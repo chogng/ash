@@ -35,7 +35,7 @@ struct Position {
 }
 
 impl Store {
-    pub(crate) fn read(&self, scope: &Scope, request: &Read) -> Result<Value> {
+    pub(crate) fn read(&self, scope: &Scope, member: &ThreadId, request: &Read) -> Result<Value> {
         let mut database = self.connection()?;
         let transaction = database.transaction()?;
         check_session(&transaction, scope)?;
@@ -59,7 +59,8 @@ impl Store {
         let (cursor, limit) = match request {
             Read::Channels { cursor, limit, .. }
             | Read::Topics { cursor, limit, .. }
-            | Read::Posts { cursor, limit, .. } => (cursor, limit.unwrap_or(20) as usize),
+            | Read::Posts { cursor, limit, .. }
+            | Read::Unread { cursor, limit } => (cursor, limit.unwrap_or(20) as usize),
             Read::Post { .. } => unreachable!(),
         };
         if !(1..=50).contains(&limit) {
@@ -69,10 +70,17 @@ impl Store {
         let object = filters.as_object_mut().expect("tagged read request");
         object.remove("cursor");
         object.remove("limit");
-        let fingerprint = format!(
-            "{:x}",
-            Sha256::digest(serde_json::to_vec(&(scope, filters))?)
-        );
+        let fingerprint = if matches!(request, Read::Unread { .. }) {
+            format!(
+                "{:x}",
+                Sha256::digest(serde_json::to_vec(&(scope, member, filters))?)
+            )
+        } else {
+            format!(
+                "{:x}",
+                Sha256::digest(serde_json::to_vec(&(scope, filters))?)
+            )
+        };
         let before = match cursor {
             None => None,
             Some(cursor) => {
@@ -167,6 +175,15 @@ impl Store {
                     ],
                 )?
             }
+            Read::Unread { .. } => collect(
+                &transaction,
+                &format!(
+                    "{POSTS} JOIN agent_board_unread u ON u.post=p.id
+                     WHERE u.board=?1 AND u.member=?2 AND (?3 IS NULL OR u.post<?3)
+                     ORDER BY u.post DESC LIMIT ?4"
+                ),
+                params![board, member.as_str(), before, take],
+            )?,
             Read::Post { .. } => unreachable!(),
         };
         page(rows, limit, fingerprint)

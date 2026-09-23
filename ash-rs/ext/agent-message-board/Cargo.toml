@@ -15,7 +15,6 @@ base64 = { workspace = true }
 caseless = { workspace = true }
 chrono = { workspace = true }
 extension-api = { package = "ash-extension-api", path = "../extension-api" }
-log = { workspace = true }
 protocol = { package = "ash-protocol", path = "../../protocol" }
 rusqlite = { workspace = true }
 serde = { workspace = true }

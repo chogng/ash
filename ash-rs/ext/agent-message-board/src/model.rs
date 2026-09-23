@@ -9,7 +9,7 @@ use serde_json::json;
 
 pub(crate) const OUTPUT_BYTES: usize = 8_000;
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub(crate) struct Scope {
     pub session: SessionId,
     pub root: ThreadId,
@@ -33,6 +33,10 @@ pub(crate) enum Read {
         topic: Option<i64>,
         author: Option<ThreadId>,
         query: Option<String>,
+        cursor: Option<String>,
+        limit: Option<u16>,
+    },
+    Unread {
         cursor: Option<String>,
         limit: Option<u16>,
     },
@@ -62,6 +66,9 @@ pub(crate) enum Write {
         topic: Option<i64>,
         state: Subscription,
     },
+    Acknowledge {
+        through: i64,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
@@ -76,9 +83,12 @@ impl Write {
         let channel = match self {
             Self::CreateChannel { channel }
             | Self::Subscription { channel, .. }
-            | Self::Post { channel, .. } => channel,
+            | Self::Post { channel, .. } => Some(channel),
+            Self::Acknowledge { .. } => None,
         };
-        channel_name(channel)?;
+        if let Some(channel) = channel {
+            channel_name(channel)?;
+        }
         match self {
             Self::Post {
                 text,
@@ -101,6 +111,7 @@ impl Write {
             Self::Subscription {
                 topic: Some(id), ..
             } => post_id(*id)?,
+            Self::Acknowledge { through } => post_id(*through)?,
             _ => {}
         }
         Ok(())
@@ -143,8 +154,6 @@ impl Message {
 
 pub(crate) struct Commit {
     pub output: Value,
-    pub notification: Option<Value>,
-    pub recipients: Vec<ThreadId>,
 }
 
 pub(crate) fn input(message: impl Into<String>) -> Error {

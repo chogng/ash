@@ -30,8 +30,16 @@ fn write(store: &Store, scope: &Scope, actor: &str, key: &str, args: Value) -> C
 }
 
 fn read(store: &Store, scope: &Scope, args: Value) -> Value {
+    read_as(store, scope, &scope.root, args)
+}
+
+fn read_as(store: &Store, scope: &Scope, member: &ThreadId, args: Value) -> Value {
     let result = store
-        .read(scope, &serde_json::from_value::<Read>(args).unwrap())
+        .read(
+            scope,
+            member,
+            &serde_json::from_value::<Read>(args).unwrap(),
+        )
         .unwrap();
     assert!(serde_json::to_vec(&result).unwrap().len() <= 8000);
     result
@@ -132,11 +140,25 @@ fn channel_and_topic_subscriptions_route_different_events_and_deduplicate_member
         }),
     );
     assert_eq!(
-        root.recipients
-            .iter()
-            .map(ThreadId::as_str)
-            .collect::<Vec<_>>(),
-        ["reader", "root"]
+        store
+            .unread(&scope, &ThreadId::new("reader").unwrap())
+            .unwrap()
+            .count,
+        1
+    );
+    assert_eq!(
+        store
+            .unread(&scope, &ThreadId::new("root").unwrap())
+            .unwrap()
+            .count,
+        1
+    );
+    assert_eq!(
+        store
+            .unread(&scope, &ThreadId::new("worker").unwrap())
+            .unwrap()
+            .count,
+        0
     );
     let id = root.output["id"].as_i64().unwrap();
     let reply = write(
@@ -149,12 +171,11 @@ fn channel_and_topic_subscriptions_route_different_events_and_deduplicate_member
         }),
     );
     assert_eq!(
-        reply
-            .recipients
-            .iter()
-            .map(ThreadId::as_str)
-            .collect::<Vec<_>>(),
-        ["worker"]
+        store
+            .unread(&scope, &ThreadId::new("worker").unwrap())
+            .unwrap()
+            .through,
+        reply.output["id"]
     );
     write(
         &store,
@@ -164,6 +185,13 @@ fn channel_and_topic_subscriptions_route_different_events_and_deduplicate_member
         json!({
             "action":"subscription","channel":"work","topic":id,"state":"off"
         }),
+    );
+    assert_eq!(
+        store
+            .unread(&scope, &ThreadId::new("worker").unwrap())
+            .unwrap()
+            .count,
+        0
     );
     let followup = write(
         &store,
@@ -175,12 +203,11 @@ fn channel_and_topic_subscriptions_route_different_events_and_deduplicate_member
         }),
     );
     assert_eq!(
-        followup
-            .recipients
-            .iter()
-            .map(ThreadId::as_str)
-            .collect::<Vec<_>>(),
-        ["reviewer"]
+        store
+            .unread(&scope, &ThreadId::new("reviewer").unwrap())
+            .unwrap()
+            .through,
+        followup.output["id"]
     );
     let topics = read(&store, &scope, json!({"action":"topics","channel":"work"}));
     assert_eq!(topics["items"][0]["replies"], 2);
@@ -238,14 +265,20 @@ fn explicit_topic_unsubscribe_survives_post_and_reopen() {
         "worker-reply",
         json!({"action":"post","channel":"work","topic":topic,"text":"more evidence"}),
     );
-    let reply = write(
+    write(
         &store,
         &scope,
         "root",
         "root-reply",
         json!({"action":"post","channel":"work","topic":topic,"text":"reviewed"}),
     );
-    assert!(reply.recipients.is_empty());
+    assert_eq!(
+        store
+            .unread(&scope, &ThreadId::new("worker").unwrap())
+            .unwrap()
+            .count,
+        0
+    );
 
     write(
         &store,
@@ -261,7 +294,184 @@ fn explicit_topic_unsubscribe_survives_post_and_reopen() {
         "followup",
         json!({"action":"post","channel":"work","topic":topic,"text":"done"}),
     );
-    assert_eq!(followup.recipients, vec![ThreadId::new("worker").unwrap()]);
+    assert_eq!(
+        store
+            .unread(&scope, &ThreadId::new("worker").unwrap())
+            .unwrap()
+            .through,
+        followup.output["id"]
+    );
+}
+
+#[test]
+fn unread_survives_reopen_and_resubscription_starts_with_new_posts() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("board.sqlite3");
+    let scope = board_scope("session", "root");
+    let reader = ThreadId::new("reader").unwrap();
+    let store = Store::open(&path).unwrap();
+    channel(&store, &scope);
+    write(
+        &store,
+        &scope,
+        "reader",
+        "watch",
+        json!({"action":"subscription","channel":"work","state":"on"}),
+    );
+    let first = write(
+        &store,
+        &scope,
+        "root",
+        "first",
+        json!({"action":"post","channel":"work","text":"first"}),
+    );
+    drop(store);
+
+    let store = Store::open(&path).unwrap();
+    assert_eq!(
+        store.unread(&scope, &reader).unwrap().through,
+        first.output["id"]
+    );
+    write(
+        &store,
+        &scope,
+        "reader",
+        "off",
+        json!({"action":"subscription","channel":"work","state":"off"}),
+    );
+    assert_eq!(store.unread(&scope, &reader).unwrap().count, 0);
+    write(
+        &store,
+        &scope,
+        "root",
+        "muted",
+        json!({"action":"post","channel":"work","text":"while muted"}),
+    );
+    write(
+        &store,
+        &scope,
+        "reader",
+        "on",
+        json!({"action":"subscription","channel":"work","state":"on"}),
+    );
+    let fresh = write(
+        &store,
+        &scope,
+        "root",
+        "fresh",
+        json!({"action":"post","channel":"work","text":"fresh"}),
+    );
+    let unread = store.unread(&scope, &reader).unwrap();
+    assert_eq!(unread.count, 1);
+    assert_eq!(unread.through, fresh.output["id"]);
+    assert_eq!(unread.notices[0]["preview"], "fresh");
+    let ack = write(
+        &store,
+        &scope,
+        "reader",
+        "ack",
+        json!({"action":"acknowledge","through":fresh.output["id"]}),
+    );
+    assert_eq!(ack.output["acknowledged"], 1);
+    assert_eq!(store.unread(&scope, &reader).unwrap().count, 0);
+    assert_eq!(
+        write(
+            &store,
+            &scope,
+            "reader",
+            "ack",
+            json!({"action":"acknowledge","through":fresh.output["id"]}),
+        )
+        .output,
+        ack.output
+    );
+}
+
+#[test]
+fn unread_pages_span_channels_and_belong_to_one_agent() {
+    let store = Store::in_memory().unwrap();
+    let scope = board_scope("session", "root");
+    let reader = ThreadId::new("reader").unwrap();
+    let other = ThreadId::new("other").unwrap();
+    channel(&store, &scope);
+    write(
+        &store,
+        &scope,
+        "root",
+        "create-news",
+        json!({"action":"create_channel","channel":"news"}),
+    );
+    write(
+        &store,
+        &scope,
+        "reader",
+        "watch-work",
+        json!({"action":"subscription","channel":"work","state":"on"}),
+    );
+    let mut ids = Vec::new();
+    for (key, channel) in [("one", "work"), ("two", "news"), ("three", "work")] {
+        ids.push(
+            write(
+                &store,
+                &scope,
+                "worker",
+                key,
+                json!({"action":"post","channel":channel,"text":key,"notify":["reader","other"]}),
+            )
+            .output["id"]
+                .clone(),
+        );
+    }
+    let first = read_as(
+        &store,
+        &scope,
+        &reader,
+        json!({"action":"unread","limit":2}),
+    );
+    assert_eq!(first["items"][0]["id"], ids[2]);
+    assert_eq!(first["items"][1]["id"], ids[1]);
+    assert_eq!(first["items"][1]["channel"], "news");
+    assert!(
+        store
+            .read(
+                &scope,
+                &other,
+                &serde_json::from_value(json!({
+                    "action":"unread","limit":2,"cursor":first["next_cursor"]
+                }))
+                .unwrap()
+            )
+            .is_err()
+    );
+    let second = read_as(
+        &store,
+        &scope,
+        &reader,
+        json!({"action":"unread","limit":2,"cursor":first["next_cursor"]}),
+    );
+    assert_eq!(second["items"][0]["id"], ids[0]);
+    assert!(second["next_cursor"].is_null());
+    write(
+        &store,
+        &scope,
+        "reader",
+        "reviewed",
+        json!({"action":"acknowledge","through":ids[1]}),
+    );
+    assert_eq!(
+        read_as(&store, &scope, &reader, json!({"action":"unread"}))["items"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        read_as(&store, &scope, &other, json!({"action":"unread"}))["items"]
+            .as_array()
+            .unwrap()
+            .len(),
+        3
+    );
 }
 
 #[test]
@@ -296,14 +506,14 @@ fn concurrent_duplicate_operations_commit_once_and_survive_reopening() {
         .map(|worker| worker.join().unwrap())
         .collect::<Vec<_>>();
     assert_eq!(results[0].output, results[1].output);
+    let store = Store::open(&path).unwrap();
     assert_eq!(
-        results
-            .iter()
-            .filter(|result| result.notification.is_some())
-            .count(),
+        store
+            .unread(&scope, &ThreadId::new("root").unwrap())
+            .unwrap()
+            .count,
         1
     );
-    let store = Store::open(&path).unwrap();
     let replay = write(
         &store,
         &scope,
@@ -312,7 +522,13 @@ fn concurrent_duplicate_operations_commit_once_and_survive_reopening() {
         json!({"action":"post","channel":"work","text":"one record"}),
     );
     assert_eq!(replay.output, results.pop().unwrap().output);
-    assert!(replay.notification.is_none());
+    assert_eq!(
+        store
+            .unread(&scope, &ThreadId::new("root").unwrap())
+            .unwrap()
+            .count,
+        1
+    );
     let changed: Write =
         serde_json::from_value(json!({"action":"post","channel":"work","text":"changed"})).unwrap();
     assert!(
@@ -404,7 +620,7 @@ fn pagination_keeps_its_position_when_new_messages_arrive() {
     ] {
         assert!(
             store
-                .read(&other, &serde_json::from_value(args).unwrap())
+                .read(&other, &other.root, &serde_json::from_value(args).unwrap())
                 .is_err()
         );
     }
@@ -542,8 +758,8 @@ fn invalid_topics_and_deleted_sessions_cannot_mutate_other_boards() {
     assert!(store.write(&b, &b.root, "cross-board", 0, &bad).is_err());
     let invalid: Read =
         serde_json::from_value(json!({"action":"post","id":post.output["id"]})).unwrap();
-    assert!(store.read(&b, &invalid).is_err());
-    assert!(store.read(&c, &invalid).is_err());
+    assert!(store.read(&b, &b.root, &invalid).is_err());
+    assert!(store.read(&c, &c.root, &invalid).is_err());
     store.delete_session(&a.session).unwrap();
     let stale = Store::open(&path).unwrap();
     let command: Write =
@@ -558,6 +774,7 @@ fn invalid_topics_and_deleted_sessions_cannot_mutate_other_boards() {
             stale
                 .read(
                     scope,
+                    &scope.root,
                     &serde_json::from_value(json!({"action":"channels"})).unwrap()
                 )
                 .is_err()

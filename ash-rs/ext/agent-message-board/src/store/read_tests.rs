@@ -111,7 +111,11 @@ fn topic_read_keeps_root_filters_cursor_and_board_isolation() {
     let mut ids = Vec::new();
     loop {
         let page = store
-            .read(&scope, &serde_json::from_value(request.clone()).unwrap())
+            .read(
+                &scope,
+                &scope.root,
+                &serde_json::from_value(request.clone()).unwrap(),
+            )
             .unwrap();
         ids.extend(
             page["items"]
@@ -140,7 +144,11 @@ fn topic_read_keeps_root_filters_cursor_and_board_isolation() {
             .unwrap()
             .extend(filters.as_object().unwrap().clone());
         let page = store
-            .read(&scope, &serde_json::from_value(request).unwrap())
+            .read(
+                &scope,
+                &scope.root,
+                &serde_json::from_value(request).unwrap(),
+            )
             .unwrap();
         assert_eq!(
             page["items"]
@@ -156,6 +164,7 @@ fn topic_read_keeps_root_filters_cursor_and_board_isolation() {
         store
             .read(
                 &scope,
+                &scope.root,
                 &serde_json::from_value(json!({"action":"posts","topic":11002})).unwrap()
             )
             .is_err()

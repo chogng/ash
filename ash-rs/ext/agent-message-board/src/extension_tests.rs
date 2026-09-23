@@ -219,12 +219,9 @@ impl Runtime {
         serde_json::from_str(&text).unwrap()
     }
     fn child(&self) -> (ThreadId, TurnId) {
-        self.child_named("child")
-    }
-    fn child_named(&self, delegation: &str) -> (ThreadId, TurnId) {
         let spawned = MultiAgentCoordinator::new(self.threads.clone(), AgentTreeLimits::default())
             .spawn(SpawnAgentRequest {
-                delegation_id: protocol::DelegationId::new(delegation).unwrap(),
+                delegation_id: protocol::DelegationId::new("child").unwrap(),
                 session_id: self.session.clone(),
                 parent_thread_id: self.root.clone(),
                 parent_turn_id: self.turn.clone(),
@@ -346,6 +343,13 @@ fn agents_share_evidence_and_reply_without_starting_idle_members() {
         }),
     );
     assert_eq!(read["text"], "<untrusted> evidence");
+    runtime.ok(
+        "board_write",
+        &child,
+        &child_turn,
+        "acknowledge-finding",
+        json!({"action":"acknowledge","through":post["id"]}),
+    );
     runtime.ok("board_write", &child, &child_turn, "reply", json!({
         "action":"post","channel":"work","topic":post["topic"],"text":"Verified at src/store.rs with the integration test."
     }));
@@ -359,7 +363,7 @@ fn agents_share_evidence_and_reply_without_starting_idle_members() {
     }));
     assert_eq!(runtime.threads.read_thread(&child).unwrap().turns.len(), 1);
     let next = start(&runtime.threads, &child, "next");
-    assert!(runtime.notices(&child, &next).is_empty());
+    assert_eq!(runtime.notices(&child, &next).len(), 2);
     assert_eq!(
         runtime.ok(
             "board_write",
@@ -370,7 +374,7 @@ fn agents_share_evidence_and_reply_without_starting_idle_members() {
         ),
         post
     );
-    assert!(runtime.notices(&child, &next).is_empty());
+    assert_eq!(runtime.notices(&child, &next).len(), 2);
     let topic = runtime.ok(
         "board_read",
         &child,
@@ -382,7 +386,7 @@ fn agents_share_evidence_and_reply_without_starting_idle_members() {
 }
 
 #[test]
-fn overflowing_notices_report_the_loss_and_prioritize_new_posts() {
+fn many_unread_posts_keep_all_records_and_prioritize_new_previews() {
     let runtime = Runtime::new();
     let (child, turn) = runtime.child();
     runtime.ok(
@@ -410,15 +414,15 @@ fn overflowing_notices_report_the_loss_and_prioritize_new_posts() {
     }
 
     let notices = runtime.notices(&child, &turn);
-    assert_eq!(notices.len(), 65);
+    assert_eq!(notices.len(), 9);
     assert_eq!(
         notices[0].retention(),
         extension_api::PromptFragmentRetention::Required
     );
-    assert!(notices[0].body().contains("66 updates"));
-    assert!(notices[0].body().contains("2 older previews were dropped"));
+    assert!(notices[0].body().contains("Unread agent board posts: 66"));
+    assert!(notices[0].body().contains("Hidden older previews: 58"));
     assert!(notices[1].body().contains("finding 65"));
-    assert!(notices[64].body().contains("finding 2"));
+    assert!(notices[8].body().contains("finding 58"));
     assert!(
         notices
             .iter()
@@ -427,19 +431,9 @@ fn overflowing_notices_report_the_loss_and_prioritize_new_posts() {
 }
 
 #[test]
-fn unsubscribe_waits_for_an_earlier_posts_fanout() {
-    use std::sync::mpsc;
-    use std::time::Duration;
-    use std::time::Instant;
-
-    let runtime = Arc::new(Runtime::new());
-    let first = runtime.child_named("first");
-    let second = runtime.child_named("second");
-    let (blocked, unsubscribing) = if first.0 < second.0 {
-        (first, second)
-    } else {
-        (second, first)
-    };
+fn idle_agent_receives_unread_digest_without_being_started() {
+    let runtime = Runtime::new();
+    let (child, child_turn) = runtime.child();
     runtime.ok(
         "board_write",
         &runtime.root,
@@ -447,115 +441,68 @@ fn unsubscribe_waits_for_an_earlier_posts_fanout() {
         "channel",
         json!({"action":"create_channel","channel":"work"}),
     );
-    for (member, turn) in [&blocked, &unsubscribing] {
-        runtime.ok(
-            "board_write",
-            member,
-            turn,
-            &format!("watch-{member}"),
-            json!({"action":"subscription","channel":"work","state":"on"}),
-        );
-    }
-
-    let (held_tx, held_rx) = mpsc::channel();
-    let (release_tx, release_rx) = mpsc::channel();
-    let threads = runtime.threads.clone();
-    let blocked_id = blocked.0.clone();
-    let holder = std::thread::spawn(move || {
-        threads.with_running_turn(&blocked_id, |_, _| {
-            held_tx.send(()).unwrap();
-            release_rx.recv().unwrap();
-            Ok(())
-        })
-    });
-    held_rx.recv_timeout(Duration::from_secs(5)).unwrap();
-
-    let writer_runtime = runtime.clone();
-    let (post_tx, post_rx) = mpsc::channel();
-    let writer = std::thread::spawn(move || {
-        let result = writer_runtime.ok(
-            "board_write",
-            &writer_runtime.root,
-            &writer_runtime.turn,
-            "post",
-            json!({"action":"post","channel":"work","text":"before unsubscribe"}),
-        );
-        post_tx.send(result).unwrap();
-    });
-    let deadline = Instant::now() + Duration::from_secs(5);
-    loop {
-        let posts = runtime.ok(
-            "board_read",
-            &runtime.root,
-            &runtime.turn,
-            "posted",
-            json!({"action":"posts","channel":"work"}),
-        );
-        if !posts["items"].as_array().unwrap().is_empty() {
-            break;
-        }
-        assert!(Instant::now() < deadline, "post did not commit");
-        std::thread::yield_now();
-    }
-
-    let other = ThreadId::new("other-root").unwrap();
-    create(&runtime.threads, &runtime.session, &other);
-    let other_turn = start(&runtime.threads, &other, "other-turn");
-    let other_runtime = runtime.clone();
-    let (other_tx, other_rx) = mpsc::channel();
-    let unrelated = std::thread::spawn(move || {
-        other_runtime.ok(
-            "board_write",
-            &other,
-            &other_turn,
-            "other-channel",
-            json!({"action":"create_channel","channel":"independent"}),
-        );
-        other_tx.send(()).unwrap();
-    });
-    let unrelated_completed = other_rx.recv_timeout(Duration::from_millis(500)).is_ok();
-
-    let off_runtime = runtime.clone();
-    let off_member = unsubscribing.0.clone();
-    let off_turn = unsubscribing.1.clone();
-    let (off_started_tx, off_started_rx) = mpsc::channel();
-    let (off_tx, off_rx) = mpsc::channel();
-    let off = std::thread::spawn(move || {
-        off_started_tx.send(()).unwrap();
-        off_runtime.ok(
-            "board_write",
-            &off_member,
-            &off_turn,
-            "off",
-            json!({"action":"subscription","channel":"work","state":"off"}),
-        );
-        off_tx.send(()).unwrap();
-    });
-    off_started_rx.recv_timeout(Duration::from_secs(5)).unwrap();
-    assert!(off_rx.recv_timeout(Duration::from_millis(100)).is_err());
-    release_tx.send(()).unwrap();
-    holder.join().unwrap().unwrap();
-    unrelated.join().unwrap();
-    assert!(
-        unrelated_completed,
-        "another board must not wait for this fanout"
-    );
-    post_rx.recv_timeout(Duration::from_secs(5)).unwrap();
-    off_rx.recv_timeout(Duration::from_secs(5)).unwrap();
-    writer.join().unwrap();
-    off.join().unwrap();
-    assert_eq!(runtime.notices(&unsubscribing.0, &unsubscribing.1).len(), 2);
-
     runtime.ok(
+        "board_write",
+        &child,
+        &child_turn,
+        "watch",
+        json!({"action":"subscription","channel":"work","state":"on"}),
+    );
+    runtime
+        .threads
+        .complete_turn(&child, &child_turn, "done".into())
+        .unwrap();
+
+    let post = runtime.ok(
         "board_write",
         &runtime.root,
         &runtime.turn,
-        "later",
-        json!({"action":"post","channel":"work","text":"after unsubscribe"}),
+        "idle-post",
+        json!({"action":"post","channel":"work","text":"review when active"}),
     );
-    assert_eq!(runtime.notices(&unsubscribing.0, &unsubscribing.1).len(), 2);
+    assert_eq!(runtime.threads.read_thread(&child).unwrap().turns.len(), 1);
+    let next = start(&runtime.threads, &child, "next");
+    let notices = runtime.notices(&child, &next);
+    assert_eq!(notices.len(), 2);
+    assert!(notices[0].body().contains("Unread agent board posts: 1"));
+    assert!(
+        notices[0]
+            .body()
+            .contains(&format!("through={}", post["id"]))
+    );
+    assert!(notices[1].body().contains("review when active"));
+    runtime
+        .threads
+        .complete_turn(&child, &next, "done".into())
+        .unwrap();
+    let again = start(&runtime.threads, &child, "again");
+    assert_eq!(runtime.notices(&child, &again).len(), 2);
+    let pending = runtime.ok(
+        "board_read",
+        &child,
+        &again,
+        "list-unread",
+        json!({"action":"unread"}),
+    );
+    assert_eq!(pending["items"][0]["id"], post["id"]);
+    let read = runtime.ok(
+        "board_read",
+        &child,
+        &again,
+        "read-unread",
+        json!({"action":"post","id":post["id"]}),
+    );
+    assert_eq!(read["text"], "review when active");
+    let ack = runtime.ok(
+        "board_write",
+        &child,
+        &again,
+        "acknowledge",
+        json!({"action":"acknowledge","through":post["id"]}),
+    );
+    assert_eq!(ack["acknowledged"], 1);
+    assert!(runtime.notices(&child, &again).is_empty());
 }
-
 #[test]
 fn posting_does_not_restore_an_explicitly_unsubscribed_agents_notices() {
     let runtime = Runtime::new();
@@ -901,7 +848,7 @@ fn code_mode_operations_have_separate_replay_receipts_and_bounded_unicode_reads(
 }
 
 #[test]
-fn completion_racing_a_post_does_not_leave_a_notice_for_the_next_turn() {
+fn completion_racing_a_post_preserves_the_next_turns_unread_notice() {
     let runtime = Arc::new(Runtime::new());
     let (child, child_turn) = runtime.child();
     runtime.ok(
@@ -936,7 +883,7 @@ fn completion_racing_a_post_does_not_leave_a_notice_for_the_next_turn() {
         .unwrap();
     writer.join().unwrap();
     let next = start(&runtime.threads, &child, "next");
-    assert!(runtime.notices(&child, &next).is_empty());
+    assert_eq!(runtime.notices(&child, &next).len(), 2);
 }
 
 #[test]

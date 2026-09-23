@@ -16,12 +16,9 @@ use rusqlite::TransactionBehavior;
 use rusqlite::params;
 use serde_json::json;
 use std::collections::BTreeSet;
-use std::collections::HashMap;
 use std::path::Path;
-use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::MutexGuard;
-use std::sync::Weak;
 
 mod read;
 
@@ -72,6 +69,14 @@ CREATE TABLE IF NOT EXISTS agent_board_topic_opt_outs (
     member TEXT NOT NULL,
     PRIMARY KEY(topic, member)
 );
+CREATE TABLE IF NOT EXISTS agent_board_unread (
+    board INTEGER NOT NULL REFERENCES agent_boards(id) ON DELETE CASCADE,
+    member TEXT NOT NULL,
+    post INTEGER NOT NULL REFERENCES agent_board_posts(id) ON DELETE CASCADE,
+    target_kind INTEGER NOT NULL, target INTEGER NOT NULL,
+    PRIMARY KEY(board, member, post)
+);
+CREATE INDEX IF NOT EXISTS agent_board_unread_target ON agent_board_unread(target_kind, target, member);
 CREATE TABLE IF NOT EXISTS agent_board_commands (
     board INTEGER NOT NULL REFERENCES agent_boards(id) ON DELETE CASCADE,
     actor TEXT NOT NULL, call TEXT NOT NULL,
@@ -84,7 +89,12 @@ CREATE TABLE IF NOT EXISTS agent_board_commands (
 /// Writes and their replay receipts commit together; Session deletion closes its boards.
 pub struct Store {
     database: Mutex<Connection>,
-    deliveries: Mutex<HashMap<Scope, Weak<Mutex<()>>>>,
+}
+
+pub(crate) struct Unread {
+    pub count: i64,
+    pub through: i64,
+    pub notices: Vec<serde_json::Value>,
 }
 
 impl Store {
@@ -104,28 +114,58 @@ impl Store {
         database.execute_batch(SCHEMA)?;
         Ok(Self {
             database: Mutex::new(database),
-            deliveries: Mutex::new(HashMap::new()),
         })
-    }
-
-    pub(crate) fn delivery_lock(&self, scope: &Scope) -> Result<Arc<Mutex<()>>> {
-        let mut deliveries = self
-            .deliveries
-            .lock()
-            .map_err(|_| Error::Runtime("delivery registry lock poisoned".into()))?;
-        deliveries.retain(|_, lock| lock.strong_count() > 0);
-        if let Some(lock) = deliveries.get(scope).and_then(Weak::upgrade) {
-            return Ok(lock);
-        }
-        let lock = Arc::new(Mutex::new(()));
-        deliveries.insert(scope.clone(), Arc::downgrade(&lock));
-        Ok(lock)
     }
 
     fn connection(&self) -> Result<MutexGuard<'_, Connection>> {
         self.database
             .lock()
             .map_err(|_| Error::Runtime("database lock poisoned".into()))
+    }
+
+    pub(crate) fn unread(&self, scope: &Scope, member: &ThreadId) -> Result<Unread> {
+        let mut database = self.connection()?;
+        let transaction = database.transaction()?;
+        check_session(&transaction, scope)?;
+        let Some(board) = board_id(&transaction, scope)? else {
+            return Ok(Unread {
+                count: 0,
+                through: 0,
+                notices: Vec::new(),
+            });
+        };
+        let (count, through): (i64, Option<i64>) = transaction.query_row(
+            "SELECT COUNT(*), MAX(post) FROM agent_board_unread WHERE board=?1 AND member=?2",
+            params![board, member.as_str()],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+        let mut statement = transaction.prepare(
+            "SELECT p.id, COALESCE(p.topic,p.id), c.name, p.author, p.created_at,
+                    substr(p.body,1,150), length(p.body)
+             FROM agent_board_unread u
+             JOIN agent_board_posts p ON p.id=u.post
+             JOIN agent_board_channels c ON c.id=p.channel
+             WHERE u.board=?1 AND u.member=?2 ORDER BY u.post DESC LIMIT 8",
+        )?;
+        let notices = statement
+            .query_map(params![board, member.as_str()], |row| {
+                Ok(json!({
+                    "id": row.get::<_, i64>(0)?,
+                    "topic": row.get::<_, i64>(1)?,
+                    "channel": row.get::<_, String>(2)?,
+                    "author": row.get::<_, String>(3)?,
+                    "created_at": row.get::<_, i64>(4)?,
+                    "preview": row.get::<_, String>(5)?,
+                    "total_chars": row.get::<_, i64>(6)?,
+                    "replies": 0,
+                }))
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(Unread {
+            count,
+            through: through.unwrap_or(0),
+            notices,
+        })
     }
 
     pub fn delete_session(&self, session: &SessionId) -> Result<()> {
@@ -178,8 +218,6 @@ impl Store {
             }
             return Ok(Commit {
                 output: serde_json::from_str(&response)?,
-                notification: None,
-                recipients: Vec::new(),
             });
         }
 
@@ -202,8 +240,6 @@ impl Store {
                 subscription(&transaction, Target::Channel(id), actor, Follow::Automatic)?;
                 Commit {
                     output: json!({"channel": channel, "creator": actor, "created_at": time}),
-                    notification: None,
-                    recipients: Vec::new(),
                 }
             }
             Write::Post {
@@ -252,6 +288,14 @@ impl Store {
                     );
                 }
                 recipients.remove(actor);
+                let target_kind = i64::from(topic.is_some());
+                for recipient in &recipients {
+                    transaction.execute(
+                        "INSERT INTO agent_board_unread(board, member, post, target_kind, target)
+                         VALUES (?1, ?2, ?3, ?4, ?5)",
+                        params![board, recipient.as_str(), id, target_kind, target],
+                    )?;
+                }
                 let message = Message {
                     id,
                     topic: root,
@@ -263,8 +307,6 @@ impl Store {
                 };
                 Commit {
                     output: message.receipt(),
-                    notification: Some(message.summary(150)),
-                    recipients: recipients.into_iter().collect(),
                 }
             }
             Write::Subscription {
@@ -283,8 +325,15 @@ impl Store {
                 subscription(&transaction, target, actor, Follow::Explicit(*state))?;
                 Commit {
                     output: json!({"channel": channel, "topic": topic, "member": actor, "state": state}),
-                    notification: None,
-                    recipients: Vec::new(),
+                }
+            }
+            Write::Acknowledge { through } => {
+                let removed = transaction.execute(
+                    "DELETE FROM agent_board_unread WHERE board=?1 AND member=?2 AND post<=?3",
+                    params![board, actor.as_str(), through],
+                )?;
+                Commit {
+                    output: json!({"through": through, "acknowledged": removed}),
                 }
             }
         };
@@ -363,17 +412,19 @@ fn subscription(
     member: &ThreadId,
     follow: Follow,
 ) -> Result<()> {
-    let (members, opt_outs, column, id) = match target {
+    let (members, opt_outs, column, kind, id) = match target {
         Target::Channel(id) => (
             "agent_board_channel_members",
             "agent_board_channel_opt_outs",
             "channel",
+            0,
             id,
         ),
         Target::Topic(id) => (
             "agent_board_topic_members",
             "agent_board_topic_opt_outs",
             "topic",
+            1,
             id,
         ),
     };
@@ -407,6 +458,10 @@ fn subscription(
             database.execute(
                 &format!("INSERT OR IGNORE INTO {opt_outs}({column}, member) VALUES (?1, ?2)"),
                 params![id, member.as_str()],
+            )?;
+            database.execute(
+                "DELETE FROM agent_board_unread WHERE target_kind=?1 AND target=?2 AND member=?3",
+                params![kind, id, member.as_str()],
             )?;
         }
     }
