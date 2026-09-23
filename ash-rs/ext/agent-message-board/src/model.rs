@@ -9,7 +9,7 @@ use serde_json::json;
 
 pub(crate) const OUTPUT_BYTES: usize = 8_000;
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize)]
 pub(crate) struct Scope {
     pub session: SessionId,
     pub root: ThreadId,
@@ -60,7 +60,6 @@ pub(crate) enum Write {
     Subscription {
         channel: String,
         topic: Option<i64>,
-        member: Option<ThreadId>,
         state: Subscription,
     },
 }
@@ -110,10 +109,6 @@ impl Write {
     pub fn members(&self) -> &[ThreadId] {
         match self {
             Self::Post { notify, .. } => notify,
-            Self::Subscription {
-                member: Some(member),
-                ..
-            } => std::slice::from_ref(member),
             _ => &[],
         }
     }

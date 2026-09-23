@@ -219,9 +219,12 @@ impl Runtime {
         serde_json::from_str(&text).unwrap()
     }
     fn child(&self) -> (ThreadId, TurnId) {
+        self.child_named("child")
+    }
+    fn child_named(&self, delegation: &str) -> (ThreadId, TurnId) {
         let spawned = MultiAgentCoordinator::new(self.threads.clone(), AgentTreeLimits::default())
             .spawn(SpawnAgentRequest {
-                delegation_id: protocol::DelegationId::new("child").unwrap(),
+                delegation_id: protocol::DelegationId::new(delegation).unwrap(),
                 session_id: self.session.clone(),
                 parent_thread_id: self.root.clone(),
                 parent_turn_id: self.turn.clone(),
@@ -322,9 +325,17 @@ fn agents_share_evidence_and_reply_without_starting_idle_members() {
         post_args.clone(),
     );
     let notices = runtime.notices(&child, &child_turn);
-    assert_eq!(notices.len(), 1);
-    assert!(notices[0].body().contains("&lt;untrusted&gt;"));
-    assert!(notices[0].body().contains("verify claims"));
+    assert_eq!(notices.len(), 2);
+    assert_eq!(
+        notices[0].retention(),
+        extension_api::PromptFragmentRetention::Required
+    );
+    assert_eq!(
+        notices[1].layer(),
+        extension_api::PromptFragmentLayer::AgentMessage
+    );
+    assert!(notices[1].body().contains("&lt;untrusted&gt;"));
+    assert!(notices[1].body().contains("verify claims"));
     let read = runtime.ok(
         "board_read",
         &child,
@@ -338,7 +349,7 @@ fn agents_share_evidence_and_reply_without_starting_idle_members() {
     runtime.ok("board_write", &child, &child_turn, "reply", json!({
         "action":"post","channel":"work","topic":post["topic"],"text":"Verified at src/store.rs with the integration test."
     }));
-    assert_eq!(runtime.notices(&runtime.root, &runtime.turn).len(), 1);
+    assert_eq!(runtime.notices(&runtime.root, &runtime.turn).len(), 2);
     runtime
         .threads
         .complete_turn(&child, &child_turn, "done".into())
@@ -371,6 +382,181 @@ fn agents_share_evidence_and_reply_without_starting_idle_members() {
 }
 
 #[test]
+fn overflowing_notices_report_the_loss_and_prioritize_new_posts() {
+    let runtime = Runtime::new();
+    let (child, turn) = runtime.child();
+    runtime.ok(
+        "board_write",
+        &runtime.root,
+        &runtime.turn,
+        "channel",
+        json!({"action":"create_channel","channel":"work"}),
+    );
+    runtime.ok(
+        "board_write",
+        &child,
+        &turn,
+        "watch",
+        json!({"action":"subscription","channel":"work","state":"on"}),
+    );
+    for index in 0..66 {
+        runtime.ok(
+            "board_write",
+            &runtime.root,
+            &runtime.turn,
+            &format!("post-{index}"),
+            json!({"action":"post","channel":"work","text":format!("finding {index}")}),
+        );
+    }
+
+    let notices = runtime.notices(&child, &turn);
+    assert_eq!(notices.len(), 65);
+    assert_eq!(
+        notices[0].retention(),
+        extension_api::PromptFragmentRetention::Required
+    );
+    assert!(notices[0].body().contains("66 updates"));
+    assert!(notices[0].body().contains("2 older previews were dropped"));
+    assert!(notices[1].body().contains("finding 65"));
+    assert!(notices[64].body().contains("finding 2"));
+    assert!(
+        notices
+            .iter()
+            .all(|notice| notice.layer() == extension_api::PromptFragmentLayer::AgentMessage)
+    );
+}
+
+#[test]
+fn unsubscribe_waits_for_an_earlier_posts_fanout() {
+    use std::sync::mpsc;
+    use std::time::Duration;
+    use std::time::Instant;
+
+    let runtime = Arc::new(Runtime::new());
+    let first = runtime.child_named("first");
+    let second = runtime.child_named("second");
+    let (blocked, unsubscribing) = if first.0 < second.0 {
+        (first, second)
+    } else {
+        (second, first)
+    };
+    runtime.ok(
+        "board_write",
+        &runtime.root,
+        &runtime.turn,
+        "channel",
+        json!({"action":"create_channel","channel":"work"}),
+    );
+    for (member, turn) in [&blocked, &unsubscribing] {
+        runtime.ok(
+            "board_write",
+            member,
+            turn,
+            &format!("watch-{member}"),
+            json!({"action":"subscription","channel":"work","state":"on"}),
+        );
+    }
+
+    let (held_tx, held_rx) = mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel();
+    let threads = runtime.threads.clone();
+    let blocked_id = blocked.0.clone();
+    let holder = std::thread::spawn(move || {
+        threads.with_running_turn(&blocked_id, |_, _| {
+            held_tx.send(()).unwrap();
+            release_rx.recv().unwrap();
+            Ok(())
+        })
+    });
+    held_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+
+    let writer_runtime = runtime.clone();
+    let (post_tx, post_rx) = mpsc::channel();
+    let writer = std::thread::spawn(move || {
+        let result = writer_runtime.ok(
+            "board_write",
+            &writer_runtime.root,
+            &writer_runtime.turn,
+            "post",
+            json!({"action":"post","channel":"work","text":"before unsubscribe"}),
+        );
+        post_tx.send(result).unwrap();
+    });
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let posts = runtime.ok(
+            "board_read",
+            &runtime.root,
+            &runtime.turn,
+            "posted",
+            json!({"action":"posts","channel":"work"}),
+        );
+        if !posts["items"].as_array().unwrap().is_empty() {
+            break;
+        }
+        assert!(Instant::now() < deadline, "post did not commit");
+        std::thread::yield_now();
+    }
+
+    let other = ThreadId::new("other-root").unwrap();
+    create(&runtime.threads, &runtime.session, &other);
+    let other_turn = start(&runtime.threads, &other, "other-turn");
+    let other_runtime = runtime.clone();
+    let (other_tx, other_rx) = mpsc::channel();
+    let unrelated = std::thread::spawn(move || {
+        other_runtime.ok(
+            "board_write",
+            &other,
+            &other_turn,
+            "other-channel",
+            json!({"action":"create_channel","channel":"independent"}),
+        );
+        other_tx.send(()).unwrap();
+    });
+    let unrelated_completed = other_rx.recv_timeout(Duration::from_millis(500)).is_ok();
+
+    let off_runtime = runtime.clone();
+    let off_member = unsubscribing.0.clone();
+    let off_turn = unsubscribing.1.clone();
+    let (off_started_tx, off_started_rx) = mpsc::channel();
+    let (off_tx, off_rx) = mpsc::channel();
+    let off = std::thread::spawn(move || {
+        off_started_tx.send(()).unwrap();
+        off_runtime.ok(
+            "board_write",
+            &off_member,
+            &off_turn,
+            "off",
+            json!({"action":"subscription","channel":"work","state":"off"}),
+        );
+        off_tx.send(()).unwrap();
+    });
+    off_started_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+    assert!(off_rx.recv_timeout(Duration::from_millis(100)).is_err());
+    release_tx.send(()).unwrap();
+    holder.join().unwrap().unwrap();
+    unrelated.join().unwrap();
+    assert!(
+        unrelated_completed,
+        "another board must not wait for this fanout"
+    );
+    post_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+    off_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+    writer.join().unwrap();
+    off.join().unwrap();
+    assert_eq!(runtime.notices(&unsubscribing.0, &unsubscribing.1).len(), 2);
+
+    runtime.ok(
+        "board_write",
+        &runtime.root,
+        &runtime.turn,
+        "later",
+        json!({"action":"post","channel":"work","text":"after unsubscribe"}),
+    );
+    assert_eq!(runtime.notices(&unsubscribing.0, &unsubscribing.1).len(), 2);
+}
+
+#[test]
 fn posting_does_not_restore_an_explicitly_unsubscribed_agents_notices() {
     let runtime = Runtime::new();
     let (child, child_turn) = runtime.child();
@@ -388,7 +574,7 @@ fn posting_does_not_restore_an_explicitly_unsubscribed_agents_notices() {
         "topic",
         json!({"action":"post","channel":"work","text":"finding"}),
     );
-    assert_eq!(runtime.notices(&runtime.root, &runtime.turn).len(), 1);
+    assert_eq!(runtime.notices(&runtime.root, &runtime.turn).len(), 2);
     runtime.ok(
         "board_write",
         &child,
@@ -425,11 +611,11 @@ fn posting_does_not_restore_an_explicitly_unsubscribed_agents_notices() {
         "accepted",
         json!({"action":"post","channel":"work","topic":first["topic"],"text":"accepted"}),
     );
-    assert_eq!(runtime.notices(&child, &child_turn).len(), 1);
+    assert_eq!(runtime.notices(&child, &child_turn).len(), 2);
 }
 
 #[test]
-fn another_agent_cannot_override_opt_out_or_notify_a_muted_target() {
+fn only_the_member_can_change_subscriptions_and_notify_respects_opt_out() {
     let runtime = Runtime::new();
     let (child, child_turn) = runtime.child();
     runtime.ok(
@@ -439,12 +625,24 @@ fn another_agent_cannot_override_opt_out_or_notify_a_muted_target() {
         "channel",
         json!({"action":"create_channel","channel":"work"}),
     );
+    assert_eq!(
+        runtime
+            .call(
+                "board_write",
+                &runtime.root,
+                &runtime.turn,
+                "onboard-child",
+                json!({"action":"subscription","channel":"work","member":child,"state":"on"}),
+            )
+            .0,
+        ToolOutputStatus::Error
+    );
     runtime.ok(
         "board_write",
-        &runtime.root,
-        &runtime.turn,
-        "onboard-child",
-        json!({"action":"subscription","channel":"work","member":child,"state":"on"}),
+        &child,
+        &child_turn,
+        "self-subscribe",
+        json!({"action":"subscription","channel":"work","state":"on"}),
     );
     runtime.ok(
         "board_write",

@@ -135,6 +135,61 @@ fn skills_preserve_provider_order_within_their_context_layer() {
 }
 
 #[test]
+fn agent_reports_keep_the_newest_preview_under_budget_pressure() {
+    let turn_id = id::<TurnId>("current");
+    let snapshot = snapshot(
+        turn_id.clone(),
+        vec![user_item("current-user", turn_id.clone(), "review")],
+    );
+    let input = ContextInput::new(
+        &snapshot,
+        turn_id,
+        vec![
+            instruction(
+                "summary",
+                InstructionPlacement::AgentMessage,
+                InstructionRetention::Required,
+                "Two board updates. Read the board for the full discussion.",
+            ),
+            instruction(
+                "newest",
+                InstructionPlacement::AgentMessage,
+                InstructionRetention::BestEffort,
+                "latest finding",
+            ),
+            instruction(
+                "older",
+                InstructionPlacement::AgentMessage,
+                InstructionRetention::BestEffort,
+                &"old finding ".repeat(500),
+            ),
+        ],
+        Vec::new(),
+        budget(500),
+    );
+    let ContextPreparation::Ready(plan) = ContextPlanner::prepare(&input).unwrap() else {
+        panic!("the current turn and newest update must fit");
+    };
+
+    assert!(
+        plan.instructions()
+            .iter()
+            .any(|item| item.source().identity() == "summary")
+    );
+    assert!(
+        plan.instructions()
+            .iter()
+            .any(|item| item.source().identity() == "newest")
+    );
+    assert!(
+        !plan
+            .instructions()
+            .iter()
+            .any(|item| item.source().identity() == "older")
+    );
+}
+
+#[test]
 fn reports_distinct_mandatory_tool_current_and_shape_failures() {
     let turn_id = id::<TurnId>("current");
     let base_snapshot = snapshot(

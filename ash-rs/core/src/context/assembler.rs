@@ -208,6 +208,18 @@ impl ContextAssembler {
                 plan.environment().to_owned(),
             )));
         }
+        input.extend(
+            plan.instructions()
+                .iter()
+                .filter(|fragment| fragment.placement() == InstructionPlacement::AgentMessage)
+                .rev()
+                .map(|fragment| {
+                    InputItem::Message(Message::text(
+                        MessageRole::Assistant,
+                        fragment.body().trim(),
+                    ))
+                }),
+        );
 
         let tool_choice = if plan.tools().is_empty() {
             ToolChoice::None

@@ -19,6 +19,7 @@ pub(crate) enum InstructionPlacement {
     Skill,
     /// Per-invocation context appended after the reusable history prefix.
     Turn,
+    AgentMessage,
 }
 
 /// Whether budget pressure may remove an instruction fragment.
@@ -141,6 +142,9 @@ impl TryFrom<ash_extension_api::PromptFragment> for InstructionFragment {
                     InstructionPlacement::Directory
                 }
                 ash_extension_api::PromptFragmentLayer::Skill => InstructionPlacement::Skill,
+                ash_extension_api::PromptFragmentLayer::AgentMessage => {
+                    InstructionPlacement::AgentMessage
+                }
             },
             retention: match fragment.retention() {
                 ash_extension_api::PromptFragmentRetention::Required => {

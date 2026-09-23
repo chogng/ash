@@ -1,10 +1,12 @@
-/// Semantic precedence requested for one extension prompt fragment.
+/// Placement and message role for one extension context fragment.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum PromptFragmentLayer {
     System,
     Product,
     Directory,
     Skill,
+    /// Attributed agent content rendered as a message, never as an instruction.
+    AgentMessage,
 }
 
 /// Whether Core may omit one extension fragment under context budget pressure.

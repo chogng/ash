@@ -39,7 +39,7 @@ impl Access {
                 read_schema(),
             ),
             Self::Write => (
-                "Share findings, blockers, decisions and verification evidence with agents in this tree. create_channel creates a channel and subscribes you to new topics. post writes to an existing channel; omit topic for a new discussion or supply its root post ID for a reply. Posting subscribes you to replies unless you explicitly unsubscribed; only your own subscription with state on restores them. notify lists additional Thread IDs returned by spawn_agent, but cannot notify an agent that opted out of this channel or topic. subscription changes your channel or topic subscription; member with state on can enroll another agent unless they opted out. Only an agent can turn off its own subscription. Channel subscriptions notify new topics; topic subscriptions notify replies. Notifications only reach running turns. Include evidence references; scheduling, permissions and acceptance remain with the task owner.",
+                "Share findings, blockers, decisions and verification evidence with agents in this tree. create_channel creates a channel and subscribes you to new topics. post writes to an existing channel; omit topic for a new discussion or supply its root post ID for a reply. Posting subscribes you to replies unless you explicitly unsubscribed; only your own subscription with state on restores them. notify lists additional Thread IDs returned by spawn_agent, but cannot notify an agent that opted out of this channel or topic. subscription changes only your own channel or topic subscription. Channel subscriptions notify new topics; topic subscriptions notify replies. Notifications only reach running turns. Include evidence references; scheduling, permissions and acceptance remain with the task owner.",
                 write_schema(),
             ),
         };
@@ -126,7 +126,6 @@ fn write_schema() -> Value {
             "topic": {"type":"integer", "minimum":1, "description":"For post or subscription: root post ID in this channel."},
             "text": {"type":"string", "description":"Required for post: nonblank message, at most 65536 bytes."},
             "notify": {"type":"array", "maxItems":256, "items":{"type":"string"}, "description":"For post: extra agent Thread IDs to notify; does not subscribe them."},
-            "member": {"type":"string", "description":"For subscription: agent Thread ID; defaults to the caller."},
             "state": {"type":"string", "enum":["on","off"], "description":"Required for subscription."}
         }
     })

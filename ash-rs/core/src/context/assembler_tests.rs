@@ -4,6 +4,7 @@ use super::super::ContextInput;
 use super::super::ContextPlanner;
 use super::super::ContextPreparation;
 use super::super::ContextTokenCount;
+use super::super::InstructionFragment;
 use super::*;
 use crate::HarnessContext;
 use crate::HarnessInstructions;
@@ -306,6 +307,63 @@ fn injects_instructions_before_history_and_environment_at_the_request_tail() {
     assert!(
         matches!(&message.content[0], ContentPart::Text(text) if text.contains(&format!("<dir>{}</dir>", additional_root.display())))
     );
+}
+
+#[test]
+fn agent_reports_follow_history_as_assistant_messages() {
+    let turn_id = id::<TurnId>("turn");
+    let snapshot = snapshot(
+        turn_id.clone(),
+        vec![ThreadItem::UserMessage {
+            item_id: id("user"),
+            turn_id: turn_id.clone(),
+            text: "review the work".into(),
+        }],
+    );
+    let reports = ["newest", "older"].into_iter().map(|body| {
+        InstructionFragment::try_from(ash_extension_api::PromptFragment::new(
+            ash_extension_api::PromptFragmentSource::new("agent-message-board", body, "1"),
+            ash_extension_api::PromptFragmentLayer::AgentMessage,
+            ash_extension_api::PromptFragmentRetention::BestEffort,
+            body,
+        ))
+        .unwrap()
+    });
+    let input = ContextInput::new(
+        &snapshot,
+        turn_id,
+        reports.collect(),
+        Vec::new(),
+        ContextBudget::provider_managed(),
+    );
+    let ContextPreparation::Ready(plan) = ContextPlanner::prepare(&input).unwrap() else {
+        panic!("provider-managed input must fit");
+    };
+    let request = ContextAssembler::assemble(&plan).unwrap();
+
+    assert_eq!(request.input.len(), 3);
+    assert!(matches!(
+        &request.input[0],
+        InputItem::Message(message) if message.role == MessageRole::User
+    ));
+    assert!(matches!(
+        &request.input[1],
+        InputItem::Message(message)
+            if message.role == MessageRole::Assistant
+                && message.content == vec![ContentPart::Text("older".into())]
+    ));
+    assert!(matches!(
+        &request.input[2],
+        InputItem::Message(message)
+            if message.role == MessageRole::Assistant
+                && message.content == vec![ContentPart::Text("newest".into())]
+    ));
+    assert!(!request.input.iter().any(|item| matches!(
+        item,
+        InputItem::Message(message)
+            if message.role == MessageRole::User
+                && message.content.iter().any(|part| matches!(part, ContentPart::Text(text) if text.contains("newest")))
+    )));
 }
 
 #[test]

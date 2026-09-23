@@ -16,9 +16,12 @@ use rusqlite::TransactionBehavior;
 use rusqlite::params;
 use serde_json::json;
 use std::collections::BTreeSet;
+use std::collections::HashMap;
 use std::path::Path;
+use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::MutexGuard;
+use std::sync::Weak;
 
 mod read;
 
@@ -81,6 +84,7 @@ CREATE TABLE IF NOT EXISTS agent_board_commands (
 /// Writes and their replay receipts commit together; Session deletion closes its boards.
 pub struct Store {
     database: Mutex<Connection>,
+    deliveries: Mutex<HashMap<Scope, Weak<Mutex<()>>>>,
 }
 
 impl Store {
@@ -100,7 +104,22 @@ impl Store {
         database.execute_batch(SCHEMA)?;
         Ok(Self {
             database: Mutex::new(database),
+            deliveries: Mutex::new(HashMap::new()),
         })
+    }
+
+    pub(crate) fn delivery_lock(&self, scope: &Scope) -> Result<Arc<Mutex<()>>> {
+        let mut deliveries = self
+            .deliveries
+            .lock()
+            .map_err(|_| Error::Runtime("delivery registry lock poisoned".into()))?;
+        deliveries.retain(|_, lock| lock.strong_count() > 0);
+        if let Some(lock) = deliveries.get(scope).and_then(Weak::upgrade) {
+            return Ok(lock);
+        }
+        let lock = Arc::new(Mutex::new(()));
+        deliveries.insert(scope.clone(), Arc::downgrade(&lock));
+        Ok(lock)
     }
 
     fn connection(&self) -> Result<MutexGuard<'_, Connection>> {
@@ -251,7 +270,6 @@ impl Store {
             Write::Subscription {
                 channel,
                 topic,
-                member,
                 state,
             } => {
                 let channel_id = channel_id(&transaction, board, channel)?;
@@ -262,20 +280,9 @@ impl Store {
                     }
                     None => Target::Channel(channel_id),
                 };
-                let member = member.as_ref().unwrap_or(actor);
-                let follow = if member == actor {
-                    Follow::Explicit(*state)
-                } else {
-                    match state {
-                        Subscription::On => Follow::Delegated,
-                        Subscription::Off => {
-                            return Err(input("only a member may unsubscribe itself"));
-                        }
-                    }
-                };
-                subscription(&transaction, target, member, follow)?;
+                subscription(&transaction, target, actor, Follow::Explicit(*state))?;
                 Commit {
-                    output: json!({"channel": channel, "topic": topic, "member": member, "state": state}),
+                    output: json!({"channel": channel, "topic": topic, "member": actor, "state": state}),
                     notification: None,
                     recipients: Vec::new(),
                 }
@@ -347,7 +354,6 @@ enum Target {
 
 enum Follow {
     Automatic,
-    Delegated,
     Explicit(Subscription),
 }
 
@@ -380,20 +386,6 @@ fn subscription(
                          SELECT 1 FROM {opt_outs} WHERE {column}=?1 AND member=?2
                      )"
                 ),
-                params![id, member.as_str()],
-            )?;
-        }
-        Follow::Delegated => {
-            let opted_out: bool = database.query_row(
-                &format!("SELECT EXISTS(SELECT 1 FROM {opt_outs} WHERE {column}=?1 AND member=?2)"),
-                params![id, member.as_str()],
-                |row| row.get(0),
-            )?;
-            if opted_out {
-                return Err(input("only a member may restore its own subscription"));
-            }
-            database.execute(
-                &format!("INSERT OR IGNORE INTO {members}({column}, member) VALUES (?1, ?2)"),
                 params![id, member.as_str()],
             )?;
         }
