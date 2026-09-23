@@ -20,34 +20,29 @@ use std::time::Duration;
 fn aggregates_safe_operation_and_http_facts() {
     let telemetry = MockOtelProvider::new(NonZeroUsize::new(4).unwrap());
 
-    ClientTelemetry::record(
-        &telemetry,
+    ClientTelemetry::start(&telemetry, ClientOperation::new("model.operation")).finish(
         ClientTelemetryEvent {
             operation: ClientOperation::new("model.operation"),
             outcome: ClientTelemetryOutcome::Succeeded,
             elapsed: Duration::from_millis(12),
         },
     );
-    ClientTelemetry::record(
-        &telemetry,
+    ClientTelemetry::start(&telemetry, ClientOperation::new("model.operation")).finish(
         ClientTelemetryEvent {
             operation: ClientOperation::new("model.operation"),
             outcome: ClientTelemetryOutcome::Failed,
             elapsed: Duration::from_millis(20),
         },
     );
-    HttpClientTelemetry::record(
-        &telemetry,
-        HttpClientTelemetryEvent {
-            method: HttpMethod::Post,
-            outcome: HttpTransportOutcome::Response {
-                status_class: HttpStatusClass::Success,
-            },
-            request_body_bytes: 11,
-            response_body_bytes: 23,
-            elapsed: Duration::from_millis(8),
+    HttpClientTelemetry::start(&telemetry).finish(HttpClientTelemetryEvent {
+        method: HttpMethod::Post,
+        outcome: HttpTransportOutcome::Response {
+            status_class: HttpStatusClass::Success,
         },
-    );
+        request_body_bytes: 11,
+        response_body_bytes: 23,
+        elapsed: Duration::from_millis(8),
+    });
 
     let snapshot = telemetry.snapshot();
     assert_eq!(snapshot.operation_count, 2);

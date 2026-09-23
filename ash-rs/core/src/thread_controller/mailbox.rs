@@ -26,6 +26,7 @@ const DEFAULT_IDLE_TIMEOUT: Duration = Duration::from_secs(30);
 type ExecutionTask = Box<dyn FnOnce(ThreadExecutionContext) + Send + 'static>;
 
 struct QueuedExecution {
+    trace_context: opentelemetry::Context,
     thread_id: ThreadId,
     turn_id: TurnId,
     incarnation: ThreadIncarnationId,
@@ -260,6 +261,7 @@ impl ThreadExecutionMailboxes {
                 },
             );
         let queued = QueuedExecution {
+            trace_context: opentelemetry::Context::current(),
             thread_id: thread_id.clone(),
             turn_id: turn_id.clone(),
             incarnation,
@@ -363,6 +365,7 @@ fn run_queued(
     loaded_threads: &Arc<LoadedThreads>,
 ) {
     let QueuedExecution {
+        trace_context,
         thread_id,
         turn_id,
         incarnation,
@@ -380,6 +383,7 @@ fn run_queued(
             loaded_threads: loaded_threads.clone(),
             active: active.clone(),
         };
+        let _context = trace_context.attach();
         task(execution);
     } else {
         cancellation.cancel();

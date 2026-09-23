@@ -25,7 +25,7 @@ use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 
 const MAX_CONNECTIONS: usize = 8;
 const IO_TIMEOUT: Duration = Duration::from_secs(5);
-const PROTOCOL: &str = "ash-trace-v1";
+const PROTOCOL: &str = "ash-trace-v2";
 const TOKEN_PREFIX: &str = "ash-trace-token.";
 
 /// A 256-bit capability, supplied by the host and never written to the stream.
@@ -230,7 +230,9 @@ async fn connection(stream: TcpStream, token: AccessToken, frames: broadcast::Se
     if !matches!(
         tokio::time::timeout(
             IO_TIMEOUT,
-            socket.send(Message::text(r#"{"type":"ready","version":1}"#))
+            socket.send(Message::text(
+                r#"{"type":"ready","version":2,"format":"otlp-json"}"#
+            ))
         )
         .await,
         Ok(Ok(()))

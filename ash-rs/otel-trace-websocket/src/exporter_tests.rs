@@ -36,7 +36,7 @@ async fn connect(address: SocketAddr) -> Socket {
         .unwrap();
     assert_eq!(
         read(&mut socket).await,
-        serde_json::json!({"type":"ready","version":1})
+        serde_json::json!({"type":"ready","version":2,"format":"otlp-json"})
     );
     socket
 }
@@ -82,8 +82,13 @@ async fn sdk_streams_parent_ids_timing_and_typed_attributes_to_all_viewers() {
     provider.force_flush().unwrap();
     let frame = read(&mut first).await;
     assert_eq!(frame, read(&mut second).await);
-    assert_eq!(frame["type"], "span");
-    assert_eq!(frame["sequence"], "1");
+    let resource = &frame["resourceSpans"][0];
+    assert_eq!(
+        resource["resource"]["attributes"][0]["value"]["stringValue"],
+        "test"
+    );
+    assert_eq!(resource["scopeSpans"][0]["scope"]["name"], "test-scope");
+    let frame = &resource["scopeSpans"][0]["spans"][0];
     assert_eq!(frame["traceId"], trace_id);
     assert_eq!(frame["parentSpanId"], parent_id);
     assert_eq!(frame["name"], "child");
@@ -91,13 +96,12 @@ async fn sdk_streams_parent_ids_timing_and_typed_attributes_to_all_viewers() {
     assert_eq!(frame["endTimeUnixNano"], "1700000000000004300");
     assert_eq!(
         frame["attributes"][0]["value"],
-        serde_json::json!({"type":"int","value": i64::MAX.to_string()})
+        serde_json::json!({"intValue": i64::MAX.to_string()})
     );
-    assert_eq!(frame["attributes"][1]["value"]["value"], true);
+    assert_eq!(frame["attributes"][1]["value"]["boolValue"], true);
     assert_eq!(frame["events"][0]["name"], "event");
-    assert_eq!(frame["status"]["description"], "failed");
-    assert_eq!(frame["scope"]["name"], "test-scope");
-    assert_eq!(frame["resource"]["attributes"][0]["value"]["value"], "test");
+    assert_eq!(frame["status"]["message"], "failed");
+    assert_eq!(frame["status"]["code"], 2);
 }
 
 #[tokio::test]
@@ -111,12 +115,18 @@ async fn connections_start_at_live_tail_without_replay() {
     tracer.start("before-connect").end();
     let mut first = connect(address).await;
     tracer.start("first").end();
-    assert_eq!(read(&mut first).await["name"], "first");
+    assert_eq!(
+        read(&mut first).await["resourceSpans"][0]["scopeSpans"][0]["spans"][0]["name"],
+        "first"
+    );
     drop(first);
     tracer.start("before-reconnect").end();
     let mut second = connect(address).await;
     tracer.start("second").end();
-    assert_eq!(read(&mut second).await["name"], "second");
+    assert_eq!(
+        read(&mut second).await["resourceSpans"][0]["scopeSpans"][0]["spans"][0]["name"],
+        "second"
+    );
 }
 
 #[tokio::test]

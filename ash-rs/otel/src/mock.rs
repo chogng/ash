@@ -352,7 +352,13 @@ impl MockOtelProvider {
 }
 
 impl ClientTelemetry for MockOtelProvider {
-    fn record(&self, event: ClientTelemetryEvent) {
+    fn start(&self, _: ClientOperation) -> Box<dyn ash_client::ClientTelemetrySpan + '_> {
+        Box::new(self)
+    }
+}
+
+impl ash_client::ClientTelemetrySpan for &MockOtelProvider {
+    fn finish(self: Box<Self>, event: ClientTelemetryEvent) {
         self.record_event(TelemetryEvent::Operation {
             operation: event.operation.name(),
             outcome: match event.outcome {
@@ -366,7 +372,13 @@ impl ClientTelemetry for MockOtelProvider {
 }
 
 impl HttpClientTelemetry for MockOtelProvider {
-    fn record(&self, event: HttpClientTelemetryEvent) {
+    fn start(&self) -> Box<dyn ash_http_client::HttpClientTelemetrySpan + '_> {
+        Box::new(self)
+    }
+}
+
+impl ash_http_client::HttpClientTelemetrySpan for &MockOtelProvider {
+    fn finish(self: Box<Self>, event: HttpClientTelemetryEvent) {
         self.record_event(TelemetryEvent::HttpAttempt {
             method: match event.method {
                 HttpMethod::Get => HttpMethodKind::Get,

@@ -345,6 +345,7 @@ pollster = "1.0.1"
 open = "5.4.1"
 opentelemetry = "0.31.0"
 opentelemetry_sdk = "0.31.0"
+opentelemetry-proto = { version = "0.31.0", default-features = false }
 portable-pty = "0.9.0"
 pkg-config = "0.3"
 p256 = { version = "0.13", default-features = false, features = ["arithmetic", "pkcs8", "std"] }

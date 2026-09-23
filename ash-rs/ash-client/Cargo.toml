@@ -13,6 +13,7 @@ path = "src/lib.rs"
 [dependencies]
 ash-async-utils = { workspace = true }
 ash-http-client = { workspace = true }
+opentelemetry = { workspace = true, features = ["trace"] }
 
 [dev-dependencies]
 http-test-support = { package = "ash-http-test-support", path = "../http-test-support" }

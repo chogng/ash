@@ -13,7 +13,6 @@ use opentelemetry_sdk::trace::SpanExporter;
 use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::sync::Mutex;
 use std::time::Duration;
 use tokio::sync::broadcast;
 
@@ -31,7 +30,6 @@ pub struct Exporter {
 struct Stream {
     server: socket::Server,
     frames: broadcast::Sender<Arc<str>>,
-    sequence: Mutex<u64>,
 }
 
 impl Exporter {
@@ -41,11 +39,7 @@ impl Exporter {
         let (frames, _) = broadcast::channel(BUFFER_FRAMES);
         let server = socket::Server::bind(address, token, frames.clone())?;
         Ok(Self {
-            stream: Arc::new(Stream {
-                server,
-                frames,
-                sequence: Mutex::new(0),
-            }),
+            stream: Arc::new(Stream { server, frames }),
             resource: Resource::builder_empty().build(),
         })
     }
@@ -57,7 +51,6 @@ impl Exporter {
 
 impl SpanExporter for Exporter {
     async fn export(&self, batch: Vec<SpanData>) -> OTelSdkResult {
-        let mut sequence = self.stream.sequence.lock().unwrap();
         if self.stream.server.is_stopped() {
             return Err(OTelSdkError::AlreadyShutdown);
         }
@@ -65,10 +58,8 @@ impl SpanExporter for Exporter {
             return Ok(());
         }
         for span in batch {
-            let next = *sequence + 1;
-            let frame = wire::encode(&span, &self.resource, next)
+            let frame = wire::encode(span, &self.resource)
                 .map_err(|error| OTelSdkError::InternalFailure(error.to_string()))?;
-            *sequence = next;
             // A viewer may disconnect during encoding. There is no replay queue.
             let _ = self.stream.frames.send(frame.into());
         }

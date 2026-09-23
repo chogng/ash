@@ -84,8 +84,9 @@ HTTPS request（或 HTTPS proxy route）时惰性加载并缓存结果，因此�
 
 ### 遥测
 
-`TelemetryHttpClient` 包装任意 `Arc<dyn HttpClient>`，向 `HttpClientTelemetry::record` 发出
-`HttpClientTelemetryEvent`。事件只有：
+`TelemetryHttpClient` 包装任意 `Arc<dyn HttpClient>`，在调用前通过 `HttpClientTelemetry::start`
+创建同步作用域，在调用结束时向 `HttpClientTelemetrySpan::finish` 提交 `HttpClientTelemetryEvent`。
+作用域覆盖实际调用，允许遥测实现建立父子 span；事件只有：
 
 - method；
 - status class 或 transport failure；
@@ -159,9 +160,10 @@ HttpClient::execute(request)
    └─ reject overflow / return HttpResponse
 
 TelemetryHttpClient::execute
+├─ HttpClientTelemetry::start
 ├─ inner.execute
 ├─ classify safe outcome + byte counts
-└─ HttpClientTelemetry::record
+└─ HttpClientTelemetrySpan::finish
 ```
 
 `ResponseBodyLimit::new` 拒绝 `usize::MAX`，因为 execute 需要额外一字节检测 overflow。提高 limit

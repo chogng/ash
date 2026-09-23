@@ -1784,7 +1784,7 @@ impl AppServer {
             },
             None => None,
         };
-        let request_started = std::time::Instant::now();
+        let request_span = self.telemetry.start(diagnostics::Activity::Rpc);
         let response = if cancellation.is_cancelled() {
             error_response(request.id, -32800, AppServerErrorName::RequestCancelled)
         } else {
@@ -1812,17 +1812,13 @@ impl AppServer {
         };
         self.request_cancellations
             .finish(connection.connection_id, request_id);
-        self.telemetry.record(
-            diagnostics::Activity::Rpc,
-            if cancellation.is_cancelled() {
-                diagnostics::Outcome::Cancelled
-            } else if response.get("error").is_some() {
-                diagnostics::Outcome::Failed
-            } else {
-                diagnostics::Outcome::Succeeded
-            },
-            request_started.elapsed(),
-        );
+        request_span.finish(if cancellation.is_cancelled() {
+            diagnostics::Outcome::Cancelled
+        } else if response.get("error").is_some() {
+            diagnostics::Outcome::Failed
+        } else {
+            diagnostics::Outcome::Succeeded
+        });
         serialize_response(response)
     }
 

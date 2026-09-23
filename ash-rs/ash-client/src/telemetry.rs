@@ -48,7 +48,12 @@ pub struct ClientTelemetryEvent {
 /// preserve the supplied value boundary: they must not reconstruct or append
 /// model IDs, URLs, headers, credentials, prompts, or response bodies.
 pub trait ClientTelemetry: Send + Sync {
-    fn record(&self, event: ClientTelemetryEvent);
+    fn start(&self, operation: ClientOperation) -> Box<dyn ClientTelemetrySpan + '_>;
+}
+
+/// Owns one operation's instrumentation on the calling thread, including its parent context.
+pub trait ClientTelemetrySpan {
+    fn finish(self: Box<Self>, event: ClientTelemetryEvent);
 }
 
 /// Adds safe telemetry around any unary provider operation client.
@@ -111,6 +116,7 @@ impl TelemetryOperationClient {
         &self,
         operation: impl FnOnce() -> Result<T, ClientError>,
     ) -> Result<T, ClientError> {
+        let span = self.telemetry.start(self.operation);
         let started = Instant::now();
         let result = operation();
         let outcome = match &result {
@@ -118,7 +124,7 @@ impl TelemetryOperationClient {
             Err(ClientError::Cancelled(_)) => ClientTelemetryOutcome::Cancelled,
             Err(_) => ClientTelemetryOutcome::Failed,
         };
-        self.telemetry.record(ClientTelemetryEvent {
+        span.finish(ClientTelemetryEvent {
             operation: self.operation,
             outcome,
             elapsed: started.elapsed(),

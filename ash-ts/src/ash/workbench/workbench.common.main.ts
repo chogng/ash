@@ -1,5 +1,6 @@
 import './contrib/memories/browser/memories.contribution.js';
 import './contrib/memory/browser/memory.contribution.js';
+import './contrib/trace/browser/trace.contribution.js';
 /**
  * Shared Workbench registrations loaded by every renderer host.
  *

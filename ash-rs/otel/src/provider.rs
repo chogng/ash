@@ -2,16 +2,18 @@ use diagnostics::Activity;
 use diagnostics::Diagnostics;
 use diagnostics::Observation;
 use diagnostics::Outcome;
+use opentelemetry::Context;
+use opentelemetry::ContextGuard;
 use opentelemetry::KeyValue;
-use opentelemetry::trace::Span;
+use opentelemetry::trace::SpanKind;
+use opentelemetry::trace::Status;
+use opentelemetry::trace::TraceContextExt;
 use opentelemetry::trace::Tracer;
 use opentelemetry::trace::TracerProvider;
 use opentelemetry_sdk::trace::SdkTracerProvider;
 use opentelemetry_sdk::trace::SpanData;
 use opentelemetry_sdk::trace::SpanExporter;
 use std::sync::Arc;
-use std::time::Duration;
-use std::time::SystemTime;
 
 #[derive(Clone)]
 pub struct Telemetry {
@@ -37,27 +39,28 @@ impl Telemetry {
         }
     }
 
-    pub fn record(&self, activity: Activity, outcome: Outcome, elapsed: Duration) {
-        let tracer = self.provider.tracer("ash");
-        let end = SystemTime::now();
-        let mut span = tracer
+    /// Starts a span on this thread. The guard must remain within synchronous execution.
+    pub fn start(&self, activity: Activity) -> TelemetrySpan {
+        let span = self
+            .provider
+            .tracer("ash")
             .span_builder(match activity {
                 Activity::Rpc => "rpc",
                 Activity::Model => "model",
                 Activity::Http => "http",
             })
-            .with_start_time(end - elapsed)
-            .with_end_time(end)
-            .with_attributes([KeyValue::new(
-                "outcome",
-                match outcome {
-                    Outcome::Succeeded => "succeeded",
-                    Outcome::Failed => "failed",
-                    Outcome::Cancelled => "cancelled",
-                },
-            )])
-            .start(&tracer);
-        span.end_with_timestamp(end);
+            .with_kind(match activity {
+                Activity::Rpc => SpanKind::Server,
+                Activity::Model | Activity::Http => SpanKind::Client,
+            })
+            .start(&self.provider.tracer("ash"));
+        let context = Context::current_with_span(span);
+        let guard = context.clone().attach();
+        TelemetrySpan {
+            context,
+            _guard: guard,
+            outcome: Outcome::Failed,
+        }
     }
 
     pub fn instrument_http(
@@ -88,31 +91,77 @@ impl Telemetry {
     }
 }
 
+/// A synchronous span scope; dropping it ends the span and restores its parent.
+pub struct TelemetrySpan {
+    context: Context,
+    _guard: ContextGuard,
+    outcome: Outcome,
+}
+
+impl TelemetrySpan {
+    pub fn finish(mut self, outcome: Outcome) {
+        self.outcome = outcome;
+    }
+}
+
+impl Drop for TelemetrySpan {
+    fn drop(&mut self) {
+        let span = self.context.span();
+        span.set_attribute(KeyValue::new(
+            "outcome",
+            match self.outcome {
+                Outcome::Succeeded => "succeeded",
+                Outcome::Failed => "failed",
+                Outcome::Cancelled => "cancelled",
+            },
+        ));
+        span.set_status(match self.outcome {
+            Outcome::Succeeded => Status::Ok,
+            Outcome::Failed => Status::error("failed"),
+            Outcome::Cancelled => Status::error("cancelled"),
+        });
+        span.end();
+    }
+}
+
 impl ash_client::ClientTelemetry for Telemetry {
-    fn record(&self, event: ash_client::ClientTelemetryEvent) {
-        self.record(
-            Activity::Model,
+    fn start(
+        &self,
+        _: ash_client::ClientOperation,
+    ) -> Box<dyn ash_client::ClientTelemetrySpan + '_> {
+        Box::new(self.start(Activity::Model))
+    }
+}
+
+impl ash_client::ClientTelemetrySpan for TelemetrySpan {
+    fn finish(self: Box<Self>, event: ash_client::ClientTelemetryEvent) {
+        TelemetrySpan::finish(
+            *self,
             match event.outcome {
                 ash_client::ClientTelemetryOutcome::Succeeded => Outcome::Succeeded,
                 ash_client::ClientTelemetryOutcome::Failed => Outcome::Failed,
                 ash_client::ClientTelemetryOutcome::Cancelled => Outcome::Cancelled,
             },
-            event.elapsed,
         );
     }
 }
 
 impl ash_http_client::HttpClientTelemetry for Telemetry {
-    fn record(&self, event: ash_http_client::HttpClientTelemetryEvent) {
-        self.record(
-            Activity::Http,
+    fn start(&self) -> Box<dyn ash_http_client::HttpClientTelemetrySpan + '_> {
+        Box::new(self.start(Activity::Http))
+    }
+}
+
+impl ash_http_client::HttpClientTelemetrySpan for TelemetrySpan {
+    fn finish(self: Box<Self>, event: ash_http_client::HttpClientTelemetryEvent) {
+        TelemetrySpan::finish(
+            *self,
             match event.outcome {
                 ash_http_client::HttpTransportOutcome::Response {
                     status_class: ash_http_client::HttpStatusClass::Success,
                 } => Outcome::Succeeded,
                 _ => Outcome::Failed,
             },
-            event.elapsed,
         );
     }
 }

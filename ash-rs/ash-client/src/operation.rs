@@ -270,9 +270,11 @@ impl AshClient {
         let transport = self.transport.clone();
         let request = request.request().clone();
         let (result_tx, result_rx) = mpsc::sync_channel(1);
+        let context = opentelemetry::Context::current();
         thread::Builder::new()
             .name("ash-http-attempt".into())
             .spawn(move || {
+                let _context = context.attach();
                 let _ = result_tx.send(transport.execute(&request).map_err(ClientError::from));
             })
             .map_err(|_| ClientError::Transport("failed to start HTTP attempt".into()))?;
@@ -303,9 +305,11 @@ impl AshClient {
         let transport = self.transport.clone();
         let request = request.request().clone();
         let (message_tx, message_rx) = mpsc::sync_channel(1);
+        let context = opentelemetry::Context::current();
         thread::Builder::new()
             .name("ash-http-stream-attempt".into())
             .spawn(move || {
+                let _context = context.attach();
                 let mut channel_sink = ChannelHttpBodySink {
                     messages: message_tx.clone(),
                 };

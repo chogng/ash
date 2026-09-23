@@ -51,6 +51,26 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  trace:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install trace test tools
+        uses: taiki-e/install-action@a6b2e2dcd845ddd7f509ce4f3ed3d922b80cc5d9
+        with:
+          tool: just@1.46.0,uv
+      - name: Check trace scopes and live OTLP transport
+        run: |
+          just check ash-otel -p ash-otel-trace-websocket --locked
+          just test ash-otel -p ash-otel-trace-websocket -p ash-client -p ash-http-client --locked
+          just test ash-otel --features mock --locked
+          just rust-warnings ash-otel -p ash-otel-trace-websocket -p ash-client -p ash-http-client --locked
+
   protocol:
     runs-on: ubuntu-24.04
     timeout-minutes: 20

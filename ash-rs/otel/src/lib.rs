@@ -2,6 +2,7 @@
 
 mod provider;
 pub use provider::Telemetry;
+pub use provider::TelemetrySpan;
 
 #[cfg(feature = "mock")]
 pub mod mock;

@@ -58,7 +58,12 @@ pub struct HttpClientTelemetryEvent {
 /// but must not combine them with URLs, header values, TLS material, or raw
 /// protocol payloads.
 pub trait HttpClientTelemetry: Send + Sync {
-    fn record(&self, event: HttpClientTelemetryEvent);
+    fn start(&self) -> Box<dyn HttpClientTelemetrySpan + '_>;
+}
+
+/// Owns one HTTP attempt's instrumentation and restores the caller's context when dropped.
+pub trait HttpClientTelemetrySpan {
+    fn finish(self: Box<Self>, event: HttpClientTelemetryEvent);
 }
 
 /// Adds safe transport telemetry around a raw HTTP client without changing its behavior.
@@ -75,6 +80,7 @@ impl TelemetryHttpClient {
 
 impl HttpClient for TelemetryHttpClient {
     fn execute(&self, request: &HttpRequest) -> Result<HttpResponse, HttpClientError> {
+        let span = self.telemetry.start();
         let started = Instant::now();
         let result = self.inner.execute(request);
         let (outcome, response_body_bytes) = match &result {
@@ -86,7 +92,7 @@ impl HttpClient for TelemetryHttpClient {
             ),
             Err(_) => (HttpTransportOutcome::TransportFailure, 0),
         };
-        self.telemetry.record(HttpClientTelemetryEvent {
+        span.finish(HttpClientTelemetryEvent {
             method: request.method(),
             outcome,
             request_body_bytes: request.body().len(),
@@ -101,6 +107,7 @@ impl HttpClient for TelemetryHttpClient {
         request: &HttpRequest,
         sink: &mut dyn HttpBodySink,
     ) -> Result<HttpResponse, HttpClientError> {
+        let span = self.telemetry.start();
         let started = Instant::now();
         let mut counting_sink = CountingHttpBodySink {
             inner: sink,
@@ -116,7 +123,7 @@ impl HttpClient for TelemetryHttpClient {
             ),
             Err(_) => (HttpTransportOutcome::TransportFailure, 0),
         };
-        self.telemetry.record(HttpClientTelemetryEvent {
+        span.finish(HttpClientTelemetryEvent {
             method: request.method(),
             outcome,
             request_body_bytes: request.body().len(),

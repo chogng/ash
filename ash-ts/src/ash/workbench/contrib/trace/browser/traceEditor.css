@@ -1,0 +1,41 @@
+.ash-trace {
+	display: flex;
+	flex-direction: column;
+	box-sizing: border-box;
+	min-width: 0;
+	min-height: 0;
+	padding: 16px;
+	gap: 8px;
+	overflow: auto;
+	color: var(--ash-foreground);
+	font-size: var(--ash-font-size-body1);
+	background: var(--ash-editor-background);
+}
+.ash-trace-toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
+.ash-trace-field { display: flex; flex-direction: column; min-width: 0; gap: 4px; }
+.ash-trace-toolbar > .ash-trace-field { flex: 1 1 220px; }
+.ash-trace-status, .ash-trace-count { overflow-wrap: anywhere; }
+.ash-trace-count { color: var(--ash-description-foreground); }
+.ash-trace-body { display: flex; flex-direction: column; flex: 1; min-height: 260px; gap: 8px; }
+.ash-trace-list { flex: 1; min-height: 120px; overflow: auto; border: var(--ash-stroke-thickness) solid var(--ash-widget-border); }
+.ash-trace-row { padding: 6px 8px; cursor: pointer; border: 1px solid transparent; }
+.ash-trace-row.selected {
+	color: var(--ash-list-active-selection-foreground);
+	background: var(--ash-list-active-selection-background);
+	border-color: var(--ash-focus-border);
+}
+.ash-trace-label { display: block; overflow-wrap: anywhere; }
+.ash-trace-track { display: block; height: 4px; margin-top: 4px; }
+.ash-trace-bar { display: block; min-width: 1px; height: 100%; background: currentColor; }
+.ash-trace-details {
+	flex: 1;
+	min-height: 100px;
+	margin: 0;
+	padding: 8px;
+	overflow: auto;
+	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+	font-family: var(--ash-font-family-monospace);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+.ash-trace-list:focus-visible, .ash-trace-details:focus-visible { outline: 1px solid var(--ash-focus-border); outline-offset: -1px; }

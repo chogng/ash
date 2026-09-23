@@ -235,8 +235,9 @@ fn assert_trace_rpc(server: &crate::AppServer, address: std::net::SocketAddr, to
             assert!(!text.contains("private-secret"));
             assert!(!text.contains(token));
             let value: serde_json::Value = serde_json::from_str(text).unwrap();
+            let value = &value["resourceSpans"][0]["scopeSpans"][0]["spans"][0];
             assert_eq!(value["name"], "rpc");
-            if value["attributes"].as_array().unwrap().iter().any(|attribute| attribute["key"] == "outcome" && attribute["value"]["value"] == "failed") {
+            if value["attributes"].as_array().unwrap().iter().any(|attribute| attribute["key"] == "outcome" && attribute["value"]["stringValue"] == "failed") {
                 failed = true;
                 break;
             }

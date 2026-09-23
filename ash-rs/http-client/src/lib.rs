@@ -22,6 +22,7 @@ pub use outbound_network::{
     OutboundNetworkSnapshot, OutboundProxyRoute, OutboundProxyTarget, OutboundTlsStream,
 };
 pub use request::{HttpMethod, HttpRequest, HttpResponse};
+pub use telemetry::HttpClientTelemetrySpan;
 pub use telemetry::{
     HttpClientTelemetry, HttpClientTelemetryEvent, HttpStatusClass, HttpTransportOutcome,
     TelemetryHttpClient,

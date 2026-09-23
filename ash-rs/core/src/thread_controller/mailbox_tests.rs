@@ -16,6 +16,64 @@ use std::time::Duration;
 use std::time::Instant;
 
 #[test]
+fn queued_executions_capture_their_own_trace_context() {
+    use opentelemetry::Context;
+    use opentelemetry::trace::{
+        SpanContext, SpanId, TraceContextExt, TraceFlags, TraceId, TraceState,
+    };
+    let loaded_threads = Arc::new(LoadedThreads::new(Arc::new(InMemoryThreadStore::default())));
+    let thread_id = ThreadId::new("thread").unwrap();
+    install(&loaded_threads, snapshot(&thread_id));
+    let mailboxes = ThreadExecutionMailboxes::with_settings(
+        loaded_threads,
+        NonZeroUsize::new(4).unwrap(),
+        Duration::from_secs(1),
+    );
+    let (tx, rx) = mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel();
+    mailboxes
+        .enqueue(&thread_id, &TurnId::new("blocker").unwrap(), move |_| {
+            release_rx.recv().unwrap();
+        })
+        .unwrap();
+    for id in 1..=2 {
+        let context = SpanContext::new(
+            TraceId::from(id as u128),
+            SpanId::from(id),
+            TraceFlags::SAMPLED,
+            false,
+            TraceState::default(),
+        );
+        let guard = Context::new().with_remote_span_context(context).attach();
+        let tx = tx.clone();
+        mailboxes
+            .enqueue(
+                &thread_id,
+                &TurnId::new(format!("turn-{id}")).unwrap(),
+                move |_| {
+                    tx.send(Context::current().span().span_context().clone())
+                        .unwrap();
+                },
+            )
+            .unwrap();
+        drop(guard);
+    }
+    mailboxes
+        .enqueue(&thread_id, &TurnId::new("untraced").unwrap(), move |_| {
+            tx.send(Context::current().span().span_context().clone())
+                .unwrap();
+        })
+        .unwrap();
+    release_tx.send(()).unwrap();
+    for id in 1..=2 {
+        let actual = rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert_eq!(actual.trace_id(), TraceId::from(id as u128));
+        assert_eq!(actual.span_id(), SpanId::from(id));
+    }
+    assert!(!rx.recv_timeout(Duration::from_secs(5)).unwrap().is_valid());
+}
+
+#[test]
 fn idle_lane_evicts_projection_and_a_later_load_gets_a_new_incarnation() {
     let threads = ThreadController::with_store(Arc::new(InMemoryThreadStore::default()));
     let thread_id = ThreadId::new("thread").unwrap();

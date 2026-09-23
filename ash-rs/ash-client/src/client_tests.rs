@@ -155,7 +155,13 @@ struct CapturingTelemetry {
 }
 
 impl ClientTelemetry for CapturingTelemetry {
-    fn record(&self, event: ClientTelemetryEvent) {
+    fn start(&self, _: ClientOperation) -> Box<dyn crate::ClientTelemetrySpan + '_> {
+        Box::new(self)
+    }
+}
+
+impl crate::ClientTelemetrySpan for &CapturingTelemetry {
+    fn finish(self: Box<Self>, event: ClientTelemetryEvent) {
         self.events.lock().unwrap().push(event);
     }
 }

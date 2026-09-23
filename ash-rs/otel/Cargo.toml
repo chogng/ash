@@ -23,6 +23,7 @@ ash-http-client = { workspace = true }
 diagnostics = { workspace = true }
 
 [dev-dependencies]
+ash-async-utils = { workspace = true }
 serde_json = { workspace = true }
 
 [lints]

@@ -28,6 +28,7 @@ pub use telemetry::ClientOperation;
 pub use telemetry::ClientTelemetry;
 pub use telemetry::ClientTelemetryEvent;
 pub use telemetry::ClientTelemetryOutcome;
+pub use telemetry::ClientTelemetrySpan;
 pub use telemetry::TelemetryOperationClient;
 
 #[cfg(test)]

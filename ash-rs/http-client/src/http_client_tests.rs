@@ -390,7 +390,13 @@ struct CapturingTelemetry {
 }
 
 impl HttpClientTelemetry for CapturingTelemetry {
-    fn record(&self, event: HttpClientTelemetryEvent) {
+    fn start(&self) -> Box<dyn crate::HttpClientTelemetrySpan + '_> {
+        Box::new(self)
+    }
+}
+
+impl crate::HttpClientTelemetrySpan for &CapturingTelemetry {
+    fn finish(self: Box<Self>, event: HttpClientTelemetryEvent) {
         self.events.lock().unwrap().push(event);
     }
 }
