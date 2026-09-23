@@ -26,6 +26,22 @@ test('language identity, configuration, and feature providers have separate owne
 	assert.equal(languageFeaturesService.hoverProvider.ordered(model).length, 1);
 });
 
+test('the language service starts with plain text and follows explicit language registration', () => {
+	using service = new LanguageService();
+	const resource = URI.file('/project/main.ts');
+	const selection = service.createByFilepathOrFirstLine(resource);
+	const changes: string[] = [];
+	using listener = selection.onDidChange(languageId => changes.push(languageId));
+	assert.deepEqual(service.getRegisteredLanguageIds(), ['plaintext']);
+	assert.equal(service.guessLanguageIdByFilepathOrFirstLine(URI.file('/project/readme.txt')), 'plaintext');
+	assert.equal(selection.languageId, 'plaintext');
+	const registration = service.registerLanguage({ id: 'typescript', extensions: ['.ts'] });
+	assert.equal(selection.languageId, 'typescript');
+	registration.dispose();
+	assert.equal(selection.languageId, 'plaintext');
+	assert.deepEqual(changes, ['typescript', 'plaintext']);
+});
+
 test('language feature registries report effective provider changes', () => {
 	using languageConfigurationService = new TestLanguageConfigurationService();
 	using languageFeaturesService = new LanguageFeaturesService();

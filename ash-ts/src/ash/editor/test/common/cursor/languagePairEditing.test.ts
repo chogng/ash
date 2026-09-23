@@ -3,8 +3,7 @@ import { test } from "mocha";
 import { CursorsController } from "../../../common/cursor/cursor.js";
 import { DeleteOperations } from "../../../common/cursor/cursorDeleteOperations.js";
 import { EditOperationType } from "../../../common/cursorCommon.js";
-import { registerBuiltinLanguageConfigurations } from '../../../standalone/common/builtinLanguages.js';
-import { TestLanguageConfigurationService } from '../modes/testLanguageConfigurationService.js';
+import { TestLanguageConfigurationService, registerTestLanguageConfigurations } from '../modes/testLanguageConfigurationService.js';
 import { Selection } from "../../../common/core/selection.js";
 import { Position } from "../../../common/core/position.js";
 import { TextModel } from "../../../common/model/textModel.js";
@@ -14,7 +13,7 @@ import { ViewModelEventsCollector } from '../../../common/viewModelEventDispatch
 test("Language pair typing auto-closes and overtypes one existing closer", () => {
 	using model = new TextModel('call', { languageId: 'typescript' });
 	using configurations = new TestLanguageConfigurationService();
-	using builtins = registerBuiltinLanguageConfigurations(configurations);
+	using builtins = registerTestLanguageConfigurations(configurations);
 	using selections = createTestCursorsController(model, [caret(4)], {}, configurations);
 
 	typeText(selections, '(');
@@ -35,7 +34,7 @@ test("Language pair typing auto-closes and overtypes one existing closer", () =>
 test("Language pair backspace removes both empty sides and remains one undo step", () => {
 	using model = new TextModel("", { languageId: 'typescript' });
 	using configurations = new TestLanguageConfigurationService();
-	using builtins = registerBuiltinLanguageConfigurations(configurations);
+	using builtins = registerTestLanguageConfigurations(configurations);
 	using selections = createTestCursorsController(model, [caret(0)], {}, configurations);
 	typeText(selections, '[');
 
@@ -52,7 +51,7 @@ test("Language pair typing surrounds directional selections and auto-closes coll
 	using model = new TextModel('alpha beta', { languageId: 'typescript' });
 	const backward = Selection.fromPositions(new Position((0) + 1, (5) + 1), new Position((0) + 1, (0) + 1));
 	using configurations = new TestLanguageConfigurationService();
-	using builtins = registerBuiltinLanguageConfigurations(configurations);
+	using builtins = registerTestLanguageConfigurations(configurations);
 	using selections = createTestCursorsController(model, primaryFirst([backward, caret(10)], 1), {}, configurations);
 	typeText(selections, '"');
 	assert.equal(model.getText(), "\"alpha\" beta\"\"");
@@ -90,7 +89,7 @@ test("Auto-closing respects following text and supports multi-token pairs", () =
 
 test("Auto-closing notIn keeps string and comment input single while code still pairs", () => {
 	using configurations = new TestLanguageConfigurationService();
-	using builtins = registerBuiltinLanguageConfigurations(configurations);
+	using builtins = registerTestLanguageConfigurations(configurations);
 
 	using stringModel = new TextModel('"value "', { languageId: 'typescript' });
 	using stringSelections = createTestCursorsController(stringModel, [caret(7)], {}, configurations);
@@ -137,7 +136,7 @@ test('Each cursor uses the language configuration at its own position', () => {
 test('Composition ending with a surrounding character restores and surrounds the original selection', () => {
 	using model = new TextModel('word', { languageId: 'typescript' });
 	using configurations = new TestLanguageConfigurationService();
-	using builtins = registerBuiltinLanguageConfigurations(configurations);
+	using builtins = registerTestLanguageConfigurations(configurations);
 	const original = Selection.fromPositions(new Position(1, 1), new Position(1, 5));
 	using selections = createTestCursorsController(model, [original], {}, configurations);
 	const events = new ViewModelEventsCollector();

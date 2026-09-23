@@ -109,6 +109,7 @@ function validateMatch(match: EditorPaneMatch, editorId: string): void {
 	if (
 		match !== EditorPaneMatch.None &&
 		match !== EditorPaneMatch.Optional &&
+		match !== EditorPaneMatch.Builtin &&
 		match !== EditorPaneMatch.Default
 	) {
 		throw new TypeError(

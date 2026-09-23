@@ -13,7 +13,7 @@ export function matchCodeEditor(input: EditorInput): EditorPaneMatch {
 	if (input.contentType === ACADEMIC_DOCUMENT_CONTENT_TYPE) return EditorPaneMatch.None;
 	if (input.resource.scheme === "untitled") return EditorPaneMatch.Default;
 	if (input.languageId !== undefined || isTextResourceLanguageInput(input)) return EditorPaneMatch.Default;
-	return input.resource.scheme === "file" || isRemoteResource(input.resource) ? EditorPaneMatch.Optional : EditorPaneMatch.None;
+	return input.resource.scheme === "file" || isRemoteResource(input.resource) ? EditorPaneMatch.Builtin : EditorPaneMatch.None;
 }
 
 /** Resolves the language identity shared by editor input, syntax, and completion. */

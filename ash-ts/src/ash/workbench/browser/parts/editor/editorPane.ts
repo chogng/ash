@@ -128,6 +128,8 @@ export interface EditorPaneCreationOptions {
 export enum EditorPaneMatch {
 	None,
 	Optional,
+	/** Product editor used when no resource-specific default matches. */
+	Builtin,
 	Default,
 }
 

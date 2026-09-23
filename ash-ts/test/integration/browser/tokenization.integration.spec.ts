@@ -28,7 +28,7 @@ test('all eight parser languages use bundled TextMate grammars in the frontend W
 		await page.evaluate(({ languageId, text }) => window.tokenizationIntegration.open(languageId, text), { languageId, text });
 		await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().tokens), { message: languageId }).toContainEqual({ type, text: lexeme });
 	}
-	expect(await page.evaluate(() => window.tokenizationIntegration.shellLanguages())).toEqual(['shellscript', 'shellscript', 'shellscript']);
+	expect(await page.evaluate(() => window.tokenizationIntegration.languageState())).toEqual({ initial: ['plaintext'], shell: 'shellscript', resource: 'shellscript', comment: '#', grammar: true, model: 'shellscript' });
 	const state = await page.evaluate(() => window.tokenizationIntegration.state());
 	expect(state.analyzeCalls).toBeGreaterThan(0);
 	expect(state.completedCalls).toBe(0);
@@ -63,4 +63,12 @@ test('typing, undo and preview tokenize while parser analysis is pending; stale 
 	await page.evaluate(() => window.tokenizationIntegration.releaseAnalysis());
 	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().diagnosticVersion)).toBe(before.version);
 	expect((await page.evaluate(() => window.tokenizationIntegration.state())).errors).toEqual([]);
+});
+
+test('unloading extensions removes language associations, editing rules and grammars together', async ({ page }) => {
+	await page.evaluate(() => window.tokenizationIntegration.open('shellscript', 'if true; then echo hello; fi'));
+	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().tokens)).toContainEqual({ type: 'keyword', text: 'if' });
+	await page.evaluate(() => window.tokenizationIntegration.unloadExtensions());
+	expect(await page.evaluate(() => window.tokenizationIntegration.languageState())).toEqual({ initial: ['plaintext'], shell: null, resource: 'plaintext', comment: null, grammar: false, model: 'plaintext' });
+	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().tokens)).toEqual([]);
 });

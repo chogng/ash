@@ -12,7 +12,6 @@ import { InMemoryConfigurationService } from '../../../platform/configuration/co
 import { ICodeEditorService, type ICodeEditorService as ICodeEditorServiceContract } from '../../browser/services/codeEditorService.js';
 import { type LanguageCompletionWorkerFactory, type SyntaxWorkerFactory } from '../../common/languages.js';
 import { VersionedEditorWorkerClient, type VersionedEditorWorkerFactory } from "../../browser/services/editorWorkerService.js";
-import { registerBuiltinLanguageConfigurations, registerBuiltinLanguageDescriptions } from '../common/builtinLanguages.js';
 import { ILanguageFeaturesService } from '../../common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../common/services/languageFeaturesService.js';
 import { ILanguageService, type IAshLanguageService } from '../../common/languages/language.js';
@@ -133,8 +132,6 @@ export class StandaloneServiceCollection extends ServiceContainer {
 		this.languageService = this.get(ILanguageService);
 		this.languageConfigurationService = this.get(ILanguageConfigurationService);
 		this.languageFeaturesService = this.get(ILanguageFeaturesService);
-		if (!overrides.languageService) this._register(registerBuiltinLanguageDescriptions(this.languageService.languages));
-		if (!overrides.languageConfigurationService) this._register(registerBuiltinLanguageConfigurations(this.languageConfigurationService));
 		this._register(FormattingConflicts.setFormatterSelector(async formatters => formatters[0]));
 	}
 }

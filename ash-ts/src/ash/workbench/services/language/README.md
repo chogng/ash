@@ -5,23 +5,25 @@ composition. The shared language identity, editing configuration, and provider
 registries are separate Editor services; Workbench registers App Server and
 product providers into those contracts without subclassing or wrapping them.
 
-`WorkbenchLanguageFeatures` installs built-in identities/configurations and JSON
-providers. App Server, extension-host, TextMate, codebase-symbols, and future LSP
+`WorkbenchLanguageFeatures` installs JSON providers. App Server, extension-host,
+TextMate, codebase-symbols, and LSP
 adapters register directly through `ILanguageFeaturesService` registries. Every
 registration is disposable and independent of per-document service lifetimes.
 
-The reusable default language data lives in
-`editor/standalone/common/builtinLanguages.ts`. Standalone and Workbench choose
-to register it during assembly; `editor/common` does not import it. File models
-receive the Workbench language configuration service and observe subsequent
-extension registrations. A directly constructed `TextModel` without language
-configuration has no language-specific editing rules and creates no services.
+The core language service registers only plain text. Product language identities,
+file associations, editing configurations and grammars come from `extensions`
+through `AppServerExtensionService`; removal releases those registrations together.
+Standalone callers explicitly register their languages and editing rules.
+File models receive the shared language configuration service and observe registration
+changes. Resource detection consults that language service without a second MIME or
+suffix table. A directly constructed `TextModel` without language configuration has
+no language-specific editing rules and creates no services.
 
 The filename split is intentional:
 
 | Filename family | Owner | Responsibility |
 | --- | --- | --- |
-| `browser/workbenchLanguageFeatures.ts` | Workbench | Product-owned built-in language and JSON provider composition |
+| `browser/workbenchLanguageFeatures.ts` | Workbench | Product-owned JSON provider composition |
 | `browser/appServer*Providers.ts` | Workbench | App Server DTO-to-Editor provider adaptation |
 | `editor/common/services/languageService.ts` | Editor | Language identity and file association |
 | `editor/common/services/languageConfigurationService.ts` | Editor | Composable editing rules |

@@ -439,7 +439,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IWorkspaceEditService, workspaceEditService);
 		const bulkEditService = this._register(new BrowserBulkEditService(workspaceEditService));
 		services.registerInstance(IBulkEditService, bulkEditService);
-		this._register(new WorkbenchLanguageFeatures(languageService, languageConfigurationService, languageFeaturesService));
+		this._register(services.createInstance(WorkbenchLanguageFeatures));
 		this._register(new AppServerLanguageProviders(languageFeaturesService, api.language, workspaceContext, { dirPermissions: dirPermissionsService, events: api.events }));
 		const diffService = new DiffService();
 		services.registerInstance(IDiffService, diffService);

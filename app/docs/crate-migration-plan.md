@@ -234,3 +234,41 @@ CLI 的 PTY 场景完成编译检查，未执行真实交互场景；没有变�
 验证平台为 macOS，未执行跨平台构建或帧率基准。Playwright 仍输出环境已有的 `NO_COLOR` / `FORCE_COLOR` 冲突提示。没有截图基线变更。
 
 本计划列出的五批迁移均已完成定向验证。后台业务 Diff、Git、Agent Patch、文件 I/O 和异步语言服务继续留在各自后端 owner。
+
+## 第五批补充：语言声明与 VS Code 职责对齐
+
+此前第五批只完成高亮计算归属，语言声明仍由扩展与内置表重复提供；此补充项已修正该缺口并完成下述定向验证。
+
+- 行为链：打开文件或 standalone 创建模型 → LanguageService → 扩展/宿主注册的语言关联与配置 → 同一 TextModel 和前端 TextMate Worker → 识别、编辑与高亮；卸载扩展时注册一同退出。
+- 上游参照：Editor 的 LanguageService/LanguagesRegistry、standaloneServices、Workbench 的 languageService 与 TextMate 扩展入口。只核对公开职责与行为，不复制实现。
+- 保留 Ash 的实例级注册表、扩展资源适配与 JSON provider；不引入全局第二份语言状态。
+
+| 准入路径（相对 ash-ts/） | 对应关系、动作与验证 |
+| --- | --- |
+| `src/ash/editor/common/services/languageService.ts`、`src/ash/editor/standalone/browser/standaloneServices.ts` | 双方都有；核心只注册纯文本，standalone 宿主显式注册其他语言；验证注册、撤销和模型语言 |
+| `src/ash/editor/standalone/common/builtinLanguages.ts` | 仅 Ash；按本轮 fix 清除重复生产定义，全部调用方同步退出，测试规则归测试目录 |
+| `src/ash/platform/language/common/textResourceLanguage.ts` | 仅 Ash 资源适配；删除硬编码 MIME/后缀表，识别委托注入的语言注册表 |
+| `src/ash/workbench/browser/parts/editor/editorPane.ts`、`editorRegistry.ts`、`src/ash/workbench/contrib/codeEditor/browser/codeEditorInput.ts` | Ash 现有文件选择链；补充低于专用编辑器、高于可选编辑器的内置优先级，让文件打开不依赖扩展加载时机；通过真实 descriptor 排序与 Electron 打开/保存验证 |
+| `src/ash/workbench/services/language/browser/workbenchLanguageFeatures.ts`、`src/ash/workbench/browser/workbench.ts` | 现有 Ash 装配；退出内置语言身份/编辑规则注册，保留现有 JSON provider |
+| `src/ash/editor/test/common/modes/testLanguageConfigurationService.ts`、`src/ash/editor/test/common/cursor/languagePairEditing.test.ts`、`languageEnter.test.ts`、`languageAutoClosingTracker.test.ts` | 迁移测试规则与导入，保留既有行为断言 |
+| `src/ash/editor/test/common/languageFeaturesService.test.ts`、`src/ash/editor/test/browser/standaloneEditor.test.ts` | 验证默认纯文本、宿主注册与资源释放 |
+| `src/ash/workbench/contrib/codeEditor/test/common/editorInput.test.ts`、`src/ash/workbench/contrib/codeEditor/test/browser/codeEditorPane.test.ts`、`src/ash/workbench/services/language/test/common/languageFeaturesService.test.ts` | 显式注册测试语言，验证文件选择、语言解析与既有 provider |
+| `test/integration/browser/languageExtensions.ts`、`tokenization.integration.ts`、`tokenization.integration.spec.ts`、`textModel.integration.ts`、`textModel.integration.spec.ts`、`language.integration.ts` | 复用真实扩展资源 fixture，等待实际注册完成，验证 grammar/配置/关联一起加载与退出、输入和文件模型 |
+| `src/ash/workbench/services/language/README.md`、`src/ash/editor/api-alignment-status.md`、`src/ash/editor/browser/README.md`、`docs/editor-architecture.md` | 修正重复内置表的旧职责说明，记录验证范围 |
+
+### 补充项执行结果
+
+- 核心仅保留纯文本；生产中的语言声明、编辑规则、grammar 从扩展装载，standalone 由宿主显式注册。删除重复内置语言文件和平台 MIME/后缀表，原规则仅保留为编辑算法的测试 fixture。
+- Electron 验证发现扩展异步装载前，文本与二进制编辑器的可选优先级相同，导致错误打开为二进制。现有 EditorPaneRegistry 增加内置优先级，普通文件由文本编辑器接管，专用类型与显式 Open With 保留优先权。
+- 文件编辑器浏览器 fixture 改为装载真实扩展，等待注册完成；辅助阅读选区场景还等待首轮着色，避免把异步初始化当作用户选区操作。
+
+| 补充项验证 | 结果 |
+| --- | --- |
+| `test:unit --run` 定向选择语言身份、standalone、三个 Cursor 文件、Code pane/input、扩展、Workbench provider、EditorPart | 10 个文件共 116 个测试通过；首次 standalone 断言修正为显式宿主注册后重跑通过 |
+| `test:editor:browser language.integration.spec.ts tokenization.integration.spec.ts` | 4 个 Chromium 场景通过，覆盖八种语言、后台分析未完成时编辑、扩展卸载 |
+| `test:editor:browser textModel.integration.spec.ts` | 首次 25 个场景通过；调整服务构造后的复验为 24 个通过、1 个辅助阅读选区时序失败；修正后两个相关场景各重复三次通过 |
+| `pnpm --dir ash-ts build`、`build:stanza` | 桌面 main/preload/renderer 与独立 Stanza 构建通过，无新增生产 warning |
+| 自动化 TypeScript 检查、Electron `App Server workspace files open` 与 `Code highlights Rust locally` | 类型检查通过；修正编辑器选择后两个真实产品场景通过，覆盖文件打开/编辑/保存、Rust 本地高亮及异步文档符号 |
+| `check-editor-alignment.mjs --structure-only`、旧生产入口检索与 `git diff --check` | 通过；结构报告仍有本批以外的未完成 API，不视为整体对齐完成 |
+
+验证平台为 macOS，使用已有开发后台包；未执行跨平台构建或帧率基准。没有修改 Rust、扩展资源、协议、依赖或锁文件，也没有截图基线变更。JSDOM Canvas 和 Playwright 颜色环境提示为既有输出。

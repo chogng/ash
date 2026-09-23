@@ -25,6 +25,7 @@ export class LanguageService extends Disposable implements IAshLanguageService {
 	constructor(private readonly warnOnOverwrite = false) {
 		super();
 		LanguageService.instanceCount += 1;
+		this._register(this.languages.register({ id: 'plaintext', extensions: ['.txt'], mimetypes: ['text/plain'] }));
 	}
 
 	public registerLanguage(definition: ILanguageExtensionPoint): IDisposable;

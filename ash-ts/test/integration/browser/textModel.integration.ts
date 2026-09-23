@@ -1,3 +1,5 @@
+import { BrowserTextMateService } from '../../../src/ash/workbench/services/textMate/browser/browserTextMateService.js';
+import { createLanguageExtensions } from './languageExtensions.js';
 import { ContextKeyService, IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { IMarkerService, MarkerService } from '../../../src/ash/platform/markers/common/markers.js';
 import { IMarkerDecorationsService } from '../../../src/ash/editor/common/services/markerDecorations.js';
@@ -41,10 +43,6 @@ import { AccessibilitySupport, IAccessibilityService } from '../../../src/ash/pl
 import { EditorExtensionsRegistry } from '../../../src/ash/editor/browser/editorExtensions.js';
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
-import rustGrammar from '../../../../extensions/rust/syntaxes/rust.tmLanguage.json' with { type: 'json' };
-import { TextMateGrammarCatalogModel } from '../../../src/ash/workbench/services/textMate/common/textMateGrammarCatalog.js';
-import { TextMateScopeThemeModel } from '../../../src/ash/workbench/services/textMate/common/textMateScopeTheme.js';
-import { createTextMateSyntaxWorkerFactory } from '../../../src/ash/workbench/services/textMate/browser/textMateSyntaxWorkerClient.js';
 
 interface WorkbenchSwitchResult {
 	readonly paneOwnsEditor: boolean;
@@ -100,18 +98,14 @@ const languageService = disposables.add(new LanguageService());
 const configurationService = disposables.add(new InMemoryConfigurationService());
 const languageConfigurationService = disposables.add(new LanguageConfigurationService(configurationService, languageService));
 const languageFeaturesService = disposables.add(new LanguageFeaturesService());
-const grammars = disposables.add(new TextMateGrammarCatalogModel({
-	revision: 1,
-	grammars: [{ scopeName: rustGrammar.scopeName, languageId: 'rust', injectTo: [], content: JSON.stringify(rustGrammar) }],
-}));
-const scopeTheme = disposables.add(new TextMateScopeThemeModel());
+const textMateService = disposables.add(new BrowserTextMateService());
+const extensions = disposables.add(await createLanguageExtensions({ textMateService, languageService, languageConfigurationService, languageFeaturesService }));
+await extensions.start();
 const models = disposables.add(new BrowserTextModelService(resourceStore, {
-	languageService,
-	languageConfigurationService,
-	languageFeaturesService,
-	syntaxService: { workerFactory: createTextMateSyntaxWorkerFactory(grammars, scopeTheme) },
+	languageService, languageConfigurationService, languageFeaturesService,
+	syntaxService: { workerFactory: textMateService.syntaxWorkerFactory },
+	onDidChangeLanguageSupport: textMateService.onDidChange,
 }));
-disposables.add(new WorkbenchLanguageFeatures(languageService, languageConfigurationService, languageFeaturesService));
 let syntaxAnalysisCount = 0;
 disposables.add(new AppServerSyntaxProviders(languageFeaturesService, {
 	analyze: async params => {
@@ -119,7 +113,10 @@ disposables.add(new AppServerSyntaxProviders(languageFeaturesService, {
 		return {
 			revision: params.revision,
 			hasErrors: true,
-			tokens: [],
+			tokens: [
+				{ kind: "keyword", range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 2 } } },
+				{ kind: "function", range: { start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } } },
+			],
 			foldingRanges: [{ range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 2, columnIndex: 1 } } }],
 			symbols: [{
 				name: "main",
@@ -150,6 +147,7 @@ const themeService = disposables.add(new TestThemeService(darkColorTheme));
 services.registerInstance(IThemeService, themeService);
 disposables.add(bindColorTheme(themeService, root));
 services.registerInstance(ILanguageFeaturesService, languageFeaturesService);
+disposables.add(services.createInstance(WorkbenchLanguageFeatures));
 services.registerInstance(ILanguageConfigurationService, languageConfigurationService);
 services.registerInstance(ILogService, new NullLoggerService());
 registerCodeEditorServices(services);

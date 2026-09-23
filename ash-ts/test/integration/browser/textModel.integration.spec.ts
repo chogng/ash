@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { getAxeResults, injectAxe } from "axe-playwright";
 
 const pageErrors = new WeakMap<object, string[]>();
@@ -19,7 +19,7 @@ test.afterEach(async ({ page }) => {
 test("text-model editor public API, pane, undo, save, and browser worker", async ({ page }) => {
 	const workers: string[] = [];
 	page.on("worker", worker => workers.push(worker.url()));
-	await page.goto("/textModel.html");
+	await openEditor(page);
 	await expect(page.locator(".stanza-editor")).toBeVisible();
 	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.apiText)).toBe("editor-api");
 
@@ -45,7 +45,7 @@ test("text-model editor public API, pane, undo, save, and browser worker", async
 });
 
 test('switching a Workbench file keeps keyboard input on the new editor and releases the old one', async ({ page }) => {
-	await page.goto('/textModel.html');
+	await openEditor(page);
 	await page.locator('.stanza-editor-input').focus();
 	const switched = await page.evaluate(() => window.ashTextModelIntegration.switchToOther());
 
@@ -66,7 +66,7 @@ test('switching a Workbench file keeps keyboard input on the new editor and rele
 });
 
 test('Code bundle activates text editor contributions and releases their UI', async ({ page }) => {
-	await page.goto('/textModel.html');
+	await openEditor(page);
 	const ids = await page.evaluate(() => window.ashTextModelIntegration.getBundleIds());
 	expect(ids).toContain('editor.contrib.clipboard');
 	expect(await page.evaluate(() => window.ashTextModelIntegration.hasClipboardContribution())).toBe(true);
@@ -94,7 +94,7 @@ test('textarea fallback routes type and composition through the standard input p
 	await page.addInitScript(() => {
 		Reflect.deleteProperty(window, 'EditContext');
 	});
-	await page.goto('/textModel.html');
+	await openEditor(page);
 	const editor = page.locator('.stanza-editor');
 	const input = page.locator('textarea.stanza-editor-input');
 	await input.focus();
@@ -136,7 +136,7 @@ test('textarea fallback routes type and composition through the standard input p
 });
 
 test("cursor layer retains nodes, animates stable moves, and resolves multi-cursor colors", async ({ page }) => {
-	await page.goto("/textModel.html");
+	await openEditor(page);
 	await expect(page.locator(".stanza-editor")).toBeVisible();
 	await expect(page.locator(".stanza-editor-token.token-keyword")).toHaveText("fn");
 	const editor = page.locator(".stanza-editor");
@@ -196,7 +196,7 @@ test("cursor layer retains nodes, animates stable moves, and resolves multi-curs
 });
 
 test("text-model editor projects revision-bound Rust syntax, diagnostics, folding, and symbols", async ({ page }) => {
-	await page.goto("/textModel.html");
+	await openEditor(page);
 	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getSyntaxAnalysisCount())).toBeGreaterThan(0);
 	await expect(page.locator(".stanza-editor-token.token-keyword")).toHaveText("fn");
 	await expect(page.locator(".cdr.squiggly-error")).toHaveCount(1);
@@ -213,7 +213,7 @@ test("text-model editor projects revision-bound Rust syntax, diagnostics, foldin
 });
 
 test("short documents have no false scroll range and use a proportional hover slider", async ({ page }) => {
-	await page.goto("/textModel.html");
+	await openEditor(page);
 	await expect(page.locator(".stanza-editor")).toBeVisible();
 	const geometry = await page.locator(".stanza-editor").evaluate(editor => {
 		const minimap = editor.querySelector<HTMLElement>(".minimap");
@@ -267,7 +267,7 @@ test("short documents have no false scroll range and use a proportional hover sl
 });
 
 test('editor auto scrollbars reveal on hover, focus and scrolling and remain draggable', async ({ page }) => {
-	await page.goto('/textModel.html');
+	await openEditor(page);
 	await page.evaluate(() => window.ashTextModelIntegration.setValue(Array.from({ length: 100 }, () => 'x'.repeat(200)).join('\n')));
 	const editor = page.locator('.stanza-editor');
 	const horizontal = editor.getByRole('scrollbar', { name: 'Horizontal scrollbar' });
@@ -310,7 +310,7 @@ test('editor auto scrollbars reveal on hover, focus and scrolling and remain dra
 });
 
 test('editor scrollbar configuration updates visibility and track dimensions', async ({ page }) => {
-	await page.goto('/textModel.html');
+	await openEditor(page);
 	const horizontal = page.locator('.ash-smooth-scrollable > .ash-scrollbar-track-horizontal');
 	const vertical = page.locator('.ash-smooth-scrollable > .ash-scrollbar-track-vertical');
 	await page.evaluate(() => window.ashTextModelIntegration.setScrollbar({
@@ -353,7 +353,7 @@ test('editor scrollbar configuration updates visibility and track dimensions', a
 });
 
 test('editor scrollbar uses wheel policy, slider dimensions and page clicks from configuration', async ({ page }) => {
-	await page.goto('/textModel.html');
+	await openEditor(page);
 	await page.evaluate(() => {
 		window.ashTextModelIntegration.setValue(Array.from({ length: 100 }, () => 'x'.repeat(200)).join('\n'));
 		window.ashTextModelIntegration.updateOptions({
@@ -388,7 +388,7 @@ test('editor scrollbar uses wheel policy, slider dimensions and page clicks from
 });
 
 test('smooth scrolling keeps continuous and subpixel wheel input immediate', async ({ page }) => {
-	await page.goto('/textModel.html');
+	await openEditor(page);
 	await page.evaluate(() => {
 		window.ashTextModelIntegration.setValue(Array.from({ length: 100 }, () => 'x'.repeat(200)).join('\n'));
 		window.ashTextModelIntegration.updateOptions({ smoothScrolling: true, inertialScroll: false, scrollPredominantAxis: false });
@@ -414,7 +414,7 @@ test('smooth scrolling keeps continuous and subpixel wheel input immediate', asy
 });
 
 test('editor scrollbar arrows support click, hold, keyboard and runtime removal', async ({ page }) => {
-	await page.goto('/textModel.html');
+	await openEditor(page);
 	await page.evaluate(() => {
 		window.ashTextModelIntegration.setValue(Array.from({ length: 100 }, () => 'x'.repeat(200)).join('\n'));
 		window.ashTextModelIntegration.setScrollbar({
@@ -476,7 +476,7 @@ test('editor scrollbar arrows support click, hold, keyboard and runtime removal'
 });
 
 test('editor inertial scrolling decays and stops on reversal, direct input and configuration changes', async ({ page }) => {
-	await page.goto('/textModel.html');
+	await openEditor(page);
 	await page.evaluate(() => {
 		window.ashTextModelIntegration.setValue(Array.from({ length: 100 }, () => 'x'.repeat(200)).join('\n'));
 		window.ashTextModelIntegration.updateOptions({ inertialScroll: true, smoothScrolling: false });
@@ -532,7 +532,7 @@ test('editor inertial scrolling decays and stops on reversal, direct input and c
 });
 
 test('editor distinguishes accelerating pixel input from fixed wheel steps before applying sensitivity', async ({ page }) => {
-	await page.goto('/textModel.html');
+	await openEditor(page);
 	await page.evaluate(() => {
 		window.ashTextModelIntegration.setValue(Array.from({ length: 1000 }, () => 'x'.repeat(200)).join('\n'));
 		window.ashTextModelIntegration.updateOptions({ inertialScroll: true, smoothScrolling: false, mouseWheelScrollSensitivity: 2 });
@@ -577,7 +577,7 @@ test('editor distinguishes accelerating pixel input from fixed wheel steps befor
 });
 
 test('editor surface and diagnostic colors follow the current Ash theme', async ({ page }) => {
-	await page.goto('/textModel.html');
+	await openEditor(page);
 	const editor = page.locator('.stanza-editor');
 	const diagnostic = page.locator('.cdr.squiggly-error');
 	await expect(diagnostic).toHaveCount(1);
@@ -605,7 +605,7 @@ test('editor surface and diagnostic colors follow the current Ash theme', async 
 });
 
 test('editor-owned colors preserve focused cursors, line borders and rulers in all four themes', async ({ page }) => {
-	await page.goto('/textModel.html');
+	await openEditor(page);
 	await page.evaluate(() => window.ashTextModelIntegration.updateOptions({
 		rulers: [12], renderLineHighlight: 'all', cursorBlinking: 'solid',
 	}));
@@ -631,7 +631,7 @@ test('editor-owned colors preserve focused cursors, line borders and rulers in a
 });
 
 test('selection, gutter, whitespace and line numbers resolve editor colors in all four themes', async ({ page }) => {
-	await page.goto('/textModel.html');
+	await openEditor(page);
 	await page.evaluate(() => {
 		window.ashTextModelIntegration.setValue('alpha beta\nsecond line');
 		window.ashTextModelIntegration.updateOptions({ renderWhitespace: 'all', lineNumbers: 'on' });
@@ -682,7 +682,7 @@ test('selection, gutter, whitespace and line numbers resolve editor colors in al
 });
 
 test("glyph margin, line numbers, and folding controls keep VS Code gutter order", async ({ page }) => {
-	await page.goto("/textModel.html");
+	await openEditor(page);
 	const glyphMargin = page.locator(".glyph-margin");
 	const foldingControl = page.locator('.ash-icon-folding-expanded').first();
 	await expect(glyphMargin).toBeVisible();
@@ -726,7 +726,7 @@ test("glyph margin, line numbers, and folding controls keep VS Code gutter order
 });
 
 test('view zones use the standard accessor, whitespace geometry, and disposal chain', async ({ page }) => {
-	await page.goto('/textModel.html');
+	await openEditor(page);
 	const editor = page.locator('.stanza-editor');
 	const baseGeometry = await editor.evaluate(element => {
 		const firstLine = element.querySelector<HTMLElement>('.view-line[data-logical-line-index="0"]');
@@ -773,7 +773,7 @@ test('view zones use the standard accessor, whitespace geometry, and disposal ch
 });
 
 test('content and glyph margin widgets use the standard editor ports in Chromium', async ({ page }) => {
-	await page.goto('/textModel.html');
+	await openEditor(page);
 	await page.evaluate(() => window.ashTextModelIntegration.showWidgets());
 	const editor = page.locator('.stanza-editor');
 	const contentWidget = page.locator('.ash-content-widget-probe');
@@ -807,7 +807,7 @@ test('content and glyph margin widgets use the standard editor ports in Chromium
 });
 
 test('model decorations render through the standard overlay in Chromium', async ({ page }) => {
-	await page.goto('/textModel.html');
+	await openEditor(page);
 	await page.evaluate(() => window.ashTextModelIntegration.showModelDecorations());
 	const inline = page.locator('.ash-model-decoration-inline');
 	const wholeLine = page.locator('.ash-model-decoration-whole');
@@ -846,13 +846,14 @@ test('model decorations render through the standard overlay in Chromium', async 
 });
 
 test("text-model editor has the accessibility contract", async ({ page }) => {
-	await page.goto("/textModel.html");
+	await openEditor(page);
 	const editor = page.locator(".stanza-editor");
 	const input = page.locator(".stanza-editor-input");
 	await expect(editor).toHaveAttribute("role", "region");
 	await expect(editor).toHaveAttribute("aria-label", /.+/);
 	await expect(input).toHaveAttribute("aria-multiline", "true");
 	await expect(input).toHaveAttribute("aria-roledescription", "code editor");
+	await expect(editor.locator('.stanza-editor-token.token-keyword').filter({ hasText: 'fn' }).first()).toBeVisible();
 	await input.focus();
 	const screenReaderContent = input.locator('.stanza-native-screen-reader-content');
 	await expect(screenReaderContent).toContainText('fn main()');
@@ -914,9 +915,10 @@ test('textarea system-caret movement updates the editor only while focused', asy
 	await page.addInitScript(() => {
 		Reflect.deleteProperty(window, 'EditContext');
 	});
-	await page.goto('/textModel.html');
+	await openEditor(page);
 	const input = page.locator('textarea.stanza-editor-input');
 	await expect(input).toHaveCount(1);
+	await expect(page.locator('.stanza-editor-token.token-keyword').filter({ hasText: 'fn' }).first()).toBeVisible();
 	await input.focus();
 	await page.waitForTimeout(110);
 	await input.evaluate(element => {
@@ -949,7 +951,7 @@ test('textarea clipboard events pass through TextAreaInput semantic events', asy
 	await page.addInitScript(() => {
 		Reflect.deleteProperty(window, 'EditContext');
 	});
-	await page.goto('/textModel.html');
+	await openEditor(page);
 	const input = page.locator('textarea.stanza-editor-input');
 	await input.focus();
 	await page.waitForTimeout(110);
@@ -992,7 +994,7 @@ function assertBox(box: { readonly x: number; readonly y: number; readonly width
 
 
 test('large multiline keyboard input replaces the selection and keeps the editor responsive', async ({ page }) => {
-	await page.goto('/textModel.html');
+	await openEditor(page);
 	const input = page.locator('.stanza-editor-input');
 	await input.focus();
 	await input.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
@@ -1003,3 +1005,8 @@ test('large multiline keyboard input replaces the selection and keeps the editor
 	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe(content + '!');
 	await expect(page.locator('.view-line[data-logical-line-index="199"]')).toBeVisible();
 });
+
+async function openEditor(page: Page): Promise<void> {
+	await page.goto('/textModel.html');
+	await page.waitForFunction(() => window.ashTextModelIntegration !== undefined);
+}

@@ -12,6 +12,7 @@ import { AppServerLanguageProviders } from '../../../src/ash/workbench/services/
 const store = new DisposableStore();
 const changes = store.add(new Emitter<ServerNotification>());
 const workspace = store.add(new WorkspaceContextService({ id: 'workspace', uri: stanza.URI.file('/project') }));
+store.add(stanza.languages.registerLanguages([{ description: { id: 'python', extensions: ['.py'] } }]));
 const model = store.add(stanza.editor.createModel('pri', 'python', stanza.URI.file('/project/main.py')));
 const editor = store.add(stanza.editor.create(document.querySelector<HTMLElement>('#editor')!, { model }));
 const features = StandaloneServices.get(ILanguageFeaturesService);

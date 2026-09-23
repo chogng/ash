@@ -97,6 +97,25 @@ test("standalone service collection honors explicit first-scope overrides", () =
 	languageConfigurations.dispose();
 });
 
+test('standalone language identity and editing rules require host registration', () => {
+	using services = new StandaloneServiceCollection({});
+	const resource = URI.file('/project/main.ts');
+	using model = services.modelService.createModel('const value = 1;', services.languageService.createByFilepathOrFirstLine(resource), resource);
+	assert.deepEqual(services.languageService.getRegisteredLanguageIds(), ['plaintext']);
+	assert.equal(model.getLanguageId(), 'plaintext');
+	assert.equal(services.languageConfigurationService.getLanguageConfiguration('typescript').comments, null);
+
+	using language = services.languageService.registerLanguage({ id: 'typescript', extensions: ['.ts'] });
+	using configuration = services.languageConfigurationService.register('typescript', { comments: { lineComment: '//' } });
+	assert.equal(model.getLanguageId(), 'typescript');
+	assert.equal(services.languageConfigurationService.getLanguageConfiguration('typescript').comments?.lineCommentToken, '//');
+
+	configuration.dispose();
+	language.dispose();
+	assert.equal(model.getLanguageId(), 'plaintext');
+	assert.equal(services.languageConfigurationService.getLanguageConfiguration('typescript').comments, null);
+});
+
 test('standalone services own and release their default formatter selection', async () => {
 	using model = new TextModel('alpha');
 	const first: DocumentFormattingEditProvider = { provideDocumentFormattingEdits: () => [] };
@@ -448,6 +467,10 @@ test("standalone completion providers execute in a live editor", async () => {
 });
 
 test("standalone API registers URI and language identity with model lifecycle events", () => {
+	using descriptions = stanza.languages.registerLanguages([
+		{ description: { id: 'typescript', extensions: ['.ts'] } },
+		{ description: { id: 'javascript', extensions: ['.js'] } },
+	]);
 	const resource = URI.parse("inmemory://stanza/registry.ts");
 	const created: string[] = [];
 	const disposed: string[] = [];

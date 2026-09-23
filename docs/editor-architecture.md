@@ -43,6 +43,8 @@ decoration 等身份只能由 `editor` 领域定义，不得为了复用而下�
 
 基础语法高亮不注册 App Server token provider。内置 JavaScript/JSX、TypeScript/TSX、JSON/JSONC、Rust 与 Shell grammar 由扩展资源服务装载，前端 TextMate Worker 持有行状态栈并计算 token。后台分析延迟不阻塞输入、撤销或词法着色；Semantic Tokens 在独立通道异步合成。Shell 在前端统一使用 `shellscript`，后台 `shell` 标识仅在 Workbench 领域适配处转换。
 
+语言关联、注释、括号和缩进规则与 grammar 一样来自扩展贡献，随扩展装载和撤销。核心只注册纯文本；standalone 宿主显式注册其他语言能力。资源识别查询同一个 LanguageService，产品不维护第二份 MIME 或后缀表。
+
 ## 环境分层与 base 联动
 
 依赖方向是 `contrib/browser → browser/common → common → base/common`，同时

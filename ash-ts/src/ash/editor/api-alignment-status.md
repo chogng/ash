@@ -4,7 +4,7 @@
 
 起始工作树干净，基线 `9526e1364`。完整目录调查为 6 个同路径文件、3 个仅 Ash 文件、26 个仅上游生产文件（20 个 TypeScript、4 个 CSS、2 个图像）。名称差异只用来调查，不作为实现队列或完成指标。
 
-用户已确认：将 `standalone/browser/namedEditorThemeService.ts` 迁入 `standalone/browser/standaloneThemeService.ts`，将 `standalone/common/namedEditorTheme.ts` 迁入 `standalone/common/standaloneTheme.ts`；迁完全部引用后删除两个旧路径，Git 基线可恢复。保留 `standalone/common/builtinLanguages.ts` 的内置语言装配职责，保留语言批量注册、provider 批量替换和 Worker 工厂注入能力。
+用户已确认：将 `standalone/browser/namedEditorThemeService.ts` 迁入 `standalone/browser/standaloneThemeService.ts`，将 `standalone/common/namedEditorTheme.ts` 迁入 `standalone/common/standaloneTheme.ts`；迁完全部引用后删除两个旧路径，Git 基线可恢复。当时保留 `standalone/common/builtinLanguages.ts` 的内置语言装配职责；该决定随后由“语言声明归属修正”更新。语言批量注册、provider 批量替换和 Worker 工厂注入能力仍予保留。
 
 首批准入链：`editor.create / setTheme / defineNamedTheme` → StandaloneServices → 单窗口主题服务 → 原主题注册表与强制颜色监听 → 已有主题绑定更新 → 主题服务单测、公开入口单测与真实浏览器主题场景。主题数据仍由平台颜色注册表编译，编辑器根、菜单根、焦点、布局和模型状态的 owner 不变。
 
@@ -120,6 +120,16 @@ Monarch 首批准入：宿主在语言激活回调注册声明式规则 → `set
 任务期间 HEAD 从起始基线前进至 `f9f059f46`；新增提交包括前端 Diff 和 TextMate 分词职责调整，均保留。完整回归发现 `ash-ts/test/integration/browser/textModel.integration.ts` 仍只注入后端诊断 / 符号 provider，没有词法 provider，却断言关键字着色和 Worker 存在。追加该准确测试路径准入：使用仓库 Rust grammar 和已有 TextMate Worker 工厂为 BrowserTextModelService 提供词法输入；后端 fixture 的 tokens 改为空，明确验证两条真实来源。保留现有颜色、块光标、符号和编辑断言，不改变生产 provider 职责。失败的 3 项定向重跑均通过，完整检查在当前 HEAD 重新执行。
 
 本批最终验证：`check-editor-alignment.mjs --test=all` 退出码 0，239 / 239 个单测文件与 623 项 Playwright 场景通过；台账、文件集合、CSS 归属、类型和 diff 检查通过，源码目录没有新增 JavaScript。Monarch 定向测试新增捕获组 rematch 后跨行进入 / 退出嵌入语言，共 6 项通过。当前 HEAD 上的 `build:stanza`、`build:renderer` 均通过，无构建 warning。测试保留已有 JSDOM Canvas 和 NO_COLOR / FORCE_COLOR 环境提示。目录复核仍为 18 个同路径、1 个经批准保留的 Ash 文件、14 个缺失生产文件；上文待补端口与待确认迁移未宣称完成。
+
+## 语言声明归属修正（2026-09-22）
+
+本轮修正此前“合并内置语言表”仍与扩展重复定义的问题。Editor 核心只注册纯文本；产品语言关联、编辑规则和 TextMate grammar 由真实扩展贡献提供，standalone 宿主显式注册其他语言。`standalone/common/builtinLanguages.ts` 已退出，平台资源识别不再维护另一份 MIME/后缀表。旧编辑规则只作为测试 fixture 保留。
+
+语言注册表仍由现有 LanguageService 实例持有，扩展释放时关联、规则和 grammar 一同退出。JSON provider 继续由 Workbench 装配；TextModel 与词法 Worker 留在前端。普通文件在扩展加载前也能选择文本编辑器，PDF 和明确二进制类型保留更高优先级，显式 Open With 仍然有效。
+
+本轮定向验证覆盖默认纯文本、宿主注册/释放、八种语言的真实扩展装载、输入/撤销/保存、无障碍选区和 Electron 文件打开。116 项单测通过；29 个不同的 Chromium 场景及两个 Electron 场景完成验证。浏览器复验曾暴露首次着色与辅助阅读选区操作的时序冲突，测试改为等待首轮真实着色后操作；两个相关场景各重复三次通过。桌面和 Stanza 生产构建、结构检查通过。既有 JSDOM Canvas 与 Playwright 颜色环境提示仍存在，生产构建无新增 warning。
+
+此项是语言声明与高亮职责的修正，不代表全部语言服务或 Editor API 与 VS Code 完全一致。准确路径与验证记录见 [迁移计划](../../../../app/docs/crate-migration-plan.md#第五批补充语言声明与-vs-code-职责对齐)。
 
 ## Folding 元数据与命令参数边界（2026-09-21）
 

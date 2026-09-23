@@ -14,7 +14,6 @@ import { EditorPaneVisibility } from "../../../../browser/parts/editor/editorPan
 import { TextFileContentSource, type ITextFileService, type ResolvedTextFileContent, type TextFileResolveRequest } from "../../../../services/textfile/common/textFileService.js";
 import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';
 import { LanguageService } from '../../../../../editor/common/services/languageService.js';
-import { registerBuiltinLanguageDescriptions } from '../../../../../editor/standalone/common/builtinLanguages.js';
 import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import { type ILanguageDiagnosticsService, type LanguageDiagnosticsPublisher, type LanguageDiagnosticSnapshot } from "../../../../services/language/common/languageDiagnosticsService.js";
 import { type TextModel } from "../../../../../editor/common/model/textModel.js";
@@ -64,7 +63,7 @@ test("Stanza editor pane loads, lays out, focuses, hides, and clears one editor 
 	const textFiles = new ImmediateTextFiles("from disk");
 	const resourceStore = new BrowserTextResourceStore(textFiles);
 	using languageService = new LanguageService();
-	using builtinLanguages = registerBuiltinLanguageDescriptions(languageService.languages);
+	using language = languageService.registerLanguage({ id: 'typescript', extensions: ['.ts'] });
 	using models = new BrowserTextModelService(resourceStore, { languageService });
 	using services = paneServices(models);
 	const pane = createPane(services, resourceStore, { textDirection: EditorTextDirection.RightToLeft, fontFamily: "Fira Code, monospace", fontSize: 16 });
@@ -185,7 +184,7 @@ test("Stanza editor pane acquires the Workbench language service for its detecte
 	const textFiles = new ImmediateTextFiles("const value = 1;");
 	const resourceStore = new BrowserTextResourceStore(textFiles);
 	using languageService = new LanguageService();
-	using builtinLanguages = registerBuiltinLanguageDescriptions(languageService.languages);
+	using language = languageService.registerLanguage({ id: 'typescript', extensions: ['.ts'] });
 	using languages = new LanguageFeaturesService();
 	using models = new BrowserTextModelService(resourceStore, { languageService, languageFeaturesService: languages });
 	using services = paneServices(models, languages);

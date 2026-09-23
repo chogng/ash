@@ -3,8 +3,7 @@ import { test } from "mocha";
 import { CursorsController } from "../../../common/cursor/cursor.js";
 import { DeleteOperations } from "../../../common/cursor/cursorDeleteOperations.js";
 import { EditOperationType } from "../../../common/cursorCommon.js";
-import { registerBuiltinLanguageConfigurations } from '../../../standalone/common/builtinLanguages.js';
-import { TestLanguageConfigurationService } from '../modes/testLanguageConfigurationService.js';
+import { TestLanguageConfigurationService, registerTestLanguageConfigurations } from '../modes/testLanguageConfigurationService.js';
 import { Selection } from "../../../common/core/selection.js";
 import { Position } from "../../../common/core/position.js";
 import { Range } from "../../../common/core/range.js";
@@ -15,7 +14,7 @@ import { ViewModelEventsCollector } from '../../../common/viewModelEventDispatch
 test("Auto-closing trust follows external edits and rejects a changed closer", () => {
 	using model = new TextModel('x', { languageId: 'typescript' });
 	using configurations = new TestLanguageConfigurationService();
-	using builtins = registerBuiltinLanguageConfigurations(configurations);
+	using builtins = registerTestLanguageConfigurations(configurations);
 	using selections = createTestCursorsController(model, [caret(1)], {}, configurations);
 	typeText(selections, '(');
 
@@ -30,7 +29,7 @@ test("Auto-closing trust follows external edits and rejects a changed closer", (
 test("Leaving an auto-closed pair invalidates its trust permanently", () => {
 	using model = new TextModel('', { languageId: 'typescript' });
 	using configurations = new TestLanguageConfigurationService();
-	using builtins = registerBuiltinLanguageConfigurations(configurations);
+	using builtins = registerTestLanguageConfigurations(configurations);
 	using selections = createTestCursorsController(model, [caret(0)], {}, configurations);
 	typeText(selections, '(');
 	assert.equal(canOvertype(model, selections, new Position((0) + 1, (1) + 1), ")"), true);
@@ -43,7 +42,7 @@ test("Leaving an auto-closed pair invalidates its trust permanently", () => {
 test("User-authored pairs cannot be overtyped or pair-deleted", () => {
 	using model = new TextModel("()", { languageId: 'typescript' });
 	using configurations = new TestLanguageConfigurationService();
-	using builtins = registerBuiltinLanguageConfigurations(configurations);
+	using builtins = registerTestLanguageConfigurations(configurations);
 	using selections = createTestCursorsController(model, [caret(1)], {}, configurations);
 
 	typeText(selections, ')');
@@ -57,7 +56,7 @@ test("User-authored pairs cannot be overtyped or pair-deleted", () => {
 test("Multi-selection auto-closing entries retain independent ownership", () => {
 	using model = new TextModel('a b', { languageId: 'typescript' });
 	using configurations = new TestLanguageConfigurationService();
-	using builtins = registerBuiltinLanguageConfigurations(configurations);
+	using builtins = registerTestLanguageConfigurations(configurations);
 	using selections = createTestCursorsController(model, primaryFirst([caret(1), caret(3)], 0), {}, configurations);
 	typeText(selections, '(');
 	assert.equal(model.getText(), "a() b()");
@@ -72,7 +71,7 @@ test("Multi-selection auto-closing entries retain independent ownership", () => 
 test("Undo removes provenance and redo does not invent it again", () => {
 	using model = new TextModel("", { languageId: 'typescript' });
 	using configurations = new TestLanguageConfigurationService();
-	using builtins = registerBuiltinLanguageConfigurations(configurations);
+	using builtins = registerTestLanguageConfigurations(configurations);
 	using selections = createTestCursorsController(model, [caret(0)], {}, configurations);
 	typeText(selections, '(');
 
@@ -88,7 +87,7 @@ test("Undo removes provenance and redo does not invent it again", () => {
 test("Cursor disposal leaves the model alive", () => {
 	using model = new TextModel('()', { languageId: 'typescript' });
 	using configurations = new TestLanguageConfigurationService();
-	using builtins = registerBuiltinLanguageConfigurations(configurations);
+	using builtins = registerTestLanguageConfigurations(configurations);
 	using selections = createTestCursorsController(model, [caret(0)], {}, configurations);
 
 	selections.dispose();
