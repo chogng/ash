@@ -5,6 +5,7 @@ import type { CodebaseConfigDto } from './CodebaseConfigDto.js';
 import type { ExecPolicyRuleDto } from './ExecPolicyRuleDto.js';
 import type { FeatureState } from './FeatureState.js';
 import type { FrontendConfigDto } from './FrontendConfigDto.js';
+import type { GitConfigDto } from './GitConfigDto.js';
 import type { GrepBackendDto } from './GrepBackendDto.js';
 import type { HookConfigDto } from './HookConfigDto.js';
 import type { IssueConfigDto } from './IssueConfigDto.js';
@@ -19,4 +20,4 @@ import type { TimeContextConfigDto } from './TimeContextConfigDto.js';
 import type { ToolMode } from './ToolMode.js';
 import type { ToolSearchConfigDto } from './ToolSearchConfigDto.js';
 
-export type ConfigReadResult = { timeContext: TimeContextConfigDto, features: Array<FeatureState>, issues: IssueConfigDto, revision: number, generation: number, model: ModelRef | null, modelReasoningEffort?: ReasoningEffort | null, approvalReviewModel: ApprovalReviewModelSelection, commitMessageModel?: ModelRef | null, advisor?: AdvisorConfig | null, commitMessageActiveDirAuthorized: boolean, toolMode: ToolMode, grepBackend: GrepBackendDto, gui: FrontendConfigDto, providers: { [key in string]: ProviderConfigDto }, mcpServers: { [key in string]: McpServerConfigDto }, skillSources: { [key in string]: SkillSourceConfigDto }, pluginRequests: { [key in string]: PluginRequestDto }, hooks: { [key in string]: HookConfigDto }, languageServers: { [key in string]: LanguageServerConfigDto }, toolSearch: ToolSearchConfigDto, codebase: CodebaseConfigDto, execPolicyRules: Array<ExecPolicyRuleDto>, tui: FrontendConfigDto, };
+export type ConfigReadResult = { timeContext: TimeContextConfigDto, features: Array<FeatureState>, issues: IssueConfigDto, git: GitConfigDto, gitConfigured: boolean, revision: number, generation: number, model: ModelRef | null, modelReasoningEffort?: ReasoningEffort | null, approvalReviewModel: ApprovalReviewModelSelection, commitMessageModel?: ModelRef | null, advisor?: AdvisorConfig | null, commitMessageActiveDirAuthorized: boolean, toolMode: ToolMode, grepBackend: GrepBackendDto, gui: FrontendConfigDto, providers: { [key in string]: ProviderConfigDto }, mcpServers: { [key in string]: McpServerConfigDto }, skillSources: { [key in string]: SkillSourceConfigDto }, pluginRequests: { [key in string]: PluginRequestDto }, hooks: { [key in string]: HookConfigDto }, languageServers: { [key in string]: LanguageServerConfigDto }, toolSearch: ToolSearchConfigDto, codebase: CodebaseConfigDto, execPolicyRules: Array<ExecPolicyRuleDto>, tui: FrontendConfigDto, };

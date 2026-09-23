@@ -197,6 +197,38 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
 }
 
 #[test]
+fn git_autofetch_settings_change_the_shared_config_snapshot() {
+    let choices = || {
+        config_choices(
+            &empty_config_snapshot(),
+            &providers(),
+            TerminalSettings::default(),
+            StatusLineSettings::default(),
+        )
+    };
+    let mut mode = super::ConfigEditor::new(choices());
+    for _ in 0..9 {
+        mode.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    }
+    assert!(matches!(
+        mode.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        super::ConfigEditorOutcome::Action(ConfigSelectionAction::SetGitMode(edit))
+            if edit.server_config.git.autofetch
+                == ash_app_server_protocol::protocol::config::GitAutoFetchModeDto::Default
+    ));
+
+    let mut period = super::ConfigEditor::new(choices());
+    for _ in 0..10 {
+        period.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    }
+    assert!(matches!(
+        period.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        super::ConfigEditorOutcome::Action(ConfigSelectionAction::SetGitPeriod(edit))
+            if edit.server_config.git.autofetch_period == 300
+    ));
+}
+
+#[test]
 fn issue_settings_only_control_browser_refresh() {
     let spec = config_choices(
         &empty_config_snapshot(),

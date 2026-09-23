@@ -28,6 +28,8 @@ use ash_app_server_protocol::protocol::git::GitSubmoduleStateDto;
 use ash_app_server_protocol::protocol::git::GitTextDiffDto;
 use ash_app_server_protocol::protocol::git::GitTextDiffResult;
 use ash_app_server_protocol::protocol::git::GitUpstreamDto;
+use ash_config::ConfigStore;
+use ash_config::GitAutoFetchMode;
 use ash_file_access::Authorization;
 use ash_file_watcher::DebouncedWatchReceiver;
 use ash_file_watcher::FileWatcher;
@@ -55,8 +57,10 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
+use std::sync::mpsc;
 use std::thread::JoinHandle;
 use std::time::Duration;
+use std::time::Instant;
 
 const GIT_WATCH_DEBOUNCE: Duration = Duration::from_millis(100);
 const ALIASED_PATH_POLL_INTERVAL: Duration = Duration::from_millis(100);
@@ -80,6 +84,7 @@ struct GitRepositoryRuntime {
 #[derive(Default)]
 pub(super) struct GitWatcher {
     shutdown: Option<tokio::sync::oneshot::Sender<()>>,
+    auto_fetch_shutdown: Option<mpsc::Sender<()>>,
     thread: Option<JoinHandle<()>>,
     children: Vec<GitWatcher>,
 }
@@ -93,6 +98,12 @@ struct GitRuntimeState {
 struct GraphSession {
     token: String,
     cursor: GitGraphCursor,
+}
+
+#[derive(Clone, Copy)]
+enum StatusNotification {
+    OnChange,
+    Always,
 }
 
 pub(super) struct GitRuntimeCommit {
@@ -429,15 +440,25 @@ impl GitRuntime {
         }
     }
 
-    pub(super) fn start_watching(self: &Arc<Self>) -> GitWatcher {
+    pub(super) fn start_watching(self: &Arc<Self>, config: Option<Arc<ConfigStore>>) -> GitWatcher {
+        let mut children = self
+            .repositories
+            .iter()
+            .map(GitRepositoryRuntime::start_watching)
+            .collect::<Vec<_>>();
+        if let Some(config) = config {
+            children.extend(
+                self.repositories
+                    .iter()
+                    .filter(|repository| repository.service.can_mutate())
+                    .map(|repository| repository.start_autofetch(Arc::clone(&config))),
+            );
+        }
         GitWatcher {
             shutdown: None,
+            auto_fetch_shutdown: None,
             thread: None,
-            children: self
-                .repositories
-                .iter()
-                .map(GitRepositoryRuntime::start_watching)
-                .collect(),
+            children,
         }
     }
 
@@ -796,7 +817,23 @@ impl GitRepositoryRuntime {
         }
         GitWatcher {
             shutdown: Some(shutdown),
+            auto_fetch_shutdown: None,
             thread,
+            children: Vec::new(),
+        }
+    }
+
+    fn start_autofetch(self: &Arc<Self>, config: Arc<ConfigStore>) -> GitWatcher {
+        let (shutdown, shutdown_rx) = mpsc::channel();
+        let runtime = Arc::downgrade(self);
+        let thread = std::thread::Builder::new()
+            .name("ash-git-autofetch".into())
+            .spawn(move || run_autofetch(runtime, config, shutdown_rx))
+            .expect("Git automatic-fetch worker starts");
+        GitWatcher {
+            shutdown: None,
+            auto_fetch_shutdown: Some(shutdown),
+            thread: Some(thread),
             children: Vec::new(),
         }
     }
@@ -823,13 +860,28 @@ impl GitRepositoryRuntime {
             &GitService,
         ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError>,
     ) -> Result<GitStatusResult, GitRuntimeError> {
-        self.mutate_paths(operation)
+        let _operation = self
+            .operation
+            .lock()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        let (repository, snapshot) = operation(&self.service).map_err(GitRuntimeError::Service)?;
+        self.invalidate_graphs()?;
+        self.accept_status(repository, snapshot, StatusNotification::Always)
     }
 
     fn accept(
         &self,
         repository: GitRepository,
         snapshot: GitRepositorySnapshot,
+    ) -> Result<GitStatusResult, GitRuntimeError> {
+        self.accept_status(repository, snapshot, StatusNotification::OnChange)
+    }
+
+    fn accept_status(
+        &self,
+        repository: GitRepository,
+        snapshot: GitRepositorySnapshot,
+        notification: StatusNotification,
     ) -> Result<GitStatusResult, GitRuntimeError> {
         let mut projected = project_status(
             self.descriptor.id.clone(),
@@ -847,7 +899,7 @@ impl GitRepositoryRuntime {
             && state.status.as_ref().is_some_and(|current| {
                 current.head == projected.head && current.changes == projected.changes
             });
-        if unchanged {
+        if unchanged && matches!(notification, StatusNotification::OnChange) {
             projected.revision = state.revision;
             return Ok(projected);
         }
@@ -937,10 +989,69 @@ impl Drop for GitWatcher {
         if let Some(shutdown) = self.shutdown.take() {
             let _ = shutdown.send(());
         }
+        if let Some(shutdown) = self.auto_fetch_shutdown.take() {
+            let _ = shutdown.send(());
+        }
         if let Some(thread) = self.thread.take() {
             let _ = thread.join();
         }
         self.children.clear();
+    }
+}
+
+fn run_autofetch(
+    runtime: std::sync::Weak<GitRepositoryRuntime>,
+    config: Arc<ConfigStore>,
+    shutdown: mpsc::Receiver<()>,
+) {
+    let changes = config.subscribe_changes();
+    let Ok(snapshot) = config.read_snapshot() else {
+        log::warn!("Git automatic fetch could not read configuration");
+        return;
+    };
+    let mut policy = snapshot.values.git;
+    let mut due = Instant::now();
+    loop {
+        if shutdown.try_recv().is_ok() {
+            return;
+        }
+        if policy.autofetch != GitAutoFetchMode::Off && Instant::now() >= due {
+            let Some(repository) = runtime.upgrade() else {
+                return;
+            };
+            let result = match policy.autofetch {
+                GitAutoFetchMode::Default => repository.fetch_default(),
+                GitAutoFetchMode::All => repository.fetch(),
+                GitAutoFetchMode::Off => unreachable!(),
+            };
+            if let Err(error) = result {
+                log::warn!("Git automatic fetch failed: {error:?}");
+            }
+            due = Instant::now() + Duration::from_secs(u64::from(policy.autofetch_period));
+        }
+        let wait = if policy.autofetch == GitAutoFetchMode::Off {
+            Duration::from_secs(1)
+        } else {
+            due.saturating_duration_since(Instant::now())
+                .min(Duration::from_secs(1))
+        };
+        match changes.recv_timeout(wait) {
+            Ok(_) => match config.read_snapshot() {
+                Ok(snapshot) => {
+                    let updated = snapshot.values.git;
+                    if updated != policy {
+                        policy = updated;
+                        due = Instant::now();
+                    }
+                }
+                Err(error) => {
+                    log::warn!("Git automatic fetch could not reload configuration: {error}");
+                    return;
+                }
+            },
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Disconnected) => return,
+        }
     }
 }
 

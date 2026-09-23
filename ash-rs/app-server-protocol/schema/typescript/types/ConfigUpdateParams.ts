@@ -4,10 +4,11 @@ import type { ApprovalReviewModelSelection } from './ApprovalReviewModelSelectio
 import type { CommandId } from './CommandId.js';
 import type { Feature } from './Feature.js';
 import type { FrontendConfigDto } from './FrontendConfigDto.js';
+import type { GitConfigDto } from './GitConfigDto.js';
 import type { GrepBackendDto } from './GrepBackendDto.js';
 import type { ModelRef } from './ModelRef.js';
 import type { ReasoningEffort } from './ReasoningEffort.js';
 import type { TimeContextConfigDto } from './TimeContextConfigDto.js';
 import type { ToolMode } from './ToolMode.js';
 
-export type ConfigUpdateParams = { timeContext?: TimeContextConfigDto | null, features?: { [key in Feature]?: boolean } | null, commandId: CommandId, expectedRevision: number, model?: ModelRef | null, modelReasoningEffort?: ReasoningEffort | null, approvalReviewModel?: ApprovalReviewModelSelection | null, commitMessageModel?: ModelRef | null, advisor?: AdvisorConfig | null, toolMode?: ToolMode | null, grepBackend?: GrepBackendDto | null, gui?: FrontendConfigDto | null, tui?: FrontendConfigDto | null, };
+export type ConfigUpdateParams = { timeContext?: TimeContextConfigDto | null, features?: { [key in Feature]?: boolean } | null, commandId: CommandId, expectedRevision: number, model?: ModelRef | null, modelReasoningEffort?: ReasoningEffort | null, approvalReviewModel?: ApprovalReviewModelSelection | null, commitMessageModel?: ModelRef | null, advisor?: AdvisorConfig | null, toolMode?: ToolMode | null, grepBackend?: GrepBackendDto | null, git?: GitConfigDto | null, gui?: FrontendConfigDto | null, tui?: FrontendConfigDto | null, };

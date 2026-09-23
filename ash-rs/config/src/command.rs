@@ -45,6 +45,8 @@ pub struct PreferencesUpdate {
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     pub grep_backend: Patch<GrepBackend>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
+    pub git: Patch<crate::GitConfig>,
+    #[serde(default, skip_serializing_if = "Patch::is_missing")]
     pub gui: Patch<BTreeMap<String, serde_json::Value>>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     pub tui: Patch<BTreeMap<String, serde_json::Value>>,

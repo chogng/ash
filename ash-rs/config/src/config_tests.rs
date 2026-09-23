@@ -78,6 +78,26 @@ worktree-keep-count = 4
 }
 
 #[test]
+fn git_autofetch_is_shared_and_validated() {
+    let default = UserConfigDocument::default();
+    let resolved = ResolvedConfig::from(&default);
+    assert_eq!(resolved.git, GitConfig::default());
+    assert!(!resolved.git_configured);
+
+    let configured =
+        toml::from_str::<UserConfigDocument>("[git]\nautofetch = 'all'\nautofetchPeriod = 60\n")
+            .unwrap();
+    configured.validate().unwrap();
+    let resolved = ResolvedConfig::from(&configured);
+    assert_eq!(resolved.git.autofetch, GitAutoFetchMode::All);
+    assert_eq!(resolved.git.autofetch_period, 60);
+    assert!(resolved.git_configured);
+
+    let invalid = toml::from_str::<UserConfigDocument>("[git]\nautofetchPeriod = 0\n").unwrap();
+    assert!(invalid.validate().is_err());
+}
+
+#[test]
 fn tool_search_defaults_to_lexical_and_requires_a_configured_embedding_model() {
     let default_document = toml::from_str::<UserConfigDocument>("").unwrap();
     assert_eq!(
@@ -420,6 +440,7 @@ fn update_preferences(
             commit_message_model: Patch::Missing,
             tool_mode: Patch::Missing,
             grep_backend: Patch::Missing,
+            git: Patch::Missing,
             gui: Patch::Missing,
             tui: Patch::Missing,
         }),
@@ -761,6 +782,7 @@ fn tool_mode_defaults_to_direct_and_updates_durably() {
                 commit_message_model: Patch::Missing,
                 tool_mode: Patch::Value(ash_protocol::ToolMode::CodeModeOnly),
                 grep_backend: Patch::Value(GrepBackend::Tgrep),
+                git: Patch::Missing,
                 gui: Patch::Missing,
                 tui: Patch::Missing,
             }),
@@ -1295,6 +1317,7 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
                 commit_message_model: Patch::Missing,
                 tool_mode: Patch::Missing,
                 grep_backend: Patch::Missing,
+                git: Patch::Missing,
                 gui: Patch::Missing,
                 tui: Patch::Missing,
                 approval_review_model: Patch::Value(ApprovalReviewModelSelection::Explicit {
@@ -1319,6 +1342,7 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
                 commit_message_model: Patch::Missing,
                 tool_mode: Patch::Missing,
                 grep_backend: Patch::Missing,
+                git: Patch::Missing,
                 gui: Patch::Missing,
                 tui: Patch::Missing,
                 approval_review_model: Patch::Value(ApprovalReviewModelSelection::Explicit {

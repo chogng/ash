@@ -59,6 +59,8 @@ fn desktop_configuration_maps_persisted_mode_into_catalog_policy() {
         issues: ash_app_server_protocol::protocol::issues::IssueConfigDto {
             auto_refresh_minutes: 10,
         },
+        git: Default::default(),
+        git_configured: false,
         tool_mode: Default::default(),
         grep_backend: GrepBackendDto::Ripgrep,
         gui: FrontendConfigDto::default(),
@@ -113,6 +115,8 @@ fn desktop_configuration_does_not_start_unconfigured_language_servers() {
         issues: ash_app_server_protocol::protocol::issues::IssueConfigDto {
             auto_refresh_minutes: 10,
         },
+        git: Default::default(),
+        git_configured: false,
         tool_mode: Default::default(),
         grep_backend: GrepBackendDto::Ripgrep,
         gui: FrontendConfigDto::default(),

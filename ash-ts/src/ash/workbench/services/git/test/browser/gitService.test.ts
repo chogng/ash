@@ -98,135 +98,61 @@ test("GitService routes resources and requests to an explicitly selected reposit
 	assert.deepEqual(statusRequests, [nestedId]);
 });
 
-test('GitService starts Auto Fetch when the App Server was ready before service creation', async () => {
-	const repositoryId = `repo_${'6'.repeat(64)}`;
-	const requests: Array<{ repositoryId?: string; mode: string }> = [];
+test('GitService reads and writes shared Auto Fetch settings through App Server', async () => {
+	let revision = 0;
+	let git = { autofetch: 'off', autofetchPeriod: 180 };
+	const writes: typeof git[] = [];
 	const api = {
-		repositories: async () => ({ repositories: [{ id: repositoryId, label: 'workspace', path: '' }] }),
-		fetch: async (params: { readonly repositoryId?: string; readonly mode: string }) => {
-			requests.push(params);
-			return { status: {
-				repositoryId,
-				streamInstanceId: 'stream-1',
-				revision: 1,
-				workspacePath: '/workspace',
-				head: { type: 'unborn', name: 'main' },
-				changes: [],
-			} };
+		readConfig: async () => ({ revision, git, gitConfigured: revision > 0 }),
+		updateConfig: async (params: { expectedRevision: number; git: typeof git }) => {
+			assert.equal(params.expectedRevision, revision);
+			git = params.git;
+			writes.push(git);
+			revision++;
 		},
+		fetch: () => { throw new Error('Desktop must not schedule automatic fetch'); },
 	} as unknown as IGitApi;
 	const appServerApi = { getConnectionState: async () => 'ready', onConnectionState: () => toDisposable(() => undefined) } as unknown as IAppServerApi;
 	const eventApi = { subscribe: () => toDisposable(() => undefined) } as unknown as IServerEventApi;
-	using workspaceContext = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using workspaceContext = new WorkspaceContextService({ id: 'empty-window' });
 	using configuration = new WorkbenchConfigurationService();
-	await configuration.updateValue(GitConfiguration.autofetch, true);
 	using service = new GitService({ api, appServerApi, eventApi, workspaceContext }, configuration, new NullLoggerService());
-
-	await waitFor(() => requests.length === 1);
-	assert.deepEqual(requests, [{ repositoryId, mode: 'default' }]);
+	await service.setAutoFetch(true);
+	assert.equal(service.autoFetch, true);
+	await service.setAutoFetchPeriod(60);
+	assert.equal(service.autoFetchPeriod, 60);
+	await service.setAutoFetch('all');
+	assert.deepEqual(writes, [
+		{ autofetch: 'default', autofetchPeriod: 180 },
+		{ autofetch: 'default', autofetchPeriod: 60 },
+		{ autofetch: 'all', autofetchPeriod: 60 },
+	]);
+	await assert.rejects(service.setAutoFetchPeriod(0), /1 to 86400/);
 });
 
-test('GitService applies Auto Fetch mode changes and stops when the workspace closes', async () => {
-	const firstId = `repo_${'1'.repeat(64)}`;
-	const secondId = `repo_${'2'.repeat(64)}`;
-	let repositoryId = firstId;
-	const requests: Array<{ repositoryId?: string; mode: string }> = [];
+test('GitService migrates persisted Desktop Auto Fetch settings once', async () => {
+	let revision = 0;
+	let git = { autofetch: 'off', autofetchPeriod: 180 };
 	const api = {
-		repositories: async () => ({ repositories: [{ id: repositoryId, label: 'workspace', path: '' }] }),
-		fetch: async (params: { readonly repositoryId?: string; readonly mode: string }) => {
-			requests.push(params);
-			return { status: {
-				repositoryId: params.repositoryId,
-				streamInstanceId: 'stream-1',
-				revision: requests.length,
-				workspacePath: '/workspace',
-				head: { type: 'unborn', name: 'main' },
-				changes: [],
-			} };
+		readConfig: async () => ({ revision, git, gitConfigured: revision > 0 }),
+		updateConfig: async (params: { expectedRevision: number; git: typeof git }) => {
+			assert.equal(params.expectedRevision, revision);
+			git = params.git;
+			revision++;
 		},
 	} as unknown as IGitApi;
 	const appServerApi = { getConnectionState: async () => 'ready', onConnectionState: () => toDisposable(() => undefined) } as unknown as IAppServerApi;
 	const eventApi = { subscribe: () => toDisposable(() => undefined) } as unknown as IServerEventApi;
-	using workspaceContext = new WorkspaceContextService({ id: 'first', uri: URI.file('/workspace') });
+	using workspaceContext = new WorkspaceContextService({ id: 'empty-window' });
 	using configuration = new WorkbenchConfigurationService();
-	using service = new GitService({ api, appServerApi, eventApi, workspaceContext }, configuration, new NullLoggerService());
-	await service.listRepositories();
-	await assert.rejects(configuration.updateValue(GitConfiguration.autofetchPeriod, 0), /1 to 86400/);
-	await configuration.updateValue(GitConfiguration.autofetchPeriod, 1);
-	await delay(20);
-	assert.deepEqual(requests, []);
-
-	await configuration.updateValue(GitConfiguration.autofetch, true);
-	await waitFor(() => requests.length === 1);
-	assert.deepEqual(requests[0], { repositoryId: firstId, mode: 'default' });
 	await configuration.updateValue(GitConfiguration.autofetch, 'all');
-	await waitFor(() => requests.length === 2);
-	assert.deepEqual(requests[1], { repositoryId: firstId, mode: 'all' });
-
-	await configuration.updateValue(GitConfiguration.autofetch, false);
-	await delay(1100);
-	assert.equal(requests.length, 2);
-
-	repositoryId = secondId;
-	workspaceContext.updateWorkspace({ id: 'second', uri: URI.file('/second') });
-	await service.listRepositories();
-	await configuration.updateValue(GitConfiguration.autofetch, true);
-	await waitFor(() => requests.length === 3);
-	assert.deepEqual(requests[2], { repositoryId: secondId, mode: 'default' });
-	workspaceContext.updateWorkspace({ id: 'empty' });
-	await delay(1100);
-	assert.equal(requests.length, 3);
-});
-
-test('GitService fetches repositories independently and stops each when disabled', async () => {
-	const firstId = `repo_${'3'.repeat(64)}`;
-	const secondId = `repo_${'4'.repeat(64)}`;
-	const requests: string[] = [];
-	let finishFirst: ((value: unknown) => void) | undefined;
-	const api = {
-		repositories: async () => ({ repositories: [
-			{ id: firstId, label: 'first', path: '' },
-			{ id: secondId, label: 'second', path: 'second' },
-		] }),
-		fetch: (params: { readonly repositoryId: string }) => {
-			requests.push(params.repositoryId);
-			if (params.repositoryId === firstId) return new Promise(resolve => { finishFirst = resolve; });
-			return Promise.resolve({ status: {
-				repositoryId: secondId,
-				streamInstanceId: 'stream-2',
-				revision: 1,
-				workspacePath: '/workspace/second',
-				head: { type: 'unborn', name: 'main' },
-				changes: [],
-			} });
-		},
-	} as unknown as IGitApi;
-	const appServerApi = { getConnectionState: async () => 'ready', onConnectionState: () => toDisposable(() => undefined) } as unknown as IAppServerApi;
-	const eventApi = { subscribe: () => toDisposable(() => undefined) } as unknown as IServerEventApi;
-	using workspaceContext = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
-	using configuration = new WorkbenchConfigurationService();
+	await configuration.updateValue(GitConfiguration.autofetchPeriod, 60);
 	using service = new GitService({ api, appServerApi, eventApi, workspaceContext }, configuration, new NullLoggerService());
-	await service.listRepositories();
-	await configuration.updateValue(GitConfiguration.autofetchPeriod, 1);
-	await configuration.updateValue(GitConfiguration.autofetch, true);
-	await waitFor(() => requests.length === 2);
-	assert.deepEqual(requests, [firstId, secondId]);
-	await service.listRepositories();
-	await delay(20);
-	assert.equal(requests.length, 2);
-	await waitFor(() => requests.length === 3, 2000);
-	assert.deepEqual(requests, [firstId, secondId, secondId]);
-	await configuration.updateValue(GitConfiguration.autofetch, false);
-	finishFirst?.({ status: {
-		repositoryId: firstId,
-		streamInstanceId: 'stream-1',
-		revision: 1,
-		workspacePath: '/workspace',
-		head: { type: 'unborn', name: 'main' },
-		changes: [],
-	} });
-	await delay(20);
-	assert.deepEqual(requests, [firstId, secondId, secondId]);
+	await waitFor(() => service.autoFetch === 'all' && service.autoFetchPeriod === 60);
+	assert.deepEqual(git, { autofetch: 'all', autofetchPeriod: 60 });
+	assert.equal(revision, 1);
+	assert.equal(configuration.inspect(GitConfiguration.autofetch).userLocalValue, undefined);
+	assert.equal(configuration.inspect(GitConfiguration.autofetchPeriod).userLocalValue, undefined);
 });
 
 test('GitService drops repository discovery completed after disposal', async () => {

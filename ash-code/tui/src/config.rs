@@ -53,6 +53,7 @@ pub(crate) enum Event {
 pub(crate) enum Command {
     SetMemories(ConfigEdit),
     SetIssues(IssueConfigEdit),
+    SetGit(ConfigEdit),
     Connection(provider::Request),
     Subscription(SubscriptionProvider, SubscriptionCommand),
     OpenEditor,

@@ -159,6 +159,13 @@ pub(crate) enum Message {
     ConfigUpdateNever,
     ConfigGitChangesAsDiff,
     ConfigGitChangesAsDiffDescription,
+    ConfigGitAutoFetch,
+    ConfigGitAutoFetchDescription,
+    ConfigGitAutoFetchPeriod,
+    ConfigGitAutoFetchPeriodDescription,
+    ConfigGitFetchOff,
+    ConfigGitFetchDefault,
+    ConfigGitFetchAll,
     ConfigStatusLineStyle,
     ConfigStatusLineSimple,
     ConfigStatusLineExpressive,
@@ -199,6 +206,15 @@ const fn english(message: Message) -> &'static str {
         Message::ConfigGitChangesAsDiffDescription => {
             "Show added and deleted lines instead of changed files"
         }
+        Message::ConfigGitAutoFetch => "Automatic Git fetch",
+        Message::ConfigGitAutoFetchDescription => {
+            "Fetch remote updates without changing local files"
+        }
+        Message::ConfigGitAutoFetchPeriod => "Git fetch interval",
+        Message::ConfigGitAutoFetchPeriodDescription => "Seconds between automatic fetches",
+        Message::ConfigGitFetchOff => "Off",
+        Message::ConfigGitFetchDefault => "Default remote",
+        Message::ConfigGitFetchAll => "All remotes",
         Message::ConfigStatusLineStyle => "Status bar style",
         Message::ConfigStatusLineSimple => "Simple",
         Message::ConfigStatusLineExpressive => "Expressive",
@@ -240,6 +256,15 @@ const fn japanese(message: Message) -> &'static str {
         Message::ConfigGitChangesAsDiffDescription => {
             "変更されたファイルではなく、追加・削除された行を表示する"
         }
+        Message::ConfigGitAutoFetch => "Git の自動取得",
+        Message::ConfigGitAutoFetchDescription => {
+            "ローカルファイルを変更せずにリモートの更新を取得する"
+        }
+        Message::ConfigGitAutoFetchPeriod => "Git 取得間隔",
+        Message::ConfigGitAutoFetchPeriodDescription => "自動取得の間隔（秒）",
+        Message::ConfigGitFetchOff => "オフ",
+        Message::ConfigGitFetchDefault => "既定のリモート",
+        Message::ConfigGitFetchAll => "すべてのリモート",
         Message::ConfigStatusLineStyle => "ステータスバーの表示",
         Message::ConfigStatusLineSimple => "シンプル",
         Message::ConfigStatusLineExpressive => "華やか",
@@ -277,6 +302,13 @@ const fn chinese(message: Message) -> &'static str {
         Message::ConfigUpdateNever => "从不",
         Message::ConfigGitChangesAsDiff => "以差异显示 Git 更改",
         Message::ConfigGitChangesAsDiffDescription => "显示新增和删除的行，而不是已更改的文件",
+        Message::ConfigGitAutoFetch => "自动获取 Git 更新",
+        Message::ConfigGitAutoFetchDescription => "获取远端更新，不更改本地文件",
+        Message::ConfigGitAutoFetchPeriod => "Git 获取间隔",
+        Message::ConfigGitAutoFetchPeriodDescription => "两次自动获取之间的秒数",
+        Message::ConfigGitFetchOff => "关闭",
+        Message::ConfigGitFetchDefault => "默认远端",
+        Message::ConfigGitFetchAll => "所有远端",
         Message::ConfigStatusLineStyle => "状态栏风格",
         Message::ConfigStatusLineSimple => "简洁",
         Message::ConfigStatusLineExpressive => "生动",
@@ -318,6 +350,17 @@ const fn french(message: Message) -> &'static str {
         Message::ConfigGitChangesAsDiffDescription => {
             "Afficher les lignes ajoutées et supprimées au lieu des fichiers modifiés"
         }
+        Message::ConfigGitAutoFetch => "Récupération Git automatique",
+        Message::ConfigGitAutoFetchDescription => {
+            "Récupérer les mises à jour sans modifier les fichiers locaux"
+        }
+        Message::ConfigGitAutoFetchPeriod => "Intervalle de récupération Git",
+        Message::ConfigGitAutoFetchPeriodDescription => {
+            "Secondes entre deux récupérations automatiques"
+        }
+        Message::ConfigGitFetchOff => "Désactivé",
+        Message::ConfigGitFetchDefault => "Dépôt distant par défaut",
+        Message::ConfigGitFetchAll => "Tous les dépôts distants",
         Message::ConfigStatusLineStyle => "Style de la barre d’état",
         Message::ConfigStatusLineSimple => "Simple",
         Message::ConfigStatusLineExpressive => "Expressif",

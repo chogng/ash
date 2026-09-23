@@ -5,6 +5,7 @@ use crate::ConfigError;
 use crate::ConfigProvenance;
 use crate::DirConfigIntent;
 use crate::DirPermissionsConfig;
+use crate::GitConfig;
 use crate::HooksConfig;
 use crate::LanguageServersConfig;
 use crate::McpConfig;
@@ -148,6 +149,8 @@ pub struct UserConfigDocument {
     pub features: features::FeatureOverrides,
     #[serde(default)]
     pub issues: crate::IssueConfig,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub git: Option<GitConfig>,
     #[serde(default)]
     pub agent: AgentConfig,
     #[serde(default)]
@@ -184,6 +187,9 @@ pub struct UserConfigDocument {
 
 impl UserConfigDocument {
     pub(crate) fn validate(&self) -> Result<(), ConfigError> {
+        if let Some(git) = self.git {
+            git.validate()?;
+        }
         self.agent.time_context.validate()?;
         if let Some(advisor) = &self.agent.advisor {
             advisor
@@ -295,6 +301,8 @@ pub struct ResolvedConfig {
     pub time_context: crate::TimeContextConfig,
     pub features: features::FeatureOverrides,
     pub issues: crate::IssueConfig,
+    pub git: GitConfig,
+    pub git_configured: bool,
     pub model: Option<ModelRef>,
     pub model_reasoning_effort: Option<ReasoningEffort>,
     pub approval_review_model: ApprovalReviewModelSelection,
@@ -382,6 +390,8 @@ impl From<&UserConfigDocument> for ResolvedConfig {
             time_context: document.agent.time_context.clone(),
             features: document.features.clone(),
             issues: document.issues.clone(),
+            git: document.git.unwrap_or_default(),
+            git_configured: document.git.is_some(),
             model: document.agent.model.clone(),
             model_reasoning_effort: document.agent.model_reasoning_effort,
             approval_review_model: document.agent.approval_review_model.clone(),

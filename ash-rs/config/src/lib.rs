@@ -13,6 +13,7 @@ mod dir_permissions;
 mod document;
 mod document_migration;
 mod exec_policy;
+mod git;
 mod hooks;
 mod language_servers;
 mod mcp;
@@ -44,6 +45,7 @@ pub use document::{
     GrepConfig, ResolvedConfig, ResolvedConfigSnapshot, UserConfigDocument,
 };
 pub use exec_policy::{DirExecPolicyConfig, UserExecPolicyConfig, compose_exec_policy};
+pub use git::{GitAutoFetchMode, GitConfig};
 pub use hooks::{
     HookAction, HookConfig, HookEnablement, HookEvent, HookId, HookMatcher, HooksConfig,
 };

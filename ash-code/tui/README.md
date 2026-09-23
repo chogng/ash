@@ -173,6 +173,8 @@ Connector 操作见 [request.rs](src/connectors/request.rs)：设备码复制到
 
 配置保存替换完整 `[tui]` 表，因此必须保留其他 TUI 设置。API key 只通过专用凭据接口保存，不进入普通配置或展示状态。快捷键候选先完成全量校验，保存失败时保留上一份有效规则。
 
+`/config` 中的 Git 自动获取模式与间隔写入共享的 `[git]` 表。App Server 对有仓库修改授权的目录执行定时 fetch；Desktop、Rust GUI 和 TUI 读取同一份配置。
+
 `/config` 的 Providers 页提供独立的 `ChatGPT subscription` 入口，可查看 Ash 账户和方案、启动设备码登录、取消登录或退出。验证地址与一次性代码显示在账户页；Esc 返回 Providers，待完成登录仍可重新进入查看和取消。TUI 使用共享账户接口，后端有 Codex 时只读复用，无 Codex 时负责续期和重新登录；缺失时生成兼容的 auth.json。复用模式断开不会退出 Codex；自管模式登出清除认证。重新连接仍有效的已有凭据无需浏览器。[认证存储与验收](../../ash-rs/docs/changes/chatgpt-auth/verification.md)。
 
 资源采样由可见状态行项目和 Processes 页共同决定；没有需求时停止采样。关闭 Git 显示只停止状态行专属工作，不能停止 ChangeTurn 的目录跟随。

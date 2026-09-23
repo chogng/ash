@@ -7,6 +7,11 @@ import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Registry } from '../../../../platform/registry/common/platform.js';
+import { localize } from '../../../../nls.js';
+import { GitConfiguration, type GitAutofetch } from '../../../services/git/common/gitConfiguration.js';
+import type { IGitService } from '../../../services/git/common/gitService.js';
 import type { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import type { ISetting, ISettingsEditorModel } from '../../../services/preferences/common/preferences.js';
 import { DefaultSettings, SettingsEditorModel } from '../../../services/preferences/common/preferencesModels.js';
@@ -46,11 +51,12 @@ export class SettingsEditorPane extends Disposable implements IPreferencesEditor
 		contextMenuProvider: IContextMenuProvider,
 		contextViewProvider: IContextViewProvider,
 		localizationService: ILocalizationService,
+		gitService: IGitService,
 	) {
 		super();
 		this.configurationService = configurationService;
 		this.localizationService = localizationService;
-		this.settingsModel = this._register(new SettingsEditorModel(new DefaultSettings().all));
+		this.settingsModel = this._register(new SettingsEditorModel([...new DefaultSettings().all, ...gitSettings(gitService)]));
 		const settingsLayout = createSettingsLayout(this.settingsModel.settings);
 		const preferencesRenderer = this._register(new PreferencesRenderer(container, {
 			clipboardService,
@@ -177,6 +183,7 @@ export class SettingsEditorPane extends Disposable implements IPreferencesEditor
 	private isModified(id: string): boolean {
 		const setting = this.settingsModel.settings.find(candidate => candidate.id === id);
 		if (!setting) return false;
+		if (setting.binding) return !Object.is(setting.binding.getValue(), setting.binding.defaultValue);
 		const configuration = setting.configuration as IRegisteredConfiguration<unknown>;
 		return JSON.stringify(configuration.serialize(this.configurationService.getValue(configuration.key))) !== JSON.stringify(configuration.serialize(configuration.defaultValue));
 	}
@@ -250,6 +257,52 @@ export class SettingsEditorPane extends Disposable implements IPreferencesEditor
 	private localizedGroupDescription(group: SettingsCategoryGroupDescriptor): string {
 		return this.localized(`groups.${group.id}.description`, group.description);
 	}
+}
+
+function gitSettings(gitService: IGitService): readonly ISetting[] {
+	const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+	const mode = registry.getConfiguration(GitConfiguration.autofetch) as IRegisteredConfiguration<GitAutofetch> | undefined;
+	const period = registry.getConfiguration(GitConfiguration.autofetchPeriod) as IRegisteredConfiguration<number> | undefined;
+	if (!mode || !period) throw new Error('Git settings require their migration definitions');
+	return [
+		{
+			id: mode.key,
+			valueType: 'select',
+			configuration: mode as IRegisteredConfiguration<string | boolean>,
+			get title() { return localize('git.autofetch.title', 'Auto Fetch'); },
+			get description() { return localize('git.autofetch.description', 'Periodically fetch updates without changing local branches or files.'); },
+			get options() { return [
+				{ value: false, label: localize('git.autofetch.off', 'Off') },
+				{ value: true, label: localize('git.autofetch.default', 'Default remote') },
+				{ value: 'all', label: localize('git.autofetch.all', 'All remotes') },
+			] as const; },
+			binding: {
+				id: mode.key,
+				defaultValue: false,
+				onDidChange: gitService.onDidChangeAutoFetch,
+				getValue: () => gitService.autoFetch,
+				updateValue: value => gitService.setAutoFetch(value as GitAutofetch),
+				resetValue: () => gitService.setAutoFetch(false),
+			},
+		},
+		{
+			id: period.key,
+			valueType: 'number',
+			configuration: period,
+			get title() { return localize('git.autofetchPeriod.title', 'Auto Fetch Period'); },
+			get description() { return localize('git.autofetchPeriod.description', 'Seconds between automatic fetches for each repository.'); },
+			minimum: 1,
+			maximum: 86_400,
+			binding: {
+				id: period.key,
+				defaultValue: 180,
+				onDidChange: gitService.onDidChangeAutoFetch,
+				getValue: () => gitService.autoFetchPeriod,
+				updateValue: value => gitService.setAutoFetchPeriod(value),
+				resetValue: () => gitService.setAutoFetchPeriod(180),
+			},
+		},
+	];
 }
 
 let nextSettingsEditorId = 1;

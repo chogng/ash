@@ -551,12 +551,20 @@ impl EnvRuntimeControl {
         let root = authorization.dir().clone();
         let replacement =
             Grant::for_environment(root.clone(), GrantSource::ExplicitUser, permissions.clone());
-        let inspection_git = replacement
-            .authorize(Permission::InspectRepository)
+        let git_permission = if permissions.allows(Permission::MutateRepository) {
+            Permission::MutateRepository
+        } else {
+            Permission::InspectRepository
+        };
+        let replacement_git = replacement
+            .authorize(git_permission)
             .ok()
             .map(|authorization| GitRuntime::new(authorization, Arc::clone(&self.updates)))
             .transpose()
             .map_err(|_| EnvRuntimeError::Failed("failed to initialize Git runtime".into()))?;
+        let replacement_git_watcher = replacement_git
+            .as_ref()
+            .map(|git| git.start_watching(self.config.clone()));
         if let Some(extension_hosts) = &self.extension_hosts {
             extension_hosts.unbind_dir();
         }
@@ -584,7 +592,8 @@ impl EnvRuntimeControl {
         runtime.workspace.codebase_semantic_job = None;
         runtime.selected_file_system = Some(Arc::new(LocalFileSystem::new(replacement.clone())));
         runtime.selected_grant = Some(replacement);
-        runtime.workspace.git = inspection_git;
+        runtime.workspace.git = replacement_git;
+        runtime.workspace._git_watcher = replacement_git_watcher;
         drop(runtime);
 
         for (_, authorization) in dir_grants {
@@ -1464,8 +1473,16 @@ impl AppServer {
         let git_dirs = dirs
             .iter()
             .map(|(id, authorization)| {
+                let permission = if authorization
+                    .permissions()
+                    .allows(Permission::MutateRepository)
+                {
+                    Permission::MutateRepository
+                } else {
+                    Permission::InspectRepository
+                };
                 authorization
-                    .authorize(Permission::InspectRepository)
+                    .authorize(permission)
                     .map(|dir| (id.clone(), dir))
                     .map_err(|_| EnvRuntimeError::PermissionRequired)
             })
@@ -1476,7 +1493,7 @@ impl AppServer {
                     "failed to initialize multi-root Git runtime: {error:?}"
                 ))
             })?;
-        let watcher = git.start_watching();
+        let watcher = git.start_watching(self.config.clone());
         let dirs = dirs.iter().cloned().collect::<BTreeMap<_, _>>();
         let dir_file_systems = dirs
             .iter()
@@ -2278,7 +2295,7 @@ impl AppServer {
         {
             log::warn!("failed to bind executable Editor Extensions to the new dir");
         }
-        let git_watcher = git.start_watching();
+        let git_watcher = git.start_watching(self.config.clone());
         let mut runtime = self
             .env_runtime
             .write()

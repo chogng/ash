@@ -1,6 +1,6 @@
-import type { GitFetchModeDto, GitHeadDto, GitRepositoryChangeDto, GitRepositoryDto, GitStatusResult } from "../../../../platform/app-server/common/generated/index.js";
+import type { ConfigReadResult, GitConfigDto, GitHeadDto, GitRepositoryChangeDto, GitRepositoryDto, GitStatusResult } from "../../../../platform/app-server/common/generated/index.js";
 import { Emitter } from "../../../../base/common/event.js";
-import { AbstractDisposable, Disposable, DisposableMap, toDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { URI } from "../../../../base/common/uri.js";
 import type { AppServerConnectionState, IAppServerApi, IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -25,21 +25,27 @@ export class GitService extends Disposable implements IGitService {
 	private readonly _onDidChangeRepositories = this._register(new Emitter<readonly GitRepository[]>());
 	private readonly _onDidChangeActiveRepository = this._register(new Emitter<GitRepository | undefined>());
 	private readonly _onDidBecomeReady = this._register(new Emitter<void>());
+	private readonly _onDidChangeAutoFetch = this._register(new Emitter<void>());
 	private readonly api: IGitApi;
 	private repositoryList: readonly GitRepository[] = Object.freeze([]);
 	private activeRepositoryId: string | undefined;
 	private discoveryGeneration = 0;
 	private selectionGeneration = 0;
 	private discovery: Promise<readonly GitRepository[]> | undefined;
-	private readonly autofetchers = this._register(new DisposableMap<string, RepositoryAutoFetcher>());
-	private connectionReady = false;
 	private connectionRevision = 0;
+	private configRevision = -1;
+	private autoFetchValue: GitAutofetch = false;
+	private autoFetchPeriodValue = 180;
+	private legacyMigration: Promise<void> | undefined;
 
 	readonly onDidChangeStatus = this._onDidChangeStatus.event;
 	readonly onDidChangeRepositoryStatus = this._onDidChangeRepositoryStatus.event;
 	readonly onDidChangeRepositories = this._onDidChangeRepositories.event;
 	readonly onDidChangeActiveRepository = this._onDidChangeActiveRepository.event;
 	readonly onDidBecomeReady = this._onDidBecomeReady.event;
+	readonly onDidChangeAutoFetch = this._onDidChangeAutoFetch.event;
+	get autoFetch(): GitAutofetch { return this.autoFetchValue; }
+	get autoFetchPeriod(): number { return this.autoFetchPeriodValue; }
 
 	get repositories(): readonly GitRepository[] {
 		return this.repositoryList;
@@ -57,6 +63,10 @@ export class GitService extends Disposable implements IGitService {
 		super();
 		this.api = options.api;
 		const events = options.eventApi.subscribe(event => {
+			if (event.method === 'config/changed') {
+				void this.refreshAutoFetch().catch(error => this.logService.error('git', 'Unable to read automatic Git fetch settings', error));
+				return;
+			}
 			if (event.method !== "git/statusChanged" || !this.hasWorkspaceFolder()) return;
 			const repository = this.repositoryList.find(candidate => candidate.id === event.params.status.repositoryId);
 			if (!repository) {
@@ -68,17 +78,14 @@ export class GitService extends Disposable implements IGitService {
 		this._register(toDisposable(() => events.dispose()));
 		const handleConnectionState = (state: AppServerConnectionState): void => {
 			const revision = ++this.connectionRevision;
-			this.connectionReady = false;
-			this.syncAutofetch();
+			if (state !== 'ready') this.configRevision = -1;
+			if (state === 'ready') void this.refreshAutoFetch().catch(error => this.logService.error('git', 'Unable to read automatic Git fetch settings', error));
 			if (state === 'ready' && !this.hasWorkspaceFolder()) {
-				this.connectionReady = true;
 				return;
 			}
 			if (state === 'ready' && this.hasWorkspaceFolder()) {
 				void this.refreshRepositories().then(() => {
 					if (this.isDisposed || revision !== this.connectionRevision) return;
-					this.connectionReady = true;
-					this.syncAutofetch();
 				}).catch(error => this.logService.error('git', 'Unable to discover repositories', error));
 			}
 		};
@@ -89,12 +96,8 @@ export class GitService extends Disposable implements IGitService {
 			if (this.isDisposed || connectionRevision !== this.connectionRevision) return;
 			handleConnectionState(state);
 		}).catch(error => this.logService.error('git', 'Unable to read App Server connection state', error));
-		this._register(this.configurationService.onDidChangeConfiguration(event => {
-			if (event.affectsConfiguration(GitConfiguration.autofetch) || event.affectsConfiguration(GitConfiguration.autofetchPeriod)) this.syncAutofetch();
-		}));
 		this._register(options.workspaceContext.onDidChangeWorkspace(({ workspace }) => {
 			this.clearRepositories();
-			this.syncAutofetch();
 			if (workspace.folders.length > 0) void this.refreshRepositories().catch(error => this.logService.error('git', 'Unable to discover repositories', error));
 		}));
 	}
@@ -218,30 +221,74 @@ export class GitService extends Disposable implements IGitService {
 		return toGitStatus((await this.api.push({ repositoryId: repository.id })).status, repository);
 	}
 
+	async setAutoFetch(value: GitAutofetch): Promise<void> {
+		await this.ensureLegacyMigration();
+		const current = await this.api.readConfig();
+		await this.api.updateConfig({
+			commandId: `desktop-git-${crypto.randomUUID()}`,
+			expectedRevision: current.revision,
+			git: { ...current.git, autofetch: value === false ? 'off' : value === true ? 'default' : 'all' },
+		});
+		await this.refreshAutoFetch();
+	}
+
+	async setAutoFetchPeriod(seconds: number): Promise<void> {
+		if (!Number.isSafeInteger(seconds) || seconds < 1 || seconds > 86_400) throw new RangeError('git.autofetchPeriod must be an integer from 1 to 86400 seconds');
+		await this.ensureLegacyMigration();
+		const current = await this.api.readConfig();
+		await this.api.updateConfig({
+			commandId: `desktop-git-${crypto.randomUUID()}`,
+			expectedRevision: current.revision,
+			git: { ...current.git, autofetchPeriod: seconds },
+		});
+		await this.refreshAutoFetch();
+	}
+
+	private async refreshAutoFetch(): Promise<void> {
+		await this.ensureLegacyMigration();
+		const config = await this.api.readConfig();
+		if (this.isDisposed || config.revision < this.configRevision) return;
+		this.configRevision = config.revision;
+		const mode: GitAutofetch = config.git.autofetch === 'off' ? false : config.git.autofetch === 'default' ? true : 'all';
+		if (this.autoFetchValue === mode && this.autoFetchPeriodValue === config.git.autofetchPeriod) return;
+		this.autoFetchValue = mode;
+		this.autoFetchPeriodValue = config.git.autofetchPeriod;
+		this._onDidChangeAutoFetch.fire();
+	}
+
+	private async ensureLegacyMigration(): Promise<void> {
+		if (!this.legacyMigration) {
+			this.legacyMigration = this.migrateLegacyAutoFetch().catch(error => {
+				this.legacyMigration = undefined;
+				throw error;
+			});
+		}
+		await this.legacyMigration;
+	}
+
+	private async migrateLegacyAutoFetch(): Promise<void> {
+		const legacyMode = this.configurationService.inspect<GitAutofetch>(GitConfiguration.autofetch).userLocalValue;
+		const legacyPeriod = this.configurationService.inspect<number>(GitConfiguration.autofetchPeriod).userLocalValue;
+		if (legacyMode === undefined && legacyPeriod === undefined) return;
+		const current = await this.api.readConfig();
+		const desired: GitConfigDto = {
+			autofetch: legacyMode === undefined ? current.git.autofetch : legacyMode === false ? 'off' : legacyMode === true ? 'default' : 'all',
+			autofetchPeriod: legacyPeriod ?? current.git.autofetchPeriod,
+		};
+		if (current.gitConfigured && (current.git.autofetch !== desired.autofetch || current.git.autofetchPeriod !== desired.autofetchPeriod)) {
+			this.logService.error('git', 'Desktop Git settings conflict with shared Git configuration; migration requires a single chosen value');
+			return;
+		}
+		if (!current.gitConfigured) {
+			await this.api.updateConfig({ commandId: `desktop-git-migrate-${crypto.randomUUID()}`, expectedRevision: current.revision, git: desired });
+		}
+		if (legacyMode !== undefined) await this.configurationService.updateValue(GitConfiguration.autofetch, undefined);
+		if (legacyPeriod !== undefined) await this.configurationService.updateValue(GitConfiguration.autofetchPeriod, undefined);
+	}
+
 	private acceptStatus(status: GitStatus): void {
 		this._onDidChangeRepositoryStatus.fire(status);
 		if (status.repositoryId === this.activeRepositoryId) this._onDidChangeStatus.fire(status);
-	}
-
-	private syncAutofetch(): void {
-		let mode: GitFetchModeDto | undefined;
-		if (this.connectionReady && this.hasWorkspaceFolder()) {
-			const setting = this.configurationService.getValue<GitAutofetch>(GitConfiguration.autofetch);
-			if (setting === true) mode = 'default';
-			if (setting === 'all') mode = 'all';
-		}
-		const period = this.configurationService.getValue<number>(GitConfiguration.autofetchPeriod);
-		const repositories = new Map(this.repositoryList.map(repository => [repository.id, repository]));
-		for (const [id, fetcher] of this.autofetchers) {
-			const repository = repositories.get(id);
-			if (!repository || !fetcher.matches(repository)) this.autofetchers.deleteAndDispose(id);
-		}
-		for (const repository of this.repositoryList) {
-			let fetcher = this.autofetchers.get(repository.id);
-			if (!fetcher && mode === undefined) continue;
-			if (!fetcher) fetcher = this.autofetchers.set(repository.id, new RepositoryAutoFetcher(repository, this.api, status => this.acceptStatus(status), this.logService));
-			fetcher.configure(mode, period);
-		}
 	}
 
 	private async requireRepository(repositoryId?: string): Promise<GitRepository> {
@@ -267,7 +314,6 @@ export class GitService extends Disposable implements IGitService {
 			if (repositorySignature(repositories) !== previousSignature) this._onDidChangeRepositories.fire(repositories);
 			if (this.activeRepositoryId !== previousActiveId) this._onDidChangeActiveRepository.fire(this.activeRepository);
 			this._onDidBecomeReady.fire();
-			this.syncAutofetch();
 			return repositories;
 		}).finally(() => {
 			if (this.discovery === request) this.discovery = undefined;
@@ -296,74 +342,6 @@ export class GitService extends Disposable implements IGitService {
 		const folders = this.options.workspaceContext.getWorkspace().folders;
 		if (folders.length === 0) throw new Error("GitUnavailable: Git requires at least one workspace folder");
 		return folders;
-	}
-}
-
-class RepositoryAutoFetcher extends AbstractDisposable {
-	private mode: GitFetchModeDto | undefined;
-	private period = 0;
-	private timer: ReturnType<typeof setTimeout> | undefined;
-	private running = false;
-	private revision = 0;
-
-	constructor(
-		private readonly repository: GitRepository,
-		private readonly api: IGitApi,
-		private readonly acceptStatus: (status: GitStatus) => void,
-		private readonly logService: ILogService,
-	) {
-		super();
-	}
-
-	public matches(repository: GitRepository): boolean {
-		return repository.id === this.repository.id
-			&& repository.label === this.repository.label
-			&& repository.path === this.repository.path
-			&& repository.root.toString() === this.repository.root.toString();
-	}
-
-	public configure(mode: GitFetchModeDto | undefined, period: number): void {
-		if (this.mode === mode && this.period === period) return;
-		this.mode = mode;
-		this.period = period;
-		this.revision += 1;
-		this.clearTimer();
-		if (!this.running && mode !== undefined) this.schedule(0);
-	}
-
-	protected override disposeCore(): void {
-		this.mode = undefined;
-		this.revision += 1;
-		this.clearTimer();
-	}
-
-	private schedule(delay: number): void {
-		if (this.isDisposed || this.mode === undefined) return;
-		this.timer = setTimeout(() => {
-			this.timer = undefined;
-			void this.run();
-		}, delay);
-	}
-
-	private async run(): Promise<void> {
-		const mode = this.mode;
-		if (this.isDisposed || mode === undefined) return;
-		this.running = true;
-		const revision = this.revision;
-		try {
-			const result = await this.api.fetch({ repositoryId: this.repository.id, mode });
-			if (!this.isDisposed && revision === this.revision) this.acceptStatus(toGitStatus(result.status, this.repository));
-		} catch (error) {
-			if (!this.isDisposed && revision === this.revision) this.logService.error('git', `Automatic fetch failed for ${this.repository.label}`, error);
-		} finally {
-			this.running = false;
-			if (!this.isDisposed && this.mode !== undefined) this.schedule(revision === this.revision ? this.period * 1000 : 0);
-		}
-	}
-
-	private clearTimer(): void {
-		if (this.timer !== undefined) clearTimeout(this.timer);
-		this.timer = undefined;
 	}
 }
 

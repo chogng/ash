@@ -494,3 +494,46 @@ fn memories_toggle_updates_backend_features_and_preserves_other_overrides() {
     );
     assert!(requests[0]["params"].get("tui").is_none());
 }
+
+#[test]
+fn git_settings_update_only_the_shared_git_section() {
+    let mut current = empty_config_snapshot();
+    current.revision = 7;
+    current.git.autofetch = ash_app_server_protocol::protocol::config::GitAutoFetchModeDto::All;
+    current.git.autofetch_period = 300;
+    let mut saved = current.clone();
+    saved.revision = 8;
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let mut client = AppServerClient::new(RecordingTransport {
+        requests: requests.clone(),
+        responses: VecDeque::from([
+            response(
+                1,
+                serde_json::json!({"revision":8,"generation":2,"disposition":"updated"}),
+            ),
+            response(2, serde_json::to_value(&saved).unwrap()),
+        ]),
+    });
+    let crate::config::Event::Updated(_) = super::execute(
+        &mut client,
+        super::Command::SetGit(crate::config::ConfigEdit {
+            terminal: Default::default(),
+            status_line: Default::default(),
+            server_config: current,
+            providers: ProviderListResult {
+                providers: Vec::new(),
+            },
+        }),
+    )
+    .unwrap() else {
+        panic!("expected refreshed settings");
+    };
+    let requests = requests.lock().unwrap();
+    assert_eq!(requests[0]["method"], "config/update");
+    assert_eq!(requests[0]["params"]["expectedRevision"], 7);
+    assert_eq!(
+        requests[0]["params"]["git"],
+        serde_json::json!({"autofetch":"all","autofetchPeriod":300})
+    );
+    assert!(requests[0]["params"].get("tui").is_none());
+}

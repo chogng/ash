@@ -120,6 +120,10 @@ impl GitService {
         self.authorization.dir()
     }
 
+    pub(crate) fn can_mutate(&self) -> bool {
+        self.authorization.permission() == Permission::MutateRepository
+    }
+
     pub(crate) fn stage(
         &self,
         paths: Vec<PathBuf>,

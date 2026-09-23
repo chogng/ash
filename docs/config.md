@@ -27,7 +27,7 @@ Runtime snapshot
 
 | 所有者 | 拥有 | 不拥有 |
 | --- | --- | --- |
-| User Config | Agent 默认值、Provider、MCP、Skill source、Plugin request、Hook、Tool Search、execution policy、目录权限，以及前端自有的 `gui`、`tui` 键值表 | secret、live connection、已安装包、运行健康状态，以及 `gui`、`tui` 字段含义 |
+| User Config | Agent 默认值、Provider、MCP、Skill source、Plugin request、Hook、Tool Search、execution policy、目录权限、Git 自动获取，以及前端自有的 `gui`、`tui` 键值表 | secret、live connection、已安装包、运行健康状态，以及 `gui`、`tui` 字段含义 |
 | Dir Config | 目录提供的 Agent/MCP/Skill/Plugin/Hook 意图和只收紧的执行规则 | 授权、凭据、安装、激活和运行状态 |
 | Device Settings | TUI/Electron 主题、可访问性、hover、sash 等设备界面偏好 | Rust GUI 编辑器字体、Agent、Provider、目录权限和运行状态 |
 | Secret Store | opaque secret bytes | 配置类型、OAuth 流程和作用域决定 |
@@ -47,8 +47,18 @@ Runtime snapshot
 `config.toml` 顶层使用 `schemaVersion` 标记文件格式。读取旧版本或无版本的历史文件时，Config 只执行已登记且无歧义的迁移，完成严格校验后原子重写为当前版本；历史字段和当前字段同时出现、未登记字段、过新版本或低于最低支持版本都会拒绝启动。v2 的 `agent.preferredModel`、`agent.preferredReasoningEffort` 会分别迁到 v3 的 `agent.model`、`agent.modelReasoningEffort`。`semanticCodeIndex` 迁到 `codebase` 时不会保留旧的源码外发授权；`workspaceTrust` 只转换路径仍存在、旧身份与路径一致的 `trusted` 项，并为它生成当前目录身份，其他项不落盘。
 
 用户文档的主要 section 是 `agent`、`gui`、`tui`、`providers`、`mcp`、`skills`、`plugins`、
-`hooks`、`toolSearch`、`execPolicy`、`dirPermissions` 和 `codebase`。Config 保存非敏感引用，不保存
+`hooks`、`toolSearch`、`execPolicy`、`dirPermissions`、`codebase` 和 `git`。Config 保存非敏感引用，不保存
 API key、OAuth token、authorization header 或 refresh 状态。
+
+Git 自动获取由 App Server 对已授权可修改的仓库逐个调度，Desktop、Rust GUI 和 TUI 共用一份 `[git]` 配置。默认关闭；`autofetch` 可设为 `"off"`、`"default"` 或 `"all"`，`autofetchPeriod` 是 1–86400 秒，默认 180 秒：
+
+```toml
+[git]
+autofetch = "default"
+autofetchPeriod = 180
+```
+
+Desktop 旧的 `git.autofetch` 和 `git.autofetchPeriod` 设备设置只用于一次性迁移，后续通过 `config/read` 和 `config/update` 读写 `[git]`。
 
 图形界面的主题选择和编辑器排版由图形界面解释根级 `[gui]`：
 

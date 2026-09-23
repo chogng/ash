@@ -5,6 +5,8 @@ import type { IGitApi } from "../common/gitApi.js";
 
 export function createDisconnectedGitApi(unavailable: UnavailableOperation): IGitApi {
 	return {
+		readConfig: () => unavailable("git.readConfig"),
+		updateConfig: () => unavailable("git.updateConfig"),
 		repositories: () => unavailable("git.repositories"),
 		status: () => unavailable("git.status"),
 		history: () => unavailable("git.history"),
@@ -26,6 +28,8 @@ export function createDisconnectedGitApi(unavailable: UnavailableOperation): IGi
 
 export function createAppServerGitApi(connection: AppServerProtocolClient): IGitApi {
 	return {
+		readConfig: () => appServerRequest(connection, "config/read", {}),
+		updateConfig: (params) => appServerRequest(connection, "config/update", params),
 		repositories: () => appServerRequest(connection, "git/repositories", {}),
 		status: (params) => appServerRequest(connection, "git/status", params),
 		history: (params) => appServerRequest(connection, "git/history", params),

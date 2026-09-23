@@ -478,6 +478,7 @@ impl WorkbenchApplication {
                     commit_message_model: Patch::Missing,
                     tool_mode: Patch::Missing,
                     grep_backend: Patch::Missing,
+                    git: Patch::Missing,
                     gui: Patch::Value(gui),
                     tui: Patch::Missing,
                 })

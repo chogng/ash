@@ -50,6 +50,8 @@ pub(crate) fn empty_config_snapshot() -> ConfigReadResult {
         issues: ash_app_server_protocol::protocol::issues::IssueConfigDto {
             auto_refresh_minutes: 10,
         },
+        git: Default::default(),
+        git_configured: false,
         tool_mode: ash_protocol::ToolMode::Direct,
         grep_backend: GrepBackendDto::Ripgrep,
         gui: FrontendConfigDto::default(),

@@ -294,7 +294,7 @@ class BooleanSettingWidget extends AbstractSettingWidget<IBooleanSetting, boolea
 	private readonly toggle: Toggle;
 
 	constructor(container: HTMLElement, descriptor: IBooleanSetting, options: SettingWidgetOptions) {
-		super(container, descriptor, configurationSettingBinding(options.configurationService, descriptor.configuration), options, 'toggle');
+		super(container, descriptor, descriptor.binding ?? configurationSettingBinding(options.configurationService, descriptor.configuration), options, 'toggle');
 		this.toggle = this._register(this.presentation === 'general'
 			? new Checkbox(this.domNode, { ariaLabel: descriptor.title, content: this.copyDomNode, contentPlacement: 'before-control' })
 			: new Switch(this.domNode, { ariaLabel: descriptor.title, content: this.copyDomNode, contentPlacement: 'before-control' }));
@@ -317,7 +317,7 @@ class NumberSettingWidget extends AbstractSettingWidget<INumberSetting, number> 
 	private readonly inputBox: InputBox | undefined;
 
 	constructor(container: HTMLElement, descriptor: INumberSetting, options: SettingWidgetOptions) {
-		super(container, descriptor, configurationSettingBinding(options.configurationService, descriptor.configuration), options);
+		super(container, descriptor, descriptor.binding ?? configurationSettingBinding(options.configurationService, descriptor.configuration), options);
 		this.domNode.append(this.copyDomNode);
 		if (this.presentation === 'editor') {
 			this.inputBox = this._register(new InputBox(this.domNode, {
@@ -368,7 +368,7 @@ class SelectSettingWidget extends AbstractSettingWidget<ISelectSetting, string |
 	private readonly select: SelectBox;
 
 	constructor(container: HTMLElement, descriptor: ISelectSetting, options: SettingWidgetOptions) {
-		super(container, descriptor, configurationSettingBinding(options.configurationService, descriptor.configuration), options, 'select');
+		super(container, descriptor, descriptor.binding ?? configurationSettingBinding(options.configurationService, descriptor.configuration), options, 'select');
 		this.select = this._register(new SelectBox(this.domNode, {
 			options: descriptor.options.map(option => ({ value: String(option.value), label: option.label })),
 			ariaLabel: descriptor.title,
@@ -403,7 +403,7 @@ class TextSettingWidget extends AbstractSettingWidget<ITextSetting, string> {
 	private readonly input: HTMLInputElement;
 
 	constructor(container: HTMLElement, descriptor: ITextSetting, options: SettingWidgetOptions) {
-		super(container, descriptor, configurationSettingBinding(options.configurationService, descriptor.configuration), options);
+		super(container, descriptor, descriptor.binding ?? configurationSettingBinding(options.configurationService, descriptor.configuration), options);
 		this.input = h(this.domNode.ownerDocument, 'input');
 		this.input.className = `ash-${this.presentation}-setting-text`;
 		this.input.type = 'text';

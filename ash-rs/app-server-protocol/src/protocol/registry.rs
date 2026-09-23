@@ -282,6 +282,10 @@ use crate::protocol::config::ExecPolicyTokenDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::config::FrontendConfigDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::config::GitAutoFetchModeDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::config::GitConfigDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::config::GrepBackendDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::config::HookActionDto;
@@ -3993,6 +3997,8 @@ typescript_bindings! {
     CodebaseConfigDto,
     ApprovalReviewModelSelectionDto,
     GrepBackendDto,
+    GitAutoFetchModeDto,
+    GitConfigDto,
     ModelContextConfigDto,
     CustomProviderConfigDto,
     CustomProviderProtocolDto,

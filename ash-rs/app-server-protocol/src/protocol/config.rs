@@ -27,6 +27,33 @@ pub enum GrepBackendDto {
     Tgrep,
 }
 
+/// Shared automatic-fetch policy for all clients of one App Server profile.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum GitAutoFetchModeDto {
+    #[default]
+    Off,
+    Default,
+    All,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitConfigDto {
+    pub autofetch: GitAutoFetchModeDto,
+    #[schemars(range(min = 1, max = 86400))]
+    pub autofetch_period: u32,
+}
+
+impl Default for GitConfigDto {
+    fn default() -> Self {
+        Self {
+            autofetch: GitAutoFetchModeDto::Off,
+            autofetch_period: 180,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(rename = "ModelRef")]
@@ -428,6 +455,8 @@ pub struct ConfigReadResult {
     pub time_context: TimeContextConfigDto,
     pub features: Vec<features::FeatureState>,
     pub issues: crate::protocol::issues::IssueConfigDto,
+    pub git: GitConfigDto,
+    pub git_configured: bool,
     #[ts(type = "number")]
     pub revision: u64,
     #[ts(type = "number")]
@@ -603,6 +632,10 @@ pub struct ConfigUpdateParams {
     #[schemars(with = "Option<GrepBackendDto>")]
     #[ts(as = "Option<GrepBackendDto>", optional = nullable)]
     pub grep_backend: Patch<GrepBackendDto>,
+    #[serde(default, skip_serializing_if = "Patch::is_missing")]
+    #[schemars(with = "Option<GitConfigDto>")]
+    #[ts(as = "Option<GitConfigDto>", optional = nullable)]
+    pub git: Patch<GitConfigDto>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     #[schemars(with = "Option<FrontendConfigDto>")]
     #[ts(as = "Option<FrontendConfigDto>", optional = nullable)]

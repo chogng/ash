@@ -26,6 +26,7 @@ impl Command {
         match self {
             Self::SetMemories(_) => "ash-tui-set-memories",
             Self::SetIssues(_) => "ash-tui-configure-issues",
+            Self::SetGit(_) => "ash-tui-configure-git",
             Self::Connection(_) => "ash-tui-provider-connection",
             Self::Subscription(_, _) => "ash-tui-subscription-account",
             Self::OpenEditor => "ash-tui-read-config",
@@ -42,6 +43,7 @@ where
     match command {
         Command::SetMemories(edit) => set_memories(client, edit).map(Event::Updated),
         Command::SetIssues(edit) => set_issue_settings(client, edit).map(Event::Updated),
+        Command::SetGit(edit) => set_git_settings(client, edit).map(Event::Updated),
         Command::Connection(request) => {
             let id = request.id.clone();
             let result = execute_connection(client, request);
@@ -89,6 +91,7 @@ fn set_memories<T: JsonRpcTransport>(
         commit_message_model: Patch::Missing,
         tool_mode: Patch::Missing,
         grep_backend: Patch::Missing,
+        git: Patch::Missing,
         gui: Patch::Missing,
         tui: Patch::Missing,
     })?;
@@ -121,6 +124,36 @@ fn set_issue_settings<T: JsonRpcTransport>(
         terminal,
         status_line: status_line.clone(),
         choices: config_choices(&config, &providers, terminal, status_line),
+    })
+}
+
+fn set_git_settings<T: JsonRpcTransport>(
+    client: &mut AppServerClient<T>,
+    edit: ConfigEdit,
+) -> Result<ConfigEditResult, ConfigCommandError> {
+    client.update_config(ConfigUpdateParams {
+        advisor: Patch::Missing,
+        time_context: Patch::Missing,
+        features: Patch::Missing,
+        command_id: new_command_id("git-config"),
+        expected_revision: edit.server_config.revision,
+        model: Patch::Missing,
+        model_reasoning_effort: Patch::Missing,
+        approval_review_model: Patch::Missing,
+        commit_message_model: Patch::Missing,
+        tool_mode: Patch::Missing,
+        grep_backend: Patch::Missing,
+        git: Patch::Value(edit.server_config.git),
+        gui: Patch::Missing,
+        tui: Patch::Missing,
+    })?;
+    let config = client.read_config()?;
+    let terminal = TerminalSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
+    let status_line = StatusLineSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
+    Ok(ConfigEditResult {
+        terminal,
+        status_line: status_line.clone(),
+        choices: config_choices(&config, &edit.providers, terminal, status_line),
     })
 }
 
@@ -287,6 +320,7 @@ where
         commit_message_model: Patch::Missing,
         tool_mode: Patch::Missing,
         grep_backend: Patch::Missing,
+        git: Patch::Missing,
         gui: Patch::Missing,
         tui: Patch::Value(tui),
     })?;

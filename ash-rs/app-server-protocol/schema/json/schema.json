@@ -13583,6 +13583,12 @@
           "minimum": 0,
           "type": "integer"
         },
+        "git": {
+          "$ref": "#/$defs/GitConfigDto"
+        },
+        "gitConfigured": {
+          "type": "boolean"
+        },
         "grepBackend": {
           "$ref": "#/$defs/GrepBackendDto"
         },
@@ -13670,6 +13676,8 @@
         "timeContext",
         "features",
         "issues",
+        "git",
+        "gitConfigured",
         "revision",
         "generation",
         "approvalReviewModel",
@@ -13751,6 +13759,16 @@
           "type": [
             "object",
             "null"
+          ]
+        },
+        "git": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GitConfigDto"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "grepBackend": {
@@ -18315,6 +18333,15 @@
       ],
       "type": "object"
     },
+    "GitAutoFetchModeDto": {
+      "description": "Shared automatic-fetch policy for all clients of one App Server profile.",
+      "enum": [
+        "off",
+        "default",
+        "all"
+      ],
+      "type": "string"
+    },
     "GitBranchDto": {
       "description": "One local branch returned by the directory Git runtime.",
       "properties": {
@@ -18646,6 +18673,25 @@
         "parentObjectIds",
         "timestampSeconds",
         "subject"
+      ],
+      "type": "object"
+    },
+    "GitConfigDto": {
+      "additionalProperties": false,
+      "properties": {
+        "autofetch": {
+          "$ref": "#/$defs/GitAutoFetchModeDto"
+        },
+        "autofetchPeriod": {
+          "format": "uint32",
+          "maximum": 86400,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "autofetch",
+        "autofetchPeriod"
       ],
       "type": "object"
     },

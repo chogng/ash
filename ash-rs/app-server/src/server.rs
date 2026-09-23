@@ -1397,8 +1397,9 @@ impl AppServer {
         authorization: ash_file_access::Authorization,
     ) -> Result<Self, git_runtime::GitRuntimeError> {
         let runtime = git_runtime::GitRuntime::new(authorization, Arc::clone(&self.updates))?;
+        let watcher = runtime.start_watching(self.config.clone());
         let state = self.env_runtime_mut();
-        state.workspace._git_watcher = Some(runtime.start_watching());
+        state.workspace._git_watcher = Some(watcher);
         state.workspace.git = Some(runtime);
         Ok(self)
     }

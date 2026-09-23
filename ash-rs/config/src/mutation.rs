@@ -320,6 +320,11 @@ fn apply_preferences(document: &mut UserConfigDocument, update: &PreferencesUpda
         Patch::Null => document.grep.backend = crate::GrepBackend::default(),
         Patch::Value(backend) => document.grep.backend = *backend,
     }
+    match &update.git {
+        Patch::Missing => {}
+        Patch::Null => document.git = None,
+        Patch::Value(git) => document.git = Some(*git),
+    }
     match &update.time_context {
         Patch::Missing => {}
         Patch::Null => document.agent.time_context = crate::TimeContextConfig::default(),

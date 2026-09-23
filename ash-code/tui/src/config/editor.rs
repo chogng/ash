@@ -19,6 +19,7 @@ use crate::widgets::text_prompt::TextPrompt;
 use crate::widgets::text_prompt::TextPromptOutcome;
 use crate::widgets::text_prompt::TextPromptSpec;
 use ash_app_server_protocol::protocol::config::ConfigReadResult;
+use ash_app_server_protocol::protocol::config::GitAutoFetchModeDto;
 use ash_app_server_protocol::protocol::provider::{
     ProviderApiKeyPolicyDto, ProviderCatalogEntryDto, ProviderListResult,
 };
@@ -29,6 +30,7 @@ use zeroize::Zeroizing;
 
 const ISSUE_REFRESH_ROW: &str = "issue-refresh";
 const ISSUE_REFRESH_INTERVALS: [u32; 5] = [0, 5, 10, 30, 60];
+const GIT_FETCH_INTERVALS: [u32; 7] = [30, 60, 180, 300, 600, 1800, 3600];
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ConfigEdit {
@@ -51,6 +53,8 @@ pub(crate) enum ConfigSelectionAction {
     SetUpdatePolicy(ConfigEdit),
     SetVimMode(ConfigEdit),
     SetShowGitChangesAsDiff(ConfigEdit),
+    SetGitMode(ConfigEdit),
+    SetGitPeriod(ConfigEdit),
     SetStatusLineStyle(ConfigEdit),
     SetLanguage(ConfigEdit),
     OpenProviderApiKey {
@@ -298,6 +302,8 @@ impl ConfigEditor {
                 | ConfigSelectionAction::SetLanguage(_)
                 | ConfigSelectionAction::SetUpdatePolicy(_)
                 | ConfigSelectionAction::SetShowGitChangesAsDiff(_)
+                | ConfigSelectionAction::SetGitMode(_)
+                | ConfigSelectionAction::SetGitPeriod(_)
                 | ConfigSelectionAction::SetStatusLineStyle(_)
                 | ConfigSelectionAction::SetTerminalSettings(_)
                 | ConfigSelectionAction::SetMemories(_)
@@ -330,6 +336,12 @@ impl ConfigEditor {
             ConfigSelectionAction::SetShowGitChangesAsDiff(edit) => {
                 edit.status_line
                     .set_show_git_changes_as_diff(status_defaults.show_git_changes_as_diff());
+            }
+            ConfigSelectionAction::SetGitMode(edit) => {
+                edit.server_config.git.autofetch = GitAutoFetchModeDto::Off;
+            }
+            ConfigSelectionAction::SetGitPeriod(edit) => {
+                edit.server_config.git.autofetch_period = 180;
             }
             ConfigSelectionAction::SetStatusLineStyle(edit) => {
                 edit.status_line.set_style(status_defaults.style());
@@ -365,6 +377,12 @@ impl ConfigEditor {
             ListSelectionOutcome::Activate(ConfigSelectionAction::AdjustIssueRefresh(edit)) => {
                 issue_refresh_outcome(edit, ListSelectionAdjustment::Next)
             }
+            ListSelectionOutcome::Activate(ConfigSelectionAction::SetGitMode(edit)) => {
+                git_mode_outcome(edit, ListSelectionAdjustment::Next)
+            }
+            ListSelectionOutcome::Activate(ConfigSelectionAction::SetGitPeriod(edit)) => {
+                git_period_outcome(edit, ListSelectionAdjustment::Next)
+            }
             ListSelectionOutcome::Activate(ConfigSelectionAction::OpenProvider(settings)) => {
                 self.provider_panel = Some(super::provider::Panel::new(settings));
                 ConfigEditorOutcome::Consumed
@@ -390,6 +408,8 @@ impl ConfigEditor {
                 ConfigSelectionAction::AdjustIssueRefresh(edit) => {
                     issue_refresh_outcome(edit, adjustment)
                 }
+                ConfigSelectionAction::SetGitMode(edit) => git_mode_outcome(edit, adjustment),
+                ConfigSelectionAction::SetGitPeriod(edit) => git_period_outcome(edit, adjustment),
                 action => ConfigEditorOutcome::Action(action),
             },
             ListSelectionOutcome::Consumed | ListSelectionOutcome::FocusPrevious => {
@@ -703,6 +723,26 @@ pub(crate) fn config_choices(
         }),
     );
     let git_changes_id = ListSelectionItemId::new("show-git-changes-as-diff");
+    let git_mode_id = ListSelectionItemId::new("git-autofetch");
+    actions.insert(
+        git_mode_id.clone(),
+        ConfigSelectionAction::SetGitMode(ConfigEdit {
+            terminal,
+            status_line: status_line.clone(),
+            server_config: config.clone(),
+            providers: providers.clone(),
+        }),
+    );
+    let git_period_id = ListSelectionItemId::new("git-autofetch-period");
+    actions.insert(
+        git_period_id.clone(),
+        ConfigSelectionAction::SetGitPeriod(ConfigEdit {
+            terminal,
+            status_line: status_line.clone(),
+            server_config: config.clone(),
+            providers: providers.clone(),
+        }),
+    );
     let show_git_changes_as_diff = status_line.show_git_changes_as_diff();
     let mut toggled_status_line = status_line.clone();
     toggled_status_line.set_show_git_changes_as_diff(!show_git_changes_as_diff);
@@ -828,6 +868,24 @@ pub(crate) fn config_choices(
                 switch_value(memories_enabled),
             ),
     );
+    config_items.push(
+        ListSelectionItem::new(nls::text(language, Message::ConfigGitAutoFetch))
+            .with_id(git_mode_id)
+            .with_columns(
+                nls::text(language, Message::ConfigGitAutoFetch),
+                nls::text(language, Message::ConfigGitAutoFetchDescription),
+                git_mode_label(language, config.git.autofetch),
+            ),
+    );
+    config_items.push(
+        ListSelectionItem::new(nls::text(language, Message::ConfigGitAutoFetchPeriod))
+            .with_id(git_period_id)
+            .with_columns(
+                nls::text(language, Message::ConfigGitAutoFetchPeriod),
+                nls::text(language, Message::ConfigGitAutoFetchPeriodDescription),
+                format!("{}s", config.git.autofetch_period),
+            ),
+    );
     let provider_items = provider_items(config, providers, &mut actions);
     let mut choices = ConfigChoices {
         model: ListSelectionModel::new(
@@ -899,6 +957,54 @@ fn update_policy_label(language: Language, policy: crate::UpdatePolicy) -> &'sta
         crate::UpdatePolicy::Latest => nls::text(language, Message::ConfigUpdateLatest),
         crate::UpdatePolicy::Stable => nls::text(language, Message::ConfigUpdateStable),
         crate::UpdatePolicy::Never => nls::text(language, Message::ConfigUpdateNever),
+    }
+}
+
+fn git_mode_outcome(
+    mut edit: ConfigEdit,
+    adjustment: ListSelectionAdjustment,
+) -> ConfigEditorOutcome {
+    edit.server_config.git.autofetch = match (edit.server_config.git.autofetch, adjustment) {
+        (GitAutoFetchModeDto::Off, ListSelectionAdjustment::Next)
+        | (GitAutoFetchModeDto::All, ListSelectionAdjustment::Previous) => {
+            GitAutoFetchModeDto::Default
+        }
+        (GitAutoFetchModeDto::Default, ListSelectionAdjustment::Next)
+        | (GitAutoFetchModeDto::Off, ListSelectionAdjustment::Previous) => GitAutoFetchModeDto::All,
+        (GitAutoFetchModeDto::All, ListSelectionAdjustment::Next)
+        | (GitAutoFetchModeDto::Default, ListSelectionAdjustment::Previous) => {
+            GitAutoFetchModeDto::Off
+        }
+    };
+    ConfigEditorOutcome::Action(ConfigSelectionAction::SetGitMode(edit))
+}
+
+fn git_period_outcome(
+    mut edit: ConfigEdit,
+    adjustment: ListSelectionAdjustment,
+) -> ConfigEditorOutcome {
+    let current = edit.server_config.git.autofetch_period;
+    edit.server_config.git.autofetch_period = match adjustment {
+        ListSelectionAdjustment::Next => GIT_FETCH_INTERVALS
+            .iter()
+            .copied()
+            .find(|period| *period > current)
+            .unwrap_or(GIT_FETCH_INTERVALS[0]),
+        ListSelectionAdjustment::Previous => GIT_FETCH_INTERVALS
+            .iter()
+            .copied()
+            .rev()
+            .find(|period| *period < current)
+            .unwrap_or(GIT_FETCH_INTERVALS[GIT_FETCH_INTERVALS.len() - 1]),
+    };
+    ConfigEditorOutcome::Action(ConfigSelectionAction::SetGitPeriod(edit))
+}
+
+fn git_mode_label(language: Language, mode: GitAutoFetchModeDto) -> &'static str {
+    match mode {
+        GitAutoFetchModeDto::Off => nls::text(language, Message::ConfigGitFetchOff),
+        GitAutoFetchModeDto::Default => nls::text(language, Message::ConfigGitFetchDefault),
+        GitAutoFetchModeDto::All => nls::text(language, Message::ConfigGitFetchAll),
     }
 }
 

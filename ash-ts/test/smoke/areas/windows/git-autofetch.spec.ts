@@ -1,7 +1,12 @@
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 
-test('Git Auto Fetch setting saves all three modes through the Settings editor', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'electron', 'Settings persistence is verified in the desktop host.');
+test('Git Auto Fetch setting saves all three modes through shared App Server config', async ({ application, target, workbench }) => {
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires the desktop App Server.');
+	if (!('windows' in application)) return;
+	const home = await application.evaluate(() => process.env.ASH_HOME!);
+	const readAutofetch = async () => (await readFile(join(home, 'config.toml'), 'utf8')).match(/^autofetch = "(off|default|all)"$/m)?.[1];
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+Shift+P');
 	await page.getByPlaceholder('Type the name of a command to run').fill('Ash Settings');
@@ -13,19 +18,11 @@ test('Git Auto Fetch setting saves all three modes through the Settings editor',
 	await select.press('Enter');
 	await page.getByRole('option', { name: 'Default remote' }).click();
 	await expect(select).toContainText('Default remote');
-	await expect.poll(() => readAutofetch(page)).toBe(true);
+	await expect.poll(readAutofetch).toBe('default');
 	await select.press('Enter');
 	await page.getByRole('option', { name: 'All remotes' }).click();
-	await expect.poll(() => readAutofetch(page)).toBe('all');
+	await expect.poll(readAutofetch).toBe('all');
 	await select.press('Enter');
 	await page.getByRole('option', { name: 'Off' }).click();
-	await expect.poll(() => readAutofetch(page)).toBeUndefined();
+	await expect.poll(readAutofetch).toBe('off');
 });
-
-async function readAutofetch(page: import('@playwright/test').Page): Promise<unknown> {
-	return page.evaluate(async () => {
-		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
-		const snapshot = await ipc.invoke('ash:configuration:read') as { document: { source: string } };
-		return (JSON.parse(snapshot.document.source) as Record<string, unknown>)['git.autofetch'];
-	});
-}

@@ -1,16 +1,100 @@
 use super::GitRuntime;
 use crate::server::notification_queue::NotificationQueue;
 use crate::server::update_broker::UpdateBroker;
+use ash_config::ConfigCommandRequest;
+use ash_config::ConfigRevision;
+use ash_config::ConfigStore;
+use ash_config::GitAutoFetchMode;
+use ash_config::GitConfig;
+use ash_config::PreferencesUpdate;
+use ash_config::UserConfigCommand;
 use ash_file_access::Authorization;
 use ash_file_access::Dir;
 use ash_file_access::Grant;
 use ash_file_access::GrantSource;
 use ash_file_access::Permission;
 use ash_file_access::Permissions;
+use ash_protocol::CommandId;
+use ash_protocol::Patch;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+#[test]
+fn automatic_fetch_runs_from_shared_config_without_a_frontend() {
+    let source = TestRepository::init();
+    source.write("tracked.txt", "remote commit\n");
+    source.git(&["add", "tracked.txt"]);
+    source.git(&["commit", "-m", "remote commit"]);
+    let expected = source.git_output(&["rev-parse", "HEAD"]);
+
+    let consumer = TestRepository::init();
+    consumer.git(&["remote", "add", "origin", source.root().to_str().unwrap()]);
+    let config_path = consumer.root().join("autofetch.sqlite3");
+    std::fs::write(
+        config_path.with_extension("toml"),
+        "schemaVersion = 5\n[git]\nautofetch = 'off'\nautofetchPeriod = 1\n",
+    )
+    .unwrap();
+    let config = Arc::new(ConfigStore::open(&config_path).unwrap());
+    let broker = Arc::new(UpdateBroker::default());
+    let queue = NotificationQueue::default();
+    broker.register(1, false, &queue);
+    let runtime = GitRuntime::new(mutation_authorization(consumer.root()), broker).unwrap();
+    runtime.status().unwrap();
+    queue.drain();
+    let watcher = runtime.start_watching(Some(Arc::clone(&config)));
+    config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("enable-autofetch").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                time_context: Patch::Missing,
+                features: Patch::Missing,
+                model: Patch::Missing,
+                model_reasoning_effort: Patch::Missing,
+                approval_review_model: Patch::Missing,
+                commit_message_model: Patch::Missing,
+                advisor: Patch::Missing,
+                tool_mode: Patch::Missing,
+                grep_backend: Patch::Missing,
+                git: Patch::Value(GitConfig {
+                    autofetch: GitAutoFetchMode::Default,
+                    autofetch_period: 1,
+                }),
+                gui: Patch::Missing,
+                tui: Patch::Missing,
+            }),
+        })
+        .unwrap();
+
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let output = Command::new("git")
+            .args(["rev-parse", "--verify", "refs/remotes/origin/main"])
+            .current_dir(consumer.root())
+            .output()
+            .unwrap();
+        if output.status.success() {
+            assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), expected);
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "App Server did not automatically fetch"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    drop(watcher);
+    assert!(
+        queue
+            .drain()
+            .iter()
+            .any(|notification| { notification["method"] == "git/statusChanged" })
+    );
+}
 
 #[test]
 fn runtime_revisions_and_notifies_only_for_changed_repository_state() {

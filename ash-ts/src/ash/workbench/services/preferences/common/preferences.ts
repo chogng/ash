@@ -34,11 +34,13 @@ export interface ISettingBase {
 export interface IBooleanSetting extends ISettingBase {
 	readonly valueType: 'boolean';
 	readonly configuration: IRegisteredConfiguration<boolean>;
+	readonly binding?: SettingValueBinding<boolean>;
 }
 
 export interface INumberSetting extends ISettingBase {
 	readonly valueType: 'number';
 	readonly configuration: IRegisteredConfiguration<number>;
+	readonly binding?: SettingValueBinding<number>;
 	readonly minimum: number;
 	readonly maximum: number;
 }
@@ -46,12 +48,14 @@ export interface INumberSetting extends ISettingBase {
 export interface ISelectSetting extends ISettingBase {
 	readonly valueType: 'select';
 	readonly configuration: IRegisteredConfiguration<string | boolean>;
+	readonly binding?: SettingValueBinding<string | boolean>;
 	readonly options: readonly ISelectSettingOption[];
 }
 
 export interface ITextSetting extends ISettingBase {
 	readonly valueType: 'text';
 	readonly configuration: IRegisteredConfiguration<string>;
+	readonly binding?: SettingValueBinding<string>;
 	readonly placeholder: string;
 }
 

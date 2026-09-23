@@ -613,6 +613,9 @@ impl App {
                 edit,
             )) => Some(ConfigCommand::SetMemories(edit).into()),
             crate::config::ConfigEditorOutcome::Action(
+                ConfigSelectionAction::SetGitMode(edit) | ConfigSelectionAction::SetGitPeriod(edit),
+            ) => Some(ConfigCommand::SetGit(edit).into()),
+            crate::config::ConfigEditorOutcome::Action(
                 ConfigSelectionAction::SetIssues(edit)
                 | ConfigSelectionAction::AdjustIssueRefresh(edit),
             ) => Some(ConfigCommand::SetIssues(edit).into()),

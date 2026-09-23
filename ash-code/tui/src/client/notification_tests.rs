@@ -102,6 +102,7 @@ fn session_change_preserves_the_invalidated_tree_identity() {
     let Some(ClientEvent::SessionChanged(changed_session_id)) = map_event(
         AppServerEvent::Notification(ServerNotification::SessionChanged(SessionChanged {
             session_id: session_id.clone(),
+            agent_tree_changed: true,
         })),
     ) else {
         panic!("Session invalidation should be preserved");

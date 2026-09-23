@@ -16,6 +16,8 @@ use ash_app_server_protocol::protocol::config::ConfigCommandResult;
 use ash_app_server_protocol::protocol::config::ConfigReadResult;
 use ash_app_server_protocol::protocol::config::ConfigUpdateParams;
 use ash_app_server_protocol::protocol::config::FrontendConfigDto;
+use ash_app_server_protocol::protocol::config::GitAutoFetchModeDto;
+use ash_app_server_protocol::protocol::config::GitConfigDto;
 use ash_app_server_protocol::protocol::config::GrepBackendDto;
 use ash_app_server_protocol::protocol::config::LanguageServerConfigDto;
 use ash_app_server_protocol::protocol::config::LanguageServerConfigureParams;
@@ -53,6 +55,8 @@ use ash_config::ConfigCommandDisposition;
 use ash_config::ConfigCommandError;
 use ash_config::ConfigCommandRequest;
 use ash_config::ConfigRevision;
+use ash_config::GitAutoFetchMode;
+use ash_config::GitConfig;
 use ash_config::GrepBackend;
 use ash_config::LanguageServerConfig;
 use ash_config::LanguageServerId;
@@ -192,6 +196,7 @@ impl AppServer {
                     advisor: params.advisor,
                     tool_mode: params.tool_mode,
                     grep_backend: params.grep_backend.map(grep_backend_from_dto),
+                    git: params.git.map(git_config_from_dto),
                     gui: params.gui.map(|config| config.0),
                     tui: params.tui.map(|config| config.0),
                 }),
@@ -223,6 +228,7 @@ impl AppServer {
                     advisor: Patch::Missing,
                     tool_mode: Patch::Missing,
                     grep_backend: Patch::Value(GrepBackend::Ripgrep),
+                    git: Patch::Missing,
                     gui: Patch::Missing,
                     tui: Patch::Missing,
                 }),
@@ -632,6 +638,8 @@ fn config_read_result(
         issues: ash_app_server_protocol::protocol::issues::IssueConfigDto {
             auto_refresh_minutes: snapshot.values.issues.auto_refresh_minutes,
         },
+        git: git_config_dto(snapshot.values.git),
+        git_configured: snapshot.values.git_configured,
         revision: snapshot.revision.get(),
         generation: snapshot.generation.get(),
         model: snapshot.values.model.map(model_ref_dto),
@@ -708,6 +716,28 @@ fn grep_backend_from_dto(backend: GrepBackendDto) -> GrepBackend {
     match backend {
         GrepBackendDto::Ripgrep => GrepBackend::Ripgrep,
         GrepBackendDto::Tgrep => GrepBackend::Tgrep,
+    }
+}
+
+fn git_config_dto(config: GitConfig) -> GitConfigDto {
+    GitConfigDto {
+        autofetch: match config.autofetch {
+            GitAutoFetchMode::Off => GitAutoFetchModeDto::Off,
+            GitAutoFetchMode::Default => GitAutoFetchModeDto::Default,
+            GitAutoFetchMode::All => GitAutoFetchModeDto::All,
+        },
+        autofetch_period: config.autofetch_period,
+    }
+}
+
+fn git_config_from_dto(config: GitConfigDto) -> GitConfig {
+    GitConfig {
+        autofetch: match config.autofetch {
+            GitAutoFetchModeDto::Off => GitAutoFetchMode::Off,
+            GitAutoFetchModeDto::Default => GitAutoFetchMode::Default,
+            GitAutoFetchModeDto::All => GitAutoFetchMode::All,
+        },
+        autofetch_period: config.autofetch_period,
     }
 }
 

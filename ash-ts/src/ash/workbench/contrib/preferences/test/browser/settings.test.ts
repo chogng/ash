@@ -5,6 +5,7 @@ import type { IAction } from '../../../../../base/common/actions.js';
 import type { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import type { IContextMenuService as ContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import type { ILocalizationService } from '../../../../../workbench/services/localization/common/localizationService.js';
+import type { IGitService } from '../../../../../workbench/services/git/common/gitService.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>', {
 	pretendToBeVisual: true,
@@ -35,7 +36,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { h } = await import('../../../../../base/browser/dom.js');
-const { Event } = await import('../../../../../base/common/event.js');
+const { Emitter, Event } = await import('../../../../../base/common/event.js');
 const { DisposableStore } = await import('../../../../../base/common/lifecycle.js');
 const { ConfigurationRegistry, Extensions: ConfigurationExtensions } = await import('../../../../../platform/configuration/common/configurationRegistry.js');
 const { IClipboardService: ClipboardServiceId } = await import('../../../../../platform/clipboard/common/clipboardService.js');
@@ -55,6 +56,7 @@ const { EditorSelectionConfiguration } = await import('../../../../../workbench/
 const { CodeEditorConfiguration } = await import('../../../../../workbench/contrib/codeEditor/common/editorConfiguration.js');
 const { ContentSearchConfiguration } = await import('../../../../../workbench/contrib/search/common/searchConfiguration.js');
 const { GitConfiguration } = await import('../../../../../workbench/services/git/common/gitConfiguration.js');
+const { IGitService: GitServiceId } = await import('../../../../../workbench/services/git/common/gitService.js');
 const configurationRegistry = Registry.as<InstanceType<typeof ConfigurationRegistry>>(ConfigurationExtensions.Configuration);
 const { EditorPart } = await import('../../../../../workbench/browser/parts/editor/editorPart.js');
 const { EditorPaneMatch } = await import('../../../../../workbench/browser/parts/editor/editorPane.js');
@@ -132,10 +134,7 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, EditorSelectionConfiguration.defaultNewDocumentEditor), 'editor');
 	assert.equal(findSettingCategory(layout, CodeEditorConfiguration.fontFamily), 'editor');
 	assert.equal(findSettingCategory(layout, ContentSearchConfiguration.maxResults), 'editor');
-	assert.equal(findSettingCategory(layout, GitConfiguration.autofetch), 'general');
-	const autofetchSetting = defaults.get(GitConfiguration.autofetch);
-	assert.equal(autofetchSetting.valueType, 'select');
-	if (autofetchSetting.valueType === 'select') assert.deepEqual(autofetchSetting.options.map(option => option.value), [false, true, 'all']);
+	assert.equal(defaults.all.some(setting => setting.id === GitConfiguration.autofetch), false);
 	assert.equal(configurationRegistry.getConfiguration(GitConfiguration.autofetch)?.defaultValue, false);
 	assert.equal(configurationRegistry.getConfiguration(GitConfiguration.autofetchPeriod)?.defaultValue, 180);
 	assert.equal(defaults.all.every(setting => ['boolean', 'number', 'select', 'text'].includes(setting.valueType)), true);
@@ -291,6 +290,16 @@ test('PreferencesEditor renders and updates registry-backed settings only', asyn
 		hideContextMenu() {},
 	};
 	const configuration = disposables.add(new WorkbenchConfigurationService());
+	const autoFetchChanged = disposables.add(new Emitter<void>());
+	let autoFetch: false | true | 'all' = false;
+	let autoFetchPeriod = 180;
+	const gitService = {
+		onDidChangeAutoFetch: autoFetchChanged.event,
+		get autoFetch() { return autoFetch; },
+		get autoFetchPeriod() { return autoFetchPeriod; },
+		setAutoFetch: async (value: false | true | 'all') => { autoFetch = value; autoFetchChanged.fire(); },
+		setAutoFetchPeriod: async (value: number) => { autoFetchPeriod = value; autoFetchChanged.fire(); },
+	} as IGitService;
 	const contextView = disposables.add(new BrowserContextViewService(root));
 	const services = new ServiceContainer();
 	services.registerInstance(ClipboardServiceId, clipboardService);
@@ -298,6 +307,7 @@ test('PreferencesEditor renders and updates registry-backed settings only', asyn
 	services.registerInstance(IContextMenuService, contextMenuProvider);
 	services.registerInstance(IContextViewService, contextView);
 	services.registerInstance(LocalizationServiceId, localizationService);
+	services.registerInstance(GitServiceId, gitService);
 	const instantiationService = services;
 	const preferencesPanes = disposables.add(new PreferencesEditorPaneRegistry());
 	disposables.add(preferencesPanes.registerPreferencesEditorPane({
@@ -305,7 +315,7 @@ test('PreferencesEditor renders and updates registry-backed settings only', asyn
 		title: 'Settings',
 		order: 1,
 		ctorDescriptor: new ServiceConstructionDescriptor(SettingsEditorPane, {
-			serviceDependencies: [ClipboardServiceId, ConfigurationServiceId, IContextMenuService, IContextViewService, LocalizationServiceId],
+			serviceDependencies: [ClipboardServiceId, ConfigurationServiceId, IContextMenuService, IContextViewService, LocalizationServiceId, GitServiceId],
 		}),
 	}));
 	const editorPanes = new EditorPaneRegistry();
@@ -343,11 +353,11 @@ test('PreferencesEditor renders and updates registry-backed settings only', asyn
 	autofetchButton?.click();
 	ownerDocument.getElementById(autofetchListId)?.querySelectorAll<HTMLElement>('[role="option"]')[1]?.click();
 	await nextTurn();
-	assert.equal(configuration.getValue(GitConfiguration.autofetch), true);
+	assert.equal(autoFetch, true);
 	autofetchButton?.click();
 	ownerDocument.getElementById(autofetchListId)?.querySelectorAll<HTMLElement>('[role="option"]')[2]?.click();
 	await nextTurn();
-	assert.equal(configuration.getValue(GitConfiguration.autofetch), 'all');
+	assert.equal(autoFetch, 'all');
 
 	const underline = root.querySelector<HTMLInputElement>(`[data-configuration-key="${AccessibilityConfiguration.underlineLinks}"]`);
 	assert.ok(underline);

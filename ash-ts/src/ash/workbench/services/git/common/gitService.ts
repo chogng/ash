@@ -1,6 +1,7 @@
 import type { Event } from "../../../../base/common/event.js";
 import type { URI } from "../../../../base/common/uri.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
+import type { GitAutofetch } from './gitConfiguration.js';
 
 export type GitChangeStatus = "unmodified" | "modified" | "added" | "deleted" | "renamed" | "copied" | "typeChanged" | "unmerged" | "untracked" | "ignored";
 
@@ -135,6 +136,11 @@ export interface GitCommitResult {
 
 /** Frontend Git operations and repository updates for the active workspace. */
 export interface IGitService {
+	readonly onDidChangeAutoFetch: Event<void>;
+	readonly autoFetch: GitAutofetch;
+	readonly autoFetchPeriod: number;
+	setAutoFetch(value: GitAutofetch): Promise<void>;
+	setAutoFetchPeriod(seconds: number): Promise<void>;
 	readonly onDidChangeStatus: Event<GitStatus>;
 	readonly onDidChangeRepositoryStatus: Event<GitStatus>;
 	readonly onDidChangeRepositories: Event<readonly GitRepository[]>;

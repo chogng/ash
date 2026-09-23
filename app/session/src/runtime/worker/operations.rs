@@ -476,6 +476,7 @@ pub(super) fn set_model(client: &mut AppServerRequestHandle, model: ModelRef) ->
             commit_message_model: Patch::Missing,
             tool_mode: Patch::Missing,
             grep_backend: Patch::Missing,
+            git: Patch::Missing,
             gui: Patch::Missing,
             tui: Patch::Missing,
         })

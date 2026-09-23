@@ -7,6 +7,7 @@ import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 import { registerEditorPane } from '../../../browser/parts/editor/editorRegistry.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
+import { IGitService } from '../../../services/git/common/gitService.js';
 import { isPreferencesEditorInput } from '../../../services/preferences/common/preferencesEditorInput.js';
 import { PreferencesEditor, PreferencesEditorId } from './preferencesEditor.js';
 import { registerPreferencesEditorPane } from './preferencesEditorRegistry.js';
@@ -28,6 +29,7 @@ registerPreferencesEditorPane({
 			IContextMenuService,
 			IContextViewService,
 			ILocalizationService,
+			IGitService,
 		],
 	}),
 });
