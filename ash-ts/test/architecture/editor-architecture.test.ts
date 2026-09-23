@@ -662,6 +662,7 @@ test("Window modes select independent Stanza feature implementations behind the 
 		assert.doesNotMatch(entry, /editor\/editor\.(?:code|academic)\.all/u);
 	}
 	assert.match(codeContribution, /editor\/editor\.code\.all/u);
+	assert.match(codeContribution, /standaloneGotoSymbolQuickAccess/u);
 	assert.match(codeContribution, /workbench\/contrib\/codeEditor\/browser\/codeEditor\.contribution/u);
 	assert.match(codeContribution, /workbench\/contrib\/tasks\/browser\/tasks\.contribution/u);
 	assert.match(codeContribution, /workbench\/contrib\/testing\/browser\/testing\.contribution/u);
@@ -753,9 +754,11 @@ test("Editor engines delegate optional feature composition to mode bundles", () 
 	assert.match(quickAccessContribution, /registerEditorContribution/u);
 	assert.match(standardBundle, /find\/browser\/findController/u);
 	assert.match(standardBundle, /quickAccess\/browser\/quickAccessController/u);
-	for (const contribution of ["bracketMatching", "gotoSymbol", "languageAnalysis", "placeholderText", "tokenization", "unicodeHighlighter", "wordHighlighter"]) {
+	for (const contribution of ["bracketMatching", "languageAnalysis", "placeholderText", "tokenization", "unicodeHighlighter", "wordHighlighter"]) {
 		assert.match(standardBundle, new RegExp(`contrib/${contribution}/browser/[^"']+\\.contribution`, "u"), contribution);
 	}
+	assert.doesNotMatch(standardBundle, /gotoSymbol\.contribution/u);
+	assert.match(readFileSync(join(editorRoot, 'editor.main.ts'), 'utf8'), /standaloneGotoSymbolQuickAccess/u);
 	assert.match(standardBundle, /contrib\/comment\/browser\/comment\.js/u);
 	assert.match(standardBundle, /contrib\/suggest\/browser\/suggestController\.js/u);
 	assert.match(standardBundle, /contrib\/gotoError\/browser\/gotoError\.js/u);

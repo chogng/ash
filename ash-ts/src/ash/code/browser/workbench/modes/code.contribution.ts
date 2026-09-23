@@ -1,6 +1,7 @@
 import '../../../../workbench/contrib/call/browser/call.contribution.js';
 import "../../../../workbench/contrib/automation/browser/automation.contribution.js";
 import "../../../../editor/editor.code.all.js";
+import '../../../../editor/standalone/browser/quickAccess/standaloneGotoSymbolQuickAccess.js';
 import "../../../../workbench/contrib/codeEditor/browser/codeEditor.contribution.js";
 import "../../../../workbench/contrib/debug/browser/debug.contribution.js";
 import "../../../../workbench/contrib/tasks/browser/tasks.contribution.js";

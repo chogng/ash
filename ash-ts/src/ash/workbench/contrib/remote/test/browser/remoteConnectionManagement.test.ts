@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
-import { Emitter } from "../../../../../base/common/event.js";
+import { Emitter, Event } from "../../../../../base/common/event.js";
 import { DialogResult, type IDialogService, type IPromptDialogOptions } from "../../../../../platform/dialogs/common/dialogs.js";
 import type { IConfirmationDialogOptions } from "../../../../../platform/dialogs/common/dialogs.js";
 import type { IMessageDialogOptions } from "../../../../../platform/dialogs/common/dialogs.js";
@@ -151,7 +151,9 @@ class TestQuickPick<TItem extends IQuickPickItem> implements IQuickPick<TItem> {
 	readonly onDidAccept = this.acceptEmitter.event;
 	readonly onDidChangeValue = this.valueEmitter.event;
 	readonly onDidHide = this.hideEmitter.event;
+	readonly onDidBlur = Event.None;
 	items: readonly TItem[] = [];
+	ariaLabel = '';
 	placeholder = "";
 	value = "";
 

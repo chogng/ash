@@ -225,6 +225,37 @@ test('Quick Input replaces a visible picker and releases it with its host', () =
 	}
 });
 
+test('Quick Pick labels its input and reports focus leaving the picker', async () => {
+	const dom = new JSDOM('<!doctype html><body><button>Editor</button><button>Other editor</button></body>');
+	installDomGlobals(dom);
+	using contextKeys = new ContextKeyService();
+	using service = new WorkbenchQuickInputService({
+		container: dom.window.document.body,
+		contextKeyService: contextKeys,
+	});
+	const button = dom.window.document.querySelector('button')!;
+	const nextButton = dom.window.document.querySelectorAll('button')[1]!;
+	try {
+		button.focus();
+		using picker = service.createQuickPick();
+		picker.ariaLabel = 'Go to Symbol';
+		picker.items = [{ label: 'main' }];
+		let blurs = 0;
+		using listener = picker.onDidBlur(() => blurs++);
+		picker.show();
+		assert.equal(dom.window.document.querySelector('.ash-quick-pick')?.getAttribute('aria-label'), 'Go to Symbol');
+		assert.equal(dom.window.document.querySelector('.ash-quick-pick-input input')?.getAttribute('aria-label'), 'Go to Symbol');
+		nextButton.focus();
+		await Promise.resolve();
+		assert.equal(blurs, 1);
+		picker.hide();
+		assert.equal(dom.window.document.activeElement, nextButton);
+	} finally {
+		service.dispose();
+		dom.window.close();
+	}
+});
+
 function emptyKeybindingService(): KeybindingService {
 	return {
 		inChordMode: false,

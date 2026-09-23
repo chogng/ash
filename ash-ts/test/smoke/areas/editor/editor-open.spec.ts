@@ -65,7 +65,7 @@ test("Code highlights Rust locally and obtains document symbols asynchronously",
 	const input = group.content.locator(".stanza-editor-input");
 	await input.focus();
 	await input.press(process.platform === "darwin" ? "Meta+Shift+O" : "Control+Shift+O");
-	await expect(group.content.locator(".stanza-editor-goto-symbol-item")).toContainText("main");
+	await expect(page.locator('.ash-quick-pick-row-label')).toContainText('main');
 });
 
 test("Code finds local workspace symbols when the language server has no workspace-symbol provider", async ({ target, workbench }) => {

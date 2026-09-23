@@ -4738,10 +4738,13 @@ for (const kind of ['definition', 'call', 'type', 'symbols'] as const) {
 			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().slice(0, 1))).toEqual([{ languageId: 'plaintext', aborted: false }]);
 			await page.evaluate(reason => window.ashStandaloneIntegration.changeLanguageRequest(reason), reason);
 			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().slice(0, 1))).toEqual([{ languageId: 'plaintext', aborted: true }]);
+			if (reason === 'blur' && kind === 'symbols') {
+				await expect(page.locator('#owned .stanza-editor-input')).toBeFocused();
+			}
 			const before = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
 			await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(0));
 			expect(await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).toEqual(before);
-			await expect(page.locator('#caller .stanza-editor-peek-view, #caller .stanza-editor-goto-symbol:not([hidden])')).toHaveCount(0);
+			await expect(page.locator('#caller .stanza-editor-peek-view, #caller .ash-quick-pick')).toHaveCount(0);
 			await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 		});
 	}
@@ -4755,7 +4758,7 @@ for (const kind of ['definition', 'call', 'type', 'symbols'] as const) {
 		if (kind === 'definition') {
 			expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).selection).toBe('[1,7 -> 1,13]');
 		} else if (kind === 'symbols') {
-			await expect(page.locator('#caller .stanza-editor-goto-symbol-item')).toHaveText('second');
+			await expect(page.locator('#caller .ash-quick-pick-row-label')).toHaveText('second');
 		} else {
 			await expect(page.locator('#caller .stanza-editor-language-hierarchy-item')).toHaveText('root');
 			await page.locator('#caller .stanza-editor-language-hierarchy-expand').first().click();
@@ -4768,6 +4771,25 @@ for (const kind of ['definition', 'call', 'type', 'symbols'] as const) {
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
 }
+
+test('symbol picker filters, navigates, restores focus and labels its input', async ({ page }) => {
+	await page.goto('/standalone.html?symbolIconsOff');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareLanguageRequest('symbols'));
+	const input = page.locator('#caller .stanza-editor-input');
+	await input.focus();
+	await page.keyboard.press('ControlOrMeta+Shift+o');
+	await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(0));
+	const picker = page.locator('#caller .ash-quick-pick');
+	const query = picker.getByRole('combobox', { name: 'Go to Symbol' });
+	await expect(picker).toHaveAttribute('aria-label', 'Go to Symbol');
+	await query.fill('sec');
+	await expect(picker.locator('.ash-quick-pick-row-label')).toHaveText('second');
+	await page.keyboard.press('Enter');
+	await expect(picker).toHaveCount(0);
+	await expect(input).toBeFocused();
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).selection).toBe('[1,7 -> 1,13]');
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
 
 
 test('signature trigger metadata distinguishes initial and repeated triggers and carries active hints', async ({ page }) => {

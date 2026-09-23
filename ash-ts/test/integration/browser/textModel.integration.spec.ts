@@ -209,7 +209,17 @@ test("text-model editor projects revision-bound Rust syntax, diagnostics, foldin
 	const input = page.locator(".stanza-editor-input");
 	await input.focus();
 	await page.keyboard.press("ControlOrMeta+Shift+o");
-	await expect(page.locator(".stanza-editor-goto-symbol-item")).toHaveText("main");
+	const symbol = page.locator('.ash-quick-pick-row-label');
+	await expect(symbol).toHaveText('main');
+	await page.keyboard.press('Enter');
+	await expect(symbol).toHaveCount(0);
+	await expect(input).toBeFocused();
+	expect(await page.evaluate(() => window.ashTextModelIntegration.getSelection())).toEqual({
+		startLineIndex: 0,
+		startColumnIndex: 3,
+		endLineIndex: 0,
+		endColumnIndex: 7,
+	});
 });
 
 test("short documents have no false scroll range and use a proportional hover slider", async ({ page }) => {

@@ -20,7 +20,6 @@ import './contrib/fontZoom/browser/fontZoom.js';
 import './contrib/folding/browser/folding.js';
 import "./contrib/format/browser/formatActions.js";
 import "./contrib/gotoError/browser/gotoError.js";
-import "./contrib/gotoSymbol/browser/gotoSymbol.contribution.js";
 import "./contrib/gotoSymbol/browser/languageNavigation.contribution.js";
 import "./contrib/hover/browser/hoverContribution.js";
 import './contrib/inPlaceReplace/browser/inPlaceReplace.js';

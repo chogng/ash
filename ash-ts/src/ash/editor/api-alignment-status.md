@@ -34,7 +34,7 @@
 | --- | --- |
 | `browser/standalone-tokens.css` | token 规则、继承和颜色表已进入既有 ViewLine presentation 与富文本复制链；尚无需要单独生成 token class 样式的调用方，不创建空 CSS |
 | `browser/inspectTokens/inspectTokens.ts`、`inspectTokens.css` | 需要完整 token 结果、主题解释及真实检查控件；目前未注册检查动作 |
-| `browser/quickAccess/standaloneGotoSymbolQuickAccess.ts`、`standaloneHelpQuickAccess.ts` | 命令面板文件已接通 F1、筛选与动作执行；通用 Quick Access registry/provider 契约仍待闭合。Go to Line action 仍使用已确认保留的 Ash 输入框；符号迁移需同时迁移 Workbench 入口 |
+| `browser/quickAccess/standaloneHelpQuickAccess.ts` | 命令面板和符号选择已接通 Quick Input；通用 Quick Access registry/provider 契约仍待闭合。Go to Line action 仍使用已确认保留的 Ash 输入框 |
 | `browser/referenceSearch/standaloneReferenceSearch.ts` | 本地引用跳转由现有语言导航控制器和 PeekViewWidget 承担；标准 ReferencesController 状态与模型链尚未对齐 |
 | `browser/standaloneWebWorker.ts`、`browser/services/standaloneWebWorkerService.ts` | 当前是模型绑定的编辑 Worker 与既有消息端口；标准通用 Worker 服务、代理与多资源同步仍缺失 |
 | `browser/standaloneTreeSitterLibraryService.ts` | 未发现本地同契约 Tree-sitter 库服务与加载链 |
@@ -58,7 +58,7 @@
 
 用户答复“按建议迁移 Quick Pick，保留共享底层”，确认上表全部建议，包括准确旧路径的删除。共享计算与传输能力继续由现有文件负责，不再重复询问。
 
-下一条 Quick Access 链仍等待已提交的归属确认，未修改以下候选。拟把 `editor/contrib/gotoSymbol/browser/gotoSymbolController.ts`、`gotoSymbol.contribution.ts`、`media/gotoSymbol.css` 的符号查询、选择与键盘行为迁入标准 Quick Access；迁完生产调用方与测试后删除这三个旧路径，Git 可恢复，DocumentSymbolService 继续共享。另拟保留以下 Ash 文件的产品职责，仅迁移服务构造和 QuickPick 接受回调：`workbench/browser/workbenchInteractionServices.ts`、`sessions/browser/actions/sessionsChatActions.ts`、`workbench/contrib/tasks/browser/taskActions.ts`、`workbench/contrib/chat/browser/pane/chatPane.ts`、`workbench/contrib/output/browser/outputActions.ts`、`workbench/contrib/quickaccess/browser/workspaceSymbolsQuickAccess.ts`、`workbench/contrib/remote/browser/remoteActions.ts`、`workbench/contrib/remote/browser/remoteConnectionManagement.ts`、`workbench/services/chat/browser/chatContextPickService.ts`。路径均相对 `ash-ts/src/ash/`。前次对控制器注入 registry / 取消请求的批准不扩展为本次迁移与删除批准。
+Quick Access 符号迁移原先等待仅 Ash 文件的归属确认；用户在准确迁移方案后答复“继续”，本批据此迁移并删除 `editor/contrib/gotoSymbol/browser/gotoSymbolController.ts`、`gotoSymbol.contribution.ts`、`media/gotoSymbol.css`。`DocumentSymbolService` 继续共享。其余 Workbench、Sessions 的 QuickPick 消费者不在本批迁移范围。
 
 Quick Input 首批准入：Workbench 命令面板 → WorkbenchQuickInputService → 平台 QuickPick → 原 InputBox / QuickInputList → 筛选、选择、关闭和焦点恢复。修改准确路径限定 `platform/quickinput/browser/quickPick.ts`（已确认仅 Ash，迁入上游同路径 `quickInput.ts` 并删除旧路径）、`workbench/services/quickinput/browser/quickInputService.ts`（双方都有，仅迁移 import 与类名）、本台账。保留当前状态、DOM、事件、样式及生命周期，先用既有 `workbench/services/quickinput/test/browser/quick-input.test.ts` 验证。
 
@@ -2129,3 +2129,5 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 Standalone 布局文件补齐：上游同路径 `standalone/browser/standaloneLayoutService.ts` 已由 Ash 独立实现并注册到窗口服务容器。服务从当前编辑器注册表发布主容器、活动容器和布局事件；F1 Quick Input 改读该服务的活动容器，选择框自身的 DOM 与释放仍由原 Controller 拥有。文件集合审计从 448 个同路径增至 449 个，缺失文件减 1。Standalone 单测 31 项通过，真实 Chromium 双编辑器 F1 场景通过，Stanza 生产构建通过。完整浏览器检查这次为 602 项通过，仍有括号着色、括号操作和 GPU 括号字形等失败；暂时断开本批服务注册与 Quick Input 接线后，4 个代表性失败仍原样复现，随后已恢复接线，因此不能将完整检查记为通过。`standaloneGotoSymbolQuickAccess.ts` 等其余缺失文件仍需先闭合各自下层调用链。
 
 Standalone Go to Offset：`editor.action.gotoOffset` 已从命令面板进入现有定位输入框，输入按一基 UTF-16 偏移解析，确认后更新选区、滚动并恢复编辑器焦点；行号模式仍独立工作。动作位于双方同路径的 `standaloneGotoLineQuickAccess.ts`，现有 Ash 定位框继续拥有输入 DOM 和生命周期。中英文标签与输入提示已接入语言目录。定向单测、真实 Chromium 命令场景及 Stanza 生产构建通过。`Colorizer.colorizeModelLine` 仍受模型同步 token 能力限制，未把异步快照伪装为同步实现；其余 Standalone 文件差异仍待逐条闭合调用链。
+
+Standalone 符号选择文件补齐：`standalone/browser/quickAccess/standaloneGotoSymbolQuickAccess.ts` 接管 `editor.action.quickOutline`、当前编辑器的文档符号请求和 Quick Pick 跳转。原仅 Ash 的 `gotoSymbolController.ts`、`gotoSymbol.contribution.ts` 与 `gotoSymbol.css` 已在生产入口和测试迁完后删除，共享 `DocumentSymbolService` 保留。Quick Pick 增加可设置的无障碍名称与失焦事件；关闭时只在焦点仍处于选择框内才恢复此前焦点，避免抢走另一个编辑器的焦点。文件集合检查现为 450 个同路径、0 个大小写错误，CSS 检查无新增上游品牌引用。Stanza/Renderer 生产构建、类型检查、Quick Input 与本地化各 6 项单测和 11 项相关 Chromium 场景通过；架构测试 23 项通过、1 项旧断言失败，该断言仍要求当前基线已不存在的 `contrib/smartSelect/common/selectionRanges.ts`。临时移除该断言后，同一测试又停在旧的 `colorPickerWidget.ts` 布局断言，因此恢复原断言，本批不改这组范围外检查。Code 产品的浏览器 smoke 场景在启动前因本机缺少 Go 命令而止于 `spawnSync go ENOENT`，未执行到 Playwright。

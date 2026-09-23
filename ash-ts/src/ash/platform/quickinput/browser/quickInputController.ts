@@ -79,13 +79,14 @@ export class QuickInputController extends Disposable {
 		if (this.active !== quickPick) {
 			return;
 		}
+		const shouldRestoreFocus = quickPick.element.contains(this.host.ownerDocument.activeElement);
 		this.active = undefined;
 		this.host.replaceChildren();
 		this.host.hidden = true;
 		const focusToRestore = this.focusToRestore;
 		this.focusToRestore = undefined;
 		this.hidden.fire();
-		if (focusToRestore?.isConnected) {
+		if (shouldRestoreFocus && focusToRestore?.isConnected) {
 			focusToRestore.focus();
 		}
 	}

@@ -39,14 +39,17 @@ export class QuickPick<TItem extends IQuickPickItem>
 	private readonly _onDidAccept = this._register(new Emitter<TItem>());
 	private readonly _onDidChangeValue = this._register(new Emitter<string>());
 	private readonly _onDidHide = this._register(new Emitter<void>());
+	private readonly _onDidBlur = this._register(new Emitter<void>());
 	private readonly options: BrowserQuickPickOptions;
 	private visible = false;
+	private _ariaLabel = localize('quickInput.title', 'Quick Pick');
 	private _placeholder = "";
 
 	readonly onDidAccept: Event<TItem> = this._onDidAccept.event;
 	readonly onDidChangeValue: Event<string> =
 		this._onDidChangeValue.event;
 	readonly onDidHide: Event<void> = this._onDidHide.event;
+	readonly onDidBlur: Event<void> = this._onDidBlur.event;
 
 	constructor(host: HTMLElement, options: BrowserQuickPickOptions) {
 		super();
@@ -55,13 +58,7 @@ export class QuickPick<TItem extends IQuickPickItem>
 		this.element = h(ownerDocument, "div");
 		this.element.className = "ash-quick-pick";
 		setRole(this.element, "dialog");
-		setAriaAttribute(this.element, "label", localize('quickInput.title', 'Quick Pick'));
-		this._register(toDisposable(() => {
-			if (this.visible) this.hide();
-			options.onDispose(this);
-			this.element.remove();
-		}));
-
+		setAriaAttribute(this.element, "label", this._ariaLabel);
 		this.list = this._register(new QuickInputList<TItem>(this.element));
 		this.inputBox = this._register(new InputBox(this.element, {
 			type: "search",
@@ -80,6 +77,13 @@ export class QuickPick<TItem extends IQuickPickItem>
 		this._register(this.inputBox.onDidChange(
 			(value) => this.handleValueChange(value),
 		));
+		this._register(this.inputBox.onDidBlur(() => {
+			queueMicrotask(() => {
+				if (this.visible && !this.element.contains(this.element.ownerDocument.activeElement)) {
+					this._onDidBlur.fire();
+				}
+			});
+		}));
 		this._register(this.list.onDidAccept((item) => {
 			this._onDidAccept.fire(item);
 		}));
@@ -89,10 +93,25 @@ export class QuickPick<TItem extends IQuickPickItem>
 		this._register(this.inputBox.onKeyDown(
 			(event: KeyboardEvent) => this.handleKeyDown(event),
 		));
+		this._register(toDisposable(() => {
+			if (this.visible) this.hide();
+			options.onDispose(this);
+			this.element.remove();
+		}));
 	}
 
 	get items(): readonly TItem[] {
 		return this.list.items;
+	}
+
+	get ariaLabel(): string {
+		return this._ariaLabel;
+	}
+
+	set ariaLabel(value: string) {
+		this._ariaLabel = value;
+		setAriaAttribute(this.element, "label", value);
+		setAriaAttribute(this.inputBox.inputElement, "label", value);
 	}
 
 	set items(items: readonly TItem[]) {

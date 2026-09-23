@@ -38,11 +38,14 @@ import { WorkbenchLanguageFeatures } from "../../../src/ash/workbench/services/l
 import { BrowserTextModelService } from "../../../src/ash/workbench/services/textmodelResolver/browser/browserTextModelService.js";
 import { TextModel } from "../../../src/ash/editor/editor.api.js";
 import "../../../src/ash/editor/editor.code.all.js";
+import '../../../src/ash/editor/standalone/browser/quickAccess/standaloneGotoSymbolQuickAccess.js';
 import { MemoryTextFiles } from "./memoryTextFiles.js";
 import { AccessibilitySupport, IAccessibilityService } from '../../../src/ash/platform/accessibility/common/accessibility.js';
 import { EditorExtensionsRegistry } from '../../../src/ash/editor/browser/editorExtensions.js';
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
+import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
+import { WorkbenchQuickInputService } from '../../../src/ash/workbench/services/quickinput/browser/quickInputService.js';
 
 interface WorkbenchSwitchResult {
 	readonly paneOwnsEditor: boolean;
@@ -151,6 +154,10 @@ disposables.add(services.createInstance(WorkbenchLanguageFeatures));
 services.registerInstance(ILanguageConfigurationService, languageConfigurationService);
 services.registerInstance(ILogService, new NullLoggerService());
 registerCodeEditorServices(services);
+services.registerInstance(IQuickInputService, disposables.add(new WorkbenchQuickInputService({
+	container: root,
+	contextKeyService: services.get(IContextKeyService),
+})));
 services.get(IAccessibilityService).setAccessibilitySupport(AccessibilitySupport.Enabled);
 services.get(IKeybindingService);
 const pane = disposables.add(services.createInstance(CodeEditorPane, resourceStore, {

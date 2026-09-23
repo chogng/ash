@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
-import { Emitter } from "../../../../../base/common/event.js";
+import { Emitter, Event } from "../../../../../base/common/event.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { ServiceContainer } from "../../../../../platform/instantiation/common/instantiation.js";
 import { IQuickInputService, type IQuickInputService as IQuickInputServiceContract, type IQuickPick, type IQuickPickItem } from "../../../../../platform/quickinput/common/quickInput.js";
@@ -130,7 +130,9 @@ class TestQuickPick<TItem extends IQuickPickItem> implements IQuickPick<TItem> {
 	readonly onDidAccept = this.acceptEmitter.event;
 	readonly onDidChangeValue = this.valueEmitter.event;
 	readonly onDidHide = this.hideEmitter.event;
+	readonly onDidBlur = Event.None;
 	items: readonly TItem[] = [];
+	ariaLabel = '';
 	placeholder = "";
 	value = "";
 
