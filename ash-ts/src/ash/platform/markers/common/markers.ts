@@ -48,6 +48,7 @@ export interface IMarkerService {
 	readonly onDidChange: Event<MarkerChange>;
 
 	set(owner: string, markers: readonly MarkerInput[]): void;
+	changeOne(owner: string, resource: URI, markers: readonly Omit<MarkerInput, "resource">[]): void;
 	remove(owner: string, resource?: URI): void;
 	read(resource?: URI, owner?: string): readonly Marker[];
 	getAll(): readonly Marker[];
@@ -83,6 +84,25 @@ export class MarkerService extends Disposable implements IMarkerService {
 		for (const input of markers) resources.set(input.resource.toString(), input.resource);
 		this.byOwner.set(owner, next);
 		if (resources.size > 0) this._onDidChange.fire({ owner, resources: [...resources.values()] });
+	}
+
+	changeOne(owner: string, resource: URI, markers: readonly Omit<MarkerInput, "resource">[]): void {
+		this.assertNotDisposed();
+		validateOwner(owner);
+		const values = markers.map((marker, index) => {
+			const input = { ...marker, resource };
+			validateMarker(input);
+			return Object.freeze({ ...input, owner, id: input.id ?? `${owner}:${resource.toString()}:${index}` });
+		});
+		const key = resource.toString();
+		const current = this.byOwner.get(owner);
+		if (values.length === 0 && !current?.has(key)) return;
+		const next = new Map(current);
+		if (values.length === 0) next.delete(key);
+		else next.set(key, values);
+		if (next.size === 0) this.byOwner.delete(owner);
+		else this.byOwner.set(owner, next);
+		this._onDidChange.fire({ owner, resources: [resource] });
 	}
 
 	remove(owner: string, resource?: URI): void {

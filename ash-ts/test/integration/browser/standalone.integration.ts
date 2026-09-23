@@ -25,7 +25,6 @@ import { EndOfLineSequence, type ITextModel } from '../../../src/ash/editor/comm
 import { IVersionedEditorWorkerClient } from '../../../src/ash/editor/browser/services/editorWorkerService.js';
 import { ILanguageFeaturesService } from '../../../src/ash/editor/common/services/languageFeatures.js';
 import { StandaloneServices } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
-import { IMarkerService, MarkerSeverity } from '../../../src/ash/platform/markers/common/markers.js';
 import { Color } from '../../../src/ash/base/common/color.js';
 import { type LanguageFeatureRequest, TokenizationRegistry } from '../../../src/ash/editor/common/languages.js';
 import * as stanza from '../../../src/ash/editor/editor.main.js';
@@ -274,6 +273,7 @@ interface StandaloneHarness {
 	foldConfigurationLines(folded: boolean): void;
 	readLineCountConfiguration(): { lines: number; viewLines: number; digitWidth: number; layout: EditorLayoutInfo };
 	setTestMarkers(enabled: boolean): void;
+	exerciseMarkerApi(): { readonly first: string[]; readonly second: string[]; readonly afterClear: string[]; readonly events: string[][] };
 	setMinimapColor(color: string): void;
 	readMinimapPixel(): number[];
 
@@ -2122,9 +2122,26 @@ window.ashStandaloneIntegration = {
 	},
 	setParentFontSize: () => callerEditor.updateOptions({ fontSize: 18 }),
 	setTestMarkers: enabled => {
-		const markers = StandaloneServices.get(IMarkerService);
-		if (enabled) markers.set('integration', [{ resource: callerResource, range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 3 } }, severity: MarkerSeverity.Error, message: 'Test marker' }]);
-		else markers.remove('integration');
+		if (enabled) stanza.editor.setModelMarkers(callerModel, 'integration', [{ range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 3 } }, severity: stanza.MarkerSeverity.Error, message: 'Test marker' }]);
+		else stanza.editor.removeAllMarkers('integration');
+	},
+	exerciseMarkerApi: () => {
+		const events: string[][] = [];
+		const listener = stanza.editor.onDidChangeMarkers(resources => events.push(resources.map(resource => resource.toString())));
+		const range = { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 3 } };
+		try {
+			stanza.editor.setModelMarkers(callerModel, 'marker-api', [{ range, severity: stanza.MarkerSeverity.Error, message: 'caller' }]);
+			stanza.editor.setModelMarkers(ownedModel, 'marker-api', [{ range, severity: stanza.MarkerSeverity.Warning, message: 'owned' }]);
+			const first = stanza.editor.getModelMarkers({ owner: 'marker-api', resource: callerResource, take: 1 }).map(marker => marker.message);
+			const second = stanza.editor.getModelMarkers({ owner: 'marker-api', resource: ownedResource }).map(marker => marker.message);
+			stanza.editor.setModelMarkers(callerModel, 'marker-api', []);
+			const afterClear = stanza.editor.getModelMarkers({ owner: 'marker-api' }).map(marker => marker.message);
+			stanza.editor.removeAllMarkers('marker-api');
+			return { first, second, afterClear, events };
+		} finally {
+			listener.dispose();
+			stanza.editor.removeAllMarkers('marker-api');
+		}
 	},
 	setMinimapColor: color => {
 		callerEditor.setValue('abcdefghijk');

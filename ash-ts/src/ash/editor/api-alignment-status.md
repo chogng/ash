@@ -42,11 +42,15 @@
 
 已有文件仍待核对的端口：
 
-- `standaloneEditor.ts`：Diff / Multi-file Diff 创建和列表事件；命令、动作和按键注册；marker 读写及事件；Worker；同步 model-line 着色 / tokenize；字体重测；link / editor opener。独立字符串和元素着色以及标准 defineTheme 已接通。上游 API 工厂的产品品牌命名与 Ash 工厂命名差异单列，不据此复制上游产品标识。
+- `standaloneEditor.ts`：Diff / Multi-file Diff 创建和列表事件；命令、动作和按键注册；Worker；同步 model-line 着色 / tokenize；字体重测；link / editor opener。marker 读写及事件已接通；独立字符串和元素着色以及标准 defineTheme 已接通。上游 API 工厂的产品品牌命名与 Ash 工厂命名差异单列，不据此复制上游产品标识。
 - `standaloneCodeEditor.ts`：实例 command / action / context key；完整全局模型配置；StandaloneCodeEditor 与可编辑 StandaloneDiffEditor 的公开契约。现有 DiffEditorWidget 仅绘制只读行，没有原始 / 修改两侧 ICodeEditor，不能伪装为标准 diff editor。
 - `standaloneLanguages.ts`：selector 评分、新符号名与范围语义 token。语言列表、编码、激活事件、同步 / 延迟 / encoded token provider 和 Monarch 已进入真实模型链。现有补全 provider 适配只提取 language ID，尚不能表达完整 scheme / pattern 选择；部分 provider 签名仍是已记录的 Ash 请求形态。
 - `standaloneServices.ts`：通用服务覆盖、动态按键注册、配置批量同步及其模型选项效果。当前 `initialize` 已返回实现 IInstantiationService 的唯一容器，withServices 延迟装配及释放已验证；工厂注入仍保留 Ash 扩展。
 - `standaloneCodeEditorService.ts`：显式 active editor 设置尚无对应 action 消费链；仍保留现有聚焦与最近活动语义。
+
+Marker API 续批准入：宿主通过 `editor.setModelMarkers` 更新一个已登记模型 → 窗口级 `MarkerService.changeOne` 只替换该 owner 的该资源 → 原 `MarkerDecorationsService` 更新波浪线。`getModelMarkers`、`removeAllMarkers` 和 `onDidChangeMarkers` 读取同一服务。修改路径为双方都有的 `platform/markers/common/markers.ts`、`editor/standalone/browser/standaloneEditor.ts`、`editor/editor.api.ts`，以及既有 marker 服务单测、standalone 浏览器场景和本台账；不增加第二个 marker owner。公开 marker 数据使用 Ash 平台已有的零基行列和 `MarkerSeverity`，未将上游不同的坐标与 severity 表示硬套在现有服务上。定向单测与浏览器场景验证单资源替换、其他资源保留、查询、事件、装饰显示和清除。
+
+本批 `typecheck:stanza`、`build:stanza`、marker 服务单测 4 项及 marker 浏览器场景 2 项通过。完整浏览器套件为 605 项通过、22 项失败；失败集中在括号、注释、inline completion 与 GPU 场景。注释快捷键失败可单独复现，现象是快捷键没有改变文本；该场景不调用本批 marker API。完整对齐检查因此未通过，不能把定向验证记作全套通过。
 
 ### 用户已确认的 Ash 底层归属
 

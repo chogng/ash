@@ -11,6 +11,9 @@ import { ILanguageService } from '../../common/languages/language.js';
 import { createTextModel, StandaloneEditor, type IStandaloneCodeEditor, type IStandaloneEditorConstructionOptions } from './standaloneCodeEditor.js';
 import { StandaloneServices, type StandaloneServiceOverrides } from "./standaloneServices.js";
 import { Colorizer, type IColorizerElementOptions, type IColorizerOptions } from './colorizer.js';
+import { IMarkerService, type Marker, type MarkerInput } from '../../../platform/markers/common/markers.js';
+
+export type StandaloneMarkerData = Omit<MarkerInput, 'resource'>;
 
 export interface IStandaloneEditorApi {
 	readonly ContentWidgetPositionPreference: typeof ContentWidgetPositionPreference;
@@ -21,6 +24,10 @@ export interface IStandaloneEditorApi {
 	readonly getModel: typeof getModel;
 	readonly getModels: typeof getModels;
 	readonly setModelLanguage: typeof setModelLanguage;
+	readonly setModelMarkers: typeof setModelMarkers;
+	readonly removeAllMarkers: typeof removeAllMarkers;
+	readonly getModelMarkers: typeof getModelMarkers;
+	readonly onDidChangeMarkers: typeof onDidChangeMarkers;
 	readonly getEditors: typeof getEditors;
 	readonly onDidCreateEditor: typeof onDidCreateEditor;
 	readonly onDidCreateModel: typeof onDidCreateModel;
@@ -130,6 +137,28 @@ export function setModelLanguage(model: ITextModel, mimeTypeOrLanguageId: string
 	model.setLanguage(languageService.createById(languageId));
 }
 
+export function setModelMarkers(model: ITextModel, owner: string, markers: readonly StandaloneMarkerData[]): void {
+	if (StandaloneServices.get(IModelService).getModel(model.uri) !== model) {
+		throw new ReferenceError('Standalone marker model is not registered with the model service');
+	}
+	StandaloneServices.get(IMarkerService).changeOne(owner, model.uri, markers);
+}
+
+export function removeAllMarkers(owner: string): void {
+	StandaloneServices.get(IMarkerService).remove(owner);
+}
+
+export function getModelMarkers(filter: { readonly owner?: string; readonly resource?: URI; readonly take?: number } = {}): readonly Marker[] {
+	const markers = StandaloneServices.get(IMarkerService).read(filter.resource, filter.owner);
+	if (filter.take === undefined) return markers;
+	if (!Number.isSafeInteger(filter.take) || filter.take < 0) throw new RangeError('Marker take must be a non-negative integer');
+	return markers.slice(0, filter.take);
+}
+
+export function onDidChangeMarkers(listener: (resources: readonly URI[]) => void): IDisposable {
+	return StandaloneServices.get(IMarkerService).onDidChange(event => listener(event.resources));
+}
+
 export function getEditors(): readonly ICodeEditor[] {
 	return StandaloneServices.get(ICodeEditorService).listCodeEditors();
 }
@@ -164,6 +193,10 @@ export function createStandaloneEditorApi(): IStandaloneEditorApi {
 		getModel,
 		getModels,
 		setModelLanguage,
+		setModelMarkers,
+		removeAllMarkers,
+		getModelMarkers,
+		onDidChangeMarkers,
 		getEditors,
 		onDidCreateEditor,
 		onDidCreateModel,

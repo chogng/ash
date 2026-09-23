@@ -3707,6 +3707,23 @@ test('standalone marker decorations appear and clear through the shared marker s
 	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 });
 
+test('standalone marker API preserves other models when one owner updates a model', async ({ page }) => {
+	await page.goto('/standalone.html');
+	const result = await page.evaluate(() => window.ashStandaloneIntegration.exerciseMarkerApi());
+	expect(result).toEqual({
+		first: ['caller'],
+		second: ['owned'],
+		afterClear: ['owned'],
+		events: [
+		['inmemory://stanza/caller.txt'],
+		['inmemory://stanza/owned.txt'],
+		['inmemory://stanza/caller.txt'],
+		['inmemory://stanza/owned.txt'],
+		],
+	});
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
 test('reference Peek embeds a read-only editor that follows parent configuration and releases on Escape', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
