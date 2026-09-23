@@ -429,6 +429,100 @@ fn posting_does_not_restore_an_explicitly_unsubscribed_agents_notices() {
 }
 
 #[test]
+fn another_agent_cannot_override_opt_out_or_notify_a_muted_target() {
+    let runtime = Runtime::new();
+    let (child, child_turn) = runtime.child();
+    runtime.ok(
+        "board_write",
+        &runtime.root,
+        &runtime.turn,
+        "channel",
+        json!({"action":"create_channel","channel":"work"}),
+    );
+    runtime.ok(
+        "board_write",
+        &runtime.root,
+        &runtime.turn,
+        "onboard-child",
+        json!({"action":"subscription","channel":"work","member":child,"state":"on"}),
+    );
+    runtime.ok(
+        "board_write",
+        &child,
+        &child_turn,
+        "mute-channel",
+        json!({"action":"subscription","channel":"work","state":"off"}),
+    );
+    assert_eq!(
+        runtime
+            .call(
+                "board_write",
+                &runtime.root,
+                &runtime.turn,
+                "subscribe-child",
+                json!({"action":"subscription","channel":"work","member":child,"state":"on"}),
+            )
+            .0,
+        ToolOutputStatus::Error
+    );
+    let topic = runtime.ok(
+        "board_write",
+        &runtime.root,
+        &runtime.turn,
+        "topic",
+        json!({"action":"post","channel":"work","text":"finding","notify":[child]}),
+    );
+    assert!(runtime.notices(&child, &child_turn).is_empty());
+
+    runtime.ok(
+        "board_write",
+        &child,
+        &child_turn,
+        "watch-channel",
+        json!({"action":"subscription","channel":"work","state":"on"}),
+    );
+    assert_eq!(
+        runtime
+            .call(
+                "board_write",
+                &runtime.root,
+                &runtime.turn,
+                "unsubscribe-child",
+                json!({"action":"subscription","channel":"work","member":child,"state":"off"}),
+            )
+            .0,
+        ToolOutputStatus::Error
+    );
+    runtime.ok(
+        "board_write",
+        &child,
+        &child_turn,
+        "mute-topic",
+        json!({"action":"subscription","channel":"work","topic":topic["topic"],"state":"off"}),
+    );
+    assert_eq!(
+        runtime
+            .call(
+                "board_write",
+                &runtime.root,
+                &runtime.turn,
+                "subscribe-topic-for-child",
+                json!({"action":"subscription","channel":"work","topic":topic["topic"],"member":child,"state":"on"}),
+            )
+            .0,
+        ToolOutputStatus::Error
+    );
+    runtime.ok(
+        "board_write",
+        &runtime.root,
+        &runtime.turn,
+        "reply",
+        json!({"action":"post","channel":"work","topic":topic["topic"],"text":"reviewed","notify":[child]}),
+    );
+    assert!(runtime.notices(&child, &child_turn).is_empty());
+}
+
+#[test]
 fn tools_reject_other_trees_forged_turns_and_write_actions_on_the_reader() {
     let runtime = Runtime::new();
     let other = ThreadId::new("other-root").unwrap();

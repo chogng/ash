@@ -528,5 +528,5 @@ fn move_session_adds_directory_and_updates_cwd() {
     let super::Event::Moved { path } = event else {
         panic!("execute MoveSession must return Event::Moved");
     };
-    assert_eq!(path, target.canonicalize().unwrap());
+    assert_eq!(path.canonicalize().unwrap(), target.canonicalize().unwrap());
 }

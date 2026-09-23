@@ -206,13 +206,15 @@ impl Store {
                 let root = topic.unwrap_or(id);
                 subscription(&transaction, Target::Topic(root), actor, Follow::Automatic)?;
                 let mut recipients: BTreeSet<ThreadId> = notify.iter().cloned().collect();
-                let (sql, target) = match topic {
+                let (sql, opt_out_sql, target) = match topic {
                     Some(id) => (
                         "SELECT member FROM agent_board_topic_members WHERE topic=?1",
+                        "SELECT member FROM agent_board_topic_opt_outs WHERE topic=?1",
                         *id,
                     ),
                     None => (
                         "SELECT member FROM agent_board_channel_members WHERE channel=?1",
+                        "SELECT member FROM agent_board_channel_opt_outs WHERE channel=?1",
                         channel_id,
                     ),
                 };
@@ -220,6 +222,13 @@ impl Store {
                 for member in statement.query_map([target], |row| row.get::<_, String>(0))? {
                     recipients.insert(
                         ThreadId::new(member?)
+                            .map_err(|error| Error::Runtime(error.to_string()))?,
+                    );
+                }
+                let mut statement = transaction.prepare(opt_out_sql)?;
+                for member in statement.query_map([target], |row| row.get::<_, String>(0))? {
+                    recipients.remove(
+                        &ThreadId::new(member?)
                             .map_err(|error| Error::Runtime(error.to_string()))?,
                     );
                 }
@@ -254,7 +263,17 @@ impl Store {
                     None => Target::Channel(channel_id),
                 };
                 let member = member.as_ref().unwrap_or(actor);
-                subscription(&transaction, target, member, Follow::Explicit(*state))?;
+                let follow = if member == actor {
+                    Follow::Explicit(*state)
+                } else {
+                    match state {
+                        Subscription::On => Follow::Delegated,
+                        Subscription::Off => {
+                            return Err(input("only a member may unsubscribe itself"));
+                        }
+                    }
+                };
+                subscription(&transaction, target, member, follow)?;
                 Commit {
                     output: json!({"channel": channel, "topic": topic, "member": member, "state": state}),
                     notification: None,
@@ -328,6 +347,7 @@ enum Target {
 
 enum Follow {
     Automatic,
+    Delegated,
     Explicit(Subscription),
 }
 
@@ -360,6 +380,20 @@ fn subscription(
                          SELECT 1 FROM {opt_outs} WHERE {column}=?1 AND member=?2
                      )"
                 ),
+                params![id, member.as_str()],
+            )?;
+        }
+        Follow::Delegated => {
+            let opted_out: bool = database.query_row(
+                &format!("SELECT EXISTS(SELECT 1 FROM {opt_outs} WHERE {column}=?1 AND member=?2)"),
+                params![id, member.as_str()],
+                |row| row.get(0),
+            )?;
+            if opted_out {
+                return Err(input("only a member may restore its own subscription"));
+            }
+            database.execute(
+                &format!("INSERT OR IGNORE INTO {members}({column}, member) VALUES (?1, ?2)"),
                 params![id, member.as_str()],
             )?;
         }

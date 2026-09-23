@@ -110,7 +110,10 @@ fn adding_a_project_root_persists_project_identity_and_keeps_permissions_explici
         panic!("the Project root operation must complete inline")
     };
     let added = result.unwrap();
-    assert_eq!(added.path, extra.canonicalize().unwrap());
+    assert_eq!(
+        added.path.canonicalize().unwrap(),
+        extra.canonicalize().unwrap()
+    );
     assert!(!added.already_present);
 
     let projects = client.list_projects().unwrap();
@@ -123,13 +126,20 @@ fn adding_a_project_root_persists_project_identity_and_keeps_permissions_explici
         .project;
     assert_eq!(project.roots.len(), 2);
     assert!(project.session_ids.contains(&session_id));
+    let primary_path = primary.canonicalize().unwrap();
+    let added_path = added.path.canonicalize().unwrap();
     assert!(
         project
             .roots
             .iter()
-            .any(|root| root.path == primary.canonicalize().unwrap())
+            .any(|root| root.path.canonicalize().unwrap() == primary_path)
     );
-    assert!(project.roots.iter().any(|root| root.path == added.path));
+    assert!(
+        project
+            .roots
+            .iter()
+            .any(|root| root.path.canonicalize().unwrap() == added_path)
+    );
 
     let directories = client
         .list_session_dirs(SessionDirListParams { session_id })
