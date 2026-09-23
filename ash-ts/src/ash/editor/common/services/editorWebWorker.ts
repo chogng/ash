@@ -11,6 +11,7 @@ import { normalizeTextLineEndings, type TextSnapshot } from '../core/textChange.
 import { StringText } from '../core/text/abstractText.js';
 import { TextReplacement } from '../core/edits/textEdit.js';
 import { TokenizationStateStore } from '../model/textModelTokens.js';
+import type { TextModel } from '../model/textModel.js';
 import { Color } from '../../../base/common/color.js';
 import { ColorId, FontStyle, StandardTokenType, TokenMetadata } from '../encodedTokenAttributes.js';
 import { getWordAtText } from '../core/wordHelper.js';
@@ -204,6 +205,7 @@ export class SyntaxProviderWorker implements languages.SyntaxWorker, LanguageWor
 		private readonly registry: SyntaxProviderRegistry,
 		private readonly onProviderError: languages.SyntaxProviderErrorHandler = reportProviderError,
 		private readonly languageIdCodec?: languages.ILanguageIdCodec,
+		private readonly model?: TextModel,
 	) {
 		if (typeof onProviderError !== "function") {
 			throw new TypeError("Syntax provider error handler must be a function");
@@ -261,7 +263,7 @@ export class SyntaxProviderWorker implements languages.SyntaxWorker, LanguageWor
 		const normalize = createLanguageTokenSnapshotNormalizer(request.snapshot);
 		for (const provider of providers) {
 			try {
-				const value = await provider.provideTokens!(providerRequest(request), signal);
+				const value = await provider.provideTokens!(providerRequest(request, this.model), signal);
 				signal.throwIfAborted();
 				if (value !== undefined) return normalize(value);
 			} catch (error) {
@@ -407,7 +409,7 @@ export class SyntaxProviderWorker implements languages.SyntaxWorker, LanguageWor
 		// The provider that owns live tokens also decides whether preview is available.
 		for (const provider of this.registry.getTokenProviders(request.payload.languageId)) {
 			try {
-				const realRequest = providerRequest(request);
+				const realRequest = providerRequest(request, this.model);
 				const realTokens = await provider.provideTokens!(realRequest, signal);
 				signal.throwIfAborted();
 				if (realTokens === undefined) continue;
@@ -441,7 +443,7 @@ export class SyntaxProviderWorker implements languages.SyntaxWorker, LanguageWor
 		normalize: (value: languages.LanguageDiagnosticResult) => languages.LanguageDiagnosticResult,
 	): Promise<languages.LanguageDiagnosticResult | undefined> {
 		try {
-			const value = await provider.provideDiagnostics!(providerRequest(request), signal);
+			const value = await provider.provideDiagnostics!(providerRequest(request, this.model), signal);
 			signal.throwIfAborted();
 			return value === undefined ? undefined : normalize(value);
 		} catch (error) {
@@ -470,11 +472,12 @@ const EMPTY_TOKENS: LanguageTokenResult = Object.freeze({ tokens: Object.freeze(
 
 const EMPTY_DIAGNOSTICS: languages.LanguageDiagnosticResult = Object.freeze({ diagnostics: Object.freeze([]) });
 
-function providerRequest(request: LanguageWorkerRequest<languages.SyntaxLane, languages.SyntaxRequest>): languages.SyntaxProviderRequest {
+function providerRequest(request: LanguageWorkerRequest<languages.SyntaxLane, languages.SyntaxRequest>, model?: TextModel): languages.SyntaxProviderRequest {
 	return Object.freeze({
 		requestId: request.requestId,
 		snapshot: request.snapshot,
 		languageId: request.payload.languageId,
+		...(model ? { model } : {}),
 	});
 }
 

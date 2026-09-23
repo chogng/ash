@@ -355,6 +355,7 @@ import type { SkillSourceRemoveParams } from './types/SkillSourceRemoveParams.js
 import type { SkillSourceSetEnablementParams } from './types/SkillSourceSetEnablementParams.js';
 import type { SyntaxAnalyzeParams } from './types/SyntaxAnalyzeParams.js';
 import type { SyntaxAnalyzeResult } from './types/SyntaxAnalyzeResult.js';
+import type { SyntaxCloseParams } from './types/SyntaxCloseParams.js';
 import type { SyntaxSelectionRangesParams } from './types/SyntaxSelectionRangesParams.js';
 import type { SyntaxSelectionRangesResult } from './types/SyntaxSelectionRangesResult.js';
 import type { TerminalAttachParams } from './types/TerminalAttachParams.js';
@@ -578,6 +579,7 @@ export interface AppServerRequestMap {
   "diff/compute": { params: DiffComputeParams; response: DiffComputeResult };
   "syntax/analyze": { params: SyntaxAnalyzeParams; response: SyntaxAnalyzeResult };
   "syntax/selectionRanges": { params: SyntaxSelectionRangesParams; response: SyntaxSelectionRangesResult };
+  "syntax/close": { params: SyntaxCloseParams; response: null };
   "language/servers": { params: LanguageServersParams; response: LanguageServersResult };
   "language/synchronize": { params: LanguageSynchronizeParams; response: null };
   "language/close": { params: LanguageCloseParams; response: null };
@@ -863,6 +865,7 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "diff/compute": { method: "diff/compute" },
   "syntax/analyze": { method: "syntax/analyze" },
   "syntax/selectionRanges": { method: "syntax/selectionRanges" },
+  "syntax/close": { method: "syntax/close" },
   "language/servers": { method: "language/servers" },
   "language/synchronize": { method: "language/synchronize" },
   "language/close": { method: "language/close" },

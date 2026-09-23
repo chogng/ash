@@ -22,8 +22,8 @@
 | Native 文件 document lifecycle | `ash-text-file` + `FileEditorHost` / `FileEditorPane` | ✅；独立 crate 拥有 baseline/version/dirty/conflict，Native 已接通 Tab、Explorer load、save、关闭确认、外部重载/显式乐观覆盖、中心 Editor Surface 以及 keyboard/IME/pointer/clipboard/viewport 输入 |
 | Native `DiffEditor` 两侧 syntax token 投影 | `ash-editor::DiffEditorDocument` / `DiffEditor` | ✅；宿主只提交 diff 与 language |
 | Stanza bundled-language token | TextMate worker + lexical fallback | ✅ |
-| Stanza parser facts | `ash-rs/syntax` via bounded `platform/syntax` adapter | ✅ JavaScript/JSX、TypeScript/TSX、JSON/JSONC、Rust、Shell token/diagnostic/symbol/folding |
-| App Server syntax RPC | bounded stateless analysis | ✅；仅异步 facts，不拥有 editor revision 或输入热路径 |
+| Stanza parser facts | `ash-rs/syntax` via bounded `platform/syntax` adapter | ✅ JavaScript/JSX、TypeScript/TSX、JSON/JSONC、Rust、Shell diagnostic/symbol/folding/selection |
+| App Server syntax RPC | 按连接和模型保留解析文档 | ✅；相邻版本增量更新语法树，仅服务异步 facts |
 | Stanza Smart Select | Stanza selection/history + `ash-syntax` on-demand scopes | ✅ expand/shrink；revision-bound、可取消、stale-safe，parser 失败时 lexical fallback |
 | completion、type、definition/reference、rename | `ash-lsp` + language server，经编辑器 language feature 接入 | ✅ Code 主路径；语言覆盖由 provider collection 决定 |
 | workspace code chunk index | `ash-codebase` 消费 `ash-syntax` declaration facts | ✅ 本地 lexical retrieval；不是统一 semantic symbol graph |
@@ -63,7 +63,7 @@ Native host
 | --- | --- | --- | --- | --- | --- |
 | grammar、query、tree-sitter tree | ✅ | 组合/消费 | ❌ | ❌ | ❌ |
 | editor text、selection、language 与本地 revision | ❌ | ✅ | 选择初始资源与语言 | ❌ | 消费同步 |
-| syntax token、parse facts 与 selection scopes | 计算 | ✅ 生命周期、selection history 与展示 | ❌ | 只投影有界 stateless request | ❌ |
+| syntax token、parse facts 与 selection scopes | 计算 | ✅ 生命周期、selection history 与展示 | ❌ | 按连接保留可释放的解析状态，投影有界结果 | ❌ |
 | theme color、DOM/native geometry、fold UI state | ❌ | ✅ | 注入主题/布局 | ❌ | ❌ |
 | 文件 dirty/save/conflict | ❌ | ❌ | 组合 `ash-text-file` | 可提供独立文件 I/O capability | ❌ |
 | type、completion、definition/reference、rename | ❌ | 交互入口 | 协调 | 可承载独立 LSP runtime | ✅ |
@@ -76,7 +76,7 @@ tree-sitter 的输出是 concrete syntax facts，不是统一 AST，也不是 co
 ## Desktop Stanza
 
 Stanza 只对外暴露编辑器与 versioned language-provider contract。声明式 grammar 在专用 TextMate
-Worker 中运行；Workbench 的 `AppServerSyntaxProviders` 把 App Server 的有界、无状态 syntax facts 注册为普通 token、diagnostic、symbol、folding 与 selection-range provider。该 adapter 不建立远端 shadow document，不参与键盘、IME、selection 或同步 transaction；Editor 只消费通用 provider contract，并在 model-version gate 后接收结果。
+Worker 中运行；Workbench 的 `AppServerSyntaxProviders` 把 App Server 的有界解析结果注册为 diagnostic、symbol、folding 与 selection-range provider。前端提交带模型 ID 和版本的完整快照；App Server 按连接保留解析文档，计算相邻快照的最小改动并增量更新语法树。同一版本的功能请求复用解析结果，模型释放时发送 `syntax/close`，连接关闭时清理该连接的全部解析文档。前端 TextModel 仍是文本和版本的唯一依据；解析请求不参与键盘、IME、selection 或同步 transaction，结果须通过 model-version gate 才能应用。
 
 Smart Select 是一条按需路径：快捷键捕获当前 snapshot 与所有 selection，调用
 `syntax/selectionRanges`，每个 selection 只沿 parser named ancestors 返回默认最多 64 层；普通

@@ -2,4 +2,4 @@
 import type { SyntaxLanguageDto } from './SyntaxLanguageDto.js';
 import type { SyntaxRangeDto } from './SyntaxRangeDto.js';
 
-export type SyntaxSelectionRangesParams = { language: SyntaxLanguageDto, revision: number, text: string, ranges: Array<SyntaxRangeDto>, };
+export type SyntaxSelectionRangesParams = { documentId: string, language: SyntaxLanguageDto, revision: number, text: string, ranges: Array<SyntaxRangeDto>, };

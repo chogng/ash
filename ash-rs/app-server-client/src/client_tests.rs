@@ -230,6 +230,7 @@ fn client_analyzes_syntax_through_the_typed_contract() {
 
     let result = client
         .analyze_syntax(SyntaxAnalyzeParams {
+            document_id: "model-1".into(),
             language: SyntaxLanguageDto::Rust,
             revision: 8,
             text: "fn main() {}\n".into(),
@@ -547,6 +548,7 @@ fn in_process_client_routes_syntax_analysis_to_the_server() {
 
     let result = client
         .analyze_syntax(SyntaxAnalyzeParams {
+            document_id: "model-1".into(),
             language: SyntaxLanguageDto::Rust,
             revision: 9,
             text: "fn main() {\n}\n".into(),

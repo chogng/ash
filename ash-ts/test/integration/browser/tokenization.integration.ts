@@ -33,6 +33,7 @@ store.add(new AppServerSyntaxProviders(services.languageFeaturesService, {
 		}));
 	},
 	selectionRanges: async params => ({ revision: params.revision, ranges: [] }),
+	close: async () => {},
 }));
 let model = services.modelService.createModel('fn main() {}\n', services.languageService.createById('rust'), stanza.URI.file('/project/main.rs'));
 const container = document.getElementById('editor')!;

@@ -7,7 +7,7 @@ import { FoldingRangeService } from '../../../../../editor/contrib/folding/commo
 import { createLanguageFeatureRequest } from '../../../../../editor/common/languages.js';
 import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';
 import { AppServerSyntaxProviders, syntaxLanguageForEditorLanguage } from '../../browser/appServerSyntaxProviders.js';
-import { createSyntaxWorker } from '../../../../../editor/common/services/editorWebWorker.js';
+import { createSyntaxWorker, SyntaxProviderWorker } from '../../../../../editor/common/services/editorWebWorker.js';
 
 test('Frontend tokens remain independent of App Server diagnostics, symbols, folds, and selection ranges', async () => {
 	using model = new TextModel('fn main() {\n  /* hi\n  */\n}\n', { languageId: 'rust' });
@@ -15,6 +15,7 @@ test('Frontend tokens remain independent of App Server diagnostics, symbols, fol
 	let analyzeCalls = 0;
 	let selectionCalls = 0;
 	let workerCalls = 0;
+	const closed: string[] = [];
 	using providers = new AppServerSyntaxProviders(languages, {
 		analyze: async params => {
 			analyzeCalls += 1;
@@ -36,6 +37,7 @@ test('Frontend tokens remain independent of App Server diagnostics, symbols, fol
 			selectionCalls += 1;
 			return { revision: params.revision, ranges: [{ range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 3, columnIndex: 1 } } }] };
 		},
+		close: async params => { closed.push(params.documentId); },
 	});
 	using syntax = createSyntaxWorker(languages.syntaxProvider, {
 		workerFactory: () => ({
@@ -49,11 +51,12 @@ test('Frontend tokens remain independent of App Server diagnostics, symbols, fol
 	});
 	using symbols = new DocumentSymbolService(model, languages.documentSymbolProvider);
 	using folding = new FoldingRangeService(model, languages.foldingRangeProvider);
+	using diagnosticsWorker = new SyntaxProviderWorker(languages.syntaxProvider, undefined, undefined, model);
 
 	const tokens = await syntax.run({ requestId: 1, lane: 'tokens', payload: { languageId: 'rust' }, snapshot: model.createVersionedSnapshot() }, new AbortController().signal);
 	assert.equal(analyzeCalls, 0, 'Lexical tokens must not request backend analysis');
 	assert.equal(workerCalls, 1);
-	const diagnostics = await syntax.run({ requestId: 2, lane: 'diagnostics', payload: { languageId: 'rust' }, snapshot: model.createVersionedSnapshot() }, new AbortController().signal);
+	const diagnostics = await diagnosticsWorker.run({ requestId: 2, lane: 'diagnostics', payload: { languageId: 'rust' }, snapshot: model.createVersionedSnapshot() }, new AbortController().signal);
 	assert.equal(tokens.lane, 'tokens');
 	assert.equal(diagnostics.lane, 'diagnostics');
 	if (tokens.lane !== 'tokens' || diagnostics.lane !== 'diagnostics') throw new Error('Unexpected lane');
@@ -75,6 +78,8 @@ test('Frontend tokens remain independent of App Server diagnostics, symbols, fol
 	assert.deepEqual(foldingRanges, [{ startLineIndex: 0, endLineIndex: 3 }]);
 	assert.equal(model.getTextInRange(structural[0]!), 'fn main() {\n  /* hi\n  */\n}');
 	assert.equal(selectionCalls, 1);
+	model.dispose();
+	assert.deepEqual(closed, [model.id]);
 });
 
 test('App Server syntax maps only supported editor languages', () => {
@@ -84,4 +89,69 @@ test('App Server syntax maps only supported editor languages', () => {
 	assert.equal(syntaxLanguageForEditorLanguage('shellscript'), 'shell');
 	assert.equal(syntaxLanguageForEditorLanguage('shell'), undefined);
 	assert.equal(syntaxLanguageForEditorLanguage('markdown'), undefined);
+});
+
+test('App Server parser sessions follow each model revision and release independently', async () => {
+	using first = new TextModel('fn first() {}\n', { languageId: 'rust' });
+	using second = new TextModel('fn second() {}\n', { languageId: 'rust' });
+	using languages = new LanguageFeaturesService();
+	const requests: { documentId: string; revision: number; text: string }[] = [];
+	const closed: string[] = [];
+	using providers = new AppServerSyntaxProviders(languages, {
+		analyze: async params => {
+			requests.push({ documentId: params.documentId, revision: params.revision, text: params.text });
+			return { revision: params.revision, hasErrors: false, tokens: [], foldingRanges: [], symbols: [], diagnostics: [] };
+		},
+		selectionRanges: async params => ({ revision: params.revision, ranges: [] }),
+		close: async params => { closed.push(params.documentId); },
+	});
+	const signal = new AbortController().signal;
+	const symbols = async (model: TextModel): Promise<void> => {
+		const provider = languages.documentSymbolProvider.ordered(model)[0]!;
+		await provider.provideDocumentSymbols(createLanguageFeatureRequest(model, model.getLanguageId(), signal), signal);
+	};
+
+	await symbols(first);
+	await symbols(second);
+	await symbols(first);
+	first.setValue('fn renamed() {}\n');
+	await symbols(first);
+	assert.deepEqual(requests, [
+		{ documentId: first.id, revision: 1, text: 'fn first() {}\n' },
+		{ documentId: second.id, revision: 1, text: 'fn second() {}\n' },
+		{ documentId: first.id, revision: first.version, text: 'fn renamed() {}\n' },
+	]);
+	first.dispose();
+	assert.deepEqual(closed, [first.id]);
+	await symbols(second);
+	second.dispose();
+	assert.deepEqual(closed, [first.id, second.id]);
+});
+
+test('Selection-only parser sessions close with their editor model', async () => {
+	using model = new TextModel('fn selected() {}\n', { languageId: 'rust' });
+	using languages = new LanguageFeaturesService();
+	const selected: { documentId: string; revision: number; text: string }[] = [];
+	const closed: string[] = [];
+	using providers = new AppServerSyntaxProviders(languages, {
+		analyze: async () => { throw new Error('Selection must not request full analysis'); },
+		selectionRanges: async params => {
+			selected.push({ documentId: params.documentId, revision: params.revision, text: params.text });
+			return { revision: params.revision, ranges: [] };
+		},
+		close: async params => { closed.push(params.documentId); },
+	});
+	const signal = new AbortController().signal;
+	const provider = languages.selectionRangeProvider.ordered(model)[0]!;
+	const stale = createLanguageFeatureRequest(model, model.getLanguageId(), signal);
+	model.setValue('fn renamed() {}\n');
+	await provider.provideSelectionRanges({
+		...createLanguageFeatureRequest(model, model.getLanguageId(), signal),
+		ranges: [new Range(1, 4, 1, 12)],
+	}, signal);
+	await provider.provideSelectionRanges({ ...stale, ranges: [new Range(1, 4, 1, 12)] }, signal);
+	await languages.documentSymbolProvider.ordered(model)[0]!.provideDocumentSymbols(stale, signal);
+	assert.deepEqual(selected, [{ documentId: model.id, revision: model.version, text: model.getValue() }]);
+	model.dispose();
+	assert.deepEqual(closed, [model.id]);
 });

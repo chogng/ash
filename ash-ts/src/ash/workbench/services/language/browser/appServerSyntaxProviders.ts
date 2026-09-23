@@ -1,17 +1,20 @@
 import { VSBuffer } from "../../../../base/common/buffer.js";
 import { raceCancellationError } from "../../../../base/common/async.js";
-import { Disposable } from "../../../../base/common/lifecycle.js";
-import type { ISyntaxApi, SyntaxAnalyzeResult, SyntaxDiagnostic, SyntaxSelectionRangesResult, SyntaxSymbol, SyntaxRange } from "../../../../platform/syntax/common/syntaxApi.js";
+import { Disposable, DisposableMap } from "../../../../base/common/lifecycle.js";
+import type { ISyntaxApi, SyntaxAnalyzeResult, SyntaxDiagnostic, SyntaxSelectionRangesResult, SyntaxSymbol, SyntaxRange, SyntaxLanguage } from "../../../../platform/syntax/common/syntaxApi.js";
 import { Position } from "../../../../editor/common/core/position.js";
 import { Range } from "../../../../editor/common/core/range.js";
 import { type TextSnapshot } from "../../../../editor/common/core/textChange.js";
+import type { TextModel } from '../../../../editor/common/model/textModel.js';
 import { type LanguageDocumentSymbol, type LanguageDocumentSymbolProvider, type LanguageDocumentSymbolRequest, type LanguageFoldingRange, type LanguageFoldingRangeProvider, type LanguageFoldingRangeRequest, type LanguageSelectionRangeProvider, type LanguageSelectionRangeRequest, type SyntaxProvider, type SyntaxProviderRequest, LanguageDiagnosticSeverity, type LanguageDiagnosticResult } from '../../../../editor/common/languages.js';
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 
 const MAX_SYNTAX_INPUT_BYTES = 4 * 1024 * 1024;
 
 interface CachedSyntaxFacts {
-	readonly key: string;
+	readonly language: SyntaxLanguage;
+	readonly version: number;
+	readonly text: string;
 	readonly promise: Promise<SyntaxAnalyzeResult>;
 }
 
@@ -21,7 +24,7 @@ interface CachedSyntaxFacts {
 export class AppServerSyntaxProviders extends Disposable {
 	constructor(languageFeatures: ILanguageFeaturesService, api: ISyntaxApi) {
 		super();
-		const provider = new AppServerSyntaxProvider(api);
+		const provider = this._register(new AppServerSyntaxProvider(api));
 		this._register(languageFeatures.syntaxProvider.register(provider));
 		this._register(languageFeatures.documentSymbolProvider.register(APP_SERVER_SYNTAX_LANGUAGE_IDS, provider));
 		this._register(languageFeatures.foldingRangeProvider.register(APP_SERVER_SYNTAX_LANGUAGE_IDS, provider));
@@ -29,26 +32,29 @@ export class AppServerSyntaxProviders extends Disposable {
 	}
 }
 
-class AppServerSyntaxProvider implements SyntaxProvider, LanguageDocumentSymbolProvider, LanguageFoldingRangeProvider, LanguageSelectionRangeProvider {
+class AppServerSyntaxProvider extends Disposable implements SyntaxProvider, LanguageDocumentSymbolProvider, LanguageFoldingRangeProvider, LanguageSelectionRangeProvider {
 	readonly id = "ash.appServer.syntax";
 	readonly languageIds = APP_SERVER_SYNTAX_LANGUAGE_IDS;
 	readonly diagnosticPriority = 100;
-	private cached: CachedSyntaxFacts | undefined;
+	private readonly sessions = this._register(new DisposableMap<TextModel, ModelSyntaxSession>());
 
-	constructor(private readonly syntax: ISyntaxApi) {}
+	constructor(private readonly syntax: ISyntaxApi) {
+		super();
+	}
 
 	async provideDiagnostics(request: SyntaxProviderRequest, signal: AbortSignal): Promise<LanguageDiagnosticResult | undefined> {
-		const result = await this.analyze(request.languageId, request.snapshot, signal);
+		if (!request.model) throw new Error('App Server syntax diagnostics require an editor model');
+		const result = await this.analyze(request.model, request.languageId, request.snapshot, signal);
 		return result ? projectAppServerSyntaxDiagnostics(result, request.snapshot) : undefined;
 	}
 
 	async provideDocumentSymbols(request: LanguageDocumentSymbolRequest, signal: AbortSignal): Promise<readonly LanguageDocumentSymbol[]> {
-		const result = await this.analyze(request.languageId, request.snapshot, signal);
+		const result = await this.analyze(request.model, request.languageId, request.snapshot, signal);
 		return result ? projectAppServerSyntaxSymbols(result, request.snapshot) : Object.freeze([]);
 	}
 
 	async provideFoldingRanges(request: LanguageFoldingRangeRequest, signal: AbortSignal): Promise<readonly LanguageFoldingRange[]> {
-		const result = await this.analyze(request.languageId, request.snapshot, signal);
+		const result = await this.analyze(request.model, request.languageId, request.snapshot, signal);
 		return result ? projectAppServerSyntaxFoldingRanges(result, request.snapshot) : Object.freeze([]);
 	}
 
@@ -57,7 +63,9 @@ class AppServerSyntaxProvider implements SyntaxProvider, LanguageDocumentSymbolP
 		if (!language || request.ranges.length === 0) return Object.freeze([]);
 		const text = request.snapshot.getText();
 		if (VSBuffer.fromString(text).byteLength > MAX_SYNTAX_INPUT_BYTES) return Object.freeze([]);
+		if (!this.session(request.model).accept(request.snapshot.version)) return Object.freeze([]);
 		const result = await raceCancellationError(this.syntax.selectionRanges({
+			documentId: request.model.id,
 			language,
 			revision: request.snapshot.version,
 			text,
@@ -69,26 +77,61 @@ class AppServerSyntaxProvider implements SyntaxProvider, LanguageDocumentSymbolP
 		return projectAppServerSyntaxSelectionRanges(result, request.snapshot);
 	}
 
-	private async analyze(languageId: string, snapshot: TextSnapshot, signal: AbortSignal): Promise<SyntaxAnalyzeResult | undefined> {
+	private async analyze(model: TextModel, languageId: string, snapshot: TextSnapshot, signal: AbortSignal): Promise<SyntaxAnalyzeResult | undefined> {
 		const language = syntaxLanguageForEditorLanguage(languageId);
 		if (!language) return undefined;
 		const text = snapshot.getText();
 		if (VSBuffer.fromString(text).byteLength > MAX_SYNTAX_INPUT_BYTES) return undefined;
-		const key = `${language}\u0000${snapshot.version}\u0000${text}`;
+		const session = this.session(model);
+		const result = await session.analyze(language, snapshot.version, text, signal);
+		if (!result) return undefined;
+		if (result.revision !== snapshot.version) {
+			throw new Error("App Server syntax result does not match the requested editor model revision");
+		}
+		return result;
+	}
+
+	private session(model: TextModel): ModelSyntaxSession {
+		let session = this.sessions.get(model);
+		if (!session) {
+			session = this.sessions.set(model, new ModelSyntaxSession(this.syntax, model, () => this.sessions.deleteAndDispose(model)));
+		}
+		return session;
+	}
+}
+
+class ModelSyntaxSession extends Disposable {
+	private cached: CachedSyntaxFacts | undefined;
+	private latestVersion = -1;
+
+	constructor(private readonly syntax: ISyntaxApi, private readonly model: TextModel, onModelDispose: () => void) {
+		super();
+		this._register(model.onWillDispose(onModelDispose));
+	}
+
+	public async analyze(language: SyntaxLanguage, version: number, text: string, signal: AbortSignal): Promise<SyntaxAnalyzeResult | undefined> {
+		if (!this.accept(version)) return undefined;
 		let cached = this.cached;
-		if (!cached || cached.key !== key) {
-			const promise = this.syntax.analyze(Object.freeze({ language, revision: snapshot.version, text }));
-			cached = Object.freeze({ key, promise });
+		if (!cached || cached.language !== language || cached.version !== version || cached.text !== text) {
+			const promise = this.syntax.analyze({ documentId: this.model.id, language, revision: version, text });
+			cached = Object.freeze({ language, version, text, promise });
 			this.cached = cached;
 			void promise.catch(() => {
 				if (this.cached === cached) this.cached = undefined;
 			});
 		}
-		const result = await raceCancellationError(cached.promise, signal, "App Server syntax request was cancelled");
-		if (result.revision !== snapshot.version) {
-			throw new Error("App Server syntax result does not match the requested editor model revision");
-		}
-		return result;
+		return raceCancellationError(cached.promise, signal, 'App Server syntax request was cancelled');
+	}
+
+	public accept(version: number): boolean {
+		if (version < this.latestVersion) return false;
+		this.latestVersion = version;
+		return true;
+	}
+
+	protected override disposeCore(): void {
+		super.disposeCore();
+		void this.syntax.close({ documentId: this.model.id }).catch(error => console.error('Failed to release App Server syntax document', error));
 	}
 }
 

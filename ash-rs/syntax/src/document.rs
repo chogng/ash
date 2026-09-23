@@ -160,6 +160,46 @@ impl SyntaxDocument {
         self.apply_edits(next_revision, std::slice::from_ref(edit))
     }
 
+    /// Advances a parser document to one host snapshot using the smallest changed text span.
+    pub fn synchronize(
+        &mut self,
+        revision: DocumentRevision,
+        text: &str,
+    ) -> Result<SyntaxSnapshot, SyntaxError> {
+        if revision == self.revision && text == self.text {
+            return Ok(self.snapshot());
+        }
+        if revision <= self.revision {
+            return Err(SyntaxError::NonIncreasingRevision {
+                current: self.revision,
+                requested: revision,
+            });
+        }
+        let mut prefix = self
+            .text
+            .as_bytes()
+            .iter()
+            .zip(text.as_bytes())
+            .take_while(|(left, right)| left == right)
+            .count();
+        while prefix > 0 && (!self.text.is_char_boundary(prefix) || !text.is_char_boundary(prefix))
+        {
+            prefix -= 1;
+        }
+        let suffix = self.text[prefix..]
+            .chars()
+            .rev()
+            .zip(text[prefix..].chars().rev())
+            .take_while(|(left, right)| left == right)
+            .map(|(character, _)| character.len_utf8())
+            .sum::<usize>();
+        let edit = SyntaxEdit::replace(
+            prefix..self.text.len() - suffix,
+            &text[prefix..text.len() - suffix],
+        );
+        self.apply_edit(revision, &edit)
+    }
+
     /// Applies one atomic batch of non-overlapping edits expressed against the current revision.
     ///
     /// Callers may preserve a host editor's single revision even when one edit event contains

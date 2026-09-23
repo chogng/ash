@@ -7,6 +7,7 @@ export function createDisconnectedSyntaxApi(unavailable: UnavailableOperation): 
 	return {
 		analyze: () => unavailable("syntax.analyze"),
 		selectionRanges: () => unavailable("syntax.selectionRanges"),
+		close: () => unavailable("syntax.close"),
 	};
 }
 
@@ -14,5 +15,6 @@ export function createAppServerSyntaxApi(connection: AppServerProtocolClient): I
 	return {
 		analyze: params => appServerRequest(connection, "syntax/analyze", params),
 		selectionRanges: params => appServerRequest(connection, "syntax/selectionRanges", { ...params, ranges: [...params.ranges] }),
+		close: async params => { await appServerRequest(connection, "syntax/close", params); },
 	};
 }

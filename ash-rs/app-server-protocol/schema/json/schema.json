@@ -6884,6 +6884,22 @@
         {
           "properties": {
             "method": {
+              "const": "syntax/close",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/SyntaxCloseParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "language/servers",
               "type": "string"
             },
@@ -11245,6 +11261,22 @@
             },
             "result": {
               "$ref": "#/$defs/SyntaxSelectionRangesResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "syntax/close",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
             }
           },
           "required": [
@@ -31615,6 +31647,9 @@
     "SyntaxAnalyzeParams": {
       "description": "Immutable document snapshot submitted for bounded syntax analysis.",
       "properties": {
+        "documentId": {
+          "type": "string"
+        },
         "language": {
           "$ref": "#/$defs/SyntaxLanguageDto"
         },
@@ -31629,6 +31664,7 @@
         }
       },
       "required": [
+        "documentId",
         "language",
         "revision",
         "text"
@@ -31678,6 +31714,18 @@
         "foldingRanges",
         "symbols",
         "diagnostics"
+      ],
+      "type": "object"
+    },
+    "SyntaxCloseParams": {
+      "description": "Releases the parser state owned by one editor model on this connection.",
+      "properties": {
+        "documentId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "documentId"
       ],
       "type": "object"
     },
@@ -31782,6 +31830,9 @@
     "SyntaxSelectionRangesParams": {
       "description": "Exact document and editor selections submitted for bounded structural-scope lookup.",
       "properties": {
+        "documentId": {
+          "type": "string"
+        },
         "language": {
           "$ref": "#/$defs/SyntaxLanguageDto"
         },
@@ -31803,6 +31854,7 @@
         }
       },
       "required": [
+        "documentId",
         "language",
         "revision",
         "text",

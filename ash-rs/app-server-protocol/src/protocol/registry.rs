@@ -1287,6 +1287,8 @@ use crate::protocol::syntax::SyntaxAnalyzeParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::syntax::SyntaxAnalyzeResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::syntax::SyntaxCloseParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::syntax::SyntaxDiagnosticDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::syntax::SyntaxDiagnosticKindDto;
@@ -3069,12 +3071,17 @@ client_methods! {
     SyntaxAnalyze => "syntax/analyze" {
         params: SyntaxAnalyzeParams,
         response: SyntaxAnalyzeResult,
-        serialization: GlobalSharedRead,
+        serialization: ResourceExclusive("documentId"),
     },
     SyntaxSelectionRanges => "syntax/selectionRanges" {
         params: SyntaxSelectionRangesParams,
         response: SyntaxSelectionRangesResult,
-        serialization: GlobalSharedRead,
+        serialization: ResourceExclusive("documentId"),
+    },
+    SyntaxClose => "syntax/close" {
+        params: SyntaxCloseParams,
+        response: (),
+        serialization: ResourceExclusive("documentId"),
     },
     LanguageServers => "language/servers" {
         params: LanguageServersParams,
@@ -4547,6 +4554,7 @@ typescript_bindings! {
     SyntaxDiagnosticKindDto,
     SyntaxDiagnosticDto,
     SyntaxAnalyzeParams,
+    SyntaxCloseParams,
     SyntaxAnalyzeResult,
     LanguageLocationKindDto,
     LanguagePositionDto,

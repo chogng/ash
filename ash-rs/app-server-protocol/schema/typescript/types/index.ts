@@ -837,6 +837,7 @@ export type { StreamInstanceId } from './StreamInstanceId.js';
 export type { SymbolKindDto } from './SymbolKindDto.js';
 export type { SyntaxAnalyzeParams } from './SyntaxAnalyzeParams.js';
 export type { SyntaxAnalyzeResult } from './SyntaxAnalyzeResult.js';
+export type { SyntaxCloseParams } from './SyntaxCloseParams.js';
 export type { SyntaxDiagnosticDto } from './SyntaxDiagnosticDto.js';
 export type { SyntaxDiagnosticKindDto } from './SyntaxDiagnosticKindDto.js';
 export type { SyntaxFoldingRangeDto } from './SyntaxFoldingRangeDto.js';

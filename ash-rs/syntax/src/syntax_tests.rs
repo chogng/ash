@@ -494,3 +494,42 @@ fn selection_ranges_reject_invalid_utf8_boundaries() {
         SyntaxError::InvalidSelectionBoundary { offset: 7 }
     ));
 }
+
+#[test]
+fn synchronizing_snapshots_keeps_incremental_revisions_and_utf8_boundaries() {
+    let mut document = SyntaxDocument::open(
+        SyntaxLanguage::Rust,
+        DocumentRevision::new(1),
+        "fn café() {}\n",
+    )
+    .unwrap();
+    let snapshot = document
+        .synchronize(DocumentRevision::new(2), "fn cafè() {}\n")
+        .unwrap();
+    assert_eq!(snapshot.revision(), DocumentRevision::new(2));
+    assert!(
+        snapshot
+            .symbols()
+            .iter()
+            .any(|symbol| symbol.name == "cafè")
+    );
+    assert_eq!(document.text(), "fn cafè() {}\n");
+    assert_eq!(
+        document
+            .synchronize(DocumentRevision::new(2), "fn cafè() {}\n")
+            .unwrap(),
+        snapshot
+    );
+    let next = document
+        .synchronize(DocumentRevision::new(3), "fn café_new() {}\n")
+        .unwrap();
+    assert!(
+        next.symbols()
+            .iter()
+            .any(|symbol| symbol.name == "café_new")
+    );
+    assert!(matches!(
+        document.synchronize(DocumentRevision::new(1), "fn stale() {}\n"),
+        Err(SyntaxError::NonIncreasingRevision { .. })
+    ));
+}

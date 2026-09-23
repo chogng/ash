@@ -129,6 +129,8 @@ class FakeTransport implements AppServerTransport {
 			this.respond(request, { revision: 4, hasErrors: false, tokens: [], foldingRanges: [], symbols: [], diagnostics: [] });
 		} else if (request.method === "syntax/selectionRanges") {
 			this.respond(request, { revision: 4, ranges: [] });
+		} else if (request.method === "syntax/close") {
+			this.respond(request, null);
 		}
 	}
 
@@ -237,6 +239,7 @@ test("routes bounded syntax analysis through the connected renderer host", async
 	const connected = await connectWebRendererApi(hot, connectorHostServices);
 
 	const result = await connected.api.syntax.analyze({
+		documentId: "model-1",
 		language: "rust",
 		revision: 4,
 		text: "fn main() {}\n",
@@ -245,8 +248,10 @@ test("routes bounded syntax analysis through the connected renderer host", async
 	assert.deepEqual(result, { revision: 4, hasErrors: false, tokens: [], foldingRanges: [], symbols: [], diagnostics: [] });
 	assert.equal(hot.requests.at(-1)?.method, "syntax/analyze");
 
-	assert.deepEqual(await connected.api.syntax.selectionRanges({ language: "rust", revision: 4, text: "fn main() {}\n", ranges: [{ start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } }] }), { revision: 4, ranges: [] });
+	assert.deepEqual(await connected.api.syntax.selectionRanges({ documentId: "model-1", language: "rust", revision: 4, text: "fn main() {}\n", ranges: [{ start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } }] }), { revision: 4, ranges: [] });
 	assert.equal(hot.requests.at(-1)?.method, "syntax/selectionRanges");
+	await connected.api.syntax.close({ documentId: "model-1" });
+	assert.equal(hot.requests.at(-1)?.method, "syntax/close");
 	connected.dispose();
 });
 

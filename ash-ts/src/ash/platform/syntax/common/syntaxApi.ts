@@ -42,6 +42,7 @@ export interface SyntaxDiagnostic {
 }
 
 export interface SyntaxAnalyzeParams {
+	readonly documentId: string;
 	readonly language: SyntaxLanguage;
 	readonly revision: number;
 	readonly text: string;
@@ -65,10 +66,15 @@ export interface SyntaxSelectionRangesResult {
 	readonly ranges: readonly SyntaxSelectionRange[];
 }
 
+export interface SyntaxCloseParams {
+	readonly documentId: string;
+}
+
 /** Transport-neutral entry point for bounded, authoritative source syntax analysis. */
 export interface ISyntaxApi {
 	analyze(params: SyntaxAnalyzeParams): Promise<SyntaxAnalyzeResult>;
 	selectionRanges(params: SyntaxSelectionRangesParams): Promise<SyntaxSelectionRangesResult>;
+	close(params: SyntaxCloseParams): Promise<void>;
 }
 
 export const ISyntaxApi = createServiceIdentifier<ISyntaxApi>("syntaxApi");

@@ -49,6 +49,7 @@ use guardian_v2::ProviderReviewModel;
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::BTreeSet;
+use std::collections::HashMap;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Write;
@@ -220,6 +221,7 @@ pub struct AppServer {
     pub(super) mcp_runtime_intents: McpRuntimeIntents,
     pub(super) mcp_status: Arc<RwLock<ash_mcp_extension::McpRuntimeStatusSnapshot>>,
     language: Mutex<language_runtime::AppServerLanguageRuntime>,
+    syntax_documents: Mutex<HashMap<(u64, String), Arc<Mutex<syntax_operations::SyntaxSession>>>>,
     approval_review_model: Option<ProviderReviewModel>,
     login: Option<Arc<ash_login::LoginService>>,
     chatgpt: Option<Arc<ash_chatgpt::ChatGptAccount>>,
@@ -557,6 +559,7 @@ impl AppServer {
             language: Mutex::new(language_runtime::AppServerLanguageRuntime::new(
                 updates.clone(),
             )),
+            syntax_documents: Mutex::new(HashMap::new()),
             approval_review_model: None,
             login: None,
             chatgpt: None,
@@ -838,6 +841,9 @@ impl AppServer {
             .cancel_connection(connection.connection_id);
         self.request_cancellations
             .cancel_connection(connection.connection_id);
+        if let Ok(mut documents) = self.syntax_documents.lock() {
+            documents.retain(|(owner, _), _| *owner != connection.connection_id);
+        }
         if let Ok(git) = self.git_runtime_service() {
             git.close_connection(connection.connection_id);
         }
@@ -2364,10 +2370,11 @@ impl AppServer {
                 self.fs_read_binary_file(connection, &request.params)
             }
             Some(ClientMethod::DiffCompute) => self.diff_compute(&request.params),
-            Some(ClientMethod::SyntaxAnalyze) => self.syntax_analyze(&request.params),
+            Some(ClientMethod::SyntaxAnalyze) => self.syntax_analyze(connection, &request.params),
             Some(ClientMethod::SyntaxSelectionRanges) => {
-                self.syntax_selection_ranges(&request.params)
+                self.syntax_selection_ranges(connection, &request.params)
             }
+            Some(ClientMethod::SyntaxClose) => self.syntax_close(connection, &request.params),
             Some(ClientMethod::LanguageServers) => self.language_servers(&request.params),
             Some(ClientMethod::LanguageSynchronize) => {
                 self.language_synchronize(&request.params, cancellation)

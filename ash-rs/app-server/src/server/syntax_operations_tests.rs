@@ -1,3 +1,4 @@
+use super::AppServer;
 use super::Utf16PositionIndex;
 use super::byte_offset_for_utf16;
 use super::byte_range_for_utf16;
@@ -7,9 +8,14 @@ use ash_app_server_protocol::protocol::syntax::SyntaxLanguageDto;
 use ash_app_server_protocol::protocol::syntax::SyntaxPositionDto;
 use ash_app_server_protocol::protocol::syntax::SyntaxRangeDto;
 use ash_app_server_protocol::protocol::syntax::SyntaxTokenKindDto;
+use ash_core::InMemoryThreadStore;
+use ash_core::ThreadController;
+use ash_model_provider::EchoModel;
 use ash_syntax::DocumentRevision;
 use ash_syntax::SyntaxDocument;
 use ash_syntax::SyntaxLanguage;
+use serde_json::json;
+use std::sync::Arc;
 
 #[test]
 fn projects_syntax_ranges_as_utf16_positions() {
@@ -17,7 +23,7 @@ fn projects_syntax_ranges_as_utf16_positions() {
     let document = SyntaxDocument::open(SyntaxLanguage::Json, DocumentRevision::new(12), source)
         .expect("JSON grammar should load");
 
-    let result = project(source, document.snapshot());
+    let result = project(source, &document.snapshot());
     let string = result
         .tokens
         .iter()
@@ -118,4 +124,88 @@ fn rejects_utf16_positions_inside_surrogate_pairs() {
         ),
         None
     );
+}
+
+#[test]
+fn parser_sessions_reuse_one_document_per_connection_and_release_on_close() {
+    let server = AppServer::new(
+        Arc::new(ThreadController::with_store(Arc::new(
+            InMemoryThreadStore::default(),
+        ))),
+        Arc::new(crate::local::ProviderModelService::new(Arc::new(EchoModel))),
+    );
+    let first = server.connection();
+    let second = server.connection();
+    let first_result = server
+        .syntax_analyze(
+            &first,
+            &json!({
+                "documentId": "model-1", "language": "rust", "revision": 1,
+                "text": "fn café() {}\n",
+            }),
+        )
+        .unwrap();
+    let second_result = server
+        .syntax_analyze(
+            &second,
+            &json!({
+                "documentId": "model-1", "language": "rust", "revision": 1,
+                "text": "fn other() {}\n",
+            }),
+        )
+        .unwrap();
+    assert_eq!(first_result["symbols"][0]["name"], "café");
+    assert_eq!(second_result["symbols"][0]["name"], "other");
+    let document = Arc::clone(
+        &server.syntax_documents.lock().unwrap()[&(first.connection_id, "model-1".into())],
+    );
+
+    let changed = server
+        .syntax_analyze(
+            &first,
+            &json!({
+                "documentId": "model-1", "language": "rust", "revision": 2,
+                "text": "fn café_new() {}\n",
+            }),
+        )
+        .unwrap();
+    assert_eq!(changed["revision"], 2);
+    assert_eq!(changed["symbols"][0]["name"], "café_new");
+    assert!(Arc::ptr_eq(
+        &document,
+        &server.syntax_documents.lock().unwrap()[&(first.connection_id, "model-1".into())]
+    ));
+    let selected = server
+        .syntax_selection_ranges(
+            &first,
+            &json!({
+                "documentId": "model-1", "language": "rust", "revision": 2,
+                "text": "fn café_new() {}\n", "ranges": [{
+                    "start": {"lineIndex": 0, "columnIndex": 3},
+                    "end": {"lineIndex": 0, "columnIndex": 11}
+                }]
+            }),
+        )
+        .unwrap();
+    assert_eq!(selected["revision"], 2);
+    assert!(selected["ranges"].as_array().unwrap().len() > 0);
+    assert!(
+        server
+            .syntax_analyze(
+                &first,
+                &json!({
+                    "documentId": "model-1", "language": "rust", "revision": 1,
+                    "text": "fn stale() {}\n",
+                })
+            )
+            .is_err()
+    );
+
+    server
+        .syntax_close(&first, &json!({"documentId": "model-1"}))
+        .unwrap();
+    assert_eq!(server.syntax_documents.lock().unwrap().len(), 1);
+    server.close_connection(second);
+    assert!(server.syntax_documents.lock().unwrap().is_empty());
+    server.close_connection(first);
 }

@@ -63,7 +63,7 @@ test("disconnected Web renderer API rejects product operations explicitly", asyn
 		},
 	);
 	await assert.rejects(
-		api.syntax.analyze({ language: "rust", revision: 1, text: "fn main() {}\n" }),
+		api.syntax.analyze({ documentId: "model-1", language: "rust", revision: 1, text: "fn main() {}\n" }),
 		(error: unknown) => {
 			assert.ok(error instanceof WebAppServerUnavailableError);
 			assert.equal(error.operation, "syntax.analyze");
@@ -71,13 +71,18 @@ test("disconnected Web renderer API rejects product operations explicitly", asyn
 		},
 	);
 	await assert.rejects(
-		api.syntax.selectionRanges({ language: "rust", revision: 1, text: "fn main() {}\n", ranges: [] }),
+		api.syntax.selectionRanges({ documentId: "model-1", language: "rust", revision: 1, text: "fn main() {}\n", ranges: [] }),
 		(error: unknown) => {
 			assert.ok(error instanceof WebAppServerUnavailableError);
 			assert.equal(error.operation, "syntax.selectionRanges");
 			return true;
 		},
 	);
+	await assert.rejects(api.syntax.close({ documentId: "model-1" }), (error: unknown) => {
+		assert.ok(error instanceof WebAppServerUnavailableError);
+		assert.equal(error.operation, "syntax.close");
+		return true;
+	});
 	await assert.rejects(
 		api.turn.resolveInteraction({
 			commandId: "resolve-1",

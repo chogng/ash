@@ -125,6 +125,7 @@ pub struct SyntaxDiagnosticDto {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SyntaxAnalyzeParams {
+    pub document_id: String,
     pub language: SyntaxLanguageDto,
     #[ts(type = "number")]
     pub revision: u64,
@@ -149,6 +150,7 @@ pub struct SyntaxAnalyzeResult {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SyntaxSelectionRangesParams {
+    pub document_id: String,
     pub language: SyntaxLanguageDto,
     #[ts(type = "number")]
     pub revision: u64,
@@ -165,4 +167,11 @@ pub struct SyntaxSelectionRangesResult {
     #[ts(type = "number")]
     pub revision: u64,
     pub ranges: Vec<SyntaxSelectionRangeDto>,
+}
+
+/// Releases the parser state owned by one editor model on this connection.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SyntaxCloseParams {
+    pub document_id: String,
 }

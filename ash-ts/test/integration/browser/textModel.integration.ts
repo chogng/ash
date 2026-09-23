@@ -131,6 +131,7 @@ disposables.add(new AppServerSyntaxProviders(languageFeaturesService, {
 		};
 	},
 	selectionRanges: async params => ({ revision: params.revision, ranges: [] }),
+	close: async () => {},
 }));
 let editorPart: ReturnType<typeof createBrowserEditorPart> | undefined;
 let viewZoneId: string | undefined;

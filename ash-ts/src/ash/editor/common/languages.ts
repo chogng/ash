@@ -937,6 +937,7 @@ export interface SyntaxRequest {
 export interface SyntaxProviderRequest extends SyntaxRequest {
 	readonly requestId: number;
 	readonly snapshot: TextSnapshot;
+	readonly model?: TextModel;
 }
 
 export interface SyntaxTokenizationRequest extends SyntaxProviderRequest {
