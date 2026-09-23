@@ -1628,6 +1628,20 @@ impl AppServer {
             .collect()
     }
 
+    pub(super) fn session_catalog_view(
+        &self,
+        session_id: &ash_protocol::SessionId,
+    ) -> Result<Option<Session>, RpcError> {
+        let records = self
+            .agent_runtime()
+            .session_thread_catalog(session_id)
+            .map_err(core_error)?;
+        if records.is_empty() {
+            return Ok(None);
+        }
+        session_from_catalog(records).map(Some)
+    }
+
     pub(super) fn notify_thread_updates(
         &self,
         thread_id: &ash_protocol::ThreadId,

@@ -1,4 +1,4 @@
-import type { AdvisorConfig, AdvisorConfigureResult, ModelListResult, ModelRef, SessionCreateParams, SessionListResult, SessionReadParams, SessionRequest, SessionRequestParams, SessionRequestResult, SessionResult, SessionSubscribeParams, SessionSubscribeResult, SessionThreadReadParams, SessionThreadReadResult, SessionThreadResult, SessionThreadSubscribeParams, SessionThreadSubscribeResult, SessionThreadUnsubscribeParams, SessionUnsubscribeParams, ThreadGoalClearParams, ThreadGoalClearResponse, ThreadGoalGetParams, ThreadGoalGetResponse, ThreadGoalSetParams, ThreadGoalSetResponse, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult, TurnSteerResult } from "../../app-server/common/generated/index.js";
+import type { AdvisorConfig, AdvisorConfigureResult, ModelListResult, ModelRef, SessionCatalogReadResult, SessionCreateParams, SessionListResult, SessionReadParams, SessionRequest, SessionRequestParams, SessionRequestResult, SessionResult, SessionSubscribeParams, SessionSubscribeResult, SessionThreadReadParams, SessionThreadReadResult, SessionThreadResult, SessionThreadSubscribeParams, SessionThreadSubscribeResult, SessionThreadUnsubscribeParams, SessionUnsubscribeParams, ThreadGoalClearParams, ThreadGoalClearResponse, ThreadGoalGetParams, ThreadGoalGetResponse, ThreadGoalSetParams, ThreadGoalSetResponse, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult, TurnSteerResult } from "../../app-server/common/generated/index.js";
 
 export type { SessionRequestResult };
 
@@ -42,6 +42,7 @@ export function turnInteractionResolveResult(result: SessionRequestResult): Turn
 export interface ISessionApi {
 	create(params: SessionCreateParams): Promise<SessionResult>;
 	read(params: SessionReadParams): Promise<SessionResult>;
+	readCatalog(params: SessionReadParams): Promise<SessionCatalogReadResult>;
 	list(): Promise<SessionListResult>;
 	subscribeCatalog(): Promise<SessionListResult>;
 	unsubscribeCatalog(): Promise<void>;

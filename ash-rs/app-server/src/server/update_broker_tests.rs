@@ -216,6 +216,7 @@ fn thread_subscription_observes_session_changes() {
     assert_eq!(notifications.len(), 1);
     assert_eq!(notifications[0]["method"], "session/changed");
     assert_eq!(notifications[0]["params"]["sessionId"], "session_1");
+    assert_eq!(notifications[0]["params"]["agentTreeChanged"], false);
 }
 
 #[test]
@@ -279,6 +280,7 @@ fn committed_subagent_updates_invalidate_the_catalog_without_a_session_subscript
     assert_eq!(notifications.len(), 1);
     assert_eq!(notifications[0]["method"], "session/changed");
     assert_eq!(notifications[0]["params"]["sessionId"], "session_1");
+    assert_eq!(notifications[0]["params"]["agentTreeChanged"], true);
 
     broker.publish_thread(
         &child_thread_id,
@@ -295,7 +297,27 @@ fn committed_subagent_updates_invalidate_the_catalog_without_a_session_subscript
             },
         }],
     );
-    assert_eq!(queue.drain()[0]["method"], "session/changed");
+    let cancelling = queue.drain();
+    assert_eq!(cancelling[0]["method"], "session/changed");
+    assert_eq!(cancelling[0]["params"]["agentTreeChanged"], true);
+
+    broker.publish_thread(
+        &child_thread_id,
+        &[ThreadUpdateEnvelope {
+            session_id: SessionId::new("session_1").unwrap(),
+            thread_id: child_thread_id.clone(),
+            durable_sequence: 3,
+            stream_cursor: None,
+            update: ThreadUpdate::Committed {
+                event: ThreadEvent::TurnSteered {
+                    thread_id: child_thread_id.clone(),
+                    turn_id: TurnId::new("turn_1").unwrap(),
+                    item_ids: Vec::new(),
+                },
+            },
+        }],
+    );
+    assert_eq!(queue.drain()[0]["params"]["agentTreeChanged"], false);
 }
 
 #[test]

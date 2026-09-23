@@ -18,16 +18,16 @@ export interface AppServerSessionsProviderHost {
 export class AppServerSessionsProvider extends Disposable implements ISessionsProvider {
 	private readonly subscribed = new Set<SessionId>();
 	private catalogSubscribed = false;
-	private readonly _onDidChangeSession = this._register(new Emitter<SessionId>());
+	private model: ModelRef | null = null;
+	private readonly _onDidChangeSession = this._register(new Emitter<{ sessionId: SessionId; detailChanged: boolean }>());
 	readonly onDidChangeSession = this._onDidChangeSession.event;
 
 	constructor(private readonly host: AppServerSessionsProviderHost) {
 		super();
 		if (host.events) {
 			const subscription = host.events.subscribe(event => {
-				if (event.method === "session/changed" || event.method === "session/deleted" || event.method === "session/thread/update") {
-					this._onDidChangeSession.fire(event.params.sessionId);
-				}
+				if (event.method === "session/changed") this._onDidChangeSession.fire({ sessionId: event.params.sessionId, detailChanged: event.params.agentTreeChanged });
+				if (event.method === "session/deleted") this._onDidChangeSession.fire({ sessionId: event.params.sessionId, detailChanged: false });
 			});
 			this._register(toDisposable(() => subscription.dispose()));
 		}
@@ -46,7 +46,13 @@ export class AppServerSessionsProvider extends Disposable implements ISessionsPr
 			this.host.model?.readModel() ?? Promise.resolve(null),
 		]);
 		this.catalogSubscribed = true;
+		this.model = model;
 		return result.sessions.map(session => ({ ...toSession(session), model }));
+	}
+
+	async readCatalog(sessionId: SessionId, previous?: ISession): Promise<ISession | undefined> {
+		const result = await this.host.session.readCatalog({ sessionId });
+		return result.session ? { ...toSession(result.session, [], previous), model: previous?.model ?? this.model } : undefined;
 	}
 
 	async subscribe(session: ISession): Promise<ISession> {
@@ -82,6 +88,7 @@ export class AppServerSessionsProvider extends Disposable implements ISessionsPr
 	async setModel(model: ModelRef): Promise<void> {
 		if (!this.host.model) throw new Error("Model selection is unavailable in this renderer host.");
 		await this.host.model.setModel({ commandId: commandId("model"), model });
+		this.model = model;
 	}
 
 	async archive(session: ISession): Promise<ISession> {
@@ -98,7 +105,8 @@ export class AppServerSessionsProvider extends Disposable implements ISessionsPr
 
 	async interrupt(session: ISession, threadId: ThreadId): Promise<void> {
 		if (!this.host.turn) throw new Error("Turn interruption is unavailable in this renderer host.");
-		const node = findAgentNode(session.agentTree ?? [], threadId);
+		const current = await this.host.session.read({ sessionId: session.sessionId });
+		const node = findAgentNode(current.agentTree.roots.map(toAgentTreeNode), threadId);
 		if (!node?.currentTurnId || !canInterrupt(node)) throw new Error(`Running Agent Thread is not available: ${threadId}`);
 		await this.host.turn.interrupt({
 			commandId: commandId("agent-interrupt"),
@@ -127,7 +135,7 @@ function toSession(session: SessionDto, threads: readonly ThreadDto[] = [], prev
 					? { type: "fork" as const, parentThreadId: thread.parentThreadId ?? thread.forkedFromId!, parentSequence: detail?.sequence ?? 0 }
 					: { type: "root" as const },
 				status: thread.status,
-				title: detail?.title ?? prior?.title,
+				title: detail?.title ?? thread.title,
 				executionStatus: detail ? executionStatus(detail.turns.at(-1)?.status) : prior?.executionStatus ?? "idle",
 			};
 		}),

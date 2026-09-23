@@ -49,9 +49,11 @@ not import Sessions product UI or add Sessions-specific layout branches.
 
 After `session/catalog/subscribe`, App Server sends `session/changed` and
 `session/deleted` to that connection as catalog invalidations. The provider
-refreshes list metadata from `session/list`; management loads full Session
-details only for an opened Session. It never compares a Session sequence because
-no such sequence exists.
+reads the affected Session through `session/catalog/read`, which reads only its
+indexed SQLite catalog rows. The backend marks Agent tree changes in the
+notification; management loads full Session details when opened or when that
+tree changes. It never compares a Session
+sequence because no such sequence exists.
 Durable sequence and gap handling belong to the Thread-backed Chat runtime and
 `session/thread/update`.
 

@@ -4,8 +4,9 @@ import type { IActiveSessionThread, ISession, ModelRef, SessionId, ThreadId } fr
 
 /** Adapts one backend into frontend Session and Chat objects. */
 export interface ISessionsProvider extends IDisposable {
-	readonly onDidChangeSession: Event<SessionId>;
+	readonly onDidChangeSession: Event<{ sessionId: SessionId; detailChanged: boolean }>;
 	list(): Promise<readonly ISession[]>;
+	readCatalog(sessionId: SessionId, previous?: ISession): Promise<ISession | undefined>;
 	subscribe(session: ISession): Promise<ISession>;
 	unsubscribe(sessionId: SessionId): Promise<void>;
 	create(title: string, model?: ModelRef): Promise<IActiveSessionThread>;

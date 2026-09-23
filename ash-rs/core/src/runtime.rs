@@ -613,6 +613,12 @@ impl AgentRuntime for Runtime<'_> {
     fn list_thread_catalog(&self) -> Result<Vec<ash_thread_store::ThreadCatalogRecord>, CoreError> {
         self.threads.list_thread_catalog()
     }
+    fn session_thread_catalog(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<Vec<ash_thread_store::ThreadCatalogRecord>, CoreError> {
+        self.threads.session_thread_catalog(session_id)
+    }
     fn read_agent(&self, agent_id: &AgentId) -> Result<agent_graph_store::AgentRecord, CoreError> {
         self.threads.read_agent(agent_id)
     }

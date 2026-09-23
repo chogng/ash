@@ -762,6 +762,7 @@ export type { SearchSource } from './SearchSource.js';
 export type { ServerCapabilities } from './ServerCapabilities.js';
 export type { ServerInfo } from './ServerInfo.js';
 export type { Session } from './Session.js';
+export type { SessionCatalogReadResult } from './SessionCatalogReadResult.js';
 export type { SessionChanged } from './SessionChanged.js';
 export type { SessionCreateParams } from './SessionCreateParams.js';
 export type { SessionDeleted } from './SessionDeleted.js';

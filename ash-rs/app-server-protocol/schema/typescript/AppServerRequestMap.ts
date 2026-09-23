@@ -322,6 +322,7 @@ import type { ResourceMetadataResult } from './types/ResourceMetadataResult.js';
 import type { ResourceReadParams } from './types/ResourceReadParams.js';
 import type { ResourceReadResult } from './types/ResourceReadResult.js';
 import type { ResourceReleaseParams } from './types/ResourceReleaseParams.js';
+import type { SessionCatalogReadResult } from './types/SessionCatalogReadResult.js';
 import type { SessionCreateParams } from './types/SessionCreateParams.js';
 import type { SessionDirAddParams } from './types/SessionDirAddParams.js';
 import type { SessionDirAddResult } from './types/SessionDirAddResult.js';
@@ -446,6 +447,7 @@ export interface AppServerRequestMap {
   "session/create": { params: SessionCreateParams; response: SessionResult };
   "agent/read": { params: AgentReadParams; response: AgentReadResult };
   "session/read": { params: SessionReadParams; response: SessionResult };
+  "session/catalog/read": { params: SessionReadParams; response: SessionCatalogReadResult };
   "session/thread/checkpoints": { params: MessageCheckpointsParams; response: MessageCheckpointsResult };
   "session/list": { params: Record<string, never>; response: SessionListResult };
   "session/catalog/subscribe": { params: Record<string, never>; response: SessionListResult };
@@ -730,6 +732,7 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "session/create": { method: "session/create" },
   "agent/read": { method: "agent/read" },
   "session/read": { method: "session/read" },
+  "session/catalog/read": { method: "session/catalog/read" },
   "session/thread/checkpoints": { method: "session/thread/checkpoints" },
   "session/list": { method: "session/list" },
   "session/catalog/subscribe": { method: "session/catalog/subscribe" },

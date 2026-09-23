@@ -8,6 +8,7 @@ use super::core_error;
 use super::decode;
 use super::operations::SessionMutation;
 use super::result;
+use ash_app_server_protocol::protocol::session::SessionCatalogReadResult;
 use ash_app_server_protocol::protocol::session::SessionCreateParams;
 use ash_app_server_protocol::protocol::session::SessionListResult;
 use ash_app_server_protocol::protocol::session::SessionReadParams;
@@ -137,6 +138,13 @@ impl AppServer {
     pub(super) fn session_read(&self, params: &Value) -> Result<Value, RpcError> {
         let params: SessionReadParams = decode(params)?;
         result(&self.session_result(&params.session_id)?)
+    }
+
+    pub(super) fn session_catalog_read(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: SessionReadParams = decode(params)?;
+        result(&SessionCatalogReadResult {
+            session: self.session_catalog_view(&params.session_id)?,
+        })
     }
 
     pub(super) fn session_list(&self) -> Result<Value, RpcError> {

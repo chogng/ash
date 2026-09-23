@@ -1199,6 +1199,8 @@ use crate::protocol::session::AdvisorConfigureResult;
 use crate::protocol::session::MessageCheckpointsParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::session::MessageCheckpointsResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::session::SessionCatalogReadResult;
 use crate::protocol::session::SessionChanged;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::session::SessionCreateParams;
@@ -2414,6 +2416,11 @@ client_methods! {
     SessionRead => "session/read" {
         params: SessionReadParams,
         response: SessionResult,
+        serialization: SessionSharedRead,
+    },
+    SessionCatalogRead => "session/catalog/read" {
+        params: SessionReadParams,
+        response: SessionCatalogReadResult,
         serialization: SessionSharedRead,
     },
     MessageCheckpoints => "session/thread/checkpoints" {
@@ -4195,6 +4202,7 @@ typescript_bindings! {
     SessionSubscribeParams,
     SessionUnsubscribeParams,
     SessionChanged,
+    SessionCatalogReadResult,
     SessionDeleted,
     SessionRequest,
     SessionRequestParams,

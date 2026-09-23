@@ -289,6 +289,7 @@ impl UpdateBroker {
                     ServerNotificationMethod::SessionChanged,
                     &SessionChanged {
                         session_id: session_id.clone(),
+                        agent_tree_changed: false,
                     },
                 ));
             }
@@ -463,10 +464,19 @@ impl UpdateBroker {
         // Committed events may change the durable Session summary even when no Thread is open.
         let sessions_with_catalog_change = updates
             .iter()
-            .filter_map(|update| {
-                matches!(&update.update, ThreadUpdate::Committed { .. }).then_some(&update.session_id)
+            .filter_map(|update| match &update.update {
+                ThreadUpdate::Committed { event } => {
+                    Some((&update.session_id, event_changes_agent_tree(event)))
+                }
+                _ => None,
             })
-            .collect::<BTreeSet<_>>();
+            .fold(
+                BTreeMap::<&SessionId, bool>::new(),
+                |mut sessions, (session_id, changed)| {
+                    *sessions.entry(session_id).or_default() |= changed;
+                    sessions
+                },
+            );
         let sessions_with_timing_change = updates
             .iter()
             .filter_map(|update| match &update.update {
@@ -532,12 +542,13 @@ impl UpdateBroker {
                     queue.extend(session_pending);
                 }
             }
-            for session_id in &sessions_with_catalog_change {
+            for (session_id, agent_tree_changed) in &sessions_with_catalog_change {
                 if subscriber.catalog {
                     queue.push(notification(
                         ServerNotificationMethod::SessionChanged,
                         &SessionChanged {
                             session_id: (*session_id).clone(),
+                            agent_tree_changed: *agent_tree_changed,
                         },
                     ));
                 }
@@ -548,6 +559,7 @@ impl UpdateBroker {
                         ServerNotificationMethod::SessionChanged,
                         &SessionChanged {
                             session_id: (*session_id).clone(),
+                            agent_tree_changed: true,
                         },
                     ));
                 }
@@ -985,6 +997,36 @@ impl UpdateBroker {
             true
         });
     }
+}
+
+fn event_changes_agent_tree(event: &ThreadEvent) -> bool {
+    matches!(
+        event,
+        ThreadEvent::ThreadCreated { .. }
+            | ThreadEvent::ThreadArchived { .. }
+            | ThreadEvent::ThreadRestored { .. }
+            | ThreadEvent::HistoryImported { .. }
+            | ThreadEvent::ForkHistoryImported { .. }
+            | ThreadEvent::ForkTurnImported { .. }
+            | ThreadEvent::ForkHistoryImportCompleted { .. }
+            | ThreadEvent::GoalCreated { .. }
+            | ThreadEvent::GoalUpdated { .. }
+            | ThreadEvent::GoalCleared { .. }
+            | ThreadEvent::TurnAccepted { .. }
+            | ThreadEvent::TurnStarted { .. }
+            | ThreadEvent::TurnCancelling { .. }
+            | ThreadEvent::TurnCompleted { .. }
+            | ThreadEvent::TurnFailed { .. }
+            | ThreadEvent::TurnInterrupted { .. }
+            | ThreadEvent::InteractionRequested { .. }
+            | ThreadEvent::InteractionResolved { .. }
+            | ThreadEvent::InteractionCancelled { .. }
+            | ThreadEvent::ModelUsageRecorded { .. }
+            | ThreadEvent::ModelInvocationRecorded { .. }
+            | ThreadEvent::DelegationResultReceived { .. }
+            | ThreadEvent::AgentJoinRequested { .. }
+            | ThreadEvent::AgentJoinSatisfied { .. }
+    )
 }
 
 fn subscriber_observes_session(subscriber: &Subscriber, session_id: &SessionId) -> bool {

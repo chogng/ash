@@ -238,6 +238,42 @@ fn sqlite_thread_store_recovers_typed_events() {
 }
 
 #[test]
+fn sqlite_session_catalog_reads_only_the_requested_session() {
+    let path = database_path("session-catalog");
+    let first_session = SessionId::new("session-first").unwrap();
+    let second_session = SessionId::new("session-second").unwrap();
+    let first_thread = ThreadId::new("thread-first").unwrap();
+    let second_thread = ThreadId::new("thread-second").unwrap();
+    let store = SqliteThreadStore::open(&path).unwrap();
+    append_created_thread(&store, &first_session, &first_thread, 1);
+    append_created_thread(&store, &second_session, &second_thread, 2);
+    rusqlite::Connection::open(&path)
+        .unwrap()
+        .execute(
+            "UPDATE thread_catalog SET record_json = 'invalid' WHERE thread_id = ?1",
+            [second_thread.as_str()],
+        )
+        .unwrap();
+
+    assert_eq!(
+        store.session_catalog(&first_session).unwrap(),
+        vec![catalog(&first_session, &first_thread, 1)]
+    );
+    assert!(
+        store
+            .session_catalog(&SessionId::new("missing").unwrap())
+            .unwrap()
+            .is_empty()
+    );
+    assert!(matches!(
+        store.session_catalog(&second_session),
+        Err(ThreadStoreError::Storage(_))
+    ));
+    drop(store);
+    fs::remove_file(path).unwrap();
+}
+
+#[test]
 fn sqlite_delete_session_removes_all_thread_history_and_change_sets_atomically() {
     let path = database_path("delete-session");
     let deleted_session = SessionId::new("session-delete").unwrap();

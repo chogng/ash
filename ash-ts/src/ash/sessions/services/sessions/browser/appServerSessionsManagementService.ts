@@ -16,6 +16,7 @@ export class AppServerSessionsManagementService extends Disposable implements IS
 	private _error: string | undefined;
 	private initializePromise: Promise<void> | undefined;
 	private readonly pendingRefreshes = new Set<SessionId>();
+	private readonly pendingDetailRefreshes = new Set<SessionId>();
 	private readonly refreshes = new Map<SessionId, Promise<void>>();
 	private readonly hydrating = new Map<SessionId, Promise<void>>();
 
@@ -24,8 +25,9 @@ export class AppServerSessionsManagementService extends Disposable implements IS
 	constructor(private readonly provider: ISessionsProvider) {
 		super();
 		this._register(provider);
-		this._register(provider.onDidChangeSession(sessionId => {
+		this._register(provider.onDidChangeSession(({ sessionId, detailChanged }) => {
 			this.pendingRefreshes.add(sessionId);
+			if (detailChanged) this.pendingDetailRefreshes.add(sessionId);
 			if (this._state !== "loading") this.scheduleRefresh(sessionId);
 		}));
 	}
@@ -45,7 +47,7 @@ export class AppServerSessionsManagementService extends Disposable implements IS
 	async openThread(sessionId: SessionId, threadId: ThreadId): Promise<void> {
 		await this.initialize();
 		const listed = this._sessions.find(candidate => candidate.sessionId === sessionId)
-			?? (await this.provider.list()).find(candidate => candidate.sessionId === sessionId);
+			?? await this.provider.readCatalog(sessionId);
 		if (!listed) throw new Error(`Session is not available: ${sessionId}`);
 		const session = await this.provider.subscribe(listed);
 		this.replaceSession(session);
@@ -65,13 +67,8 @@ export class AppServerSessionsManagementService extends Disposable implements IS
 	}
 
 	async interruptThread(sessionId: SessionId, threadId: ThreadId): Promise<void> {
-		let session = this._sessions.find(candidate => candidate.sessionId === sessionId && candidate.status === "active");
+		const session = this._sessions.find(candidate => candidate.sessionId === sessionId && candidate.status === "active");
 		if (!session) throw new Error(`Active Session is not available: ${sessionId}`);
-		if (!session.agentTree) {
-			await this.hydrateSession(sessionId);
-			session = this._sessions.find(candidate => candidate.sessionId === sessionId && candidate.status === "active");
-			if (!session) throw new Error(`Active Session is not available: ${sessionId}`);
-		}
 		await this.provider.interrupt(session, threadId);
 	}
 
@@ -205,12 +202,16 @@ export class AppServerSessionsManagementService extends Disposable implements IS
 		try {
 			while (this.pendingRefreshes.delete(sessionId)) {
 				await this.hydrating.get(sessionId);
-				const listed = (await this.provider.list()).find(candidate => candidate.sessionId === sessionId);
 				const current = this._sessions.find(candidate => candidate.sessionId === sessionId);
+				const listed = await this.provider.readCatalog(sessionId, current);
+				const detailChanged = this.pendingDetailRefreshes.delete(sessionId);
 				if (current?.agentTree && listed?.status !== "active") await this.provider.unsubscribe(sessionId);
-				const refreshed = listed && current?.agentTree && listed.status === "active"
+				const membershipChanged = listed && current && (listed.chats.length !== current.chats.length
+					|| listed.chats.some(chat => !current.chats.some(previous => previous.threadId === chat.threadId)));
+				const refreshed = listed && (detailChanged || membershipChanged) && current?.agentTree && listed.status === "active"
 					? await this.provider.subscribe(listed)
 					: listed;
+				if (sameSession(current, refreshed)) continue;
 				if (refreshed) this.replaceSession(refreshed);
 				else this._sessions = this._sessions.filter(candidate => candidate.sessionId !== sessionId);
 				if (this._active?.session.sessionId === sessionId) {
@@ -290,4 +291,13 @@ function activeThread(session: ISession, threadId: ThreadId): IActiveSessionThre
 
 function sameModel(left: ModelRef | null | undefined, right: ModelRef | null | undefined): boolean {
 	return left?.provider === right?.provider && left?.model === right?.model;
+}
+
+function sameSession(left: ISession | undefined, right: ISession | undefined): boolean {
+	if (!left || !right) return left === right;
+	if (left.title !== right.title || left.status !== right.status || left.agentTree !== right.agentTree || left.chats.length !== right.chats.length) return false;
+	return left.chats.every((chat, index) => {
+		const next = right.chats[index];
+		return next?.threadId === chat.threadId && next.status === chat.status && next.title === chat.title && next.executionStatus === chat.executionStatus;
+	});
 }

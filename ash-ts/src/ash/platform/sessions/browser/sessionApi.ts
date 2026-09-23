@@ -8,6 +8,7 @@ export function createDisconnectedSessionApi(unavailable: UnavailableOperation):
 	return {
 		create: () => unavailable("session.create"),
 		read: () => unavailable("session.read"),
+		readCatalog: () => unavailable("session.readCatalog"),
 		list: () => unavailable("session.list"),
 		subscribeCatalog: () => unavailable("session.subscribeCatalog"),
 		unsubscribeCatalog: () => unavailable("session.unsubscribeCatalog"),
@@ -57,6 +58,7 @@ export function createAppServerSessionApi(connection: AppServerProtocolClient): 
 	return {
 		create: (params) => appServerRequest(connection, "session/create", params),
 		read: (params) => appServerRequest(connection, "session/read", params),
+		readCatalog: (params) => appServerRequest(connection, "session/catalog/read", params),
 		list: () => appServerRequest(connection, "session/list", {}),
 		subscribeCatalog: () => appServerRequest(connection, "session/catalog/subscribe", {}),
 		unsubscribeCatalog: () => voidResult(appServerRequest(connection, "session/catalog/unsubscribe", {})),

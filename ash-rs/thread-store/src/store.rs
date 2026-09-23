@@ -54,6 +54,12 @@ pub trait ThreadStore: agent_graph_store::AgentGraphStore {
 
     fn list_catalog(&self) -> Result<Vec<ThreadCatalogRecord>, ThreadStoreError>;
 
+    /// Reads the catalog rows for one Session through the Session index.
+    fn session_catalog(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<Vec<ThreadCatalogRecord>, ThreadStoreError>;
+
     /// Installs a missing catalog row while upgrading an older event store.
     fn backfill_catalog(&self, record: &ThreadCatalogRecord) -> Result<(), ThreadStoreError>;
 

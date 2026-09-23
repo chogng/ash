@@ -1740,10 +1740,23 @@ fn new_session_invalidates_other_connections_without_a_session_subscription() {
         value["method"] == "session/changed" && value["params"]["sessionId"] == session_id
     }));
 
+    let catalog = call(
+        &server,
+        &mut observer,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"session/catalog/read","params":{"sessionId":session_id}}),
+    );
+    assert_eq!(catalog["result"]["session"], created["result"]["session"]);
+    let absent = call(
+        &server,
+        &mut observer,
+        serde_json::json!({"jsonrpc":"2.0","id":4,"method":"session/catalog/read","params":{"sessionId":"missing-session"}}),
+    );
+    assert!(absent["result"]["session"].is_null());
+
     let unsubscribed = call(
         &server,
         &mut observer,
-        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"session/catalog/unsubscribe","params":{}}),
+        serde_json::json!({"jsonrpc":"2.0","id":5,"method":"session/catalog/unsubscribe","params":{}}),
     );
     assert_eq!(unsubscribed["result"], serde_json::Value::Null);
     create_session(&server, &mut creator, 4, "another-session");

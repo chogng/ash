@@ -41,6 +41,12 @@ pub struct SessionReadParams {
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
+pub struct SessionCatalogReadResult {
+    pub session: Option<Session>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
 pub struct SessionSubscribeParams {
     pub session_id: SessionId,
 }
@@ -56,6 +62,7 @@ pub struct SessionUnsubscribeParams {
 #[serde(rename_all = "camelCase")]
 pub struct SessionChanged {
     pub session_id: SessionId,
+    pub agent_tree_changed: bool,
 }
 
 /// Notification that one Session and all of its Threads were permanently removed.

@@ -4804,6 +4804,22 @@
         {
           "properties": {
             "method": {
+              "const": "session/catalog/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionReadParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "session/thread/checkpoints",
               "type": "string"
             },
@@ -9149,6 +9165,22 @@
             },
             "result": {
               "$ref": "#/$defs/SessionResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "session/catalog/read",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/SessionCatalogReadResult"
             }
           },
           "required": [
@@ -29493,15 +29525,34 @@
       ],
       "type": "object"
     },
+    "SessionCatalogReadResult": {
+      "properties": {
+        "session": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Session"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
     "SessionChanged": {
       "description": "Non-durable invalidation for a Session tree derived from Thread state.",
       "properties": {
+        "agentTreeChanged": {
+          "type": "boolean"
+        },
         "sessionId": {
           "$ref": "#/$defs/SessionId"
         }
       },
       "required": [
-        "sessionId"
+        "sessionId",
+        "agentTreeChanged"
       ],
       "type": "object"
     },

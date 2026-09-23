@@ -2041,6 +2041,15 @@ impl ThreadController {
         self.store.list_catalog().map_err(CoreError::from)
     }
 
+    pub fn session_thread_catalog(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<Vec<ThreadCatalogRecord>, CoreError> {
+        self.store
+            .session_catalog(session_id)
+            .map_err(CoreError::from)
+    }
+
     /// Reads only histories already recovered for startup or opened by a caller.
     pub fn list_loaded_threads(&self) -> Result<Vec<ThreadSnapshot>, CoreError> {
         self.loaded_threads.snapshots()
@@ -3174,6 +3183,21 @@ impl ThreadStore for InMemoryThreadStore {
             .map_err(|_| ThreadStoreError::Storage("in-memory store lock poisoned".into()))?
             .catalog
             .values()
+            .cloned()
+            .collect())
+    }
+
+    fn session_catalog(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<Vec<ThreadCatalogRecord>, ThreadStoreError> {
+        Ok(self
+            .0
+            .lock()
+            .map_err(|_| ThreadStoreError::Storage("in-memory store lock poisoned".into()))?
+            .catalog
+            .values()
+            .filter(|record| &record.session_id == session_id)
             .cloned()
             .collect())
     }

@@ -52,7 +52,8 @@ test("opening a background-created conversation reads and subscribes it without 
 	assert.equal(service.active?.threadId, "automation-thread");
 	assert.equal(service.sessions.length, 1);
 	assert.equal(fake.subscribeCount, 1);
-	assert.equal(fake.listCount, 1);
+	assert.equal(fake.listCount, 0);
+	assert.equal(fake.readCatalogCount, 1);
 });
 
 test("session/changed adds a conversation created by another client without changing selection", async () => {
@@ -60,7 +61,7 @@ test("session/changed adds a conversation created by another client without chan
 	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));
 	await service.initialize();
 	fake.sessions.push(session("automation-session", "automation-thread"));
-	fake.emit({ method: "session/changed", params: { sessionId: "automation-session" } });
+	fake.emit({ method: "session/changed", params: { sessionId: "automation-session", agentTreeChanged: false } });
 	await waitFor(() => service.sessions.length === 2);
 
 	assert.equal(service.sessions[0]?.sessionId, "automation-session");
@@ -86,7 +87,7 @@ test("catalog invalidation during detail loading keeps the selected Session hydr
 
 	service.selectThread("session-2", "thread-2");
 	fake.sessions[1] = { ...fake.sessions[1]!, title: "Updated while opening" };
-	fake.emit({ method: "session/changed", params: { sessionId: "session-2" } });
+	fake.emit({ method: "session/changed", params: { sessionId: "session-2", agentTreeChanged: false } });
 	await waitFor(() => service.sessions[1]?.title === "Updated while opening" && service.sessions[1]?.agentTree !== undefined);
 
 	assert.equal(service.active?.threadId, "thread-2");
@@ -96,12 +97,13 @@ test("catalog invalidation refreshes a background Session without loading its co
 	const fake = sessionHost([session("session-1", "thread-1"), session("session-2", "thread-2")]);
 	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));
 	await service.initialize();
-	fake.sessions[1] = { ...fake.sessions[1]!, title: "Renamed in background" };
+	fake.sessions[1] = { ...fake.sessions[1]!, title: "Renamed in background", threads: [{ ...fake.sessions[1]!.threads[0]!, title: "Renamed Thread" }] };
 
-	fake.emit({ method: "session/changed", params: { sessionId: "session-2" } });
+	fake.emit({ method: "session/changed", params: { sessionId: "session-2", agentTreeChanged: false } });
 	await waitFor(() => service.sessions[1]?.title === "Renamed in background");
 
 	assert.equal(fake.subscribeCount, 1);
+	assert.equal(service.sessions[1]?.chats[0]?.title, "Renamed Thread");
 });
 
 test("session/deleted removes an unselected Session from the catalog", async () => {
@@ -135,28 +137,56 @@ test("session/changed invalidates the frontend Session without inventing a Sessi
 	const subscriptions = fake.subscribeCount;
 
 	fake.sessions[0] = { ...fake.sessions[0]!, title: "Renamed" };
-	fake.emit({ method: "session/changed", params: { sessionId: "session-1" } });
+	fake.emit({ method: "session/changed", params: { sessionId: "session-1", agentTreeChanged: false } });
 	await waitFor(() => service.sessions[0]?.title === "Renamed");
 
-	assert.equal(fake.subscribeCount, subscriptions + 1);
+	assert.equal(fake.subscribeCount, subscriptions);
+	assert.equal(fake.readCatalogCount, 1);
 	assert.equal(service.sessions[0]?.title, "Renamed");
 });
 
-test("Thread updates refresh the owning Session while Thread sequence stays on the Chat", async () => {
+test("ordinary Thread events leave the opened conversation and rendered list intact", async () => {
+	const fake = sessionHost([session("session-1", "thread-1")]);
+	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));
+	await service.initialize();
+	await waitFor(() => service.active?.session.agentTree !== undefined);
+	const original = service.sessions[0];
+	const subscriptions = fake.subscribeCount;
+	let renders = 0;
+	using listener = service.onDidChange(() => { renders += 1; });
+
+	fake.emit({ method: "session/changed", params: { sessionId: "session-1", agentTreeChanged: false } });
+	await waitFor(() => fake.readCatalogCount === 1);
+	await Promise.resolve();
+
+	assert.equal(fake.listCount, 0);
+	assert.equal(fake.subscribeCount, subscriptions);
+	assert.equal(service.sessions[0], original);
+	assert.equal(renders, 0);
+});
+
+test("a new Thread in the opened Session refreshes its subscription", async () => {
+	const fake = sessionHost([session("session-1", "thread-1")]);
+	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));
+	await service.initialize();
+	await waitFor(() => service.active?.session.agentTree !== undefined);
+	const subscriptions = fake.subscribeCount;
+	const current = fake.sessions[0]!;
+	fake.sessions[0] = { ...current, threads: [...current.threads, { ...current.threads[0]!, threadId: "thread-2" }] };
+
+	fake.emit({ method: "session/changed", params: { sessionId: "session-1", agentTreeChanged: false } });
+	await waitFor(() => fake.subscribeCount === subscriptions + 1 && service.sessions[0]?.chats.length === 2);
+
+	assert.equal(fake.listCount, 0);
+});
+
+test("the backend marks Agent tree changes for the opened Session", async () => {
 	const fake = sessionHost([session("session-1", "thread-1")]);
 	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));
 	await service.initialize();
 	const subscriptions = fake.subscribeCount;
 
-	fake.emit({
-		method: "session/thread/update",
-		params: {
-			sessionId: "session-1",
-			threadId: "thread-1",
-			durableSequence: 3,
-			update: { type: "committed", event: { type: "threadArchived", threadId: "thread-1", reason: "completed" } },
-		},
-	});
+	fake.emit({ method: "session/changed", params: { sessionId: "session-1", agentTreeChanged: true } });
 	await waitFor(() => fake.subscribeCount === subscriptions + 1);
 
 	assert.equal(service.sessions[0]?.sessionId, "session-1");
@@ -175,7 +205,7 @@ test("archive sends only the Session grouping identity", async () => {
 	assert.equal(service.active?.session.sessionId, "session-2");
 });
 
-test("interrupt uses the selected Thread sequence from the provider snapshot", async () => {
+test("interrupt reads the current Thread sequence before sending the command", async () => {
 	const tree = agentNode();
 	const fake = sessionHost([session("session-1", "thread-1")], tree);
 	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));
@@ -242,9 +272,11 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection) {
 	let subscribeCount = 0;
 	let catalogSubscriptionCount = 0;
 	let listCount = 0;
+	let readCatalogCount = 0;
 	const api: ISessionApi = {
 		async create() { throw new Error("Not used"); },
 		async read({ sessionId }) { return { session: sessions.find(candidate => candidate.sessionId === sessionId)!, agentTree }; },
+		async readCatalog({ sessionId }) { readCatalogCount += 1; return { session: sessions.find(candidate => candidate.sessionId === sessionId) ?? null }; },
 		async list() { listCount += 1; return { sessions }; },
 		async subscribeCatalog() { catalogSubscriptionCount += 1; return { sessions }; },
 		async unsubscribeCatalog() {},
@@ -293,6 +325,7 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection) {
 		get subscribeCount() { return subscribeCount; },
 		get catalogSubscriptionCount() { return catalogSubscriptionCount; },
 		get listCount() { return listCount; },
+		get readCatalogCount() { return readCatalogCount; },
 		emit(event: ServerNotification) { for (const listener of listeners) listener(event); },
 	};
 }
@@ -306,7 +339,7 @@ function threadProjection(sessionId: string, threadId: string): SessionThreadPro
 			referenceCost: { knownAmounts: [], complete: true },
 			sessionId,
 			threadId,
-			title: "Main",
+			title: `Thread ${threadId}`,
 			status: "active",
 			sequence: 1,
 			usage: {

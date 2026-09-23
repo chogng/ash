@@ -104,6 +104,10 @@ pub trait AgentRuntime {
     fn read_started_thread(&self, command_id: &CommandId) -> Result<Option<ThreadView>, CoreError>;
     fn read_session(&self, session_id: &SessionId) -> Result<SessionView, CoreError>;
     fn list_thread_catalog(&self) -> Result<Vec<ash_thread_store::ThreadCatalogRecord>, CoreError>;
+    fn session_thread_catalog(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<Vec<ash_thread_store::ThreadCatalogRecord>, CoreError>;
     fn read_agent(&self, agent_id: &AgentId) -> Result<agent_graph_store::AgentRecord, CoreError>;
     fn list_agent_threads(
         &self,

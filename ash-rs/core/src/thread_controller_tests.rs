@@ -715,6 +715,13 @@ impl ThreadStore for ToggleStore {
         Ok(Vec::new())
     }
 
+    fn session_catalog(
+        &self,
+        _: &SessionId,
+    ) -> Result<Vec<ash_thread_store::ThreadCatalogRecord>, ThreadStoreError> {
+        Ok(Vec::new())
+    }
+
     fn backfill_catalog(
         &self,
         _: &ash_thread_store::ThreadCatalogRecord,
@@ -1186,6 +1193,13 @@ impl ThreadStore for PerThreadBlockingStore {
 
     fn list_catalog(&self) -> Result<Vec<ash_thread_store::ThreadCatalogRecord>, ThreadStoreError> {
         self.inner.list_catalog()
+    }
+
+    fn session_catalog(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<Vec<ash_thread_store::ThreadCatalogRecord>, ThreadStoreError> {
+        self.inner.session_catalog(session_id)
     }
 
     fn backfill_catalog(

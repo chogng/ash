@@ -9,7 +9,7 @@ use ash_thread_store::ThreadEventBatch;
 use ash_thread_store::ThreadStore;
 use ash_thread_store::ThreadStoreError;
 use ash_thread_store::validate_append_batch;
-use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
+use rusqlite::{Connection, OptionalExtension, ToSql, TransactionBehavior, params};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -102,48 +102,23 @@ impl ThreadStore for SqliteThreadStore {
 
     fn list_catalog(&self) -> Result<Vec<ThreadCatalogRecord>, ThreadStoreError> {
         let connection = self.connection()?;
-        let mut statement = connection
-            .prepare(
-                "SELECT catalog.thread_id,
-                        catalog.session_id,
-                        catalog.requires_startup_recovery,
-                        catalog.record_json,
-                        streams.current_sequence
-                 FROM thread_catalog AS catalog
-                 JOIN thread_streams AS streams ON streams.thread_id = catalog.thread_id
-                 ORDER BY catalog.session_id, catalog.thread_id",
-            )
-            .map_err(storage_error)?;
-        statement
-            .query_map([], |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, i64>(2)?,
-                    row.get::<_, String>(3)?,
-                    row.get::<_, i64>(4)?,
-                ))
-            })
-            .map_err(storage_error)?
-            .map(|row| {
-                let (thread_id, session_id, requires_recovery, record_json, current_sequence) =
-                    row.map_err(storage_error)?;
-                let record = serde_json::from_str::<ThreadCatalogRecord>(&record_json)
-                    .map_err(|error| ThreadStoreError::Storage(error.to_string()))?;
-                let current_sequence =
-                    from_sql_integer(current_sequence).map_err(ThreadStoreError::Storage)?;
-                if record.thread.thread_id.as_str() != thread_id
-                    || record.session_id.as_str() != session_id
-                    || i64::from(record.requires_startup_recovery) != requires_recovery
-                    || record.sequence != current_sequence
-                {
-                    return Err(ThreadStoreError::Storage(
-                        "Thread catalog metadata disagrees with its stored record".into(),
-                    ));
-                }
-                Ok(record)
-            })
-            .collect()
+        query_catalog(
+            &connection,
+            "ORDER BY catalog.session_id, catalog.thread_id",
+            &[],
+        )
+    }
+
+    fn session_catalog(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<Vec<ThreadCatalogRecord>, ThreadStoreError> {
+        let connection = self.connection()?;
+        query_catalog(
+            &connection,
+            "WHERE catalog.session_id = ?1 ORDER BY catalog.thread_id",
+            &[&session_id.as_str() as &dyn ToSql],
+        )
     }
 
     fn backfill_catalog(&self, record: &ThreadCatalogRecord) -> Result<(), ThreadStoreError> {
@@ -417,6 +392,52 @@ impl ThreadStore for SqliteThreadStore {
         transaction.commit().map_err(storage_error)?;
         Ok(result)
     }
+}
+
+fn query_catalog(
+    connection: &Connection,
+    filter: &str,
+    params: &[&dyn ToSql],
+) -> Result<Vec<ThreadCatalogRecord>, ThreadStoreError> {
+    let mut statement = connection
+        .prepare(&format!(
+            "SELECT catalog.thread_id, catalog.session_id, catalog.requires_startup_recovery,
+                catalog.record_json, streams.current_sequence
+         FROM thread_catalog AS catalog
+         JOIN thread_streams AS streams ON streams.thread_id = catalog.thread_id
+         {filter}"
+        ))
+        .map_err(storage_error)?;
+    statement
+        .query_map(params, |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i64>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, i64>(4)?,
+            ))
+        })
+        .map_err(storage_error)?
+        .map(|row| {
+            let (thread_id, session_id, requires_recovery, record_json, current_sequence) =
+                row.map_err(storage_error)?;
+            let record =
+                serde_json::from_str::<ThreadCatalogRecord>(&record_json).map_err(storage_error)?;
+            let current_sequence =
+                from_sql_integer(current_sequence).map_err(ThreadStoreError::Storage)?;
+            if record.thread.thread_id.as_str() != thread_id
+                || record.session_id.as_str() != session_id
+                || i64::from(record.requires_startup_recovery) != requires_recovery
+                || record.sequence != current_sequence
+            {
+                return Err(ThreadStoreError::Storage(
+                    "Thread catalog metadata disagrees with its stored record".into(),
+                ));
+            }
+            Ok(record)
+        })
+        .collect()
 }
 
 fn write_catalog(
