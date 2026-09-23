@@ -1,5 +1,6 @@
 import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from '../../common/services/languageFeatureDebounce.js';
 import { StandaloneCodeEditorService } from './standaloneCodeEditorService.js';
+import { StandaloneLayoutService } from './standaloneLayoutService.js';
 import { IInlineCompletionsService, InlineCompletionsService } from '../../browser/services/inlineCompletionsService.js';
 import { MarkerService, IMarkerService } from '../../../platform/markers/common/markers.js';
 import { MarkerDecorationsService } from '../../common/services/markerDecorationsService.js';
@@ -52,6 +53,7 @@ import '../../../base/browser/ui/menu/menu.css';
 import '../../../base/browser/ui/button/button.css';
 import '../../../base/browser/ui/keybindinglabel/keybindinglabel.css';
 import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
+import { ILayoutService } from '../../../platform/layout/browser/layoutService.js';
 import { StandaloneQuickInputService } from './quickInput/standaloneQuickInputService.js';
 
 export interface StandaloneServiceOverrides {
@@ -96,6 +98,7 @@ export class StandaloneServiceCollection extends ServiceContainer {
 		this.registerSingleton(IMarkerDecorationsService, () => this.createInstance(MarkerDecorationsService));
 		this.registerInstance(IClipboardService, new BrowserClipboardService(window.navigator.clipboard));
 		this.registerSingleton(ICodeEditorService, () => this.createInstance(StandaloneCodeEditorService));
+		this.registerSingleton(ILayoutService, () => this.createInstance(StandaloneLayoutService));
 		this.registerSingleton(IQuickInputService, () => this.createInstance(StandaloneQuickInputService));
 		this.codeEditorService = this.get(ICodeEditorService);
 		this.editorWorkerFactory = overrides.editorWorkerFactory ?? (model => new VersionedEditorWorkerClient(model));

@@ -143,6 +143,14 @@ test('standalone command picker executes editor actions, restores focus and foll
 	await page.keyboard.press('Escape');
 	await expect(picker).toHaveCount(0);
 	await expect(input).toBeFocused();
+	const ownedInput = page.locator('#owned .stanza-editor-input');
+	await ownedInput.focus();
+	await page.keyboard.press('F1');
+	await expect(page.locator('#owned .ash-quick-pick')).toBeVisible();
+	await expect(page.locator('#caller .ash-quick-pick')).toHaveCount(0);
+	await page.keyboard.press('Escape');
+	await expect(ownedInput).toBeFocused();
+	await input.focus();
 	await page.keyboard.press('F1');
 	await query.fill('editor.action.gotoLine');
 	await expect(picker.locator('.ash-quick-pick-row-label')).toHaveCount(1);

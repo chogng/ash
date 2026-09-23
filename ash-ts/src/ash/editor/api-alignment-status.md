@@ -28,13 +28,12 @@
 
 ### 尚未闭合的完整目录清单
 
-以下路径均相对 `standalone/`，记录尚未闭合的职责；已有文件仍不代表完整契约。主题、命令选择弹层、高对比度动作、token 规则、Monarch 与独立着色接通后为 18 个同路径、1 个保留的 Ash 文件、14 个缺失生产文件。
+以下路径均相对 `standalone/`，记录尚未闭合的职责；已有文件仍不代表完整契约。主题、命令选择弹层、高对比度动作、token 规则、Monarch 与独立着色接通后，当时为 18 个同路径、1 个保留的 Ash 文件、14 个缺失生产文件。
 
 | 上游缺失路径 | 当前下层条件 |
 | --- | --- |
 | `browser/standalone-tokens.css` | token 规则、继承和颜色表已进入既有 ViewLine presentation 与富文本复制链；尚无需要单独生成 token class 样式的调用方，不创建空 CSS |
 | `browser/inspectTokens/inspectTokens.ts`、`inspectTokens.css` | 需要完整 token 结果、主题解释及真实检查控件；目前未注册检查动作 |
-| `browser/standaloneLayoutService.ts` | Quick Input 服务与样式已落位，使用共享 Controller 和 editor 现有容器几何；统一 LayoutService、输入框、Quick Access 前缀与完整选择契约仍待接通 |
 | `browser/quickAccess/standaloneGotoSymbolQuickAccess.ts`、`standaloneHelpQuickAccess.ts` | 命令面板文件已接通 F1、筛选与动作执行；通用 Quick Access registry/provider 契约仍待闭合。Go to Line action 仍使用已确认保留的 Ash 输入框；符号迁移需同时迁移 Workbench 入口 |
 | `browser/referenceSearch/standaloneReferenceSearch.ts` | 本地引用跳转由现有语言导航控制器和 PeekViewWidget 承担；标准 ReferencesController 状态与模型链尚未对齐 |
 | `browser/standaloneWebWorker.ts`、`browser/services/standaloneWebWorkerService.ts` | 当前是模型绑定的编辑 Worker 与既有消息端口；标准通用 Worker 服务、代理与多资源同步仍缺失 |
@@ -2126,5 +2125,7 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 本轮验证：扫描器消费方、syntax wire、模型 tokenization、TextMate、模型/编辑器组件定向单测通过；23 项 Editor 架构检查和 10 项 Chromium 场景通过；`build:stanza`、`build:renderer` 通过。此记录仅表示自建词法链路已收敛，不表示整个 Editor API 对齐完成。
 
 内置语言装配清理：两个 `common/languages/languageBuiltin*` 文件退出，默认语言数据合并到 `standalone/common/builtinLanguages.ts`，由 Standalone 与 Workbench 的装配入口注册。`TextModel` 不再创建内置配置服务；未传入配置的裸模型没有语言规则。Workbench 文件模型使用宿主共享配置并响应注册/撤销，测试专用服务工厂移入测试目录。定向单测、23 项架构检查、9 项 Chromium 场景和 Stanza/Renderer 构建通过。其余自建语言服务、协议和反向契约依赖仍待整理。
+
+Standalone 布局文件补齐：上游同路径 `standalone/browser/standaloneLayoutService.ts` 已由 Ash 独立实现并注册到窗口服务容器。服务从当前编辑器注册表发布主容器、活动容器和布局事件；F1 Quick Input 改读该服务的活动容器，选择框自身的 DOM 与释放仍由原 Controller 拥有。文件集合审计从 448 个同路径增至 449 个，缺失文件减 1。Standalone 单测 31 项通过，真实 Chromium 双编辑器 F1 场景通过，Stanza 生产构建通过。完整浏览器检查这次为 602 项通过，仍有括号着色、括号操作和 GPU 括号字形等失败；暂时断开本批服务注册与 Quick Input 接线后，4 个代表性失败仍原样复现，随后已恢复接线，因此不能将完整检查记为通过。`standaloneGotoSymbolQuickAccess.ts` 等其余缺失文件仍需先闭合各自下层调用链。
 
 Standalone Go to Offset：`editor.action.gotoOffset` 已从命令面板进入现有定位输入框，输入按一基 UTF-16 偏移解析，确认后更新选区、滚动并恢复编辑器焦点；行号模式仍独立工作。动作位于双方同路径的 `standaloneGotoLineQuickAccess.ts`，现有 Ash 定位框继续拥有输入 DOM 和生命周期。中英文标签与输入提示已接入语言目录。定向单测、真实 Chromium 命令场景及 Stanza 生产构建通过。`Colorizer.colorizeModelLine` 仍受模型同步 token 能力限制，未把异步快照伪装为同步实现；其余 Standalone 文件差异仍待逐条闭合调用链。

@@ -15,6 +15,7 @@ import { ILogService, NullLoggerService } from '../../../platform/log/common/log
 import { LanguageFeaturesService } from "../../common/services/languageFeaturesService.js";
 import { ILanguageFeaturesService } from '../../common/services/languageFeatures.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
+import { ILayoutService } from '../../../platform/layout/browser/layoutService.js';
 import { ILanguageService } from '../../common/languages/language.js';
 import { EditorContributionInstantiation } from '../../browser/editorExtensions.js';
 import { TestLanguageConfigurationService } from '../common/modes/testLanguageConfigurationService.js';
@@ -540,6 +541,40 @@ test("standalone editors share caller-owned models and dispose independently", (
 	assert.equal(model.getValue(), "shared model");
 	model.dispose();
 	dom.window.close();
+});
+
+test('standalone layout follows editor focus, geometry, and disposal', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main><aside></aside></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const main = dom.window.document.querySelector<HTMLElement>('main')!;
+	const aside = dom.window.document.querySelector<HTMLElement>('aside')!;
+	const layout = StandaloneServices.get(ILayoutService);
+	const first = stanza.editor.create(main, { value: 'first' });
+	const second = stanza.editor.create(aside, { value: 'second' });
+	const firstRoot = first.getContainerDomNode();
+	const secondRoot = second.getContainerDomNode();
+	const changes: HTMLElement[] = [];
+	const resized: HTMLElement[] = [];
+	using listeners = new DisposableStore();
+	listeners.add(layout.onDidChangeActiveContainer(() => changes.push(layout.activeContainer)));
+	listeners.add(layout.onDidLayoutContainer(event => resized.push(event.container)));
+
+	try {
+		assert.equal(layout.mainContainer, firstRoot);
+		assert.deepEqual([...layout.containers], [firstRoot, secondRoot]);
+		first.layout({ width: 200, height: 100 });
+		assert.deepEqual(resized, [firstRoot]);
+		second.focus();
+		assert.equal(layout.activeContainer, secondRoot);
+		assert.equal(layout.getContainer(dom.window as unknown as Window), secondRoot);
+		second.dispose();
+		assert.equal(layout.activeContainer, firstRoot);
+		assert.deepEqual(changes, [secondRoot, firstRoot]);
+	} finally {
+		second.dispose();
+		first.dispose();
+		dom.window.close();
+	}
 });
 
 test('standalone creation event exposes an assembled editor and caller-owned model', () => {
