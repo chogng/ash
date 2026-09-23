@@ -1,5 +1,6 @@
 use crate::HttpClientConfig;
 use crate::HttpClientError;
+use crate::HttpMethod;
 use crate::HttpRequest;
 use crate::HttpResponse;
 use crate::NetworkTargetPolicy;
@@ -13,6 +14,8 @@ use crate::outbound_network::system_root_store;
 use std::io::Read;
 use std::sync::Arc;
 use std::sync::OnceLock;
+use std::time::Instant;
+use url::Url;
 
 /// Executes a fully constructed HTTP request once.
 ///
@@ -48,7 +51,7 @@ pub trait HttpBodySink {
     fn emit(&mut self, chunk: &[u8]) -> Result<(), HttpClientError>;
 }
 
-/// The production synchronous HTTP client backed by one reusable `ureq` agent.
+/// The production synchronous HTTP client with reusable direct and proxy agents.
 pub struct UreqHttpClient {
     network: OutboundNetworkSnapshot,
     http_direct_agent: ureq::Agent,
@@ -114,8 +117,8 @@ impl UreqHttpClient {
         Self::with_config_and_root_loader(config, Arc::new(loader))
     }
 
-    fn agent_for(&self, request: &HttpRequest) -> Result<&ureq::Agent, HttpClientError> {
-        let route = self.network.proxy_route(request.url())?;
+    fn agent_for(&self, url: &str) -> Result<&ureq::Agent, HttpClientError> {
+        let route = self.network.proxy_route(url)?;
         let proxy_url = match &route {
             OutboundProxyRoute::Direct => None,
             OutboundProxyRoute::Proxy(target) => Some(target.url()),
@@ -123,11 +126,7 @@ impl UreqHttpClient {
         let use_proxy = proxy_url.is_some();
         let proxy_requires_tls =
             use_proxy && proxy_url.is_some_and(|url| url.starts_with("https://"));
-        let request_requires_tls = request.url().starts_with("https://")
-            || matches!(
-                self.network.config().redirects(),
-                crate::RedirectPolicy::Follow { .. }
-            );
+        let request_requires_tls = url.starts_with("https://");
         if !request_requires_tls && !proxy_requires_tls {
             return if use_proxy {
                 Ok(self
@@ -177,10 +176,7 @@ fn build_agent(
             .map_err(|_| HttpClientError::InvalidConfiguration("proxy URL is invalid".into()))?;
         builder = builder.proxy(proxy);
     }
-    builder = match config.redirects() {
-        RedirectPolicy::Reject => builder.redirects(0),
-        RedirectPolicy::Follow { max_hops } => builder.redirects(u32::from(max_hops.get())),
-    };
+    builder = builder.redirects(0);
     let timeouts = config.timeouts();
     if let Timeout::After(timeout) = timeouts.connect() {
         builder = builder.timeout_connect(timeout);
@@ -246,17 +242,66 @@ impl HttpClient for UreqHttpClient {
 
 impl UreqHttpClient {
     fn send(&self, request: &HttpRequest) -> Result<ureq::Response, HttpClientError> {
-        let mut request_builder = self
-            .agent_for(request)?
-            .request(request.method().as_str(), request.url());
-        for header in request.headers() {
-            request_builder = request_builder.set(header.name(), header.value());
-        }
-        match request_builder.send_bytes(request.body()) {
-            Ok(response) | Err(ureq::Error::Status(_, response)) => Ok(response),
-            Err(ureq::Error::Transport(_)) => {
-                Err(HttpClientError::Transport("request failed".into()))
+        let mut url = Url::parse(request.url())
+            .map_err(|_| HttpClientError::InvalidRequest("request URL is invalid".into()))?;
+        let mut method = request.method();
+        let mut body = request.body();
+        let mut hops = 0;
+        let started = Instant::now();
+        loop {
+            let mut builder = self
+                .agent_for(url.as_str())?
+                .request(method.as_str(), url.as_str());
+            for header in request.headers() {
+                if hops == 0
+                    || !["authorization", "cookie", "content-length"]
+                        .iter()
+                        .any(|name| header.name().eq_ignore_ascii_case(name))
+                {
+                    builder = builder.set(header.name(), header.value());
+                }
             }
+            if let Timeout::After(limit) = self.network.config().timeouts().overall() {
+                let remaining = limit
+                    .checked_sub(started.elapsed())
+                    .ok_or_else(|| HttpClientError::Transport("request timed out".into()))?;
+                builder = builder.timeout(remaining);
+            }
+            let response = match builder.send_bytes(body) {
+                Ok(response) | Err(ureq::Error::Status(_, response)) => response,
+                Err(ureq::Error::Transport(_)) => {
+                    return Err(HttpClientError::Transport("request failed".into()));
+                }
+            };
+            let RedirectPolicy::Follow { max_hops } = self.network.config().redirects() else {
+                return Ok(response);
+            };
+            let next_method = match response.status() {
+                301..=303 => match method {
+                    HttpMethod::Get => method,
+                    HttpMethod::Post | HttpMethod::Delete => HttpMethod::Get,
+                },
+                307 | 308 if method == HttpMethod::Get => method,
+                _ => return Ok(response),
+            };
+            let Some(location) = response.header("location") else {
+                return Ok(response);
+            };
+            if hops >= max_hops.get() {
+                return Err(HttpClientError::Transport("redirect limit exceeded".into()));
+            }
+            let next_url = url
+                .join(location)
+                .map_err(|_| HttpClientError::InvalidRequest("redirect URL is invalid".into()))?;
+            if !matches!(next_url.scheme(), "http" | "https") {
+                return Err(HttpClientError::InvalidRequest(
+                    "redirect URL must use HTTP or HTTPS".into(),
+                ));
+            }
+            url = next_url;
+            method = next_method;
+            body = &[];
+            hops += 1;
         }
     }
 }

@@ -10,9 +10,17 @@ const sourceRoot = resolve(desktopRoot, "src/ash");
 
 test("Base and Platform production imports preserve the layer direction", () => {
 	const violations: string[] = [];
+	const baseRoot = join(sourceRoot, "base");
+	// NLS is a shared root entry point used by every frontend layer.
+	const nlsRoot = join(sourceRoot, "nls.ts");
+	assert.equal(existsSync(nlsRoot), true, "shared NLS root");
+	assert.equal(existsSync(join(baseRoot, "common/nls.ts")), false, "NLS has one root owner");
+	for (const target of localImports(nlsRoot)) {
+		if (!target.startsWith(`${baseRoot}${sep}`)) violations.push(`${sourceName(nlsRoot)} -> ${sourceName(target)}`);
+	}
 	for (const file of productionTypeScriptFiles(join(sourceRoot, "base"))) {
 		for (const target of localImports(file)) {
-			if (target.startsWith(sourceRoot) && !target.startsWith(join(sourceRoot, "base"))) violations.push(`${sourceName(file)} -> ${sourceName(target)}`);
+			if (target.startsWith(sourceRoot) && target !== nlsRoot && !target.startsWith(`${baseRoot}${sep}`)) violations.push(`${sourceName(file)} -> ${sourceName(target)}`);
 		}
 	}
 	for (const file of productionTypeScriptFiles(join(sourceRoot, "platform"))) {

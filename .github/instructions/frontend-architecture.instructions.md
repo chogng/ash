@@ -35,6 +35,8 @@ Add general structures only for concrete domain-neutral consumers.
 
 ## Learnings
 
+* 遇到分层测试报告跨目录导入时，先核对目标模块的实际职责、依赖方向和上游同职责路径；目录位于 `base` 外不自动表示它属于更高层。`src/ash/nls.ts` 对应 VS Code 的根级 NLS 入口，供各前端层共享且只应依赖 `base`；分层检查要精确允许该入口并检查它自身的依赖，不能仅为通过路径断言将它迁入 `base/common`。
+
 * 必需服务不得通过多层可选 options 转传。服务组合发生变化时，沿真实创建入口核对构造注入、容器注册和作用域；缺失依赖必须在创建阶段失败，不能延迟到首次打开文件时暴露。
 
 * TypeScript 长期对象的稳定服务依赖必须在 constructor 上显式可见，由 `IInstantiationService.createInstance` 统一解析；当前端实例化体系以服务标识参数装饰器作为标准入口时，使用 `@I...Service` 声明这些依赖。options 只承载每个实例的数据、配置和宿主回调，不承载可由服务容器提供的稳定服务。禁止用 `invokeWithinContext(...getOptional)` 隐藏必需依赖，也禁止叶子对象在服务缺失时自建容器或替代实现。只有作用域 owner 可以基于注入的父容器创建子作用域并注册该作用域特有的服务；accessor 查找只用于命令或 action 的单次执行。测试应注册真实依赖并经同一创建入口装配对象。
