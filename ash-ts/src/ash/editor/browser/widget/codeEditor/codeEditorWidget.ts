@@ -104,7 +104,10 @@ export interface ICodeEditorWidgetOptions extends IEditorConstructionOptions {
 	readonly contextMenuId?: MenuId;
 }
 
-export type CodeEditorWidgetOptions = ICodeEditorWidgetOptions;
+export type CodeEditorWidgetOptions = Omit<ICodeEditorWidgetOptions, 'model' | 'input'> & {
+	readonly model: TextModel | null;
+	readonly input: Omit<ICodeEditorWidgetOptions['input'], 'resource'> & { readonly resource?: URI };
+};
 
 export type CodeEditorViewState = ICodeEditorViewState;
 
@@ -193,7 +196,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	readonly isSimpleWidget: boolean;
 	readonly contextMenuId: MenuId;
 	private modelState: Partial<CodeEditorModelState> | null = null;
-	private ownerId!: string;
+	private readonly ownerId: string;
 	private instantiationService!: IInstantiationService;
 	private readonly editorServices!: IInstantiationService;
 	private readonly contextKeyService!: IContextKeyService;
@@ -257,6 +260,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		@IContextKeyService contextKeyService: IContextKeyService,
 	) {
 		super();
+		this.ownerId = options.ownerId ?? `ash-code-editor-${this.decorationOwnerId}`;
 		options.codeEditorService?.willCreateCodeEditor();
 		try {
 			validateOptions(options);
@@ -299,7 +303,9 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			this.contextKeyService = this._register(contextKeyService.createScoped(this.rootDomNode));
 			editorServices.registerInstance(IContextKeyService, this.contextKeyService);
 			this.instantiationService = this.editorServices;
-			this.attachModel(initialModel);
+			if (initialModel) {
+				this.attachModel(initialModel);
+			}
 			if (options.codeEditorService) {
 				this._register(toDisposable(() => options.codeEditorService?.removeCodeEditor(this)));
 				options.codeEditorService.addCodeEditor(this);
@@ -312,7 +318,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 
 	private attachModel(model: TextModel): void {
 		this.modelState = {};
-		const options: CodeEditorWidgetOptions = {
+		const options: ICodeEditorWidgetOptions = {
 			...this.constructionOptions,
 			model,
 			languageId: model.getLanguageId(),
@@ -427,14 +433,13 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				presentation: options.presentation,
 				indentation: options.indentation,
 				controller: {
-					ownerId: this.ownerId ?? options.ownerId,
+					ownerId: this.ownerId,
 					...(logService ? { logService } : {}),
 					ariaLabel: options.ariaLabel ?? editorLabel(options.input),
 					semanticTokenSource,
 				},
 			}));
 			modelStore.add(this.view.onDidChangeLayout(() => this.layoutChangeEmitter.fire(this.getLayoutInfo())));
-			this.ownerId = this.controller.ownerId;
 			this.currentModel = model;
 			for (const widget of this.contentWidgets.values()) this.view.addContentWidget(widget);
 			for (const widget of this.overlayWidgets.values()) this.view.addOverlayWidget(widget);
@@ -1171,8 +1176,8 @@ class EditorDecorationsCollection implements IEditorDecorationsCollection {
 }
 
 function validateOptions(options: CodeEditorWidgetOptions): void {
-	if (!options || typeof options !== "object" || !isHTMLElement(options.container) || !options.model || !options.input || !options.languageId) {
-		throw new TypeError("Code editor widget requires a container, input, language, and text model");
+	if (!options || typeof options !== "object" || !isHTMLElement(options.container) || (options.model !== null && !(options.model instanceof TextModel)) || !options.input || !options.languageId) {
+		throw new TypeError("Code editor widget requires a container, input, language, and a text model or null");
 	}
 	if (options.onContributionError !== undefined && typeof options.onContributionError !== "function") {
 		throw new TypeError("Code editor contribution error handler must be a function");

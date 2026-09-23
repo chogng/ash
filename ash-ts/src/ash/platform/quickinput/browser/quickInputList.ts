@@ -4,6 +4,7 @@ import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import type { IQuickPickItem } from "../common/quickInput.js";
 import { h } from "../../../base/browser/dom.js";
+import { localize } from '../../../nls.js';
 
 export interface QuickInputListActiveChangeEvent<TItem> {
 	readonly item: TItem | undefined;
@@ -37,14 +38,14 @@ export class QuickInputList<TItem extends IQuickPickItem>
 		container.append(this.element);
 
 		this.list = this._register(new List<TItem>(this.element, {
-			ariaLabel: "Quick Pick results",
+			ariaLabel: localize('quickInput.results', 'Quick Pick results'),
 			renderItem: (item) => this.renderItem(item),
 		}));
 		this.list.element.classList.add("ash-quick-pick-list-items");
 		this.empty = h(ownerDocument, "div");
 		this.empty.className = "ash-quick-pick-empty";
 		setRole(this.empty, "status");
-		this.empty.textContent = "No matching results";
+		this.empty.textContent = localize('quickInput.empty', 'No matching results');
 		this.empty.hidden = true;
 		this.element.append(this.list.element, this.empty);
 

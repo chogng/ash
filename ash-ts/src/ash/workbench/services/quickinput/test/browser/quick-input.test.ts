@@ -185,6 +185,46 @@ test("Command Palette filters, executes, closes, and restores focus", async () =
 	dom.window.close();
 });
 
+test('Quick Input replaces a visible picker and releases it with its host', () => {
+	const dom = new JSDOM('<!doctype html><body><button>Editor</button></body>');
+	installDomGlobals(dom);
+	using contextKeys = new ContextKeyService();
+	const service = new WorkbenchQuickInputService({
+		container: dom.window.document.body,
+		contextKeyService: contextKeys,
+	});
+	try {
+		const button = dom.window.document.querySelector('button')!;
+		button.focus();
+		const first = service.createQuickPick();
+		let firstHidden = 0;
+		first.onDidHide(() => { firstHidden++; });
+		first.items = [{ label: 'First' }];
+		first.show();
+		const second = service.createQuickPick();
+		const values: string[] = [];
+		second.onDidChangeValue(value => values.push(value));
+		second.items = [{ label: 'Second' }, { label: 'Other' }];
+		second.value = 'second';
+		second.value = 'second';
+		second.show();
+		assert.equal(firstHidden, 1);
+		assert.deepEqual(values, ['second']);
+		assert.deepEqual([...dom.window.document.querySelectorAll('.ash-quick-pick-row-label')].map(item => item.textContent), ['Second']);
+		assert.equal(contextKeys.getValue(InQuickInputContext.key), true);
+		let secondHidden = 0;
+		second.onDidHide(() => { secondHidden++; });
+		service.dispose();
+		assert.equal(secondHidden, 1);
+		assert.equal(contextKeys.getValue(InQuickInputContext.key), false);
+		assert.equal(dom.window.document.querySelector('.ash-quick-input-host'), null);
+		assert.equal(dom.window.document.activeElement, button);
+	} finally {
+		service.dispose();
+		dom.window.close();
+	}
+});
+
 function emptyKeybindingService(): KeybindingService {
 	return {
 		inChordMode: false,

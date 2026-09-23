@@ -1,4 +1,5 @@
 import { ILanguageFeatureDebounceService } from '../../../src/ash/editor/common/services/languageFeatureDebounce.js';
+import { IInstantiationService } from '../../../src/ash/platform/instantiation/common/instantiation.js';
 import { IInlineCompletionsService } from '../../../src/ash/editor/browser/services/inlineCompletionsService.js';
 import { InlineCompletionsController } from '../../../src/ash/editor/contrib/inlineCompletions/browser/controller/inlineCompletionsController.js';
 import type { ICodeEditor } from '../../../src/ash/editor/browser/editorBrowser.js';
@@ -8,10 +9,10 @@ import { ICodeEditorService } from '../../../src/ash/editor/browser/services/cod
 import { observableCodeEditor } from '../../../src/ash/editor/browser/observableCodeEditor.js';
 import { FindController } from '../../../src/ash/editor/contrib/find/browser/findController.js';
 import { StickyScrollController } from '../../../src/ash/editor/contrib/stickyScroll/browser/stickyScrollController.js';
-import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
+import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
 import { CutAction, PasteAction } from '../../../src/ash/editor/contrib/clipboard/browser/clipboard.js';
-import { FontStyle, MetadataConsts } from '../../../src/ash/editor/common/encodedTokenAttributes.js';
+import { FontStyle, MetadataConsts, TokenMetadata } from '../../../src/ash/editor/common/encodedTokenAttributes.js';
 import { SparseMultilineTokens } from '../../../src/ash/editor/common/tokens/sparseMultilineTokens.js';
 import { CopyPasteController } from '../../../src/ash/editor/contrib/dropOrPasteInto/browser/copyPasteController.js';
 import { formatEditor, FormattingConflicts, FormattingKind, FormattingMode } from '../../../src/ash/editor/contrib/format/browser/format.js';
@@ -136,6 +137,15 @@ type LanguageRequestKind = 'hover' | 'selection' | 'definition' | 'call' | 'type
 type LanguageRequestChange = 'text' | 'selection' | 'language' | 'provider' | 'model' | 'dispose' | 'blur';
 type ContributionRequestKind = 'colors' | 'highlights' | 'completion' | 'folding' | 'links' | 'codelens' | 'hover';
 interface StandaloneHarness {
+	prepareTokenTheme(kind: 'plain' | 'encoded' | 'lazy' | 'activation' | 'monarch' | 'monarch-embedded'): void;
+	removeMonarchCommentStart(): void;
+	colorizePreview(): Promise<{ modelsBefore: number; modelsAfter: number }>;
+	readTokenTheme(): { colors: string[]; styles: number[]; languages: string[]; html: string | null; factoryCalls: number };
+	finishTokenProvider(): void;
+	removeTokenProvider(): void;
+	createEmptyEditor(): { readonly modelsAdded: number; readonly model: null; readonly id: string };
+	attachEmptyEditor(): void;
+	detachEmptyEditor(): { readonly value: string; readonly modelDisposed: boolean };
 	updateContributionOptions(options: IEditorOptions): void;
 	readContributionDecorations(): { colors: number; highlights: number; folding: number };
 	prepareStickyHeaders(): void;
@@ -377,6 +387,9 @@ if (!ownedModel) throw new Error('Owned standalone editor has no model');
 let pointerMouseUpEvents = 0;
 const pointerMouseUpListener = callerEditor.onMouseUp(() => { pointerMouseUpEvents += 1; });
 const languageRequestProviders = new DisposableStore();
+const tokenThemeResources = new DisposableStore();
+let finishTokenProvider: (() => void) | undefined;
+let tokenFactoryCalls = 0;
 const languageRequests: { languageId: string; signal: AbortSignal; finish: () => void }[] = [];
 let definitionPosition: { lineNumber: number; column: number } | null = null;
 let referenceRegistration: { dispose(): void } | undefined;
@@ -504,8 +517,149 @@ let formattingProvider: { dispose(): void } | undefined;
 let bracketTokenRegistration: { dispose(): void } | undefined;
 let stickySyntaxRegistration: { dispose(): void } | undefined;
 let stickyOutlineRegistration: { dispose(): void } | undefined;
+const emptyResources = new DisposableStore();
+let emptyEditor: stanza.IStandaloneCodeEditor;
 
 window.ashStandaloneIntegration = {
+	prepareTokenTheme: kind => {
+		tokenThemeResources.clear();
+		tokenFactoryCalls = 0;
+		finishTokenProvider = undefined;
+		stanza.editor.defineTheme('token-theme-first', { base: 'vs', inherit: true, rules: [
+			{ token: 'entity', foreground: '123456', fontStyle: 'italic' },
+			{ token: 'comment', foreground: '654321' },
+		], colors: {} });
+		stanza.editor.defineTheme('token-theme-second', { base: 'vs-dark', inherit: true, rules: [
+			{ token: 'entity', foreground: '234567', fontStyle: 'bold' },
+			{ token: 'comment', foreground: '765432' },
+		], colors: {} });
+		stanza.editor.setTheme('token-theme-first');
+		stanza.editor.setModelLanguage(callerModel, 'plaintext');
+		callerEditor.setValue('alpha beta');
+		const state: stanza.IState = { clone: () => state, equals: other => other === state };
+		const plain: stanza.TokensProvider = {
+			getInitialState: () => state,
+			tokenize: () => ({ endState: state, tokens: [{ startIndex: 0, scopes: 'entity.member' }, { startIndex: 6, scopes: 'comment.line' }] }),
+		};
+		if (kind === 'encoded') {
+			stanza.languages.setColorMap(['', '#abcdef', '#ffffff', '#123456']);
+			const languageId = stanza.languages.getEncodedLanguageId('plaintext');
+			tokenThemeResources.add(stanza.languages.setTokensProvider('plaintext', {
+				getInitialState: () => state,
+				tokenizeEncoded: () => ({ endState: state, tokens: new Uint32Array([
+					0, languageId | (3 << MetadataConsts.FOREGROUND_OFFSET) | (2 << MetadataConsts.BACKGROUND_OFFSET) | (FontStyle.Bold << MetadataConsts.FONT_STYLE_OFFSET),
+					6, languageId | (1 << MetadataConsts.FOREGROUND_OFFSET) | (2 << MetadataConsts.BACKGROUND_OFFSET),
+				]) }),
+			}));
+			tokenThemeResources.add(toDisposable(() => stanza.languages.setColorMap(null)));
+		} else if (kind === 'monarch-embedded') {
+			tokenThemeResources.add(stanza.languages.registerLanguages([
+				{ description: { id: 'monarch-host' } }, { description: { id: 'monarch-child' } },
+			]));
+			tokenThemeResources.add(stanza.languages.onLanguageEncountered('monarch-child', () => {
+				tokenFactoryCalls++;
+				tokenThemeResources.add(stanza.languages.setTokensProvider('monarch-child', plain));
+			}));
+			tokenThemeResources.add(stanza.languages.setMonarchTokensProvider('monarch-host', {
+				tokenizer: {
+					root: [
+						[/<</, { token: 'delimiter', next: '@embedded', nextEmbedded: 'monarch-child' }],
+						[/>>/, 'delimiter'], [/\w+/, 'identifier'], [/\s+/, ''],
+					],
+					embedded: [[/>>/, { token: '@rematch', next: '@pop', nextEmbedded: '@pop' }]],
+				},
+			}));
+			callerEditor.setValue('<<alpha beta>> tail');
+			stanza.editor.setModelLanguage(callerModel, 'monarch-host');
+		} else if (kind === 'monarch') {
+			tokenThemeResources.add(stanza.languages.registerLanguages([{ description: { id: 'monarch-live' } }]));
+			tokenThemeResources.add(stanza.languages.setMonarchTokensProvider('monarch-live', {
+				keywords: ['alpha'],
+				tokenizer: {
+					root: [
+						[/\/\*/, 'comment', '@comment'],
+						[/[a-z]+/, { cases: { '@keywords': 'entity.member', '@default': 'identifier' } }],
+						[/\s+/, ''],
+					],
+					comment: [[/\*\//, 'comment', '@pop'], [/[^*]+/, 'comment'], [/\*/, 'comment']],
+				},
+			}));
+			callerEditor.setValue('alpha /* note\nbeta */ gamma');
+			stanza.editor.setModelLanguage(callerModel, 'monarch-live');
+		} else if (kind === 'activation') {
+			tokenThemeResources.add(stanza.languages.registerLanguages([{ description: { id: 'activation-test' } }]));
+			tokenThemeResources.add(stanza.languages.onLanguage('activation-test', () => {
+				tokenFactoryCalls++;
+				tokenThemeResources.add(stanza.languages.setTokensProvider('activation-test', plain));
+			}));
+			stanza.editor.setModelLanguage(callerModel, 'activation-test');
+			stanza.editor.setModelLanguage(callerModel, 'plaintext');
+			stanza.editor.setModelLanguage(callerModel, 'activation-test');
+		} else if (kind === 'lazy') {
+			tokenThemeResources.add(stanza.languages.registerTokensProviderFactory('plaintext', {
+				create: () => {
+					tokenFactoryCalls++;
+					return new Promise(resolve => { finishTokenProvider = () => resolve(plain); });
+				},
+			}));
+		} else {
+			tokenThemeResources.add(stanza.languages.setTokensProvider('plaintext', plain));
+		}
+		callerEditor.focus();
+	},
+	removeMonarchCommentStart: () => {
+		callerEditor.executeEdits('monarch-test', [{ range: new stanza.Range(1, 7, 1, 9), text: '  ' }]);
+	},
+	colorizePreview: async () => {
+		const modelsBefore = stanza.editor.getModels().length;
+		const element = document.createElement('pre');
+		element.id = 'colorized-preview';
+		element.setAttribute('data-lang', callerModel.getLanguageId());
+		element.textContent = 'alpha\t<img src=x onerror=alert(1)>\n/* hello */';
+		document.body.append(element);
+		tokenThemeResources.add(toDisposable(() => element.remove()));
+		await stanza.editor.colorizeElement(element, { theme: 'token-theme-first', tabSize: 4 });
+		return { modelsBefore, modelsAfter: stanza.editor.getModels().length };
+	},
+	readTokenTheme: () => {
+		const tokens = callerModel.tokenization.getLineTokens(1);
+		const palette = TokenizationRegistry.getColorMap()!;
+		const metadata = Array.from({ length: tokens.getCount() }, (_, index) => tokens.getMetadata(index));
+		return {
+			colors: metadata.map(value => Color.Format.CSS.formatHex(palette[TokenMetadata.getForeground(value)]!)),
+			styles: metadata.map(value => TokenMetadata.getFontStyle(value)),
+			languages: metadata.map((_, index) => tokens.getLanguageId(index)),
+			html: callerEditor._getViewModel()!.getRichTextToCopy([callerModel.getFullModelRange()], false)?.html ?? null,
+			factoryCalls: tokenFactoryCalls,
+		};
+	},
+	finishTokenProvider: () => {
+		if (!finishTokenProvider) throw new Error('Token provider was not requested');
+		finishTokenProvider();
+	},
+	removeTokenProvider: () => tokenThemeResources.clear(),
+	createEmptyEditor: () => {
+		listener.dispose();
+		emptyResources.clear();
+		const container = document.createElement('div');
+		container.id = 'empty';
+		document.body.append(container);
+		emptyResources.add(toDisposable(() => container.remove()));
+		const modelsBefore = stanza.editor.getModels().length;
+		emptyEditor = emptyResources.add(stanza.editor.create(container, { model: null, value: 'ignored' }));
+		emptyEditor.layout({ width: 600, height: 240 });
+		if (emptyEditor.getModel() !== null) throw new Error('Empty editor allocated a model');
+		return { modelsAdded: stanza.editor.getModels().length - modelsBefore, model: null, id: emptyEditor.getId() };
+	},
+	attachEmptyEditor: () => {
+		emptyEditor.setModel(callerModel);
+		emptyEditor.layout({ width: 600, height: 240 });
+		emptyEditor.focus();
+	},
+	detachEmptyEditor: () => {
+		emptyEditor.setModel(null);
+		return { value: callerModel.getValue(), modelDisposed: callerModel.isDisposed() };
+	},
 	updateContributionOptions: options => callerEditor.updateOptions(options),
 	readContributionDecorations: () => {
 		const decorations = callerModel.getAllDecorations();
@@ -598,7 +752,7 @@ window.ashStandaloneIntegration = {
 			hidden: callerEditor._getViewModel()!.getHiddenAreas().map(range => [range.startLineNumber, range.endLineNumber]),
 		};
 	},
-	setStickyTheme: name => stanza.editor.setTheme(name),
+	setStickyTheme: name => callerEditor.updateOptions({ theme: name }),
 	layoutContribution: (width, height = 180) => callerEditor.layout({ width, height }),
 	prepareCompletionGeometry: scrolled => {
 		const lineNumber = scrolled ? 40 : 1;
@@ -734,7 +888,7 @@ window.ashStandaloneIntegration = {
 	},
 	readFoldingCommandState: () => ({
 		supported: callerEditor.getAction('editor.foldAll')!.isSupported(),
-		inChordMode: StandaloneServices.get().instantiationService.get(IKeybindingService).inChordMode,
+		inChordMode: StandaloneServices.get(IKeybindingService).inChordMode,
 	}),
 	runFoldingCommand: (command, args) => callerEditor.invokeWithinContext(accessor => accessor.get(ICommandService).executeCommand<void>(command, args)),
 	readFoldingMetadata: command => {
@@ -812,8 +966,8 @@ window.ashStandaloneIntegration = {
 	readStickyMenu: () => ({
 		callerEnabled: callerEditor.getOption(EditorOption.stickyScroll).enabled,
 		ownedEnabled: ownedEditor.getOption(EditorOption.stickyScroll).enabled,
-		inChordMode: StandaloneServices.get().instantiationService.get(IKeybindingService).inChordMode,
-		errors: StandaloneServices.get().instantiationService.get(INotificationService).getNotifications().map(item => item.message),
+		inChordMode: StandaloneServices.get(IKeybindingService).inChordMode,
+		errors: StandaloneServices.get(INotificationService).getNotifications().map(item => item.message),
 	}),
 	finishLanguageRequest: async index => {
 		languageRequests[index]!.finish();
@@ -877,7 +1031,7 @@ window.ashStandaloneIntegration = {
 		if (global) {
 			const command = CommandsRegistry.getCommand(id);
 			if (!command) throw new Error(`Missing parameter hint command: ${id}`);
-			await StandaloneServices.get().instantiationService.invokeFunction(accessor => command(accessor));
+			await StandaloneServices.get(IInstantiationService).invokeFunction(accessor => command(accessor));
 		} else {
 			callerEditor.trigger('test', id, {});
 		}
@@ -1156,9 +1310,9 @@ window.ashStandaloneIntegration = {
 		});
 	},
 	readInlineRequests: () => {
-		const service = StandaloneServices.get().instantiationService.get(ILanguageFeatureDebounceService);
+		const service = StandaloneServices.get(ILanguageFeatureDebounceService);
 		const other = ownedEditor.invokeWithinContext(accessor => accessor.get(ILanguageFeatureDebounceService));
-		const features = StandaloneServices.get().instantiationService.get(ILanguageFeaturesService);
+		const features = StandaloneServices.get(ILanguageFeaturesService);
 		return {
 			requests: inlineRequests.map(request => ({ kind: request.kind, text: request.text, languageId: request.languageId, aborted: request.signal.aborted })),
 			delay: service.for(features.inlineCompletionsProvider, 'Inline completions', { min: 50, max: 500 }).get(callerModel),
@@ -1507,7 +1661,7 @@ window.ashStandaloneIntegration = {
 		callerEditor.focus();
 	},
 	runEditorActivity: async () => {
-		const editors = StandaloneServices.get().instantiationService.get(ICodeEditorService);
+		const editors = StandaloneServices.get(ICodeEditorService);
 		const outside = document.createElement('button');
 		const container = document.createElement('div');
 		document.body.append(outside, container);
@@ -1538,7 +1692,7 @@ window.ashStandaloneIntegration = {
 		}
 	},
 	runHistoryCommands: async useAlias => {
-		const services = StandaloneServices.get().instantiationService;
+		const services = StandaloneServices.get(IInstantiationService);
 		const outside = document.createElement('button');
 		document.body.append(outside);
 		callerEditor.setValue('alpha');
@@ -1585,11 +1739,11 @@ window.ashStandaloneIntegration = {
 	},
 	runInputHistoryCommand: async id => {
 		const command = CommandsRegistry.getCommand(id)!;
-		await StandaloneServices.get().instantiationService.invokeFunction(accessor => command(accessor));
+		await StandaloneServices.get(IInstantiationService).invokeFunction(accessor => command(accessor));
 		return [callerEditor.getValue(), ownedEditor.getValue()];
 	},
 	runSelectAllCommand: async () => {
-		const services = StandaloneServices.get().instantiationService;
+		const services = StandaloneServices.get(IInstantiationService);
 		const command = CommandsRegistry.getCommand('editor.action.selectAll')!;
 		const outside = document.createElement('button');
 		document.body.append(outside);
@@ -1658,7 +1812,7 @@ window.ashStandaloneIntegration = {
 			outside.focus();
 			await new Promise(resolve => setTimeout(resolve, 0));
 			read('outside');
-			const services = StandaloneServices.get().instantiationService;
+			const services = StandaloneServices.get(IInstantiationService);
 			const editors = services.get(ICodeEditorService);
 			const activeAfterBlur = editors.getActiveCodeEditor() === callerEditor;
 			const action = [...EditorExtensionsRegistry.getEditorActions()].find(action => action.id === 'editor.action.copyLinesDownAction');
@@ -1716,7 +1870,7 @@ window.ashStandaloneIntegration = {
 		callerEditor.updateOptions({ readOnly: target === 'readonly' });
 		const outside = document.createElement('button');
 		document.body.append(outside);
-		const clipboard = StandaloneServices.get().instantiationService.get(IClipboardService);
+		const clipboard = StandaloneServices.get(IClipboardService);
 		const readText = clipboard.readText;
 		const writeText = clipboard.writeText;
 		const execCommand = document.execCommand;
@@ -1736,7 +1890,7 @@ window.ashStandaloneIntegration = {
 			await new Promise(resolve => setTimeout(resolve, 0));
 			const id = { copy: 'editor.action.clipboardCopyAction', cut: 'editor.action.clipboardCutAction', paste: 'editor.action.clipboardPasteAction' }[command];
 			const action = CommandsRegistry.getCommand(id)!;
-			await StandaloneServices.get().instantiationService.invokeFunction(accessor => action(accessor));
+			await StandaloneServices.get(IInstantiationService).invokeFunction(accessor => action(accessor));
 			return { values: [callerEditor.getValue(), ownedEditor.getValue()], written, reads, focused: callerEditor.hasTextFocus(), documentCommands };
 		} finally {
 			clipboard.readText = readText;
@@ -1918,7 +2072,7 @@ window.ashStandaloneIntegration = {
 		};
 	},
 	configureAccessibility: (hostEnabled, option) => {
-		const service = StandaloneServices.get().instantiationService.get(IAccessibilityService);
+		const service = StandaloneServices.get(IAccessibilityService);
 		service.setAccessibilitySupport(hostEnabled ? AccessibilitySupport.Enabled : AccessibilitySupport.Disabled);
 		callerEditor.updateOptions({ accessibilitySupport: option, wrappingIndent: 'indent' });
 		callerEditor.focus();
@@ -1966,7 +2120,7 @@ window.ashStandaloneIntegration = {
 	},
 	setParentFontSize: () => callerEditor.updateOptions({ fontSize: 18 }),
 	setTestMarkers: enabled => {
-		const markers = StandaloneServices.get().instantiationService.get(IMarkerService);
+		const markers = StandaloneServices.get(IMarkerService);
 		if (enabled) markers.set('integration', [{ resource: callerResource, range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 3 } }, severity: MarkerSeverity.Error, message: 'Test marker' }]);
 		else markers.remove('integration');
 	},
@@ -2346,11 +2500,13 @@ window.ashStandaloneIntegration = {
 	},
 	releaseOwned: () => ownedEditor.dispose(),
 	dispose: () => {
+		emptyResources.dispose();
 		contributionProviders.dispose();
 		for (const request of contributionRequests) {
 			request.finish(true);
 		}
 		languageRequestProviders.dispose();
+		tokenThemeResources.dispose();
 		parameterHintsRegistration?.dispose();
 		for (const request of parameterHintRequests) request.finish('empty');
 		renameRegistration?.dispose();

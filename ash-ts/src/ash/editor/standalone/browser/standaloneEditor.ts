@@ -4,26 +4,13 @@ import { ContentWidgetPositionPreference, OverlayWidgetPositionPreference, type 
 import { type CodeEditorWidgetOptions } from '../../browser/widget/codeEditor/codeEditorWidget.js';
 import { PositionAffinity, type ITextModel } from "../../common/model.js";
 import { TextModel } from "../../common/model/textModel.js";
-import { type NamedEditorThemeData } from "../common/namedEditorTheme.js";
-import { createTextModel, StandaloneEditor, type IStandaloneCodeEditor } from './standaloneCodeEditor.js';
+import { IStandaloneThemeService, type IStandaloneThemeData, type NamedEditorThemeData } from "../common/standaloneTheme.js";
+import { ICodeEditorService } from '../../browser/services/codeEditorService.js';
+import { IModelService } from '../../common/services/model.js';
+import { ILanguageService } from '../../common/languages/language.js';
+import { createTextModel, StandaloneEditor, type IStandaloneCodeEditor, type IStandaloneEditorConstructionOptions } from './standaloneCodeEditor.js';
 import { StandaloneServices, type StandaloneServiceOverrides } from "./standaloneServices.js";
-
-type StandaloneCodeEditorOptions = Omit<CodeEditorWidgetOptions,
-	"container" | "input" | "languageId" | "model" |
-	"editorWorkerFactory" | "completionWorkerFactory" | "codeEditorService" |
-	"registerBeforeSave" | "formatOnSave"
->;
-
-export interface IStandaloneEditorConstructionOptions extends StandaloneCodeEditorOptions {
-	readonly model?: ITextModel;
-	readonly value?: string;
-	readonly language?: string;
-	readonly resource?: URI;
-	readonly label?: string;
-	readonly readOnly?: boolean;
-	readonly theme?: string;
-	readonly autoDetectHighContrast?: boolean;
-}
+import { Colorizer, type IColorizerElementOptions, type IColorizerOptions } from './colorizer.js';
 
 export interface IStandaloneEditorApi {
 	readonly ContentWidgetPositionPreference: typeof ContentWidgetPositionPreference;
@@ -40,7 +27,10 @@ export interface IStandaloneEditorApi {
 	readonly onWillDisposeModel: typeof onWillDisposeModel;
 	readonly onDidChangeModelLanguage: typeof onDidChangeModelLanguage;
 	readonly defineNamedTheme: typeof defineNamedTheme;
+	readonly defineTheme: typeof defineTheme;
 	readonly setTheme: typeof setTheme;
+	readonly colorize: typeof colorize;
+	readonly colorizeElement: typeof colorizeElement;
 }
 
 const contentWidgetPositionPreference = Object.freeze({
@@ -55,19 +45,19 @@ const overlayWidgetPositionPreference = Object.freeze({
 });
 
 export function onDidCreateEditor(listener: (codeEditor: ICodeEditor) => void): IDisposable {
-	return StandaloneServices.get().codeEditorService.onCodeEditorAdd(listener);
+	return StandaloneServices.get(ICodeEditorService).onCodeEditorAdd(listener);
 }
 
-export function onDidCreateModel(listener: (model: TextModel) => void): IDisposable {
-	return StandaloneServices.get().modelService.onModelAdded(listener);
+export function onDidCreateModel(listener: (model: ITextModel) => void): IDisposable {
+	return StandaloneServices.get(IModelService).onModelAdded(listener);
 }
 
-export function onWillDisposeModel(listener: (model: TextModel) => void): IDisposable {
-	return StandaloneServices.get().modelService.onModelRemoved(listener);
+export function onWillDisposeModel(listener: (model: ITextModel) => void): IDisposable {
+	return StandaloneServices.get(IModelService).onModelRemoved(listener);
 }
 
-export function onDidChangeModelLanguage(listener: (event: { readonly model: TextModel; readonly oldLanguage: string }) => void): IDisposable {
-	return StandaloneServices.get().modelService.onModelLanguageChanged(event => listener({ model: event.model, oldLanguage: event.oldLanguageId }));
+export function onDidChangeModelLanguage(listener: (event: { readonly model: ITextModel; readonly oldLanguage: string }) => void): IDisposable {
+	return StandaloneServices.get(IModelService).onModelLanguageChanged(event => listener({ model: event.model, oldLanguage: event.oldLanguageId }));
 }
 
 /** Creates one browser editor. A supplied model must come from createModel(). */
@@ -98,56 +88,70 @@ export function create(
 	if (theme !== undefined) services.themeService.setTheme(theme);
 	if (autoDetectHighContrast !== undefined) services.themeService.setAutoDetectHighContrast(autoDetectHighContrast);
 	const languageId = services.languageService.getLanguageIdByMimeType(language) ?? language;
-	const model = suppliedModel ?? services.modelService.createModel(value ?? "", services.languageService.createById(languageId), resource);
+	const model = suppliedModel === undefined
+		? services.modelService.createModel(value ?? "", services.languageService.createById(languageId), resource)
+		: suppliedModel;
 	const ownsModel = suppliedModel === undefined;
 	try {
-		if (services.modelService.getModel(model.uri) !== model) throw new ReferenceError('Standalone editor model is not registered with the model service');
+		if (model && services.modelService.getModel(model.uri) !== model) throw new ReferenceError('Standalone editor model is not registered with the model service');
 		const editorOptions: CodeEditorWidgetOptions = {
 			...browserOptions,
 			container: domElement,
-			input: { resource: model.uri, label, readOnly },
-			languageId: model.getLanguageId(),
+			input: { resource: model?.uri, label, readOnly },
+			languageId: model?.getLanguageId() ?? 'plaintext',
 			model,
 			editorWorkerFactory: services.editorWorkerFactory,
 			completionWorkerFactory: services.completionWorkerFactory,
 		};
-		return services.instantiationService.createInstance(StandaloneEditor, editorOptions, model, ownsModel);
+		return services.createInstance(StandaloneEditor, editorOptions, model, ownsModel);
 	} catch (error) {
-		if (ownsModel) model.dispose();
+		if (ownsModel) model?.dispose();
 		throw error;
 	}
 }
 
 export function createModel(value: string, language?: string, uri?: URI): ITextModel {
-	const services = StandaloneServices.get();
+	const services = StandaloneServices.initialize();
 	const languageId = services.languageService.getLanguageIdByMimeType(language) || language;
 	return createTextModel(services.modelService, services.languageService, value, languageId, uri);
 }
 
 export function getModel(uri: URI): ITextModel | null {
-	return StandaloneServices.get().modelService.getModel(uri);
+	return StandaloneServices.get(IModelService).getModel(uri);
 }
 
 export function getModels(): ITextModel[] {
-	return StandaloneServices.get().modelService.getModels();
+	return StandaloneServices.get(IModelService).getModels();
 }
 
 export function setModelLanguage(model: ITextModel, mimeTypeOrLanguageId: string): void {
-	const languageService = StandaloneServices.get().languageService;
+	const languageService = StandaloneServices.get(ILanguageService);
 	const languageId = languageService.getLanguageIdByMimeType(mimeTypeOrLanguageId) ?? (mimeTypeOrLanguageId || 'plaintext');
 	model.setLanguage(languageService.createById(languageId));
 }
 
 export function getEditors(): readonly ICodeEditor[] {
-	return StandaloneServices.get().codeEditorService.listCodeEditors();
+	return StandaloneServices.get(ICodeEditorService).listCodeEditors();
 }
 
 export function defineNamedTheme(themeId: string, themeData: NamedEditorThemeData): void {
-	StandaloneServices.get().themeService.defineNamedTheme(themeId, themeData);
+	StandaloneServices.get(IStandaloneThemeService).defineNamedTheme(themeId, themeData);
+}
+
+export function defineTheme(themeName: string, themeData: IStandaloneThemeData): void {
+	StandaloneServices.get(IStandaloneThemeService).defineTheme(themeName, themeData);
 }
 
 export function setTheme(themeId: string): void {
-	StandaloneServices.get().themeService.setTheme(themeId);
+	StandaloneServices.get(IStandaloneThemeService).setTheme(themeId);
+}
+
+export function colorize(text: string, languageId: string, options: IColorizerOptions = {}): Promise<string> {
+	return Colorizer.colorize(StandaloneServices.get(ILanguageService), text, languageId, options);
+}
+
+export function colorizeElement(domNode: HTMLElement, options: IColorizerElementOptions = {}): Promise<void> {
+	return Colorizer.colorizeElement(StandaloneServices.get(IStandaloneThemeService), StandaloneServices.get(ILanguageService), domNode, options);
 }
 
 export function createStandaloneEditorApi(): IStandaloneEditorApi {
@@ -166,7 +170,10 @@ export function createStandaloneEditorApi(): IStandaloneEditorApi {
 		onWillDisposeModel,
 		onDidChangeModelLanguage,
 		defineNamedTheme,
+		defineTheme,
 		setTheme,
+		colorize,
+		colorizeElement,
 	});
 }
 

@@ -30,10 +30,12 @@ export class TokenizationRegistry<TSupport> implements ITokenizationRegistry<TSu
 		this.factories.get(languageId)?.dispose();
 		const pending = new SupportFactory(this, languageId, factory);
 		this.factories.set(languageId, pending);
+		this.handleChange([languageId]);
 		return toDisposable(() => {
 			if (this.factories.get(languageId) !== pending) return;
 			this.factories.delete(languageId);
 			pending.dispose();
+			this.handleChange([languageId]);
 		});
 	}
 

@@ -118,9 +118,9 @@ Workbench 模式 contribution 是唯一能力选择点。Code 与 Academic 各�
 | `LineDocumentSnapshot` | 有序逻辑行与 mark/atom/facet/region/relation 的单版本只读视图 | schema projection、codec、renderer、model tests |
 | `ITextBuffer` | `common/model.ts` 拥有的字符与物理行存储 contract；PieceTree 是当前私有实现 | TextModel edit、snapshot、worker mirror、maintenance |
 | `CodeEditorWidget` | Code 模式的行式 DOM projection 与 input/navigation surface | viewport、accessibility、contributed controllers |
-| `StandaloneServices` | standalone 窗口级 model/language-identity/language-configuration/language-features/theme/worker 服务；服务与 worker 只允许首次初始化覆盖，theme 始终由 `NamedEditorThemeService` 拥有 | `editor.api.ts`、standalone 生命周期测试、调试入口 |
+| `StandaloneServices` | standalone 窗口级 model/language-identity/language-configuration/language-features/theme/worker 服务；服务与 worker 只允许首次初始化覆盖，theme 始终由 `StandaloneThemeService` 拥有 | `editor.api.ts`、standalone 生命周期测试、调试入口 |
 | `StandaloneEditor` | `standaloneCodeEditor.ts` 的独立编辑器 owner；绑定主题、决定 model 所有权，并让 `create`、创建事件与 editor registry 共享同一对象身份 | `standaloneEditor.ts`、model/editor 生命周期测试 |
-| `NamedEditorThemeService` | 命名主题注册、默认 Light、活动主题切换与系统高对比度投影；不读取 Workbench 配置 | `editor.create` 的 `theme`/`autoDetectHighContrast`、`editor.defineNamedTheme/setTheme`、主题服务测试 |
+| `StandaloneThemeService` | 命名主题注册、默认 Light、活动主题切换与系统高对比度投影；不读取 Workbench 配置 | `editor.create` 的 `theme`/`autoDetectHighContrast`、`editor.defineNamedTheme/setTheme`、主题服务测试 |
 | `CodeEditorContributions` | 每次模型挂载的贡献创建、延迟调度与释放；Quick Diff 也走同一创建路径 | 模型切换、首次交互、失败后仍可渲染、显式获取贡献 |
 | `registerEditorContribution` | 编辑器贡献的统一注册；构造器、视图前配置、视图后安装共用 ID 和注册顺序 | `editor.*.all.ts`、text/document 挂载点和 contribution 顺序 |
 | `RichTextEditorWidget` | 结构化节点、marks、selection 与 node-view lifecycle | schema profile、clipboard、collaboration decoration |
@@ -129,7 +129,17 @@ Workbench 模式 contribution 是唯一能力选择点。Code 与 Academic 各�
 
 如果 common model 开始 import Workbench/generated DTO、contribution 开始拥有第二套 model state、或产品 ID 出现在 feature/controller 中，即表示所有权已经漂移。
 
-Standalone 调用者通过 `ash-light`、`ash-dark`、`ash-high-contrast-light`、`ash-high-contrast-dark` 这些内置主题名，或通过 `editor.defineNamedTheme` 注册的自定义主题名调用 `editor.setTheme`。`IColorTheme` 与编译后的内置主题快照属于 `platform/theme` 和 `NamedEditorThemeService` 的内部状态，不从 `editor.api.ts` 导出，也不能通过 standalone service override 注入。
+Standalone 调用者通过 `ash-light`、`ash-dark`、`ash-high-contrast-light`、`ash-high-contrast-dark` 这些内置主题名，或通过 `editor.defineNamedTheme` 注册的自定义主题名调用 `editor.setTheme`。`IColorTheme` 与编译后的内置主题快照属于 `platform/theme` 和 `StandaloneThemeService` 的内部状态，不从 `editor.api.ts` 导出，也不能通过 standalone service override 注入。
+
+`editor.defineTheme` 接受标准 `base`、`inherit`、`rules` 和 `colors`，内置基底为 `vs`、`vs-dark`、`hc-black`、`hc-light`，颜色来自 Ash 平台主题。`languages.setTokensProvider` 接受普通或编码 tokenizer，`registerTokensProviderFactory` 按模型需要延迟创建。两者进入同一个 TokenizationRegistry；主题切换同步更新着色与复制使用的颜色表。`languages.setColorMap` 可以设置编码颜色表，传入 `null` 恢复当前主题的颜色表。
+
+`languages.onLanguage` 在模型首次使用语言时激活，`onLanguageEncountered` 也接收 Monarch 嵌入语言的首次使用。监听可在服务初始化前注册并释放；`getLanguages` 返回独立的语言描述。`setMonarchTokensProvider` 编译声明式规则，状态随模型的逐行分词缓存传递；规则支持 include、捕获组、条件、状态栈、rematch 和嵌入语言，使用同一主题及语言编码表。注册和延迟创建的 tokenizer 随返回句柄释放。
+
+`editor.colorize` 和 `colorizeElement` 使用相同 tokenizer 生成一次性的 HTML，复用已有的 HTML 转义与 token 样式序列化，不创建模型或 Worker。元素入口读取 `lang` / `data-lang`，也可通过 `mimeType` 指定语言；片段需要更新时由调用者重新着色。
+
+`editor.create({ model: null })` 创建尚未挂接模型的编辑器，不分配文本模型或 Worker；后续 `setModel` 挂接已注册的模型，编辑器身份保持不变。`updateOptions` 接受 `theme` 和 `autoDetectHighContrast`，它们修改同一窗口的共享主题。内部通过 `StandaloneServices.get(serviceId)` 获取服务，`initialize` 返回该窗口的实例化容器。
+
+完整 standalone 入口提供 F1 命令面板和“切换高对比度主题”动作。平台 QuickInputController 统一负责选择弹层和焦点恢复；Workbench 使用窗口宿主，standalone 使用当前编辑器宿主，并随编辑器释放。命令面板枚举当前可用的编辑器动作，执行仍走原动作、上下文条件和错误通知链。
 
 ## 失败与兼容边界
 

@@ -316,9 +316,15 @@ export interface TokenizationResult {
 	readonly endState: IState;
 }
 
+export interface EncodedTokenizationResult {
+	readonly tokens: Uint32Array;
+	readonly endState: IState;
+}
+
 export interface ITokenizationSupport {
 	getInitialState(): IState;
 	tokenize(line: string, hasEOL: boolean, state: IState): TokenizationResult;
+	tokenizeEncoded?(line: string, hasEOL: boolean, state: IState): EncodedTokenizationResult;
 }
 
 export const TokenizationRegistry: ITokenizationRegistry<ITokenizationSupport> = new TokenizationRegistryImpl();

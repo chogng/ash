@@ -1,5 +1,126 @@
 # Editor API 对齐状态
 
+## Standalone 目录对齐（2026-09-22，进行中）
+
+起始工作树干净，基线 `9526e1364`。完整目录调查为 6 个同路径文件、3 个仅 Ash 文件、26 个仅上游生产文件（20 个 TypeScript、4 个 CSS、2 个图像）。名称差异只用来调查，不作为实现队列或完成指标。
+
+用户已确认：将 `standalone/browser/namedEditorThemeService.ts` 迁入 `standalone/browser/standaloneThemeService.ts`，将 `standalone/common/namedEditorTheme.ts` 迁入 `standalone/common/standaloneTheme.ts`；迁完全部引用后删除两个旧路径，Git 基线可恢复。保留 `standalone/common/builtinLanguages.ts` 的内置语言装配职责，保留语言批量注册、provider 批量替换和 Worker 工厂注入能力。
+
+首批准入链：`editor.create / setTheme / defineNamedTheme` → StandaloneServices → 单窗口主题服务 → 原主题注册表与强制颜色监听 → 已有主题绑定更新 → 主题服务单测、公开入口单测与真实浏览器主题场景。主题数据仍由平台颜色注册表编译，编辑器根、菜单根、焦点、布局和模型状态的 owner 不变。
+
+| 准确路径（相对 `ash-ts/src/ash/editor/`） | 关系 | 首批动作 |
+| --- | --- | --- |
+| `standalone/browser/namedEditorThemeService.ts` → `standalone/browser/standaloneThemeService.ts` | 仅 Ash → 仅上游 | 迁移原实现，统一类名，保留主题状态和监听释放 |
+| `standalone/common/namedEditorTheme.ts` → `standalone/common/standaloneTheme.ts` | 仅 Ash → 仅上游 | 迁移主题契约，保留已确认的 Ash 主题数据 |
+| `standalone/browser/standaloneServices.ts`、`standaloneEditor.ts`、`editor.api.ts` | 双方都有 | 同批迁移上述主题引用，不建立别名或第二个服务 |
+| `test/browser/namedEditorThemeService.test.ts`、`standaloneEditor.test.ts` | 既有测试 | 原主题和公开入口行为回归 |
+| `README.md`、`api-alignment-status.md` | 既有文档 | 更新当前归属与验证，保留历史记录 |
+
+初始调查确认：`model: null` 尚不支持；构造选项类型位于错误 owner；运行时主题选项没有进入主题服务；StandaloneServices 使用固定字段集合而非标准服务参数；DiffWidget 是只读差异展示，不提供两侧可编辑器，不能包一层便称为完整 standalone diff；Quick Input 只有选择列表契约，缺少快捷入口；TokenizationRegistry 已存在，但标准 token 主题、provider 适配与 Monarch 尚未接通。后续修改须逐条补齐所需 owner 和真实调用，不预建外围文件。
+
+基线 `typecheck:stanza` 在 Node 24.21.0 下通过。系统默认 Node 25 的首次命令被仓库版本检查拒绝；没有据此跳过检查。本段暂不声明功能完成。
+
+创建续批准入：`editor.create({ model: null }) / updateOptions` → StandaloneEditor → CodeEditorWidget 原模型挂接槽 / 原主题服务 → 无模型时不创建 TextModel 或 Worker，后续挂接 caller model，运行时切换主题。增加准确路径 `browser/widget/codeEditor/codeEditorWidget.ts`（双方都有，仅构造时允许空模型）、`standalone/browser/standaloneCodeEditor.ts`（选项类型归位、主题选项转交）、既有 `test/integration/browser/standalone.integration.ts` / `.spec.ts`（仓库根下 `ash-ts/`）。模型与 DOM 的原 owner、挂接和释放机制不变。
+
+服务续批准入：现有 editor / languages API → `StandaloneServices.get(serviceId)` → 唯一窗口容器 → 现有模型、语言、命令与主题实例。`StandaloneServiceCollection` 直接成为原 ServiceContainer 的窗口作用域，取消内部第二个容器和无参数 get；保留已确认的 Worker 注入数据。准确新增修改范围为 `standalone/browser/standaloneLanguages.ts` 及既有 `ash-ts/test/integration/browser/language.integration.ts`，其余沿用前两批路径。所有注册、创建与释放仍走原容器实现，不引入额外查找机制。
+
+已实现并经定向行为验证：两个主题文件迁移及旧引用退出；构造选项类型回到 `standaloneCodeEditor.ts`；`model: null` 创建时没有模型和 Worker，后续可挂接、编辑并释放 caller model；编辑器 ID 在无模型时就确定并保持稳定；`updateOptions` 的主题与自动高对比度选项进入唯一主题服务；模型事件使用 `ITextModel`；语言变化事件保留调用上下文和外部释放容器。主题实现目前仍采用已确认的 Ash 主题数据，不把路径迁移算成完整 token 主题契约完成。
+
+### 尚未闭合的完整目录清单
+
+以下路径均相对 `standalone/`，记录尚未闭合的职责；已有文件仍不代表完整契约。主题、命令选择弹层、高对比度动作、token 规则、Monarch 与独立着色接通后为 18 个同路径、1 个保留的 Ash 文件、14 个缺失生产文件。
+
+| 上游缺失路径 | 当前下层条件 |
+| --- | --- |
+| `browser/standalone-tokens.css` | token 规则、继承和颜色表已进入既有 ViewLine presentation 与富文本复制链；尚无需要单独生成 token class 样式的调用方，不创建空 CSS |
+| `browser/inspectTokens/inspectTokens.ts`、`inspectTokens.css` | 需要完整 token 结果、主题解释及真实检查控件；目前未注册检查动作 |
+| `browser/standaloneLayoutService.ts` | Quick Input 服务与样式已落位，使用共享 Controller 和 editor 现有容器几何；统一 LayoutService、输入框、Quick Access 前缀与完整选择契约仍待接通 |
+| `browser/quickAccess/standaloneGotoSymbolQuickAccess.ts`、`standaloneHelpQuickAccess.ts` | 命令面板文件已接通 F1、筛选与动作执行；通用 Quick Access registry/provider 契约仍待闭合。Go to Line action 仍使用已确认保留的 Ash 输入框；符号迁移需同时迁移 Workbench 入口 |
+| `browser/referenceSearch/standaloneReferenceSearch.ts` | 本地引用跳转由现有语言导航控制器和 PeekViewWidget 承担；标准 ReferencesController 状态与模型链尚未对齐 |
+| `browser/standaloneWebWorker.ts`、`browser/services/standaloneWebWorkerService.ts` | 当前是模型绑定的编辑 Worker 与既有消息端口；标准通用 Worker 服务、代理与多资源同步仍缺失 |
+| `browser/standaloneTreeSitterLibraryService.ts` | 未发现本地同契约 Tree-sitter 库服务与加载链 |
+| `browser/iPadShowKeyboard/iPadShowKeyboard.ts`、`iPadShowKeyboard.css`、`keyboard-dark.svg`、`keyboard-light.svg` | 现有输入 owner 没有这条设备专用入口；需实际设备语义与焦点验证，不能只放图像与按钮 |
+
+已有文件仍待核对的端口：
+
+- `standaloneEditor.ts`：Diff / Multi-file Diff 创建和列表事件；命令、动作和按键注册；marker 读写及事件；Worker；同步 model-line 着色 / tokenize；字体重测；link / editor opener。独立字符串和元素着色以及标准 defineTheme 已接通。上游 API 工厂的产品品牌命名与 Ash 工厂命名差异单列，不据此复制上游产品标识。
+- `standaloneCodeEditor.ts`：实例 command / action / context key；完整全局模型配置；StandaloneCodeEditor 与可编辑 StandaloneDiffEditor 的公开契约。现有 DiffEditorWidget 仅绘制只读行，没有原始 / 修改两侧 ICodeEditor，不能伪装为标准 diff editor。
+- `standaloneLanguages.ts`：selector 评分、新符号名与范围语义 token。语言列表、编码、激活事件、同步 / 延迟 / encoded token provider 和 Monarch 已进入真实模型链。现有补全 provider 适配只提取 language ID，尚不能表达完整 scheme / pattern 选择；部分 provider 签名仍是已记录的 Ash 请求形态。
+- `standaloneServices.ts`：通用服务覆盖、动态按键注册、配置批量同步及其模型选项效果。当前 `initialize` 已返回实现 IInstantiationService 的唯一容器，withServices 延迟装配及释放已验证；工厂注入仍保留 Ash 扩展。
+- `standaloneCodeEditorService.ts`：显式 active editor 设置尚无对应 action 消费链；仍保留现有聚焦与最近活动语义。
+
+### 用户已确认的 Ash 底层归属
+
+| 准确路径（相对 `ash-ts/src/ash/`） | 现状与建议 |
+| --- | --- |
+| `platform/quickinput/browser/quickPick.ts` | 仅 Ash；用户已确认迁移并删除。现已迁入 `platform/quickinput/browser/quickInput.ts`，唯一生产消费者同步迁移，旧路径退出；Git 可恢复。平台 QuickInputController 已承接共享弹层，Standalone 和 Workbench 都使用它。 |
+| `editor/common/diff/diffModel.ts`、`diffComputationService.ts`、`lineDiff.ts` | 用户已确认保留共享差异计算与版本有效性。DiffEditorWidget 仍是只读行展示，两侧 CodeEditor、模型切换、编辑后差异和滚动对齐尚未实现；本批没有增加伪装成可编辑器的 createDiffEditor。 |
+| `platform/webWorker/browser/browserWorkerClientPort.ts` | 用户已确认保留 Editor Worker 与 Workbench TextMate 共用的传输和释放实现。base WebWorkerClient 已有请求、取消与失败协议，但标准代理、双向 channel、多资源同步和外部模块加载仍需沿同一协议补齐。 |
+
+用户答复“按建议迁移 Quick Pick，保留共享底层”，确认上表全部建议，包括准确旧路径的删除。共享计算与传输能力继续由现有文件负责，不再重复询问。
+
+下一条 Quick Access 链仍等待已提交的归属确认，未修改以下候选。拟把 `editor/contrib/gotoSymbol/browser/gotoSymbolController.ts`、`gotoSymbol.contribution.ts`、`media/gotoSymbol.css` 的符号查询、选择与键盘行为迁入标准 Quick Access；迁完生产调用方与测试后删除这三个旧路径，Git 可恢复，DocumentSymbolService 继续共享。另拟保留以下 Ash 文件的产品职责，仅迁移服务构造和 QuickPick 接受回调：`workbench/browser/workbenchInteractionServices.ts`、`sessions/browser/actions/sessionsChatActions.ts`、`workbench/contrib/tasks/browser/taskActions.ts`、`workbench/contrib/chat/browser/pane/chatPane.ts`、`workbench/contrib/output/browser/outputActions.ts`、`workbench/contrib/quickaccess/browser/workspaceSymbolsQuickAccess.ts`、`workbench/contrib/remote/browser/remoteActions.ts`、`workbench/contrib/remote/browser/remoteConnectionManagement.ts`、`workbench/services/chat/browser/chatContextPickService.ts`。路径均相对 `ash-ts/src/ash/`。前次对控制器注入 registry / 取消请求的批准不扩展为本次迁移与删除批准。
+
+Quick Input 首批准入：Workbench 命令面板 → WorkbenchQuickInputService → 平台 QuickPick → 原 InputBox / QuickInputList → 筛选、选择、关闭和焦点恢复。修改准确路径限定 `platform/quickinput/browser/quickPick.ts`（已确认仅 Ash，迁入上游同路径 `quickInput.ts` 并删除旧路径）、`workbench/services/quickinput/browser/quickInputService.ts`（双方都有，仅迁移 import 与类名）、本台账。保留当前状态、DOM、事件、样式及生命周期，先用既有 `workbench/services/quickinput/test/browser/quick-input.test.ts` 验证。
+
+前序完整检查已通过：`check-editor-alignment.mjs --test=all`、`build:stanza`；后续批次继续追加受影响验证。
+
+Quick Input 宿主续批准入：F1 / 公开 quickCommand action → StandaloneQuickInputService → 当前 editor 容器的 QuickInputController → 原 QuickPick / InputBox / List → 筛选可用编辑器动作、执行与取消恢复焦点。Workbench 的同一行为也经过该 Controller，窗口布局和上下文仍由 Workbench 服务维护。这里不复制上游 provider 私有实现，也不提前增加没有本地消费者的 Quick Access registry API。
+
+| 准确路径（相对 `ash-ts/src/ash/`） | 关系与本批动作 |
+| --- | --- |
+| `platform/quickinput/browser/quickInputController.ts` | 仅上游；承接现有 WorkbenchQuickInputService 的 DOM 宿主、唯一 active picker 和焦点恢复状态，两种运行环境均实际消费 |
+| `platform/quickinput/browser/quickInput.ts`、`quickInputList.ts` | 已迁移 / 双方都有；本地化现有界面文案，程序设置 value 进入同一筛选事件链 |
+| `platform/quickinput/browser/media/quickInput.css` | 仅上游；迁入 Ash 控件既有样式，不读取或复制上游 CSS |
+| `workbench/services/quickinput/browser/quickInputService.ts`、`media/quickInput.css` | 双方都有；移走共享宿主状态与样式，保留窗口挂载、上下文和布局 |
+| `editor/standalone/browser/quickInput/standaloneQuickInputService.ts`、`standaloneQuickInput.css` | 仅上游；每个实际 editor 使用同一平台 Controller，跟随 editor 生命周期，尺寸约束归 editor 宿主 |
+| `editor/standalone/browser/quickAccess/standaloneCommandsQuickAccess.ts` | 仅上游；标准 quickCommand 动作从当前 editor 的已注册可用动作生成选择项，执行进入现有命令服务 |
+| `editor/standalone/browser/standaloneServices.ts`、`editor/editor.main.ts` | 双方都有；分别注入 standalone Quick Input、装配完整入口动作 |
+| `workbench/services/localization/common/localizationCatalogs.ts` | 既有语言包数据；补本批英文和中文文案，不迁移归属 |
+
+验证限定既有 `workbench/services/quickinput/test/browser/quick-input.test.ts`、`workbench/services/localization/test/common/localizationService.test.ts`，以及 `ash-ts/test/integration/browser/standalone.integration.ts` / `.spec.ts`。第一条实际 F1 链验证通过后，再继续符号入口等上层功能。
+
+F1 首条行为链及现有浏览器全量 611 项通过；Quick Input / 本地化定向单测 10 项通过。程序设置 value 的事件原已由 InputBox 发出，本批保留该机制并验证只通知一次。
+
+高对比度动作准入：F1 命令面板 → 标准 `editor.action.toggleHighContrast` → 唯一 StandaloneThemeService → 已有主题绑定 → 全窗口编辑器切换对应明暗高对比度，再次执行恢复原主题。新增准确路径 `editor/standalone/browser/toggleHighContrast/toggleHighContrast.ts`（仅上游，独立动作实现）；其余变更限定已准入的 `editor/editor.main.ts`、语言包、standalone 浏览器测试和本台账。不改动主题注册表、强制颜色检测或 CSS。
+
+Token 主题续批准入：宿主通过 standalone languages/editor API 注册 tokenizer 和主题 → TokenizationRegistry / StandaloneThemeService → 现有 SyntaxProviderWorker 与 TokenizationTextModelPart → 原 LanguageToken.presentation 与 ViewLine → 自定义 scope 着色、主题切换、富文本复制保持相同颜色。现有语法 provider、行索引、DOM 和 Worker 工厂仍是唯一实现；不复制上游 trie、适配器私有类图或 CSS。
+
+| 准确路径（相对 `ash-ts/src/ash/editor/`） | 关系与本批职责 |
+| --- | --- |
+| `common/languages/supports/tokenization.ts` | 双方都有；保留标准 token 分类，增加独立规则匹配与 encoded 颜色索引，供主题及 provider 适配消费 |
+| `standalone/common/standaloneTheme.ts`、`standalone/browser/standaloneThemeService.ts` | 已迁移；扩展标准主题数据、继承、tokenTheme 和颜色表，保留已确认的 Ash 命名主题 |
+| `standalone/common/themes.ts` | 仅上游；从 Ash 已有平台语法颜色生成标准内置主题规则，不复制上游规则数据 |
+| `standalone/browser/standaloneLanguages.ts`、`standaloneEditor.ts`、`editor.api.ts` | 双方都有；公开真实 tokenizer 注册、颜色表和 defineTheme 入口及类型；消费原注册表和唯一主题服务 |
+| `common/languages.ts`、`common/services/editorWebWorker.ts` | 双方都有；encoded token 结果进入当前语法缓存与既有 presentation，不改变请求和模型版本 owner |
+| `common/model/tokens/tokenizationTextModelPart.ts` | 双方都有；将现有 presentation 转为一致的 line-token metadata，供复制与 token API 使用 |
+| `test/common/modes/supports/tokenization.test.ts` | 上游同路径新增测试；检验属性继承、scope 边界、颜色索引和 fontStyle |
+| `test/browser/namedEditorThemeService.test.ts`、`standaloneEditor.test.ts`；既有 standalone 两份浏览器场景 | 原测试扩展；从注册入口验证着色、切换、异步注册与释放，不用成员存在断言代替行为 |
+
+新 token 实现采用按 scope 长度排序的本地规则数组，并缓存每个实际 scope 的匹配结果；颜色表随主题编译一次。UI 绘制继续读取既有 LanguageToken.presentation，不增加平行主题服务或新 DOM。
+
+同链补充 `common/tokenizationRegistry.ts`（双方都有）：延迟 factory 注册和移除必须发出语言变化，使已经打开的模型实际请求新 factory；只修改这两个生命周期通知。encoded token 解码使用模型已有 languageIdCodec，沿当前 createSyntaxWorker 传入，不创建新的编码表。
+
+Token 主题行为验证：4 项 Playwright 场景通过，覆盖自定义 scope 的颜色与字体、主题切换重着色、LineTokens 与富文本复制一致、外部编码颜色表、延迟 factory 只调用一次以及释放后拒绝迟到结果。上游 provider 测试还明确要求首 token 从 0 开始、后续 offset 不倒退；适配层统一规范化，保留 provider 原数组。主题服务现在返回包含 tokenTheme 的主题，原对象身份测试改为验证其主题 ID，颜色与事件测试保留。其他目录差异仍在上表，不把本批通过视为全部完成。
+
+语言激活续批准入：宿主在创建编辑器前订阅 `languages.onLanguage` → `StandaloneServices.withServices` 在窗口装配完成后安装监听 → ModelService 创建模型或切换语言 → 现有 LanguageService 的一次性激活记录 → 回调注册 tokenizer → 原模型着色链。当前 LanguageService 已有 basic/rich 事件，但没有生产调用触发它们；本批补齐 ModelService 这一实际模型注册 owner 的通知，保留现有配置、模型和分词 owner。
+
+准确路径限定 `standalone/browser/standaloneServices.ts`（双方都有；增加延迟安装与释放）、`standalone/browser/standaloneLanguages.ts`（双方都有；公开激活监听与语言列表）、`common/services/modelService.ts`（双方都有；模型登记后及语言切换时通知宿主语言服务）、`test/browser/standaloneEditor.test.ts`、`test/common/modelService.test.ts`、既有 standalone 浏览器两文件、`README.md` 和本台账。嵌入语言尚未接入，不把当前 direct-language 激活等同于 Monarch 嵌入行为。
+
+Monarch 首批准入：宿主在语言激活回调注册声明式规则 → `setMonarchTokensProvider` → 编译规则与逐行状态机 → 同一个 TokenizationRegistry → 原模型分词、主题与 ViewLine。规则输入没有现存 Ash 实现；本批只增加上游准确路径 `standalone/common/monarch/monarchTypes.ts`、`monarchCommon.ts`、`monarchCompile.ts`、`monarchLexer.ts`。类型文件拥有外部 grammar 契约；compiler 拥有宏展开、include 和输入校验；tokenizer 用不可变字符串数组记录状态栈，不复制上游栈节点、缓存工厂或 collector 类。窗口语言、主题和配置依赖经现有容器构造注入。
+
+其余准确修改路径为 `standalone/browser/standaloneLanguages.ts`、`editor.api.ts`（同步/异步注册入口及释放）、新增同路径测试 `standalone/test/browser/monarch.test.ts`、既有 standalone 浏览器两文件、README 和本台账。先验证跨行状态、分组、空行退出和声明式规则替换；嵌入语言需单独验证返回宿主状态、编码语言 ID、异步加载和注销。DOM、布局、滚动及渲染 owner 不变。
+
+同链追加准确路径 `common/config/editorConfigurationSchema.ts`（双方都有）：已有 `editor.maxTokenizationLineLength` schema 没有进入运行时配置注册表；在原 schema owner 注册相同默认值及正整数校验，使 Monarch 的配置读取和更新真实生效。用上述 Monarch 配置行为测试验证，不新建设置 owner。
+
+独立着色续批准入：宿主使用 standalone editor 着色 API 生成代码片段 → `standalone/browser/colorizer.ts`（上游同路径缺失） → 已注册 tokenizer / 同一颜色表 → 现有 `common/languages/textToHtmlTokenizer.ts` 的转义与样式序列化 → 返回 HTML 或更新调用者提供的元素。元素由调用者拥有；不创建编辑器、模型或第二套分词状态缓存。允许修改 `standalone/browser/standaloneEditor.ts`、`editor.api.ts`、既有 standalone 两份浏览器场景、`test/browser/standaloneEditor.test.ts`、README 和本台账。已有 HTML 序列化器只读取，不复制其逻辑。ModelLine 的强制同步分词缺口仍独立记录，不以异步模型当前快照冒充同步完成。
+
+上述链路定向验证通过：Monarch 的 5 项单测覆盖嵌套状态、输入状态不变、捕获组、rematch、宏、regex 中的字面状态参数、空行 / LF、长度配置、循环拒绝、嵌入语言延迟加载及 metadata。公开注册测试覆盖 factory 只创建一次、释放后拒绝迟到定义、非法替换保留当前 provider、旧注册释放不影响新 provider。3 项 Playwright 场景验证跨行注释重算、嵌入语言返回宿主及独立 HTML 的颜色、转义、缩进和模型数量不变。Colorizer 输出为一次性的内联样式 HTML；现有模型的同步强制分词和持续跟随主题的片段绑定仍未宣称完成。
+
+任务期间 HEAD 从起始基线前进至 `f9f059f46`；新增提交包括前端 Diff 和 TextMate 分词职责调整，均保留。完整回归发现 `ash-ts/test/integration/browser/textModel.integration.ts` 仍只注入后端诊断 / 符号 provider，没有词法 provider，却断言关键字着色和 Worker 存在。追加该准确测试路径准入：使用仓库 Rust grammar 和已有 TextMate Worker 工厂为 BrowserTextModelService 提供词法输入；后端 fixture 的 tokens 改为空，明确验证两条真实来源。保留现有颜色、块光标、符号和编辑断言，不改变生产 provider 职责。失败的 3 项定向重跑均通过，完整检查在当前 HEAD 重新执行。
+
+本批最终验证：`check-editor-alignment.mjs --test=all` 退出码 0，239 / 239 个单测文件与 623 项 Playwright 场景通过；台账、文件集合、CSS 归属、类型和 diff 检查通过，源码目录没有新增 JavaScript。Monarch 定向测试新增捕获组 rematch 后跨行进入 / 退出嵌入语言，共 6 项通过。当前 HEAD 上的 `build:stanza`、`build:renderer` 均通过，无构建 warning。测试保留已有 JSDOM Canvas 和 NO_COLOR / FORCE_COLOR 环境提示。目录复核仍为 18 个同路径、1 个经批准保留的 Ash 文件、14 个缺失生产文件；上文待补端口与待确认迁移未宣称完成。
+
 ## Folding 元数据与命令参数边界（2026-09-21）
 
 本批已修复注册时丢失参数约束，以及直接 action 调用把 `null` / `false` 等值变成默认参数的问题。起始基线 `09682509e`，已有上一批 6 个暂存文件；本批保护既有变更，不创建或删除文件。

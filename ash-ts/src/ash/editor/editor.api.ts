@@ -18,9 +18,13 @@ export type { IContentWidget, IContentWidgetPosition, IContentWidgetRenderedCoor
 export type { IViewZone, IViewZoneChangeAccessor } from './browser/editorBrowser.js';
 export { PositionAffinity } from './common/model.js';
 export { ColorScheme } from "../platform/theme/common/theme.js";
-export type { IStandaloneCodeEditor } from './standalone/browser/standaloneCodeEditor.js';
-export type { IStandaloneEditorApi, IStandaloneEditorConstructionOptions } from "./standalone/browser/standaloneEditor.js";
-export type { IStandaloneLanguagesApi } from './standalone/browser/standaloneLanguages.js';
+export type { IStandaloneCodeEditor, IStandaloneEditorConstructionOptions } from './standalone/browser/standaloneCodeEditor.js';
+export type { IStandaloneEditorApi } from "./standalone/browser/standaloneEditor.js";
+export type { IColorizerOptions, IColorizerElementOptions } from './standalone/browser/colorizer.js';
+export type { IStandaloneLanguagesApi, IToken, ILineTokens, IEncodedLineTokens, TokensProvider, EncodedTokensProvider, TokensProviderFactory } from './standalone/browser/standaloneLanguages.js';
+export type { IState } from './common/languages.js';
+export type { IMonarchLanguage, IMonarchLanguageRule, IMonarchLanguageAction, IMonarchLanguageBracket, IExpandedMonarchLanguageAction, IExpandedMonarchLanguageRule, IShortMonarchLanguageAction, IShortMonarchLanguageRule1, IShortMonarchLanguageRule2 } from './standalone/common/monarch/monarchTypes.js';
+export type { ITokenThemeRule } from './common/languages/supports/tokenization.js';
 export type { LanguageDescription, LanguageDescriptionChangeEvent, LanguageDescriptionContribution, LanguageDescriptionRegistration, LanguageRegistrationOptions } from './common/services/languagesRegistry.js';
 export type { TextResourceLanguageInput } from '../platform/language/common/textResourceLanguage.js';
 export type { LanguageProviderBatch, LanguageProviderBatchRegistration } from './common/services/languageFeatures.js';
@@ -60,7 +64,7 @@ export type { LanguageRenamePreparation, LanguageRenameProvider, LanguageRenameR
 export type { LanguageSelectionRangeProvider, LanguageSelectionRangeRequest } from './common/languages.js';
 export type { LanguageSemanticTokensProvider, LanguageSemanticTokensRequest } from './common/languages.js';
 export type { StandaloneServiceOverrides } from "./standalone/browser/standaloneServices.js";
-export type { NamedEditorThemeData } from "./standalone/common/namedEditorTheme.js";
+export type { NamedEditorThemeData, BuiltinTheme, IColors, IStandaloneThemeData } from "./standalone/common/standaloneTheme.js";
 export const Position = baseApi.Position;
 export type { IPosition } from "./common/core/position.js";
 export const Range = baseApi.Range;

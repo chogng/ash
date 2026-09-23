@@ -369,6 +369,16 @@ function schemaForDefault(value: unknown): JsonSchema {
 
 // The schema owner also registers the model settings consumed by editor services.
 configurationRegistry.registerConfiguration({
+	key: 'editor.maxTokenizationLineLength',
+	defaultValue: 20_000,
+	parse(value) {
+		if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1) {
+			throw new RangeError('editor.maxTokenizationLineLength must be a positive integer');
+		}
+		return value;
+	},
+});
+configurationRegistry.registerConfiguration({
 	key: 'editor.tabSize',
 	defaultValue: EDITOR_MODEL_DEFAULTS.tabSize,
 	parse: value => modelInteger(value, 'editor.tabSize'),

@@ -11,6 +11,8 @@ import { normalizeTextLineEndings, type TextSnapshot } from '../core/textChange.
 import { StringText } from '../core/text/abstractText.js';
 import { TextReplacement } from '../core/edits/textEdit.js';
 import { TokenizationStateStore } from '../model/textModelTokens.js';
+import { Color } from '../../../base/common/color.js';
+import { ColorId, FontStyle, StandardTokenType, TokenMetadata } from '../encodedTokenAttributes.js';
 import { getWordAtText } from '../core/wordHelper.js';
 import { BasicInplaceReplace } from '../languages/supports/inplaceReplaceSupport.js';
 import { type UnicodeHighlight, type UnicodeHighlightKind, computeUnicodeHighlights } from './unicodeTextModelHighlighter.js';
@@ -195,12 +197,13 @@ export class SyntaxProviderWorker implements languages.SyntaxWorker, LanguageWor
 		readonly languageId: string;
 		readonly initialState: languages.IState;
 		readonly states: TokenizationStateStore<languages.IState>;
-		readonly lines: readonly { text: string; hasEOL: boolean; tokens: readonly languages.Token[] }[];
+		readonly lines: readonly { text: string; hasEOL: boolean; tokens: readonly languages.Token[] | Uint32Array }[];
 	} | undefined;
 
 	constructor(
 		private readonly registry: SyntaxProviderRegistry,
 		private readonly onProviderError: languages.SyntaxProviderErrorHandler = reportProviderError,
+		private readonly languageIdCodec?: languages.ILanguageIdCodec,
 	) {
 		if (typeof onProviderError !== "function") {
 			throw new TypeError("Syntax provider error handler must be a function");
@@ -280,7 +283,7 @@ export class SyntaxProviderWorker implements languages.SyntaxWorker, LanguageWor
 		const cached = this.tokenizationCache?.support === support && this.tokenizationCache.languageId === request.payload.languageId
 			? this.tokenizationCache
 			: undefined;
-		const next: { text: string; hasEOL: boolean; tokens: readonly languages.Token[] }[] = [];
+		const next: { text: string; hasEOL: boolean; tokens: readonly languages.Token[] | Uint32Array }[] = [];
 		const states = new TokenizationStateStore<languages.IState>();
 		let state = support.getInitialState();
 		const initialState = state.clone();
@@ -294,24 +297,66 @@ export class SyntaxProviderWorker implements languages.SyntaxWorker, LanguageWor
 			const previousEndState = cached?.states.getEndState(index + 1);
 			const result = previous?.text === line && previous.hasEOL === hasEOL && previousStartState?.equals(state) && previousEndState
 				? { tokens: previous.tokens, endState: previousEndState }
-				: support.tokenize(line, hasEOL, state.clone());
+				: support.tokenizeEncoded ? support.tokenizeEncoded(line, hasEOL, state.clone()) : support.tokenize(line, hasEOL, state.clone());
 			next.push({ text: line, hasEOL, tokens: result.tokens });
 			states.setEndState(index + 1, result.endState.clone());
 			state = result.endState;
-			for (let tokenIndex = 0; tokenIndex < result.tokens.length; tokenIndex++) {
-				const token = result.tokens[tokenIndex]!;
-				const end = result.tokens[tokenIndex + 1]?.offset ?? line.length;
-				if (end > token.offset && token.type) tokens.push({
-					range: new Range(index + 1, token.offset + 1, index + 1, end + 1),
-					tokenType: token.type,
-					modifiers: [],
-					languageId: token.language,
-				});
-			}
+			this.appendLineTokens(tokens, result.tokens, index + 1, line);
 		}
 		const normalized = createLanguageTokenSnapshotNormalizer(request.snapshot)({ tokens });
 		this.tokenizationCache = { support, languageId: request.payload.languageId, initialState, states, lines: next };
 		return normalized;
+	}
+
+	private appendLineTokens(target: LanguageToken[], tokens: readonly languages.Token[] | Uint32Array, lineNumber: number, line: string): void {
+		if (!(tokens instanceof Uint32Array)) {
+			for (let index = 0; index < tokens.length; index++) {
+				const token = tokens[index]!;
+				const end = tokens[index + 1]?.offset ?? line.length;
+				if (end > token.offset && token.type) {
+					target.push({ range: new Range(lineNumber, token.offset + 1, lineNumber, end + 1), tokenType: token.type, modifiers: [], languageId: token.language });
+				}
+			}
+			return;
+		}
+		const codec = this.languageIdCodec;
+		const colors = languages.TokenizationRegistry.getColorMap();
+		if (!codec || !colors) {
+			throw new ReferenceError('Encoded tokenization requires a language codec and color map');
+		}
+		if (tokens.length % 2 !== 0) {
+			throw new TypeError('Encoded tokens must contain offset and metadata pairs');
+		}
+		for (let index = 0; index < tokens.length; index += 2) {
+			const start = tokens[index]!;
+			const end = tokens[index + 2] ?? line.length;
+			if (end <= start) {
+				continue;
+			}
+			const metadata = tokens[index + 1]!;
+			const type = TokenMetadata.getTokenType(metadata);
+			const foreground = TokenMetadata.getForeground(metadata);
+			const background = TokenMetadata.getBackground(metadata);
+			const style = TokenMetadata.getFontStyle(metadata);
+			const fontStyle: NonNullable<LanguageToken['presentation']>['fontStyle'] = [
+				...(style & FontStyle.Italic ? ['italic' as const] : []),
+				...(style & FontStyle.Bold ? ['bold' as const] : []),
+				...(style & FontStyle.Underline ? ['underline' as const] : []),
+				...(style & FontStyle.Strikethrough ? ['strikethrough' as const] : []),
+			];
+			target.push({
+				range: new Range(lineNumber, start + 1, lineNumber, end + 1),
+				tokenType: type === StandardTokenType.Comment ? 'comment' : type === StandardTokenType.String ? 'string' : type === StandardTokenType.RegEx ? 'regexp' : 'other',
+				modifiers: [],
+				languageId: codec.decodeLanguageId(TokenMetadata.getLanguageId(metadata)),
+				...(TokenMetadata.containsBalancedBrackets(metadata) ? {} : { balancedBrackets: false as const }),
+				presentation: {
+					foreground: foreground === ColorId.None ? undefined : Color.Format.CSS.formatHexA(colors[foreground]!, true),
+					background: background === ColorId.None || background === ColorId.DefaultBackground ? undefined : Color.Format.CSS.formatHexA(colors[background]!, true),
+					fontStyle,
+				},
+			});
+		}
 	}
 
 	private async runTokenization(request: LanguageWorkerRequest<languages.SyntaxLane, languages.SyntaxRequest>, signal: AbortSignal): Promise<LanguageTokenResult | null> {
@@ -763,11 +808,11 @@ function decodeNonNegativeSafeInteger(value: unknown, owner: string): number {
 	return value as number;
 }
 
-export function createSyntaxWorker(registry: SyntaxProviderRegistry, options: languages.SyntaxServiceOptions): languages.SyntaxWorker {
+export function createSyntaxWorker(registry: SyntaxProviderRegistry, options: languages.SyntaxServiceOptions, languageIdCodec?: languages.ILanguageIdCodec): languages.SyntaxWorker {
 	if (options.workerFactory && options.onProviderError) {
 		throw new TypeError('A custom syntax worker owns its provider error policy');
 	}
-	const worker = options.workerFactory ? new SyntaxProviderOverlayWorker(registry, options.workerFactory()) : new SyntaxProviderWorker(registry, options.onProviderError);
+	const worker = options.workerFactory ? new SyntaxProviderOverlayWorker(registry, options.workerFactory(), languageIdCodec) : new SyntaxProviderWorker(registry, options.onProviderError, languageIdCodec);
 	return options.workerDecorator ? options.workerDecorator(worker) : worker;
 }
 
@@ -775,8 +820,8 @@ export function createSyntaxWorker(registry: SyntaxProviderRegistry, options: la
 class SyntaxProviderOverlayWorker implements languages.SyntaxWorker, LanguageWorkerModelSynchronizer, LanguageWorkerResultSettler {
 	private readonly providers: SyntaxProviderWorker;
 
-	constructor(private readonly registry: SyntaxProviderRegistry, private readonly fallback: languages.SyntaxWorker) {
-		this.providers = new SyntaxProviderWorker(registry);
+	constructor(private readonly registry: SyntaxProviderRegistry, private readonly fallback: languages.SyntaxWorker, languageIdCodec?: languages.ILanguageIdCodec) {
+		this.providers = new SyntaxProviderWorker(registry, undefined, languageIdCodec);
 	}
 
 	run(request: LanguageWorkerRequest<languages.SyntaxLane, languages.SyntaxRequest>, signal: AbortSignal): Promise<languages.SyntaxResult> {

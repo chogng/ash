@@ -1,6 +1,5 @@
 import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
-import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { ILanguageConfigurationService } from '../../common/languages/languageConfigurationRegistry.js';
 import { ILanguageFeaturesService } from '../../common/services/languageFeatures.js';
 import { URI } from '../../../base/common/uri.js';
@@ -15,8 +14,28 @@ import type { ILanguageSelection, ILanguageService } from '../../common/language
 import type { ITextModel } from '../../common/model.js';
 import { TextModel } from '../../common/model/textModel.js';
 import { IModelService } from '../../common/services/model.js';
+import type { IEditorOptions } from '../../common/config/editorOptions.js';
+import { IStandaloneThemeService } from '../common/standaloneTheme.js';
+
+type StandaloneCodeEditorOptions = Omit<CodeEditorWidgetOptions,
+	'container' | 'input' | 'languageId' | 'model' |
+	'editorWorkerFactory' | 'completionWorkerFactory' | 'codeEditorService' |
+	'registerBeforeSave' | 'formatOnSave'
+>;
+
+export interface IStandaloneEditorConstructionOptions extends StandaloneCodeEditorOptions {
+	readonly model?: ITextModel | null;
+	readonly value?: string;
+	readonly language?: string;
+	readonly resource?: URI;
+	readonly label?: string;
+	readonly readOnly?: boolean;
+	readonly theme?: string;
+	readonly autoDetectHighContrast?: boolean;
+}
 
 export interface IStandaloneCodeEditor extends ICodeEditor, IDisposable {
+	updateOptions(newOptions: Readonly<IEditorOptions & Pick<IStandaloneEditorConstructionOptions, 'theme' | 'autoDetectHighContrast'>>): void;
 	getModel(): TextModel | null;
 	getValue(): string;
 	setValue(value: string): void;
@@ -29,13 +48,14 @@ export interface IStandaloneCodeEditor extends ICodeEditor, IDisposable {
 export class StandaloneEditor extends CodeEditorWidget implements IStandaloneCodeEditor {
 	private modelToDispose: TextModel | null;
 	private readonly modelService: IModelService;
+	private readonly standaloneThemeService: IStandaloneThemeService;
 
 	constructor(
 		options: CodeEditorWidgetOptions,
-		modelToDispose: TextModel,
+		modelToDispose: TextModel | null,
 		ownsModel: boolean,
 		@IInstantiationService instantiationService: IInstantiationService,
-		@IThemeService themeService: IThemeService,
+		@IStandaloneThemeService standaloneThemeService: IStandaloneThemeService,
 		@ILanguageConfigurationService languageConfigurationService: ILanguageConfigurationService,
 		@ILanguageFeaturesService languageFeaturesService: ILanguageFeaturesService,
 		@IContextKeyService contextKeyService: IContextKeyService,
@@ -44,14 +64,15 @@ export class StandaloneEditor extends CodeEditorWidget implements IStandaloneCod
 	) {
 		codeEditorService.willCreateCodeEditor();
 		// Theme variables must be ready before the view handles a theme event.
-		const themeBinding = bindColorTheme(themeService, options.container);
+		const themeBinding = bindColorTheme(standaloneThemeService, options.container);
 		try {
-			super(options, instantiationService, themeService, languageConfigurationService, languageFeaturesService, contextKeyService);
+			super(options, instantiationService, standaloneThemeService, languageConfigurationService, languageFeaturesService, contextKeyService);
 		} catch (error) {
 			themeBinding.dispose();
 			throw error;
 		}
 		this._register(themeBinding);
+		this.standaloneThemeService = standaloneThemeService;
 		this.modelService = modelService;
 		this.modelToDispose = ownsModel ? modelToDispose : null;
 		try {
@@ -61,6 +82,17 @@ export class StandaloneEditor extends CodeEditorWidget implements IStandaloneCod
 			this.dispose();
 			throw error;
 		}
+	}
+
+	public override updateOptions(newOptions: Readonly<IEditorOptions & Pick<IStandaloneEditorConstructionOptions, 'theme' | 'autoDetectHighContrast'>>): void {
+		this.assertNotDisposed();
+		if (newOptions.theme !== undefined) {
+			this.standaloneThemeService.setTheme(newOptions.theme);
+		}
+		if (newOptions.autoDetectHighContrast !== undefined) {
+			this.standaloneThemeService.setAutoDetectHighContrast(newOptions.autoDetectHighContrast);
+		}
+		super.updateOptions(newOptions);
 	}
 
 	public override setModel(model: ITextModel | null): void {

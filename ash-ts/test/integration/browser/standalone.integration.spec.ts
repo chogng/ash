@@ -1,5 +1,201 @@
 import { expect, test, type Page } from '@playwright/test';
 
+test('standalone token themes recolor text and retain matching colors when copied', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/standalone.html?symbolIconsOff');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareTokenTheme('plain'));
+	const alpha = page.locator('#caller .view-line .stanza-editor-token').filter({ hasText: 'alpha' });
+	await expect(alpha).toHaveCSS('color', 'rgb(18, 52, 86)');
+	await expect(alpha).toHaveCSS('font-style', 'italic');
+	const first = await page.evaluate(() => window.ashStandaloneIntegration.readTokenTheme());
+	expect(first.colors).toEqual(['#123456', '#654321']);
+	expect(first.styles).toEqual([1, 0]);
+	expect(first.html).toContain('#123456');
+	expect(first.html).toContain('font-style: italic');
+	await page.evaluate(() => window.ashStandaloneIntegration.setStickyTheme('token-theme-second'));
+	await expect(alpha).toHaveCSS('color', 'rgb(35, 69, 103)');
+	await expect(alpha).toHaveCSS('font-weight', '700');
+	await expect(alpha).toHaveCSS('font-style', 'normal');
+	const second = await page.evaluate(() => window.ashStandaloneIntegration.readTokenTheme());
+	expect(second.colors).toEqual(['#234567', '#765432']);
+	expect(second.styles).toEqual([2, 0]);
+	expect(second.html).toContain('#234567');
+	await page.evaluate(() => window.ashStandaloneIntegration.removeTokenProvider());
+	await expect(page.locator('#caller .view-line .stanza-editor-token')).toHaveCount(0);
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	expect(errors).toEqual([]);
+});
+
+test('standalone encoded tokens use the supplied palette and font metadata', async ({ page }) => {
+	await page.goto('/standalone.html?symbolIconsOff');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareTokenTheme('encoded'));
+	const alpha = page.locator('#caller .view-line .stanza-editor-token').filter({ hasText: 'alpha' });
+	await expect(alpha).toHaveCSS('color', 'rgb(18, 52, 86)');
+	await expect(alpha).toHaveCSS('font-weight', '700');
+	const tokens = await page.evaluate(() => window.ashStandaloneIntegration.readTokenTheme());
+	expect(tokens.colors).toEqual(['#123456', '#abcdef']);
+	expect(tokens.styles).toEqual([2, 0]);
+	expect(tokens.html).toContain('#abcdef');
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
+test('standalone language activation registers a tokenizer once when the model changes language', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/standalone.html?symbolIconsOff');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareTokenTheme('activation'));
+	const alpha = page.locator('#caller .view-line .stanza-editor-token').filter({ hasText: 'alpha' });
+	await expect(alpha).toHaveCSS('color', 'rgb(18, 52, 86)');
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readTokenTheme().factoryCalls)).toBe(1);
+	await page.evaluate(() => window.ashStandaloneIntegration.removeTokenProvider());
+	await expect(page.locator('#caller .view-line .stanza-editor-token')).toHaveCount(0);
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	expect(errors).toEqual([]);
+});
+
+test('standalone Monarch updates following lines after editing a comment boundary', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/standalone.html?symbolIconsOff');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareTokenTheme('monarch'));
+	const alpha = page.locator('#caller .view-line .stanza-editor-token').filter({ hasText: 'alpha' });
+	const beta = page.locator('#caller .view-line .stanza-editor-token').filter({ hasText: 'beta' });
+	await expect(alpha).toHaveCSS('color', 'rgb(18, 52, 86)');
+	await expect(beta).toHaveCSS('color', 'rgb(101, 67, 33)');
+	await page.evaluate(() => window.ashStandaloneIntegration.removeMonarchCommentStart());
+	await expect(beta).not.toHaveCSS('color', 'rgb(101, 67, 33)');
+	await page.evaluate(() => window.ashStandaloneIntegration.setStickyTheme('token-theme-second'));
+	await expect(alpha).toHaveCSS('color', 'rgb(35, 69, 103)');
+	await page.evaluate(() => window.ashStandaloneIntegration.removeTokenProvider());
+	await expect(page.locator('#caller .view-line .stanza-editor-token')).toHaveCount(0);
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	expect(errors).toEqual([]);
+});
+
+test('standalone Monarch activates embedded token providers and returns to the host language', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/standalone.html?symbolIconsOff');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareTokenTheme('monarch-embedded'));
+	const alpha = page.locator('#caller .view-line .stanza-editor-token').filter({ hasText: 'alpha' });
+	const beta = page.locator('#caller .view-line .stanza-editor-token').filter({ hasText: 'beta' });
+	await expect(alpha).toHaveCSS('color', 'rgb(18, 52, 86)');
+	await expect(beta).toHaveCSS('color', 'rgb(101, 67, 33)');
+	const tokens = await page.evaluate(() => window.ashStandaloneIntegration.readTokenTheme());
+	expect(tokens.languages).toEqual(['monarch-host', 'monarch-child', 'monarch-child', 'monarch-host']);
+	expect(tokens.factoryCalls).toBe(1);
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	expect(errors).toEqual([]);
+});
+
+test('standalone colorizer renders escaped themed HTML without creating an editor model', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/standalone.html?symbolIconsOff');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareTokenTheme('monarch'));
+	const models = await page.evaluate(() => window.ashStandaloneIntegration.colorizePreview());
+	expect(models.modelsAfter).toBe(models.modelsBefore);
+	const preview = page.locator('#colorized-preview');
+	await expect(preview.locator('span').filter({ hasText: /^alpha$/ })).toHaveCSS('color', 'rgb(18, 52, 86)');
+	await expect(preview.locator('span').filter({ hasText: '/* hello */' })).toHaveCSS('color', 'rgb(101, 67, 33)');
+	await expect(preview.locator('img, script')).toHaveCount(0);
+	await expect(preview.locator('br')).toHaveCount(1);
+	expect(await preview.textContent()).toContain('alpha\u00a0\u00a0\u00a0<img');
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	await expect(preview).toHaveCount(0);
+	expect(errors).toEqual([]);
+});
+
+for (const removed of [false, true]) {
+	test(`standalone lazy token provider resolves once and respects removal=${removed}`, async ({ page }) => {
+		await page.goto('/standalone.html?symbolIconsOff');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareTokenTheme('lazy'));
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readTokenTheme().factoryCalls)).toBe(1);
+		if (removed) {
+			await page.evaluate(() => window.ashStandaloneIntegration.removeTokenProvider());
+		}
+		await page.evaluate(() => window.ashStandaloneIntegration.finishTokenProvider());
+		const tokens = page.locator('#caller .view-line .stanza-editor-token');
+		if (removed) {
+			await expect(tokens).toHaveCount(0);
+		} else {
+			await expect(tokens.filter({ hasText: 'alpha' })).toHaveCSS('color', 'rgb(18, 52, 86)');
+		}
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readTokenTheme().factoryCalls)).toBe(1);
+		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	});
+}
+
+test('standalone command picker executes editor actions, restores focus and follows editor disposal', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/standalone.html');
+	const input = page.locator('#caller .stanza-editor-input');
+	await input.focus();
+	await page.keyboard.press('F1');
+	const picker = page.locator('#caller .ash-quick-pick');
+	const query = picker.getByRole('combobox');
+	await expect(query).toBeFocused();
+	const bounds = await picker.boundingBox();
+	const editorBounds = await page.locator('#caller').boundingBox();
+	expect(bounds!.width).toBeLessThanOrEqual(editorBounds!.width);
+	await page.keyboard.press('Escape');
+	await expect(picker).toHaveCount(0);
+	await expect(input).toBeFocused();
+	await page.keyboard.press('F1');
+	await query.fill('editor.action.gotoLine');
+	await expect(picker.locator('.ash-quick-pick-row-label')).toHaveCount(1);
+	await page.keyboard.press('Enter');
+	await expect(picker).toHaveCount(0);
+	await expect(page.locator('#caller .stanza-editor-goto-line-input')).toBeFocused();
+	await page.keyboard.press('Escape');
+	await expect(input).toBeFocused();
+	await page.keyboard.press('F1');
+	await expect(query).toBeFocused();
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	await expect(page.locator('.ash-quick-input-host')).toHaveCount(0);
+	expect(errors).toEqual([]);
+});
+
+for (const scheme of ['dark', 'light'] as const) {
+	test(`standalone command picker toggles ${scheme} high contrast and restores the theme`, async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(theme => window.ashStandaloneIntegration.setStickyTheme(theme), `ash-${scheme}`);
+		await page.locator('#caller .stanza-editor-input').focus();
+		for (const expected of [`ash-high-contrast-${scheme}`, `ash-${scheme}`]) {
+			await page.keyboard.press('F1');
+			const picker = page.locator('#caller .ash-quick-pick');
+			await picker.getByRole('combobox').fill('editor.action.toggleHighContrast');
+			await expect(picker.locator('.ash-quick-pick-row-label')).toHaveCount(1);
+			await page.keyboard.press('Enter');
+			await expect(page.locator('#caller')).toHaveAttribute('data-color-theme', expected);
+			await expect(page.locator('#owned')).toHaveAttribute('data-color-theme', expected);
+			await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
+		}
+		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	});
+}
+
+test('an initially empty standalone editor attaches, edits and releases a shared model', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/standalone.html');
+	const empty = await page.evaluate(() => window.ashStandaloneIntegration.createEmptyEditor());
+	expect(empty).toEqual({ modelsAdded: 0, model: null, id: expect.any(String) });
+	await expect(page.locator('#empty .stanza-editor-input')).toHaveCount(0);
+	await page.evaluate(() => window.ashStandaloneIntegration.attachEmptyEditor());
+	await expect(page.locator('#empty .stanza-editor-input')).toBeFocused();
+	await page.keyboard.press('ControlOrMeta+End');
+	await page.keyboard.type(' attached');
+	await expect(page.locator('#caller .view-line')).toContainText(['caller attached']);
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.detachEmptyEditor())).toEqual({ value: 'caller attached', modelDisposed: false });
+	await expect(page.locator('#empty .stanza-editor-input')).toHaveCount(0);
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	await expect(page.locator('#empty')).toHaveCount(0);
+	expect(errors).toEqual([]);
+});
+
 async function stickyDefinitionPoint(page: Page): Promise<{ x: number; y: number; column: number }> {
 	const text = page.locator('#caller .stanza-editor-sticky-scroll-text').last();
 	await expect(text).toHaveText('  function inner() {');

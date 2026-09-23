@@ -94,6 +94,7 @@ export class ModelService extends Disposable implements IModelService {
 		try {
 			const modelData = this._createModelData(model, key);
 			this._models.set(key, modelData);
+			this._languageService?.requestRichLanguageFeatures(model.getLanguageId());
 			this._onModelAdded.fire(model);
 			return model;
 		} catch (error) {
@@ -247,6 +248,7 @@ export class ModelService extends Disposable implements IModelService {
 		this._modelCreationOptionsByLanguageAndResource = Object.create(null) as Record<string, ITextModelCreationOptions>;
 		const options = this.getCreationOptions(model.getLanguageId(), model.uri, model.isForSimpleWidget);
 		ModelService._setModelOptionsForModel(model, options, oldOptions);
+		this._languageService?.requestRichLanguageFeatures(model.getLanguageId());
 		this._onModelModeChanged.fire(Object.freeze({ model, oldLanguageId }));
 	}
 

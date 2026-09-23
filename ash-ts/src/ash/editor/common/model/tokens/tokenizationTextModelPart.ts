@@ -18,6 +18,7 @@ import { SemanticTokensTextModelPart } from './semanticTokensTextModelPart.js';
 import { createSyntaxWorker } from '../../services/editorWebWorker.js';
 import { LanguageRequestCoordinator } from '../languageRequestCoordinator.js';
 import { toStandardTokenType } from '../../languages/supports/tokenization.js';
+import { Color } from '../../../../base/common/color.js';
 
 export interface TokenizationTextModelPartOptions {
 	readonly languageIdCodec?: ILanguageIdCodec;
@@ -53,7 +54,7 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 		this.syntaxProviderRegistry = options.syntaxProviderRegistry ?? this._register(new SyntaxProviderRegistry());
 		this.hasWorkerProvider = options.syntaxService?.workerFactory !== undefined;
 		this.tokenStore = this._register(createLanguageTokenStore(textModel));
-		this.coordinator = this._register(new LanguageRequestCoordinator(textModel, () => createSyntaxWorker(this.syntaxProviderRegistry, options.syntaxService ?? {})));
+		this.coordinator = this._register(new LanguageRequestCoordinator(textModel, () => createSyntaxWorker(this.syntaxProviderRegistry, options.syntaxService ?? {}, this.languageIdCodec)));
 		this.languageTokenLineIndex = this._register(new LanguageTokenLineIndex(this.tokenStore));
 		const tokenization = this;
 		this.languageTokens = Object.freeze({
@@ -307,6 +308,7 @@ function createLineTokens(lineContent: string, tokens: readonly LanguageToken[],
 			standardType,
 			token.balancedBrackets !== false && standardType === StandardTokenType.Other,
 			codec,
+			token.presentation,
 		));
 		offset = endOffset;
 	}
@@ -325,14 +327,34 @@ function appendToken(target: { text: string; metadata: number }[], text: string,
 	target.push({ text, metadata: tokenMetadata });
 }
 
-function metadata(languageId: string, tokenType: StandardTokenType, balancedBrackets: boolean, codec: ILanguageIdCodec): number {
+function metadata(languageId: string, tokenType: StandardTokenType, balancedBrackets: boolean, codec: ILanguageIdCodec, presentation?: LanguageToken['presentation']): number {
+	let foreground: number = ColorId.DefaultForeground;
+	let background: number = ColorId.DefaultBackground;
+	let fontStyle = FontStyle.None;
+	if (presentation) {
+		const colors = TokenizationRegistry.getColorMap();
+		const foregroundColor = presentation.foreground ? Color.fromHex(presentation.foreground) : undefined;
+		const backgroundColor = presentation.background ? Color.fromHex(presentation.background) : undefined;
+		const foregroundId = foregroundColor && colors?.findIndex((color, index) => index > 0 && color.equals(foregroundColor));
+		const backgroundId = backgroundColor && colors?.findIndex((color, index) => index > 0 && color.equals(backgroundColor));
+		if (foregroundId !== undefined && foregroundId > 0) foreground = foregroundId;
+		if (backgroundId !== undefined && backgroundId > 0) background = backgroundId;
+		for (const style of presentation.fontStyle ?? []) {
+			switch (style) {
+				case 'italic': fontStyle |= FontStyle.Italic; break;
+				case 'bold': fontStyle |= FontStyle.Bold; break;
+				case 'underline': fontStyle |= FontStyle.Underline; break;
+				case 'strikethrough': fontStyle |= FontStyle.Strikethrough; break;
+			}
+		}
+	}
 	return (
 		(codec.encodeLanguageId(languageId) << MetadataConsts.LANGUAGEID_OFFSET)
 		| (tokenType << MetadataConsts.TOKEN_TYPE_OFFSET)
 		| (balancedBrackets ? MetadataConsts.BALANCED_BRACKETS_MASK : 0)
-		| (FontStyle.None << MetadataConsts.FONT_STYLE_OFFSET)
-		| (ColorId.DefaultForeground << MetadataConsts.FOREGROUND_OFFSET)
-		| (ColorId.DefaultBackground << MetadataConsts.BACKGROUND_OFFSET)
+		| (fontStyle << MetadataConsts.FONT_STYLE_OFFSET)
+		| (foreground << MetadataConsts.FOREGROUND_OFFSET)
+		| (background << MetadataConsts.BACKGROUND_OFFSET)
 	) >>> 0;
 }
 

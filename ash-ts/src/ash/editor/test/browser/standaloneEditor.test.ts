@@ -1,4 +1,4 @@
-import { createLanguageFeatureRequest } from '../../common/languages.js';
+import { createLanguageFeatureRequest, TokenizationRegistry } from '../../common/languages.js';
 import { Emitter } from '../../../base/common/event.js';
 import { editorWorkerWireCodec, EditorWorker } from '../../common/services/editorWebWorker.js';
 import { FormattingConflicts, FormattingKind, FormattingMode } from '../../contrib/format/browser/format.js';
@@ -9,14 +9,18 @@ import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { URI } from "../../../base/common/uri.js";
 import { CancellationTokenSource } from '../../../base/common/cancellation.js';
-import { AbstractDisposable } from '../../../base/common/lifecycle.js';
+import { AbstractDisposable, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { lightColorTheme } from "../../../platform/theme/common/colorTheme.js";
 import { ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
 import { LanguageFeaturesService } from "../../common/services/languageFeaturesService.js";
+import { ILanguageFeaturesService } from '../../common/services/languageFeatures.js';
+import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
+import { ILanguageService } from '../../common/languages/language.js';
 import { EditorContributionInstantiation } from '../../browser/editorExtensions.js';
 import { TestLanguageConfigurationService } from '../common/modes/testLanguageConfigurationService.js';
 import { StandaloneServiceCollection, StandaloneServices } from "../../standalone/browser/standaloneServices.js";
 import { WorkerTextModelSyncServer } from '../../common/services/textModelSync/textModelSync.impl.js';
+import type { IMonarchLanguage } from '../../editor.api.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 const forcedColors = new browserEnvironment.window.EventTarget();
@@ -28,7 +32,7 @@ Object.defineProperty(browserEnvironment.window, "matchMedia", {
 	configurable: true,
 	value: (query: string) => {
 		if (query === "(forced-colors: active)") return forcedColors;
-		assert.ok(["(prefers-reduced-motion: reduce)", "(prefers-reduced-transparency: reduce)"].includes(query));
+		assert.ok(["(prefers-reduced-motion: reduce)", "(prefers-reduced-transparency: reduce)"].includes(query) || /^\(resolution: [\d.]+dppx\)$/u.test(query));
 		return Object.assign(new browserEnvironment.window.EventTarget(), { matches: false, media: query });
 	},
 });
@@ -85,8 +89,8 @@ test("standalone service collection honors explicit first-scope overrides", () =
 	const languages = new LanguageFeaturesService();
 	const services = new StandaloneServiceCollection({ languageConfigurationService: languageConfigurations, languageFeaturesService: languages });
 	assert.equal(services.languageFeaturesService, languages);
-	assert.equal(services.themeService.getColorTheme(), lightColorTheme);
-	assert.ok(services.instantiationService.get(ILogService) instanceof NullLoggerService);
+	assert.equal(services.themeService.getColorTheme().id, lightColorTheme.id);
+	assert.ok(services.get(ILogService) instanceof NullLoggerService);
 	services.dispose();
 	assert.equal(languages.isDisposed, false);
 	languages.dispose();
@@ -104,6 +108,131 @@ test('standalone services own and release their default formatter selection', as
 	assert.strictEqual(await FormattingConflicts.select(providers, model, FormattingMode.Explicit, FormattingKind.File), first);
 	services.dispose();
 	assert.strictEqual(await FormattingConflicts.select(providers, model, FormattingMode.Explicit, FormattingKind.File), second);
+});
+
+test('standalone initialization defers callbacks and releases registrations across initialization', () => {
+	const calls: string[] = [];
+	const removed = StandaloneServices.withServices(() => {
+		calls.push('removed');
+		return toDisposable(() => calls.push('dispose-removed'));
+	});
+	removed.dispose();
+	using pending = StandaloneServices.withServices(() => {
+		calls.push('initialized');
+		assert.ok(StandaloneServices.get(ILanguageService));
+		return toDisposable(() => calls.push('dispose-initialized'));
+	});
+	assert.deepEqual([...calls], []);
+	const services = StandaloneServices.initialize();
+	assert.equal(services.get(IInstantiationService), services);
+	assert.equal(StandaloneServices.get(IInstantiationService), services);
+	assert.equal(StandaloneServices.get(ILanguageService), services.languageService);
+	assert.equal(StandaloneServices.get(ILanguageFeaturesService), services.languageFeaturesService);
+	assert.deepEqual([...calls], ['initialized']);
+	using immediate = StandaloneServices.withServices(() => {
+		calls.push('immediate');
+		return toDisposable(() => calls.push('dispose-immediate'));
+	});
+	pending.dispose();
+	immediate.dispose();
+	assert.deepEqual(calls, ['initialized', 'immediate', 'dispose-initialized', 'dispose-immediate']);
+});
+
+test('standalone language activation is once per language and exposes independent descriptions', () => {
+	const calls: string[] = [];
+	using resources = new DisposableStore();
+	resources.add(stanza.languages.registerLanguages([
+		{ description: { id: 'activate-first', extensions: ['.first'] } },
+		{ description: { id: 'activate-second' } },
+	]));
+	resources.add(stanza.languages.onLanguageEncountered('activate-first', () => calls.push('basic')));
+	resources.add(stanza.languages.onLanguage('activate-first', () => calls.push('rich')));
+	resources.add(stanza.languages.onLanguage('activate-second', () => calls.push('changed')));
+	const removed = stanza.languages.onLanguage('activate-first', () => calls.push('removed'));
+	removed.dispose();
+	const descriptions = stanza.languages.getLanguages();
+	descriptions.find(language => language.id === 'activate-first')!.extensions!.push('.mutated');
+	assert.deepEqual(stanza.languages.getLanguages().find(language => language.id === 'activate-first')!.extensions, ['.first']);
+	const model = resources.add(stanza.editor.createModel('alpha', 'activate-first'));
+	resources.add(stanza.editor.createModel('beta', 'activate-first'));
+	stanza.editor.setModelLanguage(model, 'activate-second');
+	stanza.editor.setModelLanguage(model, 'activate-first');
+	assert.deepEqual(calls, ['basic', 'rich', 'changed']);
+});
+
+test('standalone token providers normalize offsets without modifying provider tokens', () => {
+	const input = [
+		{ startIndex: 7, scopes: 'keyword' },
+		{ startIndex: 5, scopes: 'entity' },
+		{ startIndex: 3, scopes: 'string' },
+	];
+	const state = { clone() { return this; }, equals(other: unknown) { return other === this; } };
+	using registration = stanza.languages.setTokensProvider('plaintext', {
+		getInitialState: () => state,
+		tokenize: () => ({ tokens: input, endState: state }),
+	});
+	const support = TokenizationRegistry.get('plaintext')!;
+	const tokens = support.tokenize('alpha beta', false, state).tokens;
+	assert.deepEqual(tokens.map(token => [token.offset, token.type, token.language]), [
+		[0, 'keyword', 'plaintext'], [5, 'entity', 'plaintext'], [5, 'string', 'plaintext'],
+	]);
+	const encoded = support.tokenizeEncoded!('alpha beta', false, state).tokens;
+	assert.deepEqual([encoded[0], encoded[2], encoded[4]], [0, 5, 5]);
+	assert.deepEqual(input.map(token => token.startIndex), [7, 5, 3]);
+});
+
+test('standalone Monarch registrations own lazy tokenizer creation, replacement and disposal', async () => {
+	using language = stanza.languages.registerLanguages([{ description: { id: 'monarch-registration' } }]);
+	const definition: IMonarchLanguage = { tokenizer: { root: [[/\w+/, 'identifier']] } };
+	let resolve!: (value: IMonarchLanguage) => void;
+	const removed = stanza.languages.setMonarchTokensProvider('monarch-registration', new Promise(done => { resolve = done; }));
+	const pending = TokenizationRegistry.getOrCreate('monarch-registration');
+	removed.dispose();
+	resolve(definition);
+	assert.equal(await pending, null);
+	let calls = 0;
+	using lazy = stanza.languages.registerTokensProviderFactory('monarch-registration', {
+		create: async () => { calls++; return definition; },
+	});
+	const tokenizer = (await TokenizationRegistry.getOrCreate('monarch-registration'))!;
+	assert.equal(await TokenizationRegistry.getOrCreate('monarch-registration'), tokenizer);
+	assert.equal(calls, 1);
+	assert.equal(tokenizer.tokenize('word', false, tokenizer.getInitialState()).tokens[0]!.type, 'identifier.monarch-registration');
+	assert.throws(() => stanza.languages.setMonarchTokensProvider('monarch-registration', { tokenizer: { root: [{ include: '@missing' }] } }), /Unknown tokenizer state/);
+	assert.equal(TokenizationRegistry.get('monarch-registration'), tokenizer);
+	using replacement = stanza.languages.setMonarchTokensProvider('monarch-registration', { tokenizer: { root: [[/\w+/, 'string']] } });
+	lazy.dispose();
+	assert.throws(() => tokenizer.tokenize('word', false, tokenizer.getInitialState()), /disposed/i);
+	const current = TokenizationRegistry.get('monarch-registration')!;
+	assert.equal(current.tokenize('word', false, current.getInitialState()).tokens[0]!.type, 'string.monarch-registration');
+	replacement.dispose();
+	assert.equal(TokenizationRegistry.get('monarch-registration'), null);
+});
+
+test('standalone colorization escapes markup, expands tabs and creates no model or worker', async () => {
+	using resources = new DisposableStore();
+	resources.add(stanza.languages.registerLanguages([{ description: { id: 'colorize-test', mimetypes: ['text/colorize-test'] } }]));
+	resources.add(stanza.languages.setMonarchTokensProvider('colorize-test', { tokenizer: { root: [[/word/, 'keyword'], [/./, '']] } }));
+	stanza.editor.defineTheme('colorize-theme', { base: 'vs', inherit: true, rules: [{ token: 'keyword', foreground: '123456', fontStyle: 'bold' }], colors: {} });
+	stanza.editor.setTheme('colorize-theme');
+	const models = stanza.editor.getModels().length;
+	const workers = createdWorkerCount;
+	const html = await stanza.editor.colorize('\uFEFFword\t<img>\r\n&', 'colorize-test', { tabSize: 3 });
+	const element = document.createElement('pre');
+	element.innerHTML = html;
+	assert.equal(element.textContent, 'word\u00a0\u00a0<img>&');
+	assert.equal(element.querySelectorAll('br').length, 1);
+	assert.equal(element.querySelectorAll('img').length, 0);
+	assert.equal(element.firstElementChild?.getAttribute('style'), 'color: #123456;font-weight: bold;');
+	element.setAttribute('data-lang', 'text/colorize-test');
+	element.textContent = 'word';
+	await stanza.editor.colorizeElement(element, { theme: 'colorize-theme' });
+	assert.equal(element.firstElementChild?.textContent, 'word');
+	assert.equal(element.firstElementChild?.getAttribute('style'), 'color: #123456;font-weight: bold;');
+	assert.equal(stanza.editor.getModels().length, models);
+	assert.equal(createdWorkerCount, workers);
+	await assert.rejects(stanza.editor.colorize('word', 'colorize-test', { tabSize: 0 }), /positive integer/);
+	stanza.editor.setTheme('ash-light');
 });
 
 test("standalone theme APIs register, select, and project a named theme", () => {
@@ -134,6 +263,57 @@ test("standalone public API keeps compiled theme snapshots internal", () => {
 	assert.equal(stanza.editor.PositionAffinity.LeftOfInjectedText, stanza.PositionAffinity.LeftOfInjectedText);
 });
 
+test('standalone editors can start without allocating a model or worker and attach a shared model later', () => {
+	const container = browserEnvironment.window.document.createElement('div');
+	browserEnvironment.window.document.body.append(container);
+	const models = stanza.editor.getModels();
+	const workers = createdWorkerCount;
+	const createdModels: string[] = [];
+	using listener = stanza.editor.onDidCreateModel(model => createdModels.push(model.uri.toString()));
+	using editor = stanza.editor.create(container, { model: null, value: 'ignored', language: 'typescript' });
+	const id = editor.getId();
+	assert.equal(typeof id, 'string');
+	assert.deepEqual({ model: editor.getModel(), value: editor.getValue(), state: editor.saveViewState(), createdModels, workers: createdWorkerCount - workers }, {
+		model: null, value: '', state: null, createdModels: [], workers: 0,
+	});
+	assert.deepEqual(stanza.editor.getModels(), models);
+	assert.ok(stanza.editor.getEditors().includes(editor));
+	editor.layout({ width: 500, height: 200 });
+	using model = stanza.editor.createModel('attached');
+	editor.setModel(model);
+	assert.equal(editor.getValue(), 'attached');
+	assert.equal(editor.getId(), id);
+	editor.setModel(null);
+	assert.equal(editor.getModel(), null);
+	assert.equal(model.isDisposed(), false);
+	editor.dispose();
+	assert.equal(model.isDisposed(), false);
+	assert.ok(!stanza.editor.getEditors().includes(editor));
+	container.remove();
+});
+
+test('standalone updateOptions changes the window theme and forced-color preference', () => {
+	const container = browserEnvironment.window.document.createElement('div');
+	browserEnvironment.window.document.body.append(container);
+	using editor = stanza.editor.create(container, { value: 'theme' });
+	try {
+		editor.updateOptions({ theme: 'ash-dark' });
+		assert.equal(container.getAttribute('data-color-theme'), 'ash-dark');
+		Object.assign(forcedColors, { matches: true });
+		forcedColors.dispatchEvent(new browserEnvironment.window.Event('change'));
+		assert.equal(container.getAttribute('data-color-theme'), 'ash-high-contrast-dark');
+		editor.updateOptions({ autoDetectHighContrast: false });
+		assert.equal(container.getAttribute('data-color-theme'), 'ash-dark');
+		editor.updateOptions({ autoDetectHighContrast: true });
+		assert.equal(container.getAttribute('data-color-theme'), 'ash-high-contrast-dark');
+	} finally {
+		Object.assign(forcedColors, { matches: false });
+		forcedColors.dispatchEvent(new browserEnvironment.window.Event('change'));
+		editor.updateOptions({ theme: 'ash-light' });
+		container.remove();
+	}
+});
+
 test("standalone languages API exposes provider value types", () => {
 	assert.equal(stanza.languages.LanguageCompletionItemKind, stanza.LanguageCompletionItemKind);
 	assert.equal(stanza.languages.LanguageCompletionInsertTextFormat, stanza.LanguageCompletionInsertTextFormat);
@@ -161,7 +341,7 @@ test('standalone on-type providers retain triggers, model arguments, and registr
 		},
 	};
 	using registration = stanza.languages.registerOnTypeFormattingEditProvider('plaintext', provider);
-	const registry = StandaloneServices.get().languageFeaturesService.onTypeFormattingEditProvider;
+	const registry = StandaloneServices.get(ILanguageFeaturesService).onTypeFormattingEditProvider;
 	assert.deepEqual(registry.ordered(model), [provider]);
 	assert.deepEqual(provider.autoFormatTriggerCharacters, [';', '}']);
 	assert.deepEqual(await registry.ordered(model)[0]!.provideOnTypeFormattingEdits(model, position, ';', options, source.token), [{ range: new stanza.Range(1, 1, 1, 7), text: 'ALPHA;' }]);
@@ -185,6 +365,19 @@ test('standalone languages API replaces one language generation without stale re
 	assert.deepEqual(changes, ['stanza-generation-a', 'stanza-generation-a', 'stanza-generation-b']);
 });
 
+test('standalone language events preserve listener context and dispose with the supplied store', () => {
+	using listeners = new DisposableStore();
+	const context = { calls: 0 };
+	stanza.languages.onDidChangeLanguages(function (this: typeof context) {
+		this.calls += 1;
+	}, context, listeners);
+	using registration = stanza.languages.registerLanguages([{ description: { id: 'listener-context' } }]);
+	assert.equal(context.calls, 1);
+	listeners.dispose();
+	registration.dispose();
+	assert.equal(context.calls, 1);
+});
+
 test('standalone languages API replaces provider batches atomically', () => {
 	const first = {
 		provideHover: () => ({ contents: ['first'] }),
@@ -194,7 +387,7 @@ test('standalone languages API replaces provider batches atomically', () => {
 	};
 	using model = new stanza.TextModel('', { languageId: 'stanza-batch' });
 	using batch = stanza.languages.registerProviderBatch({ hovers: [{ selector: 'stanza-batch', provider: first }] });
-	const providers = StandaloneServices.get().languageFeaturesService.hoverProvider;
+	const providers = StandaloneServices.get(ILanguageFeaturesService).hoverProvider;
 
 	assert.deepEqual(providers.ordered(model), [first]);
 	batch.replace({ hovers: [{ selector: 'stanza-batch', provider: second }] });
@@ -207,7 +400,7 @@ test("standalone languages API feeds the shared editor registries", async () => 
 	using provider = stanza.languages.registerHoverProvider('stanza-public-test', {
 		provideHover: () => ({ contents: ['Public hover'] }),
 	});
-	const services = StandaloneServices.get();
+	const services = StandaloneServices.initialize();
 	assert.equal(services.languageService.resolveLanguageId({ resource: URI.parse('file:///sample.stanza-public') }), 'stanza-public-test');
 	assert.equal(services.languageConfigurationService.getLanguageConfiguration('stanza-public-test').comments?.lineCommentToken, '//');
 	using model = stanza.editor.createModel('answer', 'stanza-public-test', URI.parse('inmemory://stanza/public-api.stanza-public'));

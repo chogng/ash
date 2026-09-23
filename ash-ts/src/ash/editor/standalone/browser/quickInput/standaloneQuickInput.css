@@ -1,0 +1,11 @@
+.ash-standalone-quick-input {
+	box-sizing: border-box;
+	min-width: 0;
+	min-height: 0;
+	padding: 8px;
+}
+
+.ash-standalone-quick-input > .ash-quick-pick {
+	max-width: 100%;
+	max-height: 100%;
+}

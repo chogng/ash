@@ -2,8 +2,11 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { colorCssVariable, darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme, lightColorTheme } from '../../../platform/theme/common/colorTheme.js';
 import { ColorScheme } from '../../../platform/theme/common/theme.js';
-import { NamedEditorThemeService } from '../../standalone/browser/namedEditorThemeService.js';
+import { StandaloneThemeService } from '../../standalone/browser/standaloneThemeService.js';
 import { registerColor } from '../../../platform/theme/common/colorRegistry.js';
+import { Color } from '../../../base/common/color.js';
+import { TokenMetadata } from '../../common/encodedTokenAttributes.js';
+import { TokenizationRegistry } from '../../common/languages.js';
 
 class TestMediaQueryList extends EventTarget {
 	public matches = false;
@@ -17,7 +20,7 @@ class TestMediaQueryList extends EventTarget {
 	}
 }
 
-function createThemeService(): { readonly mediaQuery: TestMediaQueryList; readonly service: NamedEditorThemeService } {
+function createThemeService(): { readonly mediaQuery: TestMediaQueryList; readonly service: StandaloneThemeService } {
 	const mediaQuery = new TestMediaQueryList();
 	const ownerWindow = {
 		matchMedia(query: string): MediaQueryList {
@@ -25,7 +28,7 @@ function createThemeService(): { readonly mediaQuery: TestMediaQueryList; readon
 			return mediaQuery as unknown as MediaQueryList;
 		},
 	} as Window;
-	return { mediaQuery, service: new NamedEditorThemeService(ownerWindow) };
+	return { mediaQuery, service: new StandaloneThemeService(ownerWindow) };
 }
 
 const colorsBeforeEditor = lightColorTheme.colors;
@@ -71,7 +74,44 @@ test('themes created before the editor loads include its color contributions', (
 test('standalone themes default to the built-in light theme', () => {
 	const fixture = createThemeService();
 	using service = fixture.service;
-	assert.equal(service.getColorTheme(), lightColorTheme);
+	assert.equal(service.getColorTheme().id, lightColorTheme.id);
+});
+
+test('standard theme inheritance updates selected child token colors and preserves input ownership', () => {
+	using service = createThemeService().service;
+	const rules = [{ token: 'entity', foreground: '124578', fontStyle: 'italic' }];
+	service.defineTheme('child-theme', { base: 'vs-dark', inherit: true, rules, colors: { 'editor.background': '#111111' } });
+	service.setTheme('child-theme');
+	rules[0]!.foreground = 'ffffff';
+	const readColor = (scope: string) => {
+		const theme = service.getColorTheme().tokenTheme;
+		return Color.Format.CSS.formatHex(theme.getColorMap()[TokenMetadata.getForeground(theme.match(1, scope))]!);
+	};
+	assert.equal(readColor('entity.method'), '#124578');
+	assert.equal(service.getColorTheme().getColorCss('editor.background'), '#111111');
+	service.defineTheme('vs-dark', { base: 'vs-dark', inherit: true, rules: [{ token: 'comment', foreground: '345678' }], colors: {} });
+	assert.equal(service.getColorTheme().themeName, 'child-theme');
+	assert.equal(readColor('comment.line'), '#345678');
+	assert.equal(readColor('entity.method'), '#124578');
+	assert.equal(service.getColorTheme().getColorCss('editor.background'), '#111111');
+	const palette = service.getColorTheme().tokenTheme.getColorMap();
+	service.setColorMapOverride([Color.transparent, Color.fromHex('#abcdef'), Color.fromHex('#010101')]);
+	assert.equal(TokenizationRegistry.getColorMap()![1]!.toString(), '#abcdef');
+	service.setColorMapOverride(null);
+	assert.deepEqual(TokenizationRegistry.getColorMap(), palette);
+});
+
+test('Ash named themes preserve standard base inheritance when replacing a built-in theme', () => {
+	using service = createThemeService().service;
+	service.defineTheme('inherited', { base: 'vs-dark', inherit: true, rules: [], colors: {} });
+	service.setTheme('inherited');
+	service.defineNamedTheme('vs-dark', { label: 'Custom Dark', colorScheme: ColorScheme.Dark, colors: { 'editor.background': '#121314' } });
+	assert.equal(service.getColorTheme().getColorCss('editor.background'), '#121314');
+	service.defineTheme('another', { base: 'vs-dark', inherit: true, rules: [], colors: {} });
+	service.setTheme('another');
+	assert.equal(service.getColorTheme().getColorCss('editor.background'), '#121314');
+	service.setTheme('vs-dark');
+	assert.equal(service.getColorTheme().label, 'Custom Dark');
 });
 
 test('standalone themes preserve overrides for later contributions and stop notifying after disposal', () => {
@@ -127,7 +167,7 @@ test('standalone themes track forced colors without losing the selected theme', 
 	using service = fixture.service;
 	service.setTheme(darkColorTheme.id);
 	fixture.mediaQuery.setMatches(true);
-	assert.equal(service.getColorTheme(), highContrastDarkColorTheme);
+	assert.equal(service.getColorTheme().id, highContrastDarkColorTheme.id);
 	service.defineNamedTheme(highContrastDarkColorTheme.id, {
 		label: 'Updated High Contrast Dark',
 		colorScheme: ColorScheme.HighContrastDark,
@@ -136,13 +176,13 @@ test('standalone themes track forced colors without losing the selected theme', 
 	assert.equal(service.getColorTheme().getColorCss('editor.background'), '#010101');
 
 	fixture.mediaQuery.setMatches(false);
-	assert.equal(service.getColorTheme(), darkColorTheme);
+	assert.equal(service.getColorTheme().id, darkColorTheme.id);
 	service.setTheme(lightColorTheme.id);
 	fixture.mediaQuery.setMatches(true);
-	assert.equal(service.getColorTheme(), highContrastLightColorTheme);
+	assert.equal(service.getColorTheme().id, highContrastLightColorTheme.id);
 
 	service.setAutoDetectHighContrast(false);
-	assert.equal(service.getColorTheme(), lightColorTheme);
+	assert.equal(service.getColorTheme().id, lightColorTheme.id);
 });
 
 test('editor identifiers retain their CSS variables', () => {

@@ -41,6 +41,10 @@ import { AccessibilitySupport, IAccessibilityService } from '../../../src/ash/pl
 import { EditorExtensionsRegistry } from '../../../src/ash/editor/browser/editorExtensions.js';
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
+import rustGrammar from '../../../../extensions/rust/syntaxes/rust.tmLanguage.json' with { type: 'json' };
+import { TextMateGrammarCatalogModel } from '../../../src/ash/workbench/services/textMate/common/textMateGrammarCatalog.js';
+import { TextMateScopeThemeModel } from '../../../src/ash/workbench/services/textMate/common/textMateScopeTheme.js';
+import { createTextMateSyntaxWorkerFactory } from '../../../src/ash/workbench/services/textMate/browser/textMateSyntaxWorkerClient.js';
 
 interface WorkbenchSwitchResult {
 	readonly paneOwnsEditor: boolean;
@@ -96,7 +100,17 @@ const languageService = disposables.add(new LanguageService());
 const configurationService = disposables.add(new InMemoryConfigurationService());
 const languageConfigurationService = disposables.add(new LanguageConfigurationService(configurationService, languageService));
 const languageFeaturesService = disposables.add(new LanguageFeaturesService());
-const models = disposables.add(new BrowserTextModelService(resourceStore, { languageService, languageConfigurationService, languageFeaturesService }));
+const grammars = disposables.add(new TextMateGrammarCatalogModel({
+	revision: 1,
+	grammars: [{ scopeName: rustGrammar.scopeName, languageId: 'rust', injectTo: [], content: JSON.stringify(rustGrammar) }],
+}));
+const scopeTheme = disposables.add(new TextMateScopeThemeModel());
+const models = disposables.add(new BrowserTextModelService(resourceStore, {
+	languageService,
+	languageConfigurationService,
+	languageFeaturesService,
+	syntaxService: { workerFactory: createTextMateSyntaxWorkerFactory(grammars, scopeTheme) },
+}));
 disposables.add(new WorkbenchLanguageFeatures(languageService, languageConfigurationService, languageFeaturesService));
 let syntaxAnalysisCount = 0;
 disposables.add(new AppServerSyntaxProviders(languageFeaturesService, {
@@ -105,10 +119,7 @@ disposables.add(new AppServerSyntaxProviders(languageFeaturesService, {
 		return {
 			revision: params.revision,
 			hasErrors: true,
-			tokens: [
-				{ kind: "keyword", range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 2 } } },
-				{ kind: "function", range: { start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } } },
-			],
+			tokens: [],
 			foldingRanges: [{ range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 2, columnIndex: 1 } } }],
 			symbols: [{
 				name: "main",

@@ -8,6 +8,8 @@ import { builtinLanguagePackCatalogs } from "../../common/localizationCatalogs.j
 import { LocalizationConfiguration, WorkbenchLocaleService, normalizeLocale, resolveLocale } from "../../common/locale.js";
 import { WorkbenchLocalizationService } from "../../browser/workbenchLocalizationService.js";
 import { resetNlsResolver } from '../../../../../nls.js';
+import { JSDOM } from 'jsdom';
+import { QuickInputController } from '../../../../../platform/quickinput/browser/quickInputController.js';
 
 test("locale resolution prefers exact, base-language, and English fallback matches", () => {
 	assert.equal(normalizeLocale("ZH_cn"), "zh-CN");
@@ -60,6 +62,28 @@ test('folding command metadata uses the selected Chinese language catalog', asyn
 		assert.match(fold.args![0]!.description!, /从 0 开始的行号/);
 	} finally {
 		resetNlsResolver();
+	}
+});
+
+test('Quick Input uses Chinese labels from the selected catalog', async () => {
+	using configuration = new InMemoryConfigurationService();
+	using languagePacks = new MarketplaceLanguagePackService(createMarketplace(), builtinLanguagePackCatalogs);
+	using localeService = new WorkbenchLocaleService(configuration, languagePacks);
+	using localization = new WorkbenchLocalizationService(localeService, languagePacks);
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		await localization.whenReady;
+		await localeService.setLocale('zh-CN');
+		using controller = new QuickInputController(dom.window.document.body);
+		using picker = controller.createQuickPick();
+		picker.show();
+		assert.equal(dom.window.document.querySelector('[role="dialog"]')?.getAttribute('aria-label'), '快速选择');
+		assert.equal(dom.window.document.querySelector('[role="listbox"]')?.getAttribute('aria-label'), '快速选择结果');
+		picker.items = [];
+		assert.equal(dom.window.document.querySelector('.ash-quick-pick-empty')?.textContent, '没有匹配结果');
+	} finally {
+		resetNlsResolver();
+		dom.window.close();
 	}
 });
 

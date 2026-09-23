@@ -13,6 +13,7 @@ import type {
 	IQuickPickItem,
 } from "../common/quickInput.js";
 import { QuickInputList } from "./quickInputList.js";
+import { localize } from '../../../nls.js';
 
 export interface BrowserQuickPickOptions {
 	readonly onShow: (quickPick: IBrowserQuickPickHost) => void;
@@ -29,7 +30,7 @@ export interface IBrowserQuickPickHost {
 }
 
 /** DOM implementation of one searchable Quick Pick controller. */
-export class BrowserQuickPick<TItem extends IQuickPickItem>
+export class QuickPick<TItem extends IQuickPickItem>
 	extends Disposable
 	implements IQuickPick<TItem> {
 	readonly element: HTMLDivElement;
@@ -54,7 +55,7 @@ export class BrowserQuickPick<TItem extends IQuickPickItem>
 		this.element = h(ownerDocument, "div");
 		this.element.className = "ash-quick-pick";
 		setRole(this.element, "dialog");
-		setAriaAttribute(this.element, "label", "Quick Pick");
+		setAriaAttribute(this.element, "label", localize('quickInput.title', 'Quick Pick'));
 		this._register(toDisposable(() => {
 			if (this.visible) this.hide();
 			options.onDispose(this);
@@ -64,7 +65,7 @@ export class BrowserQuickPick<TItem extends IQuickPickItem>
 		this.list = this._register(new QuickInputList<TItem>(this.element));
 		this.inputBox = this._register(new InputBox(this.element, {
 			type: "search",
-			ariaLabel: "Quick Pick",
+			ariaLabel: localize('quickInput.title', 'Quick Pick'),
 			role: "combobox",
 			ariaAutoComplete: "list",
 			ariaControls: this.list.listId,
