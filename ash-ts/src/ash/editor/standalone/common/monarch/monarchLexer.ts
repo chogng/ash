@@ -85,7 +85,7 @@ export class MonarchTokenizer extends Disposable implements ITokenizationSupport
 
 	public tokenizeEncoded(line: string, hasEOL: boolean, state: IState): EncodedTokenizationResult {
 		const result = this.scan(line, hasEOL, state, true);
-		return { tokens: new Uint32Array(result.encoded), endState: result.endState };
+		return { tokens: new Uint32Array(result.encoded), rawTokens: result.tokens, endState: result.endState };
 	}
 
 	private scan(line: string, hasEOL: boolean, initial: IState, encoded: boolean): { tokens: Token[]; encoded: number[]; endState: LineState } {
@@ -102,7 +102,7 @@ export class MonarchTokenizer extends Disposable implements ITokenizationSupport
 			}
 			metadata.push(offset, value);
 		};
-		const emit = (offset: number, type: string, language = this.languageId): void => {
+		const emitRaw = (offset: number, type: string, language: string): void => {
 			if (offset >= line.length) {
 				return;
 			}
@@ -110,6 +110,9 @@ export class MonarchTokenizer extends Disposable implements ITokenizationSupport
 			if (!previous || previous.type !== type || previous.language !== language) {
 				tokens.push({ offset, type, language });
 			}
+		};
+		const emit = (offset: number, type: string, language = this.languageId): void => {
+			emitRaw(offset, type, language);
 			if (encoded) {
 				emitMetadata(offset, theme.match(this.languageService.languageIdCodec.encodeLanguageId(language), type) | MetadataConsts.BALANCED_BRACKETS_MASK);
 			}
@@ -146,6 +149,9 @@ export class MonarchTokenizer extends Disposable implements ITokenizationSupport
 						const childHasEOL = exit === undefined && hasEOL;
 						if (encoded && support.tokenizeEncoded) {
 							const result = support.tokenizeEncoded(content, childHasEOL, childState);
+							for (const token of result.rawTokens ?? []) {
+								emitRaw(offset + token.offset, token.type, token.language);
+							}
 							for (let index = 0; index < result.tokens.length; index += 2) {
 								emitMetadata(offset + result.tokens[index]!, result.tokens[index + 1]!);
 							}

@@ -27,6 +27,72 @@ test('standalone token themes recolor text and retain matching colors when copie
 	expect(errors).toEqual([]);
 });
 
+test('standalone token inspector follows the caret and closes on Escape or model removal', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareTokenTheme('plain'));
+	await expect(page.locator('#caller .stanza-editor-token').filter({ hasText: 'alpha' })).toHaveCSS('color', 'rgb(18, 52, 86)');
+	const input = page.locator('#caller .stanza-editor-input');
+	await input.focus();
+	await page.keyboard.press('F1');
+	const picker = page.locator('#caller .ash-quick-pick');
+	await picker.getByRole('combobox').fill('Inspect Tokens');
+	await expect(picker.locator('.ash-quick-pick-row-label')).toHaveText('Developer: Inspect Tokens');
+	await page.keyboard.press('Enter');
+	const inspector = page.locator('#caller .stanza-editor-inspect-tokens');
+	await expect(inspector).toBeVisible();
+	await expect(inspector).toContainText('entity.member');
+	await expect(inspector).toContainText('alpha');
+	await expect(inspector).toContainText('#123456');
+	await expect(inspector).toHaveAttribute('role', 'status');
+	await expect(input).toBeFocused();
+	await page.evaluate(() => window.ashStandaloneIntegration.setStickyTheme('token-theme-second'));
+	await expect(inspector).toContainText('#234567');
+	await page.evaluate(() => window.ashStandaloneIntegration.setTokenInspectionPosition(8));
+	await expect(inspector).toContainText('comment.line');
+	await expect(inspector).toContainText('beta');
+	await page.evaluate(() => window.ashStandaloneIntegration.setStickyTheme('ash-high-contrast-dark'));
+	const surface = await inspector.evaluate(node => {
+		const style = getComputedStyle(node);
+		return { background: style.backgroundColor, border: style.borderStyle };
+	});
+	expect(surface.background).not.toBe('rgba(0, 0, 0, 0)');
+	expect(surface.border).toBe('solid');
+	await page.keyboard.press('Escape');
+	await expect(inspector).toHaveCount(0);
+	await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.inspectTokens'));
+	await expect(inspector).toBeVisible();
+	await page.evaluate(() => window.ashStandaloneIntegration.detachTokenInspectionModel());
+	await expect(inspector).toHaveCount(0);
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	expect(errors).toEqual([]);
+});
+
+test('standalone token inspector shows Monarch and embedded scopes', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareTokenTheme('monarch'));
+	await expect(page.locator('#caller .stanza-editor-token').filter({ hasText: 'alpha' })).toHaveCSS('color', 'rgb(18, 52, 86)');
+	await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.inspectTokens'));
+	const inspector = page.locator('#caller .stanza-editor-inspect-tokens');
+	await expect(inspector).toContainText('entity.member');
+	await page.evaluate(() => window.ashStandaloneIntegration.setTokenInspectionPosition(10));
+	await expect(inspector).toContainText('comment');
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+
+	await page.reload();
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareTokenTheme('monarch-embedded'));
+	await expect(page.locator('#caller .stanza-editor-token').filter({ hasText: 'alpha' })).toHaveCSS('color', 'rgb(18, 52, 86)');
+	await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.inspectTokens'));
+	const embeddedInspector = page.locator('#caller .stanza-editor-inspect-tokens');
+	await page.evaluate(() => window.ashStandaloneIntegration.setTokenInspectionPosition(3));
+	await expect(embeddedInspector).toContainText('monarch-child');
+	await expect(embeddedInspector).toContainText('entity.member');
+	await page.evaluate(() => window.ashStandaloneIntegration.setTokenInspectionPosition(9));
+	await expect(embeddedInspector).toContainText('comment.line');
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
 test('standalone encoded tokens use the supplied palette and font metadata', async ({ page }) => {
 	await page.goto('/standalone.html?symbolIconsOff');
 	await page.evaluate(() => window.ashStandaloneIntegration.prepareTokenTheme('encoded'));

@@ -133,6 +133,8 @@ Workbench 模式 contribution 是唯一能力选择点。Code 与 Academic 各�
 
 Standalone 调用者通过 `ash-light`、`ash-dark`、`ash-high-contrast-light`、`ash-high-contrast-dark` 这些内置主题名，或通过 `editor.defineNamedTheme` 注册的自定义主题名调用 `editor.setTheme`。`IColorTheme` 与编译后的内置主题快照属于 `platform/theme` 和 `StandaloneThemeService` 的内部状态，不从 `editor.api.ts` 导出，也不能通过 standalone service override 注入。
 
+F1 的 `Developer: Inspect Tokens` 动作在光标旁显示当前词法 token 的语言、原始 scope、修饰符和前景色；普通与 Monarch tokenizer 的 scope 与编码后的主题颜色由同一次分词结果保留。光标移动和主题变化会刷新内容，Escape、模型卸载或编辑器释放会关闭检查器。检查器只读取模型已有分词结果，不另起分词链。
+
 `editor.defineTheme` 接受标准 `base`、`inherit`、`rules` 和 `colors`，内置基底为 `vs`、`vs-dark`、`hc-black`、`hc-light`，颜色来自 Ash 平台主题。`languages.setTokensProvider` 接受普通或编码 tokenizer，`registerTokensProviderFactory` 按模型需要延迟创建。两者进入同一个 TokenizationRegistry；主题切换同步更新着色与复制使用的颜色表。`languages.setColorMap` 可以设置编码颜色表，传入 `null` 恢复当前主题的颜色表。
 
 `languages.onLanguage` 在模型首次使用语言时激活，`onLanguageEncountered` 也接收 Monarch 嵌入语言的首次使用。监听可在服务初始化前注册并释放；`getLanguages` 返回独立的语言描述。`setMonarchTokensProvider` 编译声明式规则，状态随模型的逐行分词缓存传递；规则支持 include、捕获组、条件、状态栈、rematch 和嵌入语言，使用同一主题及语言编码表。注册和延迟创建的 tokenizer 随返回句柄释放。

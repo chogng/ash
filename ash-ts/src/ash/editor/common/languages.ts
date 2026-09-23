@@ -319,6 +319,7 @@ export interface TokenizationResult {
 export interface EncodedTokenizationResult {
 	readonly tokens: Uint32Array;
 	readonly endState: IState;
+	readonly rawTokens?: readonly Token[];
 }
 
 export interface ITokenizationSupport {

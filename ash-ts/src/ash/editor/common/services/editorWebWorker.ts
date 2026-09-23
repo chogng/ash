@@ -197,7 +197,7 @@ export class SyntaxProviderWorker implements languages.SyntaxWorker, LanguageWor
 		readonly languageId: string;
 		readonly initialState: languages.IState;
 		readonly states: TokenizationStateStore<languages.IState>;
-		readonly lines: readonly { text: string; hasEOL: boolean; tokens: readonly languages.Token[] | Uint32Array }[];
+		readonly lines: readonly { text: string; hasEOL: boolean; tokens: readonly languages.Token[] | Uint32Array; rawTokens?: readonly languages.Token[] }[];
 	} | undefined;
 
 	constructor(
@@ -283,7 +283,7 @@ export class SyntaxProviderWorker implements languages.SyntaxWorker, LanguageWor
 		const cached = this.tokenizationCache?.support === support && this.tokenizationCache.languageId === request.payload.languageId
 			? this.tokenizationCache
 			: undefined;
-		const next: { text: string; hasEOL: boolean; tokens: readonly languages.Token[] | Uint32Array }[] = [];
+		const next: { text: string; hasEOL: boolean; tokens: readonly languages.Token[] | Uint32Array; rawTokens?: readonly languages.Token[] }[] = [];
 		const states = new TokenizationStateStore<languages.IState>();
 		let state = support.getInitialState();
 		const initialState = state.clone();
@@ -296,19 +296,20 @@ export class SyntaxProviderWorker implements languages.SyntaxWorker, LanguageWor
 			const previousStartState = index === 0 ? cached?.initialState : cached?.states.getEndState(index);
 			const previousEndState = cached?.states.getEndState(index + 1);
 			const result = previous?.text === line && previous.hasEOL === hasEOL && previousStartState?.equals(state) && previousEndState
-				? { tokens: previous.tokens, endState: previousEndState }
+				? { tokens: previous.tokens, rawTokens: previous.rawTokens, endState: previousEndState }
 				: support.tokenizeEncoded ? support.tokenizeEncoded(line, hasEOL, state.clone()) : support.tokenize(line, hasEOL, state.clone());
-			next.push({ text: line, hasEOL, tokens: result.tokens });
+			const rawTokens = 'rawTokens' in result ? result.rawTokens : undefined;
+			next.push({ text: line, hasEOL, tokens: result.tokens, rawTokens });
 			states.setEndState(index + 1, result.endState.clone());
 			state = result.endState;
-			this.appendLineTokens(tokens, result.tokens, index + 1, line);
+			this.appendLineTokens(tokens, result.tokens, index + 1, line, rawTokens);
 		}
 		const normalized = createLanguageTokenSnapshotNormalizer(request.snapshot)({ tokens });
 		this.tokenizationCache = { support, languageId: request.payload.languageId, initialState, states, lines: next };
 		return normalized;
 	}
 
-	private appendLineTokens(target: LanguageToken[], tokens: readonly languages.Token[] | Uint32Array, lineNumber: number, line: string): void {
+	private appendLineTokens(target: LanguageToken[], tokens: readonly languages.Token[] | Uint32Array, lineNumber: number, line: string, rawTokens?: readonly languages.Token[]): void {
 		if (!(tokens instanceof Uint32Array)) {
 			for (let index = 0; index < tokens.length; index++) {
 				const token = tokens[index]!;
@@ -327,6 +328,7 @@ export class SyntaxProviderWorker implements languages.SyntaxWorker, LanguageWor
 		if (tokens.length % 2 !== 0) {
 			throw new TypeError('Encoded tokens must contain offset and metadata pairs');
 		}
+		let rawIndex = 0;
 		for (let index = 0; index < tokens.length; index += 2) {
 			const start = tokens[index]!;
 			const end = tokens[index + 2] ?? line.length;
@@ -344,18 +346,34 @@ export class SyntaxProviderWorker implements languages.SyntaxWorker, LanguageWor
 				...(style & FontStyle.Underline ? ['underline' as const] : []),
 				...(style & FontStyle.Strikethrough ? ['strikethrough' as const] : []),
 			];
-			target.push({
-				range: new Range(lineNumber, start + 1, lineNumber, end + 1),
-				tokenType: type === StandardTokenType.Comment ? 'comment' : type === StandardTokenType.String ? 'string' : type === StandardTokenType.RegEx ? 'regexp' : 'other',
-				modifiers: [],
-				languageId: codec.decodeLanguageId(TokenMetadata.getLanguageId(metadata)),
-				...(TokenMetadata.containsBalancedBrackets(metadata) ? {} : { balancedBrackets: false as const }),
-				presentation: {
-					foreground: foreground === ColorId.None ? undefined : Color.Format.CSS.formatHexA(colors[foreground]!, true),
-					background: background === ColorId.None || background === ColorId.DefaultBackground ? undefined : Color.Format.CSS.formatHexA(colors[background]!, true),
-					fontStyle,
-				},
-			});
+			const languageId = codec.decodeLanguageId(TokenMetadata.getLanguageId(metadata));
+			const standardType = type === StandardTokenType.Comment ? 'comment' : type === StandardTokenType.String ? 'string' : type === StandardTokenType.RegEx ? 'regexp' : 'other';
+			const presentation = {
+				foreground: foreground === ColorId.None ? undefined : Color.Format.CSS.formatHexA(colors[foreground]!, true),
+				background: background === ColorId.None || background === ColorId.DefaultBackground ? undefined : Color.Format.CSS.formatHexA(colors[background]!, true),
+				fontStyle,
+			};
+			while (rawTokens?.[rawIndex + 1] && rawTokens[rawIndex + 1]!.offset <= start) rawIndex++;
+			const append = (from: number, to: number): void => {
+				if (to <= from) return;
+				const rawToken = rawTokens?.[rawIndex];
+				target.push({
+					range: new Range(lineNumber, from + 1, lineNumber, to + 1),
+					tokenType: rawToken && rawToken.offset <= from && rawToken.language === languageId && rawToken.type ? rawToken.type : standardType,
+					modifiers: [],
+					languageId,
+					...(TokenMetadata.containsBalancedBrackets(metadata) ? {} : { balancedBrackets: false as const }),
+					presentation,
+				});
+			};
+			let segmentStart = start;
+			while (rawTokens?.[rawIndex + 1] && rawTokens[rawIndex + 1]!.offset < end) {
+				const boundary = rawTokens[rawIndex + 1]!.offset;
+				append(segmentStart, boundary);
+				rawIndex++;
+				segmentStart = boundary;
+			}
+			append(segmentStart, end);
 		}
 	}
 

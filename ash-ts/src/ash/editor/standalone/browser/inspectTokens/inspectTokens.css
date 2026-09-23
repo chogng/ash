@@ -1,0 +1,33 @@
+.stanza-editor-inspect-tokens {
+	box-sizing: border-box;
+	max-width: min(360px, calc(100vw - 24px));
+	padding: 8px 10px;
+	color: var(--ash-editor-foreground);
+	background: var(--ash-editor-widget-background);
+	border: 1px solid var(--ash-editor-widget-border);
+	border-radius: 8px;
+	box-shadow: 0 4px 12px var(--ash-editor-widget-shadow);
+	overflow-wrap: anywhere;
+}
+
+.stanza-editor-inspect-tokens-heading,
+.stanza-editor-inspect-tokens-sample {
+	display: block;
+}
+
+.stanza-editor-inspect-tokens-sample {
+	margin-top: 6px;
+	white-space: pre-wrap;
+}
+
+.stanza-editor-inspect-tokens dl {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	gap: 4px 12px;
+	margin: 8px 0 0;
+}
+
+.stanza-editor-inspect-tokens dd {
+	min-width: 0;
+	margin: 0;
+}

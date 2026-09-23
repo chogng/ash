@@ -137,6 +137,8 @@ type LanguageRequestChange = 'text' | 'selection' | 'language' | 'provider' | 'm
 type ContributionRequestKind = 'colors' | 'highlights' | 'completion' | 'folding' | 'links' | 'codelens' | 'hover';
 interface StandaloneHarness {
 	prepareTokenTheme(kind: 'plain' | 'encoded' | 'lazy' | 'activation' | 'monarch' | 'monarch-embedded'): void;
+	setTokenInspectionPosition(column: number): void;
+	detachTokenInspectionModel(): void;
 	removeMonarchCommentStart(): void;
 	colorizePreview(): Promise<{ modelsBefore: number; modelsAfter: number }>;
 	readTokenTheme(): { colors: string[]; styles: number[]; languages: string[]; html: string | null; factoryCalls: number };
@@ -542,6 +544,8 @@ const emptyResources = new DisposableStore();
 let emptyEditor: stanza.IStandaloneCodeEditor;
 
 window.ashStandaloneIntegration = {
+	setTokenInspectionPosition: column => callerEditor.setPosition(new stanza.Position(1, column)),
+	detachTokenInspectionModel: () => callerEditor.setModel(null),
 	prepareTokenTheme: kind => {
 		tokenThemeResources.clear();
 		tokenFactoryCalls = 0;

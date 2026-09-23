@@ -1,6 +1,7 @@
 import { type Range } from './core/range.js';
 import { type StandardTokenType } from './encodedTokenAttributes.js';
 import { type LineTokens } from './tokens/lineTokens.js';
+import { type LanguageToken } from './tokens/languageTokens.js';
 import { type SparseMultilineTokens } from './tokens/sparseMultilineTokens.js';
 
 /** Tokenization state and operations owned by one text model. */
@@ -16,6 +17,7 @@ export interface ITokenizationTextModelPart {
 	hasAccurateTokensForLine(lineNumber: number): boolean;
 	isCheapToTokenize(lineNumber: number): boolean;
 	getLineTokens(lineNumber: number): LineTokens;
+	getLanguageTokens(lineIndex: number): readonly LanguageToken[];
 	getTokenTypeIfInsertingCharacter(lineNumber: number, column: number, character: string): StandardTokenType;
 	tokenizeLinesAt(lineNumber: number, lines: string[]): LineTokens[] | null;
 	/** Tokenizes proposed lines using the current document's lexical state without publishing them. */

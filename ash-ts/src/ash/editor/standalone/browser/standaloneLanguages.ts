@@ -230,7 +230,7 @@ function tokenizationSupport(languageId: string, provider: TokensProvider | Enco
 				tokens[index * 2] = token.offset;
 				tokens[index * 2 + 1] = theme.match(encodedId, token.type) | MetadataConsts.BALANCED_BRACKETS_MASK;
 			});
-			return { endState: result.endState, tokens };
+			return { endState: result.endState, tokens, rawTokens: normalized };
 		},
 	};
 }

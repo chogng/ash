@@ -33,7 +33,6 @@
 | 上游缺失路径 | 当前下层条件 |
 | --- | --- |
 | `browser/standalone-tokens.css` | token 规则、继承和颜色表已进入既有 ViewLine presentation 与富文本复制链；尚无需要单独生成 token class 样式的调用方，不创建空 CSS |
-| `browser/inspectTokens/inspectTokens.ts`、`inspectTokens.css` | 需要完整 token 结果、主题解释及真实检查控件；目前未注册检查动作 |
 | `browser/quickAccess/standaloneHelpQuickAccess.ts` | 命令面板和符号选择已接通 Quick Input；通用 Quick Access registry/provider 契约仍待闭合。Go to Line action 仍使用已确认保留的 Ash 输入框 |
 | `browser/referenceSearch/standaloneReferenceSearch.ts` | 本地引用跳转由现有语言导航控制器和 PeekViewWidget 承担；标准 ReferencesController 状态与模型链尚未对齐 |
 | `browser/standaloneWebWorker.ts`、`browser/services/standaloneWebWorkerService.ts` | 当前是模型绑定的编辑 Worker 与既有消息端口；标准通用 Worker 服务、代理与多资源同步仍缺失 |
@@ -2141,3 +2140,5 @@ Standalone Go to Offset：`editor.action.gotoOffset` 已从命令面板进入现
 Standalone 符号选择文件补齐：`standalone/browser/quickAccess/standaloneGotoSymbolQuickAccess.ts` 接管 `editor.action.quickOutline`、当前编辑器的文档符号请求和 Quick Pick 跳转。原仅 Ash 的 `gotoSymbolController.ts`、`gotoSymbol.contribution.ts` 与 `gotoSymbol.css` 已在生产入口和测试迁完后删除，共享 `DocumentSymbolService` 保留。Quick Pick 增加可设置的无障碍名称与失焦事件；关闭时只在焦点仍处于选择框内才恢复此前焦点，避免抢走另一个编辑器的焦点。文件集合检查现为 450 个同路径、0 个大小写错误，CSS 检查无新增上游品牌引用。Stanza/Renderer 生产构建、类型检查、Quick Input 与本地化各 6 项单测和 11 项相关 Chromium 场景通过；架构测试 23 项通过、1 项旧断言失败，该断言仍要求当前基线已不存在的 `contrib/smartSelect/common/selectionRanges.ts`。临时移除该断言后，同一测试又停在旧的 `colorPickerWidget.ts` 布局断言，因此恢复原断言，本批不改这组范围外检查。Code 产品的浏览器 smoke 场景在启动前因本机缺少 Go 命令而止于 `spawnSync go ENOENT`，未执行到 Playwright。
 
 iPad 显示键盘入口补齐：`editor.main.ts` 在 Standalone 装配同路径 `iPadShowKeyboard.ts`，仅对带触摸能力的 iPad/iPhone 或 iPadOS 桌面 UA 创建可聚焦覆盖控件；只读时移除，恢复可编辑时重建，释放编辑器时清理。触摸或焦点进入控件会调用原编辑器焦点入口，文本输入仍由既有输入 owner 处理。Ash 自有 CSS 和两份 SVG 随主题切换，按钮名称接入中英文目录。浏览器模拟覆盖触摸焦点、只读切换、释放、尺寸与浅色/深色/高对比度计算样式；它不能证明真机软键盘弹出的系统行为。同路径审计现为 452 个，CSS ownership 无上游复制或新品牌引用；定向浏览器 3 项、Base 2 项和本地化 6 项通过，Stanza 与 Renderer 构建通过。完整浏览器检查为 604 项通过、22 项失败，失败场景集中在输入历史、括号、缩进导线、行内补全和 GPU 括号字形等既有链路；本批 iPad 场景通过，故完整检查不能记为通过。
+
+Standalone token 检查入口补齐：`editor.main.ts` 注册上游同路径 `inspectTokens/inspectTokens.ts` 与 Ash 自有 CSS；F1 动作读取唯一 TextModel 分词状态，随光标和主题更新，Escape、模型切换与编辑器释放时清理。普通、Monarch 及嵌入语言 tokenizer 在单次编码分词结果中保留原始 scope；模型 Worker 按原始 scope 边界拆分同色 token，同时保留已有颜色与字体数据。Chromium 场景覆盖命令入口、焦点、普通与嵌入 scope、主题切换、高对比度计算样式和释放。`check-editor-alignment.mjs --test=all` 通过，239/239 个单测文件及 632 项 Playwright 场景通过；`build:renderer` 通过。Editor 全目录同路径 454、无大小写差异；CSS 审计无上游复制或品牌引用。Standalone 尚缺 6 个生产文件，Quick Access 帮助、引用搜索、通用 Worker 与 Tree-sitter 各需先闭合下层能力，`standalone-tokens.css` 尚无 token class 调用方。
