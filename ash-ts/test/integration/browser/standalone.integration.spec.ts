@@ -174,6 +174,20 @@ test('standalone command picker executes editor actions, restores focus and foll
 	expect(errors).toEqual([]);
 });
 
+test('standalone command registrations execute through the command service and release their shortcuts', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareStandaloneCommands());
+	await page.locator('#caller .stanza-editor-input').focus();
+	await page.keyboard.press('F8');
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readStandaloneCommands())).toEqual({ calls: ['key'], registered: true });
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.runStandaloneCommand('payload'))).toBe('payload');
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readStandaloneCommands())).toEqual({ calls: ['key', 'alias:payload'], registered: true });
+	await page.evaluate(() => window.ashStandaloneIntegration.releaseStandaloneCommands());
+	await page.keyboard.press('F8');
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readStandaloneCommands())).toEqual({ calls: ['key', 'alias:payload'], registered: false });
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
 for (const scheme of ['dark', 'light'] as const) {
 	test(`standalone command picker toggles ${scheme} high contrast and restores the theme`, async ({ page }) => {
 		await page.goto('/standalone.html');

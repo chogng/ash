@@ -52,6 +52,8 @@ Marker API 续批准入：宿主通过 `editor.setModelMarkers` 更新一个已�
 
 本批 `typecheck:stanza`、`build:stanza`、marker 服务单测 4 项及 marker 浏览器场景 2 项通过。完整浏览器套件为 605 项通过、22 项失败；失败集中在括号、注释、inline completion 与 GPU 场景。注释快捷键失败可单独复现，现象是快捷键没有改变文本；该场景不调用本批 marker API。完整对齐检查因此未通过，不能把定向验证记作全套通过。
 
+命令注册续批准入：宿主调用 `editor.addCommand` / `registerCommand` → 原 `CommandsRegistry` 持有唯一 handler → `StandaloneCommandService` 在当前窗口作用域执行并传递参数 → 返回的注册句柄移除命令。双方都有的 `standalone/browser/standaloneEditor.ts` 与 `editor.api.ts` 接入公开入口；既有 standalone 浏览器场景验证物理快捷键触发、命令服务参数传递和注销，未改命令注册表或快捷键解析器。`typecheck:stanza`、`build:stanza`、对齐结构检查及相邻 F1/高对比度浏览器场景共 4 项通过。`addEditorAction` 与动态快捷键公开入口仍待单独闭合。
+
 ### 用户已确认的 Ash 底层归属
 
 | 准确路径（相对 `ash-ts/src/ash/`） | 现状与建议 |

@@ -221,6 +221,10 @@ interface StandaloneHarness {
 	runDisposedLanguageRequest(kind: 'codeAction' | 'rename' | 'parameterHints' | 'queuedParameterHints'): Promise<{ calls: number; aborted: boolean }>;
 	runEditorActivity(): Promise<boolean[]>;
 	runHistoryCommands(useAlias: boolean): Promise<string[]>;
+	prepareStandaloneCommands(): void;
+	runStandaloneCommand(value: string): Promise<string>;
+	readStandaloneCommands(): { readonly calls: string[]; readonly registered: boolean };
+	releaseStandaloneCommands(): void;
 	prepareInputHistory(): void;
 	runInputHistoryCommand(command: 'undo' | 'redo' | 'default:undo' | 'default:redo'): Promise<string[]>;
 	runSelectAllCommand(): Promise<{ selections: string[]; inputSelection: string }>;
@@ -428,6 +432,8 @@ const inlayRequests: {
 let semanticRegistration: ReturnType<typeof stanza.languages.registerDocumentSemanticTokensProvider> | undefined;
 let completionRegistration: ReturnType<typeof stanza.languages.registerCompletionItemProvider> | undefined;
 const contributionProviders = new DisposableStore();
+const standaloneCommands = new DisposableStore();
+const standaloneCommandCalls: string[] = [];
 const contributionRequests: { languageId: string; isAborted: () => boolean; finish: (empty: boolean) => void }[] = [];
 
 function deferContributionRequest<T>(languageId: string, isAborted: () => boolean, result: T, empty: T): Promise<T> {
@@ -1693,6 +1699,28 @@ window.ashStandaloneIntegration = {
 			outside.remove();
 		}
 	},
+	prepareStandaloneCommands: () => {
+		standaloneCommands.clear();
+		standaloneCommandCalls.length = 0;
+		standaloneCommands.add(stanza.editor.addCommand({
+			id: 'test.standalone.command',
+			run: () => { standaloneCommandCalls.push('key'); },
+		}));
+		standaloneCommands.add(stanza.editor.registerCommand('test.standalone.alias', (_accessor, value) => {
+			standaloneCommandCalls.push(`alias:${String(value)}`);
+			return String(value);
+		}));
+		standaloneCommands.add(KeybindingsRegistry.registerKeybindingRule({
+			command: 'test.standalone.command',
+			keybinding: Keybinding.single(logicalKey('F8')),
+		}));
+	},
+	runStandaloneCommand: value => StandaloneServices.get(ICommandService).executeCommand<string>('test.standalone.alias', value),
+	readStandaloneCommands: () => ({
+		calls: [...standaloneCommandCalls],
+		registered: CommandsRegistry.hasCommand('test.standalone.command') && CommandsRegistry.hasCommand('test.standalone.alias'),
+	}),
+	releaseStandaloneCommands: () => standaloneCommands.clear(),
 	runHistoryCommands: async useAlias => {
 		const services = StandaloneServices.get(IInstantiationService);
 		const outside = document.createElement('button');
@@ -2520,6 +2548,7 @@ window.ashStandaloneIntegration = {
 	releaseOwned: () => ownedEditor.dispose(),
 	dispose: () => {
 		emptyResources.dispose();
+		standaloneCommands.dispose();
 		contributionProviders.dispose();
 		for (const request of contributionRequests) {
 			request.finish(true);

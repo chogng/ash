@@ -12,8 +12,14 @@ import { createTextModel, StandaloneEditor, type IStandaloneCodeEditor, type ISt
 import { StandaloneServices, type StandaloneServiceOverrides } from "./standaloneServices.js";
 import { Colorizer, type IColorizerElementOptions, type IColorizerOptions } from './colorizer.js';
 import { IMarkerService, type Marker, type MarkerInput } from '../../../platform/markers/common/markers.js';
+import { CommandsRegistry, type CommandHandler } from '../../../platform/commands/common/commands.js';
 
 export type StandaloneMarkerData = Omit<MarkerInput, 'resource'>;
+
+export interface ICommandDescriptor {
+	readonly id: string;
+	readonly run: CommandHandler;
+}
 
 export interface IStandaloneEditorApi {
 	readonly ContentWidgetPositionPreference: typeof ContentWidgetPositionPreference;
@@ -28,6 +34,8 @@ export interface IStandaloneEditorApi {
 	readonly removeAllMarkers: typeof removeAllMarkers;
 	readonly getModelMarkers: typeof getModelMarkers;
 	readonly onDidChangeMarkers: typeof onDidChangeMarkers;
+	readonly addCommand: typeof addCommand;
+	readonly registerCommand: typeof registerCommand;
 	readonly getEditors: typeof getEditors;
 	readonly onDidCreateEditor: typeof onDidCreateEditor;
 	readonly onDidCreateModel: typeof onDidCreateModel;
@@ -159,6 +167,17 @@ export function onDidChangeMarkers(listener: (resources: readonly URI[]) => void
 	return StandaloneServices.get(IMarkerService).onDidChange(event => listener(event.resources));
 }
 
+export function addCommand(descriptor: ICommandDescriptor): IDisposable {
+	if (!descriptor || typeof descriptor.id !== 'string' || typeof descriptor.run !== 'function') {
+		throw new TypeError('Standalone command requires an id and run handler');
+	}
+	return CommandsRegistry.register(descriptor.id, descriptor.run);
+}
+
+export function registerCommand(id: string, handler: CommandHandler): IDisposable {
+	return CommandsRegistry.register(id, handler);
+}
+
 export function getEditors(): readonly ICodeEditor[] {
 	return StandaloneServices.get(ICodeEditorService).listCodeEditors();
 }
@@ -197,6 +216,8 @@ export function createStandaloneEditorApi(): IStandaloneEditorApi {
 		removeAllMarkers,
 		getModelMarkers,
 		onDidChangeMarkers,
+		addCommand,
+		registerCommand,
 		getEditors,
 		onDidCreateEditor,
 		onDidCreateModel,
