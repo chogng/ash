@@ -47,6 +47,28 @@ fn markdown_preserves_structure_styles_and_link_targets() {
 }
 
 #[test]
+fn task_lists_replace_bullets_and_align_wrapped_text() {
+    let rows = render_text(
+        "- [ ] open item with several words\n  - [x] nested task\n- [x] done\n- ordinary\n\n9. [x] numbered item with several words\n10. [ ]\n",
+        20,
+    );
+    let text = rows
+        .iter()
+        .map(|row| row.line.to_string())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(rows.iter().all(|row| row.line.width() <= 20));
+    assert!(text.contains("☐ open item"), "{text}");
+    assert!(text.contains("☑ done"), "{text}");
+    assert!(text.contains("  ☑ nested task"), "{text}");
+    assert!(text.contains("• ordinary"), "{text}");
+    assert!(text.contains("9. ☑ numbered"), "{text}");
+    assert!(text.contains("10. ☐"), "{text}");
+    assert!(!text.contains("• ☑"), "{text}");
+    crate::tui_assert_snapshot!("task_list_checkboxes_and_wrapping", text);
+}
+
+#[test]
 fn tables_reflow_to_records_and_preserve_links() {
     let source = "| Name | Result |\n| :--- | ---: |\n| [中文](https://example.com) | complete |\n| beta | pending |";
     for width in [40, 12] {

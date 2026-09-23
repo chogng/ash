@@ -16,6 +16,8 @@ pub struct McpServerRuntimeStatus {
     pub connection_generation: Option<u64>,
     pub tool_count: u64,
     pub diagnostic: Option<String>,
+    /// Scheme, host, and port of a Streamable HTTP endpoint; absent for stdio.
+    pub http_origin: Option<String>,
 }
 
 /// Immutable runtime status published with one MCP catalog generation.

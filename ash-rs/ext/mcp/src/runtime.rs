@@ -11,6 +11,7 @@ use ash_mcp::McpCallError;
 use ash_mcp::McpRuntime;
 use ash_mcp::McpRuntimeOptions;
 use ash_mcp::McpServerDefinition;
+use ash_mcp::McpServerTransport;
 use ash_mcp::McpSessionFactory;
 use ash_mcp::McpToolBinding;
 use ash_mcp::RmcpSessionFactory;
@@ -194,9 +195,17 @@ fn run_worker(
     let server_metadata = definitions
         .iter()
         .map(|definition| {
+            let http_origin = match definition.transport() {
+                McpServerTransport::Stdio(_) => None,
+                McpServerTransport::StreamableHttp(server) => url::Url::parse(server.uri())
+                    .ok()
+                    .filter(|url| matches!(url.scheme(), "http" | "https"))
+                    .map(|url| url.origin().ascii_serialization()),
+            };
             (
                 definition.id().clone(),
                 definition.display_name().to_owned(),
+                http_origin,
             )
         })
         .collect::<Vec<_>>();
@@ -298,11 +307,11 @@ fn run_worker(
 
 fn runtime_status(
     runtime: &McpRuntime,
-    server_metadata: &[(ash_config::McpServerId, String)],
+    server_metadata: &[(ash_config::McpServerId, String, Option<String>)],
 ) -> McpRuntimeStatusSnapshot {
     let catalog_generation = runtime.catalog().generation();
     let mut servers = Vec::with_capacity(server_metadata.len());
-    for (server_id, display_name) in server_metadata {
+    for (server_id, display_name, http_origin) in server_metadata {
         let tools = runtime
             .catalog()
             .tools()
@@ -333,6 +342,7 @@ fn runtime_status(
             connection_generation,
             tool_count: tools.len() as u64,
             diagnostic,
+            http_origin: http_origin.clone(),
         });
     }
     McpRuntimeStatusSnapshot {

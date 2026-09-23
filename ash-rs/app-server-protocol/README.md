@@ -19,6 +19,7 @@
 | Method | 参数与结果 | 行为 |
 | --- | --- | --- |
 | `diagnostics/read` | 空参数 → `DiagnosticSnapshot` | 有界无内容诊断、构建身份和使用计数 |
+| `mcp/server/status` | 空参数 → `McpServerStatusResult` | 每个服务器的 `httpOrigin` 仅包含 HTTP(S) 协议、主机与端口；stdio 为 `null`，不返回用户信息、路径或查询参数 |
 | `feedback/prepare` | HTTPS endpoint → `PreparedFeedback` | 返回待审阅内容和同时绑定内容/地址的摘要；15 分钟有效 |
 | `feedback/upload` | operationId、digest → 空结果 | 用户明确确认后调用；仅原 connection 可上传，不自动重试；支持 request cancellation |
 | `queue/enqueue` | commandId、Session/Thread、输入、toolMode、approvalMode → QueuedMessage | 持久接收与相同请求去重；目录由后端选择 |

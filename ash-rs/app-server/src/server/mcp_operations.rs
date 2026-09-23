@@ -17,6 +17,7 @@ use ash_app_server_protocol::protocol::mcp::McpServerStatusResult;
 use ash_config::McpServerConfig;
 use ash_config::McpServerEnablement;
 use ash_config::McpServerId;
+use ash_config::McpTransportConfig;
 use ash_mcp_extension::McpOAuthCompleteRequest;
 use ash_mcp_extension::McpOAuthError;
 use ash_mcp_extension::McpOAuthErrorKind;
@@ -197,6 +198,13 @@ impl AppServer {
                 McpServerStatusDto {
                     id: server.id.to_string(),
                     display_name: server.display_name.clone(),
+                    http_origin: match &server.transport {
+                        McpTransportConfig::Stdio { .. } => None,
+                        McpTransportConfig::StreamableHttp { url } => url::Url::parse(url)
+                            .ok()
+                            .filter(|url| matches!(url.scheme(), "http" | "https"))
+                            .map(|url| url.origin().ascii_serialization()),
+                    },
                     state,
                     catalog_generation: runtime_server
                         .map(|status| status.catalog_generation)
@@ -214,6 +222,7 @@ impl AppServer {
                 .or_insert_with(|| McpServerStatusDto {
                     id: runtime_server.server_id.clone(),
                     display_name: runtime_server.display_name.clone(),
+                    http_origin: runtime_server.http_origin.clone(),
                     state: runtime_state(runtime_server),
                     catalog_generation: runtime_server.catalog_generation,
                     connection_generation: runtime_server.connection_generation,

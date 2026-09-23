@@ -8,7 +8,7 @@ use ash_mcp::{
 };
 use ash_rmcp_client::{
     CallToolRequestParams, CallToolResult, ContentBlock, JsonObject, ListToolsResult,
-    RmcpClientOptions, ServerInfo, StdioServerCommand, Tool,
+    RmcpClientOptions, ServerInfo, StdioServerCommand, StreamableHttpServer, Tool,
 };
 use ash_tools::{ToolContent, ToolOutputStatus};
 
@@ -81,6 +81,7 @@ fn bridges_sync_calls_to_continuously_running_async_runtime() {
     assert_eq!(owner.status().catalog_generation, 1);
     assert_eq!(owner.status().servers[0].server_id, server.to_string());
     assert_eq!(owner.status().servers[0].tool_count, 1);
+    assert_eq!(owner.status().servers[0].http_origin, None);
     let tool_name = owner.definitions()[0].name.clone();
     let prepared = owner
         .prepare_call(&tool_name, serde_json::json!({}))
@@ -92,6 +93,34 @@ fn bridges_sync_calls_to_continuously_running_async_runtime() {
 
     assert_eq!(output.status(), ToolOutputStatus::Success);
     assert_eq!(output.content(), &[ToolContent::Text(server.to_string())]);
+}
+
+#[test]
+fn runtime_status_keeps_only_the_http_origin() {
+    let definition = McpServerDefinition::new(
+        McpServerId::new("plugin:acme/search:mcp:remote").unwrap(),
+        "Search",
+        McpServerTransport::StreamableHttp(
+            StreamableHttpServer::new(
+                "https://alice:secret@plugin.example.test:8443/rpc?token=private",
+            )
+            .unwrap(),
+        ),
+    )
+    .unwrap();
+    let owner = McpRuntimeOwner::start_with_factory(
+        vec![definition],
+        McpRuntimeOptions::new("app-server-test", "0"),
+        Arc::new(FakeFactory),
+    )
+    .expect("start owner");
+
+    assert_eq!(
+        owner.status().servers[0].http_origin.as_deref(),
+        Some("https://plugin.example.test:8443")
+    );
+    assert!(!format!("{:?}", owner.status()).contains("secret"));
+    assert!(!format!("{:?}", owner.status()).contains("private"));
 }
 
 #[test]

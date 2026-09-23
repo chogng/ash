@@ -14,6 +14,9 @@ use ash_mcp_extension::McpOAuthRefreshRequest;
 use ash_mcp_extension::McpOAuthRevokeRequest;
 use ash_mcp_extension::McpOAuthService;
 use ash_mcp_extension::McpOAuthTarget;
+use ash_mcp_extension::McpRuntimeStatusSnapshot;
+use ash_mcp_extension::McpServerRuntimeState;
+use ash_mcp_extension::McpServerRuntimeStatus;
 use ash_model_provider::EchoModel;
 use ash_secrets::MemorySecretStore;
 use ash_secrets::SecretValue;
@@ -155,6 +158,95 @@ fn initialize_and_configure(server: &AppServer, connection: &mut crate::server::
         }),
     );
     assert_eq!(configured["result"]["revision"], 1);
+}
+
+#[test]
+fn mcp_status_exposes_only_http_origins_for_configured_and_plugin_servers() {
+    let (server, _, _profile) = server();
+    let server = server.with_mcp_status_snapshot(McpRuntimeStatusSnapshot {
+        catalog_generation: 7,
+        servers: vec![McpServerRuntimeStatus {
+            server_id: "plugin:acme/search:mcp:remote".into(),
+            display_name: "Search".into(),
+            state: McpServerRuntimeState::Connected,
+            catalog_generation: 7,
+            connection_generation: Some(3),
+            tool_count: 2,
+            diagnostic: None,
+            http_origin: Some("https://plugin.example.test".into()),
+        }],
+    });
+    let mut connection = server.connection();
+    initialize_and_configure(&server, &mut connection);
+    let http = call(
+        &server,
+        &mut connection,
+        3,
+        "mcp/server/upsert",
+        serde_json::json!({
+            "commandId": "remote-mcp",
+            "expectedRevision": 1,
+            "server": {
+                "id": "user:mcp:remote",
+                "displayName": "Remote",
+                "transport": {"type": "streamableHttp", "url": "https://alice:secret@example.test:8443/rpc?token=private"},
+                "credential": {"type": "unauthenticated"},
+                "enablement": "disabled"
+            }
+        }),
+    );
+    assert_eq!(http["result"]["revision"], 2, "{http}");
+    let stdio = call(
+        &server,
+        &mut connection,
+        4,
+        "mcp/server/upsert",
+        serde_json::json!({
+            "commandId": "local-mcp",
+            "expectedRevision": 2,
+            "server": {
+                "id": "user:mcp:local",
+                "displayName": "Local",
+                "transport": {"type": "stdio", "command": "local-server", "args": []},
+                "credential": {"type": "unauthenticated"},
+                "enablement": "disabled"
+            }
+        }),
+    );
+    assert_eq!(stdio["result"]["revision"], 3);
+    let status = call(
+        &server,
+        &mut connection,
+        5,
+        "mcp/server/status",
+        serde_json::json!({}),
+    );
+    let origins = status["result"]["servers"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|server| (server["id"].as_str().unwrap(), server["httpOrigin"].clone()))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    assert_eq!(
+        origins,
+        std::collections::BTreeMap::from([
+            (
+                "plugin:acme/search:mcp:remote",
+                serde_json::json!("https://plugin.example.test"),
+            ),
+            (
+                "user:mcp:calendar",
+                serde_json::json!("https://mcp.example.test")
+            ),
+            ("user:mcp:local", Value::Null),
+            (
+                "user:mcp:remote",
+                serde_json::json!("https://example.test:8443")
+            ),
+        ])
+    );
+    assert!(!status.to_string().contains("secret"));
+    assert!(!status.to_string().contains("private"));
 }
 
 #[test]

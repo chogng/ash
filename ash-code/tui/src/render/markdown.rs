@@ -271,7 +271,18 @@ pub(crate) fn render(
                 writer.text(&"─".repeat(writer.available_width()));
                 writer.flush();
             }
-            Event::TaskListMarker(checked) => writer.text(if *checked { "[x] " } else { "[ ] " }),
+            Event::TaskListMarker(checked) => {
+                if let Some(prefix) = writer.item_prefix.as_mut() {
+                    let number = prefix.strip_suffix("• ").unwrap_or(prefix).to_owned();
+                    *prefix = format!("{number}{} ", if *checked { "☑" } else { "☐" });
+                    if let Some(width) = writer.list_widths.last_mut() {
+                        *width = prefix.width();
+                    }
+                    if writer.current.line.spans.is_empty() {
+                        writer.current.line.push_span(Span::raw(""));
+                    }
+                }
+            }
             Event::FootnoteReference(label) => writer.text(&format!("[{label}]")),
             Event::InlineMath(text) | Event::DisplayMath(text) => writer.text(text),
             _ => {}

@@ -24516,6 +24516,13 @@
         "displayName": {
           "type": "string"
         },
+        "httpOrigin": {
+          "description": "Scheme, host, and port only; absent for stdio servers.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "id": {
           "type": "string"
         },

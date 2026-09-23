@@ -111,6 +111,8 @@ pub struct McpServerRuntimeIntentResult {
 pub struct McpServerStatusDto {
     pub id: String,
     pub display_name: String,
+    /// Scheme, host, and port only; absent for stdio servers.
+    pub http_origin: Option<String>,
     pub state: McpServerRuntimeStateDto,
     #[ts(type = "number")]
     pub catalog_generation: u64,
