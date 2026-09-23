@@ -396,15 +396,34 @@ impl MultiAgentCoordinator {
                 }
                 existing.clone()
             }
-            None => AgentMessage {
-                message_id: request.message_id,
-                delegation_id: request.delegation_id,
-                sender_thread_id: request.sender_thread_id,
-                receiver_thread_id: request.receiver_thread_id,
-                sender_sequence: sender.sequence,
-                content: AgentMessageContent::Instruction { text: request.text },
-                provenance: request.provenance,
-            },
+            None => {
+                if let Some(delegation_id) = request.delegation_id.as_ref()
+                    && sender.delegations.contains_key(delegation_id)
+                    && (sender
+                        .received_delegation_results
+                        .contains_key(delegation_id)
+                        || receiver
+                            .produced_delegation_results
+                            .contains_key(delegation_id)
+                        || !receiver
+                            .turns
+                            .iter()
+                            .any(|turn| is_interruptible_turn(turn.status)))
+                {
+                    return Err(CoreError::InvalidInput(
+                        "cannot send a new message to a completed Agent delegation".into(),
+                    ));
+                }
+                AgentMessage {
+                    message_id: request.message_id,
+                    delegation_id: request.delegation_id,
+                    sender_thread_id: request.sender_thread_id,
+                    receiver_thread_id: request.receiver_thread_id,
+                    sender_sequence: sender.sequence,
+                    content: AgentMessageContent::Instruction { text: request.text },
+                    provenance: request.provenance,
+                }
+            }
         };
         let sender_sequence = self
             .threads

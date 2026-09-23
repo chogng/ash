@@ -116,6 +116,59 @@ pub struct GrepConfig {
     pub backend: GrepBackend,
 }
 
+/// Hosts that Ash itself may contact over HTTP or WebSocket.
+///
+/// An absent list permits all hosts. An empty list disables application-owned
+/// outbound connections. Entries are exact host names or IP addresses.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NetworkConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allowed_hosts: Option<Vec<String>>,
+}
+
+impl NetworkConfig {
+    fn validate(&self) -> Result<(), ConfigError> {
+        if let Some(hosts) = &self.allowed_hosts {
+            for host in hosts {
+                let valid = if host.contains(':') {
+                    host == &host.to_ascii_lowercase()
+                        && host
+                            .parse::<std::net::IpAddr>()
+                            .is_ok_and(|address| address.is_ipv6())
+                } else {
+                    !host.is_empty()
+                        && host.len() <= 253
+                        && host.split('.').all(|label| {
+                            !label.is_empty()
+                                && label.len() <= 63
+                                && label
+                                    .as_bytes()
+                                    .first()
+                                    .is_some_and(u8::is_ascii_alphanumeric)
+                                && label
+                                    .as_bytes()
+                                    .last()
+                                    .is_some_and(u8::is_ascii_alphanumeric)
+                                && label.bytes().all(|byte| {
+                                    byte.is_ascii_lowercase()
+                                        || byte.is_ascii_digit()
+                                        || byte == b'-'
+                                })
+                        })
+                };
+                if !valid {
+                    return Err(ConfigError(format!(
+                        "network.allowedHosts contains invalid host '{host}'"
+                    )));
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 /// Agent defaults that may be resolved into future model invocations.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -156,6 +209,8 @@ pub struct UserConfigDocument {
     #[serde(default)]
     pub grep: GrepConfig,
     #[serde(default)]
+    pub network: NetworkConfig,
+    #[serde(default)]
     pub providers: BTreeMap<ProviderId, ModelProviderConfig>,
     #[serde(default)]
     pub mcp: McpConfig,
@@ -191,6 +246,7 @@ impl UserConfigDocument {
             git.validate()?;
         }
         self.agent.time_context.validate()?;
+        self.network.validate()?;
         if let Some(advisor) = &self.agent.advisor {
             advisor
                 .validate()
@@ -310,6 +366,7 @@ pub struct ResolvedConfig {
     pub advisor: Option<ash_protocol::AdvisorConfig>,
     pub tool_mode: ash_protocol::ToolMode,
     pub grep_backend: GrepBackend,
+    pub network: NetworkConfig,
     pub providers: BTreeMap<ProviderId, ModelProviderConfig>,
     pub mcp: McpConfig,
     pub skills: SkillsConfig,
@@ -399,6 +456,7 @@ impl From<&UserConfigDocument> for ResolvedConfig {
             advisor: document.agent.advisor.clone(),
             tool_mode: document.agent.tool_mode,
             grep_backend: document.grep.backend,
+            network: document.network.clone(),
             providers: document.providers.clone(),
             mcp: document.mcp.clone(),
             skills: document.skills.clone(),

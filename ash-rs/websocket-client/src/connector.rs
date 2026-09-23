@@ -5,13 +5,14 @@ use crate::WebSocketMessage;
 use crate::WebSocketRequest;
 use crate::dialer;
 use ash_http_client::HttpHeader;
+use ash_http_client::OutboundNetworkPolicy;
 use ash_http_client::OutboundNetworkSnapshot;
 use ash_http_client::Timeout;
 use futures::SinkExt;
 use futures::StreamExt;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 
-/// Opens WebSocket connections using one immutable outbound network policy.
+/// Opens WebSocket connections using shared transport settings and a live host policy.
 #[derive(Clone, Debug)]
 pub struct WebSocketConnector {
     network: OutboundNetworkSnapshot,
@@ -35,6 +36,8 @@ impl WebSocketConnector {
         &self,
         request: WebSocketRequest,
     ) -> Result<(WebSocketConnection, WebSocketHandshake), WebSocketClientError> {
+        let policy = self.network.policy().clone();
+        let url = request.url().to_owned();
         let mut wire_request = request
             .url()
             .into_client_request()
@@ -56,12 +59,19 @@ impl WebSocketConnector {
             &self.network,
             self.config.tcp_no_delay(),
         );
-        let (inner, response) = match self.network.timeouts().connect() {
-            Timeout::Disabled => connect.await,
-            Timeout::After(duration) => tokio::time::timeout(duration, connect)
-                .await
-                .map_err(|_| WebSocketClientError::ConnectionFailed)?,
-        }?;
+        let dial = async {
+            match self.network.timeouts().connect() {
+                Timeout::Disabled => connect.await,
+                Timeout::After(duration) => tokio::time::timeout(duration, connect)
+                    .await
+                    .map_err(|_| WebSocketClientError::ConnectionFailed)?,
+            }
+        };
+        let (inner, response) = tokio::select! {
+            result = dial => result?,
+            () = policy.wait_until_denied(&url) => return Err(WebSocketClientError::ConnectionClosed),
+        };
+        policy.check_url(&url)?;
         let headers = response
             .headers()
             .iter()
@@ -73,7 +83,7 @@ impl WebSocketConnector {
             })
             .collect();
         Ok((
-            WebSocketConnection { inner },
+            WebSocketConnection { inner, policy, url },
             WebSocketHandshake::new(response.status().as_u16(), headers),
         ))
     }
@@ -82,25 +92,41 @@ impl WebSocketConnector {
 /// One established WebSocket with crate-owned send and receive messages.
 pub struct WebSocketConnection {
     inner: dialer::RoutedWebSocket,
+    policy: OutboundNetworkPolicy,
+    url: String,
 }
 
 impl WebSocketConnection {
     pub async fn send(&mut self, message: WebSocketMessage) -> Result<(), WebSocketClientError> {
-        self.inner
-            .send(message.into_tungstenite())
-            .await
-            .map_err(|_| WebSocketClientError::ProtocolFailed)
+        if self.policy.check_url(&self.url).is_err() {
+            return Err(WebSocketClientError::ConnectionClosed);
+        }
+        let result = tokio::select! {
+            result = self.inner.send(message.into_tungstenite()) => result.map_err(|_| WebSocketClientError::ProtocolFailed),
+            () = self.policy.wait_until_denied(&self.url) => Err(WebSocketClientError::ConnectionClosed),
+        };
+        if self.policy.check_url(&self.url).is_err() {
+            return Err(WebSocketClientError::ConnectionClosed);
+        }
+        result
     }
 
     pub async fn receive(&mut self) -> Result<WebSocketMessage, WebSocketClientError> {
         loop {
-            let message = self
-                .inner
-                .next()
-                .await
+            if self.policy.check_url(&self.url).is_err() {
+                return Err(WebSocketClientError::ConnectionClosed);
+            }
+            let next = tokio::select! {
+                result = self.inner.next() => result,
+                () = self.policy.wait_until_denied(&self.url) => return Err(WebSocketClientError::ConnectionClosed),
+            };
+            let message = next
                 .ok_or(WebSocketClientError::ConnectionClosed)?
                 .map_err(|_| WebSocketClientError::ProtocolFailed)?;
             if let Some(message) = WebSocketMessage::from_tungstenite(message) {
+                if self.policy.check_url(&self.url).is_err() {
+                    return Err(WebSocketClientError::ConnectionClosed);
+                }
                 return Ok(message);
             }
         }

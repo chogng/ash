@@ -1475,6 +1475,14 @@ impl AppServer {
         self
     }
 
+    pub(crate) fn with_call_network_policy(
+        mut self,
+        policy: ash_http_client::OutboundNetworkPolicy,
+    ) -> Self {
+        self.calls.set_network_policy(policy);
+        self
+    }
+
     fn env_runtime_mut(&mut self) -> &mut EnvRuntime {
         Arc::get_mut(&mut self.env_runtime)
             .expect("environment runtime cannot be mutated through a builder after it is shared")

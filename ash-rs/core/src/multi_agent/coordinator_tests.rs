@@ -858,6 +858,40 @@ fn messages_and_results_apply_exactly_once_across_threads() {
 }
 
 #[test]
+fn completed_child_rejects_new_messages_but_replays_prior_delivery() {
+    let fixture = fixture();
+    let spawned = fixture.coordinator.spawn(spawn_request(&fixture)).unwrap();
+    let request = message_request(&fixture, &spawned.child_thread_id);
+    let delivered = fixture.coordinator.send_message(request).unwrap();
+    fixture
+        .threads
+        .complete_turn(
+            &spawned.child_thread_id,
+            &spawned.child_turn_id,
+            "done".into(),
+        )
+        .unwrap();
+
+    let replayed = fixture
+        .coordinator
+        .send_message(message_request(&fixture, &spawned.child_thread_id))
+        .unwrap();
+    assert_eq!(replayed.message, delivered.message);
+
+    let mut new_message = message_request(&fixture, &spawned.child_thread_id);
+    new_message.message_id = AgentMessageId::new("new-after-completion").unwrap();
+    assert!(matches!(
+        fixture.coordinator.send_message(new_message),
+        Err(crate::CoreError::InvalidInput(message)) if message.contains("completed Agent delegation")
+    ));
+    let child = fixture
+        .threads
+        .read_thread(&spawned.child_thread_id)
+        .unwrap();
+    assert_eq!(child.received_agent_messages.len(), 1);
+}
+
+#[test]
 fn messages_cannot_cross_their_exact_delegation_route() {
     let fixture = fixture();
     let first = fixture

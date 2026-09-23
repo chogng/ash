@@ -2,6 +2,7 @@ use crate::ClientIdentityPolicy;
 use crate::HttpClientConfig;
 use crate::HttpClientError;
 use crate::NetworkTargetPolicy;
+use crate::OutboundNetworkPolicy;
 use crate::ProxyBypass;
 use crate::ProxyPolicy;
 use crate::RedirectPolicy;
@@ -26,7 +27,8 @@ use tokio_rustls::TlsConnector;
 pub(crate) type SystemRootLoader =
     Arc<dyn Fn() -> Result<rustls::RootCertStore, HttpClientError> + Send + Sync>;
 
-/// A construction-time snapshot of outbound proxy, TLS, timeout, and target policy.
+/// A construction-time snapshot of outbound proxy, TLS, timeout, and target policy,
+/// with a live application host policy.
 ///
 /// HTTP and WebSocket transports consume this value so environment proxy
 /// resolution, certificate policy, and public-Internet filtering cannot drift
@@ -38,6 +40,7 @@ pub struct OutboundNetworkSnapshot {
 
 struct OutboundNetworkSnapshotInner {
     config: HttpClientConfig,
+    policy: OutboundNetworkPolicy,
     proxy_url: Option<String>,
     proxy_bypass: ProxyBypass,
     system_root_loader: SystemRootLoader,
@@ -47,11 +50,24 @@ struct OutboundNetworkSnapshotInner {
 impl OutboundNetworkSnapshot {
     /// Resolves environment-backed policy once and validates cross-policy invariants.
     pub fn new(config: HttpClientConfig) -> Result<Self, HttpClientError> {
-        Self::with_root_loader(config, Arc::new(system_root_store))
+        Self::with_root_loader(
+            config,
+            OutboundNetworkPolicy::default(),
+            Arc::new(system_root_store),
+        )
+    }
+
+    /// Applies one live application policy to both HTTP and WebSocket transports.
+    pub fn with_policy(
+        config: HttpClientConfig,
+        policy: OutboundNetworkPolicy,
+    ) -> Result<Self, HttpClientError> {
+        Self::with_root_loader(config, policy, Arc::new(system_root_store))
     }
 
     pub(crate) fn with_root_loader(
         config: HttpClientConfig,
+        policy: OutboundNetworkPolicy,
         system_root_loader: SystemRootLoader,
     ) -> Result<Self, HttpClientError> {
         if config.network_targets() == NetworkTargetPolicy::PublicInternetOnly
@@ -67,6 +83,7 @@ impl OutboundNetworkSnapshot {
         Ok(Self {
             inner: Arc::new(OutboundNetworkSnapshotInner {
                 config,
+                policy,
                 proxy_url,
                 proxy_bypass,
                 system_root_loader,
@@ -77,6 +94,7 @@ impl OutboundNetworkSnapshot {
 
     /// Selects the already-snapshotted direct or proxy route for one URL.
     pub fn proxy_route(&self, target_url: &str) -> Result<OutboundProxyRoute, HttpClientError> {
+        self.inner.policy.check_url(target_url)?;
         let target = url::Url::parse(target_url).map_err(|_| {
             HttpClientError::InvalidRequest("outbound target URL is invalid".into())
         })?;
@@ -167,6 +185,10 @@ impl OutboundNetworkSnapshot {
     /// Returns the transport timeout snapshot shared by outbound backends.
     pub fn timeouts(&self) -> crate::TransportTimeouts {
         self.inner.config.timeouts()
+    }
+
+    pub fn policy(&self) -> &OutboundNetworkPolicy {
+        &self.inner.policy
     }
 
     pub(crate) fn config(&self) -> &HttpClientConfig {

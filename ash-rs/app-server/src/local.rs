@@ -35,6 +35,8 @@ use ash_core_plugins::PluginActivationSnapshot;
 use ash_extensions::ExtensionRoot;
 use ash_file_access::Dir;
 use ash_file_access::Permission as DirPermission;
+use ash_http_client::NetworkAccess;
+use ash_http_client::OutboundNetworkPolicy;
 use ash_install_context::InstallContext;
 use ash_kimi::KimiOAuth;
 use ash_login::InteractiveLoginDriver;
@@ -82,6 +84,7 @@ use core_api::ModelSelection;
 use core_api::ModelService;
 use core_api::ModelStreamSink as CoreModelStreamSink;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::fmt;
 use std::path::Path;
 use std::path::PathBuf;
@@ -757,6 +760,7 @@ pub struct LocalProfileRuntime {
     state: Arc<ash_state::StateRuntime>,
     threads: Arc<ThreadController>,
     config: Arc<ConfigStore>,
+    network_policy: OutboundNetworkPolicy,
     secrets: Arc<dyn SecretStore>,
     updates: Arc<UpdateBroker>,
     update_scopes: Mutex<BTreeMap<ProfileUpdateScopeKey, Arc<UpdateBroker>>>,
@@ -803,16 +807,20 @@ impl LocalProfileRuntime {
         std::fs::create_dir_all(&requested_root).map_err(open_error)?;
         let profile_root = std::fs::canonicalize(&requested_root).map_err(open_error)?;
         let state = Arc::new(ash_state::StateRuntime::open(&profile_root).map_err(open_error)?);
-        let attachments = open_attachments(state.profile_root())?;
-        let repository = LocalStateRepository::open(&state).map_err(open_error)?;
         let database_path = state.database_path().to_path_buf();
-        let threads = repository
-            .recover_threads_with_attachments(attachments)
-            .map_err(open_error)?;
         let config = Arc::new(
             ConfigStore::open_with_paths(database_path.clone(), profile_root.join("config.toml"))
                 .map_err(|error| OpenAppServerError(error.0))?,
         );
+        let snapshot = config
+            .read_snapshot()
+            .map_err(|error| OpenAppServerError(error.0))?;
+        let network_policy = OutboundNetworkPolicy::new(network_access(&snapshot.values.network));
+        let attachments = open_attachments(state.profile_root(), network_policy.clone())?;
+        let repository = LocalStateRepository::open(&state).map_err(open_error)?;
+        let threads = repository
+            .recover_threads_with_attachments(attachments)
+            .map_err(open_error)?;
         threads
             .install_time_context_provider(Arc::new(crate::time_context::ConfigTimeContext::new(
                 config.clone(),
@@ -836,6 +844,7 @@ impl LocalProfileRuntime {
             state,
             threads,
             config,
+            network_policy,
             secrets,
             updates: Arc::new(UpdateBroker::default()),
             update_scopes: Mutex::new(BTreeMap::new()),
@@ -1027,6 +1036,10 @@ pub fn open_local_app_server_with_codebase_providers(
         Some(runtime) => runtime.state_runtime(),
         None => Arc::new(ash_state::StateRuntime::open(&options.profile_root).map_err(open_error)?),
     };
+    let network_policy = profile_runtime
+        .as_ref()
+        .map(|runtime| runtime.network_policy.clone())
+        .unwrap_or_else(|| OutboundNetworkPolicy::new(NetworkAccess::Any));
     let (database_path, threads, config) = match (&profile_runtime, options.session_state_mode) {
         (Some(runtime), SessionStateMode::Durable) => (
             runtime.state.database_path().to_path_buf(),
@@ -1035,12 +1048,7 @@ pub fn open_local_app_server_with_codebase_providers(
         ),
         (Some(_), SessionStateMode::Ephemeral) => unreachable!("validated above"),
         (None, SessionStateMode::Durable) => {
-            let attachments = open_attachments(&options.profile_root)?;
-            let repository = LocalStateRepository::open(&state_runtime).map_err(open_error)?;
             let database_path = state_runtime.database_path().to_path_buf();
-            let threads = repository
-                .recover_threads_with_attachments(attachments)
-                .map_err(open_error)?;
             let config = Arc::new(
                 ConfigStore::open_with_paths(
                     database_path.clone(),
@@ -1048,22 +1056,35 @@ pub fn open_local_app_server_with_codebase_providers(
                 )
                 .map_err(|error| OpenAppServerError(error.0))?,
             );
+            let snapshot = config
+                .read_snapshot()
+                .map_err(|error| OpenAppServerError(error.0))?;
+            network_policy.update(network_access(&snapshot.values.network));
+            let attachments = open_attachments(&options.profile_root, network_policy.clone())?;
+            let repository = LocalStateRepository::open(&state_runtime).map_err(open_error)?;
+            let threads = repository
+                .recover_threads_with_attachments(attachments)
+                .map_err(open_error)?;
             (database_path, threads, config)
         }
         (None, SessionStateMode::Ephemeral) => {
-            let attachments = open_attachments(&options.profile_root)?;
+            let database_path = state_runtime.database_path().to_path_buf();
+            let config = Arc::new(
+                ConfigStore::open_with_paths(
+                    database_path.clone(),
+                    options.profile_root.join("config.toml"),
+                )
+                .map_err(|error| OpenAppServerError(error.0))?,
+            );
+            let snapshot = config
+                .read_snapshot()
+                .map_err(|error| OpenAppServerError(error.0))?;
+            network_policy.update(network_access(&snapshot.values.network));
+            let attachments = open_attachments(&options.profile_root, network_policy.clone())?;
             let threads = Arc::new(ThreadController::with_store_and_attachments(
                 Arc::new(InMemoryThreadStore::default()),
                 attachments,
             ));
-            let database_path = state_runtime.database_path().to_path_buf();
-            let config = Arc::new(
-                ConfigStore::open_with_paths(
-                    database_path.clone(),
-                    options.profile_root.join("config.toml"),
-                )
-                .map_err(|error| OpenAppServerError(error.0))?,
-            );
             (database_path, threads, config)
         }
     };
@@ -1077,6 +1098,17 @@ pub fn open_local_app_server_with_codebase_providers(
     let user_config = config
         .read_snapshot()
         .map_err(|error| OpenAppServerError(error.0))?;
+    network_policy.update(network_access(&user_config.values.network));
+    let network = ash_http_client::OutboundNetworkSnapshot::with_policy(
+        ash_http_client::HttpClientConfig::default(),
+        network_policy.clone(),
+    )
+    .map_err(open_error)?;
+    let raw_http: Arc<dyn ash_http_client::HttpClient> =
+        Arc::new(ash_http_client::UreqHttpClient::with_network(network).map_err(open_error)?);
+    let application_http: Arc<dyn ash_http_client::HttpClient> = Arc::new(
+        ash_http_client::PolicyHttpClient::new(raw_http, network_policy.clone()),
+    );
     if options.dir_config.is_none()
         && let Some(dir_root) = &options.dir_root
     {
@@ -1168,8 +1200,7 @@ pub fn open_local_app_server_with_codebase_providers(
                     format!("Bearer {token}"),
                 ));
             }
-            let http = Arc::new(ash_http_client::UreqHttpClient::new().map_err(open_error)?);
-            let client = Arc::new(ash_client::AshClient::new(http));
+            let client = Arc::new(ash_client::AshClient::new(Arc::clone(&application_http)));
             options.image_generation_backend = Some(Arc::new(
                 image_generation::JsonImageGenerationBackend::new(
                     image.service_name.clone(),
@@ -1191,7 +1222,11 @@ pub fn open_local_app_server_with_codebase_providers(
         }
     }
     if let (Some(runtime), Some(services)) = (&mut connector_runtime, product_services) {
-        configure_product_connector_oauth(runtime, services.connector_oauth)?;
+        configure_product_connector_oauth(
+            runtime,
+            services.connector_oauth,
+            Arc::clone(&application_http),
+        )?;
     }
     let dir_config = options.dir_config.map(|dir_config| {
         Arc::new(DirConfigTracker::new(DirConfigStore::open(
@@ -1204,7 +1239,9 @@ pub fn open_local_app_server_with_codebase_providers(
             .read()
             .map_err(|error| OpenAppServerError(error.0))?;
     }
-    let tokenizer_downloader = Arc::new(HttpTokenizerAssetDownloader::production());
+    let tokenizer_downloader = Arc::new(HttpTokenizerAssetDownloader::with_policy(
+        network_policy.clone(),
+    ));
     let local_tokenizers = Arc::new(
         ManagedLocalTokenizerService::new(
             options.profile_root.join("cache/model-tokenizers"),
@@ -1241,12 +1278,9 @@ pub fn open_local_app_server_with_codebase_providers(
     };
     let model_client = match options.model_operation_client.take() {
         Some(client) => client,
-        None => {
-            let http = ash_http_client::UreqHttpClient::new().map_err(open_error)?;
-            Arc::new(ash_client::AshClient::new(
-                telemetry.instrument_http(Arc::new(http)),
-            ))
-        }
+        None => Arc::new(ash_client::AshClient::new(
+            telemetry.instrument_http(Arc::clone(&application_http)),
+        )),
     };
     let model_operation_client = Some(model_client);
     let codex_home = match options.codex_home.take() {
@@ -1385,6 +1419,7 @@ pub fn open_local_app_server_with_codebase_providers(
         ),
     ))
     .with_approval_review_model(approval_review_model)
+    .with_call_network_policy(network_policy.clone())
     .with_config_store(Arc::clone(&config))
     .with_login_service(login_service)
     .with_chatgpt_account(Arc::new(ash_chatgpt::ChatGptAccount::new(chatgpt_oauth)))
@@ -1578,6 +1613,7 @@ pub fn open_local_app_server_with_codebase_providers(
         .ok_or_else(|| OpenAppServerError("local Directory runtime is unavailable".into()))?;
     server = server.with_tool_config_watcher(ToolConfigWatcher::start(ToolConfigWatcherInputs {
         config,
+        network_policy,
         dir_config,
         env_tools,
         env_runtime,
@@ -1600,12 +1636,20 @@ fn default_dir_config(
     ))
 }
 
+fn network_access(config: &ash_config::NetworkConfig) -> NetworkAccess {
+    match &config.allowed_hosts {
+        Some(hosts) => NetworkAccess::Hosts(hosts.iter().cloned().collect::<BTreeSet<_>>()),
+        None => NetworkAccess::Any,
+    }
+}
+
 fn open_attachments(
     profile_root: &Path,
+    network_policy: OutboundNetworkPolicy,
 ) -> Result<Arc<ash_attachments::Attachments>, OpenAppServerError> {
     let image_store = attachment_store::FileAttachmentStore::open(profile_root.join("attachments"))
         .map_err(|error| OpenAppServerError(error.to_string()))?;
-    let remote_images = ash_attachments::SafeRemoteImageFetcher::production()
+    let remote_images = ash_attachments::SafeRemoteImageFetcher::with_policy(network_policy)
         .map_err(|error| OpenAppServerError(error.to_string()))?;
     Ok(Arc::new(
         ash_attachments::Attachments::new(Arc::new(image_store))
@@ -1620,6 +1664,7 @@ pub(crate) struct ToolConfigWatcher {
 
 struct ToolConfigWatcherInputs {
     config: Arc<ConfigStore>,
+    network_policy: OutboundNetworkPolicy,
     dir_config: Option<Arc<DirConfigTracker>>,
     env_tools: Arc<EnvToolPorts>,
     env_runtime: crate::server::EnvRuntimeControl,
@@ -1634,6 +1679,7 @@ impl ToolConfigWatcher {
     fn start(inputs: ToolConfigWatcherInputs) -> Self {
         let ToolConfigWatcherInputs {
             config,
+            network_policy,
             dir_config,
             env_tools,
             env_runtime,
@@ -1643,11 +1689,14 @@ impl ToolConfigWatcher {
             mcp_changes,
             mcp_runtime_intent_changes,
         } = inputs;
+        let changes = config.subscribe_changes();
+        if let Ok(snapshot) = config.read_snapshot() {
+            network_policy.update(network_access(&snapshot.values.network));
+        }
         let mut semantic_binding = config
             .read_snapshot()
             .ok()
             .map(|snapshot| (snapshot.values.codebase, snapshot.values.providers));
-        let changes = config.subscribe_changes();
         let connector_changes = connector_runtime
             .as_ref()
             .map(|runtime| runtime.service.authority().subscribe());
@@ -1743,6 +1792,7 @@ impl ToolConfigWatcher {
                         }
                     };
                     if config_dirty {
+                        network_policy.update(network_access(&snapshot.values.network));
                         if let Err(error) =
                             env_runtime.reconcile_user_dir_permissions(&snapshot.values)
                         {
@@ -2571,11 +2621,8 @@ impl ModelEventSink for CoreProviderStreamSink<'_> {
 fn configure_product_connector_oauth(
     runtime: &mut LocalConnectorRuntime,
     configurations: Vec<crate::product_services::ProductConnectorOAuthConfig>,
+    http: Arc<dyn ash_http_client::HttpClient>,
 ) -> Result<(), OpenAppServerError> {
-    let http: Arc<dyn ash_http_client::HttpClient> = Arc::new(
-        ash_http_client::UreqHttpClient::new()
-            .map_err(|error| OpenAppServerError(error.to_string()))?,
-    );
     let mut browser = Vec::new();
     let mut device = Vec::new();
     for configuration in configurations {

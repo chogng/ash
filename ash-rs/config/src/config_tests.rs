@@ -51,6 +51,40 @@ fn model_ref(provider: &str, model: &str) -> ModelRef {
 }
 
 #[test]
+fn application_network_hosts_round_trip_and_validate() {
+    let document = toml::from_str::<UserConfigDocument>(
+        "[network]\nallowedHosts = ['api.openai.com', '::1']\n",
+    )
+    .unwrap();
+    document.validate().unwrap();
+    assert_eq!(
+        ResolvedConfig::from(&document).network.allowed_hosts,
+        Some(vec!["api.openai.com".into(), "::1".into()])
+    );
+    let encoded = toml::to_string(&document).unwrap();
+    let decoded = toml::from_str::<UserConfigDocument>(&encoded).unwrap();
+    assert_eq!(decoded.network, document.network);
+
+    let offline = toml::from_str::<UserConfigDocument>("[network]\nallowedHosts = []\n").unwrap();
+    offline.validate().unwrap();
+    assert_eq!(offline.network.allowed_hosts, Some(Vec::new()));
+
+    for host in [
+        "*.example.com",
+        "api.example.com.",
+        "API.example.com",
+        "a..b",
+        "-bad",
+    ] {
+        let document = toml::from_str::<UserConfigDocument>(&format!(
+            "[network]\nallowedHosts = ['{host}']\n"
+        ))
+        .unwrap();
+        assert!(document.validate().is_err(), "{host}");
+    }
+}
+
+#[test]
 fn desktop_worktree_settings_survive_resolution() {
     let document = toml::from_str::<UserConfigDocument>(
         r#"

@@ -7,6 +7,9 @@ use ash_http_client::HttpHeader;
 use ash_http_client::HttpMethod;
 use ash_http_client::HttpRequest;
 use ash_http_client::NetworkTargetPolicy;
+use ash_http_client::OutboundNetworkPolicy;
+use ash_http_client::OutboundNetworkSnapshot;
+use ash_http_client::PolicyHttpClient;
 use ash_http_client::ProxyPolicy;
 use ash_http_client::RedirectPolicy;
 use ash_http_client::ResponseBodyLimit;
@@ -34,21 +37,21 @@ pub struct SafeRemoteImageFetcher {
 
 impl SafeRemoteImageFetcher {
     pub fn production() -> Result<Self, AttachmentError> {
-        let body_limit = ResponseBodyLimit::new(
-            NonZeroUsize::new(MAX_IMAGE_ATTACHMENT_BYTES)
-                .expect("attachment byte limit is non-zero"),
-        )
-        .map_err(|_| AttachmentError::RemoteFetch)?;
-        let client = UreqHttpClient::with_config(
-            HttpClientConfig::new()
-                .with_proxy_policy(ProxyPolicy::Direct)
-                .with_redirect_policy(RedirectPolicy::Reject)
-                .with_network_target_policy(NetworkTargetPolicy::PublicInternetOnly)
-                .with_response_body_limit(body_limit),
-        )
-        .map_err(|_| AttachmentError::RemoteFetch)?;
+        let client = UreqHttpClient::with_config(remote_http_config()?)
+            .map_err(|_| AttachmentError::RemoteFetch)?;
         Ok(Self {
             client: Arc::new(client),
+        })
+    }
+
+    pub fn with_policy(policy: OutboundNetworkPolicy) -> Result<Self, AttachmentError> {
+        let network = OutboundNetworkSnapshot::with_policy(remote_http_config()?, policy.clone())
+            .map_err(|_| AttachmentError::RemoteFetch)?;
+        let client: Arc<dyn HttpClient> = Arc::new(
+            UreqHttpClient::with_network(network).map_err(|_| AttachmentError::RemoteFetch)?,
+        );
+        Ok(Self {
+            client: Arc::new(PolicyHttpClient::new(client, policy)),
         })
     }
 
@@ -56,6 +59,18 @@ impl SafeRemoteImageFetcher {
     pub(crate) fn with_client(client: Arc<dyn HttpClient>) -> Self {
         Self { client }
     }
+}
+
+fn remote_http_config() -> Result<HttpClientConfig, AttachmentError> {
+    let body_limit = ResponseBodyLimit::new(
+        NonZeroUsize::new(MAX_IMAGE_ATTACHMENT_BYTES).expect("attachment byte limit is non-zero"),
+    )
+    .map_err(|_| AttachmentError::RemoteFetch)?;
+    Ok(HttpClientConfig::new()
+        .with_proxy_policy(ProxyPolicy::Direct)
+        .with_redirect_policy(RedirectPolicy::Reject)
+        .with_network_target_policy(NetworkTargetPolicy::PublicInternetOnly)
+        .with_response_body_limit(body_limit))
 }
 
 impl RemoteImageFetcher for SafeRemoteImageFetcher {

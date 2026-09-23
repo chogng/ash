@@ -6,7 +6,9 @@
 mod config;
 mod error;
 mod header;
+mod network_policy;
 mod outbound_network;
+mod policy_client;
 mod request;
 mod telemetry;
 mod ureq_client;
@@ -18,9 +20,11 @@ pub use config::{
 };
 pub use error::HttpClientError;
 pub use header::HttpHeader;
+pub use network_policy::{NetworkAccess, OutboundNetworkPolicy};
 pub use outbound_network::{
     OutboundNetworkSnapshot, OutboundProxyRoute, OutboundProxyTarget, OutboundTlsStream,
 };
+pub use policy_client::PolicyHttpClient;
 pub use request::{HttpMethod, HttpRequest, HttpResponse};
 pub use telemetry::HttpClientTelemetrySpan;
 pub use telemetry::{
@@ -36,3 +40,7 @@ mod tests;
 #[cfg(test)]
 #[path = "ureq_client_tests.rs"]
 mod transport_tests;
+
+#[cfg(test)]
+#[path = "network_policy_tests.rs"]
+mod network_policy_tests;

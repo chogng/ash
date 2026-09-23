@@ -42,7 +42,7 @@ pub use dir_config::{
 pub use dir_permissions::DirPermissionsConfig;
 pub use document::{
     AgentConfig, ApprovalReviewModelSelection, ConfigGeneration, ConfigRevision, GrepBackend,
-    GrepConfig, ResolvedConfig, ResolvedConfigSnapshot, UserConfigDocument,
+    GrepConfig, NetworkConfig, ResolvedConfig, ResolvedConfigSnapshot, UserConfigDocument,
 };
 pub use exec_policy::{DirExecPolicyConfig, UserExecPolicyConfig, compose_exec_policy};
 pub use git::{GitAutoFetchMode, GitConfig};

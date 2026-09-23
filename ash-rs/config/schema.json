@@ -599,6 +599,32 @@
         }
       ]
     },
+    "GitAutoFetchMode": {
+      "description": "Which remotes the shared Git runtime fetches automatically.",
+      "enum": [
+        "off",
+        "default",
+        "all"
+      ],
+      "type": "string"
+    },
+    "GitConfig": {
+      "additionalProperties": false,
+      "description": "Profile-wide automatic Git fetch preference, interpreted by App Server.",
+      "properties": {
+        "autofetch": {
+          "$ref": "#/$defs/GitAutoFetchMode",
+          "default": "off"
+        },
+        "autofetchPeriod": {
+          "default": 180,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
     "GrepBackend": {
       "description": "Selects the implementation used by the shared grep capability.",
       "enum": [
@@ -1032,6 +1058,22 @@
       ],
       "type": "object"
     },
+    "NetworkConfig": {
+      "additionalProperties": false,
+      "description": "Hosts that Ash itself may contact over HTTP or WebSocket.\n\nAn absent list permits all hosts. An empty list disables application-owned\noutbound connections. Entries are exact host names or IP addresses.",
+      "properties": {
+        "allowedHosts": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
     "Permission": {
       "description": "Permission kind that can be granted for one directory scope.",
       "enum": [
@@ -1370,6 +1412,16 @@
       },
       "type": "object"
     },
+    "git": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GitConfig"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "grep": {
       "$ref": "#/$defs/GrepConfig",
       "default": {
@@ -1403,6 +1455,10 @@
       "default": {
         "servers": {}
       }
+    },
+    "network": {
+      "$ref": "#/$defs/NetworkConfig",
+      "default": {}
     },
     "plugins": {
       "$ref": "#/$defs/PluginsConfig",

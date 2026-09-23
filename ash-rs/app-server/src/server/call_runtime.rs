@@ -5,6 +5,9 @@ use ash_app_server_protocol::protocol::call::CallDeployment;
 use ash_app_server_protocol::protocol::call::CallStartParams;
 use ash_app_server_protocol::protocol::call::CallStatus;
 use ash_http_client::HttpClientConfig;
+use ash_http_client::OutboundNetworkPolicy;
+use ash_http_client::OutboundNetworkSnapshot;
+use ash_http_client::PolicyHttpClient;
 use ash_http_client::ProxyPolicy;
 use ash_http_client::UreqHttpClient;
 use call::CallClient;
@@ -49,9 +52,14 @@ pub(super) struct Calls {
     executor: OnceLock<tokio::runtime::Runtime>,
     pub sessions: Mutex<BTreeMap<(u64, String), Session>>,
     local: Mutex<Weak<LocalDeployment>>,
+    network_policy: OutboundNetworkPolicy,
 }
 
 impl Calls {
+    pub fn set_network_policy(&mut self, policy: OutboundNetworkPolicy) {
+        self.network_policy = policy;
+    }
+
     fn executor(&self) -> Result<&tokio::runtime::Runtime, Failure> {
         if self.executor.get().is_none() {
             let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -103,6 +111,13 @@ impl Calls {
             return Err("This window already owns a call".into());
         }
         drop(sessions);
+        if let CallDeployment::Server { url, .. } | CallDeployment::Invitation { url, .. } =
+            &params.deployment
+        {
+            self.network_policy
+                .check_url(url)
+                .map_err(|error| error.to_string())?;
+        }
         let audio_path = executable("ASH_VOICE_HOST_PATH", "ash-voice-host")?;
         let local = if matches!(params.deployment, CallDeployment::Local) {
             let mut slot = self.local.lock().map_err(|_| "Local service unavailable")?;
@@ -145,6 +160,9 @@ impl Calls {
                 url.clone()
             }
         };
+        self.network_policy
+            .check_url(&url)
+            .map_err(|error| error.to_string())?;
         let credential = match &params.deployment {
             CallDeployment::Invitation { credential, .. } => {
                 MemberCredential::parse(credential.clone()).map_err(|e| e.to_string())?
@@ -156,14 +174,14 @@ impl Calls {
         } else {
             HttpClientConfig::default()
         };
-        let client = CallClient::new(
-            &url,
-            credential,
-            Arc::new(
-                UreqHttpClient::with_config(config).map_err(|_| "Call transport unavailable")?,
-            ),
-        )
-        .map_err(|e| e.to_string())?;
+        let network = OutboundNetworkSnapshot::with_policy(config, self.network_policy.clone())
+            .map_err(|_| "Call transport unavailable")?;
+        let raw_http: Arc<dyn ash_http_client::HttpClient> = Arc::new(
+            UreqHttpClient::with_network(network).map_err(|_| "Call transport unavailable")?,
+        );
+        let http: Arc<dyn ash_http_client::HttpClient> =
+            Arc::new(PolicyHttpClient::new(raw_http, self.network_policy.clone()));
+        let client = CallClient::new(&url, credential, http).map_err(|e| e.to_string())?;
         match &params.deployment {
             CallDeployment::Local => {
                 client
@@ -181,9 +199,11 @@ impl Calls {
             CallDeployment::Invitation { .. } => {}
         }
         let joined = client.join(&params.device_id).map_err(|e| e.to_string())?;
-        let opened = self
-            .executor()?
-            .block_on(async {
+        self.network_policy
+            .check_url(&joined.server_url)
+            .map_err(|error| error.to_string())?;
+        let opened = self.executor()?.block_on(async {
+            let connect = async {
                 tokio::time::timeout(Duration::from_secs(20), async {
                     let room = MediaRoom::connect(
                         &joined.server_url,
@@ -209,9 +229,24 @@ impl Calls {
                     Ok::<_, Failure>((room, audio))
                 })
                 .await
-            })
-            .map_err(|_| "Opening audio devices timed out".to_owned())
-            .and_then(|result| result);
+                .map_err(|_| "Opening audio devices timed out".to_owned())
+                .and_then(|result| result)
+            };
+            tokio::select! {
+                result = connect => result,
+                () = self.network_policy.wait_until_denied(&url) => Err("Call target blocked by network policy".into()),
+                () = self.network_policy.wait_until_denied(&joined.server_url) => Err("Media target blocked by network policy".into()),
+            }
+        });
+        let opened = opened.and_then(|connected| {
+            self.network_policy
+                .check_url(&url)
+                .map_err(|error| error.to_string())?;
+            self.network_policy
+                .check_url(&joined.server_url)
+                .map_err(|error| error.to_string())?;
+            Ok(connected)
+        });
         let (room, audio) = match opened {
             Ok(opened) => opened,
             Err(error) => {
@@ -248,10 +283,23 @@ impl Calls {
         let (commands, receiver) = mpsc::channel(16);
         let worker_state = state.clone();
         let worker_client = client.clone();
+        let worker_policy = self.network_policy.clone();
+        let room_policy = worker_policy.clone();
+        let worker_url = url.clone();
+        let media_url = joined.server_url.clone();
+        let policy_commands = commands.clone();
         let worker = self.executor()?.spawn(async move {
             let _local = local;
+            let policy_guard = tokio::spawn(async move {
+                tokio::select! {
+                    () = worker_policy.wait_until_denied(&worker_url) => {},
+                    () = worker_policy.wait_until_denied(&media_url) => {},
+                }
+                let (reply, _) = oneshot::channel();
+                let _ = policy_commands.send((None, reply)).await;
+            });
             call::SessionRuntime {
-                media: Box::new(super::call_adapters::Room::new(room, worker_screens)),
+                media: Box::new(super::call_adapters::Room::new(room, worker_screens, room_policy)),
                 devices: Box::new(super::call_adapters::Devices::new(audio)),
                 status,
                 changed: Arc::new(move |status| {
@@ -261,6 +309,7 @@ impl Calls {
                 client: worker_client,
                 device: params.device_id,
             }.run(receiver).await;
+            policy_guard.abort();
         });
         let opened = state.lock().map_err(|_| "Call state unavailable")?.clone();
         self.sessions
@@ -360,3 +409,7 @@ fn audio_config(direction: Direction) -> AudioConfig {
         processing: Processing::Speech,
     }
 }
+
+#[cfg(test)]
+#[path = "call_runtime_tests.rs"]
+mod tests;

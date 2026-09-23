@@ -4,6 +4,9 @@ use ash_http_client::HttpClient;
 use ash_http_client::HttpClientConfig;
 use ash_http_client::HttpMethod;
 use ash_http_client::HttpRequest;
+use ash_http_client::OutboundNetworkPolicy;
+use ash_http_client::OutboundNetworkSnapshot;
+use ash_http_client::PolicyHttpClient;
 use ash_http_client::RedirectPolicy;
 use ash_http_client::ResponseBodyLimit;
 use ash_http_client::UreqHttpClient;
@@ -46,6 +49,13 @@ impl HttpTokenizerAssetDownloader {
         }
     }
 
+    pub fn with_policy(policy: OutboundNetworkPolicy) -> Self {
+        Self {
+            client: OnceLock::new(),
+            factory: Arc::new(move || production_http_client_with_policy(policy.clone())),
+        }
+    }
+
     fn client(&self) -> Result<&Arc<dyn HttpClient>, LocalTokenizerError> {
         self.client
             .get_or_init(|| (self.factory)())
@@ -73,6 +83,22 @@ impl TokenizerAssetDownloader for HttpTokenizerAssetDownloader {
 }
 
 fn production_http_client() -> Result<Arc<dyn HttpClient>, String> {
+    UreqHttpClient::with_config(production_http_config()?)
+        .map(|client| Arc::new(client) as Arc<dyn HttpClient>)
+        .map_err(|error| error.to_string())
+}
+
+fn production_http_client_with_policy(
+    policy: OutboundNetworkPolicy,
+) -> Result<Arc<dyn HttpClient>, String> {
+    let network = OutboundNetworkSnapshot::with_policy(production_http_config()?, policy.clone())
+        .map_err(|error| error.to_string())?;
+    let client: Arc<dyn HttpClient> =
+        Arc::new(UreqHttpClient::with_network(network).map_err(|error| error.to_string())?);
+    Ok(Arc::new(PolicyHttpClient::new(client, policy)))
+}
+
+fn production_http_config() -> Result<HttpClientConfig, String> {
     let redirects = std::num::NonZeroU8::new(5).expect("five is non-zero");
     let response_limit =
         std::num::NonZeroUsize::new(128 * 1024 * 1024).expect("128 MiB is non-zero");
@@ -83,7 +109,5 @@ fn production_http_client() -> Result<Arc<dyn HttpClient>, String> {
         .with_response_body_limit(
             ResponseBodyLimit::new(response_limit).map_err(|error| error.to_string())?,
         );
-    UreqHttpClient::with_config(config)
-        .map(|client| Arc::new(client) as Arc<dyn HttpClient>)
-        .map_err(|error| error.to_string())
+    Ok(config)
 }

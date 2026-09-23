@@ -1,7 +1,7 @@
 import { MarkdownElement } from "../../../../../base/browser/markdownRenderer.js";
 import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
 import { ScrollableElement } from "../../../../../base/browser/ui/scrollbar/scrollableElement.js";
-import { Disposable, DisposableStore } from "../../../../../base/common/lifecycle.js";
+import { Disposable, DisposableMap, DisposableStore } from "../../../../../base/common/lifecycle.js";
 import type { ChatTurnErrorAction, IChatListItem } from "./chatListItems.js";
 
 interface ChatListWidgetOptions {
@@ -9,12 +9,24 @@ interface ChatListWidgetOptions {
 	readonly onDidRequestErrorAction?: (action: ChatTurnErrorAction) => void;
 }
 
+class RenderedItem extends Disposable {
+	constructor(public readonly item: IChatListItem, public readonly element: HTMLElement, disposables: DisposableStore) {
+		super();
+		this._register(disposables);
+	}
+}
+
+interface ReadingAnchor {
+	readonly id: string;
+	readonly viewportTop: number;
+}
+
 /** Renders the ordered user, Agent, reasoning, and tool items in one Chat pane. */
 export class ChatListWidget extends Disposable {
 	readonly element: HTMLElement;
 	private readonly scrollable: ScrollableElement;
 	private readonly transcript: HTMLDivElement;
-	private readonly renderedItems = this._register(new DisposableStore());
+	private readonly renderedItems = this._register(new DisposableMap<string, RenderedItem>());
 	private readonly onDidRequestErrorAction: ((action: ChatTurnErrorAction) => void) | undefined;
 	private readonly onDidRequestMemoryReference: ((reference: string) => void) | undefined;
 	private readonly advisorExpansion = new Map<string, boolean>();
@@ -41,10 +53,26 @@ export class ChatListWidget extends Disposable {
 
 	render(items: readonly IChatListItem[]): void {
 		if (this.visible) this.captureFollowState();
-		this.renderedItems.clear();
-		for (const id of this.advisorExpansion.keys()) if (!items.some(item => item.id === id)) this.advisorExpansion.delete(id);
-		this.transcript.replaceChildren(...items.map((item) => this.renderItem(item)));
-		if (this.visible) this.layout();
+		const anchor = this.visible && !this.shouldFollow ? this.readingAnchor() : undefined;
+		const ids = new Set(items.map(item => item.id));
+		for (const [id, row] of this.renderedItems) {
+			if (ids.has(id)) continue;
+			row.element.remove();
+			this.renderedItems.deleteAndDispose(id);
+		}
+		let next: ChildNode | null = this.transcript.firstChild;
+		for (const item of items) {
+			let row = this.renderedItems.get(item.id);
+			if (!row || !sameItem(row.item, item)) {
+				if (row?.element === next) next = row.element.nextSibling;
+				row?.element.remove();
+				row = this.renderedItems.set(item.id, this.renderItem(item));
+			}
+			if (row.element !== next) this.transcript.insertBefore(row.element, next);
+			next = row.element.nextSibling;
+		}
+		for (const id of this.advisorExpansion.keys()) if (!ids.has(id)) this.advisorExpansion.delete(id);
+		if (this.visible) this.layout(anchor);
 	}
 
 	setVisible(visible: boolean): void {
@@ -60,12 +88,32 @@ export class ChatListWidget extends Disposable {
 		this.shouldFollow = state.scrollHeight - state.top - state.height < 48;
 	}
 
-	private layout(): void {
+	private layout(anchor?: ReadingAnchor): void {
 		this.scrollable.layout();
-		if (this.shouldFollow) this.scrollable.scrollTo(0, this.scrollable.state.maximumTop);
+		if (this.shouldFollow) {
+			this.scrollable.scrollTo(0, this.scrollable.state.maximumTop);
+		} else if (anchor) {
+			const row = this.renderedItems.get(anchor.id);
+			if (row) {
+				const contentTop = row.element.getBoundingClientRect().top - this.transcript.getBoundingClientRect().top;
+				this.scrollable.scrollTo(0, contentTop - anchor.viewportTop);
+			}
+		}
 	}
 
-	private renderItem(item: IChatListItem): HTMLElement {
+	private readingAnchor(): ReadingAnchor | undefined {
+		const viewport = this.scrollable.scrollableElement.getBoundingClientRect();
+		for (const element of this.transcript.children) {
+			const rect = element.getBoundingClientRect();
+			if (rect.bottom > viewport.top && rect.top < viewport.bottom) {
+				return { id: (element as HTMLElement).dataset.itemId!, viewportTop: rect.top - viewport.top };
+			}
+		}
+		return undefined;
+	}
+
+	private renderItem(item: IChatListItem): RenderedItem {
+		const disposables = new DisposableStore();
 		const article = h(this.element.ownerDocument, "article");
 		article.className = `ash-chat-item ash-chat-item-${item.type}`;
 		article.dataset.itemId = item.id;
@@ -79,11 +127,11 @@ export class ChatListWidget extends Disposable {
 		if (body !== article) {
 			const disclosure = body as HTMLDetailsElement;
 			disclosure.open = this.advisorExpansion.get(item.id) ?? true;
-			this.renderedItems.add(addDisposableListener(disclosure, "toggle", () => { this.advisorExpansion.set(item.id, disclosure.open); }));
+			disposables.add(addDisposableListener(disclosure, "toggle", () => { this.advisorExpansion.set(item.id, disclosure.open); }));
 			article.append(body);
 		}
 		if (item.type === "agentMessage" || item.type === "reasoning" || item.type === "plan" || item.type === "advisor") {
-			const markdown = this.renderedItems.add(new MarkdownElement({
+			const markdown = disposables.add(new MarkdownElement({
 				ownerDocument: this.element.ownerDocument,
 				markdown: item.text,
 				breaks: true,
@@ -101,7 +149,7 @@ export class ChatListWidget extends Disposable {
 				button.type = 'button';
 				button.textContent = `Open memory reference ${index + 1}`;
 				article.append(button);
-				this.renderedItems.add(addDisposableListener(button, 'click', () => this.onDidRequestMemoryReference?.(reference)));
+				disposables.add(addDisposableListener(button, 'click', () => this.onDidRequestMemoryReference?.(reference)));
 			}
 		}
 		if (item.detail) {
@@ -117,10 +165,23 @@ export class ChatListWidget extends Disposable {
 			button.className = "ash-chat-turn-error-action";
 			button.textContent = action.label;
 			article.append(button);
-			this.renderedItems.add(addDisposableListener(button, "click", () => this.onDidRequestErrorAction?.(action)));
+			disposables.add(addDisposableListener(button, "click", () => this.onDidRequestErrorAction?.(action)));
 		}
-		return article;
+		return new RenderedItem(item, article, disposables);
 	}
+}
+
+function sameItem(left: IChatListItem, right: IChatListItem): boolean {
+	return left.id === right.id && left.type === right.type && left.text === right.text
+		&& left.transient === right.transient && left.isError === right.isError
+		&& left.label === right.label && left.detail === right.detail && left.errorCode === right.errorCode
+		&& sameAction(left.action, right.action);
+}
+
+function sameAction(left: ChatTurnErrorAction | undefined, right: ChatTurnErrorAction | undefined): boolean {
+	if (left === right) return true;
+	if (!left || !right || left.type !== right.type || left.label !== right.label) return false;
+	return left.type !== "retry" || (right.type === "retry" && left.turnId === right.turnId);
 }
 
 function itemLabel(item: IChatListItem): string {

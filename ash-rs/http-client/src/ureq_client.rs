@@ -82,6 +82,7 @@ impl UreqHttpClient {
     ) -> Result<Self, HttpClientError> {
         Self::with_network(OutboundNetworkSnapshot::with_root_loader(
             config,
+            crate::OutboundNetworkPolicy::default(),
             system_root_loader,
         )?)
     }

@@ -430,6 +430,56 @@ test("Empty chat transcripts do not render a redundant placeholder", () => {
 	dom.window.close();
 });
 
+test("Chat transcript reuses unchanged messages while replacing changed content", () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	using list = new ChatListWidget(dom.window.document.body);
+	const first = { id: "first", type: "agentMessage" as const, text: "Original **answer**", transient: false };
+	const second = { id: "second", type: "userMessage" as const, text: "Question", transient: false };
+	list.render([first, second]);
+	const firstElement = list.element.querySelector<HTMLElement>('[data-item-id="first"]');
+	const secondElement = list.element.querySelector<HTMLElement>('[data-item-id="second"]');
+	assert.ok(firstElement && secondElement);
+
+	list.render([second, { ...first, text: "Revised **answer**" }]);
+
+	assert.deepEqual([...list.element.querySelectorAll<HTMLElement>(".ash-chat-item")].map(element => ({
+		id: element.dataset.itemId,
+		reused: element === secondElement,
+	})), [{ id: "second", reused: true }, { id: "first", reused: false }]);
+	assert.equal(firstElement.isConnected, false);
+	assert.equal(list.element.querySelector("strong")?.textContent, "answer");
+	dom.window.close();
+});
+
+test("Chat transcript keeps the first visible message in place when history is prepended", () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	using list = new ChatListWidget(dom.window.document.body);
+	const viewport = list.element.querySelector<HTMLElement>(".ash-scrollbar-viewport")!;
+	const transcript = list.element.querySelector<HTMLElement>(".ash-chat-transcript")!;
+	Object.defineProperties(viewport, {
+		clientHeight: { configurable: true, get: () => 100 },
+		scrollHeight: { configurable: true, get: () => transcript.childElementCount * 100 },
+	});
+	const rect = (top: number, bottom: number): DOMRect => ({ top, bottom, left: 0, right: 100, width: 100, height: bottom - top, x: 0, y: top, toJSON: () => ({}) });
+	viewport.getBoundingClientRect = () => rect(0, 100);
+	transcript.getBoundingClientRect = () => rect(-viewport.scrollTop, transcript.childElementCount * 100 - viewport.scrollTop);
+	const item = (id: string) => ({ id, type: "userMessage" as const, text: id, transient: false });
+	list.render([item("one"), item("two"), item("three")]);
+	for (const element of transcript.children) {
+		(element as HTMLElement).getBoundingClientRect = () => {
+			const top = [...transcript.children].indexOf(element) * 100 - viewport.scrollTop;
+			return rect(top, top + 100);
+		};
+	}
+	list.setVisible(true);
+	viewport.scrollTop = 100;
+
+	list.render([item("zero"), item("one"), item("two"), item("three")]);
+
+	assert.equal(viewport.scrollTop, 200);
+	dom.window.close();
+});
+
 test("Turn error cards invoke their typed action without interpreting message text", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	let requestedAction: ChatTurnErrorAction | undefined;
@@ -1616,6 +1666,9 @@ function fakeApi(options: FakeOptions = {}): {
 		},
 		session: {
 			list: async () => ({ sessions: (options.sessions ?? []).map(sessionDto) }),
+			subscribeCatalog: async () => ({ sessions: (options.sessions ?? []).map(sessionDto) }),
+			unsubscribeCatalog: async () => undefined,
+			readCatalog: async ({ sessionId }: { sessionId: string }) => ({ session: sessionDto(currentSession(sessionId)) }),
 			read: async ({ sessionId }: { sessionId: string }) => ({
 				session: sessionDto(currentSession(sessionId)),
 			}),

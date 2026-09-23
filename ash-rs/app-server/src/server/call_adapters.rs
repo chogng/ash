@@ -1,3 +1,4 @@
+use ash_http_client::OutboundNetworkPolicy;
 use call::MediaJoin;
 use call::Operation;
 use livekit_client::AudioMixer;
@@ -19,14 +20,20 @@ pub(super) struct Room {
     mixer: AudioMixer,
     closing: Option<Operation<'static, ()>>,
     screens: Arc<Mutex<super::call_video::Screens>>,
+    network_policy: OutboundNetworkPolicy,
 }
 impl Room {
-    pub fn new(room: MediaRoom, screens: Arc<Mutex<super::call_video::Screens>>) -> Self {
+    pub fn new(
+        room: MediaRoom,
+        screens: Arc<Mutex<super::call_video::Screens>>,
+        network_policy: OutboundNetworkPolicy,
+    ) -> Self {
         Self {
             room: Some(room),
             mixer: AudioMixer::default(),
             closing: None,
             screens,
+            network_policy,
         }
     }
     fn room(&mut self) -> Result<&mut MediaRoom, String> {
@@ -166,6 +173,9 @@ impl call::Media for Room {
     }
     fn rejoin<'a>(&'a mut self, grant: &'a MediaJoin) -> Operation<'a, ()> {
         Box::pin(async move {
+            self.network_policy
+                .check_url(&grant.server_url)
+                .map_err(|error| error.to_string())?;
             // Replacing a room retires its track identities; buffered PCM and
             // settings for those removed tracks must not accumulate across epochs.
             self.mixer = AudioMixer::default();

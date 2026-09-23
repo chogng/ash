@@ -1142,6 +1142,59 @@ fn shared_profile_runtime_shares_sessions_across_env_hosts() {
 }
 
 #[test]
+fn user_network_config_is_loaded_before_start_and_reconciled_on_edit() {
+    let profile = tempfile::tempdir().unwrap();
+    let config_path = profile.path().join("config.toml");
+    std::fs::write(
+        &config_path,
+        format!(
+            "schemaVersion = {}\n[network]\nallowedHosts = ['api.example.com']\n",
+            ash_config::CONFIG_FILE_SCHEMA_VERSION
+        ),
+    )
+    .unwrap();
+    let runtime = Arc::new(LocalProfileRuntime::open(profile.path()).unwrap());
+    assert!(
+        runtime
+            .network_policy
+            .check_url("https://api.example.com/v1")
+            .is_ok()
+    );
+    assert!(
+        runtime
+            .network_policy
+            .check_url("https://other.example.com/v1")
+            .is_err()
+    );
+    let _server = open_local_app_server(
+        LocalAppServerOptions::new(profile.path())
+            .with_profile_runtime(Arc::clone(&runtime))
+            .without_built_in_skills(),
+    )
+    .unwrap();
+    std::fs::write(
+        &config_path,
+        format!(
+            "schemaVersion = {}\n[network]\nallowedHosts = []\n",
+            ash_config::CONFIG_FILE_SCHEMA_VERSION
+        ),
+    )
+    .unwrap();
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while runtime
+        .network_policy
+        .check_url("https://api.example.com/v1")
+        .is_ok()
+    {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "network policy did not update"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+#[test]
 fn shared_profile_runtime_reuses_one_durable_secret_store_across_env_hosts() {
     let profile = tempfile::tempdir().unwrap();
     let first_dir = tempfile::tempdir().unwrap();

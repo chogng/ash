@@ -1,10 +1,13 @@
 use super::*;
 use ash_http_client::HttpClientConfig;
 use ash_http_client::HttpHeader;
+use ash_http_client::NetworkAccess;
+use ash_http_client::OutboundNetworkPolicy;
 use ash_http_client::OutboundNetworkSnapshot;
 use ash_http_client::ProxyPolicy;
 use futures::SinkExt;
 use futures::StreamExt;
+use std::collections::BTreeSet;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
@@ -55,6 +58,41 @@ async fn connector_round_trips_owned_messages_over_a_local_socket() {
     assert_eq!(socket.receive().await.unwrap(), expected);
 
     server.await.unwrap();
+}
+
+#[tokio::test]
+async fn live_socket_ends_when_its_host_is_revoked() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        let (stream, _) = listener.accept().await.unwrap();
+        let _socket = accept_async(stream).await.unwrap();
+        std::future::pending::<()>().await;
+    });
+    let policy = OutboundNetworkPolicy::new(NetworkAccess::Hosts(BTreeSet::from([
+        "127.0.0.1".to_owned()
+    ])));
+    let network = OutboundNetworkSnapshot::with_policy(
+        HttpClientConfig::new().with_proxy_policy(ProxyPolicy::Direct),
+        policy.clone(),
+    )
+    .unwrap();
+    let request = WebSocketRequest::new(format!("ws://{address}/events"), Vec::new()).unwrap();
+    let (mut socket, _) = WebSocketConnector::new(network)
+        .connect(request)
+        .await
+        .unwrap();
+
+    policy.update(NetworkAccess::Hosts(BTreeSet::new()));
+    let result = tokio::time::timeout(std::time::Duration::from_secs(1), socket.receive())
+        .await
+        .unwrap();
+    assert_eq!(result.unwrap_err(), WebSocketClientError::ConnectionClosed);
+    assert_eq!(
+        socket.send(WebSocketMessage::Text("late".into())).await,
+        Err(WebSocketClientError::ConnectionClosed)
+    );
+    server.abort();
 }
 
 #[tokio::test]

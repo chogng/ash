@@ -21,3 +21,18 @@ test('advisor results are grouped and keyboard disclosure state survives a trans
 	await expect(page.locator('strong')).toBeVisible();
 	expect(errors).toEqual([]);
 });
+
+test('transcript keeps a visible message and its DOM node when older history arrives', async ({ page }) => {
+	await page.goto('/advisor.html');
+	await page.getByRole('button', { name: 'Fill transcript' }).click();
+	const anchor = page.locator('[data-item-id="message-20"]');
+	await anchor.scrollIntoViewIfNeeded();
+	await anchor.evaluate(element => element.setAttribute('data-retained', 'true'));
+	const before = await anchor.evaluate(element => element.getBoundingClientRect().top);
+
+	await page.getByRole('button', { name: 'Prepend history' }).click();
+
+	const after = await anchor.evaluate(element => element.getBoundingClientRect().top);
+	expect(Math.abs(after - before)).toBeLessThan(2);
+	await expect(anchor).toHaveAttribute('data-retained', 'true');
+});
