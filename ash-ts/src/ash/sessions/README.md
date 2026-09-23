@@ -47,10 +47,12 @@ not import Sessions product UI or add Sessions-specific layout branches.
    The product composition owns the single view-service subscription and
    pushes `(visible, active)` into the passive `SessionsPart`.
 
-App Server `session/changed` is an invalidation signal. The provider
-reads or subscribes the affected Session again; it never compares a Session
-sequence because no such sequence exists. Durable sequence and gap handling
-belong to the Thread-backed Chat runtime and
+After `session/catalog/subscribe`, App Server sends `session/changed` and
+`session/deleted` to that connection as catalog invalidations. The provider
+refreshes list metadata from `session/list`; management loads full Session
+details only for an opened Session. It never compares a Session sequence because
+no such sequence exists.
+Durable sequence and gap handling belong to the Thread-backed Chat runtime and
 `session/thread/update`.
 
 `session.ts` is the frontend product boundary. Transport DTO mapping

@@ -2426,6 +2426,16 @@ client_methods! {
         response: SessionListResult,
         serialization: GlobalSharedRead,
     },
+    SessionCatalogSubscribe => "session/catalog/subscribe" {
+        params: EmptyParams,
+        response: SessionListResult,
+        serialization: GlobalSharedRead,
+    },
+    SessionCatalogUnsubscribe => "session/catalog/unsubscribe" {
+        params: EmptyParams,
+        response: (),
+        serialization: None,
+    },
     SessionSubscribe => "session/subscribe" {
         params: SessionSubscribeParams,
         response: SessionSubscribeResult,

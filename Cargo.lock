@@ -489,7 +489,6 @@ dependencies = [
  "base64 0.22.1",
  "caseless",
  "chrono",
- "log",
  "pollster 1.0.1",
  "rusqlite",
  "serde",

@@ -17,6 +17,7 @@ export interface AppServerSessionsProviderHost {
 /** App Server adapter. Generated DTOs do not cross this provider boundary. */
 export class AppServerSessionsProvider extends Disposable implements ISessionsProvider {
 	private readonly subscribed = new Set<SessionId>();
+	private catalogSubscribed = false;
 	private readonly _onDidChangeSession = this._register(new Emitter<SessionId>());
 	readonly onDidChangeSession = this._onDidChangeSession.event;
 
@@ -24,13 +25,14 @@ export class AppServerSessionsProvider extends Disposable implements ISessionsPr
 		super();
 		if (host.events) {
 			const subscription = host.events.subscribe(event => {
-				if (event.method === "session/changed" || event.method === "session/thread/update") {
+				if (event.method === "session/changed" || event.method === "session/deleted" || event.method === "session/thread/update") {
 					this._onDidChangeSession.fire(event.params.sessionId);
 				}
 			});
 			this._register(toDisposable(() => subscription.dispose()));
 		}
 		this._register(toDisposable(() => {
+			void host.session.unsubscribeCatalog().catch(error => console.error("Failed to unsubscribe Session catalog", error));
 			for (const sessionId of this.subscribed) {
 				void host.session.unsubscribe({ sessionId }).catch(error => console.error(`Failed to unsubscribe Session '${sessionId}'`, error));
 			}
@@ -40,18 +42,11 @@ export class AppServerSessionsProvider extends Disposable implements ISessionsPr
 
 	async list(): Promise<readonly ISession[]> {
 		const [result, model] = await Promise.all([
-			this.host.session.list(),
+			this.catalogSubscribed ? this.host.session.list() : this.host.session.subscribeCatalog(),
 			this.host.model?.readModel() ?? Promise.resolve(null),
 		]);
+		this.catalogSubscribed = true;
 		return result.sessions.map(session => ({ ...toSession(session), model }));
-	}
-
-	async read(sessionId: SessionId): Promise<ISession> {
-		const [result, model] = await Promise.all([
-			this.host.session.read({ sessionId }),
-			this.host.model?.readModel() ?? Promise.resolve(null),
-		]);
-		return { ...toSession(result.session), model };
 	}
 
 	async subscribe(session: ISession): Promise<ISession> {

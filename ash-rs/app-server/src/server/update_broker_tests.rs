@@ -219,32 +219,45 @@ fn thread_subscription_observes_session_changes() {
 }
 
 #[test]
-fn session_delete_notifies_observers_before_forgetting_the_session() {
+fn session_catalog_changes_reach_connections_without_loading_the_session() {
     let broker = UpdateBroker::default();
-    let queue = NotificationQueue::default();
+    let first = NotificationQueue::default();
+    let second = NotificationQueue::default();
+    let unrelated = NotificationQueue::default();
     let session_id = SessionId::new("session_1").unwrap();
-    broker.register(1, false, &queue);
-    broker.subscribe_session(1, session_id.clone());
+    broker.register(1, false, &first);
+    broker.register(2, false, &second);
+    broker.register(3, false, &unrelated);
+    broker.subscribe_catalog(1);
+    broker.subscribe_catalog(2);
 
+    broker.publish_session_changed(&session_id);
     broker.publish_session_deleted(&session_id);
     broker.forget_session(&session_id);
-    broker.publish_session_changed(&session_id);
 
-    let notifications = queue.drain();
-    assert_eq!(notifications.len(), 1);
-    assert_eq!(notifications[0]["method"], "session/deleted");
-    assert_eq!(notifications[0]["params"]["sessionId"], "session_1");
+    for queue in [&first, &second] {
+        let notifications = queue.drain();
+        assert_eq!(notifications.len(), 2);
+        assert_eq!(notifications[0]["method"], "session/changed");
+        assert_eq!(notifications[1]["method"], "session/deleted");
+        assert_eq!(notifications[1]["params"]["sessionId"], "session_1");
+    }
+    assert!(unrelated.drain().is_empty());
+
+    broker.unsubscribe_catalog(1);
+    broker.publish_session_changed(&session_id);
+    assert!(first.drain().is_empty());
+    assert_eq!(second.drain()[0]["method"], "session/changed");
 }
 
 #[test]
-fn subagent_turn_start_invalidates_session_for_the_main_thread_subscriber() {
+fn committed_subagent_updates_invalidate_the_catalog_without_a_session_subscription() {
     let broker = UpdateBroker::default();
     let queue = NotificationQueue::default();
     let session_id = SessionId::new("session_1").unwrap();
-    let main_thread_id = ThreadId::new("main").unwrap();
     let child_thread_id = ThreadId::new("child").unwrap();
     broker.register(1, false, &queue);
-    broker.subscribe_session_thread(1, session_id.clone(), main_thread_id, 0);
+    broker.subscribe_catalog(1);
 
     broker.publish_thread(
         &child_thread_id,
@@ -266,6 +279,23 @@ fn subagent_turn_start_invalidates_session_for_the_main_thread_subscriber() {
     assert_eq!(notifications.len(), 1);
     assert_eq!(notifications[0]["method"], "session/changed");
     assert_eq!(notifications[0]["params"]["sessionId"], "session_1");
+
+    broker.publish_thread(
+        &child_thread_id,
+        &[ThreadUpdateEnvelope {
+            session_id: SessionId::new("session_1").unwrap(),
+            thread_id: child_thread_id.clone(),
+            durable_sequence: 2,
+            stream_cursor: None,
+            update: ThreadUpdate::Committed {
+                event: ThreadEvent::TurnCancelling {
+                    thread_id: child_thread_id.clone(),
+                    turn_id: TurnId::new("turn_1").unwrap(),
+                },
+            },
+        }],
+    );
+    assert_eq!(queue.drain()[0]["method"], "session/changed");
 }
 
 #[test]

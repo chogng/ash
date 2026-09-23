@@ -24,7 +24,6 @@ Before modifying this repository:
 - 当你思考项目架构时，请考虑从长期架构的终极形态去设计，而不是基于当前架构的优化方向
 - 拆分文件时，避免拆过头
 - 使用playwright测试web and electron-ui 以及electron , 调试不通过截图
-- 写 Readme.md 描述 crate 职责时，请分点描述，要求每点简洁高效
 - 禁止使用 mod.rs, 有 mod.rs 让其退场
 - 思考问题时，避免局部视角看问题，从整体看
 - Read [`pull_request_template.md`](.github/pull_request_template.md) for pr

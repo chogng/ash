@@ -43,6 +43,8 @@ export interface ISessionApi {
 	create(params: SessionCreateParams): Promise<SessionResult>;
 	read(params: SessionReadParams): Promise<SessionResult>;
 	list(): Promise<SessionListResult>;
+	subscribeCatalog(): Promise<SessionListResult>;
+	unsubscribeCatalog(): Promise<void>;
 	subscribe(params: SessionSubscribeParams): Promise<SessionSubscribeResult>;
 	unsubscribe(params: SessionUnsubscribeParams): Promise<void>;
 	createThread(params: SessionOperationInput<"createThread">): Promise<SessionThreadResult>;

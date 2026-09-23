@@ -7,15 +7,38 @@ import { AppServerSessionsManagementService } from "../../browser/appServerSessi
 import { AppServerSessionsProvider } from "../../browser/appServerSessionsProvider.js";
 
 test("management initializes the catalog from provider-owned Session mapping", async () => {
-	const fake = sessionHost([session("session-1", "thread-1")]);
+	const fake = sessionHost([session("session-1", "thread-1"), session("session-2", "thread-2")]);
 	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));
 
 	await service.initialize();
 
-	assert.equal(service.sessions.length, 1);
+	assert.equal(service.sessions.length, 2);
 	assert.equal(service.active?.session.sessionId, "session-1");
 	assert.equal(service.active?.threadId, "thread-1");
 	assert.equal(service.sessions[0]?.chats[0]?.origin.type, "root");
+	assert.equal(fake.subscribeCount, 1);
+	assert.equal(fake.catalogSubscriptionCount, 1);
+	assert.equal(service.sessions[1]?.agentTree, undefined);
+});
+
+test("Session list becomes ready while the opened conversation is still loading", async () => {
+	const fake = sessionHost([session("session-1", "thread-1"), session("session-2", "thread-2")]);
+	let release!: () => void;
+	const held = new Promise<void>(resolve => { release = resolve; });
+	const subscribe = fake.host.session.subscribe.bind(fake.host.session);
+	fake.host.session.subscribe = async params => {
+		await held;
+		return subscribe(params);
+	};
+	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));
+
+	await service.initialize();
+	assert.equal(service.state, "ready");
+	assert.equal(service.sessions.length, 2);
+	assert.equal(fake.subscribeCount, 0);
+
+	release();
+	await waitFor(() => service.active?.session.agentTree !== undefined);
 });
 
 test("opening a background-created conversation reads and subscribes it without reloading the window", async () => {
@@ -29,6 +52,7 @@ test("opening a background-created conversation reads and subscribes it without 
 	assert.equal(service.active?.threadId, "automation-thread");
 	assert.equal(service.sessions.length, 1);
 	assert.equal(fake.subscribeCount, 1);
+	assert.equal(fake.listCount, 1);
 });
 
 test("session/changed adds a conversation created by another client without changing selection", async () => {
@@ -41,6 +65,67 @@ test("session/changed adds a conversation created by another client without chan
 
 	assert.equal(service.sessions[0]?.sessionId, "automation-session");
 	assert.equal(service.active?.threadId, "thread-1");
+	assert.equal(fake.subscribeCount, 1);
+});
+
+test("selecting a catalog-only Session loads its details on demand", async () => {
+	const fake = sessionHost([session("session-1", "thread-1"), session("session-2", "thread-2")]);
+	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));
+	await service.initialize();
+
+	service.selectThread("session-2", "thread-2");
+	await waitFor(() => fake.subscribeCount === 2 && service.sessions[1]?.agentTree !== undefined);
+
+	assert.equal(service.active?.threadId, "thread-2");
+});
+
+test("catalog invalidation during detail loading keeps the selected Session hydrated", async () => {
+	const fake = sessionHost([session("session-1", "thread-1"), session("session-2", "thread-2")]);
+	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));
+	await service.initialize();
+
+	service.selectThread("session-2", "thread-2");
+	fake.sessions[1] = { ...fake.sessions[1]!, title: "Updated while opening" };
+	fake.emit({ method: "session/changed", params: { sessionId: "session-2" } });
+	await waitFor(() => service.sessions[1]?.title === "Updated while opening" && service.sessions[1]?.agentTree !== undefined);
+
+	assert.equal(service.active?.threadId, "thread-2");
+});
+
+test("catalog invalidation refreshes a background Session without loading its conversation", async () => {
+	const fake = sessionHost([session("session-1", "thread-1"), session("session-2", "thread-2")]);
+	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));
+	await service.initialize();
+	fake.sessions[1] = { ...fake.sessions[1]!, title: "Renamed in background" };
+
+	fake.emit({ method: "session/changed", params: { sessionId: "session-2" } });
+	await waitFor(() => service.sessions[1]?.title === "Renamed in background");
+
+	assert.equal(fake.subscribeCount, 1);
+});
+
+test("session/deleted removes an unselected Session from the catalog", async () => {
+	const fake = sessionHost([session("session-1", "thread-1"), session("session-2", "thread-2")]);
+	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));
+	await service.initialize();
+	fake.sessions.splice(1, 1);
+
+	fake.emit({ method: "session/deleted", params: { sessionId: "session-2" } });
+	await waitFor(() => service.sessions.length === 1);
+
+	assert.equal(service.sessions[0]?.sessionId, "session-1");
+});
+
+test("deleting the selected Session opens the next catalog Session", async () => {
+	const fake = sessionHost([session("session-1", "thread-1"), session("session-2", "thread-2")]);
+	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));
+	await service.initialize();
+	fake.sessions.splice(0, 1);
+
+	fake.emit({ method: "session/deleted", params: { sessionId: "session-1" } });
+	await waitFor(() => service.active?.threadId === "thread-2" && service.active.session.agentTree !== undefined);
+
+	assert.equal(fake.subscribeCount, 2);
 });
 
 test("session/changed invalidates the frontend Session without inventing a Session sequence", async () => {
@@ -155,10 +240,14 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection) {
 	const archiveRequests: Parameters<ISessionApi["archive"]>[0][] = [];
 	const interruptRequests: Parameters<ITurnApi["interrupt"]>[0][] = [];
 	let subscribeCount = 0;
+	let catalogSubscriptionCount = 0;
+	let listCount = 0;
 	const api: ISessionApi = {
 		async create() { throw new Error("Not used"); },
 		async read({ sessionId }) { return { session: sessions.find(candidate => candidate.sessionId === sessionId)!, agentTree }; },
-		async list() { return { sessions }; },
+		async list() { listCount += 1; return { sessions }; },
+		async subscribeCatalog() { catalogSubscriptionCount += 1; return { sessions }; },
+		async unsubscribeCatalog() {},
 		async subscribe({ sessionId }) {
 			subscribeCount += 1;
 			const value = sessions.find(candidate => candidate.sessionId === sessionId)!;
@@ -202,6 +291,8 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection) {
 		archiveRequests,
 		interruptRequests,
 		get subscribeCount() { return subscribeCount; },
+		get catalogSubscriptionCount() { return catalogSubscriptionCount; },
+		get listCount() { return listCount; },
 		emit(event: ServerNotification) { for (const listener of listeners) listener(event); },
 	};
 }

@@ -6,7 +6,6 @@ import type { IActiveSessionThread, ISession, ModelRef, SessionId, ThreadId } fr
 export interface ISessionsProvider extends IDisposable {
 	readonly onDidChangeSession: Event<SessionId>;
 	list(): Promise<readonly ISession[]>;
-	read(sessionId: SessionId): Promise<ISession>;
 	subscribe(session: ISession): Promise<ISession>;
 	unsubscribe(sessionId: SessionId): Promise<void>;
 	create(title: string, model?: ModelRef): Promise<IActiveSessionThread>;

@@ -448,6 +448,8 @@ export interface AppServerRequestMap {
   "session/read": { params: SessionReadParams; response: SessionResult };
   "session/thread/checkpoints": { params: MessageCheckpointsParams; response: MessageCheckpointsResult };
   "session/list": { params: Record<string, never>; response: SessionListResult };
+  "session/catalog/subscribe": { params: Record<string, never>; response: SessionListResult };
+  "session/catalog/unsubscribe": { params: Record<string, never>; response: null };
   "session/subscribe": { params: SessionSubscribeParams; response: SessionSubscribeResult };
   "session/request": { params: SessionRequestParams; response: SessionRequestResult };
   "session/unsubscribe": { params: SessionUnsubscribeParams; response: null };
@@ -730,6 +732,8 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "session/read": { method: "session/read" },
   "session/thread/checkpoints": { method: "session/thread/checkpoints" },
   "session/list": { method: "session/list" },
+  "session/catalog/subscribe": { method: "session/catalog/subscribe" },
+  "session/catalog/unsubscribe": { method: "session/catalog/unsubscribe" },
   "session/subscribe": { method: "session/subscribe" },
   "session/request": { method: "session/request" },
   "session/unsubscribe": { method: "session/unsubscribe" },

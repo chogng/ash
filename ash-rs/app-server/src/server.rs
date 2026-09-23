@@ -2066,6 +2066,12 @@ impl AppServer {
             Some(ClientMethod::MessageCheckpoints) => self.message_checkpoints(&request.params),
             Some(ClientMethod::AgentRead) => self.agent_read(&request.params),
             Some(ClientMethod::SessionList) => self.session_list(),
+            Some(ClientMethod::SessionCatalogSubscribe) => {
+                self.session_catalog_subscribe(connection)
+            }
+            Some(ClientMethod::SessionCatalogUnsubscribe) => {
+                self.session_catalog_unsubscribe(connection)
+            }
             Some(ClientMethod::SessionSubscribe) => {
                 self.session_subscribe(connection, &request.params)
             }

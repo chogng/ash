@@ -5,7 +5,7 @@ import type { IActiveSessionThread, IUntitledChatSession, ISession, ModelRef, Se
 import type { ISessionsManagementService, SessionsManagementState } from "../common/sessionsManagementService.js";
 import type { ISessionsProvider } from "../common/sessionsProvider.js";
 
-/** Owns the frontend Session catalog and drafts; backend details remain in the provider. */
+/** Keeps the rendered Session list and drafts; App Server owns durable Session data. */
 export class AppServerSessionsManagementService extends Disposable implements ISessionsManagementService {
 	private readonly _onDidChange = this._register(new Emitter<void>());
 	private _sessions: readonly ISession[] = [];
@@ -17,6 +17,7 @@ export class AppServerSessionsManagementService extends Disposable implements IS
 	private initializePromise: Promise<void> | undefined;
 	private readonly pendingRefreshes = new Set<SessionId>();
 	private readonly refreshes = new Map<SessionId, Promise<void>>();
+	private readonly hydrating = new Map<SessionId, Promise<void>>();
 
 	readonly onDidChange = this._onDidChange.event;
 
@@ -25,7 +26,7 @@ export class AppServerSessionsManagementService extends Disposable implements IS
 		this._register(provider);
 		this._register(provider.onDidChangeSession(sessionId => {
 			this.pendingRefreshes.add(sessionId);
-			this.scheduleRefresh(sessionId);
+			if (this._state !== "loading") this.scheduleRefresh(sessionId);
 		}));
 	}
 
@@ -43,7 +44,10 @@ export class AppServerSessionsManagementService extends Disposable implements IS
 
 	async openThread(sessionId: SessionId, threadId: ThreadId): Promise<void> {
 		await this.initialize();
-		const session = await this.provider.subscribe(await this.provider.read(sessionId));
+		const listed = this._sessions.find(candidate => candidate.sessionId === sessionId)
+			?? (await this.provider.list()).find(candidate => candidate.sessionId === sessionId);
+		if (!listed) throw new Error(`Session is not available: ${sessionId}`);
+		const session = await this.provider.subscribe(listed);
 		this.replaceSession(session);
 		this.selectThread(sessionId, threadId);
 	}
@@ -57,11 +61,17 @@ export class AppServerSessionsManagementService extends Disposable implements IS
 		this._activeUntitledSessionId = undefined;
 		this._error = undefined;
 		this._onDidChange.fire();
+		if (!session.agentTree) void this.hydrateSession(sessionId).catch(error => this.setError(error));
 	}
 
 	async interruptThread(sessionId: SessionId, threadId: ThreadId): Promise<void> {
-		const session = this._sessions.find(candidate => candidate.sessionId === sessionId && candidate.status === "active");
+		let session = this._sessions.find(candidate => candidate.sessionId === sessionId && candidate.status === "active");
 		if (!session) throw new Error(`Active Session is not available: ${sessionId}`);
+		if (!session.agentTree) {
+			await this.hydrateSession(sessionId);
+			session = this._sessions.find(candidate => candidate.sessionId === sessionId && candidate.status === "active");
+			if (!session) throw new Error(`Active Session is not available: ${sessionId}`);
+		}
 		await this.provider.interrupt(session, threadId);
 	}
 
@@ -164,6 +174,7 @@ export class AppServerSessionsManagementService extends Disposable implements IS
 			if (this._active?.session.sessionId === sessionId) this._active = this.firstActiveThread();
 			this.restoreSelection();
 			this.setState("ready");
+			if (this._active && !this._active.session.agentTree) void this.hydrateSession(this._active.session.sessionId).catch(error => this.setError(error));
 		} catch (error) {
 			this.setError(error);
 			throw error;
@@ -173,10 +184,12 @@ export class AppServerSessionsManagementService extends Disposable implements IS
 	private async loadSessions(): Promise<void> {
 		this.setState("loading");
 		try {
-			this._sessions = await Promise.all((await this.provider.list()).map(session => this.provider.subscribe(session)));
+			this._sessions = await this.provider.list();
 			this._active = this.firstActiveThread();
 			this.restoreSelection();
 			this.setState("ready");
+			for (const sessionId of this.pendingRefreshes) this.scheduleRefresh(sessionId);
+			if (this._active) void this.hydrateSession(this._active.session.sessionId).catch(error => this.setError(error));
 		} catch (error) {
 			this.setError(error);
 		}
@@ -191,19 +204,48 @@ export class AppServerSessionsManagementService extends Disposable implements IS
 	private async refreshSession(sessionId: SessionId): Promise<void> {
 		try {
 			while (this.pendingRefreshes.delete(sessionId)) {
-				const current = this._sessions.find(candidate => candidate.sessionId === sessionId) ?? await this.provider.read(sessionId);
-				const refreshed = await this.provider.subscribe(current);
-				this.replaceSession(refreshed);
+				await this.hydrating.get(sessionId);
+				const listed = (await this.provider.list()).find(candidate => candidate.sessionId === sessionId);
+				const current = this._sessions.find(candidate => candidate.sessionId === sessionId);
+				if (current?.agentTree && listed?.status !== "active") await this.provider.unsubscribe(sessionId);
+				const refreshed = listed && current?.agentTree && listed.status === "active"
+					? await this.provider.subscribe(listed)
+					: listed;
+				if (refreshed) this.replaceSession(refreshed);
+				else this._sessions = this._sessions.filter(candidate => candidate.sessionId !== sessionId);
 				if (this._active?.session.sessionId === sessionId) {
-					this._active = refreshed.status === "active" ? activeThread(refreshed, this._active.threadId) ?? this.firstActiveThread() : this.firstActiveThread();
+					this._active = refreshed?.status === "active" ? activeThread(refreshed, this._active.threadId) ?? this.firstActiveThread() : this.firstActiveThread();
 				}
 				this.restoreSelection();
 				this._error = undefined;
 				this._onDidChange.fire();
+				if (this._active && !this._active.session.agentTree) void this.hydrateSession(this._active.session.sessionId).catch(error => this.setError(error));
 			}
 		} catch (error) {
 			this.setError(error);
 		}
+	}
+
+	private hydrateSession(sessionId: SessionId): Promise<void> {
+		const pending = this.hydrating.get(sessionId);
+		if (pending) return pending;
+		const hydrate = (async () => {
+			const current = this._sessions.find(candidate => candidate.sessionId === sessionId && candidate.status === "active");
+			if (!current || current.agentTree) return;
+			const session = await this.provider.subscribe(current);
+			if (!this._sessions.some(candidate => candidate.sessionId === sessionId && candidate.status === "active")) {
+				await this.provider.unsubscribe(sessionId);
+				return;
+			}
+			this.replaceSession(session);
+			if (this._active?.session.sessionId === sessionId) {
+				this._active = activeThread(session, this._active.threadId) ?? this.firstActiveThread();
+			}
+			this._onDidChange.fire();
+		})();
+		this.hydrating.set(sessionId, hydrate);
+		void hydrate.then(() => this.hydrating.delete(sessionId), () => this.hydrating.delete(sessionId));
+		return hydrate;
 	}
 
 	private restoreSelection(): void {

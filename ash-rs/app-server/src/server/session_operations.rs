@@ -102,6 +102,7 @@ impl AppServer {
         };
         self.bind_session_runtime(&created.session_id)
             .map_err(core_error)?;
+        self.updates.publish_session_changed(&created.session_id);
         self.updates
             .subscribe_session(connection.connection_id, created.session_id.clone());
         result(&self.session_result(&created.session_id)?)
@@ -142,6 +143,22 @@ impl AppServer {
         result(&SessionListResult {
             sessions: self.session_views()?,
         })
+    }
+
+    pub(super) fn session_catalog_subscribe(
+        &self,
+        connection: &ConnectionState,
+    ) -> Result<Value, RpcError> {
+        self.updates.subscribe_catalog(connection.connection_id);
+        self.session_list()
+    }
+
+    pub(super) fn session_catalog_unsubscribe(
+        &self,
+        connection: &ConnectionState,
+    ) -> Result<Value, RpcError> {
+        self.updates.unsubscribe_catalog(connection.connection_id);
+        Ok(Value::Null)
     }
 
     pub(super) fn session_subscribe(

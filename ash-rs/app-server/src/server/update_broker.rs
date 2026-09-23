@@ -81,6 +81,7 @@ struct Subscriber {
     agent_interactions: Option<AgentInteractionCapability>,
     product_host: bool,
     collaboration_rooms: BTreeSet<String>,
+    catalog: bool,
     sessions: BTreeSet<SessionId>,
     threads: BTreeMap<ThreadId, ThreadSubscription>,
 }
@@ -149,6 +150,7 @@ impl UpdateBroker {
                     agent_interactions: None,
                     product_host,
                     collaboration_rooms: BTreeSet::new(),
+                    catalog: false,
                     sessions: BTreeSet::new(),
                     threads: BTreeMap::new(),
                 },
@@ -242,6 +244,22 @@ impl UpdateBroker {
         }
     }
 
+    pub(super) fn subscribe_catalog(&self, connection_id: u64) {
+        if let Ok(mut state) = self.state.lock()
+            && let Some(subscriber) = state.subscribers.get_mut(&connection_id)
+        {
+            subscriber.catalog = true;
+        }
+    }
+
+    pub(super) fn unsubscribe_catalog(&self, connection_id: u64) {
+        if let Ok(mut state) = self.state.lock()
+            && let Some(subscriber) = state.subscribers.get_mut(&connection_id)
+        {
+            subscriber.catalog = false;
+        }
+    }
+
     pub(super) fn subscribe_session(&self, connection_id: u64, session_id: SessionId) {
         if let Ok(mut state) = self.state.lock()
             && let Some(subscriber) = state.subscribers.get_mut(&connection_id)
@@ -266,7 +284,7 @@ impl UpdateBroker {
             let Some(queue) = subscriber.queue.upgrade() else {
                 return false;
             };
-            if subscriber_observes_session(subscriber, session_id) {
+            if subscriber.catalog || subscriber_observes_session(subscriber, session_id) {
                 queue.push(notification(
                     ServerNotificationMethod::SessionChanged,
                     &SessionChanged {
@@ -286,7 +304,7 @@ impl UpdateBroker {
             let Some(queue) = subscriber.queue.upgrade() else {
                 return false;
             };
-            if subscriber_observes_session(subscriber, session_id) {
+            if subscriber.catalog || subscriber_observes_session(subscriber, session_id) {
                 queue.push(notification(
                     ServerNotificationMethod::SessionDeleted,
                     &SessionDeleted {
@@ -442,6 +460,13 @@ impl UpdateBroker {
     }
 
     pub(super) fn publish_thread(&self, thread_id: &ThreadId, updates: &[ThreadUpdateEnvelope]) {
+        // Committed events may change the durable Session summary even when no Thread is open.
+        let sessions_with_catalog_change = updates
+            .iter()
+            .filter_map(|update| {
+                matches!(&update.update, ThreadUpdate::Committed { .. }).then_some(&update.session_id)
+            })
+            .collect::<BTreeSet<_>>();
         let sessions_with_timing_change = updates
             .iter()
             .filter_map(|update| match &update.update {
@@ -507,8 +532,18 @@ impl UpdateBroker {
                     queue.extend(session_pending);
                 }
             }
+            for session_id in &sessions_with_catalog_change {
+                if subscriber.catalog {
+                    queue.push(notification(
+                        ServerNotificationMethod::SessionChanged,
+                        &SessionChanged {
+                            session_id: (*session_id).clone(),
+                        },
+                    ));
+                }
+            }
             for session_id in &sessions_with_timing_change {
-                if subscriber_observes_session(subscriber, session_id) {
+                if !subscriber.catalog && subscriber_observes_session(subscriber, session_id) {
                     queue.push(notification(
                         ServerNotificationMethod::SessionChanged,
                         &SessionChanged {

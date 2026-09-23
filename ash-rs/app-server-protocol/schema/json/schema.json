@@ -4836,6 +4836,38 @@
         {
           "properties": {
             "method": {
+              "const": "session/catalog/subscribe",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "session/catalog/unsubscribe",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "session/subscribe",
               "type": "string"
             },
@@ -9149,6 +9181,38 @@
             },
             "result": {
               "$ref": "#/$defs/SessionListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "session/catalog/subscribe",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/SessionListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "session/catalog/unsubscribe",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
             }
           },
           "required": [

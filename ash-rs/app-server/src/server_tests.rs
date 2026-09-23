@@ -1718,6 +1718,39 @@ fn session_first_flow_exposes_derived_session_and_canonical_thread_models() {
 }
 
 #[test]
+fn new_session_invalidates_other_connections_without_a_session_subscription() {
+    let server = server();
+    let mut creator = server.connection();
+    let mut observer = server.connection();
+    initialize(&server, &mut creator);
+    initialize(&server, &mut observer);
+    let listed = call(
+        &server,
+        &mut observer,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"session/catalog/subscribe","params":{}}),
+    );
+    assert!(listed["result"]["sessions"].as_array().unwrap().is_empty());
+
+    let created = create_session(&server, &mut creator, 2, "create-session");
+    let session_id = created["result"]["session"]["sessionId"].as_str().unwrap();
+    let notifications = server.drain_notifications(&mut observer);
+
+    assert!(notifications.iter().any(|message| {
+        let value: serde_json::Value = serde_json::from_str(message).unwrap();
+        value["method"] == "session/changed" && value["params"]["sessionId"] == session_id
+    }));
+
+    let unsubscribed = call(
+        &server,
+        &mut observer,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"session/catalog/unsubscribe","params":{}}),
+    );
+    assert_eq!(unsubscribed["result"], serde_json::Value::Null);
+    create_session(&server, &mut creator, 4, "another-session");
+    assert!(server.drain_notifications(&mut observer).is_empty());
+}
+
+#[test]
 fn session_stop_archives_the_session_and_blocks_new_turns() {
     let server = server();
     let mut connection = server.connection();
