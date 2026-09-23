@@ -73,6 +73,31 @@ test("Go to Line uses Command+G on macOS", () => {
 	dom.window.close();
 });
 
+test('Go to Offset uses one-based UTF-16 positions and returns focus on accept', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const container = dom.window.document.querySelector<HTMLElement>('main')!;
+	using model = new TextModel('alpha\n😊beta');
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
+	viewport.layout({ width: 200, height: 40 });
+	const editorInput = h(dom.window.document, 'textarea');
+	container.append(editorInput);
+	using controller = new GotoLineController(editorInput, viewport, viewport.testViewModel);
+
+	controller.open('offset');
+	assert.equal(controller.input.getAttribute('aria-label'), 'Character offset');
+	assert.equal(controller.input.value, '1');
+	controller.input.value = '9';
+	controller.input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+	controller.input.dispatchEvent(keydown(dom.window, 'Enter'));
+	assert.deepEqual(viewport.testViewModel.getSelections()[0]!, Selection.fromPositions(new Position(2, 3)));
+	assert.equal(dom.window.document.activeElement, editorInput);
+
+	controller.open();
+	assert.equal(controller.input.getAttribute('aria-label'), 'Line number and optional column');
+	assert.equal(controller.input.value, '2:3');
+	dom.window.close();
+});
+
 class FixedTextMeasurer implements TextMeasurer {
 	readonly horizontalPadding = 24;
 	readonly contentLeftPadding = 12;

@@ -2126,3 +2126,5 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 本轮验证：扫描器消费方、syntax wire、模型 tokenization、TextMate、模型/编辑器组件定向单测通过；23 项 Editor 架构检查和 10 项 Chromium 场景通过；`build:stanza`、`build:renderer` 通过。此记录仅表示自建词法链路已收敛，不表示整个 Editor API 对齐完成。
 
 内置语言装配清理：两个 `common/languages/languageBuiltin*` 文件退出，默认语言数据合并到 `standalone/common/builtinLanguages.ts`，由 Standalone 与 Workbench 的装配入口注册。`TextModel` 不再创建内置配置服务；未传入配置的裸模型没有语言规则。Workbench 文件模型使用宿主共享配置并响应注册/撤销，测试专用服务工厂移入测试目录。定向单测、23 项架构检查、9 项 Chromium 场景和 Stanza/Renderer 构建通过。其余自建语言服务、协议和反向契约依赖仍待整理。
+
+Standalone Go to Offset：`editor.action.gotoOffset` 已从命令面板进入现有定位输入框，输入按一基 UTF-16 偏移解析，确认后更新选区、滚动并恢复编辑器焦点；行号模式仍独立工作。动作位于双方同路径的 `standaloneGotoLineQuickAccess.ts`，现有 Ash 定位框继续拥有输入 DOM 和生命周期。中英文标签与输入提示已接入语言目录。定向单测、真实 Chromium 命令场景及 Stanza 生产构建通过。`Colorizer.colorizeModelLine` 仍受模型同步 token 能力限制，未把异步快照伪装为同步实现；其余 Standalone 文件差异仍待逐条闭合调用链。

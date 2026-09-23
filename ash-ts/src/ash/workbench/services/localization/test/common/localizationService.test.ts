@@ -87,6 +87,22 @@ test('Quick Input uses Chinese labels from the selected catalog', async () => {
 	}
 });
 
+test('Go to Offset uses the selected Chinese language catalog', async () => {
+	using configuration = new InMemoryConfigurationService();
+	using languagePacks = new MarketplaceLanguagePackService(createMarketplace(), builtinLanguagePackCatalogs);
+	using localeService = new WorkbenchLocaleService(configuration, languagePacks);
+	using localization = new WorkbenchLocalizationService(localeService, languagePacks);
+	try {
+		await localization.whenReady;
+		await localeService.setLocale('zh-CN');
+		const { GotoOffsetAction } = await import('../../../../../editor/standalone/browser/quickAccess/standaloneGotoLineQuickAccess.js');
+		assert.equal(new GotoOffsetAction().label, '转到字符偏移量...');
+		assert.equal(localization.translate('ash', 'gotoOffset.input', 'Character offset'), '字符偏移量');
+	} finally {
+		resetNlsResolver();
+	}
+});
+
 function createMarketplace(): IMarketplaceService {
 	const changes = new Emitter<void>();
 	return {

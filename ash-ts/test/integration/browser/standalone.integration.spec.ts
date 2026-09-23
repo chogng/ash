@@ -153,6 +153,14 @@ test('standalone command picker executes editor actions, restores focus and foll
 	await expect(input).toBeFocused();
 	await page.keyboard.press('F1');
 	await expect(query).toBeFocused();
+	await query.fill('editor.action.gotoOffset');
+	await expect(picker.locator('.ash-quick-pick-row-label')).toHaveCount(1);
+	await page.keyboard.press('Enter');
+	await expect(page.locator('#caller .stanza-editor-goto-line-input')).toHaveAttribute('aria-label', 'Character offset');
+	await page.keyboard.press('Escape');
+	await expect(input).toBeFocused();
+	await page.keyboard.press('F1');
+	await expect(query).toBeFocused();
 	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	await expect(page.locator('.ash-quick-input-host')).toHaveCount(0);
 	expect(errors).toEqual([]);
@@ -4063,6 +4071,15 @@ test('standard contribution commands operate the existing find, fold and goto wi
 	await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
 	await page.keyboard.type('X');
 	expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('alpha\n  child\neXnd');
+	await page.evaluate(() => window.ashStandaloneIntegration.invokeLanguageAction('editor.action.gotoOffset'));
+	await expect(location).toBeFocused();
+	await expect(location).toHaveAttribute('aria-label', 'Character offset');
+	await location.fill('7');
+	await page.keyboard.press('Enter');
+	await expect(location).toBeHidden();
+	await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
+	await page.keyboard.type('Y');
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('alpha\nY  child\neXnd');
 	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 });
 

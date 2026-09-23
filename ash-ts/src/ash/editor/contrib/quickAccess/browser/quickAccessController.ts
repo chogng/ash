@@ -7,6 +7,7 @@ import { parseStanzaGotoLocation, type GotoLocationParseResult } from "../common
 import { Selection } from "../../../common/core/selection.js";
 import { type View } from "../../../browser/view.js";
 import { type EditorScrollPosition, type IViewModel } from '../../../common/viewModel.js';
+import { localize } from '../../../../nls.js';
 
 export interface GotoLineControllerOptions {
 	readonly operatingSystem?: OperatingSystem;
@@ -18,6 +19,7 @@ export class GotoLineController extends Disposable {
 	readonly input: HTMLInputElement;
 	private readonly status: HTMLSpanElement;
 	private initialScrollPosition: EditorScrollPosition | undefined;
+	private inputMode: 'line' | 'offset' = 'line';
 
 	constructor(
 		private readonly editorInput: HTMLElement,
@@ -65,12 +67,24 @@ export class GotoLineController extends Disposable {
 		return !this.element.hidden;
 	}
 
-	open(): void {
+	open(mode: 'line' | 'offset' = 'line'): void {
 		if (!this.visible) this.initialScrollPosition = this.viewport.viewportLayout.scrollPosition;
+		this.inputMode = mode;
 		this.element.hidden = false;
 		this.element.classList.add("visible");
 		const current = this.viewModel.getSelections()[0]!.getPosition();
-		this.input.value = `${current.lineNumber}:${current.column}`;
+		this.input.value = mode === 'offset'
+			? String(this.viewport.textModel.offsetAt(current) + 1)
+			: `${current.lineNumber}:${current.column}`;
+		this.element.setAttribute('aria-label', mode === 'offset'
+			? localize('gotoOffset.dialog', 'Go to Offset')
+			: localize('gotoLine.dialog', 'Go to Line or Column'));
+		this.input.setAttribute('aria-label', mode === 'offset'
+			? localize('gotoOffset.input', 'Character offset')
+			: localize('gotoLine.input', 'Line number and optional column'));
+		this.input.placeholder = mode === 'offset'
+			? localize('gotoOffset.placeholder', 'Offset')
+			: localize('gotoLine.placeholder', 'Line[:Column]');
 		this.position();
 		this.preview();
 		this.input.focus({ preventScroll: true });
@@ -105,7 +119,7 @@ export class GotoLineController extends Disposable {
 		const result = this.readResult();
 		if (result.kind !== "location") return;
 		stopEvent(event);
-		this.viewModel.setSelections('editor.action.gotoLine', [Selection.fromPositions(result.location.position)]);
+		this.viewModel.setSelections(this.inputMode === 'offset' ? 'editor.action.gotoOffset' : 'editor.action.gotoLine', [Selection.fromPositions(result.location.position)]);
 		this.viewport.revealPosition(result.location.position);
 		this.initialScrollPosition = undefined;
 		this.close();
@@ -120,7 +134,7 @@ export class GotoLineController extends Disposable {
 	}
 
 	private readResult(): GotoLocationParseResult {
-		return parseStanzaGotoLocation(this.viewport.textModel, this.input.value);
+		return parseStanzaGotoLocation(this.viewport.textModel, this.inputMode === 'offset' ? `::${this.input.value}` : this.input.value);
 	}
 
 	private position(): void {
