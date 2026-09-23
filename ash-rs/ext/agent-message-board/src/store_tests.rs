@@ -194,6 +194,77 @@ fn channel_and_topic_subscriptions_route_different_events_and_deduplicate_member
 }
 
 #[test]
+fn explicit_topic_unsubscribe_survives_post_and_reopen() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("board.sqlite3");
+    let scope = board_scope("session", "root");
+    let store = Store::open(&path).unwrap();
+    channel(&store, &scope);
+    let first = write(
+        &store,
+        &scope,
+        "worker",
+        "first",
+        json!({"action":"post","channel":"work","text":"first"}),
+    );
+    let topic = first.output["id"].as_i64().unwrap();
+    drop(store);
+
+    // A database created before opt-outs existed must gain them when opened again.
+    let database = rusqlite::Connection::open(&path).unwrap();
+    database
+        .execute_batch(
+            "DROP TABLE IF EXISTS agent_board_channel_opt_outs;
+             DROP TABLE IF EXISTS agent_board_topic_opt_outs;",
+        )
+        .unwrap();
+    drop(database);
+
+    let store = Store::open(&path).unwrap();
+    write(
+        &store,
+        &scope,
+        "worker",
+        "unsubscribe",
+        json!({"action":"subscription","channel":"work","topic":topic,"state":"off"}),
+    );
+    drop(store);
+
+    let store = Store::open(&path).unwrap();
+    write(
+        &store,
+        &scope,
+        "worker",
+        "worker-reply",
+        json!({"action":"post","channel":"work","topic":topic,"text":"more evidence"}),
+    );
+    let reply = write(
+        &store,
+        &scope,
+        "root",
+        "root-reply",
+        json!({"action":"post","channel":"work","topic":topic,"text":"reviewed"}),
+    );
+    assert!(reply.recipients.is_empty());
+
+    write(
+        &store,
+        &scope,
+        "worker",
+        "resubscribe",
+        json!({"action":"subscription","channel":"work","topic":topic,"state":"on"}),
+    );
+    let followup = write(
+        &store,
+        &scope,
+        "root",
+        "followup",
+        json!({"action":"post","channel":"work","topic":topic,"text":"done"}),
+    );
+    assert_eq!(followup.recipients, vec![ThreadId::new("worker").unwrap()]);
+}
+
+#[test]
 fn concurrent_duplicate_operations_commit_once_and_survive_reopening() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.sqlite3");
@@ -450,6 +521,20 @@ fn invalid_topics_and_deleted_sessions_cannot_mutate_other_boards() {
         "post",
         json!({"action":"post","channel":"work","text":"private"}),
     );
+    write(
+        &store,
+        &a,
+        "root",
+        "unfollow-topic",
+        json!({"action":"subscription","channel":"work","topic":post.output["id"],"state":"off"}),
+    );
+    write(
+        &store,
+        &a,
+        "root",
+        "unfollow-channel",
+        json!({"action":"subscription","channel":"work","state":"off"}),
+    );
     let bad: Write = serde_json::from_value(
         json!({"action":"post","channel":"work","topic":post.output["id"],"text":"bad"}),
     )
@@ -493,6 +578,14 @@ fn invalid_topics_and_deleted_sessions_cannot_mutate_other_boards() {
             })
             .unwrap();
         assert_eq!(remaining, 1);
+    }
+    for table in ["agent_board_channel_opt_outs", "agent_board_topic_opt_outs"] {
+        let remaining: i64 = database
+            .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(remaining, 0);
     }
     assert_eq!(
         database

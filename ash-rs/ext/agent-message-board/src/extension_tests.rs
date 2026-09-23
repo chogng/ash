@@ -371,6 +371,64 @@ fn agents_share_evidence_and_reply_without_starting_idle_members() {
 }
 
 #[test]
+fn posting_does_not_restore_an_explicitly_unsubscribed_agents_notices() {
+    let runtime = Runtime::new();
+    let (child, child_turn) = runtime.child();
+    runtime.ok(
+        "board_write",
+        &runtime.root,
+        &runtime.turn,
+        "channel",
+        json!({"action":"create_channel","channel":"work"}),
+    );
+    let first = runtime.ok(
+        "board_write",
+        &child,
+        &child_turn,
+        "topic",
+        json!({"action":"post","channel":"work","text":"finding"}),
+    );
+    assert_eq!(runtime.notices(&runtime.root, &runtime.turn).len(), 1);
+    runtime.ok(
+        "board_write",
+        &child,
+        &child_turn,
+        "unsubscribe",
+        json!({"action":"subscription","channel":"work","topic":first["topic"],"state":"off"}),
+    );
+    runtime.ok(
+        "board_write",
+        &child,
+        &child_turn,
+        "followup",
+        json!({"action":"post","channel":"work","topic":first["topic"],"text":"more evidence"}),
+    );
+    runtime.ok(
+        "board_write",
+        &runtime.root,
+        &runtime.turn,
+        "reply",
+        json!({"action":"post","channel":"work","topic":first["topic"],"text":"reviewed"}),
+    );
+    assert!(runtime.notices(&child, &child_turn).is_empty());
+    runtime.ok(
+        "board_write",
+        &child,
+        &child_turn,
+        "resubscribe",
+        json!({"action":"subscription","channel":"work","topic":first["topic"],"state":"on"}),
+    );
+    runtime.ok(
+        "board_write",
+        &runtime.root,
+        &runtime.turn,
+        "accepted",
+        json!({"action":"post","channel":"work","topic":first["topic"],"text":"accepted"}),
+    );
+    assert_eq!(runtime.notices(&child, &child_turn).len(), 1);
+}
+
+#[test]
 fn tools_reject_other_trees_forged_turns_and_write_actions_on_the_reader() {
     let runtime = Runtime::new();
     let other = ThreadId::new("other-root").unwrap();

@@ -39,7 +39,7 @@ impl Access {
                 read_schema(),
             ),
             Self::Write => (
-                "Share findings, blockers, decisions and verification evidence with agents in this tree. create_channel creates a channel and subscribes you to new topics. post writes to an existing channel; omit topic for a new discussion or supply its root post ID for a reply. Posting subscribes you to replies. notify lists additional Thread IDs returned by spawn_agent. subscription changes a channel or topic subscription for yourself or member. Channel subscriptions notify new topics; topic subscriptions notify replies. Notifications only reach running turns. Include evidence references; scheduling, permissions and acceptance remain with the task owner.",
+                "Share findings, blockers, decisions and verification evidence with agents in this tree. create_channel creates a channel and subscribes you to new topics. post writes to an existing channel; omit topic for a new discussion or supply its root post ID for a reply. Posting subscribes you to replies unless you explicitly unsubscribed; only subscription with state on restores them. notify lists additional Thread IDs returned by spawn_agent. subscription changes a channel or topic subscription for yourself or member. Channel subscriptions notify new topics; topic subscriptions notify replies. Notifications only reach running turns. Include evidence references; scheduling, permissions and acceptance remain with the task owner.",
                 write_schema(),
             ),
         };

@@ -59,6 +59,16 @@ CREATE TABLE IF NOT EXISTS agent_board_topic_members (
     member TEXT NOT NULL,
     PRIMARY KEY(topic, member)
 );
+CREATE TABLE IF NOT EXISTS agent_board_channel_opt_outs (
+    channel INTEGER NOT NULL REFERENCES agent_board_channels(id) ON DELETE CASCADE,
+    member TEXT NOT NULL,
+    PRIMARY KEY(channel, member)
+);
+CREATE TABLE IF NOT EXISTS agent_board_topic_opt_outs (
+    topic INTEGER NOT NULL REFERENCES agent_board_posts(id) ON DELETE CASCADE,
+    member TEXT NOT NULL,
+    PRIMARY KEY(topic, member)
+);
 CREATE TABLE IF NOT EXISTS agent_board_commands (
     board INTEGER NOT NULL REFERENCES agent_boards(id) ON DELETE CASCADE,
     actor TEXT NOT NULL, call TEXT NOT NULL,
@@ -170,7 +180,7 @@ impl Store {
                     params![board, channel, caseless::default_case_fold_str(channel), actor.as_str(), time],
                 )?;
                 let id = transaction.last_insert_rowid();
-                subscription(&transaction, Target::Channel(id), actor, Subscription::On)?;
+                subscription(&transaction, Target::Channel(id), actor, Follow::Automatic)?;
                 Commit {
                     output: json!({"channel": channel, "creator": actor, "created_at": time}),
                     notification: None,
@@ -194,7 +204,7 @@ impl Store {
                 )?;
                 let id = transaction.last_insert_rowid();
                 let root = topic.unwrap_or(id);
-                subscription(&transaction, Target::Topic(root), actor, Subscription::On)?;
+                subscription(&transaction, Target::Topic(root), actor, Follow::Automatic)?;
                 let mut recipients: BTreeSet<ThreadId> = notify.iter().cloned().collect();
                 let (sql, target) = match topic {
                     Some(id) => (
@@ -244,7 +254,7 @@ impl Store {
                     None => Target::Channel(channel_id),
                 };
                 let member = member.as_ref().unwrap_or(actor);
-                subscription(&transaction, target, member, *state)?;
+                subscription(&transaction, target, member, Follow::Explicit(*state))?;
                 Commit {
                     output: json!({"channel": channel, "topic": topic, "member": member, "state": state}),
                     notification: None,
@@ -316,22 +326,63 @@ enum Target {
     Topic(i64),
 }
 
+enum Follow {
+    Automatic,
+    Explicit(Subscription),
+}
+
 fn subscription(
     database: &Transaction<'_>,
     target: Target,
     member: &ThreadId,
-    change: Subscription,
+    follow: Follow,
 ) -> Result<()> {
-    let (table, column, id) = match target {
-        Target::Channel(id) => ("agent_board_channel_members", "channel", id),
-        Target::Topic(id) => ("agent_board_topic_members", "topic", id),
+    let (members, opt_outs, column, id) = match target {
+        Target::Channel(id) => (
+            "agent_board_channel_members",
+            "agent_board_channel_opt_outs",
+            "channel",
+            id,
+        ),
+        Target::Topic(id) => (
+            "agent_board_topic_members",
+            "agent_board_topic_opt_outs",
+            "topic",
+            id,
+        ),
     };
-    let sql = match change {
-        Subscription::On => {
-            format!("INSERT OR IGNORE INTO {table}({column}, member) VALUES (?1, ?2)")
+    match follow {
+        Follow::Automatic => {
+            database.execute(
+                &format!(
+                    "INSERT OR IGNORE INTO {members}({column}, member)
+                     SELECT ?1, ?2 WHERE NOT EXISTS (
+                         SELECT 1 FROM {opt_outs} WHERE {column}=?1 AND member=?2
+                     )"
+                ),
+                params![id, member.as_str()],
+            )?;
         }
-        Subscription::Off => format!("DELETE FROM {table} WHERE {column}=?1 AND member=?2"),
-    };
-    database.execute(&sql, params![id, member.as_str()])?;
+        Follow::Explicit(Subscription::On) => {
+            database.execute(
+                &format!("DELETE FROM {opt_outs} WHERE {column}=?1 AND member=?2"),
+                params![id, member.as_str()],
+            )?;
+            database.execute(
+                &format!("INSERT OR IGNORE INTO {members}({column}, member) VALUES (?1, ?2)"),
+                params![id, member.as_str()],
+            )?;
+        }
+        Follow::Explicit(Subscription::Off) => {
+            database.execute(
+                &format!("DELETE FROM {members} WHERE {column}=?1 AND member=?2"),
+                params![id, member.as_str()],
+            )?;
+            database.execute(
+                &format!("INSERT OR IGNORE INTO {opt_outs}({column}, member) VALUES (?1, ?2)"),
+                params![id, member.as_str()],
+            )?;
+        }
+    }
     Ok(())
 }
