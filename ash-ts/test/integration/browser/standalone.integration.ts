@@ -157,6 +157,7 @@ interface StandaloneHarness {
 	hideStickyLines(start: number, end: number): void;
 	readStickyState(): { starts: number[]; ends: number[]; offset: number; focused: boolean; line: number; scrollLeft: number; hidden: number[][] };
 	setStickyTheme(name: string): void;
+	setKeyboardReadOnly(readOnly: boolean): void;
 	layoutContribution(width: number, height?: number): void;
 	prepareCompletionGeometry(scrolled: boolean): void;
 	readCompletionGeometry(): { caret: { left: number; top: number; height: number }; api: { left: number; top: number; height: number }; widget: { left: number; top: number }; contentLeft: number; textLeft: number };
@@ -753,6 +754,7 @@ window.ashStandaloneIntegration = {
 		};
 	},
 	setStickyTheme: name => callerEditor.updateOptions({ theme: name }),
+	setKeyboardReadOnly: readOnly => callerEditor.updateOptions({ readOnly }),
 	layoutContribution: (width, height = 180) => callerEditor.layout({ width, height }),
 	prepareCompletionGeometry: scrolled => {
 		const lineNumber = scrolled ? 40 : 1;

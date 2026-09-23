@@ -38,7 +38,7 @@
 | `browser/referenceSearch/standaloneReferenceSearch.ts` | 本地引用跳转由现有语言导航控制器和 PeekViewWidget 承担；标准 ReferencesController 状态与模型链尚未对齐 |
 | `browser/standaloneWebWorker.ts`、`browser/services/standaloneWebWorkerService.ts` | 当前是模型绑定的编辑 Worker 与既有消息端口；标准通用 Worker 服务、代理与多资源同步仍缺失 |
 | `browser/standaloneTreeSitterLibraryService.ts` | 未发现本地同契约 Tree-sitter 库服务与加载链 |
-| `browser/iPadShowKeyboard/iPadShowKeyboard.ts`、`iPadShowKeyboard.css`、`keyboard-dark.svg`、`keyboard-light.svg` | 现有输入 owner 没有这条设备专用入口；需实际设备语义与焦点验证，不能只放图像与按钮 |
+| `browser/iPadShowKeyboard/iPadShowKeyboard.ts`、`iPadShowKeyboard.css`、`keyboard-dark.svg`、`keyboard-light.svg` | 文件、装配和移动浏览器模拟已补齐；真机软键盘弹出及与上游相同设备场景的对照仍待验证 |
 
 已有文件仍待核对的端口：
 
@@ -2131,3 +2131,5 @@ Standalone 布局文件补齐：上游同路径 `standalone/browser/standaloneLa
 Standalone Go to Offset：`editor.action.gotoOffset` 已从命令面板进入现有定位输入框，输入按一基 UTF-16 偏移解析，确认后更新选区、滚动并恢复编辑器焦点；行号模式仍独立工作。动作位于双方同路径的 `standaloneGotoLineQuickAccess.ts`，现有 Ash 定位框继续拥有输入 DOM 和生命周期。中英文标签与输入提示已接入语言目录。定向单测、真实 Chromium 命令场景及 Stanza 生产构建通过。`Colorizer.colorizeModelLine` 仍受模型同步 token 能力限制，未把异步快照伪装为同步实现；其余 Standalone 文件差异仍待逐条闭合调用链。
 
 Standalone 符号选择文件补齐：`standalone/browser/quickAccess/standaloneGotoSymbolQuickAccess.ts` 接管 `editor.action.quickOutline`、当前编辑器的文档符号请求和 Quick Pick 跳转。原仅 Ash 的 `gotoSymbolController.ts`、`gotoSymbol.contribution.ts` 与 `gotoSymbol.css` 已在生产入口和测试迁完后删除，共享 `DocumentSymbolService` 保留。Quick Pick 增加可设置的无障碍名称与失焦事件；关闭时只在焦点仍处于选择框内才恢复此前焦点，避免抢走另一个编辑器的焦点。文件集合检查现为 450 个同路径、0 个大小写错误，CSS 检查无新增上游品牌引用。Stanza/Renderer 生产构建、类型检查、Quick Input 与本地化各 6 项单测和 11 项相关 Chromium 场景通过；架构测试 23 项通过、1 项旧断言失败，该断言仍要求当前基线已不存在的 `contrib/smartSelect/common/selectionRanges.ts`。临时移除该断言后，同一测试又停在旧的 `colorPickerWidget.ts` 布局断言，因此恢复原断言，本批不改这组范围外检查。Code 产品的浏览器 smoke 场景在启动前因本机缺少 Go 命令而止于 `spawnSync go ENOENT`，未执行到 Playwright。
+
+iPad 显示键盘入口补齐：`editor.main.ts` 在 Standalone 装配同路径 `iPadShowKeyboard.ts`，仅对带触摸能力的 iPad/iPhone 或 iPadOS 桌面 UA 创建可聚焦覆盖控件；只读时移除，恢复可编辑时重建，释放编辑器时清理。触摸或焦点进入控件会调用原编辑器焦点入口，文本输入仍由既有输入 owner 处理。Ash 自有 CSS 和两份 SVG 随主题切换，按钮名称接入中英文目录。浏览器模拟覆盖触摸焦点、只读切换、释放、尺寸与浅色/深色/高对比度计算样式；它不能证明真机软键盘弹出的系统行为。同路径审计现为 452 个，CSS ownership 无上游复制或新品牌引用；定向浏览器 3 项、Base 2 项和本地化 6 项通过，Stanza 与 Renderer 构建通过。完整浏览器检查为 604 项通过、22 项失败，失败场景集中在输入历史、括号、缩进导线、行内补全和 GPU 括号字形等既有链路；本批 iPad 场景通过，故完整检查不能记为通过。

@@ -6,6 +6,7 @@ export interface BrowserFeatures {
 	readonly isWebkitWebView: boolean;
 	readonly isElectron: boolean;
 	readonly isAndroid: boolean;
+	readonly isIOS: boolean;
 }
 
 export interface TrustedTypesPolicyOptions {
@@ -29,13 +30,14 @@ export interface IMonacoEnvironment {
 }
 
 interface BrowserGlobals {
-	readonly navigator?: Pick<Navigator, 'userAgent'>;
+	readonly navigator?: Pick<Navigator, 'userAgent' | 'maxTouchPoints'>;
 	readonly MonacoEnvironment?: IMonacoEnvironment;
 }
 
 /** Resolves browser-engine capabilities from one user-agent value. */
-export function getBrowserFeatures(source: string | Pick<Navigator, 'userAgent'> = browserGlobals.navigator ?? ''): Readonly<BrowserFeatures> {
+export function getBrowserFeatures(source: string | Pick<Navigator, 'userAgent' | 'maxTouchPoints'> = browserGlobals.navigator ?? ''): Readonly<BrowserFeatures> {
 	const userAgent = typeof source === 'string' ? source : source.userAgent;
+	const maxTouchPoints = typeof source === 'string' ? 0 : source.maxTouchPoints;
 	const isFirefox = userAgent.includes('Firefox');
 	const isWebKit = userAgent.includes('AppleWebKit');
 	const isChrome = userAgent.includes('Chrome') || userAgent.includes('Chromium');
@@ -48,6 +50,7 @@ export function getBrowserFeatures(source: string | Pick<Navigator, 'userAgent'>
 		isWebkitWebView: !isChrome && !isSafari && isWebKit,
 		isElectron: userAgent.includes('Electron/'),
 		isAndroid: userAgent.includes('Android'),
+		isIOS: maxTouchPoints > 0 && /Macintosh|iPad|iPhone/u.test(userAgent),
 	});
 }
 
@@ -71,3 +74,4 @@ export const isSafari = browserFeatures.isSafari;
 export const isWebkitWebView = browserFeatures.isWebkitWebView;
 export const isElectron = browserFeatures.isElectron;
 export const isAndroid = browserFeatures.isAndroid;
+export const isIOS = browserFeatures.isIOS;

@@ -1,0 +1,53 @@
+.stanza-editor .stanza-editor-show-keyboard {
+	position: relative;
+	box-sizing: border-box;
+	width: 44px;
+	height: 40px;
+	border: 1px solid var(--ash-widget-border);
+	border-radius: 4px;
+	background: var(--ash-editor-background);
+}
+
+.stanza-editor .stanza-editor-show-keyboard::before {
+	content: '';
+	position: absolute;
+	left: 10px;
+	top: 10px;
+	width: 24px;
+	height: 18px;
+	background: var(--ash-editor-foreground);
+	-webkit-mask: url('./keyboard-light.svg') center / contain no-repeat;
+	mask: url('./keyboard-light.svg') center / contain no-repeat;
+	pointer-events: none;
+}
+
+[data-color-scheme='dark'] .stanza-editor .stanza-editor-show-keyboard::before,
+[data-color-scheme='high-contrast-dark'] .stanza-editor .stanza-editor-show-keyboard::before {
+	-webkit-mask-image: url('./keyboard-dark.svg');
+	mask-image: url('./keyboard-dark.svg');
+}
+
+.stanza-editor .stanza-editor-show-keyboard textarea {
+	position: absolute;
+	inset: 0;
+	box-sizing: border-box;
+	width: 100%;
+	height: 100%;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	resize: none;
+	background: transparent;
+	color: transparent;
+	caret-color: transparent;
+}
+
+.stanza-editor .stanza-editor-show-keyboard:focus-within {
+	outline: 2px solid var(--ash-focus-border);
+	outline-offset: 2px;
+}
+
+[data-color-scheme='high-contrast-dark'] .stanza-editor .stanza-editor-show-keyboard,
+[data-color-scheme='high-contrast-light'] .stanza-editor .stanza-editor-show-keyboard {
+	border-color: var(--ash-focus-border);
+}

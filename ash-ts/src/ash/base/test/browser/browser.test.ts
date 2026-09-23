@@ -11,6 +11,7 @@ test('getBrowserFeatures distinguishes supported browser engines and hosts', () 
 		isWebkitWebView: false,
 		isElectron: false,
 		isAndroid: false,
+		isIOS: false,
 	});
 	assert.deepEqual(getBrowserFeatures('Mozilla/5.0 AppleWebKit/605.1.15 Version/18.0 Safari/605.1.15'), {
 		isFirefox: false,
@@ -20,6 +21,7 @@ test('getBrowserFeatures distinguishes supported browser engines and hosts', () 
 		isWebkitWebView: false,
 		isElectron: false,
 		isAndroid: false,
+		isIOS: false,
 	});
 	assert.deepEqual(getBrowserFeatures('Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Chrome/138.0 Electron/37.0 Safari/537.36'), {
 		isFirefox: false,
@@ -29,8 +31,12 @@ test('getBrowserFeatures distinguishes supported browser engines and hosts', () 
 		isWebkitWebView: false,
 		isElectron: true,
 		isAndroid: true,
+		isIOS: false,
 	});
 	assert.equal(getBrowserFeatures('AppleWebKit/605.1.15').isWebkitWebView, true);
+	assert.equal(getBrowserFeatures({ userAgent: 'Mozilla/5.0 (iPad; CPU OS 18_0 like Mac OS X) AppleWebKit/605.1.15', maxTouchPoints: 5 }).isIOS, true);
+	assert.equal(getBrowserFeatures({ userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15', maxTouchPoints: 5 }).isIOS, true);
+	assert.equal(getBrowserFeatures({ userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15', maxTouchPoints: 0 }).isIOS, false);
 });
 
 test('getMonacoEnvironment reads the current embedding environment', () => {

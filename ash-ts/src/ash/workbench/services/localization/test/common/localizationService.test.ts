@@ -39,6 +39,8 @@ test("localization lookup falls back to English and formats parameters", async (
 	await localization.whenReady;
 	assert.equal(localization.translate("ash.settings", "displayLanguage.title", "Fallback"), "Display Language");
 	assert.equal(localization.translate("ash.missing", "missing", "Hello {name}", { name: "Ada" }), "Hello Ada");
+	await localeService.setLocale('zh-CN');
+	assert.equal(localization.translate('ash', 'iPadShowKeyboard.label', 'Show Keyboard'), '显示键盘');
 });
 
 test('folding command metadata uses the selected Chinese language catalog', async () => {
