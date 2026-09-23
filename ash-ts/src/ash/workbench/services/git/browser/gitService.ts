@@ -2,7 +2,7 @@ import type { GitFetchModeDto, GitHeadDto, GitRepositoryChangeDto, GitRepository
 import { Emitter } from "../../../../base/common/event.js";
 import { AbstractDisposable, Disposable, DisposableMap, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { URI } from "../../../../base/common/uri.js";
-import type { IAppServerApi, IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
+import type { AppServerConnectionState, IAppServerApi, IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { IGitApi } from "../../../../platform/git/common/gitApi.js";
 import { ILogService } from '../../../../platform/log/common/log.js';
@@ -66,7 +66,7 @@ export class GitService extends Disposable implements IGitService {
 			this.acceptStatus(toGitStatus(event.params.status, repository));
 		});
 		this._register(toDisposable(() => events.dispose()));
-		const connection = options.appServerApi.onConnectionState(state => {
+		const handleConnectionState = (state: AppServerConnectionState): void => {
 			const revision = ++this.connectionRevision;
 			this.connectionReady = false;
 			this.syncAutofetch();
@@ -81,13 +81,13 @@ export class GitService extends Disposable implements IGitService {
 					this.syncAutofetch();
 				}).catch(error => this.logService.error('git', 'Unable to discover repositories', error));
 			}
-		});
+		};
+		const connection = options.appServerApi.onConnectionState(handleConnectionState);
 		this._register(toDisposable(() => connection.dispose()));
 		const connectionRevision = this.connectionRevision;
 		void options.appServerApi.getConnectionState().then(state => {
 			if (this.isDisposed || connectionRevision !== this.connectionRevision) return;
-			this.connectionReady = state === 'ready';
-			this.syncAutofetch();
+			handleConnectionState(state);
 		}).catch(error => this.logService.error('git', 'Unable to read App Server connection state', error));
 		this._register(this.configurationService.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(GitConfiguration.autofetch) || event.affectsConfiguration(GitConfiguration.autofetchPeriod)) this.syncAutofetch();

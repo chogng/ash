@@ -15,6 +15,8 @@ const INDEXES_DIRECTORY: &str = "indexes";
 const LOCKS_DIRECTORY: &str = "locks";
 const DIRS_DIRECTORY: &str = "dirs";
 const GLOBAL_LOCK_FILE: &str = "indexes.lock";
+#[cfg(windows)]
+const ERROR_LOCK_VIOLATION: i32 = 33;
 
 /// One rebuildable index owned by a Directory.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -238,6 +240,8 @@ fn try_lock_exclusive(file: &File) -> io::Result<bool> {
     match fs2::FileExt::try_lock_exclusive(file) {
         Ok(()) => Ok(true),
         Err(error) if error.kind() == io::ErrorKind::WouldBlock => Ok(false),
+        #[cfg(windows)]
+        Err(error) if error.raw_os_error() == Some(ERROR_LOCK_VIOLATION) => Ok(false),
         Err(error) => Err(error),
     }
 }

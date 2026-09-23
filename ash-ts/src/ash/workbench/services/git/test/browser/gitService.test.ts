@@ -98,6 +98,34 @@ test("GitService routes resources and requests to an explicitly selected reposit
 	assert.deepEqual(statusRequests, [nestedId]);
 });
 
+test('GitService starts Auto Fetch when the App Server was ready before service creation', async () => {
+	const repositoryId = `repo_${'6'.repeat(64)}`;
+	const requests: Array<{ repositoryId?: string; mode: string }> = [];
+	const api = {
+		repositories: async () => ({ repositories: [{ id: repositoryId, label: 'workspace', path: '' }] }),
+		fetch: async (params: { readonly repositoryId?: string; readonly mode: string }) => {
+			requests.push(params);
+			return { status: {
+				repositoryId,
+				streamInstanceId: 'stream-1',
+				revision: 1,
+				workspacePath: '/workspace',
+				head: { type: 'unborn', name: 'main' },
+				changes: [],
+			} };
+		},
+	} as unknown as IGitApi;
+	const appServerApi = { getConnectionState: async () => 'ready', onConnectionState: () => toDisposable(() => undefined) } as unknown as IAppServerApi;
+	const eventApi = { subscribe: () => toDisposable(() => undefined) } as unknown as IServerEventApi;
+	using workspaceContext = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using configuration = new WorkbenchConfigurationService();
+	await configuration.updateValue(GitConfiguration.autofetch, true);
+	using service = new GitService({ api, appServerApi, eventApi, workspaceContext }, configuration, new NullLoggerService());
+
+	await waitFor(() => requests.length === 1);
+	assert.deepEqual(requests, [{ repositoryId, mode: 'default' }]);
+});
+
 test('GitService applies Auto Fetch mode changes and stops when the workspace closes', async () => {
 	const firstId = `repo_${'1'.repeat(64)}`;
 	const secondId = `repo_${'2'.repeat(64)}`;
