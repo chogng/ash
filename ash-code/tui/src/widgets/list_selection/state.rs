@@ -31,6 +31,7 @@ pub(crate) struct ListSelectionItem {
     selection_foreground: Option<Color>,
     presentation_focus: Option<Color>,
     preview: Option<ListSelectionPreview>,
+    section_heading: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -50,6 +51,7 @@ impl ListSelectionItem {
             selection_foreground: None,
             presentation_focus: None,
             preview: None,
+            section_heading: false,
         }
     }
 
@@ -61,6 +63,15 @@ impl ListSelectionItem {
     pub(crate) fn with_description(mut self, description: impl Into<Text>) -> Self {
         self.description = Some(description.into());
         self
+    }
+
+    pub(crate) fn as_section_heading(mut self) -> Self {
+        self.section_heading = true;
+        self
+    }
+
+    pub(crate) fn section_heading(&self) -> bool {
+        self.section_heading
     }
 
     pub(crate) fn with_columns(
@@ -376,6 +387,7 @@ impl ListSelectionState {
                 .initial_selected
                 .min(state.visible_len().saturating_sub(1)),
         );
+        state.skip_section_heading(ListSelectionDirection::Next);
         state
     }
 
@@ -791,7 +803,12 @@ impl ListSelectionState {
                 }
             }
             ListSelectionFocus::Items => {
-                if self.selected_visible.unwrap_or(0) > 0 {
+                if self
+                    .visible_items()
+                    .iter()
+                    .take(self.selected_visible.unwrap_or(0))
+                    .any(|item| !item.section_heading())
+                {
                     self.move_selection(ListSelectionDirection::Previous);
                 } else if self.search.is_some() {
                     self.set_focus(ListSelectionFocus::Search);
@@ -894,10 +911,32 @@ impl ListSelectionState {
             ListSelectionDirection::Previous => selected.saturating_sub(1),
             ListSelectionDirection::Next => selected.saturating_add(1).min(visible_len - 1),
         });
+        self.skip_section_heading(direction);
     }
 
     fn select_first_visible(&mut self) {
         self.selected_visible = (self.visible_len() > 0).then_some(0);
+        self.skip_section_heading(ListSelectionDirection::Next);
+    }
+
+    fn skip_section_heading(&mut self, direction: ListSelectionDirection) {
+        let Some(index) = self.selected_visible else {
+            return;
+        };
+        let items = self.visible_items();
+        if !items.get(index).is_some_and(|item| item.section_heading()) {
+            return;
+        }
+        let next = match direction {
+            ListSelectionDirection::Next => {
+                (index + 1..items.len()).find(|&index| !items[index].section_heading())
+            }
+            ListSelectionDirection::Previous => (0..index)
+                .rev()
+                .find(|&index| !items[index].section_heading()),
+        };
+        self.selected_visible =
+            next.or_else(|| items.iter().position(|item| !item.section_heading()));
     }
 
     fn reconcile_selection(&mut self) {
@@ -907,6 +946,7 @@ impl ListSelectionState {
             (Some(selected), len) => Some(selected.min(len - 1)),
             (None, _) => Some(0),
         };
+        self.skip_section_heading(ListSelectionDirection::Next);
     }
 }
 

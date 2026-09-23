@@ -13,12 +13,12 @@ expression: screen(&app)
             │  ╭────────────────────────────────────────────────────────────────────╮ │             
             │  │ Search Marketplace; Enter to search                                │ │             
             │  ╰────────────────────────────────────────────────────────────────────╯ │             
-            │  server error -32000: Catalog offline                                   │             
             │  Installed                                                              │             
             │> web                                                                    │             
-            │                                                                         │             
-            │                                                                         │             
-            │                                                                         │             
+            │v web                                                                    │             
+            │    Source: official                                                     │             
+            │    Description: —                                                       │             
+            │    Version: 2.0.0                                                       │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             

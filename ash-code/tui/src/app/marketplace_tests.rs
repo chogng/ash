@@ -27,6 +27,7 @@ use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
+use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use serde_json::Value;
 use serde_json::json;
@@ -77,18 +78,19 @@ fn focus(app: &mut App, id: &str) {
     assert!(state.focus_item(&id), "missing {id:?}");
 }
 fn screen(app: &App) -> String {
-    let mut terminal = Terminal::new(TestBackend::new(100, 32)).unwrap();
-    terminal
-        .draw(|frame| super::frame::draw(frame, app))
-        .unwrap();
-    terminal
-        .backend()
-        .buffer()
+    frame_buffer(app)
         .content
         .chunks(100)
         .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
         .collect::<Vec<_>>()
         .join("\n")
+}
+fn frame_buffer(app: &App) -> Buffer {
+    let mut terminal = Terminal::new(TestBackend::new(100, 32)).unwrap();
+    terminal
+        .draw(|frame| super::frame::draw(frame, app))
+        .unwrap();
+    terminal.backend().buffer().clone()
 }
 fn package(id: &str, version: &str) -> MarketplaceInstalledPackageDto {
     serde_json::from_value(json!({
@@ -158,11 +160,15 @@ fn initialize(client: &mut AppServerClient<Transport>) {
 #[test]
 fn marketplace_slash_commands_open_panels_without_creating_a_conversation() {
     let (mut client, requests) = client([
+        initialized(true),
+        json!({"instanceId":"test","generation":1,"packages":[]}),
         json!({"packages":[]}),
         json!({"instanceId":"test","generation":1,"packages":[]}),
+        json!({"packages":[]}),
         serde_json::to_value(crate::test_support::empty_config_snapshot()).unwrap(),
         json!({"servers":[]}),
     ]);
+    initialize(&mut client);
     let mut app = App::new();
     for (command, argument, loading_title, title) in [
         (
@@ -212,19 +218,27 @@ fn marketplace_slash_commands_open_panels_without_creating_a_conversation() {
             .map(|r| r["method"].as_str().unwrap())
             .collect::<Vec<_>>(),
         [
+            "initialize",
+            "marketplace/listInstalled",
             "marketplace/search",
             "marketplace/listInstalled",
+            "marketplace/search",
             "config/read",
             "language/servers"
         ]
     );
-    assert_eq!(requests[0]["params"]["query"], "rust");
+    assert_eq!(requests[2]["params"]["query"], "rust");
+    assert_eq!(requests[2]["params"]["capabilityKind"], "skill");
 }
 
 #[test]
 fn marketplace_search_uses_exact_capability_and_language_filters_and_gates_old_servers() {
     for supported in [true, false] {
-        let (mut client, requests) = client([initialized(supported), json!({"packages":[]})]);
+        let (mut client, requests) = client([
+            initialized(supported),
+            json!({"instanceId":"test","generation":1,"packages":[]}),
+            json!({"packages":[]}),
+        ]);
         initialize(&mut client);
         let mut app = App::new();
         app.update(lsp::Event(lsp_page()));
@@ -237,11 +251,11 @@ fn marketplace_search_uses_exact_capability_and_language_filters_and_gates_old_s
         let event = marketplace::execute(&mut client, command).unwrap();
         app.update(event);
         let requests = requests.lock().unwrap();
-        assert_eq!(requests.len(), if supported { 2 } else { 1 });
+        assert_eq!(requests.len(), if supported { 3 } else { 2 });
         if supported {
-            assert_eq!(requests[1]["params"]["capabilityKind"], "executable");
-            assert_eq!(requests[1]["params"]["languageId"], "typescript");
-            assert!(requests[1]["params"]["packageType"].is_null());
+            assert_eq!(requests[2]["params"]["capabilityKind"], "executable");
+            assert_eq!(requests[2]["params"]["languageId"], "typescript");
+            assert!(requests[2]["params"]["packageType"].is_null());
         } else {
             assert!(
                 app.list_selection()
@@ -281,6 +295,101 @@ fn marketplace_review_requires_confirmation_and_installs_the_reviewed_version() 
 }
 
 #[test]
+fn marketplace_category_groups_packages_and_keeps_shortcuts_out_of_search_input() {
+    let (mut client, requests) = client([
+        initialized(true),
+        json!({"instanceId":"test","generation":1,"packages":[package("v1", "1.0.0")]}),
+        json!({"packages":[
+            {"id":"web@official","version":"1.0.0","packageType":"plugin","displayName":"Web tools","description":"Installed bundle"},
+            {"id":"guide@ash","version":"2.0.0","packageType":"plugin","displayName":"Guide","description":"Search guide"}
+        ]}),
+    ]);
+    initialize(&mut client);
+    let mut app = chinese_app();
+    app.update(
+        marketplace::execute(&mut client, marketplace::Command::browse(Some(Kind::Skill))).unwrap(),
+    );
+    let requests = requests.lock().unwrap();
+    assert_eq!(requests[1]["method"], "marketplace/listInstalled");
+    assert_eq!(requests[2]["method"], "marketplace/search");
+    assert_eq!(requests[2]["params"]["capabilityKind"], "skill");
+    drop(requests);
+    let state = app.list_selection().unwrap();
+    assert_eq!(state.tabs().len(), 9);
+    assert_eq!(state.active_tab().label(), "技能");
+    assert_eq!(
+        state
+            .visible_items()
+            .iter()
+            .map(|item| item.label())
+            .collect::<Vec<_>>(),
+        ["已安装", "Web tools", "未安装", "Guide"]
+    );
+    assert_eq!(
+        state.visible_items()[1].description(),
+        Some("来源：official\n描述：Installed bundle\n版本：1.0.0")
+    );
+    assert_eq!(
+        state.visible_items()[3].description(),
+        Some("来源：ash\n描述：Search guide\n版本：2.0.0")
+    );
+    assert_eq!(state.selected_item().unwrap().label(), "Web tools");
+    let buffer = frame_buffer(&app);
+    assert_eq!(buffer[(15, 11)].symbol(), "已");
+    assert!(
+        buffer[(15, 11)]
+            .modifier
+            .contains(ratatui::style::Modifier::BOLD)
+    );
+    assert_eq!(buffer[(15, 12)].symbol(), "W");
+    assert_eq!(buffer[(15, 13)].symbol(), "未");
+    assert_eq!(buffer[(15, 14)].symbol(), "G");
+    crate::tui_assert_snapshot!("marketplace_category_sections", screen(&app));
+
+    app.handle_key(key(KeyCode::Up));
+    assert!(app.list_selection().unwrap().search().unwrap().input_active());
+    app.handle_key(key(KeyCode::Down));
+    assert_eq!(app.list_selection().unwrap().selected_item().unwrap().label(), "Web tools");
+    app.handle_key(key(KeyCode::Down));
+    assert_eq!(
+        app.list_selection()
+            .unwrap()
+            .selected_item()
+            .unwrap()
+            .label(),
+        "Guide"
+    );
+    app.handle_key(key(KeyCode::Right));
+    crate::tui_assert_snapshot!("marketplace_expanded_package", screen(&app));
+    assert_eq!(
+        app.handle_key(key(KeyCode::Char('i'))),
+        Some(AppCommand::Marketplace(marketplace::Command::Review {
+            package_id: "guide@ash".into(),
+            version: Some("2.0.0".into()),
+            installation_id: None,
+        }))
+    );
+    app.handle_key(key(KeyCode::Char('/')));
+    assert!(
+        app.list_selection()
+            .unwrap()
+            .search()
+            .unwrap()
+            .input_active()
+    );
+    app.handle_key(key(KeyCode::Char('r')));
+    assert_eq!(app.list_selection().unwrap().query(), "r");
+    app.handle_key(key(KeyCode::Esc));
+    assert!(matches!(
+        app.handle_key(key(KeyCode::Char('r'))),
+        Some(AppCommand::Marketplace(marketplace::Command::Browse(_)))
+    ));
+    focus(&mut app, "v1");
+    assert!(app.handle_key(key(KeyCode::Char('u'))).is_none());
+    assert_eq!(app.list_selection().unwrap().title(), "确认卸载");
+}
+
+#[test]
 fn marketplace_installed_versions_have_distinct_actions_and_offline_uninstall() {
     let mut app = App::new();
     app.update(marketplace::Event(marketplace::Page::Installed {
@@ -288,6 +397,23 @@ fn marketplace_installed_versions_have_distinct_actions_and_offline_uninstall() 
         selected: Some("v1".into()),
     }));
     crate::tui_assert_snapshot!("marketplace_installed_versions", screen(&app));
+    assert_eq!(
+        app.handle_key(key(KeyCode::Char('r'))),
+        Some(AppCommand::Marketplace(marketplace::Command::Installed))
+    );
+    focus(&mut app, "v2");
+    app.handle_key(key(KeyCode::Right));
+    assert!(
+        app.list_selection()
+            .unwrap()
+            .selected_item()
+            .unwrap()
+            .description()
+            .unwrap()
+            .contains("Version: 2.0.0")
+    );
+    crate::tui_assert_snapshot!("marketplace_installed_version_expanded", screen(&app));
+    focus(&mut app, "v1");
     // The shared typed mouse target follows the same action path as Enter.
     let outcome = app.panels_mut().command_mut().unwrap().handle_click(
         &ListSelectionPointerTarget::Item(ListSelectionItemId::new("v1")),
@@ -362,14 +488,27 @@ fn marketplace_update_tracks_the_new_installation_identity_and_pending_removal_i
 #[test]
 fn marketplace_failed_search_keeps_offline_management_accessible_and_dismissal_rejects_late_reply()
 {
-    let (mut client, _) = client([json!({"error":{"code":-32000,"message":"Catalog offline"}})]);
+    let (mut client, _) = client([
+        initialized(true),
+        json!({"instanceId":"test","generation":1,"packages":[package("v1","1.0.0")]}),
+        json!({"error":{"code":-32000,"message":"Catalog offline"}}),
+    ]);
+    initialize(&mut client);
     let mut app = App::new();
     app.update(marketplace::execute(&mut client, marketplace::Command::browse(None)).unwrap());
     crate::tui_assert_snapshot!("marketplace_catalog_offline", screen(&app));
-    assert_eq!(
-        app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT)),
-        Some(AppCommand::Marketplace(marketplace::Command::Installed))
+    assert!(
+        app.list_selection()
+            .unwrap()
+            .visible_items()
+            .iter()
+            .any(|item| item
+                .id()
+                .is_some_and(|id| id == &ListSelectionItemId::new("v1")))
     );
+    focus(&mut app, "v1");
+    assert!(app.handle_key(key(KeyCode::Char('u'))).is_none());
+    assert_eq!(app.list_selection().unwrap().title(), "Confirm removal");
     let generation = app.panels().generation();
     app.close_command_panel();
     app.update_for_panel(
@@ -428,7 +567,22 @@ fn marketplace_and_lsp_panels_render_in_inline_mode() {
     let mut settings = crate::config::TerminalSettings::default();
     settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
     app.update(crate::config::Event::SettingsReceived(settings));
-    app.update(marketplace::Event(marketplace::Page::Catalog {params:MarketplaceSearchParams {capability_kind:Some(Kind::Skill),..Default::default()},packages:serde_json::from_value(json!([{"id":"guide@official","version":"1.0.0","packageType":"plugin","displayName":"Guide","description":"A bundled skill"}])).unwrap(),error:None}));
+    app.update(marketplace::Event(marketplace::Page::Catalog {
+        params: MarketplaceSearchParams {
+            capability_kind: Some(Kind::Skill),
+            ..Default::default()
+        },
+        packages: serde_json::from_value(json!([{
+            "id":"guide@official","version":"1.0.0","packageType":"plugin",
+            "displayName":"Guide","description":"A bundled skill"
+        }]))
+        .unwrap(),
+        installed: vec![],
+        error: None,
+    }));
+    let buffer = frame_buffer(&app);
+    assert_eq!(buffer[(2, 28)].symbol(), "N");
+    assert_eq!(buffer[(2, 29)].symbol(), "G");
     crate::tui_assert_snapshot!("marketplace_inline_search", screen(&app));
     app.update(lsp::Event(lsp_page()));
     crate::tui_assert_snapshot!("lsp_inline_servers", screen(&app));
@@ -548,6 +702,7 @@ fn marketplace_tabs_share_backend_filters_and_keep_search_and_tab_focus() {
             ..Default::default()
         },
         packages: vec![],
+        installed: vec![],
         error: None,
     }));
     let Some(AppCommand::Marketplace(marketplace::Command::Browse(params))) =
@@ -556,16 +711,17 @@ fn marketplace_tabs_share_backend_filters_and_keep_search_and_tab_focus() {
         panic!("tab must search skills")
     };
     assert_eq!(params.query, "rust");
-    assert_eq!(params.capability_kind, Some(Kind::Skill));
-    assert_eq!(params.package_type, None);
+    assert_eq!(params.capability_kind, None);
+    assert_eq!(params.package_type.as_deref(), Some("plugin"));
     assert!(app.list_selection().unwrap().tabs_focused());
     app.update(marketplace::Event(marketplace::Page::Catalog {
         params,
         packages: vec![],
+        installed: vec![],
         error: None,
     }));
     assert!(app.list_selection().unwrap().tabs_focused());
-    assert_eq!(app.list_selection().unwrap().active_tab().label(), "技能");
+    assert_eq!(app.list_selection().unwrap().active_tab().label(), "插件");
     crate::tui_assert_snapshot!("marketplace_chinese_tabs", screen(&app));
     let outcome = app.panels_mut().command_mut().unwrap().handle_click(
         &ListSelectionPointerTarget::Tab(2),
@@ -575,11 +731,11 @@ fn marketplace_tabs_share_backend_filters_and_keep_search_and_tab_focus() {
     let Some(AppCommand::Marketplace(marketplace::Command::Browse(params))) =
         app.handle_command_panel_outcome(outcome)
     else {
-        panic!("click must search plugins")
+        panic!("click must search MCP")
     };
     assert_eq!(params.query, "rust");
-    assert_eq!(params.capability_kind, None);
-    assert_eq!(params.package_type.as_deref(), Some("plugin"));
+    assert_eq!(params.capability_kind, Some(Kind::Mcp));
+    assert_eq!(params.package_type, None);
 }
 
 #[test]
@@ -613,7 +769,7 @@ fn marketplace_chinese_review_and_installed_actions_preserve_package_identity() 
         packages: vec![package("v1", "1.0.0")],
         selected: Some("v1".into()),
     }));
-    assert_eq!(app.list_selection().unwrap().active_tab().label(), "已安装");
+    assert_eq!(app.list_selection().unwrap().active_tab().label(), "插件");
     crate::tui_assert_snapshot!("marketplace_chinese_installed", screen(&app));
     app.handle_key(key(KeyCode::Enter));
     focus(&mut app, "remove");
@@ -731,36 +887,42 @@ fn marketplace_failed_tab_load_keeps_the_loaded_view_and_can_be_retried() {
     app.update(marketplace::Event(marketplace::Page::Catalog {
         params: MarketplaceSearchParams::default(),
         packages: vec![],
+        installed: vec![],
         error: None,
     }));
-    assert_eq!(
-        app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT)),
-        Some(AppCommand::Marketplace(marketplace::Command::Installed))
-    );
+    assert!(matches!(
+        app.handle_key(key(KeyCode::Tab)),
+        Some(AppCommand::Marketplace(marketplace::Command::Browse(MarketplaceSearchParams {package_type:Some(ref package_type),..}))) if package_type == "plugin"
+    ));
     let Some(CommandPanel::Marketplace(panel)) = app.panels_mut().command_mut() else {
         panic!("missing marketplace")
     };
     panel.begin_request();
     assert_eq!(panel.select_tab(1), None);
     panel.fail("Installation records unavailable".into());
-    assert_eq!(panel.state().active_tab().label(), "All");
+    assert_eq!(panel.state().active_tab().label(), "Skills");
     assert_eq!(
         panel.state().message(),
         Some("Installation records unavailable")
     );
-    assert_eq!(
-        app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT)),
-        Some(AppCommand::Marketplace(marketplace::Command::Installed))
-    );
+    assert!(matches!(
+        app.handle_key(key(KeyCode::Tab)),
+        Some(AppCommand::Marketplace(marketplace::Command::Browse(MarketplaceSearchParams {package_type:Some(ref package_type),..}))) if package_type == "plugin"
+    ));
     for _ in 0..2 {
-        app.update(marketplace::Event(marketplace::Page::Installed {
+        app.update(marketplace::Event(marketplace::Page::Catalog {
+            params: MarketplaceSearchParams {
+                package_type: Some("plugin".into()),
+                ..Default::default()
+            },
             packages: vec![],
-            selected: None,
+            installed: vec![],
+            error: None,
         }));
         assert!(app.list_selection().unwrap().tabs_focused());
         assert_eq!(
             app.list_selection().unwrap().active_tab().label(),
-            "Installed"
+            "Plugins"
         );
     }
 }

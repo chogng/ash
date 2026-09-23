@@ -23,14 +23,14 @@ expression: screen(&app)
                                                                                                     
                                                                                                     
                                                                                                     
-                                                                                                    
 ─ Marketplace ──────────────────────────────────────────────────────────────────────────────────────
                                                                                                     
-   All    Skills    Plugins    MCP    Connectors    Executables    Languages    Themes              
-   Localizations    Assets    Installed                                                             
+   Skills    Plugins    MCP    Connectors    Executables    Languages    Themes    Localizations    
+   Assets                                                                                           
   ╭──────────────────────────────────────────────────────────────────────────────────────────────╮  
   │ Search Marketplace; Enter to search                                                          │  
   ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  
-  Guide  ·  guide@official · 1.0.0 · A bundled skill                                                
+  Not installed                                                                                     
+> Guide                                                                                             
                                                                                                     
-  Enter search · Esc return
+  / search · ←/→ details · i install · r refresh

@@ -493,6 +493,17 @@ fn draw_item(
     expanded: Option<bool>,
     context: RenderContext<'_>,
 ) {
+    if item.section_heading() {
+        frame.render_widget(
+            Paragraph::new(format!("  {}", item.label())).style(
+                Style::default()
+                    .fg(context.muted())
+                    .add_modifier(Modifier::BOLD),
+            ),
+            area,
+        );
+        return;
+    }
     let row_style = item_style(context, selected, hovered, pressed);
     frame.render_widget(Block::default().style(row_style), area);
     let label_style = if selected && !pressed {

@@ -25,6 +25,18 @@ fn run<T: JsonRpcTransport>(
 ) -> Result<Page, ClientError> {
     let selected = match command {
         Command::Browse(params) => {
+            let installed = client.list_installed_marketplace_packages();
+            let installed = match installed {
+                Ok(result) => result.packages,
+                Err(error) => {
+                    return Ok(Page::Catalog {
+                        params,
+                        packages: Vec::new(),
+                        installed: Vec::new(),
+                        error: Some(error.to_string()),
+                    });
+                }
+            };
             let result = (|| {
                 if (params.capability_kind.is_some() || params.language_id.is_some())
                     && !client
@@ -48,11 +60,13 @@ fn run<T: JsonRpcTransport>(
                 Ok(result) => Page::Catalog {
                     params,
                     packages: result.packages,
+                    installed,
                     error: None,
                 },
                 Err(error) => Page::Catalog {
                     params,
                     packages: Vec::new(),
+                    installed,
                     error: Some(error),
                 },
             });

@@ -47,7 +47,7 @@ pub(crate) enum Command {
 impl Command {
     pub(crate) fn browse(kind: Option<Kind>) -> Self {
         Self::Browse(MarketplaceSearchParams {
-            capability_kind: kind,
+            capability_kind: Some(kind.unwrap_or(Kind::Skill)),
             ..Default::default()
         })
     }
@@ -60,6 +60,7 @@ pub(crate) enum Page {
     Catalog {
         params: MarketplaceSearchParams,
         packages: Vec<MarketplacePackageSummaryDto>,
+        installed: Vec<MarketplaceInstalledPackageDto>,
         error: Option<String>,
     },
     Installed {
@@ -102,6 +103,9 @@ pub(crate) struct Panel {
     search: Option<MarketplaceSearchParams>,
     back: Option<Command>,
     language: Language,
+    browse_hints: crate::widgets::key_hint::KeyHints,
+    installed_hints: crate::widgets::key_hint::KeyHints,
+    pending_hints: crate::widgets::key_hint::KeyHints,
 }
 
 impl Panel {
@@ -122,26 +126,11 @@ impl Panel {
             Page::Catalog {
                 params,
                 packages,
+                installed,
                 error: failure,
             } => {
                 title = Text::from("Marketplace");
-                for package in packages {
-                    push(
-                        &mut items,
-                        &mut actions,
-                        &package.id,
-                        Text::literal(&package.display_name),
-                        Text::literal(format!(
-                            "{} · {} · {}",
-                            package.id, package.version, package.description
-                        )),
-                        Action::Request(Command::Review {
-                            package_id: package.id.clone(),
-                            version: Some(package.version),
-                            installation_id: None,
-                        }),
-                    );
-                }
+                catalog_items(&mut items, &mut actions, &params, &packages, &installed);
                 search = Some(params);
                 error = failure;
             }
@@ -150,36 +139,12 @@ impl Panel {
                 selected: focus,
             } => {
                 title = "Marketplace".into();
-                push(
-                    &mut items,
-                    &mut actions,
-                    "refresh",
-                    "Refresh installed packages",
-                    "Reads local installations; no catalog connection required",
-                    Action::Request(Command::Installed),
-                );
-                for package in packages {
-                    let state = if package.state == MarketplaceInstallationStateDto::PendingRemoval
-                    {
-                        "waiting for consumers to release"
-                    } else {
-                        "installed"
-                    };
-                    push(
-                        &mut items,
-                        &mut actions,
-                        &package.installation_id,
-                        Text::literal(format!(
-                            "{} · {}",
-                            package.package.id, package.package.version
-                        )),
-                        Text::template(
-                            "{0} · {1}",
-                            vec![state.into(), Text::literal(&package.installation_id)],
-                        ),
-                        Action::InstalledPackage(package.clone()),
-                    );
-                }
+                let params = MarketplaceSearchParams {
+                    package_type: Some("plugin".into()),
+                    ..Default::default()
+                };
+                catalog_items(&mut items, &mut actions, &params, &[], &packages);
+                search = Some(params);
                 selected = focus;
             }
             Page::Review {
@@ -259,9 +224,9 @@ impl Panel {
             }
         }
         let active_tab = if view == View::Installed {
-            Tab::Installed
+            Tab::Plugins
         } else {
-            search.as_ref().map(Tab::from_params).unwrap_or(Tab::All)
+            search.as_ref().map(Tab::from_params).unwrap_or(Tab::Skills)
         };
         let groups = if view == View::Other {
             vec![ListSelectionGroup::new("", items)]
@@ -285,6 +250,8 @@ impl Panel {
             .with_activation(bindings::ACCEPT);
         if view == View::Other {
             model = model.without_tab_bar();
+        } else {
+            model = model.with_expandable_descriptions();
         }
         if search.is_some() {
             model = model.with_input(SearchBoxModel::new("Search Marketplace; Enter to search"));
@@ -300,6 +267,14 @@ impl Panel {
         if let Some(params) = &search {
             list.state_mut().focus_search();
             list.handle_paste(params.query.clone());
+            if let Some(id) = list
+                .state()
+                .visible_items()
+                .iter()
+                .find_map(|item| item.id().cloned())
+            {
+                list.state_mut().focus_item(&id);
+            }
         }
         if let Some(selected) = selected {
             list.state_mut()
@@ -313,6 +288,20 @@ impl Panel {
             back,
             pending: false,
             language: Language::English,
+            browse_hints: crate::widgets::key_hint::KeyHints::compact()
+                .with_compact_action("/", "search")
+                .with_compact_action("←/→", "details")
+                .with_compact_action("i", "install")
+                .with_compact_action("r", "refresh"),
+            installed_hints: crate::widgets::key_hint::KeyHints::compact()
+                .with_compact_action("/", "search")
+                .with_compact_action("←/→", "details")
+                .with_compact_action("u", "uninstall")
+                .with_compact_action("r", "refresh"),
+            pending_hints: crate::widgets::key_hint::KeyHints::compact()
+                .with_compact_action("/", "search")
+                .with_compact_action("←/→", "details")
+                .with_compact_action("r", "refresh"),
             input_hints: crate::widgets::key_hint::KeyHints::compact()
                 .with_compact_action("Enter", "search")
                 .with_compact_action("Esc", "return"),
@@ -334,7 +323,7 @@ impl Panel {
         self.pending = false;
         let loaded_tab = match self.view {
             View::Catalog => self.search.as_ref().map(Tab::from_params),
-            View::Installed => Some(Tab::Installed),
+            View::Installed => Some(Tab::Plugins),
             View::Other => None,
         };
         if let Some(tab) = loaded_tab
@@ -363,6 +352,25 @@ impl Panel {
             .is_some_and(|input| input.input_active())
         {
             &self.input_hints
+        } else if self.view != View::Other {
+            if self.state().tabs_focused() {
+                self.list.key_hints()
+            } else {
+                match self
+                    .state()
+                    .selected_item()
+                    .and_then(ListSelectionItem::id)
+                    .and_then(|id| self.list.action(id))
+                {
+                    Some(Action::InstalledPackage(package))
+                        if package.state == MarketplaceInstallationStateDto::PendingRemoval =>
+                    {
+                        &self.pending_hints
+                    }
+                    Some(Action::InstalledPackage(_)) => &self.installed_hints,
+                    _ => &self.browse_hints,
+                }
+            }
         } else {
             self.list.key_hints()
         }
@@ -386,10 +394,11 @@ impl Panel {
         {
             return None;
         }
-        self.search
-            .clone()
-            .map(Command::Browse)
-            .or_else(|| self.installed().then_some(Command::Installed))
+        if self.installed() {
+            Some(Command::Installed)
+        } else {
+            self.search.clone().map(Command::Browse)
+        }
     }
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> ListSelectionOutcome<Command> {
@@ -399,6 +408,48 @@ impl Panel {
             } else {
                 ListSelectionOutcome::Consumed
             };
+        }
+        if key.kind == KeyEventKind::Press
+            && key.modifiers.is_empty()
+            && self.view != View::Other
+            && !self
+                .state()
+                .search()
+                .is_some_and(|search| search.input_active())
+        {
+            match key.code {
+                crossterm::event::KeyCode::Char('r') => {
+                    return self.refresh().map_or(
+                        ListSelectionOutcome::Consumed,
+                        ListSelectionOutcome::Activate,
+                    );
+                }
+                crossterm::event::KeyCode::Char('i') if self.state().items_focused() => {
+                    if let Some(Action::Request(command @ Command::Review { .. })) = self
+                        .state()
+                        .selected_item()
+                        .and_then(ListSelectionItem::id)
+                        .and_then(|id| self.list.action(id))
+                    {
+                        return ListSelectionOutcome::Activate(command.clone());
+                    }
+                }
+                crossterm::event::KeyCode::Char('u') if self.state().items_focused() => {
+                    if let Some(Action::InstalledPackage(package)) = self
+                        .state()
+                        .selected_item()
+                        .and_then(ListSelectionItem::id)
+                        .and_then(|id| self.list.action(id))
+                        .cloned()
+                    {
+                        if package.state == MarketplaceInstallationStateDto::Installed {
+                            self.installed_package(package, Removal::Confirm);
+                        }
+                        return ListSelectionOutcome::Consumed;
+                    }
+                }
+                _ => {}
+            }
         }
         if key.kind == KeyEventKind::Press
             && bindings::ACCEPT.matches(key)
@@ -450,9 +501,6 @@ impl Panel {
 
     fn tab_command(&self) -> Command {
         let tab = Tab::ALL[self.state().active_tab_index()];
-        if tab == Tab::Installed {
-            return Command::Installed;
-        }
         let mut params = self.search.clone().unwrap_or_default();
         params.query = self.state().query().trim().into();
         params.package_type = (tab == Tab::Plugins).then(|| "plugin".into());
@@ -579,6 +627,105 @@ fn push(
     actions.insert(id, action);
 }
 
+fn catalog_items(
+    items: &mut Vec<ListSelectionItem>,
+    actions: &mut BTreeMap<ListSelectionItemId, Action>,
+    params: &MarketplaceSearchParams,
+    packages: &[MarketplacePackageSummaryDto],
+    installed: &[MarketplaceInstalledPackageDto],
+) {
+    let matching_installed = installed.iter().filter(|package| {
+        (params.package_type.as_deref() == Some("plugin")
+            || params.capability_kind.is_none()
+            || package
+                .capabilities
+                .iter()
+                .any(|capability| Some(capability.kind) == params.capability_kind))
+            && (params.query.is_empty()
+                || packages.iter().any(|summary| {
+                    summary.id == package.package.id
+                        && (summary
+                            .display_name
+                            .to_lowercase()
+                            .contains(&params.query.to_lowercase())
+                            || summary
+                                .description
+                                .to_lowercase()
+                                .contains(&params.query.to_lowercase()))
+                })
+                || package
+                    .package
+                    .id
+                    .to_lowercase()
+                    .contains(&params.query.to_lowercase()))
+    });
+    let mut installed_count = 0;
+    for package in matching_installed {
+        if installed_count == 0 {
+            items.push(ListSelectionItem::new("Installed").as_section_heading());
+        }
+        installed_count += 1;
+        let summary = packages.iter().find(|summary| {
+            summary.id == package.package.id && summary.version == package.package.version
+        });
+        let name = summary.map_or_else(
+            || {
+                package
+                    .package
+                    .id
+                    .split('@')
+                    .next()
+                    .unwrap_or(&package.package.id)
+            },
+            |summary| summary.display_name.as_str(),
+        );
+        let description = summary.map_or("—", |summary| summary.description.as_str());
+        push(
+            items,
+            actions,
+            &package.installation_id,
+            Text::literal(name),
+            package_details(&package.package.id, description, &package.package.version),
+            Action::InstalledPackage(package.clone()),
+        );
+    }
+    let mut available_count = 0;
+    for package in packages {
+        if installed.iter().any(|installed| {
+            installed.package.id == package.id && installed.package.version == package.version
+        }) {
+            continue;
+        }
+        if available_count == 0 {
+            items.push(ListSelectionItem::new("Not installed").as_section_heading());
+        }
+        available_count += 1;
+        push(
+            items,
+            actions,
+            &package.id,
+            Text::literal(&package.display_name),
+            package_details(&package.id, &package.description, &package.version),
+            Action::Request(Command::Review {
+                package_id: package.id.clone(),
+                version: Some(package.version.clone()),
+                installation_id: None,
+            }),
+        );
+    }
+}
+
+fn package_details(id: &str, description: &str, version: &str) -> Text {
+    Text::template(
+        "Source: {0}\nDescription: {1}\nVersion: {2}",
+        vec![
+            Text::literal(id.rsplit_once('@').map_or("—", |(_, source)| source)),
+            Text::literal(description),
+            Text::literal(version),
+        ],
+    )
+}
+
 fn kind_label(kind: Kind) -> &'static str {
     match kind {
         Kind::Skill => "Skills",
@@ -594,7 +741,6 @@ fn kind_label(kind: Kind) -> &'static str {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Tab {
-    All,
     Skills,
     Plugins,
     Mcp,
@@ -604,12 +750,10 @@ enum Tab {
     Themes,
     Localizations,
     Assets,
-    Installed,
 }
 
 impl Tab {
-    const ALL: [Self; 11] = [
-        Self::All,
+    const ALL: [Self; 9] = [
         Self::Skills,
         Self::Plugins,
         Self::Mcp,
@@ -619,14 +763,13 @@ impl Tab {
         Self::Themes,
         Self::Localizations,
         Self::Assets,
-        Self::Installed,
     ];
     fn index(self) -> usize {
         Self::ALL.iter().position(|tab| *tab == self).unwrap()
     }
     fn kind(self) -> Option<Kind> {
         match self {
-            Self::All | Self::Plugins | Self::Installed => None,
+            Self::Plugins => None,
             Self::Skills => Some(Kind::Skill),
             Self::Mcp => Some(Kind::Mcp),
             Self::Connectors => Some(Kind::Connector),
@@ -639,9 +782,7 @@ impl Tab {
     }
     fn label(self) -> &'static str {
         match self {
-            Self::All => "All",
             Self::Plugins => "Plugins",
-            Self::Installed => "Installed",
             _ => kind_label(self.kind().unwrap()),
         }
     }
@@ -649,9 +790,9 @@ impl Tab {
         if params.package_type.as_deref() == Some("plugin") {
             return Self::Plugins;
         }
-        Self::ALL
-            .into_iter()
-            .find(|tab| tab.kind() == params.capability_kind)
-            .unwrap_or(Self::All)
+        params
+            .capability_kind
+            .and_then(|kind| Self::ALL.into_iter().find(|tab| tab.kind() == Some(kind)))
+            .unwrap_or(Self::Skills)
     }
 }

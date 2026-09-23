@@ -7,17 +7,15 @@ expression: screen(&app)
                                                                                                     
             ┌── Marketplace ──────────────────────────────────────────────────────[✗]─┐             
             │                                                                         │             
-            │   All    Skills    Plugins    MCP    Connectors    Executables          │             
-            │   Languages    Themes    Localizations    Assets    Installed           │             
+            │   Skills    Plugins    MCP    Connectors    Executables    Languages    │             
+            │   Themes    Localizations    Assets                                     │             
             │                                                                         │             
-            │  Refresh installed packages  ·  Reads local installations; no catalog c │             
-            │> web@official · 1.0.0  ·  installed · v1                                │             
-            │  web@official · 2.0.0  ·  installed · v2                                │             
-            │                                                                         │             
-            │                                                                         │             
-            │                                                                         │             
-            │                                                                         │             
-            │                                                                         │             
+            │  ╭────────────────────────────────────────────────────────────────────╮ │             
+            │  │ Search Marketplace; Enter to search                                │ │             
+            │  ╰────────────────────────────────────────────────────────────────────╯ │             
+            │  Installed                                                              │             
+            │> web                                                                    │             
+            │> web                                                                    │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
@@ -28,7 +26,9 @@ expression: screen(&app)
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
-            │  Enter to confirm  ·  Tab/Shift+Tab to switch  ·  Esc to close          │             
+            │                                                                         │             
+            │                                                                         │             
+            │  / search · ←/→ details · u uninstall · r refresh                       │             
   ╭─────────└─────────────────────────────────────────────────────────────────────────┘──────────╮  
   │ > Build anything                                                                             │  
   ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯
