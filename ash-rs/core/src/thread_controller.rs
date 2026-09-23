@@ -40,6 +40,7 @@ use ash_protocol::InteractionDeadline;
 use ash_protocol::ItemId;
 use ash_protocol::ModelRef;
 use ash_protocol::RequestId;
+use ash_protocol::Session;
 use ash_protocol::SessionId;
 use ash_protocol::SessionManagerActivity;
 use ash_protocol::SessionManagerInfo;
@@ -70,6 +71,7 @@ use ash_protocol::UserInput;
 use ash_thread_store::AppendBatchResult;
 use ash_thread_store::ThreadCatalogRecord;
 use ash_thread_store::ThreadStoreError;
+use ash_thread_store::session_from_catalog;
 use ash_thread_store::validate_append_batch;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -2041,6 +2043,40 @@ impl ThreadController {
         self.read_catalog(|store| store.list_catalog())
     }
 
+    /// Reads one durable row per Session and repairs damaged list rows from Thread history.
+    pub fn list_sessions(&self) -> Result<Vec<Session>, CoreError> {
+        loop {
+            match self.store.list_sessions() {
+                Ok(sessions) => return Ok(sessions),
+                Err(ThreadStoreError::SessionCatalogDamaged(session_id)) => {
+                    self.repair_session_catalog(&session_id)?;
+                }
+                Err(error) => return Err(error.into()),
+            }
+        }
+    }
+
+    pub fn read_session_catalog(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<Option<Session>, CoreError> {
+        loop {
+            match self.store.read_session(session_id) {
+                Ok(session) => return Ok(session),
+                Err(ThreadStoreError::SessionCatalogDamaged(damaged)) => {
+                    self.repair_session_catalog(&damaged)?;
+                }
+                Err(error) => return Err(error.into()),
+            }
+        }
+    }
+
+    fn repair_session_catalog(&self, session_id: &SessionId) -> Result<(), CoreError> {
+        self.read_catalog(|store| store.session_catalog(session_id))?;
+        self.store.rebuild_session(session_id)?;
+        Ok(())
+    }
+
     pub fn session_thread_catalog(
         &self,
         session_id: &SessionId,
@@ -3200,6 +3236,26 @@ impl ThreadStore for InMemoryThreadStore {
             .collect())
     }
 
+    fn list_sessions(&self) -> Result<Vec<Session>, ThreadStoreError> {
+        let mut grouped = BTreeMap::<SessionId, Vec<ThreadCatalogRecord>>::new();
+        for record in self.list_catalog()? {
+            grouped
+                .entry(record.session_id.clone())
+                .or_default()
+                .push(record);
+        }
+        grouped.into_values().map(session_from_catalog).collect()
+    }
+
+    fn read_session(&self, session_id: &SessionId) -> Result<Option<Session>, ThreadStoreError> {
+        let records = self.session_catalog(session_id)?;
+        if records.is_empty() {
+            Ok(None)
+        } else {
+            session_from_catalog(records).map(Some)
+        }
+    }
+
     fn session_catalog(
         &self,
         session_id: &SessionId,
@@ -3250,6 +3306,10 @@ impl ThreadStore for InMemoryThreadStore {
         state
             .catalog
             .insert(record.thread.thread_id.clone(), record.clone());
+        Ok(())
+    }
+
+    fn rebuild_session(&self, _: &SessionId) -> Result<(), ThreadStoreError> {
         Ok(())
     }
 

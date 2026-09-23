@@ -1631,9 +1631,9 @@ impl AppServer {
     fn session_ids(&self) -> Result<BTreeSet<ash_protocol::SessionId>, CoreError> {
         Ok(self
             .threads
-            .list_thread_catalog()?
+            .list_sessions()?
             .into_iter()
-            .map(|record| record.session_id)
+            .map(|session| session.session_id)
             .collect())
     }
 

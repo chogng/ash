@@ -16,6 +16,7 @@ use ash_thread_store::ThreadCatalogRecord;
 use ash_thread_store::ThreadEventBatch;
 use ash_thread_store::ThreadStore;
 use ash_thread_store::ThreadStoreError;
+use ash_thread_store::session_from_catalog;
 use git_turn_changes::ChangeSetId;
 use git_turn_changes::MessageState;
 use git_turn_changes::TerminalTurnState;
@@ -23,7 +24,9 @@ use git_turn_changes::TurnChangeSet;
 use git_turn_changes::TurnChangeSetDraft;
 use git_turn_changes::TurnChangeStore;
 use git_turn_changes::TurnChangeStoreError;
+use std::collections::BTreeMap;
 use std::fs;
+use std::time::Instant;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn database_path(label: &str) -> std::path::PathBuf {
@@ -250,6 +253,20 @@ fn sqlite_session_catalog_reads_only_the_requested_session() {
     let store = SqliteThreadStore::open(&path).unwrap();
     append_created_thread(&store, &first_session, &first_thread, 1);
     append_created_thread(&store, &second_session, &second_thread, 2);
+    assert_eq!(
+        store
+            .read_session(&first_session)
+            .unwrap()
+            .unwrap()
+            .session_id,
+        first_session
+    );
+    assert!(
+        store
+            .read_session(&SessionId::new("missing").unwrap())
+            .unwrap()
+            .is_none()
+    );
     rusqlite::Connection::open(&path)
         .unwrap()
         .execute(
@@ -257,6 +274,14 @@ fn sqlite_session_catalog_reads_only_the_requested_session() {
             [second_thread.as_str()],
         )
         .unwrap();
+    assert_eq!(
+        store
+            .read_session(&second_session)
+            .unwrap()
+            .unwrap()
+            .session_id,
+        second_session
+    );
 
     assert_eq!(
         store.session_catalog(&first_session).unwrap(),
@@ -274,6 +299,222 @@ fn sqlite_session_catalog_reads_only_the_requested_session() {
     ));
     drop(store);
     fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn sqlite_session_list_reads_one_verified_row_per_session() {
+    let path = database_path("session-list");
+    let session_id = SessionId::new("session-list").unwrap();
+    let thread_id = ThreadId::new("thread-list").unwrap();
+    let store = SqliteThreadStore::open(&path).unwrap();
+    append_created_thread(&store, &session_id, &thread_id, 1);
+    let expected = store.list_sessions().unwrap();
+    assert_eq!(expected.len(), 1);
+    assert_eq!(expected[0].threads[0].thread_id, thread_id);
+
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    connection
+        .execute(
+            "UPDATE thread_catalog SET record_json = 'invalid' WHERE thread_id = ?1",
+            [thread_id.as_str()],
+        )
+        .unwrap();
+    assert_eq!(store.list_sessions().unwrap(), expected);
+    connection
+        .execute(
+            "UPDATE session_catalog SET record_json = 'invalid' WHERE session_id = ?1",
+            [session_id.as_str()],
+        )
+        .unwrap();
+    assert!(matches!(
+        store.list_sessions(),
+        Err(ThreadStoreError::SessionCatalogDamaged(damaged)) if damaged == session_id
+    ));
+    store
+        .backfill_catalog(&catalog(&session_id, &thread_id, 1))
+        .unwrap();
+    assert_eq!(store.list_sessions().unwrap(), expected);
+    drop(connection);
+    drop(store);
+    fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn sqlite_session_list_migrates_existing_thread_catalog() {
+    let path = database_path("session-list-migration");
+    let session_id = SessionId::new("session-migration").unwrap();
+    let thread_id = ThreadId::new("thread-migration").unwrap();
+    let store = SqliteThreadStore::open(&path).unwrap();
+    append_created_thread(&store, &session_id, &thread_id, 1);
+    let expected = store.list_sessions().unwrap();
+    drop(store);
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    connection
+        .execute_batch(
+            "DROP TABLE session_catalog;
+             UPDATE ash_schema_migrations SET version = 8 WHERE component = 'event-store';",
+        )
+        .unwrap();
+    drop(connection);
+
+    let reopened = SqliteThreadStore::open(&path).unwrap();
+    assert_eq!(reopened.list_sessions().unwrap(), expected);
+    drop(reopened);
+    fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn sqlite_session_list_tracks_thread_archive_in_the_event_transaction() {
+    let path = database_path("session-list-archive");
+    let session_id = SessionId::new("session-archive").unwrap();
+    let thread_id = ThreadId::new("thread-archive").unwrap();
+    let store = SqliteThreadStore::open(&path).unwrap();
+    append_created_thread(&store, &session_id, &thread_id, 1);
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    connection
+        .execute_batch(
+            "CREATE TABLE session_write_count (count INTEGER NOT NULL);
+             INSERT INTO session_write_count VALUES (0);
+             CREATE TRIGGER count_session_writes AFTER UPDATE ON session_catalog
+             BEGIN UPDATE session_write_count SET count = count + 1; END;",
+        )
+        .unwrap();
+    store
+        .append_batch(&ThreadEventBatch {
+            history_prefixes: Vec::new(),
+            batch_id: "advisor-batch".into(),
+            thread_id: thread_id.clone(),
+            expected_sequence: 1,
+            events: vec![StoredEvent {
+                time_context: None,
+                schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
+                event_id: EventId("advisor-event".into()),
+                sequence: 2,
+                thread_id: thread_id.clone(),
+                recorded_at: Timestamp(2),
+                command: None,
+                event: ThreadEvent::AdvisorConfigured {
+                    thread_id: thread_id.clone(),
+                    selection: Default::default(),
+                },
+            }],
+            catalog: catalog(&session_id, &thread_id, 2),
+        })
+        .unwrap();
+    assert_eq!(
+        connection
+            .query_row("SELECT count FROM session_write_count", [], |row| row
+                .get::<_, i64>(0))
+            .unwrap(),
+        0
+    );
+
+    let mut archived = catalog(&session_id, &thread_id, 3);
+    archived.thread.status = ThreadStatus::Archived;
+    archived.archived_at_unix_ms = Some(2);
+    store
+        .append_batch(&ThreadEventBatch {
+            history_prefixes: Vec::new(),
+            batch_id: "archive-batch".into(),
+            thread_id: thread_id.clone(),
+            expected_sequence: 2,
+            events: vec![StoredEvent {
+                time_context: None,
+                schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
+                event_id: EventId("archive-event".into()),
+                sequence: 3,
+                thread_id: thread_id.clone(),
+                recorded_at: Timestamp(2),
+                command: None,
+                event: ThreadEvent::ThreadArchived {
+                    thread_id,
+                    reason: Default::default(),
+                },
+            }],
+            catalog: archived,
+        })
+        .unwrap();
+
+    assert_eq!(
+        store.list_sessions().unwrap()[0].status,
+        ash_protocol::SessionStatus::Archived
+    );
+    assert_eq!(
+        connection
+            .query_row("SELECT count FROM session_write_count", [], |row| row
+                .get::<_, i64>(0))
+            .unwrap(),
+        1
+    );
+    drop(connection);
+    drop(store);
+    fs::remove_file(path).unwrap();
+}
+
+#[test]
+#[ignore = "manual warm-list performance comparison"]
+fn benchmark_session_list_against_thread_catalog_assembly() {
+    for threads_per_session in [1, 5] {
+        let path = database_path("session-list-benchmark");
+        let store = SqliteThreadStore::open(&path).unwrap();
+        let mut ordinal = 1;
+        for index in 0..300 {
+            let session_id = SessionId::new(format!("session-{index}")).unwrap();
+            for branch in 0..threads_per_session {
+                let thread_id = ThreadId::new(format!("thread-{index}-{branch}")).unwrap();
+                append_created_thread(&store, &session_id, &thread_id, ordinal);
+                ordinal += 1;
+            }
+        }
+        let old = || {
+            let mut grouped = BTreeMap::<SessionId, Vec<ThreadCatalogRecord>>::new();
+            for record in store.list_catalog().unwrap() {
+                grouped
+                    .entry(record.session_id.clone())
+                    .or_default()
+                    .push(record);
+            }
+            grouped
+                .into_values()
+                .map(session_from_catalog)
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap()
+        };
+        assert_eq!(old(), store.list_sessions().unwrap());
+        let mut old_ns = 0;
+        let mut new_ns = 0;
+        for _ in 0..10 {
+            let start = Instant::now();
+            std::hint::black_box(old());
+            old_ns += start.elapsed().as_nanos();
+            let start = Instant::now();
+            std::hint::black_box(store.list_sessions().unwrap());
+            new_ns += start.elapsed().as_nanos();
+        }
+        eprintln!(
+            "300 sessions x {threads_per_session} threads: old {:.3} ms, new {:.3} ms per warm list",
+            old_ns as f64 / 10_000_000.0,
+            new_ns as f64 / 10_000_000.0
+        );
+        drop(store);
+        let connection = rusqlite::Connection::open(&path).unwrap();
+        connection
+            .execute_batch(
+                "DROP TABLE session_catalog;
+                 UPDATE ash_schema_migrations SET version = 8 WHERE component = 'event-store';",
+            )
+            .unwrap();
+        drop(connection);
+        let start = Instant::now();
+        let migrated = SqliteThreadStore::open(&path).unwrap();
+        eprintln!(
+            "300 sessions x {threads_per_session} threads: one-time migration {:.3} ms",
+            start.elapsed().as_secs_f64() * 1000.0
+        );
+        assert_eq!(migrated.list_sessions().unwrap().len(), 300);
+        drop(migrated);
+        fs::remove_file(path).unwrap();
+    }
 }
 
 #[test]
@@ -353,6 +594,8 @@ fn sqlite_delete_session_removes_all_thread_history_and_change_sets_atomically()
     assert!(store.load(&first).unwrap().is_empty());
     assert!(store.load(&second).unwrap().is_empty());
     assert_eq!(store.load(&kept).unwrap().len(), 1);
+    assert_eq!(store.list_sessions().unwrap().len(), 1);
+    assert_eq!(store.list_sessions().unwrap()[0].session_id, kept_session);
     assert_eq!(
         store.list_catalog().unwrap(),
         vec![catalog(&kept_session, &kept, 1)]

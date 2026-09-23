@@ -299,6 +299,7 @@ validator 与错误。Core 依赖 history 类型和该 port，不依赖本地文
 - `BEGIN IMMEDIATE` 下的 sequence compare-and-set；
 - batch/event identity 唯一性；
 - typed envelope JSON 与可查询 identity/sequence 列的原子提交；
+- 每个 Session 一条的列表记录，与 Thread 事件同事务更新，并在旧数据库升级时生成；
 - foreign key、WAL、`synchronous=FULL` 和 bounded busy timeout；
 - component-scoped schema version gate。
 

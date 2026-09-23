@@ -715,6 +715,17 @@ impl ThreadStore for ToggleStore {
         Ok(Vec::new())
     }
 
+    fn list_sessions(&self) -> Result<Vec<ash_protocol::Session>, ThreadStoreError> {
+        Ok(Vec::new())
+    }
+
+    fn read_session(
+        &self,
+        _: &SessionId,
+    ) -> Result<Option<ash_protocol::Session>, ThreadStoreError> {
+        Ok(None)
+    }
+
     fn session_catalog(
         &self,
         _: &SessionId,
@@ -726,6 +737,10 @@ impl ThreadStore for ToggleStore {
         &self,
         _: &ash_thread_store::ThreadCatalogRecord,
     ) -> Result<(), ThreadStoreError> {
+        Ok(())
+    }
+
+    fn rebuild_session(&self, _: &SessionId) -> Result<(), ThreadStoreError> {
         Ok(())
     }
 
@@ -1195,6 +1210,17 @@ impl ThreadStore for PerThreadBlockingStore {
         self.inner.list_catalog()
     }
 
+    fn list_sessions(&self) -> Result<Vec<ash_protocol::Session>, ThreadStoreError> {
+        self.inner.list_sessions()
+    }
+
+    fn read_session(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<Option<ash_protocol::Session>, ThreadStoreError> {
+        self.inner.read_session(session_id)
+    }
+
     fn session_catalog(
         &self,
         session_id: &SessionId,
@@ -1207,6 +1233,10 @@ impl ThreadStore for PerThreadBlockingStore {
         record: &ash_thread_store::ThreadCatalogRecord,
     ) -> Result<(), ThreadStoreError> {
         self.inner.backfill_catalog(record)
+    }
+
+    fn rebuild_session(&self, session_id: &SessionId) -> Result<(), ThreadStoreError> {
+        self.inner.rebuild_session(session_id)
     }
 
     fn delete_session(&self, session_id: &SessionId) -> Result<Vec<ThreadId>, ThreadStoreError> {

@@ -1,11 +1,13 @@
 use ash_protocol::ContentDigest;
+use ash_protocol::SessionId;
 use ash_thread_store::ThreadCatalogRecord;
+use ash_thread_store::ThreadStoreError;
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use std::path::Path;
 
 use crate::{SqliteDurability, open_sqlite_database};
 
-const STORAGE_SQLITE_SCHEMA_VERSION: u32 = 8;
+const STORAGE_SQLITE_SCHEMA_VERSION: u32 = 9;
 
 pub(super) fn open(path: &Path) -> Result<Connection, String> {
     let mut connection = open_sqlite_database(path, SqliteDurability::Durable)?;
@@ -134,7 +136,7 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
                  DROP TABLE IF EXISTS session_streams;",
             )
             .map_err(sql_error)?,
-        Some(4) | Some(5) | Some(6) | Some(7) | Some(STORAGE_SQLITE_SCHEMA_VERSION) => {}
+        Some(4) | Some(5) | Some(6) | Some(7) | Some(8) | Some(STORAGE_SQLITE_SCHEMA_VERSION) => {}
         Some(version) => {
             return Err(format!(
                 "unsupported event-store SQLite schema version {version}"
@@ -264,6 +266,35 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
                     params![ContentDigest::sha256(json.as_bytes()).as_str(), thread_id],
                 )
                 .map_err(sql_error)?;
+        }
+    }
+    if locked_version.is_none_or(|version| version < 9) {
+        transaction
+            .execute_batch(
+                "CREATE TABLE IF NOT EXISTS session_catalog (
+                     session_id TEXT PRIMARY KEY,
+                     record_json TEXT NOT NULL,
+                     record_version INTEGER NOT NULL,
+                     record_digest TEXT NOT NULL
+                 );",
+            )
+            .map_err(sql_error)?;
+        let session_ids = {
+            let mut statement = transaction
+                .prepare("SELECT DISTINCT session_id FROM thread_catalog ORDER BY session_id")
+                .map_err(sql_error)?;
+            statement
+                .query_map([], |row| row.get::<_, String>(0))
+                .map_err(sql_error)?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(sql_error)?
+        };
+        for session_id in session_ids {
+            let session_id = SessionId::new(session_id).map_err(sql_error)?;
+            match super::thread::write_session_catalog(&transaction, &session_id) {
+                Ok(()) | Err(ThreadStoreError::CatalogDamaged(_)) => {}
+                Err(error) => return Err(error.to_string()),
+            }
         }
     }
     transaction.commit().map_err(sql_error)?;

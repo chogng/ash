@@ -41,6 +41,34 @@ fn repository_keeps_idle_history_lazy_and_loads_it_on_access() {
         .unwrap();
     assert!(recovered.list_loaded_threads().unwrap().is_empty());
     assert_eq!(recovered.list_thread_catalog().unwrap().len(), 1);
+    ash_state::open_sqlite_database(state.database_path(), ash_state::SqliteDurability::Durable)
+        .unwrap()
+        .execute(
+            "UPDATE session_catalog SET record_json = 'invalid' WHERE session_id = ?1",
+            [session_id.as_str()],
+        )
+        .unwrap();
+    assert_eq!(
+        recovered.list_sessions().unwrap()[0].title,
+        "Primary branch"
+    );
+    assert!(recovered.list_loaded_threads().unwrap().is_empty());
+    ash_state::open_sqlite_database(state.database_path(), ash_state::SqliteDurability::Durable)
+        .unwrap()
+        .execute(
+            "UPDATE session_catalog SET record_json = 'invalid' WHERE session_id = ?1",
+            [session_id.as_str()],
+        )
+        .unwrap();
+    assert_eq!(
+        recovered
+            .read_session_catalog(&session_id)
+            .unwrap()
+            .unwrap()
+            .title,
+        "Primary branch"
+    );
+    assert!(recovered.list_loaded_threads().unwrap().is_empty());
 
     let restored = recovered.read_thread(&thread_id).unwrap();
 

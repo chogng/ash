@@ -64,7 +64,6 @@ use ash_protocol::ThreadItem;
 use ash_protocol::ThreadStatus;
 use ash_protocol::TurnStatus;
 use ash_protocol::UserInput;
-use ash_thread_store::ThreadCatalogRecord;
 use ash_typst::TypstCompileError;
 use ash_typst::TypstCompileOutcome;
 use ash_typst::TypstDiagnostic;
@@ -81,7 +80,6 @@ use core_api::ShellTurnInvocation;
 use core_api::SteerTurnRequest;
 use core_api::ThreadView;
 use serde_json::Value;
-use std::collections::BTreeMap;
 use std::time::Duration;
 
 pub(super) enum TurnInstructionSelection {
@@ -1611,35 +1609,16 @@ impl AppServer {
     }
 
     pub(super) fn session_views(&self) -> Result<Vec<Session>, RpcError> {
-        let mut records = BTreeMap::<ash_protocol::SessionId, Vec<ThreadCatalogRecord>>::new();
-        for record in self
-            .agent_runtime()
-            .list_thread_catalog()
-            .map_err(core_error)?
-        {
-            records
-                .entry(record.session_id.clone())
-                .or_default()
-                .push(record);
-        }
-        records
-            .into_iter()
-            .map(|(_, records)| session_from_catalog(records))
-            .collect()
+        self.threads.list_sessions().map_err(core_error)
     }
 
     pub(super) fn session_catalog_view(
         &self,
         session_id: &ash_protocol::SessionId,
     ) -> Result<Option<Session>, RpcError> {
-        let records = self
-            .agent_runtime()
-            .session_thread_catalog(session_id)
-            .map_err(core_error)?;
-        if records.is_empty() {
-            return Ok(None);
-        }
-        session_from_catalog(records).map(Some)
+        self.threads
+            .read_session_catalog(session_id)
+            .map_err(core_error)
     }
 
     pub(super) fn notify_thread_updates(
@@ -1683,90 +1662,6 @@ fn provider_models_failure_code(
         ModelCatalogRefreshError::Cancelled => ProviderModelsListFailureCodeDto::Cancelled,
         ModelCatalogRefreshError::Unknown => ProviderModelsListFailureCodeDto::Unknown,
     }
-}
-
-fn session_from_catalog(mut records: Vec<ThreadCatalogRecord>) -> Result<Session, RpcError> {
-    records.sort_by(|left, right| left.thread.thread_id.cmp(&right.thread.thread_id));
-    let first = records
-        .first()
-        .ok_or_else(|| core_error(core_api::CoreError::Journal("empty Session catalog".into())))?;
-    let session_id = first.session_id.clone();
-    let root = records
-        .iter()
-        .find(|record| record.thread.thread_id.as_str() == session_id.as_str())
-        .unwrap_or(first);
-    let title = root.thread.title.clone();
-    let created_at_unix_ms = root.thread.created_at_unix_ms;
-    let status = if records
-        .iter()
-        .all(|record| record.thread.status == ThreadStatus::Archived)
-    {
-        SessionStatus::Archived
-    } else {
-        SessionStatus::Active
-    };
-    let manager = catalog_session_manager(&records, created_at_unix_ms, status);
-    Ok(Session {
-        session_id,
-        title,
-        status,
-        manager,
-        threads: records.into_iter().map(|record| record.thread).collect(),
-    })
-}
-
-fn catalog_session_manager(
-    records: &[ThreadCatalogRecord],
-    created_at_unix_ms: u64,
-    lifecycle: SessionStatus,
-) -> SessionManagerInfo {
-    if lifecycle == SessionStatus::Archived {
-        let stopped = records.iter().any(|record| record.stopped);
-        let archived_at = records
-            .iter()
-            .filter_map(|record| record.archived_at_unix_ms)
-            .max()
-            .unwrap_or(created_at_unix_ms);
-        let completed_at = records
-            .iter()
-            .filter(|record| record.manager.status == SessionManagerStatus::Completed)
-            .map(|record| record.manager.status_changed_at_unix_ms)
-            .max()
-            .unwrap_or(archived_at);
-        return SessionManagerInfo {
-            status: if stopped {
-                SessionManagerStatus::Stopped
-            } else {
-                SessionManagerStatus::Completed
-            },
-            status_changed_at_unix_ms: if stopped { archived_at } else { completed_at },
-            activity: None,
-            summary: None,
-        };
-    }
-    for status in [
-        SessionManagerStatus::NeedsInput,
-        SessionManagerStatus::Working,
-    ] {
-        if let Some(record) = records
-            .iter()
-            .filter(|record| record.manager.status == status)
-            .max_by_key(|record| record.manager.status_changed_at_unix_ms)
-        {
-            return record.manager.clone();
-        }
-    }
-    records
-        .iter()
-        .filter(|record| record.manager.status != SessionManagerStatus::Idle)
-        .max_by_key(|record| record.manager.status_changed_at_unix_ms)
-        .map(|record| record.manager.clone())
-        .unwrap_or(SessionManagerInfo {
-            status: SessionManagerStatus::Idle,
-            status_changed_at_unix_ms: created_at_unix_ms,
-            activity: None,
-            summary: None,
-        })
 }
 
 fn session_manager_info(

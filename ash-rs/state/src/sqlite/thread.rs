@@ -2,6 +2,7 @@ use super::connection::{from_sql_integer, open, sql_error, to_sql_integer};
 use ash_history::StoredEvent;
 use ash_history::supports_stored_event_schema_version;
 use ash_protocol::ContentDigest;
+use ash_protocol::Session;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use ash_thread_store::AppendBatchResult;
@@ -9,6 +10,7 @@ use ash_thread_store::ThreadCatalogRecord;
 use ash_thread_store::ThreadEventBatch;
 use ash_thread_store::ThreadStore;
 use ash_thread_store::ThreadStoreError;
+use ash_thread_store::session_from_catalog;
 use ash_thread_store::validate_append_batch;
 use rusqlite::{Connection, OptionalExtension, ToSql, TransactionBehavior, params};
 use std::path::{Path, PathBuf};
@@ -150,6 +152,85 @@ impl ThreadStore for SqliteThreadStore {
         )
     }
 
+    fn list_sessions(&self) -> Result<Vec<Session>, ThreadStoreError> {
+        let connection = self.catalog_connection()?;
+        let missing = connection
+            .query_row(
+                "SELECT catalog.session_id FROM thread_catalog AS catalog
+                 WHERE NOT EXISTS (
+                     SELECT 1 FROM session_catalog AS sessions
+                     WHERE sessions.session_id = catalog.session_id
+                 ) LIMIT 1",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .map_err(storage_error)?;
+        if let Some(session_id) = missing {
+            return Err(ThreadStoreError::SessionCatalogDamaged(
+                SessionId::new(session_id).map_err(storage_error)?,
+            ));
+        }
+        let mut statement = connection
+            .prepare(
+                "SELECT session_id, record_json, record_version, record_digest
+                 FROM session_catalog ORDER BY session_id",
+            )
+            .map_err(storage_error)?;
+        statement
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, String>(3)?,
+                ))
+            })
+            .map_err(storage_error)?
+            .map(|row| {
+                let (session_id, json, version, digest) = row.map_err(storage_error)?;
+                let session_id = SessionId::new(session_id).map_err(storage_error)?;
+                decode_session_catalog(&session_id, &json, version, &digest)
+            })
+            .collect()
+    }
+
+    fn read_session(&self, session_id: &SessionId) -> Result<Option<Session>, ThreadStoreError> {
+        let connection = self.catalog_connection()?;
+        let row = connection
+            .query_row(
+                "SELECT record_json, record_version, record_digest
+                 FROM session_catalog WHERE session_id = ?1",
+                [session_id.as_str()],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, i64>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .optional()
+            .map_err(storage_error)?;
+        if let Some((json, version, digest)) = row {
+            return decode_session_catalog(session_id, &json, version, &digest).map(Some);
+        }
+        let has_threads = connection
+            .query_row(
+                "SELECT 1 FROM thread_catalog WHERE session_id = ?1 LIMIT 1",
+                [session_id.as_str()],
+                |_| Ok(()),
+            )
+            .optional()
+            .map_err(storage_error)?
+            .is_some();
+        if has_threads {
+            Err(ThreadStoreError::SessionCatalogDamaged(session_id.clone()))
+        } else {
+            Ok(None)
+        }
+    }
+
     fn session_catalog(
         &self,
         session_id: &SessionId,
@@ -182,7 +263,28 @@ impl ThreadStore for SqliteThreadStore {
             });
         }
         write_catalog(&transaction, record)?;
+        match write_session_catalog(&transaction, &record.session_id) {
+            Ok(()) => {}
+            Err(ThreadStoreError::CatalogDamaged(_)) => {
+                transaction
+                    .execute(
+                        "DELETE FROM session_catalog WHERE session_id = ?1",
+                        [record.session_id.as_str()],
+                    )
+                    .map_err(storage_error)?;
+            }
+            Err(error) => return Err(error),
+        }
         super::graph::write_binding(&transaction, record)?;
+        transaction.commit().map_err(storage_error)
+    }
+
+    fn rebuild_session(&self, session_id: &SessionId) -> Result<(), ThreadStoreError> {
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(storage_error)?;
+        write_session_catalog(&transaction, session_id)?;
         transaction.commit().map_err(storage_error)
     }
 
@@ -251,6 +353,12 @@ impl ThreadStore for SqliteThreadStore {
                 )
                 .map_err(storage_error)?;
         }
+        transaction
+            .execute(
+                "DELETE FROM session_catalog WHERE session_id = ?1",
+                [session_id.as_str()],
+            )
+            .map_err(storage_error)?;
         super::history::collect(&transaction)?;
         transaction.commit().map_err(storage_error)?;
         Ok(thread_ids)
@@ -428,7 +536,11 @@ impl ThreadStore for SqliteThreadStore {
                 actual,
             });
         }
+        let session_changed = session_list_changed(&transaction, &batch.catalog)?;
         write_catalog(&transaction, &batch.catalog)?;
+        if session_changed {
+            write_session_catalog(&transaction, &batch.catalog.session_id)?;
+        }
         super::graph::write_binding(&transaction, &batch.catalog)?;
         transaction.commit().map_err(storage_error)?;
         Ok(result)
@@ -520,6 +632,93 @@ fn write_catalog(
                 json,
                 digest.as_str(),
             ],
+        )
+        .map_err(storage_error)?;
+    Ok(())
+}
+
+fn session_list_changed(
+    connection: &Connection,
+    record: &ThreadCatalogRecord,
+) -> Result<bool, ThreadStoreError> {
+    let previous = connection
+        .query_row(
+            "SELECT record_json, record_version, record_digest FROM thread_catalog
+             WHERE thread_id = ?1",
+            [record.thread.thread_id.as_str()],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
+            },
+        )
+        .optional()
+        .map_err(storage_error)?;
+    let Some((json, version, digest)) = previous else {
+        return Ok(true);
+    };
+    if version != 1 || ContentDigest::sha256(json.as_bytes()).as_str() != digest {
+        return Ok(true);
+    }
+    let Ok(previous) = serde_json::from_str::<ThreadCatalogRecord>(&json) else {
+        return Ok(true);
+    };
+    Ok(previous.session_id != record.session_id
+        || previous.thread != record.thread
+        || previous.manager != record.manager
+        || previous.archived_at_unix_ms != record.archived_at_unix_ms
+        || previous.stopped != record.stopped)
+}
+
+fn decode_session_catalog(
+    session_id: &SessionId,
+    json: &str,
+    version: i64,
+    digest: &str,
+) -> Result<Session, ThreadStoreError> {
+    if version != 1 || ContentDigest::sha256(json.as_bytes()).as_str() != digest {
+        return Err(ThreadStoreError::SessionCatalogDamaged(session_id.clone()));
+    }
+    let session = serde_json::from_str::<Session>(json)
+        .map_err(|_| ThreadStoreError::SessionCatalogDamaged(session_id.clone()))?;
+    if &session.session_id != session_id {
+        return Err(ThreadStoreError::SessionCatalogDamaged(session_id.clone()));
+    }
+    Ok(session)
+}
+
+pub(super) fn write_session_catalog(
+    connection: &Connection,
+    session_id: &SessionId,
+) -> Result<(), ThreadStoreError> {
+    let records = query_catalog(
+        connection,
+        "WHERE catalog.session_id = ?1 ORDER BY catalog.thread_id",
+        &[&session_id.as_str() as &dyn ToSql],
+    )?;
+    if records.is_empty() {
+        connection
+            .execute(
+                "DELETE FROM session_catalog WHERE session_id = ?1",
+                [session_id.as_str()],
+            )
+            .map_err(storage_error)?;
+        return Ok(());
+    }
+    let session = session_from_catalog(records)?;
+    let json = serde_json::to_string(&session).map_err(storage_error)?;
+    let digest = ContentDigest::sha256(json.as_bytes());
+    connection
+        .execute(
+            "INSERT INTO session_catalog (session_id, record_json, record_version, record_digest)
+             VALUES (?1, ?2, 1, ?3)
+             ON CONFLICT(session_id) DO UPDATE SET
+                 record_json = excluded.record_json,
+                 record_version = excluded.record_version,
+                 record_digest = excluded.record_digest",
+            params![session_id.as_str(), json, digest.as_str()],
         )
         .map_err(storage_error)?;
     Ok(())
