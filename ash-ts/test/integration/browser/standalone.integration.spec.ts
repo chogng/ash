@@ -1,5 +1,32 @@
 import { expect, test, type Page } from '@playwright/test';
 
+test('standalone Worker mirrors models, calls its host, and releases its transport', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/standalone.html');
+	const result = await page.evaluate(() => window.ashStandaloneIntegration.runStandaloneWebWorker());
+	expect(result.initial.map(model => model.value)).toEqual(['caller', 'second']);
+	expect(result.changed.map(model => model.value)).toEqual(['changed in main thread', 'second']);
+	expect(result.changed[0]!.version).toBeGreaterThan(result.initial[0]!.version);
+	expect(result.host).toBe('host:hello');
+	expect(result.afterRemoval.map(model => model.value)).toEqual(['changed in main thread']);
+	expect(result.disposed).toBe(true);
+	expect(errors).toEqual([]);
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
+test('standalone editor shows the themed outline while its input is focused', async ({ page }) => {
+	await page.goto('/standalone.html');
+	const editor = page.locator('#caller .stanza-editor');
+	await page.locator('#caller .stanza-editor-input').focus();
+	await expect(editor).toHaveCSS('outline-style', 'solid');
+	await expect(editor).toHaveCSS('outline-color', /^rgb/);
+	expect(await editor.evaluate(node => getComputedStyle(node).getPropertyValue('--ash-focus-border').trim())).not.toBe('');
+	await page.evaluate(() => (document.activeElement as HTMLElement).blur());
+	await expect(editor).toHaveCSS('outline-style', 'none');
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
 test('standalone token themes recolor text and retain matching colors when copied', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
@@ -42,6 +69,8 @@ test('standalone token inspector follows the caret and closes on Escape or model
 	await page.keyboard.press('Enter');
 	const inspector = page.locator('#caller .stanza-editor-inspect-tokens');
 	await expect(inspector).toBeVisible();
+	await expect(inspector).toHaveCSS('font-family', /system-ui/);
+	await expect(inspector.locator('code')).toHaveCSS('font-family', /ui-monospace/);
 	await expect(inspector).toContainText('entity.member');
 	await expect(inspector).toContainText('alpha');
 	await expect(inspector).toContainText('#123456');
@@ -202,6 +231,8 @@ test('standalone command picker executes editor actions, restores focus and foll
 	await page.keyboard.press('F1');
 	const picker = page.locator('#caller .ash-quick-pick');
 	const query = picker.getByRole('combobox');
+	await expect(picker).toHaveCSS('font-family', /system-ui/);
+	await expect(picker).toHaveCSS('font-size', '13px');
 	await expect(query).toBeFocused();
 	const bounds = await picker.boundingBox();
 	const editorBounds = await page.locator('#caller').boundingBox();
@@ -238,6 +269,89 @@ test('standalone command picker executes editor actions, restores focus and foll
 	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	await expect(page.locator('.ash-quick-input-host')).toHaveCount(0);
 	expect(errors).toEqual([]);
+});
+
+test('standalone Quick Access help filters navigation actions and runs the selected action', async ({ page }) => {
+	await page.goto('/standalone.html');
+	const input = page.locator('#caller .stanza-editor-input');
+	await input.focus();
+	await page.keyboard.press('F1');
+	const picker = page.locator('#caller .ash-quick-pick');
+	const query = picker.getByRole('combobox');
+	await expect(query).toHaveAttribute('placeholder', 'Type > for commands, ? for help, or @ for symbols');
+	await query.fill('?');
+	await expect(picker).toHaveAttribute('aria-label', 'Quick Access Help');
+	await expect(picker.locator('.ash-quick-pick-row-label')).toHaveCount(4);
+	await query.fill('?line');
+	await expect(picker.locator('.ash-quick-pick-row-label')).toHaveText('? Go to Line/Column...');
+	await page.keyboard.press('Enter');
+	await expect(picker).toHaveCount(0);
+	await expect(page.locator('#caller .stanza-editor-goto-line-input')).toBeFocused();
+	await page.keyboard.press('Escape');
+	await expect(input).toBeFocused();
+	await page.keyboard.press('F1');
+	await query.fill('?symbol');
+	await expect(picker.locator('.ash-quick-pick-row-label')).toHaveText('? Go to Symbol...');
+	await page.keyboard.press('Enter');
+	await expect(picker.getByRole('combobox', { name: 'Go to Symbol' })).toBeFocused();
+	await page.keyboard.press('Escape');
+	await expect(input).toBeFocused();
+	await page.keyboard.press('F1');
+	await query.fill('?command');
+	await expect(picker.locator('.ash-quick-pick-row-label')).toHaveText('? Command Palette');
+	await page.keyboard.press('Enter');
+	await expect(picker.getByRole('combobox', { name: 'Command Palette' })).toBeFocused();
+	await query.fill('editor.action.gotoOffset');
+	await expect(picker.locator('.ash-quick-pick-row-label')).toHaveText('Go to Offset...');
+	await page.keyboard.press('Escape');
+	await expect(input).toBeFocused();
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
+test('standalone Quick Access switches command and symbol prefixes without losing the query', async ({ page }) => {
+	await page.goto('/standalone.html?symbolIconsOff');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareLanguageRequest('symbols'));
+	const input = page.locator('#caller .stanza-editor-input');
+	await input.focus();
+	await page.keyboard.press('F1');
+	const picker = page.locator('#caller .ash-quick-pick');
+	const query = picker.getByRole('combobox');
+	await query.fill('>editor.action.gotoOffset');
+	await expect(picker.locator('.ash-quick-pick-row-label')).toHaveText('Go to Offset...');
+	await query.fill('?symbol');
+	await expect(picker.locator('.ash-quick-pick-row-label')).toHaveText('? Go to Symbol...');
+	await query.fill('@sec');
+	await expect(picker).toHaveCount(1);
+	await expect(picker.getByRole('combobox', { name: 'Go to Symbol' })).toHaveValue('sec');
+	await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(0));
+	await expect(picker.locator('.ash-quick-pick-row-label')).toHaveText('second');
+	await page.keyboard.press('Enter');
+	await expect(picker).toHaveCount(0);
+	await expect(input).toBeFocused();
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).selection).toBe('[1,7 -> 1,13]');
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
+test('standalone symbol search returns to help and commands and cancels its request', async ({ page }) => {
+	await page.goto('/standalone.html?symbolIconsOff');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareLanguageRequest('symbols'));
+	const input = page.locator('#caller .stanza-editor-input');
+	await input.focus();
+	await page.keyboard.press('ControlOrMeta+Shift+o');
+	const picker = page.locator('#caller .ash-quick-pick');
+	await picker.getByRole('combobox', { name: 'Go to Symbol' }).fill('?line');
+	await expect(picker).toHaveCount(1);
+	await expect(picker).toHaveAttribute('aria-label', 'Quick Access Help');
+	await expect(picker.locator('.ash-quick-pick-row-label')).toHaveText('? Go to Line/Column...');
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests()))[0]?.aborted).toBe(true);
+	await picker.getByRole('combobox').fill('>editor.action.gotoOffset');
+	await expect(picker).toHaveAttribute('aria-label', 'Command Palette');
+	await expect(picker.locator('.ash-quick-pick-row-label')).toHaveText('Go to Offset...');
+	await page.keyboard.press('Enter');
+	await expect(page.locator('#caller .stanza-editor-goto-line-input')).toHaveAttribute('aria-label', 'Character offset');
+	await page.keyboard.press('Escape');
+	await expect(input).toBeFocused();
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 });
 
 test('standalone command registrations execute through the command service and release their shortcuts', async ({ page }) => {
@@ -1013,6 +1127,7 @@ test.describe('contribution lifecycle', () => {
 		const first = await page.evaluate(() => window.ashStandaloneIntegration.contributionPoint(3));
 		await page.mouse.move(first.x, first.y);
 		await expect(page.locator('#caller .stanza-editor-hover:not([hidden])')).toHaveText('alpha documentation');
+		await expect(page.locator('#caller .stanza-editor-hover')).toHaveCSS('font-family', /system-ui/);
 		const next = await page.evaluate(() => window.ashStandaloneIntegration.contributionPoint(9));
 		await page.mouse.move(next.x, next.y);
 		await expect(page.locator('#caller .stanza-editor-hover')).toBeHidden();

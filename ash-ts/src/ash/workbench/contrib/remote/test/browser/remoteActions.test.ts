@@ -94,6 +94,7 @@ class TestQuickPick<TItem extends IQuickPickItem> implements IQuickPick<TItem> {
 	ariaLabel = '';
 	placeholder = "";
 	value = "";
+	filterValue = (value: string): string => value;
 
 	acceptFirst(): void {
 		const item = this.items[0];

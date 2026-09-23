@@ -44,6 +44,7 @@ export class QuickPick<TItem extends IQuickPickItem>
 	private visible = false;
 	private _ariaLabel = localize('quickInput.title', 'Quick Pick');
 	private _placeholder = "";
+	private _filterValue = (value: string): string => value;
 
 	readonly onDidAccept: Event<TItem> = this._onDidAccept.event;
 	readonly onDidChangeValue: Event<string> =
@@ -135,6 +136,15 @@ export class QuickPick<TItem extends IQuickPickItem>
 		this.inputBox.value = value;
 	}
 
+	get filterValue(): (value: string) => string {
+		return this._filterValue;
+	}
+
+	set filterValue(value: (value: string) => string) {
+		this._filterValue = value;
+		this.list.filter(value(this.inputBox.value));
+	}
+
 	show(): void {
 		if (this.visible) {
 			this.focus();
@@ -158,7 +168,7 @@ export class QuickPick<TItem extends IQuickPickItem>
 	}
 
 	private handleValueChange(value: string): void {
-		this.list.filter(value);
+		this.list.filter(this._filterValue(value));
 		this._onDidChangeValue.fire(value);
 	}
 

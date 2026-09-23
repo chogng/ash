@@ -10,6 +10,7 @@ import type { ICodeEditor } from '../../../browser/editorBrowser.js';
 import { EditorAction, EditorExtensionsRegistry, registerEditorAction, type ServicesAccessor } from '../../../browser/editorExtensions.js';
 import { EditorContextKeys } from '../../../common/editorContextKeys.js';
 import type { IEditorAction } from '../../../common/editorCommon.js';
+import { getStandaloneHelpPicks } from './standaloneHelpQuickAccess.js';
 
 interface CommandPick extends IQuickPickItem {
 	readonly action: IEditorAction;
@@ -31,14 +32,28 @@ export class GotoLineAction extends EditorAction {
 		});
 	}
 
-	run(accessor: ServicesAccessor, editor: ICodeEditor): void {
+	run(accessor: ServicesAccessor, editor: ICodeEditor, args?: unknown): void {
 		const resources = new DisposableStore();
 		const picker = resources.add(accessor.get(IQuickInputService).createQuickPick<CommandPick>());
+		picker.filterValue = value => value.startsWith('>') ? value.slice(1) : value;
 		const keybindings = accessor.get(IKeybindingService);
 		const notifications = accessor.get(INotificationService);
-		picker.placeholder = localize('quickCommand.placeholder', 'Type the name of a command to run');
-		const updateItems = () => {
-			picker.items = [...EditorExtensionsRegistry.getEditorActions()].flatMap(registered => {
+		const updateMode = () => {
+			if (picker.value.startsWith('@')) {
+				const symbolAction = editor.getAction('editor.action.quickOutline');
+				if (symbolAction?.isSupported()) {
+					const query = picker.value.slice(1);
+					picker.hide();
+					void symbolAction.run(query).catch(error => notifications.error(String(error)));
+					return;
+				}
+			}
+			const isHelp = picker.value.startsWith('?');
+			picker.ariaLabel = isHelp ? localize('quickHelp.dialog', 'Quick Access Help') : localize('quickCommand.label', 'Command Palette');
+			picker.placeholder = isHelp
+				? localize('quickHelp.placeholder', 'Choose a command or type to filter')
+				: localize('quickCommand.placeholder', 'Type > for commands, ? for help, or @ for symbols');
+			picker.items = isHelp ? getStandaloneHelpPicks(editor, keybindings) : [...EditorExtensionsRegistry.getEditorActions()].flatMap(registered => {
 				const action = editor.getAction(registered.id);
 				if (!action?.isSupported() || action.id === GotoLineAction.ID) {
 					return [];
@@ -52,14 +67,18 @@ export class GotoLineAction extends EditorAction {
 				}];
 			});
 		};
-		resources.add(keybindings.onDidUpdateKeybindings(updateItems));
+		resources.add(keybindings.onDidUpdateKeybindings(updateMode));
+		resources.add(picker.onDidChangeValue(updateMode));
 		resources.add(picker.onDidAccept(item => {
 			picker.hide();
 			void item.action.run().catch(error => notifications.error(String(error)));
 		}));
 		resources.add(picker.onDidHide(() => resources.dispose()));
-		updateItems();
+		updateMode();
 		picker.show();
+		if (typeof args === 'string') {
+			picker.value = args;
+		}
 	}
 }
 

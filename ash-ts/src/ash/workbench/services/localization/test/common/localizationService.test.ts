@@ -43,6 +43,8 @@ test("localization lookup falls back to English and formats parameters", async (
 	assert.equal(localization.translate('ash', 'iPadShowKeyboard.label', 'Show Keyboard'), '显示键盘');
 	assert.equal(localization.translate('ash', 'inspectTokens.label', 'Developer: Inspect Tokens'), '开发者：检查词法单元');
 	assert.equal(localization.translate('ash', 'inspectTokens.scope', 'Token type'), '词法单元类型');
+	assert.equal(localization.translate('ash', 'quickHelp.dialog', 'Quick Access Help'), '快速访问帮助');
+	assert.equal(localization.translate('ash', 'quickCommand.placeholder', 'Type > for commands, ? for help, or @ for symbols'), '输入 > 查找命令、? 查看帮助，或 @ 查找符号');
 });
 
 test('folding command metadata uses the selected Chinese language catalog', async () => {

@@ -18,6 +18,10 @@ Code Action、Hover、Sticky Scroll 分别通过 `codeActionContributions.ts`、
 
 Standalone 宿主用 `editor.addEditorAction` 注册全局编辑器动作，可提供快捷键、执行条件和右键菜单位置；动作会出现在 `getAction()` 与 F1 命令列表中。`editor.addKeybindingRule(s)` 可以单独注册带条件的快捷键，`command: null` 表示拦截该按键。两个入口都返回注销句柄。括号、注释等语言行为由宿主通过 `languages.registerLanguages` 和 `languages.setLanguageConfiguration` 注册。
 
+Standalone 的 F1 快捷入口支持直接筛选命令，也支持 `>` 命令、`?` 帮助和 `@` 文档符号前缀。切换前缀会保留已输入的查询；关闭符号列表会取消尚未完成的符号请求。
+
+`editor.createWebWorker({ worker, host, keepIdleModels })` 接收宿主创建的模块 Worker。Worker 模块从 `standalone/browser/standaloneWebWorker.ts` 导入并调用 `startStandaloneWebWorker(self, context => methods)`，宿主随后通过 `getProxy()` 调用其方法；`withSyncedResources(uris)` 把已注册的模型送入 Worker，后续编辑增量同步，模型释放时删除镜像。Worker 通过 `context.getMirrorModels()` 读取镜像，通过 `context.callHost(method, ...args)` 调用明确提供的宿主方法。默认空闲一分钟后停止同步并清除镜像；`keepIdleModels: true` 保持同步。调用方负责释放 `createWebWorker` 返回的对象。
+
 ## 核心文档
 
 Editor 维护以下核心入口。实现 README 可以补充局部细节，但不得复制核心规范。
@@ -143,7 +147,7 @@ F1 的 `Developer: Inspect Tokens` 动作在光标旁显示当前词法 token �
 
 `editor.create({ model: null })` 创建尚未挂接模型的编辑器，不分配文本模型或 Worker；后续 `setModel` 挂接已注册的模型，编辑器身份保持不变。`updateOptions` 接受 `theme` 和 `autoDetectHighContrast`，它们修改同一窗口的共享主题。内部通过 `StandaloneServices.get(serviceId)` 获取服务，`initialize` 返回该窗口的实例化容器。
 
-完整 standalone 入口提供 F1 命令面板和“切换高对比度主题”动作。平台 QuickInputController 统一负责选择弹层和焦点恢复；Workbench 使用窗口宿主，standalone 使用当前编辑器宿主，并随编辑器释放。命令面板枚举当前可用的编辑器动作，执行仍走原动作、上下文条件和错误通知链。
+完整 standalone 入口提供 F1 命令面板和“切换高对比度主题”动作。F1 输入 `?` 可筛选命令面板、符号、行号和字符偏移量四种导航入口；选择后调用对应的原动作。平台 QuickInputController 统一负责选择弹层和焦点恢复；Workbench 使用窗口宿主，standalone 使用当前编辑器宿主，并随编辑器释放。命令面板枚举当前可用的编辑器动作，执行仍走原动作、上下文条件和错误通知链。
 
 ## 失败与兼容边界
 

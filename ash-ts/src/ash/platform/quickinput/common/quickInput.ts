@@ -24,6 +24,7 @@ export interface IQuickPick<TItem extends IQuickPickItem>
 	ariaLabel: string;
 	placeholder: string;
 	value: string;
+	filterValue: (value: string) => string;
 
 	show(): void;
 	hide(): void;

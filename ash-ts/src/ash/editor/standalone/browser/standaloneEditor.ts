@@ -1,3 +1,4 @@
+import './standalone-tokens.css';
 import { DisposableStore, type IDisposable } from "../../../base/common/lifecycle.js";
 import { URI } from "../../../base/common/uri.js";
 import { ContentWidgetPositionPreference, OverlayWidgetPositionPreference, type ICodeEditor } from "../../browser/editorBrowser.js";
@@ -18,6 +19,8 @@ import { KeybindingsRegistry } from '../../../platform/keybinding/common/keybind
 import { EditorAction, EditorCommand, EditorExtensionsRegistry, type ServicesAccessor } from '../../browser/editorExtensions.js';
 import { ContextKeyExpr } from '../../../platform/contextkey/common/contextkey.js';
 import { MenuId, MenusRegistry } from '../../../platform/actions/common/actions.js';
+import { createWebWorker as createStandaloneWebWorker, type MonacoWebWorker } from './standaloneWebWorker.js';
+import type { StandaloneWorkerOptions } from './services/standaloneWebWorkerService.js';
 
 export type StandaloneMarkerData = Omit<MarkerInput, 'resource'>;
 
@@ -39,6 +42,7 @@ export interface IStandaloneEditorApi {
 	readonly PositionAffinity: typeof PositionAffinity;
 	readonly create: typeof create;
 	readonly createModel: typeof createModel;
+	readonly createWebWorker: typeof createWebWorker;
 	readonly getModel: typeof getModel;
 	readonly getModels: typeof getModels;
 	readonly setModelLanguage: typeof setModelLanguage;
@@ -144,6 +148,10 @@ export function createModel(value: string, language?: string, uri?: URI): ITextM
 	const services = StandaloneServices.initialize();
 	const languageId = services.languageService.getLanguageIdByMimeType(language) || language;
 	return createTextModel(services.modelService, services.languageService, value, languageId, uri);
+}
+
+export function createWebWorker<T extends object>(options: StandaloneWorkerOptions): MonacoWebWorker<T> {
+	return createStandaloneWebWorker<T>(StandaloneServices.get(IModelService), options);
 }
 
 export function getModel(uri: URI): ITextModel | null {
@@ -305,6 +313,7 @@ export function createStandaloneEditorApi(): IStandaloneEditorApi {
 		PositionAffinity,
 		create,
 		createModel,
+		createWebWorker,
 		getModel,
 		getModels,
 		setModelLanguage,

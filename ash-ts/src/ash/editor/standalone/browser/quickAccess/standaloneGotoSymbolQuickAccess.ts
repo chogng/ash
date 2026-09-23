@@ -29,7 +29,7 @@ export class StandaloneGotoSymbolQuickAccessProvider extends Disposable {
 		super();
 	}
 
-	public show(): void {
+	public show(query = ''): void {
 		const model = this.editor.getModel();
 		if (!(model instanceof TextModel)) {
 			this.dispose();
@@ -39,8 +39,20 @@ export class StandaloneGotoSymbolQuickAccessProvider extends Disposable {
 		const picker = this._register(this.quickInput.createQuickPick<SymbolPick>());
 		picker.ariaLabel = localize('gotoSymbol.dialog', 'Go to Symbol');
 		picker.placeholder = localize('gotoSymbol.placeholder', 'Type a symbol name');
+		picker.value = query;
 		this._register(picker.onDidHide(() => this.dispose()));
 		this._register(picker.onDidBlur(() => this.dispose()));
+		this._register(picker.onDidChangeValue(value => {
+			if (!value.startsWith('>') && !value.startsWith('?')) {
+				return;
+			}
+			const commandAction = this.editor.getAction('editor.action.quickCommand');
+			if (!commandAction?.isSupported()) {
+				return;
+			}
+			picker.hide();
+			void commandAction.run(value).catch(error => this.notifications.error(String(error)));
+		}));
 		this._register(picker.onDidAccept(item => {
 			picker.hide();
 			this.editor.setSelection(item.symbol.selectionRange, 'editor.action.quickOutline');
@@ -94,8 +106,8 @@ export class GotoSymbolAction extends EditorAction {
 		});
 	}
 
-	public run(accessor: ServicesAccessor, editor: ICodeEditor): void {
-		accessor.get(IInstantiationService).createInstance(StandaloneGotoSymbolQuickAccessProvider, editor).show();
+	public run(accessor: ServicesAccessor, editor: ICodeEditor, args?: unknown): void {
+		accessor.get(IInstantiationService).createInstance(StandaloneGotoSymbolQuickAccessProvider, editor).show(typeof args === 'string' ? args : '');
 	}
 }
 

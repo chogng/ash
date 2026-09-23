@@ -32,10 +32,8 @@
 
 | 上游缺失路径 | 当前下层条件 |
 | --- | --- |
-| `browser/standalone-tokens.css` | token 规则、继承和颜色表已进入既有 ViewLine presentation 与富文本复制链；尚无需要单独生成 token class 样式的调用方，不创建空 CSS |
-| `browser/quickAccess/standaloneHelpQuickAccess.ts` | 命令面板和符号选择已接通 Quick Input；通用 Quick Access registry/provider 契约仍待闭合。Go to Line action 仍使用已确认保留的 Ash 输入框 |
 | `browser/referenceSearch/standaloneReferenceSearch.ts` | 本地引用跳转由现有语言导航控制器和 PeekViewWidget 承担；标准 ReferencesController 状态与模型链尚未对齐 |
-| `browser/standaloneWebWorker.ts`、`browser/services/standaloneWebWorkerService.ts` | 当前是模型绑定的编辑 Worker 与既有消息端口；标准通用 Worker 服务、代理与多资源同步仍缺失 |
+| `browser/standaloneWebWorker.ts`、`browser/services/standaloneWebWorkerService.ts` | 已接入 `editor.createWebWorker`，支持方法代理、双向请求、多模型镜像、增量同步和释放；浏览器行为验证见文末最新记录 |
 | `browser/standaloneTreeSitterLibraryService.ts` | 未发现本地同契约 Tree-sitter 库服务与加载链 |
 | `browser/iPadShowKeyboard/iPadShowKeyboard.ts`、`iPadShowKeyboard.css`、`keyboard-dark.svg`、`keyboard-light.svg` | 文件、装配和移动浏览器模拟已补齐；真机软键盘弹出及与上游相同设备场景的对照仍待验证 |
 
@@ -2142,3 +2140,11 @@ Standalone 符号选择文件补齐：`standalone/browser/quickAccess/standalone
 iPad 显示键盘入口补齐：`editor.main.ts` 在 Standalone 装配同路径 `iPadShowKeyboard.ts`，仅对带触摸能力的 iPad/iPhone 或 iPadOS 桌面 UA 创建可聚焦覆盖控件；只读时移除，恢复可编辑时重建，释放编辑器时清理。触摸或焦点进入控件会调用原编辑器焦点入口，文本输入仍由既有输入 owner 处理。Ash 自有 CSS 和两份 SVG 随主题切换，按钮名称接入中英文目录。浏览器模拟覆盖触摸焦点、只读切换、释放、尺寸与浅色/深色/高对比度计算样式；它不能证明真机软键盘弹出的系统行为。同路径审计现为 452 个，CSS ownership 无上游复制或新品牌引用；定向浏览器 3 项、Base 2 项和本地化 6 项通过，Stanza 与 Renderer 构建通过。完整浏览器检查为 604 项通过、22 项失败，失败场景集中在输入历史、括号、缩进导线、行内补全和 GPU 括号字形等既有链路；本批 iPad 场景通过，故完整检查不能记为通过。
 
 Standalone token 检查入口补齐：`editor.main.ts` 注册上游同路径 `inspectTokens/inspectTokens.ts` 与 Ash 自有 CSS；F1 动作读取唯一 TextModel 分词状态，随光标和主题更新，Escape、模型切换与编辑器释放时清理。普通、Monarch 及嵌入语言 tokenizer 在单次编码分词结果中保留原始 scope；模型 Worker 按原始 scope 边界拆分同色 token，同时保留已有颜色与字体数据。Chromium 场景覆盖命令入口、焦点、普通与嵌入 scope、主题切换、高对比度计算样式和释放。`check-editor-alignment.mjs --test=all` 通过，239/239 个单测文件及 632 项 Playwright 场景通过；`build:renderer` 通过。Editor 全目录同路径 454、无大小写差异；CSS 审计无上游复制或品牌引用。Standalone 尚缺 6 个生产文件，Quick Access 帮助、引用搜索、通用 Worker 与 Tree-sitter 各需先闭合下层能力，`standalone-tokens.css` 尚无 token class 调用方。
+
+Standalone Quick Access 帮助入口续批：缺失的 `standalone/browser/quickAccess/standaloneHelpQuickAccess.ts` 现由 F1 命令面板实际调用。输入 `?` 列出当前编辑器支持的命令面板、符号、行号和字符偏移量动作，按可见名称筛选；选择后运行原 action。弹层、焦点、键盘和释放仍由同一个 QuickInputController 负责，未建立第二份控件或动作状态。Playwright 验证筛选、行号与符号跳转、返回命令面板及焦点恢复；中英文文案加入现有目录。`check-editor-alignment.mjs --test=all` 通过，239/239 个单测文件和 633 项 Playwright 场景通过；Stanza 与 Renderer 生产构建通过。Editor 全目录同路径 455、无大小写差异，CSS 审计无新增上游复制或品牌引用。此切片只闭合帮助入口，通用 Quick Access registry/provider 与前缀切换契约仍待平台层实现。Standalone 尚缺 5 个生产文件。
+
+Quick Access 前缀续批：共享 Quick Pick 的 `filterValue` 只改变筛选词，不改输入框显示内容。Standalone F1 中 `>` 筛选命令，`?` 显示帮助，`@` 带查询打开已有符号列表；符号列表输入 `>` 或 `?` 返回 F1，原符号请求随列表释放而取消。没有新增弹层 DOM 或符号请求 owner。Playwright 验证双向切换、查询保留、焦点恢复和取消。完整 `check-editor-alignment.mjs --test=all` 通过，239/239 个单测文件和 635 项浏览器场景通过；`build:stanza` 与 `build:renderer` 通过。通用 Quick Access registry/provider 仍未实现；Standalone 缺失的 5 个生产文件未因本批变化而虚报完成。
+
+Standalone CSS 续批：核对上游后确认 `browser/standalone-tokens.css` 实际是独立编辑器的字体、焦点和辅助元素基础样式，不是 token class 规则。Ash 原有 View 直接设置代码字体，辅助状态由 View 维护；本批在同路径文件中为 Quick Input、token 检查面板与悬浮内容设置界面字体，代码样本保留等宽字体，并让编辑器实际输入焦点触发主题色轮廓。由 `standaloneEditor.ts` 真实导入，Playwright 用计算样式验证三处 DOM 命中、焦点进入与离开。完整 `check-editor-alignment.mjs --test=browser` 通过，636 项浏览器场景通过；Stanza 与 Renderer 生产构建通过。目录同路径增至 456，CSS 审计无上游复制或品牌选择器。其余 4 个缺失生产文件仍依赖引用控制器、通用 Worker 和 Tree-sitter 服务。
+
+Standalone 通用 Worker 续批：`editor.createWebWorker` 从窗口模型服务读取已注册模型，`standalone/browser/standaloneWebWorker.ts` 提供公开代理与 Worker 侧启动入口，`standalone/browser/services/standaloneWebWorkerService.ts` 持有 Worker、双向消息通道、多模型订阅和空闲释放。模型变更传输版本与增量，Worker 使用已有 `LanguageWorkerDocumentMirror`；模型释放和 Worker 释放清理镜像与传输。真实 Chromium 场景验证两个资源、后续编辑、宿主回调、模型与 Worker 释放。`check-editor-alignment.mjs --test=all` 通过，239/239 个单测文件、637 个浏览器场景通过；Stanza 和 Renderer 生产构建通过。同路径文件 458 个。剩余两个缺失路径的结论：`referenceSearch/standaloneReferenceSearch.ts` 对应的引用请求、Peek 展示和生命周期已由 `LanguageNavigationController` 唯一拥有，补同名注册层会重复控制器；`standaloneTreeSitterLibraryService.ts` 的上游文件自身只有未实现的方法，Ash 尚无 Tree-sitter 解析器、语法包和下游使用链，不能通过空服务宣称能力已接通。
