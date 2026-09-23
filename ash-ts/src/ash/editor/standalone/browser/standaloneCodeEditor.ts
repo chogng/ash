@@ -34,6 +34,17 @@ export interface IStandaloneEditorConstructionOptions extends StandaloneCodeEdit
 	readonly autoDetectHighContrast?: boolean;
 }
 
+export interface IActionDescriptor {
+	readonly id: string;
+	readonly label: string;
+	readonly precondition?: string;
+	readonly keybindings?: readonly number[];
+	readonly keybindingContext?: string;
+	readonly contextMenuGroupId?: string;
+	readonly contextMenuOrder?: number;
+	run(editor: ICodeEditor, ...args: unknown[]): void | Promise<void>;
+}
+
 export interface IStandaloneCodeEditor extends ICodeEditor, IDisposable {
 	updateOptions(newOptions: Readonly<IEditorOptions & Pick<IStandaloneEditorConstructionOptions, 'theme' | 'autoDetectHighContrast'>>): void;
 	getModel(): TextModel | null;

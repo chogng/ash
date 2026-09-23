@@ -222,6 +222,13 @@ interface StandaloneHarness {
 	runEditorActivity(): Promise<boolean[]>;
 	runHistoryCommands(useAlias: boolean): Promise<string[]>;
 	prepareStandaloneCommands(): void;
+	prepareDynamicKeybindings(): void;
+	setDynamicKeybindingContext(enabled: boolean): void;
+	prepareStandaloneAction(): void;
+	readStandaloneAction(): { calls: string[]; available: boolean; menu: boolean; registered: boolean };
+	runStandaloneAction(value: string): Promise<void>;
+	runStandaloneActionCommand(value: string): Promise<void>;
+	releaseStandaloneAction(): void;
 	runStandaloneCommand(value: string): Promise<string>;
 	readStandaloneCommands(): { readonly calls: string[]; readonly registered: boolean };
 	releaseStandaloneCommands(): void;
@@ -354,6 +361,11 @@ const callerContainer = document.querySelector<HTMLElement>('#caller')!;
 const ownedContainer = document.querySelector<HTMLElement>('#owned')!;
 const callerResource = stanza.URI.parse('inmemory://stanza/caller.txt');
 const ownedResource = stanza.URI.parse('inmemory://stanza/owned.txt');
+const typescriptConfiguration = stanza.languages.setLanguageConfiguration('typescript', {
+	comments: { lineComment: '//', blockComment: ['/*', '*/'] },
+	brackets: [['{', '}'], ['[', ']'], ['(', ')']],
+	colorizedBracketPairs: [['{', '}'], ['[', ']'], ['(', ')']],
+});
 const events: CreationEvent[] = [];
 const listener = stanza.editor.onDidCreateEditor(editor => {
 	const model = editor.getModel();
@@ -433,6 +445,8 @@ let semanticRegistration: ReturnType<typeof stanza.languages.registerDocumentSem
 let completionRegistration: ReturnType<typeof stanza.languages.registerCompletionItemProvider> | undefined;
 const contributionProviders = new DisposableStore();
 const standaloneCommands = new DisposableStore();
+const standaloneAction = new DisposableStore();
+const standaloneActionCalls: string[] = [];
 const standaloneCommandCalls: string[] = [];
 const contributionRequests: { languageId: string; isAborted: () => boolean; finish: (empty: boolean) => void }[] = [];
 
@@ -1710,11 +1724,40 @@ window.ashStandaloneIntegration = {
 			standaloneCommandCalls.push(`alias:${String(value)}`);
 			return String(value);
 		}));
-		standaloneCommands.add(KeybindingsRegistry.registerKeybindingRule({
+		standaloneCommands.add(stanza.editor.addKeybindingRule({
 			command: 'test.standalone.command',
-			keybinding: Keybinding.single(logicalKey('F8')),
+			keybinding: stanza.KeyCode.F8,
 		}));
 	},
+	prepareDynamicKeybindings: () => {
+		standaloneCommands.add(stanza.editor.addKeybindingRules([
+			{ keybinding: stanza.KeyCode.F7, command: 'test.standalone.alias', commandArgs: 'batch', when: 'editorTextFocus && test.dynamicEnabled' },
+			{ keybinding: stanza.KeyCode.F8, command: null, when: 'editorTextFocus && test.dynamicEnabled' },
+		]));
+		standaloneCommands.add(stanza.editor.addKeybindingRule({ keybinding: stanza.KeyCode.F5, command: 'test.standalone.alias', commandArgs: 'single' }));
+	},
+	setDynamicKeybindingContext: enabled => callerEditor.invokeWithinContext(accessor => accessor.get(IContextKeyService).setContext('test.dynamicEnabled', enabled)),
+	prepareStandaloneAction: () => {
+		standaloneAction.clear();
+		standaloneActionCalls.length = 0;
+		standaloneAction.add(stanza.editor.addEditorAction({
+			id: 'test.standalone.action', label: 'Standalone test action',
+			precondition: 'test.dynamicEnabled',
+			keybindings: [stanza.KeyCode.F6],
+			keybindingContext: 'editorTextFocus',
+			contextMenuGroupId: '1_modification', contextMenuOrder: 1,
+			run: (editor, ...args) => { standaloneActionCalls.push(`${editor === callerEditor ? 'caller' : 'owned'}:${String(args[0] ?? 'key')}`); },
+		}));
+	},
+	readStandaloneAction: () => ({
+		calls: [...standaloneActionCalls],
+		available: callerEditor.getAction('test.standalone.action') !== null,
+		menu: MenusRegistry.getMenuItems(MenuId.EditorContext).some(item => 'command' in item && item.command.id === 'test.standalone.action'),
+		registered: CommandsRegistry.hasCommand('test.standalone.action'),
+	}),
+	runStandaloneAction: async value => { await callerEditor.getAction('test.standalone.action')?.run(value); },
+	runStandaloneActionCommand: async value => { await StandaloneServices.get(ICommandService).executeCommand('test.standalone.action', value); },
+	releaseStandaloneAction: () => standaloneAction.clear(),
 	runStandaloneCommand: value => StandaloneServices.get(ICommandService).executeCommand<string>('test.standalone.alias', value),
 	readStandaloneCommands: () => ({
 		calls: [...standaloneCommandCalls],
@@ -2549,6 +2592,7 @@ window.ashStandaloneIntegration = {
 	dispose: () => {
 		emptyResources.dispose();
 		standaloneCommands.dispose();
+		standaloneAction.dispose();
 		contributionProviders.dispose();
 		for (const request of contributionRequests) {
 			request.finish(true);
@@ -2579,6 +2623,7 @@ window.ashStandaloneIntegration = {
 		callerEditor.dispose();
 		largeModel?.dispose();
 		callerModel.dispose();
+		typescriptConfiguration.dispose();
 		pointerMouseUpListener.dispose();
 		listener.dispose();
 	},

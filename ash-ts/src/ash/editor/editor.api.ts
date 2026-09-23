@@ -18,9 +18,10 @@ export type { IContentWidget, IContentWidgetPosition, IContentWidgetRenderedCoor
 export type { IViewZone, IViewZoneChangeAccessor } from './browser/editorBrowser.js';
 export { PositionAffinity } from './common/model.js';
 export { ColorScheme } from "../platform/theme/common/theme.js";
-export type { IStandaloneCodeEditor, IStandaloneEditorConstructionOptions } from './standalone/browser/standaloneCodeEditor.js';
+export type { IActionDescriptor, IStandaloneCodeEditor, IStandaloneEditorConstructionOptions } from './standalone/browser/standaloneCodeEditor.js';
 export type { IStandaloneEditorApi } from "./standalone/browser/standaloneEditor.js";
-export type { ICommandDescriptor } from './standalone/browser/standaloneEditor.js';
+export type { ICommandDescriptor, IKeybindingRule } from './standalone/browser/standaloneEditor.js';
+export { KeyCode, KeyMod } from '../base/common/keyCodes.js';
 export type { StandaloneMarkerData } from './standalone/browser/standaloneEditor.js';
 export { MarkerSeverity } from '../platform/markers/common/markers.js';
 export type { Marker } from '../platform/markers/common/markers.js';

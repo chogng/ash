@@ -704,6 +704,9 @@ export function registerDiffEditorContribution<Services extends EditorService[]>
 }
 
 export namespace EditorExtensionsRegistry {
+	export function registerDynamicEditorAction(action: EditorAction): IDisposable {
+		return EditorContributionRegistry.INSTANCE.registerDynamicEditorAction(action);
+	}
 
 	export function getEditorCommand(commandId: string): EditorCommand {
 		return EditorContributionRegistry.INSTANCE.getEditorCommand(commandId);
@@ -774,8 +777,22 @@ class EditorContributionRegistry {
 	}
 
 	public registerEditorAction(action: EditorAction) {
+		if (this.editorActions.some(existing => existing.id === action.id)) {
+			throw new Error(`Editor action is already registered: ${action.id}`);
+		}
 		action.register();
 		this.editorActions.push(action);
+	}
+
+	public registerDynamicEditorAction(action: EditorAction): IDisposable {
+		if (this.editorActions.some(existing => existing.id === action.id)) {
+			throw new Error(`Editor action is already registered: ${action.id}`);
+		}
+		this.editorActions.push(action);
+		return toDisposable(() => {
+			const index = this.editorActions.indexOf(action);
+			if (index >= 0) this.editorActions.splice(index, 1);
+		});
 	}
 
 	public getEditorActions(): Iterable<EditorAction> {

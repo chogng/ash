@@ -1,4 +1,4 @@
-import { type IDisposable } from "../../../base/common/lifecycle.js";
+import { DisposableStore, type IDisposable } from "../../../base/common/lifecycle.js";
 import { URI } from "../../../base/common/uri.js";
 import { ContentWidgetPositionPreference, OverlayWidgetPositionPreference, type ICodeEditor } from "../../browser/editorBrowser.js";
 import { type CodeEditorWidgetOptions } from '../../browser/widget/codeEditor/codeEditorWidget.js';
@@ -8,17 +8,29 @@ import { IStandaloneThemeService, type IStandaloneThemeData, type NamedEditorThe
 import { ICodeEditorService } from '../../browser/services/codeEditorService.js';
 import { IModelService } from '../../common/services/model.js';
 import { ILanguageService } from '../../common/languages/language.js';
-import { createTextModel, StandaloneEditor, type IStandaloneCodeEditor, type IStandaloneEditorConstructionOptions } from './standaloneCodeEditor.js';
+import { createTextModel, StandaloneEditor, type IActionDescriptor, type IStandaloneCodeEditor, type IStandaloneEditorConstructionOptions } from './standaloneCodeEditor.js';
 import { StandaloneServices, type StandaloneServiceOverrides } from "./standaloneServices.js";
 import { Colorizer, type IColorizerElementOptions, type IColorizerOptions } from './colorizer.js';
 import { IMarkerService, type Marker, type MarkerInput } from '../../../platform/markers/common/markers.js';
 import { CommandsRegistry, type CommandHandler } from '../../../platform/commands/common/commands.js';
+import { parseContextKeyExpression } from '../../../platform/contextkey/common/contextKeyExpressionParser.js';
+import { KeybindingsRegistry } from '../../../platform/keybinding/common/keybindingsRegistry.js';
+import { EditorAction, EditorCommand, EditorExtensionsRegistry, type ServicesAccessor } from '../../browser/editorExtensions.js';
+import { ContextKeyExpr } from '../../../platform/contextkey/common/contextkey.js';
+import { MenuId, MenusRegistry } from '../../../platform/actions/common/actions.js';
 
 export type StandaloneMarkerData = Omit<MarkerInput, 'resource'>;
 
 export interface ICommandDescriptor {
 	readonly id: string;
 	readonly run: CommandHandler;
+}
+
+export interface IKeybindingRule {
+	readonly keybinding: number;
+	readonly command?: string | null;
+	readonly commandArgs?: unknown;
+	readonly when?: string | null;
 }
 
 export interface IStandaloneEditorApi {
@@ -36,6 +48,9 @@ export interface IStandaloneEditorApi {
 	readonly onDidChangeMarkers: typeof onDidChangeMarkers;
 	readonly addCommand: typeof addCommand;
 	readonly registerCommand: typeof registerCommand;
+	readonly addEditorAction: typeof addEditorAction;
+	readonly addKeybindingRule: typeof addKeybindingRule;
+	readonly addKeybindingRules: typeof addKeybindingRules;
 	readonly getEditors: typeof getEditors;
 	readonly onDidCreateEditor: typeof onDidCreateEditor;
 	readonly onDidCreateModel: typeof onDidCreateModel;
@@ -178,6 +193,87 @@ export function registerCommand(id: string, handler: CommandHandler): IDisposabl
 	return CommandsRegistry.register(id, handler);
 }
 
+export function addEditorAction(descriptor: IActionDescriptor): IDisposable {
+	if (!descriptor || typeof descriptor.id !== 'string' || !descriptor.id.trim()
+		|| typeof descriptor.label !== 'string' || !descriptor.label.trim() || typeof descriptor.run !== 'function') {
+		throw new TypeError('Standalone editor action requires an id, label and run handler');
+	}
+	const precondition = descriptor.precondition === undefined ? undefined : parseContextKeyExpression(descriptor.precondition);
+	const keybindingContext = descriptor.keybindingContext === undefined ? undefined : parseContextKeyExpression(descriptor.keybindingContext);
+	if (descriptor.keybindings !== undefined && (!Array.isArray(descriptor.keybindings)
+		|| descriptor.keybindings.some(keybinding => !Number.isSafeInteger(keybinding) || keybinding <= 0))) {
+		throw new TypeError('Editor action keybindings must be encoded keybindings');
+	}
+	const action = new class extends EditorAction {
+		constructor() { super({ id: descriptor.id, label: descriptor.label, alias: descriptor.label, precondition }); }
+		override runEditorCommand(accessor: ServicesAccessor, editor: ICodeEditor, args: unknown): void | Promise<void> {
+			return this.run(accessor, editor, args);
+		}
+		run(_accessor: ServicesAccessor, editor: ICodeEditor, args: unknown): void | Promise<void> {
+			return descriptor.run(editor, ...(args === undefined ? [] : [args]));
+		}
+	}();
+	const resources = new DisposableStore();
+	try {
+		resources.add(CommandsRegistry.register(descriptor.id, (accessor, ...args) =>
+			EditorCommand.runEditorCommand(accessor, args, precondition, (_editorAccessor, editor, commandArgs) => descriptor.run(editor, ...commandArgs))));
+		resources.add(EditorExtensionsRegistry.registerDynamicEditorAction(action));
+		if (descriptor.contextMenuGroupId) {
+			resources.add(MenusRegistry.appendMenuItem(MenuId.EditorContext, {
+				command: { id: descriptor.id, title: descriptor.label },
+				when: precondition,
+				group: descriptor.contextMenuGroupId,
+				order: descriptor.contextMenuOrder ?? 0,
+			}));
+		}
+		for (const keybinding of descriptor.keybindings ?? []) {
+			resources.add(KeybindingsRegistry.registerKeybindingRule({
+				command: descriptor.id,
+				keybinding,
+				when: ContextKeyExpr.and(precondition, keybindingContext) ?? undefined,
+			}));
+		}
+		return resources;
+	} catch (error) {
+		resources.dispose();
+		throw error;
+	}
+}
+
+export function addKeybindingRule(rule: IKeybindingRule): IDisposable {
+	return addKeybindingRules([rule]);
+}
+
+export function addKeybindingRules(rules: readonly IKeybindingRule[]): IDisposable {
+	if (!Array.isArray(rules)) throw new TypeError('Keybinding rules must be an array');
+	const registrations = rules.map(rule => {
+		if (!rule || !Number.isSafeInteger(rule.keybinding) || rule.keybinding <= 0) {
+			throw new TypeError('Keybinding rule requires an encoded keybinding');
+		}
+		if (rule.command != null && (typeof rule.command !== 'string' || !rule.command.trim())) {
+			throw new TypeError('Keybinding command must be a non-empty string');
+		}
+		return {
+			keybinding: rule.keybinding,
+			command: rule.command,
+			args: rule.commandArgs === undefined ? undefined : [rule.commandArgs],
+			when: rule.when == null ? undefined : parseContextKeyExpression(rule.when),
+		};
+	});
+	const resources = new DisposableStore();
+	try {
+		for (const rule of registrations) {
+			resources.add(rule.command == null
+				? KeybindingsRegistry.registerKeybindingBlocker({ keybinding: rule.keybinding, when: rule.when })
+				: KeybindingsRegistry.registerKeybindingRule({ command: rule.command, keybinding: rule.keybinding, args: rule.args, when: rule.when }));
+		}
+		return resources;
+	} catch (error) {
+		resources.dispose();
+		throw error;
+	}
+}
+
 export function getEditors(): readonly ICodeEditor[] {
 	return StandaloneServices.get(ICodeEditorService).listCodeEditors();
 }
@@ -218,6 +314,9 @@ export function createStandaloneEditorApi(): IStandaloneEditorApi {
 		onDidChangeMarkers,
 		addCommand,
 		registerCommand,
+		addEditorAction,
+		addKeybindingRule,
+		addKeybindingRules,
 		getEditors,
 		onDidCreateEditor,
 		onDidCreateModel,

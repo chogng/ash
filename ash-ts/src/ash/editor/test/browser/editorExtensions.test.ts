@@ -46,7 +46,7 @@ test("Code bundle explicitly registers independently selectable editor capabilit
 		"editor.contrib.comment",
 		"editor.contrib.folding",
 		"editor.contrib.format",
-		"editor.contrib.gotoSymbol",
+		"editor.contrib.languageNavigation",
 		"editor.contrib.hover",
 		"editor.contrib.multicursor",
 		"editor.contrib.selectionHighlighter",

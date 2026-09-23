@@ -188,6 +188,55 @@ test('standalone command registrations execute through the command service and r
 	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 });
 
+test('standalone dynamic keybindings apply conditions, arguments and blockers', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => {
+		window.ashStandaloneIntegration.prepareStandaloneCommands();
+		window.ashStandaloneIntegration.prepareDynamicKeybindings();
+	});
+	await page.locator('#caller .stanza-editor-input').focus();
+	await page.keyboard.press('F7');
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.readStandaloneCommands())).calls).toEqual([]);
+	await page.evaluate(() => window.ashStandaloneIntegration.setDynamicKeybindingContext(true));
+	await page.keyboard.press('F7');
+	await page.keyboard.press('F8');
+	await page.keyboard.press('F5');
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.readStandaloneCommands())).calls).toEqual(['alias:batch', 'alias:single']);
+	await page.evaluate(() => window.ashStandaloneIntegration.setDynamicKeybindingContext(false));
+	await page.keyboard.press('F8');
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.readStandaloneCommands())).calls).toEqual(['alias:batch', 'alias:single', 'key']);
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
+test('standalone editor actions reach the picker, menu, shortcuts and command service until disposed', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareStandaloneAction());
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readStandaloneAction())).toEqual({
+		calls: [], available: true, menu: true, registered: true,
+	});
+	await page.locator('#caller .stanza-editor-input').focus();
+	await page.keyboard.press('F6');
+	await page.evaluate(() => window.ashStandaloneIntegration.runStandaloneAction('disabled'));
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.readStandaloneAction())).calls).toEqual([]);
+	await page.evaluate(() => window.ashStandaloneIntegration.setDynamicKeybindingContext(true));
+	await page.keyboard.press('F6');
+	await page.evaluate(() => window.ashStandaloneIntegration.runStandaloneAction('direct'));
+	await page.evaluate(() => window.ashStandaloneIntegration.runStandaloneActionCommand('command'));
+	await page.keyboard.press('F1');
+	const picker = page.locator('#caller .ash-quick-pick');
+	await picker.getByRole('combobox').fill('Standalone test action');
+	await expect(picker.locator('.ash-quick-pick-row-label')).toHaveText('Standalone test action');
+	await page.keyboard.press('Enter');
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.readStandaloneAction())).calls).toEqual([
+		'caller:key', 'caller:direct', 'caller:command', 'caller:key',
+	]);
+	await page.evaluate(() => window.ashStandaloneIntegration.releaseStandaloneAction());
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readStandaloneAction())).toEqual({
+		calls: ['caller:key', 'caller:direct', 'caller:command', 'caller:key'], available: false, menu: false, registered: false,
+	});
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
 for (const scheme of ['dark', 'light'] as const) {
 	test(`standalone command picker toggles ${scheme} high contrast and restores the theme`, async ({ page }) => {
 		await page.goto('/standalone.html');

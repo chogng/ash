@@ -58,6 +58,11 @@ declare global {
 
 const container = requiredElement('editor-root');
 const disposables = new DisposableStore();
+disposables.add(stanzaApi.languages.registerLanguages([{ description: { id: 'typescript' } }]));
+disposables.add(stanzaApi.languages.setLanguageConfiguration('typescript', {
+	brackets: [['{', '}'], ['[', ']'], ['(', ')']],
+	colorizedBracketPairs: [['{', '}'], ['[', ']'], ['(', ')']],
+}));
 const gpuFrameTrace = installGpuFrameTrace();
 disposables.add(toDisposable(() => gpuFrameTrace.dispose()));
 const resource = stanzaApi.URI.parse('inmemory://stanza/gpu-integration.ts');
