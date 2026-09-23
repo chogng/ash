@@ -107,6 +107,26 @@ test('Go to Offset uses the selected Chinese language catalog', async () => {
 	}
 });
 
+test('Git Auto Fetch settings use the selected Chinese language catalog', async () => {
+	using configuration = new InMemoryConfigurationService();
+	using languagePacks = new MarketplaceLanguagePackService(createMarketplace(), builtinLanguagePackCatalogs);
+	using localeService = new WorkbenchLocaleService(configuration, languagePacks);
+	using localization = new WorkbenchLocalizationService(localeService, languagePacks);
+	try {
+		await localization.whenReady;
+		await localeService.setLocale('zh-CN');
+		const { GitConfiguration } = await import('../../../git/common/gitConfiguration.js');
+		const { Extensions } = await import('../../../../../platform/configuration/common/configurationRegistry.js');
+		const { Registry } = await import('../../../../../platform/registry/common/platform.js');
+		const registered = Registry.as<import('../../../../../platform/configuration/common/configurationRegistry.js').IConfigurationRegistry>(Extensions.Configuration)
+			.getConfiguration(GitConfiguration.autofetch);
+		assert.equal(registered?.setting?.title, '自动获取远端更新');
+		assert.equal(registered?.setting?.description, '定期获取所有已打开仓库的远端更新，不更改本地分支或文件。');
+	} finally {
+		resetNlsResolver();
+	}
+});
+
 function createMarketplace(): IMarketplaceService {
 	const changes = new Emitter<void>();
 	return {

@@ -1,4 +1,5 @@
 import type { ISetting, ISettingsGroup, SettingsPresentation } from '../../../services/preferences/common/preferences.js';
+import { localize } from '../../../../nls.js';
 import type { SettingsTreeNode } from './settingsTreeModels.js';
 
 export interface SettingsGroupDescriptor {
@@ -44,6 +45,12 @@ export const SettingsNavigation = [
 		description: 'Configure core application behavior and accessibility.',
 		presentation: 'general',
 		groups: [
+			{
+				id: 'source-control',
+				get label() { return localize('git.settings.group', 'Source Control'); },
+				get description() { return localize('git.settings.groupDescription', 'Configure how Git checks for remote updates.'); },
+				settings: ['git.autofetch', 'git.autofetchPeriod'],
+			},
 			{
 				id: 'accessibility',
 				label: 'Accessibility',

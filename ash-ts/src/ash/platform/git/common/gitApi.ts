@@ -1,4 +1,4 @@
-import type { GitBranchListResult, GitBranchSwitchParams, GitChangeFileParams, GitChangeFileResult, GitCommitChangesParams, GitCommitChangesResult, GitCommitFileParams, GitCommitFileResult, GitCommitParams, GitCommitResult, GitGraphParams, GitGraphResult, GitHistoryResult, GitOperationResult, GitPathsParams, GitRepositoriesResult, GitRepositoryParams, GitStatusResult } from "../../app-server/common/generated/index.js";
+import type { GitBranchListResult, GitBranchSwitchParams, GitChangeFileParams, GitChangeFileResult, GitCommitChangesParams, GitCommitChangesResult, GitCommitFileParams, GitCommitFileResult, GitCommitParams, GitCommitResult, GitFetchParams, GitGraphParams, GitGraphResult, GitHistoryResult, GitOperationResult, GitPathsParams, GitRepositoriesResult, GitRepositoryParams, GitStatusResult } from "../../app-server/common/generated/index.js";
 
 export interface IGitApi {
 	repositories(): Promise<GitRepositoriesResult>;
@@ -14,7 +14,7 @@ export interface IGitApi {
 	unstage(params: GitPathsParams): Promise<GitOperationResult>;
 	discardWorktree(params: GitPathsParams): Promise<GitOperationResult>;
 	commit(params: GitCommitParams): Promise<GitCommitResult>;
-	fetch(params: GitRepositoryParams): Promise<GitOperationResult>;
+	fetch(params: GitFetchParams): Promise<GitOperationResult>;
 	pull(params: GitRepositoryParams): Promise<GitOperationResult>;
 	push(params: GitRepositoryParams): Promise<GitOperationResult>;
 }

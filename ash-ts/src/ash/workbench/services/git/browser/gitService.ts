@@ -1,12 +1,15 @@
-import type { GitHeadDto, GitRepositoryChangeDto, GitRepositoryDto, GitStatusResult } from "../../../../platform/app-server/common/generated/index.js";
+import type { GitFetchModeDto, GitHeadDto, GitRepositoryChangeDto, GitRepositoryDto, GitStatusResult } from "../../../../platform/app-server/common/generated/index.js";
 import { Emitter } from "../../../../base/common/event.js";
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { AbstractDisposable, Disposable, DisposableMap, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { URI } from "../../../../base/common/uri.js";
 import type { IAppServerApi, IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { IGitApi } from "../../../../platform/git/common/gitApi.js";
+import { ILogService } from '../../../../platform/log/common/log.js';
 import { getRemoteWorkspacePath, isRemoteResource } from "../../../../platform/remote/common/remote.js";
 import type { IWorkspaceContextService, IWorkspaceFolder } from "../../../../platform/workspace/common/workspace.js";
 import type { GitBranch, GitChangeFile, GitChangeFileComparison, GitCommitChanges, GitCommitFile, GitCommitResult, GitCommitSummary, GitHead, GitRepository, GitRepositoryChange, GitStatus, GraphPage, GraphQuery, IGitService } from "../common/gitService.js";
+import { GitConfiguration, type GitAutofetch } from '../common/gitConfiguration.js';
 
 export interface GitServiceOptions {
 	readonly api: IGitApi;
@@ -28,6 +31,9 @@ export class GitService extends Disposable implements IGitService {
 	private discoveryGeneration = 0;
 	private selectionGeneration = 0;
 	private discovery: Promise<readonly GitRepository[]> | undefined;
+	private readonly autofetchers = this._register(new DisposableMap<string, RepositoryAutoFetcher>());
+	private connectionReady = false;
+	private connectionRevision = 0;
 
 	readonly onDidChangeStatus = this._onDidChangeStatus.event;
 	readonly onDidChangeRepositoryStatus = this._onDidChangeRepositoryStatus.event;
@@ -43,7 +49,11 @@ export class GitService extends Disposable implements IGitService {
 		return this.repositoryList.find(repository => repository.id === this.activeRepositoryId);
 	}
 
-	constructor(private readonly options: GitServiceOptions) {
+	constructor(
+		private readonly options: GitServiceOptions,
+		@IConfigurationService private readonly configurationService: IConfigurationService,
+		@ILogService private readonly logService: ILogService,
+	) {
 		super();
 		this.api = options.api;
 		const events = options.eventApi.subscribe(event => {
@@ -57,12 +67,35 @@ export class GitService extends Disposable implements IGitService {
 		});
 		this._register(toDisposable(() => events.dispose()));
 		const connection = options.appServerApi.onConnectionState(state => {
-			if (state === "ready" && this.hasWorkspaceFolder()) void this.refreshRepositories().catch(() => undefined);
+			const revision = ++this.connectionRevision;
+			this.connectionReady = false;
+			this.syncAutofetch();
+			if (state === 'ready' && !this.hasWorkspaceFolder()) {
+				this.connectionReady = true;
+				return;
+			}
+			if (state === 'ready' && this.hasWorkspaceFolder()) {
+				void this.refreshRepositories().then(() => {
+					if (this.isDisposed || revision !== this.connectionRevision) return;
+					this.connectionReady = true;
+					this.syncAutofetch();
+				}).catch(error => this.logService.error('git', 'Unable to discover repositories', error));
+			}
 		});
 		this._register(toDisposable(() => connection.dispose()));
+		const connectionRevision = this.connectionRevision;
+		void options.appServerApi.getConnectionState().then(state => {
+			if (this.isDisposed || connectionRevision !== this.connectionRevision) return;
+			this.connectionReady = state === 'ready';
+			this.syncAutofetch();
+		}).catch(error => this.logService.error('git', 'Unable to read App Server connection state', error));
+		this._register(this.configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(GitConfiguration.autofetch) || event.affectsConfiguration(GitConfiguration.autofetchPeriod)) this.syncAutofetch();
+		}));
 		this._register(options.workspaceContext.onDidChangeWorkspace(({ workspace }) => {
 			this.clearRepositories();
-			if (workspace.folders.length > 0) void this.refreshRepositories().catch(() => undefined);
+			this.syncAutofetch();
+			if (workspace.folders.length > 0) void this.refreshRepositories().catch(error => this.logService.error('git', 'Unable to discover repositories', error));
 		}));
 	}
 
@@ -172,7 +205,7 @@ export class GitService extends Disposable implements IGitService {
 
 	async fetch(repositoryId?: string): Promise<GitStatus> {
 		const repository = await this.requireRepository(repositoryId);
-		return toGitStatus((await this.api.fetch({ repositoryId: repository.id })).status, repository);
+		return toGitStatus((await this.api.fetch({ repositoryId: repository.id, mode: 'all' })).status, repository);
 	}
 
 	async pull(repositoryId?: string): Promise<GitStatus> {
@@ -190,6 +223,27 @@ export class GitService extends Disposable implements IGitService {
 		if (status.repositoryId === this.activeRepositoryId) this._onDidChangeStatus.fire(status);
 	}
 
+	private syncAutofetch(): void {
+		let mode: GitFetchModeDto | undefined;
+		if (this.connectionReady && this.hasWorkspaceFolder()) {
+			const setting = this.configurationService.getValue<GitAutofetch>(GitConfiguration.autofetch);
+			if (setting === true) mode = 'default';
+			if (setting === 'all') mode = 'all';
+		}
+		const period = this.configurationService.getValue<number>(GitConfiguration.autofetchPeriod);
+		const repositories = new Map(this.repositoryList.map(repository => [repository.id, repository]));
+		for (const [id, fetcher] of this.autofetchers) {
+			const repository = repositories.get(id);
+			if (!repository || !fetcher.matches(repository)) this.autofetchers.deleteAndDispose(id);
+		}
+		for (const repository of this.repositoryList) {
+			let fetcher = this.autofetchers.get(repository.id);
+			if (!fetcher && mode === undefined) continue;
+			if (!fetcher) fetcher = this.autofetchers.set(repository.id, new RepositoryAutoFetcher(repository, this.api, status => this.acceptStatus(status), this.logService));
+			fetcher.configure(mode, period);
+		}
+	}
+
 	private async requireRepository(repositoryId?: string): Promise<GitRepository> {
 		this.requireWorkspaceFolders();
 		if (this.repositoryList.length === 0) await this.refreshRepositories();
@@ -204,7 +258,7 @@ export class GitService extends Disposable implements IGitService {
 		const generation = this.discoveryGeneration;
 		const workspaceFolders = this.requireWorkspaceFolders();
 		const request = this.api.repositories().then(result => {
-			if (generation !== this.discoveryGeneration) return this.repositoryList;
+			if (this.isDisposed || generation !== this.discoveryGeneration) return this.repositoryList;
 			const repositories = Object.freeze(result.repositories.map(repository => toGitRepository(repository, workspaceFolders)));
 			const previousActiveId = this.activeRepositoryId;
 			const previousSignature = repositorySignature(this.repositoryList);
@@ -213,6 +267,7 @@ export class GitService extends Disposable implements IGitService {
 			if (repositorySignature(repositories) !== previousSignature) this._onDidChangeRepositories.fire(repositories);
 			if (this.activeRepositoryId !== previousActiveId) this._onDidChangeActiveRepository.fire(this.activeRepository);
 			this._onDidBecomeReady.fire();
+			this.syncAutofetch();
 			return repositories;
 		}).finally(() => {
 			if (this.discovery === request) this.discovery = undefined;
@@ -241,6 +296,74 @@ export class GitService extends Disposable implements IGitService {
 		const folders = this.options.workspaceContext.getWorkspace().folders;
 		if (folders.length === 0) throw new Error("GitUnavailable: Git requires at least one workspace folder");
 		return folders;
+	}
+}
+
+class RepositoryAutoFetcher extends AbstractDisposable {
+	private mode: GitFetchModeDto | undefined;
+	private period = 0;
+	private timer: ReturnType<typeof setTimeout> | undefined;
+	private running = false;
+	private revision = 0;
+
+	constructor(
+		private readonly repository: GitRepository,
+		private readonly api: IGitApi,
+		private readonly acceptStatus: (status: GitStatus) => void,
+		private readonly logService: ILogService,
+	) {
+		super();
+	}
+
+	public matches(repository: GitRepository): boolean {
+		return repository.id === this.repository.id
+			&& repository.label === this.repository.label
+			&& repository.path === this.repository.path
+			&& repository.root.toString() === this.repository.root.toString();
+	}
+
+	public configure(mode: GitFetchModeDto | undefined, period: number): void {
+		if (this.mode === mode && this.period === period) return;
+		this.mode = mode;
+		this.period = period;
+		this.revision += 1;
+		this.clearTimer();
+		if (!this.running && mode !== undefined) this.schedule(0);
+	}
+
+	protected override disposeCore(): void {
+		this.mode = undefined;
+		this.revision += 1;
+		this.clearTimer();
+	}
+
+	private schedule(delay: number): void {
+		if (this.isDisposed || this.mode === undefined) return;
+		this.timer = setTimeout(() => {
+			this.timer = undefined;
+			void this.run();
+		}, delay);
+	}
+
+	private async run(): Promise<void> {
+		const mode = this.mode;
+		if (this.isDisposed || mode === undefined) return;
+		this.running = true;
+		const revision = this.revision;
+		try {
+			const result = await this.api.fetch({ repositoryId: this.repository.id, mode });
+			if (!this.isDisposed && revision === this.revision) this.acceptStatus(toGitStatus(result.status, this.repository));
+		} catch (error) {
+			if (!this.isDisposed && revision === this.revision) this.logService.error('git', `Automatic fetch failed for ${this.repository.label}`, error);
+		} finally {
+			this.running = false;
+			if (!this.isDisposed && this.mode !== undefined) this.schedule(revision === this.revision ? this.period * 1000 : 0);
+		}
+	}
+
+	private clearTimer(): void {
+		if (this.timer !== undefined) clearTimeout(this.timer);
+		this.timer = undefined;
 	}
 }
 

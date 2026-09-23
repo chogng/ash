@@ -147,6 +147,7 @@ import type { GitCommitFileParams } from './types/GitCommitFileParams.js';
 import type { GitCommitFileResult } from './types/GitCommitFileResult.js';
 import type { GitCommitParams } from './types/GitCommitParams.js';
 import type { GitCommitResult } from './types/GitCommitResult.js';
+import type { GitFetchParams } from './types/GitFetchParams.js';
 import type { GitGraphParams } from './types/GitGraphParams.js';
 import type { GitGraphResult } from './types/GitGraphResult.js';
 import type { GitHistoryResult } from './types/GitHistoryResult.js';
@@ -629,7 +630,7 @@ export interface AppServerRequestMap {
   "git/unstage": { params: GitPathsParams; response: GitOperationResult };
   "git/discardWorktree": { params: GitPathsParams; response: GitOperationResult };
   "git/commit": { params: GitCommitParams; response: GitCommitResult };
-  "git/fetch": { params: GitRepositoryParams; response: GitOperationResult };
+  "git/fetch": { params: GitFetchParams; response: GitOperationResult };
   "git/pull": { params: GitRepositoryParams; response: GitOperationResult };
   "git/push": { params: GitRepositoryParams; response: GitOperationResult };
   "grep/search/start": { params: ContentSearchStartParams; response: ContentSearchStartResult };

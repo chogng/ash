@@ -50,6 +50,7 @@ enum GitPathMutation {
 
 #[derive(Clone, Copy)]
 enum GitRemoteMutation {
+    FetchDefault,
     Fetch,
     PullFastForward,
     Push,
@@ -372,6 +373,12 @@ impl GitService {
         self.mutate_remote(GitRemoteMutation::Fetch)
     }
 
+    pub(crate) fn fetch_default(
+        &self,
+    ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
+        self.mutate_remote(GitRemoteMutation::FetchDefault)
+    }
+
     pub(crate) fn pull_fast_forward(
         &self,
     ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
@@ -418,6 +425,7 @@ impl GitService {
         runtime.block_on(async {
             let repository = self.open_repository().await?;
             match operation {
+                GitRemoteMutation::FetchDefault => self.client.fetch_default(&repository).await,
                 GitRemoteMutation::Fetch => self.client.fetch(&repository).await,
                 GitRemoteMutation::PullFastForward => {
                     self.client.pull_fast_forward(&repository).await

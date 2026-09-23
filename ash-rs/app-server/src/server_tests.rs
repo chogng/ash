@@ -5688,7 +5688,7 @@ fn git_remote_rpcs_fetch_pull_and_push_against_a_local_bare_remote() {
     let fetched = call(
         &server,
         &mut connection,
-        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"git/fetch","params":{}}),
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"git/fetch","params":{"mode":"default"}}),
     );
     assert!(fetched.get("error").is_none(), "{fetched}");
     let pulled = call(

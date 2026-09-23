@@ -26,7 +26,7 @@ export interface INumberConfigurationSettingSchema extends IConfigurationSetting
 	readonly maximum: number;
 }
 
-export interface ISelectConfigurationSettingSchema<T extends string = string> extends IConfigurationSettingSchemaBase {
+export interface ISelectConfigurationSettingSchema<T extends string | boolean = string> extends IConfigurationSettingSchemaBase {
 	readonly valueType: 'select';
 	readonly options: readonly { readonly value: T; readonly label: string }[];
 }
@@ -42,6 +42,7 @@ export type ConfigurationSettingSchemaFor<T> =
 	[T] extends [boolean] ? IBooleanConfigurationSettingSchema
 		: [T] extends [number] ? INumberConfigurationSettingSchema
 			: [T] extends [string] ? ISelectConfigurationSettingSchema<T & string> | ITextConfigurationSettingSchema
+				: [T] extends [string | boolean] ? ISelectConfigurationSettingSchema<T & (string | boolean)>
 				: never;
 
 export interface IRegisteredConfiguration<T = unknown> {

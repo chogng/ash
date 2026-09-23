@@ -364,13 +364,13 @@ class NumberSettingWidget extends AbstractSettingWidget<INumberSetting, number> 
 	}
 }
 
-class SelectSettingWidget extends AbstractSettingWidget<ISelectSetting, string> {
+class SelectSettingWidget extends AbstractSettingWidget<ISelectSetting, string | boolean> {
 	private readonly select: SelectBox;
 
 	constructor(container: HTMLElement, descriptor: ISelectSetting, options: SettingWidgetOptions) {
 		super(container, descriptor, configurationSettingBinding(options.configurationService, descriptor.configuration), options, 'select');
 		this.select = this._register(new SelectBox(this.domNode, {
-			options: descriptor.options,
+			options: descriptor.options.map(option => ({ value: String(option.value), label: option.label })),
 			ariaLabel: descriptor.title,
 			presentation: 'field',
 			contextViewProvider: options.contextViewProvider,
@@ -379,18 +379,22 @@ class SelectSettingWidget extends AbstractSettingWidget<ISelectSetting, string> 
 		this.select.element.dataset.configurationKey = descriptor.id;
 		this.domNode.append(this.copyDomNode, this.select.element);
 		this.bindState(state => this.renderState(state));
-		this._register(this.select.onDidSelect(({ value }) => void this.updateSetting(value)));
+		this._register(this.select.onDidSelect(({ value }) => {
+			const option = this.descriptor.options.find(candidate => String(candidate.value) === value);
+			if (option) void this.updateSetting(option.value);
+		}));
 	}
 
 	protected updateControl(descriptor: ISelectSetting): void {
 		this.select.setAriaLabel(descriptor.title);
-		if (sameSelectOptions(this.select.options, descriptor.options)) return;
-		this.select.setOptions(descriptor.options);
+		const options = descriptor.options.map(option => ({ value: String(option.value), label: option.label }));
+		if (sameSelectOptions(this.select.options, options)) return;
+		this.select.setOptions(options);
 		this.renderState(this.model.state);
 	}
 
-	private renderState(state: SettingState<string>): void {
-		this.select.value = state.value;
+	private renderState(state: SettingState<string | boolean>): void {
+		this.select.value = String(state.value);
 		this.select.enabled = !state.isPending;
 	}
 }

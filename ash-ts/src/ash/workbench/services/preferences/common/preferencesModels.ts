@@ -134,7 +134,7 @@ function registeredSetting(configuration: IRegisteredConfiguration, schema: ICon
 			return {
 				...base,
 				valueType: 'select',
-				configuration: configuration as IRegisteredConfiguration<string>,
+				configuration: configuration as IRegisteredConfiguration<string | boolean>,
 				get options() { return schema.options; },
 			};
 		case 'text':

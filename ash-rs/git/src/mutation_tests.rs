@@ -109,6 +109,53 @@ async fn fetches_fast_forward_pulls_and_pushes_against_a_local_remote() {
 }
 
 #[tokio::test]
+async fn default_fetch_updates_only_the_tracked_remote_and_never_changes_the_worktree() {
+    let origin = TestBareRepository::init();
+    let mirror = TestBareRepository::init();
+    let seed = TestRepository::clone_from(origin.root());
+    seed.write("shared.txt", "initial\n");
+    seed.commit_all("initial");
+    seed.git(&["push", "--set-upstream", "origin", "main"]);
+    seed.git(&["remote", "add", "mirror", mirror.root().to_str().unwrap()]);
+    seed.git(&["push", "mirror", "main"]);
+
+    let target = TestRepository::clone_from(origin.root());
+    target.git(&["remote", "add", "mirror", mirror.root().to_str().unwrap()]);
+    target.git(&["fetch", "mirror"]);
+    let initial_head = target.git(&["rev-parse", "HEAD"]);
+    let origin_peer = TestRepository::clone_from(origin.root());
+    origin_peer.write("shared.txt", "origin update\n");
+    origin_peer.commit_all("origin update");
+    origin_peer.git(&["push", "origin", "main"]);
+    let mirror_peer = TestRepository::clone_from(mirror.root());
+    mirror_peer.write("shared.txt", "mirror update\n");
+    mirror_peer.commit_all("mirror update");
+    mirror_peer.git(&["push", "origin", "main"]);
+
+    let client = GitClient::system();
+    let repository = client.open_repository(target.root()).await.unwrap();
+    client.fetch_default(&repository).await.unwrap();
+    assert_eq!(
+        target.git(&["rev-parse", "refs/remotes/origin/main"]),
+        origin_peer.git(&["rev-parse", "HEAD"])
+    );
+    assert_eq!(
+        target.git(&["rev-parse", "refs/remotes/mirror/main"]),
+        initial_head
+    );
+    assert_eq!(target.git(&["rev-parse", "HEAD"]), initial_head);
+    assert_eq!(target.read("shared.txt"), "initial\n");
+
+    client.fetch(&repository).await.unwrap();
+    assert_eq!(
+        target.git(&["rev-parse", "refs/remotes/mirror/main"]),
+        mirror_peer.git(&["rev-parse", "HEAD"])
+    );
+    assert_eq!(target.git(&["rev-parse", "HEAD"]), initial_head);
+    assert_eq!(target.read("shared.txt"), "initial\n");
+}
+
+#[tokio::test]
 async fn switches_to_a_listed_local_branch() {
     let repository = TestRepository::init();
     repository.write("tracked.txt", "main\n");

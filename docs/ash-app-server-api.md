@@ -321,7 +321,7 @@ Desktop 当前实现和 Playwright 后续边界见
 | `git/unstage` | repository | 从 index 移除一组 repository-relative path 的 staged change |
 | `git/discardWorktree` | repository | 恢复 tracked working-tree change，不删除 untracked 文件 |
 | `git/commit` | repository | 使用有界非空 message 创建 commit |
-| `git/fetch` | repository | non-interactive fetch all remotes 并 prune |
+| `git/fetch` | repository、可选 `mode: "default" | "all"` | non-interactive fetch 并 prune；省略 mode 时获取全部 remotes |
 | `git/pull` | repository | non-interactive fast-forward-only pull |
 | `git/push` | repository | 按当前 Git upstream/default 配置 push |
 | `grep/search/start` | connection + directory | 启动有界内容搜索 |
@@ -545,7 +545,7 @@ traversal 启动单个 bounded `git log --all --topo-order` 进程，并只在�
 （`provider`、`host`、`owner`、`repository`）。返回 `hasMore` 和继续请求所需的 `nextCursor`；状态
 变化、mutation 或连接关闭会使游标失效。symbolic remote refs（例如 `origin/HEAD`）不会作为 branch
 ref 返回。协议不暴露 raw remote URL、token 或本地 `gh` 登录配置；因此该方法表示 local Git
-repository snapshot，不是 GitHub API、PR、Checks 或 review 查询，也不会自动 fetch。Desktop SCM
+repository snapshot，不是 GitHub API、PR、Checks 或 review 查询。Desktop Workbench 可在用户设置中开启自动 fetch；Desktop SCM
 负责自动消费后续页并合并全部 commit；它可据此显示不同 graph lane 颜色、local/remote ref labels
 和 GitHub repository 摘要。
 

@@ -360,6 +360,8 @@ export type { GitCommitParams } from './GitCommitParams.js';
 export type { GitCommitResult } from './GitCommitResult.js';
 export type { GitCommitSummaryDto } from './GitCommitSummaryDto.js';
 export type { GitDiffStatisticsDto } from './GitDiffStatisticsDto.js';
+export type { GitFetchModeDto } from './GitFetchModeDto.js';
+export type { GitFetchParams } from './GitFetchParams.js';
 export type { GitGraphParams } from './GitGraphParams.js';
 export type { GitGraphResult } from './GitGraphResult.js';
 export type { GitHeadDto } from './GitHeadDto.js';

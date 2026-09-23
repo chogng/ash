@@ -187,6 +187,14 @@ impl GitClient {
         Ok(GitCommitResult { object_id })
     }
 
+    /// Fetches the current branch's default remote without interactive credential prompts.
+    pub async fn fetch_default(&self, repository: &GitRepository) -> GitResult<()> {
+        self.run_mutation(repository.worktree_root(), ["fetch", "--prune"])
+            .await?
+            .require_success()?;
+        Ok(())
+    }
+
     /// Fetches and prunes every configured remote without interactive credential prompts.
     pub async fn fetch(&self, repository: &GitRepository) -> GitResult<()> {
         self.run_mutation(repository.worktree_root(), ["fetch", "--all", "--prune"])

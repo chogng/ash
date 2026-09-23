@@ -12,6 +12,7 @@ use ash_app_server_protocol::protocol::git::GitCommitFileContentDto;
 use ash_app_server_protocol::protocol::git::GitCommitFileResult;
 use ash_app_server_protocol::protocol::git::GitCommitSummaryDto;
 use ash_app_server_protocol::protocol::git::GitDiffStatisticsDto;
+use ash_app_server_protocol::protocol::git::GitFetchModeDto;
 use ash_app_server_protocol::protocol::git::GitGraphResult;
 use ash_app_server_protocol::protocol::git::GitHeadDto;
 use ash_app_server_protocol::protocol::git::GitReferenceDto;
@@ -388,12 +389,16 @@ impl GitRuntime {
     pub(super) fn fetch_for(
         &self,
         repository_id: Option<&str>,
+        mode: GitFetchModeDto,
     ) -> Result<GitStatusResult, GitRuntimeError> {
-        self.repository(repository_id)?.fetch()
+        match mode {
+            GitFetchModeDto::Default => self.repository(repository_id)?.fetch_default(),
+            GitFetchModeDto::All => self.repository(repository_id)?.fetch(),
+        }
     }
 
     pub(super) fn fetch(&self) -> Result<GitStatusResult, GitRuntimeError> {
-        self.fetch_for(None)
+        self.fetch_for(None, GitFetchModeDto::All)
     }
 
     pub(super) fn pull_fast_forward_for(
@@ -765,6 +770,10 @@ impl GitRepositoryRuntime {
 
     pub(super) fn fetch(&self) -> Result<GitStatusResult, GitRuntimeError> {
         self.mutate_remote(GitService::fetch)
+    }
+
+    pub(super) fn fetch_default(&self) -> Result<GitStatusResult, GitRuntimeError> {
+        self.mutate_remote(GitService::fetch_default)
     }
 
     pub(super) fn pull_fast_forward(&self) -> Result<GitStatusResult, GitRuntimeError> {

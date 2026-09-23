@@ -54,6 +54,7 @@ const { WorkbenchThemesRegistry } = await import('../../../../../workbench/commo
 const { EditorSelectionConfiguration } = await import('../../../../../workbench/common/editorSelectionConfiguration.js');
 const { CodeEditorConfiguration } = await import('../../../../../workbench/contrib/codeEditor/common/editorConfiguration.js');
 const { ContentSearchConfiguration } = await import('../../../../../workbench/contrib/search/common/searchConfiguration.js');
+const { GitConfiguration } = await import('../../../../../workbench/services/git/common/gitConfiguration.js');
 const configurationRegistry = Registry.as<InstanceType<typeof ConfigurationRegistry>>(ConfigurationExtensions.Configuration);
 const { EditorPart } = await import('../../../../../workbench/browser/parts/editor/editorPart.js');
 const { EditorPaneMatch } = await import('../../../../../workbench/browser/parts/editor/editorPane.js');
@@ -131,6 +132,12 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, EditorSelectionConfiguration.defaultNewDocumentEditor), 'editor');
 	assert.equal(findSettingCategory(layout, CodeEditorConfiguration.fontFamily), 'editor');
 	assert.equal(findSettingCategory(layout, ContentSearchConfiguration.maxResults), 'editor');
+	assert.equal(findSettingCategory(layout, GitConfiguration.autofetch), 'general');
+	const autofetchSetting = defaults.get(GitConfiguration.autofetch);
+	assert.equal(autofetchSetting.valueType, 'select');
+	if (autofetchSetting.valueType === 'select') assert.deepEqual(autofetchSetting.options.map(option => option.value), [false, true, 'all']);
+	assert.equal(configurationRegistry.getConfiguration(GitConfiguration.autofetch)?.defaultValue, false);
+	assert.equal(configurationRegistry.getConfiguration(GitConfiguration.autofetchPeriod)?.defaultValue, 180);
 	assert.equal(defaults.all.every(setting => ['boolean', 'number', 'select', 'text'].includes(setting.valueType)), true);
 	const themeSetting = defaults.get(WorkbenchConfiguration.colorTheme);
 	assert.equal(themeSetting.valueType, 'select');
@@ -327,6 +334,20 @@ test('PreferencesEditor renders and updates registry-backed settings only', asyn
 	assert.equal(root.querySelector('[data-settings-category-id="models"]'), null);
 	assert.ok(root.querySelector(`[data-settings-item-id="${AccessibilityConfiguration.underlineLinks}"]`));
 	assert.ok(root.querySelector(`[data-settings-item-id="${HoverConfiguration.delay}"]`));
+	const autofetchControl = root.querySelector<HTMLElement>(`[data-configuration-key="${GitConfiguration.autofetch}"]`);
+	assert.ok(autofetchControl);
+	const autofetchButton = autofetchControl.querySelector<HTMLButtonElement>('[role="combobox"]');
+	assert.equal(autofetchButton?.getAttribute('aria-label'), 'Auto Fetch');
+	const autofetchListId = autofetchButton?.getAttribute('aria-controls');
+	assert.ok(autofetchListId);
+	autofetchButton?.click();
+	ownerDocument.getElementById(autofetchListId)?.querySelectorAll<HTMLElement>('[role="option"]')[1]?.click();
+	await nextTurn();
+	assert.equal(configuration.getValue(GitConfiguration.autofetch), true);
+	autofetchButton?.click();
+	ownerDocument.getElementById(autofetchListId)?.querySelectorAll<HTMLElement>('[role="option"]')[2]?.click();
+	await nextTurn();
+	assert.equal(configuration.getValue(GitConfiguration.autofetch), 'all');
 
 	const underline = root.querySelector<HTMLInputElement>(`[data-configuration-key="${AccessibilityConfiguration.underlineLinks}"]`);
 	assert.ok(underline);

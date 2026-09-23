@@ -7720,7 +7720,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/GitRepositoryParams"
+              "$ref": "#/$defs/GitFetchParams"
             }
           },
           "required": [
@@ -18672,6 +18672,36 @@
         "additions",
         "deletions"
       ],
+      "type": "object"
+    },
+    "GitFetchModeDto": {
+      "description": "Remote selection for a Git fetch operation.",
+      "enum": [
+        "default",
+        "all"
+      ],
+      "type": "string"
+    },
+    "GitFetchParams": {
+      "description": "Selects a repository and the remotes to fetch.",
+      "properties": {
+        "mode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GitFetchModeDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "repositoryId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
       "type": "object"
     },
     "GitGraphParams": {

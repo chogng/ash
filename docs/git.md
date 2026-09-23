@@ -43,7 +43,8 @@ Git 查询和修改使用不同 capability：
 | 暂存或取消暂存 | 使用明确的 `repositoryId` 与仓库相对路径 | 不能越过对应目录 Grant |
 | 丢弃更改 | 只恢复已跟踪文件，并在界面确认 | 不删除未跟踪文件 |
 | 切换本地分支 | Native 点击底栏当前分支，在菜单中选择另一个本地分支；请求通过 App Server | 冲突时 Git 拒绝切换并保留当前工作树 |
-| 查看 history graph | SCM Graph 以 `limit`/`cursor` 分页读取 `git/graph`，自动连续合并全部页面，按 lane 分配颜色并显示 local/remote refs；列表本身按视口虚拟化；history item 可展开 `git/commitChanges` 文件列表，点击文本文件再按需读取 `git/commitFile` 并挂到 Editor | 只包含本地已存在的 refs；不会自动 fetch；binary 或超限文件不作为文本 editor 打开 |
+| 查看 history graph | SCM Graph 以 `limit`/`cursor` 分页读取 `git/graph`，自动连续合并全部页面，按 lane 分配颜色并显示 local/remote refs；列表本身按视口虚拟化；history item 可展开 `git/commitChanges` 文件列表，点击文本文件再按需读取 `git/commitFile` 并挂到 Editor | 只包含本地已存在的 refs；自动 fetch 需主动开启；binary 或超限文件不作为文本 editor 打开 |
+| 自动获取远端更新 | Desktop Workbench 的 `git.autofetch` 默认为 `false`；`true` 获取默认远端，`"all"` 获取全部远端；`git.autofetchPeriod` 默认 180 秒 | 用户设置统一决定是否启用，不提供仓库级覆盖；各仓库独立定时获取，慢速远端不会阻塞其他仓库；只更新远端引用，不执行 pull |
 | 拉取远端 | 只允许 fast-forward | 需要交互认证时失败 |
 | 提交和推送 | 使用系统 Git 的当前仓库配置 | 尚无凭据提示和进度 UI |
 
@@ -117,7 +118,7 @@ tree 指纹。事务 journal 位于 Git common directory，进程重启后可以
   traversal；游标启动时读取一次 local/remote refs 和 configured remote identity，并通过 `hasMore` 与
   `nextCursor` 表示是否还有下一页。remote identity 只保留 provider、host、owner、repository，原始
   URL、token 和 `gh` 登录配置不会进入协议；状态变化、mutation 或连接关闭会使游标失效；
-- `git/fetch` 执行 all-remotes prune，`git/pull` 仅允许 fast-forward，`git/push` 使用 Git 当前
+- `git/fetch` 接受 `mode: "default" | "all"`；省略时沿用 all-remotes prune，默认远端模式执行 `git fetch --prune`。手动 Fetch 仍获取全部远端。`git/pull` 仅允许 fast-forward，`git/push` 使用 Git 当前
   upstream/default 配置；所有 remote operation 都是 non-interactive；
 - 每个成功 mutation 都返回新的 `GitStatusResult`，Desktop 立即重绘；首次打开 View 也会自动刷新；
 - App Server 监听已授权目录、Git metadata 和目录上层 repository `.gitignore`，以 100ms

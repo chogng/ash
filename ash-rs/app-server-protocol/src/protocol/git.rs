@@ -13,6 +13,27 @@ pub struct GitRepositoryParams {
     pub repository_id: Option<String>,
 }
 
+/// Remote selection for a Git fetch operation.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum GitFetchModeDto {
+    Default,
+    #[default]
+    All,
+}
+
+/// Selects a repository and the remotes to fetch.
+#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitFetchParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub repository_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub mode: Option<GitFetchModeDto>,
+}
+
 /// Stable, directory-relative identity for one discovered Git repository projection.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

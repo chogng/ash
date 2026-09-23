@@ -202,7 +202,7 @@ Git revision 或复制统计规则。
 
 `unstage` 在 unborn repository 使用 `git rm --cached`，其他情况使用 `git restore --staged`。
 `discard_worktree` 只恢复 tracked path，不删除 untracked 内容。`commit` 从 stdin 读取 message，
-成功后返回 HEAD object ID。Remote mutation non-interactive；`fetch` 为 all-remotes prune，
+成功后返回 HEAD object ID。Remote mutation non-interactive；`fetch_default` 获取默认远端并 prune，`fetch` 获取全部远端并 prune，
 `pull_fast_forward` 明确使用 `--ff-only`，`push` 使用 repository 当前 upstream/default。
 
 ## 补丁契约

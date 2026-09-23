@@ -12,6 +12,8 @@ use ash_app_server_protocol::protocol::git::GitCommitChangesParams;
 use ash_app_server_protocol::protocol::git::GitCommitFileParams;
 use ash_app_server_protocol::protocol::git::GitCommitParams;
 use ash_app_server_protocol::protocol::git::GitCommitResult as GitCommitResultDto;
+use ash_app_server_protocol::protocol::git::GitFetchModeDto;
+use ash_app_server_protocol::protocol::git::GitFetchParams;
 use ash_app_server_protocol::protocol::git::GitGraphParams;
 use ash_app_server_protocol::protocol::git::GitHistoryResult;
 use ash_app_server_protocol::protocol::git::GitOperationResult;
@@ -182,10 +184,13 @@ impl AppServer {
     }
 
     pub(super) fn git_fetch(&self, value: &Value) -> Result<Value, RpcError> {
-        let params: GitRepositoryParams = decode(value)?;
+        let params: GitFetchParams = decode(value)?;
         let status = self
             .git_runtime_service()?
-            .fetch_for(params.repository_id.as_deref())
+            .fetch_for(
+                params.repository_id.as_deref(),
+                params.mode.unwrap_or(GitFetchModeDto::All),
+            )
             .map_err(git_error)?;
         result(&GitOperationResult { status })
     }

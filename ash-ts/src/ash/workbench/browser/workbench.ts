@@ -461,7 +461,7 @@ export class Workbench extends Disposable {
 		);
 		const terminalService = this._register(new TerminalService(api.terminal, workspaceContext));
 		services.registerInstance(ITerminalService, terminalService);
-		const gitService = this._register(new GitService({ api: api.git, appServerApi: api.appServer, eventApi: api.events, workspaceContext }));
+		const gitService = this._register(services.createInstance(GitService, { api: api.git, appServerApi: api.appServer, eventApi: api.events, workspaceContext }));
 		services.registerInstance(IGitService, gitService);
 		services.registerInstance(ICodebaseService, new AppServerCodebaseService(api.codebase));
 		services.registerInstance(IConnectorService, this._register(new AppServerConnectorService(api.connectors, api.events)));

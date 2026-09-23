@@ -643,6 +643,10 @@ use crate::protocol::git::GitCommitSummaryDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitDiffStatisticsDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitFetchModeDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitFetchParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitGraphParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitGraphResult;
@@ -3355,7 +3359,7 @@ client_methods! {
         serialization: GlobalExclusive,
     },
     GitFetch => "git/fetch" {
-        params: GitRepositoryParams,
+        params: GitFetchParams,
         response: GitOperationResult,
         serialization: GlobalExclusive,
     },
@@ -4651,6 +4655,8 @@ typescript_bindings! {
     GitHeadDto,
     GitSubmoduleStateDto,
     GitRepositoryParams,
+    GitFetchModeDto,
+    GitFetchParams,
     GitRepositoryDto,
     GitRepositoriesResult,
     GitRepositoryChangeDto,

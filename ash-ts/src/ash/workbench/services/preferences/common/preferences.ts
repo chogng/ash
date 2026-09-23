@@ -45,7 +45,7 @@ export interface INumberSetting extends ISettingBase {
 
 export interface ISelectSetting extends ISettingBase {
 	readonly valueType: 'select';
-	readonly configuration: IRegisteredConfiguration<string>;
+	readonly configuration: IRegisteredConfiguration<string | boolean>;
 	readonly options: readonly ISelectSettingOption[];
 }
 
@@ -58,7 +58,7 @@ export interface ITextSetting extends ISettingBase {
 export type ISetting = IBooleanSetting | INumberSetting | ISelectSetting | ITextSetting;
 
 export interface ISelectSettingOption {
-	readonly value: string;
+	readonly value: string | boolean;
 	readonly label: string;
 }
 
