@@ -52,7 +52,7 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
     pub fn prepare_feedback(
         &mut self,
         params: FeedbackPrepareParams,
-    ) -> Result<feedback::PreparedFeedback, ClientError> {
+    ) -> Result<feedback_contract::PreparedFeedback, ClientError> {
         self.call(ClientMethod::FeedbackPrepare, params)
     }
     /// The caller obtains explicit user approval of the prepared bytes and destination first.

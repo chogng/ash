@@ -29,7 +29,7 @@ queue = { workspace = true }
 build-info = { workspace = true }
 analytics = { workspace = true }
 diagnostics = { workspace = true }
-feedback = { workspace = true }
+feedback-contract = { workspace = true }
 features = { workspace = true }
 ash-memory-diagnostics = { workspace = true }
 schemars = { workspace = true, optional = true }

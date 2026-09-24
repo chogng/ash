@@ -1823,7 +1823,7 @@ use features::FeatureStage;
 #[cfg(any(test, feature = "export"))]
 use features::FeatureState;
 #[cfg(any(test, feature = "export"))]
-use feedback::PreparedFeedback;
+use feedback_contract::PreparedFeedback;
 #[cfg(any(test, feature = "export"))]
 use queue::QueueInput;
 #[cfg(any(test, feature = "export"))]

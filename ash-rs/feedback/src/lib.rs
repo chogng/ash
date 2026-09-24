@@ -1,25 +1,13 @@
 //! Reviewable diagnostic bundles and explicit uploads of exactly the reviewed bytes.
 
 use diagnostics::DiagnosticSnapshot;
-use schemars::JsonSchema;
-use serde::Deserialize;
-use serde::Serialize;
+use feedback_contract::PreparedFeedback;
 use sha2::Digest;
 use sha2::Sha256;
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
-use ts_rs::TS;
-
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct PreparedFeedback {
-    pub digest: String,
-    pub endpoint: String,
-    /// Exact JSON bytes the user reviews and authorizes for this destination.
-    pub content: String,
-}
 
 struct Bundle {
     prepared: PreparedFeedback,

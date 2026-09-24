@@ -230,6 +230,8 @@ just bench-build ash-keybinding --jobs 4 --compare .build/build-health/<run>/rep
 
 同次实验没有采用全局 Profile 候选：`4 CGU + ThinLTO` 的单次冷构建约快 9%，但仅修改 CLI 入口后的 Release 重编译中位数从 6.50 秒增加到 159.24 秒；build-override O1 加六个宏相关包 O3 则使开发冷构建从约 313 秒增加到 341 秒，touch 重编译中位数只减少约 0.36 秒。默认参数保留，实际改进来自消除重复生成和实例化。
 
+2026-09-24 在 macOS aarch64、Rust 1.98.0、`dev` profile、六个 Cargo 任务和离线依赖缓存下，对 `ash-app-server-protocol` 各使用三个独立空目标目录测量。源码位于同一工作区，目标目录位于本机内置磁盘。协议包原先只为 `PreparedFeedback` 类型依赖整个反馈服务，使 HTTP/TLS 构建进入关键路径；把该类型移入独立的反馈契约包后，协议包不再编译 `ash-client`、`ash-http-client`、`reqwest` 和 `aws-lc-sys`。冷构建中位数从 89.55 秒降至 69.27 秒（减少 22.6%），其中原先单次 `aws-lc-sys` 构建步骤耗时 46.5 秒。无改动重跑中位数为 0.91→0.75 秒；在协议注册表文件末尾临时加入注释触发重编译的中位数为 3.87→4.05 秒，这项注释编辑仅验证增量失效范围，不代表实际功能编辑。`time` 报告的最大 RSS 为 1.33→1.36 GB，协议 `.rlib` 均约 52 MiB；一个测量目标目录从 1.81 降至 1.55 GiB。完整产品构建耗时未由这组包级测量推断。
+
 ## 构建源码与仓库脚本边界
 
 `build/` 按构建机制、交付物和平台划分。开发与正式发布共用这些职责目录；发布顺序、凭据注入和上传由 `.github/workflows/` 编排，不另设发布实现目录。

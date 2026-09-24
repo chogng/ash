@@ -21,6 +21,7 @@ members = [
     "ash-rs/diagnostics",
     "ash-rs/response-debug-context",
     "ash-rs/feedback",
+    "ash-rs/feedback-contract",
     "ash-rs/features",
     "ash-rs/config-schema",
     "ash-rs/process-hardening",
@@ -280,6 +281,7 @@ analytics = { package = "ash-analytics", path = "ash-rs/analytics" }
 response-debug-context = { package = "ash-response-debug-context", path = "ash-rs/response-debug-context" }
 diagnostics = { package = "ash-diagnostics", path = "ash-rs/diagnostics" }
 feedback = { package = "ash-feedback", path = "ash-rs/feedback" }
+feedback-contract = { package = "ash-feedback-contract", path = "ash-rs/feedback-contract" }
 features = { package = "ash-features", path = "ash-rs/features" }
 process-hardening = { package = "ash-process-hardening", path = "ash-rs/process-hardening" }
 build-info = { package = "ash-build-info", path = "ash-rs/build-info" }

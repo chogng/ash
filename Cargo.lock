@@ -689,7 +689,7 @@ dependencies = [
  "ash-core",
  "ash-core-api",
  "ash-diagnostics",
- "ash-feedback",
+ "ash-feedback-contract",
  "ash-memories",
  "ash-memory-diagnostics",
  "ash-protocol",
@@ -737,7 +737,7 @@ dependencies = [
  "ash-environment",
  "ash-extension-items",
  "ash-features",
- "ash-feedback",
+ "ash-feedback-contract",
  "ash-file-access",
  "ash-memories",
  "ash-memory-diagnostics",
@@ -1435,13 +1435,20 @@ dependencies = [
  "ash-async-utils",
  "ash-client",
  "ash-diagnostics",
+ "ash-feedback-contract",
  "ash-http-client",
- "schemars",
- "serde",
  "serde_json",
  "sha2 0.10.9",
- "ts-rs",
  "url",
+]
+
+[[package]]
+name = "ash-feedback-contract"
+version = "0.1.0"
+dependencies = [
+ "schemars",
+ "serde",
+ "ts-rs",
 ]
 
 [[package]]
