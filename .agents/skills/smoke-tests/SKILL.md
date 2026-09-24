@@ -1,6 +1,6 @@
 ---
 name: smoke-tests
-description: Use when running VS Code smoke tests or working on smoke-test CI steps. Covers npm run smoketest / smoketest-no-compile, grep filtering tests, and a temporary repeat-loop technique for tracking down flaky smoke tests in CI.
+description: Use when running Ash smoke tests or working on smoke-test CI steps. Covers npm run smoketest / smoketest-no-compile, grep filtering tests, and a temporary repeat-loop technique for tracking down flaky smoke tests in CI.
 ---
 
 # Running Smoke Tests
@@ -33,7 +33,7 @@ npm run smoketest
 npm run smoketest -- -g "<suite name>" --tracing
 
 # Run against a packaged build (CI style)
-npm run smoketest-no-compile -- --tracing --build "/path/to/VSCode-darwin-arm64/Code - OSS.app"
+npm run smoketest-no-compile -- --tracing --build "/path/to/Ash-darwin-arm64/Code - OSS.app"
 ```
 
 The `-g` pattern matches against test/suite titles. For example, `-g "Agents Window"` matches all three Agents Window suites (`Agents Window`, `Agents Window (local AgentHost)`, and `Agents Window (local AgentHost, SDK sandbox)`); use whatever substring identifies the suite(s) you care about.
@@ -117,7 +117,7 @@ gh run download <run-id>
 The artifact name depends on which pipeline produced it:
 
 - **Product build** (`product-build-<os>.yml`): `logs-<os>-<arch>-<attempt>` — no suite segment, e.g. `logs-macos-arm64-1`.
-- **Suite-split CI build** (`product-build-<os>-ci.yml`): `logs-<os>-<arch>-<suite>-<attempt>` — the `<suite>` segment is `lower(VSCODE_TEST_SUITE)` (e.g. `electron`), so e.g. `logs-macos-arm64-electron-1` (same shape as GitHub).
+- **Suite-split CI build** (`product-build-<os>-ci.yml`): `logs-<os>-<arch>-<suite>-<attempt>` — the `<suite>` segment is `lower(ASH_TEST_SUITE)` (e.g. `electron`), so e.g. `logs-macos-arm64-electron-1` (same shape as GitHub).
 
 `<os>` is `linux` / `macos` / `windows`, `<arch>` is `x64` / `arm64`, and `<attempt>` is `$(System.JobAttempt)`. Download with the Azure CLI:
 
