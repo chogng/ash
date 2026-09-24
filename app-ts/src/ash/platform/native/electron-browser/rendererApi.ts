@@ -45,7 +45,8 @@ export async function createElectronRendererApi(contributions: readonly Electron
 		connecting = reconnect();
 		void connecting.catch(error => console.error('App Server reconnect failed', error));
 	}));
-	const client = new AppServerProtocolClient(transport, { clientName: 'ash-desktop', capabilities: { ...(hostCapabilities.browser ? { browser: { version: 1, observe: true, input: true } } : {}), dirPermissionsHost: { version: 1 } } });
+	// Initialization includes the local daemon's cold start, which can take 15 seconds.
+	const client = new AppServerProtocolClient(transport, { clientName: 'ash-desktop', initializeTimeoutMs: 30_000, capabilities: { ...(hostCapabilities.browser ? { browser: { version: 1, observe: true, input: true } } : {}), dirPermissionsHost: { version: 1 } } });
 	resources.add(toDisposable(() => client.dispose()));
 	if (hostCapabilities.browser) { resources.add(registerAppServerBrowserHost(client)); }
 	resources.add(registerAppServerWorkspaceHost(client, () => connecting));

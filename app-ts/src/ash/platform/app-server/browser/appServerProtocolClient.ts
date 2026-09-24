@@ -27,6 +27,7 @@ export interface AppServerProtocolClientOptions {
 	readonly clientName?: string;
 	readonly clientVersion?: string;
 	readonly connectTimeoutMs?: number;
+	readonly initializeTimeoutMs?: number;
 	readonly requestTimeoutMs?: number;
 	readonly capabilities?: ClientCapabilities;
 }
@@ -68,6 +69,7 @@ export class AppServerProtocolClient {
 			clientName: options.clientName ?? "ash-web",
 			clientVersion: options.clientVersion ?? "0.1.0",
 			connectTimeoutMs: positiveInteger(options.connectTimeoutMs, DEFAULT_CONNECT_TIMEOUT, "connectTimeoutMs"),
+			initializeTimeoutMs: positiveInteger(options.initializeTimeoutMs, DEFAULT_CONNECT_TIMEOUT, "initializeTimeoutMs"),
 			requestTimeoutMs: positiveInteger(options.requestTimeoutMs, DEFAULT_REQUEST_TIMEOUT, "requestTimeoutMs"),
 			capabilities: { ...options.capabilities, notifications: true },
 		};
@@ -110,7 +112,7 @@ export class AppServerProtocolClient {
 			const initialized = await this.requestRaw(APP_SERVER_METHODS.initialize, {
 				clientInfo: { name: this.options.clientName, version: this.options.clientVersion },
 				capabilities: this.options.capabilities,
-			}, this.options.connectTimeoutMs);
+			}, this.options.initializeTimeoutMs);
 			const initialization = validateInitializeResult(initialized);
 			this._slashCommands = initialization.slashCommands;
 			this._capabilities = initialization.capabilities;

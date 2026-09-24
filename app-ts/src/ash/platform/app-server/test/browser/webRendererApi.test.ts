@@ -51,7 +51,7 @@ test('Web disposal cancels scheduled reconnect and revoked authorization is term
 });
 
 class FakeTransport implements AppServerTransport {
-	constructor(private readonly initialize: (value: InitializeResult) => unknown = value => value) {}
+	constructor(private readonly initialize: (value: InitializeResult) => unknown = value => value, private readonly initializeDelayMs = 0) {}
 	private readonly listeners = new Map<string, Set<(payload: unknown) => void>>();
 	readonly requests: Array<Record<string, unknown>> = [];
 	readonly sentEvents: string[] = [];
@@ -83,7 +83,7 @@ class FakeTransport implements AppServerTransport {
 		const request = JSON.parse(payload.frame) as Record<string, unknown>;
 		this.requests.push(request);
 		if (request.method === "initialize") {
-			this.respond(request, this.initialize({
+			const result = this.initialize({
 				serverInfo: { name: "ash-app-server", version: "0.1.0" },
 				protocolVersion: { major: APP_SERVER_PROTOCOL_MAJOR, revision: APP_SERVER_PROTOCOL_REVISION },
 				schemaHash: APP_SERVER_SCHEMA_HASH,
@@ -120,7 +120,12 @@ class FakeTransport implements AppServerTransport {
 					},
 				},
 				slashCommands: [],
-			} satisfies InitializeResult));
+			} satisfies InitializeResult);
+			if (this.initializeDelayMs > 0) {
+				setTimeout(() => this.respond(request, result), this.initializeDelayMs);
+			} else {
+				this.respond(request, result);
+			}
 		} else if (request.method === "env/dirs/set") {
 			this.respond(request, { dirs: [] });
 		} else if (request.method === "session/list") {
@@ -164,6 +169,15 @@ class FakeTransport implements AppServerTransport {
 		for (const listener of this.listeners.get(event) ?? []) listener(payload);
 	}
 }
+
+test('initialization can outlast bridge connection without timing out', async () => {
+	const transport = new FakeTransport(value => value, 20);
+	const client = new AppServerProtocolClient(transport, { connectTimeoutMs: 5, initializeTimeoutMs: 5_000 });
+	try {
+		await client.connect();
+		assert.equal(client.state, 'ready');
+	} finally { client.dispose(); }
+});
 
 test('a compatible newer schema initializes and decodes additive result fields', async () => {
 	const transport = new FakeTransport(value => ({

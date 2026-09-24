@@ -19,7 +19,7 @@ let restarting = false;
 let stopped = false;
 
 function launch(): void {
-  const child = spawn(executable, [sourceRoot, ...args], { cwd: sourceRoot, env: environment, stdio: 'inherit', windowsHide: true });
+  const child = spawn(executable, [sourceRoot, ...args], { cwd: sourceRoot, env: environment, stdio: 'inherit' });
   electron = child;
   child.once('error', error => { console.error(error); process.exitCode = 1; void stop(); });
   child.once('exit', code => {
