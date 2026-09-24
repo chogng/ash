@@ -31,6 +31,39 @@ ROOT = Path(__file__).resolve().parents[2]
 PROFILE = "dev-small"
 MANIFEST_NAME = re.compile(r"\d{20}\.json\Z")
 PACKAGE_DIRECTORY = re.compile(r"packages/[0-9A-Za-z][0-9A-Za-z.+-]*/[a-f0-9]{64}\Z")
+BUILD_ENVIRONMENT_VARIABLES = frozenset(
+    {
+        "AR",
+        "CC",
+        "CXX",
+        "CMAKE",
+        "CUDA_HOME",
+        "DOCS_RS",
+        "INCLUDE",
+        "LIB",
+        "LIBCLANG_PATH",
+        "LK_JETSON_MMAPI_DIR",
+        "VCPKG_ROOT",
+    }
+)
+BUILD_ENVIRONMENT_PREFIXES = (
+    "AR_",
+    "ASH_BUILD_",
+    "CARGO_",
+    "CC_",
+    "CFLAGS",
+    "CMAKE_",
+    "CXX_",
+    "CXXFLAGS",
+    "LDFLAGS",
+    "OPENSSL_",
+    "PKG_CONFIG_",
+    "RUST",
+    "V8_",
+    "VSCMD_",
+    "VSINSTALLDIR",
+)
+BUILD_TOOLS = ("cargo", "rustc", "cl", "link", "cc", "c++", "cmake")
 
 
 def parse_arguments(arguments: list[str] | None = None) -> argparse.Namespace:
@@ -106,6 +139,7 @@ def current_package(store: Path) -> Path:
 
 
 def package_input_digest(paths: list[Path], settings: dict) -> str:
+    """Fingerprint file metadata so the launch-time scan does not read source bodies."""
     entries = []
 
     def collect(path: Path) -> None:
@@ -132,7 +166,10 @@ def package_input_digest(paths: list[Path], settings: dict) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def reusable_package(cache_path: Path, digest: str, store: Path) -> Path | None:
+def reusable_package(
+    cache_path: Path, digest: str, store: Path, *, digest_key: str = "digest"
+) -> Path | None:
+    """Reuse only the package selected by the latest published manifest."""
     if not cache_path.is_file():
         return None
     try:
@@ -142,7 +179,7 @@ def reusable_package(cache_path: Path, digest: str, store: Path) -> Path | None:
         return None
     if (
         not isinstance(cached, dict)
-        or cached.get("digest") != digest
+        or cached.get(digest_key) != digest
         or cached.get("packageRoot") != str(package)
         or not (package / "ash-package.json").is_file()
     ):
@@ -150,11 +187,20 @@ def reusable_package(cache_path: Path, digest: str, store: Path) -> Path | None:
     return package
 
 
-def record_package_inputs(cache_path: Path, digest: str, package: Path) -> None:
+def record_package_inputs(
+    cache_path: Path, digest: str, source_digest: str, package: Path
+) -> None:
+    """Record both the pre-Cargo source key and the resolved package-input key."""
     temporary = cache_path.with_name(f"{cache_path.name}.partial-{uuid.uuid4()}")
     try:
         temporary.write_text(
-            json.dumps({"digest": digest, "packageRoot": str(package)}),
+            json.dumps(
+                {
+                    "digest": digest,
+                    "sourceDigest": source_digest,
+                    "packageRoot": str(package),
+                }
+            ),
             encoding="utf-8",
         )
         temporary.replace(cache_path)
@@ -179,7 +225,70 @@ def package_sources(root: Path) -> list[Path]:
     return sources
 
 
+def development_source_paths(root: Path) -> list[Path]:
+    """Collect Rust workspace and package resources that can invalidate a published package."""
+    return package_sources(root) + [
+        root / "ash-rs",
+        root / "app-rs",
+        root / "cli",
+        root / "code",
+        root / "build/code/update-sign",
+        root / "Cargo.lock",
+        root / ".cargo",
+        root / "rust-toolchain.toml",
+        root / "extensions",
+        root / "resources",
+        # Downloaded archives are pinned by tracked locks and are not source inputs.
+        *(path for path in (root / "third_party").iterdir() if path.name != ".cache"),
+    ]
+
+
+def development_build_environment() -> dict:
+    """Track output-affecting settings without invalidating on each shell's PATH."""
+    environment = {
+        name: value
+        for name, value in os.environ.items()
+        if name in BUILD_ENVIRONMENT_VARIABLES
+        or name.startswith(BUILD_ENVIRONMENT_PREFIXES)
+    }
+    environment["executables"] = {name: shutil.which(name) for name in BUILD_TOOLS}
+    return environment
+
+
+def development_source_digest(
+    root: Path, args: argparse.Namespace, target: str, protocol: dict
+) -> str:
+    """Fast-path key checked before Cargo and runtime archive resolution."""
+    paths = development_source_paths(root)
+    if args.remote_runtime_bundle:
+        paths.append(args.remote_runtime_bundle)
+    commit = None
+    if (root / ".git").exists():
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            commit = result.stdout.strip()
+    return package_input_digest(
+        paths,
+        {
+            "javascriptRuntime": args.javascript_runtime,
+            "target": target,
+            "protocol": protocol,
+            "remoteRuntimeCatalogUrl": args.remote_runtime_catalog_url,
+            "remoteRuntimeCatalogSha256": args.remote_runtime_catalog_sha256,
+            "gitCommit": commit,
+            "buildEnvironment": development_build_environment(),
+        },
+    )
+
+
 def publish_package(store: Path, package_store: Path, build) -> Path:
+    """Stage and publish a complete package through the shared package store."""
     store.mkdir(parents=True, exist_ok=True)
     staging = store / f".next-{uuid.uuid4()}"
     try:
@@ -216,10 +325,23 @@ def publish_package(store: Path, package_store: Path, build) -> Path:
 
 
 def prepare_development_package(args: argparse.Namespace, *, root: Path = ROOT) -> Path:
+    """Reuse a current package, then build and publish only when its inputs changed."""
     target = default_target()
     spec = TARGETS[target]
     protocol = load_protocol_metadata(root)
-    inputs = {
+    store = development_root(root, target, args.javascript_runtime)
+    cache_path = store / "prepare-inputs.json"
+    # This check avoids both Cargo and artifact resolution on an unchanged start.
+    source_digest = development_source_digest(root, args, target, protocol)
+    existing = reusable_package(
+        cache_path, source_digest, store, digest_key="sourceDigest"
+    )
+    if existing:
+        print(
+            f"Reused Ash development package ({args.javascript_runtime}) at {existing}"
+        )
+        return existing
+    requested_binaries = {
         "ash-package-store": None,
         "ash-app-server": None,
         "ash-remote": None,
@@ -231,11 +353,16 @@ def prepare_development_package(args: argparse.Namespace, *, root: Path = ROOT) 
         "ash-collaboration-server": None,
     }
     if spec.is_windows:
-        inputs["ash-windows-sandbox"] = None
+        requested_binaries["ash-windows-sandbox"] = None
     if spec.is_linux:
-        inputs["bwrap"] = None
+        requested_binaries["bwrap"] = None
     binaries = build_binaries(
-        root, spec, inputs, cargo="cargo", cargo_profile=PROFILE, host_build=True
+        root,
+        spec,
+        requested_binaries,
+        cargo="cargo",
+        cargo_profile=PROFILE,
+        host_build=True,
     )
     livekit = {"executable": str(resolve_livekit(target, root=root))}
     ripgrep = resolve_ripgrep(
@@ -278,8 +405,8 @@ def prepare_development_package(args: argparse.Namespace, *, root: Path = ROOT) 
         if args.remote_runtime_catalog_url
         else None
     )
-    store = development_root(root, target, args.javascript_runtime)
-    paths = package_sources(root) + [
+    # The second key checks the resolved binaries and locked runtime assets.
+    package_paths = package_sources(root) + [
         root / "ash-rs/app-server-protocol/schema/metadata.json",
         root / "ash-rs/skills/assets",
         root / "extensions",
@@ -291,18 +418,18 @@ def prepare_development_package(args: argparse.Namespace, *, root: Path = ROOT) 
         tgrep.executable,
     ]
     if node:
-        paths += [node.executable, node.license_file]
+        package_paths += [node.executable, node.license_file]
     if spec.is_windows:
-        paths += [
+        package_paths += [
             root / "ash-rs/windows-sandbox/LICENSE-APACHE",
             root / "ash-rs/windows-sandbox/NOTICE",
         ]
     if spec.is_linux:
-        paths += [root / "ash-rs/vendor/bubblewrap"]
+        package_paths += [root / "ash-rs/vendor/bubblewrap"]
     if args.remote_runtime_bundle:
-        paths += [args.remote_runtime_bundle]
-    digest = package_input_digest(
-        paths,
+        package_paths += [args.remote_runtime_bundle]
+    package_digest = package_input_digest(
+        package_paths,
         {
             "javascriptRuntime": args.javascript_runtime,
             "target": target,
@@ -313,9 +440,9 @@ def prepare_development_package(args: argparse.Namespace, *, root: Path = ROOT) 
             "remoteRuntimeRelease": remote_release,
         },
     )
-    cache_path = store / "prepare-inputs.json"
-    existing = reusable_package(cache_path, digest, store)
+    existing = reusable_package(cache_path, package_digest, store)
     if existing:
+        record_package_inputs(cache_path, package_digest, source_digest, existing)
         print(
             f"Reused Ash development package ({args.javascript_runtime}) at {existing}"
         )
@@ -348,7 +475,7 @@ def prepare_development_package(args: argparse.Namespace, *, root: Path = ROOT) 
         )
 
     package = publish_package(store, binaries["ash-package-store"], build)
-    record_package_inputs(cache_path, digest, package)
+    record_package_inputs(cache_path, package_digest, source_digest, package)
     print(f"Prepared Ash development package ({args.javascript_runtime}) at {package}")
     return package
 

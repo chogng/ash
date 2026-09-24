@@ -67,8 +67,14 @@ ripgrep 与平台 sandbox helper。编号清单选择当前包，进程租约保
 不再下载或复制 standalone Node；`dev:web:full` 使用 `packagedNode` variant，为后端能力提供独立 JavaScript runtime。
 开发态和发布态 Electron 都从相同的
 `<package>/bin/ash-app-server-daemon[.exe] connect` 入口连接共享 App Server，区别仅在编译 profile 和 package root。
-准备流程通过仓库锁定的 uv/Python 环境运行后端构建，前端脚本只读取已发布包的位置。`dev:desktop` 随后启动 Vite、主进程、预加载脚本和 Electron；`dev:web:full` 只启动
-Vite，并按浏览器连接管理 App Server。启动后不要关闭终端，停止服务可以按 `Ctrl+C`。
+`prepare:desktop` 并行执行原生模块重建、前端生成资源检查和 `prepare:backend`。
+`predev` 与 `predev:electron` 共用这个入口；`prestart` 先建立主进程输出目录，
+再执行同一组准备任务。`prepare:backend:web` 明确选择带 Node 的后端包，
+供完整 Browser 模式使用。后端包输入未变化时直接复用已发布包。
+
+前端脚本只读取已发布包的位置。`dev:desktop` 随后启动 Vite、主进程、
+预加载脚本和 Electron；`dev:web:full` 启动 Vite，并按浏览器连接管理
+App Server。启动后不要关闭终端，停止服务可以按 `Ctrl+C`。
 
 ### 开发态热更新
 

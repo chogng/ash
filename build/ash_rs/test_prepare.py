@@ -69,6 +69,88 @@ class PrepareTests(unittest.TestCase):
                 ),
             )
 
+    def test_development_source_digest_tracks_backend_and_resource_changes(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for directory in (
+                "ash-rs",
+                "app-rs",
+                "cli",
+                "code",
+                "build/code/update-sign",
+                ".cargo",
+                "extensions",
+                "resources",
+                "third_party",
+            ):
+                (root / directory).mkdir(parents=True)
+            (root / "Cargo.lock").write_text("lock")
+            (root / "rust-toolchain.toml").write_text("toolchain")
+            backend = root / "ash-rs/server.rs"
+            backend.write_text("first")
+            editor_backend = root / "app-rs/editor.rs"
+            editor_backend.write_text("first")
+            code_backend = root / "code/mermaid.rs"
+            code_backend.write_text("first")
+            resource = root / "resources/icon.svg"
+            resource.write_text("first")
+            args = prepare.parse_arguments([])
+            with patch.object(prepare, "package_sources", return_value=[]):
+                original = prepare.development_source_digest(root, args, "target", {})
+                backend.write_text("second content")
+                after_backend = prepare.development_source_digest(
+                    root, args, "target", {}
+                )
+                editor_backend.write_text("second content")
+                after_editor_backend = prepare.development_source_digest(
+                    root, args, "target", {}
+                )
+                code_backend.write_text("second content")
+                after_code_backend = prepare.development_source_digest(
+                    root, args, "target", {}
+                )
+                resource.write_text("second content")
+                after_resource = prepare.development_source_digest(
+                    root, args, "target", {}
+                )
+                (root / "Cargo.lock").write_text("updated lock")
+                after_lock = prepare.development_source_digest(root, args, "target", {})
+            self.assertNotEqual(original, after_backend)
+            self.assertNotEqual(after_backend, after_editor_backend)
+            self.assertNotEqual(after_editor_backend, after_code_backend)
+            self.assertNotEqual(after_code_backend, after_resource)
+            self.assertNotEqual(after_resource, after_lock)
+
+    def test_development_source_digest_ignores_unrelated_path_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for directory in (
+                "ash-rs",
+                "app-rs",
+                "cli",
+                "code",
+                "build/code/update-sign",
+                ".cargo",
+                "extensions",
+                "resources",
+                "third_party",
+            ):
+                (root / directory).mkdir(parents=True)
+            (root / "Cargo.lock").write_text("lock")
+            (root / "rust-toolchain.toml").write_text("toolchain")
+            args = prepare.parse_arguments([])
+            with (
+                patch.object(prepare, "package_sources", return_value=[]),
+                patch.object(prepare.shutil, "which", return_value="tool"),
+            ):
+                with patch.dict(prepare.os.environ, {"PATH": "first"}):
+                    first = prepare.development_source_digest(root, args, "target", {})
+                with patch.dict(prepare.os.environ, {"PATH": "second"}):
+                    second = prepare.development_source_digest(root, args, "target", {})
+            self.assertEqual(first, second)
+
     def test_reuse_requires_the_current_published_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             store = Path(temporary)
@@ -87,9 +169,20 @@ class PrepareTests(unittest.TestCase):
                 )
             )
             cache = store / "prepare-inputs.json"
-            prepare.record_package_inputs(cache, "digest", package)
+            prepare.record_package_inputs(cache, "digest", "source", package)
             self.assertEqual(package, prepare.reusable_package(cache, "digest", store))
+            self.assertEqual(
+                package,
+                prepare.reusable_package(
+                    cache, "source", store, digest_key="sourceDigest"
+                ),
+            )
             self.assertIsNone(prepare.reusable_package(cache, "changed", store))
+            self.assertIsNone(
+                prepare.reusable_package(
+                    cache, "changed", store, digest_key="sourceDigest"
+                )
+            )
             (manifests / "00000000000000000002.json").write_text(
                 json.dumps(
                     {
@@ -105,6 +198,30 @@ class PrepareTests(unittest.TestCase):
                 RuntimeError, "Invalid Ash development package"
             ):
                 prepare.current_package(store)
+
+    def test_unchanged_development_sources_skip_cargo(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package = root / "published"
+            with (
+                patch.object(
+                    prepare, "default_target", return_value="x86_64-pc-windows-msvc"
+                ),
+                patch.object(prepare, "load_protocol_metadata", return_value={}),
+                patch.object(
+                    prepare, "development_source_digest", return_value="source"
+                ),
+                patch.object(
+                    prepare, "reusable_package", return_value=package
+                ) as reuse,
+                patch.object(prepare, "build_binaries") as build,
+            ):
+                result = prepare.prepare_development_package(
+                    prepare.parse_arguments([]), root=root
+                )
+            self.assertEqual(package, result)
+            self.assertEqual("sourceDigest", reuse.call_args.kwargs["digest_key"])
+            build.assert_not_called()
 
     def test_preparation_builds_one_backend_set_and_delegates_assembly(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -138,6 +255,9 @@ class PrepareTests(unittest.TestCase):
             spec = TARGETS["x86_64-pc-windows-msvc"]
             with (
                 patch.object(prepare, "default_target", return_value=spec.target),
+                patch.object(
+                    prepare, "development_source_digest", return_value="source"
+                ),
                 patch.object(
                     prepare,
                     "load_protocol_metadata",
