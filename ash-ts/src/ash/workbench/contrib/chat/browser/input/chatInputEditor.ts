@@ -6,7 +6,7 @@ import { RunOnceScheduler } from "../../../../../base/common/async.js";
 import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { EditorLineWrapping } from "../../../../../editor/common/config/editorOptions.js";
 import { CodeEditorWidget } from "../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js";
-import { ICodeEditorService } from "../../../../../editor/browser/services/codeEditorService.js";
+import { EditorExtensionsRegistry, type EditorContributionRegistration } from "../../../../../editor/browser/editorExtensions.js";
 import { LanguageCompletionService } from '../../../../../editor/contrib/suggest/browser/suggest.js';
 import { LanguageCompletionProviderRegistry } from '../../../../../editor/common/languageFeatureRegistry.js';
 import { SuggestModel } from "../../../../../editor/contrib/suggest/browser/suggestModel.js";
@@ -36,13 +36,31 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 	readonly onDidSubmit: Event<void> = this._onDidSubmit.event;
 	private height = CHAT_INPUT_MIN_HEIGHT;
 
-	constructor(options: ChatInputEditorOptions, @IInstantiationService instantiationService: IInstantiationService, @ICodeEditorService codeEditorService: ICodeEditorService) {
+	constructor(options: ChatInputEditorOptions, @IInstantiationService instantiationService: IInstantiationService) {
 		super();
 		this.element = h(options.container.ownerDocument, "div");
 		this.element.className = "ash-chat-input-editor";
 		this.element.style.height = `${this.height}px`;
 		options.container.append(this.element);
-		codeEditorService.willCreateCodeEditor();
+		const providers = this._register(new LanguageCompletionProviderRegistry());
+		this._register(providers.register(createChatCommandCompletionProvider(options.slashCommands)));
+		this._register(providers.register(createChatSkillCompletionProvider(options.skills)));
+		const chatSuggest = {
+			id: SuggestController.ID,
+			install: context => {
+				if (context.kind !== 'text') return;
+				const completions = context.register(new LanguageCompletionService(context.model, providers));
+				const session = context.register(new SuggestModel(completions.results, context.editor, {
+					resolver: completions,
+				}));
+				return new SuggestController(context.editor, context.controller, completions, session, {
+					widgetContainer: this.element,
+				});
+			},
+		} satisfies EditorContributionRegistration;
+		const contributions = EditorExtensionsRegistry.getEditorContributions().map(contribution =>
+			contribution.id === SuggestController.ID ? chatSuggest : contribution,
+		);
 		this.editor = this._register(instantiationService.createInstance(CodeEditorWidget, {
 			container: this.element,
 			model: this.model,
@@ -52,22 +70,10 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 			ariaLabel: options.ariaLabel,
 			placeholder: options.placeholder,
 			presentation: "embedded",
-			suggestions: false,
 			padding: CHAT_INPUT_EDITOR_PADDING,
 			lineWrapping: EditorLineWrapping.On,
+			contributions,
 		}));
-		const providers = this._register(new LanguageCompletionProviderRegistry());
-		this._register(providers.register(createChatCommandCompletionProvider(options.slashCommands)));
-		this._register(providers.register(createChatSkillCompletionProvider(options.skills)));
-		const completions = this._register(new LanguageCompletionService(this.model, providers));
-		const completionSession = this._register(new SuggestModel(completions.results, this.editor, { resolver: completions }));
-		this._register(new SuggestController(
-			this.editor,
-			this.editor.controller,
-			completions,
-			completionSession,
-			{ widgetContainer: this.element },
-		));
 		const layout = this._register(new RunOnceScheduler(() => this.layout(), 0));
 		this._register(this.model.onDidChangeContent(() => {
 			layout.schedule();
@@ -83,8 +89,6 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 		this._register(toDisposable(() => observer.disconnect()));
 		observer.observe(this.element);
 		layout.schedule();
-		this._register(toDisposable(() => codeEditorService.removeCodeEditor(this.editor)));
-		codeEditorService.addCodeEditor(this.editor);
 	}
 
 	get value(): string {

@@ -49,7 +49,13 @@ test('workbench select-all command selects the focused or active editor model', 
 	services.registerInstance(IContextKeyService, contextKeys);
 	services.registerInstance(ILogService, new NullLoggerService());
 	services.registerInstance(ICodeEditorService, codeEditorService);
-	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, input: { resource: model.uri }, languageId: model.getLanguageId(), instantiationService: services, codeEditorService: codeEditorService });
+	using editor = createTestCodeEditor({
+		container: dom.window.document.querySelector<HTMLElement>('main')!,
+		model,
+		input: { resource: model.uri },
+		languageId: model.getLanguageId(),
+		instantiationService: services,
+	});
 	editor.focus();
 	await SelectAllCommand.runCommand(services, undefined);
 	assert.deepEqual(editor.getSelection(), new Selection(1, 1, 2, 4));

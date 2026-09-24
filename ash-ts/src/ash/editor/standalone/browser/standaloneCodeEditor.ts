@@ -3,7 +3,7 @@ import { IInstantiationService } from '../../../platform/instantiation/common/in
 import { ILanguageConfigurationService } from '../../common/languages/languageConfigurationRegistry.js';
 import { ILanguageFeaturesService } from '../../common/services/languageFeatures.js';
 import { URI } from '../../../base/common/uri.js';
-import { toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { type IDisposable } from '../../../base/common/lifecycle.js';
 import { bindColorTheme } from '../../../platform/theme/browser/themeStyles.js';
 import type { ICodeEditor } from '../../browser/editorBrowser.js';
 import type { IDimension } from '../../common/core/2d/dimension.js';
@@ -19,7 +19,7 @@ import { IStandaloneThemeService } from '../common/standaloneTheme.js';
 
 type StandaloneCodeEditorOptions = Omit<CodeEditorWidgetOptions,
 	'container' | 'input' | 'languageId' | 'model' |
-	'editorWorkerFactory' | 'completionWorkerFactory' | 'codeEditorService' |
+	'editorWorkerFactory' | 'completionWorkerFactory' |
 	'registerBeforeSave' | 'formatOnSave'
 >;
 
@@ -73,11 +73,10 @@ export class StandaloneEditor extends CodeEditorWidget implements IStandaloneCod
 		@ICodeEditorService codeEditorService: ICodeEditorService,
 		@IModelService modelService: IModelService,
 	) {
-		codeEditorService.willCreateCodeEditor();
 		// Theme variables must be ready before the view handles a theme event.
 		const themeBinding = bindColorTheme(standaloneThemeService, options.container);
 		try {
-			super(options, instantiationService, standaloneThemeService, languageConfigurationService, languageFeaturesService, contextKeyService);
+			super(options, instantiationService, standaloneThemeService, languageConfigurationService, languageFeaturesService, contextKeyService, codeEditorService);
 		} catch (error) {
 			themeBinding.dispose();
 			throw error;
@@ -86,13 +85,7 @@ export class StandaloneEditor extends CodeEditorWidget implements IStandaloneCod
 		this.standaloneThemeService = standaloneThemeService;
 		this.modelService = modelService;
 		this.modelToDispose = ownsModel ? modelToDispose : null;
-		try {
-			this._register(toDisposable(() => codeEditorService.removeCodeEditor(this)));
-			codeEditorService.addCodeEditor(this);
-		} catch (error) {
-			this.dispose();
-			throw error;
-		}
+		this.registerWithService();
 	}
 
 	public override updateOptions(newOptions: Readonly<IEditorOptions & Pick<IStandaloneEditorConstructionOptions, 'theme' | 'autoDetectHighContrast'>>): void {

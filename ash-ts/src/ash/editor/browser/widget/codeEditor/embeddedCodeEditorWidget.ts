@@ -21,17 +21,19 @@ export class EmbeddedCodeEditorWidget extends CodeEditorWidget {
 		@ILanguageConfigurationService languageConfigurationService: ILanguageConfigurationService,
 		@ILanguageFeaturesService languageFeaturesService: ILanguageFeaturesService,
 		@IContextKeyService contextKeyService: IContextKeyService,
+		@ICodeEditorService codeEditorService: ICodeEditorService,
 	) {
 		super({
 			...parentEditor.getRawOptions(),
 			...codeEditorWidgetOptions,
 			...options,
 			container: domElement,
-		}, instantiationService, themeService, languageConfigurationService, languageFeaturesService, contextKeyService);
+		}, instantiationService, themeService, languageConfigurationService, languageFeaturesService, contextKeyService, codeEditorService);
 
 		this.overwriteOptions = { ...options };
 		super.updateOptions(this.overwriteOptions);
 		this._register(parentEditor.onDidChangeConfiguration((event: ConfigurationChangedEvent) => this.onParentConfigurationChanged(event)));
+		this.registerWithService();
 	}
 
 	getParentEditor(): ICodeEditor {

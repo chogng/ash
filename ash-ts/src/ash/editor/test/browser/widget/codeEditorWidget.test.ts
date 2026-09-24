@@ -1,4 +1,5 @@
 import { StandaloneCodeEditorService } from '../../../standalone/browser/standaloneCodeEditorService.js';
+import { ICodeEditorService } from '../../../browser/services/codeEditorService.js';
 import { h, text } from '../../../../base/browser/dom.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { TestThemeService } from '../../../../platform/theme/test/common/testThemeService.js';
@@ -1143,6 +1144,8 @@ test('CodeEditorWidget publishes service lifecycle in construction order', () =>
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha');
 	using service = new StandaloneCodeEditorService();
+	using services = new ServiceContainer();
+	services.registerInstance(ICodeEditorService, service);
 	const events: string[] = [];
 	using willCreate = service.onWillCreateCodeEditor(() => events.push('will'));
 	using add = service.onCodeEditorAdd(editor => events.push(`add:${editor.getId()}`));
@@ -1153,7 +1156,7 @@ test('CodeEditorWidget publishes service lifecycle in construction order', () =>
 		input: { resource: model.uri },
 		languageId: model.getLanguageId(),
 		lineHeight: 20,
-		codeEditorService: service,
+		instantiationService: services,
 	});
 
 	assert.deepEqual(events, ['will', `add:${editor.getId()}`]);
@@ -2339,8 +2342,18 @@ test('CodeEditorWidget rejects missing shared services before creating its surfa
 	using theme = new TestThemeService(darkColorTheme);
 	using model = new TextModel('text');
 	using contextKeys = new ContextKeyService();
-	for (const missing of [IThemeService, ILanguageConfigurationService, ILanguageFeaturesService, IContextKeyService, IAccessibilityService]) {
+	for (const missing of [
+		IThemeService,
+		ILanguageConfigurationService,
+		ILanguageFeaturesService,
+		IContextKeyService,
+		IAccessibilityService,
+		ICodeEditorService,
+	]) {
 		using services = new ServiceContainer();
+		if (missing !== ICodeEditorService) {
+			services.registerSingleton(ICodeEditorService, () => services.createInstance(StandaloneCodeEditorService));
+		}
 		if (missing !== IContextKeyService) services.registerInstance(IContextKeyService, contextKeys);
 		if (missing !== IThemeService) services.registerInstance(IThemeService, theme);
 		if (missing !== ILanguageConfigurationService) services.registerInstance(ILanguageConfigurationService, configurations);
@@ -2364,6 +2377,7 @@ test('CodeEditorWidget shares host language services across contributions and mo
 	services.registerInstance(ILanguageConfigurationService, configurations);
 	services.registerInstance(ILanguageFeaturesService, features);
 	services.registerInstance(IAccessibilityService, enabledAccessibilityService);
+	services.registerSingleton(ICodeEditorService, () => services.createInstance(StandaloneCodeEditorService));
 	using first = new TextModel('first');
 	using second = new TextModel('second');
 	const seen: ILanguageFeaturesService[] = [];

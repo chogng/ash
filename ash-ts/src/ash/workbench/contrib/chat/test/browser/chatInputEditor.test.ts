@@ -28,6 +28,7 @@ const { Range } = await import("../../../../../editor/common/core/range.js");
 const { LanguageCompletionTriggerKind } = await import("../../../../../editor/common/languages.js");
 const { TextModel } = await import("../../../../../editor/common/model/textModel.js");
 const { ICodeEditorService } = await import("../../../../../editor/browser/services/codeEditorService.js");
+const { ICommandService } = await import('../../../../../platform/commands/common/commands.js');
 const { Selection } = await import('../../../../../editor/common/core/selection.js');
 const { ILogService, NullLoggerService } = await import('../../../../../platform/log/common/log.js');
 const { SelectAllCommand } = await import("../../../../../editor/browser/editorExtensions.js");
@@ -42,16 +43,22 @@ test('Chat registers its focused editor for global commands and removes it on di
 	const services = createCodeEditorServices(editorServices);
 	services.registerInstance(ILogService, new NullLoggerService());
 	const editors = services.get(ICodeEditorService);
+	const lifecycle: string[] = [];
+	using willCreate = editors.onWillCreateCodeEditor(() => lifecycle.push('will'));
+	using added = editors.onCodeEditorAdd(() => lifecycle.push('add'));
+	using removed = editors.onCodeEditorRemove(() => lifecycle.push('remove'));
 	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, "main"), placeholder: "Ask Ash", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
 	editor.value = 'message';
 	editor.focus();
 	assert.equal(editors.listCodeEditors().length, 1);
+	assert.deepEqual(lifecycle, ['will', 'add']);
 	assert.equal(editor.element.querySelectorAll('.stanza-editor-completion').length, 1);
 	assert.strictEqual(editors.getFocusedCodeEditor(), editors.listCodeEditors()[0]);
 	await services.invokeFunction(accessor => SelectAllCommand.runCommand(accessor, undefined));
 	assert.deepEqual(editors.getFocusedCodeEditor()?.getSelection(), new Selection(1, 1, 1, 8));
 	editor.dispose();
 	assert.equal(editors.listCodeEditors().length, 0);
+	assert.deepEqual(lifecycle, ['will', 'add', 'remove']);
 });
 
 test("Chat completion providers use one-based editor positions and ranges", async () => {
@@ -99,8 +106,8 @@ test("Chat input completes slash commands before submitting", async () => {
 
 	input.dispatchEvent(beforeInputEvent(dom.window, "/"));
 	assert.equal(editor.value, "/");
-	await waitFor(() => completionLabels(editor.element).length === 6);
-	assert.deepEqual(completionLabels(editor.element), ["/new", "/history", "/marketplace", "/plugins", "/skills", "/lsp"]);
+	await waitFor(() => completionLabels(editor.element).length === 7);
+	assert.deepEqual(completionLabels(editor.element), ["/new", "/history", "/config", "/marketplace", "/plugins", "/skills", "/lsp"]);
 	assert.equal(editor.element.querySelector(".stanza-editor")?.classList.contains("stanza-editor-embedded"), true);
 	assert.equal(editor.element.querySelector(".stanza-editor")?.classList.contains("word-wrapped"), true);
 	assert.equal(editor.element.querySelector(".stanza-editor-line-number"), null);
@@ -156,7 +163,8 @@ test('Chat command completion replaces the whole command and preserves arguments
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
 	using editorServices = new DisposableStore();
-	using editor = createCodeEditorServices(editorServices).createInstance(ChatInputEditor, { container, placeholder: "Ask Ash", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
+	const services = createCodeEditorServices(editorServices);
+	using editor = services.createInstance(ChatInputEditor, { container, placeholder: "Ask Ash", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
 	Object.defineProperty(editor.element, 'clientWidth', { value: 480 });
 	editor.layout();
 	editor.value = '/history argument';
@@ -166,7 +174,7 @@ test('Chat command completion replaces the whole command and preserves arguments
 	for (let index = 0; index < 3; index++) {
 		input.dispatchEvent(keyboardEvent(dom.window, 'ArrowRight'));
 	}
-	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: ' ', ctrlKey: true, bubbles: true, cancelable: true }));
+	await services.get(ICommandService).executeCommand('editor.action.triggerSuggest');
 	await waitFor(() => completionLabels(editor.element).length === 1);
 	assert.deepEqual(completionLabels(editor.element), ['/history']);
 	input.dispatchEvent(keyboardEvent(dom.window, 'Enter'));

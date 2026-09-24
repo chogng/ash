@@ -44,7 +44,6 @@ test('active code editor follows the pane control when two editors share a model
 		languageId: model.getLanguageId(),
 		lineHeight: 20,
 		instantiationService: services,
-		codeEditorService: service,
 	};
 	const first = resources.add(createTestCodeEditor({ ...options, container: firstContainer }));
 	const second = resources.add(createTestCodeEditor({ ...options, container: secondContainer }));

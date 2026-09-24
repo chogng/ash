@@ -21,7 +21,6 @@ import { View, type EditorTextDirection, type EditorViewportPresentation } from 
 import { KeyboardNavigationController, ViewController } from "../../view/viewController.js";
 import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import { CodeEditorContributions } from "./codeEditorContributions.js";
-import { observableCodeEditor } from '../../observableCodeEditor.js';
 import { EditorConfiguration, type IEditorConstructionOptions } from '../../config/editorConfiguration.js';
 import { migrateOptions } from '../../config/migrateOptions.js';
 import { EditorExtensionsRegistry, type EditorCommandEvent, type EditorContributionRegistration, type TextEditorContributionContext } from '../../editorExtensions.js';
@@ -34,7 +33,7 @@ import { type ConfigurationChangedEvent, EditorLineWrapping, EditorOption, type 
 import { type LanguageCompletionWorkerFactory, type LanguageLocation, type LanguageWorkspaceEdit, type LanguageDiagnosticsHost } from '../../../common/languages.js';
 import { isCompletionsEnablement, type CompletionsEnablement } from '../../../common/services/completionsEnablement.js';
 import { type SemanticTokenSource } from '../../viewParts/viewLines/viewLine.js';
-import { type ICodeEditorService } from '../../services/codeEditorService.js';
+import { ICodeEditorService } from '../../services/codeEditorService.js';
 import { applyFontInfo } from '../../config/domFontInfo.js';
 import { type URI } from '../../../../base/common/uri.js';
 import { type IClipboardCopyEvent, type IClipboardPasteEvent } from '../../controller/editContext/clipboardUtils.js';
@@ -71,7 +70,6 @@ export interface ICodeEditorWidgetOptions extends IEditorConstructionOptions {
 	readonly languageId: string;
 	readonly model: TextModel;
 	readonly ownerId?: string;
-	readonly codeEditorService?: ICodeEditorService;
 	readonly editorWorkerFactory?: VersionedEditorWorkerFactory;
 	readonly completionWorkerFactory?: LanguageCompletionWorkerFactory;
 	readonly languageDiagnosticsService?: LanguageDiagnosticsHost;
@@ -205,7 +203,6 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	private readonly contentWidgets = new Map<string, IContentWidget>();
 	private readonly overlayWidgets = new Map<string, IOverlayWidget>();
 	private readonly glyphWidgets = new Map<string, IGlyphMarginWidget>();
-	private observableInitialized = false;
 	private readonly rootDomNode!: HTMLDivElement;
 	private readonly widgetFocus!: IFocusTracker;
 	private readonly constructionOptions!: Omit<CodeEditorWidgetOptions, 'model'>;
@@ -240,10 +237,11 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		@ILanguageConfigurationService private readonly languageConfigurationService: ILanguageConfigurationService,
 		@ILanguageFeaturesService private readonly languageFeaturesService: ILanguageFeaturesService,
 		@IContextKeyService contextKeyService: IContextKeyService,
+		@ICodeEditorService private readonly codeEditorService: ICodeEditorService,
 	) {
 		super();
 		this.ownerId = options.ownerId ?? `ash-code-editor-${this.decorationOwnerId}`;
-		options.codeEditorService?.willCreateCodeEditor();
+		this.codeEditorService.willCreateCodeEditor();
 		try {
 			validateOptions(options);
 			migrateOptions(options);
@@ -288,10 +286,20 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			if (initialModel) {
 				this.attachModel(initialModel);
 			}
-			if (options.codeEditorService) {
-				this._register(toDisposable(() => options.codeEditorService?.removeCodeEditor(this)));
-				options.codeEditorService.addCodeEditor(this);
+			if (new.target === CodeEditorWidget) {
+				this.registerWithService();
 			}
+		} catch (error) {
+			this.dispose();
+			throw error;
+		}
+	}
+
+	/** Subclasses register after their own state is ready for creation listeners. */
+	protected registerWithService(): void {
+		this._register(toDisposable(() => this.codeEditorService.removeCodeEditor(this)));
+		try {
+			this.codeEditorService.addCodeEditor(this);
 		} catch (error) {
 			this.dispose();
 			throw error;
@@ -460,10 +468,6 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			modelStore.add(toDisposable(() => {
 				if (!options.model.isDisposed()) options.model.removeAllDecorationsWithOwnerId(this.decorationOwnerId);
 			}));
-			if (!this.observableInitialized) {
-				this._register(observableCodeEditor(this));
-				this.observableInitialized = true;
-			}
 			// Release contribution controllers before the View, including on later attach failures.
 			modelStore.delete(contributions);
 			modelStore.add(contributions);

@@ -90,6 +90,29 @@ test('observable code editor tracks canonical model, selections, and layout', ()
 	dom.window.close();
 });
 
+test('observable code editor starts with an empty editor and follows attachment', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel('attached');
+	const editor = createTestCodeEditor({
+		container: dom.window.document.querySelector<HTMLElement>('main')!,
+		model: null,
+		input: {},
+		languageId: model.getLanguageId(),
+	});
+	try {
+		const observableEditor = observableCodeEditor(editor);
+		assert.deepEqual({ model: observableEditor.model.get(), value: observableEditor.value.get() }, { model: null, value: '' });
+		editor.setModel(model);
+		assert.deepEqual({ model: observableEditor.model.get(), value: observableEditor.value.get() }, { model, value: 'attached' });
+		editor.dispose();
+		assert.equal(observableEditor.isDisposed, true);
+	} finally {
+		editor.dispose();
+		dom.window.close();
+	}
+});
+
 test('observable code editor line APIs use one-based line numbers', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
