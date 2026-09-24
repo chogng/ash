@@ -2,7 +2,7 @@ import { type IDimension } from "../../dom.js";
 import { Emitter, type Event } from "../../../common/event.js";
 import { Disposable, DisposableStore, type IDisposable, toDisposable } from "../../../common/lifecycle.js";
 import { type Sash, type SashPresentation } from "../sash/sash.js";
-import { type ISplitViewView, SplitView, type SplitViewLayoutPriority, type SplitViewOrientation } from "../splitview/splitview.js";
+import { type ISplitViewView, SplitView, type SplitViewLayoutPriority, type SplitViewOrientation, type SplitViewStyles } from "../splitview/splitview.js";
 import { assertChildIndex, assertDimension, assertInsertionIndex, descriptorNode, descriptorSizing, deserializeGridViewDescriptor, isSerializableView, normalizeDescriptor, normalizeRootDescriptor, orthogonal, replaceDescriptorNode, splitLocation, type GridLocation, type GridViewDescriptor, type GridViewSizing, type ISerializableView, type IView, type IViewDeserializer, type SerializedGridViewDescriptor, validateDescriptor, validateSerializedGridViewDescriptor, validateViewConstraints } from "./gridviewDescriptor.js";
 import { h } from "../../dom.js";
 
@@ -11,6 +11,8 @@ export { type GridLocation, type GridViewDescriptor, type GridViewSizing, type I
 export interface GridViewOptions {
 	/** Optional presentation applied to every Grid-owned Sash. */
 	readonly sashPresentation?: SashPresentation;
+	/** Border applied to every SplitView boundary in the Grid. */
+	readonly styles?: SplitViewStyles;
 	/** Whether hidden snap views remain recoverable from an outer Grid edge. Defaults to false. */
 	readonly edgeSnapping?: boolean;
 }
@@ -30,6 +32,7 @@ interface ParentLink {
 interface GridNodeHost {
 	readonly container: HTMLElement;
 	readonly sashPresentation: SashPresentation;
+	readonly styles: SplitViewStyles | undefined;
 	ownSplitView(splitView: SplitView): SplitView;
 	registerEvent(disposable: IDisposable): void;
 	createNode(descriptor: GridViewDescriptor<IView>): GridNode;
@@ -108,7 +111,7 @@ class BranchNode extends GridNode {
 		this.splitView = host.ownSplitView(new SplitView(
 			host.container,
 			orientation,
-			{ sashPresentation: host.sashPresentation },
+			{ sashPresentation: host.sashPresentation, styles: host.styles },
 		));
 		this.element = this.splitView.element;
 		this.children = descriptors.map((descriptor) => host.createNode(descriptor));
@@ -293,6 +296,7 @@ class AxisView implements ISplitViewView {
 export class GridView extends Disposable {
 	readonly element: HTMLDivElement;
 	private _sashPresentation: SashPresentation;
+	private readonly styles: SplitViewStyles | undefined;
 	private readonly treeResources = this._register(new DisposableStore());
 	private readonly leaves = new Map<IView, LeafNode>();
 	private readonly _onDidChange = this._register(new Emitter<void>());
@@ -329,6 +333,7 @@ export class GridView extends Disposable {
 		this.element = h(ownerDocument, "div");
 		this.element.className = "ash-grid ash-grid-view";
 		this._sashPresentation = options.sashPresentation;
+		this.styles = options.styles;
 		this._edgeSnapping = options.edgeSnapping ?? false;
 		this._register(toDisposable(() => this.element.remove()));
 		container.append(this.element);
@@ -546,6 +551,7 @@ export class GridView extends Disposable {
 		const host: GridNodeHost = {
 			container: this.element,
 			sashPresentation: this._sashPresentation,
+			styles: this.styles,
 			ownSplitView: (splitView) => this.treeResources.add(splitView),
 			registerEvent: (disposable) => {
 				this.treeResources.add(disposable);

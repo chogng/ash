@@ -1,5 +1,5 @@
 import { registerColor } from "../colorRegistry.js";
-import { accentBackground, descriptionForeground, foreground } from "./baseColors.js";
+import { accentBackground, border, descriptionForeground, foreground } from "./baseColors.js";
 
 const owner = "workbench.shell";
 const color = (id: string, dark: string, light: string, description: string): string => registerColor(id, { dark, light }, { description, owner });
@@ -9,6 +9,12 @@ export const sectionHeaderForeground = alias("sectionHeader.foreground", descrip
 export const workbenchBackground = color("workbench.background", "#1e1e1e", "#ffffff", "Workbench root background.");
 export const editorBackground = color("editor.background", "#1e1e1e", "#ffffff", "Editor background.");
 export const editorForeground = color("editor.foreground", "#d4d4d4", "#333333", "Editor foreground.");
+export const editorGroupBorder = registerColor("editorGroup.border", {
+	dark: border,
+	light: border,
+	highContrastDark: "#ffffff",
+	highContrastLight: "#000000",
+}, { description: "Border between editor groups.", owner });
 export const editorTabBackground = color("editor.tabBackground", "#EEEEEE", "#EEEEEE", "Background for inactive Editor tabs.");
 export const titleBarBackground = color("titleBar.background", "#FFFFFF", "#FFFFFF", "Title bar background.");
 export const titleBarForeground = color("titleBar.foreground", "#1f1f1f", "#1f1f1f", "Title bar foreground.");

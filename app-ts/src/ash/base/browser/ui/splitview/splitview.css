@@ -3,3 +3,21 @@
 .ash-split-view-pane-overflow-visible { overflow: visible; }
 .ash-split-view-pane[hidden] { display: none; }
 .ash-split-view-pane > * { flex: 1 1 auto; min-width: 0; min-height: 0; }
+/* Pane edges stay visible independently of resize-handle hover and drag state. */
+.ash-split-view-separator-border > .ash-split-view-pane:not(:first-child)::before {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  left: 0;
+  background-color: var(--ash-split-view-separator-border);
+  content: "";
+  pointer-events: none;
+}
+.ash-split-view-horizontal.ash-split-view-separator-border > .ash-split-view-pane:not(:first-child)::before {
+  width: var(--ash-stroke-thickness);
+  height: 100%;
+}
+.ash-split-view-vertical.ash-split-view-separator-border > .ash-split-view-pane:not(:first-child)::before {
+  width: 100%;
+  height: var(--ash-stroke-thickness);
+}

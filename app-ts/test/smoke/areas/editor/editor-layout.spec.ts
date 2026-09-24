@@ -43,6 +43,39 @@ test("editor layout remains valid across workbench window sizes", async ({ targe
 	expect(observedSizes.size).toBe(3);
 });
 
+test("split editor groups keep visible boundaries", async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== "code", "This scenario requires the Code product");
+	const editors = workbench.editors;
+	const page = workbench.page;
+
+	for (const command of ["Split Editor Horizontal", "Split Editor Vertical"]) {
+		await page.keyboard.press("F1");
+		const picker = page.locator(".ash-quick-pick");
+		await picker.getByRole("combobox").fill(command);
+		await expect(picker.locator(".ash-quick-pick-row-label").filter({ hasText: command })).toBeVisible();
+		await page.keyboard.press("Enter");
+	}
+
+	await expect(editors.groups).toHaveCount(3);
+	const borderedPanes = editors.element.locator(".ash-split-view-separator-border > .ash-split-view-pane:not(:first-child)");
+	await expect(borderedPanes).toHaveCount(2);
+	const borderColor = await editors.element.evaluate(element => {
+		const probe = element.ownerDocument.createElement("span");
+		probe.style.color = "var(--ash-editor-group-border)";
+		element.append(probe);
+		const color = getComputedStyle(probe).color;
+		probe.remove();
+		return color;
+	});
+	await expect.poll(() => borderedPanes.evaluateAll(elements => elements.map(element => {
+		const style = getComputedStyle(element, "::before");
+		return { color: style.backgroundColor, thickness: element.parentElement?.classList.contains("ash-split-view-horizontal") ? style.width : style.height };
+	}))).toEqual([
+		{ color: borderColor, thickness: "1px" },
+		{ color: borderColor, thickness: "1px" },
+	]);
+});
+
 async function editorGeometry(editor: Locator, group: Locator, title: Locator, content: Locator, watermark: Locator) {
 	const [editorBox, editorClient, groupBox, titleBox, contentBox, watermarkBox] = await Promise.all([
 		editor.boundingBox(),

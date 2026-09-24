@@ -38,6 +38,8 @@
 
 文件位置不是所有权的唯一证据，root class 和构造者才是。Part 私有子控件可以与 Part CSS 共置，但 selector 必须以该私有子控件的 root class 开始，不能借 Part root 任意穿透共享组件。
 
+编辑器分组的常驻边界由 `EditorPart` 选择语义颜色，`Grid` 传递给各层 `SplitView`，再由相邻 pane 的边缘绘制。`Sash` 只负责拖动命中区及悬停、焦点反馈；即使边界不可拖动，也应保留分组的视觉边界。
+
 ### Workbench 外观贡献
 
 `workbench/contrib/modernUI` 是 Workbench 外观方案的集中覆盖层。它只在 `.modern-ui` 存在时覆盖已有稳定 class，不创建 Part DOM，也不接管交互状态。

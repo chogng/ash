@@ -776,6 +776,7 @@ test("EditorPart restores nested horizontal and vertical Grid layouts", async ()
 	await editor.openEditor(input("C:\\project\\top-right.ts"));
 	await editor.splitActiveGroupVertical();
 	await editor.openEditor(input("C:\\project\\bottom-right.ts"));
+	assert.equal(editor.domNode.querySelectorAll(".ash-split-view-separator-border").length, 2);
 	const saved = editor.saveWorkingSet("nested-grid");
 
 	assert.equal(saved.layout?.type, "branch");
@@ -790,6 +791,7 @@ test("EditorPart restores nested horizontal and vertical Grid layouts", async ()
 	await editor.applyWorkingSet("empty", { preserveFocus: true });
 	await editor.applyWorkingSet(saved, { preserveFocus: true });
 	assert.deepEqual(editor.groups.map(group => group.id), groupIds);
+	assert.equal(editor.domNode.querySelectorAll(".ash-split-view-separator-border").length, 2);
 	const restored = editor.saveWorkingSet("nested-grid-restored");
 	assert.equal(restored.layout?.type, "branch");
 	assert.equal(restored.layout?.orientation, "horizontal");

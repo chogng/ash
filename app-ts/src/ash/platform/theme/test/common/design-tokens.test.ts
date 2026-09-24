@@ -15,6 +15,7 @@ test("CSS consumes registered design tokens and isolates intentional color sampl
 		"--ash-scrollbar-slider-size",
 		"--ash-icon-label-text-overflow",
 		"--ash-sash-inset-gap",
+		"--ash-split-view-separator-border",
 		"--ash-tab-list-inactive-background",
 		"--ash-terminal-command-gutter-width",
 	]);

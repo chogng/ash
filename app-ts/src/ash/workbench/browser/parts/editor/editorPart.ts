@@ -47,6 +47,8 @@ import type { IEditorPaneDescriptor } from "./editorPane.js";
 
 export { EditorOpenSupersededError } from "./editorGroup.js";
 
+const EDITOR_GROUP_GRID_STYLES = { separatorBorder: "var(--ash-editor-group-border)" } as const;
+
 /** Editor-region operations available to Workbench contributions. */
 export interface IEditorPart extends IEditorStateSource, IDisposable {
 	readonly domNode: HTMLElement;
@@ -199,7 +201,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 			type: "leaf",
 			view: initial.view,
 			size: 1,
-		});
+		}, { styles: EDITOR_GROUP_GRID_STYLES });
 		this.modalEditor = this._register(new ModalEditorPart({
 			container,
 			registry: this.groupOptions.registry,
@@ -693,8 +695,8 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 					if (!host) throw new Error(`Editor Grid references unknown group '${groupId}'`);
 					return host.view;
 				},
-			})
-			: new SerializableGrid(this.contentDomNode, legacyGridDescriptor(hosts, groups, this.dimension));
+			}, { styles: EDITOR_GROUP_GRID_STYLES })
+			: new SerializableGrid(this.contentDomNode, legacyGridDescriptor(hosts, groups, this.dimension), { styles: EDITOR_GROUP_GRID_STYLES });
 		this.gridSlot.value = grid;
 		this._activeGroup = hosts[activeGroupIndex]?.group ?? hosts[0]!.group;
 		for (const host of hosts) {

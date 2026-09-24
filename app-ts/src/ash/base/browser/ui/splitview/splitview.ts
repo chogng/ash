@@ -7,9 +7,15 @@ import { h } from "../../dom.js";
 export type SplitViewOrientation = "horizontal" | "vertical";
 export type SplitViewLayoutPriority = "low" | "normal" | "high";
 
+/** Optional border painted at each boundary between adjacent panes. */
+export interface SplitViewStyles {
+	readonly separatorBorder?: string;
+}
+
 export interface SplitViewOptions {
 	/** Optional Sash presentation shared by separators created for this view. */
 	readonly sashPresentation?: SashPresentation;
+	readonly styles?: SplitViewStyles;
 	/** Whether a snap view at the leading outer edge can be restored by its sash. */
 	readonly startSnappingEnabled?: boolean;
 	/** Whether a snap view at the trailing outer edge can be restored by its sash. */
@@ -114,6 +120,10 @@ export class SplitView extends Disposable {
 		this.element = element;
 		this._register(toDisposable(() => element.remove()));
 		element.className = `ash-split-view ash-split-view-${orientation}`;
+		if (options.styles?.separatorBorder) {
+			element.classList.add("ash-split-view-separator-border");
+			element.style.setProperty("--ash-split-view-separator-border", options.styles.separatorBorder);
+		}
 		container.append(element);
 		this._startSnappingEnabled = options.startSnappingEnabled ?? true;
 		this._endSnappingEnabled = options.endSnappingEnabled ?? true;
