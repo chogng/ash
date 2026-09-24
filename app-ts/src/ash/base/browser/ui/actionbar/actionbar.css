@@ -1,6 +1,5 @@
 .ash-action-bar { display: flex; align-items: stretch; gap: var(--ash-action-bar-gap); }
 .ash-action-bar.vertical { flex-direction: column; }
-.ash-action-bar .ash-icon { width: 18px; height: 18px; }
 .ash-action-bar.highlight-toggled .ash-button.checked,
 .ash-action-bar.highlight-toggled .ash-action-label.checked {
   background: var(--ash-action-bar-toggled-background);
