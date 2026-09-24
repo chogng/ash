@@ -46,7 +46,7 @@ pnpm dev:stanza
 ```
 
 打开 `http://127.0.0.1:5199/build/app_ts/vite/stanza/index.html`。VS Code 的
-`Stanza Editor - Standalone` 启动配置会自动执行同一条命令。调试页使用
+`Stanza Editor - Standalone` 启动配置会执行同一条命令并打开浏览器调试。调试页使用
 `globalThis.stanza.editor.create/createModel`，因此可以直接在浏览器控制台检查模型、编辑器和
 生命周期事件，不会启动 Workbench 或 App Server。
 

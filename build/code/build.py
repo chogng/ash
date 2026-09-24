@@ -24,6 +24,12 @@ from build.lib.v8 import resolve_v8_cargo_env  # noqa: E402
 
 DEVELOPMENT_PROFILE = "dev-small"
 DEVELOPMENT_RUNTIME_ROOT = REPOSITORY_ROOT / ".build" / "code" / "dev"
+BINARY_PACKAGES = {
+    "ash": "ash-cli",
+    "ash-app-server": "ash-app-server",
+    "ash-code-mode-host": "ash-code-mode-host",
+    "bwrap": "ash-bwrap",
+}
 
 
 def development_binaries(*, platform_name: str | None = None) -> list[str]:
@@ -40,10 +46,13 @@ def build_binaries(
     target = TARGETS[default_target()]
     cargo_environment = environment.copy()
     cargo_environment.update(resolve_v8_cargo_env(target, environ=cargo_environment))
+    if target.target == "x86_64-pc-windows-msvc":
+        cargo_environment.setdefault(
+            "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER", "rust-lld"
+        )
     command = [
         "cargo",
         "build",
-        "--workspace",
         "--locked",
         "--profile",
         DEVELOPMENT_PROFILE,
@@ -52,7 +61,7 @@ def build_binaries(
         "--message-format=json-render-diagnostics",
     ]
     for binary in binaries:
-        command.extend(["--bin", binary])
+        command.extend(["--package", BINARY_PACKAGES[binary], "--bin", binary])
     result = subprocess.run(
         command,
         cwd=REPOSITORY_ROOT,

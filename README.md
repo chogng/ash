@@ -70,7 +70,8 @@ just ash exec "summarize the current changes"
 just ash-desktop
 ```
 
-In VS Code, select `Run Ash Desktop (TypeScript)` and press F5 to run the same command.
+In VS Code, select `Ash Desktop (Electron)` and press F5 to run the same command. The three
+product groups are `Ash Code (TUI)`, `Ash Desktop (Electron)`, and `App (Rust Desktop)`.
 
 The Desktop command is shared by both Workbench build modes. The default mode is `code`; build
 matrix checks can set `ASH_WORKBENCH_MODE=academic` without changing the command name.
@@ -92,8 +93,8 @@ The full Web mode is a local development integration, not a deployable Web servi
 pnpm dev:stanza
 ```
 
-然后打开 `http://127.0.0.1:5199/build/app_ts/vite/stanza/index.html`。在 VS Code 中也可以直接选择
-`Stanza Editor - Standalone` 配置按 F5；它会自动启动同一个 Vite 任务。页面把完整 API 暴露为
+然后打开 `http://127.0.0.1:5199/build/app_ts/vite/stanza/index.html`。在 VS Code 中也可以选择
+`Stanza Editor - Standalone` 配置按 F5；它会自动启动 Vite 并打开浏览器调试。页面把完整 API 暴露为
 `globalThis.stanza`，可在浏览器控制台检查 `stanza.editor.getEditors()` 和
 `stanza.editor.getModels()`。
 

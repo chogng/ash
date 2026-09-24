@@ -65,7 +65,7 @@ Ash 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保
 根 `Justfile` 是三个产品和根 Rust workspace 的统一入口。根 `package.json` 提供 pnpm workspace 与 Electron、Browser、Stanza 等 Node 构建入口；`pnpm test` 还会调用 Rust 协议验证。完整 Rust workspace 构建由 `Justfile` 编排。
 
 - Just 在 Windows 上调用 PowerShell 7 的 `-CommandWithArgs`，保留参数边界；其他平台调用 `sh`。
-- `just ash-desktop` 内部执行 `pnpm --dir app-ts dev`；VS Code 的 `Run Ash Desktop (TypeScript)` 配置使用同一 Just 入口。
+- `just ash-desktop` 内部执行 `pnpm --dir app-ts dev`；VS Code 的 `Ash Desktop (Electron)` 配置使用同一 Just 入口。
 - Rust 构建、打包和源码启动脚本由 Just 通过 `uv run --frozen --project scripts python` 执行，统一使用锁定的 Python 环境。
 
 前端 Node 工具与 Desktop 单测使用 Node 24 LTS，具体版本由仓库根 `.nvmrc` 固定。切换到该版本后，按 [README 初始化步骤](../README.md#quick-start) 安装根 `package.json` 声明的 pnpm，再执行 `pnpm install`、构建或测试。Node 构建与测试入口调用 pnpm，安装检查要求 pnpm 版本与声明完全一致；其他 Node 主版本不受支持。
@@ -175,6 +175,8 @@ Browser 和 Electron UI 检查不启动 App Server；真实后端集成继续使
 
 根 Cargo profile 在 `dev` 与 `test` 中对完整依赖图使用轻量优化，并对 `app`、`ash-app-server` 与 `ash-app-server-client` 的超大最终链接单元使用 size optimization；debug assertions、各 profile 既有的调试信息与增量编译仍然保留。该配置把 macOS 产物的 `__eh_frame` 控制在 compact-unwind 的 16 MiB 编码上限内，不能用关闭 `linker_messages` 代替。
 
+Code 源码构建只选择实际运行的 Cargo 包和程序：`ash-cli`、`ash-app-server`、`ash-code-mode-host`，Linux 另加 `ash-bwrap`。这样不会把整个 workspace 的额外依赖特性合并进 Code 构建。Windows x86_64 MSVC 上，Code 开发构建使用 Rust 工具链自带的 `rust-lld` 链接器；显式设置 `CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER` 时使用调用方指定的链接器。其他产品构建入口不受此设置影响。
+
 ## Rust 依赖检查与构建测量
 
 ### 依赖检查
@@ -235,6 +237,10 @@ just bench-build ash-keybinding --jobs 4 --compare .build/build-health/<run>/rep
 同次实验没有采用全局 Profile 候选：`4 CGU + ThinLTO` 的单次冷构建约快 9%，但仅修改 CLI 入口后的 Release 重编译中位数从 6.50 秒增加到 159.24 秒；build-override O1 加六个宏相关包 O3 则使开发冷构建从约 313 秒增加到 341 秒，touch 重编译中位数只减少约 0.36 秒。默认参数保留，实际改进来自消除重复生成和实例化。
 
 2026-09-24 在 macOS aarch64、Rust 1.98.0、`dev` profile、六个 Cargo 任务和离线依赖缓存下，对 `ash-app-server-protocol` 各使用三个独立空目标目录测量。源码位于同一工作区，目标目录位于本机内置磁盘。协议包原先只为 `PreparedFeedback` 类型依赖整个反馈服务，使 HTTP/TLS 构建进入关键路径；把该类型移入独立的反馈契约包后，协议包不再编译 `ash-client`、`ash-http-client`、`reqwest` 和 `aws-lc-sys`。冷构建中位数从 89.55 秒降至 69.27 秒（减少 22.6%），其中原先单次 `aws-lc-sys` 构建步骤耗时 46.5 秒。无改动重跑中位数为 0.91→0.75 秒；在协议注册表文件末尾临时加入注释触发重编译的中位数为 3.87→4.05 秒，这项注释编辑仅验证增量失效范围，不代表实际功能编辑。`time` 报告的最大 RSS 为 1.33→1.36 GB，协议 `.rlib` 均约 52 MiB；一个测量目标目录从 1.81 降至 1.55 GiB。完整产品构建耗时未由这组包级测量推断。
+
+2026-09-25 在 Windows x86_64 MSVC、Rust 1.98.0、`dev-small` profile、16 个 Cargo 任务、依赖源码已缓存的条件下，对 Code 的三个程序使用独立空目标目录各测三轮。`--workspace --bin ...` 与显式 `--package/--bin` 的完整冷编译中位数为 601.48→557.29 秒（减少 7.3%）；单次配对有反向波动，不能把每轮差值都归因于包选择。Cargo 时间线显示 `windows` 包的特性数从 80 降到 65，编译耗时中位数从 135.0 降到 86.2 秒。无改动重跑中位数为 2.95→3.56 秒；仅触碰 TUI 源码触发重编的中位数为 12.79→12.00 秒，这项触碰只用于确认增量失效范围。
+
+在显式选包基础上，Windows Code 构建改用 Rust 工具链自带的 `rust-lld`。三次独立冷编译为 503.16、507.59、521.97 秒；相对于上一组的冷编差异包含机器负载波动，不能全归因于链接器。对同一处 TUI 文案做三轮实际源码编辑，原链接器与 `rust-lld` 的重编中位数为 11.31→7.84 秒（减少 30.6%），其中 `ash.exe` 链接单元约为 7.21→3.66 秒；无改动重跑中位数为 1.23→1.21 秒。三个程序的产物约为 165.12/151.12/52.37 MiB → 164.50/150.52/51.39 MiB。Windows 手工测量未采集进程树最大 RSS；其他平台未测链接器改动，因为该设置仅用于 Windows x86_64 的 Code 源码构建。
 
 ## 构建源码与仓库脚本边界
 

@@ -2,35 +2,35 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
-			"name": "Run Ash Desktop (TypeScript)",
-			"type": "node-terminal",
-			"request": "launch",
-			"command": "just ash-desktop",
-			"cwd": "${workspaceFolder}",
-			"presentation": {
-				"group": "ash-desktop",
-				"order": 1
-			}
-		},
-		{
-			"name": "Run Ash Code",
+			"name": "Ash Code (TUI)",
 			"type": "node-terminal",
 			"request": "launch",
 			"command": "just ash",
 			"cwd": "${workspaceFolder}",
 			"presentation": {
-				"group": "ash-code",
+				"group": "0_ash_code",
 				"order": 1
 			}
 		},
 		{
-			"name": "Run app",
+			"name": "Ash Desktop (Electron)",
+			"type": "node-terminal",
+			"request": "launch",
+			"command": "just ash-desktop",
+			"cwd": "${workspaceFolder}",
+			"presentation": {
+				"group": "1_ash_desktop",
+				"order": 1
+			}
+		},
+		{
+			"name": "App (Rust Desktop)",
 			"type": "node-terminal",
 			"request": "launch",
 			"command": "just app",
 			"cwd": "${workspaceFolder}",
 			"presentation": {
-				"group": "app",
+				"group": "2_app",
 				"order": 1
 			}
 		},
@@ -42,7 +42,7 @@
 			"webRoot": "${workspaceFolder}",
 			"preLaunchTask": "Launch Stanza Vite",
 			"presentation": {
-				"group": "stanza",
+				"group": "3_stanza",
 				"order": 1
 			}
 		}
