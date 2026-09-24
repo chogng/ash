@@ -80,7 +80,7 @@ interface IntegrationHarness {
 	setScrollbar(options: IEditorScrollbarOptions): void;
 	updateOptions(options: IEditorOptions): void;
 	runWorkbenchCommand(id: string): Promise<void>;
-	getViewSettings(): { readonly minimap: boolean; readonly renderWhitespace: string; readonly renderControlCharacters: boolean; readonly wordWrap: string };
+	getViewSettings(): { readonly minimap: boolean; readonly renderWhitespace: string; readonly renderControlCharacters: boolean; readonly wordWrap: string; readonly wordWrapOverride: string; readonly wrappingColumn: number };
 	setTheme(theme: 'dark' | 'light' | 'contrast' | 'contrastLight'): void;
 	setRenderRichScreenReaderContent(enabled: boolean): void;
 	showViewZone(): void;
@@ -236,6 +236,8 @@ window.ashTextModelIntegration = {
 		renderWhitespace: requiredEditorPart().getOption(EditorOption.renderWhitespace),
 		renderControlCharacters: requiredEditorPart().getOption(EditorOption.renderControlCharacters),
 		wordWrap: requiredEditorPart().getOption(EditorOption.wordWrap),
+		wordWrapOverride: requiredEditorPart().getOption(EditorOption.wordWrapOverride2),
+		wrappingColumn: requiredEditorPart().getOption(EditorOption.wrappingInfo).wrappingColumn,
 	}),
 	setTheme: theme => themeService.setColorTheme({ dark: darkColorTheme, light: lightColorTheme, contrast: highContrastDarkColorTheme, contrastLight: highContrastLightColorTheme }[theme]),
 	setRenderRichScreenReaderContent: enabled => requiredEditorPart().updateOptions({ renderRichScreenReaderContent: enabled }),

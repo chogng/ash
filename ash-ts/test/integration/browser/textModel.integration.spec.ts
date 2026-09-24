@@ -715,11 +715,12 @@ test('Workbench editor actions update the open editor and Go to Line retains key
 	await page.evaluate(() => window.ashTextModelIntegration.runWorkbenchCommand('editor.action.toggleWordWrap'));
 	await expect(page.locator('.stanza-editor.word-wrapped')).toBeVisible();
 	await expect(page.locator('.stanza-editor-accessibility-status')).toHaveText('Word wrap on');
-	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getViewSettings().wordWrap)).toBe('on');
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getViewSettings())).toMatchObject({ wordWrap: 'off', wordWrapOverride: 'on' });
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getViewSettings().wrappingColumn)).toBeGreaterThan(0);
 	await input.press('Alt+Z');
 	await expect(page.locator('.stanza-editor.word-wrapped')).toHaveCount(0);
 	await expect(page.locator('.stanza-editor-accessibility-status')).toHaveText('Word wrap off');
-	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getViewSettings().wordWrap)).toBe('off');
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getViewSettings())).toMatchObject({ wordWrap: 'off', wordWrapOverride: 'inherit', wrappingColumn: -1 });
 	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe(text);
 
 	await input.focus();
