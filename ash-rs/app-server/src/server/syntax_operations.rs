@@ -11,6 +11,7 @@ use ash_app_server_protocol::protocol::syntax::SyntaxDiagnosticDto;
 use ash_app_server_protocol::protocol::syntax::SyntaxDiagnosticKindDto;
 use ash_app_server_protocol::protocol::syntax::SyntaxFoldingRangeDto;
 use ash_app_server_protocol::protocol::syntax::SyntaxLanguageDto;
+use ash_app_server_protocol::protocol::syntax::SyntaxOpenParams;
 use ash_app_server_protocol::protocol::syntax::SyntaxPositionDto;
 use ash_app_server_protocol::protocol::syntax::SyntaxRangeDto;
 use ash_app_server_protocol::protocol::syntax::SyntaxSelectionRangeDto;
@@ -20,17 +21,18 @@ use ash_app_server_protocol::protocol::syntax::SyntaxSymbolDto;
 use ash_app_server_protocol::protocol::syntax::SyntaxSymbolKindDto;
 use ash_app_server_protocol::protocol::syntax::SyntaxTokenDto;
 use ash_app_server_protocol::protocol::syntax::SyntaxTokenKindDto;
+use ash_app_server_protocol::protocol::syntax::SyntaxUpdateParams;
 use ash_syntax::DocumentRevision;
 use ash_syntax::DocumentSymbolKind;
 use ash_syntax::SyntaxDiagnosticKind;
 use ash_syntax::SyntaxDocument;
+use ash_syntax::SyntaxEdit;
 use ash_syntax::SyntaxError;
 use ash_syntax::SyntaxLanguage;
 use ash_syntax::SyntaxRange;
 use ash_syntax::SyntaxSnapshot;
 use ash_syntax::SyntaxTokenKind;
 use serde_json::Value;
-use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -46,46 +48,68 @@ impl SyntaxSession {
         let snapshot = document.snapshot();
         Ok(Self { document, snapshot })
     }
-
-    fn synchronize(
-        &mut self,
-        language: SyntaxLanguage,
-        revision: u64,
-        text: &str,
-    ) -> Result<(), RpcError> {
-        if self.document.language() != language {
-            if revision < self.document.revision().value() {
-                return Err(syntax_error(SyntaxError::NonIncreasingRevision {
-                    current: self.document.revision(),
-                    requested: DocumentRevision::new(revision),
-                }));
-            }
-            *self = Self::open(language, revision, text)?;
-        } else if revision != self.document.revision().value() || text != self.document.text() {
-            self.snapshot = self
-                .document
-                .synchronize(DocumentRevision::new(revision), text)
-                .map_err(syntax_error)?;
-        }
-        Ok(())
-    }
 }
 
 impl AppServer {
+    pub(super) fn syntax_open(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: SyntaxOpenParams = decode(params)?;
+        validate_document_id(&params.document_id)?;
+        let session = SyntaxSession::open(
+            syntax_language(params.language),
+            params.revision,
+            &params.text,
+        )?;
+        self.syntax_documents
+            .lock()
+            .map_err(|_| internal_error())?
+            .insert(
+                (connection.connection_id, params.document_id),
+                Arc::new(Mutex::new(session)),
+            );
+        result(&())
+    }
+
+    pub(super) fn syntax_update(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: SyntaxUpdateParams = decode(params)?;
+        let session = self.syntax_document(connection, &params.document_id)?;
+        let mut session = session.lock().map_err(|_| internal_error())?;
+        if session.document.revision().value() != params.previous_revision
+            || params.revision != params.previous_revision.saturating_add(1)
+        {
+            return Err(invalid_params());
+        }
+        let mut edits = Vec::with_capacity(params.edits.len());
+        for edit in params.edits {
+            let start = byte_offset_for_utf16_index(session.document.text(), edit.start_offset)
+                .ok_or_else(invalid_params)?;
+            let end = byte_offset_for_utf16_index(session.document.text(), edit.end_offset)
+                .ok_or_else(invalid_params)?;
+            edits.push(SyntaxEdit::replace(start..end, edit.text));
+        }
+        session.snapshot = session
+            .document
+            .apply_edits(DocumentRevision::new(params.revision), &edits)
+            .map_err(syntax_error)?;
+        result(&())
+    }
+
     pub(super) fn syntax_analyze(
         &self,
         connection: &ConnectionState,
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: SyntaxAnalyzeParams = decode(params)?;
-        let document = self.syntax_document(
-            connection,
-            &params.document_id,
-            params.language,
-            params.revision,
-            &params.text,
-        )?;
+        let document = self.syntax_document(connection, &params.document_id)?;
         let document = document.lock().map_err(|_| internal_error())?;
+        validate_revision(&document, params.revision)?;
         result(&project(document.document.text(), &document.snapshot))
     }
 
@@ -95,14 +119,9 @@ impl AppServer {
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: SyntaxSelectionRangesParams = decode(params)?;
-        let document = self.syntax_document(
-            connection,
-            &params.document_id,
-            params.language,
-            params.revision,
-            &params.text,
-        )?;
+        let document = self.syntax_document(connection, &params.document_id)?;
         let document = document.lock().map_err(|_| internal_error())?;
+        validate_revision(&document, params.revision)?;
         let mut ranges = Vec::new();
         for requested in params.ranges {
             let requested = byte_range_for_utf16(document.document.text(), requested)
@@ -151,31 +170,40 @@ impl AppServer {
         &self,
         connection: &ConnectionState,
         document_id: &str,
-        language: SyntaxLanguageDto,
-        revision: u64,
-        text: &str,
     ) -> Result<Arc<Mutex<SyntaxSession>>, RpcError> {
         validate_document_id(document_id)?;
-        let language = syntax_language(language);
-        let key = (connection.connection_id, document_id.to_owned());
-        let document = {
-            let mut documents = self.syntax_documents.lock().map_err(|_| internal_error())?;
-            match documents.entry(key) {
-                Entry::Occupied(entry) => Arc::clone(entry.get()),
-                Entry::Vacant(entry) => {
-                    let document = SyntaxSession::open(language, revision, text)?;
-                    Arc::clone(entry.insert(Arc::new(Mutex::new(document))))
-                }
-            }
-        };
-        {
-            document
-                .lock()
-                .map_err(|_| internal_error())?
-                .synchronize(language, revision, text)?;
-        }
-        Ok(document)
+        self.syntax_documents
+            .lock()
+            .map_err(|_| internal_error())?
+            .get(&(connection.connection_id, document_id.to_owned()))
+            .cloned()
+            .ok_or_else(invalid_params)
     }
+}
+
+fn validate_revision(document: &SyntaxSession, revision: u64) -> Result<(), RpcError> {
+    if document.document.revision().value() != revision {
+        return Err(invalid_params());
+    }
+    Ok(())
+}
+
+fn byte_offset_for_utf16_index(text: &str, requested: usize) -> Option<usize> {
+    let mut index = 0;
+    for (byte_offset, character) in text.char_indices() {
+        if index == requested {
+            return Some(byte_offset);
+        }
+        index += character.len_utf16();
+        if index > requested {
+            return None;
+        }
+    }
+    (index == requested).then_some(text.len())
+}
+
+fn invalid_params() -> RpcError {
+    RpcError::new(-32602, AppServerErrorName::InvalidParams)
 }
 
 fn validate_document_id(document_id: &str) -> Result<(), RpcError> {

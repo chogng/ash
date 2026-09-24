@@ -111,6 +111,9 @@ const models = disposables.add(new BrowserTextModelService(resourceStore, {
 }));
 let syntaxAnalysisCount = 0;
 disposables.add(new AppServerSyntaxProviders(languageFeaturesService, {
+	generation: 1,
+	open: async () => {},
+	update: async () => {},
 	analyze: async params => {
 		syntaxAnalysisCount += 1;
 		return {

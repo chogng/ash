@@ -41,11 +41,29 @@ export interface SyntaxDiagnostic {
 	readonly kind: "error" | "missing";
 }
 
-export interface SyntaxAnalyzeParams {
+export interface SyntaxOpenParams {
 	readonly documentId: string;
 	readonly language: SyntaxLanguage;
 	readonly revision: number;
 	readonly text: string;
+}
+
+export interface SyntaxEdit {
+	readonly startOffset: number;
+	readonly endOffset: number;
+	readonly text: string;
+}
+
+export interface SyntaxUpdateParams {
+	readonly documentId: string;
+	readonly previousRevision: number;
+	readonly revision: number;
+	readonly edits: readonly SyntaxEdit[];
+}
+
+export interface SyntaxAnalyzeParams {
+	readonly documentId: string;
+	readonly revision: number;
 }
 
 export interface SyntaxAnalyzeResult {
@@ -72,6 +90,9 @@ export interface SyntaxCloseParams {
 
 /** Transport-neutral entry point for bounded, authoritative source syntax analysis. */
 export interface ISyntaxApi {
+	readonly generation: number;
+	open(params: SyntaxOpenParams): Promise<void>;
+	update(params: SyntaxUpdateParams): Promise<void>;
 	analyze(params: SyntaxAnalyzeParams): Promise<SyntaxAnalyzeResult>;
 	selectionRanges(params: SyntaxSelectionRangesParams): Promise<SyntaxSelectionRangesResult>;
 	close(params: SyntaxCloseParams): Promise<void>;

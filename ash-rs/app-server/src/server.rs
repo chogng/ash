@@ -2370,6 +2370,8 @@ impl AppServer {
                 self.fs_read_binary_file(connection, &request.params)
             }
             Some(ClientMethod::DiffCompute) => self.diff_compute(&request.params),
+            Some(ClientMethod::SyntaxOpen) => self.syntax_open(connection, &request.params),
+            Some(ClientMethod::SyntaxUpdate) => self.syntax_update(connection, &request.params),
             Some(ClientMethod::SyntaxAnalyze) => self.syntax_analyze(connection, &request.params),
             Some(ClientMethod::SyntaxSelectionRanges) => {
                 self.syntax_selection_ranges(connection, &request.params)

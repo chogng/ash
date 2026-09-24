@@ -1293,9 +1293,13 @@ use crate::protocol::syntax::SyntaxDiagnosticDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::syntax::SyntaxDiagnosticKindDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::syntax::SyntaxEditDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::syntax::SyntaxFoldingRangeDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::syntax::SyntaxLanguageDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::syntax::SyntaxOpenParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::syntax::SyntaxPositionDto;
 #[cfg(any(test, feature = "export"))]
@@ -1314,6 +1318,8 @@ use crate::protocol::syntax::SyntaxSymbolKindDto;
 use crate::protocol::syntax::SyntaxTokenDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::syntax::SyntaxTokenKindDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::syntax::SyntaxUpdateParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalAttachParams;
 #[cfg(any(test, feature = "export"))]
@@ -3068,6 +3074,16 @@ client_methods! {
         response: DiffComputeResult,
         serialization: GlobalSharedRead,
     },
+    SyntaxOpen => "syntax/open" {
+        params: SyntaxOpenParams,
+        response: (),
+        serialization: ResourceExclusive("documentId"),
+    },
+    SyntaxUpdate => "syntax/update" {
+        params: SyntaxUpdateParams,
+        response: (),
+        serialization: ResourceExclusive("documentId"),
+    },
     SyntaxAnalyze => "syntax/analyze" {
         params: SyntaxAnalyzeParams,
         response: SyntaxAnalyzeResult,
@@ -4541,6 +4557,9 @@ typescript_bindings! {
     DiffHunkDto,
     DiffComputeResult,
     SyntaxLanguageDto,
+    SyntaxOpenParams,
+    SyntaxEditDto,
+    SyntaxUpdateParams,
     SyntaxPositionDto,
     SyntaxRangeDto,
     SyntaxTokenKindDto,

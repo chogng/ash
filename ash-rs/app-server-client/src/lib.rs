@@ -128,6 +128,9 @@ use ash_app_server_protocol::protocol::skills::{
 };
 use ash_app_server_protocol::protocol::syntax::SyntaxAnalyzeParams;
 use ash_app_server_protocol::protocol::syntax::SyntaxAnalyzeResult;
+use ash_app_server_protocol::protocol::syntax::SyntaxCloseParams;
+use ash_app_server_protocol::protocol::syntax::SyntaxOpenParams;
+use ash_app_server_protocol::protocol::syntax::SyntaxUpdateParams;
 use ash_app_server_protocol::protocol::terminal::TerminalAttachParams;
 use ash_app_server_protocol::protocol::terminal::TerminalAttachResult;
 use ash_app_server_protocol::protocol::terminal::TerminalCloseParams;
@@ -595,6 +598,18 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         params: SyntaxAnalyzeParams,
     ) -> Result<SyntaxAnalyzeResult, ClientError> {
         self.call(ClientMethod::SyntaxAnalyze, params)
+    }
+
+    pub fn open_syntax(&mut self, params: SyntaxOpenParams) -> Result<(), ClientError> {
+        self.call(ClientMethod::SyntaxOpen, params)
+    }
+
+    pub fn update_syntax(&mut self, params: SyntaxUpdateParams) -> Result<(), ClientError> {
+        self.call(ClientMethod::SyntaxUpdate, params)
+    }
+
+    pub fn close_syntax(&mut self, params: SyntaxCloseParams) -> Result<(), ClientError> {
+        self.call(ClientMethod::SyntaxClose, params)
     }
 
     pub fn list_git_branches(&mut self) -> Result<GitBranchListResult, ClientError> {

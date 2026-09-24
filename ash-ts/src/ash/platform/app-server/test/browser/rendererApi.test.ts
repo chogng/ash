@@ -63,21 +63,31 @@ test("disconnected Web renderer API rejects product operations explicitly", asyn
 		},
 	);
 	await assert.rejects(
-		api.syntax.analyze({ documentId: "model-1", language: "rust", revision: 1, text: "fn main() {}\n" }),
+		api.syntax.open({ documentId: "model-1", language: "rust", revision: 1, text: "fn main() {}\n" }),
 		(error: unknown) => {
 			assert.ok(error instanceof WebAppServerUnavailableError);
-			assert.equal(error.operation, "syntax.analyze");
+			assert.equal(error.operation, "syntax.open");
 			return true;
 		},
 	);
 	await assert.rejects(
-		api.syntax.selectionRanges({ documentId: "model-1", language: "rust", revision: 1, text: "fn main() {}\n", ranges: [] }),
+		api.syntax.update({ documentId: "model-1", previousRevision: 1, revision: 2, edits: [] }),
 		(error: unknown) => {
 			assert.ok(error instanceof WebAppServerUnavailableError);
-			assert.equal(error.operation, "syntax.selectionRanges");
+			assert.equal(error.operation, "syntax.update");
 			return true;
 		},
 	);
+	await assert.rejects(api.syntax.analyze({ documentId: "model-1", revision: 1 }), (error: unknown) => {
+		assert.ok(error instanceof WebAppServerUnavailableError);
+		assert.equal(error.operation, "syntax.analyze");
+		return true;
+	});
+	await assert.rejects(api.syntax.selectionRanges({ documentId: "model-1", revision: 1, ranges: [] }), (error: unknown) => {
+		assert.ok(error instanceof WebAppServerUnavailableError);
+		assert.equal(error.operation, "syntax.selectionRanges");
+		return true;
+	});
 	await assert.rejects(api.syntax.close({ documentId: "model-1" }), (error: unknown) => {
 		assert.ok(error instanceof WebAppServerUnavailableError);
 		assert.equal(error.operation, "syntax.close");

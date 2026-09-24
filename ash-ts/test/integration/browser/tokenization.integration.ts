@@ -24,6 +24,9 @@ let analyzeCalls = 0;
 let completedCalls = 0;
 const pending: (() => void)[] = [];
 store.add(new AppServerSyntaxProviders(services.languageFeaturesService, {
+	generation: 1,
+	open: async () => {},
+	update: async () => {},
 	analyze: params => {
 		analyzeCalls++;
 		return new Promise(resolve => pending.push(() => {

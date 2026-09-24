@@ -1,7 +1,7 @@
 import { VSBuffer } from "../../../../base/common/buffer.js";
 import { raceCancellationError } from "../../../../base/common/async.js";
 import { Disposable, DisposableMap } from "../../../../base/common/lifecycle.js";
-import type { ISyntaxApi, SyntaxAnalyzeResult, SyntaxDiagnostic, SyntaxSelectionRangesResult, SyntaxSymbol, SyntaxRange, SyntaxLanguage } from "../../../../platform/syntax/common/syntaxApi.js";
+import type { ISyntaxApi, SyntaxAnalyzeResult, SyntaxDiagnostic, SyntaxSelectionRangesResult, SyntaxSymbol, SyntaxRange, SyntaxLanguage, SyntaxEdit } from "../../../../platform/syntax/common/syntaxApi.js";
 import { Position } from "../../../../editor/common/core/position.js";
 import { Range } from "../../../../editor/common/core/range.js";
 import { type TextSnapshot } from "../../../../editor/common/core/textChange.js";
@@ -12,10 +12,17 @@ import type { ILanguageFeaturesService } from '../../../../editor/common/service
 const MAX_SYNTAX_INPUT_BYTES = 4 * 1024 * 1024;
 
 interface CachedSyntaxFacts {
+	readonly generation: number;
 	readonly language: SyntaxLanguage;
 	readonly version: number;
 	readonly text: string;
 	readonly promise: Promise<SyntaxAnalyzeResult>;
+}
+
+interface SynchronizedSyntaxDocument {
+	readonly generation: number;
+	readonly language: SyntaxLanguage;
+	readonly version: number;
 }
 
 /**
@@ -62,27 +69,29 @@ class AppServerSyntaxProvider extends Disposable implements SyntaxProvider, Lang
 		const language = syntaxLanguageForEditorLanguage(request.languageId);
 		if (!language || request.ranges.length === 0) return Object.freeze([]);
 		const text = request.snapshot.getText();
-		if (VSBuffer.fromString(text).byteLength > MAX_SYNTAX_INPUT_BYTES) return Object.freeze([]);
-		if (!this.session(request.model).accept(request.snapshot.version)) return Object.freeze([]);
-		const result = await raceCancellationError(this.syntax.selectionRanges({
-			documentId: request.model.id,
-			language,
-			revision: request.snapshot.version,
-			text,
-			ranges: request.ranges.map(range => ({
+		const session = this.session(request.model);
+		if (VSBuffer.fromString(text).byteLength > MAX_SYNTAX_INPUT_BYTES) {
+			session.markOversized();
+			return Object.freeze([]);
+		}
+		const result = await session.selectionRanges(language, request.snapshot.version, text,
+			request.ranges.map(range => ({
 				start: { lineIndex: range.startLineNumber - 1, columnIndex: range.startColumn - 1 },
 				end: { lineIndex: range.endLineNumber - 1, columnIndex: range.endColumn - 1 },
 			})),
-		}), signal, "App Server syntax selection request was cancelled");
-		return projectAppServerSyntaxSelectionRanges(result, request.snapshot);
+			signal);
+		return result ? projectAppServerSyntaxSelectionRanges(result, request.snapshot) : Object.freeze([]);
 	}
 
 	private async analyze(model: TextModel, languageId: string, snapshot: TextSnapshot, signal: AbortSignal): Promise<SyntaxAnalyzeResult | undefined> {
 		const language = syntaxLanguageForEditorLanguage(languageId);
 		if (!language) return undefined;
 		const text = snapshot.getText();
-		if (VSBuffer.fromString(text).byteLength > MAX_SYNTAX_INPUT_BYTES) return undefined;
 		const session = this.session(model);
+		if (VSBuffer.fromString(text).byteLength > MAX_SYNTAX_INPUT_BYTES) {
+			session.markOversized();
+			return undefined;
+		}
 		const result = await session.analyze(language, snapshot.version, text, signal);
 		if (!result) return undefined;
 		if (result.revision !== snapshot.version) {
@@ -103,18 +112,30 @@ class AppServerSyntaxProvider extends Disposable implements SyntaxProvider, Lang
 class ModelSyntaxSession extends Disposable {
 	private cached: CachedSyntaxFacts | undefined;
 	private latestVersion = -1;
+	private synchronized: SynchronizedSyntaxDocument | undefined;
+	private queue: Promise<void> = Promise.resolve();
+	private readonly pendingEdits = new Map<number, readonly SyntaxEdit[]>();
+	private requiresReopen = false;
 
 	constructor(private readonly syntax: ISyntaxApi, private readonly model: TextModel, onModelDispose: () => void) {
 		super();
+		this._register(model.onDidChangeContent(change => {
+			this.pendingEdits.set(change.version, Object.freeze(change.changes.map(contentChange => Object.freeze({
+				startOffset: contentChange.rangeOffset,
+				endOffset: contentChange.rangeOffset + contentChange.rangeLength,
+				text: contentChange.text,
+			}))));
+			if (model.getValueLength() > MAX_SYNTAX_INPUT_BYTES) this.requiresReopen = true;
+		}));
 		this._register(model.onWillDispose(onModelDispose));
 	}
 
 	public async analyze(language: SyntaxLanguage, version: number, text: string, signal: AbortSignal): Promise<SyntaxAnalyzeResult | undefined> {
 		if (!this.accept(version)) return undefined;
 		let cached = this.cached;
-		if (!cached || cached.language !== language || cached.version !== version || cached.text !== text) {
-			const promise = this.syntax.analyze({ documentId: this.model.id, language, revision: version, text });
-			cached = Object.freeze({ language, version, text, promise });
+		if (!cached || cached.generation !== this.syntax.generation || cached.language !== language || cached.version !== version || cached.text !== text) {
+			const promise = this.run(language, version, text, () => this.syntax.analyze({ documentId: this.model.id, revision: version }));
+			cached = Object.freeze({ generation: this.syntax.generation, language, version, text, promise });
 			this.cached = cached;
 			void promise.catch(() => {
 				if (this.cached === cached) this.cached = undefined;
@@ -123,15 +144,50 @@ class ModelSyntaxSession extends Disposable {
 		return raceCancellationError(cached.promise, signal, 'App Server syntax request was cancelled');
 	}
 
+	public async selectionRanges(language: SyntaxLanguage, version: number, text: string, ranges: readonly SyntaxRange[], signal: AbortSignal): Promise<SyntaxSelectionRangesResult | undefined> {
+		if (!this.accept(version)) return undefined;
+		const promise = this.run(language, version, text, () => this.syntax.selectionRanges({ documentId: this.model.id, revision: version, ranges }));
+		return raceCancellationError(promise, signal, 'App Server syntax selection request was cancelled');
+	}
+
 	public accept(version: number): boolean {
 		if (version < this.latestVersion) return false;
 		this.latestVersion = version;
 		return true;
 	}
 
+	public markOversized(): void {
+		this.requiresReopen = true;
+	}
+
+	private run<T>(language: SyntaxLanguage, version: number, text: string, query: () => Promise<T>): Promise<T> {
+		const result = this.queue.then(async () => {
+			const current = this.synchronized;
+			const generation = this.syntax.generation;
+			if (!current || this.requiresReopen || current.generation !== generation || current.language !== language) {
+				await this.syntax.open({ documentId: this.model.id, language, revision: version, text });
+				this.pendingEdits.clear();
+				this.requiresReopen = false;
+			} else if (current.version < version) {
+				for (let nextVersion = current.version + 1; nextVersion <= version; nextVersion += 1) {
+					const edits = this.pendingEdits.get(nextVersion);
+					if (!edits) throw new Error(`Missing editor changes for syntax revision ${nextVersion}`);
+					await this.syntax.update({ documentId: this.model.id, previousRevision: nextVersion - 1, revision: nextVersion, edits });
+					this.pendingEdits.delete(nextVersion);
+				}
+			} else if (current.version !== version) {
+				throw new Error('App Server syntax request does not follow the editor model');
+			}
+			this.synchronized = Object.freeze({ generation, language, version });
+			return query();
+		});
+		this.queue = result.then(() => undefined, () => undefined);
+		return result;
+	}
+
 	protected override disposeCore(): void {
 		super.disposeCore();
-		void this.syntax.close({ documentId: this.model.id }).catch(error => console.error('Failed to release App Server syntax document', error));
+		void this.queue.then(() => this.syntax.close({ documentId: this.model.id })).catch(error => console.error('Failed to release App Server syntax document', error));
 	}
 }
 

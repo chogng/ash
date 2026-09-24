@@ -37,7 +37,11 @@ use ash_app_server_protocol::protocol::slash_commands::{
     SlashCommandArgumentModeDto, SlashCommandDefinition,
 };
 use ash_app_server_protocol::protocol::syntax::SyntaxAnalyzeParams;
+use ash_app_server_protocol::protocol::syntax::SyntaxCloseParams;
+use ash_app_server_protocol::protocol::syntax::SyntaxEditDto;
 use ash_app_server_protocol::protocol::syntax::SyntaxLanguageDto;
+use ash_app_server_protocol::protocol::syntax::SyntaxOpenParams;
+use ash_app_server_protocol::protocol::syntax::SyntaxUpdateParams;
 use ash_app_server_protocol::protocol::terminal::TerminalAttachParams;
 use ash_app_server_protocol::protocol::terminal::TerminalCreateParams;
 use ash_app_server_protocol::protocol::terminal::TerminalLifecycle;
@@ -225,15 +229,22 @@ fn client_manages_session_dirs_through_typed_contracts() {
 #[test]
 fn client_analyzes_syntax_through_the_typed_contract() {
     let mut client = AppServerClient::new(MockTransport(VecDeque::from([
-        r#"{"jsonrpc":"2.0","id":1,"result":{"revision":8,"hasErrors":false,"tokens":[],"foldingRanges":[],"symbols":[],"diagnostics":[]}}"#.into(),
+        r#"{"jsonrpc":"2.0","id":1,"result":null}"#.into(),
+        r#"{"jsonrpc":"2.0","id":2,"result":{"revision":8,"hasErrors":false,"tokens":[],"foldingRanges":[],"symbols":[],"diagnostics":[]}}"#.into(),
     ])));
 
-    let result = client
-        .analyze_syntax(SyntaxAnalyzeParams {
+    client
+        .open_syntax(SyntaxOpenParams {
             document_id: "model-1".into(),
             language: SyntaxLanguageDto::Rust,
             revision: 8,
             text: "fn main() {}\n".into(),
+        })
+        .unwrap();
+    let result = client
+        .analyze_syntax(SyntaxAnalyzeParams {
+            document_id: "model-1".into(),
+            revision: 8,
         })
         .unwrap();
 
@@ -546,22 +557,45 @@ fn in_process_client_routes_syntax_analysis_to_the_server() {
         })
         .expect("in-process client initializes");
 
-    let result = client
-        .analyze_syntax(SyntaxAnalyzeParams {
+    client
+        .open_syntax(SyntaxOpenParams {
             document_id: "model-1".into(),
             language: SyntaxLanguageDto::Rust,
             revision: 9,
             text: "fn main() {\n}\n".into(),
         })
+        .expect("syntax document opens");
+    client
+        .update_syntax(SyntaxUpdateParams {
+            document_id: "model-1".into(),
+            previous_revision: 9,
+            revision: 10,
+            edits: vec![SyntaxEditDto {
+                start_offset: 3,
+                end_offset: 7,
+                text: "renamed".into(),
+            }],
+        })
+        .expect("syntax edit applies");
+    let result = client
+        .analyze_syntax(SyntaxAnalyzeParams {
+            document_id: "model-1".into(),
+            revision: 10,
+        })
         .expect("syntax analysis succeeds");
 
-    assert_eq!(result.revision, 9);
+    assert_eq!(result.revision, 10);
     assert!(
         result
             .folding_ranges
             .iter()
             .any(|range| { range.range.start.line_index == 0 && range.range.end.line_index == 1 })
     );
+    client
+        .close_syntax(SyntaxCloseParams {
+            document_id: "model-1".into(),
+        })
+        .expect("syntax document closes");
 }
 
 #[test]

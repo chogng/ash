@@ -136,8 +136,8 @@ fn parser_sessions_reuse_one_document_per_connection_and_release_on_close() {
     );
     let first = server.connection();
     let second = server.connection();
-    let first_result = server
-        .syntax_analyze(
+    server
+        .syntax_open(
             &first,
             &json!({
                 "documentId": "model-1", "language": "rust", "revision": 1,
@@ -145,8 +145,8 @@ fn parser_sessions_reuse_one_document_per_connection_and_release_on_close() {
             }),
         )
         .unwrap();
-    let second_result = server
-        .syntax_analyze(
+    server
+        .syntax_open(
             &second,
             &json!({
                 "documentId": "model-1", "language": "rust", "revision": 1,
@@ -154,23 +154,43 @@ fn parser_sessions_reuse_one_document_per_connection_and_release_on_close() {
             }),
         )
         .unwrap();
+    let first_result = server
+        .syntax_analyze(&first, &json!({"documentId": "model-1", "revision": 1}))
+        .unwrap();
+    let second_result = server
+        .syntax_analyze(&second, &json!({"documentId": "model-1", "revision": 1}))
+        .unwrap();
     assert_eq!(first_result["symbols"][0]["name"], "café");
     assert_eq!(second_result["symbols"][0]["name"], "other");
     let document = Arc::clone(
         &server.syntax_documents.lock().unwrap()[&(first.connection_id, "model-1".into())],
     );
 
-    let changed = server
-        .syntax_analyze(
+    assert!(
+        server
+            .syntax_update(
+                &first,
+                &json!({
+                    "documentId": "model-1", "previousRevision": 1, "revision": 3,
+                    "edits": [{"startOffset": 3, "endOffset": 7, "text": "cafè_new"}],
+                })
+            )
+            .is_err()
+    );
+    server
+        .syntax_update(
             &first,
             &json!({
-                "documentId": "model-1", "language": "rust", "revision": 2,
-                "text": "fn café_new() {}\n",
+                "documentId": "model-1", "previousRevision": 1, "revision": 2,
+                "edits": [{"startOffset": 3, "endOffset": 7, "text": "cafè_new"}],
             }),
         )
         .unwrap();
+    let changed = server
+        .syntax_analyze(&first, &json!({"documentId": "model-1", "revision": 2}))
+        .unwrap();
     assert_eq!(changed["revision"], 2);
-    assert_eq!(changed["symbols"][0]["name"], "café_new");
+    assert_eq!(changed["symbols"][0]["name"], "cafè_new");
     assert!(Arc::ptr_eq(
         &document,
         &server.syntax_documents.lock().unwrap()[&(first.connection_id, "model-1".into())]
@@ -179,8 +199,8 @@ fn parser_sessions_reuse_one_document_per_connection_and_release_on_close() {
         .syntax_selection_ranges(
             &first,
             &json!({
-                "documentId": "model-1", "language": "rust", "revision": 2,
-                "text": "fn café_new() {}\n", "ranges": [{
+                "documentId": "model-1", "revision": 2,
+                "ranges": [{
                     "start": {"lineIndex": 0, "columnIndex": 3},
                     "end": {"lineIndex": 0, "columnIndex": 11}
                 }]
@@ -191,11 +211,16 @@ fn parser_sessions_reuse_one_document_per_connection_and_release_on_close() {
     assert!(selected["ranges"].as_array().unwrap().len() > 0);
     assert!(
         server
-            .syntax_analyze(
+            .syntax_analyze(&first, &json!({"documentId": "model-1", "revision": 1}))
+            .is_err()
+    );
+    assert!(
+        server
+            .syntax_update(
                 &first,
                 &json!({
-                    "documentId": "model-1", "language": "rust", "revision": 1,
-                    "text": "fn stale() {}\n",
+                    "documentId": "model-1", "previousRevision": 1, "revision": 3,
+                    "edits": [{"startOffset": 3, "endOffset": 3, "text": "stale"}],
                 })
             )
             .is_err()

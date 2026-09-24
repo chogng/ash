@@ -125,6 +125,8 @@ class FakeTransport implements AppServerTransport {
 			this.respond(request, { dirs: [] });
 		} else if (request.method === "session/list") {
 			this.respond(request, { sessions: [] });
+		} else if (request.method === "syntax/open" || request.method === "syntax/update") {
+			this.respond(request, null);
 		} else if (request.method === "syntax/analyze") {
 			this.respond(request, { revision: 4, hasErrors: false, tokens: [], foldingRanges: [], symbols: [], diagnostics: [] });
 		} else if (request.method === "syntax/selectionRanges") {
@@ -238,17 +240,19 @@ test("routes bounded syntax analysis through the connected renderer host", async
 	const hot = new FakeTransport();
 	const connected = await connectWebRendererApi(hot, connectorHostServices);
 
+	await connected.api.syntax.open({ documentId: "model-1", language: "rust", revision: 4, text: "fn main() {}\n" });
+	assert.equal(hot.requests.at(-1)?.method, "syntax/open");
+	await connected.api.syntax.update({ documentId: "model-1", previousRevision: 4, revision: 5, edits: [{ startOffset: 3, endOffset: 7, text: "entry" }] });
+	assert.equal(hot.requests.at(-1)?.method, "syntax/update");
 	const result = await connected.api.syntax.analyze({
 		documentId: "model-1",
-		language: "rust",
 		revision: 4,
-		text: "fn main() {}\n",
 	});
 
 	assert.deepEqual(result, { revision: 4, hasErrors: false, tokens: [], foldingRanges: [], symbols: [], diagnostics: [] });
 	assert.equal(hot.requests.at(-1)?.method, "syntax/analyze");
 
-	assert.deepEqual(await connected.api.syntax.selectionRanges({ documentId: "model-1", language: "rust", revision: 4, text: "fn main() {}\n", ranges: [{ start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } }] }), { revision: 4, ranges: [] });
+	assert.deepEqual(await connected.api.syntax.selectionRanges({ documentId: "model-1", revision: 4, ranges: [{ start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } }] }), { revision: 4, ranges: [] });
 	assert.equal(hot.requests.at(-1)?.method, "syntax/selectionRanges");
 	await connected.api.syntax.close({ documentId: "model-1" });
 	assert.equal(hot.requests.at(-1)?.method, "syntax/close");

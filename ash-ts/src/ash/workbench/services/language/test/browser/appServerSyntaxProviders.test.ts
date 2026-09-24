@@ -17,6 +17,9 @@ test('Frontend tokens remain independent of App Server diagnostics, symbols, fol
 	let workerCalls = 0;
 	const closed: string[] = [];
 	using providers = new AppServerSyntaxProviders(languages, {
+		generation: 1,
+		open: async () => {},
+		update: async () => {},
 		analyze: async params => {
 			analyzeCalls += 1;
 			return {
@@ -79,6 +82,8 @@ test('Frontend tokens remain independent of App Server diagnostics, symbols, fol
 	assert.equal(model.getTextInRange(structural[0]!), 'fn main() {\n  /* hi\n  */\n}');
 	assert.equal(selectionCalls, 1);
 	model.dispose();
+	await Promise.resolve();
+	await Promise.resolve();
 	assert.deepEqual(closed, [model.id]);
 });
 
@@ -95,11 +100,16 @@ test('App Server parser sessions follow each model revision and release independ
 	using first = new TextModel('fn first() {}\n', { languageId: 'rust' });
 	using second = new TextModel('fn second() {}\n', { languageId: 'rust' });
 	using languages = new LanguageFeaturesService();
-	const requests: { documentId: string; revision: number; text: string }[] = [];
+	const requests: { documentId: string; revision: number }[] = [];
+	const opened: { documentId: string; revision: number; text: string }[] = [];
+	const updated: { documentId: string; previousRevision: number; revision: number; text: string }[] = [];
 	const closed: string[] = [];
 	using providers = new AppServerSyntaxProviders(languages, {
+		generation: 1,
+		open: async params => { opened.push({ documentId: params.documentId, revision: params.revision, text: params.text }); },
+		update: async params => { updated.push({ documentId: params.documentId, previousRevision: params.previousRevision, revision: params.revision, text: params.edits[0]?.text ?? '' }); },
 		analyze: async params => {
-			requests.push({ documentId: params.documentId, revision: params.revision, text: params.text });
+			requests.push({ documentId: params.documentId, revision: params.revision });
 			return { revision: params.revision, hasErrors: false, tokens: [], foldingRanges: [], symbols: [], diagnostics: [] };
 		},
 		selectionRanges: async params => ({ revision: params.revision, ranges: [] }),
@@ -117,14 +127,23 @@ test('App Server parser sessions follow each model revision and release independ
 	first.setValue('fn renamed() {}\n');
 	await symbols(first);
 	assert.deepEqual(requests, [
+		{ documentId: first.id, revision: 1 },
+		{ documentId: second.id, revision: 1 },
+		{ documentId: first.id, revision: first.version },
+	]);
+	assert.deepEqual(opened, [
 		{ documentId: first.id, revision: 1, text: 'fn first() {}\n' },
 		{ documentId: second.id, revision: 1, text: 'fn second() {}\n' },
-		{ documentId: first.id, revision: first.version, text: 'fn renamed() {}\n' },
 	]);
+	assert.deepEqual(updated, [{ documentId: first.id, previousRevision: 1, revision: first.version, text: 'fn renamed() {}\n' }]);
 	first.dispose();
+	await Promise.resolve();
+	await Promise.resolve();
 	assert.deepEqual(closed, [first.id]);
 	await symbols(second);
 	second.dispose();
+	await Promise.resolve();
+	await Promise.resolve();
 	assert.deepEqual(closed, [first.id, second.id]);
 });
 
@@ -134,9 +153,12 @@ test('Selection-only parser sessions close with their editor model', async () =>
 	const selected: { documentId: string; revision: number; text: string }[] = [];
 	const closed: string[] = [];
 	using providers = new AppServerSyntaxProviders(languages, {
+		generation: 1,
+		open: async () => {},
+		update: async () => {},
 		analyze: async () => { throw new Error('Selection must not request full analysis'); },
 		selectionRanges: async params => {
-			selected.push({ documentId: params.documentId, revision: params.revision, text: params.text });
+			selected.push({ documentId: params.documentId, revision: params.revision, text: '' });
 			return { revision: params.revision, ranges: [] };
 		},
 		close: async params => { closed.push(params.documentId); },
@@ -151,7 +173,33 @@ test('Selection-only parser sessions close with their editor model', async () =>
 	}, signal);
 	await provider.provideSelectionRanges({ ...stale, ranges: [new Range(1, 4, 1, 12)] }, signal);
 	await languages.documentSymbolProvider.ordered(model)[0]!.provideDocumentSymbols(stale, signal);
-	assert.deepEqual(selected, [{ documentId: model.id, revision: model.version, text: model.getValue() }]);
+	assert.deepEqual(selected, [{ documentId: model.id, revision: model.version, text: '' }]);
 	model.dispose();
+	await Promise.resolve();
+	await Promise.resolve();
 	assert.deepEqual(closed, [model.id]);
+});
+
+test('oversized intermediate revisions reopen from the current bounded snapshot', async () => {
+	using model = new TextModel('fn initial() {}\n', { languageId: 'rust' });
+	using languages = new LanguageFeaturesService();
+	const opened: string[] = [];
+	let updates = 0;
+	using providers = new AppServerSyntaxProviders(languages, {
+		generation: 1,
+		open: async params => { opened.push(params.text); },
+		update: async () => { updates += 1; },
+		analyze: async params => ({ revision: params.revision, hasErrors: false, tokens: [], foldingRanges: [], symbols: [], diagnostics: [] }),
+		selectionRanges: async params => ({ revision: params.revision, ranges: [] }),
+		close: async () => {},
+	});
+	const signal = new AbortController().signal;
+	const provider = languages.documentSymbolProvider.ordered(model)[0]!;
+	const request = () => provider.provideDocumentSymbols(createLanguageFeatureRequest(model, model.getLanguageId(), signal), signal);
+	await request();
+	model.setValue('x'.repeat(4 * 1024 * 1024 + 1));
+	model.setValue('fn compact() {}\n');
+	await request();
+	assert.deepEqual(opened, ['fn initial() {}\n', 'fn compact() {}\n']);
+	assert.equal(updates, 0);
 });

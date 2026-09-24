@@ -76,7 +76,7 @@ tree-sitter 的输出是 concrete syntax facts，不是统一 AST，也不是 co
 ## Desktop Stanza
 
 Stanza 只对外暴露编辑器与 versioned language-provider contract。声明式 grammar 在专用 TextMate
-Worker 中运行；Workbench 的 `AppServerSyntaxProviders` 把 App Server 的有界解析结果注册为 diagnostic、symbol、folding 与 selection-range provider。前端提交带模型 ID 和版本的完整快照；App Server 按连接保留解析文档，计算相邻快照的最小改动并增量更新语法树。同一版本的功能请求复用解析结果，模型释放时发送 `syntax/close`，连接关闭时清理该连接的全部解析文档。前端 TextModel 仍是文本和版本的唯一依据；解析请求不参与键盘、IME、selection 或同步 transaction，结果须通过 model-version gate 才能应用。
+Worker 中运行；Workbench 的 `AppServerSyntaxProviders` 把 App Server 的有界解析结果注册为 diagnostic、symbol、folding 与 selection-range provider。每个模型第一次使用时发送一次带模型 ID、语言、版本和完整文本的 `syntax/open`；后续版本只发送 UTF-16 编辑范围与替换文本的 `syntax/update`，分析和结构选择只携带模型 ID 与版本。App Server 按连接保留解析文档，并通过 Tree-sitter 的增量编辑接口推进语法树。同一版本的功能请求复用解析结果，模型释放时发送 `syntax/close`，连接关闭时清理该连接的全部解析文档；重连后从新的连接代号重新 open。前端 TextModel 仍是文本和版本的唯一依据；解析请求不参与键盘、IME、selection 或同步 transaction，结果须通过 model-version gate 才能应用。
 
 Smart Select 是一条按需路径：快捷键捕获当前 snapshot 与所有 selection，调用
 `syntax/selectionRanges`，每个 selection 只沿 parser named ancestors 返回默认最多 64 层；普通

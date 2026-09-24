@@ -6852,6 +6852,38 @@
         {
           "properties": {
             "method": {
+              "const": "syntax/open",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/SyntaxOpenParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "syntax/update",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/SyntaxUpdateParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "syntax/analyze",
               "type": "string"
             },
@@ -11229,6 +11261,38 @@
             },
             "result": {
               "$ref": "#/$defs/DiffComputeResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "syntax/open",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "syntax/update",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
             }
           },
           "required": [
@@ -31645,29 +31709,20 @@
       "type": "string"
     },
     "SyntaxAnalyzeParams": {
-      "description": "Immutable document snapshot submitted for bounded syntax analysis.",
+      "description": "Requests parser facts from an already synchronized revision.",
       "properties": {
         "documentId": {
           "type": "string"
-        },
-        "language": {
-          "$ref": "#/$defs/SyntaxLanguageDto"
         },
         "revision": {
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
-        },
-        "text": {
-          "maxLength": 4194304,
-          "type": "string"
         }
       },
       "required": [
         "documentId",
-        "language",
-        "revision",
-        "text"
+        "revision"
       ],
       "type": "object"
     },
@@ -31753,6 +31808,31 @@
       ],
       "type": "string"
     },
+    "SyntaxEditDto": {
+      "description": "One UTF-16 replacement against the last acknowledged parser revision.",
+      "properties": {
+        "endOffset": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "startOffset": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "text": {
+          "maxLength": 4194304,
+          "type": "string"
+        }
+      },
+      "required": [
+        "startOffset",
+        "endOffset",
+        "text"
+      ],
+      "type": "object"
+    },
     "SyntaxFoldingRangeDto": {
       "description": "One parser-derived multi-line folding range.",
       "properties": {
@@ -31778,6 +31858,33 @@
         "typescriptreact"
       ],
       "type": "string"
+    },
+    "SyntaxOpenParams": {
+      "description": "Establishes one parser document from the editor's current text.",
+      "properties": {
+        "documentId": {
+          "type": "string"
+        },
+        "language": {
+          "$ref": "#/$defs/SyntaxLanguageDto"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "text": {
+          "maxLength": 4194304,
+          "type": "string"
+        }
+      },
+      "required": [
+        "documentId",
+        "language",
+        "revision",
+        "text"
+      ],
+      "type": "object"
     },
     "SyntaxPositionDto": {
       "description": "One zero-based UTF-16 position, matching the editor text-model coordinate system.",
@@ -31828,13 +31935,10 @@
       "type": "object"
     },
     "SyntaxSelectionRangesParams": {
-      "description": "Exact document and editor selections submitted for bounded structural-scope lookup.",
+      "description": "Editor selections against an already synchronized parser revision.",
       "properties": {
         "documentId": {
           "type": "string"
-        },
-        "language": {
-          "$ref": "#/$defs/SyntaxLanguageDto"
         },
         "ranges": {
           "items": {
@@ -31847,17 +31951,11 @@
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
-        },
-        "text": {
-          "maxLength": 4194304,
-          "type": "string"
         }
       },
       "required": [
         "documentId",
-        "language",
         "revision",
-        "text",
         "ranges"
       ],
       "type": "object"
@@ -31962,6 +32060,38 @@
         "variable"
       ],
       "type": "string"
+    },
+    "SyntaxUpdateParams": {
+      "description": "Advances one parser document without resending its full text.",
+      "properties": {
+        "documentId": {
+          "type": "string"
+        },
+        "edits": {
+          "items": {
+            "$ref": "#/$defs/SyntaxEditDto"
+          },
+          "maxItems": 1024,
+          "type": "array"
+        },
+        "previousRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "documentId",
+        "previousRevision",
+        "revision",
+        "edits"
+      ],
+      "type": "object"
     },
     "TerminalAttachParams": {
       "additionalProperties": false,

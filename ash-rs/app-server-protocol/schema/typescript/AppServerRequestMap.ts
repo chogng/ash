@@ -356,8 +356,10 @@ import type { SkillSourceSetEnablementParams } from './types/SkillSourceSetEnabl
 import type { SyntaxAnalyzeParams } from './types/SyntaxAnalyzeParams.js';
 import type { SyntaxAnalyzeResult } from './types/SyntaxAnalyzeResult.js';
 import type { SyntaxCloseParams } from './types/SyntaxCloseParams.js';
+import type { SyntaxOpenParams } from './types/SyntaxOpenParams.js';
 import type { SyntaxSelectionRangesParams } from './types/SyntaxSelectionRangesParams.js';
 import type { SyntaxSelectionRangesResult } from './types/SyntaxSelectionRangesResult.js';
+import type { SyntaxUpdateParams } from './types/SyntaxUpdateParams.js';
 import type { TerminalAttachParams } from './types/TerminalAttachParams.js';
 import type { TerminalAttachResult } from './types/TerminalAttachResult.js';
 import type { TerminalCloseParams } from './types/TerminalCloseParams.js';
@@ -577,6 +579,8 @@ export interface AppServerRequestMap {
   "fs/readFile": { params: FsReadFileParams; response: FsReadFileResult };
   "fs/readBinaryFile": { params: FsReadBinaryFileParams; response: FsReadBinaryFileResult };
   "diff/compute": { params: DiffComputeParams; response: DiffComputeResult };
+  "syntax/open": { params: SyntaxOpenParams; response: null };
+  "syntax/update": { params: SyntaxUpdateParams; response: null };
   "syntax/analyze": { params: SyntaxAnalyzeParams; response: SyntaxAnalyzeResult };
   "syntax/selectionRanges": { params: SyntaxSelectionRangesParams; response: SyntaxSelectionRangesResult };
   "syntax/close": { params: SyntaxCloseParams; response: null };
@@ -863,6 +867,8 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "fs/readFile": { method: "fs/readFile" },
   "fs/readBinaryFile": { method: "fs/readBinaryFile" },
   "diff/compute": { method: "diff/compute" },
+  "syntax/open": { method: "syntax/open" },
+  "syntax/update": { method: "syntax/update" },
   "syntax/analyze": { method: "syntax/analyze" },
   "syntax/selectionRanges": { method: "syntax/selectionRanges" },
   "syntax/close": { method: "syntax/close" },

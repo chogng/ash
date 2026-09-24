@@ -121,16 +121,48 @@ pub struct SyntaxDiagnosticDto {
     pub kind: SyntaxDiagnosticKindDto,
 }
 
-/// Immutable document snapshot submitted for bounded syntax analysis.
+/// Establishes one parser document from the editor's current text.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct SyntaxAnalyzeParams {
+pub struct SyntaxOpenParams {
     pub document_id: String,
     pub language: SyntaxLanguageDto,
     #[ts(type = "number")]
     pub revision: u64,
     #[schemars(length(max = 4_194_304))]
     pub text: String,
+}
+
+/// One UTF-16 replacement against the last acknowledged parser revision.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SyntaxEditDto {
+    pub start_offset: usize,
+    pub end_offset: usize,
+    #[schemars(length(max = 4_194_304))]
+    pub text: String,
+}
+
+/// Advances one parser document without resending its full text.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SyntaxUpdateParams {
+    pub document_id: String,
+    #[ts(type = "number")]
+    pub previous_revision: u64,
+    #[ts(type = "number")]
+    pub revision: u64,
+    #[schemars(length(max = 1_024))]
+    pub edits: Vec<SyntaxEditDto>,
+}
+
+/// Requests parser facts from an already synchronized revision.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SyntaxAnalyzeParams {
+    pub document_id: String,
+    #[ts(type = "number")]
+    pub revision: u64,
 }
 
 /// Parser-derived facts for exactly one submitted editor revision.
@@ -146,16 +178,13 @@ pub struct SyntaxAnalyzeResult {
     pub diagnostics: Vec<SyntaxDiagnosticDto>,
 }
 
-/// Exact document and editor selections submitted for bounded structural-scope lookup.
+/// Editor selections against an already synchronized parser revision.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SyntaxSelectionRangesParams {
     pub document_id: String,
-    pub language: SyntaxLanguageDto,
     #[ts(type = "number")]
     pub revision: u64,
-    #[schemars(length(max = 4_194_304))]
-    pub text: String,
     #[schemars(length(max = 1_024))]
     pub ranges: Vec<SyntaxRangeDto>,
 }
