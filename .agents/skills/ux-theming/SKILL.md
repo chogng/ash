@@ -1,40 +1,15 @@
 ---
 name: ux-theming
-description: Apply repository-aware theming, color-token, widget, focus, and high-contrast rules to VS Code or Ash UI. Use when registering colors or styling themed states; in Ash, use its existing theme registry and DOM state owners rather than VS Code variables or selectors.
+description: Ash theming, color tokens, widget styles, focus indicators, and high-contrast theme support. Use when registering colors, styling widgets with theme tokens, or ensuring HC/focus compliance.
 ---
 
 This skill covers color registration, CSS variable usage, widget style patterns, focus indicators, and high-contrast theme requirements.
 
-## Repository routing
-
-Determine the target repository before using any literal name or snippet below:
-
-- In `../vscode`, `.monaco-*`, `.hc-*`, `.vscode-high-contrast`, `src/vs`, and `--vscode-*` are literal repository conventions.
-- In Ash, they describe upstream semantics only. Resolve the equivalent through Ash's existing component root, state owner, and color registry; never paste the snippet or perform a prefix replacement.
-
-### Ash upstream-alignment guard
-
-When the target is Ash, the VS Code names and snippets below describe theme semantics only; they are not copyable CSS or DOM templates. Keep Ash's existing theme owner and generate variables through `ash-ts/src/ash/platform/theme/common/colorRegistry.ts`, which emits `--ash-*`. Never add `--vscode-*`, `.monaco-*`, `.monaco-workbench`, `.hc-black`, `.vscode-high-contrast`, or an upstream DOM/state wrapper merely to reuse a VS Code rule.
-
-Map an upstream color ID to an existing Ash token when the semantics match. Register a new Ash token only when the component has a distinct, durable semantic role and provide the theme variants required by Ash's registry. Theme-name equivalence does not justify copying upstream selector structure, default hex values, focus state ownership, or high-contrast class plumbing.
-
-Before changing Editor or Workbench theming, record the local component root, state classes, focus owner, token owner, and computed-style behavior. Verify the first state-changing slice in a real browser, including focus and high contrast when affected, before migrating more selectors. A prefix replacement from `--vscode-*` to `--ash-*`, matching screenshots, type checking, and selector-count progress do not prove correct theming.
-
-Concrete rule: `var(--ash-editor-background)` produced by Ash's color registry is valid when the component already owns the editor-background semantic. Copying `var(--vscode-editor-background)` or renaming it while also importing `.monaco-editor` nesting is invalid.
-
-Only theme the states required by the current verified component change. A missing upstream stylesheet, color ID, selector, or high-contrast rule does not authorize replacing a Ash stylesheet, renaming unrelated local states, adding upstream wrappers, or recreating the full VS Code theme surface.
-
-For an upstream-alignment task, exercise the same normal, focused, disabled, selected, hover, and high-contrast states that the affected component actually supports in VS Code, then assert Ash's owned class state and computed token values. A static screenshot or a renamed variable is not evidence of parity. If Ash omits a state or makes focus/contrast less usable, keep the item pending and fix it through the existing Ash theme and state owners rather than importing upstream selectors.
-
 ---
-
-## VS Code repository reference
-
-Sections 1–7 below describe literal APIs, selectors, and variables for the VS Code repository. When the target is Ash, keep only the semantic requirement—such as “use a registered background color” or “focus remains visible in high contrast”—and resolve its concrete token and selector from Ash source.
 
 ## 1. Registering Colors
 
-**File**: `src/vs/platform/theme/common/colorUtils.ts`
+**File**: `src/ash/platform/theme/common/colorUtils.ts`
 
 ```typescript
 export const myWidgetBackground = registerColor('myWidget.background',
@@ -52,41 +27,39 @@ export const myWidgetBackground = registerColor('myWidget.background',
 
 | File | Colors |
 |------|--------|
-| `src/vs/platform/theme/common/colors/baseColors.ts` | `foreground`, `focusBorder`, `contrastBorder`, text links |
-| `src/vs/platform/theme/common/colors/editorColors.ts` | Editor widgets, find match, errors/warnings |
-| `src/vs/platform/theme/common/colors/inputColors.ts` | Input, toggle, validation |
-| `src/vs/platform/theme/common/colors/listColors.ts` | List/tree selection, focus, hover, drop |
-| `src/vs/platform/theme/common/colors/miscColors.ts` | Badge, scrollbar, progress bar, sash |
-| `src/vs/workbench/common/theme.ts` | Tabs, sidebar, status bar, panels, editor groups, banner |
+| `src/ash/platform/theme/common/colors/baseColors.ts` | `foreground`, `focusBorder`, `contrastBorder`, text links |
+| `src/ash/platform/theme/common/colors/editorColors.ts` | Editor widgets, find match, errors/warnings |
+| `src/ash/platform/theme/common/colors/inputColors.ts` | Input, toggle, validation |
+| `src/ash/platform/theme/common/colors/listColors.ts` | List/tree selection, focus, hover, drop |
+| `src/ash/platform/theme/common/colors/miscColors.ts` | Badge, scrollbar, progress bar, sash |
+| `src/ash/workbench/common/theme.ts` | Tabs, sidebar, status bar, panels, editor groups, banner |
 
 ## 3. Using Colors in CSS
 
-The names in this section apply literally only in the VS Code repository. In Ash, use a `--ash-*` variable only when it is emitted by Ash's registry and matches the component's semantic role; never synthesize a variable by changing the prefix.
-
-Colors are injected as CSS custom properties on `.monaco-workbench`:
+Colors are injected as CSS custom properties on `.stanza-workbench`:
 
 ```
 Color ID: editor.background
-CSS variable: --vscode-editor-background
-Usage: var(--vscode-editor-background)
+CSS variable: --ash-editor-background
+Usage: var(--ash-editor-background)
 ```
 
 Conversion functions in `colorUtils.ts`:
-- `asCssVariable(colorId)` → `'var(--vscode-editor-background)'`
-- `asCssVariableName(colorId)` → `'--vscode-editor-background'`
+- `asCssVariable(colorId)` → `'var(--ash-editor-background)'`
+- `asCssVariableName(colorId)` → `'--ash-editor-background'`
 
 **In CSS files**, reference directly:
 ```css
 .my-widget {
-    background-color: var(--vscode-editor-background);
-    color: var(--vscode-foreground);
-    border: 1px solid var(--vscode-contrastBorder);
+    background-color: var(--ash-editor-background);
+    color: var(--ash-foreground);
+    border: 1px solid var(--ash-contrastBorder);
 }
 ```
 
 ## 4. Widget Styles Pattern
 
-**File**: `src/vs/platform/theme/browser/defaultStyles.ts`
+**File**: `src/ash/platform/theme/browser/defaultStyles.ts`
 
 Every widget type has a default style object and an override factory:
 
@@ -104,25 +77,23 @@ Available defaults: `defaultButtonStyles`, `defaultInputBoxStyles`, `defaultChec
 
 ## 5. Focus Indicators
 
-The selector and variable below are a VS Code repository example. In Ash, keep the existing focus owner and use the registered Ash focus token and component state selector; do not introduce `.monaco-*` nesting or `--vscode-focusBorder`.
-
-Defined in `src/vs/workbench/browser/media/style.css`:
+Defined in `src/ash/workbench/browser/media/style.css`:
 
 ```css
 .my-widget:focus {
     outline-width: 1px;
     outline-style: solid;
     outline-offset: -1px;
-    outline-color: var(--vscode-focusBorder);
+    outline-color: var(--ash-focusBorder);
 }
 ```
 
-**VS Code repository rules**:
-- Use `var(--vscode-focusBorder)` — never hardcode a focus color in VS Code.
+**Rules**:
+- Use `var(--ash-focusBorder)` — never hardcode a focus color.
 - Default `outline-offset: -1px` (inset). Exception: checkboxes use `2px`.
 - Active elements suppress focus ring: `.my-widget:active { outline: 0 !important; }`
 - Use `.synthetic-focus` class for programmatic focus indication.
-- Toggle buttons use `border: 1px dashed var(--vscode-focusBorder)` instead of outline.
+- Toggle buttons use `border: 1px dashed var(--ash-focusBorder)` instead of outline.
 
 ### Focus Trapping
 
@@ -130,55 +101,46 @@ Modal dialogs must trap focus within the dialog until dismissed. Use `dom.trackF
 
 ## 6. High Contrast Theme Rules
 
-The `.hc-black`, `.hc-light`, and `.vscode-high-contrast` selectors below apply literally only in the VS Code repository. In Ash, inspect and use its existing high-contrast root/state mechanism; do not add those upstream classes or mirror their DOM nesting.
-
 - **Always** provide `hcDark` and `hcLight` defaults when registering colors.
 - HC backgrounds: `Color.black` (hcDark), `Color.white` (hcLight).
 - HC borders: reference `contrastBorder` — it is `null` in normal themes, visible in HC.
 - HC focus: use `activeContrastBorder` (derived from `focusBorder`).
 - In CSS, use `.hc-black` / `.hc-light` class selectors for HC-specific overrides:
   ```css
-  .hc-black .my-widget { border: 1px solid var(--vscode-contrastBorder); }
+  .hc-black .my-widget { border: 1px solid var(--ash-contrastBorder); }
   ```
 - In TypeScript, check `isHighContrast(theme.type)` for runtime behavior changes.
 - **Box shadows** must be removed or replaced in HC mode (shadows are invisible/distracting with high contrast borders):
   ```css
   .my-widget {
-      box-shadow: 0 1px 3px var(--vscode-widget-shadow);
+      box-shadow: 0 1px 3px var(--ash-widget-shadow);
   }
-  .vscode-high-contrast .my-widget {
+  .ash-high-contrast .my-widget {
       box-shadow: none;
-      border: 1px solid var(--vscode-contrastBorder);
+      border: 1px solid var(--ash-contrastBorder);
   }
   ```
 
 ## 7. No Hardcoded Visual Values
 
-The right-hand variables in the table are VS Code repository examples. In Ash, the same semantic rule means selecting an existing registered `--ash-*` token; it never means copying `--vscode-*` or inventing a token by prefix substitution.
-
 Reviewers will always flag hardcoded colors, shadows, sizes that should use theme tokens or CSS variables.
 
 | Hardcoded (flagged) | Correct |
 |---------------------|---------|
-| `rgba(0, 0, 0, 0.12)` | `var(--vscode-widget-shadow)` or theme-aware variable |
-| `#252526` | `var(--vscode-editor-background)` |
-| `color: white` | `var(--vscode-button-foreground)` |
-| `border: 1px solid #ccc` | `var(--vscode-editorWidget-border)` |
-| `border: 1px solid …` (width) | `var(--vscode-strokeThickness)` for the 1px width |
-| `border-radius: 6px` | `var(--vscode-cornerRadius-medium)` (radius ramp) |
-| `padding: 8px 12px` (off-scale) | spacing ramp (`--vscode-spacing-size*`) |
-| `font-size: 14px` (arbitrary) | size ramp (`--vscode-fontSize-*`) |
-| `font-weight: 500` | `--vscode-fontWeight-semiBold` (no 500) |
-| codicon `font-size: 14px` | `--vscode-codiconFontSize` (16) / `-compact` (12) |
+| `rgba(0, 0, 0, 0.12)` | `var(--ash-widget-shadow)` or theme-aware variable |
+| `#252526` | `var(--ash-editor-background)` |
+| `color: white` | `var(--ash-button-foreground)` |
+| `border: 1px solid #ccc` | `var(--ash-editorWidget-border)` |
+| `border: 1px solid …` (width) | `var(--ash-strokeThickness)` for the 1px width |
+| `border-radius: 6px` | `var(--ash-cornerRadius-medium)` (radius ramp) |
+| `padding: 8px 12px` (off-scale) | spacing ramp (`--ash-spacing-size*`) |
+| `font-size: 14px` (arbitrary) | size ramp (`--ash-fontSize-*`) |
+| `font-weight: 500` | `--ash-fontWeight-semiBold` (no 500) |
+| codicon `font-size: 14px` | `--ash-codiconFontSize` (16) / `-compact` (12) |
 
 **Rule:** If a value relates to color, shadow, or border — it must come from a CSS variable or registered color token. The only exception is `0` (zero) values and purely structural measurements like `100%`.
 
-**Size, spacing, radius, font and stroke** values have their own design-system
-**size** tokens (and decision logic — snap maps, the pill→`circle` rule, and the
-compact-glyph convention). Those live in the **ux-css-layout** skill (§10
-Design-System Size Tokens) and the auto-injected
-`.github/instructions/design-tokens.instructions.md`. Reach for those when a flag
-is about *how big / how round / how bold* something is rather than *what color*.
+**Size, spacing, radius, font and stroke** values have their own design-system **size** tokens (and decision logic — snap maps, the pill→`circle` rule, and the compact-glyph convention). Those live in the **ux-css-layout** skill (§10 Design-System Size Tokens) and the auto-injected `.github/instructions/design-tokens.instructions.md`. Reach for those when a flag is about *how big / how round / how bold* something is rather than *what color*.
 
 
 ---
@@ -187,9 +149,9 @@ is about *how big / how round / how bold* something is rather than *what color*.
 
 | Area | File |
 |------|------|
-| Color registration | `src/vs/platform/theme/common/colorUtils.ts` |
-| Color registry (barrel) | `src/vs/platform/theme/common/colorRegistry.ts` |
-| Base colors | `src/vs/platform/theme/common/colors/baseColors.ts` |
-| Workbench colors | `src/vs/workbench/common/theme.ts` |
-| Default widget styles | `src/vs/platform/theme/browser/defaultStyles.ts` |
-| Global workbench styles | `src/vs/workbench/browser/media/style.css` |
+| Color registration | `src/ash/platform/theme/common/colorUtils.ts` |
+| Color registry (barrel) | `src/ash/platform/theme/common/colorRegistry.ts` |
+| Base colors | `src/ash/platform/theme/common/colors/baseColors.ts` |
+| Workbench colors | `src/ash/workbench/common/theme.ts` |
+| Default widget styles | `src/ash/platform/theme/browser/defaultStyles.ts` |
+| Global workbench styles | `src/ash/workbench/browser/media/style.css` |
