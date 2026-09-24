@@ -14,7 +14,6 @@ use ash_core::ToolOutputSink;
 use ash_core::ToolService;
 use async_utils::CancellationToken;
 use core_api::CoreError;
-use core_api::SetGoalRequest;
 use protocol::ThreadGoalStatus;
 use protocol::ToolCall;
 use protocol::ToolDefinition;
@@ -84,14 +83,7 @@ impl GoalToolService {
                 };
                 let goal = self
                     .threads
-                    .set_goal(
-                        identity.thread_id(),
-                        SetGoalRequest {
-                            status: Some(status),
-                            ..SetGoalRequest::default()
-                        },
-                    )?
-                    .goal;
+                    .update_goal_status_from_agent(identity.thread_id(), status)?;
                 success(json!({"goal": goal}))
             }
             _ => Err(CoreError::Policy(format!(

@@ -18,6 +18,7 @@ pub enum ReviewEvidenceTrust {
 #[serde(rename_all = "snake_case")]
 pub enum ReviewEvidenceKind {
     UserMessage,
+    UserGoal,
     UserAnswer,
     Delegation,
     AgentMessage,

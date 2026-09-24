@@ -1,5 +1,6 @@
 use ash_thread_store::ThreadStoreError;
 use std::fmt;
+use std::time::Instant;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CoreError {
@@ -16,7 +17,7 @@ pub enum CoreError {
     ModelFailure(ash_protocol::StableTurnError),
     ModelTransient {
         failure: ash_protocol::StableTurnError,
-        retry_after_ms: Option<u64>,
+        retry_at: Option<Instant>,
     },
     ModelContextOverflow,
     ModelAuthFailed,
@@ -26,6 +27,7 @@ pub enum CoreError {
     NotFound(String),
     Policy(String),
     PolicyCircuitBreaker(String),
+    ReviewContextChanged,
     ToolRepetition(String),
     CommandConflict,
     ThreadStore(ThreadStoreError),
@@ -44,8 +46,14 @@ impl fmt::Display for CoreError {
             Self::Journal(message) => write!(formatter, "journal error: {message}"),
             Self::Model(message) => write!(formatter, "model error: {message}"),
             Self::ModelFailure(failure) => formatter.write_str(&failure.message),
-            Self::ModelTransient { retry_after_ms, .. } => match retry_after_ms {
-                Some(delay) => write!(formatter, "transient model error; retry after {delay} ms"),
+            Self::ModelTransient { retry_at, .. } => match retry_at {
+                Some(deadline) => write!(
+                    formatter,
+                    "transient model error; retry after {} ms",
+                    deadline
+                        .saturating_duration_since(Instant::now())
+                        .as_millis()
+                ),
                 None => formatter.write_str("transient model error"),
             },
             Self::ModelContextOverflow => formatter.write_str("model context window exceeded"),
@@ -57,6 +65,9 @@ impl fmt::Display for CoreError {
             Self::Policy(message) => write!(formatter, "policy error: {message}"),
             Self::PolicyCircuitBreaker(message) => {
                 write!(formatter, "policy circuit breaker: {message}")
+            }
+            Self::ReviewContextChanged => {
+                formatter.write_str("review context changed before tool execution")
             }
             Self::ToolRepetition(message) => write!(formatter, "tool repetition: {message}"),
             Self::CommandConflict => formatter.write_str("command ID conflict"),

@@ -854,15 +854,6 @@ impl AppServer {
                 },
             )
             .map_err(core_error)?;
-        if result_goal.changed {
-            self.updates.publish_thread_goal_updated(
-                ash_app_server_protocol::protocol::goal::ThreadGoalUpdatedNotification {
-                    thread_id: params.thread_id.clone(),
-                    turn_id: None,
-                    goal: result_goal.goal.clone(),
-                },
-            );
-        }
         result(&ThreadGoalSetResponse {
             goal: result_goal.goal,
         })
@@ -875,13 +866,6 @@ impl AppServer {
             .agent_runtime()
             .clear_goal(&params.thread_id)
             .map_err(core_error)?;
-        if cleared {
-            self.updates.publish_thread_goal_cleared(
-                ash_app_server_protocol::protocol::goal::ThreadGoalClearedNotification {
-                    thread_id: params.thread_id,
-                },
-            );
-        }
         result(&ThreadGoalClearResponse { cleared })
     }
 

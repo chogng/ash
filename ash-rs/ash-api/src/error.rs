@@ -1,5 +1,6 @@
 use ash_client::ClientError;
 use std::fmt;
+use std::time::Instant;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ApiError {
@@ -8,7 +9,7 @@ pub enum ApiError {
     AuthFailed(String),
     Cancelled(String),
     Transport(String),
-    RateLimited { retry_after_ms: Option<u64> },
+    RateLimited { retry_at: Option<Instant> },
     UsageLimited,
     Overloaded,
     HttpStatus(u16),
@@ -27,10 +28,13 @@ impl fmt::Display for ApiError {
             }
             Self::Cancelled(message) => write!(formatter, "model request cancelled: {message}"),
             Self::Transport(message) => write!(formatter, "model transport failed: {message}"),
-            Self::RateLimited { retry_after_ms } => match retry_after_ms {
-                Some(milliseconds) => write!(
+            Self::RateLimited { retry_at } => match retry_at {
+                Some(deadline) => write!(
                     formatter,
-                    "model API rate limited; retry after {milliseconds} ms"
+                    "model API rate limited; retry after {} ms",
+                    deadline
+                        .saturating_duration_since(Instant::now())
+                        .as_millis()
                 ),
                 None => formatter.write_str("model API rate limited"),
             },

@@ -94,10 +94,7 @@ pub(crate) fn response_error(response: &ash_client::ClientResponse) -> ApiError 
     match response.status() {
         429 if is_usage_limited(&provider_error_detail(response.body())) => ApiError::UsageLimited,
         429 => ApiError::RateLimited {
-            retry_after_ms: response
-                .retry_after()
-                .and_then(|delay| u64::try_from(delay.as_millis()).ok())
-                .map(|delay| delay.min(60_000)),
+            retry_at: response.retry_after_deadline(),
         },
         status @ (401 | 403 | 500..=599) => ApiError::HttpStatus(status),
         400 => classify_provider_error(response.body(), ProviderErrorFallback::InvalidRequest),

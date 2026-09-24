@@ -410,17 +410,25 @@ impl ThreadController {
         turn_id: &TurnId,
         start: RecordToolExecutionStart,
     ) -> Result<(), CoreError> {
-        self.transition_turn(
-            thread_id,
-            vec![ThreadEvent::ToolExecutionStarted {
-                thread_id: thread_id.clone(),
-                turn_id: turn_id.clone(),
-                tool_call_id: start.tool_call_id,
-                action_digest: start.action_digest,
-                policy_revision: start.policy_revision,
-                authority: start.authority,
-            }],
-        )
+        self.mutate_thread(thread_id, |snapshot| {
+            if start
+                .expected_review_sequence
+                .is_some_and(|expected| snapshot.sequence != expected)
+            {
+                return Err(CoreError::ReviewContextChanged);
+            }
+            self.record_batch(
+                snapshot,
+                vec![ThreadEvent::ToolExecutionStarted {
+                    thread_id: thread_id.clone(),
+                    turn_id: turn_id.clone(),
+                    tool_call_id: start.tool_call_id,
+                    action_digest: start.action_digest,
+                    policy_revision: start.policy_revision,
+                    authority: start.authority,
+                }],
+            )
+        })
     }
 
     pub(crate) fn record_tool_execution_escalated(
@@ -429,18 +437,26 @@ impl ThreadController {
         turn_id: &TurnId,
         escalation: RecordToolExecutionEscalation,
     ) -> Result<(), CoreError> {
-        self.transition_turn(
-            thread_id,
-            vec![ThreadEvent::ToolExecutionEscalated {
-                thread_id: thread_id.clone(),
-                turn_id: turn_id.clone(),
-                tool_call_id: escalation.tool_call_id,
-                action_digest: escalation.action_digest,
-                policy_revision: escalation.policy_revision,
-                denial: escalation.denial,
-                authority: escalation.authority,
-            }],
-        )
+        self.mutate_thread(thread_id, |snapshot| {
+            if escalation
+                .expected_review_sequence
+                .is_some_and(|expected| snapshot.sequence != expected)
+            {
+                return Err(CoreError::ReviewContextChanged);
+            }
+            self.record_batch(
+                snapshot,
+                vec![ThreadEvent::ToolExecutionEscalated {
+                    thread_id: thread_id.clone(),
+                    turn_id: turn_id.clone(),
+                    tool_call_id: escalation.tool_call_id,
+                    action_digest: escalation.action_digest,
+                    policy_revision: escalation.policy_revision,
+                    denial: escalation.denial,
+                    authority: escalation.authority,
+                }],
+            )
+        })
     }
 
     /// Enqueues backend work on the Thread-owned bounded execution mailbox.

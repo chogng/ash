@@ -8,6 +8,7 @@ use ash_action_policy::CapabilitySet;
 use ash_action_policy::ResolvedAction;
 use ash_action_policy::SandboxCompatibility;
 use ash_protocol::CommandId;
+use ash_protocol::ThreadGoalStatus;
 use ash_protocol::ThreadId;
 use ash_protocol::TurnId;
 use ash_protocol::UserInput;
@@ -93,6 +94,130 @@ fn review_history_retains_prior_intent_and_latest_restriction_in_order() {
     assert_eq!(
         context.evidence()[1].trust(),
         ReviewEvidenceTrust::UntrustedContent
+    );
+}
+
+#[test]
+fn client_goal_edit_is_trusted_only_while_that_goal_is_current() {
+    let (threads, root) = fixture();
+    turn(&threads, &root.thread_id, "Prepare deployment");
+    threads
+        .set_goal(
+            &root.thread_id,
+            crate::SetGoalRequest {
+                objective: Some("Inspect only; do not publish".into()),
+                ..crate::SetGoalRequest::default()
+            },
+        )
+        .unwrap();
+    let context = review(&threads, &threads.read_thread(&root.thread_id).unwrap());
+    assert_eq!(context.user_intent(), "Inspect only; do not publish");
+    assert_eq!(context.evidence().len(), 2);
+    assert_eq!(context.evidence()[1].kind(), ReviewEvidenceKind::UserGoal);
+    assert_eq!(
+        context.evidence()[1].trust(),
+        ReviewEvidenceTrust::TrustedUser
+    );
+
+    threads
+        .update_goal_status_from_agent(&root.thread_id, ThreadGoalStatus::Complete)
+        .unwrap();
+    threads
+        .create_goal(&root.thread_id, "Publish everything".into(), None)
+        .unwrap();
+    let context = review(&threads, &threads.read_thread(&root.thread_id).unwrap());
+    assert_eq!(context.user_intent(), "Prepare deployment");
+    assert_eq!(context.evidence().len(), 2);
+    assert_eq!(
+        context.evidence()[1].content(),
+        "Inspect only; do not publish"
+    );
+}
+
+#[test]
+fn agent_goal_writes_do_not_create_user_authorization_evidence() {
+    let (threads, root) = fixture();
+    turn(&threads, &root.thread_id, "Inspect files only");
+    threads
+        .create_goal(&root.thread_id, "Publish everything".into(), None)
+        .unwrap();
+    threads
+        .update_goal_status_from_agent(&root.thread_id, ThreadGoalStatus::Blocked)
+        .unwrap();
+    threads
+        .set_goal(
+            &root.thread_id,
+            crate::SetGoalRequest {
+                token_budget: Some(Some(100)),
+                ..crate::SetGoalRequest::default()
+            },
+        )
+        .unwrap();
+    let context = review(&threads, &threads.read_thread(&root.thread_id).unwrap());
+    assert_eq!(context.user_intent(), "Inspect files only");
+    assert_eq!(context.evidence().len(), 1);
+    assert_eq!(
+        context.evidence()[0].kind(),
+        ReviewEvidenceKind::UserMessage
+    );
+
+    threads
+        .set_goal(
+            &root.thread_id,
+            crate::SetGoalRequest {
+                status: Some(ThreadGoalStatus::Paused),
+                ..crate::SetGoalRequest::default()
+            },
+        )
+        .unwrap();
+    let context = review(&threads, &threads.read_thread(&root.thread_id).unwrap());
+    assert_eq!(context.user_intent(), "Goal status: Paused");
+    assert_eq!(context.evidence()[1].kind(), ReviewEvidenceKind::UserGoal);
+    assert_eq!(context.evidence()[1].content(), "Goal status: Paused");
+
+    let result = threads
+        .set_goal(
+            &root.thread_id,
+            crate::SetGoalRequest {
+                objective: Some("Publish everything".into()),
+                ..crate::SetGoalRequest::default()
+            },
+        )
+        .unwrap();
+    assert!(!result.changed);
+    let context = review(&threads, &threads.read_thread(&root.thread_id).unwrap());
+    assert_eq!(context.user_intent(), "Publish everything");
+    assert_eq!(context.evidence()[2].kind(), ReviewEvidenceKind::UserGoal);
+    assert_eq!(context.evidence()[2].content(), "Publish everything");
+}
+
+#[test]
+fn client_goal_clear_is_recorded_after_the_original_instruction() {
+    let (threads, root) = fixture();
+    turn(&threads, &root.thread_id, "Prepare deployment");
+    threads
+        .set_goal(
+            &root.thread_id,
+            crate::SetGoalRequest {
+                objective: Some("Do not publish".into()),
+                ..crate::SetGoalRequest::default()
+            },
+        )
+        .unwrap();
+    assert!(threads.clear_goal(&root.thread_id).unwrap());
+    let context = review(&threads, &threads.read_thread(&root.thread_id).unwrap());
+    assert_eq!(context.user_intent(), "Prepare deployment");
+    assert_eq!(
+        context
+            .evidence()
+            .iter()
+            .map(|entry| (entry.kind(), entry.content()))
+            .collect::<Vec<_>>(),
+        [
+            (ReviewEvidenceKind::UserMessage, "Prepare deployment"),
+            (ReviewEvidenceKind::UserGoal, "Do not publish"),
+            (ReviewEvidenceKind::UserGoal, "Goal cleared"),
+        ]
     );
 }
 
@@ -259,6 +384,15 @@ fn fork_review_reads_its_retained_prefix_after_the_source_session_is_deleted() {
     threads
         .complete_turn(&root.thread_id, &turn_id, "Understood".into())
         .unwrap();
+    threads
+        .set_goal(
+            &root.thread_id,
+            crate::SetGoalRequest {
+                objective: Some("Do not publish".into()),
+                ..crate::SetGoalRequest::default()
+            },
+        )
+        .unwrap();
     let source = threads.read_thread(&root.thread_id).unwrap();
     let fork = threads
         .create_forked_thread(crate::CreateForkedThreadRequest {
@@ -277,7 +411,9 @@ fn fork_review_reads_its_retained_prefix_after_the_source_session_is_deleted() {
         )
         .unwrap();
     threads.delete_session_threads(&root.session_id).unwrap();
-    assert_eq!(review(&threads, &fork).user_intent(), "Read files only");
+    let context = review(&threads, &fork);
+    assert_eq!(context.user_intent(), "Do not publish");
+    assert_eq!(context.evidence()[2].kind(), ReviewEvidenceKind::UserGoal);
 }
 
 fn request() -> ActionReviewRequest {

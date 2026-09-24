@@ -166,24 +166,25 @@ impl OperationClient for AshClient {
                 .transport
                 .execute(request.request())
                 .map_err(ClientError::from);
-            let retry_delay = match &result {
+            let retry_at = match &result {
                 Ok(response)
                     if request
                         .retry_policy()
                         .should_retry_response(attempt, response.status()) =>
                 {
-                    response
-                        .retry_after()
-                        .unwrap_or_else(|| request.retry_policy().backoff_delay(attempt))
+                    response.retry_after_deadline().unwrap_or_else(|| {
+                        Instant::now() + request.retry_policy().backoff_delay(attempt)
+                    })
                 }
                 Err(_) if request.retry_policy().should_retry_transport_error(attempt) => {
-                    request.retry_policy().backoff_delay(attempt)
+                    Instant::now() + request.retry_policy().backoff_delay(attempt)
                 }
                 _ => return result,
             };
             attempt += 1;
-            if !retry_delay.is_zero() {
-                thread::sleep(retry_delay);
+            let delay = retry_at.saturating_duration_since(Instant::now());
+            if !delay.is_zero() {
+                thread::sleep(delay);
             }
         }
     }
@@ -197,24 +198,27 @@ impl OperationClient for AshClient {
         loop {
             check_cancellation(cancellation)?;
             let result = self.execute_attempt(request, cancellation);
-            let retry_delay = match &result {
+            let retry_at = match &result {
                 Err(ClientError::Cancelled(_)) => return result,
                 Ok(response)
                     if request
                         .retry_policy()
                         .should_retry_response(attempt, response.status()) =>
                 {
-                    response
-                        .retry_after()
-                        .unwrap_or_else(|| request.retry_policy().backoff_delay(attempt))
+                    response.retry_after_deadline().unwrap_or_else(|| {
+                        Instant::now() + request.retry_policy().backoff_delay(attempt)
+                    })
                 }
                 Err(_) if request.retry_policy().should_retry_transport_error(attempt) => {
-                    request.retry_policy().backoff_delay(attempt)
+                    Instant::now() + request.retry_policy().backoff_delay(attempt)
                 }
                 _ => return result,
             };
             attempt += 1;
-            wait_for_retry(retry_delay, cancellation)?;
+            wait_for_retry(
+                retry_at.saturating_duration_since(Instant::now()),
+                cancellation,
+            )?;
         }
     }
 
@@ -236,27 +240,30 @@ impl OperationClient for AshClient {
         loop {
             check_cancellation(cancellation)?;
             let outcome = self.execute_streaming_attempt(request, cancellation, sink)?;
-            let retry_delay = match &outcome.result {
+            let retry_at = match &outcome.result {
                 Ok(response)
                     if !outcome.emitted
                         && request
                             .retry_policy()
                             .should_retry_response(attempt, response.status()) =>
                 {
-                    response
-                        .retry_after()
-                        .unwrap_or_else(|| request.retry_policy().backoff_delay(attempt))
+                    response.retry_after_deadline().unwrap_or_else(|| {
+                        Instant::now() + request.retry_policy().backoff_delay(attempt)
+                    })
                 }
                 Err(_)
                     if !outcome.emitted
                         && request.retry_policy().should_retry_transport_error(attempt) =>
                 {
-                    request.retry_policy().backoff_delay(attempt)
+                    Instant::now() + request.retry_policy().backoff_delay(attempt)
                 }
                 _ => return outcome.result,
             };
             attempt += 1;
-            wait_for_retry(retry_delay, cancellation)?;
+            wait_for_retry(
+                retry_at.saturating_duration_since(Instant::now()),
+                cancellation,
+            )?;
         }
     }
 }

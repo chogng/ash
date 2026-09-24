@@ -1767,6 +1767,8 @@ use ash_protocol::TurnStatus;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::UnixMillis;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::UserGoalChange;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::UserInput;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::UserInputAnswer;
@@ -4257,6 +4259,7 @@ typescript_bindings! {
     SessionThreadResult,
     SessionRewriteResult,
     ThreadGoalStatus,
+    UserGoalChange,
     ThreadGoal,
     ThreadGoalSetParams,
     ThreadGoalSetResponse,

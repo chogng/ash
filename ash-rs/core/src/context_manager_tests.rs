@@ -85,6 +85,7 @@ fn snapshot(sequence: u64, turn_id: TurnId) -> ThreadSnapshot {
         usage: ash_protocol::ModelUsageSummary::default(),
         reference_cost: ash_protocol::ModelReferenceCostSummary::default(),
         goal: None,
+        user_goal_changes: Vec::new(),
         goal_budget_limited_turn_id: None,
         context_calibrations: Vec::new(),
         turns: vec![TurnSnapshot {

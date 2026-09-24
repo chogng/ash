@@ -211,7 +211,7 @@ classifier hook；hook 只能返回 retry decision 和低敏感 evidence，不�
 
 - exponential backoff 必须 bounded；
 - jitter 必须可测试并可注入；
-- `Retry-After` 解析失败时使用本地 policy，不 panic；
+- `Retry-After` 同时支持秒数与 HTTP 日期，在响应头到达时计算截止时间；读取响应体和传递错误耗掉的时间不再重复等待；解析失败时使用本地 policy，不 panic；
 - 超出 overall operation deadline 时不启动新 attempt；
 - cancellation 立即中止 backoff 并传递给活跃 transport attempt；
 - 测试使用 fake clock，不真实 sleep。

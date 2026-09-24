@@ -154,7 +154,7 @@ Anthropic request builder 在 wire clone 上为最后一个 tool、system conten
 | HTTP 400 或供应商错误体中的 `invalid_request` | `InvalidRequest` |
 | HTTP 401/403 或供应商错误体中的认证失败 | `AuthFailed` |
 | 供应商错误体中的上下文上限 | `ContextOverflow` |
-| HTTP 429 | `RateLimited { retry_after_ms }` |
+| HTTP 429 | `RateLimited { retry_at }`，保存响应头到达时计算的单调时钟截止时间 |
 | HTTP 5xx/529 或供应商错误体中的过载 | `Overloaded` |
 | 其他非 2xx | `HttpStatus(status)` |
 | response JSON、field 或 stream lifecycle 无效 | `InvalidResponse` |

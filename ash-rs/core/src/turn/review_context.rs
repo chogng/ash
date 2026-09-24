@@ -10,6 +10,7 @@ use ash_action_policy::ReviewEvidenceTrust;
 use ash_protocol::AgentResponse;
 use ash_protocol::ItemId;
 use ash_protocol::ThreadItem;
+use ash_protocol::UserGoalChange;
 use guardian_context::MessageOrigin;
 use std::collections::BTreeSet;
 
@@ -26,6 +27,7 @@ pub(super) fn attach_review_context(
         prefixes: BTreeSet::new(),
         items: BTreeSet::new(),
         answers: BTreeSet::new(),
+        current_user_goals: BTreeSet::new(),
         evidence: Vec::new(),
     };
     history.append(snapshot)?;
@@ -33,7 +35,11 @@ pub(super) fn attach_review_context(
         .evidence
         .iter()
         .rev()
-        .find(|entry| entry.kind() == ReviewEvidenceKind::UserMessage)
+        .find(|entry| {
+            entry.kind() == ReviewEvidenceKind::UserMessage
+                || (entry.kind() == ReviewEvidenceKind::UserGoal
+                    && history.current_user_goals.contains(entry.source()))
+        })
         .map(|entry| entry.content().to_owned())
         .unwrap_or_default();
     history.evidence.extend(host_evidence);
@@ -46,6 +52,7 @@ struct History<'a> {
     prefixes: BTreeSet<(ash_protocol::ThreadId, u64)>,
     items: BTreeSet<ItemId>,
     answers: BTreeSet<String>,
+    current_user_goals: BTreeSet<String>,
     evidence: Vec<ReviewEvidence>,
 }
 
@@ -134,6 +141,47 @@ impl History<'_> {
                 command.response_sequence,
                 ReviewEvidence::new(
                     ReviewEvidenceKind::UserAnswer,
+                    ReviewEvidenceTrust::TrustedUser,
+                    source,
+                    content,
+                ),
+            ));
+        }
+        for (sequence, change) in &snapshot.user_goal_changes {
+            let (goal_id, content) = match change {
+                UserGoalChange::Set {
+                    goal_id,
+                    objective,
+                    status,
+                } => {
+                    let content = match (objective, status) {
+                        (Some(objective), Some(status)) => {
+                            format!("{objective}\nGoal status: {status:?}")
+                        }
+                        (Some(objective), None) => objective.clone(),
+                        (None, Some(status)) => format!("Goal status: {status:?}"),
+                        (None, None) => unreachable!("reducer validates user Goal changes"),
+                    };
+                    (goal_id, content)
+                }
+                UserGoalChange::Clear { goal_id } => (goal_id, "Goal cleared".into()),
+            };
+            let source = format!(
+                "thread/{}/goal/{goal_id}/change/{sequence}",
+                snapshot.thread_id
+            );
+            if matches!(change, UserGoalChange::Set { .. })
+                && snapshot
+                    .goal
+                    .as_ref()
+                    .is_some_and(|goal| goal.goal_id == *goal_id && !goal.status.is_complete())
+            {
+                self.current_user_goals.insert(source.clone());
+            }
+            ordered.push((
+                *sequence,
+                ReviewEvidence::new(
+                    ReviewEvidenceKind::UserGoal,
                     ReviewEvidenceTrust::TrustedUser,
                     source,
                     content,

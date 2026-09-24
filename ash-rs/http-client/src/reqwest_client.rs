@@ -11,6 +11,7 @@ use crate::OutboundProxyRoute;
 use crate::RedirectPolicy;
 use crate::Timeout;
 use crate::outbound_network::is_public_internet_ip;
+use crate::request::ResponseReceivedAt;
 use ash_async_utils::CancellationToken;
 use reqwest::dns::Addrs;
 use reqwest::dns::Name;
@@ -281,6 +282,7 @@ impl ReqwestHttpClient {
                     continue;
                 }
             }
+            let received_at = ResponseReceivedAt::now();
             let status = response.status().as_u16();
             let headers = response
                 .headers()
@@ -343,7 +345,12 @@ impl ReqwestHttpClient {
             }
             initial.check()?;
             permit.check()?;
-            return Ok(HttpResponse::new(status, headers, buffered));
+            return Ok(HttpResponse::with_received_at(
+                status,
+                headers,
+                buffered,
+                received_at,
+            ));
         }
     }
 }

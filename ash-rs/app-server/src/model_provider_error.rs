@@ -8,9 +8,7 @@ pub(super) fn map_model_provider_error(error: ModelProviderError) -> CoreError {
         return CoreError::Cancelled(message.clone());
     }
 
-    let retry_after_ms = error
-        .retry_after()
-        .and_then(|delay| u64::try_from(delay.as_millis()).ok());
+    let retry_at = error.retry_after_deadline();
     let mapped = match &error {
         ModelProviderError::ConfigurationMissing
         | ModelProviderError::Config(_)
@@ -22,23 +20,20 @@ pub(super) fn map_model_provider_error(error: ModelProviderError) -> CoreError {
         }
         ModelProviderError::Api(ApiError::RateLimited { .. }) => CoreError::ModelTransient {
             failure: StableTurnError::rate_limited(),
-            retry_after_ms,
+            retry_at,
         },
         ModelProviderError::Api(ApiError::Transport(_)) => CoreError::ModelTransient {
             failure: StableTurnError::connection_failed(),
-            retry_after_ms,
+            retry_at,
         },
         ModelProviderError::Api(ApiError::Overloaded) => CoreError::ModelTransient {
             failure: StableTurnError::provider_unavailable(),
-            retry_after_ms,
+            retry_at,
         },
         ModelProviderError::Api(ApiError::HttpStatus(status)) => {
             let failure = StableTurnError::provider_http(*status);
             if failure.retryable {
-                CoreError::ModelTransient {
-                    failure,
-                    retry_after_ms,
-                }
+                CoreError::ModelTransient { failure, retry_at }
             } else {
                 CoreError::ModelFailure(failure)
             }

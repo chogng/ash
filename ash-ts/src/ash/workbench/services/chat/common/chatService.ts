@@ -177,6 +177,7 @@ export type ThreadCommittedEvent =
 		| "goalCreated"
 		| "goalUpdated"
 		| "goalCleared"
+		| "userGoalChanged"
 		| "turnExecutionBound"
 		| "agentContextSeedCommitted"
 		| "historyPrefixBound"

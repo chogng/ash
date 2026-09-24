@@ -248,7 +248,7 @@ Profile 解析发生在 Turn 接受安全点：host 选择声明式 ToolProfile�
 
 ### 7.4 当前接线与剩余恢复
 
-- **已实现**：`ApiError` 分类 `RateLimited { retry_after_ms }`、`Overloaded`、`ContextOverflow`、`AuthFailed`、`InvalidRequest` 和 `InvalidResponse`；HTTP/SSE 适配器从状态码和 OpenAI、Anthropic、Google 错误体映射，`ModelProviderError` 与 `CoreError` 透传类别。
+- **已实现**：`ApiError` 分类 `RateLimited { retry_at }`、`Overloaded`、`ContextOverflow`、`AuthFailed`、`InvalidRequest` 和 `InvalidResponse`；`retry_at` 是响应头到达时计算的单调时钟截止时间；HTTP/SSE 适配器从状态码和 OpenAI、Anthropic、Google 错误体映射，`ModelProviderError` 与 `CoreError` 透传类别。
 - **已实现**：重试循环位于 `ModelService` 之上的执行器；认证与无效请求不重试，无效响应只重试一次，瞬时错误保留类型化 `Retry-After`。
 - **已实现**：`ContextOverflow` 触发一次 durable compaction；`ContextOverflowRecoveryCommitted` 把 checkpoint 与 Turn 级恢复标记原子提交，执行器随后从新 snapshot 重试一次；再次溢出保持 `contextOverflow`。
 - **已实现**：Desktop 只读取 canonical Turn 的 `StableTurnErrorCode` 来投影错误卡片。临时失败可显式开始新 Turn，认证错误进入模型选择，上下文或 Goal 预算耗尽创建新对话，无效请求与 `toolRepetition` 聚焦输入以修改方案；刷新和重连不保留第二份错误状态。

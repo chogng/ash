@@ -1,5 +1,6 @@
 use super::policy_feedback::denied_feedback;
 use super::policy_feedback::safer_action_feedback;
+use super::review_context::attach_review_context;
 use crate::ActionPolicyService;
 use crate::AutoReviewedToolGrant;
 use crate::CoreError;
@@ -62,6 +63,7 @@ pub(super) struct ToolExecutionContext<'a> {
     thread_id: &'a ThreadId,
     turn_id: &'a TurnId,
     item_id: &'a ItemId,
+    review_sequence: u64,
     frozen_policy_revision: &'a str,
     approval_mode: ApprovalMode,
     cancellation: &'a CancellationToken,
@@ -73,6 +75,7 @@ impl<'a> ToolExecutionContext<'a> {
         thread_id: &'a ThreadId,
         turn_id: &'a TurnId,
         item_id: &'a ItemId,
+        review_sequence: u64,
         frozen_policy_revision: &'a str,
         approval_mode: ApprovalMode,
         cancellation: &'a CancellationToken,
@@ -82,6 +85,7 @@ impl<'a> ToolExecutionContext<'a> {
             thread_id,
             turn_id,
             item_id,
+            review_sequence,
             frozen_policy_revision,
             approval_mode,
             cancellation,
@@ -157,6 +161,11 @@ impl ToolExecutionOrchestrator {
                 action_digest: reviewed.action().digest().as_str().to_owned(),
                 policy_revision: reviewed.action_policy_revision().as_str().to_owned(),
                 authority: execution_authority(&authorization),
+                expected_review_sequence: matches!(
+                    authorization,
+                    ToolAuthorization::AutoReviewed(_)
+                )
+                .then_some(context.review_sequence),
             },
         )?;
 
@@ -230,6 +239,11 @@ impl ToolExecutionOrchestrator {
                 action_digest: reviewed.action().digest().as_str().to_owned(),
                 policy_revision: reviewed.action_policy_revision().as_str().to_owned(),
                 authority: execution_authority(&authorization),
+                expected_review_sequence: matches!(
+                    authorization,
+                    ToolAuthorization::AutoReviewed(_)
+                )
+                .then_some(context.review_sequence),
             },
         )?;
         let output = match operation() {
@@ -257,6 +271,11 @@ impl ToolExecutionOrchestrator {
                 action_digest: reviewed.action().digest().as_str().to_owned(),
                 policy_revision: reviewed.action_policy_revision().as_str().to_owned(),
                 authority: execution_authority(authorization),
+                expected_review_sequence: matches!(
+                    authorization,
+                    ToolAuthorization::AutoReviewed(_)
+                )
+                .then_some(context.review_sequence),
             },
         )?;
         Ok(())
@@ -313,6 +332,7 @@ impl ToolExecutionOrchestrator {
                 policy_revision: reviewed.action_policy_revision().as_str().to_owned(),
                 denial,
                 authority: execution_authority(&authorization),
+                expected_review_sequence: None,
             },
         )?;
         let output = match self.execute_service(context, &call, &authorization) {
@@ -489,12 +509,20 @@ impl ToolExecutionOrchestrator {
     ) -> Result<ToolAttempt, CoreError> {
         let denial_reason = truncate(denial.reason(), MAX_DENIAL_REASON_CHARS);
         let denial_output = truncate(denial.output().aggregated_output(), MAX_DENIAL_OUTPUT_CHARS);
+        let snapshot = self.threads.read_thread(context.thread_id)?;
         let second_review = reviewed
             .clone()
             .after_sandbox_denial(SandboxDenialEvidence::new(
                 denial_reason.clone(),
                 denial_output,
             ));
+        let second_review = attach_review_context(
+            second_review,
+            &self.threads,
+            &snapshot,
+            context.item_id,
+            self.tools.review_evidence(call)?,
+        )?;
         let decision = match crate::decide_turn_action(
             self.policy.as_ref(),
             context.frozen_policy_revision,
@@ -616,7 +644,7 @@ impl ToolExecutionOrchestrator {
             .check()
             .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
         let authority = execution_authority(&authorization);
-        self.threads.record_tool_execution_escalated(
+        let escalated = self.threads.record_tool_execution_escalated(
             context.thread_id,
             context.turn_id,
             RecordToolExecutionEscalation {
@@ -625,8 +653,22 @@ impl ToolExecutionOrchestrator {
                 policy_revision: reviewed.action_policy_revision().as_str().to_owned(),
                 denial,
                 authority,
+                expected_review_sequence: matches!(
+                    authorization,
+                    ToolAuthorization::AutoReviewed(_)
+                )
+                .then_some(snapshot.sequence),
             },
-        )?;
+        );
+        if matches!(escalated, Err(CoreError::ReviewContextChanged)) {
+            return Ok(ToolAttempt::Commit {
+                output: ToolCallOutput::Failure(
+                    "automatic review context changed before outside-sandbox retry; the exact call was not retried".into(),
+                ),
+                completion: ToolExecutionCompletion::Complete,
+            });
+        }
+        escalated?;
 
         let output = match self.execute_service(context, call, &authorization) {
             Ok(ToolExecutionOutput::Success(text)) => ToolCallOutput::Success(text),

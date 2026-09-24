@@ -70,6 +70,7 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
@@ -983,10 +984,8 @@ impl TurnExecutor {
                         }
                         break (response, stream);
                     }
-                    Err(CoreError::ModelTransient { retry_after_ms, .. })
-                        if transient_attempt < 3 =>
-                    {
-                        wait_for_model_retry(cancellation, transient_attempt, retry_after_ms)?;
+                    Err(CoreError::ModelTransient { retry_at, .. }) if transient_attempt < 3 => {
+                        wait_for_model_retry(cancellation, transient_attempt, retry_at)?;
                         transient_attempt += 1;
                     }
                     Err(CoreError::ModelInvalidResponse) if !invalid_response_attempt => {
@@ -1888,25 +1887,29 @@ fn current_unix_ms() -> Result<u64, CoreError> {
 fn wait_for_model_retry(
     cancellation: &CancellationToken,
     attempt: u32,
-    retry_after_ms: Option<u64>,
+    retry_at: Option<Instant>,
 ) -> Result<(), ExecutionFailure> {
-    let delay_ms = match retry_after_ms {
-        Some(value) => value.min(60_000),
+    let delay = match retry_at {
+        Some(deadline) => deadline
+            .saturating_duration_since(Instant::now())
+            .min(Duration::from_secs(60)),
         None => {
             let base = 1_000_u64.saturating_mul(2_u64.saturating_pow(attempt));
             let jitter = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map(|duration| duration.subsec_nanos() as u64 % 51)
                 .unwrap_or(25);
-            (base.saturating_mul(75 + jitter) / 100).min(30_000)
+            Duration::from_millis((base.saturating_mul(75 + jitter) / 100).min(30_000))
         }
     };
-    let mut remaining = delay_ms;
-    while remaining > 0 {
+    let deadline = Instant::now() + delay;
+    loop {
         check_cancellation(cancellation)?;
-        let step = remaining.min(100);
-        std::thread::sleep(Duration::from_millis(step));
-        remaining -= step;
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            break;
+        }
+        std::thread::sleep(remaining.min(Duration::from_millis(100)));
     }
     Ok(())
 }

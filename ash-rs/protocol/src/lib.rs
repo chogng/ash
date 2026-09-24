@@ -226,6 +226,7 @@ pub use thread::ThreadUpdate;
 pub use thread::ThreadUpdateEnvelope;
 pub use thread::ToolExecutionAuthority;
 pub use thread::ToolOutputStream;
+pub use thread::UserGoalChange;
 pub use tool_binding::ToolCallBinding;
 pub use tool_binding::ToolCallCaller;
 pub use tool_binding::ToolSourceProvenance;

@@ -102,7 +102,9 @@ spawn_pipe_process / spawn_pipe_process_no_stdin
 Unix pipe child 进入独立 session/process group；terminate/interrupt 作用于 group。Linux
 `set_parent_death_signal` 在 `pre_exec` 设置 SIGTERM 并复查 parent PID，降低 fork/exec race。
 
-macOS 的 `pre_exec` 描述符清理只使用内核查询、`fcntl` 与 `close`，不枚举目录或分配内存。
+Linux 的 `pre_exec` 从 `/proc/self/fd` 用栈缓冲区读取描述符，并用 `fcntl` 设置 `CLOEXEC`；
+不在 fork 后分配内存。读取或设置失败会终止 spawn。macOS 的 `pre_exec` 描述符清理只使用
+内核查询、`fcntl` 与 `close`，不枚举目录或分配内存。
 遍历上限来自当前子进程的描述符表容量，覆盖稀疏高位 FD，也覆盖降低 `RLIMIT_NOFILE` 后仍然
 打开的 FD。保留 stdio、显式传入的 FD 与用于报告 exec 失败的 CLOEXEC 管道；清理失败会让
 spawn 返回错误。

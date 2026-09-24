@@ -1547,11 +1547,11 @@ fn retries_transient_model_failures_before_completing() {
     let model = Arc::new(ScriptedModel::new([
         Err(CoreError::ModelTransient {
             failure: ash_protocol::StableTurnError::connection_failed(),
-            retry_after_ms: None,
+            retry_at: None,
         }),
         Err(CoreError::ModelTransient {
             failure: ash_protocol::StableTurnError::connection_failed(),
-            retry_after_ms: None,
+            retry_at: None,
         }),
         Ok(text_response("recovered")),
     ]));
@@ -3763,7 +3763,7 @@ fn model_failure_details_survive_retry_exhaustion() {
         let (threads, thread_id, turn_id) = started_turn();
         let error = CoreError::ModelTransient {
             failure: stable.clone(),
-            retry_after_ms: None,
+            retry_at: None,
         };
         let model = Arc::new(ScriptedModel::new(vec![Err(error.clone()); 4]));
         let executor = TurnExecutor::without_tools(threads.clone(), model.clone());

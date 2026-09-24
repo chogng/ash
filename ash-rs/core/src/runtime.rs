@@ -489,14 +489,19 @@ impl AgentRuntime for Runtime<'_> {
         thread_id: &ThreadId,
         request: SetGoalRequest,
     ) -> Result<SetGoalResult, CoreError> {
+        let before = self.threads.read_thread(thread_id)?.sequence;
         let result = self.threads.set_goal(thread_id, request)?;
+        self.publish(thread_id, before)?;
         if result.changed && result.goal.status == ThreadGoalStatus::Active {
             self.executor.resume_extension_continuation(thread_id)?;
         }
         Ok(result)
     }
     fn clear_goal(&self, thread_id: &ThreadId) -> Result<bool, CoreError> {
-        self.threads.clear_goal(thread_id)
+        let before = self.threads.read_thread(thread_id)?.sequence;
+        let cleared = self.threads.clear_goal(thread_id)?;
+        self.publish(thread_id, before)?;
+        Ok(cleared)
     }
     fn archive_session(
         &self,

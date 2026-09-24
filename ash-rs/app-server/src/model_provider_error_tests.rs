@@ -112,13 +112,14 @@ fn provider_failure_categories_cross_the_product_boundary_without_raw_details() 
 
 #[test]
 fn transient_retry_delay_crosses_the_product_boundary_as_typed_metadata() {
+    let retry_at = std::time::Instant::now() + std::time::Duration::from_millis(1_250);
     assert_eq!(
         map_model_provider_error(ModelProviderError::Api(ApiError::RateLimited {
-            retry_after_ms: Some(1_250),
+            retry_at: Some(retry_at),
         })),
         CoreError::ModelTransient {
             failure: StableTurnError::rate_limited(),
-            retry_after_ms: Some(1_250),
+            retry_at: Some(retry_at),
         }
     );
 }
@@ -415,7 +416,7 @@ fn configuration_and_http_failures_keep_their_categories() {
             map_model_provider_error(error.into()),
             CoreError::ModelTransient {
                 failure: stable,
-                retry_after_ms: None
+                retry_at: None
             }
         );
     }

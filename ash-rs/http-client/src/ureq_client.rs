@@ -11,6 +11,7 @@ use crate::Timeout;
 use crate::outbound_network::SystemRootLoader;
 use crate::outbound_network::resolve_public_internet_target;
 use crate::outbound_network::system_root_store;
+use crate::request::ResponseReceivedAt;
 use std::io::Read;
 use std::sync::Arc;
 use std::sync::OnceLock;
@@ -228,6 +229,7 @@ fn build_agent(
 impl HttpClient for UreqHttpClient {
     fn execute(&self, request: &HttpRequest) -> Result<HttpResponse, HttpClientError> {
         let response = self.send(request)?;
+        let received_at = ResponseReceivedAt::now();
         let status = response.status();
         let headers = response_headers(&response);
         let mut body = Vec::new();
@@ -244,7 +246,12 @@ impl HttpClient for UreqHttpClient {
                 "response body exceeded configured limit".into(),
             ));
         }
-        Ok(HttpResponse::new(status, headers, body))
+        Ok(HttpResponse::with_received_at(
+            status,
+            headers,
+            body,
+            received_at,
+        ))
     }
 
     fn execute_streaming(
@@ -253,6 +260,7 @@ impl HttpClient for UreqHttpClient {
         sink: &mut dyn HttpBodySink,
     ) -> Result<HttpResponse, HttpClientError> {
         let response = self.send(request)?;
+        let received_at = ResponseReceivedAt::now();
         let status = response.status();
         let headers = response_headers(&response);
         if !(200..300).contains(&status) {
@@ -261,14 +269,24 @@ impl HttpClient for UreqHttpClient {
                 body.extend_from_slice(chunk);
                 Ok(())
             })?;
-            return Ok(HttpResponse::new(status, headers, body));
+            return Ok(HttpResponse::with_received_at(
+                status,
+                headers,
+                body,
+                received_at,
+            ));
         }
         read_bounded(
             response.into_reader(),
             self.streaming_response_body_limit,
             |chunk| sink.emit(chunk),
         )?;
-        Ok(HttpResponse::new(status, headers, Vec::new()))
+        Ok(HttpResponse::with_received_at(
+            status,
+            headers,
+            Vec::new(),
+            received_at,
+        ))
     }
 }
 

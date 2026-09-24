@@ -35,6 +35,28 @@ impl ThreadGoalStatus {
     }
 }
 
+/// A Goal instruction submitted through the client API, distinct from Agent Goal tool writes.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum UserGoalChange {
+    Set {
+        goal_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        objective: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        status: Option<ThreadGoalStatus>,
+    },
+    Clear {
+        goal_id: String,
+    },
+}
+
 /// The durable Thread-scoped task Goal and its cumulative token usage.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

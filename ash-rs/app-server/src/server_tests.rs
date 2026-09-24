@@ -882,6 +882,10 @@ fn thread_goal_rpc_round_trips_and_publishes_scoped_updates() {
         notification.contains("\"method\":\"thread/goal/updated\"")
             && notification.contains("finish the implementation")
     }));
+    assert!(updates.iter().any(|notification| {
+        notification.contains("\"type\":\"userGoalChanged\"")
+            && notification.contains("finish the implementation")
+    }));
 
     let get = call(
         &server,
@@ -898,6 +902,29 @@ fn thread_goal_rpc_round_trips_and_publishes_scoped_updates() {
         set["result"]["goal"]["goalId"]
     );
 
+    let reaffirmed = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":61,
+            "method":"thread/goal/set",
+            "params":{"threadId":thread_id,"objective":"finish the implementation"}
+        }),
+    );
+    assert_eq!(reaffirmed["result"]["goal"], set["result"]["goal"]);
+    let updates = server.drain_notifications(&mut connection);
+    assert!(
+        updates
+            .iter()
+            .any(|notification| notification.contains("\"type\":\"userGoalChanged\""))
+    );
+    assert!(
+        !updates
+            .iter()
+            .any(|notification| notification.contains("\"method\":\"thread/goal/updated\""))
+    );
+
     let clear = call(
         &server,
         &mut connection,
@@ -909,12 +936,16 @@ fn thread_goal_rpc_round_trips_and_publishes_scoped_updates() {
         }),
     );
     assert_eq!(clear["result"]["cleared"], true);
+    let updates = server.drain_notifications(&mut connection);
     assert!(
-        server
-            .drain_notifications(&mut connection)
+        updates
             .iter()
             .any(|notification| notification.contains("\"method\":\"thread/goal/cleared\""))
     );
+    assert!(updates.iter().any(
+        |notification| notification.contains("\"type\":\"userGoalChanged\"")
+            && notification.contains("\"type\":\"clear\"")
+    ));
 
     let missing = call(
         &server,

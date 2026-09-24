@@ -1203,12 +1203,22 @@ fn non_success_status_is_preserved_for_api_error_decoding() {
         )
         .unwrap_err();
 
-    assert_eq!(
-        error,
-        ash_api::ApiError::RateLimited {
-            retry_after_ms: None
-        }
-    );
+    assert_eq!(error, ash_api::ApiError::RateLimited { retry_at: None });
+}
+
+#[test]
+fn rate_limit_preserves_the_transport_retry_deadline() {
+    let client = RetryAfterClient(Mutex::new(None));
+    let error = ApiEndpoint::OpenAiResponses
+        .complete_with_client(&target(), "gpt-test", &ModelRequest::text("hello"), &client)
+        .unwrap_err();
+    let ash_api::ApiError::RateLimited {
+        retry_at: Some(deadline),
+    } = error
+    else {
+        panic!("expected a rate-limit deadline");
+    };
+    assert_eq!(Some(deadline), *client.0.lock().unwrap());
 }
 
 #[test]
@@ -1272,6 +1282,20 @@ fn provider_status_and_error_bodies_map_to_semantic_failures() {
 }
 
 struct StatusClient(u16);
+
+struct RetryAfterClient(Mutex<Option<std::time::Instant>>);
+
+impl OperationClient for RetryAfterClient {
+    fn execute(&self, _: &ClientRequest) -> Result<ClientResponse, ClientError> {
+        let response = ClientResponse::new(
+            429,
+            vec![HttpHeader::new("Retry-After", "2")],
+            b"rate limited".to_vec(),
+        );
+        *self.0.lock().unwrap() = response.retry_after_deadline();
+        Ok(response)
+    }
+}
 
 impl OperationClient for StatusClient {
     fn execute(&self, _: &ClientRequest) -> Result<ClientResponse, ClientError> {

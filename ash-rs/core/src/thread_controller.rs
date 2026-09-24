@@ -67,6 +67,7 @@ use ash_protocol::TurnInstructions;
 use ash_protocol::TurnInteraction;
 use ash_protocol::TurnKind;
 use ash_protocol::TurnStatus;
+use ash_protocol::UserGoalChange;
 use ash_protocol::UserInput;
 use ash_thread_store::AppendBatchResult;
 use ash_thread_store::ThreadCatalogRecord;
@@ -342,6 +343,7 @@ pub(crate) struct RecordToolExecutionStart {
     pub action_digest: String,
     pub policy_revision: String,
     pub authority: ash_protocol::ToolExecutionAuthority,
+    pub expected_review_sequence: Option<u64>,
 }
 
 pub(crate) struct RecordToolExecutionEscalation {
@@ -350,6 +352,7 @@ pub(crate) struct RecordToolExecutionEscalation {
     pub policy_revision: String,
     pub denial: ash_protocol::SandboxDenialOutput,
     pub authority: ash_protocol::ToolExecutionAuthority,
+    pub expected_review_sequence: Option<u64>,
 }
 
 enum BatchCommand {
@@ -372,6 +375,12 @@ impl Default for ExtensionRegistries {
             sessions: BTreeMap::new(),
         }
     }
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum GoalWriteSource {
+    Client,
+    Agent,
 }
 
 /// Coordinates durable mutations for each loaded Thread.
@@ -1261,11 +1270,38 @@ impl ThreadController {
         Ok(self.read_thread(thread_id)?.goal)
     }
 
-    /// Creates or updates the single Goal owned by a Thread.
-    pub fn set_goal(
+    /// Creates or updates the single Goal owned by a Thread. Explicit client objective and status
+    /// submissions are recorded even when the Goal value is unchanged.
+    pub(crate) fn set_goal(
         &self,
         thread_id: &ThreadId,
         request: SetGoalRequest,
+    ) -> Result<SetGoalResult, CoreError> {
+        self.set_goal_with_source(thread_id, request, GoalWriteSource::Client)
+    }
+
+    /// Updates Goal lifecycle through an Agent tool without adding user authorization evidence.
+    pub fn update_goal_status_from_agent(
+        &self,
+        thread_id: &ThreadId,
+        status: ThreadGoalStatus,
+    ) -> Result<ThreadGoal, CoreError> {
+        self.set_goal_with_source(
+            thread_id,
+            SetGoalRequest {
+                status: Some(status),
+                ..SetGoalRequest::default()
+            },
+            GoalWriteSource::Agent,
+        )
+        .map(|result| result.goal)
+    }
+
+    fn set_goal_with_source(
+        &self,
+        thread_id: &ThreadId,
+        request: SetGoalRequest,
+        source: GoalWriteSource,
     ) -> Result<SetGoalResult, CoreError> {
         self.mutate_thread(thread_id, |snapshot| {
             let Some(current) = snapshot.goal.clone() else {
@@ -1280,13 +1316,21 @@ impl ThreadController {
                     request.token_budget.flatten(),
                     0,
                 )?;
-                self.record_batch(
-                    snapshot,
-                    vec![ThreadEvent::GoalCreated {
+                let mut events = vec![ThreadEvent::GoalCreated {
+                    thread_id: snapshot.thread_id.clone(),
+                    goal: goal.clone(),
+                }];
+                if source == GoalWriteSource::Client {
+                    events.push(ThreadEvent::UserGoalChanged {
                         thread_id: snapshot.thread_id.clone(),
-                        goal: goal.clone(),
-                    }],
-                )?;
+                        change: UserGoalChange::Set {
+                            goal_id: goal.goal_id.clone(),
+                            objective: request.objective.clone(),
+                            status: request.status,
+                        },
+                    });
+                }
+                self.record_batch(snapshot, events)?;
                 return Ok(SetGoalResult {
                     goal,
                     changed: true,
@@ -1299,25 +1343,40 @@ impl ThreadController {
                 current.goal_id.clone(),
                 request
                     .objective
+                    .clone()
                     .unwrap_or_else(|| current.objective.clone()),
                 request.status.unwrap_or(current.status),
                 request.token_budget.unwrap_or(current.token_budget),
                 current.tokens_used,
             )?;
+            let user_change = (source == GoalWriteSource::Client
+                && (request.objective.is_some() || request.status.is_some()))
+            .then(|| ThreadEvent::UserGoalChanged {
+                thread_id: snapshot.thread_id.clone(),
+                change: UserGoalChange::Set {
+                    goal_id: goal.goal_id.clone(),
+                    objective: request.objective,
+                    status: request.status,
+                },
+            });
             if goal == current {
+                if let Some(event) = user_change {
+                    self.record_batch(snapshot, vec![event])?;
+                }
                 return Ok(SetGoalResult {
                     goal,
                     changed: false,
                     created: false,
                 });
             }
-            self.record_batch(
-                snapshot,
-                vec![ThreadEvent::GoalUpdated {
-                    thread_id: snapshot.thread_id.clone(),
-                    goal: goal.clone(),
-                }],
-            )?;
+            let mut events = vec![ThreadEvent::GoalUpdated {
+                thread_id: snapshot.thread_id.clone(),
+                goal: goal.clone(),
+            }];
+            if let Some(event) = user_change {
+                events.push(event);
+            }
+            self.record_batch(snapshot, events)?;
             Ok(SetGoalResult {
                 goal,
                 changed: true,
@@ -1366,17 +1425,23 @@ impl ThreadController {
         })
     }
 
-    pub fn clear_goal(&self, thread_id: &ThreadId) -> Result<bool, CoreError> {
+    pub(crate) fn clear_goal(&self, thread_id: &ThreadId) -> Result<bool, CoreError> {
         self.mutate_thread(thread_id, |snapshot| {
             let Some(goal_id) = snapshot.goal.as_ref().map(|goal| goal.goal_id.clone()) else {
                 return Ok(false);
             };
             self.record_batch(
                 snapshot,
-                vec![ThreadEvent::GoalCleared {
-                    thread_id: snapshot.thread_id.clone(),
-                    goal_id,
-                }],
+                vec![
+                    ThreadEvent::GoalCleared {
+                        thread_id: snapshot.thread_id.clone(),
+                        goal_id: goal_id.clone(),
+                    },
+                    ThreadEvent::UserGoalChanged {
+                        thread_id: snapshot.thread_id.clone(),
+                        change: UserGoalChange::Clear { goal_id },
+                    },
+                ],
             )?;
             Ok(true)
         })

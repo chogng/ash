@@ -60,6 +60,36 @@ fn durable_thread_event_serializes_without_a_runtime_message_wrapper() {
 }
 
 #[test]
+fn user_goal_change_keeps_its_host_annotation_in_the_event_contract() {
+    let event = ThreadEvent::UserGoalChanged {
+        thread_id: ThreadId::new("thread_1").unwrap(),
+        change: UserGoalChange::Set {
+            goal_id: "goal_1".into(),
+            objective: Some("Inspect only".into()),
+            status: None,
+        },
+    };
+    let encoded = serde_json::to_value(&event).unwrap();
+    assert_eq!(
+        encoded,
+        json!({
+            "type": "userGoalChanged",
+            "threadId": "thread_1",
+            "change": {
+                "type": "set",
+                "goalId": "goal_1",
+                "objective": "Inspect only"
+            }
+        })
+    );
+    assert_eq!(
+        serde_json::from_value::<ThreadEvent>(encoded).unwrap(),
+        event
+    );
+    assert_eq!(event.kind(), "thread.user_goal_changed");
+}
+
+#[test]
 fn historical_agent_capability_scope_cannot_pass_tools_to_descendants() {
     let scope: AgentCapabilityScope = serde_json::from_value(json!({
         "tools": ["read_file"],

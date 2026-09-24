@@ -958,6 +958,7 @@ export type { TypstSourceRangeDto } from './TypstSourceRangeDto.js';
 export type { UnixMillis } from './UnixMillis.js';
 export type { UsageEvent } from './UsageEvent.js';
 export type { UsageSnapshot } from './UsageSnapshot.js';
+export type { UserGoalChange } from './UserGoalChange.js';
 export type { UserInput } from './UserInput.js';
 export type { UserInputAnswer } from './UserInputAnswer.js';
 export type { UserInputOption } from './UserInputOption.js';

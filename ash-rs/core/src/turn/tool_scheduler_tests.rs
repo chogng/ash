@@ -7,6 +7,7 @@ use crate::ResolveTurnInteractionRequest;
 use crate::SandboxDenialOutput;
 use crate::SequenceExpectation;
 use crate::StartTurnRequest;
+use crate::SteerTurnRequest;
 use crate::ToolAuthorization;
 use crate::ToolExecutionOutput;
 use ash_action_policy::ActionClassifier;
@@ -430,6 +431,388 @@ fn scheduler_preserves_deterministic_decisions_without_automatic_review() {
     ));
 }
 
+#[test]
+fn auto_review_rechecks_user_input_added_during_review() {
+    let mut fixture = fixture_with_approval_mode(
+        Arc::new(ReviewTool::default()),
+        Arc::new(AskPolicy),
+        ash_protocol::ApprovalMode::AutoReview,
+    );
+    let observed = Arc::new(Mutex::new(Vec::new()));
+    let policy = Arc::new(ContextAwarePolicy {
+        engine: ActionPolicyEngine::with_no_exec_rules(
+            ActionPolicyRevision::new("policy-v1"),
+            ContextAwareClassifier {
+                threads: fixture.threads.clone(),
+                thread_id: fixture.thread_id.clone(),
+                turn_id: fixture.turn_id.clone(),
+                observed: observed.clone(),
+                edit_during_review: ReviewEdit::Steer,
+            },
+            ReviewFailurePolicy::Block,
+        ),
+    });
+    fixture.scheduler = ToolScheduler::new(fixture.threads.clone(), fixture.tools.clone(), policy);
+
+    assert_eq!(
+        fixture.scheduler.run_pending(
+            &fixture.thread_id,
+            &fixture.turn_id,
+            &CancellationSource::new().token(),
+        ),
+        Ok(ToolSchedulingProgress::Complete)
+    );
+    assert_eq!(
+        observed.lock().unwrap().as_slice(),
+        ["run", "Do not publish"]
+    );
+    assert!(fixture.tools.authorizations.lock().unwrap().is_empty());
+    assert!(
+        !fixture
+            .threads
+            .read_thread(&fixture.thread_id)
+            .unwrap()
+            .tool_execution_starts
+            .contains_key(&fixture.call_id)
+    );
+}
+
+#[test]
+fn auto_review_rechecks_client_goal_changed_during_review() {
+    let mut fixture = fixture_with_approval_mode(
+        Arc::new(ReviewTool::default()),
+        Arc::new(AskPolicy),
+        ash_protocol::ApprovalMode::AutoReview,
+    );
+    let observed = Arc::new(Mutex::new(Vec::new()));
+    let policy = Arc::new(ContextAwarePolicy {
+        engine: ActionPolicyEngine::with_no_exec_rules(
+            ActionPolicyRevision::new("policy-v1"),
+            ContextAwareClassifier {
+                threads: fixture.threads.clone(),
+                thread_id: fixture.thread_id.clone(),
+                turn_id: fixture.turn_id.clone(),
+                observed: observed.clone(),
+                edit_during_review: ReviewEdit::ClientGoal,
+            },
+            ReviewFailurePolicy::Block,
+        ),
+    });
+    fixture.scheduler = ToolScheduler::new(fixture.threads.clone(), fixture.tools.clone(), policy);
+
+    assert_eq!(
+        fixture.scheduler.run_pending(
+            &fixture.thread_id,
+            &fixture.turn_id,
+            &CancellationSource::new().token(),
+        ),
+        Ok(ToolSchedulingProgress::Complete)
+    );
+    assert_eq!(
+        observed.lock().unwrap().as_slice(),
+        ["run", "Do not publish"]
+    );
+    assert!(fixture.tools.authorizations.lock().unwrap().is_empty());
+    assert!(
+        !fixture
+            .threads
+            .read_thread(&fixture.thread_id)
+            .unwrap()
+            .tool_execution_starts
+            .contains_key(&fixture.call_id)
+    );
+}
+
+#[test]
+fn auto_review_rechecks_user_input_added_before_execution_start() {
+    let mut fixture = fixture_with_approval_mode(
+        Arc::new(ReviewTool::default()),
+        Arc::new(AskPolicy),
+        ash_protocol::ApprovalMode::AutoReview,
+    );
+    let observed = Arc::new(Mutex::new(Vec::new()));
+    let policy = Arc::new(ContextAwarePolicy {
+        engine: ActionPolicyEngine::with_no_exec_rules(
+            ActionPolicyRevision::new("policy-v1"),
+            ContextAwareClassifier {
+                threads: fixture.threads.clone(),
+                thread_id: fixture.thread_id.clone(),
+                turn_id: fixture.turn_id.clone(),
+                observed: observed.clone(),
+                edit_during_review: ReviewEdit::None,
+            },
+            ReviewFailurePolicy::Block,
+        ),
+    });
+    fixture.scheduler = ToolScheduler::new(fixture.threads.clone(), fixture.tools.clone(), policy)
+        .with_hooks(Arc::new(SteerBeforeToolHook {
+            threads: fixture.threads.clone(),
+            thread_id: fixture.thread_id.clone(),
+            turn_id: fixture.turn_id.clone(),
+            called: Mutex::new(false),
+        }));
+
+    assert_eq!(
+        fixture.scheduler.run_pending(
+            &fixture.thread_id,
+            &fixture.turn_id,
+            &CancellationSource::new().token(),
+        ),
+        Ok(ToolSchedulingProgress::Complete)
+    );
+    assert_eq!(
+        observed.lock().unwrap().as_slice(),
+        ["run", "Do not publish"]
+    );
+    assert!(fixture.tools.authorizations.lock().unwrap().is_empty());
+    assert!(
+        !fixture
+            .threads
+            .read_thread(&fixture.thread_id)
+            .unwrap()
+            .tool_execution_starts
+            .contains_key(&fixture.call_id)
+    );
+}
+
+#[test]
+fn auto_review_stops_when_context_keeps_changing() {
+    let mut fixture = fixture_with_approval_mode(
+        Arc::new(ReviewTool::default()),
+        Arc::new(AskPolicy),
+        ash_protocol::ApprovalMode::AutoReview,
+    );
+    let policy = Arc::new(AlwaysChangingReviewPolicy {
+        threads: fixture.threads.clone(),
+        thread_id: fixture.thread_id.clone(),
+        turn_id: fixture.turn_id.clone(),
+        reviews: std::sync::atomic::AtomicUsize::new(0),
+    });
+    fixture.scheduler = ToolScheduler::new(
+        fixture.threads.clone(),
+        fixture.tools.clone(),
+        policy.clone(),
+    );
+
+    assert_eq!(
+        fixture.scheduler.run_pending(
+            &fixture.thread_id,
+            &fixture.turn_id,
+            &CancellationSource::new().token(),
+        ),
+        Ok(ToolSchedulingProgress::Complete)
+    );
+    assert_eq!(policy.reviews.load(std::sync::atomic::Ordering::SeqCst), 3);
+    assert!(fixture.tools.authorizations.lock().unwrap().is_empty());
+    let snapshot = fixture.threads.read_thread(&fixture.thread_id).unwrap();
+    assert!(
+        !snapshot
+            .tool_execution_starts
+            .contains_key(&fixture.call_id)
+    );
+    assert!(snapshot.items.iter().any(|item| matches!(
+        item,
+        ThreadItem::ToolResult { tool_call_id, text, is_error: true, .. }
+            if tool_call_id == &fixture.call_id && text.contains("context kept changing")
+    )));
+}
+
+struct AlwaysChangingReviewPolicy {
+    threads: Arc<ThreadController>,
+    thread_id: ThreadId,
+    turn_id: TurnId,
+    reviews: std::sync::atomic::AtomicUsize,
+}
+
+impl ActionPolicyService for AlwaysChangingReviewPolicy {
+    fn revision(&self) -> String {
+        "test-policy-v1".into()
+    }
+
+    fn decide(
+        &self,
+        request: &ActionReviewRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<ExecutionDecision, CoreError> {
+        AskPolicy.decide(request, cancellation)
+    }
+
+    fn review_approval(
+        &self,
+        _: &ActionReviewRequest,
+        _: &CancellationToken,
+    ) -> Result<Option<ExecutionDecision>, CoreError> {
+        let review = self
+            .reviews
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        self.threads.steer_turn(
+            &self.thread_id,
+            SteerTurnRequest {
+                command_id: CommandId::new(format!("review-change-{review}")).unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                turn_id: self.turn_id.clone(),
+                input: vec![UserInput::Text {
+                    text: "reconsider".into(),
+                }],
+            },
+        )?;
+        Ok(Some(ExecutionDecision::Block(
+            ash_action_policy::BlockReason::ReviewerDenied {
+                assessment_id: AssessmentId::new(format!("review-{review}")),
+                reason: "context changed".into(),
+            },
+        )))
+    }
+}
+
+struct ContextAwarePolicy {
+    engine: ActionPolicyEngine<ContextAwareClassifier>,
+}
+
+impl ActionPolicyService for ContextAwarePolicy {
+    fn revision(&self) -> String {
+        "test-policy-v1".into()
+    }
+
+    fn decide(
+        &self,
+        request: &ActionReviewRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<ExecutionDecision, CoreError> {
+        AskPolicy.decide(request, cancellation)
+    }
+
+    fn review_approval(
+        &self,
+        request: &ActionReviewRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<Option<ExecutionDecision>, CoreError> {
+        self.engine
+            .review_after_authoritative_ask_user(request, cancellation)
+            .map(Some)
+            .map_err(|error| CoreError::Policy(error.to_string()))
+    }
+}
+
+struct ContextAwareClassifier {
+    threads: Arc<ThreadController>,
+    thread_id: ThreadId,
+    turn_id: TurnId,
+    observed: Arc<Mutex<Vec<String>>>,
+    edit_during_review: ReviewEdit,
+}
+
+#[derive(Clone, Copy)]
+enum ReviewEdit {
+    None,
+    Steer,
+    ClientGoal,
+}
+
+impl ActionClassifier for ContextAwareClassifier {
+    type Error = ContextClassifierError;
+
+    fn classify(
+        &self,
+        request: &ActionReviewRequest,
+        _: &CancellationToken,
+    ) -> Result<ClassifierAssessment, Self::Error> {
+        let first = {
+            let mut observed = self.observed.lock().unwrap();
+            observed.push(request.context().user_intent().to_owned());
+            observed.len() == 1
+        };
+        if first {
+            match self.edit_during_review {
+                ReviewEdit::None => {}
+                ReviewEdit::Steer => {
+                    steer_during_review(&self.threads, &self.thread_id, &self.turn_id);
+                }
+                ReviewEdit::ClientGoal => {
+                    self.threads
+                        .set_goal(
+                            &self.thread_id,
+                            crate::SetGoalRequest {
+                                objective: Some("Do not publish".into()),
+                                ..crate::SetGoalRequest::default()
+                            },
+                        )
+                        .unwrap();
+                }
+            }
+        }
+        let recommendation = if request.context().user_intent() == "Do not publish" {
+            ClassifierRecommendation::Deny {
+                reason: "user withdrew authorization".into(),
+            }
+        } else {
+            ClassifierRecommendation::Approve {
+                capabilities: request.action().required_capabilities().clone(),
+                risk: RiskLevel::Medium,
+                user_authorization: UserAuthorization::Implicit,
+                reason: "matches the current user request".into(),
+            }
+        };
+        Ok(ClassifierAssessment::new(
+            AssessmentId::new("context-aware-review"),
+            request.action().digest().clone(),
+            request.action_policy_revision().clone(),
+            "test-prompt",
+            recommendation,
+        ))
+    }
+}
+
+struct SteerBeforeToolHook {
+    threads: Arc<ThreadController>,
+    thread_id: ThreadId,
+    turn_id: TurnId,
+    called: Mutex<bool>,
+}
+
+impl HookService for SteerBeforeToolHook {
+    fn before_tool(
+        &self,
+        _: &BeforeToolHookRequest,
+        _: &CancellationToken,
+    ) -> Result<BeforeToolHookDecision, CoreError> {
+        let mut called = self.called.lock().unwrap();
+        if !*called {
+            steer_during_review(&self.threads, &self.thread_id, &self.turn_id);
+            *called = true;
+        }
+        Ok(BeforeToolHookDecision::Continue)
+    }
+
+    fn after_tool(&self, _: &AfterToolHookRequest, _: &CancellationToken) -> Result<(), CoreError> {
+        Ok(())
+    }
+
+    fn turn_completed(
+        &self,
+        _: &crate::TurnCompletedHookRequest,
+        _: &CancellationToken,
+    ) -> Result<(), CoreError> {
+        Ok(())
+    }
+}
+
+fn steer_during_review(threads: &ThreadController, thread_id: &ThreadId, turn_id: &TurnId) {
+    threads
+        .steer_turn(
+            thread_id,
+            SteerTurnRequest {
+                command_id: CommandId::new("steer-during-review").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                turn_id: turn_id.clone(),
+                input: vec![UserInput::Text {
+                    text: "Do not publish".into(),
+                }],
+            },
+        )
+        .unwrap();
+}
+
 struct ReviewingPolicy {
     base: Arc<dyn ActionPolicyService>,
     reviews: std::sync::atomic::AtomicUsize,
@@ -573,6 +956,16 @@ fn reviewer_approval_executes_with_bound_authority_and_user_context() {
         tools,
         Arc::new(crate::approval_request::tests::EnginePolicy(engine)),
     );
+    fixture
+        .threads
+        .set_goal(
+            &fixture.thread_id,
+            crate::SetGoalRequest {
+                objective: Some("Inspect before running".into()),
+                ..crate::SetGoalRequest::default()
+            },
+        )
+        .unwrap();
 
     assert!(matches!(
         fixture.scheduler.run_pending(
@@ -593,8 +986,8 @@ fn reviewer_approval_executes_with_bound_authority_and_user_context() {
     ));
     let context = observed.lock().unwrap();
     let context = context.as_ref().unwrap();
-    assert_eq!(context.user_intent(), "run");
-    assert_eq!(context.evidence().len(), 2);
+    assert_eq!(context.user_intent(), "Inspect before running");
+    assert_eq!(context.evidence().len(), 3);
     assert_eq!(
         context.evidence()[0].kind(),
         ReviewEvidenceKind::UserMessage
@@ -603,7 +996,12 @@ fn reviewer_approval_executes_with_bound_authority_and_user_context() {
         context.evidence()[0].trust(),
         ReviewEvidenceTrust::TrustedUser
     );
-    assert_eq!(context.evidence()[1].source(), "script.py");
+    assert_eq!(context.evidence()[1].kind(), ReviewEvidenceKind::UserGoal);
+    assert_eq!(
+        context.evidence()[1].trust(),
+        ReviewEvidenceTrust::TrustedUser
+    );
+    assert_eq!(context.evidence()[2].source(), "script.py");
 }
 
 #[test]
@@ -684,6 +1082,110 @@ fn safe_sandbox_denial_is_reviewed_and_retried_once() {
             .unwrap()
             .action_digest
     );
+}
+
+#[test]
+fn sandbox_denial_review_reads_user_input_added_during_the_first_attempt() {
+    let tools = Arc::new(ReviewTool {
+        outputs: Mutex::new(VecDeque::from([
+            safe_sandbox_denial(),
+            ToolExecutionOutput::Success("outside sandbox".into()),
+        ])),
+        ..ReviewTool::default()
+    });
+    let mut fixture = fixture_with(tools, Arc::new(ExecAllowPolicy::new()));
+    let observed = Arc::new(Mutex::new(Vec::new()));
+    let policy = Arc::new(crate::approval_request::tests::EnginePolicy(
+        ActionPolicyEngine::with_no_exec_rules(
+            ActionPolicyRevision::new("policy-v1"),
+            ContextAwareClassifier {
+                threads: fixture.threads.clone(),
+                thread_id: fixture.thread_id.clone(),
+                turn_id: fixture.turn_id.clone(),
+                observed: observed.clone(),
+                edit_during_review: ReviewEdit::None,
+            },
+            ReviewFailurePolicy::Block,
+        ),
+    ));
+    fixture.scheduler = ToolScheduler::new(fixture.threads.clone(), fixture.tools.clone(), policy)
+        .with_hooks(Arc::new(SteerBeforeToolHook {
+            threads: fixture.threads.clone(),
+            thread_id: fixture.thread_id.clone(),
+            turn_id: fixture.turn_id.clone(),
+            called: Mutex::new(false),
+        }));
+
+    assert_eq!(
+        fixture.scheduler.run_pending(
+            &fixture.thread_id,
+            &fixture.turn_id,
+            &CancellationSource::new().token(),
+        ),
+        Ok(ToolSchedulingProgress::Complete)
+    );
+    assert_eq!(observed.lock().unwrap().as_slice(), ["Do not publish"]);
+    assert!(matches!(
+        fixture.tools.authorizations.lock().unwrap().as_slice(),
+        [ToolAuthorization::Sandboxed(_)]
+    ));
+    assert!(
+        !fixture
+            .threads
+            .read_thread(&fixture.thread_id)
+            .unwrap()
+            .escalated_tool_calls
+            .contains(&fixture.call_id)
+    );
+}
+
+#[test]
+fn sandbox_denial_review_rejects_user_input_added_during_secondary_review() {
+    let tools = Arc::new(ReviewTool {
+        outputs: Mutex::new(VecDeque::from([
+            safe_sandbox_denial(),
+            ToolExecutionOutput::Success("outside sandbox".into()),
+        ])),
+        ..ReviewTool::default()
+    });
+    let mut fixture = fixture_with(tools, Arc::new(ExecAllowPolicy::new()));
+    let observed = Arc::new(Mutex::new(Vec::new()));
+    let policy = Arc::new(crate::approval_request::tests::EnginePolicy(
+        ActionPolicyEngine::with_no_exec_rules(
+            ActionPolicyRevision::new("policy-v1"),
+            ContextAwareClassifier {
+                threads: fixture.threads.clone(),
+                thread_id: fixture.thread_id.clone(),
+                turn_id: fixture.turn_id.clone(),
+                observed: observed.clone(),
+                edit_during_review: ReviewEdit::Steer,
+            },
+            ReviewFailurePolicy::Block,
+        ),
+    ));
+    fixture.scheduler = ToolScheduler::new(fixture.threads.clone(), fixture.tools.clone(), policy);
+
+    assert_eq!(
+        fixture.scheduler.run_pending(
+            &fixture.thread_id,
+            &fixture.turn_id,
+            &CancellationSource::new().token(),
+        ),
+        Ok(ToolSchedulingProgress::Complete)
+    );
+    assert_eq!(observed.lock().unwrap().as_slice(), ["run"]);
+    assert!(matches!(
+        fixture.tools.authorizations.lock().unwrap().as_slice(),
+        [ToolAuthorization::Sandboxed(_)]
+    ));
+    let snapshot = fixture.threads.read_thread(&fixture.thread_id).unwrap();
+    assert!(!snapshot.escalated_tool_calls.contains(&fixture.call_id));
+    assert!(snapshot.items.iter().any(|item| matches!(
+        item,
+        ThreadItem::ToolResult { tool_call_id, text, is_error: true, .. }
+            if tool_call_id == &fixture.call_id
+                && text.contains("automatic review context changed")
+    )));
 }
 
 #[test]
@@ -863,6 +1365,7 @@ fn interrupted_approved_sandbox_escalation_is_not_retried() {
                 authority: ToolExecutionAuthority::ApprovedOnce {
                     request_id: interaction.request_id,
                 },
+                expected_review_sequence: None,
             },
         )
         .unwrap();
@@ -1030,6 +1533,7 @@ fn started_call_without_a_result_is_not_retried() {
                 action_digest: reviewed.action().digest().as_str().to_owned(),
                 policy_revision: reviewed.action_policy_revision().as_str().to_owned(),
                 authority: ash_protocol::ToolExecutionAuthority::Sandboxed,
+                expected_review_sequence: None,
             },
         )
         .unwrap();

@@ -32956,6 +32956,27 @@
           "type": "object"
         },
         {
+          "description": "Host annotation for a client Goal edit. Agent Goal tool calls never append this event.",
+          "properties": {
+            "change": {
+              "$ref": "#/$defs/UserGoalChange"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "const": "userGoalChanged",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "change"
+          ],
+          "type": "object"
+        },
+        {
           "description": "Legacy read-compatibility fact from the removed external full-Turn backend integration.\nCurrent product code does not append this event.",
           "properties": {
             "binding": {
@@ -36656,6 +36677,59 @@
         "counts"
       ],
       "type": "object"
+    },
+    "UserGoalChange": {
+      "description": "A Goal instruction submitted through the client API, distinct from Agent Goal tool writes.",
+      "oneOf": [
+        {
+          "properties": {
+            "goalId": {
+              "type": "string"
+            },
+            "objective": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "status": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ThreadGoalStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": {
+              "const": "set",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "goalId"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "goalId": {
+              "type": "string"
+            },
+            "type": {
+              "const": "clear",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "goalId"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "UserInput": {
       "description": "A provider-independent input supplied by the user for one turn.",

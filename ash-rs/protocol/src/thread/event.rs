@@ -117,6 +117,11 @@ pub enum ThreadEvent {
         thread_id: ThreadId,
         goal_id: String,
     },
+    /// Host annotation for a client Goal edit. Agent Goal tool calls never append this event.
+    UserGoalChanged {
+        thread_id: ThreadId,
+        change: crate::UserGoalChange,
+    },
     /// Legacy read-compatibility fact from the removed external full-Turn backend integration.
     /// Current product code does not append this event.
     TurnExecutionBound {
@@ -361,6 +366,7 @@ impl ThreadEvent {
             Self::GoalCreated { .. } => "thread.goal_created",
             Self::GoalUpdated { .. } => "thread.goal_updated",
             Self::GoalCleared { .. } => "thread.goal_cleared",
+            Self::UserGoalChanged { .. } => "thread.user_goal_changed",
             Self::TurnExecutionBound { .. } => "turn.execution_bound",
             Self::AgentContextSeedCommitted { .. } => "agent.context_seed_committed",
             Self::HistoryImported { .. } => "thread.history_imported",
@@ -412,6 +418,7 @@ impl ThreadEvent {
             | Self::GoalCreated { thread_id, .. }
             | Self::GoalUpdated { thread_id, .. }
             | Self::GoalCleared { thread_id, .. }
+            | Self::UserGoalChanged { thread_id, .. }
             | Self::TurnExecutionBound { thread_id, .. }
             | Self::AgentContextSeedCommitted { thread_id, .. }
             | Self::HistoryImported { thread_id, .. }

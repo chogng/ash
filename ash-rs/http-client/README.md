@@ -48,7 +48,8 @@ consumer 可以直接依赖本 crate；需要 operation retry 或 SSE framing �
 | `HttpClientError` | invalid request/configuration 或 sanitized transport failure |
 
 包括 3xx/4xx/5xx 在内的 HTTP 状态都是 `HttpResponse` 事实，不是传输错误。是否重试以及如何
-解释状态，由上层操作或协议决定。
+解释状态，由上层操作或协议决定。`HttpResponse::retry_after_deadline()` 将秒数或 HTTP 日期格式
+的 `Retry-After` 在响应头到达时换算成单调时钟截止时间；上层按剩余时间等待。
 
 `execute_streaming` 必须在响应读取过程中交付 chunk。仅实现 `execute` 的 client 在发送前返回
 `InvalidRequest`；默认实现不会读取完整响应后再把 body 当作流交付。

@@ -428,16 +428,17 @@ fn invoke_with_retry<T>(
             Err(error) if error.is_transient() && attempt < maximum_retries => {
                 attempt += 1;
                 *retry_count = retry_count.saturating_add(1);
-                let wait = error.retry_after().unwrap_or_else(|| {
-                    Duration::from_millis(50u64.saturating_mul(1 << (attempt - 1)))
+                let deadline = error.retry_after_deadline().unwrap_or_else(|| {
+                    Instant::now() + Duration::from_millis(50u64.saturating_mul(1 << (attempt - 1)))
                 });
-                let wait = wait.min(Duration::from_secs(60));
-                let mut elapsed = Duration::ZERO;
-                while elapsed < wait {
+                let deadline = deadline.min(Instant::now() + Duration::from_secs(60));
+                loop {
                     check_cancelled(cancellation)?;
-                    let step = (wait - elapsed).min(Duration::from_millis(10));
-                    std::thread::sleep(step);
-                    elapsed += step;
+                    let remaining = deadline.saturating_duration_since(Instant::now());
+                    if remaining.is_zero() {
+                        break;
+                    }
+                    std::thread::sleep(remaining.min(Duration::from_millis(10)));
                 }
             }
             Err(error) => return Err(error.into()),

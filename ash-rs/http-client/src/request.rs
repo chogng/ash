@@ -1,5 +1,7 @@
 use crate::{HttpClientError, HttpHeader};
 use std::time::Duration;
+use std::time::Instant;
+use std::time::SystemTime;
 use zeroize::Zeroize;
 
 /// An HTTP method supported by the synchronous transport.
@@ -94,14 +96,26 @@ pub struct HttpResponse {
     status: u16,
     headers: Vec<HttpHeader>,
     body: Vec<u8>,
+    retry_at: Option<Instant>,
 }
 
 impl HttpResponse {
     pub fn new(status: u16, headers: Vec<HttpHeader>, body: Vec<u8>) -> Self {
+        Self::with_received_at(status, headers, body, ResponseReceivedAt::now())
+    }
+
+    pub(crate) fn with_received_at(
+        status: u16,
+        headers: Vec<HttpHeader>,
+        body: Vec<u8>,
+        received_at: ResponseReceivedAt,
+    ) -> Self {
+        let retry_at = retry_deadline(&headers, received_at);
         Self {
             status,
             headers,
             body,
+            retry_at,
         }
     }
 
@@ -121,14 +135,46 @@ impl HttpResponse {
         (200..300).contains(&self.status)
     }
 
-    /// Returns a delta-seconds `Retry-After` value when the server supplies one.
-    pub fn retry_after(&self) -> Option<Duration> {
-        self.headers
-            .iter()
-            .find(|header| header.name().eq_ignore_ascii_case("retry-after"))
-            .and_then(|header| header.value().parse::<u64>().ok())
-            .map(Duration::from_secs)
+    /// Returns the server's retry deadline captured when response headers arrived.
+    pub fn retry_after_deadline(&self) -> Option<Instant> {
+        self.retry_at
     }
+
+    /// Returns the time remaining until the server's retry deadline.
+    pub fn retry_after(&self) -> Option<Duration> {
+        self.retry_at
+            .map(|deadline| deadline.saturating_duration_since(Instant::now()))
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ResponseReceivedAt {
+    monotonic: Instant,
+    wall: SystemTime,
+}
+
+impl ResponseReceivedAt {
+    pub(crate) fn now() -> Self {
+        Self {
+            monotonic: Instant::now(),
+            wall: SystemTime::now(),
+        }
+    }
+}
+
+fn retry_deadline(headers: &[HttpHeader], received_at: ResponseReceivedAt) -> Option<Instant> {
+    let value = headers
+        .iter()
+        .find(|header| header.name().eq_ignore_ascii_case("retry-after"))?
+        .value();
+    let delay = match value.parse::<u64>() {
+        Ok(seconds) => Duration::from_secs(seconds),
+        Err(_) => httpdate::parse_http_date(value)
+            .ok()?
+            .duration_since(received_at.wall)
+            .unwrap_or(Duration::ZERO),
+    };
+    received_at.monotonic.checked_add(delay)
 }
 
 impl Drop for HttpResponse {
@@ -148,3 +194,7 @@ fn is_http_url(url: &str) -> bool {
     let authority = authority_and_path.split('/').next().unwrap_or_default();
     !authority.is_empty() && !authority.chars().any(char::is_whitespace)
 }
+
+#[cfg(test)]
+#[path = "request_tests.rs"]
+mod tests;

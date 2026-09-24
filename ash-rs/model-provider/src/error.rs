@@ -101,12 +101,12 @@ impl ModelProviderError {
         )
     }
 
-    /// Returns the bounded server-requested delay for a transient rate limit.
-    pub fn retry_after(&self) -> Option<std::time::Duration> {
+    /// Returns the server-requested deadline for a transient rate limit.
+    pub fn retry_after_deadline(&self) -> Option<std::time::Instant> {
         match self {
             Self::Api(ApiError::RateLimited {
-                retry_after_ms: Some(delay),
-            }) => Some(std::time::Duration::from_millis(*delay)),
+                retry_at: Some(deadline),
+            }) => Some(*deadline),
             _ => None,
         }
     }

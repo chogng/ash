@@ -84,6 +84,7 @@ pub struct ThreadSnapshot {
     pub usage: ModelUsageSummary,
     pub reference_cost: ModelReferenceCostSummary,
     pub goal: Option<ash_protocol::ThreadGoal>,
+    pub(crate) user_goal_changes: Vec<(u64, ash_protocol::UserGoalChange)>,
     pub advisor: ash_protocol::AdvisorSelection,
     /// The Turn that crossed a Goal budget. This is derived from the event log and lets the
     /// remainder of that in-flight Turn be accounted without charging later Turns.
@@ -453,6 +454,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     usage: ModelUsageSummary::default(),
                     reference_cost: ModelReferenceCostSummary::default(),
                     goal: None,
+                    user_goal_changes: Vec::new(),
                     advisor: ash_protocol::AdvisorSelection::Default,
                     goal_budget_limited_turn_id: None,
                     context_calibrations: Vec::new(),
@@ -685,6 +687,50 @@ pub(crate) fn reduce_thread_event_with_prefix(
             }
             snapshot.goal = None;
             snapshot.goal_budget_limited_turn_id = None;
+        }
+        ThreadEvent::UserGoalChanged { thread_id, change } => {
+            require_no_command(envelope)?;
+            if thread_id != &snapshot.thread_id {
+                return Err(CoreError::Journal(
+                    "user Goal event Thread identity does not match the rollout".into(),
+                ));
+            }
+            match change {
+                ash_protocol::UserGoalChange::Set {
+                    goal_id,
+                    objective,
+                    status,
+                } => {
+                    if objective.is_none() && status.is_none() {
+                        return Err(CoreError::Journal(
+                            "user Goal event must include an objective or status".into(),
+                        ));
+                    }
+                    let goal = snapshot.goal.as_ref().ok_or_else(|| {
+                        CoreError::Journal("user Goal update requires an active Goal".into())
+                    })?;
+                    if goal_id != &goal.goal_id
+                        || objective
+                            .as_ref()
+                            .is_some_and(|value| value != &goal.objective)
+                        || status.is_some_and(|value| value != goal.status)
+                    {
+                        return Err(CoreError::Journal(
+                            "user Goal update does not match the current Goal".into(),
+                        ));
+                    }
+                }
+                ash_protocol::UserGoalChange::Clear { goal_id } => {
+                    if goal_id.trim().is_empty() || snapshot.goal.is_some() {
+                        return Err(CoreError::Journal(
+                            "user Goal clear must follow a Goal clear".into(),
+                        ));
+                    }
+                }
+            }
+            snapshot
+                .user_goal_changes
+                .push((envelope.sequence, change.clone()));
         }
         ThreadEvent::TurnExecutionBound { binding, .. } => {
             require_no_command(envelope)?;

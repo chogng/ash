@@ -142,6 +142,8 @@ impl ToolScheduler {
         target_tool_call_id: Option<&ToolCallId>,
         cancellation: &CancellationToken,
     ) -> Result<ToolSchedulingProgress, CoreError> {
+        let mut refreshed_call = None;
+        let mut refreshes = 0;
         loop {
             cancellation
                 .check()
@@ -160,6 +162,10 @@ impl ToolScheduler {
             else {
                 return Ok(ToolSchedulingProgress::Complete);
             };
+            if refreshed_call.as_ref() != Some(&pending.call.id) {
+                refreshed_call = Some(pending.call.id.clone());
+                refreshes = 0;
+            }
             let turn = snapshot
                 .turns
                 .iter()
@@ -223,6 +229,7 @@ impl ToolScheduler {
                 thread_id,
                 turn_id,
                 &pending.item_id,
+                snapshot.sequence,
                 frozen_policy_revision,
                 approval_mode,
                 cancellation,
@@ -372,13 +379,28 @@ impl ToolScheduler {
             else {
                 continue;
             };
-            match crate::decide_turn_action(
+            let decision = crate::decide_turn_action(
                 self.policy.as_ref(),
                 frozen_policy_revision,
                 approval_mode,
                 &reviewed,
                 cancellation,
-            )? {
+            )?;
+            if approval_mode == ash_protocol::ApprovalMode::AutoReview
+                && self.threads.read_thread(thread_id)?.sequence != snapshot.sequence
+            {
+                refreshes += 1;
+                if refreshes == 3 {
+                    self.record_failure(
+                        thread_id,
+                        turn_id,
+                        pending.call.id,
+                        "automatic review context kept changing; tool was not executed",
+                    )?;
+                }
+                continue;
+            }
+            match decision {
                 ExecutionDecision::RunSandboxed(sandbox) => {
                     let progress = self.execute(
                         &execution,
@@ -433,8 +455,26 @@ impl ToolScheduler {
                     let authorization = ToolAuthorization::AutoReviewed(
                         AutoReviewedToolGrant::new(pending.call.id.clone(), grant),
                     );
-                    let progress =
-                        self.execute(&execution, pending.call, &reviewed, authorization)?;
+                    let progress = match self.execute(
+                        &execution,
+                        pending.call.clone(),
+                        &reviewed,
+                        authorization,
+                    ) {
+                        Err(CoreError::ReviewContextChanged) => {
+                            refreshes += 1;
+                            if refreshes == 3 {
+                                self.record_failure(
+                                    thread_id,
+                                    turn_id,
+                                    pending.call.id,
+                                    "automatic review context kept changing; tool was not executed",
+                                )?;
+                            }
+                            continue;
+                        }
+                        result => result?,
+                    };
                     if progress != ToolSchedulingProgress::Complete {
                         return Ok(progress);
                     }
