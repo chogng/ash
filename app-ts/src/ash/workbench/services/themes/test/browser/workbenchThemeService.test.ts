@@ -8,7 +8,7 @@ import { IConfigurationService } from '../../../../../platform/configuration/com
 import { WorkbenchConfiguration } from '../../../../common/configuration.js';
 import { WorkbenchConfigurationService } from '../../../configuration/browser/configurationService.js';
 import { lightColorTheme } from '../../../../../platform/theme/common/colorTheme.js';
-import { registerColor } from '../../../../../platform/theme/common/colorRegistry.js';
+import { registerColor } from '../../../../../platform/theme/common/colorUtils.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
 import { URI } from '../../../../../base/common/uri.js';
@@ -40,6 +40,30 @@ test('user and extension themes share colors and TextMate rules', () => {
 		{ selector: 'comment', foreground: '#123456', fontStyle: ['italic', 'bold'] },
 		{ selector: 'string.quoted', foreground: '#123456', fontStyle: ['italic', 'bold'] },
 	]);
+});
+
+test('user themes resolve colors across component domains and their dependent defaults', () => {
+	const theme = parseUserColorTheme(JSON.stringify({
+		name: 'Domain Color Overrides',
+		type: 'dark',
+		colors: {
+			'list.hoverBackground': '#123456',
+			'scrollbar.sliderBackground': '#234567',
+			'success.foreground': '#345678',
+			'charts.orange': '#456789',
+			'quickInput.background': '#56789a',
+			'search.matchBackground': '#6789ab',
+		},
+	}));
+	for (const [id, expected] of Object.entries({
+		'menu.selectionBackground': '#123456',
+		'button.hoverBackground': '#123456',
+		'minimapSlider.background': '#234567',
+		'charts.green': '#345678',
+		'charts.orange': '#456789',
+		'quickInput.background': '#56789a',
+		'search.matchBackground': '#6789ab',
+	})) assert.equal(theme.getColorCss(id), expected, id);
 });
 
 test('theme exports contain standard fields and resolved colors', () => {

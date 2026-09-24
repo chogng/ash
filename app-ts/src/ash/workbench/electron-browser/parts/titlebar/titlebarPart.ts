@@ -13,8 +13,8 @@ import {
 	type TitlebarPartFactory,
 } from "../../../browser/parts/titlebar/titlebarPart.js";
 import { NativeMenubarControl } from "./nativeMenubarControl.js";
-import { ColorId } from "../../../../platform/theme/common/colorTheme.js";
 import { IThemeService } from "../../../../platform/theme/common/themeService.js";
+import { titleBarActionForeground, titleBarBackground } from "../../../common/theme.js";
 import { INativeHostService } from "../../../common/services.js";
 import type { INativeHostApi } from "../../../../platform/native/common/nativeHost.js";
 import "./titlebarpart.css";
@@ -44,8 +44,8 @@ export class ElectronTitlebarPart extends BrowserTitlebarPart {
 
 	public updateStyles(): void {
 		const theme = this.themeService.getColorTheme();
-		const backgroundColor = theme.getColorCss(ColorId.titleBarBackground);
-		const symbolColor = theme.getColorCss(ColorId.titleBarActionForeground);
+		const backgroundColor = theme.getColorCss(titleBarBackground);
+		const symbolColor = theme.getColorCss(titleBarActionForeground);
 		if (!backgroundColor || !symbolColor) {
 			throw new Error(`Theme '${theme.id}' does not define window control colors`);
 		}

@@ -1,8 +1,7 @@
-import { registerColor, transparent } from '../../../platform/theme/common/colorRegistry.js';
-import { editorBackground, editorForeground } from '../../../platform/theme/common/colors/workbenchColors.js';
+import { registerColor, transparent } from '../../../platform/theme/common/colorUtils.js';
+import { editorBackground, editorForeground } from '../../../platform/theme/common/colors/editorColors.js';
 
-import { selectionBackground } from '../../../platform/theme/common/colors/componentColors.js';
-import { descriptionForeground, mutedForeground } from '../../../platform/theme/common/colors/baseColors.js';
+import { descriptionForeground, mutedForeground, selectionBackground } from '../../../platform/theme/common/colors/baseColors.js';
 
 const owner = 'editor.presentation';
 const alias = (id: string, value: string, description: string): string => registerColor(id, { dark: value, light: value }, { description, owner });

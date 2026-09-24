@@ -1,6 +1,7 @@
 import { Color, RGBA } from "../../../base/common/color.js";
 import { Emitter } from "../../../base/common/event.js";
 import { Disposable } from "../../../base/common/lifecycle.js";
+import { localize, onDidChangeNls } from "../../../nls.js";
 import { ColorScheme } from "./theme.js";
 
 export type ColorIdentifier = string;
@@ -37,31 +38,16 @@ export interface ResolvedColorContribution extends ColorContribution {
 	readonly value: Color | null;
 }
 
-export function transparent(value: ColorValue, factor: number): ColorTransform {
-	return { op: "transparent", value, factor };
-}
-
-export function lighten(value: ColorValue, factor: number): ColorTransform {
-	return { op: "lighten", value, factor };
-}
-
-export function darken(value: ColorValue, factor: number): ColorTransform {
-	return { op: "darken", value, factor };
-}
-
-export function mix(value: ColorValue, other: ColorValue, factor: number): ColorTransform {
-	return { op: "mix", value, other, factor };
-}
-
-export function opaque(value: ColorValue, background: ColorValue): ColorTransform {
-	return { op: "opaque", value, background };
-}
-
 export class ColorRegistry extends Disposable {
 	private readonly colors = new Map<ColorIdentifier, ColorContribution>();
 	private catalog: readonly ColorContribution[] = Object.freeze([]);
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
+
+	constructor() {
+		super();
+		this._register(onDidChangeNls(() => this.publishCatalog()));
+	}
 
 	registerColor(id: ColorIdentifier, defaults: ColorDefaults, metadata: ColorRegistrationMetadata): ColorIdentifier {
 		this.assertNotDisposed();
@@ -69,9 +55,17 @@ export class ColorRegistry extends Disposable {
 		if (this.colors.has(id)) throw new Error(`Color token is already registered: ${id}`);
 		const contribution = Object.freeze({ id, defaults: Object.freeze({ ...defaults }), ...metadata });
 		this.colors.set(id, contribution);
-		this.catalog = Object.freeze([...this.colors.values()]);
+		this.publishCatalog();
 		this.changed.fire();
 		return id;
+	}
+
+	/** Color modules load before the locale service, so descriptions are resolved again when the language changes. */
+	private publishCatalog(): void {
+		this.catalog = Object.freeze([...this.colors.values()].map(contribution => Object.freeze({
+			...contribution,
+			description: localize(`color.${contribution.id}`, contribution.description),
+		})));
 	}
 
 	getColors(): readonly ColorContribution[] {
@@ -153,11 +147,3 @@ export function validateTokenId(id: string, kind: string): void {
 }
 
 export const Colors = new ColorRegistry();
-
-export function registerColor(id: ColorIdentifier, defaults: ColorDefaults, metadata: ColorRegistrationMetadata): ColorIdentifier {
-	return Colors.registerColor(id, defaults, metadata);
-}
-
-export function colorCssVariable(id: ColorIdentifier): string {
-	return `--ash-${id.replaceAll(".", "-").replace(/[A-Z]/g, (character) => `-${character.toLowerCase()}`)}`;
-}

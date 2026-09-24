@@ -1,4 +1,4 @@
-import { registerColor } from "../colorRegistry.js";
+import { registerColor } from "../colorUtils.js";
 import { accentBackground } from "./baseColors.js";
 
 const owner = "files.presentation";

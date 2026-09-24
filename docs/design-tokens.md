@@ -6,7 +6,7 @@ Desktop、Rust GUI 与 Ash Code TUI 分别拥有主题实现。配色理念与�
 
 | 内容 | Desktop TypeScript | Rust GUI |
 | --- | --- | --- |
-| 颜色与尺寸声明 | [theme/common](../app-ts/src/ash/platform/theme/common/colorTheme.ts) 的注册表 | [catalog.json](../app-rs/theme/resources/catalog.json) |
+| 颜色与尺寸声明 | [平台颜色注册表](../app-ts/src/ash/platform/theme/common/colorRegistry.ts) 与 [工作台颜色定义](../app-ts/src/ash/workbench/common/theme.ts)；尺寸由平台注册 | [catalog.json](../app-rs/theme/resources/catalog.json) |
 | 内置主题 | TypeScript 注册表默认值与根部 [extensions/theme-defaults](../extensions/theme-defaults/package.json) | [entries.json](../app-rs/theme/resources/entries.json) 和 Rust 解析器 |
 | 用户主题校验 | [colorThemeData.ts](../app-ts/src/ash/workbench/services/themes/common/colorThemeData.ts) | [document.rs](../app-rs/theme/src/document.rs) 与 [catalog.rs](../app-rs/theme/src/catalog.rs) |
 | 用户主题 Schema 与模板 | [colorThemeSchema.ts](../app-ts/src/ash/workbench/services/themes/common/colorThemeSchema.ts) | [app-rs/theme/resources](../app-rs/theme/resources/color-theme.schema.json) |
@@ -15,6 +15,10 @@ Desktop、Rust GUI 与 Ash Code TUI 分别拥有主题实现。配色理念与�
 | 组件消费 | CSS 变量与编辑器、终端颜色表 | `ThemeSnapshot → UiTheme` 与各组件的类型化样式 |
 
 Desktop 的 [IThemeService](../app-ts/src/ash/platform/theme/common/themeService.ts) 只提供当前颜色主题和变化通知。工作台的 [WorkbenchThemeService](../app-ts/src/ash/workbench/services/themes/browser/workbenchThemeService.ts) 负责配置选择、系统配色、主题注册变化、CSS 绑定与文件图标资源的生命周期；同 ID 主题被替换时立即通知现有消费者。用户文件的读写与迁移由该模块内部资源对象负责，独立编辑器自行拥有主题选择状态。
+
+平台颜色按基础、编辑器、输入、列表、菜单、小地图、滚动条、快速选择、搜索和图表分布在 [colors](../app-ts/src/ash/platform/theme/common/colors) 目录；工作台外壳颜色由 [theme.ts](../app-ts/src/ash/workbench/common/theme.ts) 注册。图表色板目前可供主题文件配置，界面尚无图表渲染调用方。
+
+[colorUtils.ts](../app-ts/src/ash/platform/theme/common/colorUtils.ts) 提供颜色注册、变换与 CSS 变量名；[colorRegistry.ts](../app-ts/src/ash/platform/theme/common/colorRegistry.ts) 保存默认值和英文说明，读取颜色目录时按当前语言解析说明，供主题 JSON Schema 使用。颜色文件不在加载时固定翻译结果，切换界面语言后说明会随之更新。
 
 Ash Code TUI 的调色板、用户主题和 `[tui].theme` 由 [code/tui](../code/tui/README.md) 独立拥有。
 

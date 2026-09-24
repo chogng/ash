@@ -80,7 +80,7 @@ test('Common editor contracts do not import contribution-owned modules', () => {
 });
 
 test('Editor dependency checks distinguish layer paths from Platform filenames', () => {
-	assert.doesNotMatch("import { editorBackground } from '../../../platform/theme/common/colors/workbenchColors.js';", workbenchImportPattern);
+	assert.doesNotMatch("import { editorBackground } from '../../../platform/theme/common/colors/editorColors.js';", workbenchImportPattern);
 	assert.match("import { EditorPart } from '../../../workbench/browser/parts/editor/editorPart.js';", workbenchImportPattern);
 	assert.match("import '../../../workbench/browser/workbench.contribution.js';", workbenchImportPattern);
 	assert.match("await import('../../../workbench/browser/workbench.js');", workbenchImportPattern);

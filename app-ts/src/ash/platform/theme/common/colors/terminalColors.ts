@@ -1,6 +1,6 @@
-import { registerColor } from "../colorRegistry.js";
+import { registerColor } from "../colorUtils.js";
 import { foreground } from "./baseColors.js";
-import { editorBackground, editorForeground } from "./workbenchColors.js";
+import { editorBackground, editorForeground } from "./editorColors.js";
 
 const owner = "terminal.presentation";
 const color = (id: string, dark: string, light: string, description: string): string => registerColor(id, { dark, light }, { description, owner });

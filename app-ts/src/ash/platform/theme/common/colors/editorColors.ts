@@ -1,10 +1,35 @@
-import { registerColor, transparent } from "../colorRegistry.js";
-import { border as defaultBorder, descriptionForeground as baseDescriptionForeground, errorForeground, foreground, mutedForeground, successForeground, widgetBorder as baseWidgetBorder, widgetShadow as baseWidgetShadow } from "./baseColors.js";
-import { hoverBackground as componentHoverBackground, hoverBorder as componentHoverBorder, hoverForeground as componentHoverForeground, inputBackground as componentInputBackground, listHoverBackground as componentListHoverBackground, selectionBackground as componentSelectionBackground } from "./componentColors.js";
+import { registerColor, transparent } from "../colorUtils.js";
+import {
+	border as defaultBorder,
+	descriptionForeground as baseDescriptionForeground,
+	errorForeground,
+	foreground,
+	mutedForeground,
+	selectionBackground,
+	successForeground,
+	widgetBorder as baseWidgetBorder,
+	widgetShadow as baseWidgetShadow,
+} from "./baseColors.js";
+import {
+	hoverBackground as componentHoverBackground,
+	hoverBorder as componentHoverBorder,
+	hoverForeground as componentHoverForeground,
+} from "./componentColors.js";
+import { inputBackground as defaultInputBackground } from "./inputColors.js";
+import { listHoverBackground as defaultListHoverBackground } from "./listColors.js";
 
 const owner = "editor.presentation";
 const color = (id: string, dark: string, light: string, description: string): string => registerColor(id, { dark, light }, { description, owner });
 const alias = (id: string, value: string, description: string): string => registerColor(id, { dark: value, light: value }, { description, owner });
+
+export const editorBackground = registerColor("editor.background", {
+	dark: "#1e1e1e", light: "#ffffff",
+	highContrastDark: "#1e1e1e", highContrastLight: "#ffffff",
+}, { description: "Editor background.", owner });
+export const editorForeground = registerColor("editor.foreground", {
+	dark: "#d4d4d4", light: "#333333",
+	highContrastDark: "#d4d4d4", highContrastLight: "#333333",
+}, { description: "Editor foreground.", owner });
 
 export const tokenCommentForeground = color("editor.token.commentForeground", "#6a9955", "#008000", "Foreground for comment tokens independently of their syntax or semantic source.");
 export const tokenKeywordForeground = color("editor.token.keywordForeground", "#c586c0", "#af00db", "Foreground for keyword tokens independently of their syntax or semantic source.");
@@ -28,8 +53,8 @@ export const border = alias("editor.border", defaultBorder, "Editor surface bord
 export const widgetBackground = color("editor.widgetBackground", "#252526", "#f3f3f3", "Background for floating editor widgets.");
 export const widgetBorder = alias("editor.widgetBorder", baseWidgetBorder, "Border around floating editor widgets.");
 export const widgetShadow = alias("editor.widgetShadow", baseWidgetShadow, "Shadow around floating editor widgets.");
-export const inputBackground = alias("editor.inputBackground", componentInputBackground, "Background for editor widget inputs.");
-export const listHoverBackground = alias("editor.listHoverBackground", componentListHoverBackground, "Hover background for editor widget lists.");
+export const inputBackground = alias("editor.inputBackground", defaultInputBackground, "Background for editor widget inputs.");
+export const listHoverBackground = alias("editor.listHoverBackground", defaultListHoverBackground, "Hover background for editor widget lists.");
 export const descriptionForeground = alias("editor.descriptionForeground", baseDescriptionForeground, "Foreground for editor widget descriptions.");
 export const hoverForeground = alias("editor.hoverForeground", componentHoverForeground, "Foreground for editor Hovers.");
 export const hoverBackground = alias("editor.hoverBackground", componentHoverBackground, "Background for editor Hovers.");
@@ -39,7 +64,7 @@ export const inlineCompletionForeground = alias("editor.inlineCompletionForegrou
 export const compositionBorder = color("editor.compositionBorder", "#a0a0a0", "#a0a0a0", "Border under text in an active input method composition.");
 export const foldBackground = registerColor(
 	'editor.foldBackground',
-	{ dark: transparent(componentSelectionBackground, 0.3), light: transparent(componentSelectionBackground, 0.3), highContrastDark: null, highContrastLight: null },
+	{ dark: transparent(selectionBackground, 0.3), light: transparent(selectionBackground, 0.3), highContrastDark: null, highContrastLight: null },
 	{ description: 'Background behind collapsed editor ranges.', owner, needsTransparency: true },
 );
 export const foldPlaceholderForeground = color('editor.foldPlaceholderForeground', '#808080', '#808080', 'Foreground for the collapsed-range placeholder.');

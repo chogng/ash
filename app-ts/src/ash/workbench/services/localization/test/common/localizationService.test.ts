@@ -10,6 +10,9 @@ import { WorkbenchLocalizationService } from "../../browser/workbenchLocalizatio
 import { resetNlsResolver } from '../../../../../nls.js';
 import { JSDOM } from 'jsdom';
 import { QuickInputController } from '../../../../../platform/quickinput/browser/quickInputController.js';
+import { JsonSchemasRegistry } from '../../../../../platform/jsonschemas/common/jsonSchemaRegistry.js';
+import { colorThemeSchemaId, registerColorThemeSchemas } from '../../../themes/common/colorThemeSchema.js';
+import '../../../../common/theme.js';
 
 test("locale resolution prefers exact, base-language, and English fallback matches", () => {
 	assert.equal(normalizeLocale("ZH_cn"), "zh-CN");
@@ -57,6 +60,36 @@ test('minimap menu uses the selected Chinese language catalog', async () => {
 	await localization.whenReady;
 	await localeService.setLocale('zh-CN');
 	assert.equal(localization.translate('ash', 'context.minimap.enabled', 'Minimap'), '小地图');
+});
+
+test('theme color descriptions in the JSON schema follow locale changes', async () => {
+	using configuration = new InMemoryConfigurationService();
+	using languagePacks = new MarketplaceLanguagePackService(createMarketplace(), builtinLanguagePackCatalogs);
+	using localeService = new WorkbenchLocaleService(configuration, languagePacks);
+	using localization = new WorkbenchLocalizationService(localeService, languagePacks);
+	using schemaRegistration = registerColorThemeSchemas();
+	const schema = JsonSchemasRegistry.getSchema(colorThemeSchemaId)!;
+	const description = (id: string): string | undefined => schema.properties?.colors?.properties?.[id]?.description;
+	try {
+		await localization.whenReady;
+		assert.equal(description('input.background'), 'Input background.');
+		await localeService.setLocale('zh-CN');
+		assert.deepEqual([
+			description('input.background'),
+			description('minimapSlider.background'),
+			description('charts.green'),
+			description('editorGroup.border'),
+		], [
+			'输入框背景色。',
+			'小地图视口滑块的背景色。',
+			'图表中绿色数据系列的颜色。',
+			'编辑器分组之间的边框颜色。',
+		]);
+		await localeService.setLocale('en');
+		assert.equal(description('input.background'), 'Input background.');
+	} finally {
+		resetNlsResolver();
+	}
 });
 
 test('paste and drop controls use the selected Chinese language catalog', async () => {

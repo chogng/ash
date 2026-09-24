@@ -46,6 +46,30 @@ test("App Server workspace files open in Stanza and save through the editor regi
 	).toBe("const value = 2;");
 });
 
+test('minimap slider follows its theme color in the running editor', async ({ target, workbench }) => {
+	test.skip(
+		target.appServerMode !== 'required' || target.workbenchMode !== 'code',
+		'This scenario requires the Code App Server product',
+	);
+
+	const fileRow = workbench.page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
+	await expect.poll(() => fileRow.count(), { timeout: 15_000 }).toBe(1);
+	await fileRow.click();
+	const slider = workbench.editors.groupAt(0).content.locator('.stanza-editor-minimap-slider');
+	await expect(slider).toBeVisible();
+	const colors = await slider.evaluate(element => {
+		const minimap = element.parentElement!;
+		const initial = getComputedStyle(element).backgroundColor;
+		minimap.style.setProperty('--ash-minimap-slider-background', '#123456');
+		const overridden = getComputedStyle(element).backgroundColor;
+		minimap.style.removeProperty('--ash-minimap-slider-background');
+		return { initial, overridden, restored: getComputedStyle(element).backgroundColor };
+	});
+	expect(colors.initial).not.toBe('rgba(0, 0, 0, 0)');
+	expect(colors.overridden).toBe('rgb(18, 52, 86)');
+	expect(colors.restored).toBe(colors.initial);
+});
+
 test('Code opens Go to Line from the command palette in the focused editor', async ({ target, workbench }) => {
 	test.skip(
 		target.appServerMode !== 'required' || target.workbenchMode !== 'code',

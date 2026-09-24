@@ -4,6 +4,7 @@ import {
 	ColorId,
 	colorCssVariable,
 	darkColorTheme,
+	highContrastDarkColorTheme,
 	lightColorTheme,
 	sizeCssVariable,
 } from "../../common/colorTheme.js";
@@ -24,13 +25,16 @@ test("TestThemeService exposes its initial theme and emits actual changes", () =
 	assert.deepEqual(changes, ["ash-light"]);
 });
 
-test("built-in themes define every registered color", () => {
-	for (const { id } of Colors.getColors()) {
-		assert.equal(typeof darkColorTheme.colors[id], "string");
-		assert.equal(typeof lightColorTheme.colors[id], "string");
-		assert.equal(darkColorTheme.getColorCss(id), darkColorTheme.colors[id]);
-		assert.equal(lightColorTheme.getColorCss(id), lightColorTheme.colors[id]);
+test("built-in themes resolve registered colors and omit inactive high contrast borders", () => {
+	for (const theme of [darkColorTheme, lightColorTheme, highContrastDarkColorTheme]) {
+		assert.equal(theme.colorEntries.length, Colors.getColors().length);
+		for (const { id, value } of theme.colorEntries) {
+			assert.equal(theme.getColorCss(id), theme.colors[id]);
+			assert.equal(typeof theme.colors[id], value ? "string" : "undefined");
+		}
 	}
+	assert.equal(darkColorTheme.getColorCss('contrastBorder'), undefined);
+	assert.equal(highContrastDarkColorTheme.getColorCss('contrastBorder'), '#ffffff');
 });
 
 test("color identifiers map to stable CSS custom properties", () => {
@@ -39,8 +43,8 @@ test("color identifiers map to stable CSS custom properties", () => {
 		"--ash-button-primary-hover-background",
 	);
 	assert.equal(
-		colorCssVariable(ColorId.titleBarForeground),
-		"--ash-title-bar-foreground",
+		colorCssVariable(ColorId.editorForeground),
+		"--ash-editor-foreground",
 	);
 	assert.equal(sizeCssVariable('strokeThickness'), '--ash-stroke-thickness');
 	assert.equal(colorCssVariable(ColorId.editorFoldBackground), '--ash-editor-fold-background');

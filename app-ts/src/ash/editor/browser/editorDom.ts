@@ -4,7 +4,7 @@ import { StandardMouseEvent } from '../../base/browser/mouseEvent.js';
 import { RunOnceScheduler } from '../../base/common/async.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
 import { ThemeColor, type ThemeColor as ThemeColorValue } from '../../base/common/themables.js';
-import { colorCssVariable } from '../../platform/theme/common/colorRegistry.js';
+import { colorCssVariable } from '../../platform/theme/common/colorUtils.js';
 import { type ICodeEditor } from './editorBrowser.js';
 import { type IDimension } from '../common/core/2d/dimension.js';
 

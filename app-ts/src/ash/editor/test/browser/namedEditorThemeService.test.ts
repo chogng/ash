@@ -3,7 +3,7 @@ import { test } from 'mocha';
 import { colorCssVariable, darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme, lightColorTheme } from '../../../platform/theme/common/colorTheme.js';
 import { ColorScheme } from '../../../platform/theme/common/theme.js';
 import { StandaloneThemeService } from '../../standalone/browser/standaloneThemeService.js';
-import { registerColor } from '../../../platform/theme/common/colorRegistry.js';
+import { registerColor } from '../../../platform/theme/common/colorUtils.js';
 import { Color } from '../../../base/common/color.js';
 import { TokenMetadata } from '../../common/encodedTokenAttributes.js';
 import { TokenizationRegistry } from '../../common/languages.js';

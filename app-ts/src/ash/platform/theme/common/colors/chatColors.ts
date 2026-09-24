@@ -1,4 +1,4 @@
-import { registerColor } from "../colorRegistry.js";
+import { registerColor } from "../colorUtils.js";
 
 const owner = "chat.presentation";
 const color = (id: string, dark: string, light: string, description: string): string => registerColor(id, { dark, light }, { description, owner });

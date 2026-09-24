@@ -47,6 +47,7 @@ import type { IEditorPaneDescriptor } from "./editorPane.js";
 
 export { EditorOpenSupersededError } from "./editorGroup.js";
 
+/** Keep the CSS variable reference so theme changes recolor existing Grid boundaries without restyling the Grid. */
 const EDITOR_GROUP_GRID_STYLES = { separatorBorder: "var(--ash-editor-group-border)" } as const;
 
 /** Editor-region operations available to Workbench contributions. */

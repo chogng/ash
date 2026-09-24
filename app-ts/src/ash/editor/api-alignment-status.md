@@ -922,7 +922,7 @@ common 当前 **210 个文件：179 个同路径、31 个 Ash 自有；47 个上
 | `browser/gpu/viewGpuContext.ts` | 双方都有 | 主题事件使装饰颜色与字形缓存失效，覆盖只改括号颜色的主题切换。 |
 | `browser/gpu/renderStrategy/viewportRenderStrategy.ts`、`fullFileRenderStrategy.ts` | 双方都有 | 装饰前景色与已有删除线颜色共用 CSS 变量解析，两个绘制策略都消费实际主题值。 |
 | `standalone/browser/standaloneCodeEditor.ts` | 双方都有 | 宿主先绑定主题根，再创建视图，保证同步绘制前 CSS 变量已更新；构造失败和正常关闭均释放绑定。 |
-| `test/browser/semanticTokenPresentation.test.ts`、`editorSemanticTokenViewport.test.ts`、`namedEditorThemeService.test.ts`、`../platform/theme/test/common/design-tokens.test.ts` | 现有测试设施 | 验证 token 展示数据、换行后的片段与文本合成、四种主题的颜色对比度，声明实际由行渲染器写入的组件变量。 |
+| `test/browser/semanticTokenPresentation.test.ts`、`editorSemanticTokenViewport.test.ts`、`namedEditorThemeService.test.ts`、`../workbench/test/common/design-tokens.test.ts` | 现有测试设施 | 验证 token 展示数据、换行后的片段与文本合成、四种主题的颜色对比度，声明实际由行渲染器写入的组件变量。 |
 | `test/integration/browser/standalone.integration.ts`、`standalone.integration.spec.ts`、`gpuText.integration.ts`、`gpuText.integration.spec.ts` | Ash 现有浏览器测试设施 | Playwright 验证实际计算颜色、语法色优先级、开关与颜色池、主题切换及 GPU 字形颜色。 |
 | `test/integration/browser/textModel.integration.spec.ts` | Ash 现有浏览器测试 | 在已有屏幕阅读器宿主场景中验证富文本括号颜色与可见行一致。 |
 | `common/core/README.md`、`browser/README.md`、`api-alignment-status.md` | 现有文档 | 同步颜色、样式和缓存职责，记录准入、验证及保留差异。 |

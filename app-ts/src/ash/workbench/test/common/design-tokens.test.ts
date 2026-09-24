@@ -2,10 +2,11 @@ import { strict as assert } from "node:assert";
 import { readdir, readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { test } from "mocha";
-import { colorCssVariable, sizeCssVariable, sizeIdentifiers } from "../../common/colorTheme.js";
-import { Colors } from "../../common/colorRegistry.js";
-// This audit covers editor CSS as well as platform CSS.
-import "../../../../editor/common/core/editorColorRegistry.js";
+import { colorCssVariable, sizeCssVariable, sizeIdentifiers } from "../../../platform/theme/common/colorTheme.js";
+import { Colors } from "../../../platform/theme/common/colorRegistry.js";
+import "../../../editor/common/core/editorColorRegistry.js";
+import "../../../editor/browser/widget/multiDiffEditor/colors.js";
+import "../../common/theme.js";
 
 test("CSS consumes registered design tokens and isolates intentional color samples", async () => {
 	const registered = new Set([...Colors.getColors().map(({ id }) => colorCssVariable(id)), ...sizeIdentifiers.map(sizeCssVariable)]);

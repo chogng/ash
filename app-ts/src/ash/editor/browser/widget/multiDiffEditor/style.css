@@ -31,7 +31,7 @@
 	box-sizing: border-box;
 	overflow: visible;
 	background: var(--ash-multi-diff-editor-background);
-	border: var(--ash-strokeThickness) solid var(--ash-multi-diff-editor-border);
+	border: var(--ash-stroke-thickness) solid var(--ash-multi-diff-editor-border);
 	border-radius: 6px;
 }
 
@@ -47,7 +47,7 @@
 	min-width: 0;
 	color: inherit;
 	background: var(--ash-multi-diff-editor-header-background);
-	border-bottom: var(--ash-strokeThickness) solid var(--ash-multi-diff-editor-border);
+	border-bottom: var(--ash-stroke-thickness) solid var(--ash-multi-diff-editor-border);
 	cursor: pointer;
 }
 

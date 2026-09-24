@@ -1,4 +1,4 @@
-import { registerColor, transparent } from '../colorRegistry.js';
+import { registerColor, transparent } from '../colorUtils.js';
 
 const owner = 'workbench.preferences';
 

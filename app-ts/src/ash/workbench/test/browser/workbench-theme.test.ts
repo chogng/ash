@@ -46,6 +46,46 @@ test('system theme follows the OS while explicit themes remain stable', async ()
 	assert.equal(root.getAttribute('data-color-theme'), 'ash-dark');
 });
 
+test('workbench colors follow theme changes and keep editor group borders visible in high contrast', async () => {
+	using window = new ThemeWindow();
+	const { configuration, root } = window;
+	const colors = () => ({
+		workbench: root.style.getPropertyValue('--ash-workbench-background'),
+		tab: root.style.getPropertyValue('--ash-editor-tab-background'),
+		titleBar: root.style.getPropertyValue('--ash-title-bar-background'),
+		sideBar: root.style.getPropertyValue('--ash-side-bar-background'),
+		groupBorder: root.style.getPropertyValue('--ash-editor-group-border'),
+	});
+	assert.deepEqual(colors(), {
+		workbench: '#ffffff', tab: '#eeeeee', titleBar: '#ffffff',
+		sideBar: '#f8f8f8', groupBorder: '#e5e5e5',
+	});
+	await configuration.updateValue(WorkbenchConfiguration.colorTheme, 'ash-dark');
+	assert.deepEqual(colors(), {
+		workbench: '#1e1e1e', tab: '#eeeeee', titleBar: '#ffffff',
+		sideBar: '#f8f8f8', groupBorder: '#2b2b2b',
+	});
+	using registration = WorkbenchThemesRegistry.registerColorTheme(highContrastDarkColorTheme);
+	await configuration.updateValue(WorkbenchConfiguration.colorTheme, highContrastDarkColorTheme.id);
+	assert.equal(colors().groupBorder, '#ffffff');
+});
+
+test('remote status item hover follows the status item foreground override', () => {
+	const theme = createColorTheme({
+		id: 'status-hover-override', label: 'Status Hover Override', colorScheme: ColorScheme.Dark,
+		colorOverrides: { 'statusBarItem.hoverForeground': '#123456' },
+	});
+	assert.equal(theme.getColorCss('statusBarItem.remoteHoverForeground'), '#123456');
+});
+
+test('editor group border follows the high contrast border override', () => {
+	const theme = createColorTheme({
+		id: 'contrast-border-override', label: 'Contrast Border Override', colorScheme: ColorScheme.HighContrastDark,
+		colorOverrides: { contrastBorder: '#abcdef' },
+	});
+	assert.equal(theme.getColorCss('editorGroup.border'), '#abcdef');
+});
+
 test('dynamic theme registration and replacement update the active window without a refresh caller', async () => {
 	using window = new ThemeWindow();
 	const { configuration, themes, root } = window;

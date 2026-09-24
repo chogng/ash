@@ -1,4 +1,4 @@
-import { registerColor, mix } from '../../../../platform/theme/common/colorRegistry.js';
+import { registerColor, mix } from '../../../../platform/theme/common/colorUtils.js';
 
 const owner = 'editor.multiDiffEditor';
 
