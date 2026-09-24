@@ -237,7 +237,7 @@ class AshCodeArchiveTests(unittest.TestCase):
             }
 
             result = subprocess.run(
-                ["sh", "scripts/code/install.sh"],
+                ["sh", "build/code/install.sh"],
                 cwd=archive_builder.REPOSITORY_ROOT,
                 env=environment,
                 check=True,

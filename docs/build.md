@@ -255,27 +255,28 @@ just bench-build ash-keybinding --jobs 4 --compare .build/build-health/<run>/rep
 | 路径 | 单一职责 |
 | --- | --- |
 | `build/lib/` | 后端构建共用的归档、签名、Cargo、目标识别和 V8 输入 |
-| `build/app_ts/` | Electron Main、Preload、Renderer 和 Web 的 TypeScript 构建；前端开发时监听后端文件变化、调用后端构建入口并读取共享包位置 |
+| `build/app_ts/` | Electron Main、Preload、Renderer 和 Web 的 TypeScript 构建与开发启动；监听后端文件变化、调用后端构建入口并读取共享包位置 |
 | `build/protocol/` | 将 Rust 生成的协议契约同步给 TypeScript 消费方 |
-| `scripts/app_ts/electron.ts`、`scripts/app_ts/web.ts` | Electron 启动与重启、本地 Web 静态服务启动 |
+| `build/app_ts/launch/electron.ts`、`build/app_ts/launch/web.ts` | Electron 启动与重启、本地 Web 静态服务启动 |
 | `app-ts/src/ash/platform/app-server/node/` | WebSocket 连接、共享 JSONL 进程传输；由启动方提供工作区、配置目录和可执行文件路径 |
 | `build/pnpm/` | pnpm 版本约束、安装入口和单锁文件 workspace 校验 |
 | `build/ash_rs/` | Python 实现的共享后端构建：Cargo 程序与协议生成、开发态 App Server 代次、锁定资源、开发包和发布包组装、布局校验及签名记录 |
-| `build/app_rs/`、`build/code/`、`build/remote/` | 各交付物的组装、验证与归档 |
+| `build/app_rs/` | Rust Desktop 组包、签名与远端运行时 bundle 交付 |
+| `build/code/` | Code 构建、运行、组包、归档与安装脚本 |
 | `build/darwin/` | macOS 签名命令和公证 |
 | `build/win32/` | Windows 签名命令 |
 | `build/linux/` | Linux 分离签名命令 |
 | `build/download/` | Python 后端构建共用的校验下载与解压 |
 | `build/resources/` | 共享资源生成 |
 | `build/clean.ts` | 根清理入口 |
-| `build/package.json`、`build/tsconfig.json` | `build/` 与 `scripts/app_ts/` 的 TypeScript 测试和类型检查 |
+| `build/package.json`、`build/tsconfig.json` | 构建工具的 TypeScript 测试和类型检查 |
 
 `.build/app-ts/` 是产物目录，按 `main`、`preload`、`renderer`、`node` 等运行目标存放输出。`.build/cargo/` 仍是统一 Cargo 输出目录；相同 profile 的公共依赖会复用。Code 的 `dev-small` 与 App 的默认开发 profile 分别拥有首次编译产物。
 `build/app_ts/build.ts` 提供 `all`、`host`、`renderer` 和 `prepare` 入口；`host.ts` 用一次 TypeScript 项目构建编译并监听 Electron Main 与 Preload，增量构建信息放在 `.build/app-ts/`；`watch-app-server.ts` 负责后端监听。启动脚本调用构建能力，构建模块不反向调用启动脚本。
 
-`app-ts` 的开发入口调用 `build/ash_rs/prepare.py` 准备共享包，使用 `build/app_ts/runtimeStore.ts` 读取已发布包的位置。`build/app_ts/appServer.ts` 监听 Rust 修改；`build/protocol/generate.ts` 调用 `build/ash_rs/protocol.py` 生成 Rust 协议文件后同步前端契约，再调用 `build/ash_rs/develop.py` 构建后端程序并发布可热重启的 App Server 代次。Cargo 执行、后端程序复制、资源下载、共享包布局和签名规则只由 Python 持有；TypeScript 负责前端编译、监听和开发进程生命周期。`build/app_rs/`、`build/code/` 和 `build/remote/` 以验证过的共享包为输入，仅添加各自交付物；共享包的文件清单和校验由 `build/ash_rs/` 负责。
+`app-ts` 的开发入口调用 `build/ash_rs/prepare.py` 准备共享包，使用 `build/app_ts/runtimeStore.ts` 读取已发布包的位置。`build/app_ts/appServer.ts` 监听 Rust 修改；`build/protocol/generate.ts` 调用 `build/ash_rs/protocol.py` 生成 Rust 协议文件后同步前端契约，再调用 `build/ash_rs/develop.py` 构建后端程序并发布可热重启的 App Server 代次。Cargo 执行、后端程序复制、资源下载、共享包布局和签名规则只由 Python 持有；TypeScript 负责前端编译、监听和开发进程生命周期。`build/app_rs/`、`build/code/` 和 `build/app_rs/remote/` 以验证过的共享包为输入，仅添加各自交付物；共享包的文件清单和校验由 `build/ash_rs/` 负责。
 
-Web 连接实现编译到 `node` 输出后，由 `scripts/app_ts/web.ts` 或 Vite 插件加载。两者提供开发包路径和运行配置；连接实现不读取仓库构建目录。
+Web 连接实现编译到 `node` 输出后，由 `build/app_ts/launch/web.ts` 或 Vite 插件加载。两者提供开发包路径和运行配置；连接实现不读取仓库构建目录。
 `ws` 属于 `app-ts` 的运行依赖，静态服务器使用的 `sirv` 属于根脚本的开发依赖，共用根锁文件。
 
 ### 共享包组装
@@ -288,7 +289,7 @@ LiveKit Server 的版本、来源与 SHA-256 位于 `third_party/livekit/runtime
 
 后端下载与解压由 `build/download/artifacts.py` 提供。Node、ripgrep、V8 和 LiveKit 输入通过摘要校验后进入缓存；下载使用独立临时文件，失败只清理本次临时文件。开发入口复用已校验的缓存产物。
 
-打包入口按交付物定位：`build/ash_rs/build.py` 产出不含 CLI 的共享运行时，`build/code/package.py` 将 `ash` 命令加入经过验证的运行时包，`build/code/archive.py` 将 Code 包归档；`build/app_rs/build.py` 和 `build/remote/bundle.py` 分别负责 Rust 桌面端与远端运行时。共享包签名使用 `build/ash_rs/sign.py`，App 签名使用 `build/app_rs/signing.py`，macOS 公证使用 `build/darwin/notarize.py`。
+打包入口按交付物定位：`build/ash_rs/build.py` 产出不含 CLI 的共享运行时，`build/code/package.py` 将 `ash` 命令加入经过验证的运行时包，`build/code/archive.py` 将 Code 包归档；`build/app_rs/build.py` 和 `build/app_rs/remote/bundle.py` 分别负责 Rust 桌面端与远端运行时。共享包签名使用 `build/ash_rs/sign.py`，App 签名使用 `build/app_rs/signing.py`，macOS 公证使用 `build/darwin/notarize.py`。
 
 各 Python 入口可用 `python3 -B <脚本路径>` 直接运行，Windows 使用 `python -B <脚本路径>`；模块导入从 `build` 下的所属目录开始。测试放在对应职责目录，`just test-python build` 统一发现并运行。各目录的 `BUILD.bazel` 声明自身工具和直接依赖。
 
@@ -296,15 +297,15 @@ LiveKit Server 的版本、来源与 SHA-256 位于 `third_party/livekit/runtime
 
 ### 仓库脚本与开发运行
 
-`scripts/` 根目录保存跨产品仓库工具：`cargo.py` 为整个 Cargo workspace 准备锁定的构建输入，`format.py` 统一已有格式化器，`test-python.py` 按 `scripts`、`code`、`build` 分别运行 Python 测试并在不指定范围时聚合执行。`scripts/app_ts/` 保存 Electron 和 Web 的运行入口与入口测试；它调用 `build/app_ts/` 的构建和运行准备能力，不持有前端编译规则或共享后端组包规则。
+`scripts/` 根目录保存跨产品仓库工具：`cargo.py` 为整个 Cargo workspace 准备锁定的构建输入，`format.py` 统一已有格式化器，`test-python.py` 支持 `scripts`、`code`、`build` 定向测试；不指定范围时运行 `scripts` 和 `build`，其中 `build` 已包含 Code 测试。`build/app_ts/launch/` 保存 Electron 和 Web 的运行入口与入口测试；它调用 `build/app_ts/` 的构建和运行准备能力，不持有前端编译规则或共享后端组包规则。
 
-Desktop 的 Node、Browser 和 Playwright 测试入口与 loader 归 `app-ts/test/`，根 `package.json` 直接调用 `app-ts` 的公开测试命令。`scripts/code/` 保存 Code TUI 的源码运行和完整开发包运行入口。`app` 当前没有独立脚本，因此不创建空占位文件。
+Desktop 的 Node、Browser 和 Playwright 测试入口与 loader 归 `app-ts/test/`，根 `package.json` 直接调用 `app-ts` 的公开测试命令。`build/code/` 保存 Code TUI 的源码运行、完整开发包运行和公开安装脚本。`app` 当前没有独立运行入口，因此不创建空占位文件。
 
-`build/code/build.py` 用一次 Cargo 调用构建 Code TUI、本地 App Server 和当前平台沙箱程序，并从 Cargo 的构建报告取得可执行文件路径。`scripts/code/run.py` 调用其中的暂存能力，把可执行文件放入按内容区分的 `.build/code/dev/` 目录后启动；这个小目录避免 Windows 上仍在运行的程序阻塞下一次构建，不是产品包。独立运行 `build/code/build.py` 只编译。技能、扩展和产品服务直接读取源码。`scripts/code/run_package.py` 只服务于显式的完整开发包运行。
+`build/code/build.py` 用一次 Cargo 调用构建 Code TUI、本地 App Server 和当前平台沙箱程序，并从 Cargo 的构建报告取得可执行文件路径。`build/code/run.py` 调用其中的暂存能力，把可执行文件放入按内容区分的 `.build/code/dev/` 目录后启动；这个小目录避免 Windows 上仍在运行的程序阻塞下一次构建，不是产品包。独立运行 `build/code/build.py` 只编译。技能、扩展和产品服务直接读取源码。`build/code/run_package.py` 只服务于显式的完整开发包运行。
 
 完整开发包仍由 `build/ash_rs/prepare.py` 拥有。它在一次 Cargo 调用中构建全部第一方程序；可执行文件和包输入没有变化时直接复用已发布的完整包，有变化时才复制并校验受管资源、计算整包摘要，再通过 Package Store 发布不可变代次。日常 `just ash` 不执行这些组装与发布步骤；只有验证包布局、跨产品交付、回滚或远端运行时边界时才使用 `just ash-package` 或 `just ash-package-run`。Cargo 并发由 Cargo 自己决定；开发者仍可按需显式设置 `CARGO_BUILD_JOBS`。
 
-`scripts/` 可以调用 `build/` 公开的构建准备能力，`build/` 的生产模块不得导入或执行 `scripts/`；同仓测试和类型检查覆盖两者。包组装由 `build/ash_rs/` 拥有；共享目标识别和 V8 输入解析由 `build/lib/` 拥有，日常 Cargo 命令与发布构建器都依赖这一层。测试内容和 fixture 仍归对应产品目录拥有，仓库脚本只负责入口、进程编排和临时测试输出生命周期。
+仓库级 `scripts/` 可以调用 `build/` 公开的构建准备能力，`build/` 的生产模块不得导入或执行 `scripts/`；同仓测试和类型检查覆盖两者。产品启动入口与构建能力放在同一产品构建目录，启动入口调用构建模块，构建模块不反向调用启动入口。包组装由 `build/ash_rs/` 拥有；共享目标识别和 V8 输入解析由 `build/lib/` 拥有，日常 Cargo 命令与发布构建器都依赖这一层。测试内容和 fixture 仍归对应产品目录拥有，仓库脚本只负责跨产品命令入口、进程编排和临时测试输出生命周期。
 
 ### 根配置与工具语言
 

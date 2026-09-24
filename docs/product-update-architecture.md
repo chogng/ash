@@ -239,7 +239,7 @@ Remote runtime 的下载、兼容握手、安装与回滚继续由 `ash-remote-c
 | 能力 | 当前实现 | 目标状态 |
 | --- | --- | --- |
 | Ash Code 策略 UI | `Latest / Stable / Never` 已在 TUI 实现 | 保留 UI，类型迁到共享领域后由 adapter 映射 |
-| Ash Code 更新 | CLI 已改用共享策略与签名验证；调度、下载、诊断和安装仍在 `cli/src/update.rs` | 保留 CLI 安装 adapter，继续迁出通用调度、下载和诊断 |
+| Ash Code 更新 | CLI 已改用共享策略与签名验证；调度、下载、诊断和安装仍在 `ash-cli/src/update.rs` | 保留 CLI 安装 adapter，继续迁出通用调度、下载和诊断 |
 | Rust Desktop 更新 | `app-rs/zui/src/services/update.rs` 已改用共享签名描述；HTTP staging 与安装 facade 仍在 `zui` | 继续迁出通用下载，`zui` 只保留 facade |
 | Electron Desktop 更新 | 尚无完整产品更新调用链 | 增加 update host、Main adapter、Renderer service 与 UI |
 | 系统签名 | App 与 Ash Code 已共用 `build/lib/signing.py`；Ash Code macOS/Windows 发布会签完并验证每个可执行文件，macOS 压缩包还会公证 | Electron 打包和三端最终安装器接入同一入口；Desktop `.pkg` / `.dmg` 公证后附加票据，Windows 安装器再次签名 |

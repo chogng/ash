@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "pretest": "node protocol/sync.ts",
-    "test": "node --test \"**/*.test.ts\" \"../scripts/app_ts/*.test.ts\"",
+    "test": "node --test \"**/*.test.ts\"",
     "pretypecheck": "node protocol/sync.ts",
     "typecheck": "tsc -p tsconfig.json"
   },

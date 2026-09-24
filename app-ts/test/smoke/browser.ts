@@ -81,7 +81,7 @@ const serverEnvironment = mode === 'full' ? {
 	...(productServicesPath ? { ASH_PRODUCT_SERVICES_PATH: productServicesPath } : {}),
 } : testEnvironment;
 const server = spawn(process.execPath, [
-	'../scripts/app_ts/web.ts',
+	'../build/app_ts/launch/web.ts',
 	'../.build/app-ts/renderer/ash',
 	String(port),
 ], {

@@ -90,7 +90,7 @@ app-package/
 记录共享运行时与 `app` 的完整文件清单。staging 拒绝覆盖已有目录，并把状态标成
 `unsigned`。这一步不取得密钥、不签名，也不宣称 artifact 可发布。
 
-需要支持只安装 app 的用户时，先运行 `build/remote/bundle.py`，输入一个或多个
+需要支持只安装 app 的用户时，先运行 `build/app_rs/remote/bundle.py`，输入一个或多个
 canonical packaged-node Ash package directory，再给 staging 追加
 `--remote-runtime-bundle <bundle>`。builder 将 catalog SHA-256 通过
 `APP_REMOTE_RUNTIME_CATALOG_SHA256` 编译进 app，并输出：

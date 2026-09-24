@@ -95,7 +95,7 @@ py_test(
     srcs = [
         "//build/app_rs:python_sources",
         "//build/app_rs:test_package.py",
-        "//build/remote:test_bundle.py",
+        "//build/app_rs/remote:test_bundle.py",
         "//build/ash_rs:test_support.py",
     ],
     main = "//build/app_rs:test_package.py",
@@ -124,10 +124,10 @@ py_test(
 py_test(
     name = "remote_runtime_bundle_test",
     srcs = [
-        "//build/remote:python_sources",
-        "//build/remote:test_bundle.py",
+        "//build/app_rs/remote:python_sources",
+        "//build/app_rs/remote:test_bundle.py",
     ],
-    main = "//build/remote:test_bundle.py",
+    main = "//build/app_rs/remote:test_bundle.py",
     size = "small",
 )
 
@@ -152,7 +152,7 @@ py_test(
     srcs = [
         "//build/app_rs:python_sources",
         "//build/app_rs:test_signing.py",
-        "//build/remote:test_bundle.py",
+        "//build/app_rs/remote:test_bundle.py",
         "//build/ash_rs:test_support.py",
     ],
     main = "//build/app_rs:test_signing.py",

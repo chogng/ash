@@ -2,7 +2,7 @@
 
 `app-rs/` 拥有 `app` 窗口程序及其端内交互。它使用 `ash-rs/` 的 App Server
 读取和修改 Agent 会话，通过同一个 `ASH_HOME` profile 与 Electron 桌面端、TUI 和 CLI
-连接同一个后台进程；它不调用 `cli/` 的 `ash` 命令。
+连接同一个后台进程；它不调用 `ash-cli/` 的 `ash` 命令。
 
 | 目录 | 职责 |
 | --- | --- |

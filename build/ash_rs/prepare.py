@@ -230,7 +230,7 @@ def development_source_paths(root: Path) -> list[Path]:
     return package_sources(root) + [
         root / "ash-rs",
         root / "app-rs",
-        root / "cli",
+        root / "ash-cli",
         root / "code",
         root / "build/code/update-sign",
         root / "Cargo.lock",

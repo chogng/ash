@@ -124,7 +124,7 @@ def boundary_errors(root: Path, metadata: dict) -> list[str]:
                     or (
                         parts[0] == "ash-rs"
                         and destination
-                        and destination[0] in {"app-rs", "code", "cli"}
+                        and destination[0] in {"app-rs", "code", "ash-cli"}
                     )
                     or (
                         start == "ash-app-server-daemon"

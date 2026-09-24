@@ -19,8 +19,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from build.lib.targets import TARGETS
 from build.lib.targets import target_spec
-from build.remote.bundle import RemoteRuntimeBundle
-from build.remote.bundle import validate_remote_runtime_bundle
+from build.app_rs.remote.bundle import RemoteRuntimeBundle
+from build.app_rs.remote.bundle import validate_remote_runtime_bundle
 from build.ash_rs.cargo import cargo_environment
 from build.lib.cargo import cargo_artifact_executable
 from build.lib.cargo import cargo_rendered_diagnostic

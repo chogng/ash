@@ -95,7 +95,7 @@ ash-rs/
 ```
 
 产品宿主不属于共享后端：`app` 的 `zui`、`ash-ui-components`、`ash-workbench`、renderer、`wgpu` 和 `winit` 位于
-`app-rs/` 的直接子 crate；`ash-cli` 位于 `cli/`，`ash-tui` 位于 `code/`。它们仍加入同一个
+`app-rs/` 的直接子 crate；`ash-cli` 位于 `ash-cli/`，`ash-tui` 位于 `code/`。它们仍加入同一个
 根 Cargo workspace，但 ownership 由物理目录和依赖方向表达。
 
 `editor-core`、`text-file` 和 `terminal` 位于 `app-rs/`，分别拥有端内编辑状态、文件编辑生命周期和终端模型。

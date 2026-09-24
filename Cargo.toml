@@ -67,7 +67,7 @@ members = [
     "ash-rs/memory-diagnostics",
     "ash-rs/bwrap",
     "code/ansi-escape",
-    "cli",
+    "ash-cli",
     "code/mermaid",
     "build/code/update-sign",
     "code/sprite",

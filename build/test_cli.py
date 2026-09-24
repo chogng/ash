@@ -9,8 +9,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from build.remote.bundle import validate_remote_runtime_bundle
-from build.remote.test_bundle import create_package
+from build.app_rs.remote.bundle import validate_remote_runtime_bundle
+from build.app_rs.remote.test_bundle import create_package
 from build.ash_rs.test_support import create_runtime_package
 
 
@@ -27,7 +27,7 @@ class BuildCommandTests(unittest.TestCase):
             "ash_rs/build.py": "--javascript-runtime",
             "ash_rs/prepare.py": "--javascript-runtime",
             "ash_rs/sign.py": "--verify-only",
-            "remote/bundle.py": "--bundle-dir",
+            "app_rs/remote/bundle.py": "--bundle-dir",
             "darwin/notarize.py": "--staple",
         }
         with tempfile.TemporaryDirectory() as temporary:
@@ -59,7 +59,7 @@ class BuildCommandTests(unittest.TestCase):
                     sys.executable,
                     "-E",
                     "-B",
-                    str(BUILD_ROOT / "remote/bundle.py"),
+                    str(BUILD_ROOT / "app_rs/remote/bundle.py"),
                     "--bundle-dir",
                     str(output),
                     "--package-dir",

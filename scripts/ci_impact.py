@@ -77,12 +77,12 @@ def tui_affected(changed_files: list[str], metadata: dict, root: Path) -> bool:
             return True
         if path.suffix == ".md":
             continue
-        if path.parts[:2] == ("scripts", "code"):
+        if path.parts[:2] == ("build", "code"):
             return True
         if not path.parts or path.parts[0] not in {
             "app-rs",
             "code",
-            "cli",
+            "ash-cli",
             "ash-rs",
             "third_party",
         }:

@@ -108,7 +108,7 @@ just app
 ## Repository map
 
 - [`ash-rs`](ash-rs): shared protocol, App Server, domain, storage, execution, and runtime crates.
-- [`cli`](cli): user-facing `ash` command, including shared management and terminal launch.
+- [`ash-cli`](ash-cli): user-facing `ash` command, including shared management and terminal launch.
 - [`code`](code): terminal presentation and terminal-specific capabilities.
 - [`app-ts`](app-ts): Electron Main, Preload, Renderer, and Browser Workbench.
 - [`build`](build): checked-in build orchestration; generated artifacts go to `.build/`.

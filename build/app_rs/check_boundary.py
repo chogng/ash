@@ -144,7 +144,7 @@ def main() -> int:
     if 'const DEFAULT_REMOTE_RUNTIME: &str = "ash-remote-server";' not in launch_text:
         fail("app Remote must default to the product-neutral ash-remote-server runtime")
 
-    product_host_references = ("ash-cli", "ash-tui", "cli/")
+    product_host_references = ("ash-cli", "ash-tui")
     boundary_sources = [
         *(repository_root / "app-rs").rglob("Cargo.toml"),
         *(repository_root / "app-rs").rglob("*.rs"),

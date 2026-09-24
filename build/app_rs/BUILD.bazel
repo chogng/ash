@@ -5,7 +5,7 @@ filegroup(
     srcs = glob(["*.py"], exclude = ["test_*.py"]) + [
         "//build/ash_rs:python_sources",
         "//build/linux:python_sources",
-        "//build/remote:python_sources",
+        "//build/app_rs/remote:python_sources",
     ],
 )
 

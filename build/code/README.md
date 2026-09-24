@@ -1,10 +1,10 @@
 # Code 构建与发布
 
-`build/code/` 负责终端产品的开发可执行文件、发布包和归档。用户运行的 `ash`
-由根目录 `cli/` 实现；TUI 由 `code/` 实现；此目录只负责构建和交付。
+`build/code/` 负责终端产品的开发运行、发布包、归档和公开安装脚本。用户运行的 `ash`
+由根目录 `ash-cli/` 实现；TUI 由 `code/` 实现；此目录只负责构建和交付工具。
 
 `build.py` 一次编译开发所需的 CLI、App Server 和平台程序，读取 Cargo 报告的可执行文件路径。
-`scripts/code/run.py` 调用 `build.py` 的暂存能力，将可执行文件放入 `.build/code/dev/<digest>/` 后启动 CLI；独立运行 `build.py` 只编译。
+`build/code/run.py` 调用 `build.py` 的暂存能力，将可执行文件放入 `.build/code/dev/<digest>/` 后启动 CLI；独立运行 `build.py` 只编译。
 
 正式发布按顺序组装，已有输出目录不会被覆盖：
 

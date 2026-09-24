@@ -1,13 +1,13 @@
 ---
 description: Ash CLI and Ratatui product ownership, architecture, interaction, and validation boundaries.
-applyTo: "code/**,cli/**"
+applyTo: "code/**,ash-cli/**"
 ---
 
 # Ash Code CLI/TUI Guidelines
 
 Do not add feature overviews, UI behavior specifications, design notes, change records, plans, or verification reports under `code/docs`; keep implementation guidance and targeted test commands with the owning crate, and keep cross-client methods, parameters, results, notifications, errors, and machine-output contracts in their owning API documents. See [`code/README.md`](../../code/README.md) for the product entry point. A specification or existing test file is not evidence that behavior passed acceptance.
 
-`cli/` owns the user-facing `ash` command and dispatches terminal presentation to `code/`. `code/` owns `ash-tui`, raw-mode lifecycle, Ratatui interaction, and terminal-only capabilities. Do not move this product presentation or lifecycle into `ash-rs`; shared backend semantics belong in backend-neutral contracts consumed by all three clients.
+`ash-cli/` owns the user-facing `ash` command and dispatches terminal presentation to `code/`. `code/` owns `ash-tui`, raw-mode lifecycle, Ratatui interaction, and terminal-only capabilities. Do not move this product presentation or lifecycle into `ash-rs`; shared backend semantics belong in backend-neutral contracts consumed by all three clients.
 
 Keep one writer for each product state, render from explicit state, isolate side effects, reject stale asynchronous results by request/revision identity, and keep host adapters narrow. Feature behavior belongs in vertical feature owners rather than a global application switch.
 

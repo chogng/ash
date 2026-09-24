@@ -22,7 +22,7 @@ class CiImpactTests(unittest.TestCase):
     def setUp(self) -> None:
         packages = [
             package("ash-tui", "code/tui", "shared"),
-            package("ash-cli", "cli", "shared"),
+            package("ash-cli", "ash-cli", "shared"),
             package("ash-app-server", "ash-rs/app-server", "shared"),
             package("ash-app-server-daemon", "ash-rs/app-server-daemon"),
             package("ash-remote-server", "ash-rs/remote-server"),
@@ -63,7 +63,7 @@ class CiImpactTests(unittest.TestCase):
             "build/lib/targets.py",
             "third_party/ripgrep/runtime-lock.json",
             "ash-rs/deleted/src/lib.rs",
-            "scripts/code/run.py",
+            "build/code/run.py",
         ):
             with self.subTest(path=path):
                 self.assertTrue(ci_impact.tui_affected([path], self.metadata, ROOT))

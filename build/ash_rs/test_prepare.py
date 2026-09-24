@@ -77,7 +77,7 @@ class PrepareTests(unittest.TestCase):
             for directory in (
                 "ash-rs",
                 "app-rs",
-                "cli",
+                "ash-cli",
                 "code",
                 "build/code/update-sign",
                 ".cargo",
@@ -92,6 +92,8 @@ class PrepareTests(unittest.TestCase):
             backend.write_text("first")
             editor_backend = root / "app-rs/editor.rs"
             editor_backend.write_text("first")
+            cli_source = root / "ash-cli/cli.rs"
+            cli_source.write_text("first")
             code_backend = root / "code/mermaid.rs"
             code_backend.write_text("first")
             resource = root / "resources/icon.svg"
@@ -111,6 +113,10 @@ class PrepareTests(unittest.TestCase):
                 after_code_backend = prepare.development_source_digest(
                     root, args, "target", {}
                 )
+                cli_source.write_text("second content")
+                after_cli_source = prepare.development_source_digest(
+                    root, args, "target", {}
+                )
                 resource.write_text("second content")
                 after_resource = prepare.development_source_digest(
                     root, args, "target", {}
@@ -120,7 +126,8 @@ class PrepareTests(unittest.TestCase):
             self.assertNotEqual(original, after_backend)
             self.assertNotEqual(after_backend, after_editor_backend)
             self.assertNotEqual(after_editor_backend, after_code_backend)
-            self.assertNotEqual(after_code_backend, after_resource)
+            self.assertNotEqual(after_code_backend, after_cli_source)
+            self.assertNotEqual(after_cli_source, after_resource)
             self.assertNotEqual(after_resource, after_lock)
 
     def test_development_source_digest_ignores_unrelated_path_entries(self) -> None:
@@ -129,7 +136,7 @@ class PrepareTests(unittest.TestCase):
             for directory in (
                 "ash-rs",
                 "app-rs",
-                "cli",
+                "ash-cli",
                 "code",
                 "build/code/update-sign",
                 ".cargo",

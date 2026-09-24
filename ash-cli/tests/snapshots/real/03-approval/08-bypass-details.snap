@@ -1,0 +1,36 @@
+---
+source: ash-cli/tests/support/tui_process.rs
+expression: screen
+---
+  <FIXTURE…>                                      …                            [— / —] [Dashboard]
+
+> start a session before permission bypass
+
+● BYPASS-SETUP-DONE
+
+> 请直接创建 permission-bypassed.txt
+
+● Ran write_file
+└─ write_file [call-bypass]
+   {
+     "path": "permission-bypassed.txt",
+     "content": "written with permission bypass\n"
+   }
+   wrote permission-bypassed.txt
+   view full
+
+● 权限确认已绕过。文件直接写入完成。
+
+
+
+
+
+
+
+
+                                                                         shift+tab to cycle policy
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────╮
+  │ > Build anything                                                                             │
+  ╰────────────────────────────────────────────────────────────────────────── ash-real-scenario ─╯
+
+  Space to expand · Enter to view details · Esc to return to input

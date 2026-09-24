@@ -13,7 +13,7 @@ Choose the cheapest owner-level test that proves the behavior, and add an `insta
 | --- | --- | --- |
 | Component, feature, or fixed page rendering | `code/tui` sibling `*_tests.rs` | A fixed-size Ratatui `TestBackend` buffer or other user-visible text |
 | Keyboard path, streaming phase, queue, approval, recovery, page navigation, or agent-manager flow | `code/tui` App or feature simulation test | The real App or feature after typed keys, events, commands, and scripted external responses have reached an explicit state |
-| Raw mode, PTY encoding, process composition, terminal resize/reflow, signal handling, resume across process startup, or transport wiring | `cli/tests/tui/{terminal,conversation,config,issues}.rs` | `TuiProcess::assert_snapshot` after an explicit process-observable state is reached |
+| Raw mode, PTY encoding, process composition, terminal resize/reflow, signal handling, resume across process startup, or transport wiring | `ash-cli/tests/tui/{terminal,conversation,config,issues}.rs` | `TuiProcess::assert_snapshot` after an explicit process-observable state is reached |
 | State transition, event routing, request payload, sequence, timing, or file/process side effect | The narrow owning test | A typed equality or semantic assertion; add a snapshot only when user-visible text or layout is also part of the behavior |
 
 Prefer the cheapest layer that includes the behavior owner. Do not move a deterministic renderer or App interaction test into the full-process suite. Do not replace a PTY behavior assertion with a simulation when the real terminal lifecycle is the behavior. Do not duplicate the same screen-state matrix at every layer: simulations own detailed visual states, while PTY tests keep a small representative set of boundary checks.
@@ -51,12 +51,12 @@ Text snapshots do not capture foreground/background colors or modifiers. When th
 ## Author snapshots
 
 1. Read the repository, Rust, testing, and `code` TUI instructions before editing.
-2. Keep the test beside the owner in a sibling `*_tests.rs`; use the corresponding module under `cli/tests/tui/` only for behavior that crosses a real CLI, transport, terminal, or process boundary. Keep `tui_real_scenarios.rs` as the single integration-test entry point and reuse `tests/support`; do not add scenario bodies to the entry point or make each module a separate Cargo test target.
+2. Keep the test beside the owner in a sibling `*_tests.rs`; use the corresponding module under `ash-cli/tests/tui/` only for behavior that crosses a real CLI, transport, terminal, or process boundary. Keep `tui_real_scenarios.rs` as the single integration-test entry point and reuse `tests/support`; do not add scenario bodies to the entry point or make each module a separate Cargo test target.
 3. Construct typed state and use a fixed terminal width and height. Cover another width only when wrapping, truncation, resize, or responsive layout is the behavior.
 4. Stabilize the input rather than hiding changes in the output. Use fixed fixture values and normalize host paths, generated IDs, wall-clock values, or platform separators only when they are not the behavior under test.
 5. Assert state, commands, payloads, lifecycle, and side effects independently. Snapshot the complete user-visible surface that makes the UI change reviewable.
 6. Use `insta::assert_snapshot!` for substantial external snapshots. Inline snapshots are appropriate only for short, local output that remains easier to review beside the test.
-7. Give explicit snapshot names in behavior language. For real PTY states, call `TuiProcess::assert_snapshot` or `assert_snapshot_containing`; the helper preserves the scenario directory in `cli/tests/snapshots`.
+7. Give explicit snapshot names in behavior language. For real PTY states, call `TuiProcess::assert_snapshot` or `assert_snapshot_containing`; the helper preserves the scenario directory in `ash-cli/tests/snapshots`.
 
 Do not add a new export environment variable, write tracked baselines with `fs::write`, or silently skip an assertion when an environment variable is absent. Files under `code/tui/page-snapshots` are review artifacts rather than `insta` expectations and do not prove a snapshot test passed.
 

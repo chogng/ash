@@ -62,7 +62,7 @@ test('Windows development launcher shows the Workbench window', async ({}, testI
 	const environment = { ...configuration.env };
 	delete environment.NODE_OPTIONS;
 	const child = spawn(process.execPath, [
-		resolve(desktop, '../scripts/app_ts/electron.ts'),
+		resolve(desktop, '../build/app_ts/launch/electron.ts'),
 		'--inspect=0',
 		`--remote-debugging-port=${port}`,
 		`--user-data-dir=${userDataDirectory}`,

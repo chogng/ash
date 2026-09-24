@@ -8,7 +8,7 @@ import test from "node:test";
 test("clean removes outputs and tool caches while preserving dependencies and linked directories", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "ash-clean-"));
   t.after(() => rm(root, { recursive: true, force: true }));
-  const removed = [".build/app-ts/output", "build/lib/__pycache__/cache", "scripts/code/__pycache__/cache"];
+  const removed = [".build/app-ts/output", "build/lib/__pycache__/cache", "build/code/__pycache__/cache"];
   const preserved = ["build/lib/source.py", "build/node_modules/tool/__pycache__/cache", "scripts/.venv/__pycache__/cache", "external/__pycache__/cache", "app-ts/src/ash/platform/app-server/common/generated/index.ts", "app-ts/src/ash/base/common/productIcons.ts"];
   for (const file of [...removed, ...preserved]) {
     await mkdir(join(root, file, ".."), { recursive: true });

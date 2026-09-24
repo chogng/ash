@@ -2,20 +2,20 @@
 
 > 状态：Current product model。本文是三条公开产品线的 canonical 说明。
 > Electron Desktop 的内置 Workbench 模式与窗口重载入口见 [`workbench-modes.md`](workbench-modes.md)；
-> 具体实现分别见 [`cli`](../cli/README.md)、[`code`](../code/README.md)、
+> 具体实现分别见 [`ash-cli`](../ash-cli/README.md)、[`code`](../code/README.md)、
 > [`ash-desktop-architecture.md`](ash-desktop-architecture.md) 和
 > [`app-rs/TERMINAL.md`](../app-rs/TERMINAL.md)。
 
 ## 快速理解
 
-Ash 有三个独立 UI 宿主，共享 `ash-rs` 的 Rust 后端契约。仓库根部的 `cli/` 提供用户运行的 `ash` 命令；
+Ash 有三个独立 UI 宿主，共享 `ash-rs` 的 Rust 后端契约。仓库根部的 `ash-cli/` 提供用户运行的 `ash` 命令；
 无子命令时由它启动 `code/` 的 TUI，管理命令则直接连接共享 App Server。凡是
 `Session`、`Thread`、`Turn`、`ThreadItem` Agent 产品能力，都必须经过 App Server；`app-rs`
 当前直接组合的路径只属于终端/PTY 宿主，不是 Agent API 的例外。
 
 | 产品线 | 产品形态 | 当前 UI/宿主 | 前后端接线 | 终端实现边界 |
 | --- | --- | --- | --- | --- |
-| `ash code` | TUI 产品 | `code/tui`，由根部 `cli` 启动 | `ash-app-server-client` 连接 App Server | TUI 管理自己的 `crossterm`/`ratatui` 宿主终端；不直接拥有子 PTY |
+| `ash code` | TUI 产品 | `code/tui`，由根部 `ash-cli` 启动 | `ash-app-server-client` 连接 App Server | TUI 管理自己的 `crossterm`/`ratatui` 宿主终端；不直接拥有子 PTY |
 | `ash` | Electron Desktop | `app-ts` 的 Renderer、Preload 与 Electron Main | Electron Main 连接 Rust App Server | 当前 Renderer 用 xterm；Rust/App Server 管理 `ash-utils-pty` |
 | `app` | Rust Desktop 工作台 | `app-rs` 的 Rust 窗口与 UI | Agent 能力通过 App Server；外部 AI CLI 由 Terminal host 启动 | `ash-terminal` 负责终端语义，`ash-utils-pty` 负责 AI CLI 的 PTY/进程 |
 
@@ -66,7 +66,7 @@ flowchart LR
 
 | 公开产品线 | 当前代码入口 | 当前状态 |
 | --- | --- | --- |
-| `ash code` | `cli` 的 `ash` binary → `code/tui` | TUI 产品路径已存在；TUI 通过 App Server Client 工作 |
+| `ash code` | `ash-cli` 的 `ash` binary → `code/tui` | TUI 产品路径已存在；TUI 通过 App Server Client 工作 |
 | `ash` | `app-ts` Electron client | Electron Desktop 已存在；统一 Renderer 包含 Code 与 Academic，默认模式为最近保存的选择 |
 | `app` | `app-rs/` 的 `app` binary | 终端宿主已存在，并直接组合 `ash-terminal` 与 `ash-utils-pty`；Agent 能力通过 App Server 使用 |
 

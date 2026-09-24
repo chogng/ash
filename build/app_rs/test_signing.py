@@ -10,8 +10,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from build.app_rs.build import build_package
 from build.app_rs.build import remote_runtime_network_release
-from build.remote.bundle import build_remote_runtime_bundle
-from build.remote.test_bundle import create_package
+from build.app_rs.remote.bundle import build_remote_runtime_bundle
+from build.app_rs.remote.test_bundle import create_package
 from build.app_rs.signing import main as signing_main, sign_package, verify_package
 from build.ash_rs.sign import sign_package as sign_runtime_package
 from build.ash_rs.layout import require_verified_system_signing

@@ -319,14 +319,14 @@ just test-tui
 
 功能模块的测试检查状态、请求和完成结果；App 测试检查跨功能路由、优先级和退出；真实 PTY 场景检查完整 CLI/TUI 操作。`just test-tui` 先构建配套 daemon，Windows 与 Unix 使用同一宿主；可追加场景过滤器。上述命令是执行入口，不是本次通过记录。
 
-真实场景入口为 `cli/tests/tui_real_scenarios.rs`，只加载共享支持代码和以下四个模块；仍只生成一个集成测试程序。原测试函数名过滤器继续可用，也可用 `just test-tui config::` 按组运行。
+真实场景入口为 `ash-cli/tests/tui_real_scenarios.rs`，只加载共享支持代码和以下四个模块；仍只生成一个集成测试程序。原测试函数名过滤器继续可用，也可用 `just test-tui config::` 按组运行。
 
 | 模块 | 场景归属 |
 | --- | --- |
-| [terminal.rs](../../cli/tests/tui/terminal.rs) | PTY、终端历史、滚动、尺寸、输入区域及进程退出恢复 |
-| [conversation.rs](../../cli/tests/tui/conversation.rs) | 对话、队列、审批、会话及对话中的 Git 状态 |
-| [config.rs](../../cli/tests/tui/config.rs) | 设置、供应商、账户、语言与配置面板导航 |
-| [issues.rs](../../cli/tests/tui/issues.rs) | Issue 选择、会话创建与 PR；目前仅 Unix 场景 |
+| [terminal.rs](../../ash-cli/tests/tui/terminal.rs) | PTY、终端历史、滚动、尺寸、输入区域及进程退出恢复 |
+| [conversation.rs](../../ash-cli/tests/tui/conversation.rs) | 对话、队列、审批、会话及对话中的 Git 状态 |
+| [config.rs](../../ash-cli/tests/tui/config.rs) | 设置、供应商、账户、语言与配置面板导航 |
+| [issues.rs](../../ash-cli/tests/tui/issues.rs) | Issue 选择、会话创建与 PR；目前仅 Unix 场景 |
 
 
 渲染测试使用 Ratatui 字符缓冲区与 `insta`；状态、协议和副作用仍需独立断言。固定尺寸，规范化动态路径和身份，逐项审查 `.snap.new` 后再接受，具体操作见 [TUI 测试](../../.agents/skills/test-tui/SKILL.md)。

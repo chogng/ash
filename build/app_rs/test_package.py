@@ -13,8 +13,8 @@ from build.app_rs.build import build_package
 from build.app_rs.build import main as build_app_package
 from build.app_rs.build import remote_runtime_network_release
 from build.app_rs.build import resolve_binary
-from build.remote.bundle import build_remote_runtime_bundle
-from build.remote.test_bundle import create_package
+from build.app_rs.remote.bundle import build_remote_runtime_bundle
+from build.app_rs.remote.test_bundle import create_package
 from build.ash_rs.test_support import create_runtime_package
 
 

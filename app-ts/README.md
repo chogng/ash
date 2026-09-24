@@ -93,7 +93,7 @@ Renderer 开发服务器使用 Vite HMR。`build/app_ts/vite/setup-dev.ts` 在�
 Vite 插件会在模块执行前比较 TypeScript 语法结构。只有普通实例方法、getter 和 setter 的变化进入
 原型热替换；构造器、实例字段、静态状态、装饰器、模块声明/副作用或继承关系变化都会自动执行完整
 页面重载，并在开发服务器日志中说明原因。这样旧实例不会静默保留过期的初始化状态。Electron Main
-与 Preload 仍会重启整个 Electron 进程。`scripts/app_ts/electron.ts --watch` 调用 `build/app_ts/host.ts`
+与 Preload 仍会重启整个 Electron 进程。`build/app_ts/launch/electron.ts --watch` 调用 `build/app_ts/host.ts`
 用一次 TypeScript 项目构建监听 Main 与 Preload，首次启动直接使用监听器的编译结果。只有两边都完成当前编译、没有错误，且
 编译后的 preload 通过沙盒依赖校验，才启动或重启 Electron；任何编译或校验失败都会保留当前
 进程，避免加载同一轮增量编译中的半成品模块图。

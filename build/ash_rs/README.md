@@ -169,7 +169,7 @@ For app Remote delivery, one or more completed packaged-node directories can be 
 deterministic rootless archives and a strict local catalog:
 
 ```sh
-python3 -B build/remote/bundle.py \
+python3 -B build/app_rs/remote/bundle.py \
   --bundle-dir /absolute/path/to/remote-runtimes \
   --package-dir /absolute/path/to/x86_64-linux-package \
   --package-dir /absolute/path/to/aarch64-linux-package

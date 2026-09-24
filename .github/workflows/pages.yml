@@ -4,8 +4,8 @@ on:
   push:
     branches: [main]
     paths:
-      - scripts/code/install.sh
-      - scripts/code/install.ps1
+      - build/code/install.sh
+      - build/code/install.ps1
       - .github/workflows/pages.yml
   workflow_dispatch:
 
@@ -38,10 +38,10 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/ash-pages/cli"
           touch "$RUNNER_TEMP/ash-pages/.nojekyll"
-          cp scripts/code/install.sh scripts/code/install.ps1 "$RUNNER_TEMP/ash-pages/cli/"
+          cp build/code/install.sh build/code/install.ps1 "$RUNNER_TEMP/ash-pages/cli/"
           sh -n "$RUNNER_TEMP/ash-pages/cli/install.sh"
-          cmp scripts/code/install.sh "$RUNNER_TEMP/ash-pages/cli/install.sh"
-          cmp scripts/code/install.ps1 "$RUNNER_TEMP/ash-pages/cli/install.ps1"
+          cmp build/code/install.sh "$RUNNER_TEMP/ash-pages/cli/install.sh"
+          cmp build/code/install.ps1 "$RUNNER_TEMP/ash-pages/cli/install.ps1"
 
       - name: Upload static files
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0

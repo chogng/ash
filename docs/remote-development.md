@@ -420,7 +420,7 @@ Desktop Main 仍可通过一组 all-or-nothing 的受信环境覆盖接入单个
 `ASH_REMOTE_RUNTIME_SHA256`，可选 `ASH_REMOTE_RUNTIME_INSTALL_ROOT`。这是显式 host override，
 不是签名或 updater；SHA-256 只证明内容身份，publisher provenance 仍须由本机发布层认证。
 
-standalone app 的发布路径不使用该 Desktop override。`build/remote/bundle.py` 把多个
+standalone app 的发布路径不使用该 Desktop override。`build/app_rs/remote/bundle.py` 把多个
 canonical package directory 序列化成确定性 rootless archives 与 `catalog.json`；
 `build/app_rs/build.py --remote-runtime-bundle` 将 catalog SHA-256 编译进 app binary，并把 bundle
 放到 package 资源中。网络包改用 `--remote-runtime-catalog-url` 与
@@ -524,15 +524,13 @@ canonical package directory 序列化成确定性 rootless archives 与 `catalog
 - Shared authenticated local catalog/network updater：`ash-rs/remote-connections/src/catalog.rs`、
   `ash-rs/remote-connections/src/runtime_updater.rs`
 - Shared named Remote target catalog：`ash-rs/remote-connections/src/connection_catalog.rs`
-- Shared catalog CLI boundary：`cli/src/remote_connections.rs`
-- ash code SSH TUI composition：`cli/src/remote_connect.rs`
-- ash code managed runtime preparation/package binding：`cli/src/remote_connect_runtime.rs`
-- ash code CLI-owned TUI reconnect policy：`cli/src/remote_connect_tui.rs`
-- ash code 本机进程级 SSH/broker/install 验证：`cli/tests/remote_connect.rs`
-- ash code PTY 交互断线/恢复验证：`cli/tests/remote_connect_interactive.rs`
+- ash code SSH TUI composition and named connection catalog：`ash-cli/src/remote_connect.rs`
+- ash code managed runtime preparation/package binding：`ash-cli/src/remote_connect_runtime.rs`
+- ash code CLI-owned TUI reconnect policy：`ash-cli/src/remote_connect_tui.rs`
+- ash code 本机进程级 SSH/broker/install 验证：`ash-cli/tests/remote_connect.rs`
+- ash code PTY 交互断线/恢复验证：`ash-cli/tests/remote_connect_interactive.rs`
 - ash code transport-neutral recovery handoff：`code/tui/src/app/recovery.rs`、
   `code/tui/src/sessions/active.rs`
-- Shared runtime fetch CLI boundary：`cli/src/remote_fetch.rs`
 - Shared atomic connection profiles：`ash-rs/remote-connections/src/profile_store.rs`
 - app named connection CLI：`app-rs/src/features/remote/remote_connection_cli.rs`
 - app connection picker/process launcher：状态与界面由 `app-rs/settings/remote/remote_connection_picker.rs` 持有；产品输入、进程和窗口启动接线位于 `app-rs/src/features/remote/remote_connection_picker_input.rs`、`app-rs/src/features/remote/remote_connection_process.rs`、`app-rs/src/features/remote/remote_connection_launch_input.rs`
@@ -540,7 +538,7 @@ canonical package directory 序列化成确定性 rootless archives 与 `catalog
 - app pre-window CLI launch progress protocol：`app-rs/src/features/remote/launch_progress.rs`
 - app foreground loopback Tunnel CLI：`app-rs/src/features/remote/remote_connection_tunnel.rs`；readiness gate 与恢复 supervisor：`ash-rs/remote-host`
 - app Tunnel adapter/manager：状态与界面由 `app-rs/settings/remote/remote_tunnel_manager.rs`、`app-rs/settings/remote/remote_tunnel_manager_view.rs` 持有；进程和产品输入接线位于 `app-rs/src/features/remote/remote_tunnel_process.rs`、`app-rs/src/features/remote/remote_tunnel_manager_input.rs`
-- app Remote bundle/build trust chain：`build/remote/bundle.py`、
+- app Remote bundle/build trust chain：`build/app_rs/remote/bundle.py`、
   `build/app_rs/build.py`
 - Optional headless Remote runtime：`ash-rs/remote-server`
 - Remote Terminal lease/attach：`ash-rs/exec-server/src/terminal.rs`、

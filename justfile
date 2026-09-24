@@ -105,7 +105,7 @@ generate-protocol:
 
 # Launch the ash code TUI product from the current source tree.
 ash *args:
-    {{ python }} -B scripts/code/run.py {{ recipe_args }}
+    {{ python }} -B build/code/run.py {{ recipe_args }}
 
 # Preview the Welcome pet's idle frame, all frames, or one named action.
 pet *args:
@@ -117,7 +117,7 @@ ash-package *args:
 
 # Assemble the complete development package and launch Ash Code against it.
 ash-package-run *args:
-    {{ python }} -B scripts/code/run_package.py {{ recipe_args }}
+    {{ python }} -B build/code/run_package.py {{ recipe_args }}
 
 # Launch the ash Electron Desktop product.
 ash-desktop:

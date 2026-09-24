@@ -13,7 +13,7 @@ from pathlib import Path
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 TEST_SUITES = {
     "scripts": "scripts",
-    "code": "scripts/code",
+    "code": "build/code",
     "build": "build",
 }
 
@@ -27,7 +27,7 @@ def main(arguments: list[str] | None = None) -> int:
         parser.error(
             f"unknown suite {unknown[0]!r}; choose from {', '.join(TEST_SUITES)}"
         )
-    suites = args.suites or tuple(TEST_SUITES)
+    suites = args.suites or ("scripts", "build")
 
     environment = os.environ.copy()
     python_paths = [str(REPOSITORY_ROOT)]
@@ -48,7 +48,7 @@ def main(arguments: list[str] | None = None) -> int:
                 test_root,
                 "-p",
                 "test_*.py",
-                *(["-t", str(REPOSITORY_ROOT)] if suite == "build" else []),
+                *(["-t", str(REPOSITORY_ROOT)] if suite in {"code", "build"} else []),
             ],
             cwd=REPOSITORY_ROOT,
             env=environment,
