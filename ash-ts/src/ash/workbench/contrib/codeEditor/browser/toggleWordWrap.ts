@@ -3,6 +3,8 @@ import type { WordWrapController } from '../../../../editor/contrib/wordWrap/bro
 import { localize2 } from '../../../../nls.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { IEditorPartsService } from '../../../browser/parts/editor/editorParts.js';
+import { DiffEditorPane } from './diffEditorPane.js';
 
 class ToggleWordWrapAction extends Action2 {
 	constructor() {
@@ -14,6 +16,11 @@ class ToggleWordWrapAction extends Action2 {
 	}
 
 	override run(accessor: ServicesAccessor): void {
+		const pane = accessor.getOptional(IEditorPartsService)?.activePane;
+		if (pane instanceof DiffEditorPane) {
+			pane.toggleWordWrap();
+			return;
+		}
 		const editors = accessor.get(ICodeEditorService);
 		const editor = editors.getFocusedCodeEditor() ?? editors.getActiveCodeEditor();
 		editor?.getContribution<WordWrapController>('editor.contrib.wordWrap')?.toggle();

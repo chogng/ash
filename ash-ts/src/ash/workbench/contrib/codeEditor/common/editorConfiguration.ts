@@ -380,6 +380,16 @@ export const CodeEditorConfiguration = Object.freeze({
 	}),
 	diffIgnoreTrimWhitespace: 'diffEditor.ignoreTrimWhitespace',
 	diffMaxComputationTime: 'diffEditor.maxComputationTime',
+	diffWordWrap: configurationRegistry.registerConfiguration<'off' | 'on' | 'inherit'>({
+		key: 'diffEditor.wordWrap',
+		defaultValue: 'inherit',
+		parse: value => parseEnum(value, 'diffEditor.wordWrap', ['off', 'on', 'inherit']),
+		setting: selectSetting('Word wrap', 'Wrap lines in both sides of a diff, or inherit the editor setting.', [
+			{ value: 'inherit', label: 'Inherit' },
+			{ value: 'off', label: 'Off' },
+			{ value: 'on', label: 'On' },
+		]),
+	}),
 	diffShowLineNumbers: configurationRegistry.registerConfiguration<boolean>({
 		key: "diffEditor.showLineNumbers",
 		defaultValue: true,

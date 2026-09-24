@@ -23,7 +23,7 @@ export class OverviewRulerFeature extends Disposable {
 	constructor(
 		private readonly rootElement: HTMLElement,
 		private readonly model: DiffModel,
-		private readonly lineHeight: number,
+		private readonly getRowOffsets: () => readonly number[],
 		onDidLayout: Event<IDimension>,
 	) {
 		super();
@@ -60,10 +60,11 @@ export class OverviewRulerFeature extends Disposable {
 
 	private project(): void {
 		const rows = this.model.diff?.rows ?? [];
-		reset(this.originalLane, createMarkers(this.domNode.ownerDocument, rows, 'original'));
-		reset(this.modifiedLane, createMarkers(this.domNode.ownerDocument, rows, 'modified'));
+		const offsets = this.getRowOffsets();
+		reset(this.originalLane, createMarkers(this.domNode.ownerDocument, rows, offsets, 'original'));
+		reset(this.modifiedLane, createMarkers(this.domNode.ownerDocument, rows, offsets, 'modified'));
 
-		const contentHeight = rows.length * this.lineHeight;
+		const contentHeight = offsets[rows.length] ?? 0;
 		this.root.setLeft(this.rootElement.scrollLeft + Math.max(0, this.viewportWidth - this.width));
 		this.root.setTop(this.rootElement.scrollTop);
 		this.root.setHeight(this.viewportHeight);
@@ -73,13 +74,15 @@ export class OverviewRulerFeature extends Disposable {
 	}
 }
 
-function createMarkers(ownerDocument: Document, rows: readonly LineDiffRow[], side: 'original' | 'modified'): DocumentFragment {
+function createMarkers(ownerDocument: Document, rows: readonly LineDiffRow[], offsets: readonly number[], side: 'original' | 'modified'): DocumentFragment {
 	const fragment = createFragment(ownerDocument);
+	const totalHeight = offsets[rows.length] ?? 0;
+	if (totalHeight === 0) return fragment;
 	for (const range of changedRanges(rows, side)) {
 		const marker = h(ownerDocument, 'span');
 		marker.className = `stanza-diff-overview-marker ${side === 'original' ? 'removed' : 'inserted'}`;
-		marker.style.top = `${range.startRow / rows.length * 100}%`;
-		marker.style.height = `${(range.endRowExclusive - range.startRow) / rows.length * 100}%`;
+		marker.style.top = `${(offsets[range.startRow] ?? 0) / totalHeight * 100}%`;
+		marker.style.height = `${((offsets[range.endRowExclusive] ?? 0) - (offsets[range.startRow] ?? 0)) / totalHeight * 100}%`;
 		fragment.append(marker);
 	}
 	return fragment;

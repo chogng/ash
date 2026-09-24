@@ -18,6 +18,7 @@ import { type ICodeEditorService } from '../../../../editor/browser/services/cod
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { CodeEditorConfiguration, getDiffComputationOptions } from '../common/editorConfiguration.js';
+import { EditorLineWrapping } from '../../../../editor/common/config/editorOptions.js';
 
 export interface DiffEditorPaneOptions {
 	readonly modelService: ITextModelResourceService;
@@ -123,6 +124,10 @@ export class DiffEditorPane extends Disposable implements IEditorPane {
 		this.session.value?.focus();
 	}
 
+	toggleWordWrap(): void {
+		this.session.value?.editor.toggleWordWrap();
+	}
+
 	private requireContainer(): HTMLDivElement {
 		assertDefined(this.container, new ReferenceError("Diff editor pane has not been created"));
 		return this.container;
@@ -158,6 +163,9 @@ class DiffEditorPaneSession extends Disposable {
 		}));
 		this._register(configuration.onDidChangeConfiguration(event => {
 			const languageId = model.modified.getLanguageId();
+			if (event.affectsConfiguration(CodeEditorConfiguration.diffWordWrap) || event.affectsConfiguration(CodeEditorConfiguration.wordWrap)) {
+				this.editor.setConfiguredWordWrap(readWordWrap(configuration));
+			}
 			if (event.affectsConfiguration(CodeEditorConfiguration.diffIgnoreTrimWhitespace, { overrideIdentifier: languageId })
 				|| event.affectsConfiguration(CodeEditorConfiguration.diffMaxComputationTime, { overrideIdentifier: languageId })) {
 				this.updateOptions(getDiffComputationOptions(configuration, languageId));
@@ -169,6 +177,7 @@ class DiffEditorPaneSession extends Disposable {
 		this.editor = this._register(new DiffEditorWidget({
 			container,
 			model,
+			wordWrap: readWordWrap(configuration),
 			codeEditorService: options.codeEditorService,
 			lineHeight: options.lineHeight,
 			fontFamily: options.fontFamily,
@@ -194,4 +203,10 @@ class DiffEditorPaneSession extends Disposable {
 	focus(): void {
 		this.editor.element.focus({ preventScroll: true });
 	}
+}
+
+function readWordWrap(configuration: IConfigurationService): boolean {
+	const value = configuration.getValue<'off' | 'on' | 'inherit'>(CodeEditorConfiguration.diffWordWrap);
+	return value === 'on' || (value === 'inherit'
+		&& configuration.getValue<EditorLineWrapping>(CodeEditorConfiguration.wordWrap) === EditorLineWrapping.On);
 }

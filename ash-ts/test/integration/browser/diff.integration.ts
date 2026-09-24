@@ -50,6 +50,14 @@ const quickDiff = resources.add(new QuickDiffModelService(baselines, service, co
 const reference = resources.add(quickDiff.createModelReference(URI.file('/workspace/first.ts'), modified));
 
 const harness = {
+	setComparisonText(originalText: string, modifiedText: string): void {
+		original.setValue(originalText);
+		modified.setValue(modifiedText);
+		input.value = modifiedText;
+	},
+	toggleWordWrap(): void {
+		single.toggleWordWrap();
+	},
 	read() {
 		return {
 			state: model.state.kind,

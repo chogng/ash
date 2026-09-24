@@ -7,7 +7,10 @@ import { Event } from '../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { URI } from "../../../../../base/common/uri.js";
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { CodeEditorConfiguration } from '../../common/editorConfiguration.js';
+import { EditorLineWrapping } from '../../../../../editor/common/config/editorOptions.js';
+import { IEditorPartsService } from '../../../../browser/parts/editor/editorParts.js';
 import { type IDocumentDiff, type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from "../../../../../editor/common/diff/documentDiffProvider.js";
 import { DefaultLinesDiffComputer } from "../../../../../editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js";
 import { type ITextModel } from '../../../../../editor/common/model.js';
@@ -27,6 +30,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { DiffEditorPane } = await import("../../browser/diffEditorPane.js");
+await import('../../browser/toggleWordWrap.js');
 const { createCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
 const { BrowserTextModelService } = await import("../../../../services/textmodelResolver/browser/browserTextModelService.js");
 const { BrowserTextResourceStore } = await import("../../browser/browserTextResourceStore.js");
@@ -157,6 +161,44 @@ test('Diff pane follows the modified language override and language changes', as
 	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, false, { overrideIdentifier: 'javascript' });
 	await Promise.resolve();
 	assert.ok(parent.querySelector('.stanza-diff-editor-row.modified'));
+	pane.dispose();
+	dom.window.close();
+});
+
+test('Diff pane follows configured word wrap and keeps its temporary toggle in the open view', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
+	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
+	using models = new BrowserTextModelService(resourceStore);
+	using codeEditorService = new StandaloneCodeEditorService();
+	using services = new DisposableStore();
+	const container = createCodeEditorServices(services);
+	const configuration = container.get(IConfigurationService);
+	await configuration.updateValue(CodeEditorConfiguration.wordWrap, EditorLineWrapping.On);
+	const pane = container.createInstance(DiffEditorPane, resourceStore, {
+		modelService: models,
+		createComputationService: () => new PaneTestDiffComputationService(),
+		codeEditorService,
+		breadcrumbs: false,
+	});
+	pane.create(parent);
+	pane.layout({ width: 400, height: 200 });
+	await pane.setInput(createDiffEditorInput(
+		{ resource: URI.file('/wrap-before.ts'), initialText: 'old ' + 'value '.repeat(40) },
+		{ resource: URI.file('/wrap-after.ts'), initialText: 'new ' + 'value '.repeat(40) },
+	), new AbortController().signal);
+	await Promise.resolve();
+	const editor = requiredElement<HTMLElement>(dom.window.document, '.stanza-diff-editor');
+	assert.equal(editor.classList.contains('word-wrapped'), true);
+	container.registerInstance(IEditorPartsService, { activePane: pane } as unknown as IEditorPartsService);
+	await container.get(ICommandService).executeCommand('editor.action.toggleWordWrap');
+	assert.equal(editor.classList.contains('word-wrapped'), false);
+	await configuration.updateValue('diffEditor.wordWrap', 'off');
+	assert.equal(editor.classList.contains('word-wrapped'), false);
+	pane.toggleWordWrap();
+	assert.equal(editor.classList.contains('word-wrapped'), false);
+	await configuration.updateValue('diffEditor.wordWrap', 'on');
+	assert.equal(editor.classList.contains('word-wrapped'), true);
 	pane.dispose();
 	dom.window.close();
 });

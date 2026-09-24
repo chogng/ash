@@ -136,6 +136,26 @@
   display: inline;
 }
 
+.stanza-diff-editor-row.word-wrapped .stanza-diff-editor-cell {
+  display: flex;
+}
+
+.stanza-diff-editor-row.word-wrapped .stanza-diff-editor-line-number {
+  flex: none;
+}
+
+.stanza-diff-editor-row.word-wrapped .stanza-diff-editor-line-content {
+  display: block;
+  min-width: 0;
+  flex: 1;
+}
+
+.stanza-diff-editor-visual-line {
+  display: block;
+  overflow: hidden;
+  white-space: pre;
+}
+
 .stanza-diff-editor-inline.removed {
   background: var(--ash-diff-editor-removed-text-background);
 }

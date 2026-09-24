@@ -10,9 +10,13 @@ import { DiffModel } from "../../../common/diff/diffModel.js";
 import { type IDimension } from '../../../common/core/2d/dimension.js';
 import { LineDiffKind, type LineDiff, type LineDiffRow } from "../../../common/diff/lineDiff.js";
 import { createBareFontInfoFromRawSettings } from '../../../common/config/fontInfoFromSettings.js';
+import { FontMeasurements } from '../../config/fontMeasurements.js';
+import { type BareFontInfo, type FontInfo } from '../../../common/config/fontInfo.js';
+import { WrappingIndent } from '../../../common/config/editorOptions.js';
+import { MonospaceLineBreaksComputerFactory } from '../../../common/viewModel/monospaceLineBreaksComputer.js';
 import { applyFontInfo } from "../../config/domFontInfo.js";
 import { OverviewRulerFeature } from './features/overviewRulerFeature.js';
-import { createDiffEditorRow } from "./diffEditorRows.js";
+import { createDiffEditorRow, type WrappedDiffRow } from "./diffEditorRows.js";
 import { type IDiffEditor } from '../../editorBrowser.js';
 import { type ICodeEditorService } from '../../services/codeEditorService.js';
 import { localize, onDidChangeNls } from '../../../../nls.js';
@@ -35,6 +39,7 @@ export interface DiffEditorWidgetOptions {
 	readonly originalAriaLabel?: string;
 	readonly modifiedAriaLabel?: string;
 	readonly codeEditorService?: ICodeEditorService;
+	readonly wordWrap?: boolean;
 }
 
 /**
@@ -66,6 +71,13 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 	private activeChangeRow = -1;
 	private readonly showInlineChanges: boolean;
 	private readonly loopChanges: boolean;
+	private readonly showLineNumbers: boolean;
+	private readonly bareFontInfo: BareFontInfo;
+	private fontInfo: FontInfo | undefined;
+	private configuredWordWrap: boolean;
+	private temporaryWordWrap: boolean | undefined;
+	private rowOffsets: number[] = [0];
+	private wrappedRows: WrappedDiffRow[] = [];
 
 	constructor(options: DiffEditorWidgetOptions) {
 		super();
@@ -77,6 +89,8 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		this.overscanRowCount = options.overscanRowCount ?? DEFAULT_OVERSCAN_ROW_COUNT;
 		this.showInlineChanges = options.showInlineChanges ?? true;
 		this.loopChanges = options.loopChanges ?? true;
+		this.showLineNumbers = options.showLineNumbers ?? true;
+		this.configuredWordWrap = options.wordWrap ?? false;
 		this.currentDiff = this.model.diff;
 		this.element = h(ownerDocument, "div");
 		this.contentElement = h(ownerDocument, "div");
@@ -86,13 +100,15 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		this.accessibilityStatusElement = h(ownerDocument, "div");
 		this.incompleteStatusElement = h(ownerDocument, "div");
 		this.element.className = "stanza-diff-editor";
+		this.element.classList.toggle('word-wrapped', this.wordWrap);
 		this.element.classList.toggle("hide-line-numbers", options.showLineNumbers === false);
-		applyFontInfo(this.element, createBareFontInfoFromRawSettings({
+		this.bareFontInfo = createBareFontInfoFromRawSettings({
 			fontFamily: options.fontFamily,
 			fontSize: options.fontSize,
 			fontLigatures: options.fontLigatures,
 			lineHeight: this.lineHeight,
-		}, getWindow(options.container).devicePixelRatio));
+		}, getWindow(options.container).devicePixelRatio);
+		applyFontInfo(this.element, this.bareFontInfo);
 		this.element.tabIndex = 0;
 		this.element.setAttribute("role", "region");
 		this.element.setAttribute("aria-label", `Side-by-side diff editor. Original: ${options.originalAriaLabel ?? "Original"}. Modified: ${options.modifiedAriaLabel ?? "Modified"}.`);
@@ -109,7 +125,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		this.element.append(this.contentElement, this.incompleteStatusElement);
 		options.container.append(this.element);
 		this._register(toDisposable(() => this.element.remove()));
-		this.overviewRuler = this._register(new OverviewRulerFeature(this.element, this.model, this.lineHeight, this.layoutEmitter.event));
+		this.overviewRuler = this._register(new OverviewRulerFeature(this.element, this.model, () => this.rowOffsets, this.layoutEmitter.event));
 		this.element.append(this.accessibilityStatusElement);
 		this._register(addDisposableListener(this.element, "scroll", () => this.project()));
 		this._register(addDisposableListener(this.element, "keydown", event => this.handleKeydown(event)));
@@ -133,6 +149,29 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		return this.currentDiff;
 	}
 
+	get wordWrap(): boolean {
+		return this.temporaryWordWrap ?? this.configuredWordWrap;
+	}
+
+	setConfiguredWordWrap(enabled: boolean): void {
+		this.configuredWordWrap = enabled;
+		this.updateWordWrap();
+	}
+
+	toggleWordWrap(): void {
+		this.temporaryWordWrap = this.temporaryWordWrap === undefined ? !this.wordWrap : undefined;
+		this.updateWordWrap();
+		this.accessibilityStatusElement.textContent = this.wordWrap
+			? localize('wordWrap.enabled', 'Word wrap on')
+			: localize('wordWrap.disabled', 'Word wrap off');
+	}
+
+	private updateWordWrap(): void {
+		this.element.classList.toggle('word-wrapped', this.wordWrap);
+		this.recomputeRows();
+		this.project(true);
+	}
+
 	/** The currently revealed changed row, or -1 before change navigation starts. */
 	get currentChangeRow(): number {
 		return this.activeChangeRow;
@@ -142,8 +181,10 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		if (!isFiniteNumber(size.width) || size.width < 0 || !isFiniteNumber(size.height) || size.height < 0) {
 			throw new RangeError("Diff editor widget layout size must be finite and non-negative");
 		}
+		const widthChanged = this.viewportWidth !== size.width;
 		this.viewportWidth = size.width;
 		this.viewportHeight = size.height;
+		if (widthChanged || this.rowOffsets.length !== (this.currentDiff?.rows.length ?? 0) + 1) this.recomputeRows();
 		this.project(true);
 	}
 
@@ -158,6 +199,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 				? `Could not compute differences: ${this.model.state.error.message}`
 				: "";
 		this.updateIncompleteStatus();
+		this.recomputeRows();
 		this.project(true);
 	}
 
@@ -223,8 +265,8 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 	}
 
 	private revealRow(rowIndex: number): void {
-		const rowTop = rowIndex * this.lineHeight;
-		const rowBottom = rowTop + this.lineHeight;
+		const rowTop = this.rowOffsets[rowIndex]!;
+		const rowBottom = this.rowOffsets[rowIndex + 1]!;
 		const viewportBottom = this.element.scrollTop + this.viewportHeight;
 		if (rowTop < this.element.scrollTop) this.element.scrollTop = rowTop;
 		else if (rowBottom > viewportBottom) this.element.scrollTop = Math.max(0, rowBottom - this.viewportHeight);
@@ -232,7 +274,13 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 	}
 
 	private handleKeydown(event: KeyboardEvent): void {
-		if (event.defaultPrevented || event.isComposing || event.key !== "F7" || event.ctrlKey || event.metaKey || event.altKey) return;
+		if (event.defaultPrevented || event.isComposing || event.getModifierState('AltGraph')) return;
+		if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.key.toLowerCase() === 'z') {
+			stopEvent(event);
+			this.toggleWordWrap();
+			return;
+		}
+		if (event.key !== "F7" || event.ctrlKey || event.metaKey || event.altKey) return;
 		stopEvent(event);
 		if (event.shiftKey) this.previousChange();
 		else this.nextChange();
@@ -242,23 +290,74 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		this.layoutEmitter.fire({ width: this.viewportWidth, height: this.viewportHeight });
 		this.incompleteStatusElement.style.top = `${this.element.scrollTop}px`;
 		const rows = this.currentDiff?.rows ?? [];
-		const contentHeight = rows.length * this.lineHeight;
+		const contentHeight = this.rowOffsets[rows.length] ?? 0;
 		this.contentNode.setHeight(contentHeight);
-		const visibleRowCount = Math.ceil(this.viewportHeight / this.lineHeight);
-		const firstVisibleRow = Math.floor(this.element.scrollTop / this.lineHeight);
+		const firstVisibleRow = rowAtOffset(this.rowOffsets, this.element.scrollTop);
 		const startRow = Math.max(0, firstVisibleRow - this.overscanRowCount);
-		const endRow = Math.min(rows.length, firstVisibleRow + visibleRowCount + this.overscanRowCount);
+		const lastVisibleOffset = Math.max(this.element.scrollTop, this.element.scrollTop + this.viewportHeight - 0.001);
+		const endRow = Math.min(rows.length, rowAtOffset(this.rowOffsets, lastVisibleOffset) + 1 + this.overscanRowCount);
 		if (!force && startRow === this.renderedStartRow && endRow === this.renderedEndRow) return;
 		const fragment = createFragment(this.element.ownerDocument);
 		for (let rowIndex = startRow; rowIndex < endRow; rowIndex += 1) {
 			const row = rows[rowIndex]!;
-			fragment.append(createDiffEditorRow(this.element.ownerDocument, row, this.model, this.lineHeight, rowIndex === this.activeChangeRow, this.showInlineChanges));
+			fragment.append(createDiffEditorRow(
+				this.element.ownerDocument, row, this.model, this.lineHeight,
+				rowIndex === this.activeChangeRow, this.showInlineChanges,
+				this.wordWrap ? this.wrappedRows[rowIndex] : undefined,
+			));
 		}
-		this.rowsNode.setTop(startRow * this.lineHeight);
+		this.rowsNode.setTop(this.rowOffsets[startRow] ?? 0);
 		reset(this.rowsElement, fragment);
 		this.renderedStartRow = startRow;
 		this.renderedEndRow = endRow;
 	}
+
+	private recomputeRows(): void {
+		const rows = this.currentDiff?.rows ?? [];
+		this.rowOffsets = [0];
+		this.wrappedRows = [];
+		if (!this.wordWrap) {
+			for (let i = 0; i < rows.length; i++) this.rowOffsets.push((i + 1) * this.lineHeight);
+			return;
+		}
+		const gutterWidth = this.showLineNumbers ? 52 : 0;
+		const cellWidth = Math.max(1, (this.viewportWidth - this.overviewRuler.width) / 2 - gutterWidth - 1);
+		const fontInfo = this.fontInfo ??= FontMeasurements.readFontInfo(getWindow(this.element), this.bareFontInfo);
+		const wrappingColumn = Math.max(1, Math.floor(cellWidth / fontInfo.typicalHalfwidthCharacterWidth));
+		const factory = new MonospaceLineBreaksComputerFactory('([{', ' \t})]?|/&.,;!?:');
+		const compute = (model: typeof this.model.original, lineIndices: readonly (number | undefined)[]): readonly number[][] => {
+			const computer = factory.createLineBreaksComputer({
+				getLineContent: line => model.getLineContent(line),
+				getLineInjectedText: () => null,
+			}, fontInfo, model.getOptions().tabSize, wrappingColumn, WrappingIndent.None, 'normal', false);
+			for (const index of lineIndices) if (index !== undefined) computer.addRequest(index + 1, null);
+			const breaks = computer.finalize();
+			let next = 0;
+			return lineIndices.map(index => {
+				if (index === undefined) return [0];
+				return breaks[next++]?.breakOffsets ?? [model.getLineContent(index + 1).length];
+			});
+		};
+		const original = compute(this.model.original, rows.map(row => row.originalLineIndex));
+		const modified = compute(this.model.modified, rows.map(row => row.modifiedLineIndex));
+		for (let i = 0; i < rows.length; i++) {
+			const height = Math.max(original[i]!.length, modified[i]!.length) * this.lineHeight;
+			this.wrappedRows.push({ height, originalBreaks: original[i]!, modifiedBreaks: modified[i]! });
+			this.rowOffsets.push(this.rowOffsets[i]! + height);
+		}
+	}
+}
+
+function rowAtOffset(offsets: readonly number[], offset: number): number {
+	if (offsets.length < 2) return 0;
+	let low = 0;
+	let high = offsets.length - 1;
+	while (low < high) {
+		const middle = Math.ceil((low + high) / 2);
+		if (offsets[middle]! <= offset) low = middle;
+		else high = middle - 1;
+	}
+	return Math.min(low, offsets.length - 2);
 }
 
 function diffRowLocation(row: LineDiffRow): string {
@@ -279,7 +378,13 @@ function validateOptions(options: DiffEditorWidgetOptions): void {
 	if (!isFiniteNumber(lineHeight) || lineHeight <= 0) throw new RangeError("Diff editor widget line height must be positive and finite");
 	if (options.fontFamily !== undefined && (typeof options.fontFamily !== "string" || !options.fontFamily.trim())) throw new TypeError("Diff editor font family must be a non-empty string");
 	if (options.fontSize !== undefined && (!isFiniteNumber(options.fontSize) || options.fontSize <= 0)) throw new RangeError("Diff editor font size must be positive and finite");
-	for (const [name, value] of [["fontLigatures", options.fontLigatures], ["showLineNumbers", options.showLineNumbers], ["showInlineChanges", options.showInlineChanges], ["loopChanges", options.loopChanges]] as const) {
+	for (const [name, value] of [
+		["fontLigatures", options.fontLigatures],
+		["showLineNumbers", options.showLineNumbers],
+		["showInlineChanges", options.showInlineChanges],
+		["loopChanges", options.loopChanges],
+		["wordWrap", options.wordWrap],
+	] as const) {
 		if (value !== undefined && typeof value !== "boolean") throw new TypeError(`Diff editor option '${name}' must be boolean`);
 	}
 	if (!isNonNegativeSafeInteger(overscanRowCount)) throw new RangeError("Diff editor widget overscan row count must be a non-negative safe integer");

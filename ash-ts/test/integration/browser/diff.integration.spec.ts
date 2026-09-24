@@ -19,6 +19,45 @@ test('frontend diff renders Unicode inline changes and Multi Diff without a back
 	expect(errors).toEqual([]);
 });
 
+test('word wrap keeps both diff columns, scrolling, highlights, and the overview aligned', async ({ page }) => {
+	await page.goto('/diff.html');
+	const original = `same\n${'before '.repeat(70)}😀 tail\nold end`;
+	const modified = `same\n${'before '.repeat(70)}🤖 tail\nnew end`;
+	await page.evaluate(([left, right]) => window.ashDiffIntegration.setComparisonText(left, right), [original, modified]);
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	const editor = page.locator('#single .stanza-diff-editor');
+	await editor.focus();
+	await page.keyboard.press('Alt+Z');
+	await expect(editor).toHaveClass(/word-wrapped/);
+	const row = page.locator('#single .stanza-diff-editor-row.modified').first();
+	await expect(row.locator('.stanza-diff-editor-cell.original .stanza-diff-editor-visual-line')).not.toHaveCount(1);
+	await expect(row.locator('.stanza-diff-editor-cell.modified .stanza-diff-editor-visual-line')).not.toHaveCount(1);
+	const geometry = await row.evaluate(element => {
+		const left = element.querySelector<HTMLElement>('.stanza-diff-editor-cell.original')!;
+		const right = element.querySelector<HTMLElement>('.stanza-diff-editor-cell.modified')!;
+		return { row: element.getBoundingClientRect().height, left: left.getBoundingClientRect().height, right: right.getBoundingClientRect().height };
+	});
+	expect(geometry.row).toBeGreaterThan(20);
+	expect(geometry.left).toBe(geometry.row);
+	expect(geometry.right).toBe(geometry.row);
+	await page.locator('#single').evaluate(element => { element.style.width = '400px'; });
+	await expect.poll(() => row.evaluate(element => element.getBoundingClientRect().height)).toBeGreaterThan(geometry.row);
+	await expect(row.locator('.stanza-diff-editor-inline.removed')).toContainText('😀');
+	await expect(row.locator('.stanza-diff-editor-inline.added')).toContainText('🤖');
+	await page.keyboard.press('F7');
+	await page.keyboard.press('F7');
+	await expect(page.locator('#single .stanza-diff-editor-accessibility-status')).toContainText('Change 2 of 2');
+	await editor.evaluate(element => { element.scrollTop = element.scrollHeight; element.dispatchEvent(new Event('scroll')); });
+	await expect(page.locator('#single .stanza-diff-editor-row.modified').last()).toBeVisible();
+	const marker = page.locator('#single .stanza-diff-overview-lane.modified .stanza-diff-overview-marker.inserted').first();
+	const markerTop = await marker.evaluate(element => Number.parseFloat((element as HTMLElement).style.top));
+	const contentHeight = await page.locator('#single .stanza-diff-editor-content').evaluate(element => element.getBoundingClientRect().height);
+	expect(markerTop).toBeCloseTo(20 / contentHeight * 100, 2);
+	await page.keyboard.press('Alt+Z');
+	await expect(editor).not.toHaveClass(/word-wrapped/);
+	await expect(page.locator('#single .stanza-diff-editor-visual-line')).toHaveCount(0);
+});
+
 test('unsaved input updates Diff and Quick Diff locally using the existing baseline', async ({ page }) => {
 	await page.goto('/diff.html');
 	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().quickDiffReady)).toBe(true);
