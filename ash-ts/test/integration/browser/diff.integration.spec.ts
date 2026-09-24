@@ -47,9 +47,11 @@ test('word wrap keeps both diff columns, scrolling, highlights, and the overview
 	await page.keyboard.press('F7');
 	await page.keyboard.press('F7');
 	await expect(page.locator('#single .stanza-diff-editor-accessibility-status')).toContainText('Change 2 of 2');
+	const marker = page.locator('#single .stanza-diff-overview-lane.modified .stanza-diff-overview-marker.inserted').first();
+	await marker.evaluate(element => { (element as HTMLElement).dataset.scrollIdentity = 'retained'; });
 	await editor.evaluate(element => { element.scrollTop = element.scrollHeight; element.dispatchEvent(new Event('scroll')); });
 	await expect(page.locator('#single .stanza-diff-editor-row.modified').last()).toBeVisible();
-	const marker = page.locator('#single .stanza-diff-overview-lane.modified .stanza-diff-overview-marker.inserted').first();
+	await expect(marker).toHaveAttribute('data-scroll-identity', 'retained');
 	const markerTop = await marker.evaluate(element => Number.parseFloat((element as HTMLElement).style.top));
 	const contentHeight = await page.locator('#single .stanza-diff-editor-content').evaluate(element => element.getBoundingClientRect().height);
 	expect(markerTop).toBeCloseTo(20 / contentHeight * 100, 2);

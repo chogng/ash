@@ -96,6 +96,12 @@ test("DiffEditorWidget refreshes on either source model and virtualizes diff row
 	assert.equal(overview.style.top, `${editor.element.scrollTop}px`);
 	assert.equal(Number.parseFloat(requiredElement<HTMLElement>(overview, ".stanza-diff-overview-viewport").style.height), 2);
 	assert.equal(requiredElement<HTMLElement>(overview, ".stanza-diff-overview-viewport").style.transform === "translate3d(0, 0px, 0)", false);
+	const marker = requiredElement<HTMLElement>(overview, ".stanza-diff-overview-lane.original .stanza-diff-overview-marker.removed");
+	editor.element.scrollTop = 0;
+	editor.element.dispatchEvent(new dom.window.Event("scroll"));
+	assert.equal(requiredElement<HTMLElement>(overview, ".stanza-diff-overview-lane.original .stanza-diff-overview-marker.removed"), marker);
+	editor.layout({ width: 400, height: 60 });
+	assert.equal(requiredElement<HTMLElement>(overview, ".stanza-diff-overview-lane.original .stanza-diff-overview-marker.removed"), marker);
 
 	modified.applyEdits([{
 		range: Range.fromPositions(modified.positionAt(0), modified.positionAt(modified.getText().length)),
@@ -103,6 +109,7 @@ test("DiffEditorWidget refreshes on either source model and virtualizes diff row
 	}]);
 	await waitForReady(model);
 	assert.equal(editor.diff?.rows.length, 100);
+	assert.notEqual(requiredElement<HTMLElement>(overview, ".stanza-diff-overview-lane.original .stanza-diff-overview-marker.removed"), marker);
 	editor.element.scrollTop = 0;
 	editor.element.dispatchEvent(new dom.window.Event("scroll"));
 	assert.equal(overview.style.top, "0px");

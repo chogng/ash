@@ -4,7 +4,6 @@ import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
 import { getClientArea } from "../../../../base/browser/dom.js";
 import { observeResize } from "../../../../base/browser/observer.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { Emitter } from '../../../../base/common/event.js';
 import { isFiniteNumber, isNonNegativeSafeInteger, rot } from "../../../../base/common/numbers.js";
 import { DiffModel } from "../../../common/diff/diffModel.js";
 import { type IDimension } from '../../../common/core/2d/dimension.js';
@@ -14,7 +13,7 @@ import { FontMeasurements } from '../../config/fontMeasurements.js';
 import { type BareFontInfo, type FontInfo } from '../../../common/config/fontInfo.js';
 import { applyFontInfo } from "../../config/domFontInfo.js";
 import { OverviewRulerFeature } from './features/overviewRulerFeature.js';
-import { computeDiffRowLayout, createDiffEditorRow, diffRowAtOffset, type WrappedDiffRow } from "./diffEditorRows.js";
+import { computeDiffRowLayout, createDiffEditorRow, diffRowAtOffset, type DiffRowLayout } from "./diffEditorRows.js";
 import { type IDiffEditor } from '../../editorBrowser.js';
 import { type ICodeEditorService } from '../../services/codeEditorService.js';
 import { localize, onDidChangeNls } from '../../../../nls.js';
@@ -55,13 +54,11 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 	private readonly rowsElement: HTMLDivElement;
 	private readonly rowsNode: FastDomNode<HTMLDivElement>;
 	private readonly overviewRuler: OverviewRulerFeature;
-	private readonly layoutEmitter = this._register(new Emitter<IDimension>());
 	private readonly accessibilityStatusElement: HTMLDivElement;
 	private readonly incompleteStatusElement: HTMLDivElement;
 	private readonly model: DiffModel;
 	private readonly lineHeight: number;
 	private readonly overscanRowCount: number;
-	private currentDiff: LineDiff | undefined;
 	private renderedStartRow = -1;
 	private renderedEndRow = -1;
 	private viewportWidth = 0;
@@ -74,8 +71,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 	private fontInfo: FontInfo | undefined;
 	private configuredWordWrap: boolean;
 	private temporaryWordWrap: boolean | undefined;
-	private rowOffsets: readonly number[] = [0];
-	private wrappedRows: readonly WrappedDiffRow[] = [];
+	private rowLayout: DiffRowLayout = { offsets: [0], wrappedRows: [] };
 
 	constructor(options: DiffEditorWidgetOptions) {
 		super();
@@ -89,7 +85,6 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		this.loopChanges = options.loopChanges ?? true;
 		this.showLineNumbers = options.showLineNumbers ?? true;
 		this.configuredWordWrap = options.wordWrap ?? false;
-		this.currentDiff = this.model.diff;
 		this.element = h(ownerDocument, "div");
 		this.contentElement = h(ownerDocument, "div");
 		this.contentNode = new FastDomNode(this.contentElement);
@@ -123,7 +118,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		this.element.append(this.contentElement, this.incompleteStatusElement);
 		options.container.append(this.element);
 		this._register(toDisposable(() => this.element.remove()));
-		this.overviewRuler = this._register(new OverviewRulerFeature(this.element, this.model, () => this.rowOffsets, this.layoutEmitter.event));
+		this.overviewRuler = this._register(new OverviewRulerFeature(this.element));
 		this.element.append(this.accessibilityStatusElement);
 		this._register(addDisposableListener(this.element, "scroll", () => this.project()));
 		this._register(addDisposableListener(this.element, "keydown", event => this.handleKeydown(event)));
@@ -144,7 +139,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 	}
 
 	get diff(): LineDiff | undefined {
-		return this.currentDiff;
+		return this.model.diff;
 	}
 
 	get wordWrap(): boolean {
@@ -182,12 +177,12 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		const widthChanged = this.viewportWidth !== size.width;
 		this.viewportWidth = size.width;
 		this.viewportHeight = size.height;
-		if (widthChanged || this.rowOffsets.length !== (this.currentDiff?.rows.length ?? 0) + 1) this.recomputeRows();
+		if (widthChanged || this.rowLayout.offsets.length !== (this.model.diff?.rows.length ?? 0) + 1) this.recomputeRows();
+		this.overviewRuler.layout(size);
 		this.project(true);
 	}
 
 	private refresh(): void {
-		this.currentDiff = this.model.diff;
 		this.renderedStartRow = -1;
 		this.renderedEndRow = -1;
 		this.activeChangeRow = -1;
@@ -230,7 +225,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		if (!isNonNegativeSafeInteger(lineIndex)) {
 			throw new RangeError("Stanza diff line index must be a non-negative safe integer");
 		}
-		const diff = this.currentDiff;
+		const diff = this.model.diff;
 		if (!diff) throw new Error("Diff results are not ready");
 		const rowIndex = diff.rows.findIndex(row => row[side] === lineIndex);
 		if (rowIndex < 0) throw new RangeError("Stanza diff line index is outside its source model");
@@ -238,7 +233,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 	}
 
 	private selectRelativeChange(delta: -1 | 1): number | undefined {
-		const diff = this.currentDiff;
+		const diff = this.model.diff;
 		if (!diff) {
 			this.accessibilityStatusElement.textContent = "Computing differences";
 			return undefined;
@@ -263,8 +258,8 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 	}
 
 	private revealRow(rowIndex: number): void {
-		const rowTop = this.rowOffsets[rowIndex]!;
-		const rowBottom = this.rowOffsets[rowIndex + 1]!;
+		const rowTop = this.rowLayout.offsets[rowIndex]!;
+		const rowBottom = this.rowLayout.offsets[rowIndex + 1]!;
 		const viewportBottom = this.element.scrollTop + this.viewportHeight;
 		if (rowTop < this.element.scrollTop) this.element.scrollTop = rowTop;
 		else if (rowBottom > viewportBottom) this.element.scrollTop = Math.max(0, rowBottom - this.viewportHeight);
@@ -285,15 +280,16 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 	}
 
 	private project(force = false): void {
-		this.layoutEmitter.fire({ width: this.viewportWidth, height: this.viewportHeight });
 		this.incompleteStatusElement.style.top = `${this.element.scrollTop}px`;
-		const rows = this.currentDiff?.rows ?? [];
-		const contentHeight = this.rowOffsets[rows.length] ?? 0;
+		const rows = this.model.diff?.rows ?? [];
+		const { offsets, wrappedRows } = this.rowLayout;
+		const contentHeight = offsets[rows.length] ?? 0;
+		this.overviewRuler.updateViewport(contentHeight);
 		this.contentNode.setHeight(contentHeight);
-		const firstVisibleRow = diffRowAtOffset(this.rowOffsets, this.element.scrollTop);
+		const firstVisibleRow = diffRowAtOffset(offsets, this.element.scrollTop);
 		const startRow = Math.max(0, firstVisibleRow - this.overscanRowCount);
 		const lastVisibleOffset = Math.max(this.element.scrollTop, this.element.scrollTop + this.viewportHeight - 0.001);
-		const endRow = Math.min(rows.length, diffRowAtOffset(this.rowOffsets, lastVisibleOffset) + 1 + this.overscanRowCount);
+		const endRow = Math.min(rows.length, diffRowAtOffset(offsets, lastVisibleOffset) + 1 + this.overscanRowCount);
 		if (!force && startRow === this.renderedStartRow && endRow === this.renderedEndRow) return;
 		const fragment = createFragment(this.element.ownerDocument);
 		for (let rowIndex = startRow; rowIndex < endRow; rowIndex += 1) {
@@ -301,10 +297,10 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 			fragment.append(createDiffEditorRow(
 				this.element.ownerDocument, row, this.model, this.lineHeight,
 				rowIndex === this.activeChangeRow, this.showInlineChanges,
-				this.wordWrap ? this.wrappedRows[rowIndex] : undefined,
+				this.wordWrap ? wrappedRows[rowIndex] : undefined,
 			));
 		}
-		this.rowsNode.setTop(this.rowOffsets[startRow] ?? 0);
+		this.rowsNode.setTop(offsets[startRow] ?? 0);
 		reset(this.rowsElement, fragment);
 		this.renderedStartRow = startRow;
 		this.renderedEndRow = endRow;
@@ -318,9 +314,8 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 			const fontInfo = this.fontInfo ??= FontMeasurements.readFontInfo(getWindow(this.element), this.bareFontInfo);
 			wrapping = { fontInfo, column: Math.max(1, Math.floor(cellWidth / fontInfo.typicalHalfwidthCharacterWidth)) };
 		}
-		const layout = computeDiffRowLayout(this.model, this.lineHeight, wrapping);
-		this.rowOffsets = layout.offsets;
-		this.wrappedRows = layout.wrappedRows;
+		this.rowLayout = computeDiffRowLayout(this.model, this.lineHeight, wrapping);
+		this.overviewRuler.setRows(this.model.diff?.rows ?? [], this.rowLayout.offsets);
 	}
 }
 

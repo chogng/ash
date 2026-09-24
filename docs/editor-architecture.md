@@ -1471,7 +1471,7 @@ Workbench editor 宿主负责资源视图的“在哪个 group/window、以哪�
 
 `editorOverviewRuler.border` 与 `editorOverviewRuler.background` 由 Ash 主题注册表提供，普通主题保留安静的透明表面，高对比度主题保留明确边界。`hideCursorInOverviewRuler` 是完整 boolean 配置，不再只存在于枚举和默认值。该 canvas 不可聚焦、不可点击，也不承担 hover 或命令职责。
 
-`EditorScrollbar` 尚未进入本切片：它依赖的 base scrollable element 还没有标准 overview layout、wheel delegate 和 vertical pointer delegate API。必须先补齐 base owner，再迁移 `View → EditorScrollbar`；不能在上层补同名空方法。仅本地且无生产调用的旧 debug breakpoint decoration 文件也不属于 Overview Ruler owner，未接入本链。
+`EditorScrollbar` 已通过 base 的 `SmoothScrollableElement` 接入 overview 布局、滚轮和纵向指针处理。`View` 负责安放概览标尺并转发输入；概览标尺的数据与绘制仍由 editor 拥有，base 不读取编辑器装饰数据。
 
 ### Proposed 3：语言边界
 

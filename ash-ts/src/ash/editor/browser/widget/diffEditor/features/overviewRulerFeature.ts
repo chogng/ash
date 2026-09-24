@@ -1,10 +1,8 @@
-import { addDisposableListener, fragment as createFragment, h, reset } from '../../../../../base/browser/dom.js';
+import { fragment as createFragment, h, reset } from '../../../../../base/browser/dom.js';
 import { FastDomNode } from '../../../../../base/browser/fastDomNode.js';
 import { createScrollbarAxisMetrics } from '../../../../../base/browser/ui/scrollbar/scrollbarState.js';
-import { type Event } from '../../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { type IDimension } from '../../../../common/core/2d/dimension.js';
-import { DiffModel } from '../../../../common/diff/diffModel.js';
 import { LineDiffKind, type LineDiffRow } from '../../../../common/diff/lineDiff.js';
 
 export class OverviewRulerFeature extends Disposable {
@@ -20,12 +18,7 @@ export class OverviewRulerFeature extends Disposable {
 	private viewportWidth = 0;
 	private viewportHeight = 0;
 
-	constructor(
-		private readonly rootElement: HTMLElement,
-		private readonly model: DiffModel,
-		private readonly getRowOffsets: () => readonly number[],
-		onDidLayout: Event<IDimension>,
-	) {
+	constructor(private readonly rootElement: HTMLElement) {
 		super();
 		const ownerDocument = rootElement.ownerDocument;
 		this.domNode = h(ownerDocument, 'div');
@@ -48,23 +41,19 @@ export class OverviewRulerFeature extends Disposable {
 			this.rootElement.classList.remove('has-diff-overview');
 			this.domNode.remove();
 		}));
-		this._register(addDisposableListener(this.rootElement, 'scroll', () => this.project()));
-		this._register(this.model.onDidChange(() => this.project()));
-		this._register(onDidLayout(size => {
-			this.viewportWidth = size.width;
-			this.viewportHeight = size.height;
-			this.project();
-		}));
-		this.project();
 	}
 
-	private project(): void {
-		const rows = this.model.diff?.rows ?? [];
-		const offsets = this.getRowOffsets();
+	public setRows(rows: readonly LineDiffRow[], offsets: readonly number[]): void {
 		reset(this.originalLane, createMarkers(this.domNode.ownerDocument, rows, offsets, 'original'));
 		reset(this.modifiedLane, createMarkers(this.domNode.ownerDocument, rows, offsets, 'modified'));
+	}
 
-		const contentHeight = offsets[rows.length] ?? 0;
+	public layout(size: IDimension): void {
+		this.viewportWidth = size.width;
+		this.viewportHeight = size.height;
+	}
+
+	public updateViewport(contentHeight: number): void {
 		this.root.setLeft(this.rootElement.scrollLeft + Math.max(0, this.viewportWidth - this.width));
 		this.root.setTop(this.rootElement.scrollTop);
 		this.root.setHeight(this.viewportHeight);
