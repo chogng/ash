@@ -50,6 +50,46 @@ fn first_use_downloads_once_and_later_service_reuses_disk_cache() {
     assert_eq!(downloader.download_count(), 2);
 }
 
+#[cfg(windows)]
+#[test]
+fn tokenizer_cache_under_a_long_root_survives_restart() {
+    use std::os::windows::ffi::OsStrExt;
+
+    let fixture = ManagedFixture::new();
+    let cache_root = fixture
+        .cache
+        .path()
+        .join("a".repeat(110))
+        .join("b".repeat(110));
+    assert!(cache_root.as_os_str().encode_wide().count() >= 260);
+    let mut catalog = TokenizerAssetCatalog::new();
+    catalog
+        .register(fixture.manifest(fixture.model.clone()))
+        .unwrap();
+    let downloader = Arc::new(FixtureDownloader::new(fixture.assets()));
+    let service = ManagedLocalTokenizerService::new(
+        &cache_root,
+        catalog.clone(),
+        downloader.clone(),
+        MemoryTokenizerCapacity::default(),
+    )
+    .unwrap();
+
+    prepare_and_load(&service, &fixture.model, &downloader, 2);
+
+    let restarted = ManagedLocalTokenizerService::new(
+        &cache_root,
+        catalog,
+        Arc::new(FailingDownloader::default()),
+        MemoryTokenizerCapacity::default(),
+    )
+    .unwrap();
+    assert!(matches!(
+        restarted.count(&fixture.model, &ModelRequest::text("hello")),
+        Ok(LocalTokenizationOutcome::Count(_))
+    ));
+}
+
 #[test]
 fn concurrent_cache_misses_share_one_background_preparation() {
     let fixture = ManagedFixture::new();

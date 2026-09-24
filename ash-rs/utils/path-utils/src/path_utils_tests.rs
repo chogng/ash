@@ -175,6 +175,40 @@ fn atomic_write_replaces_existing_contents() {
     assert_eq!(std::fs::read_to_string(path).unwrap(), "second");
 }
 
+#[cfg(windows)]
+#[test]
+fn atomic_write_creates_and_replaces_a_file_beyond_max_path() {
+    use std::os::windows::ffi::OsStrExt;
+
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let path = directory
+        .path()
+        .join("a".repeat(110))
+        .join("b".repeat(110))
+        .join("state.json");
+    assert!(path.as_os_str().encode_wide().count() >= 260);
+
+    write_text_atomically(&path, "first").expect("initial long-path write");
+    write_text_atomically(&path, "second").expect("long-path replacement");
+
+    let filesystem_path = persistence::filesystem_path(&path).unwrap();
+    assert_eq!(std::fs::read_to_string(filesystem_path).unwrap(), "second");
+    let directory_to_remove =
+        persistence::filesystem_path(&directory.path().join("a".repeat(110))).unwrap();
+    std::fs::remove_dir_all(directory_to_remove).unwrap();
+}
+
+#[cfg(windows)]
+#[test]
+fn filesystem_path_converts_unc_without_losing_components() {
+    let path = std::path::Path::new(r"\\server\share\folder\file.txt");
+
+    assert_eq!(
+        persistence::filesystem_path(path).unwrap(),
+        PathBuf::from(r"\\?\UNC\server\share\folder\file.txt")
+    );
+}
+
 #[test]
 fn native_workdir_is_unchanged_when_windows_rules_are_disabled() {
     let path = PathBuf::from(r"\\?\D:\worktree");

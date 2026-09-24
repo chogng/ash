@@ -19,7 +19,7 @@
 | `CanonicalPathRoot::inspect_without_symlinks` | 从 canonical root 到 candidate 逐级读取 metadata，不跟随任何 symlink | 区分 existing、missing、越界、symlink 与 metadata failure；不执行删除或写入 |
 | `normalize_for_native_workdir` | Windows 上移除 verbatim path 语法 | 不访问文件系统 |
 | `resolve_symlink_write_path` | 跟随相对或绝对 symlink chain | 循环、超过 40 层或 metadata 失败返回错误，禁止替换成原始链接路径 |
-| `write_atomically` / `write_text_atomically` | 同目录临时文件写入、保留已有权限、flush、rename、目录 sync | rename 前失败保留旧 destination；rename 后目录 sync 失败会在新内容已可见时返回错误 |
+| `write_atomically` / `write_text_atomically` | 同目录临时文件写入、保留已有权限、flush、rename、目录 sync；Windows 文件操作使用绝对扩展路径 | rename 前失败保留旧 destination；rename 后目录 sync 失败会在新内容已可见时返回错误 |
 
 `paths_match_after_normalization` 适合 Resume cwd 或本地 session filter，但本 crate 不决定何时
 恢复会话或提示用户。`write_atomically` 也不拥有上层配置 schema、revision 或 locking。
@@ -33,6 +33,7 @@
 | `canonical_root.rs::CanonicalPathRoot::comparison_path` | root 的 host-aware comparison identity，不改变返回给 caller 的 canonical path |
 | `environment.rs::is_wsl` | 环境变量与 `/proc/version` detection |
 | `persistence.rs::sync_parent` | rename 后 durability checkpoint |
+| `persistence.rs::filesystem_path` | Windows 写入期间把 drive/UNC 路径转换为文件系统可用的扩展路径，不改变调用方保存的路径 |
 
 ```text
 paths_match_after_normalization
@@ -55,6 +56,7 @@ resolve_symlink_write_path
   → resolved target | io::Error
 
 write_atomically
+  → Windows：为本次文件操作生成绝对扩展路径
   → create parent
   → NamedTempFile + write + sync
   → persist(rename)
@@ -88,4 +90,5 @@ bazel test //ash-rs/utils/path-utils:path-utils-unit-tests
 - Current：no-follow 检查与后续 caller 操作之间仍存在文件系统竞态；需要抵抗同用户并发篡改的操作应使用平台级目录句柄方案。
 - Current：atomic replace 不提供跨进程 locking，caller 必须自行拥有并发控制。
 - Current：Windows 不尝试 sync directory handle。
+- Current：Windows 扩展路径只在 `write_atomically` 的文件操作内使用，不保存到配置、协议或子进程参数；单个路径组件仍受文件系统限制。
 - Extension point：Session cwd filter 可复用比较 API，但其产品语义不能进入本 crate。

@@ -1,8 +1,14 @@
 use std::collections::HashSet;
+#[cfg(windows)]
+use std::ffi::OsString;
 use std::io;
 use std::io::Write;
+#[cfg(windows)]
+use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
+#[cfg(windows)]
+use std::path::Prefix;
 use tempfile::NamedTempFile;
 
 /// Resolves the final write target of a symlink chain, including dangling final targets.
@@ -52,6 +58,10 @@ pub fn resolve_symlink_write_path(path: &Path) -> io::Result<PathBuf> {
 /// the previous destination intact. A parent-directory sync failure is reported
 /// after the replacement has become visible.
 pub fn write_atomically(write_path: &Path, contents: &[u8]) -> io::Result<()> {
+    #[cfg(windows)]
+    let filesystem_path = filesystem_path(write_path)?;
+    #[cfg(windows)]
+    let write_path = filesystem_path.as_path();
     let parent = write_path.parent().ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -77,6 +87,36 @@ pub fn write_atomically(write_path: &Path, contents: &[u8]) -> io::Result<()> {
     temporary.as_file().sync_all()?;
     temporary.persist(write_path).map_err(|error| error.error)?;
     sync_parent(parent)
+}
+
+#[cfg(windows)]
+pub(super) fn filesystem_path(path: &Path) -> io::Result<PathBuf> {
+    let absolute = std::path::absolute(path)?;
+    let Some(Component::Prefix(prefix)) = absolute.components().next() else {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Windows filesystem path has no volume prefix",
+        ));
+    };
+    match prefix.kind() {
+        Prefix::Disk(_) => {
+            let mut extended = OsString::from(r"\\?\");
+            extended.push(absolute.as_os_str());
+            Ok(PathBuf::from(extended))
+        }
+        Prefix::UNC(server, share) => {
+            let mut extended = OsString::from(r"\\?\UNC\");
+            extended.push(server);
+            extended.push(r"\");
+            extended.push(share);
+            for component in absolute.components().skip(2) {
+                extended.push(r"\");
+                extended.push(component.as_os_str());
+            }
+            Ok(PathBuf::from(extended))
+        }
+        _ => Ok(absolute),
+    }
 }
 
 /// Atomically replaces a UTF-8 text file.
