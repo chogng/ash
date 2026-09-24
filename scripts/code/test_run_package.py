@@ -54,7 +54,7 @@ class PackageRunnerTests(unittest.TestCase):
             subprocess_run.assert_has_calls(
                 [
                     call(
-                        ["node", "build/runtime/prepare.ts"],
+                        [run_package.sys.executable, "-B", "build/ash_rs/prepare.py"],
                         cwd=run_package.run.REPOSITORY_ROOT,
                         env=environment,
                         check=False,
@@ -114,7 +114,7 @@ class PackageRunnerTests(unittest.TestCase):
                 run_package, "development_root", return_value=development_root
             ):
                 with self.assertRaisesRegex(
-                    RuntimeError, "invalid Ash development package manifest"
+                    RuntimeError, "Invalid Ash development package manifest"
                 ):
                     run_package.current_package()
 

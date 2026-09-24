@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from build.runtime.sign import sign_package
+from build.ash_rs.sign import sign_package
 from build.lib.signing import sha256
 from build.darwin.notarize import notarize
 from build.lib.signing import sign_and_verify
@@ -110,10 +110,10 @@ class SystemSigningTests(unittest.TestCase):
             commands = []
             with (
                 patch(
-                    "build.runtime.sign.system_signing_artifacts",
+                    "build.ash_rs.sign.system_signing_artifacts",
                     return_value={"cli": artifact},
                 ),
-                patch("build.runtime.sign.record_system_signing") as record,
+                patch("build.ash_rs.sign.record_system_signing") as record,
             ):
                 sign_package(
                     package,

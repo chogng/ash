@@ -15,12 +15,12 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from build.lib.targets import target_spec  # noqa: E402
-from build.runtime.cargo import validate_input_binary  # noqa: E402
-from build.runtime.layout import file_sha256  # noqa: E402
-from build.runtime.layout import package_build_id  # noqa: E402
-from build.runtime.layout import package_files  # noqa: E402
-from build.runtime.layout import validate_package_directory  # noqa: E402
-from build.runtime.layout import write_json  # noqa: E402
+from build.ash_rs.cargo import validate_input_binary  # noqa: E402
+from build.ash_rs.layout import file_sha256  # noqa: E402
+from build.ash_rs.layout import package_build_id  # noqa: E402
+from build.ash_rs.layout import package_files  # noqa: E402
+from build.ash_rs.layout import validate_package_directory  # noqa: E402
+from build.ash_rs.layout import write_json  # noqa: E402
 
 
 def build_code_package(

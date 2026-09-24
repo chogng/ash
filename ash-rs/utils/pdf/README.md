@@ -39,7 +39,7 @@ other    unsupported-platform
 Release build 先 stage runtime：
 
 ```text
-node build/download/fetchPdfium.ts --target darwin-arm64 \
+uv run --frozen --project scripts python -B build/ash_rs/pdfium.py --target darwin-arm64 \
   --output "$STAGING/resources/native/pdfium"
 ```
 

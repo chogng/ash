@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from build.app_rs.build import build_package  # noqa: E402
 from build.code.package import build_code_package  # noqa: E402
-from build.runtime.test_support import create_runtime_package  # noqa: E402
+from build.ash_rs.test_support import create_runtime_package  # noqa: E402
 
 
 class CodePackageTests(unittest.TestCase):

@@ -2,10 +2,12 @@
 
 This directory owns the shared Ash package for development and release:
 
-- `prepare.ts` resolves development inputs and publishes packages; `store.ts` reads published selections.
+- `prepare.py` resolves development inputs and publishes packages; `build/app_ts/runtimeStore.ts` reads published selections for Electron and Web.
+- `develop.py` builds the development App Server and call helpers, then publishes its executable generation.
+- `protocol.py` runs the Rust protocol fixture generator; `build/protocol/` synchronizes TypeScript consumers.
 - `build.py` resolves release binaries and resources.
-- `layout.ts` assembles both development and release packages using `layout.json`.
-- `layout.py` invokes the shared assembler and validates release contents and signing records.
+- `layout.py` assembles and validates both development and release packages using `layout.json`.
+- `livekit.py` and `pdfium.py` resolve locked backend runtime assets.
 - `sign.py` signs or verifies staged executables and refreshes package metadata.
 
 Runtime discovery, Tool policy, sandbox enforcement, notarization, installer
@@ -47,7 +49,7 @@ formats, and update delivery belong to their respective owners.
         └── vscode/LICENSE.txt        # built-in Editor Extension resources
 ```
 
-The stable entry point is `build/runtime/build.py`. Before resolving product binaries, it runs the App Server protocol generator into a temporary directory and binds the current protocol major, revision, and schema hash into `ash-package.json`; it does not rewrite checked-in fixtures. `verify:protocol` remains an explicit fixture check, while `generate:protocol` refreshes repository fixtures when they are intentionally being reviewed. If `--server-bin` or
+The release entry point is `build/ash_rs/build.py`. It reads the checked-in App Server protocol metadata and binds its major, revision, and schema hash into `ash-package.json`; it does not rewrite checked-in fixtures. `verify:protocol` remains an explicit fixture check, while `generate:protocol` refreshes repository fixtures when they are intentionally being reviewed. If `--server-bin` or
 `--app-server-daemon-bin` is omitted, `cargo.py` builds the corresponding product-neutral
 `ash-app-server` or profile-scoped `ash-app-server-daemon` for the selected target.
 It collects all missing first-party executables into one locked Cargo build, including
@@ -60,13 +62,12 @@ validates archive size and SHA-256 on every use, extracts only the locked
 member, and rejects non-regular archive members. `node.py` applies the same
 locked size/SHA-256 gate to the shared Node.js runtime, extracts only `node[.exe]`
 and its license, and never resolves the packaged runtime from the host `PATH`.
-Both Python resolvers share `build/download/artifacts.py`; development inputs use
-`build/download/artifacts.ts`. Downloads hash bounded streams and publish only verified
+Development and release resolvers share `build/download/artifacts.py`. Downloads hash bounded streams and publish only verified
 files from unique temporary paths, so failed requests cannot remove a concurrent result. Official Node.js
 releases do not contain musl builds, so musl release jobs must supply an exact
 `--node-bin`; the lock still supplies the verified upstream license. For Linux, `bubblewrap.py` validates [`ash-rs/vendor/bubblewrap`](../../ash-rs/vendor/bubblewrap/README.md), then builds the `ash-bwrap` binary with the target C compiler and `libcap`; `--bwrap-bin` accepts an already built or signed helper. Microsoft MXC is linked into the Rust runtime. Windows packages include `bin/ash-windows-sandbox.exe`, owned and signed with the shared runtime. The SDK license is copied to `ash-resources/licenses/mxc/LICENSE.md`.
 Repository-owned built-in Skills come from
-`ash-rs/skills/assets/`; `layout.ts` rejects linked or malformed Skill trees,
+`ash-rs/skills/assets/`; `layout.py` rejects linked or malformed Skill trees,
 stages them under `ash-resources/skills/`, validates the complete package in a
 sibling temporary directory, and renames it into place. It never replaces an
 existing output directory. Repository-owned declarative Editor Extensions come from the root
@@ -81,7 +82,7 @@ tree and validates the schema-v2 source list, unique names, the official pin, an
 bounded, contained, regular trust-root file before completing a package. The runtime parser owns
 endpoint and publisher policy validation and TUF verification.
 
-`--javascript-runtime packaged-node` is the default and retains standalone Node
+For release packages, `--javascript-runtime packaged-node` is the default and retains standalone Node
 for CLI, browser-bridge, remote, and headless App Server hosts.
 `--javascript-runtime host-provided-node` omits the executable, license, and Node
 component metadata; this variant is valid only when the product host injects an
@@ -91,8 +92,8 @@ only for JavaScript language-server children. Both alternatives are explicit in
 package layout version 2 under `javascriptRuntime.kind`; validators reject a
 payload whose files and declared runtime kind disagree.
 
-Desktop development uses the same locks and canonical layout through the Node
-entry at `build/runtime/prepare.ts`. It defaults to the
+Desktop development uses the same locks and canonical layout through the Python
+entry at `build/ash_rs/prepare.py`. It defaults to the
 host-provided runtime variant for Electron; Browser full mode passes
 `--javascript-runtime packaged-node`. The assembler builds first-party
 executables with Cargo's compact `dev-small` profile, verifies and extracts the required
@@ -102,19 +103,18 @@ after full-file validation. The package store retains the selected and rollback 
 reads the exact executable path from Cargo's JSON artifact messages instead of
 guessing a `target` layout. Normal compact host builds, the development
 assembler, and the Rust watcher therefore reuse one compilation cache without
-creating a second target-triple tree. It neither installs nor invokes Python.
+creating a second target-triple tree.
 On later development starts, checksum-locked archives reuse verified extracted files.
 After Cargo's incremental build, unchanged executable and package input metadata
 reuse the selected complete package without staging or publishing another copy.
 Changed inputs still go through full assembly and validation.
-The Python release builder invokes `layout.ts` with resolved inputs and therefore requires
-the repository-pinned Node 24 on `PATH`. It also honors `CARGO_TARGET_DIR`,
+The Python release builder calls the same `layout.py` assembler with resolved inputs. It also honors `CARGO_TARGET_DIR`,
 and retains its refusal to replace an explicit output directory.
 
 Windows development and release both call the MXC SDK directly. Linux proxy networking additionally requires the SDK's host dependencies: slirp4netns, util-linux and iptables with the required namespace/kernel support.
 
 ```sh
-python3 -B build/runtime/build.py \
+python3 -B build/ash_rs/build.py \
   --target aarch64-apple-darwin \
   --package-dir /absolute/path/to/ash-package
 ```
@@ -122,7 +122,7 @@ python3 -B build/runtime/build.py \
 For an Electron-owned package payload:
 
 ```sh
-python3 -B build/runtime/build.py \
+python3 -B build/ash_rs/build.py \
   --target aarch64-apple-darwin \
   --javascript-runtime host-provided-node \
   --package-dir dist/ash-electron
@@ -138,7 +138,7 @@ step. Windows uses the SDK linked into the signed product executables.
 The shared runtime builder never includes the `ash` command. Code release jobs pass the completed
 runtime to [`build/code/package.py`](../code/package.py), which adds `bin/ash[.exe]` and the Ed25519
 update trust key, then recomputes the complete package identity. They then run
-`build/runtime/sign.py`, `build/code/archive.py`, and `ash-update-sign`. macOS and Windows sign and verify every executable before package hashes and
+`build/ash_rs/sign.py`, `build/code/archive.py`, and `ash-update-sign`. macOS and Windows sign and verify every executable before package hashes and
 `buildId` are recomputed. macOS produces a rootless `.zip` for Apple notarization; Linux and
 Windows produce rootless `.tar.gz` archives. The archives are deterministic; the initial installer checks its named SHA-256 sidecar, while later updates require
 the signed descriptor and recheck every package file. CI reads the public key from the
@@ -150,7 +150,7 @@ Rust Desktop release jobs pass the same unsigned packaged-Node runtime to
 [`build/app_rs/build.py`](../app_rs/build.py). The app executable is placed beside the App Server
 executables, and its metadata and signing records are included in the shared file manifest. The
 app signer refreshes that manifest after signing; macOS and Windows also sign and verify the
-remaining runtime executables with `build/runtime/sign.py`.
+remaining runtime executables with `build/ash_rs/sign.py`.
 
 Release administrators derive the public value from the secret seed without exposing it to Cargo
 build scripts: build `ash-update-sign`, then invoke the built executable as `ash-update-sign
@@ -198,16 +198,15 @@ digest failure cleanup:
 python3 -B scripts/test-python.py
 ```
 
-The Node development assembler's target selection, locked ripgrep/Node selection,
-and atomic replacement behavior are covered by:
+Development target selection, locked runtime selection, and package reuse are covered by:
 
 ```sh
-node --test build/runtime/prepare.test.ts
+just test-python build
 ```
 
 ## Public grep runtime
 
-`tgrep.py` and development `prepare.ts` resolve the same pinned 1.0.8 archives from
+`tgrep.py` and development `prepare.py` resolve the same pinned 1.0.8 archives from
 [`third_party/tgrep/runtime-lock.json`](../../third_party/tgrep/runtime-lock.json).
 All products and Remote runtimes include `ash-resources/tgrep/tgrep[.exe]` and its
 MIT license. The component digest and complete file manifest include tgrep; signing

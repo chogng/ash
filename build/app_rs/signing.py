@@ -22,11 +22,11 @@ from build.lib.signing import run_command
 from build.lib.signing import sha256
 from build.lib.signing import sign_command as system_sign_command
 from build.lib.signing import verify_command as system_verify_command
-from build.runtime.layout import package_build_id
-from build.runtime.layout import package_files
-from build.runtime.layout import system_signing_artifacts
-from build.runtime.layout import validate_package_directory
-from build.runtime.layout import write_json as write_runtime_json
+from build.ash_rs.layout import package_build_id
+from build.ash_rs.layout import package_files
+from build.ash_rs.layout import system_signing_artifacts
+from build.ash_rs.layout import validate_package_directory
+from build.ash_rs.layout import write_json as write_runtime_json
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 

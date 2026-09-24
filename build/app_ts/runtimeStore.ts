@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { runtimeBuildPath } from "../lib/paths.ts";
+import { runtimeBuildPath } from "./paths.ts";
 
 type DevelopmentJavaScriptRuntime = "host-provided-node" | "packaged-node";
 

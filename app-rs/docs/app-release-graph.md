@@ -72,7 +72,7 @@ just app-package \
   --app-bin /absolute/path/to/app
 ```
 
-共享运行时包必须先由 `build/runtime/build.py` 生成，使用 `packaged-node` 和 release profile。
+共享运行时包必须先由 `build/ash_rs/build.py` 生成，使用 `packaged-node` 和 release profile。
 App 打包器验证它的目标平台与完整文件清单，再把 `app` 加入同一个包并重算 `ash-package.json`：
 
 ```text
@@ -159,7 +159,7 @@ python3 -B build/app_rs/signing.py verify \
   --package-dir /absolute/path/to/app-package
 ```
 
-macOS 和 Windows 还须对包内共享运行时执行 `build/runtime/sign.py`。Windows 沙箱程序由运行时签名脚本负责，App 签名脚本只签 `app.exe`，不会对它重复签名。App 的签名脚本在
+macOS 和 Windows 还须对包内共享运行时执行 `build/ash_rs/sign.py`。Windows 沙箱程序由运行时签名脚本负责，App 签名脚本只签 `app.exe`，不会对它重复签名。App 的签名脚本在
 签名或验证后刷新共享包文件清单；运行时签名脚本验证所有运行时程序及其系统签名，并重新记录
 签名后的整包身份。Windows 使用外部签名服务时，先运行 `app_rs/signing.py record`，再运行
 `runtime/sign.py --verify-only`。Linux 的 App 签名是独立签名文件，同样写入整包清单。

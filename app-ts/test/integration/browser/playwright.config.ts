@@ -12,7 +12,7 @@ export default defineConfig({
 		{ name: "chrome-gpu", testMatch: "gpuText.integration.spec.ts", use: { browserName: "chromium", channel: "chrome", deviceScaleFactor: 1.25 } },
 	],
 	webServer: process.env.ASH_EDITOR_BROWSER_EXTERNAL_SERVER ? undefined : {
-		command: "node ../../../node_modules/vite/bin/vite.js build --config vite.config.ts && node ../../../../scripts/web.ts ../../../../.build/app-ts/editor-browser 5185",
+		command: "node ../../../node_modules/vite/bin/vite.js build --config vite.config.ts && node ../../../../scripts/app_ts/web.ts ../../../../.build/app-ts/editor-browser 5185",
 		url: "http://127.0.0.1:5185/textModel.html",
 		reuseExistingServer: false,
 		timeout: 120_000,

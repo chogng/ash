@@ -10,20 +10,25 @@ test("repository build orchestration and developer scripts have separate root ow
     const path = join(repositoryRoot, directory);
     assert.equal(existsSync(path), false, `${directory} must not own repository tooling`);
   }
-  for (const category of ["app_ts", "app_rs", "code", "runtime", "remote", "download", "lib", "pnpm", "darwin", "win32", "linux", "resources"]) {
+  for (const category of ["app_ts", "app_rs", "code", "ash_rs", "remote", "download", "lib", "pnpm", "darwin", "win32", "linux", "resources"]) {
     assert.equal(existsSync(join(import.meta.dirname, category)), true, category);
   }
-  for (const entry of ["cargo.py", "format.py", "test-python.py", "electron.ts", "web.ts"]) {
+  assert.equal(existsSync(join(import.meta.dirname, "runtime")), false);
+  for (const entry of ["cargo.py", "format.py", "test-python.py"]) {
     assert.equal(existsSync(join(repositoryRoot, "scripts", entry)), true, entry);
+  }
+  for (const entry of ["electron.ts", "web.ts", "electron.test.ts"]) {
+    assert.equal(existsSync(join(repositoryRoot, "scripts/app_ts", entry)), true, entry);
+    assert.equal(existsSync(join(repositoryRoot, "scripts", entry)), false, entry);
   }
   assert.equal(existsSync(join(repositoryRoot, "app-ts/test/unit/mocha.ts")), true);
   assert.equal(existsSync(join(repositoryRoot, "scripts/code/build.py")), false);
-  for (const entry of ["app_rs/build.py", "code/build.py", "runtime/build.py"]) {
+  for (const entry of ["app_rs/build.py", "code/build.py", "ash_rs/build.py", "ash_rs/prepare.py"]) {
     assert.equal(existsSync(join(import.meta.dirname, entry)), true, entry);
   }
   assert.equal(existsSync(join(import.meta.dirname, "code/package.py")), true);
   assert.equal(existsSync(join(import.meta.dirname, "code/update-sign/Cargo.toml")), true);
-  assert.equal(existsSync(join(import.meta.dirname, "runtime/update-sign")), false);
+  assert.equal(existsSync(join(import.meta.dirname, "ash_rs/update-sign")), false);
   for (const retiredEntry of ["cargo_with_v8.py", "lib/just_shell.py", "compile.ts", "watch.ts", "vite", "lib/compilation.ts", "lib/appServer.ts", "lib/web.ts"]) {
     assert.equal(existsSync(join(import.meta.dirname, retiredEntry)), false, retiredEntry);
   }
@@ -33,6 +38,19 @@ test("repository build orchestration and developer scripts have separate root ow
   for (const entry of ["compile.ts", "compilation.ts", "watch.ts"]) {
     assert.equal(existsSync(join(import.meta.dirname, "app_ts", entry)), false, entry);
   }
+});
+
+test("frontend Node tools and backend package builders have separate language owners", () => {
+  for (const directory of ["app_ts", "pnpm", "protocol", "resources"]) {
+    assert.deepEqual(walk(join(import.meta.dirname, directory)).filter(path => extname(path) === ".py"), [], directory);
+  }
+  for (const directory of ["ash_rs", "app_rs", "code", "remote", "download", "lib", "darwin", "win32", "linux"]) {
+    assert.deepEqual(walk(join(import.meta.dirname, directory)).filter(path => extname(path) === ".ts"), [], directory);
+  }
+  const scripts = join(repositoryRoot, "scripts");
+  assert.deepEqual(readdirSync(scripts, { withFileTypes: true }).filter(entry => entry.isFile() && extname(entry.name) === ".ts").map(entry => entry.name), []);
+  assert.deepEqual(walk(join(scripts, "app_ts")).filter(path => extname(path) === ".py"), []);
+  assert.deepEqual(walk(join(scripts, "code")).filter(path => extname(path) === ".ts"), []);
 });
 
 test("Node build and repository command sources do not use runtime JavaScript", () => {

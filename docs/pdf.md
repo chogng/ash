@@ -50,7 +50,7 @@ Electron/Chromium 的 PDF Viewer 可以负责普通预览，不需要由 `ash-pd
 - `ExtractedPdfPage::page_number`：稳定的 **一基页码**，可直接用于引用和
   Desktop 跳页；空白页也会保留，供上层判定是否需要 OCR。
 
-PDFium 由 [`build/download/fetchPdfium.ts`](../build/download/fetchPdfium.ts) 在 CI / 发布
+PDFium 由 [`build/ash_rs/pdfium.py`](../build/ash_rs/pdfium.py) 在 CI / 发布
 构建时按 [`third_party/pdfium/runtime-lock.json`](../third_party/pdfium/runtime-lock.json)
 锁定的版本下载、校验并 stage 到：
 

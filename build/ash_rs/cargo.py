@@ -16,6 +16,8 @@ from build.lib.v8 import resolve_v8_cargo_env
 
 
 _BINARIES = {
+    "ash-package-store": ("ash-package-store", "--package-store-bin"),
+    "bwrap": ("ash-bwrap", "--bwrap-bin"),
     "ash-voice-host": ("ash-voice-host", "--voice-host-bin"),
     "ash-collaboration-server": (
         "ash-collaboration-server",
@@ -44,6 +46,7 @@ def build_binaries(
     *,
     cargo: str,
     cargo_profile: str,
+    host_build: bool = False,
 ) -> Dict[str, Path]:
     if "ash-windows-sandbox" in inputs and not spec.is_windows:
         raise RuntimeError("Windows sandbox executable requires a Windows target")
@@ -64,12 +67,12 @@ def build_binaries(
         "--locked",
         "--profile",
         cargo_profile,
-        "--target",
-        spec.target,
         "--target-dir",
         str(resolve_cargo_target_directory(repository_root)),
         "--message-format=json-render-diagnostics",
     ]
+    if not host_build:
+        command.extend(["--target", spec.target])
     for name in missing:
         command.extend(["--package", _BINARIES[name][0], "--bin", name])
     if "ash-voice-host" in missing:

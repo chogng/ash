@@ -21,17 +21,17 @@ from build.lib.targets import TARGETS
 from build.lib.targets import target_spec
 from build.remote.bundle import RemoteRuntimeBundle
 from build.remote.bundle import validate_remote_runtime_bundle
-from build.runtime.cargo import cargo_environment
+from build.ash_rs.cargo import cargo_environment
 from build.lib.cargo import cargo_artifact_executable
 from build.lib.cargo import cargo_rendered_diagnostic
 from build.lib.cargo import parse_cargo_message
 from build.lib.cargo import resolve_cargo_target_directory
-from build.runtime.layout import copy_uds_notices
-from build.runtime.layout import copy_windows_sandbox_notices
-from build.runtime.layout import package_build_id
-from build.runtime.layout import package_files
-from build.runtime.layout import validate_package_directory
-from build.runtime.layout import write_json
+from build.ash_rs.layout import copy_uds_notices
+from build.ash_rs.layout import copy_windows_sandbox_notices
+from build.ash_rs.layout import package_build_id
+from build.ash_rs.layout import package_files
+from build.ash_rs.layout import validate_package_directory
+from build.ash_rs.layout import write_json
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 

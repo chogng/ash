@@ -89,7 +89,7 @@ test-search: check-search test-search-rust
 
 # Exercise an assembled package through real stdio RPC, using its bundled search engines.
 test-search-package *args:
-    {{ python }} -B build/runtime/search_smoke.py {{ recipe_args }}
+    {{ python }} -B build/ash_rs/search_smoke.py {{ recipe_args }}
 
 # Fail once the configuration support window makes a compatibility migration removable.
 check-config-migrations:
@@ -113,7 +113,7 @@ pet *args:
 
 # Assemble the complete immutable development package shared by Ash products.
 ash-package *args:
-    node build/runtime/prepare.ts {{ recipe_args }}
+    {{ python }} -B build/ash_rs/prepare.py {{ recipe_args }}
 
 # Assemble the complete development package and launch Ash Code against it.
 ash-package-run *args:
@@ -141,7 +141,7 @@ app-package *args:
 
 # Build a shared App Server runtime package.
 runtime-package *args:
-    {{ python }} -B build/runtime/build.py {{ recipe_args }}
+    {{ python }} -B build/ash_rs/build.py {{ recipe_args }}
 
 # Compose a managed Code package from a verified runtime package and the ash executable.
 code-package *args:

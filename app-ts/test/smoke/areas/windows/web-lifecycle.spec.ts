@@ -4,7 +4,7 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { chromium, type Page } from '@playwright/test';
-import { developmentAshPackagePath } from '../../../../../build/runtime/store.ts';
+import { developmentAshPackagePath } from '../../../../../build/app_ts/runtimeStore.ts';
 import { expect, test } from '../../../automation/test.js';
 import { Workbench } from '../../../automation/workbench.js';
 
@@ -97,7 +97,7 @@ async function expectWorkspace(page: Page): Promise<void> {
 
 async function launchWeb(mode: 'production' | 'development', port: number, env: NodeJS.ProcessEnv): Promise<{ child: ChildProcess; url: string }> {
 	const args = mode === 'production'
-		? ['../scripts/web.ts', '../.build/app-ts/renderer/ash', String(port)]
+		? ['../scripts/app_ts/web.ts', '../.build/app-ts/renderer/ash', String(port)]
 		: ['node_modules/vite/bin/vite.js', '--config', '../build/app_ts/vite/vite.config.ts', '--port', String(port)];
 	const child = spawn(process.execPath, args, { cwd: join(repository, 'app-ts'), env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
 	try {

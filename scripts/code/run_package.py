@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import json
 import os
-import platform
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -16,63 +13,15 @@ sys.path.insert(0, str(SCRIPT_DIRECTORY))
 
 import run  # noqa: E402
 from build.code import build as code_build  # noqa: E402
-
-
-MANIFEST_PATTERN = re.compile(r"\d{20}\.json")
-PACKAGE_DIRECTORY_PATTERN = re.compile(
-    r"packages/[0-9A-Za-z][0-9A-Za-z.+-]*/[a-f0-9]{64}"
-)
-
-
-def development_root() -> Path:
-    targets = {
-        ("darwin", "arm64"): "aarch64-apple-darwin",
-        ("darwin", "x86_64"): "x86_64-apple-darwin",
-        ("linux", "aarch64"): "aarch64-unknown-linux-gnu",
-        ("linux", "x86_64"): "x86_64-unknown-linux-gnu",
-        ("windows", "arm64"): "aarch64-pc-windows-msvc",
-        ("windows", "amd64"): "x86_64-pc-windows-msvc",
-    }
-    host = (platform.system().lower(), platform.machine().lower())
-    target = targets.get(host)
-    if target is None:
-        raise RuntimeError(f"unsupported Ash development host: {host[0]}/{host[1]}")
-    return (
-        run.REPOSITORY_ROOT
-        / ".build"
-        / "runtime"
-        / "dev"
-        / "store-v1"
-        / target
-        / "host-provided-node"
-        / code_build.DEVELOPMENT_PROFILE
-    )
+from build.ash_rs.prepare import current_package as selected_package  # noqa: E402
+from build.ash_rs.prepare import development_root  # noqa: E402
+from build.lib.targets import default_target  # noqa: E402
 
 
 def current_package() -> Path:
-    root = development_root()
-    manifest_directory = root / "manifests"
-    manifests = sorted(
-        path
-        for path in manifest_directory.iterdir()
-        if MANIFEST_PATTERN.fullmatch(path.name)
+    package_root = selected_package(
+        development_root(run.REPOSITORY_ROOT, default_target(), "host-provided-node")
     )
-    if not manifests:
-        raise RuntimeError(
-            f"Ash development package has no published manifest: {manifest_directory}"
-        )
-    manifest_path = manifests[-1]
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    sequence = int(manifest_path.name[:20])
-    if (
-        not isinstance(manifest, dict)
-        or manifest.get("formatVersion") != 1
-        or manifest.get("sequence") != sequence
-        or not isinstance(manifest.get("directory"), str)
-        or PACKAGE_DIRECTORY_PATTERN.fullmatch(manifest["directory"]) is None
-    ):
-        raise RuntimeError(f"invalid Ash development package manifest: {manifest_path}")
-    package_root = root.joinpath(*manifest["directory"].split("/"))
     if not package_root.is_dir():
         raise RuntimeError(f"Ash development package is missing: {package_root}")
     return package_root
@@ -81,7 +30,7 @@ def current_package() -> Path:
 def main(arguments: list[str] | None = None) -> int:
     environment = os.environ.copy()
     prepared = subprocess.run(
-        ["node", "build/runtime/prepare.ts"],
+        [sys.executable, "-B", "build/ash_rs/prepare.py"],
         cwd=run.REPOSITORY_ROOT,
         env=environment,
         check=False,

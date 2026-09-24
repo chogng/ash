@@ -6,10 +6,10 @@ import os
 import re
 import shutil
 import stat
-import subprocess
 import tempfile
 from pathlib import Path
 from typing import Dict, Optional
+from urllib.parse import urlsplit
 
 from .bubblewrap import BubblewrapResolution
 from .node import NodeResolution
@@ -62,6 +62,8 @@ def build_package_directory(
     voice_host_binary: Optional[Path] = None,
     collaboration_server_binary: Optional[Path] = None,
     livekit: Optional[Dict[str, str]] = None,
+    remote_runtime_bundle: Optional[Path] = None,
+    remote_runtime_release: Optional[Dict[str, str]] = None,
 ) -> None:
     if spec.is_windows != (windows_sandbox_binary is not None):
         raise RuntimeError(
@@ -153,21 +155,246 @@ def build_package_directory(
                 if protocol_metadata is not None
                 else load_protocol_metadata(repository_root),
             },
+            "remoteRuntimeBundle": str(remote_runtime_bundle)
+            if remote_runtime_bundle
+            else None,
+            "remoteRuntimeRelease": remote_runtime_release,
         }
-        result = subprocess.run(
-            ["node", str(Path(__file__).with_suffix(".ts"))],
-            input=json.dumps(inputs),
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if result.returncode != 0:
-            raise RuntimeError(f"Package assembly failed: {result.stderr.strip()}")
+        assemble_package(staging, inputs)
         validate_package_directory(staging, spec)
         staging.rename(output)
     except Exception:
         shutil.rmtree(staging, ignore_errors=True)
         raise
+
+
+def copy_regular_tree(source: Path, destination: Path, kind: str) -> None:
+    metadata = source.lstat()
+    if not stat.S_ISDIR(metadata.st_mode):
+        raise RuntimeError(f"Built-in {kind} source is not a real directory: {source}")
+    destination.mkdir()
+    for entry in source.iterdir():
+        target = destination / entry.name
+        metadata = entry.lstat()
+        if stat.S_ISDIR(metadata.st_mode):
+            copy_regular_tree(entry, target, kind)
+        elif stat.S_ISREG(metadata.st_mode) and metadata.st_nlink == 1:
+            shutil.copyfile(entry, target)
+        else:
+            raise RuntimeError(
+                f"Built-in {kind} asset is not a regular unlinked file: {entry}"
+            )
+
+
+def copy_builtin_skills(source_root: Path, destination: Path) -> None:
+    source = source_root / "ash-rs/skills/assets"
+    if not stat.S_ISDIR(source.lstat().st_mode):
+        raise RuntimeError(f"Built-in Skill source is not a real directory: {source}")
+    entries = [entry for entry in source.iterdir() if entry.name != "BUILD.bazel"]
+    if not entries:
+        raise RuntimeError("Built-in Skill source is empty")
+    destination.mkdir(parents=True)
+    for entry in entries:
+        if (
+            not stat.S_ISDIR(entry.lstat().st_mode)
+            or SKILL_NAME.fullmatch(entry.name) is None
+        ):
+            raise RuntimeError(f"Invalid built-in Skill directory: {entry.name}")
+        if not (entry / "SKILL.md").is_file():
+            raise RuntimeError(f"Built-in Skill is missing SKILL.md: {entry.name}")
+        copy_regular_tree(entry, destination / entry.name, "Skill")
+
+
+def copy_builtin_extensions(source_root: Path, destination: Path) -> None:
+    source = source_root / "extensions"
+    if not stat.S_ISDIR(source.lstat().st_mode):
+        raise RuntimeError(
+            f"Built-in extension source is not a real directory: {source}"
+        )
+    entries = [
+        entry
+        for entry in source.iterdir()
+        if entry.name not in ("README.md", "BUILD.bazel")
+    ]
+    if not entries:
+        raise RuntimeError("Built-in extension source is empty")
+    destination.mkdir(parents=True)
+    for entry in entries:
+        if not stat.S_ISDIR(entry.lstat().st_mode):
+            raise RuntimeError(f"Invalid built-in extension package: {entry.name}")
+        manifest = entry / "package.json"
+        if not stat.S_ISREG(manifest.lstat().st_mode):
+            raise RuntimeError(
+                f"Built-in extension package.json is not a regular file: {entry.name}"
+            )
+        copy_regular_tree(entry, destination / entry.name, "extension package")
+
+
+def copy_executable(source: Path, destination: Path, is_windows: bool) -> None:
+    shutil.copyfile(source, destination)
+    if not is_windows:
+        destination.chmod(0o755)
+
+
+def assemble_package(staging: Path, inputs: dict) -> None:
+    """Create the same canonical package for development and release callers."""
+    options = inputs["options"]
+    source_root = Path(options["sourceRoot"])
+    target = inputs["target"]
+    is_windows = inputs["platform"] == "win32"
+    executables = inputs["executables"]
+    resources = staging / LAYOUT["resourcesDir"]
+    binary_dir = staging / "bin"
+    binary_dir.mkdir(parents=True)
+    (staging / LAYOUT["pathDir"]).mkdir(parents=True)
+    copy_builtin_skills(source_root, resources / "skills")
+    copy_builtin_extensions(source_root, resources / "extensions")
+    copy_regular_tree(
+        source_root / "resources/product-services",
+        resources / "product-services",
+        "product services",
+    )
+    remote_bundle = inputs.get("remoteRuntimeBundle")
+    if remote_bundle:
+        copy_regular_tree(
+            Path(remote_bundle),
+            staging / "ash-remote-runtimes",
+            "Remote runtime bundle",
+        )
+
+    suffix = ".exe" if is_windows else ""
+    for component, relative in LAYOUT["binaries"].items():
+        destination = staging / relative.format(exe=suffix)
+        copy_executable(Path(executables[component]), destination, is_windows)
+    if is_windows:
+        copy_executable(
+            Path(executables["windowsSandbox"]),
+            binary_dir / "ash-windows-sandbox.exe",
+            True,
+        )
+        copy_windows_sandbox_notices(source_root, resources / "licenses")
+    ripgrep = inputs["ripgrep"]
+    tgrep = inputs["tgrep"]
+    copy_executable(
+        Path(ripgrep["executable"]),
+        staging / LAYOUT["pathDir"] / ("rg" + suffix),
+        is_windows,
+    )
+    tgrep_dir = resources / "tgrep"
+    tgrep_dir.mkdir()
+    copy_executable(
+        Path(tgrep["executable"]), tgrep_dir / ("tgrep" + suffix), is_windows
+    )
+    node = inputs.get("node")
+    if node is not None:
+        node_dir = resources / "node/bin"
+        node_dir.mkdir(parents=True)
+        copy_executable(
+            Path(node["executable"]), node_dir / ("node" + suffix), is_windows
+        )
+        node_license = resources / "licenses/node"
+        node_license.mkdir(parents=True)
+        shutil.copyfile(node["license"], node_license / "LICENSE")
+    for license in LAYOUT["licenses"]:
+        destination = staging / license["destination"]
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source_root / license["source"], destination)
+
+    components = {
+        "tgrep": {
+            key: value
+            for key, value in tgrep.items()
+            if key in ("archive", "archiveSha256", "binarySha256", "source", "version")
+        },
+        "ripgrep": {
+            key: value
+            for key, value in ripgrep.items()
+            if key in ("archive", "archiveSha256", "binarySha256", "source", "version")
+        },
+    }
+    for component, relative in LAYOUT["binaries"].items():
+        components[component] = {
+            "source": "cargo-build",
+            "binarySha256": file_sha256(staging / relative.format(exe=suffix)),
+        }
+    if is_windows:
+        components["windowsSandbox"] = {
+            "source": "cargo-build",
+            "binarySha256": file_sha256(binary_dir / "ash-windows-sandbox.exe"),
+        }
+    if node is not None:
+        components["node"] = {
+            key: node[key]
+            for key in ("archive", "archiveSha256", "binarySha256", "source", "version")
+        }
+    if inputs["platform"] == "linux":
+        bubblewrap = executables.get("bubblewrap")
+        if bubblewrap is None:
+            raise RuntimeError("Linux package is missing the Bubblewrap build")
+        copy_executable(Path(bubblewrap["binary"]), resources / "bwrap", False)
+        license_dir = resources / "licenses/bubblewrap"
+        license_dir.mkdir(parents=True)
+        for license_path in bubblewrap.get("licenses", [bubblewrap["license"]]):
+            license = Path(license_path)
+            shutil.copyfile(license, license_dir / license.name)
+        components["bubblewrap"] = {
+            "binarySha256": file_sha256(Path(bubblewrap["binary"])),
+            "source": bubblewrap.get("source", "vendored-source-build"),
+            "sourceArchive": bubblewrap["archive"],
+            "sourceArchiveSha256": bubblewrap["archiveSha256"],
+            "version": bubblewrap["version"],
+        }
+
+    remote_release = inputs.get("remoteRuntimeRelease")
+    catalog = None
+    if remote_bundle or remote_release:
+        packaged_digest = (
+            file_sha256(staging / "ash-remote-runtimes/catalog.json")
+            if remote_bundle
+            else None
+        )
+        if (
+            remote_release
+            and packaged_digest
+            and remote_release["sha256"] != packaged_digest
+        ):
+            raise RuntimeError(
+                "Network Remote runtime catalog SHA-256 does not match the packaged catalog"
+            )
+        catalog = (
+            {
+                "url": remote_release["url"],
+                "sha256": remote_release["sha256"],
+                "trustBinding": "signedProductPackage",
+            }
+            if remote_release
+            else {
+                "path": "ash-remote-runtimes/catalog.json",
+                "sha256": packaged_digest,
+                "trustBinding": "signedProductPackage",
+            }
+        )
+    identity = {
+        "buildProfile": options["buildProfile"],
+        "components": components,
+        "entrypoint": LAYOUT["entrypoint"].format(exe=suffix),
+        "javascriptRuntime": {"kind": "packagedNode" if node else "hostProvidedNode"},
+        "layoutVersion": LAYOUT_VERSION,
+        "pathDir": LAYOUT["pathDir"],
+        "protocol": options["protocol"],
+        "resourcesDir": LAYOUT["resourcesDir"],
+        "target": target,
+        "version": options["version"],
+    }
+    if catalog:
+        identity["remoteRuntimeCatalog"] = catalog
+    files = package_files(staging)
+    metadata = {
+        **identity,
+        "buildId": package_build_id(identity, files),
+        "files": files,
+    }
+    write_json(staging / METADATA_FILE, metadata)
 
 
 def validate_package_directory(package: Path, spec: TargetSpec) -> None:
@@ -293,6 +520,44 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
     validate_builtin_skills(package / "ash-resources" / "skills")
     validate_builtin_extensions(package / "ash-resources" / "extensions")
     validate_product_services(package / "ash-resources" / "product-services")
+    remote_catalog = metadata.get("remoteRuntimeCatalog")
+    if remote_catalog is not None:
+        if (
+            not isinstance(remote_catalog, dict)
+            or remote_catalog.get("trustBinding") != "signedProductPackage"
+            or not isinstance(remote_catalog.get("sha256"), str)
+            or re.fullmatch(r"[a-f0-9]{64}", remote_catalog["sha256"]) is None
+        ):
+            raise RuntimeError("Invalid Remote runtime catalog package binding")
+        if (
+            remote_catalog.get("path") == "ash-remote-runtimes/catalog.json"
+            and "url" not in remote_catalog
+        ):
+            catalog_path = package / "ash-remote-runtimes/catalog.json"
+            catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+            if (
+                file_sha256(catalog_path) != remote_catalog["sha256"]
+                or catalog.get("formatVersion") != 1
+                or not isinstance(catalog.get("artifacts"), list)
+                or not catalog["artifacts"]
+            ):
+                raise RuntimeError("Invalid packaged Remote runtime catalog")
+        elif "path" not in remote_catalog and isinstance(
+            remote_catalog.get("url"), str
+        ):
+            url = urlsplit(remote_catalog["url"])
+            if (
+                url.scheme != "https"
+                or not url.hostname
+                or url.username
+                or url.password
+                or url.query
+                or url.fragment
+                or not url.path.endswith("/catalog.json")
+            ):
+                raise RuntimeError("Invalid Remote runtime catalog package source")
+        else:
+            raise RuntimeError("Invalid Remote runtime catalog package source")
     if spec.is_linux:
         bubblewrap = package / "ash-resources" / "bwrap"
         if not bubblewrap.is_file() or not is_executable(bubblewrap):

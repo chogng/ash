@@ -11,7 +11,7 @@ from pathlib import Path
 
 from build.remote.bundle import validate_remote_runtime_bundle
 from build.remote.test_bundle import create_package
-from build.runtime.test_support import create_runtime_package
+from build.ash_rs.test_support import create_runtime_package
 
 
 BUILD_ROOT = Path(__file__).resolve().parent
@@ -24,8 +24,9 @@ class BuildCommandTests(unittest.TestCase):
             "app_rs/signing.py": "{sign,verify,record}",
             "code/archive.py": "--output",
             "code/package.py": "--runtime-package",
-            "runtime/build.py": "--javascript-runtime",
-            "runtime/sign.py": "--verify-only",
+            "ash_rs/build.py": "--javascript-runtime",
+            "ash_rs/prepare.py": "--javascript-runtime",
+            "ash_rs/sign.py": "--verify-only",
             "remote/bundle.py": "--bundle-dir",
             "darwin/notarize.py": "--staple",
         }

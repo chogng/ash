@@ -9,8 +9,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from build.lib.targets import TARGETS
-from build.runtime.cargo import build_binaries
-from build.runtime.cargo import resolve_windows_sandbox_binary
+from build.ash_rs.cargo import build_binaries
+from build.ash_rs.cargo import resolve_windows_sandbox_binary
 
 
 class CargoBuildTests(unittest.TestCase):
@@ -29,8 +29,8 @@ class CargoBuildTests(unittest.TestCase):
     def test_prebuilt_inputs_skip_cargo_and_v8_resolution(self) -> None:
         inputs = {"ash-app-server": self.executable("prebuilt")}
         with (
-            patch("build.runtime.cargo.subprocess.run") as run,
-            patch("build.runtime.cargo.cargo_environment") as environment,
+            patch("build.ash_rs.cargo.subprocess.run") as run,
+            patch("build.ash_rs.cargo.cargo_environment") as environment,
         ):
             result = build_binaries(
                 self.root, self.spec, inputs, cargo="cargo", cargo_profile="release"
@@ -49,9 +49,9 @@ class CargoBuildTests(unittest.TestCase):
         }
         completed = subprocess.CompletedProcess(["cargo"], 0, json.dumps(artifact))
         with (
-            patch("build.runtime.cargo.subprocess.run", return_value=completed) as run,
+            patch("build.ash_rs.cargo.subprocess.run", return_value=completed) as run,
             patch(
-                "build.runtime.cargo.cargo_environment",
+                "build.ash_rs.cargo.cargo_environment",
                 return_value={"V8": "locked"},
             ) as environment,
         ):
@@ -81,10 +81,10 @@ class CargoBuildTests(unittest.TestCase):
         stale.chmod(0o755)
         with (
             patch(
-                "build.runtime.cargo.subprocess.run",
+                "build.ash_rs.cargo.subprocess.run",
                 return_value=subprocess.CompletedProcess(["cargo"], 0, ""),
             ),
-            patch("build.runtime.cargo.cargo_environment", return_value={}),
+            patch("build.ash_rs.cargo.cargo_environment", return_value={}),
             self.assertRaisesRegex(RuntimeError, "did not report an executable"),
         ):
             build_binaries(
@@ -102,12 +102,12 @@ class CargoBuildTests(unittest.TestCase):
         }
         with (
             patch(
-                "build.runtime.cargo.subprocess.run",
+                "build.ash_rs.cargo.subprocess.run",
                 return_value=subprocess.CompletedProcess(
                     ["cargo"], 101, json.dumps(diagnostic)
                 ),
             ),
-            patch("build.runtime.cargo.cargo_environment", return_value={}),
+            patch("build.ash_rs.cargo.cargo_environment", return_value={}),
             patch("sys.stderr", new_callable=io.StringIO) as stderr,
             self.assertRaises(subprocess.CalledProcessError) as error,
         ):
@@ -123,7 +123,7 @@ class CargoBuildTests(unittest.TestCase):
 
     def test_windows_sandbox_rejects_other_targets_before_building(self) -> None:
         with (
-            patch("build.runtime.cargo.subprocess.run") as run,
+            patch("build.ash_rs.cargo.subprocess.run") as run,
             self.assertRaisesRegex(RuntimeError, "requires a Windows target"),
         ):
             resolve_windows_sandbox_binary(
@@ -140,12 +140,12 @@ class CargoBuildTests(unittest.TestCase):
         }
         with (
             patch(
-                "build.runtime.cargo.subprocess.run",
+                "build.ash_rs.cargo.subprocess.run",
                 return_value=subprocess.CompletedProcess(
                     ["cargo"], 0, json.dumps(artifact)
                 ),
             ),
-            patch("build.runtime.cargo.cargo_environment") as environment,
+            patch("build.ash_rs.cargo.cargo_environment") as environment,
         ):
             result = resolve_windows_sandbox_binary(
                 self.root, TARGETS["x86_64-pc-windows-msvc"], None, "cargo", "release"

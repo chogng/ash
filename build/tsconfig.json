@@ -23,7 +23,7 @@
   },
   "include": [
     "**/*.ts",
-    "../scripts/*.ts"
+    "../scripts/app_ts/*.ts"
   ],
   "exclude": [
     "node_modules/**",

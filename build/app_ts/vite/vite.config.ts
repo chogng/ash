@@ -2,7 +2,7 @@ import { resolve } from "node:path";
 import { defineConfig } from "vite";
 import { AshRendererDirectory } from "../../../app-ts/src/ash/code/common/application.js";
 import { WorkbenchModeRegistry } from "../../../app-ts/src/ash/workbench/common/workbenchMode.js";
-import { appTsBuildPath } from "../../lib/paths.ts";
+import { appTsBuildPath } from "../paths.ts";
 import { buildMetricsPlugin } from './buildMetricsPlugin.ts';
 import { rendererOutput } from './rendererOutput.ts';
 import { hotReloadPlugin } from "./hotReloadPlugin.ts";

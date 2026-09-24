@@ -36,7 +36,7 @@
     "dev:desktop:rust": "pnpm --dir app-ts dev:rust",
     "dev:web": "pnpm --dir app-ts dev:web",
     "dev:web:full": "pnpm --dir app-ts dev:web:full",
-    "fetch:pdfium": "node build/download/fetchPdfium.ts",
+    "fetch:pdfium": "uv run --frozen --project scripts python -B build/ash_rs/pdfium.py",
     "package:runtime": "just runtime-package",
     "generate:protocol": "just generate-protocol",
     "verify:protocol": "cargo test --manifest-path Cargo.toml -p ash-app-server-protocol"

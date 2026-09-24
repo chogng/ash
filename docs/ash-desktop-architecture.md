@@ -210,11 +210,10 @@ Desktop 主进程入口同步注册 Electron `ready` 监听器；异步启动链
 生成的 `APP_SERVER_SCHEMA_HASH` 是 bundled Desktop 的 exact-schema 基线；Electron Main
 必须比较 initialize response，hash 不一致时不得创建业务窗口或进入 Ready。
 
-开发态与发布态共享 canonical Ash package contract。Node 开发组装器
-`build/runtime/prepare.ts` 按 target、JavaScript runtime 与 build profile 组装不可变 debug
+开发态与发布态共享 canonical Ash package contract。Python 开发组装器
+`build/ash_rs/prepare.py` 按 target、JavaScript runtime 与 build profile 组装不可变 debug
 package；Rust package store 在完整文件清单校验通过后发布编号 manifest，并用进程 lease 保护正在运行的 package。它读取 production builder
-使用的同一份 runtime lock、校验 archive digest。它不安装或调用 Python；
-Python builder 只属于显式 release packaging。`appServerExecutablePath()` 在开发态选择该
+使用的同一份 runtime lock、校验 archive digest。`appServerExecutablePath()` 在开发态选择该
 package root，在发布态选择 Electron `resourcesPath`，两者都只启动
 `<package>/bin/ash-app-server-daemon[.exe]`，其 `connect` 命令负责取得共享服务连接。独立监听使用同包的
 `<package>/bin/ash-app-server[.exe]`。两者都由开发与发布组装器

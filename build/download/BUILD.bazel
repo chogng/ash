@@ -4,5 +4,3 @@ filegroup(
     name = "python_sources",
     srcs = glob(["*.py"], exclude = ["test_*.py"]) + ["//:build/__init__.py"],
 )
-
-exports_files(["artifacts.ts"])

@@ -1,9 +1,9 @@
 import { type ChildProcess, spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
-import { watchHost } from '../build/app_ts/host.ts';
+import { watchHost } from '../../build/app_ts/host.ts';
 
-const sourceRoot = resolve(import.meta.dirname, '../app-ts');
+const sourceRoot = resolve(import.meta.dirname, '../../app-ts');
 const require = createRequire(resolve(sourceRoot, 'package.json'));
 const executable: string = require('electron');
 const args = process.argv.slice(2);

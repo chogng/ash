@@ -6,7 +6,7 @@ const serverUrl = 'http://127.0.0.1:5185/textModel.html';
 const build = await run(process.execPath, ['node_modules/vite/bin/vite.js', 'build', '--config', 'test/integration/browser/vite.config.ts'], process.env);
 if (build !== 0) process.exit(build);
 const server = spawn(process.execPath, [
-	'../scripts/web.ts',
+	'../scripts/app_ts/web.ts',
 	'../.build/app-ts/editor-browser',
 	'5185',
 ], {

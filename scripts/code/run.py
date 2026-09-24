@@ -15,7 +15,7 @@ from build.code.build import build_binaries  # noqa: E402
 from build.code.build import development_binaries  # noqa: E402
 from build.code.build import stage_runtime  # noqa: E402
 from build.lib.targets import TARGETS, default_target  # noqa: E402
-from build.runtime.tgrep import resolve_tgrep  # noqa: E402
+from build.ash_rs.tgrep import resolve_tgrep  # noqa: E402
 
 
 def runtime_environment(

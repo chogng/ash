@@ -122,7 +122,7 @@ just app
 - [Electron Desktop architecture](docs/ash-desktop-architecture.md)
 - [Shared Rust architecture](docs/ash-rs-architecture.md)
 - [Remote development](docs/remote-development.md)
-- [Packaging](build/runtime/README.md)
+- [Packaging](build/ash_rs/README.md)
 - [`app` release graph](app-rs/docs/app-release-graph.md)
 
 Crate-level implementation details live in the `README.md` next to each crate.

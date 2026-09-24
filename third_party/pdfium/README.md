@@ -12,13 +12,13 @@ the workspace enables the matching `pdfium_7763` feature.
 Fetch and verify the host artifact into a release staging directory:
 
 ```sh
-node build/download/fetchPdfium.ts --output /absolute/path/to/resources/native/pdfium
+uv run --frozen --project scripts python -B build/ash_rs/pdfium.py --output /absolute/path/to/resources/native/pdfium
 ```
 
 Cross-platform release jobs must specify their target explicitly:
 
 ```sh
-node build/download/fetchPdfium.ts --target win-x64 --output "$STAGING/resources/native/pdfium"
+uv run --frozen --project scripts python -B build/ash_rs/pdfium.py --target win-x64 --output "$STAGING/resources/native/pdfium"
 ```
 
 The destination contains `lib/libpdfium.dylib` on macOS,

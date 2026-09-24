@@ -16,9 +16,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from build.lib.targets import TARGETS
 from build.code.package import build_code_package
-from build.runtime.build import main as build_main
-from build.runtime.bubblewrap import load_vendored_source, resolve_bubblewrap
-from build.runtime.layout import (
+from build.ash_rs.build import main as build_main
+from build.ash_rs.bubblewrap import load_vendored_source, resolve_bubblewrap
+from build.ash_rs.layout import (
     build_package_directory,
     file_sha256,
     load_protocol_metadata,
@@ -27,15 +27,15 @@ from build.runtime.layout import (
     require_verified_system_signing,
     system_signing_artifacts,
 )
-from build.runtime.node import (
+from build.ash_rs.node import (
     NodeResolution,
     artifact_for_target,
     load_node_lock,
     resolve_node,
 )
-from build.runtime.ripgrep import load_lock, resolve_ripgrep
-from build.runtime.executable import ExecutableResolution
-from build.runtime.version import read_workspace_version
+from build.ash_rs.ripgrep import load_lock, resolve_ripgrep
+from build.ash_rs.executable import ExecutableResolution
+from build.ash_rs.version import read_workspace_version
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
@@ -97,27 +97,19 @@ class PackageTests(unittest.TestCase):
             ]
             rg = executable_file(root / "rg", b"ripgrep")
             output = root / "package"
-            real_run = subprocess.run
 
             def run_command(command, **kwargs):
-                if command[0] == "node":
-                    if str(command[1]).endswith("livekit.ts"):
-                        payload = json.dumps(
-                            {
-                                "executable": str(
-                                    executable_file(root / "livekit", b"livekit")
-                                ),
-                            }
-                        )
-                        return subprocess.CompletedProcess(command, 0, payload)
-                    return real_run(command, **kwargs)
                 self.assertEqual("build", command[1])
                 return subprocess.CompletedProcess(command, 0, "\n".join(artifacts))
 
             with (
-                patch("build.runtime.cargo.cargo_environment", return_value={}),
+                patch("build.ash_rs.cargo.cargo_environment", return_value={}),
                 patch(
-                    "build.runtime.cargo.subprocess.run",
+                    "build.ash_rs.build.resolve_livekit",
+                    return_value=executable_file(root / "livekit", b"livekit"),
+                ),
+                patch(
+                    "build.ash_rs.cargo.subprocess.run",
                     side_effect=run_command,
                 ) as run,
             ):
@@ -136,9 +128,7 @@ class PackageTests(unittest.TestCase):
                         ]
                     ),
                 )
-            command = next(
-                call.args[0] for call in run.call_args_list if call.args[0][0] != "node"
-            )
+            command = run.call_args.args[0]
             self.assertEqual(
                 set(names),
                 {command[i + 1] for i, value in enumerate(command) if value == "--bin"},
@@ -531,6 +521,10 @@ class PackageTests(unittest.TestCase):
                 livekit={
                     "executable": str(executable_file(root / "livekit", b"livekit")),
                 },
+                remote_runtime_release={
+                    "url": "https://example.com/catalog.json",
+                    "sha256": "f" * 64,
+                },
             )
 
             metadata = json.loads(
@@ -540,6 +534,14 @@ class PackageTests(unittest.TestCase):
                 {"kind": "hostProvidedNode"}, metadata["javascriptRuntime"]
             )
             self.assertEqual(generated_protocol, metadata["protocol"])
+            self.assertEqual(
+                {
+                    "url": "https://example.com/catalog.json",
+                    "sha256": "f" * 64,
+                    "trustBinding": "signedProductPackage",
+                },
+                metadata["remoteRuntimeCatalog"],
+            )
             self.assertNotIn("node", metadata["components"])
             self.assertFalse((output / "ash-resources" / "node").exists())
             self.assertFalse((output / "ash-resources" / "licenses" / "node").exists())

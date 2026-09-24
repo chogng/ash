@@ -59,7 +59,7 @@ def cargo_command_uses_v8(
 def cargo_command_uses_package(
     cargo: str, cargo_arguments: list[str], repository_root: Path, package: str
 ) -> bool:
-    """Inspect the selected dependency graph for a build/runtime input owner."""
+    """Inspect the selected dependency graph for a shared backend build input."""
 
     if not cargo_arguments or cargo_arguments[0] not in DEPENDENCY_COMMANDS:
         return False

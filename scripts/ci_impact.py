@@ -23,7 +23,7 @@ GLOBAL_INPUTS = {
     Path("justfile"),
     Path("scripts/cargo.py"),
     Path("scripts/ci_impact.py"),
-    Path("build/runtime/ripgrep.py"),
+    Path("build/ash_rs/ripgrep.py"),
     Path("third_party/ripgrep/runtime-lock.json"),
     Path(".github/workflows/rust-warnings.yml"),
 }

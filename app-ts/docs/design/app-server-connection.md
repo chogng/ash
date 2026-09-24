@@ -74,7 +74,7 @@ flowchart LR
 | [daemon client](../../../ash-rs/app-server-daemon/src/client.rs) | 启动或复用后端，通过私有连接取得 Web 入口 |
 | [Web protocol](../../../ash-rs/app-server-protocol/src/web.rs) | 启动和会话元数据契约及生成的 TypeScript 校验器 |
 | [Web transport](../../src/ash/platform/app-server/browser/appServerWebSocketTransport.ts) | 兑换凭证、连接、原始 JSON-RPC 帧和断线通知 |
-| [scripts/web.ts](../../../scripts/web.ts) | 用编译产物启动本地 Web，显示链接并保持租约 |
+| [scripts/app_ts/web.ts](../../../scripts/app_ts/web.ts) | 用编译产物启动本地 Web，显示链接并保持租约 |
 | [Vite plugin](../../../build/app_ts/vite/webAppServerPlugin.ts) | 开发资源入口与开发 Origin 配置 |
 | [BrowserEditor](../../src/ash/workbench/contrib/browserView/electron-browser/browserEditor.ts) | 地址栏、历史导航、页面容器、布局、焦点和无障碍帮助 |
 | [Main 页面服务](../../src/ash/platform/browser/electron-main/browserViewMainService.ts) | 网页实例、会话隔离、导航和窗口内显示 |

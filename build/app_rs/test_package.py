@@ -15,7 +15,7 @@ from build.app_rs.build import remote_runtime_network_release
 from build.app_rs.build import resolve_binary
 from build.remote.bundle import build_remote_runtime_bundle
 from build.remote.test_bundle import create_package
-from build.runtime.test_support import create_runtime_package
+from build.ash_rs.test_support import create_runtime_package
 
 
 class AppPackageTests(unittest.TestCase):

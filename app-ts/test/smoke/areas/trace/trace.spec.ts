@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
-import { developmentAshPackagePath } from '../../../../../build/runtime/store.ts';
+import { developmentAshPackagePath } from '../../../../../build/app_ts/runtimeStore.ts';
 import { expect, test } from '../../../automation/test.js';
 
 test('developer trace viewer validates connection settings and restores focus after keyboard help', async ({ workbench }) => {

@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
-import { developmentAshPackagePath } from '../runtime/store.ts';
+import { developmentAshPackagePath } from './runtimeStore.ts';
 import { buildAppServerEnvironment } from '../../app-ts/src/ash/platform/app-server/common/appServerEnvironment.ts';
 import { decodeWebListenInfo } from '../../app-ts/src/ash/platform/app-server/common/generated/WebProtocolDecoder.ts';
 import type { WebListenInfo } from '../../app-ts/src/ash/platform/app-server/common/generated/WebListenInfo.ts';

@@ -61,14 +61,13 @@ pnpm dev:web:full
 对应浏览器监听，不终止其他客户端使用的后端。Browser 命令通过设置或 URL 参数选择内置模式；
 `ASH_WORKBENCH_MODE` 只覆盖开发进程的初始模式，不维护模式后缀命令。
 
-`dev` 与 `dev:web:full` 会先通过 Node 开发组装器生成
+`dev` 与 `dev:web:full` 会先调用 `build/ash_rs/prepare.py` 生成
 `.build/runtime/dev/store-v1/<target>/<javascript-runtime>/dev-small/packages/<version>/<build-id>`；其中包含 product-neutral `ash-app-server` backend host、锁定版本的
 ripgrep 与平台 sandbox helper。编号清单选择当前包，进程租约保护正在运行的包，存储固定保留当前与回滚包。Electron 默认生成 `hostProvidedNode` variant，
 不再下载或复制 standalone Node；`dev:web:full` 使用 `packagedNode` variant，为后端能力提供独立 JavaScript runtime。
 开发态和发布态 Electron 都从相同的
 `<package>/bin/ash-app-server-daemon[.exe] connect` 入口连接共享 App Server，区别仅在编译 profile 和 package root。
-准备流程只使用仓库已要求的 Node、Rust 和 host archive utility，不安装或调用
-Python。`dev:desktop` 随后启动 Vite、主进程、预加载脚本和 Electron；`dev:web:full` 只启动
+准备流程通过仓库锁定的 uv/Python 环境运行后端构建，前端脚本只读取已发布包的位置。`dev:desktop` 随后启动 Vite、主进程、预加载脚本和 Electron；`dev:web:full` 只启动
 Vite，并按浏览器连接管理 App Server。启动后不要关闭终端，停止服务可以按 `Ctrl+C`。
 
 ### 开发态热更新
@@ -88,17 +87,17 @@ Renderer 开发服务器使用 Vite HMR。`build/app_ts/vite/setup-dev.ts` 在�
 Vite 插件会在模块执行前比较 TypeScript 语法结构。只有普通实例方法、getter 和 setter 的变化进入
 原型热替换；构造器、实例字段、静态状态、装饰器、模块声明/副作用或继承关系变化都会自动执行完整
 页面重载，并在开发服务器日志中说明原因。这样旧实例不会静默保留过期的初始化状态。Electron Main
-与 Preload 仍会重启整个 Electron 进程。`scripts/electron.ts --watch` 调用 `build/app_ts/host.ts`
+与 Preload 仍会重启整个 Electron 进程。`scripts/app_ts/electron.ts --watch` 调用 `build/app_ts/host.ts`
 用一次 TypeScript 项目构建监听 Main 与 Preload，首次启动直接使用监听器的编译结果。只有两边都完成当前编译、没有错误，且
 编译后的 preload 通过沙盒依赖校验，才启动或重启 Electron；任何编译或校验失败都会保留当前
 进程，避免加载同一轮增量编译中的半成品模块图。
 
-完整 Electron 开发命令还会运行 `build/app_ts/watch-app-server.ts`。Rust 源码或 Cargo manifest 变化后，它先完成
-`ash-app-server` 的 `dev-small` profile 构建，再发布一个不可变 generation；每个本地 Workbench window 随后通过现有 App
+完整 Electron 开发命令还会运行 `build/app_ts/watch-app-server.ts`。它监听 Rust 源码和 Cargo manifest，调用
+`build/ash_rs/develop.py` 完成 `ash-app-server` 的 `dev-small` profile 构建并发布不可变 generation；每个本地 Workbench window 随后通过现有 App
 Server supervisor 停止旧连接并启动新 generation。构建失败时当前 App Server 继续运行，初始化失败
-时自动回滚到上一 generation。Host 构建遵循 `CARGO_TARGET_DIR`，并直接读取 Cargo JSON artifact 报告的
+时自动回滚到上一 generation。Python 后端构建遵循 `CARGO_TARGET_DIR`，并直接读取 Cargo JSON artifact 报告的
 executable 路径，不依赖默认 target layout；generation 以 executable 内容摘要命名，内容未变化时不会重复发布，只保留当前版本
-和一个回滚版本。Watcher 只接受 `ash-rs` 源文件与根 `Cargo.toml`、`Cargo.lock`，明确忽略默认
+和一个回滚版本。TypeScript watcher 只接受 `ash-rs` 源文件与根 `Cargo.toml`、`Cargo.lock`，明确忽略默认
 `.build/cargo` 以及解析后的自定义 `CARGO_TARGET_DIR` 内生成的 Rust 文件，避免一次构建再次触发自己。可以单独运行
 `pnpm dev:rust` 启动同一 watcher；`dev:ui` 和
 不启动 Rust 的 disconnected Web 模式不会监听后端。

@@ -9,11 +9,11 @@ import test from 'node:test';
 test('Electron starts once after valid compilation and restarts only after valid rebuilds', { timeout: 20_000 }, async t => {
   const root = await mkdtemp(join(tmpdir(), 'ash-electron-'));
   const desktop = join(root, 'app-ts');
-  for (const directory of ['scripts', 'build/app_ts', 'build/lib', 'app-ts/node_modules/typescript/bin', 'app-ts/node_modules/electron']) {
+  for (const directory of ['scripts/app_ts', 'build/app_ts', 'app-ts/node_modules/typescript/bin', 'app-ts/node_modules/electron']) {
     await mkdir(join(root, directory), { recursive: true });
   }
-  for (const name of ['scripts/electron.ts', 'build/app_ts/host.ts', 'build/lib/paths.ts']) {
-    await copyFile(resolve(import.meta.dirname, '..', name), join(root, name));
+  for (const name of ['scripts/app_ts/electron.ts', 'build/app_ts/host.ts', 'build/app_ts/paths.ts']) {
+    await copyFile(resolve(import.meta.dirname, '../..', name), join(root, name));
   }
   await writeFile(join(root, 'package.json'), '{"type":"module"}');
   await writeFile(join(desktop, 'package.json'), '{"main":"fixture.cjs"}');
@@ -41,7 +41,7 @@ test('Electron starts once after valid compilation and restarts only after valid
     }, 25);
   `);
   await writeFile(join(desktop, 'phase'), 'initial');
-  const child = spawn(process.execPath, [join(root, 'scripts/electron.ts'), '--watch', '--fixture'], {
+  const child = spawn(process.execPath, [join(root, 'scripts/app_ts/electron.ts'), '--watch', '--fixture'], {
     cwd: tmpdir(), windowsHide: true, stdio: 'pipe', env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
   });
   let output = '';

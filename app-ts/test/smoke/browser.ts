@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import { decodeWebListenInfo, decodeWebSessionInfo } from '../../src/ash/platform/app-server/common/generated/WebProtocolDecoder.ts';
-import { developmentAshPackagePath } from '../../../build/runtime/store.ts';
+import { developmentAshPackagePath } from '../../../build/app_ts/runtimeStore.ts';
 
 const desktopDirectory = resolve(import.meta.dirname, '../..');
 const mode = process.argv[2];
@@ -14,10 +14,9 @@ if (mode !== 'disconnected' && mode !== 'full') {
 }
 
 if (mode === 'full') {
-	const desktopPreparation = await run(process.execPath, ['../build/runtime/prepare.ts'], process.env);
-	if (desktopPreparation !== 0) { process.exit(desktopPreparation); }
-	const preparation = await run(process.execPath, [
-		'../build/runtime/prepare.ts',
+	const python = ['run', '--frozen', '--project', '../scripts', 'python', '-B', '../build/ash_rs/prepare.py'];
+	const preparation = await run('uv', [
+		...python,
 		'--javascript-runtime',
 		'packaged-node',
 	], process.env);
@@ -82,7 +81,7 @@ const serverEnvironment = mode === 'full' ? {
 	...(productServicesPath ? { ASH_PRODUCT_SERVICES_PATH: productServicesPath } : {}),
 } : testEnvironment;
 const server = spawn(process.execPath, [
-	'../scripts/web.ts',
+	'../scripts/app_ts/web.ts',
 	'../.build/app-ts/renderer/ash',
 	String(port),
 ], {

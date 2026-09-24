@@ -6,7 +6,7 @@ on:
     paths:
       - 'app-ts/**'
       - 'build/**'
-      - 'scripts/*.ts'
+      - 'scripts/app_ts/**'
       - 'third_party/livekit/**'
       - 'resources/**'
       - 'extensions/**'
@@ -25,7 +25,7 @@ on:
     paths:
       - 'app-ts/**'
       - 'build/**'
-      - 'scripts/*.ts'
+      - 'scripts/app_ts/**'
       - 'third_party/livekit/**'
       - 'resources/**'
       - 'extensions/**'

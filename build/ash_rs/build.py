@@ -2,8 +2,6 @@
 """Build a canonical Ash package directory."""
 
 import argparse
-import json
-import subprocess
 import sys
 from pathlib import Path
 from typing import Optional, Sequence
@@ -12,13 +10,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from build.lib.targets import TARGETS, default_target
 
-from build.runtime.bubblewrap import resolve_bubblewrap
-from build.runtime.cargo import build_binaries
-from build.runtime.layout import build_package_directory, load_protocol_metadata
-from build.runtime.node import resolve_node
-from build.runtime.ripgrep import resolve_ripgrep
-from build.runtime.tgrep import resolve_tgrep
-from build.runtime.version import read_workspace_version
+from build.ash_rs.bubblewrap import resolve_bubblewrap
+from build.ash_rs.cargo import build_binaries
+from build.ash_rs.layout import build_package_directory, load_protocol_metadata
+from build.ash_rs.livekit import resolve_livekit
+from build.ash_rs.node import resolve_node
+from build.ash_rs.ripgrep import resolve_ripgrep
+from build.ash_rs.tgrep import resolve_tgrep
+from build.ash_rs.version import read_workspace_version
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
@@ -210,12 +209,7 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         cargo=args.cargo,
         cargo_profile=args.cargo_profile,
     )
-    livekit = json.loads(
-        subprocess.check_output(
-            ["node", str(REPOSITORY_ROOT / "build/runtime/livekit.ts"), spec.target],
-            text=True,
-        ).splitlines()[-1]
-    )
+    livekit = {"executable": str(resolve_livekit(spec.target))}
     version = read_workspace_version(REPOSITORY_ROOT / "Cargo.toml")
     output = args.package_dir.expanduser().resolve()
     build_package_directory(

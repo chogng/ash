@@ -11,7 +11,7 @@ test('Desktop build stops at the failed host or renderer step before bundling', 
   for (const directory of ['build/app_ts', 'build/lib', 'build/node_modules/vite/bin', 'app-ts/node_modules/typescript/bin']) {
     await mkdir(join(root, directory), { recursive: true });
   }
-  for (const file of ['build/app_ts/build.ts', 'build/app_ts/host.ts', 'build/lib/paths.ts']) {
+  for (const file of ['build/app_ts/build.ts', 'build/app_ts/host.ts', 'build/app_ts/paths.ts']) {
     await copyFile(resolve(import.meta.dirname, '../..', file), join(root, file));
   }
   await writeFile(join(root, 'package.json'), '{"type":"module"}');

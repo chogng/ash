@@ -318,7 +318,5 @@ just test ash-plugin
 just test ash-core-plugins
 just test ash-app-server marketplace
 just check ash-app-server
-node --test build/runtime/prepare.test.ts
-node --test build/runtime/productServices.test.ts
 just test-python build
 ```

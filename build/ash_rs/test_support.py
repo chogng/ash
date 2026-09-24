@@ -6,11 +6,11 @@ import hashlib
 from pathlib import Path
 
 from build.lib.targets import target_spec
-from build.runtime.bubblewrap import BubblewrapResolution
-from build.runtime.executable import ExecutableResolution
-from build.runtime.layout import build_package_directory
-from build.runtime.node import NodeResolution
-from build.runtime.version import read_workspace_version
+from build.ash_rs.bubblewrap import BubblewrapResolution
+from build.ash_rs.executable import ExecutableResolution
+from build.ash_rs.layout import build_package_directory
+from build.ash_rs.node import NodeResolution
+from build.ash_rs.version import read_workspace_version
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]

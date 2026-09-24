@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { lstat, mkdir, readFile, realpath, symlink, unlink, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
-import { appTsBuildPath } from '../lib/paths.ts';
+import { appTsBuildPath } from './paths.ts';
 
 const repositoryRoot = resolve(import.meta.dirname, '../..');
 const sourceRoot = join(repositoryRoot, 'app-ts');

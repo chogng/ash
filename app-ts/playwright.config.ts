@@ -31,7 +31,7 @@ export default defineConfig({
 		? undefined
 		: browserServerMode === "disconnected"
 		? {
-				command: "pnpm run build:renderer && node ../scripts/web.ts ../.build/app-ts/renderer/ash 5173",
+				command: "pnpm run build:renderer && node ../scripts/app_ts/web.ts ../.build/app-ts/renderer/ash 5173",
 				url: "http://127.0.0.1:5173/",
 				reuseExistingServer: false,
 				timeout: 120_000,

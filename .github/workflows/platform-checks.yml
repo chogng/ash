@@ -141,14 +141,14 @@ jobs:
         env:
           ASH_UPDATE_PUBLIC_KEY: ${{ vars.ASH_UPDATE_PUBLIC_KEY }}
         run: |
-          version="$(${{ matrix.python }} -c 'from build.runtime.version import read_workspace_version; from pathlib import Path; print(read_workspace_version(Path("Cargo.toml")))')"
+          version="$(${{ matrix.python }} -c 'from build.ash_rs.version import read_workspace_version; from pathlib import Path; print(read_workspace_version(Path("Cargo.toml")))')"
           test "${GITHUB_REF_NAME}" = "v${version}"
           test "${#ASH_UPDATE_PUBLIC_KEY}" = 64
           ${{ matrix.python }} -B scripts/cargo.py build --package ash-cli --bin ash --profile release --target "${{ matrix.target }}"
           cli=".build/cargo/${{ matrix.target }}/release/ash${{ runner.os == 'Windows' && '.exe' || '' }}"
           runtime=".build/releases/runtime-${{ matrix.target }}"
           package=".build/releases/ash-code-${{ matrix.target }}"
-          ${{ matrix.python }} -B build/runtime/build.py \
+          ${{ matrix.python }} -B build/ash_rs/build.py \
             --target "${{ matrix.target }}" \
             --package-dir "$runtime"
           ${{ matrix.python }} -B build/code/package.py \
@@ -162,7 +162,7 @@ jobs:
         if: github.event_name == 'release' && matrix.release_package != false && matrix.checks != false
         shell: bash
         run: |
-          ${{ matrix.python }} -B build/runtime/search_smoke.py \
+          ${{ matrix.python }} -B build/ash_rs/search_smoke.py \
             --package-dir ".build/releases/ash-code-${{ matrix.target }}" \
             --report ".build/releases/search-smoke-${{ matrix.target }}.json"
 
@@ -227,7 +227,7 @@ jobs:
         env:
           ASH_MACOS_SIGNING_IDENTITY: ${{ vars.ASH_MACOS_SIGNING_IDENTITY }}
         run: |
-          ${{ matrix.python }} -B build/runtime/sign.py \
+          ${{ matrix.python }} -B build/ash_rs/sign.py \
             --package-dir ".build/releases/ash-code-${{ matrix.target }}" \
             --target "${{ matrix.target }}"
 
@@ -238,7 +238,7 @@ jobs:
           $signTool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1
           if (-not $signTool) { throw "signtool.exe is not installed" }
           $env:ASH_WINDOWS_SIGNTOOL = $signTool.FullName
-          ${{ matrix.python }} -B build/runtime/sign.py `
+          ${{ matrix.python }} -B build/ash_rs/sign.py `
             --package-dir ".build/releases/ash-code-${{ matrix.target }}" `
             --target "${{ matrix.target }}" `
             --verify-only
