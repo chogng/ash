@@ -369,6 +369,19 @@ function schemaForDefault(value: unknown): JsonSchema {
 
 // The schema owner also registers the model settings consumed by editor services.
 configurationRegistry.registerConfiguration({
+	key: 'diffEditor.ignoreTrimWhitespace',
+	defaultValue: diffEditorDefaultOptions.ignoreTrimWhitespace,
+	parse(value) {
+		if (typeof value !== 'boolean') throw new TypeError('diffEditor.ignoreTrimWhitespace must be a boolean');
+		return value;
+	},
+	setting: {
+		title: 'Ignore trim whitespace in diffs',
+		description: 'Ignore changes in leading or trailing whitespace when comparing files.',
+		valueType: 'boolean',
+	},
+});
+configurationRegistry.registerConfiguration({
 	key: 'editor.maxTokenizationLineLength',
 	defaultValue: 20_000,
 	parse(value) {

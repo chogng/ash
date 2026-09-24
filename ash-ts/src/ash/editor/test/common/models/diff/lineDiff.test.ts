@@ -1,8 +1,30 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
-import { computeLineDiff, LineDiffKind } from '../../../../common/diff/lineDiff.js';
+import { DefaultLinesDiffComputer } from '../../../../common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js';
+import { toLineDiff, LineDiffKind, type LineDiff } from '../../../../common/diff/lineDiff.js';
 
 suite('Frontend line diff', () => {
+	test('returns standard line and character mappings with whitespace options', () => {
+		const computer = new DefaultLinesDiffComputer();
+		const options = { ignoreTrimWhitespace: false, maxComputationTimeMs: 0, computeMoves: false };
+		const diff = computer.computeDiff(['same', 'old value', 'tail'], ['same', 'new value', 'tail'], options);
+		assert.deepEqual(diff.changes.map(change => ({
+			original: [change.original.startLineNumber, change.original.endLineNumberExclusive],
+			modified: [change.modified.startLineNumber, change.modified.endLineNumberExclusive],
+			inner: change.innerChanges?.map(inner => [
+				inner.originalRange.startLineNumber, inner.originalRange.startColumn, inner.originalRange.endColumn,
+				inner.modifiedRange.startLineNumber, inner.modifiedRange.startColumn, inner.modifiedRange.endColumn,
+			]),
+		})), [{ original: [2, 3], modified: [2, 3], inner: [[2, 1, 4, 2, 1, 4]] }]);
+		assert.equal(diff.hitTimeout, false);
+		assert.deepEqual(computer.computeDiff(['  same  '], ['same'], { ...options, ignoreTrimWhitespace: true }).changes, []);
+		const moved = computer.computeDiff(['move', 'stay one', 'stay two'], ['stay one', 'stay two', 'move'], { ...options, computeMoves: true });
+		assert.deepEqual(moved.moves.map(move => [
+			move.lineRangeMapping.original.startLineNumber,
+			move.lineRangeMapping.modified.startLineNumber,
+		]), [[1, 3]]);
+	});
+
 	test('aligns insertions, removals and replacements into complete hunks', async () => {
 		const diff = await compute('same\nold\nremoved\nlast', 'same\nnew\nlast\nadded');
 		assert.deepEqual(diff.rows.map(row => [row.kind, row.originalLineIndex, row.modifiedLineIndex]), [
@@ -70,14 +92,25 @@ suite('Frontend line diff', () => {
 		const original = Array.from({ length: 12_000 }, (_, index) => String(index)).join('\n');
 		const modified = original.split('\n').reverse().join('\n');
 		const controller = new AbortController();
-		const result = computeLineDiff(original, modified, controller.signal);
+		const result = new DefaultLinesDiffComputer().computeDiffAsync(original.split('\n'), modified.split('\n'), {
+			ignoreTrimWhitespace: false,
+			maxComputationTimeMs: 0,
+			computeMoves: false,
+		}, controller.signal);
 		controller.abort(new Error('superseded'));
 		await assert.rejects(result, /superseded/);
 	});
 });
 
-function compute(original: string, modified: string): ReturnType<typeof computeLineDiff> {
-	return computeLineDiff(original, modified, new AbortController().signal);
+async function compute(original: string, modified: string): Promise<LineDiff> {
+	const originalLines = original.split('\n');
+	const modifiedLines = modified.split('\n');
+	const result = await new DefaultLinesDiffComputer().computeDiffAsync(originalLines, modifiedLines, {
+		ignoreTrimWhitespace: false,
+		maxComputationTimeMs: 0,
+		computeMoves: false,
+	}, new AbortController().signal);
+	return toLineDiff(result, originalLines.length, modifiedLines.length);
 }
 
 function longestCommonSubsequence(original: readonly string[], modified: readonly string[]): number {

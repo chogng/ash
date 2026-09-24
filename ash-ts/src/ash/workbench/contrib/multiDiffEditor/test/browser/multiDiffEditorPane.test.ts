@@ -3,11 +3,15 @@ import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
+import { type CancellationToken } from '../../../../../base/common/cancellation.js';
+import { Event } from '../../../../../base/common/event.js';
 import { URI } from '../../../../../base/common/uri.js';
-import { type DiffComputationRequest, type IDiffComputationService } from '../../../../../editor/common/diff/diffComputationService.js';
-import { type LineDiff } from '../../../../../editor/common/diff/lineDiff.js';
+import { type IDocumentDiff, type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from '../../../../../editor/common/diff/documentDiffProvider.js';
+import { DefaultLinesDiffComputer } from '../../../../../editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js';
+import { type ITextModel } from '../../../../../editor/common/model.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { ContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
 import { EditorPaneVisibility } from '../../../../browser/parts/editor/editorPane.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
@@ -16,6 +20,7 @@ import type { EditorInput, IEditorService } from '../../../../services/editor/co
 import type { GitStatus, IGitService } from '../../../../services/git/common/gitService.js';
 import type { IChatService, TurnChangeSetSummary } from '../../../../services/chat/common/chatService.js';
 import type { ISessionsManagementService } from '../../../../../sessions/services/sessions/common/sessionsManagementService.js';
+import { CodeEditorConfiguration } from '../../../codeEditor/common/editorConfiguration.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 for (const [name, value] of Object.entries({
@@ -101,9 +106,12 @@ test('Stanza multi-diff pane resolves every comparison and releases the complete
 	} satisfies TurnChangeSetSummary;
 	Object.defineProperty(dom.window, 'confirm', { configurable: true, value: () => true });
 	using editorServices = new DisposableStore();
-	const pane = createCodeEditorServices(editorServices).createInstance(MultiDiffEditorPane, {
+	const services = createCodeEditorServices(editorServices);
+	const configuration = services.get(IConfigurationService);
+	const seenOptions: boolean[] = [];
+	const pane = services.createInstance(MultiDiffEditorPane, {
 		modelService: models,
-		createComputationService: () => new PaneTestDiffComputationService(),
+		createComputationService: () => new PaneTestDiffComputationService(options => seenOptions.push(options.ignoreTrimWhitespace)),
 		lineHeight: 24,
 		showLineNumbers: false,
 		chatService: {
@@ -145,6 +153,9 @@ test('Stanza multi-diff pane resolves every comparison and releases the complete
 	], 'Review changes', {
 		kind: 'turn', sessionId: 'session-1', threadId: 'thread-1', changeSetIds: ['change-1'], repositoryId: 'repo', targetBranch: 'main', scope: 'currentTurn',
 	}), new AbortController().signal);
+	assert.deepEqual(seenOptions, [true, true]);
+	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, false);
+	assert.deepEqual(seenOptions, [true, true, false, false]);
 
 	assert.equal(parent.querySelectorAll('.stanza-multi-diff-editor-pane').length, 1);
 	assert.equal(parent.querySelectorAll('.stanza-multi-diff-editor-section').length, 2);
@@ -204,10 +215,15 @@ class BootstrapTextFiles implements ITextFileService {
 	}
 }
 
-class PaneTestDiffComputationService implements IDiffComputationService {
-	async compute(_request: DiffComputationRequest, signal: AbortSignal): Promise<LineDiff> {
-		signal.throwIfAborted();
-		return Object.freeze({ rows: Object.freeze([]), hunks: Object.freeze([]) });
+class PaneTestDiffComputationService implements IDocumentDiffProvider {
+	readonly onDidChange = Event.None;
+	constructor(private readonly observe?: (options: IDocumentDiffProviderOptions) => void) {}
+
+	async computeDiff(original: ITextModel, modified: ITextModel, options: IDocumentDiffProviderOptions, token: CancellationToken): Promise<IDocumentDiff> {
+		assert.equal(token.isCancellationRequested, false);
+		this.observe?.(options);
+		const result = new DefaultLinesDiffComputer().computeDiff(original.getLinesContent(), modified.getLinesContent(), options);
+		return { identical: original.getValue() === modified.getValue(), quitEarly: result.hitTimeout, changes: result.changes, moves: result.moves };
 	}
 
 	dispose(): void {}

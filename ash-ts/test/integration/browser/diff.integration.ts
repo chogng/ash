@@ -1,23 +1,29 @@
 import { addDisposableListener } from '../../../src/ash/base/browser/dom.js';
+import { CancellationToken, CancellationTokenSource } from '../../../src/ash/base/common/cancellation.js';
 import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
+import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
 import { DiffEditorWidget } from '../../../src/ash/editor/browser/widget/diffEditor/diffEditorWidget.js';
 import { MultiDiffEditorWidget } from '../../../src/ash/editor/browser/widget/multiDiffEditor/multiDiffEditorWidget.js';
 import { DiffModel } from '../../../src/ash/editor/common/diff/diffModel.js';
+import { toLineDiff } from '../../../src/ash/editor/common/diff/lineDiff.js';
 import { TextModel } from '../../../src/ash/editor/common/model/textModel.js';
 import { DiffService } from '../../../src/ash/workbench/services/diff/browser/diffService.js';
 import { QuickDiffModelService } from '../../../src/ash/workbench/contrib/scm/browser/quickDiffModel.js';
+import { ScmConfiguration } from '../../../src/ash/workbench/contrib/scm/common/scmConfiguration.js';
 import { WorkbenchQuickDiffService } from '../../../src/ash/workbench/contrib/scm/browser/workbenchQuickDiffService.js';
+import { CodeEditorConfiguration } from '../../../src/ash/workbench/contrib/codeEditor/common/editorConfiguration.js';
 
 const resources = new DisposableStore();
+const diffOptions = { ignoreTrimWhitespace: false, maxComputationTimeMs: 0, computeMoves: false };
 const service = new DiffService();
 const computation = resources.add(service.createComputationService());
 const original = resources.add(new TextModel('same\nbefore 😀 after\nlast'));
 const modified = resources.add(new TextModel('same\nbefore 🤖 after\nlast'));
-const model = resources.add(new DiffModel({ original, modified, computationService: computation }));
+const model = resources.add(new DiffModel({ original, modified, diffProvider: computation, diffOptions }));
 const secondOriginal = resources.add(new TextModel('one\n'));
 const secondModified = resources.add(new TextModel('one'));
-const second = resources.add(new DiffModel({ original: secondOriginal, modified: secondModified, computationService: computation }));
+const second = resources.add(new DiffModel({ original: secondOriginal, modified: secondModified, diffProvider: computation, diffOptions }));
 const single = resources.add(new DiffEditorWidget({ container: document.getElementById('single')!, model }));
 resources.add(new MultiDiffEditorWidget({
 	container: document.getElementById('multi')!,
@@ -36,7 +42,8 @@ resources.add(baselines.addProvider({
 		return { providerId: 'test', providerLabel: 'Index', label: 'Index', originalResource: resource, revision: 1, text: original.getText() };
 	},
 }));
-const quickDiff = resources.add(new QuickDiffModelService(baselines, service));
+const configuration = resources.add(new InMemoryConfigurationService());
+const quickDiff = resources.add(new QuickDiffModelService(baselines, service, configuration));
 const reference = resources.add(quickDiff.createModelReference(URI.file('/workspace/first.ts'), modified));
 
 const harness = {
@@ -54,13 +61,23 @@ const harness = {
 	},
 	async cancelLargeComparison() {
 		const text = Array.from({ length: 20_000 }, (_, index) => String(index)).join('\n');
-		const controller = new AbortController();
-		const running = computation.compute({ original: { version: 1, text }, modified: { version: 1, text: text.split('\n').reverse().join('\n') } }, controller.signal);
+		using largeOriginal = new TextModel(text);
+		using largeModified = new TextModel(text.split('\n').reverse().join('\n'));
+		using cancellation = new CancellationTokenSource();
+		const running = computation.computeDiff(largeOriginal, largeModified, diffOptions, cancellation.token);
 		const outcome = running.then(() => 'completed', error => (error as Error).name);
 		await new Promise(resolve => setTimeout(resolve, 50));
-		controller.abort();
-		const next = await computation.compute({ original: { version: 2, text: 'old' }, modified: { version: 2, text: 'new' } }, new AbortController().signal);
-		return { outcome: await outcome, kinds: next.rows.map(row => row.kind) };
+		cancellation.cancel();
+		using nextOriginal = new TextModel('old');
+		using nextModified = new TextModel('new');
+		const next = await computation.computeDiff(nextOriginal, nextModified, diffOptions, CancellationToken.None);
+		return { outcome: await outcome, kinds: toLineDiff(next, 1, 1).rows.map(row => row.kind) };
+	},
+	async setQuickDiffWhitespace(setting: 'false' | 'inherit'): Promise<void> {
+		await configuration.updateValue(ScmConfiguration.diffDecorationsIgnoreTrimWhitespace, setting);
+	},
+	async setDiffWhitespace(ignore: boolean): Promise<void> {
+		await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, ignore);
 	},
 	dispose(): void {
 		resources.dispose();

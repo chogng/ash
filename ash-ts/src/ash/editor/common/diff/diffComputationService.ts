@@ -1,5 +1,4 @@
-import { type IDisposable } from "../../../base/common/lifecycle.js";
-import { type LineDiff } from "./lineDiff.js";
+import { type IDocumentDiffProviderOptions } from "./documentDiffProvider.js";
 
 /** One immutable text document supplied to a diff computation. */
 export interface DiffComputationDocument {
@@ -11,9 +10,5 @@ export interface DiffComputationDocument {
 export interface DiffComputationRequest {
 	readonly original: DiffComputationDocument;
 	readonly modified: DiffComputationDocument;
-}
-
-/** Computes a diff outside the widget while respecting caller cancellation. */
-export interface IDiffComputationService extends IDisposable {
-	compute(request: DiffComputationRequest, signal: AbortSignal): Promise<LineDiff>;
+	readonly options: IDocumentDiffProviderOptions;
 }

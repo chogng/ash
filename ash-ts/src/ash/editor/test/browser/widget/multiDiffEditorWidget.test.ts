@@ -2,8 +2,11 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { h } from '../../../../base/browser/dom.js';
-import { type DiffComputationRequest, type IDiffComputationService } from '../../../common/diff/diffComputationService.js';
-import { LineDiffKind, type LineDiff } from '../../../common/diff/lineDiff.js';
+import { type CancellationToken } from '../../../../base/common/cancellation.js';
+import { Event } from '../../../../base/common/event.js';
+import { type IDocumentDiff, type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from '../../../common/diff/documentDiffProvider.js';
+import { DefaultLinesDiffComputer } from '../../../common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js';
+import { type ITextModel } from '../../../common/model.js';
 import { TextModel } from '../../../common/model/textModel.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
@@ -21,6 +24,7 @@ for (const [name, value] of Object.entries({
 
 const { DiffModel } = await import('../../../common/diff/diffModel.js');
 const { MultiDiffEditorWidget } = await import('../../../browser/widget/multiDiffEditor/multiDiffEditorWidget.js');
+const diffOptions: IDocumentDiffProviderOptions = { ignoreTrimWhitespace: false, maxComputationTimeMs: 0, computeMoves: false };
 
 test('MultiDiffEditorWidget presents ordered file sections with one outer viewport', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
@@ -30,8 +34,8 @@ test('MultiDiffEditorWidget presents ordered file sections with one outer viewpo
 	using secondOriginal = new TextModel(lines('before', 100));
 	using secondModified = new TextModel(lines('after', 100));
 	using computationService = new MultiDiffTestComputationService();
-	using firstModel = new DiffModel({ original: firstOriginal, modified: firstModified, computationService });
-	using secondModel = new DiffModel({ original: secondOriginal, modified: secondModified, computationService });
+	using firstModel = new DiffModel({ original: firstOriginal, modified: firstModified, diffProvider: computationService, diffOptions });
+	using secondModel = new DiffModel({ original: secondOriginal, modified: secondModified, diffProvider: computationService, diffOptions });
 	await Promise.all([waitForReady(firstModel), waitForReady(secondModel)]);
 	let disposedItemActions = 0;
 	using editor = new MultiDiffEditorWidget({
@@ -95,18 +99,13 @@ test('MultiDiffEditorWidget presents ordered file sections with one outer viewpo
 	dom.window.close();
 });
 
-class MultiDiffTestComputationService implements IDiffComputationService {
-	async compute(request: DiffComputationRequest, signal: AbortSignal): Promise<LineDiff> {
-		signal.throwIfAborted();
-		const originalLines = request.original.text.split('\n');
-		const modifiedLines = request.modified.text.split('\n');
-		const rows = Array.from({ length: Math.max(originalLines.length, modifiedLines.length) }, (_, index) => {
-			const original = originalLines[index];
-			const modified = modifiedLines[index];
-			if (original === modified) return Object.freeze({ kind: LineDiffKind.Unchanged, originalLineIndex: index, modifiedLineIndex: index, originalChanges: Object.freeze([]), modifiedChanges: Object.freeze([]) });
-			return Object.freeze({ kind: LineDiffKind.Modified, originalLineIndex: index, modifiedLineIndex: index, originalChanges: Object.freeze([]), modifiedChanges: Object.freeze([]) });
-		});
-		return Object.freeze({ rows: Object.freeze(rows), hunks: Object.freeze([]) });
+class MultiDiffTestComputationService implements IDocumentDiffProvider {
+	readonly onDidChange = Event.None;
+
+	async computeDiff(original: ITextModel, modified: ITextModel, options: IDocumentDiffProviderOptions, token: CancellationToken): Promise<IDocumentDiff> {
+		assert.equal(token.isCancellationRequested, false);
+		const result = new DefaultLinesDiffComputer().computeDiff(original.getLinesContent(), modified.getLinesContent(), options);
+		return { identical: original.getValue() === modified.getValue(), quitEarly: result.hitTimeout, changes: result.changes, moves: result.moves };
 	}
 
 	dispose(): void {}

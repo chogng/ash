@@ -1,12 +1,15 @@
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, MutableDisposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type URI } from '../../../../base/common/uri.js';
-import { type IDiffComputationService } from '../../../../editor/common/diff/diffComputationService.js';
+import { type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from '../../../../editor/common/diff/documentDiffProvider.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { DiffModel } from '../../../../editor/common/diff/diffModel.js';
 import { LineDiffKind, type LineDiff, type LineDiffHunk, type LineDiffRow } from '../../../../editor/common/diff/lineDiff.js';
 import { TextModel } from '../../../../editor/common/model/textModel.js';
 import { type IQuickDiffModel, type IQuickDiffModelService, type IQuickDiffService, type QuickDiffChange, type QuickDiffComparison, type QuickDiffModelReference, type QuickDiffModelState } from '../common/quickDiff.js';
 import { type IDiffService } from '../../../services/diff/common/diffService.js';
+import { CodeEditorConfiguration } from '../../codeEditor/common/editorConfiguration.js';
+import { ScmConfiguration, type ScmDiffDecorationsIgnoreTrimWhitespace } from '../common/scmConfiguration.js';
 
 interface SharedModelEntry {
 	readonly resource: URI;
@@ -20,7 +23,7 @@ export class QuickDiffModelService extends Disposable implements IQuickDiffModel
 	private readonly entries = new WeakMap<TextModel, SharedModelEntry>();
 	private readonly liveEntries = new Set<SharedModelEntry>();
 
-	constructor(private readonly quickDiffService: IQuickDiffService, private readonly diffService: IDiffService) {
+	constructor(private readonly quickDiffService: IQuickDiffService, private readonly diffService: IDiffService, @IConfigurationService private readonly configuration: IConfigurationService) {
 		super();
 		this._register(toDisposable(() => {
 			for (const entry of this.liveEntries) entry.quickDiffModel.dispose();
@@ -35,7 +38,7 @@ export class QuickDiffModelService extends Disposable implements IQuickDiffModel
 			throw new Error('A text model cannot be shared by different Quick Diff resources');
 		}
 		if (!entry) {
-			entry = { resource, model, quickDiffModel: new QuickDiffModel(resource, model, this.diffService, this.quickDiffService), references: 0 };
+			entry = { resource, model, quickDiffModel: new QuickDiffModel(resource, model, this.diffService, this.quickDiffService, this.configuration), references: 0 };
 			this.entries.set(model, entry);
 			this.liveEntries.add(entry);
 		}
@@ -61,7 +64,7 @@ export class QuickDiffModelService extends Disposable implements IQuickDiffModel
 /** Shared resource model that owns provider originals and live DiffModels. */
 export class QuickDiffModel extends Disposable implements IQuickDiffModel {
 	private readonly changeEmitter = this._register(new Emitter<QuickDiffModelState>());
-	private readonly computationService: IDiffComputationService;
+	private readonly diffProvider: IDocumentDiffProvider;
 	private readonly comparisonStore = this._register(new MutableDisposable<DisposableStore>());
 	private activeRequest: AbortController | undefined;
 	private requestGeneration = 0;
@@ -69,9 +72,15 @@ export class QuickDiffModel extends Disposable implements IQuickDiffModel {
 
 	readonly onDidChange = this.changeEmitter.event;
 
-	constructor(private readonly resource: URI, private readonly modified: TextModel, diffService: IDiffService, private readonly quickDiffService: IQuickDiffService) {
+	constructor(private readonly resource: URI, private readonly modified: TextModel, diffService: IDiffService, private readonly quickDiffService: IQuickDiffService, private readonly configuration: IConfigurationService) {
 		super();
-		this.computationService = this._register(diffService.createComputationService());
+		this.diffProvider = this._register(diffService.createComputationService());
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if (!event.affectsConfiguration(ScmConfiguration.diffDecorationsIgnoreTrimWhitespace)
+				&& !event.affectsConfiguration(CodeEditorConfiguration.diffIgnoreTrimWhitespace)) return;
+			const options = this.diffOptions();
+			for (const comparison of this._state.comparisons) comparison.model.updateOptions(options);
+		}));
 		this._register(quickDiffService.onDidChange(changedResource => {
 			if (!changedResource || changedResource.toString() === resource.toString()) void this.refresh();
 		}));
@@ -101,7 +110,7 @@ export class QuickDiffModel extends Disposable implements IQuickDiffModel {
 			try {
 				for (const original of originals) {
 					const originalModel = store.add(new TextModel(original.text));
-					const diffModel = store.add(new DiffModel({ original: originalModel, modified: this.modified, computationService: this.computationService }));
+					const diffModel = store.add(new DiffModel({ original: originalModel, modified: this.modified, diffProvider: this.diffProvider, diffOptions: this.diffOptions() }));
 					const comparison = Object.freeze({ original, model: diffModel });
 					comparisons.push(comparison);
 					store.add(diffModel.onDidChange(() => this.rebuildChanges()));
@@ -133,6 +142,17 @@ export class QuickDiffModel extends Disposable implements IQuickDiffModel {
 			}
 			return false;
 		});
+	}
+
+	private diffOptions(): IDocumentDiffProviderOptions {
+		const setting = this.configuration.getValue<ScmDiffDecorationsIgnoreTrimWhitespace>(ScmConfiguration.diffDecorationsIgnoreTrimWhitespace);
+		return {
+			ignoreTrimWhitespace: setting === 'inherit'
+				? this.configuration.getValue<boolean>(CodeEditorConfiguration.diffIgnoreTrimWhitespace)
+				: setting === 'true',
+			maxComputationTimeMs: 0,
+			computeMoves: false,
+		};
 	}
 
 	findNextChange(lineIndex: number, inclusive = false): QuickDiffChange | undefined {

@@ -1,78 +1,135 @@
 import { type WebWorkerRequestHandler } from '../../../base/common/worker/webWorker.js';
+import { LineRange } from '../core/ranges/lineRange.js';
+import { Range } from '../core/range.js';
 import { type DiffComputationRequest } from './diffComputationService.js';
-import { computeLineDiff, LineDiffKind, type LineDiff } from './lineDiff.js';
+import { DefaultLinesDiffComputer } from './defaultLinesDiffComputer/defaultLinesDiffComputer.js';
+import { LinesDiff, MovedText } from './linesDiffComputer.js';
+import { DetailedLineRangeMapping, LineRangeMapping, RangeMapping } from './rangeMapping.js';
 
 export const diffWorkerChannel = { protocol: 'ash.editor.diff', version: 1 };
-const rowKinds = new Set(Object.values(LineDiffKind));
 
 /** Each request owns its input snapshots; the Worker retains no document state. */
 export const diffWorkerHandler: WebWorkerRequestHandler = {
 	async handleRequest(message, signal) {
 		const request = message.request;
-		if (!isRecord(request) || !isDocument(request.original) || !isDocument(request.modified)) {
+		if (!isRecord(request) || !isDocument(request.original) || !isDocument(request.modified) || !isOptions(request.options)) {
 			throw new TypeError('Invalid editor diff request');
 		}
-		return computeLineDiff(request.original.text, request.modified.text, signal);
+		return new DefaultLinesDiffComputer().computeDiffAsync(
+			request.original.text.split('\n'),
+			request.modified.text.split('\n'),
+			request.options,
+			signal,
+		);
 	},
 	handleNotification() {
 		throw new TypeError('Editor diff does not accept notifications');
 	},
 };
 
-export function readDiffResult(value: unknown, request: DiffComputationRequest): LineDiff {
-	if (!isRecord(value) || !Array.isArray(value.rows) || !Array.isArray(value.hunks)) {
+/** Validates Worker coordinates and restores the standard diff value classes. */
+export function readDiffResult(value: unknown, request: DiffComputationRequest): LinesDiff {
+	if (!isRecord(value) || !Array.isArray(value.changes) || !Array.isArray(value.moves) || typeof value.hitTimeout !== 'boolean') {
 		throw new TypeError('Invalid editor diff result');
 	}
 	const original = request.original.text.split('\n');
 	const modified = request.modified.text.split('\n');
-	let originalIndex = 0;
-	let modifiedIndex = 0;
-	for (const row of value.rows as unknown[]) {
-		if (!isRecord(row) || !rowKinds.has(row.kind as LineDiffKind)) {
-			throw new TypeError('Invalid editor diff row');
+	let originalEnd = 1;
+	let modifiedEnd = 1;
+	const changes = value.changes.map((item): DetailedLineRangeMapping => {
+		if (!isRecord(item)) throw new TypeError('Invalid editor diff change');
+		const left = readLineRange(item.original, original.length);
+		const right = readLineRange(item.modified, modified.length);
+		if (left.startLineNumber < originalEnd || right.startLineNumber < modifiedEnd
+			|| left.startLineNumber - originalEnd !== right.startLineNumber - modifiedEnd
+			|| left.isEmpty && right.isEmpty) {
+			throw new RangeError('Invalid editor diff change order');
 		}
-		const hasOriginal = row.kind !== LineDiffKind.Added;
-		const hasModified = row.kind !== LineDiffKind.Removed;
-		if (row.originalLineIndex !== (hasOriginal ? originalIndex : undefined) || row.modifiedLineIndex !== (hasModified ? modifiedIndex : undefined)) {
-			throw new RangeError('Editor diff rows do not cover the requested lines');
+		originalEnd = left.endLineNumberExclusive;
+		modifiedEnd = right.endLineNumberExclusive;
+		const innerChanges = item.innerChanges === undefined ? undefined : readRangeMappings(item.innerChanges, original, modified, left, right);
+		return new DetailedLineRangeMapping(left, right, innerChanges);
+	});
+	if (original.length + 1 - originalEnd !== modified.length + 1 - modifiedEnd) {
+		throw new RangeError('Editor diff changes do not cover the requested lines');
+	}
+	const moves = value.moves.map((item): MovedText => {
+		if (!isRecord(item) || !isRecord(item.lineRangeMapping) || !Array.isArray(item.changes)) {
+			throw new TypeError('Invalid editor diff move');
 		}
-		readRanges(row.originalChanges, hasOriginal ? original[originalIndex] : '');
-		readRanges(row.modifiedChanges, hasModified ? modified[modifiedIndex] : '');
-		originalIndex += Number(hasOriginal);
-		modifiedIndex += Number(hasModified);
-	}
-	if (originalIndex !== original.length || modifiedIndex !== modified.length) {
-		throw new RangeError('Editor diff line counts do not match the request');
-	}
-	let rowEnd = 0;
-	for (const hunk of value.hunks as unknown[]) {
-		if (!isRecord(hunk) || !isIndex(hunk.rowStart) || !isIndex(hunk.rowEnd) || hunk.rowStart < rowEnd || hunk.rowEnd <= hunk.rowStart || hunk.rowEnd > value.rows.length || !isSpan(hunk.originalStartLineIndex, hunk.originalLineCount, original.length) || !isSpan(hunk.modifiedStartLineIndex, hunk.modifiedLineCount, modified.length)) {
-			throw new RangeError('Invalid editor diff hunk');
-		}
-		rowEnd = hunk.rowEnd;
-	}
-	return value as unknown as LineDiff;
+		const left = readLineRange(item.lineRangeMapping.original, original.length);
+		const right = readLineRange(item.lineRangeMapping.modified, modified.length);
+		const moveChanges = item.changes.map((change): DetailedLineRangeMapping => {
+			if (!isRecord(change)) throw new TypeError('Invalid editor diff move change');
+			const changeLeft = readLineRange(change.original, original.length);
+			const changeRight = readLineRange(change.modified, modified.length);
+			if (!left.containsRange(changeLeft) || !right.containsRange(changeRight)) {
+				throw new RangeError('Invalid editor diff move change range');
+			}
+			return new DetailedLineRangeMapping(changeLeft, changeRight,
+				change.innerChanges === undefined ? undefined : readRangeMappings(change.innerChanges, original, modified, changeLeft, changeRight));
+		});
+		return new MovedText(new LineRangeMapping(left, right), moveChanges);
+	});
+	return new LinesDiff(changes, moves, value.hitTimeout);
 }
 
-function readRanges(value: unknown, text: string | undefined): void {
-	if (!Array.isArray(value) || text === undefined) {
-		throw new TypeError('Invalid editor diff ranges');
+function readLineRange(value: unknown, lineCount: number): LineRange {
+	if (!isRecord(value) || !isIndex(value.startLineNumber) || !isIndex(value.endLineNumberExclusive)
+		|| value.startLineNumber < 1 || value.startLineNumber > value.endLineNumberExclusive
+		|| value.endLineNumberExclusive > lineCount + 1) {
+		throw new RangeError('Invalid editor diff line range');
 	}
-	let end = 0;
-	for (const range of value as unknown[]) {
-		if (!isRecord(range) || !isIndex(range.startColumn) || !isIndex(range.endColumn) || range.startColumn < end || range.endColumn < range.startColumn || range.endColumn > text.length) {
-			throw new RangeError('Invalid editor diff columns');
-		}
-		end = range.endColumn;
-	}
+	return new LineRange(value.startLineNumber, value.endLineNumberExclusive);
 }
 
-function isSpan(start: unknown, count: unknown, length: number): boolean {
-	return isIndex(start) && isIndex(count) && start + count <= length;
+function readRangeMappings(value: unknown, original: readonly string[], modified: readonly string[], left: LineRange, right: LineRange): RangeMapping[] {
+	if (!Array.isArray(value)) throw new TypeError('Invalid editor diff inner changes');
+	let previousOriginal: Range | undefined;
+	let previousModified: Range | undefined;
+	return value.map((item): RangeMapping => {
+		if (!isRecord(item)) throw new TypeError('Invalid editor diff inner change');
+		const originalRange = readRange(item.originalRange, original, left);
+		const modifiedRange = readRange(item.modifiedRange, modified, right);
+		if ((previousOriginal && startsBeforeEnd(originalRange, previousOriginal))
+			|| (previousModified && startsBeforeEnd(modifiedRange, previousModified))) {
+			throw new RangeError('Invalid editor diff inner change order');
+		}
+		previousOriginal = originalRange;
+		previousModified = modifiedRange;
+		return new RangeMapping(originalRange, modifiedRange);
+	});
+}
+
+function startsBeforeEnd(next: Range, previous: Range): boolean {
+	return next.startLineNumber < previous.endLineNumber
+		|| (next.startLineNumber === previous.endLineNumber && next.startColumn < previous.endColumn);
+}
+
+function readRange(value: unknown, lines: readonly string[], parent: LineRange): Range {
+	if (!isRecord(value) || !isIndex(value.startLineNumber) || !isIndex(value.endLineNumber)
+		|| !isIndex(value.startColumn) || !isIndex(value.endColumn)
+		|| value.startLineNumber !== value.endLineNumber
+		|| !parent.contains(value.startLineNumber)
+		|| value.startColumn < 1 || value.startColumn > value.endColumn
+		|| value.endColumn > lines[value.startLineNumber - 1]!.length + 1) {
+		throw new RangeError('Invalid editor diff text range');
+	}
+	return new Range(value.startLineNumber, value.startColumn, value.endLineNumber, value.endColumn);
 }
 
 function isDocument(value: unknown): value is { version: number; text: string } {
 	return isRecord(value) && isIndex(value.version) && typeof value.text === 'string';
+}
+
+function isOptions(value: unknown): value is DiffComputationRequest['options'] {
+	return isRecord(value)
+		&& typeof value.ignoreTrimWhitespace === 'boolean'
+		&& typeof value.computeMoves === 'boolean'
+		&& typeof value.maxComputationTimeMs === 'number'
+		&& Number.isFinite(value.maxComputationTimeMs)
+		&& value.maxComputationTimeMs >= 0
+		&& (value.extendToSubwords === undefined || typeof value.extendToSubwords === 'boolean');
 }
 
 function isIndex(value: unknown): value is number {

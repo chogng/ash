@@ -37,8 +37,21 @@ test('unsaved input updates Diff and Quick Diff locally using the existing basel
 	await expect(page.locator('#multi .stanza-diff-editor-row.modified')).toHaveCount(0);
 });
 
+test('Quick Diff inherits whitespace settings without reading the baseline again', async ({ page }) => {
+	await page.goto('/diff.html');
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().quickDiffReady)).toBe(true);
+	const baselineRequests = await page.evaluate(() => window.ashDiffIntegration.read().baselineRequests);
+	await page.getByRole('textbox', { name: 'Modified text' }).fill('same\nbefore 😀 after\nlast ');
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().quickDiffChanges)).toBe(1);
+	await page.evaluate(() => window.ashDiffIntegration.setQuickDiffWhitespace('inherit'));
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().quickDiffChanges)).toBe(0);
+	await page.evaluate(() => window.ashDiffIntegration.setDiffWhitespace(false));
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().quickDiffChanges)).toBe(1);
+	expect(await page.evaluate(() => window.ashDiffIntegration.read().baselineRequests)).toBe(baselineRequests);
+});
+
 test('cancels expensive Worker computation and completes the next comparison', async ({ page }) => {
 	await page.goto('/diff.html');
 	await expect(page.locator('#single .stanza-diff-editor-row.modified')).toHaveCount(1);
-	expect(await page.evaluate(() => window.ashDiffIntegration.cancelLargeComparison())).toEqual({ outcome: 'AbortError', kinds: ['modified'] });
+	expect(await page.evaluate(() => window.ashDiffIntegration.cancelLargeComparison())).toEqual({ outcome: 'CancellationError', kinds: ['modified'] });
 });

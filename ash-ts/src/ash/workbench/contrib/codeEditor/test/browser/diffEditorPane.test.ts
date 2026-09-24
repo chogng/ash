@@ -2,9 +2,15 @@ import { StandaloneCodeEditorService } from '../../../../../editor/standalone/br
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
+import { type CancellationToken } from '../../../../../base/common/cancellation.js';
+import { Event } from '../../../../../base/common/event.js';
+import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { URI } from "../../../../../base/common/uri.js";
-import { type DiffComputationRequest, type IDiffComputationService } from "../../../../../editor/common/diff/diffComputationService.js";
-import { type LineDiff } from "../../../../../editor/common/diff/lineDiff.js";
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { CodeEditorConfiguration } from '../../common/editorConfiguration.js';
+import { type IDocumentDiff, type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from "../../../../../editor/common/diff/documentDiffProvider.js";
+import { DefaultLinesDiffComputer } from "../../../../../editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js";
+import { type ITextModel } from '../../../../../editor/common/model.js';
 import { EditorPaneVisibility } from "../../../../browser/parts/editor/editorPane.js";
 import { TextFileContentSource, type ITextFileService, type ResolvedTextFileContent, type TextFileResolveRequest } from "../../../../services/textfile/common/textFileService.js";
 
@@ -21,12 +27,14 @@ for (const [name, value] of Object.entries({
 }
 
 const { DiffEditorPane } = await import("../../browser/diffEditorPane.js");
+const { createCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
 const { BrowserTextModelService } = await import("../../../../services/textmodelResolver/browser/browserTextModelService.js");
 const { BrowserTextResourceStore } = await import("../../browser/browserTextResourceStore.js");
 const { createDiffEditorInput } = await import("../../browser/diffEditorInput.js");
 
 test("Stanza diff pane rejects a missing Workbench diff computation service", () => {
-	assert.throws(() => new DiffEditorPane(new BrowserTextResourceStore(new BootstrapTextFiles()), undefined as never), /requires a Workbench diff computation service/);
+	using services = new DisposableStore();
+	assert.throws(() => createCodeEditorServices(services).createInstance(DiffEditorPane, new BrowserTextResourceStore(new BootstrapTextFiles()), undefined as never), /requires a Workbench diff computation service/);
 });
 
 test("Stanza diff pane acquires both models, lays out the review view, and releases both references", async () => {
@@ -36,7 +44,8 @@ test("Stanza diff pane acquires both models, lays out the review view, and relea
 	const resourceStore = new BrowserTextResourceStore(textFiles);
 	using models = new BrowserTextModelService(resourceStore);
 	using codeEditorService = new StandaloneCodeEditorService();
-	const pane = new DiffEditorPane(resourceStore, {
+	using services = new DisposableStore();
+	const pane = createCodeEditorServices(services).createInstance(DiffEditorPane, resourceStore, {
 		modelService: models,
 		createComputationService: () => new PaneTestDiffComputationService(),
 		codeEditorService,
@@ -79,6 +88,35 @@ test("Stanza diff pane acquires both models, lays out the review view, and relea
 	dom.window.close();
 });
 
+test('Diff pane recomputes an open comparison when ignore-trim-whitespace changes', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
+	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
+	using models = new BrowserTextModelService(resourceStore);
+	using codeEditorService = new StandaloneCodeEditorService();
+	using services = new DisposableStore();
+	const container = createCodeEditorServices(services);
+	const configuration = container.get(IConfigurationService);
+	const pane = container.createInstance(DiffEditorPane, resourceStore, {
+		modelService: models,
+		createComputationService: () => new PaneTestDiffComputationService(),
+		codeEditorService,
+		breadcrumbs: false,
+	});
+	pane.create(parent);
+	await pane.setInput(createDiffEditorInput(
+		{ resource: URI.file('/before.ts'), initialText: 'word', label: 'before.ts' },
+		{ resource: URI.file('/after.ts'), initialText: 'word ', label: 'after.ts' },
+	), new AbortController().signal);
+	await Promise.resolve();
+	assert.ok(parent.querySelector('.stanza-diff-editor-row.unchanged'));
+	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, false);
+	await Promise.resolve();
+	assert.ok(parent.querySelector('.stanza-diff-editor-row.modified'));
+	pane.dispose();
+	dom.window.close();
+});
+
 class BootstrapTextFiles implements ITextFileService {
 	readonly onDidChangeFiles = () => ({ dispose() {}, [Symbol.dispose]() {} });
 
@@ -97,10 +135,13 @@ class BootstrapTextFiles implements ITextFileService {
 	}
 }
 
-class PaneTestDiffComputationService implements IDiffComputationService {
-	async compute(_request: DiffComputationRequest, signal: AbortSignal): Promise<LineDiff> {
-		signal.throwIfAborted();
-		return Object.freeze({ rows: Object.freeze([]), hunks: Object.freeze([]) });
+class PaneTestDiffComputationService implements IDocumentDiffProvider {
+	readonly onDidChange = Event.None;
+
+	async computeDiff(original: ITextModel, modified: ITextModel, options: IDocumentDiffProviderOptions, token: CancellationToken): Promise<IDocumentDiff> {
+		assert.equal(token.isCancellationRequested, false);
+		const result = new DefaultLinesDiffComputer().computeDiff(original.getLinesContent(), modified.getLinesContent(), options);
+		return { identical: original.getValue() === modified.getValue(), quitEarly: result.hitTimeout, changes: result.changes, moves: result.moves };
 	}
 
 	dispose(): void {}

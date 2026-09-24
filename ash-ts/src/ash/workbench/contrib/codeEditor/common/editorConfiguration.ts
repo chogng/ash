@@ -3,6 +3,8 @@ import { Registry } from "../../../../platform/registry/common/platform.js";
 import { EditorIndentationKind } from "../../../../editor/common/core/misc/indentation.js";
 import { EditorLineWrapping } from "../../../../editor/common/config/editorOptions.js";
 import '../../../../editor/common/config/editorConfigurationSchema.js';
+import type { IDocumentDiffProviderOptions } from '../../../../editor/common/diff/documentDiffProvider.js';
+import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 
 export type WrappingIndentSetting = "none" | "same" | "indent" | "deepIndent";
 export type MatchBracketsSetting = "never" | "near" | "always";
@@ -358,6 +360,7 @@ export const CodeEditorConfiguration = Object.freeze({
 			{ value: "never", label: "Never" },
 		]),
 	}),
+	diffIgnoreTrimWhitespace: 'diffEditor.ignoreTrimWhitespace',
 	diffShowLineNumbers: configurationRegistry.registerConfiguration<boolean>({
 		key: "diffEditor.showLineNumbers",
 		defaultValue: true,
@@ -389,6 +392,14 @@ export const CodeEditorConfiguration = Object.freeze({
 		setting: booleanSetting("Insert final newline", "Ensure non-empty files end with a line feed when saved."),
 	}),
 });
+
+export function getDiffComputationOptions(configuration: IConfigurationService): IDocumentDiffProviderOptions {
+	return {
+		ignoreTrimWhitespace: configuration.getValue<boolean>(CodeEditorConfiguration.diffIgnoreTrimWhitespace),
+		maxComputationTimeMs: 0,
+		computeMoves: false,
+	};
+}
 
 function booleanSetting(title: string, description: string) {
 	return { valueType: "boolean", title, description } as const;

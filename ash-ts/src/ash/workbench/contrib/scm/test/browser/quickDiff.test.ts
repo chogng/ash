@@ -18,6 +18,7 @@ import { QuickDiffDecorator } from '../../browser/quickDiffDecorator.js';
 import { QuickDiffModelService } from '../../browser/quickDiffModel.js';
 import { WorkbenchQuickDiffService } from '../../browser/workbenchQuickDiffService.js';
 import { ScmConfiguration } from '../../common/scmConfiguration.js';
+import { CodeEditorConfiguration } from '../../../codeEditor/common/editorConfiguration.js';
 
 test('Git Quick Diff supplies the index for a live worktree change', async () => {
 	const fixture = gitFixture();
@@ -36,13 +37,13 @@ test('Quick Diff shares one resource model and projects configurable editor targ
 	using provider = new GitQuickDiffProvider(fixture.gitService);
 	using quickDiffService = new WorkbenchQuickDiffService();
 	using providerRegistration = quickDiffService.addProvider(provider);
-	using modelService = new QuickDiffModelService(quickDiffService, new DiffService(() => new DiffTestPort()));
+	using configuration = new InMemoryConfigurationService();
+	using modelService = new QuickDiffModelService(quickDiffService, new DiffService(() => new DiffTestPort()), configuration);
 	using model = new TextModel('same\nnew\nlast', { resource: URI.file('/workspace/src/file.ts') });
 	const firstReference = modelService.createModelReference(URI.file('/workspace/src/file.ts'), model);
 	const secondReference = modelService.createModelReference(URI.file('/workspace/src/file.ts'), model);
 	assert.equal(firstReference.object, secondReference.object);
 	firstReference.dispose();
-	using configuration = new InMemoryConfigurationService();
 	await configuration.updateValue(ScmConfiguration.diffDecorations, 'all');
 
 	using source = new QuickDiffDecorator(model, secondReference, configuration);
@@ -65,6 +66,28 @@ test('Quick Diff shares one resource model and projects configurable editor targ
 	fixture.dispose();
 });
 
+test('Quick Diff whitespace option inherits Diff settings without refetching the baseline', async () => {
+	using quickDiffService = new WorkbenchQuickDiffService();
+	let baselineRequests = 0;
+	using providerRegistration = quickDiffService.addProvider({
+		id: 'test', label: 'Index',
+		async provideOriginalResource(resource) {
+			baselineRequests++;
+			return { providerId: 'test', providerLabel: 'Index', label: 'Index', originalResource: resource, revision: 1, text: 'word' };
+		},
+	});
+	using configuration = new InMemoryConfigurationService();
+	using modelService = new QuickDiffModelService(quickDiffService, new DiffService(() => new DiffTestPort()), configuration);
+	using model = new TextModel('word ', { resource: URI.file('/workspace/whitespace.ts') });
+	using reference = modelService.createModelReference(URI.file('/workspace/whitespace.ts'), model);
+	await waitFor(() => reference.object.state.changes.length === 1);
+	await configuration.updateValue(ScmConfiguration.diffDecorationsIgnoreTrimWhitespace, 'inherit');
+	await waitFor(() => reference.object.state.comparisons[0]?.model.state.kind === 'ready' && reference.object.state.changes.length === 0);
+	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, false);
+	await waitFor(() => reference.object.state.changes.length === 1);
+	assert.equal(baselineRequests, 1);
+});
+
 test('Registered Quick Diff creates after first render and releases decorations on model detach', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
@@ -82,9 +105,9 @@ const { createTestCodeEditor } = await import('../../../../../editor/test/browse
 		using provider = new GitQuickDiffProvider(fixture.gitService);
 		using quickDiffService = new WorkbenchQuickDiffService();
 		using providerRegistration = quickDiffService.addProvider(provider);
-		using modelService = new QuickDiffModelService(quickDiffService, new DiffService(() => new DiffTestPort()));
-		using controllers = new QuickDiffEditorControllerService();
 		using configuration = new InMemoryConfigurationService();
+		using modelService = new QuickDiffModelService(quickDiffService, new DiffService(() => new DiffTestPort()), configuration);
+		using controllers = new QuickDiffEditorControllerService();
 		await configuration.updateValue(ScmConfiguration.diffDecorations, 'all');
 		using services = new ServiceContainer();
 		using codeEditors = new class extends AbstractCodeEditorService { getActiveCodeEditor() { return this.getFocusedCodeEditor(); } }();

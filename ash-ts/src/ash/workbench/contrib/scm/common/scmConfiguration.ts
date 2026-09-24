@@ -4,6 +4,7 @@ import { Registry } from '../../../../platform/registry/common/platform.js';
 export type ScmWorkingSetDefault = 'current' | 'empty';
 export type ScmDiffDecorations = 'all' | 'gutter' | 'overview' | 'minimap' | 'none';
 export type ScmDiffDecorationsGutterAction = 'diff' | 'none';
+export type ScmDiffDecorationsIgnoreTrimWhitespace = 'true' | 'false' | 'inherit';
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 
@@ -32,6 +33,24 @@ export const ScmConfiguration = Object.freeze({
 				throw new TypeError('scm.diffDecorations must be all, gutter, overview, minimap, or none');
 			}
 			return value;
+		},
+	}),
+	diffDecorationsIgnoreTrimWhitespace: configurationRegistry.registerConfiguration<ScmDiffDecorationsIgnoreTrimWhitespace>({
+		key: 'scm.diffDecorationsIgnoreTrimWhitespace',
+		defaultValue: 'false',
+		parse(value: unknown): ScmDiffDecorationsIgnoreTrimWhitespace {
+			if (value === 'true' || value === 'false' || value === 'inherit') return value;
+			throw new TypeError('scm.diffDecorationsIgnoreTrimWhitespace must be true, false, or inherit');
+		},
+		setting: {
+			title: 'Quick Diff whitespace',
+			description: 'Choose whether Source Control diff decorations ignore leading and trailing whitespace.',
+			valueType: 'select',
+			options: [
+				{ value: 'true', label: 'Ignore whitespace' },
+				{ value: 'false', label: 'Show whitespace changes' },
+				{ value: 'inherit', label: 'Inherit Diff editor setting' },
+			],
 		},
 	}),
 	diffDecorationsGutterAction: configurationRegistry.registerConfiguration<ScmDiffDecorationsGutterAction>({

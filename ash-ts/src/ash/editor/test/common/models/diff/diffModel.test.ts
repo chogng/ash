@@ -1,17 +1,24 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { type DiffComputationRequest, type IDiffComputationService } from "../../../../common/diff/diffComputationService.js";
+import { type CancellationToken } from "../../../../../base/common/cancellation.js";
+import { Emitter, Event } from "../../../../../base/common/event.js";
+import { type IDocumentDiff, type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from "../../../../common/diff/documentDiffProvider.js";
 import { DiffModel } from "../../../../common/diff/diffModel.js";
-import { LineDiffKind, type LineDiff } from "../../../../common/diff/lineDiff.js";
+import { DefaultLinesDiffComputer } from "../../../../common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js";
+import { DetailedLineRangeMapping } from "../../../../common/diff/rangeMapping.js";
+import { LineRange } from "../../../../common/core/ranges/lineRange.js";
 import { Position } from "../../../../common/core/position.js";
 import { Range } from "../../../../common/core/range.js";
+import { type ITextModel } from "../../../../common/model.js";
 import { TextModel } from "../../../../common/model/textModel.js";
+
+const diffOptions: IDocumentDiffProviderOptions = { ignoreTrimWhitespace: false, maxComputationTimeMs: 0, computeMoves: false };
 
 test("DiffModel publishes only version-pinned computation results", async () => {
 	using original = new TextModel("before");
 	using modified = new TextModel("after");
 	using computationService = new ControlledDiffComputationService();
-	using model = new DiffModel({ original, modified, computationService });
+	using model = new DiffModel({ original, modified, diffProvider: computationService, diffOptions });
 
 	assert.equal(model.state.kind, "loading");
 	const first = computationService.takeRequest();
@@ -20,7 +27,7 @@ test("DiffModel publishes only version-pinned computation results", async () => 
 		text: "current",
 	}]);
 	const second = computationService.takeRequest();
-	assert.equal(first.signal.aborted, true);
+	assert.equal(first.token.isCancellationRequested, true);
 	first.resolve(createModifiedDiff());
 	await Promise.resolve();
 	assert.equal(model.state.kind, "loading");
@@ -39,30 +46,78 @@ test("DiffModel exposes a computation result without owning its sources", async 
 	using original = new TextModel("same\nold");
 	using modified = new TextModel("same\nnew");
 	using computationService = new ResolvedDiffComputationService();
-	using model = new DiffModel({ original, modified, computationService });
+	using model = new DiffModel({ original, modified, diffProvider: computationService, diffOptions });
 
 	await waitForReady(model);
 
 	assert.equal(model.original, original);
 	assert.equal(model.modified, modified);
-	assert.equal(model.diff?.rows.length, 1);
+	assert.equal(model.diff?.rows.length, 2);
+	assert.equal(model.diff?.rows[0]?.kind, "unchanged");
+	assert.equal(model.diff?.rows[1]?.kind, "modified");
 	model.dispose();
 	assert.equal(original.getText(), "same\nold");
 	assert.equal(modified.getText(), "same\nnew");
 });
 
+test("DiffModel recomputes on provider changes and cancels when a source is disposed", async () => {
+	using original = new TextModel("before");
+	using modified = new TextModel("after");
+	using diffProvider = new ControlledDiffComputationService();
+	using model = new DiffModel({ original, modified, diffProvider, diffOptions });
+
+	const first = diffProvider.takeRequest();
+	diffProvider.changeSettings();
+	const second = diffProvider.takeRequest();
+	assert.equal(first.token.isCancellationRequested, true);
+	first.resolve(createModifiedDiff());
+	second.resolve(createModifiedDiff());
+	await waitForReady(model);
+	assert.equal(model.state.kind, "ready");
+
+	diffProvider.changeSettings();
+	const pending = diffProvider.takeRequest();
+	original.dispose();
+	assert.equal(pending.token.isCancellationRequested, true);
+	assert.equal(model.isDisposed, true);
+});
+
+test('DiffModel cancels stale work when computation options change', async () => {
+	using original = new TextModel('word');
+	using modified = new TextModel('word ');
+	using diffProvider = new ControlledDiffComputationService();
+	using model = new DiffModel({ original, modified, diffProvider, diffOptions });
+	const first = diffProvider.takeRequest();
+	model.updateOptions({ ignoreTrimWhitespace: true, maxComputationTimeMs: 0, computeMoves: false });
+	const second = diffProvider.takeRequest();
+	assert.equal(first.token.isCancellationRequested, true);
+	assert.equal(second.options.ignoreTrimWhitespace, true);
+	first.resolve(createModifiedDiff());
+	await Promise.resolve();
+	assert.equal(model.state.kind, 'loading');
+	second.resolve({ identical: false, quitEarly: false, changes: [], moves: [] });
+	await waitForReady(model);
+	assert.equal(model.diff?.rows[0]?.kind, 'unchanged');
+});
+
 interface ControlledRequest {
-	readonly request: DiffComputationRequest;
-	readonly signal: AbortSignal;
-	readonly resolve: (diff: LineDiff) => void;
+	readonly original: ITextModel;
+	readonly modified: ITextModel;
+	readonly token: CancellationToken;
+	readonly options: IDocumentDiffProviderOptions;
+	readonly resolve: (diff: IDocumentDiff) => void;
 }
 
-class ControlledDiffComputationService implements IDiffComputationService {
+class ControlledDiffComputationService implements IDocumentDiffProvider {
 	private readonly requests: ControlledRequest[] = [];
+	private readonly changed = new Emitter<void>();
+	readonly onDidChange = this.changed.event;
 
-	compute(request: DiffComputationRequest, signal: AbortSignal): Promise<LineDiff> {
-		return new Promise(resolve => this.requests.push({ request, signal, resolve }));
+	computeDiff(original: ITextModel, modified: ITextModel, options: IDocumentDiffProviderOptions, token: CancellationToken): Promise<IDocumentDiff> {
+		return new Promise(resolve => this.requests.push({ original, modified, options, token, resolve }));
 	}
+
+	changeSettings(): void { this.changed.fire(undefined); }
 
 	takeRequest(): ControlledRequest {
 		const request = this.requests.shift();
@@ -70,6 +125,27 @@ class ControlledDiffComputationService implements IDiffComputationService {
 		return request;
 	}
 
+	dispose(): void { this.changed.dispose(); }
+
+	[Symbol.dispose](): void {
+		this.dispose();
+	}
+}
+
+class ResolvedDiffComputationService implements IDocumentDiffProvider {
+	readonly onDidChange = Event.None;
+
+	computeDiff(original: ITextModel, modified: ITextModel, options: IDocumentDiffProviderOptions, token: CancellationToken): Promise<IDocumentDiff> {
+		assert.equal(token.isCancellationRequested, false);
+		const result = new DefaultLinesDiffComputer().computeDiff(original.getLinesContent(), modified.getLinesContent(), options);
+		return Promise.resolve({
+			identical: original.getValue() === modified.getValue(),
+			quitEarly: result.hitTimeout,
+			changes: result.changes,
+			moves: result.moves,
+		});
+	}
+
 	dispose(): void {}
 
 	[Symbol.dispose](): void {
@@ -77,37 +153,13 @@ class ControlledDiffComputationService implements IDiffComputationService {
 	}
 }
 
-class ResolvedDiffComputationService implements IDiffComputationService {
-	compute(_request: DiffComputationRequest, signal: AbortSignal): Promise<LineDiff> {
-		signal.throwIfAborted();
-		return Promise.resolve(createModifiedDiff());
-	}
-
-	dispose(): void {}
-
-	[Symbol.dispose](): void {
-		this.dispose();
-	}
-}
-
-function createModifiedDiff(): LineDiff {
-	return Object.freeze({
-		rows: Object.freeze([Object.freeze({
-			kind: LineDiffKind.Modified,
-			originalLineIndex: 0,
-			modifiedLineIndex: 0,
-			originalChanges: Object.freeze([]),
-			modifiedChanges: Object.freeze([]),
-		})]),
-		hunks: Object.freeze([Object.freeze({
-			rowStart: 0,
-			rowEnd: 1,
-			originalStartLineIndex: 0,
-			originalLineCount: 1,
-			modifiedStartLineIndex: 0,
-			modifiedLineCount: 1,
-		})]),
-	});
+function createModifiedDiff(): IDocumentDiff {
+	return {
+		identical: false,
+		quitEarly: false,
+		changes: [new DetailedLineRangeMapping(new LineRange(1, 2), new LineRange(1, 2), undefined)],
+		moves: [],
+	};
 }
 
 function waitForReady(model: DiffModel): Promise<void> {

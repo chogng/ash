@@ -1,79 +1,120 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
+import { CancellationToken, CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { WorkerDiffComputationService } from '../../../browser/services/workerDiffComputationService.js';
 import { DiffModel } from '../../../common/diff/diffModel.js';
 import { type DiffComputationRequest } from '../../../common/diff/diffComputationService.js';
+import { type IDocumentDiff, type IDocumentDiffProviderOptions } from '../../../common/diff/documentDiffProvider.js';
+import { readDiffResult } from '../../../common/diff/diffWorker.js';
+import { DetailedLineRangeMapping } from '../../../common/diff/rangeMapping.js';
 import { TextModel } from '../../../common/model/textModel.js';
 import { DiffTestPort } from './diffTestPort.js';
 
+const options: IDocumentDiffProviderOptions = { ignoreTrimWhitespace: false, maxComputationTimeMs: 0, computeMoves: false };
+
 suite('Frontend diff Worker', () => {
-	test('uses the same frontend service for concurrent comparisons', async () => {
+	test('uses the same frontend provider for concurrent comparisons', async () => {
 		using service = new WorkerDiffComputationService(() => new DiffTestPort());
 		const [first, second] = await Promise.all([
-			service.compute(request('before 😀 after', 'before 🤖 after'), new AbortController().signal),
-			service.compute(request('same\n', 'same'), new AbortController().signal),
+			compute(service, 'before 😀 after', 'before 🤖 after'),
+			compute(service, 'same\n', 'same'),
 		]);
-		assert.deepEqual(first.rows[0]!.originalChanges, [{ startColumn: 7, endColumn: 9 }]);
-		assert.deepEqual(second.rows.map(row => row.kind), ['unchanged', 'removed']);
+		assert.equal(first.identical, false);
+		assert.equal(first.quitEarly, false);
+		assert.deepEqual(first.changes[0]!.innerChanges?.map(change => [change.originalRange.startColumn, change.originalRange.endColumn]), [[8, 10]]);
+		assert.ok(first.changes[0] instanceof DetailedLineRangeMapping);
+		assert.equal(first.changes[0]!.flip().original.startLineNumber, 1);
+		assert.deepEqual(second.changes.map(change => [change.original.startLineNumber, change.original.endLineNumberExclusive, change.modified.startLineNumber]), [[2, 3, 2]]);
+	});
+
+	test('applies provider options while preserving byte-wise identical state', async () => {
+		using service = new WorkerDiffComputationService(() => new DiffTestPort());
+		const ignoredWhitespace = await compute(service, '  same  ', 'same', { ...options, ignoreTrimWhitespace: true });
+		assert.deepEqual(ignoredWhitespace.changes, []);
+		assert.equal(ignoredWhitespace.identical, false);
+		const moved = await compute(service, 'move\nstay one\nstay two', 'stay one\nstay two\nmove', { ...options, computeMoves: true });
+		assert.deepEqual(moved.moves.map(move => [move.lineRangeMapping.original.startLineNumber, move.lineRangeMapping.modified.startLineNumber]), [[1, 3]]);
 	});
 
 	test('cancels one comparison without discarding a newer result', async () => {
 		using service = new WorkerDiffComputationService(() => new DiffTestPort());
-		const original = Array.from({ length: 12_000 }, (_, index) => String(index)).join('\n');
-		const controller = new AbortController();
-		const pending = service.compute(request(original, original.split('\n').reverse().join('\n')), controller.signal);
-		const rejected = assert.rejects(pending, { name: 'AbortError' });
+		const text = Array.from({ length: 12_000 }, (_, index) => String(index)).join('\n');
+		using original = new TextModel(text);
+		using modified = new TextModel(text.split('\n').reverse().join('\n'));
+		using source = new CancellationTokenSource();
+		const pending = service.computeDiff(original, modified, options, source.token);
+		const rejected = assert.rejects(pending, { name: 'CancellationError' });
 		await new Promise(resolve => setTimeout(resolve, 0));
-		controller.abort();
-		const next = await service.compute(request('old', 'new'), new AbortController().signal);
+		source.cancel();
+		const next = await compute(service, 'old', 'new');
 		await rejected;
-		assert.deepEqual(next.rows.map(row => row.kind), ['modified']);
+		assert.equal(next.changes.length, 1);
 	});
 
 	test('disposal settles pending calls and terminates the owned port', async () => {
 		const port = new DiffTestPort();
 		using service = new WorkerDiffComputationService(() => port);
-		const pending = service.compute(request('old', 'new'), new AbortController().signal);
+		using original = new TextModel('old');
+		using modified = new TextModel('new');
+		const pending = service.computeDiff(original, modified, options, CancellationToken.None);
 		const rejected = assert.rejects(pending, /disposed/);
 		service.dispose();
 		await rejected;
 		assert.equal(port.isDisposed, true);
-		await assert.rejects(service.compute(request('', ''), new AbortController().signal), ReferenceError);
+		await assert.rejects(service.computeDiff(original, modified, options, CancellationToken.None), ReferenceError);
 	});
 
 	test('an already cancelled call never creates a Worker', async () => {
 		using service = new WorkerDiffComputationService(() => { throw new Error('must not start'); });
-		const controller = new AbortController();
-		controller.abort();
-		await assert.rejects(service.compute(request('', ''), controller.signal), { name: 'AbortError' });
+		using original = new TextModel('');
+		using modified = new TextModel('');
+		await assert.rejects(service.computeDiff(original, modified, options, CancellationToken.Cancelled), { name: 'CancellationError' });
 	});
 
-	test('rejects malformed Worker inputs and keeps independent requests usable', async () => {
+	test('identical documents return the standard empty result without creating a Worker', async () => {
+		using service = new WorkerDiffComputationService(() => { throw new Error('must not start'); });
+		const result = await compute(service, 'same', 'same');
+		assert.deepEqual(result, { identical: true, quitEarly: false, changes: [], moves: [] });
+	});
+
+	test('rejects malformed Worker options and keeps independent requests usable', async () => {
 		using service = new WorkerDiffComputationService(() => new DiffTestPort());
-		const malformed = { original: { version: 1, text: 42 }, modified: { version: 1, text: 'text' } } as unknown as DiffComputationRequest;
-		await assert.rejects(service.compute(malformed, new AbortController().signal), { name: 'WebWorkerRemoteError', message: 'Invalid editor diff request' });
-		const next = await service.compute(request('', ''), new AbortController().signal);
-		assert.deepEqual(next.hunks, []);
+		await assert.rejects(compute(service, 'old', 'new', { ...options, maxComputationTimeMs: Number.NaN }), {
+			name: 'WebWorkerRemoteError', message: 'Invalid editor diff request',
+		});
+		const next = await compute(service, '', '');
+		assert.deepEqual(next.changes, []);
+		assert.equal(next.identical, true);
+	});
+
+	test('rejects out-of-range standard mappings returned by a Worker', () => {
+		assert.throws(() => readDiffResult({
+			changes: [{
+				original: { startLineNumber: 1, endLineNumberExclusive: 2 },
+				modified: { startLineNumber: 1, endLineNumberExclusive: 2 },
+				innerChanges: [{
+					originalRange: { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 10 },
+					modifiedRange: { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 4 },
+				}],
+			}],
+			moves: [],
+			hitTimeout: false,
+		}, request('old', 'new')), /Invalid editor diff text range/);
 	});
 
 	test('publishes only the latest unsaved TextModel versions', async () => {
 		using original = new TextModel('before');
 		using modified = new TextModel('before');
-		using computationService = new WorkerDiffComputationService(() => new DiffTestPort());
-		using model = new DiffModel({ original, modified, computationService });
+		using diffProvider = new WorkerDiffComputationService(() => new DiffTestPort());
+		using model = new DiffModel({ original, modified, diffProvider, diffOptions: options });
 		modified.setValue('obsolete');
 		modified.setValue('current 😀');
 		await new Promise<void>((resolve, reject) => {
 			const listener = model.onDidChange(state => {
-				if (state.kind === 'loading') {
-					return;
-				}
+				if (state.kind === 'loading') return;
 				listener.dispose();
-				if (state.kind === 'error') {
-					reject(state.error);
-				} else {
-					resolve();
-				}
+				if (state.kind === 'error') reject(state.error);
+				else resolve();
 			});
 		});
 		assert.equal(model.state.modifiedVersion, modified.version);
@@ -82,6 +123,12 @@ suite('Frontend diff Worker', () => {
 	});
 });
 
+async function compute(service: WorkerDiffComputationService, originalText: string, modifiedText: string, diffOptions = options): Promise<IDocumentDiff> {
+	using original = new TextModel(originalText);
+	using modified = new TextModel(modifiedText);
+	return service.computeDiff(original, modified, diffOptions, CancellationToken.None);
+}
+
 function request(original: string, modified: string): DiffComputationRequest {
-	return { original: { version: 1, text: original }, modified: { version: 1, text: modified } };
+	return { original: { version: 1, text: original }, modified: { version: 1, text: modified }, options };
 }

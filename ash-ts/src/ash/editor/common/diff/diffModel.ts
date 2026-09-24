@@ -1,14 +1,16 @@
+import { CancellationTokenSource } from "../../../base/common/cancellation.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { toError } from "../../../base/common/errors.js";
 import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { type TextModel } from "../model/textModel.js";
-import { type DiffComputationDocument, type IDiffComputationService } from "./diffComputationService.js";
-import { type LineDiff } from "./lineDiff.js";
+import { type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from "./documentDiffProvider.js";
+import { toLineDiff, type LineDiff } from "./lineDiff.js";
 
 export interface DiffModelOptions {
 	readonly original: TextModel;
 	readonly modified: TextModel;
-	readonly computationService: IDiffComputationService;
+	readonly diffProvider: IDocumentDiffProvider;
+	readonly diffOptions: IDocumentDiffProviderOptions;
 }
 
 export interface DiffModelLoadingState {
@@ -43,15 +45,17 @@ export type DiffModelState = DiffModelLoadingState | DiffModelReadyState | DiffM
  */
 export class DiffModel extends Disposable {
 	private readonly changeEmitter = this._register(new Emitter<DiffModelState>());
-	private activeRequest: AbortController | undefined;
+	private activeRequest: CancellationTokenSource | undefined;
 	private requestGeneration = 0;
 	private _state: DiffModelState;
+	private diffOptions: IDocumentDiffProviderOptions;
 
 	readonly onDidChange: Event<DiffModelState> = this.changeEmitter.event;
 
 	constructor(private readonly options: DiffModelOptions) {
 		super();
 		validateOptions(options);
+		this.diffOptions = options.diffOptions;
 		this._state = Object.freeze({
 			kind: "loading",
 			originalVersion: options.original.version,
@@ -59,8 +63,11 @@ export class DiffModel extends Disposable {
 		});
 		this._register(options.original.onDidChangeContent(() => this.refresh()));
 		this._register(options.modified.onDidChangeContent(() => this.refresh()));
+		this._register(options.original.onWillDispose(() => this.dispose()));
+		this._register(options.modified.onWillDispose(() => this.dispose()));
+		this._register(options.diffProvider.onDidChange(() => this.refresh()));
 		this._register(toDisposable(() => {
-			this.activeRequest?.abort("diffModelDisposed");
+			this.activeRequest?.dispose(true);
 			this.activeRequest = undefined;
 		}));
 		this.refresh();
@@ -82,55 +89,69 @@ export class DiffModel extends Disposable {
 		return this._state.kind === "ready" ? this._state.diff : undefined;
 	}
 
+	updateOptions(options: IDocumentDiffProviderOptions): void {
+		if (this.diffOptions.ignoreTrimWhitespace === options.ignoreTrimWhitespace
+			&& this.diffOptions.maxComputationTimeMs === options.maxComputationTimeMs
+			&& this.diffOptions.computeMoves === options.computeMoves
+			&& this.diffOptions.extendToSubwords === options.extendToSubwords) return;
+		this.diffOptions = options;
+		this.refresh();
+	}
+
 	/** Starts a fresh computation for the current source-model versions. */
 	refresh(): void {
 		if (this.isDisposed) return;
-		const original = snapshot(this.original);
-		const modified = snapshot(this.modified);
-		this.activeRequest?.abort("supersededDiffModelRequest");
-		const controller = new AbortController();
-		this.activeRequest = controller;
+		const originalVersion = this.original.getVersionId();
+		const modifiedVersion = this.modified.getVersionId();
+		this.activeRequest?.dispose(true);
+		const source = new CancellationTokenSource();
+		this.activeRequest = source;
 		const generation = ++this.requestGeneration;
 		this.setState(Object.freeze({
 			kind: "loading",
-			originalVersion: original.version,
-			modifiedVersion: modified.version,
+			originalVersion,
+			modifiedVersion,
 		}));
-		void this.compute(generation, controller, original, modified);
+		void this.compute(generation, source, originalVersion, modifiedVersion);
 	}
 
-	private async compute(generation: number, controller: AbortController, original: DiffComputationDocument, modified: DiffComputationDocument): Promise<void> {
+	private async compute(generation: number, source: CancellationTokenSource, originalVersion: number, modifiedVersion: number): Promise<void> {
 		try {
-			const diff = await this.options.computationService.compute(Object.freeze({
-				original,
-				modified,
-			}), controller.signal);
-			if (!this.isCurrentRequest(generation, controller, original, modified)) return;
+			const result = await this.options.diffProvider.computeDiff(
+				this.original,
+				this.modified,
+				this.diffOptions,
+				source.token,
+			);
+			if (!this.isCurrentRequest(generation, source, originalVersion, modifiedVersion)) return;
+			const diff = toLineDiff(result, this.original.lineCount, this.modified.lineCount);
+			source.dispose();
 			this.activeRequest = undefined;
 			this.setState(Object.freeze({
 				kind: "ready",
-				originalVersion: original.version,
-				modifiedVersion: modified.version,
+				originalVersion,
+				modifiedVersion,
 				diff,
 			}));
 		} catch (error) {
-			if (controller.signal.aborted || !this.isCurrentRequest(generation, controller, original, modified)) return;
+			if (source.token.isCancellationRequested || !this.isCurrentRequest(generation, source, originalVersion, modifiedVersion)) return;
+			source.dispose();
 			this.activeRequest = undefined;
 			this.setState(Object.freeze({
 				kind: "error",
-				originalVersion: original.version,
-				modifiedVersion: modified.version,
+				originalVersion,
+				modifiedVersion,
 				error: toError(error),
 			}));
 		}
 	}
 
-	private isCurrentRequest(generation: number, controller: AbortController, original: DiffComputationDocument, modified: DiffComputationDocument): boolean {
+	private isCurrentRequest(generation: number, source: CancellationTokenSource, originalVersion: number, modifiedVersion: number): boolean {
 		return !this.isDisposed &&
 			this.requestGeneration === generation &&
-			this.activeRequest === controller &&
-			this.original.version === original.version &&
-			this.modified.version === modified.version;
+			this.activeRequest === source &&
+			this.original.getVersionId() === originalVersion &&
+			this.modified.getVersionId() === modifiedVersion;
 	}
 
 	private setState(state: DiffModelState): void {
@@ -139,16 +160,11 @@ export class DiffModel extends Disposable {
 	}
 }
 
-function snapshot(model: TextModel): DiffComputationDocument {
-	const snapshot = model.createVersionedSnapshot();
-	return Object.freeze({ version: snapshot.version, text: snapshot.getText() });
-}
-
 function validateOptions(options: DiffModelOptions): void {
 	if (!options || typeof options !== "object" || !options.original || !options.modified) {
 		throw new TypeError("Diff model requires original and modified text models");
 	}
-	if (!options.computationService || typeof options.computationService.compute !== "function") {
-		throw new TypeError("Diff model requires a diff computation service");
+	if (!options.diffProvider || typeof options.diffProvider.computeDiff !== "function") {
+		throw new TypeError("Diff model requires a document diff provider");
 	}
 }

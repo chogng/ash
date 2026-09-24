@@ -1,5 +1,15 @@
 # Editor API 对齐状态
 
+## common/diff 标准结果接入（2026-09-24）
+
+生产链：Diff / Multi Diff / Quick Diff → `DiffModel` 绑定两份文本版本 → `IDocumentDiffProvider.computeDiff` → `WorkerDiffComputationService` → `DefaultLinesDiffComputer` → `LinesDiff` 与行、字符范围映射 → `IDocumentDiff` → `DiffModel` 转为只读界面的行数据。Worker 回复按标准坐标校验并恢复映射类，旧的 Worker 行/区块结果及快照 `compute(request, signal)` 入口退出。比较算法只有 `defaultLinesDiffComputer.ts` 一个 owner；已确认的 Ash `diffModel.ts`、`diffComputationService.ts` 和 `lineDiff.ts` 分别保留版本有效性、Worker 快照请求数据和界面行展示职责。
+
+本批新增同路径 `common/diff/rangeMapping.ts`、`linesDiffComputer.ts`、`defaultLinesDiffComputer/defaultLinesDiffComputer.ts` 和 `documentDiffProvider.ts`，由上述生产链直接调用。标准 provider 接受模型、计算选项及取消令牌，返回表示原文与修改文完全相同的 `identical`、`quitEarly`、changes 和 moves；选项实际送入 Worker，provider 设置变化触发 `DiffModel` 重算，任一源模型释放会取消请求。普通 Diff 和 Multi Diff 现在读取已注册的 `diffEditor.ignoreTrimWhitespace`，默认按上游忽略首尾空白；设置变化会取消旧计算并更新已打开的比较。Quick Diff 读取已注册的 `scm.diffDecorationsIgnoreTrimWhitespace`，默认仍显示空白变化，也可单独忽略或继承普通 Diff 的设置；设置变化只重算现有模型，不重新获取 Git 基线。计算时限仍为无限，移动检测仍关闭；`quitEarly` 尚未在只读界面标出不完整结果，因此 `diffEditor.maxComputationTime` 尚未接线。已验证一基半开行范围、配对 UTF-16 字符范围、忽略首尾空白、精确整块移动、Worker 结果校验和取消。`extendToSubwords` 尚无生产调用，当前实现未对它改变比较行为；`rangeMapping.ts` 的编辑转换等其他上游公开方法也尚未接入。其余 11 个上游 diff 文件仍缺少当前生产调用链或下层能力，包括算法内部文件、legacy 与 external 比较器；不把这 4 个文件记为完整引擎对齐。下文 2026-09-21 的 15 个缺失文件清单保留为当时的历史状态。
+
+定向 Editor 单测覆盖标准映射、provider 选项与失效事件、相同文本的空结果、模型释放、非法 Worker 坐标及相关界面调用。完整对齐检查的结构、台账、类型检查及 Editor 单测 239/239 个文件通过；测试环境仍输出既有 JSDOM Canvas 提示。Stanza 生产构建通过。Playwright Chromium 的 3 个 diff 场景通过，覆盖 Unicode 行内差异、Multi Diff、未保存文本更新、Quick Diff 及取消后继续计算。
+
+配置接入续批：`DiffModel` 现要求调用方显式提供计算选项，不再补一组隐藏默认值。Editor 单测新增选项变化时取消旧结果、普通 Diff 设置变化后重新投影行，以及 Multi Diff 的两份比较同时重算；SCM 单测新增 Quick Diff 继承设置且不重取基线。`typecheck:stanza`、`build:stanza`、`build:renderer`、完整 Editor 单测 239/239 个文件、定向单测 7/7 个文件和 Playwright Chromium 的 4 个 diff 场景通过。单测仍输出既有 JSDOM Canvas 提示；浏览器测试仍输出既有 `NO_COLOR` / `FORCE_COLOR` 环境提示。设置 schema 可按语言覆盖，但 Workbench 的这些 diff 模型目前只读取全局值，语言覆盖尚待接入。
+
 ## Contrib 控制器身份入口（2026-09-24，续批）
 
 补全链：`editor.action.triggerSuggest` → `SuggestController.get(editor)` → 已有请求与会话 → 补全控件。注册 ID 改为上游公开的 `editor.contrib.suggestController`，原 `editor.contrib.suggest` 入口退出；模型、控件和请求 owner 不变。定向单测 2 项与 Chromium 场景 2 项通过，覆盖启用/关闭、模型解绑、显式请求、provider 撤销和公开动作。

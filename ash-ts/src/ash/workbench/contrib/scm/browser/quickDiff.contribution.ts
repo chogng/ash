@@ -30,8 +30,8 @@ registerWorkbenchServiceContribution({
 
 registerWorkbenchServiceContribution({
 	service: IQuickDiffModelService,
-	dependencies: [IQuickDiffService, IDiffService],
-	install: context => context.register(new QuickDiffModelService(context.container.get(IQuickDiffService), context.container.get(IDiffService))),
+	dependencies: [IQuickDiffService, IDiffService, IConfigurationService],
+	install: context => context.register(context.container.createInstance(QuickDiffModelService, context.container.get(IQuickDiffService), context.container.get(IDiffService))),
 });
 
 registerWorkbenchContribution('workbench.contrib.gitQuickDiffProvider', WorkbenchPhase.BlockRestore, accessor => {

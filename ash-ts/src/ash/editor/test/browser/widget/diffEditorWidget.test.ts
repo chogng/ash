@@ -2,9 +2,12 @@ import { StandaloneCodeEditorService } from '../../../standalone/browser/standal
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
+import { type CancellationToken } from '../../../../base/common/cancellation.js';
+import { Event } from '../../../../base/common/event.js';
 import { Range } from "../../../common/core/range.js";
-import { type DiffComputationRequest, type IDiffComputationService } from "../../../common/diff/diffComputationService.js";
-import { LineDiffKind, type LineDiff } from "../../../common/diff/lineDiff.js";
+import { type IDocumentDiff, type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from "../../../common/diff/documentDiffProvider.js";
+import { DefaultLinesDiffComputer } from "../../../common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js";
+import { type ITextModel } from '../../../common/model.js';
 import { TextModel } from "../../../common/model/textModel.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
@@ -21,6 +24,7 @@ for (const [name, value] of Object.entries({
 
 const { DiffEditorWidget } = await import("../../../browser/widget/diffEditor/diffEditorWidget.js");
 const { DiffModel } = await import("../../../common/diff/diffModel.js");
+const diffOptions: IDocumentDiffProviderOptions = { ignoreTrimWhitespace: false, maxComputationTimeMs: 0, computeMoves: false };
 
 test("DiffEditorWidget presents side-by-side changed lines and inline ranges", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -28,7 +32,7 @@ test("DiffEditorWidget presents side-by-side changed lines and inline ranges", a
 	using original = new TextModel("same\nold value\nremoved\ntail");
 	using modified = new TextModel("same\nnew value\nadded\ntail");
 	using computationService = new WidgetTestDiffComputationService();
-	using model = new DiffModel({ original, modified, computationService });
+	using model = new DiffModel({ original, modified, diffProvider: computationService, diffOptions });
 	await waitForReady(model);
 	using codeEditorService = new StandaloneCodeEditorService();
 	const lifecycle: string[] = [];
@@ -75,7 +79,7 @@ test("DiffEditorWidget refreshes on either source model and virtualizes diff row
 	using original = new TextModel(lines("old", 100));
 	using modified = new TextModel(lines("new", 100));
 	using computationService = new WidgetTestDiffComputationService();
-	using model = new DiffModel({ original, modified, computationService });
+	using model = new DiffModel({ original, modified, diffProvider: computationService, diffOptions });
 	await waitForReady(model);
 	using editor = new DiffEditorWidget({ container, model, lineHeight: 20, overscanRowCount: 1 });
 	editor.layout({ width: 400, height: 40 });
@@ -113,7 +117,7 @@ test("DiffEditorWidget applies presentation settings and clamps change navigatio
 	using original = new TextModel("old\nsame\nold again");
 	using modified = new TextModel("new\nsame\nnew again");
 	using computationService = new WidgetTestDiffComputationService();
-	using model = new DiffModel({ original, modified, computationService });
+	using model = new DiffModel({ original, modified, diffProvider: computationService, diffOptions });
 	await waitForReady(model);
 	using editor = new DiffEditorWidget({ container, model, lineHeight: 24, fontFamily: "Test Mono", fontSize: 15, fontLigatures: true, showLineNumbers: false, showInlineChanges: false, loopChanges: false });
 	editor.layout({ width: 400, height: 80 });
@@ -137,32 +141,13 @@ function lines(prefix: string, count: number): string {
 	return Array.from({ length: count }, (_, index) => `${prefix} ${index}`).join("\n");
 }
 
-class WidgetTestDiffComputationService implements IDiffComputationService {
-	async compute(request: DiffComputationRequest, signal: AbortSignal): Promise<LineDiff> {
-		signal.throwIfAborted();
-		const originalLines = request.original.text.split("\n");
-		const modifiedLines = request.modified.text.split("\n");
-		const rows = Array.from({ length: Math.max(originalLines.length, modifiedLines.length) }, (_, index) => {
-			const original = originalLines[index];
-			const modified = modifiedLines[index];
-			if (original === undefined) {
-				return Object.freeze({ kind: LineDiffKind.Added, modifiedLineIndex: index, originalChanges: Object.freeze([]), modifiedChanges: Object.freeze([]) });
-			}
-			if (modified === undefined) {
-				return Object.freeze({ kind: LineDiffKind.Removed, originalLineIndex: index, originalChanges: Object.freeze([]), modifiedChanges: Object.freeze([]) });
-			}
-			if (original === modified) {
-				return Object.freeze({ kind: LineDiffKind.Unchanged, originalLineIndex: index, modifiedLineIndex: index, originalChanges: Object.freeze([]), modifiedChanges: Object.freeze([]) });
-			}
-			return Object.freeze({
-				kind: LineDiffKind.Modified,
-				originalLineIndex: index,
-				modifiedLineIndex: index,
-				originalChanges: Object.freeze(original.length === 0 ? [] : [{ startColumn: 0, endColumn: original.length }]),
-				modifiedChanges: Object.freeze(modified.length === 0 ? [] : [{ startColumn: 0, endColumn: modified.length }]),
-			});
-		});
-		return Object.freeze({ rows: Object.freeze(rows), hunks: Object.freeze([]) });
+class WidgetTestDiffComputationService implements IDocumentDiffProvider {
+	readonly onDidChange = Event.None;
+
+	async computeDiff(original: ITextModel, modified: ITextModel, options: IDocumentDiffProviderOptions, token: CancellationToken): Promise<IDocumentDiff> {
+		assert.equal(token.isCancellationRequested, false);
+		const result = new DefaultLinesDiffComputer().computeDiff(original.getLinesContent(), modified.getLinesContent(), options);
+		return { identical: original.getValue() === modified.getValue(), quitEarly: result.hitTimeout, changes: result.changes, moves: result.moves };
 	}
 
 	dispose(): void {}

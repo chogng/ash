@@ -98,7 +98,7 @@ registerEditorPane({
 		if (!diffService) throw new Error("Stanza Diff requires the Workbench diff service");
 		const resourceStore = getBrowserTextResourceStore(options.textFileService);
 		const configuration = options.configurationService;
-		return new DiffEditorPane(resourceStore, {
+		return instantiationService.createInstance(DiffEditorPane, resourceStore, {
 			modelService: getBrowserTextModelService(resourceStore),
 			createComputationService: () => diffService.createComputationService(),
 			codeEditorService: instantiationService.get(ICodeEditorService),
