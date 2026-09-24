@@ -3,7 +3,7 @@ import { test } from "mocha";
 import { type CancellationToken } from "../../../../../base/common/cancellation.js";
 import { Emitter, Event } from "../../../../../base/common/event.js";
 import { type IDocumentDiff, type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from "../../../../common/diff/documentDiffProvider.js";
-import { DiffModel } from "../../../../common/diff/diffModel.js";
+import { DiffModel, type DiffModelReadyState } from "../../../../common/diff/diffModel.js";
 import { DefaultLinesDiffComputer } from "../../../../common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js";
 import { DetailedLineRangeMapping } from "../../../../common/diff/rangeMapping.js";
 import { LineRange } from "../../../../common/core/ranges/lineRange.js";
@@ -34,12 +34,26 @@ test("DiffModel publishes only version-pinned computation results", async () => 
 
 	second.resolve(createModifiedDiff());
 	await waitForReady(model);
-	const readyState = model.state;
-	assert.equal(readyState.kind, "ready");
-	if (readyState.kind !== "ready") throw new Error("Expected a ready diff model");
+	const readyState = getReadyState(model);
 	assert.equal(readyState.originalVersion, original.version);
 	assert.equal(readyState.modifiedVersion, modified.version);
+	assert.equal(readyState.quitEarly, false);
 	assert.equal(model.diff?.rows[0]?.kind, "modified");
+});
+
+test('DiffModel preserves an early-stop result for the current source versions', async () => {
+	using original = new TextModel('before');
+	using modified = new TextModel('after');
+	using provider = new ControlledDiffComputationService();
+	using model = new DiffModel({ original, modified, diffProvider: provider, diffOptions });
+	provider.takeRequest().resolve({ ...createModifiedDiff(), quitEarly: true });
+	await waitForReady(model);
+	assert.equal(getReadyState(model).quitEarly, true);
+	model.updateOptions({ ...diffOptions, maxComputationTimeMs: 10 });
+	assert.equal(model.state.kind, 'loading');
+	provider.takeRequest().resolve(createModifiedDiff());
+	await waitForReady(model);
+	assert.equal(getReadyState(model).quitEarly, false);
 });
 
 test("DiffModel exposes a computation result without owning its sources", async () => {
@@ -172,4 +186,10 @@ function waitForReady(model: DiffModel): Promise<void> {
 			else resolve();
 		});
 	});
+}
+
+function getReadyState(model: DiffModel): DiffModelReadyState {
+	const state = model.state;
+	if (state.kind !== 'ready') throw new Error('Expected a ready diff model');
+	return state;
 }

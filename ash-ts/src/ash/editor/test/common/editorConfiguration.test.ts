@@ -24,6 +24,16 @@ import { CodeEditorConfiguration } from '../../../workbench/contrib/codeEditor/c
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 
+test('diff computation time is a registered language-overridable editor setting', () => {
+	const setting = configurationRegistry.getConfiguration('diffEditor.maxComputationTime');
+	assert.equal(setting?.defaultValue, 5_000);
+	assert.equal(setting?.parse(0), 0);
+	assert.equal(setting?.parse(12_000), 12_000);
+	assert.throws(() => setting?.parse(-1), /non-negative integer/);
+	assert.throws(() => setting?.parse(1.5), /non-negative integer/);
+	assert.equal(editorConfiguration.properties['diffEditor.maxComputationTime']?.minimum, 0);
+});
+
 test('common editor options normalize shared editor settings', () => {
 	assert.equal(EditorOptions.fontFamily.validate(undefined), EDITOR_FONT_DEFAULTS.fontFamily);
 	assert.equal(EditorOptions.fontSize.validate(5), 6);

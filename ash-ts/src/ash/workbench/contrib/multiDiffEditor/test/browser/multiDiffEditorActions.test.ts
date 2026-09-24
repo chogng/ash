@@ -7,8 +7,6 @@ import { URI } from '../../../../../base/common/uri.js';
 import { MenuId, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { ContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
-import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { IInstantiationService, ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
 import type { IEditorPart as IEditorPartShape } from '../../../../browser/parts/editor/editorPart.js';
 import { ActiveEditorContext } from '../../../../common/contextkeys.js';
@@ -38,7 +36,7 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 		class TrackingMultiDiffEditorPane extends MultiDiffEditorPane {
 			public readonly calls: string[] = [];
 
-			constructor(@IInstantiationService instantiationService: IInstantiationService, @IConfigurationService configuration: IConfigurationService) {
+			constructor(@IInstantiationService instantiationService: IInstantiationService) {
 				super({
 					modelService: {
 						acquire: async () => { throw new Error('Not used'); },
@@ -51,7 +49,7 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 						dispose() {},
 						[Symbol.dispose]() {},
 					}),
-				}, instantiationService, configuration);
+				}, instantiationService);
 			}
 
 			public override nextChange(): undefined {
@@ -80,7 +78,6 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 		registrations.add(registerAction2(MultiDiffExpandAllAction));
 		registrations.add(registerAction2(MultiDiffGoToFileAction));
 		const services = new ServiceContainer();
-		services.registerInstance(IConfigurationService, registrations.add(new InMemoryConfigurationService()));
 		const pane = services.createInstance(TrackingMultiDiffEditorPane);
 		registrations.add(pane);
 		services.registerInstance(IEditorPart, { activePane: pane } as unknown as IEditorPartShape);

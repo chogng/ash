@@ -16,6 +16,7 @@ import { DiffEditorBreadcrumbsController } from "../../../../editor/contrib/diff
 import { h } from "../../../../base/browser/dom.js";
 import { type ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { CodeEditorConfiguration, getDiffComputationOptions } from '../common/editorConfiguration.js';
 
 export interface DiffEditorPaneOptions {
@@ -40,7 +41,11 @@ export class DiffEditorPane extends Disposable implements IEditorPane {
 	private container: HTMLDivElement | undefined;
 	private dimension: IDimension = { width: 0, height: 0 };
 
-	constructor(private readonly resourceStore: ITextResourceStore, private readonly options: DiffEditorPaneOptions, @IConfigurationService private readonly configuration: IConfigurationService) {
+	constructor(
+		private readonly resourceStore: ITextResourceStore,
+		private readonly options: DiffEditorPaneOptions,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
+	) {
 		super();
 		if (!resourceStore || typeof resourceStore.resolve !== "function") {
 			this.dispose();
@@ -55,11 +60,6 @@ export class DiffEditorPane extends Disposable implements IEditorPane {
 			throw new TypeError("Diff editor pane requires a text model service");
 		}
 		this.modelService = options.modelService;
-		this._register(this.configuration.onDidChangeConfiguration(event => {
-			if (event.affectsConfiguration(CodeEditorConfiguration.diffIgnoreTrimWhitespace)) {
-				this.session.value?.updateOptions(getDiffComputationOptions(this.configuration));
-			}
-		}));
 	}
 
 	create(parent: HTMLElement): void {
@@ -87,7 +87,10 @@ export class DiffEditorPane extends Disposable implements IEditorPane {
 			throwIfCancelled(signal, "Diff editor input loading was cancelled");
 			modified = await this.modelService.acquire(input.modified, signal);
 			throwIfCancelled(signal, "Diff editor input loading was cancelled");
-			next = new DiffEditorPaneSession(container, original, modified, input.original.label, input.modified.label, this.options, getDiffComputationOptions(this.configuration));
+			next = this.instantiationService.createInstance(
+				DiffEditorPaneSession, container, original, modified,
+				input.original.label, input.modified.label, this.options,
+			);
 			throwIfCancelled(signal, "Diff editor input loading was cancelled");
 		} catch (error) {
 			next?.dispose();
@@ -130,7 +133,15 @@ class DiffEditorPaneSession extends Disposable {
 	readonly editor: DiffEditorWidget;
 	private readonly model: DiffModel;
 
-	constructor(container: HTMLElement, original: TextModelReference, modified: TextModelReference, originalLabel: string | undefined, modifiedLabel: string | undefined, options: DiffEditorPaneOptions, diffOptions: IDocumentDiffProviderOptions) {
+	constructor(
+		container: HTMLElement,
+		original: TextModelReference,
+		modified: TextModelReference,
+		originalLabel: string | undefined,
+		modifiedLabel: string | undefined,
+		options: DiffEditorPaneOptions,
+		@IConfigurationService configuration: IConfigurationService,
+	) {
 		super();
 		this._register(original);
 		this._register(modified);
@@ -143,7 +154,17 @@ class DiffEditorPaneSession extends Disposable {
 			original: original.model,
 			modified: modified.model,
 			diffProvider: computationService,
-			diffOptions,
+			diffOptions: getDiffComputationOptions(configuration, modified.model.getLanguageId()),
+		}));
+		this._register(configuration.onDidChangeConfiguration(event => {
+			const languageId = model.modified.getLanguageId();
+			if (event.affectsConfiguration(CodeEditorConfiguration.diffIgnoreTrimWhitespace, { overrideIdentifier: languageId })
+				|| event.affectsConfiguration(CodeEditorConfiguration.diffMaxComputationTime, { overrideIdentifier: languageId })) {
+				this.updateOptions(getDiffComputationOptions(configuration, languageId));
+			}
+		}));
+		this._register(modified.model.onDidChangeLanguage(() => {
+			this.updateOptions(getDiffComputationOptions(configuration, model.modified.getLanguageId()));
 		}));
 		this.editor = this._register(new DiffEditorWidget({
 			container,

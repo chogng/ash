@@ -1,6 +1,6 @@
 import { addDisposableListener } from '../../../src/ash/base/browser/dom.js';
 import { CancellationToken, CancellationTokenSource } from '../../../src/ash/base/common/cancellation.js';
-import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
+import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
 import { DiffEditorWidget } from '../../../src/ash/editor/browser/widget/diffEditor/diffEditorWidget.js';
@@ -13,8 +13,11 @@ import { QuickDiffModelService } from '../../../src/ash/workbench/contrib/scm/br
 import { ScmConfiguration } from '../../../src/ash/workbench/contrib/scm/common/scmConfiguration.js';
 import { WorkbenchQuickDiffService } from '../../../src/ash/workbench/contrib/scm/browser/workbenchQuickDiffService.js';
 import { CodeEditorConfiguration } from '../../../src/ash/workbench/contrib/codeEditor/common/editorConfiguration.js';
+import { resetNlsResolver, setNlsResolver } from '../../../src/ash/nls.js';
+import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 
 const resources = new DisposableStore();
+resources.add(toDisposable(resetNlsResolver));
 const diffOptions = { ignoreTrimWhitespace: false, maxComputationTimeMs: 0, computeMoves: false };
 const service = new DiffService();
 const computation = resources.add(service.createComputationService());
@@ -73,11 +76,59 @@ const harness = {
 		const next = await computation.computeDiff(nextOriginal, nextModified, diffOptions, CancellationToken.None);
 		return { outcome: await outcome, kinds: toLineDiff(next, 1, 1).rows.map(row => row.kind) };
 	},
+	async compareLineEndings() {
+		using original = new TextModel('first\r\nold\r\nlast');
+		using modified = new TextModel('first\nnew\nlast');
+		const result = await computation.computeDiff(original, modified, diffOptions, CancellationToken.None);
+		return {
+			identical: result.identical,
+			changedLines: result.changes.map(change => [change.original.startLineNumber, change.modified.startLineNumber]),
+			inlineColumns: result.changes[0]?.innerChanges?.map(change => [change.originalRange.startColumn, change.originalRange.endColumn]),
+		};
+	},
+	async showTimedComparison(): Promise<boolean> {
+		const timedResources = resources.add(new DisposableStore());
+		const text = Array.from({ length: 20_000 }, (_, index) => String(index)).join('\n');
+		const timedOriginal = timedResources.add(new TextModel(text));
+		const timedModified = timedResources.add(new TextModel(text.split('\n').reverse().join('\n')));
+		const timedModel = timedResources.add(new DiffModel({
+			original: timedOriginal,
+			modified: timedModified,
+			diffProvider: computation,
+			diffOptions: { ...diffOptions, maxComputationTimeMs: 1 },
+		}));
+		timedResources.add(new DiffEditorWidget({ container: document.getElementById('timed-single')!, model: timedModel }));
+		timedResources.add(new MultiDiffEditorWidget({
+			container: document.getElementById('timed-multi')!,
+			items: [{ id: 'timed', label: 'timed.ts', model: timedModel }],
+		}));
+		if (timedModel.state.kind !== 'ready') {
+			await new Promise<void>((resolve, reject) => {
+				const listener = timedModel.onDidChange(state => {
+					if (state.kind === 'loading') return;
+					listener.dispose();
+					if (state.kind === 'error') reject(state.error);
+					else resolve();
+				});
+			});
+		}
+		return timedModel.state.kind === 'ready' && timedModel.state.quitEarly;
+	},
+	setChineseLocale(): void {
+		const catalog = builtinLanguagePackCatalogs.find(candidate => candidate.locale === 'zh-CN')!;
+		setNlsResolver((bundle, key, fallback) => catalog.bundles[bundle]?.[key] ?? fallback);
+	},
 	async setQuickDiffWhitespace(setting: 'false' | 'inherit'): Promise<void> {
 		await configuration.updateValue(ScmConfiguration.diffDecorationsIgnoreTrimWhitespace, setting);
 	},
 	async setDiffWhitespace(ignore: boolean): Promise<void> {
 		await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, ignore);
+	},
+	async setDiffWhitespaceForLanguage(languageId: string, ignore: boolean): Promise<void> {
+		await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, ignore, { overrideIdentifier: languageId });
+	},
+	setModifiedLanguage(languageId: string): void {
+		modified.setLanguage(languageId);
 	},
 	dispose(): void {
 		resources.dispose();

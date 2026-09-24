@@ -108,10 +108,15 @@ test('Stanza multi-diff pane resolves every comparison and releases the complete
 	using editorServices = new DisposableStore();
 	const services = createCodeEditorServices(editorServices);
 	const configuration = services.get(IConfigurationService);
+	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, false, { overrideIdentifier: 'typescript' });
 	const seenOptions: boolean[] = [];
+	const seenLimits: number[] = [];
 	const pane = services.createInstance(MultiDiffEditorPane, {
 		modelService: models,
-		createComputationService: () => new PaneTestDiffComputationService(options => seenOptions.push(options.ignoreTrimWhitespace)),
+		createComputationService: () => new PaneTestDiffComputationService(options => {
+			seenOptions.push(options.ignoreTrimWhitespace);
+			seenLimits.push(options.maxComputationTimeMs);
+		}),
 		lineHeight: 24,
 		showLineNumbers: false,
 		chatService: {
@@ -141,21 +146,25 @@ test('Stanza multi-diff pane resolves every comparison and releases the complete
 		{
 			label: 'src/first.ts',
 			original: { resource: URI.parse('git-change:/first/original'), initialText: 'old', label: 'HEAD' },
-			modified: { resource: URI.parse('git-change:/first/modified'), initialText: 'new', label: 'Working Tree' },
+			modified: { resource: URI.parse('git-change:/first/modified'), initialText: 'new', languageId: 'typescript', label: 'Working Tree' },
 			goToFile: { resource: URI.parse('file:///workspace/src/first.ts') },
 			gitChange: { repositoryId: 'repo', path: 'src/first.ts', staged: false, hasWorktreeChanges: true },
 		},
 		{
 			label: 'src/second.ts',
 			original: { resource: URI.parse('git-change:/second/original'), initialText: 'before', label: 'HEAD' },
-			modified: { resource: URI.parse('git-change:/second/modified'), initialText: 'after', label: 'Working Tree' },
+			modified: { resource: URI.parse('git-change:/second/modified'), initialText: 'after', languageId: 'javascript', label: 'Working Tree' },
 		},
 	], 'Review changes', {
 		kind: 'turn', sessionId: 'session-1', threadId: 'thread-1', changeSetIds: ['change-1'], repositoryId: 'repo', targetBranch: 'main', scope: 'currentTurn',
 	}), new AbortController().signal);
-	assert.deepEqual(seenOptions, [true, true]);
+	assert.deepEqual(seenOptions, [false, true]);
 	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, false);
-	assert.deepEqual(seenOptions, [true, true, false, false]);
+	assert.deepEqual(seenOptions, [false, true, false]);
+	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, true, { overrideIdentifier: 'typescript' });
+	assert.deepEqual(seenOptions, [false, true, false, true]);
+	await configuration.updateValue(CodeEditorConfiguration.diffMaxComputationTime, 25, { overrideIdentifier: 'javascript' });
+	assert.deepEqual(seenLimits, [5_000, 5_000, 5_000, 5_000, 25]);
 
 	assert.equal(parent.querySelectorAll('.stanza-multi-diff-editor-pane').length, 1);
 	assert.equal(parent.querySelectorAll('.stanza-multi-diff-editor-section').length, 2);

@@ -9,6 +9,10 @@ const english: LanguagePackCatalog = {
 	catalogVersion: ASH_LOCALIZATION_CATALOG_VERSION,
 	bundles: {
 		ash: {
+			"diffEditor.maxComputationTime.title": "Max computation time",
+			"diffEditor.maxComputationTime.description": "Maximum time in milliseconds to compute a diff. Set to 0 for no time limit.",
+			"diffEditor.incomplete": "Diff computation stopped after the time limit. Results may be incomplete.",
+			"diffEditor.incompleteShort": "Diff may be incomplete",
 			"trace.address": "Trace address",
 			"trace.token": "Trace token",
 			"trace.connect": "Connect",
@@ -235,6 +239,10 @@ const chinese: LanguagePackCatalog = {
 	catalogVersion: ASH_LOCALIZATION_CATALOG_VERSION,
 	bundles: {
 		ash: {
+			"diffEditor.maxComputationTime.title": "最长计算时间",
+			"diffEditor.maxComputationTime.description": "计算差异的最长时间（毫秒）。设为 0 则不限时。",
+			"diffEditor.incomplete": "差异计算已达到时间上限，结果可能不完整。",
+			"diffEditor.incompleteShort": "差异结果可能不完整",
 			"trace.address": "Trace 地址",
 			"git.settings.group": "源代码管理",
 			"git.settings.groupDescription": "配置 Git 检查远端更新的方式。",

@@ -15,6 +15,7 @@ import { LineDiffKind } from '../../../common/diff/lineDiff.js';
 import { createBareFontInfoFromRawSettings } from '../../../common/config/fontInfoFromSettings.js';
 import { applyFontInfo } from '../../config/domFontInfo.js';
 import { createDiffEditorRow } from '../diffEditor/diffEditorRows.js';
+import { localize, onDidChangeNls } from '../../../../nls.js';
 
 const DEFAULT_LINE_HEIGHT = 20;
 const DEFAULT_OVERSCAN_ROW_COUNT = 8;
@@ -120,10 +121,14 @@ export class MultiDiffEditorWidget extends Disposable {
 			const section = this.sections[index]!;
 			this._register(item.model.onDidChange(() => {
 				section.invalidate();
+				section.updateIncompleteStatus();
 				if (this.activeChange?.itemId === item.id) this.activeChange = undefined;
 				this.refreshLayout();
 			}));
 		}
+		this._register(onDidChangeNls(() => {
+			for (const section of this.sections) section.updateIncompleteStatus();
+		}));
 		this._register(observeResize(this.domNode, ([entry]) => {
 			if (entry) this.layout({ width: entry.contentRect.width, height: entry.contentRect.height });
 		}));
@@ -294,6 +299,7 @@ class MultiDiffSection extends Disposable {
 	private readonly rowsDomNode: HTMLDivElement;
 	private readonly rowsNode: FastDomNode<HTMLDivElement>;
 	private readonly statusDomNode: HTMLDivElement;
+	private readonly incompleteStatusDomNode: HTMLSpanElement;
 	private renderedStartRow = -1;
 	private renderedEndRow = -1;
 	private renderedActiveRow = -1;
@@ -331,6 +337,12 @@ class MultiDiffSection extends Disposable {
 		labelsDomNode.textContent = [item.originalLabel, item.modifiedLabel].filter((label) => label !== undefined).join(' ↔ ');
 		this.toggleDomNode.append(collapsedIconDomNode, expandedIconDomNode, titleDomNode, labelsDomNode);
 		this.headerDomNode.append(this.toggleDomNode);
+		this.incompleteStatusDomNode = h(ownerDocument, 'span');
+		this.incompleteStatusDomNode.className = 'stanza-multi-diff-editor-incomplete-status';
+		this.incompleteStatusDomNode.setAttribute('role', 'status');
+		this.incompleteStatusDomNode.setAttribute('aria-live', 'polite');
+		this.headerDomNode.append(this.incompleteStatusDomNode);
+		this.updateIncompleteStatus();
 		if (createItemActions) {
 			const actionsDomNode = h(ownerDocument, 'div');
 			actionsDomNode.className = 'stanza-multi-diff-editor-file-actions';
@@ -358,6 +370,12 @@ class MultiDiffSection extends Disposable {
 		this.domNode.style.height = `${layout.height}px`;
 		this.domNode.style.top = `${layout.top}px`;
 		this.bodyDomNode.style.height = `${layout.bodyHeight}px`;
+	}
+
+	public updateIncompleteStatus(): void {
+		this.incompleteStatusDomNode.textContent = this.item.model.state.kind === 'ready' && this.item.model.state.quitEarly
+			? localize('diffEditor.incompleteShort', 'Diff may be incomplete')
+			: '';
 	}
 
 	public setCollapsed(collapsed: boolean): void {

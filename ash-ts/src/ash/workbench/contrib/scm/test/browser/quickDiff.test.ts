@@ -6,9 +6,12 @@ import { AbstractCodeEditorService } from '../../../../../editor/browser/service
 import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IQuickDiffEditorControllerService, IQuickDiffModelService } from '../../common/quickDiff.js';
-import { Emitter } from '../../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
+import { type CancellationToken } from '../../../../../base/common/cancellation.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
+import { type ITextModel } from '../../../../../editor/common/model.js';
+import { type IDocumentDiffProviderOptions } from '../../../../../editor/common/diff/documentDiffProvider.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { DiffTestPort } from '../../../../../editor/test/browser/services/diffTestPort.js';
 import { DiffService } from '../../../../services/diff/browser/diffService.js';
@@ -83,9 +86,44 @@ test('Quick Diff whitespace option inherits Diff settings without refetching the
 	await waitFor(() => reference.object.state.changes.length === 1);
 	await configuration.updateValue(ScmConfiguration.diffDecorationsIgnoreTrimWhitespace, 'inherit');
 	await waitFor(() => reference.object.state.comparisons[0]?.model.state.kind === 'ready' && reference.object.state.changes.length === 0);
+	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, false, { overrideIdentifier: 'typescript' });
+	assert.equal(reference.object.state.changes.length, 0);
+	model.setLanguage('typescript');
+	await waitFor(() => reference.object.state.changes.length === 1);
+	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, true, { overrideIdentifier: 'typescript' });
+	await waitFor(() => reference.object.state.comparisons[0]?.model.state.kind === 'ready' && reference.object.state.changes.length === 0);
 	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, false);
+	assert.equal(reference.object.state.changes.length, 0);
+	model.setLanguage('javascript');
 	await waitFor(() => reference.object.state.changes.length === 1);
 	assert.equal(baselineRequests, 1);
+});
+
+test('Quick Diff passes its standard one-second computation limit to the diff provider', async () => {
+	using quickDiffService = new WorkbenchQuickDiffService();
+	using providerRegistration = quickDiffService.addProvider({
+		id: 'test', label: 'Index',
+		async provideOriginalResource(resource) {
+			return { providerId: 'test', providerLabel: 'Index', label: 'Index', originalResource: resource, revision: 1, text: 'before' };
+		},
+	});
+	using configuration = new InMemoryConfigurationService();
+	const limits: number[] = [];
+	using modelService = new QuickDiffModelService(quickDiffService, {
+		createComputationService: () => ({
+			onDidChange: Event.None,
+			async computeDiff(_original: ITextModel, _modified: ITextModel, options: IDocumentDiffProviderOptions, _token: CancellationToken) {
+				limits.push(options.maxComputationTimeMs);
+				return { identical: false, quitEarly: false, changes: [], moves: [] };
+			},
+			dispose() {},
+			[Symbol.dispose]() {},
+		}),
+	}, configuration);
+	using model = new TextModel('after', { resource: URI.file('/workspace/limit.ts') });
+	using reference = modelService.createModelReference(URI.file('/workspace/limit.ts'), model);
+	await waitFor(() => reference.object.state.comparisons[0]?.model.state.kind === 'ready');
+	assert.deepEqual(limits, [1_000]);
 });
 
 test('Registered Quick Diff creates after first render and releases decorations on model detach', async () => {

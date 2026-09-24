@@ -361,6 +361,7 @@ export const CodeEditorConfiguration = Object.freeze({
 		]),
 	}),
 	diffIgnoreTrimWhitespace: 'diffEditor.ignoreTrimWhitespace',
+	diffMaxComputationTime: 'diffEditor.maxComputationTime',
 	diffShowLineNumbers: configurationRegistry.registerConfiguration<boolean>({
 		key: "diffEditor.showLineNumbers",
 		defaultValue: true,
@@ -393,10 +394,16 @@ export const CodeEditorConfiguration = Object.freeze({
 	}),
 });
 
-export function getDiffComputationOptions(configuration: IConfigurationService): IDocumentDiffProviderOptions {
+export function getDiffComputationOptions(configuration: IConfigurationService, languageId: string): IDocumentDiffProviderOptions {
 	return {
-		ignoreTrimWhitespace: configuration.getValue<boolean>(CodeEditorConfiguration.diffIgnoreTrimWhitespace),
-		maxComputationTimeMs: 0,
+		ignoreTrimWhitespace: configuration.getValue<boolean>(
+			CodeEditorConfiguration.diffIgnoreTrimWhitespace,
+			{ overrideIdentifier: languageId },
+		),
+		maxComputationTimeMs: configuration.getValue<number>(
+			CodeEditorConfiguration.diffMaxComputationTime,
+			{ overrideIdentifier: languageId },
+		),
 		computeMoves: false,
 	};
 }

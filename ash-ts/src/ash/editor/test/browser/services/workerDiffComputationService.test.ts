@@ -27,13 +27,34 @@ suite('Frontend diff Worker', () => {
 		assert.deepEqual(second.changes.map(change => [change.original.startLineNumber, change.original.endLineNumberExclusive, change.modified.startLineNumber]), [[2, 3, 2]]);
 	});
 
-	test('applies provider options while preserving byte-wise identical state', async () => {
+	test('applies provider options while keeping whitespace-only changes non-identical', async () => {
 		using service = new WorkerDiffComputationService(() => new DiffTestPort());
 		const ignoredWhitespace = await compute(service, '  same  ', 'same', { ...options, ignoreTrimWhitespace: true });
 		assert.deepEqual(ignoredWhitespace.changes, []);
 		assert.equal(ignoredWhitespace.identical, false);
 		const moved = await compute(service, 'move\nstay one\nstay two', 'stay one\nstay two\nmove', { ...options, computeMoves: true });
 		assert.deepEqual(moved.moves.map(move => [move.lineRangeMapping.original.startLineNumber, move.lineRangeMapping.modified.startLineNumber]), [[1, 3]]);
+	});
+
+	test('compares logical lines when document line endings differ', async () => {
+		using service = new WorkerDiffComputationService(() => new DiffTestPort());
+		const same = await compute(service, 'first\r\nsecond\r\n', 'first\nsecond\n');
+		assert.deepEqual(same, { identical: true, quitEarly: false, changes: [], moves: [] });
+
+		const changed = await compute(service, 'first\r\nold\r\nlast', 'first\nnew\nlast');
+		assert.equal(changed.identical, false);
+		assert.deepEqual(changed.changes.map(change => [
+			change.original.startLineNumber,
+			change.original.endLineNumberExclusive,
+			change.modified.startLineNumber,
+			change.modified.endLineNumberExclusive,
+		]), [[2, 3, 2, 3]]);
+		assert.deepEqual(changed.changes[0]!.innerChanges?.map(change => [
+			change.originalRange.startColumn,
+			change.originalRange.endColumn,
+			change.modifiedRange.startColumn,
+			change.modifiedRange.endColumn,
+		]), [[1, 4, 1, 4]]);
 	});
 
 	test('cancels one comparison without discarding a newer result', async () => {

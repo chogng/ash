@@ -5,6 +5,7 @@ import { diffEditorDefaultOptions } from './diffEditor.js';
 import { editorOptionsRegistry, EditorLineWrapping } from './editorOptions.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationPropertySchema, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
+import { localize } from '../../../nls.js';
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 
@@ -379,6 +380,23 @@ configurationRegistry.registerConfiguration({
 		title: 'Ignore trim whitespace in diffs',
 		description: 'Ignore changes in leading or trailing whitespace when comparing files.',
 		valueType: 'boolean',
+	},
+});
+configurationRegistry.registerConfiguration({
+	key: 'diffEditor.maxComputationTime',
+	defaultValue: diffEditorDefaultOptions.maxComputationTime,
+	parse(value) {
+		if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+			throw new RangeError('diffEditor.maxComputationTime must be a non-negative integer');
+		}
+		return value;
+	},
+	setting: {
+		title: localize('diffEditor.maxComputationTime.title', 'Max computation time'),
+		description: localize('diffEditor.maxComputationTime.description', 'Maximum time in milliseconds to compute a diff. Set to 0 for no time limit.'),
+		valueType: 'number',
+		minimum: 0,
+		maximum: Number.MAX_SAFE_INTEGER,
 	},
 });
 configurationRegistry.registerConfiguration({

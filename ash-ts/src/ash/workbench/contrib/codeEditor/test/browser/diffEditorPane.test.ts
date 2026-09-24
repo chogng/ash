@@ -97,9 +97,10 @@ test('Diff pane recomputes an open comparison when ignore-trim-whitespace change
 	using services = new DisposableStore();
 	const container = createCodeEditorServices(services);
 	const configuration = container.get(IConfigurationService);
+	const seenLimits: number[] = [];
 	const pane = container.createInstance(DiffEditorPane, resourceStore, {
 		modelService: models,
-		createComputationService: () => new PaneTestDiffComputationService(),
+		createComputationService: () => new PaneTestDiffComputationService(options => seenLimits.push(options.maxComputationTimeMs)),
 		codeEditorService,
 		breadcrumbs: false,
 	});
@@ -111,6 +112,49 @@ test('Diff pane recomputes an open comparison when ignore-trim-whitespace change
 	await Promise.resolve();
 	assert.ok(parent.querySelector('.stanza-diff-editor-row.unchanged'));
 	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, false);
+	await Promise.resolve();
+	assert.ok(parent.querySelector('.stanza-diff-editor-row.modified'));
+	await configuration.updateValue(CodeEditorConfiguration.diffMaxComputationTime, 17);
+	await Promise.resolve();
+	assert.deepEqual(seenLimits, [5_000, 5_000, 17]);
+	pane.dispose();
+	dom.window.close();
+});
+
+test('Diff pane follows the modified language override and language changes', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
+	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
+	using models = new BrowserTextModelService(resourceStore);
+	using codeEditorService = new StandaloneCodeEditorService();
+	using services = new DisposableStore();
+	const container = createCodeEditorServices(services);
+	const configuration = container.get(IConfigurationService);
+	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, false, { overrideIdentifier: 'typescript' });
+	let computations = 0;
+	const pane = container.createInstance(DiffEditorPane, resourceStore, {
+		modelService: models,
+		createComputationService: () => new PaneTestDiffComputationService(() => computations++),
+		codeEditorService,
+		breadcrumbs: false,
+	});
+	pane.create(parent);
+	const modifiedInput = { resource: URI.file('/language-after.ts'), initialText: 'word ', languageId: 'typescript', label: 'after.ts' };
+	await pane.setInput(createDiffEditorInput(
+		{ resource: URI.file('/language-before.ts'), initialText: 'word', label: 'before.ts' },
+		modifiedInput,
+	), new AbortController().signal);
+	await Promise.resolve();
+	assert.ok(parent.querySelector('.stanza-diff-editor-row.modified'));
+	assert.equal(computations, 1);
+	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, true, { overrideIdentifier: 'javascript' });
+	assert.equal(computations, 1);
+	using modified = await models.acquire(modifiedInput, new AbortController().signal);
+	modified.model.setLanguage('javascript');
+	await Promise.resolve();
+	assert.ok(parent.querySelector('.stanza-diff-editor-row.unchanged'));
+	assert.equal(computations, 2);
+	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, false, { overrideIdentifier: 'javascript' });
 	await Promise.resolve();
 	assert.ok(parent.querySelector('.stanza-diff-editor-row.modified'));
 	pane.dispose();
@@ -137,9 +181,11 @@ class BootstrapTextFiles implements ITextFileService {
 
 class PaneTestDiffComputationService implements IDocumentDiffProvider {
 	readonly onDidChange = Event.None;
+	constructor(private readonly observe?: (options: IDocumentDiffProviderOptions) => void) {}
 
 	async computeDiff(original: ITextModel, modified: ITextModel, options: IDocumentDiffProviderOptions, token: CancellationToken): Promise<IDocumentDiff> {
 		assert.equal(token.isCancellationRequested, false);
+		this.observe?.(options);
 		const result = new DefaultLinesDiffComputer().computeDiff(original.getLinesContent(), modified.getLinesContent(), options);
 		return { identical: original.getValue() === modified.getValue(), quitEarly: result.hitTimeout, changes: result.changes, moves: result.moves };
 	}

@@ -153,3 +153,17 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+.stanza-diff-editor-incomplete-status:not([hidden]) {
+  position: absolute;
+  z-index: 8;
+  right: 30px;
+  left: 0;
+  box-sizing: border-box;
+  padding: 4px 8px;
+  color: var(--ash-warning-foreground);
+  background: var(--ash-editor-background);
+  border-bottom: 1px solid currentColor;
+  white-space: normal;
+  pointer-events: none;
+}

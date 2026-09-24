@@ -15,6 +15,7 @@ import { OverviewRulerFeature } from './features/overviewRulerFeature.js';
 import { createDiffEditorRow } from "./diffEditorRows.js";
 import { type IDiffEditor } from '../../editorBrowser.js';
 import { type ICodeEditorService } from '../../services/codeEditorService.js';
+import { localize, onDidChangeNls } from '../../../../nls.js';
 
 const DEFAULT_LINE_HEIGHT = 20;
 const DEFAULT_OVERSCAN_ROW_COUNT = 8;
@@ -53,6 +54,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 	private readonly overviewRuler: OverviewRulerFeature;
 	private readonly layoutEmitter = this._register(new Emitter<IDimension>());
 	private readonly accessibilityStatusElement: HTMLDivElement;
+	private readonly incompleteStatusElement: HTMLDivElement;
 	private readonly model: DiffModel;
 	private readonly lineHeight: number;
 	private readonly overscanRowCount: number;
@@ -82,6 +84,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		this.rowsElement = h(ownerDocument, "div");
 		this.rowsNode = new FastDomNode(this.rowsElement);
 		this.accessibilityStatusElement = h(ownerDocument, "div");
+		this.incompleteStatusElement = h(ownerDocument, "div");
 		this.element.className = "stanza-diff-editor";
 		this.element.classList.toggle("hide-line-numbers", options.showLineNumbers === false);
 		applyFontInfo(this.element, createBareFontInfoFromRawSettings({
@@ -98,8 +101,12 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		this.accessibilityStatusElement.className = "stanza-diff-editor-accessibility-status";
 		this.accessibilityStatusElement.setAttribute("aria-live", "polite");
 		this.accessibilityStatusElement.setAttribute("aria-atomic", "true");
+		this.incompleteStatusElement.className = "stanza-diff-editor-incomplete-status";
+		this.incompleteStatusElement.setAttribute("role", "status");
+		this.incompleteStatusElement.setAttribute("aria-live", "polite");
+		this.updateIncompleteStatus();
 		this.contentElement.append(this.rowsElement);
-		this.element.append(this.contentElement);
+		this.element.append(this.contentElement, this.incompleteStatusElement);
 		options.container.append(this.element);
 		this._register(toDisposable(() => this.element.remove()));
 		this.overviewRuler = this._register(new OverviewRulerFeature(this.element, this.model, this.lineHeight, this.layoutEmitter.event));
@@ -107,6 +114,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		this._register(addDisposableListener(this.element, "scroll", () => this.project()));
 		this._register(addDisposableListener(this.element, "keydown", event => this.handleKeydown(event)));
 		this._register(this.model.onDidChange(() => this.refresh()));
+		this._register(onDidChangeNls(() => this.updateIncompleteStatus()));
 		this._register(observeResize(this.element, ([entry]) => {
 			if (entry) this.layout({ width: entry.contentRect.width, height: entry.contentRect.height });
 		}));
@@ -149,7 +157,15 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 			: this.model.state.kind === "error"
 				? `Could not compute differences: ${this.model.state.error.message}`
 				: "";
+		this.updateIncompleteStatus();
 		this.project(true);
+	}
+
+	private updateIncompleteStatus(): void {
+		this.incompleteStatusElement.hidden = this.model.state.kind !== "ready" || !this.model.state.quitEarly;
+		this.incompleteStatusElement.textContent = this.incompleteStatusElement.hidden
+			? ""
+			: localize('diffEditor.incomplete', 'Diff computation stopped after the time limit. Results may be incomplete.');
 	}
 
 	revealOriginalLine(lineIndex: number): void {
@@ -224,6 +240,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 
 	private project(force = false): void {
 		this.layoutEmitter.fire({ width: this.viewportWidth, height: this.viewportHeight });
+		this.incompleteStatusElement.style.top = `${this.element.scrollTop}px`;
 		const rows = this.currentDiff?.rows ?? [];
 		const contentHeight = rows.length * this.lineHeight;
 		this.contentNode.setHeight(contentHeight);

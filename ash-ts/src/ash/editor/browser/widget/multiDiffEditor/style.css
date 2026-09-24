@@ -120,6 +120,16 @@
 	padding-right: 4px;
 }
 
+.stanza-multi-diff-editor-incomplete-status:not(:empty) {
+	flex: none;
+	max-width: 30%;
+	overflow: hidden;
+	padding: 0 8px;
+	color: var(--ash-warning-foreground);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 .stanza-multi-diff-editor-body {
 	position: relative;
 	min-width: 100%;

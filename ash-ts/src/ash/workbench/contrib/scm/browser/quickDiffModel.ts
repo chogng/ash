@@ -18,6 +18,8 @@ interface SharedModelEntry {
 	references: number;
 }
 
+const QUICK_DIFF_MAX_COMPUTATION_TIME_MS = 1_000;
+
 /** Reference-counted owner of Quick Diff models shared by decorations and editor controllers. */
 export class QuickDiffModelService extends Disposable implements IQuickDiffModelService {
 	private readonly entries = new WeakMap<TextModel, SharedModelEntry>();
@@ -77,7 +79,14 @@ export class QuickDiffModel extends Disposable implements IQuickDiffModel {
 		this.diffProvider = this._register(diffService.createComputationService());
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (!event.affectsConfiguration(ScmConfiguration.diffDecorationsIgnoreTrimWhitespace)
-				&& !event.affectsConfiguration(CodeEditorConfiguration.diffIgnoreTrimWhitespace)) return;
+				&& !event.affectsConfiguration(
+					CodeEditorConfiguration.diffIgnoreTrimWhitespace,
+					{ overrideIdentifier: modified.getLanguageId() },
+				)) return;
+			const options = this.diffOptions();
+			for (const comparison of this._state.comparisons) comparison.model.updateOptions(options);
+		}));
+		this._register(modified.onDidChangeLanguage(() => {
 			const options = this.diffOptions();
 			for (const comparison of this._state.comparisons) comparison.model.updateOptions(options);
 		}));
@@ -148,9 +157,12 @@ export class QuickDiffModel extends Disposable implements IQuickDiffModel {
 		const setting = this.configuration.getValue<ScmDiffDecorationsIgnoreTrimWhitespace>(ScmConfiguration.diffDecorationsIgnoreTrimWhitespace);
 		return {
 			ignoreTrimWhitespace: setting === 'inherit'
-				? this.configuration.getValue<boolean>(CodeEditorConfiguration.diffIgnoreTrimWhitespace)
+				? this.configuration.getValue<boolean>(
+					CodeEditorConfiguration.diffIgnoreTrimWhitespace,
+					{ overrideIdentifier: this.modified.getLanguageId() },
+				)
 				: setting === 'true',
-			maxComputationTimeMs: 0,
+			maxComputationTimeMs: QUICK_DIFF_MAX_COMPUTATION_TIME_MS,
 			computeMoves: false,
 		};
 	}

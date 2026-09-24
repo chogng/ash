@@ -61,5 +61,5 @@ function snapshot(model: ITextModel): DiffComputationRequest['original'] {
 	for (let chunk = reader.read(); chunk !== null; chunk = reader.read()) {
 		chunks.push(chunk);
 	}
-	return { version, text: chunks.join('') };
+	return { version, text: chunks.join('').replace(/\r\n|\r/g, '\n') };
 }
