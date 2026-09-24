@@ -4,9 +4,9 @@
 
 原有编辑器快捷键 → `contrib/inPlaceReplace/browser/inPlaceReplace.ts` → Worker `navigateValueSet` → 新增同路径 `inPlaceReplaceCommand.ts` → 编辑器命令执行。专用命令按替换结果计算选区：有选中文本时选中完整新值，空选区时保持原光标列（但不越过新值末尾）。现有 Worker 版本门禁、选区复核和撤销边界继续由原调用链负责。
 
-原有触发器 → `contrib/parameterHints/browser/parameterHints.ts` → 新增同路径 `provideSignatureHelp.ts` → 优先级顺序中的第一个有效提供者。新文件持有 `parameterHintsVisible` / `parameterHintsMultipleSignatures` 上下文键、触发字符筛选和提供者结果校验；控制器继续负责请求取消、界面、焦点与键盘交互。无效或报错的提供者不阻断后续提供者；模型版本变动或取消后不发布结果。
+原有触发器 → `contrib/parameterHints/browser/parameterHints.ts` → 新增同路径 `parameterHintsModel.ts` → `provideSignatureHelp.ts` → 新增同路径 `parameterHintsWidget.ts`。Model 唯一持有排队触发、请求取消和当前签名；provider 文件按优先级筛选并校验结果，无效或报错的提供者不阻断后续提供者。Widget 唯一持有提示节点、`parameterHintsVisible` / `parameterHintsMultipleSignatures` 状态和光标附近的定位，使用编辑器现有 Content Widget 容器，并保留签名切换时的节点。控制器只连接公开动作和键盘事件。模型版本变动或取消后不发布结果；提示对话框和键盘说明已进入英中双语目录。
 
-值替换的定向 Widget 单测 2 项和 Chromium 快捷键场景 1 项通过；参数提示单测 10 项、Chromium 场景 31 项通过。Stanza、Renderer 生产构建通过；完整 Editor 对齐检查通过，包含 650 个浏览器场景，未生成源码目录下的 JavaScript。
+值替换的定向 Widget 单测 2 项和 Chromium 快捷键场景 1 项通过；参数提示单测 10 项、Chromium 场景 31 项及中文文案定向单测通过。Stanza、Renderer 生产构建通过；完整 Editor 对齐检查通过，包含 650 个浏览器场景，未生成源码目录下的 JavaScript。
 
 ## Contrib 长行点击契约（2026-09-24）
 

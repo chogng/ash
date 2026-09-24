@@ -92,6 +92,8 @@ test('editor action labels use the selected Chinese language catalog', async () 
 			actions.find(action => action.id === 'editor.action.moveCarretRightAction')?.label,
 			actions.find(action => action.id === 'editor.action.insertFinalNewLine')?.label,
 		], ['开发者：强制重新分词', '将选中文本左移', '将选中文本右移', '插入文件末尾换行符']);
+		const { localize } = await import('../../../../../nls.js');
+		assert.equal(localize('parameterHints.dialog', 'Parameter hints'), '参数提示');
 	} finally {
 		resetNlsResolver();
 	}
