@@ -610,6 +610,15 @@ impl AgentRuntime for Runtime<'_> {
             agent_tree,
         })
     }
+    fn list_sessions(&self) -> Result<Vec<ash_protocol::Session>, CoreError> {
+        self.threads.list_sessions()
+    }
+    fn read_session_catalog(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<Option<ash_protocol::Session>, CoreError> {
+        self.threads.read_session_catalog(session_id)
+    }
     fn list_thread_catalog(&self) -> Result<Vec<ash_thread_store::ThreadCatalogRecord>, CoreError> {
         self.threads.list_thread_catalog()
     }

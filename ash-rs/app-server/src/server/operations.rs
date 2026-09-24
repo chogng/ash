@@ -1613,14 +1613,14 @@ impl AppServer {
     }
 
     pub(super) fn session_views(&self) -> Result<Vec<Session>, RpcError> {
-        self.threads.list_sessions().map_err(core_error)
+        self.agent_runtime().list_sessions().map_err(core_error)
     }
 
     pub(super) fn session_catalog_view(
         &self,
         session_id: &ash_protocol::SessionId,
     ) -> Result<Option<Session>, RpcError> {
-        self.threads
+        self.agent_runtime()
             .read_session_catalog(session_id)
             .map_err(core_error)
     }

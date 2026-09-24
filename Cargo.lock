@@ -641,7 +641,6 @@ dependencies = [
  "ash-sleep",
  "ash-state",
  "ash-syntax",
- "ash-thread-store",
  "ash-thread-transcript",
  "ash-tools",
  "ash-typst",

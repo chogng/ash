@@ -130,7 +130,6 @@ ash-skills = { workspace = true }
 ash-skills-extension = { workspace = true }
 ash-syntax = { workspace = true }
 ash-thread-transcript = { workspace = true }
-ash-thread-store = { workspace = true }
 git-turn-changes = { workspace = true }
 ash-tools = { workspace = true }
 ash-web-search-extension = { workspace = true }

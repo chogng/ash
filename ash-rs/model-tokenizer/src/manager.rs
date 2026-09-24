@@ -454,10 +454,9 @@ fn cache_directory(cache_root: &Path, manifest: &crate::TokenizerAssetManifest) 
 }
 
 fn cache_directory_for(cache_root: &Path, model: &ModelRef, revision: &str) -> PathBuf {
-    cache_root
-        .join(digest_directory(model.provider.as_str().as_bytes()))
-        .join(digest_directory(model.model.as_str().as_bytes()))
-        .join(digest_directory(revision.as_bytes()))
+    let identity = serde_json::to_vec(&(model.provider.as_str(), model.model.as_str(), revision))
+        .expect("tokenizer cache identity always serializes");
+    cache_root.join(digest_directory(&identity))
 }
 
 fn digest_directory(bytes: &[u8]) -> String {
