@@ -1,4 +1,5 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
+import { hash } from "../../../../base/common/hash.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Position } from "../../../common/core/position.js";
 import { Range } from "../../../common/core/range.js";
@@ -19,6 +20,16 @@ interface EditorFoldingRegionRecord {
 	collapsed: boolean;
 	readonly source: EditorFoldingRangeSource;
 }
+
+export interface FoldingLineMemento {
+	readonly startLineNumber: number;
+	readonly endLineNumber: number;
+	readonly isCollapsed: boolean;
+	readonly source: EditorFoldingRangeSource;
+	readonly checksum: number;
+}
+
+export type CollapseMemento = readonly FoldingLineMemento[];
 
 /**
  * Owns one editor's fold state independently from text and browser presentation.
@@ -47,6 +58,55 @@ export class EditorFoldingModel extends Disposable {
 	/** Returns ordered, immutable current regions. */
 	get regions(): readonly EditorFoldingRegion[] {
 		return Object.freeze(this.records.map(record => this.toRegion(record)));
+	}
+
+	/** Stores collapsed and manually created ranges for the editor view state. */
+	getMemento(): CollapseMemento | undefined {
+		const ranges = this.regions
+			.filter(region => region.collapsed || region.source === EditorFoldingRangeSource.Manual)
+			.map(region => ({
+				startLineNumber: region.startLineIndex + 1,
+				endLineNumber: region.endLineIndex + 1,
+				isCollapsed: region.collapsed,
+				source: region.source,
+				checksum: this.getLinesChecksum(region.startLineIndex + 1, region.endLineIndex + 1),
+			}));
+		return ranges.length ? ranges : undefined;
+	}
+
+	/** Restores saved ranges before or after language providers finish computing. */
+	applyMemento(state: CollapseMemento): void {
+		if (!Array.isArray(state)) return;
+		const next = this.regions.map(region => ({ ...region }));
+		let changed = false;
+		for (const saved of state) {
+			if (!Number.isSafeInteger(saved.startLineNumber) || !Number.isSafeInteger(saved.endLineNumber)
+				|| saved.startLineNumber < 1 || saved.endLineNumber > this.textModel.lineCount
+				|| saved.startLineNumber >= saved.endLineNumber
+				|| saved.checksum !== this.getLinesChecksum(saved.startLineNumber, saved.endLineNumber)) continue;
+			const range = {
+				startLineIndex: saved.startLineNumber - 1,
+				endLineIndex: saved.endLineNumber - 1,
+				collapsed: saved.isCollapsed,
+				source: saved.source,
+			};
+			const index = next.findIndex(current => editorFoldingRangeKey(current) === editorFoldingRangeKey(range));
+			if (index >= 0) {
+				next[index] = range;
+				changed = true;
+			} else if (next.every(current => current.endLineIndex < range.startLineIndex
+				|| range.endLineIndex < current.startLineIndex
+				|| current.startLineIndex <= range.startLineIndex && range.endLineIndex <= current.endLineIndex
+				|| range.startLineIndex <= current.startLineIndex && current.endLineIndex <= range.endLineIndex)) {
+				next.push(range);
+				changed = true;
+			}
+		}
+		if (changed) this.setRanges(next);
+	}
+
+	private getLinesChecksum(startLineNumber: number, endLineNumber: number): number {
+		return hash(this.textModel.getLineContent(startLineNumber + 1) + this.textModel.getLineContent(endLineNumber)) % 1_000_000;
 	}
 
 	/** Replaces all known ranges after validating non-crossing physical-line spans. */

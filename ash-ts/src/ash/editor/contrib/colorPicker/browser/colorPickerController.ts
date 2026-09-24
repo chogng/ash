@@ -74,7 +74,7 @@ export class ColorPickerController extends Disposable {
 		this.documentColorRequest?.abort();
 		const request = this.documentColorRequest = new AbortController();
 		try {
-			let data = this.detector.findAtPosition(position);
+			let data = this.detector.getColorData(position) ?? undefined;
 			if (!data) {
 				const colors = await this.service.provideDocumentColors(this.viewport.textModel.getLanguageId(), 'auto', request.signal);
 				if (request.signal.aborted) return;
@@ -110,7 +110,7 @@ export class ColorPickerController extends Disposable {
 		if (this.editor.getOption(EditorOption.colorDecoratorsActivatedOn) === 'hover') return;
 		const target = event.target;
 		if (target?.type !== MouseTargetType.CONTENT_TEXT || target.detail.injectedText?.options.attachedData !== ColorDecorationInjectedTextMarker || !target.position) return;
-		const data = this.detector.findAtPosition(this.viewport.coordinatesConverter.convertViewPositionToModelPosition(target.position));
+		const data = this.detector.getColorData(this.viewport.coordinatesConverter.convertViewPositionToModelPosition(target.position));
 		if (!data) return;
 		event.event.preventDefault();
 		event.event.stopPropagation();
@@ -136,16 +136,16 @@ export class ColorPickerController extends Disposable {
 		this.hoverTimer.clear();
 	}
 
-	private dataAtPointer(event: PointerEvent): ColorData | undefined {
+	private dataAtPointer(event: PointerEvent): ColorData | null {
 		const swatch = colorSwatch(event.target);
 		if (swatch) {
 			const viewPosition = this.viewport.getPositionFromDOMInfo(swatch, 0);
 			if (viewPosition && this.viewport.getInjectedTextAt(viewPosition)?.options.attachedData === ColorDecorationInjectedTextMarker) {
-				return this.detector.findAtPosition(this.viewport.coordinatesConverter.convertViewPositionToModelPosition(viewPosition));
+				return this.detector.getColorData(this.viewport.coordinatesConverter.convertViewPositionToModelPosition(viewPosition));
 			}
 		}
 		const target = this.viewport.getNearestTargetAtClientPoint({ clientX: event.clientX, clientY: event.clientY });
-		return target ? this.detector.findAtPosition(target.position) : undefined;
+		return target ? this.detector.getColorData(target.position) : null;
 	}
 
 	private async show(data: ColorData, focus: boolean): Promise<void> {

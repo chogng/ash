@@ -148,6 +148,8 @@ interface StandaloneHarness {
 	attachEmptyEditor(): void;
 	detachEmptyEditor(): { readonly value: string; readonly modelDisposed: boolean };
 	updateContributionOptions(options: IEditorOptions): void;
+	saveFoldingViewState(): void;
+	restoreFoldingViewState(): void;
 	readContributionDecorations(): { colors: number; highlights: number; folding: number };
 	prepareStickyHeaders(): void;
 	prepareStickySymbols(): void;
@@ -543,6 +545,7 @@ let stickySyntaxRegistration: { dispose(): void } | undefined;
 let stickyOutlineRegistration: { dispose(): void } | undefined;
 const emptyResources = new DisposableStore();
 let emptyEditor: stanza.IStandaloneCodeEditor;
+let savedFoldingViewState: ReturnType<typeof callerEditor.saveViewState> = null;
 
 window.ashStandaloneIntegration = {
 	setTokenInspectionPosition: column => callerEditor.setPosition(new stanza.Position(1, column)),
@@ -687,6 +690,8 @@ window.ashStandaloneIntegration = {
 		return { value: callerModel.getValue(), modelDisposed: callerModel.isDisposed() };
 	},
 	updateContributionOptions: options => callerEditor.updateOptions(options),
+	saveFoldingViewState: () => { savedFoldingViewState = callerEditor.saveViewState(); },
+	restoreFoldingViewState: () => callerEditor.restoreViewState(savedFoldingViewState),
 	readContributionDecorations: () => {
 		const decorations = callerModel.getAllDecorations();
 		return {

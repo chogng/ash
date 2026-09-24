@@ -1,5 +1,25 @@
 # Editor API 对齐状态
 
+## Contrib 控制器身份入口（2026-09-24，续批）
+
+补全链：`editor.action.triggerSuggest` → `SuggestController.get(editor)` → 已有请求与会话 → 补全控件。注册 ID 改为上游公开的 `editor.contrib.suggestController`，原 `editor.contrib.suggest` 入口退出；模型、控件和请求 owner 不变。定向单测 2 项与 Chromium 场景 2 项通过，覆盖启用/关闭、模型解绑、显式请求、provider 撤销和公开动作。
+
+折叠链：`editor.fold` / `editor.unfold` / 组合键动作 → `FoldingController.get(editor)` → 原折叠模型 → 隐藏行和选区。注册与动作统一使用 `FoldingController.ID`；为在注册时读取类常量，将注册块移至类声明之后，未改变注册条件或调用顺序。Chromium 场景 2 项通过，覆盖多选区、只读、启停、递归与全部动作，以及组合键取消。两项仅对齐公开身份和调用入口，其他 Suggest/Folding 契约继续待核对。
+
+折叠视图状态续批：`CodeEditorWidget.saveViewState/restoreViewState` → `FoldingController.saveViewState/restoreViewState` → `EditorFoldingModel.getMemento/applyMemento` → 原隐藏行模型。状态记录折叠区域和手动区域的行号、来源及边界行文本校验；恢复可在 provider 结果到达前应用，后续范围更新继续保留匹配折叠状态，校验行已变化的区域不恢复。折叠模型与编辑器贡献仍是唯一状态 owner。定向单测 15 项及完整 Editor 单测 239/239 个文件通过；Chromium 视图状态场景 1 项通过，验证保存、展开、恢复后可见行数从 3 到 9 再回到 3；Stanza 生产构建通过。完整 Chromium 套件本批 638 项中 637 项通过，`tokenization.integration.spec.ts` 的 pending parser 诊断版本场景失败，定向重跑仍失败；该场景不经过本批控制器链，本批不声明全套通过。
+
+## Contrib CodeLens 公开端口（2026-09-24）
+
+生产链为语言 provider → `CodeLensContribution` → `CodeLensWidget` → 可见提示的命令按钮。Widget 仍拥有稳定 DOM、视图区和释放；控制器仍拥有请求、结果模型与缓存。双方都有的 `codelensWidget.ts` 原地将仅 Ash 的 `codeLensItems`、`updateResolvedCodeLensItems` 迁为上游公开的 `getItems()`、`updateCommands(symbols)`，同批迁移唯一生产调用方；没有建立双入口，也没有改变视图布局或命令执行方式。其他 CodeLensWidget 成员差异仍待按实际调用链核对，本批不把整个声明记为已处理。
+
+既有 `codelens.test.ts` 的 7 项测试通过，覆盖 provider 归属、可见范围的延迟解析、按钮执行、缓存刷新及释放。全量 Editor 单测 239/239 个文件通过，Stanza 生产构建通过；两个 CodeLens Chromium 场景通过。单测环境仍输出既有 JSDOM Canvas 提示。
+
+## Contrib 颜色查询端口（2026-09-24）
+
+生产链为颜色 provider → `ColorDetector` 的模型装饰与颜色数据 → `ColorPickerController` 的光标、点击及悬停入口 → 颜色控件和一次可撤销编辑。双方都有的 `colorDetector.ts` 原地将仅 Ash 的 `findAtPosition` 迁为上游公开的 `getColorData(position)`，无匹配时按契约返回 `null`；同批迁移控制器的四个生产调用点和现有测试。装饰、动态样式、请求取消、控件 DOM 和释放 owner 沿用原实现。其余 ColorDetector 公开契约仍待按真实调用链核对。
+
+颜色拾取器定向单测 6 项和 Chromium 场景 1 项通过；测试覆盖编辑、撤销、失效请求、跟踪范围、无匹配返回与控件释放。最终 `check-editor-alignment.mjs --test=unit` 通过，Editor 单测 239/239 个文件通过，台账、文件集合、CSS 归属、类型检查和 `git diff --check` 均通过；Stanza 生产构建通过。两个声明的成员差异分别为 CodeLensWidget 14 项、ColorDetector 11 项，未将其记为完整对齐。
+
 ## Standalone 目录对齐（2026-09-22，进行中）
 
 起始工作树干净，基线 `9526e1364`。完整目录调查为 6 个同路径文件、3 个仅 Ash 文件、26 个仅上游生产文件（20 个 TypeScript、4 个 CSS、2 个图像）。名称差异只用来调查，不作为实现队列或完成指标。

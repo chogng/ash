@@ -32,6 +32,12 @@ export interface SuggestControllerOptions {
  * separation between View and SuggestController.
  */
 export class SuggestController extends Disposable {
+	public static readonly ID = 'editor.contrib.suggestController';
+
+	public static get(editor: ICodeEditor): SuggestController | null {
+		return editor.getContribution<SuggestController>(SuggestController.ID);
+	}
+
 	readonly widget: CompletionWidget;
 	private readonly onRequestError: (error: unknown) => void;
 	private completionRequest: AbortController | undefined;
@@ -330,7 +336,7 @@ function reportRequestError(error: unknown): void {
 }
 
 registerEditorContribution({
-	id: "editor.contrib.suggest",
+	id: SuggestController.ID,
 	install: context => {
 		if (context.kind !== "text") return;
 		if (context.options.suggestions !== undefined && !isCompletionsEnabledFromObject(context.options.suggestions, context.languageId)) return;
@@ -394,7 +400,7 @@ export class TriggerSuggestAction extends EditorAction {
 
 	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
 		editor.focus();
-		editor.getContribution<SuggestController>('editor.contrib.suggest')?.triggerSuggest();
+		SuggestController.get(editor)?.triggerSuggest();
 	}
 }
 

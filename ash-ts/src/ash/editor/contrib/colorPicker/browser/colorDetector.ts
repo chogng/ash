@@ -61,9 +61,9 @@ export class ColorDetector extends Disposable {
 		return this.detectedCount > this.editor.getOption(EditorOption.colorDecoratorsLimit);
 	}
 
-	findAtPosition(position: Position): ColorData | undefined {
+	getColorData(position: Position): ColorData | null {
 		const decoration = this.decorations.decorations.find(candidate => candidate.range.containsPosition(position));
-		return decoration ? colorDataAtCurrentRange(decoration) : undefined;
+		return decoration ? colorDataAtCurrentRange(decoration) : null;
 	}
 
 	refresh(): void {

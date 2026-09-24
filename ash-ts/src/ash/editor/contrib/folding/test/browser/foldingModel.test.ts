@@ -52,6 +52,34 @@ test("Folding model retains matching provider collapse state while replacing pro
 	assert.equal(folding.toggleContainingLine(1)?.collapsed, false);
 });
 
+test('Folding memento restores collapsed and manual ranges across provider updates', () => {
+	using model = new TextModel('outer\n  inner\n  end inner\nend outer\nother');
+	using folding = new EditorFoldingModel(model);
+	folding.setProviderRanges([{ startLineIndex: 0, endLineIndex: 3 }]);
+	folding.toggleAtLine(0);
+	folding.addManualRange(1, 2);
+	folding.toggleAtLine(1);
+	const saved = folding.getMemento();
+	assert.deepEqual(saved?.map(range => ({ start: range.startLineNumber, end: range.endLineNumber, collapsed: range.isCollapsed, source: range.source })), [
+		{ start: 1, end: 4, collapsed: true, source: EditorFoldingRangeSource.Provider },
+		{ start: 2, end: 3, collapsed: false, source: EditorFoldingRangeSource.Manual },
+	]);
+
+	folding.setRanges([]);
+	folding.applyMemento(saved!);
+	assert.deepEqual(folding.regions.map(region => ({ collapsed: region.collapsed, source: region.source })), [
+		{ collapsed: true, source: EditorFoldingRangeSource.Provider },
+		{ collapsed: false, source: EditorFoldingRangeSource.Manual },
+	]);
+	folding.setProviderRanges([{ startLineIndex: 0, endLineIndex: 3 }]);
+	assert.deepEqual(folding.regions.map(region => region.collapsed), [true, false]);
+
+	model.applyEdits([{ range: Range.fromPositions(new Position(2, 1), new Position(3, 12)), text: 'changed\nchanged end' }]);
+	folding.setRanges([]);
+	folding.applyMemento(saved!);
+	assert.deepEqual(folding.regions, []);
+});
+
 test("Folding model recursively changes only the innermost containing hierarchy", () => {
 	using model = new TextModel("outer\nchild\ngrandchild\nend child\nend outer\nunrelated\nbody");
 	using folding = new EditorFoldingModel(model);

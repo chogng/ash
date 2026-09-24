@@ -8,7 +8,7 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type ICodeEditor, type IEditorMouseEvent, MouseTargetType } from '../../../browser/editorBrowser.js';
-import { EditorFoldingModel } from "./foldingModel.js";
+import { EditorFoldingModel, type CollapseMemento } from "./foldingModel.js";
 import { EditorFoldingRangeSource, type EditorFoldingRange, type EditorFoldingRegion } from "./foldingRanges.js";
 import { Position } from "../../../common/core/position.js";
 import { Selection } from "../../../common/core/selection.js";
@@ -34,30 +34,10 @@ import './folding.css';
 
 const foldingEnabled = new RawContextKey<boolean>('foldingEnabled', false);
 
-registerEditorContribution({
-	id: "editor.contrib.folding",
-	configure: context => {
-		const folding = context.register(new EditorFoldingModel(context.model));
-		const hidden = context.register(new EditorHiddenRangeModel(context.model, folding));
-		context.provideService(TextEditorCapability.folding, folding);
-		const syncHiddenAreas = (): void => context.viewModel.setHiddenAreas(hidden.hiddenRanges);
-		syncHiddenAreas();
-		context.register(hidden.onDidChange(syncHiddenAreas));
-	},
-	install: context => {
-		if (context.kind !== "text" || context.model.largeFile.tooLargeForTokenization) return;
-		const folding = context.getService(TextEditorCapability.folding);
-		const service = context.register(new FoldingRangeService(context.model, context.languageFeaturesService.foldingRangeProvider, context.options.input.resource));
-		context.register(new FoldingRangeSource(context.editor, folding, service, {
-			configurations: context.configurations,
-			providers: context.languageFeaturesService.foldingRangeProvider,
-			tabSize: context.options.indentation?.tabSize,
-			onError: context.onLanguageError,
-		}));
-		context.register(new FoldingDecorationPresenter(context.editor, folding, new FoldingDecorationProvider(context.editor)));
-		return context.instantiationService.createInstance(FoldingController, context.editor, context.view, folding);
-	},
-});
+interface FoldingStateMemento {
+	readonly collapsedRegions?: CollapseMemento;
+	readonly lineCount?: number;
+}
 
 class FoldingDecorationPresenter extends Disposable {
 	private decorationIds: string[] = [];
@@ -174,6 +154,12 @@ class FoldingRangeSource extends Disposable {
 
 /** Applies editor actions and gutter controls to the existing folding model. */
 export class FoldingController extends Disposable {
+	public static readonly ID = 'editor.contrib.folding';
+
+	public static get(editor: ICodeEditor): FoldingController | null {
+		return editor.getContribution<FoldingController>(FoldingController.ID);
+	}
+
 	private readonly viewport: View;
 	private readonly editor: ICodeEditor;
 	private readonly folding: EditorFoldingModel;
@@ -205,6 +191,21 @@ export class FoldingController extends Disposable {
 			this.dispose();
 			throw error;
 		}
+	}
+
+	public saveViewState(): FoldingStateMemento {
+		if (!this.editor.getModel() || !this.editor.getOption(EditorOption.folding)
+			|| this.folding.model.largeFile.tooLargeForTokenization) return {};
+		return {
+			collapsedRegions: this.folding.getMemento(),
+			lineCount: this.folding.model.lineCount,
+		};
+	}
+
+	public restoreViewState(state: FoldingStateMemento | undefined): void {
+		if (!state?.collapsedRegions?.length || !this.editor.getOption(EditorOption.folding)
+			|| this.folding.model.largeFile.tooLargeForTokenization) return;
+		this.folding.applyMemento(state.collapsedRegions);
 	}
 
 	private handleGutterPointerDown(event: IEditorMouseEvent): void {
@@ -301,6 +302,31 @@ export class FoldingController extends Disposable {
 	}
 }
 
+registerEditorContribution({
+	id: FoldingController.ID,
+	configure: context => {
+		const folding = context.register(new EditorFoldingModel(context.model));
+		const hidden = context.register(new EditorHiddenRangeModel(context.model, folding));
+		context.provideService(TextEditorCapability.folding, folding);
+		const syncHiddenAreas = (): void => context.viewModel.setHiddenAreas(hidden.hiddenRanges);
+		syncHiddenAreas();
+		context.register(hidden.onDidChange(syncHiddenAreas));
+	},
+	install: context => {
+		if (context.kind !== "text" || context.model.largeFile.tooLargeForTokenization) return;
+		const folding = context.getService(TextEditorCapability.folding);
+		const service = context.register(new FoldingRangeService(context.model, context.languageFeaturesService.foldingRangeProvider, context.options.input.resource));
+		context.register(new FoldingRangeSource(context.editor, folding, service, {
+			configurations: context.configurations,
+			providers: context.languageFeaturesService.foldingRangeProvider,
+			tabSize: context.options.indentation?.tabSize,
+			onError: context.onLanguageError,
+		}));
+		context.register(new FoldingDecorationPresenter(context.editor, folding, new FoldingDecorationProvider(context.editor)));
+		return context.instantiationService.createInstance(FoldingController, context.editor, context.view, folding);
+	},
+});
+
 interface FoldingArguments {
 	levels?: number;
 	direction?: 'up' | 'down';
@@ -360,7 +386,7 @@ class FoldAction extends EditorAction {
 	}
 
 	public run(_accessor: ServicesAccessor, editor: ICodeEditor, args: FoldingArguments): void {
-		editor.getContribution<FoldingController>('editor.contrib.folding')?.setContainingFoldCollapsed(true, args);
+		FoldingController.get(editor)?.setContainingFoldCollapsed(true, args);
 	}
 }
 
@@ -381,7 +407,7 @@ class UnfoldAction extends EditorAction {
 	}
 
 	public run(_accessor: ServicesAccessor, editor: ICodeEditor, args: FoldingArguments): void {
-		editor.getContribution<FoldingController>('editor.contrib.folding')?.setContainingFoldCollapsed(false, args);
+		FoldingController.get(editor)?.setContainingFoldCollapsed(false, args);
 	}
 }
 
@@ -409,7 +435,7 @@ function registerFoldChord(
 		}
 
 		run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
-			const controller = editor.getContribution<FoldingController>('editor.contrib.folding');
+			const controller = FoldingController.get(editor);
 			if (controller) run(controller);
 		}
 	}());

@@ -96,10 +96,11 @@ test('color detector returns the tracked range before its debounced provider ref
 	await waitFor(() => detector.totalColorCount === 1);
 
 	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: 'x' }]);
-	const data = detector.findAtPosition(new Position((0) + 1, (2) + 1));
+	const data = detector.getColorData(new Position((0) + 1, (2) + 1));
 
 	assert.ok(data);
 	assert.equal(model.getTextInRange(data.information.range), '#f00');
+	assert.equal(detector.getColorData(new Position(1, 1)), null);
 });
 
 for (const change of ['language', 'provider', 'readOnly', 'dispose'] as const) {

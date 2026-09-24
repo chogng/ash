@@ -23,7 +23,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-await import('../../browser/folding.js');
+const { FoldingController } = await import('../../browser/folding.js');
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 const { FoldingDecorationProvider } = await import('../../browser/foldingDecorations.js');
@@ -89,5 +89,14 @@ test('Folding contribution projects model ranges through FoldingDecorationProvid
 	assert.equal(collapsed?.options.afterContentClassName, 'inline-folded');
 	const collapsedMarker = editor.getDomNode().querySelector<HTMLElement>('.ash-icon-folding-collapsed');
 	assert.equal(collapsedMarker?.title, 'Expand folded range');
+	assert.strictEqual(FoldingController.get(editor)?.constructor, FoldingController);
+	const saved = editor.saveViewState();
+	assert.ok(saved);
+	assert.deepEqual((saved.contributionsState[FoldingController.ID] as { collapsedRegions: { startLineNumber: number; endLineNumber: number }[] }).collapsedRegions
+		.map(range => [range.startLineNumber, range.endLineNumber]), [[1, 2]]);
+	await editor.getAction('editor.unfold')!.run();
+	assert.ok(model.getAllDecorations().some(decoration => decoration.options.description === 'folding-expanded'));
+	editor.restoreViewState(saved);
+	assert.ok(model.getAllDecorations().some(decoration => decoration.options.description === 'folding-collapsed'));
 	dom.window.close();
 });

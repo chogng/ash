@@ -218,13 +218,12 @@ export class CodeLensContribution extends Disposable {
 
 	private async resolveWidget(widget: CodeLensWidget, request: CancellationTokenSource): Promise<void> {
 		this.resolvingWidgets.set(widget, request);
-		const items = widget.codeLensItems;
+		const items = widget.getItems();
 		try {
 			const symbols = await Promise.all(items.map(item => this.resolveItem(item, request)));
-			if (request.token.isCancellationRequested || request !== this.request || widget.codeLensItems !== items || widget.isDisposed) return;
-			const resolvedItems = items.map((item, index) => symbols[index] ? Object.freeze({ symbol: symbols[index]!, provider: item.provider }) : item);
-			this.replaceResolvedItems(items, resolvedItems);
-			widget.updateResolvedCodeLensItems(resolvedItems);
+			if (request.token.isCancellationRequested || request !== this.request || widget.getItems() !== items || widget.isDisposed) return;
+			widget.updateCommands(symbols);
+			this.replaceResolvedItems(items, widget.getItems());
 			this.updateCache();
 		} finally {
 			if (this.resolvingWidgets.get(widget) === request) this.resolvingWidgets.delete(widget);

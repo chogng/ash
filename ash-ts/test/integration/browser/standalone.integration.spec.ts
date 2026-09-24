@@ -4646,6 +4646,22 @@ test.describe('folding command routing', () => {
 		await page.evaluate(() => window.ashStandaloneIntegration?.dispose());
 	});
 
+	test('saved editor view state restores collapsed lines', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(text => {
+			window.ashStandaloneIntegration.prepareClipboard(text, [[1, 1, 1, 1]]);
+			window.ashStandaloneIntegration.updateContributionOptions({ foldingStrategy: 'indentation' });
+		}, text);
+		const lines = page.locator('#caller .view-line');
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.foldAll'));
+		await expect(lines).toHaveCount(3);
+		await page.evaluate(() => window.ashStandaloneIntegration.saveFoldingViewState());
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.unfoldAll'));
+		await expect(lines).toHaveCount(9);
+		await page.evaluate(() => window.ashStandaloneIntegration.restoreFoldingViewState());
+		await expect(lines).toHaveCount(3);
+	});
+
 	test('recursive and all actions update every selected scope, including read-only editors', async ({ page }) => {
 		await page.goto('/standalone.html');
 		await page.evaluate(text => {

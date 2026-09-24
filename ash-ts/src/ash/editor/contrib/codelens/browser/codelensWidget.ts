@@ -49,7 +49,7 @@ export class CodeLensWidget extends Disposable {
 		this.layout();
 	}
 
-	public get codeLensItems(): readonly CodeLensItem[] {
+	public getItems(): readonly CodeLensItem[] {
 		return this.items;
 	}
 
@@ -64,8 +64,10 @@ export class CodeLensWidget extends Disposable {
 		this.layout();
 	}
 
-	public updateResolvedCodeLensItems(items: readonly CodeLensItem[]): void {
-		this.items = items;
+	public updateCommands(symbols: ReadonlyArray<CodeLens | undefined | null>): void {
+		this.items = this.items.map((item, index) => symbols[index]
+			? Object.freeze({ symbol: symbols[index]!, provider: item.provider })
+			: item);
 		this.commandsResolved = true;
 		this.render(this.initialSymbols);
 	}
