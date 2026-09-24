@@ -191,7 +191,7 @@ test('View zones expose one accessor lifetime and stable pointer identity', () =
 	assert.equal(computedHeight, 20);
 	assert.throws(() => accessor!.layoutZone(id), /no longer valid/);
 	let mouseDown: IEditorMouseEvent | undefined;
-	viewport.controller.userInputEvents.onMouseDown = event => { mouseDown = event; };
+	using mouseDownListener = viewport.controller.userInputEvents.onMouseDown(event => { mouseDown = event; });
 	domNode.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, buttons: 1, clientX: 60, clientY: 25 }));
 	assert.equal(mouseDown?.target.type, MouseTargetType.CONTENT_VIEW_ZONE);
 	assert.equal(mouseDown?.target.type === MouseTargetType.CONTENT_VIEW_ZONE ? mouseDown.target.detail.viewZoneId : undefined, id);
@@ -219,7 +219,7 @@ test('Content widget pointer identity comes from the registered widget owner', (
 	viewport.addContentWidget(widget);
 
 	let mouseDown: IEditorMouseEvent | undefined;
-	viewport.controller.userInputEvents.onMouseDown = event => { mouseDown = event; };
+	using mouseDownListener = viewport.controller.userInputEvents.onMouseDown(event => { mouseDown = event; });
 	nested.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, buttons: 1, clientX: 50, clientY: 10 }));
 	assert.equal(mouseDown?.target.type, MouseTargetType.CONTENT_WIDGET);
 	assert.equal(mouseDown?.target.type === MouseTargetType.CONTENT_WIDGET ? mouseDown.target.detail : undefined, 'pointer.content.widget');

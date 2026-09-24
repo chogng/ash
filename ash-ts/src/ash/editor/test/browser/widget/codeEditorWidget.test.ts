@@ -1899,11 +1899,16 @@ test('CodeEditorWidget keyboard navigation uses standard cursor movement state',
 	editor.setSelection(Selection.fromPositions(new Position(1, 5)));
 	const input = editor.controller.editContext.domNode.domNode;
 	input.focus();
+	const observed: string[] = [];
+	using firstInputListener = editor.controller.userInputEvents.onKeyDown(() => observed.push('first'));
+	using secondInputListener = editor.controller.userInputEvents.onKeyDown(() => observed.push('second'));
 
 	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' }));
 	assert.deepEqual(editor.getPosition(), new Position(2, 2));
+	firstInputListener.dispose();
 	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' }));
 	assert.deepEqual(editor.getPosition(), new Position(3, 5));
+	assert.deepEqual(observed, ['first', 'second', 'second']);
 	using keyDownListener = editor.onKeyDown(event => event.stop());
 	const prevented = new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowUp' });
 	input.dispatchEvent(prevented);

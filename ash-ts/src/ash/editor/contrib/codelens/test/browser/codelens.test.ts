@@ -131,7 +131,7 @@ test('CodeLens contribution groups one stable widget per line and refreshes prov
 	assert.deepEqual([...widget.querySelectorAll('button')].map(button => button.textContent), ['Immediate', 'Deferred']);
 	assert.equal(resolveCount, 1);
 	let mouseDown: IEditorMouseEvent | undefined;
-	viewport.controller.userInputEvents.onMouseDown = event => { mouseDown = event; };
+	using mouseDownListener = viewport.controller.userInputEvents.onMouseDown(event => { mouseDown = event; });
 	widget.querySelector('button')!.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 2, buttons: 2, clientX: 80 }));
 	assert.equal(mouseDown?.target.type, MouseTargetType.CONTENT_VIEW_ZONE);
 	viewport.layout({ width: 320, height: 60 });

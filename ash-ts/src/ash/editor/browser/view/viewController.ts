@@ -51,7 +51,6 @@ export interface ViewControllerOptions {
 	readonly logService?: ILogService;
 	readonly ariaLabel?: string;
 	readonly semanticTokenSource?: SemanticTokenSource;
-	readonly userInputEvents?: ViewUserInputEvents;
 }
 
 export interface IMouseDispatchData {
@@ -118,7 +117,7 @@ export class ViewController extends Disposable {
 	) {
 		super();
 		try {
-			this.userInputEvents = options.userInputEvents ?? new ViewUserInputEvents(viewport.coordinatesConverter);
+			this.userInputEvents = this._register(new ViewUserInputEvents(viewport.coordinatesConverter));
 			this.ownerId = options.ownerId === undefined ? nextViewId() : validateOwnerId(options.ownerId);
 			this.editContext = createEditContext(this);
 			this.element = this.editContext.domNode.domNode;
@@ -663,18 +662,8 @@ export class KeyboardNavigationController extends Disposable {
 				"Stanza keyboard and selection controllers must share one text model",
 			);
 		}
-		const previousKeyDownHandler = userInputEvents.onKeyDown;
-		const keyDownHandler = (event: IKeyboardEvent): void => {
-			previousKeyDownHandler?.(event);
-			if (!event.browserEvent.defaultPrevented) {
-				this.handleKeyDown(event);
-			}
-		};
-		userInputEvents.onKeyDown = keyDownHandler;
-		this._register(toDisposable(() => {
-			if (userInputEvents.onKeyDown === keyDownHandler) {
-				userInputEvents.onKeyDown = previousKeyDownHandler;
-			}
+		this._register(userInputEvents.onKeyDown(event => {
+			if (!event.browserEvent.defaultPrevented) this.handleKeyDown(event);
 		}));
 		const cursorListener = this._register(new class extends ViewEventHandler {
 			constructor(private readonly reset: () => void) { super(); }

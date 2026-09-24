@@ -1,70 +1,79 @@
 import { type IKeyboardEvent } from '../../../base/browser/keyboardEvent.js';
 import { type IMouseWheelEvent } from '../../../base/browser/mouseEvent.js';
+import { Emitter } from '../../../base/common/event.js';
+import { Disposable } from '../../../base/common/lifecycle.js';
 import { type ICoordinatesConverter } from '../../common/coordinatesConverter.js';
 import { Position } from '../../common/core/position.js';
 import { type IEditorMouseEvent, type IMouseTarget, type IMouseTargetViewZoneData, type IPartialEditorMouseEvent, MouseTargetType } from '../editorBrowser.js';
 
-export interface EventCallback<T> {
-	(event: T): void;
-}
+export class ViewUserInputEvents extends Disposable {
+	private readonly keyDownEmitter = this._register(new Emitter<IKeyboardEvent>());
+	private readonly keyUpEmitter = this._register(new Emitter<IKeyboardEvent>());
+	private readonly contextMenuEmitter = this._register(new Emitter<IEditorMouseEvent>());
+	private readonly mouseMoveEmitter = this._register(new Emitter<IEditorMouseEvent>());
+	private readonly mouseLeaveEmitter = this._register(new Emitter<IPartialEditorMouseEvent>());
+	private readonly mouseDownEmitter = this._register(new Emitter<IEditorMouseEvent>());
+	private readonly mouseUpEmitter = this._register(new Emitter<IEditorMouseEvent>());
+	private readonly mouseDragEmitter = this._register(new Emitter<IEditorMouseEvent>());
+	private readonly mouseDropEmitter = this._register(new Emitter<IPartialEditorMouseEvent>());
+	private readonly mouseDropCanceledEmitter = this._register(new Emitter<void>());
+	private readonly mouseWheelEmitter = this._register(new Emitter<IMouseWheelEvent>());
+	public readonly onKeyDown = this.keyDownEmitter.event;
+	public readonly onKeyUp = this.keyUpEmitter.event;
+	public readonly onContextMenu = this.contextMenuEmitter.event;
+	public readonly onMouseMove = this.mouseMoveEmitter.event;
+	public readonly onMouseLeave = this.mouseLeaveEmitter.event;
+	public readonly onMouseDown = this.mouseDownEmitter.event;
+	public readonly onMouseUp = this.mouseUpEmitter.event;
+	public readonly onMouseDrag = this.mouseDragEmitter.event;
+	public readonly onMouseDrop = this.mouseDropEmitter.event;
+	public readonly onMouseDropCanceled = this.mouseDropCanceledEmitter.event;
+	public readonly onMouseWheel = this.mouseWheelEmitter.event;
 
-export class ViewUserInputEvents {
-	public onKeyDown: EventCallback<IKeyboardEvent> | null = null;
-	public onKeyUp: EventCallback<IKeyboardEvent> | null = null;
-	public onContextMenu: EventCallback<IEditorMouseEvent> | null = null;
-	public onMouseMove: EventCallback<IEditorMouseEvent> | null = null;
-	public onMouseLeave: EventCallback<IPartialEditorMouseEvent> | null = null;
-	public onMouseDown: EventCallback<IEditorMouseEvent> | null = null;
-	public onMouseUp: EventCallback<IEditorMouseEvent> | null = null;
-	public onMouseDrag: EventCallback<IEditorMouseEvent> | null = null;
-	public onMouseDrop: EventCallback<IPartialEditorMouseEvent> | null = null;
-	public onMouseDropCanceled: EventCallback<void> | null = null;
-	public onMouseWheel: EventCallback<IMouseWheelEvent> | null = null;
-
-	constructor(private readonly coordinatesConverter: ICoordinatesConverter) {}
+	constructor(private readonly coordinatesConverter: ICoordinatesConverter) { super(); }
 
 	public emitKeyDown(event: IKeyboardEvent): void {
-		this.onKeyDown?.(event);
+		this.keyDownEmitter.fire(event);
 	}
 
 	public emitKeyUp(event: IKeyboardEvent): void {
-		this.onKeyUp?.(event);
+		this.keyUpEmitter.fire(event);
 	}
 
 	public emitContextMenu(event: IEditorMouseEvent): void {
-		this.onContextMenu?.(this.convertViewToModelMouseEvent(event));
+		this.contextMenuEmitter.fire(this.convertViewToModelMouseEvent(event));
 	}
 
 	public emitMouseMove(event: IEditorMouseEvent): void {
-		this.onMouseMove?.(this.convertViewToModelMouseEvent(event));
+		this.mouseMoveEmitter.fire(this.convertViewToModelMouseEvent(event));
 	}
 
 	public emitMouseLeave(event: IPartialEditorMouseEvent): void {
-		this.onMouseLeave?.(this.convertViewToModelMouseEvent(event));
+		this.mouseLeaveEmitter.fire(this.convertViewToModelMouseEvent(event));
 	}
 
 	public emitMouseDown(event: IEditorMouseEvent): void {
-		this.onMouseDown?.(this.convertViewToModelMouseEvent(event));
+		this.mouseDownEmitter.fire(this.convertViewToModelMouseEvent(event));
 	}
 
 	public emitMouseUp(event: IEditorMouseEvent): void {
-		this.onMouseUp?.(this.convertViewToModelMouseEvent(event));
+		this.mouseUpEmitter.fire(this.convertViewToModelMouseEvent(event));
 	}
 
 	public emitMouseDrag(event: IEditorMouseEvent): void {
-		this.onMouseDrag?.(this.convertViewToModelMouseEvent(event));
+		this.mouseDragEmitter.fire(this.convertViewToModelMouseEvent(event));
 	}
 
 	public emitMouseDrop(event: IPartialEditorMouseEvent): void {
-		this.onMouseDrop?.(this.convertViewToModelMouseEvent(event));
+		this.mouseDropEmitter.fire(this.convertViewToModelMouseEvent(event));
 	}
 
 	public emitMouseDropCanceled(): void {
-		this.onMouseDropCanceled?.();
+		this.mouseDropCanceledEmitter.fire();
 	}
 
 	public emitMouseWheel(event: IMouseWheelEvent): void {
-		this.onMouseWheel?.(event);
+		this.mouseWheelEmitter.fire(event);
 	}
 
 	private convertViewToModelMouseEvent(event: IEditorMouseEvent): IEditorMouseEvent;
