@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 #[cfg(windows)]
 use std::ffi::OsString;
 use std::io;
@@ -6,50 +5,11 @@ use std::io::Write;
 #[cfg(windows)]
 use std::path::Component;
 use std::path::Path;
+#[cfg(windows)]
 use std::path::PathBuf;
 #[cfg(windows)]
 use std::path::Prefix;
 use tempfile::NamedTempFile;
-
-/// Resolves the final write target of a symlink chain, including dangling final targets.
-/// Relative targets use the link's directory. Cycles, excessive depth and I/O errors are errors;
-/// callers never receive the original link as a substitute write target.
-pub fn resolve_symlink_write_path(path: &Path) -> io::Result<PathBuf> {
-    let mut current = path.to_path_buf();
-    let mut visited = HashSet::new();
-    for depth in 0..=40 {
-        let metadata = match std::fs::symlink_metadata(&current) {
-            Ok(metadata) => metadata,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(current),
-            Err(error) => return Err(error),
-        };
-        if !metadata.file_type().is_symlink() {
-            return Ok(current);
-        }
-        if !visited.insert(current.clone()) {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "symlink cycle in write path",
-            ));
-        }
-        if depth == 40 {
-            break;
-        }
-        let target = std::fs::read_link(&current)?;
-        current = if target.is_absolute() {
-            target
-        } else {
-            current
-                .parent()
-                .unwrap_or_else(|| Path::new("."))
-                .join(target)
-        };
-    }
-    Err(io::Error::new(
-        io::ErrorKind::InvalidInput,
-        "symlink write path exceeds 40 links",
-    ))
-}
 
 /// Atomically replaces a file with the supplied bytes.
 ///
@@ -117,11 +77,6 @@ pub(super) fn filesystem_path(path: &Path) -> io::Result<PathBuf> {
         }
         _ => Ok(absolute),
     }
-}
-
-/// Atomically replaces a UTF-8 text file.
-pub fn write_text_atomically(write_path: &Path, contents: &str) -> io::Result<()> {
-    write_atomically(write_path, contents.as_bytes())
 }
 
 fn sync_parent(parent: &Path) -> io::Result<()> {

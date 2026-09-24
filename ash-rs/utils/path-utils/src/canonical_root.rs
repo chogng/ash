@@ -1,9 +1,8 @@
 use std::fmt;
 use std::io;
 use std::path::Component;
-use std::path::{Path, PathBuf};
-
-use crate::comparison::normalize_canonical_for_comparison;
+use std::path::Path;
+use std::path::PathBuf;
 
 /// One existing host-filesystem path used as a canonical containment boundary.
 ///
@@ -190,4 +189,77 @@ impl std::error::Error for CanonicalContainmentError {
             Self::OutsideRoot => None,
         }
     }
+}
+
+fn normalize_canonical_for_comparison(path: PathBuf) -> PathBuf {
+    normalize_for_wsl_on(path, is_wsl())
+}
+
+fn is_wsl() -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        if std::env::var_os("WSL_DISTRO_NAME").is_some() {
+            return true;
+        }
+        std::fs::read_to_string("/proc/version")
+            .is_ok_and(|version| version.to_lowercase().contains("microsoft"))
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        false
+    }
+}
+
+pub(super) fn normalize_for_wsl_on(path: PathBuf, is_wsl: bool) -> PathBuf {
+    if !is_wsl || !is_wsl_case_insensitive_path(&path) {
+        return path;
+    }
+    lower_ascii_path(path)
+}
+
+fn is_wsl_case_insensitive_path(path: &Path) -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::ffi::OsStrExt;
+
+        let mut components = path.components();
+        let Some(Component::RootDir) = components.next() else {
+            return false;
+        };
+        let Some(Component::Normal(mount)) = components.next() else {
+            return false;
+        };
+        let Some(Component::Normal(drive)) = components.next() else {
+            return false;
+        };
+        let drive = drive.as_bytes();
+        mount.as_bytes().eq_ignore_ascii_case(b"mnt")
+            && drive.len() == 1
+            && drive[0].is_ascii_alphabetic()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = path;
+        false
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn lower_ascii_path(path: PathBuf) -> PathBuf {
+    use std::ffi::OsString;
+    use std::os::unix::ffi::OsStrExt;
+    use std::os::unix::ffi::OsStringExt;
+
+    let lowered = path
+        .as_os_str()
+        .as_bytes()
+        .iter()
+        .map(u8::to_ascii_lowercase)
+        .collect();
+    PathBuf::from(OsString::from_vec(lowered))
+}
+
+#[cfg(not(target_os = "linux"))]
+fn lower_ascii_path(path: PathBuf) -> PathBuf {
+    path
 }

@@ -1,39 +1,7 @@
 use super::*;
 use pretty_assertions::assert_eq;
+#[cfg(any(windows, target_os = "linux"))]
 use std::path::PathBuf;
-
-#[test]
-fn identical_existing_paths_match_after_normalization() {
-    let directory = tempfile::tempdir().expect("temporary directory");
-
-    assert!(paths_match_after_normalization(
-        directory.path(),
-        directory.path()
-    ));
-}
-
-#[test]
-fn missing_paths_fall_back_to_direct_equality() {
-    assert!(paths_match_after_normalization("missing", "missing"));
-    assert!(!paths_match_after_normalization(
-        "missing-left",
-        "missing-right"
-    ));
-}
-
-#[cfg(unix)]
-#[test]
-fn symlink_targets_compare_as_the_same_path() {
-    use std::os::unix::fs::symlink;
-
-    let directory = tempfile::tempdir().expect("temporary directory");
-    let target = directory.path().join("target");
-    let alias = directory.path().join("alias");
-    std::fs::create_dir(&target).expect("target directory");
-    symlink(&target, &alias).expect("symlink");
-
-    assert!(paths_match_after_normalization(target, alias));
-}
 
 #[test]
 fn canonical_path_root_accepts_existing_descendants() {
@@ -129,48 +97,12 @@ fn canonical_path_root_rejects_ancestor_symlink_escape() {
     ));
 }
 
-#[cfg(unix)]
-#[test]
-fn relative_symlink_write_target_is_resolved() {
-    use std::os::unix::fs::symlink;
-
-    let directory = tempfile::tempdir().expect("temporary directory");
-    let target = directory.path().join("target");
-    let alias = directory.path().join("alias");
-    symlink("target", &alias).expect("relative symlink");
-
-    assert_eq!(resolve_symlink_write_path(&alias).unwrap(), target);
-}
-
-#[cfg(unix)]
-#[test]
-fn symlink_cycles_are_errors() {
-    use std::os::unix::fs::symlink;
-
-    let directory = tempfile::tempdir().expect("temporary directory");
-    let first = directory.path().join("first");
-    let second = directory.path().join("second");
-    symlink(&second, &first).expect("first symlink");
-    symlink(&first, &second).expect("second symlink");
-
-    assert_eq!(
-        resolve_symlink_write_path(&first).unwrap_err().kind(),
-        std::io::ErrorKind::InvalidInput
-    );
-    assert!(
-        std::fs::symlink_metadata(&first)
-            .unwrap()
-            .file_type()
-            .is_symlink()
-    );
-}
-
 #[test]
 fn atomic_write_replaces_existing_contents() {
     let directory = tempfile::tempdir().expect("temporary directory");
     let path = directory.path().join("nested").join("state.json");
-    write_text_atomically(&path, "first").expect("initial write");
-    write_text_atomically(&path, "second").expect("replacement write");
+    write_atomically(&path, b"first").expect("initial write");
+    write_atomically(&path, b"second").expect("replacement write");
 
     assert_eq!(std::fs::read_to_string(path).unwrap(), "second");
 }
@@ -188,8 +120,8 @@ fn atomic_write_creates_and_replaces_a_file_beyond_max_path() {
         .join("state.json");
     assert!(path.as_os_str().encode_wide().count() >= 260);
 
-    write_text_atomically(&path, "first").expect("initial long-path write");
-    write_text_atomically(&path, "second").expect("long-path replacement");
+    write_atomically(&path, b"first").expect("initial long-path write");
+    write_atomically(&path, b"second").expect("long-path replacement");
 
     let filesystem_path = persistence::filesystem_path(&path).unwrap();
     assert_eq!(std::fs::read_to_string(filesystem_path).unwrap(), "second");
@@ -209,38 +141,16 @@ fn filesystem_path_converts_unc_without_losing_components() {
     );
 }
 
-#[test]
-fn native_workdir_is_unchanged_when_windows_rules_are_disabled() {
-    let path = PathBuf::from(r"\\?\D:\worktree");
-
-    assert_eq!(
-        comparison::normalize_for_native_workdir_on(path.clone(), false),
-        path
-    );
-}
-
 #[cfg(target_os = "linux")]
 #[test]
 fn wsl_drive_mounts_are_ascii_lowercased() {
     assert_eq!(
-        comparison::normalize_for_wsl_on(PathBuf::from("/mnt/C/Users/Dev"), true),
+        canonical_root::normalize_for_wsl_on(PathBuf::from("/mnt/C/Users/Dev"), true),
         PathBuf::from("/mnt/c/users/dev")
     );
     assert_eq!(
-        comparison::normalize_for_wsl_on(PathBuf::from("/home/Dev"), true),
+        canonical_root::normalize_for_wsl_on(PathBuf::from("/home/Dev"), true),
         PathBuf::from("/home/Dev")
-    );
-}
-
-#[cfg(unix)]
-#[test]
-fn spelling_expanding_symlink_cycles_are_bounded() {
-    let directory = tempfile::tempdir().unwrap();
-    let link = directory.path().join("cycle");
-    std::os::unix::fs::symlink("./cycle", &link).unwrap();
-    assert_eq!(
-        resolve_symlink_write_path(&link).unwrap_err().kind(),
-        std::io::ErrorKind::InvalidInput
     );
 }
 
@@ -252,7 +162,7 @@ fn atomic_replacement_preserves_existing_permissions() {
     let path = directory.path().join("script");
     std::fs::write(&path, "old").unwrap();
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o751)).unwrap();
-    write_text_atomically(&path, "new").unwrap();
+    write_atomically(&path, b"new").unwrap();
     assert_eq!(std::fs::read_to_string(&path).unwrap(), "new");
     assert_eq!(
         std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
