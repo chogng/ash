@@ -1,0 +1,10 @@
+load("//app-rs:defs.bzl", "app_rust_library")
+
+app_rust_library(
+    name = "theme",
+    crate_name = "ash_ui_theme",
+    package_name = "app-rs/theme",
+    data = glob(["resources/*.json", "src/fixtures/*.json"]),
+    source_files = ["README.md"] + glob(["resources/*.json", "src/fixtures/*.json"]),
+    unit_tests = True,
+)

@@ -1,6 +1,6 @@
 # Stanza：单一文本内核、可装配能力与产品边界
 
-> 本文是跨 editor、document、language、browser view、Workbench 和过渡 adapter 的 canonical 架构文档。扁平模块的实现和修改契约见 [`ash-ts/src/ash/editor/README.md`](../ash-ts/src/ash/editor/README.md)；行式文本与结构化文档 engine 的详细契约分别见 [`text-engine.md`](../ash-ts/src/ash/editor/text-engine.md) 和 [`document-engine.md`](../ash-ts/src/ash/editor/document-engine.md)。
+> 本文是跨 editor、document、language、browser view、Workbench 和过渡 adapter 的 canonical 架构文档。扁平模块的实现和修改契约见 [`app-ts/src/ash/editor/README.md`](../app-ts/src/ash/editor/README.md)；行式文本与结构化文档 engine 的详细契约分别见 [`text-engine.md`](../app-ts/src/ash/editor/text-engine.md) 和 [`document-engine.md`](../app-ts/src/ash/editor/document-engine.md)。
 
 ## 快速理解
 
@@ -1436,9 +1436,9 @@ Stanza pane 先通过 `BrowserTextModelService.acquire` 获取引用：已有资
 它等待初始 grammar catalog，再发 token/diagnostic 请求；catalog revision 变化会触发
 当前文档重新分析。直接构造的 Stanza session 仍使用本地 lexical/word provider，方便
 独立嵌入和确定性测试。详细 TextFile 实现契约见
-[`ash-ts/src/ash/workbench/services/textfile/README.md`](../ash-ts/src/ash/workbench/services/textfile/README.md)，
+[`app-ts/src/ash/workbench/services/textfile/README.md`](../app-ts/src/ash/workbench/services/textfile/README.md)，
 Stanza 内部契约见
-[`ash-ts/src/ash/editor/text-engine.md`](../ash-ts/src/ash/editor/text-engine.md)。
+[`app-ts/src/ash/editor/text-engine.md`](../app-ts/src/ash/editor/text-engine.md)。
 
 Grammar catalog 由共享 Workbench `ITextMateService` 拥有，声明式 extension resource contribution
 会更新其 revision；每个文档的 Analysis Worker 仍由其 model coordinator 独立拥有，避免故障域和增量 mirror 互相污染。

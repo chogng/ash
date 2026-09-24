@@ -1,0 +1,14 @@
+load("//app-rs:defs.bzl", "app_rust_library")
+
+app_rust_library(
+    name = "settings",
+    crate_name = "ash_settings",
+    crate_root = "lib.rs",
+    package_name = "app-rs/settings",
+    source_globs = [
+        "*.rs",
+        "keybindings/*.rs",
+        "remote/*.rs",
+    ],
+    unit_tests = True,
+)

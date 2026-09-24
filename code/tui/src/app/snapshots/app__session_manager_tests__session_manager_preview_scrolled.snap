@@ -1,0 +1,36 @@
+---
+source: code/tui/src/app/session_manager_tests.rs
+expression: render(&app)
+---
+  .                                                                            [— / —] [Dashboard]
+
+● Conversation message 09: content stays readable in preview.
+
+● Conversation message 10: content stays readable in preview.
+
+● Conversation message 11: content stays readable in preview.
+
+● Conversation message 12: content stays readable in preview.
+
+● Conversation message 13: content stays readable in preview.
+
+● Conversation message 14: content stays readable in preview.
+
+● Conversation message 15: content stays readable in preview.
+
+● Conversation message 16: content stays readable in preview.
+
+● Conversation message 17: content stays readable in preview.
+
+● Conversation message 18: content stays readable in preview.
+
+● Conversation message 19: content stays readable in preview.
+
+● Conversation message 20: content stays readable in preview.
+
+● Conversation message 21: content stays readable in preview.
+
+                                      Jump to bottom (click) ↓
+
+  Preview · Snapshot session · read only
+  Esc to close

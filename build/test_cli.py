@@ -11,6 +11,7 @@ from pathlib import Path
 
 from build.remote.bundle import validate_remote_runtime_bundle
 from build.remote.test_bundle import create_package
+from build.runtime.test_support import create_runtime_package
 
 
 BUILD_ROOT = Path(__file__).resolve().parent
@@ -19,11 +20,12 @@ BUILD_ROOT = Path(__file__).resolve().parent
 class BuildCommandTests(unittest.TestCase):
     def test_commands_load_outside_the_repository_without_pythonpath(self) -> None:
         commands = {
-            "app/build.py": "--app-bin",
-            "app/signing.py": "{sign,verify,record}",
+            "app_rs/build.py": "--app-bin",
+            "app_rs/signing.py": "{sign,verify,record}",
             "code/archive.py": "--output",
-            "package/build.py": "--javascript-runtime",
-            "package/sign.py": "--verify-only",
+            "code/package.py": "--runtime-package",
+            "runtime/build.py": "--javascript-runtime",
+            "runtime/sign.py": "--verify-only",
             "remote/bundle.py": "--bundle-dir",
             "darwin/notarize.py": "--staple",
         }
@@ -80,14 +82,17 @@ class BuildCommandTests(unittest.TestCase):
             binary = root / "app"
             binary.write_bytes(b"app-command-test")
             output = root / "package"
+            runtime = create_runtime_package(root, "x86_64-unknown-linux-gnu")
             result = subprocess.run(
                 [
                     sys.executable,
                     "-E",
                     "-B",
-                    str(BUILD_ROOT / "app/build.py"),
+                    str(BUILD_ROOT / "app_rs/build.py"),
                     "--app-bin",
                     str(binary),
+                    "--runtime-package",
+                    str(runtime),
                     "--package-dir",
                     str(output),
                     "--target",

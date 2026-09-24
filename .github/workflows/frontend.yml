@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'ash-ts/**'
+      - 'app-ts/**'
       - 'build/**'
       - 'scripts/*.ts'
       - 'third_party/livekit/**'
@@ -23,7 +23,7 @@ on:
       - '.github/workflows/frontend.yml'
   pull_request:
     paths:
-      - 'ash-ts/**'
+      - 'app-ts/**'
       - 'build/**'
       - 'scripts/*.ts'
       - 'third_party/livekit/**'
@@ -78,7 +78,7 @@ jobs:
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
       - name: Check generated protocol contracts
-        run: pnpm --dir ash-ts typecheck:protocol
+        run: pnpm --dir app-ts typecheck:protocol
       - name: Check and test build tools
         if: matrix.surface == 'browser'
         run: |
@@ -87,10 +87,10 @@ jobs:
           pnpm build:stanza
       - name: Test frontend units
         if: matrix.surface == 'browser'
-        run: pnpm --dir ash-ts test:unit
+        run: pnpm --dir app-ts test:unit
       - name: Install Chromium
         if: matrix.surface == 'browser'
-        run: pnpm --dir ash-ts exec playwright install --with-deps chromium
+        run: pnpm --dir app-ts exec playwright install --with-deps chromium
       - name: Test production browser UI
         if: matrix.surface == 'browser'
         run: pnpm test:desktop:smoke:browser
@@ -102,5 +102,5 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: frontend-${{ matrix.surface }}
-          path: .build/desktop/playwright/
+          path: .build/app-ts/playwright/
           if-no-files-found: ignore

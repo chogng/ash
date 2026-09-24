@@ -43,6 +43,6 @@
 - `just test ash-otel-trace-websocket`
 - `just rust-warnings ash-otel-trace-websocket`
 - App Server 接线：`just test ash-app-server --lib trace_websocket`
-- 查看器单测：`pnpm --dir ash-ts test:unit --run src/ash/workbench/contrib/trace/test/browser/traceConnection.test.ts`。
-- 查看器交互：`pnpm --dir ash-ts test:smoke:browser areas/trace/trace.spec.ts`、`pnpm --dir ash-ts test:smoke:ui areas/trace/trace.spec.ts`。
-- 实际产品采集与导出：`pnpm --dir ash-ts test:smoke:browser:full areas/trace/trace.spec.ts`、`pnpm --dir ash-ts test:smoke:desktop areas/trace/trace.spec.ts`，命令负责准备产品包。
+- 查看器单测：`pnpm --dir app-ts test:unit --run src/ash/workbench/contrib/trace/test/browser/traceConnection.test.ts`。
+- 查看器交互：`pnpm --dir app-ts test:smoke:browser areas/trace/trace.spec.ts`、`pnpm --dir app-ts test:smoke:ui areas/trace/trace.spec.ts`。
+- 实际产品采集与导出：`pnpm --dir app-ts test:smoke:browser:full areas/trace/trace.spec.ts`、`pnpm --dir app-ts test:smoke:desktop areas/trace/trace.spec.ts`，命令负责准备产品包。

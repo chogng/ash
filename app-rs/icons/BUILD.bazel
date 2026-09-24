@@ -1,0 +1,8 @@
+load("//app-rs:defs.bzl", "app_rust_library")
+
+app_rust_library(
+    name = "icons",
+    crate_name = "ash_icons",
+    package_name = "app-rs/icons",
+    data = ["//resources/icons:product-icons"],
+)

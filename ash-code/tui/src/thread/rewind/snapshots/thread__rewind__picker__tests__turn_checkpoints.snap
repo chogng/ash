@@ -1,9 +1,0 @@
----
-source: ash-code/tui/src/thread/rewind/picker_tests.rs
-expression: render(&state)
----
-╭──────────────────────────────────────────────────────────────────────────────╮
-│ Search message checkpoints                                                   │
-╰──────────────────────────────────────────────────────────────────────────────╯
-  1. first checkpoint  ·  restore before this turn; keep the original branch    
-> 2. second checkpoint  ·  restore before this turn; keep the original branch

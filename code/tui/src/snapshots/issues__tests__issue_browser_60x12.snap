@@ -1,0 +1,13 @@
+---
+source: code/tui/src/issues_tests.rs
+expression: text
+---
+─ Issues ───────────────────────────────────────────────────
+                                                            
+   Open    Closed                                           
+  ╭──────────────────────────────────────────────────────╮  
+  │ Search keywords or #number                           │  
+  ╰──────────────────────────────────────────────────────╯  
+  team/repo · 0 selected · 2 loaded · Updated               
+> [ ] #3 first                                              
+  [ ] #5 second

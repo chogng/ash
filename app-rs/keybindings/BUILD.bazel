@@ -1,0 +1,8 @@
+load("//app-rs:defs.bzl", "app_rust_library")
+
+app_rust_library(
+    name = "keybindings",
+    crate_name = "ash_keybindings_host",
+    package_name = "app-rs/keybindings",
+    unit_tests = True,
+)

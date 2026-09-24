@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - "**/*.rs"
-      - "ash-code/**/*.snap"
+      - "code/**/*.snap"
       - "**/Cargo.toml"
       - "Cargo.lock"
       - "rust-toolchain.toml"
@@ -13,13 +13,13 @@ on:
       - "scripts/cargo.py"
       - "scripts/ci_impact.py"
       - "build/lib/**"
-      - "build/package/ripgrep.py"
+      - "build/runtime/ripgrep.py"
       - "third_party/ripgrep/runtime-lock.json"
       - ".github/workflows/rust-warnings.yml"
   pull_request:
     paths:
       - "**/*.rs"
-      - "ash-code/**/*.snap"
+      - "code/**/*.snap"
       - "**/Cargo.toml"
       - "Cargo.lock"
       - "rust-toolchain.toml"
@@ -27,7 +27,7 @@ on:
       - "scripts/cargo.py"
       - "scripts/ci_impact.py"
       - "build/lib/**"
-      - "build/package/ripgrep.py"
+      - "build/runtime/ripgrep.py"
       - "third_party/ripgrep/runtime-lock.json"
       - ".github/workflows/rust-warnings.yml"
   workflow_dispatch:
@@ -148,7 +148,7 @@ jobs:
           import subprocess
           from pathlib import Path
           from build.lib.targets import TARGETS
-          from build.package.ripgrep import resolve_ripgrep
+          from build.runtime.ripgrep import resolve_ripgrep
 
           root = Path.cwd()
           ripgrep = resolve_ripgrep(
@@ -200,7 +200,7 @@ jobs:
           import subprocess
           from pathlib import Path
           from build.lib.targets import TARGETS, default_target
-          from build.package.ripgrep import resolve_ripgrep
+          from build.runtime.ripgrep import resolve_ripgrep
 
           root = Path.cwd()
           ripgrep = resolve_ripgrep(

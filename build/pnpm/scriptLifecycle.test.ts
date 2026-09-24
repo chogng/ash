@@ -8,7 +8,7 @@ import test from "node:test";
 test("aggregate and standalone unit commands prepare inputs once and stop on preparation failure", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "ash-lifecycle-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
-  const manifest = JSON.parse(await readFile(resolve(import.meta.dirname, "../../ash-ts/package.json"), "utf8"));
+  const manifest = JSON.parse(await readFile(resolve(import.meta.dirname, "../../app-ts/package.json"), "utf8"));
   const scripts = { ...manifest.scripts };
   for (const [name, operation] of Object.entries({
     "test:build-tools": "tools",

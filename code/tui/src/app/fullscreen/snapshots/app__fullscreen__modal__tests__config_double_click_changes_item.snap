@@ -1,0 +1,33 @@
+---
+source: code/tui/src/app/fullscreen/modal_tests.rs
+assertion_line: 1295
+expression: frame_text(&app)
+---
+  .                                                                            [— / —] [Dashboard]  
+                                                                                                    
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────╮  
+  │         ┌── Config ───────────────────────────────────────────────────────────[✗]─┐          │  
+  │    ▄  ▄ │                                                                         │          │  
+  │  ▗█▛██▜█│   General    Providers    Issues                                        │          │  
+  │  ▝▜████▛│                                                                         │          │  
+  │    ▝  ▘ │  ╭────────────────────────────────────────────────────────────────────╮ │          │  
+  │         │  │ Search configuration                                               │ │          │  
+  │         │  ╰────────────────────────────────────────────────────────────────────╯ │          │  
+  │         │> Vim mode                                                           off │          │  
+  │         │> Memory diagnostics                                                  on │          │  
+  │         │> Automatic updates                                               Latest │          │  
+  │         │> Show Git changes as diff                                           off │          │  
+  ╰─────────│> Language                                                       English │──────────╯  
+            │> Status bar style                                                Simple │             
+            │> Key hint style                                                Contrast │             
+            │> Screen mode                                                 fullscreen │             
+            │> Memories                                                           off │             
+            │> Automatic Git fetch                                                Off │             
+            │> Git fetch interval                                                180s │             
+            │> Advisor                                                            Off │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │ Esc return  
+  ╭─────────│  Enter change · r reset · ←/→ details · Tab tabs · / search · Esc close │──────────╮  
+  │ > Build └─────────────────────────────────────────────────────────────────────────┘          │  
+  ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯

@@ -2,7 +2,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import { relative, resolve, sep } from 'node:path';
 
 const repositoryRoot = resolve(import.meta.dirname, '../../../..');
-const localRoot = resolve(repositoryRoot, 'ash-ts/src/ash/editor');
+const localRoot = resolve(repositoryRoot, 'app-ts/src/ash/editor');
 const upstreamRoot = resolve(repositoryRoot, '../vscode/src/vs/editor');
 const scope = normalizeScope(process.argv[2] ?? '');
 

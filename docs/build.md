@@ -9,16 +9,16 @@
 
 ## 快速理解
 
-Ash 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保存产物构建、生成、下载和发布机制，使用 `scripts/` 保存作用于仓库和开发环境的命令，使用根 `.build/` 保存常规本地产物。文件是否能被直接执行不决定归属；判断标准是它构建产品产物，还是操作、检查或运行仓库。日常构建、测试和开发不再向 `ash-ts/` 或仓库根散落 `dist`、`output`、`target` 和 Bazel 便捷链接。文档站由独立的 `ash-docs` 仓库构建和清理。
+Ash 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保存产物构建、生成、下载和发布机制，使用 `scripts/` 保存作用于仓库和开发环境的命令，使用根 `.build/` 保存常规本地产物。文件是否能被直接执行不决定归属；判断标准是它构建产品产物，还是操作、检查或运行仓库。日常构建、测试和开发不再向 `app-ts/` 或仓库根散落 `dist`、`output`、`target` 和 Bazel 便捷链接。文档站由独立的 `ash-docs` 仓库构建和清理。
 
 | 看到的路径 | 它是什么 | 是否受版本控制 | 能否整体删除 |
 | --- | --- | --- | --- |
 | `build/` | 产物构建、生成、下载、监听、打包、签名及其共享实现 | 是 | 否 |
 | `scripts/` | Cargo 环境、格式化、测试、诊断和维护等仓库操作 | 是 | 否 |
 | `.build/` | Cargo、Desktop、测试和 Bazel 本地产物 | 否 | 是，运行 `pnpm clean` |
-| `ash-ts/src/ash/platform/app-server/common/generated/` | Rust 协议快照的前端消费副本 | 否 | 可通过 `pnpm --dir ash-ts protocol:sync` 重建 |
-| `ash-ts/src/ash/base/common/productIcons.ts` | 产品 SVG 生成的图标工厂 | 是 | 否，使用 `pnpm icons:generate` 更新 |
-| `ash-ts/docs/`、`ash-ts/licenses/` | Desktop 的文档和打包输入 | 是 | 否 |
+| `app-ts/src/ash/platform/app-server/common/generated/` | Rust 协议快照的前端消费副本 | 否 | 可通过 `pnpm --dir app-ts protocol:sync` 重建 |
+| `app-ts/src/ash/base/common/productIcons.ts` | 产品 SVG 生成的图标工厂 | 是 | 否，使用 `pnpm icons:generate` 更新 |
+| `app-ts/docs/`、`app-ts/licenses/` | Desktop 的文档和打包输入 | 是 | 否 |
 | `node_modules/` | pnpm workspace 的依赖链接和虚拟依赖树；内容寻址 store 使用用户级默认缓存 | 否 | 可通过 `pnpm install` 重新安装 |
 | `.ash/` | 当前目录的 Ash 配置或运行状态 | 按目录用途决定 | 不应由构建清理 |
 
@@ -65,7 +65,7 @@ Ash 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保
 根 `Justfile` 是三个产品和根 Rust workspace 的统一入口。根 `package.json` 提供 pnpm workspace 与 Electron、Browser、Stanza 等 Node 构建入口；`pnpm test` 还会调用 Rust 协议验证。完整 Rust workspace 构建由 `Justfile` 编排。
 
 - Just 在 Windows 上调用 PowerShell 7 的 `-CommandWithArgs`，保留参数边界；其他平台调用 `sh`。
-- `just ash-desktop` 内部执行 `pnpm --dir ash-ts dev`；VS Code 的 `Run Ash Desktop (TypeScript)` 配置使用同一 Just 入口。
+- `just ash-desktop` 内部执行 `pnpm --dir app-ts dev`；VS Code 的 `Run Ash Desktop (TypeScript)` 配置使用同一 Just 入口。
 - Rust 构建、打包和源码启动脚本由 Just 通过 `uv run --frozen --project scripts python` 执行，统一使用锁定的 Python 环境。
 
 Node 工具、发布包组装与 Desktop 单测使用 Node 24 LTS，具体版本由仓库根 `.nvmrc` 固定。切换到该版本后，按 [README 初始化步骤](../README.md#quick-start) 安装根 `package.json` 声明的 pnpm，再执行 `pnpm install`、构建或测试。Node 构建与测试入口调用 pnpm，安装检查要求 pnpm 版本与声明完全一致；其他 Node 主版本不受支持。
@@ -88,7 +88,9 @@ Node 工具、发布包组装与 Desktop 单测使用 Node 24 LTS，具体版本
 | `just check <package>` | 检查指定 Rust 包 |
 | `just test <package>` | 测试指定 Rust 包 |
 | `just test-tui` | 构建服务程序并运行 CLI/TUI PTY 场景 |
-| `just package <args>` | 组装正式发布包 |
+| `just runtime-package <args>` | 组装共享运行时发布包 |
+| `just code-package <args>` | 在运行时包上加入 `ash` 命令并组装 Code 发布包 |
+| `just app-package <args>` | 在运行时包上加入 Rust 桌面端并组装 App 发布包 |
 
 #### 仓库维护
 
@@ -112,7 +114,7 @@ Node 工具、发布包组装与 Desktop 单测使用 Node 24 LTS，具体版本
 | `pnpm test:web-integration` | 直接运行带 App Server 的完整 Web 集成测试 |
 | `pnpm test:desktop:smoke` | 直接运行 Electron Desktop smoke tests |
 | `pnpm typecheck:build` | 严格检查整个 `build/` 中的 TypeScript 构建代码 |
-| `pnpm --dir ash-ts typecheck:test-unit` | 检查 Desktop 单测入口及其辅助代码 |
+| `pnpm --dir app-ts typecheck:test-unit` | 检查 Desktop 单测入口及其辅助代码 |
 | `pnpm clean` | 删除 `.build/` 和 `build/`、`scripts/` 内的 Python 缓存；缓存扫描跳过依赖目录，不跟随链接 |
 
 Desktop 的 `code` 与 `academic` 通过同一个 `build:desktop` 入口构建，`ASH_WORKBENCH_MODE` 选择启动时的默认模式；两者共用一个 Renderer 产物。
@@ -123,15 +125,15 @@ Bazelisk 按 `.bazelversion` 选择 Bazel。Windows 先在当前 PowerShell 中�
 
 ```powershell
 $env:BAZEL_SH = "C:\Program Files\Git\bin\bash.exe"
-bazelisk test //app:app_ci --test_output=errors
+bazelisk test //app-rs:app_ci --test_output=errors --test_env=PATH
 ```
 
-其他平台直接运行同一条 `bazelisk test` 命令。该目标检查 App 边界和打包契约；产品行为测试使用上面的对应入口。
+其他平台直接运行同一条 `bazelisk test` 命令。测试包组装会启动仓库固定版本的 Node，因此 `--test_env=PATH` 将已配置的 Node 路径传给 Bazel 测试进程。该目标检查 App 边界和打包契约；产品行为测试使用上面的对应入口。
 
 ### 准备步骤与验证范围
 
 - `test:main` 聚合构建工具和前端单测；协议生成、图标校验和输出目录准备由 `test:unit` 的前置步骤执行一次。单独运行 `test:unit` 或 `test:editor:unit` 同样会准备输入。
-- Electron 键盘模块使用 electron-rebuild 的架构和 ABI 记录判断是否需要重新编译；需要显式重编译时运行 `pnpm --dir ash-ts rebuild:native --force`。
+- Electron 键盘模块使用 electron-rebuild 的架构和 ABI 记录判断是否需要重新编译；需要显式重编译时运行 `pnpm --dir app-ts rebuild:native --force`。
 - `test:smoke:ui` 构建 Electron 和 Renderer 并测试关闭 App Server 的界面；`test:smoke:desktop` 额外组装后端包并测试真实 App Server。Browser 的 `test:smoke:browser` 与 `test:smoke:browser:full` 分别覆盖这两个范围。
 - 使用上述带明确范围的 smoke 命令；不再提供 `test:e2e`、`test:smoke` 和 `test:desktop:e2e` 等重复别名。
 
@@ -151,8 +153,8 @@ Browser 和 Electron UI 检查不启动 App Server；真实后端集成继续使
 ```text
 .build/
 ├── cargo/                       # Cargo target-dir
-├── ash-development/<digest>/    # 源码开发所需的少量可执行文件；不含资源副本和包清单
-├── desktop/
+├── code/dev/<digest>/           # 源码开发所需的少量可执行文件；不含资源副本和包清单
+├── app-ts/
 │   ├── main/                    # Electron Main TypeScript
 │   ├── preload/                 # sandbox Preload TypeScript
 │   ├── renderer/<product>/      # Vite Renderer bundle
@@ -163,7 +165,7 @@ Browser 和 Electron UI 检查不启动 App Server；真实后端集成继续使
 │   └── dev/
 │       ├── app-server/          # backend hot-reload generations
 │       └── web-profile/         # full Web development profile
-├── ash-package/dev/store-v1/<target>/<javascript-runtime>/<build-profile>/
+├── runtime/dev/store-v1/<target>/<javascript-runtime>/<build-profile>/
 │   ├── manifests/<sequence>.json # immutable package selection history
 │   └── packages/<version>/<build-id>/ # immutable complete Ash packages and process leases
 └── bazel-*                      # Bazel convenience links
@@ -236,17 +238,17 @@ just bench-build ash-keybinding --jobs 4 --compare .build/build-health/<run>/rep
 
 ## 构建源码与仓库脚本边界
 
-`build/` 按三条产品线、共享交付物和平台划分。开发与正式发布共用这些职责目录；发布顺序、凭据注入和上传由 `.github/workflows/` 编排，不另设发布实现目录。`just build-code`、`just build-desktop` 和 `just build-app` 分别构建产品宿主；`just build` 聚合这三个入口。Code 复用 `just ash` 的 `dev-small` profile，App 复用自身默认 Cargo profile。完整共享包由 `just ash-package` 单独组装，根 Cargo workspace 的完整构建保留在显式的 `just build-rust`。
+`build/` 按三条产品线、共享交付物和平台划分。开发与正式发布共用这些职责目录；发布顺序、凭据注入和上传由 `.github/workflows/` 编排，不另设发布实现目录。`just build-code`、`just build-desktop` 和 `just build-app` 分别构建产品宿主；`just build` 聚合这三个入口。Code 通过 `build/code/build.py` 复用 `just ash` 的 `dev-small` 构建入口，App 复用自身默认 Cargo profile。完整共享包由 `just ash-package` 单独组装，根 Cargo workspace 的完整构建保留在显式的 `just build-rust`。
 
 | 路径 | 单一职责 |
 | --- | --- |
 | `build/lib/` | 通用路径、归档、签名、Cargo、目标识别和 V8 构建输入 |
-| `build/desktop/` | Electron Main、Preload、Renderer 和 Web 开发构建：编译、增量监听、Vite 配置及开发态 App Server 代次发布 |
+| `build/app_ts/` | Electron Main、Preload、Renderer 和 Web 开发构建：编译、增量监听、Vite 配置及开发态 App Server 代次发布 |
 | `scripts/electron.ts`、`scripts/web.ts` | Electron 启动与重启、本地 Web 静态服务启动 |
-| `ash-ts/src/ash/platform/app-server/node/` | WebSocket 连接、共享 JSONL 进程传输；由启动方提供工作区、配置目录和可执行文件路径 |
+| `app-ts/src/ash/platform/app-server/node/` | WebSocket 连接、共享 JSONL 进程传输；由启动方提供工作区、配置目录和可执行文件路径 |
 | `build/pnpm/` | pnpm 版本约束、安装入口和单锁文件 workspace 校验 |
-| `build/package/` | 共享包布局、资源、开发包组装与存储、发布包组装与签名记录 |
-| `build/app/`、`build/code/`、`build/remote/` | 各交付物的组装、验证与归档 |
+| `build/runtime/` | 共享包布局、资源、开发包组装与存储、发布包组装与签名记录 |
+| `build/app_rs/`、`build/code/`、`build/remote/` | 各交付物的组装、验证与归档 |
 | `build/darwin/` | macOS 签名命令和公证 |
 | `build/win32/` | Windows 签名命令 |
 | `build/linux/` | Linux 分离签名命令 |
@@ -255,48 +257,48 @@ just bench-build ash-keybinding --jobs 4 --compare .build/build-health/<run>/rep
 | `build/clean.ts` | 根清理入口 |
 | `build/package.json`、`build/tsconfig.json` | 构建工具及根目录 TypeScript 脚本的测试和类型检查 |
 
-`.build/desktop/` 是产物目录，按 `main`、`preload`、`renderer`、`node` 等运行目标存放输出。`.build/cargo/` 仍是统一 Cargo 输出目录；相同 profile 的公共依赖会复用。Code 的 `dev-small` 与 App 的默认开发 profile 分别拥有首次编译产物。
+`.build/app-ts/` 是产物目录，按 `main`、`preload`、`renderer`、`node` 等运行目标存放输出。`.build/cargo/` 仍是统一 Cargo 输出目录；相同 profile 的公共依赖会复用。Code 的 `dev-small` 与 App 的默认开发 profile 分别拥有首次编译产物。
 `compile.ts` 接受这些编译目标，`watch.ts` 接受 TypeScript 目标或 `app-server`。启动脚本调用构建能力，构建模块不反向调用启动脚本。
 
 Web 连接实现编译到 `node` 输出后，由 `scripts/web.ts` 或 Vite 插件加载。两者提供开发包路径和运行配置；连接实现不读取仓库构建目录。
-`ws` 属于 `ash-ts` 的运行依赖，静态服务器使用的 `sirv` 属于根脚本的开发依赖，共用根锁文件。
+`ws` 属于 `app-ts` 的运行依赖，静态服务器使用的 `sirv` 属于根脚本的开发依赖，共用根锁文件。
 
 ### 共享包组装
 
 音频通话通过 Cargo 管理的 LiveKit Rust SDK 接入。音频通话包包含 `ash-voice-host`、`ash-collaboration-server` 和独立 LiveKit Server 程序；Go 工具链不随产品分发。设备助手以 `ash-voice-host/host` feature 构建；Linux 构建机需要 ALSA 开发文件。
 
-LiveKit Server 的版本、来源与 SHA-256 位于 `third_party/livekit/runtime-lock.json`。开发和发布共用 `build/package/livekit.ts`：Linux／Windows 下载并校验上游程序；macOS 下载并校验源码，仅在忽略的构建缓存中解压、编译并清理，不将 Go 源码纳入仓库。macOS 构建机需要 PATH 中的 Go 1.26 工具链和系统 C/C++ 工具链。LiveKit 的 LICENSE、NOTICE 与 SFU 版权声明随包保留。更新方式见 [LiveKit Server](../third_party/livekit/README.md)。
+LiveKit Server 的版本、来源与 SHA-256 位于 `third_party/livekit/runtime-lock.json`。开发和发布共用 `build/runtime/livekit.ts`：Linux／Windows 下载并校验上游程序；macOS 下载并校验源码，仅在忽略的构建缓存中解压、编译并清理，不将 Go 源码纳入仓库。macOS 构建机需要 PATH 中的 Go 1.26 工具链和系统 C/C++ 工具链。LiveKit 的 LICENSE、NOTICE 与 SFU 版权声明随包保留。更新方式见 [LiveKit Server](../third_party/livekit/README.md)。
 
-开发入口 `build/package/prepare.ts` 与 Python 发布入口共用 `build/package/layout.ts` 组装包，布局与许可证清单由 `layout.json` 声明。组装器要求调用方显式传入协议元数据，不读取前端本地生成文件。开发入口使用受版本控制的协议常量；发布入口使用本次协议生成结果，并通过标准输入传入程序、资源和协议元数据。因此发布环境也需要仓库固定的 Node 24；Desktop 开发入口不调用 Python。
+开发入口 `build/runtime/prepare.ts` 与 Python 发布入口共用 `build/runtime/layout.ts` 组装包，布局与许可证清单由 `layout.json` 声明。组装器要求调用方显式传入协议元数据，不读取前端本地生成文件。开发入口使用受版本控制的协议常量；发布入口使用本次协议生成结果，并通过标准输入传入程序、资源和协议元数据。因此发布环境也需要仓库固定的 Node 24；Desktop 开发入口不调用 Python。
 
 下载与解压由 `build/download/artifacts.ts` 和 `artifacts.py` 按调用语言提供。Node、ripgrep、V8 下载都采用流式校验和独立临时文件，通过大小及摘要检查后才发布缓存；失败只清理本次临时文件。Node 开发入口复用已校验摘要的解压产物，不在每次启动时重新解压。
 
-打包入口按交付物定位：`build/package/build.py`、`build/app/build.py`、`build/code/archive.py` 和 `build/remote/bundle.py`。共享包签名使用 `build/package/sign.py`，App 签名使用 `build/app/signing.py`，macOS 公证使用 `build/darwin/notarize.py`。
+打包入口按交付物定位：`build/runtime/build.py` 产出不含 CLI 的共享运行时，`build/code/package.py` 将 `ash` 命令加入经过验证的运行时包，`build/code/archive.py` 将 Code 包归档；`build/app_rs/build.py` 和 `build/remote/bundle.py` 分别负责 Rust 桌面端与远端运行时。共享包签名使用 `build/runtime/sign.py`，App 签名使用 `build/app_rs/signing.py`，macOS 公证使用 `build/darwin/notarize.py`。
 
 各 Python 入口可用 `python3 -B <脚本路径>` 直接运行，Windows 使用 `python -B <脚本路径>`；模块导入从 `build` 下的所属目录开始。测试放在对应职责目录，`just test-python build` 统一发现并运行。各目录的 `BUILD.bazel` 声明自身工具和直接依赖。
 
-共享发布包先收集未提供预编译文件的第一方程序，再用一次 Cargo 调用构建并读取其报告的可执行文件路径。App 发布直接使用打包参数和 `signing.py sign / verify / record`；签名凭据由环境变量提供。
+共享发布包先收集未提供预编译文件的第一方程序，再用一次 Cargo 调用构建并读取其报告的可执行文件路径。Code 与 Rust Desktop 都以验证过的共享包为输入，加入各自的程序并重算整包清单；`app-package` 必须传入 `--runtime-package`。签名凭据由环境变量提供，系统签名覆盖共享运行时内的全部可执行程序。
 
 ### 仓库脚本与开发运行
 
-`scripts/` 根目录保存跨产品仓库工具：`cargo.py` 为整个 Cargo workspace 准备锁定的构建输入，`format.py` 统一已有格式化器，`test-python.py` 按 `scripts`、`ash-code`、`build` 分别运行 Python 测试并在不指定范围时聚合执行。
+`scripts/` 根目录保存跨产品仓库工具：`cargo.py` 为整个 Cargo workspace 准备锁定的构建输入，`format.py` 统一已有格式化器，`test-python.py` 按 `scripts`、`code`、`build` 分别运行 Python 测试并在不指定范围时聚合执行。
 
-Desktop 的 Node、Browser 和 Playwright 测试入口与 loader 归 `ash-ts/test/`，根 `package.json` 直接调用 `ash-ts` 的公开测试命令。`scripts/ash-code/` 保存 Code TUI 的源码运行和完整开发包运行入口。`app` 当前没有独立脚本，因此不创建空占位文件。
+Desktop 的 Node、Browser 和 Playwright 测试入口与 loader 归 `app-ts/test/`，根 `package.json` 直接调用 `app-ts` 的公开测试命令。`scripts/code/` 保存 Code TUI 的源码运行和完整开发包运行入口。`app` 当前没有独立脚本，因此不创建空占位文件。
 
-`scripts/ash-code/run.py` 用一次 Cargo 调用构建 Code TUI、本地 daemon 和当前平台沙箱程序，再把这些可执行文件放入按内容区分的 `.build/ash-development/` 目录后启动；这个小目录避免 Windows 上仍在运行的程序阻塞下一次构建，不是产品包。技能、扩展和产品服务直接读取源码。`scripts/ash-code/run_package.py` 只服务于显式的完整开发包运行。只有形成真实、可运行的操作契约时才新增入口；当前没有独立的远端 SSH 端到端测试，因此不提供空入口。
+`build/code/build.py` 用一次 Cargo 调用构建 Code TUI、本地 App Server 和当前平台沙箱程序，并从 Cargo 的构建报告取得可执行文件路径，再放入按内容区分的 `.build/code/dev/` 目录。`scripts/code/run.py` 从该目录启动；这个小目录避免 Windows 上仍在运行的程序阻塞下一次构建，不是产品包。技能、扩展和产品服务直接读取源码。`scripts/code/run_package.py` 只服务于显式的完整开发包运行。
 
-完整开发包仍由 `build/package/prepare.ts` 拥有。它在一次 Cargo 调用中构建全部第一方程序；可执行文件和包输入没有变化时直接复用已发布的完整包，有变化时才复制并校验受管资源、计算整包摘要，再通过 Package Store 发布不可变代次。日常 `just ash` 不执行这些组装与发布步骤；只有验证包布局、跨产品交付、回滚或远端运行时边界时才使用 `just ash-package` 或 `just ash-package-run`。Cargo 并发由 Cargo 自己决定；开发者仍可按需显式设置 `CARGO_BUILD_JOBS`。
+完整开发包仍由 `build/runtime/prepare.ts` 拥有。它在一次 Cargo 调用中构建全部第一方程序；可执行文件和包输入没有变化时直接复用已发布的完整包，有变化时才复制并校验受管资源、计算整包摘要，再通过 Package Store 发布不可变代次。日常 `just ash` 不执行这些组装与发布步骤；只有验证包布局、跨产品交付、回滚或远端运行时边界时才使用 `just ash-package` 或 `just ash-package-run`。Cargo 并发由 Cargo 自己决定；开发者仍可按需显式设置 `CARGO_BUILD_JOBS`。
 
-`scripts/` 可以调用 `build/` 公开的构建准备能力，`build/` 不得依赖或调用 `scripts/`。包组装由 `build/package/` 拥有；共享目标识别和 V8 输入解析由 `build/lib/` 拥有，日常 Cargo 命令与发布构建器都依赖这一层。测试内容和 fixture 仍归对应产品目录拥有，仓库脚本只负责入口、进程编排和临时测试输出生命周期。
+`scripts/` 可以调用 `build/` 公开的构建准备能力，`build/` 不得依赖或调用 `scripts/`。包组装由 `build/runtime/` 拥有；共享目标识别和 V8 输入解析由 `build/lib/` 拥有，日常 Cargo 命令与发布构建器都依赖这一层。测试内容和 fixture 仍归对应产品目录拥有，仓库脚本只负责入口、进程编排和临时测试输出生命周期。
 
 ### 根配置与工具语言
 
-根 `Justfile` 只声明稳定命令并委托到 `build/`、`scripts/` 或产品自身的构建入口，不保存构建机制。根 `package.json`、`pnpm-workspace.yaml` 和 `pnpm-lock.yaml` 必须留在仓库根，因为它们是 pnpm 发现 workspace 和执行 Node 命令的协议文件；安装策略与校验实现由 `build/pnpm/` 拥有。`build`、`scripts` 和 `ash-ts` 共用根锁文件与 TypeScript 版本，pnpm 内容寻址 store 使用用户级默认缓存，子项目不得再声明独立 `packageManager`、`pnpm` 策略或 npm 锁文件。
+根 `Justfile` 只声明稳定命令并委托到 `build/`、`scripts/` 或产品自身的构建入口，不保存构建机制。根 `package.json`、`pnpm-workspace.yaml` 和 `pnpm-lock.yaml` 必须留在仓库根，因为它们是 pnpm 发现 workspace 和执行 Node 命令的协议文件；安装策略与校验实现由 `build/pnpm/` 拥有。`build`、`scripts` 和 `app-ts` 共用根锁文件与 TypeScript 版本，pnpm 内容寻址 store 使用用户级默认缓存，子项目不得再声明独立 `packageManager`、`pnpm` 策略或 npm 锁文件。
 
 同理，`.bazelrc`、根 `BUILD.bazel`、`.cargo/config.toml` 和 `tsconfig.base.json` 是对应工具从仓库根发现的协议文件，不能为了让 `build/` 看起来更大而移动。文档站框架配置、内容生成、打包和验收全部归独立的 `ash-docs` 仓库。
 
-Node 构建工具和测试编排使用可擦除语法范围内的 TypeScript（`.ts`），由当前 Node.js 直接执行，不生成中间 JavaScript。跨语言仓库命令、归档和下载流程可以使用 Python；平台发布工具要求 Shell 时保留 Shell。语言由操作依赖决定，不由所在目录强制统一。`build/tsconfig.json` 检查 Node 构建工具，`build/desktop/vite/stanza/tsconfig.json` 检查浏览器中的 Stanza 开发入口，`ash-ts/test/unit/tsconfig.json` 检查 Desktop 单测入口；`scripts/pyproject.toml` 和 `scripts/uv.lock` 锁定 Python 仓库工具，`just install` 通过 uv 准备它们。
+Node 构建工具和测试编排使用可擦除语法范围内的 TypeScript（`.ts`），由当前 Node.js 直接执行，不生成中间 JavaScript。跨语言仓库命令、归档和下载流程可以使用 Python；平台发布工具要求 Shell 时保留 Shell。语言由操作依赖决定，不由所在目录强制统一。`build/tsconfig.json` 检查 Node 构建工具，`build/app_ts/vite/stanza/tsconfig.json` 检查浏览器中的 Stanza 开发入口，`app-ts/test/unit/tsconfig.json` 检查 Desktop 单测入口；`scripts/pyproject.toml` 和 `scripts/uv.lock` 锁定 Python 仓库工具，`just install` 通过 uv 准备它们。
 
-`ash-ts/` 只保存产品源码、测试内容和产品清单；构建、资源生成、下载与发布逻辑由根 `build/` 拥有，跨产品测试和维护编排由根 `scripts/` 拥有。Renderer、Workbench 和平台服务不得拥有构建工具配置或仓库操作入口。
+`app-ts/` 只保存产品源码、测试内容和产品清单；构建、资源生成、下载与发布逻辑由根 `build/` 拥有，跨产品测试和维护编排由根 `scripts/` 拥有。Renderer、Workbench 和平台服务不得拥有构建工具配置或仓库操作入口。
 
-旧的 `target/`、`ash-ts/dist/`、`ash-ts/output/`、`ash-ts/.tmp/` 和根 `output/` 仍保留忽略规则，只为防止旧工具或旧分支重新提交这些产物；当前命令不得再写入这些路径。
+旧的 `target/`、`app-ts/dist/`、`app-ts/output/`、`app-ts/.tmp/` 和根 `output/` 仍保留忽略规则，只为防止旧工具或旧分支重新提交这些产物；当前命令不得再写入这些路径。

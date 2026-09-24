@@ -1,0 +1,22 @@
+---
+source: code/tui/src/app/fullscreen/frame_tests.rs
+expression: "render(&app, 100, 20)"
+---
+  .                                                                            [— / —] [Dashboard]  
+                                                                                                    
+            ┌── Config ───────────────────────────────────────────────────────────[✗]─┐             
+            │                                                                         │             
+            │   General    Providers    Issues                                        │             
+            │                                                                         │             
+            │  ╭────────────────────────────────────────────────────────────────────╮ │             
+            │  │ Search configuration                                               │ │             
+            │  ╰────────────────────────────────────────────────────────────────────╯ │             
+            │> Auto refresh                                                     Never │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+  ╭─────────│                                                                         │──────────╮  
+  │ > Build │  Enter/Space change · ←/→ details · Tab tabs · / search · Esc close     │          │  
+  ╰─────────└─────────────────────────────────────────────────────────────────────────┘ic model ─╯

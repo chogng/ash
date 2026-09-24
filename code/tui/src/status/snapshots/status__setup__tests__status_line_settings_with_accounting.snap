@@ -1,0 +1,13 @@
+---
+source: code/tui/src/status/setup_tests.rs
+expression: "rows.join(\"\\n\")"
+---
+> Permissions                                                                                   on  
+> Model                                                                                         on  
+> Cache hit rate                                                                               off  
+> Reference cost                                                                               off  
+> Memory                                                                                       off  
+> CPU                                                                                          off  
+> Git branch                                                                                    on  
+> Git changes                                                                                  off  
+> Context                                                                                      off

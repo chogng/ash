@@ -5,3 +5,5 @@ ash_rust_crate(
     crate_name = "ash_app_server_protocol",
     data = glob(["schema/**"]) + ["src/typescript_decoder.template.ts"],
 )
+
+exports_files(["schema/metadata.json"])

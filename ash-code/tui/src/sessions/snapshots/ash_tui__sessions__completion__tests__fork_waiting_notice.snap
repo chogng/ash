@@ -1,6 +1,0 @@
----
-source: ash-code/tui/src/sessions/completion_tests.rs
-expression: text
----
-/fork
-Copied to session SESSION. Waiting for input. Open with /resume SESSION.

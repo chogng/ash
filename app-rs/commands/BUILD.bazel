@@ -1,0 +1,7 @@
+load("//app-rs:defs.bzl", "app_rust_library")
+
+app_rust_library(
+    name = "commands",
+    crate_name = "ash_commands",
+    package_name = "app-rs/commands",
+)

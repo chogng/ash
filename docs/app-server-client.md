@@ -162,7 +162,7 @@ pub(crate) enum AppServerBackend {
 - `AppServerHost` 是 `app` 的产品级横向协调层，不是 `ash-rs` 的通用 App Server API；
 - remote scheduler 仍位于 `ash-exec` 上层，不属于 App Server backend。
 
-在 app 中，这个产品边界位于 `app/workbench/app_server/`。Agent、Language 和 Terminal 通过
+在 app 中，这个产品边界位于 `app-rs/workbench/app_server/`。Agent、Language 和 Terminal 通过
 Workbench 的 App Server host 使用它导出的 session/event contract；`zui`、`ash-ui-components`、Agent Sidebar
 等 UI crate 不依赖 App Server client。这样 `ash-rs` 提供核心协议和通用 client，app 提供
 产品启动、本地/Remote backend 与重连协调，两边不会再各自复制一套 client。
@@ -493,7 +493,7 @@ TUI 不再接收一个同步 `&mut AppServerClient<T>`，也不调用 `drain_not
 | `start_in_process_client` / generic `AppServerClient<T>` | rust-app 与 contract tests 的同步适配面；TUI/CLI 不再依赖 drain |
 | typed method 同步等待 completion | shared handle 保持同步 typed API；TUI 已用 `RequestTask` 把等待移出单写者 loop |
 | bounded event/data plane | Current：1024 event + 4096 server queue；显式 `Lagged` event 尚未提供 |
-| stdio child backend | 已实现；`AppServerSession::start_stdio` 完成 initialize/schema gate 与同一 request/event contract；本地与 Remote `ash code` 的 30 秒有界重连和 snapshot 恢复由 CLI 宿主负责 |
+| stdio child backend | 已实现；`AppServerSession::start_stdio` 完成 initialize 的协议和必需能力校验，并使用同一 request/event contract；本地与 Remote `ash code` 的 30 秒有界重连和 snapshot 恢复由 CLI 宿主负责 |
 | initialize gate 只存在于一个 helper | 裸 `AppServerClient::new` 可以在未初始化时发送业务请求 |
 | server error 被压成 code/string | 丢失 typed error name/data |
 
@@ -539,7 +539,7 @@ Result、Notification 与 error 的 source of truth 仍是 `ash-app-server-proto
 
 共享层的测试重点是完整 session 生命周期：
 
-- `start` 创建 App Server 并只在 initialize/schema gate 成功后返回；
+- `start` 连接 App Server 并只在 initialize 的协议和必需能力校验成功后返回；
 - initialize 是 dispatcher 收到的首个 request；
 - startup 任一步失败都会关闭 channel 并 join 已启动 task；
 - `ash-exec` 与 TUI 使用相同 start path；

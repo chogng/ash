@@ -1,0 +1,13 @@
+---
+source: code/tui/src/issues_tests.rs
+expression: text
+---
+─ Issues ───────────
+                    
+   Open    Closed   
+  ╭──────────────╮  
+  │ Search keywor│  
+  ╰──────────────╯  
+  team/repo · 0 se  
+> [ ] #3 first      
+  [ ] #5 second

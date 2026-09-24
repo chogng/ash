@@ -37,9 +37,9 @@ bridge or duplicate product hub is required.
 Verify the integration from the repository root:
 
 ```bash
-bazel query //app:app
-bazel build //app:app_sources
-bazel test //app:app_ci
+bazel query //app-rs:app
+bazel build //app-rs:app_sources
+bazel test //app-rs:app_ci
 ```
 
 If a newer rules_rs release is adopted, first remove the archive override in a

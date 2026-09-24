@@ -2,7 +2,7 @@
 
 > 本 README 是低层 LSP 客户端运行时的 crate-level canonical contract。跨 crate 的产品语义、
 > 宿主职责和演进阶段见 [`docs/lsp.md`](../../docs/lsp.md)；Desktop 编辑器展示契约见
-> [`ash-editor`](../../app/editor/README.md)，产品级启停与路由见
+> [`ash-editor`](../../app-rs/editor/README.md)，产品级启停与路由见
 > [`ash-lsp-manager`](../lsp-manager/README.md)，server 发现与 resolved command 见
 > [`ash-lsp-server-provider`](../lsp-server-provider/README.md)。
 

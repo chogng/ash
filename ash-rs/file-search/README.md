@@ -1,7 +1,7 @@
 # `ash-file-search`
 
 > 本 README 是 文件路径枚举、glob 与 fuzzy search 的实现契约。TUI `@file` 交互由
-> [`ash-code/tui/README.md`](../../ash-code/tui/README.md) 维护。Agent 与编辑器的文件内容搜索见
+> [`code/tui/README.md`](../../code/tui/README.md) 维护。Agent 与编辑器的文件内容搜索见
 > [`ash-rs/grep/README.md`](../grep/README.md)；可执行文件的
 > discovery 与冻结边界见 [`ash-rs/shell-command/README.md`](../shell-command/README.md)。
 

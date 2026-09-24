@@ -1,8 +1,0 @@
-load("//app:defs.bzl", "app_rust_library")
-
-app_rust_library(
-    name = "terminal-runtime",
-    crate_name = "ash_terminal_runtime",
-    package_name = "app/terminal-runtime",
-    unit_tests = True,
-)

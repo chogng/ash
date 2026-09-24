@@ -1,0 +1,24 @@
+---
+source: code/tui/src/app/fullscreen/header_tests.rs
+expression: text
+---
+  main /work/ash                                           [— / —] [Dashboard]  
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+  ⏸ ask permissions on                                                          
+  ╭──────────────────────────────────────────────────────────────────────────╮  
+  │ >                                                                        │  
+  ╰──────────────────────────────────────────────────────── Automatic model ─╯  
+                                                                                
+  Enter send  ·  shift+tab permissions  ·  /home

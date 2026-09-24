@@ -1,6 +1,6 @@
 # 用户主题文件
 
-Desktop 用户主题与根部 [extensions/theme-defaults](../extensions/theme-defaults/package.json) 使用同一种 VS Code 主题 JSON 格式。解析和校验归 [themes/common](../ash-ts/src/ash/workbench/services/themes/common/colorThemeData.ts)，加载、保存与旧文件转换归 [themes/browser](../ash-ts/src/ash/workbench/services/themes/browser/workbenchThemeService.ts)。不再维护 ash-ts/resources/theme 中的独立 Schema 和模板。
+Desktop 用户主题与根部 [extensions/theme-defaults](../extensions/theme-defaults/package.json) 使用同一种 VS Code 主题 JSON 格式。解析和校验归 [themes/common](../app-ts/src/ash/workbench/services/themes/common/colorThemeData.ts)，加载、保存与旧文件转换归 [themes/browser](../app-ts/src/ash/workbench/services/themes/browser/workbenchThemeService.ts)。不再维护 app-ts/resources/theme 中的独立 Schema 和模板。
 
 ## Desktop 主题
 
@@ -52,10 +52,10 @@ Desktop 用户主题与根部 [extensions/theme-defaults](../extensions/theme-de
 
 ## Rust GUI 与 TUI
 
-Rust GUI 继续使用 [独立模板](../app/theme/resources/color-theme.template.json) 和 [Schema](../app/theme/resources/color-theme.schema.json)，文件位于 profile 的 app/themes/*.json，主题选择由 config.toml 的 [gui].theme 保存。其 version、id、label、colorScheme、别名和变换规则保持原样；不要用 Desktop 的新文件替换 Rust 文件。
+Rust GUI 继续使用 [独立模板](../app-rs/theme/resources/color-theme.template.json) 和 [Schema](../app-rs/theme/resources/color-theme.schema.json)，文件位于 profile 的 app/themes/*.json，主题选择由 config.toml 的 [gui].theme 保存。其 version、id、label、colorScheme、别名和变换规则保持原样；不要用 Desktop 的新文件替换 Rust 文件。
 
-Ash Code TUI 使用 [自己的格式](../ash-code/tui/README.md) 与 [tui].theme。各界面的主题边界见 [design-tokens.md](design-tokens.md)。
+Ash Code TUI 使用 [自己的格式](../code/tui/README.md) 与 [tui].theme。各界面的主题边界见 [design-tokens.md](design-tokens.md)。
 
 ## 验证
 
-Desktop 定向验证：pnpm --dir ash-ts run test:unit --run src/ash/workbench/services/themes/test/browser/workbenchThemeService.test.ts。修改运行时代码还需完成受影响的构建与 Playwright 验证。
+Desktop 定向验证：pnpm --dir app-ts run test:unit --run src/ash/workbench/services/themes/test/browser/workbenchThemeService.test.ts。修改运行时代码还需完成受影响的构建与 Playwright 验证。

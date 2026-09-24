@@ -9,4 +9,4 @@
 - `Typst-NOTICE.txt`：Typst 携带的第三方声明；
 - `Typst-Assets-NOTICE.txt`：内置字体和资源的许可证与声明。
 
-本目录是这些材料在仓库中的唯一权威来源。Desktop 发布流程从这里复制所需文件进入发布 staging，不在 `ash-ts/licenses/` 保存第二份源码副本。Typst 依赖、功能、字体或资源变化时，必须重新审查上游许可证材料。
+本目录是这些材料在仓库中的唯一权威来源。Desktop 发布流程从这里复制所需文件进入发布 staging，不在 `app-ts/licenses/` 保存第二份源码副本。Typst 依赖、功能、字体或资源变化时，必须重新审查上游许可证材料。

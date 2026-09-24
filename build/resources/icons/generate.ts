@@ -9,8 +9,8 @@ const repositoryDirectory = resolve(import.meta.dirname, "../../..");
 const iconDirectory = resolve(repositoryDirectory, "resources/icons");
 const defaultOutputs: IconOutputs = {
   manifestFile: resolve(iconDirectory, "manifest.json"),
-  rustFile: resolve(repositoryDirectory, "app/icons/src/generated.rs"),
-  typescriptFile: resolve(repositoryDirectory, "ash-ts/src/ash/base/common/productIcons.ts"),
+  rustFile: resolve(repositoryDirectory, "app-rs/icons/src/generated.rs"),
+  typescriptFile: resolve(repositoryDirectory, "app-ts/src/ash/base/common/productIcons.ts"),
 };
 const iconFilePattern = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*\.svg$/;
 const unsafeSvgPattern = /<(?:script|foreignObject)\b|\son[a-z]+\s*=|(?:href|xlink:href)\s*=/i;

@@ -1,5 +1,4 @@
 use crate::ExecRunId;
-use ash_app_server_protocol::protocol::common::ClientInfo;
 use ash_app_server_protocol::protocol::turn::InputItem;
 use ash_protocol::AgentInteractionKind;
 use ash_protocol::RequestId;
@@ -11,53 +10,9 @@ use ash_protocol::TurnId;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
-use std::path::Path;
-use std::path::PathBuf;
 
 /// Version emitted in every JSONL-compatible [`ExecEvent`] envelope.
 pub const EXEC_EVENT_SCHEMA_VERSION: u32 = 1;
-
-/// Startup target used by one headless runner.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum AppServerTarget {
-    Embedded(EmbeddedAppServerOptions),
-}
-
-/// Inputs needed to start the shared embedded App Server composition.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct EmbeddedAppServerOptions {
-    profile_root: PathBuf,
-    dir_root: Option<PathBuf>,
-    client_info: ClientInfo,
-}
-
-impl EmbeddedAppServerOptions {
-    pub fn new(profile_root: impl Into<PathBuf>, client_info: ClientInfo) -> Self {
-        Self {
-            profile_root: profile_root.into(),
-            dir_root: None,
-            client_info,
-        }
-    }
-
-    /// Enables directory-scoped tools for this embedded run.
-    pub fn with_dir_root(mut self, dir_root: impl Into<PathBuf>) -> Self {
-        self.dir_root = Some(dir_root.into());
-        self
-    }
-
-    pub fn profile_root(&self) -> &Path {
-        &self.profile_root
-    }
-
-    pub fn dir_root(&self) -> Option<&Path> {
-        self.dir_root.as_deref()
-    }
-
-    pub fn client_info(&self) -> &ClientInfo {
-        &self.client_info
-    }
-}
 
 /// Product-level entry intent for one headless Turn.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]

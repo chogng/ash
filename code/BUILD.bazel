@@ -1,0 +1,11 @@
+package(default_visibility = ["//visibility:public"])
+
+alias(
+    name = "ash",
+    actual = "//cli:ash",
+)
+
+alias(
+    name = "tui",
+    actual = "//code/tui:tui",
+)

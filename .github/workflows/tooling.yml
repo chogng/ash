@@ -6,7 +6,7 @@ on:
     paths:
       - 'build/**'
       - 'scripts/**'
-      - 'app/packaging/**'
+      - 'app-rs/packaging/**'
       - 'third_party/**'
       - 'resources/**'
       - 'extensions/**'
@@ -22,7 +22,7 @@ on:
     paths:
       - 'build/**'
       - 'scripts/**'
-      - 'app/packaging/**'
+      - 'app-rs/packaging/**'
       - 'third_party/**'
       - 'resources/**'
       - 'extensions/**'
@@ -64,4 +64,4 @@ jobs:
       - name: Check Python format
         run: uv run --frozen --project scripts ruff format --check build scripts
       - name: Test build, package, signing and repository contracts
-        run: just test-python build scripts ash-code
+        run: just test-python build scripts code

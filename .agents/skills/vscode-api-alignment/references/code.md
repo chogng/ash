@@ -1,10 +1,10 @@
 # Code 对齐
 
-仅在目标位于 `ash-ts/src/ash/code` 时读取。共同的对比规则、单一实现、删除确认和验证规则由主 `SKILL.md` 负责。
+仅在目标位于 `app-ts/src/ash/code` 时读取。共同的对比规则、单一实现、删除确认和验证规则由主 `SKILL.md` 负责。
 
 ## 对应范围
 
-- 本地根目录：`ash-ts/src/ash/code`
+- 本地根目录：`app-ts/src/ash/code`
 - 上游根目录：`../vscode/src/vs/code`
 - `code` 是桌面和浏览器产品入口，负责选择模式、装配低层服务、创建窗口并启动对应工作台，不拥有可下沉到 `platform`、`editor` 或 `workbench` 的领域实现。
 

@@ -1,10 +1,10 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import ts from '../../../../ash-ts/node_modules/typescript/lib/typescript.js';
+import ts from '../../../../app-ts/node_modules/typescript/lib/typescript.js';
 
 const repositoryRoot = resolve(import.meta.dirname, '../../../..');
-const ashEditorRoot = resolve(repositoryRoot, 'ash-ts/src/ash/editor');
+const ashEditorRoot = resolve(repositoryRoot, 'app-ts/src/ash/editor');
 const vscodeEditorRoot = resolve(repositoryRoot, '../vscode/src/vs/editor');
 const ledgerPath = resolve(ashEditorRoot, 'api-alignment-status.md');
 const sourceCache = new Map();
@@ -146,8 +146,8 @@ function resolveImportedFile(containingFile, specifier) {
 }
 
 function isWithin(file, root) {
-	const relative = file.slice(resolve(root).length);
-	return relative.startsWith('/') && !relative.includes('/../');
+	const path = relative(resolve(root), resolve(file));
+	return path !== '' && path !== '..' && !path.startsWith(`..${sep}`) && !isAbsolute(path);
 }
 
 function readSource(file) {

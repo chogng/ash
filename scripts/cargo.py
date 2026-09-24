@@ -71,7 +71,7 @@ def main(arguments: list[str] | None = None) -> int:
             args.cargo, cargo_arguments, REPOSITORY_ROOT, "ash-tgrep"
         )
     ):
-        from build.package.tgrep import resolve_tgrep
+        from build.runtime.tgrep import resolve_tgrep
 
         executable = resolve_tgrep(
             TARGETS[target],

@@ -1,10 +1,10 @@
 # Platform 对齐
 
-仅在目标位于 `ash-ts/src/ash/platform` 时读取。共同的对比规则、单一实现、删除确认和验证规则由主 `SKILL.md` 负责。
+仅在目标位于 `app-ts/src/ash/platform` 时读取。共同的对比规则、单一实现、删除确认和验证规则由主 `SKILL.md` 负责。
 
 ## 对应范围
 
-- 本地根目录：`ash-ts/src/ash/platform`
+- 本地根目录：`app-ts/src/ash/platform`
 - 上游根目录：`../vscode/src/vs/platform`
 - `platform` 拥有跨层共享的服务契约、服务注册和基础设施，不拥有编辑器行为、工作台组合、应用启动或 Sessions 产品 UI。
 

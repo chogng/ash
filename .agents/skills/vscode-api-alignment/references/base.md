@@ -1,10 +1,10 @@
 # Base 对齐
 
-仅在目标位于 `ash-ts/src/ash/base` 时读取。共同的对比规则、单一实现、删除确认和验证规则由主 `SKILL.md` 负责。
+仅在目标位于 `app-ts/src/ash/base` 时读取。共同的对比规则、单一实现、删除确认和验证规则由主 `SKILL.md` 负责。
 
 ## 对应范围
 
-- 本地根目录：`ash-ts/src/ash/base`
+- 本地根目录：`app-ts/src/ash/base`
 - 上游根目录：`../vscode/src/vs/base`
 - `base` 只拥有不依赖服务的通用 TypeScript 能力和 UI 基础部件，不承载 `platform`、`editor`、`workbench`、`code` 或 `sessions` 的领域状态与产品策略。
 

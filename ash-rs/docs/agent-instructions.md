@@ -367,11 +367,11 @@ aggregate_and_intervals / failure_examples / artifacts_and_digests / decision
 | `models-manager/src/instructions.rs` | 准确模型指导登记、查找与无效资产拒绝 |
 | `core/src/thread_controller.rs` | 根配置与创建事实同批写入、幂等重放 |
 | `core/src/multi_agent` | 角色隔离、委托恢复、上下文、并发和能力上限 |
-| `ash-code/tui/src/issues` | Issue 浏览与通用 Session 创建、稳定首 Turn 请求 |
+| `code/tui/src/issues` | Issue 浏览与通用 Session 创建、稳定首 Turn 请求 |
 
 协议主版本为 2，Session/Thread/Turn capability version 为 4；旧后端必须在握手时拒绝，不能忽略角色字段后执行默认 Agent。新历史记录使用 schema 15，保留读取 12–14 的支持；旧执行器不能读取新记录并丢弃根角色约束。旧种子的冻结指令仍用于恢复，不根据已删除的 general 文件重新生成。
 
-TUI 的自动 Issue 标签注入和仅服务旧流程的编辑器绑定已退场；首 Turn 直接携带完整 URL。`/pr` 也通过普通 Agent 提交路径执行。浏览刷新编辑类型集中在 `ash-code/tui/src/config.rs`。
+TUI 的自动 Issue 标签注入和仅服务旧流程的编辑器绑定已退场；首 Turn 直接携带完整 URL。`/pr` 也通过普通 Agent 提交路径执行。浏览刷新编辑类型集中在 `code/tui/src/config.rs`。
 
 配置文件 schemaVersion 2 移除 Issue 执行偏好，保留浏览刷新设置；SQLite 配置文档版本 10 的支持下界为 7。旧 Issue 数据表不再由生产路径打开，也不在后台删除用户已有数据。
 

@@ -1,0 +1,28 @@
+---
+source: code/tui/src/app/fullscreen/home_tests.rs
+expression: rendered
+---
+  .                                                        [— / —] [Dashboard]  
+                                                                                
+  ╭──────────────────────────────────────────────────────────────────────────╮  
+  │                                                                          │  
+  │    ▄  ▄      Ash Code v0.1.0                                             │  
+  │  ▗█▛██▜█▖                                                                │  
+  │  ▝▜████▛▘    Start a task below, or continue a previous session.         │  
+  │    ▝  ▘                                                                  │  
+  │              Resume session                                              │  
+  │              Dashboard                                                   │  
+  │              Settings                                                    │  
+  │              Help and shortcuts                                          │  
+  │              Quit                                                        │  
+  │                                                                          │  
+  ╰──────────────────────────────────────────────────────────────────────────╯  
+                                                                                
+                                                                                
+                                                                                
+  ⏸ ask permissions on              Type a new task · Tab actions · Esc return  
+  ╭──────────────────────────────────────────────────────────────────────────╮  
+  │ >                                                                        │  
+  ╰──────────────────────────────────────────────────────── Automatic model ─╯  
+                                                                                
+  Enter send  ·  Tab actions  ·  / commands

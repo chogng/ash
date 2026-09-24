@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const skillDirectory = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const repositoryRoot = resolve(skillDirectory, '../../..');
-const ledgerPath = resolve(repositoryRoot, 'ash-ts/src/ash/editor/api-alignment-status.md');
+const ledgerPath = resolve(repositoryRoot, 'app-ts/src/ash/editor/api-alignment-status.md');
 const ledger = readFileSync(ledgerPath, 'utf8');
 
 const handled = readDeclarations(ledger, '已处理的同名契约');

@@ -1,0 +1,36 @@
+---
+source: cli/tests/support/tui_process.rs
+expression: screen
+---
+  <FIXTURE…>                                      …                            [— / —] [Dashboard]
+
+> 请保持流式输出，直到我取消
+
+● turn interrupted
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ⏸ ask permissions on                                                   shift+tab to cycle policy
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────╮
+  │ >                                                                                            │
+  ╰────────────────────────────────────────────────────────────────────────── ash-real-scenario ─╯
+
+  Enter send  ·  shift+tab permissions  ·  /home

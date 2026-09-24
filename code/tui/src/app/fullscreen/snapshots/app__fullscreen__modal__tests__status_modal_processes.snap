@@ -1,0 +1,33 @@
+---
+source: code/tui/src/app/fullscreen/modal_tests.rs
+assertion_line: 690
+expression: frame_text(&app)
+---
+  .                                                                            [— / —] [Dashboard]  
+                                                                                                    
+                                                                                                    
+            ┌── Status ───────────────────────────────────────────────────────────[✗]─┐             
+            │                                                                         │             
+            │   Thread    Processes                                                   │             
+            │                                                                         │             
+            │  Total:      collecting                                                 │             
+            │  TUI:        collecting                                                 │             
+            │  App Server: included in the TUI process                                │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+  ╭─────────│  Tab to switch · Esc to close                                           │──────────╮  
+  │ > Build └─────────────────────────────────────────────────────────────────────────┘          │  
+  ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯

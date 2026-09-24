@@ -95,16 +95,16 @@ ash-rs/
 ```
 
 产品宿主不属于共享后端：`app` 的 `zui`、`ash-ui-components`、`ash-workbench`、renderer、`wgpu` 和 `winit` 位于
-`app/` 的直接子 crate；`ash-code` 的 `ash-cli` 与 `ash-tui` 位于 `ash-code/`。它们仍加入同一个
+`app-rs/` 的直接子 crate；`ash-cli` 位于 `cli/`，`ash-tui` 位于 `code/`。它们仍加入同一个
 根 Cargo workspace，但 ownership 由物理目录和依赖方向表达。
 
-`editor-core`、`text-file` 和 `terminal` 位于 `app/`，分别拥有端内编辑状态、文件编辑生命周期和终端模型。
+`editor-core`、`text-file` 和 `terminal` 位于 `app-rs/`，分别拥有端内编辑状态、文件编辑生命周期和终端模型。
 共享后端不依赖这些前端 crate；文件 I/O、PTY 执行和后台任务仍由各自后端能力负责。
 
-[`input-classifier`](../app/input-classifier/README.md) 与 [`shell-completion`](../app/shell-completion/README.md)
-同样位于 `app/`，拥有 Composer 的本端输入分类、内嵌模型与 Shell 补全。Session 持有输入版本与调度，后端负责命令执行。
+[`input-classifier`](../app-rs/input-classifier/README.md) 与 [`shell-completion`](../app-rs/shell-completion/README.md)
+同样位于 `app-rs/`，拥有 Composer 的本端输入分类、内嵌模型与 Shell 补全。Session 持有输入版本与调度，后端负责命令执行。
 
-[`terminal-detection`](../ash-code/terminal-detection/README.md) 位于 `ash-code/`，拥有 CLI/TUI 所在进程的宿主终端、复用器和颜色能力识别。终端查询与输入流由 TUI 协调，PTY 进程执行仍属于共享后端。
+[`terminal-detection`](../code/terminal-detection/README.md) 位于 `code/`，拥有 CLI/TUI 所在进程的宿主终端、复用器和颜色能力识别。终端查询与输入流由 TUI 协调，PTY 进程执行仍属于共享后端。
 
 当前 `exec/` 仍实现 process `ToolExecutor`。它迁移为 `tool-executor/` 后，`exec/` 名称用于
 [`exec.md`](exec.md) 定义的 headless Agent runner；迁移完成前不能把目标目录注释理解为现状。
@@ -155,16 +155,16 @@ profile placement 和 RPC state。跨层隐私与云端边界见 [`codebase.md`]
 [`codebase/README.md`](../ash-rs/codebase/README.md) 与
 [`cloud-codebase/README.md`](../ash-rs/cloud-codebase/README.md)。
 
-Rust GUI 主题由 [`app/theme`](../app/theme/README.md) 完整拥有，包括自有颜色与尺寸目录、用户主题格式、加载、解析和组件样式转换。主题选择由 GUI 的 `[gui].theme` 管理，主题文件位于 `app/themes/*.json`。它不属于共享后端；Desktop 与 Ash Code TUI 分别维护自己的主题。
+Rust GUI 主题由 [`app-rs/theme`](../app-rs/theme/README.md) 完整拥有，包括自有颜色与尺寸目录、用户主题格式、加载、解析和组件样式转换。主题选择由 GUI 的 `[gui].theme` 管理，主题文件位于 `app/themes/*.json`。它不属于共享后端；Desktop 与 Ash Code TUI 分别维护自己的主题。
 
 `ash-editor` 当前拥有 `app` 使用的多行编辑、caret/selection、undo/redo、IME、language-aware
 syntax lifecycle/projection、普通文档结构折叠、viewport soft wrap 与 source/visual row 映射、代码视口绘制、retained `DiffEditorDocument`、复用两个 CodeEditor pane 的 side-by-side DiffEditor，以及纵向组合
 多个文件 section 的 MultiDiffEditor；它依赖
 `ash-ui-components`、`ash-diff` 和 `ash-syntax`，但不依赖 `app`，也不拥有文件 Tab、平台事件、EditorHost 或
 TUI presentation。当前 API、接入义务和限制见
-[`editor/README.md`](../app/editor/README.md)。
+[`editor/README.md`](../app-rs/editor/README.md)。
 
-[`ash-editor-core`](../app/editor-core/README.md) 位于 `app/editor-core`，拥有不依赖绘制或 transport 的文本事务：
+[`ash-editor-core`](../app-rs/editor-core/README.md) 位于 `app-rs/editor-core`，拥有不依赖绘制或 transport 的文本事务：
 UTF-16 selection、revision-bound atomic multi-edit、bounded undo/redo 和 snapshot。`app`
 的 `CodeEditorDocument` 是当前真实消费者，以 persistent core 持有 committed text/history/revision，app text
 projection 仅供行索引、syntax、folding 与绘制使用。Ash Stanza 是独立的 TypeScript Browser editor，拥有自己的
@@ -172,22 +172,22 @@ PieceTree、transaction、history、selection 和 tracked ranges；它只异步�
 不通过 WASM 或 App Server shadow document 调用 `ash-editor-core`。跨运行时边界见
 [`editor-core.md`](editor-core.md)。
 
-`app/text-file` 中的 `ash-text-file` 拥有前端 UTF-8 文件编辑生命周期：保存文本基线、磁盘版本、
+`app-rs/text-file` 中的 `ash-text-file` 拥有前端 UTF-8 文件编辑生命周期：保存文本基线、磁盘版本、
 只读状态、dirty/reload/conflict 分类、乐观保存 payload 与待处理外部 snapshot。它不读取或写入
 文件、不拥有 mutable editor text、Tab、关闭确认或 presentation。`app` 把 active
 `CodeEditorDocument` 的当前文本交给该领域模型，并通过 App Server 的独立文件能力执行 I/O；
 Native 拥有关闭确认和 reload/conflict 操作条，而显式覆盖请求仍使用待处理外部 snapshot 的版本
 执行乐观 preflight，磁盘再次变化时不会无条件写入；
 当前 API、失败语义和接入义务见
-[`text-file/README.md`](../app/text-file/README.md)。
+[`text-file/README.md`](../app-rs/text-file/README.md)。
 
-[`ash-terminal`](../app/terminal/README.md) 位于 `app/terminal`，拥有 App 进程内的 ANSI/VT 解析、
+[`ash-terminal`](../app-rs/terminal/README.md) 位于 `app-rs/terminal`，拥有 App 进程内的 ANSI/VT 解析、
 终端网格、光标、滚动和输入编码。`ash-utils-pty` 继续拥有进程与字节传输；App Server 不持有第二份终端网格。
 
 `ash-markdown` 当前拥有有资源上限的 CommonMark/GFM parsing、只读文档 snapshot、富文本与
 block layout 和 app presentation，并消费 `ash-ui-components::ScrollState`；它依赖 `ash-ui-components`，但不依赖
 `app`，也不拥有消息 identity、网络图片、链接激活、平台输入或持久化。当前 API、
-信任边界和限制见 [`markdown/README.md`](../app/markdown/README.md)。
+信任边界和限制见 [`markdown/README.md`](../app-rs/markdown/README.md)。
 
 `ash-lsp` 当前拥有单语言服务器的 stdio/async transport、initialize gate、typed request
 pairing、deadline cancellation、文档同步版本、push diagnostics 与规范关闭；宿主路由层另外
@@ -237,7 +237,7 @@ paint/hit/track-page/thumb-drag geometry，以及 hover/active/fade deadline。M
 wgpu，`ash-ui-components` 只向下依赖 `zui`；`app` 只保存
 `dyn Renderer`，当前具体类型只在 composition-root adapter 中选择。Native 的 interaction 与
 accessibility frame 不进入 renderer。完整所有权、后端替换路径和架构约束见
-[`app/docs/rendering-architecture.md`](../app/docs/rendering-architecture.md)。
+[`app-rs/docs/rendering-architecture.md`](../app-rs/docs/rendering-architecture.md)。
 
 Direct-provider credential ownership 由 [`model-provider.md`](model-provider.md) 维护；通用 secret
 persistence 由 [`secrets.md`](secrets.md) 维护；interactive login control plane 由
@@ -418,8 +418,8 @@ identity、lease 和 disconnect 语义。
 cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
-pnpm --dir ash-ts test:main
-pnpm --dir ash-ts typecheck:renderer
+pnpm --dir app-ts test:main
+pnpm --dir app-ts typecheck:renderer
 ```
 
 协议变更还必须重新生成并提交 JSON Schema、TypeScript 与 Desktop 同步产物。

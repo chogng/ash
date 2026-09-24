@@ -1,0 +1,7 @@
+{
+  "extends": "../../../../app-ts/tsconfig.renderer.json",
+  "compilerOptions": {
+    "typeRoots": ["../../../../app-ts/node_modules/@types", "../../../../app-ts/node_modules"]
+  },
+  "include": ["../../../../app-ts/src/typings/css.d.ts", "../../../../app-ts/src/typings/editContext.d.ts", "index.ts"]
+}

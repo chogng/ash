@@ -13,7 +13,7 @@ from pathlib import Path
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 TEST_SUITES = {
     "scripts": "scripts",
-    "ash-code": "scripts/ash-code",
+    "code": "scripts/code",
     "build": "build",
 }
 

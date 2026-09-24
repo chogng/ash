@@ -80,7 +80,7 @@ resources/native/pdfium/
 
 ### 3.1 当前 Workbench 阅读器
 
-`ash-ts/src/ash/workbench/contrib/pdf` 是一个 Workbench contribution，不属于
+`app-ts/src/ash/workbench/contrib/pdf` 是一个 Workbench contribution，不属于
 `editor` 的文本或结构化文档 engine。它匹配 `application/pdf` 和 `.pdf` resource；通过
 `IFileService.readFileBytes` 请求 App Server 的 workspace-relative `fs/readBinaryFile`，
 再创建 `application/pdf` Blob URL 并嵌入 Chromium 的原生 PDF Viewer。

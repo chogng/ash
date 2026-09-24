@@ -6,17 +6,17 @@ Desktop、Rust GUI 与 Ash Code TUI 分别拥有主题实现。配色理念与�
 
 | 内容 | Desktop TypeScript | Rust GUI |
 | --- | --- | --- |
-| 颜色与尺寸声明 | [theme/common](../ash-ts/src/ash/platform/theme/common/colorTheme.ts) 的注册表 | [catalog.json](../app/theme/resources/catalog.json) |
-| 内置主题 | TypeScript 注册表默认值与根部 [extensions/theme-defaults](../extensions/theme-defaults/package.json) | [entries.json](../app/theme/resources/entries.json) 和 Rust 解析器 |
-| 用户主题校验 | [colorThemeData.ts](../ash-ts/src/ash/workbench/services/themes/common/colorThemeData.ts) | [document.rs](../app/theme/src/document.rs) 与 [catalog.rs](../app/theme/src/catalog.rs) |
-| 用户主题 Schema 与模板 | [colorThemeSchema.ts](../ash-ts/src/ash/workbench/services/themes/common/colorThemeSchema.ts) | [app/theme/resources](../app/theme/resources/color-theme.schema.json) |
+| 颜色与尺寸声明 | [theme/common](../app-ts/src/ash/platform/theme/common/colorTheme.ts) 的注册表 | [catalog.json](../app-rs/theme/resources/catalog.json) |
+| 内置主题 | TypeScript 注册表默认值与根部 [extensions/theme-defaults](../extensions/theme-defaults/package.json) | [entries.json](../app-rs/theme/resources/entries.json) 和 Rust 解析器 |
+| 用户主题校验 | [colorThemeData.ts](../app-ts/src/ash/workbench/services/themes/common/colorThemeData.ts) | [document.rs](../app-rs/theme/src/document.rs) 与 [catalog.rs](../app-rs/theme/src/catalog.rs) |
+| 用户主题 Schema 与模板 | [colorThemeSchema.ts](../app-ts/src/ash/workbench/services/themes/common/colorThemeSchema.ts) | [app-rs/theme/resources](../app-rs/theme/resources/color-theme.schema.json) |
 | 用户主题目录 | profile root 的 `themes/*.json` | profile root 的 `app/themes/*.json` |
 | 主题选择 | `workbench.colorTheme`，由 Desktop 配置服务保存 | `config.toml` 的 `[gui].theme`，由 GUI 解释 |
 | 组件消费 | CSS 变量与编辑器、终端颜色表 | `ThemeSnapshot → UiTheme` 与各组件的类型化样式 |
 
-Desktop 的 [IThemeService](../ash-ts/src/ash/platform/theme/common/themeService.ts) 只提供当前颜色主题和变化通知。工作台的 [WorkbenchThemeService](../ash-ts/src/ash/workbench/services/themes/browser/workbenchThemeService.ts) 负责配置选择、系统配色、主题注册变化、CSS 绑定与文件图标资源的生命周期；同 ID 主题被替换时立即通知现有消费者。用户文件的读写与迁移由该模块内部资源对象负责，独立编辑器自行拥有主题选择状态。
+Desktop 的 [IThemeService](../app-ts/src/ash/platform/theme/common/themeService.ts) 只提供当前颜色主题和变化通知。工作台的 [WorkbenchThemeService](../app-ts/src/ash/workbench/services/themes/browser/workbenchThemeService.ts) 负责配置选择、系统配色、主题注册变化、CSS 绑定与文件图标资源的生命周期；同 ID 主题被替换时立即通知现有消费者。用户文件的读写与迁移由该模块内部资源对象负责，独立编辑器自行拥有主题选择状态。
 
-Ash Code TUI 的调色板、用户主题和 `[tui].theme` 由 [ash-code/tui](../ash-code/tui/README.md) 独立拥有。
+Ash Code TUI 的调色板、用户主题和 `[tui].theme` 由 [code/tui](../code/tui/README.md) 独立拥有。
 
 ## 构建边界
 
@@ -32,7 +32,7 @@ Ash Code TUI 的调色板、用户主题和 `[tui].theme` 由 [ash-code/tui](../
 - 每端只解析自己的用户主题目录和 Schema；选择主题不写入另一端的配置。
 - Desktop 文件使用具体十六进制颜色；注册表内部仍可使用别名和变换。组件消费完整快照。
 - 两端分别验证默认值和主题加载；Desktop 另有旧格式单向转换测试，不使用跨端一致性 fixture。
-- 用户主题安装和旧主题处理见 [主题模板](theme-authoring-template.md)；Rust crate 接口见 [ash-ui-theme](../app/theme/README.md)。
+- 用户主题安装和旧主题处理见 [主题模板](theme-authoring-template.md)；Rust crate 接口见 [ash-ui-theme](../app-rs/theme/README.md)。
 
 ## 当前边界
 

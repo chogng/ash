@@ -1,0 +1,8 @@
+load("//app-rs:defs.bzl", "app_rust_library")
+
+app_rust_library(
+    name = "ui-components",
+    crate_name = "ash_ui_components",
+    package_name = "app-rs/ui-components",
+    unit_tests = True,
+)

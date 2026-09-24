@@ -1,0 +1,36 @@
+---
+source: code/tui/src/app/session_manager_tests.rs
+expression: render(&app)
+---
+  .                                                                            [— / —] [Dashboard]
+
+  Idle (1)
+> ○ Snapshot session
+  Archived (0)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────╮
+  │ > Build anything                                                                             │
+  ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯
+
+  Enter to open · Space to preview · Ctrl+X to archive · i to details · Esc to return

@@ -1,0 +1,26 @@
+---
+source: code/tui/src/app/state_tests.rs
+expression: screen
+---
+  .                                                                        [— / —] [Dashboard]
+
+            ┌── Config › xAI subscription ─────────────────────────────────────[✗]─┐
+            │                                                                      │
+            │   Account                                                            │
+            │                                                                      │
+            │  Not signed in                                                       │
+            │> Browser opened  ·  https://auth.x.ai/device                         │
+            │  Enter code  ·  XAI-1234                                             │
+            │  Cancel sign-in                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+  ╭─────────│  Tab/Shift+Tab to switch  ·  Esc to return                           │─────────╮
+  │ > Build └──────────────────────────────────────────────────────────────────────┘         │
+  ╰──────────────────────────────────────────────────────────────────────── Automatic model ─╯

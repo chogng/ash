@@ -1,10 +1,10 @@
 # Editor 对齐
 
-仅在目标位于 `ash-ts/src/ash/editor` 时读取。Editor 与其他 TypeScript 范围使用相同的非对称对比规则，不启用额外的严格模式。
+仅在目标位于 `app-ts/src/ash/editor` 时读取。Editor 与其他 TypeScript 范围使用相同的非对称对比规则，不启用额外的严格模式。
 
 ## 对应范围
 
-- 本地根目录：`ash-ts/src/ash/editor`
+- 本地根目录：`app-ts/src/ash/editor`
 - 上游根目录：`../vscode/src/vs/editor`
 - 目标：VS Code 已有而 Ash 缺失的生产文件和公开 API 持续补齐；Ash 已有而 VS Code 没有的文件和公开 API 交由用户决定；对应实现承担相同公开契约、职责、状态所有权、生命周期和调用链。CSS 参与文件集合和可观察行为核对，但由 Ash DOM、品牌 class 与主题系统独立实现。
 - `editor` 可以依赖 `base`、`platform` 和自身更低运行环境的模块，不为“自包含”复制这些能力。运行环境与职责归属按[代码组织规范](../../../../.github/instructions/source-code-organization.instructions.md)分别判断；`common` 不使用 DOM，不代表所有无 DOM 代码都归 `common`。
@@ -45,7 +45,7 @@ VS Code 有而 Ash 缺失的文件在调用链到达时直接按同路径创建�
 | provider 选择与格式化请求编排 | `editor/contrib/format/browser/format.ts` |
 | 命令注册与编辑提交 | `formatActions.ts`、`formattingEdit.ts` |
 
-先沿注册入口和实际请求核对公共契约，再迁移贡献与适配器调用方、测试和旧入口。只补 `formatActions.ts` 等同路径文件，却让公共 registry 继续从贡献导入 provider 类型，不能算职责对齐。此表是迁移目标，不代表 Ash 已完成这些迁移；代码现状见[对齐台账](../../../../ash-ts/src/ash/editor/api-alignment-status.md)。独立的 schema、序列化或协作算法仍按其实际职责判断，不按上游是否存在 `common` 目录一律搬迁。
+先沿注册入口和实际请求核对公共契约，再迁移贡献与适配器调用方、测试和旧入口。只补 `formatActions.ts` 等同路径文件，却让公共 registry 继续从贡献导入 provider 类型，不能算职责对齐。此表是迁移目标，不代表 Ash 已完成这些迁移；代码现状见[对齐台账](../../../../app-ts/src/ash/editor/api-alignment-status.md)。独立的 schema、序列化或协作算法仍按其实际职责判断，不按上游是否存在 `common` 目录一律搬迁。
 
 `editor/common/commands/editorEditCommand.ts` 在 VS Code 没有同路径文件，因此不能为了集中 selection、history 或 edit helper 自行创建，再让标准 Editor 命令反向依赖它。除非用户明确确认它是 Ash 专属 owner，否则应把公开契约和实现收敛到真实存在的标准命令、cursor 或 model owner，并让这个仅 Ash 文件保持不存在。
 
@@ -87,7 +87,7 @@ CSS ownership 报告同样不能代替人工判断。`upstream-equivalent after 
 
 ## TypeScript 输出边界
 
-`ash-ts/tsconfig.renderer.json` 必须保持 `noEmit: true`，Stanza 与扩展检查配置继承该不变量。只有负责生成产物的构建或测试配置可以启用输出，并必须把 `outDir` 明确设置在源码树外。
+`app-ts/tsconfig.renderer.json` 必须保持 `noEmit: true`，Stanza 与扩展检查配置继承该不变量。只有负责生成产物的构建或测试配置可以启用输出，并必须把 `outDir` 明确设置在源码树外。
 
 ## 完成判定
 

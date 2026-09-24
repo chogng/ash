@@ -1,0 +1,24 @@
+---
+source: code/tui/src/dirs_tests.rs
+assertion_line: 249
+expression: "format!(\"Pending:\\n{pending}\\n\\nAdded:\\n{added}\")"
+---
+Pending:
+╭──────────────────────────────────────────────────────────────────────╮
+│ /dir/new                                                             │
+╰──────────────────────────────────────────────────────────────────────╯
+Adding directory…
+No directories
+
+
+
+
+Added:
+╭──────────────────────────────────────────────────────────────────────╮
+│ Enter directory path                                                 │
+╰──────────────────────────────────────────────────────────────────────╯
+Added directory: /dir/new
+  Remove directory  ·  /dir/new
+> Read files            Allow read_file, grep and glob             [   ]
+  Modify files          Allow file-writing tools and apply_patc    [   ]
+13 more below

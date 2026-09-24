@@ -10,7 +10,7 @@ Use this reference only for UX data interpreted by the Rust TUI under `ash-code`
 | User keybindings | The ordered `[tui].keybindings` value |
 | Ordered status-line preferences | The `[tui].statusLine` value |
 | User theme selection | The `[tui]` theme setting |
-| User theme contents | Strict schema-validated JSON files under `<profile>/ash-code/themes` |
+| User theme contents | Strict schema-validated JSON files under `<profile>/code/themes` |
 | Session focus, selection, draft, scroll, or overlay state | TUI runtime state, not `[tui]` |
 
 The Rust TUI owns field meanings, defaults, typed decoding, and validation of the complete owned candidate. A persistence service may persist and revision-check the full `[tui]` value, but it treats its contents as opaque and preserves unknown sibling keys.

@@ -1,0 +1,12 @@
+---
+source: code/tui/src/render/markdown_tests.rs
+assertion_line: 33
+expression: text
+---
+Name: 中文
+Result: 
+complete
+
+Name: beta
+Result: 
+pending

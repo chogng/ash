@@ -170,7 +170,7 @@ importers:
         specifier: ^3.0.2
         version: 3.0.2
 
-  ash-ts:
+  app-ts:
     dependencies:
       '@xterm/addon-fit':
         specifier: ^0.11.0

@@ -11,7 +11,6 @@ use std::time::Instant;
 use ash_app_server_protocol::protocol::initialize::InitializeResult;
 use ash_app_server_protocol::protocol::initialize::REQUIRED_SESSION_CAPABILITIES;
 use ash_app_server_protocol::protocol::initialize::ensure_protocol_compatible;
-use ash_app_server_protocol::schema_hash;
 use ash_uds::UnixStream;
 use serde_json::Value;
 use serde_json::json;
@@ -24,7 +23,6 @@ use crate::endpoint::EndpointPaths;
 use crate::endpoint::connect_existing;
 use crate::process::ExecutableIdentity;
 use crate::process::ProcessRecord;
-use crate::process::executable_identity;
 use crate::process::force_terminate;
 use crate::process::read_process_record;
 use crate::process::record_is_active;
@@ -70,7 +68,7 @@ pub(crate) fn run_lifecycle(
             Ok(output)
         }
         LifecycleCommand::Stop => stop_unlocked(&endpoint),
-        LifecycleCommand::Version => version_unlocked(&endpoint, &options, backend_executable),
+        LifecycleCommand::Version => version_unlocked(&endpoint, &options),
     }
 }
 
@@ -197,27 +195,22 @@ fn start_unlocked(
     options: &ConnectionOptions,
     backend_executable: &Path,
 ) -> Result<LifecycleOutput, String> {
-    let daemon = resolve_backend_executable(backend_executable)?;
-    let mut replaced_stale_daemon = false;
     if let Some(control) = request_control(endpoint, ControlCommand::Status)? {
         if control.state == ControlState::Stopping {
             return Err("Local App Server daemon is stopping".into());
         }
-        let record = validate_managed_response(endpoint, &control)?;
-        if validate_executable_identity(&record, &daemon.identity).is_ok() {
-            let probe = probe_app_server(endpoint, options)
-                .map_err(|error| diagnostic_error(endpoint, &error))?;
-            return Ok(lifecycle_output(
-                LifecycleStatus::AlreadyRunning,
-                endpoint,
-                Some(&control),
-                Some(&probe),
-            ));
-        }
-        let _ = stop_unlocked(endpoint)?;
-        replaced_stale_daemon = true;
+        validate_managed_response(endpoint, &control)?;
+        let probe = probe_app_server(endpoint, options)
+            .map_err(|error| diagnostic_error(endpoint, &error))?;
+        return Ok(lifecycle_output(
+            LifecycleStatus::AlreadyRunning,
+            endpoint,
+            Some(&control),
+            Some(&probe),
+        ));
     }
 
+    let daemon = resolve_backend_executable(backend_executable)?;
     remove_stale_process_record(&endpoint.pid)?;
     let mut spawned = spawn_backend(endpoint, options, &daemon.path)?;
     let result = (|| {
@@ -239,11 +232,7 @@ fn start_unlocked(
                     let probe = probe_app_server(endpoint, options)
                         .map_err(|error| diagnostic_error(endpoint, &error))?;
                     return Ok(lifecycle_output(
-                        if replaced_stale_daemon {
-                            LifecycleStatus::Restarted
-                        } else {
-                            LifecycleStatus::Started
-                        },
+                        LifecycleStatus::Started,
                         endpoint,
                         Some(&control),
                         Some(&probe),
@@ -344,7 +333,6 @@ fn stop_recorded_process(endpoint: &EndpointPaths) -> Result<LifecycleOutput, St
 fn version_unlocked(
     endpoint: &EndpointPaths,
     options: &ConnectionOptions,
-    backend_executable: &Path,
 ) -> Result<LifecycleOutput, String> {
     let Some(control) = request_control(endpoint, ControlCommand::Status)? else {
         remove_stale_process_record(&endpoint.pid)?;
@@ -358,9 +346,7 @@ fn version_unlocked(
     if control.state == ControlState::Stopping {
         return Err("Local App Server daemon is stopping".into());
     }
-    let record = validate_managed_response(endpoint, &control)?;
-    let expected = executable_identity(backend_executable)?;
-    validate_executable_identity(&record, &expected)?;
+    validate_managed_response(endpoint, &control)?;
     let probe =
         probe_app_server(endpoint, options).map_err(|error| diagnostic_error(endpoint, &error))?;
     Ok(lifecycle_output(
@@ -410,9 +396,6 @@ fn validate_managed_response(
     control: &ControlResponse,
 ) -> Result<ProcessRecord, String> {
     control.validate()?;
-    if control.daemon_version != build_info::VERSION || control.schema_hash != schema_hash() {
-        return Err("running Local App Server daemon is incompatible with this client".into());
-    }
     let record = read_process_record(&endpoint.pid)?.ok_or_else(|| {
         "App Server daemon endpoint is running without a managed process record".to_string()
     })?;

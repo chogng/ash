@@ -1,10 +1,10 @@
 import { createServer } from 'node:http';
 import { resolve } from 'node:path';
 import sirv from 'sirv';
-import { authenticatedWebUrl, startWeb } from '../build/desktop/web.ts';
+import { authenticatedWebUrl, startWeb } from '../build/app_ts/web.ts';
 
 const repositoryRoot = resolve(import.meta.dirname, '..');
-const root = resolve(process.argv[2] ?? resolve(repositoryRoot, '.build/desktop/renderer/ash'));
+const root = resolve(process.argv[2] ?? resolve(repositoryRoot, '.build/app-ts/renderer/ash'));
 const port = Number(process.argv[3] ?? 5173);
 if (!Number.isInteger(port) || port < 1 || port > 65535) { throw new Error('Invalid Web server port'); }
 

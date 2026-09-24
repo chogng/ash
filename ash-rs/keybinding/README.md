@@ -19,7 +19,7 @@
 | `resolver.rs` | 条件与按键序列匹配 |
 | `user.rs` | 用户规则编译、平台覆盖和重复诊断 |
 
-[App Workbench](../../app/workbench/platform/keybindings.rs) 和 [Ash Code TUI](../../ash-code/tui/src/keymap.rs) 在本端转换输入事件，再调用本库。两端的命令和配置相互独立。TypeScript 端保留自己的实现，通过同一份 [一致性测试向量](../../resources/keybindings/conformance.json) 验证共同规则。
+[App Workbench](../../app-rs/workbench/platform/keybindings.rs) 和 [Ash Code TUI](../../code/tui/src/keymap.rs) 在本端转换输入事件，再调用本库。两端的命令和配置相互独立。TypeScript 端保留自己的实现，通过同一份 [一致性测试向量](../../resources/keybindings/conformance.json) 验证共同规则。
 
 完整的端侧边界、配置格式与优先级见[快捷键架构](../../docs/keybindings.md)。
 

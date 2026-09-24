@@ -1,0 +1,32 @@
+---
+source: code/tui/src/app/fullscreen/modal_tests.rs
+expression: frame_text(&app)
+---
+  .                                                                            [— / —] [Dashboard]  
+                                                                                                    
+                                                                                                    
+            ┌── Memories › Unsaved changes ───────────────────────────────────────[✗]─┐             
+            │                                                                         │             
+            │  Offline                                                                │             
+            │                                                                         │             
+            │> Continue editing                                                       │             
+            │  Discard changes                                                        │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+  ╭─────────│  Enter select · Esc back                                                │──────────╮  
+  │ > backgr└─────────────────────────────────────────────────────────────────────────┘          │  
+  ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯

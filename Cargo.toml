@@ -66,12 +66,12 @@ members = [
     "ash-rs/automation",
     "ash-rs/memory-diagnostics",
     "ash-rs/bwrap",
-    "ash-code/ansi-escape",
-    "ash-code/cli",
-    "ash-code/mermaid",
-    "ash-code/update-sign",
-    "ash-code/sprite",
-    "ash-code/terminal-detection",
+    "code/ansi-escape",
+    "cli",
+    "code/mermaid",
+    "build/code/update-sign",
+    "code/sprite",
+    "code/terminal-detection",
     "ash-rs/config",
     "ash-rs/context-engine",
     "ash-rs/core",
@@ -151,7 +151,7 @@ members = [
     "ash-rs/git-turn-changes",
     "ash-rs/tools",
     "ash-rs/uds",
-    "ash-code/tui",
+    "code/tui",
     "ash-rs/utils/absolute-path",
     "ash-rs/utils/audio",
     "ash-rs/utils/cache",
@@ -178,27 +178,27 @@ members = [
     "ash-rs/ash-client",
     "ash-rs/otel",
     "ash-rs/otel-trace-websocket",
-    "app",
-    "app/commands",
-    "app/editor",
-    "app/editor-core",
-    "app/editor-host",
-    "app/files",
-    "app/icons",
-    "app/input-classifier",
-    "app/markdown",
-    "app/scm",
-    "app/keybindings",
-    "app/session",
-    "app/settings",
-    "app/shell-completion",
-    "app/terminal",
-    "app/terminal-runtime",
-    "app/text-file",
-    "app/theme",
-    "app/ui-components",
-    "app/workbench",
-    "app/zui",
+    "app-rs",
+    "app-rs/commands",
+    "app-rs/editor",
+    "app-rs/editor-core",
+    "app-rs/editor-host",
+    "app-rs/files",
+    "app-rs/icons",
+    "app-rs/input-classifier",
+    "app-rs/markdown",
+    "app-rs/scm",
+    "app-rs/keybindings",
+    "app-rs/session",
+    "app-rs/settings",
+    "app-rs/shell-completion",
+    "app-rs/terminal",
+    "app-rs/terminal-runtime",
+    "app-rs/text-file",
+    "app-rs/theme",
+    "app-rs/ui-components",
+    "app-rs/workbench",
+    "app-rs/zui",
 ]
 default-members = [
     "ash-rs/ext/sleep",
@@ -208,7 +208,9 @@ default-members = [
     "ash-rs/ext/goal",
     "ash-rs/ext/advisor",
     "ash-rs/ext/agent",
-    "ash-rs/ext/guardian-v2","app"]
+    "ash-rs/ext/guardian-v2",
+    "app-rs",
+]
 resolver = "3"
 
 [workspace.package]
@@ -219,7 +221,7 @@ version = "0.1.0"
 
 [workspace.dependencies]
 guardian-context = { package = "ash-guardian-context", path = "ash-rs/guardian-context" }
-mermaid = { package = "ash-mermaid", path = "ash-code/mermaid" }
+mermaid = { package = "ash-mermaid", path = "code/mermaid" }
 appcontainer_common = { git = "https://github.com/microsoft/mxc", rev = "ca7ea12ac6bd9f5420d6adecb37e32a8158da476" }
 bwrap_common = { path = "ash-rs/vendor/mxc/backends/bubblewrap/common" }
 seatbelt_common = { path = "ash-rs/vendor/mxc/backends/seatbelt/common" }
@@ -434,8 +436,8 @@ external-agent-migration = { path = "ash-rs/external-agent-migration" }
 agent-roles = { package = "ash-agent-roles", path = "ash-rs/agent-roles" }
 attachment-store = { package = "ash-attachment-store", path = "ash-rs/attachment-store" }
 ash-attachments = { path = "ash-rs/attachments" }
-ash-ansi-escape = { path = "ash-code/ansi-escape" }
-ash-commands = { path = "app/commands" }
+ash-ansi-escape = { path = "code/ansi-escape" }
+ash-commands = { path = "app-rs/commands" }
 ash-app-server = { path = "ash-rs/app-server" }
 ash-app-server-daemon = { path = "ash-rs/app-server-daemon" }
 ash-app-server-client = { path = "ash-rs/app-server-client" }
@@ -466,9 +468,9 @@ ash-core = { path = "ash-rs/core" }
 core-api = { package = "ash-core-api", path = "ash-rs/core-api" }
 ash-diff = { path = "ash-rs/diff" }
 ash-debug-adapter = { path = "ash-rs/debug-adapter" }
-ash-editor = { path = "app/editor" }
-ash-editor-host = { path = "app/editor-host" }
-ash-editor-core = { path = "app/editor-core" }
+ash-editor = { path = "app-rs/editor" }
+ash-editor-host = { path = "app-rs/editor-host" }
+ash-editor-core = { path = "app-rs/editor-core" }
 ash-environment = { path = "ash-rs/environment" }
 ash-extension-api = { path = "ash-rs/ext/extension-api" }
 connectors = { package = "ash-connectors-extension", path = "ash-rs/ext/connectors" }
@@ -480,7 +482,7 @@ ash-execpolicy = { path = "ash-rs/execpolicy" }
 ash-tool-executor = { path = "ash-rs/tool-executor" }
 ash-extensions = { path = "ash-rs/extensions" }
 ash-editor-extension-host = { path = "ash-rs/editor-extension-host" }
-ash-icons = { path = "app/icons" }
+ash-icons = { path = "app-rs/icons" }
 ash-file-identity = { path = "ash-rs/file-identity" }
 ash-file-search = { path = "ash-rs/file-search" }
 ash-file-system = { path = "ash-rs/file-system" }
@@ -489,7 +491,7 @@ tgrep = { package = "ash-tgrep", path = "ash-rs/tgrep" }
 ash-immutable-generation-store = { path = "ash-rs/immutable-generation-store" }
 ash-package-store = { path = "ash-rs/package-store" }
 ash-file-watcher = { path = "ash-rs/file-watcher" }
-ash-files = { path = "app/files" }
+ash-files = { path = "app-rs/files" }
 github = { package = "ash-github", path = "ash-rs/github" }
 ash-git = { path = "ash-rs/git" }
 ash-history = { path = "ash-rs/history" }
@@ -499,19 +501,19 @@ ash-hooks = { path = "ash-rs/hooks" }
 ash-http-client = { path = "ash-rs/http-client" }
 ash-websocket-client = { path = "ash-rs/websocket-client" }
 ash-install-context = { path = "ash-rs/install-context" }
-ash-input-classifier = { path = "app/input-classifier" }
+ash-input-classifier = { path = "app-rs/input-classifier" }
 ash-instructions = { path = "ash-rs/instructions" }
 ash-keyring-store = { path = "ash-rs/keyring-store" }
 ash-kimi = { path = "ash-rs/kimi" }
 xai = { package = "ash-xai", path = "ash-rs/xai" }
 ash-keybinding = { path = "ash-rs/keybinding" }
-ash-keybindings-host = { path = "app/keybindings" }
+ash-keybindings-host = { path = "app-rs/keybindings" }
 ash-lsp-server-provider = { path = "ash-rs/lsp-server-provider" }
 ash-lsp-manager = { path = "ash-rs/lsp-manager" }
 ash-login = { path = "ash-rs/login" }
 ash-core-plugins = { path = "ash-rs/core-plugins" }
 ash-lsp = { path = "ash-rs/lsp" }
-ash-markdown = { path = "app/markdown" }
+ash-markdown = { path = "app-rs/markdown" }
 ash-mcp = { path = "ash-rs/mcp" }
 ash-model-accounting = { path = "ash-rs/model-accounting" }
 ash-model-provider = { path = "ash-rs/model-provider" }
@@ -534,33 +536,33 @@ ash-rollout-trace = { path = "ash-rs/rollout-trace" }
 ash-rmcp-client = { path = "ash-rs/rmcp-client" }
 ash-sandboxing = { path = "ash-rs/sandboxing" }
 ash-screen-capture = { path = "ash-rs/screen-capture" }
-ash-scm = { path = "app/scm" }
+ash-scm = { path = "app-rs/scm" }
 grep = { package = "ash-grep", path = "ash-rs/grep" }
 arg0 = { package = "ash-arg0", path = "ash-rs/arg0" }
 ash-secrets = { path = "ash-rs/secrets" }
-ash-session = { path = "app/session" }
-ash-settings = { path = "app/settings" }
+ash-session = { path = "app-rs/session" }
+ash-settings = { path = "app-rs/settings" }
 ash-shell-command = { path = "ash-rs/shell-command" }
-ash-shell-completion = { path = "app/shell-completion" }
+ash-shell-completion = { path = "app-rs/shell-completion" }
 ash-slash-commands = { path = "ash-rs/slash-commands" }
-ash-sprite = { path = "ash-code/sprite", default-features = false }
+ash-sprite = { path = "code/sprite", default-features = false }
 ash-slash-launcher = { path = "ash-rs/slash-launcher" }
 ash-skills = { path = "ash-rs/skills" }
 ash-state = { path = "ash-rs/state" }
 ash-syntax = { path = "ash-rs/syntax" }
-ash-terminal = { path = "app/terminal" }
-ash-terminal-runtime = { path = "app/terminal-runtime" }
-ash-terminal-detection = { path = "ash-code/terminal-detection" }
-ash-text-file = { path = "app/text-file" }
-ash-ui-theme = { path = "app/theme" }
+ash-terminal = { path = "app-rs/terminal" }
+ash-terminal-runtime = { path = "app-rs/terminal-runtime" }
+ash-terminal-detection = { path = "code/terminal-detection" }
+ash-text-file = { path = "app-rs/text-file" }
+ash-ui-theme = { path = "app-rs/theme" }
 ash-thread-store = { path = "ash-rs/thread-store" }
 ash-thread-transcript = { path = "ash-rs/thread-transcript" }
 git-turn-changes = { path = "ash-rs/git-turn-changes" }
 ash-tools = { path = "ash-rs/tools" }
-ash-tui = { path = "ash-code/tui" }
+ash-tui = { path = "code/tui" }
 ash-uds = { path = "ash-rs/uds" }
-ash-ui-components = { path = "app/ui-components" }
-ash-workbench = { path = "app/workbench" }
+ash-ui-components = { path = "app-rs/ui-components" }
+ash-workbench = { path = "app-rs/workbench" }
 ash-utils-absolute-path = { path = "ash-rs/utils/absolute-path" }
 ash-utils-cache = { path = "ash-rs/utils/cache" }
 ash-utils-elapsed = { path = "ash-rs/utils/elapsed" }
@@ -579,7 +581,7 @@ sleep_inhibitor = { package = "ash-utils-sleep-inhibitor", path = "ash-rs/utils/
 ash-file-access = { path = "ash-rs/file-access" }
 worktree = { path = "ash-rs/worktree" }
 ash-user-verification = { path = "ash-rs/user-verification" }
-zui = { path = "app/zui", default-features = false }
+zui = { path = "app-rs/zui", default-features = false }
 
 [profile.dev]
 # Keep line tables and backtraces without generating full variable debug information.

@@ -1,11 +1,11 @@
-use crate::EmbeddedAppServerOptions;
 use ash_app_server_client::AppServerEvent;
 use ash_app_server_client::AppServerEvents;
 use ash_app_server_client::AppServerRequestHandle;
 use ash_app_server_client::AppServerSession;
-use ash_app_server_client::InProcessClientOptions;
 use ash_app_server_client::ServerNotification;
+use ash_app_server_client::StdioAppServerCommand;
 use ash_app_server_protocol::protocol::common::ClientCapabilities;
+use ash_app_server_protocol::protocol::common::ClientInfo;
 use ash_app_server_protocol::protocol::session::SessionCreateParams;
 use ash_app_server_protocol::protocol::session::SessionReadParams;
 use ash_app_server_protocol::protocol::session::SessionRequest;
@@ -119,26 +119,30 @@ pub(crate) trait ExecConnection {
     fn close(&mut self) -> Result<(), ConnectionError>;
 }
 
-pub(crate) struct EmbeddedConnection {
+pub(crate) struct ServerConnection {
     session: Option<AppServerSession>,
     client: AppServerRequestHandle,
     events: AppServerEvents,
 }
 
-impl EmbeddedConnection {
-    pub fn start(options: &EmbeddedAppServerOptions) -> Result<Self, ConnectionError> {
-        let mut client_options =
-            InProcessClientOptions::new(options.profile_root(), options.client_info().clone())
-                .with_host_grok_auth()
-                .with_capabilities(ClientCapabilities {
-                    notifications: Some(true),
-                    ..ClientCapabilities::default()
-                });
-        if let Some(dir_root) = options.dir_root() {
-            client_options = client_options.with_dir_root(dir_root);
-        }
-        let mut session = AppServerSession::start_embedded(client_options)
-            .map_err(|error| ConnectionError::new(error.to_string()))?;
+impl ServerConnection {
+    pub fn start_stdio(
+        command: StdioAppServerCommand,
+        client_info: ClientInfo,
+    ) -> Result<Self, ConnectionError> {
+        let session = AppServerSession::start_stdio(
+            command,
+            client_info,
+            ClientCapabilities {
+                notifications: Some(true),
+                ..ClientCapabilities::default()
+            },
+        )
+        .map_err(|error| ConnectionError::new(error.to_string()))?;
+        Self::from_session(session)
+    }
+
+    fn from_session(mut session: AppServerSession) -> Result<Self, ConnectionError> {
         let client = session.client();
         let events = match session.take_events() {
             Ok(events) => events,
@@ -172,7 +176,7 @@ impl EmbeddedConnection {
     }
 }
 
-impl ExecConnection for EmbeddedConnection {
+impl ExecConnection for ServerConnection {
     fn create_session(
         &mut self,
         command_id: CommandId,

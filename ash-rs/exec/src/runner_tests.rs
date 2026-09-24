@@ -1,9 +1,7 @@
 use super::ExecCancellation;
 use super::ExecRunner;
 use super::ExecRunnerOptions;
-use crate::AppServerTarget;
 use crate::DiscardExecEventSink;
-use crate::EmbeddedAppServerOptions;
 use crate::ExecEntry;
 use crate::ExecEvent;
 use crate::ExecEventKind;
@@ -19,6 +17,7 @@ use crate::connection::ConnectionError;
 use crate::connection::ConnectionEvent;
 use crate::connection::ExecConnection;
 use crate::connection::ThreadSubscription;
+use ash_app_server_client::StdioAppServerCommand;
 use ash_app_server_protocol::protocol::common::ClientInfo;
 use ash_app_server_protocol::protocol::turn::InputItem;
 use ash_app_server_protocol::protocol::turn::TurnStartResult;
@@ -203,13 +202,13 @@ fn resume_and_fork_preserve_their_distinct_preparation_semantics() {
 }
 
 fn test_runner() -> ExecRunner {
-    ExecRunner::new(AppServerTarget::Embedded(EmbeddedAppServerOptions::new(
-        "/tmp/ash-exec-tests",
+    ExecRunner::new(
+        StdioAppServerCommand::new("/tmp/ash-exec-tests"),
         ClientInfo {
             name: "ash-exec-tests".into(),
             version: "1".into(),
         },
-    )))
+    )
     .with_options(
         ExecRunnerOptions::new()
             .with_turn_timeout(Duration::from_secs(1))

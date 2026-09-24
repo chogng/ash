@@ -1,5 +1,5 @@
 set working-directory := "."
-set positional-arguments := true
+set positional-arguments
 set shell := ["sh", "-cu"]
 set windows-shell := ["pwsh", "-NoLogo", "-NoProfile", "-CommandWithArgs"]
 
@@ -7,7 +7,6 @@ python := "uv run --frozen --project scripts python"
 recipe_args := if os_family() == "windows" { "@($args | Select-Object -Skip 1)" } else { '"$@"' }
 tui_profile := ""
 tui_profile_arg := if tui_profile == "" { "" } else { "--profile " + tui_profile }
-code_sandbox := if os() == "linux" { "-p ash-bwrap --bin bwrap" } else { "" }
 
 # Format Just, Rust, and first-party Python sources.
 fmt:
@@ -21,7 +20,7 @@ fmt-check:
 lint:
     uv run --frozen --project scripts ruff check build scripts
 
-# Run repository-owned Python tests, optionally selecting scripts, ash-code, or build.
+# Run repository-owned Python tests, optionally selecting scripts, code, or build.
 test-python *args:
     {{ python }} -B scripts/test-python.py {{ recipe_args }}
 
@@ -38,11 +37,11 @@ build: build-code build-desktop build-app
 
 # Build the Ash Code CLI/TUI host and its development server programs.
 build-code:
-    {{ python }} -B scripts/cargo.py build -p ash-cli --bin ash -p ash-app-server --bin ash-app-server -p ash-code-mode-host --bin ash-code-mode-host {{ code_sandbox }} --profile dev-small
+    {{ python }} -B build/code/build.py
 
 # Build the Electron Desktop product.
 build-desktop:
-    pnpm --dir ash-ts build
+    pnpm --dir app-ts build
 
 # Build the Rust Desktop host and its development server programs.
 build-app:
@@ -69,7 +68,7 @@ check *args:
 rust-warnings *args:
     {{ python }} -B scripts/cargo.py --deny-warnings check -p {{ recipe_args }} --all-targets
 
-# Discover and compile every direct consumer of grep and file-search, including app/files.
+# Discover and compile every direct consumer of grep and file-search, including app-rs/files.
 check-search *args:
     {{ python }} -B scripts/check_search.py {{ recipe_args }}
 
@@ -84,13 +83,13 @@ test-search-rust:
 
 # Validate search consumers, backend behavior, renderer lifecycle, and compiler warnings.
 test-search: check-search test-search-rust
-    pnpm --dir ash-ts test:unit --run src/ash/platform/search/test/browser/searchService.test.ts --run src/ash/workbench/contrib/search/test/browser/searchViewPane.test.ts
-    pnpm --dir ash-ts typecheck:renderer
+    pnpm --dir app-ts test:unit --run src/ash/platform/search/test/browser/searchService.test.ts --run src/ash/workbench/contrib/search/test/browser/searchViewPane.test.ts
+    pnpm --dir app-ts typecheck:renderer
     just check-search --deny-warnings
 
 # Exercise an assembled package through real stdio RPC, using its bundled search engines.
 test-search-package *args:
-    {{ python }} -B build/package/search_smoke.py {{ recipe_args }}
+    {{ python }} -B build/runtime/search_smoke.py {{ recipe_args }}
 
 # Fail once the configuration support window makes a compatibility migration removable.
 check-config-migrations:
@@ -102,27 +101,27 @@ generate-config-schema:
 
 # Refresh the checked-in App Server protocol fixtures and generated TypeScript client.
 generate-protocol:
-    pnpm --dir ash-ts run protocol:generate
+    pnpm --dir app-ts run protocol:generate
 
 # Launch the ash code TUI product from the current source tree.
 ash *args:
-    {{ python }} -B scripts/ash-code/run.py {{ recipe_args }}
+    {{ python }} -B scripts/code/run.py {{ recipe_args }}
 
 # Preview the Welcome pet's idle frame, all frames, or one named action.
 pet *args:
-    @{{ python }} -B scripts/cargo.py run --quiet -p ash-sprite -- ash-code/tui/assets/welcome/pet.sprite {{ args }}
+    @{{ python }} -B scripts/cargo.py run --quiet -p ash-sprite -- code/tui/assets/welcome/pet.sprite {{ args }}
 
 # Assemble the complete immutable development package shared by Ash products.
 ash-package *args:
-    node build/package/prepare.ts {{ recipe_args }}
+    node build/runtime/prepare.ts {{ recipe_args }}
 
 # Assemble the complete development package and launch Ash Code against it.
 ash-package-run *args:
-    {{ python }} -B scripts/ash-code/run_package.py {{ recipe_args }}
+    {{ python }} -B scripts/code/run_package.py {{ recipe_args }}
 
 # Launch the ash Electron Desktop product.
 ash-desktop:
-    pnpm --dir ash-ts dev
+    pnpm --dir app-ts dev
 
 # Launch the pure-Rust app Desktop product.
 app: build-app
@@ -138,11 +137,15 @@ app-test:
 
 # Stage an unsigned app package; release CI signs and verifies the staged binary.
 app-package *args:
-    {{ python }} -B build/app/build.py {{ recipe_args }}
+    {{ python }} -B build/app_rs/build.py {{ recipe_args }}
 
-# Build a canonical Ash package; pass normal package builder flags.
-package *args:
-    {{ python }} -B build/package/build.py {{ recipe_args }}
+# Build a shared App Server runtime package.
+runtime-package *args:
+    {{ python }} -B build/runtime/build.py {{ recipe_args }}
+
+# Compose a managed Code package from a verified runtime package and the ash executable.
+code-package *args:
+    {{ python }} -B build/code/package.py {{ recipe_args }}
 
 [unix]
 install:

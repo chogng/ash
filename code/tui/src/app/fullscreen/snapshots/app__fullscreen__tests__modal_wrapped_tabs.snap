@@ -1,0 +1,16 @@
+---
+source: code/tui/src/app/fullscreen/frame_tests.rs
+expression: text
+---
+"                    "
+"┌── Panel ─────[✗]─┐"
+"│                  │"
+"│   First tab      │"
+"│   Second tab     │"
+"│                  │"
+"│> First item      │"
+"│                  │"
+"│                  │"
+"│  Esc to close    │"
+"└──────────────────┘"
+"                    "

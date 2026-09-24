@@ -1,0 +1,9 @@
+---
+source: code/tui/src/app/inline/header_tests.rs
+expression: rendered
+---
+
+    ▄  ▄     Ash Code v0.1.0
+  ▗█▛██▜█▖   openai-chatgpt/gpt-5.6 · Subscription
+  ▝▜████▛▘   /work/ash
+    ▝  ▘

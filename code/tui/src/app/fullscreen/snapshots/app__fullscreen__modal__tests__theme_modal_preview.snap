@@ -1,0 +1,29 @@
+---
+source: code/tui/src/app/fullscreen/modal_tests.rs
+expression: rendered
+---
+                                                                                
+                                                                                
+                                                                                
+        ┌── Theme ─────────────────────────────────────────────────[✗]─┐        
+        │                                                              │        
+        │  1. Auto (match terminal)                                    │        
+        │> 2. Dark mode                                                │        
+        │  3. Light mode                                               │        
+        │  4. Dark mode (colorblind-friendly)                          │        
+        │  5. Light mode (colorblind-friendly)                         │        
+        │  6. Dark mode (ANSI colors only)                             │        
+        │  7. Light mode (ANSI colors only)                            │        
+        │  8. Custom color theme                                       │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │  ╌╌ Diff preview ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ │        
+        │  1   fn greet(ash: &str) -> String {                         │        
+        │  2  -    format!("Hello, {}!", ash)                          │        
+        │  2  +    format!("Hello, {ash}!")                            │        
+        │  3   }                                                       │        
+        │  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ │        
+        │  Syntax palette: Palette 1                                   │        
+        │  Enter to apply  ·  Esc to close                             │        
+        └──────────────────────────────────────────────────────────────┘

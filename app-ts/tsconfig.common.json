@@ -1,0 +1,25 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": true,
+    "tsBuildInfoFile": "../.build/app-ts/common.tsbuildinfo",
+    "lib": [
+      "ES2022",
+      "ESNext.Disposable"
+    ],
+    "types": [],
+    "noUncheckedSideEffectImports": true,
+    "skipLibCheck": false
+  },
+  "include": [
+    "src/typings/base-common.d.ts",
+    "src/typings/crypto.d.ts",
+    "src/ash/**/common/**/*.ts",
+    "test/types/common.ts"
+  ],
+  "exclude": [
+    "src/ash/**/test/**",
+    "src/ash/sessions/browser/**"
+  ]
+}

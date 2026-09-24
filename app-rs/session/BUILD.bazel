@@ -1,0 +1,9 @@
+load("//app-rs:defs.bzl", "app_rust_library")
+
+app_rust_library(
+    name = "session",
+    crate_name = "ash_session",
+    package_name = "app-rs/session",
+    source_files = ["README.md"],
+    unit_tests = True,
+)

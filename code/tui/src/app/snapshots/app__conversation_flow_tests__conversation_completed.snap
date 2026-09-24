@@ -1,0 +1,36 @@
+---
+source: code/tui/src/app/conversation_flow_tests.rs
+expression: render(&app)
+---
+  .                                                                            [— / —] [Dashboard]
+
+> 请 正 常 回 复 ， 并 展 示 多 行 输 出 。
+
+● 你 好 ！ 普 通 对 话 已 经 连 通 。
+
+  fn main() { println!("ash"); }
+
+  • 流 式 输 出 正 常
+  • 多 行 文 本 正 常
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ⏸ ask permissions on                                                   shift+tab to cycle policy
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────╮
+  │ >                                                                                            │
+  ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯
+
+  Enter send  ·  shift+tab permissions  ·  /home

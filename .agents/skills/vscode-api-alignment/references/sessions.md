@@ -1,10 +1,10 @@
 # Sessions 对齐
 
-仅在目标位于 `ash-ts/src/ash/sessions` 时读取。修改 Sessions 代码时还必须使用 `sessions` skill，并读取仓库的 [Sessions 实现说明](../../../../ash-ts/src/ash/sessions/README.md)；本 reference 只补充 VS Code 对齐边界。
+仅在目标位于 `app-ts/src/ash/sessions` 时读取。修改 Sessions 代码时还必须使用 `sessions` skill，并读取仓库的 [Sessions 实现说明](../../../../app-ts/src/ash/sessions/README.md)；本 reference 只补充 VS Code 对齐边界。
 
 ## 对应范围
 
-- 本地根目录：`ash-ts/src/ash/sessions`
+- 本地根目录：`app-ts/src/ash/sessions`
 - 上游根目录：`../vscode/src/vs/sessions`
 - `sessions` 位于 `workbench` 之上，可以复用工作台和更低层能力；`workbench` 不得反向依赖 Sessions 产品 UI 或布局。
 

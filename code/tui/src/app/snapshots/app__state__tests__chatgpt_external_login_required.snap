@@ -1,0 +1,26 @@
+---
+source: code/tui/src/app/state_tests.rs
+expression: screen
+---
+  .                                                                        [— / —] [Dashboard]
+
+            ┌── Config › ChatGPT subscription ─────────────────────────────────[✗]─┐
+            │                                                                      │
+            │   Account                                                            │
+            │                                                                      │
+            │  Sign in again                                                       │
+            │  Plan  ·  pro                                                        │
+            │> Sign in to ChatGPT in Codex, then reconnect here.                   │
+            │  Sign in with ChatGPT                                                │
+            │  Disconnect from Ash                                                 │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+  ╭─────────│  Tab/Shift+Tab to switch  ·  Esc to return                           │─────────╮
+  │ > Build └──────────────────────────────────────────────────────────────────────┘         │
+  ╰──────────────────────────────────────────────────────────────────────── Automatic model ─╯

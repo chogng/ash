@@ -1,7 +1,0 @@
-load("//app:defs.bzl", "app_rust_library")
-
-app_rust_library(
-    name = "markdown",
-    crate_name = "ash_markdown",
-    package_name = "app/markdown",
-)

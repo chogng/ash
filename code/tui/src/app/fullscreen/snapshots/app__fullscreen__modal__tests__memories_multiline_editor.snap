@@ -1,0 +1,32 @@
+---
+source: code/tui/src/app/fullscreen/modal_tests.rs
+expression: frame_text(&app)
+---
+  .                                                                            [— / —] [Dashboard]  
+                                                                                                    
+                                                                                                    
+            ┌── Memories › Edit memory ───────────────────────────────────────────[✗]─┐             
+            │                                                                         │             
+            │  Personal memories · Memories off                                       │             
+            │                                                                         │             
+            │  Title                                                                  │             
+            │  Fixture decision                                                       │             
+            │                                                                         │             
+            │> Content                                                                │             
+            │  Use Rust                                                               │             
+            │  保 留   两 个 空 格                                                          │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+  ╭─────────│  Tab fields · Ctrl+S save · Esc back                                    │──────────╮  
+  │ > backgr└─────────────────────────────────────────────────────────────────────────┘          │  
+  ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯

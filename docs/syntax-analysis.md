@@ -5,7 +5,7 @@
 > Stanza Text Engine 通过 TextMate 与有界 App Server syntax facts 提供语法能力。本文拥有跨编辑器的语法能力边界；底层解析契约见
 > [`ash-syntax` README](../ash-rs/syntax/README.md)，符号索引、Language Server、代码检索与未来代码图
 > 的跨系统演进见 [`code-intelligence.md`](code-intelligence.md)，Native 编辑器 API 见
-> [`ash-editor` README](../app/editor/README.md)。
+> [`ash-editor` README](../app-rs/editor/README.md)。
 
 ## 快速理解
 

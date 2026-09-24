@@ -399,9 +399,9 @@ Desktop 与协议：
 
 ```bash
 pnpm verify:protocol
-pnpm --dir ash-ts run build:host
-pnpm --dir ash-ts run typecheck:renderer
-pnpm --dir ash-ts run test:main
+pnpm --dir app-ts run build:host
+pnpm --dir app-ts run typecheck:renderer
+pnpm --dir app-ts run test:main
 ```
 
 跨阶段必须持续覆盖（已实现部分回归 + 新增项）：

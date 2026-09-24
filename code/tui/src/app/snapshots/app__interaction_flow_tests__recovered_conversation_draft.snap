@@ -1,0 +1,24 @@
+---
+source: code/tui/src/app/interaction_flow_tests.rs
+expression: "render(&restored, 80, 20)"
+---
+  .                                                        [— / —] [Dashboard]
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ⏸ ask permissions on
+  ╭──────────────────────────────────────────────────────────────────────────╮
+  │ > conversation draft                                                     │
+  ╰──────────────────────────────────────────────────────── Automatic model ─╯
+
+  Enter send  ·  shift+tab permissions  ·  /home

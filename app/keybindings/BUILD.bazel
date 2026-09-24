@@ -1,8 +1,0 @@
-load("//app:defs.bzl", "app_rust_library")
-
-app_rust_library(
-    name = "keybindings",
-    crate_name = "ash_keybindings_host",
-    package_name = "app/keybindings",
-    unit_tests = True,
-)

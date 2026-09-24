@@ -118,11 +118,13 @@ def boundary_errors(root: Path, metadata: dict) -> list[str]:
                 destination = paths.get(dependency, ())
                 forbidden = (
                     (
-                        parts[0] in {"ash-rs", "app"}
+                        parts[0] in {"ash-rs", "app-rs"}
                         and dependency in {"ash-cli", "ash-tui"}
                     )
                     or (
-                        parts[0] == "ash-rs" and destination and destination[0] == "app"
+                        parts[0] == "ash-rs"
+                        and destination
+                        and destination[0] in {"app-rs", "code", "cli"}
                     )
                     or (
                         start == "ash-app-server-daemon"

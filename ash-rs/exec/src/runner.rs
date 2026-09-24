@@ -1,10 +1,11 @@
-use crate::AppServerTarget;
 use crate::ExecEventSink;
 use crate::ExecOutcome;
 use crate::ExecRunRequest;
 use crate::ExecSinkError;
-use crate::connection::EmbeddedConnection;
 use crate::connection::ExecConnection;
+use crate::connection::ServerConnection;
+use ash_app_server_client::StdioAppServerCommand;
+use ash_app_server_protocol::protocol::common::ClientInfo;
 use ash_async_utils::CancellationToken;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -83,14 +84,16 @@ impl Default for ExecRunnerOptions {
 
 /// Runs one Agent Turn through a shared App Server client session.
 pub struct ExecRunner {
-    target: AppServerTarget,
+    command: StdioAppServerCommand,
+    client_info: ClientInfo,
     options: ExecRunnerOptions,
 }
 
 impl ExecRunner {
-    pub fn new(target: AppServerTarget) -> Self {
+    pub fn new(command: StdioAppServerCommand, client_info: ClientInfo) -> Self {
         Self {
-            target,
+            command,
+            client_info,
             options: ExecRunnerOptions::default(),
         }
     }
@@ -114,10 +117,9 @@ impl ExecRunner {
         if cancellation.is_cancelled() {
             return Err(ExecError::CancelledBeforeStart);
         }
-        let mut connection = match &self.target {
-            AppServerTarget::Embedded(options) => EmbeddedConnection::start(options)
-                .map_err(|error| ExecError::StartAppServer(error.to_string()))?,
-        };
+        let mut connection =
+            ServerConnection::start_stdio(self.command.clone(), self.client_info.clone())
+                .map_err(|error| ExecError::StartAppServer(error.to_string()))?;
         let result = self.run_connected(&mut connection, request, &mut sink, cancellation);
         let shutdown = connection.close();
         match (result, shutdown) {

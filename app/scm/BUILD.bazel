@@ -1,9 +1,0 @@
-load("//app:defs.bzl", "app_rust_library")
-
-app_rust_library(
-    name = "scm",
-    crate_name = "ash_scm",
-    package_name = "app/scm",
-    source_files = ["README.md"],
-    unit_tests = True,
-)

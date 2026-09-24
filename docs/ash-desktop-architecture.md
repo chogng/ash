@@ -174,7 +174,7 @@ MCP 或 Agent definition 的路径规范化、目录 containment 和文件 ident
 ## 3. 目录边界
 
 ```text
-ash-ts/
+app-ts/
 ├── src/
 │   ├── main.ts
 │   ├── bootstrap.ts
@@ -206,12 +206,12 @@ Desktop 主进程入口同步注册 Electron `ready` 监听器；异步启动链
 启动过程不创建额外的 splash 窗口。gate 失败时，原生 Retry/Quit 对话框允许 supervisor
 回到 stopped 后重新初始化，或按正常退出生命周期关闭应用。
 
-`ash-ts/src/ash/platform/app-server/common/generated/` 消费 Rust 协议 crate 的生成快照，不手写 wire DTO。纯前端构建只同步快照，协议修改通过 `pnpm generate:protocol` 更新；职责和验证见 [App Server 协议来源](ash-app-server-api.md#12-权威来源)。
+`app-ts/src/ash/platform/app-server/common/generated/` 消费 Rust 协议 crate 的生成快照，不手写 wire DTO。纯前端构建只同步快照，协议修改通过 `pnpm generate:protocol` 更新；职责和验证见 [App Server 协议来源](ash-app-server-api.md#12-权威来源)。
 生成的 `APP_SERVER_SCHEMA_HASH` 是 bundled Desktop 的 exact-schema 基线；Electron Main
 必须比较 initialize response，hash 不一致时不得创建业务窗口或进入 Ready。
 
 开发态与发布态共享 canonical Ash package contract。Node 开发组装器
-`build/package/prepare.ts` 按 target、JavaScript runtime 与 build profile 组装不可变 debug
+`build/runtime/prepare.ts` 按 target、JavaScript runtime 与 build profile 组装不可变 debug
 package；Rust package store 在完整文件清单校验通过后发布编号 manifest，并用进程 lease 保护正在运行的 package。它读取 production builder
 使用的同一份 runtime lock、校验 archive digest。它不安装或调用 Python；
 Python builder 只属于显式 release packaging。`appServerExecutablePath()` 在开发态选择该
@@ -227,12 +227,12 @@ initialize gate。
 Main 必须：
 
 1. 从应用包内确定的绝对路径启动 `ash-app-server-daemon connect`；`ash-app-server-daemon` crate 串行化 start，启动独立 `ash-app-server --managed` 并连接 profile-scoped local authority，以
-   connection prelude 用 `dir_root`、`dir_grant_source` 与产品服务身份选择隔离的 App Server 组合，并在交付 stdio 前完成真实 initialize/schema
+   connection prelude 用 `dir_root`、`dir_grant_source` 与产品服务身份选择隔离的 App Server 组合，并在交付 stdio 前完成真实 initialize
    readiness probe；显式诊断和恢复使用 `ash-app-server-daemon start|restart|stop|version` 的单行 JSON
    控制面；
 2. 使用 `shell: false`，只传递环境变量 allowlist；
 3. 在创建业务 UI 前完成 `initialize`；
-4. 校验 protocol version、schema hash 和 server build；
+4. 校验 protocol major 和必需能力版本，记录 schema hash 与 server build 供诊断；
 5. 将 stdout 仅交给 JSONL 协议解析器；
 6. 对 stderr 做大小限制和 secret 脱敏；
 7. 为启动、初始化、请求和关闭设置 deadline；
@@ -243,7 +243,7 @@ Main 必须：
 Main 不把 `ipcRenderer`、`fs`、`child_process`、`webContents` 或任意 JSON-RPC method
 直接暴露给 Renderer。
 
-当前 `ChildProcessJsonlTransport` 将子进程 stream lifecycle 与 JSON-RPC pairing 分开。它在积累无限 buffer 前按原始 byte 拒绝超过 1 MiB 的 frame，只接受严格 LF 和有效 UTF-8；outbound write 同时等待 callback 与 drain，并限制 pending write 数。child/stdio 任一错误都会关闭 transport；stderr 只保留 64 KiB ring，诊断读取时脱敏 credential。`close()` 异步、幂等，并在 graceful deadline 后强制终止。`pnpm --dir ash-ts run test:main` 覆盖分片 UTF-8、超限 frame、非法 framing、backpressure、stderr 和 close。
+当前 `ChildProcessJsonlTransport` 将子进程 stream lifecycle 与 JSON-RPC pairing 分开。它在积累无限 buffer 前按原始 byte 拒绝超过 1 MiB 的 frame，只接受严格 LF 和有效 UTF-8；outbound write 同时等待 callback 与 drain，并限制 pending write 数。child/stdio 任一错误都会关闭 transport；stderr 只保留 64 KiB ring，诊断读取时脱敏 credential。`close()` 异步、幂等，并在 graceful deadline 后强制终止。`pnpm --dir app-ts run test:main` 覆盖分片 UTF-8、超限 frame、非法 framing、backpressure、stderr 和 close。
 
 `JsonRpcPeer` 在 transport 之上负责双向 JSON-RPC envelope、request ID pairing、remote
 error、timeout/abort、late/unknown/duplicate response、入站 handler cancellation、pending
@@ -340,7 +340,7 @@ App Server 连接并重新读取 Session/Thread；Renderer 不直接读写 SQLit
 Electron sandbox 边界分为两层。`ISandboxGlobals` 是 preload 唯一暴露到主世界的底层桥接：
 它只包含只读进程元数据，以及受 `ash:` 频道前缀约束的 `invoke` / `on`。preload 必须保持
 自包含，运行时除 `electron` 外不得加载任何模块，也不得把 Electron event 对象传给 Renderer。
-构建后的 preload 由 `build/desktop/compilation.ts` 检查这一约束。
+构建后的 preload 由 `build/app_ts/compilation.ts` 检查这一约束。
 
 `createElectronRendererApi()` 是该桥接的唯一产品适配器。它在普通 Renderer bundle 中引用频道
 常量，并组装领域化、强类型、可枚举的 `AshElectronRendererApi`。跨宿主领域能力由其父接口
@@ -579,15 +579,15 @@ Browser 入口没有 App Server 连接时会明确显示不可用状态。`dev:w
 前端开发入口，使用同一 disconnected API 保持 UI 可检查，但不声称拥有后端能力。当前本地
 `dev:web:full` 与 `build:web` / `start:web` 使用受管理 Rust App Server 的认证
 HTTP/WebSocket 浏览器入口。每个浏览器页签独立交换 JSON-RPC，服务仍由 profile registry 管理。
-`build/desktop/web.ts` 只持有启动租约、读取启动信息和收尾；不转发业务消息。
+`build/app_ts/web.ts` 只持有启动租约、读取启动信息和收尾；不转发业务消息。
 Vite 提供开发资源，发布资源由 Rust HTTP 入口读取可信配置中的目录。
 普通 `build:renderer` 保留 disconnected 模式；`build:web` 显式启用后端连接。
 可信启动入口绑定工作区和允许的 Origin；一次性票据兑换后，浏览器通过会话凭证连接，
 不声明目录授权宿主，也不调用 `env/dirs/set` 扩大权限。具体契约和验证见
-[前端连接与浏览器能力](../ash-ts/docs/design/app-server-connection.md)。
+[前端连接与浏览器能力](../app-ts/docs/design/app-server-connection.md)。
 公网远程部署的认证、TLS 和访问策略不属于这个本地服务的能力。
 
-Renderer 与 Stanza 共用 `build/desktop/vite/rendererOutput.ts` 的分包规则，保留模块执行顺序，避免贡献注册
+Renderer 与 Stanza 共用 `build/app_ts/vite/rendererOutput.ts` 的分包规则，保留模块执行顺序，避免贡献注册
 顺序改变。构建对超过 500 kB 的 JavaScript chunk 直接报错；`build-metrics.json` 另外记录
 每个入口的静态 JavaScript 总量。分包不等于减少总下载量，worker 资源不计入此 chunk 限额。
 

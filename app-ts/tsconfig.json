@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "../.build/app-ts/all",
+    "rootDir": ".",
+    "types": ["node", "electron", "@webgpu/types"]
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/typings/base-common.d.ts", "src/typings/crypto.d.ts"]
+}

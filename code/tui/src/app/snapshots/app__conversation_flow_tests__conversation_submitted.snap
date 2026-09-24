@@ -1,0 +1,36 @@
+---
+source: code/tui/src/app/conversation_flow_tests.rs
+expression: render(&app)
+---
+  .                                                                            [— / —] [Dashboard]
+
+> 请 正 常 回 复 ， 并 展 示 多 行 输 出 。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+⠋ Starting · 0m 00s total
+  ⏸ ask permissions on                                                   shift+tab to cycle policy
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────╮
+  │ >                                                                                            │
+  ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯
+
+  Enter send  ·  shift+tab permissions  ·  /home

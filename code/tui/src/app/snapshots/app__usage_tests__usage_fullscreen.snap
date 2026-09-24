@@ -1,0 +1,30 @@
+---
+source: code/tui/src/app/usage_tests.rs
+expression: "render(&app, 80, 28)"
+---
+  .                                                        [— / —] [Dashboard]
+
+> /usage
+        ┌── Usage ─────────────────────────────────────────────────[✗]─┐
+        │                                                              │
+        │> ChatGPT plan  ·  pro                                        │
+        │  Codex                                                       │
+        │  5h window  ·  65% left (35% used)                           │
+        │  Resets  ·  2033-05-18 03:33 UTC                             │
+        │  7d window  ·  20% left (80% used)                           │
+        │  Resets  ·  2033-05-23 22:26 UTC                             │
+        │  Credits  ·  10.25                                           │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+  ╭─────│  Esc to close  ·  Run /usage to refresh                      │─────╮
+  │ > Bu└──────────────────────────────────────────────────────────────┘     │
+  ╰──────────────────────────────────────────────────────── Automatic model ─╯

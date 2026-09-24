@@ -8,9 +8,7 @@ mod run_loop;
 mod runner;
 mod turn_outcome;
 
-pub use model::AppServerTarget;
 pub use model::EXEC_EVENT_SCHEMA_VERSION;
-pub use model::EmbeddedAppServerOptions;
 pub use model::ExecEntry;
 pub use model::ExecEvent;
 pub use model::ExecEventKind;

@@ -1,6 +1,6 @@
 packages:
   - build
-  - ash-ts
+  - app-ts
 engineStrict: true
 allowBuilds:
   electron: true

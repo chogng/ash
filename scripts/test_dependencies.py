@@ -130,20 +130,20 @@ class DependencyTests(unittest.TestCase):
 
     def test_indirect_boundary_includes_build_dependencies_and_aliases(self):
         app = self.package(
-            "app", "app", deps=[{"name": "bridge", "kind": None, "rename": "helper"}]
+            "app", "app-rs", deps=[{"name": "bridge", "kind": None, "rename": "helper"}]
         )
         bridge = self.package(
             "bridge", "ash-rs/bridge", deps=[{"name": "ash-tui", "kind": "build"}]
         )
-        tui = self.package("ash-tui", "ash-code/tui")
+        tui = self.package("ash-tui", "code/tui")
         errors = dependencies.boundary_errors(
             self.root, self.metadata(app, bridge, tui)
         )
         self.assertIn("forbidden dependency path: app -> bridge -> ash-tui", errors)
 
     def test_dev_edges_do_not_become_product_edges(self):
-        app = self.package("app", "app", deps=[{"name": "ash-tui", "kind": "dev"}])
-        tui = self.package("ash-tui", "ash-code/tui")
+        app = self.package("app", "app-rs", deps=[{"name": "ash-tui", "kind": "dev"}])
+        tui = self.package("ash-tui", "code/tui")
         self.assertEqual(
             dependencies.boundary_errors(self.root, self.metadata(app, tui)), []
         )

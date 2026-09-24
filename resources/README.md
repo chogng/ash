@@ -26,7 +26,7 @@ Ash then updates its pinned copy before requiring metadata signed only by the ro
 ## Application branding
 
 The fixed application icon is derived from
-`ash-ts/src/ash/workbench/browser/media/ash-light.svg`. Unlike renderer UI,
+`app-ts/src/ash/workbench/browser/media/ash-light.svg`. Unlike renderer UI,
 launcher, package, taskbar, and Web icons do not change with the editor color theme.
 
 - `win32/ash.ico` is the Windows application and package icon.
@@ -46,11 +46,11 @@ source.
 
 The cross-client ownership and rendering contract is documented in [`docs/icons.md`](../docs/icons.md).
 
-`icons/*.svg` is the only hand-maintained input for Ash product icons. Add, replace, or remove an SVG and run `pnpm icons:generate` from the repository root; `build/resources/icons/generate.ts` canonicalizes the SVG and generates `icons/manifest.json`, `ash-ts/src/ash/base/common/productIcons.ts`, and `app/icons/src/generated.rs` together through `generate-to-ts.ts` and `generate-to-rs.ts`.
+`icons/*.svg` is the only hand-maintained input for Ash product icons. Add, replace, or remove an SVG and run `pnpm icons:generate` from the repository root; `build/resources/icons/generate.ts` canonicalizes the SVG and generates `icons/manifest.json`, `app-ts/src/ash/base/common/productIcons.ts`, and `app-rs/icons/src/generated.rs` together through `generate-to-ts.ts` and `generate-to-rs.ts`.
 
 - SVG filenames use lowercase kebab-case and become the icon IDs without a second mapping table.
 - `manifest.json` is generated output; do not edit its `file` or `rendering` fields.
-- The browser-only Seti file-icon theme is owned by `ash-ts/src/ash/platform/theme/browser/media/seti` and remains separate from product icons.
+- The browser-only Seti file-icon theme is owned by `app-ts/src/ash/platform/theme/browser/media/seti` and remains separate from product icons.
 - Renderer-specific tinting, caching, rasterization, and component layout remain in each client.
 
 The generator uses SVGO with multiple passes, removes fixed root dimensions while preserving `viewBox`, prefixes SVG IDs, rejects active or linked content, and infers `symbolic` or `multicolor` from the optimized paint values. `pnpm icons:check` verifies the SVGs and all generated outputs without modifying files; `pnpm test:icons` covers generation, optimization, deletion, safety checks, manifest metadata, and the Vite update path.

@@ -40,6 +40,27 @@ fn managed_control_response_must_match_the_private_process_record() {
 }
 
 #[test]
+fn compatible_daemon_from_another_product_version_is_accepted() {
+    let profile = tempfile::tempdir().unwrap();
+    let endpoint = EndpointPaths::prepare(profile.path()).unwrap();
+    let mut record = ProcessRecord::current(&endpoint).unwrap();
+    record.daemon_version = "another-product-version".into();
+    let _record = ProcessRecordGuard::publish(&endpoint.pid, &record).unwrap();
+    let mut response = ControlResponse::new(
+        ControlState::Running,
+        record.pid,
+        record.instance_id.clone(),
+        "sha256:another-compatible-schema".into(),
+    );
+    response.daemon_version = record.daemon_version.clone();
+
+    assert_eq!(
+        validate_managed_response(&endpoint, &response).unwrap(),
+        record
+    );
+}
+
+#[test]
 fn lifecycle_errors_include_only_the_bounded_log_tail() {
     let profile = tempfile::tempdir().unwrap();
     let endpoint = EndpointPaths::prepare(profile.path()).unwrap();

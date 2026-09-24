@@ -724,7 +724,7 @@ Desktop 导入，其 Skill 可以与其他来源一起出现在 TUI catalog 中�
 边界，不属于通用 `utils`；只有不理解外部 Agent 格式的路径规范化、目录 containment 和文件
 identity 原语可以下沉到已有基础 crate。Desktop 交互所有权与其他外部配置类型的映射见
 [`ash-desktop-architecture.md`](ash-desktop-architecture.md#22-外部-agent-配置导入仅限-desktop)；
-TUI 当前不提供外部 Agent 导入入口；Ash Code 的公共边界以其[API 入口](../ash-code/README.md)为准。
+TUI 当前不提供外部 Agent 导入入口；Ash Code 的公共边界以其[API 入口](../code/README.md)为准。
 
 目录贡献不是 Import。`ash-file-access` 拥有目录来源与能力契约；只有带 `DiscoverSkills` 的有效 Grant 才能发现 Skill。该发现可以复用 `external-agent-migration` 的安全路径检查，但不写入 Config、不产生 imported source，也不改变 `cwd`。完整语义见 [`environment-access.md`](environment-access.md#5-来源权限取代目录-trust)。
 

@@ -8,11 +8,11 @@ import test from 'node:test';
 
 test('Electron starts once after valid compilation and restarts only after valid rebuilds', { timeout: 20_000 }, async t => {
   const root = await mkdtemp(join(tmpdir(), 'ash-electron-'));
-  const desktop = join(root, 'ash-ts');
-  for (const directory of ['scripts', 'build/desktop', 'build/lib', 'ash-ts/node_modules/typescript/bin', 'ash-ts/node_modules/electron']) {
+  const desktop = join(root, 'app-ts');
+  for (const directory of ['scripts', 'build/app_ts', 'build/lib', 'app-ts/node_modules/typescript/bin', 'app-ts/node_modules/electron']) {
     await mkdir(join(root, directory), { recursive: true });
   }
-  for (const name of ['scripts/electron.ts', 'build/desktop/compilation.ts', 'build/lib/paths.ts']) {
+  for (const name of ['scripts/electron.ts', 'build/app_ts/compilation.ts', 'build/lib/paths.ts']) {
     await copyFile(resolve(import.meta.dirname, '..', name), join(root, name));
   }
   await writeFile(join(root, 'package.json'), '{"type":"module"}');
@@ -35,7 +35,7 @@ test('Electron starts once after valid compilation and restarts only after valid
       console.log(previous === undefined ? 'Starting compilation in watch mode' : 'File change detected. Starting incremental compilation');
       previous = phase;
       if (project === 'tsconfig.preload.json') {
-        const output = '../.build/desktop/preload/src/ash/base/parts/sandbox/electron-browser/preload.cjs';
+        const output = '../.build/app-ts/preload/src/ash/base/parts/sandbox/electron-browser/preload.cjs';
         fs.mkdirSync(path.dirname(output), { recursive: true });
         fs.writeFileSync(output, phase === 'initial' || phase === 'invalid' ? "require('fs')" : "require('electron')");
       }

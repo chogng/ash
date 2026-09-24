@@ -1,7 +1,7 @@
 # 三端快捷键系统
 
 > 文档所有权：本文是 Ash、App 与 Ash Code 共享快捷键语义、端侧输入边界和演进顺序的 canonical 架构文档。
-> 实现细节分别由 [`ash-keybinding`](../ash-rs/keybinding/README.md)、[`ash-keybindings-host`](../app/keybindings/README.md)、[`ash-code` TUI](../ash-code/tui/README.md) 和 [Ash 浏览器基础](../ash-ts/docs/browser-foundation.md)维护。
+> 实现细节分别由 [`ash-keybinding`](../ash-rs/keybinding/README.md)、[`ash-keybindings-host`](../app-rs/keybindings/README.md)、[`ash-code` TUI](../code/tui/README.md) 和 [Ash 浏览器基础](../app-ts/docs/browser-foundation.md)维护。
 > 状态：共享 Rust 核心与用户配置编译器、Ash Code `AppKeymap`/Keymap 设置界面（入口为 `/shortcuts`）、App、Ash TypeScript 输入链路和跨语言 conformance 向量均为 Current。
 
 ## 快速理解
@@ -82,7 +82,7 @@ all clients ── semantic command only ──→ App Server
 
 如果 `ash-keybinding` 开始依赖 `zui`、`ash-ui-components`、`winit`、Crossterm、profile 路径或产品命令，说明共享边界已经漂移。若 Ash Renderer 需要 IPC 才能决定是否阻止浏览器按键，也说明执行边界已经漂移。
 
-`app/keybindings` 是 GUI 内部的独立能力边界，不是三端共用的快捷键框架。它用 `KeybindingCatalog` 接收 Workbench 提供的命令和上下文，管理输入转换、规则和连续按键状态；Settings 只复用它的录入转换。独立 crate 限制其依赖方向，避免快捷键运行逻辑直接访问 Workbench 的业务状态。
+`app-rs/keybindings` 是 GUI 内部的独立能力边界，不是三端共用的快捷键框架。它用 `KeybindingCatalog` 接收 Workbench 提供的命令和上下文，管理输入转换、规则和连续按键状态；Settings 只复用它的录入转换。独立 crate 限制其依赖方向，避免快捷键运行逻辑直接访问 Workbench 的业务状态。
 
 TUI 的 `keymap` 负责运行时规则和匹配，`keymap_setup` 负责 `/shortcuts` 的选择、录入和配置编辑；设置交互依赖运行时规则，运行时不依赖设置界面。
 
@@ -219,7 +219,7 @@ App 和 TUI 连接 App Server 后分别读取 `[gui].keybindings` 与 `[tui].key
 
 当前 Rust 路径只有一套纯 core：App 的快捷键设置页面由 `ash-settings` 管，工作界面的组合键提示由 `ash-workbench` 管，Ash Code 根级 Keymap 直接接入共享 Resolver。adapter 只做单向转换，不保留第二套 Resolver。
 
-共享 core 可用 `bazel test //ash-rs/keybinding:keybinding-unit-tests` 在三端平台验证。App 的运行时规则、设置页面和工作界面提示分别由 `//app/keybindings:keybindings-unit-tests`、`//app/settings:settings-unit-tests` 和 `//app/workbench:workbench-unit-tests` 验证。Windows Bazel 通过仓库拥有的 `rules_rs` 兼容补丁使用 gnullvm-hosted Rust tools，使 `rustc`、过程宏 DLL 和 hermetic LLVM/MinGW linker 使用同一 ABI；这些目标在 Windows、Linux 与 macOS 都实际运行，不再使用平台跳过。
+共享 core 可用 `bazel test //ash-rs/keybinding:keybinding-unit-tests` 在三端平台验证。App 的运行时规则、设置页面和工作界面提示分别由 `//app-rs/keybindings:keybindings-unit-tests`、`//app-rs/settings:settings-unit-tests` 和 `//app-rs/workbench:workbench-unit-tests` 验证。Windows Bazel 通过仓库拥有的 `rules_rs` 兼容补丁使用 gnullvm-hosted Rust tools，使 `rustc`、过程宏 DLL 和 hermetic LLVM/MinGW linker 使用同一 ABI；这些目标在 Windows、Linux 与 macOS 都实际运行，不再使用平台跳过。
 
 ## 9. 长期不变量
 

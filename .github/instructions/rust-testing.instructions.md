@@ -18,7 +18,7 @@ Read `testing.instructions.md` first. This file adds Rust-specific commands and 
 
 ## Tests and conditional compilation
 
-- Dependency changes must pass `just dependencies`, affected package checks, and their warning gates. Preserve feature activation and validate affected build/package manifests; declaration cleanup alone does not prove build equivalence.
+- Dependency changes must pass `just dependencies`, affected package checks, and their warning gates. Preserve feature activation and validate affected build/runtime manifests; declaration cleanup alone does not prove build equivalence.
 - Changes to dependency checks or measurement tooling must pass `just test-python scripts` and execute the changed command against the real workspace. Dependency checks inspect metadata without compiling the workspace and do not require a full-suite escalation.
 
 - Test-only code must live in a sibling test file whenever the implementation can expose the required private surface to its own test module. Do not add production methods solely to make tests convenient.

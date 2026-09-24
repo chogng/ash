@@ -15,7 +15,7 @@ Core、rollout、store、model provider、sandbox 或 `ash-tool-executor`。
 | `src/model.rs` | run input、approval mode、versioned event、terminal outcome 与 exit code |
 | `src/run_id.rs` | `ExecRunId` 校验和进程内生成 |
 | `src/output.rs` | `ExecEventSink`、discard sink 与逐事件 flush 的 JSONL sink |
-| `src/connection.rs` | 私有 `ExecConnection` 端口及 embedded App Server adapter |
+| `src/connection.rs` | 私有 `ExecConnection` 端口及 App Server session adapter |
 | `src/runner.rs` | 公共 runner、timeout 配置、cancellation contract 与显式 shutdown |
 | `src/run_loop.rs` | prepare、subscribe、start、observe、interrupt 与 unsubscribe 编排 |
 | `src/turn_outcome.rs` | canonical terminal status、交互等待与公开 outcome 的唯一映射 |
@@ -30,7 +30,7 @@ Core、rollout、store、model provider、sandbox 或 `ash-tool-executor`。
 - `ExecCancellation`：廉价、非阻塞的取消观察点。
 
 `ExecEntry` 明确区分 `New`、`Resume` 和 `Fork`，避免由多个 bool 或缺省 ID 推断入口意图。
-`AppServerTarget` 当前只实现 `Embedded`；remote backend 仍是系统文档中的计划设计。
+宿主在构造 `ExecRunner` 时提供 App Server 的 stdio 连接命令和客户端身份。根部 CLI 以此连接共享 profile 服务。
 
 `ExecEvent` 是 schema version 为 1 的展示/自动化 envelope。`ThreadUpdated` 机械携带 canonical
 `ThreadUpdateEnvelope`，不建立第二套 authoritative item 或 Turn 状态。`JsonLinesExecEventSink`
@@ -48,7 +48,7 @@ Core、rollout、store、model provider、sandbox 或 `ash-tool-executor`。
 
 ## 内部接口地图与调用路径
 
-`EmbeddedConnection` 是 `ash-app-server-client` 的薄适配器；它只构造协议 Params、检查
+`ServerConnection` 是 `ash-app-server-client` 的薄适配器；它只构造协议 Params、检查
 `SessionRequestResult` variant，并把 notification 映射为私有 `ConnectionEvent`。
 `prepare_run` 拥有 new/resume/fork 到 Session/Thread 选择的唯一映射。`terminal_outcome` 是
 canonical Turn status 到公开 outcome 的唯一转换点。`required_interaction` 只决定无 UI 时何时请求
@@ -57,7 +57,7 @@ interrupt，不改变 App Server 内的批准结论。`best_effort_interrupt` �
 
 ```text
 ExecRunner::run
-  → EmbeddedConnection::start
+  → ServerConnection::start_stdio
   → ExecRunner::run_connected
      → prepare_run
      → ExecConnection::subscribe_thread
@@ -98,7 +98,7 @@ unsubscribe 并调用 `AppServerSession::shutdown`；shutdown 失败不会被静
 ## 宿主接入与验证
 
 `ash-cli` 负责参数、stdout/stderr 和 signal 注册；它不复制 runner 状态机。新的宿主应构造
-`EmbeddedAppServerOptions`、选择明确 approval mode，并根据 `ExecOutcome::exit_code` 映射进程或 Job
+`StdioAppServerCommand`、客户端身份和明确的 approval mode，并根据 `ExecOutcome::exit_code` 映射进程或 Job
 状态。
 
 ```bash
@@ -114,7 +114,7 @@ connection tests 与 CLI exit behavior。
 
 ## 当前限制与扩展点
 
-- 当前只支持 embedded App Server，不支持 daemon/remote transport；
+- 当前通过 stdio 连接共享 App Server daemon；
 - 当前是同步 run-once runner，没有长期 worker、Job/Attempt、lease、fencing 或 event ack；
 - JSONL 已 versioned，但尚无跨版本 compatibility fixture、last-message file 或 stdin item stream；
 - 自动审查由 App Server 拥有；当前 headless runner 不实现远程 reviewer channel；

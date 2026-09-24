@@ -1,8 +1,0 @@
----
-source: ash-code/tui/src/thread/status_indicator/view_tests.rs
-assertion_line: 51
-expression: text
----
-⠙ Working · 1m 05s total · ctrl+c to interrupt
-○ Waiting for approval · 1m 05s total · ctrl+c to interrupt
-⠙ Cancelling · 1m 05s total

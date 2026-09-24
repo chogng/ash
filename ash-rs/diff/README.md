@@ -2,7 +2,7 @@
 
 > 本 README 是共享代码差异数据层的 crate-level canonical contract。`ash-editor` 与 TUI
 > 只消费这里的行映射、字符范围和 hunk，不在各自 presentation 中重新实现匹配算法。Editor
-> presentation 的 canonical contract 见 [`app/editor/README.md`](../../app/editor/README.md)。
+> presentation 的 canonical contract 见 [`app-rs/editor/README.md`](../../app-rs/editor/README.md)。
 
 `ash-diff` 计算原始文本和修改后文本之间可复现、可取消且有资源上限的代码差异。它拥有精确
 换行符解析、Myers 最短编辑路径、替换配对、Unicode 字素级内联范围、Git 风格 hunk header、

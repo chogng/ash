@@ -1,0 +1,32 @@
+---
+source: code/tui/src/app/fullscreen/modal_tests.rs
+expression: frame_text(&app)
+---
+  .                                                                            [— / —] [Dashboard]  
+                                                                                                    
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────╮  
+  │         ┌── Memories › Rust decision 0 ───────────────────────────────────────[✗]─┐          │  
+  │    ▄  ▄ │                                                                         │          │  
+  │  ▗█▛██▜█│  Personal memories                                                      │          │  
+  │  ▝▜████▛│                                                                         │          │  
+  │    ▝  ▘ │  User maintained · 2023-11-14 22:13 UTC · r3                            │          │  
+  │         │                                                                         │          │  
+  │         │  Keep shared behavior in Rust.                                          │          │  
+  │         │                                                                         │          │  
+  │         │  Use the App Server contract from every client.                         │          │  
+  │         │                                                                         │          │  
+  │         │                                                                         │          │  
+  ╰─────────│                                                                         │──────────╯  
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │ Esc return  
+  ╭─────────│  e edit · Delete delete · ↑/↓ scroll · Esc back                         │──────────╮  
+  │ > Build └─────────────────────────────────────────────────────────────────────────┘          │  
+  ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯

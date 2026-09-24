@@ -1,6 +1,0 @@
----
-source: ash-code/tui/src/status/view_tests.rs
-expression: "rows.join(\"\\n\")"
----
-📋  plan ███░░░░░░░ 1/3 · 🤖  model
-⏸ ask permissions on

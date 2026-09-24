@@ -1,0 +1,20 @@
+---
+source: code/tui/src/app/mode_tests.rs
+expression: render(&app)
+---
+  .                          [— / —] [Dashboard]  
+                                                  
+● focus message 05                                
+                                                  
+● focus message 06                                
+                                                  
+● focus message 07                                
+                                                  
+             Jump to bottom (click) ↓             
+  Queue 1: queued message · next                  
+                                                  
+  ╭────────────────────────────────────────────╮  
+  │ > Build anything                           │  
+  ╰────────────────────────── Automatic model ─╯  
+                                                  
+  Space to expand · Esc to return to input

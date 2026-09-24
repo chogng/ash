@@ -9,9 +9,9 @@ Ash 按能力及依赖边界安排实现，不按 Codex 的 crate 名称复制�
 | audio | `utils/audio`、`attachments`、`core`、`ash-api` | 新增容器校验、时长估算、普通会话附件及模型编码；详见下节 |
 | cache | `utils/cache` | 修复普通线程和单线程异步运行时不能可靠复用缓存的问题；同步初始化共享互斥锁 |
 | cargo-bin | `test-binary-support`、`install-context` | 测试 helper 与产品可执行文件发现各有负责位置 |
-| cli | `ash-code/cli`、`config` | 参数、恢复命令和权限选项由 Ash 产品解释；不引入 Codex CLI 配置协议 |
+| cli | `cli`、`config` | 参数、恢复命令和权限选项由 Ash 产品解释；不引入 Codex CLI 配置协议 |
 | elapsed | `utils/elapsed` | 已有时间累计能力 |
-| fuzzy-match | `ash-code/tui/src/widgets/list_selection/matcher.rs` | 当前列表搜索已有前缀、子串和模糊匹配；不新增空的公共封装 |
+| fuzzy-match | `code/tui/src/widgets/list_selection/matcher.rs` | 当前列表搜索已有前缀、子串和模糊匹配；不新增空的公共封装 |
 | git-discovery | `git/src/repository.rs`、`git/src/client.rs` | 已有工作树/元数据发现和有超时、输出限制的 Git 子进程；与上游可选元数据探测的契约不同 |
 | home-dir | `utils/home-dir`、`home` | 使用 Ash home 及显式路径规则 |
 | image | `utils/image`、`attachments` | 已有格式、大小、尺寸校验，持久引用及按模型限制缩放 |

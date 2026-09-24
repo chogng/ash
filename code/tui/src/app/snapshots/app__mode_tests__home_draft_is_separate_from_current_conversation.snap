@@ -1,0 +1,20 @@
+---
+source: code/tui/src/app/mode_tests.rs
+expression: render(&app)
+---
+  .                          [— / —] [Dashboard]  
+                                                  
+                                                  
+                                                  
+                                                  
+                                                  
+                                                  
+                                                  
+                                                  
+                                                  
+  ⏸ ask permissions on                            
+  ╭────────────────────────────────────────────╮  
+  │ > new task draft                           │  
+  ╰────────────────────────── Automatic model ─╯  
+                                                  
+  Enter send  ·  / commands

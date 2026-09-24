@@ -1,0 +1,24 @@
+---
+source: code/tui/src/app/fullscreen/frame_tests.rs
+expression: working
+---
+  .                                                        [— / —] [Dashboard]  
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+⠋ Working · 0m 00s total · ctrl+c to interrupt                                  
+                                                               Copied 42 chars  
+  ╭──────────────────────────────────────────────────────────────────────────╮  
+  │ >                                                                        │  
+  ╰──────────────────────────────────────────────────────── Automatic model ─╯  
+                                                                                
+  Enter queue  ·  shift+tab permissions  ·  /home

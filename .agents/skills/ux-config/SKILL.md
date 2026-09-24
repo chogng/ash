@@ -26,7 +26,7 @@ If the data does not fit a listed kind, its current location is disputed, or no 
 
 Choose the implementation surface before the artifact. Names used in a request may help locate code, but they do not determine ownership.
 
-- For the TypeScript UI under `ash-ts`, read [references/typescript-ui.md](references/typescript-ui.md).
+- For the TypeScript UI under `app-ts`, read [references/typescript-ui.md](references/typescript-ui.md).
 - For the Rust GUI under `app`, read [references/rust-gui.md](references/rust-gui.md).
 - For the Rust TUI under `ash-code`, read [references/rust-tui.md](references/rust-tui.md).
 - If one change intentionally spans multiple UI hosts, read every corresponding reference. Keep host-specific selections and settings independent; share resource contents only when they already have one cross-host schema authority and lifecycle.

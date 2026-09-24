@@ -56,7 +56,7 @@ TypstCompiler::compile
 - `Typst-NOTICE.txt`：Typst 要求保留的第三方声明；
 - `Typst-Assets-NOTICE.txt`：内置字体和其他 `typst-assets` 材料的许可证与声明。
 
-Desktop 发布包还必须携带 `ash-ts/THIRD_PARTY_NOTICES.md`，并从本目录的权威文件把对应许可证材料复制到发布 staging。源码树不保存第二份副本；改变 Typst 版本、资源功能或字体来源时，必须重新审查许可证材料并检查确定性输出。
+Desktop 发布包还必须携带 `app-ts/THIRD_PARTY_NOTICES.md`，并从本目录的权威文件把对应许可证材料复制到发布 staging。源码树不保存第二份副本；改变 Typst 版本、资源功能或字体来源时，必须重新审查许可证材料并检查确定性输出。
 
 ## 测试与修改影响
 

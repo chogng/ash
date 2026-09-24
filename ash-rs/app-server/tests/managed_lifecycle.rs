@@ -94,7 +94,7 @@ fn lifecycle_commands_are_idempotent_and_probe_initialize() {
 }
 
 #[test]
-fn start_replaces_a_daemon_from_a_different_executable_identity() {
+fn start_reuses_a_compatible_daemon_from_another_installation() {
     let root = tempfile::tempdir().unwrap();
     let profile = root.path().join("profile");
     let dir = root.path().join("dir");
@@ -118,17 +118,18 @@ fn start_replaces_a_daemon_from_a_different_executable_identity() {
     };
 
     let first = run_lifecycle(LifecycleCommand::Start, options.clone(), &first_executable).unwrap();
-    let replacement = run_lifecycle(LifecycleCommand::Start, options, &second_executable).unwrap();
+    let attached = run_lifecycle(LifecycleCommand::Start, options, &second_executable).unwrap();
 
     assert_eq!(first.status, LifecycleStatus::Started);
-    assert_eq!(replacement.status, LifecycleStatus::Restarted);
-    assert_ne!(replacement.instance_id, first.instance_id);
+    assert_eq!(attached.status, LifecycleStatus::AlreadyRunning);
+    assert_eq!(attached.pid, first.pid);
+    assert_eq!(attached.instance_id, first.instance_id);
     drop(cleanup);
 }
 
 #[cfg(unix)]
 #[test]
-fn source_executable_can_be_replaced_while_daemon_is_running() {
+fn changed_source_executable_does_not_interrupt_a_running_daemon() {
     let root = tempfile::tempdir().unwrap();
     let profile = root.path().join("profile");
     let dir = root.path().join("dir");
@@ -156,9 +157,12 @@ fn source_executable_can_be_replaced_while_daemon_is_running() {
         .unwrap()
         .write_all(&[0])
         .unwrap();
-    let restarted = run_lifecycle(LifecycleCommand::Start, options, &source).unwrap();
+    let attached = run_lifecycle(LifecycleCommand::Start, options.clone(), &source).unwrap();
 
     assert_eq!(started.status, LifecycleStatus::Started);
+    assert_eq!(attached.status, LifecycleStatus::AlreadyRunning);
+    assert_eq!(started.instance_id, attached.instance_id);
+    let restarted = run_lifecycle(LifecycleCommand::Restart, options, &source).unwrap();
     assert_eq!(restarted.status, LifecycleStatus::Restarted);
     assert_ne!(started.instance_id, restarted.instance_id);
     drop(cleanup);

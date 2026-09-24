@@ -1,0 +1,19 @@
+---
+source: code/tui/src/app/welcome/pet_tests.rs
+expression: "pet_cell_map(super::pet::sprite())"
+---
+symbols
+..▄..▄..
+▗█▛██▜█▖
+▝▜████▛▘
+..▝..▘..
+foreground
+..B..B..
+BBBBBBBB
+BBBBBBBB
+..B..B..
+background
+........
+.KKKKKK.
+........
+........

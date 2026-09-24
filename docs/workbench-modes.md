@@ -17,7 +17,7 @@ Code 与 Academic 是同一个 Ash Desktop 安装包中的两种内置 Workbench
 
 ## 当前模式
 
-两个模式共享 Electron Main、Preload、Workbench runtime、布局 profile、Rust App Server、应用身份和用户数据根。发布构建同时包含两个模式的 Renderer chunk，统一输出到 `.build/desktop/renderer/ash`；模式仍使用独立的 renderer storage namespace，避免布局与视图状态互相覆盖。
+两个模式共享 Electron Main、Preload、Workbench runtime、布局 profile、Rust App Server、应用身份和用户数据根。发布构建同时包含两个模式的 Renderer chunk，统一输出到 `.build/app-ts/renderer/ash`；模式仍使用独立的 renderer storage namespace，避免布局与视图状态互相覆盖。
 
 | Workbench 模式 | 模式 ID | Editor 装配 | 模式能力 | Dedicated Sessions |
 | --- | --- | --- | --- | --- |
@@ -74,7 +74,7 @@ regular Code Workbench
 
 `sessions/` 可以依赖 `workbench/` 的可复用 Chat、Markdown 和 renderer capability；`workbench/` 不得反向导入 `sessions/`。从 Code 切换到 Academic 时，Main 先关闭当前 Workbench 所属的 Code Sessions 窗口。Academic 当前不得注册 Sessions action，也不得把未来研究工作台描述为现有能力。
 
-Code Sessions 的 Renderer 实现、状态 owner、执行路径、失败语义和扩展点见 [`ash-ts/src/ash/sessions/README.md`](../ash-ts/src/ash/sessions/README.md)。Academic 若增加专用研究工作台，必须先新增明确的模式 capability 与独立 renderer 入口；PDF、文献库、Zotero 同步和引用索引等领域能力不得提前放进通用 Workbench layout 或 generic Session storage。
+Code Sessions 的 Renderer 实现、状态 owner、执行路径、失败语义和扩展点见 [`app-ts/src/ash/sessions/README.md`](../app-ts/src/ash/sessions/README.md)。Academic 若增加专用研究工作台，必须先新增明确的模式 capability 与独立 renderer 入口；PDF、文献库、Zotero 同步和引用索引等领域能力不得提前放进通用 Workbench layout 或 generic Session storage。
 
 ## 编辑器与默认 Workbench
 

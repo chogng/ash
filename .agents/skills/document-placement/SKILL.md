@@ -9,10 +9,10 @@ Before choosing a destination, read the [documentation instructions](../../../.g
 
 | Document owner | Destination |
 | --- | --- |
-| TypeScript frontend under `ash-ts/`, including the Ash editor and Workbench | `ash-ts/docs/` |
+| TypeScript frontend under `app-ts/`, including the Ash editor and Workbench | `app-ts/docs/` |
 | Shared Rust backend under `ash-rs/` | `ash-rs/docs/` |
-| Desktop product and Rust UI under `app/` | `app/docs/` |
-| CLI and TUI product under `ash-code/` | Follow the [CLI/TUI documentation placement rules](../../../.github/instructions/tui.instructions.md); do not create an `ash-code/docs/` tree |
+| Desktop product and Rust UI under `app-rs/` | `app-rs/docs/` |
+| CLI and TUI product under `code/` | Follow the [CLI/TUI documentation placement rules](../../../.github/instructions/tui.instructions.md); do not create an `code/docs/` tree |
 | Repository-wide behavior that genuinely has no single project owner | `docs/` |
 
 For another stable top-level project, use `<project>/docs/` unless its scoped instructions specify a different location. Do not treat an individual crate, package, feature folder, or the currently active file as a project boundary.

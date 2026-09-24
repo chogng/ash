@@ -1,0 +1,9 @@
+load("//app-rs:defs.bzl", "app_rust_library")
+
+app_rust_library(
+    name = "editor-host",
+    crate_name = "ash_editor_host",
+    package_name = "app-rs/editor-host",
+    source_files = ["README.md"],
+    unit_tests = True,
+)

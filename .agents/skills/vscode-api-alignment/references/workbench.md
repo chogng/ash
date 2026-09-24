@@ -1,10 +1,10 @@
 # Workbench 对齐
 
-仅在目标位于 `ash-ts/src/ash/workbench` 时读取。共同的对比规则、单一实现、删除确认和验证规则由主 `SKILL.md` 负责。
+仅在目标位于 `app-ts/src/ash/workbench` 时读取。共同的对比规则、单一实现、删除确认和验证规则由主 `SKILL.md` 负责。
 
 ## 对应范围
 
-- 本地根目录：`ash-ts/src/ash/workbench`
+- 本地根目录：`app-ts/src/ash/workbench`
 - 上游根目录：`../vscode/src/vs/workbench`
 - `workbench` 拥有应用壳、Part、窗格、编辑器承载、跨功能服务和产品组合，不拥有更低层的通用能力，也不拥有应用进程启动。
 

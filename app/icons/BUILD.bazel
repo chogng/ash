@@ -1,8 +1,0 @@
-load("//app:defs.bzl", "app_rust_library")
-
-app_rust_library(
-    name = "icons",
-    crate_name = "ash_icons",
-    package_name = "app/icons",
-    data = ["//resources/icons:product-icons"],
-)

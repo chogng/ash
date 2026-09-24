@@ -1,0 +1,45 @@
+load("//app-rs:defs.bzl", "app_rust_library")
+load("@rules_rust//rust:defs.bzl", "rust_binary")
+
+app_rust_library(
+    name = "zui",
+    crate_name = "zui",
+    crate_features = [
+        "native",
+        "wgpu",
+    ],
+    package_name = "app-rs/zui",
+    data = [":zui_sources"],
+    source_files = [
+        "README.md",
+        "examples/bundle-manifest.json",
+        "src/render/wgpu/ui_renderer/icon.wgsl",
+        "src/render/wgpu/ui_renderer/image.wgsl",
+        "src/render/wgpu/ui_renderer/rect.wgsl",
+        "src/devtools/assets/chevron-right.svg",
+        "src/devtools/assets/chevron-down.svg",
+        "src/devtools/assets/close.svg",
+        "src/devtools/assets/cursor.svg",
+        "tools/zui_appcontainer_runner.rs",
+        "tools/zui_packager.rs",
+    ],
+    unit_tests = True,
+)
+
+rust_binary(
+    name = "zui-appcontainer-runner",
+    crate_name = "zui_appcontainer_runner",
+    crate_root = "tools/zui_appcontainer_runner.rs",
+    deps = [":zui"],
+    edition = "2024",
+    srcs = ["tools/zui_appcontainer_runner.rs"],
+)
+
+rust_binary(
+    name = "zui-packager",
+    crate_name = "zui_packager",
+    crate_root = "tools/zui_packager.rs",
+    deps = [":zui"],
+    edition = "2024",
+    srcs = ["tools/zui_packager.rs"],
+)

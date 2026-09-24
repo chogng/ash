@@ -1,0 +1,190 @@
+load("//app-rs:defs.bzl", "app_rust_binary")
+load("@rules_python//python:py_test.bzl", "py_test")
+
+package(default_visibility = ["//visibility:public"])
+
+app_rust_binary(
+    name = "app",
+    crate_name = "app",
+    crate_root = "main.rs",
+    package_name = "app",
+    source_globs = ["*.rs"],
+)
+
+exports_files([
+    "Cargo.toml",
+])
+
+filegroup(
+    name = "app_sources",
+    srcs = glob([
+        "*.rs",
+        "Cargo.toml",
+    ]) + [
+        "//:Cargo.lock",
+        "//:Cargo.toml",
+        "//app-rs/commands:commands_sources",
+        "//app-rs/editor:editor_sources",
+        "//app-rs/editor-core:editor-core_sources",
+        "//app-rs/editor-host:editor-host_sources",
+        "//app-rs/files:files_sources",
+        "//app-rs/icons:icons_sources",
+        "//app-rs/input-classifier:input-classifier_sources",
+        "//ash-rs/keybinding:keybinding_sources",
+        "//app-rs/markdown:markdown_sources",
+        "//app-rs/scm:scm_sources",
+        "//app-rs/keybindings:keybindings_sources",
+        "//app-rs/session:session_sources",
+        "//app-rs/settings:settings_sources",
+        "//app-rs/shell-completion:shell-completion_sources",
+        "//app-rs/terminal:terminal_sources",
+        "//app-rs/terminal-runtime:terminal-runtime_sources",
+        "//app-rs/text-file:text-file_sources",
+        "//app-rs/theme:theme_sources",
+        "//app-rs/ui-components:ui-components_sources",
+        "//app-rs/workbench:workbench_sources",
+        "//app-rs/zui:zui_sources",
+    ],
+)
+
+filegroup(
+    name = "app_package_contract",
+    srcs = [
+        "packaging/app-package-contract.json",
+        "packaging/app-signing-policy.json",
+    ],
+)
+
+filegroup(
+    name = "app_package_tool",
+    srcs = [
+        "//build/app_rs:python_sources",
+    ],
+)
+
+filegroup(
+    name = "app_release_inputs",
+    srcs = [
+        ":app_package_contract",
+        ":app_package_tool",
+        ":app_sources",
+    ],
+)
+
+py_test(
+    name = "app_boundary_test",
+    srcs = ["//build/app_rs:check_boundary.py"],
+    main = "//build/app_rs:check_boundary.py",
+    args = [
+        "$(location //:Cargo.toml)",
+        "$(location Cargo.toml)",
+        "$(location //:Cargo.lock)",
+    ],
+    data = [
+        ":app_sources",
+        "//:Cargo.lock",
+        "//:Cargo.toml",
+        "Cargo.toml",
+        "//build/app_rs:check_boundary.py",
+    ],
+    size = "small",
+)
+
+py_test(
+    name = "app_package_test",
+    srcs = [
+        "//build/app_rs:python_sources",
+        "//build/app_rs:test_package.py",
+        "//build/remote:test_bundle.py",
+        "//build/runtime:test_support.py",
+    ],
+    main = "//build/app_rs:test_package.py",
+    data = [
+        "//:Cargo.toml",
+        "//app-rs:app_package_contract",
+        "//ash-rs/app-server-protocol:schema/metadata.json",
+        "//build/runtime:layout.json",
+        "//build/runtime:assembly_sources",
+        "//:runtime_package_inputs",
+        "//ash-rs/skills:built-in-skills",
+        "//extensions:artifacts",
+        "//third_party/ripgrep:LICENSE-MIT",
+        "//third_party/ripgrep:UNLICENSE",
+        "//third_party/tgrep:LICENSE",
+        "//ash-rs/uds:LICENSE-APACHE",
+        "//ash-rs/uds:NOTICE",
+        "//ash-rs/vendor/mxc:LICENSE.md",
+        "//ash-rs/windows-sandbox:LICENSE-APACHE",
+        "//ash-rs/windows-sandbox:NOTICE",
+        "Cargo.toml",
+    ],
+    size = "small",
+)
+
+py_test(
+    name = "remote_runtime_bundle_test",
+    srcs = [
+        "//build/remote:python_sources",
+        "//build/remote:test_bundle.py",
+    ],
+    main = "//build/remote:test_bundle.py",
+    size = "small",
+)
+
+py_test(
+    name = "app_release_contract_test",
+    srcs = ["//build/app_rs:check_contract.py"],
+    main = "//build/app_rs:check_contract.py",
+    args = [
+        "$(location packaging/app-package-contract.json)",
+        "$(location packaging/app-signing-policy.json)",
+    ],
+    data = [
+        "packaging/app-package-contract.json",
+        "packaging/app-signing-policy.json",
+        "//build/app_rs:check_contract.py",
+    ],
+    size = "small",
+)
+
+py_test(
+    name = "app_signing_test",
+    srcs = [
+        "//build/app_rs:python_sources",
+        "//build/app_rs:test_signing.py",
+        "//build/remote:test_bundle.py",
+        "//build/runtime:test_support.py",
+    ],
+    main = "//build/app_rs:test_signing.py",
+    data = [
+        "//:Cargo.toml",
+        "//app-rs:app_package_contract",
+        "//ash-rs/app-server-protocol:schema/metadata.json",
+        "//build/runtime:layout.json",
+        "//build/runtime:assembly_sources",
+        "//:runtime_package_inputs",
+        "//ash-rs/skills:built-in-skills",
+        "//extensions:artifacts",
+        "//third_party/ripgrep:LICENSE-MIT",
+        "//third_party/ripgrep:UNLICENSE",
+        "//third_party/tgrep:LICENSE",
+        "//ash-rs/uds:LICENSE-APACHE",
+        "//ash-rs/uds:NOTICE",
+        "//ash-rs/vendor/mxc:LICENSE.md",
+        "//ash-rs/windows-sandbox:LICENSE-APACHE",
+        "//ash-rs/windows-sandbox:NOTICE",
+        "Cargo.toml",
+    ],
+    size = "small",
+)
+
+test_suite(
+    name = "app_ci",
+    tests = [
+        ":remote_runtime_bundle_test",
+        ":app_boundary_test",
+        ":app_package_test",
+        ":app_release_contract_test",
+        ":app_signing_test",
+    ],
+)

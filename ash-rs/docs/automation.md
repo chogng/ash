@@ -55,8 +55,8 @@ flowchart TD
 | `ash-rs/core` | 执行 Thread、Turn、模型调用和工具操作 | 不计算“下一次周一几点运行” |
 | `ash-rs/app-server-daemon` | 每个 profile 的后台进程生命周期与保活 | 不解释计划规则；不得因窗口连接清空而丢失调度能力 |
 | `ash-rs/app-server` | 产品无关的后端命令入口和进程装配 | 不依赖 `ash-code` 的产品入口 |
-| `ash-ts/src/ash/workbench/contrib/automation/` | 创建、编辑、暂停、立即运行、运行历史和可访问交互 | 不持久化权威计划，不持有执行计时器 |
-| `ash-ts/src/ash/platform/automation/` | 前端领域接口、订阅通知和 App Server adapter | 生成协议类型止于 adapter，不传入普通界面代码 |
+| `app-ts/src/ash/workbench/contrib/automation/` | 创建、编辑、暂停、立即运行、运行历史和可访问交互 | 不持久化权威计划，不持有执行计时器 |
+| `app-ts/src/ash/platform/automation/` | 前端领域接口、订阅通知和 App Server adapter | 生成协议类型止于 adapter，不传入普通界面代码 |
 | `app`、`ash-code` 的对应产品界面 | 消费同一后端能力并呈现产品交互 | 不另建调度器或计划存储 |
 
 automation 通过窄的执行请求和结果契约与现有 Agent 能力协作，App Server 完成装配。core 不反向依赖 automation；automation 不导入 App Server 传输实现。没有独立消费者前，不另建通用 scheduler、calendar 或 clock crate。
@@ -140,9 +140,9 @@ automation 通过窄的执行请求和结果契约与现有 Agent 能力协作�
 | [管理协议](../app-server-protocol/src/protocol/automation.rs) | list、write、delete、run、runs、stop 六个方法；`automation/changed` 通知 |
 | [Agent 执行接入](../app-server/src/server/automation_execution.rs) | 稳定命令身份查找原 Thread/Turn，使用已有执行和中断入口；结果未确认时不新建另一次执行 |
 | [后台宿主](../app-server/src/managed.rs) | 启用中且有下次运行的计划，以及未结束运行，均阻止空闲退出 |
-| [管理面板](../../ash-ts/src/ash/workbench/contrib/automation/browser/automationViewPane.ts) | 创建、编辑、暂停、立即运行、停止、历史及打开关联 Chat |
-| [Renderer 协议客户端](../../ash-ts/src/ash/platform/app-server/browser/appServerProtocolClient.ts) | 每个窗口独立连接，负责初始化、生成协议解码、请求表、通知和反向请求 |
-| [Main 连接载体](../../ash-ts/src/ash/platform/app-server/electron-main/appServerConnectionRelay.ts) | 启动连接进程、传递 MessagePort、限制帧大小与队列；不分派后端方法 |
+| [管理面板](../../app-ts/src/ash/workbench/contrib/automation/browser/automationViewPane.ts) | 创建、编辑、暂停、立即运行、停止、历史及打开关联 Chat |
+| [Renderer 协议客户端](../../app-ts/src/ash/platform/app-server/browser/appServerProtocolClient.ts) | 每个窗口独立连接，负责初始化、生成协议解码、请求表、通知和反向请求 |
+| [Main 连接载体](../../app-ts/src/ash/platform/app-server/electron-main/appServerConnectionRelay.ts) | 启动连接进程、传递 MessagePort、限制帧大小与队列；不分派后端方法 |
 
 Workbench 使用命令面板的 **Open Automations** 打开管理面板。后端通过 `contracts.automation.version = 1` 发布能力；没有该能力的宿主不显示管理入口。计划明确保存执行目录和新建或继续对话的目标，不随活动窗口改变。
 

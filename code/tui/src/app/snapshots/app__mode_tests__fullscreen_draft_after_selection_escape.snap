@@ -1,0 +1,20 @@
+---
+source: code/tui/src/app/mode_tests.rs
+expression: render(&app)
+---
+  .                          [— / —] [Dashboard]  
+                                                  
+                                                  
+● focus message 05                                
+                                                  
+● focus message 06                                
+                                                  
+● focus message 07                                
+                                                  
+             Jump to bottom (click) ↓             
+  ⏸ ask permissions on                            
+  ╭────────────────────────────────────────────╮  
+  │ > x                                        │  
+  ╰────────────────────────── Automatic model ─╯  
+                                                  
+  Enter send  ·  shift+tab permissions  ·  /home

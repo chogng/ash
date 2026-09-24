@@ -1,0 +1,20 @@
+{
+  "formatVersion": 1,
+  "product": "app",
+  "binaryByPlatform": {
+    "darwin": "bin/app",
+    "linux": "bin/app",
+    "windows": "bin/app.exe"
+  },
+  "build": {
+    "manifest": "app-rs/Cargo.toml",
+    "package": "app",
+    "binary": "app"
+  },
+  "signingPolicy": "app-rs/packaging/app-signing-policy.json",
+  "signatureRecord": "app-signature.json",
+  "optionalRemoteRuntimeCatalog": "ash-remote-runtimes/catalog.json",
+  "optionalNetworkRemoteRuntimeCatalog": "credential-free HTTPS catalog.json URL plus SHA-256 compiled into the signed binary",
+  "remoteRuntimeTrustBinding": "The catalog SHA-256 must be compiled into the signed app binary; each runtime archive is then bound by the authenticated catalog.",
+  "releaseInvariant": "The signed binary digest and every declared Remote runtime catalog binding must be verified before publication."
+}

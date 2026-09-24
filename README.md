@@ -4,9 +4,9 @@ Ash is a Rust-first agent workspace with three product lines sharing one App Ser
 
 | Product | Description | Source | Start |
 | --- | --- | --- | --- |
-| `ash code` | CLI and TUI | [`ash-code`](ash-code) | `just ash` |
-| `ash` | Electron Desktop | [`ash-ts`](ash-ts) | `just ash-desktop` |
-| `app` | Native Rust Desktop terminal | [`app`](app) | `just app` |
+| `ash code` | Terminal UI | [`code`](code) | `just ash` |
+| `ash` | Electron Desktop | [`app-ts`](app-ts) | `just ash-desktop` |
+| `app` | Rust Desktop terminal | [`app-rs`](app-rs) | `just app` |
 
 `ash-rs` contains the shared Rust backend. The product-neutral backend executable is
 `ash-app-server`, owned by [`ash-app-server`](ash-rs/app-server/README.md). Electron's `code` and
@@ -92,7 +92,7 @@ The full Web mode is a local development integration, not a deployable Web servi
 pnpm dev:stanza
 ```
 
-然后打开 `http://127.0.0.1:5199/build/desktop/vite/stanza/index.html`。在 VS Code 中也可以直接选择
+然后打开 `http://127.0.0.1:5199/build/app_ts/vite/stanza/index.html`。在 VS Code 中也可以直接选择
 `Stanza Editor - Standalone` 配置按 F5；它会自动启动同一个 Vite 任务。页面把完整 API 暴露为
 `globalThis.stanza`，可在浏览器控制台检查 `stanza.editor.getEditors()` 和
 `stanza.editor.getModels()`。
@@ -106,10 +106,11 @@ just app
 ## Repository map
 
 - [`ash-rs`](ash-rs): shared protocol, App Server, domain, storage, execution, and runtime crates.
-- [`ash-code`](ash-code): CLI command host and TUI presentation.
-- [`ash-ts`](ash-ts): Electron Main, Preload, Renderer, and Browser Workbench.
+- [`cli`](cli): user-facing `ash` command, including shared management and terminal launch.
+- [`code`](code): terminal presentation and terminal-specific capabilities.
+- [`app-ts`](app-ts): Electron Main, Preload, Renderer, and Browser Workbench.
 - [`build`](build): checked-in build orchestration; generated artifacts go to `.build/`.
-- [`app`](app): native window, terminal, renderer, and product UI.
+- [`app-rs`](app-rs): Rust window, terminal, renderer, and product UI.
 - [`docs`](docs): architecture and system documentation; start with [`docs/README.md`](docs/README.md).
 
 ## Where to read next
@@ -117,12 +118,12 @@ just app
 - [Ash user documentation](https://github.com/chogng/ash-docs)
 - [Product lines and host boundaries](docs/product-lines.md)
 - [System architecture](docs/architecture.md)
-- [Ash Code documentation](ash-code/README.md)
+- [Ash Code documentation](code/README.md)
 - [Electron Desktop architecture](docs/ash-desktop-architecture.md)
 - [Shared Rust architecture](docs/ash-rs-architecture.md)
 - [Remote development](docs/remote-development.md)
-- [Packaging](build/package/README.md)
-- [`app` release graph](app/docs/app-release-graph.md)
+- [Packaging](build/runtime/README.md)
+- [`app` release graph](app-rs/docs/app-release-graph.md)
 
 Crate-level implementation details live in the `README.md` next to each crate.
 
@@ -130,4 +131,4 @@ Crate-level implementation details live in the `README.md` next to each crate.
 
 Ash's original code and materials are proprietary and all rights reserved. See [`LICENSE`](LICENSE).
 Third-party components remain governed by their own licenses and notices, including
-[`ash-ts/THIRD_PARTY_NOTICES.md`](ash-ts/THIRD_PARTY_NOTICES.md).
+[`app-ts/THIRD_PARTY_NOTICES.md`](app-ts/THIRD_PARTY_NOTICES.md).

@@ -94,7 +94,7 @@ flowchart TD
 | --- | --- | --- | --- | --- |
 | 扩展系统 | 外部能力如何被发现、激活和撤销？ | Core Plugins 聚合来源并管理 package lifecycle，各领域消费 capability；Plugin 只定义 bundle，Connector 管账号，MCP 管协议，Skill 管指令 | 安装、领域授权、运行时和 Agent 消费是否分层 | [`core-plugins.md`](../ash-rs/docs/core-plugins.md)、[`plugins.md`](plugins.md)、[`connectors.md`](connectors.md)、[`skills.md`](skills.md)、[`mcp.md`](mcp.md) |
 | App Server 与协议 | 产品入口如何调用同一套权威能力？ | 唯一外部进入/输出边界、对外方法、DTO、事件、订阅、版本和客户端契约 | 客户端是否绕过门禁，或协议层是否偷偷拥有产品决定或持久化规则 | [`ash-app-server-api.md`](ash-app-server-api.md)、[`app-server-client.md`](app-server-client.md)、[`protocol.md`](protocol.md) |
-| 产品界面 | 用户如何观察和控制这些系统？ | Desktop、CLI、TUI 的交互、呈现和平台适配 | 界面是否复制 Core 状态或在本地发明业务规则 | [`ash-desktop-architecture.md`](ash-desktop-architecture.md)、[`ash-code`](../ash-code/README.md) |
+| 产品界面 | 用户如何观察和控制这些系统？ | Desktop、CLI、TUI 的交互、呈现和平台适配 | 界面是否复制 Core 状态或在本地发明业务规则 | [`ash-desktop-architecture.md`](ash-desktop-architecture.md)、[`ash-code`](../code/README.md) |
 
 系统名称不是按照 crate 数量划分的。一个系统可以由多个 crate 实现，一个 crate 也可能只是某个
 系统的适配器。真正的边界由权威状态、最终决定、执行责任和失败语义决定。

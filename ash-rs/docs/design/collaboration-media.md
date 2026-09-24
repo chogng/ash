@@ -89,7 +89,7 @@ LiveKit 的 SFU（选择性转发服务器）负责将参与者发布的音视�
 - `livekit-api` 负责 LiveKit API 适配；成员能否入房由 `call` 判断，密钥由已有凭据存储提供。
 - `voice-agent` 使用 App Server 注入的任务执行接口，不复制 Core 的工具循环、权限审批或 Thread 存储。
 - App Server 只做产品装配、协议转换和资源绑定；通话规则归 `call`，AI 音频协调归 `voice-agent`。
-- `ash-ts` 与 `app` 消费共享业务协议；不通过 `ash-code` 启动或调用这些能力。
+- `app-ts` 与 `app` 消费共享业务协议；不通过 `ash-code` 启动或调用这些能力。
 
 `voice-agent` 单独成 crate，是为了隔离模型与媒体的组合依赖和生命周期。它默认由选定执行主机的 App Server 托管，不要求用户额外部署一个 AI 服务。
 
@@ -316,8 +316,8 @@ rustc -vV
 ```powershell
 just test ash-screen-capture --lib window_frames_resize_stop_and_close_release_capture -- --ignored
 just test ash-voice-host --features host
-pnpm --dir ash-ts run pretest:smoke:desktop
-pnpm --dir ash-ts exec playwright test --project=electron-app-server test/smoke/areas/call/call.spec.ts
+pnpm --dir app-ts run pretest:smoke:desktop
+pnpm --dir app-ts exec playwright test --project=electron-app-server test/smoke/areas/call/call.spec.ts
 ```
 
 屏幕共享的双窗口验收必须使用两个独立产品窗口和一个真实 LiveKit 房间，逐项确认：

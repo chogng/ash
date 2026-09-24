@@ -12,7 +12,7 @@ GUI 与 Desktop 都可以指图形应用，不能直接作为运行时分类。�
 | --- | --- | --- | --- |
 | TUI | `ash-code` | TUI 进程、后端及其工具进程；终端正文、缓存、订阅和任务的存活量 | 终端交互、任务阶段标记、TUI 对象计数及进程内分配证据采集 |
 | Rust 图形端 | `app` | 图形进程、后端及其工具进程；窗口、UI 对象、图片与字体缓存、GPU 资源 | `zui` 与各能力的对象计数、缓存与渲染资源统计、产品交互 |
-| Electron 桌面端 | `ash-ts` | Main、各 Renderer、实际存在的 GPU/utility/扩展进程，以及后端进程树 | Main 登记 Electron 进程身份；各运行时提供 JS 堆、DOM、监听器及堆快照证据；Workbench 展示 |
+| Electron 桌面端 | `app-ts` | Main、各 Renderer、实际存在的 GPU/utility/扩展进程，以及后端进程树 | Main 登记 Electron 进程身份；各运行时提供 JS 堆、DOM、监听器及堆快照证据；Workbench 展示 |
 
 Rust 图形端的纹理、缓冲区和 GPU 分配必须与进程常驻内存分开记录；资源估算量也不能冒充驱动实际占用。Electron 必须区分进程与窗口，不能把所有 Renderer 合并后判断泄漏，也不能假设一个窗口始终对应一个固定 PID。
 
@@ -76,7 +76,7 @@ flowchart LR
 
 ## 当前代码与验收边界
 
-共享实现位于 [memory-diagnostics](../memory-diagnostics/README.md)，包含[进程采样](../memory-diagnostics/src/process_resources.rs)、[会话与分析](../memory-diagnostics/src/session.rs)及有界导出。TUI 原 `src/host/process_resources.rs` 与对应测试已迁入该 crate，TUI 保留显示需求与[读数呈现](../../ash-code/tui/src/status/resources.rs)。
+共享实现位于 [memory-diagnostics](../memory-diagnostics/README.md)，包含[进程采样](../memory-diagnostics/src/process_resources.rs)、[会话与分析](../memory-diagnostics/src/session.rs)及有界导出。TUI 原 `src/host/process_resources.rs` 与对应测试已迁入该 crate，TUI 保留显示需求与[读数呈现](../../code/tui/src/status/resources.rs)。
 
 协议提供 `memoryDiagnostics/start`、`memoryDiagnostics/read`、`memoryDiagnostics/submit`、`memoryDiagnostics/stop`、`memoryDiagnostics/export`，能力版本为 `memoryDiagnostics: 1`。`memory/*` 专用于长期 Memory。导出复用有容量和过期时间的 `resource/read`、`resource/release`。App Server 按连接清理，并阻止断连后在途开始请求重新建立诊断。
 

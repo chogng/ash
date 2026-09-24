@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "app/**"
+      - "app-rs/**"
       - "ash-rs/**"
       - "build/**"
       - "bazel/**"
@@ -19,7 +19,7 @@ on:
       - ".github/workflows/bazel-boundary.yml"
   pull_request:
     paths:
-      - "app/**"
+      - "app-rs/**"
       - "ash-rs/**"
       - "build/**"
       - "bazel/**"
@@ -49,6 +49,9 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: .nvmrc
       - name: Set up Bazel
         uses: bazel-contrib/setup-bazel@c5acdfb288317d0b5c0bbd7a396a3dc868bb0f86 # v0.19.0
         with:
@@ -57,4 +60,4 @@ jobs:
           repository-cache: true
           cache-save: true
       - name: Test app boundary contract
-        run: bazel test //app:app_ci --test_output=errors
+        run: bazel test //app-rs:app_ci --test_output=errors --test_env=PATH

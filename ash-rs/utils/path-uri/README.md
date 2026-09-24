@@ -1,8 +1,8 @@
 # ash-utils-path-uri
 
 > 本 README 是 Rust `file:` URI 实现契约的 canonical owner。Desktop 通用资源 URI identity
-> 由 [`ash-ts/src/ash/base/common/uri.ts`](../../../ash-ts/src/ash/base/common/uri.ts) 与
-> [`resources.ts`](../../../ash-ts/src/ash/base/common/resources.ts) 拥有；跨层 ownership 与
+> 由 [`app-ts/src/ash/base/common/uri.ts`](../../../app-ts/src/ash/base/common/uri.ts) 与
+> [`resources.ts`](../../../app-ts/src/ash/base/common/resources.ts) 拥有；跨层 ownership 与
 > 当前状态见 [`docs/ash-desktop-architecture.md`](../../../docs/ash-desktop-architecture.md)；
 > 本机 filesystem normalization 由 [`ash-utils-path`](../path-utils/README.md) 拥有。
 

@@ -1,0 +1,8 @@
+load("//app-rs:defs.bzl", "app_rust_library")
+
+app_rust_library(
+    name = "terminal-runtime",
+    crate_name = "ash_terminal_runtime",
+    package_name = "app-rs/terminal-runtime",
+    unit_tests = True,
+)

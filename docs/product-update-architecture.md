@@ -47,7 +47,7 @@ Remote App Server，不跟随当前 Workspace 或 Environment 切换。
 | 更新领域 | 目标 `ash-rs/product-update` | 描述解析、签名验证、版本比较、目标选择、有界下载、摘要校验、检查调度、状态与错误 | UI、Electron IPC、窗口、启动入口 |
 | Electron update host | 目标 Rust update host + Electron Main adapter | 启动可信更新进程、接收类型化结果、调用 Desktop 安装与退出能力 | 解析发布规则、接受 Renderer 提供的路径 |
 | Rust Desktop 宿主 | `app` composition root 与 distribution adapter | 选择 app 安装器、协调窗口退出和重启 | 再实现一套签名与下载协议 |
-| Ash Code 宿主 | `ash-code/cli` | CLI 包安装、版本目录、启动入口切换、TUI 通知 | 把安装副作用放进 `ash-tui` |
+| Ash Code 宿主 | `cli` | CLI 包安装、版本目录、启动入口切换、TUI 通知 | 把安装副作用放进 `ash-tui` |
 | 三端 UI | Renderer、Rust GUI、TUI | 策略编辑、进度、成功、失败、重启操作 | 下载、校验、路径选择、文件替换 |
 
 crate 用来隔离共享更新能力和依赖，不代表所有产品必须使用同一个进程。Rust Desktop 与 CLI 可以
@@ -187,7 +187,7 @@ Electron 生命周期。
 
 `app` 直接组合共享更新领域，通过 product-specific installer 把 `ReadyToInstall` 转换成系统安装或
 版本切换。`zui` 可以保留 `UpdateHandle` 这类 UI 可调用 facade，但签名解析、HTTP 下载和摘要校验
-应从 `app/zui/src/services/update.rs` 迁出，避免 UI 基础设施成为发布规则 owner。
+应从 `app-rs/zui/src/services/update.rs` 迁出，避免 UI 基础设施成为发布规则 owner。
 
 Rust GUI 负责展示下载进度、错误和重启操作；app composition root 负责生命周期。窗口组件不直接
 持有 staging 路径或安装器。
@@ -239,11 +239,11 @@ Remote runtime 的下载、兼容握手、安装与回滚继续由 `ash-remote-c
 | 能力 | 当前实现 | 目标状态 |
 | --- | --- | --- |
 | Ash Code 策略 UI | `Latest / Stable / Never` 已在 TUI 实现 | 保留 UI，类型迁到共享领域后由 adapter 映射 |
-| Ash Code 更新 | CLI 已改用共享策略与签名验证；调度、下载、诊断和安装仍在 `ash-code/cli/src/update.rs` | 保留 CLI 安装 adapter，继续迁出通用调度、下载和诊断 |
-| Rust Desktop 更新 | `app/zui/src/services/update.rs` 已改用共享签名描述；HTTP staging 与安装 facade 仍在 `zui` | 继续迁出通用下载，`zui` 只保留 facade |
+| Ash Code 更新 | CLI 已改用共享策略与签名验证；调度、下载、诊断和安装仍在 `cli/src/update.rs` | 保留 CLI 安装 adapter，继续迁出通用调度、下载和诊断 |
+| Rust Desktop 更新 | `app-rs/zui/src/services/update.rs` 已改用共享签名描述；HTTP staging 与安装 facade 仍在 `zui` | 继续迁出通用下载，`zui` 只保留 facade |
 | Electron Desktop 更新 | 尚无完整产品更新调用链 | 增加 update host、Main adapter、Renderer service 与 UI |
 | 系统签名 | App 与 Ash Code 已共用 `build/lib/signing.py`；Ash Code macOS/Windows 发布会签完并验证每个可执行文件，macOS 压缩包还会公证 | Electron 打包和三端最终安装器接入同一入口；Desktop `.pkg` / `.dmg` 公证后附加票据，Windows 安装器再次签名 |
-| 更新描述签名 | `ash-code/update-sign` 已直接消费共享发布描述与 canonical encoding | 保留密钥输入和 release artifact adapter |
+| 更新描述签名 | `code/update-sign` 已直接消费共享发布描述与 canonical encoding | 保留密钥输入和 release artifact adapter |
 | 发布工作流 | Ash Code 已有系统签名、macOS 公证、最新版本描述签名和稳定版本晋升工作流 | 扩展为按 product/target 发布 Electron 与 Rust Desktop 产物 |
 | 共享更新 crate | `ash-rs/product-update` 已拥有策略、product/target/package 描述、签名与验证 | 继续迁入通用下载、调度、状态与错误 |
 
@@ -256,8 +256,8 @@ Remote runtime 的下载、兼容握手、安装与回滚继续由 `ash-remote-c
    fixture；签名工具、Ash Code 与 `zui` 已消费同一契约。
 2. 继续向 `ash-rs/product-update` 迁入通用下载、摘要、调度和诊断；保持 Ash Code 与 Rust
    Desktop 的用户行为不变。
-3. 把 `ash-code/cli` 收缩为版本目录、启动入口和 TUI notice adapter，删除本地重复逻辑。
-4. 把 `app/zui` 的签名和下载实现替换为共享领域；在 `app` composition root 接入安装生命周期。
+3. 把 `cli` 收缩为版本目录、启动入口和 TUI notice adapter，删除本地重复逻辑。
+4. 把 `app-rs/zui` 的签名和下载实现替换为共享领域；在 `app` composition root 接入安装生命周期。
 5. 为 Electron Desktop 增加本机 update host、Main typed adapter、Renderer service 和 UI；验证
    Renderer 无路径权限且 Remote workspace 不改变更新目标。
 6. 三端全部接入后删除旧 DTO、解析器、检查缓存和签名测试副本，只保留共享 conformance fixture

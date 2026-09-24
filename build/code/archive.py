@@ -19,8 +19,8 @@ sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from build.lib.targets import target_spec  # noqa: E402
 from build.lib.archive import open_tar_gz  # noqa: E402
-from build.package.layout import require_verified_system_signing  # noqa: E402
-from build.package.layout import validate_package_directory  # noqa: E402
+from build.runtime.layout import require_verified_system_signing  # noqa: E402
+from build.runtime.layout import validate_package_directory  # noqa: E402
 
 
 def create_archive(package: Path, output: Path) -> Path:

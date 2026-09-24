@@ -8,7 +8,7 @@ exports_files(["foreign_platform_binary.bzl"])
 # consumer for the generic transition rule without entering the normal build.
 foreign_platform_binary(
     name = "ash-cli-windows-x86_64-gnullvm",
-    binary = "//ash-code/cli:ash",
+    binary = "//cli:ash",
     platform = "//:windows_x86_64_gnullvm",
     tags = ["manual"],
     target_compatible_with = ["@platforms//os:windows"],

@@ -1,0 +1,36 @@
+---
+source: code/tui/src/app/session_manager_tests.rs
+expression: render(&app)
+---
+  .                                                                            [— / —] [Dashboard]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ⏸ ask permissions on                                                                 ← Dashboard
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────╮
+  │ >                                                                                            │
+  ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯
+
+  Enter send  ·  shift+tab permissions  ·  /home

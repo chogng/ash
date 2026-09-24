@@ -402,14 +402,14 @@ target、非规范/符号链接路径、大小或 SHA-256 不匹配，并在远�
 开发/发布包可选择离线 bundle：
 
 ```text
-node build/package/prepare.ts \
+node build/runtime/prepare.ts \
   --remote-runtime-bundle <bundle-directory>
 ```
 
 也可生成只绑定网络发布目录的轻量产品包；URL 与摘要随后由平台应用签名认证：
 
 ```text
-node build/package/prepare.ts \
+node build/runtime/prepare.ts \
   --remote-runtime-catalog-url https://releases.example/ash/<version>/catalog.json \
   --remote-runtime-catalog-sha256 <catalog-digest>
 ```
@@ -422,7 +422,7 @@ Desktop Main 仍可通过一组 all-or-nothing 的受信环境覆盖接入单个
 
 standalone app 的发布路径不使用该 Desktop override。`build/remote/bundle.py` 把多个
 canonical package directory 序列化成确定性 rootless archives 与 `catalog.json`；
-`build/app/build.py --remote-runtime-bundle` 将 catalog SHA-256 编译进 app binary，并把 bundle
+`build/app_rs/build.py --remote-runtime-bundle` 将 catalog SHA-256 编译进 app binary，并把 bundle
 放到 package 资源中。网络包改用 `--remote-runtime-catalog-url` 与
 `--remote-runtime-catalog-sha256`，把 URL 和摘要同时编译进 binary，不需要附带 archive。staging/signing
 会检查 binary 中确实存在所选 binding，signature record 再记录 catalog digest。运行时先验证 catalog
@@ -474,90 +474,90 @@ canonical package directory 序列化成确定性 rootless archives 与 `catalog
 
 ## 实现证据
 
-- Remote URI 与 authority：`ash-ts/src/ash/platform/remote/common/remote.ts`
-- SSH launcher：`ash-ts/src/ash/platform/remote/electron-main/sshAppServerProcessLauncher.ts`
+- Remote URI 与 authority：`app-ts/src/ash/platform/remote/common/remote.ts`
+- SSH launcher：`app-ts/src/ash/platform/remote/electron-main/sshAppServerProcessLauncher.ts`
 - Desktop Remote Terminal lease owner：
-  `ash-ts/src/ash/platform/terminal/electron-main/reconnectableTerminalMainService.ts`
+  `app-ts/src/ash/platform/terminal/electron-main/reconnectableTerminalMainService.ts`
 - Desktop Terminal 恢复投影：
-  `ash-ts/src/ash/workbench/services/terminal/browser/terminalService.ts`
-- Desktop runtime probe：`ash-ts/src/ash/platform/remote/electron-main/sshAppServerProcessLauncher.ts`
-- Desktop install adapter：`ash-ts/src/ash/platform/remote/electron-main/ashCliRemoteRuntimeInstaller.ts`
-- Desktop signed catalog binding/fetch/provisioner：`ash-ts/src/ash/platform/remote/electron-main/packagedRemoteRuntimeCatalog.ts`、
-  `ash-ts/src/ash/platform/remote/electron-main/ashCliRemoteRuntimeFetcher.ts`、
-  `ash-ts/src/ash/platform/remote/electron-main/ashCliRemoteRuntimeProvisioner.ts`
+  `app-ts/src/ash/workbench/services/terminal/browser/terminalService.ts`
+- Desktop runtime probe：`app-ts/src/ash/platform/remote/electron-main/sshAppServerProcessLauncher.ts`
+- Desktop install adapter：`app-ts/src/ash/platform/remote/electron-main/ashCliRemoteRuntimeInstaller.ts`
+- Desktop signed catalog binding/fetch/provisioner：`app-ts/src/ash/platform/remote/electron-main/packagedRemoteRuntimeCatalog.ts`、
+  `app-ts/src/ash/platform/remote/electron-main/ashCliRemoteRuntimeFetcher.ts`、
+  `app-ts/src/ash/platform/remote/electron-main/ashCliRemoteRuntimeProvisioner.ts`
 - Desktop 安装进度状态、窄 IPC 与取消：
-  `ash-ts/src/ash/platform/remote/electron-main/remoteRuntimeInstallProgressMainService.ts`、
-  `ash-ts/src/ash/platform/remote/electron-main/remoteRuntimeInstallProgressIpc.ts`、
-  `ash-ts/src/ash/platform/remote/electron-main/ashCliRemoteCommand.ts`
+  `app-ts/src/ash/platform/remote/electron-main/remoteRuntimeInstallProgressMainService.ts`、
+  `app-ts/src/ash/platform/remote/electron-main/remoteRuntimeInstallProgressIpc.ts`、
+  `app-ts/src/ash/platform/remote/electron-main/ashCliRemoteCommand.ts`
 - Desktop Workbench 前安装窗口：
-  `ash-ts/src/ash/code/electron-browser/remote-runtime-install/remoteRuntimeInstall.ts`、
-  `ash-ts/src/ash/platform/remote/electron-main/electronRemoteRuntimeInstallWindow.ts`
+  `app-ts/src/ash/code/electron-browser/remote-runtime-install/remoteRuntimeInstall.ts`、
+  `app-ts/src/ash/platform/remote/electron-main/electronRemoteRuntimeInstallWindow.ts`
 - Desktop Remote 启动门禁与窗口上下文：
-  `ash-ts/src/ash/platform/remote/electron-main/remoteRuntimeBootstrapMainService.ts`、
-  `ash-ts/src/ash/platform/remote/electron-main/remoteWindowMainContext.ts`、
-  `ash-ts/src/ash/platform/remote/electron-main/electronRemoteWindowMainHost.ts`
-- Desktop profile adapter：`ash-ts/src/ash/platform/remote/electron-main/ashCliRemoteConnectionProfiles.ts`
+  `app-ts/src/ash/platform/remote/electron-main/remoteRuntimeBootstrapMainService.ts`、
+  `app-ts/src/ash/platform/remote/electron-main/remoteWindowMainContext.ts`、
+  `app-ts/src/ash/platform/remote/electron-main/electronRemoteWindowMainHost.ts`
+- Desktop profile adapter：`app-ts/src/ash/platform/remote/electron-main/ashCliRemoteConnectionProfiles.ts`
 - Desktop named-connection adapter/IPC 与多窗口打开：
-  `ash-ts/src/ash/platform/remote/electron-main/ashCliRemoteConnections.ts`、
-  `ash-ts/src/ash/platform/remote/electron-main/remoteConnectionIpc.ts`、
-  `ash-ts/src/ash/code/electron-main/workbenchWindowRegistry.ts`、
-  `ash-ts/src/ash/code/electron-main/electronWindowLaunch.ts`；窗口 registry、第二实例参数和真实
-  Electron 双 Workbench 覆盖分别位于 `ash-ts/src/ash/code/test/electron-main/` 与
-  `ash-ts/test/smoke/areas/windows/multi-workbench.spec.ts`
-- Desktop saved-host Quick Pick 与图形管理器：`ash-ts/src/ash/workbench/contrib/remote/browser/remoteActions.ts`、
-  `ash-ts/src/ash/workbench/contrib/remote/browser/remoteConnectionManagement.ts`
+  `app-ts/src/ash/platform/remote/electron-main/ashCliRemoteConnections.ts`、
+  `app-ts/src/ash/platform/remote/electron-main/remoteConnectionIpc.ts`、
+  `app-ts/src/ash/code/electron-main/workbenchWindowRegistry.ts`、
+  `app-ts/src/ash/code/electron-main/electronWindowLaunch.ts`；窗口 registry、第二实例参数和真实
+  Electron 双 Workbench 覆盖分别位于 `app-ts/src/ash/code/test/electron-main/` 与
+  `app-ts/test/smoke/areas/windows/multi-workbench.spec.ts`
+- Desktop saved-host Quick Pick 与图形管理器：`app-ts/src/ash/workbench/contrib/remote/browser/remoteActions.ts`、
+  `app-ts/src/ash/workbench/contrib/remote/browser/remoteConnectionManagement.ts`
 - Desktop 手动重连与 runtime 回滚协调：
-  `ash-ts/src/ash/platform/remote/electron-main/remoteConnectionRecoveryCoordinator.ts`
-- Desktop 回滚命令与无路径 IPC：`ash-ts/src/ash/workbench/contrib/remote/browser/remoteActions.ts`、
-  `ash-ts/src/ash/platform/remote/common/remoteAgentApi.ts`
-- App Server lifecycle：`ash-ts/src/ash/platform/app-server/electron-main/app-server-supervisor.ts`
-- Workspace 参数解析：`ash-ts/src/ash/platform/workspaces/electron-main/workspacesMainService.ts`
-- Workbench service：`ash-ts/src/ash/workbench/services/remote/common/remoteAgentService.ts`
-- Remote contribution：`ash-ts/src/ash/workbench/contrib/remote/browser/remote.contribution.ts`
+  `app-ts/src/ash/platform/remote/electron-main/remoteConnectionRecoveryCoordinator.ts`
+- Desktop 回滚命令与无路径 IPC：`app-ts/src/ash/workbench/contrib/remote/browser/remoteActions.ts`、
+  `app-ts/src/ash/platform/remote/common/remoteAgentApi.ts`
+- App Server lifecycle：`app-ts/src/ash/platform/app-server/electron-main/app-server-supervisor.ts`
+- Workspace 参数解析：`app-ts/src/ash/platform/workspaces/electron-main/workspacesMainService.ts`
+- Workbench service：`app-ts/src/ash/workbench/services/remote/common/remoteAgentService.ts`
+- Remote contribution：`app-ts/src/ash/workbench/contrib/remote/browser/remote.contribution.ts`
 - Desktop Remote Debug Workspace/源码 authority：
-  `ash-ts/src/ash/workbench/services/debug/browser/debugService.ts`、
-  `ash-ts/src/ash/workbench/services/debug/browser/debugAdapterSession.ts`、
-  `ash-ts/src/ash/workbench/contrib/debug/browser/debugViewPane.ts`
+  `app-ts/src/ash/workbench/services/debug/browser/debugService.ts`、
+  `app-ts/src/ash/workbench/services/debug/browser/debugAdapterSession.ts`、
+  `app-ts/src/ash/workbench/contrib/debug/browser/debugViewPane.ts`
 - Shared Rust Remote identity/SSH/Tunnel primitives：`ash-rs/remote`、`ash-rs/remote-connections`、
   `ash-rs/remote-host`
 - Shared platform probe/package installer：`ash-rs/remote-connections/src/install.rs`
 - Shared authenticated local catalog/network updater：`ash-rs/remote-connections/src/catalog.rs`、
   `ash-rs/remote-connections/src/runtime_updater.rs`
 - Shared named Remote target catalog：`ash-rs/remote-connections/src/connection_catalog.rs`
-- Shared catalog CLI boundary：`ash-code/cli/src/remote_connections.rs`
-- ash code SSH TUI composition：`ash-code/cli/src/remote_connect.rs`
-- ash code managed runtime preparation/package binding：`ash-code/cli/src/remote_connect_runtime.rs`
-- ash code CLI-owned TUI reconnect policy：`ash-code/cli/src/remote_connect_tui.rs`
-- ash code 本机进程级 SSH/broker/install 验证：`ash-code/cli/tests/remote_connect.rs`
-- ash code PTY 交互断线/恢复验证：`ash-code/cli/tests/remote_connect_interactive.rs`
-- ash code transport-neutral recovery handoff：`ash-code/tui/src/app/recovery.rs`、
-  `ash-code/tui/src/sessions/active.rs`
-- Shared runtime fetch CLI boundary：`ash-code/cli/src/remote_fetch.rs`
+- Shared catalog CLI boundary：`cli/src/remote_connections.rs`
+- ash code SSH TUI composition：`cli/src/remote_connect.rs`
+- ash code managed runtime preparation/package binding：`cli/src/remote_connect_runtime.rs`
+- ash code CLI-owned TUI reconnect policy：`cli/src/remote_connect_tui.rs`
+- ash code 本机进程级 SSH/broker/install 验证：`cli/tests/remote_connect.rs`
+- ash code PTY 交互断线/恢复验证：`cli/tests/remote_connect_interactive.rs`
+- ash code transport-neutral recovery handoff：`code/tui/src/app/recovery.rs`、
+  `code/tui/src/sessions/active.rs`
+- Shared runtime fetch CLI boundary：`cli/src/remote_fetch.rs`
 - Shared atomic connection profiles：`ash-rs/remote-connections/src/profile_store.rs`
-- app named connection CLI：`app/src/features/remote/remote_connection_cli.rs`
-- app connection picker/process launcher：状态与界面由 `app/settings/remote/remote_connection_picker.rs` 持有；产品输入、进程和窗口启动接线位于 `app/src/features/remote/remote_connection_picker_input.rs`、`app/src/features/remote/remote_connection_process.rs`、`app/src/features/remote/remote_connection_launch_input.rs`
-- app connection manager：状态与界面由 `app/settings/remote/remote_connection_manager.rs`、`app/settings/remote/remote_connection_manager_view.rs` 持有；产品输入和持久化接线位于 `app/src/features/remote/remote_connection_manager_input.rs`
-- app pre-window CLI launch progress protocol：`app/src/features/remote/launch_progress.rs`
-- app foreground loopback Tunnel CLI：`app/src/features/remote/remote_connection_tunnel.rs`；readiness gate 与恢复 supervisor：`ash-rs/remote-host`
-- app Tunnel adapter/manager：状态与界面由 `app/settings/remote/remote_tunnel_manager.rs`、`app/settings/remote/remote_tunnel_manager_view.rs` 持有；进程和产品输入接线位于 `app/src/features/remote/remote_tunnel_process.rs`、`app/src/features/remote/remote_tunnel_manager_input.rs`
+- app named connection CLI：`app-rs/src/features/remote/remote_connection_cli.rs`
+- app connection picker/process launcher：状态与界面由 `app-rs/settings/remote/remote_connection_picker.rs` 持有；产品输入、进程和窗口启动接线位于 `app-rs/src/features/remote/remote_connection_picker_input.rs`、`app-rs/src/features/remote/remote_connection_process.rs`、`app-rs/src/features/remote/remote_connection_launch_input.rs`
+- app connection manager：状态与界面由 `app-rs/settings/remote/remote_connection_manager.rs`、`app-rs/settings/remote/remote_connection_manager_view.rs` 持有；产品输入和持久化接线位于 `app-rs/src/features/remote/remote_connection_manager_input.rs`
+- app pre-window CLI launch progress protocol：`app-rs/src/features/remote/launch_progress.rs`
+- app foreground loopback Tunnel CLI：`app-rs/src/features/remote/remote_connection_tunnel.rs`；readiness gate 与恢复 supervisor：`ash-rs/remote-host`
+- app Tunnel adapter/manager：状态与界面由 `app-rs/settings/remote/remote_tunnel_manager.rs`、`app-rs/settings/remote/remote_tunnel_manager_view.rs` 持有；进程和产品输入接线位于 `app-rs/src/features/remote/remote_tunnel_process.rs`、`app-rs/src/features/remote/remote_tunnel_manager_input.rs`
 - app Remote bundle/build trust chain：`build/remote/bundle.py`、
-  `build/app/build.py`
+  `build/app_rs/build.py`
 - Optional headless Remote runtime：`ash-rs/remote-server`
 - Remote Terminal lease/attach：`ash-rs/exec-server/src/terminal.rs`、
-  `app/src/features/terminal/terminal_session/remote.rs`
-- Desktop Main Tunnel coordinator：`ash-ts/src/ash/platform/remote/electron-main/sshRemoteTunnelService.ts`
+  `app-rs/src/features/terminal/terminal_session/remote.rs`
+- Desktop Main Tunnel coordinator：`app-ts/src/ash/platform/remote/electron-main/sshRemoteTunnelService.ts`
 - Desktop Main Tunnel listener readiness/recovery 测试：
-  `ash-ts/src/ash/platform/remote/test/electron-main/sshRemoteTunnelService.test.ts`
+  `app-ts/src/ash/platform/remote/test/electron-main/sshRemoteTunnelService.test.ts`
 - Desktop Remote Browser URL/Tunnel adapter 与生命周期：
-  `ash-ts/src/ash/platform/browser/common/browserViewNavigation.ts`、
-  `ash-ts/src/ash/platform/browser/electron-main/browserViewMainService.ts`、
-  `ash-ts/src/ash/platform/remote/electron-main/remoteBrowserViewNavigationResolver.ts`
+  `app-ts/src/ash/platform/browser/common/browserViewNavigation.ts`、
+  `app-ts/src/ash/platform/browser/electron-main/browserViewMainService.ts`、
+  `app-ts/src/ash/platform/remote/electron-main/remoteBrowserViewNavigationResolver.ts`
 - Desktop Remote Browser mapping、失败、取消、Workspace fencing 与异步 host retirement 测试：
-  `ash-ts/src/ash/platform/remote/test/electron-main/remoteBrowserViewNavigationResolver.test.ts`、
-  `ash-ts/src/ash/platform/browser/test/electron-main/browserAutomationMainService.test.ts`
+  `app-ts/src/ash/platform/remote/test/electron-main/remoteBrowserViewNavigationResolver.test.ts`、
+  `app-ts/src/ash/platform/browser/test/electron-main/browserAutomationMainService.test.ts`
 - Desktop Ports 面板与 Tunnel event projection：
-  `ash-ts/src/ash/workbench/contrib/remote/browser/remotePortsViewPane.ts`、
-  `ash-ts/src/ash/workbench/contrib/remote/test/browser/remotePortsViewPane.test.ts`
+  `app-ts/src/ash/workbench/contrib/remote/browser/remotePortsViewPane.ts`、
+  `app-ts/src/ash/workbench/contrib/remote/test/browser/remotePortsViewPane.test.ts`
 
 ## 后续演进
 

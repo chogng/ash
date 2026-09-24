@@ -3,7 +3,7 @@
 > 本文是 Ash 编辑器扩展的跨层架构权威文档，明确区分两条当前边界：声明式静态 Editor
 > Extension 与 Ash 原生可执行 Editor Extension Host v1。静态目录实现见
 > [`ash-rs/extensions/README.md`](../ash-rs/extensions/README.md)，声明式 Workbench 投影见
-> [`ash-ts/src/ash/workbench/services/extensions/README.md`](../ash-ts/src/ash/workbench/services/extensions/README.md)，
+> [`app-ts/src/ash/workbench/services/extensions/README.md`](../app-ts/src/ash/workbench/services/extensions/README.md)，
 > 可执行进程与 RPC 实现见
 > [`ash-rs/editor-extension-host/README.md`](../ash-rs/editor-extension-host/README.md)。统一 Marketplace
 > artifact/capability 入口由 [`core-plugins.md`](../ash-rs/docs/core-plugins.md) 维护；legacy
@@ -358,10 +358,10 @@ cargo test --manifest-path Cargo.toml -p ash-extensions
 cargo test --manifest-path Cargo.toml -p ash-plugin
 cargo test --manifest-path Cargo.toml -p ash-core-plugins
 powershell -NoProfile -ExecutionPolicy Bypass -File ash-rs/editor-extension-host/check-standalone.ps1
-pnpm --dir ash-ts test:extensions
-pnpm --dir ash-ts typecheck:extensions
-pnpm --dir ash-ts test:unit
-pnpm --dir ash-ts test:build-tools
+pnpm --dir app-ts test:extensions
+pnpm --dir app-ts typecheck:extensions
+pnpm --dir app-ts test:unit
+pnpm --dir app-ts test:build-tools
 ```
 
 `test:extensions` 与 `typecheck:extensions` 覆盖静态链、Host transport/domain projection 与 Workbench provider seams。App Server runtime 当前由 sibling Rust tests 和 Host standalone suite 封住；根 workspace 仍需在缺失的本地 crate 恢复后补跑完整 `ash-app-server` package test。

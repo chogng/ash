@@ -3,6 +3,7 @@ load("//:defs.bzl", "ash_rust_crate")
 filegroup(
     name = "built-in-skills",
     srcs = glob(["assets/*/SKILL.md"]),
+    visibility = ["//visibility:public"],
 )
 
 ash_rust_crate(

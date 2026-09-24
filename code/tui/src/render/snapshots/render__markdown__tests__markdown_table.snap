@@ -1,0 +1,9 @@
+---
+source: code/tui/src/render/markdown_tests.rs
+assertion_line: 32
+expression: text
+---
+Name │   Result
+─────┼─────────
+中文 │ complete
+beta │  pending

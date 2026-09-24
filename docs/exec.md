@@ -208,12 +208,10 @@ pub enum ExecEntry {
     Fork { session_id: SessionId, parent_thread_id: ThreadId, title: String, input: Vec<InputItem> },
 }
 
-pub enum AppServerTarget {
-    Embedded(EmbeddedAppServerOptions),
-}
+// 宿主构造 ExecRunner 时提供 StdioAppServerCommand 和 ClientInfo。
 ```
 
-`AppServerTarget::Remote(RemoteAppServerOptions)` 仍是 Proposed。它将表示连接相同 App Server
+当前 CLI 通过 stdio 连接共享 profile 的 App Server。远程连接仍使用相同的 App Server
 contract，不表示 scheduler job protocol，也不表示 remote process executor。
 
 `ash-cli` 负责参数和帮助；`ash-exec` 负责这些参数解析后的运行语义。

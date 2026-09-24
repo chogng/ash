@@ -1,6 +1,0 @@
----
-source: ash-code/tui/src/sessions/completion_tests.rs
-expression: text
----
-/fork investigate independently
-Started session SESSION in the background. Results stay there. Open with /resume SESSION.

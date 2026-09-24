@@ -65,7 +65,7 @@ App Server adapter 还拒绝绝对路径和含 `..` component 的参数。
 
 canonical package builder 当前按 checksum-locked manifest 把 ripgrep 放到
 `ash-path/rg[.exe]`，并在 `ash-package.json` 记录版本和 digest；具体 staging contract 见
-[`build/package/README.md`](../../build/package/README.md)。本 crate 仍不信任
+[`build/runtime/README.md`](../../build/runtime/README.md)。本 crate 仍不信任
 metadata，也尚未执行版本/capability probe。Packaging 不能改变上述 executable validation、
 identity freeze 和 fail-closed 语义。Linux package 同时携带经过 source lock 构建的
 `ash-resources/bwrap`；它的 discovery/probe contract 由

@@ -1,0 +1,36 @@
+---
+source: cli/tests/support/tui_process.rs
+expression: screen
+---
+  <FIXTURE…>                                      …                            [— / —] [Dashboard]
+
+> 请创建 approved-by-tui.txt
+
+● Running write_file
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+○ Waiting for approval · 0m 00s total · ctrl+c to interrupt
+                                                                         shift+tab to cycle policy
+┌Approval required─────────────────────────────────────────────────────────────────────────────────┐
+│the action requires user approval                                                                 │
+│File read  ·  <FIXTURE>/profile/worktrees│
+│File write  ·  <FIXTURE>/profile/worktree│
+│> Approve once                                                                                    │
+│  Decline                                                                                         │
+│                                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+  Enter to confirm

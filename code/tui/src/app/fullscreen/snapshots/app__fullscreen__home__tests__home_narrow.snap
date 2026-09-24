@@ -1,0 +1,20 @@
+---
+source: code/tui/src/app/fullscreen/home_tests.rs
+expression: "text(&render(&app, 40, 16))"
+---
+  .                        [Dashboard]  
+                                        
+  ╭──────────────────────────────────╮  
+  │                                  │  
+  │  Ash Code v0.1.0                 │  
+  │  Dashboard                       │  
+  │  Settings                        │  
+  │  Help and shortcuts              │  
+  │> Quit                            │  
+  ╰──────────────────────────────────╯  
+  ⏸ ask permissions on                  
+  ╭──────────────────────────────────╮  
+  │ > Build anything                 │  
+  ╰──────────────── Automatic model ─╯  
+                                        
+  Enter select · Esc input

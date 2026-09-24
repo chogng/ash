@@ -1,0 +1,24 @@
+---
+source: code/tui/src/app/interaction_flow_tests.rs
+expression: "render(&app, 80, 20)"
+---
+  .                                                        [— / —] [Dashboard]
+
+
+
+
+
+
+┌Next step  (1/1)──────────────────────────────────────────────────────────────┐
+│How should the work continue?                                                 │
+│  Continue  Use the proposed approach                                         │
+│> Type your own answer  Answer in the input below                             │
+│> Keep the user draft                                                         │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  ╭──────────────────────────────────────────────────────────────────────────╮
+  │ > chat draft stays here                                                  │
+  ╰──────────────────────────────────────────────────────── Automatic model ─╯
+
+  Enter to answer · Esc to cancel

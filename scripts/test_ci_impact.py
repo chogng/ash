@@ -21,14 +21,14 @@ def package(name: str, path: str, *dependencies: str) -> dict:
 class CiImpactTests(unittest.TestCase):
     def setUp(self) -> None:
         packages = [
-            package("ash-tui", "ash-code/tui", "shared"),
-            package("ash-cli", "ash-code/cli", "shared"),
+            package("ash-tui", "code/tui", "shared"),
+            package("ash-cli", "cli", "shared"),
             package("ash-app-server", "ash-rs/app-server", "shared"),
             package("ash-app-server-daemon", "ash-rs/app-server-daemon"),
             package("ash-remote-server", "ash-rs/remote-server"),
             package("shared", "ash-rs/shared", "leaf"),
             package("leaf", "ash-rs/leaf"),
-            package("app", "app", "unrelated"),
+            package("app", "app-rs", "unrelated"),
             package("unrelated", "ash-rs/unrelated"),
         ]
         self.metadata = {
@@ -38,10 +38,10 @@ class CiImpactTests(unittest.TestCase):
 
     def test_product_and_transitive_dependency_changes_run_tui(self) -> None:
         for path in (
-            "ash-code/tui/src/lib.rs",
+            "code/tui/src/lib.rs",
             "ash-rs/leaf/src/lib.rs",
             "ash-rs/app-server/src/lib.rs",
-            "ash-code/tui/src/view.snap",
+            "code/tui/src/view.snap",
         ):
             with self.subTest(path=path):
                 self.assertTrue(ci_impact.tui_affected([path], self.metadata, ROOT))
@@ -49,7 +49,7 @@ class CiImpactTests(unittest.TestCase):
     def test_unrelated_package_changes_skip_tui(self) -> None:
         self.assertFalse(
             ci_impact.tui_affected(
-                ["app/src/main.rs", "ash-rs/unrelated/src/lib.rs"],
+                ["app-rs/src/main.rs", "ash-rs/unrelated/src/lib.rs"],
                 self.metadata,
                 ROOT,
             )
@@ -63,7 +63,7 @@ class CiImpactTests(unittest.TestCase):
             "build/lib/targets.py",
             "third_party/ripgrep/runtime-lock.json",
             "ash-rs/deleted/src/lib.rs",
-            "scripts/ash-code/run.py",
+            "scripts/code/run.py",
         ):
             with self.subTest(path=path):
                 self.assertTrue(ci_impact.tui_affected([path], self.metadata, ROOT))

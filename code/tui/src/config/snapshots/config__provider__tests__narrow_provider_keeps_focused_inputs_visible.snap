@@ -1,0 +1,16 @@
+---
+source: code/tui/src/config/provider_tests.rs
+expression: "text(&render(&panel, 36, 14, Instant::now()))"
+---
+> Provider name
+  ╭──────────────────────────────╮
+  │ My gateway                   │
+  ╰──────────────────────────────╯
+  Base URL
+  ╭──────────────────────────────╮
+  │  https://example.test/gateway│
+  ╰──────────────────────────────╯
+  API key
+  ╭──────────────────────────────╮
+  │ API key (optional)           │
+  ╰──────────────────────────────╯

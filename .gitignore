@@ -17,20 +17,20 @@ __pycache__/
 .tmp/
 .snow
 output/
-!ash-ts/src/ash/workbench/contrib/output/
-!ash-ts/src/ash/workbench/contrib/output/**
-!ash-ts/src/ash/workbench/services/output/
-!ash-ts/src/ash/workbench/services/output/**
+!app-ts/src/ash/workbench/contrib/output/
+!app-ts/src/ash/workbench/contrib/output/**
+!app-ts/src/ash/workbench/services/output/
+!app-ts/src/ash/workbench/services/output/**
 
 # Legacy Desktop build products
-ash-ts/node_modules/
-ash-ts/dist/
-ash-ts/test/integration/browser/dist/
-ash-ts/.tmp/
-ash-ts/debug.log
+app-ts/node_modules/
+app-ts/dist/
+app-ts/test/integration/browser/dist/
+app-ts/.tmp/
+app-ts/debug.log
 node_modules/
 .pnpm-store/
-ash-ts/src/ash/platform/app-server/common/generated/
+app-ts/src/ash/platform/app-server/common/generated/
 schemas/app-server/
 
 # Downloaded, checksum-verified third-party native runtime artifacts.

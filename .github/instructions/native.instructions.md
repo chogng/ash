@@ -1,6 +1,6 @@
 ---
 description: Ash native UI ownership and the ash-rs/native deprecation boundary.
-applyTo: "ash-rs/native/**,app/**"
+applyTo: "ash-rs/native/**,app-rs/**"
 ---
 
 # Native UI Ownership Guidelines
@@ -9,9 +9,9 @@ applyTo: "ash-rs/native/**,app/**"
 
 Route new capability to its long-term owner:
 
-- backend-independent frame, layout, paint, inspection, interaction, animation, invalidation, and retained lifecycle contracts belong in `app/zui`;
-- reusable application/window lifecycle, renderer initialization, platform capability, event-loop, and multi-window orchestration belong to the single public `app/zui` crate; its foundation/layout/text/presentation/runtime/application/platform/renderer modules are private implementation boundaries, not sibling crates or alternative entry points;
-- reusable UI controls belong in `app/ui-components` (`ash-ui-components`), while Workbench titlebar, tab navigation, interaction identities, and presentation state belong in `app/workbench-ui` (`ash-workbench-ui`); generic layout algorithms remain in `app/zui`;
+- backend-independent frame, layout, paint, inspection, interaction, animation, invalidation, and retained lifecycle contracts belong in `app-rs/zui`;
+- reusable application/window lifecycle, renderer initialization, platform capability, event-loop, and multi-window orchestration belong to the single public `app-rs/zui` crate; its foundation/layout/text/presentation/runtime/application/platform/renderer modules are private implementation boundaries, not sibling crates or alternative entry points;
+- reusable UI controls belong in `app-rs/ui-components` (`ash-ui-components`), while Workbench titlebar, tab navigation, interaction identities, and presentation state belong in `app-rs/workbench-ui` (`ash-workbench-ui`); generic layout algorithms remain in `app-rs/zui`;
 - file, SCM, editor, terminal, and other domain behavior belongs in its domain crate;
 - `app` owns product state mapping, product event meaning, scene construction, and the native product entry point; it consumes platform events and rendering only through public `zui` contracts.
 

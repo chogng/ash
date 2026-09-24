@@ -1,6 +1,6 @@
 # 调试系统
 
-> 状态：Code 产品已具备通用 DAP 调试平台；SSH Remote Workbench 的 stdio adapter、debuggee Terminal、断点路径和调用栈源码都绑定同一个远端 Environment，编辑器 Workspace 只负责路径与配置呈现；Academic 不组装 Tasks、Testing 或 Debug。后端实现细节由 [`ash-debug-adapter` README](../ash-rs/debug-adapter/README.md) 拥有，Renderer 实现细节由 [Workbench Debug README](../ash-ts/src/ash/workbench/services/debug/README.md) 拥有。
+> 状态：Code 产品已具备通用 DAP 调试平台；SSH Remote Workbench 的 stdio adapter、debuggee Terminal、断点路径和调用栈源码都绑定同一个远端 Environment，编辑器 Workspace 只负责路径与配置呈现；Academic 不组装 Tasks、Testing 或 Debug。后端实现细节由 [`ash-debug-adapter` README](../ash-rs/debug-adapter/README.md) 拥有，Renderer 实现细节由 [Workbench Debug README](../app-ts/src/ash/workbench/services/debug/README.md) 拥有。
 
 ## 快速理解
 

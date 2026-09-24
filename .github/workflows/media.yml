@@ -13,7 +13,7 @@ on:
       - "ash-rs/voice-agent/**"
       - "ash-rs/voice-host/**"
       - "ash-rs/app-server/src/server/call*"
-      - "build/package/livekit.ts"
+      - "build/runtime/livekit.ts"
       - "third_party/livekit/**"
       - "ash-rs/call/**"
       - "ash-rs/collaboration-server/**"
@@ -66,7 +66,7 @@ jobs:
           node-version-file: .nvmrc
       - name: Prepare the locked LiveKit Server
         run: |
-          node build/package/livekit.ts "${{ matrix.target }}" > "$RUNNER_TEMP/livekit.json"
+          node build/runtime/livekit.ts "${{ matrix.target }}" > "$RUNNER_TEMP/livekit.json"
           echo "ASH_TEST_LIVEKIT_SERVER=$(node -p 'require(process.argv[1]).executable' "$RUNNER_TEMP/livekit.json")" >> "$GITHUB_ENV"
       - name: Test Rust SDK patches
         run: |
@@ -121,7 +121,7 @@ jobs:
       - name: Prepare and run the server
         shell: bash
         run: |
-          node build/package/livekit.ts "${{ matrix.target }}" > "$RUNNER_TEMP/livekit.json"
+          node build/runtime/livekit.ts "${{ matrix.target }}" > "$RUNNER_TEMP/livekit.json"
           server=$(node -p 'require(process.argv[1]).executable' "$RUNNER_TEMP/livekit.json")
           version=$(node -p 'require("./third_party/livekit/runtime-lock.json").version')
           test "$("$server" --version)" = "livekit-server version $version"

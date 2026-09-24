@@ -3,7 +3,7 @@ package(default_visibility = ["//visibility:public"])
 filegroup(
     name = "python_sources",
     srcs = glob(["*.py"], exclude = ["test_*.py"]) + [
-        "//build/package:python_sources",
+        "//build/runtime:python_sources",
         "//build/lib:archive_sources",
     ],
 )

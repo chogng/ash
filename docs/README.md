@@ -1,6 +1,6 @@
 # 工程文档
 
-[系统架构](architecture.md) · [Ash Code](../ash-code/README.md) · [app](../app/docs/README.md) · [用户文档](https://github.com/chogng/ash-docs)
+[系统架构](architecture.md) · [Ash Code](../code/README.md) · [app](../app-rs/docs/README.md) · [用户文档](https://github.com/chogng/ash-docs)
 
 普通开发直接完成实现和测试，按需更新现有文档；显式使用 `/develop` 时才采用[阶段产物与验收规则](development-workflow.md)。编写文档见[写作规范](../.github/instructions/documentation.instructions.md)。各模块的代码和测试入口在相邻 README。
 
@@ -70,12 +70,12 @@
 
 ## app 产品
 
-[app 文档](../app/docs/README.md)：桌面交互、终端、输入与渲染。
+[app 文档](../app-rs/docs/README.md)：桌面交互、终端、输入与渲染。
 
 ## 平台与产品
 
 [`architecture.md`](architecture.md)（总入口）、[`ash-rs-architecture.md`](ash-rs-architecture.md)、
-[`ash-code/README.md`](../ash-code/README.md)、[`workbench-modes.md`](workbench-modes.md)、
+[`code/README.md`](../code/README.md)、[`workbench-modes.md`](workbench-modes.md)、
 [`product-lines.md`](product-lines.md)、[`remote-development.md`](remote-development.md)、[`git.md`](git.md)、
 [`documentation-guidelines.md`](documentation-guidelines.md)
 
@@ -83,6 +83,6 @@
 
 | 文档 | 状态 |
 | --- | --- |
-| [`app/docs/native-deprecation-plan.md`](../app/docs/native-deprecation-plan.md) | Native 弃用迁移 |
-| [`app/docs/app-migration-plan.md`](../app/docs/app-migration-plan.md) | App 迁移 |
-| [`app/docs/app-release-graph.md`](../app/docs/app-release-graph.md) | App 发布依赖 |
+| [`app-rs/docs/native-deprecation-plan.md`](../app-rs/docs/native-deprecation-plan.md) | Native 弃用迁移 |
+| [`app-rs/docs/app-migration-plan.md`](../app-rs/docs/app-migration-plan.md) | App 迁移 |
+| [`app-rs/docs/app-release-graph.md`](../app-rs/docs/app-release-graph.md) | App 发布依赖 |

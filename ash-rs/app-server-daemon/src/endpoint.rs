@@ -25,7 +25,6 @@ use std::os::unix::fs::OpenOptionsExt;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
-use ash_app_server_protocol::schema_hash;
 use ash_uds::SocketDirectory;
 use ash_uds::UnixListener;
 use ash_uds::UnixStream;
@@ -240,9 +239,6 @@ pub(crate) fn endpoint_identity(profile_root: &Path) -> String {
     update_path_digest(&mut digest, profile_root);
     digest.update(b"ash-app-server-daemon");
     digest.update(ENDPOINT_CONTRACT_VERSION.to_le_bytes());
-    digest.update(build_info::VERSION.as_bytes());
-    digest.update([0]);
-    digest.update(schema_hash().as_bytes());
     let identity = format!("{:x}", digest.finalize());
     identity[..32].into()
 }

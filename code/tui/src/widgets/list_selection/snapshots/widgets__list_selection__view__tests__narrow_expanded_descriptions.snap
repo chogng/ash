@@ -1,0 +1,16 @@
+---
+source: code/tui/src/widgets/list_selection/view_tests.rs
+expression: terminal.backend().to_string()
+---
+"  ╭────────────────────────────╮"
+"  │ Search                     │"
+"  ╰────────────────────────────╯"
+"v First                      off"
+"    A long description that     "
+"    wraps across several narrow "
+"    terminal lines.             "
+"v Second                      on"
+"    Another explanation         "
+"                                "
+"                                "
+"                                "

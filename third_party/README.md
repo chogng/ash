@@ -13,7 +13,7 @@ inventory. Third-party material is recorded according to how Ash consumes it:
 | Downloaded native runtime | `third_party/<name>/` | Preserve its provenance, checksum, license, and required notices |
 | Ordinary Rust or JavaScript dependency | Owning manifest and lockfile | Validate its license policy and include required notices in the product that distributes it |
 | Component-specific bundled assets | The owning component, for example `ash-rs/utils/typst/licenses/` | Copy the applicable license and notice texts into the release |
-| Desktop release notices | `ash-ts/THIRD_PARTY_NOTICES.md` and `ash-ts/licenses/` | Ship them with the desktop application |
+| Desktop release notices | `app-ts/THIRD_PARTY_NOTICES.md` and `app-ts/licenses/` | Ship them with the desktop application |
 
 Do not add a package-manager dependency to this directory merely because it is
 third-party. Add it here only when Ash owns the download, verification,

@@ -81,7 +81,7 @@ editorLineHeight = 20
 
 `theme` 使用内置主题入口、用户主题 ID 或 `system`。`interfaceFontFamily` 和 `interfaceFontSize` 控制 Workbench 导航和设置页等界面文字；`editorFontFamily`、`editorFontSize` 和 `editorLineHeight` 只控制编辑器。字体族可用 `monospace`、`sans-serif`、`serif` 或具体字体名称，字号范围为 6–96 px，编辑器行高不能小于字号且不能超过 192 px。这些默认值、校验和生效方式都属于图形界面，不进入 Config 或 App Server 的领域类型。
 
-TUI 独立解释根级 `[tui]`，其中保存主题、屏幕模式、输入模式等界面设置；字段含义和交互见 [TUI 配置说明](../ash-code/tui/README.md#终端生命周期)：
+TUI 独立解释根级 `[tui]`，其中保存主题、屏幕模式、输入模式等界面设置；字段含义和交互见 [TUI 配置说明](../code/tui/README.md#终端生命周期)：
 
 ```toml
 [tui]

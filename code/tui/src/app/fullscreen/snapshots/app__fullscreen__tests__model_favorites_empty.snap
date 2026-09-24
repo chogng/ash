@@ -1,0 +1,20 @@
+---
+source: code/tui/src/app/fullscreen/frame_tests.rs
+expression: "render(&app, 100, 18)"
+---
+  .                                                                            [— / —] [Dashboard]  
+                                                                                                    
+            ┌── Model ────────────────────────────────────────────────────────────[✗]─┐             
+            │                                                                         │             
+            │   Favorites    My gateway                                               │             
+            │                                                                         │             
+            │  No models here · Pin models from a provider tab to Favorites           │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+  ╭─────────│                                                                         │──────────╮  
+  │ > Build │  Enter to apply · Tab/Shift+Tab to switch · Esc to close                │          │  
+  ╰─────────└─────────────────────────────────────────────────────────────────────────┘ic model ─╯

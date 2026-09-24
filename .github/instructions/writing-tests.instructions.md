@@ -1,6 +1,6 @@
 ---
 description: Ash TypeScript test writing guidelines — unit tests, browser integration, snapshots, and clean teardown.
-applyTo: "**/src/ash/**/test/**/*.ts,**/src/ash/**/*.test.ts,ash-ts/test/**/*.ts"
+applyTo: "**/src/ash/**/test/**/*.ts,**/src/ash/**/*.test.ts,app-ts/test/**/*.ts"
 ---
 
 # Writing Tests
@@ -17,11 +17,11 @@ Canonical reference: https://github.com/microsoft/vscode/wiki/Writing-Tests
 
 ## Running Tests
 
-- **Unit tests:** `pnpm --dir ash-ts test:unit`
+- **Unit tests:** `pnpm --dir app-ts test:unit`
   - Filter: `--grep <pattern>`
   - File: `--run src/ash/<owner>/test/<runtime>/myFile.test.ts`
   - Glob: `--runGlob '**/myFile.test.js'`
-- **Editor browser integration:** `pnpm --dir ash-ts test:editor:browser`
+- **Editor browser integration:** `pnpm --dir app-ts test:editor:browser`
 - **Browser and Electron UI:** use the owning `test:smoke:*` Playwright project.
 
 ## Writing Unit Tests

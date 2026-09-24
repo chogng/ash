@@ -1,0 +1,7 @@
+load("//app-rs:defs.bzl", "app_rust_library")
+
+app_rust_library(
+    name = "editor",
+    crate_name = "ash_editor",
+    package_name = "app-rs/editor",
+)

@@ -10,4 +10,4 @@
 
 验证：`just test ash-message-history` 与 `just test ash-state message_history`。
 
-TypeScript Chat 尚未接入，后续工作见 [Chat 输入历史接入待办](../../ash-ts/docs/chat-input-history.md)。
+TypeScript Chat 尚未接入，后续工作见 [Chat 输入历史接入待办](../../app-ts/docs/chat-input-history.md)。

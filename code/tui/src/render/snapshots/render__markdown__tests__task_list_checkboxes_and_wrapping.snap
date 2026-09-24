@@ -1,0 +1,14 @@
+---
+source: code/tui/src/render/markdown_tests.rs
+expression: text
+---
+☐ open item with 
+  several words
+  ☑ nested task
+☑ done
+• ordinary
+
+9. ☑ numbered item 
+     with several 
+     words
+10. ☐

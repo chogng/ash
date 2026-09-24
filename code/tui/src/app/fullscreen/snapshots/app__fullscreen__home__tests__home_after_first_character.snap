@@ -1,0 +1,28 @@
+---
+source: code/tui/src/app/fullscreen/home_tests.rs
+expression: rendered
+---
+  .                                                        [— / —] [Dashboard]  
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+  ⏸ ask permissions on                                                          
+  ╭──────────────────────────────────────────────────────────────────────────╮  
+  │ > x                                                                      │  
+  ╰──────────────────────────────────────────────────────── Automatic model ─╯  
+                                                                                
+  Enter send  ·  / commands

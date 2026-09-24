@@ -1,0 +1,20 @@
+---
+source: code/tui/src/app/mode_tests.rs
+expression: render(&app)
+---
+  .                          [— / —] [Dashboard]  
+                                                  
+─ Issues ─────────────────────────────────────────
+                                                  
+   Open    Closed                                 
+  ╭────────────────────────────────────────────╮  
+  │ Search keywords or #number                 │  
+  ╰────────────────────────────────────────────╯  
+   · 0 selected · 0 loaded ·                      
+  FULL-ISSUE-ERROR                                
+                                                  
+                                                  
+                                                  
+                                                  
+                                                  
+  Tab state · Enter details · Space select

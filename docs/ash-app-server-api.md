@@ -1109,7 +1109,7 @@ Kimi 订阅登录使用 device-code flow，没有本地 callback listener：App 
 - Rust DTO 与 registry：`ash-rs/app-server-protocol/src/protocol/`
 - JSON Schema：`ash-rs/app-server-protocol/schema/json/schema.json`
 - TypeScript 入口：`ash-rs/app-server-protocol/schema/typescript/index.ts`
-- Desktop 生成入口：`ash-ts/src/ash/platform/app-server/common/generated/index.ts`
+- Desktop 生成入口：`app-ts/src/ash/platform/app-server/common/generated/index.ts`
 
 修改契约后执行：
 
@@ -1119,11 +1119,11 @@ pnpm run generate:protocol
 
 Rust DTO 与 registry 是唯一协议来源；`schema/typescript` 是提交到 Git 的生成快照，前端 `common/generated` 是不提交的消费副本。`protocol:generate` 先更新快照，再同步前端副本；禁止手改两处生成物。
 
-纯前端构建通过 `pnpm --dir ash-ts protocol:sync` 同步快照，不运行 Cargo。同步会移除退场类型，保留未变文件的时间戳，并在源快照缺失或目标包含手写文件时失败。联合开发的后端 watcher 和开发包准备入口在发布后端前重新生成协议。
+纯前端构建通过 `pnpm --dir app-ts protocol:sync` 同步快照，不运行 Cargo。同步会移除退场类型，保留未变文件的时间戳，并在源快照缺失或目标包含手写文件时失败。联合开发的后端 watcher 和开发包准备入口在发布后端前重新生成协议。
 
 生成类型只用于协议客户端、领域通信接口和运行时 adapter；领域服务、编辑器与 UI 使用前端自有类型。WebSocket 只传输消息，`initialize` 负责主版本和能力版本检查。schema hash 差异用于诊断，不单独阻断连接；允许扩展的结果对象可增加字段，严格对象、未知枚举和未声明通知仍须经过解码规则校验，不会因握手通过而跳过。
 
-生成快照一致性测试、`pnpm --dir ash-ts typecheck:protocol`、协议行为测试和受影响的前端构建必须同时通过。
+生成快照一致性测试、`pnpm --dir app-ts typecheck:protocol`、协议行为测试和受影响的前端构建必须同时通过。
 
 ## 13. Typst 文档编译
 

@@ -19,12 +19,12 @@ description: Align Ash TypeScript source files, browser CSS responsibilities, AP
 
 | Ash 范围 | 必须读取 |
 | --- | --- |
-| `ash-ts/src/ash/base` | [Base 对齐](references/base.md) |
-| `ash-ts/src/ash/platform` | [Platform 对齐](references/platform.md) |
-| `ash-ts/src/ash/editor` | [Editor 对齐](references/editor-example.md) |
-| `ash-ts/src/ash/workbench` | [Workbench 对齐](references/workbench.md) |
-| `ash-ts/src/ash/code` | [Code 对齐](references/code.md) |
-| `ash-ts/src/ash/sessions` | [Sessions 对齐](references/sessions.md) |
+| `app-ts/src/ash/base` | [Base 对齐](references/base.md) |
+| `app-ts/src/ash/platform` | [Platform 对齐](references/platform.md) |
+| `app-ts/src/ash/editor` | [Editor 对齐](references/editor-example.md) |
+| `app-ts/src/ash/workbench` | [Workbench 对齐](references/workbench.md) |
+| `app-ts/src/ash/code` | [Code 对齐](references/code.md) |
+| `app-ts/src/ash/sessions` | [Sessions 对齐](references/sessions.md) |
 
 Rust 文件不使用本 skill，也不以 VS Code 为参照。普通 TypeScript 命名若没有 VS Code 对应关系，同样不使用本 skill。
 

@@ -1,0 +1,24 @@
+---
+source: code/tui/src/app/fullscreen/frame_tests.rs
+expression: "render(&app, 100, 20)"
+---
+  .                                                                            [— / —] [Dashboard]  
+                                                                                                    
+> /pr                                                                                               
+                                                                                                    
+> Prepare and create a pull request for the current changes using the connected GitHub tools. Verify
+the target branch and checks, and report the pull request link.                                     
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+⠋ Starting · 0m 00s total                                                                           
+  ⏸ ask permissions on                                                   shift+tab to cycle policy  
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────╮  
+  │ >                                                                                            │  
+  ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯  
+                                                                                                    
+  Enter send  ·  shift+tab permissions  ·  /home

@@ -1,0 +1,21 @@
+---
+source: code/tui/src/app/mode_tests.rs
+assertion_line: 234
+expression: render(&app)
+---
+                                                  
+● focus message 04                                
+                                                  
+● focus message 05                                
+                                                  
+● focus message 06                                
+                                                  
+● focus message 07                                
+                                                  
+           Ctrl+End to jump to bottom ↓           
+                                                  
+──────────────────────────────────────────────────
+> x                                               
+──────────────────────────────────────────────────
+                                                  
+  ⏸ ask permissions on

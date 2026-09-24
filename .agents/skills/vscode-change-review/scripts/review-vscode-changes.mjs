@@ -141,7 +141,7 @@ function readChange(line) {
 
 function readScope(path) {
 	const match = /^src\/vs\/(base|platform|editor|workbench|code|sessions)(?:\/|$)/u.exec(path);
-	return match ? `ash-ts/src/ash/${match[1]}` : 'other';
+	return match ? `app-ts/src/ash/${match[1]}` : 'other';
 }
 
 function printResult(result, state) {

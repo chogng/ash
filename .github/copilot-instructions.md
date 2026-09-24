@@ -12,9 +12,9 @@ Before changing a file, identify its owner and read every matching scoped instru
 | Any implementation or test | [`testing.instructions.md`](instructions/testing.instructions.md) |
 | Rust, Cargo manifests/lockfile, `.cargo/`, or Rust build checks | [`rust.instructions.md`](instructions/rust.instructions.md) and [`rust-testing.instructions.md`](instructions/rust-testing.instructions.md) |
 | TypeScript tests and validation | [`typescript-testing.instructions.md`](instructions/typescript-testing.instructions.md) |
-| `ash-rs/native` or `app` | [`native.instructions.md`](instructions/native.instructions.md) |
+| `ash-rs/native` or `app-rs` | [`native.instructions.md`](instructions/native.instructions.md) |
 | Markdown documentation | [`documentation.instructions.md`](instructions/documentation.instructions.md) |
-| `ash-code` CLI/TUI | [`tui.instructions.md`](instructions/tui.instructions.md) |
+| `cli` or `code` | [`tui.instructions.md`](instructions/tui.instructions.md) |
 
 Scoped instructions contain implementation rules. Architecture documents contain design, status, and rationale.
 
@@ -27,7 +27,7 @@ Scoped instructions contain implementation rules. Architecture documents contain
 
 ## Repository ownership
 
-Desktop frontend paths below are relative to `ash-ts/`.
+Desktop frontend paths below are relative to `app-ts/`.
 
 | Path | Owner |
 | --- | --- |
@@ -36,16 +36,18 @@ Desktop frontend paths below are relative to `ash-ts/`.
 | `src/ash/editor` | Editor models, state, projection, and contributions |
 | `src/ash/workbench` | Application shell, Parts, panes, and product composition |
 | `ash-rs` | Shared Rust backend protocols, domains, storage, execution, and backend-neutral server host |
-| `app` | Rust Desktop product, including editor text state, file editing lifecycle, terminal emulation, Composer input classification, Shell completion, `zui`, `ash-ui-components`, `ash-workbench-ui`, renderer, `wgpu`, and `winit` |
-| `ash-code` | `ash code` CLI and Ratatui product host, including host-terminal and color-capability detection |
+| `app-ts` | Electron Desktop and Browser Workbench product host |
+| `app-rs` | Rust Desktop product, including editor text state, file editing lifecycle, terminal emulation, Composer input classification, Shell completion, `zui`, `ash-ui-components`, `ash-workbench-ui`, renderer, `wgpu`, and `winit` |
+| `code` | `ash code` Ratatui presentation, including host-terminal and color-capability detection |
+| `cli` | User-facing `ash` command, shared management operations, and terminal launch |
 
 Preserve the frontend dependency direction `base → platform → editor → workbench`. Lower layers must not import, specialize for, or copy state from higher layers. Multiple callers do not justify moving a domain concept into `base`; the abstraction must be domain-neutral and have a complete current consumer contract.
 
-`ash-ts` and `app` must not execute, package, import, or depend on `ash-cli`, `ash-tui`, `ash-code/cli`, or the `ash app-server` product command. App Server listening entrypoints belong to `ash-rs/app-server`; daemon lifecycle commands belong to `ash-rs/app-server-daemon`; local Remote management belongs to `ash-rs/remote-connections`; the remote runtime belongs to `ash-rs/remote-server`. Shared internal helper dispatch belongs to `ash-rs/arg0`. The daemon manages a separate `ash-app-server --managed` process; service registries, queue execution, and automation run in `app-server`. Keep the runtime dependency direction `app-server → app-server-daemon`, never the reverse.
+`app-ts` and `app-rs` must not execute, package, import, or depend on `ash-cli`, `ash-tui`, `cli/`, or the `ash app-server` product command. App Server listening entrypoints belong to `ash-rs/app-server`; daemon lifecycle commands belong to `ash-rs/app-server-daemon`; local Remote management belongs to `ash-rs/remote-connections`; the remote runtime belongs to `ash-rs/remote-server`. Shared internal helper dispatch belongs to `ash-rs/arg0`. The daemon manages a separate `ash-app-server --managed` process; service registries, queue execution, and automation run in `app-server`. Keep the runtime dependency direction `app-server → app-server-daemon`, never the reverse.
 
-`ash-rs`, `app`, and `ash-code` may remain in the same root Cargo workspace; workspace membership does not change implementation ownership.
+`ash-rs`, `app-rs`, `code`, and `cli` may remain in the same root Cargo workspace; workspace membership does not change implementation ownership.
 
-When a request mentions Workbench, Sessions, or another frontend concept, locate it in the Renderer/Workbench first. Only route to `ash-code` when the request explicitly concerns the terminal, Ratatui, the CLI, or `ash-code`.
+When a request mentions Workbench, Sessions, or another frontend concept, locate it in the Renderer/Workbench first. Route terminal presentation to `code`, command parsing to `cli`, and shared product behavior to `ash-rs`.
 
 ## General implementation rules
 
