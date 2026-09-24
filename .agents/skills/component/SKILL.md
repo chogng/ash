@@ -51,7 +51,7 @@ List all the key files and a brief description of their purpose:
 - **Fill** each section with component-specific details
 - **Gather** information from the attached context and use available tools if needed to complete your understanding
 - **Ask** the user for clarification if you cannot fill out a section with accurate information
-- **Use complete file paths** from repository root (e.g., `src/vs/workbench/services/example/browser/exampleService.ts`)
+- **Use complete file paths** from repository root (e.g., `src/ash/workbench/services/example/browser/exampleService.ts`)
 - **Keep** descriptions concise but comprehensive
 - **Use file references** instead of code snippets when making references to code as otherwise the code may become outdated
 </instructions>
