@@ -1,42 +1,21 @@
 ---
 name: ux-css-layout
-description: Apply repository-aware CSS layout rules, file organization, naming, scrolling, responsive layout, and text overflow patterns to VS Code or Ash UI. Use when writing CSS, building layouts, or fixing text truncation; in Ash, preserve its DOM owners and naming instead of importing VS Code structure or branding.
+description: Ash CSS conventions, file organization, class naming, standard sizes, SplitView/Grid layout, scrollable content, responsive layout, and text overflow/ellipsis patterns. Use when writing CSS, building layouts, or fixing text truncation issues.
 ---
 
 This skill covers CSS file organization, naming, standard sizes, programmatic layout (SplitView, Grid, scrollable), responsive patterns, and text overflow handling.
-
-## Repository routing
-
-Determine the target repository before applying any selector, token, DOM, or widget example in this skill:
-
-- In `../vscode`, the `src/vs`, `.monaco-*`, and `--vscode-*` examples below are literal repository conventions.
-- In Ash, those names are upstream reference syntax only. Apply the layout principle to the existing Ash component and use its registered names and owners; never paste the example and replace prefixes.
-
-### Ash upstream-alignment guard
-
-When this skill is used in Ash together with `vscode-api-alignment`, the VS Code snippets below are convention examples, not implementation templates. Do not introduce `monaco-*` selectors, `--vscode-*` variables, VS Code DOM wrappers, or a matching private class hierarchy into Ash merely to reuse an upstream rule. Establish the existing Ash DOM owner, state classes, layout owner, input path, theme tokens, and browser behavior first; then implement only the required behavior with Ash-owned names and structure.
-
-Never change a Ash DOM hierarchy or scrolling/focus owner simply because an upstream CSS selector expects that hierarchy. A first change to DOM nesting, scroll ownership, focus handling, or programmatic layout must be verified in one minimal real-browser slice before migrating additional callers. Type checking, selector presence, screenshots, and file-count progress do not prove layout or interaction quality.
-
-Keep the surrounding Ash TypeScript and CSS style readable even when the upstream API has many options: do not compress option objects, methods, selectors, or declarations to increase batch size. If the result could be produced by copying upstream and replacing prefixes, stop and redesign from the local owner and behavior contract.
-
-Only modify CSS that is required by the current verified behavior slice. A missing upstream CSS file, a selector diff, or an API-alignment batch does not authorize replacing an existing stylesheet, renaming unrelated selectors, rebuilding DOM wrappers, or importing the whole upstream visual system.
-
-For an upstream-alignment task, validate the same semantic scenario in Ash and VS Code before calling layout work complete: use the same viewport and input sequence, then compare focus ownership, scroll offsets, clipping, wrapping, hit targets, and computed geometry. A visually similar still image is insufficient, and a Ash result that loses an upstream behavior remains pending; do not compensate by copying the upstream stylesheet or DOM nesting.
 
 ---
 
 ## 1. File Organization
 
-The `src/vs` paths in this section are literal only for the VS Code repository. In Ash, keep the same co-location principle but use the owning Ash component path; do not create a parallel `src/vs`-shaped style tree.
-
 CSS files are **co-located** with their TypeScript components:
 
 ```
-src/vs/base/browser/ui/button/
+src/ash/base/browser/ui/button/
     button.ts
     button.css
-src/vs/workbench/contrib/myFeature/browser/
+src/ash/workbench/contrib/myFeature/browser/
     myFeature.ts
     media/
         myFeature.css
@@ -49,13 +28,14 @@ import './media/myFeature.css';
 import './button.css';
 ```
 
-Workbench-level global styles live in `src/vs/workbench/browser/media/`.
+Workbench-level global styles live in `src/ash/workbench/browser/media/`.
 
 ## 2. Class Naming
 
-- **VS Code repository:** use its established `monaco-` component roots such as `.monaco-workbench`, `.monaco-split-view2`, and `.monaco-scrollable-element`; use its existing modifier and state-class conventions.
-- **Ash repository:** preserve the owning component's existing Ash root and feature vocabulary. Never introduce or retain a new `.monaco-*` selector to claim alignment, and never rename unrelated local selectors merely to resemble VS Code.
-- In either repository, feature-specific classes use readable kebab-case and state classes describe real component state rather than an upstream selector that the local DOM does not produce.
+- **`stanza-` prefix** for all major components: `.stanza-workbench`, `.stanza-split-view2`, `.stanza-scrollable-element`
+- **Modifier classes**: `.stanza-split-view2.vertical`, `.stanza-split-view2.horizontal`
+- **State classes**: `.visible`, `.focused`, `.active`, `.highlight`
+- Feature-specific classes use kebab-case without prefix: `.my-feature`, `.outline-pane`, `.welcome-view-content`
 
 ## 3. Standard Sizes
 
@@ -70,11 +50,7 @@ Workbench-level global styles live in `src/vs/workbench/browser/media/`.
 | Line height | 1.4em |
 | Validation message font-size | 12px (line-height: 17px) |
 
-> For `padding`/`margin`/`gap`, `border-radius`, `font-size`/`font-weight`,
-> codicon size and border width, prefer the design-system **size tokens** over
-> raw px — see [§10 Design-System Size Tokens](#10-design-system-size-tokens-spacing-radius-font-codicon-stroke).
-> Canonical reference: `.github/instructions/design-tokens.instructions.md`
-> (auto-injected for `src/vs/**/*.css`).
+> For `padding`/`margin`/`gap`, `border-radius`, `font-size`/`font-weight`, lxicon size and border width, prefer the design-system **size tokens** over raw px — see [§10 Design-System Size Tokens](#10-design-system-size-tokens-spacing-radius-font-codicon-stroke). Canonical reference: `.github/instructions/design-tokens.instructions.md` (auto-injected for `src/ash/**/*.css`).
 
 
 ## 4. CSS Selector Quality
@@ -89,22 +65,13 @@ Workbench-level global styles live in `src/vs/workbench/browser/media/`.
 
 ### Never Add New `!important`
 
-Do not introduce `!important` in new or modified CSS. When a declaration loses
-the cascade, inspect the competing selector and increase specificity with the
-smallest appropriate component, workbench, or state-class prefix instead.
-Existing `!important` declarations may be preserved and must not be removed
-mechanically during unrelated edits. Do not copy them, add new ones, or use
-them to avoid understanding selector ownership.
+Do not introduce `!important` in new or modified CSS. When a declaration loses the cascade, inspect the competing selector and increase specificity with the smallest appropriate component, workbench, or state-class prefix instead. Existing `!important` declarations may be preserved and must not be removed mechanically during unrelated edits. Do not copy them, add new ones, or use them to avoid understanding selector ownership.
 
-The narrow exception is shared focus/active-outline suppression, where
-`outline: 0 !important` is intentionally used to override native or global focus
-indicators and prevent flashing outlines during pointer activation. Keep this
-exception scoped to focus-indicator behavior; feature styling must still resolve
-cascade conflicts through selector specificity.
+The narrow exception is shared focus/active-outline suppression, where `outline: 0 !important` is intentionally used to override native or global focus indicators and prevent flashing outlines during pointer activation. Keep this exception scoped to focus-indicator behavior; feature styling must still resolve cascade conflicts through selector specificity.
 
 ## 5. SplitView Layout
 
-**File**: `src/vs/base/browser/ui/splitview/splitview.ts`
+**File**: `src/ash/base/browser/ui/splitview/splitview.ts`
 
 For splitting views with draggable sashes (either horizontal or vertical):
 
@@ -131,7 +98,7 @@ Use `LayoutPriority.High` / `.Low` to control which views resize first when spac
 
 ## 6. Grid Layout
 
-**File**: `src/vs/base/browser/ui/grid/grid.ts`
+**File**: `src/ash/base/browser/ui/grid/grid.ts`
 
 For 2D layouts (used by editor groups):
 ```typescript
@@ -161,7 +128,7 @@ scrollable.scanDomNode(); // call after content changes
 
 ## 8. Responsive Layout
 
-VS Code does **not** use CSS media queries. Instead, it uses a **programmatic constraint-based layout system**:
+Ash does **not** use CSS media queries. Instead, it uses a **programmatic constraint-based layout system**:
 
 - `IView.minimumSize` / `maximumSize` — views declare their size constraints.
 - `SplitView` and `Grid` distribute space according to constraints and `LayoutPriority`.
@@ -229,7 +196,7 @@ Flex children default to `min-width: auto`, which **prevents** `text-overflow: e
 }
 ```
 
-This pattern is used throughout VS Code — for example, `.monaco-icon-label-container` sets `min-width: 0` and `flex: 1` to allow label text to truncate.
+This pattern is used throughout Ash — for example, `.stanza-icon-label-container` sets `min-width: 0` and `flex: 1` to allow label text to truncate.
 
 ### Fixed vs Flexible Elements
 
@@ -280,122 +247,77 @@ For `IconLabel` and list/tree renderers, this is handled automatically. For cust
 
 ---
 
-## 10. Design-System Size Tokens (spacing, radius, font, codicon, stroke)
+## 10. Design-System Size Tokens (spacing, radius, font, lxicon, stroke)
 
-This section documents the VS Code repository's literal `--vscode-*` size-token system. In Ash, use a size token only if Ash already registers and owns the equivalent token; do not copy the variable, mechanically rename it to `--ash-*`, or create a token solely because VS Code has one. Otherwise preserve the local component's established sizing rules and validate the resulting geometry in the browser.
+Ash ships a design-system **size** ramp, registered in `src/ash/platform/theme/common/sizes/baseSizes.ts` and emitted as `--ash-*` CSS variables. When writing or editing CSS, prefer the token var over a raw px value wherever a token exists. The full tables + rationale live in the auto-injected `.github/instructions/design-tokens.instructions.md` (canonical source — keep this section in sync with it). This section captures the **decision logic** for deeper styling tasks.
 
-VS Code ships a design-system **size** ramp, registered in
-`src/vs/platform/theme/common/sizes/baseSizes.ts` and emitted as `--vscode-*` CSS
-variables.
-When writing or editing CSS, prefer the token var over a raw px value wherever a
-token exists. The full tables + rationale live in the auto-injected
-`.github/instructions/design-tokens.instructions.md` (canonical source — keep
-this section in sync with it). This section captures the **decision logic** for
-deeper styling tasks.
-
-> Every `--vscode-*` size var you reference must already exist in
-> `build/lib/stylelint/vscode-known-variables.json` (`"sizes"` array,
-> alphabetically sorted) or stylelint/hygiene fails. Adding a *new* token means
-> adding it both in `baseSizes.ts` and that JSON file.
+> Every `--ash-*` size var you reference must already exist in `build/lib/stylelint/ash-known-variables.json` (`"sizes"` array, alphabetically sorted) or stylelint/hygiene fails. Adding a *new* token means adding it both in `baseSizes.ts` and that JSON file.
 
 ### Spacing — `padding`, `margin`, `gap`
 
-Scale (px): `0, 2, 4, 6, 8, 10, 12, 16, 20, 24, 28, 32, 36, 40` →
-`--vscode-spacing-sizeNone`, `--vscode-spacing-size20` … `--vscode-spacing-size400`
-(token number = px × 10, so `size200` = 20px).
+Scale (px): `0, 2, 4, 6, 8, 10, 12, 16, 20, 24, 28, 32, 36, 40` → `--ash-spacing-sizeNone`, `--ash-spacing-size20` … `--ash-spacing-size400` (token number = px × 10, so `size200` = 20px).
 
-**What matters is the value, not the token.** Adopting the `var()` is optional —
-a raw px value is fine **as long as it lands on the scale**. What breaks rhythm is
-an **off-scale** value (3, 5, 7, 14, 26px…). Snap off-scale values to the nearest
-scale value, **ties round up** (`5px → 6px`, `3px → 4px`, `1px → 2px`,
-`26px → 28px`). Each length of a shorthand is checked independently
-(`0 5px → 0 6px`). Leave `auto`, `%`, `em`/`rem`, `var()`/`calc()` untouched.
+**What matters is the value, not the token.** Adopting the `var()` is optional — a raw px value is fine **as long as it lands on the scale**. What breaks rhythm is an **off-scale** value (3, 5, 7, 14, 26px…). Snap off-scale values to the nearest scale value, **ties round up** (`5px → 6px`, `3px → 4px`, `1px → 2px`, `26px → 28px`). Each length of a shorthand is checked independently (`0 5px → 0 6px`). Leave `auto`, `%`, `em`/`rem`, `var()`/`calc()` untouched.
 
 ### Corner radius — `border-radius`
 
 | px | Variable | Use |
 |----|----------|-----|
-| 2  | `--vscode-cornerRadius-xSmall` | very compact elements |
-| 4  | `--vscode-cornerRadius-small` | controls (buttons, inputs) |
-| 6  | `--vscode-cornerRadius-medium` | base / inner surfaces |
-| 8  | `--vscode-cornerRadius-large` | prominent / outer surfaces |
-| 12 | `--vscode-cornerRadius-xLarge` | very prominent surfaces |
-| 9999 | `--vscode-cornerRadius-circle` | fully rounded (pills, dots) |
+| 2  | `--ash-cornerRadius-xSmall` | very compact elements |
+| 4  | `--ash-cornerRadius-small` | controls (buttons, inputs) |
+| 6  | `--ash-cornerRadius-medium` | base / inner surfaces |
+| 8  | `--ash-cornerRadius-large` | prominent / outer surfaces |
+| 12 | `--ash-cornerRadius-xLarge` | very prominent surfaces |
+| 9999 | `--ash-cornerRadius-circle` | fully rounded (pills, dots) |
 
-**Snap map** for off-scale literals (ties round **up**):
-`2→xSmall`, `3,4→small`, `5,6→medium`, `7,8→large`, `10,11,12→xLarge`,
-`14,16,18,20→xLarge`, `999→circle`.
+**Snap map** for off-scale literals (ties round **up**): `2→xSmall`, `3,4→small`, `5,6→medium`, `7,8→large`, `10,11,12→xLarge`, `14,16,18,20→xLarge`, `999→circle`.
 
-- **Pills** (radius ≈ half the element height — e.g. `28h`/`14r`, `36h`/`18r`,
-  `22×22`/`11r`) → `--vscode-cornerRadius-circle`, **not** xLarge. The
-  literal-nearest token would square them and lose the fully-rounded intent.
-- **Leave untouched:** `50%`, `0`, `0px`, `inherit`, any `calc()`/`var()`.
-  Preserve `!important`.
+- **Pills** (radius ≈ half the element height — e.g. `28h`/`14r`, `36h`/`18r`, `22×22`/`11r`) → `--ash-cornerRadius-circle`, **not** xLarge. The literal-nearest token would square them and lose the fully-rounded intent.
+- **Leave untouched:** `50%`, `0`, `0px`, `inherit`, any `calc()`/`var()`. Preserve `!important`.
 
 ### Font size & weight
 
-Generic UI ramp — pair a **size** token with a **weight** token ("Strong" =
-matching size token + `semiBold`, never a separate size):
+Generic UI ramp — pair a **size** token with a **weight** token ("Strong" = matching size token + `semiBold`, never a separate size):
 
 | px | Size var | Weight |
 |----|----------|--------|
-| 26 | `--vscode-fontSize-heading1` | semiBold |
-| 18 | `--vscode-fontSize-heading2` | semiBold |
-| 13 | `--vscode-fontSize-heading3` | semiBold |
-| 13 | `--vscode-fontSize-body1` | regular |
-| 11 | `--vscode-fontSize-body2` | regular |
-| 12 | `--vscode-fontSize-label1` | regular |
-| 11 | `--vscode-fontSize-label2` | regular |
-| 10 | `--vscode-fontSize-label3` | regular |
+| 26 | `--ash-fontSize-heading1` | semiBold |
+| 18 | `--ash-fontSize-heading2` | semiBold |
+| 13 | `--ash-fontSize-heading3` | semiBold |
+| 13 | `--ash-fontSize-body1` | regular |
+| 11 | `--ash-fontSize-body2` | regular |
+| 12 | `--ash-fontSize-label1` | regular |
+| 11 | `--ash-fontSize-label2` | regular |
+| 10 | `--ash-fontSize-label3` | regular |
 
-Generic weights: `--vscode-fontWeight-regular` (400),
-`--vscode-fontWeight-semiBold` (600).
+Generic weights: `--ash-fontWeight-regular` (400), `--ash-fontWeight-semiBold` (600).
 
-**Deprecated** — `--vscode-bodyFontSize` (13) → `--vscode-fontSize-body1`,
-`--vscode-bodyFontSize-small` (12) → `--vscode-fontSize-label1`,
-`--vscode-bodyFontSize-xSmall` (11) → `--vscode-fontSize-body2`.
+**Deprecated** — `--ash-bodyFontSize` (13) → `--ash-fontSize-body1`, `--ash-bodyFontSize-small` (12) → `--ash-fontSize-label1`, `--ash-bodyFontSize-xSmall` (11) → `--ash-fontSize-body2`.
 
-The legacy Agents-specific `--vscode-agents-fontSize-*` and
-`--vscode-agents-fontWeight-*` tokens are also deprecated; use the matching
-generic tokens.
+The legacy Agents-specific `--ash-agents-fontSize-*` and `--ash-agents-fontWeight-*` tokens are also deprecated; use the matching generic tokens.
 
-- **No medium (500).** `font-weight: 500` is off the ramp — snap to `semiBold`.
-  Likewise `700`/`bold` → round to the nearer of 400/600.
-- **"Strong" is not a separate size.** "Body 1 Strong" = the matching
-  `--vscode-fontSize-*` size token + `semiBold`. Never add a strong *size*.
-- `normal` ≡ 400 → `regular`. Leave `inherit`, `lighter`, `bolder`,
-  `var()`/`calc()` untouched.
+- **No medium (500).** `font-weight: 500` is off the ramp — snap to `semiBold`. Likewise `700`/`bold` → round to the nearer of 400/600.
+- **"Strong" is not a separate size.** "Body 1 Strong" = the matching `--ash-fontSize-*` size token + `semiBold`. Never add a strong *size*.
+- `normal` ≡ 400 → `regular`. Leave `inherit`, `lighter`, `bolder`, `var()`/`calc()` untouched.
 
-### Codicon size — icon `font-size`
+### Lxicon size — icon `font-size`
 
-Codicons are **only ever 16px or 12px** — never `14px` or any in-between value.
+Lxicons are **only ever 16px or 12px** — never `14px` or any in-between value.
 
 | px | Variable | Use |
 |----|----------|-----|
-| 16 | `--vscode-codiconFontSize` (base) | default icon size |
-| 12 | `--vscode-codiconFontSize-compact` | dense/inline chrome |
+| 16 | `--ash-lxiconFontSize` (base) | default icon size |
+| 12 | `--ash-lxiconFontSize-compact` | dense/inline chrome |
 
-**Compact-glyph convention:** when sizing an icon at the compact 12px size, also
-swap the registered glyph to its `*Compact` variant (e.g. `Codicon.close` →
-`Codicon.closeCompact`, `Codicon.add` → `Codicon.addCompact`). CSS `font-size`
-alone only scales the icon — it does **not** change to the visually-optimized
-compact glyph; that requires changing the registered icon (Action2 `icon:` /
-`renderIcon`). **Only swap the glyph when no CSS selector targets the original
-glyph class** (e.g. `.codicon-close`); selectors keyed on the glyph class
-(`.codicon-add`, `.codicon-chevron-down`) break when the class becomes
-`-compact`, so update those selectors too (or size via a glyph-independent
-wrapper class like `.monaco-button`). Some icons (settings/sliders, agent, vm,
-info, lock, plus) have **no** compact variant — keep the regular glyph at 12px.
+**Compact-glyph convention:** when sizing an icon at the compact 12px size, also swap the registered glyph to its `*Compact` variant (e.g. `Lxicon.close` → `Lxicon.closeCompact`, `Lxicon.add` → `Lxicon.addCompact`). CSS `font-size` alone only scales the icon — it does **not** change to the visually-optimized compact glyph; that requires changing the registered icon (Action2 `icon:` / `renderIcon`). **Only swap the glyph when no CSS selector targets the original glyph class** (e.g. `.lxicon-close`); selectors keyed on the glyph class (`.lxicon-add`, `.lxicon-chevron-down`) break when the class becomes `-compact`, so update those selectors too (or size via a glyph-independent wrapper class like `.stanza-button`). Some icons (settings/sliders, agent, vm, info, lock, plus) have **no** compact variant — keep the regular glyph at 12px.
 
 ### Stroke — border width
 
-A **single** stroke thickness: `1px` → `--vscode-strokeThickness`. Applies to the
-`border: 1px solid <color>` shorthand and `border-width: 1px`. Other widths have
-no token — leave them.
+A **single** stroke thickness: `1px` → `--ash-strokeThickness`. Applies to the `border: 1px solid <color>` shorthand and `border-width: 1px`. Other widths have no token — leave them.
 
 ```css
-/* prefer */  border: var(--vscode-strokeThickness) solid var(--vscode-widget-border);
-/* avoid  */  border: 1px solid var(--vscode-widget-border);
+/* prefer */  border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+/* avoid  */  border: 1px solid var(--ash-widget-border);
 ```
 
 ---
@@ -404,7 +326,7 @@ no token — leave them.
 
 | Area | File |
 |------|------|
-| SplitView | `src/vs/base/browser/ui/splitview/splitview.ts` |
-| Grid | `src/vs/base/browser/ui/grid/grid.ts` |
-| Scrollbar | `src/vs/base/browser/ui/scrollbar/scrollableElement.ts` |
-| Global workbench styles | `src/vs/workbench/browser/media/style.css` |
+| SplitView | `src/ash/base/browser/ui/splitview/splitview.ts` |
+| Grid | `src/ash/base/browser/ui/grid/grid.ts` |
+| Scrollbar | `src/ash/base/browser/ui/scrollbar/scrollableElement.ts` |
+| Global workbench styles | `src/ash/workbench/browser/media/style.css` |
