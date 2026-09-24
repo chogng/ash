@@ -437,7 +437,7 @@ impl StatusLineModel {
                     StatusLineItem::ReferenceCost => "💰",
                     StatusLineItem::Memory => "💾",
                     StatusLineItem::Cpu => "🖥️",
-                    StatusLineItem::GitBranch => "🌿",
+                    StatusLineItem::GitBranch => super::GIT_BRANCH_ICON,
                     StatusLineItem::GitChanges => "📝",
                     StatusLineItem::Permissions | StatusLineItem::Context => "",
                 };

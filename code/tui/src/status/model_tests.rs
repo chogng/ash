@@ -37,6 +37,23 @@ fn status_line_combines_plan_subagents_model_branch_and_changes() {
 }
 
 #[test]
+fn rich_status_line_uses_the_workspace_git_branch_marker() {
+    let mut settings = StatusLineSettings::default();
+    for item in StatusLineItem::ALL {
+        settings.set(item, item == StatusLineItem::GitBranch);
+    }
+    settings.set_style(StatusLineStyle::Rich);
+    let mut status_line = StatusLineModel::new();
+    status_line.apply_settings(settings);
+    status_line.apply_git_status(&git_status(1));
+
+    assert_eq!(
+        status_line.top_text_for_width(80, StatusLineRuntime::default()),
+        "⎇ main"
+    );
+}
+
+#[test]
 fn memory_and_cpu_are_opt_in_and_use_compact_text_when_space_is_tight() {
     let mut settings = StatusLineSettings::default();
     for item in StatusLineItem::ALL {

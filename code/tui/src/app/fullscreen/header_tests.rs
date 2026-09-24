@@ -55,12 +55,18 @@ fn header_places_branch_and_path_without_repeating_them_below() {
         .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
         .collect::<Vec<_>>()
         .join("\n");
-    assert!(text.lines().next().unwrap().starts_with("  main /work/ash"));
+    assert!(
+        text.lines()
+            .next()
+            .unwrap()
+            .starts_with("  ⎇ main /work/ash")
+    );
     assert_eq!(text.matches("main").count(), 1);
     assert_eq!(text.matches("/work/ash").count(), 1);
+    assert_eq!(buffer[(2, 0)].symbol(), "⎇");
     assert_eq!(buffer[(2, 0)].fg, app.render_context().foreground());
     assert!(buffer[(2, 0)].modifier.contains(Modifier::BOLD));
-    assert_eq!(buffer[(7, 0)].fg, app.render_context().muted());
+    assert_eq!(buffer[(9, 0)].fg, app.render_context().muted());
     crate::tui_assert_snapshot!("workspace_header_and_hintbar", text);
 
     let area = Rect::new(0, 0, 80, 20);
@@ -70,7 +76,7 @@ fn header_places_branch_and_path_without_repeating_them_below() {
         Some(super::Target::Branch)
     );
     assert_eq!(
-        super::target_at(&app, header, Position::new(7, 0)),
+        super::target_at(&app, header, Position::new(9, 0)),
         Some(super::Target::Workspace)
     );
     super::super::pointer::activate_pointer_item(&mut app, area, 2, 0);

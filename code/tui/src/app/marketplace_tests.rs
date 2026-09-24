@@ -347,9 +347,22 @@ fn marketplace_category_groups_packages_and_keeps_shortcuts_out_of_search_input(
     crate::tui_assert_snapshot!("marketplace_category_sections", screen(&app));
 
     app.handle_key(key(KeyCode::Up));
-    assert!(app.list_selection().unwrap().search().unwrap().input_active());
+    assert!(
+        app.list_selection()
+            .unwrap()
+            .search()
+            .unwrap()
+            .input_active()
+    );
     app.handle_key(key(KeyCode::Down));
-    assert_eq!(app.list_selection().unwrap().selected_item().unwrap().label(), "Web tools");
+    assert_eq!(
+        app.list_selection()
+            .unwrap()
+            .selected_item()
+            .unwrap()
+            .label(),
+        "Web tools"
+    );
     app.handle_key(key(KeyCode::Down));
     assert_eq!(
         app.list_selection()
