@@ -277,6 +277,8 @@ interface StandaloneHarness {
 	runDeferredPaste(change: 'none' | 'writableAgain' | 'selection' | 'composition' | 'escape'): Promise<{ value: string; handled: boolean; finishedBeforeDecode: boolean }>;
 	runDeferredDrop(change: 'none' | 'readonly' | 'writableAgain'): Promise<{ value: string; selectionUnchanged: boolean; handled: boolean }>;
 	runLineAction(id: string, args?: unknown): Promise<void>;
+	prepareMoveSelectedText(): void;
+	prepareFinalNewLine(): void;
 	runScopedActions(): Promise<{ supported: boolean[]; values: string[]; otherValue: string; sameContext: boolean; focusRetained: boolean }>;
 	readLineCopy(): { value: string; selections: string[] };
 	prepareReferencePreview(): void;
@@ -2133,6 +2135,16 @@ window.ashStandaloneIntegration = {
 		const action = callerEditor.getAction(id);
 		if (!action) throw new Error(`Missing editor action: ${id}`);
 		await action.run(args);
+	},
+	prepareMoveSelectedText: () => {
+		callerEditor.setValue('012345');
+		callerEditor.setSelection(new stanza.Selection(1, 3, 1, 5));
+		callerEditor.focus();
+	},
+	prepareFinalNewLine: () => {
+		callerEditor.setValue('alpha');
+		callerEditor.setSelection(new stanza.Selection(1, 2, 1, 4));
+		callerEditor.focus();
 	},
 	readLineCopy: () => ({ value: callerEditor.getValue(), selections: (callerEditor.getSelections() ?? []).map(selection => selection.toString()) }),
 	updateRenderingOptions: enabled => {

@@ -336,6 +336,86 @@ test('force retokenize action refreshes the active model through its syntax prov
 	}
 });
 
+test('move selected text actions update text, selection and undo through the editor', async () => {
+	await import('../../../contrib/caretOperations/browser/caretOperations.js');
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel('012345');
+	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, contributions: [] });
+	try {
+		const left = editor.getAction('editor.action.moveCarretLeftAction');
+		const right = editor.getAction('editor.action.moveCarretRightAction');
+		assert.ok(left && right);
+		editor.setSelection(new Selection(1, 3, 1, 5));
+		await left.run();
+		assert.deepEqual([model.getValue(), editor.getSelection()?.toString()], ['023145', '[1,2 -> 1,4]']);
+		model.undo();
+		assert.equal(model.getValue(), '012345');
+
+		editor.setSelection(new Selection(1, 3, 1, 5));
+		await right.run();
+		assert.deepEqual([model.getValue(), editor.getSelection()?.toString()], ['014235', '[1,4 -> 1,6]']);
+		model.undo();
+		assert.equal(model.getValue(), '012345');
+
+		editor.setSelection(new Selection(1, 5, 1, 3));
+		await left.run();
+		assert.deepEqual([model.getValue(), editor.getSelection()?.toString()], ['023145', '[1,4 -> 1,2]']);
+		model.undo();
+		editor.setSelection(new Selection(1, 1, 1, 3));
+		await left.run();
+		assert.deepEqual([model.getValue(), editor.getSelection()?.toString()], ['012345', '[1,1 -> 1,3]']);
+		editor.setSelection(new Selection(1, 5, 1, 7));
+		await right.run();
+		assert.deepEqual([model.getValue(), editor.getSelection()?.toString()], ['012345', '[1,5 -> 1,7]']);
+		editor.updateOptions({ readOnly: true });
+		assert.deepEqual([left.isSupported(), right.isSupported()], [false, false]);
+		editor.updateOptions({ readOnly: false });
+		model.setValue('012345\nabcdef');
+		editor.setSelections([new Selection(1, 3, 1, 5), new Selection(2, 3, 2, 5)]);
+		await left.run();
+		assert.deepEqual([
+			model.getValue(),
+			(editor.getSelections() ?? []).map(selection => selection.toString()),
+		], ['023145\nacdbef', ['[1,2 -> 1,4]', '[2,2 -> 2,4]']]);
+		model.setValue('012345\nabcdef');
+		editor.setSelection(new Selection(1, 2, 2, 3));
+		await left.run();
+		await right.run();
+		assert.deepEqual([model.getValue(), editor.getSelection()?.toString()], ['012345\nabcdef', '[1,2 -> 2,3]']);
+		editor.setSelection(new Selection(2, 1, 2, 1));
+		await left.run();
+		await right.run();
+		assert.deepEqual([
+			model.getValue(),
+			(editor.getSelections() ?? []).map(selection => selection.toString()),
+		], ['012345\nabcdef', ['[2,1 -> 2,1]']]);
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('insert final new line action appends the model EOL and keeps the selection', async () => {
+	await import('../../../contrib/insertFinalNewLine/browser/insertFinalNewLine.js');
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel('alpha');
+	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, contributions: [] });
+	try {
+		const action = editor.getAction('editor.action.insertFinalNewLine');
+		assert.ok(action);
+		editor.setSelection(new Selection(1, 4, 1, 2));
+		await action.run();
+		assert.deepEqual([model.getValue(), editor.getSelection()?.toString()], ['alpha\n', '[1,4 -> 1,2]']);
+		model.undo();
+		assert.equal(model.getValue(), 'alpha');
+		editor.setModel(null);
+		await action.run();
+	} finally {
+		dom.window.close();
+	}
+});
+
 test('CodeEditorWidget actions keep their editor context across read-only changes and model switches', async () => {
 	await import('../../../contrib/linesOperations/browser/linesOperations.js');
 	const dom = new JSDOM('<!doctype html><body><main></main><aside></aside></body>');

@@ -73,7 +73,7 @@ test('folding command metadata uses the selected Chinese language catalog', asyn
 	}
 });
 
-test('force retokenize action label uses the selected Chinese language catalog', async () => {
+test('editor action labels use the selected Chinese language catalog', async () => {
 	using configuration = new InMemoryConfigurationService();
 	using languagePacks = new MarketplaceLanguagePackService(createMarketplace(), builtinLanguagePackCatalogs);
 	using localeService = new WorkbenchLocaleService(configuration, languagePacks);
@@ -82,9 +82,16 @@ test('force retokenize action label uses the selected Chinese language catalog',
 		await localization.whenReady;
 		await localeService.setLocale('zh-CN');
 		await import('../../../../../editor/contrib/tokenization/browser/tokenization.js');
+		await import('../../../../../editor/contrib/caretOperations/browser/caretOperations.js');
+		await import('../../../../../editor/contrib/insertFinalNewLine/browser/insertFinalNewLine.js');
 		const { EditorExtensionsRegistry } = await import('../../../../../editor/browser/editorExtensions.js');
-		const action = [...EditorExtensionsRegistry.getEditorActions()].find(candidate => candidate.id === 'editor.action.forceRetokenize');
-		assert.equal(action?.label, '开发者：强制重新分词');
+		const actions = [...EditorExtensionsRegistry.getEditorActions()];
+		assert.deepEqual([
+			actions.find(action => action.id === 'editor.action.forceRetokenize')?.label,
+			actions.find(action => action.id === 'editor.action.moveCarretLeftAction')?.label,
+			actions.find(action => action.id === 'editor.action.moveCarretRightAction')?.label,
+			actions.find(action => action.id === 'editor.action.insertFinalNewLine')?.label,
+		], ['开发者：强制重新分词', '将选中文本左移', '将选中文本右移', '插入文件末尾换行符']);
 	} finally {
 		resetNlsResolver();
 	}

@@ -1931,6 +1931,29 @@ test('transpose letters keeps a selected primary range while editing a secondary
 	expect(errors).toEqual([]);
 });
 
+test('move selected text actions update the document and selection with one undo step', async ({ page }) => {
+	await page.goto('/standalone.html');
+	for (const [direction, value, selection] of [
+		['Left', '023145', '[1,2 -> 1,4]'],
+		['Right', '014235', '[1,4 -> 1,6]'],
+	] as const) {
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareMoveSelectedText());
+		await page.evaluate(id => window.ashStandaloneIntegration.runLineAction(id), `editor.action.moveCarret${direction}Action`);
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({ value, selections: [selection] });
+		await page.keyboard.press('ControlOrMeta+z');
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('012345');
+	}
+});
+
+test('insert final new line action appends an EOL and preserves the editor selection', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareFinalNewLine());
+	await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.insertFinalNewLine'));
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({ value: 'alpha\n', selections: ['[1,2 -> 1,4]'] });
+	await page.keyboard.press('ControlOrMeta+z');
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('alpha');
+});
+
 for (const direction of ['Up', 'Down']) {
 	test(`copy final lines ${direction} includes the empty last line and restores selections on undo`, async ({ page }) => {
 		await page.goto('/standalone.html');

@@ -1,5 +1,11 @@
 # Editor API 对齐状态
 
+## Contrib 文本动作契约（2026-09-24）
+
+`editor.all.ts` 已接入上游同路径的 `contrib/caretOperations/browser/caretOperations.ts`、`moveCaretCommand.ts`、`contrib/insertFinalNewLine/browser/insertFinalNewLine.ts` 和 `insertFinalNewLineCommand.ts`。命令面板的左移 / 右移选中文本动作经过当前编辑器的 `executeCommands`，在同一编辑事务内交换选区和相邻文本，保留选区方向、多光标和一次撤销；空选区、跨行选区及行边界不改变文本。插入文件末尾换行动作按模型 EOL 追加一行，保留当前选区并形成一次撤销。它是显式动作；Workbench 原有的保存时按配置补末尾换行规则仍独立判断是否需要补行。动作标题已加入英中双语目录。没有新建 DOM、样式或焦点 owner。
+
+定向 Editor 单测 2 项、Chromium 场景 2 项及中文动作标题单测 1 项通过；Stanza 和 Renderer 生产构建通过。完整 Editor 对齐检查通过，包含 648 个浏览器场景，未生成源码目录下的 JavaScript；运行时仅有既有的 `NO_COLOR` / `FORCE_COLOR` 提示。未把其他上游缺失贡献文件视为已接通。
+
 ## Contrib Tokenization 开发者命令（2026-09-24）
 
 `editor.action.forceRetokenize` 已由同路径 `contrib/tokenization/browser/tokenization.ts` 注册并接入 `editor.all.ts`。命令从当前编辑器取得模型，调用模型已有的 `resetTokenization()`；Ash 的语法提供者可以异步执行，因此新结果由模型原有请求链发布，命令不调用会在异步提供者下抛错的同步 `forceTokenization()`。无模型时命令不操作。现有 `tokenization.contribution.ts` 仍负责视图 token 来源和就绪状态，不承担请求或缓存。命令标题进入英中双语目录。
