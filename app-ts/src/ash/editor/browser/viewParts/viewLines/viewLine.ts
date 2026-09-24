@@ -72,7 +72,7 @@ export class ViewLine {
 
 	public renderLine(text: string, tokens: readonly ResolvedSemanticToken[], wrappedTextIndentWidth = 0, inlineDecorations: readonly InlineDecoration[] = [], lineNumber = 1): boolean {
 		if (!Number.isFinite(wrappedTextIndentWidth) || wrappedTextIndentWidth < 0) throw new RangeError('View line indent must be finite and non-negative');
-		this._renderedViewLine.render(text, tokens, wrappedTextIndentWidth, inlineDecorations, lineNumber);
+		this._renderedViewLine.render(text, tokens, wrappedTextIndentWidth, inlineDecorations, lineNumber, this._options.stopRenderingLineAfter);
 		this._isMaybeInvalid = false;
 		return true;
 	}
@@ -146,10 +146,10 @@ class RenderedViewLine {
 		return this.cachedWidth !== undefined && (this.cachedWidth > this.wrappedTextIndentWidth || this.renderedText.length === 0);
 	}
 
-	render(text: string, tokens: readonly ResolvedSemanticToken[], wrappedTextIndentWidth: number, inlineDecorations: readonly InlineDecoration[], lineNumber: number): void {
-		this.characterMapping = projectStanzaSemanticTokenLine(this.textElement, text, tokens, this.tabSize, inlineDecorations, lineNumber);
+	render(text: string, tokens: readonly ResolvedSemanticToken[], wrappedTextIndentWidth: number, inlineDecorations: readonly InlineDecoration[], lineNumber: number, stopRenderingLineAfter: number): void {
+		this.characterMapping = projectStanzaSemanticTokenLine(this.textElement, text, tokens, this.tabSize, inlineDecorations, lineNumber, stopRenderingLineAfter);
 		this.textElement.style.marginInlineStart = `${wrappedTextIndentWidth}px`;
-		this.renderedText = text;
+		this.renderedText = stopRenderingLineAfter < 0 ? text : text.slice(0, stopRenderingLineAfter);
 		this.wrappedTextIndentWidth = wrappedTextIndentWidth;
 		this.resetCachedWidth();
 	}
@@ -227,16 +227,19 @@ export function projectStanzaSemanticTokenLine(
 	tabSize = 4,
 	inlineDecorations: readonly InlineDecoration[] = [],
 	lineNumber = 1,
+	stopRenderingLineAfter = -1,
 ): CharacterMapping {
 	validateLineTokens(lineText, tokens);
 	if (!Number.isSafeInteger(tabSize) || tabSize < 1) throw new RangeError('Stanza semantic line tab size must be a positive safe integer');
+	const visibleText = stopRenderingLineAfter < 0 ? lineText : lineText.slice(0, stopRenderingLineAfter);
 	const ownerDocument = element.ownerDocument;
 	const fragment = createFragment(ownerDocument);
-	const lineDecorations = inlineDecorations.filter(decoration => decoration.range.startLineNumber <= lineNumber && decoration.range.endLineNumber >= lineNumber);
-	const boundaries = [...new Set([0, lineText.length, ...tokens.flatMap(token => [token.startColumn, token.endColumn]), ...lineDecorations.flatMap(decoration => [Math.max(0, decoration.range.startColumn - 1), Math.min(lineText.length, decoration.range.endColumn - 1)])])].sort((left, right) => left - right);
-	const characterMapping = new CharacterMapping(lineText.length + 1, Math.max(1, boundaries.length - 1));
+	const lineDecorations = inlineDecorations.filter(decoration => decoration.range.startLineNumber <= lineNumber && decoration.range.endLineNumber >= lineNumber && decoration.range.startColumn - 1 <= visibleText.length);
+	const boundary = (column: number) => Math.max(0, Math.min(visibleText.length, column));
+	const boundaries = [...new Set([0, visibleText.length, ...tokens.flatMap(token => [boundary(token.startColumn), boundary(token.endColumn)]), ...lineDecorations.flatMap(decoration => [boundary(decoration.range.startColumn - 1), boundary(decoration.range.endColumn - 1)])])].sort((left, right) => left - right);
+	const characterMapping = new CharacterMapping(visibleText.length + 1, Math.max(1, boundaries.length - 1));
 	let visibleColumn = 0;
-	if (lineText.length === 0) {
+	if (visibleText.length === 0) {
 		fragment.append(h(ownerDocument, 'span'));
 		characterMapping.setColumnInfo(1, 0, 0, 0);
 	}
@@ -257,16 +260,22 @@ export function projectStanzaSemanticTokenLine(
 		for (const modifier of token?.modifiers ?? []) tokenElement.classList.add(modifier);
 		if (token?.syntaxPresentation) applySyntaxPresentation(tokenElement, token.syntaxPresentation);
 		for (const decoration of decorations) tokenElement.classList.add(...decoration.inlineClassName.split(/\s+/u).filter(Boolean));
-		tokenElement.textContent = lineText.slice(startColumn, endColumn);
+		tokenElement.textContent = visibleText.slice(startColumn, endColumn);
 		for (let offset = startColumn; offset < endColumn; offset += 1) {
 			characterMapping.setColumnInfo(offset + 1, index, offset - startColumn, visibleColumn);
-			visibleColumn += lineText.charCodeAt(offset) === 9 ? tabSize - visibleColumn % tabSize : 1;
+			visibleColumn += visibleText.charCodeAt(offset) === 9 ? tabSize - visibleColumn % tabSize : 1;
 		}
-		if (endColumn === lineText.length) characterMapping.setColumnInfo(lineText.length + 1, index, endColumn - startColumn, visibleColumn);
+		if (endColumn === visibleText.length) characterMapping.setColumnInfo(visibleText.length + 1, index, endColumn - startColumn, visibleColumn);
 		fragment.append(tokenElement);
 	}
-	if (fragment.textContent !== lineText) {
+	if (fragment.textContent !== visibleText) {
 		throw new Error("Stanza semantic token projection changed line text");
+	}
+	if (visibleText.length < lineText.length) {
+		const marker = h(ownerDocument, 'span');
+		marker.className = 'mtkcontrol';
+		marker.textContent = '…';
+		fragment.append(marker);
 	}
 	reset(element, fragment);
 	return characterMapping;

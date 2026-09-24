@@ -50,6 +50,21 @@ test("syntax token presentation applies exact theme styling without a semantic c
 	dom.window.close();
 });
 
+test("long-line projection clips decorated tokens and keeps the final visible column mapped", () => {
+	const dom = new JSDOM("<!doctype html><body><code></code></body>");
+	const element = requiredElement<HTMLElement>(dom.window.document, "code");
+	const mapping = projectStanzaSemanticTokenLine(element, "abcdefghij", [presented(0, 10, SemanticTokenPresentation.Variable)], 4, [
+		new InlineDecoration(new Range(1, 3, 1, 10), "highlight", InlineDecorationType.Regular),
+	], 1, 5);
+	assert.equal(element.textContent, "abcde…");
+	assert.equal(mapping.length, 6);
+	assert.equal(mapping.getDomPosition(6).charIndex, 3);
+	assert.equal(requiredElement<HTMLElement>(element, ".highlight").textContent, "cde");
+	projectStanzaSemanticTokenLine(element, "abcdefghij", [], 4, [], 1, -1);
+	assert.equal(element.textContent, "abcdefghij");
+	dom.window.close();
+});
+
 test("Semantic token source resolves immutable named lines without owning common state", () => {
 	using model = new TextModel("const value");
 	using store = createLanguageTokenStore(model);

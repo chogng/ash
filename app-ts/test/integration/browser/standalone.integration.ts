@@ -281,6 +281,8 @@ interface StandaloneHarness {
 	prepareFinalNewLine(): void;
 	runScopedActions(): Promise<{ supported: boolean[]; values: string[]; otherValue: string; sameContext: boolean; focusRetained: boolean }>;
 	readLineCopy(): { value: string; selections: string[] };
+	prepareLongLine(): void;
+	readLongLineLimit(): number;
 	prepareReferencePreview(): void;
 	setParentFontSize(): void;
 	updateRenderingOptions(enabled: boolean): number;
@@ -2147,6 +2149,11 @@ window.ashStandaloneIntegration = {
 		callerEditor.focus();
 	},
 	readLineCopy: () => ({ value: callerEditor.getValue(), selections: (callerEditor.getSelections() ?? []).map(selection => selection.toString()) }),
+	prepareLongLine: () => {
+		callerEditor.updateOptions({ wordWrap: 'off', stopRenderingLineAfter: 8 });
+		callerEditor.setValue('0123456789abcdefghij');
+	},
+	readLongLineLimit: () => callerEditor.getOption(EditorOption.stopRenderingLineAfter),
 	updateRenderingOptions: enabled => {
 		callerEditor.updateOptions({
 			minimap: { enabled, side: 'left', showSlider: 'always' },

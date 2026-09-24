@@ -33,6 +33,7 @@ import './contrib/linesOperations/browser/linesOperations.js';
 import './contrib/indentation/browser/indentation.js';
 import './contrib/lineSelection/browser/lineSelection.js';
 import './contrib/linkedEditing/browser/linkedEditing.js';
+import './contrib/longLinesHelper/browser/longLinesHelper.js';
 import "./contrib/links/browser/links.js";
 import './contrib/message/browser/messageController.js';
 import './contrib/middleScroll/browser/middleScroll.contribution.js';

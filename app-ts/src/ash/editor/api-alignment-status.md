@@ -1,5 +1,11 @@
 # Editor API 对齐状态
 
+## Contrib 长行点击契约（2026-09-24）
+
+`editor.all.ts` 已接入上游同路径 `contrib/longLinesHelper/browser/longLinesHelper.ts`，在首次鼠标交互前注册编辑器级监听。`stopRenderingLineAfter` 现在由现有视图行渲染实际执行：超出限制的文本以省略号标记，语法 token、行内装饰和列映射只投影可见部分；点击截断边界的文本时，贡献将当前编辑器的限制改为 `-1`，配置变更触发原视图行重绘并显示完整文本。点击边界之前的文本不更改配置。模型全文、token 来源及编辑器焦点仍由原 owner 管理。
+
+Chromium 定向场景验证了截断、边界前点击不展开、边界点击展开；视图行单测验证带装饰 token 的截断列映射和恢复全文。Stanza、Renderer 生产构建通过；完整 Editor 对齐检查通过，包含 649 个浏览器场景，未生成源码目录下的 JavaScript。
+
 ## Contrib 文本动作契约（2026-09-24）
 
 `editor.all.ts` 已接入上游同路径的 `contrib/caretOperations/browser/caretOperations.ts`、`moveCaretCommand.ts`、`contrib/insertFinalNewLine/browser/insertFinalNewLine.ts` 和 `insertFinalNewLineCommand.ts`。命令面板的左移 / 右移选中文本动作经过当前编辑器的 `executeCommands`，在同一编辑事务内交换选区和相邻文本，保留选区方向、多光标和一次撤销；空选区、跨行选区及行边界不改变文本。插入文件末尾换行动作按模型 EOL 追加一行，保留当前选区并形成一次撤销。它是显式动作；Workbench 原有的保存时按配置补末尾换行规则仍独立判断是否需要补行。动作标题已加入英中双语目录。没有新建 DOM、样式或焦点 owner。

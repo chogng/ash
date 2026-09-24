@@ -4090,6 +4090,40 @@ test('folding hides view zones and restores their layout callbacks after scrolli
 });
 
 
+test('clicking the clipped end of a long line reveals its remaining text', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareLongLine());
+	const line = page.locator('#caller .view-line').first();
+	await expect(line).toContainText('01234567');
+	await expect(line).not.toContainText('abcdefghij');
+	const clickCharacter = async (character: string) => {
+		const point = await line.evaluate((element, value) => {
+			const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+			let node: Node | null;
+			while ((node = walker.nextNode())) {
+				const offset = node.textContent?.indexOf(value) ?? -1;
+				if (offset < 0) continue;
+				const range = document.createRange();
+				range.setStart(node, offset);
+				range.setEnd(node, offset + 1);
+				const rect = range.getBoundingClientRect();
+				return { x: rect.right - 1, y: rect.top + rect.height / 2 };
+			}
+			throw new Error(`Character ${value} is not rendered`);
+		}, character);
+		await page.mouse.click(point.x, point.y);
+	};
+	await clickCharacter('2');
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readLongLineLimit())).toBe(8);
+	await clickCharacter('7');
+	await expect(line).toContainText('0123456789abcdefghij');
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readLongLineLimit())).toBe(-1);
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	expect(errors).toEqual([]);
+});
+
 test('editor rendering follows updated configuration without replacing the view', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
