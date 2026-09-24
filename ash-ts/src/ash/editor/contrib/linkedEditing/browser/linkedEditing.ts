@@ -190,7 +190,7 @@ registerEditorContribution({
 			context.controller.element,
 			context.view,
 			context.languageFeaturesService.linkedEditingRangeProvider,
-			() => context.configurations.getLanguageConfiguration(context.languageId).getWordDefinition(),
+			() => context.configurations.getLanguageConfiguration(context.model.getLanguageId()).getWordDefinition(),
 			context.onLanguageError,
 		);
 	},

@@ -16,7 +16,7 @@ test('line actions are registered while the host owns their shortcuts', () => {
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using model = new TextModel('zero\none\ntwo');
-	using editor = createTestCodeEditor({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
+	using editor = createTestCodeEditor({ container, model, lineHeight: 20 });
 	editor.setSelection(Selection.fromPositions(new Position(2, 2)));
 
 	const actionIds = new Set(Array.from(EditorExtensionsRegistry.getEditorActions(), action => action.id));

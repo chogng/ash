@@ -37,8 +37,6 @@ test('FoldingDecorationProvider selects controls, highlights, and editor-owned d
 	using editor = createTestCodeEditor({
 		container: dom.window.document.querySelector<HTMLElement>('main')!,
 		model,
-		input: { resource: model.uri },
-		languageId: model.getLanguageId(),
 		lineHeight: 20,
 		folding: false,
 	});
@@ -69,8 +67,6 @@ test('Folding contribution projects model ranges through FoldingDecorationProvid
 	using editor = createTestCodeEditor({
 		container: dom.window.document.querySelector<HTMLElement>('main')!,
 		model,
-		input: { resource: model.uri },
-		languageId: model.getLanguageId(),
 		lineHeight: 20,
 	});
 	editor.layout({ width: 320, height: 120 });

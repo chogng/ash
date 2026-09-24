@@ -37,7 +37,7 @@ test('Transpose Letters runs directly through its canonical action', () => {
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using model = new TextModel('a😊b');
-	using editor = createTestCodeEditor({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
+	using editor = createTestCodeEditor({ container, model, lineHeight: 20 });
 	editor.setSelection(Selection.fromPositions(new Position(1, 2)));
 	const action = [...EditorExtensionsRegistry.getEditorActions()].find(candidate => candidate.id === 'editor.action.transposeLetters');
 	assert.ok(action);
@@ -64,7 +64,7 @@ test('Transpose Action runs directly at a line end', () => {
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using model = new TextModel('hello\nworld');
-	using editor = createTestCodeEditor({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
+	using editor = createTestCodeEditor({ container, model, lineHeight: 20 });
 	editor.setSelection(Selection.fromPositions(new Position(1, 6)));
 	const action = [...EditorExtensionsRegistry.getEditorActions()].find(candidate => candidate.id === 'editor.action.transpose');
 	assert.ok(action);
@@ -82,7 +82,7 @@ for (const primary of [new Selection(1, 3, 1, 1), new Selection(1, 1, 1, 1)]) {
 		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 		try {
 			using model = new TextModel('keep\na😊b');
-			using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, input: { resource: model.uri }, languageId: model.getLanguageId() });
+			using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model });
 			const initial = [primary, new Selection(2, 2, 2, 2)];
 			editor.setSelections(initial);
 			const action = [...EditorExtensionsRegistry.getEditorActions()].find(candidate => candidate.id === 'editor.action.transposeLetters');
@@ -106,7 +106,7 @@ test('Transpose Letters leaves a single emoji unchanged without publishing an ed
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	try {
 		using model = new TextModel('😊');
-		using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, input: { resource: model.uri }, languageId: model.getLanguageId() });
+		using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model });
 		const selection = new Selection(1, 3, 1, 3);
 		editor.setSelection(selection);
 		const version = model.getVersionId();

@@ -39,7 +39,7 @@ test('observable content notifications expose the updated cursor and view', () =
 	using domCleanup = { [Symbol.dispose]: () => dom.window.close() };
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('long content '.repeat(40));
-	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineWrapping: EditorLineWrapping.On });
+	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, lineWrapping: EditorLineWrapping.On });
 	editor.layout({ width: 180, height: 100 });
 	editor.setPosition(model.positionAt(model.length));
 	using observableEditor = observableCodeEditor(editor);
@@ -58,7 +58,7 @@ test('observable code editor tracks canonical model, selections, and layout', ()
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using model = new TextModel('alpha');
-	using editor = createTestCodeEditor({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
+	using editor = createTestCodeEditor({ container, model, lineHeight: 20 });
 	using observableEditor = observableCodeEditor(editor);
 
 	assert.strictEqual(observableCodeEditor(editor), observableEditor);
@@ -97,8 +97,6 @@ test('observable code editor starts with an empty editor and follows attachment'
 	const editor = createTestCodeEditor({
 		container: dom.window.document.querySelector<HTMLElement>('main')!,
 		model: null,
-		input: {},
-		languageId: model.getLanguageId(),
 	});
 	try {
 		const observableEditor = observableCodeEditor(editor);
@@ -118,7 +116,7 @@ test('observable code editor line APIs use one-based line numbers', () => {
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using model = new TextModel('alpha\nbeta');
-	using editor = createTestCodeEditor({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
+	using editor = createTestCodeEditor({ container, model, lineHeight: 20 });
 	using observableEditor = observableCodeEditor(editor);
 	editor.layout({ width: 320, height: 80 });
 
@@ -137,7 +135,7 @@ test('observable code editor owns reactive decorations and follows editor dispos
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using model = new TextModel('alpha');
-	const editor = createTestCodeEditor({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
+	const editor = createTestCodeEditor({ container, model, lineHeight: 20 });
 	const observableEditor = observableCodeEditor(editor);
 	const source = observableValue('decorations', [{ range: new Range(1, 1, 1, 3), options: { description: 'observable' } }]);
 	using decorationOwner = observableEditor.setDecorations(source);
@@ -157,7 +155,7 @@ test('observable code editor follows model attachment changes without retaining 
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using first = new TextModel('first');
 	using second = new TextModel('second');
-	using editor = createTestCodeEditor({ container, model: first, input: { resource: first.uri }, languageId: first.getLanguageId(), lineHeight: 20 });
+	using editor = createTestCodeEditor({ container, model: first, lineHeight: 20 });
 	using observableEditor = observableCodeEditor(editor);
 	const values: string[] = [];
 	using reaction = autorun(reader => {
@@ -186,7 +184,7 @@ test('observable decorations follow the attached model and release old ranges', 
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using first = new TextModel('first');
 	using second = new TextModel('second');
-	using editor = createTestCodeEditor({ container, model: first, input: { resource: first.uri }, languageId: first.getLanguageId(), lineHeight: 20 });
+	using editor = createTestCodeEditor({ container, model: first, lineHeight: 20 });
 	using observableEditor = observableCodeEditor(editor);
 	const source = observableValue('switch-decorations', [{ range: new Range(1, 1, 1, 2), options: { description: 'switch' } }]);
 	using owner = observableEditor.setDecorations(source);

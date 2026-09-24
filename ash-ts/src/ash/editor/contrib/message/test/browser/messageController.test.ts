@@ -38,8 +38,7 @@ test('read-only edit attempts use MessageController and close after cursor movem
 	using editor = createTestCodeEditor({
 		container,
 		model,
-		input: { resource: model.uri, readOnly: true },
-		languageId: model.getLanguageId(),
+		readOnly: true,
 		lineHeight: 20,
 	});
 	editor.layout({ width: 400, height: 100 });

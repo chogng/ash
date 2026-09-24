@@ -4,7 +4,7 @@ import { ILanguageConfigurationService } from '../../../common/languages/languag
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { ICodeEditor } from '../../editorBrowser.js';
 import { ICodeEditorService } from '../../services/codeEditorService.js';
-import { CodeEditorWidget, ICodeEditorWidgetOptions } from './codeEditorWidget.js';
+import { CodeEditorWidget, type CodeEditorWidgetOptions } from './codeEditorWidget.js';
 import { ConfigurationChangedEvent, IEditorOptions } from '../../../common/config/editorOptions.js';
 import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 
@@ -14,7 +14,7 @@ export class EmbeddedCodeEditorWidget extends CodeEditorWidget {
 	constructor(
 		domElement: HTMLElement,
 		options: IEditorOptions,
-		codeEditorWidgetOptions: ICodeEditorWidgetOptions,
+		codeEditorWidgetOptions: CodeEditorWidgetOptions,
 		private readonly parentEditor: ICodeEditor,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IThemeService themeService: IThemeService,

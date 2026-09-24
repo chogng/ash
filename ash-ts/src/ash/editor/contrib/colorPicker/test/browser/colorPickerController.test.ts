@@ -2,7 +2,6 @@ import type { LanguageColorProvider } from '../../../../common/languages.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
-import { URI } from '../../../../../base/common/uri.js';
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
 import { LanguageFeatureRegistry } from '../../../../common/languageFeatureRegistry.js';
@@ -48,8 +47,7 @@ test('color picker decorates, edits, and undoes a CSS color as one operation', a
 	const errors: unknown[] = [];
 	using editor = createTestCodeEditor({
 		container,
-		input: { resource: URI.file('C:\\project\\colors.css'), label: 'colors.css' },
-		languageId: 'css',
+		ariaLabel: 'colors.css',
 		model,
 		onLanguageError: error => errors.push(error),
 	});
@@ -85,8 +83,7 @@ test('color detector returns the tracked range before its debounced provider ref
 	using model = new TextModel('#f00');
 	using editor = createTestCodeEditor({
 		container,
-		input: { resource: URI.file('C:\\project\\tracked.css'), label: 'tracked.css' },
-		languageId: 'css',
+		ariaLabel: 'tracked.css',
 		model,
 	});
 	const providers = new LanguageFeatureRegistry<LanguageColorProvider>();
@@ -127,7 +124,7 @@ for (const change of ['language', 'provider', 'readOnly', 'dispose'] as const) {
 		});
 		const errors: unknown[] = [];
 		using editor = createTestCodeEditor({
-			container, model, languageId: 'css', input: { resource: model.uri },
+			container, model,
 			languageFeaturesService: features, onLanguageError: error => errors.push(error),
 		});
 		editor.layout({ width: 500, height: 160 });

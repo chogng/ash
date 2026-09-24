@@ -53,7 +53,7 @@ test('CodeActionController resolves an action with its original provider before 
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	const errors: unknown[] = [];
 	using editor = createTestCodeEditor({
-		container, model, languageId: 'typescript', input: { resource, label: 'test.ts' },
+		container, model, ariaLabel: 'test.ts',
 		languageFeaturesService: features, dimension: { width: 320, height: 80 }, onLanguageError: error => errors.push(error),
 	});
 	editor.setSelection(Selection.fromPositions(new Position(1, 7), new Position(1, 12)));
@@ -87,7 +87,7 @@ test('Code actions without a resolver never use another provider resolver', asyn
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	const errors: unknown[] = [];
 	using editor = createTestCodeEditor({
-		container, model, languageId: 'typescript', input: { resource: model.uri, label: 'test.ts' },
+		container, model, ariaLabel: 'test.ts',
 		languageFeaturesService: features, dimension: { width: 320, height: 80 }, onLanguageError: error => errors.push(error),
 	});
 	const input = container.querySelector<HTMLElement>('.stanza-editor-input')!;
@@ -121,7 +121,7 @@ for (const outcome of ['complete', 'error'] as const) {
 		let calls = 0;
 		const container = dom.window.document.querySelector<HTMLElement>('main')!;
 		using editor = createTestCodeEditor({
-			container, model, languageId: 'typescript', input: { resource: model.uri, label: 'test.ts' },
+			container, model, ariaLabel: 'test.ts',
 			languageFeaturesService: features, dimension: { width: 320, height: 80 }, onLanguageError: error => errors.push(error),
 			onApplyWorkspaceEdit: async () => {
 				calls++;
@@ -167,7 +167,7 @@ test('a failing code action provider does not prevent another provider from retu
 	const errors: unknown[] = [];
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using editor = createTestCodeEditor({
-		container, model, languageId: 'typescript', input: { resource: model.uri, label: 'test.ts' },
+		container, model, ariaLabel: 'test.ts',
 		languageFeaturesService: features, dimension: { width: 320, height: 80 }, onLanguageError: error => errors.push(error),
 	});
 	const input = container.querySelector<HTMLElement>('.stanza-editor-input')!;

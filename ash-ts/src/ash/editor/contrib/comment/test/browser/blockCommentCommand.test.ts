@@ -42,8 +42,6 @@ test('Block Comment runs through the canonical editor action', () => {
 	using editor = createTestCodeEditor({
 		container,
 		model,
-		input: { resource: model.uri },
-		languageId: model.getLanguageId(),
 		languageConfigurationService: configurations,
 		lineHeight: 20,
 	});
@@ -67,8 +65,6 @@ test('Block Comment leaves languages without a block comment pair unchanged', ()
 	using editor = createTestCodeEditor({
 		container,
 		model,
-		input: { resource: model.uri },
-		languageId: model.getLanguageId(),
 		languageConfigurationService: configurations,
 		lineHeight: 20,
 	});

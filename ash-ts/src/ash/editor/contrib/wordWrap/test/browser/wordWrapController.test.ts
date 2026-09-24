@@ -46,8 +46,6 @@ test("word-wrap choice follows the model and leaves the editor setting unchanged
 	using editor = createTestCodeEditor({
 		container,
 		model: first,
-		input: { resource: first.uri },
-		languageId: first.getLanguageId(),
 		instantiationService: services,
 		wordWrap: "off",
 		minimap: { enabled: false },
@@ -69,8 +67,6 @@ test("word-wrap choice follows the model and leaves the editor setting unchanged
 	using peer = createTestCodeEditor({
 		container: dom.window.document.querySelector<HTMLElement>("aside")!,
 		model: first,
-		input: { resource: first.uri },
-		languageId: first.getLanguageId(),
 		instantiationService: services,
 		wordWrap: "off",
 		minimap: { enabled: false },

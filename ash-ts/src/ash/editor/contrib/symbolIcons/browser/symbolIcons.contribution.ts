@@ -7,7 +7,7 @@ registerEditorContribution({
 	id: "editor.contrib.symbolIcons",
 	configure: context => {
 		if (context.options.showSymbolIcons === false || context.model.largeFile.tooLargeForTokenization) return;
-		const service = context.register(new DocumentSymbolService(context.model, context.languageFeaturesService.documentSymbolProvider, { resource: context.options.input.resource }));
+		const service = context.register(new DocumentSymbolService(context.model, context.languageFeaturesService.documentSymbolProvider, { resource: context.model.uri }));
 		context.register(context.getService(IInstantiationService).createInstance(SymbolIconsController,
 			context.model,
 			service,

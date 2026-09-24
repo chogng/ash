@@ -42,8 +42,6 @@ test('Toggle Line Comment runs through the canonical editor action', () => {
 	using editor = createTestCodeEditor({
 		container,
 		model,
-		input: { resource: model.uri },
-		languageId: model.getLanguageId(),
 		languageConfigurationService: configurations,
 		lineHeight: 20,
 	});
@@ -67,8 +65,6 @@ test('Toggle Line Comment leaves languages without a line comment token unchange
 	using editor = createTestCodeEditor({
 		container,
 		model,
-		input: { resource: model.uri },
-		languageId: model.getLanguageId(),
 		languageConfigurationService: configurations,
 		lineHeight: 20,
 	});
@@ -87,7 +83,7 @@ test('Toggle Line Comment retains a primary selection below a secondary caret', 
 		using model = new TextModel('alpha\nbeta\ngamma', { languageId: 'typescript' });
 		using configurations = new TestLanguageConfigurationService();
 		using registration = configurations.register('typescript', { comments: { lineComment: '//' } });
-		using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, input: { resource: model.uri }, languageId: model.getLanguageId(), languageConfigurationService: configurations });
+		using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, languageConfigurationService: configurations });
 		const initial = [new Selection(3, 4, 3, 2), new Selection(1, 2, 1, 2)];
 		editor.setSelections(initial);
 		const action = [...EditorExtensionsRegistry.getEditorActions()].find(candidate => candidate.id === 'editor.action.commentLine');

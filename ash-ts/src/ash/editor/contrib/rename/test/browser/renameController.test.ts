@@ -168,7 +168,7 @@ function createEditor(onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit) => Pr
 	commandLogs.set(model, commands);
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	const editor = createTestCodeEditor({
-		container, model, languageId: 'typescript', input: { resource: model.uri, label: 'test.ts' },
+		container, model, ariaLabel: 'test.ts',
 		languageFeaturesService: features, dimension: { width: 320, height: 100 }, onLanguageError: error => errors.push(error),
 		...(onApplyWorkspaceEdit ? { onApplyWorkspaceEdit } : {}),
 	});

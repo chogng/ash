@@ -55,7 +55,7 @@ registerEditorContribution({
 			context.editor,
 			context.view,
 			context.editorWorker,
-			() => context.configurations.getLanguageConfiguration(context.languageId).getWordDefinition(),
+			() => context.configurations.getLanguageConfiguration(context.model.getLanguageId()).getWordDefinition(),
 			context.onLanguageError,
 		);
 	},

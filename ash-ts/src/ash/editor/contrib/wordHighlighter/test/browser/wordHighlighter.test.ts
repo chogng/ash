@@ -118,7 +118,7 @@ function createHarness(text: string, languages: TestLanguageFeaturesService, res
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	const model = new TextModel(text, { languageId: 'typescript', resource });
 	const editor = createTestCodeEditor({
-		container, model, input: { resource }, languageId: 'typescript', languageFeaturesService: languages,
+		container, model, languageFeaturesService: languages,
 		contributions: [], occurrencesHighlight: mode, occurrencesHighlightDelay: 0, dimension: { width: 240, height: 60 },
 	});
 	editor.setSelection(new Selection(1, 2, 1, 2));

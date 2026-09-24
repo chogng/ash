@@ -414,7 +414,7 @@ test("Stanza editor pane resolves extension first-line languages after loading a
 	let languageId: string | undefined;
 	const pane = createPane(services, resourceStore, {
 		createPart: options => {
-			languageId = options.languageId;
+			languageId = options.model?.getLanguageId();
 			return { layout: () => {}, focus: () => {}, getValue: () => "", updateOptions: () => {}, dispose: () => {}, [Symbol.dispose]: () => {} };
 		},
 	});
@@ -479,8 +479,10 @@ test("Stanza editor pane forwards Workbench editor preferences to each created p
 		},
 	});
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\configured.ts") }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:\\project\\configured.ts"), label: 'Configured file', readOnly: true }, new AbortController().signal);
 
+	assert.equal(received?.ariaLabel, 'Configured file');
+	assert.equal(received?.readOnly, true);
 	assert.equal(received?.lineWrapping, EditorLineWrapping.On);
 	assert.equal(received?.fontFamily, "Fira Code, monospace");
 	assert.equal(received?.fontSize, 16);

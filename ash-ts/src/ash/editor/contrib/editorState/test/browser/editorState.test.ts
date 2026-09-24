@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { suiteTeardown, test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
-import { URI } from '../../../../../base/common/uri.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { Position } from '../../../../common/core/position.js';
 import { Selection } from '../../../../common/core/selection.js';
@@ -29,8 +28,6 @@ function createEditor(model: TextModel): ReturnType<typeof createTestCodeEditor>
 	const editor = createTestCodeEditor({
 		container,
 		model,
-		languageId: 'plaintext',
-		input: { resource: URI.file('/state.txt') },
 		contributions: [],
 	});
 	editor.onDidDispose(() => container.remove());

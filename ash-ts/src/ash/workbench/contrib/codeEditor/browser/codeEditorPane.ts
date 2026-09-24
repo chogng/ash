@@ -191,12 +191,11 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 		const beforeSaveHooks: Array<() => void | Promise<void>> = [];
 		try {
 			throwIfCancelled(signal, "Code editor input loading was cancelled");
-			const languageId = modelReference.model.getLanguageId();
 			part = this.createPart({
 				container,
-				input,
-				languageId,
 				model: modelReference.model,
+				ariaLabel: input.label,
+				readOnly: input.readOnly,
 				textMateService: this.options.textMateService,
 				languageDiagnosticsService: this.options.languageDiagnosticsService,
 				accessibilityService: this.options.accessibilityService,

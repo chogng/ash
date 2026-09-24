@@ -165,8 +165,6 @@ test("Completion request wiring rejects a same-model session from another servic
 		container: requiredElement<HTMLElement>(dom.window.document, "main"),
 		model,
 		lineHeight: 20,
-		input: { resource: model.uri },
-		languageId: "typescript",
 		contributions: [],
 	});
 	const viewport = editor.view;
@@ -198,8 +196,6 @@ function createFixture(provider: LanguageCompletionProvider, text = "con"): Trig
 		container: requiredElement<HTMLElement>(dom.window.document, "main"),
 		model,
 		lineHeight: 20,
-		input: { resource: model.uri },
-		languageId: "typescript",
 		contributions: [],
 	});
 	const viewport = editor.view;

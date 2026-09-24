@@ -285,7 +285,7 @@ registerEditorContribution({
 			context.editor,
 			context.view,
 			context.languageFeaturesService.codeLensProvider,
-			context.options.input.resource,
+			context.model.uri,
 			context.options.onExecuteEditorCommand,
 			context.onLanguageError,
 		);

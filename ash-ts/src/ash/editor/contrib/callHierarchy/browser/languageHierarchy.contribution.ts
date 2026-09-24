@@ -7,7 +7,7 @@ registerEditorContribution({ id: "editor.contrib.languageHierarchy", install: co
 		context.controller.element,
 		context.editor,
 		context.view,
-		context.options.input.resource,
+		context.model.uri,
 		context.options.onOpenLocation,
 		context.onLanguageError,
 	);

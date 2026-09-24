@@ -147,7 +147,7 @@ export class LanguageNavigationController extends Disposable {
 			const preview = this.peek.add(this.instantiationService.createInstance(EmbeddedCodeEditorWidget,
 				previewHost,
 				{ readOnly: true, automaticLayout: true, minimap: { enabled: false }, scrollBeyondLastLine: false },
-				{ container: previewHost, model, input: { resource: model.uri, readOnly: true }, languageId: model.getLanguageId(), presentation: 'embedded', ariaLabel: 'Reference preview' },
+				{ container: previewHost, model, presentation: 'embedded', ariaLabel: 'Reference preview' },
 				this.editor,
 			));
 			const range = sameResource.selectionRange ?? sameResource.range;

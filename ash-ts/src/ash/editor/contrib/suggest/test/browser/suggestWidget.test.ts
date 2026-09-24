@@ -49,8 +49,6 @@ test("Completion widget projects named options, focus, ARIA, and content coordin
 		glyphMargin: false,
 		textDirection: EditorTextDirection.LeftToRight,
 		lineHeight: 20,
-		input: { resource: model.uri },
-		languageId: "plaintext",
 		contributions: [],
 	});
 	const viewport = editor.view;
@@ -238,8 +236,6 @@ test("Completion widget validates ownership and clears its active descendant on 
 		container,
 		model,
 		lineHeight: 20,
-		input: { resource: model.uri },
-		languageId: "plaintext",
 		contributions: [],
 	});
 	const viewport = editor.view;
@@ -334,8 +330,6 @@ function createFixture(text: string, sessionOptions: LanguageCompletionSessionOp
 		container: requiredElement<HTMLElement>(dom.window.document, "main"),
 		model,
 		lineHeight: 20,
-		input: { resource: model.uri },
-		languageId: "plaintext",
 		contributions: [],
 	});
 	const viewport = editor.view;
@@ -398,7 +392,7 @@ function completion(id: string, label: string, kind: LanguageCompletionItemKind,
 }
 
 function editorAt(model: TextModel, position: Position): ReturnType<typeof createTestCodeEditor> {
-	const editor = createTestCodeEditor({ container: h(document, 'div'), model, input: { resource: model.uri }, languageId: 'plaintext', contributions: [] });
+	const editor = createTestCodeEditor({ container: h(document, 'div'), model, contributions: [] });
 	editor.setPosition(position);
 	return editor;
 }

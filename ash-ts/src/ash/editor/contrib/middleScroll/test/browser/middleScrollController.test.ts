@@ -33,8 +33,6 @@ test('middle click opens a scroll session and keyboard input closes it', () => {
 	using editor = createTestCodeEditor({
 		container,
 		model,
-		input: { resource: model.uri },
-		languageId: model.getLanguageId(),
 		lineHeight: 20,
 		scrollOnMiddleClick: true,
 	});
@@ -67,8 +65,6 @@ test('disabled middle-click scrolling does not create a scroll session', () => {
 	using editor = createTestCodeEditor({
 		container,
 		model,
-		input: { resource: model.uri },
-		languageId: model.getLanguageId(),
 		lineHeight: 20,
 		scrollOnMiddleClick: false,
 	});
@@ -87,8 +83,6 @@ test('pointer displacement continuously scrolls and release ends an active movem
 	using editor = createTestCodeEditor({
 		container,
 		model,
-		input: { resource: model.uri },
-		languageId: model.getLanguageId(),
 		lineHeight: 20,
 		scrollOnMiddleClick: true,
 	});

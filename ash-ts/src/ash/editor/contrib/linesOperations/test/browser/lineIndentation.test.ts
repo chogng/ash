@@ -15,7 +15,7 @@ test('selected-line Tab remains available to the host keybinding', () => {
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using model = new TextModel('one\n  two\nthree', { tabSize: 2, indentSize: 2, insertSpaces: true });
-	using editor = createTestCodeEditor({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
+	using editor = createTestCodeEditor({ container, model, lineHeight: 20 });
 	editor.setSelection(Selection.fromPositions(new Position(1, 1), new Position(3, 6)));
 
 	const indent = key(dom.window, 'Tab');

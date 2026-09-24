@@ -178,8 +178,6 @@ function createFixture(text: string, anchor = new Position((0) + 1, (0) + 1), ac
 		model,
 		contributions: [],
 		lineHeight: 20,
-		input: { resource: model.uri },
-		languageId: model.getLanguageId(),
 	});
 	editor.layout({ width: 600, height: 120 });
 	editor.setSelection(Selection.fromPositions(anchor, active));

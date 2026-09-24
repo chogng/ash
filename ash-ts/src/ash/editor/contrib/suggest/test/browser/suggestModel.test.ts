@@ -505,7 +505,7 @@ function completion(id: string, label: string, preselect = false, range = Range.
 }
 
 function editorAt(model: TextModel, position: Position): ReturnType<typeof createTestCodeEditor> {
-	const editor = createTestCodeEditor({ container: h(document, 'div'), model, input: { resource: model.uri }, languageId: 'plaintext', contributions: [] });
+	const editor = createTestCodeEditor({ container: h(document, 'div'), model, contributions: [] });
 	editor.setPosition(position);
 	return editor;
 }

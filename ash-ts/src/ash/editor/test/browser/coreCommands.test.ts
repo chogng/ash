@@ -52,8 +52,6 @@ test('workbench select-all command selects the focused or active editor model', 
 	using editor = createTestCodeEditor({
 		container: dom.window.document.querySelector<HTMLElement>('main')!,
 		model,
-		input: { resource: model.uri },
-		languageId: model.getLanguageId(),
 		instantiationService: services,
 	});
 	editor.focus();
@@ -96,7 +94,7 @@ test("line selection remains an independent editor extension", () => {
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("one\ntwo\nthree");
-	using editor = createTestCodeEditor({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
+	using editor = createTestCodeEditor({ container, model, lineHeight: 20 });
 	editor.view.layout({ width: 400, height: 100 });
 	editor.setSelection(Selection.fromPositions(new Position((0) + 1, (1) + 1)));
 

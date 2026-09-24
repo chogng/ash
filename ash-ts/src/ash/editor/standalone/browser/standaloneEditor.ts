@@ -131,9 +131,9 @@ export function create(
 		const editorOptions: CodeEditorWidgetOptions = {
 			...browserOptions,
 			container: domElement,
-			input: { resource: model?.uri, label, readOnly },
-			languageId: model?.getLanguageId() ?? 'plaintext',
 			model,
+			ariaLabel: label,
+			readOnly,
 			editorWorkerFactory: services.editorWorkerFactory,
 			completionWorkerFactory: services.completionWorkerFactory,
 		};

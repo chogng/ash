@@ -200,6 +200,6 @@ class AcceptInlineCompletionCommand implements ICommand {
 }
 
 registerEditorContribution({ id: InlineCompletionsController.ID, install: context => {
-	if (context.kind !== "text" || (context.options.inlineCompletions !== undefined && !isCompletionsEnabledFromObject(context.options.inlineCompletions, context.languageId))) return;
+	if (context.kind !== "text" || (context.options.inlineCompletions !== undefined && !isCompletionsEnabledFromObject(context.options.inlineCompletions, context.model.getLanguageId()))) return;
 	return context.instantiationService.createInstance(InlineCompletionsController, context.editor, context.view, context.model, context.languageFeaturesService.inlineCompletionsProvider, context.onDidExecuteCommand, context.onLanguageError);
 } });

@@ -58,17 +58,9 @@ export interface EditorSectionHeaderOptions {
 }
 
 /** Internal services and host callbacks used while constructing one code editor widget. */
-export interface ICodeEditorWidgetOptions extends IEditorConstructionOptions {
+export interface CodeEditorWidgetOptions extends IEditorConstructionOptions {
 	readonly container: HTMLElement;
-	readonly input: {
-		readonly resource: URI;
-		readonly label?: string;
-		readonly languageId?: string;
-		readonly readOnly?: boolean;
-		readonly initialText?: string;
-	};
-	readonly languageId: string;
-	readonly model: TextModel;
+	readonly model: TextModel | null;
 	readonly ownerId?: string;
 	readonly editorWorkerFactory?: VersionedEditorWorkerFactory;
 	readonly completionWorkerFactory?: LanguageCompletionWorkerFactory;
@@ -101,11 +93,6 @@ export interface ICodeEditorWidgetOptions extends IEditorConstructionOptions {
 	readonly isSimpleWidget?: boolean;
 	readonly contextMenuId?: MenuId;
 }
-
-export type CodeEditorWidgetOptions = Omit<ICodeEditorWidgetOptions, 'model' | 'input'> & {
-	readonly model: TextModel | null;
-	readonly input: Omit<ICodeEditorWidgetOptions['input'], 'resource'> & { readonly resource?: URI };
-};
 
 export type CodeEditorViewState = ICodeEditorViewState;
 
@@ -254,7 +241,6 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				options.contextMenuId ?? (options.isSimpleWidget ? MenuId.SimpleEditorContext : MenuId.EditorContext),
 				{
 				...constructionOptions,
-				readOnly: options.input.readOnly,
 				lineNumbers: options.lineNumbers ?? (options.presentation === 'embedded' ? 'off' : undefined),
 				minimap: { ...options.minimap, enabled: options.minimap?.enabled ?? options.presentation !== 'embedded' },
 				guides: {
@@ -307,12 +293,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	}
 
 	private attachModel(model: TextModel): void {
-		const options: ICodeEditorWidgetOptions = {
-			...this.constructionOptions,
-			model,
-			languageId: model.getLanguageId(),
-			input: { ...this.constructionOptions.input, resource: model.uri },
-		};
+		const options = this.constructionOptions;
 		const modelStore = new DisposableStore();
 		this.modelSlot.value = modelStore;
 		try {
@@ -331,14 +312,14 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			this.configuration.setModelLineCount(model.lineCount);
 			modelStore.add(model.onDidChangeDecorations(event => this.modelDecorationsEmitter.fire(event)));
 			modelStore.add(model.onWillDispose(() => this.setModel(null)));
-			const attachedView = options.model.onBeforeAttached();
-			modelStore.add(toDisposable(() => options.model.onBeforeDetached(attachedView)));
+			const attachedView = model.onBeforeAttached();
+			modelStore.add(toDisposable(() => model.onBeforeDetached(attachedView)));
 			const ownerWindow = options.container.ownerDocument.defaultView;
 			if (!ownerWindow) throw new ReferenceError('Code editor requires a browser window');
 			const viewModel = modelStore.add(new ViewModel(
 				this.decorationOwnerId,
 				this.configuration,
-				options.model,
+				model,
 				DOMLineBreaksComputerFactory.create(ownerWindow),
 				MonospaceLineBreaksComputerFactory.create(this.configuration.options),
 				callback => scheduleAtNextAnimationFrame(ownerWindow, callback),
@@ -388,10 +369,9 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				kind: 'text',
 				renderDiagnosticDecorations: !services.has(IMarkerDecorationsService),
 				options,
-				model: options.model,
+				model,
 				viewModel,
 				editorWorker,
-				languageId: options.languageId,
 				languageFeaturesService,
 				configurations: languageConfigurationService,
 				onLanguageError,
@@ -408,13 +388,14 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				},
 				register: value => modelStore.add(value),
 			});
+			const ariaLabel = options.ariaLabel ?? editorLabel(model.uri);
 			const view = modelStore.add(new View({
 				container: options.container,
 				rootDomNode: this.rootDomNode,
 				viewModel,
 				configuration: this.configuration,
 				theme: themeService.getColorTheme(),
-				ariaLabel: options.ariaLabel ?? editorLabel(options.input),
+				ariaLabel,
 				dimension: options.dimension,
 				semanticTokenSource,
 				bracketGuideSource,
@@ -424,7 +405,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				controller: {
 					ownerId: this.ownerId,
 					...(logService ? { logService } : {}),
-					ariaLabel: options.ariaLabel ?? editorLabel(options.input),
+					ariaLabel,
 					semanticTokenSource,
 				},
 			}));
@@ -466,7 +447,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			modelStore.add(inputEvents.onMouseDropCanceled(() => this.mouseDropCanceledEmitter.fire()));
 			modelStore.add(inputEvents.onMouseWheel(event => this.mouseWheelEmitter.fire(event)));
 			modelStore.add(toDisposable(() => {
-				if (!options.model.isDisposed()) options.model.removeAllDecorationsWithOwnerId(this.decorationOwnerId);
+				if (!model.isDisposed()) model.removeAllDecorationsWithOwnerId(this.decorationOwnerId);
 			}));
 			// Release contribution controllers before the View, including on later attach failures.
 			modelStore.delete(contributions);
@@ -477,9 +458,8 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				editor: this,
 				instantiationService: this.instantiationService,
 				options,
-				model: options.model,
+				model,
 				editorWorker,
-				languageId: options.languageId,
 				languageFeaturesService,
 				configurations: languageConfigurationService,
 				controller: this.controller,
@@ -1132,8 +1112,8 @@ class EditorDecorationsCollection implements IEditorDecorationsCollection {
 }
 
 function validateOptions(options: CodeEditorWidgetOptions): void {
-	if (!options || typeof options !== "object" || !isHTMLElement(options.container) || (options.model !== null && !(options.model instanceof TextModel)) || !options.input || !options.languageId) {
-		throw new TypeError("Code editor widget requires a container, input, language, and a text model or null");
+	if (!options || typeof options !== "object" || !isHTMLElement(options.container) || (options.model !== null && !(options.model instanceof TextModel))) {
+		throw new TypeError("Code editor widget requires a container and a text model or null");
 	}
 	if (options.onContributionError !== undefined && typeof options.onContributionError !== "function") {
 		throw new TypeError("Code editor contribution error handler must be a function");
@@ -1164,9 +1144,8 @@ function executeEditorCommand<T>(emitter: Emitter<EditorCommandEvent>, commandId
 	return result;
 }
 
-function editorLabel(input: ICodeEditorWidgetOptions['input']): string {
-	if (input.label?.trim()) return input.label;
-	const path = decodeURIComponent(input.resource.path);
+function editorLabel(resource: URI): string {
+	const path = decodeURIComponent(resource.path);
 	return path.slice(path.lastIndexOf('/') + 1) || 'Text editor';
 }
 

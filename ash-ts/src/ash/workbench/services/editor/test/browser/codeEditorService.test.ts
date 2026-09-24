@@ -40,8 +40,6 @@ test('active code editor follows the pane control when two editors share a model
 	document.body.append(firstContainer, secondContainer);
 	const options = {
 		model,
-		input: { resource: model.uri },
-		languageId: model.getLanguageId(),
 		lineHeight: 20,
 		instantiationService: services,
 	};

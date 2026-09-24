@@ -51,8 +51,6 @@ test('clipboard actions use the focused code editor and platform clipboard servi
 	using editor = createTestCodeEditor({
 		container,
 		model,
-		input: { resource: model.uri },
-		languageId: model.getLanguageId(),
 		lineHeight: 20,
 		instantiationService: services,
 	});
@@ -88,16 +86,12 @@ test('paste command drops a delayed clipboard read after focus, selection, or mo
 	using first = createTestCodeEditor({
 		container: dom.window.document.querySelector<HTMLElement>('main')!,
 		model: firstModel,
-		input: { resource: firstModel.uri },
-		languageId: firstModel.getLanguageId(),
 		lineHeight: 20,
 		instantiationService: services,
 	});
 	using second = createTestCodeEditor({
 		container: dom.window.document.querySelector<HTMLElement>('aside')!,
 		model: secondModel,
-		input: { resource: secondModel.uri },
-		languageId: secondModel.getLanguageId(),
 		lineHeight: 20,
 		instantiationService: services,
 	});
@@ -180,16 +174,12 @@ test('cut command keeps text when clipboard writing completes after selection or
 	using first = createTestCodeEditor({
 		container: dom.window.document.querySelector<HTMLElement>('main')!,
 		model: firstModel,
-		input: { resource: firstModel.uri },
-		languageId: firstModel.getLanguageId(),
 		lineHeight: 20,
 		instantiationService: services,
 	});
 	using second = createTestCodeEditor({
 		container: dom.window.document.querySelector<HTMLElement>('aside')!,
 		model: secondModel,
-		input: { resource: secondModel.uri },
-		languageId: secondModel.getLanguageId(),
 		lineHeight: 20,
 		instantiationService: services,
 	});

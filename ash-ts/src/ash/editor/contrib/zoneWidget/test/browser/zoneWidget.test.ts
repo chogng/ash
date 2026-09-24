@@ -34,8 +34,6 @@ test('ZoneWidget reserves editor space, tracks its anchor, updates layout, and r
 	using editor = createTestCodeEditor({
 		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
 		model,
-		input: { resource: model.uri },
-		languageId: model.getLanguageId(),
 		lineHeight: 20,
 	});
 	editor.layout({ width: 200, height: 100 });
@@ -128,8 +126,6 @@ test('ZoneWidget preserves selection on request and exposes an enabled resize sa
 	using editor = createTestCodeEditor({
 		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
 		model,
-		input: { resource: model.uri },
-		languageId: model.getLanguageId(),
 		lineHeight: 20,
 	});
 	editor.layout({ width: 200, height: 40 });
@@ -178,8 +174,6 @@ test('ZoneWidget places an anchor after its wrapped visual line', () => {
 	using editor = createTestCodeEditor({
 		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
 		model,
-		input: { resource: model.uri },
-		languageId: model.getLanguageId(),
 		lineHeight: 20,
 	});
 	editor.layout({ width: 100, height: 500 });

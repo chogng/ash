@@ -7,7 +7,7 @@ registerEditorContribution({ id: "editor.contrib.sectionHeaders", install: conte
 	return new SectionHeadersController(
 		context.view,
 		context.model,
-		context.languageId,
+		context.model.getLanguageId(),
 		context.configurations,
 		{
 			findRegionSectionHeaders: options.showRegionSectionHeaders ?? true,

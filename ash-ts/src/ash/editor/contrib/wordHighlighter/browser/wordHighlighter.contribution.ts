@@ -425,7 +425,7 @@ registerEditorContribution({
 		const decorations = context.register(new TextDecorationCollection<DocumentHighlightKind | undefined>(context.model));
 		context.register(new TextualMultiDocumentHighlightFeature(context.languageFeaturesService));
 		return new WordHighlighterContribution(context.controller, context.editor, decorations, {
-			resource: context.options.input.resource,
+			resource: context.model.uri,
 			languageFeaturesService: context.languageFeaturesService,
 			onError: context.onLanguageError,
 		});

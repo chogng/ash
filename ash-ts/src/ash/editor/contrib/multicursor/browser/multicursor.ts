@@ -253,7 +253,7 @@ registerEditorContribution({ id: SelectionHighlighter.ID, install: context => {
 			context.editor,
 			decorations,
 			{
-				languageId: context.languageId,
+				languageId: context.model.getLanguageId(),
 				languageFeaturesService: context.languageFeaturesService,
 			},
 		);

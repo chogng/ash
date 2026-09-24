@@ -18,7 +18,7 @@ import type { IEditorOptions } from '../../common/config/editorOptions.js';
 import { IStandaloneThemeService } from '../common/standaloneTheme.js';
 
 type StandaloneCodeEditorOptions = Omit<CodeEditorWidgetOptions,
-	'container' | 'input' | 'languageId' | 'model' |
+	'container' | 'model' |
 	'editorWorkerFactory' | 'completionWorkerFactory' |
 	'registerBeforeSave' | 'formatOnSave'
 >;

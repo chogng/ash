@@ -201,7 +201,7 @@ function createEditor(enabled = true) {
 	const errors: unknown[] = [];
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	const editor = createTestCodeEditor({
-		container, model, languageId: 'typescript', input: { resource: model.uri, label: 'test.ts' },
+		container, model, ariaLabel: 'test.ts',
 		languageFeaturesService: features, dimension: { width: 400, height: 120 },
 		parameterHints: { enabled }, onLanguageError: error => errors.push(error),
 	});

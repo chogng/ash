@@ -64,8 +64,6 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 		this.editor = this._register(instantiationService.createInstance(CodeEditorWidget, {
 			container: this.element,
 			model: this.model,
-			input: { resource: this.model.uri },
-			languageId: CHAT_INPUT_LANGUAGE_ID,
 			lineHeight: CHAT_INPUT_LINE_HEIGHT,
 			ariaLabel: options.ariaLabel,
 			placeholder: options.placeholder,

@@ -48,8 +48,6 @@ test('ContextMenuController opens the host menu at the active cursor from Shift+
 	using editor = createTestCodeEditor({
 		container,
 		model,
-		input: { resource: model.uri },
-		languageId: model.getLanguageId(),
 		lineHeight: 20,
 		instantiationService: services,
 	});

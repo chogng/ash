@@ -203,7 +203,7 @@ test("Provider request flows through store, session, acceptance, and undo", asyn
 	}));
 	using model = new TextModel("con");
 	using service = new LanguageCompletionService(model, registry);
-	using editor = createTestCodeEditor({ container: h(document, 'div'), model, input: { resource: model.uri }, languageId: 'plaintext', contributions: [] });
+	using editor = createTestCodeEditor({ container: h(document, 'div'), model, contributions: [] });
 	editor.setPosition(new Position(1, 4));
 	using session = new SuggestModel(service.results, editor);
 

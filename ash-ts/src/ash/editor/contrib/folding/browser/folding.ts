@@ -315,7 +315,7 @@ registerEditorContribution({
 	install: context => {
 		if (context.kind !== "text" || context.model.largeFile.tooLargeForTokenization) return;
 		const folding = context.getService(TextEditorCapability.folding);
-		const service = context.register(new FoldingRangeService(context.model, context.languageFeaturesService.foldingRangeProvider, context.options.input.resource));
+		const service = context.register(new FoldingRangeService(context.model, context.languageFeaturesService.foldingRangeProvider, context.model.uri));
 		context.register(new FoldingRangeSource(context.editor, folding, service, {
 			configurations: context.configurations,
 			providers: context.languageFeaturesService.foldingRangeProvider,

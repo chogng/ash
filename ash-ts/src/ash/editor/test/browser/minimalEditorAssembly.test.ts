@@ -34,8 +34,7 @@ test("minimal text editor assembly creates only the engine surface", () => {
 	const resource = URI.file("C:\\project\\minimal.ts");
 	using editor = createTestCodeEditor({
 		container,
-		input: { resource, label: "minimal.ts" },
-		languageId: "typescript",
+		ariaLabel: "minimal.ts",
 		model,
 		placeholder: "Not installed",
 	});
@@ -61,8 +60,6 @@ test("typing, pair deletion and Enter share cursor history without contributions
 	using model = new TextModel("", { languageId: "typescript" });
 	using editor = createTestCodeEditor({
 		container: dom.window.document.querySelector<HTMLElement>("main")!,
-		input: { resource: URI.file("/minimal.ts") },
-		languageId: "typescript",
 		model,
 		contributions: [],
 	});

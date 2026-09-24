@@ -30,7 +30,7 @@ test('CursorUndoRedoController restores and reapplies cursor-only history', () =
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using model = new TextModel('one\ntwo');
-	using editor = createTestCodeEditor({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
+	using editor = createTestCodeEditor({ container, model, lineHeight: 20 });
 	const original = [Selection.fromPositions(new Position(1, 1))];
 	const multiple = [Selection.fromPositions(new Position(2, 1)), Selection.fromPositions(new Position(1, 1))];
 	assert.ok(CursorUndoRedoController.get(editor));

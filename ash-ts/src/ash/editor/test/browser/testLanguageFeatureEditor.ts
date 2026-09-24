@@ -24,7 +24,7 @@ export function createLanguageFeatureEditor() {
 	const opened: LanguageLocation[] = [];
 	const errors: unknown[] = [];
 	const editor = createTestCodeEditor({
-		container, model, languageId: 'typescript', input: { resource: model.uri },
+		container, model,
 		languageFeaturesService: features, dimension: { width: 500, height: 200 },
 		onOpenLocation: location => { opened.push(location); }, onLanguageError: error => errors.push(error),
 	});

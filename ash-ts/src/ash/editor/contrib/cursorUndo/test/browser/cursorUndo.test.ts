@@ -32,8 +32,6 @@ test('CursorUndoRedoController records canonical same-version selection events',
 	using editor = createTestCodeEditor({
 		container: dom.window.document.querySelector<HTMLElement>('main')!,
 		model,
-		input: { resource: model.uri },
-		languageId: model.getLanguageId(),
 		lineHeight: 20,
 	});
 	const controller = CursorUndoRedoController.get(editor);
@@ -59,8 +57,6 @@ test('CursorUndoRedoController clears cursor history after document changes', ()
 	using editor = createTestCodeEditor({
 		container: dom.window.document.querySelector<HTMLElement>('main')!,
 		model,
-		input: { resource: model.uri },
-		languageId: model.getLanguageId(),
 		lineHeight: 20,
 	});
 	const controller = CursorUndoRedoController.get(editor);

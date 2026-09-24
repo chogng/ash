@@ -339,8 +339,6 @@ class CommitMessageEditor extends Disposable {
 		this.editor = this._register(instantiationService.createInstance(CodeEditorWidget, {
 			container,
 			model: this.model,
-			input: { resource: this.model.uri },
-			languageId: this.model.getLanguageId(),
 			lineHeight: 20,
 			ariaLabel: 'Commit message',
 			placeholder: 'Commit message',

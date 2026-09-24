@@ -157,7 +157,6 @@ const { createTestCodeEditor } = await import('../../../../../editor/test/browse
 		const errors: unknown[] = [];
 		using editor = createTestCodeEditor({
 			container: dom.window.document.querySelector('main')!, model,
-			input: { resource: URI.file('/workspace/src/file.ts') }, languageId: model.getLanguageId(),
 			instantiationService: services, onContributionError: error => errors.push(error),
 		});
 		assert.deepEqual(fixture.requests, [], 'deferred construction must not fetch during attach');

@@ -256,7 +256,7 @@ registerEditorContribution({
 	id: 'editor.contrib.colorPicker',
 	install: context => {
 		if (context.kind !== 'text') return;
-		const service = new ColorService(context.model, context.languageFeaturesService.colorProvider, context.options.input.resource, context.onLanguageError);
+		const service = new ColorService(context.model, context.languageFeaturesService.colorProvider, context.model.uri, context.onLanguageError);
 		const targetWindow = context.controller.element.ownerDocument.defaultView;
 		if (!targetWindow) throw new Error('Color picker requires an attached browser window');
 		const detector = context.register(new ColorDetector(

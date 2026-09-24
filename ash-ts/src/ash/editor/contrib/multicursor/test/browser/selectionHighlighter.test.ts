@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
-import { URI } from '../../../../../base/common/uri.js';
 import { Selection } from '../../../../common/core/selection.js';
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
@@ -80,8 +79,6 @@ function createHarness(text: string, languages: TestLanguageFeaturesService, ini
 		container,
 		model,
 		contributions: [],
-		input: { resource: URI.parse('file:///selection-highlighter.ts') },
-		languageId: 'typescript',
 		lineHeight: 20,
 	});
 	editor.setSelection(initialSelection, 'test');

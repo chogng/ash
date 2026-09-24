@@ -32,7 +32,7 @@ import { type TextModel } from '../common/model/textModel.js';
 import { type DocumentTextStyleAttributes } from '../common/model/documentSchema.js';
 import { type ILanguageConfigurationService } from '../common/languages/languageConfigurationRegistry.js';
 import { type ILanguageFeaturesService } from '../common/services/languageFeatures.js';
-import { type ICodeEditorWidgetOptions } from './widget/codeEditor/codeEditorWidget.js';
+import { type CodeEditorWidgetOptions } from './widget/codeEditor/codeEditorWidget.js';
 import { type ViewController } from './view/viewController.js';
 import { type View } from './view.js';
 import type { BracketGuideSource } from './viewParts/indentGuides/indentGuides.js';
@@ -519,7 +519,6 @@ interface SharedTextContext {
 	readonly kind: 'text';
 	readonly model: TextModel;
 	readonly editorWorker: IVersionedEditorWorkerClient;
-	readonly languageId: string;
 	readonly languageFeaturesService: ILanguageFeaturesService;
 	readonly configurations: ILanguageConfigurationService;
 	readonly onLanguageError: (error: unknown) => void;
@@ -529,12 +528,11 @@ interface SharedTextContext {
 }
 
 export interface TextEditorContributionConfigurationContext extends SharedTextContext {
-	readonly options: Pick<ICodeEditorWidgetOptions,
+	readonly options: Pick<CodeEditorWidgetOptions,
 		| 'bracketPairColorization'
 		| 'folding'
 		| 'guides'
 		| 'indentation'
-		| 'input'
 		| 'languageDiagnosticsService'
 		| 'showSymbolIcons'
 	>;
@@ -546,7 +544,7 @@ export interface TextEditorContributionConfigurationContext extends SharedTextCo
 }
 
 export interface TextEditorContributionContext extends SharedTextContext {
-	readonly options: Pick<ICodeEditorWidgetOptions,
+	readonly options: Pick<CodeEditorWidgetOptions,
 		| 'codeLens'
 		| 'colorDecorators'
 		| 'colorDecoratorsActivatedOn'
@@ -561,7 +559,6 @@ export interface TextEditorContributionContext extends SharedTextContext {
 		| 'inlayHints'
 		| 'inlineCompletions'
 		| 'languageDiagnosticsService'
-		| 'input'
 		| 'matchBrackets'
 		| 'occurrencesHighlight'
 		| 'occurrencesHighlightDelay'

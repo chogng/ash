@@ -4,7 +4,7 @@ import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { localize2 } from '../../../../nls.js';
 import { WordBasedCompletionItemProvider } from '../../../browser/services/editorWorkerService.js';
 import { EditorAction, registerEditorAction, registerEditorContribution, type ServicesAccessor } from '../../../browser/editorExtensions.js';
-import { type ICodeEditorWidgetOptions } from '../../../browser/widget/codeEditor/codeEditorWidget.js';
+import { type URI } from '../../../../base/common/uri.js';
 import { isCompletionsEnabledFromObject } from '../../../common/services/completionsEnablement.js';
 import { Position } from "../../../common/core/position.js";
 import { stopEvent } from '../../../../base/browser/dom.js';
@@ -339,9 +339,9 @@ registerEditorContribution({
 	id: SuggestController.ID,
 	install: context => {
 		if (context.kind !== "text") return;
-		if (context.options.suggestions !== undefined && !isCompletionsEnabledFromObject(context.options.suggestions, context.languageId)) return;
+		if (context.options.suggestions !== undefined && !isCompletionsEnabledFromObject(context.options.suggestions, context.model.getLanguageId())) return;
 		const completions = context.register(new LanguageCompletionService(context.model, context.languageFeaturesService.completionProvider, {
-			resource: context.options.input.resource,
+			resource: context.model.uri,
 			providers: [new WordBasedCompletionItemProvider(context.editorWorker)],
 			...(context.options.completionWorkerFactory ? { workerFactory: context.options.completionWorkerFactory } : {}),
 		}));
@@ -349,7 +349,7 @@ registerEditorContribution({
 			resolver: completions,
 			onResolveError: context.onLanguageError,
 			onDidAccept: item => completions.executeCompletionCommand(context.model.getLanguageId(), item, new AbortController().signal),
-			snippetVariables: createSnippetVariables(context.options.input),
+			snippetVariables: createSnippetVariables(context.model.uri),
 		}));
 		return new SuggestController(
 			context.editor,
@@ -361,8 +361,8 @@ registerEditorContribution({
 	},
 });
 
-function createSnippetVariables(input: ICodeEditorWidgetOptions['input']): { readonly resolveVariable: (name: string) => string | undefined } {
-	const filePath = decodeURIComponent(input.resource.path);
+function createSnippetVariables(resource: URI): { readonly resolveVariable: (name: string) => string | undefined } {
+	const filePath = decodeURIComponent(resource.path);
 	const separator = filePath.lastIndexOf("/");
 	const filename = filePath.slice(separator + 1);
 	const extension = filename.lastIndexOf(".");

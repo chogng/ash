@@ -33,8 +33,6 @@ test('CopyPasteController owns URI-list and bounded text-file paste extensions',
 	using editor = createTestCodeEditor({
 		container: dom.window.document.querySelector<HTMLElement>('main')!,
 		model,
-		input: { resource: model.uri },
-		languageId: model.getLanguageId(),
 		lineHeight: 20,
 	});
 	editor.setSelection(new Selection(1, 1, 1, 8));
@@ -68,8 +66,6 @@ for (const change of ['writableAgain', 'selection', 'composition', 'content', 'm
 			using editor = createTestCodeEditor({
 				container: dom.window.document.querySelector<HTMLElement>('main')!,
 				model,
-				input: { resource: model.uri },
-				languageId: model.getLanguageId(),
 				lineHeight: 20,
 			});
 			editor.setPosition({ lineNumber: 1, column: 6 });
@@ -132,8 +128,6 @@ for (const failure of ['throw', 'reject', 'oversize'] as const) {
 			using editor = createTestCodeEditor({
 				container: dom.window.document.querySelector<HTMLElement>('main')!,
 				model,
-				input: { resource: model.uri },
-				languageId: model.getLanguageId(),
 				lineHeight: 20,
 			});
 			editor.setPosition({ lineNumber: 1, column: 6 });
