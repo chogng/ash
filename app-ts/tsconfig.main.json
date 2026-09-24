@@ -2,6 +2,8 @@
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "../.build/app-ts/main",
+    "incremental": true,
+    "tsBuildInfoFile": "../.build/app-ts/main.tsbuildinfo",
     "rootDir": ".",
     "types": ["node", "electron"]
   },

@@ -43,12 +43,12 @@ test("Vite build ownership does not leak back into Workbench sources or scripts"
 test("Desktop Vite commands select the Desktop build config", () => {
 	const manifest = JSON.parse(read("package.json")) as { readonly scripts: Readonly<Record<string, string>> };
 	for (const name of ["build", "build:renderer"]) {
-		assert.match(manifest.scripts[name], /\.\.\/build\/desktop\/compile\.ts/u, name);
+		assert.match(manifest.scripts[name], /\.\.\/build\/app_ts\/build\.ts/u, name);
 	}
 	for (const name of ["dev", "dev:ui", "dev:renderer", "dev:web", "dev:web:full"]) {
-		assert.match(manifest.scripts[name], /\.\.\/build\/desktop\/vite\/vite\.config\.ts/u, name);
+		assert.match(manifest.scripts[name], /\.\.\/build\/app_ts\/vite\/vite\.config\.ts/u, name);
 	}
-	assert.match(readFileSync(resolve(buildRoot, "../compile.ts"), "utf8"), /build\/desktop\/vite\/vite\.config\.ts/u);
+	assert.match(readFileSync(resolve(buildRoot, "../build.ts"), "utf8"), /vite\/vite\.config\.ts/u);
 });
 
 function read(relativePath: string): string {

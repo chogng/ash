@@ -1,7 +1,7 @@
 import { type ChildProcess, spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
-import { watchCompilation } from '../build/app_ts/compilation.ts';
+import { watchHost } from '../build/app_ts/host.ts';
 
 const sourceRoot = resolve(import.meta.dirname, '../app-ts');
 const require = createRequire(resolve(sourceRoot, 'package.json'));
@@ -13,7 +13,7 @@ const environment = { ...process.env };
 delete environment.ELECTRON_RUN_AS_NODE;
 
 let electron: ChildProcess | undefined;
-let watcher: Awaited<ReturnType<typeof watchCompilation>> | undefined;
+let watcher: Awaited<ReturnType<typeof watchHost>> | undefined;
 let ready = false;
 let restarting = false;
 let stopped = false;
@@ -61,7 +61,7 @@ async function stop(): Promise<void> {
 process.once('SIGINT', () => { void stop(); });
 process.once('SIGTERM', () => { void stop(); });
 if (watch) {
-  watcher = await watchCompilation(['main', 'preload'], current => {
+  watcher = await watchHost(current => {
     ready = current;
     if (ready) void restart();
   });

@@ -2,6 +2,8 @@
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "../.build/app-ts/preload",
+    "incremental": true,
+    "tsBuildInfoFile": "../.build/app-ts/preload.tsbuildinfo",
     "rootDir": ".",
     "types": ["node", "electron"]
   },

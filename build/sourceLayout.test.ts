@@ -27,8 +27,11 @@ test("repository build orchestration and developer scripts have separate root ow
   for (const retiredEntry of ["cargo_with_v8.py", "lib/just_shell.py", "compile.ts", "watch.ts", "vite", "lib/compilation.ts", "lib/appServer.ts", "lib/web.ts"]) {
     assert.equal(existsSync(join(import.meta.dirname, retiredEntry)), false, retiredEntry);
   }
-  for (const entry of ["compile.ts", "watch.ts", "compilation.ts", "appServer.ts", "web.ts", "vite/vite.config.ts"]) {
+  for (const entry of ["build.ts", "host.ts", "watch-app-server.ts", "appServer.ts", "web.ts", "vite/vite.config.ts"]) {
     assert.equal(existsSync(join(import.meta.dirname, "app_ts", entry)), true, entry);
+  }
+  for (const entry of ["compile.ts", "compilation.ts", "watch.ts"]) {
+    assert.equal(existsSync(join(import.meta.dirname, "app_ts", entry)), false, entry);
   }
 });
 

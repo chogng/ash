@@ -340,7 +340,7 @@ App Server 连接并重新读取 Session/Thread；Renderer 不直接读写 SQLit
 Electron sandbox 边界分为两层。`ISandboxGlobals` 是 preload 唯一暴露到主世界的底层桥接：
 它只包含只读进程元数据，以及受 `ash:` 频道前缀约束的 `invoke` / `on`。preload 必须保持
 自包含，运行时除 `electron` 外不得加载任何模块，也不得把 Electron event 对象传给 Renderer。
-构建后的 preload 由 `build/app_ts/compilation.ts` 检查这一约束。
+构建后的 preload 由 `build/app_ts/host.ts` 检查这一约束。
 
 `createElectronRendererApi()` 是该桥接的唯一产品适配器。它在普通 Renderer bundle 中引用频道
 常量，并组装领域化、强类型、可枚举的 `AshElectronRendererApi`。跨宿主领域能力由其父接口

@@ -258,7 +258,7 @@ just bench-build ash-keybinding --jobs 4 --compare .build/build-health/<run>/rep
 | `build/package.json`、`build/tsconfig.json` | 构建工具及根目录 TypeScript 脚本的测试和类型检查 |
 
 `.build/app-ts/` 是产物目录，按 `main`、`preload`、`renderer`、`node` 等运行目标存放输出。`.build/cargo/` 仍是统一 Cargo 输出目录；相同 profile 的公共依赖会复用。Code 的 `dev-small` 与 App 的默认开发 profile 分别拥有首次编译产物。
-`compile.ts` 接受这些编译目标，`watch.ts` 接受 TypeScript 目标或 `app-server`。启动脚本调用构建能力，构建模块不反向调用启动脚本。
+`build/app_ts/build.ts` 提供 `all`、`host`、`renderer` 和 `prepare` 入口；`host.ts` 用一次 TypeScript 项目构建编译并监听 Electron Main 与 Preload，增量构建信息放在 `.build/app-ts/`；`watch-app-server.ts` 负责后端监听。启动脚本调用构建能力，构建模块不反向调用启动脚本。
 
 Web 连接实现编译到 `node` 输出后，由 `scripts/web.ts` 或 Vite 插件加载。两者提供开发包路径和运行配置；连接实现不读取仓库构建目录。
 `ws` 属于 `app-ts` 的运行依赖，静态服务器使用的 `sirv` 属于根脚本的开发依赖，共用根锁文件。
