@@ -2053,11 +2053,13 @@ dependencies = [
  "ash-websocket-client",
  "ash-xai",
  "base64 0.22.1",
+ "futures",
  "serde",
  "serde_json",
  "sha2 0.10.9",
  "tempfile",
  "tokio",
+ "tokio-tungstenite 0.28.0",
  "url",
 ]
 

@@ -28,7 +28,7 @@
 | --- | --- | --- |
 | 本次到底使用哪个模型？ | 根据供应商定义、用户选择和本次调用覆盖生成不可变绑定 | [一次调用如何形成](#1-一次调用如何形成) |
 | 自定义服务地址会影响什么？ | 只在供应商配置明确允许时生效，不会把一个服务偷偷当成另一个协议 | [供应商与 API 端点](#5-供应商与-api-端点的联动) |
-| 凭据由这里保存吗？ | 不保存；这里只取得本次调用所需的凭据，保存和登录属于相邻系统 | [供应商凭据](#6-供应商凭据边界) |
+| 凭据由这里保存吗？ | App Server 接收新 key，本 crate 校验并映射到 `ash-secrets`；订阅登录由各自领域处理 | [供应商凭据](#6-供应商凭据边界) |
 | 失败后会自动重试吗？ | 只有调用类型明确允许安全重试时才会重试；模型推理默认不能仅凭“没收到输出”重跑 | [重试分工](#8-重试分工) |
 | 当前已经能做什么？ | 已具备 HTTP completion、embedding/rerank，以及显式 Responses WebSocket／Realtime GA 会话 | [当前实现审计](#3-当前实现审计) |
 
@@ -183,9 +183,9 @@ Ash 当前 adapter 可以切换过去。OAuth 也只决定如何取得 credentia
 
 | Provider / runtime | 官方公开能力 | 与当前 Ash invocation profile 的关系 | 当前 Ash 状态 |
 | --- | --- | --- | --- |
-| OpenAI Platform | [Responses WebSocket](https://developers.openai.com/api/docs/guides/websocket-mode) | 独立 Responses 会话 | 显式 connect_responses 已实现；默认模型调用仍用 HTTP |
+| OpenAI Platform | [Responses WebSocket](https://developers.openai.com/api/docs/guides/websocket-mode) | 独立 Responses 会话 | 显式 `connect_responses` 已实现；本地握手验证已存 API key，轮换后重连，删除后终止会话；默认模型调用仍用 HTTP |
 | ChatGPT 订阅 | 本地 Codex 实现及 Luna／low 实连 | 专用认证 target 和握手 beta 头 | 两轮同连接调用与增量发送已实测 |
-| OpenAI Realtime GA | [Realtime GA](https://developers.openai.com/api/docs/guides/realtime) | 独立 realtimeApiProfile，不由 Luna 订阅授权 | connect_realtime 已实现；本地事件／PCM 验证，未实连语音模型 |
+| OpenAI Realtime GA | [Realtime GA](https://developers.openai.com/api/docs/guides/realtime) | 独立 `realtimeApiProfile` 和模型 ID，不由 Luna 订阅授权 | `connect_realtime` 已实现；本地握手验证已存 API key，不再要求模型出现在文本目录；未实连语音模型 |
 | xAI | [Responses WebSocket mode](https://docs.x.ai/developers/advanced-api-usage/websocket-mode) 明确使用 `wss://api.x.ai/v1/responses` | 上游 exact Responses WS，但 Ash 当前 xAI definition 仍是 Chat Completions | `Unavailable`；先迁移/验证 Responses adapter，再启用 |
 | Google Gemini | [Live API](https://ai.google.dev/api/live) 是 stateful WebSocket | 独立 `BidiGenerateContent`/Live 模型协议，不是当前 OpenAI-compatible Chat route | `Unavailable` |
 | Qwen | [文本流式输出](https://www.alibabacloud.com/help/en/model-studio/stream) 使用 SSE；[Realtime API](https://www.alibabacloud.com/help/en/model-studio/realtime) 另有 WebSocket | Realtime 属于 Omni/audio/ASR/TTS 等独立协议 | `Unavailable` |
@@ -382,9 +382,11 @@ App Server 将声明传给模型目录，Desktop 不按供应商名称或协议�
 响应结束前的事件交付，以及取消、截断、接收方错误和已交付内容不得重放的行为。
 
 `output_transport` 只区分当前 HTTP invocation 是否提供原生增量输出，不代表 WebSocket。
-`websocket_api_profile` 是另一条 fail-closed capability：当前只有 OpenAI definition 声明
-`OpenAiResponses`，且它只是后续 runtime binding 的必要条件，不表示 codec/session 已完成，也不能
-替 ChatGPT subscription target 或自定义 compatible endpoint 作保证。
+`websocket_api_profile` 是另一条显式能力：当前只有 OpenAI definition 声明
+`OpenAiResponses`。它不替 ChatGPT subscription target 或自定义 compatible endpoint 作保证。
+产品 API key 由 App Server 接收并保存在 profile SecretStore 中，模型 runtime 在握手时注入；
+Responses 连接每次调用前检查凭据变化，变更时丢弃旧连接历史。Realtime 和 Live 在建连时读取
+凭据，现有会话由调用方管理关闭。平台实机验收状态见[凭据边界](secrets.md#12-模型-api-key-的进程边界)。
 
 DeepSeek `: keep-alive` 的 frame 边界由 client 识别，作为无 payload 的 SSE comment 交给协议层；
 协议层确认它不形成 model output。Anthropic `event: ping` 同样由协议层过滤。Runtime 不解析

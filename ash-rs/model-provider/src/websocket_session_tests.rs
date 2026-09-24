@@ -2,7 +2,205 @@ use super::*;
 use ash_api::WebSocketSessionConfig;
 use ash_http_client::HttpClientConfig;
 use ash_http_client::OutboundNetworkSnapshot;
+use ash_http_client::ProxyPolicy;
 use ash_websocket_client::WebSocketConnector;
+use futures::SinkExt;
+use futures::StreamExt;
+use tokio::net::TcpListener;
+use tokio_tungstenite::tungstenite::Message;
+
+fn local_connector() -> WebSocketConnector {
+    WebSocketConnector::new(
+        OutboundNetworkSnapshot::new(
+            HttpClientConfig::new().with_proxy_policy(ProxyPolicy::Direct),
+        )
+        .unwrap(),
+    )
+}
+
+#[tokio::test]
+async fn stored_api_key_authenticates_all_three_openai_websocket_services() {
+    let secrets = Arc::new(MemorySecretStore::default());
+    secrets
+        .store(
+            &provider_api_key_secret_key(&provider_id("openai")),
+            &SecretValue::new(b"socket-test-key".to_vec()),
+        )
+        .unwrap();
+    let runtime = ModelProviderRuntime::with_client_and_secrets(
+        ProviderConfigRegistry::builtin(),
+        Arc::new(FailingTransport),
+        secrets,
+    );
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let config = provider_config_with_endpoint(
+        "openai",
+        format!("http://{}/v1", listener.local_addr().unwrap()),
+    );
+    let server = tokio::spawn(async move {
+        for path in ["/v1/responses", "/v1/realtime", "/v1/live/sessions"] {
+            let (tcp, _) = listener.accept().await.unwrap();
+            let mut socket = tokio_tungstenite::accept_hdr_async(
+                tcp,
+                move |request: &tokio_tungstenite::tungstenite::handshake::server::Request,
+                      response| {
+                    assert_eq!(request.uri().path(), path);
+                    assert_eq!(request.headers()["authorization"], "Bearer socket-test-key");
+                    if path == "/v1/realtime" {
+                        assert_eq!(request.uri().query(), Some("model=realtime-fixture"));
+                    }
+                    Ok(response)
+                },
+            )
+            .await
+            .unwrap();
+            match path {
+                "/v1/realtime" => {
+                    socket
+                        .send(Message::Text(
+                            json!({"type":"session.created","session":{"type":"realtime","id":"realtime-1"}})
+                                .to_string()
+                                .into(),
+                        ))
+                        .await
+                        .unwrap();
+                }
+                "/v1/live/sessions" => {
+                    let start: Value = serde_json::from_str(
+                        socket.next().await.unwrap().unwrap().to_text().unwrap(),
+                    )
+                    .unwrap();
+                    assert_eq!(start["type"], "session.start");
+                    socket
+                        .send(Message::Text(
+                            json!({"type":"session.started","session":{"id":"live-1","model":"gpt-live-1"}})
+                                .to_string()
+                                .into(),
+                        ))
+                        .await
+                        .unwrap();
+                }
+                _ => {}
+            }
+        }
+    });
+    let cancellation = CancellationSource::new().token();
+    let responses = runtime
+        .connect_responses(
+            &config,
+            &model_ref("openai", "gpt-5.6"),
+            None,
+            local_connector(),
+            WebSocketSessionConfig::default(),
+            &cancellation,
+        )
+        .await
+        .unwrap();
+    assert!(responses.is_open());
+    drop(responses);
+    runtime
+        .connect_realtime(
+            &config,
+            &model_ref("openai", "realtime-fixture"),
+            &local_connector(),
+            WebSocketSessionConfig::default(),
+            &cancellation,
+        )
+        .await
+        .unwrap();
+    runtime
+        .connect_voice(
+            &config,
+            &ash_model_provider_config::VoiceModelConfig::default(),
+            "test",
+            &local_connector(),
+            WebSocketSessionConfig::default(),
+            &cancellation,
+        )
+        .await
+        .unwrap();
+    server.await.unwrap();
+}
+
+#[tokio::test]
+async fn responses_socket_reconnects_after_key_rotation_and_closes_after_deletion() {
+    let secrets = Arc::new(MemorySecretStore::default());
+    let key = provider_api_key_secret_key(&provider_id("openai"));
+    secrets
+        .store(&key, &SecretValue::new(b"first-key".to_vec()))
+        .unwrap();
+    let runtime = ModelProviderRuntime::with_client_and_secrets(
+        ProviderConfigRegistry::builtin(),
+        Arc::new(FailingTransport),
+        secrets.clone(),
+    );
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let config = provider_config_with_endpoint(
+        "openai",
+        format!("http://{}/v1", listener.local_addr().unwrap()),
+    );
+    let server = tokio::spawn(async move {
+        for expected in ["Bearer first-key", "Bearer second-key"] {
+            let (tcp, _) = listener.accept().await.unwrap();
+            let mut socket = tokio_tungstenite::accept_hdr_async(
+                tcp,
+                move |request: &tokio_tungstenite::tungstenite::handshake::server::Request,
+                      response| {
+                    assert_eq!(request.headers()["authorization"], expected);
+                    Ok(response)
+                },
+            )
+            .await
+            .unwrap();
+            if expected == "Bearer second-key" {
+                let request: Value =
+                    serde_json::from_str(socket.next().await.unwrap().unwrap().to_text().unwrap())
+                        .unwrap();
+                assert_eq!(request["generate"], false);
+                socket
+                    .send(Message::Text(
+                        json!({"type":"response.completed","response":{"id":"warm","status":"completed","output":[],"usage":{"input_tokens":1,"output_tokens":0}}})
+                            .to_string()
+                            .into(),
+                    ))
+                    .await
+                    .unwrap();
+            }
+        }
+    });
+    let cancellation = CancellationSource::new().token();
+    let mut session = runtime
+        .connect_responses(
+            &config,
+            &model_ref("openai", "gpt-5.6"),
+            None,
+            local_connector(),
+            WebSocketSessionConfig::default(),
+            &cancellation,
+        )
+        .await
+        .unwrap();
+    secrets
+        .store(&key, &SecretValue::new(b"second-key".to_vec()))
+        .unwrap();
+    assert_eq!(
+        session
+            .warm_up(&ModelRequest::text("warm"), &cancellation)
+            .await
+            .unwrap()
+            .response_id,
+        "warm"
+    );
+    secrets.delete(&key).unwrap();
+    assert!(matches!(
+        session
+            .warm_up(&ModelRequest::text("again"), &cancellation)
+            .await,
+        Err(ModelProviderError::Credential(_))
+    ));
+    assert!(!session.is_open());
+    server.await.unwrap();
+}
 
 #[test]
 fn websocket_factories_require_their_own_declared_service_protocols() {

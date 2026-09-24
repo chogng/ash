@@ -371,7 +371,12 @@ fn provider_rpc_lists_the_backend_catalog_and_stores_api_keys_without_projecting
             "jsonrpc":"2.0","id":2,"method":"provider/list","params":{}
         }),
     );
-    assert_eq!(initial["result"]["providers"].as_array().unwrap().len(), 13);
+    assert_eq!(
+        initial["result"]["providers"].as_array().unwrap().len(),
+        ash_model_provider_config::ProviderConfigRegistry::builtin()
+            .providers()
+            .count()
+    );
 
     let saved = call(
         &server,

@@ -2255,7 +2255,7 @@ fn custom_provider_discovery_preserves_configured_model_choices() {
             .filter(|entry| entry.model.provider == provider)
             .map(|entry| entry.model.model.as_str())
             .collect::<Vec<_>>(),
-        ["gpt-5.6", "gpt-6-astra"]
+        ["gpt-5.6", "gpt-6-astra", "grok-4.5"]
     );
     assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 0);
     let fetched = model.refresh(&provider).unwrap();

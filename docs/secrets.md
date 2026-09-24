@@ -239,7 +239,7 @@ Desktop renderer ──▶ SecretStore
 - OS keyring adapter contract 的完整 round trip；真实平台 keyring round trip 由 opt-in host test 验证；
 - file backend 的完整 round trip、permission、atomic replace 与 stale staging cleanup；
 - logout/delete 后 exact value file 不可读取；
-- schema、App Server DTO、Thread event 和 rollout 中无 secret-bearing field。
+- 除明确的 `provider/apiKey/set` 和 `provider/probe` 输入外，App Server 响应、Thread event 和 rollout 不含 secret 值。
 
 ## 11. 固定决策
 
@@ -253,4 +253,19 @@ Desktop renderer ──▶ SecretStore
 7. 本地 composition 默认使用 `<profile>/secrets` 下的私有文件 backend；Unix 强制 0700/0600，Windows 使用 owner-only protected DACL 和 write-through atomic replacement。
 8. `ash-keyring-store` 保留为可注入的平台 adapter；它不是 daemon 默认，不与文件 backend fallback 或双写。
 9. `LocalProfileRuntime` 拥有一个 profile 的唯一 `SecretStore`；共享 profile runtime 时注入不同 store 会直接拒绝，不形成第二套 credential authority。
-10. App Server protocol 和普通 server operation 不暴露 secret；local composition 只把 `SecretStore` 注入 Connector、MCP、ChatGPT 与 Kimi credential adapter。订阅 token 只在本地 credential owner 与单次模型请求之间流动，不进入 Core Agent Loop 状态。
+10. `provider/apiKey/set` 与 `provider/probe` 可把新 key 交给受信任的 App Server；后端不提供读取已存 key 的接口。local composition 将同一个 `SecretStore` 注入模型、Connector、MCP 与订阅认证 adapter。订阅 token 只在本地 credential owner 与单次模型请求之间流动，不进入 Core Agent Loop 状态。
+
+## 12. 模型 API key 的进程边界
+
+产品模型的 API key 由受信任的 App Server 接收并管理。`provider/apiKey/set` 写入当前 profile 的 `SecretStore`；`provider/list` 只返回是否已配置，`provider/remove` 清理被删除连接的 key。`ash-model-provider` 在发起 HTTP、Responses WebSocket、Realtime 或 Live 请求时解析凭据并生成鉴权标头。CLI/TUI 通过同一 App Server 协议管理 key；Desktop 使用同一协议，当前尚无独立的模型 key 设置界面。
+
+| 能力 | 所有者 |
+| --- | --- |
+| Key 录入、状态和删除命令 | App Server 协议与 `ash-app-server` |
+| Key 校验、存储映射、请求鉴权 | `ash-model-provider` 与 `ash-secrets` |
+| 模型 HTTP/WebSocket 协议 | `ash-api`、`ash-websocket-client` |
+| 沙箱命令流量与审批 | `ash-network-proxy`、执行与策略领域 |
+
+这种边界允许 App Server 在录入和调用时接触明文 key；同用户且能访问 App Server 的客户端也可提交新 key 或使用已配置的模型。修改供应商的 `baseUrl` 后，下一次调用会把该供应商已存的 key 用于新目标，因此配置写入者与 key 录入者属于同一信任域。profile 文件权限保护落盘值，但不提供“App Server 不能读取 key”或“每次修改都由系统身份确认”的保证。无需安装独立模型服务，也不要求旧 profile key 重新录入；已有 key 沿用同一存储位置。不得把模型 key 自动交给沙箱命令或网络代理。
+
+macOS 的 App Server 协议和本地 WebSocket 握手已用假 key 自动测试。Linux GNU/musl 与 Windows x64/ARM64 的真实机器构建、profile 权限、录入/轮换/删除及 HTTP、Responses WebSocket、Realtime、Live 调用仍需分别验收；未执行这些实机检查前，不宣称对应平台已通过产品验收。真实供应商凭据与系统网络的端到端调用也尚未在本次改动中验证。

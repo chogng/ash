@@ -2,6 +2,7 @@ use super::ModelEventSink;
 use super::ModelProviderRuntime;
 use super::Provider;
 use crate::ModelProviderError;
+use crate::ProviderCredentialService;
 use ash_api::ApiError;
 use ash_api::ApiStreamSink;
 use ash_api::ModelRequest;
@@ -28,6 +29,7 @@ pub struct ResponsesModelSession {
     limits: WebSocketSessionConfig,
     target: ResolvedApiTarget,
     session: ResponsesWebSocketSession,
+    credentials: Option<ProviderCredentialService>,
 }
 
 impl ModelProviderRuntime {
@@ -101,6 +103,11 @@ impl ModelProviderRuntime {
             ));
         }
         let connection = runtime.connection(model, &normalized)?;
+        let credentials = if matches!(&connection, super::ProviderConnection::Direct { .. }) {
+            runtime.credentials.clone()
+        } else {
+            None
+        };
         let provider = runtime.instantiate_normalized_with_connection(normalized, connection)?;
         provider.resolve_model(&model.model)?;
         let target = provider.target.resolve()?.into_api_target();
@@ -123,6 +130,7 @@ impl ModelProviderRuntime {
             limits,
             target,
             session,
+            credentials,
         })
     }
 
@@ -161,7 +169,6 @@ impl ModelProviderRuntime {
         }
         let connection = runtime.direct_connection(&normalized)?;
         let provider = runtime.instantiate_normalized_with_connection(normalized, connection)?;
-        provider.resolve_model(&model.model)?;
         let target = provider.target.resolve()?;
         RealtimeSession::connect(
             connector,
@@ -234,8 +241,8 @@ impl ResponsesModelSession {
         cancellation: &CancellationToken,
     ) -> Result<(), ModelProviderError> {
         super::check_cancellation(cancellation)?;
-        let target = match self.provider.target.resolve() {
-            Ok(target) => target.into_api_target(),
+        let target = match self.current_target() {
+            Ok(target) => target,
             Err(error) => {
                 self.session.abort();
                 return Err(error);
@@ -258,6 +265,27 @@ impl ResponsesModelSession {
             self.target = target;
         }
         Ok(())
+    }
+
+    fn current_target(&self) -> Result<ResolvedApiTarget, ModelProviderError> {
+        let Some(credentials) = &self.credentials else {
+            return self
+                .provider
+                .target
+                .resolve()
+                .map(|target| target.into_api_target());
+        };
+        let mut headers = self.provider.adapter.fixed_headers();
+        headers.extend(
+            credentials
+                .request_model_headers(&self.provider.config)
+                .map_err(|error| ModelProviderError::Credential(error.to_string()))?
+                .invocation,
+        );
+        Ok(ResolvedApiTarget::new(
+            self.provider.config.base_url.clone(),
+            headers,
+        ))
     }
 }
 struct Events<'a> {

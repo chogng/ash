@@ -35,8 +35,11 @@ ash-websocket-client = { workspace = true }
 
 [dev-dependencies]
 base64 = { workspace = true }
+futures = { workspace = true }
 tempfile = { workspace = true }
 serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "net"] }
+tokio-tungstenite = { workspace = true }
 
 [lints]
 workspace = true

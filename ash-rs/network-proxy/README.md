@@ -1,5 +1,7 @@
 # ash-network-proxy
 
+后续命令网络能力与各平台验收门槛见[代理规划](../docs/network-proxy.md)。产品模型 API key 的进程边界见[凭据说明](../../docs/secrets.md#12-模型-api-key-的进程边界)。
+
 - 提供 HTTP 正向代理、HTTPS CONNECT 和 SOCKS5 TCP 转发。
 - 在 DNS 查询和连接上游前，将每个真实目标交给主机授权。
 - 固定已检查的解析地址，阻止域名解析到私有地址后绕过目标限制。
