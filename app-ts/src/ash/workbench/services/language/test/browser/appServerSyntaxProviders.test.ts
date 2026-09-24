@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert';
 import { test } from 'mocha';
 import { Range } from '../../../../../editor/common/core/range.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
-import { DocumentSymbolService } from '../../../../../editor/contrib/documentSymbols/common/languageDocumentSymbols.js';
+import { OutlineModel } from '../../../../../editor/contrib/documentSymbols/browser/outlineModel.js';
 import { FoldingRangeService } from '../../../../../editor/contrib/folding/common/languageFoldingRanges.js';
 import { createLanguageFeatureRequest } from '../../../../../editor/common/languages.js';
 import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';
@@ -52,7 +52,6 @@ test('Frontend tokens remain independent of App Server diagnostics, symbols, fol
 			[Symbol.dispose]() {},
 		}),
 	});
-	using symbols = new DocumentSymbolService(model, languages.documentSymbolProvider);
 	using folding = new FoldingRangeService(model, languages.foldingRangeProvider);
 	using diagnosticsWorker = new SyntaxProviderWorker(languages.syntaxProvider, undefined, undefined, model);
 
@@ -63,7 +62,8 @@ test('Frontend tokens remain independent of App Server diagnostics, symbols, fol
 	assert.equal(tokens.lane, 'tokens');
 	assert.equal(diagnostics.lane, 'diagnostics');
 	if (tokens.lane !== 'tokens' || diagnostics.lane !== 'diagnostics') throw new Error('Unexpected lane');
-	const documentSymbols = await symbols.provideDocumentSymbols('rust');
+	const outline = await OutlineModel.create(languages.documentSymbolProvider, model, new AbortController().signal, error => { throw error; });
+	const documentSymbols = outline?.getTopLevelSymbols() ?? [];
 	const foldingRanges = await folding.provideFoldingRanges('rust');
 	const signal = new AbortController().signal;
 	const structural = await languages.selectionRangeProvider.ordered(model)[0]!.provideSelectionRanges({

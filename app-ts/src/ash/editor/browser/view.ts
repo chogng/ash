@@ -36,7 +36,7 @@ import { EditorScrollbar } from './viewParts/editorScrollbar/editorScrollbar.js'
 import { LineNumbersOverlay } from './viewParts/lineNumbers/lineNumbers.js';
 import { BlockDecorations } from './viewParts/blockDecorations/blockDecorations.js';
 import { CurrentLineHighlightOverlay, CurrentLineMarginHighlightOverlay } from './viewParts/currentLineHighlight/currentLineHighlight.js';
-import { IndentGuidesOverlay, type BracketGuideSource } from './viewParts/indentGuides/indentGuides.js';
+import { IndentGuidesOverlay } from './viewParts/indentGuides/indentGuides.js';
 import { LinesDecorationsOverlay } from './viewParts/linesDecorations/linesDecorations.js';
 import { MarginViewLineDecorationsOverlay } from './viewParts/marginDecorations/marginDecorations.js';
 import { SelectionsOverlay } from './viewParts/selections/selections.js';
@@ -113,7 +113,6 @@ export interface EditorViewportOptions {
 	readonly ariaLabel?: string;
 	readonly textMeasurer?: TextMeasurer & { refresh?(): boolean };
 	readonly semanticTokenSource?: SemanticTokenSource;
-	readonly bracketGuideSource?: BracketGuideSource;
 	readonly presentation?: EditorViewportPresentation;
 	/** `host` delegates the visible focus outline to the viewport's direct host. */
 	readonly focusOutlineOwner?: EditorFocusOutlineOwner;
@@ -330,7 +329,6 @@ export class View extends ViewEventHandler {
 		this.contentViewOverlays.addDynamicOverlay(new CurrentLineHighlightOverlay(this.viewContext));
 		this.contentViewOverlays.addDynamicOverlay(new SelectionsOverlay(this.viewContext, this.viewModel, this.model, this.contentElement, () => this.visualProjection, () => this.textLeft, this.textMeasurer));
 		this.contentViewOverlays.addDynamicOverlay(new IndentGuidesOverlay(this.viewContext, {
-			bracketGuideSource: options.bracketGuideSource,
 			viewModel: this.viewModel,
 			host: this.contentElement,
 			readVisualProjection: () => this.visualProjection,
@@ -666,9 +664,8 @@ export class View extends ViewEventHandler {
 	}
 
 	layoutOverlayWidget(widget: IOverlayWidget): void {
-		if (this.overlayWidgets.setWidgetPosition(widget, widget.getPosition())) {
-			this.project(this.viewport.layout);
-		}
+		this.overlayWidgets.setWidgetPosition(widget, widget.getPosition());
+		this.project(this.viewport.layout);
 	}
 
 	removeOverlayWidget(widget: IOverlayWidget): void {
@@ -1135,9 +1132,6 @@ function validateEditorViewportOptions(options: EditorViewportOptions): void {
 	if (focusOutlineOwner !== 'editor' && focusOutlineOwner !== 'host') throw new TypeError('Unknown Stanza editor focus outline owner');
 	if (options.semanticTokenSource && options.semanticTokenSource.textModel !== options.viewModel.model) {
 		throw new TypeError('Stanza viewport and semantic token source must share one text model');
-	}
-	if (options.bracketGuideSource && options.bracketGuideSource.textModel !== options.viewModel.model) {
-		throw new TypeError('Stanza viewport and bracket guide source must share one text model');
 	}
 }
 

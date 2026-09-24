@@ -1,5 +1,5 @@
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { normalizeLanguageWorkspaceEdit, type LanguageWorkspaceEdit } from "../../../../editor/common/languages.js";
+import { normalizeLanguageWorkspaceEdit, type LanguageWorkspaceEdit, type LanguageWorkspaceEditEntry } from "../../../../editor/common/languages.js";
 import { type IBulkEditOptions, type IBulkEditPreviewHandler, type IBulkEditResult, type IBulkEditService, ResourceEdit, ResourceFileEdit, ResourceTextEdit } from '../../../../editor/browser/services/bulkEditService.js';
 import { type IWorkspaceEditService, type WorkspaceEditResult } from "../../../services/language/common/workspaceEditService.js";
 
@@ -28,28 +28,53 @@ export class BrowserBulkEditService extends Disposable implements IBulkEditServi
 	}
 
 	async apply(value: ResourceEdit[] | LanguageWorkspaceEdit, options: IBulkEditOptions = {}): Promise<IBulkEditResult> {
-		let edits = Array.isArray(value) ? [...value] : ResourceEdit.convert(normalizeLanguageWorkspaceEdit(value));
+		const sourceEdit = Array.isArray(value) ? undefined : normalizeLanguageWorkspaceEdit(value);
+		let edits = Array.isArray(value) ? [...value] : ResourceEdit.convert(sourceEdit!);
 		const signal = options.token ?? new AbortController().signal;
+		let previewed = false;
 		if (options.showPreview === true || (options.showPreview !== false && edits.length > 1 && this.previewHandler)) {
 			const previewHandler = this.previewHandler;
 			if (!previewHandler) throw new Error("Bulk edit preview is not available");
 			edits = await previewHandler(edits, options);
+			previewed = true;
 			if (signal.aborted || edits.length === 0) return { ariaSummary: 'No edits were applied', isApplied: false };
 		}
-		const edit = toLanguageWorkspaceEdit(edits);
+		const edit = sourceEdit && !previewed ? sourceEdit : toLanguageWorkspaceEdit(edits);
+		if (edit.entries.length === 0) return { ariaSummary: 'No edits were applied', isApplied: false };
 		const result: WorkspaceEditResult = await this.workspaceEdits.apply(edit, signal);
-		return { ariaSummary: `${result.resources.length} resources changed`, isApplied: edit.entries.length > 0 };
+		return { ariaSummary: `${result.resources.length} resources changed`, isApplied: true, undo: result.undo };
 	}
 }
 
 export function toLanguageWorkspaceEdit(edits: readonly ResourceEdit[]): LanguageWorkspaceEdit {
-	return normalizeLanguageWorkspaceEdit({ entries: edits.map(edit => {
-		if (edit instanceof ResourceTextEdit) return { kind: 'textDocument', resource: edit.resource, ...(edit.versionId === undefined ? {} : { version: edit.versionId }), edits: [edit.textEdit] };
+	const entries: LanguageWorkspaceEditEntry[] = [];
+	const groups = new Map<string, { kind: 'textDocument'; resource: ResourceTextEdit['resource']; version?: number; edits: ResourceTextEdit['textEdit'][] }>();
+	const flushText = (): void => {
+		entries.push(...groups.values());
+		groups.clear();
+	};
+	for (const edit of edits) {
+		if (edit instanceof ResourceTextEdit) {
+			const key = edit.resource.toString();
+			let group = groups.get(key);
+			if (!group) {
+				group = { kind: 'textDocument', resource: edit.resource, version: edit.versionId, edits: [] };
+				groups.set(key, group);
+			} else if (edit.versionId !== undefined) {
+				if (group.version !== undefined && group.version !== edit.versionId) throw new Error(`Conflicting workspace edit versions for ${key}`);
+				group.version = edit.versionId;
+			}
+			group.edits.push(edit.textEdit);
+			continue;
+		}
+		flushText();
 		if (!(edit instanceof ResourceFileEdit)) throw new TypeError('Unknown resource edit');
-		if (edit.oldResource && edit.newResource) return { kind: 'rename', source: edit.oldResource, target: edit.newResource, existing: existing(edit.options) };
-		if (edit.newResource) return { kind: 'create', resource: edit.newResource, existing: existing(edit.options) };
-		return { kind: 'delete', resource: edit.oldResource!, missing: edit.options.ignoreIfNotExists ? 'ignore' : 'error', mode: edit.options.recursive ? 'recursive' : 'fileOrEmptyDirectory' };
-	}) });
+		if (edit.oldResource && edit.newResource) entries.push({ kind: 'rename', source: edit.oldResource, target: edit.newResource, existing: existing(edit.options) });
+		else if (edit.newResource) entries.push({ kind: 'create', resource: edit.newResource, existing: existing(edit.options) });
+		else entries.push({ kind: 'delete', resource: edit.oldResource!, missing: edit.options.ignoreIfNotExists ? 'ignore' : 'error', mode: edit.options.recursive ? 'recursive' : 'fileOrEmptyDirectory' });
+	}
+	flushText();
+	return normalizeLanguageWorkspaceEdit({ entries });
 }
 
 function existing(options: ResourceFileEdit['options']): 'error' | 'overwrite' | 'ignore' {

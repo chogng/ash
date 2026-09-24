@@ -21,3 +21,23 @@
   padding: 0 1px;
   font-weight: 700;
 }
+
+.stanza-editor-parameter-hints-documentation {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: var(--ash-stroke-thickness) solid var(--ash-editor-border);
+  color: var(--ash-editor-description-foreground, var(--ash-editor-foreground));
+  font-size: var(--ash-font-size-body2);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.stanza-editor-parameter-hints-documentation > div + div {
+  margin-top: 4px;
+}
+
+[data-color-scheme="high-contrast-dark"] .stanza-editor-parameter-hints,
+[data-color-scheme="high-contrast-light"] .stanza-editor-parameter-hints {
+  box-shadow: none;
+}

@@ -28,6 +28,7 @@ import { ILogService, NullLoggerService } from '../../../../../platform/log/comm
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { EditorOption } from '../../../../../editor/common/config/editorOptions.js';
+import { EditorMinimapConfiguration } from '../../../../../editor/common/config/editorConfigurationSchema.js';
 import { CodeEditorConfiguration } from '../../common/editorConfiguration.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 
@@ -126,7 +127,8 @@ test('open code editor applies live view settings and actions without replacing 
 	using services = paneServices(models);
 	const configuration = services.get(IConfigurationService);
 	await configuration.updateValue(CodeEditorConfiguration.wordWrap, EditorLineWrapping.On);
-	await configuration.updateValue(CodeEditorConfiguration.minimapEnabled, false);
+	await configuration.updateValue(EditorMinimapConfiguration.enabled, false);
+	await configuration.updateValue(EditorMinimapConfiguration.side, 'left');
 	using pane = createPane(services, resourceStore, {});
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file('/project/settings.ts') }, new AbortController().signal);
@@ -134,12 +136,15 @@ test('open code editor applies live view settings and actions without replacing 
 	assert.ok(control instanceof CodeEditorWidget);
 	assert.equal(control.getOption(EditorOption.wordWrap), 'on');
 	assert.equal(control.getOption(EditorOption.minimap).enabled, false);
+	assert.equal(control.getOption(EditorOption.minimap).side, 'left');
 
 	await configuration.updateValue(CodeEditorConfiguration.wordWrap, EditorLineWrapping.Off);
-	await configuration.updateValue(CodeEditorConfiguration.minimapEnabled, true);
+	await configuration.updateValue(EditorMinimapConfiguration.enabled, true);
+	await configuration.updateValue(EditorMinimapConfiguration.size, 'fit');
 	assert.equal(pane.getControl(), control);
 	assert.equal(control.getOption(EditorOption.wordWrap), 'off');
 	assert.equal(control.getOption(EditorOption.minimap).enabled, true);
+	assert.equal(control.getOption(EditorOption.minimap).size, 'fit');
 	assert.equal(control.getOption(EditorOption.renderWhitespace), 'selection');
 	assert.equal(control.getOption(EditorOption.renderControlCharacters), true);
 	await services.get(ICommandService).executeCommand('editor.action.toggleRenderWhitespace');
@@ -151,10 +156,10 @@ test('open code editor applies live view settings and actions without replacing 
 	assert.equal(configuration.getValue(CodeEditorConfiguration.renderControlCharacters), false);
 	assert.equal(control.getOption(EditorOption.renderControlCharacters), false);
 	await services.get(ICommandService).executeCommand('editor.action.toggleMinimap');
-	assert.equal(configuration.getValue(CodeEditorConfiguration.minimapEnabled), false);
+	assert.equal(configuration.getValue(EditorMinimapConfiguration.enabled), false);
 	assert.equal(control.getOption(EditorOption.minimap).enabled, false);
 	await services.get(ICommandService).executeCommand('editor.action.toggleMinimap');
-	assert.equal(configuration.getValue(CodeEditorConfiguration.minimapEnabled), true);
+	assert.equal(configuration.getValue(EditorMinimapConfiguration.enabled), true);
 	assert.equal(control.getOption(EditorOption.minimap).enabled, true);
 });
 

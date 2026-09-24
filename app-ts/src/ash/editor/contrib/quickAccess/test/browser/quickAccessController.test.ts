@@ -1,3 +1,5 @@
+import '../../../../test/browser/testEditorDom.js';
+import { browserEnvironment } from '../../../../test/browser/testEditorDom.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -7,19 +9,6 @@ import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { h } from "../../../../../base/browser/dom.js";
 import { type TextMeasurer } from '../../../../common/viewModel.js';
-
-const browserEnvironment = new JSDOM("<!doctype html><body></body>");
-for (const [name, value] of Object.entries({
-	window: browserEnvironment.window,
-	document: browserEnvironment.window.document,
-	Node: browserEnvironment.window.Node,
-	Element: browserEnvironment.window.Element,
-	HTMLElement: browserEnvironment.window.HTMLElement,
-	Event: browserEnvironment.window.Event,
-	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
-})) {
-	Object.defineProperty(globalThis, name, { configurable: true, value });
-}
 
 const { TestView: View } = await import("../../../../test/browser/viewModel/testViewModel.js");
 const { GotoLineController, isStanzaGotoLineChord } = await import("../../browser/quickAccessController.js");

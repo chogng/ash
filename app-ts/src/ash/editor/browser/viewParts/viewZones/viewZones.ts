@@ -49,7 +49,6 @@ export class ViewZones extends ViewPart {
 		this.domNode.setPosition('absolute');
 		this.domNode.setTop(0);
 		this.domNode.setAttribute('role', 'presentation');
-		this.domNode.setAttribute('aria-hidden', 'true');
 		this.marginDomNode = createFastDomNode(h(ownerDocument, 'div'));
 		this.marginDomNode.setClassName('stanza-editor-margin-view-zones');
 		this.marginDomNode.setPosition('absolute');
@@ -193,6 +192,8 @@ export class ViewZones extends ViewPart {
 		domNode.setDisplay('none');
 		domNode.setClassName(`${domNode.domNode.className} stanza-editor-view-zone`.trim());
 		domNode.setAttribute('data-view-zone-id', id);
+		// Most zones only carry visual decoration. Keep those hidden without hiding interactive zones.
+		if (!zone.isAccessible) domNode.setAttribute('aria-hidden', 'true');
 		this.domNode.appendChild(domNode);
 		const marginDomNode = zone.marginDomNode ? createFastDomNode(zone.marginDomNode) : null;
 		if (marginDomNode) {

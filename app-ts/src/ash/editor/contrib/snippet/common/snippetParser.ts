@@ -1,4 +1,5 @@
 import { applySnippetTransform, createSnippetTransform, type SnippetTransform } from "./snippetTransform.js";
+import { type URI } from '../../../../base/common/uri.js';
 
 /** One occurrence of a snippet tabstop within its expanded insertion text. */
 export interface SnippetPlaceholder {
@@ -35,6 +36,27 @@ export interface Snippet {
 /** Resolves one snippet variable from the caller-owned editor context. */
 export interface SnippetVariableResolver {
 	resolveVariable(name: string): string | undefined;
+}
+
+/** File variables shared by completion and transfer snippets. */
+export function createSnippetVariables(resource: URI): SnippetVariableResolver {
+	const filePath = decodeURIComponent(resource.path);
+	const separator = filePath.lastIndexOf('/');
+	const filename = filePath.slice(separator + 1);
+	const extension = filename.lastIndexOf('.');
+	const filenameBase = extension > 0 ? filename.slice(0, extension) : filename;
+	const directory = separator > 0 ? filePath.slice(0, separator) : '/';
+	return Object.freeze({
+		resolveVariable(name: string): string | undefined {
+			switch (name) {
+				case 'TM_FILENAME': return filename;
+				case 'TM_FILENAME_BASE': return filenameBase;
+				case 'TM_DIRECTORY': return directory;
+				case 'TM_FILEPATH': return filePath;
+				default: return undefined;
+			}
+		},
+	});
 }
 
 export interface SnippetOptions {

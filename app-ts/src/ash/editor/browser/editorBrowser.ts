@@ -276,6 +276,8 @@ export interface IViewZone {
 	afterColumn?: number;
 	afterColumnAffinity?: PositionAffinity;
 	showInHiddenAreas?: boolean;
+	/** Lets interactive zone content participate in keyboard and screen reader navigation. */
+	isAccessible?: boolean;
 	heightInLines?: number;
 	heightInPx?: number;
 	ordinal?: number;

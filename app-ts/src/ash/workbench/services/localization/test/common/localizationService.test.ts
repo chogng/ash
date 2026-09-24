@@ -49,6 +49,42 @@ test("localization lookup falls back to English and formats parameters", async (
 	assert.equal(localization.translate('ash', 'chat.advisor.configure', 'Configure an advisor model in Chat Settings before asking for a second opinion'), '请先在聊天设置中配置顾问模型，再请求第二意见');
 });
 
+test('minimap menu uses the selected Chinese language catalog', async () => {
+	using configuration = new InMemoryConfigurationService();
+	using languagePacks = new MarketplaceLanguagePackService(createMarketplace(), builtinLanguagePackCatalogs);
+	using localeService = new WorkbenchLocaleService(configuration, languagePacks);
+	using localization = new WorkbenchLocalizationService(localeService, languagePacks);
+	await localization.whenReady;
+	await localeService.setLocale('zh-CN');
+	assert.equal(localization.translate('ash', 'context.minimap.enabled', 'Minimap'), '小地图');
+});
+
+test('paste and drop controls use the selected Chinese language catalog', async () => {
+	using configuration = new InMemoryConfigurationService();
+	using languagePacks = new MarketplaceLanguagePackService(createMarketplace(), builtinLanguagePackCatalogs);
+	using localeService = new WorkbenchLocaleService(configuration, languagePacks);
+	using localization = new WorkbenchLocalizationService(localeService, languagePacks);
+	await localization.whenReady;
+	await localeService.setLocale('zh-CN');
+	assert.deepEqual([
+		localization.translate('ash', 'dropOrPaste.pasteAs', 'Paste As...'),
+		localization.translate('ash', 'dropOrPaste.selectPasteAction', 'Select Paste Action'),
+		localization.translate('ash', 'dropOrPaste.pasteOptions', 'Paste options'),
+		localization.translate('ash', 'dropOrPaste.selectorHelp', 'Use arrow keys to choose an edit. Press Escape to return to the editor.'),
+		localization.translate('ash', 'dropOrPaste.invalidEdit', 'Could not prepare edit: {0}'),
+		localization.translate('ash', 'dropOrPaste.snippetUnavailable', 'Snippet navigation is unavailable in this editor.'),
+		localization.translate('ash', 'dropOrPaste.switchFailed', 'Could not change edit: {0}'),
+	], [
+		'选择性粘贴...',
+		'选择粘贴方式',
+		'粘贴选项',
+		'使用方向键选择编辑方式。按 Escape 返回编辑器。',
+		'无法准备编辑：{0}',
+		'此编辑器无法使用代码片段占位符导航。',
+		'无法切换编辑：{0}',
+	]);
+});
+
 test('folding command metadata uses the selected Chinese language catalog', async () => {
 	using configuration = new InMemoryConfigurationService();
 	using languagePacks = new MarketplaceLanguagePackService(createMarketplace(), builtinLanguagePackCatalogs);

@@ -1,5 +1,12 @@
 import type { ValidDiffEditorBaseOptions } from './editorOptions.js';
 
+export interface HideUnchangedRegionsOptions {
+	readonly enabled: boolean;
+	readonly contextLineCount: number;
+	readonly minimumLineCount: number;
+	readonly revealLineCount: number;
+}
+
 /** Default options shared by side-by-side and inline diff hosts. */
 export const diffEditorDefaultOptions = Object.freeze({
 	enableSplitViewResizing: true,

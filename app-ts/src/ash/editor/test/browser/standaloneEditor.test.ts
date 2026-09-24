@@ -22,6 +22,7 @@ import { TestLanguageConfigurationService } from '../common/modes/testLanguageCo
 import { StandaloneServiceCollection, StandaloneServices } from "../../standalone/browser/standaloneServices.js";
 import { WorkerTextModelSyncServer } from '../../common/services/textModelSync/textModelSync.impl.js';
 import type { IMonarchLanguage } from '../../editor.api.js';
+import { installEditorTestDom } from './editorTestGlobals.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 const forcedColors = new browserEnvironment.window.EventTarget();
@@ -69,21 +70,16 @@ class TestResizeObserver {
 	unobserve(): void {}
 	disconnect(): void {}
 }
-for (const [name, value] of Object.entries({
-	window: browserEnvironment.window,
-	document: browserEnvironment.window.document,
-	Node: browserEnvironment.window.Node,
-	Element: browserEnvironment.window.Element,
-	HTMLElement: browserEnvironment.window.HTMLElement,
-	Event: browserEnvironment.window.Event,
-	InputEvent: browserEnvironment.window.InputEvent,
-	ResizeObserver: TestResizeObserver,
-	Worker: TestWorker,
-})) Object.defineProperty(globalThis, name, { configurable: true, value });
+const installedGlobals = installEditorTestDom(browserEnvironment, [
+	'Node', 'Element', 'HTMLElement', 'Event', 'InputEvent',
+], { ResizeObserver: TestResizeObserver, Worker: TestWorker });
 
 const stanza = await import("../../editor.main.js");
 
-suiteTeardown(() => browserEnvironment.window.close());
+suiteTeardown(() => {
+	installedGlobals.dispose();
+	browserEnvironment.window.close();
+});
 
 test("standalone service collection honors explicit first-scope overrides", () => {
 	const languageConfigurations = new TestLanguageConfigurationService();

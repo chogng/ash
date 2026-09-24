@@ -1,18 +1,7 @@
+import './testEditorDom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
-
-const browserEnvironment = new JSDOM('<!doctype html><body></body>');
-for (const [name, value] of Object.entries({
-	window: browserEnvironment.window,
-	document: browserEnvironment.window.document,
-	Node: browserEnvironment.window.Node,
-	Element: browserEnvironment.window.Element,
-	HTMLElement: browserEnvironment.window.HTMLElement,
-	NodeFilter: browserEnvironment.window.NodeFilter,
-})) {
-	Object.defineProperty(globalThis, name, { configurable: true, value });
-}
 
 const { DomReadingContext } = await import('../../browser/viewParts/viewLines/domReadingContext.js');
 const { RangeUtil } = await import('../../browser/viewParts/viewLines/rangeUtil.js');

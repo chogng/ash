@@ -1,29 +1,16 @@
+import '../../../../test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
-import { test, suiteTeardown } from 'mocha';
+import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
 import { Selection } from '../../../../common/core/selection.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 
-const environment = new JSDOM('<!doctype html><body></body>');
-for (const [name, value] of Object.entries({
-	window: environment.window,
-	document: environment.window.document,
-	Node: environment.window.Node,
-	Element: environment.window.Element,
-	HTMLElement: environment.window.HTMLElement,
-	Event: environment.window.Event,
-	InputEvent: environment.window.InputEvent,
-	KeyboardEvent: environment.window.KeyboardEvent,
-	ResizeObserver: class TestResizeObserver { observe(): void {} unobserve(): void {} disconnect(): void {} },
-})) Object.defineProperty(globalThis, name, { configurable: true, value });
-
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 const { CursorUndoRedoController } = await import('../../browser/cursorUndo.js');
 
-suiteTeardown(() => environment.window.close());
 
 test('CursorUndoRedoController records canonical same-version selection events', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');

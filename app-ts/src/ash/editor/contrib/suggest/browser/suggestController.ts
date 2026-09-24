@@ -4,7 +4,7 @@ import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { localize2 } from '../../../../nls.js';
 import { WordBasedCompletionItemProvider } from '../../../browser/services/editorWorkerService.js';
 import { EditorAction, registerEditorAction, registerEditorContribution, type ServicesAccessor } from '../../../browser/editorExtensions.js';
-import { type URI } from '../../../../base/common/uri.js';
+import { createSnippetVariables } from '../../snippet/common/snippetParser.js';
 import { isCompletionsEnabledFromObject } from '../../../common/services/completionsEnablement.js';
 import { Position } from "../../../common/core/position.js";
 import { stopEvent } from '../../../../base/browser/dom.js';
@@ -121,20 +121,6 @@ export class SuggestController extends Disposable {
 
 	private handleKeydown(event: KeyboardEvent): void {
 		if (this.isDisposed || event.defaultPrevented || event.isComposing) return;
-		if (
-			event.altKey &&
-			!event.shiftKey &&
-			!event.ctrlKey &&
-			!event.metaKey &&
-			(event.key === 'ArrowDown' || event.key === 'ArrowUp') &&
-			(event.key === 'ArrowDown'
-				? this.session.selectNextSnippetChoice()
-				: this.session.selectPreviousSnippetChoice())
-		) {
-			stopEvent(event);
-			return;
-		}
-
 		const state = this.readState();
 		if (
 			!event.shiftKey &&
@@ -168,9 +154,8 @@ export class SuggestController extends Disposable {
 			!event.metaKey &&
 			event.key === 'Escape'
 		) {
-			const cancelledSnippet = this.session.cancelSnippetPlaceholderNavigation();
-			if (cancelledSnippet || state || this.completionRequest) {
-				if (cancelledSnippet || state) {
+			if (state || this.completionRequest) {
+				if (state) {
 					stopEvent(event);
 				}
 				this.cancel();
@@ -183,13 +168,6 @@ export class SuggestController extends Disposable {
 			!event.metaKey &&
 			event.key === 'Tab'
 		) {
-			const handledSnippet = event.shiftKey
-				? this.session.selectPreviousSnippetPlaceholder()
-				: this.session.selectNextSnippetPlaceholder();
-			if (handledSnippet) {
-				stopEvent(event);
-				return;
-			}
 			if (!event.shiftKey && state) {
 				stopEvent(event);
 				this.acceptSelected();
@@ -360,26 +338,6 @@ registerEditorContribution({
 		);
 	},
 });
-
-function createSnippetVariables(resource: URI): { readonly resolveVariable: (name: string) => string | undefined } {
-	const filePath = decodeURIComponent(resource.path);
-	const separator = filePath.lastIndexOf("/");
-	const filename = filePath.slice(separator + 1);
-	const extension = filename.lastIndexOf(".");
-	const filenameBase = extension > 0 ? filename.slice(0, extension) : filename;
-	const directory = separator > 0 ? filePath.slice(0, separator) : "/";
-	return Object.freeze({
-		resolveVariable(name: string): string | undefined {
-			switch (name) {
-				case "TM_FILENAME": return filename;
-				case "TM_FILENAME_BASE": return filenameBase;
-				case "TM_DIRECTORY": return directory;
-				case "TM_FILEPATH": return filePath;
-				default: return undefined;
-			}
-		},
-	});
-}
 
 export class TriggerSuggestAction extends EditorAction {
 	public static readonly id = 'editor.action.triggerSuggest';

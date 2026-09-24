@@ -68,7 +68,7 @@ Ash 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保
 - `just ash-desktop` 内部执行 `pnpm --dir app-ts dev`；VS Code 的 `Ash Desktop (Electron)` 配置使用同一 Just 入口。
 - Rust 构建、打包和源码启动脚本由 Just 通过 `uv run --frozen --project scripts python` 执行，统一使用锁定的 Python 环境。
 
-前端 Node 工具与 Desktop 单测使用 Node 24 LTS，具体版本由仓库根 `.nvmrc` 固定。切换到该版本后，按 [README 初始化步骤](../README.md#quick-start) 安装根 `package.json` 声明的 pnpm，再执行 `pnpm install`、构建或测试。Node 构建与测试入口调用 pnpm，安装检查要求 pnpm 版本与声明完全一致；其他 Node 主版本不受支持。
+前端 Node 工具与 Desktop 单测使用 Node 24 LTS，具体版本由仓库根 `.nvmrc` 和 `package.json` 的 `devEngines.runtime` 共同固定。按 [README 初始化步骤](../README.md#quick-start) 安装根 `package.json` 声明的 pnpm 后，`pnpm install` 会下载并使用固定的 Node 版本，后续 pnpm 脚本也使用该版本。直接运行 Node 命令时仍需自行切换到 `.nvmrc` 指定版本。安装检查要求 pnpm 版本与声明完全一致；其他 Node 主版本不受支持。
 
 #### 产品启动与 Rust 构建
 
@@ -110,7 +110,7 @@ Ash 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保
 | `pnpm build:desktop` | 构建 Electron Main、Preload 和包含全部 Workbench 模式的 Renderer |
 | `pnpm test:build` | 运行构建工具自身的单元测试 |
 | `pnpm test` | 先验证 Rust 协议，再生成前端协议并运行构建工具检查和 Desktop 单元测试 |
-| `pnpm test:integration` | 直接运行 Editor 浏览器集成测试 |
+| `pnpm test:integration` | 运行全部浏览器集成测试 |
 | `pnpm test:web-integration` | 直接运行带 App Server 的完整 Web 集成测试 |
 | `pnpm test:desktop:smoke` | 直接运行 Electron Desktop smoke tests |
 | `pnpm typecheck:build` | 严格检查整个 `build/` 中的 TypeScript 构建代码 |

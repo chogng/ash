@@ -1,3 +1,4 @@
+import '../../../../test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -10,25 +11,6 @@ import { TextDecorationCollection } from '../../../../common/model/decorationCol
 import { TextModel } from '../../../../common/model/textModel.js';
 import { TestLanguageFeaturesService } from '../../../../test/common/testLanguageFeaturesService.js';
 
-const browserEnvironment = new JSDOM('<!doctype html><body></body>');
-class TestResizeObserver {
-	observe(): void {}
-	unobserve(): void {}
-	disconnect(): void {}
-}
-for (const [name, value] of Object.entries({
-	window: browserEnvironment.window,
-	document: browserEnvironment.window.document,
-	Node: browserEnvironment.window.Node,
-	Element: browserEnvironment.window.Element,
-	HTMLElement: browserEnvironment.window.HTMLElement,
-	Event: browserEnvironment.window.Event,
-	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
-	ResizeObserver: TestResizeObserver,
-})) {
-	Object.defineProperty(globalThis, name, { configurable: true, value });
-}
-
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 const { TextualMultiDocumentHighlightFeature } = await import('../../browser/textualHighlightProvider.js');
 const { WordHighlighterContribution } = await import('../../browser/wordHighlighter.contribution.js');
@@ -37,8 +19,9 @@ test('Word highlighter uses the textual provider for complete Unicode words', as
 	using languages = new TestLanguageFeaturesService();
 	using harness = createHarness('café caféine café\nCafé', languages, URI.parse('file:///one.ts'), 'singleFile');
 
+	const highlighted = waitForDecorations(harness.decorations);
 	harness.controller.restoreViewState(true);
-	await settleHighlights();
+	await highlighted;
 
 	assert.deepEqual(decorationRanges(harness.decorations), [
 		Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (4) + 1)),
@@ -56,8 +39,9 @@ test('Word highlighter prefers semantic providers and renders read and write kin
 	});
 	using harness = createHarness('item item', languages, URI.parse('file:///semantic.ts'), 'singleFile');
 
+	const highlighted = waitForDecorations(harness.decorations);
 	harness.controller.restoreViewState(true);
-	await settleHighlights();
+	await highlighted;
 
 	assert.deepEqual(harness.decorations.decorations.map(decoration => decoration.metadata), [DocumentHighlightKind.Read, DocumentHighlightKind.Write]);
 	assert.deepEqual(harness.model.getAllDecorations().map(decoration => decoration.options.className), ['word-highlight', 'word-highlight-strong']);
@@ -68,8 +52,9 @@ test('Multi-file word highlighting updates every open editor sharing the languag
 	using first = createHarness('item one item', languages, URI.parse('file:///one.ts'), 'multiFile');
 	using second = createHarness('item two', languages, URI.parse('file:///two.ts'), 'multiFile');
 
+	const highlighted = Promise.all([waitForDecorations(first.decorations), waitForDecorations(second.decorations)]);
 	first.controller.restoreViewState(true);
-	await settleHighlights();
+	await highlighted;
 
 	assert.deepEqual([first.decorations.size, second.decorations.size], [2, 1]);
 });
@@ -77,8 +62,11 @@ test('Multi-file word highlighting updates every open editor sharing the languag
 test('Word highlighter cancels a stale provider request when the selection changes', async () => {
 	using languages = new TestLanguageFeaturesService();
 	let aborted = false;
+	let markStarted!: () => void;
+	const started = new Promise<void>(resolve => { markStarted = resolve; });
 	using semanticProvider = languages.documentHighlightProvider.register('typescript', {
 		provideDocumentHighlights: (_model, _position, token) => new Promise(resolve => {
+			markStarted();
 			token.onCancellationRequested(() => {
 				aborted = true;
 				resolve([]);
@@ -88,9 +76,8 @@ test('Word highlighter cancels a stale provider request when the selection chang
 	using harness = createHarness('item other', languages, URI.parse('file:///cancel.ts'), 'singleFile');
 
 	harness.controller.restoreViewState(true);
-	await new Promise(resolve => setTimeout(resolve, 1));
+	await started;
 	harness.editor.setSelections([Selection.fromPositions(new Position((0) + 1, (6) + 1))]);
-	await settleHighlights();
 
 	assert.equal(aborted, true);
 	assert.equal(harness.decorations.size, 0);
@@ -100,12 +87,12 @@ test('Word highlighter obeys the off mode and navigates existing highlights', as
 	using languages = new TestLanguageFeaturesService();
 	using disabled = createHarness('item item', languages, URI.parse('file:///disabled.ts'), 'off');
 	disabled.controller.restoreViewState(true);
-	await settleHighlights();
 	assert.equal(disabled.decorations.size, 0);
 
 	using enabled = createHarness('item item', languages, URI.parse('file:///enabled.ts'), 'singleFile');
+	const highlighted = waitForDecorations(enabled.decorations);
 	enabled.controller.restoreViewState(true);
-	await settleHighlights();
+	await highlighted;
 	enabled.controller.moveNext();
 	assert.deepEqual(enabled.editor.getSelections()![0]!, Selection.fromPositions(new Position((0) + 1, (5) + 1)));
 	enabled.controller.moveBack();
@@ -140,6 +127,11 @@ function decorationRanges(decorations: TextDecorationCollection<DocumentHighligh
 	return decorations.decorations.map(decoration => decoration.range);
 }
 
-async function settleHighlights(): Promise<void> {
-	await new Promise(resolve => setTimeout(resolve, 10));
+function waitForDecorations(decorations: TextDecorationCollection<DocumentHighlightKind | undefined>): Promise<void> {
+	return new Promise(resolve => {
+		const listener = decorations.onDidChange(() => {
+			listener.dispose();
+			resolve();
+		});
+	});
 }

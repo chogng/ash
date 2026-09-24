@@ -1,5 +1,6 @@
 import type { MultiDiffEditorPaneOptions } from '../../browser/multiDiffEditorPane.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { validateJsonValue } from '../../../../../base/common/jsonValue.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -9,6 +10,7 @@ import { URI } from '../../../../../base/common/uri.js';
 import { type IDocumentDiff, type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from '../../../../../editor/common/diff/documentDiffProvider.js';
 import { DefaultLinesDiffComputer } from '../../../../../editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js';
 import { type ITextModel } from '../../../../../editor/common/model.js';
+import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { ContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
@@ -23,9 +25,16 @@ import type { GitStatus, IGitService } from '../../../../services/git/common/git
 import type { IChatService, TurnChangeSetSummary } from '../../../../services/chat/common/chatService.js';
 import type { ISessionsManagementService } from '../../../../../sessions/services/sessions/common/sessionsManagementService.js';
 import { CodeEditorConfiguration } from '../../../codeEditor/common/editorConfiguration.js';
-import { EditorLineWrapping } from '../../../../../editor/common/config/editorOptions.js';
+import { EditorLineWrapping, EditorOption } from '../../../../../editor/common/config/editorOptions.js';
+import { type ITextModelResourceService, type TextModelInput, type TextModelReference } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
+browserEnvironment.window.HTMLCanvasElement.prototype.getContext = () => null;
+class TestResizeObserver {
+	observe(): void {}
+	unobserve(): void {}
+	disconnect(): void {}
+}
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
 	document: browserEnvironment.window.document,
@@ -33,6 +42,7 @@ for (const [name, value] of Object.entries({
 	Element: browserEnvironment.window.Element,
 	HTMLElement: browserEnvironment.window.HTMLElement,
 	Event: browserEnvironment.window.Event,
+	ResizeObserver: TestResizeObserver,
 })) {
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
@@ -65,10 +75,12 @@ test('Multi-diff sources resolve uncommitted Git and composed Turn contents', as
 	assert.deepEqual({
 		before: gitInput.items[0]?.original.initialText,
 		after: gitInput.items[0]?.modified.initialText,
+		readOnly: gitInput.items[0]?.modified.readOnly,
 		source: gitInput.source,
 	}, {
 		before: 'head',
 		after: 'worktree',
+		readOnly: true,
 		source: { kind: 'git', repositoryId: 'repo', scope: 'uncommitted', branchName: 'main' },
 	});
 
@@ -91,8 +103,9 @@ test('Multi-diff sources resolve uncommitted Git and composed Turn contents', as
 	}, { before: 'before', after: 'after', ids: ['one', 'two'] });
 });
 
-test('Stanza multi-diff pane resolves every comparison and releases the complete session', async () => {
+test('Stanza multi-diff pane resolves visible comparisons and releases the complete session', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
 	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
 	using models = new BrowserTextModelService(resourceStore);
@@ -150,7 +163,7 @@ test('Stanza multi-diff pane resolves every comparison and releases the complete
 		{
 			label: 'src/first.ts',
 			original: { resource: URI.parse('git-change:/first/original'), initialText: 'old', label: 'HEAD' },
-			modified: { resource: URI.parse('git-change:/first/modified'), initialText: 'new', languageId: 'typescript', label: 'Working Tree' },
+			modified: { resource: URI.parse('git-change:/first/modified'), initialText: 'new', languageId: 'typescript', label: 'Working Tree', readOnly: true },
 			goToFile: { resource: URI.parse('file:///workspace/src/first.ts') },
 			gitChange: { repositoryId: 'repo', path: 'src/first.ts', staged: false, hasWorktreeChanges: true },
 		},
@@ -171,7 +184,10 @@ test('Stanza multi-diff pane resolves every comparison and releases the complete
 	assert.deepEqual(seenLimits, [5_000, 5_000, 5_000, 5_000, 25]);
 
 	assert.equal(parent.querySelectorAll('.stanza-multi-diff-editor-pane').length, 1);
+	assert.equal(parent.querySelectorAll('.stanza-multi-diff-editor-session.pending').length, 0);
 	assert.equal(parent.querySelectorAll('.stanza-multi-diff-editor-section').length, 2);
+	assert.deepEqual(services.get(ICodeEditorService).listCodeEditors().map(editor => editor.getOption(EditorOption.readOnly)), [true, true, true, false]);
+	assert.deepEqual(services.get(ICodeEditorService).listCodeEditors().map(editor => editor.getOption(EditorOption.scrollBeyondLastLine)), [false, false, false, false]);
 	assert.equal(parent.querySelectorAll('.stanza-multi-diff-editor-file-actions > .ash-toolbar').length, 2);
 	assert.equal(parent.querySelectorAll('.stanza-multi-diff-editor-toolbar').length, 1);
 	assert.equal(parent.querySelectorAll('.stanza-multi-diff-editor-toolbar .ash-dropdown-with-primary-action-view-item').length, 2);
@@ -188,7 +204,12 @@ test('Stanza multi-diff pane resolves every comparison and releases the complete
 	assert.equal(parent.querySelector('.stanza-multi-diff-editor')?.getAttribute('aria-label'), 'Review changes, 2 files');
 	assert.equal(parent.querySelector('.stanza-multi-diff-editor')?.classList.contains('hide-line-numbers'), true);
 	pane.focus();
-	assert.equal(dom.window.document.activeElement?.classList.contains('stanza-multi-diff-editor'), true);
+	assert.equal(requiredElement<HTMLElement>(parent, '.stanza-multi-diff-editor').contains(dom.window.document.activeElement), true);
+	assert.equal(pane.viewStateTypeId, 'ash.multiDiffEditor');
+	const paneViewState: unknown = validateJsonValue(pane.saveViewState());
+	pane.collapseAll();
+	pane.restoreViewState(paneViewState);
+	assert.ok([...parent.querySelectorAll('.stanza-multi-diff-editor-header-toggle')].every(header => header.getAttribute('aria-expanded') === 'true'));
 	requiredElement<HTMLButtonElement>(dom.window.document, 'button[aria-label="Open File"]').click();
 	requiredElement<HTMLButtonElement>(dom.window.document, 'button[aria-label="Stage Changes"]').click();
 	requiredElement<HTMLButtonElement>(dom.window.document, 'button[aria-label="Discard Changes"]').click();
@@ -200,6 +221,8 @@ test('Stanza multi-diff pane resolves every comparison and releases the complete
 	assert.equal((parent.firstElementChild as HTMLElement).hidden, true);
 	pane.clearInput();
 	assert.equal(parent.querySelectorAll('.stanza-multi-diff-editor').length, 0);
+	assert.equal(services.get(ICodeEditorService).listDiffEditors().length, 0);
+	assert.equal(services.get(ICodeEditorService).listCodeEditors().length, 0);
 	await pane.setInput(createMultiDiffEditorInput(URI.parse('ash-multi-diff:/empty'), [], 'No changes', {
 		kind: 'git', repositoryId: 'repo', scope: 'uncommitted', branchName: 'main',
 	}), new AbortController().signal);
@@ -210,8 +233,168 @@ test('Stanza multi-diff pane resolves every comparison and releases the complete
 	dom.window.close();
 });
 
+test('Multi-diff pane acquires text models as files enter the viewport and releases them on clear', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
+	using models = new BrowserTextModelService(new BrowserTextResourceStore(new BootstrapTextFiles()));
+	using resources = new DisposableStore();
+	const services = createCodeEditorServices(resources);
+	const acquired: string[] = [];
+	const released: string[] = [];
+	const trackedModels: ITextModelResourceService = {
+		async acquire(input: TextModelInput, signal: AbortSignal): Promise<TextModelReference> {
+			const reference = await models.acquire(input, signal);
+			acquired.push(input.resource.toString());
+			let disposed = false;
+			const dispose = (): void => {
+				if (disposed) return;
+				disposed = true;
+				released.push(input.resource.toString());
+				reference.dispose();
+			};
+			return {
+				resource: reference.resource,
+				model: reference.model,
+				get isDirty() { return reference.isDirty; },
+				onDidChangeDirty: reference.onDidChangeDirty,
+				get hasExternalChange() { return reference.hasExternalChange; },
+				onDidChangeExternalChange: reference.onDidChangeExternalChange,
+				save: signal => reference.save(signal),
+				revert: signal => reference.revert(signal),
+				dispose,
+				[Symbol.dispose]: dispose,
+			};
+		},
+		dispose: () => models.dispose(),
+		[Symbol.dispose]: () => models.dispose(),
+	};
+	using pane = services.createInstance(MultiDiffEditorPane, {
+		modelService: trackedModels,
+		createComputationService: () => new PaneTestDiffComputationService(),
+	} satisfies MultiDiffEditorPaneOptions);
+	pane.create(parent);
+	pane.layout({ width: 600, height: 240 });
+	const items = Array.from({ length: 100 }, (_, index) => ({
+		label: `file-${index}.ts`,
+		original: { resource: URI.parse(`git-change:/lazy/${index}/original`), initialText: `old ${index}` },
+		modified: { resource: URI.parse(`git-change:/lazy/${index}/modified`), initialText: `new ${index}` },
+	}));
+	await pane.setInput(createMultiDiffEditorInput(URI.parse('ash-multi-diff:/lazy'), items, 'Lazy files'), new AbortController().signal);
+	assert.ok(acquired.length > 0 && acquired.length < 20);
+	assert.ok(acquired.every(resource => /\/lazy\/[0-9]\//.test(resource) && Number(resource.match(/\/lazy\/(\d+)\//)?.[1]) < 10));
+	const editor = requiredElement<HTMLElement>(parent, '.stanza-multi-diff-editor');
+	const content = requiredElement<HTMLElement>(editor, '.stanza-multi-diff-editor-content');
+	editor.scrollTop = parseFloat(content.style.height) - 200;
+	editor.dispatchEvent(new dom.window.Event('scroll', { bubbles: true }));
+	await new Promise<void>(resolve => {
+		const ready = (): boolean => [...editor.querySelectorAll('.stanza-multi-diff-editor-section')].some(section =>
+			section.querySelector('.stanza-multi-diff-editor-title')?.textContent === 'file-99.ts'
+				&& section.querySelector('.stanza-diff-editor') !== null);
+		if (ready()) return resolve();
+		const observer = new dom.window.MutationObserver(() => {
+			if (!ready()) return;
+			observer.disconnect();
+			resolve();
+		});
+		observer.observe(editor, { childList: true, subtree: true });
+	});
+	assert.ok(acquired.length < 30);
+	pane.clearInput();
+	assert.deepEqual(released.slice().sort(), acquired.slice().sort());
+	dom.window.close();
+});
+
+test('Multi-diff pane keeps available files open when one comparison fails to load', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
+	using models = new BrowserTextModelService(new BrowserTextResourceStore(new BootstrapTextFiles()));
+	using resources = new DisposableStore();
+	const services = createCodeEditorServices(resources);
+	const partialModels: ITextModelResourceService = {
+		acquire: (input, signal) => input.resource.path.includes('/broken/')
+			? Promise.reject(new Error('Unavailable'))
+			: models.acquire(input, signal),
+		dispose: () => models.dispose(),
+		[Symbol.dispose]: () => models.dispose(),
+	};
+	using pane = services.createInstance(MultiDiffEditorPane, {
+		modelService: partialModels,
+		createComputationService: () => new PaneTestDiffComputationService(),
+	} satisfies MultiDiffEditorPaneOptions);
+	pane.create(parent);
+	pane.layout({ width: 600, height: 300 });
+	await pane.setInput(createMultiDiffEditorInput(URI.parse('ash-multi-diff:/partial'), [
+		{
+			label: 'available.ts',
+			original: { resource: URI.parse('git-change:/available/original'), initialText: 'old' },
+			modified: { resource: URI.parse('git-change:/available/modified'), initialText: 'new' },
+		},
+		{
+			label: 'broken.ts',
+			original: { resource: URI.parse('git-change:/broken/original'), initialText: 'old' },
+			modified: { resource: URI.parse('git-change:/broken/modified'), initialText: 'new' },
+		},
+	], 'Partial'), new AbortController().signal);
+	assert.equal(parent.querySelectorAll('.stanza-multi-diff-editor-session.pending').length, 0);
+	assert.equal(parent.querySelectorAll('.stanza-diff-editor').length, 1);
+	assert.equal(parent.querySelector('.stanza-multi-diff-editor-incomplete-status:not(:empty)')?.textContent, 'Could not load broken.ts');
+	pane.clearInput();
+	assert.equal(parent.querySelector('.stanza-multi-diff-editor'), null);
+	dom.window.close();
+});
+
+for (const cancellation of ['signal', 'clear'] as const) {
+	test(`Multi-diff pane releases a model delivered after ${cancellation === 'signal' ? 'input cancellation' : 'clearing pending input'}`, async () => {
+		const dom = new JSDOM('<!doctype html><body><main></main></body>');
+		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+		const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
+		using models = new BrowserTextModelService(new BrowserTextResourceStore(new BootstrapTextFiles()));
+		using resources = new DisposableStore();
+		const services = createCodeEditorServices(resources);
+		const originalInput = { resource: URI.parse('git-change:/cancel/original'), initialText: 'old' };
+		const reference = await models.acquire(originalInput, new AbortController().signal);
+		let modelDisposed = false;
+		using listener = reference.model.onWillDispose(() => { modelDisposed = true; });
+		let signalAcquisitionStarted: (() => void) | undefined;
+		const acquisitionStarted = new Promise<void>(resolve => { signalAcquisitionStarted = resolve; });
+		let deliver: ((reference: TextModelReference) => void) | undefined;
+		const delayedModels: ITextModelResourceService = {
+			acquire: async () => {
+				signalAcquisitionStarted?.();
+				return new Promise<TextModelReference>(resolve => { deliver = resolve; });
+			},
+			dispose: () => models.dispose(),
+			[Symbol.dispose]: () => models.dispose(),
+		};
+		using pane = services.createInstance(MultiDiffEditorPane, {
+			modelService: delayedModels,
+			createComputationService: () => new PaneTestDiffComputationService(),
+		} satisfies MultiDiffEditorPaneOptions);
+		pane.create(parent);
+		pane.layout({ width: 400, height: 240 });
+		const controller = new AbortController();
+		const pending = pane.setInput(createMultiDiffEditorInput(URI.parse('ash-multi-diff:/cancel'), [{
+			label: 'cancel.ts',
+			original: originalInput,
+			modified: { resource: URI.parse('git-change:/cancel/modified'), initialText: 'new' },
+		}], 'Cancel'), controller.signal);
+		await acquisitionStarted;
+		assert.equal(parent.querySelectorAll('.stanza-multi-diff-editor-session.pending').length, 1);
+		if (cancellation === 'signal') controller.abort();
+		else pane.clearInput();
+		deliver!(reference);
+		await assert.rejects(pending, /cancelled/);
+		assert.equal(modelDisposed, true);
+		assert.equal(parent.querySelector('.stanza-multi-diff-editor'), null);
+		dom.window.close();
+	});
+}
+
 test('Multi-diff pane inherits word wrap and routes the toggle command to its view', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
 	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
 	using models = new BrowserTextModelService(resourceStore);
@@ -282,7 +465,7 @@ class PaneTestDiffComputationService implements IDocumentDiffProvider {
 	}
 }
 
-function requiredElement<T extends Element>(ownerDocument: Document, selector: string): T {
+function requiredElement<T extends Element>(ownerDocument: ParentNode, selector: string): T {
 	const element = ownerDocument.querySelector<T>(selector);
 	if (!element) throw new Error(`Missing ${selector}`);
 	return element;

@@ -7,12 +7,11 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { EditorAction, registerEditorAction, type ServicesAccessor } from '../../../browser/editorExtensions.js';
 import type { ICodeEditor } from '../../../browser/editorBrowser.js';
-import { Position } from '../../../common/core/position.js';
 import { EditorContextKeys } from '../../../common/editorContextKeys.js';
 import type { LanguageDocumentSymbol } from '../../../common/languages.js';
 import { TextModel } from '../../../common/model/textModel.js';
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
-import { DocumentSymbolService } from '../../../contrib/documentSymbols/common/languageDocumentSymbols.js';
+import { OutlineModel } from '../../../contrib/documentSymbols/browser/outlineModel.js';
 
 interface SymbolPick extends IQuickPickItem {
 	readonly symbol: LanguageDocumentSymbol;
@@ -61,7 +60,6 @@ export class StandaloneGotoSymbolQuickAccessProvider extends Disposable {
 
 		const request = new AbortController();
 		this._register(toDisposable(() => request.abort()));
-		const symbols = this._register(new DocumentSymbolService(model, this.languageFeatures.documentSymbolProvider, { resource: model.uri }));
 		const close = () => this.dispose();
 		this._register(this.editor.onDidChangeModelContent(close));
 		this._register(this.editor.onDidChangeModel(close));
@@ -70,18 +68,16 @@ export class StandaloneGotoSymbolQuickAccessProvider extends Disposable {
 		this._register(model.onDidChangeLanguage(close));
 		this._register(this.languageFeatures.documentSymbolProvider.onDidChange(close));
 		picker.show();
-		void symbols.provideDocumentSymbols(model.getLanguageId(), request.signal).then(result => {
-			if (request.signal.aborted) {
+		void OutlineModel.create(
+			this.languageFeatures.documentSymbolProvider,
+			model,
+			request.signal,
+			error => this.notifications.error(String(error)),
+		).then(outline => {
+			if (request.signal.aborted || !outline) {
 				return;
 			}
-			const flat: LanguageDocumentSymbol[] = [];
-			const visit = (symbol: LanguageDocumentSymbol): void => {
-				flat.push(symbol);
-				symbol.children?.forEach(visit);
-			};
-			result.forEach(visit);
-			flat.sort((left, right) => Position.compare(left.selectionRange.getStartPosition(), right.selectionRange.getStartPosition()));
-			picker.items = flat.map(symbol => ({ symbol, label: symbol.name, description: symbol.detail }));
+			picker.items = outline.asListOfDocumentSymbols().map(symbol => ({ symbol, label: symbol.name, description: symbol.detail }));
 		}).catch(error => {
 			if (!request.signal.aborted) {
 				this.notifications.error(String(error));

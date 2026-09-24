@@ -43,9 +43,9 @@ export class OverviewRulerFeature extends Disposable {
 		}));
 	}
 
-	public setRows(rows: readonly LineDiffRow[], offsets: readonly number[]): void {
-		reset(this.originalLane, createMarkers(this.domNode.ownerDocument, rows, offsets, 'original'));
-		reset(this.modifiedLane, createMarkers(this.domNode.ownerDocument, rows, offsets, 'modified'));
+	public setRows(rows: readonly LineDiffRow[]): void {
+		reset(this.originalLane, createMarkers(this.domNode.ownerDocument, rows, 'original'));
+		reset(this.modifiedLane, createMarkers(this.domNode.ownerDocument, rows, 'modified'));
 	}
 
 	public layout(size: IDimension): void {
@@ -53,25 +53,24 @@ export class OverviewRulerFeature extends Disposable {
 		this.viewportHeight = size.height;
 	}
 
-	public updateViewport(contentHeight: number): void {
-		this.root.setLeft(this.rootElement.scrollLeft + Math.max(0, this.viewportWidth - this.width));
-		this.root.setTop(this.rootElement.scrollTop);
+	public updateViewport(contentHeight: number, scrollTop: number): void {
+		this.root.setLeft(Math.max(0, this.viewportWidth - this.width));
+		this.root.setTop(0);
 		this.root.setHeight(this.viewportHeight);
-		const metrics = createScrollbarAxisMetrics(this.viewportHeight, contentHeight, this.rootElement.scrollTop, this.viewportHeight, 2);
+		const metrics = createScrollbarAxisMetrics(this.viewportHeight, contentHeight, scrollTop, this.viewportHeight, 2);
 		this.viewportNode.setHeight(metrics.thumbSize);
 		this.viewportNode.setTransform(`translate3d(0, ${metrics.thumbPosition}px, 0)`);
 	}
 }
 
-function createMarkers(ownerDocument: Document, rows: readonly LineDiffRow[], offsets: readonly number[], side: 'original' | 'modified'): DocumentFragment {
+function createMarkers(ownerDocument: Document, rows: readonly LineDiffRow[], side: 'original' | 'modified'): DocumentFragment {
 	const fragment = createFragment(ownerDocument);
-	const totalHeight = offsets[rows.length] ?? 0;
-	if (totalHeight === 0) return fragment;
+	if (rows.length === 0) return fragment;
 	for (const range of changedRanges(rows, side)) {
 		const marker = h(ownerDocument, 'span');
 		marker.className = `stanza-diff-overview-marker ${side === 'original' ? 'removed' : 'inserted'}`;
-		marker.style.top = `${(offsets[range.startRow] ?? 0) / totalHeight * 100}%`;
-		marker.style.height = `${((offsets[range.endRowExclusive] ?? 0) - (offsets[range.startRow] ?? 0)) / totalHeight * 100}%`;
+		marker.style.top = `${range.startRow / rows.length * 100}%`;
+		marker.style.height = `${(range.endRowExclusive - range.startRow) / rows.length * 100}%`;
 		fragment.append(marker);
 	}
 	return fragment;

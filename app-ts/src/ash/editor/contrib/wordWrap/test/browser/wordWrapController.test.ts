@@ -1,29 +1,11 @@
+import '../../../../test/browser/testEditorDom.js';
+import { browserEnvironment } from '../../../../test/browser/testEditorDom.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { DisposableStore, toDisposable } from "../../../../../base/common/lifecycle.js";
-
-const browserEnvironment = new JSDOM("<!doctype html><body></body>");
-browserEnvironment.window.HTMLCanvasElement.prototype.getContext = () => null;
-class TestResizeObserver {
-	observe(): void {}
-	unobserve(): void {}
-	disconnect(): void {}
-}
-for (const [name, value] of Object.entries({
-	window: browserEnvironment.window,
-	document: browserEnvironment.window.document,
-	Node: browserEnvironment.window.Node,
-	Element: browserEnvironment.window.Element,
-	HTMLElement: browserEnvironment.window.HTMLElement,
-	Event: browserEnvironment.window.Event,
-	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
-	ResizeObserver: TestResizeObserver,
-})) {
-	Object.defineProperty(globalThis, name, { configurable: true, value });
-}
 
 const { EditorOption } = await import("../../../../common/config/editorOptions.js");
 const { WordWrapController } = await import("../../browser/wordWrapController.js");

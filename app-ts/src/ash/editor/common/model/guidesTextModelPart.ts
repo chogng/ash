@@ -261,7 +261,6 @@ export class GuidesTextModelPart extends TextModelPart implements IGuidesTextMod
 			result.push([]);
 		}
 
-		const includeSingleLinePairs = true;
 		const bracketPairs =
 			this.textModel.bracketPairs.getBracketPairsInRangeWithMinIndentation(
 				new Range(
@@ -283,9 +282,10 @@ export class GuidesTextModelPart extends TextModelPart implements IGuidesTextMod
 					).toArray()
 			).filter((bp) => Range.strictContainsPosition(bp.range, activePosition));
 
+			// A single-line pair has no vertical guide, so it cannot take the active stroke.
 			activeBracketPairRange = findLast(
 				bracketsContainingActivePosition,
-				(i) => includeSingleLinePairs || i.range.startLineNumber !== i.range.endLineNumber
+				(i) => i.range.startLineNumber !== i.range.endLineNumber
 			)?.range;
 		}
 
@@ -293,7 +293,7 @@ export class GuidesTextModelPart extends TextModelPart implements IGuidesTextMod
 		const colorProvider = new BracketPairGuidesClassNames();
 
 		for (const pair of bracketPairs) {
-			if (!pair.closingBracketRange) {
+			if (!pair.closingBracketRange || pair.range.startLineNumber === pair.range.endLineNumber) {
 				continue;
 			}
 
@@ -311,22 +311,6 @@ export class GuidesTextModelPart extends TextModelPart implements IGuidesTextMod
 			const start = pair.openingBracketRange.getStartPosition();
 			const end = pair.closingBracketRange.getStartPosition();
 			const horizontalGuides = options.horizontalGuides === HorizontalGuidesState.Enabled || (options.horizontalGuides === HorizontalGuidesState.EnabledForActive && isActive);
-
-			if (pair.range.startLineNumber === pair.range.endLineNumber) {
-				if (includeSingleLinePairs && horizontalGuides) {
-					result[pair.range.startLineNumber - startLineNumber].push(
-						new IndentGuide(
-							-1,
-							pair.openingBracketRange.getEndPosition().column,
-							className,
-							new IndentGuideHorizontalLine(false, end.column),
-							-1,
-							-1,
-						)
-					);
-				}
-				continue;
-			}
 
 			const endVisibleColumn = this.getVisibleColumnFromPosition(end);
 			const startVisibleColumn = this.getVisibleColumnFromPosition(
@@ -347,9 +331,8 @@ export class GuidesTextModelPart extends TextModelPart implements IGuidesTextMod
 
 			const visibleGuideStartLineNumber = Math.max(start.lineNumber, startLineNumber);
 			const visibleGuideEndLineNumber = Math.min(end.lineNumber, endLineNumber);
-			const offset = renderHorizontalEndLineAtTheBottom ? 1 : 0;
-
-			for (let l = visibleGuideStartLineNumber; l < visibleGuideEndLineNumber + offset; l++) {
+			// The browser draws the closing row's final half-stroke from this guide.
+			for (let l = visibleGuideStartLineNumber; l <= visibleGuideEndLineNumber; l++) {
 				result[l - startLineNumber].push(
 					new IndentGuide(
 						guideVisibleColumn,
@@ -517,13 +500,13 @@ export class GuidesTextModelPart extends TextModelPart implements IGuidesTextMod
 }
 
 export class BracketPairGuidesClassNames {
-	public readonly activeClassName = 'indent-active';
+	public readonly activeClassName = 'active';
 
 	getInlineClassName(nestingLevel: number, nestingLevelOfEqualBracketType: number, independentColorPoolPerBracketType: boolean): string {
 		return this.getInlineClassNameOfLevel(independentColorPoolPerBracketType ? nestingLevelOfEqualBracketType : nestingLevel);
 	}
 
 	getInlineClassNameOfLevel(level: number): string {
-		return `bracket-indent-guide lvl-${level % 30}`;
+		return `stanza-editor-guide-level-${level % 6 + 1}`;
 	}
 }

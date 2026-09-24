@@ -7,7 +7,7 @@ import { type VersionedLanguageResult } from '../../../common/model/languageRequ
 import { type VersionedLanguageResultStore } from '../../../common/model/languageResultStore.js';
 import { assertLanguageCompletionCommitCharacter, normalizeLanguageCompletionItemDetails, LanguageCompletionInsertTextFormat, type LanguageCompletionItem, type LanguageCompletionItemDetails, type LanguageCompletionItemResolver, type LanguageCompletionResolveRequest, type LanguageCompletionResult } from '../../../common/languages.js';
 import { parseSnippet, type Snippet, type SnippetVariableResolver } from "../../snippet/common/snippetParser.js";
-import { SnippetSession } from "../../snippet/browser/snippetSession.js";
+import { SnippetController2 } from '../../snippet/browser/snippetController2.js';
 import { Position } from "../../../common/core/position.js";
 import { Selection } from "../../../common/core/selection.js";
 import { normalizeTextLineEndings } from "../../../common/core/textChange.js";
@@ -69,7 +69,6 @@ export class SuggestModel extends Disposable {
 	private readonly onDidAccept: ((item: LanguageCompletionItem) => void | Promise<void>) | undefined;
 	private readonly snippetVariables: SnippetVariableResolver | undefined;
 	private resolveController: AbortController | undefined;
-	private snippetSession: SnippetSession | undefined;
 	private accepting = false;
 
 	readonly onDidChange: Event<LanguageCompletionSessionChange> = this.changeEmitter.event;
@@ -113,8 +112,6 @@ export class SuggestModel extends Disposable {
 			this._register(editor.onDidDispose(() => this.dispose()));
 			this._register(toDisposable(() => {
 				this.cancelResolution("sessionDisposed");
-				this.snippetSession?.dispose();
-				this.snippetSession = undefined;
 				const hadState = this.currentState !== undefined;
 				this.currentState = undefined;
 				if (hadState) this.fire(LanguageCompletionSessionChangeReason.Cancelled);
@@ -196,11 +193,11 @@ export class SuggestModel extends Disposable {
 			this.editor.executeCommand("suggest.accept", command);
 			this.editor.pushUndoStop();
 			if (insertion.snippet && insertion.snippet.placeholderGroups.length > 0) {
-				this.snippetSession?.dispose();
-				this.snippetSession = new SnippetSession(
+				const snippets = SnippetController2.get(this.editor);
+				if (!snippets) throw new Error('Snippet contribution is unavailable');
+				snippets.startSession(
 					this.textModel,
-					this.editor,
-					insertion.resultStartOffset,
+					[insertion.resultStartOffset],
 					insertion.snippet,
 					insertion.text.length,
 				);
@@ -213,45 +210,6 @@ export class SuggestModel extends Disposable {
 		this.accepting = false;
 		if (state.selectedItem.command && this.onDidAccept) void Promise.resolve().then(() => this.onDidAccept!(state.selectedItem)).catch(this.onResolveError);
 		this.close(LanguageCompletionSessionChangeReason.Accepted);
-		return true;
-	}
-
-	/** Advances an active accepted-snippet tabstop sequence, if any. */
-	selectNextSnippetPlaceholder(): boolean {
-		this.assertNotDisposed();
-		const session = this.snippetSession;
-		if (!session) return false;
-		const handled = session.selectNext();
-		if (session.isDisposed) this.snippetSession = undefined;
-		return handled;
-	}
-
-	/** Moves backwards through an active accepted-snippet tabstop sequence. */
-	selectPreviousSnippetPlaceholder(): boolean {
-		this.assertNotDisposed();
-		const session = this.snippetSession;
-		if (!session) return false;
-		return session.selectPrevious();
-	}
-
-	/** Selects the next value of the active accepted-snippet choice tabstop. */
-	selectNextSnippetChoice(): boolean {
-		this.assertNotDisposed();
-		return this.snippetSession?.selectNextChoice() ?? false;
-	}
-
-	/** Selects the previous value of the active accepted-snippet choice tabstop. */
-	selectPreviousSnippetChoice(): boolean {
-		this.assertNotDisposed();
-		return this.snippetSession?.selectPreviousChoice() ?? false;
-	}
-
-	/** Stops tabstop navigation while preserving the expanded snippet text. */
-	cancelSnippetPlaceholderNavigation(): boolean {
-		this.assertNotDisposed();
-		if (!this.snippetSession) return false;
-		this.snippetSession.dispose();
-		this.snippetSession = undefined;
 		return true;
 	}
 

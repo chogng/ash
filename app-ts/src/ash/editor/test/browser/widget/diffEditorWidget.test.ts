@@ -1,151 +1,167 @@
-import { StandaloneCodeEditorService } from '../../../standalone/browser/standaloneCodeEditorService.js';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { JSDOM } from "jsdom";
+import assert from 'node:assert/strict';
+import { test, suiteTeardown } from 'mocha';
+import { JSDOM } from 'jsdom';
 import { type CancellationToken } from '../../../../base/common/cancellation.js';
 import { Event } from '../../../../base/common/event.js';
-import { Range } from "../../../common/core/range.js";
-import { type IDocumentDiff, type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from "../../../common/diff/documentDiffProvider.js";
-import { DefaultLinesDiffComputer } from "../../../common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js";
+import { Range } from '../../../common/core/range.js';
+import { type IDocumentDiff, type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from '../../../common/diff/documentDiffProvider.js';
+import { DefaultLinesDiffComputer } from '../../../common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js';
 import { type ITextModel } from '../../../common/model.js';
-import { TextModel } from "../../../common/model/textModel.js";
+import { TextModel } from '../../../common/model/textModel.js';
+import { ICodeEditorService } from '../../../browser/services/codeEditorService.js';
+import { StandaloneCodeEditorService } from '../../../standalone/browser/standaloneCodeEditorService.js';
+import { EditorOption } from '../../../common/config/editorOptions.js';
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
+import { TestThemeService } from '../../../../platform/theme/test/common/testThemeService.js';
+import { darkColorTheme } from '../../../../platform/theme/common/colorTheme.js';
+import { ILanguageConfigurationService } from '../../../common/languages/languageConfigurationRegistry.js';
+import { createTestLanguageConfigurationService } from '../../common/modes/testLanguageConfigurationService.js';
+import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
+import { LanguageFeaturesService } from '../../../common/services/languageFeaturesService.js';
+import { IContextKeyService, ContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { AccessibilitySupport, IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
+import { ServiceContainer } from '../../../../platform/instantiation/common/instantiation.js';
+import { installEditorTestDom } from '../editorTestGlobals.js';
 
-const browserEnvironment = new JSDOM("<!doctype html><body></body>");
-for (const [name, value] of Object.entries({
-	window: browserEnvironment.window,
-	document: browserEnvironment.window.document,
-	Node: browserEnvironment.window.Node,
-	Element: browserEnvironment.window.Element,
-	HTMLElement: browserEnvironment.window.HTMLElement,
-	Event: browserEnvironment.window.Event,
-})) {
-	Object.defineProperty(globalThis, name, { configurable: true, value });
+const browserEnvironment = new JSDOM('<!doctype html><body></body>');
+browserEnvironment.window.HTMLCanvasElement.prototype.getContext = () => null;
+class TestResizeObserver {
+	observe(): void {}
+	unobserve(): void {}
+	disconnect(): void {}
 }
+const installedGlobals = installEditorTestDom(browserEnvironment, [
+	'Node', 'Element', 'HTMLElement', 'Event', 'InputEvent', 'KeyboardEvent',
+], { ResizeObserver: TestResizeObserver });
 
-const { DiffEditorWidget } = await import("../../../browser/widget/diffEditor/diffEditorWidget.js");
-const { DiffModel } = await import("../../../common/diff/diffModel.js");
+await import('../../../contrib/diffEditorBreadcrumbs/browser/contribution.js');
+const { DiffEditorWidget } = await import('../../../browser/widget/diffEditor/diffEditorWidget.js');
+const { DiffModel } = await import('../../../common/diff/diffModel.js');
+suiteTeardown(() => {
+	installedGlobals.dispose();
+	browserEnvironment.window.close();
+});
 const diffOptions: IDocumentDiffProviderOptions = { ignoreTrimWhitespace: false, maxComputationTimeMs: 0, computeMoves: false };
 
-test("DiffEditorWidget presents side-by-side changed lines and inline ranges", async () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
-	const container = requiredElement<HTMLElement>(dom.window.document, "main");
-	using original = new TextModel("same\nold value\nremoved\ntail");
-	using modified = new TextModel("same\nnew value\nadded\ntail");
-	using computationService = new WidgetTestDiffComputationService();
-	using model = new DiffModel({ original, modified, diffProvider: computationService, diffOptions });
+const enabledAccessibilityService: IAccessibilityService = {
+	onDidChangeScreenReaderOptimized: Event.None,
+	onDidChangeReducedMotion: Event.None,
+	onDidChangeReducedTransparency: Event.None,
+	onDidChangeLinkUnderlines: Event.None,
+	alwaysUnderlineAccessKeys: async () => false,
+	isScreenReaderOptimized: () => true,
+	isMotionReduced: () => false,
+	isTransparencyReduced: () => false,
+	getAccessibilitySupport: () => AccessibilitySupport.Enabled,
+	setAccessibilitySupport: () => {},
+	alert: () => {},
+	status: () => {},
+};
+
+test('DiffEditorWidget owns two editors, keeps source models caller-owned, and refreshes decorations after an edit', async () => {
+	using services = createServices();
+	using original = new TextModel('same\nold value\ntail');
+	using modified = new TextModel('same\nnew value\ntail');
+	using computation = new WidgetTestDiffComputationService();
+	using model = new DiffModel({ original, modified, diffProvider: computation, diffOptions });
 	await waitForReady(model);
-	using codeEditorService = new StandaloneCodeEditorService();
+	const container = browserEnvironment.window.document.createElement('main');
+	const codeEditorService = services.get(ICodeEditorService);
 	const lifecycle: string[] = [];
-	using willCreate = codeEditorService.onWillCreateDiffEditor(() => lifecycle.push('will'));
 	using added = codeEditorService.onDiffEditorAdd(() => lifecycle.push('add'));
 	using removed = codeEditorService.onDiffEditorRemove(() => lifecycle.push('remove'));
-	const editor = new DiffEditorWidget({ container, model, lineHeight: 20, codeEditorService });
-	assert.deepEqual(lifecycle, ['will', 'add']);
+	const editor = services.createInstance(DiffEditorWidget, { container, model, lineHeight: 20 });
+	editor.layout({ width: 400, height: 80 });
+
+	assert.deepEqual(lifecycle, ['add']);
 	assert.deepEqual(codeEditorService.listDiffEditors(), [editor]);
-	editor.layout({ width: 400, height: 80 });
-
-	const rows = [...editor.element.querySelectorAll<HTMLElement>(".stanza-diff-editor-row")];
-	assert.equal(rows.length, 4);
-	assert.equal(rows[0]?.classList.contains("unchanged"), true);
-	assert.equal(rows[1]?.classList.contains("modified"), true);
-	assert.equal(rows[1]?.querySelector(".stanza-diff-editor-cell.original")?.textContent, "2old value");
-	assert.equal(rows[1]?.querySelector(".stanza-diff-editor-cell.modified")?.textContent, "2new value");
-	assert.equal(rows[1]?.querySelectorAll(".stanza-diff-editor-inline.removed").length, 1);
-	assert.equal(rows[1]?.querySelectorAll(".stanza-diff-editor-inline.added").length, 1);
-	const overview = requiredElement<HTMLElement>(editor.element, ".stanza-diff-overview");
-	assert.equal(overview.style.left, "370px");
-	assert.equal(overview.style.height, "80px");
-	assert.equal(overview.querySelectorAll(".stanza-diff-overview-lane.original .stanza-diff-overview-marker.removed").length, 1);
-	assert.equal(overview.querySelectorAll(".stanza-diff-overview-lane.modified .stanza-diff-overview-marker.inserted").length, 1);
-	assert.equal(requiredElement<HTMLElement>(overview, ".stanza-diff-overview-viewport").style.height, "80px");
+	assert.equal(editor.originalEditor.getModel(), original);
+	assert.equal(editor.modifiedEditor.getModel(), modified);
+	assert.equal(editor.originalEditor.getOption(EditorOption.readOnly), true);
+	assert.equal(editor.modifiedEditor.getOption(EditorOption.readOnly), false);
+	assert.equal(editor.originalEditor.getOption(EditorOption.scrollBeyondLastLine), true);
+	assert.equal(editor.element.querySelectorAll('.stanza-editor').length, 2);
+	assert.equal(original.getAllDecorations().some(decoration => decoration.options.className === 'stanza-diff-line-removed'), true);
+	assert.equal(modified.getAllDecorations().some(decoration => decoration.options.inlineClassName === 'stanza-diff-inline-added'), true);
 	assert.equal(editor.nextChange(), 1);
-	assert.equal(editor.currentChangeRow, 1);
-	assert.equal(editor.element.querySelector(".stanza-diff-editor-row.active")?.classList.contains("modified"), true);
-	assert.equal(editor.previousChange(), 2);
-	const next = new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "F7" });
-	editor.element.dispatchEvent(next);
-	assert.equal(next.defaultPrevented, true);
-	assert.equal(editor.currentChangeRow, 1);
-	assert.match(editor.element.querySelector(".stanza-diff-editor-accessibility-status")?.textContent ?? "", /Change 1 of 2/);
+	assert.match(editor.element.querySelector('.stanza-diff-editor-accessibility-status')?.textContent ?? '', /Change 1 of 1/);
+
+	modified.applyEdits([{ range: new Range(2, 1, 2, 10), text: 'old value' }]);
+	await waitForReady(model);
+	assert.equal(editor.diff?.hunks.length, 0);
+	assert.equal(modified.getAllDecorations().some(decoration => decoration.options.className === 'stanza-diff-line-added'), false);
 	editor.dispose();
-	assert.deepEqual(lifecycle, ['will', 'add', 'remove']);
+	assert.deepEqual(lifecycle, ['add', 'remove']);
 	assert.deepEqual(codeEditorService.listDiffEditors(), []);
-	dom.window.close();
+	assert.equal(original.isDisposed(), false);
+	assert.equal(modified.isDisposed(), false);
 });
 
-test("DiffEditorWidget refreshes on either source model and virtualizes diff rows", async () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
-	const container = requiredElement<HTMLElement>(dom.window.document, "main");
-	using original = new TextModel(lines("old", 100));
-	using modified = new TextModel(lines("new", 100));
-	using computationService = new WidgetTestDiffComputationService();
-	using model = new DiffModel({ original, modified, diffProvider: computationService, diffOptions });
+test('DiffEditorWidget inserts paired view space for added lines and navigates without wrapping when requested', async () => {
+	using services = createServices();
+	using original = new TextModel('first\nlast\nold end');
+	using modified = new TextModel('first\ninserted\nlast\nnew end');
+	using computation = new WidgetTestDiffComputationService();
+	using model = new DiffModel({ original, modified, diffProvider: computation, diffOptions });
 	await waitForReady(model);
-	using editor = new DiffEditorWidget({ container, model, lineHeight: 20, overscanRowCount: 1 });
-	editor.layout({ width: 400, height: 40 });
-
-	assert.equal(editor.element.querySelectorAll(".stanza-diff-editor-row").length, 3);
-	editor.revealModifiedLine(80);
-	const firstVisibleRow = editor.element.querySelector<HTMLElement>(".stanza-diff-editor-row");
-	assert.equal(firstVisibleRow?.style.height, "20px");
-	assert.ok(editor.element.scrollTop > 0);
-	const rows = requiredElement<HTMLElement>(editor.element, ".stanza-diff-editor-rows");
-	assert.notEqual(rows.style.top, "0px");
-	assert.equal(rows.style.transform, "");
-	const overview = requiredElement<HTMLElement>(editor.element, ".stanza-diff-overview");
-	assert.equal(overview.style.top, `${editor.element.scrollTop}px`);
-	assert.equal(Number.parseFloat(requiredElement<HTMLElement>(overview, ".stanza-diff-overview-viewport").style.height), 2);
-	assert.equal(requiredElement<HTMLElement>(overview, ".stanza-diff-overview-viewport").style.transform === "translate3d(0, 0px, 0)", false);
-	const marker = requiredElement<HTMLElement>(overview, ".stanza-diff-overview-lane.original .stanza-diff-overview-marker.removed");
-	editor.element.scrollTop = 0;
-	editor.element.dispatchEvent(new dom.window.Event("scroll"));
-	assert.equal(requiredElement<HTMLElement>(overview, ".stanza-diff-overview-lane.original .stanza-diff-overview-marker.removed"), marker);
-	editor.layout({ width: 400, height: 60 });
-	assert.equal(requiredElement<HTMLElement>(overview, ".stanza-diff-overview-lane.original .stanza-diff-overview-marker.removed"), marker);
-
-	modified.applyEdits([{
-		range: Range.fromPositions(modified.positionAt(0), modified.positionAt(modified.getText().length)),
-		text: "same",
-	}]);
-	await waitForReady(model);
-	assert.equal(editor.diff?.rows.length, 100);
-	assert.notEqual(requiredElement<HTMLElement>(overview, ".stanza-diff-overview-lane.original .stanza-diff-overview-marker.removed"), marker);
-	editor.element.scrollTop = 0;
-	editor.element.dispatchEvent(new dom.window.Event("scroll"));
-	assert.equal(overview.style.top, "0px");
-	assert.equal(requiredElement<HTMLElement>(overview, ".stanza-diff-overview-viewport").style.transform, "translate3d(0, 0px, 0)");
-	assert.equal(editor.element.querySelector(".stanza-diff-editor-row")?.classList.contains("modified"), true);
-	dom.window.close();
-});
-
-test("DiffEditorWidget applies presentation settings and clamps change navigation when looping is disabled", async () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
-	const container = requiredElement<HTMLElement>(dom.window.document, "main");
-	using original = new TextModel("old\nsame\nold again");
-	using modified = new TextModel("new\nsame\nnew again");
-	using computationService = new WidgetTestDiffComputationService();
-	using model = new DiffModel({ original, modified, diffProvider: computationService, diffOptions });
-	await waitForReady(model);
-	using editor = new DiffEditorWidget({ container, model, lineHeight: 24, fontFamily: "Test Mono", fontSize: 15, fontLigatures: true, showLineNumbers: false, showInlineChanges: false, loopChanges: false });
+	const container = browserEnvironment.window.document.createElement('main');
+	using editor = services.createInstance(DiffEditorWidget, {
+		container,
+		model,
+		lineHeight: 20,
+		wordWrap: false,
+		loopChanges: false,
+		readOnly: true,
+	});
 	editor.layout({ width: 400, height: 80 });
 
-	assert.equal(editor.element.classList.contains("hide-line-numbers"), true);
-	assert.equal(editor.element.style.fontFamily.startsWith('"Test Mono", '), true);
-	assert.equal(editor.element.style.fontFamily.endsWith('monospace'), true);
-	assert.equal(editor.element.style.fontSize, "15px");
-	assert.equal(editor.element.style.fontFeatureSettings.includes('"liga" on'), true);
-	assert.equal(editor.element.style.lineHeight, '24px');
-	assert.equal(editor.element.querySelectorAll(".stanza-diff-editor-inline").length, 0);
-	assert.equal(editor.nextChange(), 0);
-	assert.equal(editor.nextChange(), 2);
-	assert.equal(editor.nextChange(), 2);
-	assert.equal(editor.previousChange(), 0);
-	assert.equal(editor.previousChange(), 0);
-	dom.window.close();
+	assert.equal(editor.modifiedEditor.getOption(EditorOption.readOnly), true);
+	assert.equal(editor.originalEditor.getTopForLineNumber(2), editor.modifiedEditor.getTopForLineNumber(3));
+	assert.equal(editor.nextChange(), 1);
+	assert.equal(editor.nextChange(), 3);
+	assert.equal(editor.nextChange(), 3);
+	assert.equal(editor.previousChange(), 1);
+	editor.toggleWordWrap();
+	assert.equal(editor.wordWrap, true);
+	assert.equal(editor.originalEditor.getOption(EditorOption.wordWrap), 'on');
+	assert.equal(editor.modifiedEditor.getOption(EditorOption.wordWrap), 'on');
+	assert.equal(editor.element.classList.contains('word-wrapped'), true);
 });
 
-function lines(prefix: string, count: number): string {
-	return Array.from({ length: count }, (_, index) => `${prefix} ${index}`).join("\n");
+test('DiffEditorWidget hides paired unchanged lines and reveals them from either side', async () => {
+	using services = createServices();
+	const lines = Array.from({ length: 36 }, (_, index) => `line ${index + 1}`);
+	using original = new TextModel(lines.join('\n'));
+	using modified = new TextModel([...lines.slice(0, -1), 'changed line'].join('\n'));
+	using computation = new WidgetTestDiffComputationService();
+	using model = new DiffModel({ original, modified, diffProvider: computation, diffOptions });
+	await waitForReady(model);
+	const container = browserEnvironment.window.document.createElement('main');
+	using editor = services.createInstance(DiffEditorWidget, {
+		container,
+		model,
+		hideUnchangedRegions: { enabled: true, contextLineCount: 1, minimumLineCount: 3, revealLineCount: 2 },
+	});
+	editor.layout({ width: 800, height: 600 });
+
+	assert.equal(editor.element.querySelectorAll('.ash-diff-hidden-region').length, 2);
+	assert.equal(editor.originalEditor.getVisibleRanges().some(range => range.startLineNumber <= 5 && 5 <= range.endLineNumber), false);
+	(editor.element.querySelector('.ash-diff-hidden-region button') as HTMLButtonElement).click();
+	assert.equal(editor.element.querySelector('.ash-diff-hidden-region-count')?.textContent, '31 hidden lines');
+	(editor.element.querySelectorAll('.ash-diff-hidden-region button')[1] as HTMLButtonElement).click();
+	assert.equal(editor.element.querySelectorAll('.ash-diff-hidden-region').length, 0);
+	assert.equal(editor.originalEditor.getVisibleRanges().some(range => range.startLineNumber <= 5 && 5 <= range.endLineNumber), true);
+});
+
+function createServices(): ServiceContainer {
+	const services = new ServiceContainer();
+	services.registerSingleton(IContextKeyService, () => new ContextKeyService());
+	services.registerInstance(IThemeService, new TestThemeService(darkColorTheme));
+	services.registerInstance(ILanguageConfigurationService, createTestLanguageConfigurationService());
+	services.registerInstance(ILanguageFeaturesService, new LanguageFeaturesService());
+	services.registerInstance(IAccessibilityService, enabledAccessibilityService);
+	services.registerSingleton(ICodeEditorService, () => services.createInstance(StandaloneCodeEditorService));
+	return services;
 }
 
 class WidgetTestDiffComputationService implements IDocumentDiffProvider {
@@ -164,19 +180,13 @@ class WidgetTestDiffComputationService implements IDocumentDiffProvider {
 	}
 }
 
-function requiredElement<T extends Element>(owner: ParentNode, selector: string): T {
-	const element = owner.querySelector<T>(selector);
-	if (!element) throw new Error(`Missing ${selector}`);
-	return element;
-}
-
 function waitForReady(model: InstanceType<typeof DiffModel>): Promise<void> {
-	if (model.state.kind === "ready") return Promise.resolve();
+	if (model.state.kind === 'ready') return Promise.resolve();
 	return new Promise((resolve, reject) => {
 		const listener = model.onDidChange(state => {
-			if (state.kind === "loading") return;
+			if (state.kind === 'loading') return;
 			listener.dispose();
-			if (state.kind === "error") reject(state.error);
+			if (state.kind === 'error') reject(state.error);
 			else resolve();
 		});
 	});

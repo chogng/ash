@@ -4,6 +4,8 @@ import { createServiceIdentifier } from "../../../../platform/instantiation/comm
 
 export interface WorkspaceEditResult {
 	readonly resources: readonly URI[];
+	/** Reverts this application while its touched resources still match the applied state. */
+	readonly undo: () => Promise<void>;
 }
 
 /** Applies one validated multi-resource language edit through shared text models. */

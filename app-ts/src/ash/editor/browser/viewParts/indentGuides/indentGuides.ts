@@ -2,31 +2,16 @@ import "./indentGuides.css";
 import { h } from "../../../../base/browser/dom.js";
 import { EditorOption, type InternalGuidesOptions } from '../../../common/config/editorOptions.js';
 import { Position } from '../../../common/core/position.js';
+import { HorizontalGuidesState, type IndentGuide } from '../../../common/textModelGuides.js';
 import { type IViewModel, type TextMeasurer } from '../../../common/viewModel.js';
 import { type EditorVisualLine, type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
 import { type RenderingContext } from "../../view/renderingContext.js";
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
-import type { TextModel } from '../../../common/model/textModel.js';
-import type { Range } from '../../../common/core/range.js';
 import { renderViewPartRows } from '../../view/viewLayer.js';
 import * as viewEvents from '../../../common/viewEvents.js';
 
-export interface BracketGuide {
-	readonly opening: Range;
-	readonly closing: Range;
-	/** One-based visual column shared by the vertical segments of this pair. */
-	readonly visibleColumn: number;
-	readonly level: number;
-}
-
-export interface BracketGuideSource {
-	readonly textModel: TextModel;
-	getBracketGuides(startLineIndex: number, endLineIndexInclusive: number): readonly BracketGuide[];
-}
-
 interface IndentGuidesOptions {
-	readonly bracketGuideSource: BracketGuideSource | undefined;
 	readonly viewModel: IViewModel;
 	readonly host: HTMLElement;
 	readonly readVisualProjection: () => EditorVisualLineProjection;
@@ -39,7 +24,6 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
 	private _renderResult: string[] = [];
 	private guides: InternalGuidesOptions;
 	private primaryPosition: Position | undefined;
-	private readonly bracketGuideSource: BracketGuideSource | undefined;
 	private readonly viewModel: IViewModel;
 	private readonly host: HTMLElement;
 	private readonly readVisualProjection: () => EditorVisualLineProjection;
@@ -50,7 +34,6 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
 		this.context.addEventHandler(this);
 		this.guides = this.context.configuration.options.get(EditorOption.guides);
 		this.primaryPosition = options.viewModel.getPrimaryCursorState().modelState.position;
-		this.bracketGuideSource = options.bracketGuideSource;
 		this.viewModel = options.viewModel;
 		this.host = options.host;
 		this.readVisualProjection = options.readVisualProjection;
@@ -88,7 +71,6 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
 
 	public prepareRender(context: RenderingContext): void {
 		const bracketGuides = this.resolveBracketGuides(context);
-		const activeBracketGuide = this.resolveActiveBracketGuide(bracketGuides);
 		const { startLineNumber, endLineNumber } = context.viewportData;
 		const indentation = this.guides.indentation ? this.viewModel.getLinesIndentGuides(startLineNumber, endLineNumber) : [];
 		const activeIndentation = this.guides.indentation && this.guides.highlightActiveIndentation !== false
@@ -103,8 +85,8 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
 				const visualLine = projection.lineAt(visualLineIndex);
 				if (!visualLine) continue;
 				const bracketColumns = new Set<number>();
-				for (const guide of bracketGuides) {
-					if (this.appendBracketGuide(row, visualLine, context.viewportData.lineHeight, guide, activeBracketGuide, textLeft, measureLineWidth)) {
+				for (const guide of bracketGuides[visualLineIndex + 1 - startLineNumber] ?? []) {
+					if (this.appendBracketGuide(row, visualLine, context.viewportData.lineHeight, guide, textLeft, measureLineWidth)) {
 						bracketColumns.add(guide.visibleColumn);
 					}
 				}
@@ -138,49 +120,37 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
 		return this._renderResult[lineNumber - startLineNumber] ?? '';
 	}
 
-	private resolveBracketGuides(context: RenderingContext): readonly BracketGuide[] {
-		if (this.guides.bracketPairs === false || !this.bracketGuideSource?.getBracketGuides) return Object.freeze([]);
-		const projection = this.readVisualProjection();
-		const first = projection.lineAt(context.viewportData.startLineNumber - 1);
-		const last = projection.lineAt(context.viewportData.endLineNumber - 1);
-		if (!first || !last) return Object.freeze([]);
-		return this.bracketGuideSource.getBracketGuides(first.logicalLineIndex, last.logicalLineIndex);
-	}
-
-	private resolveActiveBracketGuide(guides: readonly BracketGuide[]): BracketGuide | undefined {
-		const position = this.viewModel.getPrimaryCursorState().modelState.position;
-		if (!position) return undefined;
-		return guides.filter(guide => guide.opening.startLineNumber !== guide.closing.startLineNumber && containsPosition(guide, position)).sort(compareInnermostFirst)[0];
+	private resolveBracketGuides(context: RenderingContext): IndentGuide[][] {
+		if (this.guides.bracketPairs === false || this.viewModel.model.isTooLargeForTokenization()) {
+			return [];
+		}
+		let horizontalGuides = HorizontalGuidesState.Disabled;
+		if (this.guides.bracketPairsHorizontal === true) {
+			horizontalGuides = HorizontalGuidesState.Enabled;
+		} else if (this.guides.bracketPairsHorizontal === 'active') {
+			horizontalGuides = HorizontalGuidesState.EnabledForActive;
+		}
+		return this.viewModel.getBracketGuidesInRangeByLine(
+			context.viewportData.startLineNumber,
+			context.viewportData.endLineNumber,
+			this.viewModel.getPrimaryCursorState().modelState.position ?? null,
+			{
+				includeInactive: this.guides.bracketPairs === true,
+				horizontalGuides,
+				highlightActive: this.guides.highlightActiveBracketPair,
+			},
+		);
 	}
 
 	private appendBracketGuide(
 		row: HTMLElement,
 		visualLine: EditorVisualLine,
 		lineHeight: number,
-		guide: BracketGuide,
-		activeGuide: BracketGuide | undefined,
+		guide: IndentGuide,
 		textLeft: number,
 		measureLineWidth: (text: string) => number,
 	): boolean {
-		const lineIndex = visualLine.logicalLineIndex;
-		const openingLineIndex = guide.opening.startLineNumber - 1;
-		const closingLineIndex = guide.closing.startLineNumber - 1;
-		if (openingLineIndex === closingLineIndex) {
-			return false;
-		}
-		const openingColumnIndex = guide.opening.startColumn - 1;
-		const closingColumnIndex = guide.closing.startColumn - 1;
-		if (lineIndex < openingLineIndex || lineIndex > closingLineIndex) {
-			return false;
-		}
-		if (lineIndex === openingLineIndex && visualLine.endColumn <= openingColumnIndex) {
-			return false;
-		}
-		if (lineIndex === closingLineIndex && visualLine.startColumn > closingColumnIndex) {
-			return false;
-		}
-		const active = activeGuide === guide;
-		if (this.guides.bracketPairs === 'active' && !active) {
+		if (guide.visibleColumn < 1) {
 			return false;
 		}
 		const offset = measureLineWidth(' '.repeat(guide.visibleColumn - 1));
@@ -188,51 +158,50 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
 			return false;
 		}
 		const left = textLeft + offset;
-		const text = this.viewModel.model.getLineContent(lineIndex + 1);
+		const text = this.viewModel.model.getLineContent(visualLine.logicalLineIndex + 1);
 		const bracketLeft = (column: number): number => textLeft + (visualLine.wrappedTextIndentWidth ?? 0) + measureLineWidth(text.slice(visualLine.startColumn, column));
-		const vertical = h(row.ownerDocument, 'span');
-		vertical.className = `core-guide stanza-editor-bracket-guide stanza-editor-guide-level-${guide.level}`;
-		vertical.dataset.bracketLevel = String(guide.level);
-		vertical.style.left = `${left}px`;
-		const openingVisualLine = lineIndex === openingLineIndex && visualLine.startColumn <= openingColumnIndex && openingColumnIndex < visualLine.endColumn;
-		const closingVisualLine = lineIndex === closingLineIndex && visualLine.startColumn <= closingColumnIndex && closingColumnIndex < visualLine.endColumn;
+		if (guide.horizontalLine) {
+			const endColumn = guide.horizontalLine.endColumn - 1;
+			if (endColumn < visualLine.startColumn || endColumn >= visualLine.endColumn) {
+				return false;
+			}
+			const end = bracketLeft(endColumn);
+			if (end <= left) {
+				return false;
+			}
+			const horizontal = h(row.ownerDocument, 'span');
+			horizontal.className = `stanza-editor-bracket-guide-horizontal ${guide.className}`;
+			horizontal.style.left = `${left}px`;
+			horizontal.style.width = `${end - left}px`;
+			horizontal.style.top = `${guide.horizontalLine.top ? lineHeight / 2 : lineHeight}px`;
+			if (!guide.horizontalLine.top) {
+				horizontal.style.transform = 'translateY(-100%)';
+			}
+			row.append(horizontal);
+			return false;
+		}
+		const openingColumnIndex = guide.forWrappedLinesAfterColumn - 1;
+		const closingColumnIndex = guide.forWrappedLinesBeforeOrAtColumn - 1;
+		if (openingColumnIndex >= 0 && visualLine.endColumn <= openingColumnIndex) {
+			return false;
+		}
+		if (closingColumnIndex >= 0 && visualLine.startColumn > closingColumnIndex) {
+			return false;
+		}
+		const openingVisualLine = openingColumnIndex >= visualLine.startColumn && openingColumnIndex < visualLine.endColumn;
+		const closingVisualLine = closingColumnIndex >= visualLine.startColumn && closingColumnIndex < visualLine.endColumn;
 		const openingLeft = openingVisualLine ? bracketLeft(openingColumnIndex) : left;
-		const closingLeft = closingVisualLine ? bracketLeft(closingColumnIndex) : left;
 		const top = openingVisualLine ? (openingLeft > left ? lineHeight - 1 : lineHeight / 2) : 0;
-		const closingTop = text.slice(visualLine.startColumn, closingColumnIndex).trim() ? lineHeight - 1 : lineHeight / 2;
-		const bottom = closingVisualLine ? lineHeight - closingTop : 0;
+		let bottom = 0;
+		if (closingVisualLine) {
+			bottom = text.slice(visualLine.startColumn, closingColumnIndex).trim() ? 1 : lineHeight / 2;
+		}
+		const vertical = h(row.ownerDocument, 'span');
+		vertical.className = `core-guide stanza-editor-bracket-guide ${guide.className}`;
+		vertical.style.left = `${left}px`;
 		vertical.style.top = `${top}px`;
 		vertical.style.height = `${lineHeight - top - bottom}px`;
-		if (active && this.guides.highlightActiveBracketPair) vertical.classList.add('active');
 		row.append(vertical);
-		const horizontalMode = this.guides.bracketPairsHorizontal;
-		if (horizontalMode === false || (horizontalMode === 'active' && !active)) {
-			return true;
-		}
-		const end = openingVisualLine ? openingLeft : closingLeft;
-		if ((!openingVisualLine && !closingVisualLine) || end <= left) {
-			return true;
-		}
-		const horizontal = h(row.ownerDocument, 'span');
-		horizontal.className = `stanza-editor-bracket-guide-horizontal stanza-editor-guide-level-${guide.level}`;
-		horizontal.style.left = `${left}px`;
-		horizontal.style.width = `${end - left}px`;
-		const atRowEnd = openingVisualLine || closingTop > lineHeight / 2;
-		horizontal.style.top = `${atRowEnd ? lineHeight : closingTop}px`;
-		if (atRowEnd) {
-			horizontal.style.transform = 'translateY(-100%)';
-		}
-		if (active && this.guides.highlightActiveBracketPair) horizontal.classList.add('active');
-		row.append(horizontal);
 		return true;
 	}
-}
-
-function containsPosition(guide: BracketGuide, position: Position): boolean {
-	return Position.compare(guide.opening.getStartPosition(), position) <= 0 && Position.compare(guide.closing.getEndPosition(), position) >= 0;
-}
-
-function compareInnermostFirst(left: BracketGuide, right: BracketGuide): number {
-	const opening = Position.compare(right.opening.getStartPosition(), left.opening.getStartPosition());
-	return opening !== 0 ? opening : Position.compare(left.closing.getEndPosition(), right.closing.getEndPosition());
 }

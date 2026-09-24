@@ -4,7 +4,7 @@ import { Disposable, MutableDisposable, toDisposable } from '../../../../base/co
 import { DiffEditorWidget } from '../../../../editor/browser/widget/diffEditor/diffEditorWidget.js';
 import { type ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
 import { type View } from '../../../../editor/browser/view.js';
-import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { EditorOption, RenderLineNumbersType } from '../../../../editor/common/config/editorOptions.js';
 import { Position } from '../../../../editor/common/core/position.js';
 import { LineDiffKind } from '../../../../editor/common/diff/lineDiff.js';
@@ -20,7 +20,7 @@ export class QuickDiffEditorController extends Disposable implements IQuickDiffE
 	private readonly modelReference: QuickDiffModelReference | undefined;
 	private currentChange: QuickDiffChange | undefined;
 
-	constructor(private readonly editor: ICodeEditor, private readonly editorView: View, @IConfigurationService private readonly configurationService: IConfigurationService, @IQuickDiffModelService modelService: IQuickDiffModelService, @IQuickDiffEditorControllerService controllerService: IQuickDiffEditorControllerService, @ICodeEditorService private readonly codeEditorService: ICodeEditorService) {
+	constructor(private readonly editor: ICodeEditor, private readonly editorView: View, @IConfigurationService private readonly configurationService: IConfigurationService, @IQuickDiffModelService modelService: IQuickDiffModelService, @IQuickDiffEditorControllerService controllerService: IQuickDiffEditorControllerService, @IInstantiationService private readonly instantiationService: IInstantiationService) {
 		super();
 		this.modelReference = this._register(modelService.createModelReference(editorView.textModel.uri, editorView.textModel));
 		this._register(new QuickDiffDecorator(editorView.textModel, this.modelReference, configurationService));
@@ -89,9 +89,8 @@ export class QuickDiffEditorController extends Disposable implements IQuickDiffE
 		this.currentChange = change;
 		this.editorView.revealPosition(new Position((change.lineIndex) + 1, (0) + 1));
 		const index = model.state.changes.indexOf(change);
-		this.view.value = new QuickDiffPeekView(
+		this.view.value = this.instantiationService.createInstance(QuickDiffPeekView,
 			this.editor,
-			this.codeEditorService,
 			change,
 			Math.max(0, index) + 1,
 			model.state.changes.length,
@@ -138,7 +137,7 @@ export class QuickDiffEditorControllerService extends Disposable implements IQui
 }
 
 class QuickDiffPeekView extends Disposable {
-	constructor(editor: ICodeEditor, codeEditorService: ICodeEditorService, change: QuickDiffChange, index: number, count: number, showPrevious: () => void, showNext: () => void, close: () => void) {
+	constructor(editor: ICodeEditor, change: QuickDiffChange, index: number, count: number, showPrevious: () => void, showNext: () => void, close: () => void, @IInstantiationService instantiationService: IInstantiationService) {
 		super();
 		const domNode = editor.getDomNode();
 		if (!domNode) throw new Error('Quick Diff requires an attached editor');
@@ -163,10 +162,10 @@ class QuickDiffPeekView extends Disposable {
 		this._register(addDisposableListener(previous, 'click', showPrevious));
 		this._register(addDisposableListener(next, 'click', showNext));
 		this._register(addDisposableListener(closeButton, 'click', close));
-		const diffWidget = this._register(new DiffEditorWidget({
+		const diffWidget = this._register(instantiationService.createInstance(DiffEditorWidget, {
 			container: diffContainer,
 			model: change.comparison.model,
-			codeEditorService,
+			readOnly: true,
 			lineHeight: editor.getOption(EditorOption.fontInfo).lineHeight,
 			fontFamily: editor.getOption(EditorOption.fontInfo).fontFamily,
 			fontSize: editor.getOption(EditorOption.fontInfo).fontSize,

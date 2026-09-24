@@ -167,6 +167,7 @@ import { IExtensionService } from "../services/extensions/common/extensionServic
 import { AppServerRemoteAgentService } from "../services/remote/browser/appServerRemoteAgentService.js";
 import { IRemoteAgentService } from "../services/remote/common/remoteAgentService.js";
 import { ILanguageFeaturesService } from '../../editor/common/services/languageFeatures.js';
+import { DefaultDropProvidersFeature, DefaultPasteProvidersFeature } from '../../editor/contrib/dropOrPasteInto/browser/defaultProviders.js';
 import { ICodeEditorService } from '../../editor/browser/services/codeEditorService.js';
 import { CodeEditorService } from '../services/editor/browser/codeEditorService.js';
 import { LanguageFeaturesService } from '../../editor/common/services/languageFeaturesService.js';
@@ -214,6 +215,8 @@ import { projectColorThemeTokens } from "../services/textMate/common/textMateThe
 import { BrowserWorkspaceEditService } from "../services/language/browser/browserWorkspaceEditService.js";
 import { IWorkspaceEditService } from "../services/language/common/workspaceEditService.js";
 import { ITextModelResourceService } from "../services/textmodelResolver/common/textModelResourceService.js";
+import { ITextModelService } from '../../editor/common/services/resolverService.js';
+import { TextModelResolverService } from '../services/textmodelResolver/common/textModelResolverService.js';
 import { registerTreeViewsDnDService } from '../../editor/common/services/treeViewsDndService.js';
 import { BrowserBulkEditService } from "../contrib/bulkEdit/browser/bulkEditService.js";
 import { IBulkEditService } from "../../editor/browser/services/bulkEditService.js";
@@ -421,6 +424,8 @@ export class Workbench extends Disposable {
 		services.registerInstance(ILanguageConfigurationService, languageConfigurationService);
 		const languageFeaturesService = this._register(new LanguageFeaturesService());
 		services.registerInstance(ILanguageFeaturesService, languageFeaturesService);
+		this._register(new DefaultPasteProvidersFeature(languageFeaturesService, workspaceContext));
+		this._register(new DefaultDropProvidersFeature(languageFeaturesService, workspaceContext));
 		services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService));
 		services.registerSingleton(IInlineCompletionsService, () => services.createInstance(InlineCompletionsService));
 		services.registerSingleton(ILanguageFeatureDebounceService, () => services.createInstance(LanguageFeatureDebounceService));
@@ -435,6 +440,7 @@ export class Workbench extends Disposable {
 			onDidChangeLanguageSupport: textMateService.onDidChange,
 		}));
 		services.registerInstance(ITextModelResourceService, textModelService);
+		services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
 		const workspaceEditService = this._register(new BrowserWorkspaceEditService(textModelService, workingCopyService, fileService));
 		services.registerInstance(IWorkspaceEditService, workspaceEditService);
 		const bulkEditService = this._register(new BrowserBulkEditService(workspaceEditService));

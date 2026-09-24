@@ -1,5 +1,7 @@
+import '../../../../test/browser/testEditorDom.js';
+import { browserEnvironment } from '../../../../test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
-import { test, suiteTeardown } from 'mocha';
+import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { type CancellationToken } from '../../../../../base/common/cancellation.js';
 import { CursorsController } from '../../../../common/cursor/cursor.js';
@@ -15,25 +17,10 @@ import { type ICodeEditor } from '../../../../browser/editorBrowser.js';
 import { type ICommand } from '../../../../common/editorCommon.js';
 import { type TextMeasurer } from '../../../../common/viewModel.js';
 
-const browserEnvironment = new JSDOM('<!doctype html><body></body>');
-for (const [name, value] of Object.entries({
-	window: browserEnvironment.window,
-	document: browserEnvironment.window.document,
-	Node: browserEnvironment.window.Node,
-	Element: browserEnvironment.window.Element,
-	HTMLElement: browserEnvironment.window.HTMLElement,
-	Event: browserEnvironment.window.Event,
-	InputEvent: browserEnvironment.window.InputEvent,
-	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
-})) {
-	Object.defineProperty(globalThis, name, { configurable: true, value });
-}
-
 const { TestView: View } = await import('../../../../test/browser/viewModel/testViewModel.js');
 const { ViewController } = await import('../../../../browser/view/viewController.js');
 const { LinkedEditingContribution } = await import('../../browser/linkedEditing.js');
 
-suiteTeardown(() => browserEnvironment.window.close());
 
 test('linked editing applies one input transaction to every provider range', async () => {
 	const calls: Array<{ readonly model: TextModel; readonly position: Position; readonly token: CancellationToken }> = [];

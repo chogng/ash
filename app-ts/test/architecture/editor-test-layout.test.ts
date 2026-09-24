@@ -46,8 +46,9 @@ test("browser integrations import the stable API and only their mode bundle", ()
 	assert.doesNotMatch(academicIntegration, /editor\.(?:main|code\.all)\.js/u);
 });
 
-test("desktop exposes one editor browser test entrypoint", () => {
-	assert.equal(desktopPackage.scripts?.["test:editor:browser"], "tsc -p test/integration/browser/tsconfig.json && node test/integration/browser/run.ts");
+test("desktop exposes editor and full browser integration entrypoints", () => {
+	assert.match(desktopPackage.scripts?.["test:editor:browser"] ?? "", /run\.ts --editor$/u);
+	assert.match(desktopPackage.scripts?.["test:browser:integration"] ?? "", /run\.ts$/u);
 	assert.equal(exists(join(desktopRoot, "test/runner")), false);
 	assert.equal(exists(join(unitRoot, "test-editor.ts")), false);
 	assert.equal(exists(join(unitRoot, "pnpm-script.ts")), false);

@@ -145,6 +145,29 @@ test("HoverService suppresses replacement Hovers until the pointer moves after a
 	replacementTarget.remove();
 });
 
+test('HoverService focuses a requested keyboard hover', () => {
+	const container = requiredElement<HTMLElement>('main');
+	const target = h(environment.window.document, 'div');
+	target.tabIndex = 0;
+	container.append(target);
+	target.getBoundingClientRect = () => rectangle(20, 100, 80, 24);
+	const contextViews = new BrowserContextViewService(container);
+	const contextMenus = new TestContextMenuService();
+	using configuration = new InMemoryConfigurationService();
+	const hoverService = new HoverService(configuration, contextViews, contextMenus);
+	const hover = hoverService.setupHover({ target, content: 'Keyboard hover', setupKeyboardEvents: true });
+
+	target.focus();
+	target.dispatchEvent(new environment.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+	assert.equal(environment.window.document.activeElement, container.querySelector('.ash-hover'));
+	assert.equal(hover.visible, true);
+
+	hoverService.dispose();
+	contextMenus.dispose();
+	contextViews.dispose();
+	target.remove();
+});
+
 class TestContextMenuService extends Disposable implements IContextMenuService {
 	private readonly _onDidShowContextMenu = this._register(new Emitter<void>());
 	private readonly _onDidHideContextMenu = this._register(new Emitter<void>());

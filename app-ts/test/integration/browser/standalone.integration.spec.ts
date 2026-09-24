@@ -1459,6 +1459,92 @@ for (const inputKind of ['editContext', 'textarea'] as const) {
 		});
 	});
 
+	test(`${inputKind} find highlights the current match in normal and forced colors`, async ({ page }) => {
+		if (inputKind === 'textarea') {
+			await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+		}
+		await page.goto('/standalone.html');
+		await page.locator('#caller .stanza-editor-input').focus();
+		await page.keyboard.press('ControlOrMeta+f');
+		const findWidget = page.locator('#caller .stanza-editor-find-widget');
+		await expect(findWidget).toBeVisible();
+		await findWidget.getByRole('textbox', { name: 'Find' }).fill('caller');
+		const currentMatch = page.locator('#caller .cdr.currentFindMatch');
+		await expect(currentMatch).toHaveCount(1);
+		await expect(currentMatch).toHaveCSS('outline-style', 'solid');
+		await page.emulateMedia({ forcedColors: 'active' });
+		await expect(currentMatch).toHaveCSS('outline-style', 'solid');
+		await expect(currentMatch).toHaveCSS('background-color', /rgba\(.*?,\s*0\)/);
+		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	});
+
+	test(`${inputKind} find sash resizes the overlay and grouped button hovers share their delay`, async ({ page }) => {
+		if (inputKind === 'textarea') {
+			await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+		}
+		await page.goto('/standalone.html');
+		await page.locator('#caller .stanza-editor-input').focus();
+		await page.keyboard.press('ControlOrMeta+f');
+		const findWidget = page.locator('#caller .stanza-editor-find-widget');
+		const sash = findWidget.getByRole('separator', { name: 'Resize find widget' });
+		await expect(sash).toBeVisible();
+		const initial = await findWidget.boundingBox();
+		const sashBox = await sash.boundingBox();
+		expect(initial).not.toBeNull();
+		expect(sashBox).not.toBeNull();
+		await page.mouse.move(sashBox!.x + sashBox!.width / 2, sashBox!.y + sashBox!.height / 2);
+		await page.mouse.down();
+		await page.mouse.move(sashBox!.x + sashBox!.width / 2 - 16, sashBox!.y + sashBox!.height / 2);
+		await page.mouse.up();
+		await expect.poll(() => findWidget.evaluate(node => Math.round(node.getBoundingClientRect().width))).toBe(Math.round(initial!.width) + 16);
+		await expect(sash).toHaveAttribute('aria-valuenow', String(Math.round(initial!.width) + 16));
+		const resized = await findWidget.boundingBox();
+		expect(Math.round(resized!.x)).toBe(Math.round(initial!.x) - 16);
+
+		await page.evaluate(() => window.ashStandaloneIntegration.layoutContribution(420));
+		await expect.poll(() => findWidget.evaluate(node => Math.round(node.getBoundingClientRect().width))).toBeLessThan(480);
+		await page.evaluate(() => window.ashStandaloneIntegration.layoutContribution(640));
+		await expect.poll(() => findWidget.evaluate(node => Math.round(node.getBoundingClientRect().width))).toBe(Math.round(initial!.width) + 16);
+
+		await sash.focus();
+		await page.keyboard.press('ArrowRight');
+		await expect.poll(() => findWidget.evaluate(node => Math.round(node.getBoundingClientRect().width))).toBe(Math.round(initial!.width) + 6);
+		await sash.dblclick();
+		await expect.poll(() => findWidget.evaluate(node => Math.round(node.getBoundingClientRect().width))).toBe(480);
+
+		const matchCase = findWidget.getByRole('button', { name: 'Match case' });
+		const wholeWord = findWidget.getByRole('button', { name: 'Match whole word' });
+		await matchCase.hover();
+		await expect(page.locator('.ash-hover')).toHaveText('Match case');
+		await wholeWord.hover();
+		await expect(page.locator('.ash-hover')).toHaveText('Match whole word', { timeout: 300 });
+		await matchCase.focus();
+		await expect(page.locator('.ash-hover')).toHaveText('Match case');
+		await expect(matchCase).toHaveAttribute('aria-describedby', /ash-hover-/);
+		await wholeWord.focus();
+		await expect(page.locator('.ash-hover')).toHaveText('Match whole word');
+		await page.emulateMedia({ forcedColors: 'active' });
+		await sash.hover();
+		await expect(sash).toHaveClass(/ash-sash-hover/);
+		expect(await sash.evaluate(node => getComputedStyle(node, '::after').backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
+		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	});
+
+	test(`${inputKind} closed find options share managed hover delay`, async ({ page }) => {
+		if (inputKind === 'textarea') {
+			await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+		}
+		await page.goto('/standalone.html');
+		await page.evaluate(() => window.ashStandaloneIntegration.toggleClosedFindOption());
+		const options = page.locator('#caller .stanza-editor-find-options-widget');
+		await expect(options).toBeVisible();
+		await options.getByRole('button', { name: 'Match case' }).hover();
+		await expect(page.locator('.ash-hover')).toContainText('Match case');
+		await options.getByRole('button', { name: 'Match whole word' }).hover();
+		await expect(page.locator('.ash-hover')).toContainText('Match whole word', { timeout: 300 });
+		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	});
+
 	test(`${inputKind} active editor follows use across creation, model switches, and removal`, async ({ page }) => {
 		if (inputKind === 'textarea') {
 			await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
@@ -1501,39 +1587,141 @@ for (const inputKind of ['editContext', 'textarea'] as const) {
 		}
 	}
 
-	for (const change of ['none', 'writableAgain', 'selection', 'composition', 'escape'] as const) {
-		test(`${inputKind} deferred file paste respects ${change} state before committing`, async ({ page }) => {
-			if (inputKind === 'textarea') {
-				await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
-			}
-			await page.goto('/standalone.html');
-			expect(await page.evaluate(change => window.ashStandaloneIntegration.runDeferredPaste(change), change)).toEqual({
-				value: change === 'none' ? 'alpha file' : 'alpha',
-				handled: true,
-				finishedBeforeDecode: change !== 'none',
-			});
-			if (change === 'none') {
-				await page.keyboard.press('ControlOrMeta+z');
-				expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('alpha');
-			}
+	test(`${inputKind} file paste inserts its name without reading content`, async ({ page }) => {
+		if (inputKind === 'textarea') {
+			await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+		}
+		await page.goto('/standalone.html');
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.runFilePaste())).toEqual({
+			value: 'alphasnippet.txt',
+			handled: true,
+			fileReads: 0,
 		});
-	}
+		await page.keyboard.press('ControlOrMeta+z');
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('alpha');
+	});
 }
 
-for (const change of ['none', 'readonly', 'writableAgain'] as const) {
-	test(`deferred file drop respects ${change} state before committing`, async ({ page }) => {
+test('File drop stays available to the host without reading content', async ({ page }) => {
+	await page.goto('/standalone.html');
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.runFileDrop())).toEqual({
+		value: 'alpha',
+		dragOverHandled: false,
+		dropHandled: false,
+		fileReads: 0,
+	});
+});
+
+for (const enabled of [true, false]) {
+	test(`text drop respects dropIntoEditor.enabled=${enabled}`, async ({ page }) => {
 		await page.goto('/standalone.html');
-		expect(await page.evaluate(change => window.ashStandaloneIntegration.runDeferredDrop(change), change)).toEqual({
-			value: change === 'none' ? 'alpha file' : 'alpha',
-			selectionUnchanged: change !== 'none',
-			handled: true,
+		expect(await page.evaluate(enabled => window.ashStandaloneIntegration.runTextDrop(enabled), enabled)).toEqual({
+			value: enabled ? 'alpha dropped' : 'alpha',
+			dragOverHandled: enabled,
+			dropHandled: enabled,
 		});
-		if (change === 'none') {
+		if (enabled) {
 			await page.keyboard.press('ControlOrMeta+z');
 			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('alpha');
 		}
 	});
 }
+
+for (const inputKind of ['native', 'textarea'] as const) {
+	for (const enabled of [true, false]) {
+		test(`${inputKind} URI paste respects pasteAs.enabled=${enabled}`, async ({ page }) => {
+			if (inputKind === 'textarea') {
+				await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+			}
+			await page.goto('/standalone.html');
+			expect(await page.evaluate(enabled => window.ashStandaloneIntegration.runUriPaste(enabled), enabled)).toEqual({
+				value: enabled ? 'alphahttps://example.test/snippet' : 'alpha',
+				handled: true,
+			});
+		});
+	}
+}
+
+test('Paste As chooses an edit before changing the document', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.startPasteAsPicker());
+	const picker = page.getByRole('dialog', { name: 'Paste As...' });
+	await expect(picker).toBeVisible();
+	await expect(picker).toContainText('Insert Plain Text');
+	await expect(picker).toContainText('Insert HTML');
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('alpha');
+	await picker.getByRole('combobox').fill('HTML');
+	await picker.getByRole('combobox').press('Enter');
+	await expect.poll(async () => (await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('<b>markup</b>');
+	await expect(picker).toBeHidden();
+	expect(errors).toEqual([]);
+});
+
+test('paste providers show a keyboard accessible selector and switch the applied edit', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/standalone.html');
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.runPasteProviderSelector())).toEqual({
+		value: 'CUSTOM',
+		handled: true,
+	});
+	const selector = page.locator('.stanza-editor-post-edit-selector');
+	await expect(selector).toBeVisible();
+	await expect(selector).toHaveAttribute('aria-label', 'Paste options');
+	await expect(selector.locator('option')).toHaveCount(2);
+	const surface = await selector.evaluate(element => {
+		const bounds = element.getBoundingClientRect();
+		const style = getComputedStyle(element);
+		return { width: bounds.width, border: style.borderStyle, background: style.backgroundColor };
+	});
+	expect(surface.width).toBeGreaterThan(0);
+	expect(surface.border).toBe('solid');
+	expect(surface.background).not.toBe('rgba(0, 0, 0, 0)');
+	await page.evaluate(() => window.ashStandaloneIntegration.setStickyTheme('ash-high-contrast-dark'));
+	await expect(selector).toHaveCSS('border-style', 'solid');
+	await page.locator('#caller .stanza-editor-input').focus();
+	await page.keyboard.press('ControlOrMeta+.');
+	await expect(selector).toBeFocused();
+	await selector.selectOption({ label: 'Insert Plain Text' });
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLineCopy().value)).toBe('plain');
+	await expect(selector).toBeVisible();
+	await selector.focus();
+	await page.keyboard.press('Escape');
+	await expect(selector).toHaveCount(0);
+	await page.keyboard.press('ControlOrMeta+z');
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLineCopy().value)).toBe('alpha');
+	expect(errors).toEqual([]);
+});
+
+test('a pasted snippet keeps tabstop navigation after an additional resource edit', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/standalone.html');
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.runPasteSnippetWithAdditionalEdit())).toEqual({
+		value: 'name(value)', otherValue: 'EXTRA', handled: true,
+	});
+	await page.locator('#caller .stanza-editor-input').focus();
+	await page.keyboard.type('fn');
+	await page.keyboard.press('Tab');
+	await page.keyboard.type('arg');
+	await page.keyboard.press('Tab');
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy().value)).toBe('fn(arg)');
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.getOwnedValue())).toBe('EXTRA');
+	expect(errors).toEqual([]);
+});
+
+test('switching a snippet paste choice restores the additional resource edit', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.runPasteSnippetWithAdditionalEdit());
+	await page.locator('.stanza-editor-post-edit-selector').selectOption({ label: 'Insert Plain Text' });
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLineCopy().value)).toBe('plain');
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.getOwnedValue())).toBe('trail');
+	expect(errors).toEqual([]);
+});
 
 test('occurrence shortcuts and actions share the same selections and edit transaction', async ({ page }) => {
 	await page.goto('/standalone.html');
@@ -2396,6 +2584,35 @@ test.describe('parameter hints requests', () => {
 		await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
 	});
 
+	test('only the active signature shows provider documentation in normal and high contrast themes', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareParameterHints());
+		await page.keyboard.press('ControlOrMeta+Shift+Space');
+		await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints', {
+			signatures: [
+				{ label: 'call(value)', documentation: 'Adds a value', parameters: [{ label: 'value', documentation: 'Value to add' }], activeParameter: 0 },
+				{ label: 'call(other)', documentation: 'Uses another argument', parameters: [{ label: 'other', documentation: 'Other argument' }], activeParameter: 0 },
+			],
+		}));
+		const dialog = page.getByRole('dialog', { name: 'Parameter hints' });
+		const documentation = dialog.locator('.stanza-editor-parameter-hints-documentation');
+		await expect(documentation).toHaveCount(1);
+		await expect(documentation).toBeVisible();
+		await expect(documentation.locator('div')).toHaveText(['Adds a value', 'Value to add']);
+
+		await page.evaluate(() => window.ashStandaloneIntegration.runParameterHintCommand('showNextParameterHint'));
+		await expect(documentation).toHaveCount(1);
+		await expect(documentation.locator('div')).toHaveText(['Uses another argument', 'Other argument']);
+		await page.evaluate(() => window.ashStandaloneIntegration.setStickyTheme('ash-high-contrast-dark'));
+		expect(await documentation.evaluate(element => ({
+			border: getComputedStyle(element).borderTopWidth,
+			fontSize: getComputedStyle(element).fontSize,
+			whiteSpace: getComputedStyle(element).whiteSpace,
+			shadow: getComputedStyle(element.closest('.stanza-editor-parameter-hints')!).boxShadow,
+		}))).toEqual({ border: '1px', fontSize: '11px', whiteSpace: 'pre-wrap', shadow: 'none' });
+		await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
+	});
+
 	test('parameter hints respect runtime disabling and enabling', async ({ page }) => {
 		await page.goto('/standalone.html');
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareParameterHints(false));
@@ -2414,9 +2631,38 @@ test.describe('parameter hints requests', () => {
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareParameterHints());
 		await page.evaluate(() => window.ashStandaloneIntegration.queueParameterHints('type'));
 		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests())).toEqual([{
-			text: 'call(a,)', languageId: 'plaintext', position: '(1,8)', context: { kind: 'triggerCharacter', triggerCharacter: ',', isRetrigger: true }, aborted: false,
+			text: 'call(a,)', languageId: 'plaintext', position: '(1,8)', context: { kind: 'triggerCharacter', triggerCharacter: ',', isRetrigger: false }, aborted: false,
 		}]);
 		await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints'));
+		await expect(page.getByRole('dialog', { name: 'Parameter hints' })).toBeVisible();
+	});
+
+	test('a repeated edit keeps the last active signature while a refresh is pending', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareParameterHints());
+		await page.keyboard.type('(');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length)).toBe(1);
+		await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints', {
+			signatures: [
+				{ label: 'call(value)', parameters: [{ label: 'value' }] },
+				{ label: 'call(other)', parameters: [{ label: 'other' }] },
+			],
+		}));
+		await expect(page.getByRole('dialog', { name: 'Parameter hints' })).toBeVisible();
+		await page.evaluate(() => window.ashStandaloneIntegration.runParameterHintCommand('showNextParameterHint'));
+
+		await page.keyboard.type('a');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length)).toBe(2);
+		await page.keyboard.type('b');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length)).toBe(3);
+		const requests = await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests());
+		expect(requests[1]!.aborted).toBe(true);
+		expect(requests[2]!.context).toMatchObject({
+			kind: 'contentChange',
+			isRetrigger: true,
+			activeSignatureHelp: { activeSignature: 1, signatures: [{ label: 'call(value)' }, { label: 'call(other)' }] },
+		});
+		await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(2, 'hints'));
 		await expect(page.getByRole('dialog', { name: 'Parameter hints' })).toBeVisible();
 	});
 
@@ -5142,6 +5388,28 @@ test('symbol picker filters, navigates, restores focus and labels its input', as
 	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 });
 
+test('symbol picker combines registered providers in document order', async ({ page }) => {
+	await page.goto('/standalone.html?symbolIconsOff');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareMultipleDocumentSymbols());
+	await page.locator('#caller .stanza-editor-input').focus();
+	await page.keyboard.press('ControlOrMeta+Shift+o');
+	const picker = page.locator('#caller .ash-quick-pick');
+	await expect(picker.locator('.ash-quick-pick-row-label')).toHaveText(['first', 'second']);
+	await picker.getByRole('combobox', { name: 'Go to Symbol' }).fill('second');
+	await page.keyboard.press('Enter');
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).selection).toBe('[1,7 -> 1,13]');
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
+test('document symbol command resolves a resource without changing the active editor', async ({ page }) => {
+	await page.goto('/standalone.html?symbolIconsOff');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareMultipleDocumentSymbols());
+	const input = page.locator('#caller .stanza-editor-input');
+	await input.focus();
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readDocumentSymbolCommand())).toEqual(['first', 'second']);
+	await expect(input).toBeFocused();
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
 
 test('signature trigger metadata distinguishes initial and repeated triggers and carries active hints', async ({ page }) => {
 	await page.goto('/standalone.html');
@@ -5206,3 +5474,19 @@ for (const kind of ['rename', 'quickFix'] as const) {
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
 }
+
+test('editor scrollbar menu toggles the minimap', async ({ page }) => {
+	await page.goto('/standalone.html');
+	const minimap = page.locator('#caller .minimap');
+	await expect(minimap).toBeVisible();
+	await page.locator('#caller .ash-scrollbar-track-vertical').evaluate(track => {
+		track.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: 390, clientY: 20 }));
+	});
+	await page.getByRole('menuitemcheckbox', { name: 'Minimap' }).click();
+	await expect(minimap).toBeHidden();
+	await page.locator('#caller .ash-scrollbar-track-vertical').evaluate(track => {
+		track.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: 390, clientY: 20 }));
+	});
+	await expect(page.getByRole('menuitem', { name: 'Vertical Size' })).toBeDisabled();
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});

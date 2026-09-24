@@ -10,7 +10,7 @@ import { type TrackedRange } from "../../../common/model/trackedRange.js";
 import { TrackedRangeStickiness, type IIdentifiedSingleEditOperation } from '../../../common/model.js';
 
 /**
- * Owns one accepted completion snippet's tabstop navigation.
+ * Owns one editor snippet's tabstop navigation.
  *
  * Every tabstop occurrence is tracked through later model transactions. The
  * session owns neither the model nor the editor, and may
@@ -19,13 +19,13 @@ import { TrackedRangeStickiness, type IIdentifiedSingleEditOperation } from '../
 export class SnippetSession extends Disposable {
 	private readonly groups: readonly SnippetTrackedGroup[];
 	private readonly transforms: readonly SnippetTrackedTransform[];
-	private readonly finalRange: TrackedRange;
+	private readonly finalRanges: readonly TrackedRange[];
 	private currentGroupIndex = 0;
 
 	constructor(
 		private readonly model: TextModel,
 		private readonly editor: ICodeEditor,
-		insertionStartOffset: number,
+		insertionStartOffsets: number | readonly number[],
 		snippet: Snippet,
 		finalOffsetWithinInsertion = snippet.text.length,
 	) {
@@ -34,9 +34,10 @@ export class SnippetSession extends Disposable {
 			this.dispose();
 			throw new TypeError("Language completion snippet session must share its editor text model");
 		}
-		if (!Number.isSafeInteger(insertionStartOffset) || insertionStartOffset < 0 || insertionStartOffset > model.getText().length) {
+		const starts = typeof insertionStartOffsets === 'number' ? [insertionStartOffsets] : insertionStartOffsets;
+		if (starts.length === 0 || starts.some(start => !Number.isSafeInteger(start) || start < 0 || start > model.getText().length)) {
 			this.dispose();
-			throw new RangeError("Language completion snippet insertion offset is outside its text model");
+			throw new RangeError("Snippet insertion offset is outside its text model");
 		}
 		if (!snippet || typeof snippet.text !== "string" || snippet.placeholderGroups.length === 0) {
 			this.dispose();
@@ -49,38 +50,38 @@ export class SnippetSession extends Disposable {
 		try {
 			this.groups = Object.freeze(snippet.placeholderGroups.map(group => Object.freeze({
 				index: group.index,
-				ranges: Object.freeze(group.placeholders.map(placeholder =>
+				ranges: Object.freeze(starts.flatMap(start => group.placeholders.map(placeholder =>
 					model.trackRange(
 						Range.fromPositions(
-							model.positionAt(insertionStartOffset + placeholder.startOffset),
-							model.positionAt(insertionStartOffset + placeholder.endOffset),
+							model.positionAt(start + placeholder.startOffset),
+							model.positionAt(start + placeholder.endOffset),
 						),
 						TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 					)
-				)),
+				))),
 				...(group.choices ? { choices: group.choices } : {}),
 			})));
-			this.transforms = Object.freeze((snippet.transforms ?? []).map(transform => Object.freeze({
+			this.transforms = Object.freeze(starts.flatMap(start => (snippet.transforms ?? []).map(transform => Object.freeze({
 				index: transform.index,
 				transform: transform.transform,
 				range: model.trackRange(
 					Range.fromPositions(
-						model.positionAt(insertionStartOffset + transform.startOffset),
-						model.positionAt(insertionStartOffset + transform.endOffset),
+						model.positionAt(start + transform.startOffset),
+						model.positionAt(start + transform.endOffset),
 					),
 					TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 				),
-			})));
-			this.finalRange = model.trackRange(
-				Range.fromPositions(model.positionAt(insertionStartOffset + finalOffsetWithinInsertion)),
+			}))));
+			this.finalRanges = Object.freeze(starts.map(start => model.trackRange(
+				Range.fromPositions(model.positionAt(start + finalOffsetWithinInsertion)),
 				TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-			);
+			)));
 			this._register(toDisposable(() => {
 				for (const group of this.groups) {
 					for (const range of group.ranges) range.dispose();
 				}
 				for (const transform of this.transforms) transform.range.dispose();
-				this.finalRange.dispose();
+				for (const range of this.finalRanges) range.dispose();
 			}));
 			this.selectGroup(0);
 		} catch (error) {
@@ -92,7 +93,7 @@ export class SnippetSession extends Disposable {
 	/** Whether this session has released its tracked tabstops. */
 	get isDisposed(): boolean { return super.isDisposed; }
 
-	/** Advances to the next tabstop or consumes the final Tab that leaves the snippet. */
+	/** Advances to the next tabstop; Tab after an explicit final stop belongs to the editor. */
 	selectNext(): boolean {
 		this.assertNotDisposed();
 		if (this.currentGroupIndex + 1 < this.groups.length) {
@@ -103,14 +104,18 @@ export class SnippetSession extends Disposable {
 			return true;
 		}
 		if (this.currentGroupIndex === this.groups.length - 1) {
+			if (this.groups[this.currentGroupIndex]!.index === 0) {
+				this.dispose();
+				return false;
+			}
 			this.synchronizeTransforms(this.groups[this.currentGroupIndex]!);
 			this.editor.pushUndoStop();
 			this.currentGroupIndex += 1;
-			this.editor.setSelections([Selection.fromPositions(this.finalRange.range.getEndPosition())]);
+			this.editor.setSelections(this.finalRanges.map(range => Selection.fromPositions(range.range.getEndPosition())));
 			return true;
 		}
 		this.dispose();
-		return true;
+		return false;
 	}
 
 	/** Moves to the preceding tabstop; no selection changes occur before the first group. */

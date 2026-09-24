@@ -1,24 +1,13 @@
+import './testEditorDom.js';
 import assert from "node:assert/strict";
-import { test, suiteTeardown } from "mocha";
+import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { EditorZoom } from "../../common/config/editorZoom.js";
 import { TextModel } from "../../common/model/textModel.js";
-
-const browserEnvironment = new JSDOM("<!doctype html><body></body>");
-for (const [name, value] of Object.entries({
-	window: browserEnvironment.window,
-	document: browserEnvironment.window.document,
-	Node: browserEnvironment.window.Node,
-	Element: browserEnvironment.window.Element,
-	HTMLElement: browserEnvironment.window.HTMLElement,
-	Event: browserEnvironment.window.Event,
-})) {
-	Object.defineProperty(globalThis, name, { configurable: true, value });
-}
+import { installEditorTestGlobals } from './editorTestGlobals.js';
 
 const { TestView: View } = await import("./viewModel/testViewModel.js");
 
-suiteTeardown(() => browserEnvironment.window.close());
 
 test("Stanza viewport automatic layout uses the observed content box", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -34,7 +23,7 @@ test("Stanza viewport automatic layout uses the observed content box", () => {
 		disconnect(): void {}
 	}
 	Object.defineProperty(dom.window, "ResizeObserver", { configurable: true, value: TestResizeObserver });
-	Object.defineProperty(globalThis, "ResizeObserver", { configurable: true, value: TestResizeObserver });
+	using installedObserver = installEditorTestGlobals({ ResizeObserver: TestResizeObserver });
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel();
 	using viewport = new View({ container, model, lineHeight: 20, automaticLayout: true });

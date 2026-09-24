@@ -31,9 +31,10 @@ On macOS or Linux, install Rust. Cargo supplies the input classifier's
 build-time Protocol Buffers compiler; no system `protoc` installation is
 required.
 
-For Electron or Browser Workbench development, first install the Node version in
-`.nvmrc`. From the repository root, install the pnpm version declared by
-`package.json`, then install workspace dependencies:
+For Electron or Browser Workbench development, install the pnpm version declared
+by `package.json`, then install workspace dependencies from the repository root.
+pnpm downloads and uses the Node version pinned in `devEngines.runtime`; `.nvmrc`
+pins the same version for commands run outside pnpm:
 
 ```bash
 npm install -g "$(node -p 'require("./package.json").packageManager')"

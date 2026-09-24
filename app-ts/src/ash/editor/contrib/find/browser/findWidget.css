@@ -18,6 +18,11 @@
   gap: 5px;
 }
 
+.stanza-editor-find-widget > .ash-sash-vertical {
+  top: 0;
+  bottom: 0;
+}
+
 .stanza-editor-find-row,
 .stanza-editor-replace-row {
   display: grid;
@@ -27,7 +32,7 @@
 }
 
 .stanza-editor-replace-row {
-  grid-template-columns: 24px minmax(80px, 1fr) auto auto;
+  grid-template-columns: 24px minmax(80px, 1fr) repeat(3, auto);
 }
 
 .stanza-editor-find-input {
@@ -73,9 +78,24 @@
   border-radius: 3px;
 }
 
+.stanza-editor-find-button svg {
+  width: 16px;
+  height: 16px;
+  vertical-align: middle;
+}
+
 .stanza-editor-find-button:hover,
-.stanza-editor-find-button.checked {
+.stanza-editor-find-button.checked,
+.stanza-editor-find-button.find-options-highlight {
   background: var(--ash-button-hover-background);
+}
+
+.stanza-editor-find-button:disabled {
+  opacity: 0.5;
+}
+
+.stanza-editor-find-button:disabled:hover {
+  background: transparent;
 }
 
 .stanza-editor-find-button:focus-visible {
@@ -85,4 +105,26 @@
 
 .stanza-editor-find-replace-toggle {
   font-size: 16px;
+}
+
+.stanza-editor .findMatch {
+  background: var(--ash-search-match-background);
+}
+
+.stanza-editor .currentFindMatch {
+  background: color-mix(in srgb, var(--ash-search-match-background) 70%, var(--ash-focus-border));
+  outline: 1px solid var(--ash-focus-border);
+}
+
+@media (forced-colors: active) {
+  .stanza-editor-find-button:disabled {
+    color: GrayText;
+    opacity: 1;
+  }
+
+  .stanza-editor .findMatch,
+  .stanza-editor .currentFindMatch {
+    background: transparent;
+    outline: 1px solid CanvasText;
+  }
 }

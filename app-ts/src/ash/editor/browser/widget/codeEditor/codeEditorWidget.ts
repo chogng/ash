@@ -1,4 +1,3 @@
-import type { BracketGuideSource } from '../../viewParts/indentGuides/indentGuides.js';
 import { IMarkerDecorationsService } from '../../../common/services/markerDecorations.js';
 import { getClientArea, h, isHTMLElement, scheduleAtNextAnimationFrame } from "../../../../base/browser/dom.js";
 import { type IKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
@@ -362,7 +361,6 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			const getOptionalService = services.getOptional.bind(services);
 			const provideService = services.registerInstance.bind(services);
 			let semanticTokenSource: SemanticTokenSource | undefined;
-			let bracketGuideSource: BracketGuideSource | undefined;
 			const selectedContributions = options.contributions ?? EditorExtensionsRegistry.getEditorContributions();
 			const contributions = modelStore.add(services.createInstance(CodeEditorContributions));
 			contributions.configure(selectedContributions, {
@@ -382,10 +380,6 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 					if (semanticTokenSource) throw new Error('Text editor semantic-token source is already configured');
 					semanticTokenSource = source;
 				},
-				setBracketGuideSource: source => {
-					if (bracketGuideSource) throw new Error('Text editor bracket-guide source is already configured');
-					bracketGuideSource = source;
-				},
 				register: value => modelStore.add(value),
 			});
 			const ariaLabel = options.ariaLabel ?? editorLabel(model.uri);
@@ -398,7 +392,6 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				ariaLabel,
 				dimension: options.dimension,
 				semanticTokenSource,
-				bracketGuideSource,
 				textDirection: options.textDirection,
 				presentation: options.presentation,
 				indentation: options.indentation,
@@ -651,6 +644,10 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 
 	changeViewZones(callback: (accessor: IViewZoneChangeAccessor) => void): void {
 		if (this.currentModel) this.view.changeViewZones(callback);
+	}
+
+	setHiddenAreas(ranges: readonly Range[]): void {
+		if (this.currentModel) this.viewModel.setHiddenAreas(ranges);
 	}
 
 	announceAccessibilityStatus(message: string): void {

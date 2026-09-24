@@ -39,13 +39,14 @@ export function localize(info: ILocalizeInfo, message: string, ...args: Localize
 export function localize(key: string, message: string, ...args: LocalizeArgument[]): string;
 export function localize(info: ILocalizeInfo | string, message: string, ...args: LocalizeArgument[]): string {
 	const key = typeof info === "string" ? info : info.key;
-	return formatNlsArguments(resolver("ash", key, message), args);
+	const parameters = args.length === 0 ? undefined : Object.fromEntries(args.map((value, index) => [String(index), String(value)]));
+	return resolver("ash", key, message, parameters);
 }
 
 export function localize2(info: ILocalizeInfo, message: string, ...args: LocalizeArgument[]): ILocalizedString;
 export function localize2(key: string, message: string, ...args: LocalizeArgument[]): ILocalizedString;
 export function localize2(info: ILocalizeInfo | string, message: string, ...args: LocalizeArgument[]): ILocalizedString {
-	const original = formatNlsArguments(message, args);
+	const original = formatNlsMessage(message, Object.fromEntries(args.map((value, index) => [String(index), String(value)])));
 	return {
 		original,
 		value: localize(info as string, message, ...args),
@@ -72,13 +73,5 @@ export function formatNlsMessage(
 	return message.replaceAll(/\{([A-Za-z0-9_.-]+)\}/gu, (placeholder, key: string) => {
 		const value = parameters[key];
 		return value === undefined ? placeholder : String(value);
-	});
-}
-
-function formatNlsArguments(message: string, args: readonly LocalizeArgument[]): string {
-	return message.replaceAll(/\{(\d+)\}/gu, (placeholder, index: string) => {
-		const numericIndex = Number(index);
-		if (numericIndex >= args.length) return placeholder;
-		return String(args[numericIndex]);
 	});
 }

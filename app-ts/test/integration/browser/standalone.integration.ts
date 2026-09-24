@@ -7,14 +7,13 @@ import { CommandsRegistry, ICommandService, type ICommandMetadata } from '../../
 import { IContextKeyService } from "../../../src/ash/platform/contextkey/browser/contextKeyService.js";
 import { ICodeEditorService } from '../../../src/ash/editor/browser/services/codeEditorService.js';
 import { observableCodeEditor } from '../../../src/ash/editor/browser/observableCodeEditor.js';
-import { FindController } from '../../../src/ash/editor/contrib/find/browser/findController.js';
+import { FindController, FindStartFocusAction } from '../../../src/ash/editor/contrib/find/browser/findController.js';
 import { StickyScrollController } from '../../../src/ash/editor/contrib/stickyScroll/browser/stickyScrollController.js';
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
 import { CutAction, PasteAction } from '../../../src/ash/editor/contrib/clipboard/browser/clipboard.js';
 import { FontStyle, MetadataConsts, TokenMetadata } from '../../../src/ash/editor/common/encodedTokenAttributes.js';
 import { SparseMultilineTokens } from '../../../src/ash/editor/common/tokens/sparseMultilineTokens.js';
-import { CopyPasteController } from '../../../src/ash/editor/contrib/dropOrPasteInto/browser/copyPasteController.js';
 import { formatEditor, FormattingConflicts, FormattingKind, FormattingMode } from '../../../src/ash/editor/contrib/format/browser/format.js';
 import { type CancellationToken } from '../../../src/ash/base/common/cancellation.js';
 import { scheduleAtNextAnimationFrame } from '../../../src/ash/base/browser/scheduler.js';
@@ -24,6 +23,7 @@ import { type EditorLayoutInfo, type IEditorOptions } from '../../../src/ash/edi
 import { EndOfLineSequence, type ITextModel } from '../../../src/ash/editor/common/model.js';
 import { IVersionedEditorWorkerClient } from '../../../src/ash/editor/browser/services/editorWorkerService.js';
 import { ILanguageFeaturesService } from '../../../src/ash/editor/common/services/languageFeatures.js';
+import { HierarchicalKind } from '../../../src/ash/base/common/hierarchicalKind.js';
 import { StandaloneServices } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
 import { Color } from '../../../src/ash/base/common/color.js';
 import { type LanguageFeatureRequest, TokenizationRegistry } from '../../../src/ash/editor/common/languages.js';
@@ -162,6 +162,7 @@ interface StandaloneHarness {
 	setStickyTheme(name: string): void;
 	setKeyboardReadOnly(readOnly: boolean): void;
 	layoutContribution(width: number, height?: number): void;
+	toggleClosedFindOption(): void;
 	prepareCompletionGeometry(scrolled: boolean): void;
 	readCompletionGeometry(): { caret: { left: number; top: number; height: number }; api: { left: number; top: number; height: number }; widget: { left: number; top: number }; contentLeft: number; textLeft: number };
 	prepareContributionRequests(kind: ContributionRequestKind): void;
@@ -181,6 +182,8 @@ interface StandaloneHarness {
 	readFoldingMetadata(command: string): Omit<ICommandMetadata, 'args'> & { args: { name: string; description?: string; schema?: unknown }[] };
 	readLanguageActions(): { rename: boolean; quickFix: boolean };
 	prepareLanguageRequest(kind: LanguageRequestKind, emptyDefinition?: boolean): void;
+	prepareMultipleDocumentSymbols(): void;
+	readDocumentSymbolCommand(): Promise<readonly string[]>;
 	languageHoverPoint(): { x: number; y: number };
 	readLanguageRequests(): { languageId: string; aborted: boolean }[];
 	readDefinitionPosition(): { lineNumber: number; column: number } | null;
@@ -274,8 +277,13 @@ interface StandaloneHarness {
 	runDeferredRichCopy(fail: boolean): Promise<{ pendingHtml: string; finishedHtml: string; rejected: boolean; writtenText: string }>;
 	runDeferredClipboard(command: 'cut' | 'paste', change: 'none' | 'selection' | 'focus' | 'readonly' | 'composition' | 'escape' | 'model' | 'dispose', fromOutside: boolean): Promise<{ value: string; finishedBeforeTransfer: boolean }>;
 	runActiveClipboard(command: 'copy' | 'cut' | 'paste', target: 'outside' | 'readonly' | 'find'): Promise<{ values: string[]; written: string; reads: number; focused: boolean; documentCommands: string[] }>;
-	runDeferredPaste(change: 'none' | 'writableAgain' | 'selection' | 'composition' | 'escape'): Promise<{ value: string; handled: boolean; finishedBeforeDecode: boolean }>;
-	runDeferredDrop(change: 'none' | 'readonly' | 'writableAgain'): Promise<{ value: string; selectionUnchanged: boolean; handled: boolean }>;
+	runFilePaste(): { value: string; handled: boolean; fileReads: number };
+	runFileDrop(): { value: string; dragOverHandled: boolean; dropHandled: boolean; fileReads: number };
+	runTextDrop(enabled: boolean): Promise<{ value: string; dragOverHandled: boolean; dropHandled: boolean }>;
+	runUriPaste(enabled: boolean): Promise<{ value: string; handled: boolean }>;
+	startPasteAsPicker(): void;
+	runPasteProviderSelector(): Promise<{ value: string; handled: boolean }>;
+	runPasteSnippetWithAdditionalEdit(): Promise<{ value: string; otherValue: string; handled: boolean }>;
 	runLineAction(id: string, args?: unknown): Promise<void>;
 	prepareMoveSelectedText(): void;
 	prepareFinalNewLine(): void;
@@ -409,6 +417,28 @@ const ownedEditor = stanza.editor.create(ownedContainer, {
 });
 callerEditor.layout({ width: callerContainer.clientWidth, height: callerContainer.clientHeight });
 ownedEditor.layout({ width: ownedContainer.clientWidth, height: ownedContainer.clientHeight });
+function waitForCallerValue(expected: string): Promise<void> {
+	if (callerEditor.getValue() === expected) return Promise.resolve();
+	return new Promise(resolve => {
+		const listener = callerEditor.onDidChangeModelContent(() => {
+			if (callerEditor.getValue() !== expected) return;
+			listener.dispose();
+			resolve();
+		});
+	});
+}
+function openFindReplace(): void {
+	void callerEditor.getContribution<FindController>(FindController.ID)!.start({
+		forceRevealReplace: true,
+		seedSearchStringFromSelection: 'single',
+		seedSearchStringFromNonEmptySelection: false,
+		seedSearchStringFromGlobalClipboard: false,
+		shouldFocus: FindStartFocusAction.FocusFindInput,
+		shouldAnimate: false,
+		updateSearchScope: true,
+		loop: true,
+	});
+}
 const ownedModel = ownedEditor.getModel();
 if (!ownedModel) throw new Error('Owned standalone editor has no model');
 let pointerMouseUpEvents = 0;
@@ -791,6 +821,7 @@ window.ashStandaloneIntegration = {
 	setStickyTheme: name => callerEditor.updateOptions({ theme: name }),
 	setKeyboardReadOnly: readOnly => callerEditor.updateOptions({ readOnly }),
 	layoutContribution: (width, height = 180) => callerEditor.layout({ width, height }),
+	toggleClosedFindOption: () => callerEditor.getContribution<FindController>(FindController.ID)!.toggleCaseSensitive(),
 	prepareCompletionGeometry: scrolled => {
 		const lineNumber = scrolled ? 40 : 1;
 		callerEditor.setValue(Array.from({ length: 80 }, () => 'alpha '.repeat(50)).join('\n'));
@@ -982,6 +1013,23 @@ window.ashStandaloneIntegration = {
 				}));
 			}
 		}
+	},
+	prepareMultipleDocumentSymbols: () => {
+		languageRequestProviders.clear();
+		callerEditor.setValue('first second');
+		callerEditor.focus();
+		languageRequestProviders.add(stanza.languages.registerDocumentSymbolProvider('*', {
+			provideDocumentSymbols: () => [{ name: 'first', kind: 'function', range: new stanza.Range(1, 1, 1, 6), selectionRange: new stanza.Range(1, 1, 1, 6) }],
+		}));
+		languageRequestProviders.add(stanza.languages.registerDocumentSymbolProvider('*', {
+			provideDocumentSymbols: () => [{ name: 'second', kind: 'function', range: new stanza.Range(1, 7, 1, 13), selectionRange: new stanza.Range(1, 7, 1, 13) }],
+		}));
+	},
+	readDocumentSymbolCommand: async () => {
+		const symbols = await StandaloneServices.get(ICommandService).executeCommand<readonly stanza.LanguageDocumentSymbol[]>(
+			'_executeDocumentSymbolProvider', callerModel.uri,
+		);
+		return symbols.map(symbol => symbol.name);
 	},
 	languageHoverPoint: () => {
 		const bounds = callerEditor.getDomNode()!.getBoundingClientRect();
@@ -1805,7 +1853,7 @@ window.ashStandaloneIntegration = {
 			callerEditor.updateOptions({ readOnly: true });
 			await run('undo');
 			callerEditor.updateOptions({ readOnly: false });
-			callerEditor.getContribution<FindController>(FindController.ID)!.open({ showReplace: true });
+			openFindReplace();
 			callerEditor.getDomNode()!.querySelector<HTMLInputElement>('input[aria-label="Find"]')!.focus();
 			await run('undo');
 			callerEditor.focus();
@@ -1823,7 +1871,7 @@ window.ashStandaloneIntegration = {
 		callerEditor.executeEdits('test', [{ range: new stanza.Range(1, 6, 1, 6), text: '!' }]);
 		callerEditor.pushUndoStop();
 		callerEditor.updateOptions({ readOnly: true });
-		callerEditor.getContribution<FindController>(FindController.ID)!.open({ showReplace: true });
+		openFindReplace();
 	},
 	runInputHistoryCommand: async id => {
 		const command = CommandsRegistry.getCommand(id)!;
@@ -1852,7 +1900,7 @@ window.ashStandaloneIntegration = {
 			await new Promise(resolve => setTimeout(resolve, 0));
 			await run();
 			callerEditor.setPosition({ lineNumber: 1, column: 2 });
-			callerEditor.getContribution<FindController>(FindController.ID)!.open({ showReplace: true });
+			openFindReplace();
 			const input = callerEditor.getDomNode()!.querySelector<HTMLInputElement>('input[aria-label="Find"]')!;
 			input.value = 'needle';
 			input.focus();
@@ -1891,7 +1939,7 @@ window.ashStandaloneIntegration = {
 		try {
 			callerEditor.focus();
 			read('text');
-			callerEditor.getContribution<FindController>(FindController.ID)!.open({ showReplace: true });
+			openFindReplace();
 			await new Promise(resolve => setTimeout(resolve, 0));
 			read('find');
 			callerEditor.getDomNode()!.querySelector<HTMLInputElement>('input[aria-label="Replace"]')!.focus();
@@ -1970,7 +2018,7 @@ window.ashStandaloneIntegration = {
 		document.execCommand = command => { documentCommands.push(command); return false; };
 		try {
 			if (target === 'find') {
-				callerEditor.getContribution<FindController>(FindController.ID)!.open({ showReplace: true });
+				openFindReplace();
 				callerEditor.getDomNode()!.querySelector<HTMLInputElement>('input[aria-label="Find"]')!.focus();
 			} else {
 				outside.focus();
@@ -2048,66 +2096,169 @@ window.ashStandaloneIntegration = {
 			document.execCommand = execCommand;
 		}
 	},
-	runDeferredPaste: async change => {
+	runFilePaste: () => {
 		callerEditor.setValue('alpha');
 		callerEditor.setPosition(new stanza.Position(1, 6));
 		callerEditor.focus();
-		let resolveFile!: (text: string) => void;
-		const pending = new Promise<string>(resolve => { resolveFile = resolve; });
-		const file = new File(['pending'], 'snippet.txt', { type: 'text/plain' });
-		Object.defineProperty(file, 'text', { value: () => pending });
+		let fileReads = 0;
+		const file = new File(['content'], 'snippet.txt', { type: 'text/plain' });
+		Object.defineProperty(file, 'text', { value: () => {
+			fileReads += 1;
+			return Promise.resolve('content');
+		} });
 		const clipboardData = new DataTransfer();
 		clipboardData.items.add(file);
-		const input = document.activeElement!;
-		const event = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData });
-		input.dispatchEvent(event);
-		let finished = false;
-		const completion = CopyPasteController.get(callerEditor)!.finishedPaste().then(() => { finished = true; });
-		if (change === 'writableAgain') {
-			callerEditor.updateOptions({ readOnly: true });
-			callerEditor.updateOptions({ readOnly: false });
-		} else if (change === 'selection') {
-			callerEditor.setPosition(new stanza.Position(1, 1));
-			callerEditor.setPosition(new stanza.Position(1, 6));
-		} else if (change === 'composition') {
-			const target = input instanceof HTMLTextAreaElement ? input : (input as HTMLElement & { editContext?: EventTarget }).editContext;
-			if (!target) throw new Error('Composition target is unavailable');
-			target.dispatchEvent(new CompositionEvent('compositionstart', { data: '' }));
-			target.dispatchEvent(new CompositionEvent('compositionend', { data: '' }));
-		} else if (change === 'escape') {
-			input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
-		}
-		await new Promise(resolve => setTimeout(resolve, 0));
-		const finishedBeforeDecode = finished;
-		resolveFile(' file');
-		await completion;
-		return { value: callerEditor.getValue(), handled: event.defaultPrevented, finishedBeforeDecode };
+		const paste = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData });
+
+		document.activeElement!.dispatchEvent(paste);
+
+		return { value: callerEditor.getValue(), handled: paste.defaultPrevented, fileReads };
 	},
-	runDeferredDrop: async change => {
+	runFileDrop: () => {
 		callerEditor.setValue('alpha');
-		callerEditor.setPosition(new stanza.Position(1, 1));
-		callerEditor.focus();
-		const before = callerEditor.getSelection()!.toString();
-		let resolveFile!: (text: string) => void;
-		const pending = new Promise<string>(resolve => { resolveFile = resolve; });
-		const file = new File(['pending'], 'snippet.txt', { type: 'text/plain' });
-		Object.defineProperty(file, 'text', { value: () => pending });
+		let fileReads = 0;
+		const file = new File(['content'], 'snippet.txt', { type: 'text/plain' });
+		Object.defineProperty(file, 'text', { value: () => {
+			fileReads += 1;
+			return Promise.resolve('content');
+		} });
 		const dataTransfer = new DataTransfer();
 		dataTransfer.items.add(file);
 		const node = callerEditor.getDomNode()!;
 		const bounds = node.getBoundingClientRect();
 		const position = callerEditor.getScrolledVisiblePosition(new stanza.Position(1, 6))!;
-		const event = new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer, clientX: bounds.left + position.left, clientY: bounds.top + position.top + position.height / 2 });
-		node.dispatchEvent(event);
+		const clientX = bounds.left + position.left;
+		const clientY = bounds.top + position.top + position.height / 2;
+		const dragOver = new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer, clientX, clientY });
+		const drop = new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer, clientX, clientY });
+
+		node.dispatchEvent(dragOver);
+		node.dispatchEvent(drop);
+
+		return {
+			value: callerEditor.getValue(),
+			dragOverHandled: dragOver.defaultPrevented,
+			dropHandled: drop.defaultPrevented,
+			fileReads,
+		};
+	},
+	runTextDrop: async enabled => {
+		callerEditor.setValue('alpha');
+		callerEditor.updateOptions({ dropIntoEditor: { enabled } });
+		const dataTransfer = new DataTransfer();
+		dataTransfer.setData('text/plain', ' dropped');
+		const node = callerEditor.getDomNode()!;
+		const bounds = node.getBoundingClientRect();
+		const position = callerEditor.getScrolledVisiblePosition(new stanza.Position(1, 6))!;
+		const clientX = bounds.left + position.left;
+		const clientY = bounds.top + position.top + position.height / 2;
+		const dragOver = new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer, clientX, clientY });
+		const drop = new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer, clientX, clientY });
 		try {
-			if (change !== 'none') callerEditor.updateOptions({ readOnly: true });
-			if (change === 'writableAgain') callerEditor.updateOptions({ readOnly: false });
-			resolveFile(' file');
-			await new Promise(resolve => setTimeout(resolve, 0));
-			return { value: callerEditor.getValue(), selectionUnchanged: callerEditor.getSelection()!.toString() === before, handled: event.defaultPrevented };
+			const changed = enabled ? waitForCallerValue('alpha dropped') : Promise.resolve();
+			node.dispatchEvent(dragOver);
+			node.dispatchEvent(drop);
+			await changed;
+			return { value: callerEditor.getValue(), dragOverHandled: dragOver.defaultPrevented, dropHandled: drop.defaultPrevented };
 		} finally {
-			callerEditor.updateOptions({ readOnly: false });
+			callerEditor.updateOptions({ dropIntoEditor: { enabled: true } });
 		}
+	},
+	runUriPaste: async enabled => {
+		callerEditor.setValue('alpha');
+		callerEditor.setPosition(new stanza.Position(1, 6));
+		callerEditor.updateOptions({ pasteAs: { enabled } });
+		callerEditor.focus();
+		const clipboardData = new DataTransfer();
+		clipboardData.setData('text/uri-list', 'https://example.test/snippet');
+		const paste = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData });
+		try {
+			const changed = enabled ? waitForCallerValue('alphahttps://example.test/snippet') : Promise.resolve();
+			document.activeElement!.dispatchEvent(paste);
+			await changed;
+			return { value: callerEditor.getValue(), handled: paste.defaultPrevented };
+		} finally {
+			callerEditor.updateOptions({ pasteAs: { enabled: true } });
+		}
+	},
+	startPasteAsPicker: () => {
+		callerEditor.setValue('alpha');
+		callerEditor.setSelection(new stanza.Selection(1, 1, 1, 6));
+		callerEditor.focus();
+		const clipboard = navigator.clipboard;
+		const priorRead = Object.getOwnPropertyDescriptor(clipboard, 'read');
+		Object.defineProperty(clipboard, 'read', {
+			configurable: true,
+			value: async () => [{
+				types: ['text/plain', 'text/html'],
+				getType: async (type: string) => new Blob([type === 'text/html' ? '<b>markup</b>' : 'plain'], { type }),
+			}],
+		});
+		const action = callerEditor.getAction('editor.action.pasteAs');
+		if (!action) throw new Error('Paste As action is missing');
+		void action.run().finally(() => {
+			if (priorRead) Object.defineProperty(clipboard, 'read', priorRead);
+			else Reflect.deleteProperty(clipboard, 'read');
+		});
+	},
+	runPasteProviderSelector: async () => {
+		callerEditor.setValue('alpha');
+		callerEditor.setSelection(new stanza.Selection(1, 1, 1, 6));
+		callerEditor.focus();
+		const kind = new HierarchicalKind('text.browserTest');
+		const features = StandaloneServices.get(ILanguageFeaturesService);
+		contributionProviders.add(features.documentPasteEditProvider.register({
+			language: callerModel.getLanguageId(),
+			hasAccessToAllModels: true,
+		}, {
+			copyMimeTypes: [],
+			pasteMimeTypes: ['text/plain'],
+			providedPasteEditKinds: [kind],
+			async provideDocumentPasteEdits() {
+				return { edits: [{ title: 'Insert Browser Test Text', kind, insertText: 'CUSTOM' }], dispose() {} };
+			},
+		}));
+		const clipboardData = new DataTransfer();
+		clipboardData.setData('text/plain', 'plain');
+		const paste = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData });
+		const changed = waitForCallerValue('CUSTOM');
+		document.activeElement!.dispatchEvent(paste);
+		await changed;
+		return { value: callerEditor.getValue(), handled: paste.defaultPrevented };
+	},
+	runPasteSnippetWithAdditionalEdit: async () => {
+		callerEditor.setValue('alpha');
+		ownedEditor.setValue('trail');
+		callerEditor.setSelection(new stanza.Selection(1, 1, 1, 6));
+		callerEditor.focus();
+		const kind = new HierarchicalKind('text.browserSnippet');
+		const features = StandaloneServices.get(ILanguageFeaturesService);
+		contributionProviders.add(features.documentPasteEditProvider.register({
+			language: callerModel.getLanguageId(),
+			hasAccessToAllModels: true,
+		}, {
+			copyMimeTypes: [],
+			pasteMimeTypes: ['text/plain'],
+			providedPasteEditKinds: [kind],
+			async provideDocumentPasteEdits() {
+				return {
+					edits: [{
+						title: 'Insert Browser Snippet',
+						kind,
+						insertText: { snippet: '${1:name}(${2:value})$0' },
+						additionalEdit: { edits: [{ resource: ownedModel.uri, textEdit: { range: new stanza.Range(1, 1, 1, 6), text: 'EXTRA' } }] },
+					}],
+					dispose() {},
+				};
+			},
+		}));
+		const clipboardData = new DataTransfer();
+		clipboardData.setData('text/plain', 'plain');
+		const paste = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData });
+		const changed = waitForCallerValue('name(value)');
+		document.activeElement!.dispatchEvent(paste);
+		await changed;
+		return { value: callerEditor.getValue(), otherValue: ownedEditor.getValue(), handled: paste.defaultPrevented };
 	},
 	runScopedActions: async () => {
 		callerEditor.setValue('alpha\nbeta\ngamma');

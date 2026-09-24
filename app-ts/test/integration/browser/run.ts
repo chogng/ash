@@ -3,6 +3,21 @@ import { resolve } from 'node:path';
 
 const desktopDirectory = resolve(import.meta.dirname, '../../..');
 const serverUrl = 'http://127.0.0.1:5185/textModel.html';
+// Keep the editor command focused while the full browser command covers every spec.
+const editorSpecs = [
+	'academic.integration.spec.ts',
+	'diff.integration.spec.ts',
+	'gpuText.integration.spec.ts',
+	'iPadShowKeyboard.integration.spec.ts',
+	'language.integration.spec.ts',
+	'loading.integration.spec.ts',
+	'standalone.integration.spec.ts',
+	'textModel.integration.spec.ts',
+	'themes.integration.spec.ts',
+	'tokenization.integration.spec.ts',
+];
+const editorOnly = process.argv[2] === '--editor';
+const playwrightArgs = process.argv.slice(editorOnly ? 3 : 2);
 const build = await run(process.execPath, ['node_modules/vite/bin/vite.js', 'build', '--config', 'test/integration/browser/vite.config.ts'], process.env);
 if (build !== 0) process.exit(build);
 const server = spawn(process.execPath, [
@@ -22,7 +37,8 @@ try {
 		'test',
 		'--config',
 		'test/integration/browser/playwright.config.ts',
-		...process.argv.slice(2),
+		...(editorOnly ? editorSpecs : []),
+		...playwrightArgs,
 	], {
 		...process.env,
 		ASH_EDITOR_BROWSER_EXTERNAL_SERVER: '1',

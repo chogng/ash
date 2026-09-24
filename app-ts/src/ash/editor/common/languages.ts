@@ -1,6 +1,6 @@
 import { Range, type IRange } from './core/range.js';
 import { type TextSnapshot, normalizeTextLineEndings } from './core/textChange.js';
-import { Position } from './core/position.js';
+import { Position, type IPosition } from './core/position.js';
 import { type URI } from '../../base/common/uri.js';
 import { type Event } from '../../base/common/event.js';
 import { type IDisposable, Disposable } from '../../base/common/lifecycle.js';
@@ -9,6 +9,8 @@ import { type LanguageWorker, type LanguageRequestOutcome } from './model/langua
 import { type LanguageTokenResult } from './tokens/languageTokens.js';
 import { isPositiveSafeInteger } from '../../base/common/numbers.js';
 import { type CancellationToken } from '../../base/common/cancellation.js';
+import { type IReadonlyVSDataTransfer } from '../../base/common/dataTransfer.js';
+import { type HierarchicalKind } from '../../base/common/hierarchicalKind.js';
 import { type Color } from '../../base/common/color.js';
 import { type ExtensionIdentifier } from '../../platform/extensions/common/extensions.js';
 import { EditOperation, type ISingleEditOperation } from './core/editOperation.js';
@@ -23,6 +25,83 @@ import { type LanguageWorkerDocumentSynchronization } from './services/textModel
 type Thenable<T> = PromiseLike<T>;
 
 export type ProviderResult<T> = T | undefined | null | Thenable<T | undefined | null>;
+
+export interface WorkspaceEdit {
+	readonly edits: readonly WorkspaceEditEntry[];
+}
+
+export type WorkspaceEditEntry = {
+	readonly resource: URI;
+	readonly textEdit: TextEdit & { readonly insertAsSnippet?: boolean; readonly keepWhitespace?: boolean };
+	readonly versionId?: number;
+} | {
+	readonly oldResource?: URI;
+	readonly newResource?: URI;
+	readonly options?: {
+		readonly overwrite?: boolean;
+		readonly ignoreIfExists?: boolean;
+		readonly ignoreIfNotExists?: boolean;
+		readonly recursive?: boolean;
+	};
+};
+
+export type DropYieldTo = { readonly kind: HierarchicalKind } | { readonly mimeType: string };
+
+export interface DocumentPasteEdit {
+	readonly title: string;
+	readonly kind: HierarchicalKind;
+	readonly handledMimeType?: string;
+	readonly yieldTo?: readonly DropYieldTo[];
+	insertText: string | { readonly snippet: string };
+	additionalEdit?: WorkspaceEdit;
+}
+
+export const enum DocumentPasteTriggerKind {
+	Automatic,
+	PasteAs,
+}
+
+export interface DocumentPasteContext {
+	readonly only?: HierarchicalKind;
+	readonly triggerKind: DocumentPasteTriggerKind;
+}
+
+export interface DocumentPasteEditsSession {
+	readonly edits: readonly DocumentPasteEdit[];
+	dispose(): void;
+}
+
+export interface DocumentPasteEditProvider {
+	readonly id?: string;
+	readonly copyMimeTypes: readonly string[];
+	readonly pasteMimeTypes: readonly string[];
+	readonly providedPasteEditKinds: readonly HierarchicalKind[];
+	prepareDocumentPaste?(model: model.ITextModel, ranges: readonly IRange[], dataTransfer: IReadonlyVSDataTransfer, token: CancellationToken): Promise<IReadonlyVSDataTransfer | undefined>;
+	provideDocumentPasteEdits?(model: model.ITextModel, ranges: readonly IRange[], dataTransfer: IReadonlyVSDataTransfer, context: DocumentPasteContext, token: CancellationToken): Promise<DocumentPasteEditsSession | undefined>;
+	resolveDocumentPasteEdit?(edit: DocumentPasteEdit, token: CancellationToken): Promise<DocumentPasteEdit>;
+}
+
+export interface DocumentDropEdit {
+	readonly title: string;
+	readonly kind: HierarchicalKind | undefined;
+	readonly handledMimeType?: string;
+	readonly yieldTo?: readonly DropYieldTo[];
+	insertText: string | { readonly snippet: string };
+	additionalEdit?: WorkspaceEdit;
+}
+
+export interface DocumentDropEditsSession {
+	readonly edits: readonly DocumentDropEdit[];
+	dispose(): void;
+}
+
+export interface DocumentDropEditProvider {
+	readonly id?: string;
+	readonly dropMimeTypes?: readonly string[];
+	readonly providedDropEditKinds?: readonly HierarchicalKind[];
+	provideDocumentDropEdits(model: model.ITextModel, position: IPosition, dataTransfer: IReadonlyVSDataTransfer, token: CancellationToken): ProviderResult<DocumentDropEditsSession>;
+	resolveDocumentDropEdit?(edit: DocumentDropEdit, token: CancellationToken): Promise<DocumentDropEdit>;
+}
 
 /** One source or target position returned by a cross-resource language feature. */
 export interface LanguageLocation {

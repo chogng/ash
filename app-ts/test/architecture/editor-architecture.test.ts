@@ -233,7 +233,6 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/viewParts/whitespace/whitespace.css",
 		"contrib/folding/browser/foldingDecorations.ts",
 		"contrib/folding/browser/folding.css",
-		"contrib/smartSelect/common/selectionRanges.ts",
 		"contrib/symbolIcons/browser/symbolIcons.ts",
 		"contrib/symbolIcons/browser/symbolIcons.css",
 		"browser/viewParts/margin/margin.ts",
@@ -328,8 +327,6 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"contrib/semanticTokens/common/semanticTokens.ts",
 		"common/viewLayout/editorViewportLinesLayout.ts",
 
-		"contrib/colorPicker/browser/colorPickerWidget.ts",
-		"contrib/peekView/browser/peekView.ts",
 		"browser/controller/inputController.ts",
 		"browser/controller/inputCommandController.ts",
 		"browser/controller/inputCompletionController.ts",
@@ -484,18 +481,16 @@ test('Required editor view parts are connected to their production owners', () =
 	assert.match(whitespace, /viewModel\.getCursorStates\(/u);
 	assert.match(overviewRuler, /new OverviewZoneManager/u);
 	assert.match(textureAtlas, /from ['"]\.\.\/taskQueue\.js['"]/u);
-	assert.match(codeEditorWidget, /observableCodeEditor\(this\)/u);
 	assert.match(placeholder, /observableCodeEditor\(editor\)/u);
 	assert.match(textModel, /countEOL\(edit\.text\)/u);
 	assert.match(textModelSearch, /getMapForWordSeparators/u);
 });
 
-test('Editor production files are entrypoints or have a production caller', () => {
+test('Editor implementation files have an importer or an explicit entrypoint', () => {
 	const sourceRoot = resolve(desktopRoot, 'src');
 	const sourceFiles = collectFiles(sourceRoot).filter(file => file.endsWith('.ts'));
 	const editorProductionFiles = sourceFiles.filter(file => file.startsWith(editorRoot) && !isTestFile(file));
-	const productionIncoming = new Map(editorProductionFiles.map(file => [architecturePathKey(file), 0]));
-	const testIncoming = new Map(editorProductionFiles.map(file => [architecturePathKey(file), 0]));
+	const incoming = new Map(editorProductionFiles.map(file => [architecturePathKey(file), 0]));
 	const importPattern = /(?:from\s+|import\s*(?:\(\s*)?)["']([^"']+)["']/gu;
 
 	for (const sourceFile of sourceFiles) {
@@ -504,7 +499,6 @@ test('Editor production files are entrypoints or have a production caller', () =
 			const specifier = match[1]!;
 			if (!specifier.startsWith('.')) continue;
 			const target = architecturePathKey(resolve(dirname(sourceFile), specifier.replace(/\.js$/u, '.ts')));
-			const incoming = isTestFile(sourceFile) ? testIncoming : productionIncoming;
 			if (incoming.has(target)) incoming.set(target, incoming.get(target)! + 1);
 		}
 	}
@@ -516,9 +510,9 @@ test('Editor production files are entrypoints or have a production caller', () =
 	].map(architecturePathKey));
 	const unreferenced = editorProductionFiles.filter(file => {
 		const key = architecturePathKey(file);
-		return productionIncoming.get(key) === 0 && testIncoming.get(key) === 0 && !explicitEntrypoints.has(key);
+		return incoming.get(key) === 0 && !explicitEntrypoints.has(key);
 	}).map(file => relative(editorRoot, file));
-	assert.deepEqual(unreferenced, [], 'Editor files without a production caller or direct test');
+	assert.deepEqual(unreferenced, [], 'Editor files without an importer');
 });
 
 function architecturePathKey(path: string): string {
@@ -737,7 +731,6 @@ test("Editor engines delegate optional feature composition to mode bundles", () 
 	assert.doesNotMatch(textHost, /EditorBrowserRuntime|IEditorBrowserRuntime/u);
 	assert.doesNotMatch(textHost, /registerEditorBrowserFactory|EditorBrowserFactory/u);
 	assert.match(textHost, /getEditorContributions/u);
-	assert.match(textHost, /this\.contributions\.initialize/u);
 	assert.match(codeEditorContributions, /runWhenWindowIdle/u);
 	assert.doesNotMatch(textHost, optionalControllerPattern);
 	assert.doesNotMatch(textHost, /EditingCommandController/u);

@@ -1,3 +1,4 @@
+import '../../../../test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -7,24 +8,6 @@ import { Range } from '../../../../common/core/range.js';
 import { TextDecorationCollection } from '../../../../common/model/decorationCollection.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { TestLanguageFeaturesService } from '../../../../test/common/testLanguageFeaturesService.js';
-
-const browserEnvironment = new JSDOM('<!doctype html><body></body>');
-class TestResizeObserver {
-	observe(): void {}
-	unobserve(): void {}
-	disconnect(): void {}
-}
-for (const [name, value] of Object.entries({
-	window: browserEnvironment.window,
-	document: browserEnvironment.window.document,
-	Node: browserEnvironment.window.Node,
-	Element: browserEnvironment.window.Element,
-	HTMLElement: browserEnvironment.window.HTMLElement,
-	Event: browserEnvironment.window.Event,
-	ResizeObserver: TestResizeObserver,
-})) {
-	Object.defineProperty(globalThis, name, { configurable: true, value });
-}
 
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');

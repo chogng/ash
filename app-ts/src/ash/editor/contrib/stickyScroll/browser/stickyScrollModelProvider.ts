@@ -2,10 +2,9 @@ import type { CancellationToken } from '../../../../base/common/cancellation.js'
 import { AbstractDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import type { ICodeEditor } from '../../../browser/editorBrowser.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
-import { Range } from '../../../common/core/range.js';
-import type { TextModel } from '../../../common/model/textModel.js';
-import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageDocumentSymbol, type LanguageDocumentSymbolProvider } from '../../../common/languages.js';
+import type { LanguageDocumentSymbol } from '../../../common/languages.js';
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
+import { OutlineModel } from '../../documentSymbols/browser/outlineModel.js';
 import type { EditorFoldingModel } from '../../folding/browser/foldingModel.js';
 import { computeEditorIndentFoldingRanges } from '../../folding/browser/indentRangeProvider.js';
 import { StickyElement, StickyModel, StickyRange } from './stickyScrollElement.js';
@@ -17,8 +16,6 @@ export interface IStickyModelProvider extends IDisposable {
 /** Reads scope sources without taking ownership of text or fold state. */
 export class StickyModelProvider extends AbstractDisposable implements IStickyModelProvider {
 	private request: AbortController | undefined;
-	private readonly providerIds = new WeakMap<LanguageDocumentSymbolProvider, string>();
-	private nextProviderId = 0;
 	private outlineProviderId: string | undefined;
 
 	constructor(
@@ -40,41 +37,22 @@ export class StickyModelProvider extends AbstractDisposable implements IStickyMo
 		if (model.getLineCount() < 2) {
 			return new StickyModel(model.uri, version, undefined, undefined);
 		}
-		const languageId = model.getLanguageId();
 		const source = this.editor.getOption(EditorOption.stickyScroll).defaultModel;
-		const symbols = this.languageFeaturesService.documentSymbolProvider.ordered(model);
+		const registry = this.languageFeaturesService.documentSymbolProvider;
 		let ranges: StickyRange[] | undefined;
 		let outlineProviderId: string | undefined;
-		if (source === 'outlineModel' && symbols.length > 0) {
+		if (source === 'outlineModel' && registry.has(model)) {
 			const controller = this.request = new AbortController();
 			const cancellation = token.onCancellationRequested(() => controller.abort());
 			try {
-				const request = { ...createLanguageFeatureRequest(model, languageId, controller.signal), resource: model.uri };
-				const groups = (await Promise.all(symbols.map(async provider => {
-					let id = this.providerIds.get(provider);
-					if (id === undefined) {
-						id = String(this.nextProviderId++);
-						this.providerIds.set(provider, id);
-					}
-					try {
-						const result = await provider.provideDocumentSymbols(request, controller.signal);
-						if (!isLanguageFeatureRequestCurrent(request) || result.length === 0) {
-							return undefined;
-						}
-						const ranges: StickyRange[] = [];
-						appendSymbolRanges(result, model, ranges);
-						const coverage = ranges.reduce((total, range) => total + range.endLineNumber - range.startLineNumber, 0);
-						return { id, ranges, coverage };
-					} catch (error) {
-						if (isLanguageFeatureRequestCurrent(request)) {
-							this.onError(error);
-						}
-						return undefined;
-					}
-				}))).filter(group => group !== undefined);
-				if (!isLanguageFeatureRequestCurrent(request)) {
-					return null;
-				}
+				const outline = await OutlineModel.create(registry, model, controller.signal, this.onError);
+				if (!outline) return null;
+				const groups = [...outline.children.values()].map(group => {
+					const scopes: StickyRange[] = [];
+					appendSymbolRanges([...group.children.values()].map(element => element.symbol), scopes);
+					const coverage = scopes.reduce((total, range) => total + range.endLineNumber - range.startLineNumber, 0);
+					return { id: group.id, ranges: scopes, coverage };
+				});
 				let selected = groups.find(group => group.id === this.outlineProviderId);
 				if (!selected) {
 					for (const group of groups) {
@@ -130,14 +108,11 @@ export class StickyModelProvider extends AbstractDisposable implements IStickyMo
 	}
 }
 
-function appendSymbolRanges(symbols: readonly LanguageDocumentSymbol[], model: TextModel, ranges: StickyRange[]): void {
+function appendSymbolRanges(symbols: readonly LanguageDocumentSymbol[], ranges: StickyRange[]): void {
 	for (const symbol of symbols) {
-		if (!model.isValidRange(symbol.range) || !model.isValidRange(symbol.selectionRange) || !Range.lift(symbol.range).containsRange(symbol.selectionRange)) {
-			throw new RangeError('Sticky scroll symbol range is outside its document scope');
-		}
 		ranges.push(new StickyRange(symbol.selectionRange.startLineNumber, symbol.range.endLineNumber));
 		if (symbol.children) {
-			appendSymbolRanges(symbol.children, model, ranges);
+			appendSymbolRanges(symbol.children, ranges);
 		}
 	}
 }

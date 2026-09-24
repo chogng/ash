@@ -90,12 +90,6 @@ export const CodeEditorConfiguration = Object.freeze({
 			{ value: "deepIndent", label: "Deep indent" },
 		]),
 	}),
-	minimapEnabled: configurationRegistry.registerConfiguration<boolean>({
-		key: "editor.minimap.enabled",
-		defaultValue: true,
-		parse: value => parseBoolean(value, "editor.minimap.enabled"),
-		setting: booleanSetting("Enabled", "Show a compact document overview on the right side of the editor."),
-	}),
 	renderWhitespace: configurationRegistry.registerConfiguration<'none' | 'boundary' | 'selection' | 'trailing' | 'all'>({
 		key: 'editor.renderWhitespace',
 		defaultValue: 'selection',
@@ -380,6 +374,10 @@ export const CodeEditorConfiguration = Object.freeze({
 	}),
 	diffIgnoreTrimWhitespace: 'diffEditor.ignoreTrimWhitespace',
 	diffMaxComputationTime: 'diffEditor.maxComputationTime',
+	diffHideUnchangedRegionsEnabled: 'diffEditor.hideUnchangedRegions.enabled',
+	diffHideUnchangedRegionsContextLineCount: 'diffEditor.hideUnchangedRegions.contextLineCount',
+	diffHideUnchangedRegionsMinimumLineCount: 'diffEditor.hideUnchangedRegions.minimumLineCount',
+	diffHideUnchangedRegionsRevealLineCount: 'diffEditor.hideUnchangedRegions.revealLineCount',
 	diffWordWrap: configurationRegistry.registerConfiguration<'off' | 'on' | 'inherit'>({
 		key: 'diffEditor.wordWrap',
 		defaultValue: 'inherit',
@@ -407,12 +405,6 @@ export const CodeEditorConfiguration = Object.freeze({
 		defaultValue: true,
 		parse: value => parseBoolean(value, "diffEditor.loopChanges"),
 		setting: booleanSetting("Loop through changes", "Wrap change navigation from the final difference to the first."),
-	}),
-	diffBreadcrumbs: configurationRegistry.registerConfiguration<boolean>({
-		key: "diffEditor.breadcrumbs.enabled",
-		defaultValue: true,
-		parse: value => parseBoolean(value, "diffEditor.breadcrumbs.enabled"),
-		setting: booleanSetting("Change breadcrumbs", "Show the current change position while navigating a diff."),
 	}),
 	insertFinalNewLine: configurationRegistry.registerConfiguration<boolean>({
 		key: "files.insertFinalNewline",

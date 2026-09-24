@@ -20,13 +20,15 @@ import { LanguageService } from '../../common/services/languageService.js';
 import { ILanguageConfigurationService, LanguageConfigurationService } from '../../common/languages/languageConfigurationRegistry.js';
 import { IModelService } from '../../common/services/model.js';
 import { ModelService } from '../../common/services/modelService.js';
+import { ITextModelService } from '../../common/services/resolverService.js';
+import { InMemoryTextModelService } from '../../common/services/inMemoryTextModelService.js';
 import { ITextResourcePropertiesService, type ITextResourcePropertiesService as ITextResourcePropertiesServiceContract } from '../../common/services/textResourceConfiguration.js';
 import { isLinux, isMacintosh } from '../../../base/common/platform.js';
 import type { URI } from '../../../base/common/uri.js';
 import { IStandaloneThemeService } from "../common/standaloneTheme.js";
 import { StandaloneThemeService } from "./standaloneThemeService.js";
-import { Emitter, type Event } from '../../../base/common/event.js';
-import { type IWorkspaceFolder } from '../../../platform/workspace/common/workspace.js';
+import { Emitter, Event } from '../../../base/common/event.js';
+import { IWorkspaceContextService, WorkbenchState, type IWorkspace, type IWorkspaceFolder } from '../../../platform/workspace/common/workspace.js';
 import { ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
 import { BrowserClipboardService } from '../../../platform/clipboard/browser/browserClipboardService.js';
 import { IClipboardService } from '../../../platform/clipboard/common/clipboardService.js';
@@ -42,6 +44,7 @@ import { IMenuService, MenuService } from '../../../platform/actions/common/menu
 import type { Context, IContextKey } from '../../../platform/contextkey/common/contextkey.js';
 import { BrowserContextMenuService } from '../../../platform/contextview/browser/contextMenuService.js';
 import { IContextMenuService, IContextViewService } from '../../../platform/contextview/browser/contextView.js';
+import { HoverService, IHoverService } from '../../../platform/hover/browser/hoverService.js';
 import { IKeybindingService, KeybindingContextKeys } from '../../../platform/keybinding/common/keybinding.js';
 import { KeybindingResolver, KeybindingResolveKind } from '../../../platform/keybinding/common/keybindingResolver.js';
 import { INotificationService, NotificationSeverity, type NotificationAction, type NotificationHandle, type NotificationItem, type NotificationOptions } from '../../../platform/notification/common/notification.js';
@@ -55,6 +58,72 @@ import '../../../base/browser/ui/keybindinglabel/keybindinglabel.css';
 import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
 import { ILayoutService } from '../../../platform/layout/browser/layoutService.js';
 import { StandaloneQuickInputService } from './quickInput/standaloneQuickInputService.js';
+import { DefaultDropProvidersFeature, DefaultPasteProvidersFeature } from '../../contrib/dropOrPasteInto/browser/defaultProviders.js';
+import { IBulkEditService, ResourceEdit, ResourceTextEdit, type IBulkEditOptions, type IBulkEditPreviewHandler, type IBulkEditResult } from '../../browser/services/bulkEditService.js';
+import { EditOperation } from '../../common/core/editOperation.js';
+import { Range } from '../../common/core/range.js';
+import { type ITextModel } from '../../common/model.js';
+
+export class StandaloneWorkspaceContextService implements IWorkspaceContextService {
+	readonly onDidChangeWorkspace = Event.None;
+	private readonly workspace: IWorkspace = Object.freeze({ id: 'standalone', folders: [] });
+
+	getWorkspace(): IWorkspace { return this.workspace; }
+	getWorkbenchState(): WorkbenchState { return WorkbenchState.EMPTY; }
+}
+
+/** Applies editor-local workspace edits for embedded editors. */
+export class StandaloneBulkEditService implements IBulkEditService {
+	declare readonly _serviceBrand: undefined;
+
+	constructor(@ICodeEditorService private readonly editors: ICodeEditorServiceContract) {}
+
+	hasPreviewHandler(): boolean { return false; }
+	setPreviewHandler(_handler: IBulkEditPreviewHandler): IDisposable {
+		throw new Error('Bulk edit preview is unavailable in an embedded editor');
+	}
+
+	async apply(value: ResourceEdit[] | import('../../common/languages.js').LanguageWorkspaceEdit, options: IBulkEditOptions = {}): Promise<IBulkEditResult> {
+		const edits = Array.isArray(value) ? value : ResourceEdit.convert(value);
+		const byModel = new Map<ITextModel, ResourceTextEdit[]>();
+		for (const edit of edits) {
+			if (!(edit instanceof ResourceTextEdit)) throw new Error('Embedded editors only support text workspace edits');
+			const model = [options.editor, ...this.editors.listCodeEditors()]
+				.map(editor => editor?.getModel())
+				.find(candidate => candidate?.uri.toString() === edit.resource.toString());
+			if (!model) throw new Error(`No embedded editor owns ${edit.resource.toString()}`);
+			if (edit.versionId !== undefined && model.getVersionId() !== edit.versionId) throw new Error('Workspace edit target changed');
+			const group = byModel.get(model) ?? [];
+			group.push(edit);
+			byModel.set(model, group);
+		}
+		if (options.token?.aborted || edits.length === 0) return { ariaSummary: 'No edits were applied', isApplied: false };
+		const applied = new Map<ITextModel, { readonly text: string; readonly alternativeVersionId: number }>();
+		try {
+			for (const [model, group] of byModel) {
+				model.pushStackElement();
+				model.pushEditOperations([], group.map(edit => EditOperation.replaceMove(Range.lift(edit.textEdit.range), edit.textEdit.text)), () => []);
+				model.pushStackElement();
+				applied.set(model, { text: model.getValue(), alternativeVersionId: model.getAlternativeVersionId() });
+			}
+		} catch (error) {
+			for (const model of [...applied.keys()].reverse()) model.undo();
+			throw error;
+		}
+		return {
+			ariaSummary: `${edits.length} edits applied`,
+			isApplied: true,
+			undo: async () => {
+				for (const [model, state] of applied) {
+					if (model.getValue() !== state.text || model.getAlternativeVersionId() !== state.alternativeVersionId) {
+						throw new Error('Workspace edit target changed before replacement');
+					}
+				}
+				for (const model of [...applied.keys()].reverse()) model.undo();
+			},
+		};
+	}
+}
 
 export interface StandaloneServiceOverrides {
 	readonly languageService?: IAshLanguageService;
@@ -94,12 +163,18 @@ export class StandaloneServiceCollection extends ServiceContainer {
 		this.registerSingleton(IContextMenuService, () => this.createInstance(new ServiceConstructionDescriptor(BrowserContextMenuService, {
 			serviceDependencies: [IMenuService, IContextKeyService, IKeybindingService, IContextViewService, INotificationService],
 		})));
+		this.registerSingleton(IHoverService, accessor => new HoverService(
+			accessor.get(IConfigurationService),
+			accessor.get(IContextViewService),
+			accessor.get(IContextMenuService),
+		));
 		this.registerSingleton(IMarkerService, () => new MarkerService());
 		this.registerSingleton(IMarkerDecorationsService, () => this.createInstance(MarkerDecorationsService));
 		this.registerInstance(IClipboardService, new BrowserClipboardService(window.navigator.clipboard));
 		this.registerSingleton(ICodeEditorService, () => this.createInstance(StandaloneCodeEditorService));
 		this.registerSingleton(ILayoutService, () => this.createInstance(StandaloneLayoutService));
 		this.registerSingleton(IQuickInputService, () => this.createInstance(StandaloneQuickInputService));
+		this.registerSingleton(IBulkEditService, () => this.createInstance(StandaloneBulkEditService));
 		this.codeEditorService = this.get(ICodeEditorService);
 		this.editorWorkerFactory = overrides.editorWorkerFactory ?? (model => new VersionedEditorWorkerClient(model));
 		this.syntaxWorkerFactory = overrides.syntaxWorkerFactory;
@@ -121,6 +196,10 @@ export class StandaloneServiceCollection extends ServiceContainer {
 		));
 		if (overrides.languageFeaturesService) this.registerInstance(ILanguageFeaturesService, overrides.languageFeaturesService);
 		else this.registerSingleton(ILanguageFeaturesService, () => new LanguageFeaturesService());
+		const workspaceContext = new StandaloneWorkspaceContextService();
+		this.registerInstance(IWorkspaceContextService, workspaceContext);
+		this._register(new DefaultPasteProvidersFeature(this.get(ILanguageFeaturesService), workspaceContext));
+		this._register(new DefaultDropProvidersFeature(this.get(ILanguageFeaturesService), workspaceContext));
 		this.registerSingleton(IStandaloneThemeService, () => new StandaloneThemeService(window));
 		this.themeService = this.get(IStandaloneThemeService);
 		this.registerSingleton(IModelService, accessor => new ModelService(
@@ -132,6 +211,7 @@ export class StandaloneServiceCollection extends ServiceContainer {
 			{ syntaxService: { workerFactory: this.syntaxWorkerFactory } },
 		));
 		this.modelService = this.get(IModelService) as ModelService;
+		this.registerSingleton(ITextModelService, () => this.createInstance(InMemoryTextModelService));
 		this.languageService = this.get(ILanguageService);
 		this.languageConfigurationService = this.get(ILanguageConfigurationService);
 		this.languageFeaturesService = this.get(ILanguageFeaturesService);

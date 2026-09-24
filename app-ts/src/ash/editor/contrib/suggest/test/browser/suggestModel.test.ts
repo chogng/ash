@@ -4,6 +4,8 @@ import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { ReplaceCommand } from '../../../../common/commands/replaceCommand.js';
 import { LanguageCompletionDetailsStatus, LanguageCompletionSessionChangeReason, SuggestModel } from "../../browser/suggestModel.js";
+import { SnippetController2 } from '../../../snippet/browser/snippetController2.js';
+import { EditorContributionInstantiation } from '../../../../browser/editorExtensions.js';
 import { LanguageResultAcceptance } from '../../../../common/model/languageResultStore.js';
 import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind, type LanguageCompletionItem, type LanguageCompletionItemDetails, type LanguageCompletionItemResolver, type LanguageCompletionResolveRequest } from '../../../../common/languages.js';
 import { createLanguageCompletionStore } from '../../browser/suggest.js';
@@ -11,30 +13,14 @@ import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
 import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
+import { installEditorTestDom } from '../../../../test/browser/editorTestGlobals.js';
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 browserEnvironment.window.HTMLCanvasElement.prototype.getContext = () => null;
-const globals = new Map<string, PropertyDescriptor | undefined>();
-for (const [name, value] of Object.entries({
-	window: browserEnvironment.window,
-	document: browserEnvironment.window.document,
-	Node: browserEnvironment.window.Node,
-	Element: browserEnvironment.window.Element,
-	HTMLElement: browserEnvironment.window.HTMLElement,
-	Event: browserEnvironment.window.Event,
-})) {
-	globals.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
-	Object.defineProperty(globalThis, name, { configurable: true, value });
-}
+const installedGlobals = installEditorTestDom(browserEnvironment, ['Node', 'Element', 'HTMLElement', 'Event']);
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 suiteTeardown(() => {
+	installedGlobals.dispose();
 	browserEnvironment.window.close();
-	for (const [name, descriptor] of globals) {
-		if (descriptor) {
-			Object.defineProperty(globalThis, name, descriptor);
-		} else {
-			Reflect.deleteProperty(globalThis, name);
-		}
-	}
 });
 
 test("Completion session opens at the matching cursor and navigates cyclically", () => {
@@ -201,14 +187,14 @@ test("Completion snippets select grouped tabstops and leave them without changin
 	assert.equal(session.acceptSelected(), true);
 	assert.equal(model.getText(), "function name(value) {  }");
 	assert.deepEqual(editor.getSelections()![0]!, Selection.fromPositions(new Position((0) + 1, (9) + 1), new Position((0) + 1, (13) + 1)));
-	assert.equal(session.selectNextSnippetPlaceholder(), true);
+	SnippetController2.get(editor)!.next();
 	assert.deepEqual(editor.getSelections()![0]!, Selection.fromPositions(new Position((0) + 1, (14) + 1), new Position((0) + 1, (19) + 1)));
-	assert.equal(session.selectNextSnippetPlaceholder(), true);
+	SnippetController2.get(editor)!.next();
 	assert.deepEqual(editor.getSelections()![0]!, Selection.fromPositions(new Position((0) + 1, (23) + 1)));
-	assert.equal(session.selectPreviousSnippetPlaceholder(), true);
+	SnippetController2.get(editor)!.prev();
 	assert.deepEqual(editor.getSelections()![0]!, Selection.fromPositions(new Position((0) + 1, (14) + 1), new Position((0) + 1, (19) + 1)));
-	assert.equal(session.cancelSnippetPlaceholderNavigation(), true);
-	assert.equal(session.selectNextSnippetPlaceholder(), false);
+	SnippetController2.get(editor)!.cancel();
+	assert.equal(SnippetController2.get(editor)!.isInSnippet(), false);
 	assert.equal(model.getText(), "function name(value) {  }");
 });
 
@@ -238,12 +224,12 @@ for (const transform of [false, true]) {
 		const expanded = transform ? 'long-long => LONG' : 'long-long';
 		assert.equal(model.getText(), initial);
 		editor.updateOptions({ readOnly: true });
-		assert.equal(session.selectNextSnippetChoice(), false);
+		pressSnippetChoice(editor, 'ArrowDown');
 		assert.equal(model.getText(), initial);
 		editor.updateOptions({ readOnly: false });
 		const changes: string[] = [];
 		using listener = model.onDidChangeContent(() => changes.push(model.getText()));
-		assert.equal(session.selectNextSnippetChoice(), true);
+		pressSnippetChoice(editor, 'ArrowDown');
 		assert.deepEqual(changes, [expanded]);
 		assert.deepEqual(editor.getSelections(), primaryFirst([
 			Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (4) + 1)),
@@ -251,21 +237,21 @@ for (const transform of [false, true]) {
 		], 0));
 		model.undo();
 		assert.equal(model.getText(), initial);
-		assert.equal(session.selectNextSnippetChoice(), true);
+		pressSnippetChoice(editor, 'ArrowDown');
 		assert.equal(model.getText(), expanded);
-		assert.equal(session.selectPreviousSnippetChoice(), true);
+		pressSnippetChoice(editor, 'ArrowUp');
 		assert.equal(model.getText(), initial);
 		model.undo();
 		assert.equal(model.getText(), expanded);
 		model.undo();
 		assert.equal(model.getText(), initial);
-		assert.equal(session.selectNextSnippetChoice(), true);
+		pressSnippetChoice(editor, 'ArrowDown');
 		assert.equal(model.getText(), expanded);
 		model.undo();
 		assert.equal(model.getText(), initial);
 		model.redo();
 		assert.equal(model.getText(), expanded);
-		assert.equal(session.selectPreviousSnippetChoice(), true);
+		pressSnippetChoice(editor, 'ArrowUp');
 		assert.equal(model.getText(), initial);
 	});
 }
@@ -297,7 +283,7 @@ test("Completion snippets refresh tabstop transforms when navigation leaves a so
 		"next",
 	));
 	assert.equal(model.getText(), "next => NAME");
-	assert.equal(session.selectNextSnippetPlaceholder(), true);
+	SnippetController2.get(editor)!.next();
 	assert.equal(model.getText(), "next => NEXT");
 });
 
@@ -504,8 +490,21 @@ function completion(id: string, label: string, preselect = false, range = Range.
 	};
 }
 
+function pressSnippetChoice(editor: ReturnType<typeof createTestCodeEditor>, key: 'ArrowDown' | 'ArrowUp'): void {
+	editor.focus();
+	const input = editor.controller.editContext.domNode.domNode;
+	input.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key, altKey: true, bubbles: true, cancelable: true }));
+}
+
 function editorAt(model: TextModel, position: Position): ReturnType<typeof createTestCodeEditor> {
-	const editor = createTestCodeEditor({ container: h(document, 'div'), model, contributions: [] });
+	const container = h(document, 'div');
+	document.body.appendChild(container);
+	const editor = createTestCodeEditor({
+		container,
+		model,
+		contributions: [{ id: SnippetController2.ID, ctor: SnippetController2, instantiation: EditorContributionInstantiation.Eager }],
+	});
+	editor.onDidDispose(() => container.remove());
 	editor.setPosition(position);
 	return editor;
 }

@@ -10,6 +10,15 @@ export type HoverContent = HoverContentValue | (() => HoverContentValue);
 export type HoverDelay = number | (() => number);
 export type HoverPersistence = "transient" | "sticky";
 
+export interface IHoverLifecycleOptions {
+	/** Related targets skip the delay when moving between their hovers. */
+	readonly groupId?: string;
+	/** Uses the configured shorter pointer delay. */
+	readonly reducedDelay?: boolean;
+	/** Enter or Space moves keyboard focus into the tooltip. */
+	readonly setupKeyboardEvents?: boolean;
+}
+
 export interface HoverOptions {
 	readonly target: HTMLElement;
 	readonly content: HoverContent;
@@ -22,6 +31,7 @@ export interface HoverOptions {
 	readonly anchorPosition?: AnchorPosition;
 	readonly gap?: number;
 	readonly contextViewProvider?: IContextViewProvider;
+	readonly setupKeyboardEvents?: boolean;
 }
 
 let hoverId = 0;
@@ -111,6 +121,16 @@ export class Hover extends Disposable {
 			if (this.isInsideHover(event.relatedTarget)) return;
 			this.scheduleHide();
 		}));
+		if (options.setupKeyboardEvents) {
+			this._register(addDisposableListener(target, "keydown", (event: KeyboardEvent) => {
+				if (event.key !== " " && event.key !== "Enter") return;
+				this.show();
+				if (this.tooltip) {
+					this.tooltip.tabIndex = -1;
+					this.tooltip.focus();
+				}
+			}));
+		}
 	}
 
 	get visible(): boolean {

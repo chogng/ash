@@ -18,6 +18,10 @@
 	flex-direction: column;
 }
 
+.stanza-multi-diff-editor-session.pending {
+	visibility: hidden;
+}
+
 .stanza-multi-diff-editor-host {
 	position: relative;
 	min-width: 0;

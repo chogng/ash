@@ -9,12 +9,11 @@ import { type EditorInput } from "../../../browser/parts/editor/editorInput.js";
 import { DIFF_EDITOR_ID, isDiffEditorInput } from "./diffEditorInput.js";
 import { type ITextResourceStore } from "../../../services/textmodelResolver/common/textResourceStore.js";
 import { DiffModel } from "../../../../editor/common/diff/diffModel.js";
+import { type HideUnchangedRegionsOptions } from '../../../../editor/common/config/diffEditor.js';
 import { type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from "../../../../editor/common/diff/documentDiffProvider.js";
 import { DiffEditorWidget } from "../../../../editor/browser/widget/diffEditor/diffEditorWidget.js";
 import { type TextModelReference, type ITextModelResourceService } from "../../../services/textmodelResolver/common/textModelResourceService.js";
-import { DiffEditorBreadcrumbsController } from "../../../../editor/contrib/diffEditorBreadcrumbs/browser/diffEditorBreadcrumbs.js";
 import { h } from "../../../../base/browser/dom.js";
-import { type ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { CodeEditorConfiguration, getDiffComputationOptions, getDiffWordWrap } from '../common/editorConfiguration.js';
@@ -22,7 +21,6 @@ import { CodeEditorConfiguration, getDiffComputationOptions, getDiffWordWrap } f
 export interface DiffEditorPaneOptions {
 	readonly modelService: ITextModelResourceService;
 	readonly createComputationService: () => IDocumentDiffProvider & IDisposable;
-	readonly codeEditorService: ICodeEditorService;
 	readonly lineHeight?: number;
 	readonly fontFamily?: string;
 	readonly fontSize?: number;
@@ -30,10 +28,9 @@ export interface DiffEditorPaneOptions {
 	readonly showLineNumbers?: boolean;
 	readonly showInlineChanges?: boolean;
 	readonly loopChanges?: boolean;
-	readonly breadcrumbs?: boolean;
 }
 
-/** Workbench pane that acquires two text references for a read-only comparison. */
+/** Workbench pane that owns an editable comparison over two acquired text references. */
 export class DiffEditorPane extends Disposable implements IEditorPane {
 	readonly id = DIFF_EDITOR_ID;
 	private readonly session = this._register(new MutableDisposable<DiffEditorPaneSession>());
@@ -145,6 +142,7 @@ class DiffEditorPaneSession extends Disposable {
 		modifiedLabel: string | undefined,
 		options: DiffEditorPaneOptions,
 		@IConfigurationService configuration: IConfigurationService,
+		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super();
 		this._register(original);
@@ -169,15 +167,21 @@ class DiffEditorPaneSession extends Disposable {
 				|| event.affectsConfiguration(CodeEditorConfiguration.diffMaxComputationTime, { overrideIdentifier: languageId })) {
 				this.updateOptions(getDiffComputationOptions(configuration, languageId));
 			}
+			if (event.affectsConfiguration(CodeEditorConfiguration.diffHideUnchangedRegionsEnabled)
+				|| event.affectsConfiguration(CodeEditorConfiguration.diffHideUnchangedRegionsContextLineCount)
+				|| event.affectsConfiguration(CodeEditorConfiguration.diffHideUnchangedRegionsMinimumLineCount)
+				|| event.affectsConfiguration(CodeEditorConfiguration.diffHideUnchangedRegionsRevealLineCount)) {
+				this.editor.setHideUnchangedRegionsOptions(getHideUnchangedRegionsOptions(configuration));
+			}
 		}));
 		this._register(modified.model.onDidChangeLanguage(() => {
 			this.updateOptions(getDiffComputationOptions(configuration, model.modified.getLanguageId()));
 		}));
-		this.editor = this._register(new DiffEditorWidget({
+		this.editor = this._register(instantiationService.createInstance(DiffEditorWidget, {
 			container,
 			model,
 			wordWrap: getDiffWordWrap(configuration),
-			codeEditorService: options.codeEditorService,
+			hideUnchangedRegions: getHideUnchangedRegionsOptions(configuration),
 			lineHeight: options.lineHeight,
 			fontFamily: options.fontFamily,
 			fontSize: options.fontSize,
@@ -188,7 +192,6 @@ class DiffEditorPaneSession extends Disposable {
 			originalAriaLabel: originalLabel,
 			modifiedAriaLabel: modifiedLabel,
 		}));
-		if (options.breadcrumbs !== false) this._register(new DiffEditorBreadcrumbsController(this.editor, model));
 	}
 
 	updateOptions(options: IDocumentDiffProviderOptions): void {
@@ -200,6 +203,15 @@ class DiffEditorPaneSession extends Disposable {
 	}
 
 	focus(): void {
-		this.editor.element.focus({ preventScroll: true });
+		this.editor.focus();
 	}
+}
+
+function getHideUnchangedRegionsOptions(configuration: IConfigurationService): HideUnchangedRegionsOptions {
+	return {
+		enabled: configuration.getValue<boolean>(CodeEditorConfiguration.diffHideUnchangedRegionsEnabled),
+		contextLineCount: configuration.getValue<number>(CodeEditorConfiguration.diffHideUnchangedRegionsContextLineCount),
+		minimumLineCount: configuration.getValue<number>(CodeEditorConfiguration.diffHideUnchangedRegionsMinimumLineCount),
+		revealLineCount: configuration.getValue<number>(CodeEditorConfiguration.diffHideUnchangedRegionsRevealLineCount),
+	};
 }

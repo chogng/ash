@@ -1,5 +1,7 @@
+import '../../../../test/browser/testEditorDom.js';
+import { browserEnvironment } from '../../../../test/browser/testEditorDom.js';
 import assert from "node:assert/strict";
-import { test, suiteTeardown } from "mocha";
+import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { SuggestModel } from "../../browser/suggestModel.js";
 import { LanguageCompletionService } from '../../browser/suggest.js';
@@ -11,26 +13,7 @@ import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { SuggestController } from "../../browser/suggestController.js";
 
-const browserEnvironment = new JSDOM("<!doctype html><body></body>");
-for (const [name, value] of Object.entries({
-	window: browserEnvironment.window,
-	document: browserEnvironment.window.document,
-	Node: browserEnvironment.window.Node,
-	Element: browserEnvironment.window.Element,
-	HTMLElement: browserEnvironment.window.HTMLElement,
-	Event: browserEnvironment.window.Event,
-	InputEvent: browserEnvironment.window.InputEvent,
-	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
-	ResizeObserver: class { observe(): void {} unobserve(): void {} disconnect(): void {} },
-})) {
-	Object.defineProperty(globalThis, name, {
-		configurable: true,
-		value,
-	});
-}
-
 const { createTestCodeEditor } = await import("../../../../test/browser/testCodeEditor.js");
-suiteTeardown(() => browserEnvironment.window.close());
 const { ViewController } = await import('../../../../browser/view/viewController.js');
 test("Explicit invocation requests providers through the completion service", async () => {
 	const requests: LanguageCompletionProviderRequest[] = [];

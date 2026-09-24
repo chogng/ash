@@ -1,6 +1,7 @@
 # `ash` Electron Desktop Workbench 模式与切换边界
 
 > 本文是 Electron Desktop 内部 `code` 与 `academic` Workbench 模式、窗口重载和能力装配的 canonical 说明。它们不等同于公开产品线；公开宿主边界见 [`product-lines.md`](product-lines.md)。
+> Work / Code 两种模式及文档编辑器的未来目标见 [`app-ts/docs/design/work-code-workbench.md`](../app-ts/docs/design/work-code-workbench.md)；本文继续描述当前实现。
 
 ## 快速理解
 

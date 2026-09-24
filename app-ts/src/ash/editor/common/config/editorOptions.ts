@@ -1219,6 +1219,7 @@ interface EditorOptionValueMap {
 	[EditorOption.wrappingIndent]: WrappingIndent;
 	[EditorOption.wrappingStrategy]: 'simple' | 'advanced';
 	[EditorOption.padding]: InternalEditorPaddingOptions;
+	[EditorOption.pasteAs]: EditorPasteAsOptions;
 	[EditorOption.peekWidgetDefaultFocus]: 'tree' | 'editor';
 	[EditorOption.placeholder]: string | undefined;
 	[EditorOption.quickSuggestionsDelay]: number;

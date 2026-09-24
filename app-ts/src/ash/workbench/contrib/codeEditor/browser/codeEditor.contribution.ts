@@ -1,4 +1,3 @@
-import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
 import './quickaccess/gotoLineQuickAccess.js';
 import './toggleMinimap.js';
 import './toggleRenderWhitespace.js';
@@ -104,7 +103,6 @@ registerEditorPane({
 		return instantiationService.createInstance(DiffEditorPane, resourceStore, {
 			modelService: getBrowserTextModelService(resourceStore),
 			createComputationService: () => diffService.createComputationService(),
-			codeEditorService: instantiationService.get(ICodeEditorService),
 			lineHeight: configuration?.getValue(CodeEditorConfiguration.lineHeight),
 			fontFamily: configuration?.getValue(CodeEditorConfiguration.fontFamily) || undefined,
 			fontSize: configuration?.getValue(CodeEditorConfiguration.fontSize),
@@ -112,7 +110,6 @@ registerEditorPane({
 			showLineNumbers: configuration?.getValue(CodeEditorConfiguration.diffShowLineNumbers),
 			showInlineChanges: configuration?.getValue(CodeEditorConfiguration.diffShowInlineChanges),
 			loopChanges: configuration?.getValue(CodeEditorConfiguration.diffLoopChanges),
-			breadcrumbs: configuration?.getValue(CodeEditorConfiguration.diffBreadcrumbs),
 		});
 	},
 });

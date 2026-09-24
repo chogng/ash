@@ -1,12 +1,52 @@
 # Editor API 对齐状态
 
+## Drop / Paste Into Editor（2026-09-24）
+
+`CopyPasteController` 和 `DropIntoEditorController` 现在从语言特性注册表收集 provider edit，按 `yieldTo` 排序，再由 `PostEditWidgetManager` 经 Bulk Edit 应用插入和附加工作区编辑。内置纯文本、绝对路径、相对路径 provider 走同一条链；HTML 只在显式 `Paste As` 时提供。复制准备数据带有 ID：普通粘贴及能从剪贴板读到该 ID 的 `Paste As` 可交给匹配的 provider，同文本的外部剪贴板内容不会误用旧准备结果；`Paste As...` 没有指定 kind 时先让用户选择。普通粘贴和拖放在存在多个可替换编辑时显示编辑器内选择器，支持键盘切换、Escape 和撤销。该目录的八个生产 TS/CSS 文件现与 VS Code 同路径；仅 Ash 的 `textFileTransfer.ts` 及其测试已按用户确认删除。
+
+含附加工作区编辑的候选现在也显示事后选择器。Bulk Edit 返回本次应用的撤销操作：Standalone 对所有受影响的已打开模型逐一撤销；Workbench 工作区编辑先核对受影响资源的最终内容，再按相反顺序撤销文本与文件操作，包含关闭的文件、新建、重命名和删除。任一资源已被其他操作修改时，候选切换停止且不覆盖该资源。`SnippetController2` 成为补全、粘贴和拖放的共同占位符会话 owner；带多个光标的 snippet 同步选择各插入点的占位符，Tab、Shift+Tab、选项切换和 Escape 由该控制器处理。以下较早的逐文件行和历史批次记录只反映当时的实现状态，以本节为当前行为说明。
+
+此前对齐批次的定向单测覆盖粘贴、拖放、排序和附加文本编辑共 20 项；中文词条定向单测 1 项、Chromium 相关场景 11 项通过，其中包含 `Paste As...` 选择和事后选择器。补齐撤销与 snippet 会话后，7 份定向单测文件共 72 项通过，覆盖跨资源与文件操作回退、多光标占位符及补全会话；Chromium 8 项场景通过，覆盖粘贴候选切换、附加资源恢复、snippet Tab 导航和原有补全导航。中文词条定向单测 1 项、测试 TypeScript 编译、浏览器测试 TypeScript 检查、`typecheck:stanza`、`build:stanza`、`build:renderer` 通过。此前完整本地化测试中的顾问文案和 Git 自动获取设置两项旧断言失败未记为通过。
+
+## Find 浏览器公开接口（2026-09-24）
+
+编辑器查找动作和快捷键进入 `contrib/find/browser/findController.ts`，由 `FindReplaceState` 持有查询与选项，`FindModelBoundToEditorModel` 查询当前文本模型并执行替换，`FindDecorations` 持有匹配高亮和选区范围，`FindWidget` 与 `FindOptionsWidget` 持有输入、焦点和可访问反馈。模型切换会释放旧匹配与选区范围并重新查询；只读状态会关闭替换控件并拒绝替换。查找历史使用工作区存储。
+
+用户已确认将仅 Ash 的 `contrib/find/common/textSearchCommands.ts` 归入上游对应的 `contrib/find/browser/replacePattern.ts` 和 `replaceAllCommand.ts` 后删除；旧控制器的 `open/close/visible` 接口及调用方也已迁到公开的 `start/closeFindWidget/getState`。下文较早的 Find 文件清单与静态扫描记录保留为当时状态，以本节为当前归属。
+
+定向 Editor 单测 4 个文件、19 项通过，覆盖入口、匹配、替换、正则选区、模型切换、只读焦点和视图状态；Playwright Chromium 的 7 个相关场景通过，覆盖两种输入方式、焦点、命令及普通/强制高对比度下的当前匹配高亮。`build:stanza`、浏览器测试的 TypeScript 检查和结构对齐检查通过。
+
+查找栏用 `getVerticalSashLeft` 定位左侧 Sash，支持指针拖动、方向键调整和双击切换默认/最大宽度；编辑器变窄时按可用空间收缩，恢复后保留用户选定宽度。`SimpleButton.hoverLifecycleOptions` 将分组、缩短延迟和键盘激活参数交给悬停服务；主查找栏和关闭时显示的查找选项分别使用 `find-widget`、`find-options-widget` 组，快捷键信息随绑定变化更新。覆盖本次补齐的 Find 单测 15 项、编辑器贡献生命周期单测 17 项、悬停服务单测 3 项，以及两种输入模式下的 4 个 Chromium 场景通过；浏览器场景还检查强制高对比度下的 Sash 反馈。`build:stanza` 与 `build:renderer` 通过。浮层重新布局的入口会在控件尺寸改变时更新位置。
+
+## Diff Editor Breadcrumbs 与隐藏未修改区域（2026-09-24）
+
+用户确认删除仅 Ash 的 `contrib/diffEditorBreadcrumbs/browser/diffEditorBreadcrumbs.ts` 和 `contrib/diffEditorBreadcrumbs/browser/media/diffEditorBreadcrumbs.css`。这两个文件实现的是改动行按钮，并非上游同目录的文档符号面包屑。`DiffEditorPane` 的创建调用、`breadcrumbs` 选项和 `diffEditor.breadcrumbs.enabled` 设置已同步移除；Quick Diff 仍使用 Diff Editor 的行跳转方法，因此保留该方法。下方旧审查表记录删除前的文件状态。
+
+新增同路径 `contrib/diffEditorBreadcrumbs/browser/contribution.ts`，由修改侧文档符号模型提供折叠区中的符号按钮；模型内容、语言或提供者变化时会取消旧请求并更新按钮。`DiffEditorWidget` 的 `HideUnchangedRegionsFeature` 根据差异结果成对隐藏两侧未修改行，提供分段展开、全部展开和符号跳转。`DiffEditorPane` 读取并监听四项 `diffEditor.hideUnchangedRegions.*` 设置；标准 Diff 视图与直接创建的 Diff Editor 均可启用。首行保持可见，以满足 Ash 编辑器的视图模型约束。折叠区按钮可通过键盘操作，展开后将焦点送回编辑器并播报结果。下方旧审查表只记录删除前状态。
+
+## Document Symbols 归属修正（2026-09-24）
+
+用户确认删除仅 Ash 的 `contrib/documentSymbols/common/languageDocumentSymbols.ts`，把调用迁到上游对应的 `contrib/documentSymbols/browser/outlineModel.ts`。新模型按提供者分组请求文档符号，建立父子树和稳定的提供者身份；快速符号选择、符号图标及 Sticky Scroll 共用这一实现，原文件和全部引用退出。请求绑定当前模型版本、语言及提供者集合，过期结果不发布；单个提供者报错不丢弃其他提供者的结果。以下历史段落中“保留 DocumentSymbolService”的判断已被本次修正覆盖。
+
+`contrib/documentSymbols/browser/documentSymbols.ts` 现注册 `_executeDocumentSymbolProvider`：先按 URI 获取文本模型引用，再用 `OutlineModel` 返回顶层符号，最后释放引用。Standalone 使用已注册的编辑器模型，Workbench 使用现有文件资源模型服务，因此命令可以读取未打开的文件且不改变活动编辑器。两个宿主均在服务容器中注册了 `ITextModelService`。
+
+模型、Sticky Scroll、符号图标和语言适配的 25 项定向测试及符号选择的 2 个 Chromium 场景通过；新增命令的 Workbench 定向执行和 Standalone Chromium 场景通过。Stanza 生产构建曾通过；最终复跑及完整测试入口被其他模块的 FindModel、FindController 和 Multi Diff 类型错误阻断，未记为通过。
+
 ## Contrib 值替换与参数提示契约（2026-09-24）
 
 原有编辑器快捷键 → `contrib/inPlaceReplace/browser/inPlaceReplace.ts` → Worker `navigateValueSet` → 新增同路径 `inPlaceReplaceCommand.ts` → 编辑器命令执行。专用命令按替换结果计算选区：有选中文本时选中完整新值，空选区时保持原光标列（但不越过新值末尾）。现有 Worker 版本门禁、选区复核和撤销边界继续由原调用链负责。
 
 原有触发器 → `contrib/parameterHints/browser/parameterHints.ts` → 新增同路径 `parameterHintsModel.ts` → `provideSignatureHelp.ts` → 新增同路径 `parameterHintsWidget.ts`。Model 唯一持有排队触发、请求取消和当前签名；provider 文件按优先级筛选并校验结果，无效或报错的提供者不阻断后续提供者。Widget 唯一持有提示节点、`parameterHintsVisible` / `parameterHintsMultipleSignatures` 状态和光标附近的定位，使用编辑器现有 Content Widget 容器，并保留签名切换时的节点。控制器只连接公开动作和键盘事件。模型版本变动或取消后不发布结果；提示对话框和键盘说明已进入英中双语目录。
 
-值替换的定向 Widget 单测 2 项和 Chromium 快捷键场景 1 项通过；参数提示单测 10 项、Chromium 场景 31 项及中文文案定向单测通过。Stanza、Renderer 生产构建通过；完整 Editor 对齐检查通过，包含 650 个浏览器场景，未生成源码目录下的 JavaScript。
+连续输入在首次请求尚未发出时保留最后一个触发字符，并保持 `isRetrigger: false`；已有结果刷新期间再次编辑会取消旧请求，同时继续传递用户当前选中的活动签名。显式关闭与释放仍清除这些会话状态。
+
+Widget 现在直接显示活动签名及其活动参数的纯文本说明；切换签名时更新说明，其他签名的说明不占用空间。原 Content Widget 定位、签名节点和键盘焦点不变；说明沿用编辑器的主题文字与分隔颜色，高对比度下取消阴影。
+
+值替换的定向 Widget 单测 2 项和 Chromium 快捷键场景 1 项通过；参数提示单测 10 项、Chromium 场景 33 项及中文文案定向单测通过。Stanza、Renderer 生产构建和 CSS 归属检查通过；完整 Editor 对齐检查通过，包含 654 个浏览器场景，未生成源码目录下的 JavaScript。
+
+## 括号辅助线移除独立适配器（2026-09-24）
+
+括号结构仍由 `TextModel.bracketPairs` 唯一持有。`GuidesTextModelPart.getLinesBracketGuides` 直接提供逐行列、层级、活动状态和端点；`ViewModel` 映射可见行，`IndentGuidesOverlay` 负责测量和绘制。`contrib/bracketMatching/browser/bracketColorizationPresentation.ts`、`BracketGuideSource` 和编辑器装配中的 `setBracketGuideSource` 已退出；颜色装饰继续由模型的 `ColorizedBracketPairsDecorationProvider` 提供。模型测试覆盖颜色关闭、颜色池、编辑后缩进列、活动和闭括号端点；浏览器场景验证主题、线段几何、折叠和滚动。
 
 ## Contrib 长行点击契约（2026-09-24）
 
@@ -1739,10 +1779,9 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 | `contrib/diffEditorBreadcrumbs/browser/diffEditorBreadcrumbs.ts` | 1 / 0 | 人工检查：根节点移除、模型监听释放、节点自有 click 监听；大量变更逐行生成按钮的成本待测。 |
 | `contrib/documentEditor.contribution.ts` | 1 / 1 | 人工检查：仅 document 模式安装格式与协作贡献，句柄交给 context 的 setter owner。 |
 | `contrib/dropOrPasteInto/browser/copyPasteContribution.ts` | 1 / 1 | 人工检查：贡献注册入口、安装条件与服务/控制器归属；功能实现结论见对应文件。 |
-| `contrib/dropOrPasteInto/browser/copyPasteController.ts` | 1 / 2 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |
+| `contrib/dropOrPasteInto/browser/copyPasteController.ts` | 1 / 2 | 当时仅接管 URI-list 粘贴；当前 provider 与选择器行为见本页顶部的 Drop / Paste 节。 |
 | `contrib/dropOrPasteInto/browser/dropIntoEditorContribution.ts` | 1 / 1 | 人工检查：贡献注册入口、安装条件与服务/控制器归属；功能实现结论见对应文件。 |
-| `contrib/dropOrPasteInto/browser/dropIntoEditorController.ts` | 1 / 0 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |
-| `contrib/dropOrPasteInto/browser/textFileTransfer.ts` | 2 / 2 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `contrib/dropOrPasteInto/browser/dropIntoEditorController.ts` | 1 / 0 | 当时仅处理纯文本和 URI-list；当前 provider 与选择器行为见本页顶部的 Drop / Paste 节。 |
 | `contrib/editorState/browser/editorState.ts` | 4 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
 | `contrib/editorState/browser/editorStateController.ts` | 1 / 0 | 人工检查：焦点/选区/滚动监听均注册释放；创建时已有焦点与滚动状态的同步待验证。 |
 | `contrib/editorState/browser/keybindingCancellation.ts` | 1 / 1 | 人工检查：WeakMap 请求栈、Escape 仅取消最新请求及编辑器销毁取消；父 token 已取消时的同步清理需专门回归。 |
@@ -2214,3 +2253,5 @@ Quick Access 前缀续批：共享 Quick Pick 的 `filterValue` 只改变筛选�
 Standalone CSS 续批：核对上游后确认 `browser/standalone-tokens.css` 实际是独立编辑器的字体、焦点和辅助元素基础样式，不是 token class 规则。Ash 原有 View 直接设置代码字体，辅助状态由 View 维护；本批在同路径文件中为 Quick Input、token 检查面板与悬浮内容设置界面字体，代码样本保留等宽字体，并让编辑器实际输入焦点触发主题色轮廓。由 `standaloneEditor.ts` 真实导入，Playwright 用计算样式验证三处 DOM 命中、焦点进入与离开。完整 `check-editor-alignment.mjs --test=browser` 通过，636 项浏览器场景通过；Stanza 与 Renderer 生产构建通过。目录同路径增至 456，CSS 审计无上游复制或品牌选择器。其余 4 个缺失生产文件仍依赖引用控制器、通用 Worker 和 Tree-sitter 服务。
 
 Standalone 通用 Worker 续批：`editor.createWebWorker` 从窗口模型服务读取已注册模型，`standalone/browser/standaloneWebWorker.ts` 提供公开代理与 Worker 侧启动入口，`standalone/browser/services/standaloneWebWorkerService.ts` 持有 Worker、双向消息通道、多模型订阅和空闲释放。模型变更传输版本与增量，Worker 使用已有 `LanguageWorkerDocumentMirror`；模型释放和 Worker 释放清理镜像与传输。真实 Chromium 场景验证两个资源、后续编辑、宿主回调、模型与 Worker 释放。`check-editor-alignment.mjs --test=all` 通过，239/239 个单测文件、637 个浏览器场景通过；Stanza 和 Renderer 生产构建通过。同路径文件 458 个。剩余两个缺失路径的结论：`referenceSearch/standaloneReferenceSearch.ts` 对应的引用请求、Peek 展示和生命周期已由 `LanguageNavigationController` 唯一拥有，补同名注册层会重复控制器；`standaloneTreeSitterLibraryService.ts` 的上游文件自身只有未实现的方法，Ash standalone 尚无本地 Tree-sitter 解析器与下游使用链，不能通过空服务宣称能力已接通。Code Workbench 的 App Server 解析会话属于另一条调用链，不为 standalone 创建同名服务。
+
+2026-09-24：drop/paste 初期批次纠正了文件内容解码与 HTML 隐式转文本行为，并按用户确认删除仅 Ash 的 `browser/textFileTransfer.ts` 及其测试。后续 provider、排序和选择器接入后的当前行为与剩余边界见本页顶部的 Drop / Paste 节。初期批次的定向单测 10 项、Chromium 场景 9 项、Stanza 类型检查与 Renderer 构建通过；这些数字不代表后续批次的验证结果。

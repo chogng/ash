@@ -10,6 +10,8 @@ import { type TextResourceChangeEvent, type TextResourceContent, type TextResour
 import { BrowserWorkingCopyService } from "../../../workingCopy/browser/browserWorkingCopyService.js";
 import { type IWorkingCopy } from "../../../workingCopy/common/workingCopyService.js";
 import { BrowserWorkspaceEditService } from "../../browser/browserWorkspaceEditService.js";
+import { BrowserBulkEditService } from '../../../../contrib/bulkEdit/browser/bulkEditService.js';
+import { ResourceTextEdit } from '../../../../../editor/browser/services/bulkEditService.js';
 import { FileKind, FileNotFoundError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileService } from "../../../../../platform/files/common/files.js";
 
 test("workspace edits preflight every document before mutating and persist closed resources", async () => {
@@ -29,6 +31,118 @@ test("workspace edits preflight every document before mutating and persist close
 	assert.equal(store.text(first), "one");
 	assert.equal(store.text(second), "two");
 	assert.deepEqual(store.saved, [first.toString(), second.toString()]);
+});
+
+test("workspace edit undo restores multiple closed documents", async () => {
+	const first = URI.file('C:\\project\\first.ts');
+	const second = URI.file('C:\\project\\second.ts');
+	using store = new MemoryResourceStore([[first, 'alpha'], [second, 'bravo']]);
+	using models = new BrowserTextModelService(store);
+	using workingCopies = new BrowserWorkingCopyService();
+	using service = new BrowserWorkspaceEditService(models, workingCopies, new MemoryFileService([[first, 'alpha'], [second, 'bravo']]));
+
+	const applied = await service.apply({ entries: [
+		{ kind: 'textDocument', resource: first, edits: [{ range: new Range(1, 1, 1, 6), text: 'one' }] },
+		{ kind: 'textDocument', resource: second, edits: [{ range: new Range(1, 1, 1, 6), text: 'two' }] },
+	] });
+	await applied.undo();
+	assert.deepEqual([store.text(first), store.text(second)], ['alpha', 'bravo']);
+});
+
+test('bulk text edits against one resource use the original coordinate space', async () => {
+	const resource = URI.file('C:\\project\\one.ts');
+	using store = new MemoryResourceStore([[resource, 'abc def']]);
+	using models = new BrowserTextModelService(store);
+	using workingCopies = new BrowserWorkingCopyService();
+	using workspaceEdits = new BrowserWorkspaceEditService(models, workingCopies, new MemoryFileService([[resource, 'abc def']]));
+	using bulkEdits = new BrowserBulkEditService(workspaceEdits);
+
+	const result = await bulkEdits.apply([
+		new ResourceTextEdit(resource, { range: new Range(1, 1, 1, 4), text: 'longword' }),
+		new ResourceTextEdit(resource, { range: new Range(1, 5, 1, 8), text: 'XYZ' }),
+	]);
+	assert.equal(store.text(resource), 'longword XYZ');
+	if (!result.isApplied) throw new Error('Expected the bulk edit to apply');
+	await result.undo();
+	assert.equal(store.text(resource), 'abc def');
+});
+
+test('bulk language workspace edits preserve explicitly ordered document operations', async () => {
+	const resource = URI.file('C:\\project\\one.ts');
+	using store = new MemoryResourceStore([[resource, 'abc def']]);
+	using models = new BrowserTextModelService(store);
+	using workingCopies = new BrowserWorkingCopyService();
+	using workspaceEdits = new BrowserWorkspaceEditService(models, workingCopies, new MemoryFileService([[resource, 'abc def']]));
+	using bulkEdits = new BrowserBulkEditService(workspaceEdits);
+
+	const result = await bulkEdits.apply({ entries: [
+		{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 1, 1, 4), text: 'longword' }] },
+		{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 10, 1, 13), text: 'XYZ' }] },
+	] });
+	assert.equal(store.text(resource), 'longword XYZ');
+	if (!result.isApplied) throw new Error('Expected the bulk edit to apply');
+	await result.undo();
+	assert.equal(store.text(resource), 'abc def');
+});
+
+test("workspace edit undo reverses a created file and its inserted text", async () => {
+	const resource = URI.file('C:\\project\\new.ts');
+	using store = new MemoryResourceStore([]);
+	using models = new BrowserTextModelService(store);
+	using workingCopies = new BrowserWorkingCopyService();
+	const files = new MemoryFileService([]);
+	using service = new BrowserWorkspaceEditService(models, workingCopies, files);
+
+	const applied = await service.apply({ entries: [
+		{ kind: 'create', resource, existing: 'error' },
+		{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 1, 1, 1), text: 'ready' }] },
+	] });
+	await applied.undo();
+	assert.equal(files.has(resource), false);
+});
+
+test('workspace edit undo restores file creation, rename, and deletion together', async () => {
+	const created = URI.file('C:\\project\\created.ts');
+	const source = URI.file('C:\\project\\source.ts');
+	const renamed = URI.file('C:\\project\\renamed.ts');
+	const deleted = URI.file('C:\\project\\deleted.ts');
+	using store = new MemoryResourceStore([]);
+	using models = new BrowserTextModelService(store);
+	using workingCopies = new BrowserWorkingCopyService();
+	const files = new MemoryFileService([[source, 'source'], [deleted, 'deleted']]);
+	using service = new BrowserWorkspaceEditService(models, workingCopies, files);
+
+	const applied = await service.apply({ entries: [
+		{ kind: 'create', resource: created, existing: 'error' },
+		{ kind: 'rename', source, target: renamed, existing: 'error' },
+		{ kind: 'delete', resource: deleted, missing: 'error', mode: 'fileOrEmptyDirectory' },
+	] });
+	await applied.undo();
+	assert.deepEqual({
+		created: files.has(created),
+		source: files.text(source),
+		renamed: files.has(renamed),
+		deleted: files.text(deleted),
+	}, { created: false, source: 'source', renamed: false, deleted: 'deleted' });
+});
+
+test('workspace edit undo leaves all resources intact when another target changed', async () => {
+	const first = URI.file('C:\\project\\first.ts');
+	const second = URI.file('C:\\project\\second.ts');
+	using store = new MemoryResourceStore([[first, 'alpha'], [second, 'bravo']]);
+	using models = new BrowserTextModelService(store);
+	using workingCopies = new BrowserWorkingCopyService();
+	using service = new BrowserWorkspaceEditService(models, workingCopies, new MemoryFileService([[first, 'alpha'], [second, 'bravo']]));
+	const secondReference = await models.acquire({ resource: second }, new AbortController().signal);
+
+	const applied = await service.apply({ entries: [
+		{ kind: 'textDocument', resource: first, edits: [{ range: new Range(1, 1, 1, 6), text: 'one' }] },
+		{ kind: 'textDocument', resource: second, edits: [{ range: new Range(1, 1, 1, 6), text: 'two' }] },
+	] });
+	secondReference.model.applyOperations([{ range: new Range(1, 4, 1, 4), text: '!' }]);
+	await assert.rejects(applied.undo(), /changed before replacement/);
+	assert.deepEqual([store.text(first), secondReference.model.getText()], ['one', 'two!']);
+	secondReference.dispose();
 });
 
 test("workspace edits keep open working copies dirty instead of saving behind the editor", async () => {

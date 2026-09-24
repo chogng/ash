@@ -27,4 +27,4 @@ Before modifying this repository:
 - 禁止使用 mod.rs, 有 mod.rs 让其退场
 - 思考问题时，避免局部视角看问题，从整体看
 - Read [`pull_request_template.md`](.github/pull_request_template.md) for pr
-- 代码文件注意写注释说明
+- 对无法从代码直接看出的设计原因、关键约束、生命周期和接口约定写注释；避免复述代码行为

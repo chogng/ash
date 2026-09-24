@@ -1,6 +1,8 @@
+import './testEditorDom.js';
+import { browserEnvironment } from './testEditorDom.js';
 import { StandaloneCodeEditorService } from '../../standalone/browser/standaloneCodeEditorService.js';
 import assert from "node:assert/strict";
-import { test, suiteTeardown } from "mocha";
+import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { Selection } from "../../common/core/selection.js";
 import { Position } from "../../common/core/position.js";
@@ -15,20 +17,6 @@ import { ILogService, NullLoggerService } from '../../../platform/log/common/log
 import { ICodeEditorService } from '../../browser/services/codeEditorService.js';
 import { type TextMeasurer } from '../../common/viewModel.js';
 
-const browserEnvironment = new JSDOM("<!doctype html><body></body>");
-browserEnvironment.window.HTMLCanvasElement.prototype.getContext = () => null;
-for (const [name, value] of Object.entries({
-	window: browserEnvironment.window,
-	document: browserEnvironment.window.document,
-	Node: browserEnvironment.window.Node,
-	Element: browserEnvironment.window.Element,
-	HTMLElement: browserEnvironment.window.HTMLElement,
-	Event: browserEnvironment.window.Event,
-	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
-})) {
-	Object.defineProperty(globalThis, name, { configurable: true, value });
-}
-
 const { TestView: View } = await import("./viewModel/testViewModel.js");
 const { installCoreTextEditorCommands } = await import("../../browser/coreCommands.js");
 const { KeyboardNavigationController } = await import('../../browser/view/viewController.js');
@@ -37,7 +25,6 @@ const { CodeEditorWidget } = await import('../../browser/widget/codeEditor/codeE
 const { createTestCodeEditor } = await import('./testCodeEditor.js');
 const { SelectAllCommand } = await import('../../browser/editorExtensions.js');
 
-suiteTeardown(() => browserEnvironment.window.close());
 
 test('workbench select-all command selects the focused or active editor model', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main><button>Outside</button></body>');

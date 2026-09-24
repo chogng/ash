@@ -1,3 +1,4 @@
+import './testEditorDom.js';
 import { h } from '../../../base/browser/dom.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
@@ -152,21 +153,6 @@ test("Pointer hit testing applies sticky gutter and viewport scrolling", () => {
 		injectedText: null,
 	});
 });
-
-const browserEnvironment = new JSDOM("<!doctype html><body></body>");
-for (const [name, value] of Object.entries({
-	window: browserEnvironment.window,
-	document: browserEnvironment.window.document,
-	Node: browserEnvironment.window.Node,
-	Element: browserEnvironment.window.Element,
-	HTMLElement: browserEnvironment.window.HTMLElement,
-	Event: browserEnvironment.window.Event,
-})) {
-	Object.defineProperty(globalThis, name, {
-		configurable: true,
-		value,
-	});
-}
 
 const { TestView: View } = await import(
 	"./viewModel/testViewModel.js"

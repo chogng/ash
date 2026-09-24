@@ -110,6 +110,19 @@ export class ParameterHintsWidget extends Disposable implements IContentWidget {
 		} else {
 			node.textContent = signature.label;
 		}
+		if (active && (signature.documentation || parameter?.documentation)) {
+			const documentation = h(this.element.ownerDocument, 'div');
+			documentation.className = 'stanza-editor-parameter-hints-documentation';
+			for (const text of [signature.documentation, parameter?.documentation]) {
+				if (!text) {
+					continue;
+				}
+				const paragraph = h(this.element.ownerDocument, 'div');
+				paragraph.textContent = text;
+				documentation.append(paragraph);
+			}
+			node.append(documentation);
+		}
 	}
 
 	private hide(): void {

@@ -1,29 +1,12 @@
+import './testEditorDom.js';
 import assert from "node:assert/strict";
-import { test, suiteTeardown } from "mocha";
+import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { URI } from "../../../base/common/uri.js";
 import { TextModel } from "../../common/model/textModel.js";
 
-const browserEnvironment = new JSDOM("<!doctype html><body></body>");
-for (const [name, value] of Object.entries({
-	window: browserEnvironment.window,
-	document: browserEnvironment.window.document,
-	Node: browserEnvironment.window.Node,
-	Element: browserEnvironment.window.Element,
-	HTMLElement: browserEnvironment.window.HTMLElement,
-	Event: browserEnvironment.window.Event,
-	InputEvent: browserEnvironment.window.InputEvent,
-	ResizeObserver: class {
-		observe(): void {}
-		unobserve(): void {}
-		disconnect(): void {}
-	},
-})) Object.defineProperty(globalThis, name, { configurable: true, value });
-
 const { CodeEditorWidget } = await import('../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('./testCodeEditor.js');
-
-suiteTeardown(() => browserEnvironment.window.close());
 
 test("minimal text editor assembly creates only the engine surface", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");

@@ -1,21 +1,10 @@
+import './testEditorDom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { ViewLineOptions } from '../../browser/viewParts/viewLines/viewLineOptions.js';
 import { ColorScheme } from '../../../platform/theme/common/theme.js';
 import { createTestConfiguration } from './config/testConfiguration.js';
-
-const browserEnvironment = new JSDOM('<!doctype html><body></body>');
-for (const [name, value] of Object.entries({
-	window: browserEnvironment.window,
-	document: browserEnvironment.window.document,
-	Node: browserEnvironment.window.Node,
-	Element: browserEnvironment.window.Element,
-	HTMLElement: browserEnvironment.window.HTMLElement,
-	NodeFilter: browserEnvironment.window.NodeFilter,
-})) {
-	Object.defineProperty(globalThis, name, { configurable: true, value });
-}
 
 const { SemanticTokenPresentation } = await import('../../browser/viewParts/viewLines/viewLine.js');
 const { ViewLine } = await import('../../browser/viewParts/viewLines/viewLine.js');

@@ -160,7 +160,7 @@ F1 的 `Developer: Inspect Tokens` 动作在光标旁显示当前词法 token �
 ## 测试与修改影响
 
 - `test:editor:unit` 编译并运行 editor 内核测试，以及随 owner 迁移到 Workbench 的 code/document pane 与 collaboration adapter 测试。
-- `test:editor:browser` 在同一浏览器 suite 内验证 Code/Academic TextModel 挂载点、输入、布局、代码块行范围和可访问性集成。
+- `test:editor:browser` 运行编辑器相关的浏览器集成用例，验证 Code/Academic TextModel、Diff、输入、布局、主题、语言和可访问性；`test:browser:integration` 运行该目录的全部浏览器集成用例。
 - `test/architecture/editor-architecture.test.ts` 验证扁平目录、单一 TextModel authority 和模式 bundle。
 
 修改 product composition 时至少运行架构测试和两个 Renderer 类型检查目标；修改 model、input、serialization 或 schema 时运行对应 engine 的 unit/browser suite。浏览器集成测试应在统一 Stanza 测试入口下按具体 model 挂载点命名，不再以历史 engine 代号表达架构所有权。

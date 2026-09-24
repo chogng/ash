@@ -5,7 +5,15 @@
   "license": "UNLICENSED",
   "packageManager": "pnpm@12.4.2",
   "engines": {
-    "node": ">=24 <25"
+    "node": ">=24 <25",
+    "pnpm": "12.4.2"
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "24.21.0",
+      "onFail": "download"
+    }
   },
   "scripts": {
     "preinstall": "node build/pnpm/preinstall.ts",
@@ -17,7 +25,7 @@
     "icons:check": "node build/resources/icons/generate.ts --check",
     "test": "pnpm run verify:protocol && pnpm --dir app-ts run test:main",
     "test:build": "pnpm --dir build test",
-    "test:integration": "pnpm --dir app-ts run test:editor:browser",
+    "test:integration": "pnpm --dir app-ts run test:browser:integration",
     "test:icons": "node --test build/resources/icons/generate.test.ts",
     "test:web-integration": "pnpm --dir app-ts run test:smoke:browser:full",
     "test:extensions": "pnpm --dir app-ts run test:extensions",

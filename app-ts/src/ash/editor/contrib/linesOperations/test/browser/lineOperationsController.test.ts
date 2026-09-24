@@ -1,15 +1,25 @@
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Position } from '../../../../common/core/position.js';
 import { Selection } from '../../../../common/core/selection.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { EditorExtensionsRegistry } from '../../../../browser/editorExtensions.js';
+import { installEditorTestDom } from '../../../../test/browser/editorTestGlobals.js';
 
-installDom(new JSDOM('<!doctype html><body></body>'));
+const moduleDom = new JSDOM('<!doctype html><body></body>');
+const installedGlobals = installEditorTestDom(moduleDom, [
+	'Node', 'Element', 'HTMLElement', 'Event', 'InputEvent', 'KeyboardEvent',
+], {
+	ResizeObserver: class TestResizeObserver { observe(): void {} unobserve(): void {} disconnect(): void {} },
+});
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 await import('../../browser/linesOperations.js');
+suiteTeardown(() => {
+	installedGlobals.dispose();
+	moduleDom.window.close();
+});
 
 test('line actions are registered while the host owns their shortcuts', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
@@ -43,18 +53,4 @@ test('line actions are registered while the host owns their shortcuts', () => {
 
 function key(target: JSDOM['window'], value: string, options: KeyboardEventInit = {}): KeyboardEvent {
 	return new target.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: value, ...options }) as unknown as KeyboardEvent;
-}
-
-function installDom(dom: JSDOM): void {
-	for (const [name, value] of Object.entries({
-		window: dom.window,
-		document: dom.window.document,
-		Node: dom.window.Node,
-		Element: dom.window.Element,
-		HTMLElement: dom.window.HTMLElement,
-		Event: dom.window.Event,
-		InputEvent: dom.window.InputEvent,
-		KeyboardEvent: dom.window.KeyboardEvent,
-		ResizeObserver: class TestResizeObserver { observe(): void {} unobserve(): void {} disconnect(): void {} },
-	})) Object.defineProperty(globalThis, name, { configurable: true, value });
 }

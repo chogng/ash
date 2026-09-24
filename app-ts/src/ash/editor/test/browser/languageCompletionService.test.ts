@@ -10,30 +10,14 @@ import { LanguageRequestCancellationReason, LanguageRequestStatus } from '../../
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
+import { installEditorTestDom } from './editorTestGlobals.js';
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 browserEnvironment.window.HTMLCanvasElement.prototype.getContext = () => null;
-const globals = new Map<string, PropertyDescriptor | undefined>();
-for (const [name, value] of Object.entries({
-	window: browserEnvironment.window,
-	document: browserEnvironment.window.document,
-	Node: browserEnvironment.window.Node,
-	Element: browserEnvironment.window.Element,
-	HTMLElement: browserEnvironment.window.HTMLElement,
-	Event: browserEnvironment.window.Event,
-})) {
-	globals.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
-	Object.defineProperty(globalThis, name, { configurable: true, value });
-}
+const installedGlobals = installEditorTestDom(browserEnvironment, ['Node', 'Element', 'HTMLElement', 'Event']);
 const { createTestCodeEditor } = await import('./testCodeEditor.js');
 suiteTeardown(() => {
+	installedGlobals.dispose();
 	browserEnvironment.window.close();
-	for (const [name, descriptor] of globals) {
-		if (descriptor) {
-			Object.defineProperty(globalThis, name, descriptor);
-		} else {
-			Reflect.deleteProperty(globalThis, name);
-		}
-	}
 });
 
 test("Completion service runs providers concurrently and merges deterministically", async () => {

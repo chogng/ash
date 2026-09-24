@@ -1,3 +1,5 @@
+import './testEditorDom.js';
+import { browserEnvironment } from './testEditorDom.js';
 import { editorCursorForeground } from '../../common/core/editorColorRegistry.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
@@ -13,21 +15,6 @@ import { GlyphMarginLane, MinimapPosition, OverviewRulerLane, TrackedRangeSticki
 import { themeColorFromId } from '../../../base/common/themables.js';
 import { ColorId, darkColorTheme } from '../../../platform/theme/common/colorTheme.js';
 import { type TextMeasurer } from '../../common/viewModel.js';
-
-const browserEnvironment = new JSDOM("<!doctype html><body></body>");
-for (const [name, value] of Object.entries({
-	window: browserEnvironment.window,
-	document: browserEnvironment.window.document,
-	Node: browserEnvironment.window.Node,
-	Element: browserEnvironment.window.Element,
-	HTMLElement: browserEnvironment.window.HTMLElement,
-	Event: browserEnvironment.window.Event,
-})) {
-	Object.defineProperty(globalThis, name, {
-		configurable: true,
-		value,
-	});
-}
 
 const { EditorTextDirection } = await import(
 	"../../browser/view.js"

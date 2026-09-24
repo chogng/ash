@@ -1,3 +1,4 @@
+import './testEditorDom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -8,14 +9,6 @@ import { Position } from '../../common/core/position.js';
 import { Selection } from '../../common/core/selection.js';
 import { TextModel } from '../../common/model/textModel.js';
 import { type TextMeasurer } from '../../common/viewModel.js';
-
-const browserEnvironment = new JSDOM('<!doctype html><body></body>');
-class TestResizeObserver { observe(): void {} unobserve(): void {} disconnect(): void {} }
-for (const [name, value] of Object.entries({
-	window: browserEnvironment.window, document: browserEnvironment.window.document, Node: browserEnvironment.window.Node,
-	Element: browserEnvironment.window.Element, HTMLElement: browserEnvironment.window.HTMLElement, Event: browserEnvironment.window.Event,
-	ResizeObserver: TestResizeObserver,
-})) Object.defineProperty(globalThis, name, { configurable: true, value });
 
 const { TestView } = await import('./viewModel/testViewModel.js');
 

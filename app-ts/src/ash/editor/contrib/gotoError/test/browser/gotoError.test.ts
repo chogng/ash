@@ -1,3 +1,5 @@
+import '../../../../test/browser/testEditorDom.js';
+import { browserEnvironment as environment } from '../../../../test/browser/testEditorDom.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -11,8 +13,6 @@ import { h } from "../../../../../base/browser/dom.js";
 import { TrackedRangeStickiness } from '../../../../common/model.js';
 import { type TextMeasurer } from '../../../../common/viewModel.js';
 
-const environment = new JSDOM("<!doctype html><body></body>");
-for (const [name, value] of Object.entries({ window: environment.window, document: environment.window.document, Node: environment.window.Node, Element: environment.window.Element, HTMLElement: environment.window.HTMLElement, Event: environment.window.Event, KeyboardEvent: environment.window.KeyboardEvent })) Object.defineProperty(globalThis, name, { configurable: true, value });
 const { TestView: View } = await import("../../../../test/browser/viewModel/testViewModel.js");
 const { DiagnosticNavigationController } = await import("../../browser/gotoError.js");
 

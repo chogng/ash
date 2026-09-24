@@ -4,6 +4,8 @@
 
 本文只维护实施顺序和验收边界。当前职责与已有实现分别见 [Editor 目录说明](../../src/ash/editor/README.md)、[文本内核](../../src/ash/editor/text-engine.md)、[富文档内核](../../src/ash/editor/document-engine.md) 和[跨系统边界](../../../docs/editor-architecture.md)；VS Code 对应关系及未处理项由 [API 对齐台账](../../src/ash/editor/api-alignment-status.md)维护。
 
+Work / Code 工作台与通用文档编辑器的目标行为见 [目标设计](work-code-workbench.md)；该设计尚未实施，本路线图中的 Code / Academic 状态仍描述当前实现。
+
 ## 范围与当前基线
 
 - 本路线图覆盖 `app-ts/src/ash/editor`、它在 Workbench 中的 pane 和服务接线，以及 Standalone 入口。Rust App Server 提供文件与语言等异步能力，不接管 TypeScript 编辑器的同步文本、选区或输入状态。

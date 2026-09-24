@@ -1,3 +1,4 @@
+import '../../../../test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -15,19 +16,6 @@ import { TextModel } from '../../../../common/model/textModel.js';
 import { bindCodeLensCacheStorage, codeLensCache } from '../../browser/codeLensCache.js';
 import { CodeLensModel, getCodeLensModel } from '../../browser/codelens.js';
 import { type TextMeasurer } from '../../../../common/viewModel.js';
-
-const browserEnvironment = new JSDOM('<!doctype html><body></body>');
-for (const [name, value] of Object.entries({
-	window: browserEnvironment.window,
-	document: browserEnvironment.window.document,
-	Node: browserEnvironment.window.Node,
-	Element: browserEnvironment.window.Element,
-	HTMLElement: browserEnvironment.window.HTMLElement,
-	Event: browserEnvironment.window.Event,
-	MouseEvent: browserEnvironment.window.MouseEvent,
-})) {
-	Object.defineProperty(globalThis, name, { configurable: true, value });
-}
 
 const { TestView: View } = await import('../../../../test/browser/viewModel/testViewModel.js');
 const { CodeLensContribution } = await import('../../browser/codelensController.js');

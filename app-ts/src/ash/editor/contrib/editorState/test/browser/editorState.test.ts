@@ -1,6 +1,7 @@
+import '../../../../test/browser/testEditorDom.js';
+import { browserEnvironment as environment } from '../../../../test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
-import { suiteTeardown, test } from 'mocha';
-import { JSDOM } from 'jsdom';
+import { test } from 'mocha';
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { Position } from '../../../../common/core/position.js';
@@ -9,18 +10,7 @@ import { Range } from '../../../../common/core/range.js';
 import { CodeEditorStateFlag, EditorStateCancellationTokenSource } from '../../browser/editorState.js';
 import { EditorKeybindingCancellationTokenSource } from '../../browser/keybindingCancellation.js';
 
-const environment = new JSDOM('<!doctype html><body></body>');
-for (const [name, value] of Object.entries({
-	window: environment.window,
-	document: environment.window.document,
-	Node: environment.window.Node,
-	Element: environment.window.Element,
-	HTMLElement: environment.window.HTMLElement,
-	Event: environment.window.Event,
-})) Object.defineProperty(globalThis, name, { configurable: true, value });
-environment.window.HTMLCanvasElement.prototype.getContext = () => null;
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
-suiteTeardown(() => environment.window.close());
 
 function createEditor(model: TextModel): ReturnType<typeof createTestCodeEditor> {
 	const container = environment.window.document.createElement('div');

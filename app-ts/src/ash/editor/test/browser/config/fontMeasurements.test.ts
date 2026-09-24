@@ -20,10 +20,10 @@ function savedFontInfo(): ISerializedFontInfo {
 	}, true);
 }
 
-test('restored font metrics preserve persisted values until the window measures again', async function () {
-	this.timeout(10_000);
+test('restored font metrics preserve persisted values until the window measures again', () => {
 	const dom = new JSDOM('<body></body>');
 	using cleanup = toDisposable(() => dom.window.close());
+	using evictionTimers = installWindowTimeouts(dom);
 	using measurements = new FontMeasurementsImpl();
 	const target = dom.window as unknown as Window;
 	const saved = savedFontInfo();
@@ -34,7 +34,7 @@ test('restored font metrics preserve persisted values until the window measures 
 	assert.equal(restored.isTrusted, false);
 	assert.equal(restored.typicalHalfwidthCharacterWidth, saved.typicalHalfwidthCharacterWidth);
 	assert.equal(measurements.serializeFontInfo(target), undefined);
-	await new Promise(resolve => setTimeout(resolve, 5_100));
+	evictionTimers.runPending();
 	assert.equal(measurements.serializeFontInfo(target), undefined);
 	Object.defineProperty(dom.window.HTMLElement.prototype, 'offsetWidth', { get: () => 2048 });
 	const measured = measurements.readFontInfo(target, font);
@@ -80,11 +80,12 @@ test('failed fresh font measurements do not preserve another window\'s restored 
 	assert.deepEqual(measurements.serializeFontInfo(target), []);
 });
 
-test('FontMeasurements expires unreliable readings independently in every window', async function () {
-	this.timeout(10_000);
+test('FontMeasurements expires unreliable readings independently in every window', () => {
 	const first = new JSDOM('<body></body>');
 	const second = new JSDOM('<body></body>');
 	const closed = new JSDOM('<body></body>');
+	using firstTimers = installWindowTimeouts(first);
+	using secondTimers = installWindowTimeouts(second);
 	const tracker = new DisposableTracker();
 	using tracking = installDisposableTracker(tracker);
 	using measurements = new FontMeasurementsImpl();
@@ -97,7 +98,8 @@ test('FontMeasurements expires unreliable readings independently in every window
 		measurements.readFontInfo(closed.window as unknown as Window, font);
 		closed.window.dispatchEvent(new closed.window.PageTransitionEvent('pagehide'));
 		closed.window.close();
-		await new Promise(resolve => setTimeout(resolve, 5_100));
+		firstTimers.runPending();
+		secondTimers.runPending();
 		const after = windows.map(target => measurements.readFontInfo(target, font));
 		assert.deepEqual({
 			expired: after.map((value, index) => value !== before[index]),
@@ -116,3 +118,37 @@ test('FontMeasurements expires unreliable readings independently in every window
 	}
 	tracker.assertNoLeaks();
 });
+
+/** Runs the window-owned expiry callbacks without waiting for the five-second cache lifetime. */
+function installWindowTimeouts(dom: JSDOM): { runPending(): void; [Symbol.dispose](): void } {
+	const setTimeoutDescriptor = Object.getOwnPropertyDescriptor(dom.window, 'setTimeout');
+	const clearTimeoutDescriptor = Object.getOwnPropertyDescriptor(dom.window, 'clearTimeout');
+	assert.ok(setTimeoutDescriptor);
+	assert.ok(clearTimeoutDescriptor);
+	const callbacks = new Map<number, () => void>();
+	let nextHandle = 0;
+	Object.defineProperty(dom.window, 'setTimeout', {
+		configurable: true,
+		value: (callback: () => void, delay: number) => {
+			assert.equal(delay, 5_000);
+			const handle = ++nextHandle;
+			callbacks.set(handle, callback);
+			return handle;
+		},
+	});
+	Object.defineProperty(dom.window, 'clearTimeout', {
+		configurable: true,
+		value: (handle: number) => callbacks.delete(handle),
+	});
+	return {
+		runPending(): void {
+			const pending = [...callbacks.values()];
+			callbacks.clear();
+			for (const callback of pending) callback();
+		},
+		[Symbol.dispose](): void {
+			Object.defineProperty(dom.window, 'setTimeout', setTimeoutDescriptor);
+			Object.defineProperty(dom.window, 'clearTimeout', clearTimeoutDescriptor);
+		},
+	};
+}

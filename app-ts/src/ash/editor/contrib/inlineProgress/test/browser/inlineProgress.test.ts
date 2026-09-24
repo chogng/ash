@@ -1,25 +1,14 @@
+import '../../../../test/browser/testEditorDom.js';
+import { browserEnvironment as environment } from '../../../../test/browser/testEditorDom.js';
 import { h } from '../../../../../base/browser/dom.js';
 import assert from 'node:assert/strict';
-import { test, suiteTeardown } from 'mocha';
-import { JSDOM } from 'jsdom';
+import { test } from 'mocha';
 import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
 import type { ICodeEditor, IContentWidget } from '../../../../browser/editorBrowser.js';
 import { Position } from '../../../../common/core/position.js';
 
-const environment = new JSDOM('<!doctype html><body></body>');
-for (const [name, value] of Object.entries({
-	window: environment.window,
-	document: environment.window.document,
-	Node: environment.window.Node,
-	Element: environment.window.Element,
-	HTMLElement: environment.window.HTMLElement,
-	HTMLButtonElement: environment.window.HTMLButtonElement,
-	Event: environment.window.Event,
-})) Object.defineProperty(globalThis, name, { configurable: true, value });
-
 const { InlineProgressManager } = await import('../../browser/inlineProgress.js');
 
-suiteTeardown(() => environment.window.close());
 
 test('InlineProgressManager delays, positions, cancels, and releases its widget', async () => {
 	const container = h(environment.window.document, 'main');

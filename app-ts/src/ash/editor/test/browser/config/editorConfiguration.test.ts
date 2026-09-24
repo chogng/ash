@@ -17,6 +17,7 @@ import { createConfigurationServices, createTestConfiguration, TEST_FONT_INFO } 
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { AccessibilitySupport, IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { ServiceContainer } from '../../../../platform/instantiation/common/instantiation.js';
+import { installEditorTestGlobals } from '../editorTestGlobals.js';
 
 test('ComputedEditorOptions stores canonical option IDs', () => {
 	const options = new ComputedEditorOptions();
@@ -196,8 +197,6 @@ test('EditorConfiguration recomputes measured font options when the cache change
 });
 
 test('EditorConfiguration owns automatic container observation and stops it with the option', () => {
-	const previousResizeObserver = Object.getOwnPropertyDescriptor(globalThis, 'ResizeObserver');
-	assert.ok(previousResizeObserver);
 	const observers: TestResizeObserver[] = [];
 	class TestResizeObserver implements ResizeObserver {
 		private target: Element | undefined;
@@ -218,7 +217,7 @@ test('EditorConfiguration owns automatic container observation and stops it with
 		}
 	}
 
-	Object.defineProperty(globalThis, 'ResizeObserver', { configurable: true, value: TestResizeObserver });
+	using installedObserver = installEditorTestGlobals({ ResizeObserver: TestResizeObserver });
 	const dom = new JSDOM('<div id="editor"></div>');
 	const container = dom.window.document.querySelector<HTMLElement>('#editor')!;
 	const configuration = createTestConfiguration(container, { automaticLayout: true });
@@ -249,7 +248,6 @@ test('EditorConfiguration owns automatic container observation and stops it with
 	} finally {
 		configuration.dispose();
 		dom.window.close();
-		Object.defineProperty(globalThis, 'ResizeObserver', previousResizeObserver);
 	}
 });
 

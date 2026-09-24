@@ -11,6 +11,7 @@ test("Node version declarations agree with the build runtime", () => {
   const version = readFileSync(join(repositoryRoot, ".nvmrc"), "utf8").trim();
   assert.match(version, /^24\.\d+\.\d+$/);
   assert.equal(manifest.engines.node, ">=24 <25");
+  assert.deepEqual(manifest.devEngines.runtime, { name: "node", version, onFail: "download" });
   const result = spawnSync(process.execPath, [join(repositoryRoot, "build/pnpm/preinstall.ts")], {
     env: { ...process.env, npm_config_user_agent: `pnpm/${manifest.packageManager.split("@")[1]}` },
     encoding: "utf8",
@@ -22,12 +23,15 @@ test("Node version declarations agree with the build runtime", () => {
 test("pnpm owns every repository Node project with one lockfile", () => {
   const rootManifest = JSON.parse(readFileSync(join(repositoryRoot, "package.json"), "utf8")) as {
     packageManager?: string;
+    engines?: { pnpm?: string };
     scripts?: Record<string, string>;
   };
   const workspace = readFileSync(join(repositoryRoot, "pnpm-workspace.yaml"), "utf8");
   const lockfile = readFileSync(join(repositoryRoot, "pnpm-lock.yaml"), "utf8");
   assert.equal(rootManifest.packageManager, "pnpm@12.4.2");
+  assert.equal(rootManifest.engines?.pnpm, "12.4.2");
   assert.equal(rootManifest.scripts?.preinstall, "node build/pnpm/preinstall.ts");
+  assert.ok(lockfile.includes(`specifier: runtime:${readFileSync(join(repositoryRoot, ".nvmrc"), "utf8").trim()}`));
   const packages = [...workspace.matchAll(/^  - (.+)$/gm)].map((match) => match[1]);
   assert.deepEqual(packages, ["build", "app-ts"]);
   assert.doesNotMatch(workspace, /^storeDir:/m);

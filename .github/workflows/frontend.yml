@@ -91,6 +91,9 @@ jobs:
       - name: Install Chromium
         if: matrix.surface == 'browser'
         run: pnpm --dir app-ts exec playwright install --with-deps chromium
+      - name: Test editor browser integration
+        if: matrix.surface == 'browser'
+        run: pnpm --dir app-ts run test:editor:browser --project=chromium
       - name: Test production browser UI
         if: matrix.surface == 'browser'
         run: pnpm test:desktop:smoke:browser

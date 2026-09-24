@@ -38,6 +38,8 @@ export class LanguageFeaturesService extends Disposable implements ILanguageFeat
 	public readonly selectionRangeProvider: LanguageFeatureRegistry<languages.LanguageSelectionRangeProvider>;
 	public readonly documentHighlightProvider: LanguageFeatureRegistry<languages.DocumentHighlightProvider>;
 	public readonly multiDocumentHighlightProvider: LanguageFeatureRegistry<languages.MultiDocumentHighlightProvider>;
+	public readonly documentPasteEditProvider: LanguageFeatureRegistry<languages.DocumentPasteEditProvider>;
+	public readonly documentDropEditProvider: LanguageFeatureRegistry<languages.DocumentDropEditProvider>;
 	private _notebookTypeResolver: NotebookInfoResolver | undefined;
 
 	constructor() {
@@ -71,6 +73,8 @@ export class LanguageFeaturesService extends Disposable implements ILanguageFeat
 		this.selectionRangeProvider = new LanguageFeatureRegistry(this._score.bind(this));
 		this.documentHighlightProvider = new LanguageFeatureRegistry(this._score.bind(this));
 		this.multiDocumentHighlightProvider = new LanguageFeatureRegistry(this._score.bind(this));
+		this.documentPasteEditProvider = new LanguageFeatureRegistry(this._score.bind(this));
+		this.documentDropEditProvider = new LanguageFeatureRegistry(this._score.bind(this));
 	}
 
 	public setNotebookTypeResolver(resolver: NotebookInfoResolver | undefined): void {

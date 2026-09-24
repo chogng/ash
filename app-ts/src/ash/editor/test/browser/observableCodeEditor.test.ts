@@ -1,5 +1,6 @@
+import './testEditorDom.js';
 import assert from 'node:assert/strict';
-import { test, suiteTeardown } from 'mocha';
+import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { autorun, observableValue } from '../../../base/common/observable.js';
 import { Position } from '../../common/core/position.js';
@@ -8,31 +9,10 @@ import { Selection } from '../../common/core/selection.js';
 import { TextModel } from '../../common/model/textModel.js';
 import { EditorLineWrapping } from '../../common/config/editorOptions.js';
 
-const browserEnvironment = new JSDOM('<!doctype html><body></body>');
-class TestResizeObserver {
-	observe(): void {}
-	unobserve(): void {}
-	disconnect(): void {}
-}
-for (const [name, value] of Object.entries({
-	window: browserEnvironment.window,
-	document: browserEnvironment.window.document,
-	Node: browserEnvironment.window.Node,
-	Element: browserEnvironment.window.Element,
-	HTMLElement: browserEnvironment.window.HTMLElement,
-	Event: browserEnvironment.window.Event,
-	InputEvent: browserEnvironment.window.InputEvent,
-	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
-	ResizeObserver: TestResizeObserver,
-})) {
-	Object.defineProperty(globalThis, name, { configurable: true, value });
-}
-
 const { observableCodeEditor } = await import('../../browser/observableCodeEditor.js');
 const { CodeEditorWidget } = await import('../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('./testCodeEditor.js');
 
-suiteTeardown(() => browserEnvironment.window.close());
 
 test('observable content notifications expose the updated cursor and view', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');

@@ -1,15 +1,10 @@
 import assert from "node:assert/strict";
-import { test, suiteTeardown } from "mocha";
-import { JSDOM } from "jsdom";
+import { test } from "mocha";
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { EditorContributionInstantiation, EditorExtensionsRegistry, registerEditorContribution } from "../../browser/editorExtensions.js";
 import { TriggerInlineEditCommandsRegistry } from '../../browser/triggerInlineEditCommandsRegistry.js';
 
-const browserEnvironment = new JSDOM("<!doctype html><body></body>");
-Object.defineProperty(globalThis, "window", { configurable: true, value: browserEnvironment.window });
-Object.defineProperty(globalThis, "document", { configurable: true, value: browserEnvironment.window.document });
-
-suiteTeardown(() => browserEnvironment.window.close());
+await import('./testEditorDom.js');
 
 test("editor contributions retain bundle registration order and stable identity", async () => {
 	const before = EditorExtensionsRegistry.getEditorContributions().map(contribution => contribution.id);

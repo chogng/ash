@@ -10,21 +10,15 @@ import { ContextKeyService, IContextKeyService } from "../../../../../platform/c
 import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { ICodeEditorService } from '../../../../browser/services/codeEditorService.js';
+import { installEditorTestDom } from '../../../../test/browser/editorTestGlobals.js';
 
 const environment = new JSDOM('<!doctype html><body></body>');
-for (const [name, value] of Object.entries({
-	window: environment.window,
-	document: environment.window.document,
+const installedGlobals = installEditorTestDom(environment, [
+	'Node', 'Element', 'HTMLElement', 'Event', 'InputEvent', 'KeyboardEvent', 'MouseEvent',
+], {
 	navigator: { userAgent: environment.window.navigator.userAgent, clipboard: {} },
-	Node: environment.window.Node,
-	Element: environment.window.Element,
-	HTMLElement: environment.window.HTMLElement,
-	Event: environment.window.Event,
-	InputEvent: environment.window.InputEvent,
-	KeyboardEvent: environment.window.KeyboardEvent,
-	MouseEvent: environment.window.MouseEvent,
 	ResizeObserver: class TestResizeObserver { observe(): void {} unobserve(): void {} disconnect(): void {} },
-})) Object.defineProperty(globalThis, name, { configurable: true, value });
+});
 
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
@@ -33,7 +27,10 @@ assert.ok(CopyAction);
 assert.ok(CutAction);
 assert.ok(PasteAction);
 
-suiteTeardown(() => environment.window.close());
+suiteTeardown(() => {
+	installedGlobals.dispose();
+	environment.window.close();
+});
 
 test('clipboard actions use the focused code editor and platform clipboard service', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');

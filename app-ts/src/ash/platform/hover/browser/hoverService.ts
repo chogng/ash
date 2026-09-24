@@ -1,3 +1,4 @@
+import "../../../base/browser/ui/hover/hover.css";
 import type { HoverDelegateSetupOptions, IHoverDelegate, IManagedHover as IBaseManagedHover } from "../../../base/browser/ui/hover/hoverDelegate.js";
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
 import { Hover, type HoverContent } from "../../../base/browser/ui/hover/hover.js";
@@ -11,6 +12,7 @@ import { HoverConfiguration, type HoverDelayMode } from "../common/hoverService.
 /** Caller-owned description of one target and its managed Hover content. */
 export interface HoverSetupOptions extends HoverDelegateSetupOptions {
 	readonly delay?: HoverDelayMode;
+	readonly setupKeyboardEvents?: boolean;
 }
 
 /** Handle returned to callers for updating or explicitly controlling a Hover. */
@@ -94,6 +96,7 @@ export class HoverService extends Disposable implements IHoverService {
 				anchorPosition: options.anchorPosition,
 				gap: options.gap,
 				contextViewProvider: this.contextViewService,
+				setupKeyboardEvents: options.setupKeyboardEvents,
 			}),
 			groupId: options.groupId,
 			onDidShow: () => this.didShow(managed),

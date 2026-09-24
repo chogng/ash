@@ -1,23 +1,13 @@
+import '../../../../test/browser/testEditorDom.js';
+import { browserEnvironment } from '../../../../test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
-import { test, suiteTeardown } from 'mocha';
+import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { OverviewRulerZone } from '../../../../common/viewModel/overviewZoneManager.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { type TextMeasurer } from '../../../../common/viewModel.js';
 
-const browserEnvironment = new JSDOM('<!doctype html><body></body>');
-for (const [name, value] of Object.entries({
-	window: browserEnvironment.window,
-	document: browserEnvironment.window.document,
-	Node: browserEnvironment.window.Node,
-	Element: browserEnvironment.window.Element,
-	HTMLElement: browserEnvironment.window.HTMLElement,
-	Event: browserEnvironment.window.Event,
-})) Object.defineProperty(globalThis, name, { configurable: true, value });
-
 const { TestView: View } = await import('../../../../test/browser/viewModel/testViewModel.js');
-
-suiteTeardown(() => browserEnvironment.window.close());
 
 test('OverviewRuler projects standard zones through its canvas and layout API', () => {
 	const paint: { readonly fill: string; readonly top: number; readonly height: number }[] = [];

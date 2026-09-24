@@ -22,16 +22,14 @@ import { Emitter } from '../../../base/common/event.js';
 import { darkColorTheme } from '../../../platform/theme/common/colorTheme.js';
 import { EditorTheme } from '../../common/editorTheme.js';
 import { EditorOption } from '../../common/config/editorOptions.js';
+import { installEditorTestDom, installEditorTestGlobals } from './editorTestGlobals.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
-for (const [name, value] of Object.entries({
-	window: browserEnvironment.window,
-	document: browserEnvironment.window.document,
-	Node: browserEnvironment.window.Node,
-	Element: browserEnvironment.window.Element,
-	HTMLElement: browserEnvironment.window.HTMLElement,
-})) Object.defineProperty(globalThis, name, { configurable: true, value });
-suiteTeardown(() => browserEnvironment.window.close());
+const installedGlobals = installEditorTestDom(browserEnvironment, ['Node', 'Element', 'HTMLElement']);
+suiteTeardown(() => {
+	installedGlobals.dispose();
+	browserEnvironment.window.close();
+});
 
 test('BufferDirtyTracker exposes one inclusive dirty range', () => {
 	const tracker = new BufferDirtyTracker();
@@ -116,11 +114,7 @@ test('Viewport GPU strategy preserves tab stops and complete grapheme cells', as
 });
 
 test('Rectangle GPU rendering draws a clear pass into the caller-owned frame', async () => {
-	const originalUsage = Object.getOwnPropertyDescriptor(globalThis, 'GPUBufferUsage');
-	Object.defineProperty(globalThis, 'GPUBufferUsage', {
-		configurable: true,
-		value: { COPY_DST: 1, STORAGE: 2, UNIFORM: 4, VERTEX: 8 },
-	});
+	const installedUsage = installEditorTestGlobals({ GPUBufferUsage: { COPY_DST: 1, STORAGE: 2, UNIFORM: 4, VERTEX: 8 } });
 	const passes: GPURenderPassDescriptor[] = [];
 	let ended = false;
 		const device = {
@@ -189,8 +183,7 @@ test('Rectangle GPU rendering draws a clear pass into the caller-owned frame', a
 			renderer.dispose();
 			assert.equal(eventHandlerCount, 0);
 		} finally {
-		if (originalUsage) Object.defineProperty(globalThis, 'GPUBufferUsage', originalUsage);
-		else Reflect.deleteProperty(globalThis, 'GPUBufferUsage');
+		installedUsage.dispose();
 	}
 });
 
@@ -424,15 +417,10 @@ function lineTokens(content: string): IViewLineTokens {
 }
 
 function withGpuBufferUsage(callback: () => void): void {
-	const originalUsage = Object.getOwnPropertyDescriptor(globalThis, 'GPUBufferUsage');
-	Object.defineProperty(globalThis, 'GPUBufferUsage', {
-		configurable: true,
-		value: { COPY_DST: 1, STORAGE: 2, UNIFORM: 4, VERTEX: 8 },
-	});
+	const installedUsage = installEditorTestGlobals({ GPUBufferUsage: { COPY_DST: 1, STORAGE: 2, UNIFORM: 4, VERTEX: 8 } });
 	try {
 		callback();
 	} finally {
-		if (originalUsage) Object.defineProperty(globalThis, 'GPUBufferUsage', originalUsage);
-		else Reflect.deleteProperty(globalThis, 'GPUBufferUsage');
+		installedUsage.dispose();
 	}
 }

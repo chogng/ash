@@ -1,189 +1,208 @@
 .stanza-diff-editor {
-  position: relative;
-  box-sizing: border-box;
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  min-height: 0;
-  overflow: auto;
-  color: var(--ash-editor-foreground);
-  background: var(--ash-editor-background);
-  font-family: var(--ash-font-family-monospace, ui-monospace, monospace);
-  white-space: pre;
-  outline: none;
+	position: relative;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 30px;
+	box-sizing: border-box;
+	width: 100%;
+	height: 100%;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+	color: var(--ash-editor-foreground);
+	background: var(--ash-editor-background);
 }
 
 .stanza-diff-editor:focus-visible {
-  outline: 1px solid var(--ash-focus-border);
-  outline-offset: -1px;
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
 }
 
-.stanza-diff-editor-content {
-  position: relative;
-  min-width: 100%;
+.stanza-diff-editor-side {
+	position: relative;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
 }
 
-.stanza-diff-editor-rows {
-  position: absolute;
-  top: 0;
-  left: 0;
-  min-width: 100%;
+.stanza-diff-editor-side.original {
+	border-right: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+}
+
+.stanza-diff-editor-side.modified {
+	grid-column: 2;
+}
+
+.stanza-diff-line-removed {
+	background: var(--ash-diff-editor-removed-line-background);
+}
+
+.stanza-diff-line-added {
+	background: var(--ash-diff-editor-inserted-line-background);
+}
+
+.stanza-diff-line-active {
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
+}
+
+.stanza-diff-inline-removed {
+	background: var(--ash-diff-editor-removed-text-background);
+}
+
+.stanza-diff-inline-added {
+	background: var(--ash-diff-editor-inserted-text-background);
+}
+
+[data-color-scheme="high-contrast-dark"] .stanza-diff-line-removed,
+[data-color-scheme="high-contrast-dark"] .stanza-diff-line-added,
+[data-color-scheme="high-contrast-light"] .stanza-diff-line-removed,
+[data-color-scheme="high-contrast-light"] .stanza-diff-line-added {
+	outline: var(--ash-stroke-thickness) solid var(--ash-contrast-border);
+	outline-offset: -1px;
 }
 
 .stanza-diff-overview {
-  position: absolute;
-  z-index: 9;
-  width: 30px;
-  overflow: hidden;
-  color: var(--ash-editor-foreground);
-  pointer-events: none;
-  background: color-mix(in srgb, currentColor 3%, transparent);
+	position: absolute;
+	z-index: 9;
+	width: 30px;
+	overflow: hidden;
+	color: var(--ash-editor-foreground);
+	pointer-events: none;
+	background: color-mix(in srgb, currentColor 3%, transparent);
 }
 
 .stanza-diff-overview-lane {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 15px;
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: 15px;
 }
 
 .stanza-diff-overview-lane.original {
-  left: 0;
+	left: 0;
 }
 
 .stanza-diff-overview-lane.modified {
-  right: 0;
+	right: 0;
 }
 
 .stanza-diff-overview-marker {
-  position: absolute;
-  right: 0;
-  left: 0;
-  z-index: 1;
-  min-height: 2px;
+	position: absolute;
+	right: 0;
+	left: 0;
+	z-index: 1;
+	min-height: 2px;
 }
 
 .stanza-diff-overview-marker.removed {
-  background: var(--ash-diff-editor-removed-line-marker);
+	background: var(--ash-diff-editor-removed-line-marker);
 }
 
 .stanza-diff-overview-marker.inserted {
-  background: var(--ash-diff-editor-inserted-line-marker);
+	background: var(--ash-diff-editor-inserted-line-marker);
 }
 
 .stanza-diff-overview-viewport {
-  position: absolute;
-  top: 0;
-  right: 0;
-  left: 0;
-  z-index: 2;
-  min-height: 2px;
-  background: var(--ash-scrollbar-slider-background, color-mix(in srgb, currentColor 12%, transparent));
-  will-change: transform;
-}
-
-.stanza-diff-editor-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  min-width: 100%;
-}
-
-.stanza-diff-editor-row.active {
-  outline: 1px solid var(--ash-focus-border);
-  outline-offset: -1px;
-}
-
-.stanza-diff-editor-cell {
-  box-sizing: border-box;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: clip;
-}
-
-.stanza-diff-editor-cell.original {
-  border-right: 1px solid var(--ash-widget-border);
-}
-
-.stanza-diff-editor-cell.removed,
-.stanza-diff-editor-row.modified .stanza-diff-editor-cell.original {
-  background: var(--ash-diff-editor-removed-line-background);
-}
-
-.stanza-diff-editor-cell.added,
-.stanza-diff-editor-row.modified .stanza-diff-editor-cell.modified {
-  background: var(--ash-diff-editor-inserted-line-background);
-}
-
-.stanza-diff-editor-cell.missing {
-  background: var(--ash-diff-editor-missing-line-background);
-}
-
-.stanza-diff-editor-line-number {
-  display: inline-block;
-  box-sizing: border-box;
-  width: 52px;
-  padding: 0 8px;
-  color: var(--ash-description-foreground);
-  text-align: right;
-  user-select: none;
-}
-
-.stanza-diff-editor.hide-line-numbers .stanza-diff-editor-line-number {
-  display: none;
-}
-
-.stanza-diff-editor-line-content {
-  display: inline;
-}
-
-.stanza-diff-editor-row.word-wrapped .stanza-diff-editor-cell {
-  display: flex;
-}
-
-.stanza-diff-editor-row.word-wrapped .stanza-diff-editor-line-number {
-  flex: none;
-}
-
-.stanza-diff-editor-row.word-wrapped .stanza-diff-editor-line-content {
-  display: block;
-  min-width: 0;
-  flex: 1;
-}
-
-.stanza-diff-editor-visual-line {
-  display: block;
-  overflow: hidden;
-  white-space: pre;
-}
-
-.stanza-diff-editor-inline.removed {
-  background: var(--ash-diff-editor-removed-text-background);
-}
-
-.stanza-diff-editor-inline.added {
-  background: var(--ash-diff-editor-inserted-text-background);
+	position: absolute;
+	top: 0;
+	right: 0;
+	left: 0;
+	z-index: 2;
+	min-height: 2px;
+	background: var(--ash-scrollbar-slider-background, color-mix(in srgb, currentColor 12%, transparent));
+	will-change: transform;
 }
 
 .stanza-diff-editor-accessibility-status {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  clip-path: inset(50%);
-  white-space: nowrap;
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	clip-path: inset(50%);
+	white-space: nowrap;
 }
 
 .stanza-diff-editor-incomplete-status:not([hidden]) {
-  position: absolute;
-  z-index: 8;
-  right: 30px;
-  left: 0;
-  box-sizing: border-box;
-  padding: 4px 8px;
-  color: var(--ash-warning-foreground);
-  background: var(--ash-editor-background);
-  border-bottom: 1px solid currentColor;
-  white-space: normal;
-  pointer-events: none;
+	position: absolute;
+	z-index: 8;
+	right: 30px;
+	left: 0;
+	box-sizing: border-box;
+	padding: 4px 8px;
+	color: var(--ash-warning-foreground);
+	background: var(--ash-editor-background);
+	border-bottom: 1px solid currentColor;
+	white-space: normal;
+	pointer-events: none;
+}
+
+.ash-diff-hidden-region-content {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	box-sizing: border-box;
+	width: 100%;
+	height: 100%;
+	padding: 0 8px;
+	overflow: hidden;
+	color: var(--ash-description-foreground);
+	background: var(--ash-editor-background);
+	border-top: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+	border-bottom: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+	font-size: var(--ash-font-size-label2);
+	white-space: nowrap;
+}
+
+.ash-diff-hidden-region-count {
+	flex: 0 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ash-diff-hidden-region-breadcrumbs {
+	display: flex;
+	gap: 2px;
+	min-width: 0;
+	overflow: hidden;
+}
+
+.ash-diff-hidden-region-breadcrumbs[hidden] {
+	display: none;
+}
+
+.ash-diff-hidden-region button {
+	flex: none;
+	min-width: 24px;
+	padding: 2px;
+	color: var(--ash-editor-foreground);
+	background: transparent;
+	border: 0;
+	border-radius: 4px;
+	font: inherit;
+	cursor: pointer;
+}
+
+.ash-diff-hidden-region button:hover {
+	background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.ash-diff-hidden-region button:focus-visible {
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
+}
+
+.ash-diff-hidden-region .ash-diff-hidden-region-symbol {
+	flex: 0 1 auto;
+	min-width: 0;
+	max-width: 12rem;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+[data-color-scheme="high-contrast-dark"] .ash-diff-hidden-region-content,
+[data-color-scheme="high-contrast-light"] .ash-diff-hidden-region-content {
+	border-color: var(--ash-contrast-border);
 }

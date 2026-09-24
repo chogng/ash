@@ -5,9 +5,9 @@ import { Range } from "../../../common/core/range.js";
 import { TextDecorationCollection, type TextDecorationId } from "../../../common/model/decorationCollection.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 
-import { type DocumentSymbolService } from "../../documentSymbols/common/languageDocumentSymbols.js";
 import { TrackedRangeStickiness } from '../../../common/model.js';
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
+import { OutlineModel } from '../../documentSymbols/browser/outlineModel.js';
 
 interface SymbolIconMetadata {
 	readonly kind: LanguageDocumentSymbol["kind"];
@@ -23,16 +23,14 @@ export class SymbolIconsController extends Disposable {
 
 	constructor(
 		private readonly model: TextModel,
-		private readonly service: DocumentSymbolService,
 		private readonly onError: (error: unknown) => void,
-		@ILanguageFeaturesService languageFeatures: ILanguageFeaturesService,
+		@ILanguageFeaturesService private readonly languageFeatures: ILanguageFeaturesService,
 	) {
 		super();
-		if (service.textModel !== model) throw new TypeError("Stanza symbol icon dependencies must share a text model");
 		this.collection = this._register(new TextDecorationCollection(model));
 		this._register(model.onDidChangeContent(() => void this.refresh()));
 		this._register(model.onDidChangeLanguage(() => void this.refresh()));
-		this._register(languageFeatures.documentSymbolProvider.onDidChange(() => void this.refresh()));
+		this._register(this.languageFeatures.documentSymbolProvider.onDidChange(() => void this.refresh()));
 		this._register(model.onWillDispose(() => this.request?.abort()));
 		this._register(toDisposable(() => this.request?.abort()));
 		void this.refresh();
@@ -44,12 +42,12 @@ export class SymbolIconsController extends Disposable {
 		this.decorationIds = this.collection.deltaDecorations(this.decorationIds, []);
 		const request = this.request = new AbortController();
 		try {
-			const symbols = await this.service.provideDocumentSymbols(this.model.getLanguageId(), request.signal);
-			if (request.signal.aborted || request !== this.request) return;
+			const outline = await OutlineModel.create(this.languageFeatures.documentSymbolProvider, this.model, request.signal, this.onError);
+			if (request.signal.aborted || request !== this.request || !outline) return;
 			const seenLines = new Set<number>();
 			this.decorationIds = this.collection.deltaDecorations(
 				this.decorationIds,
-				flatten(symbols).flatMap(symbol => {
+				outline.asListOfDocumentSymbols().flatMap(symbol => {
 					const lineNumber = symbol.selectionRange.startLineNumber;
 					const lineIndex = lineNumber - 1;
 					if (seenLines.has(lineIndex)) return [];
@@ -78,10 +76,6 @@ function symbolIconDecorationOptions(metadata: SymbolIconMetadata) {
 		linesDecorationsClassName: `stanza-editor-symbol-icon ${symbolKindClass(metadata.kind)}`,
 		linesDecorationsTooltip: metadata.detail ? `${metadata.name}: ${metadata.detail}` : metadata.name,
 	});
-}
-
-function flatten(symbols: readonly LanguageDocumentSymbol[]): readonly LanguageDocumentSymbol[] {
-	return symbols.flatMap(symbol => [symbol, ...flatten(symbol.children ?? [])]);
 }
 
 function symbolKindClass(kind: LanguageDocumentSymbol["kind"]): string {

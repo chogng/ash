@@ -1,4 +1,3 @@
-import { StandaloneCodeEditorService } from '../../../../../editor/standalone/browser/standaloneCodeEditorService.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -9,7 +8,9 @@ import { URI } from "../../../../../base/common/uri.js";
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { CodeEditorConfiguration } from '../../common/editorConfiguration.js';
-import { EditorLineWrapping } from '../../../../../editor/common/config/editorOptions.js';
+import { EditorLineWrapping, EditorOption, RenderLineNumbersType } from '../../../../../editor/common/config/editorOptions.js';
+import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
+import { type DiffEditorWidget } from '../../../../../editor/browser/widget/diffEditor/diffEditorWidget.js';
 import { IEditorPartsService } from '../../../../browser/parts/editor/editorParts.js';
 import { type IDocumentDiff, type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from "../../../../../editor/common/diff/documentDiffProvider.js";
 import { DefaultLinesDiffComputer } from "../../../../../editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js";
@@ -30,6 +31,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { DiffEditorPane } = await import("../../browser/diffEditorPane.js");
+await import('../../../../../editor/contrib/diffEditorBreadcrumbs/browser/contribution.js');
 await import('../../browser/toggleWordWrap.js');
 const { createCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
 const { BrowserTextModelService } = await import("../../../../services/textmodelResolver/browser/browserTextModelService.js");
@@ -47,12 +49,12 @@ test("Stanza diff pane acquires both models, lays out the review view, and relea
 	const textFiles = new BootstrapTextFiles();
 	const resourceStore = new BrowserTextResourceStore(textFiles);
 	using models = new BrowserTextModelService(resourceStore);
-	using codeEditorService = new StandaloneCodeEditorService();
 	using services = new DisposableStore();
-	const pane = createCodeEditorServices(services).createInstance(DiffEditorPane, resourceStore, {
+	const container = createCodeEditorServices(services);
+	const codeEditorService = container.get(ICodeEditorService);
+	const pane = container.createInstance(DiffEditorPane, resourceStore, {
 		modelService: models,
 		createComputationService: () => new PaneTestDiffComputationService(),
-		codeEditorService,
 		lineHeight: 24,
 		fontFamily: "Test Mono",
 		fontSize: 15,
@@ -60,7 +62,6 @@ test("Stanza diff pane acquires both models, lays out the review view, and relea
 		showLineNumbers: false,
 		showInlineChanges: false,
 		loopChanges: false,
-		breadcrumbs: false,
 	});
 	pane.create(parent);
 	pane.layout({ width: 640, height: 480 });
@@ -72,16 +73,17 @@ test("Stanza diff pane acquires both models, lays out the review view, and relea
 	assert.equal(parent.querySelectorAll(".stanza-diff-editor-pane").length, 1);
 	assert.equal(parent.querySelectorAll(".stanza-diff-editor").length, 1);
 	const editor = requiredElement<HTMLElement>(dom.window.document, ".stanza-diff-editor");
-	assert.equal(editor.classList.contains("hide-line-numbers"), true);
-	assert.equal(editor.style.fontFamily.startsWith('"Test Mono", '), true);
-	assert.equal(editor.style.fontFamily.endsWith('monospace'), true);
-	assert.equal(editor.style.fontSize, "15px");
-	assert.equal(editor.style.fontFeatureSettings.includes('"liga" on'), true);
-	assert.equal(parent.querySelector(".stanza-diff-editor-breadcrumbs"), null);
+	const diffWidget = codeEditorService.listDiffEditors()[0] as DiffEditorWidget;
+	assert.equal(editor.querySelectorAll('.stanza-editor').length, 2);
+	assert.equal(diffWidget.originalEditor.getOption(EditorOption.lineNumbers).renderType, RenderLineNumbersType.Off);
+	assert.equal(diffWidget.modifiedEditor.getOption(EditorOption.lineNumbers).renderType, RenderLineNumbersType.Off);
+	assert.equal(diffWidget.modifiedEditor.getOption(EditorOption.fontFamily), 'Test Mono');
+	assert.equal(diffWidget.modifiedEditor.getOption(EditorOption.fontSize), 15);
+	assert.match(diffWidget.modifiedEditor.getOption(EditorOption.fontLigatures), /"liga" on/);
 	assert.match(parent.querySelector(".stanza-diff-editor")?.getAttribute("aria-label") ?? "", /before\.ts/);
 	assert.equal(codeEditorService.listDiffEditors().length, 1);
 	pane.focus();
-	assert.equal(dom.window.document.activeElement?.classList.contains("stanza-diff-editor"), true);
+	assert.equal(editor.contains(dom.window.document.activeElement), true);
 	pane.setVisible(EditorPaneVisibility.Hidden);
 	assert.equal((parent.firstElementChild as HTMLElement).hidden, true);
 	pane.clearInput();
@@ -97,7 +99,6 @@ test('Diff pane recomputes an open comparison when ignore-trim-whitespace change
 	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
 	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
 	using models = new BrowserTextModelService(resourceStore);
-	using codeEditorService = new StandaloneCodeEditorService();
 	using services = new DisposableStore();
 	const container = createCodeEditorServices(services);
 	const configuration = container.get(IConfigurationService);
@@ -105,8 +106,6 @@ test('Diff pane recomputes an open comparison when ignore-trim-whitespace change
 	const pane = container.createInstance(DiffEditorPane, resourceStore, {
 		modelService: models,
 		createComputationService: () => new PaneTestDiffComputationService(options => seenLimits.push(options.maxComputationTimeMs)),
-		codeEditorService,
-		breadcrumbs: false,
 	});
 	pane.create(parent);
 	await pane.setInput(createDiffEditorInput(
@@ -114,10 +113,11 @@ test('Diff pane recomputes an open comparison when ignore-trim-whitespace change
 		{ resource: URI.file('/after.ts'), initialText: 'word ', label: 'after.ts' },
 	), new AbortController().signal);
 	await Promise.resolve();
-	assert.ok(parent.querySelector('.stanza-diff-editor-row.unchanged'));
+	const diffWidget = container.get(ICodeEditorService).listDiffEditors()[0] as DiffEditorWidget;
+	assert.equal(diffWidget.diff?.hunks.length, 0);
 	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, false);
 	await Promise.resolve();
-	assert.ok(parent.querySelector('.stanza-diff-editor-row.modified'));
+	assert.equal(diffWidget.diff?.hunks.length, 1);
 	await configuration.updateValue(CodeEditorConfiguration.diffMaxComputationTime, 17);
 	await Promise.resolve();
 	assert.deepEqual(seenLimits, [5_000, 5_000, 17]);
@@ -130,7 +130,6 @@ test('Diff pane follows the modified language override and language changes', as
 	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
 	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
 	using models = new BrowserTextModelService(resourceStore);
-	using codeEditorService = new StandaloneCodeEditorService();
 	using services = new DisposableStore();
 	const container = createCodeEditorServices(services);
 	const configuration = container.get(IConfigurationService);
@@ -139,8 +138,6 @@ test('Diff pane follows the modified language override and language changes', as
 	const pane = container.createInstance(DiffEditorPane, resourceStore, {
 		modelService: models,
 		createComputationService: () => new PaneTestDiffComputationService(() => computations++),
-		codeEditorService,
-		breadcrumbs: false,
 	});
 	pane.create(parent);
 	const modifiedInput = { resource: URI.file('/language-after.ts'), initialText: 'word ', languageId: 'typescript', label: 'after.ts' };
@@ -149,18 +146,19 @@ test('Diff pane follows the modified language override and language changes', as
 		modifiedInput,
 	), new AbortController().signal);
 	await Promise.resolve();
-	assert.ok(parent.querySelector('.stanza-diff-editor-row.modified'));
+	const diffWidget = container.get(ICodeEditorService).listDiffEditors()[0] as DiffEditorWidget;
+	assert.equal(diffWidget.diff?.hunks.length, 1);
 	assert.equal(computations, 1);
 	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, true, { overrideIdentifier: 'javascript' });
 	assert.equal(computations, 1);
 	using modified = await models.acquire(modifiedInput, new AbortController().signal);
 	modified.model.setLanguage('javascript');
 	await Promise.resolve();
-	assert.ok(parent.querySelector('.stanza-diff-editor-row.unchanged'));
+	assert.equal(diffWidget.diff?.hunks.length, 0);
 	assert.equal(computations, 2);
 	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, false, { overrideIdentifier: 'javascript' });
 	await Promise.resolve();
-	assert.ok(parent.querySelector('.stanza-diff-editor-row.modified'));
+	assert.equal(diffWidget.diff?.hunks.length, 1);
 	pane.dispose();
 	dom.window.close();
 });
@@ -170,7 +168,6 @@ test('Diff pane follows configured word wrap and keeps its temporary toggle in t
 	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
 	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
 	using models = new BrowserTextModelService(resourceStore);
-	using codeEditorService = new StandaloneCodeEditorService();
 	using services = new DisposableStore();
 	const container = createCodeEditorServices(services);
 	const configuration = container.get(IConfigurationService);
@@ -178,8 +175,6 @@ test('Diff pane follows configured word wrap and keeps its temporary toggle in t
 	const pane = container.createInstance(DiffEditorPane, resourceStore, {
 		modelService: models,
 		createComputationService: () => new PaneTestDiffComputationService(),
-		codeEditorService,
-		breadcrumbs: false,
 	});
 	pane.create(parent);
 	pane.layout({ width: 400, height: 200 });
@@ -199,6 +194,44 @@ test('Diff pane follows configured word wrap and keeps its temporary toggle in t
 	assert.equal(editor.classList.contains('word-wrapped'), false);
 	await configuration.updateValue('diffEditor.wordWrap', 'on');
 	assert.equal(editor.classList.contains('word-wrapped'), true);
+	pane.dispose();
+	dom.window.close();
+});
+
+test('Diff pane updates hidden unchanged regions when settings change', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
+	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
+	using models = new BrowserTextModelService(resourceStore);
+	using services = new DisposableStore();
+	const container = createCodeEditorServices(services);
+	const configuration = container.get(IConfigurationService);
+	const pane = container.createInstance(DiffEditorPane, resourceStore, {
+		modelService: models,
+		createComputationService: () => new PaneTestDiffComputationService(),
+	});
+	pane.create(parent);
+	pane.layout({ width: 800, height: 300 });
+	const lines = Array.from({ length: 36 }, (_, index) => `shared ${index + 1}`);
+	await pane.setInput(createDiffEditorInput(
+		{ resource: URI.file('/hidden-before.ts'), initialText: lines.join('\n') },
+		{ resource: URI.file('/hidden-after.ts'), initialText: [...lines.slice(0, -1), 'changed'].join('\n') },
+	), new AbortController().signal);
+	await Promise.resolve();
+	const regions = () => parent.querySelectorAll('.ash-diff-hidden-region');
+	assert.equal(regions().length, 0);
+	await configuration.updateValue(CodeEditorConfiguration.diffHideUnchangedRegionsContextLineCount, 1);
+	await configuration.updateValue(CodeEditorConfiguration.diffHideUnchangedRegionsMinimumLineCount, 3);
+	await configuration.updateValue(CodeEditorConfiguration.diffHideUnchangedRegionsRevealLineCount, 2);
+	await configuration.updateValue(CodeEditorConfiguration.diffHideUnchangedRegionsEnabled, true);
+	assert.equal(regions().length, 2);
+	assert.equal(regions()[0]?.querySelector('.ash-diff-hidden-region-count')?.textContent, '33 hidden lines');
+	await configuration.updateValue(CodeEditorConfiguration.diffHideUnchangedRegionsMinimumLineCount, 100);
+	assert.equal(regions().length, 0);
+	await configuration.updateValue(CodeEditorConfiguration.diffHideUnchangedRegionsMinimumLineCount, 3);
+	assert.equal(regions().length, 2);
+	await configuration.updateValue(CodeEditorConfiguration.diffHideUnchangedRegionsEnabled, false);
+	assert.equal(regions().length, 0);
 	pane.dispose();
 	dom.window.close();
 });

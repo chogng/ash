@@ -9,6 +9,82 @@ import { localize } from '../../../nls.js';
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 
+/** Settings changed by the editor minimap menu in every editor host. */
+export const EditorMinimapConfiguration = Object.freeze({
+	enabled: configurationRegistry.registerConfiguration<boolean>({
+		key: 'editor.minimap.enabled',
+		defaultValue: true,
+		parse: value => modelBoolean(value, 'editor.minimap.enabled'),
+		setting: {
+			title: localize('context.minimap.enabled', 'Minimap'),
+			description: localize('context.minimap.enabled.description', 'Show a compact overview of the document.'),
+			valueType: 'boolean',
+		},
+	}),
+	renderCharacters: configurationRegistry.registerConfiguration<boolean>({
+		key: 'editor.minimap.renderCharacters',
+		defaultValue: true,
+		parse: value => modelBoolean(value, 'editor.minimap.renderCharacters'),
+		setting: {
+			title: localize('context.minimap.renderCharacters', 'Render Characters'),
+			description: localize('context.minimap.renderCharacters.description', 'Draw text characters in the minimap.'),
+			valueType: 'boolean',
+		},
+	}),
+	size: configurationRegistry.registerConfiguration<'proportional' | 'fill' | 'fit'>({
+		key: 'editor.minimap.size',
+		defaultValue: 'proportional',
+		parse(value) {
+			if (value === 'proportional' || value === 'fill' || value === 'fit') return value;
+			throw new TypeError('editor.minimap.size must be proportional, fill, or fit');
+		},
+		setting: {
+			title: localize('context.minimap.size', 'Vertical Size'),
+			description: localize('context.minimap.size.description', 'Choose how the minimap uses the editor height.'),
+			valueType: 'select',
+			options: [
+				{ value: 'proportional', label: localize('context.minimap.size.proportional', 'Proportional') },
+				{ value: 'fill', label: localize('context.minimap.size.fill', 'Fill') },
+				{ value: 'fit', label: localize('context.minimap.size.fit', 'Fit') },
+			],
+		},
+	}),
+	showSlider: configurationRegistry.registerConfiguration<'always' | 'mouseover'>({
+		key: 'editor.minimap.showSlider',
+		defaultValue: 'mouseover',
+		parse(value) {
+			if (value === 'always' || value === 'mouseover') return value;
+			throw new TypeError('editor.minimap.showSlider must be always or mouseover');
+		},
+		setting: {
+			title: localize('context.minimap.slider', 'Show Slider'),
+			description: localize('context.minimap.slider.description', 'Choose when the minimap slider is visible.'),
+			valueType: 'select',
+			options: [
+				{ value: 'mouseover', label: localize('context.minimap.slider.mouseover', 'Mouse Over') },
+				{ value: 'always', label: localize('context.minimap.slider.always', 'Always') },
+			],
+		},
+	}),
+	side: configurationRegistry.registerConfiguration<'right' | 'left'>({
+		key: 'editor.minimap.side',
+		defaultValue: 'right',
+		parse(value) {
+			if (value === 'right' || value === 'left') return value;
+			throw new TypeError('editor.minimap.side must be right or left');
+		},
+		setting: {
+			title: localize('context.minimap.side', 'Side'),
+			description: localize('context.minimap.side.description', 'Place the minimap on the left or right side of the editor.'),
+			valueType: 'select',
+			options: [
+				{ value: 'right', label: localize('context.minimap.side.right', 'Right') },
+				{ value: 'left', label: localize('context.minimap.side.left', 'Left') },
+			],
+		},
+	}),
+});
+
 /** The common configuration node shape used by VS Code settings tooling. */
 export interface EditorConfigurationNode {
 	readonly id: string;
@@ -247,6 +323,7 @@ const properties: Record<string, JsonSchema> = {
 	'editor.renderValidationDecorations': { type: 'string', enum: ['editable', 'on', 'off'], default: 'editable' },
 	'editor.minimap.enabled': { type: 'boolean', default: true },
 	'editor.minimap.side': { type: 'string', enum: ['right', 'left'], default: 'right' },
+	'editor.minimap.size': { type: 'string', enum: ['proportional', 'fill', 'fit'], default: 'proportional' },
 	'editor.minimap.renderCharacters': { type: 'boolean', default: true },
 	'editor.minimap.showSlider': { type: 'string', enum: ['always', 'mouseover'], default: 'mouseover' },
 	'editor.minimap.maxColumn': { type: 'number', default: 120, minimum: 1 },
@@ -399,6 +476,46 @@ configurationRegistry.registerConfiguration({
 		maximum: Number.MAX_SAFE_INTEGER,
 	},
 });
+configurationRegistry.registerConfiguration({
+	key: 'diffEditor.hideUnchangedRegions.enabled',
+	defaultValue: diffEditorDefaultOptions.hideUnchangedRegions.enabled,
+	parse: value => modelBoolean(value, 'diffEditor.hideUnchangedRegions.enabled'),
+	setting: {
+		title: localize('diffEditor.hideUnchanged.title', 'Hide unchanged regions'),
+		description: localize('diffEditor.hideUnchanged.description', 'Collapse long unchanged regions in a diff.'),
+		valueType: 'boolean',
+	},
+});
+for (const [key, defaultValue, title, description] of [
+	[
+		'diffEditor.hideUnchangedRegions.contextLineCount',
+		diffEditorDefaultOptions.hideUnchangedRegions.contextLineCount,
+		localize('diffEditor.hideUnchanged.contextTitle', 'Context lines'),
+		localize('diffEditor.hideUnchanged.contextDescription', 'Keep this many unchanged lines visible beside each change.'),
+	],
+	[
+		'diffEditor.hideUnchangedRegions.minimumLineCount',
+		diffEditorDefaultOptions.hideUnchangedRegions.minimumLineCount,
+		localize('diffEditor.hideUnchanged.minimumTitle', 'Minimum hidden lines'),
+		localize('diffEditor.hideUnchanged.minimumDescription', 'Only collapse a region when at least this many lines can be hidden.'),
+	],
+	[
+		'diffEditor.hideUnchangedRegions.revealLineCount',
+		diffEditorDefaultOptions.hideUnchangedRegions.revealLineCount,
+		localize('diffEditor.hideUnchanged.revealTitle', 'Reveal lines'),
+		localize('diffEditor.hideUnchanged.revealDescription', 'Show this many lines when expanding a collapsed region.'),
+	],
+] as const) {
+	configurationRegistry.registerConfiguration({
+		key,
+		defaultValue,
+		parse(value) {
+			if (!Number.isSafeInteger(value) || (value as number) < 1) throw new RangeError(`${key} must be a positive integer`);
+			return value as number;
+		},
+		setting: { title, description, valueType: 'number', minimum: 1, maximum: Number.MAX_SAFE_INTEGER },
+	});
+}
 configurationRegistry.registerConfiguration({
 	key: 'editor.maxTokenizationLineLength',
 	defaultValue: 20_000,

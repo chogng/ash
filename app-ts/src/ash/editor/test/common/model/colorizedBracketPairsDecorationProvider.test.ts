@@ -1,12 +1,11 @@
-import { registerTestTokens } from '../../../../test/common/testTokenization.js';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { LanguageBracketGuideSource } from '../../browser/bracketColorizationPresentation.js';
-import { TestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
-import { Range } from "../../../../common/core/range.js";
-import { TextModel } from "../../../../common/model/textModel.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { Range } from '../../../common/core/range.js';
+import { TextModel } from '../../../common/model/textModel.js';
+import { TestLanguageConfigurationService } from '../../common/modes/testLanguageConfigurationService.js';
+import { registerTestTokens } from '../../common/testTokenization.js';
 
-test("Bracket colorization follows model nesting and excludes brackets in strings", async () => {
+test('Bracket colorization follows model nesting and excludes brackets in strings', async () => {
 	using configurations = new TestLanguageConfigurationService();
 	using model = new TextModel("{\n  (\"}\")\n}", { languageId: "typescript", languageConfigurationService: configurations });
 	using registration = configurations.register("typescript", {
@@ -32,7 +31,7 @@ test("Bracket colorization follows model nesting and excludes brackets in string
 	assert.deepEqual(colors.getLineBrackets(2), [{ startColumn: 0, endColumn: 1, className: 'stanza-editor-bracket-level-1' }]);
 });
 
-test("Bracket colorization invalidates its cached nesting after model edits", () => {
+test('Bracket colorization invalidates its cached nesting after model edits', () => {
 	using configurations = new TestLanguageConfigurationService();
 	using model = new TextModel("{\n}", { languageId: "typescript", languageConfigurationService: configurations });
 	using registration = configurations.register("typescript", { brackets: [["{", "}"]] });
@@ -48,29 +47,11 @@ test("Bracket colorization invalidates its cached nesting after model edits", ()
 	assert.deepEqual(colors.getLineBrackets(2), [{ startColumn: 0, endColumn: 1, className: 'stanza-editor-bracket-level-2' }]);
 });
 
-test('Bracket guide projection remains available when bracket colors are disabled', () => {
-	using configurations = new TestLanguageConfigurationService();
-	using model = new TextModel('{\n  value\n}', { languageId: "typescript", languageConfigurationService: configurations });
-	using registration = configurations.register('typescript', { brackets: [['{', '}']] });
-	const guides = new LanguageBracketGuideSource(model);
-
-	model.updateOptions({ bracketColorizationOptions: { enabled: false, independentColorPoolPerBracketType: false } });
-	assert.deepEqual(model.getLineDecorations(1), []);
-	assert.deepEqual(guides.getBracketGuides(1, 1), [{
-		opening: Range.fromPositions(model.positionAt(0), model.positionAt(1)),
-		closing: Range.fromPositions(model.positionAt(model.getText().length - 1), model.positionAt(model.getText().length)),
-		visibleColumn: 1,
-		level: 1,
-	}]);
-});
-
 test('Model bracket decorations honor color pools, query filters and option changes', () => {
 	using configurations = new TestLanguageConfigurationService();
 	using model = new TextModel('{([])}', { languageId: 'typescript', languageConfigurationService: configurations });
 	using registration = configurations.register('typescript', { brackets: [['{', '}'], ['(', ')'], ['[', ']']] });
 	const colors = () => model.getAllDecorations(12).map(decoration => decoration.options.inlineClassName);
-	const guides = new LanguageBracketGuideSource(model);
-	assert.deepEqual(guides.getBracketGuides(0, 0).map(guide => guide.level), [1, 2, 3]);
 	assert.deepEqual(colors(), [1, 2, 3, 3, 2, 1].map(level => `stanza-editor-bracket-level-${level}`));
 	assert.deepEqual(model.getDecorationsInRange(model.getFullModelRange(), 12, false, false, true), []);
 	assert.deepEqual(model.getAllMarginDecorations(12), []);
@@ -79,17 +60,6 @@ test('Model bracket decorations honor color pools, query filters and option chan
 	model.updateOptions({ bracketColorizationOptions: { enabled: true, independentColorPoolPerBracketType: true } });
 	assert.ok(changes > 0);
 	assert.deepEqual(colors(), Array(6).fill('stanza-editor-bracket-level-1'));
-	assert.deepEqual(guides.getBracketGuides(0, 0).map(guide => guide.level), [1, 1, 1]);
 	model.updateOptions({ bracketColorizationOptions: { enabled: false, independentColorPoolPerBracketType: true } });
 	assert.deepEqual(colors(), []);
-});
-
-test('Bracket guide columns use the model minimum indentation and refresh after edits', () => {
-	using configurations = new TestLanguageConfigurationService();
-	using model = new TextModel('call(\n\tfirst,\n  second\n    third)', { languageId: 'typescript', languageConfigurationService: configurations });
-	using registration = configurations.register('typescript', { brackets: [['(', ')']] });
-	const source = new LanguageBracketGuideSource(model);
-	assert.deepEqual(source.getBracketGuides(1, 2).map(guide => guide.visibleColumn), [3]);
-	model.applyEdits([{ range: new Range(3, 1, 3, 3), text: '    ' }]);
-	assert.deepEqual(source.getBracketGuides(1, 2).map(guide => guide.visibleColumn), [5]);
 });

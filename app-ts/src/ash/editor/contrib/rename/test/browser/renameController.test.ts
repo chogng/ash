@@ -1,29 +1,11 @@
+import '../../../../test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
-import { test, suiteTeardown } from 'mocha';
+import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Range } from '../../../../common/core/range.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { LanguageFeaturesService } from '../../../../common/services/languageFeaturesService.js';
 import type { LanguageRenameRequest, LanguageWorkspaceEdit } from '../../../../common/languages.js';
-
-const browserEnvironment = new JSDOM('<!doctype html><body></body>');
-browserEnvironment.window.HTMLCanvasElement.prototype.getContext = () => null;
-for (const [name, value] of Object.entries({
-	window: browserEnvironment.window,
-	document: browserEnvironment.window.document,
-	Node: browserEnvironment.window.Node,
-	Element: browserEnvironment.window.Element,
-	HTMLElement: browserEnvironment.window.HTMLElement,
-	Event: browserEnvironment.window.Event,
-	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
-	ResizeObserver: class {
-		observe(): void {}
-		unobserve(): void {}
-		disconnect(): void {}
-	},
-})) {
-	Object.defineProperty(globalThis, name, { configurable: true, value });
-}
 
 await import('../../browser/rename.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
@@ -36,7 +18,6 @@ registerEditorContribution({
 		return context.onDidExecuteCommand(event => commandLogs.get(context.model)?.push(event.commandId));
 	},
 });
-suiteTeardown(() => browserEnvironment.window.close());
 
 test('rename keeps the provider that prepared the symbol and reports one undoable command', async () => {
 	using fixture = createEditor();

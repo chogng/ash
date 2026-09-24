@@ -1,34 +1,15 @@
+import '../../../../test/browser/testEditorDom.js';
+import { browserEnvironment as browser } from '../../../../test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
-import { test, suiteTeardown } from 'mocha';
+import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { TextModel } from '../../../../common/model/textModel.js';
-
-const browser = new JSDOM('<!doctype html><body></body>');
-class TestResizeObserver {
-	observe(): void {}
-	unobserve(): void {}
-	disconnect(): void {}
-}
-for (const [name, value] of Object.entries({
-	window: browser.window,
-	document: browser.window.document,
-	Node: browser.window.Node,
-	Element: browser.window.Element,
-	HTMLElement: browser.window.HTMLElement,
-	Event: browser.window.Event,
-	InputEvent: browser.window.InputEvent,
-	KeyboardEvent: browser.window.KeyboardEvent,
-	ResizeObserver: TestResizeObserver,
-})) {
-	Object.defineProperty(globalThis, name, { configurable: true, value });
-}
 
 const { FoldingController } = await import('../../browser/folding.js');
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 const { FoldingDecorationProvider } = await import('../../browser/foldingDecorations.js');
 
-suiteTeardown(() => browser.window.close());
 
 test('FoldingDecorationProvider selects controls, highlights, and editor-owned decoration lifetime', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');

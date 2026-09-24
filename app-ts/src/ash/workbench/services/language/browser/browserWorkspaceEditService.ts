@@ -38,8 +38,14 @@ interface PreparedResourceEdit {
 
 type PreparedEdit = PreparedTextEdit | PreparedResourceEdit;
 type UndoOperation = () => Promise<void>;
+interface AppliedResourceState {
+	readonly resource: URI;
+	readonly expected: VirtualFile;
+	readonly textModel: boolean;
+	readonly alternativeVersionId?: number;
+}
 
-/** Workbench owner for ordered, preflighted workspace edits with best-effort undo on failure. */
+/** Workbench owner for ordered, preflighted workspace edits and their inverse operations. */
 export class BrowserWorkspaceEditService extends Disposable implements IWorkspaceEditService {
 	private readonly retainedFailedSaves = new Map<string, TextModelReference>();
 
@@ -74,11 +80,54 @@ export class BrowserWorkspaceEditService extends Disposable implements IWorkspac
 				if (rollbackErrors.length > 0) throw new AggregateError([error, ...rollbackErrors], "Workspace edit failed and could not be fully rolled back");
 				throw error;
 			}
-			return Object.freeze({ resources: Object.freeze([...touched.values()]) });
+			const lastKind = new Map<string, PreparedEdit['kind']>();
+			for (const operation of prepared) {
+				for (const resource of entryResources(operation.entry)) lastKind.set(resource.toString(), operation.kind);
+			}
+			const finalStates = [...touched.values()].map(resource => {
+				const textModel = lastKind.get(resource.toString()) === 'textDocument';
+				return {
+					resource,
+					expected: { ...states.get(resource.toString())! },
+					textModel,
+					...(textModel ? { alternativeVersionId: acquired.get(resource.toString())!.reference.model.getAlternativeVersionId() } : {}),
+				};
+			});
+			let reverted = false;
+			return Object.freeze({
+				resources: Object.freeze([...touched.values()]),
+				undo: async (): Promise<void> => {
+					if (reverted) throw new Error('Workspace edit was already reverted');
+					await this.verifyAppliedState(finalStates);
+					const errors = await rollback(undo);
+					if (errors.length > 0) throw new AggregateError(errors, `Workspace edit could not be fully reverted: ${errors.map(String).join('; ')}`);
+					reverted = true;
+				},
+			});
 		} finally {
 			for (const [key, model] of acquired) {
 				if (this.retainedFailedSaves.get(key) === model.reference) continue;
 				model.reference.dispose();
+			}
+		}
+	}
+
+	private async verifyAppliedState(resources: readonly AppliedResourceState[]): Promise<void> {
+		for (const { resource, expected, textModel, alternativeVersionId } of resources) {
+			if (textModel) {
+				const reference = await this.models.acquire({ resource }, new AbortController().signal);
+				try {
+					if (reference.model.getText() !== expected.text || reference.model.getAlternativeVersionId() !== alternativeVersionId) {
+						throw new Error(`Workspace edit target '${resource.toString()}' changed before replacement`);
+					}
+				} finally {
+					reference.dispose();
+				}
+				continue;
+			}
+			const actual = await this.fileState(resource, new Map());
+			if (actual.exists !== expected.exists || (expected.exists && actual.text !== expected.text)) {
+				throw new Error(`Workspace edit target '${resource.toString()}' changed before replacement`);
 			}
 		}
 	}
@@ -141,14 +190,10 @@ export class BrowserWorkspaceEditService extends Disposable implements IWorkspac
 		if (operation.kind === "textDocument") {
 			const { entry, model, before, after } = operation;
 			if (model.reference.model.getText() !== before) throw new Error(`Workspace edit content for '${entry.resource.toString()}' changed during application`);
-			model.reference.model.applyEdits(entry.edits);
-			undo.push(async () => {
-				model.reference.model.reset(before);
-				if (!model.wasOpen) {
-					await model.reference.save(new AbortController().signal);
-					this.retainedFailedSaves.delete(entry.resource.toString());
-				}
-			});
+			if (before === after) return;
+			model.reference.model.applyOperations(entry.edits);
+			const appliedVersion = model.reference.model.getAlternativeVersionId();
+			undo.push(() => this.undoText(entry.resource, before, after, appliedVersion, model.wasOpen));
 			if (!model.wasOpen) {
 				try {
 					await model.reference.save(signal);
@@ -166,9 +211,11 @@ export class BrowserWorkspaceEditService extends Disposable implements IWorkspac
 				const entry = operation.entry;
 				if (entry.kind !== "create") throw new Error("Invalid prepared workspace create");
 				await this.files.createFile(entry.resource, entry.existing);
-				undo.push(operation.targetBefore === undefined
-					? () => this.files.delete(entry.resource, "ignore", "fileOrEmptyDirectory")
-					: () => this.files.writeFile({ resource: entry.resource, content: operation.targetBefore! }).then(() => undefined));
+				undo.push(async () => {
+					await this.assertFileText(entry.resource, '');
+					if (operation.targetBefore === undefined) await this.files.delete(entry.resource, "ignore", "fileOrEmptyDirectory");
+					else await this.files.writeFile({ resource: entry.resource, content: operation.targetBefore });
+				});
 				return;
 			}
 			case "rename": {
@@ -176,6 +223,7 @@ export class BrowserWorkspaceEditService extends Disposable implements IWorkspac
 				if (entry.kind !== "rename") throw new Error("Invalid prepared workspace rename");
 				await this.files.rename(entry.source, entry.target, entry.existing);
 				undo.push(async () => {
+					await this.assertFileText(entry.target, operation.sourceBefore!);
 					await this.files.rename(entry.target, entry.source, "overwrite");
 					if (operation.targetBefore !== undefined) await this.files.writeFile({ resource: entry.target, content: operation.targetBefore });
 				});
@@ -186,10 +234,31 @@ export class BrowserWorkspaceEditService extends Disposable implements IWorkspac
 				if (entry.kind !== "delete") throw new Error("Invalid prepared workspace delete");
 				await this.files.delete(entry.resource, entry.missing, entry.mode);
 				undo.push(async () => {
+					await this.assertFileText(entry.resource, undefined);
 					await this.files.createFile(entry.resource, "overwrite");
 					await this.files.writeFile({ resource: entry.resource, content: operation.sourceBefore! });
 				});
 			}
+		}
+	}
+
+	private async undoText(resource: URI, before: string, after: string, appliedVersion: number, wasOpen: boolean): Promise<void> {
+		const reference = await this.models.acquire({ resource }, new AbortController().signal);
+		try {
+			if (reference.model.getText() !== after || reference.model.getAlternativeVersionId() !== appliedVersion) {
+				throw new Error(`Workspace edit target '${resource.toString()}' changed before replacement`);
+			}
+			if (!reference.model.undo() || reference.model.getText() !== before) throw new Error(`Workspace edit for '${resource.toString()}' is no longer the latest undo step`);
+			if (!wasOpen) await reference.save(new AbortController().signal);
+		} finally {
+			reference.dispose();
+		}
+	}
+
+	private async assertFileText(resource: URI, expected: string | undefined): Promise<void> {
+		const state = await this.fileState(resource, new Map());
+		if (state.exists !== (expected !== undefined) || (state.exists && state.text !== expected)) {
+			throw new Error(`Workspace edit target '${resource.toString()}' changed before replacement`);
 		}
 	}
 

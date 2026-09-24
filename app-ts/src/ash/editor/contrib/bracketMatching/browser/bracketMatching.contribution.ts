@@ -1,18 +1,11 @@
 import { registerEditorContribution } from '../../../browser/editorExtensions.js';
 import { TextDecorationCollection } from '../../../common/model/decorationCollection.js';
-import { LanguageBracketGuideSource } from './bracketColorizationPresentation.js';
 import { BracketMatchingController } from './bracketMatching.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { KeyCode } from '../../../../base/common/keyCodes.js';
 
 registerEditorContribution({
 	id: BracketMatchingController.ID,
-	configure: context => {
-		const largeFile = context.model.largeFile.tooLargeForTokenization;
-		if (!largeFile) {
-			context.setBracketGuideSource(new LanguageBracketGuideSource(context.model));
-		}
-	},
 	install: context => {
 		if (context.kind !== 'text') return;
 		const bracketPairs = context.model.bracketPairs;

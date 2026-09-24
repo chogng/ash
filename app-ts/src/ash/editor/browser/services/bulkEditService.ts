@@ -99,10 +99,14 @@ export interface IBulkEditOptions {
 	readonly reason?: unknown;
 }
 
-export interface IBulkEditResult {
+export type IBulkEditResult = {
 	readonly ariaSummary: string;
-	readonly isApplied: boolean;
-}
+	readonly isApplied: false;
+} | {
+	readonly ariaSummary: string;
+	readonly isApplied: true;
+	readonly undo: () => Promise<void>;
+};
 
 export type IBulkEditPreviewHandler = (edits: ResourceEdit[], options?: IBulkEditOptions) => Promise<ResourceEdit[]>;
 

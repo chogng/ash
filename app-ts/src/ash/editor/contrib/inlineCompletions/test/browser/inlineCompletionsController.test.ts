@@ -1,3 +1,4 @@
+import '../../../../test/browser/testEditorDom.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import type { LanguageInlineCompletionsProvider } from '../../../../common/languages.js';
 import { createTestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
@@ -6,7 +7,7 @@ import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from 
 import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IInlineCompletionsService, InlineCompletionsService } from '../../../../browser/services/inlineCompletionsService.js';
 import assert from 'node:assert/strict';
-import { test, suiteTeardown } from 'mocha';
+import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { TriggerInlineEditCommandsRegistry } from '../../../../browser/triggerInlineEditCommandsRegistry.js';
@@ -28,24 +29,9 @@ class TestResizeObserver {
 	disconnect(): void {}
 }
 
-const browserEnvironment = new JSDOM('<!doctype html><body></body>');
-for (const [name, value] of Object.entries({
-	window: browserEnvironment.window,
-	document: browserEnvironment.window.document,
-	Node: browserEnvironment.window.Node,
-	Element: browserEnvironment.window.Element,
-	HTMLElement: browserEnvironment.window.HTMLElement,
-	Event: browserEnvironment.window.Event,
-	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
-	ResizeObserver: TestResizeObserver,
-})) {
-	Object.defineProperty(globalThis, name, { configurable: true, value });
-}
-
 const { TestView: View } = await import('../../../../test/browser/viewModel/testViewModel.js');
 const { InlineCompletionsController } = await import('../../browser/controller/inlineCompletionsController.js');
 
-suiteTeardown(() => browserEnvironment.window.close());
 
 test('Registered editor commands retrigger inline completions after their edit', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');

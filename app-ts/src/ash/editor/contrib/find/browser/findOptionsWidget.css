@@ -1,0 +1,31 @@
+.stanza-editor-find-options-widget {
+  position: absolute;
+  z-index: 12;
+  display: flex;
+  gap: 3px;
+  padding: 4px;
+  color: var(--ash-editor-foreground);
+  background: var(--ash-dialog-background);
+  border: 1px solid var(--ash-widget-border);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px var(--ash-widget-shadow);
+}
+
+.stanza-editor-find-options-widget[hidden] { display: none; }
+
+.stanza-editor-find-options-widget button {
+  min-width: 24px;
+  height: 24px;
+  color: var(--ash-button-foreground);
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+}
+
+.stanza-editor-find-options-widget button:hover,
+.stanza-editor-find-options-widget button[aria-pressed="true"] { background: var(--ash-button-hover-background); }
+
+.stanza-editor-find-options-widget button:focus-visible {
+  outline: 1px solid var(--ash-focus-border);
+  outline-offset: -1px;
+}

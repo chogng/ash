@@ -1,30 +1,16 @@
+import '../../../../test/browser/testEditorDom.js';
+import { browserEnvironment as environment } from '../../../../test/browser/testEditorDom.js';
 import { h } from '../../../../../base/browser/dom.js';
 import assert from 'node:assert/strict';
-import { test, suiteTeardown } from 'mocha';
-import { JSDOM } from 'jsdom';
+import { test } from 'mocha';
 import { TextModel } from '../../../../common/model/textModel.js';
 import '../../browser/middleScroll.contribution.js';
 
-const environment = new JSDOM('<!doctype html><body></body>');
-for (const [name, value] of Object.entries({
-	window: environment.window,
-	document: environment.window.document,
-	Node: environment.window.Node,
-	Element: environment.window.Element,
-	HTMLElement: environment.window.HTMLElement,
-	HTMLCanvasElement: environment.window.HTMLCanvasElement,
-	Event: environment.window.Event,
-	KeyboardEvent: environment.window.KeyboardEvent,
-	PointerEvent: environment.window.PointerEvent ?? environment.window.MouseEvent,
-	ResizeObserver: class TestResizeObserver { observe(): void {} unobserve(): void {} disconnect(): void {} },
-})) Object.defineProperty(globalThis, name, { configurable: true, value });
-environment.window.HTMLCanvasElement.prototype.getContext = () => null;
 
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 const { MiddleScrollController } = await import('../../browser/middleScrollController.js');
 
-suiteTeardown(() => environment.window.close());
 
 test('middle click opens a scroll session and keyboard input closes it', () => {
 	const container = h(environment.window.document, 'main');
@@ -88,8 +74,15 @@ test('pointer displacement continuously scrolls and release ends an active movem
 	});
 	editor.layout({ width: 300, height: 60 });
 	editor.view.domNode.domNode.dispatchEvent(pointerEvent('pointerdown', 1, 7, 40, 30));
+	const scrolled = new Promise<void>(resolve => {
+		const listener = editor.view.onDidChangeLayout(event => {
+			if (event.layout.scrollPosition.top <= 0 || event.layout.scrollPosition.left <= 0) return;
+			listener.dispose();
+			resolve();
+		});
+	});
 	environment.window.dispatchEvent(pointerEvent('pointermove', 0, 7, 120, 100));
-	await new Promise(resolve => setTimeout(resolve, 50));
+	await scrolled;
 	environment.window.dispatchEvent(pointerEvent('pointerup', 0, 7, 120, 100));
 
 	assert.ok(editor.view.currentLayout.scrollPosition.top > 0);

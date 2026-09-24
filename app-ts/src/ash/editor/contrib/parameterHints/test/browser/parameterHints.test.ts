@@ -1,5 +1,6 @@
+import '../../../../test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
-import { test, suiteTeardown } from 'mocha';
+import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Position } from '../../../../common/core/position.js';
 import { TextModel } from '../../../../common/model/textModel.js';
@@ -7,27 +8,8 @@ import { LanguageFeaturesService } from '../../../../common/services/languageFea
 import type { LanguageParameterHints, LanguageParameterHintsRequest } from '../../../../common/languages.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 
-const browserEnvironment = new JSDOM('<!doctype html><body></body>');
-browserEnvironment.window.HTMLCanvasElement.prototype.getContext = () => null;
-for (const [name, value] of Object.entries({
-	window: browserEnvironment.window,
-	document: browserEnvironment.window.document,
-	Node: browserEnvironment.window.Node,
-	Element: browserEnvironment.window.Element,
-	HTMLElement: browserEnvironment.window.HTMLElement,
-	Event: browserEnvironment.window.Event,
-	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
-	ResizeObserver: class {
-		observe(): void {}
-		unobserve(): void {}
-		disconnect(): void {}
-	},
-})) {
-	Object.defineProperty(globalThis, name, { configurable: true, value });
-}
 await import('../../browser/parameterHints.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
-suiteTeardown(() => browserEnvironment.window.close());
 
 const hints: LanguageParameterHints = {
 	signatures: [{ label: 'call(value)', parameters: [{ label: 'value' }], activeParameter: 0 }],

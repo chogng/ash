@@ -48,8 +48,8 @@ export class MultiDiffGoToNextChangeAction extends Action2 {
 		});
 	}
 
-	public override run(accessor: ServicesAccessor): void {
-		activeMultiDiffPane(accessor)?.nextChange();
+	public override run(accessor: ServicesAccessor): Promise<unknown> | undefined {
+		return activeMultiDiffPane(accessor)?.nextChange();
 	}
 }
 
@@ -67,8 +67,8 @@ export class MultiDiffGoToPreviousChangeAction extends Action2 {
 		});
 	}
 
-	public override run(accessor: ServicesAccessor): void {
-		activeMultiDiffPane(accessor)?.previousChange();
+	public override run(accessor: ServicesAccessor): Promise<unknown> | undefined {
+		return activeMultiDiffPane(accessor)?.previousChange();
 	}
 }
 

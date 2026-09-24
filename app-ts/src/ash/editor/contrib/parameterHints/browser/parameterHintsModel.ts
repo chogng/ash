@@ -1,7 +1,7 @@
 import { getActiveElement } from '../../../../base/browser/dom.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { Emitter } from '../../../../base/common/event.js';
-import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { TextModelChangeReason, type TextModelChange } from '../../../common/core/textChange.js';
@@ -17,7 +17,7 @@ export class ParameterHintsModel extends Disposable {
 	private readonly scheduler: RunOnceScheduler;
 	private currentHints: LanguageParameterHints | undefined;
 	private pending: LanguageParameterHintsContext | undefined;
-	private request: AbortController | undefined;
+	private request: { controller: AbortController; activeSignatureHelp: LanguageParameterHints | undefined } | undefined;
 
 	constructor(
 		private readonly input: HTMLElement,
@@ -44,6 +44,7 @@ export class ParameterHintsModel extends Disposable {
 		this._register(editor.onDidChangeConfiguration(event => {
 			if (event.hasChanged(EditorOption.parameterHints)) this.cancel();
 		}));
+		this._register(toDisposable(() => this.cancel()));
 	}
 
 	get hints(): LanguageParameterHints | undefined {
@@ -61,7 +62,7 @@ export class ParameterHintsModel extends Disposable {
 	cancel(): void {
 		this.scheduler.cancel();
 		this.pending = undefined;
-		this.request?.abort();
+		this.request?.controller.abort();
 		this.request = undefined;
 		this.currentHints = undefined;
 		this.changedHints.fire(undefined);
@@ -98,25 +99,26 @@ export class ParameterHintsModel extends Disposable {
 	private onContentChange(change: TextModelChange): void {
 		const active = this.isActive;
 		const pending = this.pending;
-		const activeSignatureHelp = this.currentHints ?? pending?.activeSignatureHelp;
+		const isRetrigger = !!this.request || !!this.currentHints || !!pending?.isRetrigger;
+		const activeSignatureHelp = this.currentHints ?? pending?.activeSignatureHelp ?? this.request?.activeSignatureHelp;
 		this.cancel();
 		if (change.reason !== TextModelChangeReason.Edit || !this.canRequest()) return;
 		const inserted = change.changes.length === 1 ? change.changes[0]!.text : '';
 		const providers = this.languageFeaturesService.signatureHelpProvider.ordered(this.textModel);
 		const triggerCharacter = [...inserted].reverse().find(character => providers.some(provider =>
 			provider.signatureHelpTriggerCharacters?.includes(character)
-			|| (active && provider.signatureHelpRetriggerCharacters?.includes(character)),
+			|| (isRetrigger && provider.signatureHelpRetriggerCharacters?.includes(character)),
 		));
 		if (triggerCharacter !== undefined) {
-			this.pending = { kind: 'triggerCharacter', triggerCharacter, isRetrigger: active, activeSignatureHelp };
+			this.pending = { kind: 'triggerCharacter', triggerCharacter, isRetrigger, activeSignatureHelp };
 		} else if (active) {
-			this.pending = { ...(pending ?? { kind: 'contentChange' }), isRetrigger: active, activeSignatureHelp };
+			this.pending = { ...(pending ?? { kind: 'contentChange' }), isRetrigger, activeSignatureHelp };
 		}
 		if (this.pending) this.scheduler.schedule();
 	}
 
 	private async refresh(context: LanguageParameterHintsContext): Promise<void> {
-		const activeSignatureHelp = context.activeSignatureHelp ?? this.currentHints;
+		const activeSignatureHelp = context.activeSignatureHelp ?? this.currentHints ?? this.request?.activeSignatureHelp;
 		context = Object.freeze({
 			...context,
 			isRetrigger: context.isRetrigger ?? (!!this.request || !!this.currentHints),
@@ -125,7 +127,8 @@ export class ParameterHintsModel extends Disposable {
 		this.cancel();
 		const position = this.editor.getSelections()?.[0]?.getPosition();
 		if (!this.canRequest() || !position) return;
-		const controller = this.request = new AbortController();
+		const controller = new AbortController();
+		const activeRequest = this.request = { controller, activeSignatureHelp };
 		const request: LanguageParameterHintsRequest = Object.freeze({
 			...createLanguageFeatureRequest(this.textModel, this.textModel.getLanguageId(), controller.signal),
 			resource: this.textModel.uri,
@@ -133,7 +136,7 @@ export class ParameterHintsModel extends Disposable {
 			context,
 		});
 		const hints = await provideSignatureHelp(this.languageFeaturesService.signatureHelpProvider, request, this.onError);
-		if (!isLanguageFeatureRequestCurrent(request) || this.request !== controller) return;
+		if (!isLanguageFeatureRequestCurrent(request) || this.request !== activeRequest) return;
 		if (!hints) {
 			this.cancel();
 			return;
@@ -142,9 +145,4 @@ export class ParameterHintsModel extends Disposable {
 		this.changedHints.fire(hints);
 	}
 
-	override dispose(): void {
-		if (this.isDisposed) return;
-		this.cancel();
-		super.dispose();
-	}
 }

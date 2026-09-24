@@ -1,6 +1,7 @@
+import '../../../../test/browser/testEditorDom.js';
 import type { LanguageColorProvider } from '../../../../common/languages.js';
 import assert from 'node:assert/strict';
-import { test, suiteTeardown } from 'mocha';
+import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
@@ -12,31 +13,10 @@ import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { LanguageFeaturesService } from '../../../../common/services/languageFeaturesService.js';
 import type { ColorPickerController } from '../../browser/colorPickerController.js';
 
-const browserEnvironment = new JSDOM('<!doctype html><body></body>');
-browserEnvironment.window.HTMLCanvasElement.prototype.getContext = () => null;
-for (const [name, value] of Object.entries({
-	window: browserEnvironment.window,
-	document: browserEnvironment.window.document,
-	Node: browserEnvironment.window.Node,
-	Element: browserEnvironment.window.Element,
-	HTMLElement: browserEnvironment.window.HTMLElement,
-	Event: browserEnvironment.window.Event,
-	InputEvent: browserEnvironment.window.InputEvent,
-	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
-	ResizeObserver: class {
-		observe(): void {}
-		unobserve(): void {}
-		disconnect(): void {}
-	},
-})) {
-	Object.defineProperty(globalThis, name, { configurable: true, value });
-}
-
 await import('../../browser/colorPickerController.js');
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 
-suiteTeardown(() => browserEnvironment.window.close());
 
 test('color picker decorates, edits, and undoes a CSS color as one operation', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');

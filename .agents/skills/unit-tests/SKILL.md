@@ -1,6 +1,6 @@
 ---
 name: unit-tests
-description: Use when running unit tests in the VS Code repo. Covers the runTests tool, scripts/test.sh (macOS/Linux) and scripts/test.bat (Windows), and their supported arguments for filtering, globbing, and debugging tests.
+description: Use when running unit tests in the Ash repo. Covers the runTests tool, scripts/test.sh (macOS/Linux) and scripts/test.bat (Windows), and their supported arguments for filtering, globbing, and debugging tests.
 ---
 
 # Running Unit Tests
@@ -13,7 +13,7 @@ If the `runTests` tool is available, **prefer it** over running shell commands. 
 - Pass test names via the `testNames` parameter to filter which tests run.
 - Set `mode="coverage"` to collect coverage.
 
-Example (conceptual): run tests in `src/vs/editor/test/common/model.test.ts` with test name filter `"should split lines"`.
+Example (conceptual): run tests in `src/ash/editor/test/common/model.test.ts` with test name filter `"should split lines"`.
 
 ## Fallback: Shell scripts
 
@@ -31,17 +31,17 @@ These scripts download Electron if needed and launch the Mocha test runner.
 Pass source file paths directly as positional arguments. The test runner automatically treats bare `.ts`/`.js` positional arguments as `--run` values.
 
 ```bash
-./scripts/test.sh src/vs/editor/test/common/model.test.ts
+./scripts/test.sh src/ash/editor/test/common/model.test.ts
 ```
 
 ```bat
-.\scripts\test.bat src\vs\editor\test\common\model.test.ts
+.\scripts\test.bat src\ash\editor\test\common\model.test.ts
 ```
 
 Multiple files:
 
 ```bash
-./scripts/test.sh src/vs/editor/test/common/model.test.ts src/vs/editor/test/common/range.test.ts
+./scripts/test.sh src/ash/editor/test/common/model.test.ts src/ash/editor/test/common/range.test.ts
 ```
 
 #### `--run <file>` - Run tests from a specific file (explicit form)
@@ -49,13 +49,13 @@ Multiple files:
 Accepts a **source file path** (starting with `src/`). The runner strips the `src/` prefix and the `.ts`/`.js` extension automatically to resolve the compiled module.
 
 ```bash
-./scripts/test.sh --run src/vs/editor/test/common/model.test.ts
+./scripts/test.sh --run src/ash/editor/test/common/model.test.ts
 ```
 
 Multiple files can be specified by repeating `--run`:
 
 ```bash
-./scripts/test.sh --run src/vs/editor/test/common/model.test.ts --run src/vs/editor/test/common/range.test.ts
+./scripts/test.sh --run src/ash/editor/test/common/model.test.ts --run src/ash/editor/test/common/range.test.ts
 ```
 
 #### `--grep <pattern>` (aliases: `-g`, `-f`) - Filter tests by name
@@ -69,7 +69,7 @@ Runs only tests whose full title matches the pattern (passed to Mocha's `--grep`
 Combine with `--run` to filter tests within a specific file:
 
 ```bash
-./scripts/test.sh --run src/vs/editor/test/common/model.test.ts --grep "should split lines"
+./scripts/test.sh --run src/ash/editor/test/common/model.test.ts --grep "should split lines"
 ```
 
 #### `--runGlob <pattern>` (aliases: `--glob`, `--runGrep`) - Run tests matching a glob
@@ -85,7 +85,7 @@ Note: the glob runs against compiled `.js` files in the output directory, not so
 #### `--coverage` - Generate a coverage report
 
 ```bash
-./scripts/test.sh --run src/vs/editor/test/common/model.test.ts --coverage
+./scripts/test.sh --run src/ash/editor/test/common/model.test.ts --coverage
 ```
 
 #### `--timeout <ms>` - Set test timeout
@@ -93,7 +93,7 @@ Note: the glob runs against compiled `.js` files in the output directory, not so
 Override the default Mocha timeout for long-running tests.
 
 ```bash
-./scripts/test.sh --run src/vs/editor/test/common/model.test.ts --timeout 10000
+./scripts/test.sh --run src/ash/editor/test/common/model.test.ts --timeout 10000
 ```
 
 ### Integration tests
@@ -102,4 +102,4 @@ Integration tests (files ending in `.integrationTest.ts` or located in `extensio
 
 ### Compilation requirement
 
-Tests run against compiled JavaScript output. Ensure the `VS Code - Build` watch task is running or that compilation has completed before running tests. Test failures caused by stale output are a common pitfall.
+Tests run against compiled JavaScript output. Ensure the `Ash - Build` watch task is running or that compilation has completed before running tests. Test failures caused by stale output are a common pitfall.

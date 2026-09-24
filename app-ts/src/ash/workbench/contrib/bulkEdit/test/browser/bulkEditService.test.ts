@@ -77,7 +77,7 @@ class RecordingWorkspaceEditService implements IWorkspaceEditService {
 
 	async apply(edit: LanguageWorkspaceEdit): Promise<WorkspaceEditResult> {
 		this.calls.push(edit);
-		return { resources: Object.freeze([]) };
+		return { resources: Object.freeze([]), undo: async () => {} };
 	}
 }
 

@@ -17,18 +17,25 @@ import { createTestLanguageConfigurationService } from '../common/modes/testLang
 import { ILanguageConfigurationService } from '../../common/languages/languageConfigurationRegistry.js';
 import { ILanguageFeaturesService } from '../../common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../common/services/languageFeaturesService.js';
-import { StandaloneCommandService, StandaloneKeybindingService, StandaloneNotificationService } from '../../standalone/browser/standaloneServices.js';
+import { StandaloneBulkEditService, StandaloneCommandService, StandaloneKeybindingService, StandaloneNotificationService, StandaloneWorkspaceContextService } from '../../standalone/browser/standaloneServices.js';
+import { IBulkEditService } from '../../browser/services/bulkEditService.js';
+import { DefaultDropProvidersFeature, DefaultPasteProvidersFeature } from '../../contrib/dropOrPasteInto/browser/defaultProviders.js';
+import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
 import { IKeybindingService } from '../../../platform/keybinding/common/keybinding.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
 import { IMenuService, MenuService } from '../../../platform/actions/common/menuService.js';
 import { IContextMenuService, IContextViewService } from '../../../platform/contextview/browser/contextView.js';
+import { HoverService, IHoverService } from '../../../platform/hover/browser/hoverService.js';
 import { BrowserContextViewService } from '../../../platform/contextview/browser/contextViewService.js';
 import { BrowserContextMenuService } from '../../../platform/contextview/browser/contextMenuService.js';
 import { IAccessibilityService } from '../../../platform/accessibility/common/accessibility.js';
 import { AccessibilityService } from '../../../platform/accessibility/browser/accessibilityService.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
+import { QuickInputController } from '../../../platform/quickinput/browser/quickInputController.js';
+import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
 
 interface TestCodeEditorOptions extends CodeEditorWidgetOptions {
 	readonly instantiationService?: IInstantiationService;
@@ -45,6 +52,9 @@ export function createCodeEditorServices(disposables: Pick<DisposableStore, 'add
 
 /** Completes an existing test scope without replacing its explicit service overrides. */
 export function registerCodeEditorServices(services: ServiceContainer): void {
+	if (!services.has(ILogService)) {
+		services.registerInstance(ILogService, new NullLoggerService());
+	}
 	if (!services.has(IContextKeyService)) {
 		services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 	}
@@ -76,6 +86,9 @@ export function registerCodeEditorServices(services: ServiceContainer): void {
 	if (!services.has(INotificationService)) {
 		services.registerSingleton(INotificationService, () => services.createInstance(StandaloneNotificationService));
 	}
+	if (!services.has(IQuickInputService)) {
+		services.registerSingleton(IQuickInputService, () => new QuickInputController(document.body));
+	}
 	if (!services.has(IMenuService)) {
 		services.registerSingleton(IMenuService, () => services.createInstance(new ServiceConstructionDescriptor(MenuService, {
 			serviceDependencies: [ICommandService, IContextKeyService],
@@ -88,6 +101,13 @@ export function registerCodeEditorServices(services: ServiceContainer): void {
 		services.registerSingleton(IContextMenuService, () => services.createInstance(new ServiceConstructionDescriptor(BrowserContextMenuService, {
 			serviceDependencies: [IMenuService, IContextKeyService, IKeybindingService, IContextViewService, INotificationService],
 		})));
+	}
+	if (!services.has(IHoverService)) {
+		services.registerSingleton(IHoverService, accessor => new HoverService(
+			accessor.get(IConfigurationService),
+			accessor.get(IContextViewService),
+			accessor.get(IContextMenuService),
+		));
 	}
 	if (!services.has(ILanguageFeatureDebounceService)) {
 		services.registerSingleton(ILanguageFeatureDebounceService, () => services.createInstance(LanguageFeatureDebounceService));
@@ -104,6 +124,12 @@ export function registerCodeEditorServices(services: ServiceContainer): void {
 	if (!services.has(ILanguageFeaturesService)) {
 		services.registerSingleton(ILanguageFeaturesService, () => new LanguageFeaturesService());
 	}
+	if (!services.has(IBulkEditService)) {
+		services.registerSingleton(IBulkEditService, () => services.createInstance(StandaloneBulkEditService));
+	}
+	if (!services.has(IWorkspaceContextService)) {
+		services.registerInstance(IWorkspaceContextService, new StandaloneWorkspaceContextService());
+	}
 }
 
 export function createTestCodeEditor(options: TestCodeEditorOptions): CodeEditorWidget {
@@ -111,6 +137,9 @@ export function createTestCodeEditor(options: TestCodeEditorOptions): CodeEditor
 	try {
 		const { instantiationService, languageConfigurationService, languageFeaturesService, accessibilityService, ...widgetOptions } = options;
 		const overrides = resources.add(instantiationService ? instantiationService.createChild() : new ServiceContainer());
+		if (!overrides.has(IQuickInputService)) {
+			overrides.registerSingleton(IQuickInputService, () => new QuickInputController(widgetOptions.container.ownerDocument.body));
+		}
 		if (languageConfigurationService) {
 			overrides.registerInstance(ILanguageConfigurationService, languageConfigurationService);
 		}
@@ -121,6 +150,8 @@ export function createTestCodeEditor(options: TestCodeEditorOptions): CodeEditor
 			overrides.registerInstance(IAccessibilityService, accessibilityService);
 		}
 		const services = createCodeEditorServices(resources, overrides);
+		resources.add(new DefaultPasteProvidersFeature(services.get(ILanguageFeaturesService), services.get(IWorkspaceContextService)));
+		resources.add(new DefaultDropProvidersFeature(services.get(ILanguageFeaturesService), services.get(IWorkspaceContextService)));
 		return services.createInstance(TestCodeEditor, widgetOptions, resources);
 	} catch (error) {
 		resources.dispose();

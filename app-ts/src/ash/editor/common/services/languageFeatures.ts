@@ -36,6 +36,8 @@ export interface ILanguageFeaturesService extends IDisposable {
 	readonly selectionRangeProvider: LanguageFeatureRegistry<languages.LanguageSelectionRangeProvider>;
 	readonly documentHighlightProvider: LanguageFeatureRegistry<languages.DocumentHighlightProvider>;
 	readonly multiDocumentHighlightProvider: LanguageFeatureRegistry<languages.MultiDocumentHighlightProvider>;
+	readonly documentPasteEditProvider: LanguageFeatureRegistry<languages.DocumentPasteEditProvider>;
+	readonly documentDropEditProvider: LanguageFeatureRegistry<languages.DocumentDropEditProvider>;
 	setNotebookTypeResolver(resolver: import('../languageFeatureRegistry.js').NotebookInfoResolver | undefined): void;
 	registerProviderBatch(providers: LanguageProviderBatch): LanguageProviderBatchRegistration;
 }

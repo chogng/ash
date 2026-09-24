@@ -21,6 +21,7 @@ import { type ICodeEditorViewState } from '../../../../editor/common/editorCommo
 import { ITextModelResourceService, type TextModelReference } from "../../../services/textmodelResolver/common/textModelResourceService.js";
 import { type EditorTextDirection } from "../../../../editor/browser/view.js";
 import { EditorLineWrapping, type IEditorOptions } from "../../../../editor/common/config/editorOptions.js";
+import { EditorMinimapConfiguration } from '../../../../editor/common/config/editorConfigurationSchema.js';
 import { type IWorkingCopy, type IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import { type Range } from "../../../../editor/common/core/range.js";
 import { type LanguageLocation, type LanguageWorkspaceEdit } from "../../../../editor/common/languages.js";
@@ -156,8 +157,14 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 			if (this.options.lineWrapping === undefined && event.affectsConfiguration(CodeEditorConfiguration.wordWrap)) {
 				update.wordWrap = this.configurationService.getValue(CodeEditorConfiguration.wordWrap) === EditorLineWrapping.On ? 'on' : 'off';
 			}
-			if (this.options.minimap === undefined && event.affectsConfiguration(CodeEditorConfiguration.minimapEnabled)) {
-				update.minimap = { enabled: this.configurationService.getValue(CodeEditorConfiguration.minimapEnabled) };
+			if (this.options.minimap === undefined && [
+				EditorMinimapConfiguration.enabled,
+				EditorMinimapConfiguration.renderCharacters,
+				EditorMinimapConfiguration.size,
+				EditorMinimapConfiguration.showSlider,
+				EditorMinimapConfiguration.side,
+			].some(key => event.affectsConfiguration(key))) {
+				update.minimap = this.readMinimapOptions();
 			}
 			if (event.affectsConfiguration(CodeEditorConfiguration.renderWhitespace)) {
 				update.renderWhitespace = this.configurationService.getValue(CodeEditorConfiguration.renderWhitespace);
@@ -167,6 +174,16 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 			}
 			if (Object.keys(update).length > 0) part.updateOptions(update);
 		}));
+	}
+
+	private readMinimapOptions(): IEditorOptions['minimap'] {
+		return {
+			enabled: this.configurationService.getValue(EditorMinimapConfiguration.enabled),
+			renderCharacters: this.configurationService.getValue(EditorMinimapConfiguration.renderCharacters),
+			size: this.configurationService.getValue(EditorMinimapConfiguration.size),
+			showSlider: this.configurationService.getValue(EditorMinimapConfiguration.showSlider),
+			side: this.configurationService.getValue(EditorMinimapConfiguration.side),
+		};
 	}
 
 	create(parent: HTMLElement): void {
@@ -206,7 +223,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 				lineHeight: this.options.lineHeight,
 				fontLigatures: this.options.fontLigatures,
 				experimentalGpuAcceleration: this.options.experimentalGpuAcceleration,
-				minimap: this.options.minimap ?? { enabled: this.configurationService.getValue(CodeEditorConfiguration.minimapEnabled) },
+				minimap: this.options.minimap ?? this.readMinimapOptions(),
 				renderWhitespace: this.configurationService.getValue(CodeEditorConfiguration.renderWhitespace),
 				renderControlCharacters: this.configurationService.getValue(CodeEditorConfiguration.renderControlCharacters),
 				renderLineHighlight: this.options.renderLineHighlight,

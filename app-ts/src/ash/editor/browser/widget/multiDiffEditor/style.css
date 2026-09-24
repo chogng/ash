@@ -7,9 +7,9 @@
 	min-height: 0;
 	overflow: auto;
 	color: var(--ash-editor-foreground);
-	background: var(--ash-editor-background);
+	background: var(--ash-multi-diff-editor-background);
 	font-family: var(--ash-font-family-monospace, ui-monospace, monospace);
-	white-space: pre;
+	white-space: normal;
 	outline: none;
 }
 
@@ -29,13 +29,16 @@
 	right: 8px;
 	left: 8px;
 	box-sizing: border-box;
-	overflow: hidden;
-	background: var(--ash-editor-background);
-	border: 1px solid var(--ash-widget-border);
+	overflow: visible;
+	background: var(--ash-multi-diff-editor-background);
+	border: var(--ash-strokeThickness) solid var(--ash-multi-diff-editor-border);
 	border-radius: 6px;
 }
 
 .stanza-multi-diff-editor-header {
+	position: sticky;
+	top: 0;
+	z-index: 2;
 	display: flex;
 	align-items: center;
 	box-sizing: border-box;
@@ -43,8 +46,8 @@
 	height: 34px;
 	min-width: 0;
 	color: inherit;
-	background: color-mix(in srgb, var(--ash-editor-background) 92%, var(--ash-foreground));
-	border-bottom: 1px solid var(--ash-widget-border);
+	background: var(--ash-multi-diff-editor-header-background);
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-multi-diff-editor-border);
 	cursor: pointer;
 }
 
@@ -133,28 +136,14 @@
 .stanza-multi-diff-editor-body {
 	position: relative;
 	min-width: 100%;
+}
+
+.stanza-multi-diff-editor-item-editor {
+	position: sticky;
+	top: 34px;
+	min-width: 0;
+	width: 100%;
 	overflow: hidden;
-}
-
-.stanza-multi-diff-editor-rows {
-	position: absolute;
-	top: 0;
-	left: 0;
-	min-width: 100%;
-}
-
-.stanza-multi-diff-editor.hide-line-numbers .stanza-diff-editor-line-number {
-	display: none;
-}
-
-.stanza-multi-diff-editor-status {
-	display: flex;
-	align-items: center;
-	box-sizing: border-box;
-	height: 40px;
-	padding: 0 10px;
-	color: var(--ash-description-foreground);
-	white-space: normal;
 }
 
 .stanza-multi-diff-editor-accessibility-status {

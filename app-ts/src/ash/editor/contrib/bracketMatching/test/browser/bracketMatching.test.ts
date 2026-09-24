@@ -1,3 +1,4 @@
+import '../../../../test/browser/testEditorDom.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -10,18 +11,6 @@ import { TextModel } from "../../../../common/model/textModel.js";
 import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 import { type ICodeEditor } from '../../../../browser/editorBrowser.js';
 import { type TextMeasurer } from '../../../../common/viewModel.js';
-
-const browserEnvironment = new JSDOM("<!doctype html><body></body>");
-for (const [name, value] of Object.entries({
-	window: browserEnvironment.window,
-	document: browserEnvironment.window.document,
-	Node: browserEnvironment.window.Node,
-	Element: browserEnvironment.window.Element,
-	HTMLElement: browserEnvironment.window.HTMLElement,
-	Event: browserEnvironment.window.Event,
-})) {
-	Object.defineProperty(globalThis, name, { configurable: true, value });
-}
 
 const { TestView: View } = await import("../../../../test/browser/viewModel/testViewModel.js");
 const { BracketMatchingController } = await import("../../browser/bracketMatching.js");

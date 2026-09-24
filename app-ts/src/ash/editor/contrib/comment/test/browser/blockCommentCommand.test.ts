@@ -1,36 +1,17 @@
+import '../../../../test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
-import { test, suiteTeardown } from 'mocha';
+import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Position } from '../../../../common/core/position.js';
 import { Selection } from '../../../../common/core/selection.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { TestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
 
-const browserEnvironment = new JSDOM('<!doctype html><body></body>');
-for (const [name, value] of Object.entries({
-	window: browserEnvironment.window,
-	document: browserEnvironment.window.document,
-	Node: browserEnvironment.window.Node,
-	Element: browserEnvironment.window.Element,
-	HTMLElement: browserEnvironment.window.HTMLElement,
-	Event: browserEnvironment.window.Event,
-	InputEvent: browserEnvironment.window.InputEvent,
-	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
-	ResizeObserver: class TestResizeObserver {
-		observe(): void {}
-		unobserve(): void {}
-		disconnect(): void {}
-	},
-})) {
-	Object.defineProperty(globalThis, name, { configurable: true, value });
-}
-
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 const { EditorExtensionsRegistry } = await import('../../../../browser/editorExtensions.js');
 await import('../../browser/comment.js');
 
-suiteTeardown(() => browserEnvironment.window.close());
 
 test('Block Comment runs through the canonical editor action', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
