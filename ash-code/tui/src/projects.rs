@@ -17,10 +17,12 @@ use ash_app_server_protocol::protocol::projects::ProjectCreateParams;
 use ash_app_server_protocol::protocol::projects::ProjectDto;
 use ash_app_server_protocol::protocol::projects::ProjectReadParams;
 use ash_app_server_protocol::protocol::projects::ProjectRootAddParams;
+use ash_app_server_protocol::protocol::projects::ProjectRootDto;
 use ash_app_server_protocol::protocol::projects::ProjectSessionMutationParams;
 use ash_app_server_protocol::protocol::projects::ProjectStatusDto;
 use ash_protocol::ProjectId;
 use ash_protocol::SessionId;
+use ash_utils_absolute_path::AbsolutePathBuf;
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
@@ -76,7 +78,7 @@ where
                 Some(project) => project,
                 None => create_project(client, workspace, session_id)?,
             };
-            Ok(Event::RootsOpened(root_choices(&project, workspace)))
+            Ok(Event::RootsOpened(root_choices(&project, workspace)?))
         }
         Command::OpenAddRoot => {
             let session_id =
@@ -109,9 +111,7 @@ fn current_project<T>(
 where
     T: JsonRpcTransport,
 {
-    let workspace = workspace
-        .canonicalize()
-        .unwrap_or_else(|_| workspace.to_path_buf());
+    let workspace = canonical_workspace(workspace)?;
     let summaries = client.list_projects().map_err(|error| error.to_string())?;
     let mut matches = Vec::new();
     for summary in summaries.projects {
@@ -124,11 +124,11 @@ where
             })
             .map_err(|error| error.to_string())?
             .project;
-        if project.roots.iter().any(|root| {
-            root.path
-                .to_host_path()
-                .is_ok_and(|path| path.as_path() == workspace)
-        }) {
+        if project
+            .roots
+            .iter()
+            .any(|root| root_matches_workspace(root, &workspace))
+        {
             matches.push(project);
         }
     }
@@ -295,18 +295,24 @@ fn path_name(path: &Path) -> String {
         .unwrap_or_else(|| path.display().to_string())
 }
 
-pub(crate) fn root_choices(project: &ProjectDto, workspace: &Path) -> RootChoices {
-    let workspace = workspace
-        .canonicalize()
-        .unwrap_or_else(|_| workspace.to_path_buf());
+fn canonical_workspace(workspace: &Path) -> Result<AbsolutePathBuf, String> {
+    AbsolutePathBuf::resolve_against_current_dir(workspace)
+        .and_then(|path| path.canonicalize())
+        .map_err(|error| error.to_string())
+}
+
+fn root_matches_workspace(root: &ProjectRootDto, workspace: &AbsolutePathBuf) -> bool {
+    root.path
+        .to_host_path()
+        .is_ok_and(|path| path == *workspace)
+}
+
+pub(crate) fn root_choices(project: &ProjectDto, workspace: &Path) -> Result<RootChoices, String> {
+    let workspace = canonical_workspace(workspace)?;
     let current_environment = project
         .roots
         .iter()
-        .find(|root| {
-            root.path
-                .to_host_path()
-                .is_ok_and(|path| path.as_path() == workspace)
-        })
+        .find(|root| root_matches_workspace(root, &workspace))
         .map(|root| root.environment_id.clone())
         .expect("Project root choices require the current workspace root");
     let mut actions = BTreeMap::new();
@@ -317,11 +323,7 @@ pub(crate) fn root_choices(project: &ProjectDto, workspace: &Path) -> RootChoice
         .filter(|root| root.environment_id == current_environment)
         .enumerate()
         .map(|(index, root)| {
-            let path = root
-                .path
-                .to_host_path()
-                .expect("Project roots in the current environment must be on this host");
-            let is_current = path.as_path() == workspace;
+            let is_current = root_matches_workspace(root, &workspace);
             if is_current {
                 current = index;
             }
@@ -329,13 +331,17 @@ pub(crate) fn root_choices(project: &ProjectDto, workspace: &Path) -> RootChoice
             actions.insert(
                 id.clone(),
                 RootSelectionAction::Switch {
-                    path: path.as_path().to_path_buf(),
+                    path: root
+                        .path
+                        .to_host_path()
+                        .expect("Project roots in the current environment are host paths")
+                        .into_path_buf(),
                     current: is_current,
                 },
             );
             ListSelectionItem::new(&root.name)
                 .with_id(id)
-                .with_description(path.as_path().display().to_string())
+                .with_description(root.path.inferred_native_path_string())
         })
         .collect();
     let add_id = ListSelectionItemId::new("project-root:add");
@@ -345,7 +351,7 @@ pub(crate) fn root_choices(project: &ProjectDto, workspace: &Path) -> RootChoice
             .with_id(add_id)
             .with_description("Add a directory to this project"),
     );
-    RootChoices {
+    Ok(RootChoices {
         model: ListSelectionModel::new(
             "Switch project folder",
             vec![ListSelectionGroup::new(&project.name, items)],
@@ -355,7 +361,7 @@ pub(crate) fn root_choices(project: &ProjectDto, workspace: &Path) -> RootChoice
         .without_tab_bar()
         .with_empty_message("No matching project folders"),
         actions,
-    }
+    })
 }
 
 #[cfg(test)]

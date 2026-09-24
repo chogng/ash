@@ -1,5 +1,5 @@
-import { watchAppServer } from './lib/appServer.ts';
-import { compilationTargets, watchCompilation } from './lib/compilation.ts';
+import { watchAppServer } from './appServer.ts';
+import { compilationTargets, watchCompilation } from './compilation.ts';
 
 const args = process.argv.slice(2);
 if (args[0] === 'app-server') {

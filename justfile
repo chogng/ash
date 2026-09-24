@@ -7,6 +7,7 @@ python := "uv run --frozen --project scripts python"
 recipe_args := if os_family() == "windows" { "@($args | Select-Object -Skip 1)" } else { '"$@"' }
 tui_profile := ""
 tui_profile_arg := if tui_profile == "" { "" } else { "--profile " + tui_profile }
+code_sandbox := if os() == "linux" { "-p ash-bwrap --bin bwrap" } else { "" }
 
 # Format Just, Rust, and first-party Python sources.
 fmt:
@@ -32,12 +33,20 @@ dependencies *args:
 bench-build *args:
     {{ python }} -B scripts/benchmark.py {{ recipe_args }}
 
-# Build all three product lines from the repository root.
-build: build-desktop build-rust
+# Build the three product hosts from the repository root.
+build: build-code build-desktop build-app
+
+# Build the Ash Code CLI/TUI host and its development server programs.
+build-code:
+    {{ python }} -B scripts/cargo.py build -p ash-cli --bin ash -p ash-app-server --bin ash-app-server -p ash-code-mode-host --bin ash-code-mode-host {{ code_sandbox }} --profile dev-small
 
 # Build the Electron Desktop product.
 build-desktop:
     pnpm --dir ash-ts build
+
+# Build the Rust Desktop host and its development server programs.
+build-app:
+    {{ python }} -B scripts/cargo.py build -p app --bin app -p ash-app-server --bin ash-app-server -p ash-code-mode-host --bin ash-code-mode-host
 
 # Build the root Rust workspace with the locked V8 inputs when required.
 build-rust *args:
@@ -116,8 +125,7 @@ ash-desktop:
     pnpm --dir ash-ts dev
 
 # Launch the pure-Rust app Desktop product.
-app:
-    {{ python }} -B scripts/cargo.py build -p ash-app-server --bin ash-app-server -p ash-code-mode-host --bin ash-code-mode-host
+app: build-app
     {{ python }} -B scripts/cargo.py run -p app
 
 # Check every pure-Rust app target with the locked sandbox-enabled V8 inputs.

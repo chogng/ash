@@ -27,7 +27,7 @@ if (mode === 'full') {
 	}
 }
 
-const build = await run(process.execPath, ['node_modules/vite/bin/vite.js', 'build', '--config', '../build/vite/vite.config.ts'], { ...process.env, ASH_WEB_APP_SERVER: mode === 'full' ? '1' : '0' });
+const build = await run(process.execPath, ['node_modules/vite/bin/vite.js', 'build', '--config', '../build/desktop/vite/vite.config.ts'], { ...process.env, ASH_WEB_APP_SERVER: mode === 'full' ? '1' : '0' });
 if (build !== 0) process.exit(build);
 
 const port = mode === 'full' ? 5174 : 5173;

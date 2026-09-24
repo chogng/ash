@@ -1,6 +1,6 @@
 import { dirname, extname, resolve } from "node:path";
 import type { Plugin } from "vite";
-import { generateIcons } from "../resources/icons/generate.ts";
+import { generateIcons } from "../../resources/icons/generate.ts";
 
 const watchedEvents = new Set(["add", "change", "unlink"]);
 
@@ -28,8 +28,8 @@ export type AshProductIconsPlugin = Omit<Plugin, "configureServer"> & {
  * while Vite is running and reloads the Renderer after a successful update.
  */
 export function productIconsPlugin(options: ProductIconsPluginOptions = {}): AshProductIconsPlugin {
-  const sourceDirectory = resolve(options.sourceDirectory ?? resolve(import.meta.dirname, "../../resources/icons"));
-  const outputFile = resolve(options.outputFile ?? resolve(import.meta.dirname, "../../ash-ts/src/ash/base/common/productIcons.ts"));
+  const sourceDirectory = resolve(options.sourceDirectory ?? resolve(import.meta.dirname, "../../../resources/icons"));
+  const outputFile = resolve(options.outputFile ?? resolve(import.meta.dirname, "../../../ash-ts/src/ash/base/common/productIcons.ts"));
   const debounceMilliseconds = options.debounceMilliseconds ?? 50;
   let timer: NodeJS.Timeout | undefined;
   let pending: Promise<unknown> = Promise.resolve();

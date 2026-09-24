@@ -13,6 +13,7 @@ path = "src/lib.rs"
 [dependencies]
 features = { workspace = true }
 ash-utils-home-dir = { workspace = true }
+ash-utils-absolute-path = { workspace = true }
 memories = { workspace = true }
 queue = { workspace = true }
 message-history = { workspace = true }

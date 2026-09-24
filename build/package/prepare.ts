@@ -1,15 +1,16 @@
 import { resolveLivekit } from './livekit.ts';
 import { spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { chmod, mkdir, readFile, rm, stat } from "node:fs/promises";
+import { chmod, mkdir, readFile, readdir, rm, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 
-import { extractMember, materialize, sha256 } from "../download/artifacts.ts";
+import { extractLockedMember, materialize } from "../download/artifacts.ts";
 import { cargoArtifactExecutable, cargoRenderedDiagnostic, cargoTargetDirectory, parseCargoMessage } from "../lib/cargo.ts";
 import { ashPackageBuildPath } from "../lib/paths.ts";
-import { developmentHostTarget } from "./store.ts";
+import { packageInputDigest, recordPackageInputs, reusablePackage } from "./inputs.ts";
+import { developmentAshPackagePath, developmentHostTarget } from "./store.ts";
 import { assemblePackage, type RemoteRuntimeRelease, type ResolvedExecutable, type ResolvedNode, type ResolvedBubblewrap, type FirstPartyExecutables } from "./layout.ts";
 
 const repositoryRoot = resolve(import.meta.dirname, "..", "..");
@@ -261,12 +262,12 @@ async function resolveExecutable(runtime: "ripgrep" | "tgrep", target: string, i
   const cacheDirectory = join(repositoryRoot, "third_party", ".cache", runtime, artifact.version, artifact.key);
   const archive = await materializeArchive(artifact, cacheDirectory);
   const executable = join(cacheDirectory, (runtime === "ripgrep" ? "rg" : "tgrep") + (isWindows ? ".exe" : ""));
-  await extractMember(archive, artifact.executable, executable, archiveBufferLimit);
+  const binarySha256 = await extractLockedMember(archive, artifact.sha256, artifact.executable, executable, archiveBufferLimit);
   if (!isWindows) await chmod(executable, 0o755);
   return {
     archive: artifact.archive,
     archiveSha256: artifact.sha256,
-    binarySha256: await sha256(executable),
+    binarySha256,
     executable,
     source: "upstream-release",
     version: artifact.version,
@@ -280,13 +281,13 @@ async function resolveNode(target: string, isWindows: boolean): Promise<Resolved
   const archive = await materializeArchive(artifact, cacheDirectory);
   const executable = join(cacheDirectory, isWindows ? "node.exe" : "node");
   const license = join(cacheDirectory, "LICENSE");
-  await extractMember(archive, artifact.executable, executable, archiveBufferLimit);
-  await extractMember(archive, artifact.license, license, archiveBufferLimit);
+  const binarySha256 = await extractLockedMember(archive, artifact.sha256, artifact.executable, executable, archiveBufferLimit);
+  await extractLockedMember(archive, artifact.sha256, artifact.license, license, archiveBufferLimit);
   if (!isWindows) await chmod(executable, 0o755);
   return {
     archive: artifact.archive,
     archiveSha256: artifact.sha256,
-    binarySha256: await sha256(executable),
+    binarySha256,
     executable,
     license,
     source: "upstream-release",
@@ -522,6 +523,38 @@ export async function prepareDevelopmentPackage(
   const ripgrep = await resolveExecutable("ripgrep", target, isWindows);
   const tgrep = await resolveExecutable("tgrep", target, isWindows);
   const node = javascriptRuntime === "packaged-node" ? await resolveNode(target, isWindows) : undefined;
+  const layout = JSON.parse(await readFile(join(repositoryRoot, "build/package/layout.json"), "utf8")) as {
+    readonly licenses: readonly { readonly source: string }[];
+  };
+  const packageSources = (await readdir(join(repositoryRoot, "build/package")))
+    .filter(name => name === "layout.json" || name.endsWith(".ts") && !name.endsWith(".test.ts"))
+    .map(name => join(repositoryRoot, "build/package", name));
+  const inputPaths = [
+    ...packageSources,
+    join(repositoryRoot, "build/download/artifacts.ts"),
+    join(repositoryRoot, "build/lib/cargo.ts"),
+    join(repositoryRoot, "build/lib/paths.ts"),
+    join(repositoryRoot, "Cargo.toml"),
+    join(repositoryRoot, "ash-rs/app-server-protocol/schema/metadata.json"),
+    join(repositoryRoot, "ash-rs/skills/assets"),
+    join(repositoryRoot, "extensions"),
+    join(repositoryRoot, "resources/product-services"),
+    ...layout.licenses.map(license => join(repositoryRoot, license.source)),
+    ...Object.values(executables).filter((value): value is string => typeof value === "string"),
+    ripgrep.executable,
+    tgrep.executable,
+    ...(node ? [node.executable, node.license] : []),
+    ...(isWindows ? [join(repositoryRoot, "ash-rs/windows-sandbox/LICENSE-APACHE"), join(repositoryRoot, "ash-rs/windows-sandbox/NOTICE")] : []),
+    ...(process.platform === "linux" ? [join(repositoryRoot, "ash-rs/vendor/bubblewrap"), executables.bubblewrap!.binary] : []),
+    ...(remoteRuntimeBundle ? [remoteRuntimeBundle] : []),
+  ];
+  const digest = await packageInputDigest(inputPaths, { javascriptRuntime, target, protocol, ripgrep, tgrep, node, remoteRuntimeRelease });
+  const cachePath = join(outputDirectory, "prepare-inputs.json");
+  const existing = await reusablePackage(cachePath, digest, () => developmentAshPackagePath(repositoryRoot, javascriptRuntime));
+  if (existing) {
+    console.log(`Reused Ash development package (${javascriptRuntime}) at ${existing}`);
+    return;
+  }
   const packageRoot = await publishDevelopmentPackage(outputDirectory, executables.packageStore, (staging) => assemblePackage(
     staging,
     target,
@@ -534,6 +567,7 @@ export async function prepareDevelopmentPackage(
     remoteRuntimeBundle,
     remoteRuntimeRelease,
   ));
+  await recordPackageInputs(cachePath, digest, packageRoot);
   console.log(`Prepared Ash development package (${javascriptRuntime}) at ${packageRoot}`);
 }
 

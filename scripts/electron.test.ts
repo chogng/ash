@@ -9,10 +9,10 @@ import test from 'node:test';
 test('Electron starts once after valid compilation and restarts only after valid rebuilds', { timeout: 20_000 }, async t => {
   const root = await mkdtemp(join(tmpdir(), 'ash-electron-'));
   const desktop = join(root, 'ash-ts');
-  for (const directory of ['scripts', 'build/lib', 'ash-ts/node_modules/typescript/bin', 'ash-ts/node_modules/electron']) {
+  for (const directory of ['scripts', 'build/desktop', 'build/lib', 'ash-ts/node_modules/typescript/bin', 'ash-ts/node_modules/electron']) {
     await mkdir(join(root, directory), { recursive: true });
   }
-  for (const name of ['scripts/electron.ts', 'build/lib/compilation.ts', 'build/lib/paths.ts']) {
+  for (const name of ['scripts/electron.ts', 'build/desktop/compilation.ts', 'build/lib/paths.ts']) {
     await copyFile(resolve(import.meta.dirname, '..', name), join(root, name));
   }
   await writeFile(join(root, 'package.json'), '{"type":"module"}');

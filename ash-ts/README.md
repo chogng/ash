@@ -45,7 +45,7 @@ Terminal 等依赖后端的操作会明确报告不可用。
 pnpm dev:stanza
 ```
 
-打开 `http://127.0.0.1:5199/build/vite/stanza/index.html`。VS Code 的
+打开 `http://127.0.0.1:5199/build/desktop/vite/stanza/index.html`。VS Code 的
 `Stanza Editor - Standalone` 启动配置会自动执行同一条命令。调试页使用
 `globalThis.stanza.editor.create/createModel`，因此可以直接在浏览器控制台检查模型、编辑器和
 生命周期事件，不会启动 Workbench 或 App Server。
@@ -76,24 +76,24 @@ Vite，并按浏览器连接管理 App Server。启动后不要关闭终端，�
 热更新分为两个单向依赖层：`src/ash/base/common/hotReload.ts` 定义 Renderer realm 内通用的
 export-handler runtime，`src/ash/base/common/hotReloadHelpers.ts` 在其上提供
 `readHotReloadableExport`、`observeHotReloadableExports` 和 `createHotClass`；两者都不依赖 Vite 或
-Workbench。根 `build/vite/` 拥有开发入口、语法分析、HMR 边界注入和完整 Vite 配置。Workbench 产品
+Workbench。`build/desktop/vite/` 拥有开发入口、语法分析、HMR 边界注入和完整 Vite 配置。Workbench 产品
 源码不启用或配置开发工具。
 
-Renderer 开发服务器使用 Vite HMR。`build/vite/setup-dev.ts` 在产品入口前启用 runtime。CSS 由 Vite
+Renderer 开发服务器使用 Vite HMR。`build/desktop/vite/setup-dev.ts` 在产品入口前启用 runtime。CSS 由 Vite
 直接替换；一般运行时导出会交给 helper 注册的观察者决定是否接受更新。名称以 `Part`、`ViewPane` 或
-`Widget` 结尾的持久 UI 类由 `build/vite/hotReloadPlugin.ts` 建立稳定身份，方法修改会补丁到
+`Widget` 结尾的持久 UI 类由 `build/desktop/vite/hotReloadPlugin.ts` 建立稳定身份，方法修改会补丁到
 现有实例，因此 Workbench 状态和当前窗口不需要重建。其他确实只修改原型方法的派生 UI 类可以用
 `@ash-hot-reload patch-prototype` 显式加入同一机制。
 
 Vite 插件会在模块执行前比较 TypeScript 语法结构。只有普通实例方法、getter 和 setter 的变化进入
 原型热替换；构造器、实例字段、静态状态、装饰器、模块声明/副作用或继承关系变化都会自动执行完整
 页面重载，并在开发服务器日志中说明原因。这样旧实例不会静默保留过期的初始化状态。Electron Main
-与 Preload 仍会重启整个 Electron 进程。`scripts/electron.ts --watch` 调用 `build/lib/compilation.ts`
+与 Preload 仍会重启整个 Electron 进程。`scripts/electron.ts --watch` 调用 `build/desktop/compilation.ts`
 监听两个 TypeScript 项目，首次启动直接使用监听器的编译结果。只有两边都完成当前编译、没有错误，且
 编译后的 preload 通过沙盒依赖校验，才启动或重启 Electron；任何编译或校验失败都会保留当前
 进程，避免加载同一轮增量编译中的半成品模块图。
 
-完整 Electron 开发命令还会运行 `build/watch.ts app-server`。Rust 源码或 Cargo manifest 变化后，它先完成
+完整 Electron 开发命令还会运行 `build/desktop/watch.ts app-server`。Rust 源码或 Cargo manifest 变化后，它先完成
 `ash-app-server` 的 `dev-small` profile 构建，再发布一个不可变 generation；每个本地 Workbench window 随后通过现有 App
 Server supervisor 停止旧连接并启动新 generation。构建失败时当前 App Server 继续运行，初始化失败
 时自动回滚到上一 generation。Host 构建遵循 `CARGO_TARGET_DIR`，并直接读取 Cargo JSON artifact 报告的
@@ -164,7 +164,7 @@ Command、MenuId、Context Key 与菜单型 Toolbar 的 canonical 组合规范�
 普通 `dev:web`、`dev:renderer` 和静态 Browser 构建未配置 host 时由
 `platform/app-server/browser/rendererApi.ts` 提供 disconnected API：UI 正常启动，状态栏显示
 App Server 不可用，产品操作明确失败。`dev:web:full` 使用 Vite 提供前端资源，
-由 `build/lib/web.ts` 启动受管理 App Server 的认证浏览器入口。`build:web` / `start:web`
+由 `build/desktop/web.ts` 启动受管理 App Server 的认证浏览器入口。`build:web` / `start:web`
 使用 Rust HTTP 入口提供编译产物；浏览器通过 WebSocket 直接交换 JSON-RPC。
 
 打开启动器给出的完整链接：URL fragment 中的一次性票据兑换为当前页签的会话，随后从地址栏移除。

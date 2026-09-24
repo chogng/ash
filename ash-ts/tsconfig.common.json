@@ -2,6 +2,8 @@
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "noEmit": true,
+    "incremental": true,
+    "tsBuildInfoFile": "../.build/desktop/common.tsbuildinfo",
     "lib": [
       "ES2022",
       "ESNext.Disposable"

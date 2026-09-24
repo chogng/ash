@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
-import { lstat, mkdir, open, rename, rm } from "node:fs/promises";
+import { lstat, mkdir, open, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -112,4 +112,30 @@ export async function extractMember(archive: string, member: string, destination
   } finally {
     await rm(partial, { force: true });
   }
+}
+
+/** Reuses a verified extraction from an immutable, checksum-locked archive. */
+export async function extractLockedMember(archive: string, archiveSha256: string, member: string, destination: string, maxBytes: number): Promise<string> {
+  const receipt = `${destination}.extract.json`;
+  try {
+    const cached: unknown = JSON.parse(await readFile(receipt, "utf8"));
+    if (cached && typeof cached === "object" && "archiveSha256" in cached && cached.archiveSha256 === archiveSha256
+      && "member" in cached && cached.member === member && "digest" in cached && typeof cached.digest === "string"
+      && /^[a-f0-9]{64}$/u.test(cached.digest)) {
+      const metadata = await lstat(destination);
+      if (metadata.isFile() && metadata.size <= maxBytes && await sha256(destination) === cached.digest) return cached.digest;
+    }
+  } catch (error) {
+    if (!(error instanceof SyntaxError) && !(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
+  }
+  await extractMember(archive, member, destination, maxBytes);
+  const digest = await sha256(destination);
+  const partial = `${receipt}.partial-${randomUUID()}`;
+  try {
+    await writeFile(partial, JSON.stringify({ archiveSha256, member, digest }));
+    await rename(partial, receipt);
+  } finally {
+    await rm(partial, { force: true });
+  }
+  return digest;
 }

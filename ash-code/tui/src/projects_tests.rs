@@ -15,23 +15,28 @@ use std::path::Path;
 
 #[test]
 fn project_root_picker_preselects_the_current_workspace() {
+    let workspace = tempfile::tempdir().unwrap();
+    let a = workspace.path().join("a");
+    let b = workspace.path().join("b");
+    std::fs::create_dir(&a).unwrap();
+    std::fs::create_dir(&b).unwrap();
     let project = ProjectDto {
         project_id: ProjectId::new("project").unwrap(),
         revision: 1,
         status: ProjectStatusDto::Active,
         name: "Ash".into(),
         description: String::new(),
-        roots: vec![root("a", "/work/a"), root("b", "/work/b")],
+        roots: vec![root("a", &a), root("b", &b)],
         session_ids: Vec::new(),
     };
-    let spec = root_choices(&project, Path::new("/work/b"));
+    let spec = root_choices(&project, &b).unwrap();
     let mut picker = ListSelection::new(spec.model, spec.actions);
     assert_eq!(picker.state().title(), "Switch project folder");
     assert_eq!(picker.state().selected_item().unwrap().label(), "b");
     assert!(matches!(
         picker.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         ListSelectionOutcome::Activate(RootSelectionAction::Switch { path, current: true })
-            if path == Path::new("/work/b")
+            if path == b
     ));
 
     // Navigating to the last item selects the add folder action
@@ -46,13 +51,17 @@ fn project_root_picker_preselects_the_current_workspace() {
     ));
 }
 
-fn root(seed: &str, path: &str) -> ProjectRootDto {
+fn root(seed: &str, path: &Path) -> ProjectRootDto {
     ProjectRootDto {
         environment_id: EnvId::local(),
         dir_id: format!("sha256:{}", seed.repeat(64))
             .parse::<DirId>()
             .unwrap(),
-        path: format!("file://{path}").parse().unwrap(),
+        path: url::Url::from_file_path(path)
+            .unwrap()
+            .as_str()
+            .parse()
+            .unwrap(),
         name: seed.into(),
         purpose: String::new(),
     }
@@ -132,18 +141,18 @@ fn adding_a_project_root_persists_project_identity_and_keeps_permissions_explici
         root.path
             .to_host_path()
             .unwrap()
+            .as_path()
             .canonicalize()
             .unwrap()
-            .as_path()
             == primary_path
     }));
     assert!(project.roots.iter().any(|root| {
         root.path
             .to_host_path()
             .unwrap()
+            .as_path()
             .canonicalize()
             .unwrap()
-            .as_path()
             == added_path
     }));
 

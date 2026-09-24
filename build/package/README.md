@@ -104,6 +104,10 @@ reads the exact executable path from Cargo's JSON artifact messages instead of
 guessing a `target` layout. Normal compact host builds, the development
 assembler, and the Rust watcher therefore reuse one compilation cache without
 creating a second target-triple tree. It neither installs nor invokes Python.
+On later development starts, checksum-locked archives reuse verified extracted files.
+After Cargo's incremental build, unchanged executable and package input metadata
+reuse the selected complete package without staging or publishing another copy.
+Changed inputs still go through full assembly and validation.
 The Python release builder invokes `layout.ts` with resolved inputs and therefore requires
 the repository-pinned Node 24 on `PATH`. It also honors `CARGO_TARGET_DIR`,
 and retains its refusal to replace an explicit output directory.

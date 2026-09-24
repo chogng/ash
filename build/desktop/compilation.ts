@@ -2,7 +2,7 @@ import { type ChildProcess, spawn } from 'node:child_process';
 import { lstat, mkdir, readFile, realpath, symlink, unlink, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
-import { desktopBuildPath } from './paths.ts';
+import { desktopBuildPath } from '../lib/paths.ts';
 
 const repositoryRoot = resolve(import.meta.dirname, '../..');
 const sourceRoot = join(repositoryRoot, 'ash-ts');

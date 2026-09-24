@@ -31,11 +31,11 @@ test("aggregate and standalone unit commands prepare inputs once and stop on pre
   const executable = script ? process.execPath : pnpm;
   const prefix = script ? [pnpm] : [];
   for (const [command, expected, failure] of [
-    ["test:main", ["tools", "output", "common", "protocol", "icons", "unit"], ""],
-    ["test:unit", ["output", "common", "protocol", "icons", "unit"], ""],
-    ["test:editor:unit", ["output", "common", "protocol", "icons", "editor"], ""],
-    ["test:main", ["tools", "output", "common"], "common"],
-    ["test:main", ["tools", "output", "common", "protocol"], "protocol"],
+    ["test:main", ["tools", "output", "protocol", "common", "icons", "unit"], ""],
+    ["test:unit", ["output", "protocol", "common", "icons", "unit"], ""],
+    ["test:editor:unit", ["output", "protocol", "common", "icons", "editor"], ""],
+    ["test:main", ["tools", "output", "protocol", "common"], "common"],
+    ["test:main", ["tools", "output", "protocol"], "protocol"],
   ] as const) {
     await writeFile(join(directory, "operations.jsonl"), "");
     const result = spawnSync(executable, [...prefix, "run", command], {

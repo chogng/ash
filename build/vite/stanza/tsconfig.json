@@ -1,7 +1,0 @@
-{
-  "extends": "../../../ash-ts/tsconfig.renderer.json",
-  "compilerOptions": {
-    "typeRoots": ["../../../ash-ts/node_modules/@types", "../../../ash-ts/node_modules"]
-  },
-  "include": ["../../../ash-ts/src/typings/css.d.ts", "../../../ash-ts/src/typings/editContext.d.ts", "index.ts"]
-}

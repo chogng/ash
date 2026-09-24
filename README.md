@@ -51,6 +51,9 @@ Build all three product lines through the repository-level command:
 just build
 ```
 
+Use `just build-code`, `just build-desktop`, or `just build-app` to build one product host.
+`just build-rust` remains the explicit full Rust workspace build.
+
 `pnpm build` builds only the Electron and Browser workspace.
 
 ### `ash code`
@@ -89,7 +92,7 @@ The full Web mode is a local development integration, not a deployable Web servi
 pnpm dev:stanza
 ```
 
-然后打开 `http://127.0.0.1:5199/build/vite/stanza/index.html`。在 VS Code 中也可以直接选择
+然后打开 `http://127.0.0.1:5199/build/desktop/vite/stanza/index.html`。在 VS Code 中也可以直接选择
 `Stanza Editor - Standalone` 配置按 F5；它会自动启动同一个 Vite 任务。页面把完整 API 暴露为
 `globalThis.stanza`，可在浏览器控制台检查 `stanza.editor.getEditors()` 和
 `stanza.editor.getModels()`。

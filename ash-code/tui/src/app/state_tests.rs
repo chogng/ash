@@ -153,12 +153,10 @@ use ash_slash_commands::{
 fn app_with_advisor_command() -> App {
     let catalog = SlashCommandCatalog::with_local_and_server(
         built_in_slash_command_definitions(),
-        ["advisor"].map(|name| {
-            SlashCommandCatalog::default()
-                .command_named(name)
-                .unwrap()
-                .clone()
-        }),
+        [SlashCommandCatalog::default()
+            .command_named("advisor")
+            .unwrap()
+            .clone()],
     )
     .unwrap();
     let mut app = App::new();
@@ -783,90 +781,16 @@ fn config_slash_command_is_owned_by_the_local_host() {
 }
 
 #[test]
-fn advisor_question_uses_a_turn_submission() {
-    let mut app = app_with_advisor_command();
-    app.insert_text("/advisor Check src/app.rs cancellation");
-
-    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-
-    assert_text_submission(action, "/advisor Check src/app.rs cancellation");
-}
-
-#[test]
-fn advisor_command_opens_config_or_selects_a_model() {
+fn advisor_command_opens_a_question_draft_without_starting_a_session() {
     let mut app = app_with_advisor_command();
     app.insert_text("/advisor");
-    assert_eq!(
-        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        Some(AppCommand::Config(ConfigCommand::OpenAdvisor))
-    );
-    app.insert_text("/advisor openai/reviewer");
-    assert_eq!(
-        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        Some(AppCommand::Config(ConfigCommand::SelectAdvisor(
-            "openai/reviewer".into()
-        )))
-    );
-    for value in ["off", "clear"] {
-        app.insert_text(&format!("/advisor {value}"));
-        assert_eq!(
-            app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-            Some(AppCommand::Config(ConfigCommand::SelectAdvisor(
-                value.into()
-            )))
-        );
-    }
-}
 
-#[test]
-fn config_owns_the_advisor_settings_page() {
-    let config = empty_config_snapshot();
-    let mut app = App::new();
-    app.update(ConfigEvent::EditorOpened(config_choices(
-        &config,
-        &ProviderListResult { providers: vec![] },
-        TerminalSettings::default(),
-        StatusLineSettings::default(),
-    )));
-    for _ in 0..20 {
-        if app
-            .list_selection()
-            .unwrap()
-            .selected_item()
-            .unwrap()
-            .label()
-            == "Advisor"
-        {
-            break;
-        }
-        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    }
-    assert_eq!(
-        app.list_selection()
-            .unwrap()
-            .selected_item()
-            .unwrap()
-            .label(),
-        "Advisor"
-    );
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert_eq!(action, Some(AppCommand::Config(ConfigCommand::OpenAdvisor)));
 
-    app.update(ConfigEvent::AdvisorOpened {
-        root: config_choices(
-            &config,
-            &ProviderListResult { providers: vec![] },
-            TerminalSettings::default(),
-            StatusLineSettings::default(),
-        ),
-        advisor: advisor_choices(
-            &config,
-            &ash_app_server_protocol::protocol::model::ModelListResult { models: vec![] },
-            Language::English,
-        ),
-    });
-    assert_eq!(app.list_selection().unwrap().title(), "Advisor");
-    assert_eq!(app.list_selection().unwrap().visible_items().len(), 2);
+    assert_eq!(action, None);
+    assert_eq!(app.input(), "/advisor ");
+    assert!(app.messages().is_empty());
+    assert_eq!(app.status(), &Status::Ready);
     let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(80, 24)).unwrap();
     terminal
         .draw(|frame| crate::app::frame::draw(frame, &app))
@@ -876,37 +800,54 @@ fn config_owns_the_advisor_settings_page() {
         .map(|y| (0..80).map(|x| buffer[(x, y)].symbol()).collect::<String>())
         .collect::<Vec<_>>()
         .join("\n");
-    crate::tui_assert_snapshot!("config_advisor_settings", rendered);
-    assert_eq!(
-        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        None
-    );
-    assert_eq!(app.list_selection().unwrap().title(), "Advisor model");
-    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-    assert_eq!(app.list_selection().unwrap().title(), "Advisor");
+    crate::tui_assert_snapshot!("advisor_question_draft", rendered);
 }
 
 #[test]
-fn advisor_command_opens_the_config_page_from_chat() {
+fn advisor_question_uses_a_turn_submission() {
+    let mut app = app_with_advisor_command();
+    app.insert_text("/advisor Check cancellation");
+
+    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert_text_submission(action, "/advisor Check cancellation");
+}
+
+#[test]
+fn config_owns_the_advisor_model_picker() {
     let config = empty_config_snapshot();
     let mut app = App::new();
-    app.update(ConfigEvent::AdvisorOpened {
-        root: config_choices(
-            &config,
-            &ProviderListResult { providers: vec![] },
-            TerminalSettings::default(),
-            StatusLineSettings::default(),
-        ),
-        advisor: advisor_choices(
-            &config,
-            &ash_app_server_protocol::protocol::model::ModelListResult { models: vec![] },
-            Language::English,
-        ),
-    });
+    app.update(ConfigEvent::EditorOpened(config_choices(
+        &config,
+        &ProviderListResult { providers: vec![] },
+        TerminalSettings::default(),
+        StatusLineSettings::default(),
+    )));
+    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert_eq!(action, Some(AppCommand::Config(ConfigCommand::OpenAdvisor)));
 
-    assert_eq!(app.list_selection().unwrap().title(), "Advisor");
-    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-    assert_eq!(app.list_selection().unwrap().title(), "Config");
+    app.update(ConfigEvent::AdvisorOpened(advisor_choices(
+        &config,
+        &ash_app_server_protocol::protocol::model::ModelListResult { models: vec![] },
+        Language::English,
+    )));
+    assert_eq!(app.list_selection().unwrap().title(), "Advisor model: Off");
+    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(80, 24)).unwrap();
+    terminal
+        .draw(|frame| crate::app::frame::draw(frame, &app))
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    let rendered = (0..24)
+        .map(|y| (0..80).map(|x| buffer[(x, y)].symbol()).collect::<String>())
+        .collect::<Vec<_>>()
+        .join("\n");
+    crate::tui_assert_snapshot!("config_advisor_model", rendered);
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::Config(ConfigCommand::SetAdvisor(None)))
+    );
 }
 
 #[test]
@@ -2349,7 +2290,12 @@ fn project_folder_picker_switches_only_to_a_non_current_root_without_a_draft() {
     use ash_app_server_protocol::protocol::projects::ProjectStatusDto;
     use ash_file_access::DirId;
     use ash_file_access::EnvId;
-    let mut app = App::for_dir(std::path::Path::new("/work/current"));
+    let workspace = tempfile::tempdir().unwrap();
+    let current = workspace.path().join("current");
+    let other = workspace.path().join("other");
+    std::fs::create_dir(&current).unwrap();
+    std::fs::create_dir(&other).unwrap();
+    let mut app = App::for_dir(&current);
     let dir_id = |seed: char| {
         format!("sha256:{}", seed.to_string().repeat(64))
             .parse::<DirId>()
@@ -2365,14 +2311,22 @@ fn project_folder_picker_switches_only_to_a_non_current_root_without_a_draft() {
             ProjectRootDto {
                 environment_id: EnvId::local(),
                 dir_id: dir_id('a'),
-                path: "file:///work/current".parse().unwrap(),
+                path: url::Url::from_file_path(&current)
+                    .unwrap()
+                    .as_str()
+                    .parse()
+                    .unwrap(),
                 name: "current".into(),
                 purpose: String::new(),
             },
             ProjectRootDto {
                 environment_id: EnvId::local(),
                 dir_id: dir_id('b'),
-                path: "file:///work/other".parse().unwrap(),
+                path: url::Url::from_file_path(&other)
+                    .unwrap()
+                    .as_str()
+                    .parse()
+                    .unwrap(),
                 name: "other".into(),
                 purpose: String::new(),
             },
@@ -2380,24 +2334,24 @@ fn project_folder_picker_switches_only_to_a_non_current_root_without_a_draft() {
         session_ids: Vec::new(),
     };
     app.update(crate::projects::Event::RootsOpened(
-        crate::projects::root_choices(&project, std::path::Path::new("/work/current")),
+        crate::projects::root_choices(&project, &current).unwrap(),
     ));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     assert!(matches!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        Some(AppCommand::Dirs(crate::dirs::Command::MoveSession { path })) if path == std::path::Path::new("/work/other")
+        Some(AppCommand::Dirs(crate::dirs::Command::MoveSession { path })) if path == other
     ));
     assert!(app.command_panel().is_none());
 
-    let mut app = App::for_dir(std::path::Path::new("/work/current"));
+    let mut app = App::for_dir(&current);
     app.insert_text("keep this draft");
     app.update(crate::projects::Event::RootsOpened(
-        crate::projects::root_choices(&project, std::path::Path::new("/work/current")),
+        crate::projects::root_choices(&project, &current).unwrap(),
     ));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     assert!(matches!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        Some(AppCommand::Dirs(crate::dirs::Command::MoveSession { path })) if path == std::path::Path::new("/work/other")
+        Some(AppCommand::Dirs(crate::dirs::Command::MoveSession { path })) if path == other
     ));
     assert_eq!(app.input(), "keep this draft");
     assert!(app.command_panel().is_none());
@@ -2410,7 +2364,10 @@ fn project_folder_picker_opens_add_root_when_add_item_is_selected() {
     use ash_app_server_protocol::protocol::projects::ProjectStatusDto;
     use ash_file_access::DirId;
     use ash_file_access::EnvId;
-    let mut app = App::for_dir(std::path::Path::new("/work/current"));
+    let workspace = tempfile::tempdir().unwrap();
+    let current = workspace.path().join("current");
+    std::fs::create_dir(&current).unwrap();
+    let mut app = App::for_dir(&current);
     let dir_id = |seed: char| {
         format!("sha256:{}", seed.to_string().repeat(64))
             .parse::<DirId>()
@@ -2425,14 +2382,18 @@ fn project_folder_picker_opens_add_root_when_add_item_is_selected() {
         roots: vec![ProjectRootDto {
             environment_id: EnvId::local(),
             dir_id: dir_id('a'),
-            path: "file:///work/current".parse().unwrap(),
+            path: url::Url::from_file_path(&current)
+                .unwrap()
+                .as_str()
+                .parse()
+                .unwrap(),
             name: "current".into(),
             purpose: String::new(),
         }],
         session_ids: Vec::new(),
     };
     app.update(crate::projects::Event::RootsOpened(
-        crate::projects::root_choices(&project, std::path::Path::new("/work/current")),
+        crate::projects::root_choices(&project, &current).unwrap(),
     ));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     assert!(matches!(

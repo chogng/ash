@@ -1,6 +1,6 @@
-import { addDisposableListener } from "../../../ash-ts/src/ash/base/browser/dom.js";
-import { DisposableStore, toDisposable } from "../../../ash-ts/src/ash/base/common/lifecycle.js";
-import * as stanzaApi from "../../../ash-ts/src/ash/editor/editor.main.js";
+import { addDisposableListener } from "../../../../ash-ts/src/ash/base/browser/dom.js";
+import { DisposableStore, toDisposable } from "../../../../ash-ts/src/ash/base/common/lifecycle.js";
+import * as stanzaApi from "../../../../ash-ts/src/ash/editor/editor.main.js";
 import "./style.css";
 
 declare global {

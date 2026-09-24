@@ -340,7 +340,7 @@ App Server 连接并重新读取 Session/Thread；Renderer 不直接读写 SQLit
 Electron sandbox 边界分为两层。`ISandboxGlobals` 是 preload 唯一暴露到主世界的底层桥接：
 它只包含只读进程元数据，以及受 `ash:` 频道前缀约束的 `invoke` / `on`。preload 必须保持
 自包含，运行时除 `electron` 外不得加载任何模块，也不得把 Electron event 对象传给 Renderer。
-构建后的 preload 由 `build/lib/compilation.ts` 检查这一约束。
+构建后的 preload 由 `build/desktop/compilation.ts` 检查这一约束。
 
 `createElectronRendererApi()` 是该桥接的唯一产品适配器。它在普通 Renderer bundle 中引用频道
 常量，并组装领域化、强类型、可枚举的 `AshElectronRendererApi`。跨宿主领域能力由其父接口
@@ -579,7 +579,7 @@ Browser 入口没有 App Server 连接时会明确显示不可用状态。`dev:w
 前端开发入口，使用同一 disconnected API 保持 UI 可检查，但不声称拥有后端能力。当前本地
 `dev:web:full` 与 `build:web` / `start:web` 使用受管理 Rust App Server 的认证
 HTTP/WebSocket 浏览器入口。每个浏览器页签独立交换 JSON-RPC，服务仍由 profile registry 管理。
-`build/lib/web.ts` 只持有启动租约、读取启动信息和收尾；不转发业务消息。
+`build/desktop/web.ts` 只持有启动租约、读取启动信息和收尾；不转发业务消息。
 Vite 提供开发资源，发布资源由 Rust HTTP 入口读取可信配置中的目录。
 普通 `build:renderer` 保留 disconnected 模式；`build:web` 显式启用后端连接。
 可信启动入口绑定工作区和允许的 Origin；一次性票据兑换后，浏览器通过会话凭证连接，
@@ -587,7 +587,7 @@ Vite 提供开发资源，发布资源由 Rust HTTP 入口读取可信配置中�
 [前端连接与浏览器能力](../ash-ts/docs/design/app-server-connection.md)。
 公网远程部署的认证、TLS 和访问策略不属于这个本地服务的能力。
 
-Renderer 与 Stanza 共用 `build/vite/rendererOutput.ts` 的分包规则，保留模块执行顺序，避免贡献注册
+Renderer 与 Stanza 共用 `build/desktop/vite/rendererOutput.ts` 的分包规则，保留模块执行顺序，避免贡献注册
 顺序改变。构建对超过 500 kB 的 JavaScript chunk 直接报错；`build-metrics.json` 另外记录
 每个入口的静态 JavaScript 总量。分包不等于减少总下载量，worker 资源不计入此 chunk 限额。
 

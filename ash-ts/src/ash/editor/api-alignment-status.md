@@ -513,7 +513,7 @@ Workbench 准入：`services/language/browser/appServerLanguageProviders.ts` 与
 - 四个命令均已接通：`editor.action.triggerParameterHints`、`closeParameterHints`、`showPrevParameterHint`、`showNextParameterHint`。按键通过 editor 的 keydown 事件先消费，再进入公开 `trigger`，正文导航不会重复处理。切换保留原签名节点，以 `aria-current` 标记活动签名，并提供键盘说明。
 - 两份受影响单测共 77 项通过（签名提示 10 项、Widget 67 项），无警告。常规入口被下述范围外错误阻塞后，使用临时配置继承 `ash-ts/tsconfig.test.json`，仅将 include 缩到两份测试与原声明文件，并将相同 types 解析为绝对路径；编译通过后用原 `test/unit/editor.ts --run` 执行，未跳过类型检查。
 - `pnpm --dir ash-ts test:editor:browser` 完整通过，459/459 项，其中签名提示定向场景 31 项。验证公开动作和命令、动态 provider / 语言 / 模型上下文、循环边界、焦点与选区不变、DOM 复用、取消和原有输入链。浏览器只保留既有 `NO_COLOR` 环境提示。
-- Stanza 直接编译目标 `tsc -p ../build/vite/stanza/tsconfig.json --noEmit` 与现有 `editor.vite.config.ts` 生产打包均通过，无警告。
+- Stanza 直接编译目标 `tsc -p ../build/desktop/vite/stanza/tsconfig.json --noEmit` 与现有 `editor.vite.config.ts` 生产打包均通过，无警告。
 - 当时 `check-editor-alignment.mjs --test=all`、常规单测入口和构建被 `platform/sessions/common/sessionApi.ts` 的四处类型错误阻塞。原先“生成协议已移除 Advisor”的判断已纠正：Rust 已提交快照仍有这些成员，是本地生成目录过期且检查顺序错误；本轮通过既有同步脚本及 package 生命周期修复。
 - 结构、台账、CSS ownership 和 `git diff --check` 通过；生产文件集合仍为 537 个（422 同路径、115 Ash 自有），声明核对仍为 80/41。没有新增文件或修改 CSS。provider 触发字符声明、标准 signature-help 请求契约与独立 Model/Widget 接口仍待后续调用链处理。
 

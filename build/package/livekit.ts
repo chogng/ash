@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { chmod, mkdtemp, mkdir, rename, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { extractMember, materialize } from '../download/artifacts.ts';
+import { extractLockedMember, materialize } from '../download/artifacts.ts';
 import lock from '../../third_party/livekit/runtime-lock.json' with { type: 'json' };
 
 const cache = resolve(import.meta.dirname, '../../third_party/.cache/livekit', lock.version);
@@ -15,22 +15,23 @@ export async function resolveLivekit(target: string): Promise<{ executable: stri
 	if (!artifact && !mac) { throw new Error(`No media server build is defined for ${target}`); }
 	if (mac && process.platform !== 'darwin') { throw new Error('The macOS media server must be built on macOS.'); }
 	await mkdir(cache, { recursive: true });
-	const directory = await mkdtemp(join(cache, `${target}-`));
 	const name = target.includes('windows') ? 'livekit-server.exe' : 'livekit-server';
 	const executable = join(cache, target, name);
+	if (artifact) {
+		const archive = await materialize(artifact, join(cache, artifact.archive), 128 * 1024 * 1024);
+		await extractLockedMember(archive, artifact.sha256, name, executable, 256 * 1024 * 1024);
+		await chmod(executable, 0o755);
+		return { executable };
+	}
+	const directory = await mkdtemp(join(cache, `${target}-`));
 	try {
 		const output = join(directory, name);
-		if (artifact) {
-			const archive = await materialize(artifact, join(cache, artifact.archive), 128 * 1024 * 1024);
-			await extractMember(archive, name, output, 256 * 1024 * 1024);
-		} else {
-			const archive = await materialize(lock.source, join(cache, 'source.tar.gz'), 10 * 1024 * 1024);
-			run('tar', ['-xzf', archive, '-C', directory]);
-			run('go', ['build', '-trimpath', '-buildvcs=false', '-mod=readonly', '-o', output, './cmd/server'], {
-				cwd: join(directory, `livekit-${lock.version}`),
-				env: { ...process.env, GOTOOLCHAIN: 'local', GOWORK: 'off', GOFLAGS: '', CGO_ENABLED: '1', GOOS: 'darwin', GOARCH: target.startsWith('aarch64') ? 'arm64' : 'amd64' },
-			});
-		}
+		const archive = await materialize(lock.source, join(cache, 'source.tar.gz'), 10 * 1024 * 1024);
+		run('tar', ['-xzf', archive, '-C', directory]);
+		run('go', ['build', '-trimpath', '-buildvcs=false', '-mod=readonly', '-o', output, './cmd/server'], {
+			cwd: join(directory, `livekit-${lock.version}`),
+			env: { ...process.env, GOTOOLCHAIN: 'local', GOWORK: 'off', GOFLAGS: '', CGO_ENABLED: '1', GOOS: 'darwin', GOARCH: target.startsWith('aarch64') ? 'arm64' : 'amd64' },
+		});
 		await chmod(output, 0o755);
 		await mkdir(join(cache, target), { recursive: true });
 		await rename(output, executable);

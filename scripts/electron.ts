@@ -1,7 +1,7 @@
 import { type ChildProcess, spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
-import { watchCompilation } from '../build/lib/compilation.ts';
+import { watchCompilation } from '../build/desktop/compilation.ts';
 
 const sourceRoot = resolve(import.meta.dirname, '../ash-ts');
 const require = createRequire(resolve(sourceRoot, 'package.json'));

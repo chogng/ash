@@ -1,8 +1,8 @@
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
-import { AshRendererDirectory } from "../../ash-ts/src/ash/code/common/application.js";
-import { WorkbenchModeRegistry } from "../../ash-ts/src/ash/workbench/common/workbenchMode.js";
-import { desktopBuildPath } from "../lib/paths.ts";
+import { AshRendererDirectory } from "../../../ash-ts/src/ash/code/common/application.js";
+import { WorkbenchModeRegistry } from "../../../ash-ts/src/ash/workbench/common/workbenchMode.js";
+import { desktopBuildPath } from "../../lib/paths.ts";
 import { buildMetricsPlugin } from './buildMetricsPlugin.ts';
 import { rendererOutput } from './rendererOutput.ts';
 import { hotReloadPlugin } from "./hotReloadPlugin.ts";
@@ -11,7 +11,7 @@ import { webAppServerVitePlugin } from "./webAppServerPlugin.ts";
 import { workbenchEntryPlugin } from "./workbenchEntryPlugin.ts";
 
 export default defineConfig(() => {
-  const desktopRoot = resolve(import.meta.dirname, "../../ash-ts");
+  const desktopRoot = resolve(import.meta.dirname, "../../../ash-ts");
   const repositoryRoot = resolve(desktopRoot, "..");
   const workbenchModeId = WorkbenchModeRegistry.resolveModeId(process.env.ASH_WORKBENCH_MODE);
   const webAppServerEnabled = process.env.ASH_WEB_APP_SERVER === "1";

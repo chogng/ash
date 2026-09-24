@@ -4,7 +4,7 @@ import { buildMetricsPlugin } from './buildMetricsPlugin.ts';
 import { rendererOutput } from './rendererOutput.ts';
 import { hotReloadPlugin } from "./hotReloadPlugin.ts";
 
-const repositoryRoot = resolve(import.meta.dirname, "../..");
+const repositoryRoot = resolve(import.meta.dirname, "../../..");
 const desktopRoot = resolve(repositoryRoot, "ash-ts");
 
 export default defineConfig({

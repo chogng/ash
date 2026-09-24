@@ -6,7 +6,7 @@ import { analyzeHotReloadModule, unsafeHotReloadChangeReason } from "./hotReload
 import { hotReloadPlugin, type AshHotReloadPlugin } from "./hotReloadPlugin.ts";
 
 test("Vite hot reload injects setup and a generic export-handler boundary", () => {
-  const setupPath = resolve("/workspace/build/vite/setup-dev.ts");
+  const setupPath = resolve("/workspace/build/desktop/vite/setup-dev.ts");
   const plugin = hotReloadPlugin({ desktopRoot: "/workspace/ash-ts", setupPath });
   const transformed = transform(plugin, "export class SidebarPart extends PaneCompositePart {}", "/workspace/ash-ts/src/ash/sidebarPart.ts?direct");
   const htmlTags = plugin.transformIndexHtml.handler();
@@ -22,10 +22,10 @@ test("Vite hot reload injects setup and a generic export-handler boundary", () =
 });
 
 test("Vite hot reload emits a valid Windows file URL for setup", () => {
-  const plugin = hotReloadPlugin({ desktopRoot: "C:\\workspace\\ash-ts", setupPath: "C:\\workspace\\build\\vite\\setup-dev.ts" });
+  const plugin = hotReloadPlugin({ desktopRoot: "C:\\workspace\\ash-ts", setupPath: "C:\\workspace\\build\\desktop\\vite\\setup-dev.ts" });
   const htmlTags = plugin.transformIndexHtml.handler();
 
-  assert.deepEqual(htmlTags, [{ tag: "script", attrs: { type: "module", src: "/@fs/C:/workspace/build/vite/setup-dev.ts" }, injectTo: "head-prepend" }]);
+  assert.deepEqual(htmlTags, [{ tag: "script", attrs: { type: "module", src: "/@fs/C:/workspace/build/desktop/vite/setup-dev.ts" }, injectTo: "head-prepend" }]);
 });
 
 test("Vite hot reload supports explicit prototype-patch opt in", () => {

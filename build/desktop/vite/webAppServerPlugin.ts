@@ -1,5 +1,5 @@
 import type { Plugin } from 'vite';
-import { authenticatedWebUrl, startWeb } from '../lib/web.ts';
+import { authenticatedWebUrl, startWeb } from '../web.ts';
 
 export function webAppServerVitePlugin(): Plugin {
 	let close: (() => Promise<void>) | undefined;

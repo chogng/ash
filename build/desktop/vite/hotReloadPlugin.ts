@@ -27,7 +27,7 @@ export interface AshHotReloadPlugin extends Plugin {
 
 /** Owns Vite's development-only bridge to the generic Renderer hot-reload runtime. */
 export function hotReloadPlugin(options: HotReloadPluginOptions = {}): AshHotReloadPlugin {
-  const desktopRoot = resolveHostPath(options.desktopRoot ?? resolve(import.meta.dirname, "../../ash-ts"));
+  const desktopRoot = resolveHostPath(options.desktopRoot ?? resolve(import.meta.dirname, "../../../ash-ts"));
   const setupPath = resolveHostPath(options.setupPath ?? resolve(import.meta.dirname, "setup-dev.ts"));
   const analyses = new Map<string, HotReloadModuleAnalysis>();
   return {

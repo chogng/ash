@@ -98,7 +98,7 @@ async function expectWorkspace(page: Page): Promise<void> {
 async function launchWeb(mode: 'production' | 'development', port: number, env: NodeJS.ProcessEnv): Promise<{ child: ChildProcess; url: string }> {
 	const args = mode === 'production'
 		? ['../scripts/web.ts', '../.build/desktop/renderer/ash', String(port)]
-		: ['node_modules/vite/bin/vite.js', '--config', '../build/vite/vite.config.ts', '--port', String(port)];
+		: ['node_modules/vite/bin/vite.js', '--config', '../build/desktop/vite/vite.config.ts', '--port', String(port)];
 	const child = spawn(process.execPath, args, { cwd: join(repository, 'ash-ts'), env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
 	try {
 		const url = await new Promise<string>((resolveUrl, reject) => {

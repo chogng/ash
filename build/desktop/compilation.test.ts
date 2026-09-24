@@ -8,10 +8,10 @@ import test from 'node:test';
 test('compile prepares outputs and stops before bundling when TypeScript or preload validation fails', async t => {
   const root = await mkdtemp(join(tmpdir(), 'ash-compile-'));
   t.after(() => rm(root, { recursive: true, force: true }));
-  for (const directory of ['build/lib', 'build/node_modules/vite/bin', 'ash-ts/node_modules/typescript/bin']) {
+  for (const directory of ['build/desktop', 'build/lib', 'build/node_modules/vite/bin', 'ash-ts/node_modules/typescript/bin']) {
     await mkdir(join(root, directory), { recursive: true });
   }
-  for (const file of ['build/compile.ts', 'build/lib/compilation.ts', 'build/lib/paths.ts']) {
+  for (const file of ['build/desktop/compile.ts', 'build/desktop/compilation.ts', 'build/lib/paths.ts']) {
     await copyFile(resolve(import.meta.dirname, '../..', file), join(root, file));
   }
   await writeFile(join(root, 'package.json'), '{"type":"module"}');
@@ -34,7 +34,7 @@ test('compile prepares outputs and stops before bundling when TypeScript or prel
     ['', ['tsconfig.main.json', 'tsconfig.preload.json', 'tsconfig.renderer.json', 'bundle']],
   ] as const) {
     await writeFile(join(root, 'ash-ts/operations.log'), '');
-    const result = spawnSync(process.execPath, [join(root, 'build/compile.ts'), 'main', 'preload', 'renderer'], {
+    const result = spawnSync(process.execPath, [join(root, 'build/desktop/compile.ts'), 'main', 'preload', 'renderer'], {
       cwd: tmpdir(), env: { ...process.env, FAILURE: failure }, encoding: 'utf8', windowsHide: true, timeout: 10_000,
     });
     assert.equal(result.error, undefined);

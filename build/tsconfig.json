@@ -27,6 +27,6 @@
   ],
   "exclude": [
     "node_modules/**",
-    "vite/stanza/**/*.ts"
+    "desktop/vite/stanza/**/*.ts"
   ]
 }

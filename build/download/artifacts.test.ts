@@ -6,7 +6,7 @@ import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { extractMember, materialize } from "./artifacts.ts";
+import { extractLockedMember, extractMember, materialize } from "./artifacts.ts";
 
 test("a failed concurrent download preserves the verified cache and cached reads stay offline", async () => {
   const root = await mkdtemp(join(tmpdir(), "ash-download-"));
@@ -77,4 +77,30 @@ test("parallel extraction publishes complete content and extraction failure pres
     assert.equal(await readFile(destination, "utf8"), "archive payload");
     assert.deepEqual((await readdir(root)).sort(), ["input.tar", "member", "output"]);
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("locked extraction reuses verified content and refreshes changed archives", async () => {
+  const root = await mkdtemp(join(tmpdir(), "ash-locked-extract-"));
+  try {
+    const member = join(root, "member");
+    const archive = join(root, "input.tar");
+    const destination = join(root, "output");
+    await writeFile(member, "original");
+    assert.equal(spawnSync("tar", ["-cf", archive, "-C", root, "member"]).status, 0);
+    const firstArchiveDigest = createHash("sha256").update(await readFile(archive)).digest("hex");
+    const firstDigest = await extractLockedMember(archive, firstArchiveDigest, "member", destination, 100);
+    await assert.rejects(extractLockedMember(archive, firstArchiveDigest, "member", destination, 2), /exceeds size limit/);
+    await rm(archive);
+    assert.equal(await extractLockedMember(archive, firstArchiveDigest, "member", destination, 100), firstDigest);
+    await writeFile(destination, "corrupt");
+    await assert.rejects(extractLockedMember(archive, firstArchiveDigest, "member", destination, 100), /Could not extract/);
+    await writeFile(member, "updated");
+    assert.equal(spawnSync("tar", ["-cf", archive, "-C", root, "member"]).status, 0);
+    const nextArchiveDigest = createHash("sha256").update(await readFile(archive)).digest("hex");
+    assert.notEqual(nextArchiveDigest, firstArchiveDigest);
+    await extractLockedMember(archive, nextArchiveDigest, "member", destination, 100);
+    assert.equal(await readFile(destination, "utf8"), "updated");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
