@@ -5,9 +5,9 @@ use crate::protocol::common::SessionId;
 use ash_environment::EnvId;
 use ash_file_access::DirId;
 use ash_protocol::ProjectId;
+use ash_utils_path_uri::PathUri;
 use serde::Deserialize;
 use serde::Serialize;
-use std::path::PathBuf;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -21,7 +21,8 @@ pub enum ProjectStatusDto {
 pub struct ProjectRootDto {
     pub environment_id: EnvId,
     pub dir_id: DirId,
-    pub path: PathBuf,
+    /// Absolute file location in the root's environment; this does not grant access.
+    pub path: PathUri,
     pub name: String,
     pub purpose: String,
 }

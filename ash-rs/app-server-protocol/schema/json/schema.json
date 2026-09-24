@@ -27016,6 +27016,10 @@
       ],
       "type": "string"
     },
+    "PathUri": {
+      "description": "An immutable, cross-platform representation of one absolute `file:` URI.\n\nThe URI retains POSIX, Windows drive, or UNC spelling independently of the\noperating system running Ash. Lexical operations do not access the host\nfilesystem, resolve symlinks, or apply filesystem case-folding.",
+      "type": "string"
+    },
     "PendingInteraction": {
       "description": "Redaction-safe metadata for a Turn that is waiting on an interaction.\n\nThe full request payload stays in the durable interaction fact so an App Server can redeliver\nit to its selected owner after recovery. Readable Thread snapshots expose only this metadata,\npreventing a broad subscription from becoming an implicit interaction-delivery channel.",
       "properties": {
@@ -27697,7 +27701,8 @@
           "type": "string"
         },
         "path": {
-          "type": "string"
+          "$ref": "#/$defs/PathUri",
+          "description": "Absolute file location in the root's environment; this does not grant access."
         },
         "purpose": {
           "type": "string"

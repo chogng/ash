@@ -236,6 +236,25 @@ fn host_paths_round_trip_on_the_current_platform() {
     assert_eq!(uri.to_host_path().unwrap(), path);
 }
 
+#[test]
+fn explicit_posix_path_that_looks_like_a_windows_drive_keeps_its_convention() {
+    let path = PathUri::from_native_path("/C:/source/main.rs", PathConvention::Posix).unwrap();
+
+    assert!(path.is_opaque());
+    assert_eq!(path.infer_path_convention(), Some(PathConvention::Posix));
+    assert_eq!(path.inferred_native_path_string(), "/C:/source/main.rs");
+}
+
+#[cfg(unix)]
+#[test]
+fn host_posix_path_that_looks_like_a_windows_drive_round_trips() {
+    let path = AbsolutePathBuf::from_absolute("/C:/source/main.rs").unwrap();
+    let uri = PathUri::from_absolute_path(&path);
+
+    assert!(uri.is_opaque());
+    assert_eq!(uri.to_host_path().unwrap(), path);
+}
+
 #[cfg(unix)]
 #[test]
 fn non_utf8_host_paths_round_trip_losslessly() {

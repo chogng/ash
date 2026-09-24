@@ -24,8 +24,9 @@ remote execution boundary 上传递文件位置的 contract，不替代当前 Ap
 | `PathConvention` | 显式选择 POSIX/Windows grammar | 不代表一台具体机器或授权环境 |
 
 Serde 和 `TS` 将 `PathUri` 表示为 canonical URI string。Windows drive letter 统一为大写，
-`file://localhost/...` 统一为无 authority 的本地 URI。无法普通 URL 表示的 host-native path
-使用保留的 opaque URI；opaque URI 只能在相同 host convention 上恢复，且除自身相等外不参与
+`file://localhost/...` 统一为无 authority 的本地 URI。无法普通 URL 无歧义表示的路径
+（包括形如 `/C:/...` 的 POSIX 路径）使用保留的 opaque URI；opaque URI 只能在相同路径
+约定的 host 上恢复，且除自身相等外不参与
 lexical containment。
 
 ## 文件与内部所有权
@@ -63,6 +64,8 @@ PathUri::starts_with / relative_path_from
 - local-only API 可以继续使用 `Path`/`PathBuf`；
 - workspace-relative RPC 继续使用相对 path，由 Rust authority 执行 root confinement；
 - absolute file identity 跨 JSON/RPC、remote executor 或不同 OS 时使用 `PathUri`；
+- `project/read`、Project mutation result 与 `project/changed` 的 root `path` 使用 `PathUri`；
+  同一 root 的 `environmentId` 标识路径所属环境，`dirId` 仅作目录身份，不自动授予访问权限；
 - 收到 `PathUri` 不等于获得读写授权，consumer 必须另行验证 capability/workspace boundary；
 - domain 若需要忽略 fragment 等替代 identity，必须显式选择；`PathUri` 本身拒绝 fragment。
 
@@ -80,7 +83,7 @@ schema；修改 containment 时还要检查 sandbox/file-system consumer 的领�
 
 ## 当前限制与扩展点
 
-- Current：crate 已实现但尚无 production consumer。
+- Current：Project root 的 App Server 输出已使用本 crate；其他 filesystem RPC 仍使用其所属领域的路径契约。
 - Current：只接受 `file:`，不表示 HTTP、MCP resource 或 editor fragment URI。
 - Current：lexical identity 大小写敏感；filesystem-specific case comparison 属于 consumer。
 - Current：opaque fallback 不支持 parent/join/relative traversal。

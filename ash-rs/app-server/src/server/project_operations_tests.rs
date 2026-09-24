@@ -12,6 +12,7 @@ use ash_file_access::Permissions;
 use ash_model_provider::EchoModel;
 use ash_protocol::CommandId;
 use ash_protocol::ContentDigest;
+use ash_utils_path_uri::PathUri;
 use core_api::StartThreadRequest;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -98,6 +99,12 @@ fn project_rpc_keeps_catalog_associations_separate_from_directory_authority() {
         added["result"]["project"]["roots"][0]["dirId"],
         dir.id().as_str()
     );
+    let root_uri: PathUri =
+        serde_json::from_value(added["result"]["project"]["roots"][0]["path"].clone()).unwrap();
+    assert_eq!(
+        root_uri.to_host_path().unwrap().as_path(),
+        dir.canonical_path()
+    );
     assert_eq!(
         fixture
             .server
@@ -111,7 +118,14 @@ fn project_rpc_keeps_catalog_associations_separate_from_directory_authority() {
 
     let replayed = call(&fixture.server, &mut host, 7, "project/root/add", params);
     assert_eq!(replayed["result"]["disposition"], "replayed");
-    assert_eq!(notifications.drain().len(), 1);
+    let changed = notifications.drain();
+    assert_eq!(changed.len(), 1);
+    let changed: serde_json::Value = serde_json::from_str(&changed[0]).unwrap();
+    assert_eq!(changed["method"], "project/changed");
+    assert_eq!(
+        changed["params"]["project"]["roots"][0]["path"],
+        root_uri.to_string()
+    );
 
     fixture
         .server
@@ -130,6 +144,10 @@ fn project_rpc_keeps_catalog_associations_separate_from_directory_authority() {
     assert_eq!(
         read["result"]["project"]["roots"].as_array().unwrap().len(),
         1
+    );
+    assert_eq!(
+        read["result"]["project"]["roots"][0]["path"],
+        root_uri.to_string()
     );
     assert!(
         fixture

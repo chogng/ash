@@ -1,78 +1,40 @@
 # ash-utils-path
 
-> 本 README 是本 crate 当前实现契约的 canonical owner。跨进程文件位置 identity 的契约由
-> [`ash-utils-path-uri`](../path-uri/README.md) 拥有；Session cwd 与文件系统系统语义仍由对应
-> `docs/*.md` 文档拥有。
+`ash-utils-path` 提供三项本机文件系统操作：检查路径是否留在指定目录内、拼接受约束的相对路径、原子替换文件。它只报告路径和文件系统事实；访问权限与具体存储策略由调用方决定。
 
-`ash-utils-path` 处理当前 host 文件系统上的 canonical containment、受约束的相对路径拼接和原子替换。
-它不定义远程文件身份、workspace 授权边界或 Session 恢复策略。
+## 公开接口
 
-## 边界与公共契约
-
-| API | 当前职责 | Failure semantics |
+| 接口 | 行为 | 失败或边界 |
 | --- | --- | --- |
-| `join_descendant` | 绝对根路径下拼接非空相对路径，保留操作系统路径字节 | 拒绝父级、根与平台前缀；不检查符号链接或授予访问权限 |
-| `CanonicalPathRoot::new` / `canonicalize_within` | 缓存 canonical root，并验证 existing candidate 的真实 host path containment | candidate 不可用与 canonical path 逃出 root 分别返回 `Unavailable` / `OutsideRoot` |
-| `CanonicalPathRoot::inspect_without_symlinks` | 从 canonical root 到 candidate 逐级读取 metadata，不跟随任何 symlink | 区分 existing、missing、越界、symlink 与 metadata failure；不执行删除或写入 |
-| `write_atomically` | 同目录临时文件写入、保留已有权限、flush、rename、目录 sync；Windows 文件操作使用绝对扩展路径 | rename 前失败保留旧 destination；rename 后目录 sync 失败会在新内容已可见时返回错误 |
+| `CanonicalPathRoot::new` | 从已存在的根路径建立检查范围 | 根路径无法规范化时返回 I/O 错误 |
+| `canonicalize_within` | 跟随符号链接，返回仍在范围内的实际路径 | 路径不存在或无法读取时返回 `Unavailable`；越界返回 `OutsideRoot` |
+| `inspect_without_symlinks` | 从根目录逐级检查路径，不跟随符号链接 | 区分 `Existing`、`Missing`、`OutsideRoot`、`Symlink` 和 `Unavailable` |
+| `join_descendant` | 在绝对根路径下拼接非空相对路径，保留操作系统路径字节 | 拒绝父级、根和平台前缀；不检查文件系统 |
+| `write_atomically` | 在目标目录写入临时文件，保留已有目标的权限，同步文件后替换目标 | 替换前失败时保留旧文件；替换后的目录同步失败仍会报错，此时新内容已经可见 |
 
-`CanonicalPathRoot` 只报告路径事实，不决定访问权限。`write_atomically` 不拥有上层配置 schema、revision 或 locking。
+## 使用边界
 
-## 文件、内部所有权与调用关系
+- `join_descendant` 只检查路径写法。读取或写入前，调用方仍需检查实际路径和自己的访问规则。
+- 只需表示不一定存在的绝对路径时，使用 [`ash-utils-absolute-path`](../absolute-path/README.md)；需要跨进程传递文件位置时，使用 [`ash-utils-path-uri`](../path-uri/README.md) 或所属协议的相对路径。
+- 本 crate 不保存会话状态，也不决定 workspace 授权。
 
-| 文件 / private symbol | Ownership |
-| --- | --- |
-| `canonical_root.rs::normalize_for_wsl_on` | root containment 比较时处理 WSL `/mnt/<drive>` 大小写 |
-| `canonical_root.rs::is_wsl_case_insensitive_path` | 精确识别 Windows drive mount，不把普通 Linux path 当成 case-insensitive |
-| `canonical_root.rs::CanonicalPathRoot::comparison_path` | root 的 host-aware comparison identity，不改变返回给 caller 的 canonical path |
-| `canonical_root.rs::is_wsl` | 仅供 root containment 比较使用的 WSL 环境检测 |
-| `persistence.rs::sync_parent` | rename 后 durability checkpoint |
-| `persistence.rs::filesystem_path` | Windows 写入期间把 drive/UNC 路径转换为文件系统可用的扩展路径，不改变调用方保存的路径 |
+## 平台行为
 
-```text
-CanonicalPathRoot::canonicalize_within
-  → canonicalize(candidate)
-  → normalize canonical root + candidate for host comparison (WSL drive mounts)
-  → component-aware starts_with
+- 在 WSL 的 `/mnt/<drive>` 路径上，`CanonicalPathRoot` 比较实际路径时按 ASCII 忽略大小写；返回给调用方的路径不因此改写。
+- Windows 上，`write_atomically` 在文件操作期间将磁盘和 UNC 路径转为绝对扩展路径。扩展格式不会写入配置或传给子进程。
 
-CanonicalPathRoot::inspect_without_symlinks
-  → lexical containment
-  → symlink_metadata(root..candidate)
-  → Existing | Missing | OutsideRoot | Symlink | Unavailable
+## 当前限制与扩展点
 
-write_atomically
-  → Windows：为本次文件操作生成绝对扩展路径
-  → create parent
-  → NamedTempFile + write + sync
-  → persist(rename)
-  → sync_parent
-```
+- `canonicalize_within` 要求目标已存在，且会跟随符号链接。检查尚未创建的路径或禁止符号链接时，使用 `inspect_without_symlinks`；两种检查不能互相替代。
+- `inspect_without_symlinks` 只报告检查时的状态，无法阻止检查后路径被修改。需要抵抗并发修改的文件操作应由执行操作的模块使用目录句柄等平台机制，不能只增加一次路径检查。
+- `write_atomically` 不提供跨进程锁。替换后会在 Unix 上同步父目录；Windows 目前不做目录同步。
+- Windows 扩展路径只覆盖 `write_atomically` 的文件操作；其他文件操作需要在各自的操作入口处理长路径，单个路径组件仍受文件系统限制。
 
-如果这里开始保存 Session 状态、解析 URI、决定 workspace grant 或决定哪个目录可以删除，表示
-ownership 已经漂移。`inspect_without_symlinks` 只报告路径事实，是否允许操作仍由 caller 决定。
-
-## 集成与测试
-
-`ash-install-context` 的随包资源定位和 `ash-file-access::Dir` 的路径解析复用 `join_descendant`。
-文件访问层仍负责后续真实路径范围与符号链接检查；词法拼接成功不代表操作已获授权。
-
-consumer 只应依赖本 crate 的公开 API，不应依赖 private module。需要跨 RPC 序列化的路径应使用
-`ash-utils-path-uri` 或所属 protocol 的 root-relative path contract。
+## 验证
 
 ```text
 just test ash-utils-path
 bazel test //ash-rs/utils/path-utils:path-utils-unit-tests
 ```
 
-修改 WSL、containment 或 atomic-write failure semantics 时必须同步更新
-`path_utils_tests.rs` 和本 README。`external-agent-migration` 消费 canonical containment；`ash-state`、`ash-secrets`、`ash-attachment-store` 与 `ash-core-plugins` 消费 no-follow inspection，并分别拥有索引、secret、attachment 与 package store 的操作策略。
-
-## 当前限制与扩展点
-
-- Current：`canonicalize_within` 要求 candidate 存在；不存在路径使用 `inspect_without_symlinks` 检查。
-- Current：`canonicalize_within` 跟随 symlink；需要禁止 symlink 的 consumer 使用独立的
-  `inspect_without_symlinks`，两种策略不互相替代。
-- Current：no-follow 检查与后续 caller 操作之间仍存在文件系统竞态；需要抵抗同用户并发篡改的操作应使用平台级目录句柄方案。
-- Current：atomic replace 不提供跨进程 locking，caller 必须自行拥有并发控制。
-- Current：Windows 不尝试 sync directory handle。
-- Current：Windows 扩展路径只在 `write_atomically` 的文件操作内使用，不保存到配置、协议或子进程参数；单个路径组件仍受文件系统限制。
+修改路径范围、WSL 比较或原子写入行为时，同步更新 `src/path_utils_tests.rs` 和本文档。

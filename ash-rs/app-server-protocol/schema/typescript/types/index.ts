@@ -676,6 +676,7 @@ export type { ModelUsageSummary } from './ModelUsageSummary.js';
 export type { ModelUsageTotal } from './ModelUsageTotal.js';
 export type { Observation } from './Observation.js';
 export type { Outcome } from './Outcome.js';
+export type { PathUri } from './PathUri.js';
 export type { PendingInteraction } from './PendingInteraction.js';
 export type { PermissionDto } from './PermissionDto.js';
 export type { Personality } from './Personality.js';

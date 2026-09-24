@@ -103,6 +103,7 @@ ash-home = { workspace = true }
 ash-install-context = { workspace = true }
 ash-instructions = { workspace = true }
 ash-utils-absolute-path = { workspace = true }
+ash-utils-path-uri = { workspace = true }
 ash-kimi = { workspace = true }
 xai = { workspace = true }
 ash-lsp-server-provider = { workspace = true }

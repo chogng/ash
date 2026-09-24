@@ -3,10 +3,18 @@ use crate::{PathConvention, PathUri, PathUriParseError};
 use url::Url;
 
 pub(super) fn parse_native_path(path: &str, convention: PathConvention) -> Option<PathUri> {
-    match convention {
+    let uri = match convention {
         PathConvention::Posix => parse_posix_path(path),
         PathConvention::Windows => parse_windows_path(path),
+    }?;
+    if uri.infer_path_convention() == Some(convention) {
+        return Some(uri);
     }
+    let bytes = match convention {
+        PathConvention::Posix => path.as_bytes().to_vec(),
+        PathConvention::Windows => path.encode_utf16().flat_map(u16::to_le_bytes).collect(),
+    };
+    Some(PathUri::from_opaque_path_bytes(&bytes))
 }
 
 pub(super) fn infer_path_convention(path: &PathUri) -> Option<PathConvention> {

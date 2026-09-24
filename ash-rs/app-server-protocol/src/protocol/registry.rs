@@ -1777,6 +1777,8 @@ use ash_protocol::UserInputQuestion;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::WorkspaceCheckpoint;
 #[cfg(any(test, feature = "export"))]
+use ash_utils_path_uri::PathUri;
+#[cfg(any(test, feature = "export"))]
 use build_info::BuildInfo;
 #[cfg(any(test, feature = "export"))]
 use call::CallConnection;
@@ -4505,6 +4507,7 @@ typescript_bindings! {
     AutomationRunsParams,
     AutomationRunsResult,
     AutomationStopParams,
+    PathUri,
     ProjectRootDto,
     ProjectDto,
     ProjectSummaryDto,

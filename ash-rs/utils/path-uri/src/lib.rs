@@ -43,6 +43,7 @@ impl PathUri {
     pub fn from_absolute_path(path: &AbsolutePathBuf) -> Self {
         if let Ok(url) = Url::from_file_path(path)
             && let Ok(uri) = Self::try_from(url)
+            && uri.infer_path_convention() == Some(PathConvention::native())
         {
             return uri;
         }

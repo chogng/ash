@@ -44,6 +44,7 @@ ash-environment = { workspace = true }
 ash-file-access = { workspace = true }
 ash-collaboration = { workspace = true }
 ash-thread-transcript = { workspace = true }
+ash-utils-path-uri = { workspace = true }
 
 [build-dependencies]
 serde_json = { workspace = true }

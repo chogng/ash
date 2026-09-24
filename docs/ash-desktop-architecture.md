@@ -92,8 +92,8 @@ Rust primitive 与 model adapter 的实现细节分别见
 [`ash-rs/file-system/README.md`](../ash-rs/file-system/README.md) 和
 [`ash-rs/file-system-tool/README.md`](../ash-rs/file-system-tool/README.md)。跨平台 Rust
 `file:` URI 的 canonical implementation contract 见
-[`ash-rs/utils/path-uri/README.md`](../ash-rs/utils/path-uri/README.md)；该 crate 当前尚未接入
-production consumer，因此下表的共享 URI 状态仍为“部分具备”。
+[`ash-rs/utils/path-uri/README.md`](../ash-rs/utils/path-uri/README.md)；Project root 的 App Server
+输出已接入该契约，Files 的共享 URI 状态仍为“部分具备”。
 
 | 能力 | Owner | 当前状态 |
 | --- | --- | --- |

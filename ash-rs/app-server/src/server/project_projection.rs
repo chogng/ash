@@ -4,6 +4,8 @@ use ash_app_server_protocol::protocol::projects::ProjectStatusDto;
 use ash_app_server_protocol::protocol::projects::ProjectSummaryDto;
 use ash_projects::Project;
 use ash_projects::ProjectStatus;
+use ash_utils_absolute_path::AbsolutePathBuf;
+use ash_utils_path_uri::PathUri;
 
 pub(super) fn project(project: &Project) -> ProjectDto {
     ProjectDto {
@@ -18,7 +20,10 @@ pub(super) fn project(project: &Project) -> ProjectDto {
             .map(|root| ProjectRootDto {
                 environment_id: root.environment_id.clone(),
                 dir_id: root.dir_id.clone(),
-                path: root.path.clone(),
+                path: PathUri::from_absolute_path(
+                    &AbsolutePathBuf::from_absolute(&root.path)
+                        .expect("validated Project root has an absolute path"),
+                ),
                 name: root.name.clone(),
                 purpose: root.purpose.clone(),
             })
