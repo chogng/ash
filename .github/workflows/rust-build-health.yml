@@ -1,4 +1,4 @@
-name: Rust build health
+name: Rust checks and build performance
 
 on:
   push:
@@ -75,10 +75,10 @@ jobs:
           tool: just@1.46.0,uv
       - name: Check trace scopes and live OTLP transport
         run: |
-          just check ash-otel -p ash-otel-trace-websocket --locked
+          # The warning gate checks every target covered by the regular check.
+          just rust-warnings ash-otel -p ash-otel-trace-websocket -p ash-client -p ash-http-client --locked
           just test ash-otel -p ash-otel-trace-websocket -p ash-client -p ash-http-client --locked
           just test ash-otel --features mock --locked
-          just rust-warnings ash-otel -p ash-otel-trace-websocket -p ash-client -p ash-http-client --locked
 
   protocol:
     # Keep the performance comparison job below free of compiler cache effects.
@@ -104,14 +104,13 @@ jobs:
           sudo apt-get install --yes --no-install-recommends build-essential libssl-dev pkg-config
       - name: Check the default protocol build and committed artifacts
         run: |
-          just check ash-app-server-protocol --locked
-          just test ash-app-server-protocol --locked
+          # The warning gate checks every target covered by the regular check.
           just rust-warnings ash-app-server-protocol --locked
+          just test ash-app-server-protocol --locked
       - name: Check the protocol exporter and its runtime metadata
         run: |
-          just check ash-app-server-protocol --features export --locked
-          just test ash-app-server-protocol --features export --bin generate_protocol --test schema_hash --locked
           just rust-warnings ash-app-server-protocol --features export --locked
+          just test ash-app-server-protocol --features export --bin generate_protocol --test schema_hash --locked
 
   dependencies:
     runs-on: ubuntu-24.04

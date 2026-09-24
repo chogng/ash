@@ -218,7 +218,9 @@ just bench-build ash-keybinding --jobs 4 --compare .build/build-health/<run>/rep
 
 ### CI 检查
 
-`Rust build health` 在 push/PR 检查依赖与工具回归测试；仅在 main push 对编译热点 `ash-app-server-protocol` 执行性能门禁，避免 PR 等待重复的全冷编译。每次 main push 的性能作业独立运行，不被后续推送取消，以免遗漏被取消的提交。在同一个 Ubuntu 作业中分别检出推送前后的源码，两份源码使用当前版本的 Rust 工具链、四个并发任务，各测三轮。任一场景的耗时中位数同时增加超过 25% 和两秒时检查失败，两份日志和报告都会上传。首次推送没有基线时仅执行依赖检查。这是协议包的编译门禁，不代表其他产品的整包耗时预算。
+`Rust checks and build performance` 在 push/PR 检查依赖与工具回归测试；仅在 main push 对编译热点 `ash-app-server-protocol` 执行性能门禁，避免 PR 等待重复的全冷编译。每次 main push 的性能作业独立运行，不被后续推送取消，以免遗漏被取消的提交。在同一个 Ubuntu 作业中分别检出推送前后的源码，两份源码使用当前版本的 Rust 工具链、四个并发任务，各测三轮。任一场景的耗时中位数同时增加超过 25% 和两秒时检查失败，两份日志和报告都会上传。首次推送没有基线时仅执行依赖检查。这是协议包的编译门禁，不代表其他产品的整包耗时预算。
+
+该工作流的追踪测试和协议测试作业使用 sccache 复用不同 CI 运行间的 Rust 编译结果，并关闭 Rust 增量编译。这两个作业先运行覆盖所有目标的 `rust-warnings`，再运行测试，不重复执行已被 warning 检查覆盖的普通 `check`。性能门禁仍使用独立空目标目录且不启用 sccache，以便比较源码改动前后的编译耗时。本机日常构建不自动启用 sccache。
 
 `Rust warnings` 在 Linux、macOS、Windows 并行检查工作区；Linux TUI 测试单独并行运行。PR 改动路径按 Cargo 包及其依赖关系判断是否影响 TUI、CLI 或测试所需的服务程序；根 Cargo 配置、构建入口和无法归属的相关源码改动仍运行 TUI 测试。main push 和手动触发始终运行完整 TUI 覆盖，避免连续推送取消前一次运行后遗漏测试。GitHub Ubuntu runner 无法完成 Bubblewrap 的隔离网络 loopback 设置，因此三个依赖真实沙盒执行的 PTY 场景在单独并行的 macOS 作业中运行，其余 PTY 场景仍在 Linux 运行。测试使用锁定的 ripgrep 产物，并在耗时的 Rust 编译前验证它能启动。Linux 与 macOS TUI 作业的服务程序和 CLI 测试目标统一使用已有的 `ci-test` profile，避免同一作业在 `dev` 与 `test` profile 间重复编译后端依赖；普通 `just test-tui` 仍使用原有默认 profile。
 
@@ -237,6 +239,10 @@ just bench-build ash-keybinding --jobs 4 --compare .build/build-health/<run>/rep
 同次实验没有采用全局 Profile 候选：`4 CGU + ThinLTO` 的单次冷构建约快 9%，但仅修改 CLI 入口后的 Release 重编译中位数从 6.50 秒增加到 159.24 秒；build-override O1 加六个宏相关包 O3 则使开发冷构建从约 313 秒增加到 341 秒，touch 重编译中位数只减少约 0.36 秒。默认参数保留，实际改进来自消除重复生成和实例化。
 
 2026-09-24 在 macOS aarch64、Rust 1.98.0、`dev` profile、六个 Cargo 任务和离线依赖缓存下，对 `ash-app-server-protocol` 各使用三个独立空目标目录测量。源码位于同一工作区，目标目录位于本机内置磁盘。协议包原先只为 `PreparedFeedback` 类型依赖整个反馈服务，使 HTTP/TLS 构建进入关键路径；把该类型移入独立的反馈契约包后，协议包不再编译 `ash-client`、`ash-http-client`、`reqwest` 和 `aws-lc-sys`。冷构建中位数从 89.55 秒降至 69.27 秒（减少 22.6%），其中原先单次 `aws-lc-sys` 构建步骤耗时 46.5 秒。无改动重跑中位数为 0.91→0.75 秒；在协议注册表文件末尾临时加入注释触发重编译的中位数为 3.87→4.05 秒，这项注释编辑仅验证增量失效范围，不代表实际功能编辑。`time` 报告的最大 RSS 为 1.33→1.36 GB，协议 `.rlib` 均约 52 MiB；一个测量目标目录从 1.81 降至 1.55 GiB。完整产品构建耗时未由这组包级测量推断。
+
+同日在 macOS aarch64、Rust 1.98.0、`dev` profile、四个 Cargo 任务、`CARGO_INCREMENTAL=0` 和相同源码下，分别用三个独立空目标目录对照普通构建与已预热的本机 sccache 0.16.0。协议包空目标目录构建中位数为 66.03→47.88 秒（减少 27.5%），无改动重跑为 0.72→0.80 秒，触碰 `lib.rs` 时间戳后的重编译为 19.97→1.86 秒；后者复用了内容未变的编译结果，不代表修改代码后的重编译速度。两组包产物合计均为 85,773,398 字节。`time` 的最大 RSS 不覆盖独立运行的 sccache 服务，不能据此判断总内存变化。GitHub Actions 缓存和整个 CI 作业的耗时尚未由这组本机包级测量验证。
+
+同日对 `Rust checks and build performance` 的协议默认配置步骤做了三组交错顺序的完整命令对照。测量使用提交 `e6c4c14b6` 的独立检出、macOS aarch64、Rust 1.98.0、四个 Cargo 任务、`CARGO_INCREMENTAL=0`、离线依赖、每轮独立空目标目录，并关闭 sccache。原顺序 `check → test → rust-warnings` 分别用时 226.33、220.13、177.04 秒；去掉被 `rust-warnings --all-targets` 覆盖的 `check` 并先运行 warning 检查后，分别用时 188.91、145.92、139.26 秒。总耗时中位数为 220.13→145.92 秒，但各轮负载有波动；按交错配对，节省时间分别为 37.42、74.21、37.79 秒。原 `check` 自身耗时中位数为 38.59 秒；测试各轮均有 57 项通过。目标目录大小中位数为 1,321,928→1,055,728 KiB，测试步骤的最大 RSS 中位数为 2.25→2.25 GB；单个测试产物大小未单独测量。追踪作业和协议 `export` 配置的重复 `check` 同样被各自的 `rust-warnings --all-targets` 覆盖，未做单独耗时对照。这组本机无 sccache 的数据不代表 GitHub runner 启用 sccache 后的实际作业耗时。
 
 2026-09-25 在 Windows x86_64 MSVC、Rust 1.98.0、`dev-small` profile、16 个 Cargo 任务、依赖源码已缓存的条件下，对 Code 的三个程序使用独立空目标目录各测三轮。`--workspace --bin ...` 与显式 `--package/--bin` 的完整冷编译中位数为 601.48→557.29 秒（减少 7.3%）；单次配对有反向波动，不能把每轮差值都归因于包选择。Cargo 时间线显示 `windows` 包的特性数从 80 降到 65，编译耗时中位数从 135.0 降到 86.2 秒。无改动重跑中位数为 2.95→3.56 秒；仅触碰 TUI 源码触发重编的中位数为 12.79→12.00 秒，这项触碰只用于确认增量失效范围。
 
