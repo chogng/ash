@@ -1,3 +1,4 @@
+use super::GlyphSet;
 use super::KeyHintStyle;
 use super::TerminalSettings;
 use crate::nls::Language;
@@ -17,10 +18,34 @@ fn tui_table_defaults_missing_terminal_fields() {
     assert_eq!(settings.auto_update(), crate::UpdatePolicy::Latest);
     assert_eq!(settings.language(), Language::English);
     assert_eq!(settings.key_hint_style(), KeyHintStyle::Contrast);
+    assert_eq!(settings.glyph_set(), GlyphSet::Powerline);
     assert_eq!(
         settings.screen_mode(),
         crate::terminal::ScreenMode::Fullscreen
     );
+}
+
+#[test]
+fn glyph_set_round_trips_and_rejects_unknown_values() {
+    for (value, expected) in [
+        ("powerline", GlyphSet::Powerline),
+        ("plain", GlyphSet::Plain),
+    ] {
+        let section = FrontendConfigDto(BTreeMap::from([(
+            "glyphSet".into(),
+            serde_json::json!(value),
+        )]));
+        let settings = TerminalSettings::from_tui(&section).unwrap();
+        assert_eq!(settings.glyph_set(), expected);
+        assert_eq!(
+            settings.write_to_tui(&section).unwrap().0["glyphSet"],
+            serde_json::json!(value)
+        );
+    }
+    for value in [serde_json::json!(true), serde_json::json!("auto")] {
+        let section = FrontendConfigDto(BTreeMap::from([("glyphSet".into(), value)]));
+        assert!(TerminalSettings::from_tui(&section).is_err());
+    }
 }
 
 #[test]

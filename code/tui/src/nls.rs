@@ -160,6 +160,10 @@ pub(crate) enum Message {
     ConfigKeyHintMuted,
     ConfigKeyHintContrastDescription,
     ConfigKeyHintMutedDescription,
+    ConfigGlyphSet,
+    ConfigGlyphSetDescription,
+    ConfigGlyphPowerline,
+    ConfigGlyphPlain,
     ConfigMemoryDiagnostics,
     ConfigMemoryDiagnosticsDescription,
     ConfigAutoUpdate,
@@ -213,6 +217,10 @@ const fn english(message: Message) -> &'static str {
         Message::ConfigKeyHintMuted => "Muted",
         Message::ConfigKeyHintContrastDescription => "Emphasize keys over their descriptions",
         Message::ConfigKeyHintMutedDescription => "Show the entire hint with equal emphasis",
+        Message::ConfigGlyphSet => "Git branch marker",
+        Message::ConfigGlyphSetDescription => "Choose a marker supported by your terminal font",
+        Message::ConfigGlyphPowerline => "Powerline",
+        Message::ConfigGlyphPlain => "Plain text",
         Message::ConfigMemoryDiagnostics => "Memory diagnostics",
         Message::ConfigMemoryDiagnosticsDescription => {
             "Continuously collect bounded memory evidence"
@@ -273,6 +281,10 @@ const fn japanese(message: Message) -> &'static str {
         Message::ConfigKeyHintMuted => "控えめ",
         Message::ConfigKeyHintContrastDescription => "説明よりキーを強調する",
         Message::ConfigKeyHintMutedDescription => "ヒント全体を同じ強さで表示する",
+        Message::ConfigGlyphSet => "Git ブランチの記号",
+        Message::ConfigGlyphSetDescription => "端末のフォントで表示できる記号を選ぶ",
+        Message::ConfigGlyphPowerline => "Powerline",
+        Message::ConfigGlyphPlain => "テキスト",
         Message::ConfigMemoryDiagnostics => "メモリ診断",
         Message::ConfigMemoryDiagnosticsDescription => {
             "上限付きのメモリ診断データを継続的に収集する"
@@ -333,6 +345,10 @@ const fn chinese(message: Message) -> &'static str {
         Message::ConfigKeyHintMuted => "弱化",
         Message::ConfigKeyHintContrastDescription => "突出按键，弱化说明",
         Message::ConfigKeyHintMutedDescription => "按相同强度显示整条提示",
+        Message::ConfigGlyphSet => "Git 分支标识",
+        Message::ConfigGlyphSetDescription => "选择终端字体支持的分支标识",
+        Message::ConfigGlyphPowerline => "Powerline",
+        Message::ConfigGlyphPlain => "纯文本",
         Message::ConfigMemoryDiagnostics => "内存诊断",
         Message::ConfigMemoryDiagnosticsDescription => "持续收集有界的内存诊断数据",
         Message::ConfigAutoUpdate => "自动更新",
@@ -387,6 +403,12 @@ const fn french(message: Message) -> &'static str {
         Message::ConfigKeyHintMuted => "Atténué",
         Message::ConfigKeyHintContrastDescription => "Mettre les touches en valeur",
         Message::ConfigKeyHintMutedDescription => "Afficher toute l’aide avec la même intensité",
+        Message::ConfigGlyphSet => "Repère de branche Git",
+        Message::ConfigGlyphSetDescription => {
+            "Choisir un repère pris en charge par la police du terminal"
+        }
+        Message::ConfigGlyphPowerline => "Powerline",
+        Message::ConfigGlyphPlain => "Texte simple",
         Message::ConfigMemoryDiagnostics => "Diagnostic mémoire",
         Message::ConfigMemoryDiagnosticsDescription => {
             "Collecter en continu des données de diagnostic mémoire limitées"

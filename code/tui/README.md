@@ -231,6 +231,7 @@ screenMode = "fullscreen"
 theme = "graphite"
 inputMode = "standard"
 keyHintStyle = "contrast"
+glyphSet = "powerline"
 memoryDiagnostics = false
 autoUpdate = "latest"
 showGitChangesAsDiff = false
@@ -241,6 +242,8 @@ language = "en"
 `screenMode` 只接受 `fullscreen` 和 `inline`，缺省为 `fullscreen`。已有主屏配置需要将该值更新为 `inline`；其他值按配置错误报告。在 Config 的“通用”页通过 Enter、Space 或左右键切换，保存成功后立即应用；外部配置重载也使用同一路径。设置沿用现有 Config 读写通路；本地运行保存在本机 profile，远程连接目前读取和写入远端 App Server 的 profile。本机独立 UX 配置通路尚未接入。启动时先验证设置，再获取终端模式；非法值会报告配置错误。
 
 `keyHintStyle` 只接受 `contrast` 和 `muted`，缺省为 `contrast`。`contrast` 使用当前主题的前景色与粗体显示按键，说明文字使用弱化色；`muted` 保留整条弱化斜体效果。该设置由 Config 的“通用”页写入，fullscreen、inline 和两者的功能面板共用同一渲染通路并即时应用。
+
+`glyphSet` 只接受 `powerline` 和 `plain`，缺省为 `powerline`。`powerline` 用 U+E0A0 显示 Git 分支标识，需要终端选用包含 Powerline 字形的字体；`plain` 显示文字 `git`，不依赖特殊字体。Config 的“通用”页可以切换该设置，保存和外部配置重载后立即更新顶部栏与丰富样式状态栏。终端名称不能可靠说明用户选用的字体，因此不会据此自动切换。
 
 鼠标交互和选中复制由 `screenMode` 决定，不再提供独立开关。旧 `mouseInteractions`、`copyOnSelect` 字段不参与解析和运行决策，在 Config 的“通用”页保存设置时删除；它们不会改变已选择的屏幕模式。
 

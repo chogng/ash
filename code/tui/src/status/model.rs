@@ -156,6 +156,7 @@ struct GitStatusCursor {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(crate) struct StatusLineModel {
     settings: StatusLineSettings,
+    glyph_set: crate::config::GlyphSet,
     context_model: Option<ModelRefDto>,
     context_capacity: Option<u64>,
     context_usage: Option<(ash_protocol::ModelRef, ash_protocol::ModelContextUsage)>,
@@ -182,6 +183,14 @@ impl StatusLineModel {
             .as_ref()
             .and_then(|value| value.full.first())
             .map(|segment| segment.text.as_str())
+    }
+
+    pub(crate) const fn branch_marker(&self) -> &'static str {
+        self.glyph_set.branch_marker()
+    }
+
+    pub(crate) fn set_glyph_set(&mut self, glyph_set: crate::config::GlyphSet) {
+        self.glyph_set = glyph_set;
     }
     pub(crate) fn new() -> Self {
         Self::default()
@@ -437,7 +446,7 @@ impl StatusLineModel {
                     StatusLineItem::ReferenceCost => "💰",
                     StatusLineItem::Memory => "💾",
                     StatusLineItem::Cpu => "🖥️",
-                    StatusLineItem::GitBranch => super::GIT_BRANCH_ICON,
+                    StatusLineItem::GitBranch => self.branch_marker(),
                     StatusLineItem::GitChanges => "📝",
                     StatusLineItem::Permissions | StatusLineItem::Context => "",
                 };

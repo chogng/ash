@@ -49,7 +49,12 @@ fn rich_status_line_uses_the_workspace_git_branch_marker() {
 
     assert_eq!(
         status_line.top_text_for_width(80, StatusLineRuntime::default()),
-        "⎇ main"
+        "\u{e0a0} main"
+    );
+    status_line.set_glyph_set(crate::config::GlyphSet::Plain);
+    assert_eq!(
+        status_line.top_text_for_width(80, StatusLineRuntime::default()),
+        "git main"
     );
 }
 

@@ -442,6 +442,8 @@ impl ConfigEditor {
                     edit.terminal.set_screen_mode(defaults.screen_mode());
                 } else if *id == ListSelectionItemId::new("key-hint-style") {
                     edit.terminal.set_key_hint_style(defaults.key_hint_style());
+                } else if *id == ListSelectionItemId::new("glyph-set") {
+                    edit.terminal.set_glyph_set(defaults.glyph_set());
                 } else if *id == ListSelectionItemId::new("memory-diagnostics") {
                     edit.terminal
                         .set_memory_diagnostics(defaults.memory_diagnostics());
@@ -815,6 +817,22 @@ pub(crate) fn config_choices(
             Message::ConfigKeyHintMutedDescription,
         ),
     };
+    let glyph_set_id = ListSelectionItemId::new("glyph-set");
+    let mut next_glyph_set = terminal;
+    next_glyph_set.set_glyph_set(terminal.glyph_set().next());
+    actions.insert(
+        glyph_set_id.clone(),
+        ConfigSelectionAction::SetTerminalSettings(ConfigEdit {
+            terminal: next_glyph_set,
+            status_line: status_line.clone(),
+            server_config: config.clone(),
+            providers: providers.clone(),
+        }),
+    );
+    let glyph_set_label = match terminal.glyph_set() {
+        crate::config::GlyphSet::Powerline => Message::ConfigGlyphPowerline,
+        crate::config::GlyphSet::Plain => Message::ConfigGlyphPlain,
+    };
     let memory_diagnostics_id = ListSelectionItemId::new("memory-diagnostics");
     let memory_diagnostics = terminal.memory_diagnostics();
     let mut toggled_terminal = terminal;
@@ -1001,6 +1019,16 @@ pub(crate) fn config_choices(
                 nls::text(language, Message::ConfigGitAutoFetchPeriod),
                 nls::text(language, Message::ConfigGitAutoFetchPeriodDescription),
                 format!("{}s", config.git.autofetch_period),
+            ),
+    );
+    // Keep the branch marker beside the other Git display and refresh settings.
+    config_items.push(
+        ListSelectionItem::new(nls::text(language, Message::ConfigGlyphSet))
+            .with_id(glyph_set_id)
+            .with_columns(
+                nls::text(language, Message::ConfigGlyphSet),
+                nls::text(language, Message::ConfigGlyphSetDescription),
+                nls::text(language, glyph_set_label),
             ),
     );
     let advisor_id = ListSelectionItemId::new("advisor");

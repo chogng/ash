@@ -1,6 +1,5 @@
 ---
 source: code/tui/src/app/fullscreen/modal_tests.rs
-assertion_line: 1224
 expression: frame
 ---
   .                                                                               [— / —] [仪 表 盘 ]  
@@ -24,8 +23,8 @@ expression: frame
             │> 记 忆                                                               关 闭  │             
             │> 自 动 获 取  Git 更 新                                                  关 闭  │             
             │> Git 获 取 间 隔                                                       180s │             
+            │> Git 分 支 标 识                                                  Powerline │             
             │> 顾 问                                                               关 闭  │             
-            │                                                                         │             
             │                                                                         │             
             │                                                                         │ · Esc 返 回   
   ╭─────────│  Enter 更 改  · r 重 置  · ←/→ 详 情  · Tab 标 签 页  · / 搜 索  · Esc 关 闭         │──────────╮  

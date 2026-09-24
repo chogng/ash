@@ -26,22 +26,54 @@ impl Default for KeyHintStyle {
     }
 }
 
+/// Selects the branch marker that the host terminal font can render.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum GlyphSet {
+    Powerline,
+    Plain,
+}
+
+impl GlyphSet {
+    pub(crate) const fn next(self) -> Self {
+        match self {
+            Self::Powerline => Self::Plain,
+            Self::Plain => Self::Powerline,
+        }
+    }
+
+    pub(crate) const fn branch_marker(self) -> &'static str {
+        match self {
+            Self::Powerline => "\u{e0a0}",
+            Self::Plain => "git",
+        }
+    }
+}
+
+impl Default for GlyphSet {
+    fn default() -> Self {
+        Self::Powerline
+    }
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct TerminalSettings {
     screen_mode: crate::terminal::ScreenMode,
     input_mode: ChatInputMode,
     key_hint_style: KeyHintStyle,
+    glyph_set: GlyphSet,
     memory_diagnostics: bool,
     auto_update: crate::UpdatePolicy,
     language: Language,
 }
 
 impl TerminalSettings {
-    const KEYS: [&'static str; 6] = [
+    const KEYS: [&'static str; 7] = [
         "screenMode",
         "inputMode",
         "keyHintStyle",
+        "glyphSet",
         "memoryDiagnostics",
         "autoUpdate",
         "language",
@@ -110,6 +142,14 @@ impl TerminalSettings {
         self.key_hint_style = style;
     }
 
+    pub(crate) const fn glyph_set(self) -> GlyphSet {
+        self.glyph_set
+    }
+
+    pub(crate) fn set_glyph_set(&mut self, glyph_set: GlyphSet) {
+        self.glyph_set = glyph_set;
+    }
+
     pub(crate) const fn memory_diagnostics(self) -> bool {
         self.memory_diagnostics
     }
@@ -141,6 +181,7 @@ impl Default for TerminalSettings {
             screen_mode: crate::terminal::ScreenMode::Fullscreen,
             input_mode: ChatInputMode::Standard,
             key_hint_style: KeyHintStyle::Contrast,
+            glyph_set: GlyphSet::Powerline,
             memory_diagnostics: false,
             auto_update: crate::UpdatePolicy::Latest,
             language: Language::English,

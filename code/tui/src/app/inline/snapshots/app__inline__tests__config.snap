@@ -1,6 +1,5 @@
 ---
 source: code/tui/src/app/inline/frame_tests.rs
-assertion_line: 95
 expression: text(&buffer)
 ---
 ─ Config ───────────────────────────────────────────────────────────────────────────────────────────
@@ -20,6 +19,7 @@ expression: text(&buffer)
 > Memories                                                                                     off  
 > Automatic Git fetch                                                                          Off  
 > Git fetch interval                                                                          180s  
+> Git branch marker                                                                      Powerline  
 > Advisor                                                                                      Off  
                                                                                                     
   Enter change · r reset · ←/→ details · Tab tabs · / search · Esc close

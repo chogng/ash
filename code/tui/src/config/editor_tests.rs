@@ -529,6 +529,7 @@ fn config_root_uses_the_selected_language_through_nls() {
         Some("切换界面语言 中文")
     );
     assert_eq!(state.visible_items()[6].label(), "按键提示风格");
+    assert_eq!(state.visible_items()[11].label(), "Git 分支标识");
 }
 
 #[test]
@@ -555,6 +556,43 @@ fn key_hint_style_cycles_with_activation() {
             super::ConfigEditorOutcome::Action(ConfigSelectionAction::SetTerminalSettings(edit))
                 if edit.terminal.key_hint_style() == expected
         ));
+    }
+}
+
+#[test]
+fn glyph_set_cycles_with_activation() {
+    use crate::widgets::list_selection::ListSelectionItemId;
+    for (current, expected) in [
+        (
+            crate::config::GlyphSet::Powerline,
+            crate::config::GlyphSet::Plain,
+        ),
+        (
+            crate::config::GlyphSet::Plain,
+            crate::config::GlyphSet::Powerline,
+        ),
+    ] {
+        let mut terminal = TerminalSettings::default();
+        terminal.set_glyph_set(current);
+        for key in [KeyCode::Enter, KeyCode::Char(' ')] {
+            let mut editor = super::ConfigEditor::new(config_choices(
+                &empty_config_snapshot(),
+                &providers(),
+                terminal,
+                StatusLineSettings::default(),
+            ));
+            assert!(
+                editor
+                    .selection
+                    .state_mut()
+                    .focus_item(&ListSelectionItemId::new("glyph-set"))
+            );
+            assert!(matches!(
+                editor.handle_key(KeyEvent::new(key, KeyModifiers::NONE)),
+                super::ConfigEditorOutcome::Action(ConfigSelectionAction::SetTerminalSettings(edit))
+                    if edit.terminal.glyph_set() == expected
+            ));
+        }
     }
 }
 
@@ -873,6 +911,7 @@ fn reset_restores_only_the_selected_general_setting() {
     terminal.set_language(Language::Chinese);
     terminal.set_key_hint_style(crate::config::KeyHintStyle::Muted);
     terminal.set_screen_mode(crate::terminal::ScreenMode::Inline);
+    terminal.set_glyph_set(crate::config::GlyphSet::Plain);
     let mut status = StatusLineSettings::default();
     status.set_style(status.style().next());
     status.set_show_git_changes_as_diff(true);
@@ -883,12 +922,25 @@ fn reset_restores_only_the_selected_general_setting() {
         .0
         .insert("unrelated".into(), serde_json::json!({"keep": true}));
     let catalog = providers();
-    for row in 0..8 {
+    for (row, id) in [
+        "terminal-vim-mode",
+        "memory-diagnostics",
+        "auto-update",
+        "show-git-changes-as-diff",
+        "language",
+        "status-line-style",
+        "key-hint-style",
+        "screen-mode",
+        "glyph-set",
+    ]
+    .into_iter()
+    .enumerate()
+    {
         let mut editor =
             super::ConfigEditor::new(config_choices(&config, &catalog, terminal, status.clone()));
-        for _ in 0..row {
-            editor.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-        }
+        assert!(editor.selection.state_mut().focus_item(
+            &crate::widgets::list_selection::ListSelectionItemId::new(id)
+        ));
         assert!(editor.key_hints().text().contains("r reset"));
         let mut expected_terminal = terminal;
         let mut expected_status = status.clone();
@@ -904,6 +956,7 @@ fn reset_restores_only_the_selected_general_setting() {
             5 => expected_status.set_style(status_defaults.style()),
             6 => expected_terminal.set_key_hint_style(defaults.key_hint_style()),
             7 => expected_terminal.set_screen_mode(defaults.screen_mode()),
+            8 => expected_terminal.set_glyph_set(defaults.glyph_set()),
             _ => unreachable!(),
         }
         // A refresh and a second reset must preserve the selection and stay at the default.

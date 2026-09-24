@@ -1,6 +1,5 @@
 ---
 source: code/tui/src/app/fullscreen/modal_tests.rs
-assertion_line: 1295
 expression: frame_text(&app)
 ---
   .                                                                            [— / —] [Dashboard]  
@@ -24,8 +23,8 @@ expression: frame_text(&app)
             │> Memories                                                           off │             
             │> Automatic Git fetch                                                Off │             
             │> Git fetch interval                                                180s │             
+            │> Git branch marker                                            Powerline │             
             │> Advisor                                                            Off │             
-            │                                                                         │             
             │                                                                         │             
             │                                                                         │ Esc return  
   ╭─────────│  Enter change · r reset · ←/→ details · Tab tabs · / search · Esc close │──────────╮  

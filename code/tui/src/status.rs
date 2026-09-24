@@ -7,9 +7,6 @@ mod settings_request;
 mod setup;
 mod view;
 
-/// Git branch marker shared by the workspace header and rich status line.
-pub(crate) const GIT_BRANCH_ICON: &str = "⎇";
-
 /// A completed status operation delivered to the TUI state owner.
 pub(crate) enum Event {
     LineSettingsReceived(StatusLineSettings),

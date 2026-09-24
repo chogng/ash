@@ -23,8 +23,8 @@ expression: frame_text(&app)
             │> Memories                                                           off │             
             │> Automatic Git fetch                                                Off │             
             │> Git fetch interval                                                180s │             
+            │> Git branch marker                                            Powerline │             
             │> Advisor                                                            Off │             
-            │                                                                         │             
             │                                                                         │             
             │                                                                         │             
   ╭─────────│  Enter change · r reset · ←/→ details · Tab tabs · / search · Esc close │──────────╮  

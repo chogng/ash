@@ -564,6 +564,37 @@ fn key_hint_style_is_persisted_in_the_tui_toml_section() {
 }
 
 #[test]
+fn glyph_set_is_persisted_in_the_tui_toml_section() {
+    let (mut client, state_root) = client();
+    let server_config = client.read_config().unwrap();
+    let mut terminal = crate::config::TerminalSettings::from_tui(&server_config.tui).unwrap();
+    terminal.set_glyph_set(crate::config::GlyphSet::Plain);
+    let status_line = crate::status::StatusLineSettings::from_tui(&server_config.tui).unwrap();
+
+    let result = crate::config::set_settings(
+        &mut client,
+        crate::config::ConfigEdit {
+            terminal,
+            status_line,
+            server_config,
+            providers: ash_app_server_protocol::protocol::provider::ProviderListResult {
+                providers: Vec::new(),
+            },
+        },
+    )
+    .unwrap();
+
+    assert_eq!(result.terminal.glyph_set(), crate::config::GlyphSet::Plain);
+    assert_eq!(
+        client.read_config().unwrap().tui.0.get("glyphSet"),
+        Some(&serde_json::json!("plain"))
+    );
+
+    drop(client);
+    let _ = fs::remove_dir_all(state_root);
+}
+
+#[test]
 fn resume_and_model_without_arguments_open_actionable_pickers() {
     let (mut client, state_root) = client();
     let mut conversation = ActiveConversation::start(&mut client, "current".into()).unwrap();

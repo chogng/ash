@@ -957,6 +957,9 @@ impl App {
     }
 
     fn set_terminal_settings(&mut self, settings: TerminalSettings) {
+        self.chat_panel
+            .status_line_mut()
+            .set_glyph_set(settings.glyph_set());
         if self.screen_mode() != settings.screen_mode() {
             let editor = self.panels_mut().take_editor();
             self.terminal_settings = settings;

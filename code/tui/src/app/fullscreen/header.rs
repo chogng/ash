@@ -64,7 +64,7 @@ pub(super) fn draw(frame: &mut Frame<'_>, area: Rect, app: &App, context: Render
     if !areas.branch.is_empty()
         && let Some(branch) = app.status_line().branch_label()
     {
-        let branch_text = format!("{} {branch}", crate::status::GIT_BRANCH_ICON);
+        let branch_text = format!("{} {branch}", app.status_line().branch_marker());
         let line =
             crate::render::truncate_with_ellipsis(&branch_text, usize::from(areas.branch.width));
         let style = Style::default()
@@ -284,7 +284,7 @@ fn header_layout(area: Rect, app: &App, context: RenderContext<'_>) -> HeaderLay
     let branch_width = if branch_text.is_empty() {
         0
     } else {
-        (branch_text.width() as u16 + crate::status::GIT_BRANCH_ICON.width() as u16 + 1)
+        (branch_text.width() as u16 + app.status_line().branch_marker().width() as u16 + 1)
             .min(content_budget / 2)
     };
     let branch = Rect::new(workspace_start, area.y, branch_width, 1);

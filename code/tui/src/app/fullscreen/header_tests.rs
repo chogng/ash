@@ -59,11 +59,11 @@ fn header_places_branch_and_path_without_repeating_them_below() {
         text.lines()
             .next()
             .unwrap()
-            .starts_with("  ⎇ main /work/ash")
+            .starts_with("  \u{e0a0} main /work/ash")
     );
     assert_eq!(text.matches("main").count(), 1);
     assert_eq!(text.matches("/work/ash").count(), 1);
-    assert_eq!(buffer[(2, 0)].symbol(), "⎇");
+    assert_eq!(buffer[(2, 0)].symbol(), "\u{e0a0}");
     assert_eq!(buffer[(2, 0)].fg, app.render_context().foreground());
     assert!(buffer[(2, 0)].modifier.contains(Modifier::BOLD));
     assert_eq!(buffer[(9, 0)].fg, app.render_context().muted());
@@ -81,6 +81,44 @@ fn header_places_branch_and_path_without_repeating_them_below() {
     );
     super::super::pointer::activate_pointer_item(&mut app, area, 2, 0);
     assert!(app.command_panel().is_some());
+}
+
+#[test]
+fn plain_glyph_set_updates_the_header_and_its_hit_targets() {
+    let mut app = app_with_branch();
+    let mut settings = crate::config::TerminalSettings::default();
+    settings.set_glyph_set(crate::config::GlyphSet::Plain);
+    app.update(crate::config::Event::SettingsReceived(settings));
+
+    let mut terminal = Terminal::new(TestBackend::new(80, 20)).unwrap();
+    terminal
+        .draw(|frame| crate::app::frame::draw(frame, &app))
+        .unwrap();
+    let text = terminal
+        .backend()
+        .buffer()
+        .content
+        .chunks(80)
+        .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        text.lines()
+            .next()
+            .unwrap()
+            .starts_with("  git main /work/ash")
+    );
+    crate::tui_assert_snapshot!("workspace_header_plain_marker", text);
+
+    let header = super::super::layout(&app, Rect::new(0, 0, 80, 20)).header;
+    assert_eq!(
+        super::target_at(&app, header, Position::new(2, 0)),
+        Some(super::Target::Branch)
+    );
+    assert_eq!(
+        super::target_at(&app, header, Position::new(11, 0)),
+        Some(super::Target::Workspace)
+    );
 }
 
 #[test]
