@@ -62,26 +62,27 @@ def build_binaries(
     ]
     for binary in binaries:
         command.extend(["--package", BINARY_PACKAGES[binary], "--bin", binary])
-    result = subprocess.run(
+    executables: dict[str, Path] = {}
+    # Cargo writes build progress to stderr; keep it on the terminal while
+    # reading JSON diagnostics and executable paths from stdout as they arrive.
+    with subprocess.Popen(
         command,
         cwd=REPOSITORY_ROOT,
         env=cargo_environment,
-        capture_output=True,
+        stdout=subprocess.PIPE,
         text=True,
-        check=False,
-    )
-    if result.stderr:
-        sys.stderr.write(result.stderr)
-    executables: dict[str, Path] = {}
-    for line in result.stdout.splitlines():
-        message = parse_cargo_message(line)
-        if diagnostic := cargo_rendered_diagnostic(message):
-            sys.stderr.write(diagnostic)
-        for name in binaries:
-            if executable := cargo_artifact_executable(message, name):
-                executables[name] = Path(executable)
-    if result.returncode != 0:
-        return result.returncode, {}
+    ) as process:
+        for line in process.stdout:
+            message = parse_cargo_message(line)
+            if diagnostic := cargo_rendered_diagnostic(message):
+                sys.stderr.write(diagnostic)
+                sys.stderr.flush()
+            for name in binaries:
+                if executable := cargo_artifact_executable(message, name):
+                    executables[name] = Path(executable)
+        returncode = process.wait()
+    if returncode != 0:
+        return returncode, {}
     for name in binaries:
         if name not in executables:
             raise RuntimeError(f"Cargo did not report {name}")

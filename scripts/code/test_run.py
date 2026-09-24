@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import io
+import json
 import tempfile
 import unittest
-import json
 from pathlib import Path
 from unittest.mock import patch
 
@@ -51,32 +52,47 @@ class SourceRunnerTests(unittest.TestCase):
                 build, "default_target", return_value="x86_64-pc-windows-msvc"
             ),
             patch.object(build, "resolve_v8_cargo_env", return_value={}),
-            patch.object(build.subprocess, "run") as subprocess_run,
+            patch.object(build.subprocess, "Popen") as subprocess_popen,
+            patch("sys.stderr", new_callable=io.StringIO) as stderr,
         ):
             first = Path(temporary) / "ash"
             second = Path(temporary) / "ash-app-server"
             first.touch()
             second.touch()
-            messages = "\n".join(
-                json.dumps(
-                    {
-                        "reason": "compiler-artifact",
-                        "target": {"name": name, "kind": ["bin"]},
-                        "executable": str(path),
-                    }
+            process = subprocess_popen.return_value.__enter__.return_value
+
+            def cargo_messages():
+                yield (
+                    json.dumps(
+                        {
+                            "reason": "compiler-message",
+                            "message": {"rendered": "warning\n"},
+                        }
+                    )
+                    + "\n"
                 )
-                for name, path in (("ash", first), ("ash-app-server", second))
-            )
-            subprocess_run.return_value = build.subprocess.CompletedProcess(
-                [], 0, messages
-            )
+                self.assertEqual("warning\n", stderr.getvalue())
+                for name, path in (("ash", first), ("ash-app-server", second)):
+                    yield (
+                        json.dumps(
+                            {
+                                "reason": "compiler-artifact",
+                                "target": {"name": name, "kind": ["bin"]},
+                                "executable": str(path),
+                            }
+                        )
+                        + "\n"
+                    )
+
+            process.stdout = cargo_messages()
+            process.wait.return_value = 0
 
             self.assertEqual(
                 build.build_binaries(binaries, {"CARGO_BUILD_JOBS": "4"}),
                 (0, {"ash": first, "ash-app-server": second}),
             )
 
-        subprocess_run.assert_called_once_with(
+        subprocess_popen.assert_called_once_with(
             [
                 "cargo",
                 "build",
@@ -104,10 +120,34 @@ class SourceRunnerTests(unittest.TestCase):
                 "CARGO_BUILD_JOBS": "4",
                 "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER": "rust-lld",
             },
-            capture_output=True,
+            stdout=build.subprocess.PIPE,
             text=True,
-            check=False,
         )
+        process.wait.assert_called_once_with()
+
+    def test_build_binaries_returns_cargo_failure_after_live_diagnostic(self) -> None:
+        with (
+            patch.object(build, "default_target", return_value="aarch64-apple-darwin"),
+            patch.object(build, "resolve_v8_cargo_env", return_value={}),
+            patch.object(build.subprocess, "Popen") as subprocess_popen,
+            patch("sys.stderr", new_callable=io.StringIO) as stderr,
+        ):
+            process = subprocess_popen.return_value.__enter__.return_value
+            process.stdout = iter(
+                [
+                    json.dumps(
+                        {
+                            "reason": "compiler-message",
+                            "message": {"rendered": "compile failed\n"},
+                        }
+                    )
+                    + "\n"
+                ]
+            )
+            process.wait.return_value = 101
+
+            self.assertEqual(build.build_binaries(["ash"], {}), (101, {}))
+            self.assertEqual(stderr.getvalue(), "compile failed\n")
 
     def test_development_binaries_include_platform_children(self) -> None:
         self.assertNotIn(
