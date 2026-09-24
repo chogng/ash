@@ -8,7 +8,12 @@ import { ICodeEditorService } from '../../../src/ash/editor/browser/services/cod
 import { StandaloneCodeEditorService } from '../../../src/ash/editor/standalone/browser/standaloneCodeEditorService.js';
 import { IInlineCompletionsService, InlineCompletionsService } from '../../../src/ash/editor/browser/services/inlineCompletionsService.js';
 import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
-import type { IEditorScrollbarOptions, IEditorOptions } from '../../../src/ash/editor/common/config/editorOptions.js';
+import { EditorOption, type IEditorScrollbarOptions, type IEditorOptions } from '../../../src/ash/editor/common/config/editorOptions.js';
+import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
+import '../../../src/ash/workbench/contrib/codeEditor/browser/quickaccess/gotoLineQuickAccess.js';
+import '../../../src/ash/workbench/contrib/codeEditor/browser/toggleMinimap.js';
+import '../../../src/ash/workbench/contrib/codeEditor/browser/toggleRenderWhitespace.js';
+import '../../../src/ash/workbench/contrib/codeEditor/browser/toggleRenderControlCharacter.js';
 import { h } from '../../../src/ash/base/browser/dom.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
@@ -73,6 +78,8 @@ interface IntegrationHarness {
 	setScrollLeft(scrollLeft: number): void;
 	setScrollbar(options: IEditorScrollbarOptions): void;
 	updateOptions(options: IEditorOptions): void;
+	runWorkbenchCommand(id: string): Promise<void>;
+	getViewSettings(): { readonly minimap: boolean; readonly renderWhitespace: string; readonly renderControlCharacters: boolean };
 	setTheme(theme: 'dark' | 'light' | 'contrast' | 'contrastLight'): void;
 	setRenderRichScreenReaderContent(enabled: boolean): void;
 	showViewZone(): void;
@@ -222,6 +229,12 @@ window.ashTextModelIntegration = {
 	setScrollLeft: scrollLeft => requiredEditorPart().setScrollLeft(scrollLeft),
 	setScrollbar: scrollbar => requiredEditorPart().updateOptions({ scrollbar }),
 	updateOptions: options => requiredEditorPart().updateOptions(options),
+	runWorkbenchCommand: id => services.get(ICommandService).executeCommand(id),
+	getViewSettings: () => ({
+		minimap: requiredEditorPart().getOption(EditorOption.minimap).enabled,
+		renderWhitespace: requiredEditorPart().getOption(EditorOption.renderWhitespace),
+		renderControlCharacters: requiredEditorPart().getOption(EditorOption.renderControlCharacters),
+	}),
 	setTheme: theme => themeService.setColorTheme({ dark: darkColorTheme, light: lightColorTheme, contrast: highContrastDarkColorTheme, contrastLight: highContrastLightColorTheme }[theme]),
 	setRenderRichScreenReaderContent: enabled => requiredEditorPart().updateOptions({ renderRichScreenReaderContent: enabled }),
 	showViewZone: () => {

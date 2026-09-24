@@ -691,6 +691,38 @@ test('selection, gutter, whitespace and line numbers resolve editor colors in al
 	}
 });
 
+test('Workbench editor actions update the open editor and Go to Line retains keyboard focus', async ({ page }) => {
+	await openEditor(page);
+	const input = page.locator('.stanza-editor-input');
+	const minimap = page.locator('.stanza-editor .minimap');
+	await input.focus();
+	await page.evaluate(() => window.ashTextModelIntegration.runWorkbenchCommand('editor.action.toggleMinimap'));
+	await expect(minimap).toBeHidden();
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getViewSettings().minimap)).toBe(false);
+	await page.evaluate(() => window.ashTextModelIntegration.runWorkbenchCommand('editor.action.toggleMinimap'));
+	await expect(minimap).toBeVisible();
+
+	await page.evaluate(() => window.ashTextModelIntegration.setValue('alpha  beta\nsecond line'));
+	await page.evaluate(() => window.ashTextModelIntegration.runWorkbenchCommand('editor.action.toggleRenderWhitespace'));
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getViewSettings().renderWhitespace)).toBe('none');
+	await page.evaluate(() => window.ashTextModelIntegration.runWorkbenchCommand('editor.action.toggleRenderWhitespace'));
+	await expect(page.locator('.stanza-editor-whitespace').first()).toBeVisible();
+	await page.evaluate(() => window.ashTextModelIntegration.runWorkbenchCommand('editor.action.toggleRenderControlCharacter'));
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getViewSettings().renderControlCharacters)).toBe(false);
+
+	await input.focus();
+	await page.evaluate(() => window.ashTextModelIntegration.runWorkbenchCommand('workbench.action.gotoLine'));
+	const dialog = page.locator('.stanza-editor-goto-line-widget');
+	await expect(dialog).toBeVisible();
+	const lineInput = dialog.getByRole('textbox', { name: 'Line number and optional column' });
+	await expect(lineInput).toBeFocused();
+	await lineInput.fill('2:1');
+	await lineInput.press('Enter');
+	await expect(dialog).toBeHidden();
+	await expect(input).toBeFocused();
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getSelection().startLineIndex)).toBe(1);
+});
+
 test("glyph margin, line numbers, and folding controls keep VS Code gutter order", async ({ page }) => {
 	await openEditor(page);
 	const glyphMargin = page.locator(".glyph-margin");

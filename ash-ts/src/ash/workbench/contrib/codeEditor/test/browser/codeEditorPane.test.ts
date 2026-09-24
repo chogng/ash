@@ -25,8 +25,14 @@ import { ILanguageFeaturesService } from '../../../../../editor/common/services/
 import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from '../../../../../editor/common/services/languageFeatureDebounce.js';
 import { ILanguageConfigurationService } from '../../../../../editor/common/languages/languageConfigurationRegistry.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { EditorOption } from '../../../../../editor/common/config/editorOptions.js';
+import { CodeEditorConfiguration } from '../../common/editorConfiguration.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+browserEnvironment.window.HTMLCanvasElement.prototype.getContext = () => null;
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
 	document: browserEnvironment.window.document,
@@ -45,7 +51,12 @@ for (const [name, value] of Object.entries({
 }
 
 await import("../../../../../editor/editor.code.all.js");
+await import('../../browser/quickaccess/gotoLineQuickAccess.js');
+await import('../../browser/toggleMinimap.js');
+await import('../../browser/toggleRenderWhitespace.js');
+await import('../../browser/toggleRenderControlCharacter.js');
 const { CodeEditorPane: EditorPane } = await import("../../browser/codeEditorPane.js");
+const { createBrowserEditorPart } = await import('../../browser/browserEditorPart.js');
 const { CodeEditorWidget } = await import('../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor, registerCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
 const { BrowserTextModelService } = await import("../../../../services/textmodelResolver/browser/browserTextModelService.js");
@@ -103,6 +114,72 @@ test("Stanza editor pane loads, lays out, focuses, hides, and clears one editor 
 	pane.dispose();
 	assert.equal(parent.children.length, 0);
 	dom.window.close();
+});
+
+test('open code editor applies live view settings and actions without replacing its control', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using closeWindow = toDisposable(() => dom.window.close());
+	const parent = dom.window.document.querySelector<HTMLElement>('main')!;
+	const resourceStore = new BrowserTextResourceStore(new ImmediateTextFiles('a long line of text'));
+	using models = new BrowserTextModelService(resourceStore);
+	using services = paneServices(models);
+	const configuration = services.get(IConfigurationService);
+	await configuration.updateValue(CodeEditorConfiguration.wordWrap, EditorLineWrapping.On);
+	await configuration.updateValue(CodeEditorConfiguration.minimapEnabled, false);
+	using pane = createPane(services, resourceStore, {});
+	pane.create(parent);
+	await pane.setInput({ resource: URI.file('/project/settings.ts') }, new AbortController().signal);
+	const control = pane.getControl();
+	assert.ok(control instanceof CodeEditorWidget);
+	assert.equal(control.getOption(EditorOption.wordWrap), 'on');
+	assert.equal(control.getOption(EditorOption.minimap).enabled, false);
+
+	await configuration.updateValue(CodeEditorConfiguration.wordWrap, EditorLineWrapping.Off);
+	await configuration.updateValue(CodeEditorConfiguration.minimapEnabled, true);
+	assert.equal(pane.getControl(), control);
+	assert.equal(control.getOption(EditorOption.wordWrap), 'off');
+	assert.equal(control.getOption(EditorOption.minimap).enabled, true);
+	assert.equal(control.getOption(EditorOption.renderWhitespace), 'selection');
+	assert.equal(control.getOption(EditorOption.renderControlCharacters), true);
+	await services.get(ICommandService).executeCommand('editor.action.toggleRenderWhitespace');
+	assert.equal(configuration.getValue(CodeEditorConfiguration.renderWhitespace), 'none');
+	assert.equal(control.getOption(EditorOption.renderWhitespace), 'none');
+	await services.get(ICommandService).executeCommand('editor.action.toggleRenderWhitespace');
+	assert.equal(control.getOption(EditorOption.renderWhitespace), 'all');
+	await services.get(ICommandService).executeCommand('editor.action.toggleRenderControlCharacter');
+	assert.equal(configuration.getValue(CodeEditorConfiguration.renderControlCharacters), false);
+	assert.equal(control.getOption(EditorOption.renderControlCharacters), false);
+	await services.get(ICommandService).executeCommand('editor.action.toggleMinimap');
+	assert.equal(configuration.getValue(CodeEditorConfiguration.minimapEnabled), false);
+	assert.equal(control.getOption(EditorOption.minimap).enabled, false);
+	await services.get(ICommandService).executeCommand('editor.action.toggleMinimap');
+	assert.equal(configuration.getValue(CodeEditorConfiguration.minimapEnabled), true);
+	assert.equal(control.getOption(EditorOption.minimap).enabled, true);
+});
+
+test('Workbench Go to Line command opens the active editor dialog and focuses its input', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using closeWindow = toDisposable(() => dom.window.close());
+	const parent = dom.window.document.querySelector<HTMLElement>('main')!;
+	const resourceStore = new BrowserTextResourceStore(new ImmediateTextFiles('first\nsecond'));
+	using models = new BrowserTextModelService(resourceStore);
+	using services = paneServices(models);
+	using pane = createPane(services, resourceStore, {
+		createPart: options => createBrowserEditorPart(services, options),
+		showUnicodeHighlights: false,
+	});
+	pane.create(parent);
+	await pane.setInput({ resource: URI.file('/project/goto.ts') }, new AbortController().signal);
+	pane.focus();
+
+	await services.get(ICommandService).executeCommand('workbench.action.gotoLine');
+	const dialog = parent.querySelector<HTMLElement>('.stanza-editor-goto-line-widget');
+	const input = dialog?.querySelector<HTMLInputElement>('input');
+	assert.ok(dialog && input);
+	assert.equal(dialog.hidden, false);
+	assert.equal(dom.window.document.activeElement, input);
 });
 
 test('Stanza editor pane switches files without leaving the old model, DOM, or keyboard focus behind', async () => {
@@ -291,7 +368,7 @@ test("Stanza editor pane trims trailing whitespace before saving", async () => {
 	using services = paneServices(models);
 	const pane = createPane(services, resourceStore, {
 		trimTrailingWhitespace: true,
-		createPart: () => ({ layout: () => {}, focus: () => {}, getValue: () => "", dispose: () => {}, [Symbol.dispose]: () => {} }),
+		createPart: () => ({ layout: () => {}, focus: () => {}, getValue: () => "", updateOptions: () => {}, dispose: () => {}, [Symbol.dispose]: () => {} }),
 	});
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\trim.ts") }, new AbortController().signal);
@@ -312,7 +389,7 @@ test("Stanza editor pane inserts the configured final newline before saving", as
 	using services = paneServices(models);
 	const pane = createPane(services, resourceStore, {
 		insertFinalNewLine: true,
-		createPart: () => ({ layout: () => {}, focus: () => {}, getValue: () => "", dispose: () => {}, [Symbol.dispose]: () => {} }),
+		createPart: () => ({ layout: () => {}, focus: () => {}, getValue: () => "", updateOptions: () => {}, dispose: () => {}, [Symbol.dispose]: () => {} }),
 	});
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\final-newline.ts") }, new AbortController().signal);
@@ -338,7 +415,7 @@ test("Stanza editor pane resolves extension first-line languages after loading a
 	const pane = createPane(services, resourceStore, {
 		createPart: options => {
 			languageId = options.languageId;
-			return { layout: () => {}, focus: () => {}, getValue: () => "", dispose: () => {}, [Symbol.dispose]: () => {} };
+			return { layout: () => {}, focus: () => {}, getValue: () => "", updateOptions: () => {}, dispose: () => {}, [Symbol.dispose]: () => {} };
 		},
 	});
 	pane.create(parent);
@@ -398,7 +475,7 @@ test("Stanza editor pane forwards Workbench editor preferences to each created p
 		insertFinalNewLine: true,
 		createPart: options => {
 			received = options;
-			return { layout: () => {}, focus: () => {}, getValue: () => "", dispose: () => {}, [Symbol.dispose]: () => {} };
+			return { layout: () => {}, focus: () => {}, getValue: () => "", updateOptions: () => {}, dispose: () => {}, [Symbol.dispose]: () => {} };
 		},
 	});
 	pane.create(parent);
@@ -578,6 +655,7 @@ test('code editor creation rejects a missing language configuration registration
 	using languages = new LanguageFeaturesService();
 	using services = new ServiceContainer();
 	services.registerInstance(ITextModelResourceService, models);
+	services.registerSingleton(IConfigurationService, () => new InMemoryConfigurationService());
 	services.registerSingleton(IThemeService, () => new TestThemeService(darkColorTheme));
 	services.registerInstance(ILanguageFeaturesService, languages);
 	using pane = createPane(services, resourceStore, {});

@@ -10,6 +10,7 @@ import * as strings from '../../../../base/common/strings.js';
 import type { URI } from "../../../../base/common/uri.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { type EditorInput } from "../../../browser/parts/editor/editorInput.js";
 import { type IEditorPane } from "../../../browser/parts/editor/editorPane.js";
 import { EditorPaneVisibility } from "../../../browser/parts/editor/editorPane.js";
@@ -19,7 +20,7 @@ import { CodeEditorWidget, type CodeEditorWidgetOptions } from '../../../../edit
 import { type ICodeEditorViewState } from '../../../../editor/common/editorCommon.js';
 import { ITextModelResourceService, type TextModelReference } from "../../../services/textmodelResolver/common/textModelResourceService.js";
 import { type EditorTextDirection } from "../../../../editor/browser/view.js";
-import { type EditorLineWrapping } from "../../../../editor/common/config/editorOptions.js";
+import { EditorLineWrapping, type IEditorOptions } from "../../../../editor/common/config/editorOptions.js";
 import { type IWorkingCopy, type IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import { type Range } from "../../../../editor/common/core/range.js";
 import { type LanguageLocation, type LanguageWorkspaceEdit } from "../../../../editor/common/languages.js";
@@ -31,6 +32,7 @@ import type { IAccessibilityService } from "../../../../platform/accessibility/c
 import { trimTrailingWhitespace } from "../../../../editor/common/commands/trimTrailingWhitespaceCommand.js";
 import { EditOperation } from '../../../../editor/common/core/editOperation.js';
 import { Position } from '../../../../editor/common/core/position.js';
+import { CodeEditorConfiguration } from '../common/editorConfiguration.js';
 
 export interface EditorPanePart extends IDisposable {
 	readonly onDidChangeModelContent?: Event<IModelContentChangedEvent>;
@@ -39,6 +41,7 @@ export interface EditorPanePart extends IDisposable {
 	layout(dimension: IDimension): void;
 	focus(): void;
 	getValue(): string;
+	updateOptions(options: Readonly<IEditorOptions>): void;
 	revealRange?(range: Range): void;
 	saveViewState?(): ICodeEditorViewState | null;
 	restoreViewState?(state: ICodeEditorViewState): void;
@@ -133,6 +136,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 		private readonly options: EditorPaneOptions,
 		@ITextModelResourceService private readonly modelService: ITextModelResourceService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IConfigurationService private readonly configurationService: IConfigurationService,
 	) {
 		super();
 		if (!resourceStore || typeof resourceStore.resolve !== "function" || typeof resourceStore.save !== "function" || typeof resourceStore.onDidChange !== "function") {
@@ -140,6 +144,29 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 			throw new TypeError("Code editor pane requires a text resource store");
 		}
 		this.createPart = options.createPart ?? (partOptions => this.instantiationService.createInstance(CodeEditorWidget, partOptions));
+		this._register(this.configurationService.onDidChangeConfiguration(event => {
+			const part = this.part.value;
+			if (!part) return;
+			const update: {
+				wordWrap?: IEditorOptions['wordWrap'];
+				minimap?: IEditorOptions['minimap'];
+				renderWhitespace?: IEditorOptions['renderWhitespace'];
+				renderControlCharacters?: IEditorOptions['renderControlCharacters'];
+			} = {};
+			if (this.options.lineWrapping === undefined && event.affectsConfiguration(CodeEditorConfiguration.wordWrap)) {
+				update.wordWrap = this.configurationService.getValue(CodeEditorConfiguration.wordWrap) === EditorLineWrapping.On ? 'on' : 'off';
+			}
+			if (this.options.minimap === undefined && event.affectsConfiguration(CodeEditorConfiguration.minimapEnabled)) {
+				update.minimap = { enabled: this.configurationService.getValue(CodeEditorConfiguration.minimapEnabled) };
+			}
+			if (event.affectsConfiguration(CodeEditorConfiguration.renderWhitespace)) {
+				update.renderWhitespace = this.configurationService.getValue(CodeEditorConfiguration.renderWhitespace);
+			}
+			if (event.affectsConfiguration(CodeEditorConfiguration.renderControlCharacters)) {
+				update.renderControlCharacters = this.configurationService.getValue(CodeEditorConfiguration.renderControlCharacters);
+			}
+			if (Object.keys(update).length > 0) part.updateOptions(update);
+		}));
 	}
 
 	create(parent: HTMLElement): void {
@@ -173,14 +200,16 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 				textMateService: this.options.textMateService,
 				languageDiagnosticsService: this.options.languageDiagnosticsService,
 				accessibilityService: this.options.accessibilityService,
-				lineWrapping: this.options.lineWrapping,
+				lineWrapping: this.options.lineWrapping ?? this.configurationService.getValue(CodeEditorConfiguration.wordWrap),
 				wrappingIndent: this.options.wrappingIndent,
 				fontFamily: this.options.fontFamily,
 				fontSize: this.options.fontSize,
 				lineHeight: this.options.lineHeight,
 				fontLigatures: this.options.fontLigatures,
 				experimentalGpuAcceleration: this.options.experimentalGpuAcceleration,
-				minimap: this.options.minimap,
+				minimap: this.options.minimap ?? { enabled: this.configurationService.getValue(CodeEditorConfiguration.minimapEnabled) },
+				renderWhitespace: this.configurationService.getValue(CodeEditorConfiguration.renderWhitespace),
+				renderControlCharacters: this.configurationService.getValue(CodeEditorConfiguration.renderControlCharacters),
 				renderLineHighlight: this.options.renderLineHighlight,
 				renderLineHighlightOnlyWhenFocus: this.options.renderLineHighlightOnlyWhenFocus,
 				cursorStyle: this.options.cursorStyle,

@@ -46,6 +46,34 @@ test("App Server workspace files open in Stanza and save through the editor regi
 	).toBe("const value = 2;");
 });
 
+test('Code opens Go to Line from the command palette in the focused editor', async ({ target, workbench }) => {
+	test.skip(
+		target.appServerMode !== 'required' || target.workbenchMode !== 'code',
+		'This scenario requires the Code App Server product',
+	);
+
+	const page = workbench.page;
+	const fileRow = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
+	await expect.poll(() => fileRow.count(), { timeout: 15_000 }).toBe(1);
+	await fileRow.click();
+	const input = workbench.editors.groupAt(0).content.locator('.stanza-editor-input');
+	await input.focus();
+	await page.keyboard.press('F1');
+	const picker = page.locator('.ash-quick-pick');
+	await picker.getByRole('combobox').fill('Go to Line/Column');
+	await expect(picker.locator('.ash-quick-pick-row-label').filter({ hasText: 'Go to Line/Column...' })).toBeVisible();
+	await page.keyboard.press('Enter');
+
+	const dialog = workbench.editors.groupAt(0).content.locator('.stanza-editor-goto-line-widget');
+	await expect(dialog).toBeVisible();
+	const lineInput = dialog.getByRole('textbox', { name: 'Line number and optional column' });
+	await expect(lineInput).toBeFocused();
+	await lineInput.fill('2:1');
+	await lineInput.press('Enter');
+	await expect(dialog).toBeHidden();
+	await expect(input).toBeFocused();
+});
+
 test("Code highlights Rust locally and obtains document symbols asynchronously", async ({ target, workbench }) => {
 	test.skip(
 		target.appServerMode !== "required" || target.workbenchMode !== "code",

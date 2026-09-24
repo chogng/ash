@@ -96,6 +96,24 @@ export const CodeEditorConfiguration = Object.freeze({
 		parse: value => parseBoolean(value, "editor.minimap.enabled"),
 		setting: booleanSetting("Enabled", "Show a compact document overview on the right side of the editor."),
 	}),
+	renderWhitespace: configurationRegistry.registerConfiguration<'none' | 'boundary' | 'selection' | 'trailing' | 'all'>({
+		key: 'editor.renderWhitespace',
+		defaultValue: 'selection',
+		parse: value => parseEnum(value, 'editor.renderWhitespace', ['none', 'boundary', 'selection', 'trailing', 'all']),
+		setting: selectSetting('Render whitespace', 'Choose which spaces and tabs are visible in the editor.', [
+			{ value: 'none', label: 'None' },
+			{ value: 'boundary', label: 'Boundary' },
+			{ value: 'selection', label: 'Selection' },
+			{ value: 'trailing', label: 'Trailing' },
+			{ value: 'all', label: 'All' },
+		]),
+	}),
+	renderControlCharacters: configurationRegistry.registerConfiguration<boolean>({
+		key: 'editor.renderControlCharacters',
+		defaultValue: true,
+		parse: value => parseBoolean(value, 'editor.renderControlCharacters'),
+		setting: booleanSetting('Render control characters', 'Show control characters in the editor.'),
+	}),
 	lineNumbers: configurationRegistry.registerConfiguration<boolean>({
 		key: "editor.lineNumbers",
 		defaultValue: true,

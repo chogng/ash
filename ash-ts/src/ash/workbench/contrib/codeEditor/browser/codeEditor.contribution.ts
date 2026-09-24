@@ -1,4 +1,8 @@
 import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
+import './quickaccess/gotoLineQuickAccess.js';
+import './toggleMinimap.js';
+import './toggleRenderWhitespace.js';
+import './toggleRenderControlCharacter.js';
 import { getBrowserTextModelService } from "../../../services/textmodelResolver/browser/browserTextModelService.js";
 import { registerEditorPane } from "../../../browser/parts/editor/editorRegistry.js";
 import { getBrowserTextResourceStore } from "./browserTextResourceStore.js";
@@ -35,9 +39,7 @@ registerEditorPane({
 			lineHeight: configuration?.getValue(CodeEditorConfiguration.lineHeight),
 			fontLigatures: configuration?.getValue(CodeEditorConfiguration.fontLigatures),
 			experimentalGpuAcceleration: configuration?.getValue(CodeEditorConfiguration.experimentalGpuAcceleration),
-			lineWrapping: configuration?.getValue(CodeEditorConfiguration.wordWrap),
 			wrappingIndent: configuration?.getValue(CodeEditorConfiguration.wrappingIndent),
-			minimap: { enabled: configuration?.getValue(CodeEditorConfiguration.minimapEnabled) !== false },
 			renderLineHighlight: configuration?.getValue(CodeEditorConfiguration.renderLineHighlight),
 			renderLineHighlightOnlyWhenFocus: configuration?.getValue(CodeEditorConfiguration.renderLineHighlightOnlyWhenFocus),
 			cursorStyle: configuration?.getValue(CodeEditorConfiguration.cursorStyle),
