@@ -5,8 +5,7 @@ description: Primary accessibility skill for VS Code. REQUIRED for new feature a
 
 ## When to Use This Skill
 
-Use this skill for any VS Code feature work that introduces or changes interactive UI.
-Use this skill by default for new features and contributions, including when the request does not explicitly mention accessibility.
+Use this skill for any Ash feature work that introduces or changes interactive UI. Use this skill by default for new features and contributions, including when the request does not explicitly mention accessibility.
 
 Trigger examples:
 - "add a new feature"
@@ -161,8 +160,7 @@ A verbosity setting controls whether a hint such as "press Alt+F1 for accessibil
 
 ### Steps
 
-1. **Add an entry** to `AccessibilityVerbositySettingId` in
-   `src/vs/workbench/contrib/accessibility/browser/accessibilityConfiguration.ts`:
+1. **Add an entry** to `AccessibilityVerbositySettingId` in `src/ash/workbench/contrib/accessibility/browser/accessibilityConfiguration.ts`:
    ```ts
    export const enum AccessibilityVerbositySettingId {
        // … existing entries …
@@ -295,9 +293,9 @@ All interactive UI elements must have appropriate ARIA attributes so screen read
 
 ## Key Files
 
-- `src/vs/platform/accessibility/browser/accessibleView.ts` — `AccessibleViewProviderId`, `AccessibleContentProvider`, `IAccessibleViewContentProvider`
-- `src/vs/platform/accessibility/browser/accessibleViewRegistry.ts` — `AccessibleViewRegistry`, `IAccessibleViewImplementation`
-- `src/vs/workbench/contrib/accessibility/browser/accessibilityConfiguration.ts` — `AccessibilityVerbositySettingId`, verbosity setting registration
-- `src/vs/platform/accessibilitySignal/browser/accessibilitySignalService.ts` — `IAccessibilitySignalService`, `AccessibilitySignal`
-- `src/vs/base/browser/ui/aria/aria.ts` — `alert()`, `status()` for ARIA live region announcements
+- `src/ash/platform/accessibility/browser/accessibleView.ts` — `AccessibleViewProviderId`, `AccessibleContentProvider`, `IAccessibleViewContentProvider`
+- `src/ash/platform/accessibility/browser/accessibleViewRegistry.ts` — `AccessibleViewRegistry`, `IAccessibleViewImplementation`
+- `src/ash/workbench/contrib/accessibility/browser/accessibilityConfiguration.ts` — `AccessibilityVerbositySettingId`, verbosity setting registration
+- `src/ash/platform/accessibilitySignal/browser/accessibilitySignalService.ts` — `IAccessibilitySignalService`, `AccessibilitySignal`
+- `src/ash/base/browser/ui/aria/aria.ts` — `alert()`, `status()` for ARIA live region announcements
 

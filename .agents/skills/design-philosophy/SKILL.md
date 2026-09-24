@@ -1,11 +1,11 @@
 ---
 name: design-philosophy
-description: The VS Code design philosophy — a shared Values→Principles→Moves vocabulary for reasoning about UI in design terms instead of raw pixels. Use when designing, building, reviewing, or giving feedback on any visual surface; when deciding a radius, spacing, type role, icon size, border, color, or motion; or when translating a "this feels off" observation into a concrete, principled fix.
+description: The Ash design philosophy — a shared Values→Principles→Moves vocabulary for reasoning about UI in design terms instead of raw pixels. Use when designing, building, reviewing, or giving feedback on any visual surface; when deciding a radius, spacing, type role, icon size, border, color, or motion; or when translating a "this feels off" observation into a concrete, principled fix.
 ---
 
-# VS Code Design Philosophy
+# Ash Design Philosophy
 
-This skill is the **canonical VS Code design philosophy** — the single source of truth for how we reason about UI, for both developers and agents.
+This skill is the **canonical Ash design philosophy** — the single source of truth for how we reason about UI, for both developers and agents.
 
 As more and more of the UI is implemented via agents and tooling, the pixels increasingly take care of themselves, and the scarce, human part becomes the design judgment behind them.
 
@@ -36,7 +36,7 @@ Read top-down when you're learning the system, and bottom-up when you're fixing 
 
 ## The values: what we design for
 
-These four values name what we want people to *feel* using VS Code - they're the top layer, the thing every principle and move below is ultimately in service of. Learn them and you can describe almost any bug. Each is a *feeling* the UI should give; each is upheld by one or more **principles** below. Reach for the value first, the principle second, the move last.
+These four values name what we want people to *feel* using Ash - they're the top layer, the thing every principle and move below is ultimately in service of. Learn them and you can describe almost any bug. Each is a *feeling* the UI should give; each is upheld by one or more **principles** below. Reach for the value first, the principle second, the move last.
 
 | Value | Means | When it's broken it feels… | Principles |
 |------|-------|----------------------------|------------|
@@ -49,11 +49,11 @@ These four values name what we want people to *feel* using VS Code - they're the
 
 ### Why these four?
 
-It's fair to ask: who would ever *want* a UI that isn't calm, focused, consistent, and delightful? That's exactly the point. These aren't differentiators we're claiming over other products - they're the qualities most **under threat in a tool like ours**, and naming them is how we defend them. We chose them because they're the values VS Code is structurally inclined to *lose*:
+It's fair to ask: who would ever *want* a UI that isn't calm, focused, consistent, and delightful? That's exactly the point. These aren't differentiators we're claiming over other products - they're the qualities most **under threat in a tool like ours**, and naming them is how we defend them. We chose them because they're the values Ash is structurally inclined to *lose*:
 
-- **Calm** is the first casualty of an IDE. VS Code is information-dense and lived in for hours; every feature team has a good reason to add one more affordance, and the sum is noise. Calm is the value that pushes back on our own gravity.
+- **Calm** is the first casualty of an IDE. Ash is information-dense and lived in for hours; every feature team has a good reason to add one more affordance, and the sum is noise. Calm is the value that pushes back on our own gravity.
 - **Focused** matters because our surfaces are *deep*. A screen full of equally-weighted, equally-valid controls is the default failure mode of a power tool. Naming focus forces us to decide what leads.
-- **Consistent** has the largest surface area to defend. VS Code is built by many hands over many years; drift is the natural state. Consistency is less an aspiration than a maintenance discipline.
+- **Consistent** has the largest surface area to defend. Ash is built by many hands over many years; drift is the natural state. Consistency is less an aspiration than a maintenance discipline.
 - **Delightful** is the one we deliberately **ration**. It earns its place only by doing a job (Principle 7). We name it not to add more polish but to keep it honest, so delight guides and confirms rather than decorates.
 
 And each value names a real **tension**, not a free win - which is what makes it a choice worth stating rather than a platitude:
@@ -179,7 +179,7 @@ Moves are the **concrete mechanics** - the tokens, ramps, and tiers. On their ow
 
 This is the one section that touches implementation - and even here, the goal is to keep the *conversation* about design. Treat the Moves as the **shared vocabulary that lets an agreed design be built consistently**, not as the opening move in a review. Reach for them *after* you've named the feeling and the principle, never instead of it.
 
-The size and font tokens live in [`baseSizes.ts`](../../../src/vs/platform/theme/common/sizes/baseSizes.ts); the full reference is in [design-tokens.instructions.md](../../instructions/design-tokens.instructions.md).
+The size and font tokens live in [`baseSizes.ts`](../../../src/ash/platform/theme/common/sizes/baseSizes.ts); the full reference is in [design-tokens.instructions.md](../../instructions/design-tokens.instructions.md).
 
 <a id="design-tokens"></a>
 ### Tokens are the source of truth, not the pixel
@@ -197,11 +197,11 @@ Corner radius encodes **how far a surface floats above the one beneath it**. Eve
 
 | Tier | Radius | Token | What it is |
 |------|--------|-------|------------|
-| **Control** | 4px | `--vscode-cornerRadius-small` | interactible elements - buttons, inputs, list rows, tabs |
-| **Inner** | 6px | `--vscode-cornerRadius-medium` | non-control containers sitting *inside* a surface |
-| **Outer** | 8px | `--vscode-cornerRadius-large` | floating / overlay surfaces - menus, hovers, dialogs, toasts |
+| **Control** | 4px | `--ash-cornerRadius-small` | interactible elements - buttons, inputs, list rows, tabs |
+| **Inner** | 6px | `--ash-cornerRadius-medium` | non-control containers sitting *inside* a surface |
+| **Outer** | 8px | `--ash-cornerRadius-large` | floating / overlay surfaces - menus, hovers, dialogs, toasts |
 
-Pills (radius ≈ half the height) are **fully round** (`--vscode-cornerRadius-circle`), not "a big radius."
+Pills (radius ≈ half the height) are **fully round** (`--ash-cornerRadius-circle`), not "a big radius."
 - **Decision rule:** pick the tier by the surface's **role in the stack**, not by how the corner looks. A bug here sounds like *"this overlay is rounded at the control tier,"* never *"this needs more border-radius."*
 - **Serves:** *Elevation is encoded* (5), *Room to breathe* (2).
 
@@ -222,21 +222,21 @@ Text styles are **roles**, not arbitrary sizes: `heading1–3`, `body1–2`, `la
 <a id="icon-sizes"></a>
 ### Icon sizes - two sizes, chosen by context
 
-Codicons are **16px (base)** or **12px (compact)** - nothing in between; `14px` is always a bug. At the compact size, also swap to the `*Compact` glyph (`Codicon.close` → `Codicon.closeCompact`) so the icon is *optically* tuned, not just scaled.
+Lxicons are **16px (base)** or **12px (compact)** - nothing in between; `14px` is always a bug. At the compact size, also swap to the `*Compact` glyph (`Lxicon.close` → `Lxicon.closeCompact`) so the icon is *optically* tuned, not just scaled.
 - **Decision rule:** size tracks the **density and rank of the context**. Use **base (16px)** for standalone or primary actions and comfortable click targets; use **compact (12px)** for dense rows, inline glyphs, and secondary chrome where the icon rides alongside text. So the answer to "16 or 12?" is *"what is this icon's role here?"* - not a taste call. Say *"this icon should be compact,"* not *"shrink it a bit."*
 - **Serves:** *One thing leads* (4), *Sameness signals sameness* (6).
 
 <a id="one-stroke"></a>
 ### One stroke
 
-The standard border/separator stroke is **1px** (`--vscode-strokeThickness`).
+The standard border/separator stroke is **1px** (`--ash-strokeThickness`).
 - **Decision rule:** whether an ordinary border is present is a **yes/no** decision. Preserve thicker semantic or accessibility strokes, such as focus indicators.
 - **Serves:** *Quiet at rest* (1), *Sameness signals sameness* (6).
 
 <a id="theme-color"></a>
 ### Color comes from the theme
 
-Every color is a `--vscode-*` theme token, so the UI tracks the active theme and high-contrast modes.
+Every color is a `--ash-*` theme token, so the UI tracks the active theme and high-contrast modes.
 - **Decision rule:** a hardcoded hex is a bug by construction. Color bugs are *"wrong theme token"* (or *"a token that disappears in light/HC"*), never a hex value to nudge.
 - **Serves:** *Quiet at rest* (1), *Sameness signals sameness* (6).
 
@@ -278,7 +278,7 @@ Lead with the **role / tier / ramp**, not the number - then name the principle s
 | "the title looks thin" | "the heading is **missing the `semiBold` weight**" | 4 · One thing leads |
 | "font-weight 500 here" | "**500 is off the ramp** - snap to `semiBold` (600)" | 6 · Sameness |
 | "shrink this icon a touch" | "this icon should be the **compact (12px) size + `*Compact` glyph**" | 4 · One thing leads |
-| "this icon is 14px" | "codicons are **16 or 12 only** - pick base or compact" | 6 · Sameness |
+| "this icon is 14px" | "lxicons are **16 or 12 only** - pick base or compact" | 6 · Sameness |
 | "this ordinary border is too thick" | "standard borders are **one stroke (1px)** - this should/shouldn't have one; preserve thicker focus/semantic strokes" | 1 · Quiet at rest |
 | "change this grey hex" | "this is the **wrong theme token** / it **vanishes in light/HC**" | 6 · Sameness |
 | "the command center has a box around it" | "chrome should be **quiet at rest, reveal on hover**" | 1 · Quiet at rest |
@@ -326,5 +326,5 @@ These aren't wrong, they're just *incomplete* - they fix one spot and drift back
 
 - **Attach the surface.** A screenshot or a short clip (for motion) plus the name of the view beats a paragraph of description. Circle the spot.
 - **One observation per thread.** Keep each piece of feedback to a single surface + value, so it can be discussed and resolved on its own.
-- **Light vs. dark vs. high-contrast.** If something only breaks in one theme, say so - that usually points at a *theme token* problem, not a color choice.
+- **Light ash. dark ash. high-contrast.** If something only breaks in one theme, say so - that usually points at a *theme token* problem, not a color choice.
 - **Reduced motion.** For animation feedback, note whether you have `prefers-reduced-motion` on; a transition should still make sense without it.
