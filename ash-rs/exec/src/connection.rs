@@ -129,6 +129,7 @@ impl EmbeddedConnection {
     pub fn start(options: &EmbeddedAppServerOptions) -> Result<Self, ConnectionError> {
         let mut client_options =
             InProcessClientOptions::new(options.profile_root(), options.client_info().clone())
+                .with_host_grok_auth()
                 .with_capabilities(ClientCapabilities {
                     notifications: Some(true),
                     ..ClientCapabilities::default()

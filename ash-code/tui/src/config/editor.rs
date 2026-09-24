@@ -20,9 +20,11 @@ use crate::widgets::text_prompt::TextPromptOutcome;
 use crate::widgets::text_prompt::TextPromptSpec;
 use ash_app_server_protocol::protocol::config::ConfigReadResult;
 use ash_app_server_protocol::protocol::config::GitAutoFetchModeDto;
+use ash_app_server_protocol::protocol::model::ModelListResult;
 use ash_app_server_protocol::protocol::provider::{
     ProviderApiKeyPolicyDto, ProviderCatalogEntryDto, ProviderListResult,
 };
+use ash_protocol::AdvisorConfig;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::LazyLock;
@@ -42,6 +44,8 @@ pub(crate) struct ConfigEdit {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ConfigSelectionAction {
+    OpenAdvisor,
+    SetAdvisor(Option<AdvisorConfig>),
     SetMemories(ConfigEdit),
     SetIssues(super::IssueConfigEdit),
     AdjustIssueRefresh(super::IssueConfigEdit),
@@ -107,6 +111,7 @@ pub(crate) struct ConfigEditor {
     selection: ListSelection<ConfigSelectionAction>,
     provider_panel: Option<super::provider::Panel>,
     subscription: Option<ListSelection<ConfigSelectionAction>>,
+    advisor: Option<ListSelection<ConfigSelectionAction>>,
     prompt: Option<ProviderApiKeyPromptState>,
     removing: Option<super::provider::Request>,
 }
@@ -140,14 +145,18 @@ impl ConfigEditor {
             selection: ListSelection::new(spec.model, spec.actions),
             provider_panel: None,
             subscription: None,
+            advisor: None,
             prompt: None,
             removing: None,
         }
     }
 
     pub(crate) fn parent_title(&self) -> Option<&str> {
-        (self.provider_panel.is_some() || self.prompt.is_some() || self.subscription.is_some())
-            .then(|| self.selection.state().title())
+        (self.provider_panel.is_some()
+            || self.prompt.is_some()
+            || self.subscription.is_some()
+            || self.advisor.is_some())
+        .then(|| self.selection.state().title())
     }
 
     pub(crate) fn return_to_parent(&mut self) {
@@ -161,6 +170,7 @@ impl ConfigEditor {
         self.provider_panel = None;
         self.prompt = None;
         self.subscription = None;
+        self.advisor = None;
     }
 
     pub(crate) fn provider_mut(&mut self) -> Option<&mut super::provider::Panel> {
@@ -191,6 +201,20 @@ impl ConfigEditor {
     }
 
     pub(crate) fn handle_key(&mut self, key: crossterm::event::KeyEvent) -> ConfigEditorOutcome {
+        if let Some(advisor) = self.advisor.as_mut() {
+            let outcome = advisor.handle_key(key);
+            return match outcome {
+                ListSelectionOutcome::Activate(ConfigSelectionAction::SetAdvisor(config)) => {
+                    self.advisor = None;
+                    ConfigEditorOutcome::Action(ConfigSelectionAction::SetAdvisor(config))
+                }
+                ListSelectionOutcome::Dismiss => {
+                    self.advisor = None;
+                    ConfigEditorOutcome::Consumed
+                }
+                _ => ConfigEditorOutcome::Consumed,
+            };
+        }
         if let Some(subscription) = self.subscription.as_mut() {
             let outcome = subscription.handle_key(key);
             return self.handle_subscription_outcome(outcome);
@@ -396,7 +420,8 @@ impl ConfigEditor {
             }
             ListSelectionOutcome::Activate(action) => ConfigEditorOutcome::Action(action),
             ListSelectionOutcome::Adjust(action, adjustment) => match action {
-                ConfigSelectionAction::OpenProviderApiKey { .. }
+                ConfigSelectionAction::OpenAdvisor
+                | ConfigSelectionAction::OpenProviderApiKey { .. }
                 | ConfigSelectionAction::OpenProvider(_)
                 | ConfigSelectionAction::Connection(_)
                 | ConfigSelectionAction::OpenSubscription(_)
@@ -426,7 +451,9 @@ impl ConfigEditor {
     }
 
     pub(crate) fn handle_paste(&mut self, pasted: String) {
-        if let Some(subscription) = self.subscription.as_mut() {
+        if let Some(advisor) = self.advisor.as_mut() {
+            advisor.handle_paste(pasted);
+        } else if let Some(subscription) = self.subscription.as_mut() {
             subscription.handle_paste(pasted);
         } else if let Some(prompt) = self.prompt.as_mut() {
             prompt.prompt.handle_paste(pasted);
@@ -438,6 +465,9 @@ impl ConfigEditor {
     }
 
     pub(crate) fn page(&self) -> ConfigEditorPage<'_> {
+        if let Some(advisor) = &self.advisor {
+            return ConfigEditorPage::Selection(advisor.state());
+        }
         if let Some(subscription) = &self.subscription {
             return ConfigEditorPage::Selection(subscription.state());
         }
@@ -466,6 +496,9 @@ impl ConfigEditor {
                 .with_compact_action("/", "search")
                 .with_compact_action("Esc", "close")
         });
+        if let Some(advisor) = &self.advisor {
+            return advisor.key_hints();
+        }
         if let Some(subscription) = &self.subscription {
             return subscription.key_hints();
         }
@@ -487,6 +520,9 @@ impl ConfigEditor {
     }
 
     pub(crate) fn selection(&self) -> Option<&crate::widgets::list_selection::ListSelectionState> {
+        if let Some(advisor) = &self.advisor {
+            return Some(advisor.state());
+        }
         if let Some(subscription) = &self.subscription {
             return Some(subscription.state());
         }
@@ -496,6 +532,9 @@ impl ConfigEditor {
     pub(crate) fn selection_mut(
         &mut self,
     ) -> Option<&mut crate::widgets::list_selection::ListSelectionState> {
+        if let Some(advisor) = &mut self.advisor {
+            return Some(advisor.state_mut());
+        }
         if let Some(subscription) = &mut self.subscription {
             return Some(subscription.state_mut());
         }
@@ -504,6 +543,10 @@ impl ConfigEditor {
 
     pub(crate) fn open_subscription(&mut self, spec: ConfigChoices) {
         self.subscription = Some(ListSelection::new(spec.model, spec.actions));
+    }
+
+    pub(crate) fn open_advisor(&mut self, spec: ConfigChoices) {
+        self.advisor = Some(ListSelection::new(spec.model, spec.actions));
     }
 
     pub(crate) fn is_testing(&self) -> bool {
@@ -886,7 +929,24 @@ pub(crate) fn config_choices(
                 format!("{}s", config.git.autofetch_period),
             ),
     );
-    let provider_items = provider_items(config, providers, &mut actions);
+    let advisor_id = ListSelectionItemId::new("advisor-model");
+    actions.insert(advisor_id.clone(), ConfigSelectionAction::OpenAdvisor);
+    let advisor_label = config
+        .advisor
+        .as_ref()
+        .map(|advisor| format!("{}/{}", advisor.model.provider, advisor.model.model))
+        .unwrap_or_else(|| nls::text(language, Message::ConfigAdvisorOff).into());
+    let mut provider_items = provider_items(config, providers, &mut actions);
+    provider_items.insert(
+        0,
+        ListSelectionItem::new(nls::text(language, Message::ConfigAdvisorModel))
+            .with_id(advisor_id)
+            .with_columns(
+                nls::text(language, Message::ConfigAdvisorModel),
+                nls::text(language, Message::ConfigAdvisorDescription),
+                advisor_label,
+            ),
+    );
     let mut choices = ConfigChoices {
         model: ListSelectionModel::new(
             nls::text(language, Message::ConfigTitle),
@@ -910,6 +970,58 @@ pub(crate) fn config_choices(
     };
     choices.model.localize(language);
     choices
+}
+
+pub(crate) fn advisor_choices(
+    config: &ConfigReadResult,
+    catalog: &ModelListResult,
+    language: Language,
+) -> ConfigChoices {
+    let models = catalog
+        .models
+        .iter()
+        .filter(|entry| config.providers.contains_key(entry.model.provider.as_str()))
+        .collect::<Vec<_>>();
+    let selected = config
+        .advisor
+        .as_ref()
+        .and_then(|advisor| models.iter().position(|entry| entry.model == advisor.model))
+        .map(|index| index + 1)
+        .unwrap_or(0);
+    let mut actions = BTreeMap::new();
+    let off_id = ListSelectionItemId::new("off");
+    actions.insert(off_id.clone(), ConfigSelectionAction::SetAdvisor(None));
+    let mut items = vec![
+        ListSelectionItem::new(nls::text(language, Message::ConfigAdvisorOff)).with_id(off_id),
+    ];
+    for entry in models {
+        let model = entry.model.clone();
+        let id = ListSelectionItemId::new(format!("{}/{}", model.provider, model.model));
+        actions.insert(
+            id.clone(),
+            ConfigSelectionAction::SetAdvisor(Some(AdvisorConfig::new(model))),
+        );
+        items.push(ListSelectionItem::new(&entry.display_name).with_id(id));
+    }
+    let current = config
+        .advisor
+        .as_ref()
+        .map(|advisor| format!("{}/{}", advisor.model.provider, advisor.model.model))
+        .unwrap_or_else(|| nls::text(language, Message::ConfigAdvisorOff).into());
+    ConfigChoices {
+        model: ListSelectionModel::new(
+            format!(
+                "{}: {current}",
+                nls::text(language, Message::ConfigAdvisorModel)
+            ),
+            vec![ListSelectionGroup::new(
+                nls::text(language, Message::ConfigAdvisorModel),
+                items,
+            )],
+        )
+        .with_initial_selected(selected),
+        actions,
+    }
 }
 
 fn language_outcome(

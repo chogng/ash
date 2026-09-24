@@ -29,6 +29,13 @@ fn started() -> AccountLoginStartResult {
     }
 }
 
+fn started_event() -> SubscriptionEvent {
+    SubscriptionEvent::Started {
+        login: started(),
+        browser_error: None,
+    }
+}
+
 fn completion() -> AccountLoginCompleted {
     AccountLoginCompleted {
         login_id: "login-1".into(),
@@ -55,7 +62,7 @@ fn login_waits_without_blocking_and_completion_shows_account_and_plan() {
     assert!(labels(&subscription).contains(&"Sign in with ChatGPT".into()));
     assert!(subscription.begin(&SubscriptionCommand::SignIn));
     assert!(!subscription.begin(&SubscriptionCommand::SignIn));
-    subscription.update(SubscriptionEvent::Started(started()));
+    subscription.update(started_event());
     assert!(!subscription.begin(&SubscriptionCommand::SignIn));
     let state = ListSelectionState::new(subscription.choices().model);
     assert!(
@@ -85,7 +92,7 @@ fn completion_before_start_response_does_not_restore_a_finished_login() {
     let mut other = completion();
     other.login_id = "another-provider-login".into();
     subscription.update(SubscriptionEvent::Completed(other));
-    subscription.update(SubscriptionEvent::Started(started()));
+    subscription.update(started_event());
     assert!(labels(&subscription).contains(&"Signed in".into()));
     assert!(!labels(&subscription).contains(&"Cancel sign-in".into()));
 }
@@ -96,7 +103,7 @@ fn failed_login_and_request_errors_allow_retry() {
     subscription.begin(&SubscriptionCommand::SignIn);
     subscription.update(SubscriptionEvent::Failed("Service unavailable".into()));
     assert!(subscription.begin(&SubscriptionCommand::SignIn));
-    subscription.update(SubscriptionEvent::Started(started()));
+    subscription.update(started_event());
     let mut completed = completion();
     completed.account.accounts.clear();
     completed.status = AccountLoginCompletionStatusDto::Failed {
@@ -118,7 +125,7 @@ fn older_account_reads_and_unrelated_completions_cannot_replace_current_state() 
         revision: 4,
         accounts: vec![],
     }));
-    subscription.update(SubscriptionEvent::Started(started()));
+    subscription.update(started_event());
     let mut other = completion();
     other.login_id = "another-login".into();
     subscription.update(SubscriptionEvent::Completed(other));
@@ -129,7 +136,7 @@ fn older_account_reads_and_unrelated_completions_cannot_replace_current_state() 
 #[test]
 fn cancellation_after_completion_preserves_the_successful_account() {
     let mut subscription = Subscription::default();
-    subscription.update(SubscriptionEvent::Started(started()));
+    subscription.update(started_event());
     subscription.begin(&SubscriptionCommand::Cancel {
         login_id: "login-1".into(),
     });
@@ -156,10 +163,11 @@ fn reconnecting_existing_codex_credentials_reads_the_account_without_a_challenge
         ]),
     });
     assert_eq!(
-        execute(
+        execute_with_browser(
             &mut client,
             SubscriptionProvider::ChatGpt,
-            SubscriptionCommand::SignIn
+            SubscriptionCommand::SignIn,
+            |_| panic!("an existing login must not open a browser"),
         ),
         SubscriptionEvent::Read(account(2))
     );
@@ -203,12 +211,16 @@ fn account_actions_use_only_redacted_account_rpcs_and_logout_refreshes() {
         SubscriptionEvent::Read(_)
     ));
     assert_eq!(
-        execute(
+        execute_with_browser(
             &mut client,
             SubscriptionProvider::ChatGpt,
-            SubscriptionCommand::SignIn
+            SubscriptionCommand::SignIn,
+            |url| {
+                assert_eq!(url, "https://auth.openai.com/codex/device");
+                Ok(())
+            },
         ),
-        SubscriptionEvent::Started(started())
+        started_event()
     );
     assert_eq!(
         execute(
@@ -257,9 +269,21 @@ fn xai_subscription_commands_select_xai_device_authorization_and_logout() {
             serde_json::json!({"revision":2,"accounts":[]}),
         ]),
     });
-    assert!(
-        matches!(execute(&mut client, SubscriptionProvider::Xai, SubscriptionCommand::SignIn), SubscriptionEvent::Started(AccountLoginStartResult::DeviceCode { login_id, .. }) if login_id == "xai-login")
-    );
+    assert!(matches!(
+        execute_with_browser(
+            &mut client,
+            SubscriptionProvider::Xai,
+            SubscriptionCommand::SignIn,
+            |url| {
+                assert_eq!(url, "https://auth.x.ai/device");
+                Ok(())
+            }
+        ),
+        SubscriptionEvent::Started {
+            login: AccountLoginStartResult::DeviceCode { login_id, .. },
+            browser_error: None,
+        } if login_id == "xai-login"
+    ));
     assert!(matches!(
         execute(
             &mut client,
@@ -277,4 +301,40 @@ fn xai_subscription_commands_select_xai_device_authorization_and_logout() {
         requests[1]["params"],
         serde_json::json!({"provider":"xai-subscription"})
     );
+}
+
+#[test]
+fn browser_open_failure_keeps_the_device_challenge_available() {
+    let mut client = AppServerClient::new(Transport {
+        requests: Vec::new(),
+        results: VecDeque::from([serde_json::to_value(started()).unwrap()]),
+    });
+    let event = execute_with_browser(
+        &mut client,
+        SubscriptionProvider::ChatGpt,
+        SubscriptionCommand::SignIn,
+        |url| {
+            assert_eq!(url, "https://auth.openai.com/codex/device");
+            Err("could not open browser".into())
+        },
+    );
+    assert_eq!(
+        event,
+        SubscriptionEvent::Started {
+            login: started(),
+            browser_error: Some("could not open browser".into()),
+        }
+    );
+    let mut subscription = Subscription::default();
+    subscription.update(event);
+    let state = ListSelectionState::new(subscription.choices().model);
+    assert!(labels(&subscription).contains(&"Could not open browser".into()));
+    assert!(labels(&subscription).contains(&"Open in your browser".into()));
+    assert!(
+        state
+            .visible_items()
+            .iter()
+            .any(|item| { item.description() == Some("https://auth.openai.com/codex/device") })
+    );
+    assert!(labels(&subscription).contains(&"Cancel sign-in".into()));
 }

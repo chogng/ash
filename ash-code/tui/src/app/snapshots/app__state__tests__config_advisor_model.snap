@@ -1,0 +1,27 @@
+---
+source: ash-code/tui/src/app/state_tests.rs
+assertion_line: 846
+expression: rendered
+---
+  .                                                        [— / —] [Dashboard]  
+                                                                                
+        ┌── Config › Advisor model: Off ───────────────────────────[✗]─┐        
+        │                                                              │        
+        │   Advisor model                                              │        
+        │                                                              │        
+        │> Off                                                         │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+  ╭─────│  Tab/Shift+Tab to switch  ·  Esc to close                    │─────╮  
+  │ > Bu└──────────────────────────────────────────────────────────────┘     │  
+  ╰──────────────────────────────────────────────────────── Automatic model ─╯

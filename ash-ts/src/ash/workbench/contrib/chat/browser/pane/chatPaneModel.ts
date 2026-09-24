@@ -1,6 +1,7 @@
 import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import type { AgentResponse, IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnChangeDetails, TurnChangeSetSummary, TurnInteraction } from "../../../../services/chat/common/chatService.js";
+import { localize } from "../../../../../nls.js";
 import type { SkillReference } from "../../../../../platform/skills/common/skillApi.js";
 import type { ResolvedChatContext } from "../../../../services/chat/common/chatContextService.js";
 import type { IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
@@ -267,6 +268,12 @@ export class ChatPaneModel extends Disposable {
 		}
 		try {
 			this.setState("submitting");
+			const question = name === "advisor" ? argumentsText.trim() : "";
+			const advisorDefault = name === "advisor" ? await this.chatService.readAdvisorDefault() : null;
+			if (name === "advisor" && !question) throw new Error(localize('chat.advisor.questionRequired', 'Enter a question after /advisor'));
+			if (name === "advisor" && this.selection.kind === "untitled" && advisorDefault === null) {
+				throw new Error(localize('chat.advisor.configure', 'Configure an advisor model in Chat Settings before asking for a second opinion'));
+			}
 			const active = await this.ensureActiveSession();
 			if (this._thread?.threadId !== active.threadId) {
 				await this.subscribe(active);
@@ -276,24 +283,10 @@ export class ChatPaneModel extends Disposable {
 				throw new Error("Chat Thread is not available");
 			}
 			if (name === "advisor") {
-				const argument = argumentsText.trim();
 				const options = { sessionId: active.session.sessionId, threadId: active.threadId, expectedSequence: thread.sequence };
-				if (argument === "save") {
-					const selection = thread.advisor;
-					const config = selection.type === "model" ? selection.config : selection.type === "off" ? null : await this.chatService.readAdvisorDefault();
-					await this.chatService.saveAdvisorDefault(config);
-				} else if (argument.startsWith("ask ")) {
-					if (activeTurn(thread)) throw new Error("Wait for the active Turn to finish before starting a consultation");
-					const enabled = thread.advisor.type === "model" || (thread.advisor.type === "default" && await this.chatService.readAdvisorDefault() !== null);
-					if (!enabled) throw new Error("Select an advisor model with /advisor before asking for a second opinion");
-					await this.chatService.consultAdvisor({ ...options, question: argument.slice(4).trim() });
-				} else if (argument === "off" || argument === "default") {
-					await this.chatService.configureAdvisor({ ...options, selection: { type: argument } });
-				} else {
-					const model = this.models.find(entry => `${entry.model.provider}/${entry.model.model}` === argument)?.model;
-					if (!model) throw new Error("Select an available advisor model, or use /advisor off or /advisor ask <question>");
-					await this.chatService.configureAdvisor({ ...options, selection: { type: "model", config: { model, maxCalls: 3, maxOutputTokens: 2048 } } });
-				}
+				if (activeTurn(thread)) throw new Error(localize('chat.advisor.turnActive', 'Wait for the active Turn to finish before starting a consultation'));
+				if (advisorDefault === null) throw new Error(localize('chat.advisor.configure', 'Configure an advisor model in Chat Settings before asking for a second opinion'));
+				await this.chatService.consultAdvisor({ ...options, question });
 				await this.refreshThread();
 				this.setState("ready");
 				return;

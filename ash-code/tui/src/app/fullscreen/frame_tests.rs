@@ -2141,6 +2141,7 @@ fn custom_provider_app() -> App {
         KeyCode::Down,
         KeyCode::Down,
         KeyCode::Down,
+        KeyCode::Down,
         KeyCode::Enter,
     ] {
         app.handle_key(KeyEvent::new(key, KeyModifiers::NONE));

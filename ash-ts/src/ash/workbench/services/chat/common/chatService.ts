@@ -339,6 +339,7 @@ export interface IChatService {
 	readonly onDidUpdateTurnChanges: Event<TurnChangesUpdate>;
 	listModels(): Promise<readonly ModelCatalogEntry[]>;
 	listModelCatalog(): Promise<readonly ModelCatalogEntry[]>;
+	listAdvisorModels(): Promise<readonly ModelCatalogEntry[]>;
 	refreshModels(): Promise<readonly ModelCatalogEntry[]>;
 	isModelVisible(model: ModelRef): boolean;
 	setModelVisible(model: ModelRef, visible: boolean): Promise<void>;

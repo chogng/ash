@@ -1,0 +1,24 @@
+---
+source: ash-code/tui/src/app/inline/frame_tests.rs
+assertion_line: 95
+expression: text(&buffer)
+---
+─ Config ───────────────────────────────────────────────────────────────────────────────────────────
+                                                                                                    
+   General    Providers    Issues                                                                   
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────╮  
+  │ Search configuration                                                                         │  
+  ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  
+> Vim mode                                                                                     off  
+> Memory diagnostics                                                                           off  
+> Automatic updates                                                                         Latest  
+> Show Git changes as diff                                                                     off  
+> Language                                                                                 English  
+> Status bar style                                                                          Simple  
+> Key hint style                                                                          Contrast  
+> Screen mode                                                                               inline  
+> Memories                                                                                     off  
+> Automatic Git fetch                                                                          Off  
+> Git fetch interval                                                                          180s  
+                                                                                                    
+  Enter change · r reset · ←/→ details · Tab tabs · / search · Esc close

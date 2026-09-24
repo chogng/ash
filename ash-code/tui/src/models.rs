@@ -1,4 +1,3 @@
-pub(crate) mod advisor;
 mod picker;
 mod request;
 

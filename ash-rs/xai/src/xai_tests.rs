@@ -3,6 +3,7 @@ use ash_client::ClientError;
 use ash_client::ClientResponse;
 use ash_http_client::HttpResponse;
 use ash_secrets::MemorySecretStore;
+use ash_secrets::SecretStore;
 use std::collections::VecDeque;
 
 const DEVICE: &str = r#"{"device_code":"device-secret","user_code":"ABCD-EFGH","verification_uri":"https://auth.x.ai/device","expires_in":60,"interval":0}"#;
@@ -50,7 +51,219 @@ fn credential(expires_at: u64) -> TokenCredential {
         expires_at: Some(expires_at),
         account_id: "account-a".into(),
         credential_revision: 1,
+        grok_email: None,
+        grok_identity: None,
     }
+}
+
+fn write_grok_login(path: &std::path::Path, token: &str, expires_at: &str, user: &str) {
+    std::fs::write(
+        path,
+        serde_json::to_vec(&serde_json::json!({
+            "another-provider": {"refresh_token": "unrelated-secret"},
+            format!("https://auth.x.ai::{CLIENT_ID}"): {
+                "key": token,
+                "auth_mode": "oidc",
+                "user_id": user,
+                "principal_id": "principal-a",
+                "team_id": "team-a",
+                "email": "person@example.test",
+                "expires_at": expires_at,
+                "refresh_token": "grok-owned-refresh"
+            }
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+}
+
+fn auth_with_grok(
+    path: &std::path::Path,
+    secrets: Arc<MemorySecretStore>,
+    client: Arc<ScriptedClient>,
+) -> Arc<XaiOAuth> {
+    XaiOAuth::with_client_and_grok_auth(
+        secrets,
+        client,
+        path.parent().unwrap().join("xai.lock"),
+        Some(path.to_owned()),
+        DEFAULT_POLL_INTERVAL,
+    )
+}
+
+#[test]
+fn existing_grok_login_is_reused_without_copying_or_refreshing_its_secret() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("auth.json");
+    write_grok_login(&path, "grok-access", "2099-01-01T00:00:00Z", "user-a");
+    let before = std::fs::read(&path).unwrap();
+    let secrets = Arc::new(MemorySecretStore::default());
+    let client = ScriptedClient::new(&[]);
+    let auth = auth_with_grok(&path, secrets.clone(), client.clone());
+    let service = LoginService::new(auth.clone()).unwrap();
+    let account = service.read().unwrap().accounts.remove(0);
+    assert_eq!(account.status, AccountStatus::Ready);
+    assert_eq!(account.email.as_deref(), Some("person@example.test"));
+    assert!(account.account.account_id.starts_with("grok-"));
+    let target = auth.api_target().unwrap();
+    assert_eq!(target.account_id, account.account.account_id);
+    assert!(target.target.headers.iter().any(|header| {
+        header.name() == "Authorization" && header.value() == "Bearer grok-access"
+    }));
+    assert!(matches!(
+        service.begin(LoginMethod::XaiDeviceCode).unwrap(),
+        BeginLogin::Connected { .. }
+    ));
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+    assert!(client.requests.lock().unwrap().is_empty());
+    assert!(secrets.load(&XaiOAuth::credential_key()).unwrap().is_none());
+}
+
+#[test]
+fn grok_rotation_is_reloaded_only_for_the_same_identity() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("auth.json");
+    write_grok_login(&path, "first-access", "2099-01-01T00:00:00Z", "user-a");
+    let auth = auth_with_grok(
+        &path,
+        Arc::new(MemorySecretStore::default()),
+        ScriptedClient::new(&[]),
+    );
+    let rejected = auth.api_target().unwrap();
+    assert!(auth.recover_unauthorized(&rejected).unwrap().is_none());
+    auth.note_rejected(&rejected);
+    assert_eq!(
+        auth.read_account().unwrap().unwrap().status,
+        AccountStatus::ReauthenticationRequired
+    );
+    write_grok_login(&path, "second-access", "2099-01-01T00:00:00Z", "user-a");
+    let renewed = auth.recover_unauthorized(&rejected).unwrap().unwrap();
+    assert_eq!(renewed.account_id, rejected.account_id);
+    assert_ne!(renewed.credential_revision, rejected.credential_revision);
+    assert_eq!(
+        auth.read_account().unwrap().unwrap().status,
+        AccountStatus::Ready
+    );
+    write_grok_login(&path, "other-access", "2099-01-01T00:00:00Z", "user-b");
+    assert!(auth.recover_unauthorized(&rejected).unwrap().is_none());
+}
+
+#[test]
+fn ash_login_takes_ownership_when_grok_login_is_expired() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("auth.json");
+    write_grok_login(&path, "expired-access", "2020-01-01T00:00:00Z", "user-a");
+    let before = std::fs::read(&path).unwrap();
+    let secrets = Arc::new(MemorySecretStore::default());
+    let client = ScriptedClient::new(&[
+        (200, DEVICE),
+        (400, r#"{"error":"authorization_pending"}"#),
+        (200, TOKEN),
+    ]);
+    let auth = XaiOAuth::with_client_and_grok_auth(
+        secrets.clone(),
+        client.clone(),
+        dir.path().join("lock"),
+        Some(path.clone()),
+        Duration::from_millis(1),
+    );
+    let service = Arc::new(LoginService::new(auth.clone()).unwrap());
+    auth.install_login_service(&service).unwrap();
+    assert_eq!(
+        service.read().unwrap().accounts[0].status,
+        AccountStatus::ReauthenticationRequired
+    );
+    assert!(matches!(
+        service.begin(LoginMethod::XaiDeviceCode).unwrap(),
+        BeginLogin::DeviceCode { .. }
+    ));
+    let deadline = std::time::Instant::now() + Duration::from_secs(2);
+    while auth.load_credential().unwrap().is_none() && std::time::Instant::now() < deadline {
+        thread::sleep(Duration::from_millis(5));
+    }
+    assert_eq!(
+        auth.api_target().unwrap().account_id,
+        auth.load_credential().unwrap().unwrap().account_id
+    );
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+    assert!(secrets.load(&XaiOAuth::credential_key()).unwrap().is_some());
+}
+
+#[test]
+fn disconnecting_grok_keeps_its_file_and_reconnects_without_a_challenge() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("auth.json");
+    write_grok_login(&path, "grok-access", "2099-01-01T00:00:00Z", "user-a");
+    let before = std::fs::read(&path).unwrap();
+    let auth = auth_with_grok(
+        &path,
+        Arc::new(MemorySecretStore::default()),
+        ScriptedClient::new(&[]),
+    );
+    let service = LoginService::new(auth.clone()).unwrap();
+    let account = service.read().unwrap().accounts.remove(0);
+    auth.logout(&account.account).unwrap();
+    assert!(auth.read_account().unwrap().is_none());
+    assert!(matches!(
+        service.begin(LoginMethod::XaiDeviceCode).unwrap(),
+        BeginLogin::Connected { .. }
+    ));
+    assert!(auth.read_account().unwrap().is_some());
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+}
+
+#[test]
+fn ash_owned_login_stays_selected_while_a_grok_login_exists() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("auth.json");
+    write_grok_login(&path, "grok-access", "2099-01-01T00:00:00Z", "user-a");
+    let secrets = Arc::new(MemorySecretStore::default());
+    let auth = auth_with_grok(&path, secrets, ScriptedClient::new(&[]));
+    auth.store_credential(&credential(now_epoch_seconds() + 3600))
+        .unwrap();
+    let target = auth.api_target().unwrap();
+    assert_eq!(target.account_id, "account-a");
+    assert!(target.target.headers.iter().any(|header| {
+        header.name() == "Authorization" && header.value() == "Bearer old-access"
+    }));
+    let account = auth.read_account().unwrap().unwrap();
+    auth.logout(&account.account).unwrap();
+    assert!(auth.read_account().unwrap().is_none());
+    assert!(matches!(
+        LoginService::new(auth.clone())
+            .unwrap()
+            .begin(LoginMethod::XaiDeviceCode)
+            .unwrap(),
+        BeginLogin::Connected { .. }
+    ));
+    assert!(
+        auth.read_account()
+            .unwrap()
+            .unwrap()
+            .account
+            .account_id
+            .starts_with("grok-")
+    );
+}
+
+#[test]
+fn invalid_grok_file_reports_an_error_before_starting_login() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("auth.json");
+    std::fs::write(&path, b"not json").unwrap();
+    let client = ScriptedClient::new(&[]);
+    let auth = auth_with_grok(
+        &path,
+        Arc::new(MemorySecretStore::default()),
+        client.clone(),
+    );
+    assert!(auth.read_account().is_err());
+    assert!(
+        LoginService::deferred(auth)
+            .begin(LoginMethod::XaiDeviceCode)
+            .is_err()
+    );
+    assert!(client.requests.lock().unwrap().is_empty());
 }
 
 #[test]

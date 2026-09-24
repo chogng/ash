@@ -85,6 +85,15 @@ export class ChatService extends Disposable implements IChatService {
 		return this.refreshModels();
 	}
 
+	async listAdvisorModels(): Promise<readonly ModelCatalogEntry[]> {
+		const [models, providers] = await Promise.all([
+			this.listModelCatalog(),
+			this.options.modelApi.readConfiguredProviderIds(),
+		]);
+		const configured = new Set(providers);
+		return models.filter(entry => configured.has(entry.model.provider));
+	}
+
 	async refreshModels(): Promise<readonly ModelCatalogEntry[]> {
 		if (this.modelCatalogLoad) return this.modelCatalogLoad;
 		const load = this.options.modelApi.list().then(result => this.acceptModelCatalog(result.models));

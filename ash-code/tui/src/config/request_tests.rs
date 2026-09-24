@@ -29,6 +29,57 @@ impl JsonRpcTransport for RecordingTransport {
 }
 
 #[test]
+fn advisor_model_selection_updates_global_config() {
+    let mut current = empty_config_snapshot();
+    current.revision = 4;
+    let advisor = ash_protocol::AdvisorConfig::new(ash_protocol::ModelRef::new(
+        ash_protocol::ProviderId::new("openai").unwrap(),
+        ash_protocol::ModelId::new("gpt-ash").unwrap(),
+    ));
+    let mut saved = current.clone();
+    saved.revision = 5;
+    saved.advisor = Some(advisor.clone());
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let mut client = AppServerClient::new(RecordingTransport {
+        requests: requests.clone(),
+        responses: VecDeque::from([
+            response(1, serde_json::to_value(&current).unwrap()),
+            response(
+                2,
+                serde_json::json!({"revision":5,"generation":2,"disposition":"updated"}),
+            ),
+            response(3, serde_json::to_value(&saved).unwrap()),
+            response(4, serde_json::json!({"providers":[]})),
+        ]),
+    });
+    let crate::config::Event::Updated(_) =
+        super::execute(&mut client, super::Command::SetAdvisor(Some(advisor))).unwrap()
+    else {
+        panic!("expected refreshed settings")
+    };
+    let requests = requests.lock().unwrap();
+    assert_eq!(
+        requests
+            .iter()
+            .map(|request| request["method"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        [
+            "config/read",
+            "config/update",
+            "config/read",
+            "provider/list"
+        ]
+    );
+    assert_eq!(requests[1]["params"]["expectedRevision"], 4);
+    assert_eq!(
+        requests[1]["params"]["advisor"]["model"],
+        serde_json::json!({"provider":"openai","model":"gpt-ash"})
+    );
+    assert!(requests[1]["params"].get("tui").is_none());
+    assert!(requests[1]["params"].get("model").is_none());
+}
+
+#[test]
 fn issue_config_write_uses_its_backend_contract_without_changing_tui_preferences() {
     let mut current = empty_config_snapshot();
     current.revision = 2;

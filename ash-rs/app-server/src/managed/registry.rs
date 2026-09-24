@@ -170,8 +170,9 @@ fn open_server_with_profile_runtime(
     host: &ConnectionOptions,
     profile_runtime: Arc<LocalProfileRuntime>,
 ) -> Result<AppServer, String> {
-    let mut options =
-        LocalAppServerOptions::new(host.profile_root()).with_profile_runtime(profile_runtime);
+    let mut options = LocalAppServerOptions::new(host.profile_root())
+        .with_host_grok_auth()
+        .with_profile_runtime(profile_runtime);
     options = options.with_pty_helper(std::env::current_exe().map_err(|error| error.to_string())?);
     if let Some(dir_root) = host.dir_root() {
         options = match host.dir_grant_source() {

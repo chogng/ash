@@ -45,7 +45,7 @@ impl XaiOAuth {
         })?;
         let _lock = self.lock_credentials()?;
         check_cancelled(cancellation)?;
-        let mut credential = self.load_credential()?.ok_or_else(account_changed)?;
+        let mut credential = self.active_credential()?.ok_or_else(account_changed)?;
         if self.account_reads.load(Ordering::Relaxed) != generation
             || credential.account_id != account_id
             || credential.profile.as_ref().is_some_and(|previous| {
@@ -56,8 +56,21 @@ impl XaiOAuth {
         {
             return Err(account_changed());
         }
+        if let Some(identity) = &credential.grok_identity {
+            if account.user_id != identity.user_id
+                || account.principal_id.as_deref() != Some(identity.principal_id.as_str())
+                || account
+                    .team_id
+                    .as_ref()
+                    .is_some_and(|team| team != &identity.team_id)
+            {
+                return Err(account_changed());
+            }
+        }
         credential.profile = Some(account.clone());
-        self.store_credential(&credential)?;
+        if !super::is_grok_account(account_id) {
+            self.store_credential(&credential)?;
+        }
         self.publish_account_update(&credential);
         Ok(account)
     }

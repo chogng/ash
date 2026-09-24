@@ -4,14 +4,16 @@
 - Store and refresh Ash-owned credentials through the secret store.
 - Resolve authenticated Grok CLI proxy requests per invocation.
 - Delegate model catalog, account, settings, and subscription usage HTTP requests and decoding to `backend-client::xai`; retain account checks and one-time authentication recovery.
-- Keep subscription credentials separate from API keys and Grok CLI storage.
+- Read an existing Grok CLI OAuth access token without touching Grok's rotating refresh token or credential file. When Ash signs in, keep its credentials separate from API keys and Grok CLI storage.
 
 ## Subscription transport
 
 - Device authorization uses `auth.x.ai/oauth2/device/code` and `auth.x.ai/oauth2/token`.
 - Inference uses `https://cli-chat-proxy.grok.com/v1/responses` over HTTP/SSE; account models come from `/models-v2`.
 - `xai-subscription` is separate from the `xai` API-key provider. Ash stores credentials in its profile secret store and coordinates refreshes through the profile's `xai.lock`.
-- Start from Ash Code's `/config` → Providers → xAI Subscription. Complete the browser device challenge, then select a discovered model.
+- If Ash has no subscription credential, it reads `~/.grok/auth.json` on the backend host for a valid official Grok OAuth access token. It reads only the matching entry's access token, account identity, email, and expiry. Ash never copies the Grok refresh token or writes the file. An Ash-owned credential takes precedence once the user signs in to Ash. A malformed Grok file reports an error instead of silently choosing another account.
+- Start from Ash Code's `/config` → Providers → xAI Subscription. Existing valid Grok login connects immediately. Otherwise Ash Code opens the device challenge in the local browser and keeps its URL and code visible in the terminal. Complete the challenge, then select a discovered model.
+- Disconnecting a borrowed Grok login stores only an Ash-local disconnected flag. Signing in again reconnects a still-valid Grok login without altering its file. An expired Grok access token needs a fresh Ash sign-in unless Grok has renewed the file.
 - A failed rotating-token exchange requires signing in again; the submitted refresh token is never reused after an uncertain network result.
 - `refresh_account` reads live identity and subscription metadata, merges it into the current credential under the credential lock, and updates the login service. A changed remote user/principal/team or a concurrent local login is rejected.
 - `read_subscription` reads the account, access settings, current credit usage and period, exact balances and usage history. `account/rateLimits/read` exposes the current xAI usage separately from ChatGPT windows; `/usage` displays both signed-in subscriptions.

@@ -5,6 +5,7 @@ use super::ConfigEditResult;
 use super::Event;
 use super::ProviderApiKeyEdit;
 use super::TerminalSettings;
+use super::advisor_choices;
 use super::config_choices;
 use crate::client::new_command_id;
 use crate::status::StatusLineSettings;
@@ -24,6 +25,8 @@ pub(crate) struct ProviderApiKeyUpdate {
 impl Command {
     pub(crate) const fn request_name(&self) -> &'static str {
         match self {
+            Self::OpenAdvisor => "ash-tui-read-advisor-config",
+            Self::SetAdvisor(_) => "ash-tui-set-advisor-config",
             Self::SetMemories(_) => "ash-tui-set-memories",
             Self::SetIssues(_) => "ash-tui-configure-issues",
             Self::SetGit(_) => "ash-tui-configure-git",
@@ -41,6 +44,17 @@ where
     T: JsonRpcTransport,
 {
     match command {
+        Command::OpenAdvisor => (|| -> Result<Event, ConfigCommandError> {
+            let config = client.read_config().map_err(ConfigCommandError::from)?;
+            let models = client.list_models().map_err(ConfigCommandError::from)?;
+            let terminal = TerminalSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
+            Ok(Event::AdvisorOpened(advisor_choices(
+                &config,
+                &models,
+                terminal.language(),
+            )))
+        })(),
+        Command::SetAdvisor(advisor) => set_advisor(client, advisor).map(Event::Updated),
         Command::SetMemories(edit) => set_memories(client, edit).map(Event::Updated),
         Command::SetIssues(edit) => set_issue_settings(client, edit).map(Event::Updated),
         Command::SetGit(edit) => set_git_settings(client, edit).map(Event::Updated),
@@ -63,6 +77,38 @@ where
         }
     }
     .map_err(|error| error.to_string())
+}
+
+fn set_advisor<T: JsonRpcTransport>(
+    client: &mut AppServerClient<T>,
+    advisor: Option<ash_protocol::AdvisorConfig>,
+) -> Result<ConfigEditResult, ConfigCommandError> {
+    let config = client.read_config()?;
+    client.update_config(ConfigUpdateParams {
+        command_id: new_command_id("advisor-config"),
+        expected_revision: config.revision,
+        advisor: advisor.map(Patch::Value).unwrap_or(Patch::Null),
+        time_context: Patch::Missing,
+        features: Patch::Missing,
+        model: Patch::Missing,
+        model_reasoning_effort: Patch::Missing,
+        commit_message_model: Patch::Missing,
+        approval_review_model: Patch::Missing,
+        tool_mode: Patch::Missing,
+        grep_backend: Patch::Missing,
+        git: Patch::Missing,
+        gui: Patch::Missing,
+        tui: Patch::Missing,
+    })?;
+    let config = client.read_config()?;
+    let terminal = TerminalSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
+    let status_line = StatusLineSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
+    let providers = client.list_providers()?;
+    Ok(ConfigEditResult {
+        terminal,
+        status_line: status_line.clone(),
+        choices: config_choices(&config, &providers, terminal, status_line),
+    })
 }
 
 fn set_memories<T: JsonRpcTransport>(

@@ -84,6 +84,14 @@ fn product_chrome_is_localized_without_changing_source_content() {
     assert_eq!(localize(Language::Chinese, "Dashboard"), "仪表盘");
     assert_eq!(localize(Language::Japanese, "close"), "閉じる");
     assert_eq!(
+        localize(Language::Chinese, "Browser opened"),
+        "已打开浏览器"
+    );
+    assert_eq!(
+        localize(Language::Chinese, "Could not open browser"),
+        "无法打开浏览器"
+    );
+    assert_eq!(
         localize(Language::French, "Search help"),
         "Rechercher dans l’aide"
     );

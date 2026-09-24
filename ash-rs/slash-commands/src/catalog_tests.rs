@@ -19,6 +19,11 @@ fn default_catalog_advertises_product_commands() {
     assert_eq!(catalog.origin("team"), Some(SlashCommandOrigin::Server));
     assert_eq!(catalog.origin("develop"), Some(SlashCommandOrigin::Server));
     assert_eq!(catalog.commands()[0].name, "advisor");
+    assert_eq!(catalog.commands()[0].argument_hint.as_deref(), Some("<question>"));
+    assert_eq!(
+        catalog.commands()[0].description,
+        "Ask the configured advisor for a second opinion"
+    );
     assert_eq!(
         catalog.commands()[0].argument_mode,
         SlashCommandArgumentMode::Optional

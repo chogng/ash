@@ -17,6 +17,95 @@ const PROFILE: &str = r#"{"userId":"user-a","email":"ada@example.test","firstNam
 const TOKEN: &str =
     r#"{"access_token":"new-access","refresh_token":"new-refresh","expires_in":3600}"#;
 
+#[test]
+fn borrowed_grok_login_reads_subscription_without_writing_grok_or_ash_credentials() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("auth.json");
+    let contents = serde_json::to_vec(&serde_json::json!({
+        format!("https://auth.x.ai::{}", crate::CLIENT_ID): {
+            "key": "grok-access",
+            "refresh_token": "grok-owned-refresh",
+            "auth_mode": "oidc",
+            "user_id": "user-a",
+            "principal_id": "principal-a",
+            "team_id": "team-a",
+            "email": "ada@example.test",
+            "expires_at": "2099-01-01T00:00:00Z"
+        }
+    }))
+    .unwrap();
+    std::fs::write(&path, &contents).unwrap();
+    let secrets = Arc::new(MemorySecretStore::default());
+    let transport = Transport::new(&[
+        (
+            200,
+            r#"{"userId":"user-a","principalId":"principal-a","email":"ada@example.test","subscriptionTier":"SuperGrokPro"}"#,
+        ),
+        (200, r#"{"allow_access":true}"#),
+        (200, r#"{"config":{"creditUsagePercent":12.5}}"#),
+    ]);
+    let auth = XaiOAuth::with_grok_auth_file(
+        secrets.clone(),
+        transport.clone(),
+        dir.path().join("lock"),
+        path.clone(),
+    );
+    let account_id = auth.account_id().unwrap().unwrap();
+    let data = auth
+        .read_subscription(&account_id, &CancellationSource::new().token())
+        .unwrap();
+    assert_eq!(
+        data.account.subscription_tier.as_deref(),
+        Some("SuperGrokPro")
+    );
+    assert_eq!(transport.requests.lock().unwrap().len(), 3);
+    assert_eq!(std::fs::read(&path).unwrap(), contents);
+    use ash_secrets::SecretStore;
+    assert!(secrets.load(&XaiOAuth::credential_key()).unwrap().is_none());
+}
+
+#[test]
+fn borrowed_grok_login_rejects_a_changed_remote_identity() {
+    for profile in [
+        r#"{"userId":"user-a","principalId":"other-principal"}"#,
+        r#"{"userId":"user-a","principalId":"principal-a","teamId":"other-team"}"#,
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("auth.json");
+        std::fs::write(
+            &path,
+            serde_json::to_vec(&serde_json::json!({
+                format!("https://auth.x.ai::{}", crate::CLIENT_ID): {
+                    "key": "grok-access",
+                    "auth_mode": "oidc",
+                    "user_id": "user-a",
+                    "principal_id": "principal-a",
+                    "team_id": "team-a",
+                    "expires_at": "2099-01-01T00:00:00Z"
+                }
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        let secrets = Arc::new(MemorySecretStore::default());
+        let auth = XaiOAuth::with_grok_auth_file(
+            secrets.clone(),
+            Transport::new(&[(200, profile)]),
+            dir.path().join("lock"),
+            path,
+        );
+        let account_id = auth.account_id().unwrap().unwrap();
+        assert_eq!(
+            auth.refresh_account(&account_id, &CancellationSource::new().token())
+                .unwrap_err()
+                .kind(),
+            XaiErrorKind::AccountChanged
+        );
+        use ash_secrets::SecretStore;
+        assert!(secrets.load(&XaiOAuth::credential_key()).unwrap().is_none());
+    }
+}
+
 struct Transport {
     responses: Mutex<VecDeque<ClientResponse>>,
     requests: Mutex<Vec<ClientRequest>>,
@@ -66,6 +155,8 @@ fn credential() -> TokenCredential {
         account_id: "login-a".into(),
         credential_revision: 1,
         profile: None,
+        grok_email: None,
+        grok_identity: None,
     }
 }
 
@@ -224,40 +315,21 @@ fn a_changed_remote_identity_is_not_saved_and_status_failures_are_not_refreshed(
 #[test]
 #[ignore = "Reads the existing Grok access token without refreshing or modifying Grok credentials"]
 fn live_subscription_backend() {
-    use ash_secrets::SecretStore;
-    #[derive(serde::Deserialize)]
-    struct GrokCredential {
-        key: String,
-        auth_mode: String,
-    }
     let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
         .expect("home directory");
     let path = std::path::PathBuf::from(home).join(".grok/auth.json");
     let before = zeroize::Zeroizing::new(std::fs::read(&path).expect("Grok login required"));
-    let map: std::collections::BTreeMap<String, GrokCredential> =
-        serde_json::from_slice(&before).expect("Grok auth map");
-    let entry = map
-        .get(&format!("https://auth.x.ai::{}", crate::CLIENT_ID))
-        .expect("Grok OAuth login required");
-    assert_eq!(entry.auth_mode, "oidc");
-    let mut credential = credential();
-    credential.access_token = entry.key.clone();
-    credential.refresh_token.clear();
-    credential.expires_at = None;
     let dir = tempfile::tempdir().unwrap();
     let secrets = Arc::new(MemorySecretStore::default());
-    secrets
-        .store(
-            &XaiOAuth::credential_key(),
-            &ash_secrets::SecretValue::new(serde_json::to_vec(&credential).unwrap()),
-        )
-        .unwrap();
     let auth = XaiOAuth::production(secrets, dir.path().join("lock")).unwrap();
-    let result = auth.read_subscription("login-a", &CancellationSource::new().token());
+    let account_id = auth
+        .account_id()
+        .unwrap()
+        .expect("Grok OAuth login required");
+    let result = auth.read_subscription(&account_id, &CancellationSource::new().token());
     let after = zeroize::Zeroizing::new(std::fs::read(&path).unwrap());
     assert!(*before == *after, "Grok auth changed during read-only test");
-    let data =
-        result.unwrap_or_else(|error| panic!("subscription query failed: {:?}", error.kind()));
+    let data = result.unwrap_or_else(|error| panic!("subscription query failed: {error}"));
     assert!(!data.account.user_id.is_empty());
     println!(
         "xAI account, settings and subscription usage queries passed; Grok credentials unchanged"

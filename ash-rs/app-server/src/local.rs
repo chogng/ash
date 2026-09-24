@@ -102,6 +102,7 @@ pub struct LocalAppServerOptions {
     execution_environments: Vec<exec_server::ExecutionEnvironment>,
     pub profile_root: PathBuf,
     codex_home: Option<PathBuf>,
+    grok_auth_path: Option<PathBuf>,
     pub dir_config: Option<LocalDirConfigOptions>,
     pub slash_commands: SlashCommandCatalog,
     pub dir_root: Option<PathBuf>,
@@ -160,6 +161,7 @@ impl LocalAppServerOptions {
             profile_root: profile_root.into(),
             execution_environments: Vec::new(),
             codex_home: None,
+            grok_auth_path: None,
             dir_config: None,
             slash_commands: SlashCommandCatalog::default(),
             dir_root: None,
@@ -191,6 +193,18 @@ impl LocalAppServerOptions {
     /// Selects the Codex credential home for an isolated host or test environment.
     pub fn with_codex_home(mut self, home: impl Into<PathBuf>) -> Self {
         self.codex_home = Some(home.into());
+        self
+    }
+
+    /// Reads the backend host's Grok login when Ash has no xAI credential.
+    pub fn with_host_grok_auth(mut self) -> Self {
+        self.grok_auth_path = xai::grok_auth_path();
+        self
+    }
+
+    /// Selects a Grok credential file for an isolated host or test environment.
+    pub fn with_grok_auth_file(mut self, path: impl Into<PathBuf>) -> Self {
+        self.grok_auth_path = Some(path.into());
         self
     }
 
@@ -1302,13 +1316,19 @@ pub fn open_local_app_server_with_codebase_providers(
         None => KimiOAuth::production(Arc::clone(&profile_secrets))
             .map_err(|error| OpenAppServerError(error.to_string()))?,
     };
-    let xai_oauth = match &model_operation_client {
-        Some(client) => xai::XaiOAuth::with_client(
+    let xai_oauth = match (&model_operation_client, &options.grok_auth_path) {
+        (Some(client), Some(path)) => xai::XaiOAuth::with_grok_auth_file(
+            Arc::clone(&profile_secrets),
+            Arc::clone(client),
+            options.profile_root.join("xai.lock"),
+            path.clone(),
+        ),
+        (Some(client), None) => xai::XaiOAuth::with_client(
             Arc::clone(&profile_secrets),
             Arc::clone(client),
             options.profile_root.join("xai.lock"),
         ),
-        None => xai::XaiOAuth::production(
+        (None, _) => xai::XaiOAuth::production(
             Arc::clone(&profile_secrets),
             options.profile_root.join("xai.lock"),
         )

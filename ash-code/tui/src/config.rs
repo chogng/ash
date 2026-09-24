@@ -16,6 +16,7 @@ pub(crate) use editor::ConfigEditorOutcome;
 pub(crate) use editor::ConfigEditorPage;
 pub(crate) use editor::ConfigSelectionAction;
 pub(crate) use editor::ProviderApiKeyEdit;
+pub(crate) use editor::advisor_choices;
 pub(crate) use editor::config_choices;
 pub(crate) use request::execute;
 #[cfg(test)]
@@ -37,6 +38,7 @@ pub(crate) struct ConfigEditResult {
 
 /// A completed configuration operation delivered to the TUI state owner.
 pub(crate) enum Event {
+    AdvisorOpened(ConfigChoices),
     Connection(provider::Reply),
     Subscription(SubscriptionEvent),
     SubscriptionReply(SubscriptionProvider, SubscriptionEvent),
@@ -51,6 +53,8 @@ pub(crate) enum Event {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Command {
+    OpenAdvisor,
+    SetAdvisor(Option<ash_protocol::AdvisorConfig>),
     SetMemories(ConfigEdit),
     SetIssues(IssueConfigEdit),
     SetGit(ConfigEdit),

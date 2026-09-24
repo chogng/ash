@@ -26,10 +26,9 @@ impl Default for SlashCommandCatalog {
         Self::new([
             SlashCommandDefinition {
                 name: "advisor".into(),
-                description: "Choose an advisor model, turn it off, or ask for a second opinion"
-                    .into(),
+                description: "Ask the configured advisor for a second opinion".into(),
                 argument_mode: SlashCommandArgumentMode::Optional,
-                argument_hint: Some("<provider/model|off|ask question>".into()),
+                argument_hint: Some("<question>".into()),
             },
             SlashCommandDefinition {
                 name: "compact".into(),

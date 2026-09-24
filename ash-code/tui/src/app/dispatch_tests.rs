@@ -10,10 +10,12 @@ use crate::sessions::ConversationTranscript;
 use crate::skills::Command as SkillCommand;
 use crate::skills::Event as SkillEvent;
 use crate::thread::composer::{
-    ChatInputItem, SlashCommandInvocation, TuiSlashCommandAction, built_in_catalog_command,
+    ChatInputItem, ChatSubmission, SlashCommandInvocation, TuiSlashCommandAction,
+    built_in_catalog_command,
 };
 use crate::thread::read_thread;
 use crate::thread::transcript::MessageRole;
+use crate::thread::{ThreadRequestScope, submit_prompt};
 use ash_app_server_client::JsonRpcTransport;
 use ash_app_server_client::{
     AppServerClient, InProcessClientOptions, InProcessTransport, start_in_process_client,
@@ -29,6 +31,7 @@ use ash_client::ClientError;
 use ash_client::ClientRequest;
 use ash_client::ClientResponse;
 use ash_client::OperationClient;
+use ash_protocol::ApprovalMode;
 use ash_protocol::CommandId;
 use ash_protocol::ReasoningEffort;
 use ash_protocol::SessionStatus;
@@ -44,6 +47,30 @@ use std::sync::MutexGuard;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+#[test]
+fn advisor_question_uses_consult_request_instead_of_worker_turn() {
+    let (mut client, state_root, model) = client_with_model_probe();
+    let conversation = ActiveConversation::start(&mut client, "advisor".into()).unwrap();
+    let result = submit_prompt(
+        &mut client,
+        ThreadRequestScope::new(
+            conversation.session_id(),
+            conversation.thread_id(),
+            conversation.thread_sequence(),
+        ),
+        ChatSubmission {
+            display_text: "/advisor Check cancellation".into(),
+            input: vec![ChatInputItem::Text("/advisor Check cancellation".into())],
+        },
+        ApprovalMode::AskPermissions,
+    );
+    let error = result.unwrap_err();
+    assert!(error.to_string().contains("AdvisorDisabled"), "{error}");
+    assert_eq!(model.calls(), 0);
+    drop(client);
+    let _ = fs::remove_dir_all(state_root);
+}
 
 #[test]
 fn branch_persists_lineage_switches_threads_and_does_not_call_the_model() {
@@ -1180,58 +1207,4 @@ fn apply_conversation_change(app: &mut App, change: ConversationChange, snapshot
         ),
     ));
     app.update(crate::thread::Event::ProductNotice(change.notice));
-}
-
-#[test]
-fn advisor_picker_and_off_command_use_thread_configuration() {
-    let (mut client, state_root) = client();
-    let mut conversation = ActiveConversation::start(&mut client, "advisor".into()).unwrap();
-    let mut app = App::new();
-    let invoke = |argument: &str| SlashCommandInvocation {
-        command: ash_slash_commands::SlashCommandCatalog::default()
-            .command_named("advisor")
-            .unwrap()
-            .clone(),
-        origin: ash_slash_commands::SlashCommandOrigin::Server,
-        display_arguments: argument.into(),
-        arguments: if argument.is_empty() {
-            vec![]
-        } else {
-            vec![ChatInputItem::Text(argument.into())]
-        },
-    };
-    execute(&mut conversation, &mut client, invoke(""), &mut app);
-    let picker = app.list_selection().unwrap();
-    assert_eq!(picker.title(), "Advisor: off");
-    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(80, 24)).unwrap();
-    terminal
-        .draw(|frame| crate::app::frame::draw(frame, &app))
-        .unwrap();
-    let buffer = terminal.backend().buffer();
-    let rendered = (0..24)
-        .map(|y| (0..80).map(|x| buffer[(x, y)].symbol()).collect::<String>())
-        .collect::<Vec<_>>()
-        .join("\n");
-    crate::tui_assert_snapshot!("advisor_picker", rendered);
-
-    let labels = picker
-        .visible_items()
-        .iter()
-        .map(|item| item.label())
-        .collect::<Vec<_>>()
-        .join("\n");
-    assert!(labels.starts_with("No advisor\nUse saved default\nSave current selection as default"));
-    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-    execute(&mut conversation, &mut client, invoke("off"), &mut app);
-    let thread = read_thread(
-        &mut client,
-        conversation.session_id(),
-        conversation.thread_id(),
-    )
-    .unwrap();
-    assert_eq!(thread.advisor, ash_protocol::AdvisorSelection::Off);
-    assert!(thread.turns.is_empty());
-    crate::tui_assert_snapshot!(app.messages().last().unwrap().text(), @"Advisor: off. Use /advisor ask <question> for a second opinion.");
-    drop(client);
-    let _ = fs::remove_dir_all(state_root);
 }

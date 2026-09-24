@@ -1193,7 +1193,11 @@ impl AppServer {
             .transpose()
             .map_err(|_| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?
             .and_then(|snapshot| snapshot.values.advisor);
-        let advisor = thread_before.advisor.resolve(advisor_default.as_ref());
+        let advisor = if kind == ash_protocol::TurnKind::Advisor {
+            advisor_default.clone()
+        } else {
+            thread_before.advisor.resolve(advisor_default.as_ref())
+        };
         if kind == ash_protocol::TurnKind::Advisor && advisor.is_none() {
             return Err(RpcError::new(-32602, AppServerErrorName::AdvisorDisabled));
         }

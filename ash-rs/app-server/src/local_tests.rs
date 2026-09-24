@@ -223,6 +223,69 @@ fn local_composition_reads_empty_subscription_accounts_before_sign_in() {
     assert_eq!(account["result"]["accounts"], serde_json::json!([]));
 }
 
+#[test]
+fn local_composition_reads_existing_grok_login_without_importing_it() {
+    let profile = tempfile::tempdir().unwrap();
+    let grok_auth = profile.path().join("grok-auth.json");
+    let contents = serde_json::to_vec(&serde_json::json!({
+        "https://auth.x.ai::b1a00492-073a-47ea-816f-4c329264a828": {
+            "key": "existing-grok-access",
+            "refresh_token": "grok-owned-refresh",
+            "auth_mode": "oidc",
+            "user_id": "user-a",
+            "principal_id": "principal-a",
+            "team_id": "team-a",
+            "email": "person@example.test",
+            "expires_at": "2099-01-01T00:00:00Z"
+        }
+    }))
+    .unwrap();
+    std::fs::write(&grok_auth, &contents).unwrap();
+    let client = Arc::new(AccountUsageClient {
+        response: Mutex::new((
+            200,
+            serde_json::json!({
+                "userId": "user-a",
+                "principalId": "principal-a",
+                "teamId": "team-a",
+                "email": "person@example.test",
+                "subscriptionTier": "SuperGrokPro"
+            }),
+        )),
+        requests: Mutex::new(Vec::new()),
+        during_request: Mutex::new(None),
+    });
+    let server = open_local_app_server(
+        LocalAppServerOptions::new(profile.path())
+            .with_grok_auth_file(&grok_auth)
+            .with_codex_home(profile.path().join("codex"))
+            .with_model_operation_client(client.clone())
+            .without_built_in_skills()
+            .with_session_state_mode(SessionStateMode::Ephemeral),
+    )
+    .unwrap();
+    let mut connection = server.connection();
+    server.handle_json(
+        &mut connection,
+        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"test","version":"1"},"capabilities":{}}}"#,
+    );
+    let account: serde_json::Value = serde_json::from_str(&server.handle_json(
+        &mut connection,
+        r#"{"jsonrpc":"2.0","id":2,"method":"account/read","params":{}}"#,
+    ))
+    .unwrap();
+    let xai = account["result"]["accounts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|account| account["provider"] == "xai-subscription")
+        .expect("xAI account missing");
+    assert_eq!(xai["status"], "ready");
+    assert_eq!(xai["email"], "person@example.test");
+    assert_eq!(client.requests.lock().unwrap().len(), 1);
+    assert_eq!(std::fs::read(&grok_auth).unwrap(), contents);
+}
+
 struct AccountUsageClient {
     response: Mutex<(u16, serde_json::Value)>,
     requests: Mutex<Vec<ClientRequest>>,

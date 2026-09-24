@@ -136,7 +136,6 @@ impl ChatComposer {
         map_chat_input_outcome(input.submit_current())
     }
 
-    #[cfg(test)]
     pub(crate) fn insert_text(&mut self, input: &mut ChatInput, text: &str) {
         input.insert_text(text);
     }

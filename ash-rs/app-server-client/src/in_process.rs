@@ -29,6 +29,7 @@ pub struct InProcessClientOptions {
     pub built_in_skills: BuiltInSkillRoot,
     pub session_state_mode: SessionStateMode,
     model_operation_client: Option<Arc<dyn OperationClient>>,
+    host_grok_auth: bool,
     product_services: Option<LocalProductServicesConfig>,
 }
 
@@ -43,6 +44,7 @@ impl InProcessClientOptions {
             built_in_skills: BuiltInSkillRoot::AutoDetect,
             session_state_mode: SessionStateMode::Durable,
             model_operation_client: None,
+            host_grok_auth: false,
             product_services: None,
         }
     }
@@ -82,6 +84,12 @@ impl InProcessClientOptions {
     /// Replaces the production model operation client for this embedded composition.
     pub fn with_model_operation_client(mut self, client: Arc<dyn OperationClient>) -> Self {
         self.model_operation_client = Some(client);
+        self
+    }
+
+    /// Reads the backend host's Grok login when Ash has no xAI credential.
+    pub fn with_host_grok_auth(mut self) -> Self {
+        self.host_grok_auth = true;
         self
     }
 
@@ -263,6 +271,9 @@ pub fn open_in_process_app_server(
     let mut server_options = LocalAppServerOptions::new(options.profile_root)
         .with_session_state_mode(options.session_state_mode)
         .with_slash_command_catalog(options.slash_commands);
+    if options.host_grok_auth {
+        server_options = server_options.with_host_grok_auth();
+    }
     server_options.built_in_skills = options.built_in_skills;
     if let Some(dir_root) = options.dir_root {
         server_options = server_options.with_dir_root(dir_root);

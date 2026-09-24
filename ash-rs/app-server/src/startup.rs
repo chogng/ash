@@ -288,6 +288,7 @@ pub(super) enum GrantSource {
 
 pub(super) fn open_server(host: &StartupOptions) -> Result<AppServer, String> {
     let mut options = LocalAppServerOptions::new(host.profile_root())
+        .with_host_grok_auth()
         .with_pty_helper(env::current_exe().map_err(|error| error.to_string())?);
     if let Some(exporter) = crate::trace::from_environment()? {
         options = options.with_trace_exporter(exporter);

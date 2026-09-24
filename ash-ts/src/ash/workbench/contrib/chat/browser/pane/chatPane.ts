@@ -1,4 +1,4 @@
-import { DisposableStore, MutableDisposable, Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { IContextViewService } from "../../../../../platform/contextview/browser/contextView.js";
@@ -25,7 +25,6 @@ export class ChatPane extends Disposable {
 	private readonly goalElement: HTMLDivElement;
 	private readonly sessionService: ISessionsManagementService;
 	private submittedMessage = false;
-	private readonly advisorPicker = this._register(new MutableDisposable<DisposableStore>());
 
 	constructor(container: HTMLElement, panelId: string, chatService: IChatService, selection: ChatPaneSelection, sessionService: ISessionsManagementService, contextMenuService: IContextMenuService, contextViewService: IContextViewService, commandService: ICommandService, contextPickService: IChatContextPickService, quickInputService: IQuickInputService) {
 		super();
@@ -48,30 +47,7 @@ export class ChatPane extends Disposable {
 		const inputDelegate: ChatInputDelegate = {
 			send: (text, skills, contexts) => this.send(text, skills, contexts),
 			executeCommand: (invocation) => invocation.argumentsText ? commandService.executeCommand(invocation.commandId, invocation.argumentsText) : commandService.executeCommand(invocation.commandId),
-			executeServerCommand: async (invocation) => {
-				if (invocation.name !== "advisor" || invocation.argumentsText.trim()) {
-					await this.model.executeServerCommand(invocation.name, invocation.argumentsText);
-					return;
-				}
-				const selection = this.model.thread?.advisor;
-				const selected = selection?.type === "model" ? `${selection.config.model.provider}/${selection.config.model.model}` : selection?.type ?? "default";
-				const store = new DisposableStore();
-				this.advisorPicker.value = store;
-				const picker = store.add(quickInputService.createQuickPick<{ label: string; description?: string; argument: string }>());
-				picker.placeholder = `Advisor (${selected}) — consultations use additional tokens`;
-				picker.items = [
-					{ label: "No advisor", description: "Turn off consultations", argument: "off" },
-					{ label: "Use saved default", argument: "default" },
-					...this.model.models.map(entry => ({ label: entry.displayName, description: `${entry.model.provider}/${entry.model.model}`, argument: `${entry.model.provider}/${entry.model.model}` })),
-					{ label: "Save current selection as default", description: "Applies to conversations using the saved default", argument: "save" },
-				];
-				store.add(picker.onDidAccept(choice => {
-					picker.hide();
-					void this.model.executeServerCommand("advisor", choice.argument).catch(() => undefined);
-				}));
-				store.add(picker.onDidHide(() => { this.advisorPicker.clear(); this.focus(); }));
-				picker.show();
-			},
+				executeServerCommand: (invocation) => this.model.executeServerCommand(invocation.name, invocation.argumentsText),
 			interrupt: () => this.model.interrupt(),
 			selectModel: (model) => this.model.selectModel(model),
 			resolveInteraction: (response) => this.model.resolveInteraction(response),

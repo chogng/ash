@@ -29,8 +29,11 @@ use ash_secrets::SecretStore;
 use ash_secrets::SecretValue;
 use serde::Deserialize;
 use serde::Serialize;
+use sha2::Digest;
+use sha2::Sha256;
 use std::collections::BTreeMap;
 use std::fmt;
+use std::io::Read;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::Weak;
@@ -43,6 +46,12 @@ use zeroize::Zeroize;
 
 pub const XAI_PROVIDER_ID: &str = "xai-subscription";
 pub use backend_client::xai::BASE_URL as XAI_SUBSCRIPTION_API_BASE_URL;
+
+/// Grok's credential file on the backend host, if its home directory is known.
+pub fn grok_auth_path() -> Option<std::path::PathBuf> {
+    std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
+        .map(|home| std::path::PathBuf::from(home).join(".grok/auth.json"))
+}
 
 mod account;
 pub use account::Subscription;
@@ -57,6 +66,7 @@ const TOKEN_URL: &str = "https://auth.x.ai/oauth2/token";
 // This is an adapter compatibility policy, not a published third-party API version.
 const GROK_BUILD_VERSION: &str = "1.0.38";
 const CREDENTIAL_KEY: &str = "provider/xai/current/oauth";
+const DISCONNECTED_KEY: &str = "provider/xai/disconnected";
 const DEVICE_GRANT_TYPE: &str = "urn:ietf:params:oauth:grant-type:device_code";
 const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(5);
 const MAX_POLL_DURATION: Duration = Duration::from_secs(15 * 60);
@@ -126,6 +136,8 @@ pub struct XaiOAuth {
     refresh: Mutex<()>,
     account_reads: AtomicU64,
     lock_path: std::path::PathBuf,
+    grok_auth_path: Option<std::path::PathBuf>,
+    rejected_grok: Mutex<Option<(String, u64)>>,
     minimum_poll_interval: Duration,
 }
 
@@ -136,11 +148,43 @@ impl XaiOAuth {
     ) -> Result<Arc<Self>, XaiError> {
         let transport = UreqHttpClient::new()
             .map_err(|_| XaiError::new("Xai HTTPS transport is unavailable"))?;
-        Ok(Self::with_client(
+        Ok(Self::with_host_grok_auth(
             secrets,
             Arc::new(AshClient::new(Arc::new(transport))),
             lock_path,
         ))
+    }
+
+    /// Uses the Grok login on this backend host when Ash has no own xAI login.
+    fn with_host_grok_auth(
+        secrets: Arc<dyn SecretStore>,
+        client: Arc<dyn OperationClient>,
+        lock_path: std::path::PathBuf,
+    ) -> Arc<Self> {
+        let grok_auth_path = grok_auth_path();
+        Self::with_client_and_grok_auth(
+            secrets,
+            client,
+            lock_path,
+            grok_auth_path,
+            DEFAULT_POLL_INTERVAL,
+        )
+    }
+
+    /// Reads one explicitly selected Grok credential file without modifying it.
+    pub fn with_grok_auth_file(
+        secrets: Arc<dyn SecretStore>,
+        client: Arc<dyn OperationClient>,
+        lock_path: std::path::PathBuf,
+        grok_auth_path: std::path::PathBuf,
+    ) -> Arc<Self> {
+        Self::with_client_and_grok_auth(
+            secrets,
+            client,
+            lock_path,
+            Some(grok_auth_path),
+            DEFAULT_POLL_INTERVAL,
+        )
     }
 
     pub fn with_client(
@@ -157,6 +201,16 @@ impl XaiOAuth {
         lock_path: std::path::PathBuf,
         minimum_poll_interval: Duration,
     ) -> Arc<Self> {
+        Self::with_client_and_grok_auth(secrets, client, lock_path, None, minimum_poll_interval)
+    }
+
+    fn with_client_and_grok_auth(
+        secrets: Arc<dyn SecretStore>,
+        client: Arc<dyn OperationClient>,
+        lock_path: std::path::PathBuf,
+        grok_auth_path: Option<std::path::PathBuf>,
+        minimum_poll_interval: Duration,
+    ) -> Arc<Self> {
         Arc::new_cyclic(|self_weak| Self {
             client,
             secrets,
@@ -166,6 +220,8 @@ impl XaiOAuth {
             refresh: Mutex::new(()),
             account_reads: AtomicU64::new(0),
             lock_path,
+            grok_auth_path,
+            rejected_grok: Mutex::new(None),
             minimum_poll_interval,
         })
     }
@@ -179,12 +235,18 @@ impl XaiOAuth {
     /// Resolves a fresh bearer target for one xAI subscription invocation.
     pub fn api_target(&self) -> Result<XaiApiTarget, XaiError> {
         let _refresh = self.lock_credentials()?;
-        let mut credential = self.load_credential()?.ok_or_else(|| {
+        let mut credential = self.active_credential()?.ok_or_else(|| {
             XaiError::with_kind(
                 XaiErrorKind::Authentication,
                 "xAI Subscription is not signed in",
             )
         })?;
+        if self.grok_rejected(&credential) {
+            return Err(XaiError::with_kind(
+                XaiErrorKind::Authentication,
+                "Grok sign-in has expired; sign in with xAI in Ash",
+            ));
+        }
         if credential.needs_refresh() {
             if credential.refresh_token.trim().is_empty() {
                 return Err(XaiError::with_kind(
@@ -207,7 +269,7 @@ impl XaiOAuth {
     /// Reads the local catalog scope without refreshing or exposing a token.
     pub fn account_id(&self) -> Result<Option<String>, XaiError> {
         Ok(self
-            .load_credential()?
+            .active_credential()?
             .map(|credential| credential.account_id.clone()))
     }
 
@@ -216,6 +278,25 @@ impl XaiOAuth {
         &self,
         rejected: &XaiApiTarget,
     ) -> Result<Option<XaiApiTarget>, XaiError> {
+        if is_grok_account(&rejected.account_id) {
+            let Some(credential) = self.active_credential()? else {
+                return Ok(None);
+            };
+            if credential.account_id != rejected.account_id
+                || credential.credential_revision == rejected.credential_revision
+                || !credential.is_usable()
+            {
+                return Ok(None);
+            }
+            return Ok(Some(XaiApiTarget {
+                target: ResolvedApiTarget::new(
+                    XAI_SUBSCRIPTION_API_BASE_URL,
+                    self.api_headers(&credential),
+                ),
+                account_id: credential.account_id.clone(),
+                credential_revision: credential.credential_revision,
+            }));
+        }
         let _refresh = self.lock_credentials()?;
         let Some(mut credential) = self.load_credential()? else {
             return Ok(None);
@@ -298,6 +379,12 @@ impl XaiOAuth {
     }
 
     pub fn note_rejected(&self, rejected: &XaiApiTarget) {
+        if is_grok_account(&rejected.account_id) {
+            if let Ok(mut current) = self.rejected_grok.lock() {
+                *current = Some((rejected.account_id.clone(), rejected.credential_revision));
+            }
+            return;
+        }
         let Ok(_lock) = self.lock_credentials() else {
             return;
         };
@@ -501,6 +588,65 @@ impl XaiOAuth {
         SecretKey::new(CREDENTIAL_KEY).expect("static Xai credential key is valid")
     }
 
+    fn disconnected_key() -> SecretKey {
+        SecretKey::new(DISCONNECTED_KEY).expect("static Xai disconnection key is valid")
+    }
+
+    fn disconnected(&self) -> Result<bool, XaiError> {
+        self.secrets
+            .load(&Self::disconnected_key())
+            .map(|value| value.is_some())
+            .map_err(|_| XaiError::new("Xai connection state is unavailable"))
+    }
+
+    fn active_credential(&self) -> Result<Option<TokenCredential>, XaiError> {
+        if self.disconnected()? {
+            return Ok(None);
+        }
+        self.candidate_credential()
+    }
+
+    fn candidate_credential(&self) -> Result<Option<TokenCredential>, XaiError> {
+        match self.load_credential()? {
+            Some(credential) => Ok(Some(credential)),
+            None => self.load_grok_credential(),
+        }
+    }
+
+    fn load_grok_credential(&self) -> Result<Option<TokenCredential>, XaiError> {
+        let Some(path) = &self.grok_auth_path else {
+            return Ok(None);
+        };
+        let file = match std::fs::File::open(path) {
+            Ok(file) => file,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(_) => return Err(XaiError::new("Grok credential file could not be read")),
+        };
+        let mut contents = Vec::new();
+        file.take(1024 * 1024 + 1)
+            .read_to_end(&mut contents)
+            .map_err(|_| XaiError::new("Grok credential file could not be read"))?;
+        let bytes = SecretValue::new(contents);
+        if bytes.expose().len() > 1024 * 1024 {
+            return Err(XaiError::new("Grok credential file is too large"));
+        }
+        let GrokCredentialMap(entry) = serde_json::from_slice(bytes.expose())
+            .map_err(|_| XaiError::new("Grok credential file is invalid"))?;
+        let Some(entry) = entry else {
+            return Ok(None);
+        };
+        entry.into_credential()
+    }
+
+    fn grok_rejected(&self, credential: &TokenCredential) -> bool {
+        is_grok_account(&credential.account_id)
+            && self.rejected_grok.lock().map_or(true, |rejected| {
+                matches!(rejected.as_ref(), Some((account_id, revision))
+                    if account_id == &credential.account_id
+                        && *revision == credential.credential_revision)
+            })
+    }
+
     fn load_credential(&self) -> Result<Option<TokenCredential>, XaiError> {
         self.secrets
             .load(&Self::credential_key())
@@ -529,7 +675,8 @@ impl XaiOAuth {
             email: credential
                 .profile
                 .as_ref()
-                .and_then(|profile| profile.email.clone()),
+                .and_then(|profile| profile.email.clone())
+                .or_else(|| credential.grok_email.clone()),
             display_name: credential.profile.as_ref().and_then(|profile| {
                 let name = [profile.first_name.as_deref(), profile.last_name.as_deref()]
                     .into_iter()
@@ -547,7 +694,7 @@ impl XaiOAuth {
                 .profile
                 .as_ref()
                 .and_then(|profile| profile.subscription_tier.clone()),
-            status: if credential.is_usable() {
+            status: if credential.is_usable() && !self.grok_rejected(credential) {
                 AccountStatus::Ready
             } else {
                 AccountStatus::ReauthenticationRequired
@@ -585,7 +732,7 @@ impl InteractiveLoginDriver for XaiOAuth {
     }
 
     fn read_account(&self) -> Result<Option<AccountSnapshot>, LoginError> {
-        self.load_credential()
+        self.active_credential()
             .map(|credential| credential.map(|credential| self.account_snapshot(&credential)))
             .map_err(login_driver_error)
     }
@@ -603,6 +750,19 @@ impl InteractiveLoginDriver for XaiOAuth {
                 LoginErrorKind::Conflict,
                 "a Xai login is already active",
             ));
+        }
+        if let Some(credential) = self.candidate_credential().map_err(login_driver_error)? {
+            if credential.is_usable() && !self.grok_rejected(&credential) {
+                self.secrets
+                    .delete(&Self::disconnected_key())
+                    .map_err(|_| {
+                        login_driver_error(XaiError::new("Xai connection state is unavailable"))
+                    })?;
+                return Ok(BeginLogin::Connected {
+                    login_id: request.login_id,
+                    account: self.account_snapshot(&credential),
+                });
+            }
         }
         let account_id = random_account_id().map_err(login_driver_error)?;
         let device = self.request_device_code().map_err(login_driver_error)?;
@@ -631,6 +791,10 @@ impl InteractiveLoginDriver for XaiOAuth {
             }
             let completion = match outcome.and_then(|credential| {
                 runtime.store_credential(&credential)?;
+                runtime
+                    .secrets
+                    .delete(&Self::disconnected_key())
+                    .map_err(|_| XaiError::new("Xai connection state is unavailable"))?;
                 Ok(runtime.account_snapshot(&credential))
             }) {
                 Ok(account) => LoginCompletionOutcome::Succeeded { account },
@@ -675,6 +839,14 @@ impl InteractiveLoginDriver for XaiOAuth {
         for (_, source) in std::mem::take(&mut *active) {
             source.cancel();
         }
+        self.secrets
+            .store(&Self::disconnected_key(), &SecretValue::new(b"1".to_vec()))
+            .map_err(|_| {
+                LoginError::new(
+                    LoginErrorKind::Unavailable,
+                    "Xai connection state is unavailable",
+                )
+            })?;
         self.secrets
             .delete(&Self::credential_key())
             .map(|_| ())
@@ -754,6 +926,8 @@ impl TokenResponse {
             account_id,
             credential_revision,
             profile: None,
+            grok_email: None,
+            grok_identity: None,
         })
     }
 }
@@ -768,6 +942,127 @@ impl Drop for TokenResponse {
     }
 }
 
+#[derive(Deserialize)]
+struct GrokCredential {
+    key: String,
+    auth_mode: String,
+    user_id: String,
+    principal_id: String,
+    team_id: String,
+    email: Option<String>,
+    expires_at: String,
+}
+
+struct GrokCredentialMap(Option<GrokCredential>);
+
+impl<'de> Deserialize<'de> for GrokCredentialMap {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct MapVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for MapVisitor {
+            type Value = GrokCredentialMap;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a Grok credential map")
+            }
+
+            fn visit_map<M>(self, mut map: M) -> Result<Self::Value, M::Error>
+            where
+                M: serde::de::MapAccess<'de>,
+            {
+                let mut selected = None;
+                let expected = format!("https://auth.x.ai::{CLIENT_ID}");
+                while let Some(key) = map.next_key::<String>()? {
+                    if key == expected {
+                        selected = Some(map.next_value::<GrokCredential>()?);
+                    } else {
+                        map.next_value::<serde::de::IgnoredAny>()?;
+                    }
+                }
+                Ok(GrokCredentialMap(selected))
+            }
+        }
+
+        deserializer.deserialize_map(MapVisitor)
+    }
+}
+
+impl GrokCredential {
+    fn into_credential(mut self) -> Result<Option<TokenCredential>, XaiError> {
+        if self.auth_mode != "oidc" {
+            return Ok(None);
+        }
+        if self.key.trim().is_empty()
+            || self.user_id.trim().is_empty()
+            || self.principal_id.trim().is_empty()
+            || self.team_id.trim().is_empty()
+        {
+            return Err(XaiError::new("Grok credential is incomplete"));
+        }
+        let expires_at = chrono::DateTime::parse_from_rfc3339(&self.expires_at)
+            .ok()
+            .and_then(|time| u64::try_from(time.timestamp()).ok())
+            .ok_or_else(|| XaiError::new("Grok credential expiry is invalid"))?;
+        let revision = Sha256::digest(self.key.as_bytes());
+        Ok(Some(TokenCredential {
+            profile: None,
+            access_token: std::mem::take(&mut self.key),
+            refresh_token: String::new(),
+            token_type: "Bearer".into(),
+            scope: String::new(),
+            expires_at: Some(expires_at),
+            account_id: grok_account_id(&self.user_id, &self.principal_id, &self.team_id),
+            credential_revision: u64::from_be_bytes(revision[..8].try_into().unwrap()),
+            grok_email: self.email.take(),
+            grok_identity: Some(GrokIdentity {
+                user_id: std::mem::take(&mut self.user_id),
+                principal_id: std::mem::take(&mut self.principal_id),
+                team_id: std::mem::take(&mut self.team_id),
+            }),
+        }))
+    }
+}
+
+impl Drop for GrokCredential {
+    fn drop(&mut self) {
+        self.key.zeroize();
+        self.user_id.zeroize();
+        self.principal_id.zeroize();
+        self.team_id.zeroize();
+        self.email.zeroize();
+    }
+}
+
+fn is_grok_account(account_id: &str) -> bool {
+    account_id.starts_with("grok-")
+}
+
+fn grok_account_id(user_id: &str, principal_id: &str, team_id: &str) -> String {
+    let mut identity = Sha256::new();
+    for part in [user_id, principal_id, team_id] {
+        identity.update((part.len() as u64).to_be_bytes());
+        identity.update(part.as_bytes());
+    }
+    format!("grok-{:x}", identity.finalize())
+}
+
+struct GrokIdentity {
+    user_id: String,
+    principal_id: String,
+    team_id: String,
+}
+
+impl Drop for GrokIdentity {
+    fn drop(&mut self) {
+        self.user_id.zeroize();
+        self.principal_id.zeroize();
+        self.team_id.zeroize();
+    }
+}
+
 #[derive(Deserialize, Serialize)]
 struct TokenCredential {
     #[serde(default)]
@@ -779,6 +1074,10 @@ struct TokenCredential {
     expires_at: Option<u64>,
     account_id: String,
     credential_revision: u64,
+    #[serde(skip)]
+    grok_email: Option<String>,
+    #[serde(skip)]
+    grok_identity: Option<GrokIdentity>,
 }
 
 impl TokenCredential {
@@ -801,6 +1100,7 @@ impl Drop for TokenCredential {
         self.token_type.zeroize();
         self.scope.zeroize();
         self.account_id.zeroize();
+        self.grok_email.zeroize();
     }
 }
 

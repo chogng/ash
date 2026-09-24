@@ -255,7 +255,6 @@ impl ChatInput {
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn insert_text(&mut self, text: &str) {
         self.reset_history_navigation();
         self.textarea.insert_text(text);

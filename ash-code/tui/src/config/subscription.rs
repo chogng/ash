@@ -69,8 +69,13 @@ pub(crate) enum SubscriptionCommand {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum SubscriptionEvent {
     Read(AccountReadResult),
-    Started(AccountLoginStartResult),
-    Cancelled { login_id: String },
+    Started {
+        login: AccountLoginStartResult,
+        browser_error: Option<String>,
+    },
+    Cancelled {
+        login_id: String,
+    },
     SignedOut(AccountReadResult),
     Failed(String),
     Updated(AccountReadResult),
@@ -83,6 +88,7 @@ pub(crate) struct Subscription {
     provider: SubscriptionProvider,
     account: Option<AccountReadResult>,
     login: Option<AccountLoginStartResult>,
+    browser_error: Option<String>,
     pending: Option<SubscriptionCommand>,
     message: Option<String>,
     early_completions: BTreeMap<String, AccountLoginCompleted>,
@@ -134,9 +140,13 @@ impl Subscription {
                         self.early_completions.clear();
                         self.update_account(account);
                     }
-                    SubscriptionEvent::Started(login) => {
+                    SubscriptionEvent::Started {
+                        login,
+                        browser_error,
+                    } => {
                         if matches!(login, AccountLoginStartResult::Connected { .. }) {
                             self.login = None;
+                            self.browser_error = None;
                             self.early_completions.clear();
                             return;
                         }
@@ -144,6 +154,7 @@ impl Subscription {
                             self.finish(completed);
                         } else {
                             self.login = Some(login);
+                            self.browser_error = browser_error;
                         }
                         self.early_completions.clear();
                     }
@@ -156,6 +167,7 @@ impl Subscription {
                             .is_some_and(|login| login_id(login) == cancelled)
                         {
                             self.login = None;
+                            self.browser_error = None;
                             self.message = Some("Sign-in cancelled".into());
                         }
                     }
@@ -186,6 +198,7 @@ impl Subscription {
 
     fn finish(&mut self, completed: AccountLoginCompleted) {
         self.login = None;
+        self.browser_error = None;
         self.message = Some(match completed.status {
             AccountLoginCompletionStatusDto::Succeeded => {
                 format!("Signed in to {}", self.provider.name())
@@ -227,6 +240,10 @@ impl Subscription {
             items.push(ListSelectionItem::new(message));
         }
         if let Some(login) = &self.login {
+            if let Some(error) = &self.browser_error {
+                items
+                    .push(ListSelectionItem::new("Could not open browser").with_description(error));
+            }
             match login {
                 AccountLoginStartResult::Connected { .. } => {}
                 AccountLoginStartResult::DeviceCode {
@@ -235,8 +252,12 @@ impl Subscription {
                     ..
                 } => {
                     items.push(
-                        ListSelectionItem::new("Open in your browser")
-                            .with_description(verification_url),
+                        ListSelectionItem::new(if self.browser_error.is_some() {
+                            "Open in your browser"
+                        } else {
+                            "Browser opened"
+                        })
+                        .with_description(verification_url),
                     );
                     items.push(ListSelectionItem::new("Enter code").with_description(user_code));
                 }
@@ -244,8 +265,12 @@ impl Subscription {
                     authorization_url, ..
                 } => {
                     items.push(
-                        ListSelectionItem::new("Open in your browser")
-                            .with_description(authorization_url),
+                        ListSelectionItem::new(if self.browser_error.is_some() {
+                            "Open in your browser"
+                        } else {
+                            "Browser opened"
+                        })
+                        .with_description(authorization_url),
                     );
                 }
             }
@@ -314,6 +339,15 @@ pub(crate) fn execute<T: JsonRpcTransport>(
     provider: SubscriptionProvider,
     command: SubscriptionCommand,
 ) -> SubscriptionEvent {
+    execute_with_browser(client, provider, command, crate::host::browser::open_url)
+}
+
+fn execute_with_browser<T: JsonRpcTransport>(
+    client: &mut AppServerClient<T>,
+    provider: SubscriptionProvider,
+    command: SubscriptionCommand,
+    open_browser: impl FnOnce(&str) -> Result<(), String>,
+) -> SubscriptionEvent {
     let result = match command {
         SubscriptionCommand::Read => client.read_accounts().map(SubscriptionEvent::Read),
         SubscriptionCommand::SignIn => client
@@ -324,7 +358,21 @@ pub(crate) fn execute<T: JsonRpcTransport>(
                 AccountLoginStartResult::Connected { .. } => {
                     client.read_accounts().map(SubscriptionEvent::Read)
                 }
-                challenge => Ok(SubscriptionEvent::Started(challenge)),
+                challenge => {
+                    let url = match &challenge {
+                        AccountLoginStartResult::DeviceCode {
+                            verification_url, ..
+                        } => verification_url,
+                        AccountLoginStartResult::Browser {
+                            authorization_url, ..
+                        } => authorization_url,
+                        AccountLoginStartResult::Connected { .. } => unreachable!(),
+                    };
+                    Ok(SubscriptionEvent::Started {
+                        browser_error: open_browser(url).err(),
+                        login: challenge,
+                    })
+                }
             }),
         SubscriptionCommand::Cancel { login_id } => client
             .cancel_account_login(AccountLoginCancelParams {

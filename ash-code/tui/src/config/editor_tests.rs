@@ -1,3 +1,4 @@
+use super::advisor_choices;
 use super::config_choices;
 use super::provider_api_key_prompt;
 use crate::config::ConfigSelectionAction;
@@ -33,6 +34,71 @@ fn providers() -> ProviderListResult {
             },
         ],
     }
+}
+
+#[test]
+fn advisor_choices_are_localized_and_config_owned() {
+    let choices = advisor_choices(
+        &empty_config_snapshot(),
+        &ash_app_server_protocol::protocol::model::ModelListResult { models: vec![] },
+        Language::Chinese,
+    );
+    let state = ListSelectionState::new(choices.model);
+    assert_eq!(state.title(), "顾问模型: 关闭");
+    assert_eq!(state.visible_items()[0].label(), "关闭");
+    assert!(
+        choices
+            .actions
+            .values()
+            .any(|action| action == &ConfigSelectionAction::SetAdvisor(None))
+    );
+}
+
+#[test]
+fn configured_advisor_model_is_selected_when_opening_config() {
+    use ash_app_server_protocol::protocol::model::{ModelCatalogEntry, ModelListResult};
+    use ash_protocol::{
+        AdvisorConfig, ModelAccess, ModelCapabilities, ModelId, ModelOutputTransport, ModelRef,
+        ProviderId,
+    };
+
+    let model = ModelRef::new(
+        ProviderId::new("openai").unwrap(),
+        ModelId::new("gpt-ash").unwrap(),
+    );
+    let mut config = empty_config_snapshot();
+    config.advisor = Some(AdvisorConfig::new(model.clone()));
+    let catalog = ModelListResult {
+        models: vec![ModelCatalogEntry {
+            model,
+            display_name: "GPT Ash".into(),
+            access: ModelAccess::Unknown,
+            output_transport: ModelOutputTransport::Unary,
+            context_window: None,
+            auto_compact_token_limit: None,
+            available_context_window: None,
+            capabilities: ModelCapabilities::UNKNOWN,
+            supported_reasoning_efforts: Vec::new(),
+            model_reasoning_effort: None,
+            default_personality: None,
+        }],
+    };
+    let unavailable = advisor_choices(&empty_config_snapshot(), &catalog, Language::English);
+    assert_eq!(ListSelectionState::new(unavailable.model).visible_items().len(), 1);
+    config.providers.insert(
+        "openai".into(),
+        ash_app_server_protocol::protocol::config::ProviderConfigDto {
+            provider: "openai".into(),
+            custom: None,
+            base_url: None,
+            max_output_tokens: None,
+            model_context: Default::default(),
+        },
+    );
+    let choices = advisor_choices(&config, &catalog, Language::English);
+    let state = ListSelectionState::new(choices.model);
+    assert_eq!(state.selected_item().unwrap().label(), "GPT Ash");
+    assert_eq!(state.title(), "Advisor model: openai/gpt-ash");
 }
 
 #[test]
@@ -178,22 +244,30 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
     state.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     state.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     let _ = state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-    assert_eq!(state.visible_items().len(), 4);
-    assert_eq!(state.visible_items()[0].label(), "OpenAI");
-    assert_eq!(state.visible_items()[1].label(), "Ollama");
+    assert_eq!(state.visible_items().len(), 5);
+    assert_eq!(state.visible_items()[0].label(), "Advisor model");
+    assert_eq!(state.visible_items()[1].label(), "OpenAI");
+    assert_eq!(state.visible_items()[2].label(), "Ollama");
     assert!(
         state
             .visible_items()
             .iter()
+            .skip(1)
             .all(|item| item.description().is_none())
     );
     assert!(matches!(
         view.actions
             .get(state.visible_items()[0].id().unwrap())
             .unwrap(),
+        ConfigSelectionAction::OpenAdvisor
+    ));
+    assert!(matches!(
+        view.actions
+            .get(state.visible_items()[1].id().unwrap())
+            .unwrap(),
         ConfigSelectionAction::OpenProviderApiKey { .. }
     ));
-    assert!(state.visible_items()[1].id().is_none());
+    assert!(state.visible_items()[2].id().is_none());
 }
 
 #[test]
@@ -586,7 +660,7 @@ fn only_custom_provider_rows_offer_delete_and_order_does_not_follow_names() {
     let id = crate::widgets::list_selection::ListSelectionItemId::new("custom-a");
     editor.selection.state_mut().focus_item(&id);
     assert_eq!(
-        editor.selection().unwrap().visible_items()[0].label(),
+        editor.selection().unwrap().visible_items()[1].label(),
         "Zulu"
     );
     assert!(editor.key_hints().text().contains("Delete"));

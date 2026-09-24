@@ -604,6 +604,12 @@ impl CommandPanel {
         }
     }
 
+    pub(crate) fn open_advisor(&mut self, spec: ConfigChoices) {
+        if let Self::Config(content) = self {
+            content.open_advisor(spec);
+        }
+    }
+
     pub(crate) fn update_subscription(&mut self, spec: ConfigChoices) {
         if let Self::Config(content) = self {
             content.update_subscription(spec);
@@ -888,6 +894,12 @@ impl Panels {
     pub(crate) fn open_subscription(&mut self, choices: ConfigChoices) {
         if let Some(command) = self.command.as_mut() {
             command.open_subscription(choices);
+        }
+    }
+
+    pub(crate) fn open_advisor(&mut self, choices: ConfigChoices) {
+        if let Some(command) = self.command.as_mut() {
+            command.open_advisor(choices);
         }
     }
 

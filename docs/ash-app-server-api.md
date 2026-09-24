@@ -1194,7 +1194,7 @@ Issue Workflow、plan、assignment、task、专属 PR 发布接口及对应存�
 
 `AdvisorConfig` 包含 `model:{provider,model}`、可选 `reasoningEffort`、`maxCalls`（默认 3，范围 1–16）、`maxOutputTokens`（默认 2048，范围 256–32768）。`config/read.advisor` 和 `config/update.advisor` 管理 `[agent.advisor]` 全局默认；更新时省略表示不变，`null` 表示关闭默认。
 
-Thread 保存选择策略；每次接受 Turn 时将解析后的顾问配置写入 `Turn.advisor`。修改选择不影响已经接受的 Turn。分支继承分支点的选择。目标自动续跑使用当前 Thread 的显式选择；使用默认时沿用目标上一轮已冻结的配置。子 Agent 不自动启用顾问。
+Thread 保存普通 Coding Turn 的顾问选择策略；接受 Turn 时将解析后的顾问配置写入 `Turn.advisor`，其中显式咨询直接读取全局默认。修改选择不影响已经接受的 Turn。分支继承分支点的选择。目标自动续跑使用当前 Thread 的显式选择；使用默认时沿用目标上一轮已冻结的配置。子 Agent 不自动启用顾问。
 
 `consultAdvisor` 创建 `kind:"advisor"` 的 Turn，经正常工具权限与取消流程直接执行一次顾问调用，不调用工作模型，也不触发目标自动续跑。普通 Coding Turn 在启用顾问时可以调用 `advisor({question})`。关闭时目录中不提供该工具。
 
@@ -1204,7 +1204,7 @@ Thread 保存选择策略；每次接受 Turn 时将解析后的顾问配置写�
 
 每次实际发起的顾问请求都有带 `toolCallId` 的 `ModelInvocationRecord`。顾问用量与参考费用计入 Turn、Thread 和目标预算；它不更新工作模型的上下文占用。供应商未返回用量时保留未知状态。恢复遵循既有 ToolCall 规则，已开始且结果未知的请求不自动重新计费调用。
 
-桌面端和 TUI 支持 `/advisor` 选择器、`/advisor provider/model`、`/advisor off`、`/advisor default`、`/advisor save` 和 `/advisor ask <question>`。`save` 将当前选择写为全局默认。所有设置与咨询使用上面的结构化请求。
+桌面端和 TUI 的 `/advisor` 进入问题输入，`/advisor <question>` 直接提交一次咨询。顾问模型在 `/config` 中设置为全局默认；界面从 `model/list` 获取模型，并只提供 `config/read.providers` 中已配置供应商的模型，通过 `config/read.advisor` 显示当前选择，再通过 `config/update.advisor` 保存。直接咨询使用 `consultAdvisor` 和全局顾问模型，即使旧会话保存了单独的关闭或模型选择也以 `/config` 为准；仅选择 `/advisor` 不创建会话。
 
 ## 可用语言服务器
 

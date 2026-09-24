@@ -26,6 +26,7 @@ export function createDisconnectedModelApi(unavailable: UnavailableOperation): I
 		list: () => unavailable("model.list"),
 		readModel: () => unavailable("model.readModel"),
 		readAdvisorDefault: () => unavailable("model.readAdvisorDefault"),
+		readConfiguredProviderIds: () => unavailable("model.readConfiguredProviderIds"),
 		setAdvisorDefault: () => unavailable("model.setAdvisorDefault"),
 		setModel: () => unavailable("model.setModel"),
 	};
@@ -76,6 +77,7 @@ export function createAppServerModelApi(connection: AppServerProtocolClient): IM
 		list: () => appServerRequest(connection, "model/list", {}),
 		readModel: async () => (await appServerRequest(connection, "config/read", {})).model,
 		readAdvisorDefault: async () => (await appServerRequest(connection, "config/read", {})).advisor ?? null,
+		readConfiguredProviderIds: async () => Object.keys((await appServerRequest(connection, "config/read", {})).providers),
 		setAdvisorDefault: async ({ commandId, advisor }) => {
 			const config = await appServerRequest(connection, "config/read", {});
 			await appServerRequest(connection, "config/update", { commandId, expectedRevision: config.revision, advisor });

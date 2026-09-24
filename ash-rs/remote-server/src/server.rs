@@ -99,8 +99,9 @@ pub fn serve_stdio(options: RemoteServerOptions) -> Result<(), RemoteServerError
 }
 
 pub(crate) fn open_server(options: &RemoteServerOptions) -> Result<AppServer, RemoteServerError> {
-    let mut local_options =
-        LocalAppServerOptions::new(options.profile_root.clone()).with_dir_root(&options.dir_root);
+    let mut local_options = LocalAppServerOptions::new(options.profile_root.clone())
+        .with_host_grok_auth()
+        .with_dir_root(&options.dir_root);
     if let Some(path) = &options.product_services_path {
         let services = LocalProductServicesConfig::load(path, &options.profile_root)
             .map_err(|error| RemoteServerError::new(error.to_string()))?;

@@ -1403,6 +1403,8 @@ interface FakeOptions {
 		readonly access: "apiKey" | "subscription" | "local" | "enterprise" | "unknown";
 		readonly outputTransport: "nativeStreaming" | "unary";
 	}[];
+	readonly configuredProviders?: readonly string[];
+	readonly advisorDefault?: { readonly model: ModelRef; readonly maxCalls: number; readonly maxOutputTokens: number };
 }
 
 function createChatService(api: IRendererHost, configurationService?: WorkbenchConfigurationService): ChatService {
@@ -1722,6 +1724,9 @@ function fakeApi(options: FakeOptions = {}): {
 				modelListRequests.push(undefined);
 				return { models: [...(options.models ?? [])] };
 			},
+			readAdvisorDefault: async () => options.advisorDefault ?? null,
+			readConfiguredProviderIds: async () => options.configuredProviders ?? [],
+			setAdvisorDefault: async () => undefined,
 			readModel: async () => options.sessions?.find(session => session.model)?.model ?? null,
 			setModel: async (params: { readonly commandId: string; readonly model: ModelRef }) => {
 				modelRequests.push(params);
@@ -1939,20 +1944,46 @@ test("Audio history identifies the sender and recording duration", () => {
 });
 
 
-test("Advisor commands configure the Thread and consult without starting the worker", async () => {
+test("Advisor question consults directly without starting the worker", async () => {
 	const activeSession = session("session-1", "thread-1");
-	const fake = fakeApi({ sessions: [activeSession], thread: () => ({ ...thread("previous answer"), advisor: { type: "model", config: { model: { provider: "test", model: "reviewer" }, maxCalls: 3, maxOutputTokens: 2048 } } }) });
+	const fake = fakeApi({
+		sessions: [activeSession],
+		advisorDefault: { model: { provider: "openai", model: "reviewer" }, maxCalls: 3, maxOutputTokens: 2048 },
+		thread: () => ({ ...thread("previous answer"), advisor: { type: "off" } }),
+	});
 	using chat = createChatService(fake.api);
 	using sessions = new AppServerSessionsManagementService(fake.api);
 	using model = new ChatPaneModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
 	await model.initialize();
-	await model.executeServerCommand("advisor", "off");
-	await model.executeServerCommand("advisor", "ask Check cancellation");
+	await model.executeServerCommand("advisor", "Check cancellation");
 	assert.equal(fake.turnStartRequests.length, 0);
-	assert.equal(fake.advisorRequests[0]?.selection.type, "off");
-	assert.equal(fake.advisorRequests[0]?.expectedSequence, 4);
+	assert.equal(fake.advisorRequests.length, 0);
 	assert.equal(fake.consultRequests[0]?.question, "Check cancellation");
 	assert.equal(fake.consultRequests[0]?.threadId, "thread-1");
+});
+
+test("Advisor without a configured model keeps an untitled chat", async () => {
+	const fake = fakeApi();
+	using chat = createChatService(fake.api);
+	using sessions = new AppServerSessionsManagementService(fake.api);
+	const untitled = sessions.createUntitledSession();
+	using model = new ChatPaneModel(chat, { kind: "untitled", session: untitled }, sessions);
+	await model.initialize();
+	await assert.rejects(model.executeServerCommand("advisor", "Check cancellation"), /Configure an advisor model in Chat Settings/);
+	assert.equal(fake.createSessionRequests.length, 0);
+	assert.equal(fake.consultRequests.length, 0);
+});
+
+test("Advisor model choices include only configured providers", async () => {
+	const fake = fakeApi({
+		configuredProviders: ["openai"],
+		models: [
+			{ model: { provider: "openai", model: "reviewer" }, displayName: "Reviewer", access: "apiKey", outputTransport: "unary" },
+			{ model: { provider: "google", model: "flash" }, displayName: "Flash", access: "apiKey", outputTransport: "unary" },
+		],
+	});
+	using chat = createChatService(fake.api);
+	assert.deepEqual((await chat.listAdvisorModels()).map(entry => entry.displayName), ["Reviewer"]);
 });
 
 test("Advisor transcript groups the call and renders advice as a disclosure", () => {

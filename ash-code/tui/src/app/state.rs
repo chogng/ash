@@ -484,24 +484,6 @@ impl App {
                 }
                 .into(),
             ),
-            CommandPanelOutcome::Model(ModelSelectionAction::Advisor { preference }) => {
-                let command = self
-                    .thread_presentations
-                    .slash_commands()
-                    .command_named("advisor")?
-                    .clone();
-                Some(
-                    ThreadCommand::ExecuteProductCommand(SlashCommandInvocation {
-                        command,
-                        origin: SlashCommandOrigin::Server,
-                        arguments: vec![crate::thread::composer::ChatInputItem::Text(
-                            preference.clone(),
-                        )],
-                        display_arguments: preference,
-                    })
-                    .into(),
-                )
-            }
             CommandPanelOutcome::Model(ModelSelectionAction::Select { preference, .. }) => {
                 Some(ModelCommand::SetModel { preference }.into())
             }
@@ -609,6 +591,12 @@ impl App {
         outcome: crate::config::ConfigEditorOutcome,
     ) -> Option<AppCommand> {
         match outcome {
+            crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::OpenAdvisor) => {
+                Some(ConfigCommand::OpenAdvisor.into())
+            }
+            crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::SetAdvisor(
+                config,
+            )) => Some(ConfigCommand::SetAdvisor(config).into()),
             crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::SetMemories(
                 edit,
             )) => Some(ConfigCommand::SetMemories(edit).into()),
@@ -725,7 +713,6 @@ impl App {
         self.thread_presentations.replace_input_catalog(catalog);
     }
 
-    #[cfg(test)]
     pub(crate) fn insert_text(&mut self, text: &str) {
         if self.accepts_input() {
             let (panel, input) = self.composer_parts_mut();
@@ -2107,6 +2094,7 @@ impl App {
             }
             AppEvent::Config(
                 ConfigEvent::EditorOpened(_)
+                | ConfigEvent::AdvisorOpened(_)
                 | ConfigEvent::ApiKeySaved { .. }
                 | ConfigEvent::Connection(_),
             )
@@ -2392,6 +2380,9 @@ impl App {
     fn apply_config_event(&mut self, event: ConfigEvent) {
         self.fullscreen.pointer.cancel_click();
         match event {
+            ConfigEvent::AdvisorOpened(choices) => {
+                self.panels_mut().open_advisor(choices);
+            }
             ConfigEvent::Connection(reply) => {
                 if let Err(error) = &reply.result {
                     self.thread
@@ -2853,9 +2844,10 @@ impl App {
             }
             (SlashCommandOrigin::Server, _)
                 if invocation.command.name == "advisor"
-                    && !invocation.display_arguments.trim().starts_with("ask ") =>
+                    && invocation.display_arguments.trim().is_empty() =>
             {
-                Some(ThreadCommand::ExecuteProductCommand(invocation).into())
+                self.insert_text("/advisor ");
+                None
             }
             (SlashCommandOrigin::Server, _)
                 if invocation.command.name == "advisor" && self.chat_panel.is_steering() =>

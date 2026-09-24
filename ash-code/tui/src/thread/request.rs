@@ -135,8 +135,8 @@ where
     T: JsonRpcTransport,
 {
     let question = match submission.input.as_slice() {
-        [ChatInputItem::Text(text)] => text.trim().strip_prefix("/advisor ask ").map(str::trim).map(str::to_owned),
-        _ if submission.display_text.trim().starts_with("/advisor ask ") => return Err(ClientError::Protocol("Advisor questions must be text; send attachments to the conversation before consulting.".into())),
+        [ChatInputItem::Text(text)] => text.trim().strip_prefix("/advisor ").map(str::trim).map(str::to_owned),
+        _ if submission.display_text.trim().starts_with("/advisor ") => return Err(ClientError::Protocol("Advisor questions must be text; send attachments to the conversation before consulting.".into())),
         _ => None,
     };
     let request = match question {

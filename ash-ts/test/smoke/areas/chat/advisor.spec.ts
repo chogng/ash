@@ -1,11 +1,12 @@
 import { expect, test } from '../../../automation/test.js';
 
-test('Advisor selection persists through the product backend without starting a worker Turn', async ({ target, workbench }) => {
+test('Advisor asks from chat input and model selection lives in config', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'required', 'Advisor configuration requires the product backend.');
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
+	await expect(page.locator('.ash-chat-status')).not.toHaveText('Loading chat...');
 	const input = page.locator('.ash-chat-input-editor .stanza-editor-input');
 	const command = async (text: string): Promise<void> => {
 		await input.focus();
@@ -15,13 +16,17 @@ test('Advisor selection persists through the product backend without starting a 
 		await page.keyboard.press('Enter');
 	};
 	await command('/advisor');
-	await expect(page.getByPlaceholder('Advisor (default) — consultations use additional tokens')).toBeVisible();
+	await expect(page.locator('.ash-chat-input-editor .stanza-editor-line-text')).toContainText('/advisor');
+	await expect(page.locator('.ash-chat-item-userMessage')).toHaveCount(0);
+	await command('/config');
+	const picker = page.getByRole('dialog', { name: 'Chat settings and advisor model' });
+	await expect(picker).toBeVisible();
+	await expect(picker.getByPlaceholder('Configure a provider in Chat Settings to choose an advisor model')).toBeVisible();
+	await expect(picker.locator('.ash-list-row')).toHaveCount(2);
 	await page.getByText('No advisor', { exact: true }).click();
 	await expect(input).toBeFocused();
-	await command('/advisor');
-	await expect(page.getByPlaceholder('Advisor (off) — consultations use additional tokens')).toBeVisible();
-	await page.keyboard.press('Escape');
-	await command('/advisor ask Check cancellation');
-	await expect(page.getByText('Select an advisor model with /advisor before asking for a second opinion', { exact: true })).toBeVisible();
+	await command('/advisor Check cancellation');
+	const status = page.locator('.ash-chat:visible .ash-chat-status');
+	await expect(status).toHaveText('Configure an advisor model in Chat Settings before asking for a second opinion');
 	await expect(page.locator('.ash-chat-item-userMessage')).toHaveCount(0);
 });

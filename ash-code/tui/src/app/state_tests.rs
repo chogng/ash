@@ -5,6 +5,7 @@ use crate::app::AppEvent;
 use crate::config::Command as ConfigCommand;
 use crate::config::Event as ConfigEvent;
 use crate::config::TerminalSettings;
+use crate::config::advisor_choices;
 use crate::config::config_choices;
 use crate::dirs::Command as DirCommand;
 use crate::host::Command as HostCommand;
@@ -148,6 +149,24 @@ fn enter_test_session(app: &mut App) {
 use ash_slash_commands::{
     SlashCommandArgumentMode, SlashCommandCatalog, SlashCommandDefinition, SlashCommandOrigin,
 };
+
+fn app_with_advisor_command() -> App {
+    let catalog = SlashCommandCatalog::with_local_and_server(
+        built_in_slash_command_definitions(),
+        [SlashCommandCatalog::default()
+            .command_named("advisor")
+            .unwrap()
+            .clone()],
+    )
+    .unwrap();
+    let mut app = App::new();
+    app.replace_chat_input_catalog(crate::thread::composer::ChatInputCatalog::new(
+        catalog,
+        Vec::new(),
+        Vec::new(),
+    ));
+    app
+}
 
 #[test]
 fn enter_submits_trimmed_input_and_records_the_user_message() {
@@ -762,6 +781,76 @@ fn config_slash_command_is_owned_by_the_local_host() {
 }
 
 #[test]
+fn advisor_command_opens_a_question_draft_without_starting_a_session() {
+    let mut app = app_with_advisor_command();
+    app.insert_text("/advisor");
+
+    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert_eq!(action, None);
+    assert_eq!(app.input(), "/advisor ");
+    assert!(app.messages().is_empty());
+    assert_eq!(app.status(), &Status::Ready);
+    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(80, 24)).unwrap();
+    terminal
+        .draw(|frame| crate::app::frame::draw(frame, &app))
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    let rendered = (0..24)
+        .map(|y| (0..80).map(|x| buffer[(x, y)].symbol()).collect::<String>())
+        .collect::<Vec<_>>()
+        .join("\n");
+    crate::tui_assert_snapshot!("advisor_question_draft", rendered);
+}
+
+#[test]
+fn advisor_question_uses_a_turn_submission() {
+    let mut app = app_with_advisor_command();
+    app.insert_text("/advisor Check cancellation");
+
+    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert_text_submission(action, "/advisor Check cancellation");
+}
+
+#[test]
+fn config_owns_the_advisor_model_picker() {
+    let config = empty_config_snapshot();
+    let mut app = App::new();
+    app.update(ConfigEvent::EditorOpened(config_choices(
+        &config,
+        &ProviderListResult { providers: vec![] },
+        TerminalSettings::default(),
+        StatusLineSettings::default(),
+    )));
+    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert_eq!(action, Some(AppCommand::Config(ConfigCommand::OpenAdvisor)));
+
+    app.update(ConfigEvent::AdvisorOpened(advisor_choices(
+        &config,
+        &ash_app_server_protocol::protocol::model::ModelListResult { models: vec![] },
+        Language::English,
+    )));
+    assert_eq!(app.list_selection().unwrap().title(), "Advisor model: Off");
+    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(80, 24)).unwrap();
+    terminal
+        .draw(|frame| crate::app::frame::draw(frame, &app))
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    let rendered = (0..24)
+        .map(|y| (0..80).map(|x| buffer[(x, y)].symbol()).collect::<String>())
+        .collect::<Vec<_>>()
+        .join("\n");
+    crate::tui_assert_snapshot!("config_advisor_model", rendered);
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::Config(ConfigCommand::SetAdvisor(None)))
+    );
+}
+
+#[test]
 fn startup_slash_command_opens_a_read_only_context_panel() {
     let mut app = App::new();
     app.insert_text("/startup");
@@ -1065,13 +1154,14 @@ fn chatgpt_subscription_keeps_pending_login_across_navigation_and_cancels_by_id(
         )))
     );
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-    app.update(ConfigEvent::Subscription(SubscriptionEvent::Started(
-        AccountLoginStartResult::DeviceCode {
+    app.update(ConfigEvent::Subscription(SubscriptionEvent::Started {
+        login: AccountLoginStartResult::DeviceCode {
             login_id: "login-1".into(),
             verification_url: "https://auth.openai.com/codex/device".into(),
             user_code: "ABCD-1234".into(),
         },
-    )));
+        browser_error: None,
+    }));
     assert_eq!(
         app.list_selection().unwrap().active_tab().label(),
         "Providers"
@@ -2665,11 +2755,14 @@ fn xai_subscription_login_stays_separate_from_chatgpt_after_navigation() {
     );
     app.update(ConfigEvent::SubscriptionReply(
         SubscriptionProvider::Xai,
-        SubscriptionEvent::Started(AccountLoginStartResult::DeviceCode {
-            login_id: "xai-login".into(),
-            verification_url: "https://auth.x.ai/device".into(),
-            user_code: "XAI-1234".into(),
-        }),
+        SubscriptionEvent::Started {
+            login: AccountLoginStartResult::DeviceCode {
+                login_id: "xai-login".into(),
+                verification_url: "https://auth.x.ai/device".into(),
+                user_code: "XAI-1234".into(),
+            },
+            browser_error: None,
+        },
     ));
     let screen = crate::app::usage_tests::render(&app, 96, 24);
     assert!(screen.contains("XAI-1234") && screen.contains("https://auth.x.ai/device"));
@@ -2706,4 +2799,39 @@ fn xai_subscription_login_stays_separate_from_chatgpt_after_navigation() {
         }),
     ));
     assert!(crate::app::usage_tests::render(&app, 96, 24).contains("XAI-1234"));
+}
+
+#[test]
+fn xai_subscription_browser_failure_keeps_the_manual_challenge_visible() {
+    use crate::config::SubscriptionEvent;
+    use crate::config::SubscriptionProvider;
+    use ash_app_server_protocol::protocol::account::AccountLoginStartResult;
+    use ash_app_server_protocol::protocol::account::AccountReadResult;
+    let mut app = App::new();
+    enter_provider_row(&mut app, "xAI Subscription");
+    app.update(ConfigEvent::SubscriptionReply(
+        SubscriptionProvider::Xai,
+        SubscriptionEvent::Read(AccountReadResult {
+            revision: 1,
+            accounts: vec![],
+        }),
+    ));
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.update(ConfigEvent::SubscriptionReply(
+        SubscriptionProvider::Xai,
+        SubscriptionEvent::Started {
+            login: AccountLoginStartResult::DeviceCode {
+                login_id: "xai-login".into(),
+                verification_url: "https://auth.x.ai/device".into(),
+                user_code: "XAI-1234".into(),
+            },
+            browser_error: Some("browser command unavailable".into()),
+        },
+    ));
+    let screen = crate::app::usage_tests::render(&app, 96, 24);
+    assert!(screen.contains("Could not open browser"));
+    assert!(screen.contains("https://auth.x.ai/device"));
+    assert!(screen.contains("XAI-1234"));
+    crate::tui_assert_snapshot!("xai_subscription_browser_failure", screen);
 }

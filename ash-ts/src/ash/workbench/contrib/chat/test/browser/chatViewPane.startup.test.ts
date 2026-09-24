@@ -131,6 +131,7 @@ function unavailableChatService(): IChatService {
 		onDidUpdateTurnChanges: neverEvent<import("../../../../services/chat/common/chatService.js").TurnChangesUpdate>(),
 		listModels: () => pending as Promise<readonly ModelCatalogEntry[]>,
 		listModelCatalog: () => pending as Promise<readonly ModelCatalogEntry[]>,
+		listAdvisorModels: () => pending as Promise<readonly ModelCatalogEntry[]>,
 		refreshModels: () => pending as Promise<readonly ModelCatalogEntry[]>,
 		isModelVisible: () => true,
 		setModelVisible: () => pending as Promise<void>,

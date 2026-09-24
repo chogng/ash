@@ -56,6 +56,7 @@ export interface ISessionApi {
 
 export interface IModelApi {
 	readAdvisorDefault(): Promise<AdvisorConfig | null>;
+	readConfiguredProviderIds(): Promise<readonly string[]>;
 	setAdvisorDefault(params: { readonly commandId: string; readonly advisor: AdvisorConfig | null }): Promise<void>;
 	list(): Promise<ModelListResult>;
 	readModel(): Promise<ModelRef | null>;

@@ -6391,7 +6391,36 @@ mod execution_environment_tests;
 #[test]
 fn advisor_requests_are_typed_retry_safe_and_separate_from_worker_turns() {
     let backend = Arc::new(CountingStartBackend::default());
-    let server = server().with_turn_backend(backend.clone());
+    let profile = tempfile::tempdir().unwrap();
+    let config = Arc::new(ConfigStore::open(profile.path().join("config.sqlite3")).unwrap());
+    let provider = ProviderId::new("openai").unwrap();
+    let configured = config
+        .apply(ash_config::ConfigCommandRequest {
+            command_id: CommandId::new("configure-advisor-provider").unwrap(),
+            expected_revision: ash_config::ConfigRevision::new(0),
+            command: ash_config::UserConfigCommand::ConfigureProvider {
+                provider: provider.clone(),
+                config: ash_model_provider_config::ModelProviderConfig::new(provider.clone()),
+            },
+        })
+        .unwrap();
+    config
+        .apply(ash_config::ConfigCommandRequest {
+            command_id: CommandId::new("set-advisor-default").unwrap(),
+            expected_revision: configured.revision,
+            command: ash_config::UserConfigCommand::UpdatePreferences(
+                ash_config::PreferencesUpdate {
+                    advisor: ash_protocol::Patch::Value(ash_protocol::AdvisorConfig::new(
+                        ModelRef::new(provider, ModelId::new("reviewer").unwrap()),
+                    )),
+                    ..Default::default()
+                },
+            ),
+        })
+        .unwrap();
+    let server = server()
+        .with_config_store(config)
+        .with_turn_backend(backend.clone());
     let mut connection = server.connection();
     initialize(&server, &mut connection);
     let session = create_session(&server, &mut connection, 2, "advisor-session");
@@ -6443,10 +6472,19 @@ fn advisor_requests_are_typed_retry_safe_and_separate_from_worker_turns() {
         replayed["result"]["value"]["sequence"], sequence,
         "retry must use its receipt even if the model is no longer in the catalog: {replayed}"
     );
+    let off_sequence = server
+        .threads()
+        .configure_advisor(
+            &id,
+            CommandId::new("legacy-off").unwrap(),
+            core_api::SequenceExpectation::Any,
+            ash_protocol::AdvisorSelection::Off,
+        )
+        .unwrap();
     let mut ask = request(
         7,
         "ask",
-        serde_json::json!({"type":"consultAdvisor","threadId":thread_id,"expectedSequence":sequence,"question":"Check cancellation"}),
+        serde_json::json!({"type":"consultAdvisor","threadId":thread_id,"expectedSequence":off_sequence,"question":"Check cancellation"}),
     );
     let accepted = call(&server, &mut connection, ask.clone());
     assert_eq!(accepted["result"]["type"], "turn", "{accepted}");
@@ -6466,7 +6504,7 @@ fn advisor_requests_are_typed_retry_safe_and_separate_from_worker_turns() {
             .model
             .model
             .as_str(),
-        "advisor"
+        "reviewer"
     );
     let conflicting = call(
         &server,
@@ -6474,7 +6512,7 @@ fn advisor_requests_are_typed_retry_safe_and_separate_from_worker_turns() {
         request(
             9,
             "ask",
-            serde_json::json!({"type":"startTurn","threadId":thread_id,"expectedSequence":sequence,"input":[{"type":"text","text":"Check cancellation"}]}),
+            serde_json::json!({"type":"startTurn","threadId":thread_id,"expectedSequence":off_sequence,"input":[{"type":"text","text":"Check cancellation"}]}),
         ),
     );
     assert!(conflicting.get("error").is_some());

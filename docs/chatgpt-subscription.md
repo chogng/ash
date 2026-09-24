@@ -21,7 +21,7 @@ Ash 与 Codex 使用兼容的 ChatGPT 认证存储。检测到 Codex 时只读�
 
 只读加载只保留 access token、身份与有效期，不反序列化 refresh token。认证模式遵循 Codex 的显式 `auth_mode` 及旧文件模式判定；已有 API key 等其他认证模式不会被当成 ChatGPT 订阅。用户配置的登录方式和 workspace 限制仍须匹配。
 
-凭据完全缺失时，用户可从 `/config → Providers → ChatGPT subscription` 发起设备码登录。成功后创建以下 Codex 结构：
+凭据完全缺失时，用户可从 `/config → Providers → ChatGPT subscription` 发起设备码登录。Ash Code 收到登录链接后自动尝试打开本机浏览器；打开失败时仍显示链接和代码。成功后创建以下 Codex 结构：
 
 ```json
 {

@@ -1,7 +1,11 @@
 import { lxiconsLibrary } from "../../../../../base/common/lxiconsLibrary.js";
+import { DisposableStore } from "../../../../../base/common/lifecycle.js";
+import { localize } from "../../../../../nls.js";
 import { Action2, MenuId, registerAction2 } from "../../../../../platform/actions/common/actions.js";
 import { ContextKeyExpr } from "../../../../../platform/contextkey/common/contextkey.js";
 import type { ServicesAccessor } from "../../../../../platform/instantiation/common/instantiation.js";
+import { IQuickInputService } from "../../../../../platform/quickinput/common/quickInput.js";
+import { IChatService } from "../../../../services/chat/common/chatService.js";
 import { IPreferencesService } from "../../../../services/preferences/common/preferences.js";
 import { IViewsService } from "../../../../services/views/browser/viewsService.js";
 import { ChatSessionInspectorVisibleContext, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, TOGGLE_SESSION_INSPECTOR_COMMAND_ID } from "../../common/chat.js";
@@ -115,7 +119,39 @@ registerAction2(class OpenChatSettingsAction extends Action2 {
 		});
 	}
 
-	override run(accessor: ServicesAccessor): Promise<void> {
-		return accessor.get(IPreferencesService).openSettings();
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const chat = accessor.get(IChatService);
+		const preferences = accessor.get(IPreferencesService);
+		const [current, models] = await Promise.all([chat.readAdvisorDefault(), chat.listAdvisorModels()]);
+		type Setting = { label: string; description?: string; model?: typeof current; openSettings?: true };
+		const picker = accessor.get(IQuickInputService).createQuickPick<Setting>();
+		const disposables = new DisposableStore();
+		disposables.add(picker);
+		picker.ariaLabel = localize('chat.settings.advisorAria', 'Chat settings and advisor model');
+		picker.placeholder = models.length
+			? localize('chat.settings.advisorPlaceholder', 'Choose an advisor model or open all settings')
+			: localize('chat.settings.advisorProviderRequired', 'Configure a provider in Chat Settings to choose an advisor model');
+		picker.items = [
+			{ label: localize('chat.settings.openAll', 'Open all settings'), openSettings: true },
+			{ label: localize('chat.settings.advisorOff', 'No advisor'), description: current === null ? localize('chat.settings.current', 'Current') : undefined, model: null },
+			...models.map(entry => ({
+				label: entry.displayName,
+				description: current?.model.provider === entry.model.provider && current.model.model === entry.model.model ? localize('chat.settings.current', 'Current') : `${entry.model.provider}/${entry.model.model}`,
+				model: { model: entry.model, maxCalls: 3, maxOutputTokens: 2048 },
+			})),
+		];
+		disposables.add(picker.onDidAccept((item) => {
+			if (item.openSettings) {
+				picker.hide();
+				void preferences.openSettings();
+				return;
+			}
+			void chat.saveAdvisorDefault(item.model ?? null).then(
+				() => picker.hide(),
+				error => { picker.placeholder = `${localize('chat.settings.advisorSaveFailed', 'Could not save advisor model')}: ${String(error)}`; },
+			);
+		}));
+		disposables.add(picker.onDidHide(() => disposables.dispose()));
+		picker.show();
 	}
 });

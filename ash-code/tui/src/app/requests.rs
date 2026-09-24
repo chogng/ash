@@ -173,6 +173,8 @@ pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
             ConfigCommand::SetIssues(_)
             | ConfigCommand::SetGit(_)
             | ConfigCommand::SetMemories(_)
+            | ConfigCommand::OpenAdvisor
+            | ConfigCommand::SetAdvisor(_)
             | ConfigCommand::OpenEditor
             | ConfigCommand::Subscription(_, _)
             | ConfigCommand::Edit(_)
