@@ -114,6 +114,7 @@ test("New File from Template opens the selected extension template as an untitle
 
 class TestQuickInputService implements IQuickInputServiceContract {
 	picker: TestQuickPick<IQuickPickItem> | undefined;
+	async input(): Promise<string | undefined> { return undefined; }
 
 	createQuickPick<TItem extends IQuickPickItem>(): IQuickPick<TItem> {
 		const picker = new TestQuickPick<TItem>();

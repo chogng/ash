@@ -66,7 +66,7 @@
 [`codebase.md`](codebase.md)、
 [`syntax-analysis.md`](syntax-analysis.md)、[`lsp.md`](lsp.md)、
 [`editor-extensions.md`](editor-extensions.md)、
-[`chat-session-inspector.md`](chat-session-inspector.md)、[`pdf.md`](pdf.md)、[`typst.md`](typst.md)
+[`chat-session-inspector.md`](chat-session-inspector.md)、[`typst.md`](typst.md)
 
 ## app 产品
 

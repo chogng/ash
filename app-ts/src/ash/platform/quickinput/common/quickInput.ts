@@ -30,9 +30,17 @@ export interface IQuickPick<TItem extends IQuickPickItem>
 	hide(): void;
 }
 
+export interface IInputOptions {
+	readonly title?: string;
+	readonly placeHolder?: string;
+	readonly password?: boolean;
+	readonly validateInput?: (value: string) => Promise<string | null | undefined>;
+}
+
 /** Creates Quick Input controllers hosted by one Workbench window. */
 export interface IQuickInputService {
 	createQuickPick<TItem extends IQuickPickItem>(): IQuickPick<TItem>;
+	input(options: IInputOptions): Promise<string | undefined>;
 }
 
 export const IQuickInputService =

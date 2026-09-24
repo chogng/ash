@@ -25,7 +25,7 @@ Ash 将 Typst 0.15.1 作为 Rust 库嵌入，不调用系统安装的 `typst` �
 | --- | --- | --- |
 | 把 Typst 源码编译成 PDF | 已实现内存编译和临时 PDF 资源 | 仅支持单文件源码 |
 | 从 Academic 文档生成 Typst | 计划由确定性序列化器完成 | 尚未实现 |
-| 在 Workbench 预览 workspace PDF | Chromium PDF Viewer 贡献 | 已实现；Typst 临时资源尚未桥接到该贡献 |
+| 在 Workbench 预览 workspace PDF | PDF.js 阅读器 | 已实现；Typst 临时资源尚未桥接到该贡献 |
 | 使用本地文件、网络或外部包 | 明确拒绝 | 保持编译器信任边界 |
 | 保存最终 PDF | 调用方显式读取并导出 | 临时资源不会自动持久化 |
 

@@ -9,6 +9,7 @@ import type { ISkillApi } from "../../../../platform/skills/common/skillApi.js";
 import type { ITurnChangesApi } from "../../../../platform/turnChanges/common/turnChangesApi.js";
 import type { ModelRef, SessionId, ThreadId } from "../../../../sessions/services/sessions/common/session.js";
 import type { AdvisorConfig, ConfigureAdvisorOptions, ConsultAdvisorOptions, CompactContextOptions, IChatService, InterruptTurnOptions, ModelCatalogEntry, ResolveInteractionOptions, SkillSelectorDefinition, SlashCommandDefinition, StartTurnOptions, SteerTurnOptions, Thread, ThreadGoalUpdate, ThreadItem, ThreadSubscription, ThreadTranscriptEntry, ThreadTranscriptSnapshot, ThreadTranscriptUpdateEnvelope, ThreadUpdate, ThreadUpdateEnvelope, TurnChangeDetails, TurnChangeSetSummary, TurnChangesUpdate } from "../common/chatService.js";
+import type { ModelProviderCredentialStatus } from '../common/chatService.js';
 import { ModelCatalogConfiguration, modelRefIdentity } from "../common/modelCatalog.js";
 
 export interface ChatServiceOptions {
@@ -83,6 +84,20 @@ export class ChatService extends Disposable implements IChatService {
 	async listModelCatalog(): Promise<readonly ModelCatalogEntry[]> {
 		if (this.hasLoadedModelCatalog) return this.modelCatalog;
 		return this.refreshModels();
+	}
+
+	async listModelProviders(): Promise<readonly ModelProviderCredentialStatus[]> {
+		const result = await this.options.modelApi.listProviders();
+		return result.providers.map(provider => ({
+			provider: provider.provider,
+			displayName: provider.displayName,
+			apiKeyPolicy: provider.apiKeyPolicy,
+			apiKeyConfigured: provider.apiKeyConfigured,
+		}));
+	}
+
+	async setModelProviderApiKey(provider: string, apiKey: string): Promise<void> {
+		await this.options.modelApi.setProviderApiKey({ provider, apiKey });
 	}
 
 	async listAdvisorModels(): Promise<readonly ModelCatalogEntry[]> {

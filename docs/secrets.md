@@ -257,7 +257,7 @@ Desktop renderer ──▶ SecretStore
 
 ## 12. 模型 API key 的进程边界
 
-产品模型的 API key 由受信任的 App Server 接收并管理。`provider/apiKey/set` 写入当前 profile 的 `SecretStore`；`provider/list` 只返回是否已配置，`provider/remove` 清理被删除连接的 key。`ash-model-provider` 在发起 HTTP、Responses WebSocket、Realtime 或 Live 请求时解析凭据并生成鉴权标头。CLI/TUI 通过同一 App Server 协议管理 key；Desktop 使用同一协议，当前尚无独立的模型 key 设置界面。
+产品模型的 API key 由受信任的 App Server 接收并管理。`provider/apiKey/set` 写入当前 profile 的 `SecretStore`；`provider/list` 只返回是否已配置，`provider/remove` 清理被删除连接的 key。`ash-model-provider` 在发起 HTTP、Responses WebSocket、Realtime 或 Live 请求时解析凭据并生成鉴权标头。CLI/TUI 通过同一 App Server 协议管理 key；Desktop 的 Chat Settings 可查看提供者的配置状态，并用遮蔽输入框录入或替换 key，不提供已存 key 的回读。
 
 | 能力 | 所有者 |
 | --- | --- |

@@ -119,8 +119,8 @@ reason = "Current upstream API families: 0.4.1 via glib-macros; 0.5.0 via clap_d
 
 [[multiple_versions]]
 name = "itertools"
-versions = ["0.11.0", "0.12.1", "0.13.0", "0.14.0", "0.15.0"]
-reason = "0.11 via LiveKit pbjson-build; 0.12 via LiveKit prost 0.12; 0.13 via bindgen/ratatui; 0.14 via prost 0.14/tokenizers; 0.15 via pdfium-render."
+versions = ["0.11.0", "0.12.1", "0.13.0", "0.14.0"]
+reason = "0.11 via LiveKit pbjson-build; 0.12 via LiveKit prost 0.12; 0.13 via bindgen/ratatui; 0.14 via prost 0.14/tokenizers."
 
 [[multiple_versions]]
 name = "jni-sys"
@@ -129,8 +129,8 @@ reason = "Current upstream API families: 0.3.1 via ndk, ndk-sys; 0.4.1 via jni, 
 
 [[multiple_versions]]
 name = "libloading"
-versions = ["0.7.4", "0.8.9", "0.9.0"]
-reason = "Current upstream API families: 0.7.4 via libappindicator-sys; 0.8.9 via ash, clang-sys, dlib and other importers; 0.9.0 via pdfium-render. Review the introducing packages together before changing this set."
+versions = ["0.7.4", "0.8.9"]
+reason = "Current upstream API families: 0.7.4 via libappindicator-sys; 0.8.9 via ash, clang-sys, dlib and other importers. Review the introducing packages together before changing this set."
 
 [[multiple_versions]]
 name = "linux-raw-sys"

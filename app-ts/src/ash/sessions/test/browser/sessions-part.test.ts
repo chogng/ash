@@ -101,6 +101,8 @@ test("SessionsPart remains owned by the Sessions product layer", () => {
 		onDidUpdateTurnChanges: () => toDisposable(() => {}),
 		async listModels() { return []; },
 		async listModelCatalog() { return []; },
+		async listModelProviders() { return []; },
+		async setModelProviderApiKey() {},
 		async listAdvisorModels() { return []; },
 		async refreshModels() { return []; },
 		isModelVisible() { return true; },

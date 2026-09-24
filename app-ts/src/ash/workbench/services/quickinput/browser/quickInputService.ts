@@ -3,6 +3,7 @@ import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { QuickInputController } from "../../../../platform/quickinput/browser/quickInputController.js";
 import type {
 	IQuickInputService,
+	IInputOptions,
 	IQuickPick,
 	IQuickPickItem,
 } from "../../../../platform/quickinput/common/quickInput.js";
@@ -45,6 +46,10 @@ export class WorkbenchQuickInputService
 
 	createQuickPick<TItem extends IQuickPickItem>(): IQuickPick<TItem> {
 		return this.controller.createQuickPick<TItem>();
+	}
+
+	input(options: IInputOptions): Promise<string | undefined> {
+		return this.controller.input(options);
 	}
 
 	private updateLayout(): void {

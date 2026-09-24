@@ -24,6 +24,8 @@ export function createDisconnectedSessionApi(unavailable: UnavailableOperation):
 export function createDisconnectedModelApi(unavailable: UnavailableOperation): IModelApi {
 	return {
 		list: () => unavailable("model.list"),
+		listProviders: () => unavailable('model.listProviders'),
+		setProviderApiKey: () => unavailable('model.setProviderApiKey'),
 		readModel: () => unavailable("model.readModel"),
 		readAdvisorDefault: () => unavailable("model.readAdvisorDefault"),
 		readConfiguredProviderIds: () => unavailable("model.readConfiguredProviderIds"),
@@ -75,6 +77,8 @@ export function createAppServerSessionApi(connection: AppServerProtocolClient): 
 export function createAppServerModelApi(connection: AppServerProtocolClient): IModelApi {
 	return {
 		list: () => appServerRequest(connection, "model/list", {}),
+		listProviders: () => appServerRequest(connection, 'provider/list', {}),
+		setProviderApiKey: params => appServerRequest(connection, 'provider/apiKey/set', params),
 		readModel: async () => (await appServerRequest(connection, "config/read", {})).model,
 		readAdvisorDefault: async () => (await appServerRequest(connection, "config/read", {})).advisor ?? null,
 		readConfiguredProviderIds: async () => Object.keys((await appServerRequest(connection, "config/read", {})).providers),

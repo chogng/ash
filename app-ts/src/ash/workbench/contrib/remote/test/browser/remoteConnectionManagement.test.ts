@@ -135,6 +135,7 @@ class TestRemoteConnectionService implements IRemoteConnectionService {
 
 class TestQuickInputService implements IQuickInputService {
 	readonly pickers: TestQuickPick<IQuickPickItem>[] = [];
+	async input(): Promise<string | undefined> { return undefined; }
 
 	createQuickPick<TItem extends IQuickPickItem>(): IQuickPick<TItem> {
 		const picker = new TestQuickPick<TItem>();

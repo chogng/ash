@@ -25,7 +25,7 @@ import { emptyEditorServiceState } from '../../../../../workbench/test/common/te
 import { IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent } from "../../../../../workbench/services/layout/browser/layoutService.js";
 import { ChatService } from "../../../../../workbench/services/chat/browser/chatService.js";
 import { ChatContextPickService } from "../../../../../workbench/services/chat/browser/chatContextPickService.js";
-import { IChatService, type AdvisorConfig, type ThreadUpdateEnvelope, type TurnError } from "../../../../../workbench/services/chat/common/chatService.js";
+import { IChatService, type AdvisorConfig, type ModelProviderCredentialStatus, type ThreadUpdateEnvelope, type TurnError } from "../../../../../workbench/services/chat/common/chatService.js";
 import { ModelCatalogConfiguration } from "../../../../../workbench/services/chat/common/modelCatalog.js";
 import { WorkbenchConfigurationService } from "../../../../../workbench/services/configuration/browser/configurationService.js";
 import { AppServerSessionsManagementService as SessionsManagementService } from "../../../../../sessions/services/sessions/browser/appServerSessionsManagementService.js";
@@ -34,6 +34,7 @@ import type { ISession } from "../../../../../sessions/services/sessions/common/
 import { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
 import { IViewsService, ViewsService } from "../../../../../workbench/services/views/browser/viewsService.js";
 import { ContextKeyService, IContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
+import { DialogResult, IDialogService, type IMessageDialogOptions } from '../../../../../platform/dialogs/common/dialogs.js';
 import { ViewDescriptorService } from "../../../../../workbench/services/views/common/viewDescriptorService.js";
 import { WorkbenchQuickInputService } from "../../../../../workbench/services/quickinput/browser/quickInputService.js";
 import { h } from "../../../../../base/browser/dom.js";
@@ -42,6 +43,7 @@ const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 const emptyChatContextPickService = new ChatContextPickService();
 const unavailableQuickInputService = {
 	createQuickPick: () => { throw new Error("Quick input is unavailable in this test"); },
+	input: () => { throw new Error('Quick input is unavailable in this test'); },
 } as IQuickInputService;
 
 class AppServerSessionsManagementService extends SessionsManagementService {
@@ -1411,6 +1413,7 @@ interface FakeOptions {
 		readonly outputTransport: "nativeStreaming" | "unary";
 	}[];
 	readonly configuredProviders?: readonly string[];
+	readonly providers?: readonly ModelProviderCredentialStatus[];
 	readonly advisorDefault?: { readonly model: ModelRef; readonly enabled: boolean; readonly maxCalls: number; readonly maxOutputTokens: number };
 }
 
@@ -1642,6 +1645,7 @@ function fakeApi(options: FakeOptions = {}): {
 	readonly turnCompactRequests: readonly SessionOperationInput<"compactContext">[];
 	readonly turnSteerRequests: readonly SessionOperationInput<"steerTurn">[];
 	readonly modelListRequests: readonly undefined[];
+	readonly providerKeyRequests: readonly { readonly provider: string; readonly apiKey: string }[];
 	readonly modelRequests: readonly { readonly commandId: string; readonly model: ModelRef }[];
 	readonly savedAdvisorDefaults: readonly (AdvisorConfig | null)[];
 	readonly emit: (notification: ServerNotification) => void;
@@ -1659,6 +1663,8 @@ function fakeApi(options: FakeOptions = {}): {
 	const turnCompactRequests: SessionOperationInput<"compactContext">[] = [];
 	const turnSteerRequests: SessionOperationInput<"steerTurn">[] = [];
 	const modelListRequests: undefined[] = [];
+	const providerKeyRequests: { provider: string; apiKey: string }[] = [];
+	let providers = options.providers?.map(provider => ({ ...provider })) ?? [];
 	const modelRequests: { readonly commandId: string; readonly model: ModelRef }[] = [];
 	const savedAdvisorDefaults: (AdvisorConfig | null)[] = [];
 	let advisorDefault: AdvisorConfig | null = options.advisorDefault ?? null;
@@ -1734,6 +1740,12 @@ function fakeApi(options: FakeOptions = {}): {
 				modelListRequests.push(undefined);
 				return { models: [...(options.models ?? [])] };
 			},
+			listProviders: async () => ({ providers: providers.map(provider => ({ ...provider })) }),
+			setProviderApiKey: async ({ provider, apiKey }: { provider: string; apiKey: string }) => {
+				providerKeyRequests.push({ provider, apiKey });
+				providers = providers.map(entry => entry.provider === provider ? { ...entry, apiKeyConfigured: true } : entry);
+				return { provider, apiKeyConfigured: true };
+			},
 			readAdvisorDefault: async () => advisorDefault,
 			readConfiguredProviderIds: async () => options.configuredProviders ?? [],
 			setAdvisorDefault: async ({ advisor }: { readonly advisor: AdvisorConfig | null }) => {
@@ -1797,6 +1809,7 @@ function fakeApi(options: FakeOptions = {}): {
 		turnCompactRequests,
 		turnSteerRequests,
 		modelListRequests,
+		providerKeyRequests,
 		modelRequests,
 		savedAdvisorDefaults,
 		emit: (notification) => {
@@ -1945,6 +1958,14 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 	assert.fail("Timed out waiting for Chat view state");
 }
 
+function recordingDialogService(messages: IMessageDialogOptions[]): IDialogService {
+	return {
+		showMessage: async options => { messages.push(options); },
+		confirm: async () => false,
+		prompt: async () => DialogResult.Cancel,
+	};
+}
+
 
 test("Audio history identifies the sender and recording duration", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
@@ -2020,6 +2041,7 @@ test("Chat Settings toggles Advisor while keeping its selected model", async () 
 	const services = new ServiceContainer();
 	services.registerInstance(IChatService, chat);
 	services.registerInstance(IQuickInputService, quickInput);
+	services.registerInstance(IDialogService, recordingDialogService([]));
 	using preferences = new BrowserPreferencesService(() => ({
 		...emptyEditorServiceState,
 		openEditor: async () => undefined,
@@ -2035,10 +2057,67 @@ test("Chat Settings toggles Advisor while keeping its selected model", async () 
 		const input = dom.window.document.querySelector<HTMLInputElement>(".ash-quick-pick-input input");
 		assert.ok(input);
 		input.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "ArrowDown" }));
+		input.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "ArrowDown" }));
 		input.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
 		await waitFor(() => fake.savedAdvisorDefaults.length === (enabled ? 2 : 1));
 		assert.deepEqual(fake.savedAdvisorDefaults.at(-1), { ...selected, enabled });
 	}
+	dom.window.close();
+});
+
+test('Chat Settings saves a masked provider key through the model API and refreshes the catalog', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const fake = fakeApi({ providers: [
+		{ provider: 'ollama', displayName: 'Ollama', apiKeyPolicy: 'unsupported', apiKeyConfigured: false },
+		{ provider: 'openai', displayName: 'OpenAI', apiKeyPolicy: 'required', apiKeyConfigured: false },
+	] });
+	using chat = createChatService(fake.api);
+	using contextKeys = new ContextKeyService();
+	using quickInput = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
+	const messages: IMessageDialogOptions[] = [];
+	const services = new ServiceContainer();
+	services.registerInstance(IChatService, chat);
+	services.registerInstance(IQuickInputService, quickInput);
+	services.registerInstance(IDialogService, recordingDialogService(messages));
+	using preferences = new BrowserPreferencesService(() => ({
+		...emptyEditorServiceState,
+		openEditor: async () => undefined,
+		focusActiveEditor() {},
+	}));
+	services.registerInstance(IPreferencesService, preferences);
+	using commands = new CommandService(services);
+
+	const choose = (value: string): void => {
+		const input = dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick-input input');
+		assert.ok(input);
+		input.value = value;
+		input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+		input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter' }));
+	};
+	await commands.executeCommand(OPEN_CHAT_SETTINGS_COMMAND_ID);
+	choose('Manage Model API Keys');
+	await waitFor(() => dom.window.document.querySelector('[role="dialog"][aria-label="Model provider API keys"]') !== null);
+	const labels = [...dom.window.document.querySelectorAll('.ash-quick-pick-row-label')].map(element => element.textContent);
+	assert.deepEqual(labels, ['OpenAI']);
+	assert.match(dom.window.document.querySelector('.ash-quick-pick-row-description')?.textContent ?? '', /API key required/);
+	choose('OpenAI');
+	await waitFor(() => dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick-input input[type="password"]') !== null);
+	const input = dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick-input input[type="password"]');
+	assert.ok(input);
+	input.value = '  test-secret  ';
+	input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+	assert.equal(dom.window.document.body.textContent?.includes('test-secret'), false);
+	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter' }));
+	await waitFor(() => messages.length === 1);
+	assert.deepEqual(fake.providerKeyRequests, [{ provider: 'openai', apiKey: 'test-secret' }]);
+	assert.equal(fake.modelListRequests.length, 2);
+	assert.equal(messages[0]?.message, 'API key saved for OpenAI');
+	assert.equal(input.value, '');
+
+	await commands.executeCommand(OPEN_CHAT_SETTINGS_COMMAND_ID);
+	choose('Manage Model API Keys');
+	await waitFor(() => dom.window.document.querySelector('[role="dialog"][aria-label="Model provider API keys"]') !== null);
+	assert.equal(dom.window.document.querySelector('.ash-quick-pick-row-description')?.textContent, 'API key saved');
 	dom.window.close();
 });
 

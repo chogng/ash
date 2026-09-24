@@ -94,6 +94,8 @@ test('editor action labels use the selected Chinese language catalog', async () 
 		], ['开发者：强制重新分词', '将选中文本左移', '将选中文本右移', '插入文件末尾换行符']);
 		const { localize } = await import('../../../../../nls.js');
 		assert.equal(localize('parameterHints.dialog', 'Parameter hints'), '参数提示');
+		assert.equal(localize('chat.providerKeys.manage', 'Manage Model API Keys'), '管理模型 API 密钥');
+		assert.equal(localize('chat.providerKeys.inputTitle', 'API key for {0}', 'OpenAI'), 'OpenAI 的 API 密钥');
 	} finally {
 		resetNlsResolver();
 	}

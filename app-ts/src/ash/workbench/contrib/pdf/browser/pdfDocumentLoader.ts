@@ -2,7 +2,7 @@ import { raceCancellationError } from "../../../../base/common/async.js";
 import type { IFileService } from "../../../../platform/files/common/files.js";
 import type { EditorInput } from "../../../browser/parts/editor/editorInput.js";
 
-/** Loads the immutable bytes that Chromium's PDF Viewer renders for one editor input. */
+/** Loads PDF bytes for the Workbench PDF.js renderer. */
 export interface IPdfDocumentLoader {
 	load(input: EditorInput, signal: AbortSignal): Promise<Uint8Array>;
 }

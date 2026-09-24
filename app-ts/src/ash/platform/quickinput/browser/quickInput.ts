@@ -15,14 +15,14 @@ import type {
 import { QuickInputList } from "./quickInputList.js";
 import { localize } from '../../../nls.js';
 
-export interface BrowserQuickPickOptions {
-	readonly onShow: (quickPick: IBrowserQuickPickHost) => void;
-	readonly onHide: (quickPick: IBrowserQuickPickHost) => void;
-	readonly onDispose: (quickPick: IBrowserQuickPickHost) => void;
+export interface BrowserQuickInputHostOptions {
+	readonly onShow: (quickInput: IBrowserQuickInputHost) => void;
+	readonly onHide: (quickInput: IBrowserQuickInputHost) => void;
+	readonly onDispose: (quickInput: IBrowserQuickInputHost) => void;
 }
 
 /** Narrow controller used by the shared Workbench host. */
-export interface IBrowserQuickPickHost {
+export interface IBrowserQuickInputHost {
 	readonly element: HTMLDivElement;
 	focus(): void;
 	hide(): void;
@@ -32,7 +32,7 @@ export interface IBrowserQuickPickHost {
 /** DOM implementation of one searchable Quick Pick controller. */
 export class QuickPick<TItem extends IQuickPickItem>
 	extends Disposable
-	implements IQuickPick<TItem> {
+	implements IQuickPick<TItem>, IBrowserQuickInputHost {
 	readonly element: HTMLDivElement;
 	private readonly inputBox: InputBox;
 	private readonly list: QuickInputList<TItem>;
@@ -40,7 +40,7 @@ export class QuickPick<TItem extends IQuickPickItem>
 	private readonly _onDidChangeValue = this._register(new Emitter<string>());
 	private readonly _onDidHide = this._register(new Emitter<void>());
 	private readonly _onDidBlur = this._register(new Emitter<void>());
-	private readonly options: BrowserQuickPickOptions;
+	private readonly options: BrowserQuickInputHostOptions;
 	private visible = false;
 	private _ariaLabel = localize('quickInput.title', 'Quick Pick');
 	private _placeholder = "";
@@ -52,7 +52,7 @@ export class QuickPick<TItem extends IQuickPickItem>
 	readonly onDidHide: Event<void> = this._onDidHide.event;
 	readonly onDidBlur: Event<void> = this._onDidBlur.event;
 
-	constructor(host: HTMLElement, options: BrowserQuickPickOptions) {
+	constructor(host: HTMLElement, options: BrowserQuickInputHostOptions) {
 		super();
 		this.options = options;
 		const ownerDocument = host.ownerDocument;

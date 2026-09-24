@@ -1,4 +1,5 @@
 import type { AdvisorConfig, AdvisorConfigureResult, ModelListResult, ModelRef, SessionCatalogReadResult, SessionCreateParams, SessionListResult, SessionReadParams, SessionRequest, SessionRequestParams, SessionRequestResult, SessionResult, SessionSubscribeParams, SessionSubscribeResult, SessionThreadReadParams, SessionThreadReadResult, SessionThreadResult, SessionThreadSubscribeParams, SessionThreadSubscribeResult, SessionThreadUnsubscribeParams, SessionUnsubscribeParams, ThreadGoalClearParams, ThreadGoalClearResponse, ThreadGoalGetParams, ThreadGoalGetResponse, ThreadGoalSetParams, ThreadGoalSetResponse, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult, TurnSteerResult } from "../../app-server/common/generated/index.js";
+import type { ProviderApiKeySetParams, ProviderApiKeySetResult, ProviderListResult } from '../../app-server/common/generated/index.js';
 
 export type { SessionRequestResult };
 
@@ -59,6 +60,8 @@ export interface IModelApi {
 	readConfiguredProviderIds(): Promise<readonly string[]>;
 	setAdvisorDefault(params: { readonly commandId: string; readonly advisor: AdvisorConfig | null }): Promise<void>;
 	list(): Promise<ModelListResult>;
+	listProviders(): Promise<ProviderListResult>;
+	setProviderApiKey(params: ProviderApiKeySetParams): Promise<ProviderApiKeySetResult>;
 	readModel(): Promise<ModelRef | null>;
 	setModel(params: { readonly commandId: string; readonly model: ModelRef }): Promise<void>;
 }

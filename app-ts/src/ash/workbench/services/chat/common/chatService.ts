@@ -8,6 +8,13 @@ import type { ResolvedChatContext } from "./chatContextService.js";
 
 export type { ModelCatalogEntry } from "./modelCatalog.js";
 
+export interface ModelProviderCredentialStatus {
+	readonly provider: string;
+	readonly displayName: string;
+	readonly apiKeyPolicy: 'unsupported' | 'optional' | 'required';
+	readonly apiKeyConfigured: boolean;
+}
+
 export interface ChatImageAttachment {
 	readonly contentDigest: string;
 	readonly mediaType: "png" | "jpeg" | "gif" | "webP";
@@ -341,6 +348,8 @@ export interface IChatService {
 	readonly onDidUpdateTurnChanges: Event<TurnChangesUpdate>;
 	listModels(): Promise<readonly ModelCatalogEntry[]>;
 	listModelCatalog(): Promise<readonly ModelCatalogEntry[]>;
+	listModelProviders(): Promise<readonly ModelProviderCredentialStatus[]>;
+	setModelProviderApiKey(provider: string, apiKey: string): Promise<void>;
 	listAdvisorModels(): Promise<readonly ModelCatalogEntry[]>;
 	refreshModels(): Promise<readonly ModelCatalogEntry[]>;
 	isModelVisible(model: ModelRef): boolean;

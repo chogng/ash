@@ -7,7 +7,7 @@ This directory owns the shared Ash package for development and release:
 - `protocol.py` runs the Rust protocol fixture generator; `build/protocol/` synchronizes TypeScript consumers.
 - `build.py` resolves release binaries and resources.
 - `layout.py` assembles and validates both development and release packages using `layout.json`.
-- `livekit.py` and `pdfium.py` resolve locked backend runtime assets.
+- `livekit.py` resolves the locked LiveKit server runtime.
 - `sign.py` signs or verifies staged executables and refreshes package metadata.
 
 Runtime discovery, Tool policy, sandbox enforcement, notarization, installer

@@ -218,7 +218,7 @@ just bench-build ash-keybinding --jobs 4 --compare .build/build-health/<run>/rep
 
 ### CI 检查
 
-`Rust checks and build performance` 在 push/PR 检查依赖与工具回归测试；仅在 main push 对编译热点 `ash-app-server-protocol` 执行性能门禁，避免 PR 等待重复的全冷编译。每次 main push 的性能作业独立运行，不被后续推送取消，以免遗漏被取消的提交。在同一个 Ubuntu 作业中分别检出推送前后的源码，两份源码使用当前版本的 Rust 工具链、四个并发任务，各测三轮。任一场景的耗时中位数同时增加超过 25% 和两秒时检查失败，两份日志和报告都会上传。首次推送没有基线时仅执行依赖检查。这是协议包的编译门禁，不代表其他产品的整包耗时预算。
+`Rust checks and build performance` 在 push/PR 检查依赖；`Build tooling` 在 Linux、macOS 和 Windows 运行构建脚本回归测试。仅在 main push 对编译热点 `ash-app-server-protocol` 执行性能门禁，避免 PR 等待重复的全冷编译。每次 main push 的性能作业独立运行，不被后续推送取消，以免遗漏被取消的提交。在同一个 Ubuntu 作业中分别检出推送前后的源码，两份源码使用当前版本的 Rust 工具链、四个并发任务，各测三轮。任一场景的耗时中位数同时增加超过 25% 和两秒时检查失败，两份日志和报告都会上传。首次推送没有基线时不执行性能比较，其余检查照常运行。这是协议包的编译门禁，不代表其他产品的整包耗时预算。
 
 该工作流的追踪测试和协议测试作业使用 sccache 复用不同 CI 运行间的 Rust 编译结果，并关闭 Rust 增量编译。这两个作业先运行覆盖所有目标的 `rust-warnings`，再运行测试，不重复执行已被 warning 检查覆盖的普通 `check`。性能门禁仍使用独立空目标目录且不启用 sccache，以便比较源码改动前后的编译耗时。本机日常构建不自动启用 sccache。
 

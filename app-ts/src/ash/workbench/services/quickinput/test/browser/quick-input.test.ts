@@ -225,6 +225,49 @@ test('Quick Input replaces a visible picker and releases it with its host', () =
 	}
 });
 
+test('Quick Input masks a password, validates it, clears it, and restores focus', async () => {
+	const dom = new JSDOM('<!doctype html><body><button>Editor</button></body>');
+	installDomGlobals(dom);
+	using contextKeys = new ContextKeyService();
+	using service = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
+	const editor = dom.window.document.querySelector('button')!;
+	editor.focus();
+
+	const accepted = service.input({ title: 'Provider API key', password: true, validateInput: async value => value.trim() ? undefined : 'Enter a key' });
+	const input = dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick-input input');
+	assert.ok(input);
+	assert.equal(input.type, 'password');
+	assert.equal(input.getAttribute('aria-label'), 'Provider API key');
+	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter' }));
+	await Promise.resolve();
+	assert.equal(input.getAttribute('aria-invalid'), 'true');
+	assert.equal(dom.window.document.querySelector('.ash-input-box-message')?.textContent, 'Enter a key');
+	input.value = 'test-secret';
+	input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter' }));
+	assert.equal(await accepted, 'test-secret');
+	assert.equal(input.value, '');
+	assert.equal(dom.window.document.querySelector('.ash-quick-pick'), null);
+	assert.equal(dom.window.document.activeElement, editor);
+
+	const cancelled = service.input({ title: 'Another key', password: true });
+	const next = dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick-input input');
+	assert.ok(next);
+	next.value = 'discard-me';
+	next.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Escape' }));
+	assert.equal(await cancelled, undefined);
+	assert.equal(next.value, '');
+
+	const abandoned = service.input({ title: 'Unfinished key', password: true });
+	const unfinished = dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick-input input');
+	assert.ok(unfinished);
+	unfinished.value = 'discard-on-dispose';
+	service.dispose();
+	assert.equal(await abandoned, undefined);
+	assert.equal(unfinished.value, '');
+	dom.window.close();
+});
+
 test('Quick Pick labels its input and reports focus leaving the picker', async () => {
 	const dom = new JSDOM('<!doctype html><body><button>Editor</button><button>Other editor</button></body>');
 	installDomGlobals(dom);

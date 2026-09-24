@@ -39,7 +39,7 @@ export function localize(info: ILocalizeInfo, message: string, ...args: Localize
 export function localize(key: string, message: string, ...args: LocalizeArgument[]): string;
 export function localize(info: ILocalizeInfo | string, message: string, ...args: LocalizeArgument[]): string {
 	const key = typeof info === "string" ? info : info.key;
-	return resolver("ash", key, formatNlsArguments(message, args));
+	return formatNlsArguments(resolver("ash", key, message), args);
 }
 
 export function localize2(info: ILocalizeInfo, message: string, ...args: LocalizeArgument[]): ILocalizedString;

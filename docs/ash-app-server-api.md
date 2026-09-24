@@ -289,7 +289,7 @@ Desktop 当前实现和 Playwright 后续边界见
 | `codebase/configure` | config + Directory | 配置可选设备内模型与自动上下文行为；不保存索引数据 |
 | `languageServer/configure` / `languageServer/remove` | config | revision-safe 修改或恢复 language-server mode/path preference |
 | `provider/configure` / `provider/remove` | config | 新增自定义项分配并持久保存顺序，编辑保持顺序；删除拒绝内置项和仍被配置引用的项，并清理该连接密钥。自定义 API 类型支持 Responses、Chat Completions、Anthropic Messages；`contextWindow` 保存 Provider 的 272000／1000000 档位，`model` 留空时目录使用对应 API 类型的内置模型，填写时使用该 ID。 |
-| `provider/apiKey/set` / `provider/list` | model provider credential | 受信任的本地客户端提交新 key，由 App Server 写入 profile SecretStore；列表只返回配置状态，不返回 key。CLI/TUI 使用同一协议，Desktop 可通过生成的协议客户端调用，当前尚无专门的 key 设置界面。 |
+| `provider/apiKey/set` / `provider/list` | model provider credential | 受信任的本地客户端提交新 key，由 App Server 写入 profile SecretStore；列表只返回配置状态，不返回 key。CLI/TUI 使用同一协议；Desktop 的 Chat Settings 可查看提供者状态并录入或替换 key。 |
 | `provider/probe` | model provider | 使用未保存的 `config` 和可选临时 `apiKey`；填写 `model` 时发起一次最小生成请求，省略时获取模型 ID 列表。返回 `passed`、`models` 或 `failed`；不保存配置和密钥，不重试其他路径。成功不证明完整上下文容量；协议 revision 31。 |
 | `provider/models/list` | model catalog | 按已保存 Provider 配置主动刷新目录；返回带 `type` 的 `models`（含列表）、`empty` 或 `failed`（含分类 code），不修改配置和凭据。自定义供应商的刷新结果不自动改变 `model/list` 的配置模型选择；选择远端模型需通过 `provider/configure` 保存其 ID。失败分类不包含上游响应正文或秘密；协议 revision 29 |
 | `mcp/server/upsert` / `mcp/server/remove` / `mcp/server/enablement/set` | config | 修改 standalone MCP desired config |
