@@ -2405,13 +2405,34 @@ fn advisor_default_validates_provider_and_survives_reopening() {
             })
             .is_err()
     );
+    let mut disabled = advisor.clone();
+    disabled.enabled = false;
+    let disabled_result = store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("disable-advisor").unwrap(),
+            expected_revision: selected.revision,
+            command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                advisor: Patch::Value(disabled.clone()),
+                ..Default::default()
+            }),
+        })
+        .unwrap();
+    assert_eq!(
+        ConfigStore::open(&path)
+            .unwrap()
+            .read_snapshot()
+            .unwrap()
+            .values
+            .advisor,
+        Some(disabled)
+    );
     let mut invalid = advisor;
     invalid.max_calls = 0;
     assert!(
         store
             .apply(ConfigCommandRequest {
                 command_id: CommandId::new("invalid-advisor").unwrap(),
-                expected_revision: selected.revision,
+                expected_revision: disabled_result.revision,
                 command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
                     advisor: Patch::Value(invalid),
                     ..Default::default()
@@ -2422,7 +2443,7 @@ fn advisor_default_validates_provider_and_survives_reopening() {
     store
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("clear-advisor").unwrap(),
-            expected_revision: selected.revision,
+            expected_revision: disabled_result.revision,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
                 advisor: Patch::Null,
                 ..Default::default()

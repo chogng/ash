@@ -268,10 +268,30 @@ export class ChatPaneModel extends Disposable {
 		}
 		try {
 			this.setState("submitting");
-			const question = name === "advisor" ? argumentsText.trim() : "";
+			const argument = argumentsText.trim();
+			const isModelSelection = /^[^/\s]+\/\S+$/.test(argument);
+			const isAdvisorConfigArgument = argument === "off" || argument === "clear" || isModelSelection;
+			if (name === "advisor" && isAdvisorConfigArgument) {
+				const current = await this.chatService.readAdvisorDefault();
+				if (argument === "clear") {
+					await this.chatService.saveAdvisorDefault(null);
+				} else if (argument === "off") {
+					if (current) await this.chatService.saveAdvisorDefault({ ...current, enabled: false });
+				} else {
+					const models = await this.chatService.listAdvisorModels();
+					const chosen = models.find(entry => `${entry.model.provider}/${entry.model.model}` === argument);
+					if (!chosen) throw new Error(localize('chat.advisor.modelUnavailable', 'Advisor model is unavailable: {0}', argument));
+					const config = current?.model.provider === chosen.model.provider && current.model.model === chosen.model.model
+						? { ...current, enabled: true }
+						: { model: chosen.model, enabled: true, maxCalls: 3, maxOutputTokens: 2048 };
+					await this.chatService.saveAdvisorDefault(config);
+				}
+				this.setState("ready");
+				return;
+			}
 			const advisorDefault = name === "advisor" ? await this.chatService.readAdvisorDefault() : null;
-			if (name === "advisor" && !question) throw new Error(localize('chat.advisor.questionRequired', 'Enter a question after /advisor'));
-			if (name === "advisor" && this.selection.kind === "untitled" && advisorDefault === null) {
+			if (name === "advisor" && !argument) throw new Error(localize('chat.advisor.questionRequired', 'Enter a question after /advisor'));
+			if (name === "advisor" && this.selection.kind === "untitled" && (!advisorDefault || !advisorDefault.enabled)) {
 				throw new Error(localize('chat.advisor.configure', 'Configure an advisor model in Chat Settings before asking for a second opinion'));
 			}
 			const active = await this.ensureActiveSession();
@@ -285,8 +305,8 @@ export class ChatPaneModel extends Disposable {
 			if (name === "advisor") {
 				const options = { sessionId: active.session.sessionId, threadId: active.threadId, expectedSequence: thread.sequence };
 				if (activeTurn(thread)) throw new Error(localize('chat.advisor.turnActive', 'Wait for the active Turn to finish before starting a consultation'));
-				if (advisorDefault === null) throw new Error(localize('chat.advisor.configure', 'Configure an advisor model in Chat Settings before asking for a second opinion'));
-				await this.chatService.consultAdvisor({ ...options, question });
+				if (!advisorDefault || !advisorDefault.enabled) throw new Error(localize('chat.advisor.configure', 'Configure an advisor model in Chat Settings before asking for a second opinion'));
+				await this.chatService.consultAdvisor({ ...options, question: argument });
 				await this.refreshThread();
 				this.setState("ready");
 				return;

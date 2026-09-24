@@ -124,7 +124,11 @@ where
             })
             .map_err(|error| error.to_string())?
             .project;
-        if project.roots.iter().any(|root| root.path == workspace) {
+        if project.roots.iter().any(|root| {
+            root.path
+                .to_host_path()
+                .is_ok_and(|path| path.as_path() == workspace)
+        }) {
             matches.push(project);
         }
     }
@@ -298,7 +302,11 @@ pub(crate) fn root_choices(project: &ProjectDto, workspace: &Path) -> RootChoice
     let current_environment = project
         .roots
         .iter()
-        .find(|root| root.path == workspace)
+        .find(|root| {
+            root.path
+                .to_host_path()
+                .is_ok_and(|path| path.as_path() == workspace)
+        })
         .map(|root| root.environment_id.clone())
         .expect("Project root choices require the current workspace root");
     let mut actions = BTreeMap::new();
@@ -309,7 +317,11 @@ pub(crate) fn root_choices(project: &ProjectDto, workspace: &Path) -> RootChoice
         .filter(|root| root.environment_id == current_environment)
         .enumerate()
         .map(|(index, root)| {
-            let is_current = root.path == workspace;
+            let path = root
+                .path
+                .to_host_path()
+                .expect("Project roots in the current environment must be on this host");
+            let is_current = path.as_path() == workspace;
             if is_current {
                 current = index;
             }
@@ -317,13 +329,13 @@ pub(crate) fn root_choices(project: &ProjectDto, workspace: &Path) -> RootChoice
             actions.insert(
                 id.clone(),
                 RootSelectionAction::Switch {
-                    path: root.path.clone(),
+                    path: path.as_path().to_path_buf(),
                     current: is_current,
                 },
             );
             ListSelectionItem::new(&root.name)
                 .with_id(id)
-                .with_description(root.path.display().to_string())
+                .with_description(path.as_path().display().to_string())
         })
         .collect();
     let add_id = ListSelectionItemId::new("project-root:add");

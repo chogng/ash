@@ -153,10 +153,12 @@ use ash_slash_commands::{
 fn app_with_advisor_command() -> App {
     let catalog = SlashCommandCatalog::with_local_and_server(
         built_in_slash_command_definitions(),
-        [SlashCommandCatalog::default()
-            .command_named("advisor")
-            .unwrap()
-            .clone()],
+        ["advisor"].map(|name| {
+            SlashCommandCatalog::default()
+                .command_named(name)
+                .unwrap()
+                .clone()
+        }),
     )
     .unwrap();
     let mut app = App::new();
@@ -781,40 +783,43 @@ fn config_slash_command_is_owned_by_the_local_host() {
 }
 
 #[test]
-fn advisor_command_opens_a_question_draft_without_starting_a_session() {
-    let mut app = app_with_advisor_command();
-    app.insert_text("/advisor");
-
-    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-
-    assert_eq!(action, None);
-    assert_eq!(app.input(), "/advisor ");
-    assert!(app.messages().is_empty());
-    assert_eq!(app.status(), &Status::Ready);
-    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(80, 24)).unwrap();
-    terminal
-        .draw(|frame| crate::app::frame::draw(frame, &app))
-        .unwrap();
-    let buffer = terminal.backend().buffer();
-    let rendered = (0..24)
-        .map(|y| (0..80).map(|x| buffer[(x, y)].symbol()).collect::<String>())
-        .collect::<Vec<_>>()
-        .join("\n");
-    crate::tui_assert_snapshot!("advisor_question_draft", rendered);
-}
-
-#[test]
 fn advisor_question_uses_a_turn_submission() {
     let mut app = app_with_advisor_command();
-    app.insert_text("/advisor Check cancellation");
+    app.insert_text("/advisor Check src/app.rs cancellation");
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
-    assert_text_submission(action, "/advisor Check cancellation");
+    assert_text_submission(action, "/advisor Check src/app.rs cancellation");
 }
 
 #[test]
-fn config_owns_the_advisor_model_picker() {
+fn advisor_command_opens_config_or_selects_a_model() {
+    let mut app = app_with_advisor_command();
+    app.insert_text("/advisor");
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::Config(ConfigCommand::OpenAdvisor))
+    );
+    app.insert_text("/advisor openai/reviewer");
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::Config(ConfigCommand::SelectAdvisor(
+            "openai/reviewer".into()
+        )))
+    );
+    for value in ["off", "clear"] {
+        app.insert_text(&format!("/advisor {value}"));
+        assert_eq!(
+            app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+            Some(AppCommand::Config(ConfigCommand::SelectAdvisor(
+                value.into()
+            )))
+        );
+    }
+}
+
+#[test]
+fn config_owns_the_advisor_settings_page() {
     let config = empty_config_snapshot();
     let mut app = App::new();
     app.update(ConfigEvent::EditorOpened(config_choices(
@@ -823,17 +828,45 @@ fn config_owns_the_advisor_model_picker() {
         TerminalSettings::default(),
         StatusLineSettings::default(),
     )));
-    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    for _ in 0..20 {
+        if app
+            .list_selection()
+            .unwrap()
+            .selected_item()
+            .unwrap()
+            .label()
+            == "Advisor"
+        {
+            break;
+        }
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    }
+    assert_eq!(
+        app.list_selection()
+            .unwrap()
+            .selected_item()
+            .unwrap()
+            .label(),
+        "Advisor"
+    );
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert_eq!(action, Some(AppCommand::Config(ConfigCommand::OpenAdvisor)));
 
-    app.update(ConfigEvent::AdvisorOpened(advisor_choices(
-        &config,
-        &ash_app_server_protocol::protocol::model::ModelListResult { models: vec![] },
-        Language::English,
-    )));
-    assert_eq!(app.list_selection().unwrap().title(), "Advisor model: Off");
+    app.update(ConfigEvent::AdvisorOpened {
+        root: config_choices(
+            &config,
+            &ProviderListResult { providers: vec![] },
+            TerminalSettings::default(),
+            StatusLineSettings::default(),
+        ),
+        advisor: advisor_choices(
+            &config,
+            &ash_app_server_protocol::protocol::model::ModelListResult { models: vec![] },
+            Language::English,
+        ),
+    });
+    assert_eq!(app.list_selection().unwrap().title(), "Advisor");
+    assert_eq!(app.list_selection().unwrap().visible_items().len(), 2);
     let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(80, 24)).unwrap();
     terminal
         .draw(|frame| crate::app::frame::draw(frame, &app))
@@ -843,11 +876,37 @@ fn config_owns_the_advisor_model_picker() {
         .map(|y| (0..80).map(|x| buffer[(x, y)].symbol()).collect::<String>())
         .collect::<Vec<_>>()
         .join("\n");
-    crate::tui_assert_snapshot!("config_advisor_model", rendered);
+    crate::tui_assert_snapshot!("config_advisor_settings", rendered);
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        Some(AppCommand::Config(ConfigCommand::SetAdvisor(None)))
+        None
     );
+    assert_eq!(app.list_selection().unwrap().title(), "Advisor model");
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert_eq!(app.list_selection().unwrap().title(), "Advisor");
+}
+
+#[test]
+fn advisor_command_opens_the_config_page_from_chat() {
+    let config = empty_config_snapshot();
+    let mut app = App::new();
+    app.update(ConfigEvent::AdvisorOpened {
+        root: config_choices(
+            &config,
+            &ProviderListResult { providers: vec![] },
+            TerminalSettings::default(),
+            StatusLineSettings::default(),
+        ),
+        advisor: advisor_choices(
+            &config,
+            &ash_app_server_protocol::protocol::model::ModelListResult { models: vec![] },
+            Language::English,
+        ),
+    });
+
+    assert_eq!(app.list_selection().unwrap().title(), "Advisor");
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert_eq!(app.list_selection().unwrap().title(), "Config");
 }
 
 #[test]
@@ -2306,14 +2365,14 @@ fn project_folder_picker_switches_only_to_a_non_current_root_without_a_draft() {
             ProjectRootDto {
                 environment_id: EnvId::local(),
                 dir_id: dir_id('a'),
-                path: "/work/current".into(),
+                path: "file:///work/current".parse().unwrap(),
                 name: "current".into(),
                 purpose: String::new(),
             },
             ProjectRootDto {
                 environment_id: EnvId::local(),
                 dir_id: dir_id('b'),
-                path: "/work/other".into(),
+                path: "file:///work/other".parse().unwrap(),
                 name: "other".into(),
                 purpose: String::new(),
             },
@@ -2366,7 +2425,7 @@ fn project_folder_picker_opens_add_root_when_add_item_is_selected() {
         roots: vec![ProjectRootDto {
             environment_id: EnvId::local(),
             dir_id: dir_id('a'),
-            path: "/work/current".into(),
+            path: "file:///work/current".parse().unwrap(),
             name: "current".into(),
             purpose: String::new(),
         }],

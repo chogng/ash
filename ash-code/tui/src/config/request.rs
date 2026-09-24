@@ -8,6 +8,8 @@ use super::TerminalSettings;
 use super::advisor_choices;
 use super::config_choices;
 use crate::client::new_command_id;
+use crate::nls;
+use crate::nls::Message;
 use crate::status::StatusLineSettings;
 use ash_app_server_client::AppServerClient;
 use ash_app_server_client::ClientError;
@@ -26,6 +28,7 @@ impl Command {
     pub(crate) const fn request_name(&self) -> &'static str {
         match self {
             Self::OpenAdvisor => "ash-tui-read-advisor-config",
+            Self::SelectAdvisor(_) => "ash-tui-select-advisor-config",
             Self::SetAdvisor(_) => "ash-tui-set-advisor-config",
             Self::SetMemories(_) => "ash-tui-set-memories",
             Self::SetIssues(_) => "ash-tui-configure-issues",
@@ -48,13 +51,21 @@ where
             let config = client.read_config().map_err(ConfigCommandError::from)?;
             let models = client.list_models().map_err(ConfigCommandError::from)?;
             let terminal = TerminalSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
-            Ok(Event::AdvisorOpened(advisor_choices(
-                &config,
-                &models,
-                terminal.language(),
-            )))
+            let status_line =
+                StatusLineSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
+            let providers = client.list_providers().map_err(ConfigCommandError::from)?;
+            Ok(Event::AdvisorOpened {
+                root: config_choices(&config, &providers, terminal, status_line),
+                advisor: advisor_choices(&config, &models, terminal.language()),
+            })
         })(),
-        Command::SetAdvisor(advisor) => set_advisor(client, advisor).map(Event::Updated),
+        Command::SelectAdvisor(selection) => select_advisor(client, selection).map(Event::Updated),
+        Command::SetAdvisor(advisor) => (|| -> Result<Event, ConfigCommandError> {
+            let models = client.list_models()?;
+            let (result, config) = set_advisor(client, advisor)?;
+            let choices = advisor_choices(&config, &models, result.terminal.language());
+            Ok(Event::AdvisorSaved(result, choices))
+        })(),
         Command::SetMemories(edit) => set_memories(client, edit).map(Event::Updated),
         Command::SetIssues(edit) => set_issue_settings(client, edit).map(Event::Updated),
         Command::SetGit(edit) => set_git_settings(client, edit).map(Event::Updated),
@@ -79,10 +90,55 @@ where
     .map_err(|error| error.to_string())
 }
 
+fn select_advisor<T: JsonRpcTransport>(
+    client: &mut AppServerClient<T>,
+    selection: String,
+) -> Result<ConfigEditResult, ConfigCommandError> {
+    let config = client.read_config()?;
+    let terminal = TerminalSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
+    let advisor = if selection == "clear" {
+        None
+    } else if selection == "off" {
+        config.advisor.map(|mut advisor| {
+            advisor.enabled = false;
+            advisor
+        })
+    } else {
+        let models = client.list_models()?;
+        let model = models
+            .models
+            .iter()
+            .find(|entry| {
+                format!("{}/{}", entry.model.provider, entry.model.model) == selection
+                    && config.providers.contains_key(entry.model.provider.as_str())
+            })
+            .map(|entry| entry.model.clone())
+            .ok_or_else(|| {
+                ConfigCommandError(format!(
+                    "{}: {selection}",
+                    nls::text(terminal.language(), Message::ConfigAdvisorModelUnavailable)
+                ))
+            })?;
+        let mut advisor = config
+            .advisor
+            .filter(|advisor| advisor.model == model)
+            .unwrap_or_else(|| ash_protocol::AdvisorConfig::new(model));
+        advisor.enabled = true;
+        Some(advisor)
+    };
+    set_advisor(client, advisor).map(|(result, _)| result)
+}
+
 fn set_advisor<T: JsonRpcTransport>(
     client: &mut AppServerClient<T>,
     advisor: Option<ash_protocol::AdvisorConfig>,
-) -> Result<ConfigEditResult, ConfigCommandError> {
+) -> Result<
+    (
+        ConfigEditResult,
+        ash_app_server_protocol::protocol::config::ConfigReadResult,
+    ),
+    ConfigCommandError,
+> {
     let config = client.read_config()?;
     client.update_config(ConfigUpdateParams {
         command_id: new_command_id("advisor-config"),
@@ -104,11 +160,12 @@ fn set_advisor<T: JsonRpcTransport>(
     let terminal = TerminalSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
     let status_line = StatusLineSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
     let providers = client.list_providers()?;
-    Ok(ConfigEditResult {
+    let result = ConfigEditResult {
         terminal,
         status_line: status_line.clone(),
         choices: config_choices(&config, &providers, terminal, status_line),
-    })
+    };
+    Ok((result, config))
 }
 
 fn set_memories<T: JsonRpcTransport>(

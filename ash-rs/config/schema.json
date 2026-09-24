@@ -4,6 +4,10 @@
       "additionalProperties": false,
       "description": "Immutable model and budget selected for consultations in one Turn.",
       "properties": {
+        "enabled": {
+          "default": true,
+          "type": "boolean"
+        },
         "maxCalls": {
           "default": 3,
           "format": "uint32",

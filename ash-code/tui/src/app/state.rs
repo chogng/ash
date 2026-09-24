@@ -594,6 +594,9 @@ impl App {
             crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::OpenAdvisor) => {
                 Some(ConfigCommand::OpenAdvisor.into())
             }
+            crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::OpenAdvisorModel) => {
+                None
+            }
             crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::SetAdvisor(
                 config,
             )) => Some(ConfigCommand::SetAdvisor(config).into()),
@@ -713,6 +716,7 @@ impl App {
         self.thread_presentations.replace_input_catalog(catalog);
     }
 
+    #[cfg(test)]
     pub(crate) fn insert_text(&mut self, text: &str) {
         if self.accepts_input() {
             let (panel, input) = self.composer_parts_mut();
@@ -2075,7 +2079,9 @@ impl App {
             return;
         }
         match event {
-            AppEvent::Config(ConfigEvent::Updated(result)) => {
+            AppEvent::Config(
+                ConfigEvent::Updated(result) | ConfigEvent::AdvisorSaved(result, _),
+            ) => {
                 self.update(ConfigEvent::SettingsReceived(result.terminal));
                 self.update(StatusEvent::LineSettingsReceived(result.status_line));
             }
@@ -2094,7 +2100,7 @@ impl App {
             }
             AppEvent::Config(
                 ConfigEvent::EditorOpened(_)
-                | ConfigEvent::AdvisorOpened(_)
+                | ConfigEvent::AdvisorOpened { .. }
                 | ConfigEvent::ApiKeySaved { .. }
                 | ConfigEvent::Connection(_),
             )
@@ -2380,8 +2386,15 @@ impl App {
     fn apply_config_event(&mut self, event: ConfigEvent) {
         self.fullscreen.pointer.cancel_click();
         match event {
-            ConfigEvent::AdvisorOpened(choices) => {
-                self.panels_mut().open_advisor(choices);
+            ConfigEvent::AdvisorOpened { root, advisor } => {
+                if !matches!(self.panels().command(), Some(CommandPanel::Config(_))) {
+                    self.open_command_panel(CommandPanel::config(root));
+                }
+                self.panels_mut().open_advisor(advisor);
+            }
+            ConfigEvent::AdvisorSaved(result, choices) => {
+                self.apply_config_result(result);
+                self.panels_mut().update_advisor(choices);
             }
             ConfigEvent::Connection(reply) => {
                 if let Err(error) = &reply.result {
@@ -2419,19 +2432,7 @@ impl App {
                     .set_input_mode(settings.input_mode());
             }
             ConfigEvent::Updated(result) => {
-                self.set_terminal_settings(result.terminal);
-                self.chat_panel
-                    .status_line_mut()
-                    .apply_settings(result.status_line);
-                if !self.mouse_mode().captures_terminal_input() {
-                    self.fullscreen.clear();
-                }
-                self.sessions
-                    .input
-                    .set_input_mode(result.terminal.input_mode());
-                self.thread_presentations
-                    .set_input_mode(result.terminal.input_mode());
-                self.panels_mut().replace_config(result.choices);
+                self.apply_config_result(result);
             }
             ConfigEvent::EditorOpened(view) => {
                 self.open_command_panel(CommandPanel::config(view));
@@ -2446,6 +2447,22 @@ impl App {
                 self.chat_panel.start_input();
             }
         }
+    }
+
+    fn apply_config_result(&mut self, result: crate::config::ConfigEditResult) {
+        self.set_terminal_settings(result.terminal);
+        self.chat_panel
+            .status_line_mut()
+            .apply_settings(result.status_line);
+        if !self.mouse_mode().captures_terminal_input() {
+            self.fullscreen.clear();
+        }
+        self.sessions
+            .input
+            .set_input_mode(result.terminal.input_mode());
+        self.thread_presentations
+            .set_input_mode(result.terminal.input_mode());
+        self.panels_mut().replace_config(result.choices);
     }
 
     fn apply_model_event(&mut self, event: ModelEvent) {
@@ -2846,8 +2863,16 @@ impl App {
                 if invocation.command.name == "advisor"
                     && invocation.display_arguments.trim().is_empty() =>
             {
-                self.insert_text("/advisor ");
-                None
+                Some(ConfigCommand::OpenAdvisor.into())
+            }
+            (SlashCommandOrigin::Server, _)
+                if invocation.command.name == "advisor"
+                    && is_advisor_config_argument(invocation.display_arguments.trim()) =>
+            {
+                Some(
+                    ConfigCommand::SelectAdvisor(invocation.display_arguments.trim().to_owned())
+                        .into(),
+                )
             }
             (SlashCommandOrigin::Server, _)
                 if invocation.command.name == "advisor" && self.chat_panel.is_steering() =>
@@ -2896,6 +2921,13 @@ impl App {
             Status::Ready | Status::Error => Some(AppCommand::Quit),
         }
     }
+}
+
+fn is_advisor_config_argument(argument: &str) -> bool {
+    matches!(argument, "off" | "clear")
+        || argument.split_once('/').is_some_and(|(provider, model)| {
+            !provider.is_empty() && !model.is_empty() && !argument.chars().any(char::is_whitespace)
+        })
 }
 
 #[cfg(test)]

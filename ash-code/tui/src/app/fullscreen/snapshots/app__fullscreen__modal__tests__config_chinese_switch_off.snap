@@ -1,5 +1,6 @@
 ---
 source: ash-code/tui/src/app/fullscreen/modal_tests.rs
+assertion_line: 1224
 expression: frame
 ---
   .                                                                               [— / —] [仪 表 盘 ]  
@@ -21,9 +22,9 @@ expression: frame
             │> 按 键 提 示 风 格                                                       对 比  │             
             │> 屏 幕 模 式                                                     fullscreen │             
             │> 记 忆                                                               关 闭  │             
-            │                                                                         │             
-            │                                                                         │             
-            │                                                                         │             
+            │> 自 动 获 取  Git 更 新                                                  关 闭  │             
+            │> Git 获 取 间 隔                                                       180s │             
+            │> 顾 问                                                               关 闭  │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │ · Esc 返 回   

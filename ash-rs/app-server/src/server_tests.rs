@@ -6435,7 +6435,7 @@ fn advisor_requests_are_typed_retry_safe_and_separate_from_worker_turns() {
             },
         })
         .unwrap();
-    config
+    let default_selected = config
         .apply(ash_config::ConfigCommandRequest {
             command_id: CommandId::new("set-advisor-default").unwrap(),
             expected_revision: configured.revision,
@@ -6450,7 +6450,7 @@ fn advisor_requests_are_typed_retry_safe_and_separate_from_worker_turns() {
         })
         .unwrap();
     let server = server()
-        .with_config_store(config)
+        .with_config_store(config.clone())
         .with_turn_backend(backend.clone());
     let mut connection = server.connection();
     initialize(&server, &mut connection);
@@ -6512,6 +6512,93 @@ fn advisor_requests_are_typed_retry_safe_and_separate_from_worker_turns() {
             ash_protocol::AdvisorSelection::Off,
         )
         .unwrap();
+    let mut disabled = ash_protocol::AdvisorConfig::new(ModelRef::new(
+        ProviderId::new("openai").unwrap(),
+        ModelId::new("reviewer").unwrap(),
+    ));
+    disabled.enabled = false;
+    let disabled_result = config
+        .apply(ash_config::ConfigCommandRequest {
+            command_id: CommandId::new("disable-advisor-default").unwrap(),
+            expected_revision: default_selected.revision,
+            command: ash_config::UserConfigCommand::UpdatePreferences(
+                ash_config::PreferencesUpdate {
+                    advisor: ash_protocol::Patch::Value(disabled.clone()),
+                    ..Default::default()
+                },
+            ),
+        })
+        .unwrap();
+    let rejected = call(
+        &server,
+        &mut connection,
+        request(
+            70,
+            "disabled-ask",
+            serde_json::json!({"type":"consultAdvisor","threadId":thread_id,"expectedSequence":off_sequence,"question":"Check cancellation"}),
+        ),
+    );
+    assert_eq!(
+        rejected["error"]["data"]["kind"], "AdvisorDisabled",
+        "{rejected}"
+    );
+    let explicit_session = create_session(&server, &mut connection, 71, "disabled-session");
+    let explicit_session_id = explicit_session["result"]["session"]["sessionId"]
+        .as_str()
+        .unwrap();
+    let explicit = create_thread(
+        &server,
+        &mut connection,
+        72,
+        "disabled-thread",
+        explicit_session_id,
+        1,
+    );
+    let explicit_id = explicit["result"]["value"]["threadId"].as_str().unwrap();
+    let explicit_thread_id = ash_protocol::ThreadId::new(explicit_id).unwrap();
+    let explicit_sequence = server
+        .threads()
+        .configure_advisor(
+            &explicit_thread_id,
+            CommandId::new("explicit-advisor").unwrap(),
+            core_api::SequenceExpectation::Any,
+            ash_protocol::AdvisorSelection::Model {
+                config: ash_protocol::AdvisorConfig::new(ModelRef::new(
+                    ProviderId::new("openai").unwrap(),
+                    ModelId::new("reviewer").unwrap(),
+                )),
+            },
+        )
+        .unwrap();
+    let ordinary = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":73,"method":"session/request",
+            "params":{"commandId":"disabled-ordinary","sessionId":explicit_session_id,"request":{
+                "type":"startTurn","threadId":explicit_id,"expectedSequence":explicit_sequence,
+                "input":[{"type":"text","text":"Review this"}]
+            }}
+        }),
+    );
+    assert_eq!(ordinary["result"]["type"], "turn", "{ordinary}");
+    let ordinary_thread = server.threads().read_thread(&explicit_thread_id).unwrap();
+    assert!(ordinary_thread.turns[0].advisor.is_none());
+    config
+        .apply(ash_config::ConfigCommandRequest {
+            command_id: CommandId::new("reenable-advisor-default").unwrap(),
+            expected_revision: disabled_result.revision,
+            command: ash_config::UserConfigCommand::UpdatePreferences(
+                ash_config::PreferencesUpdate {
+                    advisor: ash_protocol::Patch::Value(ash_protocol::AdvisorConfig {
+                        enabled: true,
+                        ..disabled
+                    }),
+                    ..Default::default()
+                },
+            ),
+        })
+        .unwrap();
     let mut ask = request(
         7,
         "ask",
@@ -6524,7 +6611,7 @@ fn advisor_requests_are_typed_retry_safe_and_separate_from_worker_turns() {
         call(&server, &mut connection, ask)["result"],
         accepted["result"]
     );
-    assert_eq!(backend.starts.load(Ordering::Relaxed), 1);
+    assert_eq!(backend.starts.load(Ordering::Relaxed), 2);
     let state = server.threads().read_thread(&id).unwrap();
     assert_eq!(state.turns[0].kind, ash_protocol::TurnKind::Advisor);
     assert_eq!(

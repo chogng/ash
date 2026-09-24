@@ -2,4 +2,4 @@
 import type { ModelRef } from './ModelRef.js';
 import type { ReasoningEffort } from './ReasoningEffort.js';
 
-export type AdvisorConfig = { model: ModelRef, reasoningEffort?: ReasoningEffort | null, maxCalls: number, maxOutputTokens: number, };
+export type AdvisorConfig = { model: ModelRef, enabled: boolean, reasoningEffort?: ReasoningEffort | null, maxCalls: number, maxOutputTokens: number, };

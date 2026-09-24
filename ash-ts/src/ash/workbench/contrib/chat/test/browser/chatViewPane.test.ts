@@ -25,7 +25,7 @@ import { emptyEditorServiceState } from '../../../../../workbench/test/common/te
 import { IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent } from "../../../../../workbench/services/layout/browser/layoutService.js";
 import { ChatService } from "../../../../../workbench/services/chat/browser/chatService.js";
 import { ChatContextPickService } from "../../../../../workbench/services/chat/browser/chatContextPickService.js";
-import type { ThreadUpdateEnvelope, TurnError } from "../../../../../workbench/services/chat/common/chatService.js";
+import { IChatService, type AdvisorConfig, type ThreadUpdateEnvelope, type TurnError } from "../../../../../workbench/services/chat/common/chatService.js";
 import { ModelCatalogConfiguration } from "../../../../../workbench/services/chat/common/modelCatalog.js";
 import { WorkbenchConfigurationService } from "../../../../../workbench/services/configuration/browser/configurationService.js";
 import { AppServerSessionsManagementService as SessionsManagementService } from "../../../../../sessions/services/sessions/browser/appServerSessionsManagementService.js";
@@ -147,12 +147,16 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	});
 	const services = new ServiceContainer();
 	let preferencesEditorTarget: string | undefined;
+	using chat = createChatService(api);
+	using quickInput = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
 	using preferences: PreferencesService = new BrowserPreferencesService(() => ({
 		...emptyEditorServiceState,
 		openEditor: async (_input, _options, target) => { preferencesEditorTarget = target; },
 		focusActiveEditor() {},
 	}));
 	services.registerInstance(IPreferencesService, preferences);
+	services.registerInstance(IChatService, chat);
+	services.registerInstance(IQuickInputService, quickInput);
 	services.registerInstance(IContextKeyService, contextKeys);
 	using commands = new CommandService(services);
 	const menuService = new MenuService(commands, contextKeys);
@@ -175,7 +179,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 			id: CHAT_VIEW_ID,
 			title: "Chat",
 		},
-		createChatService(api),
+		chat,
 		sessions,
 		menuService,
 		contextMenuService,
@@ -281,6 +285,9 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		],
 	);
 	await chatActions[3]?.run();
+	const settingsInput = dom.window.document.querySelector<HTMLInputElement>(".ash-quick-pick-input input");
+	assert.ok(settingsInput);
+	settingsInput.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
 	assert.equal(preferencesEditorTarget, "modalGroup");
 	const tabs = tablist?.querySelectorAll<HTMLButtonElement>("[role='tab']");
 	assert.equal(tabs?.length, 2);
@@ -1404,7 +1411,7 @@ interface FakeOptions {
 		readonly outputTransport: "nativeStreaming" | "unary";
 	}[];
 	readonly configuredProviders?: readonly string[];
-	readonly advisorDefault?: { readonly model: ModelRef; readonly maxCalls: number; readonly maxOutputTokens: number };
+	readonly advisorDefault?: { readonly model: ModelRef; readonly enabled: boolean; readonly maxCalls: number; readonly maxOutputTokens: number };
 }
 
 function createChatService(api: IRendererHost, configurationService?: WorkbenchConfigurationService): ChatService {
@@ -1636,6 +1643,7 @@ function fakeApi(options: FakeOptions = {}): {
 	readonly turnSteerRequests: readonly SessionOperationInput<"steerTurn">[];
 	readonly modelListRequests: readonly undefined[];
 	readonly modelRequests: readonly { readonly commandId: string; readonly model: ModelRef }[];
+	readonly savedAdvisorDefaults: readonly (AdvisorConfig | null)[];
 	readonly emit: (notification: ServerNotification) => void;
 	readonly emitReady: () => void;
 } {
@@ -1652,6 +1660,8 @@ function fakeApi(options: FakeOptions = {}): {
 	const turnSteerRequests: SessionOperationInput<"steerTurn">[] = [];
 	const modelListRequests: undefined[] = [];
 	const modelRequests: { readonly commandId: string; readonly model: ModelRef }[] = [];
+	const savedAdvisorDefaults: (AdvisorConfig | null)[] = [];
+	let advisorDefault: AdvisorConfig | null = options.advisorDefault ?? null;
 	const currentThread = () => options.thread?.() ?? thread();
 	const currentSession = (sessionId: string): ISession => options.sessions?.find(candidate => candidate.sessionId === sessionId)
 		?? (options.createThread?.session.sessionId === sessionId ? options.createThread.session : undefined)
@@ -1724,9 +1734,12 @@ function fakeApi(options: FakeOptions = {}): {
 				modelListRequests.push(undefined);
 				return { models: [...(options.models ?? [])] };
 			},
-			readAdvisorDefault: async () => options.advisorDefault ?? null,
+			readAdvisorDefault: async () => advisorDefault,
 			readConfiguredProviderIds: async () => options.configuredProviders ?? [],
-			setAdvisorDefault: async () => undefined,
+			setAdvisorDefault: async ({ advisor }: { readonly advisor: AdvisorConfig | null }) => {
+				advisorDefault = advisor;
+				savedAdvisorDefaults.push(advisor);
+			},
 			readModel: async () => options.sessions?.find(session => session.model)?.model ?? null,
 			setModel: async (params: { readonly commandId: string; readonly model: ModelRef }) => {
 				modelRequests.push(params);
@@ -1785,6 +1798,7 @@ function fakeApi(options: FakeOptions = {}): {
 		turnSteerRequests,
 		modelListRequests,
 		modelRequests,
+		savedAdvisorDefaults,
 		emit: (notification) => {
 			for (const listener of listeners) listener(notification);
 		},
@@ -1948,17 +1962,17 @@ test("Advisor question consults directly without starting the worker", async () 
 	const activeSession = session("session-1", "thread-1");
 	const fake = fakeApi({
 		sessions: [activeSession],
-		advisorDefault: { model: { provider: "openai", model: "reviewer" }, maxCalls: 3, maxOutputTokens: 2048 },
+		advisorDefault: { model: { provider: "openai", model: "reviewer" }, enabled: true, maxCalls: 3, maxOutputTokens: 2048 },
 		thread: () => ({ ...thread("previous answer"), advisor: { type: "off" } }),
 	});
 	using chat = createChatService(fake.api);
 	using sessions = new AppServerSessionsManagementService(fake.api);
 	using model = new ChatPaneModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
 	await model.initialize();
-	await model.executeServerCommand("advisor", "Check cancellation");
+	await model.executeServerCommand("advisor", "Check src/app.rs cancellation");
 	assert.equal(fake.turnStartRequests.length, 0);
 	assert.equal(fake.advisorRequests.length, 0);
-	assert.equal(fake.consultRequests[0]?.question, "Check cancellation");
+	assert.equal(fake.consultRequests[0]?.question, "Check src/app.rs cancellation");
 	assert.equal(fake.consultRequests[0]?.threadId, "thread-1");
 });
 
@@ -1972,6 +1986,60 @@ test("Advisor without a configured model keeps an untitled chat", async () => {
 	await assert.rejects(model.executeServerCommand("advisor", "Check cancellation"), /Configure an advisor model in Chat Settings/);
 	assert.equal(fake.createSessionRequests.length, 0);
 	assert.equal(fake.consultRequests.length, 0);
+});
+
+test("Advisor command selects a model and the off switch preserves its settings", async () => {
+	const fake = fakeApi({
+		configuredProviders: ["openai"],
+		models: [{ model: { provider: "openai", model: "reviewer" }, displayName: "Reviewer", access: "apiKey", outputTransport: "unary" }],
+	});
+	using chat = createChatService(fake.api);
+	using sessions = new AppServerSessionsManagementService(fake.api);
+	using model = new ChatPaneModel(chat, { kind: "untitled", session: sessions.createUntitledSession() }, sessions);
+	await model.initialize();
+	await model.executeServerCommand("advisor", "openai/reviewer");
+	assert.equal(fake.savedAdvisorDefaults[0]?.enabled, true);
+	await model.executeServerCommand("advisor", "off");
+	assert.deepEqual(fake.savedAdvisorDefaults[1], { ...fake.savedAdvisorDefaults[0], enabled: false });
+	await assert.rejects(model.executeServerCommand("advisor", "Check cancellation"), /Configure an advisor model/);
+	await model.executeServerCommand("advisor", "openai/reviewer");
+	assert.deepEqual(fake.savedAdvisorDefaults[2], fake.savedAdvisorDefaults[0]);
+	await model.executeServerCommand("advisor", "clear");
+	assert.equal(fake.savedAdvisorDefaults[3], null);
+	assert.equal(fake.createSessionRequests.length, 0);
+	assert.equal(fake.consultRequests.length, 0);
+});
+
+test("Chat Settings toggles Advisor while keeping its selected model", async () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const selected = { model: { provider: "openai", model: "reviewer" }, enabled: true, maxCalls: 5, maxOutputTokens: 4096 };
+	const fake = fakeApi({ advisorDefault: selected });
+	using chat = createChatService(fake.api);
+	using contextKeys = new ContextKeyService();
+	using quickInput = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
+	const services = new ServiceContainer();
+	services.registerInstance(IChatService, chat);
+	services.registerInstance(IQuickInputService, quickInput);
+	using preferences = new BrowserPreferencesService(() => ({
+		...emptyEditorServiceState,
+		openEditor: async () => undefined,
+		focusActiveEditor() {},
+	}));
+	services.registerInstance(IPreferencesService, preferences);
+	using commands = new CommandService(services);
+	for (const enabled of [false, true]) {
+		await commands.executeCommand(OPEN_CHAT_SETTINGS_COMMAND_ID);
+		const labels = [...dom.window.document.querySelectorAll(".ash-quick-pick-row-label")].map(element => element.textContent);
+		assert.ok(labels.includes(enabled ? "Turn Advisor on" : "Turn Advisor off"));
+		assert.ok(labels.includes("Clear saved Advisor model"));
+		const input = dom.window.document.querySelector<HTMLInputElement>(".ash-quick-pick-input input");
+		assert.ok(input);
+		input.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "ArrowDown" }));
+		input.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
+		await waitFor(() => fake.savedAdvisorDefaults.length === (enabled ? 2 : 1));
+		assert.deepEqual(fake.savedAdvisorDefaults.at(-1), { ...selected, enabled });
+	}
+	dom.window.close();
 });
 
 test("Advisor model choices include only configured providers", async () => {

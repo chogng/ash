@@ -43,16 +43,17 @@ fn advisor_model_selection_updates_global_config() {
     let mut client = AppServerClient::new(RecordingTransport {
         requests: requests.clone(),
         responses: VecDeque::from([
-            response(1, serde_json::to_value(&current).unwrap()),
+            response(1, serde_json::json!({"models":[]})),
+            response(2, serde_json::to_value(&current).unwrap()),
             response(
-                2,
+                3,
                 serde_json::json!({"revision":5,"generation":2,"disposition":"updated"}),
             ),
-            response(3, serde_json::to_value(&saved).unwrap()),
-            response(4, serde_json::json!({"providers":[]})),
+            response(4, serde_json::to_value(&saved).unwrap()),
+            response(5, serde_json::json!({"providers":[]})),
         ]),
     });
-    let crate::config::Event::Updated(_) =
+    let crate::config::Event::AdvisorSaved(_, _) =
         super::execute(&mut client, super::Command::SetAdvisor(Some(advisor))).unwrap()
     else {
         panic!("expected refreshed settings")
@@ -64,19 +65,128 @@ fn advisor_model_selection_updates_global_config() {
             .map(|request| request["method"].as_str().unwrap())
             .collect::<Vec<_>>(),
         [
+            "model/list",
             "config/read",
             "config/update",
             "config/read",
             "provider/list"
         ]
     );
-    assert_eq!(requests[1]["params"]["expectedRevision"], 4);
+    assert_eq!(requests[2]["params"]["expectedRevision"], 4);
     assert_eq!(
-        requests[1]["params"]["advisor"]["model"],
+        requests[2]["params"]["advisor"]["model"],
         serde_json::json!({"provider":"openai","model":"gpt-ash"})
     );
-    assert!(requests[1]["params"].get("tui").is_none());
-    assert!(requests[1]["params"].get("model").is_none());
+    assert!(requests[2]["params"].get("tui").is_none());
+    assert!(requests[2]["params"].get("model").is_none());
+}
+
+#[test]
+fn advisor_off_command_preserves_the_selected_model() {
+    let mut current = empty_config_snapshot();
+    current.revision = 4;
+    current.advisor = Some(ash_protocol::AdvisorConfig::new(
+        ash_protocol::ModelRef::new(
+            ash_protocol::ProviderId::new("openai").unwrap(),
+            ash_protocol::ModelId::new("reviewer").unwrap(),
+        ),
+    ));
+    let mut saved = current.clone();
+    saved.revision = 5;
+    saved.advisor.as_mut().unwrap().enabled = false;
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let mut client = AppServerClient::new(RecordingTransport {
+        requests: requests.clone(),
+        responses: VecDeque::from([
+            response(1, serde_json::to_value(&current).unwrap()),
+            response(2, serde_json::to_value(&current).unwrap()),
+            response(
+                3,
+                serde_json::json!({"revision":5,"generation":2,"disposition":"updated"}),
+            ),
+            response(4, serde_json::to_value(&saved).unwrap()),
+            response(5, serde_json::json!({"providers":[]})),
+        ]),
+    });
+    super::execute(&mut client, super::Command::SelectAdvisor("off".into())).unwrap();
+    let requests = requests.lock().unwrap();
+    assert_eq!(requests[2]["method"], "config/update");
+    assert_eq!(requests[2]["params"]["advisor"]["enabled"], false);
+    assert_eq!(
+        requests[2]["params"]["advisor"]["model"],
+        serde_json::json!({"provider":"openai","model":"reviewer"})
+    );
+}
+
+#[test]
+fn advisor_model_command_selects_a_configured_provider_model() {
+    use ash_app_server_protocol::protocol::model::{ModelCatalogEntry, ModelListResult};
+    use ash_protocol::{
+        AdvisorConfig, ModelAccess, ModelCapabilities, ModelId, ModelOutputTransport, ModelRef,
+        ProviderId,
+    };
+
+    let model = ModelRef::new(
+        ProviderId::new("openai").unwrap(),
+        ModelId::new("reviewer").unwrap(),
+    );
+    let mut current = empty_config_snapshot();
+    current.revision = 4;
+    current.providers.insert(
+        "openai".into(),
+        ash_app_server_protocol::protocol::config::ProviderConfigDto {
+            provider: "openai".into(),
+            custom: None,
+            base_url: None,
+            max_output_tokens: None,
+            model_context: Default::default(),
+        },
+    );
+    let catalog = ModelListResult {
+        models: vec![ModelCatalogEntry {
+            model: model.clone(),
+            display_name: "Reviewer".into(),
+            access: ModelAccess::Unknown,
+            output_transport: ModelOutputTransport::Unary,
+            context_window: None,
+            auto_compact_token_limit: None,
+            available_context_window: None,
+            capabilities: ModelCapabilities::UNKNOWN,
+            supported_reasoning_efforts: Vec::new(),
+            model_reasoning_effort: None,
+            default_personality: None,
+        }],
+    };
+    let mut saved = current.clone();
+    saved.revision = 5;
+    saved.advisor = Some(AdvisorConfig::new(model));
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let mut client = AppServerClient::new(RecordingTransport {
+        requests: requests.clone(),
+        responses: VecDeque::from([
+            response(1, serde_json::to_value(&current).unwrap()),
+            response(2, serde_json::to_value(&catalog).unwrap()),
+            response(3, serde_json::to_value(&current).unwrap()),
+            response(
+                4,
+                serde_json::json!({"revision":5,"generation":2,"disposition":"updated"}),
+            ),
+            response(5, serde_json::to_value(&saved).unwrap()),
+            response(6, serde_json::json!({"providers":[]})),
+        ]),
+    });
+    super::execute(
+        &mut client,
+        super::Command::SelectAdvisor("openai/reviewer".into()),
+    )
+    .unwrap();
+    let requests = requests.lock().unwrap();
+    assert_eq!(requests[3]["method"], "config/update");
+    assert_eq!(requests[3]["params"]["advisor"]["enabled"], true);
+    assert_eq!(
+        requests[3]["params"]["advisor"]["model"],
+        serde_json::json!({"provider":"openai","model":"reviewer"})
+    );
 }
 
 #[test]

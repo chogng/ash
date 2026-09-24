@@ -45,6 +45,7 @@ pub(crate) struct ConfigEdit {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ConfigSelectionAction {
     OpenAdvisor,
+    OpenAdvisorModel,
     SetAdvisor(Option<AdvisorConfig>),
     SetMemories(ConfigEdit),
     SetIssues(super::IssueConfigEdit),
@@ -100,6 +101,11 @@ impl fmt::Debug for ProviderApiKeyEdit {
 
 pub(crate) type ConfigChoices = ListSelectionSpec<ConfigSelectionAction>;
 
+pub(crate) struct AdvisorChoices {
+    pub(crate) settings: ConfigChoices,
+    pub(crate) models: ConfigChoices,
+}
+
 pub(crate) struct ProviderApiKeyPrompt {
     pub(crate) spec: TextPromptSpec,
     pub(crate) provider: String,
@@ -111,7 +117,7 @@ pub(crate) struct ConfigEditor {
     selection: ListSelection<ConfigSelectionAction>,
     provider_panel: Option<super::provider::Panel>,
     subscription: Option<ListSelection<ConfigSelectionAction>>,
-    advisor: Option<ListSelection<ConfigSelectionAction>>,
+    advisor: Option<AdvisorEditor>,
     prompt: Option<ProviderApiKeyPromptState>,
     removing: Option<super::provider::Request>,
 }
@@ -121,6 +127,50 @@ struct ProviderApiKeyPromptState {
     provider: String,
     prompt: TextPrompt,
     key_hints: crate::widgets::key_hint::KeyHints,
+}
+
+#[derive(Debug)]
+struct AdvisorEditor {
+    settings: ListSelection<ConfigSelectionAction>,
+    models: Option<ListSelection<ConfigSelectionAction>>,
+    model_choices: ConfigChoices,
+}
+
+impl AdvisorEditor {
+    fn new(choices: AdvisorChoices) -> Self {
+        Self {
+            settings: ListSelection::new(choices.settings.model, choices.settings.actions),
+            models: None,
+            model_choices: choices.models,
+        }
+    }
+
+    fn selection(&self) -> &ListSelection<ConfigSelectionAction> {
+        self.models.as_ref().unwrap_or(&self.settings)
+    }
+
+    fn selection_mut(&mut self) -> &mut ListSelection<ConfigSelectionAction> {
+        self.models.as_mut().unwrap_or(&mut self.settings)
+    }
+
+    fn open_models(&mut self) {
+        self.models = Some(ListSelection::new(
+            self.model_choices.model.clone(),
+            self.model_choices.actions.clone(),
+        ));
+    }
+
+    fn replace(&mut self, choices: AdvisorChoices) {
+        self.settings
+            .replace(choices.settings.model, choices.settings.actions);
+        self.model_choices = choices.models;
+        if let Some(models) = self.models.as_mut() {
+            models.replace(
+                self.model_choices.model.clone(),
+                self.model_choices.actions.clone(),
+            );
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -152,6 +202,11 @@ impl ConfigEditor {
     }
 
     pub(crate) fn parent_title(&self) -> Option<&str> {
+        if let Some(advisor) = &self.advisor {
+            if advisor.models.is_some() {
+                return Some(advisor.settings.state().title());
+            }
+        }
         (self.provider_panel.is_some()
             || self.prompt.is_some()
             || self.subscription.is_some()
@@ -170,6 +225,11 @@ impl ConfigEditor {
         self.provider_panel = None;
         self.prompt = None;
         self.subscription = None;
+        if let Some(advisor) = self.advisor.as_mut() {
+            if advisor.models.take().is_some() {
+                return;
+            }
+        }
         self.advisor = None;
     }
 
@@ -202,13 +262,20 @@ impl ConfigEditor {
 
     pub(crate) fn handle_key(&mut self, key: crossterm::event::KeyEvent) -> ConfigEditorOutcome {
         if let Some(advisor) = self.advisor.as_mut() {
-            let outcome = advisor.handle_key(key);
+            let outcome = advisor.selection_mut().handle_key(key);
             return match outcome {
                 ListSelectionOutcome::Activate(ConfigSelectionAction::SetAdvisor(config)) => {
-                    self.advisor = None;
+                    advisor.models = None;
                     ConfigEditorOutcome::Action(ConfigSelectionAction::SetAdvisor(config))
                 }
+                ListSelectionOutcome::Activate(ConfigSelectionAction::OpenAdvisorModel) => {
+                    advisor.open_models();
+                    ConfigEditorOutcome::Consumed
+                }
                 ListSelectionOutcome::Dismiss => {
+                    if advisor.models.take().is_some() {
+                        return ConfigEditorOutcome::Consumed;
+                    }
                     self.advisor = None;
                     ConfigEditorOutcome::Consumed
                 }
@@ -421,6 +488,7 @@ impl ConfigEditor {
             ListSelectionOutcome::Activate(action) => ConfigEditorOutcome::Action(action),
             ListSelectionOutcome::Adjust(action, adjustment) => match action {
                 ConfigSelectionAction::OpenAdvisor
+                | ConfigSelectionAction::OpenAdvisorModel
                 | ConfigSelectionAction::OpenProviderApiKey { .. }
                 | ConfigSelectionAction::OpenProvider(_)
                 | ConfigSelectionAction::Connection(_)
@@ -452,7 +520,7 @@ impl ConfigEditor {
 
     pub(crate) fn handle_paste(&mut self, pasted: String) {
         if let Some(advisor) = self.advisor.as_mut() {
-            advisor.handle_paste(pasted);
+            advisor.selection_mut().handle_paste(pasted);
         } else if let Some(subscription) = self.subscription.as_mut() {
             subscription.handle_paste(pasted);
         } else if let Some(prompt) = self.prompt.as_mut() {
@@ -466,7 +534,7 @@ impl ConfigEditor {
 
     pub(crate) fn page(&self) -> ConfigEditorPage<'_> {
         if let Some(advisor) = &self.advisor {
-            return ConfigEditorPage::Selection(advisor.state());
+            return ConfigEditorPage::Selection(advisor.selection().state());
         }
         if let Some(subscription) = &self.subscription {
             return ConfigEditorPage::Selection(subscription.state());
@@ -497,7 +565,7 @@ impl ConfigEditor {
                 .with_compact_action("Esc", "close")
         });
         if let Some(advisor) = &self.advisor {
-            return advisor.key_hints();
+            return advisor.selection().key_hints();
         }
         if let Some(subscription) = &self.subscription {
             return subscription.key_hints();
@@ -521,7 +589,7 @@ impl ConfigEditor {
 
     pub(crate) fn selection(&self) -> Option<&crate::widgets::list_selection::ListSelectionState> {
         if let Some(advisor) = &self.advisor {
-            return Some(advisor.state());
+            return Some(advisor.selection().state());
         }
         if let Some(subscription) = &self.subscription {
             return Some(subscription.state());
@@ -533,7 +601,7 @@ impl ConfigEditor {
         &mut self,
     ) -> Option<&mut crate::widgets::list_selection::ListSelectionState> {
         if let Some(advisor) = &mut self.advisor {
-            return Some(advisor.state_mut());
+            return Some(advisor.selection_mut().state_mut());
         }
         if let Some(subscription) = &mut self.subscription {
             return Some(subscription.state_mut());
@@ -545,8 +613,14 @@ impl ConfigEditor {
         self.subscription = Some(ListSelection::new(spec.model, spec.actions));
     }
 
-    pub(crate) fn open_advisor(&mut self, spec: ConfigChoices) {
-        self.advisor = Some(ListSelection::new(spec.model, spec.actions));
+    pub(crate) fn open_advisor(&mut self, choices: AdvisorChoices) {
+        self.advisor = Some(AdvisorEditor::new(choices));
+    }
+
+    pub(crate) fn update_advisor(&mut self, choices: AdvisorChoices) {
+        if let Some(advisor) = self.advisor.as_mut() {
+            advisor.replace(choices);
+        }
     }
 
     pub(crate) fn is_testing(&self) -> bool {
@@ -929,24 +1003,29 @@ pub(crate) fn config_choices(
                 format!("{}s", config.git.autofetch_period),
             ),
     );
-    let advisor_id = ListSelectionItemId::new("advisor-model");
+    let advisor_id = ListSelectionItemId::new("advisor");
     actions.insert(advisor_id.clone(), ConfigSelectionAction::OpenAdvisor);
-    let advisor_label = config
-        .advisor
-        .as_ref()
-        .map(|advisor| format!("{}/{}", advisor.model.provider, advisor.model.model))
-        .unwrap_or_else(|| nls::text(language, Message::ConfigAdvisorOff).into());
-    let mut provider_items = provider_items(config, providers, &mut actions);
-    provider_items.insert(
-        0,
-        ListSelectionItem::new(nls::text(language, Message::ConfigAdvisorModel))
+    config_items.push(
+        ListSelectionItem::new(nls::text(language, Message::ConfigAdvisor))
             .with_id(advisor_id)
             .with_columns(
-                nls::text(language, Message::ConfigAdvisorModel),
+                nls::text(language, Message::ConfigAdvisor),
                 nls::text(language, Message::ConfigAdvisorDescription),
-                advisor_label,
+                nls::text(
+                    language,
+                    if config
+                        .advisor
+                        .as_ref()
+                        .is_some_and(|advisor| advisor.enabled)
+                    {
+                        Message::ConfigAdvisorOn
+                    } else {
+                        Message::ConfigAdvisorOff
+                    },
+                ),
             ),
     );
+    let provider_items = provider_items(config, providers, &mut actions);
     let mut choices = ConfigChoices {
         model: ListSelectionModel::new(
             nls::text(language, Message::ConfigTitle),
@@ -976,52 +1055,123 @@ pub(crate) fn advisor_choices(
     config: &ConfigReadResult,
     catalog: &ModelListResult,
     language: Language,
-) -> ConfigChoices {
+) -> AdvisorChoices {
     let models = catalog
         .models
         .iter()
         .filter(|entry| config.providers.contains_key(entry.model.provider.as_str()))
         .collect::<Vec<_>>();
+    let enabled = config
+        .advisor
+        .as_ref()
+        .is_some_and(|advisor| advisor.enabled);
+    let model_label = config
+        .advisor
+        .as_ref()
+        .map(|advisor| format!("{}/{}", advisor.model.provider, advisor.model.model))
+        .unwrap_or_else(|| nls::text(language, Message::ConfigAdvisorNoModel).into());
+    let enabled_id = ListSelectionItemId::new("advisor-enabled");
+    let model_id = ListSelectionItemId::new("advisor-model");
+    let mut settings_actions = BTreeMap::new();
+    settings_actions.insert(
+        enabled_id.clone(),
+        config
+            .advisor
+            .as_ref()
+            .map_or(ConfigSelectionAction::OpenAdvisorModel, |advisor| {
+                ConfigSelectionAction::SetAdvisor(Some(AdvisorConfig {
+                    enabled: !advisor.enabled,
+                    ..advisor.clone()
+                }))
+            }),
+    );
+    settings_actions.insert(model_id.clone(), ConfigSelectionAction::OpenAdvisorModel);
+    let settings = ConfigChoices {
+        model: ListSelectionModel::new(
+            nls::text(language, Message::ConfigAdvisor),
+            vec![ListSelectionGroup::new(
+                nls::text(language, Message::ConfigAdvisor),
+                vec![
+                    ListSelectionItem::new(nls::text(language, Message::ConfigAdvisorEnabled))
+                        .with_id(enabled_id)
+                        .with_columns(
+                            nls::text(language, Message::ConfigAdvisorEnabled),
+                            nls::text(language, Message::ConfigAdvisorEnabledDescription),
+                            nls::text(
+                                language,
+                                if enabled {
+                                    Message::ConfigAdvisorOn
+                                } else {
+                                    Message::ConfigAdvisorOff
+                                },
+                            ),
+                        ),
+                    ListSelectionItem::new(nls::text(language, Message::ConfigAdvisorModel))
+                        .with_id(model_id)
+                        .with_columns(
+                            nls::text(language, Message::ConfigAdvisorModel),
+                            nls::text(language, Message::ConfigAdvisorDescription),
+                            model_label,
+                        ),
+                ],
+            )],
+        )
+        .without_tab_bar()
+        .with_expandable_descriptions()
+        .with_activation(bindings::CONFIG_CHANGE)
+        .with_dismiss(bindings::RETURN_LIST),
+        actions: settings_actions,
+    };
+    let mut model_actions = BTreeMap::new();
+    let mut items = Vec::new();
+    if config.advisor.is_some() {
+        let clear_id = ListSelectionItemId::new("advisor-clear");
+        model_actions.insert(clear_id.clone(), ConfigSelectionAction::SetAdvisor(None));
+        items.push(
+            ListSelectionItem::new(nls::text(language, Message::ConfigAdvisorClear))
+                .with_id(clear_id),
+        );
+    }
+    let model_start = items.len();
     let selected = config
         .advisor
         .as_ref()
         .and_then(|advisor| models.iter().position(|entry| entry.model == advisor.model))
-        .map(|index| index + 1)
+        .map(|index| index + model_start)
         .unwrap_or(0);
-    let mut actions = BTreeMap::new();
-    let off_id = ListSelectionItemId::new("off");
-    actions.insert(off_id.clone(), ConfigSelectionAction::SetAdvisor(None));
-    let mut items = vec![
-        ListSelectionItem::new(nls::text(language, Message::ConfigAdvisorOff)).with_id(off_id),
-    ];
     for entry in models {
         let model = entry.model.clone();
         let id = ListSelectionItemId::new(format!("{}/{}", model.provider, model.model));
-        actions.insert(
-            id.clone(),
-            ConfigSelectionAction::SetAdvisor(Some(AdvisorConfig::new(model))),
-        );
+        let mut advisor = config
+            .advisor
+            .as_ref()
+            .filter(|advisor| advisor.model == model)
+            .cloned()
+            .unwrap_or_else(|| AdvisorConfig::new(model.clone()));
+        advisor.model = model;
+        advisor.enabled = enabled;
+        model_actions.insert(id.clone(), ConfigSelectionAction::SetAdvisor(Some(advisor)));
         items.push(ListSelectionItem::new(&entry.display_name).with_id(id));
     }
-    let current = config
-        .advisor
-        .as_ref()
-        .map(|advisor| format!("{}/{}", advisor.model.provider, advisor.model.model))
-        .unwrap_or_else(|| nls::text(language, Message::ConfigAdvisorOff).into());
-    ConfigChoices {
+    let models = ConfigChoices {
         model: ListSelectionModel::new(
-            format!(
-                "{}: {current}",
-                nls::text(language, Message::ConfigAdvisorModel)
-            ),
+            nls::text(language, Message::ConfigAdvisorModel),
             vec![ListSelectionGroup::new(
                 nls::text(language, Message::ConfigAdvisorModel),
                 items,
             )],
         )
-        .with_initial_selected(selected),
-        actions,
-    }
+        .without_tab_bar()
+        .with_initial_selected(selected)
+        .with_dismiss(bindings::RETURN_LIST)
+        .with_search(SearchBoxModel::new(nls::text(
+            language,
+            Message::ConfigSearch,
+        )))
+        .with_empty_message(nls::text(language, Message::ConfigAdvisorModelUnavailable)),
+        actions: model_actions,
+    };
+    AdvisorChoices { settings, models }
 }
 
 fn language_outcome(

@@ -604,9 +604,15 @@ impl CommandPanel {
         }
     }
 
-    pub(crate) fn open_advisor(&mut self, spec: ConfigChoices) {
+    pub(crate) fn open_advisor(&mut self, spec: crate::config::AdvisorChoices) {
         if let Self::Config(content) = self {
             content.open_advisor(spec);
+        }
+    }
+
+    pub(crate) fn update_advisor(&mut self, choices: crate::config::AdvisorChoices) {
+        if let Self::Config(content) = self {
+            content.update_advisor(choices);
         }
     }
 
@@ -897,9 +903,15 @@ impl Panels {
         }
     }
 
-    pub(crate) fn open_advisor(&mut self, choices: ConfigChoices) {
+    pub(crate) fn open_advisor(&mut self, choices: crate::config::AdvisorChoices) {
         if let Some(command) = self.command.as_mut() {
             command.open_advisor(choices);
+        }
+    }
+
+    pub(crate) fn update_advisor(&mut self, choices: crate::config::AdvisorChoices) {
+        if let Some(command) = self.command.as_mut() {
+            command.update_advisor(choices);
         }
     }
 

@@ -1181,7 +1181,7 @@ Issue Workflow、plan、assignment、task、专属 PR 发布接口及对应存�
 
 ## Advisor
 
-此变更使用 protocol revision 2、capability version 6。
+此变更使用 protocol revision 3、capability version 7。
 
 `session/request` 提供两种顾问操作：
 
@@ -1192,7 +1192,7 @@ Issue Workflow、plan、assignment、task、专属 PR 发布接口及对应存�
 
 未配置顾问的显式咨询返回 `AdvisorDisabled`。两种操作都使用外层 `sessionId` 和 `commandId`，遵循序列冲突与相同命令重放规则。`selection` 为 `{type:"default"}`、`{type:"off"}` 或 `{type:"model",config:AdvisorConfig}`。显式选择须存在于模型目录。问题长度为 1–8000 字节，不能全为空白。
 
-`AdvisorConfig` 包含 `model:{provider,model}`、可选 `reasoningEffort`、`maxCalls`（默认 3，范围 1–16）、`maxOutputTokens`（默认 2048，范围 256–32768）。`config/read.advisor` 和 `config/update.advisor` 管理 `[agent.advisor]` 全局默认；更新时省略表示不变，`null` 表示关闭默认。
+`AdvisorConfig` 包含 `model:{provider,model}`、`enabled`（默认 `true`，兼容旧配置）、可选 `reasoningEffort`、`maxCalls`（默认 3，范围 1–16）、`maxOutputTokens`（默认 2048，范围 256–32768）。`config/read.advisor` 和 `config/update.advisor` 管理 `[agent.advisor]` 全局配置；`enabled:false` 关闭顾问但保留模型和预算，更新时省略表示不变，`null` 清除配置。全局关闭优先于 Thread 的显式模型选择。
 
 Thread 保存普通 Coding Turn 的顾问选择策略；接受 Turn 时将解析后的顾问配置写入 `Turn.advisor`，其中显式咨询直接读取全局默认。修改选择不影响已经接受的 Turn。分支继承分支点的选择。目标自动续跑使用当前 Thread 的显式选择；使用默认时沿用目标上一轮已冻结的配置。子 Agent 不自动启用顾问。
 
@@ -1204,7 +1204,7 @@ Thread 保存普通 Coding Turn 的顾问选择策略；接受 Turn 时将解析
 
 每次实际发起的顾问请求都有带 `toolCallId` 的 `ModelInvocationRecord`。顾问用量与参考费用计入 Turn、Thread 和目标预算；它不更新工作模型的上下文占用。供应商未返回用量时保留未知状态。恢复遵循既有 ToolCall 规则，已开始且结果未知的请求不自动重新计费调用。
 
-桌面端和 TUI 的 `/advisor` 进入问题输入，`/advisor <question>` 直接提交一次咨询。顾问模型在 `/config` 中设置为全局默认；界面从 `model/list` 获取模型，并只提供 `config/read.providers` 中已配置供应商的模型，通过 `config/read.advisor` 显示当前选择，再通过 `config/update.advisor` 保存。直接咨询使用 `consultAdvisor` 和全局顾问模型，即使旧会话保存了单独的关闭或模型选择也以 `/config` 为准；仅选择 `/advisor` 不创建会话。
+桌面端和 TUI 的 `/advisor` 打开模型配置，`/advisor <provider/model>` 选择并启用模型，`/advisor off` 关闭顾问但保留选择，`/advisor clear` 清除选择；其他 `/advisor <question>` 参数直接提交一次咨询。`off`、`clear` 和不含空白的 `<provider/model>` 优先按配置命令解析。TUI 在“配置 → 通用 → 顾问”中分别设置启用开关和顾问模型；“提供商”只管理供应商。首次在配置页选择模型时保持关闭，须显式开启。界面从 `model/list` 获取模型，并只提供 `config/read.providers` 中已配置供应商的模型，通过 `config/read.advisor` 显示当前选择，再通过 `config/update.advisor` 保存。直接咨询使用 `consultAdvisor` 和全局顾问模型，即使旧会话保存了单独的关闭或模型选择也以全局配置为准；只选择模型不创建会话。普通提问中要求“先咨询 Advisor”时，由工作模型决定是否调用 `advisor({question})`。
 
 ## 可用语言服务器
 

@@ -52,7 +52,7 @@ fn root(seed: &str, path: &str) -> ProjectRootDto {
         dir_id: format!("sha256:{}", seed.repeat(64))
             .parse::<DirId>()
             .unwrap(),
-        path: path.into(),
+        path: format!("file://{path}").parse().unwrap(),
         name: seed.into(),
         purpose: String::new(),
     }
@@ -128,18 +128,24 @@ fn adding_a_project_root_persists_project_identity_and_keeps_permissions_explici
     assert!(project.session_ids.contains(&session_id));
     let primary_path = primary.canonicalize().unwrap();
     let added_path = added.path.canonicalize().unwrap();
-    assert!(
-        project
-            .roots
-            .iter()
-            .any(|root| root.path.canonicalize().unwrap() == primary_path)
-    );
-    assert!(
-        project
-            .roots
-            .iter()
-            .any(|root| root.path.canonicalize().unwrap() == added_path)
-    );
+    assert!(project.roots.iter().any(|root| {
+        root.path
+            .to_host_path()
+            .unwrap()
+            .canonicalize()
+            .unwrap()
+            .as_path()
+            == primary_path
+    }));
+    assert!(project.roots.iter().any(|root| {
+        root.path
+            .to_host_path()
+            .unwrap()
+            .canonicalize()
+            .unwrap()
+            .as_path()
+            == added_path
+    }));
 
     let directories = client
         .list_session_dirs(SessionDirListParams { session_id })

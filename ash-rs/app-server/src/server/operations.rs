@@ -1177,7 +1177,12 @@ impl AppServer {
             .transpose()
             .map_err(|_| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?
             .and_then(|snapshot| snapshot.values.advisor);
-        let advisor = if kind == ash_protocol::TurnKind::Advisor {
+        let advisor = if advisor_default
+            .as_ref()
+            .is_some_and(|config| !config.enabled)
+        {
+            None
+        } else if kind == ash_protocol::TurnKind::Advisor {
             advisor_default.clone()
         } else {
             thread_before.advisor.resolve(advisor_default.as_ref())

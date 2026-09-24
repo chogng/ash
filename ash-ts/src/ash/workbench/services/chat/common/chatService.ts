@@ -25,6 +25,7 @@ export interface ChatAudioAttachment {
 
 export interface AdvisorConfig {
 	readonly model: ModelRef;
+	readonly enabled: boolean;
 	readonly reasoningEffort?: "none" | "minimal" | "low" | "medium" | "high" | "extraHigh" | "max" | null;
 	readonly maxCalls: number;
 	readonly maxOutputTokens: number;

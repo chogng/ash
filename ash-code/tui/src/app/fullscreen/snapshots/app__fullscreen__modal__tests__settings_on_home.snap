@@ -21,9 +21,9 @@ expression: frame_text(&app)
             │> Key hint style                                                Contrast │             
             │> Screen mode                                                 fullscreen │             
             │> Memories                                                           off │             
-            │                                                                         │             
-            │                                                                         │             
-            │                                                                         │             
+            │> Automatic Git fetch                                                Off │             
+            │> Git fetch interval                                                180s │             
+            │> Advisor                                                            Off │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             

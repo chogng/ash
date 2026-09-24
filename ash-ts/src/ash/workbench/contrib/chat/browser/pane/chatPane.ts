@@ -15,6 +15,7 @@ import { h } from "../../../../../base/browser/dom.js";
 import type { ChatContextAttachment } from "../../../../services/chat/common/chatContextService.js";
 import type { IChatContextPickService } from "../../../../services/chat/common/chatContextService.js";
 import type { IQuickInputService } from "../../../../../platform/quickinput/common/quickInput.js";
+import { OPEN_CHAT_SETTINGS_COMMAND_ID } from "../../common/chat.js";
 
 /** Owns the content and interaction state for one local or durable Chat tab. */
 export class ChatPane extends Disposable {
@@ -47,7 +48,9 @@ export class ChatPane extends Disposable {
 		const inputDelegate: ChatInputDelegate = {
 			send: (text, skills, contexts) => this.send(text, skills, contexts),
 			executeCommand: (invocation) => invocation.argumentsText ? commandService.executeCommand(invocation.commandId, invocation.argumentsText) : commandService.executeCommand(invocation.commandId),
-				executeServerCommand: (invocation) => this.model.executeServerCommand(invocation.name, invocation.argumentsText),
+				executeServerCommand: (invocation) => invocation.name === "advisor" && !invocation.argumentsText.trim()
+					? commandService.executeCommand(OPEN_CHAT_SETTINGS_COMMAND_ID)
+					: this.model.executeServerCommand(invocation.name, invocation.argumentsText),
 			interrupt: () => this.model.interrupt(),
 			selectModel: (model) => this.model.selectModel(model),
 			resolveInteraction: (response) => this.model.resolveInteraction(response),

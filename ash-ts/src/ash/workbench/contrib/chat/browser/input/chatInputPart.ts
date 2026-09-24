@@ -154,11 +154,6 @@ export class ChatInputPart extends Disposable {
 			return;
 		}
 		if (input.kind === "command" && input.binding.origin === "server") {
-			if (input.command.name === "advisor" && !input.argumentsText.trim()) {
-				this.input.value = "/advisor ";
-				this.focus();
-				return;
-			}
 			await this.submit(inputValue, [], this.delegate.executeServerCommand({ name: input.command.name, argumentsText: input.argumentsText }));
 			return;
 		}

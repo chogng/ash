@@ -10,6 +10,8 @@ use ts_rs::TS;
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AdvisorConfig {
     pub model: ModelRef,
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub reasoning_effort: Option<ReasoningEffort>,
@@ -25,6 +27,7 @@ impl AdvisorConfig {
     pub fn new(model: ModelRef) -> Self {
         Self {
             model,
+            enabled: true,
             reasoning_effort: None,
             max_calls: default_max_calls(),
             max_output_tokens: default_max_output_tokens(),
@@ -44,6 +47,10 @@ impl AdvisorConfig {
 
 const fn default_max_calls() -> u32 {
     3
+}
+
+const fn default_enabled() -> bool {
+    true
 }
 
 const fn default_max_output_tokens() -> u32 {
@@ -68,10 +75,42 @@ pub enum AdvisorSelection {
 
 impl AdvisorSelection {
     pub fn resolve(&self, default: Option<&AdvisorConfig>) -> Option<AdvisorConfig> {
-        match self {
+        let config = match self {
             Self::Default => default.cloned(),
             Self::Off => None,
             Self::Model { config } => Some(config.clone()),
-        }
+        };
+        config.filter(|config| config.enabled)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{ModelId, ProviderId};
+
+    #[test]
+    fn old_config_defaults_to_enabled_and_disabled_config_does_not_resolve() {
+        let config: AdvisorConfig = serde_json::from_value(serde_json::json!({
+            "model": { "provider": "openai", "model": "reviewer" }
+        }))
+        .unwrap();
+        assert!(config.enabled);
+        assert_eq!(
+            AdvisorSelection::Default.resolve(Some(&config)),
+            Some(config.clone())
+        );
+        let disabled = AdvisorConfig {
+            enabled: false,
+            ..AdvisorConfig::new(ModelRef::new(
+                ProviderId::new("openai").unwrap(),
+                ModelId::new("reviewer").unwrap(),
+            ))
+        };
+        assert_eq!(AdvisorSelection::Default.resolve(Some(&disabled)), None);
+        assert_eq!(
+            AdvisorSelection::Model { config: disabled }.resolve(None),
+            None
+        );
     }
 }

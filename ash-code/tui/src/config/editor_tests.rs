@@ -43,14 +43,47 @@ fn advisor_choices_are_localized_and_config_owned() {
         &ash_app_server_protocol::protocol::model::ModelListResult { models: vec![] },
         Language::Chinese,
     );
-    let state = ListSelectionState::new(choices.model);
-    assert_eq!(state.title(), "顾问模型: 关闭");
-    assert_eq!(state.visible_items()[0].label(), "关闭");
+    let state = ListSelectionState::new(choices.settings.model);
+    assert_eq!(state.title(), "顾问");
+    assert_eq!(state.visible_items()[0].label(), "启用顾问");
+    assert_eq!(state.visible_items()[1].label(), "顾问模型");
     assert!(
         choices
+            .settings
             .actions
             .values()
-            .any(|action| action == &ConfigSelectionAction::SetAdvisor(None))
+            .any(|action| action == &ConfigSelectionAction::OpenAdvisorModel)
+    );
+    let picker = ListSelectionState::new(choices.models.model);
+    assert_eq!(picker.title(), "顾问模型");
+    assert!(picker.visible_items().is_empty());
+    assert!(choices.models.actions.is_empty());
+}
+
+#[test]
+fn advisor_entry_belongs_to_general_not_providers() {
+    let choices = config_choices(
+        &empty_config_snapshot(),
+        &providers(),
+        TerminalSettings::default(),
+        StatusLineSettings::default(),
+    );
+    let mut state = ListSelectionState::new(choices.model);
+    assert_eq!(state.active_tab().label(), "General");
+    assert!(
+        state
+            .visible_items()
+            .iter()
+            .any(|item| item.label() == "Advisor")
+    );
+
+    state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    assert_eq!(state.active_tab().label(), "Providers");
+    assert!(
+        state
+            .visible_items()
+            .iter()
+            .all(|item| item.label() != "Advisor")
     );
 }
 
@@ -68,7 +101,7 @@ fn configured_advisor_model_is_selected_when_opening_config() {
     );
     let mut config = empty_config_snapshot();
     config.advisor = Some(AdvisorConfig::new(model.clone()));
-    let catalog = ModelListResult {
+    let mut catalog = ModelListResult {
         models: vec![ModelCatalogEntry {
             model,
             display_name: "GPT Ash".into(),
@@ -84,7 +117,12 @@ fn configured_advisor_model_is_selected_when_opening_config() {
         }],
     };
     let unavailable = advisor_choices(&empty_config_snapshot(), &catalog, Language::English);
-    assert_eq!(ListSelectionState::new(unavailable.model).visible_items().len(), 1);
+    assert_eq!(
+        ListSelectionState::new(unavailable.models.model)
+            .visible_items()
+            .len(),
+        0
+    );
     config.providers.insert(
         "openai".into(),
         ash_app_server_protocol::protocol::config::ProviderConfigDto {
@@ -96,9 +134,104 @@ fn configured_advisor_model_is_selected_when_opening_config() {
         },
     );
     let choices = advisor_choices(&config, &catalog, Language::English);
-    let state = ListSelectionState::new(choices.model);
+    let state = ListSelectionState::new(choices.models.model);
     assert_eq!(state.selected_item().unwrap().label(), "GPT Ash");
-    assert_eq!(state.title(), "Advisor model: openai/gpt-ash");
+    assert_eq!(state.title(), "Advisor model");
+    assert!(
+        choices
+            .models
+            .actions
+            .values()
+            .any(|action| action == &ConfigSelectionAction::SetAdvisor(config.advisor.clone()))
+    );
+    assert!(choices.settings.actions.values().any(|action| action
+        == &ConfigSelectionAction::SetAdvisor(Some(AdvisorConfig {
+            enabled: false,
+            ..config.advisor.clone().unwrap()
+        }))));
+    let mut disabled = config.advisor.clone().unwrap();
+    disabled.enabled = false;
+    disabled.max_calls = 5;
+    config.advisor = Some(disabled.clone());
+    let other_model = ModelRef::new(
+        ProviderId::new("openai").unwrap(),
+        ModelId::new("gpt-ash-review").unwrap(),
+    );
+    let mut other_entry = catalog.models[0].clone();
+    other_entry.model = other_model.clone();
+    other_entry.display_name = "GPT Ash Review".into();
+    catalog.models.push(other_entry);
+    let choices = advisor_choices(&config, &catalog, Language::English);
+    let state = ListSelectionState::new(choices.models.model);
+    assert_eq!(state.selected_item().unwrap().label(), "GPT Ash");
+    assert!(choices.settings.actions.values().any(|action| action
+        == &ConfigSelectionAction::SetAdvisor(Some(AdvisorConfig {
+            enabled: true,
+            ..disabled.clone()
+        }))));
+    assert!(
+        choices
+            .models
+            .actions
+            .values()
+            .any(|action| action == &ConfigSelectionAction::SetAdvisor(None))
+    );
+    assert!(choices.models.actions.values().any(|action| matches!(
+        action,
+        ConfigSelectionAction::SetAdvisor(Some(advisor))
+            if advisor.model == other_model && !advisor.enabled && advisor.max_calls == 3
+    )));
+    let mut unselected = config;
+    unselected.advisor = None;
+    let choices = advisor_choices(&unselected, &catalog, Language::English);
+    assert!(choices.models.actions.values().any(|action| matches!(
+        action,
+        ConfigSelectionAction::SetAdvisor(Some(advisor)) if !advisor.enabled
+    )));
+}
+
+#[test]
+fn advisor_switch_refreshes_in_place_and_keeps_the_model() {
+    use ash_protocol::{AdvisorConfig, ModelId, ModelRef, ProviderId};
+
+    let mut config = empty_config_snapshot();
+    let model = ModelRef::new(
+        ProviderId::new("openai").unwrap(),
+        ModelId::new("gpt-ash").unwrap(),
+    );
+    let mut advisor = AdvisorConfig::new(model);
+    advisor.enabled = false;
+    config.advisor = Some(advisor.clone());
+    let catalog = ash_app_server_protocol::protocol::model::ModelListResult { models: vec![] };
+    let mut editor = super::ConfigEditor::new(config_choices(
+        &config,
+        &providers(),
+        TerminalSettings::default(),
+        StatusLineSettings::default(),
+    ));
+    editor.open_advisor(advisor_choices(&config, &catalog, Language::English));
+    assert!(matches!(
+        editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        super::ConfigEditorOutcome::Action(ConfigSelectionAction::SetAdvisor(Some(next)))
+            if next.enabled && next.model == advisor.model
+    ));
+
+    config.advisor.as_mut().unwrap().enabled = true;
+    editor.update_advisor(advisor_choices(&config, &catalog, Language::English));
+    let state = editor.selection().unwrap();
+    assert_eq!(state.title(), "Advisor");
+    assert!(
+        state.visible_items()[0]
+            .description()
+            .unwrap()
+            .contains("On")
+    );
+    assert!(
+        state.visible_items()[1]
+            .description()
+            .unwrap()
+            .contains("openai/gpt-ash")
+    );
 }
 
 #[test]
@@ -244,30 +377,22 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
     state.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     state.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     let _ = state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-    assert_eq!(state.visible_items().len(), 5);
-    assert_eq!(state.visible_items()[0].label(), "Advisor model");
-    assert_eq!(state.visible_items()[1].label(), "OpenAI");
-    assert_eq!(state.visible_items()[2].label(), "Ollama");
+    assert_eq!(state.visible_items().len(), 4);
+    assert_eq!(state.visible_items()[0].label(), "OpenAI");
+    assert_eq!(state.visible_items()[1].label(), "Ollama");
     assert!(
         state
             .visible_items()
             .iter()
-            .skip(1)
             .all(|item| item.description().is_none())
     );
     assert!(matches!(
         view.actions
             .get(state.visible_items()[0].id().unwrap())
             .unwrap(),
-        ConfigSelectionAction::OpenAdvisor
-    ));
-    assert!(matches!(
-        view.actions
-            .get(state.visible_items()[1].id().unwrap())
-            .unwrap(),
         ConfigSelectionAction::OpenProviderApiKey { .. }
     ));
-    assert!(state.visible_items()[2].id().is_none());
+    assert!(state.visible_items()[1].id().is_none());
 }
 
 #[test]
@@ -660,7 +785,7 @@ fn only_custom_provider_rows_offer_delete_and_order_does_not_follow_names() {
     let id = crate::widgets::list_selection::ListSelectionItemId::new("custom-a");
     editor.selection.state_mut().focus_item(&id);
     assert_eq!(
-        editor.selection().unwrap().visible_items()[1].label(),
+        editor.selection().unwrap().visible_items()[0].label(),
         "Zulu"
     );
     assert!(editor.key_hints().text().contains("Delete"));

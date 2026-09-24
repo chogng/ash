@@ -123,7 +123,7 @@ registerAction2(class OpenChatSettingsAction extends Action2 {
 		const chat = accessor.get(IChatService);
 		const preferences = accessor.get(IPreferencesService);
 		const [current, models] = await Promise.all([chat.readAdvisorDefault(), chat.listAdvisorModels()]);
-		type Setting = { label: string; description?: string; model?: typeof current; openSettings?: true };
+		type Setting = { label: string; description?: string; model?: NonNullable<typeof current>; openSettings?: true; clearModel?: true };
 		const picker = accessor.get(IQuickInputService).createQuickPick<Setting>();
 		const disposables = new DisposableStore();
 		disposables.add(picker);
@@ -133,11 +133,20 @@ registerAction2(class OpenChatSettingsAction extends Action2 {
 			: localize('chat.settings.advisorProviderRequired', 'Configure a provider in Chat Settings to choose an advisor model');
 		picker.items = [
 			{ label: localize('chat.settings.openAll', 'Open all settings'), openSettings: true },
-			{ label: localize('chat.settings.advisorOff', 'No advisor'), description: current === null ? localize('chat.settings.current', 'Current') : undefined, model: null },
+			...(current ? [{
+				label: current.enabled ? localize('chat.settings.advisorDisable', 'Turn Advisor off') : localize('chat.settings.advisorEnable', 'Turn Advisor on'),
+				description: `${current.model.provider}/${current.model.model}`,
+				model: { ...current, enabled: !current.enabled },
+			}, {
+				label: localize('chat.settings.advisorClear', 'Clear saved Advisor model'),
+				clearModel: true as const,
+			}] : []),
 			...models.map(entry => ({
 				label: entry.displayName,
 				description: current?.model.provider === entry.model.provider && current.model.model === entry.model.model ? localize('chat.settings.current', 'Current') : `${entry.model.provider}/${entry.model.model}`,
-				model: { model: entry.model, maxCalls: 3, maxOutputTokens: 2048 },
+				model: current?.model.provider === entry.model.provider && current.model.model === entry.model.model
+					? { ...current, enabled: true }
+					: { model: entry.model, enabled: true, maxCalls: 3, maxOutputTokens: 2048 },
 			})),
 		];
 		disposables.add(picker.onDidAccept((item) => {
@@ -146,7 +155,15 @@ registerAction2(class OpenChatSettingsAction extends Action2 {
 				void preferences.openSettings();
 				return;
 			}
-			void chat.saveAdvisorDefault(item.model ?? null).then(
+			if (item.clearModel) {
+				void chat.saveAdvisorDefault(null).then(
+					() => picker.hide(),
+					error => { picker.placeholder = `${localize('chat.settings.advisorSaveFailed', 'Could not save advisor model')}: ${String(error)}`; },
+				);
+				return;
+			}
+			if (!item.model) return;
+			void chat.saveAdvisorDefault(item.model).then(
 				() => picker.hide(),
 				error => { picker.placeholder = `${localize('chat.settings.advisorSaveFailed', 'Could not save advisor model')}: ${String(error)}`; },
 			);
