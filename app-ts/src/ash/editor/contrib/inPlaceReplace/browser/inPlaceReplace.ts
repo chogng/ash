@@ -4,9 +4,9 @@ import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { registerEditorContribution } from '../../../browser/editorExtensions.js';
 import { type IVersionedEditorWorkerClient } from '../../../browser/services/editorWorkerService.js';
 import { type View } from '../../../browser/view.js';
-import { ReplaceCommandThatPreservesSelection } from '../../../common/commands/replaceCommand.js';
 import { Selection } from '../../../common/core/selection.js';
 import { Range } from '../../../common/core/range.js';
+import { InPlaceReplaceCommand } from './inPlaceReplaceCommand.js';
 
 class InPlaceReplaceController extends Disposable {
 	constructor(
@@ -37,7 +37,7 @@ class InPlaceReplaceController extends Disposable {
 		if (!result || !Selection.selectionsArrEqual(this.editor.getSelections()!, selectionState)) return false;
 		this.editor.pushUndoStop();
 		this.editor.executeCommands('editor.action.inPlaceReplace', [
-			new ReplaceCommandThatPreservesSelection(Range.lift(result.range), result.value, selectionState[0]!),
+			new InPlaceReplaceCommand(Range.lift(result.range), selectionState[0]!, result.value),
 			...selectionState.slice(1).map(() => null),
 		]);
 		this.editor.pushUndoStop();

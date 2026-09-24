@@ -1,5 +1,13 @@
 # Editor API 对齐状态
 
+## Contrib 值替换与参数提示契约（2026-09-24）
+
+原有编辑器快捷键 → `contrib/inPlaceReplace/browser/inPlaceReplace.ts` → Worker `navigateValueSet` → 新增同路径 `inPlaceReplaceCommand.ts` → 编辑器命令执行。专用命令按替换结果计算选区：有选中文本时选中完整新值，空选区时保持原光标列（但不越过新值末尾）。现有 Worker 版本门禁、选区复核和撤销边界继续由原调用链负责。
+
+原有触发器 → `contrib/parameterHints/browser/parameterHints.ts` → 新增同路径 `provideSignatureHelp.ts` → 优先级顺序中的第一个有效提供者。新文件持有 `parameterHintsVisible` / `parameterHintsMultipleSignatures` 上下文键、触发字符筛选和提供者结果校验；控制器继续负责请求取消、界面、焦点与键盘交互。无效或报错的提供者不阻断后续提供者；模型版本变动或取消后不发布结果。
+
+值替换的定向 Widget 单测 2 项和 Chromium 快捷键场景 1 项通过；参数提示单测 10 项、Chromium 场景 31 项通过。Stanza、Renderer 生产构建通过；完整 Editor 对齐检查通过，包含 650 个浏览器场景，未生成源码目录下的 JavaScript。
+
 ## Contrib 长行点击契约（2026-09-24）
 
 `editor.all.ts` 已接入上游同路径 `contrib/longLinesHelper/browser/longLinesHelper.ts`，在首次鼠标交互前注册编辑器级监听。`stopRenderingLineAfter` 现在由现有视图行渲染实际执行：超出限制的文本以省略号标记，语法 token、行内装饰和列映射只投影可见部分；点击截断边界的文本时，贡献将当前编辑器的限制改为 `-1`，配置变更触发原视图行重绘并显示完整文本。点击边界之前的文本不更改配置。模型全文、token 来源及编辑器焦点仍由原 owner 管理。

@@ -279,6 +279,7 @@ interface StandaloneHarness {
 	runLineAction(id: string, args?: unknown): Promise<void>;
 	prepareMoveSelectedText(): void;
 	prepareFinalNewLine(): void;
+	prepareInPlaceReplace(): void;
 	runScopedActions(): Promise<{ supported: boolean[]; values: string[]; otherValue: string; sameContext: boolean; focusRetained: boolean }>;
 	readLineCopy(): { value: string; selections: string[] };
 	prepareLongLine(): void;
@@ -2146,6 +2147,11 @@ window.ashStandaloneIntegration = {
 	prepareFinalNewLine: () => {
 		callerEditor.setValue('alpha');
 		callerEditor.setSelection(new stanza.Selection(1, 2, 1, 4));
+		callerEditor.focus();
+	},
+	prepareInPlaceReplace: () => {
+		callerEditor.setValue('flag true');
+		callerEditor.setSelection(new stanza.Selection(1, 6, 1, 10));
 		callerEditor.focus();
 	},
 	readLineCopy: () => ({ value: callerEditor.getValue(), selections: (callerEditor.getSelections() ?? []).map(selection => selection.toString()) }),

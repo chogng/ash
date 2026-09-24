@@ -1625,6 +1625,32 @@ test('CodeEditorWidget runs in-place replacement through the registered contribu
 	dom.window.close();
 });
 
+test('CodeEditorWidget selects the full replacement and keeps an empty caret column', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('flag true');
+	using editor = createTestCodeEditor({ container, model, lineHeight: 20 });
+	editor.setSelection(new Selection(1, 6, 1, 10));
+
+	const replace = (key: string) => editor.controller.element.dispatchEvent(new dom.window.KeyboardEvent('keydown', {
+		bubbles: true, cancelable: true, key, ctrlKey: true, shiftKey: true,
+	}));
+	replace('.');
+	await waitForText(model, 'flag false');
+	assert.equal(editor.getSelection()?.toString(), '[1,6 -> 1,11]');
+	replace(',');
+	await waitForText(model, 'flag true');
+	assert.equal(editor.getSelection()?.toString(), '[1,6 -> 1,10]');
+
+	model.setValue('value 9');
+	editor.setPosition(new Position(1, 8));
+	replace('.');
+	await waitForText(model, 'value 10');
+	assert.equal(editor.getSelection()?.toString(), '[1,8 -> 1,8]');
+	dom.window.close();
+});
+
 test("CodeEditorWidget owns padding, placeholder, and current-line presentation for embedded editors", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;

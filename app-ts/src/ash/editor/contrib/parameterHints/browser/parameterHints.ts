@@ -6,7 +6,7 @@ import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { isMacintosh } from '../../../../base/common/platform.js';
 import { localize, localize2 } from '../../../../nls.js';
-import { ContextKeyExpr, RawContextKey, type IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
+import { ContextKeyExpr, type IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import type { View } from '../../../browser/view.js';
@@ -16,9 +16,7 @@ import { EditorContextKeys } from '../../../common/editorContextKeys.js';
 import { TextModelChangeReason } from '../../../common/core/textChange.js';
 import * as languages from '../../../common/languages.js';
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
-
-const visible = new RawContextKey<boolean>('parameterHintsVisible', false);
-const multipleSignatures = new RawContextKey<boolean>('parameterHintsMultipleSignatures', false);
+import { Context, provideSignatureHelp } from './provideSignatureHelp.js';
 
 /** Owns the signature-help request, queued trigger and editor-local hint nodes. */
 class ParameterHintsController extends Disposable {
@@ -48,8 +46,8 @@ class ParameterHintsController extends Disposable {
 		if (viewport.textModel !== editor.getModel()) {
 			throw new TypeError('Parameter hints dependencies must share one text model');
 		}
-		this.visibleKey = visible.bindTo(contextKeyService);
-		this.multipleSignaturesKey = multipleSignatures.bindTo(contextKeyService);
+		this.visibleKey = Context.Visible.bindTo(contextKeyService);
+		this.multipleSignaturesKey = Context.MultipleSignatures.bindTo(contextKeyService);
 		this.element = h(viewport.domNode.domNode.ownerDocument, 'div');
 		this.element.className = 'stanza-editor-parameter-hints';
 		this.element.hidden = true;
@@ -206,35 +204,10 @@ class ParameterHintsController extends Disposable {
 			position,
 			context,
 		});
-		for (const provider of this.languageFeaturesService.signatureHelpProvider.ordered(model)) {
-			if (!languages.isLanguageFeatureRequestCurrent(request)) {
-				return;
-			}
-			if (context.kind === 'triggerCharacter'
-				&& !provider.signatureHelpTriggerCharacters?.includes(context.triggerCharacter)
-				&& !(context.isRetrigger && provider.signatureHelpRetriggerCharacters?.includes(context.triggerCharacter))) {
-				continue;
-			}
-			try {
-				const value = await provider.provideParameterHints(request, request.signal);
-				if (!languages.isLanguageFeatureRequestCurrent(request)) {
-					return;
-				}
-				if (value) {
-					const hints = normalizeParameterHints(value);
-					if (hints.signatures.length > 0) {
-						this.render(hints);
-						return;
-					}
-				}
-			} catch (error) {
-				if (languages.isLanguageFeatureRequestCurrent(request)) {
-					this.onError(error);
-				}
-			}
-		}
+		const hints = await provideSignatureHelp(this.languageFeaturesService.signatureHelpProvider, request, this.onError);
 		if (languages.isLanguageFeatureRequestCurrent(request)) {
-			this.hide();
+			if (hints) this.render(hints);
+			else this.hide();
 		}
 	}
 
@@ -296,40 +269,6 @@ class ParameterHintsController extends Disposable {
 	}
 }
 
-function normalizeParameterHints(value: languages.LanguageParameterHints): languages.LanguageParameterHints {
-	if (!value || typeof value !== 'object' || !Array.isArray(value.signatures)) {
-		throw new TypeError('Parameter hints signatures must be an array');
-	}
-	validateActiveIndex(value.activeSignature, value.signatures.length);
-	const signatures = value.signatures.map(signature => {
-		if (!signature || typeof signature.label !== 'string' || !Array.isArray(signature.parameters)
-			|| (signature.documentation !== undefined && typeof signature.documentation !== 'string')) {
-			throw new TypeError('Parameter hints must contain a label, parameters and optional text documentation');
-		}
-		validateActiveIndex(signature.activeParameter, signature.parameters.length);
-		const parameters = signature.parameters.map((parameter: languages.LanguageParameterInformation) => {
-			if (!parameter || typeof parameter.label !== 'string'
-				|| (parameter.documentation !== undefined && typeof parameter.documentation !== 'string')) {
-				throw new TypeError('Parameter labels and documentation must be text');
-			}
-			return Object.freeze({ label: parameter.label, documentation: parameter.documentation });
-		});
-		return Object.freeze({
-			label: signature.label,
-			documentation: signature.documentation,
-			parameters: Object.freeze(parameters),
-			activeParameter: signature.activeParameter,
-		});
-	});
-	return Object.freeze({ signatures: Object.freeze(signatures), activeSignature: value.activeSignature });
-}
-
-function validateActiveIndex(index: number | undefined, length: number): void {
-	if (index !== undefined && (!Number.isInteger(index) || index < 0 || index >= Math.max(1, length))) {
-		throw new TypeError('Parameter hints active index is outside the returned signatures or parameters');
-	}
-}
-
 class TriggerParameterHintsAction extends EditorAction {
 	constructor() {
 		super({
@@ -361,7 +300,7 @@ registerEditorCommand(new ParameterHintsCommand({
 	precondition: undefined,
 	handler: controller => controller.cancel(),
 	kbOpts: {
-		kbExpr: ContextKeyExpr.and(EditorContextKeys.focus.isEqualTo(true), visible.isEqualTo(true)),
+		kbExpr: ContextKeyExpr.and(EditorContextKeys.focus.isEqualTo(true), Context.Visible.isEqualTo(true)),
 		primary: KeyCode.Escape,
 		secondary: [KeyMod.Shift | KeyCode.Escape],
 		weight: KeybindingWeight.EditorContrib + 75,
@@ -370,7 +309,7 @@ registerEditorCommand(new ParameterHintsCommand({
 
 registerEditorCommand(new ParameterHintsCommand({
 	id: 'showPrevParameterHint',
-	precondition: ContextKeyExpr.and(visible.isEqualTo(true), multipleSignatures.isEqualTo(true)),
+	precondition: ContextKeyExpr.and(Context.Visible.isEqualTo(true), Context.MultipleSignatures.isEqualTo(true)),
 	handler: controller => controller.previous(),
 	kbOpts: {
 		kbExpr: EditorContextKeys.focus.isEqualTo(true),
@@ -383,7 +322,7 @@ registerEditorCommand(new ParameterHintsCommand({
 
 registerEditorCommand(new ParameterHintsCommand({
 	id: 'showNextParameterHint',
-	precondition: ContextKeyExpr.and(visible.isEqualTo(true), multipleSignatures.isEqualTo(true)),
+	precondition: ContextKeyExpr.and(Context.Visible.isEqualTo(true), Context.MultipleSignatures.isEqualTo(true)),
 	handler: controller => controller.next(),
 	kbOpts: {
 		kbExpr: EditorContextKeys.focus.isEqualTo(true),

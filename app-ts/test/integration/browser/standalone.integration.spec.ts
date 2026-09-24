@@ -4124,6 +4124,23 @@ test('clicking the clipped end of a long line reveals its remaining text', async
 	expect(errors).toEqual([]);
 });
 
+test('in-place replacement selects the complete new value from a real keyboard shortcut', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareInPlaceReplace());
+	await page.keyboard.press('Control+Shift+.');
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({
+		value: 'flag false', selections: ['[1,6 -> 1,11]'],
+	});
+	await page.keyboard.press('Control+Shift+,');
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({
+		value: 'flag true', selections: ['[1,6 -> 1,10]'],
+	});
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	expect(errors).toEqual([]);
+});
+
 test('editor rendering follows updated configuration without replacing the view', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
