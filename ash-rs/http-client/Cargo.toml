@@ -11,9 +11,12 @@ name = "ash_http_client"
 path = "src/lib.rs"
 
 [dependencies]
+ash-async-utils = { workspace = true }
+futures = { workspace = true }
+reqwest = { workspace = true }
 rustls = { workspace = true }
 rustls-native-certs = { workspace = true }
-tokio = { workspace = true, features = ["io-util", "sync"] }
+tokio = { workspace = true, features = ["io-util", "sync", "macros", "rt-multi-thread"] }
 tokio-rustls = { workspace = true }
 ureq = { workspace = true }
 url = { workspace = true }

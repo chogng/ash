@@ -1,7 +1,8 @@
 use crate::HttpClientError;
 use std::collections::BTreeSet;
 use std::sync::Arc;
-use std::sync::RwLock;
+use std::sync::Mutex;
+use std::sync::Weak;
 use tokio::sync::watch;
 use url::Url;
 
@@ -26,8 +27,45 @@ impl Default for OutboundNetworkPolicy {
 
 #[derive(Debug)]
 struct PolicyState {
-    access: RwLock<NetworkAccess>,
+    current: Mutex<CurrentPolicy>,
     changes: watch::Sender<u64>,
+}
+
+#[derive(Debug)]
+struct CurrentPolicy {
+    access: NetworkAccess,
+    permits: Vec<Weak<PermitState>>,
+}
+
+#[derive(Debug)]
+struct PermitState {
+    host: String,
+    revoked: watch::Sender<bool>,
+}
+
+/// Authorization for one request. Once revoked, it cannot become valid again.
+#[derive(Clone, Debug)]
+pub struct NetworkPermit {
+    state: Arc<PermitState>,
+}
+
+impl NetworkPermit {
+    pub fn check(&self) -> Result<(), HttpClientError> {
+        if *self.state.revoked.borrow() {
+            Err(denied())
+        } else {
+            Ok(())
+        }
+    }
+
+    pub async fn revoked(&self) {
+        let _ = self
+            .state
+            .revoked
+            .subscribe()
+            .wait_for(|revoked| *revoked)
+            .await;
+    }
 }
 
 impl OutboundNetworkPolicy {
@@ -35,7 +73,10 @@ impl OutboundNetworkPolicy {
         let (changes, _) = watch::channel(0);
         Self {
             state: Arc::new(PolicyState {
-                access: RwLock::new(access),
+                current: Mutex::new(CurrentPolicy {
+                    access,
+                    permits: Vec::new(),
+                }),
                 changes,
             }),
         }
@@ -44,11 +85,20 @@ impl OutboundNetworkPolicy {
     pub fn update(&self, access: NetworkAccess) {
         let mut current = self
             .state
-            .access
-            .write()
+            .current
+            .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if *current != access {
-            *current = access;
+        if current.access != access {
+            current.permits.retain(|permit| {
+                let Some(permit) = permit.upgrade() else {
+                    return false;
+                };
+                if !allows(&access, &permit.host) {
+                    permit.revoked.send_replace(true);
+                }
+                true
+            });
+            current.access = access;
             self.state
                 .changes
                 .send_modify(|generation| *generation += 1);
@@ -56,27 +106,36 @@ impl OutboundNetworkPolicy {
     }
 
     pub fn check_url(&self, url: &str) -> Result<(), HttpClientError> {
-        let url = Url::parse(url).map_err(|_| {
-            HttpClientError::InvalidRequest("outbound target URL is invalid".into())
-        })?;
-        let host = url.host_str().ok_or_else(|| {
-            HttpClientError::InvalidRequest("outbound target URL has no host".into())
-        })?;
-        let host = host.trim_start_matches('[').trim_end_matches(']');
-        let access = self
+        let host = host(url)?;
+        let current = self
             .state
-            .access
-            .read()
+            .current
+            .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if matches!(&*access, NetworkAccess::Any)
-            || matches!(&*access, NetworkAccess::Hosts(hosts) if hosts.contains(host))
-        {
+        if allows(&current.access, &host) {
             Ok(())
         } else {
-            Err(HttpClientError::InvalidRequest(
-                "outbound target is blocked by application network policy".into(),
-            ))
+            Err(denied())
         }
+    }
+
+    pub fn acquire(&self, url: &str) -> Result<NetworkPermit, HttpClientError> {
+        let host = host(url)?;
+        let mut current = self
+            .state
+            .current
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !allows(&current.access, &host) {
+            return Err(denied());
+        }
+        let state = Arc::new(PermitState {
+            host,
+            revoked: watch::channel(false).0,
+        });
+        current.permits.retain(|permit| permit.strong_count() != 0);
+        current.permits.push(Arc::downgrade(&state));
+        Ok(NetworkPermit { state })
     }
 
     /// Wakes when a live connection's target is no longer permitted.
@@ -84,4 +143,29 @@ impl OutboundNetworkPolicy {
         let mut changes = self.state.changes.subscribe();
         while self.check_url(url).is_ok() && changes.changed().await.is_ok() {}
     }
+}
+
+fn host(url: &str) -> Result<String, HttpClientError> {
+    let url = Url::parse(url)
+        .map_err(|_| HttpClientError::InvalidRequest("outbound target URL is invalid".into()))?;
+    let host = url
+        .host_str()
+        .ok_or_else(|| HttpClientError::InvalidRequest("outbound target URL has no host".into()))?;
+    Ok(host
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .to_owned())
+}
+
+fn allows(access: &NetworkAccess, host: &str) -> bool {
+    match access {
+        NetworkAccess::Any => true,
+        NetworkAccess::Hosts(hosts) => hosts.contains(host),
+    }
+}
+
+fn denied() -> HttpClientError {
+    HttpClientError::InvalidRequest(
+        "outbound target is blocked by application network policy".into(),
+    )
 }

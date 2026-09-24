@@ -7,9 +7,8 @@ use ash_app_server_protocol::protocol::call::CallStatus;
 use ash_http_client::HttpClientConfig;
 use ash_http_client::OutboundNetworkPolicy;
 use ash_http_client::OutboundNetworkSnapshot;
-use ash_http_client::PolicyHttpClient;
 use ash_http_client::ProxyPolicy;
-use ash_http_client::UreqHttpClient;
+use ash_http_client::ReqwestHttpClient;
 use call::CallClient;
 use call::LocalDeployment;
 use call::MemberCredential;
@@ -176,11 +175,9 @@ impl Calls {
         };
         let network = OutboundNetworkSnapshot::with_policy(config, self.network_policy.clone())
             .map_err(|_| "Call transport unavailable")?;
-        let raw_http: Arc<dyn ash_http_client::HttpClient> = Arc::new(
-            UreqHttpClient::with_network(network).map_err(|_| "Call transport unavailable")?,
+        let http: Arc<dyn ash_http_client::HttpClient> = Arc::new(
+            ReqwestHttpClient::with_network(network).map_err(|_| "Call transport unavailable")?,
         );
-        let http: Arc<dyn ash_http_client::HttpClient> =
-            Arc::new(PolicyHttpClient::new(raw_http, self.network_policy.clone()));
         let client = CallClient::new(&url, credential, http).map_err(|e| e.to_string())?;
         match &params.deployment {
             CallDeployment::Local => {

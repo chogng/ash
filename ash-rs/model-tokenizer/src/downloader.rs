@@ -6,8 +6,8 @@ use ash_http_client::HttpMethod;
 use ash_http_client::HttpRequest;
 use ash_http_client::OutboundNetworkPolicy;
 use ash_http_client::OutboundNetworkSnapshot;
-use ash_http_client::PolicyHttpClient;
 use ash_http_client::RedirectPolicy;
+use ash_http_client::ReqwestHttpClient;
 use ash_http_client::ResponseBodyLimit;
 use ash_http_client::UreqHttpClient;
 use std::sync::Arc;
@@ -94,8 +94,8 @@ fn production_http_client_with_policy(
     let network = OutboundNetworkSnapshot::with_policy(production_http_config()?, policy.clone())
         .map_err(|error| error.to_string())?;
     let client: Arc<dyn HttpClient> =
-        Arc::new(UreqHttpClient::with_network(network).map_err(|error| error.to_string())?);
-    Ok(Arc::new(PolicyHttpClient::new(client, policy)))
+        Arc::new(ReqwestHttpClient::with_network(network).map_err(|error| error.to_string())?);
+    Ok(client)
 }
 
 fn production_http_config() -> Result<HttpClientConfig, String> {

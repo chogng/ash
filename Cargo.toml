@@ -360,6 +360,7 @@ ratex-svg = { version = "0.1.14", features = ["embed-fonts"] }
 ratex-types = "0.1.14"
 ratatui = "0.29.0"
 regex = "1"
+reqwest = { version = "0.13.4", default-features = false, features = ["rustls"] }
 rust-stemmers = "1"
 resvg = { version = "0.47", default-features = false }
 schemars = "1.2.1"

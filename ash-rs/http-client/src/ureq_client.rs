@@ -26,6 +26,21 @@ use url::Url;
 pub trait HttpClient: Send + Sync {
     fn execute(&self, request: &HttpRequest) -> Result<HttpResponse, HttpClientError>;
 
+    fn execute_with_cancellation(
+        &self,
+        request: &HttpRequest,
+        cancellation: &ash_async_utils::CancellationToken,
+    ) -> Result<HttpResponse, HttpClientError> {
+        cancellation
+            .check()
+            .map_err(|_| HttpClientError::Transport("HTTP request cancelled".into()))?;
+        let response = self.execute(request)?;
+        cancellation
+            .check()
+            .map_err(|_| HttpClientError::Transport("HTTP request cancelled".into()))?;
+        Ok(response)
+    }
+
     /// Executes one request and incrementally emits a successful response body.
     ///
     /// Non-success response bodies remain buffered in the returned response so
@@ -39,6 +54,22 @@ pub trait HttpClient: Send + Sync {
         Err(HttpClientError::InvalidRequest(
             "HTTP client does not support streaming".into(),
         ))
+    }
+
+    fn execute_streaming_with_cancellation(
+        &self,
+        request: &HttpRequest,
+        cancellation: &ash_async_utils::CancellationToken,
+        sink: &mut dyn HttpBodySink,
+    ) -> Result<HttpResponse, HttpClientError> {
+        cancellation
+            .check()
+            .map_err(|_| HttpClientError::Transport("HTTP request cancelled".into()))?;
+        let response = self.execute_streaming(request, sink)?;
+        cancellation
+            .check()
+            .map_err(|_| HttpClientError::Transport("HTTP request cancelled".into()))?;
+        Ok(response)
     }
 }
 

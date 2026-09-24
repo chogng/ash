@@ -5,7 +5,7 @@ use crate::WebSocketMessage;
 use crate::WebSocketRequest;
 use crate::dialer;
 use ash_http_client::HttpHeader;
-use ash_http_client::OutboundNetworkPolicy;
+use ash_http_client::NetworkPermit;
 use ash_http_client::OutboundNetworkSnapshot;
 use ash_http_client::Timeout;
 use futures::SinkExt;
@@ -36,8 +36,8 @@ impl WebSocketConnector {
         &self,
         request: WebSocketRequest,
     ) -> Result<(WebSocketConnection, WebSocketHandshake), WebSocketClientError> {
-        let policy = self.network.policy().clone();
         let url = request.url().to_owned();
+        let permit = self.network.policy().acquire(&url)?;
         let mut wire_request = request
             .url()
             .into_client_request()
@@ -68,10 +68,11 @@ impl WebSocketConnector {
             }
         };
         let (inner, response) = tokio::select! {
+            biased;
+            () = permit.revoked() => return Err(WebSocketClientError::ConnectionClosed),
             result = dial => result?,
-            () = policy.wait_until_denied(&url) => return Err(WebSocketClientError::ConnectionClosed),
         };
-        policy.check_url(&url)?;
+        permit.check()?;
         let headers = response
             .headers()
             .iter()
@@ -83,7 +84,7 @@ impl WebSocketConnector {
             })
             .collect();
         Ok((
-            WebSocketConnection { inner, policy, url },
+            WebSocketConnection { inner, permit },
             WebSocketHandshake::new(response.status().as_u16(), headers),
         ))
     }
@@ -92,20 +93,20 @@ impl WebSocketConnector {
 /// One established WebSocket with crate-owned send and receive messages.
 pub struct WebSocketConnection {
     inner: dialer::RoutedWebSocket,
-    policy: OutboundNetworkPolicy,
-    url: String,
+    permit: NetworkPermit,
 }
 
 impl WebSocketConnection {
     pub async fn send(&mut self, message: WebSocketMessage) -> Result<(), WebSocketClientError> {
-        if self.policy.check_url(&self.url).is_err() {
+        if self.permit.check().is_err() {
             return Err(WebSocketClientError::ConnectionClosed);
         }
         let result = tokio::select! {
+            biased;
+            () = self.permit.revoked() => Err(WebSocketClientError::ConnectionClosed),
             result = self.inner.send(message.into_tungstenite()) => result.map_err(|_| WebSocketClientError::ProtocolFailed),
-            () = self.policy.wait_until_denied(&self.url) => Err(WebSocketClientError::ConnectionClosed),
         };
-        if self.policy.check_url(&self.url).is_err() {
+        if self.permit.check().is_err() {
             return Err(WebSocketClientError::ConnectionClosed);
         }
         result
@@ -113,18 +114,19 @@ impl WebSocketConnection {
 
     pub async fn receive(&mut self) -> Result<WebSocketMessage, WebSocketClientError> {
         loop {
-            if self.policy.check_url(&self.url).is_err() {
+            if self.permit.check().is_err() {
                 return Err(WebSocketClientError::ConnectionClosed);
             }
             let next = tokio::select! {
+                biased;
+                () = self.permit.revoked() => return Err(WebSocketClientError::ConnectionClosed),
                 result = self.inner.next() => result,
-                () = self.policy.wait_until_denied(&self.url) => return Err(WebSocketClientError::ConnectionClosed),
             };
             let message = next
                 .ok_or(WebSocketClientError::ConnectionClosed)?
                 .map_err(|_| WebSocketClientError::ProtocolFailed)?;
             if let Some(message) = WebSocketMessage::from_tungstenite(message) {
-                if self.policy.check_url(&self.url).is_err() {
+                if self.permit.check().is_err() {
                     return Err(WebSocketClientError::ConnectionClosed);
                 }
                 return Ok(message);

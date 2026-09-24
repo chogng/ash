@@ -9,9 +9,9 @@ use ash_http_client::HttpRequest;
 use ash_http_client::NetworkTargetPolicy;
 use ash_http_client::OutboundNetworkPolicy;
 use ash_http_client::OutboundNetworkSnapshot;
-use ash_http_client::PolicyHttpClient;
 use ash_http_client::ProxyPolicy;
 use ash_http_client::RedirectPolicy;
+use ash_http_client::ReqwestHttpClient;
 use ash_http_client::ResponseBodyLimit;
 use ash_http_client::UreqHttpClient;
 use url::Url;
@@ -48,11 +48,9 @@ impl SafeRemoteImageFetcher {
         let network = OutboundNetworkSnapshot::with_policy(remote_http_config()?, policy.clone())
             .map_err(|_| AttachmentError::RemoteFetch)?;
         let client: Arc<dyn HttpClient> = Arc::new(
-            UreqHttpClient::with_network(network).map_err(|_| AttachmentError::RemoteFetch)?,
+            ReqwestHttpClient::with_network(network).map_err(|_| AttachmentError::RemoteFetch)?,
         );
-        Ok(Self {
-            client: Arc::new(PolicyHttpClient::new(client, policy)),
-        })
+        Ok(Self { client })
     }
 
     #[cfg(test)]

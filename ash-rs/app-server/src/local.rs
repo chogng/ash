@@ -1118,11 +1118,8 @@ pub fn open_local_app_server_with_codebase_providers(
         network_policy.clone(),
     )
     .map_err(open_error)?;
-    let raw_http: Arc<dyn ash_http_client::HttpClient> =
-        Arc::new(ash_http_client::UreqHttpClient::with_network(network).map_err(open_error)?);
-    let application_http: Arc<dyn ash_http_client::HttpClient> = Arc::new(
-        ash_http_client::PolicyHttpClient::new(raw_http, network_policy.clone()),
-    );
+    let application_http: Arc<dyn ash_http_client::HttpClient> =
+        Arc::new(ash_http_client::ReqwestHttpClient::with_network(network).map_err(open_error)?);
     if options.dir_config.is_none()
         && let Some(dir_root) = &options.dir_root
     {

@@ -8,8 +8,8 @@ mod error;
 mod header;
 mod network_policy;
 mod outbound_network;
-mod policy_client;
 mod request;
+mod reqwest_client;
 mod telemetry;
 mod ureq_client;
 
@@ -20,12 +20,12 @@ pub use config::{
 };
 pub use error::HttpClientError;
 pub use header::HttpHeader;
-pub use network_policy::{NetworkAccess, OutboundNetworkPolicy};
+pub use network_policy::{NetworkAccess, NetworkPermit, OutboundNetworkPolicy};
 pub use outbound_network::{
     OutboundNetworkSnapshot, OutboundProxyRoute, OutboundProxyTarget, OutboundTlsStream,
 };
-pub use policy_client::PolicyHttpClient;
 pub use request::{HttpMethod, HttpRequest, HttpResponse};
+pub use reqwest_client::ReqwestHttpClient;
 pub use telemetry::HttpClientTelemetrySpan;
 pub use telemetry::{
     HttpClientTelemetry, HttpClientTelemetryEvent, HttpStatusClass, HttpTransportOutcome,

@@ -1681,7 +1681,10 @@ dependencies = [
 name = "ash-http-client"
 version = "0.1.0"
 dependencies = [
+ "ash-async-utils",
  "ash-http-test-support",
+ "futures",
+ "reqwest 0.13.4",
  "rustls",
  "rustls-native-certs 0.7.3",
  "tokio",

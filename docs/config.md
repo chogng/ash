@@ -50,7 +50,7 @@ Runtime snapshot
 `hooks`、`toolSearch`、`execPolicy`、`dirPermissions`、`codebase`、`network` 和 `git`。Config 保存非敏感引用，不保存
 API key、OAuth token、authorization header 或 refresh 状态。
 
-`[network]` 控制 App Server 内置的模型、鉴权、图片、tokenizer 下载和通话请求。缺省允许所有主机；`allowedHosts` 只接受完整的小写主机名或 IP 地址，不支持通配符。空数组禁止这些出站请求。修改文件后，App Server 会热更新策略，让被收紧策略拦住的 HTTP 调用返回错误，并结束对应的 WebSocket 与通话会话。命令执行的网络审批仍由 `execPolicy` 管理。
+`[network]` 控制 App Server 内置的模型、鉴权、图片、tokenizer 下载和通话请求。缺省允许所有主机；`allowedHosts` 只接受完整的小写主机名或 IP 地址，不支持通配符。空数组禁止这些出站请求。修改文件后，App Server 会热更新策略，撤销不再允许的在途 HTTP 请求并停止其响应体读取，同时结束对应的 WebSocket 与通话会话。命令执行的网络审批仍由 `execPolicy` 管理。
 
 ```toml
 [network]

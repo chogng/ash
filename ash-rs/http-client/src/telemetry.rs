@@ -76,13 +76,15 @@ impl TelemetryHttpClient {
     pub fn new(inner: Arc<dyn HttpClient>, telemetry: Arc<dyn HttpClientTelemetry>) -> Self {
         Self { inner, telemetry }
     }
-}
 
-impl HttpClient for TelemetryHttpClient {
-    fn execute(&self, request: &HttpRequest) -> Result<HttpResponse, HttpClientError> {
+    fn record_execute(
+        &self,
+        request: &HttpRequest,
+        send: impl FnOnce(&dyn HttpClient, &HttpRequest) -> Result<HttpResponse, HttpClientError>,
+    ) -> Result<HttpResponse, HttpClientError> {
         let span = self.telemetry.start();
         let started = Instant::now();
-        let result = self.inner.execute(request);
+        let result = send(self.inner.as_ref(), request);
         let (outcome, response_body_bytes) = match &result {
             Ok(response) => (
                 HttpTransportOutcome::Response {
@@ -102,10 +104,15 @@ impl HttpClient for TelemetryHttpClient {
         result
     }
 
-    fn execute_streaming(
+    fn record_streaming(
         &self,
         request: &HttpRequest,
         sink: &mut dyn HttpBodySink,
+        send: impl FnOnce(
+            &dyn HttpClient,
+            &HttpRequest,
+            &mut dyn HttpBodySink,
+        ) -> Result<HttpResponse, HttpClientError>,
     ) -> Result<HttpResponse, HttpClientError> {
         let span = self.telemetry.start();
         let started = Instant::now();
@@ -113,7 +120,7 @@ impl HttpClient for TelemetryHttpClient {
             inner: sink,
             emitted_bytes: 0,
         };
-        let result = self.inner.execute_streaming(request, &mut counting_sink);
+        let result = send(self.inner.as_ref(), request, &mut counting_sink);
         let (outcome, buffered_bytes) = match &result {
             Ok(response) => (
                 HttpTransportOutcome::Response {
@@ -131,6 +138,43 @@ impl HttpClient for TelemetryHttpClient {
             elapsed: started.elapsed(),
         });
         result
+    }
+}
+
+impl HttpClient for TelemetryHttpClient {
+    fn execute(&self, request: &HttpRequest) -> Result<HttpResponse, HttpClientError> {
+        self.record_execute(request, |inner, request| inner.execute(request))
+    }
+
+    fn execute_with_cancellation(
+        &self,
+        request: &HttpRequest,
+        cancellation: &ash_async_utils::CancellationToken,
+    ) -> Result<HttpResponse, HttpClientError> {
+        self.record_execute(request, |inner, request| {
+            inner.execute_with_cancellation(request, cancellation)
+        })
+    }
+
+    fn execute_streaming(
+        &self,
+        request: &HttpRequest,
+        sink: &mut dyn HttpBodySink,
+    ) -> Result<HttpResponse, HttpClientError> {
+        self.record_streaming(request, sink, |inner, request, sink| {
+            inner.execute_streaming(request, sink)
+        })
+    }
+
+    fn execute_streaming_with_cancellation(
+        &self,
+        request: &HttpRequest,
+        cancellation: &ash_async_utils::CancellationToken,
+        sink: &mut dyn HttpBodySink,
+    ) -> Result<HttpResponse, HttpClientError> {
+        self.record_streaming(request, sink, |inner, request, sink| {
+            inner.execute_streaming_with_cancellation(request, cancellation, sink)
+        })
     }
 }
 
