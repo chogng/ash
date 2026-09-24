@@ -1,14 +1,69 @@
 import { fragment as createFragment, h, reset } from '../../../../base/browser/dom.js';
 import { type DiffModel } from '../../../common/diff/diffModel.js';
 import { LineDiffKind, type DiffRange, type LineDiffRow } from '../../../common/diff/lineDiff.js';
+import { type FontInfo } from '../../../common/config/fontInfo.js';
+import { WrappingIndent } from '../../../common/config/editorOptions.js';
+import { MonospaceLineBreaksComputerFactory } from '../../../common/viewModel/monospaceLineBreaksComputer.js';
 
-/** Creates one side-by-side row shared by the single- and multi-diff widgets. */
+/** Rendering data for one paired source line after wrapping. */
 export interface WrappedDiffRow {
 	readonly height: number;
 	readonly originalBreaks: readonly number[];
 	readonly modifiedBreaks: readonly number[];
 }
 
+export interface DiffRowLayout {
+	readonly offsets: readonly number[];
+	readonly wrappedRows: readonly WrappedDiffRow[];
+}
+
+/** Computes paired row heights once so rendering, scrolling, and navigation share coordinates. */
+export function computeDiffRowLayout(model: DiffModel, lineHeight: number, wrapping?: { readonly fontInfo: FontInfo; readonly column: number }): DiffRowLayout {
+	const rows = model.diff?.rows ?? [];
+	const offsets = [0];
+	if (!wrapping) {
+		for (let i = 0; i < rows.length; i++) offsets.push((i + 1) * lineHeight);
+		return { offsets, wrappedRows: [] };
+	}
+	const factory = new MonospaceLineBreaksComputerFactory('([{', ' \t})]?|/&.,;!?:');
+	const compute = (source: typeof model.original, lineIndices: readonly (number | undefined)[]): readonly number[][] => {
+		const computer = factory.createLineBreaksComputer({
+			getLineContent: line => source.getLineContent(line),
+			getLineInjectedText: () => null,
+		}, wrapping.fontInfo, source.getOptions().tabSize, wrapping.column, WrappingIndent.None, 'normal', false);
+		for (const index of lineIndices) if (index !== undefined) computer.addRequest(index + 1, null);
+		const breaks = computer.finalize();
+		let next = 0;
+		return lineIndices.map(index => {
+			if (index === undefined) return [0];
+			return breaks[next++]?.breakOffsets ?? [source.getLineContent(index + 1).length];
+		});
+	};
+	const original = compute(model.original, rows.map(row => row.originalLineIndex));
+	const modified = compute(model.modified, rows.map(row => row.modifiedLineIndex));
+	const wrappedRows: WrappedDiffRow[] = [];
+	for (let i = 0; i < rows.length; i++) {
+		const height = Math.max(original[i]!.length, modified[i]!.length) * lineHeight;
+		wrappedRows.push({ height, originalBreaks: original[i]!, modifiedBreaks: modified[i]! });
+		offsets.push(offsets[i]! + height);
+	}
+	return { offsets, wrappedRows };
+}
+
+/** Finds the logical row containing a pixel offset into a diff body. */
+export function diffRowAtOffset(offsets: readonly number[], offset: number): number {
+	if (offsets.length < 2) return 0;
+	let low = 0;
+	let high = offsets.length - 1;
+	while (low < high) {
+		const middle = Math.ceil((low + high) / 2);
+		if (offsets[middle]! <= offset) low = middle;
+		else high = middle - 1;
+	}
+	return Math.min(low, offsets.length - 2);
+}
+
+/** Creates one side-by-side row shared by the single- and multi-diff widgets. */
 export function createDiffEditorRow(ownerDocument: Document, row: LineDiffRow, model: DiffModel, lineHeight: number, active: boolean, showInlineChanges: boolean, wrapped?: WrappedDiffRow): HTMLDivElement {
 	const element = h(ownerDocument, 'div');
 	element.className = `stanza-diff-editor-row ${row.kind}`;

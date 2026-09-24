@@ -58,6 +58,41 @@ test('word wrap keeps both diff columns, scrolling, highlights, and the overview
 	await expect(page.locator('#single .stanza-diff-editor-visual-line')).toHaveCount(0);
 });
 
+test('multi diff wraps paired rows and repositions sections through resize and collapse', async ({ page }) => {
+	await page.goto('/diff.html');
+	const original = `same\n${'before '.repeat(70)}😀 tail\nsame end`;
+	const modified = `same\n${'before '.repeat(70)}🤖 tail\nsame end`;
+	await page.evaluate(([left, right]) => window.ashDiffIntegration.setComparisonText(left, right), [original, modified]);
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	const editor = page.locator('#multi .stanza-multi-diff-editor');
+	await editor.focus();
+	await page.keyboard.press('Alt+Z');
+	await expect(editor).toHaveClass(/word-wrapped/);
+	const sections = editor.locator('.stanza-multi-diff-editor-section');
+	const firstRow = sections.first().locator('.stanza-diff-editor-row.modified');
+	await expect(firstRow.locator('.stanza-diff-editor-visual-line').first()).toBeVisible();
+	const firstHeight = await firstRow.evaluate(element => element.getBoundingClientRect().height);
+	expect(firstHeight).toBeGreaterThan(20);
+	const sectionGap = await sections.evaluateAll(elements => elements[1]!.getBoundingClientRect().top - elements[0]!.getBoundingClientRect().bottom);
+	expect(sectionGap).toBe(8);
+	await page.locator('#multi').evaluate(element => { element.style.width = '400px'; });
+	await expect.poll(() => firstRow.evaluate(element => element.getBoundingClientRect().height)).toBeGreaterThan(firstHeight);
+	const resizedGap = await sections.evaluateAll(elements => elements[1]!.getBoundingClientRect().top - elements[0]!.getBoundingClientRect().bottom);
+	expect(resizedGap).toBe(8);
+	await sections.first().locator('.stanza-multi-diff-editor-header-toggle').click();
+	await expect(sections.first().locator('.stanza-multi-diff-editor-header-toggle')).toHaveAttribute('aria-expanded', 'false');
+	await editor.focus();
+	await page.keyboard.press('F7');
+	await expect(sections.first().locator('.stanza-multi-diff-editor-header-toggle')).toHaveAttribute('aria-expanded', 'true');
+	await page.keyboard.press('F7');
+	await expect(editor.locator('.stanza-multi-diff-editor-accessibility-status')).toContainText('Change 2 of 2');
+	await expect(sections.nth(1).locator('.stanza-diff-editor-row.active')).toHaveCount(1);
+	await editor.focus();
+	await page.keyboard.press('Alt+Z');
+	await expect(editor).not.toHaveClass(/word-wrapped/);
+	await expect(editor.locator('.stanza-diff-editor-visual-line')).toHaveCount(0);
+});
+
 test('unsaved input updates Diff and Quick Diff locally using the existing baseline', async ({ page }) => {
 	await page.goto('/diff.html');
 	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().quickDiffReady)).toBe(true);

@@ -12,11 +12,9 @@ import { LineDiffKind, type LineDiff, type LineDiffRow } from "../../../common/d
 import { createBareFontInfoFromRawSettings } from '../../../common/config/fontInfoFromSettings.js';
 import { FontMeasurements } from '../../config/fontMeasurements.js';
 import { type BareFontInfo, type FontInfo } from '../../../common/config/fontInfo.js';
-import { WrappingIndent } from '../../../common/config/editorOptions.js';
-import { MonospaceLineBreaksComputerFactory } from '../../../common/viewModel/monospaceLineBreaksComputer.js';
 import { applyFontInfo } from "../../config/domFontInfo.js";
 import { OverviewRulerFeature } from './features/overviewRulerFeature.js';
-import { createDiffEditorRow, type WrappedDiffRow } from "./diffEditorRows.js";
+import { computeDiffRowLayout, createDiffEditorRow, diffRowAtOffset, type WrappedDiffRow } from "./diffEditorRows.js";
 import { type IDiffEditor } from '../../editorBrowser.js';
 import { type ICodeEditorService } from '../../services/codeEditorService.js';
 import { localize, onDidChangeNls } from '../../../../nls.js';
@@ -76,8 +74,8 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 	private fontInfo: FontInfo | undefined;
 	private configuredWordWrap: boolean;
 	private temporaryWordWrap: boolean | undefined;
-	private rowOffsets: number[] = [0];
-	private wrappedRows: WrappedDiffRow[] = [];
+	private rowOffsets: readonly number[] = [0];
+	private wrappedRows: readonly WrappedDiffRow[] = [];
 
 	constructor(options: DiffEditorWidgetOptions) {
 		super();
@@ -292,10 +290,10 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		const rows = this.currentDiff?.rows ?? [];
 		const contentHeight = this.rowOffsets[rows.length] ?? 0;
 		this.contentNode.setHeight(contentHeight);
-		const firstVisibleRow = rowAtOffset(this.rowOffsets, this.element.scrollTop);
+		const firstVisibleRow = diffRowAtOffset(this.rowOffsets, this.element.scrollTop);
 		const startRow = Math.max(0, firstVisibleRow - this.overscanRowCount);
 		const lastVisibleOffset = Math.max(this.element.scrollTop, this.element.scrollTop + this.viewportHeight - 0.001);
-		const endRow = Math.min(rows.length, rowAtOffset(this.rowOffsets, lastVisibleOffset) + 1 + this.overscanRowCount);
+		const endRow = Math.min(rows.length, diffRowAtOffset(this.rowOffsets, lastVisibleOffset) + 1 + this.overscanRowCount);
 		if (!force && startRow === this.renderedStartRow && endRow === this.renderedEndRow) return;
 		const fragment = createFragment(this.element.ownerDocument);
 		for (let rowIndex = startRow; rowIndex < endRow; rowIndex += 1) {
@@ -313,51 +311,17 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 	}
 
 	private recomputeRows(): void {
-		const rows = this.currentDiff?.rows ?? [];
-		this.rowOffsets = [0];
-		this.wrappedRows = [];
-		if (!this.wordWrap) {
-			for (let i = 0; i < rows.length; i++) this.rowOffsets.push((i + 1) * this.lineHeight);
-			return;
+		let wrapping: { readonly fontInfo: FontInfo; readonly column: number } | undefined;
+		if (this.wordWrap) {
+			const gutterWidth = this.showLineNumbers ? 52 : 0;
+			const cellWidth = Math.max(1, (this.viewportWidth - this.overviewRuler.width) / 2 - gutterWidth - 1);
+			const fontInfo = this.fontInfo ??= FontMeasurements.readFontInfo(getWindow(this.element), this.bareFontInfo);
+			wrapping = { fontInfo, column: Math.max(1, Math.floor(cellWidth / fontInfo.typicalHalfwidthCharacterWidth)) };
 		}
-		const gutterWidth = this.showLineNumbers ? 52 : 0;
-		const cellWidth = Math.max(1, (this.viewportWidth - this.overviewRuler.width) / 2 - gutterWidth - 1);
-		const fontInfo = this.fontInfo ??= FontMeasurements.readFontInfo(getWindow(this.element), this.bareFontInfo);
-		const wrappingColumn = Math.max(1, Math.floor(cellWidth / fontInfo.typicalHalfwidthCharacterWidth));
-		const factory = new MonospaceLineBreaksComputerFactory('([{', ' \t})]?|/&.,;!?:');
-		const compute = (model: typeof this.model.original, lineIndices: readonly (number | undefined)[]): readonly number[][] => {
-			const computer = factory.createLineBreaksComputer({
-				getLineContent: line => model.getLineContent(line),
-				getLineInjectedText: () => null,
-			}, fontInfo, model.getOptions().tabSize, wrappingColumn, WrappingIndent.None, 'normal', false);
-			for (const index of lineIndices) if (index !== undefined) computer.addRequest(index + 1, null);
-			const breaks = computer.finalize();
-			let next = 0;
-			return lineIndices.map(index => {
-				if (index === undefined) return [0];
-				return breaks[next++]?.breakOffsets ?? [model.getLineContent(index + 1).length];
-			});
-		};
-		const original = compute(this.model.original, rows.map(row => row.originalLineIndex));
-		const modified = compute(this.model.modified, rows.map(row => row.modifiedLineIndex));
-		for (let i = 0; i < rows.length; i++) {
-			const height = Math.max(original[i]!.length, modified[i]!.length) * this.lineHeight;
-			this.wrappedRows.push({ height, originalBreaks: original[i]!, modifiedBreaks: modified[i]! });
-			this.rowOffsets.push(this.rowOffsets[i]! + height);
-		}
+		const layout = computeDiffRowLayout(this.model, this.lineHeight, wrapping);
+		this.rowOffsets = layout.offsets;
+		this.wrappedRows = layout.wrappedRows;
 	}
-}
-
-function rowAtOffset(offsets: readonly number[], offset: number): number {
-	if (offsets.length < 2) return 0;
-	let low = 0;
-	let high = offsets.length - 1;
-	while (low < high) {
-		const middle = Math.ceil((low + high) / 2);
-		if (offsets[middle]! <= offset) low = middle;
-		else high = middle - 1;
-	}
-	return Math.min(low, offsets.length - 2);
 }
 
 function diffRowLocation(row: LineDiffRow): string {

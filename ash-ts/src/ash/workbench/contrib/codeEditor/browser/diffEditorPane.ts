@@ -17,8 +17,7 @@ import { h } from "../../../../base/browser/dom.js";
 import { type ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { CodeEditorConfiguration, getDiffComputationOptions } from '../common/editorConfiguration.js';
-import { EditorLineWrapping } from '../../../../editor/common/config/editorOptions.js';
+import { CodeEditorConfiguration, getDiffComputationOptions, getDiffWordWrap } from '../common/editorConfiguration.js';
 
 export interface DiffEditorPaneOptions {
 	readonly modelService: ITextModelResourceService;
@@ -164,7 +163,7 @@ class DiffEditorPaneSession extends Disposable {
 		this._register(configuration.onDidChangeConfiguration(event => {
 			const languageId = model.modified.getLanguageId();
 			if (event.affectsConfiguration(CodeEditorConfiguration.diffWordWrap) || event.affectsConfiguration(CodeEditorConfiguration.wordWrap)) {
-				this.editor.setConfiguredWordWrap(readWordWrap(configuration));
+				this.editor.setConfiguredWordWrap(getDiffWordWrap(configuration));
 			}
 			if (event.affectsConfiguration(CodeEditorConfiguration.diffIgnoreTrimWhitespace, { overrideIdentifier: languageId })
 				|| event.affectsConfiguration(CodeEditorConfiguration.diffMaxComputationTime, { overrideIdentifier: languageId })) {
@@ -177,7 +176,7 @@ class DiffEditorPaneSession extends Disposable {
 		this.editor = this._register(new DiffEditorWidget({
 			container,
 			model,
-			wordWrap: readWordWrap(configuration),
+			wordWrap: getDiffWordWrap(configuration),
 			codeEditorService: options.codeEditorService,
 			lineHeight: options.lineHeight,
 			fontFamily: options.fontFamily,
@@ -203,10 +202,4 @@ class DiffEditorPaneSession extends Disposable {
 	focus(): void {
 		this.editor.element.focus({ preventScroll: true });
 	}
-}
-
-function readWordWrap(configuration: IConfigurationService): boolean {
-	const value = configuration.getValue<'off' | 'on' | 'inherit'>(CodeEditorConfiguration.diffWordWrap);
-	return value === 'on' || (value === 'inherit'
-		&& configuration.getValue<EditorLineWrapping>(CodeEditorConfiguration.wordWrap) === EditorLineWrapping.On);
 }

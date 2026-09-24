@@ -436,6 +436,12 @@ export function getDiffComputationOptions(configuration: IConfigurationService, 
 	};
 }
 
+export function getDiffWordWrap(configuration: IConfigurationService): boolean {
+	const value = configuration.getValue<'off' | 'on' | 'inherit'>(CodeEditorConfiguration.diffWordWrap);
+	return value === 'on' || (value === 'inherit'
+		&& configuration.getValue<EditorLineWrapping>(CodeEditorConfiguration.wordWrap) === EditorLineWrapping.On);
+}
+
 function booleanSetting(title: string, description: string) {
 	return { valueType: "boolean", title, description } as const;
 }

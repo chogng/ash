@@ -13,14 +13,18 @@ import { type DiffModel } from '../../../common/diff/diffModel.js';
 import { type IDimension } from '../../../common/core/2d/dimension.js';
 import { LineDiffKind } from '../../../common/diff/lineDiff.js';
 import { createBareFontInfoFromRawSettings } from '../../../common/config/fontInfoFromSettings.js';
+import { type BareFontInfo, type FontInfo } from '../../../common/config/fontInfo.js';
 import { applyFontInfo } from '../../config/domFontInfo.js';
-import { createDiffEditorRow } from '../diffEditor/diffEditorRows.js';
+import { FontMeasurements } from '../../config/fontMeasurements.js';
+import { computeDiffRowLayout, createDiffEditorRow, diffRowAtOffset, type DiffRowLayout } from '../diffEditor/diffEditorRows.js';
 import { localize, onDidChangeNls } from '../../../../nls.js';
 
 const DEFAULT_LINE_HEIGHT = 20;
 const DEFAULT_OVERSCAN_ROW_COUNT = 8;
 const SECTION_HEADER_HEIGHT = 34;
 const SECTION_GAP = 8;
+const SECTION_HORIZONTAL_INSET = 18;
+const SCROLLBAR_RESERVE = 15;
 const STATUS_BODY_HEIGHT = 40;
 
 export interface MultiDiffEditorItem {
@@ -41,6 +45,7 @@ export interface MultiDiffEditorWidgetOptions {
 	readonly showLineNumbers?: boolean;
 	readonly showInlineChanges?: boolean;
 	readonly loopChanges?: boolean;
+	readonly wordWrap?: boolean;
 	readonly overscanRowCount?: number;
 	readonly ariaLabel?: string;
 	/** Populates the dedicated action slot owned by each file header. */
@@ -57,6 +62,7 @@ interface MultiDiffSectionLayout {
 	readonly bodyTop: number;
 	readonly bodyHeight: number;
 	readonly height: number;
+	readonly rows: DiffRowLayout;
 }
 
 /** Read-only, vertically virtualized presentation of multiple DiffModels. */
@@ -68,11 +74,17 @@ export class MultiDiffEditorWidget extends Disposable {
 	private readonly items: readonly MultiDiffEditorItem[];
 	private readonly sections: readonly MultiDiffSection[];
 	private readonly layouts: MultiDiffSectionLayout[] = [];
+	private rowLayouts = new WeakMap<DiffModel, DiffRowLayout>();
 	private readonly collapsedItemIds = new Set<string>();
 	private readonly lineHeight: number;
 	private readonly overscanRowCount: number;
 	private readonly showInlineChanges: boolean;
 	private readonly loopChanges: boolean;
+	private readonly showLineNumbers: boolean;
+	private readonly bareFontInfo: BareFontInfo;
+	private fontInfo: FontInfo | undefined;
+	private configuredWordWrap: boolean;
+	private temporaryWordWrap: boolean | undefined;
 	private viewportWidth = 0;
 	private viewportHeight = 0;
 	private activeChange: MultiDiffEditorLocation | undefined;
@@ -85,16 +97,20 @@ export class MultiDiffEditorWidget extends Disposable {
 		this.overscanRowCount = options.overscanRowCount ?? DEFAULT_OVERSCAN_ROW_COUNT;
 		this.showInlineChanges = options.showInlineChanges ?? true;
 		this.loopChanges = options.loopChanges ?? true;
+		this.showLineNumbers = options.showLineNumbers ?? true;
+		this.configuredWordWrap = options.wordWrap ?? false;
 		const ownerDocument = options.container.ownerDocument;
 		this.domNode = h(ownerDocument, 'div');
 		this.domNode.className = 'stanza-multi-diff-editor';
+		this.domNode.classList.toggle('word-wrapped', this.wordWrap);
 		this.domNode.classList.toggle('hide-line-numbers', options.showLineNumbers === false);
-		applyFontInfo(this.domNode, createBareFontInfoFromRawSettings({
+		this.bareFontInfo = createBareFontInfoFromRawSettings({
 			fontFamily: options.fontFamily,
 			fontSize: options.fontSize,
 			fontLigatures: options.fontLigatures,
 			lineHeight: this.lineHeight,
-		}, getWindow(options.container).devicePixelRatio));
+		}, getWindow(options.container).devicePixelRatio);
+		applyFontInfo(this.domNode, this.bareFontInfo);
 		this.domNode.tabIndex = 0;
 		this.domNode.setAttribute('role', 'region');
 		this.domNode.setAttribute('aria-label', options.ariaLabel ?? `Multi-file diff editor with ${this.items.length} files`);
@@ -120,6 +136,7 @@ export class MultiDiffEditorWidget extends Disposable {
 			const item = this.items[index]!;
 			const section = this.sections[index]!;
 			this._register(item.model.onDidChange(() => {
+				this.rowLayouts.delete(item.model);
 				section.invalidate();
 				section.updateIncompleteStatus();
 				if (this.activeChange?.itemId === item.id) this.activeChange = undefined;
@@ -140,13 +157,41 @@ export class MultiDiffEditorWidget extends Disposable {
 		return this.activeChange;
 	}
 
+	public get wordWrap(): boolean {
+		return this.temporaryWordWrap ?? this.configuredWordWrap;
+	}
+
+	public setConfiguredWordWrap(enabled: boolean): void {
+		this.configuredWordWrap = enabled;
+		this.updateWordWrap();
+	}
+
+	public toggleWordWrap(): void {
+		this.temporaryWordWrap = this.temporaryWordWrap === undefined ? !this.wordWrap : undefined;
+		this.updateWordWrap();
+		this.accessibilityStatusDomNode.textContent = this.wordWrap
+			? localize('wordWrap.enabled', 'Word wrap on')
+			: localize('wordWrap.disabled', 'Word wrap off');
+	}
+
+	private updateWordWrap(): void {
+		this.domNode.classList.toggle('word-wrapped', this.wordWrap);
+		this.rowLayouts = new WeakMap();
+		this.refreshLayout();
+	}
+
 	public layout(size: IDimension = getClientArea(this.domNode)): void {
 		if (!isFiniteNumber(size.width) || size.width < 0 || !isFiniteNumber(size.height) || size.height < 0) {
 			throw new RangeError('Multi-diff editor layout size must be finite and non-negative');
 		}
+		const widthChanged = this.viewportWidth !== size.width;
 		this.viewportWidth = size.width;
 		this.viewportHeight = size.height;
-		this.project(true);
+		if (widthChanged) {
+			this.rowLayouts = new WeakMap();
+			this.refreshLayout();
+		}
+		else this.project(true);
 	}
 
 	public toggleItem(itemId: string): boolean {
@@ -187,15 +232,27 @@ export class MultiDiffEditorWidget extends Disposable {
 	}
 
 	private refreshLayout(): void {
+		let wrapping: { readonly fontInfo: FontInfo; readonly column: number } | undefined;
+		if (this.wordWrap) {
+			const gutterWidth = this.showLineNumbers ? 52 : 0;
+			const cellWidth = Math.max(1, (this.viewportWidth - SECTION_HORIZONTAL_INSET - SCROLLBAR_RESERVE) / 2 - gutterWidth - 1);
+			const fontInfo = this.fontInfo ??= FontMeasurements.readFontInfo(getWindow(this.domNode), this.bareFontInfo);
+			wrapping = { fontInfo, column: Math.max(1, Math.floor(cellWidth / fontInfo.typicalHalfwidthCharacterWidth)) };
+		}
 		let top = SECTION_GAP;
 		this.layouts.length = 0;
 		for (let index = 0; index < this.items.length; index += 1) {
 			const item = this.items[index]!;
 			const collapsed = this.collapsedItemIds.has(item.id);
 			const rowCount = item.model.diff?.rows.length ?? 0;
-			const bodyHeight = collapsed ? 0 : rowCount > 0 ? rowCount * this.lineHeight : STATUS_BODY_HEIGHT;
+			let rows = this.rowLayouts.get(item.model);
+			if (!rows) {
+				rows = computeDiffRowLayout(item.model, this.lineHeight, wrapping);
+				this.rowLayouts.set(item.model, rows);
+			}
+			const bodyHeight = collapsed ? 0 : rowCount > 0 ? rows.offsets[rowCount]! : STATUS_BODY_HEIGHT;
 			const height = SECTION_HEADER_HEIGHT + bodyHeight;
-			const layout = { top, bodyTop: top + SECTION_HEADER_HEIGHT, bodyHeight, height };
+			const layout = { top, bodyTop: top + SECTION_HEADER_HEIGHT, bodyHeight, height, rows };
 			this.layouts.push(layout);
 			this.sections[index]!.layout(layout);
 			top += height + SECTION_GAP;
@@ -241,8 +298,8 @@ export class MultiDiffEditorWidget extends Disposable {
 		}
 		this.activeChange = Object.freeze({ ...location });
 		const layout = this.layouts[itemIndex]!;
-		const rowTop = layout.bodyTop + location.rowIndex * this.lineHeight;
-		const rowBottom = rowTop + this.lineHeight;
+		const rowTop = layout.bodyTop + layout.rows.offsets[location.rowIndex]!;
+		const rowBottom = layout.bodyTop + layout.rows.offsets[location.rowIndex + 1]!;
 		const viewportBottom = this.domNode.scrollTop + this.viewportHeight;
 		if (rowTop < this.domNode.scrollTop) this.domNode.scrollTop = rowTop;
 		else if (rowBottom > viewportBottom) this.domNode.scrollTop = Math.max(0, rowBottom - this.viewportHeight);
@@ -250,7 +307,13 @@ export class MultiDiffEditorWidget extends Disposable {
 	}
 
 	private handleKeydown(event: KeyboardEvent): void {
-		if (event.defaultPrevented || event.isComposing || event.key !== 'F7' || event.ctrlKey || event.metaKey || event.altKey) return;
+		if (event.defaultPrevented || event.isComposing || event.getModifierState('AltGraph')) return;
+		if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.key.toLowerCase() === 'z') {
+			stopEvent(event);
+			this.toggleWordWrap();
+			return;
+		}
+		if (event.key !== 'F7' || event.ctrlKey || event.metaKey || event.altKey) return;
 		stopEvent(event);
 		if (event.shiftKey) this.previousChange();
 		else this.nextChange();
@@ -275,16 +338,18 @@ export class MultiDiffEditorWidget extends Disposable {
 				continue;
 			}
 			section.showRows();
-			const firstVisibleRow = Math.floor(Math.max(0, viewportTop - layout.bodyTop) / this.lineHeight);
-			const visibleRowCount = Math.ceil(this.viewportHeight / this.lineHeight);
+			const offsets = layout.rows.offsets;
+			const firstVisibleRow = diffRowAtOffset(offsets, Math.max(0, viewportTop - layout.bodyTop));
 			const startRow = Math.max(0, firstVisibleRow - this.overscanRowCount);
-			const endRow = Math.min(diff.rows.length, firstVisibleRow + visibleRowCount + this.overscanRowCount);
+			const lastVisibleOffset = Math.max(0, viewportBottom - layout.bodyTop - 0.001);
+			const endRow = Math.min(diff.rows.length, diffRowAtOffset(offsets, lastVisibleOffset) + 1 + this.overscanRowCount);
 			section.renderRows(
 				startRow,
 				endRow,
 				this.lineHeight,
 				this.activeChange?.itemId === item.id ? this.activeChange.rowIndex : -1,
 				this.showInlineChanges,
+				layout.rows,
 				force,
 			);
 		}
@@ -403,14 +468,17 @@ class MultiDiffSection extends Disposable {
 		this.statusDomNode.hidden = true;
 	}
 
-	public renderRows(startRow: number, endRow: number, lineHeight: number, activeRow: number, showInlineChanges: boolean, force: boolean): void {
+	public renderRows(startRow: number, endRow: number, lineHeight: number, activeRow: number, showInlineChanges: boolean, layout: DiffRowLayout, force: boolean): void {
 		if (!force && startRow === this.renderedStartRow && endRow === this.renderedEndRow && activeRow === this.renderedActiveRow) return;
 		const rows = this.item.model.diff?.rows ?? [];
 		const fragment = createFragment(this.domNode.ownerDocument);
 		for (let rowIndex = startRow; rowIndex < endRow; rowIndex += 1) {
-			fragment.append(createDiffEditorRow(this.domNode.ownerDocument, rows[rowIndex]!, this.item.model, lineHeight, rowIndex === activeRow, showInlineChanges));
+			fragment.append(createDiffEditorRow(
+				this.domNode.ownerDocument, rows[rowIndex]!, this.item.model, lineHeight,
+				rowIndex === activeRow, showInlineChanges, layout.wrappedRows[rowIndex],
+			));
 		}
-		this.rowsNode.setTop(startRow * lineHeight);
+		this.rowsNode.setTop(layout.offsets[startRow] ?? 0);
 		reset(this.rowsDomNode, fragment);
 		this.renderedStartRow = startRow;
 		this.renderedEndRow = endRow;
@@ -444,7 +512,13 @@ function validateOptions(options: MultiDiffEditorWidgetOptions): void {
 	if (!isNonNegativeSafeInteger(overscanRowCount)) throw new RangeError('Multi-diff editor overscan row count must be a non-negative safe integer');
 	if (options.fontFamily !== undefined && (typeof options.fontFamily !== 'string' || !options.fontFamily.trim())) throw new TypeError('Multi-diff editor font family must be a non-empty string');
 	if (options.fontSize !== undefined && (!isFiniteNumber(options.fontSize) || options.fontSize <= 0)) throw new RangeError('Multi-diff editor font size must be positive and finite');
-	for (const [name, value] of [['fontLigatures', options.fontLigatures], ['showLineNumbers', options.showLineNumbers], ['showInlineChanges', options.showInlineChanges], ['loopChanges', options.loopChanges]] as const) {
+	for (const [name, value] of [
+		['fontLigatures', options.fontLigatures],
+		['showLineNumbers', options.showLineNumbers],
+		['showInlineChanges', options.showInlineChanges],
+		['loopChanges', options.loopChanges],
+		['wordWrap', options.wordWrap],
+	] as const) {
 		if (value !== undefined && typeof value !== 'boolean') throw new TypeError(`Multi-diff editor option '${name}' must be boolean`);
 	}
 	if (options.ariaLabel !== undefined && (typeof options.ariaLabel !== 'string' || options.ariaLabel.trim().length === 0)) throw new TypeError('Multi-diff editor ARIA label must be a non-empty string');

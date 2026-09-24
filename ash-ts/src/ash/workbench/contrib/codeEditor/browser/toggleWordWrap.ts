@@ -5,6 +5,7 @@ import { Action2, registerAction2 } from '../../../../platform/actions/common/ac
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IEditorPartsService } from '../../../browser/parts/editor/editorParts.js';
 import { DiffEditorPane } from './diffEditorPane.js';
+import { MultiDiffEditorPane } from '../../multiDiffEditor/browser/multiDiffEditorPane.js';
 
 class ToggleWordWrapAction extends Action2 {
 	constructor() {
@@ -18,6 +19,10 @@ class ToggleWordWrapAction extends Action2 {
 	override run(accessor: ServicesAccessor): void {
 		const pane = accessor.getOptional(IEditorPartsService)?.activePane;
 		if (pane instanceof DiffEditorPane) {
+			pane.toggleWordWrap();
+			return;
+		}
+		if (pane instanceof MultiDiffEditorPane) {
 			pane.toggleWordWrap();
 			return;
 		}

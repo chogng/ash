@@ -12,8 +12,10 @@ import { type ITextModel } from '../../../../../editor/common/model.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { ContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
 import { EditorPaneVisibility } from '../../../../browser/parts/editor/editorPane.js';
+import { IEditorPartsService } from '../../../../browser/parts/editor/editorParts.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { TextFileContentSource, type ITextFileService, type ResolvedTextFileContent, type TextFileResolveRequest } from '../../../../services/textfile/common/textFileService.js';
 import type { EditorInput, IEditorService } from '../../../../services/editor/common/editorService.js';
@@ -21,6 +23,7 @@ import type { GitStatus, IGitService } from '../../../../services/git/common/git
 import type { IChatService, TurnChangeSetSummary } from '../../../../services/chat/common/chatService.js';
 import type { ISessionsManagementService } from '../../../../../sessions/services/sessions/common/sessionsManagementService.js';
 import { CodeEditorConfiguration } from '../../../codeEditor/common/editorConfiguration.js';
+import { EditorLineWrapping } from '../../../../../editor/common/config/editorOptions.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 for (const [name, value] of Object.entries({
@@ -39,6 +42,7 @@ const { BrowserTextModelService } = await import('../../../../services/textmodel
 const { BrowserTextResourceStore } = await import('../../../codeEditor/browser/browserTextResourceStore.js');
 const { createMultiDiffEditorInput } = await import('../../browser/multiDiffEditorInput.js');
 const { MultiDiffEditorPane } = await import('../../browser/multiDiffEditorPane.js');
+await import('../../../codeEditor/browser/toggleWordWrap.js');
 const { createGitMultiDiffEditorInput } = await import('../../browser/scmMultiDiffAction.js');
 const { createTurnMultiDiffEditorInput } = await import('../../browser/turnMultiDiffSource.js');
 
@@ -203,6 +207,42 @@ test('Stanza multi-diff pane resolves every comparison and releases the complete
 	pane.clearInput();
 	pane.dispose();
 	assert.equal(parent.children.length, 0);
+	dom.window.close();
+});
+
+test('Multi-diff pane inherits word wrap and routes the toggle command to its view', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
+	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
+	using models = new BrowserTextModelService(resourceStore);
+	using resources = new DisposableStore();
+	const services = createCodeEditorServices(resources);
+	const configuration = services.get(IConfigurationService);
+	await configuration.updateValue(CodeEditorConfiguration.wordWrap, EditorLineWrapping.On);
+	const pane = services.createInstance(MultiDiffEditorPane, {
+		modelService: models,
+		createComputationService: () => new PaneTestDiffComputationService(),
+	} satisfies MultiDiffEditorPaneOptions);
+	pane.create(parent);
+	pane.layout({ width: 400, height: 200 });
+	await pane.setInput(createMultiDiffEditorInput(URI.parse('ash-multi-diff:/wrap'), [{
+		label: 'wrap.ts',
+		original: { resource: URI.parse('git-change:/wrap/original'), initialText: 'old ' + 'value '.repeat(40) },
+		modified: { resource: URI.parse('git-change:/wrap/modified'), initialText: 'new ' + 'value '.repeat(40) },
+	}], 'Wrap'), new AbortController().signal);
+	await Promise.resolve();
+	const editor = requiredElement<HTMLElement>(dom.window.document, '.stanza-multi-diff-editor');
+	assert.equal(editor.classList.contains('word-wrapped'), true);
+	services.registerInstance(IEditorPartsService, { activePane: pane } as unknown as IEditorPartsService);
+	await services.get(ICommandService).executeCommand('editor.action.toggleWordWrap');
+	assert.equal(editor.classList.contains('word-wrapped'), false);
+	await configuration.updateValue(CodeEditorConfiguration.diffWordWrap, 'off');
+	assert.equal(editor.classList.contains('word-wrapped'), false);
+	pane.toggleWordWrap();
+	assert.equal(editor.classList.contains('word-wrapped'), false);
+	await configuration.updateValue(CodeEditorConfiguration.diffWordWrap, 'on');
+	assert.equal(editor.classList.contains('word-wrapped'), true);
+	pane.dispose();
 	dom.window.close();
 });
 

@@ -28,7 +28,7 @@ import { GIT_VIEW_ID } from '../../scm/browser/scmViewPane.js';
 import { createGitMultiDiffEditorInput } from './scmMultiDiffAction.js';
 import { isMultiDiffEditorInput, MULTI_DIFF_EDITOR_ID, multiDiffEditorItemKey, type MultiDiffEditorInput, type MultiDiffEditorInputItem } from './multiDiffEditorInput.js';
 import { MultiDiffEditorToolbar } from './multiDiffEditorToolbar.js';
-import { CodeEditorConfiguration, getDiffComputationOptions } from '../../codeEditor/common/editorConfiguration.js';
+import { CodeEditorConfiguration, getDiffComputationOptions, getDiffWordWrap } from '../../codeEditor/common/editorConfiguration.js';
 
 export interface MultiDiffEditorPaneOptions {
 	readonly modelService: ITextModelResourceService;
@@ -149,6 +149,10 @@ export class MultiDiffEditorPane extends Disposable implements IEditorPane {
 		this.session.value?.focus();
 	}
 
+	public toggleWordWrap(): void {
+		this.session.value?.editor?.toggleWordWrap();
+	}
+
 	public nextChange(): MultiDiffEditorLocation | undefined {
 		return this.session.value?.editor?.nextChange();
 	}
@@ -225,6 +229,10 @@ class MultiDiffEditorPaneSession extends Disposable {
 				};
 			});
 			this._register(configuration.onDidChangeConfiguration(event => {
+				if (event.affectsConfiguration(CodeEditorConfiguration.diffWordWrap)
+					|| event.affectsConfiguration(CodeEditorConfiguration.wordWrap)) {
+					this.editor?.setConfiguredWordWrap(getDiffWordWrap(configuration));
+				}
 				for (const model of this.models) {
 					const languageId = model.modified.getLanguageId();
 					if (event.affectsConfiguration(CodeEditorConfiguration.diffIgnoreTrimWhitespace, { overrideIdentifier: languageId })
@@ -260,6 +268,7 @@ class MultiDiffEditorPaneSession extends Disposable {
 			this.editor = this._register(new MultiDiffEditorWidget({
 				container: this.editorDomNode,
 				items,
+				wordWrap: getDiffWordWrap(configuration),
 				lineHeight: options.lineHeight,
 				fontFamily: options.fontFamily,
 				fontSize: options.fontSize,
