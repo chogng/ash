@@ -155,7 +155,7 @@ The same `linesOperations.ts` owner maps Ctrl+J (Command+J on macOS), reduces ov
 
 `caretOperations/browser/transpose.ts` owns the macOS Ctrl+T `editor.action.transposeLetters` path and swaps complete graphemes in one isolated transaction. `linesOperations/browser/linesOperations.ts` separately owns `editor.action.transpose`, including its end-of-line exchange with the following line break; both paths reject range selections and resolve overlapping cursors before editing.
 
-`WordWrapController` maps Alt+Z to a viewport-local word-wrap toggle. `View` always virtualizes through its visual-line source, so switching wrapping rebuilds row geometry, scroll limits, hit testing, selection projection, and rendering without changing the model or re-creating the editor. The `.word-wrapped` root class reflects that component-owned presentation state.
+`WordWrapController` maps Alt+Z and the Workbench `editor.action.toggleWordWrap` command to the same viewport-local word-wrap toggle. `View` always virtualizes through its visual-line source, so switching wrapping rebuilds row geometry, scroll limits, hit testing, selection projection, and rendering without changing the model or re-creating the editor. The `.word-wrapped` root class reflects that component-owned presentation state.
 
 The actions in `multicursor.ts` handle Ctrl/Cmd+D and Ctrl/Cmd+Shift+L without browser-native selection logic. `ITextModel.getWordAtPosition` resolves the source word for a collapsed primary cursor, then the contribution adds the next exact match or replaces the set with every exact match; the actions update and reveal the live selections.
 

@@ -14,6 +14,7 @@ import '../../../src/ash/workbench/contrib/codeEditor/browser/quickaccess/gotoLi
 import '../../../src/ash/workbench/contrib/codeEditor/browser/toggleMinimap.js';
 import '../../../src/ash/workbench/contrib/codeEditor/browser/toggleRenderWhitespace.js';
 import '../../../src/ash/workbench/contrib/codeEditor/browser/toggleRenderControlCharacter.js';
+import '../../../src/ash/workbench/contrib/codeEditor/browser/toggleWordWrap.js';
 import { h } from '../../../src/ash/base/browser/dom.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
@@ -79,7 +80,7 @@ interface IntegrationHarness {
 	setScrollbar(options: IEditorScrollbarOptions): void;
 	updateOptions(options: IEditorOptions): void;
 	runWorkbenchCommand(id: string): Promise<void>;
-	getViewSettings(): { readonly minimap: boolean; readonly renderWhitespace: string; readonly renderControlCharacters: boolean };
+	getViewSettings(): { readonly minimap: boolean; readonly renderWhitespace: string; readonly renderControlCharacters: boolean; readonly wordWrap: string };
 	setTheme(theme: 'dark' | 'light' | 'contrast' | 'contrastLight'): void;
 	setRenderRichScreenReaderContent(enabled: boolean): void;
 	showViewZone(): void;
@@ -234,6 +235,7 @@ window.ashTextModelIntegration = {
 		minimap: requiredEditorPart().getOption(EditorOption.minimap).enabled,
 		renderWhitespace: requiredEditorPart().getOption(EditorOption.renderWhitespace),
 		renderControlCharacters: requiredEditorPart().getOption(EditorOption.renderControlCharacters),
+		wordWrap: requiredEditorPart().getOption(EditorOption.wordWrap),
 	}),
 	setTheme: theme => themeService.setColorTheme({ dark: darkColorTheme, light: lightColorTheme, contrast: highContrastDarkColorTheme, contrastLight: highContrastLightColorTheme }[theme]),
 	setRenderRichScreenReaderContent: enabled => requiredEditorPart().updateOptions({ renderRichScreenReaderContent: enabled }),

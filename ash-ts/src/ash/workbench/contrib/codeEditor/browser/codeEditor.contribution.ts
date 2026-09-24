@@ -3,6 +3,7 @@ import './quickaccess/gotoLineQuickAccess.js';
 import './toggleMinimap.js';
 import './toggleRenderWhitespace.js';
 import './toggleRenderControlCharacter.js';
+import './toggleWordWrap.js';
 import { getBrowserTextModelService } from "../../../services/textmodelResolver/browser/browserTextModelService.js";
 import { registerEditorPane } from "../../../browser/parts/editor/editorRegistry.js";
 import { getBrowserTextResourceStore } from "./browserTextResourceStore.js";

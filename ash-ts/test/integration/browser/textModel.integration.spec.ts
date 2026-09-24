@@ -709,6 +709,18 @@ test('Workbench editor actions update the open editor and Go to Line retains key
 	await expect(page.locator('.stanza-editor-whitespace').first()).toBeVisible();
 	await page.evaluate(() => window.ashTextModelIntegration.runWorkbenchCommand('editor.action.toggleRenderControlCharacter'));
 	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getViewSettings().renderControlCharacters)).toBe(false);
+	const text = `${'alpha '.repeat(80)}\nsecond line`;
+	await page.evaluate(value => window.ashTextModelIntegration.setValue(value), text);
+	await input.focus();
+	await page.evaluate(() => window.ashTextModelIntegration.runWorkbenchCommand('editor.action.toggleWordWrap'));
+	await expect(page.locator('.stanza-editor.word-wrapped')).toBeVisible();
+	await expect(page.locator('.stanza-editor-accessibility-status')).toHaveText('Word wrap on');
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getViewSettings().wordWrap)).toBe('on');
+	await input.press('Alt+Z');
+	await expect(page.locator('.stanza-editor.word-wrapped')).toHaveCount(0);
+	await expect(page.locator('.stanza-editor-accessibility-status')).toHaveText('Word wrap off');
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getViewSettings().wordWrap)).toBe('off');
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe(text);
 
 	await input.focus();
 	await page.evaluate(() => window.ashTextModelIntegration.runWorkbenchCommand('workbench.action.gotoLine'));

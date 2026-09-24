@@ -6,7 +6,7 @@ test('Code exposes editor view actions in the command palette', async ({ target,
 	await workbench.page.keyboard.press('F1');
 	const picker = workbench.page.locator('.ash-quick-pick');
 	const query = picker.getByRole('combobox');
-	for (const label of ['Toggle Minimap', 'Toggle Render Whitespace', 'Toggle Control Characters', 'Go to Line/Column...']) {
+	for (const label of ['Toggle Minimap', 'Toggle Render Whitespace', 'Toggle Control Characters', 'View: Toggle Word Wrap', 'Go to Line/Column...']) {
 		await query.fill(label);
 		await expect(picker.locator('.ash-quick-pick-row-label').filter({ hasText: label })).toBeVisible();
 	}

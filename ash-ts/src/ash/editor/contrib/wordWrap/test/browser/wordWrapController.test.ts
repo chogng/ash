@@ -6,6 +6,7 @@ import { h } from "../../../../../base/browser/dom.js";
 import { type TextMeasurer } from '../../../../common/viewModel.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+browserEnvironment.window.HTMLCanvasElement.prototype.getContext = () => null;
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
 	document: browserEnvironment.window.document,
@@ -24,6 +25,7 @@ const { WordWrapController } = await import("../../browser/wordWrapController.js
 
 test("Word-wrap shortcut switches Stanza's visual projection without editing text", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("abcdef");
 	using viewport = new View({ container, model, glyphMargin: false, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), minimap: { enabled: false } });
@@ -37,8 +39,18 @@ test("Word-wrap shortcut switches Stanza's visual projection without editing tex
 	assert.equal(enable.defaultPrevented, true);
 	assert.equal(viewport.lineWrapping, EditorLineWrapping.On);
 	assert.equal(viewport.domNode.domNode.classList.contains("word-wrapped"), true);
+	assert.equal(viewport.domNode.domNode.querySelector(".stanza-editor-accessibility-status")?.textContent, "Word wrap on");
 	assert.equal(viewport.viewportLayout.contentSize.height, 60);
 	assert.equal(model.getText(), "abcdef");
+	controller.toggle();
+	assert.equal(viewport.lineWrapping, EditorLineWrapping.Off);
+	assert.equal(viewport.domNode.domNode.classList.contains("word-wrapped"), false);
+	assert.equal(viewport.domNode.domNode.querySelector(".stanza-editor-accessibility-status")?.textContent, "Word wrap off");
+
+	const reenable = keydown(dom.window, "z", { altKey: true });
+	input.dispatchEvent(reenable);
+	assert.equal(reenable.defaultPrevented, true);
+	assert.equal(viewport.lineWrapping, EditorLineWrapping.On);
 
 	const disable = keydown(dom.window, "z", { altKey: true });
 	input.dispatchEvent(disable);
