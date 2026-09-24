@@ -22,18 +22,18 @@ await extensions.start();
 
 let analyzeCalls = 0;
 let completedCalls = 0;
-const pending: (() => void)[] = [];
+const pending: { revision: number; resolve: () => void }[] = [];
 store.add(new AppServerSyntaxProviders(services.languageFeaturesService, {
 	generation: 1,
 	open: async () => {},
 	update: async () => {},
 	analyze: params => {
 		analyzeCalls++;
-		return new Promise(resolve => pending.push(() => {
+		return new Promise(resolve => pending.push({ revision: params.revision, resolve: () => {
 			completedCalls++;
 			resolve({ revision: params.revision, hasErrors: true, tokens: [], symbols: [], foldingRanges: [],
 				diagnostics: [{ kind: 'error', range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 2 } } }] });
-		}));
+		} }));
 	},
 	selectionRanges: async params => ({ revision: params.revision, ranges: [] }),
 	close: async () => {},
@@ -63,7 +63,7 @@ const integration = {
 		return {
 			text: model.getValue(), version: model.version, tokenVersion: model.tokenization.modelVersion,
 			tokens: model.tokenization.lines.flatMap(line => line.tokens.map(token => ({ type: token.tokenType, text: model.getTextInRange(token.range) }))),
-			analyzeCalls, completedCalls, errors,
+			analyzeCalls, completedCalls, pendingVersions: pending.map(request => request.revision), errors,
 			diagnosticVersion: model.diagnostics.results.result?.modelVersion ?? null,
 		};
 	},
@@ -87,7 +87,7 @@ const integration = {
 		const hasString = line !== undefined && Array.from({ length: line.getCount() }, (_, index) => line.getStandardTokenType(index)).includes(StandardTokenType.String);
 		return { hasString, unchanged: model.version === version };
 	},
-	releaseAnalysis(): void { for (const resolve of pending.splice(0)) resolve(); },
+	releaseAnalysis(): void { for (const request of pending.splice(0)) request.resolve(); },
 	dispose(): void { editor.dispose(); model.dispose(); store.dispose(); integration.releaseAnalysis(); },
 };
 declare global { interface Window { tokenizationIntegration: typeof integration } }

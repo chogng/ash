@@ -60,7 +60,20 @@ test('typing, undo and preview tokenize while parser analysis is pending; stale 
 	expect(preview.unchanged).toBe(true);
 	const before = await page.evaluate(() => window.tokenizationIntegration.state());
 	expect(before.diagnosticVersion).toBeNull();
-	await page.evaluate(() => window.tokenizationIntegration.releaseAnalysis());
+	let releasedCurrent = false;
+	for (let index = 0; index < before.version; index++) {
+		await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().pendingVersions.length)).toBeGreaterThan(0);
+		const revision = await page.evaluate(() => window.tokenizationIntegration.state().pendingVersions[0]!);
+		expect(revision).toBeLessThanOrEqual(before.version);
+		await page.evaluate(() => window.tokenizationIntegration.releaseAnalysis());
+		if (revision === before.version) {
+			releasedCurrent = true;
+			break;
+		}
+		await expect.poll(() => page.evaluate(revision => window.tokenizationIntegration.state().pendingVersions.some(value => value > revision), revision)).toBe(true);
+		expect((await page.evaluate(() => window.tokenizationIntegration.state())).diagnosticVersion).toBeNull();
+	}
+	expect(releasedCurrent).toBe(true);
 	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().diagnosticVersion)).toBe(before.version);
 	expect((await page.evaluate(() => window.tokenizationIntegration.state())).errors).toEqual([]);
 });

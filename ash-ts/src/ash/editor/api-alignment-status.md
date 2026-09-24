@@ -8,6 +8,8 @@
 
 折叠视图状态续批：`CodeEditorWidget.saveViewState/restoreViewState` → `FoldingController.saveViewState/restoreViewState` → `EditorFoldingModel.getMemento/applyMemento` → 原隐藏行模型。状态记录折叠区域和手动区域的行号、来源及边界行文本校验；恢复可在 provider 结果到达前应用，后续范围更新继续保留匹配折叠状态，校验行已变化的区域不恢复。折叠模型与编辑器贡献仍是唯一状态 owner。定向单测 15 项及完整 Editor 单测 239/239 个文件通过；Chromium 视图状态场景 1 项通过，验证保存、展开、恢复后可见行数从 3 到 9 再回到 3；Stanza 生产构建通过。完整 Chromium 套件本批 638 项中 637 项通过，`tokenization.integration.spec.ts` 的 pending parser 诊断版本场景失败，定向重跑仍失败；该场景不经过本批控制器链，本批不声明全套通过。
 
+上述 tokenization 场景已修复（2026-09-24）：测试替身的解析请求按版本串行排队，原测试只释放当时已进入等待队列的请求，就立即等待最新版本诊断。场景现逐个释放排队版本，并检查旧版本完成后诊断仍为空、当前版本完成后才发布。未改解析或诊断产品实现；定向 Chromium 场景通过，随后完整 Chromium 套件 635/635 项通过。
+
 ## Contrib CodeLens 公开端口（2026-09-24）
 
 生产链为语言 provider → `CodeLensContribution` → `CodeLensWidget` → 可见提示的命令按钮。Widget 仍拥有稳定 DOM、视图区和释放；控制器仍拥有请求、结果模型与缓存。双方都有的 `codelensWidget.ts` 原地将仅 Ash 的 `codeLensItems`、`updateResolvedCodeLensItems` 迁为上游公开的 `getItems()`、`updateCommands(symbols)`，同批迁移唯一生产调用方；没有建立双入口，也没有改变视图布局或命令执行方式。其他 CodeLensWidget 成员差异仍待按实际调用链核对，本批不把整个声明记为已处理。
