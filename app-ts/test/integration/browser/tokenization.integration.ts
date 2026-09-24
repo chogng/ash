@@ -87,6 +87,12 @@ const integration = {
 		const hasString = line !== undefined && Array.from({ length: line.getCount() }, (_, index) => line.getStandardTokenType(index)).includes(StandardTokenType.String);
 		return { hasString, unchanged: model.version === version };
 	},
+	async forceRetokenize(): Promise<{ version: number; accurate: boolean }> {
+		const action = editor.getAction('editor.action.forceRetokenize');
+		if (!action) throw new Error('Force Retokenize action is not registered');
+		await action.run();
+		return { version: model.version, accurate: model.tokenization.hasAccurateTokensForLine(model.getLineCount()) };
+	},
 	releaseAnalysis(): void { for (const request of pending.splice(0)) request.resolve(); },
 	dispose(): void { editor.dispose(); model.dispose(); store.dispose(); integration.releaseAnalysis(); },
 };

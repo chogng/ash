@@ -73,6 +73,23 @@ test('folding command metadata uses the selected Chinese language catalog', asyn
 	}
 });
 
+test('force retokenize action label uses the selected Chinese language catalog', async () => {
+	using configuration = new InMemoryConfigurationService();
+	using languagePacks = new MarketplaceLanguagePackService(createMarketplace(), builtinLanguagePackCatalogs);
+	using localeService = new WorkbenchLocaleService(configuration, languagePacks);
+	using localization = new WorkbenchLocalizationService(localeService, languagePacks);
+	try {
+		await localization.whenReady;
+		await localeService.setLocale('zh-CN');
+		await import('../../../../../editor/contrib/tokenization/browser/tokenization.js');
+		const { EditorExtensionsRegistry } = await import('../../../../../editor/browser/editorExtensions.js');
+		const action = [...EditorExtensionsRegistry.getEditorActions()].find(candidate => candidate.id === 'editor.action.forceRetokenize');
+		assert.equal(action?.label, '开发者：强制重新分词');
+	} finally {
+		resetNlsResolver();
+	}
+});
+
 test('Quick Input uses Chinese labels from the selected catalog', async () => {
 	using configuration = new InMemoryConfigurationService();
 	using languagePacks = new MarketplaceLanguagePackService(createMarketplace(), builtinLanguagePackCatalogs);

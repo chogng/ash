@@ -36,6 +36,15 @@ test('all eight parser languages use bundled TextMate grammars in the frontend W
 	expect(page.workers().some(worker => worker.url().includes('textMateSyntaxWorkerMain'))).toBe(true);
 });
 
+test('Force Retokenize action invalidates and refreshes visible tokens', async ({ page }) => {
+	await expect(page.locator('.stanza-editor-token.token-keyword').filter({ hasText: /^fn$/ })).toBeVisible();
+	const before = await page.evaluate(() => window.tokenizationIntegration.state());
+	const result = await page.evaluate(() => window.tokenizationIntegration.forceRetokenize());
+	expect(result).toEqual({ version: before.version, accurate: false });
+	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().tokenVersion)).toBe(before.version);
+	await expect(page.locator('.stanza-editor-token.token-keyword').filter({ hasText: /^fn$/ })).toBeVisible();
+});
+
 test('typing, undo and preview tokenize while parser analysis is pending; stale diagnostics are discarded', async ({ page }) => {
 	const input = page.locator('.stanza-editor-input');
 	await expect(page.locator('.stanza-editor-token.token-keyword').filter({ hasText: /^fn$/ })).toBeVisible();

@@ -1,5 +1,11 @@
 # Editor API 对齐状态
 
+## Contrib Tokenization 开发者命令（2026-09-24）
+
+`editor.action.forceRetokenize` 已由同路径 `contrib/tokenization/browser/tokenization.ts` 注册并接入 `editor.all.ts`。命令从当前编辑器取得模型，调用模型已有的 `resetTokenization()`；Ash 的语法提供者可以异步执行，因此新结果由模型原有请求链发布，命令不调用会在异步提供者下抛错的同步 `forceTokenization()`。无模型时命令不操作。现有 `tokenization.contribution.ts` 仍负责视图 token 来源和就绪状态，不承担请求或缓存。命令标题进入英中双语目录。
+
+编辑器动作单测 70 项通过，其中新增场景验证命令使旧 token 失效、重新请求并发布新 token，解绑模型后可安全调用。Chromium 定向场景通过，验证真实 TextMate Worker 重新发布后可见高亮恢复；`build:stanza`、`build:renderer` 和完整 Editor 对齐检查通过，后者包含 646 个 Chromium 场景。中文动作标题定向单测通过；语言服务整文件另有两个既有断言失败，分别涉及 Advisor 文案和 Git 自动获取设置，本批不计为语言服务测试全通过。
+
 ## common/diff 标准结果接入（2026-09-24）
 
 生产链：Diff / Multi Diff / Quick Diff → `DiffModel` 绑定两份文本版本 → `IDocumentDiffProvider.computeDiff` → `WorkerDiffComputationService` → `DefaultLinesDiffComputer` → `LinesDiff` 与行、字符范围映射 → `IDocumentDiff` → `DiffModel` 转为只读界面的行数据。Worker 回复按标准坐标校验并恢复映射类，旧的 Worker 行/区块结果及快照 `compute(request, signal)` 入口退出。比较算法只有 `defaultLinesDiffComputer.ts` 一个 owner；已确认的 Ash `diffModel.ts`、`diffComputationService.ts` 和 `lineDiff.ts` 分别保留版本有效性、Worker 快照请求数据和界面行展示职责。

@@ -24,6 +24,7 @@ import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { Selection } from '../../../common/core/selection.js';
 import { TextModel } from "../../../common/model/textModel.js";
+import { SyntaxProviderRegistry } from '../../../common/languageFeatureRegistry.js';
 import { GlyphMarginLane } from '../../../common/model.js';
 import { EditorLineWrapping, EditorOption, RenderLineNumbersType } from '../../../common/config/editorOptions.js';
 import { ScrollType } from '../../../common/editorCommon.js';
@@ -295,6 +296,44 @@ test('CodeEditorWidget scopes and updates the standard editor context keys', () 
 	editor.updateOptions({ readOnly: true });
 	assert.equal(scoped.getValue('editorReadonly'), true);
 	dom.window.close();
+});
+
+test('force retokenize action refreshes the active model through its syntax provider', async () => {
+	await import('../../../contrib/tokenization/browser/tokenization.js');
+	using providers = new SyntaxProviderRegistry();
+	let requests = 0;
+	using registration = providers.register({
+		id: 'test.retokenize',
+		languageIds: ['retokenize'],
+		provideTokens: () => ({ tokens: [{
+			range: new Range(1, 1, 1, 6),
+			tokenType: ++requests === 1 ? 'string' : 'comment',
+			modifiers: [],
+		}] }),
+	});
+	using model = new TextModel('value', { languageId: 'retokenize', tokenization: { syntaxProviderRegistry: providers } });
+	for (let attempt = 0; attempt < 20 && !model.tokenization.hasAccurateTokensForLine(1); attempt++) {
+		await new Promise(resolve => setTimeout(resolve, 0));
+	}
+	assert.equal(model.tokenization.getLanguageTokens(0)[0]?.tokenType, 'string');
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, contributions: [] });
+	try {
+		const action = editor.getAction('editor.action.forceRetokenize');
+		assert.ok(action);
+		await action.run();
+		assert.equal(model.tokenization.hasAccurateTokensForLine(1), false);
+		for (let attempt = 0; attempt < 20 && !model.tokenization.hasAccurateTokensForLine(1); attempt++) {
+			await new Promise(resolve => setTimeout(resolve, 0));
+		}
+		assert.deepEqual([requests, model.tokenization.getLanguageTokens(0)[0]?.tokenType], [2, 'comment']);
+		editor.setModel(null);
+		await action.run();
+		assert.equal(requests, 2);
+	} finally {
+		dom.window.close();
+	}
 });
 
 test('CodeEditorWidget actions keep their editor context across read-only changes and model switches', async () => {

@@ -47,6 +47,7 @@ import "./contrib/symbolIcons/browser/symbolIcons.contribution.js";
 import "./contrib/suggest/browser/suggestController.js";
 import './contrib/toggleTabFocusMode/browser/toggleTabFocusMode.js';
 import "./contrib/tokenization/browser/tokenization.contribution.js";
+import './contrib/tokenization/browser/tokenization.js';
 import "./contrib/unicodeHighlighter/browser/unicodeHighlighter.contribution.js";
 import "./contrib/unusualLineTerminators/browser/unusualLineTerminators.contribution.js";
 import "./contrib/wordHighlighter/browser/wordHighlighter.contribution.js";
