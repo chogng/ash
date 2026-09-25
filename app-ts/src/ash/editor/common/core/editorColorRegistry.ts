@@ -130,3 +130,12 @@ export const editorBracketPairGuideActiveBackground3 = alias('editorBracketPairG
 export const editorBracketPairGuideActiveBackground4 = alias('editorBracketPairGuide.activeBackground4', editorBracketHighlightingForeground4, 'Color of the fourth active bracket pair guide.');
 export const editorBracketPairGuideActiveBackground5 = alias('editorBracketPairGuide.activeBackground5', editorBracketHighlightingForeground5, 'Color of the fifth active bracket pair guide.');
 export const editorBracketPairGuideActiveBackground6 = alias('editorBracketPairGuide.activeBackground6', editorBracketHighlightingForeground6, 'Color of the sixth active bracket pair guide.');
+
+const collaborationOwner = 'collaboration.presentation';
+const collaborationSelection = (id: string, value: string, description: string): string =>
+	registerColor(id, { dark: value, light: value }, { description, owner: collaborationOwner });
+
+export const collaborationSelection0Background = collaborationSelection('collaboration.selection0Background', '#3584e4', 'Background tint for the first concurrent collaborator selection.');
+export const collaborationSelection1Background = collaborationSelection('collaboration.selection1Background', '#9141ac', 'Background tint for the second concurrent collaborator selection.');
+export const collaborationSelection2Background = collaborationSelection('collaboration.selection2Background', '#26a269', 'Background tint for the third concurrent collaborator selection.');
+export const collaborationSelection3Background = collaborationSelection('collaboration.selection3Background', '#c64600', 'Background tint for the fourth concurrent collaborator selection.');

@@ -5,7 +5,7 @@ import type { IAction } from "../../../../base/common/actions.js";
 import { Separator } from "../../../../base/common/actions.js";
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
-import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
+import { Lxicon } from "../../../../base/common/lxicons.js";
 import { clamp } from "../../../../base/common/numbers.js";
 import { assertDefined } from "../../../../base/common/types.js";
 import { ToolBar } from "../../../../base/browser/ui/toolbar/toolbar.js";
@@ -274,16 +274,16 @@ export class PdfEditorPane extends Disposable implements IEditorPane {
 	private renderToolbar(): void {
 		const available = this.input !== undefined;
 		this.toolbar?.setActions([
-			action("ash.pdf.annotations.select", "Select", "Select annotations", lxiconsLibrary.check, available, this.mode === "select", () => this.setMode("select")),
-			action("ash.pdf.annotations.highlight", "Highlight", "Draw a highlight", lxiconsLibrary.bold, available, this.mode === "highlight", () => this.setMode("highlight")),
-			action("ash.pdf.annotations.ink", "Draw", "Draw freehand ink", lxiconsLibrary.italics, available, this.mode === "ink", () => this.setMode("ink")),
-			action("ash.pdf.annotations.note", "Note", "Place a note", lxiconsLibrary.chat, available, this.mode === "note", () => this.setMode("note")),
+			action("ash.pdf.annotations.select", "Select", "Select annotations", Lxicon.check, available, this.mode === "select", () => this.setMode("select")),
+			action("ash.pdf.annotations.highlight", "Highlight", "Draw a highlight", Lxicon.bold, available, this.mode === "highlight", () => this.setMode("highlight")),
+			action("ash.pdf.annotations.ink", "Draw", "Draw freehand ink", Lxicon.italics, available, this.mode === "ink", () => this.setMode("ink")),
+			action("ash.pdf.annotations.note", "Note", "Place a note", Lxicon.chat, available, this.mode === "note", () => this.setMode("note")),
 			new Separator(),
-			action("ash.pdf.annotations.undo", "Undo", "Undo annotation change", lxiconsLibrary.history, available && this.annotationModel.canUndo, false, () => this.annotationModel.undo()),
-			action("ash.pdf.annotations.redo", "Redo", "Redo annotation change", lxiconsLibrary.history, available && this.annotationModel.canRedo, false, () => this.annotationModel.redo()),
-			action("ash.pdf.annotations.delete", "Delete", "Delete selected annotation", lxiconsLibrary.trash, available && this.selectedAnnotationId !== undefined, false, () => this.deleteSelectedAnnotation()),
+			action("ash.pdf.annotations.undo", "Undo", "Undo annotation change", Lxicon.history, available && this.annotationModel.canUndo, false, () => this.annotationModel.undo()),
+			action("ash.pdf.annotations.redo", "Redo", "Redo annotation change", Lxicon.history, available && this.annotationModel.canRedo, false, () => this.annotationModel.redo()),
+			action("ash.pdf.annotations.delete", "Delete", "Delete selected annotation", Lxicon.trash, available && this.selectedAnnotationId !== undefined, false, () => this.deleteSelectedAnnotation()),
 			new Separator(),
-			action("ash.pdf.annotations.save", "Save", "Save annotations", lxiconsLibrary.check, available && this.annotationModel.isDirty && !this.saveOperation, false, () => this.save().catch(() => undefined)),
+			action("ash.pdf.annotations.save", "Save", "Save annotations", Lxicon.check, available && this.annotationModel.isDirty && !this.saveOperation, false, () => this.save().catch(() => undefined)),
 		]);
 	}
 

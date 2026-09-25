@@ -5,7 +5,7 @@ import { type LanguageDiagnostic, type LanguageDiagnosticResult, type LanguageDi
 import { type URI } from "../../../../base/common/uri.js";
 import { MinimapPosition, OverviewRulerLane, TrackedRangeStickiness, type IModelDecorationOptions } from '../../../common/model.js';
 import { themeColorFromId } from '../../../../base/common/themables.js';
-import { ColorId } from '../../../../platform/theme/common/colorTheme.js';
+import { accentForeground, errorForeground, warningForeground } from '../../../../platform/theme/common/colors/baseColors.js';
 
 /**
  * Projects current-version diagnostics into generic text decorations.
@@ -50,11 +50,11 @@ export function diagnosticDecorationOptions(diagnostic: LanguageDiagnostic): Omi
 	const hoverMessage = { value: diagnosticHoverText(diagnostic) };
 	switch (diagnostic.severity) {
 		case LanguageDiagnosticSeverity.Error:
-			return markerOptions('squiggly-error', ColorId.errorForeground, 30, hoverMessage);
+			return markerOptions('squiggly-error', errorForeground, 30, hoverMessage);
 		case LanguageDiagnosticSeverity.Warning:
-			return markerOptions('squiggly-warning', ColorId.warningForeground, 20, hoverMessage);
+			return markerOptions('squiggly-warning', warningForeground, 20, hoverMessage);
 		case LanguageDiagnosticSeverity.Information:
-			return markerOptions('squiggly-info', ColorId.accentForeground, 10, hoverMessage);
+			return markerOptions('squiggly-info', accentForeground, 10, hoverMessage);
 		case LanguageDiagnosticSeverity.Hint:
 			return {
 				description: 'marker-decoration',

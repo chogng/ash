@@ -4,7 +4,7 @@ import { URI } from "../../../../base/common/uri.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import { FileKind, type IFileEntry, type IFileService } from "../../../../platform/files/common/files.js";
 import type { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
-import type { IFileIconThemeService } from "../../../../platform/theme/browser/fileIconThemeService.js";
+import type { IResourceIconRenderer } from "../../../browser/labels.js";
 import type { IHoverService } from "../../../../platform/hover/browser/hoverService.js";
 import type { IFileLabelDecorationService } from "../../../services/labels/common/fileLabelDecorationService.js";
 import type { ILabelService } from "../../../../platform/label/common/labelService.js";
@@ -26,7 +26,6 @@ export class ExplorerViewPane extends ViewPane {
 	private readonly fileService: IFileService;
 	private readonly workspaceContextService: IWorkspaceContextService;
 	private readonly editorService: IEditorService;
-	private readonly fileIconThemeService: IFileIconThemeService;
 	private readonly hoverService: IHoverService;
 	private readonly resourceLabels: ResourceLabels;
 	private readonly scrollable: ScrollableElement;
@@ -43,7 +42,7 @@ export class ExplorerViewPane extends ViewPane {
 		fileService: IFileService,
 		workspaceContextService: IWorkspaceContextService,
 		editorService: IEditorService,
-		fileIconThemeService: IFileIconThemeService,
+		resourceIconRenderer: IResourceIconRenderer,
 		hoverService: IHoverService,
 		configurationService: IConfigurationService,
 		fileLabelDecorationService?: IFileLabelDecorationService,
@@ -53,11 +52,10 @@ export class ExplorerViewPane extends ViewPane {
 		this.fileService = fileService;
 		this.workspaceContextService = workspaceContextService;
 		this.editorService = editorService;
-		this.fileIconThemeService = fileIconThemeService;
 		this.hoverService = hoverService;
 		this.resourceLabels = this._register(new ResourceLabels(DEFAULT_LABELS_CONTAINER, {
 			workspaceContextService,
-			fileIconThemeService,
+			resourceIconRenderer,
 			fileLabelDecorationService,
 			labelService,
 		}));
@@ -94,7 +92,7 @@ export class ExplorerViewPane extends ViewPane {
 		this._register(this.tree.onDidOpen((event) => {
 			if (event.element.kind === FileKind.File) void this.openFile(event);
 		}));
-		this._register(fileIconThemeService.onDidFileIconThemeChange(
+		this._register(resourceIconRenderer.onDidChangeResourceIcons(
 			() => this.render(),
 		));
 		this._register(workspaceContextService.onDidChangeWorkspace(() => {

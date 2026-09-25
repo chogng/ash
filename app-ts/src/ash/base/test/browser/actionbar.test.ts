@@ -3,7 +3,7 @@ import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import type { IAction } from "../../common/actions.js";
 import { Separator } from "../../common/actions.js";
-import { lxiconsLibrary } from "../../common/lxiconsLibrary.js";
+import { Lxicon } from "../../common/lxicons.js";
 import { ActionBar } from "../../browser/ui/actionbar/actionbar.js";
 import { LabelActionViewItem } from "../../browser/ui/actionbar/actionViewItems.js";
 import { setHoverDelegate, type HoverDelegateSetupOptions, type IManagedHover } from "../../browser/ui/hover/hoverDelegate.js";
@@ -51,7 +51,7 @@ test("LabelActionViewItem owns compact icon-and-text action markup", () => {
 		actions: [activeAction],
 		actionViewItemProvider: (action) => new LabelActionViewItem(action, {
 			label: "cmd",
-			icon: lxiconsLibrary.terminalCmd,
+			icon: Lxicon.terminalCmd,
 			ariaLabel: "Active terminal: cmd",
 			tooltip: "Active terminal: cmd",
 		}),

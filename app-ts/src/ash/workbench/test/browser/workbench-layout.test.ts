@@ -29,7 +29,7 @@ for (const [name, value] of Object.entries({
 
 const { Dimension } = await import("../../../base/browser/dom.js");
 const { bindResizableLayout } = await import("../../../base/browser/ui/resizable/resizable.js");
-const { lxiconsLibrary } = await import("../../../base/common/lxiconsLibrary.js");
+const { Lxicon } = await import("../../../base/common/lxicons.js");
 const { StorageScope, WillSaveStateReason } = await import("../../../platform/storage/common/storage.js");
 const { MenuId } = await import(
 	"../../../platform/actions/common/actions.js"
@@ -1456,13 +1456,13 @@ test("panel layout actions use state icons", () => {
 		.flatMap(([, actions]) => actions)
 		.find((action) => action.id === ToggleMaximizedPanelCommandId);
 
-	assert.equal(panelAction()?.icon, lxiconsLibrary.layoutPanelOff);
+	assert.equal(panelAction()?.icon, Lxicon.layoutPanelOff);
 	contextKeys.setContext("panelVisible", true);
-	assert.equal(panelAction()?.icon, lxiconsLibrary.layoutPanel);
-	assert.equal(maximizePanelAction()?.icon, lxiconsLibrary.screenFull);
+	assert.equal(panelAction()?.icon, Lxicon.layoutPanel);
+	assert.equal(maximizePanelAction()?.icon, Lxicon.screenFull);
 	assert.equal(maximizePanelAction()?.checked, false);
 	contextKeys.setContext('panelMaximized', true);
-	assert.equal(maximizePanelAction()?.icon, lxiconsLibrary.screenNormal);
+	assert.equal(maximizePanelAction()?.icon, Lxicon.screenNormal);
 	assert.equal(maximizePanelAction()?.checked, true);
 });
 

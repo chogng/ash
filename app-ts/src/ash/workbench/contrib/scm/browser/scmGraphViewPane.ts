@@ -1,9 +1,9 @@
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { observeElementSize } from "../../../../base/browser/observer.js";
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from "../../../../base/browser/ui/contextview/contextview.js";
-import { appendIcon } from "../../../../base/browser/ui/icon/icon.js";
+import { appendIcon } from "../../../../base/browser/ui/lxicons/lxicon.js";
 import { IconLabel } from "../../../../base/browser/ui/iconlabel/iconlabel.js";
-import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
+import { Lxicon } from "../../../../base/common/lxicons.js";
 import { DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
 import { MenuWorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
@@ -13,7 +13,7 @@ import type { IContextKey } from "../../../../platform/contextkey/common/context
 import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import type { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
 import type { IHoverService } from "../../../../platform/hover/browser/hoverService.js";
-import type { IFileIconThemeService } from "../../../../platform/theme/browser/fileIconThemeService.js";
+import type { IResourceIconRenderer } from "../../../browser/labels.js";
 import type { GitCommitChange, GitCommitChanges, GitCommitSummary, GraphPage, GitHead, GitReference, GitRemoteProvider, IGitService } from "../../../services/git/common/gitService.js";
 import type { IEditorService } from "../../../services/editor/common/editorService.js";
 import type { IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
@@ -53,7 +53,7 @@ export class ScmGraphViewPane extends ViewPane {
 	private graphRepositoryId: string | undefined;
 	public get repositoryId(): string | undefined { return this.graphRepositoryId; }
 
-	constructor(container: HTMLElement, options: IViewPaneOptions, gitService: IGitService, menuService: IMenuService, private readonly contextMenuService: IContextMenuService, contextKeyService: IContextKeyService, private readonly hoverService: IHoverService, private readonly editorService: IEditorService, private readonly fileIconThemeService: IFileIconThemeService) {
+	constructor(container: HTMLElement, options: IViewPaneOptions, gitService: IGitService, menuService: IMenuService, private readonly contextMenuService: IContextMenuService, contextKeyService: IContextKeyService, private readonly hoverService: IHoverService, private readonly editorService: IEditorService, private readonly resourceIconRenderer: IResourceIconRenderer) {
 		super(container, { ...options, headerActionsVisibility: "whenExpanded" });
 		this.gitService = gitService;
 		this.contentElement.classList.add("ash-scm-secondary-pane");
@@ -67,7 +67,7 @@ export class ScmGraphViewPane extends ViewPane {
 		}));
 		this.contentElement.append(this.graphElement);
 		this._register(observeElementSize(this.graphElement, () => this.renderRows()));
-		this._register(fileIconThemeService.onDidFileIconThemeChange(() => this.renderRows()));
+		this._register(resourceIconRenderer.onDidChangeResourceIcons(() => this.renderRows()));
 		this.busyContext = GitGraphBusyContext.bindTo(contextKeyService);
 		this._register(toDisposable(() => this.busyContext.reset()));
 		const toolbar = this._register(new MenuWorkbenchToolBar(
@@ -373,7 +373,7 @@ export class ScmGraphViewPane extends ViewPane {
 			const label = h(this.graphElement.ownerDocument, "span");
 			label.className = `ash-scm-graph-label ${reference.current ? "head" : reference.kind === "remoteBranch" ? "remote" : "local"}`;
 			label.dataset.icon = reference.kind === "remoteBranch" ? "cloud" : "git-branch";
-			appendIcon(reference.kind === "remoteBranch" ? lxiconsLibrary.cloud : lxiconsLibrary.gitBranch, label);
+			appendIcon(reference.kind === "remoteBranch" ? Lxicon.cloud : Lxicon.gitBranch, label);
 			const text = h(this.graphElement.ownerDocument, "span");
 			text.className = "ash-scm-graph-label-description";
 			text.textContent = reference.name;
@@ -422,7 +422,7 @@ export class ScmGraphViewPane extends ViewPane {
 				label: name,
 				description: parentPath || undefined,
 				reserveIconSpace: true,
-				renderIcon: (container) => this.fileIconThemeService.renderFileIcon(commitFileUri(commit.objectId, change.path, "modified"), container),
+				renderIcon: (container) => this.resourceIconRenderer.renderFileIcon(commitFileUri(commit.objectId, change.path, "modified"), container),
 				title: change.path,
 			}));
 			fileLabel.element.classList.add("ash-scm-graph-change-label");

@@ -1,4 +1,4 @@
-import type { IColorTheme } from "../../platform/theme/common/colorTheme.js";
+import type { IColorTheme } from "../../platform/theme/common/themeService.js";
 import { createServiceIdentifier } from "../../platform/instantiation/common/instantiation.js";
 import type { ColorScheme } from "../../platform/theme/common/theme.js";
 

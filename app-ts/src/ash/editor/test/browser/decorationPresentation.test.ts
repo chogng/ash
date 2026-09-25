@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { themeColorFromId } from '../../../base/common/themables.js';
-import { ColorId } from '../../../platform/theme/common/colorTheme.js';
+import { errorForeground } from '../../../platform/theme/common/colors/baseColors.js';
 import { TextDecorationCollection } from '../../common/model/decorationCollection.js';
 import { Range } from '../../common/core/range.js';
 import { TextModel } from '../../common/model/textModel.js';
@@ -23,8 +23,8 @@ test('TextDecorationCollection keeps opaque metadata beside standard model optio
 			description: 'marker-decoration',
 			className: 'squiggly-error',
 			hoverMessage: { value: 'error' },
-			overviewRuler: { color: themeColorFromId(ColorId.errorForeground), position: OverviewRulerLane.Right },
-			minimap: { color: themeColorFromId(ColorId.errorForeground), position: MinimapPosition.Inline },
+			overviewRuler: { color: themeColorFromId(errorForeground), position: OverviewRulerLane.Right },
+			minimap: { color: themeColorFromId(errorForeground), position: MinimapPosition.Inline },
 		},
 		metadata: { kind: 'error' },
 	});

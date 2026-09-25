@@ -5,7 +5,7 @@ import { DropdownMenuActionViewItem } from "../../../../base/browser/ui/dropdown
 import { Separator, SubmenuAction, type IAction } from "../../../../base/common/actions.js";
 import type { Icon } from "../../../../base/common/icon.js";
 import { MutableDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
-import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
+import { Lxicon } from "../../../../base/common/lxicons.js";
 import { URI } from "../../../../base/common/uri.js";
 import { Position } from "../../../../editor/common/core/position.js";
 import { Range } from "../../../../editor/common/core/range.js";
@@ -170,10 +170,10 @@ export class OutputViewPane extends ViewPane {
 	private createTitleActions(active: IOutputChannel | undefined): readonly IAction[] {
 		return [
 			this.action(SelectChannelActionId, active?.label ?? "Select Output Channel", "Select Output Channel", undefined, this.outputService.channels.length > 0, undefined, () => undefined),
-			this.action(FilterActionId, "Filter Output", "Filter Output", lxiconsLibrary.filter, Boolean(active), undefined, () => undefined),
-			this.action(ClearChannelActionId, "Clear Output", active ? `Clear ${active.label}` : "Clear Output", lxiconsLibrary.eraser, (active?.entries.length ?? 0) > 0, undefined, () => active?.clear()),
-			this.action(AutoScrollActionId, "Auto Scroll", this.autoScroll ? "Auto Scroll: On" : "Auto Scroll: Off", lxiconsLibrary.pinned, Boolean(active), this.autoScroll, () => this.toggleAutoScroll()),
-			this.action(MoreActionId, "More Output Actions", "More Output Actions", lxiconsLibrary.ellipsis, Boolean(active), undefined, () => undefined),
+			this.action(FilterActionId, "Filter Output", "Filter Output", Lxicon.filter, Boolean(active), undefined, () => undefined),
+			this.action(ClearChannelActionId, "Clear Output", active ? `Clear ${active.label}` : "Clear Output", Lxicon.eraser, (active?.entries.length ?? 0) > 0, undefined, () => active?.clear()),
+			this.action(AutoScrollActionId, "Auto Scroll", this.autoScroll ? "Auto Scroll: On" : "Auto Scroll: Off", Lxicon.pinned, Boolean(active), this.autoScroll, () => this.toggleAutoScroll()),
+			this.action(MoreActionId, "More Output Actions", "More Output Actions", Lxicon.ellipsis, Boolean(active), undefined, () => undefined),
 		];
 	}
 
@@ -195,8 +195,8 @@ export class OutputViewPane extends ViewPane {
 		const active = this.outputService.activeChannel;
 		if (!active) return [];
 		return [
-			this.action("ash.output.openInEditor", "Open Output in Editor", `Open ${active.label} in Editor`, lxiconsLibrary.linkExternal, Boolean(this.editorService), undefined, () => this.editorService ? openOutputChannelInEditor(active, this.editorService) : undefined),
-			this.action("ash.output.export", "Export Output…", `Export ${active.label}`, lxiconsLibrary.download, Boolean(this.hostService), undefined, () => this.hostService ? exportOutputChannel(active, this.hostService) : undefined),
+			this.action("ash.output.openInEditor", "Open Output in Editor", `Open ${active.label} in Editor`, Lxicon.linkExternal, Boolean(this.editorService), undefined, () => this.editorService ? openOutputChannelInEditor(active, this.editorService) : undefined),
+			this.action("ash.output.export", "Export Output…", `Export ${active.label}`, Lxicon.download, Boolean(this.hostService), undefined, () => this.hostService ? exportOutputChannel(active, this.hostService) : undefined),
 		];
 	}
 

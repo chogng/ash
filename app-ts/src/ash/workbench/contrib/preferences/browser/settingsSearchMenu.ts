@@ -2,7 +2,7 @@ import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Separator, type IAction } from '../../../../base/common/actions.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import { lxiconsLibrary } from '../../../../base/common/lxiconsLibrary.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 
 export interface SettingsSearchMenuOptions {
 	readonly getValue: () => string;
@@ -20,7 +20,7 @@ export class SettingsSearchMenu extends Disposable {
 		super();
 		this.button = this._register(new Button(container, {
 			label: '',
-			icon: lxiconsLibrary.filter,
+			icon: Lxicon.filter,
 			ariaLabel: 'Filter Settings',
 			title: 'Filter Settings',
 			onClick: () => this.show(),

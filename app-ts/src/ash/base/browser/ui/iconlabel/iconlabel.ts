@@ -1,6 +1,6 @@
 import type { HoverContent } from '../hover/hover.js';
 import { getHoverDelegate, type IManagedHover } from '../hover/hoverDelegate.js';
-import { appendIcon } from '../icon/icon.js';
+import { appendIcon } from '../lxicons/lxicon.js';
 import { getIconAriaLabel, type IMatch } from '../../../common/iconLabels.js';
 import type { Icon } from '../../../common/icon.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../common/lifecycle.js';

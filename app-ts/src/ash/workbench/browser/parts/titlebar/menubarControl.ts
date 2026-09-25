@@ -3,7 +3,7 @@ import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { Button } from "../../../../base/browser/ui/button/button.js";
 import { SubmenuAction } from "../../../../base/common/actions.js";
 import { Disposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
+import { Lxicon } from "../../../../base/common/lxicons.js";
 import { MenuId } from "../../../../platform/actions/common/actions.js";
 import type { IMenu, IMenuService } from "../../../../platform/actions/common/menuService.js";
 import type { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
@@ -44,7 +44,7 @@ export class BrowserMenubarControl extends Disposable
 		this.button = this._register(new Button(this.domNode, {
 			label: applicationMenuLabel(),
 			title: applicationMenuLabel(),
-			icon: lxiconsLibrary.menu,
+			icon: Lxicon.menu,
 			onClick: () => this.toggleMenu(),
 		}));
 		this.button.domNode.setAttribute("aria-label", applicationMenuLabel());

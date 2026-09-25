@@ -1,8 +1,7 @@
 import type { ColorScheme } from '../../../platform/theme/common/theme.js';
-import { IThemeService } from '../../../platform/theme/common/themeService.js';
+import { IThemeService, type IColorTheme } from '../../../platform/theme/common/themeService.js';
 import type { ServiceIdentifier } from '../../../platform/instantiation/common/instantiation.js';
 import type { Color } from '../../../base/common/color.js';
-import type { IColorTheme } from '../../../platform/theme/common/colorTheme.js';
 import type { ITokenThemeRule, TokenTheme } from '../../common/languages/supports/tokenization.js';
 
 export const IStandaloneThemeService = IThemeService as ServiceIdentifier<IStandaloneThemeService>;

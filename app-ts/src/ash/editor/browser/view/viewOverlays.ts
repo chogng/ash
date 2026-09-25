@@ -7,6 +7,7 @@ import { DynamicViewOverlay } from './dynamicViewOverlay.js';
 import { type RenderingContext, type RestrictedRenderingContext } from './renderingContext.js';
 import { ViewPart } from './viewPart.js';
 import { ViewPartRows } from './viewLayer.js';
+import { renderLineDecorationIcons } from '../viewParts/linesDecorations/linesDecorations.js';
 
 export class ViewOverlays extends ViewPart {
 	protected readonly domNode: FastDomNode<HTMLElement>;
@@ -138,6 +139,7 @@ export class MarginViewOverlays extends ViewOverlays {
 
 	protected override _viewOverlaysRender(context: RestrictedRenderingContext): void {
 		super._viewOverlaysRender(context);
+		renderLineDecorationIcons(this.domNode.domNode);
 		this.domNode.setHeight(Math.min(context.scrollHeight, 1_000_000));
 		this.domNode.setWidth(this._contentLeft);
 	}

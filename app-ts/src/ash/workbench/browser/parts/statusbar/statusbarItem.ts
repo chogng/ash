@@ -2,7 +2,7 @@ import "./statusbarItem.css";
 import { addDisposableListener, h, text as createText } from "../../../../base/browser/dom.js";
 import { Disposable, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { getHoverDelegate, type IManagedHover } from "../../../../base/browser/ui/hover/hoverDelegate.js";
-import { appendIcon } from "../../../../base/browser/ui/icon/icon.js";
+import { appendIcon } from "../../../../base/browser/ui/lxicons/lxicon.js";
 import type { IStatusbarEntry, IStatusbarEntrySegment } from "../../../services/statusbar/browser/statusbar.js";
 
 const StatusbarHoverGroupId = "statusbar";

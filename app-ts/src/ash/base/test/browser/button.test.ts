@@ -3,7 +3,7 @@ import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { Button } from "../../browser/ui/button/button.js";
 import { setHoverDelegate, type IManagedHover } from "../../browser/ui/hover/hoverDelegate.js";
-import { lxiconsLibrary } from "../../common/lxiconsLibrary.js";
+import { Lxicon } from "../../common/lxicons.js";
 
 test("Button only installs a Hover for an explicit title", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
@@ -42,7 +42,7 @@ test("Button only installs a Hover for an explicit title", () => {
 
 	using iconButton = new Button(dom.window.document.body, {
 		label: "Menu",
-		icon: lxiconsLibrary.menu,
+		icon: Lxicon.menu,
 	});
 	iconButton.label = "Application menu";
 	assert.ok(iconButton.domNode.querySelector("svg.ash-icon"));

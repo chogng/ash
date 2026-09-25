@@ -1,7 +1,7 @@
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { ActionBar } from "../../../../base/browser/ui/actionbar/actionbar.js";
 import type { IAction } from "../../../../base/common/actions.js";
-import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
+import { Lxicon } from "../../../../base/common/lxicons.js";
 import { type ITaskRun, type ITaskService, type IWorkspaceTask } from "../../../services/tasks/common/taskService.js";
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../browser/parts/views/viewPane.js";
 import { TERMINAL_VIEW_ID } from "../../terminal/common/terminal.js";
@@ -78,7 +78,7 @@ export class TasksViewPane extends ViewPane {
 			id: "ash.tasks.refresh",
 			label: "Refresh Tasks",
 			tooltip: "Refresh Tasks",
-			icon: lxiconsLibrary.refresh,
+			icon: Lxicon.refresh,
 			enabled: !this.refreshing,
 			checked: undefined,
 			run: () => this.refresh(),

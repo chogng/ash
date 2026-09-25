@@ -1,5 +1,5 @@
 import type { Icon } from "../../../../../base/common/icon.js";
-import { lxiconsLibrary } from "../../../../../base/common/lxiconsLibrary.js";
+import { Lxicon } from "../../../../../base/common/lxicons.js";
 import type { ITerminalProfile } from "../../../../services/terminal/common/terminal.js";
 
 /** Selects the product icon for a trusted terminal profile identity. */
@@ -7,10 +7,10 @@ export function terminalProfileIcon(profile: Pick<ITerminalProfile, "profileId">
 	switch (profile?.profileId) {
 		case "cmd":
 		case "command-prompt":
-			return lxiconsLibrary.terminalCmd;
+			return Lxicon.terminalCmd;
 		case "git-bash":
-			return lxiconsLibrary.terminalGitBash;
+			return Lxicon.terminalGitBash;
 		default:
-			return lxiconsLibrary.terminal;
+			return Lxicon.terminal;
 	}
 }

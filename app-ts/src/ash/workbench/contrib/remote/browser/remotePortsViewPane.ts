@@ -2,7 +2,7 @@ import { toDisposable } from "../../../../base/common/lifecycle.js";
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { ActionBar } from "../../../../base/browser/ui/actionbar/actionbar.js";
 import type { IAction } from "../../../../base/common/actions.js";
-import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
+import { Lxicon } from "../../../../base/common/lxicons.js";
 import type { RemoteAgentConnection } from "../../../../platform/remote/common/remoteAgentApi.js";
 import type { IRemoteTunnelService } from "../../../../platform/remote/common/remoteTunnelService.js";
 import type { RemoteTunnel } from "../../../../platform/remote/common/remoteTunnelService.js";
@@ -200,7 +200,7 @@ export class RemotePortsViewPane extends ViewPane {
 			id: "ash.ports.focusForwardPort",
 			label: "Forward a Port",
 			tooltip: "Forward a Port",
-			icon: lxiconsLibrary.add,
+			icon: Lxicon.add,
 			enabled: canForward && !this.opening,
 			checked: undefined,
 			run: () => this.portInput.focus(),
@@ -209,7 +209,7 @@ export class RemotePortsViewPane extends ViewPane {
 			id: "ash.ports.refresh",
 			label: "Refresh Ports",
 			tooltip: "Refresh Ports",
-			icon: lxiconsLibrary.refresh,
+			icon: Lxicon.refresh,
 			enabled: remote,
 			checked: undefined,
 			run: () => this.refresh(),

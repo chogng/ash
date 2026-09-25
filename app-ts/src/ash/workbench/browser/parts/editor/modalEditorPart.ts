@@ -6,7 +6,7 @@ import { observeElementSize } from '../../../../base/browser/observer.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { DisposableMap, Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { lxiconsLibrary } from '../../../../base/common/lxiconsLibrary.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import type { EditorInput, EditorOpenOptions } from '../../../services/editor/common/editorService.js';
 import { EditorOpenSupersededError } from './editorGroup.js';
 import { type EditorPaneCreationOptions, type IEditorPane, EditorPaneVisibility } from './editorPane.js';
@@ -65,7 +65,7 @@ export class ModalEditorPart extends Disposable {
 		this.domNode.setAttribute('aria-labelledby', this.titleDomNode.id);
 		this.closeButton = this._register(new Button(headerDomNode, {
 			label: 'Close editor',
-			icon: lxiconsLibrary.close,
+			icon: Lxicon.close,
 			onClick: () => this.requestClose(),
 		}));
 		this.closeButton.toggleClassName('ash-modal-editor-close', true);

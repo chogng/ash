@@ -1,5 +1,5 @@
 import { createProductIconLibrary } from "./productIcons.js";
-import { register } from "./icon.js";
+import { registerLxicon } from './lxiconsUtil.js';
 
 /**
  * Lxicons supplied by Ash's repository-owned product resources.
@@ -7,4 +7,4 @@ import { register } from "./icon.js";
  * The generated library gives every canonical SVG the ID derived from its
  * lowercase kebab-case filename.
  */
-export const lxiconsLibrary = createProductIconLibrary(register);
+export const lxiconsLibrary = createProductIconLibrary(registerLxicon);

@@ -4,7 +4,7 @@ import { IFileService } from "../../../../platform/files/common/files.js";
 import { ServiceConstructionDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
 import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { IEditorService } from "../../../services/editor/common/editorService.js";
-import { IFileIconThemeService } from "../../../../platform/theme/browser/fileIconThemeService.js";
+import { IResourceIconRenderer } from "../../../browser/labels.js";
 import { IHoverService } from "../../../../platform/hover/browser/hoverService.js";
 import { IFileLabelDecorationService } from "../../../services/labels/common/fileLabelDecorationService.js";
 import { ILabelService } from "../../../../platform/label/common/labelService.js";
@@ -34,7 +34,7 @@ export function registerFilesViews(
 					IFileService,
 					IWorkspaceContextService,
 					IEditorService,
-					IFileIconThemeService,
+					IResourceIconRenderer,
 					IHoverService,
 					IConfigurationService,
 					IFileLabelDecorationService,

@@ -1,12 +1,12 @@
 import { Emitter } from "../../../common/event.js";
 import { Disposable } from "../../../common/lifecycle.js";
-import { lxiconsLibrary } from "../../../common/lxiconsLibrary.js";
+import { Lxicon } from "../../../common/lxicons.js";
 import { addDisposableListener, isHTMLElement, stopEvent, h } from "../../dom.js";
 import { focusPreservingScroll } from "../../focus.js";
 import { setAriaAttribute, setRole } from "../aria/aria.js";
 import type { IContextViewProvider } from "../contextview/contextview.js";
 import { Dropdown } from "../dropdown/dropdown.js";
-import { appendIcon } from "../icon/icon.js";
+import { appendIcon } from "../lxicons/lxicon.js";
 
 export interface SelectOption {
 	readonly value: string;
@@ -62,7 +62,7 @@ export class SelectBox extends Disposable {
 			content: list,
 			ariaLabel: options.ariaLabel,
 			gap: 2,
-			indicator: lxiconsLibrary.unfold,
+			indicator: Lxicon.unfold,
 			contentWidth: "at-least-trigger",
 			contextViewProvider: options.contextViewProvider,
 		}));
@@ -209,7 +209,7 @@ export class SelectBox extends Disposable {
 			const check = h(ownerDocument, "span");
 			check.className = "ash-select-box-option-check";
 			setAriaAttribute(check, "hidden", true);
-			appendIcon(lxiconsLibrary.check, check);
+			appendIcon(Lxicon.check, check);
 			element.append(check);
 			return element;
 		});

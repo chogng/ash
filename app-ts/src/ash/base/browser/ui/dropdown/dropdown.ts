@@ -1,11 +1,11 @@
 import { Emitter } from "../../../common/event.js";
 import type { Icon } from "../../../common/icon.js";
 import { Disposable, toDisposable } from "../../../common/lifecycle.js";
-import { lxiconsLibrary } from "../../../common/lxiconsLibrary.js";
+import { Lxicon } from "../../../common/lxicons.js";
 import { addDisposableListener, stopEvent, h } from "../../dom.js";
 import { setAriaAttribute } from "../aria/aria.js";
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, ContextView, ContextViewFocusRestore, type ContextViewHideReason, type IContextViewProvider } from "../contextview/contextview.js";
-import { appendIcon } from "../icon/icon.js";
+import { appendIcon } from "../lxicons/lxicon.js";
 
 export type DropdownContent = HTMLElement | (() => HTMLElement);
 
@@ -72,7 +72,7 @@ export class Dropdown extends Disposable {
 		label.textContent = options.label;
 		const indicator = h(ownerDocument, "span");
 		indicator.className = "ash-dropdown-indicator";
-		appendIcon(options.indicator ?? lxiconsLibrary.chevronDown, indicator);
+		appendIcon(options.indicator ?? Lxicon.chevronDown, indicator);
 		setAriaAttribute(indicator, "hidden", true);
 		button.append(label, indicator);
 		element.append(button);

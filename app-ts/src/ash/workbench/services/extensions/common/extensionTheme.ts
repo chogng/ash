@@ -1,7 +1,7 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Color } from "../../../../base/common/color.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { type IColorTheme } from "../../../../platform/theme/common/colorTheme.js";
+import type { IColorTheme } from "../../../../platform/theme/common/themeService.js";
 import { createDocumentColorTheme, parseColorThemeDocument } from "../../themes/common/colorThemeData.js";
 import { ColorScheme } from "../../../../platform/theme/common/theme.js";
 

@@ -6,10 +6,9 @@ import { URI } from '../../../base/common/uri.js';
 import { FileKind } from '../../../platform/files/common/files.js';
 import { OperatingSystem } from '../../../base/common/platform.js';
 import { LabelService } from '../../../platform/label/common/labelService.js';
-import type { IFileIconThemeService } from '../../../platform/theme/browser/fileIconThemeService.js';
 import { WorkspaceContextService } from '../../services/workspaces/browser/workspaceContextService.js';
 import { FileLabelDecorationService } from '../../services/labels/browser/fileLabelDecorationService.js';
-import { DEFAULT_LABELS_CONTAINER, ResourceLabels } from '../../browser/labels.js';
+import { DEFAULT_LABELS_CONTAINER, ResourceLabels, type IResourceIconRenderer } from '../../browser/labels.js';
 
 test('ResourceLabels formats files and reacts to icon and decoration changes', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
@@ -19,8 +18,8 @@ test('ResourceLabels formats files and reacts to icon and decoration changes', (
 	using decorations = new FileLabelDecorationService();
 	using labelService = new LabelService(workspace, OperatingSystem.Linux);
 	const iconThemeChange = new Emitter<void>();
-	const fileIconThemeService: IFileIconThemeService = {
-		onDidFileIconThemeChange: iconThemeChange.event,
+	const resourceIconRenderer: IResourceIconRenderer = {
+		onDidChangeResourceIcons: iconThemeChange.event,
 		renderFileIcon: (_resource, container) => {
 			container.classList.add('test-file-icon');
 			container.textContent = 'T';
@@ -28,7 +27,7 @@ test('ResourceLabels formats files and reacts to icon and decoration changes', (
 	};
 	using labels = new ResourceLabels(DEFAULT_LABELS_CONTAINER, {
 		workspaceContextService: workspace,
-		fileIconThemeService,
+		resourceIconRenderer,
 		fileLabelDecorationService: decorations,
 		labelService,
 	});

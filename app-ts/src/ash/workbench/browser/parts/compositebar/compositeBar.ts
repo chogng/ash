@@ -5,7 +5,7 @@ import { ActionBar, type ActionBarDropPosition } from "../../../../base/browser/
 import type { IAction } from "../../../../base/common/actions.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
+import { Lxicon } from "../../../../base/common/lxicons.js";
 import { localize, type ILocalizationService } from "../../../services/localization/common/localizationService.js";
 import { ViewContainerLocation, type IViewContainerDescriptor } from "../../../common/views.js";
 import type { IViewDescriptorService } from "../../../services/views/common/viewDescriptorService.js";
@@ -301,7 +301,7 @@ class CompositeBarOverflowAction implements IAction {
 	readonly id = OVERFLOW_ACTION_ID;
 	readonly label: string;
 	readonly tooltip: string;
-	readonly icon = lxiconsLibrary.ellipsis;
+	readonly icon = Lxicon.ellipsis;
 	readonly enabled = true;
 
 	constructor(label: string) {

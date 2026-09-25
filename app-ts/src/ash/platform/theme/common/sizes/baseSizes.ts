@@ -1,4 +1,5 @@
-import { registerSize, size } from "../sizeRegistry.js";
+import { registerSize } from "../sizeRegistry.js";
+import { size } from "../sizeUtils.js";
 
 const owner = "platform.ui";
 const dimension = (id: string, value: number, description: string): string => registerSize(id, size(value), { description, owner });

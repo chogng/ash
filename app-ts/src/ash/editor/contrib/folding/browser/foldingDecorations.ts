@@ -1,15 +1,16 @@
-import { register } from '../../../../base/common/icon.js';
-import { lxiconsLibrary } from '../../../../base/common/lxiconsLibrary.js';
+import type { Icon } from '../../../../base/common/icon.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import { ThemeIcon, themeColorFromId } from '../../../../base/common/themables.js';
 import { foldBackground } from '../../../../platform/theme/common/colors/editorColors.js';
+import { registerIcon } from '../../../../platform/theme/common/iconRegistry.js';
 import type { ICodeEditor } from '../../../browser/editorBrowser.js';
 import { MinimapPosition, TrackedRangeStickiness, type IModelDecorationOptions, type IModelDecorationsChangeAccessor } from '../../../common/model.js';
 import type { IDecorationProvider } from './foldingModel.js';
 
-export const foldingExpandedIcon = register('folding-expanded', lxiconsLibrary.chevronDown);
-export const foldingCollapsedIcon = register('folding-collapsed', lxiconsLibrary.chevronRight);
-export const foldingManualCollapsedIcon = register('folding-manual-collapsed', foldingCollapsedIcon);
-export const foldingManualExpandedIcon = register('folding-manual-expanded', foldingExpandedIcon);
+export const foldingExpandedIcon = registerIcon('folding-expanded', Lxicon.chevronDown, 'Icon for an expanded folding range');
+export const foldingCollapsedIcon = registerIcon('folding-collapsed', Lxicon.chevronRight, 'Icon for a collapsed folding range');
+export const foldingManualCollapsedIcon = registerIcon('folding-manual-collapsed', foldingCollapsedIcon, 'Icon for a manually collapsed folding range');
+export const foldingManualExpandedIcon = registerIcon('folding-manual-expanded', foldingExpandedIcon, 'Icon for a manually expanded folding range');
 
 const collapsedTooltip = 'Expand folded range';
 const expandedTooltip = 'Collapse range';
@@ -76,7 +77,7 @@ function foldingOption(
 	description: string,
 	stickiness: TrackedRangeStickiness,
 	tooltip: string,
-	icon: { readonly id: string } | undefined,
+	icon: Icon | undefined,
 	highlight: boolean,
 	alwaysVisible = false,
 ): IModelDecorationOptions {
@@ -85,7 +86,10 @@ function foldingOption(
 		stickiness,
 		isWholeLine: true,
 		linesDecorationsTooltip: tooltip,
-		...(icon ? { firstLineDecorationClassName: `${alwaysVisible ? 'alwaysShowFoldIcons ' : ''}${ThemeIcon.asClassName(icon)}` } : {}),
+		...(icon ? {
+			firstLineDecorationClassName: `${alwaysVisible ? 'alwaysShowFoldIcons ' : ''}${ThemeIcon.asClassName(icon)}`,
+			firstLineDecorationIcon: icon,
+		} : {}),
 		...(isCollapsedDescription(description) ? { afterContentClassName: 'inline-folded' } : {}),
 		...(highlight ? highlighted : {}),
 	});

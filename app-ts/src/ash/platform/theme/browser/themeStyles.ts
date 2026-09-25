@@ -1,7 +1,7 @@
 import { combinedDisposable, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
-import { colorCssVariable, sizeCssVariable, type IColorTheme } from "../common/colorTheme.js";
-import { sizeToCss } from "../common/sizeRegistry.js";
-import { type IThemeService } from "../common/themeService.js";
+import { colorCssVariable } from "../common/colorUtils.js";
+import { asCssVariableName, sizeValueToCss } from "../common/sizeUtils.js";
+import type { IColorTheme, IThemeService } from "../common/themeService.js";
 import { isDarkColorScheme } from "../common/theme.js";
 
 interface IPreviousProperty {
@@ -39,8 +39,8 @@ export function bindColorTheme(
 			else target.style.removeProperty(colorCssVariable(id));
 		}
 		for (const { id, value } of theme.sizeEntries) {
-			rememberProperty(sizeCssVariable(id));
-			target.style.setProperty(sizeCssVariable(id), sizeToCss(value));
+			rememberProperty(asCssVariableName(id));
+			target.style.setProperty(asCssVariableName(id), sizeValueToCss(value));
 		}
 		target.style.setProperty(
 			"color-scheme",

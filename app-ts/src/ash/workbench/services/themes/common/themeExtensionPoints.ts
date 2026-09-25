@@ -1,6 +1,6 @@
 import { Emitter } from '../../../../base/common/event.js';
 import { type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import type { IWorkbenchFileIconTheme } from './workbenchThemeService.js';
+import type { IWorkbenchFileIconTheme, IWorkbenchProductIconTheme } from './workbenchThemeService.js';
 
 class WorkbenchFileIconThemeRegistry {
 	private readonly changed = new Emitter<void>();
@@ -45,4 +45,38 @@ class WorkbenchFileIconThemeRegistry {
 }
 
 export const WorkbenchFileIconThemesRegistry = new WorkbenchFileIconThemeRegistry();
+
+class WorkbenchProductIconThemeRegistry {
+	private readonly changed = new Emitter<void>();
+	private readonly registrations = new Map<object, readonly IWorkbenchProductIconTheme[]>();
+	public readonly onDidChange = this.changed.event;
+
+	public getThemes(): readonly IWorkbenchProductIconTheme[] {
+		return [...this.registrations.values()].flat();
+	}
+
+	public registerThemes(): IDisposable & { replace(themes: readonly IWorkbenchProductIconTheme[]): void } {
+		const owner = {};
+		let disposed = false;
+		const registration = toDisposable(() => {
+			disposed = true;
+			if (this.registrations.delete(owner)) this.changed.fire();
+		});
+		return Object.assign(registration, { replace: (themes: readonly IWorkbenchProductIconTheme[]): void => {
+			if (disposed) throw new ReferenceError('Product icon theme registration is disposed');
+			const ids = new Set<string>();
+			for (const [other, values] of this.registrations) {
+				if (other !== owner) for (const theme of values) ids.add(theme.id);
+			}
+			for (const theme of themes) {
+				if (ids.has(theme.id)) throw new Error(`Duplicate product icon theme: ${theme.id}`);
+				ids.add(theme.id);
+			}
+			this.registrations.set(owner, Object.freeze([...themes]));
+			this.changed.fire();
+		} });
+	}
+}
+
+export const WorkbenchProductIconThemesRegistry = new WorkbenchProductIconThemeRegistry();
 

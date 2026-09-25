@@ -1,6 +1,6 @@
-import { getRegisteredIcon, type Icon } from '../../../common/icon.js';
+import type { Icon } from '../../../common/icon.js';
 import type { IMatch } from '../../../common/iconLabels.js';
-import { appendIcon } from '../icon/icon.js';
+import { appendIcon, getRegisteredIcon } from '../lxicons/lxicon.js';
 import { h, text as createText } from '../../dom.js';
 
 const iconToken = /\$\(([A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)(?:~([A-Za-z]+))?\)/gu;
@@ -28,7 +28,7 @@ export function renderLabelWithIcons(
 		sawToken = true;
 		const textEnd = escaped ? index - 1 : index;
 		appendLabelText(container, label.slice(cursor, textEnd), cursor, options.matches);
-		const icon = escaped ? undefined : getRegisteredIcon(match[1]!);
+		const icon = escaped ? undefined : getRegisteredIcon(match[1]!, container.ownerDocument);
 		if (icon) {
 			const iconElement = h(container.ownerDocument, 'span');
 			iconElement.className = 'ash-icon-label-inline-icon';

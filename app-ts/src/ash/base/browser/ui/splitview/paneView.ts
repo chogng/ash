@@ -1,9 +1,9 @@
 import { addDisposableListener, h } from "../../dom.js";
 import { trackFocus } from "../../focus.js";
-import { appendIcon } from "../icon/icon.js";
+import { appendIcon } from "../lxicons/lxicon.js";
 import type { Event } from "../../../common/event.js";
 import { Disposable, toDisposable } from "../../../common/lifecycle.js";
-import { lxiconsLibrary } from "../../../common/lxiconsLibrary.js";
+import { Lxicon } from "../../../common/lxicons.js";
 
 /** Construction inputs for a titled, collapsible pane. */
 export interface PaneViewOptions {
@@ -61,9 +61,9 @@ export class PaneView extends Disposable {
 		const twistyContainer = h(ownerDocument, "span");
 		twistyContainer.className = "ash-pane-view-header-twisty-container";
 		twistyContainer.setAttribute("aria-hidden", "true");
-		const collapsedIcon = appendIcon(lxiconsLibrary.chevronRight, twistyContainer);
+		const collapsedIcon = appendIcon(Lxicon.chevronRight, twistyContainer);
 		collapsedIcon.classList.add("ash-pane-view-collapsed-icon");
-		const expandedIcon = appendIcon(lxiconsLibrary.chevronDown, twistyContainer);
+		const expandedIcon = appendIcon(Lxicon.chevronDown, twistyContainer);
 		expandedIcon.classList.add("ash-pane-view-expanded-icon");
 		this.titleElement = h(ownerDocument, "h3");
 		this.titleElement.className = "ash-pane-view-header-title";

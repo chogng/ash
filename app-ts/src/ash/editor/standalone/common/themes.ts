@@ -1,5 +1,6 @@
 import { Color } from '../../../base/common/color.js';
-import { darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme, lightColorTheme, type IColorTheme } from '../../../platform/theme/common/colorTheme.js';
+import { darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme, lightColorTheme } from '../../../platform/theme/common/colorTheme.js';
+import type { IColorTheme } from '../../../platform/theme/common/themeService.js';
 import * as editorColors from '../../../platform/theme/common/colors/editorColors.js';
 import type { BuiltinTheme, IStandaloneThemeData } from './standaloneTheme.js';
 

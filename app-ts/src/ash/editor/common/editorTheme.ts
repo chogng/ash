@@ -1,4 +1,4 @@
-import { IColorTheme } from '../../platform/theme/common/colorTheme.js';
+import type { IColorTheme } from '../../platform/theme/common/themeService.js';
 import { ColorIdentifier } from '../../platform/theme/common/colorRegistry.js';
 import { Color } from '../../base/common/color.js';
 import { ColorScheme } from '../../platform/theme/common/theme.js';

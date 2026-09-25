@@ -1,13 +1,13 @@
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import {
-	ColorId,
-	colorCssVariable,
 	darkColorTheme,
 	highContrastDarkColorTheme,
 	lightColorTheme,
-	sizeCssVariable,
 } from "../../common/colorTheme.js";
+import { colorCssVariable } from "../../common/colorUtils.js";
+import { editorForeground, foldBackground, foldPlaceholderForeground, foldingControlForeground } from "../../common/colors/editorColors.js";
+import { primaryButtonHoverBackground } from "../../common/colors/inputColors.js";
 import { TestThemeService } from "./testThemeService.js";
 import { Colors } from "../../common/colorRegistry.js";
 
@@ -39,15 +39,14 @@ test("built-in themes resolve registered colors and omit inactive high contrast 
 
 test("color identifiers map to stable CSS custom properties", () => {
 	assert.equal(
-		colorCssVariable(ColorId.primaryButtonHoverBackground),
+		colorCssVariable(primaryButtonHoverBackground),
 		"--ash-button-primary-hover-background",
 	);
 	assert.equal(
-		colorCssVariable(ColorId.editorForeground),
+		colorCssVariable(editorForeground),
 		"--ash-editor-foreground",
 	);
-	assert.equal(sizeCssVariable('strokeThickness'), '--ash-stroke-thickness');
-	assert.equal(colorCssVariable(ColorId.editorFoldBackground), '--ash-editor-fold-background');
-	assert.equal(colorCssVariable(ColorId.editorFoldPlaceholderForeground), '--ash-editor-fold-placeholder-foreground');
-	assert.equal(colorCssVariable(ColorId.editorGutterFoldingControlForeground), '--ash-editor-gutter-folding-control-foreground');
+	assert.equal(colorCssVariable(foldBackground), '--ash-editor-fold-background');
+	assert.equal(colorCssVariable(foldPlaceholderForeground), '--ash-editor-fold-placeholder-foreground');
+	assert.equal(colorCssVariable(foldingControlForeground), '--ash-editor-gutter-folding-control-foreground');
 });

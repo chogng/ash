@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { Emitter } from "../../../../../base/common/event.js";
-import { lxiconsLibrary } from "../../../../../base/common/lxiconsLibrary.js";
+import { Lxicon } from "../../../../../base/common/lxicons.js";
 import { ScmStatusContribution } from "../../../../../workbench/contrib/scm/browser/scmStatus.js";
 import type { GitStatus, IGitService } from "../../../../../workbench/services/git/common/gitService.js";
 import { StatusbarAlignment, StatusbarService } from "../../../../../workbench/services/statusbar/browser/statusbar.js";
@@ -29,7 +29,7 @@ test("SCM status projects the Git branch and upstream counts", async () => {
 	]);
 	assert.deepEqual(statusbar.getEntries(StatusbarAlignment.Left).map(item => item.entry.text), ["main", "3↓ 2↑"]);
 	assert.deepEqual(statusbar.getEntries(StatusbarAlignment.Left).map(item => item.compactGroup), ["ash.status.git", "ash.status.git"]);
-	assert.equal(statusbar.getEntries(StatusbarAlignment.Left)[1]?.entry.icon, lxiconsLibrary.sync);
+	assert.equal(statusbar.getEntries(StatusbarAlignment.Left)[1]?.entry.icon, Lxicon.sync);
 	assert.equal(statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.run?.(), true);
 	assert.equal(statusbar.getEntries(StatusbarAlignment.Left)[1]?.entry.run?.(), true);
 	assert.deepEqual(focusedViews, ["ash.gitView", "ash.gitView"]);

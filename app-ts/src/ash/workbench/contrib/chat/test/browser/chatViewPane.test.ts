@@ -7,7 +7,7 @@ import type { IRendererHost } from "../../../../../platform/renderer/common/rend
 import type { IAction } from "../../../../../base/common/actions.js";
 import { Emitter } from "../../../../../base/common/event.js";
 import { TAB_CLOSE_ACTION_ID } from "../../../../../base/browser/ui/tablist/tabList.js";
-import { lxiconsLibrary } from "../../../../../base/common/lxiconsLibrary.js";
+import { Lxicon } from "../../../../../base/common/lxicons.js";
 import { MenuId } from "../../../../../platform/actions/common/actions.js";
 import { MenuService } from "../../../../../platform/actions/common/menuService.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
@@ -264,25 +264,25 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 				id: OPEN_CHAT_BROWSER_COMMAND_ID,
 				label: "Open Browser",
 				enabled: false,
-				icon: lxiconsLibrary.browserWeb,
+				icon: Lxicon.browserWeb,
 			},
 			{
 				id: MOVE_CHAT_TO_EDITOR_COMMAND_ID,
 				label: "Move Chat to Editor Area",
 				enabled: false,
-				icon: lxiconsLibrary.layoutPanel,
+				icon: Lxicon.layoutPanel,
 			},
 			{
 				id: MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID,
 				label: "Move Chat to New Window",
 				enabled: false,
-				icon: lxiconsLibrary.linkExternal,
+				icon: Lxicon.linkExternal,
 			},
 			{
 				id: OPEN_CHAT_SETTINGS_COMMAND_ID,
 				label: "Chat Settings",
 				enabled: true,
-				icon: lxiconsLibrary.settings,
+				icon: Lxicon.settings,
 			},
 		],
 	);

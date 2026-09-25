@@ -8,7 +8,6 @@ import { operatingSystem, OperatingSystem } from '../../base/common/platform.js'
 import { createServiceIdentifier } from '../../platform/instantiation/common/instantiation.js';
 import { FileKind } from '../../platform/files/common/files.js';
 import type { ILabelService } from '../../platform/label/common/labelService.js';
-import type { IFileIconThemeService } from '../../platform/theme/browser/fileIconThemeService.js';
 import type { IWorkspaceContextService } from '../../platform/workspace/common/workspace.js';
 import type { IUntitledTextEditorService } from '../services/untitled/common/untitledTextEditorService.js';
 import type { IFileLabelDecoration, IFileLabelDecorationChangeEvent, IFileLabelDecorationService } from '../services/labels/common/fileLabelDecorationService.js';
@@ -48,13 +47,21 @@ export interface IResourceLabelsContainer {
 	readonly onDidChangeVisibility: Event<boolean>;
 }
 
+/** Renders a resource icon using the active Workbench file icon theme. */
+export interface IResourceIconRenderer {
+	readonly onDidChangeResourceIcons: Event<void>;
+	renderFileIcon(resource: URI, container: HTMLElement): void;
+}
+
+export const IResourceIconRenderer = createServiceIdentifier<IResourceIconRenderer>('resourceIconRenderer');
+
 export const DEFAULT_LABELS_CONTAINER: IResourceLabelsContainer = {
 	onDidChangeVisibility: Event.None,
 };
 
 export interface ResourceLabelServices {
 	readonly workspaceContextService: IWorkspaceContextService;
-	readonly fileIconThemeService: IFileIconThemeService;
+	readonly resourceIconRenderer: IResourceIconRenderer;
 	readonly untitledTextEditorService?: IUntitledTextEditorService;
 	readonly fileLabelDecorationService?: IFileLabelDecorationService;
 	readonly labelService?: ILabelService;
@@ -85,7 +92,7 @@ export class ResourceLabels extends Disposable {
 			for (const widget of this.widgets) widget.setVisibility(visible);
 		}));
 		this._register(services.workspaceContextService.onDidChangeWorkspace(() => this.rerenderAll()));
-		this._register(services.fileIconThemeService.onDidFileIconThemeChange(() => this.rerenderAll(true)));
+		this._register(services.resourceIconRenderer.onDidChangeResourceIcons(() => this.rerenderAll(true)));
 		if (services.labelService) this._register(services.labelService.onDidChangeFormatters(event => this.rerenderScheme(event.scheme)));
 		if (services.untitledTextEditorService) {
 			this._register(services.untitledTextEditorService.onDidCreate(() => this.rerenderAll()));
@@ -363,7 +370,7 @@ class ResourceLabelWidget extends Disposable {
 		let title = this.currentTitle ?? (resource ? pathLabel(resource, this.services.workspaceContextService, this.services.labelService) : undefined);
 		if (decoration?.tooltip) title = title ? `${title} • ${decoration.tooltip}` : decoration.tooltip;
 		const renderIcon = resource && !options.hideIcon && !options.icon && fileKind !== FileKind.Directory
-			? (container: HTMLSpanElement) => this.services.fileIconThemeService.renderFileIcon(resource, container)
+			? (container: HTMLSpanElement) => this.services.resourceIconRenderer.renderFileIcon(resource, container)
 			: undefined;
 		const iconOptions: IconLabelValueOptions = {
 			...options,

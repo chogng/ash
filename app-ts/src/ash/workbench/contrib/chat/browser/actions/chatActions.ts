@@ -1,4 +1,4 @@
-import { lxiconsLibrary } from "../../../../../base/common/lxiconsLibrary.js";
+import { Lxicon } from "../../../../../base/common/lxicons.js";
 import { DisposableStore } from "../../../../../base/common/lifecycle.js";
 import { Action2, MenuId, registerAction2 } from "../../../../../platform/actions/common/actions.js";
 import type { ServicesAccessor } from "../../../../../platform/instantiation/common/instantiation.js";
@@ -13,7 +13,7 @@ registerAction2(class OpenChatAction extends Action2 {
 		super({
 			id: OPEN_CHAT_COMMAND_ID,
 			title: "Open Chat",
-			icon: lxiconsLibrary.chat,
+			icon: Lxicon.chat,
 			f1: true,
 		});
 	}
@@ -28,7 +28,7 @@ registerAction2(class NewChatAction extends Action2 {
 		super({
 			id: NEW_CHAT_COMMAND_ID,
 			title: "New Chat",
-			icon: lxiconsLibrary.add,
+			icon: Lxicon.add,
 			f1: true,
 			menu: {
 				id: MenuId.ChatTitle,
@@ -57,7 +57,7 @@ registerAction2(class ShowChatHistoryAction extends Action2 {
 			id: SHOW_CHAT_HISTORY_COMMAND_ID,
 			title: "Show Chat History",
 			tooltip: "Show Chat History",
-			icon: lxiconsLibrary.history,
+			icon: Lxicon.history,
 			f1: true,
 			menu: {
 				id: MenuId.ChatTitle,

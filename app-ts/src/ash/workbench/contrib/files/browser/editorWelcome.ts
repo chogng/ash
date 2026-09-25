@@ -1,7 +1,7 @@
 import "./media/editorWelcome.css";
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
-import { appendIcon } from "../../../../base/browser/ui/icon/icon.js";
-import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
+import { appendIcon } from "../../../../base/browser/ui/lxicons/lxicon.js";
+import { Lxicon } from "../../../../base/common/lxicons.js";
 import { Disposable, MutableDisposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 
 const MAX_VISIBLE_RECENT_PROJECTS = 5;
@@ -90,7 +90,7 @@ export class EditorWelcome extends Disposable {
 		const mark = h(ownerDocument, "div");
 		mark.className = "ash-editor-group-welcome-mark";
 		mark.setAttribute("aria-hidden", "true");
-		appendIcon(lxiconsLibrary.model, mark);
+		appendIcon(Lxicon.model, mark);
 
 		const name = h(ownerDocument, "div");
 		name.className = "ash-editor-group-welcome-name";
@@ -120,22 +120,22 @@ export class EditorWelcome extends Disposable {
 		const cardOptions: readonly WelcomeCardOptions[] = [
 			{
 				label: "Open folder",
-				icon: lxiconsLibrary.folders,
+				icon: Lxicon.folders,
 				action: actions?.openFolder,
 			},
 			{
 				label: "Clone repo",
-				icon: lxiconsLibrary.gitBranch,
+				icon: Lxicon.gitBranch,
 				action: actions?.cloneRepository,
 			},
 			{
 				label: "Connect via SSH",
-				icon: lxiconsLibrary.remote,
+				icon: Lxicon.remote,
 				action: actions?.connectViaSsh,
 			},
 			{
 				label: "Connect GitHub",
-				icon: lxiconsLibrary.github,
+				icon: Lxicon.github,
 				action: actions?.connectGitHub,
 				variant: "featured",
 				external: true,

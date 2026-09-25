@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { colorCssVariable, darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme, lightColorTheme } from '../../../platform/theme/common/colorTheme.js';
+import { darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme, lightColorTheme } from '../../../platform/theme/common/colorTheme.js';
+import { colorCssVariable } from '../../../platform/theme/common/colorUtils.js';
 import { ColorScheme } from '../../../platform/theme/common/theme.js';
 import { StandaloneThemeService } from '../../standalone/browser/standaloneThemeService.js';
 import { registerColor } from '../../../platform/theme/common/colorUtils.js';

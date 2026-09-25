@@ -5,7 +5,7 @@ import { Selection } from './core/selection.js';
 import { CursorChangeReason } from './cursorEvents.js';
 import { ScrollType } from './editorCommon.js';
 import { IModelDecorationsChangedEvent } from './textModelEvents.js';
-import { IColorTheme } from '../../platform/theme/common/colorTheme.js';
+import type { IColorTheme } from '../../platform/theme/common/themeService.js';
 
 export const enum ViewEventType {
 	ViewCompositionStart,

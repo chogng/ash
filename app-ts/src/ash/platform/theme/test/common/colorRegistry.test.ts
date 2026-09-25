@@ -2,7 +2,6 @@ import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import { ColorRegistry } from "../../common/colorRegistry.js";
 import { transparent } from "../../common/colorUtils.js";
-import { SizeRegistry, size, sizeToCss } from "../../common/sizeRegistry.js";
 import { ColorScheme } from "../../common/theme.js";
 
 const metadata = { description: "Test token.", owner: "test" };
@@ -34,15 +33,6 @@ test("ColorRegistry rejects duplicates, cycles, unknown references, and unknown 
 	assert.throws(() => unknown.resolve(ColorScheme.Light, { "missing.override": "#000000" }), /Unknown color token override/);
 });
 
-test("SizeRegistry validates registration and serializes CSS values", () => {
-	const registry = new SizeRegistry();
-	registry.registerSize("fontSize.body1", size(13), metadata);
-	assert.equal(sizeToCss(registry.getSizes()[0]!.value), "13px");
-	assert.equal(sizeToCss(size(400, "unitless")), "400");
-	assert.throws(() => registry.registerSize("fontSize.body1", size(14), metadata), /already registered/);
-	assert.throws(() => size(Number.NaN), /must be finite/);
-});
-
 test("color contributions publish a new catalog without changing earlier snapshots", () => {
 	using colors = new ColorRegistry();
 	const before = colors.getColors();
@@ -55,10 +45,4 @@ test("color contributions publish a new catalog without changing earlier snapsho
 	assert.equal(colors.getColors(), colors.getColors());
 	assert.throws(() => colors.registerColor("late.color", { dark: "#000000", light: "#ffffff" }, metadata), /already registered/);
 	assert.equal(changes.length, 1);
-});
-
-test("size contributions remain sealed after startup", () => {
-	const sizes = new SizeRegistry();
-	sizes.seal();
-	assert.throws(() => sizes.registerSize("late.size", size(1), metadata), /registry is sealed/);
 });

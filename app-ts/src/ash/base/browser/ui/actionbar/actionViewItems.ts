@@ -7,7 +7,7 @@ import { setAriaAttribute } from "../aria/aria.js";
 import { Button, type ButtonOptions } from "../button/button.js";
 import type { AnchorPosition } from "../contextview/contextview.js";
 import { getHoverDelegate, type IManagedHover } from "../hover/hoverDelegate.js";
-import { appendIcon } from "../icon/icon.js";
+import { appendIcon } from "../lxicons/lxicon.js";
 
 const ActionHoverGroupId = "actions";
 

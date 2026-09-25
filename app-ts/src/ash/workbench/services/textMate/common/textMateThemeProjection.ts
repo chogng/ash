@@ -1,5 +1,5 @@
 import { type ColorScheme } from "../../../../platform/theme/common/theme.js";
-import type { IColorTheme } from "../../../../platform/theme/common/colorTheme.js";
+import type { IColorTheme } from "../../../../platform/theme/common/themeService.js";
 import { type ExtensionThemeCatalog, type ExtensionThemeDefinition } from "../../extensions/common/extensionTheme.js";
 import { type TextMateScopeTheme, type TextMateScopeThemeRule, type TextMateTokenFontStyle } from "./textMateScopeTheme.js";
 

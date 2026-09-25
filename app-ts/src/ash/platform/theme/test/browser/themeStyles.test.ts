@@ -2,27 +2,29 @@ import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import { bindColorTheme } from "../../browser/themeStyles.js";
 import {
-	ColorId,
-	colorCssVariable,
 	darkColorTheme,
 	lightColorTheme,
-	sizeCssVariable,
 } from "../../common/colorTheme.js";
+import { colorCssVariable } from "../../common/colorUtils.js";
+import { foreground } from "../../common/colors/baseColors.js";
+import { actionBarToggledBackground, tabListActiveBackground } from "../../common/colors/componentColors.js";
+import { editorBackground } from "../../common/colors/editorColors.js";
+import { menuSelectionBackground, menuSelectionForeground } from "../../common/colors/menuColors.js";
 import { TestThemeService } from "../common/testThemeService.js";
 import { registerColor } from "../../common/colorUtils.js";
+import { asCssVariableName } from "../../common/sizeUtils.js";
 
 test("color theme binding applies changes and restores prior root styles", () => {
 	using service = new TestThemeService(darkColorTheme);
 	const target = new FakeThemeTarget();
-	const foreground = colorCssVariable(ColorId.foreground);
-	const background = colorCssVariable(ColorId.editorBackground);
-	const chatTabBackground = colorCssVariable(ColorId.chatTabBackground);
+	const foregroundVariable = colorCssVariable(foreground);
+	const background = colorCssVariable(editorBackground);
 	const sashHoverBackground = colorCssVariable('sash.hoverBackground');
-	const menuSelectionForeground = colorCssVariable(ColorId.menuSelectionForeground);
-	const menuSelectionBackground = colorCssVariable(ColorId.menuSelectionBackground);
-	const actionBarToggledBackground = colorCssVariable(ColorId.actionBarToggledBackground);
-	const tabListActiveBackground = colorCssVariable(ColorId.tabListActiveBackground);
-	target.style.setProperty(foreground, "hotpink", "important");
+	const menuSelectionForegroundVariable = colorCssVariable(menuSelectionForeground);
+	const menuSelectionBackgroundVariable = colorCssVariable(menuSelectionBackground);
+	const actionBarToggledBackgroundVariable = colorCssVariable(actionBarToggledBackground);
+	const tabListActiveBackgroundVariable = colorCssVariable(tabListActiveBackground);
+	target.style.setProperty(foregroundVariable, "hotpink", "important");
 	target.style.setProperty("color-scheme", "only light");
 	target.setAttribute("data-color-theme", "host-theme");
 
@@ -30,47 +32,44 @@ test("color theme binding applies changes and restores prior root styles", () =>
 		service,
 		target as unknown as HTMLElement,
 	);
-	assert.equal(target.style.getPropertyValue(foreground), "#cccccc");
+	assert.equal(target.style.getPropertyValue(foregroundVariable), "#cccccc");
 	assert.equal(target.style.getPropertyValue(background), "#1e1e1e");
-	assert.equal(target.style.getPropertyValue(chatTabBackground), "#eeeeee");
 	assert.equal(target.style.getPropertyValue(sashHoverBackground), "#007acc");
-	assert.equal(target.style.getPropertyValue(menuSelectionForeground), "#cccccc");
-	assert.equal(target.style.getPropertyValue(menuSelectionBackground), "#2a2d2e");
-	assert.equal(target.style.getPropertyValue(actionBarToggledBackground), "#37373d");
-	assert.equal(target.style.getPropertyValue(tabListActiveBackground), "#04395e");
+	assert.equal(target.style.getPropertyValue(menuSelectionForegroundVariable), "#cccccc");
+	assert.equal(target.style.getPropertyValue(menuSelectionBackgroundVariable), "#2a2d2e");
+	assert.equal(target.style.getPropertyValue(actionBarToggledBackgroundVariable), "#37373d");
+	assert.equal(target.style.getPropertyValue(tabListActiveBackgroundVariable), "#04395e");
 	assert.equal(target.style.getPropertyValue("color-scheme"), "dark");
-	assert.equal(target.style.getPropertyValue(sizeCssVariable("scrollbar.size")), "10px");
-	assert.equal(target.style.getPropertyValue(sizeCssVariable("tabList.contentInset")), "4px");
-	assert.equal(target.style.getPropertyValue(sizeCssVariable("tabList.itemContentInset")), "6px");
-	assert.equal(target.style.getPropertyValue(sizeCssVariable("fontSize.body1")), "13px");
-	assert.equal(target.style.getPropertyValue(sizeCssVariable("fontSize.label2")), "11px");
-	assert.equal(target.style.getPropertyValue(sizeCssVariable("fontWeight.regular")), "400");
+	assert.equal(target.style.getPropertyValue(asCssVariableName("scrollbar.size")), "10px");
+	assert.equal(target.style.getPropertyValue(asCssVariableName("tabList.contentInset")), "4px");
+	assert.equal(target.style.getPropertyValue(asCssVariableName("tabList.itemContentInset")), "6px");
+	assert.equal(target.style.getPropertyValue(asCssVariableName("fontSize.body1")), "13px");
+	assert.equal(target.style.getPropertyValue(asCssVariableName("fontSize.label2")), "11px");
+	assert.equal(target.style.getPropertyValue(asCssVariableName("fontWeight.regular")), "400");
 	assert.equal(target.getAttribute("data-color-theme"), "ash-dark");
 
 	service.setColorTheme(lightColorTheme);
 	assert.equal(target.style.getPropertyValue(background), "#ffffff");
-	assert.equal(target.style.getPropertyValue(chatTabBackground), "#eeeeee");
 	assert.equal(target.style.getPropertyValue(sashHoverBackground), "#007acc");
-	assert.equal(target.style.getPropertyValue(menuSelectionForeground), "#3b3b3b");
-	assert.equal(target.style.getPropertyValue(menuSelectionBackground), "#e8e8e8");
-	assert.equal(target.style.getPropertyValue(actionBarToggledBackground), "#e4e6f2");
-	assert.equal(target.style.getPropertyValue(tabListActiveBackground), "#0060c0");
+	assert.equal(target.style.getPropertyValue(menuSelectionForegroundVariable), "#3b3b3b");
+	assert.equal(target.style.getPropertyValue(menuSelectionBackgroundVariable), "#e8e8e8");
+	assert.equal(target.style.getPropertyValue(actionBarToggledBackgroundVariable), "#e4e6f2");
+	assert.equal(target.style.getPropertyValue(tabListActiveBackgroundVariable), "#0060c0");
 	assert.equal(target.style.getPropertyValue("color-scheme"), "light");
 	assert.equal(target.getAttribute("data-color-theme"), "ash-light");
 
 	binding.dispose();
-	assert.equal(target.style.getPropertyValue(foreground), "hotpink");
-	assert.equal(target.style.getPropertyPriority(foreground), "important");
+	assert.equal(target.style.getPropertyValue(foregroundVariable), "hotpink");
+	assert.equal(target.style.getPropertyPriority(foregroundVariable), "important");
 	assert.equal(target.style.getPropertyValue(background), "");
-	assert.equal(target.style.getPropertyValue(chatTabBackground), "");
 	assert.equal(target.style.getPropertyValue(sashHoverBackground), "");
-	assert.equal(target.style.getPropertyValue(actionBarToggledBackground), "");
-	assert.equal(target.style.getPropertyValue(tabListActiveBackground), "");
-	assert.equal(target.style.getPropertyValue(sizeCssVariable("scrollbar.size")), "");
-	assert.equal(target.style.getPropertyValue(sizeCssVariable("tabList.contentInset")), "");
-	assert.equal(target.style.getPropertyValue(sizeCssVariable("tabList.itemContentInset")), "");
-	assert.equal(target.style.getPropertyValue(sizeCssVariable("fontSize.body1")), "");
-	assert.equal(target.style.getPropertyValue(sizeCssVariable("fontWeight.regular")), "");
+	assert.equal(target.style.getPropertyValue(actionBarToggledBackgroundVariable), "");
+	assert.equal(target.style.getPropertyValue(tabListActiveBackgroundVariable), "");
+	assert.equal(target.style.getPropertyValue(asCssVariableName("scrollbar.size")), "");
+	assert.equal(target.style.getPropertyValue(asCssVariableName("tabList.contentInset")), "");
+	assert.equal(target.style.getPropertyValue(asCssVariableName("tabList.itemContentInset")), "");
+	assert.equal(target.style.getPropertyValue(asCssVariableName("fontSize.body1")), "");
+	assert.equal(target.style.getPropertyValue(asCssVariableName("fontWeight.regular")), "");
 	assert.equal(target.style.getPropertyValue("color-scheme"), "only light");
 	assert.equal(target.getAttribute("data-color-theme"), "host-theme");
 	assert.equal(target.getAttribute("data-color-scheme"), null);

@@ -1,0 +1,6 @@
+{
+  "iconDefinitions": {
+    "add": { "iconPath": "./add.svg" },
+    "browser-test-semantic-product": { "iconPath": "./add.svg" }
+  }
+}

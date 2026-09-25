@@ -1,10 +1,10 @@
-import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
+import { Lxicon } from "../../../../base/common/lxicons.js";
 import { IMenuService } from "../../../../platform/actions/common/menuService.js";
 import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
 import { ICommandService } from "../../../../platform/commands/common/commands.js";
 import { IHoverService } from "../../../../platform/hover/browser/hoverService.js";
-import { IFileIconThemeService } from "../../../../platform/theme/browser/fileIconThemeService.js";
+import { IResourceIconRenderer } from "../../../browser/labels.js";
 import { ServiceConstructionDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
@@ -40,7 +40,7 @@ export function registerGitViews(
 		title: "Git",
 		localizationKey: { bundle: "ash.views", key: "git" },
 		location: ViewContainerLocation.Sidebar,
-		icon: lxiconsLibrary.gitBranch,
+		icon: Lxicon.gitBranch,
 		order: 3,
 	});
 	registry.registerStaticViews(WorkbenchViewContainerId.Git, [
@@ -51,7 +51,7 @@ export function registerGitViews(
 			order: 1,
 			canToggleVisibility: false,
 			ctorDescriptor: new ServiceConstructionDescriptor(ScmViewPane, {
-				serviceDependencies: [IGitService, IFileIconThemeService, IEditorService, ICommandService, IContextMenuService],
+				serviceDependencies: [IGitService, IResourceIconRenderer, IEditorService, ICommandService, IContextMenuService],
 			}),
 		},
 		{
@@ -71,7 +71,7 @@ export function registerGitViews(
 			collapsed: true,
 			canToggleVisibility: false,
 			ctorDescriptor: new ServiceConstructionDescriptor(ScmGraphViewPane, {
-				serviceDependencies: [IGitService, IMenuService, IContextMenuService, IContextKeyService, IHoverService, IEditorService, IFileIconThemeService],
+				serviceDependencies: [IGitService, IMenuService, IContextMenuService, IContextKeyService, IHoverService, IEditorService, IResourceIconRenderer],
 			}),
 		},
 	]);

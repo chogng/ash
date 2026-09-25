@@ -1,4 +1,4 @@
-import { lxiconsLibrary } from "../../../base/common/lxiconsLibrary.js";
+import { Lxicon } from "../../../base/common/lxicons.js";
 import { Action2, MenuId, registerAction2 } from "../../../platform/actions/common/actions.js";
 import type { ISessionsWindowApi } from "../../common/sessionsWindow.js";
 import { ILayoutService } from "../../../platform/layout/browser/layoutService.js";
@@ -17,7 +17,7 @@ export function registerSessionsTitlebarEntry(actionId: string, title: string, d
 				id: actionId,
 				title,
 				tooltip: title,
-				icon: lxiconsLibrary.chat,
+				icon: Lxicon.chat,
 				menu: {
 					id: MenuId.TitleBarLeft,
 					group: "navigation",

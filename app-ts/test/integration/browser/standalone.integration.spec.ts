@@ -563,6 +563,7 @@ test.describe('contribution lifecycle', () => {
 			}
 			await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ showFoldingControls: 'always' }));
 			await expect(page.locator('#caller .ash-icon-folding-expanded').first()).toBeVisible();
+			await expect(page.locator('#caller .ash-icon-folding-expanded svg.ash-icon').first()).toBeVisible();
 			await page.locator('#caller .ash-icon-folding-expanded').first().click();
 			await expect(page.locator('#caller .view-line[data-logical-line-index="1"]')).toHaveCount(0);
 			await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ folding: false }));
@@ -792,8 +793,16 @@ test.describe('contribution lifecycle', () => {
 		});
 		const folds = page.locator('#caller .stanza-editor-sticky-scroll-folding');
 		await expect(folds).toHaveCount(2);
+		await expect(folds.last().locator('svg.ash-icon')).toHaveCount(1);
+		expect(await folds.last().evaluate(element => {
+			const path = element.querySelector('svg [stroke]');
+			return path !== null && getComputedStyle(path).stroke === getComputedStyle(element).color;
+		})).toBe(true);
+		const expandedPath = await folds.last().locator('svg path').first().getAttribute('d');
 		await folds.last().click();
 		await expect(folds.last()).toHaveAttribute('aria-expanded', 'false');
+		await expect(folds.last().locator('svg.ash-icon')).toHaveCount(1);
+		expect(await folds.last().locator('svg path').first().getAttribute('d')).not.toBe(expandedPath);
 		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readStickyState().hidden)).toEqual([[3, 83]]);
 		await folds.last().focus();
 		await page.keyboard.press('Enter');

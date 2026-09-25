@@ -1,4 +1,6 @@
 import './linesDecorations.css';
+import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
+import { Icon } from '../../../../base/common/icon.js';
 import { DecorationToRender, DedupOverlay } from '../glyphMargin/glyphMargin.js';
 import { type RenderingContext } from '../../view/renderingContext.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
@@ -46,7 +48,7 @@ export class LinesDecorationsOverlay extends DedupOverlay {
 				result.push(new DecorationToRender(decoration.range.startLineNumber, decoration.range.endLineNumber, decoration.options.linesDecorationsClassName, tooltip, decoration.options.zIndex));
 			}
 			if (decoration.options.firstLineDecorationClassName) {
-				result.push(new DecorationToRender(decoration.range.startLineNumber, decoration.range.startLineNumber, decoration.options.firstLineDecorationClassName, tooltip, decoration.options.zIndex));
+				result.push(new DecorationToRender(decoration.range.startLineNumber, decoration.range.startLineNumber, decoration.options.firstLineDecorationClassName, tooltip, decoration.options.zIndex, decoration.options.firstLineDecorationIcon ?? undefined));
 			}
 		}
 		return result;
@@ -62,7 +64,8 @@ export class LinesDecorationsOverlay extends DedupOverlay {
 			const decorations = toRender[lineNumber - visibleStartLineNumber]!.getDecorations();
 			output[lineNumber - visibleStartLineNumber] = decorations.map(decoration => {
 				const title = decoration.tooltip === null ? '' : `" title="${escapeAttribute(decoration.tooltip)}`;
-				return `<div class="cldr stanza-editor-line-decoration ${escapeAttribute(decoration.className)}${title}${common}`;
+				const icon = decoration.icon ? `" data-ash-icon-id="${escapeAttribute(decoration.icon.id)}` : '';
+				return `<div class="cldr stanza-editor-line-decoration ${escapeAttribute(decoration.className)}${title}${icon}${common}`;
 			}).join('');
 		}
 		this._renderResult = output;
@@ -70,6 +73,13 @@ export class LinesDecorationsOverlay extends DedupOverlay {
 
 	public render(startLineNumber: number, lineNumber: number): string {
 		return this._renderResult?.[lineNumber - startLineNumber] ?? '';
+	}
+}
+
+/** Materializes semantic decoration icons after the overlay HTML is mounted. */
+export function renderLineDecorationIcons(container: HTMLElement): void {
+	for (const decoration of container.querySelectorAll<HTMLElement>('.stanza-editor-line-decoration[data-ash-icon-id]')) {
+		appendIcon(Icon.fromId(decoration.dataset.ashIconId!), decoration);
 	}
 }
 

@@ -8,7 +8,7 @@ import { Range } from '../core/range.js';
 import { type IModelDecoration, type IModelDeltaDecoration, type ITextModel, TrackedRangeStickiness, OverviewRulerLane, MinimapPosition } from '../model.js';
 import { type IMarkerDecorationsService } from './markerDecorations.js';
 import { themeColorFromId } from '../../../base/common/themables.js';
-import { ColorId } from '../../../platform/theme/common/colorTheme.js';
+import { accentForeground, errorForeground, warningForeground } from '../../../platform/theme/common/colors/baseColors.js';
 
 interface ModelMarkers {
 	readonly store: DisposableStore;
@@ -157,8 +157,8 @@ export class MarkerDecorationsService extends Disposable implements IMarkerDecor
 }
 
 function markerOptions(marker: Marker): IModelDeltaDecoration['options'] {
-	const colorId = marker.severity === MarkerSeverity.Error ? ColorId.errorForeground
-		: marker.severity === MarkerSeverity.Warning ? ColorId.warningForeground : ColorId.accentForeground;
+	const colorId = marker.severity === MarkerSeverity.Error ? errorForeground
+		: marker.severity === MarkerSeverity.Warning ? warningForeground : accentForeground;
 	const color = themeColorFromId(colorId);
 	const severity = marker.severity === MarkerSeverity.Information ? 'info' : marker.severity;
 	const prefix = [marker.source, marker.code].filter(value => value !== undefined).join(' ');

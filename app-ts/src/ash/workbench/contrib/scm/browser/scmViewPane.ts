@@ -4,11 +4,11 @@ import { Button } from "../../../../base/browser/ui/button/button.js";
 import { IconLabel } from "../../../../base/browser/ui/iconlabel/iconlabel.js";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
 import type { IAction } from "../../../../base/common/actions.js";
-import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
+import { Lxicon } from "../../../../base/common/lxicons.js";
 import { DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { WorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
 import type { ICommandService } from "../../../../platform/commands/common/commands.js";
-import type { IFileIconThemeService } from "../../../../platform/theme/browser/fileIconThemeService.js";
+import type { IResourceIconRenderer } from "../../../browser/labels.js";
 import type { GitChangeFileComparison, GitChangeStatus, GitRepositoryChange, GitStatus, IGitService } from "../../../services/git/common/gitService.js";
 import type { IEditorService } from "../../../services/editor/common/editorService.js";
 import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
@@ -39,7 +39,7 @@ export class ScmViewPane extends ViewPane {
 	private busy = false;
 	private unavailable = false;
 
-	constructor(container: HTMLElement, options: IViewPaneOptions, gitService: IGitService, private readonly fileIconThemeService: IFileIconThemeService, private readonly editorService: IEditorService, private readonly commandService: ICommandService, private readonly contextMenuProvider: IContextMenuProvider) {
+	constructor(container: HTMLElement, options: IViewPaneOptions, gitService: IGitService, private readonly resourceIconRenderer: IResourceIconRenderer, private readonly editorService: IEditorService, private readonly commandService: ICommandService, private readonly contextMenuProvider: IContextMenuProvider) {
 		super(container, options);
 		this.gitService = gitService;
 		this.contentElement.classList.add("ash-scm");
@@ -61,7 +61,7 @@ export class ScmViewPane extends ViewPane {
 		this.commitInput.setAttribute("aria-label", "Commit message");
 		const commitButton = this._register(new Button(commitForm, {
 			label: "Commit",
-			icon: lxiconsLibrary.check,
+			icon: Lxicon.check,
 			contentAlignment: "labelCentered",
 			type: "submit",
 			title: "Commit staged changes",
@@ -93,7 +93,7 @@ export class ScmViewPane extends ViewPane {
 		this._register(this.gitService.onDidChangeRepositories(() => this.renderRepositorySelector()));
 		this._register(this.gitService.onDidChangeActiveRepository(() => this.renderRepositorySelector()));
 		this._register(this.gitService.onDidBecomeReady(() => void this.refresh()));
-		this._register(this.fileIconThemeService.onDidFileIconThemeChange(() => {
+		this._register(this.resourceIconRenderer.onDidChangeResourceIcons(() => {
 			if (this.status) this.renderStatus(this.status);
 		}));
 		this._register(toDisposable(() => {
@@ -273,7 +273,7 @@ export class ScmViewPane extends ViewPane {
 			label: name,
 			description: parentPath || undefined,
 			reserveIconSpace: true,
-			renderIcon: (container) => this.fileIconThemeService.renderFileIcon(repositoryFileUri(this.status?.workspacePath, change.path), container),
+			renderIcon: (container) => this.resourceIconRenderer.renderFileIcon(repositoryFileUri(this.status?.workspacePath, change.path), container),
 			title: change.originalPath ? `${change.originalPath} → ${change.path}` : change.path,
 		}));
 		fileLabel.element.classList.add("ash-scm-change-label");
@@ -335,7 +335,7 @@ export class ScmViewPane extends ViewPane {
 			id: `scm.section.viewAll.${side}.${sectionActionId(title)}`,
 			label,
 			tooltip: label,
-			icon: lxiconsLibrary.codeReview,
+			icon: Lxicon.codeReview,
 			enabled: true,
 			checked: undefined,
 			run: () => void this.openChanges(title, changes, side),
@@ -363,7 +363,7 @@ export class ScmViewPane extends ViewPane {
 			id,
 			label,
 			tooltip: label,
-			icon: action === "stage" ? lxiconsLibrary.add : action === "unstage" ? lxiconsLibrary.remove : lxiconsLibrary.discard,
+			icon: action === "stage" ? Lxicon.add : action === "unstage" ? Lxicon.remove : Lxicon.discard,
 			enabled: true,
 			checked: undefined,
 			run: () => this.requestPathAction(action, paths),

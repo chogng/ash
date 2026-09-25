@@ -7,7 +7,8 @@ import { TextDecorationCollection } from '../../../../editor/common/model/decora
 import { type TextModel } from '../../../../editor/common/model/textModel.js';
 
 import { type IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { ColorId } from '../../../../platform/theme/common/colorTheme.js';
+import { warningForeground } from '../../../../platform/theme/common/colors/baseColors.js';
+import { diffInsertedLineMarker, diffRemovedLineMarker } from '../../../../platform/theme/common/colors/editorColors.js';
 import { type QuickDiffComparison, type QuickDiffModelReference } from '../common/quickDiff.js';
 import { ScmConfiguration } from '../common/scmConfiguration.js';
 import { MinimapPosition, OverviewRulerLane, TrackedRangeStickiness, type IModelDecorationOptions } from '../../../../editor/common/model.js';
@@ -121,9 +122,9 @@ function classNameForKind(kind: QuickDiffDecorationMetadata['kind']): string {
 
 function colorForKind(kind: QuickDiffDecorationMetadata['kind']): string {
 	switch (kind) {
-		case LineDiffKind.Added: return ColorId.diffEditorInsertedLineMarker;
-		case LineDiffKind.Modified: return ColorId.warningForeground;
-		case LineDiffKind.Removed: return ColorId.diffEditorRemovedLineMarker;
+		case LineDiffKind.Added: return diffInsertedLineMarker;
+		case LineDiffKind.Modified: return warningForeground;
+		case LineDiffKind.Removed: return diffRemovedLineMarker;
 	}
 }
 

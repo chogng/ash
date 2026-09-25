@@ -5,7 +5,7 @@ import { Color } from '../../../base/common/color.js';
 import { Disposable, toDisposable, type IDisposable, type IReference } from '../../../base/common/lifecycle.js';
 import { observableValue, type IObservable } from '../../../base/common/observable.js';
 import { editorBackground, editorForeground } from '../../../platform/theme/common/colors/editorColors.js';
-import { type IColorTheme } from '../../../platform/theme/common/colorTheme.js';
+import type { IColorTheme } from '../../../platform/theme/common/themeService.js';
 import { EditorFontLigatures, EditorOption } from '../../common/config/editorOptions.js';
 import { ColorId } from '../../common/encodedTokenAttributes.js';
 import { ViewEventHandler } from '../../common/viewEventHandler.js';

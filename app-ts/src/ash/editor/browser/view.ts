@@ -50,7 +50,7 @@ import { ViewContentWidgets } from './viewParts/contentWidgets/contentWidgets.js
 import { ViewOverlayWidgets } from './viewParts/overlayWidgets/overlayWidgets.js';
 import { type ViewPart } from './view/viewPart.js';
 import { ViewContext } from '../common/viewModel/viewContext.js';
-import { type IColorTheme } from '../../platform/theme/common/colorTheme.js';
+import type { IColorTheme } from '../../platform/theme/common/themeService.js';
 import type { IContentWidget, IEditorAriaOptions, IGlyphMarginWidget, IOverlayWidget, IViewZoneChangeAccessor } from './editorBrowser.js';
 import { ContentViewOverlays, MarginViewOverlays } from './view/viewOverlays.js';
 import { LineWidthIndex, ViewLines } from './viewParts/viewLines/viewLines.js';

@@ -1,6 +1,6 @@
 import { ActionViewItem, LabelActionViewItem } from "../../../../../base/browser/ui/actionbar/actionViewItems.js";
 import type { IAction } from "../../../../../base/common/actions.js";
-import { lxiconsLibrary } from "../../../../../base/common/lxiconsLibrary.js";
+import { Lxicon } from "../../../../../base/common/lxicons.js";
 import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { DropdownWithPrimaryActionViewItem } from "../../../../../platform/actions/browser/dropdownWithPrimaryActionViewItem.js";
 import { MenuWorkbenchToolBar } from "../../../../../platform/actions/browser/toolbar.js";
@@ -118,7 +118,7 @@ export class TerminalTitleActions extends Disposable {
 				id: NEW_TERMINAL_COMMAND_ID,
 				title: "New Terminal",
 				tooltip: "New Terminal",
-				icon: lxiconsLibrary.add,
+				icon: Lxicon.add,
 				precondition: TerminalCreatingContext.isEqualTo(false),
 			},
 			group: "navigation",
@@ -129,7 +129,7 @@ export class TerminalTitleActions extends Disposable {
 				id: RELAUNCH_TERMINAL_COMMAND_ID,
 				title: "Relaunch Terminal",
 				tooltip: "Relaunch Terminal",
-				icon: lxiconsLibrary.history,
+				icon: Lxicon.history,
 			},
 			when: ContextKeyExpr.and(
 				TerminalHasActiveInstanceContext.isEqualTo(true),
@@ -143,7 +143,7 @@ export class TerminalTitleActions extends Disposable {
 				id: KILL_TERMINAL_COMMAND_ID,
 				title: "Kill Terminal",
 				tooltip: "Kill Terminal",
-				icon: lxiconsLibrary.trash,
+				icon: Lxicon.trash,
 			},
 			when: TerminalHasActiveInstanceContext.isEqualTo(true),
 			group: "navigation",

@@ -12,7 +12,8 @@ Product icon 是 renderer-independent semantic identity，不是某个 component
 
 ```text
 resources/icons/*.svg
-  ├─ Desktop generator → private SVG factories → semantic registry → browser SVG renderer
+  ├─ Desktop generator → private SVG factories → Lxicon built-in catalog
+  │                                         → platform iconRegistry → browser SVG renderer
   └─ Rust generator → private artwork → explicit semantic library
                                      → ash-icons
                        → zui PaintIcon → ash-ui-components IconLabel / Button
@@ -32,7 +33,11 @@ resources/icons/*.svg
 | --- | --- | --- |
 | Canonical first-party SVG artwork | `resources/icons` | ✅ |
 | Desktop generated SVG factories | `app-ts/src/ash/base/common/productIcons.ts` | ✅ |
-| Desktop semantic registration与resolution | `base/common/icon.ts` / `lxiconsLibrary.ts` | ✅ |
+| Desktop built-in SVG catalog | `base/common/lxicons.ts` / `lxiconsUtil.ts` | ✅ |
+| Desktop semantic registration与resolution | `platform/theme/common/iconRegistry.ts` | ✅ |
+| Desktop SVG creation and display | `base/browser/ui/lxicons` | ✅ |
+| Desktop searchable SVG icon selector | `base/browser/ui/icons/iconSelectBox.ts` | ✅，等待产品调用入口 |
+| Desktop product SVG theme selection | `workbench/services/themes` | ✅ |
 | Rust semantic identity、definition 与 rendering mode | `ash-icons` | ✅ |
 | Rust logical placement、tint 与 clip scene contract | `zui::PaintIcon` | ✅ |
 | Rust icon+text component geometry | `ash-ui-components::IconLabel` | ✅ |
@@ -43,10 +48,14 @@ resources/icons/*.svg
 `ash-icons` 不依赖 `zui` 或 `ash-ui-components`。`PaintIcon`、`IconLabel`、`Button` 和 `InputBox` 可以依赖 icon identity，但
 资源 crate 不得包含 component、font、layout、theme color、GPU 或 input routing。
 
+VS Code 的 `base/browser/ui/icons/iconSelectBox.ts` 是图标选择控件。Ash 在同路径提供可筛选、
+可键盘选择的 SVG 控件；当前没有产品调用入口。SVG 创建、挂载与主题更新由 `base/browser/ui/lxicons` 负责。
+
 ## 3. 身份与图稿
 
 - 产品接口传递 `Icon` / `IconId`，不传 filename 或 raw SVG；
-- public semantic library 由产品显式登记，不能由 resource filename 自动扩张；
+- Desktop 的 `Lxicon` 枚举内置图稿；产品界面有独立含义时，由所属模块调用 `registerIcon` 声明语义 ID，并以 `Lxicon` 作为默认图稿；
+- 资源文件名可以生成内置图稿 ID，但不能代替产品组件的语义注册；
 - semantic ID 与 artwork 是多对一关系，允许稳定 alias 和无调用方迁移的 artwork 替换；
 - checked-in generated binding 保证 Cargo/Bazel compile action 不运行 generator；
 - `IconRendering::Symbolic` 表示整个图标由 caller tint；
@@ -58,7 +67,7 @@ resources/icons/*.svg
 ## 4. 当前实现
 
 Rust generator 扫描全部 canonical SVG，生成 164 个 crate-private `IconDefinition` binding；
-`library.rs` 显式登记与 Desktop `lxiconsLibrary` 对齐的公共 semantic constants、排序后的
+`library.rs` 显式登记与 Desktop `Lxicon` 图稿目录对应的公共 semantic constants、排序后的
 `ALL_ICONS` 和 `icon_by_id` lookup。`history → refresh.svg`、`dropdown-indicator →
 chevron-down.svg` 等映射证明 semantic identity 不依赖 filename。`Button` 的 icon+text paint
 path 复用 `IconLabel`。
@@ -78,6 +87,6 @@ cargo test --manifest-path Cargo.toml -p ash-icons -p ash-ui-components
 ```
 
 Desktop 继续运行自己的 generate/check/optimize workflow。新增 SVG 必须同时更新两个 checked-in
-generated output；新增公共语义还必须显式更新两个客户端的 library。未来可以把两个 generator
+generated output；新增产品语义应由所属客户端显式注册，跨端共享语义还需更新两个客户端。未来可以把两个 generator
 的 discovery/validation 合并为 repository-level tool，但不能让 Rust 或 Desktop build 在编译
 阶段隐式改写源码。

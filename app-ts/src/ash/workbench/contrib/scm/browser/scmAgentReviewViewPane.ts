@@ -1,5 +1,5 @@
 import { Button } from "../../../../base/browser/ui/button/button.js";
-import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
+import { Lxicon } from "../../../../base/common/lxicons.js";
 import type { IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
 import { ViewPane } from "../../../browser/parts/views/viewPane.js";
 import { h } from "../../../../base/browser/dom.js";
@@ -14,7 +14,7 @@ export class ScmAgentReviewViewPane extends ViewPane {
 		empty.textContent = "No agent changes to review.";
 		const findIssues = this._register(new Button(this.contentElement, {
 			label: "Find Issues",
-			icon: lxiconsLibrary.codeReview,
+			icon: Lxicon.codeReview,
 			contentAlignment: "labelCentered",
 			title: "Find Issues",
 		}));

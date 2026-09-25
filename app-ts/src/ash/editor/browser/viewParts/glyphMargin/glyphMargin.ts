@@ -1,4 +1,5 @@
 import { h } from '../../../../base/browser/dom.js';
+import type { Icon } from '../../../../base/common/icon.js';
 import './glyphMargin.css';
 import { createFastDomNode, FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { type RenderingContext, type RestrictedRenderingContext } from '../../view/renderingContext.js';
@@ -22,6 +23,7 @@ export class DecorationToRender {
 		public readonly className: string,
 		public readonly tooltip: string | null,
 		zIndex: number | undefined,
+		public readonly icon?: Icon,
 	) {
 		this.zIndex = zIndex ?? 0;
 	}
@@ -32,6 +34,7 @@ export class LineDecorationToRender {
 		public readonly className: string,
 		public readonly zIndex: number,
 		public readonly tooltip: string | null,
+		public readonly icon?: Icon,
 	) {}
 }
 
@@ -71,7 +74,7 @@ export abstract class DedupOverlay extends DynamicViewOverlay {
 				previousEndLineIndex = endLineIndex;
 			}
 			for (let lineIndex = startLineIndex; lineIndex <= previousEndLineIndex; lineIndex += 1) {
-				output[lineIndex]!.add(new LineDecorationToRender(decoration.className, decoration.zIndex, decoration.tooltip));
+				output[lineIndex]!.add(new LineDecorationToRender(decoration.className, decoration.zIndex, decoration.tooltip, decoration.icon));
 			}
 		}
 		return output;

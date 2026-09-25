@@ -1,4 +1,4 @@
-import { WorkbenchFileIconThemesRegistry } from '../services/themes/common/themeExtensionPoints.js';
+import { WorkbenchFileIconThemesRegistry, WorkbenchProductIconThemesRegistry } from '../services/themes/common/themeExtensionPoints.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../platform/configuration/common/configurationRegistry.js";
 import { AccessibilityConfiguration } from "../../platform/accessibility/common/accessibility.js";
 import { Registry } from "../../platform/registry/common/platform.js";
@@ -32,6 +32,18 @@ export const WorkbenchConfiguration = Object.freeze({
 		setting: {
 			valueType: 'select', title: 'File icon theme', description: 'Choose the file icons contributed by an installed extension.',
 			get options() { return [{ value: '', label: 'None' }, ...WorkbenchFileIconThemesRegistry.getThemes().map(theme => ({ value: theme.id, label: theme.label }))]; },
+		},
+	}),
+	productIconTheme: configurationRegistry.registerConfiguration<string>({
+		key: 'workbench.productIconTheme',
+		defaultValue: 'default',
+		parse(value: unknown): string {
+			if (typeof value === 'string' && /^[a-zA-Z0-9._-]{1,256}$/u.test(value)) return value;
+			throw new TypeError('Invalid product icon theme ID');
+		},
+		setting: {
+			valueType: 'select', title: 'Product icon theme', description: 'Choose the SVG artwork for controls and other product icons.',
+			get options() { return [{ value: 'default', label: 'Default' }, ...WorkbenchProductIconThemesRegistry.getThemes().map(theme => ({ value: theme.id, label: theme.label }))]; },
 		},
 	}),
 	colorTheme: configurationRegistry.registerConfiguration<string>({

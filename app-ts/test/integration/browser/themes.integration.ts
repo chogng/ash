@@ -1,6 +1,11 @@
 import manifest from '../../../../extensions/theme-seti/package.json' with { type: 'json' };
 import themeUrl from '../../../../extensions/theme-seti/icons/vs-seti-icon-theme.json?url';
 import fontUrl from '../../../../extensions/theme-seti/icons/seti.woff?url';
+import productThemeUrl from './fixtures/product-icons/theme.json?url';
+import productIconUrl from './fixtures/product-icons/add.svg?url';
+import { appendIcon } from '../../../src/ash/base/browser/ui/lxicons/lxicon.js';
+import { IconSelectBox } from '../../../src/ash/base/browser/ui/icons/iconSelectBox.js';
+import { Lxicon } from '../../../src/ash/base/common/lxicons.js';
 import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
@@ -17,12 +22,14 @@ import { TextMateScopeThemeModel } from '../../../src/ash/workbench/services/tex
 import { LanguageRequestCoordinator } from '../../../src/ash/editor/common/model/languageRequestCoordinator.js';
 import type { LanguageToken } from '../../../src/ash/editor/common/tokens/languageTokens.js';
 import { TextModel } from '../../../src/ash/editor/common/model/textModel.js';
-import { registerColor } from '../../../src/ash/platform/theme/common/colorRegistry.js';
+import { registerColor } from '../../../src/ash/platform/theme/common/colorUtils.js';
+import { registerIcon } from '../../../src/ash/platform/theme/common/iconRegistry.js';
 
 declare global {
 	interface Window {
 		registerLateThemeColor(): void;
 		disposeThemeRoot(): void;
+		disposeIconSelectBox(): void;
 		previewInTextMateWorker(): Promise<{ preview: string[]; unchanged: boolean; text: string }>;
 		tokenizeInTextMateWorker(): Promise<readonly { type: string; modifiers: readonly string[]; presentation?: { foreground?: string; fontStyle?: readonly string[] } }[]>;
 	}
@@ -77,16 +84,24 @@ const services = resources.add(new ServiceContainer());
 services.registerInstance(IConfigurationService, configuration);
 const themes = resources.add(services.createInstance(WorkbenchThemeService, document.querySelector<HTMLElement>('#root')!));
 themes.initialize();
+appendIcon(Lxicon.add, document.querySelector<HTMLElement>('#product-icon')!);
+appendIcon(registerIcon('browser-test-semantic-product', Lxicon.chevronRight, 'Browser test semantic product icon'), document.querySelector<HTMLElement>('#semantic-product-icon')!);
+const iconSelectBox = resources.add(new IconSelectBox({ icons: [Lxicon.add, Lxicon.chevronRight, Lxicon.check], showIconInfo: true }));
+const iconSelectHost = document.querySelector<HTMLElement>('#icon-select-host')!;
+iconSelectHost.append(iconSelectBox.domNode);
+iconSelectBox.layout({ width: 240, height: 180 });
+resources.add(iconSelectBox.onDidSelect(icon => { iconSelectHost.dataset.selectedIcon = icon.id; }));
+window.disposeIconSelectBox = () => iconSelectBox.dispose();
 window.registerLateThemeColor = () => {
 	registerColor('test.browserLate', { dark: '#123456', light: '#abcdef' }, { description: 'Late browser test.', owner: 'test' });
 };
 window.disposeThemeRoot = () => themes.dispose();
 const render = (): void => themes.renderFileIcon(URI.file('/workspace/main.ts'), document.querySelector<HTMLElement>('#icon')!);
-resources.add(themes.onDidFileIconThemeChange(render));
-const manifestJson = JSON.stringify(manifest);
+resources.add(themes.onDidChangeResourceIcons(render));
+const manifestJson = JSON.stringify({ ...manifest, contributes: { ...manifest.contributes, productIconThemes: [{ id: 'test-svg-product', label: 'Test SVG product icons', path: './product-icons/theme.json' }] } });
 const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(manifestJson));
 const hash = 'sha256:' + Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
-const urls: Record<string, string> = { 'icons/vs-seti-icon-theme.json': themeUrl, 'icons/seti.woff': fontUrl };
+const urls: Record<string, string> = { 'icons/vs-seti-icon-theme.json': themeUrl, 'icons/seti.woff': fontUrl, 'product-icons/theme.json': productThemeUrl, 'product-icons/add.svg': productIconUrl };
 const grammars = resources.add(new TextMateGrammarService());
 const extensions = resources.add(new AppServerExtensionService({
 	api: {
@@ -108,6 +123,8 @@ render();
 document.querySelector('#none')!.addEventListener('click', () => { void configuration.updateValue(WorkbenchConfiguration.iconTheme, null); });
 document.querySelector('#seti')!.addEventListener('click', () => { void configuration.updateValue(WorkbenchConfiguration.iconTheme, 'vs-seti'); });
 document.querySelector('#light')!.addEventListener('click', () => { void configuration.updateValue(WorkbenchConfiguration.colorTheme, 'ash-light'); });
+document.querySelector('#svg-icons')!.addEventListener('click', () => { void configuration.updateValue(WorkbenchConfiguration.productIconTheme, 'test-svg-product'); });
+document.querySelector('#default-icons')!.addEventListener('click', () => { void configuration.updateValue(WorkbenchConfiguration.productIconTheme, 'default'); });
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
 document.body.dataset.ready = 'true';
 

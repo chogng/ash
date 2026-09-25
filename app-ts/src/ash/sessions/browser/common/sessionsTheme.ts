@@ -1,9 +1,8 @@
 import { bindColorTheme } from "../../../platform/theme/browser/themeStyles.js";
 import { darkColorTheme } from "../../../platform/theme/common/colorTheme.js";
 import { lightColorTheme } from "../../../platform/theme/common/colorTheme.js";
-import type { IThemeService } from "../../../platform/theme/common/themeService.js";
-import type { IColorTheme } from "../../../platform/theme/common/colorTheme.js";
-import { Emitter } from "../../../base/common/event.js";
+import { defaultProductIconTheme, type IColorTheme, type IThemeService } from "../../../platform/theme/common/themeService.js";
+import { Emitter, Event } from "../../../base/common/event.js";
 import { combinedDisposable } from "../../../base/common/lifecycle.js";
 import { toDisposable } from "../../../base/common/lifecycle.js";
 import type { IDisposable } from "../../../base/common/lifecycle.js";
@@ -18,7 +17,9 @@ export function bindSessionsTheme(root: HTMLElement): IDisposable {
 	const themeChanges = new Emitter<IColorTheme>();
 	const themeService: IThemeService = {
 		onDidColorThemeChange: themeChanges.event,
+		onDidProductIconThemeChange: Event.None,
 		getColorTheme: () => selectTheme(systemColorScheme),
+		getProductIconTheme: () => defaultProductIconTheme,
 	};
 	const handleSystemColorSchemeChange = (): void => themeChanges.fire(themeService.getColorTheme());
 	systemColorScheme.addEventListener("change", handleSystemColorSchemeChange);

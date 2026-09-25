@@ -10,7 +10,7 @@ import { EditorOption } from '../../../common/config/editorOptions.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import * as viewEvents from '../../../common/viewEvents.js';
 import { editorRuler } from '../../../common/core/editorColorRegistry.js';
-import { type IColorTheme } from '../../../../platform/theme/common/colorTheme.js';
+import type { IColorTheme } from '../../../../platform/theme/common/themeService.js';
 
 /** Renders configured editor rulers into the shared GPU rectangle buffer. */
 export class RulersGpu extends ViewPart {

@@ -77,9 +77,6 @@ import { IFileSystemProviderService } from "../../platform/files/common/fileSyst
 import {
 	IFileService,
 } from "../../platform/files/common/files.js";
-import {
-	IFileIconThemeService,
-} from "../../platform/theme/browser/fileIconThemeService.js";
 import { FileLabelDecorationService } from "../services/labels/browser/fileLabelDecorationService.js";
 import { IFileLabelDecorationService } from "../services/labels/common/fileLabelDecorationService.js";
 import {
@@ -133,7 +130,7 @@ import {
 } from "../services/dialogs/common/dialogService.js";
 import { WorkbenchContextKeysHandler } from './contextkeys.js';
 import { WorkbenchThemeService } from "../services/themes/browser/workbenchThemeService.js";
-import { IResourceLabelService, ResourceLabelService } from "./labels.js";
+import { IResourceIconRenderer, IResourceLabelService, ResourceLabelService } from "./labels.js";
 import { ILabelService, LabelService } from "../../platform/label/common/labelService.js";
 import { WorkbenchLayout, type WorkbenchDefaultLayout } from "./layout.js";
 import { IWorkbenchLayoutService, type WorkbenchPartId } from "../services/layout/browser/layoutService.js";
@@ -585,11 +582,10 @@ export class Workbench extends Disposable {
 		this._register(extensionService.themes.onDidChange(() => updateTextMateTheme()));
 		this._register(themeService.onDidColorThemeChange(() => updateTextMateTheme()));
 		services.registerInstance(IUserThemeService, userThemeService ?? UnavailableUserThemeService);
-		const fileIconThemeService = themeService;
-		services.registerInstance(IFileIconThemeService, fileIconThemeService);
+		services.registerInstance(IResourceIconRenderer, themeService);
 		services.registerInstance(IResourceLabelService, this._register(new ResourceLabelService({
 			workspaceContextService: workspaceContext,
-			fileIconThemeService,
+			resourceIconRenderer: themeService,
 			untitledTextEditorService,
 			fileLabelDecorationService: services.get(IFileLabelDecorationService),
 			labelService,

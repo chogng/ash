@@ -1,4 +1,4 @@
-import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
+import { Lxicon } from "../../../../base/common/lxicons.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import type { RemoteConnectionState } from "../../../../platform/remote/common/remote.js";
 import type { IWorkbenchContribution } from "../../../common/contributions.js";
@@ -46,14 +46,14 @@ function remoteStatusEntry(state: RemoteConnectionState, connection: RemoteAgent
 	const kind = connection?.kind === "ssh" && state === "connected" ? "remote" : undefined;
 	switch (state) {
 		case "connected":
-			return { kind, icon: lxiconsLibrary.remote, text: "", ariaLabel: `Remote connection to ${backend} is ready`, tooltip: `Connected to ${backend}`, run };
+			return { kind, icon: Lxicon.remote, text: "", ariaLabel: `Remote connection to ${backend} is ready`, tooltip: `Connected to ${backend}`, run };
 		case "connecting":
-			return { kind, icon: lxiconsLibrary.remote, text: "Connecting\u2026", ariaLabel: `Remote connection to ${backend} is connecting`, tooltip: `Connecting to ${backend}`, run };
+			return { kind, icon: Lxicon.remote, text: "Connecting\u2026", ariaLabel: `Remote connection to ${backend} is connecting`, tooltip: `Connecting to ${backend}`, run };
 		case "reconnecting":
-			return { kind, icon: lxiconsLibrary.remote, text: "Reconnecting\u2026", ariaLabel: `Remote connection to ${backend} is reconnecting`, tooltip: `Reconnecting to ${backend}`, run };
+			return { kind, icon: Lxicon.remote, text: "Reconnecting\u2026", ariaLabel: `Remote connection to ${backend} is reconnecting`, tooltip: `Reconnecting to ${backend}`, run };
 		case "disconnecting":
-			return { kind, icon: lxiconsLibrary.remote, text: "Disconnecting\u2026", ariaLabel: `Remote connection to ${backend} is disconnecting`, tooltip: `Disconnecting from ${backend}`, run };
+			return { kind, icon: Lxicon.remote, text: "Disconnecting\u2026", ariaLabel: `Remote connection to ${backend} is disconnecting`, tooltip: `Disconnecting from ${backend}`, run };
 		case "disconnected":
-			return { kind, icon: lxiconsLibrary.remote, text: "Disconnected", ariaLabel: `Remote connection to ${backend} is disconnected`, tooltip: `${backend} is disconnected`, run };
+			return { kind, icon: Lxicon.remote, text: "Disconnected", ariaLabel: `Remote connection to ${backend} is disconnected`, tooltip: `${backend} is disconnected`, run };
 	}
 }

@@ -111,6 +111,8 @@ export interface IModelDecorationOptions {
 	linesDecorationsTooltip?: string | null;
 	lineNumberClassName?: string | null;
 	firstLineDecorationClassName?: string | null;
+	/** SVG icon rendered inside the first-line decoration; the class remains its layout and interaction hook. */
+	firstLineDecorationIcon?: Icon | null;
 	marginClassName?: string | null;
 	inlineClassName?: string | null;
 	inlineClassNameAffectsLetterSpacing?: boolean;
@@ -491,6 +493,7 @@ export interface ITextModel extends IDisposable {
 	detectIndentation(defaultInsertSpaces: boolean, defaultTabSize: number): void;
 }
 import type { Event } from '../../base/common/event.js';
+import type { Icon } from '../../base/common/icon.js';
 import type { IMarkdownString } from '../../base/common/htmlContent.js';
 import type { IDisposable } from '../../base/common/lifecycle.js';
 import type { ThemeColor } from '../../base/common/themables.js';

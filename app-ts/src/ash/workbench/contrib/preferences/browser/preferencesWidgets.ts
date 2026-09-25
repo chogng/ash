@@ -9,7 +9,7 @@ import { Checkbox, Switch, type Toggle } from '../../../../base/browser/ui/toggl
 import type { IAction } from '../../../../base/common/actions.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { lxiconsLibrary } from '../../../../base/common/lxiconsLibrary.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import type { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { ILocalizationService } from '../../../services/localization/common/localizationService.js';
@@ -126,7 +126,7 @@ class SettingActions extends Disposable {
 		this.actionsDomNode.className = 'ash-setting-item-actions';
 		this.trigger = this._register(new Button(this.actionsDomNode, {
 			label: '',
-			icon: lxiconsLibrary.gear,
+			icon: Lxicon.gear,
 			onClick: () => this.show(),
 		}));
 		this.trigger.toggleClassName('ash-setting-item-actions-trigger', true);

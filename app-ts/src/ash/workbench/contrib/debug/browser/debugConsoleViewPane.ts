@@ -1,7 +1,7 @@
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { ActionBar } from "../../../../base/browser/ui/actionbar/actionbar.js";
 import type { IAction } from "../../../../base/common/actions.js";
-import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
+import { Lxicon } from "../../../../base/common/lxicons.js";
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../browser/parts/views/viewPane.js";
 import type { IDebugConsoleService } from "../../../services/debug/common/debugConsoleService.js";
 import { CLEAR_DEBUG_CONSOLE_COMMAND_ID } from "../common/debug.js";
@@ -72,7 +72,7 @@ export class DebugConsoleViewPane extends ViewPane {
 		this.output.textContent = active?.output ?? "";
 		this.input.disabled = !active?.canEvaluate;
 		this.input.placeholder = active?.canEvaluate ? "Evaluate expression" : "Start a debug session to evaluate expressions";
-		const clearAction: IAction = { id: CLEAR_DEBUG_CONSOLE_COMMAND_ID, label: "Clear Console", tooltip: "Clear Console", icon: lxiconsLibrary.eraser, enabled: Boolean(active?.output), checked: undefined, run: () => this.consoleService.clear() };
+		const clearAction: IAction = { id: CLEAR_DEBUG_CONSOLE_COMMAND_ID, label: "Clear Console", tooltip: "Clear Console", icon: Lxicon.eraser, enabled: Boolean(active?.output), checked: undefined, run: () => this.consoleService.clear() };
 		this.titleActions.updateActions([clearAction]);
 		if (atEnd) this.output.scrollTop = this.output.scrollHeight;
 	}

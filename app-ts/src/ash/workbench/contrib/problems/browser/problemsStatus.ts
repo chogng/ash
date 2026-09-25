@@ -1,5 +1,5 @@
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
+import { Lxicon } from "../../../../base/common/lxicons.js";
 import { MarkerSeverity, type IMarkerService } from "../../../../platform/markers/common/markers.js";
 import type { IWorkbenchContribution } from "../../../common/contributions.js";
 import { StatusbarAlignment, type IStatusbarEntry, type IStatusbarEntryAccessor, type IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
@@ -41,8 +41,8 @@ export class ProblemsStatusContribution extends Disposable implements IWorkbench
 		return {
 			text: "",
 			segments: [
-				{ icon: lxiconsLibrary.error, text: packNumber(errors) },
-				{ icon: lxiconsLibrary.warning, text: packNumber(warnings) },
+				{ icon: Lxicon.error, text: packNumber(errors) },
+				{ icon: Lxicon.warning, text: packNumber(warnings) },
 			],
 			ariaLabel: tooltip,
 			tooltip,

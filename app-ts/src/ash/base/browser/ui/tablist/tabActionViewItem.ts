@@ -1,7 +1,7 @@
 import { addDisposableListener, h } from "../../dom.js";
 import type { IAction } from "../../../common/actions.js";
 import type { Icon } from "../../../common/icon.js";
-import { lxiconsLibrary } from "../../../common/lxiconsLibrary.js";
+import { Lxicon } from "../../../common/lxicons.js";
 import { assertDefined } from "../../../common/types.js";
 import { ActionBar } from "../actionbar/actionbar.js";
 import { ActionViewItem } from "../actionbar/actionViewItems.js";
@@ -130,7 +130,7 @@ function closeTabAction<T>(item: TabListItem<T>, close: (value: T) => void, icon
 		id: TAB_CLOSE_ACTION_ID,
 		label,
 		tooltip: label,
-		icon: icon ?? lxiconsLibrary.close,
+		icon: icon ?? Lxicon.close,
 		enabled: true,
 		run: () => close(item.value),
 	};

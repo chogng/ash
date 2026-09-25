@@ -3,7 +3,7 @@ import { ToolBar } from "../../../../base/browser/ui/toolbar/toolbar.js";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
 import type { IAction } from "../../../../base/common/actions.js";
 import { isCancellationError } from "../../../../base/common/errors.js";
-import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
+import { Lxicon } from "../../../../base/common/lxicons.js";
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { DocumentCollaborationInvite } from "../../../services/documentCollaboration/common/documentCollaborationService.js";
 import type { DocumentCollaborationMember } from "../../../services/documentCollaboration/common/documentCollaborationService.js";
@@ -368,7 +368,7 @@ export class CollaborationContribution extends Disposable {
 }
 
 function createAction(id: string, label: string, tooltip: string, enabled: boolean, checked: boolean, run: () => void): IAction {
-	return { id, label, tooltip, icon: lxiconsLibrary.agent, enabled, checked, run };
+	return { id, label, tooltip, icon: Lxicon.agent, enabled, checked, run };
 }
 
 const emptyCollaborationContextMenuProvider: IContextMenuProvider = {

@@ -3,10 +3,10 @@ import { addDisposableListener, isNode, h } from "../../dom.js";
 import { FocusNavigationBoundary, FocusNavigationDirection, focusFirst, focusLast, moveFocus } from "../../focus.js";
 import type { ResolvedKeybinding } from "../../../common/keybindings.js";
 import { Disposable, toDisposable } from "../../../common/lifecycle.js";
-import { lxiconsLibrary } from "../../../common/lxiconsLibrary.js";
+import { Lxicon } from "../../../common/lxicons.js";
 import { ActionViewItem, ButtonActionViewItem, SeparatorActionViewItem } from "../actionbar/actionViewItems.js";
 import { AnchorAxisAlignment, AnchorPosition, ContextView, ContextViewFocusRestore } from "../contextview/contextview.js";
-import { appendIcon } from "../icon/icon.js";
+import { appendIcon } from "../lxicons/lxicon.js";
 import { KeybindingLabel } from "../keybindinglabel/keybindinglabel.js";
 
 export interface MenuActionViewItemOptions {
@@ -33,7 +33,7 @@ function prependMenuLeadingSlot(
 	if (icon) slot.append(icon);
 	else if (checked !== undefined) {
 		slot.classList.add("ash-menu-leading-check");
-		appendIcon(lxiconsLibrary.check, slot);
+		appendIcon(Lxicon.check, slot);
 	}
 	button.prepend(slot);
 }
@@ -167,7 +167,7 @@ class SubmenuMenuActionViewItem extends ButtonActionViewItem {
 		this.button.domNode.setAttribute("aria-expanded", "false");
 		const indicator = h(ownerDocument, "span");
 		indicator.className = "ash-submenu-indicator";
-		appendIcon(lxiconsLibrary.chevronRight, indicator);
+		appendIcon(Lxicon.chevronRight, indicator);
 		this.button.domNode.append(indicator);
 	}
 

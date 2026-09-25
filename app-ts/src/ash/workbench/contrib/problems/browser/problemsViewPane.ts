@@ -1,7 +1,7 @@
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { ActionBar } from "../../../../base/browser/ui/actionbar/actionbar.js";
 import type { IAction } from "../../../../base/common/actions.js";
-import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
+import { Lxicon } from "../../../../base/common/lxicons.js";
 import { getOrSet } from "../../../../base/common/map.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { Range } from "../../../../editor/common/core/range.js";
@@ -56,7 +56,7 @@ export class ProblemsViewPane extends ViewPane {
 			id: "ash.problems.focusFilter",
 			label: "Filter Problems",
 			tooltip: "Filter Problems",
-			icon: lxiconsLibrary.filter,
+			icon: Lxicon.filter,
 			enabled: true,
 			checked: undefined,
 			run: () => this.filterInput.focus(),

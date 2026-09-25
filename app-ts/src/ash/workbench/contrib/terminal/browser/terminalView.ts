@@ -1,6 +1,6 @@
 import { TabList, type TabListDropPosition } from "../../../../base/browser/ui/tablist/tabList.js";
 import { Disposable, DisposableMap } from "../../../../base/common/lifecycle.js";
-import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
+import { Lxicon } from "../../../../base/common/lxicons.js";
 import type { IMenuService } from "../../../../platform/actions/common/menuService.js";
 import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import type { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
@@ -78,7 +78,7 @@ export class TerminalViewPane extends ViewPane {
 					this.draggedTerminal = undefined;
 				},
 			},
-			closeActionIcon: lxiconsLibrary.trash,
+			closeActionIcon: Lxicon.trash,
 			onActivate: (instance) => {
 				this.terminalService.setActiveInstance(instance);
 				this.focus();

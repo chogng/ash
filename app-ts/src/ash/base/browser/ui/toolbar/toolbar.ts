@@ -2,7 +2,7 @@ import type { IContextMenuProvider } from "../../contextmenu.js";
 import type { IAction } from "../../../common/actions.js";
 import { Separator } from "../../../common/actions.js";
 import { Disposable } from "../../../common/lifecycle.js";
-import { lxiconsLibrary } from "../../../common/lxiconsLibrary.js";
+import { Lxicon } from "../../../common/lxicons.js";
 import { ActionBar, type ActionBarOrientation, type ActionViewItemProvider } from "../actionbar/actionbar.js";
 import type { ActionViewItemOptions } from "../actionbar/actionViewItems.js";
 import type { AnchorPosition } from "../contextview/contextview.js";
@@ -107,7 +107,7 @@ class MoreActionsAction implements IAction {
 	readonly id = "ash.toolbar.moreActions";
 	readonly label = "More Actions";
 	readonly tooltip = "More Actions";
-	readonly icon = lxiconsLibrary.ellipsis;
+	readonly icon = Lxicon.ellipsis;
 	readonly enabled = true;
 	readonly checked = undefined;
 

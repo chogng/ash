@@ -19,7 +19,7 @@ filesystem access.
 | Trusted roots, immutable package snapshot, digest and generation | `ash-extensions::ExtensionCatalog` | Built-in first, profile second; direct child packages only |
 | Renderer transport and exact-shape normalization | `platform/extensions/*` | `IExtensionApi.list` and generation-bound `readResource` |
 | Workbench catalog/domain types | `common/extensionService.ts` | Does not expose generated DTO or manifest JSON |
-| Supported manifest parsing | `parseExtensionManifest` | Identity plus languages, grammars, snippets, themes, and debuggers |
+| Supported manifest parsing | `parseExtensionManifest` | Identity plus languages, grammars, snippets, color/icon themes, and debuggers |
 | Workbench lifecycle | `AppServerExtensionService` | Serialized/coalesced refresh with full candidate preparation and one event-barrier commit |
 | Grammar/Worker materialization | `workbench/services/textMate` | Latest complete catalog and independent failure event |
 | Language/configuration/completion | Stanza language services | Caller-owned disposable registrations |
@@ -35,6 +35,7 @@ filesystem access.
 | `grammars` | Root/injection loader plus advanced embedded/token/bracket metadata | TextMate service owns later materialization |
 | `themes` | Strictly parsed versioned catalog, selectable Workbench color themes, and active TextMate token projection | `include` is rejected; manifest NLS placeholders use deterministic fallback labels |
 | `iconThemes` | Package-relative fonts and SVG/PNG file icons; selectable through `workbench.iconTheme` | File associations and light variants; folder-specific associations are not consumed by the current file label contract |
+| `productIconThemes` | Package-relative SVG artwork for semantic product icon IDs; selectable through `workbench.productIconTheme` | Unspecified IDs keep Ash's built-in SVG artwork |
 | `debuggers` | Unique type, label, adapter program, and args | Discovery only; no VS Code Debug Extension API |
 
 `configurationDefaults`, `semanticTokenScopes`, extension JavaScript, LSP declarations, and dynamic
@@ -44,13 +45,25 @@ Theme documents accept only the four supported `uiTheme` values, hexadecimal col
 settings composed of `foreground`, `background`, and supported `fontStyle` values. Unknown
 Workbench color token IDs remain catalog data but are ignored when compiling product color themes.
 
+Product icon themes use the manifest entry `{ "id": "my-icons", "label": "My icons", "path": "./icons/theme.json" }`.
+The referenced JSONC file maps icon IDs to package-relative SVG resources:
+
+```json
+{ "iconDefinitions": { "add": { "iconPath": "./add.svg" } } }
+```
+
+Each SVG needs a `viewBox` and may contain basic shapes and their drawing attributes. Scripts,
+styles, external references, and paths outside the package are rejected before registration.
+`workbench.productIconTheme` selects one contribution by ID; `default` selects Ash's built-in
+`lxicons` SVGs. Theme changes update icons already displayed in the window.
+
 ## Execution and refresh path
 
 ```text
 IExtensionApi.list("refresh")
   -> adapt transport descriptors to Workbench candidates
   -> parseExtensionManifest
-  -> load/parse language configurations, snippets, themes
+  -> load/parse language configurations, snippets, color themes, and SVG icon themes
   -> prepare language, grammar, completion, file-template, theme, and debugger registrations
   -> await the candidate TextMate grammar catalog
   -> commit all domain registrations behind the synchronous event barrier

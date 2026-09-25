@@ -1,15 +1,16 @@
 import './findWidget.css';
 import '../../../../base/browser/ui/sash/sash.css';
 import { addDisposableListener, h, stopEvent } from '../../../../base/browser/dom.js';
-import { appendIcon } from '../../../../base/browser/ui/icon/icon.js';
+import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { type IHoverLifecycleOptions } from '../../../../base/browser/ui/hover/hover.js';
 import { Sash, SashState } from '../../../../base/browser/ui/sash/sash.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { register as registerIcon, type Icon } from '../../../../base/common/icon.js';
+import type { Icon } from '../../../../base/common/icon.js';
 import { localize } from '../../../../nls.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { type IHoverService } from '../../../../platform/hover/browser/hoverService.js';
+import { registerIcon } from '../../../../platform/theme/common/iconRegistry.js';
 import { type ICodeEditor, type IOverlayWidget, type IOverlayWidgetPosition, OverlayWidgetPositionPreference, type IViewZone } from '../../../browser/editorBrowser.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { CONTEXT_FIND_INPUT_FOCUSED, CONTEXT_FIND_WIDGET_FOCUSED, CONTEXT_REPLACE_INPUT_FOCUSED, MATCHES_LIMIT } from './findModel.js';
@@ -36,11 +37,11 @@ const iconSvg = (path: string): string =>
 	`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" ` +
 	`fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">` +
 	`<path d="${path}"/></svg>`;
-export const findSelectionIcon = registerIcon('find-selection', () => iconSvg('M3 3h3M3 3v3M13 3h-3M13 3v3M3 13h3M3 13v-3M13 13h-3M13 13v-3'));
-export const findReplaceIcon = registerIcon('find-replace', () => iconSvg('M3 5h9l-2-2M12 5l-2 2M13 11H4l2-2M4 11l2 2'));
-export const findReplaceAllIcon = registerIcon('find-replace-all', () => iconSvg('M3 4h9l-2-2M12 4l-2 2M13 9H4l2-2M4 9l2 2M3 13h10'));
-export const findPreviousMatchIcon = registerIcon('find-previous-match', () => iconSvg('M8 13V3M4 7l4-4 4 4'));
-export const findNextMatchIcon = registerIcon('find-next-match', () => iconSvg('M8 3v10M4 9l4 4 4-4'));
+export const findSelectionIcon = registerIcon('find-selection', () => iconSvg('M3 3h3M3 3v3M13 3h-3M13 3v3M3 13h3M3 13v-3M13 13h-3M13 13v-3'), 'Search only in the selection');
+export const findReplaceIcon = registerIcon('find-replace', () => iconSvg('M3 5h9l-2-2M12 5l-2 2M13 11H4l2-2M4 11l2 2'), 'Replace the current match');
+export const findReplaceAllIcon = registerIcon('find-replace-all', () => iconSvg('M3 4h9l-2-2M12 4l-2 2M13 9H4l2-2M4 9l2 2M3 13h10'), 'Replace all matches');
+export const findPreviousMatchIcon = registerIcon('find-previous-match', () => iconSvg('M8 13V3M4 7l4-4 4 4'), 'Go to the previous match');
+export const findNextMatchIcon = registerIcon('find-next-match', () => iconSvg('M8 3v10M4 9l4 4 4-4'), 'Go to the next match');
 
 export const NLS_MATCHES_LOCATION = localize('label.matchesLocation', '{0} of {1}');
 export const NLS_NO_RESULTS = localize('label.noResults', 'No results');

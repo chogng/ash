@@ -19,11 +19,11 @@ test("SelectBox owns its unfold trigger and trailing selected check inside a the
 		configurable: true,
 		value(): void {},
 	});
-	const [{ ContextView }, { appendIcon }, { SelectBox }, { lxiconsLibrary }] = await Promise.all([
+	const [{ ContextView }, { appendIcon }, { SelectBox }, { Lxicon }] = await Promise.all([
 		import("../../browser/ui/contextview/contextview.js"),
-		import("../../browser/ui/icon/icon.js"),
+		import("../../browser/ui/lxicons/lxicon.js"),
 		import("../../browser/ui/selectbox/selectbox.js"),
-		import("../../common/lxiconsLibrary.js"),
+		import("../../common/lxicons.js"),
 	]);
 	const host = dom.window.document.querySelector<HTMLElement>("main")!;
 	const contextView = new ContextView(host);
@@ -43,7 +43,7 @@ test("SelectBox owns its unfold trigger and trailing selected check inside a the
 	button.getBoundingClientRect = () => ({ width: 192 } as DOMRect);
 	const indicator = selectBox.element.querySelector<HTMLElement>(".ash-dropdown-indicator")!;
 	const expectedIndicator = h(dom.window.document, "span");
-	appendIcon(lxiconsLibrary.unfold, expectedIndicator);
+	appendIcon(Lxicon.unfold, expectedIndicator);
 	assert.equal(indicator.innerHTML, expectedIndicator.innerHTML);
 
 	selectBox.show();
@@ -55,7 +55,7 @@ test("SelectBox owns its unfold trigger and trailing selected check inside a the
 	const selected = list.querySelector<HTMLElement>(".ash-select-box-option-selected")!;
 	const check = selected.querySelector<HTMLElement>(":scope > .ash-select-box-option-check")!;
 	const expectedCheck = h(dom.window.document, "span");
-	appendIcon(lxiconsLibrary.check, expectedCheck);
+	appendIcon(Lxicon.check, expectedCheck);
 	assert.equal(selected.lastElementChild, check);
 	assert.equal(check.innerHTML, expectedCheck.innerHTML);
 	assert.equal(selected.getAttribute("aria-selected"), "true");

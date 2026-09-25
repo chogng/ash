@@ -28,7 +28,7 @@ import {
 import { registerPanelViews } from "../contrib/panel/browser/panel.contribution.js";
 import { registerProblemsView } from "../contrib/problems/browser/problems.contribution.js";
 import { registerTerminalView } from "../contrib/terminal/browser/terminal.contribution.js";
-import { lxiconsLibrary } from "../../base/common/lxiconsLibrary.js";
+import { Lxicon } from "../../base/common/lxicons.js";
 import "../contrib/bulkEdit/browser/bulkEdit.contribution.js";
 import "../contrib/binaryEditor/browser/binaryEditor.contribution.js";
 import "../contrib/markdown/browser/markdown.contribution.js";
@@ -55,7 +55,7 @@ ViewsRegistry.registerStaticViewContainer({
 	title: "Explorer",
 	localizationKey: { bundle: "ash.views", key: "explorer" },
 	location: ViewContainerLocation.Sidebar,
-	icon: lxiconsLibrary.files,
+	icon: Lxicon.files,
 	order: 1,
 	isDefault: true,
 });

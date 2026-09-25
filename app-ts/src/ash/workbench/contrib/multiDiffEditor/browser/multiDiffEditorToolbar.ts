@@ -3,7 +3,7 @@ import { text, addDisposableListener, h, stopEvent } from '../../../../base/brow
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import type { IAction } from '../../../../base/common/actions.js';
-import { lxiconsLibrary } from '../../../../base/common/lxiconsLibrary.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { CodeEditorWidget } from '../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
 import { Position } from '../../../../editor/common/core/position.js';
@@ -64,7 +64,7 @@ export class MultiDiffEditorToolbar extends Disposable {
 
 	private createSourceToolbar(container: HTMLElement): void {
 		const primary = new ToolbarAction('multiDiff.source', sourceLabel(this.options.input.source), 'Select change source', undefined, true, () => this.selectCurrentSource());
-		const dropdown = new ToolbarAction('multiDiff.source.menu', 'Select Changes', 'Select Changes', lxiconsLibrary.chevronDown, true, () => {});
+		const dropdown = new ToolbarAction('multiDiff.source.menu', 'Select Changes', 'Select Changes', Lxicon.chevronDown, true, () => {});
 		const actions: readonly IAction[] = [
 			new ToolbarAction('multiDiff.source.currentTurn', 'Current Turn', 'Show the current Turn', undefined, this.canOpenTurns(), () => this.openTurnSource('currentTurn')),
 			new ToolbarAction('multiDiff.source.throughCurrentTurn', 'Current Turn and Earlier', 'Show all changes through the current Turn', undefined, this.canOpenTurns(), () => this.openTurnSource('throughCurrentTurn')),
@@ -86,16 +86,16 @@ export class MultiDiffEditorToolbar extends Disposable {
 	private createRepositoryToolbar(container: HTMLElement): void {
 		const isMain = isMainBranch(sourceBranch(this.options.input.source));
 		const primary = isMain
-			? new ToolbarAction('multiDiff.commit.auto', 'Commit', 'Generate a commit message and commit the selected Turn changes', lxiconsLibrary.gitCommit, this.canOpenTurns(), () => this.autoCommit())
-			: new ToolbarAction('multiDiff.pullRequest.create', 'Create Pull Request', 'Pull request provider is not connected', lxiconsLibrary.git, false, () => {});
-		const dropdown = new ToolbarAction('multiDiff.repository.menu', 'Repository Actions', 'Repository Actions', lxiconsLibrary.chevronDown, true, () => {});
+			? new ToolbarAction('multiDiff.commit.auto', 'Commit', 'Generate a commit message and commit the selected Turn changes', Lxicon.gitCommit, this.canOpenTurns(), () => this.autoCommit())
+			: new ToolbarAction('multiDiff.pullRequest.create', 'Create Pull Request', 'Pull request provider is not connected', Lxicon.git, false, () => {});
+		const dropdown = new ToolbarAction('multiDiff.repository.menu', 'Repository Actions', 'Repository Actions', Lxicon.chevronDown, true, () => {});
 		const actions = isMain ? this.commitActions() : this.pullRequestActions();
-		const files = new ToolbarAction('multiDiff.files', 'Files', 'Open Files', lxiconsLibrary.files, this.options.viewsService !== undefined, () => this.options.viewsService?.focusView(EXPLORER_VIEW_ID));
+		const files = new ToolbarAction('multiDiff.files', 'Files', 'Open Files', Lxicon.files, this.options.viewsService !== undefined, () => this.options.viewsService?.focusView(EXPLORER_VIEW_ID));
 		const secondary = [
-			new ToolbarAction('multiDiff.collapseAll', 'Collapse All', 'Collapse all diffs', lxiconsLibrary.fold, true, this.options.collapseAll),
-			new ToolbarAction('multiDiff.expandAll', 'Expand All', 'Expand all diffs', lxiconsLibrary.unfold, true, this.options.expandAll),
-			new ToolbarAction('multiDiff.stageAll', 'Stage All', 'Stage all changes in this source', lxiconsLibrary.check, this.canOpenGit(), () => this.stageAll()),
-			new ToolbarAction('multiDiff.discardAll', 'Discard All', 'Discard all working-tree changes in this source', lxiconsLibrary.discard, this.canOpenGit(), () => this.discardAll()),
+			new ToolbarAction('multiDiff.collapseAll', 'Collapse All', 'Collapse all diffs', Lxicon.fold, true, this.options.collapseAll),
+			new ToolbarAction('multiDiff.expandAll', 'Expand All', 'Expand all diffs', Lxicon.unfold, true, this.options.expandAll),
+			new ToolbarAction('multiDiff.stageAll', 'Stage All', 'Stage all changes in this source', Lxicon.check, this.canOpenGit(), () => this.stageAll()),
+			new ToolbarAction('multiDiff.discardAll', 'Discard All', 'Discard all working-tree changes in this source', Lxicon.discard, this.canOpenGit(), () => this.discardAll()),
 		];
 		const toolbar = this._register(new WorkbenchToolBar(container, this.options.contextMenuProvider, {
 			ariaLabel: 'Multi-diff repository actions',
@@ -109,9 +109,9 @@ export class MultiDiffEditorToolbar extends Disposable {
 
 	private commitActions(): readonly IAction[] {
 		return [
-			new ToolbarAction('multiDiff.commit.manual', 'Commit', 'Enter a commit message', lxiconsLibrary.gitCommit, this.options.gitService !== undefined, () => this.showCommitEditor(false)),
-			new ToolbarAction('multiDiff.commitAndPush', 'Commit and Push', 'Commit and push', lxiconsLibrary.repoPush, this.options.gitService !== undefined, () => this.showCommitEditor(true)),
-			new ToolbarAction('multiDiff.push', 'Push', 'Push the current branch', lxiconsLibrary.repoPush, this.options.gitService !== undefined, () => this.run('Pushing…', async () => {
+			new ToolbarAction('multiDiff.commit.manual', 'Commit', 'Enter a commit message', Lxicon.gitCommit, this.options.gitService !== undefined, () => this.showCommitEditor(false)),
+			new ToolbarAction('multiDiff.commitAndPush', 'Commit and Push', 'Commit and push', Lxicon.repoPush, this.options.gitService !== undefined, () => this.showCommitEditor(true)),
+			new ToolbarAction('multiDiff.push', 'Push', 'Push the current branch', Lxicon.repoPush, this.options.gitService !== undefined, () => this.run('Pushing…', async () => {
 				await this.options.gitService!.push(this.repositoryId());
 				return 'Pushed the current branch.';
 			})),
@@ -232,8 +232,8 @@ export class MultiDiffEditorToolbar extends Disposable {
 		const actionsDomNode = h(ownerDocument, 'div');
 		actionsDomNode.className = 'stanza-multi-diff-commit-actions';
 		const cancel = store.add(new Button(actionsDomNode, { label: 'Cancel', presentation: 'secondary', onClick: () => this.overlay.clear() }));
-		const commit = store.add(new Button(actionsDomNode, { label: 'Commit', presentation: 'primary', icon: lxiconsLibrary.gitCommit, onClick: () => void this.commitFromEditor(editor.value, includeInputDomNode.checked, false) }));
-		const commitAndPush = store.add(new Button(actionsDomNode, { label: 'Commit and Push', presentation: 'primary', icon: lxiconsLibrary.repoPush, onClick: () => void this.commitFromEditor(editor.value, includeInputDomNode.checked, true) }));
+		const commit = store.add(new Button(actionsDomNode, { label: 'Commit', presentation: 'primary', icon: Lxicon.gitCommit, onClick: () => void this.commitFromEditor(editor.value, includeInputDomNode.checked, false) }));
+		const commitAndPush = store.add(new Button(actionsDomNode, { label: 'Commit and Push', presentation: 'primary', icon: Lxicon.repoPush, onClick: () => void this.commitFromEditor(editor.value, includeInputDomNode.checked, true) }));
 		commit.domNode.hidden = pushAfterCommit;
 		commitAndPush.domNode.hidden = !pushAfterCommit;
 		dialogDomNode.append(headingDomNode, editorHostDomNode, includeDomNode, actionsDomNode);

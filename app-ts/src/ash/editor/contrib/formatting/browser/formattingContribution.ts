@@ -1,7 +1,7 @@
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
 import { ToolBar } from "../../../../base/browser/ui/toolbar/toolbar.js";
 import type { IAction } from "../../../../base/common/actions.js";
-import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
+import { Lxicon } from "../../../../base/common/lxicons.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { DocumentTextStyleAttributes, DocumentTextStyleFontFamily } from "../../../common/model/documentSchema.js";
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
@@ -145,8 +145,8 @@ export class FormattingContribution extends Disposable {
 		setSelectValue(this.fontFamily, state.fontFamily ?? "");
 		setSelectValue(this.fontSize, state.fontSize === undefined ? "" : String(state.fontSize));
 		this.inlineActions.setActions([
-			createAction("bold", "Bold", "Toggle bold", lxiconsLibrary.bold, hasTextContext && !state.readOnly, state.bold, () => this.options.onToggleMark("strong")),
-			createAction("italic", "Italic", "Toggle italic", lxiconsLibrary.italics, hasTextContext && !state.readOnly, state.italic, () => this.options.onToggleMark("em")),
+			createAction("bold", "Bold", "Toggle bold", Lxicon.bold, hasTextContext && !state.readOnly, state.bold, () => this.options.onToggleMark("strong")),
+			createAction("italic", "Italic", "Toggle italic", Lxicon.italics, hasTextContext && !state.readOnly, state.italic, () => this.options.onToggleMark("em")),
 		]);
 		this.documentActions.setActions(this.options.documentActions.map(action => createAction(
 			action.id,

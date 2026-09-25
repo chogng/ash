@@ -1,4 +1,4 @@
-import { lxiconsLibrary } from "../../../../../base/common/lxiconsLibrary.js";
+import { Lxicon } from "../../../../../base/common/lxicons.js";
 import { DisposableStore } from "../../../../../base/common/lifecycle.js";
 import { localize } from "../../../../../nls.js";
 import { Action2, MenuId, registerAction2 } from "../../../../../platform/actions/common/actions.js";
@@ -23,12 +23,12 @@ registerAction2(class ToggleSessionInspectorAction extends Action2 {
 			id: TOGGLE_SESSION_INSPECTOR_COMMAND_ID,
 			title: "Show Session Inspector",
 			tooltip: "Show Session Inspector",
-			icon: lxiconsLibrary.layoutSidebarRightOff,
+			icon: Lxicon.layoutSidebarRightOff,
 			toggled: {
 				condition: ChatSessionInspectorVisibleContext.isEqualTo(true),
 				title: "Hide Session Inspector",
 				tooltip: "Hide Session Inspector",
-				icon: lxiconsLibrary.layoutSidebarRight,
+				icon: Lxicon.layoutSidebarRight,
 			},
 			menu: [
 				{
@@ -52,7 +52,7 @@ registerAction2(class OpenChatBrowserAction extends Action2 {
 		super({
 			id: OPEN_CHAT_BROWSER_COMMAND_ID,
 			title: "Open Browser",
-			icon: lxiconsLibrary.browserWeb,
+			icon: Lxicon.browserWeb,
 			precondition: ChatBrowserAvailable,
 			menu: {
 				id: MenuId.ChatTitle,
@@ -72,7 +72,7 @@ registerAction2(class MoveChatToEditorAction extends Action2 {
 		super({
 			id: MOVE_CHAT_TO_EDITOR_COMMAND_ID,
 			title: "Move Chat to Editor Area",
-			icon: lxiconsLibrary.layoutPanel,
+			icon: Lxicon.layoutPanel,
 			precondition: ChatEditorAreaAvailable,
 			menu: {
 				id: MenuId.ChatTitle,
@@ -92,7 +92,7 @@ registerAction2(class MoveChatToNewWindowAction extends Action2 {
 		super({
 			id: MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID,
 			title: "Move Chat to New Window",
-			icon: lxiconsLibrary.linkExternal,
+			icon: Lxicon.linkExternal,
 			precondition: ChatNewWindowAvailable,
 			menu: {
 				id: MenuId.ChatTitle,
@@ -112,7 +112,7 @@ registerAction2(class OpenChatSettingsAction extends Action2 {
 		super({
 			id: OPEN_CHAT_SETTINGS_COMMAND_ID,
 			title: "Chat Settings",
-			icon: lxiconsLibrary.settings,
+			icon: Lxicon.settings,
 			menu: {
 				id: MenuId.ChatTitle,
 				group: "chatActions",

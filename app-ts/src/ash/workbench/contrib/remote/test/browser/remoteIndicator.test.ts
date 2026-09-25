@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import { Emitter } from "../../../../../base/common/event.js";
-import { lxiconsLibrary } from "../../../../../base/common/lxiconsLibrary.js";
+import { Lxicon } from "../../../../../base/common/lxicons.js";
 import { Disposable } from "../../../../../base/common/lifecycle.js";
 import type { RemoteConnectionState } from "../../../../../platform/remote/common/remote.js";
 import type { RemoteAgentConnection } from "../../../../../platform/remote/common/remoteAgentApi.js";
@@ -21,7 +21,7 @@ test("remote indicator owns the leading clickable left status entry", async () =
 	const entries = statusbarService.getEntries(StatusbarAlignment.Left);
 	assert.deepEqual(entries.map(entry => entry.id), ["ash.status.remote", "ash.status.git.branch"]);
 	assert.equal(entries[0]?.entry.kind, undefined);
-	assert.equal(entries[0]?.entry.icon, lxiconsLibrary.remote);
+	assert.equal(entries[0]?.entry.icon, Lxicon.remote);
 	assert.equal(entries[0]?.entry.text, "");
 	assert.equal(entries[0]?.entry.ariaLabel, "Remote connection to local backend is ready");
 	await entries[0]?.entry.run?.();

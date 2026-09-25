@@ -1,4 +1,4 @@
-import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
+import { Lxicon } from "../../../../base/common/lxicons.js";
 import { Disposable, MutableDisposable } from "../../../../base/common/lifecycle.js";
 import type { IWorkbenchContribution } from "../../../common/contributions.js";
 import type { GitHead, GitStatus, IGitService } from "../../../services/git/common/gitService.js";
@@ -66,20 +66,20 @@ export class ScmStatusContribution extends Disposable implements IWorkbenchContr
 
 function branchEntry(head: GitHead, run: () => unknown): IStatusbarEntry {
 	switch (head.type) {
-		case "branch": return { icon: lxiconsLibrary.gitBranch, text: head.name, ariaLabel: `Git branch ${head.name}`, tooltip: head.upstream ? `${head.name} tracks ${head.upstream.name}` : `${head.name} has no upstream`, run };
-		case "unborn": return { icon: lxiconsLibrary.gitBranch, text: head.name, ariaLabel: `Unborn Git branch ${head.name}`, tooltip: `${head.name} has no commits`, run };
+		case "branch": return { icon: Lxicon.gitBranch, text: head.name, ariaLabel: `Git branch ${head.name}`, tooltip: head.upstream ? `${head.name} tracks ${head.upstream.name}` : `${head.name} has no upstream`, run };
+		case "unborn": return { icon: Lxicon.gitBranch, text: head.name, ariaLabel: `Unborn Git branch ${head.name}`, tooltip: `${head.name} has no commits`, run };
 		case "detached": {
 			const revision = head.objectId.slice(0, 8);
-			return { icon: lxiconsLibrary.gitCommit, text: revision, ariaLabel: `Detached Git HEAD at ${revision}`, tooltip: `Detached HEAD at ${head.objectId}`, run };
+			return { icon: Lxicon.gitCommit, text: revision, ariaLabel: `Detached Git HEAD at ${revision}`, tooltip: `Detached HEAD at ${head.objectId}`, run };
 		}
 	}
 }
 
 function syncEntry(head: GitHead, run: () => unknown): IStatusbarEntry {
-	if (head.type !== "branch") return { icon: lxiconsLibrary.sync, text: "", ariaLabel: "No Git branch to synchronize", tooltip: "No Git branch to synchronize", run };
-	if (!head.upstream) return { icon: lxiconsLibrary.repoPush, text: "", ariaLabel: `Publish Git branch ${head.name}`, tooltip: `${head.name} has no upstream`, run };
+	if (head.type !== "branch") return { icon: Lxicon.sync, text: "", ariaLabel: "No Git branch to synchronize", tooltip: "No Git branch to synchronize", run };
+	if (!head.upstream) return { icon: Lxicon.repoPush, text: "", ariaLabel: `Publish Git branch ${head.name}`, tooltip: `${head.name} has no upstream`, run };
 	const { ahead, behind, name } = head.upstream;
 	const text = ahead === 0 && behind === 0 ? "" : `${behind}↓ ${ahead}↑`;
 	const summary = `${behind} incoming and ${ahead} outgoing ${ahead + behind === 1 ? "change" : "changes"}`;
-	return { icon: lxiconsLibrary.sync, text, ariaLabel: `Synchronize Git changes, ${summary}`, tooltip: `Synchronize Changes with ${name}: ${summary}`, run };
+	return { icon: Lxicon.sync, text, ariaLabel: `Synchronize Git changes, ${summary}`, tooltip: `Synchronize Changes with ${name}: ${summary}`, run };
 }

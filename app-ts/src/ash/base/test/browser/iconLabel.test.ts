@@ -4,12 +4,12 @@ import { JSDOM } from 'jsdom';
 import { IconLabel } from '../../browser/ui/iconlabel/iconlabel.js';
 import { SimpleIconLabel } from '../../browser/ui/iconlabel/simpleIconLabel.js';
 import { h } from '../../browser/dom.js';
-import { register } from '../../common/icon.js';
+import { registerLxicon } from '../../common/lxiconsUtil.js';
 import { setHoverDelegate, type IManagedHover } from '../../browser/ui/hover/hoverDelegate.js';
 
 test('IconLabel updates name, description, suffix, and semantic icons in place', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
-	const icon = register('test-icon-label-inline', () => '<svg viewBox="0 0 16 16"></svg>');
+	const icon = registerLxicon('test-icon-label-inline', () => '<svg viewBox="0 0 16 16"></svg>');
 	const hoverContents: unknown[] = [];
 	using delegate = setHoverDelegate({
 		setupHover(options) {
@@ -71,7 +71,7 @@ test('IconLabel renders unknown inline icons as literal text', () => {
 
 test('SimpleIconLabel renders semantic icons and owns its hover', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
-	const icon = register('test-simple-icon-label', () => '<svg viewBox="0 0 16 16"></svg>');
+	const icon = registerLxicon('test-simple-icon-label', () => '<svg viewBox="0 0 16 16"></svg>');
 	const container = h(dom.window.document, 'span');
 	dom.window.document.body.append(container);
 	using label = new SimpleIconLabel(container);

@@ -2,14 +2,14 @@ import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { setHoverDelegate, type IManagedHover } from "../../../../../base/browser/ui/hover/hoverDelegate.js";
-import { lxiconsLibrary } from "../../../../../base/common/lxiconsLibrary.js";
+import { Lxicon } from "../../../../../base/common/lxicons.js";
 import { StatusbarPart } from "../../../../../workbench/browser/parts/statusbar/statusbarPart.js";
 import { StatusbarAlignment, StatusbarService } from "../../../../../workbench/services/statusbar/browser/statusbar.js";
 
 test("status bar entries render an icon before their text", () => {
 	const document = new JSDOM("<!doctype html><body></body>").window.document;
 	using service = new StatusbarService();
-	using entry = service.addEntry({ icon: lxiconsLibrary.gitBranch, text: "main", ariaLabel: "Git branch main" }, { id: "test.branch", alignment: StatusbarAlignment.Left });
+	using entry = service.addEntry({ icon: Lxicon.gitBranch, text: "main", ariaLabel: "Git branch main" }, { id: "test.branch", alignment: StatusbarAlignment.Left });
 	using part = new StatusbarPart(document.body, service);
 	const element = part.domNode.querySelector<HTMLElement>('[data-statusbar-item-id="test.branch"]');
 	const label = element?.querySelector<HTMLElement>(".ash-statusbar-item-label");
@@ -30,7 +30,7 @@ test("status bar entries render an icon before their text", () => {
 
 	const icon = label.firstElementChild;
 	const textNode = label.lastChild;
-	entry.update({ icon: lxiconsLibrary.gitBranch, text: "develop", ariaLabel: "Git branch develop" });
+	entry.update({ icon: Lxicon.gitBranch, text: "develop", ariaLabel: "Git branch develop" });
 	assert.equal(label.firstElementChild, icon);
 	assert.equal(label.lastChild, textNode);
 	assert.equal(textNode?.textContent, "develop");
@@ -39,7 +39,7 @@ test("status bar entries render an icon before their text", () => {
 test("status bar entries support accessible icon-only presentation", () => {
 	const document = new JSDOM("<!doctype html><body></body>").window.document;
 	using service = new StatusbarService();
-	using entry = service.addEntry({ icon: lxiconsLibrary.remote, text: "", ariaLabel: "App Server ready", tooltip: "Connected" }, { id: "test.remote", alignment: StatusbarAlignment.Left });
+	using entry = service.addEntry({ icon: Lxicon.remote, text: "", ariaLabel: "App Server ready", tooltip: "Connected" }, { id: "test.remote", alignment: StatusbarAlignment.Left });
 	using part = new StatusbarPart(document.body, service);
 	const element = part.domNode.querySelector<HTMLElement>('[data-statusbar-item-id="test.remote"]');
 	const label = element?.querySelector<HTMLElement>(".ash-statusbar-item-label");
@@ -59,8 +59,8 @@ test("status bar entries render grouped segments inside one action", () => {
 	using entry = service.addEntry({
 		text: "",
 		segments: [
-			{ icon: lxiconsLibrary.error, text: "2" },
-			{ icon: lxiconsLibrary.warning, text: "1" },
+			{ icon: Lxicon.error, text: "2" },
+			{ icon: Lxicon.warning, text: "1" },
 		],
 		ariaLabel: "Errors: 2, Warnings: 1",
 	}, { id: "test.problems", alignment: StatusbarAlignment.Left });
@@ -76,7 +76,7 @@ test("status bar entries render grouped segments inside one action", () => {
 	assert.equal(label.querySelectorAll("svg.ash-icon").length, 2);
 	assert.equal(label.getAttribute("aria-label"), "Errors: 2, Warnings: 1");
 
-	entry.update({ text: "", segments: [{ icon: lxiconsLibrary.error, text: "3" }, { icon: lxiconsLibrary.warning, text: "0" }] });
+	entry.update({ text: "", segments: [{ icon: Lxicon.error, text: "3" }, { icon: Lxicon.warning, text: "0" }] });
 	assert.equal(element.textContent, "30");
 });
 
@@ -86,7 +86,7 @@ test("status bar entries compact adjacent members of the same group", () => {
 	using service = new StatusbarService();
 	using remote = service.addEntry({ kind: "remote", text: "", run() {} }, { id: "test.remote", alignment: StatusbarAlignment.Left, priority: 3 });
 	using branch = service.addEntry({ text: "main", run() {} }, { id: "test.branch", alignment: StatusbarAlignment.Left, priority: 2, compactGroup: "git" });
-	using sync = service.addEntry({ icon: lxiconsLibrary.sync, text: "2↓ 1↑", run() {} }, { id: "test.sync", alignment: StatusbarAlignment.Left, priority: 1, compactGroup: "git" });
+	using sync = service.addEntry({ icon: Lxicon.sync, text: "2↓ 1↑", run() {} }, { id: "test.sync", alignment: StatusbarAlignment.Left, priority: 1, compactGroup: "git" });
 	using problems = service.addEntry({ text: "0" }, { id: "test.problems", alignment: StatusbarAlignment.Left, priority: 0 });
 	using part = new StatusbarPart(document.body, service);
 	const branchElement = part.domNode.querySelector<HTMLElement>('[data-statusbar-item-id="test.branch"]');

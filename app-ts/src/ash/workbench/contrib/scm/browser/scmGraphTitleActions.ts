@@ -1,5 +1,5 @@
 import type { Icon } from '../../../../base/common/icon.js';
-import { lxiconsLibrary } from '../../../../base/common/lxiconsLibrary.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
@@ -38,22 +38,22 @@ abstract class GitGraphAction extends Action2 {
 }
 
 registerAction2(class GitFetchAction extends GitGraphAction {
-	constructor() { super(GitFetchCommandId, 'Fetch', 'Fetch Git remotes', lxiconsLibrary.repoFetch, 1); }
+	constructor() { super(GitFetchCommandId, 'Fetch', 'Fetch Git remotes', Lxicon.repoFetch, 1); }
 	override run(accessor: ServicesAccessor, target: unknown): Promise<void> { return this.runRemote(accessor, target, (gitService, repositoryId) => gitService.fetch(repositoryId)); }
 });
 
 registerAction2(class GitPullAction extends GitGraphAction {
-	constructor() { super(GitPullCommandId, 'Pull', 'Pull current branch (fast-forward only)', lxiconsLibrary.repoPull, 2); }
+	constructor() { super(GitPullCommandId, 'Pull', 'Pull current branch (fast-forward only)', Lxicon.repoPull, 2); }
 	override run(accessor: ServicesAccessor, target: unknown): Promise<void> { return this.runRemote(accessor, target, (gitService, repositoryId) => gitService.pull(repositoryId)); }
 });
 
 registerAction2(class GitPushAction extends GitGraphAction {
-	constructor() { super(GitPushCommandId, 'Push', 'Push current branch', lxiconsLibrary.repoPush, 3); }
+	constructor() { super(GitPushCommandId, 'Push', 'Push current branch', Lxicon.repoPush, 3); }
 	override run(accessor: ServicesAccessor, target: unknown): Promise<void> { return this.runRemote(accessor, target, (gitService, repositoryId) => gitService.push(repositoryId)); }
 });
 
 registerAction2(class GitGraphRefreshAction extends GitGraphAction {
-	constructor() { super(GitGraphRefreshCommandId, 'Refresh', 'Refresh Git graph', lxiconsLibrary.refresh, 4); }
+	constructor() { super(GitGraphRefreshCommandId, 'Refresh', 'Refresh Git graph', Lxicon.refresh, 4); }
 	override run(_accessor: ServicesAccessor, target: unknown): Promise<void> { return runInGraph(target); }
 });
 

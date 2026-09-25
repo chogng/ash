@@ -861,7 +861,7 @@ common 当前 **210 个文件：179 个同路径、31 个 Ash 自有；47 个上
 | `model/tokens/tokenizationFontDecorationsProvider.ts` | 保留 token 字体展示 | `languageTokenLineIndex.ts` 的 `StyledTokenSource` 与行渲染器消费 provider 字体信息；语义字体来自 token metadata，不另建字体装饰状态。 |
 | `tokens/contiguousMultilineTokens.ts`、`tokens/contiguousMultilineTokensBuilder.ts`、`tokens/contiguousTokensEditing.ts`、`tokens/contiguousTokensStore.ts`、`tokens/tokenWithTextArray.ts` | 保留单一 token 存储 | `languageTokens.ts`、`LanguageTokenLineIndex` 和 `LineTokens` 承担结果保存、编辑失效与可见行读取；上游连续编码数组不是当前持久状态格式。 |
 | `services/editorWorkerHost.ts` | 保留唯一 Worker 通道 | `services/textModelSync.ts` 与 `base/common/worker/webWorker.ts` 持有同步、版本校验、传输和释放；没有独立 Editor host 回调通道。 |
-| `services/getIconClasses.ts` | 保留 Platform 图标绘制 | `platform/theme/browser/fileIconThemeService.ts` → Workbench 资源标签，按资源解析并渲染图标；没有 Editor 图标 CSS 类生成器消费者。 |
+| `services/getIconClasses.ts` | 文件图标归 Workbench 资源标签 | `workbench/browser/labels.ts` 的资源图标接口按资源解析并渲染文件图标；Editor 没有图标 CSS 类生成器消费者。 |
 | `services/modelUndoRedoParticipant.ts` | 保留模型历史 owner | `ModelService` 的关闭模型历史预算与重开恢复、`TextModel` 历史持有现有撤销行为；没有跨资源 edit-stack 重开参与者。 |
 | `services/semanticTokensStyling.ts`、`services/semanticTokensStylingService.ts` | 按既有决定不恢复包装 | `semanticTokensProviderStyling.ts` 转换 provider 结果；主题和具名 token 的 owner 保持唯一。 |
 | `services/textResourceConfigurationService.ts` | 保留资源配置查询 | `ModelService` 经 `IConfigurationService` 查询资源/语言覆盖并监听更新；EOL 经 `ITextResourcePropertiesService` 解析。未出现需要独立资源配置 facade 的生产消费者。 |
@@ -1063,7 +1063,7 @@ GPU 回归原先用隐藏的 DOM 行测量宽度；这些行在 GPU 渲染时允
 | `model/tokens/tokenizationFontDecorationsProvider.ts` | 当前字体样式随语法/语义 token 展示信息传递；独立 token 字体装饰提供者未接入。 |
 | `multiDiffEditor.ts` | 当前多文件 diff 使用 `MultiDiffEditorItem` 与 item/row 定位；上游布局变体和资源 viewState 契约未接入。 |
 | `services/editorWorkerHost.ts` | Worker 通道由 `base/common/worker/webWorker.ts` 和 `services/textModelSync.ts` 持有，保留单一传输链。 |
-| `services/getIconClasses.ts` | 文件图标由 Platform 的 `fileIconThemeService.ts` 渲染；没有使用上游图标 CSS 类生成器的调用方。 |
+| `services/getIconClasses.ts` | 文件图标由 Workbench 资源标签渲染；没有使用上游图标 CSS 类生成器的调用方。 |
 | `services/inMemoryTextModelService.ts` | 独立编辑器由 ModelService 持有模型，Workbench 由资源模型服务持有引用；上游 synthetic document 服务未接入。 |
 | `services/languageFeatureDebounce.ts` | 当前高亮贡献拥有定时调度；基于提供者延迟的自适应 debounce 服务未接入。 |
 | `services/modelUndoRedoParticipant.ts` | 当前模型历史与 Workbench 关闭文档历史持有撤销状态；上游跨模型 edit-stack 重开参与者未接入。 |

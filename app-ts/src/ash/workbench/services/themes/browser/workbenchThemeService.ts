@@ -1,16 +1,17 @@
-import { WorkbenchFileIconThemesRegistry } from '../common/themeExtensionPoints.js';
+import { WorkbenchFileIconThemesRegistry, WorkbenchProductIconThemesRegistry } from '../common/themeExtensionPoints.js';
 import type { IWorkbenchFileIconTheme } from '../common/workbenchThemeService.js';
 import { Emitter } from '../../../../base/common/event.js';
+import { setIconResolver } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Disposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { FileKind, FileNotFoundError, FileRevisionConflictError, IFileService, type IFileContent } from '../../../../platform/files/common/files.js';
 import { type IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import type { IColorTheme } from '../../../../platform/theme/common/colorTheme.js';
 import { Colors } from '../../../../platform/theme/common/colorRegistry.js';
-import type { IThemeService } from '../../../../platform/theme/common/themeService.js';
+import { defaultProductIconTheme, type IColorTheme, type IProductIconTheme, type IThemeService } from '../../../../platform/theme/common/themeService.js';
+import { getIconDefinition } from '../../../../platform/theme/common/iconRegistry.js';
 import { bindColorTheme } from '../../../../platform/theme/browser/themeStyles.js';
-import type { IFileIconThemeService } from '../../../../platform/theme/browser/fileIconThemeService.js';
+import type { IResourceIconRenderer } from '../../../browser/labels.js';
 import { isDarkColorScheme } from '../../../../platform/theme/common/theme.js';
 import { WorkbenchConfiguration } from '../../../common/configuration.js';
 import { resolveWorkbenchColorTheme, SystemColorThemePreference, WorkbenchThemesRegistry } from '../../../common/theme.js';
@@ -20,15 +21,18 @@ import { migrateUserTheme } from '../common/themeMigration.js';
 import { registerColorThemeSchemas } from '../common/colorThemeSchema.js';
 
 /** Owns active theme selection and its window-scoped visual resources. */
-export class WorkbenchThemeService extends Disposable implements IThemeService, IFileIconThemeService {
+export class WorkbenchThemeService extends Disposable implements IThemeService, IResourceIconRenderer {
 	private readonly colorThemeChange = this._register(new Emitter<IColorTheme>());
 	private readonly systemDarkQuery: MediaQueryList;
 	private colorTheme: IColorTheme;
 	private initialized = false;
 	public readonly onDidColorThemeChange = this.colorThemeChange.event;
-	private readonly fileIconChange = this._register(new Emitter<void>());
-	public readonly onDidFileIconThemeChange = this.fileIconChange.event;
+	private readonly resourceIconChange = this._register(new Emitter<void>());
+	public readonly onDidChangeResourceIcons = this.resourceIconChange.event;
 	private fileIconTheme: IWorkbenchFileIconTheme | undefined;
+	private productIconTheme: IProductIconTheme = defaultProductIconTheme;
+	private readonly productIconThemeChange = this._register(new Emitter<IProductIconTheme>());
+	public readonly onDidProductIconThemeChange = this.productIconThemeChange.event;
 	private iconStyles: HTMLStyleElement | undefined;
 
 	constructor(
@@ -60,8 +64,12 @@ export class WorkbenchThemeService extends Disposable implements IThemeService, 
 				this.updateColorTheme();
 			}
 			if (event.affectsConfiguration(WorkbenchConfiguration.iconTheme)) { this.updateFileIconTheme(); }
+			if (event.affectsConfiguration(WorkbenchConfiguration.productIconTheme)) { this.updateProductIconTheme(); }
 		}));
 		this._register(WorkbenchFileIconThemesRegistry.onDidChange(() => this.updateFileIconTheme()));
+		this._register(WorkbenchProductIconThemesRegistry.onDidChange(() => this.updateProductIconTheme()));
+		setIconResolver(this.container.ownerDocument, icon => getIconDefinition(icon, defaultProductIconTheme.icons));
+		this._register(toDisposable(() => setIconResolver(this.container.ownerDocument, icon => getIconDefinition(icon, defaultProductIconTheme.icons))));
 		this._register(WorkbenchThemesRegistry.onDidChange(() => this.updateColorTheme()));
 		this._register(Colors.onDidChange(() => this.colorThemeChange.fire(this.colorTheme)));
 		const updateSystemTheme = (): void => this.updateColorTheme();
@@ -70,11 +78,14 @@ export class WorkbenchThemeService extends Disposable implements IThemeService, 
 		this.updateColorTheme();
 		this._register(bindColorTheme(this, this.container));
 		this.updateFileIconTheme();
+		this.updateProductIconTheme();
 	}
 
 	public getColorTheme(): IColorTheme {
 		return this.colorTheme;
 	}
+
+	public getProductIconTheme(): IProductIconTheme { return this.productIconTheme; }
 
 	private resolveColorTheme(): IColorTheme {
 		const preference = this.configurationService.getValue<string>(WorkbenchConfiguration.colorTheme);
@@ -89,7 +100,7 @@ export class WorkbenchThemeService extends Disposable implements IThemeService, 
 		}
 		this.colorTheme = theme;
 		this.colorThemeChange.fire(theme);
-		this.fileIconChange.fire();
+		this.resourceIconChange.fire();
 	}
 
 	private updateFileIconTheme(): void {
@@ -100,7 +111,16 @@ export class WorkbenchThemeService extends Disposable implements IThemeService, 
 		if (this.iconStyles) {
 			this.iconStyles.textContent = theme ? theme.styleSheetContent + '\n.ash-file-icon{font-style:normal;font-weight:normal;line-height:16px;}' : '';
 		}
-		this.fileIconChange.fire();
+		this.resourceIconChange.fire();
+	}
+
+	private updateProductIconTheme(): void {
+		const id = this.configurationService.getValue<string>(WorkbenchConfiguration.productIconTheme);
+		const theme = WorkbenchProductIconThemesRegistry.getThemes().find(theme => theme.id === id) ?? defaultProductIconTheme;
+		if (theme === this.productIconTheme) return;
+		this.productIconTheme = theme;
+		setIconResolver(this.container.ownerDocument, icon => getIconDefinition(icon, theme.icons));
+		this.productIconThemeChange.fire(theme);
 	}
 
 	public renderFileIcon(resource: URI, container: HTMLElement): void {

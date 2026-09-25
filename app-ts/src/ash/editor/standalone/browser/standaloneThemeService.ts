@@ -1,8 +1,11 @@
-import { Emitter } from '../../../base/common/event.js';
+import { Emitter, Event } from '../../../base/common/event.js';
+import { setIconResolver } from '../../../base/browser/ui/lxicons/lxicon.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
-import { createColorTheme, darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme, type IColorTheme, lightColorTheme } from '../../../platform/theme/common/colorTheme.js';
+import { createColorTheme, darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme, lightColorTheme } from '../../../platform/theme/common/colorTheme.js';
+import { defaultProductIconTheme, type IColorTheme } from '../../../platform/theme/common/themeService.js';
 import { ColorScheme, isDarkColorScheme } from '../../../platform/theme/common/theme.js';
 import { Colors } from '../../../platform/theme/common/colorRegistry.js';
+import { getIconDefinition } from '../../../platform/theme/common/iconRegistry.js';
 import type { Color } from '../../../base/common/color.js';
 import { TokenizationRegistry } from '../../common/languages.js';
 import { TokenTheme } from '../../common/languages/supports/tokenization.js';
@@ -19,6 +22,7 @@ export class StandaloneThemeService extends Disposable implements IStandaloneThe
 	private readonly changed = this._register(new Emitter<IColorTheme>());
 	private colorTheme: IStandaloneTheme = withTokenTheme(lightColorTheme, vs);
 	public readonly onDidColorThemeChange = this.changed.event;
+	public readonly onDidProductIconThemeChange = Event.None;
 	private readonly themes = new Map<string, IStandaloneTheme>();
 	private readonly definitions = new Map<string, IStandaloneThemeData>();
 	private colorMapOverride: Color[] | null = null;
@@ -28,6 +32,7 @@ export class StandaloneThemeService extends Disposable implements IStandaloneThe
 
 	constructor(ownerWindow: Window) {
 		super();
+		setIconResolver(ownerWindow.document, icon => getIconDefinition(icon));
 		for (const theme of [lightColorTheme, darkColorTheme, highContrastLightColorTheme, highContrastDarkColorTheme]) {
 			this.themes.set(theme.id, theme === lightColorTheme ? this.colorTheme : withTokenTheme(theme, definitionForScheme(theme.colorScheme)));
 		}
@@ -99,6 +104,8 @@ export class StandaloneThemeService extends Disposable implements IStandaloneThe
 	public getColorTheme(): IStandaloneTheme {
 		return this.colorTheme;
 	}
+
+	public getProductIconTheme() { return defaultProductIconTheme; }
 
 	public setColorTheme(theme: IColorTheme): void {
 		this.registerColorTheme(theme);

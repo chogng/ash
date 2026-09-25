@@ -1,4 +1,4 @@
-import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
+import { Lxicon } from "../../../../base/common/lxicons.js";
 import { ServiceConstructionDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
 import { IContentSearchService } from "../../../../platform/search/common/search.js";
 import { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
@@ -17,7 +17,7 @@ export function registerSearchViews(
 		title: "Search",
 		localizationKey: { bundle: "ash.views", key: "search" },
 		location: ViewContainerLocation.Sidebar,
-		icon: lxiconsLibrary.search,
+		icon: Lxicon.search,
 		order: 2,
 	});
 	registry.registerStaticViews(WorkbenchViewContainerId.Search, [{

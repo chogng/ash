@@ -1,6 +1,7 @@
 import { serializeUserColorThemeDraft } from "./colorThemeData.js";
 import { type ColorValue } from "../../../../platform/theme/common/colorRegistry.js";
-import { createColorTheme, type IColorTheme } from "../../../../platform/theme/common/colorTheme.js";
+import { createColorTheme } from "../../../../platform/theme/common/colorTheme.js";
+import type { IColorTheme } from "../../../../platform/theme/common/themeService.js";
 import { ColorScheme } from "../../../../platform/theme/common/theme.js";
 
 const USER_COLOR_THEME_SCHEMA_URL = "https://ash.dev/schemas/color-theme.schema.json";

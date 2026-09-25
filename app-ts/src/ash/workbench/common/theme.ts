@@ -2,7 +2,8 @@ import { Emitter, type Event } from "../../base/common/event.js";
 import { type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
 import { registerColor } from "../../platform/theme/common/colorUtils.js";
 import { accentBackground, border, contrastBorder, descriptionForeground } from "../../platform/theme/common/colors/baseColors.js";
-import { darkColorTheme, type IColorTheme, lightColorTheme } from "../../platform/theme/common/colorTheme.js";
+import { darkColorTheme, lightColorTheme } from "../../platform/theme/common/colorTheme.js";
+import type { IColorTheme } from "../../platform/theme/common/themeService.js";
 
 const colorOwner = "workbench.shell";
 const color = (id: string, dark: string, light: string, description: string): string =>
@@ -28,6 +29,12 @@ color("titleBar.hoverBackground", "#e5e5e5", "#e5e5e5", "Hovered title bar item 
 const sideBarBackground = color("sideBar.background", "#F8F8F8", "#F8F8F8", "Primary side bar background.");
 alias("auxiliaryBar.background", sideBarBackground, "Auxiliary side bar background.");
 alias("panel.background", sideBarBackground, "Panel background.");
+const emptyExplorerOpenFolderBackground = registerColor("files.emptyExplorerOpenFolderBackground", {
+	dark: accentBackground, light: accentBackground,
+}, { description: "Background for the Empty Explorer Open Folder action.", owner: "files.presentation" });
+registerColor("files.emptyExplorerOpenFolderHoverBackground", {
+	dark: emptyExplorerOpenFolderBackground, light: emptyExplorerOpenFolderBackground,
+}, { description: "Hovered background for the Empty Explorer Open Folder action.", owner: "files.presentation" });
 color("compositeBar.foreground", "#ffffff", "#1f1f1f", "Active composite bar foreground.");
 color("compositeBar.inactiveForeground", "#858585", "#616161", "Inactive composite bar foreground.");
 

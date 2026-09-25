@@ -5,10 +5,10 @@ import type {
 import { addDisposableListener, stopEvent, h } from "../../dom.js";
 import type { IAction } from "../../../common/actions.js";
 import { Emitter } from "../../../common/event.js";
-import { lxiconsLibrary } from "../../../common/lxiconsLibrary.js";
+import { Lxicon } from "../../../common/lxicons.js";
 import { ActionViewItem, type ActionViewItemOptions } from "../actionbar/actionViewItems.js";
 import { Button } from "../button/button.js";
-import { appendIcon } from "../icon/icon.js";
+import { appendIcon } from "../lxicons/lxicon.js";
 
 export type DropdownMenuActions =
 	| readonly IAction[]
@@ -57,7 +57,7 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 		button.domNode.setAttribute("aria-expanded", "false");
 		const indicator = h(container.ownerDocument, "span");
 		indicator.className = "ash-dropdown-menu-indicator";
-		appendIcon(lxiconsLibrary.chevronDown, indicator);
+		appendIcon(Lxicon.chevronDown, indicator);
 		button.domNode.append(indicator);
 		this._register(addDisposableListener(button.domNode, "keydown", (event) => {
 			if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;

@@ -1,0 +1,67 @@
+.ash-icon-select-box {
+	display: flex;
+	flex-direction: column;
+	box-sizing: border-box;
+	gap: 8px;
+	padding: 8px;
+	min-width: 0;
+	min-height: 0;
+	color: var(--ash-foreground);
+}
+
+.ash-icon-select-scroll { flex: 1; min-height: 0; }
+
+.ash-icon-select-help {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+
+.ash-icon-select-grid {
+	display: grid;
+	gap: 4px;
+	padding: 4px;
+	width: max-content;
+}
+
+.ash-icon-select-item {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
+	width: 36px;
+	height: 36px;
+	border: 1px solid transparent;
+	border-radius: 4px;
+	color: inherit;
+	cursor: pointer;
+}
+
+.ash-icon-select-item:hover { background: var(--ash-list-hover-background); }
+.ash-icon-select-item.focused {
+	background: var(--ash-list-active-selection-background);
+	color: var(--ash-list-active-selection-foreground);
+}
+
+.ash-icon-select-info {
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	color: var(--ash-description-foreground);
+}
+
+.ash-icon-select-info mark {
+	color: var(--ash-accent-foreground);
+	background: transparent;
+	font-weight: var(--ash-font-weight-semi-bold);
+}
+
+.ash-icon-select-empty { padding: 8px; }
+
+[data-color-scheme^='high-contrast'] .ash-icon-select-item.focused {
+	border-color: var(--ash-contrast-border);
+}

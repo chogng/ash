@@ -1,4 +1,4 @@
-import { lxiconsLibrary } from '../../../../base/common/lxiconsLibrary.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { Action2, MenuId } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
@@ -22,7 +22,7 @@ export class MultiDiffGoToFileAction extends Action2 {
 			id: MultiDiffGoToFileCommandId,
 			title: 'Open File',
 			tooltip: 'Open File',
-			icon: lxiconsLibrary.linkExternal,
+			icon: Lxicon.linkExternal,
 			precondition: MultiDiffEditorActive,
 			menu: { id: MenuId.MultiDiffEditorFileToolbar, when: MultiDiffEditorActive, group: 'navigation', order: 22 },
 		});
@@ -40,7 +40,7 @@ export class MultiDiffGoToNextChangeAction extends Action2 {
 			id: MultiDiffGoToNextChangeCommandId,
 			title: 'Go to Next Change',
 			tooltip: 'Go to Next Change',
-			icon: lxiconsLibrary.arrowDown,
+			icon: Lxicon.arrowDown,
 			precondition: MultiDiffEditorActive,
 			menu: { id: MenuId.EditorTitle, when: MultiDiffEditorActive, group: 'navigation', order: 11 },
 			keybinding: { primary: Keybinding.single(logicalKey('F7')), when: MultiDiffEditorActive },
@@ -59,7 +59,7 @@ export class MultiDiffGoToPreviousChangeAction extends Action2 {
 			id: MultiDiffGoToPreviousChangeCommandId,
 			title: 'Go to Previous Change',
 			tooltip: 'Go to Previous Change',
-			icon: lxiconsLibrary.arrowUp,
+			icon: Lxicon.arrowUp,
 			precondition: MultiDiffEditorActive,
 			menu: { id: MenuId.EditorTitle, when: MultiDiffEditorActive, group: 'navigation', order: 10 },
 			keybinding: { primary: Keybinding.single(logicalKey('F7', { shiftKey: true })), when: MultiDiffEditorActive },
@@ -77,7 +77,7 @@ export class MultiDiffCollapseAllAction extends Action2 {
 		super({
 			id: MultiDiffCollapseAllCommandId,
 			title: 'Collapse All Diffs',
-			icon: lxiconsLibrary.fold,
+			icon: Lxicon.fold,
 			precondition: MultiDiffEditorActive,
 			menu: { id: MenuId.EditorTitle, when: MultiDiffEditorActive, group: '4_collapse', order: 1 },
 			f1: true,
@@ -94,7 +94,7 @@ export class MultiDiffExpandAllAction extends Action2 {
 		super({
 			id: MultiDiffExpandAllCommandId,
 			title: 'Expand All Diffs',
-			icon: lxiconsLibrary.unfold,
+			icon: Lxicon.unfold,
 			precondition: MultiDiffEditorActive,
 			menu: { id: MenuId.EditorTitle, when: MultiDiffEditorActive, group: '4_collapse', order: 2 },
 			f1: true,

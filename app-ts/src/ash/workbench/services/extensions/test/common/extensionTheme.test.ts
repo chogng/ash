@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
-import { ColorId } from "../../../../../platform/theme/common/colorTheme.js";
+import { editorBackground } from "../../../../../platform/theme/common/colors/editorColors.js";
 import { ColorScheme } from "../../../../../platform/theme/common/theme.js";
 import { createExtensionWorkbenchColorTheme, extensionWorkbenchThemeId, parseExtensionTheme } from "../../common/extensionTheme.js";
 
@@ -17,7 +17,7 @@ test("compiles a stable selectable Workbench theme from supported extension colo
 	assert.equal(id, "extension-vscode-theme-defaults-visual-studio-dark");
 	assert.equal(theme.label, "Dark (Visual Studio)");
 	assert.equal(theme.colorScheme, ColorScheme.Dark);
-	assert.equal(theme.getColorCss(ColorId.editorBackground), "#1e1e1e");
+	assert.equal(theme.getColorCss(editorBackground), "#1e1e1e");
 });
 
 test("rejects selectable extension themes without a supported UI scheme", () => {

@@ -1,7 +1,8 @@
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import "./actions/chatActions.js";
 import "./actions/chatLayoutActions.js";
-import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
+import "../common/widget/chatColors.js";
+import { Lxicon } from "../../../../base/common/lxicons.js";
 import { IMenuService } from "../../../../platform/actions/common/menuService.js";
 import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
 import { IContextViewService } from "../../../../platform/contextview/browser/contextView.js";
@@ -31,7 +32,7 @@ export function registerChatViews(registry: WorkbenchViewRegistry = ViewsRegistr
 		title: "Chat",
 		localizationKey: { bundle: "ash.views", key: "chat" },
 		location: ViewContainerLocation.AuxiliaryBar,
-		icon: lxiconsLibrary.chat,
+		icon: Lxicon.chat,
 		order: 1,
 		isDefault: true,
 	});

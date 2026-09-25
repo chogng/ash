@@ -5,7 +5,7 @@ import { h } from '../../../../base/browser/dom.js';
 import { type IDimension } from '../../../../base/browser/dom.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import type { IAction } from '../../../../base/common/actions.js';
-import { lxiconsLibrary } from '../../../../base/common/lxiconsLibrary.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { assertDefined } from '../../../../base/common/types.js';
 import { MultiDiffEditorWidget } from '../../../../editor/browser/widget/multiDiffEditor/multiDiffEditorWidget.js';
@@ -331,15 +331,15 @@ class MultiDiffEditorPaneSession extends Disposable {
 	}
 
 	private createFileActions(container: HTMLElement, input: MultiDiffEditorInputItem, options: MultiDiffEditorPaneOptions, contextMenuProvider: IContextMenuProvider, sourceInput?: MultiDiffEditorInput): WorkbenchToolBar {
-		const actions: IAction[] = [new PaneAction('multiDiff.openFile', 'Open File', 'Open File', lxiconsLibrary.linkExternal, true, item => options.editorService?.openEditor(item.goToFile ?? item.modified))];
+		const actions: IAction[] = [new PaneAction('multiDiff.openFile', 'Open File', 'Open File', Lxicon.linkExternal, true, item => options.editorService?.openEditor(item.goToFile ?? item.modified))];
 		const change = input.gitChange;
 		if (change) {
-			actions.push(new PaneAction('multiDiff.discardFile', 'Discard Changes', 'Discard Changes', lxiconsLibrary.discard, change.hasWorktreeChanges, async item => {
+			actions.push(new PaneAction('multiDiff.discardFile', 'Discard Changes', 'Discard Changes', Lxicon.discard, change.hasWorktreeChanges, async item => {
 				if (container.ownerDocument.defaultView?.confirm(`Discard changes in ${item.gitChange!.path}? This cannot be undone.`) !== true) return;
 				await options.gitService?.discardWorktree([item.gitChange!.path], item.gitChange!.repositoryId);
 				await this.refreshGitSource(sourceInput, options);
 			}));
-			actions.push(new PaneAction(change.staged ? 'multiDiff.unstageFile' : 'multiDiff.stageFile', change.staged ? 'Unstage Changes' : 'Stage Changes', change.staged ? 'Unstage Changes' : 'Stage Changes', change.staged ? lxiconsLibrary.remove : lxiconsLibrary.check, options.gitService !== undefined, async item => {
+			actions.push(new PaneAction(change.staged ? 'multiDiff.unstageFile' : 'multiDiff.stageFile', change.staged ? 'Unstage Changes' : 'Stage Changes', change.staged ? 'Unstage Changes' : 'Stage Changes', change.staged ? Lxicon.remove : Lxicon.check, options.gitService !== undefined, async item => {
 				if (item.gitChange!.staged) await options.gitService?.unstage([item.gitChange!.path], item.gitChange!.repositoryId);
 				else await options.gitService?.stage([item.gitChange!.path], item.gitChange!.repositoryId);
 				await this.refreshGitSource(sourceInput, options);

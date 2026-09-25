@@ -9,7 +9,7 @@ import type { ICommandService } from "../../../../../platform/commands/common/co
 import { ServiceContainer } from "../../../../../platform/instantiation/common/instantiation.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { HoverSetupOptions, IHoverService, IManagedHover } from "../../../../../platform/hover/browser/hoverService.js";
-import type { IFileIconThemeService } from "../../../../../platform/theme/browser/fileIconThemeService.js";
+import type { IResourceIconRenderer } from "../../../../browser/labels.js";
 import { IGitService, type GraphQuery, type GitStatus } from "../../../../../workbench/services/git/common/gitService.js";
 import { IEditorService, type EditorInput, type EditorOpenOptions } from "../../../../../workbench/services/editor/common/editorService.js";
 import { CommandService } from "../../../../../workbench/services/commands/common/commandService.js";
@@ -808,9 +808,9 @@ function testEditorService(opened: Array<{ readonly input: EditorInput; readonly
 	};
 }
 
-function testFileIconThemeService(): IFileIconThemeService {
+function testFileIconThemeService(): IResourceIconRenderer {
 	return {
-		onDidFileIconThemeChange: () => ({ dispose(): void {}, [Symbol.dispose](): void {} }),
+		onDidChangeResourceIcons: () => ({ dispose(): void {}, [Symbol.dispose](): void {} }),
 		renderFileIcon: (resource, container) => { container.dataset.fileIcon = decodeURIComponent(resource.path.split("/").at(-1) ?? ""); },
 	};
 }

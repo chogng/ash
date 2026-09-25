@@ -1,7 +1,7 @@
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
-import { appendIcon } from '../../../../base/browser/ui/icon/icon.js';
+import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { lxiconsLibrary } from '../../../../base/common/lxiconsLibrary.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import { formatNlsMessage, localize } from '../../../../nls.js';
 import { type CodeEditorViewState } from '../codeEditor/codeEditorWidget.js';
 import { DiffEditorWidget } from '../diffEditor/diffEditorWidget.js';
@@ -56,10 +56,10 @@ export class DiffEditorItemTemplate extends Disposable {
 		this.toggleDomNode.setAttribute('aria-keyshortcuts', 'ArrowDown ArrowUp Home End');
 		const collapsedIconDomNode = h(ownerDocument, 'span');
 		collapsedIconDomNode.className = 'stanza-multi-diff-editor-chevron collapsed-icon';
-		appendIcon(lxiconsLibrary.chevronRight, collapsedIconDomNode);
+		appendIcon(Lxicon.chevronRight, collapsedIconDomNode);
 		const expandedIconDomNode = h(ownerDocument, 'span');
 		expandedIconDomNode.className = 'stanza-multi-diff-editor-chevron expanded-icon';
-		appendIcon(lxiconsLibrary.chevronDown, expandedIconDomNode);
+		appendIcon(Lxicon.chevronDown, expandedIconDomNode);
 		const titleDomNode = h(ownerDocument, 'span');
 		titleDomNode.className = 'stanza-multi-diff-editor-title';
 		titleDomNode.textContent = item.label;

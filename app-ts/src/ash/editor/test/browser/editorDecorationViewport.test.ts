@@ -13,7 +13,9 @@ import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { GlyphMarginLane, MinimapPosition, OverviewRulerLane, TrackedRangeStickiness } from '../../common/model.js';
 import { themeColorFromId } from '../../../base/common/themables.js';
-import { ColorId, darkColorTheme } from '../../../platform/theme/common/colorTheme.js';
+import { darkColorTheme } from '../../../platform/theme/common/colorTheme.js';
+import { errorForeground, warningForeground } from '../../../platform/theme/common/colors/baseColors.js';
+import { diffInsertedLineMarker } from '../../../platform/theme/common/colors/editorColors.js';
 import { type TextMeasurer } from '../../common/viewModel.js';
 
 const { EditorTextDirection } = await import(
@@ -43,8 +45,8 @@ test("Model decorations project, update, and follow tracked ranges", async () =>
 		options: {
 			description: 'marker decoration',
 			className: 'squiggly-error',
-			overviewRuler: { color: themeColorFromId(ColorId.errorForeground), position: OverviewRulerLane.Right },
-			minimap: { color: themeColorFromId(ColorId.errorForeground), position: MinimapPosition.Inline },
+			overviewRuler: { color: themeColorFromId(errorForeground), position: OverviewRulerLane.Right },
+			minimap: { color: themeColorFromId(errorForeground), position: MinimapPosition.Inline },
 		},
 		metadata: "error",
 	});
@@ -78,8 +80,8 @@ test("Model decorations project, update, and follow tracked ranges", async () =>
 		options: {
 			description: 'marker decoration',
 			className: 'squiggly-warning',
-			overviewRuler: { color: themeColorFromId(ColorId.warningForeground), position: OverviewRulerLane.Right },
-			minimap: { color: themeColorFromId(ColorId.warningForeground), position: MinimapPosition.Inline },
+			overviewRuler: { color: themeColorFromId(warningForeground), position: OverviewRulerLane.Right },
+			minimap: { color: themeColorFromId(warningForeground), position: MinimapPosition.Inline },
 		},
 		metadata: "warning",
 	});
@@ -210,13 +212,13 @@ test("Quick Diff decorations project into the overview ruler and minimap gutter"
 		{
 			range: Range.fromPositions(new Position((1) + 1, (0) + 1)),
 			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-			options: { description: 'added diff', minimap: { color: themeColorFromId(ColorId.diffEditorInsertedLineMarker), position: MinimapPosition.Gutter } },
+			options: { description: 'added diff', minimap: { color: themeColorFromId(diffInsertedLineMarker), position: MinimapPosition.Gutter } },
 			metadata: 'added',
 		},
 		{
 			range: Range.fromPositions(new Position((2) + 1, (0) + 1)),
 			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-			options: { description: 'modified diff', overviewRuler: { color: themeColorFromId(ColorId.warningForeground), position: OverviewRulerLane.Left } },
+			options: { description: 'modified diff', overviewRuler: { color: themeColorFromId(warningForeground), position: OverviewRulerLane.Left } },
 			metadata: 'modified',
 		},
 		{
@@ -224,8 +226,8 @@ test("Quick Diff decorations project into the overview ruler and minimap gutter"
 			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 			options: {
 				description: 'deleted diff',
-				overviewRuler: { color: themeColorFromId(ColorId.errorForeground), position: OverviewRulerLane.Left },
-				minimap: { color: themeColorFromId(ColorId.errorForeground), position: MinimapPosition.Gutter },
+				overviewRuler: { color: themeColorFromId(errorForeground), position: OverviewRulerLane.Left },
+				minimap: { color: themeColorFromId(errorForeground), position: MinimapPosition.Gutter },
 			},
 			metadata: 'deleted',
 		},

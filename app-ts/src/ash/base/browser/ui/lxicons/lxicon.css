@@ -1,0 +1,12 @@
+svg.ash-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  pointer-events: none;
+}
+
+svg.ash-icon [stroke="#000"],
+svg.ash-icon [stroke="black"] { stroke: currentColor; }
+
+svg.ash-icon [fill="#000"],
+svg.ash-icon [fill="black"] { fill: currentColor; }

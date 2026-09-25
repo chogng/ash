@@ -3,12 +3,12 @@ import { addDisposableListener, stopEvent, h } from "../../../../../base/browser
 import { ButtonActionViewItem, type ActionViewItem } from "../../../../../base/browser/ui/actionbar/actionViewItems.js";
 import { AnchorPosition, ContextView, ContextViewFocusRestore } from "../../../../../base/browser/ui/contextview/contextview.js";
 import { DropdownMenuActionViewItem } from "../../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js";
-import { appendIcon } from "../../../../../base/browser/ui/icon/icon.js";
+import { appendIcon } from "../../../../../base/browser/ui/lxicons/lxicon.js";
 import { Menu } from "../../../../../base/browser/ui/menu/menu.js";
 import type { IAction } from "../../../../../base/common/actions.js";
 import type { Icon } from "../../../../../base/common/icon.js";
 import { Disposable, MutableDisposable, DisposableStore, toDisposable } from "../../../../../base/common/lifecycle.js";
-import { lxiconsLibrary } from "../../../../../base/common/lxiconsLibrary.js";
+import { Lxicon } from "../../../../../base/common/lxicons.js";
 import { WorkbenchToolBar } from "../../../../../platform/actions/browser/toolbar.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { IContextViewService } from "../../../../../platform/contextview/browser/contextView.js";
@@ -215,12 +215,12 @@ export class ChatInputPart extends Disposable {
 	private renderToolbarActions(): void {
 		const mode = modeOptions.find(option => option.id === this.mode) ?? modeOptions[0]!;
 		const modeAction = this.toolbarState.inputKind === "command"
-			? new ChatInputAction("ash.chat.input.command", "Command", "Slash command", lxiconsLibrary.start, false, "mode", () => {})
+			? new ChatInputAction("ash.chat.input.command", "Command", "Slash command", Lxicon.start, false, "mode", () => {})
 			: new SelectorAction(
 				"ash.chat.input.mode",
 				mode.label,
 				`Mode: ${mode.label}`,
-				lxiconsLibrary.unlimited,
+				Lxicon.unlimited,
 				"mode",
 				() => modeOptions.map(option => new ChatInputAction(
 					`ash.chat.input.mode.${option.id}`,
@@ -260,7 +260,7 @@ export class ChatInputPart extends Disposable {
 			"ash.chat.input.attachment",
 			"Attach",
 			"Attach context",
-			lxiconsLibrary.paperclip,
+			Lxicon.paperclip,
 			true,
 			"attachment",
 			() => void this.pickContext(),
@@ -269,7 +269,7 @@ export class ChatInputPart extends Disposable {
 			"ash.chat.input.send",
 			"Send",
 			this.toolbarState.inputKind === "command" ? "Run command" : "Send message",
-			lxiconsLibrary.arrowUp,
+			Lxicon.arrowUp,
 			this.toolbarState.canSubmit,
 			"send",
 			() => this.inputContainer.requestSubmit(),
@@ -277,7 +277,7 @@ export class ChatInputPart extends Disposable {
 		const trailingActions = this.toolbarState.canInterrupt
 			? [
 				sendAction,
-				new ChatInputAction("ash.chat.input.interrupt", "Stop", "Stop response", lxiconsLibrary.close, true, "interrupt", () => void this.delegate.interrupt()),
+				new ChatInputAction("ash.chat.input.interrupt", "Stop", "Stop response", Lxicon.close, true, "interrupt", () => void this.delegate.interrupt()),
 			]
 			: [sendAction];
 		const inputActions = this.toolbarState.inputKind === "command" ? [modeAction] : [modeAction, modelAction, attachmentAction];
@@ -304,7 +304,7 @@ export class ChatInputPart extends Disposable {
 			remove.type = "button";
 			remove.className = "ash-chat-input-attachment-remove";
 			remove.setAttribute("aria-label", `Remove ${attachment.name}`);
-			appendIcon(lxiconsLibrary.close, remove);
+			appendIcon(Lxicon.close, remove);
 			this.attachmentListeners.add(addDisposableListener(remove, "click", () => {
 				this.attachments.delete(attachmentKey(attachment));
 				this.renderAttachments();
@@ -517,7 +517,7 @@ class ChatInputModeSelectorViewItem extends ButtonActionViewItem {
 		button.setAttribute("aria-expanded", "false");
 		const indicator = h(container.ownerDocument, "span");
 		indicator.className = "ash-dropdown-menu-indicator ash-chat-input-mode-indicator";
-		appendIcon(lxiconsLibrary.chevronDown, indicator);
+		appendIcon(Lxicon.chevronDown, indicator);
 		button.append(indicator);
 		this.contextView = this._register(new ContextView(this.contextViewService.container));
 		this._register(addDisposableListener(button, "keydown", (event) => {

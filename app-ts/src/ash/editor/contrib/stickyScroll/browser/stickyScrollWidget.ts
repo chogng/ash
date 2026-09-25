@@ -1,7 +1,8 @@
 import './stickyScroll.css';
 import { h } from '../../../../base/browser/dom.js';
+import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
+import type { Icon } from '../../../../base/common/icon.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { ThemeIcon } from '../../../../base/common/themables.js';
 import { localize } from '../../../../nls.js';
 import type { ICodeEditor } from '../../../browser/editorBrowser.js';
 import { projectStanzaSemanticTokenLine } from '../../../browser/viewParts/viewLines/viewLine.js';
@@ -31,6 +32,7 @@ interface HeaderRow {
 	readonly text: HTMLSpanElement;
 	readonly number: HTMLSpanElement;
 	readonly folding: HTMLButtonElement;
+	foldingIcon: Icon | undefined;
 }
 
 /** Owns retained header buttons; the controller mounts the root and handles navigation. */
@@ -132,7 +134,7 @@ export class StickyScrollWidget extends Disposable {
 				folding.type = 'button';
 				button.append(text);
 				element.append(button, number, folding);
-				row = { element, button, text, number, folding };
+				row = { element, button, text, number, folding, foldingIcon: undefined };
 				this.rows.set(lineId, row);
 			}
 			unused.delete(lineId);
@@ -176,7 +178,13 @@ export class StickyScrollWidget extends Disposable {
 			number.style.width = `${layout.lineNumbersWidth}px`;
 			const region = foldingModel.regions.find(region => region.startLineIndex === lineNumber - 1);
 			folding.hidden = !region || !this.editor.getOption(EditorOption.folding) || foldingControls === 'never' || state.showEndForLine === index;
-			folding.className = `stanza-editor-sticky-scroll-folding ${ThemeIcon.asClassName(region?.collapsed ? foldingCollapsedIcon : foldingExpandedIcon)}`;
+			const foldingIcon = region?.collapsed ? foldingCollapsedIcon : foldingExpandedIcon;
+			if (row.foldingIcon !== foldingIcon) {
+				folding.replaceChildren();
+				appendIcon(foldingIcon, folding);
+				row.foldingIcon = foldingIcon;
+			}
+			folding.className = 'stanza-editor-sticky-scroll-folding';
 			folding.classList.toggle('expanded', !!region && !region.collapsed);
 			folding.setAttribute('aria-expanded', String(!region?.collapsed));
 			folding.title = region?.collapsed

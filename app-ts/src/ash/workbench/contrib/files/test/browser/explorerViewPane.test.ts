@@ -5,7 +5,7 @@ import { URI } from "../../../../../base/common/uri.js";
 import { InMemoryConfigurationService } from "../../../../../platform/configuration/common/inMemoryConfigurationService.js";
 import { FileKind, type IFileService } from "../../../../../platform/files/common/files.js";
 import { WorkspaceContextService } from "../../../../../workbench/services/workspaces/browser/workspaceContextService.js";
-import type { IFileIconThemeService } from "../../../../../platform/theme/browser/fileIconThemeService.js";
+import type { IResourceIconRenderer } from "../../../../browser/labels.js";
 import type { IHoverService, IManagedHover } from "../../../../../platform/hover/browser/hoverService.js";
 import { ListConfiguration } from "../../../../../platform/list/common/listConfiguration.js";
 import type { EditorInput, EditorOpenOptions, EditorOpenTarget, IEditorService } from "../../../../../workbench/services/editor/common/editorService.js";
@@ -91,8 +91,8 @@ test("ExplorerViewPane opens workspace files on single click", async () => {
 	};
 	using configurationService = new InMemoryConfigurationService();
 	await configurationService.updateValue(ListConfiguration.openMode, "doubleClick");
-	const fileIconThemeService: IFileIconThemeService = {
-		onDidFileIconThemeChange: () => ({
+	const resourceIconRenderer: IResourceIconRenderer = {
+		onDidChangeResourceIcons: () => ({
 			dispose() {},
 			[Symbol.dispose]() {},
 		}),
@@ -156,7 +156,7 @@ test("ExplorerViewPane opens workspace files on single click", async () => {
 			fileService,
 			workspaceContextService,
 			editorService,
-			fileIconThemeService,
+			resourceIconRenderer,
 			hoverService,
 			configurationService,
 		);

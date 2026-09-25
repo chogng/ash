@@ -1,11 +1,11 @@
 import { addDisposableListener, isNode, stopEvent, h } from "../../dom.js";
 import { disposableWindowTimeout } from "../../scheduler.js";
-import { appendIcon } from "../icon/icon.js";
+import { appendIcon } from "../lxicons/lxicon.js";
 import type { ListDragAndDrop, ListDragData, ListScrolling } from "../list/list.js";
 import { List } from "../list/listWidget.js";
 import { Emitter, type Event } from "../../../common/event.js";
 import { Disposable, MutableDisposable, type IDisposable } from "../../../common/lifecycle.js";
-import { lxiconsLibrary } from "../../../common/lxiconsLibrary.js";
+import { Lxicon } from "../../../common/lxicons.js";
 import { rot } from "../../../common/numbers.js";
 import type { AbstractTreeNode, TreeAcceptEvent, TreeActivateEvent, TreeCollapseRequestEvent, TreeDragAndDrop, TreeDragOverReaction, TreeFindMatchType, TreeFindMode, TreeFindResult, TreeFocusChangeEvent, TreeIndentGuides, TreeKeyboardNavigationLabelProvider, TreePointerEvent, TreePointerTarget, TreeSelectionChangeEvent, TreeSelectionPresentation, TreeTwistieState } from "./tree.js";
 
@@ -186,7 +186,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		twistie.setAttribute("aria-hidden", "true");
 		const twistieState = { collapsible: node.collapsible, expanded: node.collapsible && !node.collapsed };
 		if (this.options.renderTwistie) this.options.renderTwistie(node, twistieState, twistie);
-		else if (twistieState.collapsible) appendIcon(twistieState.expanded ? lxiconsLibrary.chevronDown : lxiconsLibrary.chevronRight, twistie);
+		else if (twistieState.collapsible) appendIcon(twistieState.expanded ? Lxicon.chevronDown : Lxicon.chevronRight, twistie);
 		const contents = h(document, "span");
 		contents.className = "ash-tree-contents";
 		contents.append(this.options.renderElement(node));

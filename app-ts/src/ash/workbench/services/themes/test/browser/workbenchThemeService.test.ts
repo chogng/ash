@@ -22,6 +22,39 @@ import { JsonSchemasRegistry } from '../../../../../platform/jsonschemas/common/
 import { DiskFileSystemProvider } from '../../../../../platform/files/node/diskFileSystemProvider.js';
 import type { IDisposable } from '../../../../../base/common/lifecycle.js';
 import type { IUserThemeService } from '../../../../common/userThemes.js';
+import { WorkbenchProductIconThemesRegistry } from '../../common/themeExtensionPoints.js';
+import { appendIcon } from '../../../../../base/browser/ui/lxicons/lxicon.js';
+import { registerIcon } from '../../../../../platform/theme/common/iconRegistry.js';
+
+test('selected product icon theme refreshes mounted SVGs and returns to defaults', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>');
+	try {
+		Object.defineProperty(browser.window, 'matchMedia', { value: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }) });
+		const icon = registerIcon('test-workbench-product-icon', () => '<svg viewBox="0 0 16 16"><path d="M1 1"/></svg>', 'Workbench product icon test');
+		using registration = WorkbenchProductIconThemesRegistry.registerThemes();
+		registration.replace([{ id: 'test-workbench-svg', label: 'Test SVG', icons: new Map([[icon.id, () => '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="4"/></svg>']]) }]);
+		using configuration = new WorkbenchConfigurationService();
+		using services = new ServiceContainer();
+		services.registerInstance(IConfigurationService, configuration);
+		using active = services.createInstance(WorkbenchThemeService, browser.window.document.body);
+		active.initialize();
+		const mounted = appendIcon(icon, browser.window.document.body);
+		assert(mounted.querySelector('path'));
+		await configuration.updateValue(WorkbenchConfiguration.productIconTheme, 'test-workbench-svg');
+		assert.equal(active.getProductIconTheme().id, 'test-workbench-svg');
+		assert(mounted.querySelector('circle'));
+		await configuration.updateValue(WorkbenchConfiguration.productIconTheme, 'default');
+		assert.equal(active.getProductIconTheme().id, 'default');
+		assert(mounted.querySelector('path'));
+		await configuration.updateValue(WorkbenchConfiguration.productIconTheme, 'test-workbench-svg');
+		registration.replace([]);
+		assert.equal(active.getProductIconTheme().id, 'default');
+		assert(mounted.querySelector('path'));
+		assert.equal(browser.window.document.body.querySelector('svg.ash-icon'), mounted);
+	} finally {
+		browser.window.close();
+	}
+});
 
 const document = {
 	name: 'Test User Aurora',

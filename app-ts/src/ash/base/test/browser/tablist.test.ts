@@ -3,9 +3,9 @@ import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { TAB_CLOSE_ACTION_ID, TabList, type TabListItem } from "../../browser/ui/tablist/tabList.js";
 import type { IAction } from "../../common/actions.js";
-import { register } from "../../common/icon.js";
+import { registerLxicon } from "../../common/lxiconsUtil.js";
 
-const customCloseIcon = register("tablist-test-close", () => '<svg viewBox="0 0 16 16" data-test-icon="custom-close"><path d="M2 2h12v12H2z"/></svg>');
+const customCloseIcon = registerLxicon("tablist-test-close", () => '<svg viewBox="0 0 16 16" data-test-icon="custom-close"><path d="M2 2h12v12H2z"/></svg>');
 
 test("TabList owns manual selection semantics and roving focus", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
