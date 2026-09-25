@@ -5,7 +5,9 @@ import { InMemoryConfigurationService } from "../../../../../platform/configurat
 import type { IMarketplaceService } from "../../../../../platform/marketplace/common/marketplaceService.js";
 import { MarketplaceLanguagePackService } from "../../../../../platform/languagePacks/browser/marketplaceLanguagePackService.js";
 import { builtinLanguagePackCatalogs } from "../../common/localizationCatalogs.js";
-import { LocalizationConfiguration, WorkbenchLocaleService, normalizeLocale, resolveLocale } from "../../common/locale.js";
+import { normalizeLocale } from "../../../../../platform/languagePacks/common/languagePackCatalog.js";
+import { LocalizationConfiguration } from "../../common/locale.js";
+import { WorkbenchLocaleService } from "../../browser/localeService.js";
 import { WorkbenchLocalizationService } from "../../browser/workbenchLocalizationService.js";
 import { resetNlsResolver } from '../../../../../nls.js';
 import { commandActionLabel, localizedString } from '../../../../../platform/action/common/action.js';
@@ -15,23 +17,32 @@ import { JsonSchemasRegistry } from '../../../../../platform/jsonschemas/common/
 import { colorThemeSchemaId, registerColorThemeSchemas } from '../../../themes/common/colorThemeSchema.js';
 import '../../../../common/theme.js';
 
-test("locale resolution prefers exact, base-language, and English fallback matches", () => {
+test("locale selection resolves installed variants and falls back to English", async () => {
 	assert.equal(normalizeLocale("ZH_cn"), "zh-CN");
-	assert.equal(resolveLocale("zh-cn", ["en", "zh-CN", "fr"]), "zh-CN");
-	assert.equal(resolveLocale("fr-CA", ["en", "fr"]), "fr");
-	assert.equal(resolveLocale("de", ["en", "zh-CN"]), "en");
+	using configuration = new InMemoryConfigurationService();
+	using languagePacks = new MarketplaceLanguagePackService(createMarketplace(), builtinLanguagePackCatalogs);
+	using localeService = new WorkbenchLocaleService(configuration, languagePacks);
+	await localeService.whenReady;
+	await localeService.setLocale({ id: 'zh-cn', label: 'Chinese' });
+	assert.equal(localeService.locale, 'zh-CN');
+	await configuration.updateValue(LocalizationConfiguration.locale, 'de');
+	assert.equal(localeService.locale, 'en');
 });
 
-test("locale selection is client-local and only accepts installed packs", async () => {
+test("locale selection stores a configured value and only accepts installed packs", async () => {
 	using configuration = new InMemoryConfigurationService();
 	using languagePacks = new MarketplaceLanguagePackService(createMarketplace(), builtinLanguagePackCatalogs);
 	using localeService = new WorkbenchLocaleService(configuration, languagePacks);
 
 	await localeService.whenReady;
-	await assert.rejects(localeService.setLocale("fr"), /not installed/);
-	await localeService.setLocale("zh_cn");
+	await assert.rejects(localeService.setLocale({ id: 'fr', label: 'French' }), /not installed/);
+	await localeService.setLocale({ id: 'zh_cn', label: 'Chinese' });
 	assert.equal(localeService.locale, "zh-CN");
 	assert.equal(configuration.getValue(LocalizationConfiguration.locale), "zh-CN");
+	await localeService.clearLocalePreference();
+	assert.equal(localeService.locale, 'en');
+	assert.equal(configuration.getValue(LocalizationConfiguration.locale), 'en');
+	assert.equal(configuration.inspect(LocalizationConfiguration.locale).userValue, undefined);
 });
 
 test("localization lookup falls back to English and formats parameters", async () => {
@@ -43,7 +54,7 @@ test("localization lookup falls back to English and formats parameters", async (
 	await localization.whenReady;
 	assert.equal(localization.translate("ash.settings", "displayLanguage.title", "Fallback"), "Display Language");
 	assert.equal(localization.translate("ash.missing", "missing", "Hello {name}", { name: "Ada" }), "Hello Ada");
-	await localeService.setLocale('zh-CN');
+	await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
 	assert.deepEqual([
 		commandActionLabel(localizedString('ash.menu', 'file', 'File')),
 		commandActionLabel(localizedString('ash.actions', 'showPanel', 'Show Panel')),
@@ -65,7 +76,7 @@ test('minimap menu uses the selected Chinese language catalog', async () => {
 	using localeService = new WorkbenchLocaleService(configuration, languagePacks);
 	using localization = new WorkbenchLocalizationService(localeService, languagePacks);
 	await localization.whenReady;
-	await localeService.setLocale('zh-CN');
+	await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
 	assert.equal(localization.translate('ash', 'context.minimap.enabled', 'Minimap'), '小地图');
 });
 
@@ -80,7 +91,7 @@ test('theme color descriptions in the JSON schema follow locale changes', async 
 	try {
 		await localization.whenReady;
 		assert.equal(description('input.background'), 'Input background.');
-		await localeService.setLocale('zh-CN');
+		await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
 		assert.deepEqual([
 			description('input.background'),
 			description('minimapSlider.background'),
@@ -92,7 +103,7 @@ test('theme color descriptions in the JSON schema follow locale changes', async 
 			'图表中绿色数据系列的颜色。',
 			'编辑器分组之间的边框颜色。',
 		]);
-		await localeService.setLocale('en');
+		await localeService.setLocale({ id: 'en', label: 'English' });
 		assert.equal(description('input.background'), 'Input background.');
 	} finally {
 		resetNlsResolver();
@@ -105,7 +116,7 @@ test('paste and drop controls use the selected Chinese language catalog', async 
 	using localeService = new WorkbenchLocaleService(configuration, languagePacks);
 	using localization = new WorkbenchLocalizationService(localeService, languagePacks);
 	await localization.whenReady;
-	await localeService.setLocale('zh-CN');
+	await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
 	assert.deepEqual([
 		localization.translate('ash', 'dropOrPaste.pasteAs', 'Paste As...'),
 		localization.translate('ash', 'dropOrPaste.selectPasteAction', 'Select Paste Action'),
@@ -132,7 +143,7 @@ test('folding command metadata uses the selected Chinese language catalog', asyn
 	using localization = new WorkbenchLocalizationService(localeService, languagePacks);
 	try {
 		await localization.whenReady;
-		await localeService.setLocale('zh-CN');
+		await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
 		await import('../../../../../editor/contrib/folding/browser/folding.js');
 		const { EditorExtensionsRegistry } = await import('../../../../../editor/browser/editorExtensions.js');
 		const actions = [...EditorExtensionsRegistry.getEditorActions()];
@@ -156,7 +167,7 @@ test('editor action labels use the selected Chinese language catalog', async () 
 	using localization = new WorkbenchLocalizationService(localeService, languagePacks);
 	try {
 		await localization.whenReady;
-		await localeService.setLocale('zh-CN');
+		await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
 		await import('../../../../../editor/contrib/tokenization/browser/tokenization.js');
 		await import('../../../../../editor/contrib/caretOperations/browser/caretOperations.js');
 		await import('../../../../../editor/contrib/insertFinalNewLine/browser/insertFinalNewLine.js');
@@ -188,7 +199,7 @@ test('Quick Input uses Chinese labels from the selected catalog', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
 		await localization.whenReady;
-		await localeService.setLocale('zh-CN');
+		await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
 		using controller = new QuickInputController(dom.window.document.body);
 		using picker = controller.createQuickPick();
 		picker.show();
@@ -209,7 +220,7 @@ test('Go to Offset uses the selected Chinese language catalog', async () => {
 	using localization = new WorkbenchLocalizationService(localeService, languagePacks);
 	try {
 		await localization.whenReady;
-		await localeService.setLocale('zh-CN');
+		await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
 		const { GotoOffsetAction } = await import('../../../../../editor/standalone/browser/quickAccess/standaloneGotoLineQuickAccess.js');
 		assert.equal(new GotoOffsetAction().label, '转到字符偏移量...');
 		assert.equal(localization.translate('ash', 'gotoOffset.input', 'Character offset'), '字符偏移量');
@@ -225,7 +236,7 @@ test('Source Control settings use the selected Chinese language catalog', async 
 	using localization = new WorkbenchLocalizationService(localeService, languagePacks);
 	try {
 		await localization.whenReady;
-		await localeService.setLocale('zh-CN');
+		await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
 		const { localize } = await import('../../../../../nls.js');
 		assert.deepEqual([
 			localize('git.settings.groupDescription', 'Configure Git fetching and Source Control diff decorations.'),

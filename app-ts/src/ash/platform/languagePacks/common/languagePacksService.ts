@@ -3,6 +3,11 @@ import { createServiceIdentifier } from "../../instantiation/common/instantiatio
 
 export type LocaleId = string;
 
+export interface ILanguagePackItem {
+	readonly id: LocaleId;
+	readonly label: string;
+}
+
 export interface LanguagePackCatalog {
 	readonly schemaVersion: 1;
 	readonly locale: LocaleId;

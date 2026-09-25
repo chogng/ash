@@ -193,7 +193,8 @@ import { IMarketplaceService } from "../../platform/marketplace/common/marketpla
 import { AppServerMarketplaceService } from "../services/marketplace/browser/appServerMarketplaceService.js";
 import { MarketplaceLanguagePackService } from "../../platform/languagePacks/browser/marketplaceLanguagePackService.js";
 import { ILanguagePackService } from "../../platform/languagePacks/common/languagePacksService.js";
-import { ILocaleService, WorkbenchLocaleService } from "../services/localization/common/locale.js";
+import { ILocaleService } from "../services/localization/common/locale.js";
+import { WorkbenchLocaleService } from "../services/localization/browser/localeService.js";
 import { ILocalizationService } from "../services/localization/common/localizationService.js";
 import { WorkbenchLocalizationService } from "../services/localization/browser/workbenchLocalizationService.js";
 import { builtinLanguagePackCatalogs } from "../services/localization/common/localizationCatalogs.js";

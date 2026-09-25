@@ -13,6 +13,7 @@ import "./contrib/modernUI/browser/modernUI.contribution.js";
 
 import './contrib/marketplace/browser/marketplace.contribution.js';
 import './contrib/language/browser/languageServers.contribution.js';
+import './contrib/localization/common/localization.contribution.js';
 import './contrib/skills/browser/skills.contribution.js';
 import './contrib/onboarding/browser/onboarding.contribution.js';
 import './browser/parts/titlebar/commandCenterOnboarding.contribution.js';
