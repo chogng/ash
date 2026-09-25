@@ -454,8 +454,8 @@ export class AshApplication extends Disposable {
 			: new LocalAppServerProcessLauncher({
 				executable: packagedExecutable,
 				expectedSha256: expectedPackagedSha256,
-				// The profile may still have a daemon from an older package with incompatible capabilities.
-				args: ["connect-selected"],
+				// Full development selects its backend generation; UI debugging preserves a compatible shared daemon.
+				args: [!app.isPackaged && process.env.ASH_DEV_REUSE_APP_SERVER === "1" ? "connect" : "connect-selected"],
 				environment: { ...this.appServerEnvironment(workspace), ASH_APP_SERVER_PATH: selectDevelopmentAppServerExecutable(appServerExecutablePath(packageLocation), developmentExecutable) },
 			});
 		const supervisor = new AppServerConnectionRelay({

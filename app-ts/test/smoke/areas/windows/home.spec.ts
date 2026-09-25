@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { access, link, mkdtemp, realpath, rm } from 'node:fs/promises';
+import { access, chmod, copyFile, link, mkdtemp, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
@@ -57,5 +57,41 @@ test('Desktop replaces a daemon started from another package generation', async 
 			await execFileAsync(daemon, ['stop'], { env: { ...process.env, ASH_HOME: profile, ASH_APP_SERVER_PATH: selectedBackend }, windowsHide: true });
 		}
 		await rm(userDataDirectory, { force: true, recursive: true, maxRetries: 10, retryDelay: 100 });
+	}
+});
+
+test('Desktop UI debugging reuses a compatible daemon outside the selected package', async ({ target }) => {
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'This checks the Electron frontend debugging connection.');
+	const userDataDirectory = await mkdtemp(join(tmpdir(), 'ash-'));
+	const profile = join(userDataDirectory, 'profile');
+	const appPath = resolve(import.meta.dirname, '../../../..');
+	const packageLocation = { appPath, isPackaged: false, platform: process.platform, resourcesPath: '' };
+	const daemon = appServerDaemonExecutablePath(packageLocation);
+	const selectedBackend = appServerExecutablePath(packageLocation);
+	const existingBackend = join(userDataDirectory, process.platform === 'win32' ? 'existing-app-server.exe' : 'existing-app-server');
+	const environment = { ...process.env, ASH_HOME: profile, ASH_APP_SERVER_PATH: existingBackend };
+	let desktop: Awaited<ReturnType<typeof launchElectron>> | undefined;
+	try {
+		await copyFile(selectedBackend, existingBackend);
+		if (process.platform !== 'win32') await chmod(existingBackend, 0o700);
+		const started = JSON.parse((await execFileAsync(daemon, ['start'], { env: environment, windowsHide: true })).stdout) as { readonly pid: number };
+		desktop = await launchElectron({ appServerMode: 'required', userDataDirectory, profileDirectory: profile, reuseAppServer: true });
+		const connected = JSON.parse((await execFileAsync(daemon, ['version'], { env: environment, windowsHide: true })).stdout) as { readonly pid: number };
+		expect(connected.pid).toBe(started.pid);
+		await expect(desktop.driver.workbench.element).toBeVisible();
+	} finally {
+		try {
+			if (desktop) {
+				// This test owns the Electron process and profile; quit without waiting for application state flushing.
+				desktop.application.process().kill('SIGKILL');
+				await desktop.application.close();
+			}
+		} finally {
+			try {
+				await execFileAsync(daemon, ['stop'], { env: environment, windowsHide: true });
+			} finally {
+				await rm(userDataDirectory, { force: true, recursive: true, maxRetries: 10, retryDelay: 100 });
+			}
+		}
 	}
 });

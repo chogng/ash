@@ -20,6 +20,13 @@ pnpm install
 pnpm dev:desktop
 ```
 
+VS Code 的 `Ash Desktop (Electron)` F5 配置用于日常 TypeScript UI 调试。它运行
+`pnpm --dir app-ts dev:ui:connected`，启动 Vite、Electron Main 和 Preload 的监听，
+连接当前 profile 中兼容的 App Server；重复启动前端不会重新构建或替换后端。
+若本机尚无开发后端包，先运行一次 `pnpm --dir app-ts prepare:backend`。
+修改 Rust 后端时使用 `Ash Desktop (Electron + Rust)` 配置，它继续运行完整
+`just ash-desktop`，构建并切换后端 generation。
+
 只开发桌面界面、但需要检查 Electron 特有的窗口、标题栏、菜单和原生交互时，运行：
 
 ```bash
@@ -65,8 +72,9 @@ pnpm dev:web:full
 `.build/runtime/dev/store-v1/<target>/<javascript-runtime>/dev-small/packages/<version>/<build-id>`；其中包含 product-neutral `ash-app-server` backend host、锁定版本的
 ripgrep 与平台 sandbox helper。编号清单选择当前包，进程租约保护正在运行的包，存储固定保留当前与回滚包。Electron 默认生成 `hostProvidedNode` variant，
 不再下载或复制 standalone Node；`dev:web:full` 使用 `packagedNode` variant，为后端能力提供独立 JavaScript runtime。
-开发态和发布态 Electron 都从相同的
-`<package>/bin/ash-app-server-daemon[.exe] connect` 入口连接共享 App Server，区别仅在编译 profile 和 package root。
+开发态和发布态 Electron 都通过随包的
+`<package>/bin/ash-app-server-daemon[.exe]` 连接共享 App Server。完整开发和发布启动使用
+`connect-selected` 选择当前后端；VS Code 的前端调试入口使用普通 `connect` 复用兼容的运行进程。
 `prepare:desktop` 并行执行原生模块重建、前端生成资源检查和 `prepare:backend`。
 `predev` 与 `predev:electron` 共用这个入口；`prestart` 先建立主进程输出目录，
 再执行同一组准备任务。`prepare:backend:web` 明确选择带 Node 的后端包，
@@ -105,7 +113,7 @@ Server supervisor 停止旧连接并启动新 generation。构建失败时当前
 executable 路径，不依赖默认 target layout；generation 以 executable 内容摘要命名，内容未变化时不会重复发布，只保留当前版本
 和一个回滚版本。TypeScript watcher 只接受 `ash-rs` 源文件与根 `Cargo.toml`、`Cargo.lock`，明确忽略默认
 `.build/cargo` 以及解析后的自定义 `CARGO_TARGET_DIR` 内生成的 Rust 文件，避免一次构建再次触发自己。可以单独运行
-`pnpm dev:rust` 启动同一 watcher；`dev:ui` 和
+`pnpm dev:rust` 启动同一 watcher；`dev:ui`、`dev:ui:connected` 和
 不启动 Rust 的 disconnected Web 模式不会监听后端。
 
 不带项目路径启动时，Ash 使用空窗口上下文。构建完成后，可以通过启动参数打开一个项目目录：

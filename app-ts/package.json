@@ -77,6 +77,7 @@
     "typecheck:extensions": "tsc -p tsconfig.extensions-check.json --noEmit",
     "dev": "concurrently -k -n renderer,electron-host,app-server \"vite --config ../build/app_ts/vite/vite.config.ts\" \"wait-on tcp:127.0.0.1:5173 && cross-env ASH_DEV_APP_SERVER_RELOAD=1 ASH_RENDERER_URL=http://127.0.0.1:5173 node ../build/app_ts/launch/electron.ts --watch\" \"node ../build/app_ts/watch-app-server.ts --skip-initial\"",
     "dev:ui": "concurrently -k -n renderer,electron-host \"vite --config ../build/app_ts/vite/vite.config.ts\" \"wait-on tcp:127.0.0.1:5173 && cross-env ASH_DESKTOP_UI_ONLY=1 ASH_RENDERER_URL=http://127.0.0.1:5173 node ../build/app_ts/launch/electron.ts --watch\"",
+    "dev:ui:connected": "pnpm run predev:ui && concurrently -k -n renderer,electron-host \"vite --config ../build/app_ts/vite/vite.config.ts\" \"wait-on tcp:127.0.0.1:5173 && cross-env ASH_DEV_REUSE_APP_SERVER=1 ASH_RENDERER_URL=http://127.0.0.1:5173 node ../build/app_ts/launch/electron.ts --watch\"",
     "dev:renderer": "vite --config ../build/app_ts/vite/vite.config.ts",
     "dev:stanza": "vite --config ../build/app_ts/vite/editor.vite.config.ts",
     "dev:web": "vite --config ../build/app_ts/vite/vite.config.ts",
