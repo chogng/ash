@@ -28,7 +28,7 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border-right: 1px solid var(--ash-widget-border);
+  border-right: var(--ash-stroke-thickness) solid var(--ash-widget-border);
   background: var(--ash-side-bar-background);
 }
 
@@ -41,12 +41,12 @@
 .ash-settings-navigation-tree {
   width: 100%;
   box-sizing: border-box;
-  padding: 18px 12px;
+  padding: 20px 12px;
 }
 
 .ash-settings-navigation-empty {
   margin: 0;
-  padding: 18px 24px;
+  padding: 20px 24px;
   color: var(--ash-description-foreground);
   line-height: 1.5;
 }
@@ -71,8 +71,8 @@
 .ash-settings-page h3 {
   margin: 0 0 8px;
   color: var(--ash-settings-header-foreground);
-  font-size: 22px;
-  font-weight: 600;
+  font-size: var(--ash-font-size-heading2);
+  font-weight: var(--ash-font-weight-semi-bold);
 }
 
 .ash-settings-page.has-navigation-target h3 {
@@ -80,7 +80,7 @@
   z-index: 2;
   top: 0;
   background: var(--ash-editor-background);
-  border-bottom: 1px solid var(--ash-settings-header-border);
+  border-bottom: var(--ash-stroke-thickness) solid var(--ash-settings-header-border);
 }
 
 .ash-settings-description {
@@ -135,8 +135,8 @@
 .ash-indexing-setting legend {
   padding: 0;
   color: var(--ash-foreground);
-  font-size: 15px;
-  font-weight: 600;
+  font-size: var(--ash-font-size-heading3);
+  font-weight: var(--ash-font-weight-semi-bold);
 }
 
 .ash-indexing-toggle {
@@ -148,9 +148,9 @@
 
 .ash-settings-text-input {
   min-height: 32px;
-  padding: 5px 9px;
-  border: 1px solid var(--ash-input-border);
-  border-radius: 4px;
+  padding: 6px 10px;
+  border: var(--ash-stroke-thickness) solid var(--ash-input-border);
+  border-radius: var(--ash-corner-radius-small);
   outline: none;
   color: var(--ash-input-foreground);
   background: var(--ash-input-background);
@@ -169,12 +169,12 @@
   margin: 0;
   padding: 0;
   color: var(--ash-foreground);
-  font-size: 15px;
-  font-weight: 600;
+  font-size: var(--ash-font-size-heading3);
+  font-weight: var(--ash-font-weight-semi-bold);
 }
 
 .ash-theme-setting-hint {
-  margin: 6px 0 14px;
+  margin: 6px 0 16px;
   color: var(--ash-description-foreground);
   line-height: 1.5;
 }
@@ -190,8 +190,8 @@
   display: grid;
   min-width: 0;
   padding: 12px;
-  border: 1px solid var(--ash-widget-border);
-  border-radius: 8px;
+  border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+  border-radius: var(--ash-corner-radius-large);
   background: var(--ash-editor-background);
   cursor: pointer;
   gap: 10px;
@@ -208,7 +208,7 @@
 }
 
 .ash-theme-option:has(input:focus-visible) {
-  outline: 1px solid var(--ash-focus-border);
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
   outline-offset: 2px;
 }
 
@@ -228,8 +228,8 @@
   display: grid;
   height: 72px;
   overflow: hidden;
-  border: 1px solid var(--ash-widget-border);
-  border-radius: 5px;
+  border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+  border-radius: var(--ash-corner-radius-medium);
   background: var(--theme-preview-editor);
   grid-column: 1 / -1;
   grid-template-columns: 30% 70%;
@@ -239,7 +239,7 @@
 .ash-theme-preview::after {
   content: "";
   margin: 12px;
-  border-radius: 3px;
+  border-radius: var(--ash-corner-radius-small);
   background: var(--theme-preview-control);
 }
 
@@ -252,12 +252,12 @@
   min-width: 0;
   flex-direction: column;
   grid-column: 1 / -1;
-  gap: 3px;
+  gap: 4px;
 }
 
 .ash-theme-option-title {
   color: var(--ash-foreground);
-  font-weight: 600;
+  font-weight: var(--ash-font-weight-semi-bold);
 }
 
 .ash-theme-option-description {
@@ -291,9 +291,9 @@
 .ash-theme-json {
   display: flex;
   margin-top: 16px;
-  padding: 14px;
-  border: 1px solid var(--ash-widget-border);
-  border-radius: 6px;
+  padding: 16px;
+  border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+  border-radius: var(--ash-corner-radius-medium);
   background: var(--ash-editor-background);
   flex-direction: column;
   gap: 8px;
@@ -306,7 +306,7 @@
 
 .ash-theme-json h4 {
   color: var(--ash-foreground);
-  font-size: 14px;
+  font-size: var(--ash-font-size-heading3);
 }
 
 .ash-theme-json p {
@@ -320,8 +320,8 @@
   min-height: 320px;
   padding: 10px 12px;
   resize: vertical;
-  border: 1px solid var(--ash-input-border);
-  border-radius: 4px;
+  border: var(--ash-stroke-thickness) solid var(--ash-input-border);
+  border-radius: var(--ash-corner-radius-small);
   outline: none;
   color: var(--ash-editor-foreground);
   background: var(--ash-input-background);
@@ -345,8 +345,8 @@
 .ash-user-theme-status {
   margin-top: 12px;
   padding: 10px 12px;
-  border: 1px solid var(--ash-widget-border);
-  border-radius: 6px;
+  border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+  border-radius: var(--ash-corner-radius-medium);
   color: var(--ash-description-foreground);
   font-size: 12px;
   overflow-wrap: anywhere;
@@ -389,7 +389,7 @@
 
   .ash-settings-sidebar {
     border-right: 0;
-    border-bottom: 1px solid var(--ash-widget-border);
+    border-bottom: var(--ash-stroke-thickness) solid var(--ash-widget-border);
   }
 
   .ash-settings-navigation-tree {

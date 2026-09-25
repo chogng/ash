@@ -30,13 +30,13 @@
 	font: inherit;
 	color: var(--ash-input-foreground);
 	background: var(--ash-input-background);
-	border: 1px solid var(--ash-input-border);
-	border-radius: 4px;
+	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
+	border-radius: var(--ash-corner-radius-small);
 }
 .ash-call li { overflow-wrap: anywhere; }
 .ash-call button { cursor: pointer; }
 .ash-call button:disabled { cursor: default; opacity: 0.6; }
-.ash-call :focus-visible { outline: 1px solid var(--ash-focus-border); outline-offset: 2px; }
+.ash-call :focus-visible { outline: var(--ash-stroke-thickness) solid var(--ash-focus-border); outline-offset: 2px; }
 .ash-call [hidden] { display: none; }
 
 .ash-call .call-screens {

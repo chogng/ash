@@ -11,9 +11,9 @@
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 0 3px;
-  border: 1px solid transparent;
-  border-radius: 4px;
+  padding: 0 4px;
+  border: var(--ash-stroke-thickness) solid transparent;
+  border-radius: var(--ash-corner-radius-small);
   color: var(--ash-button-foreground);
   background: transparent;
   font: inherit;
@@ -41,7 +41,7 @@
   white-space: nowrap;
 }
 .ash-action-label:focus-visible {
-  outline: 1px solid var(--ash-focus-border);
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
   outline-offset: -1px;
 }
 .ash-action-label:disabled {

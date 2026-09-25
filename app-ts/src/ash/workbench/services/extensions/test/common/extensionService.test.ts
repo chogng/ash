@@ -478,7 +478,7 @@ test('loads icon manifests and fonts through generation-bound resources and revo
 	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() });
 	await service.start();
 	const theme = WorkbenchFileIconThemesRegistry.getThemes().find(theme => theme.id === 'vs-seti');
-	assert.ok(theme?.resolveFileIcon('main.ts', true)?.character);
+	assert.ok(theme?.resolveFileIcon(['file-icon', 'typescript-lang-file-icon'], true)?.character);
 	assert.deepEqual(requests, ['icons/vs-seti-icon-theme.json', 'icons/seti.woff']);
 	generation++;
 	fail = true;

@@ -6,18 +6,18 @@
 
 .ash-output-filter-bar {
   flex: 0 0 auto;
-  padding: 5px 8px;
-  border-bottom: 1px solid var(--ash-border);
+  padding: 6px 8px;
+  border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
 }
 
 .ash-output-filter-input {
   width: 100%;
   box-sizing: border-box;
   min-height: 24px;
-  padding: 2px 7px;
+  padding: 2px 8px;
   color: var(--ash-input-foreground);
   background: var(--ash-input-background);
-  border: 1px solid var(--ash-input-border);
+  border: var(--ash-stroke-thickness) solid var(--ash-input-border);
   outline: none;
 }
 

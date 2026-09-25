@@ -18,7 +18,7 @@
 .ash-trace-count { color: var(--ash-description-foreground); }
 .ash-trace-body { display: flex; flex-direction: column; flex: 1; min-height: 260px; gap: 8px; }
 .ash-trace-list { flex: 1; min-height: 120px; overflow: auto; border: var(--ash-stroke-thickness) solid var(--ash-widget-border); }
-.ash-trace-row { padding: 6px 8px; cursor: pointer; border: 1px solid transparent; }
+.ash-trace-row { padding: 6px 8px; cursor: pointer; border: var(--ash-stroke-thickness) solid transparent; }
 .ash-trace-row.selected {
 	color: var(--ash-list-active-selection-foreground);
 	background: var(--ash-list-active-selection-background);
@@ -38,4 +38,4 @@
 	white-space: pre-wrap;
 	overflow-wrap: anywhere;
 }
-.ash-trace-list:focus-visible, .ash-trace-details:focus-visible { outline: 1px solid var(--ash-focus-border); outline-offset: -1px; }
+.ash-trace-list:focus-visible, .ash-trace-details:focus-visible { outline: var(--ash-stroke-thickness) solid var(--ash-focus-border); outline-offset: -1px; }

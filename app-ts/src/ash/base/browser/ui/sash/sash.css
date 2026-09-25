@@ -13,7 +13,7 @@
 }
 .ash-sash::after {
   background-color: transparent;
-  border-radius: 999px;
+  border-radius: var(--ash-corner-radius-circle);
   pointer-events: none;
 }
 @media (prefers-reduced-motion: no-preference) {

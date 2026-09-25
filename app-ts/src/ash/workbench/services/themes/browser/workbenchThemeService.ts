@@ -4,6 +4,8 @@ import { Emitter } from '../../../../base/common/event.js';
 import { setIconResolver } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Disposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
+import { ILanguageService } from '../../../../editor/common/languages/language.js';
+import { getIconClasses } from '../../../../editor/common/services/getIconClasses.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { FileKind, FileNotFoundError, FileRevisionConflictError, IFileService, type IFileContent } from '../../../../platform/files/common/files.js';
 import { type IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -38,6 +40,7 @@ export class WorkbenchThemeService extends Disposable implements IThemeService, 
 	constructor(
 		private readonly container: HTMLElement,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
+		@ILanguageService private readonly languageService: ILanguageService,
 	) {
 		super();
 		const ownerWindow = container.ownerDocument.defaultView;
@@ -67,6 +70,7 @@ export class WorkbenchThemeService extends Disposable implements IThemeService, 
 			if (event.affectsConfiguration(WorkbenchConfiguration.productIconTheme)) { this.updateProductIconTheme(); }
 		}));
 		this._register(WorkbenchFileIconThemesRegistry.onDidChange(() => this.updateFileIconTheme()));
+		this._register(this.languageService.onDidChange(() => this.resourceIconChange.fire()));
 		this._register(WorkbenchProductIconThemesRegistry.onDidChange(() => this.updateProductIconTheme()));
 		setIconResolver(this.container.ownerDocument, icon => getIconDefinition(icon, defaultProductIconTheme.icons));
 		this._register(toDisposable(() => setIconResolver(this.container.ownerDocument, icon => getIconDefinition(icon, defaultProductIconTheme.icons))));
@@ -124,8 +128,9 @@ export class WorkbenchThemeService extends Disposable implements IThemeService, 
 	}
 
 	public renderFileIcon(resource: URI, container: HTMLElement): void {
-		const name = decodeURIComponent(resource.path.slice(resource.path.lastIndexOf('/') + 1));
-		const icon = this.fileIconTheme?.resolveFileIcon(name, isDarkColorScheme(this.colorTheme.colorScheme));
+		const classes = getIconClasses(undefined, this.languageService, resource, FileKind.File);
+		const icon = this.fileIconTheme?.resolveFileIcon(classes, isDarkColorScheme(this.colorTheme.colorScheme));
+		container.classList.add(...classes);
 		container.classList.toggle('ash-file-icon', icon !== undefined);
 		container.textContent = icon?.character ?? '';
 		container.style.color = icon?.color ?? '';

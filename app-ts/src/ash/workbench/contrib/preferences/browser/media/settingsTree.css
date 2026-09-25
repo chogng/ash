@@ -2,7 +2,7 @@
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 30px;
+  gap: 32px;
 }
 
 .ash-settings-tree-group.is-navigation-target > .ash-settings-tree-group-title,

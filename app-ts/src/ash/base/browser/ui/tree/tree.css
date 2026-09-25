@@ -6,6 +6,11 @@
   outline: none;
 }
 
+.ash-tree:focus-visible:not(:has(.ash-tree-row.focused)) {
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  outline-offset: -1px;
+}
+
 .ash-tree-row.find-match .ash-tree-contents {
   text-decoration: underline;
   text-decoration-color: var(--ash-focus-border);
@@ -13,7 +18,7 @@
 }
 
 .ash-tree-row.drag-over {
-  outline: 1px solid var(--ash-focus-border);
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
   outline-offset: -1px;
 }
 
@@ -74,7 +79,7 @@
   width: var(--ash-tree-indent, 14px);
   box-sizing: border-box;
   flex: 0 0 var(--ash-tree-indent, 14px);
-  border-left: 1px solid transparent;
+  border-left: var(--ash-stroke-thickness) solid transparent;
 }
 
 .ash-tree-indent-guides-always .ash-tree-indent-guide,
@@ -96,7 +101,7 @@
 }
 
 .ash-tree:focus .ash-tree-row.focused {
-  outline: 1px solid var(--ash-focus-border);
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
   outline-offset: -1px;
 }
 

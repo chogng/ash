@@ -3,8 +3,8 @@
   max-width: none;
   padding: 0;
   overflow: hidden;
-  border: 1px solid var(--ash-dialog-border);
-  border-radius: 6px;
+  border: var(--ash-stroke-thickness) solid var(--ash-dialog-border);
+  border-radius: var(--ash-corner-radius-medium);
   color: var(--ash-foreground);
   background: var(--ash-dialog-background);
   box-shadow: 0 12px 36px var(--ash-dialog-shadow);
@@ -17,14 +17,14 @@
 
 .ash-dialog-title {
   margin: 0;
-  padding: 16px 18px 8px;
+  padding: 16px 20px 8px;
   color: var(--ash-foreground);
-  font-size: 15px;
-  font-weight: 600;
+  font-size: var(--ash-font-size-heading2);
+  font-weight: var(--ash-font-weight-semi-bold);
 }
 
 .ash-dialog-body {
-  padding: 0 18px 16px;
+  padding: 0 20px 16px;
 }
 
 .ash-dialog-content {
@@ -55,7 +55,7 @@
 }
 
 .ash-dialog-detail:focus-visible {
-  outline: 1px solid var(--ash-focus-border);
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
   outline-offset: -1px;
 }
 

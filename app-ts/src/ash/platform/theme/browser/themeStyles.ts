@@ -36,7 +36,8 @@ export function bindColorTheme(
 		for (const { id, value } of theme.colorEntries) {
 			rememberProperty(colorCssVariable(id));
 			if (value) target.style.setProperty(colorCssVariable(id), value.toString());
-			else target.style.removeProperty(colorCssVariable(id));
+			// A missing custom property would inherit a color from an outer theme root.
+			else target.style.setProperty(colorCssVariable(id), "initial");
 		}
 		for (const { id, value } of theme.sizeEntries) {
 			rememberProperty(asCssVariableName(id));

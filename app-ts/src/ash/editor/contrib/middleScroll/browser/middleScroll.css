@@ -4,7 +4,7 @@
 	width: 6px;
 	height: 6px;
 	background: var(--ash-editor-foreground);
-	border: 1px solid var(--ash-editor-background);
+	border: var(--ash-stroke-thickness) solid var(--ash-editor-background);
 	border-radius: 50%;
 	opacity: 0.65;
 	transform: translate(-50%, -50%);

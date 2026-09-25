@@ -4,6 +4,6 @@
   .ash-workbench-panel,
   .ash-workbench-auxiliarybar
 ) {
-  border: 1px solid var(--ash-border);
-  border-radius: 8px;
+  border: var(--ash-stroke-thickness) solid var(--ash-border);
+  border-radius: var(--ash-corner-radius-large);
 }

@@ -45,7 +45,7 @@
   justify-content: flex-end;
   gap: 2px;
   padding: 2px 4px;
-  border-bottom: 1px solid var(--ash-widget-border);
+  border-bottom: var(--ash-stroke-thickness) solid var(--ash-widget-border);
 }
 
 .ash-quick-diff-peek-action {
@@ -55,13 +55,13 @@
   font: inherit;
   background: transparent;
   border: 0;
-  border-radius: 2px;
+  border-radius: var(--ash-corner-radius-x-small);
 }
 
 .ash-quick-diff-peek-action:hover,
 .ash-quick-diff-peek-action:focus-visible {
   background: var(--ash-list-hover-background);
-  outline: 1px solid var(--ash-focus-border);
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
 }
 
 .ash-quick-diff-peek-diff {

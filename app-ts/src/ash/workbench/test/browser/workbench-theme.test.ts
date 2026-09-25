@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
+import { ILanguageService } from '../../../editor/common/languages/language.js';
+import { LanguageService } from '../../../editor/common/services/languageService.js';
 import { Disposable, DisposableTracker, installDisposableTracker, toDisposable } from '../../../base/common/lifecycle.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { ServiceContainer } from '../../../platform/instantiation/common/instantiation.js';
@@ -27,6 +29,7 @@ class ThemeWindow extends Disposable {
 			return this.systemTheme;
 		} });
 		this.services.registerInstance(IConfigurationService, this.configuration);
+		this.services.registerInstance(ILanguageService, this._register(new LanguageService()));
 		this.themes = this._register(this.services.createInstance(WorkbenchThemeService, this.root));
 		this.themes.initialize();
 	}
@@ -65,7 +68,6 @@ test('workbench colors follow theme changes and keep editor group borders visibl
 		workbench: '#1e1e1e', tab: '#eeeeee', titleBar: '#ffffff',
 		sideBar: '#f8f8f8', groupBorder: '#2b2b2b',
 	});
-	using registration = WorkbenchThemesRegistry.registerColorTheme(highContrastDarkColorTheme);
 	await configuration.updateValue(WorkbenchConfiguration.colorTheme, highContrastDarkColorTheme.id);
 	assert.equal(colors().groupBorder, '#ffffff');
 });
@@ -118,7 +120,9 @@ test('unrelated registrations do not notify colors or file icons and disposal re
 		let icons = 0;
 		using colorListener = themes.onDidColorThemeChange(() => colors++);
 		using iconListener = themes.onDidChangeResourceIcons(() => icons++);
-		using registration = WorkbenchThemesRegistry.registerColorTheme(highContrastDarkColorTheme);
+		using registration = WorkbenchThemesRegistry.registerColorTheme(createColorTheme({
+			id: 'unrelated-high-contrast', label: 'Unrelated High Contrast', colorScheme: ColorScheme.HighContrastDark,
+		}));
 		assert.deepEqual([colors, icons], [0, 0]);
 		await configuration.updateValue(WorkbenchConfiguration.colorTheme, highContrastDarkColorTheme.id);
 		assert.deepEqual([colors, icons, root.getAttribute('data-color-scheme')], [1, 1, ColorScheme.HighContrastDark]);

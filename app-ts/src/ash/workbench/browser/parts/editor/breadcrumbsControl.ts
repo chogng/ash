@@ -1,8 +1,9 @@
 import { h } from "../../../../base/browser/dom.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { BreadcrumbsModel } from "./breadcrumbsModel.js";
 import type { EditorInput } from "./editorInput.js";
 
-/** Resource-path projection for the active editor in one group title. */
+/** Renders the active editor's resource path in one group title. */
 export class EditorBreadcrumbsControl extends Disposable {
 	readonly domNode: HTMLElement;
 
@@ -21,11 +22,8 @@ export class EditorBreadcrumbsControl extends Disposable {
 			this.domNode.hidden = true;
 			return;
 		}
-		const path = safelyDecodePath(input.resource.path);
-		const segments = path.split("/").filter(Boolean);
-		if (input.resource.authority) segments.unshift(input.resource.authority);
-		if (segments.length === 0) segments.push(input.label?.trim() || input.resource.toString());
-		for (const [index, segment] of segments.entries()) {
+		const elements = new BreadcrumbsModel(input.resource, input.label).getElements();
+		for (const [index, element] of elements.entries()) {
 			if (index > 0) {
 				const separator = h(this.domNode.ownerDocument, "span");
 				separator.className = "ash-editor-breadcrumb-separator";
@@ -35,19 +33,11 @@ export class EditorBreadcrumbsControl extends Disposable {
 			}
 			const item = h(this.domNode.ownerDocument, "span");
 			item.className = "ash-editor-breadcrumb-item";
-			item.textContent = segment;
-			if (index === segments.length - 1) item.setAttribute("aria-current", "page");
+			item.textContent = element.label;
+			if (index === elements.length - 1) item.setAttribute("aria-current", "page");
 			this.domNode.append(item);
 		}
 		this.domNode.title = input.resource.toString();
 		this.domNode.hidden = false;
-	}
-}
-
-function safelyDecodePath(path: string): string {
-	try {
-		return decodeURIComponent(path);
-	} catch {
-		return path;
 	}
 }

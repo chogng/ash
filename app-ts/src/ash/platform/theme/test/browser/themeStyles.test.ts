@@ -3,6 +3,7 @@ import { test } from "mocha";
 import { bindColorTheme } from "../../browser/themeStyles.js";
 import {
 	darkColorTheme,
+	highContrastDarkColorTheme,
 	lightColorTheme,
 } from "../../common/colorTheme.js";
 import { colorCssVariable } from "../../common/colorUtils.js";
@@ -46,6 +47,9 @@ test("color theme binding applies changes and restores prior root styles", () =>
 	assert.equal(target.style.getPropertyValue(asCssVariableName("fontSize.body1")), "13px");
 	assert.equal(target.style.getPropertyValue(asCssVariableName("fontSize.label2")), "11px");
 	assert.equal(target.style.getPropertyValue(asCssVariableName("fontWeight.regular")), "400");
+	assert.equal(target.style.getPropertyValue(asCssVariableName("spacing.size80")), "8px");
+	assert.equal(target.style.getPropertyValue(asCssVariableName("cornerRadius.circle")), "9999px");
+	assert.equal(target.style.getPropertyValue(asCssVariableName("lxiconFontSize.compact")), "12px");
 	assert.equal(target.getAttribute("data-color-theme"), "ash-dark");
 
 	service.setColorTheme(lightColorTheme);
@@ -70,6 +74,9 @@ test("color theme binding applies changes and restores prior root styles", () =>
 	assert.equal(target.style.getPropertyValue(asCssVariableName("tabList.itemContentInset")), "");
 	assert.equal(target.style.getPropertyValue(asCssVariableName("fontSize.body1")), "");
 	assert.equal(target.style.getPropertyValue(asCssVariableName("fontWeight.regular")), "");
+	assert.equal(target.style.getPropertyValue(asCssVariableName("spacing.size80")), "");
+	assert.equal(target.style.getPropertyValue(asCssVariableName("cornerRadius.circle")), "");
+	assert.equal(target.style.getPropertyValue(asCssVariableName("lxiconFontSize.compact")), "");
 	assert.equal(target.style.getPropertyValue("color-scheme"), "only light");
 	assert.equal(target.getAttribute("data-color-theme"), "host-theme");
 	assert.equal(target.getAttribute("data-color-scheme"), null);
@@ -85,7 +92,7 @@ test("theme binding applies later color contributions and restores their origina
 	target.style.setProperty(property, 'hotpink', 'important');
 	const before = darkColorTheme.colorEntries;
 	using binding = bindColorTheme(service, target as unknown as HTMLElement);
-	registerColor('test.lateBinding', { dark: '#123456', light: '#abcdef' }, { description: 'Late binding test.', owner: 'test' });
+	registerColor('test.lateBinding', { dark: '#123456', light: '#abcdef', highContrastDark: '#ffffff', highContrastLight: '#000000' }, { description: 'Late binding test.', owner: 'test' });
 	assert.deepEqual({
 		oldEntry: before.find(entry => entry.id === 'test.lateBinding'),
 		resolved: darkColorTheme.getColorCss('test.lateBinding'),
@@ -95,6 +102,17 @@ test("theme binding applies later color contributions and restores their origina
 	assert.equal(target.style.getPropertyValue(property), '#abcdef');
 	binding.dispose();
 	assert.deepEqual([target.style.getPropertyValue(property), target.style.getPropertyPriority(property)], ['hotpink', 'important']);
+});
+
+test("null theme colors mask parent values and restore prior inline styles", () => {
+	using service = new TestThemeService(highContrastDarkColorTheme);
+	const target = new FakeThemeTarget();
+	const shadow = colorCssVariable('widget.shadow');
+	target.style.setProperty(shadow, '#123456', 'important');
+	const binding = bindColorTheme(service, target as unknown as HTMLElement);
+	assert.deepEqual([target.style.getPropertyValue(shadow), target.style.getPropertyPriority(shadow)], ['initial', '']);
+	binding.dispose();
+	assert.deepEqual([target.style.getPropertyValue(shadow), target.style.getPropertyPriority(shadow)], ['#123456', 'important']);
 });
 
 interface IStyleProperty {

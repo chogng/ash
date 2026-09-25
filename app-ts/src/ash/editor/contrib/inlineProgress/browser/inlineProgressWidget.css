@@ -15,7 +15,7 @@
 .inline-progress-widget .icon {
 	width: 0.75em;
 	height: 0.75em;
-	border: 1px solid currentcolor;
+	border: var(--ash-stroke-thickness) solid currentcolor;
 	border-right-color: transparent;
 	border-radius: 50%;
 	animation: inline-progress-spin 800ms linear infinite;

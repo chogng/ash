@@ -19,8 +19,8 @@
   flex: 0 0 auto;
   margin: 0 10px 8px;
   padding: 8px;
-  border: 1px solid var(--ash-focus-border);
-  border-radius: 5px;
+  border: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  border-radius: var(--ash-corner-radius-medium);
   color: var(--ash-foreground);
   background: var(--ash-input-background);
   font-size: 12px;
@@ -50,8 +50,8 @@
 
 .ash-chat-interaction-form input,
 .ash-chat-interaction-form select {
-  padding: 5px;
-  border: 1px solid var(--ash-border);
+  padding: 6px;
+  border: var(--ash-stroke-thickness) solid var(--ash-border);
   color: inherit;
   background: var(--stanza-editor-background);
 }
@@ -64,8 +64,8 @@
   flex-direction: column;
   min-height: 140px;
   padding: 10px;
-  border: 1px solid var(--ash-input-border);
-  border-radius: 8px;
+  border: var(--ash-stroke-thickness) solid var(--ash-input-border);
+  border-radius: var(--ash-corner-radius-large);
   background: var(--ash-input-background);
 }
 
@@ -96,7 +96,7 @@
   padding-left: 8px;
   color: var(--ash-foreground);
   background: var(--ash-button-secondary-background);
-  border-radius: 4px;
+  border-radius: var(--ash-corner-radius-small);
 }
 
 .ash-chat-input-attachment-label {
@@ -115,7 +115,7 @@
   color: inherit;
   background: transparent;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--ash-corner-radius-small);
 }
 
 .ash-chat-input-attachment-remove:hover {
@@ -158,8 +158,8 @@
   width: auto;
   min-width: 0;
   gap: 0;
-  padding: 0 14px;
-  border-radius: 999px;
+  padding: 0 16px;
+  border-radius: var(--ash-corner-radius-circle);
   background: color-mix(in srgb, var(--ash-button-foreground) 10%, transparent);
   font-size: 12px;
 }
@@ -182,19 +182,19 @@
   min-width: 0;
   max-width: 100%;
   padding: 0 4px;
-  border-radius: 999px;
+  border-radius: var(--ash-corner-radius-circle);
   font-size: 13px;
 }
 
 .ash-chat-input-model-access-badge {
   flex: 0 0 auto;
   margin-left: 6px;
-  padding: 1px 5px;
-  border: 1px solid var(--ash-widget-border);
-  border-radius: 999px;
+  padding: 2px 6px;
+  border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+  border-radius: var(--ash-corner-radius-circle);
   color: var(--ash-description-foreground);
-  font-size: 9px;
-  font-weight: 600;
+  font-size: var(--ash-font-size-label3);
+  font-weight: var(--ash-font-weight-semi-bold);
   line-height: 14px;
 }
 
@@ -210,7 +210,7 @@
 .ash-chat-input-attachment-action {
   width: var(--ash-toolbar-action-size);
   min-width: var(--ash-toolbar-action-size);
-  padding: 3px;
+  padding: 4px;
   color: var(--ash-description-foreground);
   border-radius: 50%;
 }
@@ -228,7 +228,7 @@
 .ash-chat-input-interrupt-action {
   width: var(--ash-toolbar-action-size);
   min-width: var(--ash-toolbar-action-size);
-  padding: 3px;
+  padding: 4px;
   border-radius: 50%;
   color: var(--ash-button-primary-foreground);
   background: var(--ash-button-primary-background);

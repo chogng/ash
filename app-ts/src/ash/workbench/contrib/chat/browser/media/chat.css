@@ -31,7 +31,7 @@
   min-width: 280px;
   min-height: 0;
   flex-direction: column;
-  border-left: 1px solid var(--ash-border);
+  border-left: var(--ash-stroke-thickness) solid var(--ash-border);
   background: var(--ash-side-bar-background);
   color: var(--ash-foreground);
 }
@@ -46,7 +46,7 @@
   justify-content: space-between;
   min-height: 36px;
   padding: 0 10px;
-  border-bottom: 1px solid var(--ash-border);
+  border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
 }
 
 .ash-session-inspector-header h2,
@@ -54,7 +54,7 @@
 .ash-session-inspector-change h4 {
   margin: 0;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: var(--ash-font-weight-semi-bold);
 }
 
 .ash-session-inspector-close,
@@ -62,7 +62,7 @@
 .ash-session-inspector-change-actions button,
 .ash-session-inspector-discard {
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--ash-corner-radius-small);
   background: transparent;
   color: inherit;
   font: inherit;
@@ -72,7 +72,7 @@
 .ash-session-inspector-close,
 .ash-session-inspector-change-actions button,
 .ash-session-inspector-discard {
-  padding: 4px 7px;
+  padding: 4px 8px;
 }
 
 .ash-session-inspector-close:hover,
@@ -84,8 +84,8 @@
 
 .ash-session-inspector button:focus-visible,
 .ash-session-inspector textarea:focus-visible {
-  outline: 1px solid var(--ash-focus-border);
-  outline-offset: 1px;
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  outline-offset: var(--ash-stroke-thickness);
 }
 
 .ash-session-inspector button:disabled {
@@ -101,11 +101,11 @@
 
 .ash-session-inspector-section {
   padding: 8px 0 12px;
-  border-bottom: 1px solid var(--ash-border);
+  border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
 }
 
 .ash-session-inspector-section-body {
-  margin-top: 7px;
+  margin-top: 8px;
 }
 
 .ash-session-inspector-empty,
@@ -118,7 +118,7 @@
 
 .ash-session-inspector-plan,
 .ash-session-inspector-files {
-  margin: 5px 0;
+  margin: 6px 0;
   padding-inline-start: 20px;
   font-size: 11px;
 }
@@ -131,12 +131,12 @@
 .ash-session-inspector-threads {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
 }
 
 .ash-session-inspector-thread {
   width: 100%;
-  padding-block: 5px;
+  padding-block: 6px;
   text-align: left;
 }
 
@@ -148,12 +148,12 @@
 .ash-session-inspector-change {
   margin-top: 8px;
   padding: 8px;
-  border: 1px solid var(--ash-border);
-  border-radius: 5px;
+  border: var(--ash-stroke-thickness) solid var(--ash-border);
+  border-radius: var(--ash-corner-radius-medium);
 }
 
 .ash-session-inspector-status {
-  margin: 5px 0;
+  margin: 6px 0;
   color: var(--ash-description-foreground);
   font-size: 11px;
 }
@@ -166,8 +166,8 @@
   box-sizing: border-box;
   width: 100%;
   resize: vertical;
-  border: 1px solid var(--ash-input-border, var(--ash-border));
-  border-radius: 4px;
+  border: var(--ash-stroke-thickness) solid var(--ash-input-border, var(--ash-border));
+  border-radius: var(--ash-corner-radius-small);
   padding: 6px;
   background: var(--ash-input-background);
   color: var(--ash-input-foreground);
@@ -178,7 +178,7 @@
   display: flex;
   justify-content: flex-end;
   gap: 4px;
-  margin-top: 5px;
+  margin-top: 6px;
 }
 
 .ash-session-inspector-discard {
@@ -197,6 +197,7 @@
   width: min(92%, 360px);
   min-width: 0;
   box-shadow: -4px 0 12px var(--ash-widget-shadow);
+  border-inline-start: var(--ash-stroke-thickness) solid var(--ash-contrast-border);
 }
 
 .ash-chat-pane-host > .ash-chat {
@@ -225,8 +226,8 @@
   flex: 0 0 auto;
   margin: 8px 12px 0;
   padding: 6px 8px;
-  border: 1px solid var(--ash-border);
-  border-radius: 4px;
+  border: var(--ash-stroke-thickness) solid var(--ash-border);
+  border-radius: var(--ash-corner-radius-small);
   color: var(--ash-description-foreground);
   font-size: 11px;
   overflow: hidden;
@@ -242,7 +243,7 @@
   box-sizing: border-box;
   min-height: 0;
   flex: 0 0 auto;
-  padding: 22px 24px 24px;
+  padding: 24px 24px 24px;
 }
 
 .ash-chat.has-conversation > .ash-chat-input-part {
@@ -271,7 +272,7 @@
   text-align: center;
 }
 .ash-chat-item {
-  margin: 0 0 14px;
+  margin: 0 0 16px;
   color: var(--ash-foreground);
   font-size: 13px;
   line-height: 1.5;
@@ -280,11 +281,11 @@
   margin-bottom: 4px;
   color: var(--ash-description-foreground);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: var(--ash-font-weight-semi-bold);
   text-transform: uppercase;
 }
 .ash-chat-item-userMessage pre {
-  border-radius: 6px;
+  border-radius: var(--ash-corner-radius-medium);
   background: var(--ash-input-background);
 }
 .ash-chat-item pre {
@@ -313,8 +314,8 @@
 .ash-chat-turn-error-action {
   margin: 0 8px 4px;
   padding: 4px 8px;
-  border: 1px solid var(--ash-border);
-  border-radius: 4px;
+  border: var(--ash-stroke-thickness) solid var(--ash-border);
+  border-radius: var(--ash-corner-radius-small);
   color: var(--ash-button-foreground);
   background: var(--ash-button-secondary-background);
   font: inherit;
@@ -324,6 +325,6 @@
   background: var(--ash-button-hover-background);
 }
 .ash-chat-turn-error-action:focus-visible {
-  outline: 1px solid var(--ash-focus-border);
-  outline-offset: 1px;
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  outline-offset: var(--ash-stroke-thickness);
 }

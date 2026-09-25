@@ -12,7 +12,7 @@ export interface IWorkbenchFileIconTheme {
 	readonly id: string;
 	readonly label: string;
 	readonly styleSheetContent: string;
-	resolveFileIcon(name: string, dark: boolean): FileIconDefinition | undefined;
+	resolveFileIcon(classes: readonly string[], dark: boolean): FileIconDefinition | undefined;
 }
 
 /** SVG replacements for registered product icon IDs. Unspecified IDs retain their built-in artwork. */

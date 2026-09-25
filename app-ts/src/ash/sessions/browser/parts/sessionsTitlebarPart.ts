@@ -1,3 +1,4 @@
+import "../../common/sessionsColors.js";
 import "./media/sessionsTitlebarPart.css";
 import "../common/sessionsControls.css";
 import { addDisposableListener, h } from "../../../base/browser/dom.js";

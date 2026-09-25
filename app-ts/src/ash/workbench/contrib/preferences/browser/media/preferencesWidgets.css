@@ -5,7 +5,7 @@
   flex: 0 0 44px;
   align-items: center;
   padding: 6px 12px;
-  border-bottom: 1px solid var(--ash-widget-border);
+  border-bottom: var(--ash-stroke-thickness) solid var(--ash-widget-border);
   background: var(--ash-editor-background);
 }
 
@@ -38,8 +38,8 @@
 .ash-settings-search-input input {
   height: 30px;
   padding: 4px 10px;
-  border: 1px solid var(--ash-input-border);
-  border-radius: 4px;
+  border: var(--ash-stroke-thickness) solid var(--ash-input-border);
+  border-radius: var(--ash-corner-radius-small);
   outline: none;
   color: var(--ash-input-foreground);
   background: var(--ash-input-background);
@@ -57,25 +57,25 @@
   display: flex;
   max-width: 760px;
   flex-direction: column;
-  gap: 30px;
+  gap: 32px;
 }
 
 .ash-configuration-settings-group h4 {
   margin: 0;
   color: var(--ash-foreground);
-  font-size: 15px;
-  font-weight: 600;
+  font-size: var(--ash-font-size-heading3);
+  font-weight: var(--ash-font-weight-semi-bold);
 }
 
 .ash-configuration-settings-group-description {
-  margin: 5px 0 12px;
+  margin: 6px 0 12px;
   color: var(--ash-description-foreground);
   line-height: 1.5;
 }
 
 .ash-configuration-settings-list {
   overflow: visible;
-  border-radius: 8px;
+  border-radius: var(--ash-corner-radius-large);
   background: var(--ash-settings-item-background);
 }
 
@@ -85,7 +85,7 @@
   flex-direction: column;
   border-radius: 0;
   background: transparent;
-  gap: 30px;
+  gap: 32px;
 }
 
 .ash-settings-tree-group:not(.is-settings-root) > .ash-configuration-settings-list > * {
@@ -109,9 +109,9 @@
   min-height: 68px;
   box-sizing: border-box;
   align-items: center;
-  padding: 12px 14px;
+  padding: 12px 16px;
   color: var(--ash-foreground);
-  gap: 18px;
+  gap: 20px;
 }
 
 .ash-configuration-setting:hover {
@@ -130,11 +130,11 @@
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 
 .ash-configuration-setting-title {
-  font-weight: 600;
+  font-weight: var(--ash-font-weight-semi-bold);
 }
 
 .ash-configuration-setting-description {
@@ -149,7 +149,7 @@
   align-items: center;
   color: var(--ash-description-foreground);
   font-size: 11px;
-  gap: 5px;
+  gap: 6px;
 }
 
 .ash-settings-indicators.is-modified::before {
@@ -239,8 +239,8 @@
 .ash-general-setting-control:not(.ash-select-box),
 .ash-editor-setting-text {
 	padding: 4px 8px;
-	border: 1px solid var(--ash-input-border);
-	border-radius: 4px;
+	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
+	border-radius: var(--ash-corner-radius-small);
 	outline: none;
 	color: var(--ash-input-foreground);
 	background: var(--ash-input-background);
@@ -248,8 +248,8 @@
 }
 
 .ash-general-setting-control:not(.ash-select-box):focus-visible {
-	outline: 1px solid var(--ash-focus-border);
-	outline-offset: 1px;
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: var(--ash-stroke-thickness);
 }
 
 .ash-editor-setting {

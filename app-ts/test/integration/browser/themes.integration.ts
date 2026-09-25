@@ -3,11 +3,29 @@ import themeUrl from '../../../../extensions/theme-seti/icons/vs-seti-icon-theme
 import fontUrl from '../../../../extensions/theme-seti/icons/seti.woff?url';
 import productThemeUrl from './fixtures/product-icons/theme.json?url';
 import productIconUrl from './fixtures/product-icons/add.svg?url';
+import '../../../src/ash/workbench/browser/media/style.css';
+import '../../../src/ash/base/browser/ui/contextview/contextview.css';
+import '../../../src/ash/base/browser/ui/button/button.css';
+import '../../../src/ash/base/browser/ui/menu/menu.css';
+import '../../../src/ash/base/browser/ui/selectbox/selectbox.css';
+import '../../../src/ash/base/browser/ui/scrollbar/scrollbar.css';
+import '../../../src/ash/base/browser/ui/tree/tree.css';
+import '../../../src/ash/base/browser/ui/list/list.css';
+import '../../../src/ash/editor/browser/widget/richTextEditor/richTextEditorWidget.css';
+import '../../../src/ash/editor/contrib/codeAction/browser/media/codeAction.css';
+import '../../../src/ash/sessions/browser/parts/media/sessionsTitlebarPart.css';
+import '../../../src/ash/workbench/browser/parts/editor/media/modalEditorPart.css';
+import '../../../src/ash/workbench/contrib/pdf/browser/media/pdfEditor.css';
+import '../../../src/ash/workbench/contrib/scm/browser/media/scm.css';
+import '../../../src/ash/sessions/common/sessionsColors.js';
+import '../../../src/ash/workbench/contrib/pdf/common/pdfColors.js';
 import { appendIcon } from '../../../src/ash/base/browser/ui/lxicons/lxicon.js';
 import { IconSelectBox } from '../../../src/ash/base/browser/ui/icons/iconSelectBox.js';
 import { Lxicon } from '../../../src/ash/base/common/lxicons.js';
 import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
+import { ILanguageService } from '../../../src/ash/editor/common/languages/language.js';
+import { LanguageService } from '../../../src/ash/editor/common/services/languageService.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { ServiceContainer } from '../../../src/ash/platform/instantiation/common/instantiation.js';
 import { WorkbenchConfiguration } from '../../../src/ash/workbench/common/configuration.js';
@@ -23,12 +41,18 @@ import { LanguageRequestCoordinator } from '../../../src/ash/editor/common/model
 import type { LanguageToken } from '../../../src/ash/editor/common/tokens/languageTokens.js';
 import { TextModel } from '../../../src/ash/editor/common/model/textModel.js';
 import { registerColor } from '../../../src/ash/platform/theme/common/colorUtils.js';
+import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { highContrastDarkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
+import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { registerIcon } from '../../../src/ash/platform/theme/common/iconRegistry.js';
 
 declare global {
 	interface Window {
 		registerLateThemeColor(): void;
 		disposeThemeRoot(): void;
+		selectColorTheme(id: string): Promise<void>;
+		mountNestedHighContrastWidget(): void;
+		disposeNestedHighContrastWidget(): void;
 		disposeIconSelectBox(): void;
 		previewInTextMateWorker(): Promise<{ preview: string[]; unchanged: boolean; text: string }>;
 		tokenizeInTextMateWorker(): Promise<readonly { type: string; modifiers: readonly string[]; presentation?: { foreground?: string; fontStyle?: readonly string[] } }[]>;
@@ -82,6 +106,9 @@ const configuration = resources.add(new WorkbenchConfigurationService());
 await configuration.updateValue(WorkbenchConfiguration.colorTheme, 'ash-dark');
 const services = resources.add(new ServiceContainer());
 services.registerInstance(IConfigurationService, configuration);
+const languages = resources.add(new LanguageService());
+resources.add(languages.registerLanguage({ id: 'typescript', extensions: ['.ts'] }));
+services.registerInstance(ILanguageService, languages);
 const themes = resources.add(services.createInstance(WorkbenchThemeService, document.querySelector<HTMLElement>('#root')!));
 themes.initialize();
 appendIcon(Lxicon.add, document.querySelector<HTMLElement>('#product-icon')!);
@@ -93,9 +120,28 @@ iconSelectBox.layout({ width: 240, height: 180 });
 resources.add(iconSelectBox.onDidSelect(icon => { iconSelectHost.dataset.selectedIcon = icon.id; }));
 window.disposeIconSelectBox = () => iconSelectBox.dispose();
 window.registerLateThemeColor = () => {
-	registerColor('test.browserLate', { dark: '#123456', light: '#abcdef' }, { description: 'Late browser test.', owner: 'test' });
+	registerColor('test.browserLate', { dark: '#123456', light: '#abcdef', highContrastDark: '#ffffff', highContrastLight: '#000000' }, { description: 'Late browser test.', owner: 'test' });
 };
 window.disposeThemeRoot = () => themes.dispose();
+window.selectColorTheme = id => configuration.updateValue(WorkbenchConfiguration.colorTheme, id);
+let nestedHighContrastWidget: { host: HTMLElement; service: TestThemeService; binding: { dispose(): void } } | undefined;
+window.mountNestedHighContrastWidget = () => {
+	const host = document.createElement('div');
+	host.id = 'nested-high-contrast-root';
+	const widget = document.createElement('div');
+	widget.className = 'ash-context-view-default';
+	host.append(widget);
+	document.querySelector<HTMLElement>('#root')!.append(host);
+	const service = new TestThemeService(highContrastDarkColorTheme);
+	const binding = bindColorTheme(service, host);
+	nestedHighContrastWidget = { host, service, binding };
+};
+window.disposeNestedHighContrastWidget = () => {
+	nestedHighContrastWidget?.binding.dispose();
+	nestedHighContrastWidget?.service.dispose();
+	nestedHighContrastWidget?.host.remove();
+	nestedHighContrastWidget = undefined;
+};
 const render = (): void => themes.renderFileIcon(URI.file('/workspace/main.ts'), document.querySelector<HTMLElement>('#icon')!);
 resources.add(themes.onDidChangeResourceIcons(render));
 const manifestJson = JSON.stringify({ ...manifest, contributes: { ...manifest.contributes, productIconThemes: [{ id: 'test-svg-product', label: 'Test SVG product icons', path: './product-icons/theme.json' }] } });

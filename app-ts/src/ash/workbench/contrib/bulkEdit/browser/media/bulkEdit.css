@@ -13,8 +13,8 @@
 }
 
 .ash-bulk-edit-toolbar button {
-  border: 1px solid var(--ash-border);
-  border-radius: 3px;
+  border: var(--ash-stroke-thickness) solid var(--ash-border);
+  border-radius: var(--ash-corner-radius-small);
   padding: 4px 8px;
   color: inherit;
   background: var(--ash-input-background);
@@ -27,8 +27,8 @@
 }
 
 .ash-bulk-edit-toolbar button:focus-visible {
-  outline: 1px solid var(--ash-focus-border);
-  outline-offset: 1px;
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  outline-offset: var(--ash-stroke-thickness);
 }
 
 .ash-bulk-edit-toolbar button:disabled {
@@ -53,9 +53,9 @@
 
 .ash-bulk-edit-entry {
   margin-bottom: 6px;
-  border: 1px solid var(--ash-border);
-  border-radius: 4px;
-  padding: 7px;
+  border: var(--ash-stroke-thickness) solid var(--ash-border);
+  border-radius: var(--ash-corner-radius-small);
+  padding: 8px;
   background: var(--ash-editor-background);
 }
 
@@ -66,7 +66,7 @@
 .ash-bulk-edit-entry-header {
   display: grid;
   grid-template-columns: auto auto minmax(0, 1fr);
-  gap: 7px;
+  gap: 8px;
   align-items: center;
 }
 
@@ -83,7 +83,7 @@
 }
 
 .ash-bulk-edit-detail {
-  margin: 4px 0 0 23px;
+  margin: 4px 0 0 24px;
   color: var(--ash-description-foreground);
   font-size: 12px;
 }
@@ -93,7 +93,7 @@
 }
 
 .ash-bulk-edit-text-change {
-  margin: 6px 0 0 23px;
+  margin: 6px 0 0 24px;
   color: var(--ash-description-foreground);
   font-size: 12px;
 }
@@ -102,7 +102,7 @@
   max-height: 180px;
   margin: 6px 0 0;
   overflow: auto;
-  border: 1px solid var(--ash-border);
+  border: var(--ash-stroke-thickness) solid var(--ash-border);
   padding: 6px;
   color: var(--ash-editor-foreground);
   background: var(--ash-editor-background);

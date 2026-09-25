@@ -13,6 +13,7 @@ import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
 import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
+import { LanguageService } from '../../../../common/services/languageService.js';
 import { SuggestController } from "../../browser/suggestController.js";
 
 const { EditorTextDirection, View } = await import("../../../../browser/view.js");
@@ -37,9 +38,10 @@ test("Completion widget projects named options, focus, ARIA, and content coordin
 	const viewport = editor.view;
 	editor.setPosition(new Position((0) + 1, (3) + 1));
 	using session = new SuggestModel(service.results, editor);
+	using languages = new LanguageService();
 	viewport.layout({ width: 300, height: 40 });
 	const input = viewport.controller;
-	using suggest = new SuggestController(editor, input, service, session);
+	using suggest = new SuggestController(editor, input, service, session, {}, languages);
 	viewport.focus();
 	accept(service.results, model, 1, [
 		completion("constant", "const", LanguageCompletionItemKind.Keyword, "declaration"),
@@ -71,6 +73,25 @@ test("Completion widget projects named options, focus, ARIA, and content coordin
 		text: "Variableconsoleglobal",
 	}]);
 	dom.window.close();
+});
+
+test('File and folder completions use resource icon classes in the Editor widget', () => {
+	using fixture = createFixture('con');
+	accept(fixture.store, fixture.model, 1, [
+		completion('file', 'README.ts', LanguageCompletionItemKind.File),
+		completion('folder', 'src', LanguageCompletionItemKind.Folder),
+	]);
+	const options = [...fixture.suggest.widget.element.querySelectorAll<HTMLElement>('.stanza-editor-completion-option')];
+	const fileKind = options[0]?.querySelector('.stanza-editor-completion-kind');
+	const folderKind = options[1]?.querySelector('.stanza-editor-completion-kind');
+
+	assert.equal(fileKind?.classList.contains('readme.ts-name-file-icon'), true);
+	assert.equal(fileKind?.classList.contains('ts-ext-file-icon'), true);
+	assert.equal(fileKind?.classList.contains('typescript-lang-file-icon'), true);
+	assert.equal(folderKind?.classList.contains('folder-icon'), true);
+	assert.equal(folderKind?.classList.contains('src-name-folder-icon'), true);
+	assert.equal(options[0]?.getAttribute('role'), 'option');
+	assert.equal(options[1]?.getAttribute('role'), 'option');
 });
 
 test("Completion keyboard navigation accepts one item before ordinary input routing", () => {
@@ -224,9 +245,10 @@ test("Completion widget validates ownership and clears its active descendant on 
 	const viewport = editor.view;
 	editor.setPosition(new Position((0) + 1, (3) + 1));
 	using session = new SuggestModel(service.results, editor);
+	using languages = new LanguageService();
 	const input = viewport.controller;
-	assert.throws(() => new SuggestController(editor, input, service, otherSession), /must share one text model/);
-	using suggest = new SuggestController(editor, input, service, session);
+	assert.throws(() => new SuggestController(editor, input, service, otherSession, {}, languages), /must share one text model/);
+	using suggest = new SuggestController(editor, input, service, session, {}, languages);
 	assert.equal(input.element.getAttribute("aria-autocomplete"), "both");
 	suggest.dispose();
 	assert.equal(input.element.getAttribute("aria-autocomplete"), "both");
@@ -318,9 +340,11 @@ function createFixture(text: string, sessionOptions: LanguageCompletionSessionOp
 	const viewport = editor.view;
 	editor.setPosition(new Position((0) + 1, (text.length) + 1));
 	const session = new SuggestModel(service.results, editor, sessionOptions);
+	const languages = new LanguageService();
+	const languageRegistration = languages.registerLanguage({ id: 'typescript', extensions: ['.ts'] });
 	viewport.layout({ width: 300, height: 40 });
 	const input = viewport.controller;
-	const suggest = new SuggestController(editor, input, service, session);
+	const suggest = new SuggestController(editor, input, service, session, {}, languages);
 	viewport.focus();
 	return {
 		dom,
@@ -335,6 +359,8 @@ function createFixture(text: string, sessionOptions: LanguageCompletionSessionOp
 			suggest.dispose();
 			editor.dispose();
 			session.dispose();
+			languageRegistration.dispose();
+			languages.dispose();
 			service.dispose();
 			model.dispose();
 			registry.dispose();

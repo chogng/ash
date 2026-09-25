@@ -41,13 +41,7 @@ import "../contrib/quickaccess/browser/workspaceSymbolsQuickAccess.js";
 import { registerRemoteViews } from "../contrib/remote/browser/remote.contribution.js";
 import "../contrib/sash/browser/sash.contribution.js";
 import "./parts/dialogs/dialog.contribution.js";
-import "./parts/editor/editorActions.js";
-import { EditorStatusContribution } from "./parts/editor/editorStatus.js";
-import { IEditorPart } from "./parts/editor/editorPart.js";
-import { IStatusbarService } from "../services/statusbar/browser/statusbar.js";
-import { EditorAutoSaveContribution } from "./parts/editor/editorAutoSave.js";
-import { IWorkingCopyService } from "../services/workingCopy/common/workingCopyService.js";
-import { IConfigurationService } from "../../platform/configuration/common/configuration.js";
+import "./parts/editor/editor.contribution.js";
 import "./parts/titlebar/menubar.contribution.js";
 import "./parts/titlebar/titlebarActions.js";
 
@@ -75,23 +69,4 @@ registerWorkbenchContribution(
 	(accessor) => new KeybindingsResourceContribution({
 		service: accessor.get(IKeybindingsResourceService),
 	}),
-);
-
-registerWorkbenchContribution(
-	"workbench.contrib.editorStatus",
-	WorkbenchPhase.AfterRestored,
-	(accessor) => new EditorStatusContribution(
-		accessor.get(IEditorPart),
-		accessor.get(IStatusbarService),
-	),
-);
-
-registerWorkbenchContribution(
-	"workbench.contrib.editorAutoSave",
-	WorkbenchPhase.AfterRestored,
-	(accessor) => new EditorAutoSaveContribution(
-		accessor.get(IEditorPart),
-		accessor.get(IWorkingCopyService),
-		accessor.get(IConfigurationService),
-	),
 );

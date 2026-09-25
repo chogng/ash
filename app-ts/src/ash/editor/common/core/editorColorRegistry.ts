@@ -4,7 +4,9 @@ import { editorBackground, editorForeground } from '../../../platform/theme/comm
 import { descriptionForeground, mutedForeground, selectionBackground } from '../../../platform/theme/common/colors/baseColors.js';
 
 const owner = 'editor.presentation';
-const alias = (id: string, value: string, description: string): string => registerColor(id, { dark: value, light: value }, { description, owner });
+const alias = (id: string, value: string, description: string): string => registerColor(id, {
+	dark: value, light: value, highContrastDark: value, highContrastLight: value,
+}, { description, owner });
 
 function editorColor(id: string, value: string, description: string): string {
 	return registerColor(id, { dark: value, light: value, highContrastDark: value, highContrastLight: value }, { description, owner });
@@ -32,7 +34,7 @@ export const editorMultiCursorSecondaryForeground = alias('editorMultiCursor.sec
 export const editorMultiCursorSecondaryBackground = alias('editorMultiCursor.secondary.background', editorCursorBackground, 'Foreground for a character covered by a secondary cursor when multiple cursors are active.');
 export const editorOverviewRulerBorder = registerColor(
 	'editorOverviewRuler.border',
-	{ dark: '#7f7f7f4d', light: '#7f7f7f4d', highContrastDark: '#7f7f7f4d', highContrastLight: '#666666' },
+	{ dark: '#7f7f7f4d', light: '#7f7f7f4d', highContrastDark: 'contrastBorder', highContrastLight: 'contrastBorder' },
 	{ description: 'Color of the editor overview ruler border.', owner },
 );
 export const editorOverviewRulerBackground = registerColor(
@@ -40,14 +42,14 @@ export const editorOverviewRulerBackground = registerColor(
 	{
 		dark: transparent(editorBackground, 0),
 		light: transparent(editorBackground, 0),
-		highContrastDark: transparent(editorBackground, 0),
-		highContrastLight: transparent(editorBackground, 0),
+		highContrastDark: null,
+		highContrastLight: null,
 	},
 	{ description: 'Background color of the editor overview ruler.', owner, needsTransparency: true },
 );
 export const editorLineHighlight = registerColor(
 	'editor.lineHighlightBackground',
-	{ dark: '#00000000', light: '#00000000', highContrastDark: '#00000000', highContrastLight: '#00000000' },
+	{ dark: '#00000000', light: '#00000000', highContrastDark: null, highContrastLight: null },
 	{ description: 'Background for the line at the primary cursor position.', owner },
 );
 export const editorInactiveLineHighlight = registerColor(
@@ -132,10 +134,10 @@ export const editorBracketPairGuideActiveBackground5 = alias('editorBracketPairG
 export const editorBracketPairGuideActiveBackground6 = alias('editorBracketPairGuide.activeBackground6', editorBracketHighlightingForeground6, 'Color of the sixth active bracket pair guide.');
 
 const collaborationOwner = 'collaboration.presentation';
-const collaborationSelection = (id: string, value: string, description: string): string =>
-	registerColor(id, { dark: value, light: value }, { description, owner: collaborationOwner });
+const collaborationSelection = (id: string, value: string, highContrastDark: string, highContrastLight: string, description: string): string =>
+	registerColor(id, { dark: value, light: value, highContrastDark, highContrastLight }, { description, owner: collaborationOwner });
 
-export const collaborationSelection0Background = collaborationSelection('collaboration.selection0Background', '#3584e4', 'Background tint for the first concurrent collaborator selection.');
-export const collaborationSelection1Background = collaborationSelection('collaboration.selection1Background', '#9141ac', 'Background tint for the second concurrent collaborator selection.');
-export const collaborationSelection2Background = collaborationSelection('collaboration.selection2Background', '#26a269', 'Background tint for the third concurrent collaborator selection.');
-export const collaborationSelection3Background = collaborationSelection('collaboration.selection3Background', '#c64600', 'Background tint for the fourth concurrent collaborator selection.');
+export const collaborationSelection0Background = collaborationSelection('collaboration.selection0Background', '#3584e4', '#80bfff', '#0044aa', 'Background tint for the first concurrent collaborator selection.');
+export const collaborationSelection1Background = collaborationSelection('collaboration.selection1Background', '#9141ac', '#ff80ff', '#800080', 'Background tint for the second concurrent collaborator selection.');
+export const collaborationSelection2Background = collaborationSelection('collaboration.selection2Background', '#26a269', '#80ff80', '#006b00', 'Background tint for the third concurrent collaborator selection.');
+export const collaborationSelection3Background = collaborationSelection('collaboration.selection3Background', '#c64600', '#ffbd80', '#924000', 'Background tint for the fourth concurrent collaborator selection.');

@@ -18,7 +18,7 @@
 
 .ash-automation .automation-row {
 	padding-block: 8px;
-	border-bottom: 1px solid var(--ash-input-border);
+	border-bottom: var(--ash-stroke-thickness) solid var(--ash-input-border);
 }
 
 .ash-automation .automation-row span {
@@ -50,13 +50,13 @@
 	font: inherit;
 	color: var(--ash-input-foreground);
 	background: var(--ash-input-background);
-	border: 1px solid var(--ash-input-border);
-	border-radius: 4px;
+	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
+	border-radius: var(--ash-corner-radius-small);
 }
 
 .ash-automation textarea { resize: vertical; }
 .ash-automation button { cursor: pointer; }
 .ash-automation button.selected { border-color: var(--ash-focus-border); }
-.ash-automation :focus-visible { outline: 1px solid var(--ash-focus-border); outline-offset: 2px; }
-.ash-automation fieldset { display: flex; flex-wrap: wrap; gap: 8px; border: 1px solid var(--ash-input-border); }
+.ash-automation :focus-visible { outline: var(--ash-stroke-thickness) solid var(--ash-focus-border); outline-offset: 2px; }
+.ash-automation fieldset { display: flex; flex-wrap: wrap; gap: 8px; border: var(--ash-stroke-thickness) solid var(--ash-input-border); }
 .ash-automation [hidden] { display: none; }

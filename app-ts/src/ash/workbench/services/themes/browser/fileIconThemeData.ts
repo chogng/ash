@@ -1,46 +1,12 @@
 import type { FileIconDefinition, IWorkbenchFileIconTheme } from '../common/workbenchThemeService.js';
+import { fileIconSelectorEscape, getIconClassesForLanguageId } from '../../../../editor/common/services/getIconClasses.js';
 
 interface Associations {
 	readonly file?: string;
-	readonly fileNames: Readonly<Record<string, string>>;
-	readonly fileExtensions: Readonly<Record<string, string>>;
-	readonly languageIds: Readonly<Record<string, string>>;
+	readonly folder?: string;
+	readonly rootFolder?: string;
+	readonly selectors: ReadonlyMap<string, string>;
 }
-
-const LANGUAGE_ID_BY_EXTENSION = new Map<string, string>([
-	["bash", "shellscript"],
-	["cc", "cpp"],
-	["cjs", "javascript"],
-	["clj", "clojure"],
-	["cljs", "clojure"],
-	["coffee", "coffeescript"],
-	["cs", "csharp"],
-	["cxx", "cpp"],
-	["fs", "fsharp"],
-	["fsx", "fsharp"],
-	["h", "c"],
-	["hh", "cpp"],
-	["hpp", "cpp"],
-	["hs", "haskell"],
-	["js", "javascript"],
-	["jsx", "javascriptreact"],
-	["kt", "kotlin"],
-	["kts", "kotlin"],
-	["md", "markdown"],
-	["mjs", "javascript"],
-	["pl", "perl"],
-	["pm", "perl"],
-	["ps1", "powershell"],
-	["py", "python"],
-	["rb", "ruby"],
-	["rs", "rust"],
-	["sh", "shellscript"],
-	["ts", "typescript"],
-	["tsx", "typescriptreact"],
-	["yml", "yaml"],
-	["zsh", "shellscript"],
-]);
-
 
 /** Validates extension icon documents and resolves their package-relative resources. */
 export class FileIconThemeData implements IWorkbenchFileIconTheme {
@@ -98,22 +64,24 @@ export class FileIconThemeData implements IWorkbenchFileIconTheme {
 				color, fontFamily: font?.family ?? '', fontSize: definition.fontSize === undefined ? font?.size ?? '100%' : fontSize(definition.fontSize), image,
 			}));
 		}
-		return new FileIconThemeData(id, label, styles.join('\n'), icons, associations(document, icons), associations(document.light ?? {}, icons));
+		const normal = associations(document, icons);
+		const light = associations(document.light ?? {}, icons);
+		styles.push(...suggestionStyles(icons, normal, light));
+		return new FileIconThemeData(id, label, styles.join('\n'), icons, normal, light);
 	}
 
-	public resolveFileIcon(name: string, dark: boolean): FileIconDefinition | undefined {
-		const normalized = name.toLowerCase();
+	public resolveFileIcon(classes: readonly string[], dark: boolean): FileIconDefinition | undefined {
 		const specific = (associations: Associations): string | undefined => {
-			if (associations.fileNames[normalized]) { return associations.fileNames[normalized]; }
-			const segments = normalized.split('.');
-			for (let index = 1; index < segments.length; index++) {
-				const match = associations.fileExtensions[segments.slice(index).join('.')];
-				if (match) { return match; }
+			for (const className of classes) {
+				const match = associations.selectors.get(className);
+				if (match) return match;
 			}
-			const extension = segments.at(-1)!;
-			return associations.languageIds[LANGUAGE_ID_BY_EXTENSION.get(extension) ?? extension];
+			return undefined;
 		};
-		const icon = dark ? specific(this.normal) ?? this.normal.file : specific(this.light) ?? specific(this.normal) ?? this.light.file ?? this.normal.file;
+		const fallback = (associations: Associations): string | undefined =>
+			classes.includes('rootfolder-icon') ? associations.rootFolder ?? associations.folder :
+			classes.includes('folder-icon') ? associations.folder : associations.file;
+		const icon = dark ? specific(this.normal) ?? fallback(this.normal) : specific(this.light) ?? specific(this.normal) ?? fallback(this.light) ?? fallback(this.normal);
 		return icon === undefined ? undefined : this.icons.get(icon);
 	}
 }
@@ -148,6 +116,67 @@ function associations(value: unknown, icons: ReadonlyMap<string, FileIconDefinit
 		if (!icons.has(id)) { throw new Error('Unknown file icon definition: ' + id); }
 		return id;
 	};
-	const map = (value: unknown): Readonly<Record<string, string>> => Object.freeze(Object.fromEntries(Object.entries(record(value ?? {})).map(([name, icon]) => [name.toLowerCase(), checked(icon)])));
-	return Object.freeze({ ...(input.file === undefined ? {} : { file: checked(input.file) }), fileNames: map(input.fileNames), fileExtensions: map(input.fileExtensions), languageIds: map(input.languageIds) });
+	const selectors = new Map<string, string>();
+	const add = (value: unknown, suffix: string): void => {
+		for (const [name, icon] of Object.entries(record(value ?? {}))) {
+			selectors.set(`${fileIconSelectorEscape(name.toLowerCase())}-${suffix}`, checked(icon));
+		}
+	};
+	add(input.fileNames, 'name-file-icon');
+	add(input.fileExtensions, 'ext-file-icon');
+	add(input.folderNames, 'name-folder-icon');
+	add(input.rootFolderNames, 'root-name-folder-icon');
+	for (const [name, icon] of Object.entries(record(input.languageIds ?? {}))) {
+		selectors.set(getIconClassesForLanguageId(name.toLowerCase())[1]!, checked(icon));
+	}
+	return {
+		...(input.file === undefined ? {} : { file: checked(input.file) }),
+		...(input.folder === undefined ? {} : { folder: checked(input.folder) }),
+		...(input.rootFolder === undefined ? {} : { rootFolder: checked(input.rootFolder) }),
+		selectors,
+	};
+}
+
+function suggestionStyles(icons: ReadonlyMap<string, FileIconDefinition>, normal: Associations, light: Associations): string[] {
+	const styles: string[] = [];
+	const add = (selector: string, iconId: string | undefined): void => {
+		if (!iconId) return;
+		const icon = icons.get(iconId)!;
+		styles.push(`${selector}{font-size:0;min-width:16px;inline-size:16px;}`);
+		const common = 'display:inline-block;width:16px;height:16px;vertical-align:middle;';
+		styles.push(icon.image
+			? `${selector}::before{${common}content:"";background:url(${cssString(icon.image)}) center/contain no-repeat;}`
+			: `${selector}::before{${common}content:${cssString(icon.character)};color:${icon.color || 'inherit'};font-family:${cssString(icon.fontFamily)};font-size:${icon.fontSize};line-height:16px;}`);
+	};
+	const base = ':where(.ash-workbench) .ash-themed-file-icon';
+	const lightBase = ':where(.ash-workbench[data-color-scheme="light"],.ash-workbench[data-color-scheme="high-contrast-light"]) .ash-themed-file-icon';
+	const defaults = (prefix: string, associations: Associations): void => {
+		add(`${prefix}.file-icon`, associations.file);
+		add(`${prefix}.folder-icon`, associations.folder);
+		add(`${prefix}.rootfolder-icon`, associations.rootFolder ?? associations.folder);
+	};
+	const specifics = (prefix: string, associations: Associations): void => {
+		const entries = [...associations.selectors].sort(([left], [right]) => iconSelectorPriority(left) - iconSelectorPriority(right) || left.length - right.length);
+		for (const [className, iconId] of entries) {
+			const kind = className.endsWith('-folder-icon') ? className.endsWith('-root-name-folder-icon') ? 'rootfolder-icon' : 'folder-icon' : 'file-icon';
+			add(`${prefix}.${kind}[class~=${cssString(className)}]`, iconId);
+		}
+	};
+	// The zero-specificity theme root lets a filename match outrank a light default;
+	// light-specific matches then win over normal matches at the same specificity.
+	defaults(base, normal);
+	defaults(lightBase, light);
+	specifics(base, normal);
+	specifics(lightBase, light);
+	return styles;
+}
+
+function iconSelectorPriority(className: string): number {
+	if (className.endsWith('-lang-file-icon')) return 0;
+	if (className.endsWith('-ext-file-icon')) return 1;
+	return 2;
+}
+
+function cssString(value: string): string {
+	return '"' + Array.from(value, character => /[a-z0-9_-]/i.test(character) ? character : `\\${character.codePointAt(0)!.toString(16)} `).join('') + '"';
 }

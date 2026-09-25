@@ -7,6 +7,7 @@ import { EditorAction, registerEditorAction, registerEditorContribution, type Se
 import { createSnippetVariables } from '../../snippet/common/snippetParser.js';
 import { isCompletionsEnabledFromObject } from '../../../common/services/completionsEnablement.js';
 import { Position } from "../../../common/core/position.js";
+import { ILanguageService } from '../../../common/languages/language.js';
 import { stopEvent } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
@@ -48,7 +49,8 @@ export class SuggestController extends Disposable {
 		private readonly view: ViewController,
 		private readonly service: LanguageCompletionService,
 		private readonly session: SuggestModel,
-		options: SuggestControllerOptions = {},
+		options: SuggestControllerOptions,
+		@ILanguageService languageService: ILanguageService,
 	) {
 		super();
 		try {
@@ -74,6 +76,7 @@ export class SuggestController extends Disposable {
 				view,
 				view.viewport,
 				session,
+				languageService,
 				options.widgetContainer,
 			));
 			this._register(view.onWillBeforeInput(event => this.handleBeforeInput(event)));
@@ -329,7 +332,7 @@ registerEditorContribution({
 			onDidAccept: item => completions.executeCompletionCommand(context.model.getLanguageId(), item, new AbortController().signal),
 			snippetVariables: createSnippetVariables(context.model.uri),
 		}));
-		return new SuggestController(
+		return context.instantiationService.createInstance(SuggestController,
 			context.editor,
 			context.controller,
 			completions,

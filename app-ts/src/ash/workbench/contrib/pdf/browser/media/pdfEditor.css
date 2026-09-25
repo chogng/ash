@@ -11,7 +11,7 @@
 
 .ash-pdf-editor-toolbar {
   background: var(--ash-editor-background);
-  border-block-end: 1px solid var(--ash-widget-border);
+  border-block-end: var(--ash-stroke-thickness) solid var(--ash-widget-border);
   flex: 0 0 auto;
   min-block-size: 32px;
   padding-inline: 4px;
@@ -39,7 +39,8 @@
 
 .ash-pdf-page {
   background: var(--ash-input-background);
-  box-shadow: 0 1px 4px color-mix(in srgb, var(--ash-editor-foreground) 22%, transparent);
+  box-shadow: 0 1px 4px var(--ash-pdf-page-shadow);
+  outline: var(--ash-stroke-thickness) solid var(--ash-contrast-border);
   flex: 0 0 auto;
   position: relative;
 }
@@ -72,7 +73,7 @@
 }
 
 .ash-pdf-annotation-highlight.selected {
-  outline: 1px solid var(--ash-focus-border);
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
 }
 
 .ash-pdf-annotation-ink {
@@ -94,10 +95,10 @@
 
 .ash-pdf-annotation-note {
   background: var(--ash-input-background);
-  border: 1px solid var(--ash-editor-foreground);
+  border: var(--ash-stroke-thickness) solid var(--ash-editor-foreground);
   border-radius: 50%;
   block-size: 14px;
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--ash-editor-foreground) 35%, transparent);
+  box-shadow: 0 1px 2px var(--ash-pdf-annotation-note-shadow);
   inline-size: 14px;
   padding: 0;
   position: absolute;
@@ -106,12 +107,12 @@
 
 .ash-pdf-annotation-note.selected {
   outline: 2px solid var(--ash-focus-border);
-  outline-offset: 1px;
+  outline-offset: var(--ash-stroke-thickness);
 }
 
 .ash-pdf-annotation-sidebar {
   background: var(--ash-side-bar-background);
-  border-inline-start: 1px solid var(--ash-widget-border);
+  border-inline-start: var(--ash-stroke-thickness) solid var(--ash-widget-border);
   display: flex;
   flex: 0 0 248px;
   flex-direction: column;
@@ -124,7 +125,7 @@
 .ash-pdf-annotation-heading {
   color: var(--ash-editor-foreground);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: var(--ash-font-weight-semi-bold);
   margin: 0;
 }
 
@@ -145,8 +146,8 @@
 
 .ash-pdf-annotation-text {
   background: var(--ash-input-background);
-  border: 1px solid var(--ash-input-border);
-  border-radius: 2px;
+  border: var(--ash-stroke-thickness) solid var(--ash-input-border);
+  border-radius: var(--ash-corner-radius-x-small);
   color: var(--ash-input-foreground);
   font: inherit;
   min-block-size: 70px;
@@ -171,7 +172,7 @@
   cursor: pointer;
   font: inherit;
   overflow: hidden;
-  padding: 5px 6px;
+  padding: 6px 6px;
   text-align: start;
   text-overflow: ellipsis;
   white-space: nowrap;

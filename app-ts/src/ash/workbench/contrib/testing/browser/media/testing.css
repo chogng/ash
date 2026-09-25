@@ -7,15 +7,15 @@
 
 .ash-testing-controls {
   display: flex;
-  gap: 5px;
+  gap: 6px;
 }
 
 .ash-testing-controls button,
 .ash-testing-run,
 .ash-testing-run-result {
   border: 0;
-  border-radius: 3px;
-  padding: 4px 7px;
+  border-radius: var(--ash-corner-radius-small);
+  padding: 4px 8px;
   color: inherit;
   background: color-mix(in srgb, currentColor 8%, transparent);
   font: inherit;
@@ -40,7 +40,7 @@
 .ash-testing-profile {
   display: grid;
   grid-template-columns: auto minmax(70px, 1fr);
-  gap: 2px 7px;
+  gap: 2px 8px;
   align-items: center;
   padding: 4px 2px;
 }
@@ -83,6 +83,6 @@
 }
 
 .ash-testing button:focus-visible {
-  outline: 1px solid var(--ash-focus-border);
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
   outline-offset: -1px;
 }

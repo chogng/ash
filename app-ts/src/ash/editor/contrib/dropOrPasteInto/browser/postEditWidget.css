@@ -4,7 +4,7 @@
 	color: var(--ash-editor-foreground);
 	background: var(--ash-editor-hover-background, var(--ash-editor-background));
 	border: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-	border-radius: 4px;
+	border-radius: var(--ash-corner-radius-small);
 	font-size: var(--ash-font-size-body2);
 }
 

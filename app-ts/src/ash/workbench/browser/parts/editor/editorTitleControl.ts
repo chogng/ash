@@ -1,20 +1,15 @@
 import "./media/editorTitleControl.css";
-import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
 import { Disposable, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { Emitter, type Event } from "../../../../base/common/event.js";
-import { MenuWorkbenchToolBar, WorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
-import { type IMenuService, MenuId } from "../../../../platform/actions/common/actions.js";
-import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
+import type { Event } from "../../../../base/common/event.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IRegisteredConfiguration } from "../../../../platform/configuration/common/configurationRegistry.js";
 import { Registry } from "../../../../platform/registry/common/platform.js";
 import {
-	EditorBreadcrumbsEnabledConfiguration,
 	EditorTabsModeConfiguration,
 	type EditorTabsMode,
 } from "../../../services/editor/common/editorConfiguration.js";
 import type { EditorInput } from "./editorInput.js";
-import { EditorBreadcrumbsControl } from "./breadcrumbsControl.js";
+import { EditorHeaderControl, type EditorHeaderActions } from "./editorHeaderControl.js";
 import { EditorTabsControl, type EditorTabDescriptor, type EditorTabsDelegate } from "./editorTabsControl.js";
 import { MultiEditorTabsControl } from "./multiEditorTabsControl.js";
 import { NoEditorTabsControl } from "./noEditorTabsControl.js";
@@ -22,42 +17,31 @@ import { SingleEditorTabsControl } from "./singleEditorTabsControl.js";
 import { h } from "../../../../base/browser/dom.js";
 import { WorkbenchConfiguration, type WorkbenchLayoutStyle } from '../../../common/configuration.js';
 
-/** Platform services used to populate the Editor title toolbar. */
-export interface EditorTitleActions {
-	readonly menuService: IMenuService;
-	readonly contextMenuProvider: IContextMenuProvider;
-	readonly contextKeyService?: IContextKeyService;
-}
-
-/** Hosts one group's Editor tabs and its independent action toolbar. */
+/** Hosts one group's Editor tabs and header in their shared title layout. */
 export class EditorTitleControl extends Disposable {
 	static readonly HEIGHT = 35;
 
 	readonly domNode: HTMLDivElement;
-	private readonly heightEmitter = this._register(new Emitter<void>());
-	readonly onDidChangeHeight: Event<void> = this.heightEmitter.event;
+	readonly onDidChangeHeight: Event<void>;
 	private readonly tabsAndActionsDomNode: HTMLDivElement;
 	private readonly delegate: EditorTabsDelegate;
 	private readonly configurationService: IConfigurationService | undefined;
 	private readonly tabsSlot = this._register(new MutableDisposable<EditorTabsControl>());
 	private tabsMode: EditorTabsMode;
-	private readonly breadcrumbs: EditorBreadcrumbsControl;
-	private breadcrumbsEnabled: boolean;
+	private readonly header: EditorHeaderControl;
 	private editors: readonly EditorTabDescriptor[] = [];
 	private activeInput: EditorInput | undefined;
-	private readonly toolbar: WorkbenchToolBar;
 
 	constructor(
 		container: HTMLElement,
 		delegate: EditorTabsDelegate,
-		titleActions?: EditorTitleActions,
+		titleActions?: EditorHeaderActions,
 		configurationService?: IConfigurationService,
 	) {
 		super();
 		this.delegate = delegate;
 		this.configurationService = configurationService;
 		this.tabsMode = configurationService?.getValue<EditorTabsMode>(EditorTabsModeConfiguration) ?? configurationDefault<EditorTabsMode>(EditorTabsModeConfiguration);
-		this.breadcrumbsEnabled = configurationService?.getValue<boolean>(EditorBreadcrumbsEnabledConfiguration) ?? configurationDefault<boolean>(EditorBreadcrumbsEnabledConfiguration);
 		const ownerDocument = container.ownerDocument;
 		this.domNode = h(ownerDocument, "div");
 		this.domNode.className = "ash-editor-title-control";
@@ -67,30 +51,13 @@ export class EditorTitleControl extends Disposable {
 		this.domNode.append(this.tabsAndActionsDomNode);
 		this.tabsSlot.value = this.createTabsControl(this.tabsMode);
 		this.updateTabsLayoutStyle();
-		const actionsDomNode = h(ownerDocument, "div");
-		actionsDomNode.className = "ash-editor-title-actions";
-		this.tabsAndActionsDomNode.append(actionsDomNode);
-		this.toolbar = this._register(titleActions
-			? new MenuWorkbenchToolBar(
-				actionsDomNode,
-				titleActions.menuService,
-				titleActions.contextMenuProvider,
-				MenuId.EditorTitle,
-				{
-					highlightToggledItems: true,
-					contextKeyService: titleActions.contextKeyService,
-				},
-			)
-			: new WorkbenchToolBar(
-				actionsDomNode,
-				emptyEditorToolbarContextMenuProvider,
-				{
-					ariaLabel: "Editor actions",
-					highlightToggledItems: true,
-				},
-			));
-		this.breadcrumbs = this._register(new EditorBreadcrumbsControl(this.domNode));
-		this.updateBreadcrumbVisibility();
+		this.header = this._register(new EditorHeaderControl(
+			this.domNode,
+			this.tabsAndActionsDomNode,
+			titleActions,
+			configurationService,
+		));
+		this.onDidChangeHeight = this.header.onDidChangeHeight;
 		if (configurationService) {
 			this._register(configurationService.onDidChangeConfiguration(event => {
 				if (event.affectsConfiguration(EditorTabsModeConfiguration)) {
@@ -99,10 +66,6 @@ export class EditorTitleControl extends Disposable {
 					this.updateTabsLayoutStyle();
 					this.tabs.setEditors(this.editors, this.activeInput);
 				}
-				if (event.affectsConfiguration(EditorBreadcrumbsEnabledConfiguration)) {
-					this.breadcrumbsEnabled = configurationService.getValue<boolean>(EditorBreadcrumbsEnabledConfiguration);
-					this.updateBreadcrumbVisibility();
-				}
 				if (event.affectsConfiguration(WorkbenchConfiguration.layoutStyle)) this.updateTabsLayoutStyle();
 			}));
 		}
@@ -110,7 +73,7 @@ export class EditorTitleControl extends Disposable {
 	}
 
 	get height(): number {
-		return EditorTitleControl.HEIGHT + (this.breadcrumbsEnabled && this.activeInput && this.activeInput.showBreadcrumbs !== false ? 22 : 0);
+		return EditorTitleControl.HEIGHT + this.header.height;
 	}
 
 	setEditors(
@@ -120,8 +83,7 @@ export class EditorTitleControl extends Disposable {
 		this.editors = editors;
 		this.activeInput = activeInput;
 		this.tabs.setEditors(editors, activeInput);
-		this.breadcrumbs.setInput(activeInput);
-		this.updateBreadcrumbVisibility();
+		this.header.setInput(activeInput);
 	}
 
 	private createTabsControl(mode: EditorTabsMode): EditorTabsControl {
@@ -146,14 +108,6 @@ export class EditorTitleControl extends Disposable {
 		if (!tabs) throw new ReferenceError("Editor tabs control is not available");
 		return tabs;
 	}
-
-	private updateBreadcrumbVisibility(): void {
-		const wasVisible = this.domNode.classList.contains("ash-editor-title-with-breadcrumbs");
-		this.breadcrumbs.domNode.hidden = !this.breadcrumbsEnabled || !this.activeInput || this.activeInput.showBreadcrumbs === false;
-		const visible = !this.breadcrumbs.domNode.hidden;
-		this.domNode.classList.toggle("ash-editor-title-with-breadcrumbs", visible);
-		if (visible !== wasVisible) this.heightEmitter.fire();
-	}
 }
 
 function configurationDefault<T>(key: string): T {
@@ -161,11 +115,3 @@ function configurationDefault<T>(key: string): T {
 	if (!configuration) throw new RangeError(`Unknown configuration: ${key}`);
 	return configuration.defaultValue;
 }
-
-const emptyEditorToolbarContextMenuProvider: IContextMenuProvider = {
-	showContextMenu(): never {
-		throw new Error(
-			"The empty Editor toolbar cannot present secondary actions",
-		);
-	},
-};

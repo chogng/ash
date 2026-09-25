@@ -2,7 +2,7 @@
   .ash-statusbar-item,
   .ash-statusbar-item-label
 ) {
-  border-radius: 4px;
+  border-radius: var(--ash-corner-radius-small);
 }
 
 :is(.ash-workbench, .ash-auxiliary-window-container).modern-ui :is(

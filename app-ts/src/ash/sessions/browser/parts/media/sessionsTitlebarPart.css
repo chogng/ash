@@ -1,5 +1,5 @@
 .ash-workbench-titlebar {
-  border-bottom: 1px solid var(--ash-border);
+  border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
   background: color-mix(in srgb, var(--ash-title-bar-background, var(--ash-workbench-background)) 88%, var(--ash-editor-background));
 }
 
@@ -17,7 +17,8 @@
   flex: 0 0 auto;
   border-radius: 50%;
   background: var(--sessions-accent);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--sessions-accent) 16%, transparent);
+  box-shadow: 0 0 0 4px var(--ash-sessions-accent-glow);
+  outline: var(--ash-stroke-thickness) solid var(--ash-contrast-border);
   content: "";
 }
 
@@ -32,13 +33,13 @@
   white-space: nowrap;
 }
 
-.ash-sessions-titlebar-button { padding: 4px 9px; }
+.ash-sessions-titlebar-button { padding: 4px 10px; }
 
 .ash-sessions-navigation-button {
   width: 26px;
   height: 26px;
   border: 0;
-  border-radius: 5px;
+  border-radius: var(--ash-corner-radius-medium);
   color: var(--ash-title-bar-foreground, var(--ash-foreground));
   background: transparent;
   cursor: pointer;

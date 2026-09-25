@@ -4,7 +4,7 @@
   min-height: 0;
   flex-direction: column;
   gap: 12px;
-  padding: 17px 14px 14px;
+  padding: 16px 16px 16px;
   background: var(--sessions-muted-surface);
 }
 
@@ -12,7 +12,7 @@
   margin: 0;
   color: var(--ash-section-header-foreground, var(--ash-foreground));
   font-size: 11px;
-  font-weight: 700;
+  font-weight: var(--ash-font-weight-semi-bold);
   letter-spacing: .075em;
   text-transform: uppercase;
 }
@@ -22,9 +22,9 @@
   min-height: 0;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   overflow: auto;
-  padding-top: 3px;
+  padding-top: 4px;
 }
 
 .ash-sessions-list-item {
@@ -33,10 +33,10 @@
   min-height: 34px;
   align-items: center;
   gap: 8px;
-  padding: 7px 9px;
+  padding: 8px 10px;
   overflow: hidden;
-  border: 1px solid transparent;
-  border-radius: 6px;
+  border: var(--ash-stroke-thickness) solid transparent;
+  border-radius: var(--ash-corner-radius-medium);
   color: var(--ash-foreground);
   background: transparent;
   cursor: pointer;

@@ -9,8 +9,8 @@ export type ColorIdentifier = string;
 export interface ColorDefaults {
 	readonly dark: ColorValue;
 	readonly light: ColorValue;
-	readonly highContrastDark?: ColorValue;
-	readonly highContrastLight?: ColorValue;
+	readonly highContrastDark: ColorValue;
+	readonly highContrastLight: ColorValue;
 }
 
 export type ColorTransform =
@@ -102,8 +102,8 @@ function defaultsForScheme(defaults: ColorDefaults, scheme: ColorScheme): ColorV
 	switch (scheme) {
 		case ColorScheme.Dark: return defaults.dark;
 		case ColorScheme.Light: return defaults.light;
-		case ColorScheme.HighContrastDark: return defaults.highContrastDark ?? defaults.dark;
-		case ColorScheme.HighContrastLight: return defaults.highContrastLight ?? defaults.light;
+		case ColorScheme.HighContrastDark: return defaults.highContrastDark;
+		case ColorScheme.HighContrastLight: return defaults.highContrastLight;
 	}
 }
 

@@ -27,11 +27,6 @@
 	box-shadow: 0 -6px 6px -6px var(--ash-scrollbar-shadow) inset;
 }
 
-[data-color-scheme="high-contrast-dark"] .stanza-editor .stanza-editor-scroll-decoration-shadow,
-[data-color-scheme="high-contrast-light"] .stanza-editor .stanza-editor-scroll-decoration-shadow {
-	box-shadow: none;
-}
-
 @media (forced-colors: active) {
 	.stanza-editor .stanza-editor-scroll-decoration-shadow {
 		box-shadow: none;

@@ -1,10 +1,13 @@
 import { Disposable, MutableDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
+import type { IWorkbenchContribution } from "../../../common/contributions.js";
 import { isEditorPaneWithStatus } from "./editorPane.js";
 import type { IEditorPart } from "./editorPart.js";
 import { StatusbarAlignment, type IStatusbarEntry, type IStatusbarEntryAccessor, type IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
 
 /** Projects the active editor's cursor, format, language, and save state. */
-export class EditorStatusContribution extends Disposable {
+export class EditorStatusContribution extends Disposable implements IWorkbenchContribution {
+	static readonly ID = "workbench.contrib.editorStatus";
+
 	private readonly cursor = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
 	private readonly format = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
 	private readonly language = this._register(new MutableDisposable<IStatusbarEntryAccessor>());

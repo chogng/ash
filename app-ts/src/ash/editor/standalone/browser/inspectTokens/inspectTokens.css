@@ -4,8 +4,8 @@
 	padding: 8px 10px;
 	color: var(--ash-editor-foreground);
 	background: var(--ash-editor-widget-background);
-	border: 1px solid var(--ash-editor-widget-border);
-	border-radius: 8px;
+	border: var(--ash-stroke-thickness) solid var(--ash-editor-widget-border);
+	border-radius: var(--ash-corner-radius-large);
 	box-shadow: 0 4px 12px var(--ash-editor-widget-shadow);
 	overflow-wrap: anywhere;
 }

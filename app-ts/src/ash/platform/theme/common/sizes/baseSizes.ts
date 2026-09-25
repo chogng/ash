@@ -6,6 +6,20 @@ const dimension = (id: string, value: number, description: string): string => re
 const scalar = (id: string, value: number, description: string): string => registerSize(id, size(value, "unitless"), { description, owner });
 const duration = (id: string, value: number, description: string): string => registerSize(id, size(value, "ms"), { description, owner });
 
+for (const value of [0, 2, 4, 6, 8, 10, 12, 16, 20, 24, 28, 32, 36, 40]) {
+	const name = value === 0 ? "None" : String(value * 10);
+	dimension(`spacing.size${name}`, value, `Standard ${value}px spacing.`);
+}
+
+export const cornerRadiusXSmall = dimension("cornerRadius.xSmall", 2, "Radius for very compact elements.");
+export const cornerRadiusSmall = dimension("cornerRadius.small", 4, "Radius for controls.");
+export const cornerRadiusMedium = dimension("cornerRadius.medium", 6, "Radius for inner surfaces.");
+export const cornerRadiusLarge = dimension("cornerRadius.large", 8, "Radius for prominent surfaces.");
+export const cornerRadiusXLarge = dimension("cornerRadius.xLarge", 12, "Radius for large surfaces.");
+export const cornerRadiusCircle = dimension("cornerRadius.circle", 9999, "Radius for round buttons, dots, and pills.");
+export const lxiconFontSize = dimension("lxiconFontSize", 16, "Standard Lxicon glyph size.");
+export const lxiconFontSizeCompact = dimension("lxiconFontSize.compact", 12, "Compact Lxicon glyph size.");
+
 export const fontSizeHeading1 = dimension("fontSize.heading1", 26, "Largest heading font size.");
 export const fontSizeHeading2 = dimension("fontSize.heading2", 18, "Title heading font size.");
 export const fontSizeHeading3 = dimension("fontSize.heading3", 13, "Subtitle heading font size.");
@@ -15,7 +29,6 @@ export const fontSizeLabel1 = dimension("fontSize.label1", 12, "Section title an
 export const fontSizeLabel2 = dimension("fontSize.label2", 11, "Metadata label font size.");
 export const fontSizeLabel3 = dimension("fontSize.label3", 10, "Badge label font size.");
 export const fontWeightRegular = scalar("fontWeight.regular", 400, "Regular font weight for un-emphasized text.");
-export const fontWeightMedium = scalar("fontWeight.medium", 500, "Medium font weight for controls, navigation, and other compact emphasized text.");
 export const fontWeightSemiBold = scalar("fontWeight.semiBold", 600, "Strong font weight paired with any font-size role for tabs, headings, and emphasized text.");
 export const strokeThickness = dimension("strokeThickness", 1, "Standard UI border thickness.");
 

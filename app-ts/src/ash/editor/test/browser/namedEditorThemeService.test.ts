@@ -128,14 +128,14 @@ test('standalone themes preserve overrides for later contributions and stop noti
 	overrides['editor.background'] = '#ffffff';
 	const changes: string[] = [];
 	using listener = service.onDidColorThemeChange(value => changes.push(value.getColorCss('test.standaloneLate')!));
-	registerColor('test.standaloneLate', { dark: 'editor.background', light: '#abcdef' }, { description: 'Late standalone test.', owner: 'test' });
+	registerColor('test.standaloneLate', { dark: 'editor.background', light: '#abcdef', highContrastDark: 'editor.background', highContrastLight: '#000000' }, { description: 'Late standalone test.', owner: 'test' });
 	assert.deepEqual({ before: before['test.standaloneLate'], value: theme.colors['test.standaloneLate'], changes }, {
 		before: undefined, value: '#101010', changes: ['#101010'],
 	});
 	assert.equal(theme.getColorCss('editor.background'), '#101010');
 	assert.equal(theme.colorEntries, theme.colorEntries);
 	service.dispose();
-	registerColor('test.standaloneAfterDispose', { dark: '#000000', light: '#ffffff' }, { description: 'Disposed standalone test.', owner: 'test' });
+	registerColor('test.standaloneAfterDispose', { dark: '#000000', light: '#ffffff', highContrastDark: '#000000', highContrastLight: '#ffffff' }, { description: 'Disposed standalone test.', owner: 'test' });
 	assert.deepEqual(changes, ['#101010']);
 });
 

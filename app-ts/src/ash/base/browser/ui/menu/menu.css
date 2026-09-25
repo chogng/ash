@@ -1,8 +1,8 @@
 .ash-context-view-menu {
   color: var(--ash-foreground);
   background: var(--ash-editor-background);
-  border: 1px solid var(--ash-border);
-  border-radius: 4px;
+  border: var(--ash-stroke-thickness) solid var(--ash-border);
+  border-radius: var(--ash-corner-radius-small);
   box-shadow: 0 2px 8px var(--ash-widget-shadow);
   overflow: auto;
 }
@@ -16,9 +16,9 @@
 .ash-menu .ash-button {
   width: 100%;
   min-height: 24px;
-  padding: 3px 8px;
+  padding: 4px 8px;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--ash-corner-radius-small);
   background: transparent;
   text-align: left;
   justify-content: flex-start;
@@ -27,7 +27,6 @@
 .ash-menu .ash-action-view-item.focused > .ash-button {
   color: var(--ash-menu-selection-foreground);
   background: var(--ash-menu-selection-background);
-  outline: 0;
 }
 .ash-menu-leading-slot {
   display: inline-flex;
@@ -67,12 +66,12 @@
 }
 .ash-menu .ash-menu-badge {
   margin-left: auto;
-  padding: 1px 6px;
-  border: 1px solid var(--ash-widget-border);
-  border-radius: 999px;
+  padding: 2px 6px;
+  border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+  border-radius: var(--ash-corner-radius-circle);
   color: var(--ash-description-foreground);
   font-size: 10px;
-  font-weight: 600;
+  font-weight: var(--ash-font-weight-semi-bold);
   line-height: 16px;
 }
 .ash-menu .ash-menu-badge + .ash-menu-keybinding {

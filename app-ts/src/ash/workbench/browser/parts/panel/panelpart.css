@@ -1,7 +1,7 @@
 .ash-workbench-panel {
   overflow: hidden;
   border: 0;
-  border-top: 1px solid var(--ash-border);
+  border-top: var(--ash-stroke-thickness) solid var(--ash-border);
   border-radius: 0;
   background: var(--ash-panel-background);
 }
@@ -11,7 +11,7 @@
   min-width: 0;
   height: var(--ash-pane-title-height);
   flex: 0 0 var(--ash-pane-title-height);
-  border-bottom: 1px solid var(--ash-border);
+  border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
 }
 .ash-panel-title-control > .ash-composite-bar {
   min-width: 0;

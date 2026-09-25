@@ -1,3 +1,4 @@
+import "../common/pdfColors.js";
 import "./media/pdfEditor.css";
 import { registerEditorPane } from "../../../browser/parts/editor/editorRegistry.js";
 import { PdfEditorPane } from "./pdfEditorPane.js";

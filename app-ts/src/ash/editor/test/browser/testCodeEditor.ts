@@ -17,6 +17,8 @@ import { createTestLanguageConfigurationService } from '../common/modes/testLang
 import { ILanguageConfigurationService } from '../../common/languages/languageConfigurationRegistry.js';
 import { ILanguageFeaturesService } from '../../common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../common/services/languageFeaturesService.js';
+import { ILanguageService } from '../../common/languages/language.js';
+import { LanguageService } from '../../common/services/languageService.js';
 import { StandaloneBulkEditService, StandaloneCommandService, StandaloneKeybindingService, StandaloneNotificationService, StandaloneWorkspaceContextService } from '../../standalone/browser/standaloneServices.js';
 import { IBulkEditService } from '../../browser/services/bulkEditService.js';
 import { DefaultDropProvidersFeature, DefaultPasteProvidersFeature } from '../../contrib/dropOrPasteInto/browser/defaultProviders.js';
@@ -53,6 +55,9 @@ export function createCodeEditorServices(disposables: Pick<DisposableStore, 'add
 
 /** Completes an existing test scope without replacing its explicit service overrides. */
 export function registerCodeEditorServices(services: ServiceContainer): void {
+	if (!services.has(ILanguageService)) {
+		services.registerSingleton(ILanguageService, () => new LanguageService());
+	}
 	if (!services.has(ILogService)) {
 		services.registerInstance(ILogService, new NullLoggerService());
 	}

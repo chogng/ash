@@ -5,14 +5,14 @@ import { Action2, MenuId, registerAction2 } from "../../../../platform/actions/c
 import { Keybinding, logicalKey } from "../../../../base/common/keybindings.js";
 import type { ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
 import { IQuickInputService, type IQuickPickItem } from "../../../../platform/quickinput/common/quickInput.js";
+import { IQuickAccessController } from "../../../../platform/quickinput/common/quickAccess.js";
 import { IEditorPart } from "./editorPart.js";
 import type { ExtensionFileTemplateDefinition } from "../../../services/extensions/common/extensionFileTemplate.js";
 import { IExtensionService } from "../../../services/extensions/common/extensionService.js";
 import { IUntitledTextEditorService } from "../../../services/untitled/common/untitledTextEditorService.js";
-import type { EditorIdentifier } from "../../../services/editor/common/editorState.js";
 import { EditorsVisibleContext } from "../../../common/contextkeys.js";
-import type { IEditorPaneDescriptor } from "./editorPane.js";
 import { IEditorPartsService } from "./editorParts.js";
+import { AllEditorsByMostRecentlyUsedQuickAccess } from "./editorQuickAccess.js";
 
 export const SplitEditorHorizontalCommandId =
 	"workbench.action.splitEditorHorizontal";
@@ -52,25 +52,6 @@ registerAction2(class SplitEditorVerticalAction extends Action2 {
 
 	override run(accessor: ServicesAccessor): Promise<void> {
 		return accessor.get(IEditorPart).splitActiveGroupVertical();
-	}
-});
-
-export const CloseActiveEditorCommandId = "workbench.action.closeActiveEditor";
-
-registerAction2(class CloseActiveEditorAction extends Action2 {
-	constructor() {
-		super({
-			id: CloseActiveEditorCommandId,
-			title: localizedString("ash", "workbench.closeEditor", "Close Editor"),
-			f1: true,
-			menu: { id: MenuId.MenubarFileMenu, when: EditorsVisibleContext.isEqualTo(true), group: "4_close", order: 1 },
-			keybinding: { primary: Keybinding.single(logicalKey("w", { primaryKey: true })) },
-		});
-	}
-
-	override async run(accessor: ServicesAccessor): Promise<void> {
-		const editor = accessor.get(IEditorPart);
-		if (editor.activeInput) await editor.closeEditor(editor.activeInput);
 	}
 });
 
@@ -144,10 +125,6 @@ registerAction2(class NavigateEditorMruBackwardsAction extends Action2 {
 	}
 });
 
-interface OpenEditorQuickPickItem extends IQuickPickItem {
-	readonly editor: EditorIdentifier;
-}
-
 export const ShowAllEditorsCommandId = "workbench.action.showAllEditors";
 
 registerAction2(class ShowAllEditorsAction extends Action2 {
@@ -162,40 +139,7 @@ registerAction2(class ShowAllEditorsAction extends Action2 {
 	}
 
 	override run(accessor: ServicesAccessor): void {
-		const editorPart = accessor.get(IEditorPart);
-		const items = editorPart.editorsMru.map(editor => ({
-			editor,
-			label: editorInputLabel(editor.input),
-			description: `Group ${editorPart.groups.findIndex(group => group.id === editor.groupId) + 1}`,
-			detail: editor.input.resource.toString(),
-		}));
-		showEditorPicker(accessor.get(IQuickInputService), items, "Select an open editor", item => {
-			editorPart.activateEditorIdentifier(item.editor);
-		});
-	}
-});
-
-interface ReopenWithQuickPickItem extends IQuickPickItem {
-	readonly descriptor: IEditorPaneDescriptor;
-}
-
-export const ReopenWithCommandId = "workbench.action.reopenWithEditor";
-
-registerAction2(class ReopenWithAction extends Action2 {
-	constructor() {
-		super({ id: ReopenWithCommandId, title: "Reopen Editor With...", f1: true });
-	}
-
-	override run(accessor: ServicesAccessor): void {
-		const editorPart = accessor.get(IEditorPart);
-		const items = editorPart.getEditorPaneChoices().map(descriptor => ({
-			descriptor,
-			label: descriptor.name,
-			description: descriptor.id,
-		}));
-		showEditorPicker(accessor.get(IQuickInputService), items, "Select an editor", item => {
-			void editorPart.reopenActiveEditorWith(item.descriptor.id).catch(error => console.error("Could not reopen editor", error));
-		});
+		accessor.get(IQuickAccessController).show(AllEditorsByMostRecentlyUsedQuickAccess.PREFIX);
 	}
 });
 
@@ -321,30 +265,3 @@ registerAction2(class SaveActiveEditorAction extends Action2 {
 		return accessor.get(IEditorPart).saveActiveEditor();
 	}
 });
-
-function showEditorPicker<TItem extends IQuickPickItem>(
-	quickInputService: IQuickInputService,
-	items: readonly TItem[],
-	placeholder: string,
-	onAccept: (item: TItem) => void,
-): void {
-	if (items.length === 0) return;
-	const picker = quickInputService.createQuickPick<TItem>();
-	const disposables = new DisposableStore();
-	disposables.add(picker);
-	picker.placeholder = placeholder;
-	picker.items = items;
-	disposables.add(picker.onDidAccept(item => {
-		picker.hide();
-		onAccept(item);
-	}));
-	disposables.add(picker.onDidHide(() => disposables.dispose()));
-	picker.show();
-}
-
-function editorInputLabel(input: { readonly resource: { readonly path: string; toString(): string }; readonly label?: string }): string {
-	if (input.label?.trim()) return input.label;
-	const path = decodeURIComponent(input.resource.path).replace(/\/+$/u, "");
-	const separator = path.lastIndexOf("/");
-	return path.slice(separator + 1) || input.resource.toString();
-}

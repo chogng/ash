@@ -12,6 +12,6 @@
 
 [data-color-scheme="high-contrast-dark"] .stanza-editor-selection,
 [data-color-scheme="high-contrast-light"] .stanza-editor-selection {
-	outline: 1px solid var(--ash-focus-border);
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
 	outline-offset: -1px;
 }

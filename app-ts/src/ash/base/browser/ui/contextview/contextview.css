@@ -12,8 +12,8 @@
 .ash-context-view-default {
   color: var(--ash-foreground);
   background: var(--ash-editor-background);
-  border: 1px solid var(--ash-border);
-  border-radius: 4px;
+  border: var(--ash-stroke-thickness) solid var(--ash-border);
+  border-radius: var(--ash-corner-radius-small);
   box-shadow: 0 2px 8px var(--ash-widget-shadow);
   overflow: auto;
 }
@@ -21,8 +21,8 @@
 .ash-context-view-hover {
   color: var(--ash-hover-foreground);
   background: var(--ash-hover-background);
-  border-color: var(--ash-hover-border);
-  border-radius: 6px;
+  border: var(--ash-stroke-thickness) solid var(--ash-hover-border);
+  border-radius: var(--ash-corner-radius-medium);
   box-shadow: 0 4px 16px var(--ash-hover-shadow);
   overflow: visible;
 }
@@ -39,14 +39,14 @@
 
 .ash-context-view-hover.ash-context-view-above::before {
   bottom: -5px;
-  border-right: 1px solid var(--ash-hover-border);
-  border-bottom: 1px solid var(--ash-hover-border);
+  border-right: var(--ash-stroke-thickness) solid var(--ash-hover-border);
+  border-bottom: var(--ash-stroke-thickness) solid var(--ash-hover-border);
 }
 
 .ash-context-view-hover.ash-context-view-below::before {
   top: -5px;
-  border-top: 1px solid var(--ash-hover-border);
-  border-left: 1px solid var(--ash-hover-border);
+  border-top: var(--ash-stroke-thickness) solid var(--ash-hover-border);
+  border-left: var(--ash-stroke-thickness) solid var(--ash-hover-border);
 }
 
 .ash-context-view-hover.ash-context-view-align-left::before {
@@ -63,8 +63,8 @@
   bottom: auto;
   left: -5px;
   border: 0;
-  border-bottom: 1px solid var(--ash-hover-border);
-  border-left: 1px solid var(--ash-hover-border);
+  border-bottom: var(--ash-stroke-thickness) solid var(--ash-hover-border);
+  border-left: var(--ash-stroke-thickness) solid var(--ash-hover-border);
 }
 
 .ash-context-view-hover.ash-context-view-axis-horizontal.ash-context-view-above::before {
@@ -73,6 +73,6 @@
   bottom: auto;
   left: auto;
   border: 0;
-  border-top: 1px solid var(--ash-hover-border);
-  border-right: 1px solid var(--ash-hover-border);
+  border-top: var(--ash-stroke-thickness) solid var(--ash-hover-border);
+  border-right: var(--ash-stroke-thickness) solid var(--ash-hover-border);
 }

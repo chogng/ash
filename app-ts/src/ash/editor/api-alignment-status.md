@@ -1,5 +1,13 @@
 # Editor API 对齐状态
 
+## 文件图标类与主题接线（2026-09-25）
+
+`common/services/getIconClasses.ts` 已按同路径补入：根据资源、文件类型、已打开模型与语言关联生成文件名、复合扩展名和语言类名；数据 URI 使用 `base/common/network.ts` 的 scheme 常量。Editor 补全列表的 File/Folder 项现在使用这些类名；普通编辑器和 Chat 输入框均通过依赖注入创建补全控制器。Workbench 主题数据将同一组类名生成补全图标样式，并匹配资源标签的文件名、扩展名及语言关联；语言注册变化会通知已有资源标签重绘。当前 Workbench 未提供 `IModelService`，资源标签按已注册的文件语言关联选择图标；工具函数的模型优先语义由 Editor 单测验证。下文较早的“没有消费者”和缺失文件清单是当时的审计记录。
+
+定向单测 5 个文件通过；Chromium 文件图标场景通过，覆盖真实字体、类名、明暗主题与关闭/恢复。`typecheck:stanza`、`typecheck:renderer`、`build:renderer` 曾通过，本批文件的 `git diff --check` 通过。随后同时进行的 `colorRegistry.ts` 改动把高对比度默认值改为必填，最后一次 `typecheck:stanza` 因范围外颜色注册调用缺失字段而失败，不能把当前全工作区类型检查记为通过。完整 Editor 单测在 Find 图标 `find-selection` 未注册处失败；全工作区的 `git diff --check` 受同时进行的 `editorActions.ts` 尾部空行改动影响，均未记为通过。
+
+补齐 Editor 调用后，`typecheck:stanza`、`typecheck:renderer`、`build:renderer` 和测试 TypeScript 编译通过；新增的 Editor 补全、文件夹主题定向单测通过。Chromium 分别验证了补全控制器的真实创建路径，以及主题图标字体、明暗切换和关闭后的文字恢复。较宽的 Suggest 单测文件仍有两条 snippet 选区用例失败；Chat 输入单测文件另有日志服务重复注册及布局用例失败，不能将这两个测试文件记为整体通过。Chat 输入的两条补全行为定向单测通过。
+
 ## Drop / Paste Into Editor（2026-09-24）
 
 `CopyPasteController` 和 `DropIntoEditorController` 现在从语言特性注册表收集 provider edit，按 `yieldTo` 排序，再由 `PostEditWidgetManager` 经 Bulk Edit 应用插入和附加工作区编辑。内置纯文本、绝对路径、相对路径 provider 走同一条链；HTML 只在显式 `Paste As` 时提供。复制准备数据带有 ID：普通粘贴及能从剪贴板读到该 ID 的 `Paste As` 可交给匹配的 provider，同文本的外部剪贴板内容不会误用旧准备结果；`Paste As...` 没有指定 kind 时先让用户选择。普通粘贴和拖放在存在多个可替换编辑时显示编辑器内选择器，支持键盘切换、Escape 和撤销。该目录的八个生产 TS/CSS 文件现与 VS Code 同路径；仅 Ash 的 `textFileTransfer.ts` 及其测试已按用户确认删除。

@@ -81,7 +81,7 @@
 .stanza-editor .symbolHighlight {
 	box-sizing: border-box;
 	background-color: var(--ash-selection-background);
-	border: 1px solid var(--ash-focus-border);
+	border: var(--ash-stroke-thickness) solid var(--ash-focus-border);
 }
 
 [data-color-scheme="high-contrast-dark"] .rangeHighlight,

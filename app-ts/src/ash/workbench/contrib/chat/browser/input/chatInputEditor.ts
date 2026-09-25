@@ -53,7 +53,7 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 				const session = context.register(new SuggestModel(completions.results, context.editor, {
 					resolver: completions,
 				}));
-				return new SuggestController(context.editor, context.controller, completions, session, {
+				return context.instantiationService.createInstance(SuggestController, context.editor, context.controller, completions, session, {
 					widgetContainer: this.element,
 				});
 			},

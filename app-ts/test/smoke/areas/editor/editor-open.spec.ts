@@ -46,6 +46,163 @@ test("App Server workspace files open in Stanza and save through the editor regi
 	).toBe("const value = 2;");
 });
 
+test("Show All Editors searches recent editors and restores editor focus", async ({ target, workbench }) => {
+	test.skip(
+		target.appServerMode !== "required" || target.workbenchMode !== "code",
+		"This scenario requires the Code App Server product",
+	);
+
+	const page = workbench.page;
+	const fileRow = page.locator(".ash-explorer .ash-tree-row").filter({ hasText: "main.ts" });
+	await expect.poll(() => fileRow.count(), { timeout: 15_000 }).toBe(1);
+	await fileRow.click();
+	const group = workbench.editors.groupAt(0);
+	await expect(group.tabs).toHaveCount(1);
+	const breadcrumbs = group.title.getByRole("navigation", { name: "Editor breadcrumbs" });
+	await expect(breadcrumbs).toBeVisible();
+	await expect(breadcrumbs.locator('[aria-current="page"]')).toHaveText("main.ts");
+
+	await page.keyboard.press("F1");
+	const picker = page.locator(".ash-quick-pick");
+	await picker.getByRole("combobox").fill("Show All Editors");
+	await expect(picker.locator(".ash-quick-pick-row-label", { hasText: "Show All Editors" })).toBeVisible();
+	await page.keyboard.press("Enter");
+
+	const search = picker.getByRole("combobox");
+	await expect(search).toHaveValue("edt mru ");
+	await search.fill("edt mru main");
+	await expect(picker.locator(".ash-quick-pick-row-label", { hasText: "main.ts" })).toBeVisible();
+	await page.keyboard.press("Enter");
+	await expect(picker).toHaveCount(0);
+	await expect(group.content.locator(".stanza-editor-input")).toBeFocused();
+});
+
+test("Binary content shows an editor error with a working alternative", async ({ target, testWorkspace, workbench }) => {
+	test.skip(
+		target.appServerMode !== "required" || target.workbenchMode !== "code",
+		"This scenario requires the Code App Server product",
+	);
+
+	await writeFile(testWorkspace.file, new Uint8Array([0x48, 0x69, 0x00, 0xff]));
+	const fileRow = workbench.page.locator(".ash-explorer .ash-tree-row").filter({ hasText: "main.ts" });
+	await expect.poll(() => fileRow.count(), { timeout: 15_000 }).toBe(1);
+	await fileRow.click();
+
+	const content = workbench.editors.groupAt(0).content;
+	const error = content.getByRole("alert");
+	await expect(error).toContainText("Unable to open main.ts");
+	await expect(error).toContainText("binary");
+	await expect(error.getByRole("button", { name: "Retry" })).toBeVisible();
+	const alternative = error.getByRole("button", { name: "Open as Binary" });
+	await expect(alternative).toBeVisible();
+	const styles = await error.evaluate(element => ({
+		display: getComputedStyle(element).display,
+		gap: getComputedStyle(element).gap,
+		actionGap: getComputedStyle(element.querySelector(".ash-editor-open-error-actions")!).gap,
+		color: getComputedStyle(element.querySelector(".ash-editor-open-error-detail")!).color,
+	}));
+	expect(styles.display).toBe("flex");
+	expect(styles.gap).toBe("12px");
+	expect(styles.actionGap).toBe("8px");
+	expect(styles.color).not.toBe("rgba(0, 0, 0, 0)");
+	await alternative.click();
+	await expect(content.locator(".ash-binary-editor-content")).toContainText("48 69 00 ff");
+	await expect(error).toHaveCount(0);
+});
+
+test("Reopen Editor With switches the active file to Binary Editor", async ({ target, workbench }) => {
+	test.skip(
+		target.appServerMode !== "required" || target.workbenchMode !== "code",
+		"This scenario requires the Code App Server product",
+	);
+
+	const page = workbench.page;
+	const fileRow = page.locator(".ash-explorer .ash-tree-row").filter({ hasText: "main.ts" });
+	await expect.poll(() => fileRow.count(), { timeout: 15_000 }).toBe(1);
+	await fileRow.click();
+	const content = workbench.editors.groupAt(0).content;
+	await expect(content.locator(".stanza-editor-input")).toBeAttached();
+
+	await page.keyboard.press("F1");
+	const picker = page.locator(".ash-quick-pick");
+	await picker.getByRole("combobox").fill("Reopen Editor With");
+	await expect(picker.locator(".ash-quick-pick-row-label", { hasText: "Reopen Editor With..." })).toBeVisible();
+	await page.keyboard.press("Enter");
+	await expect(picker.getByRole("combobox")).toHaveAttribute("placeholder", "Select an editor");
+	await picker.locator(".ash-quick-pick-row-label", { hasText: "Binary Editor" }).click();
+
+	await expect(picker).toHaveCount(0);
+	await expect(content.locator(".ash-binary-editor-content")).toContainText("63 6f 6e 73 74");
+});
+
+test("Close Editor command closes the active tab", async ({ target, workbench }) => {
+	test.skip(
+		target.appServerMode !== "required" || target.workbenchMode !== "code",
+		"This scenario requires the Code App Server product",
+	);
+
+	const page = workbench.page;
+	const fileRow = page.locator(".ash-explorer .ash-tree-row").filter({ hasText: "main.ts" });
+	await expect.poll(() => fileRow.count(), { timeout: 15_000 }).toBe(1);
+	await fileRow.click();
+	const group = workbench.editors.groupAt(0);
+	await expect(group.tabs).toHaveCount(1);
+
+	await page.keyboard.press("F1");
+	const picker = page.locator(".ash-quick-pick");
+	await picker.getByRole("combobox").fill("Close Editor");
+	await picker.locator(".ash-quick-pick-row-label", { hasText: /^Close Editor$/u }).click();
+	await expect(group.tabs).toHaveCount(0);
+});
+
+test('Dragging a tab to a group edge shows the split target and moves the editor', async ({ target, workbench }) => {
+	test.skip(
+		target.appServerMode !== 'required' || target.workbenchMode !== 'code',
+		'This scenario requires the Code App Server product',
+	);
+
+	const page = workbench.page;
+	const explorer = page.locator('.ash-explorer .ash-tree-row');
+	for (const filename of ['main.rs', 'main.ts']) {
+		const row = explorer.filter({ hasText: filename });
+		await expect.poll(() => row.count(), { timeout: 15_000 }).toBe(1);
+		if (filename === 'main.rs') await row.dblclick();
+		else await row.click();
+	}
+
+	const editors = workbench.editors;
+	const group = editors.groupAt(0);
+	await expect(group.tabs).toHaveCount(2);
+	await group.tabs.filter({ hasText: 'main.ts' }).dragTo(
+		group.tabs.filter({ hasText: 'main.rs' }),
+		{ targetPosition: { x: 8, y: 12 } },
+	);
+	await expect(group.tabs).toContainText(['main.ts', 'main.rs']);
+	const tabBox = await group.tabs.filter({ hasText: 'main.ts' }).boundingBox();
+	const groupBox = await group.element.boundingBox();
+	if (!tabBox || !groupBox) throw new Error('Editor drag requires visible tab and group bounds');
+
+	await page.mouse.move(tabBox.x + tabBox.width / 2, tabBox.y + tabBox.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(tabBox.x + tabBox.width / 2 + 12, tabBox.y + tabBox.height / 2 + 12, { steps: 4 });
+	await page.mouse.move(groupBox.x + groupBox.width - 8, groupBox.y + groupBox.height * 0.65, { steps: 12 });
+	await expect(group.element).toHaveAttribute('data-editor-drop-direction', 'right');
+	const feedback = await group.element.evaluate(element => {
+		const style = getComputedStyle(element, '::after');
+		return { content: style.content, inset: style.left, width: style.width, border: style.borderTopColor };
+	});
+	expect(feedback.content).toBe('""');
+	expect(feedback.inset).not.toBe('auto');
+	expect(feedback.width).not.toBe('0px');
+	expect(feedback.border).not.toBe('rgba(0, 0, 0, 0)');
+	await page.mouse.up();
+
+	await expect(editors.groups).toHaveCount(2);
+	await expect(editors.groupAt(0).tabs).toContainText(['main.rs']);
+	await expect(editors.groupAt(1).tabs).toContainText(['main.ts']);
+	await expect(editors.element.locator('[data-editor-drop-direction]')).toHaveCount(0);
+});
+
 test('minimap slider follows its theme color in the running editor', async ({ target, workbench }) => {
 	test.skip(
 		target.appServerMode !== 'required' || target.workbenchMode !== 'code',

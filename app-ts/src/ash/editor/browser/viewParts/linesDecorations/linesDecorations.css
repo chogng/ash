@@ -1,7 +1,7 @@
 .stanza-editor .lines-decorations {
 	position: absolute;
 	top: 0;
-	background: white;
+	background: var(--ash-editor-background);
 }
 
 /*

@@ -10,8 +10,10 @@ import "../../../editor/common/core/editorColorRegistry.js";
 import "../../../editor/browser/widget/multiDiffEditor/colors.js";
 import "../../common/theme.js";
 import "../../contrib/chat/common/widget/chatColors.js";
+import "../../contrib/pdf/common/pdfColors.js";
 import "../../contrib/preferences/common/settingsEditorColorRegistry.js";
 import "../../contrib/terminal/common/terminalColorRegistry.js";
+import "../../../sessions/common/sessionsColors.js";
 
 test("CSS consumes registered design tokens and isolates intentional color samples", async () => {
 	const registered = new Set([...Colors.getColors().map(({ id }) => colorCssVariable(id)), ...Sizes.getSizes().map(({ id }) => asCssVariableName(id))]);

@@ -8,14 +8,14 @@
   color: var(--ash-editor-foreground);
   white-space: normal;
   background: var(--ash-dialog-background);
-  border: 1px solid var(--ash-widget-border);
-  border-radius: 4px;
+  border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+  border-radius: var(--ash-corner-radius-small);
   box-shadow: 0 4px 12px var(--ash-widget-shadow);
 }
 
 .stanza-editor-find-widget.visible {
   display: grid;
-  gap: 5px;
+  gap: 6px;
 }
 
 .stanza-editor-find-widget > .ash-sash-vertical {
@@ -27,7 +27,7 @@
 .stanza-editor-replace-row {
   display: grid;
   grid-template-columns: 24px minmax(80px, 1fr) auto repeat(7, 24px);
-  gap: 3px;
+  gap: 4px;
   align-items: center;
 }
 
@@ -43,7 +43,7 @@
   color: var(--ash-input-foreground);
   font: inherit;
   background: var(--ash-input-background);
-  border: 1px solid var(--ash-input-border);
+  border: var(--ash-stroke-thickness) solid var(--ash-input-border);
   outline: none;
 }
 
@@ -69,13 +69,13 @@
   box-sizing: border-box;
   min-width: 24px;
   height: 24px;
-  padding: 0 5px;
+  padding: 0 6px;
   color: var(--ash-button-foreground);
   font: inherit;
   line-height: 22px;
   background: transparent;
   border: 0;
-  border-radius: 3px;
+  border-radius: var(--ash-corner-radius-small);
 }
 
 .stanza-editor-find-button svg {
@@ -99,12 +99,12 @@
 }
 
 .stanza-editor-find-button:focus-visible {
-  outline: 1px solid var(--ash-focus-border);
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
   outline-offset: -1px;
 }
 
 .stanza-editor-find-replace-toggle {
-  font-size: 16px;
+  font-size: var(--ash-font-size-heading2);
 }
 
 .stanza-editor .findMatch {
@@ -113,7 +113,7 @@
 
 .stanza-editor .currentFindMatch {
   background: color-mix(in srgb, var(--ash-search-match-background) 70%, var(--ash-focus-border));
-  outline: 1px solid var(--ash-focus-border);
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
 }
 
 @media (forced-colors: active) {
@@ -125,6 +125,6 @@
   .stanza-editor .findMatch,
   .stanza-editor .currentFindMatch {
     background: transparent;
-    outline: 1px solid CanvasText;
+    outline: var(--ash-stroke-thickness) solid CanvasText;
   }
 }

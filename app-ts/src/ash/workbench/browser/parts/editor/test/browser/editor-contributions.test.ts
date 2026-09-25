@@ -13,10 +13,10 @@ import type { EditorInput } from "../../editorInput.js";
 import type { IEditorPane, EditorPaneStatus } from "../../editorPane.js";
 import { EditorPaneVisibility } from "../../editorPane.js";
 import type { IEditorPart } from "../../editorPart.js";
-import { EditorAutoSaveContribution } from "../../editorAutoSave.js";
+import { EditorAutoSave } from "../../editorAutoSave.js";
 import { EditorStatusContribution } from "../../editorStatus.js";
 
-test("EditorAutoSaveContribution saves dirty copies after the configured delay and skips conflicts", async () => {
+test("EditorAutoSave saves dirty copies after the configured delay and skips conflicts", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const editorChanges = new Emitter<void>();
 	const editorPart = {
@@ -30,7 +30,7 @@ test("EditorAutoSaveContribution saves dirty copies after the configured delay a
 	using workingCopies = new BrowserWorkingCopyService();
 	using workingCopy = new TestWorkingCopy(URI.file("C:\\project\\auto-save.ts"));
 	using registration = workingCopies.register(workingCopy);
-	using contribution = new EditorAutoSaveContribution(editorPart, workingCopies, configuration);
+	using contribution = new EditorAutoSave(editorPart, workingCopies, configuration);
 
 	workingCopy.markDirty();
 	await waitFor(() => workingCopy.saveCount === 1);
@@ -45,7 +45,7 @@ test("EditorAutoSaveContribution saves dirty copies after the configured delay a
 	dom.window.close();
 });
 
-test("EditorAutoSaveContribution observes auxiliary editor window blur", async () => {
+test("EditorAutoSave observes auxiliary editor window blur", async () => {
 	const main = new JSDOM("<!doctype html><body></body>");
 	const auxiliary = new JSDOM("<!doctype html><body></body>");
 	const editorChanges = new Emitter<void>();
@@ -60,7 +60,7 @@ test("EditorAutoSaveContribution observes auxiliary editor window blur", async (
 	using workingCopies = new BrowserWorkingCopyService();
 	using workingCopy = new TestWorkingCopy(URI.file("C:\\project\\auxiliary-auto-save.ts"));
 	using registration = workingCopies.register(workingCopy);
-	using contribution = new EditorAutoSaveContribution(editorPart, workingCopies, configuration);
+	using contribution = new EditorAutoSave(editorPart, workingCopies, configuration);
 
 	state.domNode = auxiliary.window.document.body;
 	editorChanges.fire();
@@ -74,7 +74,59 @@ test("EditorAutoSaveContribution observes auxiliary editor window blur", async (
 	auxiliary.window.close();
 });
 
-test("EditorAutoSaveContribution clears a delay timer through the window that created it", async () => {
+test("EditorAutoSave saves dirty working copies when focus mode loses window focus", async () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const editorChanges = new Emitter<void>();
+	const editorPart = {
+		domNode: dom.window.document.body,
+		activePane: undefined,
+		onDidChangeEditors: editorChanges.event,
+	} as unknown as IEditorPart;
+	const configuration = new InMemoryConfigurationService();
+	await configuration.updateValue(EditorAutoSaveConfiguration, "onFocusChange");
+	using workingCopies = new BrowserWorkingCopyService();
+	using workingCopy = new TestWorkingCopy(URI.file("C:\\project\\focus-auto-save.ts"));
+	using registration = workingCopies.register(workingCopy);
+	using contribution = new EditorAutoSave(editorPart, workingCopies, configuration);
+
+	workingCopy.markDirty();
+	dom.window.dispatchEvent(new dom.window.Event("blur"));
+	await waitFor(() => workingCopy.saveCount === 1);
+
+	editorChanges.dispose();
+	configuration.dispose();
+	dom.window.close();
+});
+
+test("EditorAutoSave saves existing dirty working copies when auto save is enabled", async () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const editorChanges = new Emitter<void>();
+	const editorPart = {
+		domNode: dom.window.document.body,
+		activePane: undefined,
+		onDidChangeEditors: editorChanges.event,
+	} as unknown as IEditorPart;
+	const configuration = new InMemoryConfigurationService();
+	using workingCopies = new BrowserWorkingCopyService();
+	using workingCopy = new TestWorkingCopy(URI.file("C:\\project\\enabled-auto-save.ts"));
+	using registration = workingCopies.register(workingCopy);
+	using untitled = new TestWorkingCopy(URI.parse("untitled:/draft"));
+	using untitledRegistration = workingCopies.register(untitled);
+	using contribution = new EditorAutoSave(editorPart, workingCopies, configuration);
+
+	workingCopy.markDirty();
+	untitled.markDirty();
+	await configuration.updateValue(EditorAutoSaveConfiguration, "onFocusChange");
+	await waitFor(() => workingCopy.saveCount === 1);
+	dom.window.dispatchEvent(new dom.window.Event("blur"));
+	assert.equal(untitled.saveCount, 0);
+
+	editorChanges.dispose();
+	configuration.dispose();
+	dom.window.close();
+});
+
+test("EditorAutoSave clears a delay timer through the window that created it", async () => {
 	const main = new JSDOM("<!doctype html><body></body>");
 	const auxiliary = new JSDOM("<!doctype html><body></body>");
 	const editorChanges = new Emitter<void>();
@@ -90,7 +142,7 @@ test("EditorAutoSaveContribution clears a delay timer through the window that cr
 	using workingCopies = new BrowserWorkingCopyService();
 	using workingCopy = new TestWorkingCopy(URI.file("C:\\project\\window-timer.ts"));
 	using registration = workingCopies.register(workingCopy);
-	using contribution = new EditorAutoSaveContribution(editorPart, workingCopies, configuration);
+	using contribution = new EditorAutoSave(editorPart, workingCopies, configuration);
 
 	workingCopy.markDirty();
 	state.domNode = auxiliary.window.document.body;

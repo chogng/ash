@@ -8,15 +8,15 @@
 
 .ash-workbench-sessions > .ash-workbench-part-content {
   gap: 16px;
-  padding: 22px;
+  padding: 24px;
 }
 
 .ash-sessions-surface-header { flex: 0 0 auto; }
 
 .ash-sessions-surface-header h1 {
-  margin: 0 0 5px;
-  font-size: 17px;
-  font-weight: 680;
+  margin: 0 0 6px;
+  font-size: var(--ash-font-size-heading2);
+  font-weight: var(--ash-font-weight-semi-bold);
   letter-spacing: -.012em;
 }
 

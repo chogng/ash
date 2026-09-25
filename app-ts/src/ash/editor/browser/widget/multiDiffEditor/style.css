@@ -14,7 +14,7 @@
 }
 
 .stanza-multi-diff-editor:focus-visible {
-	outline: 1px solid var(--ash-focus-border);
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
 	outline-offset: -1px;
 }
 
@@ -32,7 +32,7 @@
 	overflow: visible;
 	background: var(--ash-multi-diff-editor-background);
 	border: var(--ash-stroke-thickness) solid var(--ash-multi-diff-editor-border);
-	border-radius: 6px;
+	border-radius: var(--ash-corner-radius-medium);
 }
 
 .stanza-multi-diff-editor-header {
@@ -89,7 +89,7 @@
 }
 
 .stanza-multi-diff-editor-header-toggle:focus-visible {
-	outline: 1px solid var(--ash-focus-border);
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
 	outline-offset: -1px;
 }
 
@@ -100,7 +100,7 @@
 .stanza-multi-diff-editor-title {
 	min-width: 0;
 	overflow: hidden;
-	font-weight: 600;
+	font-weight: var(--ash-font-weight-semi-bold);
 	text-overflow: ellipsis;
 }
 

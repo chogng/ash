@@ -6,11 +6,11 @@
 }
 
 .ash-workbench-sidebar {
-  border-right: 1px solid var(--ash-border);
+  border-right: var(--ash-stroke-thickness) solid var(--ash-border);
 }
 
 .ash-workbench-agentSidebar {
-  border-left: 1px solid var(--ash-border);
+  border-left: var(--ash-stroke-thickness) solid var(--ash-border);
 }
 .ash-sidebar-part {
   background: var(--ash-side-bar-background);

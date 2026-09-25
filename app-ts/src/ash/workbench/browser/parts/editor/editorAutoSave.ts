@@ -1,12 +1,15 @@
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { DisposableMap, Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
+import type { IWorkbenchContribution } from "../../../common/contributions.js";
 import { EditorAutoSaveConfiguration, EditorAutoSaveDelayConfiguration, type EditorAutoSaveMode } from "../../../services/editor/common/editorConfiguration.js";
 import type { IWorkingCopy, IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import type { IEditorPart } from "./editorPart.js";
 
 /** Coordinates configuration-driven saves without taking ownership of editor models. */
-export class EditorAutoSaveContribution extends Disposable {
+export class EditorAutoSave extends Disposable implements IWorkbenchContribution {
+	static readonly ID = "workbench.contrib.editorAutoSave";
+
 	private readonly registrations = this._register(new DisposableMap<IWorkingCopy, DisposableStore>());
 	private readonly windowListeners = this._register(new DisposableMap<Window, DisposableStore>());
 	private readonly timers = new Map<IWorkingCopy, { readonly ownerWindow: Window; readonly handle: number }>();
@@ -25,6 +28,9 @@ export class EditorAutoSaveContribution extends Disposable {
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (!event.affectsConfiguration(EditorAutoSaveConfiguration) && !event.affectsConfiguration(EditorAutoSaveDelayConfiguration)) return;
 			this.clearTimers();
+			if (event.affectsConfiguration(EditorAutoSaveConfiguration) && this.mode !== "off") {
+				for (const workingCopy of workingCopies.getAll()) void this.save(workingCopy);
+			}
 			if (this.mode === "afterDelay") {
 				for (const workingCopy of workingCopies.getAll()) this.schedule(workingCopy);
 			}
@@ -59,7 +65,7 @@ export class EditorAutoSaveContribution extends Disposable {
 		if (!ownerWindow || this.windowListeners.has(ownerWindow)) return;
 		const listeners = new DisposableStore();
 		listeners.add(addDisposableListener(ownerWindow, "blur", () => {
-			if (this.mode !== "onWindowChange") return;
+			if (this.mode !== "onWindowChange" && this.mode !== "onFocusChange") return;
 			for (const workingCopy of this.workingCopies.getAll()) void this.save(workingCopy);
 		}));
 		listeners.add(addDisposableListener(ownerWindow, "unload", () => this.windowListeners.deleteAndDispose(ownerWindow)));
@@ -91,7 +97,7 @@ export class EditorAutoSaveContribution extends Disposable {
 	}
 
 	private async save(workingCopy: IWorkingCopy): Promise<void> {
-		if (!workingCopy.isDirty || workingCopy.hasExternalChange || this.saving.has(workingCopy)) return;
+		if (workingCopy.resource.scheme === "untitled" || !workingCopy.isDirty || workingCopy.hasExternalChange || this.saving.has(workingCopy)) return;
 		this.saving.add(workingCopy);
 		try {
 			await workingCopy.save(new AbortController().signal);

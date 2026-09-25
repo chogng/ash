@@ -5,7 +5,7 @@
   flex-wrap: wrap;
   gap: 4px;
   padding: 6px 12px;
-  border-bottom: 1px solid var(--ash-border);
+  border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
   background: var(--ash-editor-background);
 }
 
@@ -18,7 +18,7 @@
   align-items: center;
   gap: 6px;
   padding-inline: 6px;
-  border-inline: 1px solid var(--ash-border);
+  border-inline: var(--ash-stroke-thickness) solid var(--ash-border);
 }
 
 .stanza-structured-format-select-control {
@@ -32,9 +32,9 @@
 .stanza-structured-format-select {
   min-width: 88px;
   height: 24px;
-  padding-inline: 5px;
-  border: 1px solid var(--ash-border);
-  border-radius: 4px;
+  padding-inline: 6px;
+  border: var(--ash-stroke-thickness) solid var(--ash-border);
+  border-radius: var(--ash-corner-radius-small);
   color: var(--ash-editor-foreground);
   background: var(--ash-input-background, var(--ash-editor-background));
   font: inherit;
@@ -43,8 +43,8 @@
 .stanza-structured-format-font-size .stanza-structured-format-select { min-width: 64px; }
 
 .stanza-structured-format-select:focus-visible {
-  outline: 1px solid var(--ash-focus-border);
-  outline-offset: 1px;
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  outline-offset: var(--ash-stroke-thickness);
 }
 
 .stanza-structured-format-code-context {
@@ -63,16 +63,16 @@
   box-sizing: border-box;
   flex: 0 0 240px;
   overflow: auto;
-  border-inline-end: 1px solid var(--ash-border);
+  border-inline-end: var(--ash-stroke-thickness) solid var(--ash-border);
   color: var(--ash-editor-foreground);
   background: var(--ash-editor-background);
 }
 
 .stanza-document-outline-title {
-  padding: 12px 14px 8px;
+  padding: 12px 16px 8px;
   color: var(--ash-editor-foreground);
   font-size: 0.85em;
-  font-weight: 600;
+  font-weight: var(--ash-font-weight-semi-bold);
   text-transform: uppercase;
 }
 
@@ -86,7 +86,7 @@
   box-sizing: border-box;
   display: block;
   width: 100%;
-  padding-block: 5px;
+  padding-block: 6px;
   padding-inline-end: 8px;
   overflow: hidden;
   border: 0;
@@ -101,8 +101,12 @@
 
 .stanza-document-outline-entry:hover,
 .stanza-document-outline-entry:focus-visible {
-  outline: 0;
   background: var(--ash-toolbar-hover-background);
+}
+
+.stanza-document-outline-entry:focus-visible {
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  outline-offset: -1px;
 }
 
 .ash-text-editor-widget-pane {
@@ -111,7 +115,7 @@
   min-width: 0;
   height: 100%;
   overflow: auto;
-  padding: 32px 48px 96px;
+  padding: 32px 40px 40px;
   color: var(--ash-editor-foreground);
   background: var(--ash-editor-background);
 }
@@ -144,7 +148,7 @@
 
 .ash-academic-title {
   padding-bottom: 16px;
-  border-bottom: 1px solid var(--ash-border);
+  border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
 }
 
 .ash-academic-abstract {
@@ -184,6 +188,12 @@
   line-height: 1.6;
 }
 
+.stanza-document-text-input:focus-visible,
+.stanza-document-rich-text-input:focus-visible {
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  outline-offset: -1px;
+}
+
 .stanza-document-inline-run { white-space: pre-wrap; }
 .stanza-document-inline-image {
   max-width: 100%;
@@ -198,19 +208,19 @@
   display: inline-block;
   margin: 0 2px;
   padding: 0 4px;
-  border: 1px solid var(--ash-border);
-  border-radius: 3px;
+  border: var(--ash-stroke-thickness) solid var(--ash-border);
+  border-radius: var(--ash-corner-radius-small);
   background: var(--ash-toolbar-hover-background);
   cursor: pointer;
 }
 .stanza-document-inline-node.stanza-document-inline-node-selected {
   outline: 2px solid var(--ash-focus-border);
-  outline-offset: 1px;
+  outline-offset: var(--ash-stroke-thickness);
 }
 .ash-citation {
   display: inline-block;
   margin-inline: 2px;
-  padding-inline: 3px;
+  padding-inline: 4px;
   color: var(--ash-accent-foreground);
   cursor: pointer;
   font-size: 0.9em;
@@ -221,24 +231,24 @@
 }
 .ash-citation.stanza-document-inline-node-selected {
   outline: 2px solid var(--ash-focus-border);
-  outline-offset: 1px;
+  outline-offset: var(--ash-stroke-thickness);
 }
 .ash-citation-bibliography {
   margin-top: 24px;
   padding-top: 12px;
-  border-top: 1px solid var(--ash-border);
+  border-top: var(--ash-stroke-thickness) solid var(--ash-border);
 }
 .ash-citation-reference {
   margin: 6px 0;
 }
-.stanza-document-mark-strong { font-weight: 700; }
+.stanza-document-mark-strong { font-weight: var(--ash-font-weight-semi-bold); }
 .stanza-document-mark-em { font-style: italic; }
 .stanza-document-mark-textStyle[data-font-family="sans"] { font-family: var(--ash-font-family); }
 .stanza-document-mark-textStyle[data-font-family="serif"] { font-family: Georgia, "Times New Roman", serif; }
 .stanza-document-mark-textStyle[data-font-family="monospace"] { font-family: var(--ash-font-family-monospace); }
 .stanza-document-mark-code {
   padding: 0 2px;
-  border-radius: 3px;
+  border-radius: var(--ash-corner-radius-small);
   background: var(--ash-text-code-block-background);
   font-family: var(--ash-font-family-monospace);
 }
@@ -248,7 +258,7 @@
 }
 
 .stanza-document-remote-selection {
-  border-radius: 2px;
+  border-radius: var(--ash-corner-radius-x-small);
   box-decoration-break: clone;
 }
 
@@ -257,10 +267,19 @@
 .stanza-document-remote-selection-2 { background: color-mix(in srgb, var(--ash-collaboration-selection2-background) 26%, transparent); }
 .stanza-document-remote-selection-3 { background: color-mix(in srgb, var(--ash-collaboration-selection3-background) 26%, transparent); }
 
+:is([data-color-scheme="high-contrast-dark"], [data-color-scheme="high-contrast-light"]) .stanza-document-remote-selection {
+  background: var(--ash-editor-background);
+}
+
+:is([data-color-scheme="high-contrast-dark"], [data-color-scheme="high-contrast-light"]) .stanza-document-remote-selection-0 { outline: var(--ash-stroke-thickness) solid var(--ash-collaboration-selection0-background); }
+:is([data-color-scheme="high-contrast-dark"], [data-color-scheme="high-contrast-light"]) .stanza-document-remote-selection-1 { outline: var(--ash-stroke-thickness) solid var(--ash-collaboration-selection1-background); }
+:is([data-color-scheme="high-contrast-dark"], [data-color-scheme="high-contrast-light"]) .stanza-document-remote-selection-2 { outline: var(--ash-stroke-thickness) solid var(--ash-collaboration-selection2-background); }
+:is([data-color-scheme="high-contrast-dark"], [data-color-scheme="high-contrast-light"]) .stanza-document-remote-selection-3 { outline: var(--ash-stroke-thickness) solid var(--ash-collaboration-selection3-background); }
+
 .stanza-document-code-block {
   padding: 12px 16px;
-  border: 1px solid var(--ash-border);
-  border-radius: 6px;
+  border: var(--ash-stroke-thickness) solid var(--ash-border);
+  border-radius: var(--ash-corner-radius-medium);
   background: var(--ash-text-code-block-background);
   font-family: var(--ash-font-family-monospace);
 }
@@ -293,7 +312,7 @@
 .stanza-document-table-cell {
   min-width: 120px;
   padding: 8px;
-  border: 1px solid var(--ash-border);
+  border: var(--ash-stroke-thickness) solid var(--ash-border);
   vertical-align: top;
 }
 

@@ -49,15 +49,15 @@
 }
 
 .ash-statusbar-item.compact-left > .ash-statusbar-item-label {
-  padding: 0 5px 0 3px;
+  padding: 0 6px 0 4px;
 }
 
 .ash-statusbar-item.compact-right > .ash-statusbar-item-label {
-  padding: 0 3px 0 5px;
+  padding: 0 4px 0 6px;
 }
 
 .ash-statusbar-item.compact-left.compact-right > .ash-statusbar-item-label {
-  padding: 0 3px;
+  padding: 0 4px;
 }
 
 .ash-statusbar-item-label > .ash-icon,
@@ -77,7 +77,7 @@
 
 .ash-statusbar-item-label.has-segments {
   gap: 4px;
-  padding: 0 5px;
+  padding: 0 6px;
 }
 
 .ash-statusbar-item-label.disabled {
@@ -110,11 +110,11 @@
 
 .ash-statusbar-item-label:active:not(.disabled) {
   background: var(--ash-status-bar-item-active-background);
-  outline: 1px solid var(--ash-focus-border);
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
   outline-offset: -1px;
 }
 
 .ash-statusbar-item-label:focus-visible {
-  outline: 1px solid var(--ash-focus-border);
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
   outline-offset: -1px;
 }

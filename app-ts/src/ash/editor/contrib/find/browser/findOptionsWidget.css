@@ -2,12 +2,12 @@
   position: absolute;
   z-index: 12;
   display: flex;
-  gap: 3px;
+  gap: 4px;
   padding: 4px;
   color: var(--ash-editor-foreground);
   background: var(--ash-dialog-background);
-  border: 1px solid var(--ash-widget-border);
-  border-radius: 4px;
+  border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+  border-radius: var(--ash-corner-radius-small);
   box-shadow: 0 4px 12px var(--ash-widget-shadow);
 }
 
@@ -19,13 +19,13 @@
   color: var(--ash-button-foreground);
   background: transparent;
   border: 0;
-  border-radius: 3px;
+  border-radius: var(--ash-corner-radius-small);
 }
 
 .stanza-editor-find-options-widget button:hover,
 .stanza-editor-find-options-widget button[aria-pressed="true"] { background: var(--ash-button-hover-background); }
 
 .stanza-editor-find-options-widget button:focus-visible {
-  outline: 1px solid var(--ash-focus-border);
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
   outline-offset: -1px;
 }

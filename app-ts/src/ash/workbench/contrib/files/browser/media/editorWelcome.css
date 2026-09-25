@@ -50,7 +50,7 @@
 }
 
 .ash-editor-group-welcome-name {
-  font-size: 30px;
+  font-size: var(--ash-font-size-heading1);
   font-weight: var(--ash-font-weight-semi-bold);
   letter-spacing: .06em;
   line-height: 1;
@@ -60,7 +60,7 @@
   display: flex;
   justify-content: center;
   gap: 8px;
-  margin-top: 14px;
+  margin-top: 16px;
   color: var(--ash-description-foreground);
   font-size: var(--ash-font-size-body1);
 }
@@ -76,7 +76,7 @@
   grid-auto-rows: 60px;
   gap: 24px;
   justify-content: space-between;
-  margin-top: 48px;
+  margin-top: 40px;
 }
 
 .ash-editor-group-welcome-card {
@@ -86,9 +86,9 @@
   height: 60px;
   min-width: 0;
   min-height: 60px;
-  padding: 10px 28px 10px 14px;
-  border: 1px solid var(--ash-border);
-  border-radius: 9px;
+  padding: 10px 28px 10px 16px;
+  border: var(--ash-stroke-thickness) solid var(--ash-border);
+  border-radius: var(--ash-corner-radius-large);
   flex-direction: row;
   align-items: center;
   justify-content: flex-start;
@@ -107,23 +107,23 @@
 }
 
 .ash-editor-group-welcome-card:not(.featured) {
-  padding-right: 14px;
+  padding-right: 16px;
 }
 
 .ash-editor-group-welcome-card:focus-visible {
-  outline: 1px solid var(--ash-focus-border);
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
   outline-offset: 2px;
 }
 
 .ash-editor-group-welcome-card.featured {
   border-color: transparent;
   color: var(--ash-button-primary-foreground);
-  background: color-mix(in srgb, var(--ash-editor-background) 20%, black);
+  background: var(--ash-button-primary-background);
 }
 
 .ash-editor-group-welcome-card.featured:not(:disabled):hover {
   border-color: var(--ash-focus-border);
-  background: color-mix(in srgb, var(--ash-editor-background) 14%, black);
+  background: var(--ash-button-primary-hover-background);
 }
 
 .ash-editor-group-welcome-card.is-disabled {
@@ -159,13 +159,13 @@
   position: absolute;
   top: 50%;
   right: 10px;
-  font-size: 20px;
+  font-size: var(--ash-font-size-heading2);
   line-height: 1;
   transform: translateY(-50%);
 }
 
 .ash-editor-group-welcome-recent {
-  margin-top: 52px;
+  margin-top: 40px;
 }
 
 .ash-editor-group-welcome-section-heading {
@@ -178,7 +178,7 @@
 .ash-editor-group-welcome-section-heading h2 {
   margin: 0;
   color: var(--ash-description-foreground);
-  font-size: 16px;
+  font-size: var(--ash-font-size-heading2);
   font-weight: var(--ash-font-weight-regular);
 }
 
@@ -246,13 +246,13 @@ button.ash-editor-group-welcome-recent-item:hover {
 }
 
 .ash-editor-group-welcome > .ash-editor-group-welcome-scroll .ash-editor-group-watermark-shortcuts {
-  margin: 48px auto 0;
+  margin: 40px auto 0;
 }
 
 @container (max-width: 680px) {
   .ash-editor-group-welcome-content {
     width: min(384px, calc(100% - 32px));
-    margin-top: 56px;
+    margin-top: 40px;
   }
 
   .ash-editor-group-welcome-cards {

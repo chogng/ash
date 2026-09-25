@@ -2,11 +2,11 @@
   position: absolute;
   z-index: 8;
   max-width: min(480px, calc(100% - 16px));
-  padding: 6px 9px;
+  padding: 6px 10px;
   color: var(--ash-editor-hover-foreground, var(--ash-editor-foreground));
   background: var(--ash-editor-hover-background, var(--ash-editor-background));
-  border: 1px solid var(--ash-editor-hover-border, var(--ash-editor-border));
-  border-radius: 4px;
+  border: var(--ash-stroke-thickness) solid var(--ash-editor-hover-border, var(--ash-editor-border));
+  border-radius: var(--ash-corner-radius-small);
   box-shadow: 0 4px 14px var(--ash-editor-widget-shadow);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -14,5 +14,5 @@
 }
 
 .stanza-editor-hover-content + .stanza-editor-hover-content {
-  margin-top: 5px;
+  margin-top: 6px;
 }

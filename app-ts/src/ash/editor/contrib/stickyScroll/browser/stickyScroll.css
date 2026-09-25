@@ -9,7 +9,7 @@
   overflow: hidden;
   pointer-events: none;
   background: var(--ash-editor-background);
-  border-bottom: 1px solid var(--ash-widget-border);
+  border-bottom: var(--ash-stroke-thickness) solid var(--ash-widget-border);
 }
 
 .stanza-editor-sticky-scroll.empty {
@@ -93,6 +93,6 @@
 
 .stanza-editor-sticky-scroll-item:focus-visible,
 .stanza-editor-sticky-scroll-folding:focus-visible {
-  outline: 1px solid var(--ash-focus-border);
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
   outline-offset: -1px;
 }

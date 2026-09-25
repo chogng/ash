@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
+import { ILanguageService } from '../../../../../editor/common/languages/language.js';
+import { LanguageService } from '../../../../../editor/common/services/languageService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { WorkbenchConfiguration } from '../../../../common/configuration.js';
 import { WorkbenchConfigurationService } from '../../../configuration/browser/configurationService.js';
@@ -36,6 +38,8 @@ test('selected product icon theme refreshes mounted SVGs and returns to defaults
 		using configuration = new WorkbenchConfigurationService();
 		using services = new ServiceContainer();
 		services.registerInstance(IConfigurationService, configuration);
+		using languages = new LanguageService();
+		services.registerInstance(ILanguageService, languages);
 		using active = services.createInstance(WorkbenchThemeService, browser.window.document.body);
 		active.initialize();
 		const mounted = appendIcon(icon, browser.window.document.body);
@@ -119,12 +123,14 @@ test('active user themes refresh later colors while preserving editor overrides 
 		await configuration.updateValue(WorkbenchConfiguration.colorTheme, theme.id);
 		using services = new ServiceContainer();
 		services.registerInstance(IConfigurationService, configuration);
+		using languages = new LanguageService();
+		services.registerInstance(ILanguageService, languages);
 		using active = services.createInstance(WorkbenchThemeService, browser.window.document.body);
 		active.initialize();
 		const before = theme.colorEntries;
 		const changes: string[] = [];
 		using listener = active.onDidColorThemeChange(value => changes.push(value.getColorCss('test.workbenchLate')!));
-		registerColor('test.workbenchLate', { dark: 'editorCursor.foreground', light: '#123456' }, { description: 'Late workbench test.', owner: 'test' });
+		registerColor('test.workbenchLate', { dark: 'editorCursor.foreground', light: '#123456', highContrastDark: 'editorCursor.foreground', highContrastLight: '#000000' }, { description: 'Late workbench test.', owner: 'test' });
 		assert.deepEqual({
 			before: before.find(entry => entry.id === 'test.workbenchLate'),
 			resolved: theme.colors['test.workbenchLate'],
@@ -224,6 +230,8 @@ test('theme save, rename, reload, and delete keep identity in the filename', asy
 		using configuration = new WorkbenchConfigurationService();
 		using services = new ServiceContainer();
 		services.registerInstance(IConfigurationService, configuration);
+		using languages = new LanguageService();
+		services.registerInstance(ILanguageService, languages);
 		using activeThemes = services.createInstance(WorkbenchThemeService, browser.window.document.body);
 		activeThemes.initialize();
 		const created = await service.saveAs(JSON.stringify(document));

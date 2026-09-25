@@ -1,0 +1,24 @@
+.ash-editor-group[data-editor-drop-direction]::after {
+  position: absolute;
+  z-index: 20;
+  border: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  background: color-mix(in srgb, var(--ash-focus-border) 18%, transparent);
+  content: "";
+  pointer-events: none;
+}
+
+.ash-editor-group[data-editor-drop-direction="left"]::after {
+  inset: 0 50% 0 0;
+}
+
+.ash-editor-group[data-editor-drop-direction="right"]::after {
+  inset: 0 0 0 50%;
+}
+
+.ash-editor-group[data-editor-drop-direction="up"]::after {
+  inset: 0 0 50%;
+}
+
+.ash-editor-group[data-editor-drop-direction="down"]::after {
+  inset: 50% 0 0;
+}

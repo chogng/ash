@@ -15,16 +15,16 @@
   flex: 0 0 auto;
   gap: 4px;
   padding: 4px;
-  border-bottom: 1px solid var(--ash-border);
+  border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
 }
 .ash-browser-toolbar input { flex: 1; min-width: 0; }
 .ash-browser-toolbar button, .ash-browser-toolbar input {
   color: var(--ash-editor-foreground);
   background: var(--ash-editor-background);
-  border: 1px solid var(--ash-border);
+  border: var(--ash-stroke-thickness) solid var(--ash-border);
   font: inherit;
 }
-.ash-browser-toolbar :focus-visible { outline: 1px solid var(--ash-focus-border); outline-offset: -1px; }
+.ash-browser-toolbar :focus-visible { outline: var(--ash-stroke-thickness) solid var(--ash-focus-border); outline-offset: -1px; }
 .ash-browser-toolbar button:disabled { color: var(--ash-description-foreground); }
 .ash-browser-status {
   flex: 0 0 auto;

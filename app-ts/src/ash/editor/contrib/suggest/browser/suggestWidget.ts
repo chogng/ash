@@ -1,5 +1,9 @@
 import "./media/suggest.css";
 import { Position } from "../../../common/core/position.js";
+import { URI } from '../../../../base/common/uri.js';
+import { FileKind } from '../../../../platform/files/common/files.js';
+import type { ILanguageService } from '../../../common/languages/language.js';
+import { getIconClasses } from '../../../common/services/getIconClasses.js';
 import { addDisposableListener, fragment as createFragment, h, isElement, reset, stopEvent } from "../../../../base/browser/dom.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type ICodeEditor } from "../../../browser/editorBrowser.js";
@@ -20,6 +24,7 @@ export class CompletionWidget extends Disposable {
 		private readonly view: ViewController,
 		private readonly viewport: View,
 		private readonly session: SuggestModel,
+		private readonly languageService: ILanguageService,
 		container: HTMLElement | undefined = undefined,
 	) {
 		super();
@@ -140,6 +145,16 @@ export class CompletionWidget extends Disposable {
 			kind.className = "stanza-editor-completion-kind";
 			kind.setAttribute("aria-hidden", "true");
 			kind.textContent = completionKindLabel(item.kind);
+			if (item.kind === LanguageCompletionItemKind.File || item.kind === LanguageCompletionItemKind.Folder) {
+				const fileKind = item.kind === LanguageCompletionItemKind.File ? FileKind.File : FileKind.Directory;
+				const resource = URI.parse(`fake:///${encodeURIComponent(item.label)}`);
+				const detail = item.detail ? URI.parse(`fake:///${encodeURIComponent(item.detail)}`) : undefined;
+				const labelClasses = getIconClasses(undefined, this.languageService, resource, fileKind);
+				const detailClasses = detail ? getIconClasses(undefined, this.languageService, detail, fileKind) : [];
+				const iconClasses = fileKind === FileKind.File && detailClasses.length > labelClasses.length
+					? detailClasses : labelClasses;
+				kind.classList.add('ash-themed-file-icon', ...iconClasses, ...(fileKind === FileKind.Directory ? detailClasses : []));
+			}
 			label.className = "stanza-editor-completion-label";
 			label.textContent = item.label;
 			detail.className = "stanza-editor-completion-detail";

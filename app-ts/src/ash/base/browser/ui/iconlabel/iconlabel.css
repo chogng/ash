@@ -76,7 +76,7 @@
   white-space: pre;
 }
 
-.ash-icon-label.bold { font-weight: 600; }
+.ash-icon-label.bold { font-weight: var(--ash-font-weight-semi-bold); }
 .ash-icon-label.italic { font-style: italic; }
 .ash-icon-label.strikethrough { text-decoration: line-through; }
 .ash-icon-label-highlight { background: var(--ash-search-match-background); }

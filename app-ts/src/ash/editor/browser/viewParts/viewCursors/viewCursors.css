@@ -39,7 +39,7 @@
 .stanza-editor .cursors-layer.cursor-block-outline-style > .cursor {
 	background: transparent !important;
 	border-style: solid;
-	border-width: 1px;
+	border-width: var(--ash-stroke-thickness);
 }
 
 /* -- underline-style -- */
@@ -51,7 +51,7 @@
 
 /* -- underline-thin-style -- */
 .stanza-editor .cursors-layer.cursor-underline-thin-style > .cursor {
-	border-bottom-width: 1px;
+	border-bottom-width: var(--ash-stroke-thickness);
 	border-bottom-style: solid;
 	background: transparent !important;
 }

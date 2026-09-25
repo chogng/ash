@@ -19,8 +19,8 @@
   min-height: 0;
   overflow: hidden;
   flex-direction: column;
-  border: 1px solid var(--ash-border);
-  border-radius: 10px;
+  border: var(--ash-stroke-thickness) solid var(--ash-border);
+  border-radius: var(--ash-corner-radius-x-large);
   background: color-mix(in srgb, var(--ash-editor-background) 96%, var(--ash-workbench-background));
   box-shadow: 0 12px 30px color-mix(in srgb, var(--ash-widget-shadow) 40%, transparent);
 }
@@ -35,7 +35,7 @@
   align-items: center;
   gap: 8px;
   padding: 0 8px 0 12px;
-  border-bottom: 1px solid var(--ash-border);
+  border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
   background: color-mix(in srgb, var(--ash-editor-background) 88%, var(--ash-workbench-background));
 }
 
@@ -51,7 +51,7 @@
   min-width: 0;
   overflow: hidden;
   flex: 1 1 auto;
-  padding: 7px 0;
+  padding: 8px 0;
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -61,7 +61,7 @@
   width: 26px;
   height: 26px;
   flex: 0 0 auto;
-  border-radius: 6px;
+  border-radius: var(--ash-corner-radius-medium);
   color: var(--ash-description-foreground);
   font-size: 18px;
   line-height: 1;
@@ -74,7 +74,7 @@
 
 .ash-sessions-chat-slot-title:focus-visible,
 .ash-sessions-chat-slot-close:focus-visible {
-  outline: 1px solid var(--sessions-accent);
+  outline: var(--ash-stroke-thickness) solid var(--sessions-accent);
   outline-offset: -1px;
 }
 
@@ -95,7 +95,7 @@
 
 .ash-sessions-chat-view-empty h2 {
   margin: 0;
-  font-size: 24px;
+  font-size: var(--ash-font-size-heading1);
   letter-spacing: -.025em;
 }
 

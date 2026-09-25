@@ -8,7 +8,7 @@
 .ash-tasks-run,
 .ash-task-run-button {
   border: 0;
-  border-radius: 3px;
+  border-radius: var(--ash-corner-radius-small);
   color: inherit;
   background: transparent;
   font: inherit;
@@ -17,7 +17,7 @@
 
 .ash-tasks-status {
   min-height: 18px;
-  padding: 5px 2px;
+  padding: 6px 2px;
   color: var(--ash-description-foreground);
   font-size: 12px;
 }
@@ -36,7 +36,7 @@
   gap: 8px;
   align-items: center;
   width: 100%;
-  padding: 5px 7px;
+  padding: 6px 8px;
   text-align: left;
 }
 
@@ -47,7 +47,7 @@
 
 .ash-tasks-run:focus-visible,
 .ash-task-run-button:focus-visible {
-  outline: 1px solid var(--ash-focus-border);
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
   outline-offset: -1px;
 }
 
@@ -69,13 +69,13 @@
 
 .ash-task-run {
   margin-top: 6px;
-  border-top: 1px solid var(--ash-border);
-  padding-top: 5px;
+  border-top: var(--ash-stroke-thickness) solid var(--ash-border);
+  padding-top: 6px;
 }
 
 .ash-task-run-button {
   width: 100%;
-  padding: 5px 7px;
+  padding: 6px 8px;
   text-align: left;
 }
 

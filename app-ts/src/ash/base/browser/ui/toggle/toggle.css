@@ -13,7 +13,7 @@
   display: grid;
   min-width: 0;
   align-items: center;
-  gap: 18px;
+  gap: 20px;
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
@@ -41,8 +41,8 @@
 }
 
 .ash-toggle > input:focus-visible {
-  outline: 1px solid var(--ash-focus-border);
-  outline-offset: 1px;
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  outline-offset: var(--ash-stroke-thickness);
 }
 
 .ash-checkbox > input {
@@ -74,8 +74,8 @@
   height: 18px;
   flex: 0 0 34px;
   box-sizing: border-box;
-  border: 1px solid var(--ash-input-border);
-  border-radius: 10px;
+  border: var(--ash-stroke-thickness) solid var(--ash-input-border);
+  border-radius: var(--ash-corner-radius-circle);
   background: var(--ash-input-background);
   transition:
     background var(--ash-animation-duration-normal, 200ms) cubic-bezier(0.4, 0, 0.2, 1),
@@ -107,6 +107,6 @@
 }
 
 .ash-switch > input:focus-visible ~ .ash-switch-track {
-  outline: 1px solid var(--ash-focus-border);
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
   outline-offset: 2px;
 }

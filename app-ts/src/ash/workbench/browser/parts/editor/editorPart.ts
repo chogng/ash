@@ -29,6 +29,8 @@ import type { IDocumentCollaborationApi } from "../../../../platform/collaborati
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import { WorkbenchPart } from "../../part.js";
 import { EditorGroup, type EditorGroupOptions, type IEditorGroup } from "./editorGroup.js";
+import { EditorDropTarget } from "./editorDropTarget.js";
+import { EditorsObserver } from "./editorsObserver.js";
 import { EditorTabDragAndDropController, type EditorTabDropEvent } from "./editorTabDragAndDrop.js";
 import type { EditorInput, EditorOpenOptions, EditorOpenTarget } from "../../../services/editor/common/editorService.js";
 import type { TextResourceLanguageResolver } from "../../../../platform/language/common/textResourceLanguage.js";
@@ -41,7 +43,7 @@ import type { EditorWelcomeOptions, IEditorWelcomeProject } from "../../../contr
 import { EditorInputSerializers, type EditorInputSerializerRegistry, isSerializedEditorInput } from "../../../services/editor/common/editorInputSerializer.js";
 import type { ApplyEditorWorkingSetOptions, EditorWorkingSet, EditorWorkingSetLayout, EditorWorkingSetTarget } from "../../../services/editor/common/editorWorkingSet.js";
 import { ModalEditorPart } from "./modalEditorPart.js";
-import type { EditorGroupChangeEvent, EditorGroupId, EditorIdentifier, EditorInstanceId, EditorPartChangeEvent, EditorPartState, IEditorStateSource } from "../../../services/editor/common/editorState.js";
+import type { EditorGroupChangeEvent, EditorGroupId, EditorIdentifier, EditorPartChangeEvent, EditorPartState, IEditorStateSource } from "../../../services/editor/common/editorState.js";
 import { editorInputKey } from "./editorTabsControl.js";
 import type { IEditorPaneDescriptor } from "./editorPane.js";
 
@@ -146,7 +148,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 	private readonly saveAsResource: ((defaultName: string) => Promise<URI | undefined>) | undefined;
 	private readonly inputSerializers: EditorInputSerializerRegistry;
 	private readonly dialogService: IDialogService | undefined;
-	private readonly mruEditorIds: EditorInstanceId[] = [];
+	private readonly editorsObserver: EditorsObserver;
 	private readonly recentlyClosed: RecentlyClosedEditor[] = [];
 
 	override get minimumWidth(): number { return 120; }
@@ -203,6 +205,11 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 			view: initial.view,
 			size: 1,
 		}, { styles: EDITOR_GROUP_GRID_STYLES });
+		this._register(new EditorDropTarget(
+			this.contentDomNode,
+			target => this._groups.find(host => host.group.domNode.contains(target))?.group,
+			this.tabDragAndDrop,
+		));
 		this.modalEditor = this._register(new ModalEditorPart({
 			container,
 			registry: this.groupOptions.registry,
@@ -234,6 +241,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 				} : {}),
 			},
 		}));
+		this.editorsObserver = this._register(new EditorsObserver(this));
 		this._register(this.modalEditor.onDidRequestClose(input => {
 			void this.closeEditor(input).catch(reportEditorCloseError);
 		}));
@@ -269,11 +277,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 	}
 
 	get editorsMru(): readonly EditorIdentifier[] {
-		const byId = new Map(this.getEditorState().groups.flatMap(group => group.editors).map(editor => [editor.instanceId, editor]));
-		return Object.freeze(this.mruEditorIds.flatMap(instanceId => {
-			const editor = byId.get(instanceId);
-			return editor ? [Object.freeze({ groupId: editor.groupId, instanceId: editor.instanceId, paneId: editor.paneId, input: editor.input })] : [];
-		}));
+		return this.editorsObserver.editors;
 	}
 
 	get recentlyClosedEditors(): readonly RecentlyClosedEditor[] {
@@ -706,15 +710,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 	}
 
 	private handleEditorGroupChange(event: EditorGroupChangeEvent): void {
-		if (event.kind === "activeEditorChanged" && event.editor) {
-			this.touchEditorMru(event.editor.instanceId);
-			return;
-		}
 		if (event.kind !== "editorClosed") return;
-		if (!this._groups.some(({ group }) => group.editors.some(editor => editor.instanceId === event.editor.instanceId))) {
-			const index = this.mruEditorIds.indexOf(event.editor.instanceId);
-			if (index >= 0) this.mruEditorIds.splice(index, 1);
-		}
 		if (event.reason === "close") this.addRecentlyClosed(event.editor.input, event.editor.paneId);
 	}
 
@@ -726,17 +722,9 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		if (this.recentlyClosed.length > 20) this.recentlyClosed.length = 20;
 	}
 
-	private touchEditorMru(instanceId: EditorInstanceId): void {
-		const index = this.mruEditorIds.indexOf(instanceId);
-		if (index >= 0) this.mruEditorIds.splice(index, 1);
-		this.mruEditorIds.unshift(instanceId);
-	}
-
 	private setActiveGroup(group: EditorGroup): void {
 		if (this._activeGroup === group) return;
 		this._activeGroup = group;
-		const editor = group.editors.find(candidate => candidate.isActive);
-		if (editor) this.touchEditorMru(editor.instanceId);
 		this.editorChangeEmitter.fire(Object.freeze({ kind: "activeGroupChanged", groupId: group.id }));
 	}
 

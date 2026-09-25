@@ -1,4 +1,4 @@
 .stanza-editor.linked-editing-active {
-  outline: 1px solid color-mix(in srgb, var(--ash-focus-border) 35%, transparent);
+  outline: var(--ash-stroke-thickness) solid color-mix(in srgb, var(--ash-focus-border) 35%, transparent);
   outline-offset: -1px;
 }

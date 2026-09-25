@@ -10,7 +10,7 @@
   min-height: 28px;
   padding: 0;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--ash-corner-radius-small);
   color: var(--ash-title-bar-foreground);
   background: transparent;
 }

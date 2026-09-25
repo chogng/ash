@@ -13,8 +13,8 @@
   padding: 2px 8px;
   color: var(--ash-foreground);
   background: transparent;
-  border: 1px solid var(--ash-border);
-  border-radius: 3px;
+  border: var(--ash-stroke-thickness) solid var(--ash-border);
+  border-radius: var(--ash-corner-radius-small);
   font: inherit;
   cursor: pointer;
 }
@@ -25,7 +25,7 @@
 }
 
 .ash-dropdown-button:focus-visible {
-  outline: 1px solid var(--ash-focus-border);
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
   outline-offset: -1px;
 }
 
@@ -63,7 +63,7 @@
   display: flex;
   align-items: stretch;
   gap: 0;
-  border-radius: 4px;
+  border-radius: var(--ash-corner-radius-small);
 }
 
 .ash-dropdown-with-primary-primary,
@@ -81,15 +81,15 @@
 .ash-toolbar .ash-dropdown-with-primary-primary.icon > .ash-button {
   width: var(--ash-toolbar-action-size);
   min-width: var(--ash-toolbar-action-size);
-  padding: 3px;
-  border-radius: 4px 0 0 4px;
+  padding: 4px;
+  border-radius: var(--ash-corner-radius-small) 0 0 var(--ash-corner-radius-small);
 }
 
 .ash-toolbar .ash-dropdown-with-primary-dropdown > .ash-button {
   width: 18px;
   min-width: 18px;
-  padding: 3px 2px;
-  border-radius: 0 4px 4px 0;
+  padding: 4px 2px;
+  border-radius: 0 var(--ash-corner-radius-small) var(--ash-corner-radius-small) 0;
 }
 
 .ash-dropdown-with-primary-dropdown .ash-button-content {

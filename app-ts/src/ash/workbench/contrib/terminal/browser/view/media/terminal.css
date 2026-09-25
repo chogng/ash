@@ -37,7 +37,7 @@
 .ash-terminal-tabs {
   min-width: 0;
   min-height: 0;
-  border-left: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  border-left: var(--ash-stroke-thickness) solid color-mix(in srgb, currentColor 12%, transparent);
 }
 
 .ash-terminal-tabs .ash-tab {
@@ -77,12 +77,12 @@
 }
 
 .ash-terminal-tabs .ash-tab-label:focus-visible {
-  outline: 1px solid var(--ash-focus-border);
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
   outline-offset: -1px;
 }
 
 .ash-terminal-tabs .ash-tab-actions {
-  padding-right: 3px;
+  padding-right: 4px;
 }
 
 .ash-terminal-tabs-narrow .ash-icon-label-text {
@@ -91,8 +91,8 @@
 
 .ash-terminal-tabs-narrow .ash-tab-label {
   justify-content: center;
-  padding-right: 3px;
-  padding-left: 3px;
+  padding-right: 4px;
+  padding-left: 4px;
 }
 
 .ash-terminal-tabs .ash-tab[data-state="disconnected"],
@@ -109,7 +109,7 @@
   min-width: 0;
   min-height: 0;
   flex: 1 1 auto;
-  padding: 5px 8px 3px;
+  padding: 6px 8px 4px;
   overflow: hidden;
 }
 
@@ -143,7 +143,7 @@
   box-sizing: border-box;
   width: 6px;
   height: 6px;
-  border: 1px solid currentColor;
+  border: var(--ash-stroke-thickness) solid currentColor;
   border-radius: 50%;
   content: "";
 }

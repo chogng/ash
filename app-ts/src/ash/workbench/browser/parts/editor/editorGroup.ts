@@ -1,10 +1,9 @@
-import { DragAndDropObserver } from "../../../../base/browser/dnd.js";
-import { DndCssClasses } from "../../../../base/browser/ui/dnd/dnd.js";
-import { addDisposableListener, h } from "../../../../base/browser/dom.js";
+import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { Dimension, type IDimension } from "../../../../base/browser/dom.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { validateJsonValue } from "../../../../base/common/jsonValue.js";
-import { Disposable, setDisposableOwner, toDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { localize } from "../../../../nls.js";
 import type { URI } from "../../../../base/common/uri.js";
 import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
@@ -19,14 +18,16 @@ import type { IDocumentCollaborationApi } from "../../../../platform/collaborati
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import type { EditorInput, EditorOpenOptions } from "./editorInput.js";
 import type { TextResourceLanguageResolver } from "../../../../platform/language/common/textResourceLanguage.js";
-import { isEditorPaneWithViewState, type IEditorPane, EditorPaneVisibility } from "./editorPane.js";
+import { isEditorPaneWithViewState, type IEditorPane } from "./editorPane.js";
+import { EditorPanes, type EditorPaneInstance } from './editorPanes.js';
 import { extractExternalEditorInputs } from "./editorDropData.js";
 import { EditorPaneRegistry } from "./editorRegistry.js";
 import type { IEditorTabDragAndDrop, EditorTabDropPosition } from "./editorTabDragAndDrop.js";
-import { EditorGroupWatermark } from "./editorGroupWatermark.js";
-import { EditorWelcome, type EditorWelcomeOptions, type IEditorWelcomeProject } from "../../../contrib/files/browser/editorWelcome.js";
+import { EditorGroupView } from './editorGroupView.js';
+import { ErrorPlaceholderEditor } from "./editorPlaceholder.js";
+import type { EditorWelcomeOptions, IEditorWelcomeProject } from "../../../contrib/files/browser/editorWelcome.js";
 import { editorInputKey, type EditorTabDescriptor } from "./editorTabsControl.js";
-import { EditorTitleControl, type EditorTitleActions } from "./editorTitleControl.js";
+import type { EditorHeaderActions } from "./editorHeaderControl.js";
 import { type LanguageLocation, type LanguageWorkspaceEdit } from "../../../../editor/common/languages.js";
 import type { ILanguageDiagnosticsService } from "../../../services/language/common/languageDiagnosticsService.js";
 import type { IKeybindingsResourceService } from "../../../../platform/keybinding/common/keybindingsResource.js";
@@ -34,7 +35,6 @@ import type { IKeyboardLayoutService } from "../../../../platform/keyboardLayout
 import type { IContextKeyService, IScopedContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import type { EditorCloseReason, EditorGroupChangeEvent, EditorGroupId, EditorGroupState, EditorInstanceId, EditorInstanceState } from "../../../services/editor/common/editorState.js";
 import type { SerializedEditorViewState } from "../../../services/editor/common/editorWorkingSet.js";
-import type { Direction as GridDirection } from "../../../../base/browser/ui/grid/grid.js";
 import { EditorGroupContextKeyController } from './editorContextKeys.js';
 
 /** Operations and state owned independently by one EditorGroup. */
@@ -98,7 +98,7 @@ export interface EditorGroupOptions {
 	readonly onWillCloseEditor?: (group: IEditorGroup, input: EditorInput, pane: IEditorPane) => Promise<boolean>;
 	readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
 	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit) => void | Promise<void>;
-	readonly titleActions?: EditorTitleActions;
+	readonly titleActions?: EditorHeaderActions;
 	readonly welcome?: EditorWelcomeOptions;
 	readonly welcomeVisible?: boolean;
 	readonly onDidActivate?: () => void;
@@ -113,17 +113,17 @@ interface EditorGroupEntry extends EditorTabDescriptor {
 }
 
 /**
- * Owns an ordered set of Editor inputs, their Pane lifetimes, and title UI.
+ * Owns the ordered Editor inputs and active tab in one group.
  *
- * EditorPart owns group layout. This class owns only the behavior that remains
- * independent when the Part later contains multiple split groups.
+ * EditorGroupView owns its DOM and EditorPanes owns pane lifetimes.
  */
 export class EditorGroup extends Disposable implements IEditorGroup {
 	readonly id: EditorGroupId;
 	readonly domNode: HTMLElement;
 	private readonly editorChangeEmitter = this._register(new Emitter<EditorGroupChangeEvent>());
 	readonly onDidChangeEditors: Event<EditorGroupChangeEvent> = this.editorChangeEmitter.event;
-	private readonly contentDomNode: HTMLDivElement;
+	private readonly view: EditorGroupView;
+	private readonly panes: EditorPanes;
 	private readonly registry: EditorPaneRegistry;
 	private readonly configurationService: IConfigurationService | undefined;
 	private readonly contextKeyService: IContextKeyService | undefined;
@@ -146,23 +146,16 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 	private readonly onWillCloseEditor: ((group: IEditorGroup, input: EditorInput, pane: IEditorPane) => Promise<boolean>) | undefined;
 	private readonly onOpenLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined;
 	private readonly onApplyWorkspaceEdit: ((edit: LanguageWorkspaceEdit) => void | Promise<void>) | undefined;
-	private readonly titleActions: EditorTitleActions | undefined;
-	private readonly titleControl: EditorTitleControl;
-	private readonly welcome: EditorWelcome;
-	private readonly welcomeDomNode: HTMLElement;
+	private readonly titleActions: EditorHeaderActions | undefined;
 	private readonly entries: EditorGroupEntry[] = [];
-	private welcomeVisible: boolean;
 	private activeEntry: EditorGroupEntry | undefined;
 	private ordinaryContent: Element | undefined;
 	private groupDimension: IDimension = Dimension.Zero;
 	private dimension: IDimension = Dimension.Zero;
 	private openSequence = 0;
-	private pendingPane: EditorPaneInstance | undefined;
-	private dropSplitDirection: GridDirection | undefined;
 
 	constructor(container: HTMLElement, options: EditorGroupOptions) {
 		super();
-		const ownerDocument = container.ownerDocument;
 		this.id = options.id ?? nextEditorGroupId();
 		reserveEditorGroupId(this.id);
 		this.registry = options.registry;
@@ -187,13 +180,25 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 		this.onOpenLocation = options.onOpenLocation;
 		this.onApplyWorkspaceEdit = options.onApplyWorkspaceEdit;
 		this.titleActions = options.titleActions;
-		this.domNode = h(ownerDocument, "section");
-		this.domNode.className = "ash-editor-group";
-		this.domNode.setAttribute("aria-label", "Editor group");
-		container.append(this.domNode);
-		this.scopedContextKeyService = this.contextKeyService
-			? this._register(this.contextKeyService.createScoped(this.domNode))
-			: undefined;
+		this.view = this._register(new EditorGroupView(container, {
+			activate: input => this.activateEntry(this.requireEntry(input), true),
+			preview: input => this.activateEntry(this.requireEntry(input), false),
+			close: input => {
+				void this.closeEditor(input).catch(reportEditorCloseError);
+			},
+			startDrag: input => options.dragAndDrop?.start(this, input),
+			isDragging: () => options.dragAndDrop?.isDragging() ?? false,
+			drop: (target, position) => options.dragAndDrop?.drop(this, target, position),
+			dropExternal: (event, target, position) => {
+				void this.openExternalEditors(event.dataTransfer, target, position).catch((error: unknown) => {
+					console.error("Failed to open dropped editor resources", error);
+				});
+			},
+			endDrag: () => options.dragAndDrop?.end(),
+		}, options));
+		this.domNode = this.view.domNode;
+		this.panes = this.view.panes;
+		this.scopedContextKeyService = this.view.scopedContextKeyService;
 		if (this.scopedContextKeyService) {
 			this._register(new EditorGroupContextKeyController(
 				this.scopedContextKeyService,
@@ -202,87 +207,16 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 				this.languageResolver,
 			));
 		}
-		this._register(new DragAndDropObserver(this.domNode, {
-			onDragOver: (event) => {
-				if (!options.dragAndDrop?.isDragging() || this.dragIsOverTitle(event)) return;
-				if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-				this.dropSplitDirection = editorDropSplitDirection(event, this.domNode.getBoundingClientRect());
-				if (this.dropSplitDirection) this.domNode.dataset.editorDropDirection = this.dropSplitDirection;
-				else delete this.domNode.dataset.editorDropDirection;
-				this.domNode.classList.add(DndCssClasses.DropTarget);
-			},
-			onDragLeave: () => this.clearEditorDropFeedback(),
-			onDrop: (event) => {
-				if (!options.dragAndDrop?.isDragging() || this.dragIsOverTitle(event)) return;
-				event.stopPropagation();
-				const splitDirection = this.dropSplitDirection;
-				this.clearEditorDropFeedback();
-				options.dragAndDrop.drop(this, undefined, "after", splitDirection);
-				options.dragAndDrop.end();
-			},
-			onDragEnd: () => this.clearEditorDropFeedback(),
-		}));
 		if (options.onDidActivate) {
 			this._register(addDisposableListener(this.domNode, "focusin", () => {
 				options.onDidActivate?.();
 			}));
 		}
-		this.titleControl = this._register(new EditorTitleControl(
-			this.domNode,
-			{
-				activate: (input) => {
-					this.activateEntry(this.requireEntry(input), true);
-				},
-				preview: (input) => this.activateEntry(this.requireEntry(input), false),
-				close: (input) => {
-					void this.closeEditor(input).catch(reportEditorCloseError);
-				},
-				startDrag: (input) => options.dragAndDrop?.start(this, input),
-				isDragging: () => options.dragAndDrop?.isDragging() ?? false,
-				drop: (target, position) => options.dragAndDrop?.drop(this, target, position),
-				dropExternal: (event, target, position) => {
-					void this.openExternalEditors(event.dataTransfer, target, position).catch((error: unknown) => {
-						console.error("Failed to open dropped editor resources", error);
-					});
-				},
-				endDrag: () => options.dragAndDrop?.end(),
-			},
-			options.titleActions ? {
-				...options.titleActions,
-				contextKeyService: this.scopedContextKeyService,
-			} : undefined,
-			this.configurationService,
-		));
-		this._register(this.titleControl.onDidChangeHeight(() => this.layout(this.groupDimension)));
-		this.contentDomNode = h(ownerDocument, "div");
-		this.contentDomNode.className = "ash-editor-group-content";
-		const shortcuts = options.keybindingService
-			? this._register(new EditorGroupWatermark(
-				this.contentDomNode,
-				options.keybindingService,
-			))
-			: undefined;
-		const welcomeOptions: EditorWelcomeOptions = {
-			...options.welcome,
-			...(shortcuts ? { shortcuts: shortcuts.domNode } : {}),
-		};
-		this.welcome = this._register(new EditorWelcome(
-			this.contentDomNode,
-			welcomeOptions,
-		));
-		this.welcomeDomNode = this.welcome.element;
-		this.welcomeVisible = options.welcomeVisible ?? true;
-		this.welcomeDomNode.hidden = !this.welcomeVisible;
-		this.domNode.append(
-			this.titleControl.domNode,
-			this.contentDomNode,
-		);
+		this._register(this.view.onDidChangeTitleHeight(() => this.layout(this.groupDimension)));
 		this._register(toDisposable(() => {
 			this.cancelPendingOpen();
-			for (const entry of this.entries) entry.paneInstance.dispose();
 			this.entries.length = 0;
 		}));
-		this._register(toDisposable(() => this.domNode.remove()));
 		this.renderChrome();
 	}
 
@@ -299,7 +233,7 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 	}
 
 	get activePane(): IEditorPane | undefined {
-		return this.activeEntry?.paneInstance.pane;
+		return this.panes.activePane;
 	}
 
 	getEditorState(): EditorGroupState {
@@ -409,21 +343,18 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 			this.showOpenError(input, options, error, existing);
 			throw error;
 		}
-		const paneInstance = new EditorPaneInstance(
-			this.contentDomNode,
-			pane,
-		);
-		setDisposableOwner(paneInstance, this);
-		this.pendingPane = paneInstance;
+		let paneInstance: EditorPaneInstance;
 		try {
-			pane.create(paneInstance.domNode);
-			paneInstance.setVisible(EditorPaneVisibility.Hidden);
+			paneInstance = this.panes.create(pane);
+		} catch (error) {
+			this.showOpenError(input, options, error, existing);
+			throw error;
+		}
+		this.panes.setPending(paneInstance);
+		try {
 			await pane.setInput(input, paneInstance.signal);
 		} catch (error) {
-			if (this.pendingPane === paneInstance) {
-				this.pendingPane = undefined;
-			}
-			paneInstance.dispose();
+			this.panes.disposePane(paneInstance);
 			if (sequence !== this.openSequence) {
 				throw new EditorOpenSupersededError(input);
 			}
@@ -433,12 +364,12 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 
 		if (
 			sequence !== this.openSequence ||
-			this.pendingPane !== paneInstance
+			this.panes.pendingPane !== paneInstance
 		) {
-			paneInstance.dispose();
+			this.panes.disposePane(paneInstance);
 			throw new EditorOpenSupersededError(input);
 		}
-		this.pendingPane = undefined;
+		this.panes.clearPending(paneInstance);
 		return this.commitEditorPane(input, options, paneInstance, existing, instanceId);
 	}
 
@@ -461,8 +392,7 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 		if (existing) {
 			const index = this.entries.indexOf(existing);
 			const previous = this.editorState(existing);
-			existing.paneInstance.setVisible(EditorPaneVisibility.Hidden);
-			existing.paneInstance.dispose();
+			this.panes.disposePane(existing.paneInstance);
 			if (this.activeEntry === existing) this.activeEntry = undefined;
 			this.entries[index] = entry;
 			this.editorChangeEmitter.fire(Object.freeze({ kind: "editorClosed", editor: previous, reason: "replace" }));
@@ -473,8 +403,7 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 			if (preview) {
 				const index = this.entries.indexOf(preview);
 				const previous = this.editorState(preview);
-				preview.paneInstance.setVisible(EditorPaneVisibility.Hidden);
-				preview.paneInstance.dispose();
+				this.panes.disposePane(preview.paneInstance);
 				if (this.activeEntry === preview) this.activeEntry = undefined;
 				this.entries[index] = entry;
 				this.editorChangeEmitter.fire(Object.freeze({ kind: "editorClosed", editor: previous, reason: "previewReplace" }));
@@ -490,7 +419,7 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 	}
 
 	private showOpenError(input: EditorInput, options: EditorOpenOptions, error: unknown, existing: EditorGroupEntry | undefined): void {
-		if (existing?.paneInstance.pane instanceof EditorOpenErrorPane) {
+		if (existing?.paneInstance.pane instanceof ErrorPlaceholderEditor) {
 			existing.paneInstance.pane.updateError(error);
 			this.activateEntry(existing, false);
 			return;
@@ -499,7 +428,7 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 		const binaryEditor = error instanceof TextFileBinaryError
 			? this.registry.getEditors(input).find(candidate => candidate.id === "ash.editor.binary")
 			: undefined;
-		const pane = new EditorOpenErrorPane(
+		const pane = new ErrorPlaceholderEditor(
 			error,
 			() => {
 				void this.openEditor(input, { ...options, pinned: true }).catch(() => undefined);
@@ -508,16 +437,13 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 				void this.closeEditor(input).catch(reportEditorCloseError);
 			},
 			binaryEditor ? {
-				label: "Open as Binary",
+				label: localize("workbench.editorOpenAsBinary", "Open as Binary"),
 				run: () => {
 					void this.openEditor(input, { ...options, pinned: true, preferredEditorId: binaryEditor.id }).catch(() => undefined);
 				},
 			} : undefined,
 		);
-		const paneInstance = new EditorPaneInstance(this.contentDomNode, pane);
-		setDisposableOwner(paneInstance, this);
-		pane.create(paneInstance.domNode);
-		paneInstance.setVisible(EditorPaneVisibility.Hidden);
+		const paneInstance = this.panes.create(pane);
 		void pane.setInput(input, paneInstance.signal);
 		this.commitEditorPane(input, options, paneInstance, undefined);
 	}
@@ -552,9 +478,8 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 		const wasActive = this.activeEntry === entry;
 		if (wasActive) {
 			this.activeEntry = undefined;
-			entry.paneInstance.setVisible(EditorPaneVisibility.Hidden);
 		}
-		entry.paneInstance.dispose();
+		this.panes.disposePane(entry.paneInstance);
 		this.editorChangeEmitter.fire(Object.freeze({ kind: "editorClosed", editor: closedState, reason }));
 		if (wasActive) {
 			const next = this.entries[index] ?? this.entries[index - 1];
@@ -577,12 +502,11 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 	}
 
 	setWelcomeRecentProjects(projects: readonly IEditorWelcomeProject[]): void {
-		this.welcome.setRecentProjects(projects);
+		this.view.setWelcomeRecentProjects(projects);
 	}
 
 	setWelcomeVisible(visible: boolean): void {
-		if (this.welcomeVisible === visible) return;
-		this.welcomeVisible = visible;
+		if (!this.view.setWelcomeVisible(visible)) return;
 		this.renderContent();
 	}
 
@@ -651,19 +575,18 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 		this.groupDimension = dimension;
 		this.dimension = new Dimension(
 			dimension.width,
-			Math.max(0, dimension.height - this.titleControl.height),
+			Math.max(0, dimension.height - this.view.titleHeight),
 		);
-		this.activePane?.layout(this.dimension);
+		this.panes.layout(this.dimension);
 	}
 
 	focus(): void {
-		this.activePane?.focus();
+		this.panes.focus();
 	}
 
 	private activateEntry(entry: EditorGroupEntry, focus: boolean): void {
 		const changed = this.activeEntry !== entry;
 		if (this.activeEntry !== entry) {
-			this.activeEntry?.paneInstance.setVisible(EditorPaneVisibility.Hidden);
 			this.activeEntry = entry;
 		}
 		if (changed) {
@@ -671,40 +594,21 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 		}
 		this.ordinaryContent = undefined;
 		this.renderContent();
-		entry.paneInstance.pane.layout(this.dimension);
-		entry.paneInstance.setVisible(EditorPaneVisibility.Visible);
+		this.panes.activate(entry.paneInstance, this.dimension);
 		this.renderChrome();
-		if (focus) entry.paneInstance.pane.focus();
+		if (focus) this.panes.focus();
 	}
 
 	private renderContent(): void {
-		const children: Element[] = [];
-		if (this.ordinaryContent) {
-			children.push(this.ordinaryContent);
-		} else {
-			this.welcomeDomNode.hidden = !this.welcomeVisible || this.entries.length > 0;
-			children.push(
-				this.welcomeDomNode,
-				...this.entries.map(({ paneInstance }) => paneInstance.domNode),
-			);
-		}
-		if (this.pendingPane) children.push(this.pendingPane.domNode);
-		this.contentDomNode.replaceChildren(...children);
+		this.view.renderContent(
+			this.entries.map(entry => entry.paneInstance),
+			this.panes.pendingPane,
+			this.ordinaryContent,
+		);
 	}
 
 	private renderChrome(): void {
-		this.titleControl.setEditors(this.entries, this.activeInput);
-	}
-
-	private dragIsOverTitle(event: DragEvent): boolean {
-		const target = event.target as Node | null;
-		return target ? this.titleControl.domNode.contains(target) : false;
-	}
-
-	private clearEditorDropFeedback(): void {
-		this.dropSplitDirection = undefined;
-		delete this.domNode.dataset.editorDropDirection;
-		this.domNode.classList.remove(DndCssClasses.DropTarget);
+		this.view.setEditors(this.entries, this.activeInput);
 	}
 
 	private insertEntry(entry: EditorGroupEntry, index: number | undefined): void {
@@ -764,9 +668,7 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 	}
 
 	private cancelPendingOpen(): void {
-		const pending = this.pendingPane;
-		this.pendingPane = undefined;
-		pending?.dispose();
+		this.panes.cancelPending();
 	}
 }
 
@@ -776,7 +678,6 @@ function applyEditorOpenOptions(pane: IEditorPane, options: EditorOpenOptions): 
 
 let editorGroupId = 0;
 let editorInstanceId = 0;
-let editorPaneId = 0;
 
 function nextEditorGroupId(): EditorGroupId {
 	return `editor-group-${++editorGroupId}`;
@@ -793,125 +694,6 @@ function nextEditorInstanceId(): EditorInstanceId {
 	return `editor-instance-${++editorInstanceId}`;
 }
 
-class EditorOpenErrorPane extends Disposable implements IEditorPane {
-	readonly id = "workbench.editor.openError";
-	private root!: HTMLDivElement;
-	private title!: HTMLHeadingElement;
-	private detail!: HTMLParagraphElement;
-	private retryButton!: HTMLButtonElement;
-	private input: EditorInput | undefined;
-
-	constructor(
-		private error: unknown,
-		private readonly onRetry: () => void,
-		private readonly onClose: () => void,
-		private readonly alternative?: { readonly label: string; readonly run: () => void },
-	) {
-		super();
-	}
-
-	create(parent: HTMLElement): void {
-		const ownerDocument = parent.ownerDocument;
-		this.root = h(ownerDocument, "div");
-		this.root.className = "ash-editor-open-error";
-		this.root.tabIndex = -1;
-		this.root.setAttribute("role", "alert");
-		this.title = h(ownerDocument, "h2");
-		this.detail = h(ownerDocument, "p");
-		this.detail.className = "ash-editor-open-error-detail";
-		const actions = h(ownerDocument, "div");
-		actions.className = "ash-editor-open-error-actions";
-		this.retryButton = h(ownerDocument, "button");
-		this.retryButton.type = "button";
-		this.retryButton.textContent = "Retry";
-		const closeButton = h(ownerDocument, "button");
-		closeButton.type = "button";
-		closeButton.textContent = "Close Editor";
-		actions.append(this.retryButton);
-		if (this.alternative) {
-			const alternativeButton = h(ownerDocument, "button");
-			alternativeButton.type = "button";
-			alternativeButton.textContent = this.alternative.label;
-			actions.append(alternativeButton);
-			this._register(addDisposableListener(alternativeButton, "click", this.alternative.run));
-		}
-		actions.append(closeButton);
-		this.root.append(this.title, this.detail, actions);
-		parent.append(this.root);
-		this._register(addDisposableListener(this.retryButton, "click", this.onRetry));
-		this._register(addDisposableListener(closeButton, "click", this.onClose));
-		this._register(toDisposable(() => this.root.remove()));
-		this.render();
-	}
-
-	setInput(input: EditorInput, _signal: AbortSignal): Promise<void> {
-		this.input = input;
-		this.render();
-		return Promise.resolve();
-	}
-
-	updateError(error: unknown): void {
-		this.error = error;
-		this.render();
-	}
-
-	clearInput(): void { this.input = undefined; }
-	layout(_dimension: IDimension): void {}
-	setVisible(_visibility: EditorPaneVisibility): void {}
-	focus(): void { this.retryButton?.focus(); }
-
-	private render(): void {
-		if (!this.root) return;
-		this.title.textContent = this.input ? `Unable to open ${editorInputLabel(this.input)}` : "Unable to open editor";
-		this.detail.textContent = errorMessage(this.error);
-	}
-}
-
-class EditorPaneInstance extends Disposable {
-	readonly domNode: HTMLDivElement;
-	readonly signal: AbortSignal;
-	readonly panelId: string;
-	readonly tabId: string;
-
-	constructor(
-		container: HTMLElement,
-		readonly pane: IEditorPane,
-	) {
-		super();
-		const ownerDocument = container.ownerDocument;
-		const id = ++editorPaneId;
-		this.panelId = `ash-editor-pane-${id}`;
-		this.tabId = `ash-editor-tab-${id}`;
-		const AbortControllerConstructor =
-			ownerDocument.defaultView?.AbortController ?? AbortController;
-		const abortController = new AbortControllerConstructor();
-		this.signal = abortController.signal;
-		this.domNode = h(ownerDocument, "div");
-		this.domNode.id = this.panelId;
-		this.domNode.className = "ash-editor-pane-host";
-		this.domNode.setAttribute("role", "tabpanel");
-		this.domNode.setAttribute("aria-labelledby", this.tabId);
-		container.append(this.domNode);
-		this._register(toDisposable(() => this.domNode.remove()));
-		this._register(pane);
-		this._register(toDisposable(() => pane.clearInput()));
-		this._register(toDisposable(() => pane.setVisible(EditorPaneVisibility.Hidden)));
-		this._register(toDisposable(() => abortController.abort()));
-	}
-
-	setVisible(visibility: EditorPaneVisibility): void {
-		this.domNode.hidden = visibility === EditorPaneVisibility.Hidden;
-		this.pane.setVisible(visibility);
-	}
-
-	observeWorkingCopy(listener: () => void): void {
-		const workingCopy = this.pane.workingCopy;
-		if (!workingCopy) return;
-		this._register(workingCopy.onDidChangeDirty(listener));
-		this._register(workingCopy.onDidChangeExternalChange(listener));
-	}
-}
-
 export class EditorOpenSupersededError extends Error {
 	constructor(readonly input: EditorInput) {
 		super(`Editor opening was superseded: ${input.resource}`);
@@ -921,28 +703,4 @@ export class EditorOpenSupersededError extends Error {
 
 function reportEditorCloseError(error: unknown): void {
 	console.error("Failed to close editor", error);
-}
-
-function editorInputLabel(input: Pick<EditorInput, "resource" | "label">): string {
-	if (input.label?.trim()) return input.label;
-	const path = decodeURIComponent(input.resource.path).replace(/\/+$/u, "");
-	const separator = path.lastIndexOf("/");
-	return path.slice(separator + 1) || input.resource.toString();
-}
-
-function errorMessage(error: unknown): string {
-	if (error instanceof Error && error.message.trim()) return error.message.trim();
-	return typeof error === "string" && error.trim() ? error.trim() : "An unknown error occurred while opening this editor.";
-}
-
-function editorDropSplitDirection(event: DragEvent, bounds: DOMRect): GridDirection | undefined {
-	if (bounds.width <= 0 || bounds.height <= 0) return undefined;
-	const distances = [
-		{ direction: "left" as const, distance: event.clientX - bounds.left, threshold: bounds.width * 0.25 },
-		{ direction: "right" as const, distance: bounds.right - event.clientX, threshold: bounds.width * 0.25 },
-		{ direction: "up" as const, distance: event.clientY - bounds.top, threshold: bounds.height * 0.25 },
-		{ direction: "down" as const, distance: bounds.bottom - event.clientY, threshold: bounds.height * 0.25 },
-	].filter(candidate => candidate.distance >= 0 && candidate.distance <= candidate.threshold)
-		.sort((left, right) => left.distance - right.distance);
-	return distances[0]?.direction;
 }

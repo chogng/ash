@@ -1,7 +1,7 @@
 .stanza-editor :is(.ash-quick-input-host, .stanza-editor-inspect-tokens, .stanza-editor-hover) {
 	font-family: var(--ash-font-family, system-ui, sans-serif);
 	font-size: 13px;
-	font-weight: 400;
+	font-weight: var(--ash-font-weight-regular);
 	letter-spacing: normal;
 	line-height: 1.4;
 }
@@ -11,6 +11,6 @@
 }
 
 .stanza-editor.stanza-editor-focus-owner-editor:focus-within {
-	outline: 1px solid var(--ash-focus-border);
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
 	outline-offset: -1px;
 }

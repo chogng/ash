@@ -249,8 +249,8 @@ button, input, select, textarea { font: inherit; }
   gap: 10px;
   align-items: flex-start;
   padding: 10px 12px;
-  border: 1px solid var(--ash-widget-border, var(--ash-foreground));
-  border-radius: 6px;
+  border: var(--ash-stroke-thickness) solid var(--ash-widget-border, var(--ash-foreground));
+  border-radius: var(--ash-corner-radius-medium);
   color: var(--ash-foreground);
   background: var(--ash-editor-background, var(--ash-workbench-background));
   box-shadow: 0 4px 16px var(--ash-widget-shadow);
@@ -283,8 +283,8 @@ button, input, select, textarea { font: inherit; }
 .ash-notification-action,
 .ash-notification-close,
 .ash-progress-cancel {
-  border: 1px solid var(--ash-button-border, var(--ash-foreground));
-  border-radius: 3px;
+  border: var(--ash-stroke-thickness) solid var(--ash-button-border, var(--ash-foreground));
+  border-radius: var(--ash-corner-radius-small);
   color: inherit;
   background: var(--ash-button-background, transparent);
   cursor: pointer;
@@ -315,8 +315,8 @@ button, input, select, textarea { font: inherit; }
   gap: 8px;
   align-items: center;
   padding: 6px 8px;
-  border: 1px solid var(--ash-widget-border, var(--ash-foreground));
-  border-radius: 4px;
+  border: var(--ash-stroke-thickness) solid var(--ash-widget-border, var(--ash-foreground));
+  border-radius: var(--ash-corner-radius-small);
   color: var(--ash-foreground);
   background: var(--ash-editor-background, var(--ash-workbench-background));
   pointer-events: auto;

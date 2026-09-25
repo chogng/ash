@@ -4,7 +4,7 @@
   max-width: min(420px, calc(100vw - 16px));
   max-height: min(50vh, calc(100vh - 16px));
   box-sizing: border-box;
-  padding: 5px 8px;
+  padding: 6px 8px;
   color: var(--ash-hover-foreground);
   background: var(--ash-hover-background);
   border-radius: inherit;
@@ -19,9 +19,9 @@
 
 .ash-hover code,
 .ash-hover kbd {
-  padding: 1px 3px;
+  padding: 2px 4px;
   background: var(--ash-text-code-block-background);
-  border-radius: 3px;
+  border-radius: var(--ash-corner-radius-small);
   font-family: var(--ash-font-family-monospace);
   font-size: 0.92em;
 }

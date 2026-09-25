@@ -37,8 +37,8 @@ button.stanza-editor-codelens-command:hover {
 
 button.stanza-editor-codelens-command:focus-visible {
   color: var(--ash-text-link-active-foreground, var(--ash-editor-foreground));
-  outline: 1px solid var(--ash-focus-border);
-  outline-offset: 1px;
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  outline-offset: var(--ash-stroke-thickness);
 }
 
 .stanza-editor-codelens-separator {

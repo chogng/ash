@@ -21,12 +21,17 @@
   min-height: 320px;
   overflow: hidden;
   flex-direction: column;
-  border: 1px solid var(--ash-widget-border);
-  border-radius: 8px;
+  border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+  border-radius: var(--ash-corner-radius-large);
   outline: none;
   color: var(--ash-foreground);
   background: var(--ash-editor-background);
   box-shadow: 0 16px 48px var(--ash-dialog-shadow);
+}
+
+.ash-modal-editor:focus-visible {
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  outline-offset: -1px;
 }
 
 .ash-modal-editor-header {
@@ -35,15 +40,15 @@
   flex: 0 0 35px;
   align-items: center;
   justify-content: space-between;
-  padding: 0 8px 0 14px;
-  border-bottom: 1px solid var(--ash-widget-border);
+  padding: 0 8px 0 16px;
+  border-bottom: var(--ash-stroke-thickness) solid var(--ash-widget-border);
   background: var(--ash-title-bar-background);
 }
 
 .ash-modal-editor-title {
   margin: 0;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--ash-font-size-heading3);
+  font-weight: var(--ash-font-weight-semi-bold);
 }
 
 .ash-modal-editor-close {

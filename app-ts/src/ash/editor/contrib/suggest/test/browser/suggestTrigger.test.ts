@@ -11,6 +11,7 @@ import { LanguageCompletionTriggerKind, type LanguageCompletionProvider, type La
 import { Position } from "../../../../common/core/position.js";
 import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
+import { LanguageService } from '../../../../common/services/languageService.js';
 import { SuggestController } from "../../browser/suggestController.js";
 
 const { createTestCodeEditor } = await import("../../../../test/browser/testCodeEditor.js");
@@ -153,9 +154,10 @@ test("Completion request wiring rejects a same-model session from another servic
 	const viewport = editor.view;
 	editor.setPosition(new Position((0) + 1, (3) + 1));
 	using session = new SuggestModel(firstService.results, editor);
+	using languages = new LanguageService();
 
 	const input = viewport.controller;
-	assert.throws(() => new SuggestController(editor, input, secondService, session), /must share one text model and completion result store/);
+	assert.throws(() => new SuggestController(editor, input, secondService, session, {}, languages), /must share one text model and completion result store/);
 	dom.window.close();
 });
 
@@ -184,9 +186,10 @@ function createFixture(provider: LanguageCompletionProvider, text = "con"): Trig
 	const viewport = editor.view;
 	editor.setPosition(new Position((0) + 1, (text.length) + 1));
 	const session = new SuggestModel(service.results, editor);
+	const languages = new LanguageService();
 	viewport.layout({ width: 300, height: 40 });
 	const input = viewport.controller;
-	const suggest = new SuggestController(editor, input, service, session);
+	const suggest = new SuggestController(editor, input, service, session, {}, languages);
 	viewport.focus();
 	return {
 		dom,
@@ -199,6 +202,7 @@ function createFixture(provider: LanguageCompletionProvider, text = "con"): Trig
 			suggest.dispose();
 			editor.dispose();
 			session.dispose();
+			languages.dispose();
 			service.dispose();
 			model.dispose();
 			registration.dispose();

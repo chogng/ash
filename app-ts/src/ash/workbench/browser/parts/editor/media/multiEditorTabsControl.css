@@ -26,7 +26,7 @@
 }
 
 .ash-multi-editor-tabs-control .ash-tab[data-state="conflict"] .ash-tab-close-action button::after {
-  border-radius: 1px;
+  border-radius: var(--ash-corner-radius-x-small);
   color: var(--ash-warning-foreground);
   transform: rotate(45deg);
 }

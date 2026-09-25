@@ -1,0 +1,26 @@
+.ash-editor-open-error {
+	display: flex;
+	width: min(560px, calc(100% - 48px));
+	height: 100%;
+	margin: 0 auto;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 12px;
+	text-align: center;
+	color: var(--ash-foreground);
+}
+
+.ash-editor-open-error h2,
+.ash-editor-open-error p {
+	margin: 0;
+}
+
+.ash-editor-open-error-detail {
+	color: var(--ash-description-foreground);
+}
+
+.ash-editor-open-error-actions {
+	display: flex;
+	gap: 8px;
+}

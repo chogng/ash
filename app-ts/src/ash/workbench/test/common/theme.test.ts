@@ -1,8 +1,42 @@
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
-import { createColorTheme } from "../../../platform/theme/common/colorTheme.js";
+import { createColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from "../../../platform/theme/common/colorTheme.js";
 import { ColorScheme } from "../../../platform/theme/common/theme.js";
-import { WorkbenchThemeRegistry } from "../../common/theme.js";
+import { WorkbenchThemeRegistry, WorkbenchThemesRegistry } from "../../common/theme.js";
+
+test('built-in high contrast themes keep common foreground and background pairs readable', () => {
+	assert.deepEqual(WorkbenchThemesRegistry.getColorThemes().filter(theme => theme.colorScheme.startsWith('high-contrast')).map(theme => theme.id), [
+		highContrastLightColorTheme.id,
+		highContrastDarkColorTheme.id,
+	]);
+	const pairs = [
+		['foreground', 'workbench.background'],
+		['editor.foreground', 'editor.background'],
+		['input.foreground', 'input.background'],
+		['button.foreground', 'button.background'],
+		['button.primaryForeground', 'button.primaryBackground'],
+		['button.primaryForeground', 'button.primaryHoverBackground'],
+		['list.activeSelectionForeground', 'list.activeSelectionBackground'],
+		['menu.selectionForeground', 'menu.selectionBackground'],
+		['foreground', 'list.hoverBackground'],
+		['foreground', 'toolbar.hoverBackground'],
+		['foreground', 'actionBar.toggledBackground'],
+		['foreground', 'tabList.hoverBackground'],
+		['titleBar.foreground', 'titleBar.hoverBackground'],
+		['menu.foreground', 'menu.hoverBackground'],
+		['statusBar.foreground', 'statusBar.background'],
+		['statusBar.foreground', 'statusBarItem.hoverBackground'],
+		['statusBarItem.remoteForeground', 'statusBarItem.remoteBackground'],
+	] as const;
+	for (const theme of [highContrastDarkColorTheme, highContrastLightColorTheme]) {
+		for (const [foreground, background] of pairs) {
+			const text = theme.getColor(foreground);
+			const surface = theme.getColor(background);
+			assert.ok(text && surface);
+			assert.ok(contrastRatio(text.rgba, surface.rgba) >= 7, `${theme.id}: ${foreground} on ${background}`);
+		}
+	}
+});
 
 test("a contributed Workbench theme set can replace its own stable IDs", () => {
 	const registry = new WorkbenchThemeRegistry();
@@ -39,4 +73,17 @@ test("Workbench theme changes publish one immutable catalog after registration, 
 
 function theme(id: string, label: string, colorScheme = ColorScheme.Dark) {
 	return createColorTheme({ id, label, colorScheme });
+}
+
+function contrastRatio(foreground: { r: number; g: number; b: number }, background: { r: number; g: number; b: number }): number {
+	const luminance = (color: { r: number; g: number; b: number }): number => {
+		const linear = (channel: number): number => {
+			const value = channel / 255;
+			return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+		};
+		return 0.2126 * linear(color.r) + 0.7152 * linear(color.g) + 0.0722 * linear(color.b);
+	};
+	const first = luminance(foreground);
+	const second = luminance(background);
+	return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05);
 }

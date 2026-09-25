@@ -736,6 +736,28 @@ test("EditorPart tracks MRU editors, reopens closed inputs, and reopens with ano
 	dom.window.close();
 });
 
+test("EditorPart keeps MRU order across groups and removes closed editors", async () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const registry = new EditorPaneRegistry();
+	registry.register(descriptor("test.editor.default", ".ts", () => new TestEditorPane("test.editor.default")));
+	const editor = new EditorPart(dom.window.document.body, { registry });
+	const first = input("C:\\project\\first.ts");
+	const second = input("C:\\project\\second.ts");
+
+	await editor.openEditor(first);
+	const firstEditor = editor.editorsMru[0]!;
+	await editor.openEditor(second, {}, "sideGroup");
+	assert.deepEqual(editor.editorsMru.map(candidate => candidate.input), [second, first]);
+
+	editor.activateEditorIdentifier(firstEditor);
+	assert.deepEqual(editor.editorsMru.map(candidate => candidate.input), [first, second]);
+	await editor.closeEditor(first);
+	assert.deepEqual(editor.editorsMru.map(candidate => candidate.input), [second]);
+
+	editor.dispose();
+	dom.window.close();
+});
+
 test("EditorPart persists JSON-safe pane view state in working sets", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();

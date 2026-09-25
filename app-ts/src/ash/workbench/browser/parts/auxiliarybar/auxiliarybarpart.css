@@ -1,6 +1,6 @@
 .ash-workbench-auxiliarybar {
   border: 0;
-  border-left: 1px solid var(--ash-border);
+  border-left: var(--ash-stroke-thickness) solid var(--ash-border);
   border-radius: 0;
   background: var(--ash-auxiliary-bar-background);
 }

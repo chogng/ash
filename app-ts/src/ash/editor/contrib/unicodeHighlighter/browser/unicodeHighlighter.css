@@ -1,4 +1,4 @@
 .stanza-editor .unicode-highlight {
   background: color-mix(in srgb, var(--ash-warning-foreground) 22%, transparent);
-  border-bottom: 1px dotted var(--ash-warning-foreground);
+  border-bottom: var(--ash-stroke-thickness) dotted var(--ash-warning-foreground);
 }

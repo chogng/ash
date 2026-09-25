@@ -17,7 +17,7 @@
 .ash-toolbar .ash-action-view-item > .ash-button {
   height: var(--ash-toolbar-action-size);
   min-height: var(--ash-toolbar-action-size);
-  padding-block: 3px;
+  padding-block: 4px;
 }
 
 .ash-toolbar .ash-action-view-item > .ash-action-label {
@@ -29,7 +29,7 @@
   width: var(--ash-toolbar-action-size);
   min-width: var(--ash-toolbar-action-size);
   border: 0;
-  padding: 3px;
+  padding: 4px;
 }
 
 .ash-toolbar .ash-action-view-item.icon .ash-button-label,

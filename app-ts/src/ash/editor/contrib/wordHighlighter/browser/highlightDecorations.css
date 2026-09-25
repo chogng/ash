@@ -26,6 +26,6 @@
 	.stanza-editor .word-highlight-text,
 	.stanza-editor .word-highlight-strong,
 	.stanza-editor .selection-highlight {
-		border: 1px dotted CanvasText;
+		border: var(--ash-stroke-thickness) dotted CanvasText;
 	}
 }

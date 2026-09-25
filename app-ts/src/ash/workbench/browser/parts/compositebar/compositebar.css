@@ -29,7 +29,7 @@
   min-width: var(--ash-toolbar-action-size);
   height: var(--ash-toolbar-action-size);
   min-height: var(--ash-toolbar-action-size);
-  padding: 3px;
+  padding: 4px;
   border: 0;
   color: var(--ash-composite-bar-inactive-foreground);
 }
@@ -107,7 +107,7 @@
 }
 
 .ash-composite-bar-item:focus-visible {
-  outline: 1px solid var(--ash-focus-border);
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
   outline-offset: -1px;
 }
 

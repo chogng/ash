@@ -3,6 +3,7 @@ import { test } from "mocha";
 import {
 	darkColorTheme,
 	highContrastDarkColorTheme,
+	highContrastLightColorTheme,
 	lightColorTheme,
 } from "../../common/colorTheme.js";
 import { colorCssVariable } from "../../common/colorUtils.js";
@@ -26,7 +27,7 @@ test("TestThemeService exposes its initial theme and emits actual changes", () =
 });
 
 test("built-in themes resolve registered colors and omit inactive high contrast borders", () => {
-	for (const theme of [darkColorTheme, lightColorTheme, highContrastDarkColorTheme]) {
+	for (const theme of [darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme]) {
 		assert.equal(theme.colorEntries.length, Colors.getColors().length);
 		for (const { id, value } of theme.colorEntries) {
 			assert.equal(theme.getColorCss(id), theme.colors[id]);
@@ -35,6 +36,15 @@ test("built-in themes resolve registered colors and omit inactive high contrast 
 	}
 	assert.equal(darkColorTheme.getColorCss('contrastBorder'), undefined);
 	assert.equal(highContrastDarkColorTheme.getColorCss('contrastBorder'), '#ffffff');
+	assert.equal(highContrastLightColorTheme.getColorCss('contrastBorder'), '#000000');
+});
+
+test('high contrast theme colors are opaque when present', () => {
+	for (const theme of [highContrastDarkColorTheme, highContrastLightColorTheme]) {
+		for (const { id, value } of theme.colorEntries) {
+			assert.equal(value?.rgba.a ?? 1, 1, `${theme.id}: ${id}`);
+		}
+	}
 });
 
 test("color identifiers map to stable CSS custom properties", () => {

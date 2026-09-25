@@ -14,7 +14,7 @@
 .ash-binary-editor-summary {
   flex: 0 0 auto;
   padding: 8px 12px;
-  border-bottom: 1px solid var(--ash-border);
+  border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
   color: var(--ash-description-foreground);
   font-size: 12px;
 }

@@ -1,30 +1,23 @@
-import "./media/auxiliaryEditorPart.css";
 import { addDisposableListener } from "../../../../base/browser/dom.js";
-import { Dimension, type IDimension } from "../../../../base/browser/dom.js";
+import type { IDimension } from "../../../../base/browser/dom.js";
 import type { Direction as GridDirection } from "../../../../base/browser/ui/grid/grid.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { DisposableMap, Disposable, DisposableStore, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { DisposableMap, Disposable, DisposableStore } from "../../../../base/common/lifecycle.js";
 import { rot } from "../../../../base/common/numbers.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import type { EditorInput, EditorOpenOptions, EditorOpenTarget } from "../../../services/editor/common/editorService.js";
 import type { ApplyEditorWorkingSetOptions, EditorWorkingSet, EditorWorkingSetTarget } from "../../../services/editor/common/editorWorkingSet.js";
 import type { EditorIdentifier, EditorPartChangeEvent, EditorPartState } from "../../../services/editor/common/editorState.js";
 import type { IAuxiliaryWindow, IAuxiliaryWindowService } from "../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js";
-import { StatusbarService } from "../../../services/statusbar/browser/statusbar.js";
-import { StatusbarHeight } from "../workbenchPartDimensions.js";
-import { StatusbarPart } from "../statusbar/statusbarPart.js";
 import type { IEditorPane, IEditorPaneDescriptor } from "./editorPane.js";
 import { editorInputKey } from "./editorTabsControl.js";
-import { EditorStatusContribution } from "./editorStatus.js";
 import type { EditorCloseAllOptions, IEditorPart, RecentlyClosedEditor } from "./editorPart.js";
 import type { IEditorGroup } from "./editorGroup.js";
-
-export interface AuxiliaryEditorPartCreation {
-	readonly part: IEditorPart;
-	readonly resources?: readonly IDisposable[];
-}
-
-export type AuxiliaryEditorPartFactory = (container: HTMLElement) => AuxiliaryEditorPartCreation;
+import {
+	AuxiliaryEditorPart,
+	type AuxiliaryEditorPartCreation,
+	type AuxiliaryEditorPartFactory,
+} from "./auxiliaryEditorPart.js";
 
 /** Multi-window coordinator exposed to commands and editor services. */
 export interface IEditorPartsService extends IEditorPart {
@@ -43,7 +36,7 @@ export const IEditorPartsService = createServiceIdentifier<IEditorPartsService>(
 export class EditorParts extends Disposable implements IEditorPartsService {
 	private readonly editorChangeEmitter = this._register(new Emitter<EditorPartChangeEvent>());
 	private readonly auxiliaryCreatedEmitter = this._register(new Emitter<IEditorPart>());
-	private readonly auxiliary = this._register(new DisposableMap<IEditorPart, AuxiliaryEditorPartHandle>());
+	private readonly auxiliary = this._register(new DisposableMap<IEditorPart, AuxiliaryEditorPart>());
 	private readonly partListeners = this._register(new DisposableMap<IEditorPart, DisposableStore>());
 	private _activePart: IEditorPart;
 	readonly onDidChangeEditors = this.editorChangeEmitter.event;
@@ -85,7 +78,7 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 			auxiliaryWindow[Symbol.dispose]();
 			throw error;
 		}
-		const handle = new AuxiliaryEditorPartHandle(auxiliaryWindow, creation);
+		const handle = new AuxiliaryEditorPart(auxiliaryWindow, creation);
 		this.auxiliary.set(creation.part, handle);
 		this.registerPart(creation.part, auxiliaryWindow);
 		this.setActivePart(creation.part);
@@ -212,30 +205,6 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 	private findPartForInput(input: EditorInput): IEditorPart | undefined {
 		const key = editorInputKey(input);
 		return this.parts.find(part => part.groups.some(group => group.inputs.some(candidate => editorInputKey(candidate) === key)));
-	}
-}
-
-class AuxiliaryEditorPartHandle extends Disposable {
-	constructor(window: IAuxiliaryWindow, creation: AuxiliaryEditorPartCreation) {
-		super();
-		// The window service owns registry lifetime; this handle only requests close.
-		this._register(toDisposable(() => window[Symbol.dispose]()));
-		const resources = this._register(new DisposableStore());
-		for (const resource of creation.resources ?? []) resources.add(resource);
-		this._register(creation.part);
-		const statusbarService = this._register(new StatusbarService());
-		const statusbarPart = this._register(new StatusbarPart(window.container, statusbarService));
-		this._register(new EditorStatusContribution(creation.part, statusbarService));
-		this._register(window.onBeforeUnload(event => {
-			if (creation.part.getEditorState().groups.some(group => group.editors.some(editor => editor.isDirty))) {
-				event.veto("The auxiliary editor window contains unsaved changes.");
-			}
-		}));
-		this._register(window.onDidLayout(dimension => {
-			creation.part.layout(new Dimension(dimension.width, Math.max(0, dimension.height - StatusbarHeight)));
-			statusbarPart.layout(new Dimension(dimension.width, StatusbarHeight));
-		}));
-		window.layout();
 	}
 }
 
