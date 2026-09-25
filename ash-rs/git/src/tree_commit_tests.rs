@@ -17,7 +17,7 @@ fn tree(repository: &TestRepository, revision: &str) -> GitTreeId {
 }
 
 #[tokio::test]
-async fn immutable_commit_preserves_staged_unstaged_and_untracked_layers() {
+async fn tree_commit_preserves_staged_unstaged_and_untracked_layers() {
     let fixture = TestRepository::init();
     fixture.write("change.txt", "base\n");
     fixture.write("staged.txt", "base\n");
@@ -69,7 +69,7 @@ async fn immutable_commit_preserves_staged_unstaged_and_untracked_layers() {
 }
 
 #[tokio::test]
-async fn immutable_commit_reports_replay_conflict_without_moving_target() {
+async fn tree_commit_reports_replay_conflict_without_moving_target() {
     let fixture = TestRepository::init();
     fixture.write("same.txt", "base\n");
     fixture.commit_all("base");
@@ -235,7 +235,7 @@ async fn interrupted_ref_update_resumes_checkout_installation_from_journal() {
 }
 
 #[tokio::test]
-async fn immutable_commit_creates_the_first_commit_on_an_unborn_branch() {
+async fn tree_commit_creates_the_first_commit_on_an_unborn_branch() {
     let fixture = TestRepository::init();
     let client = GitClient::system();
     let repository = client.open_repository(fixture.root()).await.unwrap();
@@ -500,7 +500,7 @@ async fn prepared_commit_refuses_publication_after_the_target_moves() {
 }
 
 #[tokio::test]
-async fn immutable_commit_rejects_a_detached_source_checkout() {
+async fn tree_commit_rejects_a_detached_source_checkout() {
     let fixture = TestRepository::init();
     fixture.write("same.txt", "base\n");
     fixture.commit_all("base");

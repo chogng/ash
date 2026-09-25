@@ -75,7 +75,7 @@ impl GitPreparedTreeCommitRequest {
     }
 }
 
-/// Immutable commit object prepared for later conditional publication.
+/// Commit object built from a sealed tree for later conditional publication.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GitPreparedTreeCommit {
     transaction_id: String,
@@ -1303,5 +1303,5 @@ fn changed_paths(changes: Vec<crate::GitTreeChange>) -> Vec<PathBuf> {
 }
 
 #[cfg(test)]
-#[path = "immutable_commit_tests.rs"]
+#[path = "tree_commit_tests.rs"]
 mod tests;

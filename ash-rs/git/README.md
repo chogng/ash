@@ -43,7 +43,7 @@ Git domain owner 下，而不是建立平级的 `ash-git-utils`：
 | `src/text_diff.rs` | 从同一次状态快照构建 repository-wide 或 path-scoped 的有界 UTF-8 HEAD/worktree Diff 与文件级、聚合增删行统计 | `GitTextDiffSnapshot`、`GitTextDiff`、`GitDiffStatistics`、`GitClient::text_diff_snapshot[_under]` |
 | `src/worktree.rs` | 解析 primary/linked/locked/prunable worktree inventory，不决定产品工作区替换 | `GitWorktree`、`GitWorktreeAvailability`、`GitClient::worktrees` |
 | `src/objects.rs` | 捕获、固定、读取、比较与安装不可变 tree/blob；忽略 Git ignored 的未跟踪文件 | `GitTreeId`、`GitPrivateRef`、`GitClient::capture_worktree_tree` |
-| `src/immutable_commit.rs` | 把封存 Turn delta 重放到目标分支，保留 checkout 的 staged/unstaged/untracked 语义，并通过 journal + ref CAS 恢复中断事务 | `GitTreeCommitRequest`、`GitTreeCommitRecovery`、`GitClient::commit_tree_delta` |
+| `src/tree_commit.rs` | 把封存的 tree delta 重放到目标分支，保留 checkout 的 staged/unstaged/untracked 语义，并通过 journal + ref CAS 恢复中断事务 | `GitTreeCommitRequest`、`GitTreeCommitRecovery`、`GitClient::commit_tree_delta` |
 | `src/info.rs` | local branches、fetch/push remote URLs、credential-free remote identity、bounded recent history | `GitBranch`、`GitRemote`、`GitRemoteIdentity`、`GitRemoteProvider`、`GitCommitSummary` |
 | `src/graph.rs` | local/remote-tracking refs 与单次 `git log --all` traversal 的分页 graph page | `GitGraph`、`GitGraphCursor`、`GitReference`、`GitReferenceKind`、private `parse_references` |
 | `src/mutation.rs` | path set/commit request validation 与常用 index/worktree/branch/remote mutation | `GitPathspecSet`、`GitCommitRequest`、`GitCommitResult`、`GitClient::switch_branch` |
