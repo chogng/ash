@@ -113,6 +113,18 @@ impl ProviderCredentialService {
         encode_key(provider, definition.api_key_header, secret.as_ref())
     }
 
+    /// Loads the stored API key for scope identity without the Required-policy missing-key error.
+    pub(crate) fn stored_api_key(
+        &self,
+        provider: &ProviderId,
+    ) -> Result<Option<SecretValue>, ProviderCredentialError> {
+        let definition = self.definition(provider)?;
+        if definition.api_key_policy == ApiKeyPolicy::Unsupported {
+            return Ok(None);
+        }
+        Ok(self.secrets.load(&provider_api_key_secret_key(provider))?)
+    }
+
     pub(crate) fn request_model_headers(
         &self,
         config: &ash_model_provider_config::NormalizedModelProviderConfig,

@@ -15,6 +15,8 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 
+use crate::ProviderCredentialService;
+
 #[derive(Default)]
 struct CapturedDiagnostics(Mutex<Vec<response_debug_context::ResponseDiagnostic>>);
 
@@ -240,6 +242,102 @@ fn providers_without_dynamic_discovery_return_no_binding() {
 }
 
 #[test]
+fn zai_coding_plan_binding_publishes_plan_models_under_the_key_scoped_scope() {
+    let secrets = Arc::new(ash_secrets::MemorySecretStore::default());
+    let client = Arc::new(CatalogClient {
+        request: Mutex::new(None),
+    });
+    let runtime = crate::ModelProviderRuntime::with_client_and_secrets(
+        ProviderConfigRegistry::builtin(),
+        client.clone(),
+        secrets.clone(),
+    );
+    let credentials = ProviderCredentialService::new(ProviderConfigRegistry::builtin(), secrets);
+    credentials
+        .set_api_key(&ProviderId::new("zai").unwrap(), b"plan-key".to_vec())
+        .unwrap();
+    let mut config = ModelProviderConfig::new(ProviderId::new("zai").unwrap());
+    config.base_url = Some(ash_model_provider_config::ZAI_CODING_PLAN_BASE_URL.into());
+
+    let binding = runtime
+        .catalog_binding(&config)
+        .unwrap()
+        .expect("coding plan endpoint and API key select the plan binding");
+    assert!(binding
+        .scope()
+        .source_scope()
+        .as_str()
+        .starts_with("zai-subscription:"));
+    let executor = tokio::runtime::Builder::new_current_thread()
+        .build()
+        .unwrap();
+    executor
+        .block_on(
+            runtime
+                .models_manager()
+                .refresh(binding.scope().clone(), binding.source()),
+        )
+        .unwrap();
+    let models = runtime
+        .models_manager()
+        .list(&[binding.scope().clone()], &CatalogQuery::all())
+        .unwrap();
+    assert_eq!(
+        models
+            .iter()
+            .map(|entry| entry.model().model.as_str())
+            .collect::<Vec<_>>(),
+        vec!["glm-5.1"]
+    );
+    assert_eq!(
+        models[0].info().access,
+        ash_protocol::ModelAccess::Subscription
+    );
+    assert!(client.request.lock().unwrap().is_none());
+
+    credentials
+        .set_api_key(&ProviderId::new("zai").unwrap(), b"rotated-key".to_vec())
+        .unwrap();
+    let rotated = runtime.catalog_binding(&config).unwrap().unwrap();
+    assert_ne!(binding.scope(), rotated.scope());
+}
+
+#[test]
+fn zai_stays_in_api_mode_without_the_plan_endpoint_or_key() {
+    let secrets = Arc::new(ash_secrets::MemorySecretStore::default());
+    let runtime = crate::ModelProviderRuntime::with_client_and_secrets(
+        ProviderConfigRegistry::builtin(),
+        Arc::new(CatalogClient {
+            request: Mutex::new(None),
+        }),
+        secrets.clone(),
+    );
+    let mut config = ModelProviderConfig::new(ProviderId::new("zai").unwrap());
+    config.base_url = Some(ash_model_provider_config::ZAI_CODING_PLAN_BASE_URL.into());
+    assert!(
+        runtime.catalog_binding(&config).unwrap().is_none(),
+        "the coding endpoint without a stored API key stays in API mode"
+    );
+
+    let credentials = ProviderCredentialService::new(ProviderConfigRegistry::builtin(), secrets);
+    credentials
+        .set_api_key(&ProviderId::new("zai").unwrap(), b"plan-key".to_vec())
+        .unwrap();
+    let config = ModelProviderConfig::new(ProviderId::new("zai").unwrap());
+    assert!(
+        runtime.catalog_binding(&config).unwrap().is_none(),
+        "a stored API key with the default endpoint stays in API mode"
+    );
+
+    let mut config = ModelProviderConfig::new(ProviderId::new("zai").unwrap());
+    config.base_url = Some("https://api.z.ai/api/paas/v4".into());
+    assert!(
+        runtime.catalog_binding(&config).unwrap().is_none(),
+        "a stored API key with a custom endpoint stays in API mode"
+    );
+}
+
+#[test]
 fn openai_catalog_handles_empty_lists_invalid_payloads_and_http_errors() {
     struct Client {
         responses: Mutex<std::collections::VecDeque<ClientResponse>>,
@@ -307,7 +405,6 @@ fn openai_catalog_handles_empty_lists_invalid_payloads_and_http_errors() {
 
 #[test]
 fn custom_catalog_fetches_models_with_its_own_key_and_invalidates_scope() {
-    use crate::ProviderCredentialService;
     use ash_model_provider_config::CustomProviderConfig;
     use ash_model_provider_config::CustomProviderProtocol;
     struct Client {

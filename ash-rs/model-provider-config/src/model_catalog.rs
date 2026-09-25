@@ -139,6 +139,13 @@ pub const STATIC_MODEL_CATALOG: &[StaticModelSpec] = &[
         approval_review_default: true,
     },
     static_model! {
+        provider: "zai",
+        id: "glm-5.1",
+        name: "GLM-5.1",
+        access: subscription,
+        runtime: zai_coding_plan,
+    },
+    static_model! {
         provider: "minimax",
         id: "MiniMax-M3",
         name: "MiniMax M3",

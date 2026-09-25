@@ -6,6 +6,10 @@ use crate::ModelId;
 use crate::ProviderAdapter;
 use crate::ProviderDefinition;
 
+/// The GLM Coding Plan endpoint. The plan reuses the standard Z.AI API key, so pointing the
+/// zai connection at this URL is how a user selects plan access over pay-as-you-go API access.
+pub const ZAI_CODING_PLAN_BASE_URL: &str = "https://api.z.ai/api/coding/paas/v4";
+
 pub(super) fn definition() -> ProviderDefinition {
     default_provider(
         "zai",
@@ -23,4 +27,19 @@ pub(super) fn definition() -> ProviderDefinition {
                 ModelId::new("glm-4.5").expect("valid model ID"),
             ]),
     )
+}
+
+/// GLM Coding Plan models are served through the coding endpoint with the same API key and
+/// adapter as the standard endpoint, so the catalog is restricted to the plan's listed models.
+pub(super) fn subscription_definition() -> ProviderDefinition {
+    let mut definition = default_provider(
+        "zai",
+        "GLM Coding Plan",
+        ProviderAdapter::Zai,
+        ApiProfile::OpenAiChatCompletions,
+        ZAI_CODING_PLAN_BASE_URL,
+    )
+    .with_native_streaming();
+    definition.model_catalog_policy = crate::ModelCatalogPolicy::ListedOnly;
+    definition
 }

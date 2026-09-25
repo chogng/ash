@@ -14,7 +14,7 @@ mod openai;
 mod openai_compatible;
 mod qwen;
 mod xai;
-mod zai;
+pub(super) mod zai;
 
 pub(crate) fn builtin() -> [ProviderDefinition; 13] {
     [
@@ -39,6 +39,7 @@ pub(crate) fn subscription_definition(id: &str) -> Option<ProviderDefinition> {
         "openai" => Some(openai::subscription_definition()),
         "xai" => Some(xai::subscription_definition()),
         "kimi" => Some(kimi::subscription_definition()),
+        "zai" => Some(zai::subscription_definition()),
         _ => None,
     }
 }

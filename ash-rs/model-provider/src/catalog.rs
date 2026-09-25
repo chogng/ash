@@ -2,12 +2,14 @@ mod kimi;
 mod ollama;
 mod openai;
 mod xai;
+mod zai;
 
 pub(crate) use kimi::kimi_catalog_binding;
 pub(crate) use ollama::ollama_catalog_binding;
 pub(crate) use openai::chatgpt_catalog_binding;
 pub(crate) use openai::openai_catalog_binding;
 pub(crate) use xai::xai_catalog_binding;
+pub(crate) use zai::zai_catalog_binding;
 
 use ash_models_manager::CatalogScopeKey;
 use ash_models_manager::ModelCatalogSource;

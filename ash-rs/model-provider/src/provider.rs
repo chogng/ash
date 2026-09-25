@@ -919,6 +919,27 @@ impl ModelProviderRuntime {
                 .transpose()
                 .map_err(|error| ModelProviderError::Credential(error.to_string()))?
                 .unwrap_or(false),
+            "zai" => {
+                // The GLM Coding Plan is selected by pointing the zai connection at the coding
+                // endpoint; the plan reuses the standard stored API key, which subscription
+                // mode then requires. A default or custom endpoint stays in API mode.
+                let coding_plan_selected = config.base_url.as_deref().is_some_and(|base_url| {
+                    base_url.trim().trim_end_matches('/')
+                        == ash_model_provider_config::ZAI_CODING_PLAN_BASE_URL
+                });
+                coding_plan_selected
+                    && self
+                        .credentials
+                        .as_ref()
+                        .map(|credentials| {
+                            credentials
+                                .stored_api_key(&config.provider)
+                                .map(|key| key.is_some())
+                        })
+                        .transpose()
+                        .map_err(|error| ModelProviderError::Credential(error.to_string()))?
+                        .unwrap_or(false)
+            }
             _ => false,
         };
         let mut effective = config.clone();
@@ -976,6 +997,18 @@ impl ModelProviderRuntime {
                 .map(|auth| crate::catalog::kimi_catalog_binding(Arc::clone(auth)))
                 .transpose()
                 .map(Option::flatten);
+        }
+        if normalized.access_mode == ProviderAccessMode::Subscription
+            && normalized.provider.as_str() == "zai"
+        {
+            let api_key = self
+                .credentials
+                .as_ref()
+                .map(|credentials| credentials.stored_api_key(&normalized.provider))
+                .transpose()
+                .map_err(|error| ModelProviderError::Credential(error.to_string()))?
+                .flatten();
+            return crate::catalog::zai_catalog_binding(api_key);
         }
         let definition = runtime
             .configs

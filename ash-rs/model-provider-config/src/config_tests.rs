@@ -616,6 +616,11 @@ fn builtin_provider_models_and_defaults_derive_from_static_catalog() {
         if spec.runtime == StaticModelRuntime::KimiCode {
             assert_eq!(spec.provider_id, "kimi");
         }
+        if spec.runtime == StaticModelRuntime::ZaiCodingPlan {
+            assert_eq!(spec.provider_id, "zai");
+            assert!(!spec.is_approval_review_default);
+            assert!(!spec.supports_input_token_count);
+        }
         if spec.supports_input_token_count {
             assert!(
                 registry
@@ -633,10 +638,27 @@ fn builtin_provider_models_and_defaults_derive_from_static_catalog() {
 
 #[test]
 fn provider_subscription_mode_replaces_the_api_catalog_and_endpoint() {
-    for (provider, endpoint) in [
-        ("openai", "https://chatgpt.com/backend-api/codex"),
-        ("xai", "https://cli-chat-proxy.grok.com/v1"),
-        ("kimi", "https://api.kimi.com/coding/v1"),
+    for (provider, endpoint, api_key_policy) in [
+        (
+            "openai",
+            "https://chatgpt.com/backend-api/codex",
+            ApiKeyPolicy::Unsupported,
+        ),
+        (
+            "xai",
+            "https://cli-chat-proxy.grok.com/v1",
+            ApiKeyPolicy::Unsupported,
+        ),
+        (
+            "kimi",
+            "https://api.kimi.com/coding/v1",
+            ApiKeyPolicy::Unsupported,
+        ),
+        (
+            "zai",
+            crate::ZAI_CODING_PLAN_BASE_URL,
+            ApiKeyPolicy::Required,
+        ),
     ] {
         let mut config = ModelProviderConfig::new(provider_id(provider));
         config.access_mode = crate::ProviderAccessMode::Subscription;
@@ -644,7 +666,7 @@ fn provider_subscription_mode_replaces_the_api_catalog_and_endpoint() {
             .with_configs([&config])
             .unwrap();
         let definition = registry.get(&config.provider).unwrap();
-        assert_eq!(definition.api_key_policy, ApiKeyPolicy::Unsupported);
+        assert_eq!(definition.api_key_policy, api_key_policy);
         assert!(
             matches!(&definition.endpoint, EndpointPolicy::ProviderDefault { base_url } if base_url == endpoint)
         );
