@@ -87,6 +87,8 @@ fn home_keeps_actions_above_the_fixed_composer() {
     let buffer = render(&app, terminal.width, terminal.height);
     assert_eq!(buffer[(actions.x, actions.y)].symbol(), ">");
     assert_eq!(buffer[(actions.x + 2, actions.y)].symbol(), "N");
+    assert!(text(&buffer).contains("New worktree"));
+    assert!(text(&buffer).contains("New branch"));
     assert_eq!(
         buffer[(actions.x, actions.y)].bg,
         app.render_context().selection_background()
@@ -121,11 +123,29 @@ fn home_and_shared_hints_use_the_selected_language() {
     let rendered = text(&render(&app, 80, 24));
     let compact = rendered.replace(' ', "");
 
+    assert!(compact.contains("新建工作树"));
+    assert!(compact.contains("新建分支"));
     assert!(compact.contains("恢复会话"));
     assert!(compact.contains("帮助与快捷键"));
     assert!(compact.contains("Enter选择"));
     assert!(!rendered.contains("Resume session"));
     crate::tui_assert_snapshot!("home_chinese", rendered);
+
+    assert_eq!(app.handle_key(key(KeyCode::Enter)), None);
+    assert_eq!(app.list_selection().unwrap().title(), "新建工作树");
+    assert_eq!(
+        app.list_selection()
+            .unwrap()
+            .search()
+            .unwrap()
+            .placeholder(),
+        "工作树名称"
+    );
+    assert_eq!(app.handle_key(key(KeyCode::Esc)), None);
+
+    app.handle_key(key(KeyCode::Down));
+    assert_eq!(app.handle_key(key(KeyCode::Enter)), None);
+    assert_eq!(app.list_selection().unwrap().title(), "新建分支");
 }
 
 #[test]
@@ -234,21 +254,91 @@ fn home_card_uses_the_page_width_without_an_empty_top_band() {
 }
 
 #[test]
-fn home_new_task_action_opens_worktree_choice() {
+fn home_new_worktree_action_opens_a_checkout_only_prompt() {
     let mut app = unstarted_app();
     app.open_home();
     assert_eq!(app.handle_key(key(KeyCode::Tab)), None);
     assert_eq!(app.fullscreen.home.selected, Some(0));
     assert_eq!(app.handle_key(key(KeyCode::Enter)), None);
-    assert_eq!(app.list_selection().unwrap().title(), "New task");
+    assert_eq!(app.list_selection().unwrap().title(), "New worktree");
+    assert!(app.fullscreen_home_visible());
+    crate::tui_assert_snapshot!("home_new_worktree_prompt", text(&render(&app, 80, 24)));
+    for character in "topic".chars() {
+        app.handle_key(key(KeyCode::Char(character)));
+    }
     assert_eq!(
-        app.list_selection()
-            .unwrap()
-            .selected_item()
-            .unwrap()
-            .label(),
-        "New worktree"
+        app.handle_key(key(KeyCode::Enter)),
+        Some(AppCommand::Git(crate::git::Command::CreateWorktree {
+            name: "topic".into()
+        }))
     );
+    assert!(app.fullscreen_home_visible());
+    app.update(crate::git::Event::WorktreeCreated(Ok(
+        ash_app_server_protocol::protocol::git::GitWorktreeCreateResult {
+            path: "/worktrees/topic".into(),
+        },
+    )));
+    assert!(app.fullscreen_home_visible());
+    assert!(app.command_panel().is_none());
+    assert!(text(&render(&app, 80, 24)).contains("Worktree created at /worktrees/topic"));
+}
+
+#[test]
+fn home_new_branch_action_opens_a_branch_only_prompt() {
+    let mut app = unstarted_app();
+    app.open_home();
+    app.handle_key(key(KeyCode::Tab));
+    app.handle_key(key(KeyCode::Down));
+    assert_eq!(app.fullscreen.home.selected, Some(1));
+    assert_eq!(app.handle_key(key(KeyCode::Enter)), None);
+    assert_eq!(app.list_selection().unwrap().title(), "New branch");
+    assert_eq!(app.list_selection().unwrap().query(), "ash/");
+    assert_eq!(app.command_panel().unwrap().parent_title(), None);
+    crate::tui_assert_snapshot!("home_new_branch_prompt", text(&render(&app, 80, 24)));
+    assert_eq!(app.handle_key(key(KeyCode::Esc)), None);
+    assert!(app.command_panel().is_none());
+    assert!(app.fullscreen_home_visible());
+}
+
+#[test]
+fn home_pointer_actions_use_the_same_worktree_and_branch_paths() {
+    let terminal = ratatui::layout::Rect::new(0, 0, 100, 30);
+    let mut app = unstarted_app();
+    app.open_home();
+    let transcript = crate::app::fullscreen::layout(&app, terminal)
+        .session
+        .transcript;
+    let actions = super::layout(transcript).actions;
+    assert_eq!(
+        super::action_at(
+            &app,
+            transcript,
+            ratatui::layout::Position::new(actions.x, actions.y),
+        ),
+        Some(super::Action::NewWorktree)
+    );
+    assert_eq!(
+        super::super::pointer::activate_pointer_item(&mut app, terminal, actions.x, actions.y),
+        None
+    );
+    assert_eq!(app.list_selection().unwrap().title(), "New worktree");
+
+    let mut app = unstarted_app();
+    app.open_home();
+    assert_eq!(
+        super::action_at(
+            &app,
+            transcript,
+            ratatui::layout::Position::new(actions.x, actions.y + 1),
+        ),
+        Some(super::Action::NewBranch)
+    );
+    assert_eq!(
+        super::super::pointer::activate_pointer_item(&mut app, terminal, actions.x, actions.y + 1),
+        None
+    );
+    assert_eq!(app.list_selection().unwrap().title(), "New branch");
+    assert_eq!(app.list_selection().unwrap().query(), "ash/");
 }
 
 #[test]

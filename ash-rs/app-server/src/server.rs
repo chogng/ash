@@ -257,6 +257,7 @@ pub struct AppServer {
     _tool_config_watcher: Option<crate::local::ToolConfigWatcher>,
     _interaction_deadline_watcher: interaction_runtime::InteractionDeadlineWatcher,
     git_turn_changes: Option<Arc<git_turn_changes_runtime::GitTurnChangesRuntime>>,
+    dir_services: Option<Arc<thread_dirs::ThreadDirs>>,
     issue_runtime: Option<Arc<issue_runtime::IssueRuntime>>,
     issue_cache: Option<Arc<Mutex<ash_state::SqliteIssueCache>>>,
     projects: Option<Arc<ash_projects::ProjectCoordinator>>,
@@ -595,6 +596,7 @@ impl AppServer {
             _tool_config_watcher: None,
             _interaction_deadline_watcher: interaction_deadline_watcher,
             git_turn_changes: None,
+            dir_services: None,
             issue_runtime: None,
             issue_cache: None,
             projects: None,
@@ -684,10 +686,11 @@ impl AppServer {
             config,
             Arc::clone(&self.threads),
             Arc::clone(&self.model),
-            dirs,
+            Arc::clone(&dirs),
             Arc::clone(&self.updates),
         )?;
         let mut server = self.with_git_turn_changes_runtime(runtime)?;
+        server.dir_services = Some(dirs);
         server.issue_cache = Some(Arc::new(Mutex::new(ash_state::SqliteIssueCache::open(
             database_path,
         )?)));
@@ -2479,6 +2482,7 @@ impl AppServer {
             Some(ClientMethod::GitChangeFile) => self.git_change_file(&request.params),
             Some(ClientMethod::GitBranchSwitch) => self.git_branch_switch(&request.params),
             Some(ClientMethod::GitBranchCreate) => self.git_branch_create(&request.params),
+            Some(ClientMethod::GitWorktreeCreate) => self.git_worktree_create(&request.params),
             Some(ClientMethod::GitStage) => self.git_stage(&request.params),
             Some(ClientMethod::GitUnstage) => self.git_unstage(&request.params),
             Some(ClientMethod::GitDiscardWorktree) => self.git_discard_worktree(&request.params),

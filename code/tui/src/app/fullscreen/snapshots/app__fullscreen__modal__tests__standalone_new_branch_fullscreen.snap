@@ -5,16 +5,14 @@ expression: frame_text(&app)
   .                                                                            [— / —] [Dashboard]  
                                                                                                     
                                                                                                     
-            ┌── New task ─────────────────────────────────────────────────────────[✗]─┐             
+            ┌── New branch ───────────────────────────────────────────────────────[✗]─┐             
             │                                                                         │             
-            │> New worktree  ·  Detached · new session                                │             
-            │  New branch worktree  ·  ash/ branch · new session                      │             
+            │  Create branch                                                          │             
             │                                                                         │             
-            │                                                                         │             
-            │                                                                         │             
-            │                                                                         │             
-            │                                                                         │             
-            │                                                                         │             
+            │  ╭────────────────────────────────────────────────────────────────────╮ │             
+            │  │ ash/topic                                                          │ │             
+            │  ╰────────────────────────────────────────────────────────────────────╯ │             
+            │  Create a branch at HEAD without switching worktrees.                   │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
@@ -27,6 +25,8 @@ expression: frame_text(&app)
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
-  ╭─────────│  w New worktree · b New branch worktree · Esc close                     │──────────╮  
+            │                                                                         │             
+            │                                                                         │             
+  ╭─────────│  Enter to create  ·  Esc to close                                       │──────────╮  
   │ > Build └─────────────────────────────────────────────────────────────────────────┘          │  
   ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯

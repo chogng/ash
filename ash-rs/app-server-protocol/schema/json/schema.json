@@ -7720,6 +7720,22 @@
         {
           "properties": {
             "method": {
+              "const": "git/worktree/create",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitWorktreeCreateParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "git/stage",
               "type": "string"
             },
@@ -12145,6 +12161,22 @@
             },
             "result": {
               "$ref": "#/$defs/GitBranchListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "git/worktree/create",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitWorktreeCreateResult"
             }
           },
           "required": [
@@ -19413,6 +19445,37 @@
         "name",
         "ahead",
         "behind"
+      ],
+      "type": "object"
+    },
+    "GitWorktreeCreateParams": {
+      "description": "Creates an independent detached checkout at HEAD without starting a Thread.",
+      "properties": {
+        "name": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "repositoryId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "GitWorktreeCreateResult": {
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
       ],
       "type": "object"
     },

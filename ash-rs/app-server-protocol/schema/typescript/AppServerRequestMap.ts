@@ -158,6 +158,8 @@ import type { GitRepositoriesResult } from './types/GitRepositoriesResult.js';
 import type { GitRepositoryParams } from './types/GitRepositoryParams.js';
 import type { GitStatusResult } from './types/GitStatusResult.js';
 import type { GitTextDiffResult } from './types/GitTextDiffResult.js';
+import type { GitWorktreeCreateParams } from './types/GitWorktreeCreateParams.js';
+import type { GitWorktreeCreateResult } from './types/GitWorktreeCreateResult.js';
 import type { GrepIndexDisableAndDeleteParams } from './types/GrepIndexDisableAndDeleteParams.js';
 import type { GrepIndexDisableAndDeleteResult } from './types/GrepIndexDisableAndDeleteResult.js';
 import type { GrepIndexStatusResult } from './types/GrepIndexStatusResult.js';
@@ -634,6 +636,7 @@ export interface AppServerRequestMap {
   "git/changeFile": { params: GitChangeFileParams; response: GitChangeFileResult };
   "git/branch/switch": { params: GitBranchSwitchParams; response: GitOperationResult };
   "git/branch/create": { params: GitBranchCreateParams; response: GitBranchListResult };
+  "git/worktree/create": { params: GitWorktreeCreateParams; response: GitWorktreeCreateResult };
   "git/stage": { params: GitPathsParams; response: GitOperationResult };
   "git/unstage": { params: GitPathsParams; response: GitOperationResult };
   "git/discardWorktree": { params: GitPathsParams; response: GitOperationResult };
@@ -923,6 +926,7 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "git/changeFile": { method: "git/changeFile" },
   "git/branch/switch": { method: "git/branch/switch" },
   "git/branch/create": { method: "git/branch/create" },
+  "git/worktree/create": { method: "git/worktree/create" },
   "git/stage": { method: "git/stage" },
   "git/unstage": { method: "git/unstage" },
   "git/discardWorktree": { method: "git/discardWorktree" },

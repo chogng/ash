@@ -374,6 +374,32 @@ impl WorktreeManager {
         &self.settings
     }
 
+    /// Creates a user-owned checkout without binding it to a Thread.
+    pub async fn create_unbound(&self, source_directory: &Path, name: &str) -> Result<PathBuf> {
+        if name.is_empty()
+            || name.len() > 64
+            || !name
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+        {
+            bail!("worktree name must use 1–64 letters, numbers, '-' or '_'");
+        }
+        let source = self.git.open_repository(source_directory).await?;
+        let head = self.git.resolve_commit(&source, "HEAD").await?;
+        let checkout = self.settings.root.join("manual").join(name);
+        if std::fs::symlink_metadata(&checkout).is_ok() {
+            bail!("worktree already exists at {}", checkout.display());
+        }
+        std::fs::create_dir_all(
+            checkout
+                .parent()
+                .context("worktree checkout omitted its parent")?,
+        )?;
+        let request = GitDetachedWorktreeRequest::new(checkout.clone(), head)?;
+        self.git.create_detached_checkout(&source, &request).await?;
+        Ok(checkout)
+    }
+
     /// Lists the repository's worktrees while preserving the source directory's relative cwd.
     pub async fn list(&self, source_directory: &Path) -> Result<Vec<Worktree>> {
         let source_directory = dunce::canonicalize(source_directory).with_context(|| {

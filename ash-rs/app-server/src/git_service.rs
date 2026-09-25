@@ -125,6 +125,11 @@ impl GitService {
         self.authorization.permission() == Permission::MutateRepository
     }
 
+    pub(crate) fn mutable_source(&self) -> Result<PathBuf, GitServiceError> {
+        self.ensure_mutable()?;
+        Ok(self.projection_root.clone())
+    }
+
     pub(crate) fn stage(
         &self,
         paths: Vec<PathBuf>,

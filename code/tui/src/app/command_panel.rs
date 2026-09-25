@@ -215,8 +215,12 @@ impl CommandPanel {
         Self::GitBranches(BranchPanel::new(spec))
     }
 
-    pub(crate) fn new_task_worktrees() -> Self {
-        Self::GitBranches(BranchPanel::new_task())
+    pub(crate) fn new_branch() -> Self {
+        Self::GitBranches(BranchPanel::new_branch())
+    }
+
+    pub(crate) fn new_worktree() -> Self {
+        Self::GitBranches(BranchPanel::new_worktree())
     }
 
     pub(crate) fn project_roots(spec: RootChoices) -> Self {

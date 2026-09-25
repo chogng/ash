@@ -246,6 +246,17 @@ impl GitRuntime {
         self.repository(repository_id)?.create_branch(name)
     }
 
+    pub(super) fn mutable_source_for(
+        &self,
+        repository_id: Option<&str>,
+    ) -> Result<PathBuf, GitRuntimeError> {
+        let repository = self.repository(repository_id)?;
+        repository
+            .service
+            .mutable_source()
+            .map_err(GitRuntimeError::Service)
+    }
+
     pub(super) fn local_branches(&self) -> Result<Vec<GitBranchDto>, GitRuntimeError> {
         self.local_branches_for(None)
     }

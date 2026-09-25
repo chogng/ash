@@ -694,6 +694,10 @@ use crate::protocol::git::GitTextDiffResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitUpstreamDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitWorktreeCreateParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitWorktreeCreateResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::goal::ThreadGoalClearParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::goal::ThreadGoalClearResponse;
@@ -3376,6 +3380,11 @@ client_methods! {
         response: GitBranchListResult,
         serialization: GlobalExclusive,
     },
+    GitWorktreeCreate => "git/worktree/create" {
+        params: GitWorktreeCreateParams,
+        response: GitWorktreeCreateResult,
+        serialization: GlobalExclusive,
+    },
     GitStage => "git/stage" {
         params: GitPathsParams,
         response: GitOperationResult,
@@ -4710,6 +4719,8 @@ typescript_bindings! {
     GitStatusChanged,
     GitBranchDto,
     GitBranchCreateParams,
+    GitWorktreeCreateParams,
+    GitWorktreeCreateResult,
     GitBranchListResult,
     GitCommitSummaryDto,
     GitHistoryResult,

@@ -20,6 +20,8 @@ use ash_app_server_protocol::protocol::git::GitHistoryResult;
 use ash_app_server_protocol::protocol::git::GitOperationResult;
 use ash_app_server_protocol::protocol::git::GitPathsParams;
 use ash_app_server_protocol::protocol::git::GitRepositoryParams;
+use ash_app_server_protocol::protocol::git::GitWorktreeCreateParams;
+use ash_app_server_protocol::protocol::git::GitWorktreeCreateResult;
 use ash_git::GitError;
 use serde_json::Value;
 use std::num::NonZeroUsize;
@@ -149,6 +151,25 @@ impl AppServer {
             .create_branch_for(params.repository_id.as_deref(), &params.name)
             .map_err(git_error)?;
         result(&GitBranchListResult { branches })
+    }
+
+    pub(super) fn git_worktree_create(&self, value: &Value) -> Result<Value, RpcError> {
+        let params: GitWorktreeCreateParams = decode(value)?;
+        let source = self
+            .git_runtime_service()?
+            .mutable_source_for(params.repository_id.as_deref())
+            .map_err(git_error)?;
+        let dirs = &self
+            .dir_services
+            .as_ref()
+            .ok_or_else(|| RpcError::new(-32060, AppServerErrorName::GitUnavailable))?;
+        let path = dirs
+            .runtime
+            .block_on(dirs.worktrees.create_unbound(&source, &params.name))
+            .map_err(|_| RpcError::new(-32061, AppServerErrorName::GitOperationFailed))?;
+        result(&GitWorktreeCreateResult {
+            path: path.to_string_lossy().into_owned(),
+        })
     }
 
     pub(super) fn git_stage(&self, params: &Value) -> Result<Value, RpcError> {

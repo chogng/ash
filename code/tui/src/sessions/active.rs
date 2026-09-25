@@ -50,18 +50,7 @@ impl ActiveConversation {
     where
         T: JsonRpcTransport,
     {
-        create_conversation(client, title, None).map(|(conversation, _)| conversation)
-    }
-
-    pub(crate) fn start_in_branch<T>(
-        client: &mut AppServerClient<T>,
-        title: String,
-        branch_name: String,
-    ) -> Result<Self, ClientError>
-    where
-        T: JsonRpcTransport,
-    {
-        create_conversation(client, title, Some(branch_name)).map(|(conversation, _)| conversation)
+        create_conversation(client, title).map(|(conversation, _)| conversation)
     }
 
     pub(crate) fn recover<T>(
@@ -213,7 +202,7 @@ impl ActiveConversation {
         } else {
             arguments.to_owned()
         };
-        let (conversation, _) = create_conversation(client, title, None)?;
+        let (conversation, _) = create_conversation(client, title)?;
         *self = conversation;
         Ok(ConversationChange {
             notice: "Started a new session.".into(),
@@ -396,7 +385,6 @@ fn is_conversation_thread(thread: &ash_protocol::SessionThread) -> bool {
 fn create_conversation<T>(
     client: &mut AppServerClient<T>,
     title: String,
-    branch_name: Option<String>,
 ) -> Result<(ActiveConversation, Thread), ClientError>
 where
     T: JsonRpcTransport,
@@ -406,7 +394,7 @@ where
         agent: ash_protocol::AgentRoleSelection::Default,
         command_id: new_command_id("session"),
         title,
-        branch_name,
+        branch_name: None,
     })?;
     let thread_id = current_conversation_thread(&session.session)
         .map(|thread| thread.thread_id.clone())

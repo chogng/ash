@@ -10,9 +10,9 @@ expression: text(&buffer)
   │  ▗█▛██▜█▖                                                                                                                            │  
   │  ▝▜████▛▘    Start a task below, or continue a previous session.                                                                     │  
   │    ▝  ▘                                                                                                                              │  
-  │            > New task                                                                                                                │  
+  │            > New worktree                                                                                                            │  
+  │              New branch                                                                                                              │  
   │              Resume session                                                                                                          │  
-  │              Dashboard                                                                                                               │  
   │              Settings                                                                                                                │  
   │              Help and shortcuts                                                                                                      │  
   │              Quit                                                                                                                    │  

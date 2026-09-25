@@ -66,7 +66,7 @@ use ash_app_server_protocol::protocol::git::GitStatusResult;
 use ash_app_server_protocol::protocol::git::{
     GitBranchCreateParams, GitBranchListResult, GitBranchSwitchParams, GitCommitParams,
     GitCommitResult, GitOperationResult, GitPathsParams, GitRepositoriesResult,
-    GitRepositoryParams, GitTextDiffResult,
+    GitRepositoryParams, GitTextDiffResult, GitWorktreeCreateParams, GitWorktreeCreateResult,
 };
 use ash_app_server_protocol::protocol::initialize::{InitializeParams, InitializeResult};
 use ash_app_server_protocol::protocol::language::LanguageCloseParams;
@@ -630,6 +630,13 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         params: GitBranchCreateParams,
     ) -> Result<GitBranchListResult, ClientError> {
         self.call(ClientMethod::GitBranchCreate, params)
+    }
+
+    pub fn create_git_worktree(
+        &mut self,
+        params: GitWorktreeCreateParams,
+    ) -> Result<GitWorktreeCreateResult, ClientError> {
+        self.call(ClientMethod::GitWorktreeCreate, params)
     }
 
     pub fn list_projects(&mut self) -> Result<ProjectListResult, ClientError> {

@@ -4,16 +4,16 @@ expression: frame_text(&app)
 ---
   .                                                                            [— / —] [Dashboard]  
                                                                                                     
-● branch already exists                                                                             
-            ┌── New task › New branch worktree ───────────────────────────────────[✗]─┐             
+                                                                                                    
+            ┌── New branch ───────────────────────────────────────────────────────[✗]─┐             
             │                                                                         │             
-            │  Create branch worktree                                                 │             
+            │  Create branch                                                          │             
             │                                                                         │             
             │  ╭────────────────────────────────────────────────────────────────────╮ │             
             │  │ ash/topic                                                          │ │             
             │  ╰────────────────────────────────────────────────────────────────────╯ │             
             │  branch already exists                                                  │             
-            │  New task in an ash/ branch and its own worktree.                       │             
+            │  Create a branch at HEAD without switching worktrees.                   │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
@@ -27,6 +27,6 @@ expression: frame_text(&app)
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
-  ╭─────────│  Enter to create  ·  Esc to back                                        │──────────╮  
+  ╭─────────│  Enter to create  ·  Esc to close                                       │──────────╮  
   │ > Build └─────────────────────────────────────────────────────────────────────────┘          │  
   ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯

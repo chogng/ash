@@ -378,6 +378,23 @@ pub struct GitBranchCreateParams {
     pub name: String,
 }
 
+/// Creates an independent detached checkout at HEAD without starting a Thread.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitWorktreeCreateParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub repository_id: Option<String>,
+    #[schemars(length(min = 1, max = 64))]
+    pub name: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitWorktreeCreateResult {
+    pub path: String,
+}
+
 /// One bounded UTF-8 text change from `HEAD` to the directory working tree.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

@@ -213,8 +213,7 @@ pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
         AppCommand::Git(_) => Some(RequestKey::Git),
         AppCommand::Sessions(SessionCommand::Preview { .. }) => Some(RequestKey::Preview),
         AppCommand::Sessions(
-            SessionCommand::CreateWorktree { .. }
-            | SessionCommand::Restore { .. }
+            SessionCommand::Restore { .. }
             | SessionCommand::Delete { .. }
             | SessionCommand::Resume { .. }
             | SessionCommand::Archive { .. }

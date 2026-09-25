@@ -146,6 +146,25 @@ impl GitClient {
         self.open_repository(&request.checkout_root).await
     }
 
+    /// Creates a detached linked worktree with its files checked out for direct use.
+    pub async fn create_detached_checkout(
+        &self,
+        repository: &GitRepository,
+        request: &GitDetachedWorktreeRequest,
+    ) -> GitResult<GitRepository> {
+        let arguments = vec![
+            OsString::from("worktree"),
+            OsString::from("add"),
+            OsString::from("--detach"),
+            request.checkout_root.as_os_str().to_owned(),
+            OsString::from(&request.start_object_id),
+        ];
+        self.run_mutation(repository.worktree_root(), arguments)
+            .await?
+            .require_success()?;
+        self.open_repository(&request.checkout_root).await
+    }
+
     /// Creates a linked worktree and a new branch as one Git operation.
     pub async fn create_named_worktree(
         &self,

@@ -1207,19 +1207,6 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Branches et arbres de travail du projet",
     ),
     translation("Worktrees", "ワークツリー", "工作树", "Arbres de travail"),
-    translation("New task", "新しいタスク", "新建任务", "Nouvelle tâche"),
-    translation(
-        "New branch worktree",
-        "新しいブランチのワークツリー",
-        "新建分支工作树",
-        "Nouvel arbre de travail sur une branche",
-    ),
-    translation(
-        "Create branch worktree",
-        "ブランチのワークツリーを作成",
-        "创建分支工作树",
-        "Créer un arbre de travail sur une branche",
-    ),
     translation(
         "At HEAD · no checkout change",
         "HEAD から作成 · チェックアウトは変更しません",
@@ -1243,12 +1230,6 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "ブランチは別のワークツリーでチェックアウトされています",
         "该分支已在其他工作树中检出",
         "La branche est extraite dans un autre arbre de travail",
-    ),
-    translation(
-        "New task in an ash/ branch and its own worktree.",
-        "ash/ ブランチと専用ワークツリーで新しいタスクを開始します。",
-        "在 ash/ 分支及独立工作树中开始新任务。",
-        "Nouvelle tâche dans une branche ash/ et son propre arbre de travail.",
     ),
     translation(
         "Create a branch at HEAD without switching worktrees.",
@@ -1312,12 +1293,6 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Créer une branche",
     ),
     translation(
-        "New session on this branch. Project branch unchanged.",
-        "このブランチで新しいセッションを開始します。プロジェクトのブランチは変わりません。",
-        "在此分支上开始新会话。项目分支不变。",
-        "Nouvelle session sur cette branche. La branche du projet reste inchangée.",
-    ),
-    translation(
         "Enter a branch name",
         "ブランチ名を入力してください",
         "请输入分支名称",
@@ -1336,28 +1311,40 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Nouvel arbre de travail",
     ),
     translation(
+        "Worktree name",
+        "ワークツリー名",
+        "工作树名称",
+        "Nom de l'arbre de travail",
+    ),
+    translation(
+        "Create worktree",
+        "ワークツリーを作成",
+        "创建工作树",
+        "Créer l'arbre de travail",
+    ),
+    translation(
+        "Worktree created at",
+        "ワークツリーの作成先:",
+        "工作树已创建于",
+        "Arbre de travail créé à",
+    ),
+    translation(
+        "Create at HEAD. No session starts.",
+        "HEAD から作成します。セッションは開始しません。",
+        "从 HEAD 创建，不启动会话。",
+        "Créer à HEAD. Aucune session ne démarre.",
+    ),
+    translation(
+        "Use 1–64 letters, numbers, '-' or '_'",
+        "1～64 文字の英数字、'-'、'_' を使用してください",
+        "请使用 1–64 个英文字母、数字、'-' 或 '_'",
+        "Utilisez 1 à 64 lettres, chiffres, '-' ou '_'",
+    ),
+    translation(
         "New branch",
         "新しいブランチ",
         "新建分支",
         "Nouvelle branche",
-    ),
-    translation(
-        "Detached · new session",
-        "detached · 新しいセッション",
-        "游离 HEAD · 新会话",
-        "Détaché · nouvelle session",
-    ),
-    translation(
-        "ash/ branch · new session",
-        "ash/ ブランチ · 新しいセッション",
-        "ash/ 分支 · 新会话",
-        "Branche ash/ · nouvelle session",
-    ),
-    translation(
-        "Started a new session in its own worktree. The project branch stays unchanged.",
-        "専用のワークツリーで新しいセッションを開始しました。プロジェクトのブランチは変わりません。",
-        "已在独立工作树中开始新会话。项目分支保持不变。",
-        "Nouvelle session démarrée dans son propre arbre de travail. La branche du projet reste inchangée.",
     ),
     translation(
         "Cancel sign-in",

@@ -268,145 +268,56 @@ fn frame_text(app: &crate::app::App) -> String {
 }
 
 #[test]
-fn branch_picker_new_worktree_action_works_in_both_screen_modes() {
+fn standalone_new_branch_prompt_works_in_both_screen_modes() {
     use crate::app::AppCommand;
     use crate::app::command_panel::CommandPanel;
-    use crate::sessions::Command;
-    for (mode, picker_snapshot, prompt_snapshot) in [
+    use crate::git::Command as GitCommand;
+
+    for (mode, snapshot) in [
         (
             crate::terminal::ScreenMode::Fullscreen,
-            "branch_picker_new_worktree_fullscreen",
-            "branch_picker_worktree_name_fullscreen",
+            "standalone_new_branch_fullscreen",
         ),
         (
             crate::terminal::ScreenMode::Inline,
-            "branch_picker_new_worktree_inline",
-            "branch_picker_worktree_name_inline",
+            "standalone_new_branch_inline",
         ),
     ] {
         let mut app = crate::app::App::new();
         let mut settings = crate::config::TerminalSettings::default();
         settings.set_screen_mode(mode);
         app.update(crate::config::Event::SettingsReceived(settings));
-        app.open_command_panel(CommandPanel::new_task_worktrees());
-        assert_eq!(
-            app.list_selection()
-                .unwrap()
-                .selected_item()
-                .unwrap()
-                .label(),
-            "New worktree"
-        );
-        crate::tui_assert_snapshot!(picker_snapshot, frame_text(&app));
-        assert!(matches!(
-            app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-            Some(AppCommand::Sessions(Command::CreateWorktree {
-                branch_name: None,
-                ..
-            }))
-        ));
-        app.open_command_panel(CommandPanel::new_task_worktrees());
-        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-        assert_eq!(
-            app.list_selection()
-                .unwrap()
-                .selected_item()
-                .unwrap()
-                .label(),
-            "New branch worktree"
-        );
-        assert_eq!(
-            app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-            None
-        );
+        app.open_command_panel(CommandPanel::new_branch());
+        assert_eq!(app.list_selection().unwrap().title(), "New branch");
+        assert_eq!(app.command_panel().unwrap().parent_title(), None);
         assert_eq!(app.list_selection().unwrap().query(), "ash/");
-        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-        assert_eq!(
-            app.list_selection()
-                .unwrap()
-                .selected_item()
-                .unwrap()
-                .label(),
-            "New branch worktree"
-        );
-        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         for character in "topic".chars() {
             app.handle_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
         }
-        assert_eq!(app.list_selection().unwrap().query(), "ash/topic");
-        crate::tui_assert_snapshot!(prompt_snapshot, frame_text(&app));
-        assert!(matches!(
+        crate::tui_assert_snapshot!(snapshot, frame_text(&app));
+        assert_eq!(
             app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-            Some(AppCommand::Sessions(Command::CreateWorktree {
-                branch_name: Some(branch_name),
-                ..
-            })) if branch_name == "ash/topic"
-        ));
-        let generation = app.panels().generation();
-        app.update_for_panel(
-            generation,
-            crate::thread::Event::CommandFailed {
-                command: "ash/topic".into(),
-                error: "branch already exists".into(),
-            },
+            Some(AppCommand::Git(GitCommand::Create {
+                name: "ash/topic".into(),
+            }))
         );
+        app.update(crate::git::Event::CreateFinished {
+            name: "ash/topic".into(),
+            result: Err("branch already exists".into()),
+        });
         assert_eq!(
             app.list_selection().unwrap().message(),
             Some("branch already exists")
         );
         if matches!(mode, crate::terminal::ScreenMode::Fullscreen) {
-            crate::tui_assert_snapshot!(
-                "branch_picker_worktree_name_error_fullscreen",
-                frame_text(&app)
-            );
+            crate::tui_assert_snapshot!("standalone_new_branch_error", frame_text(&app));
         }
+        assert_eq!(
+            app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+            None
+        );
+        assert!(app.command_panel().is_none());
     }
-
-    let mut app = crate::app::App::new();
-    app.open_command_panel(CommandPanel::new_task_worktrees());
-    let area = Rect::new(0, 0, 100, 30);
-    let target = (0..area.height)
-        .flat_map(|y| (0..area.width).map(move |x| (x, y)))
-        .find_map(|(x, y)| {
-            let target = super::target_at(&app, area, ratatui::layout::Position::new(x, y))?;
-            match &target {
-                super::Target::List(
-                    crate::widgets::list_selection::ListSelectionPointerTarget::Item(id),
-                ) if id
-                    == &crate::widgets::list_selection::ListSelectionItemId::new("task:branch") =>
-                {
-                    Some(target)
-                }
-                _ => None,
-            }
-        })
-        .unwrap();
-    assert_eq!(
-        super::activate(
-            &mut app,
-            area,
-            target,
-            crate::widgets::list_selection::ListSelectionClick::Single,
-        ),
-        None
-    );
-    assert_eq!(app.list_selection().unwrap().query(), "ash/");
-
-    let mut shortcuts = crate::app::App::new();
-    shortcuts.open_command_panel(CommandPanel::new_task_worktrees());
-    assert!(matches!(
-        shortcuts.handle_key(KeyEvent::new(KeyCode::Char('w'), KeyModifiers::NONE)),
-        Some(AppCommand::Sessions(Command::CreateWorktree {
-            branch_name: None,
-            ..
-        }))
-    ));
-    shortcuts.open_command_panel(CommandPanel::new_task_worktrees());
-    assert_eq!(
-        shortcuts.handle_key(KeyEvent::new(KeyCode::Char('b'), KeyModifiers::NONE)),
-        None
-    );
-    assert_eq!(shortcuts.list_selection().unwrap().query(), "ash/");
 }
 
 #[test]

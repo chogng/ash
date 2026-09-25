@@ -25,43 +25,7 @@ fn branch_picker_preselects_the_current_branch_and_preserves_its_identity() {
 }
 
 #[test]
-fn new_task_picker_exposes_both_worktree_actions() {
-    let spec = super::new_task_choices();
-    let mut picker = ListSelection::new(spec.model, spec.actions);
-    assert_eq!(
-        picker.state().selected_item().unwrap().label(),
-        "New worktree"
-    );
-    assert_eq!(
-        picker.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        ListSelectionOutcome::Activate(BranchSelectionAction::NewWorktree)
-    );
-    picker.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    assert_eq!(
-        picker.state().selected_item().unwrap().label(),
-        "New branch worktree"
-    );
-    assert_eq!(
-        picker.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        ListSelectionOutcome::Activate(BranchSelectionAction::NewBranchWorktree)
-    );
-}
-
-#[test]
-fn branch_picker_shortcuts_create_or_open_branch_prompt_without_stealing_search_input() {
-    let mut panel = BranchPanel::new_task();
-    assert!(panel.key_hints().text().contains("w New worktree"));
-    assert!(panel.key_hints().text().contains("b New branch worktree"));
-    assert_eq!(
-        panel.handle_key(KeyEvent::new(KeyCode::Char('w'), KeyModifiers::NONE)),
-        ListSelectionOutcome::Activate(BranchSelectionAction::NewWorktree)
-    );
-    assert_eq!(
-        panel.handle_key(KeyEvent::new(KeyCode::Char('b'), KeyModifiers::NONE)),
-        ListSelectionOutcome::Consumed
-    );
-    assert!(panel.is_branch_name_prompt());
-    assert_eq!(panel.state().query(), "ash/");
+fn branch_picker_shortcut_does_not_steal_search_input() {
     let mut panel = BranchPanel::new(choices(GitBranchListResult {
         branches: vec![branch("main", true)],
     }));
@@ -72,13 +36,10 @@ fn branch_picker_shortcuts_create_or_open_branch_prompt_without_stealing_search_
 }
 
 #[test]
-fn worktree_name_prompt_prefills_ash_prefix_and_requires_a_suffix() {
-    let mut panel = BranchPanel::new_task();
-    panel.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    assert_eq!(
-        panel.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        ListSelectionOutcome::Consumed
-    );
+fn standalone_branch_prompt_prefills_ash_prefix_and_requires_a_suffix() {
+    let mut panel = BranchPanel::new_branch();
+    assert_eq!(panel.state().title(), "New branch");
+    assert_eq!(panel.parent_title(), None);
     assert_eq!(panel.state().query(), "ash/");
     assert_eq!(
         panel.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
@@ -89,7 +50,7 @@ fn worktree_name_prompt_prefills_ash_prefix_and_requires_a_suffix() {
     }
     assert_eq!(
         panel.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        ListSelectionOutcome::Activate(BranchSelectionAction::CreateBranchWorktree {
+        ListSelectionOutcome::Activate(BranchSelectionAction::CreateBranch {
             branch_name: "ash/topic".into()
         })
     );
@@ -106,10 +67,98 @@ fn worktree_name_prompt_prefills_ash_prefix_and_requires_a_suffix() {
     }
     assert_eq!(
         panel.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        ListSelectionOutcome::Activate(BranchSelectionAction::CreateBranchWorktree {
+        ListSelectionOutcome::Activate(BranchSelectionAction::CreateBranch {
             branch_name: "topic".into()
         })
     );
+    assert_eq!(
+        panel.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+        ListSelectionOutcome::Dismiss
+    );
+}
+
+#[test]
+fn standalone_worktree_prompt_creates_only_a_checkout_command() {
+    let mut panel = BranchPanel::new_worktree();
+    assert_eq!(panel.state().title(), "New worktree");
+    assert_eq!(panel.state().query(), "");
+    assert_eq!(
+        panel.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        ListSelectionOutcome::Consumed
+    );
+    for character in "topic".chars() {
+        panel.handle_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
+    }
+    assert_eq!(
+        panel.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        ListSelectionOutcome::Activate(BranchSelectionAction::CreateWorktree {
+            name: "topic".into()
+        })
+    );
+}
+
+#[test]
+fn creating_a_worktree_through_app_server_leaves_session_catalog_unchanged() {
+    use ash_app_server_client::{AppServerSession, InProcessClientOptions};
+    use ash_app_server_protocol::protocol::common::ClientInfo;
+    let _guard = crate::test_support::in_process_test_guard();
+    let root = tempfile::tempdir().unwrap();
+    let repo = root.path().join("repo");
+    std::fs::create_dir(&repo).unwrap();
+    for args in [
+        vec!["init", "--initial-branch=main"],
+        vec!["config", "user.name", "Ash Test"],
+        vec!["config", "user.email", "ash@example.test"],
+    ] {
+        let output = std::process::Command::new("git")
+            .args(args)
+            .current_dir(&repo)
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+    }
+    std::fs::write(repo.join("tracked.txt"), "base\n").unwrap();
+    for args in [vec!["add", "tracked.txt"], vec!["commit", "-m", "initial"]] {
+        let output = std::process::Command::new("git")
+            .args(args)
+            .current_dir(&repo)
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+    }
+    let mut capabilities = crate::client_capabilities();
+    capabilities.dir_permissions_host = None;
+    let session = AppServerSession::start_embedded(
+        InProcessClientOptions::new(
+            root.path().join("state"),
+            ClientInfo {
+                name: "worktree-only-test".into(),
+                version: "1".into(),
+            },
+        )
+        .with_dir_root(repo.clone())
+        .with_capabilities(capabilities),
+    )
+    .unwrap();
+    let mut client = session.client();
+    let before = client.list_sessions().unwrap().sessions;
+    let created = super::execute(
+        &mut client,
+        super::Command::CreateWorktree {
+            name: "topic".into(),
+        },
+    )
+    .unwrap();
+    let super::Event::WorktreeCreated(Ok(created)) = created else {
+        panic!("worktree creation should succeed")
+    };
+    let checkout = std::path::PathBuf::from(created.path);
+    assert_eq!(checkout, root.path().join("state/worktrees/manual/topic"));
+    assert_eq!(
+        std::fs::read_to_string(checkout.join("tracked.txt")).unwrap(),
+        "base\n"
+    );
+    assert_eq!(client.list_sessions().unwrap().sessions, before);
 }
 
 #[test]

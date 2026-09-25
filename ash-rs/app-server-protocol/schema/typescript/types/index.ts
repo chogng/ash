@@ -386,6 +386,8 @@ export type { GitSubmoduleStateDto } from './GitSubmoduleStateDto.js';
 export type { GitTextDiffDto } from './GitTextDiffDto.js';
 export type { GitTextDiffResult } from './GitTextDiffResult.js';
 export type { GitUpstreamDto } from './GitUpstreamDto.js';
+export type { GitWorktreeCreateParams } from './GitWorktreeCreateParams.js';
+export type { GitWorktreeCreateResult } from './GitWorktreeCreateResult.js';
 export type { GrepBackendDto } from './GrepBackendDto.js';
 export type { GrepIndexDisableAndDeleteParams } from './GrepIndexDisableAndDeleteParams.js';
 export type { GrepIndexDisableAndDeleteResult } from './GrepIndexDisableAndDeleteResult.js';

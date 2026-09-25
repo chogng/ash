@@ -73,6 +73,41 @@ impl RepositoryFixture {
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn unbound_worktree_checks_out_files_without_creating_a_thread_or_branch() {
+    let fixture = RepositoryFixture::new();
+    let manager = fixture.manager();
+    let checkout = manager
+        .create_unbound(&fixture.repository, "my-worktree")
+        .await
+        .expect("create independent worktree");
+
+    assert_eq!(checkout, manager.settings().root.join("manual/my-worktree"));
+    assert!(checkout.join("nested/component").exists());
+    assert_eq!(
+        run_git(&fixture.repository, &["branch", "--show-current"]),
+        "main"
+    );
+    assert_eq!(run_git(&checkout, &["branch", "--show-current"]), "");
+    let listed = manager
+        .list(&fixture.repository)
+        .await
+        .expect("list worktrees");
+    assert_eq!(listed[1].owner(), &WorktreeOwner::Unbound);
+    assert!(
+        manager
+            .create_unbound(&fixture.repository, "my-worktree")
+            .await
+            .is_err()
+    );
+    assert!(
+        manager
+            .create_unbound(&fixture.repository, "../escape")
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn list_and_resolve_preserve_the_source_relative_directory() {
     let fixture = RepositoryFixture::new();
     let checkout = fixture.add_managed_worktree("a1b2", "topic", "topic");

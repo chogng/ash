@@ -14,6 +14,8 @@ use ash_app_server_protocol::protocol::git::GitBranchCreateParams;
 use ash_app_server_protocol::protocol::git::GitBranchListResult;
 use ash_app_server_protocol::protocol::git::GitBranchSwitchParams;
 use ash_app_server_protocol::protocol::git::GitStatusResult;
+use ash_app_server_protocol::protocol::git::GitWorktreeCreateParams;
+use ash_app_server_protocol::protocol::git::GitWorktreeCreateResult;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use std::collections::BTreeMap;
 
@@ -26,6 +28,7 @@ pub(crate) enum Event {
         name: String,
         result: Result<GitBranchListResult, String>,
     },
+    WorktreeCreated(Result<GitWorktreeCreateResult, String>),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -33,6 +36,7 @@ pub(crate) enum Command {
     OpenPicker,
     Switch { name: String },
     Create { name: String },
+    CreateWorktree { name: String },
 }
 
 impl Command {
@@ -41,224 +45,338 @@ impl Command {
             Self::OpenPicker => "ash-tui-list-git-branches",
             Self::Switch { .. } => "ash-tui-switch-git-branch",
             Self::Create { .. } => "ash-tui-create-git-branch",
+            Self::CreateWorktree { .. } => "ash-tui-create-git-worktree",
         }
     }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum BranchSelectionAction {
-    NewWorktree,
     NewBranch,
-    NewBranchWorktree,
     CreateBranch { branch_name: String },
-    CreateBranchWorktree { branch_name: String },
+    CreateWorktree { name: String },
     Occupied { name: String },
     Switch { name: String, current: bool },
 }
 
 #[derive(Debug)]
 pub(crate) struct BranchPanel {
-    branches: ListSelection<BranchSelectionAction>,
-    branch_name: Option<ListSelection<BranchSelectionAction>>,
-    new_task: bool,
-    picker_hints: KeyHints,
-    prompt_hints: KeyHints,
+    view: BranchView,
     language: crate::nls::Language,
+}
+
+#[derive(Debug)]
+enum BranchView {
+    Picker {
+        branches: ListSelection<BranchSelectionAction>,
+        branch_name: Option<ListSelection<BranchSelectionAction>>,
+        picker_hints: KeyHints,
+        prompt_hints: KeyHints,
+    },
+    NewBranch {
+        prompt: ListSelection<BranchSelectionAction>,
+        hints: KeyHints,
+    },
+    NewWorktree {
+        prompt: ListSelection<BranchSelectionAction>,
+        hints: KeyHints,
+    },
 }
 
 impl BranchPanel {
     pub(crate) fn new(spec: BranchChoices) -> Self {
-        Self::with_mode(spec, false)
-    }
-
-    pub(crate) fn new_task() -> Self {
-        Self::with_mode(new_task_choices(), true)
-    }
-
-    fn with_mode(spec: BranchChoices, new_task: bool) -> Self {
-        let picker_hints = if new_task {
-            KeyHints::compact().with_compact_action("w", "New worktree")
-        } else {
-            KeyHints::compact()
-        };
-        let picker_hints = picker_hints.with_compact_action(
-            "b",
-            if new_task {
-                "New branch worktree"
-            } else {
-                "New branch"
-            },
-        );
-        let picker_hints = if new_task {
-            picker_hints
-        } else {
-            picker_hints.with_compact_action("/", "search")
-        };
         Self {
-            branches: ListSelection::new(spec.model, spec.actions),
-            branch_name: None,
-            new_task,
-            picker_hints: picker_hints.with_compact_action("Esc", "close"),
-            prompt_hints: KeyHints::new()
-                .with_action("Enter", "create")
-                .with_action("Esc", "back"),
+            view: BranchView::Picker {
+                branches: ListSelection::new(spec.model, spec.actions),
+                branch_name: None,
+                picker_hints: KeyHints::compact()
+                    .with_compact_action("b", "New branch")
+                    .with_compact_action("/", "search")
+                    .with_compact_action("Esc", "close"),
+                prompt_hints: KeyHints::new()
+                    .with_action("Enter", "create")
+                    .with_action("Esc", "back"),
+            },
+            language: crate::nls::Language::English,
+        }
+    }
+
+    pub(crate) fn new_branch() -> Self {
+        Self {
+            view: BranchView::NewBranch {
+                prompt: branch_name_prompt(crate::nls::Language::English),
+                hints: KeyHints::new()
+                    .with_action("Enter", "create")
+                    .with_action("Esc", "close"),
+            },
+            language: crate::nls::Language::English,
+        }
+    }
+
+    pub(crate) fn new_worktree() -> Self {
+        Self {
+            view: BranchView::NewWorktree {
+                prompt: worktree_name_prompt(crate::nls::Language::English),
+                hints: KeyHints::new()
+                    .with_action("Enter", "create")
+                    .with_action("Esc", "close"),
+            },
             language: crate::nls::Language::English,
         }
     }
 
     pub(crate) fn state(&self) -> &ListSelectionState {
-        self.branch_name.as_ref().unwrap_or(&self.branches).state()
+        match &self.view {
+            BranchView::Picker {
+                branches,
+                branch_name,
+                ..
+            } => branch_name.as_ref().unwrap_or(branches).state(),
+            BranchView::NewBranch { prompt, .. } | BranchView::NewWorktree { prompt, .. } => {
+                prompt.state()
+            }
+        }
     }
 
     pub(crate) fn is_branch_name_prompt(&self) -> bool {
-        self.branch_name.is_some()
+        match &self.view {
+            BranchView::Picker { branch_name, .. } => branch_name.is_some(),
+            BranchView::NewBranch { .. } | BranchView::NewWorktree { .. } => true,
+        }
     }
 
     pub(crate) fn parent_title(&self) -> Option<&str> {
-        self.branch_name
-            .as_ref()
-            .map(|_| self.branches.state().title())
+        match &self.view {
+            BranchView::Picker {
+                branches,
+                branch_name: Some(_),
+                ..
+            } => Some(branches.state().title()),
+            _ => None,
+        }
     }
 
     pub(crate) fn return_to_parent(&mut self) {
-        self.branch_name = None;
+        if let BranchView::Picker { branch_name, .. } = &mut self.view {
+            *branch_name = None;
+        }
     }
 
     pub(crate) fn state_mut(&mut self) -> &mut ListSelectionState {
-        self.branch_name
-            .as_mut()
-            .unwrap_or(&mut self.branches)
-            .state_mut()
+        match &mut self.view {
+            BranchView::Picker {
+                branches,
+                branch_name,
+                ..
+            } => branch_name.as_mut().unwrap_or(branches).state_mut(),
+            BranchView::NewBranch { prompt, .. } | BranchView::NewWorktree { prompt, .. } => {
+                prompt.state_mut()
+            }
+        }
     }
 
     pub(crate) fn localize(&mut self, language: crate::nls::Language) {
         self.language = language;
-        self.branches.state_mut().localize(language);
-        if let Some(prompt) = &mut self.branch_name {
-            prompt.state_mut().localize(language);
+        match &mut self.view {
+            BranchView::Picker {
+                branches,
+                branch_name,
+                ..
+            } => {
+                branches.state_mut().localize(language);
+                if let Some(prompt) = branch_name {
+                    prompt.state_mut().localize(language);
+                }
+            }
+            BranchView::NewBranch { prompt, .. } | BranchView::NewWorktree { prompt, .. } => {
+                prompt.state_mut().localize(language)
+            }
         }
     }
 
     pub(crate) fn key_hints(&self) -> &KeyHints {
-        self.branch_name
-            .as_ref()
-            .map(|_| &self.prompt_hints)
-            .unwrap_or(&self.picker_hints)
+        match &self.view {
+            BranchView::Picker {
+                branch_name: Some(_),
+                prompt_hints,
+                ..
+            } => prompt_hints,
+            BranchView::Picker { picker_hints, .. } => picker_hints,
+            BranchView::NewBranch { hints, .. } | BranchView::NewWorktree { hints, .. } => hints,
+        }
     }
 
     pub(crate) fn handle_key(
         &mut self,
         key: KeyEvent,
     ) -> ListSelectionOutcome<BranchSelectionAction> {
-        if let Some(prompt) = &mut self.branch_name {
-            if key.kind == KeyEventKind::Press && key.code == KeyCode::Esc {
-                self.return_to_parent();
-                return ListSelectionOutcome::Consumed;
-            }
-            if key.kind == KeyEventKind::Press
-                && key.code == KeyCode::Enter
-                && key.modifiers == KeyModifiers::NONE
-            {
-                let branch_name = prompt.state().query().trim();
-                if branch_name.is_empty() || branch_name == "ash/" {
-                    let message = if branch_name.is_empty() {
-                        "Enter a branch name"
-                    } else {
-                        "Enter a branch name after ash/"
-                    };
-                    prompt.state_mut().set_message(Some(message.into()));
-                    return ListSelectionOutcome::Consumed;
-                }
-                return ListSelectionOutcome::Activate(if self.new_task {
-                    BranchSelectionAction::CreateBranchWorktree {
-                        branch_name: branch_name.into(),
-                    }
+        match &mut self.view {
+            BranchView::NewBranch { prompt, .. } => {
+                if key.kind == KeyEventKind::Press && key.code == KeyCode::Esc {
+                    ListSelectionOutcome::Dismiss
                 } else {
-                    BranchSelectionAction::CreateBranch {
-                        branch_name: branch_name.into(),
+                    handle_branch_name_key(prompt, key)
+                }
+            }
+            BranchView::NewWorktree { prompt, .. } => {
+                if key.kind == KeyEventKind::Press && key.code == KeyCode::Esc {
+                    ListSelectionOutcome::Dismiss
+                } else {
+                    handle_worktree_name_key(prompt, key)
+                }
+            }
+            BranchView::Picker {
+                branch_name: Some(_),
+                ..
+            } if key.kind == KeyEventKind::Press && key.code == KeyCode::Esc => {
+                self.return_to_parent();
+                ListSelectionOutcome::Consumed
+            }
+            BranchView::Picker {
+                branch_name: Some(prompt),
+                ..
+            } => handle_branch_name_key(prompt, key),
+            BranchView::Picker {
+                branches,
+                branch_name,
+                ..
+            } => {
+                let outcome = if key.kind == KeyEventKind::Press
+                    && key.modifiers == KeyModifiers::NONE
+                    && branches.state().items_focused()
+                    && key.code == KeyCode::Char('b')
+                {
+                    ListSelectionOutcome::Activate(BranchSelectionAction::NewBranch)
+                } else {
+                    branches.handle_key(key)
+                };
+                match outcome {
+                    ListSelectionOutcome::Activate(BranchSelectionAction::NewBranch) => {
+                        *branch_name = Some(branch_name_prompt(self.language));
+                        ListSelectionOutcome::Consumed
                     }
-                });
-            }
-            let before = prompt.state().query().to_owned();
-            let outcome = prompt.handle_key(key);
-            if prompt.state().query() != before {
-                prompt.state_mut().set_message(None);
-            }
-            return outcome;
-        }
-        if key.kind == KeyEventKind::Press
-            && key.modifiers == KeyModifiers::NONE
-            && self.branches.state().items_focused()
-        {
-            match key.code {
-                KeyCode::Char('w') if self.new_task => {
-                    return ListSelectionOutcome::Activate(BranchSelectionAction::NewWorktree);
+                    ListSelectionOutcome::Activate(BranchSelectionAction::Occupied { .. }) => {
+                        branches
+                            .state_mut()
+                            .set_message(Some("Branch is checked out in another worktree".into()));
+                        ListSelectionOutcome::Consumed
+                    }
+                    outcome => outcome,
                 }
-                KeyCode::Char('b') => {
-                    self.open_branch_prompt();
-                    return ListSelectionOutcome::Consumed;
-                }
-                _ => {}
             }
         }
-        match self.branches.handle_key(key) {
-            ListSelectionOutcome::Activate(BranchSelectionAction::NewBranch) => {
-                self.open_branch_prompt();
-                ListSelectionOutcome::Consumed
-            }
-            ListSelectionOutcome::Activate(BranchSelectionAction::NewBranchWorktree) => {
-                self.open_branch_prompt();
-                ListSelectionOutcome::Consumed
-            }
-            ListSelectionOutcome::Activate(BranchSelectionAction::Occupied { .. }) => {
-                self.branches
-                    .state_mut()
-                    .set_message(Some("Branch is checked out in another worktree".into()));
-                ListSelectionOutcome::Consumed
-            }
-            outcome => outcome,
-        }
-    }
-
-    fn open_branch_prompt(&mut self) {
-        let mut model = ListSelectionModel::new(
-            if self.new_task {
-                "New branch worktree"
-            } else {
-                "New branch"
-            },
-            vec![ListSelectionGroup::new("", Vec::new())],
-        )
-        .with_input(SearchBoxModel::new("Branch name").with_initial_query("ash/"))
-        .with_action(
-            ListSelectionItem::new(if self.new_task {
-                "Create branch worktree"
-            } else {
-                "Create branch"
-            })
-            .with_id(ListSelectionItemId::new("worktree:create")),
-        )
-        .without_tab_bar()
-        .with_empty_message(if self.new_task {
-            "New task in an ash/ branch and its own worktree."
-        } else {
-            "Create a branch at HEAD without switching worktrees."
-        });
-        model.localize(self.language);
-        let mut prompt = ListSelection::new(model, BTreeMap::new());
-        prompt.state_mut().focus_search();
-        self.branch_name = Some(prompt);
     }
 
     pub(crate) fn handle_paste(&mut self, pasted: String) {
-        match &mut self.branch_name {
-            Some(prompt) => {
+        match &mut self.view {
+            BranchView::Picker {
+                branch_name: Some(prompt),
+                ..
+            }
+            | BranchView::NewBranch { prompt, .. }
+            | BranchView::NewWorktree { prompt, .. } => {
                 prompt.handle_paste(pasted);
                 prompt.state_mut().set_message(None);
             }
-            None => self.branches.handle_paste(pasted),
+            BranchView::Picker { branches, .. } => branches.handle_paste(pasted),
         }
     }
+}
+
+fn branch_name_prompt(language: crate::nls::Language) -> ListSelection<BranchSelectionAction> {
+    let mut model =
+        ListSelectionModel::new("New branch", vec![ListSelectionGroup::new("", Vec::new())])
+            .with_input(SearchBoxModel::new("Branch name").with_initial_query("ash/"))
+            .with_action(
+                ListSelectionItem::new("Create branch")
+                    .with_id(ListSelectionItemId::new("branch:create")),
+            )
+            .without_tab_bar()
+            .with_empty_message("Create a branch at HEAD without switching worktrees.");
+    model.localize(language);
+    let mut prompt = ListSelection::new(model, BTreeMap::new());
+    prompt.state_mut().focus_search();
+    prompt
+}
+
+fn worktree_name_prompt(language: crate::nls::Language) -> ListSelection<BranchSelectionAction> {
+    let mut model = ListSelectionModel::new(
+        "New worktree",
+        vec![ListSelectionGroup::new("", Vec::new())],
+    )
+    .with_input(SearchBoxModel::new("Worktree name"))
+    .with_action(
+        ListSelectionItem::new("Create worktree")
+            .with_id(ListSelectionItemId::new("worktree:create")),
+    )
+    .without_tab_bar()
+    .with_empty_message("Create at HEAD. No session starts.");
+    model.localize(language);
+    let mut prompt = ListSelection::new(model, BTreeMap::new());
+    prompt.state_mut().focus_search();
+    prompt
+}
+
+fn handle_worktree_name_key(
+    prompt: &mut ListSelection<BranchSelectionAction>,
+    key: KeyEvent,
+) -> ListSelectionOutcome<BranchSelectionAction> {
+    if key.kind == KeyEventKind::Press
+        && key.code == KeyCode::Enter
+        && key.modifiers == KeyModifiers::NONE
+    {
+        let name = prompt.state().query().trim();
+        if name.is_empty()
+            || name.len() > 64
+            || !name
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+        {
+            prompt
+                .state_mut()
+                .set_message(Some("Use 1–64 letters, numbers, '-' or '_'".into()));
+            return ListSelectionOutcome::Consumed;
+        }
+        return ListSelectionOutcome::Activate(BranchSelectionAction::CreateWorktree {
+            name: name.into(),
+        });
+    }
+    let before = prompt.state().query().to_owned();
+    let outcome = prompt.handle_key(key);
+    if prompt.state().query() != before {
+        prompt.state_mut().set_message(None);
+    }
+    outcome
+}
+
+fn handle_branch_name_key(
+    prompt: &mut ListSelection<BranchSelectionAction>,
+    key: KeyEvent,
+) -> ListSelectionOutcome<BranchSelectionAction> {
+    if key.kind == KeyEventKind::Press
+        && key.code == KeyCode::Enter
+        && key.modifiers == KeyModifiers::NONE
+    {
+        let branch_name = prompt.state().query().trim();
+        if branch_name.is_empty() || branch_name == "ash/" {
+            let message = if branch_name.is_empty() {
+                "Enter a branch name"
+            } else {
+                "Enter a branch name after ash/"
+            };
+            prompt.state_mut().set_message(Some(message.into()));
+            return ListSelectionOutcome::Consumed;
+        }
+        return ListSelectionOutcome::Activate(BranchSelectionAction::CreateBranch {
+            branch_name: branch_name.into(),
+        });
+    }
+    let before = prompt.state().query().to_owned();
+    let outcome = prompt.handle_key(key);
+    if prompt.state().query() != before {
+        prompt.state_mut().set_message(None);
+    }
+    outcome
 }
 
 pub(crate) fn execute<T>(client: &mut AppServerClient<T>, command: Command) -> Result<Event, String>
@@ -289,6 +407,14 @@ where
                 .map_err(|error| git_error_message(error, GitAction::Create));
             Ok(Event::CreateFinished { name, result })
         }
+        Command::CreateWorktree { name } => Ok(Event::WorktreeCreated(
+            client
+                .create_git_worktree(GitWorktreeCreateParams {
+                    repository_id: None,
+                    name,
+                })
+                .map_err(|error| git_error_message(error, GitAction::CreateWorktree)),
+        )),
     }
 }
 
@@ -368,44 +494,19 @@ fn choices_with_selected(result: GitBranchListResult, selected: Option<usize>) -
     }
 }
 
-pub(crate) fn new_task_choices() -> BranchChoices {
-    let worktree = ListSelectionItemId::new("task:detached");
-    let branch = ListSelectionItemId::new("task:branch");
-    BranchChoices {
-        model: ListSelectionModel::new(
-            "New task",
-            vec![ListSelectionGroup::new(
-                "",
-                vec![
-                    ListSelectionItem::new("New worktree")
-                        .with_id(worktree.clone())
-                        .with_description("Detached · new session"),
-                    ListSelectionItem::new("New branch worktree")
-                        .with_id(branch.clone())
-                        .with_description("ash/ branch · new session"),
-                ],
-            )],
-        )
-        .without_tab_bar()
-        .with_initial_selected(0),
-        actions: BTreeMap::from([
-            (worktree, BranchSelectionAction::NewWorktree),
-            (branch, BranchSelectionAction::NewBranchWorktree),
-        ]),
-    }
-}
-
 enum GitAction {
     List,
     Switch,
     Create,
+    CreateWorktree,
 }
 
 fn git_error_message(error: ash_app_server_client::ClientError, action: GitAction) -> String {
     match error {
-        ash_app_server_client::ClientError::Server { code: -32601, .. } => {
-            "The connected App Server does not support this branch action. Restart it to use the current version.".into()
-        }
+        ash_app_server_client::ClientError::Server { code: -32601, .. } => match action {
+            GitAction::CreateWorktree => "The connected App Server does not support worktree creation. Restart it to use the current version.".into(),
+            _ => "The connected App Server does not support this branch action. Restart it to use the current version.".into(),
+        },
         ash_app_server_client::ClientError::Server { code: -32061, .. } => match action {
             GitAction::List => "Could not read project branches.".into(),
             GitAction::Switch => {
@@ -415,6 +516,7 @@ fn git_error_message(error: ash_app_server_client::ClientError, action: GitActio
                 "Could not create branch. Check the branch name and whether it already exists."
                     .into()
             }
+            GitAction::CreateWorktree => "Could not create worktree. Check its name and existing directories.".into(),
         },
         ash_app_server_client::ClientError::Server { code: -32060, .. } => {
             "Git is unavailable for this project.".into()

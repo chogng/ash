@@ -48,18 +48,18 @@ impl Home {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::app) enum Action {
-    NewTask,
+    NewWorktree,
+    NewBranch,
     Resume,
-    Dashboard,
     Settings,
     Help,
     Quit,
 }
 
 const ACTIONS: [(Action, &str); 6] = [
-    (Action::NewTask, "New task"),
+    (Action::NewWorktree, "New worktree"),
+    (Action::NewBranch, "New branch"),
     (Action::Resume, "Resume session"),
-    (Action::Dashboard, "Dashboard"),
     (Action::Settings, "Settings"),
     (Action::Help, "Help and shortcuts"),
     (Action::Quit, "Quit"),
@@ -241,8 +241,12 @@ pub(super) fn activate(app: &mut App, action: Action) -> Option<AppCommand> {
         .position(|(candidate, _)| *candidate == action);
     app.fullscreen.focus_page();
     match action {
-        Action::NewTask => {
-            app.open_command_panel(CommandPanel::new_task_worktrees());
+        Action::NewWorktree => {
+            app.open_command_panel(CommandPanel::new_worktree());
+            None
+        }
+        Action::NewBranch => {
+            app.open_command_panel(CommandPanel::new_branch());
             None
         }
         Action::Resume => {
@@ -251,10 +255,6 @@ pub(super) fn activate(app: &mut App, action: Action) -> Option<AppCommand> {
                 app.sessions.active_session_id().map(|id| id.as_str()),
             );
             app.open_command_panel(CommandPanel::sessions(choices));
-            None
-        }
-        Action::Dashboard => {
-            super::navigation::show_manager(app);
             None
         }
         Action::Settings => Some(crate::config::Command::OpenEditor.into()),

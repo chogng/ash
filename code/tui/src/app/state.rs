@@ -491,25 +491,13 @@ impl App {
                 Some(ModelCommand::Pin { preference, pinned }.into())
             }
             CommandPanelOutcome::GitBranch(action) => match action {
-                crate::git::BranchSelectionAction::CreateBranchWorktree { branch_name } => Some(
-                    SessionCommand::CreateWorktree {
-                        language: self.language(),
-                        branch_name: Some(branch_name),
-                    }
-                    .into(),
-                ),
-                crate::git::BranchSelectionAction::NewWorktree => Some(
-                    SessionCommand::CreateWorktree {
-                        language: self.language(),
-                        branch_name: None,
-                    }
-                    .into(),
-                ),
                 crate::git::BranchSelectionAction::NewBranch => None,
-                crate::git::BranchSelectionAction::NewBranchWorktree => None,
                 crate::git::BranchSelectionAction::Occupied { .. } => None,
                 crate::git::BranchSelectionAction::CreateBranch { branch_name } => {
                     Some(GitCommand::Create { name: branch_name }.into())
+                }
+                crate::git::BranchSelectionAction::CreateWorktree { name } => {
+                    Some(GitCommand::CreateWorktree { name }.into())
                 }
                 crate::git::BranchSelectionAction::Switch { name, current } => {
                     if current {
@@ -1968,6 +1956,20 @@ impl App {
                 GitEvent::CreateFinished {
                     result: Err(error), ..
                 } => self.panels_mut().set_command_message(error),
+                GitEvent::WorktreeCreated(Ok(created)) => {
+                    self.close_command_panel();
+                    self.chat_panel.show_notice(
+                        format!(
+                            "{} {}",
+                            crate::nls::localize(self.language(), "Worktree created at"),
+                            created.path
+                        ),
+                        Instant::now(),
+                    );
+                }
+                GitEvent::WorktreeCreated(Err(error)) => {
+                    self.panels_mut().set_command_message(error)
+                }
             },
             AppEvent::Host(event) => self.apply_host_event(event),
             AppEvent::Config(event) => self.apply_config_event(event),
