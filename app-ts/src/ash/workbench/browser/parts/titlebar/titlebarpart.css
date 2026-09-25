@@ -1,4 +1,5 @@
 .ash-workbench-titlebar {
+  position: relative;
   color: var(--ash-title-bar-foreground);
   flex-direction: row;
   align-items: center;
@@ -20,6 +21,80 @@
   flex-direction: row;
   align-items: center;
   align-self: stretch;
+}
+
+.ash-titlebar-command-center {
+  /* The desktop reserves unequal space for window controls; center against the full window. */
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  min-width: 0;
+  width: 400px;
+  transform: translate(-50%, -50%);
+}
+
+.ash-titlebar-command-center-button {
+  width: 100%;
+  height: 24px;
+  min-height: 24px;
+  min-width: 0;
+  padding: 0 8px;
+  color: var(--ash-command-center-foreground);
+  background: var(--ash-command-center-background);
+  border: var(--ash-stroke-thickness) solid var(--ash-command-center-border);
+  border-radius: 4px;
+}
+
+.ash-titlebar-command-center-button:hover {
+  background: var(--ash-command-center-hover-background);
+}
+
+.ash-titlebar-command-center-button:active,
+.ash-titlebar-command-center-button:focus-visible,
+.ash-titlebar-command-center-button.active {
+  border-color: var(--ash-command-center-active-border);
+}
+
+.ash-titlebar-command-center-button.active {
+  background: var(--ash-title-bar-background);
+}
+
+.ash-titlebar-command-center-button:focus-visible {
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  outline-offset: 1px;
+}
+
+.ash-titlebar-command-center-button .ash-button-content,
+.ash-titlebar-command-center-button .ash-button-label {
+  min-width: 0;
+}
+
+.ash-titlebar-command-center-button .ash-button-content {
+  max-width: 100%;
+}
+
+.ash-titlebar-command-center-button .ash-icon-label-icon {
+  flex: 0 0 auto;
+}
+
+.ash-titlebar-command-center-button .ash-button-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 800px) {
+  .ash-titlebar-command-center {
+    width: 32px;
+  }
+
+  .ash-titlebar-command-center-button .ash-button-label {
+    display: none;
+  }
+
+  .ash-titlebar-command-center-button {
+    padding-inline: 6px;
+  }
 }
 
 .ash-titlebar-app-icon {

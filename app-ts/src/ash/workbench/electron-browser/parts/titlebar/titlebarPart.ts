@@ -17,6 +17,7 @@ import { IThemeService } from "../../../../platform/theme/common/themeService.js
 import { titleBarActionForeground, titleBarBackground } from "../../../common/theme.js";
 import { INativeHostService } from "../../../common/services.js";
 import type { INativeHostApi } from "../../../../platform/native/common/nativeHost.js";
+import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import "./titlebarpart.css";
 
 /**
@@ -29,6 +30,7 @@ export class ElectronTitlebarPart extends BrowserTitlebarPart {
 		container: HTMLElement,
 		options: ITitlebarPartFactoryOptions,
 		nativeMenubar: INativeMenubarApi,
+		@IInstantiationService instantiationService: IInstantiationService,
 		@IThemeService private readonly themeService: IThemeService,
 		@INativeHostService private readonly hostService: INativeHostApi,
 	) {
@@ -36,6 +38,7 @@ export class ElectronTitlebarPart extends BrowserTitlebarPart {
 			container,
 			options,
 			new ElectronMenubarControl(container, options, nativeMenubar),
+			instantiationService,
 		);
 		this.domNode.classList.add("ash-electron-titlebar");
 		this._register(this.themeService.onDidColorThemeChange(() => this.updateStyles()));

@@ -157,6 +157,7 @@ class TestQuickPick<TItem extends IQuickPickItem> implements IQuickPick<TItem> {
 	ariaLabel = '';
 	placeholder = "";
 	value = "";
+	valueSelection = { start: 0, end: 0 };
 	filterValue = (value: string): string => value;
 
 	accept(index = 0): void {

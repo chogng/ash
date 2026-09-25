@@ -25,6 +25,11 @@ export const titleBarBackground = color("titleBar.background", "#FFFFFF", "#FFFF
 color("titleBar.foreground", "#1f1f1f", "#1f1f1f", "Title bar foreground.");
 export const titleBarActionForeground = color("titleBar.actionForeground", "#424242", "#424242", "Title bar action foreground.");
 color("titleBar.hoverBackground", "#e5e5e5", "#e5e5e5", "Hovered title bar item background.");
+registerColor('commandCenter.foreground', { dark: '#424242', light: '#424242', highContrastDark: '#ffffff', highContrastLight: '#000000' }, { description: 'Command Center search text and icon.', owner: colorOwner });
+registerColor('commandCenter.background', { dark: '#f6f6f6', light: '#f6f6f6', highContrastDark: '#000000', highContrastLight: '#ffffff' }, { description: 'Command Center search background.', owner: colorOwner });
+registerColor('commandCenter.border', { dark: '#d0d0d0', light: '#d0d0d0', highContrastDark: contrastBorder, highContrastLight: contrastBorder }, { description: 'Command Center search border.', owner: colorOwner });
+registerColor('commandCenter.hoverBackground', { dark: '#ebebeb', light: '#ebebeb', highContrastDark: '#000000', highContrastLight: '#ffffff' }, { description: 'Hovered Command Center search background.', owner: colorOwner });
+registerColor('commandCenter.activeBorder', { dark: '#888888', light: '#888888', highContrastDark: contrastBorder, highContrastLight: contrastBorder }, { description: 'Active Command Center search border.', owner: colorOwner });
 
 const sideBarBackground = color("sideBar.background", "#F8F8F8", "#F8F8F8", "Primary side bar background.");
 alias("auxiliaryBar.background", sideBarBackground, "Auxiliary side bar background.");

@@ -43,6 +43,7 @@ test("localization lookup falls back to English and formats parameters", async (
 	assert.equal(localization.translate("ash.settings", "displayLanguage.title", "Fallback"), "Display Language");
 	assert.equal(localization.translate("ash.missing", "missing", "Hello {name}", { name: "Ada" }), "Hello Ada");
 	await localeService.setLocale('zh-CN');
+	assert.equal(localization.translate('ash.regions', 'searchCommands', 'Search commands'), '搜索命令');
 	assert.equal(localization.translate('ash', 'iPadShowKeyboard.label', 'Show Keyboard'), '显示键盘');
 	assert.equal(localization.translate('ash', 'inspectTokens.label', 'Developer: Inspect Tokens'), '开发者：检查词法单元');
 	assert.equal(localization.translate('ash', 'inspectTokens.scope', 'Token type'), '词法单元类型');

@@ -20,6 +20,8 @@ import {
 } from "../../platform/keyboardLayout/common/userKeyboardLayout.js";
 import { type ILayoutService as ILayoutServiceContract } from "../../platform/layout/browser/layoutService.js";
 import { IQuickInputService } from "../../platform/quickinput/common/quickInput.js";
+import { IQuickAccessController } from "../../platform/quickinput/common/quickAccess.js";
+import { QuickAccessController } from "../../platform/quickinput/browser/quickAccess.js";
 import { CommandService } from "../services/commands/common/commandService.js";
 import { BrowserKeyboardLayoutService } from "../services/keybinding/browser/keyboardLayoutService.js";
 import { WorkbenchKeybindingService } from "../services/keybinding/browser/keybindingService.js";
@@ -131,6 +133,7 @@ export class WorkbenchInteractionServices extends Disposable {
 		}));
 		this.quickInputService = quickInputService;
 		container.registerInstance(IQuickInputService, quickInputService);
+		container.registerInstance(IQuickAccessController, this._register(container.createInstance(QuickAccessController)));
 		this.chatContextPickService = new ChatContextPickService();
 		container.registerInstance(IChatContextPickService, this.chatContextPickService);
 		container.registerInstance(IPreferencesService, this._register(new PreferencesService(() => container.get(IEditorService))));

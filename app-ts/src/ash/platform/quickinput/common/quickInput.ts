@@ -12,6 +12,11 @@ export interface IQuickPickItem {
 	readonly keybinding?: string;
 }
 
+export interface IQuickInputSelection {
+	readonly start: number;
+	readonly end: number;
+}
+
 /** A short-lived searchable selection UI hosted by the current window. */
 export interface IQuickPick<TItem extends IQuickPickItem>
 	extends IDisposable {
@@ -24,6 +29,7 @@ export interface IQuickPick<TItem extends IQuickPickItem>
 	ariaLabel: string;
 	placeholder: string;
 	value: string;
+	valueSelection: IQuickInputSelection;
 	filterValue: (value: string) => string;
 
 	show(): void;

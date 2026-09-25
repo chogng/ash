@@ -5,6 +5,7 @@ import {
 } from "../../../base/browser/ui/aria/aria.js";
 import {
 	InputBox,
+	type InputSelection,
 } from "../../../base/browser/ui/inputbox/inputbox.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
@@ -134,6 +135,17 @@ export class QuickPick<TItem extends IQuickPickItem>
 
 	set value(value: string) {
 		this.inputBox.value = value;
+	}
+
+	get valueSelection(): InputSelection {
+		return {
+			start: this.inputBox.inputElement.selectionStart ?? 0,
+			end: this.inputBox.inputElement.selectionEnd ?? 0,
+		};
+	}
+
+	set valueSelection(value: InputSelection) {
+		this.inputBox.select(value);
 	}
 
 	get filterValue(): (value: string) => string {

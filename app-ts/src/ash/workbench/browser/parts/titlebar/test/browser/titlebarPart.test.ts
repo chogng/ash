@@ -7,8 +7,9 @@ import type {
 import type {
 	IMenubarControl,
 } from "../../../../../../workbench/browser/parts/titlebar/menubarControl.js";
+import type { ILocalizationService } from "../../../../../../workbench/services/localization/common/localizationService.js";
 import { h } from "../../../../../../base/browser/dom.js";
-import { Event } from "../../../../../../base/common/event.js";
+import { Emitter, Event } from "../../../../../../base/common/event.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -36,7 +37,7 @@ const { MenuId, MenusRegistry } = await import(
 const { MenuService } = await import(
 	"../../../../../../platform/actions/common/menuService.js"
 );
-const { CommandsRegistry } = await import(
+const { CommandsRegistry, ICommandService } = await import(
 	"../../../../../../platform/commands/common/commands.js"
 );
 const { ContextKeyService } = await import(
@@ -47,6 +48,9 @@ const { ServiceContainer } = await import(
 );
 const { CommandService } = await import(
 	"../../../../../../workbench/services/commands/common/commandService.js"
+);
+const { IQuickAccessController } = await import(
+	"../../../../../../platform/quickinput/common/quickAccess.js"
 );
 const { BrowserTitlebarPart } = await import(
 	"../../../../../../workbench/browser/parts/titlebar/titlebarPart.js"
@@ -66,9 +70,10 @@ test("titlebar owns a menu-driven actions container", async () => {
 	using disposables = new DisposableStore();
 	const ownerDocument = browserEnvironment.window.document;
 	ownerDocument.body.replaceChildren();
-	const commandService = disposables.add(
-		new CommandService(new ServiceContainer()),
-	);
+	const services = disposables.add(new ServiceContainer());
+	const commandService = disposables.add(new CommandService(services));
+	services.registerInstance(ICommandService, commandService);
+	services.registerInstance(IQuickAccessController, { onDidChangeVisibility: Event.None, show() {} });
 	const contextKeyService = disposables.add(new ContextKeyService());
 	const menuService = new MenuService(commandService, contextKeyService);
 	let runs = 0;
@@ -95,7 +100,7 @@ test("titlebar owns a menu-driven actions container", async () => {
 			this.dispose();
 		},
 	};
-	const titlebar = disposables.add(new BrowserTitlebarPart(ownerDocument.body, {
+	const titlebar = disposables.add(services.createInstance(BrowserTitlebarPart, ownerDocument.body, {
 		menuService,
 		contextMenuService,
 	}, menubar));
@@ -150,15 +155,23 @@ test("titlebar owns a menu-driven actions container", async () => {
 	assert.equal(menubarDisposed, true);
 });
 
-test("titlebar renders its product icon before left actions and the application menu", () => {
+test("titlebar renders its product icon, command center, and application menu", () => {
 	using disposables = new DisposableStore();
 	const ownerDocument = browserEnvironment.window.document;
 	ownerDocument.body.replaceChildren();
-	const commandService = disposables.add(
-		new CommandService(new ServiceContainer()),
-	);
+	const services = disposables.add(new ServiceContainer());
+	const commandService = disposables.add(new CommandService(services));
+	services.registerInstance(ICommandService, commandService);
+	services.registerInstance(IQuickAccessController, { onDidChangeVisibility: Event.None, show() {} });
 	const contextKeyService = disposables.add(new ContextKeyService());
 	const menuService = new MenuService(commandService, contextKeyService);
+	const localeChanged = disposables.add(new Emitter<void>());
+	let commandCenterLabel = "Search commands";
+	const localizationService: ILocalizationService = {
+		onDidChange: localeChanged.event,
+		whenReady: Promise.resolve(),
+		translate: () => commandCenterLabel,
+	};
 	disposables.add(MenusRegistry.appendMenuItem(MenuId.TitleBarLeft, {
 		command: {
 			id: "test.titlebar.leftAction",
@@ -167,10 +180,7 @@ test("titlebar renders its product icon before left actions and the application 
 		group: "navigation",
 	}));
 	const menubarElement = h(ownerDocument, "nav");
-	const titlebar = disposables.add(new BrowserTitlebarPart(ownerDocument.body, {
-		menuService,
-		contextMenuService,
-	}, {
+	const menubar: IMenubarControl = {
 		domNode: menubarElement,
 		dispose() {
 			menubarElement.remove();
@@ -178,7 +188,12 @@ test("titlebar renders its product icon before left actions and the application 
 		[Symbol.dispose]() {
 			this.dispose();
 		},
-	}));
+	};
+	const titlebar = disposables.add(services.createInstance(BrowserTitlebarPart, ownerDocument.body, {
+		menuService,
+		contextMenuService,
+		localizationService,
+	}, menubar));
 
 	const titleChildren = [...titlebar.domNode.querySelector(
 		".ash-workbench-part-title",
@@ -199,6 +214,18 @@ test("titlebar renders its product icon before left actions and the application 
 	);
 	assert.equal(titleChildren.length, 3);
 	assert.equal(titlebar.domNode.querySelector(".ash-titlebar-label"), null);
+	const commandCenter = titlebar.domNode.querySelector<HTMLButtonElement>(".ash-titlebar-command-center-button");
+	assert.equal(commandCenter?.textContent, "Search commands");
+	assert.equal(commandCenter?.getAttribute("aria-label"), "Search commands");
+	assert.equal(commandCenter?.type, "button");
+	assert.equal(commandCenter?.getAttribute('aria-haspopup'), 'dialog');
+	assert.equal(commandCenter?.getAttribute('aria-expanded'), 'false');
+	assert.equal(commandCenter?.parentElement?.previousElementSibling?.className, "ash-workbench-part-title");
+	assert.equal(commandCenter?.parentElement?.nextElementSibling?.className, "ash-workbench-part-content");
+	commandCenterLabel = "搜索命令";
+	localeChanged.fire();
+	assert.equal(commandCenter?.textContent, "搜索命令");
+	assert.equal(commandCenter?.getAttribute("aria-label"), "搜索命令");
 });
 
 test("browser titlebar uses one icon trigger for the application menus", () => {

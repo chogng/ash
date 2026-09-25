@@ -8,7 +8,8 @@ import { WorkbenchWindowBarHeight } from "../workbenchPartDimensions.js";
 import { BrowserMenubarControl, type IMenubarControl } from "./menubarControl.js";
 import { h } from "../../../../base/browser/dom.js";
 import type { ILocalizationService } from "../../../services/localization/common/localizationService.js";
-import type { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
+import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
+import { CommandCenterControl } from "./commandCenterControl.js";
 
 /** Inputs shared by web and Electron titlebar factories. */
 export interface ITitlebarPartFactoryOptions {
@@ -37,6 +38,7 @@ export class BrowserTitlebarPart extends WorkbenchPart {
 		container: HTMLElement,
 		options: ITitlebarPartFactoryOptions,
 		menubar: IMenubarControl,
+		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super(container, "titlebar");
 		const ownerDocument = container.ownerDocument;
@@ -57,6 +59,8 @@ export class BrowserTitlebarPart extends WorkbenchPart {
 				{ presentation: "inherit-foreground" },
 			),
 		);
+		const commandCenter = this._register(instantiationService.createInstance(CommandCenterControl, this.domNode, options.localizationService));
+		this.contentDomNode.before(commandCenter.domNode);
 		const actionsDomNode = h(ownerDocument, "div");
 		actionsDomNode.className = "ash-titlebar-actions ash-titlebar-interactive-region";
 		this.contentDomNode.append(actionsDomNode);
@@ -77,8 +81,8 @@ export class BrowserTitlebarPart extends WorkbenchPart {
 }
 
 /** Creates the titlebar used by a regular web workbench. */
-export const createBrowserTitlebarPart: TitlebarPartFactory = (container, options) =>
-	new BrowserTitlebarPart(
+export const createBrowserTitlebarPart: TitlebarPartFactory = (container, options, instantiationService) =>
+	instantiationService.createInstance(BrowserTitlebarPart,
 		container,
 		options,
 		new BrowserMenubarControl(

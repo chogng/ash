@@ -4,6 +4,8 @@ import { JSDOM } from 'jsdom';
 import { Event } from '../../../../../../base/common/event.js';
 import { DisposableTracker, installDisposableTracker } from '../../../../../../base/common/lifecycle.js';
 import { ServiceContainer } from '../../../../../../platform/instantiation/common/instantiation.js';
+import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
+import { IQuickAccessController } from '../../../../../../platform/quickinput/common/quickAccess.js';
 import { IThemeService } from '../../../../../../platform/theme/common/themeService.js';
 import { TestThemeService } from '../../../../../../platform/theme/test/common/testThemeService.js';
 import { darkColorTheme, lightColorTheme } from '../../../../../../platform/theme/common/colorTheme.js';
@@ -38,6 +40,8 @@ test('Electron titlebar applies the active theme and releases its subscription w
 		using commands = new CommandService(services);
 		using contextKeys = new ContextKeyService();
 		const menus = new MenuService(commands, contextKeys);
+		services.registerInstance(ICommandService, commands);
+		services.registerInstance(IQuickAccessController, { onDidChangeVisibility: Event.None, show() {} });
 		const applied: INativeWindowTheme[] = [];
 		services.registerInstance(IThemeService, themes);
 		services.registerInstance(INativeHostService, {

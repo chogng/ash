@@ -24,6 +24,8 @@ import {
 import {
 	IQuickInputService,
 } from "../../../../../platform/quickinput/common/quickInput.js";
+import { IQuickAccessController } from "../../../../../platform/quickinput/common/quickAccess.js";
+import { QuickAccessController } from "../../../../../platform/quickinput/browser/quickAccess.js";
 import {
 	CommandService,
 } from "../../../../../workbench/services/commands/common/commandService.js";
@@ -32,13 +34,13 @@ import {
 } from "../../../../../workbench/services/quickinput/browser/quickInputService.js";
 import {
 	InQuickInputContext,
-} from "../../../../../workbench/browser/quickaccess.js";
-import {
 	ShowAllCommandsCommandId,
-} from "../../../../../workbench/contrib/quickaccess/browser/commandsQuickAccess.js";
+} from "../../../../../workbench/browser/quickaccess.js";
+await import("../../../../../workbench/contrib/quickaccess/browser/commandsQuickAccess.js");
+await import("../../../../../workbench/contrib/quickaccess/browser/helpQuickAccess.js");
 import { h } from "../../../../../base/browser/dom.js";
 
-test("Show All Commands is not exposed in the titlebar", () => {
+test("Show All Commands is not duplicated in the titlebar action menu", () => {
 	const titlebarCommandIds = MenusRegistry.getMenuItems(MenuId.TitleBar)
 		.flatMap((item) => "command" in item ? [item.command.id] : []);
 
@@ -132,6 +134,8 @@ test("Command Palette filters, executes, closes, and restores focus", async () =
 		contextKeyService: contextKeys,
 	});
 	services.registerInstance(IQuickInputService, quickInput);
+	const quickAccess = services.createInstance(QuickAccessController);
+	services.registerInstance(IQuickAccessController, quickAccess);
 	services.registerInstance(IKeybindingService, emptyKeybindingService());
 
 	let executions = 0;
@@ -180,8 +184,56 @@ test("Command Palette filters, executes, closes, and restores focus", async () =
 	assert.equal(dom.window.document.activeElement, focusTarget);
 
 	quickInput.dispose();
+	quickAccess.dispose();
 	commands.dispose();
 	contextKeys.dispose();
+	dom.window.close();
+});
+
+test('Quick Access switches search modes in one picker and restores focus on close', () => {
+	const dom = new JSDOM('<!doctype html><body><button>Search</button></body>');
+	installDomGlobals(dom);
+	{
+		using services = new ServiceContainer();
+		using contextKeys = new ContextKeyService();
+		services.registerInstance(IContextKeyService, contextKeys);
+		using commands = new CommandService(services);
+		services.registerInstance(ICommandService, commands);
+		services.registerInstance(IMenuService, new MenuService(commands, contextKeys));
+		services.registerInstance(IKeybindingService, emptyKeybindingService());
+		using quickInput = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
+		services.registerInstance(IQuickInputService, quickInput);
+		using quickAccess = services.createInstance(QuickAccessController);
+		services.registerInstance(IQuickAccessController, quickAccess);
+		const button = dom.window.document.querySelector('button')!;
+		button.focus();
+		quickAccess.show();
+		const picker = dom.window.document.querySelector('.ash-quick-pick');
+		const input = picker?.querySelector<HTMLInputElement>('.ash-quick-pick-input input');
+		assert.ok(picker);
+		assert.ok(input);
+		assert.equal(input.placeholder, 'Search commands (type >, @, or ? for modes)');
+		input.value = '?';
+		input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+		assert.equal(dom.window.document.querySelector('.ash-quick-pick'), picker);
+		assert.equal(input.placeholder, 'Select a search mode');
+		const commandMode = [...picker.querySelectorAll<HTMLElement>('.ash-quick-pick-row-label')]
+			.find(label => label.textContent === '> Commands');
+		assert.ok(commandMode);
+		commandMode.click();
+		assert.equal(dom.window.document.querySelector('.ash-quick-pick'), picker);
+		assert.equal(input.value, '>');
+		assert.equal(input.placeholder, 'Type the name of a command to run');
+		assert.equal(input.selectionStart, 1);
+		assert.equal(input.selectionEnd, 1);
+		quickAccess.show('>foo');
+		assert.equal(input.value, '>foo');
+		assert.equal(input.selectionStart, 1);
+		assert.equal(input.selectionEnd, 4);
+		input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Escape' }));
+		assert.equal(dom.window.document.querySelector('.ash-quick-pick'), null);
+		assert.equal(dom.window.document.activeElement, button);
+	}
 	dom.window.close();
 });
 
