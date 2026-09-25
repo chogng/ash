@@ -24,4 +24,4 @@ ASH_TEST_LIVEKIT_SERVER=/absolute/path/livekit-server just test ash-livekit-clie
 
 - 进程内所有房间共享 Ash 的 HTTP／WebSocket 传输；首次连接前注册一次，重连、连接诊断和区域发现继续使用同一网络策略。
 - `stats` 返回 Ash 自己的发布端与订阅端报告计数，不向调用方暴露 SDK 类型。
-- `livekit` 与 `livekit-signaling` 直接使用官方 crate；本地仅保留尚未发布的 `webrtc-sys` 错误解析修复。
+- `livekit` 与 `livekit-signaling` 使用官方 crate；`webrtc-sys` 固定到包含 UTF-8 错误解析修复的上游提交，直至该修复发布到 crates.io。

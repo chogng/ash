@@ -1,6 +1,0 @@
-[workspace]
-members = ["webrtc-sys"]
-resolver = "2"
-
-[patch.crates-io]
-webrtc-sys = { path = "webrtc-sys" }

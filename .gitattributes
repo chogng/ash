@@ -16,6 +16,3 @@
 /resources/icons/manifest.json text eol=lf
 /app-rs/icons/src/generated.rs text eol=lf
 /app-ts/generated/product-icons.ts text eol=lf
-
-# Preserve the imported SDK snapshots and upstream patch context byte-for-byte.
-/ash-rs/vendor/livekit-rust-sdks/** -text whitespace=-blank-at-eol,-blank-at-eof

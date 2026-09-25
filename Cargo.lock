@@ -14327,7 +14327,8 @@ dependencies = [
 
 [[package]]
 name = "webrtc-sys"
-version = "0.3.45"
+version = "0.3.46"
+source = "git+https://github.com/livekit/rust-sdks?rev=bbcb62cc4973acd51eeb69f39ad0fc19032f7c49#bbcb62cc4973acd51eeb69f39ad0fc19032f7c49"
 dependencies = [
  "cc",
  "cxx",
@@ -14341,8 +14342,7 @@ dependencies = [
 [[package]]
 name = "webrtc-sys-build"
 version = "0.3.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0cd4f418e16f4b7ba028e6b5c70e4f532c7d2b5ca39726d42b699f3e4591ed5c"
+source = "git+https://github.com/livekit/rust-sdks?rev=bbcb62cc4973acd51eeb69f39ad0fc19032f7c49#bbcb62cc4973acd51eeb69f39ad0fc19032f7c49"
 dependencies = [
  "anyhow",
  "fs2",

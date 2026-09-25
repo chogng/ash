@@ -56,15 +56,15 @@
       "destination": "ash-resources/licenses/livekit/pkg/sfu/NOTICE"
     },
     {
-      "source": "ash-rs/vendor/livekit-rust-sdks/LICENSE",
+      "source": "third_party/livekit-rust-sdks/LICENSE",
       "destination": "ash-resources/licenses/livekit-rust-sdks/LICENSE"
     },
     {
-      "source": "ash-rs/vendor/livekit-rust-sdks/NOTICE",
+      "source": "third_party/livekit-rust-sdks/NOTICE",
       "destination": "ash-resources/licenses/livekit-rust-sdks/NOTICE"
     },
     {
-      "source": "ash-rs/vendor/livekit-rust-sdks/webrtc-sys/NOTICE.md",
+      "source": "third_party/livekit-rust-sdks/webrtc-sys/NOTICE.md",
       "destination": "ash-resources/licenses/livekit-rust-sdks/webrtc-sys/NOTICE.md"
     }
   ]

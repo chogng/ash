@@ -1,5 +1,5 @@
 [workspace]
-exclude = ["ash-rs/vendor/mxc", "ash-rs/vendor/livekit-rust-sdks"]
+exclude = ["ash-rs/vendor/mxc"]
 members = [
     "ash-rs/exec-server",
     "ash-rs/exec-server-protocol",
@@ -626,7 +626,8 @@ debug = "limited"
 unsafe_code = "forbid"
 
 [patch.crates-io]
-webrtc-sys = { path = "ash-rs/vendor/livekit-rust-sdks/webrtc-sys" }
+# livekit/rust-sdks#1466 fixes UTF-8 RTC error parsing and has not reached a crate release.
+webrtc-sys = { git = "https://github.com/livekit/rust-sdks", rev = "bbcb62cc4973acd51eeb69f39ad0fc19032f7c49" }
 candle-onnx = { path = "third_party/candle-onnx" }
 
 [patch."https://github.com/microsoft/mxc"]

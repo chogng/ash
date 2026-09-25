@@ -6,7 +6,7 @@ on:
     paths: &media-paths
       - "ash-rs/livekit-client/**"
       - "ash-rs/screen-capture/**"
-      - "ash-rs/vendor/livekit-rust-sdks/**"
+      - "third_party/livekit-rust-sdks/**"
       - "ash-rs/http-client/**"
       - "ash-rs/websocket-client/**"
       - "ash-rs/livekit-api/**"
@@ -68,10 +68,6 @@ jobs:
         run: |
           python -B build/ash_rs/livekit.py "${{ matrix.target }}" > "$RUNNER_TEMP/livekit.json"
           echo "ASH_TEST_LIVEKIT_SERVER=$(node -p 'require(process.argv[1]).executable' "$RUNNER_TEMP/livekit.json")" >> "$GITHUB_ENV"
-      - name: Test Rust SDK patches
-        run: |
-          python ash-rs/vendor/livekit-rust-sdks/verify.py
-          python -B scripts/cargo.py test --locked --manifest-path ash-rs/vendor/livekit-rust-sdks/Cargo.toml -p webrtc-sys --lib rtc_error
       - name: Check media packages
         run: python -B scripts/cargo.py check --locked -p ash-livekit-client -p ash-screen-capture -p ash-voice-agent
       - name: Build the collaboration service
