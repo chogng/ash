@@ -138,6 +138,7 @@ import type { FsRenameParams } from './types/FsRenameParams.js';
 import type { FsWriteFileParams } from './types/FsWriteFileParams.js';
 import type { FsWriteFileResult } from './types/FsWriteFileResult.js';
 import type { GitBranchCreateParams } from './types/GitBranchCreateParams.js';
+import type { GitBranchDeleteParams } from './types/GitBranchDeleteParams.js';
 import type { GitBranchListResult } from './types/GitBranchListResult.js';
 import type { GitBranchSwitchParams } from './types/GitBranchSwitchParams.js';
 import type { GitChangeFileParams } from './types/GitChangeFileParams.js';
@@ -160,6 +161,7 @@ import type { GitStatusResult } from './types/GitStatusResult.js';
 import type { GitTextDiffResult } from './types/GitTextDiffResult.js';
 import type { GitWorktreeCreateParams } from './types/GitWorktreeCreateParams.js';
 import type { GitWorktreeCreateResult } from './types/GitWorktreeCreateResult.js';
+import type { GitWorktreeDeleteParams } from './types/GitWorktreeDeleteParams.js';
 import type { GitWorktreeListResult } from './types/GitWorktreeListResult.js';
 import type { GitWorktreeResolveParams } from './types/GitWorktreeResolveParams.js';
 import type { GitWorktreeResolveResult } from './types/GitWorktreeResolveResult.js';
@@ -639,7 +641,9 @@ export interface AppServerRequestMap {
   "git/changeFile": { params: GitChangeFileParams; response: GitChangeFileResult };
   "git/branch/switch": { params: GitBranchSwitchParams; response: GitOperationResult };
   "git/branch/create": { params: GitBranchCreateParams; response: GitBranchListResult };
+  "git/branch/delete": { params: GitBranchDeleteParams; response: GitBranchListResult };
   "git/worktree/create": { params: GitWorktreeCreateParams; response: GitWorktreeCreateResult };
+  "git/worktree/delete": { params: GitWorktreeDeleteParams; response: GitWorktreeListResult };
   "git/worktree/list": { params: GitRepositoryParams; response: GitWorktreeListResult };
   "git/worktree/resolve": { params: GitWorktreeResolveParams; response: GitWorktreeResolveResult };
   "git/stage": { params: GitPathsParams; response: GitOperationResult };
@@ -931,7 +935,9 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "git/changeFile": { method: "git/changeFile" },
   "git/branch/switch": { method: "git/branch/switch" },
   "git/branch/create": { method: "git/branch/create" },
+  "git/branch/delete": { method: "git/branch/delete" },
   "git/worktree/create": { method: "git/worktree/create" },
+  "git/worktree/delete": { method: "git/worktree/delete" },
   "git/worktree/list": { method: "git/worktree/list" },
   "git/worktree/resolve": { method: "git/worktree/resolve" },
   "git/stage": { method: "git/stage" },

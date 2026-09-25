@@ -378,6 +378,17 @@ pub struct GitBranchCreateParams {
     pub name: String,
 }
 
+/// Deletes one merged local branch that is not checked out in any worktree.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitBranchDeleteParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub repository_id: Option<String>,
+    #[schemars(length(min = 1, max = 1024))]
+    pub name: String,
+}
+
 /// Creates an independent detached checkout at HEAD without starting a Thread.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -387,6 +398,17 @@ pub struct GitWorktreeCreateParams {
     pub repository_id: Option<String>,
     #[schemars(length(min = 1, max = 64))]
     pub name: String,
+}
+
+/// Removes one clean, unbound linked checkout from a selected repository.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitWorktreeDeleteParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub repository_id: Option<String>,
+    #[schemars(length(min = 1, max = 32768))]
+    pub checkout_root: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

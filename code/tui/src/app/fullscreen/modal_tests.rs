@@ -363,6 +363,179 @@ fn project_branch_picker_shows_occupied_branch_and_pure_creation_in_both_modes()
 }
 
 #[test]
+fn project_branch_delete_confirms_and_restores_the_picker_in_both_modes() {
+    use crate::app::AppCommand;
+    use crate::git::Command as GitCommand;
+    use crate::git::Event;
+    use ash_app_server_protocol::protocol::git::{GitBranchDto, GitBranchListResult};
+
+    for (mode, language, confirm_snapshot, deleted_snapshot) in [
+        (
+            crate::terminal::ScreenMode::Fullscreen,
+            crate::nls::Language::English,
+            "project_branch_delete_confirmation_fullscreen",
+            "project_branch_deleted_fullscreen",
+        ),
+        (
+            crate::terminal::ScreenMode::Inline,
+            crate::nls::Language::Chinese,
+            "project_branch_delete_confirmation_inline_chinese",
+            "project_branch_deleted_inline_chinese",
+        ),
+    ] {
+        let mut app = crate::app::App::new();
+        let mut settings = crate::config::TerminalSettings::default();
+        settings.set_screen_mode(mode);
+        settings.set_language(language);
+        app.update(crate::config::Event::SettingsReceived(settings));
+        let main = GitBranchDto {
+            name: "main".into(),
+            object_id: "main".into(),
+            current: true,
+            upstream: None,
+            checked_out_elsewhere: Some(false),
+        };
+        let topic = GitBranchDto {
+            name: "topic".into(),
+            object_id: "topic".into(),
+            current: false,
+            upstream: None,
+            checked_out_elsewhere: Some(false),
+        };
+        app.update(Event::PickerOpened(crate::git::choices(
+            GitBranchListResult {
+                branches: vec![main.clone(), topic],
+            },
+        )));
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        app.handle_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE));
+        assert_eq!(
+            app.list_selection().unwrap().title(),
+            if language == crate::nls::Language::Chinese {
+                "删除分支"
+            } else {
+                "Delete branch"
+            }
+        );
+        crate::tui_assert_snapshot!(confirm_snapshot, frame_text(&app));
+        assert_eq!(
+            app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+            None
+        );
+        app.handle_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE));
+        assert_eq!(
+            app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+            Some(AppCommand::Git(GitCommand::DeleteBranch {
+                name: "topic".into()
+            }))
+        );
+        app.update(Event::BranchDeleted(Err("branch is unmerged".into())));
+        assert_eq!(
+            app.list_selection().unwrap().message(),
+            Some("branch is unmerged")
+        );
+        app.update(Event::BranchDeleted(Ok(crate::git::choices(
+            GitBranchListResult {
+                branches: vec![main],
+            },
+        ))));
+        assert_eq!(app.command_panel().unwrap().parent_title(), None);
+        assert_eq!(
+            app.list_selection().unwrap().message(),
+            Some(crate::nls::localize(language, "Branch deleted.")).as_deref()
+        );
+        crate::tui_assert_snapshot!(deleted_snapshot, frame_text(&app));
+    }
+}
+
+#[test]
+fn project_worktree_delete_confirms_and_restores_the_picker_in_both_modes() {
+    use crate::app::AppCommand;
+    use crate::git::Command as GitCommand;
+    use crate::git::Event;
+    use ash_app_server_protocol::protocol::git::GitWorktreeDto;
+    use ash_app_server_protocol::protocol::git::GitWorktreeListResult;
+    use ash_app_server_protocol::protocol::git::GitWorktreeStateDto;
+
+    for (mode, language, confirm_snapshot, deleted_snapshot) in [
+        (
+            crate::terminal::ScreenMode::Fullscreen,
+            crate::nls::Language::English,
+            "project_worktree_delete_confirmation_fullscreen",
+            "project_worktree_deleted_fullscreen",
+        ),
+        (
+            crate::terminal::ScreenMode::Inline,
+            crate::nls::Language::Chinese,
+            "project_worktree_delete_confirmation_inline_chinese",
+            "project_worktree_deleted_inline_chinese",
+        ),
+    ] {
+        let mut app = crate::app::App::new();
+        let mut settings = crate::config::TerminalSettings::default();
+        settings.set_screen_mode(mode);
+        settings.set_language(language);
+        app.update(crate::config::Event::SettingsReceived(settings));
+        let current = GitWorktreeDto {
+            checkout_root: "/repo".into(),
+            path: "/repo".into(),
+            branch: Some("main".into()),
+            head: "0123456789abcdef0123456789abcdef01234567".into(),
+            current: true,
+            state: GitWorktreeStateDto::Ready,
+        };
+        let topic = GitWorktreeDto {
+            checkout_root: "/worktrees/topic".into(),
+            path: "/worktrees/topic".into(),
+            branch: None,
+            head: current.head.clone(),
+            current: false,
+            state: GitWorktreeStateDto::Ready,
+        };
+        app.update(Event::WorktreePickerOpened(crate::git::worktree_choices(
+            GitWorktreeListResult {
+                worktrees: vec![current.clone(), topic],
+            },
+            None,
+        )));
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        app.handle_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE));
+        assert_eq!(
+            app.list_selection().unwrap().title(),
+            if language == crate::nls::Language::Chinese {
+                "删除工作树"
+            } else {
+                "Delete worktree"
+            }
+        );
+        crate::tui_assert_snapshot!(confirm_snapshot, frame_text(&app));
+        assert_eq!(
+            app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+            Some(AppCommand::Git(GitCommand::DeleteWorktree {
+                checkout_root: "/worktrees/topic".into(),
+            }))
+        );
+        app.update(Event::WorktreeDeleted(Err("worktree has changes".into())));
+        assert_eq!(
+            app.list_selection().unwrap().message(),
+            Some("worktree has changes")
+        );
+        app.update(Event::WorktreeDeleted(Ok(crate::git::worktree_choices(
+            GitWorktreeListResult {
+                worktrees: vec![current],
+            },
+            None,
+        ))));
+        assert_eq!(app.command_panel().unwrap().parent_title(), None);
+        assert_eq!(
+            app.list_selection().unwrap().message(),
+            Some(crate::nls::localize(language, "Worktree deleted.")).as_deref()
+        );
+        crate::tui_assert_snapshot!(deleted_snapshot, frame_text(&app));
+    }
+}
+
+#[test]
 fn project_branch_parent_title_returns_to_the_picker() {
     use ash_app_server_protocol::protocol::git::GitBranchListResult;
 

@@ -276,6 +276,31 @@ impl GitClient {
         Ok(())
     }
 
+    /// Removes a linked checkout only when Git finds no local changes or lock.
+    pub async fn remove_clean_linked_worktree(
+        &self,
+        repository: &GitRepository,
+        checkout_root: &Path,
+    ) -> GitResult<()> {
+        if !checkout_root.is_absolute() || checkout_root == repository.worktree_root() {
+            return Err(GitError::InvalidConfiguration {
+                field: "linked worktree removal path",
+                requirement: "must identify another absolute checkout",
+            });
+        }
+        self.run_mutation(
+            repository.worktree_root(),
+            [
+                OsString::from("worktree"),
+                OsString::from("remove"),
+                checkout_root.as_os_str().to_owned(),
+            ],
+        )
+        .await?
+        .require_success()?;
+        Ok(())
+    }
+
     /// Removes one linked worktree after the ledger owner has verified discard eligibility.
     pub async fn remove_linked_worktree(
         &self,

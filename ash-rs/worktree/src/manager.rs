@@ -400,6 +400,41 @@ impl WorktreeManager {
         Ok(checkout)
     }
 
+    /// Removes one listed, unbound linked checkout; Git rejects dirty or locked targets.
+    pub async fn remove_unbound(
+        &self,
+        source_directory: &Path,
+        checkout_root: &Path,
+    ) -> Result<()> {
+        if !checkout_root.is_absolute() {
+            bail!("worktree checkout selector must be an absolute path");
+        }
+        let target = dunce::canonicalize(checkout_root).with_context(|| {
+            format!(
+                "cannot resolve worktree checkout {}",
+                checkout_root.display()
+            )
+        })?;
+        let worktree = self
+            .list(source_directory)
+            .await?
+            .into_iter()
+            .find(|worktree| worktree.checkout_root() == target)
+            .context("worktree selector did not match a checkout")?;
+        if worktree.kind() != WorktreeKind::Linked
+            || worktree.is_current()
+            || !matches!(worktree.availability(), WorktreeAvailability::Ready)
+            || !matches!(worktree.owner(), WorktreeOwner::Unbound)
+        {
+            bail!("worktree is not an unbound linked checkout");
+        }
+        let source = self.git.open_repository(source_directory).await?;
+        self.git
+            .remove_clean_linked_worktree(&source, worktree.checkout_root())
+            .await?;
+        Ok(())
+    }
+
     /// Lists the repository's worktrees while preserving the source directory's relative cwd.
     pub async fn list(&self, source_directory: &Path) -> Result<Vec<Worktree>> {
         let source_directory = dunce::canonicalize(source_directory).with_context(|| {

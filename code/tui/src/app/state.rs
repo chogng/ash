@@ -499,6 +499,9 @@ impl App {
                 crate::git::BranchSelectionAction::CreateBranch { branch_name } => {
                     Some(GitCommand::Create { name: branch_name }.into())
                 }
+                crate::git::BranchSelectionAction::DeleteBranch { name } => {
+                    Some(GitCommand::DeleteBranch { name }.into())
+                }
                 crate::git::BranchSelectionAction::Switch { name, current } => {
                     if current {
                         self.close_command_panel();
@@ -513,6 +516,9 @@ impl App {
                 | crate::git::WorktreeSelectionAction::Unavailable { .. } => None,
                 crate::git::WorktreeSelectionAction::Create { name } => {
                     Some(GitCommand::CreateWorktree { name }.into())
+                }
+                crate::git::WorktreeSelectionAction::Delete { checkout_root } => {
+                    Some(GitCommand::DeleteWorktree { checkout_root }.into())
                 }
                 crate::git::WorktreeSelectionAction::Open {
                     checkout_root,
@@ -1974,6 +1980,12 @@ impl App {
                 GitEvent::CreateFinished {
                     result: Err(error), ..
                 } => self.panels_mut().set_command_message(error),
+                GitEvent::BranchDeleted(Ok(choices)) => {
+                    self.open_command_panel(CommandPanel::git_branches(choices));
+                    let message = crate::nls::localize(self.language(), "Branch deleted.");
+                    self.panels_mut().set_command_message(message.into());
+                }
+                GitEvent::BranchDeleted(Err(error)) => self.panels_mut().set_command_message(error),
                 GitEvent::WorktreePickerOpened(choices) => {
                     self.open_command_panel(CommandPanel::git_worktrees(choices));
                 }
@@ -2001,6 +2013,14 @@ impl App {
                     );
                 }
                 GitEvent::WorktreeCreateFailed(error) => {
+                    self.panels_mut().set_command_message(error)
+                }
+                GitEvent::WorktreeDeleted(Ok(choices)) => {
+                    self.open_command_panel(CommandPanel::git_worktrees(choices));
+                    let message = crate::nls::localize(self.language(), "Worktree deleted.");
+                    self.panels_mut().set_command_message(message.into());
+                }
+                GitEvent::WorktreeDeleted(Err(error)) => {
                     self.panels_mut().set_command_message(error)
                 }
                 GitEvent::WorktreeResolved(Ok(path)) => {
@@ -2151,10 +2171,10 @@ impl App {
             ) = &event
             {
                 match self.panels_mut().command_mut() {
-                    Some(CommandPanel::GitBranches(panel)) if panel.is_branch_name_prompt() => {
+                    Some(CommandPanel::GitBranches(panel)) if panel.is_subpage() => {
                         panel.state_mut().set_message(Some(error.clone()));
                     }
-                    Some(CommandPanel::GitWorktrees(panel)) if panel.is_name_prompt() => {
+                    Some(CommandPanel::GitWorktrees(panel)) if panel.is_subpage() => {
                         panel.state_mut().set_message(Some(error.clone()));
                     }
                     Some(CommandPanel::Marketplace(panel)) => panel.fail(error.clone()),

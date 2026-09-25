@@ -31,8 +31,40 @@ fn branch_picker_shortcut_does_not_steal_search_input() {
     }));
     panel.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
     panel.handle_key(KeyEvent::new(KeyCode::Char('b'), KeyModifiers::NONE));
-    assert!(!panel.is_branch_name_prompt());
+    assert!(!panel.is_subpage());
     assert_eq!(panel.state().query(), "b");
+}
+
+#[test]
+fn branch_delete_requires_a_noncurrent_selection_and_confirmation() {
+    let mut panel = BranchPanel::new(choices(GitBranchListResult {
+        branches: vec![branch("main", true), branch("topic", false)],
+    }));
+    assert_eq!(
+        panel.handle_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE)),
+        ListSelectionOutcome::Consumed
+    );
+    assert_eq!(
+        panel.state().message(),
+        Some("Cannot delete a checked-out branch.")
+    );
+    panel.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    panel.handle_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE));
+    assert_eq!(panel.state().title(), "Delete branch");
+    assert_eq!(panel.parent_title(), Some("Project branches"));
+    assert_eq!(panel.state().selected_item().unwrap().label(), "topic");
+    assert_eq!(
+        panel.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+        ListSelectionOutcome::Consumed
+    );
+    assert_eq!(panel.state().title(), "Project branches");
+    panel.handle_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE));
+    assert_eq!(
+        panel.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        ListSelectionOutcome::Activate(BranchSelectionAction::DeleteBranch {
+            name: "topic".into()
+        })
+    );
 }
 
 #[test]
@@ -112,6 +144,40 @@ fn worktree_picker_creates_a_checkout_without_starting_a_session() {
         panel.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         ListSelectionOutcome::Activate(super::WorktreeSelectionAction::Create {
             name: "topic".into()
+        })
+    );
+    assert_eq!(
+        panel.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+        ListSelectionOutcome::Consumed
+    );
+    assert_eq!(panel.state().title(), "Project worktrees");
+}
+
+#[test]
+fn worktree_delete_requires_a_noncurrent_selection_and_confirmation() {
+    let mut panel = super::WorktreePanel::new(super::worktree_choices(
+        ash_app_server_protocol::protocol::git::GitWorktreeListResult {
+            worktrees: vec![worktree("/repo", true), worktree("/worktrees/topic", false)],
+        },
+        None,
+    ));
+    panel.handle_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE));
+    assert_eq!(
+        panel.state().message(),
+        Some("Cannot delete the current worktree.")
+    );
+    panel.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    panel.handle_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE));
+    assert_eq!(panel.state().title(), "Delete worktree");
+    assert_eq!(panel.parent_title(), Some("Project worktrees"));
+    assert_eq!(
+        panel.state().selected_item().unwrap().label(),
+        "/worktrees/topic"
+    );
+    assert_eq!(
+        panel.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        ListSelectionOutcome::Activate(super::WorktreeSelectionAction::Delete {
+            checkout_root: "/worktrees/topic".into()
         })
     );
     assert_eq!(
@@ -269,6 +335,30 @@ fn creating_a_worktree_through_app_server_leaves_session_catalog_unchanged() {
         resolved,
         super::Event::WorktreeResolved(Ok(path)) if path == checkout.to_string_lossy()
     ));
+    std::fs::write(checkout.join("draft"), "uncommitted").unwrap();
+    assert!(matches!(
+        super::execute(
+            &mut client,
+            super::Command::DeleteWorktree {
+                checkout_root: path.clone()
+            }
+        )
+        .unwrap(),
+        super::Event::WorktreeDeleted(Err(_))
+    ));
+    assert!(checkout.exists());
+    std::fs::remove_file(checkout.join("draft")).unwrap();
+    let super::Event::WorktreeDeleted(Ok(remaining)) = super::execute(
+        &mut client,
+        super::Command::DeleteWorktree {
+            checkout_root: path,
+        },
+    )
+    .unwrap() else {
+        panic!("clean unbound worktree should be removed")
+    };
+    assert!(!checkout.exists());
+    assert_eq!(remaining.actions.len(), 2);
     assert_eq!(client.list_sessions().unwrap().sessions, before);
 }
 
@@ -476,6 +566,14 @@ fn branch_commands_list_and_switch_the_real_workspace_repository() {
     let spec = super::choices_after_create(result, &name).unwrap();
     let picker = ListSelection::new(spec.model, spec.actions);
     assert_eq!(picker.state().selected_item().unwrap().label(), name);
+    let super::Event::BranchDeleted(Ok(remaining)) = super::execute(
+        &mut client,
+        super::Command::DeleteBranch { name: name.clone() },
+    )
+    .unwrap() else {
+        panic!("merged branch should be deleted")
+    };
+    assert!(!remaining.actions.values().any(|action| matches!(action, BranchSelectionAction::Switch { name: branch, .. } if branch == &name)));
     assert_eq!(
         std::process::Command::new("git")
             .args(["branch", "--show-current"])

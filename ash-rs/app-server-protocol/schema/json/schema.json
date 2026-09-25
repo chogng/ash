@@ -7720,11 +7720,43 @@
         {
           "properties": {
             "method": {
+              "const": "git/branch/delete",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitBranchDeleteParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "git/worktree/create",
               "type": "string"
             },
             "params": {
               "$ref": "#/$defs/GitWorktreeCreateParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "git/worktree/delete",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitWorktreeDeleteParams"
             }
           },
           "required": [
@@ -12204,11 +12236,43 @@
         {
           "properties": {
             "method": {
+              "const": "git/branch/delete",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitBranchListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "git/worktree/create",
               "type": "string"
             },
             "result": {
               "$ref": "#/$defs/GitWorktreeCreateResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "git/worktree/delete",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitWorktreeListResult"
             }
           },
           "required": [
@@ -18590,6 +18654,26 @@
       ],
       "type": "object"
     },
+    "GitBranchDeleteParams": {
+      "description": "Deletes one merged local branch that is not checked out in any worktree.",
+      "properties": {
+        "name": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "type": "string"
+        },
+        "repositoryId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
     "GitBranchDto": {
       "description": "One local branch returned by the directory Git runtime.",
       "properties": {
@@ -19540,6 +19624,26 @@
       },
       "required": [
         "path"
+      ],
+      "type": "object"
+    },
+    "GitWorktreeDeleteParams": {
+      "description": "Removes one clean, unbound linked checkout from a selected repository.",
+      "properties": {
+        "checkoutRoot": {
+          "maxLength": 32768,
+          "minLength": 1,
+          "type": "string"
+        },
+        "repositoryId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "checkoutRoot"
       ],
       "type": "object"
     },

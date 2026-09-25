@@ -246,6 +246,14 @@ impl GitRuntime {
         self.repository(repository_id)?.create_branch(name)
     }
 
+    pub(super) fn delete_branch_for(
+        &self,
+        repository_id: Option<&str>,
+        name: &str,
+    ) -> Result<Vec<GitBranchDto>, GitRuntimeError> {
+        self.repository(repository_id)?.delete_branch(name)
+    }
+
     pub(super) fn mutable_source_for(
         &self,
         repository_id: Option<&str>,
@@ -590,6 +598,17 @@ impl GitRepositoryRuntime {
             .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
         self.service
             .create_branch(name)
+            .map_err(GitRuntimeError::Service)?;
+        self.local_branches_locked()
+    }
+
+    fn delete_branch(&self, name: &str) -> Result<Vec<GitBranchDto>, GitRuntimeError> {
+        let _operation = self
+            .operation
+            .lock()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        self.service
+            .delete_branch(name)
             .map_err(GitRuntimeError::Service)?;
         self.local_branches_locked()
     }

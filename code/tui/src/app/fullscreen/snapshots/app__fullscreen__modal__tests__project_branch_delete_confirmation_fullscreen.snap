@@ -5,15 +5,9 @@ expression: frame_text(&app)
   .                                                                            [— / —] [Dashboard]  
                                                                                                     
                                                                                                     
-            ┌── Project branches ─────────────────────────────────────────────────[✗]─┐             
+            ┌── Project branches › Delete branch ─────────────────────────────────[✗]─┐             
             │                                                                         │             
-            │  ╭────────────────────────────────────────────────────────────────────╮ │             
-            │  │ Search branches                                                    │ │             
-            │  ╰────────────────────────────────────────────────────────────────────╯ │             
-            │  New branch  ·  At HEAD · no checkout change                            │             
-            │  Project branches                                                       │             
-            │> main  ·  Current                                                       │             
-            │  topic  ·  In another worktree                                          │             
+            │> topic  ·  Only merged branches can be deleted. This cannot be undone.  │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
@@ -27,6 +21,12 @@ expression: frame_text(&app)
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
-  ╭─────────│  b New branch · d delete · / search · Esc close                         │──────────╮  
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+  ╭─────────│  Enter to delete  ·  Esc to back                                        │──────────╮  
   │ > Build └─────────────────────────────────────────────────────────────────────────┘          │  
   ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯

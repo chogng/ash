@@ -1274,6 +1274,36 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Arbre de travail créé. Appuyez sur Entrée pour l'ouvrir.",
     ),
     translation(
+        "Delete worktree",
+        "ワークツリーを削除",
+        "删除工作树",
+        "Supprimer l'arbre de travail",
+    ),
+    translation(
+        "Requires a clean linked worktree with no task.",
+        "変更がなくタスクに紐付いていないリンク済みワークツリーだけを削除できます。",
+        "只能删除没有改动且未绑定任务的关联工作树。",
+        "Seuls les arbres de travail liés, propres et sans tâche peuvent être supprimés.",
+    ),
+    translation(
+        "Cannot delete the current worktree.",
+        "現在のワークツリーは削除できません。",
+        "不能删除当前工作树。",
+        "Impossible de supprimer l'arbre de travail actuel.",
+    ),
+    translation(
+        "Worktree deleted.",
+        "ワークツリーを削除しました。",
+        "工作树已删除。",
+        "Arbre de travail supprimé.",
+    ),
+    translation(
+        "Could not delete worktree. It may have changes or be in use.",
+        "ワークツリーを削除できませんでした。変更があるか使用中の可能性があります。",
+        "无法删除工作树；它可能有未提交的改动或正在使用。",
+        "Impossible de supprimer l'arbre de travail. Il peut contenir des modifications ou être utilisé.",
+    ),
+    translation(
         "Could not read project worktrees.",
         "プロジェクトのワークツリーを読み取れませんでした。",
         "无法读取项目工作树。",
@@ -1314,6 +1344,36 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "ブランチは別のワークツリーでチェックアウトされています",
         "该分支已在其他工作树中检出",
         "La branche est extraite dans un autre arbre de travail",
+    ),
+    translation(
+        "Delete branch",
+        "ブランチを削除",
+        "删除分支",
+        "Supprimer la branche",
+    ),
+    translation(
+        "Only merged branches can be deleted. This cannot be undone.",
+        "マージ済みのブランチだけを削除できます。この操作は元に戻せません。",
+        "只能删除已合并的分支；此操作无法撤销。",
+        "Seules les branches fusionnées peuvent être supprimées. Cette action est irréversible.",
+    ),
+    translation(
+        "Cannot delete a checked-out branch.",
+        "チェックアウト中のブランチは削除できません。",
+        "不能删除已检出的分支。",
+        "Impossible de supprimer une branche extraite.",
+    ),
+    translation(
+        "Branch deleted.",
+        "ブランチを削除しました。",
+        "分支已删除。",
+        "Branche supprimée.",
+    ),
+    translation(
+        "Could not delete branch. It may be unmerged or checked out.",
+        "ブランチを削除できませんでした。未マージかチェックアウト中の可能性があります。",
+        "无法删除分支；它可能尚未合并或仍被检出。",
+        "Impossible de supprimer la branche. Elle peut être non fusionnée ou extraite.",
     ),
     translation(
         "Create a branch at HEAD without switching worktrees.",

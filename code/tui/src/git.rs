@@ -1,3 +1,4 @@
+use crate::nls::Text;
 use crate::widgets::key_hint::KeyHints;
 use crate::widgets::list_selection::ListSelection;
 use crate::widgets::list_selection::ListSelectionGroup;
@@ -11,10 +12,12 @@ use crate::widgets::search_box::SearchBoxModel;
 use ash_app_server_client::AppServerClient;
 use ash_app_server_client::JsonRpcTransport;
 use ash_app_server_protocol::protocol::git::GitBranchCreateParams;
+use ash_app_server_protocol::protocol::git::GitBranchDeleteParams;
 use ash_app_server_protocol::protocol::git::GitBranchListResult;
 use ash_app_server_protocol::protocol::git::GitBranchSwitchParams;
 use ash_app_server_protocol::protocol::git::GitStatusResult;
 use ash_app_server_protocol::protocol::git::GitWorktreeCreateParams;
+use ash_app_server_protocol::protocol::git::GitWorktreeDeleteParams;
 use ash_app_server_protocol::protocol::git::GitWorktreeResolveParams;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use std::collections::BTreeMap;
@@ -34,12 +37,14 @@ pub(crate) enum Event {
         name: String,
         result: Result<GitBranchListResult, String>,
     },
+    BranchDeleted(Result<BranchChoices, String>),
     WorktreePickerOpened(WorktreeChoices),
     WorktreeCreated {
         path: String,
         choices: Result<WorktreeChoices, String>,
     },
     WorktreeCreateFailed(String),
+    WorktreeDeleted(Result<WorktreeChoices, String>),
     WorktreeResolved(Result<String, String>),
 }
 
@@ -48,8 +53,10 @@ pub(crate) enum Command {
     OpenPicker,
     Switch { name: String },
     Create { name: String },
+    DeleteBranch { name: String },
     OpenWorktrees,
     CreateWorktree { name: String },
+    DeleteWorktree { checkout_root: String },
     ResolveWorktree { checkout_root: String },
 }
 
@@ -59,8 +66,10 @@ impl Command {
             Self::OpenPicker => "ash-tui-list-git-branches",
             Self::Switch { .. } => "ash-tui-switch-git-branch",
             Self::Create { .. } => "ash-tui-create-git-branch",
+            Self::DeleteBranch { .. } => "ash-tui-delete-git-branch",
             Self::OpenWorktrees => "ash-tui-list-git-worktrees",
             Self::CreateWorktree { .. } => "ash-tui-create-git-worktree",
+            Self::DeleteWorktree { .. } => "ash-tui-delete-git-worktree",
             Self::ResolveWorktree { .. } => "ash-tui-resolve-git-worktree",
         }
     }
@@ -70,6 +79,7 @@ impl Command {
 pub(crate) enum BranchSelectionAction {
     NewBranch,
     CreateBranch { branch_name: String },
+    DeleteBranch { name: String },
     Occupied { name: String },
     Switch { name: String, current: bool },
 }
@@ -78,9 +88,11 @@ pub(crate) enum BranchSelectionAction {
 pub(crate) struct BranchPanel {
     branches: ListSelection<BranchSelectionAction>,
     branch_name: Option<ListSelection<BranchSelectionAction>>,
+    delete: Option<ListSelection<BranchSelectionAction>>,
     language: crate::nls::Language,
     picker_hints: KeyHints,
     prompt_hints: KeyHints,
+    delete_hints: KeyHints,
 }
 
 impl BranchPanel {
@@ -88,38 +100,47 @@ impl BranchPanel {
         Self {
             branches: ListSelection::new(spec.model, spec.actions),
             branch_name: None,
+            delete: None,
             language: crate::nls::Language::English,
             picker_hints: KeyHints::compact()
                 .with_compact_action("b", "New branch")
+                .with_compact_action("d", "delete")
                 .with_compact_action("/", "search")
                 .with_compact_action("Esc", "close"),
             prompt_hints: KeyHints::new()
                 .with_action("Enter", "create")
                 .with_action("Esc", "back"),
+            delete_hints: KeyHints::new()
+                .with_action("Enter", "delete")
+                .with_action("Esc", "back"),
         }
     }
 
     pub(crate) fn state(&self) -> &ListSelectionState {
-        self.branch_name.as_ref().unwrap_or(&self.branches).state()
+        self.delete
+            .as_ref()
+            .or(self.branch_name.as_ref())
+            .unwrap_or(&self.branches)
+            .state()
     }
 
-    pub(crate) fn is_branch_name_prompt(&self) -> bool {
-        self.branch_name.is_some()
+    pub(crate) fn is_subpage(&self) -> bool {
+        self.branch_name.is_some() || self.delete.is_some()
     }
 
     pub(crate) fn parent_title(&self) -> Option<&str> {
-        self.branch_name
-            .as_ref()
-            .map(|_| self.branches.state().title())
+        self.is_subpage().then(|| self.branches.state().title())
     }
 
     pub(crate) fn return_to_parent(&mut self) {
         self.branch_name = None;
+        self.delete = None;
     }
 
     pub(crate) fn state_mut(&mut self) -> &mut ListSelectionState {
-        self.branch_name
+        self.delete
             .as_mut()
+            .or(self.branch_name.as_mut())
             .unwrap_or(&mut self.branches)
             .state_mut()
     }
@@ -130,10 +151,15 @@ impl BranchPanel {
         if let Some(prompt) = &mut self.branch_name {
             prompt.state_mut().localize(language);
         }
+        if let Some(prompt) = &mut self.delete {
+            prompt.state_mut().localize(language);
+        }
     }
 
     pub(crate) fn key_hints(&self) -> &KeyHints {
-        if self.branch_name.is_some() {
+        if self.delete.is_some() {
+            &self.delete_hints
+        } else if self.branch_name.is_some() {
             &self.prompt_hints
         } else {
             &self.picker_hints
@@ -144,13 +170,42 @@ impl BranchPanel {
         &mut self,
         key: KeyEvent,
     ) -> ListSelectionOutcome<BranchSelectionAction> {
-        if key.kind == KeyEventKind::Press && key.code == KeyCode::Esc && self.branch_name.is_some()
-        {
+        if key.kind == KeyEventKind::Press && key.code == KeyCode::Esc && self.is_subpage() {
             self.return_to_parent();
             return ListSelectionOutcome::Consumed;
         }
         if let Some(prompt) = &mut self.branch_name {
             return handle_branch_name_key(prompt, key);
+        }
+        if let Some(prompt) = &mut self.delete {
+            return prompt.handle_key(key);
+        }
+        if key.kind == KeyEventKind::Press
+            && key.modifiers == KeyModifiers::NONE
+            && key.code == KeyCode::Char('d')
+            && self.branches.state().items_focused()
+        {
+            let selected = self
+                .branches
+                .state()
+                .selected_item()
+                .and_then(|item| item.id());
+            let action = selected.and_then(|id| self.branches.action(id)).cloned();
+            match action {
+                Some(BranchSelectionAction::Switch {
+                    name,
+                    current: false,
+                }) => {
+                    self.delete = Some(branch_delete_prompt(self.language, name));
+                }
+                Some(BranchSelectionAction::Switch { current: true, .. })
+                | Some(BranchSelectionAction::Occupied { .. }) => self
+                    .branches
+                    .state_mut()
+                    .set_message(Some("Cannot delete a checked-out branch.".into())),
+                _ => {}
+            }
+            return ListSelectionOutcome::Consumed;
         }
         let outcome = if key.kind == KeyEventKind::Press
             && key.modifiers == KeyModifiers::NONE
@@ -177,6 +232,9 @@ impl BranchPanel {
     }
 
     pub(crate) fn handle_paste(&mut self, pasted: String) {
+        if self.delete.is_some() {
+            return;
+        }
         if let Some(prompt) = &mut self.branch_name {
             prompt.handle_paste(pasted);
             prompt.state_mut().set_message(None);
@@ -184,6 +242,32 @@ impl BranchPanel {
             self.branches.handle_paste(pasted);
         }
     }
+}
+
+fn branch_delete_prompt(
+    language: crate::nls::Language,
+    name: String,
+) -> ListSelection<BranchSelectionAction> {
+    let id = ListSelectionItemId::new("branch:delete-confirm");
+    let mut model = ListSelectionModel::new(
+        "Delete branch",
+        vec![ListSelectionGroup::new(
+            "",
+            vec![
+                ListSelectionItem::new(Text::literal(&name))
+                    .with_id(id.clone())
+                    .with_description(
+                        "Only merged branches can be deleted. This cannot be undone.",
+                    ),
+            ],
+        )],
+    )
+    .without_tab_bar();
+    model.localize(language);
+    ListSelection::new(
+        model,
+        BTreeMap::from([(id, BranchSelectionAction::DeleteBranch { name })]),
+    )
 }
 
 fn branch_name_prompt(language: crate::nls::Language) -> ListSelection<BranchSelectionAction> {
@@ -260,6 +344,15 @@ where
                 .map_err(|error| git_error_message(error, GitAction::Create));
             Ok(Event::CreateFinished { name, result })
         }
+        Command::DeleteBranch { name } => Ok(Event::BranchDeleted(
+            client
+                .delete_git_branch(GitBranchDeleteParams {
+                    repository_id: None,
+                    name,
+                })
+                .map(choices)
+                .map_err(|error| git_error_message(error, GitAction::DeleteBranch)),
+        )),
         Command::OpenWorktrees => client
             .list_git_worktrees()
             .map(|result| Event::WorktreePickerOpened(worktree_choices(result, None)))
@@ -286,6 +379,15 @@ where
                 choices,
             })
         }
+        Command::DeleteWorktree { checkout_root } => Ok(Event::WorktreeDeleted(
+            client
+                .delete_git_worktree(GitWorktreeDeleteParams {
+                    repository_id: None,
+                    checkout_root,
+                })
+                .map(|result| worktree_choices(result, None))
+                .map_err(|error| git_error_message(error, GitAction::DeleteWorktree)),
+        )),
         Command::ResolveWorktree { checkout_root } => Ok(Event::WorktreeResolved(
             client
                 .resolve_git_worktree(GitWorktreeResolveParams {
@@ -380,13 +482,15 @@ enum GitAction {
     ResolveWorktree,
     Switch,
     Create,
+    DeleteBranch,
     CreateWorktree,
+    DeleteWorktree,
 }
 
 fn git_error_message(error: ash_app_server_client::ClientError, action: GitAction) -> String {
     match error {
         ash_app_server_client::ClientError::Server { code: -32601, .. } => match action {
-            GitAction::CreateWorktree | GitAction::ListWorktrees | GitAction::ResolveWorktree => "The connected App Server does not support worktree management. Restart it to use the current version.".into(),
+            GitAction::CreateWorktree | GitAction::DeleteWorktree | GitAction::ListWorktrees | GitAction::ResolveWorktree => "The connected App Server does not support worktree management. Restart it to use the current version.".into(),
             _ => "The connected App Server does not support this branch action. Restart it to use the current version.".into(),
         },
         ash_app_server_client::ClientError::Server { code: -32061, .. } => match action {
@@ -400,7 +504,9 @@ fn git_error_message(error: ash_app_server_client::ClientError, action: GitActio
                 "Could not create branch. Check the branch name and whether it already exists."
                     .into()
             }
+            GitAction::DeleteBranch => "Could not delete branch. It may be unmerged or checked out.".into(),
             GitAction::CreateWorktree => "Could not create worktree. Check its name and existing directories.".into(),
+            GitAction::DeleteWorktree => "Could not delete worktree. It may have changes or be in use.".into(),
         },
         ash_app_server_client::ClientError::Server { code: -32060, .. } => {
             "Git is unavailable for this project.".into()

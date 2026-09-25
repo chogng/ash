@@ -108,6 +108,51 @@ async fn unbound_worktree_checks_out_files_without_creating_a_thread_or_branch()
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn removing_an_unbound_worktree_requires_a_clean_noncurrent_checkout() {
+    let fixture = RepositoryFixture::new();
+    let manager = fixture.manager();
+    let checkout = manager
+        .create_unbound(&fixture.repository, "removable")
+        .await
+        .expect("create unbound checkout");
+    fs::write(checkout.join("untracked"), "draft").expect("create untracked file");
+    assert!(
+        manager
+            .remove_unbound(&fixture.repository, &checkout)
+            .await
+            .is_err()
+    );
+    assert!(checkout.exists());
+    fs::remove_file(checkout.join("untracked")).expect("remove draft");
+    assert!(
+        manager
+            .remove_unbound(&fixture.repository, &fixture.repository)
+            .await
+            .is_err()
+    );
+
+    let owned = fixture.add_managed_worktree("a1b2", "owned", "owned");
+    manager
+        .bind_thread(&owned, "owned-thread")
+        .await
+        .expect("bind thread");
+    assert!(
+        manager
+            .remove_unbound(&fixture.repository, &owned)
+            .await
+            .is_err()
+    );
+    assert!(owned.exists());
+
+    manager
+        .remove_unbound(&fixture.repository, &checkout)
+        .await
+        .expect("remove clean unbound checkout");
+    assert!(!checkout.exists());
+    assert_eq!(manager.list(&fixture.repository).await.unwrap().len(), 2);
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn list_and_resolve_preserve_the_source_relative_directory() {
     let fixture = RepositoryFixture::new();
     let checkout = fixture.add_managed_worktree("a1b2", "topic", "topic");

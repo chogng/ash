@@ -5,15 +5,14 @@ expression: frame_text(&app)
   .                                                                            [— / —] [Dashboard]  
                                                                                                     
                                                                                                     
-            ┌── Project branches ─────────────────────────────────────────────────[✗]─┐             
+            ┌── Project worktrees ────────────────────────────────────────────────[✗]─┐             
             │                                                                         │             
             │  ╭────────────────────────────────────────────────────────────────────╮ │             
-            │  │ Search branches                                                    │ │             
+            │  │ Search worktrees                                                   │ │             
             │  ╰────────────────────────────────────────────────────────────────────╯ │             
-            │  New branch  ·  At HEAD · no checkout change                            │             
-            │  Project branches                                                       │             
-            │> main  ·  Current                                                       │             
-            │  topic  ·  In another worktree                                          │             
+            │  Worktree deleted.                                                      │             
+            │  New worktree  ·  Create at HEAD · no session                           │             
+            │> repo  ·  Current · main · /repo                                        │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
@@ -27,6 +26,7 @@ expression: frame_text(&app)
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
-  ╭─────────│  b New branch · d delete · / search · Esc close                         │──────────╮  
+            │                                                                         │             
+  ╭─────────│  n New worktree · d delete · / search · Esc close                       │──────────╮  
   │ > Build └─────────────────────────────────────────────────────────────────────────┘          │  
   ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯

@@ -29,6 +29,43 @@ async fn creating_a_local_branch_keeps_the_current_checkout() {
 }
 
 #[tokio::test]
+async fn deleting_a_branch_requires_merge_and_no_checkout() {
+    let repository = TestRepository::init();
+    repository.write("tracked", "base");
+    repository.commit_all("base");
+    let git = GitClient::system();
+    let opened = git.open_repository(repository.root()).await.unwrap();
+
+    git.create_branch(&opened, "merged").await.unwrap();
+    git.delete_merged_branch(&opened, "merged").await.unwrap();
+    assert!(git.delete_merged_branch(&opened, "main").await.is_err());
+
+    repository.git(&["switch", "-c", "unmerged"]);
+    repository.write("tracked", "topic");
+    repository.commit_all("topic");
+    repository.git(&["switch", "main"]);
+    assert!(git.delete_merged_branch(&opened, "unmerged").await.is_err());
+    assert!(
+        git.local_branches(&opened)
+            .await
+            .unwrap()
+            .iter()
+            .any(|branch| branch.name() == "unmerged")
+    );
+
+    let linked_root = tempfile::tempdir().unwrap();
+    let linked = linked_root.path().join("occupied");
+    repository.git(&[
+        "worktree",
+        "add",
+        "-b",
+        "occupied",
+        linked.to_str().unwrap(),
+    ]);
+    assert!(git.delete_merged_branch(&opened, "occupied").await.is_err());
+}
+
+#[tokio::test]
 async fn task_branch_uses_head_without_copying_dirty_files_or_switching_checkout() {
     let repository = TestRepository::init();
     repository.write("tracked", "original");

@@ -26,6 +26,9 @@ pub(crate) enum WorktreeSelectionAction {
     Create {
         name: String,
     },
+    Delete {
+        checkout_root: String,
+    },
     Open {
         checkout_root: String,
         current: bool,
@@ -39,9 +42,11 @@ pub(crate) enum WorktreeSelectionAction {
 pub(crate) struct WorktreePanel {
     picker: ListSelection<WorktreeSelectionAction>,
     name: Option<ListSelection<WorktreeSelectionAction>>,
+    delete: Option<ListSelection<WorktreeSelectionAction>>,
     language: Language,
     picker_hints: KeyHints,
     prompt_hints: KeyHints,
+    delete_hints: KeyHints,
 }
 
 impl WorktreePanel {
@@ -49,35 +54,49 @@ impl WorktreePanel {
         Self {
             picker: ListSelection::new(spec.model, spec.actions),
             name: None,
+            delete: None,
             language: Language::English,
             picker_hints: KeyHints::compact()
                 .with_compact_action("n", "New worktree")
+                .with_compact_action("d", "delete")
                 .with_compact_action("/", "search")
                 .with_compact_action("Esc", "close"),
             prompt_hints: KeyHints::new()
                 .with_action("Enter", "create")
                 .with_action("Esc", "back"),
+            delete_hints: KeyHints::new()
+                .with_action("Enter", "delete")
+                .with_action("Esc", "back"),
         }
     }
 
     pub(crate) fn state(&self) -> &ListSelectionState {
-        self.name.as_ref().unwrap_or(&self.picker).state()
+        self.delete
+            .as_ref()
+            .or(self.name.as_ref())
+            .unwrap_or(&self.picker)
+            .state()
     }
 
     pub(crate) fn state_mut(&mut self) -> &mut ListSelectionState {
-        self.name.as_mut().unwrap_or(&mut self.picker).state_mut()
+        self.delete
+            .as_mut()
+            .or(self.name.as_mut())
+            .unwrap_or(&mut self.picker)
+            .state_mut()
     }
 
-    pub(crate) fn is_name_prompt(&self) -> bool {
-        self.name.is_some()
+    pub(crate) fn is_subpage(&self) -> bool {
+        self.name.is_some() || self.delete.is_some()
     }
 
     pub(crate) fn parent_title(&self) -> Option<&str> {
-        self.name.as_ref().map(|_| self.picker.state().title())
+        self.is_subpage().then(|| self.picker.state().title())
     }
 
     pub(crate) fn return_to_parent(&mut self) {
         self.name = None;
+        self.delete = None;
     }
 
     pub(crate) fn localize(&mut self, language: Language) {
@@ -86,10 +105,15 @@ impl WorktreePanel {
         if let Some(name) = &mut self.name {
             name.state_mut().localize(language);
         }
+        if let Some(delete) = &mut self.delete {
+            delete.state_mut().localize(language);
+        }
     }
 
     pub(crate) fn key_hints(&self) -> &KeyHints {
-        if self.name.is_some() {
+        if self.delete.is_some() {
+            &self.delete_hints
+        } else if self.name.is_some() {
             &self.prompt_hints
         } else {
             &self.picker_hints
@@ -100,12 +124,42 @@ impl WorktreePanel {
         &mut self,
         key: KeyEvent,
     ) -> ListSelectionOutcome<WorktreeSelectionAction> {
-        if key.kind == KeyEventKind::Press && key.code == KeyCode::Esc && self.name.is_some() {
-            self.name = None;
+        if key.kind == KeyEventKind::Press && key.code == KeyCode::Esc && self.is_subpage() {
+            self.return_to_parent();
             return ListSelectionOutcome::Consumed;
         }
         if let Some(name) = &mut self.name {
             return handle_name_key(name, key);
+        }
+        if let Some(delete) = &mut self.delete {
+            return delete.handle_key(key);
+        }
+        if key.kind == KeyEventKind::Press
+            && key.modifiers == KeyModifiers::NONE
+            && key.code == KeyCode::Char('d')
+            && self.picker.state().items_focused()
+        {
+            let selected = self
+                .picker
+                .state()
+                .selected_item()
+                .and_then(|item| item.id());
+            let action = selected.and_then(|id| self.picker.action(id)).cloned();
+            match action {
+                Some(WorktreeSelectionAction::Open {
+                    checkout_root,
+                    current: false,
+                }) => self.delete = Some(worktree_delete_prompt(self.language, checkout_root)),
+                Some(WorktreeSelectionAction::Open { current: true, .. }) => self
+                    .picker
+                    .state_mut()
+                    .set_message(Some("Cannot delete the current worktree.".into())),
+                Some(WorktreeSelectionAction::Unavailable { message }) => {
+                    self.picker.state_mut().set_message(Some(message.into()));
+                }
+                _ => {}
+            }
+            return ListSelectionOutcome::Consumed;
         }
         let outcome = if key.kind == KeyEventKind::Press
             && key.modifiers == KeyModifiers::NONE
@@ -130,6 +184,9 @@ impl WorktreePanel {
     }
 
     pub(crate) fn handle_paste(&mut self, pasted: String) {
+        if self.delete.is_some() {
+            return;
+        }
         if let Some(name) = &mut self.name {
             name.handle_paste(pasted);
             name.state_mut().set_message(None);
@@ -137,6 +194,30 @@ impl WorktreePanel {
             self.picker.handle_paste(pasted);
         }
     }
+}
+
+fn worktree_delete_prompt(
+    language: Language,
+    checkout_root: String,
+) -> ListSelection<WorktreeSelectionAction> {
+    let id = ListSelectionItemId::new("worktree:delete-confirm");
+    let mut model = ListSelectionModel::new(
+        "Delete worktree",
+        vec![ListSelectionGroup::new(
+            "",
+            vec![
+                ListSelectionItem::new(Text::literal(&checkout_root))
+                    .with_id(id.clone())
+                    .with_description("Requires a clean linked worktree with no task."),
+            ],
+        )],
+    )
+    .without_tab_bar();
+    model.localize(language);
+    ListSelection::new(
+        model,
+        BTreeMap::from([(id, WorktreeSelectionAction::Delete { checkout_root })]),
+    )
 }
 
 fn name_prompt(language: Language) -> ListSelection<WorktreeSelectionAction> {

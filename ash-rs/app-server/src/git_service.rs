@@ -186,6 +186,18 @@ impl GitService {
         })
     }
 
+    pub(crate) fn delete_branch(&self, name: &str) -> Result<(), GitServiceError> {
+        self.ensure_mutable()?;
+        let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
+        runtime.block_on(async {
+            let repository = self.open_repository().await?;
+            self.client
+                .delete_merged_branch(&repository, name)
+                .await
+                .map_err(GitServiceError::Git)
+        })
+    }
+
     pub(crate) fn recent_commits(&self) -> Result<Vec<GitCommitSummary>, GitServiceError> {
         self.ensure_readable()?;
         let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;

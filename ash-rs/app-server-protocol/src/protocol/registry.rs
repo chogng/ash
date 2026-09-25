@@ -615,6 +615,8 @@ use crate::protocol::fs::FsWriteFileResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitBranchCreateParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitBranchDeleteParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitBranchDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitBranchListResult;
@@ -697,6 +699,8 @@ use crate::protocol::git::GitUpstreamDto;
 use crate::protocol::git::GitWorktreeCreateParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitWorktreeCreateResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitWorktreeDeleteParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitWorktreeDto;
 #[cfg(any(test, feature = "export"))]
@@ -3390,9 +3394,19 @@ client_methods! {
         response: GitBranchListResult,
         serialization: GlobalExclusive,
     },
+    GitBranchDelete => "git/branch/delete" {
+        params: GitBranchDeleteParams,
+        response: GitBranchListResult,
+        serialization: GlobalExclusive,
+    },
     GitWorktreeCreate => "git/worktree/create" {
         params: GitWorktreeCreateParams,
         response: GitWorktreeCreateResult,
+        serialization: GlobalExclusive,
+    },
+    GitWorktreeDelete => "git/worktree/delete" {
+        params: GitWorktreeDeleteParams,
+        response: GitWorktreeListResult,
         serialization: GlobalExclusive,
     },
     GitWorktreeList => "git/worktree/list" {
@@ -4739,7 +4753,9 @@ typescript_bindings! {
     GitStatusChanged,
     GitBranchDto,
     GitBranchCreateParams,
+    GitBranchDeleteParams,
     GitWorktreeCreateParams,
+    GitWorktreeDeleteParams,
     GitWorktreeCreateResult,
     GitWorktreeDto,
     GitWorktreeStateDto,

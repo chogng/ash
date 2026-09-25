@@ -10,10 +10,10 @@ expression: frame_text(&app)
             │  ╭────────────────────────────────────────────────────────────────────╮ │             
             │  │ Search branches                                                    │ │             
             │  ╰────────────────────────────────────────────────────────────────────╯ │             
+            │  Branch deleted.                                                        │             
             │  New branch  ·  At HEAD · no checkout change                            │             
             │  Project branches                                                       │             
             │> main  ·  Current                                                       │             
-            │  topic  ·  In another worktree                                          │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             

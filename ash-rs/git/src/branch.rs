@@ -18,6 +18,24 @@ impl GitClient {
         Ok(())
     }
 
+    /// Deletes a local branch only when Git considers it merged and no worktree has it checked out.
+    pub async fn delete_merged_branch(
+        &self,
+        repository: &GitRepository,
+        name: &str,
+    ) -> GitResult<()> {
+        self.run_query(
+            repository.worktree_root(),
+            ["check-ref-format", "--branch", name],
+        )
+        .await?
+        .require_success()?;
+        self.run_mutation(repository.worktree_root(), ["branch", "-d", "--", name])
+            .await?
+            .require_success()?;
+        Ok(())
+    }
+
     /// Pushes exactly the reviewed commit to a task branch, without force or checkout changes.
     pub async fn push_branch_commit(
         &self,

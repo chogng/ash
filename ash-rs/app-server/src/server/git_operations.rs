@@ -6,6 +6,7 @@ use crate::git_service::GitServiceError;
 use crate::server::git_runtime::GitRuntimeError;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::git::GitBranchCreateParams;
+use ash_app_server_protocol::protocol::git::GitBranchDeleteParams;
 use ash_app_server_protocol::protocol::git::GitBranchListResult;
 use ash_app_server_protocol::protocol::git::GitBranchSwitchParams;
 use ash_app_server_protocol::protocol::git::GitChangeFileParams;
@@ -22,6 +23,7 @@ use ash_app_server_protocol::protocol::git::GitPathsParams;
 use ash_app_server_protocol::protocol::git::GitRepositoryParams;
 use ash_app_server_protocol::protocol::git::GitWorktreeCreateParams;
 use ash_app_server_protocol::protocol::git::GitWorktreeCreateResult;
+use ash_app_server_protocol::protocol::git::GitWorktreeDeleteParams;
 use ash_app_server_protocol::protocol::git::GitWorktreeDto;
 use ash_app_server_protocol::protocol::git::GitWorktreeListResult;
 use ash_app_server_protocol::protocol::git::GitWorktreeResolveParams;
@@ -162,6 +164,18 @@ impl AppServer {
         result(&GitBranchListResult { branches })
     }
 
+    pub(super) fn git_branch_delete(&self, value: &Value) -> Result<Value, RpcError> {
+        let params: GitBranchDeleteParams = decode(value)?;
+        if params.name.trim().is_empty() || params.name.len() > 1024 || params.name.contains('\0') {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let branches = self
+            .git_runtime_service()?
+            .delete_branch_for(params.repository_id.as_deref(), &params.name)
+            .map_err(git_error)?;
+        result(&GitBranchListResult { branches })
+    }
+
     pub(super) fn git_worktree_create(&self, value: &Value) -> Result<Value, RpcError> {
         let params: GitWorktreeCreateParams = decode(value)?;
         let source = self
@@ -186,9 +200,38 @@ impl AppServer {
 
     pub(super) fn git_worktree_list(&self, value: &Value) -> Result<Value, RpcError> {
         let params: GitRepositoryParams = decode(value)?;
+        result(&self.git_worktree_list_result(params.repository_id.as_deref())?)
+    }
+
+    pub(super) fn git_worktree_delete(&self, value: &Value) -> Result<Value, RpcError> {
+        let params: GitWorktreeDeleteParams = decode(value)?;
+        if params.checkout_root.is_empty() || params.checkout_root.len() > 32_768 {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
         let source = self
             .git_runtime_service()?
-            .readable_source_for(params.repository_id.as_deref())
+            .mutable_source_for(params.repository_id.as_deref())
+            .map_err(git_error)?;
+        let dirs = self
+            .dir_services
+            .as_ref()
+            .ok_or_else(|| RpcError::new(-32060, AppServerErrorName::GitUnavailable))?;
+        dirs.runtime
+            .block_on(
+                dirs.worktrees
+                    .remove_unbound(&source, Path::new(&params.checkout_root)),
+            )
+            .map_err(|_| RpcError::new(-32061, AppServerErrorName::GitOperationFailed))?;
+        result(&self.git_worktree_list_result(params.repository_id.as_deref())?)
+    }
+
+    fn git_worktree_list_result(
+        &self,
+        repository_id: Option<&str>,
+    ) -> Result<GitWorktreeListResult, RpcError> {
+        let source = self
+            .git_runtime_service()?
+            .readable_source_for(repository_id)
             .map_err(git_error)?;
         let dirs = self
             .dir_services
@@ -237,7 +280,7 @@ impl AppServer {
                 })
             })
             .collect::<Result<Vec<_>, RpcError>>()?;
-        result(&GitWorktreeListResult { worktrees })
+        Ok(GitWorktreeListResult { worktrees })
     }
 
     pub(super) fn git_worktree_resolve(&self, value: &Value) -> Result<Value, RpcError> {

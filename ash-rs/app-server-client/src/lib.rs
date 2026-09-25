@@ -64,10 +64,11 @@ use ash_app_server_protocol::protocol::fs::{
 };
 use ash_app_server_protocol::protocol::git::GitStatusResult;
 use ash_app_server_protocol::protocol::git::{
-    GitBranchCreateParams, GitBranchListResult, GitBranchSwitchParams, GitCommitParams,
-    GitCommitResult, GitOperationResult, GitPathsParams, GitRepositoriesResult,
+    GitBranchCreateParams, GitBranchDeleteParams, GitBranchListResult, GitBranchSwitchParams,
+    GitCommitParams, GitCommitResult, GitOperationResult, GitPathsParams, GitRepositoriesResult,
     GitRepositoryParams, GitTextDiffResult, GitWorktreeCreateParams, GitWorktreeCreateResult,
-    GitWorktreeListResult, GitWorktreeResolveParams, GitWorktreeResolveResult,
+    GitWorktreeDeleteParams, GitWorktreeListResult, GitWorktreeResolveParams,
+    GitWorktreeResolveResult,
 };
 use ash_app_server_protocol::protocol::initialize::{InitializeParams, InitializeResult};
 use ash_app_server_protocol::protocol::language::LanguageCloseParams;
@@ -633,11 +634,25 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         self.call(ClientMethod::GitBranchCreate, params)
     }
 
+    pub fn delete_git_branch(
+        &mut self,
+        params: GitBranchDeleteParams,
+    ) -> Result<GitBranchListResult, ClientError> {
+        self.call(ClientMethod::GitBranchDelete, params)
+    }
+
     pub fn create_git_worktree(
         &mut self,
         params: GitWorktreeCreateParams,
     ) -> Result<GitWorktreeCreateResult, ClientError> {
         self.call(ClientMethod::GitWorktreeCreate, params)
+    }
+
+    pub fn delete_git_worktree(
+        &mut self,
+        params: GitWorktreeDeleteParams,
+    ) -> Result<GitWorktreeListResult, ClientError> {
+        self.call(ClientMethod::GitWorktreeDelete, params)
     }
 
     pub fn list_git_worktrees(&mut self) -> Result<GitWorktreeListResult, ClientError> {

@@ -203,10 +203,10 @@ impl CommandPanel {
 
     pub(crate) fn allows_backdrop_dismiss(&self) -> bool {
         if let Self::GitBranches(panel) = self {
-            return !panel.is_branch_name_prompt();
+            return !panel.is_subpage();
         }
         if let Self::GitWorktrees(panel) = self {
-            return !panel.is_name_prompt();
+            return !panel.is_subpage();
         }
         self.body().allows_backdrop_dismiss()
     }
