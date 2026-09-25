@@ -253,7 +253,7 @@ fn account_actions_use_only_redacted_account_rpcs_and_logout_refreshes() {
             serde_json::json!({ "method": "account/read", "params": {} }),
             serde_json::json!({ "method": "account/login/start", "params": { "method": { "type": "openAiChatGptDeviceCode" } } }),
             serde_json::json!({ "method": "account/login/cancel", "params": { "loginId": "login-1" } }),
-            serde_json::json!({ "method": "account/logout", "params": { "provider": "openai-chatgpt" } }),
+            serde_json::json!({ "method": "account/logout", "params": { "provider": "chatgpt-subscription" } }),
             serde_json::json!({ "method": "account/read", "params": {} }),
         ]
     );

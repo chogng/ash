@@ -860,6 +860,7 @@ fn client_with_model_probe() -> (DispatchTestClient, PathBuf, Arc<OfflineOperati
                 version: "1".into(),
             },
         )
+        .with_codex_home(state_root.join("codex"))
         .with_model_operation_client(model.clone()),
     )
     .unwrap();

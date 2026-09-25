@@ -20,6 +20,7 @@ use crate::cache::classify_freshness;
 use crate::cache::read_lock;
 use crate::cache::rebuild_snapshot;
 use crate::cache::write_lock;
+use crate::disk_cache::DiskCatalogCache;
 use crate::filter::matches_query;
 use crate::filter::validate_requirements;
 use crate::merge::apply_discovery;
@@ -34,6 +35,7 @@ use ash_protocol::ModelRef;
 use ash_protocol::ProviderId;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::RwLock;
 
@@ -58,6 +60,7 @@ struct ModelsManagerInner {
     scopes: Arc<RwLock<BTreeMap<CatalogScopeKey, Arc<ManagedScope>>>>,
     freshness: CatalogFreshnessPolicy,
     clock: Arc<dyn Clock>,
+    disk_cache: Option<Arc<DiskCatalogCache>>,
 }
 
 impl ModelsManager {
@@ -69,6 +72,20 @@ impl ModelsManager {
                 scopes: Arc::clone(&self.inner.scopes),
                 freshness: self.inner.freshness.clone(),
                 clock: Arc::clone(&self.inner.clock),
+                disk_cache: self.inner.disk_cache.clone(),
+            }),
+        }
+    }
+
+    /// Persists observed catalogs across Ash processes in one file per provider.
+    pub fn with_disk_cache(&self, directory: PathBuf) -> Self {
+        Self {
+            inner: Arc::new(ModelsManagerInner {
+                providers: self.inner.providers.clone(),
+                scopes: Arc::clone(&self.inner.scopes),
+                freshness: self.inner.freshness,
+                clock: Arc::clone(&self.inner.clock),
+                disk_cache: Some(Arc::new(DiskCatalogCache::new(directory))),
             }),
         }
     }
@@ -281,6 +298,7 @@ impl ModelsManager {
                 scopes: Arc::new(RwLock::new(BTreeMap::new())),
                 freshness,
                 clock,
+                disk_cache: None,
             }),
         }
     }
@@ -321,6 +339,30 @@ impl ModelsManager {
                 read_lock(&managed.state).snapshot.generation().next()
             });
         let managed = Arc::new(ManagedScope::new(definition, scope, generation));
+        if !scope.is_provider_seed()
+            && let Some(cache) = &self.inner.disk_cache
+        {
+            match cache.load(scope) {
+                Ok(Some(catalog)) => {
+                    let mut state = write_lock(&managed.state);
+                    apply_discovery(&mut state.records, &catalog);
+                    state.last_success = Some(catalog.observed_at);
+                    state.cache_hint = catalog.cache_hint;
+                    state.validator = catalog.validator;
+                    state.has_live_observation = true;
+                    let freshness =
+                        classify_freshness(&state, self.inner.clock.now(), self.inner.freshness);
+                    rebuild_snapshot(scope, &mut state, freshness);
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    log::warn!(
+                        "could not read model catalog for {}: {error}",
+                        scope.provider()
+                    );
+                }
+            }
+        }
         scopes.insert(scope.clone(), managed.clone());
         Ok(managed)
     }
@@ -363,6 +405,25 @@ impl ModelsManager {
                 }
             }
         }
+        if matches!(outcome, CatalogDiscoveryOutcome::NotModified(_))
+            && !read_lock(&managed.state).has_live_observation
+        {
+            let error = ModelsManagerError::NotModifiedWithoutObservation(scope.clone());
+            self.commit_failure(scope, managed, error.clone());
+            return Err(error);
+        }
+        if let Some(cache) = &self.inner.disk_cache {
+            let saved = match &outcome {
+                CatalogDiscoveryOutcome::Modified(catalog) => cache.store(catalog),
+                CatalogDiscoveryOutcome::NotModified(observation) => cache.touch(observation),
+            };
+            if let Err(error) = saved {
+                log::warn!(
+                    "could not persist model catalog for {}: {error}",
+                    scope.provider()
+                );
+            }
+        }
         let mut state = write_lock(&managed.state);
         match outcome {
             CatalogDiscoveryOutcome::Modified(catalog) => {
@@ -373,12 +434,6 @@ impl ModelsManager {
                 state.has_live_observation = true;
             }
             CatalogDiscoveryOutcome::NotModified(catalog) => {
-                if !state.has_live_observation {
-                    drop(state);
-                    let error = ModelsManagerError::NotModifiedWithoutObservation(scope.clone());
-                    self.commit_failure(scope, managed, error.clone());
-                    return Err(error);
-                }
                 state.last_success = Some(catalog.observed_at);
                 state.cache_hint = catalog.cache_hint;
                 if catalog.validator.is_some() {

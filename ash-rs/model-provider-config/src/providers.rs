@@ -16,13 +16,12 @@ mod qwen;
 mod xai;
 mod zai;
 
-pub(crate) fn builtin() -> [ProviderDefinition; 14] {
+pub(crate) fn builtin() -> [ProviderDefinition; 13] {
     [
         openai::definition(),
         openai_compatible::definition(),
         google::definition(),
         xai::definition(),
-        xai::subscription_definition(),
         qwen::definition(),
         kimi::definition(),
         deepseek::definition(),
@@ -33,6 +32,15 @@ pub(crate) fn builtin() -> [ProviderDefinition; 14] {
         mimo::definition(),
         anthropic::definition(),
     ]
+}
+
+pub(crate) fn subscription_definition(id: &str) -> Option<ProviderDefinition> {
+    match id {
+        "openai" => Some(openai::subscription_definition()),
+        "xai" => Some(xai::subscription_definition()),
+        "kimi" => Some(kimi::subscription_definition()),
+        _ => None,
+    }
 }
 
 pub(super) fn default_provider(

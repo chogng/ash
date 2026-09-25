@@ -2,8 +2,8 @@ use crate::config::{is_http_url, normalize_base_url};
 use crate::{
     ApprovalReviewModelDefault, BaseUrlNormalization, EndpointPolicy, InputTokenCountTarget,
     ModelCatalogPolicy, ModelProviderConfig, NormalizedInputTokenCountConfig,
-    NormalizedModelProviderConfig, ProviderConfigError, ProviderDefinition, ProviderId,
-    model_catalog, providers,
+    NormalizedModelProviderConfig, ProviderAccessMode, ProviderConfigError, ProviderDefinition,
+    ProviderId, model_catalog, providers,
 };
 use ash_protocol::ModelRef;
 use std::collections::BTreeMap;
@@ -83,7 +83,18 @@ impl ProviderConfigRegistry {
         let mut registry = self.clone();
         let mut names = std::collections::BTreeSet::new();
         for config in configs {
-            if let Some(custom) = &config.custom {
+            if config.access_mode == ProviderAccessMode::Subscription {
+                config.validate_static()?;
+                let mut definition = providers::subscription_definition(config.provider.as_str())
+                    .ok_or_else(|| ProviderConfigError::InvalidProvider {
+                    provider: config.provider.clone(),
+                    message: "subscription access is unavailable for this provider".into(),
+                })?;
+                model_catalog::attach_subscription_models(&mut definition);
+                registry
+                    .providers
+                    .insert(config.provider.clone(), definition);
+            } else if let Some(custom) = &config.custom {
                 config.validate_static()?;
                 if !names.insert(custom.name.trim().to_lowercase()) {
                     return Err(ProviderConfigError::DuplicateProvider(
@@ -187,6 +198,7 @@ impl ProviderConfigRegistry {
         });
         Ok(NormalizedModelProviderConfig {
             provider: config.provider.clone(),
+            access_mode: config.access_mode,
             api_profile: definition.api_profile,
             base_url,
             input_token_count,

@@ -100,7 +100,7 @@ fn device_flow_creates_codex_compatible_credentials_and_subscription_headers() {
         thread::sleep(Duration::from_millis(5));
     }
     let account = service.read().unwrap().accounts[0].clone();
-    assert_eq!(account.account.provider, OPENAI_CHATGPT_PROVIDER_ID);
+    assert_eq!(account.account.provider, CHATGPT_SUBSCRIPTION_PROVIDER_ID);
     assert_eq!(account.email.as_deref(), Some("person@example.com"));
     assert_eq!(account.plan.as_deref(), Some("plus"));
     assert_eq!(account.status, AccountStatus::Ready);
@@ -195,7 +195,9 @@ fn disconnect_and_reconnect_leave_codex_unchanged_and_external_logout_is_observe
     );
     let service = Arc::new(LoginService::new(runtime.clone()).unwrap());
     runtime.install_login_service(&service).unwrap();
-    service.logout_provider(OPENAI_CHATGPT_PROVIDER_ID).unwrap();
+    service
+        .logout_provider(CHATGPT_SUBSCRIPTION_PROVIDER_ID)
+        .unwrap();
     assert!(runtime.read_account().unwrap().is_none());
     assert!(runtime.api_target().is_err());
     let restarted = ChatGptOAuth::with_client(

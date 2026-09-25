@@ -1,5 +1,6 @@
 use crate::ApprovalReviewModelDefault;
 use crate::InputTokenCountModelPolicy;
+use crate::ProviderAccessMode;
 use crate::ProviderDefinition;
 use crate::StaticModelSpec;
 use crate::static_model_spec::static_model;
@@ -155,14 +156,26 @@ pub const STATIC_MODEL_CATALOG: &[StaticModelSpec] = &[
 
 /// Finds the single static row owning a provider-scoped model identity.
 pub fn find_static_model(model: &ModelRef) -> Option<&'static StaticModelSpec> {
+    find_static_model_for_mode(model, ProviderAccessMode::Api)
+}
+
+pub fn find_static_model_for_mode(
+    model: &ModelRef,
+    mode: ProviderAccessMode,
+) -> Option<&'static StaticModelSpec> {
     STATIC_MODEL_CATALOG.iter().find(|candidate| {
         candidate.provider_id == model.provider.as_str()
             && candidate.model_id == model.model.as_str()
+            && matches!(candidate.access, ash_protocol::ModelAccess::Subscription)
+                == (mode == ProviderAccessMode::Subscription)
     })
 }
 
 pub(crate) fn attach_static_models(definitions: &mut [ProviderDefinition]) {
     for spec in STATIC_MODEL_CATALOG {
+        if spec.access == ash_protocol::ModelAccess::Subscription {
+            continue;
+        }
         let definition = definitions
             .iter_mut()
             .find(|definition| definition.id.as_str() == spec.provider_id)
@@ -200,4 +213,15 @@ pub(crate) fn attach_static_models(definitions: &mut [ProviderDefinition]) {
             };
         }
     }
+}
+
+pub(crate) fn attach_subscription_models(definition: &mut ProviderDefinition) {
+    definition.models = STATIC_MODEL_CATALOG
+        .iter()
+        .filter(|spec| {
+            spec.provider_id == definition.id.as_str()
+                && spec.access == ash_protocol::ModelAccess::Subscription
+        })
+        .map(StaticModelSpec::model)
+        .collect();
 }

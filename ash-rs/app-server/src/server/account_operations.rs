@@ -60,7 +60,7 @@ impl AppServer {
                 .map_err(xai_error)?;
             return result(&xai_usage(params, subscription));
         }
-        if params.provider != ash_chatgpt::OPENAI_CHATGPT_PROVIDER_ID {
+        if params.provider != ash_chatgpt::CHATGPT_SUBSCRIPTION_PROVIDER_ID {
             return Err(RpcError::new(
                 -32030,
                 AppServerErrorName::AccountRateLimitsUnavailable,
@@ -104,6 +104,7 @@ impl AppServer {
     ) -> Result<Value, RpcError> {
         let login = self.login_service()?;
         let state = login.refresh().map_err(login_error)?;
+        self.configure_ready_subscription_providers(&state)?;
         if let Some(auth) = &self.xai {
             if let Some(account) = state.accounts.iter().find(|account| {
                 account.account.provider == xai::XAI_PROVIDER_ID
@@ -125,34 +126,26 @@ impl AppServer {
             AccountLoginMethodDto::XaiDeviceCode => LoginMethod::XaiDeviceCode,
         };
         let login = self.login_service()?;
-        if method == LoginMethod::XaiDeviceCode {
-            let store = self
-                .config
-                .as_ref()
-                .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
-            let snapshot = store
-                .read_snapshot()
-                .map_err(|_| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
-            let provider =
-                ash_protocol::ProviderId::new(xai::XAI_PROVIDER_ID).expect("constant provider ID");
-            if !snapshot.values.providers.contains_key(&provider) {
-                store
-                    .apply(ash_config::ConfigCommandRequest {
-                        command_id: ash_protocol::CommandId::new(format!(
-                            "configure-xai-subscription-{}",
-                            snapshot.revision.get()
-                        ))
-                        .expect("generated command ID"),
-                        expected_revision: snapshot.revision,
-                        command: ash_config::UserConfigCommand::ConfigureProvider {
-                            provider: provider.clone(),
-                            config: ash_model_provider_config::ModelProviderConfig::new(provider),
-                        },
-                    })
-                    .map_err(super::config_operations::config_operation_error)?;
+        match method {
+            LoginMethod::XaiDeviceCode => {
+                self.ensure_subscription_provider_configured(xai::XAI_PROVIDER_ID)?;
             }
+            LoginMethod::KimiDeviceCode => {
+                self.ensure_subscription_provider_configured(ash_kimi::KIMI_PROVIDER_ID)?;
+            }
+            _ => {}
         }
         let started = login.begin(method).map_err(login_error)?;
+        if matches!(
+            method,
+            LoginMethod::OpenAiChatGptBrowser | LoginMethod::OpenAiChatGptDeviceCode
+        ) && matches!(&started, BeginLogin::Connected { .. })
+            && self.config.is_some()
+        {
+            self.ensure_subscription_provider_configured(
+                ash_chatgpt::CHATGPT_SUBSCRIPTION_PROVIDER_ID,
+            )?;
+        }
         result(&match started {
             BeginLogin::Connected { login_id, .. } => AccountLoginStartResult::Connected {
                 login_id: login_id.to_string(),
@@ -207,6 +200,62 @@ impl AppServer {
         self.login
             .as_deref()
             .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::AccountUnavailable))
+    }
+
+    fn configure_ready_subscription_providers(
+        &self,
+        state: &ash_login::AccountState,
+    ) -> Result<(), RpcError> {
+        if state.accounts.iter().any(|account| {
+            account.account.provider == ash_chatgpt::CHATGPT_SUBSCRIPTION_PROVIDER_ID
+                && account.status == AccountStatus::Ready
+        }) && self.config.is_some()
+        {
+            self.ensure_subscription_provider_configured(
+                ash_chatgpt::CHATGPT_SUBSCRIPTION_PROVIDER_ID,
+            )?;
+        }
+        if state.accounts.iter().any(|account| {
+            account.account.provider == ash_kimi::KIMI_PROVIDER_ID
+                && account.status == AccountStatus::Ready
+        }) && self.config.is_some()
+        {
+            self.ensure_subscription_provider_configured(ash_kimi::KIMI_PROVIDER_ID)?;
+        }
+        Ok(())
+    }
+
+    fn ensure_subscription_provider_configured(&self, id: &str) -> Result<(), RpcError> {
+        let id = match id {
+            ash_chatgpt::CHATGPT_SUBSCRIPTION_PROVIDER_ID => "openai",
+            ash_kimi::KIMI_PROVIDER_ID => "kimi",
+            xai::XAI_PROVIDER_ID => "xai",
+            _ => return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams)),
+        };
+        let store = self
+            .config
+            .as_ref()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let snapshot = store
+            .read_snapshot()
+            .map_err(|_| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let provider = ash_protocol::ProviderId::new(id).expect("constant provider ID");
+        if snapshot.values.providers.contains_key(&provider) {
+            return Ok(());
+        }
+        store
+            .apply(ash_config::ConfigCommandRequest {
+                command_id: ash_protocol::CommandId::new(format!(
+                    "configure-{}-{}",
+                    id,
+                    snapshot.revision.get()
+                ))
+                .expect("generated command ID"),
+                expected_revision: snapshot.revision,
+                command: ash_config::UserConfigCommand::EnsureProvider { provider },
+            })
+            .map_err(super::config_operations::config_operation_error)?;
+        Ok(())
     }
 }
 

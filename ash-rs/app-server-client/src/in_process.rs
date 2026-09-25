@@ -22,6 +22,7 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct InProcessClientOptions {
     pub profile_root: PathBuf,
+    codex_home: Option<PathBuf>,
     pub dir_root: Option<PathBuf>,
     pub client_info: ClientInfo,
     pub capabilities: ClientCapabilities,
@@ -37,6 +38,7 @@ impl InProcessClientOptions {
     pub fn new(profile_root: impl Into<PathBuf>, client_info: ClientInfo) -> Self {
         Self {
             profile_root: profile_root.into(),
+            codex_home: None,
             dir_root: None,
             client_info,
             capabilities: ClientCapabilities::default(),
@@ -87,6 +89,11 @@ impl InProcessClientOptions {
         self
     }
 
+    pub fn with_codex_home(mut self, home: impl Into<PathBuf>) -> Self {
+        self.codex_home = Some(home.into());
+        self
+    }
+
     /// Reads the backend host's Grok login when Ash has no xAI credential.
     pub fn with_host_grok_auth(mut self) -> Self {
         self.host_grok_auth = true;
@@ -119,6 +126,7 @@ impl fmt::Debug for InProcessClientOptions {
         formatter
             .debug_struct("InProcessClientOptions")
             .field("profile_root", &self.profile_root)
+            .field("codex_home", &self.codex_home)
             .field("dir_root", &self.dir_root)
             .field("client_info", &self.client_info)
             .field("capabilities", &self.capabilities)
@@ -140,6 +148,7 @@ impl fmt::Debug for InProcessClientOptions {
 impl PartialEq for InProcessClientOptions {
     fn eq(&self, other: &Self) -> bool {
         self.profile_root == other.profile_root
+            && self.codex_home == other.codex_home
             && self.dir_root == other.dir_root
             && self.client_info == other.client_info
             && self.capabilities == other.capabilities
@@ -271,6 +280,9 @@ pub fn open_in_process_app_server(
     let mut server_options = LocalAppServerOptions::new(options.profile_root)
         .with_session_state_mode(options.session_state_mode)
         .with_slash_command_catalog(options.slash_commands);
+    if let Some(home) = options.codex_home {
+        server_options = server_options.with_codex_home(home);
+    }
     if options.host_grok_auth {
         server_options = server_options.with_host_grok_auth();
     }

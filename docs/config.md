@@ -45,6 +45,7 @@ Runtime snapshot
 - 成功提交只影响后续安全点，不改写已经冻结的 Turn。
 
 `config.toml` 顶层使用 `schemaVersion` 标记文件格式。读取旧版本或无版本的历史文件时，Config 只执行已登记且无歧义的迁移，完成严格校验后原子重写为当前版本；历史字段和当前字段同时出现、未登记字段、过新版本或低于最低支持版本都会拒绝启动。v2 的 `agent.preferredModel`、`agent.preferredReasoningEffort` 会分别迁到 v3 的 `agent.model`、`agent.modelReasoningEffort`。`semanticCodeIndex` 迁到 `codebase` 时不会保留旧的源码外发授权；`workspaceTrust` 只转换路径仍存在、旧身份与路径一致的 `trusted` 项，并为它生成当前目录身份，其他项不落盘。
+v6 将旧 `xai-subscription` 模型引用和提供商配置迁到 `xai`。模型引用只包含供应商与型号；当前接入方式由可用凭据决定，订阅账户就绪时优先订阅，退出后使用已保存的 API key。旧的 OpenAI 与 Kimi 模型引用不改名；切换后型号不在有效目录中时，需重新选择。
 
 用户文档的主要 section 是 `agent`、`gui`、`tui`、`providers`、`mcp`、`skills`、`plugins`、
 `hooks`、`toolSearch`、`execPolicy`、`dirPermissions`、`codebase`、`network` 和 `git`。Config 保存非敏感引用，不保存
@@ -101,6 +102,7 @@ Config 和 App Server 将 `[gui]`、`[tui]` 作为不透明键值表保存，不
 首个 `ProviderApi` 模型，并与供应商配置一起持久化。已有选择保持不变，包括新增其他供应商时。
 没有内置 API 模型的连接不生成模型 ID。保存过程不请求模型列表，也不验证远端调用权限。
 重新保存旧连接可以补齐缺失选择；目录顺序后续变化不会改写已经保存的模型。
+订阅登录使用 `EnsureProvider` 仅登记内置提供商，不按 API 模型生成默认选择；用户随后可在 `/model` 中选择订阅模型。
 
 ## 目录配置
 

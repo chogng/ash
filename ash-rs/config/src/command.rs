@@ -64,6 +64,10 @@ pub enum UserConfigCommand {
         provider: ProviderId,
         config: ModelProviderConfig,
     },
+    /// Adds a built-in subscription provider without choosing a default model.
+    EnsureProvider {
+        provider: ProviderId,
+    },
     RemoveProvider {
         provider: ProviderId,
     },

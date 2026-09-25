@@ -130,13 +130,13 @@ fn account_usage_queries_do_not_hold_the_global_mutation_lock() {
     assert_eq!(
         method
             .serialization_scope(&serde_json::json!({
-                "provider":"openai-chatgpt", "accountId":"account-1"
+                "provider":"chatgpt-subscription", "accountId":"account-1"
             }))
             .unwrap(),
         None
     );
     let result: crate::protocol::account::AccountRateLimitsReadResult = serde_json::from_value(serde_json::json!({
-        "provider":"openai-chatgpt", "accountId":"account-1", "plan":"plus",
+        "provider":"chatgpt-subscription", "accountId":"account-1", "plan":"plus",
         "limits":[{"id":"codex","name":null,"model":null,"allowed":null,"limitReached":null,"primary":null,"secondary":null}],
         "credits":null
     })).unwrap();

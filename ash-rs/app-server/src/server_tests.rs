@@ -254,7 +254,7 @@ struct TestLoginDriver {
 
 impl InteractiveLoginDriver for TestLoginDriver {
     fn provider_id(&self) -> &'static str {
-        "openai-chatgpt"
+        "chatgpt-subscription"
     }
 
     fn read_account(&self) -> Result<Option<AccountSnapshot>, LoginError> {
@@ -5205,7 +5205,7 @@ fn account_rpc_projects_login_completion_without_credentials() {
             outcome: LoginCompletionOutcome::Succeeded {
                 account: AccountSnapshot {
                     account: AccountRef {
-                        provider: "openai-chatgpt".into(),
+                        provider: "chatgpt-subscription".into(),
                         account_id: "acct_redacted".into(),
                     },
                     email: Some("person@example.test".into()),
@@ -6642,21 +6642,24 @@ fn advisor_requests_are_typed_retry_safe_and_separate_from_worker_turns() {
 }
 
 #[test]
-fn xai_subscription_login_registers_its_provider_once_for_model_selection() {
-    struct Driver;
+fn device_subscription_login_registers_its_provider_once_for_model_selection() {
+    struct Driver {
+        provider: &'static str,
+        method: ash_login::LoginMethod,
+    }
     impl InteractiveLoginDriver for Driver {
         fn provider_id(&self) -> &'static str {
-            "xai-subscription"
+            self.provider
         }
         fn read_account(&self) -> Result<Option<AccountSnapshot>, LoginError> {
             Ok(None)
         }
         fn begin(&self, request: BeginLoginRequest) -> Result<BeginLogin, LoginError> {
-            assert_eq!(request.method, ash_login::LoginMethod::XaiDeviceCode);
+            assert_eq!(request.method, self.method);
             Ok(BeginLogin::DeviceCode {
                 login_id: request.login_id,
-                verification_url: "https://auth.x.ai/device".into(),
-                user_code: "XAI-CODE".into(),
+                verification_url: "https://auth.example.test/device".into(),
+                user_code: "SUBSCRIPTION-CODE".into(),
             })
         }
         fn cancel(&self, _: &LoginId) -> Result<CancelLoginOutcome, LoginError> {
@@ -6666,34 +6669,168 @@ fn xai_subscription_login_registers_its_provider_once_for_model_selection() {
             Ok(())
         }
     }
+    for (provider, method, rpc_method) in [
+        (
+            "xai-subscription",
+            ash_login::LoginMethod::XaiDeviceCode,
+            "xaiDeviceCode",
+        ),
+        (
+            "kimi-subscription",
+            ash_login::LoginMethod::KimiDeviceCode,
+            "kimiDeviceCode",
+        ),
+    ] {
+        let profile = tempfile::tempdir().unwrap();
+        let config = Arc::new(ConfigStore::open(profile.path().join("config.sqlite3")).unwrap());
+        let server = server()
+            .with_config_store(config.clone())
+            .with_login_service(Arc::new(
+                LoginService::new(Arc::new(Driver { provider, method })).unwrap(),
+            ));
+        let mut connection = server.connection();
+        initialize(&server, &mut connection);
+        for id in 2..4 {
+            let response = call(
+                &server,
+                &mut connection,
+                serde_json::json!({"jsonrpc":"2.0","id":id,"method":"account/login/start","params":{"method":{"type":rpc_method}}}),
+            );
+            assert_eq!(
+                response["result"]["userCode"], "SUBSCRIPTION-CODE",
+                "{response}"
+            );
+            let cancelled = call(
+                &server,
+                &mut connection,
+                serde_json::json!({"jsonrpc":"2.0","id":id+2,"method":"account/login/cancel","params":{"loginId":response["result"]["loginId"]}}),
+            );
+            assert_eq!(cancelled["result"]["status"], "cancelled");
+            let snapshot = config.read_snapshot().unwrap();
+            assert_eq!(snapshot.revision.get(), 1);
+            assert_eq!(snapshot.values.providers.len(), 1);
+            assert!(
+                snapshot.values.providers.contains_key(
+                    &ProviderId::new(if provider == "xai-subscription" {
+                        "xai"
+                    } else {
+                        "kimi"
+                    })
+                    .unwrap()
+                )
+            );
+            assert!(snapshot.values.model.is_none());
+        }
+    }
+}
+
+#[test]
+fn chatgpt_login_registers_subscription_only_after_it_is_ready() {
     let profile = tempfile::tempdir().unwrap();
     let config = Arc::new(ConfigStore::open(profile.path().join("config.sqlite3")).unwrap());
+    let driver = Arc::new(TestLoginDriver::default());
     let server = server()
         .with_config_store(config.clone())
-        .with_login_service(Arc::new(LoginService::new(Arc::new(Driver)).unwrap()));
+        .with_login_service(Arc::new(LoginService::new(driver.clone()).unwrap()));
     let mut connection = server.connection();
     initialize(&server, &mut connection);
+
+    let started = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"account/login/start","params":{"method":{"type":"openAiChatGptBrowser"}}}),
+    );
+    assert!(started["result"]["loginId"].is_string(), "{started}");
+    let snapshot = config.read_snapshot().unwrap();
+    assert_eq!(snapshot.revision.get(), 0);
+    assert!(
+        !snapshot
+            .values
+            .providers
+            .contains_key(&ProviderId::new("openai").unwrap())
+    );
+    assert!(snapshot.values.model.is_none());
+
+    let cancelled = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"account/login/cancel","params":{"loginId":started["result"]["loginId"]}}),
+    );
+    assert_eq!(cancelled["result"]["status"], "cancelled");
+    let restarted = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":4,"method":"account/login/start","params":{"method":{"type":"openAiChatGptBrowser"}}}),
+    );
+    assert!(restarted["result"]["loginId"].is_string(), "{restarted}");
+    assert_eq!(config.read_snapshot().unwrap().revision.get(), 0);
+    *driver.account.lock().unwrap() = Some(AccountSnapshot {
+        account: AccountRef {
+            provider: "chatgpt-subscription".into(),
+            account_id: "account-1".into(),
+        },
+        email: None,
+        display_name: None,
+        organization: None,
+        plan: Some("plus".into()),
+        status: AccountStatus::Ready,
+        credential_revision: 1,
+    });
+    let read = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":5,"method":"account/read","params":{}}),
+    );
+    assert_eq!(read["result"]["accounts"][0]["status"], "ready");
+    let snapshot = config.read_snapshot().unwrap();
+    assert_eq!(snapshot.revision.get(), 1);
+    assert!(
+        snapshot
+            .values
+            .providers
+            .contains_key(&ProviderId::new("openai").unwrap())
+    );
+    assert!(snapshot.values.model.is_none());
+}
+
+#[test]
+fn account_read_registers_subscription_for_an_existing_chatgpt_login() {
+    let profile = tempfile::tempdir().unwrap();
+    let config = Arc::new(ConfigStore::open(profile.path().join("config.sqlite3")).unwrap());
+    let driver = Arc::new(TestLoginDriver {
+        account: Mutex::new(Some(AccountSnapshot {
+            account: AccountRef {
+                provider: "chatgpt-subscription".into(),
+                account_id: "account-1".into(),
+            },
+            email: None,
+            display_name: None,
+            organization: None,
+            plan: Some("plus".into()),
+            status: AccountStatus::Ready,
+            credential_revision: 1,
+        })),
+    });
+    let server = server()
+        .with_config_store(config.clone())
+        .with_login_service(Arc::new(LoginService::new(driver).unwrap()));
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+
     for id in 2..4 {
-        let response = call(
+        let read = call(
             &server,
             &mut connection,
-            serde_json::json!({"jsonrpc":"2.0","id":id,"method":"account/login/start","params":{"method":{"type":"xaiDeviceCode"}}}),
+            serde_json::json!({"jsonrpc":"2.0","id":id,"method":"account/read","params":{}}),
         );
-        assert_eq!(response["result"]["userCode"], "XAI-CODE", "{response}");
-        let cancelled = call(
-            &server,
-            &mut connection,
-            serde_json::json!({"jsonrpc":"2.0","id":id+2,"method":"account/login/cancel","params":{"loginId":response["result"]["loginId"]}}),
-        );
-        assert_eq!(cancelled["result"]["status"], "cancelled");
+        assert_eq!(read["result"]["accounts"][0]["status"], "ready");
         let snapshot = config.read_snapshot().unwrap();
         assert_eq!(snapshot.revision.get(), 1);
-        assert_eq!(snapshot.values.providers.len(), 1);
         assert!(
             snapshot
                 .values
                 .providers
-                .contains_key(&ProviderId::new("xai-subscription").unwrap())
+                .contains_key(&ProviderId::new("openai").unwrap())
         );
         assert!(snapshot.values.model.is_none());
     }

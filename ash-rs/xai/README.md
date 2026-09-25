@@ -10,7 +10,7 @@
 
 - Device authorization uses `auth.x.ai/oauth2/device/code` and `auth.x.ai/oauth2/token`.
 - Inference uses `https://cli-chat-proxy.grok.com/v1/responses` over HTTP/SSE; account models come from `/models-v2`.
-- `xai-subscription` is separate from the `xai` API-key provider. Ash stores credentials in its profile secret store and coordinates refreshes through the profile's `xai.lock`.
+- The account provider ID is `xai-subscription`; model references use the vendor ID `xai` for both subscription and API access. Ash stores subscription credentials in its profile secret store and coordinates refreshes through the profile's `xai.lock`. When both credentials are available, the ready subscription takes precedence.
 - If Ash has no subscription credential, it reads `~/.grok/auth.json` on the backend host for a valid official Grok OAuth access token. It reads only the matching entry's access token, account identity, email, and expiry. Ash never copies the Grok refresh token or writes the file. An Ash-owned credential takes precedence once the user signs in to Ash. A malformed Grok file reports an error instead of silently choosing another account.
 - Start from Ash Code's `/config` → Providers → xAI Subscription. Existing valid Grok login connects immediately. Otherwise Ash Code opens the device challenge in the local browser and keeps its URL and code visible in the terminal. Complete the challenge, then select a discovered model.
 - Disconnecting a borrowed Grok login stores only an Ash-local disconnected flag. Signing in again reconnects a still-valid Grok login without altering its file. An expired Grok access token needs a fresh Ash sign-in unless Grok has renewed the file.

@@ -63,7 +63,7 @@ fn usage_command_reads_the_selected_account_and_renders_both_screen_modes() {
         requests.lock().unwrap().as_slice(),
         &[
             json!({"method":"account/read", "params":{}}),
-            json!({"method":"account/rateLimits/read", "params":{"provider":"openai-chatgpt", "accountId":"account-1"}}),
+            json!({"method":"account/rateLimits/read", "params":{"provider":"chatgpt-subscription", "accountId":"account-1"}}),
         ]
     );
     for event in output.events {
@@ -317,12 +317,12 @@ fn set_mode(app: &mut App, mode: ScreenMode) {
 }
 
 fn account(status: &str) -> Value {
-    json!({"revision":1,"accounts":[{"provider":"openai-chatgpt","accountId":"account-1",
+    json!({"revision":1,"accounts":[{"provider":"chatgpt-subscription","accountId":"account-1",
         "email":null,"displayName":null,"organization":null,"plan":"pro","status":status,"credentialRevision":1}]})
 }
 
 fn quota() -> Value {
-    json!({"provider":"openai-chatgpt","accountId":"account-1","plan":"pro","limits":[{
+    json!({"provider":"chatgpt-subscription","accountId":"account-1","plan":"pro","limits":[{
         "id":"codex","name":null,"model":null,"allowed":true,"limitReached":false,
         "primary":{"usedPercent":35,"windowSeconds":18000,"resetsAt":2000000000},
         "secondary":{"usedPercent":80,"windowSeconds":604800,"resetsAt":2000500000}}],

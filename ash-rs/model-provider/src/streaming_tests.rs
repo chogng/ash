@@ -114,10 +114,10 @@ impl ModelEventSink for LiveEvents {
 #[test]
 fn every_chat_provider_delivers_live_events_and_the_same_complete_result() {
     let definitions = ProviderConfigRegistry::builtin();
-    for definition in definitions
-        .providers()
-        .filter(|definition| definition.api_profile == ApiProfile::OpenAiChatCompletions)
-    {
+    for definition in definitions.providers().filter(|definition| {
+        definition.api_profile == ApiProfile::OpenAiChatCompletions
+            && !definition.id.as_str().ends_with("-subscription")
+    }) {
         let id = definition.id.as_str();
         let finished = Arc::new(AtomicBool::new(false));
         let client = Arc::new(ObservedChatClient {

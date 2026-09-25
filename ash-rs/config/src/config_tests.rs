@@ -230,6 +230,31 @@ fn configuring_provider_selects_its_first_api_model_and_preserves_selection_afte
 }
 
 #[test]
+fn ensuring_subscription_provider_keeps_model_selection_empty() {
+    let path = config_path("subscription-provider");
+    let store = ConfigStore::open(&path).unwrap();
+    store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("ensure-openai").unwrap(),
+            expected_revision: ConfigRevision::new(0),
+            command: UserConfigCommand::EnsureProvider {
+                provider: provider_id("openai"),
+            },
+        })
+        .unwrap();
+    let snapshot = store.read_snapshot().unwrap();
+    assert!(
+        snapshot
+            .values
+            .providers
+            .contains_key(&provider_id("openai"))
+    );
+    assert!(snapshot.values.model.is_none());
+    drop(store);
+    remove_config_files(&path);
+}
+
+#[test]
 fn saving_existing_provider_restores_missing_model_but_preserves_explicit_choice() {
     let path = config_path("provider-existing-model");
     let store = ConfigStore::open(&path).unwrap();
@@ -336,7 +361,7 @@ fn issue_execution_settings_are_removed_once_from_versioned_configuration() {
     ] {
         assert!(!encoded.contains(removed));
     }
-    assert!(encoded.contains("schemaVersion = 5"));
+    assert!(encoded.contains("schemaVersion = 6"));
     assert!(
         !crate::document_migration::decode(&encoded)
             .unwrap()
@@ -378,7 +403,7 @@ fn model_settings_are_migrated_once_from_version_two() {
         document.agent.model_reasoning_effort
     );
     let persisted = std::fs::read_to_string(&config_path).unwrap();
-    assert!(persisted.contains("schemaVersion = 5"));
+    assert!(persisted.contains("schemaVersion = 6"));
     assert!(!persisted.contains("preferredModel"));
     assert!(!persisted.contains("preferredReasoningEffort"));
     drop(store);
@@ -391,6 +416,54 @@ fn model_settings_are_migrated_once_from_version_two() {
     assert_eq!(std::fs::read_to_string(&config_path).unwrap(), persisted);
     drop(reopened);
     remove_config_files(&database_path);
+}
+
+#[test]
+fn legacy_xai_subscription_provider_moves_to_vendor_identity_once() {
+    let mut document = UserConfigDocument::default();
+    for id in ["openai", "kimi", "xai-subscription"] {
+        document
+            .providers
+            .insert(provider_id(id), ModelProviderConfig::new(provider_id(id)));
+    }
+    document.agent.model = Some(model_ref("xai-subscription", "grok-4.5"));
+    document.agent.approval_review_model = ApprovalReviewModelSelection::Explicit {
+        model: model_ref("openai", "gpt-5.6-sol"),
+    };
+    document.agent.commit_message_model = Some(model_ref("kimi", "kimi-k2.7-code"));
+    let encoded = crate::document_migration::encode(&document).unwrap();
+    let legacy = encoded.replacen("schemaVersion = 6", "schemaVersion = 5", 1);
+    let decoded = crate::document_migration::decode(&legacy).unwrap();
+    assert!(decoded.rewrite_required);
+    assert_eq!(
+        decoded.document.agent.model,
+        Some(model_ref("xai", "grok-4.5"))
+    );
+    assert_eq!(
+        decoded
+            .document
+            .agent
+            .approval_review_model
+            .explicit_model(),
+        Some(&model_ref("openai", "gpt-5.6-sol"))
+    );
+    assert_eq!(
+        decoded.document.agent.commit_message_model,
+        Some(model_ref("kimi", "kimi-k2.7-code"))
+    );
+    for id in ["openai", "kimi", "xai"] {
+        assert!(decoded.document.providers.contains_key(&provider_id(id)));
+    }
+    assert!(
+        !decoded
+            .document
+            .providers
+            .contains_key(&provider_id("xai-subscription"))
+    );
+    let current = crate::document_migration::encode(&decoded.document).unwrap();
+    let reopened = crate::document_migration::decode(&current).unwrap();
+    assert!(!reopened.rewrite_required);
+    assert_eq!(reopened.document, decoded.document);
 }
 
 #[test]
@@ -572,7 +645,7 @@ type = "disabled"
     );
 
     let persisted = persisted_config_document(&database_path);
-    assert!(persisted.contains("schemaVersion = 5"));
+    assert!(persisted.contains("schemaVersion = 6"));
     assert!(persisted.contains("[codebase]"));
     assert!(persisted.contains("[dirPermissions.entries]"));
     assert!(!persisted.contains("semanticCodeIndex"));
@@ -685,11 +758,11 @@ fn versioned_config_keeps_unknown_fields_strict() {
 #[test]
 fn newer_file_schema_is_rejected_explicitly() {
     let database_path = config_path("newer-file-schema");
-    std::fs::write(database_path.with_extension("toml"), "schemaVersion = 6\n").unwrap();
+    std::fs::write(database_path.with_extension("toml"), "schemaVersion = 7\n").unwrap();
 
     let error = ConfigStore::open(&database_path).err().unwrap();
 
-    assert!(error.0.contains("newer than supported version 5"));
+    assert!(error.0.contains("newer than supported version 6"));
     remove_config_files(&database_path);
 }
 
@@ -1441,6 +1514,7 @@ fn provider_entries_validate_their_key_and_static_settings() {
             command: UserConfigCommand::ConfigureProvider {
                 provider: provider_id("openai"),
                 config: ModelProviderConfig {
+                    access_mode: ash_model_provider_config::ProviderAccessMode::Api,
                     custom: None,
                     provider: provider_id("anthropic"),
                     base_url: Some("file:///tmp/provider".into()),

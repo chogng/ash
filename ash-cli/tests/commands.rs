@@ -464,7 +464,7 @@ fn api_key_input_is_stored_without_appearing_in_command_output() {
     );
     session.shutdown().unwrap();
     assert_eq!(
-        harness.json(&["logout", "openai-chatgpt"])["status"],
+        harness.json(&["logout", "chatgpt-subscription"])["status"],
         "alreadyLoggedOut"
     );
 }

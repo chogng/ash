@@ -1403,7 +1403,13 @@ fn provider_mouse_input_and_parent_title_return_to_config() {
         app.list_selection().unwrap().selected_item().unwrap().id(),
         Some(&ListSelectionItemId::new("new-custom-provider"))
     );
-    crate::tui_assert_snapshot!("provider_parent_restores_config", frame_text(&app));
+    let frame = frame_text(&app);
+    let trimmed = frame
+        .lines()
+        .map(str::trim_end)
+        .collect::<Vec<_>>()
+        .join("\n");
+    crate::tui_assert_snapshot!("provider_parent_restores_config", trimmed);
 }
 
 #[test]

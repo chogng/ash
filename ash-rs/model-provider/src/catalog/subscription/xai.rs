@@ -1,4 +1,4 @@
-use super::ModelCatalogBinding;
+use crate::catalog::ModelCatalogBinding;
 use ::xai::XaiOAuth;
 use ash_async_utils::CancellationSource;
 use ash_models_manager::CatalogCacheHint;
@@ -20,6 +20,8 @@ use ash_protocol::ModelAccess;
 use ash_protocol::ModelId;
 use ash_protocol::ProviderId;
 use ash_protocol::ReasoningEffort;
+use sha2::Digest;
+use sha2::Sha256;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
@@ -33,9 +35,10 @@ pub(crate) fn xai_catalog_binding(
     else {
         return Ok(None);
     };
+    let digest = Sha256::digest(account_id.as_bytes());
     let scope = CatalogScopeKey::new(
-        ProviderId::new(::xai::XAI_PROVIDER_ID).expect("constant provider ID"),
-        CatalogSourceScopeId::new(format!("xai-subscription:{account_id}"))
+        ProviderId::new("xai").expect("constant provider ID"),
+        CatalogSourceScopeId::new(format!("xai-subscription:{digest:x}"))
             .map_err(|error| crate::ModelProviderError::Unavailable(error.to_string()))?,
     );
     Ok(Some(ModelCatalogBinding {
@@ -141,7 +144,7 @@ impl ModelCatalogSource for XaiCatalogSource {
                 .with_cache_hint(
                     CatalogCacheHint::unspecified()
                         .with_fresh_for(Duration::from_secs(300))
-                        .with_stale_usable_for(Duration::ZERO),
+                        .with_stale_usable_for(Duration::from_secs(86400)),
                 ),
             ))
         })

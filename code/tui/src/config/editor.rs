@@ -1387,35 +1387,26 @@ fn provider_items(
         {
             continue;
         }
-        if provider.provider == "xai-subscription" {
-            let id = ListSelectionItemId::new("xai-subscription");
-            actions.insert(
-                id.clone(),
-                ConfigSelectionAction::OpenSubscription(super::SubscriptionProvider::Xai),
+        let mut api = provider_item(provider, actions);
+        if matches!(provider.provider.as_str(), "openai" | "xai") {
+            api = ListSelectionItem::new(format!("{} API key", provider.display_name)).with_id(
+                ListSelectionItemId::new(format!("provider-api-key-{}", provider.provider)),
             );
-            items.push(ListSelectionItem::new("xAI Subscription").with_id(id));
-        } else if provider.provider == "openai-chatgpt" {
-            let id = ListSelectionItemId::new("openai-chatgpt");
-            actions.insert(
-                id.clone(),
-                ConfigSelectionAction::OpenSubscription(super::SubscriptionProvider::ChatGpt),
-            );
-            items.push(ListSelectionItem::new("ChatGPT").with_id(id));
-        } else {
-            items.push(provider_item(provider, actions));
         }
-    }
-    if !catalog
-        .providers
-        .iter()
-        .any(|provider| provider.provider == "openai-chatgpt")
-    {
-        let id = ListSelectionItemId::new("openai-chatgpt");
-        actions.insert(
-            id.clone(),
-            ConfigSelectionAction::OpenSubscription(super::SubscriptionProvider::ChatGpt),
-        );
-        items.push(ListSelectionItem::new("ChatGPT").with_id(id));
+        items.push(api);
+        let subscription = match provider.provider.as_str() {
+            "openai" => Some(("ChatGPT", super::SubscriptionProvider::ChatGpt)),
+            "xai" => Some(("xAI Subscription", super::SubscriptionProvider::Xai)),
+            _ => None,
+        };
+        if let Some((label, subscription)) = subscription {
+            let id = ListSelectionItemId::new(format!("{}-subscription", provider.provider));
+            actions.insert(
+                id.clone(),
+                ConfigSelectionAction::OpenSubscription(subscription),
+            );
+            items.push(ListSelectionItem::new(label).with_id(id));
+        }
     }
     let id = ListSelectionItemId::new("new-custom-provider");
     actions.insert(

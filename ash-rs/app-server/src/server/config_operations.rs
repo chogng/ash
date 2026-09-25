@@ -1134,6 +1134,7 @@ pub(super) fn provider_config_from_dto(
         .transpose()
         .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
     Ok(ModelProviderConfig {
+        access_mode: ash_model_provider_config::ProviderAccessMode::Api,
         custom: config.custom.map(|custom| ash_model_provider_config::CustomProviderConfig {
             context_window: custom.context_window,
         order: custom.order,

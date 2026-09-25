@@ -40,7 +40,7 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 use zeroize::Zeroize;
 
-pub const KIMI_PROVIDER_ID: &str = "kimi";
+pub const KIMI_PROVIDER_ID: &str = "kimi-subscription";
 pub const KIMI_CODE_API_BASE_URL: &str = "https://api.kimi.com/coding/v1";
 
 const CLIENT_ID: &str = "17e5f671-d194-4dfb-9706-5516cb48c098";
@@ -152,6 +152,21 @@ impl KimiOAuth {
             KIMI_CODE_API_BASE_URL,
             self.api_headers(&credential),
         ))
+    }
+
+    /// Reads whether the local Kimi Code subscription can be selected without refreshing it.
+    pub fn subscription_ready(&self) -> Result<bool, KimiError> {
+        Ok(self
+            .load_credential()?
+            .is_some_and(|credential| credential.is_usable()))
+    }
+
+    /// The login's device identity separates cached catalogs across Kimi sign-ins.
+    pub fn subscription_catalog_identity(&self) -> Result<Option<String>, KimiError> {
+        Ok(self
+            .load_credential()?
+            .filter(TokenCredential::is_usable)
+            .map(|credential| credential.device_id.clone()))
     }
 
     fn request_device_code(

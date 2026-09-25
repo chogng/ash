@@ -58,6 +58,7 @@ pub(crate) fn load_selection<T>(
 where
     T: JsonRpcTransport,
 {
+    client.read_accounts()?;
     let config = client.read_config()?;
     let catalog = client.list_models()?;
     let providers = client.list_providers()?;

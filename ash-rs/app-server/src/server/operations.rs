@@ -1338,10 +1338,15 @@ impl AppServer {
             .iter()
             .find(|turn| turn.turn_id == turn_id)
             .ok_or_else(|| RpcError::new(-32011, AppServerErrorName::CoreOperationFailed))?;
-        let subscription = turn.model.as_ref().is_some_and(|model| {
-            ash_model_provider_config::find_static_model(model)
-                .is_some_and(|entry| entry.access == ModelAccess::Subscription)
-        });
+        let subscription = if let Some(model) = turn.model.as_ref() {
+            self.model_catalog
+                .list()
+                .map_err(core_error)?
+                .iter()
+                .any(|entry| entry.model == *model && entry.access == ModelAccess::Subscription)
+        } else {
+            false
+        };
         if subscription
             && input.iter().any(|item| {
                 !matches!(

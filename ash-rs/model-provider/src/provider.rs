@@ -39,12 +39,11 @@ use ash_model_provider_config::Model;
 use ash_model_provider_config::ModelId;
 use ash_model_provider_config::ModelProviderConfig;
 use ash_model_provider_config::NormalizedModelProviderConfig;
+use ash_model_provider_config::ProviderAccessMode;
 use ash_model_provider_config::ProviderConfigError;
 use ash_model_provider_config::ProviderConfigRegistry;
 use ash_model_provider_config::ProviderDefinition;
 use ash_model_provider_config::ProviderId;
-use ash_model_provider_config::StaticModelRuntime;
-use ash_model_provider_config::find_static_model;
 use ash_model_tokenizer::LocalTokenizerRegistry;
 use ash_model_tokenizer::LocalTokenizerService;
 use ash_models_manager::ModelRequirements;
@@ -58,6 +57,7 @@ use ash_secrets::SecretStore;
 use response_debug_context::AuthRecovery;
 use response_debug_context::ResponseDiagnosticSink;
 use response_debug_context::ResponseOperation;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -606,6 +606,19 @@ impl Provider {
                 .map(|resolved| resolved.entry().info().clone())
                 .map_err(model_resolution_error);
         }
+        if let ProviderTarget::ChatGpt(auth) = &self.target {
+            let binding = crate::catalog::chatgpt_catalog_binding(
+                Arc::clone(auth),
+                Arc::clone(&self.client),
+                self.diagnostics.clone(),
+            )?
+            .ok_or_else(|| ModelProviderError::Credential("ChatGPT is not signed in".into()))?;
+            return self
+                .models
+                .resolve(binding.scope(), model_id, &ModelRequirements::agent())
+                .map(|resolved| resolved.entry().info().clone())
+                .map_err(model_resolution_error);
+        }
         self.models
             .resolve_static(
                 &ModelRef::new(self.definition.id.clone(), model_id.clone()),
@@ -705,6 +718,11 @@ impl ModelProviderRuntime {
         local_tokenizers: Arc<dyn LocalTokenizerService>,
     ) -> Self {
         self.local_tokenizers = local_tokenizers;
+        self
+    }
+
+    pub fn with_catalog_cache(mut self, directory: PathBuf) -> Self {
+        self.models = self.models.with_disk_cache(directory);
         self
     }
 
@@ -863,18 +881,99 @@ impl ModelProviderRuntime {
         self.models.clone()
     }
 
+    pub fn models_manager_for_config(
+        &self,
+        config: &ModelProviderConfig,
+    ) -> Result<ModelsManager, ModelProviderError> {
+        let effective = self.effective_config(config)?;
+        let registry = self.configs.with_configs([&effective])?;
+        Ok(self.models.with_registry(registry))
+    }
+
+    /// Materializes the active connection. A ready subscription takes precedence over
+    /// a stored API key; a credential-store error must not silently change the route.
+    pub fn effective_config(
+        &self,
+        config: &ModelProviderConfig,
+    ) -> Result<ModelProviderConfig, ModelProviderError> {
+        let subscription_ready = match config.provider.as_str() {
+            "openai" => self
+                .chatgpt_oauth
+                .as_ref()
+                .map(|auth| auth.account_id())
+                .transpose()
+                .map_err(|error| ModelProviderError::Credential(error.to_string()))?
+                .flatten()
+                .is_some(),
+            "xai" => self
+                .xai_oauth
+                .as_ref()
+                .map(|auth| auth.subscription_ready())
+                .transpose()
+                .map_err(|error| ModelProviderError::Credential(error.to_string()))?
+                .unwrap_or(false),
+            "kimi" => self
+                .kimi_oauth
+                .as_ref()
+                .map(|auth| auth.subscription_ready())
+                .transpose()
+                .map_err(|error| ModelProviderError::Credential(error.to_string()))?
+                .unwrap_or(false),
+            _ => false,
+        };
+        let mut effective = config.clone();
+        effective.access_mode = if subscription_ready {
+            ProviderAccessMode::Subscription
+        } else {
+            ProviderAccessMode::Api
+        };
+        if subscription_ready {
+            effective.base_url = None;
+        }
+        Ok(effective)
+    }
+
     /// Resolves a dynamic model catalog source for one immutable provider configuration.
     pub fn catalog_binding(
         &self,
         config: &ModelProviderConfig,
     ) -> Result<Option<ModelCatalogBinding>, ModelProviderError> {
-        let runtime = self.with_configs([config])?;
-        let normalized = runtime.configs.normalize(config)?;
-        if normalized.provider.as_str() == xai::XAI_PROVIDER_ID {
+        let config = self.effective_config(config)?;
+        let runtime = self.with_configs([&config])?;
+        let normalized = runtime.configs.normalize(&config)?;
+        if normalized.access_mode == ProviderAccessMode::Subscription
+            && normalized.provider.as_str() == "xai"
+        {
             return self
                 .xai_oauth
                 .as_ref()
                 .map(|auth| crate::catalog::xai_catalog_binding(Arc::clone(auth)))
+                .transpose()
+                .map(Option::flatten);
+        }
+        if normalized.access_mode == ProviderAccessMode::Subscription
+            && normalized.provider.as_str() == "openai"
+        {
+            return self
+                .chatgpt_oauth
+                .as_ref()
+                .map(|auth| {
+                    crate::catalog::chatgpt_catalog_binding(
+                        Arc::clone(auth),
+                        Arc::clone(&self.client),
+                        self.diagnostics.clone(),
+                    )
+                })
+                .transpose()
+                .map(Option::flatten);
+        }
+        if normalized.access_mode == ProviderAccessMode::Subscription
+            && normalized.provider.as_str() == "kimi"
+        {
+            return self
+                .kimi_oauth
+                .as_ref()
+                .map(|auth| crate::catalog::kimi_catalog_binding(Arc::clone(auth)))
                 .transpose()
                 .map(Option::flatten);
         }
@@ -917,8 +1016,9 @@ impl ModelProviderRuntime {
         &self,
         config: &ModelProviderConfig,
     ) -> Result<Provider, ModelProviderError> {
-        let runtime = self.with_configs([config])?;
-        let normalized = runtime.configs.normalize(config)?;
+        let config = self.effective_config(config)?;
+        let runtime = self.with_configs([&config])?;
+        let normalized = runtime.configs.normalize(&config)?;
         runtime.instantiate_normalized(normalized)
     }
 
@@ -927,9 +1027,10 @@ impl ModelProviderRuntime {
         config: &ModelProviderConfig,
         model: &ModelRef,
     ) -> Result<Model, ModelProviderError> {
-        let runtime = self.with_configs([config])?;
-        let normalized = runtime.configs.normalize_for(config, &model.provider)?;
-        let connection = runtime.connection(model, &normalized)?;
+        let config = self.effective_config(config)?;
+        let runtime = self.with_configs([&config])?;
+        let normalized = runtime.configs.normalize_for(&config, &model.provider)?;
+        let connection = runtime.connection(&normalized)?;
         runtime
             .instantiate_normalized_with_connection(normalized, connection)?
             .resolve_model(&model.model)
@@ -940,9 +1041,12 @@ impl ModelProviderRuntime {
         config: &ModelProviderConfig,
         model_ref: &ModelRef,
     ) -> Result<Arc<dyn ModelInvoker>, ModelProviderError> {
-        let runtime = self.with_configs([config])?;
-        let normalized = runtime.configs.normalize_for(config, &model_ref.provider)?;
-        let connection = runtime.connection(model_ref, &normalized)?;
+        let config = self.effective_config(config)?;
+        let runtime = self.with_configs([&config])?;
+        let normalized = runtime
+            .configs
+            .normalize_for(&config, &model_ref.provider)?;
+        let connection = runtime.connection(&normalized)?;
         runtime
             .instantiate_normalized_with_connection(normalized, connection)?
             .build_model(&model_ref.model)
@@ -954,9 +1058,12 @@ impl ModelProviderRuntime {
         model_ref: &ModelRef,
         request: &ModelRequest,
     ) -> Result<ModelResponse, ModelProviderError> {
-        let runtime = self.with_configs([config])?;
-        let normalized = runtime.configs.normalize_for(config, &model_ref.provider)?;
-        let connection = runtime.connection(model_ref, &normalized)?;
+        let config = self.effective_config(config)?;
+        let runtime = self.with_configs([&config])?;
+        let normalized = runtime
+            .configs
+            .normalize_for(&config, &model_ref.provider)?;
+        let connection = runtime.connection(&normalized)?;
         runtime
             .instantiate_normalized_with_connection(normalized, connection)?
             .complete(&model_ref.model, request)
@@ -966,11 +1073,7 @@ impl ModelProviderRuntime {
         &self,
         normalized: NormalizedModelProviderConfig,
     ) -> Result<Provider, ModelProviderError> {
-        let connection = if normalized.provider.as_str() == xai::XAI_PROVIDER_ID {
-            self.xai_connection()?
-        } else {
-            self.direct_connection(&normalized)?
-        };
+        let connection = self.connection(&normalized)?;
         self.instantiate_normalized_with_connection(normalized, connection)
     }
 
@@ -998,14 +1101,15 @@ impl ModelProviderRuntime {
 
     fn connection(
         &self,
-        model: &ModelRef,
         normalized: &NormalizedModelProviderConfig,
     ) -> Result<ProviderConnection, ModelProviderError> {
-        if normalized.provider.as_str() == xai::XAI_PROVIDER_ID {
+        if normalized.access_mode == ProviderAccessMode::Subscription
+            && normalized.provider.as_str() == "xai"
+        {
             return self.xai_connection();
         }
-        match find_static_model(model).map(|spec| spec.runtime) {
-            Some(StaticModelRuntime::KimiCode) => self
+        match (normalized.access_mode, normalized.provider.as_str()) {
+            (ProviderAccessMode::Subscription, "kimi") => self
                 .kimi_oauth
                 .as_ref()
                 .ok_or_else(|| {
@@ -1014,7 +1118,7 @@ impl ModelProviderRuntime {
                 .api_target()
                 .map(|target| ProviderConnection::Subscription { target })
                 .map_err(|error| ModelProviderError::Credential(error.to_string())),
-            Some(StaticModelRuntime::ChatGptSubscription) => {
+            (ProviderAccessMode::Subscription, "openai") => {
                 let auth = self.chatgpt_oauth.as_ref().ok_or_else(|| {
                     ModelProviderError::Credential("ChatGPT OAuth is unavailable".into())
                 })?;
@@ -1026,7 +1130,10 @@ impl ModelProviderRuntime {
                     auth: Arc::clone(auth),
                 })
             }
-            Some(StaticModelRuntime::ProviderApi) | None => self.direct_connection(normalized),
+            (ProviderAccessMode::Api, _) => self.direct_connection(normalized),
+            (ProviderAccessMode::Subscription, _) => Err(ModelProviderError::Unavailable(
+                "subscription access is unavailable for this provider".into(),
+            )),
         }
     }
 

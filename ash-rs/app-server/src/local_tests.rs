@@ -376,19 +376,19 @@ fn local_account_rate_limits_use_the_signed_in_account_and_redact_failures() {
         "AccountRateLimitsUnavailable"
     );
     assert_eq!(
-        read(&mut connection, "openai-chatgpt", "account-2")["error"]["message"],
+        read(&mut connection, "chatgpt-subscription", "account-2")["error"]["message"],
         "AccountChanged"
     );
     assert_eq!(
-        read(&mut connection, "openai-chatgpt", "")["error"]["message"],
+        read(&mut connection, "chatgpt-subscription", "")["error"]["message"],
         "InvalidParams"
     );
     assert!(client.requests.lock().unwrap().is_empty());
-    let result = read(&mut connection, "openai-chatgpt", "account-1");
+    let result = read(&mut connection, "chatgpt-subscription", "account-1");
     assert_eq!(
         result["result"],
         serde_json::json!({
-            "provider":"openai-chatgpt","accountId":"account-1","plan":"plus",
+            "provider":"chatgpt-subscription","accountId":"account-1","plan":"plus",
             "limits":[{"id":"codex","name":null,"model":null,"allowed":true,"limitReached":false,
                 "primary":{"usedPercent":35,"windowSeconds":18000,"resetsAt":2000000000},"secondary":null}],
             "credits":{"hasCredits":false,"unlimited":false,"balance":null}
@@ -412,7 +412,7 @@ fn local_account_rate_limits_use_the_signed_in_account_and_redact_failures() {
             status,
             serde_json::json!({"private":"sensitive-upstream-body"}),
         );
-        let failed = read(&mut connection, "openai-chatgpt", "account-1");
+        let failed = read(&mut connection, "chatgpt-subscription", "account-1");
         assert_eq!(failed["error"]["message"], "AccountOperationFailed");
         assert!(!failed.to_string().contains("sensitive-upstream-body"));
     }
@@ -429,15 +429,264 @@ fn local_account_rate_limits_use_the_signed_in_account_and_redact_failures() {
     let closed = closing.clone();
     let host = Arc::clone(&server);
     *client.during_request.lock().unwrap() = Some(Box::new(move || host.close_connection(closed)));
-    let cancelled = read(&mut closing, "openai-chatgpt", "account-1");
+    let cancelled = read(&mut closing, "chatgpt-subscription", "account-1");
     assert_eq!(cancelled["error"]["message"], "RequestCancelled");
     assert_eq!(cancelled["error"]["code"], -32800);
     std::fs::remove_file(home.path().join("auth.json")).unwrap();
     assert_eq!(
-        read(&mut connection, "openai-chatgpt", "account-1")["error"]["message"],
+        read(&mut connection, "chatgpt-subscription", "account-1")["error"]["message"],
         "AccountUnavailable"
     );
     assert_eq!(client.requests.lock().unwrap().len(), 6);
+}
+
+#[test]
+fn chatgpt_model_catalog_is_shared_by_login_picker_and_disk_cache() {
+    use base64::Engine;
+
+    struct CatalogClient {
+        calls: std::sync::atomic::AtomicUsize,
+    }
+
+    impl OperationClient for CatalogClient {
+        fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
+            assert!(
+                request
+                    .url()
+                    .starts_with("https://chatgpt.com/backend-api/codex/models?client_version="),
+                "{}",
+                request.url()
+            );
+            assert!(request.headers().iter().any(|header| {
+                header.name() == "Authorization" && header.value() == "Bearer catalog-token"
+            }));
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(ClientResponse::new(
+                200,
+                Vec::new(),
+                serde_json::to_vec(&serde_json::json!({"models":[{
+                    "slug":"gpt-5.6", "display_name":"Subscription Test",
+                    "visibility":"list", "context_window":100000,
+                    "default_reasoning_level":"medium",
+                    "supported_reasoning_levels":[{"effort":"low"},{"effort":"medium"}]
+                }]}))
+                .unwrap(),
+            ))
+        }
+    }
+
+    let profile = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let jwt = |value: serde_json::Value| {
+        format!(
+            "e30.{}.signature",
+            base64::engine::general_purpose::URL_SAFE_NO_PAD
+                .encode(serde_json::to_vec(&value).unwrap())
+        )
+    };
+    std::fs::write(
+        home.path().join("auth.json"),
+        serde_json::to_vec(&serde_json::json!({
+            "auth_mode":"chatgpt", "tokens": {
+                "id_token":jwt(serde_json::json!({"https://api.openai.com/auth":{
+                    "chatgpt_user_id":"user-1", "chatgpt_account_id":"account-1",
+                    "chatgpt_plan_type":"plus"}})),
+                "access_token":"catalog-token", "refresh_token":"never-used",
+                "account_id":"account-1"
+            }, "last_refresh":"2026-09-25T00:00:00Z"
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let client = Arc::new(CatalogClient {
+        calls: std::sync::atomic::AtomicUsize::new(0),
+    });
+    for (iteration, expected_calls) in [1, 1].into_iter().enumerate() {
+        let server = open_local_app_server(
+            LocalAppServerOptions::new(profile.path())
+                .with_codex_home(home.path())
+                .with_model_operation_client(client.clone())
+                .without_built_in_skills()
+                .with_session_state_mode(SessionStateMode::Ephemeral),
+        )
+        .unwrap();
+        let mut connection = server.connection();
+        local_call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"catalog-test","version":"1"},"capabilities":{}}}),
+        );
+        let saved_key = local_call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc":"2.0","id":50,"method":"provider/apiKey/set","params":{"provider":"openai","apiKey":"catalog-api-key"}}),
+        );
+        assert_eq!(saved_key["result"]["apiKeyConfigured"], true);
+        let api_config = local_call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc":"2.0","id":49,"method":"config/read","params":{}}),
+        );
+        assert!(api_config["result"]["providers"]["openai"].is_object());
+        let account = local_call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc":"2.0","id":2,"method":"account/read","params":{}}),
+        );
+        assert_eq!(account["result"]["accounts"][0]["status"], "ready");
+        let config = local_call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc":"2.0","id":3,"method":"config/read","params":{}}),
+        );
+        assert!(config["result"]["providers"]["openai"].is_object());
+        assert!(config["result"]["model"].is_null());
+        let models = local_call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc":"2.0","id":4,"method":"model/list","params":{}}),
+        );
+        let entry = models["result"]["models"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|entry| {
+                entry["model"]["provider"] == "openai" && entry["model"]["model"] == "gpt-5.6"
+            })
+            .unwrap();
+        assert_eq!(entry["displayName"], "Subscription Test");
+        assert_eq!(entry["access"], "subscription");
+        assert!(
+            !models["result"]["models"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|entry| {
+                    entry["model"]["provider"] == "openai"
+                        && entry["model"]["model"] == "gpt-5.6"
+                        && entry["access"] == "apiKey"
+                })
+        );
+        assert_eq!(
+            client.calls.load(std::sync::atomic::Ordering::SeqCst),
+            expected_calls
+        );
+        if iteration == 1 {
+            let disconnected = local_call(
+                &server,
+                &mut connection,
+                serde_json::json!({"jsonrpc":"2.0","id":51,"method":"account/logout","params":{"provider":"chatgpt-subscription"}}),
+            );
+            assert!(disconnected["result"].is_object());
+            let api_models = local_call(
+                &server,
+                &mut connection,
+                serde_json::json!({"jsonrpc":"2.0","id":52,"method":"model/list","params":{}}),
+            );
+            assert!(
+                api_models["result"]["models"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|entry| {
+                        entry["model"]["provider"] == "openai"
+                            && entry["model"]["model"] == "gpt-5.6"
+                            && entry["access"] == "apiKey"
+                    })
+            );
+        }
+    }
+    let cache = std::fs::read_to_string(profile.path().join("cache/models/openai.json")).unwrap();
+    assert!(cache.contains("gpt-5.6"));
+    assert!(!cache.contains("catalog-token"));
+    assert!(!cache.contains("account-1"));
+}
+
+#[test]
+fn kimi_subscription_catalog_wins_over_api_and_persists_by_vendor() {
+    use ash_secrets::SecretStore;
+
+    struct NoCatalogNetwork;
+    impl OperationClient for NoCatalogNetwork {
+        fn execute(&self, _: &ClientRequest) -> Result<ClientResponse, ClientError> {
+            panic!("Kimi's known catalog should not require a network request")
+        }
+    }
+
+    let profile = tempfile::tempdir().unwrap();
+    let config = Arc::new(ConfigStore::open(profile.path().join("config.json")).unwrap());
+    config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("enable-kimi").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::EnsureProvider {
+                provider: ProviderId::new("kimi").unwrap(),
+            },
+        })
+        .unwrap();
+    let secrets = Arc::new(MemorySecretStore::default());
+    let provider = ProviderId::new("kimi").unwrap();
+    secrets
+        .store(
+            &ash_model_provider::provider_api_key_secret_key(&provider),
+            &ash_secrets::SecretValue::new(b"kimi-api-key".to_vec()),
+        )
+        .unwrap();
+    let oauth_key = ash_secrets::SecretKey::new("provider/kimi/current/oauth").unwrap();
+    secrets
+        .store(
+            &oauth_key,
+            &ash_secrets::SecretValue::new(
+                br#"{"access_token":"kimi-access","refresh_token":"kimi-refresh","token_type":"Bearer","scope":"coding","expires_at":4102444800,"device_id":"ash-device","credential_revision":1}"#.to_vec(),
+            ),
+        )
+        .unwrap();
+    let client = Arc::new(NoCatalogNetwork);
+    let registry = ProviderConfigRegistry::builtin();
+    let runtime = Arc::new(
+        ModelProviderRuntime::with_client_and_secrets(
+            registry.clone(),
+            client.clone(),
+            secrets.clone(),
+        )
+        .with_kimi_oauth(ash_kimi::KimiOAuth::with_client(secrets.clone(), client))
+        .with_catalog_cache(profile.path().join("models")),
+    );
+    let service = ConfigBackedModelService {
+        config,
+        dir_config: None,
+        provider_configs: registry,
+        models_manager: runtime.models_manager(),
+        catalog_provider: runtime.clone(),
+        catalog_runtime: Arc::new(tokio::runtime::Runtime::new().unwrap()),
+        resolver: Arc::new(ModelProviderSnapshotResolver {
+            model_provider: runtime,
+        }),
+    };
+    let subscribed = service.list().unwrap();
+    assert!(subscribed.iter().any(|entry| {
+        entry.model == ModelRef::new(provider.clone(), ModelId::new("kimi-k2.7-code").unwrap())
+            && entry.access == ModelAccess::Subscription
+    }));
+    assert!(
+        !subscribed.iter().any(|entry| {
+            entry.model.provider == provider && entry.access == ModelAccess::ApiKey
+        })
+    );
+    let persisted = std::fs::read_to_string(profile.path().join("models/kimi.json")).unwrap();
+    assert!(persisted.contains("kimi-k2.7-code"));
+    assert!(!persisted.contains("kimi-access"));
+    assert!(!persisted.contains("kimi-api-key"));
+
+    secrets.delete(&oauth_key).unwrap();
+    let api = service.list().unwrap();
+    assert!(api.iter().any(|entry| {
+        entry.model == ModelRef::new(provider.clone(), ModelId::new("kimi-k2.6").unwrap())
+            && entry.access == ModelAccess::ApiKey
+    }));
+    assert!(!api.iter().any(|entry| {
+        entry.model == ModelRef::new(provider.clone(), ModelId::new("kimi-k2.7-code").unwrap())
+    }));
 }
 
 #[test]
@@ -489,7 +738,7 @@ fn local_codex_account_reconnects_without_oauth_and_observes_external_logout() {
         call(
             3,
             "account/logout",
-            serde_json::json!({"provider":"openai-chatgpt"})
+            serde_json::json!({"provider":"chatgpt-subscription"})
         )["result"]["status"],
         "loggedOut"
     );
@@ -1937,16 +2186,22 @@ fn configured_provider_resolves_default_model_with_its_saved_endpoint() {
 }
 
 #[test]
-fn subscription_model_resolution_does_not_require_an_api_key_provider_config() {
+fn subscription_model_resolution_uses_the_vendor_provider_config() {
     let provider = Arc::new(RecordingModelProvider::default());
     let resolver = ModelProviderSnapshotResolver {
         model_provider: provider.clone(),
     };
+    let mut provider_config = ModelProviderConfig::new(ProviderId::new("openai").unwrap());
+    provider_config.access_mode = ash_model_provider_config::ProviderAccessMode::Subscription;
     let config = ResolvedConfig {
         model: Some(ModelRef::new(
             ProviderId::new("openai").unwrap(),
             ModelId::new("gpt-5.6-sol").unwrap(),
         )),
+        providers: std::collections::BTreeMap::from([(
+            provider_config.provider.clone(),
+            provider_config.clone(),
+        )]),
         ..ResolvedConfig::default()
     };
 
@@ -1954,8 +2209,32 @@ fn subscription_model_resolution_does_not_require_an_api_key_provider_config() {
 
     let request = provider.request.lock().unwrap().clone().unwrap();
     assert_eq!(request.model, config.model.unwrap());
-    assert_eq!(request.config.provider.as_str(), "openai");
+    assert_eq!(request.config, provider_config);
     assert_eq!(request.config.base_url, None);
+}
+
+#[test]
+fn same_model_identity_uses_the_active_access_mode_for_billing() {
+    let provider = ProviderId::new("openai").unwrap();
+    let model = ModelRef::new(provider.clone(), ModelId::new("gpt-5.6").unwrap());
+    let mut config = ResolvedConfig {
+        model: Some(model),
+        providers: std::collections::BTreeMap::from([(
+            provider.clone(),
+            ModelProviderConfig::new(provider.clone()),
+        )]),
+        ..ResolvedConfig::default()
+    };
+    assert_eq!(
+        super::billing_scope_for_config(&config),
+        ModelBillingScope::PublicApi
+    );
+    config.providers.get_mut(&provider).unwrap().access_mode =
+        ash_model_provider_config::ProviderAccessMode::Subscription;
+    assert_eq!(
+        super::billing_scope_for_config(&config),
+        ModelBillingScope::SubscriptionPlan
+    );
 }
 
 impl ModelSnapshotResolver for RecordingSnapshotResolver {
@@ -2630,8 +2909,11 @@ fn xai_subscription_catalog_drives_model_selection_context_and_invocation() {
     let client = Arc::new(Proxy);
     let auth = xai::XaiOAuth::with_client(secrets, client.clone(), profile.path().join("xai.lock"));
     let registry = ProviderConfigRegistry::builtin();
-    let runtime =
-        Arc::new(ModelProviderRuntime::with_client(registry.clone(), client).with_xai_oauth(auth));
+    let runtime = Arc::new(
+        ModelProviderRuntime::with_client(registry.clone(), client)
+            .with_xai_oauth(auth)
+            .with_catalog_cache(profile.path().join("models")),
+    );
     let service = ConfigBackedModelService {
         config: config.clone(),
         dir_config: None,
@@ -2645,12 +2927,15 @@ fn xai_subscription_catalog_drives_model_selection_context_and_invocation() {
     };
     let entries = service.list().unwrap();
     let model = ModelRef::new(
-        ProviderId::new("xai-subscription").unwrap(),
+        ProviderId::new("xai").unwrap(),
         ModelId::new("grok-test").unwrap(),
     );
     let entry = entries.iter().find(|entry| entry.model == model).unwrap();
     assert_eq!(entry.access, ModelAccess::Subscription);
     assert_eq!(entry.context_window, Some(500000));
+    let cache = std::fs::read_to_string(profile.path().join("models/xai.json")).unwrap();
+    assert!(cache.contains("grok-test"));
+    assert!(!cache.contains("fixture-refresh"));
     let configured = config
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("configure-xai").unwrap(),
@@ -2686,6 +2971,16 @@ fn xai_subscription_catalog_drives_model_selection_context_and_invocation() {
             .unwrap(),
         ResolvedContextBudget::CoreManaged(_)
     ));
+    let frozen = service
+        .snapshot(ModelSelection::ConfiguredDefault)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        frozen
+            .billing_scope(ModelSelection::ConfiguredDefault)
+            .unwrap(),
+        ModelBillingScope::SubscriptionPlan
+    );
     assert_eq!(
         service
             .reasoning_config(ModelSelection::ConfiguredDefault)

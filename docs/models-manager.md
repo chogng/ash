@@ -2,7 +2,7 @@
 
 > 物理位置：`ash-rs/models-manager/`
 > Rust crate：`ash_models_manager`
-> 当前状态：Phase 1 core 与 Ollama 动态目录已实现；跨 provider 的 Agent 模型选择、其他动态 provider adapters、持久缓存和完整 App Server snapshot API 尚未实现
+> 当前状态：Phase 1 core、Ollama/ChatGPT/xAI 动态目录及按供应商分文件的持久缓存已实现；跨 provider 的 Agent 模型选择和完整 App Server snapshot API 尚未实现
 > Crate 实现说明：[`ash-models-manager` README](../ash-rs/models-manager/README.md)
 > Canonical model contract：[`ash-protocol` model catalog](../ash-rs/protocol/src/model/catalog.rs)
 > Provider wire adapter：[`ash-api.md`](ash-api.md)
@@ -18,7 +18,7 @@
 
 模型目录系统回答“当前有哪些模型可选、这些信息有多可信”；它管理发现、内存缓存和合并，不执行
 模型调用。当前静态目录、动态 source port、snapshot/generation、singleflight、merge/filter/resolve
-已经落地；真实 provider discovery 与完整客户端协议仍按后续阶段推进。
+已经落地；Ollama、ChatGPT 与 xAI 的目录读取已接入，其他 provider discovery 与完整客户端协议仍按后续阶段推进。
 
 | 读者首先会问 | 直接答案 | 深入阅读 |
 | --- | --- | --- |
@@ -95,9 +95,10 @@ model provider 负责“如何用已选模型执行一次调用”
 | 字段 provenance 与 Unknown 保留 | ✅ | `CatalogRecord`、`ModelMetadataProvenance` |
 | 配置生效后的模型信息、上下文裁剪和压缩建议 | ✅ | `ModelCatalogEntry::model_info`；保留原始目录证据，App Server 消费结果 |
 | model-provider/App Server 静态目录统一 | ✅ | `ModelProviderRuntime::models_manager`、`ConfigBackedModelService` |
-| 真实 provider discovery adapters | 部分具备 | Ollama `/api/tags` + `/api/show` 已接入；其他 provider 留在 Phase 2 |
+| 真实 provider discovery adapters | 部分具备 | Ollama、ChatGPT、xAI 已接入；其他 provider 留在后续阶段 |
 | Agent 启动时的继承、覆盖和跨 provider 替换 | 尚未完成 | 当前 `resolve` 只校验一个准确 `ModelRef`；尚无统一候选选择、替换记录和客户端警告 |
-| persisted observation cache、backoff/jitter、并发总闸 | 尚未完成 | Phase 4 / 后续 core hardening |
+| persisted observation cache | ✅ | profile 内的 `cache/models/<provider>.json`，按供应商分文件、按账户 scope 隔离、原子写入 |
+| backoff/jitter、并发总闸 | 尚未完成 | 后续 core hardening |
 | `model/refresh`、`model/updated`、完整 snapshot DTO | 尚未完成 | Phase 3 |
 
 现有 `ModelInfo` 也存在后续需要修正的语义缺口：
@@ -508,10 +509,11 @@ keep-alive 或本地模型驻留。后三者的 provider-specific 行为分别�
 第一版至少提供：
 
 1. process-local memory cache：读取热路径、singleflight state 和 immutable snapshots；
-2. 可选 persisted observation cache：改善重启和离线体验，但只是可删除 projection。
+2. persisted observation cache：改善重启和离线体验，但只是可删除的目录副本。
 
-持久 cache 通过 `CatalogCacheStore` port 注入。Manager 决定 key、schema、freshness 和写入时机；
-文件/数据库 adapter 决定物理 I/O。持久层不得成为模型可用性的 authority。
+Ash profile 的 `cache/models/<provider>.json` 由 manager 统一读写，例如 OpenAI/ChatGPT 为 `openai.json`，xAI/Grok 为 `xai.json`。Manager 决定 scope、schema、freshness 和写入时机；同一供应商文件内按接入方式和账户 scope 隔离，各订阅来源只提供已认证的目录读取逻辑。持久层不得成为模型可用性的 authority。损坏或不兼容的供应商文件会在该供应商下一次成功发现时重建。
+
+已有 Codex 登录可通过本地 Codex `model/list` 读取其当前账户校验过的目录，再转换为 Ash 的记录；不直接复制 Codex 缓存中的不透明身份字段。Grok 的本地缓存可能包含凭据，Ash 通过已登录的模型目录请求提取模型信息，不复制原始缓存。Kimi Code 的已知订阅型号通过自己的目录来源写入 `kimi.json`，按登录设备隔离。未来 GLM 与 OpenCode 的订阅来源分别写入 `zai.json` 和 `opencode.json`。
 
 持久记录只保存 normalized metadata、scope fingerprint、官方 source revision 和时间，不保存：
 
@@ -1024,7 +1026,7 @@ contract test；未文档化 cache header 不成为正确性依赖。
 
 ### 阶段 4：持久缓存与维护流程
 
-- 增加可删除的 persisted observation cache；
+- ✅ 增加可删除的 persisted observation cache；
 - 内置 metadata 加 source URL、reviewed_at 和维护校验；
 - 建立官方文档变化的人工/自动审计流程；
 - 根据真实指标调整 TTL、backoff 和 warm-up 范围。

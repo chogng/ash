@@ -37,3 +37,18 @@ pub(super) fn definition() -> ProviderDefinition {
         InputTokenCountProfile::OpenAiResponses,
     ))
 }
+
+/// ChatGPT subscription models use the Codex backend with OAuth credentials.
+pub(super) fn subscription_definition() -> ProviderDefinition {
+    let mut definition = default_provider(
+        "openai",
+        "ChatGPT Subscription",
+        ProviderAdapter::OpenAi,
+        ApiProfile::OpenAiResponses,
+        "https://chatgpt.com/backend-api/codex",
+    )
+    .with_native_streaming();
+    definition.api_key_policy = crate::ApiKeyPolicy::Unsupported;
+    definition.model_catalog_policy = crate::ModelCatalogPolicy::AllowUnlisted;
+    definition
+}

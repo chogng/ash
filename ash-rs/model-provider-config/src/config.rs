@@ -24,6 +24,9 @@ pub struct ModelContextConfig {
 #[serde(rename_all = "camelCase")]
 pub struct ModelProviderConfig {
     pub provider: ProviderId,
+    #[serde(skip)]
+    #[schemars(skip)]
+    pub access_mode: ProviderAccessMode,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub custom: Option<CustomProviderConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -38,6 +41,7 @@ impl ModelProviderConfig {
     pub fn new(provider: ProviderId) -> Self {
         Self {
             provider,
+            access_mode: ProviderAccessMode::Api,
             custom: None,
             base_url: None,
             max_output_tokens: None,
@@ -73,6 +77,16 @@ impl ModelProviderConfig {
         }
         Ok(())
     }
+}
+
+/// The single active connection for a provider. Credentials can remain stored
+/// when this changes, but catalog discovery and requests use only this mode.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ProviderAccessMode {
+    #[default]
+    Api,
+    Subscription,
 }
 
 /// User-defined API connection, independent of built-in provider identities.
@@ -206,6 +220,7 @@ impl CustomProviderConfig {
 #[serde(rename_all = "camelCase")]
 pub struct NormalizedModelProviderConfig {
     pub provider: ProviderId,
+    pub access_mode: ProviderAccessMode,
     pub api_profile: ApiProfile,
     pub base_url: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]

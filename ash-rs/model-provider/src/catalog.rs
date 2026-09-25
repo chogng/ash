@@ -1,5 +1,7 @@
-mod xai;
-pub(crate) use xai::xai_catalog_binding;
+mod subscription;
+pub(crate) use subscription::chatgpt_catalog_binding;
+pub(crate) use subscription::kimi_catalog_binding;
+pub(crate) use subscription::xai_catalog_binding;
 
 use crate::diagnostics::DiagnosticClient;
 use ash_async_utils::CancellationSource;

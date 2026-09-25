@@ -63,8 +63,8 @@ use ash_model_provider::ModelRuntimeRequest;
 use ash_model_provider::TokenizerAssetCatalog;
 use ash_model_provider::UnavailableModel;
 use ash_model_provider_config::ModelProviderConfig;
+use ash_model_provider_config::ProviderAccessMode;
 use ash_model_provider_config::ProviderConfigRegistry;
-use ash_model_provider_config::StaticModelRuntime;
 use ash_model_provider_config::find_static_model;
 use ash_models_manager::CatalogQuery;
 use ash_models_manager::CatalogScopeKey;
@@ -1342,6 +1342,7 @@ pub fn open_local_app_server_with_codebase_providers(
             Arc::clone(&profile_secrets),
         ),
     }
+    .with_catalog_cache(options.profile_root.join("cache/models"))
     .with_response_diagnostics(Arc::new(diagnostics.clone()))
     .with_local_tokenizers(local_tokenizers)
     .with_chatgpt_oauth(Arc::clone(&chatgpt_oauth))
@@ -2007,12 +2008,7 @@ impl ModelSnapshotResolver for ModelProviderSnapshotResolver {
                 ash_model_provider::ModelProviderError::ConfigurationMissing,
             ));
         };
-        let provider = config.selected_provider().cloned().or_else(|| {
-            let model = config.model.as_ref()?;
-            let runtime = find_static_model(model)?.runtime;
-            (runtime != StaticModelRuntime::ProviderApi)
-                .then(|| ModelProviderConfig::new(model.provider.clone()))
-        });
+        let provider = config.selected_provider().cloned();
         let Some(provider) = provider else {
             return Arc::new(UnavailableModel::from_error(
                 ash_model_provider::ModelProviderError::ConfigurationMissing,
@@ -2040,8 +2036,7 @@ impl ModelService for ConfigBackedModelService {
         selection: ModelSelection<'_>,
     ) -> Result<Option<Arc<dyn ModelService>>, CoreError> {
         let config = self.config_for_selection(selection)?;
-        let budget =
-            context_budget_for_config(&config, &self.provider_configs, &self.models_manager)?;
+        let budget = self.context_budget_for_resolved(&config)?;
         let billing_scope = billing_scope_for_config(&config);
         Ok(Some(Arc::new(FrozenModelService {
             provider: ProviderModelService::new(self.resolver.resolve(&config)),
@@ -2057,17 +2052,7 @@ impl ModelService for ConfigBackedModelService {
 
     fn context_budget(&self, selection: ModelSelection<'_>) -> Result<ContextBudget, CoreError> {
         let config = self.config_for_selection(selection)?;
-        if let Some(model) = &config.model
-            && model.provider.as_str() == xai::XAI_PROVIDER_ID
-        {
-            let provider = &config.providers[&model.provider];
-            let info = self
-                .catalog_provider
-                .model_info(provider, model)
-                .map_err(|error| CoreError::Model(error.to_string()))?;
-            return context_budget_for_model(&info, provider, &self.provider_configs);
-        }
-        context_budget_for_config(&config, &self.provider_configs, &self.models_manager)
+        self.context_budget_for_resolved(&config)
     }
 
     fn image_input_policy(
@@ -2086,7 +2071,11 @@ impl ModelService for ConfigBackedModelService {
         let Some(model) = config.model.as_ref() else {
             return Ok(None);
         };
-        let default_effort = if model.provider.as_str() == xai::XAI_PROVIDER_ID {
+        let default_effort = if config
+            .providers
+            .get(&model.provider)
+            .is_some_and(|provider| provider.access_mode == ProviderAccessMode::Subscription)
+        {
             self.catalog_provider
                 .model_info(&config.providers[&model.provider], model)
                 .map_err(|error| CoreError::Model(error.to_string()))?
@@ -2202,15 +2191,7 @@ impl ModelCatalog for ConfigBackedModelService {
     fn list(
         &self,
     ) -> Result<Vec<ash_app_server_protocol::protocol::model::ModelCatalogEntry>, CoreError> {
-        let mut config = self.resolved_config()?;
-        let subscription =
-            ash_protocol::ProviderId::new(xai::XAI_PROVIDER_ID).expect("constant provider ID");
-        if self.provider_configs.get(&subscription).is_some() {
-            config
-                .providers
-                .entry(subscription.clone())
-                .or_insert_with(|| ModelProviderConfig::new(subscription));
-        }
+        let config = self.resolved_config()?;
         let registry = self
             .provider_configs
             .with_configs(config.providers.values())
@@ -2240,7 +2221,8 @@ impl ModelCatalog for ConfigBackedModelService {
             if let Err(error) = self.catalog_runtime.block_on(manager.read(
                 scope.clone(),
                 if provider.provider.as_str() == "ollama"
-                    || provider.provider.as_str() == xai::XAI_PROVIDER_ID
+                    || provider.access_mode == ProviderAccessMode::Subscription
+                    || scope.source_scope().as_str().starts_with("chatgpt:")
                 {
                     ash_models_manager::CatalogReadPolicy::CachePreferred
                 } else {
@@ -2293,7 +2275,10 @@ impl ModelCatalog for ConfigBackedModelService {
                 .providers
                 .get(&model.provider)
                 .is_none_or(|provider| provider.custom.is_none())
-            && model.provider.as_str() != xai::XAI_PROVIDER_ID
+            && config
+                .providers
+                .get(&model.provider)
+                .is_none_or(|provider| provider.access_mode == ProviderAccessMode::Api)
             && !models.iter().any(|entry| entry.model == model)
         {
             let resolved = manager
@@ -2326,6 +2311,30 @@ impl ModelCatalog for ConfigBackedModelService {
 }
 
 impl ConfigBackedModelService {
+    fn context_budget_for_resolved(
+        &self,
+        config: &ResolvedConfig,
+    ) -> Result<ContextBudget, CoreError> {
+        if let Some(model) = &config.model
+            && config
+                .providers
+                .get(&model.provider)
+                .is_some_and(|provider| provider.access_mode == ProviderAccessMode::Subscription)
+        {
+            let provider = &config.providers[&model.provider];
+            let info = self
+                .catalog_provider
+                .model_info(provider, model)
+                .map_err(|error| CoreError::Model(error.to_string()))?;
+            let registry = self
+                .provider_configs
+                .with_configs(config.providers.values())
+                .map_err(|error| CoreError::Model(error.to_string()))?;
+            return context_budget_for_model(&info, provider, &registry);
+        }
+        context_budget_for_config(config, &self.provider_configs, &self.models_manager)
+    }
+
     fn config_for_selection(
         &self,
         selection: ModelSelection<'_>,
@@ -2338,17 +2347,22 @@ impl ConfigBackedModelService {
             config.model = Some(model.clone());
         }
         if let Some(model) = &config.model
-            && model.provider.as_str() == xai::XAI_PROVIDER_ID
+            && config
+                .providers
+                .get(&model.provider)
+                .is_some_and(|provider| provider.access_mode == ProviderAccessMode::Subscription)
         {
             let provider = config
                 .providers
                 .entry(model.provider.clone())
                 .or_insert_with(|| ModelProviderConfig::new(model.provider.clone()));
-            let binding = self
+            let Some(binding) = self
                 .catalog_provider
                 .catalog_binding(provider)
                 .map_err(|error| CoreError::Model(error.to_string()))?
-                .ok_or_else(|| CoreError::Model("xAI Subscription is not signed in".into()))?;
+            else {
+                return Ok(config);
+            };
             self.catalog_runtime
                 .block_on(self.models_manager.read(
                     binding.scope().clone(),
@@ -2368,9 +2382,28 @@ impl ConfigBackedModelService {
     }
 
     fn resolve_config(&self, user: &ResolvedConfigSnapshot) -> Result<ResolvedConfig, CoreError> {
-        resolve_local_config(user, self.dir_config.as_deref()).map_err(|error| {
-            CoreError::Model(format!("failed to resolve directory config: {}", error.0))
-        })
+        let mut config =
+            resolve_local_config(user, self.dir_config.as_deref()).map_err(|error| {
+                CoreError::Model(format!("failed to resolve directory config: {}", error.0))
+            })?;
+        for id in ["openai", "xai", "kimi"] {
+            let provider = ash_protocol::ProviderId::new(id).expect("built-in provider ID");
+            let configured = config
+                .providers
+                .get(&provider)
+                .cloned()
+                .unwrap_or_else(|| ModelProviderConfig::new(provider.clone()));
+            let effective = self
+                .catalog_provider
+                .effective_config(&configured)
+                .map_err(|error| CoreError::Model(error.to_string()))?;
+            if effective.access_mode == ProviderAccessMode::Subscription
+                || config.providers.contains_key(&provider)
+            {
+                config.providers.insert(provider, effective);
+            }
+        }
+        Ok(config)
     }
 }
 
@@ -2711,7 +2744,11 @@ fn billing_scope_for_config(config: &ash_config::ResolvedConfig) -> ModelBilling
     let Some(model) = config.model.as_ref() else {
         return ModelBillingScope::Unavailable;
     };
-    if model.provider.as_str() == xai::XAI_PROVIDER_ID {
+    if config
+        .providers
+        .get(&model.provider)
+        .is_some_and(|provider| provider.access_mode == ProviderAccessMode::Subscription)
+    {
         return ModelBillingScope::SubscriptionPlan;
     }
     let access = find_static_model(model)

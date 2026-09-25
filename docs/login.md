@@ -29,12 +29,12 @@ reauthentication-required 状态；它不把不同 Provider 的 credential 协�
 
 当前实现是 provider-neutral control plane：`InteractiveLoginDriver` 声明自己的 stable provider ID，接收 service-owned `LoginId`，返回 browser/device-code 挑战或立即连接成功，以及脱敏账户摘要。App Server 已暴露 `account/read`、`account/login/start`、`account/login/cancel`、带 provider 参数的 `account/logout`，并主动发布 `account/login/completed` 与 `account/updated`；`account/read` 返回 `accounts[]`，所以 ChatGPT 与 Kimi 可以同时登录。
 
-产品边界按认证能力划分：供应商提供并允许稳定的用户订阅 OAuth 时，通过 `ash-login` 暴露交互式账户登录；没有该能力但提供开发者 API 的供应商，通过模型凭据领域接受 API key。登录方法中不存在 API key 分支，两条路径也不会自动 fallback。
+产品边界按认证能力划分：供应商提供并允许稳定的用户订阅 OAuth 时，通过 `ash-login` 暴露交互式账户登录；开发者 API 通过模型凭据领域接受 API key。两种凭据可以同时保存；订阅账户就绪时，该供应商的模型列表与文本请求优先使用订阅。订阅不可用时才使用已保存的 API key，不会在一次失败的订阅请求中改走 API。
 
-本地默认 composition 同时安装两个 native driver。`ash-chatgpt` 与 `ash-kimi` 各自使用对应 device OAuth endpoint 和 public client ID，在本机交换/刷新 token，并将整个 credential envelope 保存到 profile SecretStore。两者都只向控制面投影脱敏账户。
+本地默认组合同时安装两个登录适配器。`ash-chatgpt` 与 `ash-kimi` 各自使用对应 device OAuth endpoint 和 public client ID，在本机交换或刷新 token；ChatGPT 使用 Codex 兼容的本地登录存储，Kimi 使用 profile SecretStore。两者都只向控制面提供脱敏账户信息。
 
-默认目录中的 `openai/*` subscription rows 显式标记 `runtime = chatgpt_subscription`，`kimi/kimi-k2.7-code` 标记 `runtime = kimi_code`；两者都由本地 `TurnExecutor` 执行，只在 request target 与 credential owner 上不同。`access = subscription` 只是接入方式，不能单独决定 target。现有 API-key rows 保持独立凭据路径，二者不互换。
-登录完成不会自动切换已有 Session 或 Thread 的执行路径。
+默认目录中的 `openai/gpt-5.6-sol` 等订阅模型显式标记 `runtime = chatgpt_subscription`，`kimi/kimi-k2.7-code` 标记 `runtime = kimi_code`。`ModelRef` 始终使用供应商 ID；当前账户状态决定有效接入方式，目录只展示该方式的模型，同名模型不会出现两次。订阅切换后，原来选择的模型若不在当前目录，需要在 `/model` 中重选。
+App Server 读取到已就绪的 ChatGPT 账户时登记 `openai` 供应商，使订阅模型出现在 `/model`；取消或尚未完成的登录不会登记。Ash 首次读取订阅目录时，若 Codex 有本地模型缓存，会通过 Codex 的本地 `model/list` 校验当前账户并转换可见条目；否则由 Ash 使用当前登录读取 ChatGPT 目录。转换后的模型信息存入 Ash profile 的 `cache/models/openai.json`，同一文件内按账户和接入方式隔离。xAI 写入 `xai.json`，Kimi Code 写入 `kimi.json`；这些文件都按供应商和账户 scope 管理。旧配置的 `xai-subscription` 模型引用迁为 `xai`；OpenAI 与 Kimi 的原有模型引用保持供应商 ID 不变。
 
 Kimi wire contract 以 [Kimi CLI 的官方 OAuth 实现](https://github.com/MoonshotAI/kimi-cli/blob/main/src/kimi_cli/auth/oauth.py) 为主依据，并与 [CLIProxyAPI 的 Kimi adapter](https://github.com/router-for-me/CLIProxyAPI/blob/main/internal/auth/kimi/kimi.go) 交叉验证。Ash 请求使用真实 `User-Agent: Ash/*` 与 `X-Msh-Platform: Ash`，不伪装成 Kimi CLI 或 CPA。
 

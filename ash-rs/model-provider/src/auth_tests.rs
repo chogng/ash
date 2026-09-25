@@ -25,7 +25,7 @@ fn catalog_reports_every_builtin_without_exposing_values() {
 
     let catalog = service.catalog().unwrap();
 
-    assert_eq!(catalog.len(), 14);
+    assert_eq!(catalog.len(), 13);
     assert!(catalog.iter().any(|entry| {
         entry.provider == openai
             && entry.api_key_policy == ApiKeyPolicy::Required
@@ -82,6 +82,19 @@ fn mutation_rejects_unsupported_and_invalid_keys() {
         service.set_api_key(&provider("ollama"), b"key".to_vec()),
         Err(ProviderCredentialError::ApiKeyUnsupported)
     ));
+    for id in ["openai", "kimi", "xai"] {
+        let mut config = ash_model_provider_config::ModelProviderConfig::new(provider(id));
+        config.access_mode = ash_model_provider_config::ProviderAccessMode::Subscription;
+        let registry = ProviderConfigRegistry::builtin()
+            .with_configs([&config])
+            .unwrap();
+        let subscription =
+            ProviderCredentialService::new(registry, Arc::new(MemorySecretStore::default()));
+        assert!(matches!(
+            subscription.set_api_key(&provider(id), b"key".to_vec()),
+            Err(ProviderCredentialError::ApiKeyUnsupported)
+        ));
+    }
     assert!(matches!(
         service.set_api_key(&provider("openai"), b"bad\nkey".to_vec()),
         Err(ProviderCredentialError::InvalidApiKey)

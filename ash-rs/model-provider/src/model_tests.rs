@@ -278,6 +278,7 @@ fn provider_config_with_endpoint(
     base_url: impl Into<String>,
 ) -> ModelProviderConfig {
     ModelProviderConfig {
+        access_mode: ash_model_provider_config::ProviderAccessMode::Api,
         custom: None,
         provider: provider_id(provider),
         base_url: Some(base_url.into()),
@@ -788,6 +789,12 @@ fn chatgpt_subscription_runtime_uses_local_oauth_and_ash_agent_loop() {
         responses_response("Hello from ChatGPT"),
     )));
     let secrets = Arc::new(MemorySecretStore::default());
+    secrets
+        .store(
+            &provider_api_key_secret_key(&provider_id("openai")),
+            &SecretValue::new(b"openai-api-key".to_vec()),
+        )
+        .unwrap();
     let home = tempfile::tempdir().unwrap();
     use base64::Engine;
     let jwt = |value: Value| {
@@ -918,6 +925,13 @@ fn chatgpt_subscription_runtime_uses_local_oauth_and_ash_agent_loop() {
         model.invoke(&input),
         Err(ModelProviderError::Credential(_))
     ));
+    assert!(secrets.load(&disconnected).unwrap().is_none());
+    assert!(
+        secrets
+            .load(&SecretKey::new("provider/chatgpt-subscription/disconnected").unwrap())
+            .unwrap()
+            .is_some()
+    );
     assert!(transport.0.request.lock().unwrap().is_none());
     secrets.delete(&disconnected).unwrap();
     std::fs::remove_file(auth_path).unwrap();
@@ -1023,10 +1037,17 @@ impl OperationClient for CapturingSubscriptionTransport {
 
 #[test]
 fn kimi_subscription_runtime_uses_local_oauth_and_the_coding_api() {
+    let cache = tempfile::tempdir().unwrap();
     let transport = Arc::new(CapturingTransport::new(completion_response(
         "Hello from Kimi Code",
     )));
     let secrets = Arc::new(MemorySecretStore::default());
+    secrets
+        .store(
+            &provider_api_key_secret_key(&provider_id("kimi")),
+            &SecretValue::new(b"kimi-api-key".to_vec()),
+        )
+        .unwrap();
     secrets
         .store(
             &SecretKey::new("provider/kimi/current/oauth").unwrap(),
@@ -1039,8 +1060,9 @@ fn kimi_subscription_runtime_uses_local_oauth_and_the_coding_api() {
     let runtime = ModelProviderRuntime::with_client_and_secrets(
         ProviderConfigRegistry::builtin(),
         transport.clone(),
-        secrets,
+        secrets.clone(),
     )
+    .with_catalog_cache(cache.path().join("models"))
     .with_kimi_oauth(kimi_oauth);
     let model = runtime
         .build_model(
@@ -1061,6 +1083,49 @@ fn kimi_subscription_runtime_uses_local_oauth_and_the_coding_api() {
             .any(|header| { header.name() == "X-Msh-Platform" && header.value() == "Ash" })
     );
     assert_eq!(request["model"], "kimi-for-coding");
+
+    let binding = runtime
+        .catalog_binding(&provider_config("kimi"))
+        .unwrap()
+        .unwrap();
+    let manager = runtime
+        .models_manager_for_config(&provider_config("kimi"))
+        .unwrap();
+    tokio::runtime::Builder::new_current_thread()
+        .build()
+        .unwrap()
+        .block_on(manager.refresh(binding.scope().clone(), binding.source()))
+        .unwrap();
+    let catalog = manager
+        .list(
+            &[binding.scope().clone()],
+            &ash_models_manager::CatalogQuery::all(),
+        )
+        .unwrap();
+    assert_eq!(catalog.len(), 1);
+    assert_eq!(catalog[0].model(), &model_ref("kimi", "kimi-k2.7-code"));
+    assert_eq!(
+        catalog[0].info().access,
+        ash_protocol::ModelAccess::Subscription
+    );
+    let persisted = std::fs::read_to_string(cache.path().join("models/kimi.json")).unwrap();
+    assert!(persisted.contains("kimi-k2.7-code"));
+    assert!(!persisted.contains("kimi-access"));
+    assert!(!persisted.contains("kimi-api-key"));
+
+    secrets
+        .store(
+            &SecretKey::new("provider/kimi/current/oauth").unwrap(),
+            &SecretValue::new(
+                br#"{"access_token":"other-access","refresh_token":"other-refresh","token_type":"Bearer","scope":"coding","expires_at":4102444800,"device_id":"other-device","credential_revision":4}"#.to_vec(),
+            ),
+        )
+        .unwrap();
+    let changed = runtime
+        .catalog_binding(&provider_config("kimi"))
+        .unwrap()
+        .unwrap();
+    assert_ne!(binding.scope(), changed.scope());
 }
 
 #[test]
@@ -1997,7 +2062,7 @@ fn every_builtin_provider_applies_its_authentication_without_subscription_header
         providers.len(),
         ProviderConfigRegistry::builtin()
             .providers()
-            .filter(|provider| provider.id.as_str() != "xai-subscription")
+            .filter(|provider| !provider.id.as_str().ends_with("-subscription"))
             .count()
     );
     for provider in providers {

@@ -11,6 +11,11 @@ name = "ash_models_manager"
 path = "src/lib.rs"
 
 [dependencies]
+fs2 = { workspace = true }
+log = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
 tokio = { workspace = true, features = ["rt", "sync"] }
 ash-model-provider-config = { workspace = true }
 ash-prompts = { workspace = true }

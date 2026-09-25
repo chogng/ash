@@ -170,14 +170,15 @@ invoker、request/response validation、OpenAI-compatible/Ollama runtime resolve
 WebSocket eligibility 由独立的 `WebSocketApiProfile` 声明，不能从
 `ModelOutputTransport` 或 HTTP compatibility 推断。`connect_responses` 返回调用者拥有的 `ResponsesModelSession`，支持完整请求、准确增量、预热、已存 API key 轮换后的重连及关闭；不自动切换 HTTP 或重放。`connect_realtime` 由独立的 `RealtimeApiProfile` 授权，接受独立的 Realtime 模型 ID，拒绝订阅文本模型，返回公共 Realtime GA 会话。三种 OpenAI WebSocket 会话均在握手时使用已存 API key；默认 Agent 调用仍走 HTTP，未增加语音 UI。
 `ProviderCredentialService` 是供应商 API Key 的唯一所有者：App Server 通过它校验并写入 host 注入的 `SecretStore`，direct 和 semantic runtime 通过它解析 `ApiKeyPolicy` 与 `ApiKeyHeader`。`Provider` 合并 adapter 声明的固定 Header 与认证 Header，并唯一持有最终 `ResolvedApiTarget`；各 provider adapter 只负责 endpoint、模型名映射、固定 Header 和专属计数。Anthropic 的现有 API key 通道使用 `x-api-key`；Google OpenAI 兼容生成接口及其余远端 adapter 使用 Bearer Header；Ollama 不读取 Key，OpenAI-compatible 允许无 Key endpoint。
-更多 stream profile 与动态 catalog 的长期设计仍在系统文档中演进。完整
+订阅模型目录读取集中在 `src/catalog/subscription.rs`：ChatGPT 适配器优先读取 Codex 当前账户校验后的本地目录，无法使用时由 Ash 请求 ChatGPT；xAI 适配器读取已登录账户的模型目录。两者只返回标准化观察结果，缓存由 `ash-models-manager` 按供应商写入 Ash profile。更多 stream profile 与动态 catalog 的长期设计仍在系统文档中演进。
+
 ChatGPT subscription 通过 `ash-chatgpt` 提供的 fresh authenticated target 进入 OpenAI Responses adapter；Agent loop 仍由 Ash Core `TurnExecutor` 持有。该订阅接口拒绝公开 API 的 `prompt_cache_breakpoint` 字段；runtime 选择明确的 `ApiEndpoint::ChatGptResponses`，不改写缓存字段或组装路由头。`ash-api` 统一处理这些协议规则，完整结果、流式调用和认证重试共用同一 API 入口。
 新增能力应保持 invoker immutable、profile explicit、
 provider adapter private，以及 config/catalog/codec/operation/network 分层。
 
 当前 runtime 已为 Ollama 实现 `ModelCatalogSource`，通过独立的 `ash-ollama` 调用 `/api/tags` 与
-`/api/show`，并与模型调用共享 operation client。其他 provider 的动态 discovery endpoint/DTO 和
-credential binding 属于下一阶段 adapter 工作。静态 invocation resolution 已统一进入 manager。
+`/api/show`，并与模型调用共享 operation client。ChatGPT 与 xAI 的订阅目录也已接入；其他 provider 的动态 discovery endpoint/DTO 和
+credential binding 属于各自的后续适配工作。静态 invocation resolution 已统一进入 manager。
 
 当前 input-token preflight 已贯穿 `ModelInvoker → ProviderAdapter → ash-api → OperationClient` 的
 caller-owned cancellation。所有 estimated endpoint 使用额外 1%/至少 32 tokens 的保守记账余量；这

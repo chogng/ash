@@ -434,16 +434,19 @@ fn accepted_stream_failure_does_not_claim_http_401_or_auth_recovery() {
 }
 
 #[test]
-fn later_invocations_do_not_inherit_previous_unauthorized_evidence() {
+fn rejected_chatgpt_credentials_block_later_invocations() {
     let diagnostics = Arc::new(CapturedDiagnostics::default());
-    let (_home, _client, model) =
+    let (_home, client, model) =
         fixture_with_diagnostics(ResponseCase::Denied, Some(diagnostics.clone()));
     assert!(model.invoke(&request()).is_err());
-    assert!(model.invoke(&request()).is_err());
+    assert!(matches!(
+        model.invoke(&request()),
+        Err(ModelProviderError::Credential(_))
+    ));
     let reports = diagnostics.0.lock().unwrap();
     assert_eq!(reports.len(), 2);
     assert!(reports[0].first_unauthorized.is_some());
-    assert_eq!(reports[1].attempts, 1);
+    assert_eq!(reports[1].attempts, 0);
     assert_eq!(
         reports[0]
             .first_unauthorized
@@ -454,19 +457,11 @@ fn later_invocations_do_not_inherit_previous_unauthorized_evidence() {
             .as_deref(),
         Some("rejected-0")
     );
-    assert_eq!(
-        reports[1]
-            .first_unauthorized
-            .as_ref()
-            .unwrap()
-            .response
-            .request_id
-            .as_deref(),
-        Some("rejected-2")
-    );
-    assert_eq!(reports[1].latest, reports[1].first_unauthorized);
+    assert!(reports[1].first_unauthorized.is_none());
+    assert!(reports[1].latest.is_none());
     assert_eq!(
         reports[1].recovery,
-        response_debug_context::AuthRecovery::Failed
+        response_debug_context::AuthRecovery::NotAttempted
     );
+    assert_eq!(client.attempts.load(Ordering::SeqCst), 2);
 }

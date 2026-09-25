@@ -556,3 +556,136 @@ async fn changed_provider_definitions_replace_seed_cache_and_keep_unaffected_dis
     );
     assert_eq!(source.calls.load(Ordering::SeqCst), 1);
 }
+
+#[tokio::test]
+async fn disk_cache_restores_each_subscription_scope_after_restart() {
+    let root = tempfile::tempdir().unwrap();
+    let directory = root.path().join("models");
+    let manager = ModelsManager::new(registry()).with_disk_cache(directory.clone());
+    for (scope_name, model_name) in [("account-a", "alpha-a"), ("account-b", "alpha-b")] {
+        let scope = dynamic_scope("flexible", scope_name);
+        manager
+            .refresh(
+                scope.clone(),
+                Arc::new(QueueSource::new([Ok(modified(
+                    &scope,
+                    DiscoveryCoverage::CompleteAgentCatalog,
+                    [DiscoveredModel::new(model_id(model_name)).with_metadata(
+                        ModelMetadataPatch {
+                            display_name: Some(format!("Model {model_name}")),
+                            ..Default::default()
+                        },
+                    )],
+                ))])),
+            )
+            .await
+            .unwrap();
+    }
+
+    assert!(directory.join("flexible.json").is_file());
+    let restarted = ModelsManager::new(registry()).with_disk_cache(directory);
+    for (scope_name, model_name) in [("account-a", "alpha-a"), ("account-b", "alpha-b")] {
+        let scope = dynamic_scope("flexible", scope_name);
+        let snapshot = restarted.snapshot(&scope).unwrap();
+        assert_eq!(snapshot.entries().len(), 1);
+        assert_eq!(snapshot.entries()[0].model().model, model_id(model_name));
+        assert_eq!(
+            snapshot.entries()[0].availability(),
+            ModelAvailability::Available
+        );
+        assert_eq!(
+            snapshot.entries()[0].info().display_name,
+            format!("Model {model_name}")
+        );
+    }
+    assert!(
+        restarted
+            .snapshot(&dynamic_scope("flexible", "account-c"))
+            .unwrap()
+            .entries()
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn disk_cache_separates_providers_and_escapes_file_names() {
+    let root = tempfile::tempdir().unwrap();
+    let directory = root.path().join("models");
+    let providers = ProviderConfigRegistry::from_definitions([
+        definition("first", ModelCatalogPolicy::AllowUnlisted),
+        definition("second", ModelCatalogPolicy::AllowUnlisted),
+        definition("../outside", ModelCatalogPolicy::AllowUnlisted),
+    ])
+    .unwrap();
+    let manager = ModelsManager::new(providers.clone()).with_disk_cache(directory.clone());
+    for (provider, model) in [
+        ("first", "first-model"),
+        ("second", "second-model"),
+        ("../outside", "escaped-model"),
+    ] {
+        let scope = dynamic_scope(provider, "same-account");
+        manager
+            .refresh(
+                scope.clone(),
+                Arc::new(QueueSource::new([Ok(modified(
+                    &scope,
+                    DiscoveryCoverage::CompleteAgentCatalog,
+                    [DiscoveredModel::new(model_id(model))],
+                ))])),
+            )
+            .await
+            .unwrap();
+    }
+    for (file, present, absent) in [
+        ("first.json", "first-model", "second-model"),
+        ("second.json", "second-model", "first-model"),
+        ("%2E%2E%2Foutside.json", "escaped-model", "first-model"),
+    ] {
+        let content = std::fs::read_to_string(directory.join(file)).unwrap();
+        assert!(content.contains(present));
+        assert!(!content.contains(absent));
+    }
+    assert!(!root.path().join("outside.json").exists());
+    let restarted = ModelsManager::new(providers).with_disk_cache(directory);
+    for (provider, model) in [
+        ("first", "first-model"),
+        ("second", "second-model"),
+        ("../outside", "escaped-model"),
+    ] {
+        let snapshot = restarted
+            .snapshot(&dynamic_scope(provider, "same-account"))
+            .unwrap();
+        assert_eq!(snapshot.entries()[0].model().model, model_id(model));
+    }
+}
+
+#[tokio::test]
+async fn corrupt_disk_cache_is_rebuilt_from_discovery() {
+    let root = tempfile::tempdir().unwrap();
+    let directory = root.path().join("models");
+    std::fs::create_dir_all(&directory).unwrap();
+    std::fs::write(directory.join("flexible.json"), b"invalid json").unwrap();
+    let scope = dynamic_scope("flexible", "account-a");
+    let manager = ModelsManager::new(registry()).with_disk_cache(directory.clone());
+    assert!(manager.snapshot(&scope).unwrap().entries().is_empty());
+    manager
+        .refresh(
+            scope.clone(),
+            Arc::new(QueueSource::new([Ok(modified(
+                &scope,
+                DiscoveryCoverage::CompleteAgentCatalog,
+                [DiscoveredModel::new(model_id("alpha-a"))],
+            ))])),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        ModelsManager::new(registry())
+            .with_disk_cache(directory)
+            .snapshot(&scope)
+            .unwrap()
+            .entries()
+            .len(),
+        1
+    );
+}

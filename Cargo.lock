@@ -2096,6 +2096,11 @@ dependencies = [
  "ash-model-provider-config",
  "ash-prompts",
  "ash-protocol",
+ "fs2",
+ "log",
+ "serde",
+ "serde_json",
+ "tempfile",
  "tokio",
 ]
 

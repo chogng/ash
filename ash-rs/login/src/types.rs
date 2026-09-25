@@ -76,8 +76,8 @@ pub enum LoginMethod {
 impl LoginMethod {
     pub fn provider_id(self) -> &'static str {
         match self {
-            Self::OpenAiChatGptBrowser | Self::OpenAiChatGptDeviceCode => "openai-chatgpt",
-            Self::KimiDeviceCode => "kimi",
+            Self::OpenAiChatGptBrowser | Self::OpenAiChatGptDeviceCode => "chatgpt-subscription",
+            Self::KimiDeviceCode => "kimi-subscription",
             Self::XaiDeviceCode => "xai-subscription",
         }
     }

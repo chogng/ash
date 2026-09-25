@@ -34,7 +34,7 @@ impl SubscriptionProvider {
     }
     fn id(self) -> &'static str {
         match self {
-            Self::ChatGpt => "openai-chatgpt",
+            Self::ChatGpt => "chatgpt-subscription",
             Self::Xai => "xai-subscription",
         }
     }

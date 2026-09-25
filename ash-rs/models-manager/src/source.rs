@@ -5,13 +5,15 @@ use ash_protocol::ModelId;
 use ash_protocol::ModelLifecycle;
 use ash_protocol::Personality;
 use ash_protocol::ReasoningEffort;
+use serde::Deserialize;
+use serde::Serialize;
 use std::fmt;
 use std::future::Future;
 use std::pin::Pin;
 use std::time::Duration;
 use std::time::SystemTime;
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ModelCapabilitiesPatch {
     pub tools: Option<CapabilitySupport>,
     pub reasoning: Option<CapabilitySupport>,
@@ -20,7 +22,7 @@ pub struct ModelCapabilitiesPatch {
     pub image_detail_original: Option<CapabilitySupport>,
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ModelMetadataPatch {
     pub access: Option<ash_protocol::ModelAccess>,
     pub display_name: Option<String>,
@@ -33,7 +35,7 @@ pub struct ModelMetadataPatch {
     pub lifecycle: Option<ModelLifecycle>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DiscoveredModel {
     pub id: ModelId,
     pub metadata: ModelMetadataPatch,
@@ -53,20 +55,20 @@ impl DiscoveredModel {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum DiscoveryCoverage {
     CompleteAgentCatalog,
     Partial,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum CatalogValidator {
     Etag(String),
     LastModified(String),
     SourceRevision(String),
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CatalogCacheHint {
     fresh_for: Option<Duration>,
     stale_usable_for: Option<Duration>,
@@ -96,7 +98,7 @@ impl CatalogCacheHint {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DiscoveredCatalog {
     pub scope: CatalogScopeKey,
     pub coverage: DiscoveryCoverage,

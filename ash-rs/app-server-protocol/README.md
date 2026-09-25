@@ -88,7 +88,7 @@
 
 - `account/login/start` 的 `method: {type: "xaiDeviceCode"}` 返回设备授权链接、验证码和 `loginId`；取消与完成沿用 `account/login/cancel` 和 `account/login/completed`。
 - 开始 xAI 登录时注册空的提供商配置，保留已有配置，供登录后保存模型选择。账户 provider 为 `xai-subscription`；`account/logout` 按该 provider 退出。凭证仅保存在后端，账户 RPC 不返回 token。
-- `model/list` 根据当前账户的 `/models-v2` 目录返回模型，切换账户后旧目录不可用于调用。`account/read` 刷新 xAI 身份与实时套餐；`account/rateLimits/read` 支持 `xai-subscription`，使用同一个登录 ID 校验整个查询。
+- `model/list` 在订阅账户就绪时根据当前账户的 `/models-v2` 目录返回 `xai` 模型；订阅不可用时使用已保存的 xAI API 配置。切换账户后旧目录不可用于调用。`account/read` 刷新 xAI 身份与实时套餐；`account/rateLimits/read` 支持 `xai-subscription`，使用同一个登录 ID 校验整个查询。
 - 额度结果的 `plan` 可为空。ChatGPT 继续使用 `limits` 和 `credits`；xAI 使用可选的 `xai` 字段，保留小数百分比、上游周期、访问资格和 USD 分字符串。缺失值表示未提供，不推导零用量、余额或允许状态。`xai` 为空时不序列化。
 - 查询只读；取消或登录改变会丢弃旧结果。403/426/429 不刷新凭证，401 最多恢复一次。`account/updated` 发布经当前登录身份检查的资料。
 - `ThreadItem.reasoning.state` 保存带作用域的加密 Responses 项；重载历史和工具续轮保留完整项，切换账户、模型或端点后不再发送旧项。

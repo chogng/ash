@@ -39,12 +39,13 @@ use std::sync::Mutex;
 use std::sync::Weak;
 use std::thread;
 
-pub const OPENAI_CHATGPT_PROVIDER_ID: &str = "openai-chatgpt";
+pub const CHATGPT_SUBSCRIPTION_PROVIDER_ID: &str = "chatgpt-subscription";
 pub const CHATGPT_RESPONSES_BASE_URL: &str = "https://chatgpt.com/backend-api/codex";
 
 pub(crate) const AUTH_BASE_URL: &str = "https://auth.openai.com";
 pub(crate) const CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
-const DISCONNECTED_KEY: &str = "provider/openai-chatgpt/disconnected";
+const DISCONNECTED_KEY: &str = "provider/chatgpt-subscription/disconnected";
+const LEGACY_DISCONNECTED_KEY: &str = "provider/openai-chatgpt/disconnected";
 
 /// Sanitized ChatGPT OAuth or credential failure.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -147,6 +148,24 @@ impl ChatGptOAuth {
         self.api_target_for(CHATGPT_RESPONSES_BASE_URL)
     }
 
+    /// Returns the ready account identity used to scope its model catalog.
+    pub fn account_id(&self) -> Result<Option<String>, ChatGptError> {
+        let Some(credential) = self.load_credential()? else {
+            return Ok(None);
+        };
+        if self.account_snapshot(&credential).status != AccountStatus::Ready {
+            return Ok(None);
+        }
+        credential
+            .identity()
+            .map(|identity| Some(identity.account_id))
+    }
+
+    /// Path to the Codex catalog beside the external login when Codex owns the account.
+    pub fn codex_model_cache_path(&self) -> Option<PathBuf> {
+        self.auth.codex_model_cache_path()
+    }
+
     pub(crate) fn api_target_for(&self, base_url: &str) -> Result<ChatGptApiTarget, ChatGptError> {
         if self.disconnected()? {
             return Err(ChatGptError::new("ChatGPT is disconnected in Ash"));
@@ -167,11 +186,37 @@ impl ChatGptOAuth {
         SecretKey::new(DISCONNECTED_KEY).expect("static connection key is valid")
     }
 
+    fn legacy_disconnected_key() -> SecretKey {
+        SecretKey::new(LEGACY_DISCONNECTED_KEY).expect("static legacy connection key is valid")
+    }
+
     fn disconnected(&self) -> Result<bool, ChatGptError> {
-        self.secrets
+        if self
+            .secrets
             .load(&Self::disconnected_key())
-            .map(|value| value.is_some())
-            .map_err(|_| ChatGptError::new("Ash connection state could not be read"))
+            .map_err(|_| ChatGptError::new("Ash connection state could not be read"))?
+            .is_some()
+        {
+            return Ok(true);
+        }
+        let legacy = self
+            .secrets
+            .load(&Self::legacy_disconnected_key())
+            .map_err(|_| ChatGptError::new("Ash connection state could not be read"))?;
+        let Some(legacy) = legacy else {
+            return Ok(false);
+        };
+        // Persist the new marker before deleting the old one so a restart cannot
+        // silently reconnect a user who had explicitly disconnected Ash.
+        self.secrets
+            .store(&Self::disconnected_key(), &legacy)
+            .and_then(|_| {
+                self.secrets
+                    .delete(&Self::legacy_disconnected_key())
+                    .map(|_| ())
+            })
+            .map_err(|_| ChatGptError::new("Ash connection state could not be saved"))?;
+        Ok(true)
     }
 
     pub(crate) fn load_credential(&self) -> Result<Option<TokenCredential>, ChatGptError> {
@@ -251,6 +296,7 @@ impl ChatGptOAuth {
     fn connect(&self) -> Result<(), ChatGptError> {
         self.secrets
             .delete(&Self::disconnected_key())
+            .and_then(|_| self.secrets.delete(&Self::legacy_disconnected_key()))
             .map(|_| ())
             .map_err(|_| ChatGptError::new("Ash connection state could not be saved"))
     }
@@ -258,7 +304,7 @@ impl ChatGptOAuth {
     fn account_snapshot(&self, credential: &TokenCredential) -> AccountSnapshot {
         AccountSnapshot {
             account: AccountRef {
-                provider: OPENAI_CHATGPT_PROVIDER_ID.into(),
+                provider: CHATGPT_SUBSCRIPTION_PROVIDER_ID.into(),
                 account_id: credential
                     .account_id
                     .clone()
@@ -328,7 +374,7 @@ impl ChatGptOAuth {
 
 impl InteractiveLoginDriver for ChatGptOAuth {
     fn provider_id(&self) -> &'static str {
-        OPENAI_CHATGPT_PROVIDER_ID
+        CHATGPT_SUBSCRIPTION_PROVIDER_ID
     }
 
     fn read_account(&self) -> Result<Option<AccountSnapshot>, LoginError> {
@@ -445,7 +491,7 @@ impl InteractiveLoginDriver for ChatGptOAuth {
     }
 
     fn logout(&self, account: &AccountRef) -> Result<(), LoginError> {
-        if account.provider != OPENAI_CHATGPT_PROVIDER_ID {
+        if account.provider != CHATGPT_SUBSCRIPTION_PROVIDER_ID {
             return Err(LoginError::new(
                 LoginErrorKind::InvalidInput,
                 "account is not owned by the ChatGPT login driver",

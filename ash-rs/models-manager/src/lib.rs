@@ -1,6 +1,7 @@
 //! Provider-independent model discovery, caching, resolution, effective metadata, and instructions.
 
 mod cache;
+mod disk_cache;
 mod error;
 mod filter;
 mod instructions;

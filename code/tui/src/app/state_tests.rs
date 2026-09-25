@@ -1084,9 +1084,9 @@ fn enter_provider_row(app: &mut App, label: &str) -> Option<AppCommand> {
                     api_key_configured: false,
                 },
                 ProviderCatalogEntryDto {
-                    provider: "xai-subscription".into(),
-                    display_name: "xAI Subscription".into(),
-                    api_key_policy: ProviderApiKeyPolicyDto::Unsupported,
+                    provider: "xai".into(),
+                    display_name: "xAI (Grok)".into(),
+                    api_key_policy: ProviderApiKeyPolicyDto::Required,
                     api_key_configured: false,
                 },
             ],
@@ -1226,7 +1226,7 @@ fn chatgpt_external_login_error_shows_codex_instructions_and_allows_retry() {
             match request["method"].as_str().unwrap() {
                 "account/read" => {
                     response["result"] = serde_json::json!({"revision":1,"accounts":[{
-                        "provider":"openai-chatgpt","accountId":"account-1","status":"reauthenticationRequired",
+                        "provider":"chatgpt-subscription","accountId":"account-1","status":"reauthenticationRequired",
                         "email":null,"displayName":"ChatGPT","organization":null,"plan":"pro","credentialRevision":1
                     }]})
                 }

@@ -22,7 +22,7 @@ pub(crate) fn load<T: JsonRpcTransport>(client: &mut AppServerClient<T>) -> Resu
         .filter(|account| {
             matches!(
                 account.provider.as_str(),
-                "openai-chatgpt" | "xai-subscription"
+                "chatgpt-subscription" | "xai-subscription"
             )
         })
         .collect();

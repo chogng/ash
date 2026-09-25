@@ -115,7 +115,7 @@ provider/kimi/current/oauth
 ```
 
 这里的 account segment 必须是 opaque ID，不能直接放 email、token 或 workspace name。
-ChatGPT 凭据按 [Codex 兼容约定](chatgpt-subscription.md) 保存于 Codex 用户存储，Ash 按 Codex 是否可发现选择只读复用或维护，不在 profile SecretStore 中保存 token 副本；SecretStore 仅保存 `provider/openai-chatgpt/disconnected`。Kimi 的凭据和刷新仍由本机 adapter 及 profile SecretStore 负责。
+ChatGPT 凭据按 [Codex 兼容约定](chatgpt-subscription.md) 保存于 Codex 用户存储，Ash 按 Codex 是否可发现选择只读复用或维护，不在 profile SecretStore 中保存 token 副本；SecretStore 仅保存 `provider/chatgpt-subscription/disconnected`，旧断开标记在读取时一次性迁移。Kimi 的凭据和刷新仍由本机适配器及 profile SecretStore 负责。
 MCP/Connector 使用自己的 namespace，不能把 Provider key schema 当成通用 credential schema。
 
 ## 5. Backend 策略

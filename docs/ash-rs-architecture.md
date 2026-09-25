@@ -244,7 +244,7 @@ persistence 由 [`secrets.md`](secrets.md) 维护；interactive login control pl
 [`login.md`](login.md) 维护。目录模型不创建统一 credential/OAuth crate，也不让 Core、API 或
 network client 读取 secret store。
 
-ChatGPT 订阅通过 [`chatgpt-subscription.md`](chatgpt-subscription.md) 接入：`ash-chatgpt` 在本机执行 device OAuth、refresh 与 SecretStore persistence，并向 `ash-model-provider` 提供 fresh authenticated target。完整 Agent loop 继续由 Ash Core `TurnExecutor` 持有。产品 composition 使用 exact ModelRef 对应静态 row 的 `runtime = chatgpt_subscription` 选择 target，不会由“已登录”隐式切换模型。
+ChatGPT 订阅通过 [`chatgpt-subscription.md`](chatgpt-subscription.md) 接入：`ash-chatgpt` 在本机执行 device OAuth、refresh 与 SecretStore persistence，并向 `ash-model-provider` 提供 fresh authenticated target。完整 Agent loop 继续由 Ash Core `TurnExecutor` 持有。产品 composition 保持 `openai` 供应商身份；订阅账户就绪时优先使用订阅目录与目标，订阅不可用时使用已保存的 API key。
 
 ## 3. Protocol 边界
 

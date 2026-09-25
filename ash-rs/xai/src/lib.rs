@@ -273,6 +273,13 @@ impl XaiOAuth {
             .map(|credential| credential.account_id.clone()))
     }
 
+    /// Reads subscription readiness from the current local credential without a network call.
+    pub fn subscription_ready(&self) -> Result<bool, XaiError> {
+        Ok(self
+            .active_credential()?
+            .is_some_and(|credential| credential.is_usable() && !self.grok_rejected(&credential)))
+    }
+
     /// Refreshes a rejected credential at most once, without crossing a login boundary.
     pub fn recover_unauthorized(
         &self,

@@ -32,3 +32,18 @@ pub(super) fn definition() -> ProviderDefinition {
             ]),
     )
 }
+
+/// Kimi Code subscription models use the coding endpoint with OAuth credentials.
+pub(super) fn subscription_definition() -> ProviderDefinition {
+    let mut definition = default_provider(
+        "kimi",
+        "Kimi Subscription",
+        ProviderAdapter::Kimi,
+        ApiProfile::OpenAiChatCompletions,
+        "https://api.kimi.com/coding/v1",
+    )
+    .with_native_streaming();
+    definition.api_key_policy = crate::ApiKeyPolicy::Unsupported;
+    definition.model_catalog_policy = crate::ModelCatalogPolicy::ListedOnly;
+    definition
+}

@@ -47,6 +47,14 @@ pub(crate) fn apply_command(
                     .map(|model| model.model_ref());
             }
         }
+        UserConfigCommand::EnsureProvider { provider } => {
+            document
+                .providers
+                .entry(provider.clone())
+                .or_insert_with(|| {
+                    ash_model_provider_config::ModelProviderConfig::new(provider.clone())
+                });
+        }
         UserConfigCommand::RemoveProvider { provider } => {
             if document
                 .agent

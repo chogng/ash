@@ -39,6 +39,7 @@ scope。晚到的旧请求只可能提交到旧 scope。
 src/
 ├── manager.rs      # read/refresh/singleflight 与 list/resolve orchestration
 ├── cache.rs        # per-scope state、clock/freshness 与 snapshot generation rebuild
+├── disk_cache.rs   # profile 内按供应商分文件保存目录 observation
 ├── source.rs       # consumer-owned discovery port 与 observation patch
 ├── snapshot.rs     # immutable snapshot、generation、provenance、warning
 ├── model_info.rs   # 解析结果、未收录模型信息、配置覆盖和压缩阈值建议

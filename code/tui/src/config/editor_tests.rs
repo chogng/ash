@@ -378,8 +378,9 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
     state.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     let _ = state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     assert_eq!(state.visible_items().len(), 4);
-    assert_eq!(state.visible_items()[0].label(), "OpenAI");
-    assert_eq!(state.visible_items()[1].label(), "Ollama");
+    assert_eq!(state.visible_items()[0].label(), "OpenAI API key");
+    assert_eq!(state.visible_items()[1].label(), "ChatGPT");
+    assert_eq!(state.visible_items()[2].label(), "Ollama");
     assert!(
         state
             .visible_items()
@@ -392,7 +393,7 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
             .unwrap(),
         ConfigSelectionAction::OpenProviderApiKey { .. }
     ));
-    assert!(state.visible_items()[1].id().is_none());
+    assert!(state.visible_items()[2].id().is_none());
 }
 
 #[test]

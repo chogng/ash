@@ -9,6 +9,7 @@ use ash_file_access::DirId;
 use ash_file_access::Permission;
 use ash_file_access::Permissions;
 use ash_model_provider_config::ModelProviderConfig;
+use ash_protocol::ModelRef;
 use ash_protocol::ProviderId;
 use serde::Deserialize;
 use sha2::Digest;
@@ -17,7 +18,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
 
-pub(crate) const CURRENT_FILE_SCHEMA_VERSION: i64 = 5;
+pub(crate) const CURRENT_FILE_SCHEMA_VERSION: i64 = 6;
 // Raise this only when the product support window no longer includes the removed versions.
 const MIN_SUPPORTED_FILE_SCHEMA_VERSION: i64 = 1;
 
@@ -73,6 +74,7 @@ pub(crate) fn decode(source: &str) -> Result<DecodedDocument, ConfigError> {
         .as_table_mut()
         .ok_or_else(|| ConfigError("user configuration root must be a TOML table".into()))?;
     let version = root.remove("schemaVersion");
+    let migrate_subscription = !matches!(version.as_ref(), Some(toml::Value::Integer(6)));
     let rewrite_required = match version {
         None => {
             migrate_unversioned(root)?;
@@ -104,9 +106,12 @@ pub(crate) fn decode(source: &str) -> Result<DecodedDocument, ConfigError> {
             ));
         }
     };
-    let document = value
+    let mut document = value
         .try_into::<UserConfigDocument>()
         .map_err(|error| ConfigError(error.to_string()))?;
+    if migrate_subscription {
+        migrate_subscription_models(&mut document);
+    }
     document.validate()?;
     Ok(DecodedDocument {
         document,
@@ -128,6 +133,51 @@ pub(crate) fn encode(document: &UserConfigDocument) -> Result<String, ConfigErro
     root.extend(fields.clone());
     toml::to_string_pretty(&toml::Value::Table(root))
         .map_err(|error| ConfigError(error.to_string()))
+}
+
+fn migrate_subscription_models(document: &mut UserConfigDocument) {
+    let old = ProviderId::new("xai-subscription").expect("legacy provider ID");
+    let current = ProviderId::new("xai").expect("built-in provider ID");
+    let migrate = |model: &mut ModelRef| {
+        if model.provider == old {
+            model.provider = current.clone();
+        }
+    };
+    if let Some(model) = &mut document.agent.model {
+        migrate(model);
+    }
+    if let crate::ApprovalReviewModelSelection::Explicit { model } =
+        &mut document.agent.approval_review_model
+    {
+        migrate(model);
+    }
+    if let Some(model) = &mut document.agent.commit_message_model {
+        migrate(model);
+    }
+    if let Some(advisor) = &mut document.agent.advisor {
+        migrate(&mut advisor.model);
+    }
+    if let Some(models) = &mut document.codebase.models {
+        migrate(&mut models.embedding_model);
+        if let Some(model) = &mut models.rerank_model {
+            migrate(model);
+        }
+    }
+    if let Some(model) = &mut document.tool_search.embedding_model {
+        migrate(model);
+    }
+    // An egress grant binds both the old model identity and its old provider
+    // configuration. Require a fresh authorization for the new identity.
+    document
+        .commit_messages
+        .source_egress_grants
+        .retain(|_, grant| grant.model.provider != old);
+    if document.providers.remove(&old).is_some() {
+        document
+            .providers
+            .entry(current.clone())
+            .or_insert_with(|| ModelProviderConfig::new(current));
+    }
 }
 
 fn migrate_grep_backend(root: &mut toml::map::Map<String, toml::Value>) {
@@ -432,6 +482,9 @@ pub(crate) fn decode_legacy_json(source: &str) -> Result<UserConfigDocument, Con
         }
         root.insert("grep".into(), serde_json::json!({"backend": backend}));
     }
-    serde_json::from_value(value)
-        .map_err(|error| ConfigError(format!("invalid legacy config document: {error}")))
+    let mut document: UserConfigDocument = serde_json::from_value(value)
+        .map_err(|error| ConfigError(format!("invalid legacy config document: {error}")))?;
+    migrate_subscription_models(&mut document);
+    document.validate()?;
+    Ok(document)
 }

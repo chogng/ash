@@ -78,6 +78,27 @@ impl AppServer {
         self.configured_credentials()?
             .set_api_key(&provider, params.api_key.into_bytes())
             .map_err(provider_credential_error)?;
+        if let Some(store) = &self.config {
+            let snapshot = store
+                .read_snapshot()
+                .map_err(|_| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+            if !snapshot.values.providers.contains_key(&provider) {
+                store
+                    .apply(ash_config::ConfigCommandRequest {
+                        command_id: ash_protocol::CommandId::new(format!(
+                            "configure-api-key-{}-{}",
+                            provider,
+                            snapshot.revision.get()
+                        ))
+                        .expect("generated command ID"),
+                        expected_revision: snapshot.revision,
+                        command: ash_config::UserConfigCommand::EnsureProvider {
+                            provider: provider.clone(),
+                        },
+                    })
+                    .map_err(|_| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+            }
+        }
         result(&ProviderApiKeySetResult {
             provider: provider.to_string(),
             api_key_configured: true,

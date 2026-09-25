@@ -7,6 +7,7 @@ use ash_client::ClientResponse;
 use ash_client::OperationClient;
 use ash_client::OperationStreamSink;
 use ash_model_provider_config::ModelProviderConfig;
+use ash_model_provider_config::ProviderConfigRegistry;
 use ash_secrets::MemorySecretStore;
 use ash_secrets::SecretKey;
 use ash_secrets::SecretStore;
@@ -62,10 +63,11 @@ async fn live_grok_auth_is_read_only_and_uses_the_ash_model_pipeline() {
     )));
     let auth = xai::XaiOAuth::with_client(secrets, client.clone(), dir.path().join("lock"));
     let runtime = ModelProviderRuntime::builtin_with_client(client).with_xai_oauth(auth);
-    let config = ModelProviderConfig::new(ProviderId::new("xai-subscription").unwrap());
+    let config = ModelProviderConfig::new(ProviderId::new("xai").unwrap());
     let binding = runtime.catalog_binding(&config).unwrap().unwrap();
     let catalog = runtime
-        .models_manager()
+        .models_manager_for_config(&config)
+        .unwrap()
         .refresh(binding.scope().clone(), binding.source())
         .await;
     let fingerprint = || {
@@ -192,13 +194,25 @@ async fn xai_subscription_uses_live_catalog_replays_scoped_reasoning_and_observe
     let dir = tempfile::tempdir().unwrap();
     let secrets = Arc::new(MemorySecretStore::default());
     store_account(&secrets, "account-a");
+    secrets
+        .store(
+            &provider_api_key_secret_key(&ProviderId::new("xai").unwrap()),
+            &SecretValue::new(b"xai-api-key".to_vec()),
+        )
+        .unwrap();
     let proxy = Arc::new(Proxy::default());
     let auth = xai::XaiOAuth::with_client(secrets.clone(), proxy.clone(), dir.path().join("lock"));
-    let runtime = ModelProviderRuntime::builtin_with_client(proxy.clone()).with_xai_oauth(auth);
-    let config = ModelProviderConfig::new(ProviderId::new("xai-subscription").unwrap());
+    let runtime = ModelProviderRuntime::with_client_and_secrets(
+        ProviderConfigRegistry::builtin(),
+        proxy.clone(),
+        secrets.clone(),
+    )
+    .with_xai_oauth(auth);
+    let config = ModelProviderConfig::new(ProviderId::new("xai").unwrap());
     let binding = runtime.catalog_binding(&config).unwrap().unwrap();
     runtime
-        .models_manager()
+        .models_manager_for_config(&config)
+        .unwrap()
         .refresh(binding.scope().clone(), binding.source())
         .await
         .unwrap();
@@ -272,10 +286,11 @@ async fn xai_subscription_retries_only_one_http_401_before_any_stream_output() {
         let auth = xai::XaiOAuth::with_client(secrets, proxy.clone(), dir.path().join("lock"));
         let runtime =
             ModelProviderRuntime::builtin_with_client(proxy.clone()).with_xai_oauth(auth.clone());
-        let config = ModelProviderConfig::new(ProviderId::new("xai-subscription").unwrap());
+        let config = ModelProviderConfig::new(ProviderId::new("xai").unwrap());
         let binding = runtime.catalog_binding(&config).unwrap().unwrap();
         runtime
-            .models_manager()
+            .models_manager_for_config(&config)
+            .unwrap()
             .refresh(binding.scope().clone(), binding.source())
             .await
             .unwrap();

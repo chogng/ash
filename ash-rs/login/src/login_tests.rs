@@ -26,7 +26,7 @@ struct UnavailableDriver;
 
 impl InteractiveLoginDriver for FakeKimiDriver {
     fn provider_id(&self) -> &'static str {
-        "kimi"
+        "kimi-subscription"
     }
 
     fn read_account(&self) -> Result<Option<AccountSnapshot>, LoginError> {
@@ -54,7 +54,7 @@ impl InteractiveLoginDriver for FakeKimiDriver {
 
 impl InteractiveLoginDriver for UnavailableDriver {
     fn provider_id(&self) -> &'static str {
-        "openai-chatgpt"
+        "chatgpt-subscription"
     }
 
     fn read_account(&self) -> Result<Option<AccountSnapshot>, LoginError> {
@@ -82,7 +82,7 @@ impl InteractiveLoginDriver for UnavailableDriver {
 
 impl InteractiveLoginDriver for FakeDriver {
     fn provider_id(&self) -> &'static str {
-        "openai-chatgpt"
+        "chatgpt-subscription"
     }
 
     fn read_account(&self) -> Result<Option<AccountSnapshot>, LoginError> {
@@ -148,7 +148,7 @@ impl LoginEvents for RecordedEvents {
 fn account() -> AccountSnapshot {
     AccountSnapshot {
         account: AccountRef {
-            provider: "openai-chatgpt".into(),
+            provider: "chatgpt-subscription".into(),
             account_id: "acct_redacted".into(),
         },
         email: Some("person@example.test".into()),
@@ -216,14 +216,14 @@ fn multiple_provider_drivers_keep_independent_accounts_and_route_by_method() {
     let kimi: Arc<dyn InteractiveLoginDriver> = Arc::new(FakeKimiDriver::default());
     let service = LoginService::new_with_drivers([openai, kimi]).unwrap();
     assert_eq!(
-        service.logout_provider("openai-chatgpt").unwrap(),
+        service.logout_provider("chatgpt-subscription").unwrap(),
         LogoutOutcome::AlreadyLoggedOut
     );
 
     let started = service.begin(LoginMethod::KimiDeviceCode).unwrap();
     let kimi_account = AccountSnapshot {
         account: AccountRef {
-            provider: "kimi".into(),
+            provider: "kimi-subscription".into(),
             account_id: "current".into(),
         },
         email: None,
@@ -244,7 +244,7 @@ fn multiple_provider_drivers_keep_independent_accounts_and_route_by_method() {
 
     assert_eq!(service.read().unwrap().accounts, vec![kimi_account]);
     assert_eq!(
-        service.logout_provider("kimi").unwrap(),
+        service.logout_provider("kimi-subscription").unwrap(),
         LogoutOutcome::LoggedOut
     );
     assert!(service.read().unwrap().accounts.is_empty());
@@ -255,7 +255,7 @@ fn one_unavailable_provider_does_not_hide_another_provider_account() {
     let kimi = Arc::new(FakeKimiDriver::default());
     let kimi_account = AccountSnapshot {
         account: AccountRef {
-            provider: "kimi".into(),
+            provider: "kimi-subscription".into(),
             account_id: "current".into(),
         },
         email: None,
@@ -360,12 +360,12 @@ fn refresh_discards_only_the_provider_changed_during_the_read() {
         .unwrap(),
     );
     let mut kimi_account = account();
-    kimi_account.account.provider = "kimi".into();
+    kimi_account.account.provider = "kimi-subscription".into();
     *kimi.account.lock().unwrap() = Some(kimi_account.clone());
     let (release, read) = delayed_refresh(&driver, &service);
     let updated = service.update_account(account()).unwrap();
     release.send(()).unwrap();
     let result = read.join().unwrap();
-    assert_eq!(result.accounts, vec![kimi_account, account()]);
+    assert_eq!(result.accounts, vec![account(), kimi_account]);
     assert_eq!(result.revision, updated.revision + 1);
 }

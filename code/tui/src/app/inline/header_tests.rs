@@ -17,7 +17,7 @@ fn wide_header_keeps_pet_and_identity_information_together() {
         models: vec![
             ash_app_server_protocol::protocol::model::ModelCatalogEntry {
                 model: ash_protocol::ModelRef::new(
-                    ash_protocol::ProviderId::new("openai-chatgpt").unwrap(),
+                    ash_protocol::ProviderId::new("openai").unwrap(),
                     ash_protocol::ModelId::new("gpt-5.6").unwrap(),
                 ),
                 display_name: "gpt-5.6".into(),
@@ -35,7 +35,7 @@ fn wide_header_keeps_pet_and_identity_information_together() {
     };
     model.apply_model_summary(&ModelSummary::from_catalog(
         Some(ModelRefDto {
-            provider: "openai-chatgpt".into(),
+            provider: "openai".into(),
             model: "gpt-5.6".into(),
         }),
         None,
@@ -46,7 +46,7 @@ fn wide_header_keeps_pet_and_identity_information_together() {
     let rendered = buffer_text(&buffer, 80, 10);
 
     assert!(rendered.contains(concat!("Ash Code v", env!("CARGO_PKG_VERSION"))));
-    assert!(rendered.contains("openai-chatgpt/gpt-5.6 · Subscription"));
+    assert!(rendered.contains("openai/gpt-5.6 · Subscription"));
     assert!(rendered.contains("/work/ash"));
     assert_eq!(
         (super::pet::sprite().width(), super::pet::sprite().height()),

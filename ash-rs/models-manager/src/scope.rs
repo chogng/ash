@@ -1,4 +1,6 @@
 use ash_protocol::ProviderId;
+use serde::Deserialize;
+use serde::Serialize;
 use std::fmt;
 
 const STATIC_SOURCE_SCOPE: &str = "ash:provider-seed";
@@ -8,7 +10,7 @@ const STATIC_SOURCE_SCOPE: &str = "ash:provider-seed";
 /// Hosts should pass a one-way fingerprint rather than raw endpoint or credential material. A
 /// changed provider configuration must produce a new value so a late response cannot overwrite the
 /// new scope.
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct CatalogSourceScopeId(String);
 
 impl CatalogSourceScopeId {
@@ -42,7 +44,7 @@ impl fmt::Display for CatalogSourceScopeId {
 }
 
 /// Stable cache identity for one provider catalog authority.
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct CatalogScopeKey {
     provider: ProviderId,
     source_scope: CatalogSourceScopeId,

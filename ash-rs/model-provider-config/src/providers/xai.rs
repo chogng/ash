@@ -15,7 +15,7 @@ pub(super) fn definition() -> ProviderDefinition {
 /// Subscription credentials only ever target the Grok CLI proxy.
 pub(super) fn subscription_definition() -> ProviderDefinition {
     let mut definition = default_provider(
-        "xai-subscription",
+        "xai",
         "xAI Subscription",
         ProviderAdapter::Xai,
         ApiProfile::OpenAiResponses,

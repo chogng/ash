@@ -755,7 +755,7 @@ Session 不保存 model、下一次 approval mode 或 current Thread。`model/li
 App Server 在创建 Turn 时读取执行配置，并把实际 model、approval mode、tool mode 与 policy revision
 冻结到该 Turn。产品当前选中的分支属于产品导航状态，不进入 Core Session 视图。
 
-`model/list` 的 direct provider seed、ChatGPT 订阅条目和 Kimi Code 订阅条目都派生自 `ash-model-provider-config::STATIC_MODEL_CATALOG`。每个条目统一返回 provider-scoped identity、display name、`access`、完整 context window、automatic compaction threshold、`availableContextWindow`、capabilities、reasoning efforts 和默认 personality。`availableContextWindow` 使用与 Turn 执行相同的当前配置和预算规则，已经扣除 output reservation、safety margin 与 ordinary auto-compaction 边界；列目录不会调用 provider、`account/read` 或 upstream `model/list` 做健康检查。
+`model/list` 的 direct provider seed、ChatGPT 订阅条目和 Kimi Code 订阅条目的基础信息来自 `ash-model-provider-config::STATIC_MODEL_CATALOG`。ChatGPT、xAI 等订阅登录后还可通过各自的模型目录补充条目；订阅目录存入 Ash profile 的 `cache/models/<provider>.json`，按供应商分文件、在文件内按账户隔离。每个条目统一返回 provider-scoped identity、display name、`access`、完整 context window、automatic compaction threshold、`availableContextWindow`、capabilities、reasoning efforts 和默认 personality。`availableContextWindow` 使用与 Turn 执行相同的当前配置和预算规则，已经扣除 output reservation、safety margin 与 ordinary auto-compaction 边界。列目录会按缓存策略读取订阅目录；它不是模型调用健康检查。
 Provider 配置、认证、账户 entitlement、rate limit、传输和模型端拒绝都由 `TurnExecutor` 调用的
 模型服务验证，并以该 Turn 的稳定错误出现；它们不回写模型列表。`access = subscription` 只表示
 接入方式。登录状态不会隐式改变已经创建的 Turn。
@@ -1033,7 +1033,7 @@ account/login/completed
 account/updated
 ```
 
-`account/rateLimits/read` 按 `{ provider, accountId }` 查询指定账号。支持 `provider = "openai-chatgpt"` 和 `"xai-subscription"`。本地组合复用对应供应商的登录与模型认证对象，通过 `backend-client::chatgpt` 或 `backend-client::xai` 读取后台数据，不接触客户端凭据。
+`account/rateLimits/read` 按 `{ provider, accountId }` 查询指定账号。支持 `provider = "chatgpt-subscription"` 和 `"xai-subscription"`。本地组合复用对应供应商的登录与模型认证对象，通过 `backend-client::chatgpt` 或 `backend-client::xai` 读取后台数据，不接触客户端凭据。
 
 - xAI 的 `limits` 为空、`credits` 为 `null`；`xai` 保留独立的信用额度合约：`usedPercent` 为小数，`periodType/periodStart/periodEnd` 为上游周期，`allowed/message` 为访问状态。`prepaidCents/onDemandUsedCents/onDemandCapCents` 为整数 USD 分字符串，避免跨语言精度损失。未提供的数据为 `null`；ChatGPT 不序列化 `xai`。
 - `account/read` 查询已就绪 xAI 账号的实时资料和套餐，并通过登录服务更新邮箱、姓名与组织；账号资料和额度查询均不持有全局读写锁。请求前后检查登录身份，取消或退出登录后的旧响应不进入账号状态。订阅接入不提供充值、购卡、充值提醒或付款入口。已有重置卡的查询和使用保留在 `backend-client::chatgpt`，尚未暴露为 RPC。

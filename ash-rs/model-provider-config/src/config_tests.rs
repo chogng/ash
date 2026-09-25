@@ -115,6 +115,7 @@ fn model_ref(provider: &str, model: &str) -> ash_protocol::ModelRef {
 #[test]
 fn model_provider_config_is_serializable_and_has_a_schema() {
     let config = ModelProviderConfig {
+        access_mode: crate::ProviderAccessMode::Api,
         custom: None,
         provider: provider_id("openai"),
         base_url: Some("https://example.test/v1".into()),
@@ -240,6 +241,7 @@ fn token_count_targets_and_model_support_are_normalized_explicitly() {
     let registry = ProviderConfigRegistry::builtin();
     let openai = registry
         .normalize(&ModelProviderConfig {
+            access_mode: crate::ProviderAccessMode::Api,
             custom: None,
             provider: provider_id("openai"),
             base_url: Some("https://proxy.test/v1".into()),
@@ -252,6 +254,7 @@ fn token_count_targets_and_model_support_are_normalized_explicitly() {
         .unwrap();
     let google_override = registry
         .normalize(&ModelProviderConfig {
+            access_mode: crate::ProviderAccessMode::Api,
             custom: None,
             provider: provider_id("google"),
             base_url: Some("https://proxy.test/v1/openai".into()),
@@ -401,6 +404,7 @@ fn configured_endpoint_is_required_and_overrides_are_normalized() {
 
     let normalized = registry
         .normalize(&ModelProviderConfig {
+            access_mode: crate::ProviderAccessMode::Api,
             custom: None,
             provider: provider_id("custom"),
             base_url: Some(" https://runtime.test/v1/ ".into()),
@@ -414,6 +418,7 @@ fn configured_endpoint_is_required_and_overrides_are_normalized() {
 #[test]
 fn static_validation_rejects_invalid_urls_and_zero_token_limits() {
     let invalid_url = ModelProviderConfig {
+        access_mode: crate::ProviderAccessMode::Api,
         custom: None,
         provider: provider_id("custom"),
         base_url: Some("file:///tmp/provider".into()),
@@ -426,6 +431,7 @@ fn static_validation_rejects_invalid_urls_and_zero_token_limits() {
     ));
 
     let invalid_tokens = ModelProviderConfig {
+        access_mode: crate::ProviderAccessMode::Api,
         custom: None,
         provider: provider_id("custom"),
         base_url: None,
@@ -442,6 +448,7 @@ fn static_validation_rejects_invalid_urls_and_zero_token_limits() {
 fn static_validation_rejects_zero_model_context_limits() {
     let model = ModelId::new("model").unwrap();
     let config = ModelProviderConfig {
+        access_mode: crate::ProviderAccessMode::Api,
         custom: None,
         provider: provider_id("custom"),
         base_url: None,
@@ -507,7 +514,7 @@ fn registry_merge_has_explicit_conflict_semantics() {
 #[test]
 fn builtins_are_valid_and_include_all_supported_adapters() {
     let registry = ProviderConfigRegistry::builtin();
-    assert_eq!(registry.providers().count(), 14);
+    assert_eq!(registry.providers().count(), 13);
     assert_eq!(
         registry.get(&provider_id("openai")).unwrap().adapter,
         ProviderAdapter::OpenAi
@@ -532,7 +539,11 @@ fn static_model_catalog_has_unique_valid_rows() {
         assert!(!spec.provider_id.trim().is_empty());
         assert!(!spec.model_id.trim().is_empty());
         assert!(!spec.display_name.trim().is_empty());
-        assert!(identities.insert((spec.provider_id, spec.model_id)));
+        assert!(identities.insert((
+            spec.provider_id,
+            spec.model_id,
+            spec.access == ash_protocol::ModelAccess::Subscription,
+        )));
         assert_eq!(
             spec.has_one_million_context(),
             spec.context_window == ash_protocol::ContextWindow::Known(1_000_000)
@@ -566,7 +577,10 @@ fn builtin_provider_models_and_defaults_derive_from_static_catalog() {
     for definition in registry.providers() {
         let specs = STATIC_MODEL_CATALOG
             .iter()
-            .filter(|spec| spec.provider_id == definition.id.as_str())
+            .filter(|spec| {
+                spec.provider_id == definition.id.as_str()
+                    && spec.access != ash_protocol::ModelAccess::Subscription
+            })
             .collect::<Vec<_>>();
         assert_eq!(
             definition.models,
@@ -599,6 +613,9 @@ fn builtin_provider_models_and_defaults_derive_from_static_catalog() {
             assert!(!spec.is_approval_review_default);
             assert!(!spec.supports_input_token_count);
         }
+        if spec.runtime == StaticModelRuntime::KimiCode {
+            assert_eq!(spec.provider_id, "kimi");
+        }
         if spec.supports_input_token_count {
             assert!(
                 registry
@@ -611,6 +628,36 @@ fn builtin_provider_models_and_defaults_derive_from_static_catalog() {
                         .supports(&ModelId::new(spec.model_id).unwrap()))
             );
         }
+    }
+}
+
+#[test]
+fn provider_subscription_mode_replaces_the_api_catalog_and_endpoint() {
+    for (provider, endpoint) in [
+        ("openai", "https://chatgpt.com/backend-api/codex"),
+        ("xai", "https://cli-chat-proxy.grok.com/v1"),
+        ("kimi", "https://api.kimi.com/coding/v1"),
+    ] {
+        let mut config = ModelProviderConfig::new(provider_id(provider));
+        config.access_mode = crate::ProviderAccessMode::Subscription;
+        let registry = ProviderConfigRegistry::builtin()
+            .with_configs([&config])
+            .unwrap();
+        let definition = registry.get(&config.provider).unwrap();
+        assert_eq!(definition.api_key_policy, ApiKeyPolicy::Unsupported);
+        assert!(
+            matches!(&definition.endpoint, EndpointPolicy::ProviderDefault { base_url } if base_url == endpoint)
+        );
+        assert!(
+            definition
+                .models
+                .iter()
+                .all(|model| model.access == ash_protocol::ModelAccess::Subscription)
+        );
+        assert_eq!(
+            registry.normalize(&config).unwrap().access_mode,
+            crate::ProviderAccessMode::Subscription
+        );
     }
 }
 

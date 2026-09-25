@@ -199,6 +199,25 @@ impl CodexAuthStore {
         Self { home }
     }
 
+    pub(crate) fn codex_model_cache_path(&self) -> Option<PathBuf> {
+        let config_path = self.home.join("config.toml");
+        if config_path.is_file() {
+            let config = std::fs::read_to_string(config_path).ok()?;
+            let config: toml::Value = toml::from_str(&config).ok()?;
+            // Codex may share this login while routing its model list to a custom provider.
+            let provider = config.get("model_provider").and_then(toml::Value::as_str);
+            if provider.is_some_and(|provider| provider != "openai")
+                || config
+                    .get("model_providers")
+                    .and_then(|providers| providers.get("openai"))
+                    .is_some()
+            {
+                return None;
+            }
+        }
+        Some(self.home.join("models_cache.json"))
+    }
+
     fn config(&self) -> Result<AuthConfig, ChatGptError> {
         let Some(bytes) = read_file(&self.home.join("config.toml"))? else {
             return Ok(AuthConfig::default());
