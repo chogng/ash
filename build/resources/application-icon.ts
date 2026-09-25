@@ -4,7 +4,6 @@ import { resolve } from "node:path";
 
 const repositoryRoot = resolve(import.meta.dirname, "../..");
 const source = resolve(repositoryRoot, "resources/win32/ash.svg");
-const windowSource = resolve(repositoryRoot, "resources/branding/ash-app-black-512.png");
 const executableOutput = resolve(repositoryRoot, "resources/win32/ash.ico");
 const windowOutput = resolve(repositoryRoot, "resources/win32/ash-512.png");
 const sizes = [16, 24, 32, 48, 64, 128, 256] as const;
@@ -46,7 +45,7 @@ export async function generateWindowsApplicationIcons(): Promise<{ executable: B
       directory.writeUInt32LE(offset, entry + 12);
       offset += image.length;
     }
-    return { executable: Buffer.concat([directory, ...images]), window: await readFile(windowSource) };
+    return { executable: Buffer.concat([directory, ...images]), window: await renderPng(512) };
   } finally {
     await browser.close();
   }

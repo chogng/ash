@@ -18,7 +18,6 @@ export interface IEditorWelcomeProject {
 
 /** Host-owned actions and data projected into the editor welcome page. */
 export interface EditorWelcomeOptions {
-	readonly productName?: string;
 	readonly actions?: {
 		readonly openFolder?: EditorWelcomeAction;
 		readonly cloneRepository?: EditorWelcomeAction;
@@ -67,7 +66,7 @@ export class EditorWelcome extends Disposable {
 		scroll.append(content);
 		this.element.append(scroll);
 
-		content.append(this.createBrand(ownerDocument, options));
+		content.append(this.createBrand(ownerDocument));
 		content.append(this.createCards(ownerDocument, options.actions));
 		this.recentSection = this.createRecentProjects(ownerDocument);
 		content.append(this.recentSection);
@@ -80,10 +79,7 @@ export class EditorWelcome extends Disposable {
 		this.renderRecentProjects(this.recentSection);
 	}
 
-	private createBrand(
-		ownerDocument: Document,
-		options: EditorWelcomeOptions,
-	): HTMLElement {
+	private createBrand(ownerDocument: Document): HTMLElement {
 		const brand = h(ownerDocument, "header");
 		brand.className = "ash-editor-group-welcome-brand";
 
@@ -93,20 +89,12 @@ export class EditorWelcome extends Disposable {
 
 		const name = h(ownerDocument, "div");
 		name.className = "ash-editor-group-welcome-name";
-		name.textContent = (options.productName ?? "Ash").toUpperCase();
+		name.textContent = "ASH";
 		brand.append(mark, name);
-
-		const plan = h(ownerDocument, "div");
-		plan.className = "ash-editor-group-welcome-plan";
-		plan.append(
-			this.createText(ownerDocument, "Local workspace"),
-			this.createText(ownerDocument, "·", "ash-editor-group-welcome-plan-separator"),
-			this.createText(ownerDocument, "Ready to build"),
-		);
 
 		const wrapper = h(ownerDocument, "div");
 		wrapper.className = "ash-editor-group-welcome-intro";
-		wrapper.append(brand, plan);
+		wrapper.append(brand);
 		return wrapper;
 	}
 
@@ -265,17 +253,6 @@ export class EditorWelcome extends Disposable {
 		path.className = "ash-editor-group-welcome-recent-path";
 		path.textContent = project.path;
 		item.append(name, path);
-	}
-
-	private createText(
-		ownerDocument: Document,
-		text: string,
-		className = "ash-editor-group-welcome-plan-item",
-	): HTMLSpanElement {
-		const element = h(ownerDocument, "span");
-		element.className = className;
-		element.textContent = text;
-		return element;
 	}
 
 	private run(action: EditorWelcomeAction | undefined): void {

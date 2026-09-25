@@ -26,17 +26,17 @@ Ash then updates its pinned copy before requiring metadata signed only by the ro
 ## Application branding
 
 Application icons are fixed and do not change with the editor color theme.
-`branding/ash-mark.svg` is the transparent vector source for the Ash mark;
-`branding/ash-app-black-512.png` is the supplied full-size black application icon.
-The application icon uses that mark on a rounded square: black with a white
-mark in `win32/ash.svg` and `app-ts/src/ash/workbench/browser/media/ash-light.svg`,
-and white with a black mark in the titlebar-only `ash-dark.svg`. The macOS,
-Linux, and Web icons use the black application icon.
+`branding/ash-app-black-512.png` is the supplied full-size black application icon
+used by macOS, Linux, and Web. The Windows application icon uses the same mark
+on a black rounded square in `win32/ash.svg`. The titlebar and editor welcome
+page use the cropped transparent `app-ts/src/ash/workbench/browser/media/ash-mark.svg`,
+tinted by their foreground color. The system tray uses transparent monochrome
+artwork from `tray/`.
 
 - `win32/ash.ico` contains 16, 24, 32, 48, 64, 128, and 256 pixel PNG images
   rendered from `win32/ash.svg`; `win32/ash-512.png` is the Rust window icon
-  copied from `branding/ash-app-black-512.png`. Run `pnpm app-icon:generate`
-  after changing either source and `pnpm app-icon:check` to verify both outputs.
+  rendered from that same SVG. Run `pnpm app-icon:generate` after changing the
+  Windows source and `pnpm app-icon:check` to verify both outputs.
   Electron development windows load the ICO directly. The Electron packaging
   command embeds it in `Ash.exe`, and the Rust `app` build embeds it in `app.exe`.
 - `darwin/ash.icns` is the macOS application bundle icon.
@@ -44,8 +44,8 @@ Linux, and Web icons use the black application icon.
 - The Rust Workbench embeds `win32/ash-512.png` for its Windows window icon.
 - `server/` contains the Web favicon, install icons, and manifest.
 - `tray/ash-black.svg` and `tray/ash-white.svg` are transparent monochrome
-  tray artwork. The matching 16, 24, and 32 pixel PNGs are ready for hosts
-  that need raster tray icons.
+  tray artwork. The matching 16, 24, and 32 pixel PNGs are packaged with the
+  Windows Electron application for different display scales.
 
 Vite copies `server/` unchanged to the renderer output root, and the browser
 Workbench and Sessions pages link those stable paths. On Windows x64,
@@ -58,9 +58,9 @@ use the same application ID as the running Electron process. Run
 `pnpm --dir app-ts package:win32:verify` to launch the packaged Workbench with
 Playwright after building the bundle.
 
-`ash-dark.svg` remains a renderer-only titlebar variant and is not a packaging
-source. The tray artwork is a resource; each host controls whether it creates
-a system tray item.
+The Windows Electron host installs a theme-aware tray icon while the application
+runs; clicking it focuses the Workbench. Closing the last window still exits the
+application.
 
 ## Icons
 

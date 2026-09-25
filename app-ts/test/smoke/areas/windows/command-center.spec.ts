@@ -2,6 +2,38 @@ import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
 
+test('titlebar toolbar icons fit inside their buttons', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const buttons = workbench.page.locator('.ash-workbench-titlebar .ash-toolbar .ash-action-view-item.icon > .ash-button');
+	await expect(buttons.first()).toBeVisible();
+	const iconBounds = await buttons.evaluateAll(elements => elements.map(button => {
+		const label = button.querySelector('.ash-icon-label');
+		const icon = label?.querySelector('svg.ash-icon');
+		if (!label || !icon) throw new Error('Toolbar icon button is missing its icon');
+		const labelRect = label.getBoundingClientRect();
+		const iconRect = icon.getBoundingClientRect();
+		const buttonRect = button.getBoundingClientRect();
+		return {
+			buttonWidth: buttonRect.width,
+			labelWidth: labelRect.width,
+			iconWidth: iconRect.width,
+			leftInset: iconRect.left - labelRect.left,
+			rightInset: labelRect.right - iconRect.right,
+			buttonLeftInset: iconRect.left - buttonRect.left,
+			buttonRightInset: buttonRect.right - iconRect.right,
+		};
+	}));
+	for (const bounds of iconBounds) {
+		expect(bounds.buttonWidth).toBe(22);
+		expect(bounds.iconWidth).toBe(16);
+		expect(bounds.labelWidth).toBeGreaterThanOrEqual(bounds.iconWidth);
+		expect(bounds.leftInset).toBeGreaterThanOrEqual(0);
+		expect(bounds.rightInset).toBeGreaterThanOrEqual(0);
+		expect(bounds.buttonLeftInset).toBeCloseTo(3, 1);
+		expect(bounds.buttonRightInset).toBeCloseTo(3, 1);
+	}
+});
+
 test('Quick Access has no backdrop and lets workbench controls receive clicks', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
@@ -24,7 +56,38 @@ test('titlebar command center opens command search and restores focus', async ({
 	await expect(commandCenter).toBeVisible();
 
 	const titlebar = page.locator('.ash-workbench-titlebar');
-	await expect(titlebar.locator('.ash-titlebar-app-icon')).toHaveCSS('background-image', /ash-(light|dark).*\.svg/u);
+	const appIcon = titlebar.locator('.ash-titlebar-app-icon');
+	await expect(appIcon).toHaveCSS('mask-image', /ash-mark.*\.svg/u);
+	await expect(appIcon).toHaveCSS('background-image', 'none');
+	await expect(appIcon).toHaveCSS('background-color', await appIcon.evaluate(element => getComputedStyle(element).color));
+	const markSize = await appIcon.evaluate(async element => {
+		const mask = getComputedStyle(element).maskImage;
+		const image = new Image();
+		image.src = mask.slice(5, -2);
+		await image.decode();
+		const canvas = document.createElement('canvas');
+		canvas.width = element.clientWidth;
+		canvas.height = element.clientHeight;
+		const context = canvas.getContext('2d')!;
+		context.drawImage(image, 0, 0, canvas.width, canvas.height);
+		const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+		let left = canvas.width;
+		let top = canvas.height;
+		let right = -1;
+		let bottom = -1;
+		for (let y = 0; y < canvas.height; y++) {
+			for (let x = 0; x < canvas.width; x++) {
+				if (pixels[(y * canvas.width + x) * 4 + 3] === 0) continue;
+				left = Math.min(left, x);
+				top = Math.min(top, y);
+				right = Math.max(right, x);
+				bottom = Math.max(bottom, y);
+			}
+		}
+		return { width: right - left + 1, height: bottom - top + 1 };
+	});
+	expect(markSize.width).toBeGreaterThanOrEqual(13);
+	expect(markSize.height).toBeGreaterThanOrEqual(13);
 	const [titlebarBounds, controlBounds] = await Promise.all([titlebar.boundingBox(), commandCenter.boundingBox()]);
 	expect(titlebarBounds).not.toBeNull();
 	expect(controlBounds).not.toBeNull();

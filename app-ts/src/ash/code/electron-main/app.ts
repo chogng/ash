@@ -2,10 +2,11 @@ import { OAuthCallbackHost } from "../../platform/connectors/electron-main/oauth
 import { RendererWorkspaceHost } from "../../platform/workspaces/electron-main/rendererWorkspaceHost.js";
 import { BrowserAutomationHost } from "../../platform/browser/electron-main/browserAutomationHostRoutes.js";
 import { rendererSystemHostRoutes } from "../../platform/native/electron-main/rendererSystemHostRoutes.js";
-import { nativeImage, shell } from "electron";
-import { app, BrowserWindow, dialog, ipcMain, Menu, screen, TouchBar, type Event as ElectronEvent, type MenuItemConstructorOptions } from "electron/main";
+import { nativeImage, nativeTheme, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, screen, TouchBar, Tray, type Event as ElectronEvent, type MenuItemConstructorOptions } from "electron/main";
 import type { DirGrant } from "../../platform/dirPermissions/common/dirPermissionsService.js";
 import { join } from "node:path";
+import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { isCancellationError } from "../../base/common/errors.js";
 import { Disposable, DisposableStore, DisposableTracker, installDisposableTracker, type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
@@ -212,7 +213,32 @@ export class AshApplication extends Disposable {
 			if (!this.quitRequested) app.quit();
 			return;
 		}
+		this.createTray();
 		await this.drainPendingWindowLaunches();
+	}
+
+	private createTray(): void {
+		if (process.platform !== 'win32') return;
+		const iconDirectory = app.isPackaged
+			? join(app.getAppPath(), 'resources', 'tray')
+			: join(app.getAppPath(), '..', 'resources', 'tray');
+		const loadIcon = (color: 'black' | 'white') => {
+			const icon = nativeImage.createFromPath(join(iconDirectory, `ash-${color}-16.png`));
+			icon.addRepresentation({ scaleFactor: 1.5, buffer: readFileSync(join(iconDirectory, `ash-${color}-24.png`)) });
+			icon.addRepresentation({ scaleFactor: 2, buffer: readFileSync(join(iconDirectory, `ash-${color}-32.png`)) });
+			return icon;
+		};
+		const blackIcon = loadIcon('black');
+		const whiteIcon = loadIcon('white');
+		const tray = new Tray(nativeTheme.shouldUseDarkColorsForSystemIntegratedUI ? whiteIcon : blackIcon);
+		tray.setToolTip(AshApplicationName);
+		tray.on('click', () => this.handleActivate());
+		const updateIcon = (): void => tray.setImage(nativeTheme.shouldUseDarkColorsForSystemIntegratedUI ? whiteIcon : blackIcon);
+		nativeTheme.on('updated', updateIcon);
+		this._register(toDisposable(() => {
+			nativeTheme.removeListener('updated', updateIcon);
+			tray.destroy();
+		}));
 	}
 
 	async disposeAfterStartupFailure(): Promise<void> {

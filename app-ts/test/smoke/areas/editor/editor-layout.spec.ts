@@ -12,12 +12,6 @@ test("empty editor distinguishes an empty window from an open workspace", async 
 	await expect(group.content).toBeVisible();
 	await expect(group.watermark).toBeVisible({ visible: welcomeVisible });
 	await expect(group.tabs).toHaveCount(0);
-	if (welcomeVisible) {
-		const mark = group.watermark.locator('.ash-editor-group-welcome-mark');
-		await expect(mark).toHaveAttribute('aria-hidden', 'true');
-		const backgroundImage = await mark.evaluate(element => getComputedStyle(element).backgroundImage);
-		expect(backgroundImage).toMatch(/ash-(light|dark).*\.svg/u);
-	}
 
 	await expect.poll(async () => editorGeometry(editors.element, group.element, group.title, group.content, group.watermark)).toEqual({
 		groupFillsEditorClient: true,
@@ -25,6 +19,26 @@ test("empty editor distinguishes an empty window from an open workspace", async 
 		titleHasHeight: true,
 		contentHasArea: true,
 		watermarkInsideContent: welcomeVisible ? true : null,
+	});
+});
+
+test.describe('welcome brand', () => {
+	test.use({ openWorkspace: false });
+
+	test('welcome displays only the Ash name above the actions', async ({ workbench }) => {
+		const welcome = workbench.editors.groupAt(0).watermark;
+		await expect(welcome.locator('.ash-editor-group-welcome-name')).toHaveText('ASH');
+		await expect(welcome.locator('.ash-editor-group-welcome-plan')).toHaveCount(0);
+		await expect(welcome.getByRole('button', { name: 'Open folder' })).toBeVisible();
+	});
+
+	test('welcome uses the theme-colored mark without a filled icon tile', async ({ workbench }) => {
+		const mark = workbench.editors.groupAt(0).watermark.locator('.ash-editor-group-welcome-mark');
+		await expect(mark).toBeVisible();
+		await expect(mark).toHaveAttribute('aria-hidden', 'true');
+		await expect(mark).toHaveCSS('mask-image', /ash-mark.*\.svg/u);
+		await expect(mark).toHaveCSS('background-image', 'none');
+		await expect(mark).toHaveCSS('background-color', await mark.evaluate(element => getComputedStyle(element).color));
 	});
 });
 

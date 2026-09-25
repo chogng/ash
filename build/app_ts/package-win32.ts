@@ -63,6 +63,7 @@ async function assembleBundle(stage: string, bundlePath: string, options: Map<st
   for (const part of ['main', 'preload', 'renderer']) {
     await cp(join(buildRoot, part), join(appStage, 'dist', part), { recursive: true });
   }
+  await cp(join(repositoryRoot, 'resources', 'tray'), join(appStage, 'resources', 'tray'), { recursive: true });
 
   const electronMetadata = JSON.parse(await readFile(join(appRoot, 'node_modules', 'electron', 'package.json'), 'utf8'));
   await lstat(python);
@@ -96,7 +97,7 @@ async function assembleBundle(stage: string, bundlePath: string, options: Map<st
     ignore: path => {
       const [top, second] = path.slice(1).split('/');
       if (!top) return false;
-      if (!['package.json', 'node_modules', 'dist', 'THIRD_PARTY_NOTICES.md'].includes(top)) return true;
+      if (!['package.json', 'node_modules', 'dist', 'resources', 'THIRD_PARTY_NOTICES.md'].includes(top)) return true;
       return top === 'node_modules' && ['.bin', 'electron'].includes(second);
     },
   });
@@ -146,6 +147,12 @@ async function validateBundle(path: string): Promise<void> {
     'resources/app/dist/main/src/main.js',
     'resources/app/dist/preload/src/ash/base/parts/sandbox/electron-browser/preload.cjs',
     'resources/app/dist/renderer/ash/electron-browser/workbench/workbench.html',
+    'resources/app/resources/tray/ash-black-16.png',
+    'resources/app/resources/tray/ash-black-24.png',
+    'resources/app/resources/tray/ash-black-32.png',
+    'resources/app/resources/tray/ash-white-16.png',
+    'resources/app/resources/tray/ash-white-24.png',
+    'resources/app/resources/tray/ash-white-32.png',
     'resources/ash-package.json',
     'resources/bin/ash-app-server.exe',
   ]) await lstat(join(path, file));

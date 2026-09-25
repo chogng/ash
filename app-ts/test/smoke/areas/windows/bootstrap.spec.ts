@@ -20,10 +20,16 @@ test('Desktop starts when its application entry loads after Electron is ready', 
 	const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory });
 	const entry = testInfo.outputPath('late-start.mjs');
 	await writeFile(entry, `
-import { app } from 'electron/main';
+import { app, Tray } from 'electron/main';
 import { bootstrapElectronMain } from ${JSON.stringify(pathToFileURL(join(mainOutput, 'bootstrap.js')).href)};
 bootstrapElectronMain();
 app.setAppPath(${JSON.stringify(desktop)});
+const setToolTip = Tray.prototype.setToolTip;
+Tray.prototype.setToolTip = function(text) {
+	globalThis.__ashTray = this;
+	globalThis.__ashTrayTooltip = text;
+	setToolTip.call(this, text);
+};
 void app.whenReady().then(async () => {
 	const { startElectronApplication } = await import(${JSON.stringify(pathToFileURL(join(mainOutput, 'ash/code/electron-main/startElectronApplication.js')).href)});
 	startElectronApplication({ initialModeId: 'code' });
@@ -42,6 +48,13 @@ void app.whenReady().then(async () => {
 			ready: app.isReady(),
 			windows: BrowserWindow.getAllWindows().length,
 		}))).toEqual({ ready: true, windows: 1 });
+		if (process.platform === 'win32') {
+			expect(await application.evaluate(() => (globalThis as typeof globalThis & { __ashTrayTooltip?: string }).__ashTrayTooltip)).toBe('Ash');
+			await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].minimize());
+			await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isMinimized())).toBe(true);
+			await application.evaluate(() => (globalThis as typeof globalThis & { __ashTray: { emit(event: string): void } }).__ashTray.emit('click'));
+			await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isMinimized())).toBe(false);
+		}
 	} finally {
 		await application.close();
 	}
@@ -81,7 +94,7 @@ test('Windows development launcher shows the Workbench window', async ({}, testI
 		const context = browser.contexts()[0];
 		await expect.poll(() => context.pages().some(page => page.url().includes('/workbench/workbench.html'))).toBe(true);
 		const page = context.pages().find(page => page.url().includes('/workbench/workbench.html'))!;
-		await expect(page.getByText('ASH CODE', { exact: true })).toBeVisible();
+		await expect(page.getByText('ASH', { exact: true })).toBeVisible();
 		const inspectorPort = Number(output.match(/Debugger listening on ws:\/\/127\.0\.0\.1:(\d+)/u)![1]);
 		const [target] = await (await fetch(`http://127.0.0.1:${inspectorPort}/json/list`)).json() as Array<{ webSocketDebuggerUrl: string }>;
 		const socket = new WebSocket(target.webSocketDebuggerUrl);

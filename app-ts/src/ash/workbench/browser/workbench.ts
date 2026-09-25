@@ -773,7 +773,6 @@ export class Workbench extends Disposable {
 			},
 			welcomeVisible: workbenchState === WorkbenchState.EMPTY,
 			welcome: {
-				productName: mode.title,
 				recentProjects: welcomeRecentProjects(),
 				actions: {
 					openFolder: workspaceOpenService.canOpenFolder

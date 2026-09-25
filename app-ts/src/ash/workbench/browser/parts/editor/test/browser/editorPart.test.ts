@@ -333,7 +333,6 @@ test("EditorPart renders the project welcome page and dispatches available cards
 	const editor = new EditorPart(dom.window.document.body, {
 		registry: new EditorPaneRegistry(),
 		welcome: {
-			productName: "Ash",
 			actions: {
 				openFolder: () => {
 					openFolderCount += 1;
@@ -348,7 +347,8 @@ test("EditorPart renders the project welcome page and dispatches available cards
 		".ash-editor-group-welcome",
 	);
 	assert.ok(welcome);
-	assert.match(welcome.textContent ?? "", /ASH/);
+	assert.equal(welcome.querySelector(".ash-editor-group-welcome-name")?.textContent, "ASH");
+	assert.equal(welcome.querySelector(".ash-editor-group-welcome-plan"), null);
 	assert.match(welcome.textContent ?? "", /Recent projects/);
 	assert.deepEqual(
 		[...welcome.querySelectorAll<HTMLButtonElement>(".ash-editor-group-welcome-card")]

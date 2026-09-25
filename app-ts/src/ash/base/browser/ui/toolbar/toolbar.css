@@ -29,7 +29,7 @@
   width: var(--ash-toolbar-action-size);
   min-width: var(--ash-toolbar-action-size);
   border: 0;
-  padding: 4px;
+  padding: 3px;
 }
 
 .ash-toolbar .ash-action-view-item.icon .ash-button-label,

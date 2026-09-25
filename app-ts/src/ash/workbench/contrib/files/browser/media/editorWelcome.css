@@ -38,12 +38,8 @@
 .ash-editor-group-welcome-mark {
   width: 42px;
   height: 42px;
-  background: center / contain no-repeat url("../../../../browser/media/ash-light.svg");
-}
-
-.ash-workbench[data-color-scheme="dark"] .ash-editor-group-welcome-mark,
-.ash-workbench[data-color-scheme="high-contrast-dark"] .ash-editor-group-welcome-mark {
-  background-image: url("../../../../browser/media/ash-dark.svg");
+  background-color: currentColor;
+  mask: center / contain no-repeat url("../../../../browser/media/ash-mark.svg");
 }
 
 .ash-editor-group-welcome-name {
@@ -51,19 +47,6 @@
   font-weight: var(--ash-font-weight-semi-bold);
   letter-spacing: .06em;
   line-height: 1;
-}
-
-.ash-editor-group-welcome-plan {
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 16px;
-  color: var(--ash-description-foreground);
-  font-size: var(--ash-font-size-body1);
-}
-
-.ash-editor-group-welcome-plan-separator {
-  color: var(--ash-muted-foreground);
 }
 
 .ash-editor-group-welcome-cards {
