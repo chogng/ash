@@ -39,6 +39,7 @@ export interface IExtUri {
 	getComparisonKey(uri: URI): string;
 	getComparisonKeyIgnoringFragment(uri: URI): string;
 	isEqual(left: URI | undefined, right: URI | undefined): boolean;
+	isEqualOrParent(base: URI, parentCandidate: URI, ignoreFragment?: boolean): boolean;
 	isEqualIgnoringFragment(
 		left: URI | undefined,
 		right: URI | undefined,
@@ -60,6 +61,13 @@ function normalizePercentEncoding(value: string): string {
 			? character
 			: `%${hexadecimal.toUpperCase()}`;
 	});
+}
+
+function comparisonPath(path: string, ignoreCase: boolean): string {
+	if (!ignoreCase) {
+		return normalizePercentEncoding(path);
+	}
+	return path.split('/').map(segment => encodeURIComponent(decodeURIComponent(segment).toLowerCase())).join('/');
 }
 
 function keyPart(value: string): string {
@@ -90,6 +98,23 @@ export class ExtUri implements IExtUri {
 		return this.getComparisonKey(left) === this.getComparisonKey(right);
 	}
 
+	isEqualOrParent(base: URI, parentCandidate: URI, ignoreFragment = false): boolean {
+		if (base.scheme !== parentCandidate.scheme || base.authority.toLowerCase() !== parentCandidate.authority.toLowerCase()) {
+			return false;
+		}
+		if (normalizePercentEncoding(base.query) !== normalizePercentEncoding(parentCandidate.query)) {
+			return false;
+		}
+		if (!ignoreFragment && normalizePercentEncoding(base.fragment) !== normalizePercentEncoding(parentCandidate.fragment)) {
+			return false;
+		}
+
+		const ignoreCase = this.ignorePathCasing(base);
+		const path = comparisonPath(base.path, ignoreCase).replace(/\/+$/u, '') || '/';
+		const parent = comparisonPath(parentCandidate.path, ignoreCase).replace(/\/+$/u, '') || '/';
+		return path === parent || path.startsWith(parent === '/' ? parent : `${parent}/`);
+	}
+
 	isEqualIgnoringFragment(
 		left: URI | undefined,
 		right: URI | undefined,
@@ -105,9 +130,7 @@ export class ExtUri implements IExtUri {
 	}
 
 	private createComparisonKey(uri: URI, includeFragment: boolean): string {
-		const path = this.ignorePathCasing(uri)
-			? decodeURIComponent(uri.path).toLowerCase()
-			: normalizePercentEncoding(uri.path);
+		const path = comparisonPath(uri.path, this.ignorePathCasing(uri));
 		const fragment = includeFragment
 			? normalizePercentEncoding(uri.fragment)
 			: "";

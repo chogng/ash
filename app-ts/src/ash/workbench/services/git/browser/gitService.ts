@@ -1,6 +1,7 @@
 import type { ConfigReadResult, GitConfigDto, GitHeadDto, GitRepositoryChangeDto, GitRepositoryDto, GitStatusResult } from "../../../../platform/app-server/common/generated/index.js";
 import { Emitter } from "../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import type { URI } from "../../../../base/common/uri.js";
 import type { AppServerConnectionState, IAppServerApi, IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -123,9 +124,11 @@ export class GitService extends Disposable implements IGitService {
 
 	repositoryForResource(resource: URI): GitRepository | undefined {
 		let match: GitRepository | undefined;
+		const pathOnlyResource = resource.withoutQuery().withoutFragment();
 		for (const repository of this.repositoryList) {
-			if (!isEqualOrParent(resource, repository.root)) continue;
-			if (!match || repositoryPath(repository.root).length > repositoryPath(match.root).length) match = repository;
+			const root = repository.root.withoutQuery().withoutFragment();
+			if (!extUriBiasedIgnorePathCase.isEqualOrParent(pathOnlyResource, root)) continue;
+			if (!match || root.path.length > match.root.path.length) match = repository;
 		}
 		return match;
 	}
@@ -366,18 +369,6 @@ function appendRelativePath(root: URI, relativePath: string): URI {
 
 function repositorySignature(repositories: readonly GitRepository[]): string {
 	return repositories.map(repository => `${repository.id}\0${repository.label}\0${repository.root}`).join("\n");
-}
-
-function isEqualOrParent(resource: URI, root: URI): boolean {
-	if (resource.scheme !== root.scheme || resource.authority.toLowerCase() !== root.authority.toLowerCase()) return false;
-	const candidate = repositoryPath(resource);
-	const parent = repositoryPath(root).replace(/\/$/u, "");
-	return candidate === parent || candidate.startsWith(`${parent}/`);
-}
-
-function repositoryPath(resource: URI): string {
-	const path = resource.scheme === "file" ? resource.fsPath.replaceAll("\\", "/") : decodeURIComponent(resource.path);
-	return resource.scheme === "file" && /^[A-Za-z]:\//u.test(path) ? path.toLowerCase() : path;
 }
 
 function toGitStatus(status: GitStatusResult, repository: GitRepository): GitStatus {

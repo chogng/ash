@@ -52,6 +52,32 @@ test("ExtUri normalizes URI spelling under an explicit casing policy", () => {
 	assert.equal(caseInsensitiveExtUri.isEqual(first, second), true);
 });
 
+test('ExtUri compares URI parents at path segment boundaries', () => {
+	const root = URI.parse('ash://workspace/project');
+	const child = URI.parse('ash://workspace/project/src/file.ts');
+
+	assert.equal(extUri.isEqualOrParent(child, root), true);
+	assert.equal(extUri.isEqualOrParent(root, child), false);
+	assert.equal(extUri.isEqualOrParent(URI.parse('ash://workspace/project-next/file.ts'), root), false);
+	assert.equal(extUri.isEqualOrParent(URI.parse('ash://other/project/file.ts'), root), false);
+	assert.equal(extUri.isEqualOrParent(child, URI.parse('file:///project')), false);
+	assert.equal(extUri.isEqualOrParent(child, URI.parse('ash://workspace/project/')), true);
+});
+
+test('ExtUri applies URI identity and casing rules to parent paths', () => {
+	const root = URI.parse('ash://workspace/Project?revision=1#anchor');
+	const child = URI.parse('ash://workspace/Project/src/file.ts?revision=1#anchor');
+
+	assert.equal(extUri.isEqualOrParent(child, root), true);
+	assert.equal(extUri.isEqualOrParent(child.withFragment('other'), root), false);
+	assert.equal(extUri.isEqualOrParent(child.withFragment('other'), root, true), true);
+	assert.equal(extUri.isEqualOrParent(child.withQuery('revision=2'), root), false);
+	assert.equal(extUri.isEqualOrParent(URI.parse('ash://workspace/project/src/file.ts?revision=1#anchor'), root), false);
+	assert.equal(caseInsensitiveExtUri.isEqualOrParent(URI.parse('ash://workspace/project/src/file.ts?revision=1#anchor'), root), true);
+	assert.equal(extUri.isEqualOrParent(URI.parse('ash://workspace/Project%2Fsrc/file.ts?revision=1#anchor'), root), false);
+	assert.equal(caseInsensitiveExtUri.isEqual(URI.parse('ash://workspace/a%2Fb'), URI.parse('ash://workspace/a/b')), false);
+});
+
 test("ResourceMap uses exact URI identity by default", () => {
 	const firstAnchor = URI.parse("ash://workspace/item#anchor=1");
 	const secondAnchor = URI.parse("ash://workspace/item#anchor=2");

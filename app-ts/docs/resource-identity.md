@@ -24,6 +24,33 @@ Path casing is a policy decision. The default policy treats local `file:` paths
 as written. `extUriBiasedIgnorePathCase` follows the current native platform,
 and remote providers can create an `ExtUri` matching their own semantics.
 
+`ExtUri.isEqualOrParent(base, parentCandidate)` checks directory boundaries
+under the same path casing policy. Scheme, authority, query, and fragment must
+match; callers can explicitly ignore the fragment. Git repository selection
+compares paths without query or fragment because those components describe a
+file view, not the repository location.
+
+## Alignment ownership
+
+The `base/common` directory currently has 61 matching implementation files,
+seven Ash-only files, and 92 implementation paths present only in VS Code.
+VS Code also has three declaration files absent from Ash. There are no case-only
+path differences. Missing paths enter implementation only when an Ash
+production caller reaches their responsibility.
+
+The following seven Ash-only paths were confirmed on 2026-09-25 to retain
+their current responsibilities:
+
+| Path | Responsibility |
+| --- | --- |
+| `environment.ts` | Runtime environment facts shared by Base and Platform |
+| `jsonValue.ts` | General JSON value validation |
+| `icon.ts`, `lxicons.ts`, `lxiconsLibrary.ts`, `lxiconsUtil.ts`, `productIcons.ts` | Ash icon contracts and generated product icon catalog |
+
+`workbench/services/git/browser/gitService.ts` was also confirmed as the owner
+of Ash Git repository selection. Its URI containment check uses the Base
+contract; repository discovery and selection remain in that service.
+
 ## UUIDs
 
 `uuid.ts` supplies validated UUID values. Domain-specific identifiers should be

@@ -91,6 +91,9 @@ test("GitService routes resources and requests to an explicitly selected reposit
 	]);
 	assert.equal(service.repositoryForResource(URI.file("/workspace/packages/nested/src/file.ts"))?.id, nestedId);
 	assert.equal(service.repositoryForResource(URI.file("/workspace/root.ts"))?.id, rootId);
+	assert.equal(service.repositoryForResource(URI.file('/workspace/packages/nested-other/file.ts'))?.id, rootId);
+	assert.equal(service.repositoryForResource(URI.parse('file:///workspace/packages/nested/src/file.ts?revision=1#preview'))?.id, nestedId);
+	assert.equal(service.repositoryForResource(URI.file('/outside/file.ts')), undefined);
 
 	const selected = await service.selectRepository(nestedId);
 	assert.equal(service.activeRepository?.id, nestedId);
