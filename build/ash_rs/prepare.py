@@ -262,17 +262,7 @@ def development_source_digest(
     paths = development_source_paths(root)
     if args.remote_runtime_bundle:
         paths.append(args.remote_runtime_bundle)
-    commit = None
-    if (root / ".git").exists():
-        result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            cwd=root,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if result.returncode == 0:
-            commit = result.stdout.strip()
+    # A frontend-only commit changes HEAD without changing the backend package inputs.
     return package_input_digest(
         paths,
         {
@@ -281,7 +271,6 @@ def development_source_digest(
             "protocol": protocol,
             "remoteRuntimeCatalogUrl": args.remote_runtime_catalog_url,
             "remoteRuntimeCatalogSha256": args.remote_runtime_catalog_sha256,
-            "gitCommit": commit,
             "buildEnvironment": development_build_environment(),
         },
     )

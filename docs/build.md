@@ -65,7 +65,7 @@ Ash 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保
 根 `Justfile` 是三个产品和根 Rust workspace 的统一入口。根 `package.json` 提供 pnpm workspace 与 Electron、Browser、Stanza 等 Node 构建入口；`pnpm test` 还会调用 Rust 协议验证。完整 Rust workspace 构建由 `Justfile` 编排。
 
 - Just 在 Windows 上调用 PowerShell 7 的 `-CommandWithArgs`，保留参数边界；其他平台调用 `sh`。
-- `just ash-desktop` 内部执行 `pnpm --dir app-ts dev`；VS Code 的 `Ash Desktop (Electron + Rust)` 配置使用同一 Just 入口。`Ash Desktop (Electron)` 配置只构建前端并复用兼容的 App Server，适合反复调试 TypeScript UI。
+- `just ash-desktop` 内部执行 `pnpm --dir app-ts dev`；VS Code 的 `Ash Desktop (Electron)` 默认 F5 配置使用同一入口，前端走热更新，后端输入变化才重新构建和换代。`Ash Desktop UI (reuse App Server)` 只构建前端并复用兼容的服务。
 - Rust 构建、打包和源码启动脚本由 Just 通过 `uv run --frozen --project scripts python` 执行，统一使用锁定的 Python 环境。
 
 前端 Node 工具与 Desktop 单测使用 Node 24 LTS，具体版本由仓库根 `.nvmrc` 和 `package.json` 的 `devEngines.runtime` 共同固定。按 [README 初始化步骤](../README.md#quick-start) 安装根 `package.json` 声明的 pnpm 后，`pnpm install` 会下载并使用固定的 Node 版本，后续 pnpm 脚本也使用该版本。直接运行 Node 命令时仍需自行切换到 `.nvmrc` 指定版本。安装检查要求 pnpm 版本与声明完全一致；其他 Node 主版本不受支持。

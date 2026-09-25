@@ -79,6 +79,7 @@ class PrepareTests(unittest.TestCase):
                 "app-rs",
                 "ash-cli",
                 "code",
+                "app-ts/src/ash/workbench",
                 "build/code/update-sign",
                 ".cargo",
                 "extensions",
@@ -96,11 +97,18 @@ class PrepareTests(unittest.TestCase):
             cli_source.write_text("first")
             code_backend = root / "code/mermaid.rs"
             code_backend.write_text("first")
+            frontend = root / "app-ts/src/ash/workbench/view.ts"
+            frontend.write_text("first")
             resource = root / "resources/icon.svg"
             resource.write_text("first")
             args = prepare.parse_arguments([])
             with patch.object(prepare, "package_sources", return_value=[]):
                 original = prepare.development_source_digest(root, args, "target", {})
+                frontend.write_text("second content")
+                self.assertEqual(
+                    original,
+                    prepare.development_source_digest(root, args, "target", {}),
+                )
                 backend.write_text("second content")
                 after_backend = prepare.development_source_digest(
                     root, args, "target", {}
@@ -130,7 +138,7 @@ class PrepareTests(unittest.TestCase):
             self.assertNotEqual(after_cli_source, after_resource)
             self.assertNotEqual(after_resource, after_lock)
 
-    def test_development_source_digest_ignores_unrelated_path_entries(self) -> None:
+    def test_development_source_digest_ignores_unrelated_git_commit_and_path(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             for directory in (
@@ -147,14 +155,29 @@ class PrepareTests(unittest.TestCase):
                 (root / directory).mkdir(parents=True)
             (root / "Cargo.lock").write_text("lock")
             (root / "rust-toolchain.toml").write_text("toolchain")
+            (root / ".git").mkdir()
             args = prepare.parse_arguments([])
             with (
                 patch.object(prepare, "package_sources", return_value=[]),
                 patch.object(prepare.shutil, "which", return_value="tool"),
             ):
-                with patch.dict(prepare.os.environ, {"PATH": "first"}):
+                with (
+                    patch.dict(prepare.os.environ, {"PATH": "first"}),
+                    patch.object(
+                        prepare.subprocess,
+                        "run",
+                        return_value=SimpleNamespace(returncode=0, stdout="a" * 40),
+                    ),
+                ):
                     first = prepare.development_source_digest(root, args, "target", {})
-                with patch.dict(prepare.os.environ, {"PATH": "second"}):
+                with (
+                    patch.dict(prepare.os.environ, {"PATH": "second"}),
+                    patch.object(
+                        prepare.subprocess,
+                        "run",
+                        return_value=SimpleNamespace(returncode=0, stdout="b" * 40),
+                    ),
+                ):
                     second = prepare.development_source_digest(root, args, "target", {})
             self.assertEqual(first, second)
 

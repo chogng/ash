@@ -16,7 +16,7 @@
 			"name": "Ash Desktop (Electron)",
 			"type": "node-terminal",
 			"request": "launch",
-			"command": "pnpm --dir app-ts dev:ui:connected",
+			"command": "just ash-desktop",
 			"cwd": "${workspaceFolder}",
 			"presentation": {
 				"group": "1_ash_desktop",
@@ -24,10 +24,10 @@
 			}
 		},
 		{
-			"name": "Ash Desktop (Electron + Rust)",
+			"name": "Ash Desktop UI (reuse App Server)",
 			"type": "node-terminal",
 			"request": "launch",
-			"command": "just ash-desktop",
+			"command": "pnpm --dir app-ts dev:ui:connected",
 			"cwd": "${workspaceFolder}",
 			"presentation": {
 				"group": "1_ash_desktop",
