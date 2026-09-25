@@ -1,15 +1,15 @@
 ---
 name: sessions
-description: Core principles and workflow router for changes to the Agents Window under src/vs/sessions.
+description: Core principles and workflow router for changes to the Agents Window under src/ash/sessions.
 ---
 
 # Agents Window development
 
-Use this skill for implementation, review, or design work under `src/vs/sessions/**`.
+Use this skill for implementation, review, or design work under `src/ash/sessions/**`.
 
 ## 1. Apply the core principles
 
-- Preserve the layer direction: `vs/sessions` may import `vs/workbench` and lower layers; `vs/workbench` must never import `vs/sessions`.
+- Preserve the layer direction: `ash/sessions` may import `ash/workbench` and lower layers; `ash/workbench` must never import `ash/sessions`.
 - Keep shared Sessions code provider-neutral. Non-provider contributions must not import provider implementations.
 - Model mutable session and chat state with observables. Use events for notifications, not as a parallel state model or for control flow.
 - Register Sessions menu IDs in `browser/menus.ts` and consume `Menus.*`.
@@ -19,23 +19,23 @@ Use this skill for implementation, review, or design work under `src/vs/sessions
 
 ## 2. Identify the owning area
 
-Start with `src/vs/sessions/README.md`, then read only the specifications relevant to the change:
+Start with `src/ash/sessions/README.md`, then read only the specifications relevant to the change:
 
 | Area | Specification |
 |------|---------------|
-| Layering, folder ownership, cross-module imports | `src/vs/sessions/LAYERS.md` |
-| Session/chat model, services, provider contract, core data flow | `src/vs/sessions/SESSIONS.md` |
-| Automations ownership, routing, migration, persistence, and run lifecycle | `src/vs/sessions/AUTOMATIONS.md` |
-| Workbench parts, grid, title bar, editor presentation | `src/vs/sessions/LAYOUT.md` |
-| Session-aware layout state and restoration | `src/vs/sessions/LAYOUT_CONTROLLER.md` |
-| Single-pane behavior and expected compositions | `src/vs/sessions/SINGLE_PANE_SCENARIOS.md` |
-| Sessions sidebar list, grouping, filtering, and persistence | `src/vs/sessions/SESSIONS_LIST.md` |
-| Phone layout and mobile components | `src/vs/sessions/MOBILE.md` |
-| AI customizations | `src/vs/sessions/AI_CUSTOMIZATIONS.md` |
-| Copilot customizations | `src/vs/sessions/copilot-customizations-spec.md` |
-| Copilot Chat provider | `src/vs/sessions/contrib/providers/copilotChatSessions/COPILOT_CHAT_SESSIONS_PROVIDER.md` |
-| Agent Host provider | `src/vs/sessions/contrib/providers/agentHost/AGENT_HOST_SESSIONS_PROVIDER.md` |
-| Remote Agent Host provider | `src/vs/sessions/contrib/providers/remoteAgentHost/REMOTE_AGENT_HOST_SESSIONS_PROVIDER.md` |
+| Layering, folder ownership, cross-module imports | `src/ash/sessions/LAYERS.md` |
+| Session/chat model, services, provider contract, core data flow | `src/ash/sessions/SESSIONS.md` |
+| Automations ownership, routing, migration, persistence, and run lifecycle | `src/ash/sessions/AUTOMATIONS.md` |
+| Workbench parts, grid, title bar, editor presentation | `src/ash/sessions/LAYOUT.md` |
+| Session-aware layout state and restoration | `src/ash/sessions/LAYOUT_CONTROLLER.md` |
+| Single-pane behavior and expected compositions | `src/ash/sessions/SINGLE_PANE_SCENARIOS.md` |
+| Sessions sidebar list, grouping, filtering, and persistence | `src/ash/sessions/SESSIONS_LIST.md` |
+| Phone layout and mobile components | `src/ash/sessions/MOBILE.md` |
+| AI customizations | `src/ash/sessions/AI_CUSTOMIZATIONS.md` |
+| Copilot customizations | `src/ash/sessions/copilot-customizations-spec.md` |
+| Copilot Chat provider | `src/ash/sessions/contrib/providers/copilotChatSessions/COPILOT_CHAT_SESSIONS_PROVIDER.md` |
+| Agent Host provider | `src/ash/sessions/contrib/providers/agentHost/AGENT_HOST_SESSIONS_PROVIDER.md` |
+| Remote Agent Host provider | `src/ash/sessions/contrib/providers/remoteAgentHost/REMOTE_AGENT_HOST_SESSIONS_PROVIDER.md` |
 
 Do not load the learning inbox by default. Search its headings and scopes, then read only matching entries after the authoritative specification.
 
@@ -76,7 +76,7 @@ Update a specification only when component ownership, an interface or lifecycle 
 Run the smallest existing checks that cover the change:
 
 - focused unit tests for affected behavior;
-- `npm run valid-layers-check` when imports or module ownership change;
+- `pnpm run valid-layers-check` when imports or module ownership change;
 - targeted type checking or compilation when TypeScript changes warrant it;
 - relevant integration, E2E, or visual validation for cross-process or UI work.
 
