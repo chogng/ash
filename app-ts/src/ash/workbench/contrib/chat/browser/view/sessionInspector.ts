@@ -1,9 +1,10 @@
 import { h } from "../../../../../base/browser/dom.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../../../base/common/lifecycle.js";
 import type { AgentTreeNode } from "../../../../../sessions/services/sessions/common/session.js";
-import type { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
+import type { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagement.js";
 import type { TurnChangeSetSummary } from "../../../../services/chat/common/chatService.js";
 import type { ChatPaneModel } from "../pane/chatPaneModel.js";
+import type { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 
 export interface SessionInspectorDelegate {
 	close(): void;
@@ -17,7 +18,7 @@ export class SessionInspector extends Disposable {
 	private readonly editedDrafts = new Map<string, string>();
 	private model: ChatPaneModel | undefined;
 
-	constructor(container: HTMLElement, private readonly sessions: ISessionsManagementService, delegate: SessionInspectorDelegate) {
+	constructor(container: HTMLElement, private readonly sessions: ISessionsManagementService, delegate: SessionInspectorDelegate, private readonly dialogs: IDialogService) {
 		super();
 		const document = container.ownerDocument;
 		this.element = h(document, "aside");
@@ -154,12 +155,18 @@ export class SessionInspector extends Disposable {
 			discard.classList.add("ash-session-inspector-discard");
 			discard.disabled = changes.some((changeSet) => changeSet.captureState === "open");
 			discard.addEventListener("click", () => {
-				if (!section.body.ownerDocument.defaultView?.confirm("Discard every uncommitted change in this Thread?")) return;
-				void model.discardChanges().catch((error) => this.showOperationError(error));
+				void this.confirmDiscard(model);
 			});
 			section.body.append(discard);
 		}
+
 		return section.root;
+	}
+
+	private async confirmDiscard(model: ChatPaneModel): Promise<void> {
+		const decision = await this.dialogs.confirm({ message: 'Discard every uncommitted change in this Thread?' });
+		if (!decision.confirmed || this.isDisposed || this.model !== model || model.changeSets.some(changeSet => changeSet.captureState === 'open')) return;
+		void model.discardChanges().catch((error) => this.showOperationError(error));
 	}
 
 	private changeCard(model: ChatPaneModel, changeSet: TurnChangeSetSummary): HTMLElement {

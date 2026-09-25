@@ -288,3 +288,34 @@ jobs:
             ".build/releases/ash-code-${{ matrix.target }}.${{ matrix.archive }}" \
             ".build/releases/ash-code-${{ matrix.target }}.${{ matrix.archive }}.sha256" \
             ".build/releases/ash-code-${{ matrix.target }}.update.json"
+
+      - name: Install Desktop packaging dependencies
+        if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'macOS'
+        shell: bash
+        run: |
+          npm install --global "$(node --print "require('./package.json').packageManager")"
+          pnpm install --frozen-lockfile
+
+      - name: Package and verify macOS Desktop
+        if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'macOS'
+        shell: bash
+        env:
+          ASH_MACOS_SIGNING_IDENTITY: ${{ vars.ASH_MACOS_SIGNING_IDENTITY }}
+        run: pnpm run package:desktop:darwin
+
+      - name: Notarize and publish macOS Desktop
+        if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'macOS'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          arch="$(node -p 'process.arch')"
+          bundle="dist/Ash-darwin-${arch}/Ash.app"
+          archive=".build/releases/Ash-darwin-${arch}.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$bundle" "$archive"
+          python3 -B build/darwin/notarize.py "$archive"
+          xcrun stapler staple "$bundle"
+          xcrun stapler validate "$bundle"
+          rm "$archive"
+          ditto -c -k --sequesterRsrc --keepParent "$bundle" "$archive"
+          gh release upload "$GITHUB_REF_NAME" "$archive"

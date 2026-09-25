@@ -29,7 +29,29 @@ test.describe('welcome brand', () => {
 		const welcome = workbench.editors.groupAt(0).watermark;
 		await expect(welcome.locator('.ash-editor-group-welcome-name')).toHaveText('ASH');
 		await expect(welcome.locator('.ash-editor-group-welcome-plan')).toHaveCount(0);
-		await expect(welcome.getByRole('button', { name: 'Open folder' })).toBeVisible();
+		await expect(welcome.getByRole('button', { name: 'open folder' })).toBeVisible();
+	});
+
+	test('welcome actions use gray cards and a black GitHub card', async ({ workbench }) => {
+		const cards = workbench.editors.groupAt(0).watermark.locator('.ash-editor-group-welcome-card');
+		await expect(cards).toHaveCount(4);
+		await expect(cards.locator('.ash-editor-group-welcome-card-label')).toHaveText(['open folder', 'clone repo', 'connect via ssh', 'connect github']);
+		for (const index of [0, 1, 2]) {
+			const card = cards.nth(index);
+			await expect(card).toHaveCSS('background-color', 'rgb(243, 243, 243)');
+			await expect(card).toHaveCSS('border-color', 'rgb(212, 212, 212)');
+			await expect(card).toHaveCSS('opacity', '1');
+			await expect(card.locator('svg.ash-icon')).toHaveCSS('width', '16px');
+			await card.hover();
+			await expect(card).toHaveCSS('background-color', 'rgb(228, 228, 228)');
+		}
+		const github = cards.nth(3);
+		await expect(github).toHaveCSS('background-color', 'rgb(0, 0, 0)');
+		await expect(github).toHaveCSS('color', 'rgb(255, 255, 255)');
+		await expect(github.locator('svg.ash-icon')).toHaveCSS('color', 'rgb(255, 255, 255)');
+		await expect(github.locator('svg.ash-icon path').first()).toHaveCSS('fill', 'rgb(255, 255, 255)');
+		await github.hover();
+		await expect(github).toHaveCSS('background-color', 'rgb(38, 38, 38)');
 	});
 
 	test('welcome uses the theme-colored mark without a filled icon tile', async ({ workbench }) => {

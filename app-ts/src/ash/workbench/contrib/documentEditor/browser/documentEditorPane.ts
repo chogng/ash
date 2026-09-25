@@ -24,6 +24,7 @@ import type { IWorkingCopy } from "../../../services/workingCopy/common/workingC
 import type { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import { DOCUMENT_EDITOR_ID } from "./documentEditorInput.js";
 import { h } from "../../../../base/browser/dom.js";
+import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 
 /** Workbench-only services that complement one document editor. */
 export interface EditorPaneOptions extends RichTextEditorOptions {
@@ -33,7 +34,7 @@ export interface EditorPaneOptions extends RichTextEditorOptions {
 	readonly schema?: DocumentSchema;
 	readonly createEmptyDocument?: () => DocumentNode;
 	readonly workingCopyService?: IWorkingCopyService;
-	readonly createDocumentCollaborationService?: (ownerWindow: Window) => IDocumentCollaborationService;
+	readonly createDocumentCollaborationService?: () => IDocumentCollaborationService;
 }
 
 /** Workbench pane that hosts one structured document editor. */
@@ -58,7 +59,7 @@ export class DocumentEditorPane extends Disposable implements IEditorPane {
 		return this.modelReference.value;
 	}
 
-	constructor(textFiles: ITextFileService, options: EditorPaneOptions = {}) {
+	constructor(textFiles: ITextFileService, options: EditorPaneOptions = {}, @IDialogService private readonly dialogs: IDialogService) {
 		super();
 		this.options = options;
 		this._register(toDisposable(() => this.stopCollaboration()));
@@ -76,10 +77,8 @@ export class DocumentEditorPane extends Disposable implements IEditorPane {
 		container.className = "stanza-structured-editor-pane";
 		parent.append(container);
 		this.container = container;
-		const ownerWindow = parent.ownerDocument.defaultView;
-		assertDefined(ownerWindow, new ReferenceError("Document editor requires a browser window"));
 		const { workingCopyService: _workingCopyService, createDocumentCollaborationService, ...editorOptions } = this.options;
-		this.collaborationService = createDocumentCollaborationService ? this._register(createDocumentCollaborationService(ownerWindow)) : undefined;
+		this.collaborationService = createDocumentCollaborationService ? this._register(createDocumentCollaborationService()) : undefined;
 		const collaboration = this._register(new CollaborationContribution(container, {
 			onStart: roomId => this.startCollaboration(roomId),
 			onStop: () => this.stopCollaboration(),
@@ -87,11 +86,11 @@ export class DocumentEditorPane extends Disposable implements IEditorPane {
 			onListMembers: () => this.requireRoom().listMembers(this.roomRequest!.signal),
 			onRotateMemberAccessToken: principalId => this.requireRoom().rotateMemberAccessToken(principalId, this.roomRequest!.signal),
 			onRevokeMember: principalId => this.requireRoom().revokeMember(principalId, this.roomRequest!.signal),
-		}));
+		}, this.dialogs));
 		this.collaboration = collaboration;
 		container.append(collaboration.element);
 		collaboration.setState(this.collaborationService ? 'inactive' : 'unavailable');
-		const editor = this._register(new RichTextEditorWidget(editorOptions));
+		const editor = this._register(new RichTextEditorWidget(editorOptions, this.dialogs));
 		this.editor = editor;
 		editor.create(container);
 	}

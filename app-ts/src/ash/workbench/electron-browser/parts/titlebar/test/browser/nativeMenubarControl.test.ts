@@ -6,7 +6,7 @@ import { type IMenuChangeEvent, type IMenuService, MenuItemAction } from '../../
 import type { ICommandService } from '../../../../../../platform/commands/common/commands.js';
 import { ContextKeyService } from "../../../../../../platform/contextkey/browser/contextKeyService.js";
 import type { INativeMenubarApi, INativeMenubarData, INativeMenubarSelection } from '../../../../../../platform/menubar/common/nativeMenubar.js';
-import { NativeMenubarControl } from '../../../../../../workbench/electron-browser/parts/titlebar/nativeMenubarControl.js';
+import { NativeMenubarControl } from '../../../../../../workbench/electron-browser/parts/titlebar/menubarControl.js';
 
 test('failed menubar updates retain the last installed revision', async () => {
 	const changes = new Emitter<IMenuChangeEvent>();

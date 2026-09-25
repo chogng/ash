@@ -68,7 +68,7 @@ export class OnboardingTryoutService implements IOnboardingTryoutService {
 			message: tryout.description,
 			primaryButton: localize('onboarding.tryoutConfirm', 'Try it'),
 		});
-		if (!confirmed || token.isCancellationRequested) return 'cancelled';
+		if (!confirmed.confirmed || token.isCancellationRequested) return 'cancelled';
 		return this.run(id, token);
 	}
 

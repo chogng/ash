@@ -15,6 +15,8 @@ import { bindCodeLensCacheStorage } from "../../../../editor/contrib/codelens/br
 import { IStorageService } from "../../../../platform/storage/common/storage.js";
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
 import { CodeEditorConfiguration, type WrappingIndentSetting } from "../common/editorConfiguration.js";
+import { TextFileEditor } from '../../files/browser/editors/textFileEditor.js';
+import { isRemoteResource } from '../../../../platform/remote/common/remote.js';
 
 registerWorkbenchContribution("workbench.contrib.codeLensCachePersistence", WorkbenchPhase.BlockStartup, accessor => bindCodeLensCacheStorage(accessor.get(IStorageService)));
 
@@ -28,7 +30,8 @@ registerEditorPane({
 		const configuration = options.configurationService;
 		const instantiationService = options.instantiationService;
 		if (!instantiationService) throw new Error('Stanza Code requires the Workbench instantiation service');
-		return instantiationService.createInstance(TextResourceEditor, resourceStore, {
+		const isFile = options.input?.resource.scheme === 'file' || (options.input && isRemoteResource(options.input.resource));
+		return instantiationService.createInstance(isFile ? TextFileEditor : TextResourceEditor, resourceStore, {
 			createPart: partOptions => createBrowserEditorPart(instantiationService, partOptions),
 			textMateService: options.textMateService,
 			languageDiagnosticsService: options.languageDiagnosticsService,

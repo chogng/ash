@@ -7,8 +7,8 @@ import type { ICommandEvent, ICommandService } from "../../../platform/commands/
 import type { IContextMenuService } from "../../../platform/contextview/browser/contextView.js";
 import type { IContextViewService } from "../../../platform/contextview/browser/contextView.js";
 import type { IChatService, ThreadUpdateEnvelope } from "../../../workbench/services/chat/common/chatService.js";
-import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagementService.js";
-import { SessionsService } from "../../../sessions/services/view/browser/sessionsService.js";
+import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
+import { SessionsService } from "../../../sessions/services/sessions/browser/sessionsService.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({

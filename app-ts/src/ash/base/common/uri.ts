@@ -97,7 +97,7 @@ export class URI {
 				throw new TypeError(`UNC path must contain a host: ${path}`);
 			}
 			const url = new URL(`file://${authority}/`);
-			url.pathname = resourcePath;
+			url.pathname = resourcePath.replaceAll('%', '%25');
 			return new URI(url);
 		}
 
@@ -109,7 +109,7 @@ export class URI {
 			? `/${normalized}`
 			: normalized;
 		const url = new URL("file:///");
-		url.pathname = resourcePath;
+		url.pathname = resourcePath.replaceAll('%', '%25');
 		return new URI(url);
 	}
 

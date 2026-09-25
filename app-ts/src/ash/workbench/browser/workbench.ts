@@ -56,6 +56,7 @@ import "../../platform/layout/browser/zIndexRegistry.js";
 import {
 	ServiceContainer,
 } from "../../platform/instantiation/common/instantiation.js";
+import { getSingletonServiceDescriptors } from '../../platform/instantiation/common/extensions.js';
 import { BrowserNotificationService } from "../../platform/notification/browser/notificationService.js";
 import { INotificationService } from "../../platform/notification/common/notification.js";
 import { BrowserProgressService } from "../../platform/progress/browser/progressService.js";
@@ -65,9 +66,11 @@ import type { IKeybindingsResourceApi } from "../../platform/keybinding/common/k
 import type { IKeyboardLayoutProvider } from "../../platform/keyboardLayout/common/keyboardLayout.js";
 import {
 	BrowserDialogHandler,
-} from "../../platform/dialogs/browser/browserDialogHandler.js";
+} from "./parts/dialogs/dialogHandler.js";
 import {
 	IDialogService,
+	IFileDialogService,
+	type IDialogHandler,
 } from "../../platform/dialogs/common/dialogs.js";
 import {
 	BrowserFileService,
@@ -96,6 +99,8 @@ import {
 	IWorkbenchDialogHandler,
 } from "../common/dialogs.js";
 import { INativeHostService } from "../common/services.js";
+import { FileDialogService } from '../services/dialogs/electron-browser/fileDialogService.js';
+import { FileDialogService as BrowserFileDialogService } from '../services/dialogs/browser/fileDialogService.js';
 import { IUserThemeService, type IUserThemeService as IUserThemeServiceContract, UnavailableUserThemeService } from "../common/userThemes.js";
 import {
 	ViewContainerLocation,
@@ -124,9 +129,9 @@ import {
 	IViewsService,
 	ViewsService,
 } from "../services/views/browser/viewsService.js";
-import { AppServerSessionsManagementService } from "../../sessions/services/sessions/browser/appServerSessionsManagementService.js";
-import { AppServerSessionsProvider } from "../../sessions/services/sessions/browser/appServerSessionsProvider.js";
-import { ISessionsManagementService } from "../../sessions/services/sessions/common/sessionsManagementService.js";
+import { SessionsManagementService } from "../../sessions/services/sessions/browser/sessionsManagementService.js";
+import { AppServerSessionsProvider } from "../../sessions/contrib/providers/appServer/browser/appServerSessionsProvider.js";
+import { ISessionsManagementService } from "../../sessions/services/sessions/common/sessionsManagement.js";
 import {
 	WorkbenchConfigurationService,
 } from "../services/configuration/browser/configurationService.js";
@@ -177,7 +182,7 @@ import { CodeEditorService } from '../services/editor/browser/codeEditorService.
 import { LanguageFeaturesService } from '../../editor/common/services/languageFeaturesService.js';
 import { ILanguageService } from '../../editor/common/languages/language.js';
 import { LanguageService } from '../../editor/common/services/languageService.js';
-import { ILanguageConfigurationService, LanguageConfigurationService } from '../../editor/common/languages/languageConfigurationRegistry.js';
+import { ILanguageConfigurationService } from '../../editor/common/languages/languageConfigurationRegistry.js';
 import { WorkbenchLanguageFeatures } from '../services/language/browser/workbenchLanguageFeatures.js';
 import { GitService } from "../services/git/browser/gitService.js";
 import { IGitService } from "../services/git/common/gitService.js";
@@ -213,16 +218,17 @@ import { BrowserUntitledTextEditorService } from "../services/untitled/browser/b
 import { IUntitledTextEditorService } from "../services/untitled/common/untitledTextEditorService.js";
 import { BrowserWorkingCopyService } from "../services/workingCopy/browser/browserWorkingCopyService.js";
 import { IWorkingCopyService } from "../services/workingCopy/common/workingCopyService.js";
+import { IActivityService } from '../services/activity/common/activity.js';
+import { ActivityService } from '../services/activity/browser/activityService.js';
 import { IndexedDbWorkingCopyBackupService } from "../services/workingCopy/browser/indexedDbWorkingCopyBackupService.js";
 import { WorkingCopyBackupTracker } from "../services/workingCopy/browser/workingCopyBackupTracker.js";
 import { IWorkingCopyBackupService, type WorkingCopyBackup } from "../services/workingCopy/common/workingCopyBackupService.js";
 import { projectColorThemeTokens } from "../services/textMate/common/textMateThemeProjection.js";
 import { BrowserWorkspaceEditService } from "../services/language/browser/browserWorkspaceEditService.js";
 import { IWorkspaceEditService } from "../services/language/common/workspaceEditService.js";
-import { ITextModelResourceService } from "../services/textmodelResolver/common/textModelResourceService.js";
+import { IFileTextModelService, ITextModelResourceService } from "../services/textmodelResolver/common/textModelResourceService.js";
 import { ITextModelService } from '../../editor/common/services/resolverService.js';
 import { TextModelResolverService } from '../services/textmodelResolver/common/textModelResolverService.js';
-import { registerTreeViewsDnDService } from '../../editor/common/services/treeViewsDndService.js';
 import { BrowserBulkEditService } from "../contrib/bulkEdit/browser/bulkEditService.js";
 import { IBulkEditService } from "../../editor/browser/services/bulkEditService.js";
 import { getBrowserTextModelService } from "../services/textmodelResolver/browser/browserTextModelService.js";
@@ -277,6 +283,7 @@ export interface IStartWorkbenchOptions {
 	readonly keyboardLayoutProvider?: IKeyboardLayoutProvider;
 	readonly userKeyboardLayoutApi?: IUserKeyboardLayoutApi;
 	readonly nativeHostApi?: INativeHostApi;
+	readonly dialogHandler?: IDialogHandler;
 	readonly userThemeService?: IUserThemeServiceContract;
 	readonly createContextMenuService: WorkbenchContextMenuServiceFactory;
 	readonly createTitlebarPart: TitlebarPartFactory;
@@ -297,6 +304,7 @@ export function startWorkbench({
 	keyboardLayoutProvider,
 	userKeyboardLayoutApi,
 	nativeHostApi,
+	dialogHandler,
 	userThemeService,
 	createContextMenuService,
 	createTitlebarPart,
@@ -314,6 +322,7 @@ export function startWorkbench({
 		keyboardLayoutProvider,
 		userKeyboardLayoutApi,
 		nativeHostApi,
+		dialogHandler,
 		userThemeService,
 		createContextMenuService,
 		createTitlebarPart,
@@ -353,6 +362,7 @@ export class Workbench extends Disposable {
 		keyboardLayoutProvider: IKeyboardLayoutProvider | undefined,
 		userKeyboardLayoutApi: IUserKeyboardLayoutApi | undefined,
 		nativeHostApi: INativeHostApi | undefined,
+		dialogHandler: IDialogHandler | undefined,
 		userThemeService: IUserThemeServiceContract | undefined,
 		createContextMenuService: WorkbenchContextMenuServiceFactory,
 		createTitlebarPart: TitlebarPartFactory,
@@ -365,8 +375,10 @@ export class Workbench extends Disposable {
 		this._register(FormattingConflicts.setFormatterSelector(async formatters => formatters[0]));
 		const mode = WorkbenchModeRegistry.get(modeId);
 		const services = this._register(new ServiceContainer());
+		for (const [id, descriptor] of getSingletonServiceDescriptors()) {
+			services.registerSingleton(id, () => services.createInstance(descriptor));
+		}
 		if (browserViewApi) { services.registerInstance(IBrowserViewApi, browserViewApi); }
-		registerTreeViewsDnDService(services);
 		const instantiationService = services;
 		const logService = this._register(new LogService({ sinks: [new ConsoleLogSink()] }));
 		this.logService = logService;
@@ -388,18 +400,37 @@ export class Workbench extends Disposable {
 		services.registerInstance(IRemoteTunnelService, api.remoteTunnels ?? UnavailableRemoteTunnelService);
 		if (nativeHostApi) {
 			services.registerInstance(INativeHostService, nativeHostApi);
+			services.registerSingleton(IFileDialogService, () => services.createInstance(FileDialogService));
 		}
 		if (browserFileSystemProvider) this._register(browserFileSystemProvider);
+		if (browserFileSystemProvider) {
+			services.registerInstance(IFileDialogService, new BrowserFileDialogService({
+				kind: 'local',
+				provider: browserFileSystemProvider,
+				pickDirectory: startIn => (window as unknown as { showDirectoryPicker: (options?: { startIn?: FileSystemDirectoryHandle }) => Promise<FileSystemDirectoryHandle> }).showDirectoryPicker(startIn ? { startIn } : undefined),
+				quickInput: () => services.get(IQuickInputService),
+				fileService: () => services.get(IFileService),
+				workspaceRoot: () => services.get(IWorkspaceContextService).getWorkspace().folders[0]?.uri,
+			}, () => services.get(IDialogService)));
+		} else if (webWorkspaceClient) {
+			services.registerInstance(IFileDialogService, new BrowserFileDialogService({
+				kind: 'server',
+				client: webWorkspaceClient,
+				quickInput: () => services.get(IQuickInputService),
+				fileService: () => services.get(IFileService),
+				workspaceRoot: () => services.get(IWorkspaceContextService).getWorkspace().folders[0]?.uri,
+			}, () => services.get(IDialogService)));
+		}
 		const workspaceOpenService = browserFileSystemProvider
 			? new BrowserWorkspaceOpenService(
 				browserFileSystemProvider,
 				workspace => this.updateWorkspace(workspace),
-				() => (window as unknown as { showDirectoryPicker: () => Promise<FileSystemDirectoryHandle> }).showDirectoryPicker(),
+				services.get(IFileDialogService),
 			)
 			: webWorkspaceClient
 				? new WebWorkspaceOpenService(
 					webWorkspaceClient,
-					() => services.get(IQuickInputService),
+					services.get(IFileDialogService),
 					() => services.get(IDialogService),
 					async () => {
 						await this.workingCopyBackupTracker.flush();
@@ -409,7 +440,7 @@ export class Workbench extends Disposable {
 						return true;
 					},
 				)
-				: new WorkspaceOpenService(nativeHostApi);
+				: new WorkspaceOpenService(nativeHostApi, services.getOptional(IFileDialogService), () => services.get(IDialogService));
 		services.registerInstance(IWorkspaceOpenService, workspaceOpenService);
 		const workspaceContext = this._register(new WorkspaceContextService(workspace));
 		this.workspaceContext = workspaceContext;
@@ -454,8 +485,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IConfigurationResourceService, configuration);
 		const languageService = this._register(new LanguageService());
 		services.registerInstance(ILanguageService, languageService);
-		const languageConfigurationService = this._register(new LanguageConfigurationService(configuration, languageService));
-		services.registerInstance(ILanguageConfigurationService, languageConfigurationService);
+		const languageConfigurationService = services.get(ILanguageConfigurationService);
 		const languageFeaturesService = this._register(new LanguageFeaturesService());
 		services.registerInstance(ILanguageFeaturesService, languageFeaturesService);
 		this._register(new DefaultPasteProvidersFeature(languageFeaturesService, workspaceContext));
@@ -474,6 +504,7 @@ export class Workbench extends Disposable {
 			onDidChangeLanguageSupport: textMateService.onDidChange,
 		}));
 		services.registerInstance(ITextModelResourceService, textModelService);
+		services.registerInstance(IFileTextModelService, textModelService);
 		services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
 		const workspaceEditService = this._register(new BrowserWorkspaceEditService(textModelService, workingCopyService, fileService));
 		services.registerInstance(IWorkspaceEditService, workspaceEditService);
@@ -636,7 +667,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(ILanguageServerStatusService, languageServerStatusService);
 		services.registerInstance(
 			IWorkbenchDialogHandler,
-			new BrowserDialogHandler(workbenchRoot),
+			dialogHandler ?? new BrowserDialogHandler(workbenchRoot),
 		);
 		const interactionServices = this._register(new WorkbenchInteractionServices({
 			container: services,
@@ -671,7 +702,7 @@ export class Workbench extends Disposable {
 			contextKeyService: contextKeys,
 		}));
 		services.registerInstance(IViewDescriptorService, viewDescriptors);
-		const sessionService = this._register(new AppServerSessionsManagementService(new AppServerSessionsProvider({
+		const sessionService = this._register(new SessionsManagementService(new AppServerSessionsProvider({
 			session: api.session,
 			model: api.model,
 			turn: api.turn,
@@ -702,6 +733,8 @@ export class Workbench extends Disposable {
 			ariaLabelKey: { bundle: "ash.regions", key: "primarySidebar" },
 			viewsAriaLabelKey: { bundle: "ash.regions", key: "primarySidebarViews" },
 		}));
+		const activityService = this._register(new ActivityService(sidebar.compositeBar));
+		services.registerInstance(IActivityService, activityService);
 		const agentSidebar = this._register(new SidebarPart(workbenchRoot, {
 			viewDescriptorService: viewDescriptors,
 			contextKeyService: contextKeys,
@@ -754,11 +787,8 @@ export class Workbench extends Disposable {
 			workingCopyService,
 			dialogService,
 			bulkEditService,
-			saveAsResource: nativeHostApi
-				? async (defaultName) => {
-					const filePath = await nativeHostApi.saveFile({ defaultName });
-					return filePath ? URI.file(filePath) : undefined;
-				}
+			saveAsResource: nativeHostApi || browserFileSystemProvider || webWorkspaceClient && workspace.folders.length > 0
+				? defaultName => services.get(IFileDialogService).pickFileToSave(URI.file(`/${defaultName}`))
 				: undefined,
 			titleActions: {
 				menuService: menus,

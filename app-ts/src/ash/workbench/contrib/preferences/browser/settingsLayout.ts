@@ -155,7 +155,7 @@ export const SettingsNavigation = [
 				id: 'files',
 				label: 'Files',
 				description: 'Configure file editing and save behavior.',
-				settings: ['files.*'],
+				settings: ['files.*', 'explorer.fileNesting.*'],
 			},
 		],
 	},

@@ -63,6 +63,8 @@ URL 查询参数 `ash-workbench-mode` 把 Main 已选择的窗口模式 ID 交�
 
 Code Sessions 是独立页面，不是给 `workbench/browser/layout*` 增加模式分支。Code 的普通 Workbench 只注册一个 Titlebar action，Electron Main 创建 sibling Sessions 窗口，并把对应 HTML 加入可信 IPC allowlist。
 
+`app-ts/src/ash/platform/windows/` 持有父子窗口关系、创建与关闭、重复打开时的复用、子窗口资源释放，以及打开和返回的 IPC 契约。`code/electron-main/app.ts` 根据当前模式提供 Sessions 入口、连接和可信 IPC 装配：父窗口只注册打开命令，子窗口只注册返回命令；浏览器页面切换直接使用平台导航。子窗口随父 Workbench 窗口关闭，模式切换前也会关闭。
+
 ```text
 regular Code Workbench titlebar
         │ Open Code Sessions

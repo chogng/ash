@@ -53,3 +53,17 @@ export function defaultWindowState(
 		height: size.height,
 	};
 }
+
+export interface IFocusableWindow {
+	isDestroyed(): boolean;
+	isMinimized(): boolean;
+	restore(): void;
+	focus(): void;
+}
+
+/** Restores a minimized Electron window before focusing it. */
+export function focusWindow(window: IFocusableWindow): void {
+	if (window.isDestroyed()) return;
+	if (window.isMinimized()) window.restore();
+	window.focus();
+}

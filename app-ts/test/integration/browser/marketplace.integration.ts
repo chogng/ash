@@ -6,7 +6,7 @@ import { ICodeEditorService } from '../../../src/ash/editor/browser/services/cod
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { ServiceContainer } from '../../../src/ash/platform/instantiation/common/instantiation.js';
-import { BrowserDialogHandler } from '../../../src/ash/platform/dialogs/browser/browserDialogHandler.js';
+import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialogHandler.js';
 import { DialogResult, IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { ILanguageServerService } from '../../../src/ash/platform/language/common/languageServerService.js';
 import type { IMarketplaceApi } from '../../../src/ash/platform/marketplace/common/marketplaceApi.js';
@@ -65,9 +65,13 @@ services.registerInstance(IConfigurationService, { getValue: () => true } as unk
 const dialogs = new BrowserDialogHandler(document.body);
 const signal = new AbortController().signal;
 services.registerInstance(IDialogService, {
-	confirm: async options => await dialogs.showDialog({ kind: 'confirmation', ...options }, signal) === DialogResult.Primary,
+	confirm: async options => (await dialogs.showDialog({ kind: 'confirmation', ...options }, signal)).button === DialogResult.Primary,
 	showMessage: async options => { await dialogs.showDialog({ kind: 'message', ...options }, signal); },
-	prompt: options => dialogs.showDialog({ kind: 'prompt', ...options }, signal),
+	prompt: async options => (await dialogs.showDialog({ kind: 'prompt', ...options }, signal)).button,
+	input: async options => {
+		const result = await dialogs.showDialog({ kind: 'input', ...options }, signal);
+		return { confirmed: result.button === DialogResult.Primary, values: result.values, checkboxChecked: result.checkboxChecked };
+	},
 });
 services.registerInstance(ICommandService, { executeCommand: async (id: string, options: MarketplaceOpenOptions) => { requests.push(['command', id, options]); if (id !== OPEN_MARKETPLACE_COMMAND_ID) { throw new Error(id); } await marketplace.open(options); } } as unknown as ICommandService);
 let revision = 3;

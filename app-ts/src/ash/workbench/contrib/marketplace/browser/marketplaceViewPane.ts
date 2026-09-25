@@ -169,12 +169,12 @@ export class MarketplaceViewPane extends ViewPane {
 		this.applyEnabled();
 		try {
 			if (operation === 'uninstall' && installed) {
-				if (!await this.dialogs.confirm({ title: 'Uninstall package', message: `Uninstall ${installed.package.id}?`, detail: `This removes all capabilities in this package:\n${installed.capabilities.map(capability => `${capability.kind}: ${capability.id}`).join('\n')}\nActive consumers may delay removal.`, primaryButton: 'Uninstall' })) { return; }
+				if (!(await this.dialogs.confirm({ title: 'Uninstall package', message: `Uninstall ${installed.package.id}?`, detail: `This removes all capabilities in this package:\n${installed.capabilities.map(capability => `${capability.kind}: ${capability.id}`).join('\n')}\nActive consumers may delay removal.`, primaryButton: 'Uninstall' })).confirmed) { return; }
 				await this.marketplace.uninstall(installed.installationId);
 			} else {
 				const details = operation === 'update' && installed ? await this.marketplace.get(installed.package.id) : selected;
 				if (!details) { return; }
-				if (!await this.dialogs.confirm({ title: operation === 'install' ? 'Install package' : 'Update package', message: `${operation === 'install' ? 'Install' : 'Update to'} ${details.displayName} ${details.package.version}?`, detail: `${details.package.id}\nSource: ${details.source}\n${this.describeCapabilities(details)}\nAll capabilities in this package are installed together.`, primaryButton: operation === 'install' ? 'Install' : 'Update' })) { return; }
+				if (!(await this.dialogs.confirm({ title: operation === 'install' ? 'Install package' : 'Update package', message: `${operation === 'install' ? 'Install' : 'Update to'} ${details.displayName} ${details.package.version}?`, detail: `${details.package.id}\nSource: ${details.source}\n${this.describeCapabilities(details)}\nAll capabilities in this package are installed together.`, primaryButton: operation === 'install' ? 'Install' : 'Update' })).confirmed) { return; }
 				if (operation === 'update' && installed) { selection = (await this.marketplace.update(installed.installationId, details.package.version)).installationId; }
 				else { await this.marketplace.install(details.package.id, details.package.version); }
 			}

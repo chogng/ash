@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
 import type { ElectronApplication } from '@playwright/test';
+import type { BrowserWindow, MessageBoxOptions } from 'electron';
 import type { ISandboxGlobals } from "../../../../src/ash/base/parts/sandbox/electron-browser/sandboxTypes.js";
 import { decodeAppServerServerRequestResult } from '../../../../src/ash/platform/app-server/common/generated/AppServerProtocolDecoder.js';
 import { expect, test } from '../../../automation/test.js';
@@ -55,10 +56,24 @@ test('desktop browser opens visible pages, navigates history, resizes and releas
 			const view = (await views()).find(view => view.url === `${url}second`);
 			return bounds && view ? Math.abs(view.bounds.width - bounds.width) : 1000;
 		}).toBeLessThan(2);
+		await electron.evaluate(({ dialog }) => {
+			const original = dialog.showMessageBox.bind(dialog);
+			const state = globalThis as typeof globalThis & { ashTestDialog?: { title?: string; finish?: () => void; restore: () => void } };
+			state.ashTestDialog = { restore: () => { dialog.showMessageBox = original; } };
+			dialog.showMessageBox = ((...args: [MessageBoxOptions] | [BrowserWindow, MessageBoxOptions]) => new Promise(resolve => {
+				const options = args.length === 1 ? args[0] : args[1];
+				state.ashTestDialog!.title = options.title;
+				state.ashTestDialog!.finish = () => resolve({ response: 0, checkboxChecked: false });
+			})) as typeof dialog.showMessageBox;
+		});
 		await location.focus(); await location.press('Alt+F1');
-		await expect(page.getByRole('dialog', { name: 'Browser accessibility help' })).toBeVisible();
+		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashTestDialog?: { title?: string } }).ashTestDialog?.title)).toBe('Browser accessibility help');
 		await expect.poll(async () => (await views()).filter(view => view.url === `${url}second` && view.visible).length).toBe(0);
-		await page.keyboard.press('Escape');
+		await electron.evaluate(() => {
+			const state = (globalThis as typeof globalThis & { ashTestDialog?: { finish?: () => void; restore: () => void } }).ashTestDialog;
+			state?.finish?.();
+			state?.restore();
+		});
 		await page.getByRole('button', { name: 'Close Browser', exact: true }).click();
 		await expect.poll(async () => (await views()).filter(view => view.url.startsWith(url)).length).toBe(0);
 		const hostCall = (method: string, params: unknown) => page.evaluate(({ method, params }) => {

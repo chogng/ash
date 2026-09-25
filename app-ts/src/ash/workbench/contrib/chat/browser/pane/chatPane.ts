@@ -4,7 +4,7 @@ import type { IContextMenuService } from "../../../../../platform/contextview/br
 import type { IContextViewService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { IChatService } from "../../../../services/chat/common/chatService.js";
 import type { IActiveSessionThread, IUntitledChatSession, SessionId, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
-import type { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
+import type { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagement.js";
 import type { ChatInputDelegate } from "../input/chatInput.js";
 import type { SkillReference } from "../../../../../platform/skills/common/skillApi.js";
 import { ChatInputPart } from "../input/chatInputPart.js";

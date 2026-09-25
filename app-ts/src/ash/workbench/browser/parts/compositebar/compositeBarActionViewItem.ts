@@ -15,6 +15,7 @@ export interface CompositeBarActionOptions {
 	readonly tabId: string;
 	readonly panelId?: string;
 	readonly checked: boolean;
+	readonly badge?: { readonly count: number; readonly description: string };
 	readonly onActivate: (compositeId: string) => void;
 }
 
@@ -69,7 +70,7 @@ export class CompositeBarActionViewItem extends ActionViewItem {
 		container.id = options.tabId;
 		container.setAttribute("role", "tab");
 		container.setAttribute("aria-selected", String(options.checked));
-		container.setAttribute("aria-label", options.label);
+		container.setAttribute("aria-label", options.badge ? `${options.label}, ${options.badge.description}` : options.label);
 		if (options.panelId) container.setAttribute("aria-controls", options.panelId);
 		this.setupHover(container, this.compositeAction.tooltip);
 		const action = h(container.ownerDocument, "span");
@@ -79,6 +80,13 @@ export class CompositeBarActionViewItem extends ActionViewItem {
 			icon: options.icon,
 		}));
 		container.append(action);
+		if (options.badge) {
+			const badge = h(container.ownerDocument, 'span');
+			badge.className = 'ash-composite-bar-badge';
+			badge.textContent = String(options.badge.count);
+			badge.setAttribute('aria-hidden', 'true');
+			container.append(badge);
+		}
 		this._register(addDisposableListener(container, "click", (event) => {
 			event.preventDefault();
 			event.stopPropagation();

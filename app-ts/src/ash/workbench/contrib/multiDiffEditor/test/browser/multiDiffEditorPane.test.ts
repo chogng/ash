@@ -14,16 +14,18 @@ import { ICodeEditorService } from '../../../../../editor/browser/services/codeE
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { ContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { DialogResult, IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
 import { EditorPaneVisibility } from '../../../../browser/parts/editor/editorPane.js';
 import { IEditorPartsService } from '../../../../browser/parts/editor/editorParts.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { TextFileContentSource, type ITextFileService, type ResolvedTextFileContent, type TextFileResolveRequest } from '../../../../services/textfile/common/textFileService.js';
+import { VIEW_ID } from '../../../files/common/files.js';
 import type { EditorInput, IEditorService } from '../../../../services/editor/common/editorService.js';
 import type { GitStatus, IGitService } from '../../../../services/git/common/gitService.js';
 import type { IChatService, TurnChangeSetSummary } from '../../../../services/chat/common/chatService.js';
-import type { ISessionsManagementService } from '../../../../../sessions/services/sessions/common/sessionsManagementService.js';
+import type { ISessionsManagementService } from '../../../../../sessions/services/sessions/common/sessionsManagement.js';
 import { CodeEditorConfiguration } from '../../../codeEditor/common/editorConfiguration.js';
 import { EditorLineWrapping, EditorOption } from '../../../../../editor/common/config/editorOptions.js';
 import { type ITextModelResourceService, type TextModelInput, type TextModelReference } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
@@ -55,6 +57,15 @@ const { MultiDiffEditorPane } = await import('../../browser/multiDiffEditorPane.
 await import('../../../codeEditor/browser/toggleWordWrap.js');
 const { createGitMultiDiffEditorInput } = await import('../../browser/scmMultiDiffAction.js');
 const { createTurnMultiDiffEditorInput } = await import('../../browser/turnMultiDiffSource.js');
+
+function registerDialogs(services: ServiceContainer): void {
+	services.registerInstance(IDialogService, {
+		showMessage: async () => {},
+		confirm: async () => ({ confirmed: true }),
+		prompt: async () => DialogResult.Cancel,
+		input: async () => ({ confirmed: false }),
+	});
+}
 
 test('Multi-diff sources resolve uncommitted Git and composed Turn contents', async () => {
 	const status: GitStatus = {
@@ -114,6 +125,7 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 	const menus = new MenuService(commands, contexts);
 	const gitActions: string[] = [];
 	const opened: string[] = [];
+	const focusedViews: string[] = [];
 	const contextMenus: string[][] = [];
 	const committedChangeSets: string[] = [];
 	const changeSet = {
@@ -121,9 +133,9 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 		statistics: { files: 1, additions: 1, deletions: 1 }, captureState: 'sealed', messageState: 'ready', commitState: 'idle',
 		dependencies: [], externalDependencyPaths: [], warnings: [], conflictPaths: [], revision: 1,
 	} satisfies TurnChangeSetSummary;
-	Object.defineProperty(dom.window, 'confirm', { configurable: true, value: () => true });
 	using editorServices = new DisposableStore();
 	const services = createCodeEditorServices(editorServices);
+	registerDialogs(services);
 	const configuration = services.get(IConfigurationService);
 	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, false, { overrideIdentifier: 'typescript' });
 	const seenOptions: boolean[] = [];
@@ -151,6 +163,10 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 		editorService: {
 			openEditor: async (input: EditorInput) => { opened.push(input.resource.toString()); },
 		} as unknown as IEditorService,
+		viewsService: {
+			openView: () => undefined,
+			focusView: (viewId: string) => { focusedViews.push(viewId); return true; },
+		},
 		fileActions: {
 			menuService: menus,
 			contextMenuProvider: { showContextMenu(options) { contextMenus.push(options.getActions().map(action => action.label)); } },
@@ -192,6 +208,8 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 	assert.equal(parent.querySelectorAll('.stanza-multi-diff-editor-toolbar').length, 1);
 	assert.equal(parent.querySelectorAll('.stanza-multi-diff-editor-toolbar .ash-dropdown-with-primary-action-view-item').length, 2);
 	assert.equal(parent.querySelectorAll('button button').length, 0);
+	requiredElement<HTMLButtonElement>(dom.window.document, 'button[aria-label="Files"]').click();
+	assert.equal(focusedViews.at(-1), VIEW_ID);
 	requiredElement<HTMLButtonElement>(dom.window.document, '.stanza-multi-diff-editor-source-toolbar .ash-dropdown-with-primary-dropdown button').click();
 	requiredElement<HTMLButtonElement>(dom.window.document, '.stanza-multi-diff-editor-repository-toolbar .ash-dropdown-with-primary-dropdown button').click();
 	requiredElement<HTMLButtonElement>(dom.window.document, '.stanza-multi-diff-editor-repository-toolbar .ash-toolbar-more-actions button').click();
@@ -240,6 +258,7 @@ test('Multi-diff pane acquires text models as files enter the viewport and relea
 	using models = new BrowserTextModelService(new BrowserTextResourceStore(new BootstrapTextFiles()));
 	using resources = new DisposableStore();
 	const services = createCodeEditorServices(resources);
+	registerDialogs(services);
 	const acquired: string[] = [];
 	const released: string[] = [];
 	const trackedModels: ITextModelResourceService = {
@@ -312,6 +331,7 @@ test('Multi-diff pane keeps available files open when one comparison fails to lo
 	using models = new BrowserTextModelService(new BrowserTextResourceStore(new BootstrapTextFiles()));
 	using resources = new DisposableStore();
 	const services = createCodeEditorServices(resources);
+	registerDialogs(services);
 	const partialModels: ITextModelResourceService = {
 		acquire: (input, signal) => input.resource.path.includes('/broken/')
 			? Promise.reject(new Error('Unavailable'))
@@ -353,6 +373,7 @@ for (const cancellation of ['signal', 'clear'] as const) {
 		using models = new BrowserTextModelService(new BrowserTextResourceStore(new BootstrapTextFiles()));
 		using resources = new DisposableStore();
 		const services = createCodeEditorServices(resources);
+		registerDialogs(services);
 		const originalInput = { resource: URI.parse('git-change:/cancel/original'), initialText: 'old' };
 		const reference = await models.acquire(originalInput, new AbortController().signal);
 		let modelDisposed = false;
@@ -400,6 +421,8 @@ test('Multi-diff pane inherits word wrap and routes the toggle command to its vi
 	using models = new BrowserTextModelService(resourceStore);
 	using resources = new DisposableStore();
 	const services = createCodeEditorServices(resources);
+	registerDialogs(services);
+
 	const configuration = services.get(IConfigurationService);
 	await configuration.updateValue(CodeEditorConfiguration.wordWrap, EditorLineWrapping.On);
 	const pane = services.createInstance(MultiDiffEditorPane, {

@@ -1,8 +1,10 @@
 import "./media/editorWelcome.css";
+import "../common/editorWelcomeColors.js";
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { appendIcon } from "../../../../base/browser/ui/lxicons/lxicon.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
 import { Disposable, MutableDisposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
+import { localize, onDidChangeNls } from "../../../../nls.js";
 
 const MAX_VISIBLE_RECENT_PROJECTS = 5;
 
@@ -30,6 +32,7 @@ export interface EditorWelcomeOptions {
 
 interface WelcomeCardOptions {
 	readonly label: string;
+	readonly labelKey: string;
 	readonly icon: Parameters<typeof appendIcon>[0];
 	readonly action: EditorWelcomeAction | undefined;
 	readonly variant?: "default" | "featured";
@@ -106,29 +109,39 @@ export class EditorWelcome extends Disposable {
 		cards.className = "ash-editor-group-welcome-cards";
 		const cardOptions: readonly WelcomeCardOptions[] = [
 			{
-				label: "Open folder",
+				label: 'open folder',
+				labelKey: 'editorWelcome.openFolder',
 				icon: Lxicon.folders,
 				action: actions?.openFolder,
 			},
 			{
-				label: "Clone repo",
+				label: 'clone repo',
+				labelKey: 'editorWelcome.cloneRepo',
 				icon: Lxicon.gitBranch,
 				action: actions?.cloneRepository,
 			},
 			{
-				label: "Connect via SSH",
+				label: 'connect via ssh',
+				labelKey: 'editorWelcome.connectViaSsh',
 				icon: Lxicon.remote,
 				action: actions?.connectViaSsh,
 			},
 			{
-				label: "Connect GitHub",
+				label: 'connect github',
+				labelKey: 'editorWelcome.connectGitHub',
 				icon: Lxicon.github,
 				action: actions?.connectGitHub,
 				variant: "featured",
 				external: true,
 			},
 		];
-		for (const card of cardOptions) cards.append(this.createCard(ownerDocument, card));
+		const renderedCards = cardOptions.map(card => this.createCard(ownerDocument, card));
+		cards.append(...renderedCards);
+		this._register(onDidChangeNls(() => {
+			for (let index = 0; index < cardOptions.length; index += 1) {
+				this.updateCardLabel(renderedCards[index], cardOptions[index]);
+			}
+		}));
 		return cards;
 	}
 
@@ -142,7 +155,6 @@ export class EditorWelcome extends Disposable {
 		if (!options.action) {
 			card.disabled = true;
 			card.classList.add("is-disabled");
-			card.title = `${options.label} is not available yet`;
 		} else {
 			this._register(addDisposableListener(card, "click", () => this.run(options.action)));
 		}
@@ -154,7 +166,6 @@ export class EditorWelcome extends Disposable {
 
 		const label = h(ownerDocument, "span");
 		label.className = "ash-editor-group-welcome-card-label";
-		label.textContent = options.label;
 		card.append(icon, label);
 		if (options.external) {
 			const arrow = h(ownerDocument, "span");
@@ -163,7 +174,14 @@ export class EditorWelcome extends Disposable {
 			arrow.textContent = "↗";
 			card.append(arrow);
 		}
+		this.updateCardLabel(card, options);
 		return card;
+	}
+
+	private updateCardLabel(card: HTMLButtonElement, options: WelcomeCardOptions): void {
+		const label = localize(options.labelKey, options.label);
+		card.querySelector<HTMLElement>('.ash-editor-group-welcome-card-label')!.textContent = label;
+		if (card.disabled) card.title = localize('editorWelcome.actionUnavailable', '{0} is not available yet', label);
 	}
 
 	private createRecentProjects(ownerDocument: Document): HTMLElement {

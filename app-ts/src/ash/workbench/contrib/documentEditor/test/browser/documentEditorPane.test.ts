@@ -7,7 +7,8 @@ import { URI } from "../../../../../base/common/uri.js";
 import type { IFileChangeEvent } from "../../../../../platform/files/common/files.js";
 import { TextFileSaveConflictError, type ITextFileService, type ResolvedTextFileContent, type TextFileResolveRequest, type TextFileSaveRequest } from "../../../../services/textfile/common/textFileService.js";
 import { DOCUMENT_EDITOR_ID } from "../../browser/documentEditorInput.js";
-import { DocumentEditorPane as EditorPane } from "../../browser/documentEditorPane.js";
+import { DocumentEditorPane, type EditorPaneOptions } from "../../browser/documentEditorPane.js";
+import { DialogResult, type IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { nodeViews as profileNodeViews } from "../../../../../editor/contrib/academic/browser/nodeViews.js";
 import { inlineNodeViews as citationInlineNodeViews, nodeViews as citationNodeViews } from "../../../../../editor/contrib/citation/browser/nodeViews.js";
 import { citationToolbarActions } from "../../../../../editor/contrib/citation/browser/toolbarAction.js";
@@ -20,6 +21,20 @@ import { createDefaultDocumentSchema, DocumentSchema } from "../../../../../edit
 import { h } from "../../../../../base/browser/dom.js";
 
 await import("../../../../../editor/contrib/documentEditor.contribution.js");
+
+let dialogValues: readonly string[] = [];
+const testDialogs: IDialogService = {
+	showMessage: async () => {},
+	confirm: async () => ({ confirmed: true }),
+	prompt: async () => DialogResult.Cancel,
+	input: async () => ({ confirmed: true, values: dialogValues }),
+};
+
+class EditorPane extends DocumentEditorPane {
+	constructor(files: ITextFileService, options: EditorPaneOptions = {}) {
+		super(files, options, testDialogs);
+	}
+}
 
 function documentAction(parent: ParentNode, actionId: string): HTMLButtonElement {
 	const button = parent.querySelector<HTMLButtonElement>(`[data-action-id='${actionId}'] button`);
@@ -404,8 +419,7 @@ test("Stanza renders and deletes Academic citation inline nodes", async () => {
 
 test("Stanza exposes Academic citation insertion as a toolbar action", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
-	const prompts = ["smith-2024", "[Smith 2024]"];
-	Object.defineProperty(environment.window, "prompt", { configurable: true, value: () => prompts.shift() ?? null });
+	dialogValues = ['smith-2024', '[Smith 2024]'];
 	const schema = createAcademicDocumentSchema();
 	const paragraph = schema.createNode("paragraph", { id: "toolbar-paragraph", content: [schema.createText("See", { id: "toolbar-text" })] });
 	const document = schema.createDocument([paragraph], "toolbar-document");
@@ -423,6 +437,7 @@ test("Stanza exposes Academic citation insertion as a toolbar action", async () 
 	const citationButton = documentAction(parent, "citation");
 	assert.equal(citationButton.disabled, false);
 	citationButton.click();
+	await new Promise(resolve => setTimeout(resolve, 0));
 	const inserted = pane.getDocument().content[0]?.content.find(node => node.type === "citation");
 	assert.equal(inserted?.attrs.key, "smith-2024");
 	assert.equal(inserted?.attrs.label, "[Smith 2024]");
@@ -460,8 +475,7 @@ test("Stanza renders resolved citations and bibliography references", async () =
 
 test("Stanza exposes reference insertion as a citation toolbar action", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
-	const prompts = ["smith-2024", "Smith, 2024"];
-	Object.defineProperty(environment.window, "prompt", { configurable: true, value: () => prompts.shift() ?? null });
+	dialogValues = ['smith-2024', 'Smith, 2024'];
 	const schema = createAcademicDocumentSchema();
 	const paragraph = schema.createNode("paragraph", { id: "reference-toolbar-paragraph", content: [schema.createText("Body")] });
 	const document = schema.createDocument([paragraph], "reference-toolbar-document");
@@ -477,6 +491,7 @@ test("Stanza exposes reference insertion as a citation toolbar action", async ()
 	const referenceButton = documentAction(parent, "reference");
 	assert.equal(referenceButton.disabled, false);
 	referenceButton.click();
+	await new Promise(resolve => setTimeout(resolve, 0));
 	const bibliography = pane.getDocument().content.find(node => node.type === "bibliography");
 	assert.ok(bibliography);
 	assert.equal(bibliography.content[0]?.attrs.key, "smith-2024");
@@ -1204,8 +1219,7 @@ test("Stanza carries collapsed mark toggles into later input", async () => {
 
 test("Stanza applies, updates, and removes link marks", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
-	let promptValue = " https://example.test ";
-	Object.defineProperty(environment.window, "prompt", { configurable: true, value: () => promptValue });
+	dialogValues = [' https://example.test '];
 	const files = new MemoryTextFiles(JSON.stringify({
 		format: "ash.document",
 		version: 1,
@@ -1248,15 +1262,17 @@ test("Stanza applies, updates, and removes link marks", async () => {
 
 	select(0, 1, 1, 6);
 	documentAction(parent, "link").click();
+	await Promise.resolve();
 	assert.deepEqual(pane.getDocument().content[0]?.content.map(node => node.marks.map(mark => mark.type)), [[], ["link"], ["strong", "link"]]);
 	let links = Array.from(rich.querySelectorAll<HTMLAnchorElement>("a.stanza-document-inline-run"));
 	assert.deepEqual(links.map(link => link.getAttribute("href")), ["https://example.test", "https://example.test"]);
 	assert.equal(documentAction(parent, "link").classList.contains("checked"), true);
 
-	promptValue = "https://updated.test";
+	dialogValues = ['https://updated.test'];
 	select(1, 0, 2, 6);
 	const shortcut = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "k", ctrlKey: true });
 	rich.dispatchEvent(shortcut);
+	await Promise.resolve();
 	assert.equal(shortcut.defaultPrevented, true);
 	links = Array.from(rich.querySelectorAll<HTMLAnchorElement>("a.stanza-document-inline-run"));
 	assert.deepEqual(links.map(link => link.getAttribute("href")), ["https://updated.test", "https://updated.test"]);
@@ -1712,7 +1728,7 @@ class MemoryTextFiles implements ITextFileService {
 
 test('switching a document cancels a pending room and disposes a late connection', async () => {
 	const environment = new JSDOM('<!doctype html><body></body>');
-	Object.defineProperty(environment.window, 'prompt', { configurable: true, value: () => '' });
+	dialogValues = [''];
 	let finishOpen!: () => void;
 	const pending = new Promise<void>(resolve => { finishOpen = resolve; });
 	let openingSignal: AbortSignal | undefined;
@@ -1744,6 +1760,7 @@ test('switching a document cancels a pending room and disposes a late connection
 		pane.create(environment.window.document.body);
 		await pane.setInput({ resource: URI.file('/first.md') }, new AbortController().signal);
 		documentAction(environment.window.document, 'startCollaboration').click();
+		await Promise.resolve();
 		assert.equal(openingSignal?.aborted, false);
 		await pane.setInput({ resource: URI.file('/second.md') }, new AbortController().signal);
 		assert.equal(openingSignal?.aborted, true);

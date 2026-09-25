@@ -366,7 +366,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 				primaryButton: "Open File",
 				cancelButton: "Cancel",
 			});
-			if (!confirmed) throw new CancellationError("Opening the large file was cancelled");
+			if (!confirmed.confirmed) throw new CancellationError("Opening the large file was cancelled");
 		});
 	}
 

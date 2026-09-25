@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { Emitter } from "../../../base/common/event.js";
-import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagementService.js";
-import type { ISessionsService } from "../../services/view/common/sessionsService.js";
-import { SessionsList } from "../../browser/common/sessionsList.js";
+import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
+import type { ISessionsService } from "../../services/sessions/browser/sessionsService.js";
+import { SessionsList } from "../../browser/parts/sessionsList.js";
 
 test("SessionsList keeps session buttons and focus while refreshing", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");

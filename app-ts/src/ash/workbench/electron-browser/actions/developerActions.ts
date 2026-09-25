@@ -1,5 +1,7 @@
+import { localizedString } from "../../../platform/action/common/action.js";
 import {
 	Action2,
+	MenuId,
 } from "../../../platform/actions/common/actions.js";
 import type {
 	ServicesAccessor,
@@ -10,12 +12,13 @@ export const ToggleDeveloperToolsCommandId =
 	"workbench.action.toggleDevTools";
 
 /** Toggles the developer tools for the active Electron window. */
-export class ToggleDeveloperToolsAction extends Action2 {
+export class ToggleDevToolsAction extends Action2 {
 	constructor() {
 		super({
 			id: ToggleDeveloperToolsCommandId,
-			title: "Developer: Toggle Developer Tools",
+			title: localizedString("ash", "workbench.toggleDeveloperTools", "Developer: Toggle Developer Tools"),
 			f1: true,
+			menu: { id: MenuId.MenubarHelpMenu, group: "5_tools", order: 1 },
 		});
 	}
 

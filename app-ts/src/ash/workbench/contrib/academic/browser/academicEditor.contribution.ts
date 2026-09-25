@@ -14,20 +14,22 @@ for (const profile of profiles) {
 		canOpen: input => matchEditorProfiles(input, [profile]),
 		create: options => {
 			if (!options.textFileService) throw new Error("Document editor requires the Workbench text file service");
+			const instantiationService = options.instantiationService;
+			if (!instantiationService) throw new Error("Document editor requires the Workbench instantiation service");
 			if (!options.input) throw new Error("Document editor requires its Workbench input during construction");
 			const selectedProfile = findEditorProfile(options.input, [profile]);
 			if (!selectedProfile) throw new Error("Document editor has no profile for " + options.input.resource.toString());
 			const paneOptions = createDocumentEditorPaneOptions(selectedProfile, {
 				onSave: options.onSave,
 				workingCopyService: options.workingCopyService,
-				createDocumentCollaborationService: ownerWindow => {
+				createDocumentCollaborationService: () => {
 					const appServerDocumentCollaborationService = options.documentCollaborationApi && options.serverEvents
 						? new AppServerDocumentCollaborationService(options.documentCollaborationApi, options.serverEvents)
 						: undefined;
-					return new DocumentCollaborationService(ownerWindow, appServerDocumentCollaborationService);
+					return instantiationService.createInstance(DocumentCollaborationService, appServerDocumentCollaborationService);
 				},
 			});
-			return new DocumentEditorPane(options.textFileService, paneOptions);
+			return instantiationService.createInstance(DocumentEditorPane, options.textFileService, paneOptions);
 		},
 	});
 }

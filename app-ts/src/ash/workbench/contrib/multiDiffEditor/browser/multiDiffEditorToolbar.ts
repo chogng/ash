@@ -1,4 +1,5 @@
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { text, addDisposableListener, h, stopEvent } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
@@ -12,8 +13,8 @@ import { TextModel } from '../../../../editor/common/model/textModel.js';
 import { DropdownWithPrimaryActionViewItem } from '../../../../platform/actions/browser/dropdownWithPrimaryActionViewItem.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import type { IActiveSessionThread } from '../../../../sessions/services/sessions/common/session.js';
-import type { ISessionsManagementService } from '../../../../sessions/services/sessions/common/sessionsManagementService.js';
-import { EXPLORER_VIEW_ID } from '../../files/browser/files.contribution.js';
+import type { ISessionsManagementService } from '../../../../sessions/services/sessions/common/sessionsManagement.js';
+import { VIEW_ID } from '../../files/common/files.js';
 import type { IChatService, TurnChangeSetSummary } from '../../../services/chat/common/chatService.js';
 import type { IEditorService } from '../../../services/editor/common/editorService.js';
 import type { IGitService } from '../../../services/git/common/gitService.js';
@@ -42,7 +43,7 @@ export class MultiDiffEditorToolbar extends Disposable {
 	private readonly overlay = this._register(new MutableDisposable<DisposableStore>());
 	private busy = false;
 
-	constructor(private readonly options: MultiDiffEditorToolbarOptions, @IInstantiationService private readonly instantiationService: IInstantiationService) {
+	constructor(private readonly options: MultiDiffEditorToolbarOptions, @IInstantiationService private readonly instantiationService: IInstantiationService, @IDialogService private readonly dialogs: IDialogService) {
 		super();
 		const ownerDocument = options.container.ownerDocument;
 		this.domNode = h(ownerDocument, 'div');
@@ -90,7 +91,7 @@ export class MultiDiffEditorToolbar extends Disposable {
 			: new ToolbarAction('multiDiff.pullRequest.create', 'Create Pull Request', 'Pull request provider is not connected', Lxicon.git, false, () => {});
 		const dropdown = new ToolbarAction('multiDiff.repository.menu', 'Repository Actions', 'Repository Actions', Lxicon.chevronDown, true, () => {});
 		const actions = isMain ? this.commitActions() : this.pullRequestActions();
-		const files = new ToolbarAction('multiDiff.files', 'Files', 'Open Files', Lxicon.files, this.options.viewsService !== undefined, () => this.options.viewsService?.focusView(EXPLORER_VIEW_ID));
+		const files = new ToolbarAction('multiDiff.files', 'Files', 'Open Files', Lxicon.files, this.options.viewsService !== undefined, () => this.options.viewsService?.focusView(VIEW_ID));
 		const secondary = [
 			new ToolbarAction('multiDiff.collapseAll', 'Collapse All', 'Collapse all diffs', Lxicon.fold, true, this.options.collapseAll),
 			new ToolbarAction('multiDiff.expandAll', 'Expand All', 'Expand all diffs', Lxicon.unfold, true, this.options.expandAll),
@@ -288,8 +289,11 @@ export class MultiDiffEditorToolbar extends Disposable {
 
 	private async discardAll(): Promise<void> {
 		if (!this.options.gitService) return;
-		const confirmed = this.domNode.ownerDocument.defaultView?.confirm('Discard all working-tree changes in this source? This cannot be undone.') === true;
-		if (!confirmed) return;
+		const confirmation = await this.dialogs.confirm({
+			message: 'Discard all working-tree changes in this source? This cannot be undone.',
+			primaryButton: 'Discard Changes',
+		});
+		if (!confirmation.confirmed || this.isDisposed) return;
 		await this.run('Discarding changes…', async () => {
 			const status = await this.options.gitService!.status(this.repositoryId());
 			const paths = uniquePaths(status.changes.filter(change => change.worktreeStatus !== 'unmodified').map(change => change.path));

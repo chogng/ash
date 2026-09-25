@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
+import { DialogResult, type IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+
 import { JSDOM } from "jsdom";
 import type { IFileService } from '../../../../../platform/files/common/files.js';
 import { Emitter, type Event } from "../../../../../base/common/event.js";
@@ -10,9 +12,16 @@ import type { IContextMenuService } from "../../../../../platform/contextview/br
 import type { IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, ThreadRead, ThreadSubscription, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope } from "../../../../services/chat/common/chatService.js";
 import type { IWorkbenchLayoutService, WorkbenchPartId, WorkbenchPartVisibilityChangeEvent } from "../../../../services/layout/browser/layoutService.js";
 import type { ApprovalMode, IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
-import type { ISessionsManagementService, SessionsManagementState } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
+import type { ISessionsManagementService, SessionsManagementState } from "../../../../../sessions/services/sessions/common/sessionsManagement.js";
 import type { IChatContextPickService } from "../../../../services/chat/common/chatContextService.js";
 import type { IQuickInputService } from "../../../../../platform/quickinput/common/quickInput.js";
+
+const testDialogs: IDialogService = {
+	showMessage: async () => {},
+	confirm: async () => ({ confirmed: true }),
+	prompt: async () => DialogResult.Cancel,
+	input: async () => ({ confirmed: false }),
+};
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -51,6 +60,7 @@ test("opens a local Chat tab before the backend session request settles", () => 
 		{} as IChatContextPickService,
 		{} as IQuickInputService,
 		{} as IFileService,
+		testDialogs,
 	);
 
 	assert.equal(sessionService.untitledSessions.length, 1);

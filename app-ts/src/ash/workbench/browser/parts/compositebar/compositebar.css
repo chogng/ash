@@ -133,6 +133,27 @@
   height: 16px;
 }
 
+.ash-composite-bar-badge {
+  display: inline-flex;
+  min-width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  border-radius: var(--ash-corner-radius-circle);
+  color: var(--ash-selection-foreground);
+  background: var(--ash-accent-background);
+  font-size: var(--ash-font-size-label3);
+  line-height: 1;
+}
+
+.ash-composite-bar-icon .ash-composite-bar-badge {
+  position: absolute;
+  right: -6px;
+  bottom: 2px;
+}
+
 /* Keep the visual gap inside a Composite action's native drop hit area. */
 .ash-composite-bar > .ash-action-bar.ash-action-bar-dnd.horizontal > .ash-composite-bar-item:not(:last-child)::after {
   position: absolute;

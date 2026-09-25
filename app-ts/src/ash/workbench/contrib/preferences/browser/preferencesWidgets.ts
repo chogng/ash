@@ -8,12 +8,12 @@ import { SelectBox, type SelectOption } from '../../../../base/browser/ui/select
 import { Checkbox, Switch, type Toggle } from '../../../../base/browser/ui/toggle/toggle.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
-import { Disposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import type { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { ILocalizationService } from '../../../services/localization/common/localizationService.js';
-import type { IBooleanSetting, INumberSetting, ISelectSetting, ISetting, ITextSetting, SettingReference, SettingValueBinding, SettingsPresentation } from '../../../services/preferences/common/preferences.js';
+import type { IBooleanSetting, INumberSetting, ISelectSetting, ISetting, IStringMapSetting, ITextSetting, SettingReference, SettingValueBinding, SettingsPresentation } from '../../../services/preferences/common/preferences.js';
 import { configurationSettingBinding, SettingModel, type SettingState } from '../../../services/preferences/common/preferencesModels.js';
 import { SettingsSearchMenu } from './settingsSearchMenu.js';
 import { SettingsTreeIndicatorsLabel } from './settingsEditorSettingIndicators.js';
@@ -423,6 +423,133 @@ class TextSettingWidget extends AbstractSettingWidget<ITextSetting, string> {
 	}
 }
 
+class StringMapSettingWidget extends AbstractSettingWidget<IStringMapSetting, Record<string, string>> {
+	private readonly rows: HTMLDivElement;
+	private readonly addButton: Button;
+	private readonly rowDisposables = this._register(new DisposableStore());
+	private renderedValue: Record<string, string> | undefined;
+
+	constructor(container: HTMLElement, descriptor: IStringMapSetting, options: SettingWidgetOptions) {
+		super(container, descriptor, descriptor.binding ?? configurationSettingBinding(options.configurationService, descriptor.configuration), options);
+		this.domNode.classList.add('ash-string-map-setting');
+		this.domNode.dataset.configurationKey = descriptor.configuration.key;
+		this.rows = h(this.domNode.ownerDocument, 'div');
+		this.rows.className = 'ash-string-map-rows';
+		const actions = h(this.domNode.ownerDocument, 'div');
+		actions.className = 'ash-string-map-actions';
+		this.addButton = this._register(new Button(actions, {
+			label: descriptor.addLabel,
+			ariaLabel: descriptor.addLabel,
+			onClick: () => {
+				const keyInput = this.addRow('', '');
+				keyInput.focus();
+			},
+		}));
+		this.domNode.append(this.copyDomNode, this.rows, actions);
+		this.bindState(state => {
+			if (!sameStringMap(this.renderedValue, state.value)) {
+				this.renderRows(state.value);
+			}
+			this.addButton.enabled = !state.isPending;
+			for (const input of this.rows.querySelectorAll('input')) {
+				input.disabled = state.isPending;
+			}
+			for (const button of this.rows.querySelectorAll('button')) {
+				button.disabled = state.isPending;
+			}
+		});
+	}
+
+	protected updateControl(descriptor: IStringMapSetting): void {
+		this.addButton.label = descriptor.addLabel;
+		this.addButton.domNode.setAttribute('aria-label', descriptor.addLabel);
+		this.updateRowLabels();
+	}
+
+	private renderRows(value: Record<string, string>): void {
+		this.rowDisposables.clear();
+		this.rows.replaceChildren();
+		for (const [key, childPatterns] of Object.entries(value)) {
+			this.addRow(key, childPatterns);
+		}
+		this.renderedValue = value;
+	}
+
+	private addRow(key: string, childPatterns: string): HTMLInputElement {
+		const row = h(this.domNode.ownerDocument, 'div');
+		row.className = 'ash-string-map-row';
+		const keyInput = h(this.domNode.ownerDocument, 'input');
+		keyInput.type = 'text';
+		keyInput.value = key;
+		keyInput.dataset.patternPart = 'key';
+		const valueInput = h(this.domNode.ownerDocument, 'input');
+		valueInput.type = 'text';
+		valueInput.value = childPatterns;
+		valueInput.dataset.patternPart = 'value';
+		row.append(keyInput, valueInput);
+		const rowDisposables = this.rowDisposables.add(new DisposableStore());
+		rowDisposables.add(addDisposableListener(keyInput, 'change', () => this.acceptRows()));
+		rowDisposables.add(addDisposableListener(valueInput, 'change', () => this.acceptRows()));
+		rowDisposables.add(new Button(row, {
+			label: this.descriptor.removeLabel,
+			ariaLabel: this.descriptor.removeLabel,
+			size: 'small',
+			onClick: () => {
+				row.remove();
+				rowDisposables.dispose();
+				this.updateRowLabels();
+				this.acceptRows();
+			},
+		}));
+		this.rows.append(row);
+		this.updateRowLabels();
+		return keyInput;
+	}
+
+	private updateRowLabels(): void {
+		for (const [index, row] of [...this.rows.children].entries()) {
+			row.querySelector<HTMLInputElement>('[data-pattern-part="key"]')?.setAttribute('aria-label', `${this.descriptor.keyLabel} ${index + 1}`);
+			row.querySelector<HTMLInputElement>('[data-pattern-part="value"]')?.setAttribute('aria-label', `${this.descriptor.valueLabel} ${index + 1}`);
+			row.querySelector<HTMLButtonElement>('button')?.setAttribute('aria-label', `${this.descriptor.removeLabel} ${index + 1}`);
+		}
+	}
+
+	private acceptRows(): void {
+		if (this.model.state.isPending) return;
+		const value: Record<string, string> = Object.create(null) as Record<string, string>;
+		for (const row of this.rows.children) {
+			const keyInput = row.querySelector<HTMLInputElement>('[data-pattern-part="key"]');
+			const valueInput = row.querySelector<HTMLInputElement>('[data-pattern-part="value"]');
+			if (!keyInput || !valueInput) continue;
+			const key = keyInput.value.trim();
+			const childPatterns = valueInput.value.trim();
+			keyInput.setAttribute('aria-invalid', String(!key));
+			valueInput.setAttribute('aria-invalid', String(!childPatterns));
+			if (!key || !childPatterns) {
+				this.reportStatus(this.descriptor.incompleteMessage, true);
+				return;
+			}
+			if (Object.hasOwn(value, key)) {
+				keyInput.setAttribute('aria-invalid', 'true');
+				this.reportStatus(this.descriptor.duplicateMessage, true);
+				return;
+			}
+			value[key] = childPatterns;
+		}
+		try {
+			this.descriptor.configuration.parse(value);
+		} catch (error) {
+			this.reportStatus(settingErrorMessage(error, 'Invalid setting value.'), true);
+			return;
+		}
+		if (sameStringMap(value, this.model.state.value)) {
+			this.reportStatus('', false);
+			return;
+		}
+		void this.updateSetting(value);
+	}
+}
+
 export function createSettingWidget(container: HTMLElement, setting: ISetting, options: SettingWidgetOptions): SettingWidget {
 	switch (setting.valueType) {
 		case 'boolean':
@@ -433,7 +560,16 @@ export function createSettingWidget(container: HTMLElement, setting: ISetting, o
 			return new SelectSettingWidget(container, setting, options);
 		case 'text':
 			return new TextSettingWidget(container, setting, options);
+		case 'stringMap':
+			return new StringMapSettingWidget(container, setting, options);
 	}
+}
+
+function sameStringMap(left: Record<string, string> | undefined, right: Record<string, string>): boolean {
+	if (!left) return false;
+	const leftEntries = Object.entries(left);
+	const rightEntries = Object.entries(right);
+	return leftEntries.length === rightEntries.length && leftEntries.every(([key, value], index) => key === rightEntries[index]?.[0] && value === rightEntries[index]?.[1]);
 }
 
 function sameSelectOptions(left: readonly SelectOption[], right: readonly SelectOption[]): boolean {

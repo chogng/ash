@@ -2,6 +2,45 @@ import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
 
+test('Sessions entry sits beside Quick Access and animates its Ash mark on intent', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	const commandCenter = page.locator('.ash-titlebar-command-center-button');
+	const actionId = target.kind === 'electron' ? 'workbench.action.openAgentsWindow' : 'ash.code.open-sessions';
+	const entry = page.locator(`.ash-titlebar-center-adjacent-actions [data-action-id="${actionId}"] button`);
+	await expect(page.locator(`.ash-titlebar-left-actions [data-action-id="${actionId}"]`)).toHaveCount(0);
+	await expect(entry).toBeVisible();
+	await expect(entry).toHaveAttribute('aria-label', target.kind === 'electron' ? 'Open Agents Window' : 'Open Code Sessions');
+	const mark = entry.locator('svg.ash-sessions-titlebar-mark');
+	await expect(mark.locator('path')).toHaveCount(9);
+
+	for (const width of [1200, 700]) {
+		await page.setViewportSize({ width, height: 800 });
+		const searchBounds = await commandCenter.boundingBox();
+		const entryBounds = await entry.boundingBox();
+		expect(searchBounds).not.toBeNull();
+		expect(entryBounds).not.toBeNull();
+		expect(entryBounds!.x - searchBounds!.x - searchBounds!.width).toBeGreaterThanOrEqual(6);
+		expect(Math.abs(entryBounds!.y + entryBounds!.height / 2 - searchBounds!.y - searchBounds!.height / 2)).toBeLessThan(1);
+	}
+
+	const petal = mark.locator('#petal-north');
+	await entry.hover();
+	await expect(petal).toHaveCSS('animation-name', 'ash-sessions-mark-bloom');
+	await page.mouse.move(400, 180);
+	await commandCenter.focus();
+	await page.keyboard.press('Tab');
+	await expect(entry).toBeFocused();
+	await expect(petal).toHaveCSS('animation-name', 'ash-sessions-mark-bloom');
+	await page.emulateMedia({ reducedMotion: 'reduce' });
+	await expect(petal).toHaveCSS('animation-name', 'none');
+
+	if (target.kind === 'browser') {
+		await entry.click();
+		await expect(page).toHaveURL(/sessions-code\.html/u);
+	}
+});
+
 test('titlebar toolbar icons fit inside their buttons', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const buttons = workbench.page.locator('.ash-workbench-titlebar .ash-toolbar .ash-action-view-item.icon > .ash-button');

@@ -197,6 +197,7 @@ export class ObjectTree<TNode> extends Disposable {
 	get selection(): readonly TNode[] {
 		return this.tree.selection.map((node) => node.element);
 	}
+	getVisibleElements(): readonly TNode[] { return this.model.visibleNodes.map((node) => node.element); }
 
 	domFocus(): void { this.tree.domFocus(); }
 	rerender(id?: string): void { this.model.rerender(id); }
@@ -355,6 +356,7 @@ export class CompressibleObjectTree<T> extends Disposable {
 	clearFind(): void { this.tree.clearFind(); }
 	get focus(): T | undefined { return this.tree.focus ? lastCompressedElement(this.tree.focus.element.elements) : undefined; }
 	get selection(): readonly T[] { return this.tree.selection.map((node) => lastCompressedElement(node.element.elements)); }
+	getVisibleElements(): readonly T[] { return this.model.visibleNodes.map((node) => lastCompressedElement(node.element.elements)); }
 	domFocus(): void { this.tree.domFocus(); }
 	rerender(element?: T): void { this.model.rerender(element); }
 	setFocus(element: T, browserEvent?: UIEvent): void {

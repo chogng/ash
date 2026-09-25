@@ -58,8 +58,15 @@ test("localization lookup falls back to English and formats parameters", async (
 	assert.deepEqual([
 		commandActionLabel(localizedString('ash.menu', 'file', 'File')),
 		commandActionLabel(localizedString('ash.actions', 'showPanel', 'Show Panel')),
+		commandActionLabel(localizedString('ash.actions', 'openAgentsWindow', 'Open Agents Window')),
 		commandActionLabel(localizedString('ash', 'workbench.openFolder', 'Open Folder...')),
-	], ['文件', '显示面板', '打开文件夹...']);
+		commandActionLabel(localizedString('ash', 'workbench.toggleDeveloperTools', 'Developer: Toggle Developer Tools')),
+		commandActionLabel(localizedString('ash', 'workbench.switchWindow', 'Switch Window...')),
+		commandActionLabel(localizedString('ash', 'workbench.installShellCommand', 'Install ash Command in PATH')),
+	], ['文件', '显示面板', '打开 Agents 窗口', '打开文件夹...', '开发者：切换开发者工具', '切换窗口...', '在 PATH 中安装 ash 命令']);
+	assert.equal(localization.translate('ash', 'openAgentsWindow.systemWideFailed', 'Some system-wide shortcuts could not be registered ({0}); they may be used by another application.', { '0': 'Ctrl+A' }), '部分系统级快捷键无法注册（Ctrl+A）；它们可能已被其他应用占用。');
+	assert.equal(localization.translate('ash', 'dialog.input', 'Input'), '输入');
+	assert.equal(localization.translate('ash', 'collaboration.dialog.tokenMessage', 'Enter the remote collaboration server bearer token.'), '输入远程协作服务器的访问令牌。');
 	assert.equal(localization.translate('ash.regions', 'searchCommands', 'Search commands'), '搜索命令');
 	assert.equal(localization.translate('ash', 'iPadShowKeyboard.label', 'Show Keyboard'), '显示键盘');
 	assert.equal(localization.translate('ash', 'inspectTokens.label', 'Developer: Inspect Tokens'), '开发者：检查词法单元');
@@ -68,6 +75,21 @@ test("localization lookup falls back to English and formats parameters", async (
 	assert.equal(localization.translate('ash', 'quickCommand.placeholder', 'Type > for commands, ? for help, or @ for symbols'), '输入 > 查找命令、? 查看帮助，或 @ 查找符号');
 	assert.equal(localization.translate('ash', 'chat.settings.advisorDisable', 'Turn Advisor off'), '关闭顾问');
 	assert.equal(localization.translate('ash', 'chat.advisor.configure', 'Configure an advisor model in Chat Settings before asking for a second opinion'), '请先在聊天设置中配置顾问模型，再请求第二意见');
+	assert.deepEqual([
+		localization.translate('ash', 'editorWelcome.openFolder', 'open folder'),
+		localization.translate('ash', 'editorWelcome.cloneRepo', 'clone repo'),
+		localization.translate('ash', 'editorWelcome.connectViaSsh', 'connect via ssh'),
+		localization.translate('ash', 'editorWelcome.connectGitHub', 'connect github'),
+	], ['打开文件夹', '克隆仓库', '通过 SSH 连接', '连接 GitHub']);
+	assert.deepEqual([
+		localization.translate('ash', 'files.openEditors.title', 'Open Editors'),
+		localization.translate('ash', 'files.openEditors.group', 'Group {0}', { '0': 2 }),
+		localization.translate('ash', 'files.openEditors.unsaved', 'Unsaved changes'),
+		localization.translate('ash', 'files.nesting.enabledTitle', 'File nesting'),
+		localization.translate('ash', 'files.findInExplorer', 'Find files in Explorer'),
+		localization.translate('ash', 'files.saveConflictTitle', 'File changed on disk'),
+		localization.translate('ash', 'files.openBinaryAsText', 'Open as Read-Only Text'),
+	], ['打开的编辑器', '第 2 组', '未保存的更改', '文件嵌套', '在资源管理器中查找文件', '磁盘上的文件已更改', '以只读文本打开']);
 });
 
 test('minimap menu uses the selected Chinese language catalog', async () => {
@@ -186,6 +208,12 @@ test('editor action labels use the selected Chinese language catalog', async () 
 		assert.equal(localize('onboarding.stepProgress', 'Step {0} of {1}', 2, 3), '第 2 步，共 3 步');
 		assert.equal(localize('onboarding.commandCenter.title', 'Find commands quickly'), '快速查找命令');
 		assert.equal(localize('releaseNotes.open', 'Show Release Notes'), '显示版本说明');
+		assert.equal(localize({ bundle: 'ash', key: 'workbench.copyPath' }, 'Copy Path'), '复制路径');
+		assert.equal(localize({ bundle: 'ash', key: 'workbench.copyRelativePath' }, 'Copy Relative Path'), '复制相对路径');
+		assert.equal(localize({ bundle: 'ash', key: 'workbench.newFile' }, 'New File...'), '新建文件...');
+		assert.equal(localize({ bundle: 'ash', key: 'workbench.newFileName' }, 'New File Name'), '新建文件名称');
+		assert.equal(localize('workbench.explorerDecoratedFile', '{0}, {1}', 'link', localize('workbench.explorerSymbolicLink', 'Symbolic Link')), 'link，符号链接');
+		assert.equal(localize({ bundle: 'ash', key: 'workbench.downloadFile' }, 'Download File...'), '下载文件...');
 	} finally {
 		resetNlsResolver();
 	}

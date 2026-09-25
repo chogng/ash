@@ -51,7 +51,7 @@ export class BulkEditPreviewContribution extends Disposable {
 				primaryButton: "Continue",
 				cancelButton: "Cancel",
 			});
-			if (!confirmed) return [];
+			if (!confirmed.confirmed) return [];
 			this.activeSession.controller.abort();
 			view.cancelInput();
 		}

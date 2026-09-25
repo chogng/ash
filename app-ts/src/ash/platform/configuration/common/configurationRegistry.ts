@@ -36,14 +36,25 @@ export interface ITextConfigurationSettingSchema extends IConfigurationSettingSc
 	readonly placeholder: string;
 }
 
-export type IConfigurationSettingSchema = IBooleanConfigurationSettingSchema | INumberConfigurationSettingSchema | ISelectConfigurationSettingSchema | ITextConfigurationSettingSchema;
+export interface IStringMapConfigurationSettingSchema extends IConfigurationSettingSchemaBase {
+	readonly valueType: 'stringMap';
+	readonly keyLabel: string;
+	readonly valueLabel: string;
+	readonly addLabel: string;
+	readonly removeLabel: string;
+	readonly incompleteMessage: string;
+	readonly duplicateMessage: string;
+}
+
+export type IConfigurationSettingSchema = IBooleanConfigurationSettingSchema | INumberConfigurationSettingSchema | ISelectConfigurationSettingSchema | ITextConfigurationSettingSchema | IStringMapConfigurationSettingSchema;
 
 export type ConfigurationSettingSchemaFor<T> =
 	[T] extends [boolean] ? IBooleanConfigurationSettingSchema
 		: [T] extends [number] ? INumberConfigurationSettingSchema
 			: [T] extends [string] ? ISelectConfigurationSettingSchema<T & string> | ITextConfigurationSettingSchema
 				: [T] extends [string | boolean] ? ISelectConfigurationSettingSchema<T & (string | boolean)>
-				: never;
+					: [T] extends [Record<string, string>] ? IStringMapConfigurationSettingSchema
+						: never;
 
 export interface IRegisteredConfiguration<T = unknown> {
 	readonly key: string;

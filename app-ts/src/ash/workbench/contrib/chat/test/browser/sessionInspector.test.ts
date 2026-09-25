@@ -3,16 +3,24 @@ import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { Emitter } from "../../../../../base/common/event.js";
 import type { AgentTreeNode, ISession } from "../../../../../sessions/services/sessions/common/session.js";
-import type { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
+import type { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagement.js";
 import type { TurnChangeDetails, TurnChangeSetSummary } from "../../../../services/chat/common/chatService.js";
 import type { ChatPaneModel } from "../../browser/pane/chatPaneModel.js";
 import { SessionInspector } from "../../browser/view/sessionInspector.js";
+import { DialogResult, type IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+
+const testDialogs: IDialogService = {
+	showMessage: async () => {},
+	confirm: async () => ({ confirmed: true }),
+	prompt: async () => DialogResult.Cancel,
+	input: async () => ({ confirmed: false }),
+};
 
 test("Session Inspector isolates Thread changes and enforces open, sealed, draft, and dependency state", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const selected: string[] = [];
 	const sessions = { selectThread: (_sessionId: string, threadId: string) => selected.push(threadId) } as unknown as ISessionsManagementService;
-	using inspector = new SessionInspector(dom.window.document.body, sessions, { close() {} });
+	using inspector = new SessionInspector(dom.window.document.body, sessions, { close() {} }, testDialogs);
 
 	const first = modelFixture("thread-a", [changeSet("open", { captureState: "open", revision: 1 })]);
 	inspector.bind(first.model);
@@ -35,6 +43,27 @@ test("Session Inspector isolates Thread changes and enforces open, sealed, draft
 	inspector.bind(second.model);
 	assert.doesNotMatch(inspector.element.textContent ?? "", /blocked/);
 	assert.match(inspector.element.textContent ?? "", /other · sealed/);
+	dom.window.close();
+});
+
+test('Session Inspector discards changes only after confirmation', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	let discarded = 0;
+	let confirmed = false;
+	const dialogs: IDialogService = { ...testDialogs, confirm: async () => ({ confirmed }) };
+	const { model } = modelFixture('thread-a', [changeSet('sealed', { captureState: 'sealed', revision: 1 })]);
+	(model as unknown as { discardChanges: () => Promise<void> }).discardChanges = async () => { discarded += 1; };
+	using inspector = new SessionInspector(dom.window.document.body, {} as ISessionsManagementService, { close() {} }, dialogs);
+	inspector.bind(model);
+	const discard = inspector.element.querySelector<HTMLButtonElement>('[aria-label="Discard every uncommitted change in this Thread"]');
+	assert.ok(discard);
+	discard.click();
+	await Promise.resolve();
+	assert.equal(discarded, 0);
+	confirmed = true;
+	discard.click();
+	await Promise.resolve();
+	assert.equal(discarded, 1);
 	dom.window.close();
 });
 

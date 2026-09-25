@@ -44,3 +44,19 @@ test("BrowserLifecycleService returns the same shutdown promise during onWillShu
 	await initial;
 	browser.window.close();
 });
+
+test('BrowserLifecycleService retries a failed shutdown without publishing completion', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>');
+	using lifecycle = new BrowserLifecycleService({ ownerWindow: browser.window as unknown as Window, onError: () => undefined });
+	let attempts = 0;
+	const completed: string[] = [];
+	lifecycle.onWillShutdown(event => event.join(++attempts === 1 ? Promise.reject(new Error('save failed')) : Promise.resolve(), 'backup'));
+	lifecycle.onDidShutdown(reason => completed.push(reason));
+	await assert.rejects(lifecycle.shutdown('windowClose'), /shutdown participants failed/);
+	assert.equal(lifecycle.phase, 'running');
+	assert.deepEqual(completed, []);
+	await lifecycle.shutdown('windowClose');
+	assert.equal(lifecycle.phase, 'shutdown');
+	assert.deepEqual(completed, ['windowClose']);
+	browser.window.close();
+});

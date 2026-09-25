@@ -15,12 +15,12 @@ const MAX_RENDERED_BYTES = 64 * 1024;
 /** Read-only hexadecimal/ascii projection for resources that are not safe text. */
 export class BaseBinaryResourceEditor extends Disposable implements IEditorPane {
 	readonly id = BINARY_EDITOR_ID;
-	private container: HTMLElement | undefined;
+	protected container: HTMLElement | undefined;
 	private content: HTMLPreElement | undefined;
 	private summary: HTMLElement | undefined;
 	private metadata: string | undefined;
 
-	constructor(private readonly files: IFileService) {
+	constructor(protected readonly files: IFileService) {
 		super();
 	}
 

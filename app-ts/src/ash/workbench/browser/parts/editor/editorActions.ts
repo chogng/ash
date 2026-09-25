@@ -229,35 +229,6 @@ registerAction2(class MoveEditorToNewWindowAction extends Action2 {
 	}
 });
 
-export const NewUntitledTextEditorCommandId =
-	"workbench.action.files.newUntitledFile";
-
-registerAction2(class NewUntitledTextEditorAction extends Action2 {
-	constructor() {
-		super({
-			id: NewUntitledTextEditorCommandId,
-			title: localizedString("ash", "workbench.newUntitledFile", "New Untitled Text Editor"),
-			tooltip: localizedString("ash", "workbench.newUntitledFile", "New Untitled Text Editor"),
-			icon: Lxicon.add,
-			f1: true,
-			menu: { id: MenuId.MenubarFileMenu, group: "1_file", order: -1 },
-			keybinding: {
-				primary: Keybinding.single(logicalKey("n", { primaryKey: true })),
-			},
-		});
-	}
-
-	override run(accessor: ServicesAccessor): Promise<void> {
-		const untitled = accessor.get(IUntitledTextEditorService).create();
-		return accessor.get(IEditorPart).openEditor({
-			resource: untitled.resource,
-			label: untitled.label,
-			initialText: untitled.initialText,
-			languageId: untitled.languageId,
-		}).then(() => undefined);
-	}
-});
-
 export const NewFileFromTemplateCommandId = "workbench.action.files.newFileFromTemplate";
 
 interface FileTemplateQuickPickItem extends IQuickPickItem {
@@ -300,33 +271,5 @@ registerAction2(class NewFileFromTemplateAction extends Action2 {
 		}));
 		disposables.add(picker.onDidHide(() => disposables.dispose()));
 		picker.show();
-	}
-});
-
-/** Saves the active pane through the Workbench-owned editor lifecycle. */
-export const SaveActiveEditorCommandId =
-	"workbench.action.files.save";
-
-registerAction2(class SaveActiveEditorAction extends Action2 {
-	constructor() {
-		super({
-			id: SaveActiveEditorCommandId,
-			title: localizedString("ash", "workbench.save", "Save"),
-			tooltip: localizedString("ash", "workbench.save", "Save"),
-			f1: true,
-			menu: {
-				id: MenuId.MenubarFileMenu,
-				when: EditorsVisibleContext.isEqualTo(true),
-				group: "3_save",
-				order: 1,
-			},
-			keybinding: {
-				primary: Keybinding.single(logicalKey("s", { primaryKey: true })),
-			},
-		});
-	}
-
-	override run(accessor: ServicesAccessor): Promise<void> {
-		return accessor.get(IEditorPart).saveActiveEditor();
 	}
 });

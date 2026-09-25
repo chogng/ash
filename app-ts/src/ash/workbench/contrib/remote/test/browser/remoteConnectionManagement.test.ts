@@ -191,11 +191,12 @@ class TestDialogService implements IDialogService {
 	confirmResult = true;
 
 	async showMessage(options: IMessageDialogOptions): Promise<void> { this.messages.push(options); }
-	async confirm(options: IConfirmationDialogOptions): Promise<boolean> {
+	async confirm(options: IConfirmationDialogOptions): Promise<{ confirmed: boolean }> {
 		this.confirmations.push(options);
-		return this.confirmResult;
+		return { confirmed: this.confirmResult };
 	}
 	async prompt(_options: IPromptDialogOptions): Promise<DialogResult> { return DialogResult.Cancel; }
+	async input(): Promise<never> { throw new Error('Unexpected input dialog'); }
 }
 
 async function acceptPicker(quickInput: TestQuickInputService, pickerIndex: number, itemIndex = 0): Promise<void> {

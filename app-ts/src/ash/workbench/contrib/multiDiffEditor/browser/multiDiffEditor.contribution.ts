@@ -7,7 +7,7 @@ import { IChatService } from '../../../services/chat/common/chatService.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IGitService } from '../../../services/git/common/gitService.js';
 import { IViewsService } from '../../../services/views/browser/viewsService.js';
-import { ISessionsManagementService } from '../../../../sessions/services/sessions/common/sessionsManagementService.js';
+import { ISessionsManagementService } from '../../../../sessions/services/sessions/common/sessionsManagement.js';
 import { matchMultiDiffEditor, MULTI_DIFF_EDITOR_ID } from './multiDiffEditorInput.js';
 import { MultiDiffCollapseAllAction, MultiDiffExpandAllAction, MultiDiffGoToFileAction, MultiDiffGoToNextChangeAction, MultiDiffGoToPreviousChangeAction } from './multiDiffEditorActions.js';
 import { MultiDiffEditorPane } from './multiDiffEditorPane.js';

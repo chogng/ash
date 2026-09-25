@@ -20,6 +20,7 @@
     "build": "pnpm run build:desktop",
     "build:desktop": "pnpm --dir app-ts build",
     "package:desktop:win32": "pnpm --dir app-ts package:win32:bundle && pnpm --dir app-ts package:win32:verify && pnpm --dir app-ts package:win32:installer",
+    "package:desktop:darwin": "pnpm --dir app-ts package:darwin:bundle && pnpm --dir app-ts package:darwin:verify",
     "build:stanza": "pnpm --dir app-ts build:stanza",
     "clean": "node build/clean.ts",
     "icons:generate": "node build/resources/icons/generate.ts",

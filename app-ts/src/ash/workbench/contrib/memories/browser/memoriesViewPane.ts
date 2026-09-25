@@ -235,7 +235,7 @@ export class MemoriesViewPane extends ViewPane {
 		this.status.textContent = localize('memories.saved', 'Memory saved.');
 	}
 	private async deleteMemory(): Promise<void> {
-		if (!this.selected || !await this.dialogs.confirm({ title: 'Delete memory', message: `Delete “${this.selected.title}”?`, detail: 'This removes the saved memory. Existing conversation history is retained.', primaryButton: 'Delete' })) { return; }
+		if (!this.selected || !(await this.dialogs.confirm({ title: 'Delete memory', message: `Delete “${this.selected.title}”?`, detail: 'This removes the saved memory. Existing conversation history is retained.', primaryButton: 'Delete' })).confirmed) { return; }
 		await this.memories.delete(this.selected, this.mutationId);
 		this.dirty = false;
 		await this.newMemory();
@@ -249,8 +249,8 @@ export class MemoriesViewPane extends ViewPane {
 	private async discardDraft(): Promise<boolean> {
 		if (!this.dirty) { return true; }
 		const discard = await this.dialogs.confirm({ message: 'Discard unsaved memory changes?', primaryButton: 'Discard changes' });
-		if (discard) { this.dirty = false; }
-		return discard;
+		if (discard.confirmed) { this.dirty = false; }
+		return discard.confirmed;
 	}
 	private async perform(operation: () => Promise<void>): Promise<void> {
 		if (this.working || this.isDisposed) { return; }

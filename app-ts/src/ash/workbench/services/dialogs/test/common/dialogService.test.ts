@@ -17,9 +17,9 @@ test("dialog service publishes requests through its owned model", async () => {
 
 	assert.equal(service.model.dialogs.length, 1);
 	assert.equal(item?.request.kind, "confirmation");
-	item?.close(DialogResult.Primary);
+	item?.close({ button: DialogResult.Primary });
 
-	assert.equal(await confirmation, true);
+	assert.deepEqual(await confirmation, { confirmed: true, checkboxChecked: undefined });
 	assert.equal(service.model.dialogs.length, 0);
 });
 
@@ -32,7 +32,14 @@ test("dialog service maps cancellation to a false confirmation", async () => {
 
 	service.model.dialogs[0]?.cancel();
 
-	assert.equal(await confirmation, false);
+	assert.deepEqual(await confirmation, { confirmed: false, checkboxChecked: undefined });
+});
+
+test('confirmation keeps its checkbox selection', async () => {
+	using service = new DialogService();
+	const confirmation = service.confirm({ message: 'Remove credentials?', checkbox: { label: 'Remove stored data' } });
+	service.model.dialogs[0]?.close({ button: DialogResult.Primary, checkboxChecked: true });
+	assert.deepEqual(await confirmation, { confirmed: true, checkboxChecked: true });
 });
 
 test("dialog service preserves all three prompt outcomes", async () => {
@@ -45,9 +52,26 @@ test("dialog service preserves all three prompt outcomes", async () => {
 	const item = service.model.dialogs[0];
 
 	assert.equal(item?.request.kind, "prompt");
-	item?.close(DialogResult.Secondary);
+	item?.close({ button: DialogResult.Secondary });
 
 	assert.equal(await prompt, DialogResult.Secondary);
+});
+
+test("input dialog returns values and checkbox state from the selected action", async () => {
+	using service = new DialogService();
+	const input = service.input({
+		message: "Server address",
+		inputs: [{ value: "https://" }],
+		checkbox: { label: "Remember server" },
+	});
+	const item = service.model.dialogs[0];
+	assert.equal(item?.request.kind, "input");
+	item?.close({ button: DialogResult.Primary, values: ["https://example.test"], checkboxChecked: true });
+	assert.deepEqual(await input, {
+		confirmed: true,
+		values: ["https://example.test"],
+		checkboxChecked: true,
+	});
 });
 
 test("disposing dialog service cancels every queued model request", async () => {
@@ -61,7 +85,7 @@ test("disposing dialog service cancels every queued model request", async () => 
 	assert.equal(service.model.dialogs.length, 2);
 	service.dispose();
 
-	assert.equal(await confirmation, false);
+	assert.deepEqual(await confirmation, { confirmed: false, checkboxChecked: undefined });
 	await message;
 	assert.equal(service.model.dialogs.length, 0);
 });

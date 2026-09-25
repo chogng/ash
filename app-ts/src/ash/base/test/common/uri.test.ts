@@ -39,6 +39,13 @@ test("URI.file supports Windows drive paths and UNC paths", () => {
 	assert.equal(unc.fsPath, "\\\\server\\share\\An item.txt");
 });
 
+test('URI.file preserves percent signs and Unicode in file paths', () => {
+	const resource = URI.file('C:\\project\\hello %中.txt');
+	assert.equal(resource.toString(), 'file:///C:/project/hello%20%25%E4%B8%AD.txt');
+	assert.equal(resource.fsPath, 'C:\\project\\hello %中.txt');
+	assert.equal(URI.parse(resource.toString()).fsPath, resource.fsPath);
+});
+
 test("URI changes are immutable and fragments can be removed explicitly", () => {
 	const anchored = URI.parse("ash://workspace/item?rev=2#anchor=7");
 	const resource = anchored.withoutFragment();

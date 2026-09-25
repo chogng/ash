@@ -1,4 +1,5 @@
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import './media/multiDiffEditorPane.css';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import { h } from '../../../../base/browser/dom.js';
@@ -26,7 +27,7 @@ import type { IChatService } from '../../../services/chat/common/chatService.js'
 import type { IEditorService } from '../../../services/editor/common/editorService.js';
 import type { IGitService } from '../../../services/git/common/gitService.js';
 import type { IViewsService } from '../../../services/views/browser/viewsService.js';
-import type { ISessionsManagementService } from '../../../../sessions/services/sessions/common/sessionsManagementService.js';
+import type { ISessionsManagementService } from '../../../../sessions/services/sessions/common/sessionsManagement.js';
 import { GIT_VIEW_ID } from '../../scm/browser/scmViewPane.js';
 import { createGitMultiDiffEditorInput } from './scmMultiDiffAction.js';
 import { isMultiDiffEditorInput, MULTI_DIFF_EDITOR_ID, multiDiffEditorItemKey, type MultiDiffEditorInput, type MultiDiffEditorInputItem } from './multiDiffEditorInput.js';
@@ -189,6 +190,7 @@ class MultiDiffEditorPaneSession extends Disposable {
 		initialSignal: AbortSignal,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IConfigurationService configuration: IConfigurationService,
+		@IDialogService private readonly dialogs: IDialogService,
 	) {
 		super();
 		try {
@@ -336,7 +338,11 @@ class MultiDiffEditorPaneSession extends Disposable {
 		const change = input.gitChange;
 		if (change) {
 			actions.push(new PaneAction('multiDiff.discardFile', 'Discard Changes', 'Discard Changes', Lxicon.discard, change.hasWorktreeChanges, async item => {
-				if (container.ownerDocument.defaultView?.confirm(`Discard changes in ${item.gitChange!.path}? This cannot be undone.`) !== true) return;
+				const confirmation = await this.dialogs.confirm({
+					message: `Discard changes in ${item.gitChange!.path}? This cannot be undone.`,
+					primaryButton: 'Discard Changes',
+				});
+				if (!confirmation.confirmed || this.isDisposed) return;
 				await options.gitService?.discardWorktree([item.gitChange!.path], item.gitChange!.repositoryId);
 				await this.refreshGitSource(sourceInput, options);
 			}));

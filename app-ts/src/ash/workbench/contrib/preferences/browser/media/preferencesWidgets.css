@@ -261,6 +261,50 @@
 	border-color: var(--ash-focus-border);
 }
 
+.ash-string-map-setting {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.ash-string-map-rows {
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.ash-string-map-row {
+	display: grid;
+	min-width: 0;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) auto;
+	gap: 8px;
+}
+
+.ash-string-map-row input {
+	width: 100%;
+	min-width: 0;
+	min-height: 30px;
+	box-sizing: border-box;
+	padding: 4px 8px;
+	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
+	border-radius: var(--ash-corner-radius-small);
+	outline: none;
+	color: var(--ash-input-foreground);
+	background: var(--ash-input-background);
+	font: inherit;
+}
+
+.ash-string-map-row input:focus-visible {
+	border-color: var(--ash-focus-border);
+}
+
+.ash-string-map-row input[aria-invalid='true'] {
+	border-color: var(--ash-error-foreground);
+}
+
+.ash-string-map-actions {
+	display: flex;
+}
+
 .ash-configuration-settings-status {
   min-height: 18px;
   margin: -18px 0 0;

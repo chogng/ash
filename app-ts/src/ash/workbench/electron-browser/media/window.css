@@ -1,0 +1,3 @@
+.ash-statusbar-item[data-statusbar-item-id='ash.status.zoom'] .ash-statusbar-item-label {
+	font-variant-numeric: tabular-nums;
+}

@@ -3,7 +3,7 @@ import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import type { IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 
-export type SettingValueType = 'boolean' | 'number' | 'select' | 'text';
+export type SettingValueType = 'boolean' | 'number' | 'select' | 'text' | 'stringMap';
 export type SettingsPresentation = 'editor' | 'general';
 
 export interface SettingValueBinding<T> {
@@ -59,7 +59,19 @@ export interface ITextSetting extends ISettingBase {
 	readonly placeholder: string;
 }
 
-export type ISetting = IBooleanSetting | INumberSetting | ISelectSetting | ITextSetting;
+export interface IStringMapSetting extends ISettingBase {
+	readonly valueType: 'stringMap';
+	readonly configuration: IRegisteredConfiguration<Record<string, string>>;
+	readonly binding?: SettingValueBinding<Record<string, string>>;
+	readonly keyLabel: string;
+	readonly valueLabel: string;
+	readonly addLabel: string;
+	readonly removeLabel: string;
+	readonly incompleteMessage: string;
+	readonly duplicateMessage: string;
+}
+
+export type ISetting = IBooleanSetting | INumberSetting | ISelectSetting | ITextSetting | IStringMapSetting;
 
 export interface ISelectSettingOption {
 	readonly value: string | boolean;

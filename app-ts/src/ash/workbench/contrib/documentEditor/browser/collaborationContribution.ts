@@ -9,6 +9,7 @@ import type { DocumentCollaborationInvite } from "../../../services/documentColl
 import type { DocumentCollaborationMember } from "../../../services/documentCollaboration/common/documentCollaborationService.js";
 import type { DocumentCollaborationRoomRole } from "../../../services/documentCollaboration/common/documentCollaborationService.js";
 import { addDisposableListener, h, fragment as createFragment } from "../../../../base/browser/dom.js";
+import type { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 
 export type CollaborationToolbarState = "unavailable" | "inactive" | "connecting" | "connected" | "resyncRequired" | "error";
 
@@ -44,7 +45,7 @@ export class CollaborationContribution extends Disposable {
 	private startGeneration = 0;
 	private readonly memberActionListeners = this._register(new MutableDisposable<DisposableStore>());
 
-	constructor(container: HTMLElement, private readonly options: CollaborationContributionOptions) {
+	constructor(container: HTMLElement, private readonly options: CollaborationContributionOptions, private readonly dialogs: IDialogService) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		const element = h(ownerDocument, "div");
@@ -153,13 +154,19 @@ export class CollaborationContribution extends Disposable {
 		return !this.isDisposed && this._state === "connected" && this.roomId === roomId && this.principalId === principalId;
 	}
 
-	private toggle(): void {
+	private async toggle(): Promise<void> {
 		if (this._state === "connected") {
 			this.options.onStop();
 			return;
 		}
-		const entered = this.element.ownerDocument.defaultView?.prompt("Enter a collaboration room ID to join, or leave it blank to create one.", "");
-		if (entered == null) return;
+		const generationBeforeInput = this.startGeneration;
+		const response = await this.dialogs.input({
+			title: 'Collaborate',
+			message: 'Enter a collaboration room ID to join, or leave it blank to create one.',
+			inputs: [{ value: '' }],
+		});
+		if (!response.confirmed || this.isDisposed || generationBeforeInput !== this.startGeneration) return;
+		const entered = response.values?.[0] ?? '';
 		this.setState("connecting");
 		const generation = this.startGeneration;
 		void this.options.onStart(entered.trim() || undefined).then(
@@ -179,14 +186,19 @@ export class CollaborationContribution extends Disposable {
 		);
 	}
 
-	private createInvite(): void {
+	private async createInvite(): Promise<void> {
 		if (this._state !== "connected" || !this.roomId || !this.canManageMembers) return;
-		const displayName = this.element.ownerDocument.defaultView?.prompt("Enter a collaborator name.", "");
-		if (displayName == null) return;
-		const role = this.requestInviteRole();
-		if (!role) return;
 		const roomId = this.roomId;
 		const principalId = this.principalId;
+		const response = await this.dialogs.input({
+			title: 'Invite collaborator',
+			message: 'Enter a collaborator name and role: owner, editor, or viewer.',
+			inputs: [{ placeholder: 'Name' }, { value: 'editor', placeholder: 'Role' }],
+		});
+		if (!response.confirmed || !this.isCurrentRoom(roomId, principalId)) return;
+		const displayName = response.values?.[0]?.trim() ?? '';
+		const role = this.parseInviteRole(response.values?.[1] ?? '');
+		if (!role) return;
 		void this.options.onInvite(displayName, role).then(
 			invite => {
 				if (!this.isCurrentRoom(roomId, principalId)) {
@@ -314,11 +326,12 @@ export class CollaborationContribution extends Disposable {
 		);
 	}
 
-	private revokeMember(member: DocumentCollaborationMember): void {
+	private async revokeMember(member: DocumentCollaborationMember): Promise<void> {
 		if (this._state !== "connected" || !this.roomId || !this.canManageMembers || member.principalId === this.principalId) return;
-		if (this.element.ownerDocument.defaultView?.confirm(`Revoke ${member.displayName}'s room access?`) !== true) return;
 		const roomId = this.roomId;
 		const principalId = this.principalId;
+		const decision = await this.dialogs.confirm({ message: `Revoke ${member.displayName}'s room access?` });
+		if (!decision.confirmed || !this.isCurrentRoom(roomId, principalId)) return;
 		void this.options.onRevokeMember(member.principalId).then(
 			() => {
 				if (!this.isCurrentRoom(roomId, principalId)) {
@@ -341,9 +354,7 @@ export class CollaborationContribution extends Disposable {
 		);
 	}
 
-	private requestInviteRole(): DocumentCollaborationRoomRole | undefined {
-		const entered = this.element.ownerDocument.defaultView?.prompt("Enter the collaborator role: owner, editor, or viewer.", "editor");
-		if (entered == null) return undefined;
+	private parseInviteRole(entered: string): DocumentCollaborationRoomRole | undefined {
 		const role = entered.trim().toLowerCase();
 		if (role === "owner" || role === "editor" || role === "viewer") return role;
 		if (this.roomId) this.setState("connected", { roomId: this.roomId, principalId: this.principalId, canManageMembers: true, message: "Collaboration role must be owner, editor, or viewer" });

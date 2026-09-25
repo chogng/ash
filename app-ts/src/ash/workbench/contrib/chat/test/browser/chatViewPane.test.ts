@@ -28,10 +28,10 @@ import { ChatContextPickService } from "../../../../../workbench/services/chat/b
 import { IChatService, type AdvisorConfig, type ModelProviderCredentialStatus, type ThreadUpdateEnvelope, type TurnError } from "../../../../../workbench/services/chat/common/chatService.js";
 import { ModelCatalogConfiguration } from "../../../../../workbench/services/chat/common/modelCatalog.js";
 import { WorkbenchConfigurationService } from "../../../../../workbench/services/configuration/browser/configurationService.js";
-import { AppServerSessionsManagementService as SessionsManagementService } from "../../../../../sessions/services/sessions/browser/appServerSessionsManagementService.js";
-import { AppServerSessionsProvider } from "../../../../../sessions/services/sessions/browser/appServerSessionsProvider.js";
+import { SessionsManagementService as BaseSessionsManagementService } from "../../../../../sessions/services/sessions/browser/sessionsManagementService.js";
+import { AppServerSessionsProvider } from "../../../../../sessions/contrib/providers/appServer/browser/appServerSessionsProvider.js";
 import type { ISession } from "../../../../../sessions/services/sessions/common/session.js";
-import { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
+import { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagement.js";
 import { IViewsService, ViewsService } from "../../../../../workbench/services/views/browser/viewsService.js";
 import { ContextKeyService, IContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
 import { DialogResult, IDialogService, type IMessageDialogOptions } from '../../../../../platform/dialogs/common/dialogs.js';
@@ -44,6 +44,13 @@ import type { ICommandService } from "../../../../../platform/commands/common/co
 import type { IOpenerService } from "../../../../../platform/opener/common/openerService.js";
 import type { IEditorService } from "../../../../../workbench/services/editor/common/editorService.js";
 
+const testDialogs: IDialogService = {
+	showMessage: async () => {},
+	confirm: async () => ({ confirmed: true }),
+	prompt: async () => DialogResult.Cancel,
+	input: async () => ({ confirmed: false }),
+};
+
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 const emptyChatContextPickService = new ChatContextPickService();
 const unavailableQuickInputService = {
@@ -54,7 +61,7 @@ const unavailableFileService = {
 	readFileBytes: async () => { throw new Error('File read is unavailable in this test'); },
 } as unknown as IFileService;
 
-class AppServerSessionsManagementService extends SessionsManagementService {
+class SessionsManagementService extends BaseSessionsManagementService {
 	constructor(api: IRendererHost) {
 		super(new AppServerSessionsProvider({ session: api.session, model: api.model, turn: api.turn, events: api.events }));
 	}
@@ -158,7 +165,7 @@ test('Chat loads an Ash remote workspace image through the file service', async 
 	Object.defineProperty(dom.window.URL, 'revokeObjectURL', { configurable: true, value: () => undefined });
 	try {
 		using contextViewService = new BrowserContextViewService(dom.window.document.body);
-		using sessions = new AppServerSessionsManagementService(fake.api);
+		using sessions = new SessionsManagementService(fake.api);
 		using contextKeys = new ContextKeyService();
 		const services = new ServiceContainer();
 		using commands = new CommandService(services);
@@ -177,6 +184,7 @@ test('Chat loads an Ash remote workspace image through the file service', async 
 			emptyChatContextPickService,
 			unavailableQuickInputService,
 			fileService,
+			testDialogs,
 			contextKeys,
 		);
 		dom.window.document.body.append(pane.element);
@@ -235,7 +243,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		models: [subscriptionModel],
 	});
 	const api = fake.api;
-	using sessions = new AppServerSessionsManagementService(api);
+	using sessions = new SessionsManagementService(api);
 	using contextKeys = new ContextKeyService();
 	using viewDescriptors = new ViewDescriptorService({
 		contextKeyService: contextKeys,
@@ -285,6 +293,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		emptyChatContextPickService,
 		unavailableQuickInputService,
 		unavailableFileService,
+		testDialogs,
 		contextKeys,
 	);
 	chatView = pane;
@@ -617,7 +626,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
 	});
 	const api = fake.api;
 	const services = new ServiceContainer();
-	using sessions = new AppServerSessionsManagementService(api);
+	using sessions = new SessionsManagementService(api);
 	using contextKeys = new ContextKeyService();
 	using viewDescriptors = new ViewDescriptorService({
 		contextKeyService: contextKeys,
@@ -650,6 +659,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
 		emptyChatContextPickService,
 		unavailableQuickInputService,
 		unavailableFileService,
+		testDialogs,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -733,7 +743,7 @@ test("the New Chat slash command opens an untitled session", async () => {
 	const initialSession = session("session-1", "thread-1", "First Chat");
 	const fake = fakeApi({ sessions: [initialSession] });
 	const services = new ServiceContainer();
-	using sessions = new AppServerSessionsManagementService(fake.api);
+	using sessions = new SessionsManagementService(fake.api);
 	using contextKeys = new ContextKeyService();
 	using viewDescriptors = new ViewDescriptorService({
 		contextKeyService: contextKeys,
@@ -770,6 +780,7 @@ test("the New Chat slash command opens an untitled session", async () => {
 		emptyChatContextPickService,
 		unavailableQuickInputService,
 		unavailableFileService,
+		testDialogs,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -813,7 +824,7 @@ test("failed first send keeps the untitled session and its input draft", async (
 		createSessionError: new Error("Cannot create Session"),
 	});
 	const services = new ServiceContainer();
-	using sessions = new AppServerSessionsManagementService(fake.api);
+	using sessions = new SessionsManagementService(fake.api);
 	using contextKeys = new ContextKeyService();
 	using viewDescriptors = new ViewDescriptorService({
 		contextKeyService: contextKeys,
@@ -846,6 +857,7 @@ test("failed first send keeps the untitled session and its input draft", async (
 		emptyChatContextPickService,
 		unavailableQuickInputService,
 		unavailableFileService,
+		testDialogs,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -900,7 +912,7 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
 		],
 	};
 	const api = fakeApi({ sessions: [multiThreadSession] }).api;
-	using sessions = new AppServerSessionsManagementService(api);
+	using sessions = new SessionsManagementService(api);
 	using contextKeys = new ContextKeyService();
 	using viewDescriptors = new ViewDescriptorService({
 		contextKeyService: contextKeys,
@@ -928,6 +940,7 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
 		emptyChatContextPickService,
 		unavailableQuickInputService,
 		unavailableFileService,
+		testDialogs,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -966,7 +979,7 @@ test("Chat history selects an active Thread through Quick Pick", async () => {
 		],
 	}).api;
 	const services = new ServiceContainer();
-	using sessions = new AppServerSessionsManagementService(api);
+	using sessions = new SessionsManagementService(api);
 	using contextKeys = new ContextKeyService();
 	using quickInput = new WorkbenchQuickInputService({
 		container: dom.window.document.body,
@@ -1053,7 +1066,7 @@ test("ViewsService resolves, opens, and focuses contributed views", () => {
 	assert.equal(service.openView("missing"), undefined);
 });
 
-test("AppServerSessionsManagementService restores and creates active Threads", async () => {
+test("SessionsManagementService restores and creates active Threads", async () => {
 	const initialSession = session("session-1", "thread-1");
 	const createdSession = session("session-2");
 	const attachedSession = session("session-2", "thread-2");
@@ -1065,7 +1078,7 @@ test("AppServerSessionsManagementService restores and creates active Threads", a
 			threadId: "thread-2",
 		},
 	}).api;
-	using service = new AppServerSessionsManagementService(api);
+	using service = new SessionsManagementService(api);
 
 	await service.initialize();
 	assert.equal(service.active?.threadId, "thread-1");
@@ -1077,11 +1090,11 @@ test("AppServerSessionsManagementService restores and creates active Threads", a
 	assert.equal(service.state, "ready");
 });
 
-test("AppServerSessionsManagementService archives a Session and selects the next active one", async () => {
+test("SessionsManagementService archives a Session and selects the next active one", async () => {
 	const first = session("session-1", "thread-1");
 	const second = session("session-2", "thread-2");
 	const fake = fakeApi({ sessions: [first, second] });
-	using service = new AppServerSessionsManagementService(fake.api);
+	using service = new SessionsManagementService(fake.api);
 
 	await service.initialize();
 	await service.archiveSession("session-1");
@@ -1100,10 +1113,10 @@ test("AppServerSessionsManagementService archives a Session and selects the next
 	assert.equal(service.state, "ready");
 });
 
-test("AppServerSessionsManagementService permits an empty selection when no durable Session remains", async () => {
+test("SessionsManagementService permits an empty selection when no durable Session remains", async () => {
 	const onlySession = session("session-1", "thread-1");
 	const fake = fakeApi({ sessions: [onlySession] });
-	using service = new AppServerSessionsManagementService(fake.api);
+	using service = new SessionsManagementService(fake.api);
 
 	await service.initialize();
 	await service.archiveSession("session-1");
@@ -1115,9 +1128,9 @@ test("AppServerSessionsManagementService permits an empty selection when no dura
 	assert.equal(fake.createThreadRequests.length, 0);
 });
 
-test("AppServerSessionsManagementService selects another untitled session and permits the last one to be discarded", async () => {
+test("SessionsManagementService selects another untitled session and permits the last one to be discarded", async () => {
 	const fake = fakeApi();
-	using service = new AppServerSessionsManagementService(fake.api);
+	using service = new SessionsManagementService(fake.api);
 
 	await service.initialize();
 	assert.equal(service.untitledSessions.length, 0);
@@ -1134,14 +1147,14 @@ test("AppServerSessionsManagementService selects another untitled session and pe
 	assert.equal(fake.createThreadRequests.length, 0);
 });
 
-test("AppServerSessionsManagementService persists and reflects the model", async () => {
+test("SessionsManagementService persists and reflects the model", async () => {
 	const fake = fakeApi({
 		sessions: [
 			session("session-1", "thread-1"),
 			session("session-2", "thread-2"),
 		],
 	});
-	using service = new AppServerSessionsManagementService(fake.api);
+	using service = new SessionsManagementService(fake.api);
 	await service.initialize();
 	const model: ModelRef = { provider: "openai", model: "gpt-session" };
 
@@ -1160,7 +1173,7 @@ test("ChatPaneModel applies backend-assembled transcript entries", async () => {
 		sessions: [activeSession],
 		thread: () => currentThread,
 	});
-	using sessions = new AppServerSessionsManagementService(fake.api);
+	using sessions = new SessionsManagementService(fake.api);
 	using model = new ChatPaneModel(createChatService(fake.api), {
 		kind: "session",
 		active: {
@@ -1241,7 +1254,7 @@ test("ChatPaneModel projects and refreshes the canonical durable Turn plan", asy
 		}],
 	};
 	const fake = fakeApi({ sessions: [activeSession], thread: () => currentThread });
-	using sessions = new AppServerSessionsManagementService(fake.api);
+	using sessions = new SessionsManagementService(fake.api);
 	using model = new ChatPaneModel(createChatService(fake.api), {
 		kind: "session",
 		active: { session: activeSession, threadId: "thread-1" },
@@ -1295,7 +1308,7 @@ test("ChatPaneModel mechanically clears and replaces transient transcript entrie
 		sessions: [activeSession],
 		thread: () => thread(),
 	});
-	using sessions = new AppServerSessionsManagementService(fake.api);
+	using sessions = new SessionsManagementService(fake.api);
 	using model = new ChatPaneModel(createChatService(fake.api), {
 		kind: "session",
 		active: {
@@ -1377,7 +1390,7 @@ test("ChatPaneModel projects a durable Turn failure into the conversation", asyn
 		}],
 	};
 	const fake = fakeApi({ sessions: [activeSession], thread: () => failedThread });
-	using sessions = new AppServerSessionsManagementService(fake.api);
+	using sessions = new SessionsManagementService(fake.api);
 	using model = new ChatPaneModel(createChatService(fake.api), {
 		kind: "session",
 		active: { session: activeSession, threadId: "thread-1" },
@@ -1435,7 +1448,7 @@ test("ChatPaneModel rebuilds error actions from canonical Thread state after ref
 	const activeSession = session("session-1", "thread-1");
 	let currentThread = threadWithFailure("providerAuth", false);
 	const fake = fakeApi({ sessions: [activeSession], thread: () => currentThread });
-	using sessions = new AppServerSessionsManagementService(fake.api);
+	using sessions = new SessionsManagementService(fake.api);
 	using model = new ChatPaneModel(createChatService(fake.api), {
 		kind: "session",
 		active: { session: activeSession, threadId: "thread-1" },
@@ -1473,7 +1486,7 @@ test("ChatPaneModel retries only the latest retryable failed Turn as a new visib
 	const activeSession = session("session-1", "thread-1");
 	const failedThread = threadWithFailure("modelInvocationFailed", true);
 	const fake = fakeApi({ sessions: [activeSession], thread: () => failedThread });
-	using sessions = new AppServerSessionsManagementService(fake.api);
+	using sessions = new SessionsManagementService(fake.api);
 	using model = new ChatPaneModel(createChatService(fake.api), {
 		kind: "session",
 		active: { session: activeSession, threadId: "thread-1" },
@@ -1644,7 +1657,7 @@ test("Chat picker retains the selected model when it is hidden", async () => {
 	using configuration = new WorkbenchConfigurationService();
 	await configuration.updateValue(ModelCatalogConfiguration.hiddenModels, [entry.model]);
 	using chat = createChatService(fake.api, configuration);
-	using sessions = new AppServerSessionsManagementService(fake.api);
+	using sessions = new SessionsManagementService(fake.api);
 	using model = new ChatPaneModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
 
 	await model.initialize();
@@ -1676,7 +1689,7 @@ test("ChatPaneModel steers an active Turn instead of starting another Turn", asy
 	};
 	const fake = fakeApi({ sessions: [activeSession], thread: () => activeThread });
 	using chat = createChatService(fake.api);
-	using sessions = new AppServerSessionsManagementService(fake.api);
+	using sessions = new SessionsManagementService(fake.api);
 	using model = new ChatPaneModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
 	await model.initialize();
 
@@ -1697,7 +1710,7 @@ test("ChatPaneModel dispatches compact as a standalone server command", async ()
 	const activeSession = session("session-1", "thread-1");
 	const fake = fakeApi({ sessions: [activeSession], thread: () => thread("previous answer") });
 	using chat = createChatService(fake.api);
-	using sessions = new AppServerSessionsManagementService(fake.api);
+	using sessions = new SessionsManagementService(fake.api);
 	using model = new ChatPaneModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
 	await model.initialize();
 
@@ -2060,7 +2073,8 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 function recordingDialogService(messages: IMessageDialogOptions[]): IDialogService {
 	return {
 		showMessage: async options => { messages.push(options); },
-		confirm: async () => false,
+		confirm: async () => ({ confirmed: false }),
+		input: async () => { throw new Error('Unexpected input dialog'); },
 		prompt: async () => DialogResult.Cancel,
 	};
 }
@@ -2086,7 +2100,7 @@ test("Advisor question consults directly without starting the worker", async () 
 		thread: () => ({ ...thread("previous answer"), advisor: { type: "off" } }),
 	});
 	using chat = createChatService(fake.api);
-	using sessions = new AppServerSessionsManagementService(fake.api);
+	using sessions = new SessionsManagementService(fake.api);
 	using model = new ChatPaneModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
 	await model.initialize();
 	await model.executeServerCommand("advisor", "Check src/app.rs cancellation");
@@ -2099,7 +2113,7 @@ test("Advisor question consults directly without starting the worker", async () 
 test("Advisor without a configured model keeps an untitled chat", async () => {
 	const fake = fakeApi();
 	using chat = createChatService(fake.api);
-	using sessions = new AppServerSessionsManagementService(fake.api);
+	using sessions = new SessionsManagementService(fake.api);
 	const untitled = sessions.createUntitledSession();
 	using model = new ChatPaneModel(chat, { kind: "untitled", session: untitled }, sessions);
 	await model.initialize();
@@ -2114,7 +2128,7 @@ test("Advisor command selects a model and the off switch preserves its settings"
 		models: [{ model: { provider: "openai", model: "reviewer" }, displayName: "Reviewer", access: "apiKey", outputTransport: "unary" }],
 	});
 	using chat = createChatService(fake.api);
-	using sessions = new AppServerSessionsManagementService(fake.api);
+	using sessions = new SessionsManagementService(fake.api);
 	using model = new ChatPaneModel(chat, { kind: "untitled", session: sessions.createUntitledSession() }, sessions);
 	await model.initialize();
 	await model.executeServerCommand("advisor", "openai/reviewer");

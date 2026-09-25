@@ -15,7 +15,9 @@ import {
 } from "../services/keybinding/browser/keybindingsResourceContribution.js";
 import {
 	registerFilesViews,
-} from "../contrib/files/browser/files.contribution.js";
+} from "../contrib/files/browser/explorerViewlet.js";
+import '../contrib/files/browser/files.contribution.js';
+import '../contrib/accessibility/browser/accessibility.contribution.js';
 import {
 	registerGitViews,
 } from "../contrib/scm/browser/scm.contribution.js";
@@ -41,7 +43,7 @@ import "../contrib/quickaccess/browser/quickAccess.contribution.js";
 import "../contrib/search/browser/searchQuickAccess.contribution.js";
 import { registerRemoteViews } from "../contrib/remote/browser/remote.contribution.js";
 import "../contrib/sash/browser/sash.contribution.js";
-import "./parts/dialogs/dialog.contribution.js";
+import "./parts/dialogs/dialog.web.contribution.js";
 import "./parts/editor/editor.contribution.js";
 import "./parts/titlebar/menubar.contribution.js";
 import "./parts/titlebar/titlebarActions.js";

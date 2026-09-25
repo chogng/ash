@@ -1,0 +1,107 @@
+.ash-explorer-view-pane {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.ash-explorer-title {
+  flex: 0 0 auto;
+  text-transform: uppercase;
+}
+
+.ash-explorer-find-input {
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+  padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+  border: var(--ash-stroke-thickness) solid var(--ash-input-border);
+  border-radius: var(--ash-corner-radius-small);
+  color: var(--ash-input-foreground);
+  background: var(--ash-input-background);
+  font-size: var(--ash-font-size-label1);
+  text-transform: none;
+}
+
+.ash-explorer-find-input[hidden] { display: none; }
+.ash-explorer-find-input:focus-visible { outline: var(--ash-stroke-thickness) solid var(--ash-focus-border); }
+
+.ash-explorer {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.ash-explorer > .ash-scrollable-element {
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.ash-explorer-scroll-content {
+  padding: 2px 0 8px;
+}
+
+.ash-explorer-row-content {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ash-explorer-row-content > .ash-icon-label {
+  min-width: 0;
+  flex: 1 1 auto;
+  width: 100%;
+}
+
+.ash-explorer-status {
+  padding: 8px;
+  color: color-mix(in srgb, currentColor 70%, transparent);
+  font-size: 12px;
+}
+
+.ash-explorer-error {
+  color: var(--ash-error-foreground);
+}
+
+.ash-empty-explorer {
+  display: flex;
+  min-height: 120px;
+  box-sizing: border-box;
+  align-items: center;
+  flex-direction: column;
+  gap: 12px;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+}
+
+.ash-empty-explorer-message {
+  max-width: 220px;
+  margin: 0;
+  color: color-mix(in srgb, currentColor 70%, transparent);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.ash-empty-explorer-open-folder.ash-button {
+  width: 100%;
+  color: var(--ash-button-primary-foreground);
+  background: var(--ash-files-empty-explorer-open-folder-background);
+}
+
+.ash-empty-explorer-open-folder.ash-button:not(:disabled):hover {
+  background: var(--ash-files-empty-explorer-open-folder-hover-background);
+}
+
+.ash-empty-explorer-status {
+  min-height: 18px;
+  margin: 0;
+  color: var(--ash-error-foreground);
+  font-size: 12px;
+  line-height: 18px;
+}

@@ -7,10 +7,12 @@ import type { IAction } from "../../../../base/common/actions.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
 import { DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { WorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
-import type { ICommandService } from "../../../../platform/commands/common/commands.js";
-import type { IResourceIconRenderer } from "../../../browser/labels.js";
-import type { GitChangeFileComparison, GitChangeStatus, GitRepositoryChange, GitStatus, IGitService } from "../../../services/git/common/gitService.js";
-import type { IEditorService } from "../../../services/editor/common/editorService.js";
+import { ICommandService } from "../../../../platform/commands/common/commands.js";
+import { IResourceIconRenderer } from "../../../browser/labels.js";
+import { type GitChangeFileComparison, type GitChangeStatus, type GitRepositoryChange, type GitStatus, IGitService } from "../../../services/git/common/gitService.js";
+import { IEditorService } from "../../../services/editor/common/editorService.js";
+import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
 import { createDiffEditorInput } from "../../../common/editor/diffEditorInput.js";
 import { OpenScmMultiDiffEditorCommandId, type OpenScmMultiDiffEditorOptions, type OpenScmMultiDiffEditorResult } from "../../multiDiffEditor/browser/scmMultiDiffAction.js";
@@ -39,7 +41,7 @@ export class ScmViewPane extends ViewPane {
 	private busy = false;
 	private unavailable = false;
 
-	constructor(container: HTMLElement, options: IViewPaneOptions, gitService: IGitService, private readonly resourceIconRenderer: IResourceIconRenderer, private readonly editorService: IEditorService, private readonly commandService: ICommandService, private readonly contextMenuProvider: IContextMenuProvider) {
+	constructor(container: HTMLElement, options: IViewPaneOptions, @IGitService gitService: IGitService, @IResourceIconRenderer private readonly resourceIconRenderer: IResourceIconRenderer, @IEditorService private readonly editorService: IEditorService, @ICommandService private readonly commandService: ICommandService, @IContextMenuService private readonly contextMenuProvider: IContextMenuProvider, @IDialogService private readonly dialogs: IDialogService) {
 		super(container, options);
 		this.gitService = gitService;
 		this.contentElement.classList.add("ash-scm");
@@ -159,14 +161,14 @@ export class ScmViewPane extends ViewPane {
 		}
 	}
 
-	private requestPathAction(action: GitPathAction, paths: readonly string[]): void {
+	private async requestPathAction(action: GitPathAction, paths: readonly string[]): Promise<void> {
 		if (this.busy || paths.length === 0) return;
 		if (action === "discard") {
 			const target = paths.length === 1 ? paths[0] : `${paths.length} working-tree files`;
-			const confirmed = this.element.ownerDocument.defaultView?.confirm(
-				`Discard changes in ${target}? This cannot be undone.`,
-			) === true;
-			if (!confirmed) return;
+			const repositoryId = this.status?.repositoryId;
+			const revision = this.revision;
+			const decision = await this.dialogs.confirm({ message: `Discard changes in ${target}? This cannot be undone.` });
+			if (!decision.confirmed || this.isDisposed || this.busy || revision !== this.revision || repositoryId !== this.status?.repositoryId) return;
 		}
 		void this.runPathAction(action, paths);
 	}

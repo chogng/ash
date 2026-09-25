@@ -12,7 +12,7 @@ import {
 	type ITitlebarPartFactoryOptions,
 	type TitlebarPartFactory,
 } from "../../../browser/parts/titlebar/titlebarPart.js";
-import { NativeMenubarControl } from "./nativeMenubarControl.js";
+import { NativeMenubarControl } from "./menubarControl.js";
 import { IThemeService } from "../../../../platform/theme/common/themeService.js";
 import { titleBarActionForeground, titleBarBackground } from "../../../common/theme.js";
 import { INativeHostService } from "../../../common/services.js";
@@ -25,7 +25,7 @@ import "./titlebarpart.css";
  *
  * Owns the draggable region, host control space, and window control colors.
  */
-export class ElectronTitlebarPart extends BrowserTitlebarPart {
+export class NativeTitlebarPart extends BrowserTitlebarPart {
 	constructor(
 		container: HTMLElement,
 		options: ITitlebarPartFactoryOptions,
@@ -92,5 +92,5 @@ class ElectronMenubarControl extends Disposable
 export function createElectronTitlebarPartFactory(
 	nativeMenubar: INativeMenubarApi,
 ): TitlebarPartFactory {
-	return (container, options, instantiationService) => instantiationService.createInstance(ElectronTitlebarPart, container, options, nativeMenubar);
+	return (container, options, instantiationService) => instantiationService.createInstance(NativeTitlebarPart, container, options, nativeMenubar);
 }

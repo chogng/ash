@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { DialogResult, type IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import type { IContextMenuProvider } from "../../../../../base/browser/contextmenu.js";
@@ -16,6 +18,13 @@ import { CommandService } from "../../../../../workbench/services/commands/commo
 import { OpenScmMultiDiffEditorAction } from "../../../../../workbench/contrib/multiDiffEditor/browser/scmMultiDiffAction.js";
 import { resolveGitChangeInputs } from "../../../../../workbench/contrib/scm/browser/scmChangeEditorInput.js";
 import { emptyEditorServiceState } from '../../../../../workbench/test/common/testEditorService.js';
+
+const testDialogs: IDialogService = {
+	showMessage: async () => {},
+	confirm: async () => ({ confirmed: true }),
+	prompt: async () => DialogResult.Cancel,
+	input: async () => ({ confirmed: false }),
+};
 
 test("SCM diff inputs open live files and keep deleted files on the readable side", async () => {
 	const status: GitStatus = {
@@ -477,6 +486,7 @@ test("ScmViewPane groups App Server Git status", async () => {
 	const installedGlobals = installDomGlobals(browser);
 	let requestCount = 0;
 	let stagedPaths: readonly string[] | undefined;
+	let discardCalls = 0;
 	let stagedRepositoryId: string | undefined;
 	let completeStage: (() => void) | undefined;
 	let committedMessage: string | undefined;
@@ -548,7 +558,7 @@ test("ScmViewPane groups App Server Git status", async () => {
 			completeStage = () => resolve(first);
 		}),
 		unstage: async () => first,
-		discardWorktree: async () => first,
+		discardWorktree: async () => { discardCalls += 1; return first; },
 		commit: async (message: string, repositoryId?: string) => {
 			committedMessage = message;
 			committedRepositoryId = repositoryId;
@@ -584,7 +594,10 @@ test("ScmViewPane groups App Server Git status", async () => {
 		using pane = new ScmViewPane(browser.window.document.body, {
 			id: "ash.git",
 			title: "Changes",
-		}, gitService, testFileIconThemeService(), editorService, commandService, testContextMenuProvider);
+		}, gitService, testFileIconThemeService(), editorService, commandService, testContextMenuProvider, {
+			...testDialogs,
+			confirm: async () => ({ confirmed: false }),
+		});
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector(".ash-scm-status")?.textContent === "4 changed files");
 
@@ -657,6 +670,9 @@ test("ScmViewPane groups App Server Git status", async () => {
 		assert.ok(stage);
 		assert.ok(stage.querySelector(".ash-icon"));
 		assert.ok(discard?.querySelector(".ash-icon"));
+		discard?.click();
+		await Promise.resolve();
+		assert.equal(discardCalls, 0);
 		stage.click();
 		await waitFor(() => stagedPaths !== undefined);
 		assert.deepEqual(stagedPaths, ["src/working.ts"]);
@@ -752,7 +768,7 @@ test("ScmViewPane accepts a restarted Git stream and rejects its retired predece
 		using pane = new ScmViewPane(browser.window.document.body, {
 			id: "ash.git.restart",
 			title: "Changes",
-		}, gitService, testFileIconThemeService(), testEditorService(), inactiveCommandService(), testContextMenuProvider);
+		}, gitService, testFileIconThemeService(), testEditorService(), inactiveCommandService(), testContextMenuProvider, testDialogs);
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector('[aria-label="Open changes for before.ts"]') !== null);
 		assert.equal(pane.element.querySelector(".ash-scm-branch"), null);

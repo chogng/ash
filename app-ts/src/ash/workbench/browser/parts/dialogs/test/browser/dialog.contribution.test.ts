@@ -1,21 +1,21 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
+import "../../dialog.web.contribution.js";
 import {
 	type DialogRequest,
 	DialogResult,
 	DialogSeverity,
 	type IDialogHandler,
+	type IDialogOutcome,
 } from "../../../../../../platform/dialogs/common/dialogs.js";
 import {
 	ServiceContainer,
 } from "../../../../../../platform/instantiation/common/instantiation.js";
 import {
-	DialogHandlerContribution,
-} from "../../../../../../workbench/browser/parts/dialogs/dialog.contribution.js";
-import {
 	IDialogsModel,
 	IWorkbenchDialogHandler,
 } from "../../../../../../workbench/common/dialogs.js";
+import { DialogHandlerContribution } from '../../dialog.web.contribution.js';
 import {
 	WorkbenchContributionsRegistry,
 	WorkbenchPhase,
@@ -35,9 +35,9 @@ class TestDialogHandler implements IDialogHandler {
 	showDialog(
 		request: DialogRequest,
 		signal: AbortSignal,
-	): Promise<DialogResult> {
+	): Promise<IDialogOutcome> {
 		return new Promise((resolve, reject) => {
-			this.calls.push({ request, signal, resolve, reject });
+			this.calls.push({ request, signal, resolve: result => resolve({ button: result }), reject });
 		});
 	}
 }
@@ -55,7 +55,7 @@ test("dialog handler contribution starts at BlockStartup", async () => {
 
 	assert.equal(handler.calls.length, 1);
 	handler.calls[0]?.resolve(DialogResult.Primary);
-	assert.equal(await confirmation, true);
+	assert.equal((await confirmation).confirmed, true);
 });
 
 test("dialog handler contribution presents the model queue serially", async () => {
@@ -76,7 +76,7 @@ test("dialog handler contribution presents the model queue serially", async () =
 	assert.equal(handler.calls[0]?.request.kind, "confirmation");
 
 	handler.calls[0]?.resolve(DialogResult.Primary);
-	assert.equal(await confirmation, true);
+	assert.equal((await confirmation).confirmed, true);
 	assert.equal(handler.calls.length, 2);
 	assert.equal(handler.calls[1]?.request.kind, "message");
 
@@ -97,7 +97,7 @@ test("dialog handler contribution picks up existing model items", async () => {
 	assert.equal(handler.calls.length, 1);
 	assert.equal(handler.calls[0]?.request.message, "Pending");
 	handler.calls[0]?.resolve(DialogResult.Cancel);
-	assert.equal(await confirmation, false);
+	assert.equal((await confirmation).confirmed, false);
 });
 
 test("closing the active model item aborts its handler", async () => {
@@ -113,7 +113,7 @@ test("closing the active model item aborts its handler", async () => {
 
 	item?.cancel();
 
-	assert.equal(await confirmation, false);
+	assert.equal((await confirmation).confirmed, false);
 	assert.equal(call?.signal.aborted, true);
 	call?.resolve(DialogResult.Cancel);
 });
@@ -136,7 +136,7 @@ test("dialog handler contribution continues after a handler failure", async () =
 	assert.equal(handler.calls.length, 2);
 
 	handler.calls[1]?.resolve(DialogResult.Primary);
-	assert.equal(await next, true);
+	assert.equal((await next).confirmed, true);
 });
 
 test("disposing the contribution cancels its active model item", async () => {
@@ -152,6 +152,6 @@ test("disposing the contribution cancels its active model item", async () => {
 	contribution.dispose();
 
 	assert.equal(call?.signal.aborted, true);
-	assert.equal(await confirmation, false);
+	assert.equal((await confirmation).confirmed, false);
 	call?.resolve(DialogResult.Cancel);
 });

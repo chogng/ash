@@ -4,7 +4,7 @@ import { Emitter, type Event } from "../../../../base/common/event.js";
 import { type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { runWhenWindowIdle } from "../../../../base/browser/dom.js";
-import { TextModelConflictError, type TextModelInput, type TextModelReference, type ITextModelResourceService } from "../common/textModelResourceService.js";
+import { TextModelConflictError, type TextModelInput, type TextModelReference, type IFileTextModelService } from "../common/textModelResourceService.js";
 import { TextResourceConflictError, type TextResourceChangeEvent, type ITextResourceStore } from "../common/textResourceStore.js";
 import { normalizeTextLineEndings } from "../../../../editor/common/core/textChange.js";
 import { TextModel, type TextModelMaintenanceOptions } from "../../../../editor/common/model/textModel.js";
@@ -46,7 +46,7 @@ export interface BrowserTextModelServiceOptions {
 }
 
 /** Shares text models by exact resource identity while references are open. */
-export class BrowserTextModelService implements ITextModelResourceService {
+export class BrowserTextModelService implements IFileTextModelService {
 	private readonly entries = new Map<string, TextModelEntry>();
 	private readonly undoRedoParticipant = new RetainedModelUndoRedoHistory();
 	private disposed = false;
@@ -233,6 +233,24 @@ export class BrowserTextModelService implements ITextModelResourceService {
 		}).catch(() => {
 			if (!entry.disposed) this.setExternalChange(entry, true);
 		});
+	}
+
+	/** Rechecks an open file when its window regains focus and watcher events may have been missed. */
+	async refresh(resource: URI): Promise<void> {
+		this.ensureAlive();
+		const entry = this.entries.get(resource.toString());
+		if (!entry) return;
+		await entry.saveQueue;
+		if (entry.disposed) return;
+		const observedVersion = entry.model.version;
+		const content = await this.resourceStore.resolve({ resource }, new AbortController().signal);
+		if (entry.disposed || content.revision === entry.revision) return;
+		if (entry.dirty || entry.model.version !== observedVersion) {
+			this.setExternalChange(entry, true);
+			return;
+		}
+		this.applyFileContent(entry, content.text, content.revision);
+		this.setExternalChange(entry, false);
 	}
 
 	private applyFileContent(entry: TextModelEntry, text: string, revision: string | undefined): void {

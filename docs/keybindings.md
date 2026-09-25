@@ -165,6 +165,16 @@ block = true # 阻止这个默认规则
 - User 高于 Workbench/Builtin；同来源比较显式 priority，最后由后声明规则获胜。
 - Rust App/TUI 当前不支持命令 `args`；Ash Renderer 的 `keybindings.json` 保留自己的 JSON 契约和 `args` 扩展。
 
+Ash Code 桌面版可以在 profile 的 `keybindings.json` 中为打开 Agents 窗口的命令启用系统级快捷键：
+
+```json
+[
+  { "key": "ctrl+alt+shift+f24", "command": "workbench.action.openAgentsWindow", "systemWide": true }
+]
+```
+
+只有显式设置 `systemWide: true` 的单段组合会向操作系统注册；多段组合或无法转换成 Electron accelerator 的按键不会注册。系统级触发不受 `when` 条件限制，条件被忽略时会提示用户。注册失败会显示警告；修改或删除规则、关闭对应 Workbench 窗口时会释放旧注册。Browser Workbench 和 Ash Code TUI 不注册系统级快捷键。
+
 Ash Code 当前可配置 command ID：
 
 | Command ID | 行为 |
@@ -194,7 +204,7 @@ App 和 TUI 连接 App Server 后分别读取 `[gui].keybindings` 与 `[tui].key
 | Ash Code 可搜索的 Keymap editor | Current | `/shortcuts` 打开 Keymap 设置界面，以“快捷键、职责、default/user 来源”三列汇总 default 与 User 键位，不展示内部 command ID；诊断和配置位置可见，可配置项只消费 `AppKeymap` snapshot |
 | Ash Code 录制与保存 | Current | 单键/两段 Chord 录制只在 Keymap editor 的 `KeyCapture` 中截获输入；配置 revision 过期时拒绝保存，完整编译成功后才更新配置和运行时规则 |
 | 目录提供的键位 | Not accepted | `DirConfigDocument` 不接受键位声明；如需支持必须先定义独立来源 capability 与显式启用 |
-| OS `systemWide` 热键 | Not accepted | 只可能由拥有窗口快捷键能力的 Ash/App 实现；TUI 不支持 |
+| OS `systemWide` 热键 | Ash Code 桌面版 Current；App/TUI Not accepted | Ash 只为显式启用的 `workbench.action.openAgentsWindow` 用户规则注册；TUI 不支持 |
 
 ## 7. 可靠性、隐私和兼容性
 

@@ -2,7 +2,6 @@ import { Lxicon } from "../../../../base/common/lxicons.js";
 import { IMenuService } from "../../../../platform/actions/common/actions.js";
 import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
-import { ICommandService } from "../../../../platform/commands/common/commands.js";
 import { IHoverService } from "../../../../platform/hover/browser/hoverService.js";
 import { IResourceIconRenderer } from "../../../browser/labels.js";
 import { ServiceConstructionDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
@@ -50,9 +49,7 @@ export function registerGitViews(
 			localizationKey: { bundle: "ash.views", key: "changes" },
 			order: 1,
 			canToggleVisibility: false,
-			ctorDescriptor: new ServiceConstructionDescriptor(ScmViewPane, {
-				serviceDependencies: [IGitService, IResourceIconRenderer, IEditorService, ICommandService, IContextMenuService],
-			}),
+			ctorDescriptor: new ServiceConstructionDescriptor(ScmViewPane),
 		},
 		{
 			id: GIT_AGENT_REVIEW_VIEW_ID,

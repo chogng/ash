@@ -30,6 +30,7 @@ export interface IKeybindingEntry {
 	readonly mac?: string | null;
 	readonly linux?: string | null;
 	readonly win?: string | null;
+	readonly systemWide?: boolean;
 }
 
 /** One host-authoritative keybinding resource snapshot. */
@@ -147,6 +148,7 @@ function validateKeybindingEntry(
 		"mac",
 		"when",
 		"win",
+		"systemWide",
 	]);
 	for (const field of Object.keys(source)) {
 		if (!allowedKeys.has(field)) {
@@ -178,6 +180,10 @@ function validateKeybindingEntry(
 	const mac = optionalKey(source.mac, `${path}.mac`);
 	const linux = optionalKey(source.linux, `${path}.linux`);
 	const win = optionalKey(source.win, `${path}.win`);
+	const systemWide = source.systemWide;
+	if (systemWide !== undefined && typeof systemWide !== "boolean") {
+		throw new TypeError(`${path}.systemWide must be a boolean`);
+	}
 
 	return {
 		key,
@@ -187,6 +193,7 @@ function validateKeybindingEntry(
 		...(mac === undefined ? {} : { mac }),
 		...(linux === undefined ? {} : { linux }),
 		...(win === undefined ? {} : { win }),
+		...(systemWide === undefined ? {} : { systemWide }),
 	};
 }
 

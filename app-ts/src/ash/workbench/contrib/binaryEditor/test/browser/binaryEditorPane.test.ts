@@ -7,6 +7,11 @@ import { EditorPaneMatch } from "../../../../../workbench/browser/parts/editor/e
 import { BaseBinaryResourceEditor, binaryEditorDescriptor } from "../../../../../workbench/browser/parts/editor/binaryEditor.js";
 import { BinaryResourceDiffEditor, binaryDiffEditorDescriptor, createBinaryDiffEditorInput } from "../../../../../workbench/browser/parts/editor/binaryDiffEditor.js";
 import { EditorInputSerializers } from "../../../../../workbench/services/editor/common/editorInputSerializer.js";
+import { BinaryFileEditor } from '../../../files/browser/editors/binaryFileEditor.js';
+import { CODE_EDITOR_ID } from '../../../../common/editor/codeEditorId.js';
+import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
+import type { EditorInput, EditorOpenOptions } from '../../../../services/editor/common/editorService.js';
+import type { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 
 test("BinaryEditorPane renders a bounded hexadecimal and ascii preview", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
@@ -28,6 +33,34 @@ test("binary editor descriptor is default for explicit binary content and option
 	assert.equal(descriptor.canOpen({ resource: URI.file("C:\\project\\sample.bin"), contentType: "application/octet-stream" }), EditorPaneMatch.Default);
 	assert.equal(descriptor.canOpen({ resource: URI.file("C:\\project\\sample.bin") }), EditorPaneMatch.Optional);
 	assert.equal(descriptor.canOpen({ resource: URI.parse("untitled:/sample.bin") }), EditorPaneMatch.None);
+});
+
+test('Binary file editor opens a bounded read-only text preview', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const resource = URI.file('C:\\project\\sample.bin');
+	let opened: EditorInput | undefined;
+	let openOptions: EditorOpenOptions | undefined;
+	const dialogs: IDialogService = {
+		showMessage: async () => {},
+		confirm: async () => { throw new Error('Unexpected confirm'); },
+		prompt: async () => { throw new Error('Unexpected prompt'); },
+		input: async () => { throw new Error('Unexpected input'); },
+	};
+	const pane = new BinaryFileEditor(new TestFileService(new Uint8Array([0x48, 0x69, 0x00, 0xff])), {
+		...emptyEditorServiceState,
+		openEditor: async (input, options) => { opened = input; openOptions = options; },
+		focusActiveEditor: () => {},
+	}, dialogs);
+	pane.create(dom.window.document.body);
+	await pane.setInput({ resource }, new AbortController().signal);
+	dom.window.document.querySelector<HTMLButtonElement>('.ash-binary-open-as-text')!.click();
+	await waitFor(() => opened !== undefined);
+	assert.equal(opened?.resource.toString(), resource.toString());
+	assert.equal(opened?.readOnly, true);
+	assert.equal(opened?.initialText, 'Hi\u0000�');
+	assert.equal(openOptions?.preferredEditorId, CODE_EDITOR_ID);
+	pane.dispose();
+	dom.window.close();
 });
 
 test("Binary diff keeps both byte previews and metadata through working-set serialization", async () => {
@@ -60,4 +93,12 @@ class TestFileService implements IFileService {
 	async createFile(): Promise<never> { throw new Error("read only"); }
 	async rename(): Promise<never> { throw new Error("read only"); }
 	async delete(): Promise<never> { throw new Error("read only"); }
+}
+
+async function waitFor(predicate: () => boolean): Promise<void> {
+	for (let attempt = 0; attempt < 20; attempt += 1) {
+		if (predicate()) return;
+		await new Promise(resolve => setTimeout(resolve, 0));
+	}
+	assert.fail('Timed out waiting for binary text preview');
 }

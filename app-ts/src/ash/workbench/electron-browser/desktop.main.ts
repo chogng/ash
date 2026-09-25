@@ -5,6 +5,7 @@ import { URI } from '../../base/common/uri.js';
 import { IFileService } from '../../platform/files/common/files.js';
 import { ServiceContainer } from '../../platform/instantiation/common/instantiation.js';
 import { createElectronRendererApi, type ElectronRendererCapabilityContribution } from '../../platform/native/electron-browser/rendererApi.js';
+import { registerWindowCloseHandler } from '../../platform/windows/electron-browser/windowClose.js';
 import { parseWorkspace } from '../../platform/workspace/common/workspace.js';
 import { showStartupError } from '../browser/startupError.js';
 import { startWorkbench, type Workbench } from '../browser/workbench.js';
@@ -13,6 +14,7 @@ import { createElectronWorkbenchContextMenuService } from '../services/contextme
 import { loadUserThemes } from '../services/themes/browser/workbenchThemeService.js';
 import { switchElectronWorkbenchMode } from '../services/workbenchMode/electron-browser/electronWorkbenchModeHost.js';
 import { createElectronTitlebarPartFactory } from './parts/titlebar/titlebarPart.js';
+import { NativeDialogHandler } from './parts/dialogs/dialogHandler.js';
 
 /** Owns desktop startup and the resources of one renderer window. */
 export class DesktopMain extends Disposable {
@@ -34,6 +36,7 @@ export class DesktopMain extends Disposable {
 		const tracking = tracker ? installDisposableTracker(tracker) : undefined;
 		try {
 			const api = this._register(await createElectronRendererApi(this.rendererCapabilities));
+			const container = document.querySelector<HTMLElement>('#app') ?? document.body;
 			const profileServices = this._register(new ServiceContainer());
 			profileServices.registerInstance(IFileService, api.localFiles);
 			const userThemes = this._register(await loadUserThemes(profileServices, URI.parse(api.userDataHome.toString().replace(/\/$/u, '') + '/themes')));
@@ -41,13 +44,14 @@ export class DesktopMain extends Disposable {
 				modeId: this.modeId,
 				api,
 				browserViewApi: api.browserView,
-				container: document.querySelector<HTMLElement>('#app') ?? document.body,
+				container,
 				workspace: parseWorkspace(await api.workspace.getWorkspace()),
 				configurationApi: api.configuration,
 				keybindingsResourceApi: api.keybindings,
 				keyboardLayoutProvider: api.keyboardLayout,
 				userKeyboardLayoutApi: api.userKeyboardLayout,
 				nativeHostApi: api.nativeHost,
+				dialogHandler: new NativeDialogHandler(api.nativeHost, container),
 				userThemeService: userThemes,
 				createContextMenuService: options => createElectronWorkbenchContextMenuService(options, api.nativeContextMenu),
 				createTitlebarPart: createElectronTitlebarPartFactory(api.nativeMenubar),
@@ -67,6 +71,7 @@ export class DesktopMain extends Disposable {
 					}
 				});
 			}, { once: true }));
+			this._register(await registerWindowCloseHandler(() => workbench.shutdown('windowClose')));
 		} catch (error) {
 			try {
 				this.dispose();

@@ -48,15 +48,19 @@ export class BrowserLifecycleService extends Disposable implements ILifecycleSer
 			},
 		});
 		accepting = false;
-		void this.completeShutdown(reason, operations).then(resolveShutdown, rejectShutdown);
+		void this.completeShutdown(reason, operations).then(resolveShutdown, error => {
+			this._phase = 'running';
+			this.shutdownPromise = undefined;
+			rejectShutdown?.(error);
+		});
 		return this.shutdownPromise;
 	}
 
 	private async completeShutdown(reason: ShutdownReason, operations: readonly { readonly label: string; readonly operation: Promise<unknown> }[]): Promise<void> {
 		const results = await Promise.allSettled(operations.map(candidate => candidate.operation));
-		this._phase = "shutdown";
-		this.didShutdownEmitter.fire(reason);
 		const failures = results.flatMap((result, index) => result.status === "rejected" ? [new Error(`Shutdown participant '${operations[index]!.label}' failed`, { cause: result.reason })] : []);
 		if (failures.length > 0) throw new AggregateError(failures, "One or more shutdown participants failed");
+		this._phase = "shutdown";
+		this.didShutdownEmitter.fire(reason);
 	}
 }

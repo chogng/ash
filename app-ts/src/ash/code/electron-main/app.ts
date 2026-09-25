@@ -3,10 +3,15 @@ import { RendererWorkspaceHost } from "../../platform/workspaces/electron-main/r
 import { BrowserAutomationHost } from "../../platform/browser/electron-main/browserAutomationHostRoutes.js";
 import { rendererSystemHostRoutes } from "../../platform/native/electron-main/rendererSystemHostRoutes.js";
 import { nativeImage, nativeTheme, shell } from "electron";
-import { app, BrowserWindow, dialog, ipcMain, Menu, screen, TouchBar, Tray, type Event as ElectronEvent, type MenuItemConstructorOptions } from "electron/main";
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, screen, TouchBar, Tray, type Event as ElectronEvent, type MenuItemConstructorOptions } from "electron/main";
 import type { DirGrant } from "../../platform/dirPermissions/common/dirPermissionsService.js";
-import { join } from "node:path";
-import { readFileSync } from "node:fs";
+import { basename, delimiter, dirname, isAbsolute, join } from "node:path";
+import { homedir } from 'node:os';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { randomUUID } from 'node:crypto';
+import { access, chmod, lstat, readFile, unlink, writeFile } from "node:fs/promises";
+import { constants, readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { isCancellationError } from "../../base/common/errors.js";
 import { Disposable, DisposableStore, DisposableTracker, installDisposableTracker, type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
@@ -25,24 +30,24 @@ import { browserViewIpcRoutes } from "../../platform/browser/electron-main/brows
 import { BrowserViewMainService } from "../../platform/browser/electron-main/browserViewMainService.js";
 import { BrowserAutomationMainService } from "../../platform/browser/electron-main/browserAutomationMainService.js";
 import { BrowserTargetRegistry } from "../../platform/browser/electron-main/browserTargetRegistry.js";
-import { CONFIGURATION_CHANGED_CHANNEL } from "../../platform/configuration/common/configurationIpc.js";
 import { configurationValues } from '../../platform/configuration/common/configurationIpc.js';
 import { editJsonObjectProperty } from '../../base/common/json.js';
-import { ConfigurationMainService, configurationIpcRoutes } from "../../platform/configuration/electron-main/configurationMainService.js";
+import { ConfigurationMainService } from "../../platform/configuration/electron-main/configurationMainService.js";
 import { nativeContextMenuIpcRoutes } from "../../platform/contextview/electron-main/contextMenuIpc.js";
 import { developmentArtifactsPath } from "../../platform/environment/node/developmentArtifacts.js";
 import { ElectronClipboardService } from "../../platform/clipboard/electron-main/electronClipboardService.js";
 import { ElectronOpenerService } from "../../platform/opener/electron-main/electronOpenerService.js";
-import { KEYBINDINGS_RESOURCE_CHANGED_CHANNEL } from "../../platform/keybinding/common/keybindingsResource.js";
-import { KeybindingsResourceMainService, keybindingsResourceIpcRoutes } from "../../platform/keybinding/electron-main/keybindingsResourceMainService.js";
-import { NATIVE_KEYBOARD_LAYOUT_CHANGED_CHANNEL } from "../../platform/keyboardLayout/common/nativeKeyboardLayout.js";
-import { NativeKeyboardLayoutMainService, nativeKeyboardLayoutIpcRoutes } from "../../platform/keyboardLayout/electron-main/nativeKeyboardLayoutMainService.js";
-import { USER_KEYBOARD_LAYOUT_CHANGED_CHANNEL } from "../../platform/keyboardLayout/common/userKeyboardLayout.js";
-import { UserKeyboardLayoutMainService, userKeyboardLayoutIpcRoutes } from "../../platform/keyboardLayout/electron-main/userKeyboardLayoutMainService.js";
+import { KeybindingsResourceMainService } from "../../platform/keybinding/electron-main/keybindingsResourceMainService.js";
+import { NativeKeyboardLayoutMainService } from "../../platform/keyboardLayout/electron-main/nativeKeyboardLayoutMainService.js";
+import { UserKeyboardLayoutMainService } from "../../platform/keyboardLayout/electron-main/userKeyboardLayoutMainService.js";
 import { NativeMenubarMainService, nativeMenubarIpcRoutes } from "../../platform/menubar/electron-main/menubarMainService.js";
 import { nativeHostIpcRoutes } from "../../platform/native/electron-main/nativeHostIpc.js";
 import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL } from "../../platform/native/common/nativeHost.js";
-import { sessionsWindowIpcRoutes } from "../../sessions/electron-main/sessionsWindowIpc.js";
+import { WindowDialogHost } from '../../platform/dialogs/electron-main/windowDialogHost.js';
+import { openDedicatedWindowIpcRoute, returnToParentWindowIpcRoute } from "../../platform/windows/electron-main/dedicatedWindowIpc.js";
+import { DedicatedWindowHost } from "../../platform/windows/electron-main/dedicatedWindowHost.js";
+import { GlobalKeybindingsMainService } from '../../platform/globalKeybindings/electron-main/globalKeybindingsMainService.js';
+import { OPEN_AGENTS_WINDOW_COMMAND_ID } from '../../workbench/contrib/chat/common/chat.js';
 import { StateService } from "../../platform/state/node/stateService.js";
 import { migrateLegacyLocalProfile } from "../../platform/profile/node/localProfile.js";
 import { resolveHome } from "../../platform/home/node/home.js";
@@ -50,8 +55,9 @@ import { diskFileSystemProviderRoutes } from "../../platform/files/electron-main
 import { URI } from "../../base/common/uri.js";
 import { DiskFileSystemProvider } from "../../platform/files/node/diskFileSystemProvider.js";
 import { applyWindowState, resolveBrowserWindowOptions } from "../../platform/windows/electron-main/windows.js";
-import { WindowMode } from "../../platform/window/electron-main/window.js";
 import { WindowsStateHandler } from "../../platform/windows/electron-main/windowsStateHandler.js";
+import { WindowsMainService, trackWindowResourceChanges, windowCloseResponseIpcRoute, windowOperationIpcRoute, windowResourceIpcRoutes } from "../../platform/windows/electron-main/windowsMainService.js";
+import { focusWindow } from "../../platform/window/electron-main/window.js";
 import { type IAnyWorkspaceIdentifier, isRemoteWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, serializeWorkspace, UNKNOWN_EMPTY_WINDOW_WORKSPACE } from "../../platform/workspace/common/workspace.js";
 import { packagedRemoteRuntimeCatalogSource } from "../../platform/remote/electron-main/packagedRemoteRuntimeCatalog.js";
 import { RemoteRuntimeInstaller, remoteRuntimeArtifactFromEnvironment } from "../../platform/remote/electron-main/remoteRuntimeInstaller.js";
@@ -104,10 +110,11 @@ interface WorkbenchWindowRecord extends IWorkbenchWindowRecord {
 	readonly workspaceContext: WorkspaceContextMainService;
 	readonly supervisor: AppServerConnectionRelay;
 	readonly resources: DisposableStore;
+	readonly dedicatedWindow: DedicatedWindowHost<BrowserWindow>;
+	readonly remoteConnections: RemoteConnections;
 	modeId: WorkbenchModeId;
 	windowsStateHandler: WindowsStateHandler;
 	windowStateTracking: IDisposable;
-	sessionsWindow?: BrowserWindow;
 	openWorkspace?: (root: string) => Promise<void>;
 }
 
@@ -127,11 +134,29 @@ export class AshApplication extends Disposable {
 	private readonly tracking: globalThis.Disposable | undefined;
 	private readonly trustedIpcRouter: TrustedIpcRouter;
 	private readonly nativeKeyboardLayout: NativeKeyboardLayoutMainService;
+	private readonly globalKeybindings: GlobalKeybindingsMainService;
 	private readonly nativeMenubar: NativeMenubarMainService | undefined;
 	private readonly profileRoot: string;
 	private readonly windowIconPath: string | undefined;
 
 	private readonly workbenchWindows = new WorkbenchWindowRegistry<WorkbenchWindowRecord>();
+	private readonly windowsMainService = new WindowsMainService(
+		() => this.workbenchWindows.values().flatMap(record => {
+			const child = record.dedicatedWindow.currentWindow;
+			return child ? [record.window, child] : [record.window];
+		}),
+		async () => {
+			const workspaces = this.workspaces;
+			if (!workspaces) throw new Error('Workspace service is not initialized');
+			return (await this.openWorkspace({ id: `empty-window-${randomUUID()}` }, workspaces))?.window;
+		},
+		process.platform,
+		window => this.workbenchWindows.values().find(record => record.dedicatedWindow.currentWindow === window)?.id,
+		async (window, message) => {
+			this.workbenchWindows.values().find(record => record.dedicatedWindow.currentWindow === window)?.dedicatedWindow.failClose(window, message);
+			await dialog.showMessageBox(window, { type: 'error', message });
+		},
+	);
 	private readonly pendingWindowLaunches: PendingWindowLaunch[] = [];
 	private workspaces: WorkspacesMainService | undefined;
 	private persistentServices: PersistentServices | undefined;
@@ -153,6 +178,16 @@ export class AshApplication extends Disposable {
 		this.tracking = tracking;
 		this.trustedIpcRouter = this._register(new TrustedIpcRouter(ipcMain));
 		this.nativeKeyboardLayout = this._register(new NativeKeyboardLayoutMainService());
+		this.globalKeybindings = this._register(new GlobalKeybindingsMainService({
+			shortcuts: globalShortcut,
+			activeWindowId: () => this.workbenchWindows.active()?.id,
+			runCommand: (windowId, commandId) => {
+				if (commandId !== OPEN_AGENTS_WINDOW_COMMAND_ID) return;
+				const record = this.workbenchWindows.values().find(candidate => candidate.id === windowId);
+				if (record) return this.openSessionsWindow(record);
+			},
+			onError: error => console.error('Failed to open Agents Window from a system-wide shortcut', error),
+		}));
 		this.nativeMenubar = process.platform === "darwin"
 			? this._register(new NativeMenubarMainService({
 				applicationName: app.name,
@@ -542,8 +577,21 @@ export class AshApplication extends Disposable {
 		});
 		const window = new BrowserWindow({
 			...browserWindowOptions,
+			...(process.platform === 'darwin' ? { tabbingIdentifier: 'ash-workbench' } : {}),
 			icon: this.windowIconPath,
 			show: false,
+		});
+		resources.add(toDisposable(() => {
+			if (!window.isDestroyed()) window.destroy();
+		}));
+		const dedicatedWindow = resources.add(new DedicatedWindowHost(
+			options => new BrowserWindow(options),
+			() => focusWindow(window),
+		));
+		const remoteConnections = new RemoteConnections({
+			remoteExecutable: remoteExecutablePath({ appPath: app.getAppPath(), isPackaged: app.isPackaged, platform: process.platform, resourcesPath: process.resourcesPath }),
+			environment: { ...process.env, ASH_HOME: this.profileRoot },
+			scheduleConnect: connection => this.openRemoteConnection(connection, workspaces),
 		});
 		const windowStateTracking = windowsStateHandler.trackWindow(window);
 		const record: WorkbenchWindowRecord = {
@@ -553,23 +601,22 @@ export class AshApplication extends Disposable {
 			workspaceContext,
 			supervisor,
 			resources,
+			dedicatedWindow,
+			remoteConnections,
 			modeId: this.defaultModeId,
 			windowsStateHandler,
 			windowStateTracking,
 			isDestroyed: () => window.isDestroyed(),
-			focus: () => focusElectronWindow(window),
+			focus: () => focusWindow(window),
 		};
 		this.workbenchWindows.add(record);
-		resources.add(toDisposable(() => {
-			if (!window.isDestroyed()) window.destroy();
-		}));
+		resources.add(toDisposable(() => this.globalKeybindings.removeWindow(record.id)));
 		const onFocus = (): void => {
 			if (!window.isDestroyed()) this.workbenchWindows.activate(record.id);
 		};
 		window.on("focus", onFocus);
 		resources.add(toDisposable(() => window.removeListener("focus", onFocus)));
 		window.once("closed", () => {
-			this.closeSessionsWindow(record);
 			this.workbenchWindows.remove(record.id);
 			if (!resources.isDisposed) resources.dispose();
 		});
@@ -622,21 +669,21 @@ export class AshApplication extends Disposable {
 				window.webContents.send(WORKSPACE_CONTEXT_CHANGED_CHANNEL, serializeWorkspace(resolvedWorkspace));
 			}
 		}));
-		const { configuration, keybindings } = this.services;
+		const windowResources = {
+			configuration: this.services.configuration,
+			keybindings: this.services.keybindings,
+			nativeKeyboardLayout: this.nativeKeyboardLayout,
+			userKeyboardLayout: this.services.userKeyboardLayout,
+		};
 		const workspaceTransitions = windowDisposables.add(new WorkspaceTransitionMainService({
 			workspaces,
 			context: workspaceContext,
 			...this.createWorkspaceTransitionRuntime(supervisor, workspaceHost),
 		}));
-		const remoteConnections = new RemoteConnections({
-			remoteExecutable: remoteExecutablePath({ appPath: app.getAppPath(), isPackaged: app.isPackaged, platform: process.platform, resourcesPath: process.resourcesPath }),
-			environment: { ...process.env, ASH_HOME: this.profileRoot },
-			scheduleConnect: connection => this.openRemoteConnection(connection, workspaces),
-		});
 		const remoteWindowContext = windowDisposables.add(new RemoteWindowMainContext({
 			supervisor,
 			workspaceContext,
-			connections: remoteConnections,
+			connections: record.remoteConnections,
 			tunnels: remoteTunnelService,
 			host: electronRemoteWindowMainHost(window),
 			prepareForRuntimeReplacement: () => window.webContents.send("ash:terminal:prepareReplacement"),
@@ -665,6 +712,7 @@ export class AshApplication extends Disposable {
 			}
 		};
 		record.openWorkspace = (root) => transitionToFolder(root, true);
+		const windowDialogs = windowDisposables.add(new WindowDialogHost(window, (target, options) => dialog.showMessageBox(target, options)));
 		const ipcRoutes = [
 			...workspaceHost.routes(),
 			...supervisor.routes(window.webContents, () => ({ workspaceId: workspaceContext.getWorkspace().id, workspaceRoot: workspaceContext.getResolvedWorkspace().folders[0]?.uri.fsPath ?? this.profileRoot }), this.appServerStartupMode === "required"),
@@ -673,32 +721,12 @@ export class AshApplication extends Disposable {
 			...rendererSystemHostRoutes(window),
 			...remoteWindowContext.ipcRoutes,
 			...browserViewIpcRoutes(browserViewMainService),
-			...configurationIpcRoutes(configuration),
-			...keybindingsResourceIpcRoutes(keybindings),
-			...nativeKeyboardLayoutIpcRoutes(this.nativeKeyboardLayout),
-			...userKeyboardLayoutIpcRoutes(this.services.userKeyboardLayout),
+			...windowResourceIpcRoutes(windowResources),
+			windowOperationIpcRoute(this.windowsMainService, window),
+			windowCloseResponseIpcRoute(this.windowsMainService, window),
 			...nativeHostIpcRoutes({
-				openFolder: async () => {
-					const result = await dialog.showOpenDialog(window, {
-						title: "Open Folder",
-						properties: ["openDirectory"],
-					});
-					const folderPath = result.filePaths[0];
-					if (result.canceled || !folderPath) return;
-					try {
-						await transitionToFolder(folderPath, false);
-					} catch (error) {
-						if (error instanceof Error && error.message.includes("Finish the active request")) {
-							await dialog.showMessageBox(window, {
-								type: "info",
-								message: "Finish the active request before opening another folder.",
-								detail: "The current Workspace was kept unchanged.",
-							});
-							return;
-						}
-						throw error;
-					}
-				},
+				performDialogOperation: operation => windowDialogs.perform(operation),
+				performShellCommand: operation => this.performShellCommand(operation),
 				pickFolder: async () => {
 					const result = await dialog.showOpenDialog(window, {
 						title: "Add Directory",
@@ -706,11 +734,31 @@ export class AshApplication extends Disposable {
 					});
 					return result.canceled || !result.filePaths[0] ? undefined : result.filePaths[0];
 				},
+				pickFile: async (options) => {
+					const result = await dialog.showOpenDialog(window, {
+						title: options.title ?? 'Open File',
+						...(options.defaultPath ? { defaultPath: options.defaultPath } : {}),
+						...(options.buttonLabel ? { buttonLabel: options.buttonLabel } : {}),
+						...(options.filters ? { filters: options.filters.map(filter => ({ name: filter.name, extensions: [...filter.extensions] })) } : {}),
+						properties: [
+							...(options.canSelectFiles ? ['openFile' as const] : []),
+							...(options.canSelectFolders ? ['openDirectory' as const] : []),
+							...(options.canSelectMany ? ['multiSelections' as const] : []),
+						],
+					});
+					return result.canceled || result.filePaths.length === 0 ? undefined : result.filePaths;
+				},
 				openWorkspace: (root) => transitionToFolder(root, true),
+				revealFile: path => {
+					if (!isAbsolute(path)) throw new TypeError('File path to reveal must be absolute');
+					shell.showItemInFolder(path);
+				},
 				saveFile: async (options) => {
 					const result = await dialog.showSaveDialog(window, {
-						title: "Save File",
-						...(options.defaultName ? { defaultPath: options.defaultName } : {}),
+						title: options.title ?? "Save File",
+						...(options.defaultPath || options.defaultName ? { defaultPath: options.defaultPath ?? options.defaultName } : {}),
+						...(options.buttonLabel ? { buttonLabel: options.buttonLabel } : {}),
+						...(options.filters ? { filters: options.filters.map(filter => ({ name: filter.name, extensions: [...filter.extensions] })) } : {}),
 					});
 					return result.canceled || !result.filePath ? undefined : result.filePath;
 				},
@@ -721,15 +769,16 @@ export class AshApplication extends Disposable {
 					}
 				},
 				toggleDeveloperTools: () => window.webContents.toggleDevTools(),
+				syncSystemWideKeybindings: bindings => this.globalKeybindings.updateKeybindings(
+					record.id,
+					bindings.filter(binding => binding.commandId === OPEN_AGENTS_WINDOW_COMMAND_ID),
+				),
 			}),
 			...workbenchModeIpcRoutes(modeId => this.scheduleWorkbenchModeSwitch(record, modeId)),
 			...diskFileSystemProviderRoutes(windowDisposables.add(new DiskFileSystemProvider([URI.file(this.profileRoot)])), URI.file(this.profileRoot)),
 			...workspaceContextIpcRoutes(workspaceContext),
 		];
-		ipcRoutes.push(...sessionsWindowIpcRoutes({
-			openSessionsWindow: () => this.openSessionsWindow(record),
-			returnToWorkbench: () => record.focus(),
-		}));
+		ipcRoutes.push(openDedicatedWindowIpcRoute(() => this.openSessionsWindow(record)));
 		if (this.nativeMenubar) {
 			const nativeContextMenu = windowDisposables.add(
 				new ElectronContextMenu(window),
@@ -745,18 +794,9 @@ export class AshApplication extends Disposable {
 			},
 			ipcRoutes,
 		));
-		windowDisposables.add(configuration.onDidChange((snapshot) =>
-			window.webContents.send(CONFIGURATION_CHANGED_CHANNEL, snapshot)
-		));
-		windowDisposables.add(keybindings.onDidChange((snapshot) =>
-			window.webContents.send(KEYBINDINGS_RESOURCE_CHANGED_CHANNEL, snapshot)
-		));
-		windowDisposables.add(this.nativeKeyboardLayout.onDidChangeKeyboardLayout((layout) =>
-			window.webContents.send(NATIVE_KEYBOARD_LAYOUT_CHANGED_CHANNEL, layout)
-		));
-		windowDisposables.add(this.services.userKeyboardLayout.onDidChangeKeyboardLayout(() =>
-			window.webContents.send(USER_KEYBOARD_LAYOUT_CHANGED_CHANNEL, this.services.userKeyboardLayout.currentKeyboardLayout)
-		));
+		windowDisposables.add(this.windowsMainService.trackZoomLevel(window));
+		windowDisposables.add(this.windowsMainService.trackClose(window, () => record.dedicatedWindow.close()));
+		windowDisposables.add(trackWindowResourceChanges(window, windowResources));
 		try {
 			await this.loadRendererEntry(window, rendererEntry);
 			return record;
@@ -766,93 +806,108 @@ export class AshApplication extends Disposable {
 		}
 	}
 
-	/** Creates or focuses the Sessions window belonging to one Workbench supervisor. */
+	/** Opens the mode's Sessions renderer under the Workbench window host. */
 	private async openSessionsWindow(record: WorkbenchWindowRecord): Promise<void> {
 		const mode = WorkbenchModeRegistry.get(record.modeId);
 		if (!mode.dedicatedSessions) {
 			throw new Error(`${mode.title} does not provide a dedicated Sessions window`);
 		}
-		const existing = record.sessionsWindow;
-		if (existing && !existing.isDestroyed()) {
-			if (existing.isMinimized()) existing.restore();
-			existing.focus();
-			return;
-		}
-
 		const sessionsEntry = this.resolveRendererEntry("sessions", record.modeId);
-		const browserWindowOptions = resolveBrowserWindowOptions({
-			state: {
-				mode: WindowMode.Normal,
-				width: 1_180,
-				height: 780,
-			},
-			webPreferences: this.createSandboxWebPreferences(),
-		});
-		const window = new BrowserWindow({
-			...browserWindowOptions,
-			icon: this.windowIconPath,
-			show: false,
+		await record.dedicatedWindow.open({
 			title: `${mode.title} Sessions`,
-		});
-		record.sessionsWindow = window;
-		window.once("ready-to-show", () => {
-			if (!window.isDestroyed()) {
-				window.show();
-			}
-		});
-
-		const windowDisposables = record.resources.add(new DisposableStore());
-		const sessionsRelay = windowDisposables.add(this.createAppServerConnectionRelay(record.workspaceContext.getWorkspace(), windowDisposables));
-		windowDisposables.add(this.trustedIpcRouter.register(
-			{
-				webContents: window.webContents,
-				allowedEntryUrls: new Set([
-					normalizeEntryUrl(sessionsEntry.url),
-				]),
+			icon: this.windowIconPath,
+			width: 1_180,
+			height: 780,
+			webPreferences: this.createSandboxWebPreferences(),
+			initialize: async (window, windowDisposables) => {
+				const sessionsRelay = windowDisposables.add(this.createAppServerConnectionRelay(record.workspaceContext.getWorkspace(), windowDisposables));
+				const remoteWindowContext = windowDisposables.add(new RemoteWindowMainContext({
+					supervisor: sessionsRelay,
+					workspaceContext: record.workspaceContext,
+					connections: record.remoteConnections,
+					tunnels: new SshRemoteTunnelService({
+						getWorkspace: () => record.workspaceContext.getWorkspace(),
+						sshExecutable: process.env.ASH_SSH_PATH ?? "ssh",
+						localEnvironment: process.env,
+					}),
+					host: electronRemoteWindowMainHost(window),
+					prepareForRuntimeReplacement: () => window.webContents.send("ash:terminal:prepareReplacement"),
+				}));
+				const windowResources = {
+					configuration: this.services.configuration,
+					keybindings: this.services.keybindings,
+					nativeKeyboardLayout: this.nativeKeyboardLayout,
+					userKeyboardLayout: this.services.userKeyboardLayout,
+				};
+				const ipcRoutes = [
+					...sessionsRelay.routes(window.webContents, () => ({ workspaceId: record.workspaceId, workspaceRoot: record.workspaceContext.getResolvedWorkspace().folders[0]?.uri.fsPath ?? this.profileRoot }), this.appServerStartupMode === "required"),
+					...rendererSystemHostRoutes(window),
+					...remoteWindowContext.ipcRoutes,
+					...windowResourceIpcRoutes(windowResources),
+					windowOperationIpcRoute(this.windowsMainService, window),
+					...diskFileSystemProviderRoutes(windowDisposables.add(new DiskFileSystemProvider([URI.file(this.profileRoot)])), URI.file(this.profileRoot)),
+					...workspaceContextIpcRoutes(record.workspaceContext),
+					returnToParentWindowIpcRoute(() => record.dedicatedWindow.returnToParent(window)),
+					windowCloseResponseIpcRoute(this.windowsMainService, window),
+				];
+				if (this.nativeMenubar) {
+					const nativeContextMenu = windowDisposables.add(new ElectronContextMenu(window));
+					ipcRoutes.push(...nativeContextMenuIpcRoutes(nativeContextMenu));
+				}
+				windowDisposables.add(this.trustedIpcRouter.register(
+					{
+						webContents: window.webContents,
+						allowedEntryUrls: new Set([normalizeEntryUrl(sessionsEntry.url)]),
+					},
+					ipcRoutes,
+				));
+				windowDisposables.add(this.windowsMainService.trackZoomLevel(window));
+				windowDisposables.add(this.windowsMainService.trackClose(window));
+				windowDisposables.add(trackWindowResourceChanges(window, windowResources));
+				windowDisposables.add(record.workspaceContext.onDidChangeWorkspace(({ resolvedWorkspace }) => {
+					if (!window.isDestroyed()) {
+						window.webContents.send(WORKSPACE_CONTEXT_CHANGED_CHANNEL, serializeWorkspace(resolvedWorkspace));
+					}
+				}));
+				await this.loadRendererEntry(window, sessionsEntry);
 			},
-			[
-				...sessionsRelay.routes(window.webContents, () => ({ workspaceId: record.workspaceId, workspaceRoot: record.workspaceContext.getResolvedWorkspace().folders[0]?.uri.fsPath ?? this.profileRoot }), this.appServerStartupMode === "required"),
-				...rendererSystemHostRoutes(window),
-				...diskFileSystemProviderRoutes(windowDisposables.add(new DiskFileSystemProvider([URI.file(this.profileRoot)])), URI.file(this.profileRoot)),
-				...workspaceContextIpcRoutes(record.workspaceContext),
-				...sessionsWindowIpcRoutes({
-					openSessionsWindow: () => this.openSessionsWindow(record),
-					returnToWorkbench: () => this.returnToMainWindow(record, window),
-				}),
-			],
-		));
-		windowDisposables.add(record.workspaceContext.onDidChangeWorkspace(({ resolvedWorkspace }) => {
-			if (!window.isDestroyed()) {
-				window.webContents.send(WORKSPACE_CONTEXT_CHANGED_CHANNEL, serializeWorkspace(resolvedWorkspace));
-			}
-		}));
-		window.once("closed", () => {
-			windowDisposables.dispose();
-			if (record.sessionsWindow === window) record.sessionsWindow = undefined;
 		});
+	}
 
-		try {
-			await this.loadRendererEntry(window, sessionsEntry);
-		} catch (error) {
-			if (!window.isDestroyed()) {
-				window.destroy();
+	private async performShellCommand(operation: 'install' | 'uninstall'): Promise<string> {
+		if (process.platform !== 'darwin') throw new Error('Shell command installation requires macOS');
+		if (!app.isPackaged) throw new Error('Shell command installation requires a packaged Ash application');
+		const appBundle = dirname(dirname(dirname(process.execPath)));
+		if (!basename(appBundle).endsWith('.app')) throw new Error('The Ash application bundle is unavailable');
+		const launcher = `#!/bin/sh\n# Ash desktop launcher\nexec /usr/bin/open -n -a '${appBundle.replaceAll("'", "'\\''")}' --args "$@"\n`;
+		const { stdout: shellPath } = await promisify(execFile)(process.env.SHELL ?? '/bin/zsh', ['-lc', 'printf %s "$PATH"'], { encoding: 'utf8', timeout: 5_000 });
+		const eligible = new Set(['/usr/local/bin', '/opt/homebrew/bin', join(homedir(), '.local', 'bin'), join(homedir(), 'bin')]);
+		const directories = [...new Set(shellPath.split(delimiter).filter(path => eligible.has(path)))];
+		if (directories.length === 0) throw new Error('Add a writable bin directory to PATH before installing the ash command');
+		for (const directory of directories) {
+			const commandPath = join(directory, 'ash');
+			let existing: Awaited<ReturnType<typeof lstat>> | undefined;
+			try { existing = await lstat(commandPath); } catch (error) {
+				if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
 			}
-			throw error;
+			if (existing) {
+				if (!existing.isFile() || !(await readFile(commandPath, 'utf8')).startsWith('#!/bin/sh\n# Ash desktop launcher\n')) {
+					throw new Error(`${commandPath} belongs to another installation`);
+				}
+				if (operation === 'uninstall') await unlink(commandPath);
+				else {
+					await writeFile(commandPath, launcher);
+					await chmod(commandPath, 0o755);
+				}
+				return commandPath;
+			}
+			if (operation === 'install') {
+				try { await access(directory, constants.W_OK); } catch { continue; }
+				await writeFile(commandPath, launcher, { flag: 'wx', mode: 0o755 });
+				return commandPath;
+			}
 		}
-	}
-
-	private returnToMainWindow(record: WorkbenchWindowRecord, sessionsWindow: BrowserWindow): void {
-		record.focus();
-		if (!sessionsWindow.isDestroyed()) {
-			sessionsWindow.close();
-		}
-	}
-
-	private closeSessionsWindow(record: WorkbenchWindowRecord): void {
-		const window = record.sessionsWindow;
-		if (window && !window.isDestroyed()) {
-			window.close();
-		}
+		throw new Error(operation === 'install' ? 'No writable bin directory is available in PATH' : 'The ash command is not installed in PATH');
 	}
 
 	private scheduleWorkbenchModeSwitch(record: WorkbenchWindowRecord, modeId: WorkbenchModeId): void {
@@ -866,7 +921,8 @@ export class AshApplication extends Disposable {
 		if (record.window.isDestroyed() || record.modeId === modeId) return;
 		const previousModeId = record.modeId;
 		const previousDefaultModeId = this.defaultModeId;
-		this.closeSessionsWindow(record);
+		await record.dedicatedWindow.close();
+		this.globalKeybindings.removeWindow(record.id);
 		record.modeId = modeId;
 		this.defaultModeId = modeId;
 		try {
@@ -1241,10 +1297,4 @@ function workspaceTransitionError(
 	if (!failure) return new Error("Workspace transition failed without a classified failure");
 	if (failure.error instanceof Error) return failure.error;
 	return new Error(`Workspace transition failed during ${failure.stage}`);
-}
-
-function focusElectronWindow(window: BrowserWindow): void {
-	if (window.isDestroyed()) return;
-	if (window.isMinimized()) window.restore();
-	window.focus();
 }

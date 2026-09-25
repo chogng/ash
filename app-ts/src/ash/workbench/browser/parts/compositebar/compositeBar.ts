@@ -56,6 +56,7 @@ export class CompositeBar extends Disposable {
 		this._register(new Emitter<CompositeBarSelectionEvent>());
 	private containers: readonly IViewContainerDescriptor[] = [];
 	private readonly tabWidths = new Map<string, number>();
+	private readonly badges = new Map<string, { readonly count: number; readonly description: string }>();
 	private actionBarInsetWidth = 0;
 	private actionBarItemGap = 0;
 	private renderedContainerIds: readonly string[] = [];
@@ -126,6 +127,12 @@ export class CompositeBar extends Disposable {
 	setAriaLabel(label: string): void {
 		this.domNode.setAttribute("aria-label", label);
 		this.actionBar.element.setAttribute("aria-label", label);
+	}
+
+	setBadge(containerId: string, count: number | undefined, description?: string): void {
+		if (count === undefined) this.badges.delete(containerId);
+		else this.badges.set(containerId, { count, description: description ?? String(count) });
+		this.render();
 	}
 
 	setActiveComposite(compositeId: string): void {
@@ -200,6 +207,7 @@ export class CompositeBar extends Disposable {
 					tabId: compositeTabId(this.location, container.id),
 					panelId: compositePanelId(this.location, container.id),
 					checked: container.id === this._activeCompositeId,
+					badge: this.badges.get(container.id),
 					onActivate: (compositeId) => {
 						if (this._activeCompositeId === compositeId) return;
 						this._onDidSelectComposite.fire({ compositeId });

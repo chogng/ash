@@ -4,9 +4,10 @@ import type { ServicesAccessor } from "../../../platform/instantiation/common/in
 import { IQuickInputService, type IQuickPickItem } from "../../../platform/quickinput/common/quickInput.js";
 import { NEW_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID } from "../../../workbench/contrib/chat/common/chat.js";
 import type { SessionId, ThreadId } from "../../services/sessions/common/session.js";
-import { ISessionsManagementService } from "../../services/sessions/common/sessionsManagementService.js";
-import { ISessionsService } from "../../services/view/common/sessionsService.js";
+import { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
+import { ISessionsService } from "../../services/sessions/browser/sessionsService.js";
 
+// ChatPane shares these command IDs with the regular Workbench; this window owns their Sessions behavior.
 registerAction2(class NewSessionsChatAction extends Action2 {
 	constructor() {
 		super({ id: NEW_CHAT_COMMAND_ID, title: "New Session" });

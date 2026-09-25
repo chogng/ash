@@ -142,7 +142,7 @@ async function connectToRemote(connection: RemoteConnectionDefinition, connectio
 		detail: `${connection.host}:${connection.workspace}`,
 		primaryButton: "Open Remote Window",
 	});
-	if (!confirmed) return;
+	if (!confirmed.confirmed) return;
 	try {
 		await connections.connect(connection.name);
 	} catch (error) {

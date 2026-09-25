@@ -28,6 +28,7 @@ export type TitlebarPartFactory = (
 export class BrowserTitlebarPart extends WorkbenchPart {
 	private readonly menubar: IMenubarControl;
 	private readonly leftActions: MenuWorkbenchToolBar;
+	private readonly centerAdjacentActions: MenuWorkbenchToolBar;
 	private readonly actions: MenuWorkbenchToolBar;
 
 	override get minimumHeight(): number { return WorkbenchWindowBarHeight; }
@@ -58,8 +59,22 @@ export class BrowserTitlebarPart extends WorkbenchPart {
 				{ presentation: "inherit-foreground" },
 			),
 		);
-		const commandCenter = this._register(instantiationService.createInstance(CommandCenterControl, this.domNode, options.localizationService));
-		this.contentDomNode.before(commandCenter.domNode);
+		const centerDomNode = h(ownerDocument, "div");
+		centerDomNode.className = "ash-titlebar-center";
+		this.contentDomNode.before(centerDomNode);
+		this._register(instantiationService.createInstance(CommandCenterControl, centerDomNode, options.localizationService));
+		const centerAdjacentActionsDomNode = h(ownerDocument, "div");
+		centerAdjacentActionsDomNode.className = "ash-titlebar-center-adjacent-actions ash-titlebar-interactive-region";
+		centerDomNode.append(centerAdjacentActionsDomNode);
+		this.centerAdjacentActions = this._register(
+			new MenuWorkbenchToolBar(
+				centerAdjacentActionsDomNode,
+				options.menuService,
+				options.contextMenuService,
+				MenuId.TitleBarAdjacentCenter,
+				{ presentation: "inherit-foreground" },
+			),
+		);
 		const actionsDomNode = h(ownerDocument, "div");
 		actionsDomNode.className = "ash-titlebar-actions ash-titlebar-interactive-region";
 		this.contentDomNode.append(actionsDomNode);

@@ -21,6 +21,7 @@ import { DocumentCollaborationController } from '../../../contrib/collaboration/
 import { createDocumentFragmentFromHtml } from './htmlDocumentFragment.js';
 import type { DocumentCollaborationConnection, DocumentCollaborationPresence } from '../../../common/services/documentCollaborationService.js';
 import { h, fragment as createFragment } from '../../../../base/browser/dom.js';
+import type { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 
 export interface RichTextEditorOptions {
 	/** Configures the generic heading query exposed by the pane. */
@@ -64,12 +65,13 @@ export interface EditorToolbarActionContext {
 	readonly blockId: DocumentNodeId;
 	readonly selection: DocumentTextSelection | undefined;
 	readonly ownerDocument: Document;
+	readonly dialogs: IDialogService;
 }
 
 export interface EditorToolbarAction {
 	readonly id: string;
 	readonly label: string;
-	readonly run: (context: EditorToolbarActionContext) => DocumentCommand | undefined;
+	readonly run: (context: EditorToolbarActionContext) => DocumentCommand | undefined | Promise<DocumentCommand | undefined>;
 }
 
 const DEFAULT_DOCUMENT_ACTIONS: readonly { readonly id: string; readonly label: string }[] = [
@@ -119,7 +121,7 @@ export class RichTextEditorWidget extends Disposable {
 	private remotePresences: readonly DocumentCollaborationPresence[] = [];
 	private dimension: IDimension = { width: 0, height: 0 };
 
-	constructor(private readonly options: RichTextEditorOptions = {}) {
+	constructor(private readonly options: RichTextEditorOptions = {}, private readonly dialogs: IDialogService) {
 		super();
 		this._register(toDisposable(() => this.disposeNodeViews()));
 	}
@@ -896,8 +898,9 @@ export class RichTextEditorWidget extends Disposable {
 		} else if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && (event.key === "b" || event.key === "B" || event.key === "i" || event.key === "I")) {
 			command = createToggleMarkCommand(model.schema, model.document, node.id, inlineSelection.nodeId, selection, event.key.toLowerCase() === "b" ? "strong" : "em", {}, model.storedMarks);
 		} else if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && (event.key === "k" || event.key === "K") && !collapsed) {
-			const href = editor.ownerDocument.defaultView?.prompt("Link URL", "https://");
-			if (href) command = createSetLinkMarkCommand(model.schema, model.document, node.id, inlineSelection.nodeId, selection, href, model.storedMarks);
+			event.preventDefault();
+			void this.requestLink(model, node.id, inlineSelection.nodeId, selection);
+			return;
 		} else if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key === "Enter" && event.shiftKey) {
 			command = createInsertHardBreakCommand(model.schema, model.document, node.id, selection);
 		} else if (!event.metaKey && !event.ctrlKey && event.key === "Enter" && !event.shiftKey && collapsed) {
@@ -1094,10 +1097,11 @@ export class RichTextEditorWidget extends Disposable {
 		this.updateToolbar();
 	}
 
-	private handleToolbarAction(action: string): void {
+	private async handleToolbarAction(action: string): Promise<void> {
 		if (this.isReadOnly()) return;
 		const model = this.model;
 		if (!model) return;
+		const document = model.document;
 		const blockId = this.activeBlockId ?? findTextBearingBlockId(model.document, model.selection?.kind === "text" ? model.selection.anchor.nodeId : undefined) ?? findFirstEditableBlock(model.document)?.id;
 		if (!blockId) return;
 		const selection = this.readActiveDocumentTextSelection(model, blockId);
@@ -1120,9 +1124,8 @@ export class RichTextEditorWidget extends Disposable {
 				break;
 			case "link": {
 				if (!selection || !selectionBlockId) break;
-				const href = this.requireContainer().ownerDocument.defaultView?.prompt("Link URL", "https://");
-				if (href) command = createSetLinkMarkCommand(model.schema, model.document, selectionBlockId, selection.anchor.nodeId, selection, href, model.storedMarks);
-				break;
+				await this.requestLink(model, selectionBlockId, selection.anchor.nodeId, selection);
+				return;
 			}
 			case "unlink":
 				if (selection && selectionBlockId) command = createRemoveMarkCommand(model.schema, model.document, selectionBlockId, selection.anchor.nodeId, selection, "link", model.storedMarks);
@@ -1153,10 +1156,20 @@ export class RichTextEditorWidget extends Disposable {
 		}
 		if (!command) {
 			const toolbarAction = this.options.toolbarActions?.find(candidate => candidate.id === action);
-			if (toolbarAction) command = toolbarAction.run({ model, blockId, selection, ownerDocument: this.requireContainer().ownerDocument });
+			if (toolbarAction) command = await toolbarAction.run({ model, blockId, selection, ownerDocument: this.requireContainer().ownerDocument, dialogs: this.dialogs });
 		}
-		if (!command) return;
+		if (!command || this.isDisposed || this.model !== model || model.document !== document || this.isReadOnly()) return;
 		this.dispatchCommand(model, command);
+	}
+
+	private async requestLink(model: TextModel, blockId: DocumentNodeId, nodeId: DocumentNodeId, selection: DocumentTextSelection): Promise<void> {
+		const document = model.document;
+		const result = await this.dialogs.input({ title: 'Link', message: 'Link URL', inputs: [{ value: 'https://' }] });
+		if (!result.confirmed || this.isDisposed || this.model !== model || model.document !== document || this.isReadOnly()) return;
+		const href = result.values?.[0];
+		if (!href) return;
+		const command = createSetLinkMarkCommand(model.schema, model.document, blockId, nodeId, selection, href, model.storedMarks);
+		if (command) this.dispatchCommand(model, command);
 	}
 
 	private handleTextMarkAction(markType: "strong" | "em"): void {

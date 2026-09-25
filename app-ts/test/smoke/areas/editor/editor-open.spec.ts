@@ -273,6 +273,10 @@ test("Binary content shows an editor error with a working alternative", async ({
 	await alternative.click();
 	await expect(content.locator(".ash-binary-editor-content")).toContainText("48 69 00 ff");
 	await expect(error).toHaveCount(0);
+	await content.getByRole('button', { name: 'Open as Read-Only Text' }).click();
+	await expect(content.locator('.stanza-editor-input')).toBeAttached();
+	await expect(content.locator('.stanza-editor-input')).toHaveAttribute('aria-readonly', 'true');
+	await expect(content.locator('.ash-binary-editor-content')).toHaveCount(0);
 });
 
 test("Compare open files as binary shows both byte views", async ({ target, workbench }) => {

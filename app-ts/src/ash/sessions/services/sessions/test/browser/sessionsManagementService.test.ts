@@ -3,12 +3,12 @@ import { test } from "mocha";
 import type { AgentTreeNodeProjection, ModelUsageSummary, ServerNotification, Session as SessionDto, SessionThreadProjection } from "../../../../../platform/app-server/common/generated/index.js";
 import type { IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
 import type { ISessionApi, ITurnApi } from "../../../../../platform/sessions/common/sessionApi.js";
-import { AppServerSessionsManagementService } from "../../browser/appServerSessionsManagementService.js";
-import { AppServerSessionsProvider } from "../../browser/appServerSessionsProvider.js";
+import { SessionsManagementService } from "../../browser/sessionsManagementService.js";
+import { AppServerSessionsProvider } from "../../../../contrib/providers/appServer/browser/appServerSessionsProvider.js";
 
 test("management initializes the catalog from provider-owned Session mapping", async () => {
 	const fake = sessionHost([session("session-1", "thread-1"), session("session-2", "thread-2")]);
-	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));
+	using service = new SessionsManagementService(new AppServerSessionsProvider(fake.host));
 
 	await service.initialize();
 
@@ -30,7 +30,7 @@ test("Session list becomes ready while the opened conversation is still loading"
 		await held;
 		return subscribe(params);
 	};
-	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));
+	using service = new SessionsManagementService(new AppServerSessionsProvider(fake.host));
 
 	await service.initialize();
 	assert.equal(service.state, "ready");
@@ -43,7 +43,7 @@ test("Session list becomes ready while the opened conversation is still loading"
 
 test("opening a background-created conversation reads and subscribes it without reloading the window", async () => {
 	const fake = sessionHost([]);
-	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));
+	using service = new SessionsManagementService(new AppServerSessionsProvider(fake.host));
 	await service.initialize();
 	fake.sessions.push(session("automation-session", "automation-thread"));
 
@@ -58,7 +58,7 @@ test("opening a background-created conversation reads and subscribes it without 
 
 test("session/changed adds a conversation created by another client without changing selection", async () => {
 	const fake = sessionHost([session("session-1", "thread-1")]);
-	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));
+	using service = new SessionsManagementService(new AppServerSessionsProvider(fake.host));
 	await service.initialize();
 	fake.sessions.push(session("automation-session", "automation-thread"));
 	fake.emit({ method: "session/changed", params: { sessionId: "automation-session", agentTreeChanged: false } });
@@ -71,7 +71,7 @@ test("session/changed adds a conversation created by another client without chan
 
 test("selecting a catalog-only Session loads its details on demand", async () => {
 	const fake = sessionHost([session("session-1", "thread-1"), session("session-2", "thread-2")]);
-	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));
+	using service = new SessionsManagementService(new AppServerSessionsProvider(fake.host));
 	await service.initialize();
 
 	service.selectThread("session-2", "thread-2");
@@ -82,7 +82,7 @@ test("selecting a catalog-only Session loads its details on demand", async () =>
 
 test("catalog invalidation during detail loading keeps the selected Session hydrated", async () => {
 	const fake = sessionHost([session("session-1", "thread-1"), session("session-2", "thread-2")]);
-	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));
+	using service = new SessionsManagementService(new AppServerSessionsProvider(fake.host));
 	await service.initialize();
 
 	service.selectThread("session-2", "thread-2");
@@ -95,7 +95,7 @@ test("catalog invalidation during detail loading keeps the selected Session hydr
 
 test("catalog invalidation refreshes a background Session without loading its conversation", async () => {
 	const fake = sessionHost([session("session-1", "thread-1"), session("session-2", "thread-2")]);
-	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));
+	using service = new SessionsManagementService(new AppServerSessionsProvider(fake.host));
 	await service.initialize();
 	fake.sessions[1] = { ...fake.sessions[1]!, title: "Renamed in background", threads: [{ ...fake.sessions[1]!.threads[0]!, title: "Renamed Thread" }] };
 
@@ -108,7 +108,7 @@ test("catalog invalidation refreshes a background Session without loading its co
 
 test("session/deleted removes an unselected Session from the catalog", async () => {
 	const fake = sessionHost([session("session-1", "thread-1"), session("session-2", "thread-2")]);
-	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));
+	using service = new SessionsManagementService(new AppServerSessionsProvider(fake.host));
 	await service.initialize();
 	fake.sessions.splice(1, 1);
 
@@ -120,7 +120,7 @@ test("session/deleted removes an unselected Session from the catalog", async () 
 
 test("deleting the selected Session opens the next catalog Session", async () => {
 	const fake = sessionHost([session("session-1", "thread-1"), session("session-2", "thread-2")]);
-	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));
+	using service = new SessionsManagementService(new AppServerSessionsProvider(fake.host));
 	await service.initialize();
 	fake.sessions.splice(0, 1);
 
@@ -132,7 +132,7 @@ test("deleting the selected Session opens the next catalog Session", async () =>
 
 test("session/changed invalidates the frontend Session without inventing a Session sequence", async () => {
 	const fake = sessionHost([session("session-1", "thread-1")]);
-	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));
+	using service = new SessionsManagementService(new AppServerSessionsProvider(fake.host));
 	await service.initialize();
 	const subscriptions = fake.subscribeCount;
 
@@ -147,7 +147,7 @@ test("session/changed invalidates the frontend Session without inventing a Sessi
 
 test("ordinary Thread events leave the opened conversation and rendered list intact", async () => {
 	const fake = sessionHost([session("session-1", "thread-1")]);
-	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));
+	using service = new SessionsManagementService(new AppServerSessionsProvider(fake.host));
 	await service.initialize();
 	await waitFor(() => service.active?.session.agentTree !== undefined);
 	const original = service.sessions[0];
@@ -167,7 +167,7 @@ test("ordinary Thread events leave the opened conversation and rendered list int
 
 test("a new Thread in the opened Session refreshes its subscription", async () => {
 	const fake = sessionHost([session("session-1", "thread-1")]);
-	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));
+	using service = new SessionsManagementService(new AppServerSessionsProvider(fake.host));
 	await service.initialize();
 	await waitFor(() => service.active?.session.agentTree !== undefined);
 	const subscriptions = fake.subscribeCount;
@@ -182,7 +182,7 @@ test("a new Thread in the opened Session refreshes its subscription", async () =
 
 test("the backend marks Agent tree changes for the opened Session", async () => {
 	const fake = sessionHost([session("session-1", "thread-1")]);
-	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));
+	using service = new SessionsManagementService(new AppServerSessionsProvider(fake.host));
 	await service.initialize();
 	const subscriptions = fake.subscribeCount;
 
@@ -195,7 +195,7 @@ test("the backend marks Agent tree changes for the opened Session", async () => 
 
 test("archive sends only the Session grouping identity", async () => {
 	const fake = sessionHost([session("session-1", "thread-1"), session("session-2", "thread-2")]);
-	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));
+	using service = new SessionsManagementService(new AppServerSessionsProvider(fake.host));
 	await service.initialize();
 
 	await service.archiveSession("session-1");
@@ -208,7 +208,7 @@ test("archive sends only the Session grouping identity", async () => {
 test("interrupt reads the current Thread sequence before sending the command", async () => {
 	const tree = agentNode();
 	const fake = sessionHost([session("session-1", "thread-1")], tree);
-	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));
+	using service = new SessionsManagementService(new AppServerSessionsProvider(fake.host));
 	await service.initialize();
 
 	await service.interruptThread("session-1", "thread-1");

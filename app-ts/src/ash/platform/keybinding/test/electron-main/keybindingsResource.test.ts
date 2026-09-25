@@ -22,6 +22,16 @@ import {
 } from "../../../../workbench/services/keybinding/browser/keybindingsResourceService.js";
 
 test("keybinding resource wire data validates complete ordered rules", () => {
+	assert.deepEqual(validateKeybindingsResource([{
+		key: 'ctrl+shift+a',
+		command: 'workbench.action.openAgentsWindow',
+		systemWide: true,
+	}])[0]?.systemWide, true);
+	assert.throws(() => validateKeybindingsResource([{
+		key: 'ctrl+shift+a',
+		command: 'workbench.action.openAgentsWindow',
+		systemWide: 'yes',
+	}]), /systemWide must be a boolean/);
 	assert.deepEqual(
 		validateKeybindingsResourceSnapshot({
 			revision: 3,

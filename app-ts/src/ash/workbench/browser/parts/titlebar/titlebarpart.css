@@ -23,7 +23,7 @@
   align-self: stretch;
 }
 
-.ash-titlebar-command-center {
+.ash-titlebar-center {
   /* The desktop reserves unequal space for window controls; center against the full window. */
   position: absolute;
   left: 50%;
@@ -31,6 +31,20 @@
   min-width: 0;
   width: 400px;
   transform: translate(-50%, -50%);
+}
+
+.ash-titlebar-command-center {
+  width: 100%;
+}
+
+.ash-titlebar-center-adjacent-actions {
+  position: absolute;
+  left: calc(100% + var(--ash-spacing-size80));
+  top: 50%;
+  display: flex;
+  align-items: center;
+  color: var(--ash-title-bar-action-foreground);
+  transform: translateY(-50%);
 }
 
 .ash-titlebar-command-center-button {
@@ -84,7 +98,7 @@
 }
 
 @media (max-width: 800px) {
-  .ash-titlebar-command-center {
+  .ash-titlebar-center {
     width: 32px;
   }
 

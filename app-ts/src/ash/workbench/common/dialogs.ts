@@ -4,6 +4,7 @@ import {
 	type DialogRequest,
 	DialogResult,
 	type IDialogHandler,
+	type IDialogOutcome,
 } from "../../platform/dialogs/common/dialogs.js";
 import {
 	createServiceIdentifier,
@@ -13,7 +14,7 @@ import {
 export interface IDialogViewItem {
 	readonly request: DialogRequest;
 
-	close(result: DialogResult): void;
+	close(result: IDialogOutcome): void;
 	cancel(): void;
 	fail(error: unknown): void;
 }
@@ -21,7 +22,7 @@ export interface IDialogViewItem {
 /** Handle returned to the caller that enqueued a dialog. */
 export interface IDialogHandle {
 	readonly item: IDialogViewItem;
-	readonly result: Promise<DialogResult>;
+	readonly result: Promise<IDialogOutcome>;
 }
 
 /** Change emitted after one dialog leaves the model. */
@@ -29,7 +30,7 @@ export type IDialogCloseEvent =
 	| {
 		readonly kind: "result";
 		readonly item: IDialogViewItem;
-		readonly result: DialogResult;
+		readonly result: IDialogOutcome;
 	}
 	| {
 		readonly kind: "error";
@@ -87,9 +88,9 @@ export class DialogsModel
 			throw new ReferenceError("DialogsModel is already disposed");
 		}
 
-		let resolveResult!: (result: DialogResult) => void;
+		let resolveResult!: (result: IDialogOutcome) => void;
 		let rejectResult!: (error: unknown) => void;
-		const result = new Promise<DialogResult>((resolve, reject) => {
+		const result = new Promise<IDialogOutcome>((resolve, reject) => {
 			resolveResult = resolve;
 			rejectResult = reject;
 		});
@@ -108,7 +109,7 @@ export class DialogsModel
 					result: dialogResult,
 				});
 			},
-			cancel: () => item.close(DialogResult.Cancel),
+			cancel: () => item.close({ button: DialogResult.Cancel }),
 			fail: (error) => {
 				if (settled) return;
 				settled = true;

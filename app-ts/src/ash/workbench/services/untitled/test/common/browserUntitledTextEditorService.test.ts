@@ -27,7 +27,9 @@ for (const [name, value] of Object.entries({
 }
 
 const { IEditorPart } = await import("../../../../browser/parts/editor/editorPart.js");
-const { NewFileFromTemplateCommandId, NewUntitledTextEditorCommandId } = await import("../../../../browser/parts/editor/editorActions.js");
+const { NewFileFromTemplateCommandId } = await import("../../../../browser/parts/editor/editorActions.js");
+const { NEW_UNTITLED_FILE_COMMAND_ID } = await import("../../../../contrib/files/browser/fileConstants.js");
+await import("../../../../contrib/files/browser/fileActions.contribution.js");
 
 suiteTeardown(() => browserEnvironment.window.close());
 
@@ -71,7 +73,7 @@ test("New Untitled Text Editor opens a compatible text editor input", async () =
 	services.registerInstance(IEditorPart, editorPart);
 	using commands = new CommandService(services);
 
-	await commands.executeCommand(NewUntitledTextEditorCommandId);
+	await commands.executeCommand(NEW_UNTITLED_FILE_COMMAND_ID);
 
 	assert.equal(opened.length, 1);
 	assert.equal(opened[0]?.resource.toString(), "untitled:/Untitled-1");

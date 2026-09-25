@@ -1,0 +1,86 @@
+.ash-open-editors {
+	display: flex;
+	min-height: 0;
+	flex: 1 1 auto;
+	flex-direction: column;
+}
+
+.ash-open-editors-tree {
+	min-height: 0;
+	flex: 1 1 auto;
+}
+
+.ash-open-editors-empty {
+	padding: var(--ash-spacing-size80);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+}
+
+.ash-open-editors-empty:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
+}
+
+.ash-open-editors-row {
+	display: flex;
+	min-width: 0;
+	width: 100%;
+	align-items: center;
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-open-editors-group {
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-open-editors-icon {
+	display: inline-flex;
+	width: var(--ash-lxiconFontSize);
+	flex: 0 0 var(--ash-lxiconFontSize);
+	align-items: center;
+}
+
+.ash-open-editors-label {
+	min-width: 0;
+	flex: 1 1 auto;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.ash-open-editors-row.active .ash-open-editors-label {
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-open-editors-row.preview .ash-open-editors-label {
+	font-style: italic;
+}
+
+.ash-open-editors-dirty {
+	flex: 0 0 auto;
+	font-size: var(--ash-fontSize-body2);
+}
+
+.ash-open-editors-close {
+	display: inline-flex;
+	width: var(--ash-spacing-size200);
+	height: var(--ash-spacing-size200);
+	flex: 0 0 var(--ash-spacing-size200);
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+	border: 0;
+	border-radius: var(--ash-cornerRadius-small);
+	color: inherit;
+	background: transparent;
+	cursor: pointer;
+}
+
+.ash-open-editors-close:hover {
+	background: var(--ash-list-hover-background);
+}
+
+.ash-open-editors-close:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
+}

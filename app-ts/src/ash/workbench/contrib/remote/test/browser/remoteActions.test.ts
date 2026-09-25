@@ -122,12 +122,13 @@ class TestDialogService implements IDialogService {
 		this.messages.push(options);
 	}
 
-	async confirm(options: IConfirmationDialogOptions): Promise<boolean> {
+	async confirm(options: IConfirmationDialogOptions): Promise<{ confirmed: boolean }> {
 		this.confirmations.push(options);
-		return true;
+		return { confirmed: true };
 	}
 
 	async prompt(_options: IPromptDialogOptions): Promise<DialogResult> { return DialogResult.Cancel; }
+	async input(): Promise<never> { throw new Error('Unexpected input dialog'); }
 }
 
 async function waitUntil(predicate: () => boolean): Promise<void> {

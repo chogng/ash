@@ -102,10 +102,27 @@ test('DefaultSettings projects only Configuration Registry metadata', () => {
 		defaultValue: 'hidden',
 		parse: value => String(value),
 	});
+	registry.registerConfiguration({
+		key: 'editor.test.patterns',
+		defaultValue: { '*.source': '${capture}.output' },
+		parse: value => value as Record<string, string>,
+		setting: {
+			valueType: 'stringMap',
+			title: 'Test patterns',
+			description: 'Maps parent patterns to child patterns.',
+			keyLabel: 'Parent',
+			valueLabel: 'Children',
+			addLabel: 'Add',
+			removeLabel: 'Remove',
+			incompleteMessage: 'Complete both fields.',
+			duplicateMessage: 'Duplicate parent.',
+		},
+	});
 
 	const defaults = new DefaultSettings(registry);
-	assert.deepEqual(defaults.all.map(setting => setting.id), ['editor.test.enabled']);
+	assert.deepEqual(defaults.all.map(setting => setting.id), ['editor.test.enabled', 'editor.test.patterns']);
 	assert.equal(defaults.get(visible).valueType, 'boolean');
+	assert.equal(defaults.get('editor.test.patterns').valueType, 'stringMap');
 });
 
 test('settingsLayout is the single projection from registered settings to categories', () => {
@@ -144,7 +161,7 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(defaults.all.some(setting => setting.id === GitConfiguration.autofetch), false);
 	assert.equal(configurationRegistry.getConfiguration(GitConfiguration.autofetch)?.defaultValue, false);
 	assert.equal(configurationRegistry.getConfiguration(GitConfiguration.autofetchPeriod)?.defaultValue, 180);
-	assert.equal(defaults.all.every(setting => ['boolean', 'number', 'select', 'text'].includes(setting.valueType)), true);
+	assert.equal(defaults.all.every(setting => ['boolean', 'number', 'select', 'text', 'stringMap'].includes(setting.valueType)), true);
 	const themeSetting = defaults.get(WorkbenchConfiguration.colorTheme);
 	assert.equal(themeSetting.valueType, 'select');
 	if (themeSetting.valueType === 'select') {

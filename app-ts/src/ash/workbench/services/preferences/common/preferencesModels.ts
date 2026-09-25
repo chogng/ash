@@ -139,6 +139,8 @@ function registeredSetting(configuration: IRegisteredConfiguration, schema: ICon
 			};
 		case 'text':
 			return { ...base, valueType: 'text', configuration: configuration as IRegisteredConfiguration<string>, placeholder: schema.placeholder };
+		case 'stringMap':
+			return { ...base, valueType: 'stringMap', configuration: configuration as IRegisteredConfiguration<Record<string, string>>, keyLabel: schema.keyLabel, valueLabel: schema.valueLabel, addLabel: schema.addLabel, removeLabel: schema.removeLabel, incompleteMessage: schema.incompleteMessage, duplicateMessage: schema.duplicateMessage };
 	}
 }
 

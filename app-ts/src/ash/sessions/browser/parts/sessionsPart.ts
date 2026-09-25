@@ -6,10 +6,10 @@ import type { IContextViewService } from "../../../platform/contextview/browser/
 import type { IQuickInputService } from "../../../platform/quickinput/common/quickInput.js";
 import type { IChatService } from "../../../workbench/services/chat/common/chatService.js";
 import type { IChatContextPickService } from "../../../workbench/services/chat/common/chatContextService.js";
-import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagementService.js";
+import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
 import { WorkbenchPart } from "../../../workbench/browser/part.js";
-import type { SessionsViewSelection } from "../../services/view/common/sessionsService.js";
-import { SessionsChatView } from "../common/sessionsChatView.js";
+import type { SessionsViewSelection } from "../../services/sessions/browser/sessionsService.js";
+import { SessionsChatView } from "./sessionsChatView.js";
 import { h } from "../../../base/browser/dom.js";
 
 export interface SessionsPartOptions {

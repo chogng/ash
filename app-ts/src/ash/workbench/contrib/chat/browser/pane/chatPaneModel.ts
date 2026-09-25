@@ -5,7 +5,7 @@ import { localize } from "../../../../../nls.js";
 import type { SkillReference } from "../../../../../platform/skills/common/skillApi.js";
 import type { ResolvedChatContext } from "../../../../services/chat/common/chatContextService.js";
 import type { IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
-import type { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
+import type { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagement.js";
 import { chatTranscriptListItems, type IChatListItem } from "../list/chatListItems.js";
 
 export type ChatPaneState =

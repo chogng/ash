@@ -29,7 +29,7 @@ canonical in [`docs/editor-architecture.md`](../../../../../../docs/editor-archi
 This service deliberately does not cache live models. The Text and Document engines have
 different transaction and undo semantics, so each editor domain owns its model
 identity and reference lifetime. `IWorkingCopyService` indexes the resulting
-format-specific working copies without owning their models. `ExplorerViewPane`
+format-specific working copies without owning their models. `ExplorerView`
 passes only a resource and label to `EditorPart`; the selected pane resolves
 content through this service and registers its working copy with the shared
 Workbench lifecycle.
@@ -43,7 +43,7 @@ Stanza text and document contributions reject construction when that service is 
 Cancellation before resolution or save, or while awaiting the underlying I/O, rejects without publishing a result. File-service errors pass through unchanged. `TextFileBinaryError` and `TextFileTooLargeError` are editor-facing classification failures: the open-error pane may offer the registered Binary Editor, but the bytes never enter a text model.
 
 Adding model caches, backup persistence, or conflict policy directly to
-`ExplorerViewPane` would signal architectural drift. Dirty state and conflict
+`ExplorerView` would signal architectural drift. Dirty state and conflict
 policy remain in the editor-domain adapters (`BrowserTextModelService` for the
 Text Engine and `DocumentWorkingCopy` for the Document Engine); the shared working-copy contract
 exposes their common lifecycle without requiring a second editor model authority.
@@ -53,7 +53,7 @@ exposes their common lifecycle without requiring a second editor model authority
 `test/common/textFileService.test.ts` covers bootstrap precedence, byte delegation, cancellation, UTF-8 BOM handling, binary/invalid UTF-8 rejection, size limits, and failure propagation.
 `../../../platform/files/test/browser/fileService.test.ts` covers App Server
 invalidation projection.
-`../../contrib/files/test/browser/explorerViewPane.test.ts` verifies that Explorer does not read file
+`../../contrib/files/test/browser/explorerView.test.ts` verifies that Explorer does not read file
 content. Stanza Text Engine model and pane tests cover shared model references, edit
 preservation, cancellation, and session disposal. The working-copy service
 test covers registration, lookup, and unregistration.

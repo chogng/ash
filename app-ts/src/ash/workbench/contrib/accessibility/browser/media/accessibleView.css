@@ -1,0 +1,24 @@
+.ash-accessible-view-dialog.ash-dialog {
+	width: min(48rem, calc(100vw - var(--ash-spacing-size160) - var(--ash-spacing-size160)));
+}
+
+.ash-accessible-view-content {
+	display: block;
+	box-sizing: border-box;
+	width: 100%;
+	height: min(60vh, 32rem);
+	padding: var(--ash-spacing-size120);
+	resize: none;
+	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
+	border-radius: var(--ash-corner-radius-medium);
+	color: var(--ash-foreground);
+	background: var(--ash-editor-background);
+	font: inherit;
+	font-size: var(--ash-font-size-body1);
+	line-height: 1.4;
+}
+
+.ash-accessible-view-content:focus-visible {
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
+}

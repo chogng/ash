@@ -13,7 +13,7 @@ import '../../../src/ash/base/browser/ui/tree/tree.css';
 import '../../../src/ash/base/browser/ui/list/list.css';
 import '../../../src/ash/editor/browser/widget/richTextEditor/richTextEditorWidget.css';
 import '../../../src/ash/editor/contrib/codeAction/browser/media/codeAction.css';
-import '../../../src/ash/sessions/browser/parts/media/sessionsTitlebarPart.css';
+import '../../../src/ash/sessions/browser/parts/media/titlebarpart.css';
 import '../../../src/ash/workbench/browser/parts/editor/media/modalEditorPart.css';
 import '../../../src/ash/workbench/contrib/pdf/browser/media/pdfEditor.css';
 import '../../../src/ash/workbench/contrib/scm/browser/media/scm.css';

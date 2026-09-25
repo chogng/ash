@@ -1,25 +1,25 @@
 import "../media/chat.css";
 import { setDisposableOwner, toDisposable } from "../../../../../base/common/lifecycle.js";
-import type { IMenuService } from "../../../../../platform/actions/common/actions.js";
-import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
-import type { IContextViewService } from "../../../../../platform/contextview/browser/contextView.js";
-import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
+import { IMenuService } from "../../../../../platform/actions/common/actions.js";
+import { IContextMenuService, IContextViewService } from "../../../../../platform/contextview/browser/contextView.js";
+import { ICommandService } from "../../../../../platform/commands/common/commands.js";
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../../browser/parts/views/viewPane.js";
-import type { IWorkbenchLayoutService } from "../../../../services/layout/browser/layoutService.js";
-import type { IChatService } from "../../../../services/chat/common/chatService.js";
+import { IWorkbenchLayoutService } from "../../../../services/layout/browser/layoutService.js";
+import { IChatService } from "../../../../services/chat/common/chatService.js";
 import type { IActiveSessionThread, IChat, ISession, IUntitledChatSession, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
-import type { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
+import { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagement.js";
 import { ChatPane, resolveMarkdownWorkspaceResource } from "../pane/chatPane.js";
 import { ChatTitleControl } from "./chatTitleControl.js";
 import { h, isHTMLElement } from "../../../../../base/browser/dom.js";
-import type { IChatContextPickService, ChatContextAttachment } from "../../../../services/chat/common/chatContextService.js";
-import type { IQuickInputService } from "../../../../../platform/quickinput/common/quickInput.js";
-import type { IOpenerService } from "../../../../../platform/opener/common/openerService.js";
-import type { IEditorService } from "../../../../services/editor/common/editorService.js";
-import type { IFileService } from '../../../../../platform/files/common/files.js';
+import { IChatContextPickService, type ChatContextAttachment } from "../../../../services/chat/common/chatContextService.js";
+import { IQuickInputService } from "../../../../../platform/quickinput/common/quickInput.js";
+import { IOpenerService } from "../../../../../platform/opener/common/openerService.js";
+import { IEditorService } from "../../../../services/editor/common/editorService.js";
+import { IFileService } from '../../../../../platform/files/common/files.js';
+import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { type IContextKey } from "../../../../../platform/contextkey/common/contextkey.js";
-import { ContextKeyService, type IContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
+import { ContextKeyService, IContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
 import { ChatSessionInspectorVisibleContext } from "../../common/chat.js";
 import { SessionInspector } from "./sessionInspector.js";
 
@@ -60,19 +60,20 @@ export class ChatViewPane extends ViewPane {
 	constructor(
 		container: HTMLElement,
 		options: IViewPaneOptions,
-		chatService: IChatService,
-		sessionService: ISessionsManagementService,
-		menuService: IMenuService,
-		contextMenuService: IContextMenuService,
-		private readonly contextViewService: IContextViewService,
-		commandService: ICommandService,
-		private readonly layoutService: IWorkbenchLayoutService,
-		private readonly contextPickService: IChatContextPickService,
-		private readonly quickInputService: IQuickInputService,
-		private readonly fileService: IFileService,
-		contextKeyService?: IContextKeyService,
-		private readonly openerService?: IOpenerService,
-		private readonly editorService?: IEditorService,
+		@IChatService chatService: IChatService,
+		@ISessionsManagementService sessionService: ISessionsManagementService,
+		@IMenuService menuService: IMenuService,
+		@IContextMenuService contextMenuService: IContextMenuService,
+		@IContextViewService private readonly contextViewService: IContextViewService,
+		@ICommandService commandService: ICommandService,
+		@IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService,
+		@IChatContextPickService private readonly contextPickService: IChatContextPickService,
+		@IQuickInputService private readonly quickInputService: IQuickInputService,
+		@IFileService private readonly fileService: IFileService,
+		@IDialogService private readonly dialogs: IDialogService,
+		@IContextKeyService contextKeyService?: IContextKeyService,
+		@IOpenerService private readonly openerService?: IOpenerService,
+		@IEditorService private readonly editorService?: IEditorService,
 	) {
 		super(container, options);
 		this.chatService = chatService;
@@ -107,7 +108,7 @@ export class ChatViewPane extends ViewPane {
 		this._register(toDisposable(() => this.inspectorVisible.reset()));
 		this.inspector = this._register(new SessionInspector(this.body, sessionService, {
 			close: () => this.setInspectorVisible(false),
-		}));
+		}, this.dialogs));
 		this.inspector.element.hidden = true;
 		this.contentElement.append(this.body);
 		this.body.addEventListener("keydown", (event) => {

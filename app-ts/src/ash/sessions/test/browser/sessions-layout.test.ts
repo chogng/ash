@@ -21,10 +21,9 @@ const { Dimension } = await import("../../../base/browser/dom.js");
 const { WorkbenchPart } = await import("../../../workbench/browser/part.js");
 const { BrowserStorageService } = await import("../../../workbench/services/storage/browser/storageService.js");
 const { WillSaveStateReason } = await import("../../../platform/storage/common/storage.js");
-const { SessionsWorkbenchLayout } = await import("../../../sessions/browser/layout.js");
-const { sessionsPartIds } = await import("../../../sessions/services/layout/browser/sessionsLayoutService.js");
+const { SessionsWorkbenchLayout, sessionsPartIds } = await import("../../../sessions/browser/layoutPolicy.js");
 
-type SessionsPartId = import("../../../sessions/services/layout/browser/sessionsLayoutService.js").SessionsPartId;
+type SessionsPartId = import("../../../sessions/browser/layoutPolicy.js").SessionsPartId;
 type WorkbenchPartInstance = import("../../../workbench/browser/part.js").WorkbenchPart;
 
 class TestSessionsPart extends WorkbenchPart {

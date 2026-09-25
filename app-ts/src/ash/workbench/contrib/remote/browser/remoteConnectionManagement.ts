@@ -83,7 +83,7 @@ async function removeConnection(connections: IRemoteConnectionService, quickInpu
 		detail: `${connection.host}:${connection.workspace}`,
 		primaryButton: "Remove",
 	});
-	if (!confirmed) return;
+	if (!confirmed.confirmed) return;
 	try {
 		const removed = await connections.remove(connection.name);
 		await showManagementSuccess(

@@ -2,10 +2,8 @@ import type {
 	INativeHostApi,
 } from "../../../../platform/native/common/nativeHost.js";
 import { URI } from '../../../../base/common/uri.js';
-import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
-import type { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
-import type { IQuickInputService, IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
+import { DialogSeverity, type IDialogService, type IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import type { HTMLFileSystemProvider } from '../../../../platform/files/browser/htmlFileSystemProvider.js';
 import { workspaceFromIdentifier, type IWorkspace } from '../../../../platform/workspace/common/workspace.js';
 import {
@@ -35,12 +33,6 @@ export interface IWebWorkspaceClient {
 	authorize(path: string): Promise<() => void>;
 }
 
-type ServerDirectoryItem = IQuickPickItem & (
-	| { readonly kind: 'select'; readonly path: string }
-	| { readonly kind: 'parent'; readonly path: string }
-	| { readonly kind: 'directory'; readonly path: string }
-);
-
 /** Selects a server directory and asks the server to authorize a new Web session for it. */
 export class WebWorkspaceOpenService implements IWorkspaceOpenService {
 	readonly canOpenFolder = true;
@@ -48,7 +40,7 @@ export class WebWorkspaceOpenService implements IWorkspaceOpenService {
 
 	constructor(
 		private readonly client: IWebWorkspaceClient,
-		private readonly quickInput: () => IQuickInputService,
+		private readonly fileDialogs: IFileDialogService,
 		private readonly dialogs: () => IDialogService,
 		private readonly prepareSwitch: () => Promise<boolean>,
 	) {}
@@ -66,45 +58,13 @@ export class WebWorkspaceOpenService implements IWorkspaceOpenService {
 			detail: localize({ bundle: 'ash', key: 'workbench.serverFolderAuthorizeDetail' }, 'A folder outside the current permission scope also needs approval on the server computer.'),
 			primaryButton: localize({ bundle: 'ash', key: 'workbench.serverFolderAuthorizeButton' }, 'Open Folder'),
 		});
-		if (!approved) return;
+		if (!approved.confirmed) return;
 		const activate = await this.client.authorize(selected.path);
 		if (await this.prepareSwitch()) activate();
 	}
 
 	async pickFolder(): Promise<string | undefined> {
-		let path = '';
-		for (;;) {
-			const listing = await this.client.list(path);
-			const selected = await this.pickDirectory(listing);
-			if (!selected) return undefined;
-			if (selected.kind === 'select') return selected.path;
-			path = selected.path;
-		}
-	}
-
-	private pickDirectory(listing: IWebWorkspaceDirectoryList): Promise<ServerDirectoryItem | undefined> {
-		const picker = this.quickInput().createQuickPick<ServerDirectoryItem>();
-		const disposables = new DisposableStore();
-		disposables.add(picker);
-		picker.placeholder = listing.path;
-		picker.ariaLabel = localize({ bundle: 'ash', key: 'workbench.serverFolderChoose' }, 'Choose a server folder');
-		picker.items = [
-			{ kind: 'select', path: listing.path, label: localize({ bundle: 'ash', key: 'workbench.serverFolderSelect' }, 'Select this folder'), description: listing.path },
-			...(listing.parent ? [{ kind: 'parent' as const, path: listing.parent, label: '..', description: listing.parent }] : []),
-			...listing.directories.map(directory => ({ kind: 'directory' as const, path: directory.path, label: directory.name })),
-		];
-		return new Promise(resolve => {
-			let settled = false;
-			const finish = (item: ServerDirectoryItem | undefined): void => {
-				if (settled) return;
-				settled = true;
-				disposables.dispose();
-				resolve(item);
-			};
-			disposables.add(picker.onDidAccept(item => finish(item)));
-			disposables.add(picker.onDidHide(() => finish(undefined)));
-			picker.show();
-		});
+		return (await this.fileDialogs.showOpenDialog({ canSelectFiles: false, canSelectFolders: true }))?.[0]?.fsPath;
 	}
 }
 
@@ -116,19 +76,32 @@ export class WorkspaceOpenService implements IWorkspaceOpenService {
 	readonly canOpenWorkspace: boolean;
 	private readonly nativeHostApi: INativeHostApi | undefined;
 
-	constructor(nativeHostApi: INativeHostApi | undefined) {
+	constructor(nativeHostApi: INativeHostApi | undefined, private readonly fileDialogs: IFileDialogService | undefined, private readonly dialogs: () => IDialogService) {
 		this.nativeHostApi = nativeHostApi;
 		this.canOpenFolder = nativeHostApi !== undefined;
 		this.canOpenWorkspace = nativeHostApi !== undefined;
 	}
 
-	openFolder(): Promise<void> {
+	async openFolder(): Promise<void> {
 		if (!this.nativeHostApi) {
-			return Promise.reject(
-				new Error("Opening folders is unavailable in this Workbench host"),
-			);
+			throw new Error("Opening folders is unavailable in this Workbench host");
 		}
-		return this.nativeHostApi.openFolder();
+		const path = await this.pickFolder();
+		if (!path) return;
+		try {
+			await this.nativeHostApi.openWorkspace(path);
+		} catch (error) {
+			if (error instanceof Error && error.message.includes('Directory permissions were not selected')) return;
+			if (error instanceof Error && error.message.includes('Finish the active request')) {
+				await this.dialogs().showMessage({
+					severity: DialogSeverity.Info,
+					message: localize({ bundle: 'ash', key: 'workbench.folderOpenBlocked' }, 'Finish the active request before opening another folder.'),
+					detail: localize({ bundle: 'ash', key: 'workbench.folderOpenBlockedDetail' }, 'The current Workspace was kept unchanged.'),
+				});
+				return;
+			}
+			throw error;
+		}
 	}
 
 	openWorkspace(root: string): Promise<void> {
@@ -140,13 +113,11 @@ export class WorkspaceOpenService implements IWorkspaceOpenService {
 		return this.nativeHostApi.openWorkspace(root);
 	}
 
-	pickFolder(): Promise<string | undefined> {
-		if (!this.nativeHostApi) {
-			return Promise.reject(
-				new Error("Picking folders is unavailable in this Workbench host"),
-			);
+	async pickFolder(): Promise<string | undefined> {
+		if (!this.fileDialogs) {
+			throw new Error("Picking folders is unavailable in this Workbench host");
 		}
-		return this.nativeHostApi.pickFolder();
+		return (await this.fileDialogs.showOpenDialog({ canSelectFiles: false, canSelectFolders: true }))?.[0]?.fsPath;
 	}
 }
 
@@ -158,7 +129,7 @@ export class BrowserWorkspaceOpenService implements IWorkspaceOpenService {
 	constructor(
 		private readonly provider: HTMLFileSystemProvider,
 		private readonly updateWorkspace: (workspace: IWorkspace) => Promise<void>,
-		private readonly pickDirectory: () => Promise<FileSystemDirectoryHandle>,
+		private readonly fileDialogs: IFileDialogService,
 	) {}
 
 	public async openFolder(): Promise<void> {
@@ -176,13 +147,7 @@ export class BrowserWorkspaceOpenService implements IWorkspaceOpenService {
 	}
 
 	private async pickFolderResource(): Promise<URI | undefined> {
-		let handle: FileSystemDirectoryHandle;
-		try { handle = await this.pickDirectory(); }
-		catch (error) {
-			if (error instanceof DOMException && error.name === 'AbortError') return undefined;
-			throw error;
-		}
-		return this.provider.registerDirectoryHandle(handle);
+		return (await this.fileDialogs.showOpenDialog({ canSelectFiles: false, canSelectFolders: true }))?.[0];
 	}
 
 	private openResource(resource: URI): Promise<void> {

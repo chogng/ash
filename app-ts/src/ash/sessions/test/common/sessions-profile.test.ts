@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { codeSessionsProfile } from "../../browser/code/codeSessionsProfile.js";
-import { resolveSessionsPageUrl } from "../../browser/common/sessionNavigation.js";
+import { codeSessionsProfile } from "../../../code/common/codeSessionsProfile.js";
+import { resolveDedicatedWindowPageUrl } from "../../../platform/windows/browser/dedicatedWindowNavigation.js";
 import { createSessionsProfile } from "../../common/sessionsProfile.js";
 
 test("dedicated Sessions profile belongs to the Code Workbench mode", () => {
@@ -11,11 +11,11 @@ test("dedicated Sessions profile belongs to the Code Workbench mode", () => {
 
 test("Sessions navigation only resolves a sibling renderer page", () => {
 	assert.equal(
-		resolveSessionsPageUrl("../workbench/workbench.html", "file:///ash/electron-browser/sessions/sessions-code.html"),
+		resolveDedicatedWindowPageUrl("../workbench/workbench.html", "file:///ash/electron-browser/sessions/sessions-code.html"),
 		"file:///ash/electron-browser/workbench/workbench.html",
 	);
 	assert.throws(
-		() => resolveSessionsPageUrl("https://example.com", "file:///ash/electron-browser/sessions/sessions-code.html"),
+		() => resolveDedicatedWindowPageUrl("https://example.com", "file:///ash/electron-browser/sessions/sessions-code.html"),
 		/sibling renderer directory/,
 	);
 });

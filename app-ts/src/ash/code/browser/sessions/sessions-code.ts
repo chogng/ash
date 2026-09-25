@@ -1,5 +1,5 @@
 import { WorkbenchModeId } from "../../../workbench/common/workbenchMode.js";
-import { codeSessionsProfile } from "../../../sessions/browser/code/codeSessionsProfile.js";
-import { startBrowserSessions } from "../../../sessions/browser/webSessions.js";
+import { codeSessionsProfile } from "../../common/codeSessionsProfile.js";
+import { startBrowserSessions } from "../../../sessions/browser/web.main.js";
 
 startBrowserSessions(WorkbenchModeId.Code, codeSessionsProfile);

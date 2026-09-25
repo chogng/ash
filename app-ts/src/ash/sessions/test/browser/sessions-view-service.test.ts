@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "mocha";
 import { Emitter } from "../../../base/common/event.js";
 import type { ApprovalMode, IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../services/sessions/common/session.js";
-import type { ISessionsManagementService, SessionsManagementState } from "../../services/sessions/common/sessionsManagementService.js";
-import { SessionsService } from "../../../sessions/services/view/browser/sessionsService.js";
-import type { SessionsViewSelection } from "../../../sessions/services/view/common/sessionsService.js";
+import type { ISessionsManagementService, SessionsManagementState } from "../../services/sessions/common/sessionsManagement.js";
+import { SessionsService } from "../../../sessions/services/sessions/browser/sessionsService.js";
+import type { SessionsViewSelection } from "../../../sessions/services/sessions/browser/sessionsService.js";
 
 test("Sessions view service owns multi-session visibility and Back/Forward navigation", async () => {
 	using sessions = new FakeSessionService([session("session-1", "thread-1"), session("session-2", "thread-2")]);

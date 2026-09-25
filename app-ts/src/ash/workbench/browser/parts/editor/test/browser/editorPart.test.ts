@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
+import { formatNlsMessage, resetNlsResolver, setNlsResolver } from "../../../../../../nls.js";
+import { builtinLanguagePackCatalogs } from "../../../../../services/localization/common/localizationCatalogs.js";
 import type {
 	IDimension,
 } from "../../../../../../base/browser/dom.js";
@@ -231,7 +233,7 @@ test("EditorPart confirms a large file before changing the active editor", async
 		stat: async (resource: URI) => ({ resource, kind: "file", sizeBytes: 2 * 1024 * 1024, readonly: false, modifiedAtMillis: undefined }),
 	} as unknown as IFileService;
 	let allow = false;
-	const dialogService = { confirm: async () => allow } as unknown as IDialogService;
+	const dialogService = { confirm: async () => ({ confirmed: allow }) } as unknown as IDialogService;
 	const editor = new EditorPart(dom.window.document.body, { registry, configurationService: configuration, fileService, dialogService });
 	const large = input("C:\\project\\large.ts");
 	await assert.rejects(editor.openEditor(large), /cancelled/);
@@ -353,13 +355,22 @@ test("EditorPart renders the project welcome page and dispatches available cards
 	assert.deepEqual(
 		[...welcome.querySelectorAll<HTMLButtonElement>(".ash-editor-group-welcome-card")]
 			.map((card) => card.textContent),
-		["Open folder", "Clone repo", "Connect via SSH", "Connect GitHub↗"],
+		["open folder", "clone repo", "connect via ssh", "connect github↗"],
 	);
 	const cards = welcome.querySelectorAll<HTMLButtonElement>(
 		".ash-editor-group-welcome-card",
 	);
+	assert.deepEqual([...cards].map(card => card.querySelector('svg')?.getAttribute('data-ash-icon-id')), ['folders', 'git-branch', 'remote', 'github']);
 	assert.equal(cards[0]?.disabled, false);
 	assert.equal(cards[1]?.disabled, true);
+	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	try {
+		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+		assert.deepEqual([...cards].map(card => card.querySelector('.ash-editor-group-welcome-card-label')?.textContent), ['打开文件夹', '克隆仓库', '通过 SSH 连接', '连接 GitHub']);
+		assert.equal(cards[1]?.title, '“克隆仓库”暂不可用');
+	} finally {
+		resetNlsResolver();
+	}
 	cards[0]?.click();
 	assert.equal(openFolderCount, 1);
 
@@ -1536,7 +1547,8 @@ class TestDialogService implements IDialogService {
 	}
 
 	async showMessage(): Promise<void> {}
-	async confirm(): Promise<boolean> { return false; }
+	async confirm(): Promise<{ confirmed: boolean }> { return { confirmed: false }; }
+	async input(): Promise<never> { throw new Error('Unexpected input dialog'); }
 	async prompt(options: IPromptDialogOptions): Promise<DialogResult> {
 		this.prompts.push(options);
 		return this.results.shift() ?? DialogResult.Cancel;

@@ -94,6 +94,7 @@ interface AsyncTreeView<T> extends IDisposable {
 	readonly onDidChangeCollapseState: Event<AsyncTreeCollapseEvent<T>>;
 	readonly focus: T | undefined;
 	readonly selection: readonly T[];
+	getVisibleElements(): readonly T[];
 	domFocus(): void;
 	setChildren(children: readonly CompressibleTreeElement<T>[]): void;
 	collapse(element: T): boolean;
@@ -153,6 +154,7 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 	getInput(): TInput | undefined { return this.input; }
 	get focus(): T | undefined { return this.tree.focus; }
 	get selection(): readonly T[] { return this.tree.selection; }
+	getVisibleElements(): readonly T[] { return this.tree.getVisibleElements(); }
 	domFocus(): void { this.tree.domFocus(); }
 	setFindPattern(pattern: string): void { this.tree.setFindPattern(pattern); }
 	findNext(): T | undefined { return this.tree.findNext(); }
@@ -336,6 +338,7 @@ function objectTreeView<T>(tree: ObjectTree<T>, getId: (element: T) => string): 
 		onDidChangeCollapseState: tree.onDidChangeCollapseState,
 		get focus() { return tree.focus; },
 		get selection() { return tree.selection; },
+		getVisibleElements: () => tree.getVisibleElements(),
 		domFocus: () => tree.domFocus(),
 		setChildren: (children) => tree.setChildren(children),
 		collapse: (element) => tree.collapse(getId(element)),
@@ -363,6 +366,7 @@ function compressibleTreeView<T>(tree: CompressibleObjectTree<T>): AsyncTreeView
 		onDidChangeCollapseState: tree.onDidChangeCollapseState,
 		get focus() { return tree.focus; },
 		get selection() { return tree.selection; },
+		getVisibleElements: () => tree.getVisibleElements(),
 		domFocus: () => tree.domFocus(),
 		setChildren: (children) => tree.setChildren(children),
 		collapse: (element) => tree.collapse(element),

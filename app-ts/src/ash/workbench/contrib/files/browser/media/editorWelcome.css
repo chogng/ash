@@ -67,23 +67,22 @@
   min-width: 0;
   min-height: 60px;
   padding: 10px 28px 10px 16px;
-  border: var(--ash-stroke-thickness) solid var(--ash-border);
+  border: var(--ash-stroke-thickness) solid var(--ash-editor-welcome-card-border);
   border-radius: var(--ash-corner-radius-large);
   flex-direction: row;
   align-items: center;
   justify-content: flex-start;
   gap: 10px;
   color: var(--ash-foreground);
-  background: var(--ash-hover-background);
+  background: var(--ash-editor-welcome-card-background);
   font: inherit;
   text-align: left;
   cursor: pointer;
   transition: background-color var(--ash-animation-duration-fast) ease, border-color var(--ash-animation-duration-fast) ease;
 }
 
-.ash-editor-group-welcome-card:not(:disabled):hover {
-  border-color: var(--ash-focus-border);
-  background: var(--ash-button-hover-background);
+.ash-editor-group-welcome-card:hover {
+  background: var(--ash-editor-welcome-card-hover-background);
 }
 
 .ash-editor-group-welcome-card:not(.featured) {
@@ -96,19 +95,17 @@
 }
 
 .ash-editor-group-welcome-card.featured {
-  border-color: transparent;
-  color: var(--ash-button-primary-foreground);
-  background: var(--ash-button-primary-background);
+  border-color: var(--ash-editor-welcome-featured-card-border);
+  color: var(--ash-editor-welcome-featured-card-foreground);
+  background: var(--ash-editor-welcome-featured-card-background);
 }
 
-.ash-editor-group-welcome-card.featured:not(:disabled):hover {
-  border-color: var(--ash-focus-border);
-  background: var(--ash-button-primary-hover-background);
+.ash-editor-group-welcome-card.featured:hover {
+  background: var(--ash-editor-welcome-featured-card-hover-background);
 }
 
 .ash-editor-group-welcome-card.is-disabled {
   cursor: default;
-  opacity: .62;
 }
 
 .ash-editor-group-welcome-card-icon {
@@ -121,8 +118,8 @@
 }
 
 .ash-editor-group-welcome-card-icon .ash-icon {
-  width: 18px;
-  height: 18px;
+  width: var(--ash-lxicon-font-size);
+  height: var(--ash-lxicon-font-size);
 }
 
 .ash-editor-group-welcome-card-label {

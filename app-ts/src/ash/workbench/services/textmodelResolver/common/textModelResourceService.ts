@@ -50,6 +50,13 @@ export interface ITextModelResourceService<TInput extends TextModelInput = TextM
 	acquire(input: TInput, signal: AbortSignal): Promise<TReference>;
 }
 
+/** Revalidates already open file models after a host focus change. */
+export interface IFileTextModelService extends ITextModelResourceService {
+	refresh(resource: URI): Promise<void>;
+}
+
+export const IFileTextModelService: ServiceIdentifier<IFileTextModelService> = createServiceIdentifier<IFileTextModelService>('fileTextModelService');
+
 export type { ITextResourceStore } from "./textResourceStore.js";
 
 /** Service key used by hosts that register a text model service. */

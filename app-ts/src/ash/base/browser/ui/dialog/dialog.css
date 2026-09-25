@@ -59,6 +59,20 @@
   outline-offset: -1px;
 }
 
+.ash-dialog-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ash-dialog-inputs .ash-input-box {
+  width: 100%;
+}
+
+.ash-dialog-content .ash-checkbox {
+  align-self: flex-start;
+}
+
 .ash-dialog-actions {
   display: flex;
   flex-direction: row-reverse;
@@ -68,15 +82,6 @@
 
 .ash-dialog-actions .ash-button {
   min-width: 80px;
-}
-
-.ash-dialog-actions .ash-dialog-primary-button {
-  color: var(--ash-button-primary-foreground);
-  background: var(--ash-button-primary-background);
-}
-
-.ash-dialog-actions .ash-dialog-primary-button:hover {
-  background: var(--ash-button-primary-hover-background);
 }
 
 .ash-dialog[data-dialog-severity="warning"] {

@@ -53,6 +53,13 @@ export class HTMLFileSystemProvider extends Disposable implements IFileService {
 		return rootUri(saved);
 	}
 
+	/** Resolves a previously authorized folder for the browser's starting location. */
+	public async getDirectoryHandle(resource: URI): Promise<FileSystemDirectoryHandle> {
+		const handle = await this.handle(resource);
+		if (!isDirectoryHandle(handle)) throw new FileOperationNotSupportedError(resource, 'getDirectoryHandle');
+		return handle;
+	}
+
 	public async stat(resource: URI): Promise<IFileStat> {
 		const handle = await this.handle(resource);
 		if (isDirectoryHandle(handle)) {

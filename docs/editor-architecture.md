@@ -1421,7 +1421,7 @@ Stanza 已从独立内核演进为由真实 `IEditorPane` 宿主的编辑器能�
 | Completion Worker | `createBrowserEditorPart` | ✅ 产品 Stanza pane 已选择 |
 | dirty、save/revert、CRLF/LF、粗粒度外改重载与冲突状态 | `BrowserTextModelService` | ✅；CAS 与 Workbench 备份恢复已完成，TextFile 边界严格接受 UTF-8 并把其他内容路由到只读 Binary Editor |
 
-打开资源时，`ExplorerViewPane` 只提交 `{ resource, label }`；它不再预读文件或伪造
+打开资源时，`ExplorerView` 只提交 `{ resource, label }`；它不再预读文件或伪造
 `initialText`。`EditorBrowser` 选定 descriptor 后把 `ITextFileService` 注入 pane。
 Stanza pane 先通过 `BrowserTextModelService.acquire` 获取引用：已有资源模型保持权威，
 新资源才调用 TextFile resolve。最后一个引用释放时模型销毁。TextFile service

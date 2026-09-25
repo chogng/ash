@@ -218,7 +218,7 @@ test("dialogs model publishes and settles renderer items", async () => {
 	using didClose = model.onDidCloseDialog(
 		(event) => events.push(
 			event.kind === "result"
-				? `close:${event.result}`
+				? `close:${event.result.button}`
 				: "close:error",
 		),
 	);
@@ -229,8 +229,8 @@ test("dialogs model publishes and settles renderer items", async () => {
 	});
 
 	assert.equal(model.dialogs.length, 1);
-	handle.item.close(DialogResult.Primary);
-	assert.equal(await handle.result, DialogResult.Primary);
+	handle.item.close({ button: DialogResult.Primary });
+	assert.deepEqual(await handle.result, { button: DialogResult.Primary });
 	assert.equal(model.dialogs.length, 0);
 	assert.deepEqual(events, ["show:message", "close:primary"]);
 });
@@ -318,13 +318,15 @@ test("file views register after their host container", async () => {
 	});
 	try {
 		const {
-			EXPLORER_VIEW_ID,
 			registerFilesViews,
 		} = await import(
-			"../../../workbench/contrib/files/browser/files.contribution.js"
+			"../../../workbench/contrib/files/browser/explorerViewlet.js"
 		);
 		const { EmptyView } = await import(
 			"../../../workbench/contrib/files/browser/views/emptyView.js"
+		);
+		const { VIEW_ID } = await import(
+			"../../../workbench/contrib/files/common/files.js"
 		);
 
 		registerFilesViews(registry);
@@ -333,10 +335,10 @@ test("file views register after their host container", async () => {
 			registry.getViews(WorkbenchViewContainerId.Sidebar).map(
 				(view) => view.id,
 			),
-			[EXPLORER_VIEW_ID, EmptyView.ID],
+			[VIEW_ID, EmptyView.ID],
 		);
 		using contextKeys = new ContextKeyService();
-		const explorer = registry.getView(EXPLORER_VIEW_ID);
+		const explorer = registry.getView(VIEW_ID);
 		const empty = registry.getView(EmptyView.ID);
 		assert.ok(explorer);
 		assert.ok(empty);

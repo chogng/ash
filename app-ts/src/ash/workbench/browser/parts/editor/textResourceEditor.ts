@@ -37,7 +37,8 @@ const wordWrapConfiguration = "editor.wordWrap";
 const renderWhitespaceConfiguration = "editor.renderWhitespace";
 const renderControlCharactersConfiguration = "editor.renderControlCharacters";
 
-export const CODE_EDITOR_ID = "stanza.editor.code";
+export { CODE_EDITOR_ID } from '../../../common/editor/codeEditorId.js';
+import { CODE_EDITOR_ID } from '../../../common/editor/codeEditorId.js';
 
 export interface EditorPanePart extends IDisposable, ITextCodeEditorControl {
 	readonly onDidChangeModelContent?: Event<IModelContentChangedEvent>;
@@ -351,8 +352,17 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 	}
 
 	async save(): Promise<void> {
-		for (const hook of [...this.beforeSaveHooks]) await hook();
-		await this.workingCopy?.save(new AbortController().signal);
+		try {
+			for (const hook of [...this.beforeSaveHooks]) await hook();
+			await this.workingCopy?.save(new AbortController().signal);
+		} catch (error) {
+			await this.handleSaveError(error);
+			throw error;
+		}
+	}
+
+	protected handleSaveError(error: unknown): void | Promise<void> {
+		(this.options.onSaveError ?? reportSaveError)(error);
 	}
 
 	async revert(): Promise<void> {
@@ -370,7 +380,6 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 		}).catch(error => {
 			const message = error instanceof Error && error.message.trim().length > 0 ? error.message.trim() : "unknown error";
 			this.part.value?.announceAccessibilityStatus?.(`Save failed: ${message}`);
-			(this.options.onSaveError ?? reportSaveError)(error);
 		}).finally(() => {
 			this.saving = false;
 		});

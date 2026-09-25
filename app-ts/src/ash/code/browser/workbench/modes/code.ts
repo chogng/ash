@@ -1,9 +1,9 @@
 import "./code.contribution.js";
 import { createAppServerDebugAdapterCapability } from "../../../../platform/debug/browser/appServerDebugAdapterProcessService.js";
 import { WorkbenchModeId } from "../../../../workbench/common/workbenchMode.js";
-import { codeSessionsProfile } from "../../../../sessions/browser/code/codeSessionsProfile.js";
-import { registerSessionsTitlebarEntry } from "../../../../sessions/browser/common/sessionTitlebarEntry.js";
+import { codeSessionsProfile } from "../../../common/codeSessionsProfile.js";
+import { registerOpenAgentsWindowBrowserCommand } from "../../../../sessions/contrib/openAgentsWindow/browser/openAgentsWindowCommand.js";
 import { startBrowserWorkbench } from "../../../../workbench/browser/web.bootstrap.js";
 
-registerSessionsTitlebarEntry(codeSessionsProfile.titlebarActionId, "Open Code Sessions", { kind: "page", relativePath: "../sessions/sessions-code.html" });
+registerOpenAgentsWindowBrowserCommand(codeSessionsProfile.titlebarActionId, "Open Code Sessions", "../sessions/sessions-code.html");
 startBrowserWorkbench(WorkbenchModeId.Code, [createAppServerDebugAdapterCapability]);
