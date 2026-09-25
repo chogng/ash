@@ -18,7 +18,7 @@ test('desktop dialog and shell routes reject malformed requests', async () => {
 		pickFolder: async () => undefined, pickFile: async () => undefined, openWorkspace: async () => {},
 		revealFile: () => {},
 		saveFile: async () => undefined, isAccessibilitySupportEnabled: () => false,
-		setWindowTheme: () => {}, toggleDeveloperTools: () => {},
+		setWindowTheme: () => {}, setWindowDimmed: () => {}, toggleDeveloperTools: () => {},
 		syncSystemWideKeybindings: () => ({ failed: [] }),
 	});
 	const dialog = routes.find(route => route.channel === NATIVE_HOST_DIALOG_CHANNEL);
@@ -61,6 +61,7 @@ test('desktop window commands reach the window host', async () => {
 		openWorkspace: async () => {},
 		revealFile: async () => {},
 		setWindowTheme: async () => {},
+		setWindowDimmed: async () => {},
 		toggleDeveloperTools: async () => {},
 		saveFile: async () => undefined,
 		isAccessibilitySupportEnabled: async () => false,

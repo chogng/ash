@@ -80,8 +80,8 @@ export const SettingsNavigation = [
 			{
 				id: 'layout',
 				label: 'Layout',
-				description: 'Choose how Workbench regions connect to each other.',
-				settings: ['workbench.layoutStyle'],
+				get description() { return localize('settings.appearance.layout.description', 'Configure the Workbench layout and window zoom.'); },
+				settings: ['workbench.layoutStyle', 'window.zoomLevel'],
 			},
 		],
 	},

@@ -17,6 +17,7 @@ import {
 	NATIVE_HOST_PICK_FILE_CHANNEL,
 	NATIVE_HOST_SAVE_FILE_CHANNEL,
 	NATIVE_HOST_SET_WINDOW_THEME_CHANNEL,
+	NATIVE_HOST_SET_WINDOW_DIMMED_CHANNEL,
 	NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL,
 	NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL,
 } from "../../../../platform/native/common/nativeHost.js";
@@ -42,6 +43,7 @@ test("native host routes validate folder picking and developer tools", async () 
 	let toggles = 0;
 	let savedFileOptions: unknown;
 	const windowThemes: unknown[] = [];
+	const windowDimmed: boolean[] = [];
 	const routes = nativeHostIpcRoutes({
 		performDialogOperation: () => undefined,
 		performShellCommand: async () => '',
@@ -60,6 +62,7 @@ test("native host routes validate folder picking and developer tools", async () 
 		setWindowTheme: (theme) => {
 			windowThemes.push(theme);
 		},
+		setWindowDimmed: dimmed => { windowDimmed.push(dimmed); },
 		toggleDeveloperTools: () => {
 			toggles += 1;
 		},
@@ -79,6 +82,7 @@ test("native host routes validate folder picking and developer tools", async () 
 	const setWindowTheme = routes.find(
 		({ channel }) => channel === NATIVE_HOST_SET_WINDOW_THEME_CHANNEL,
 	);
+	const setWindowDimmed = routes.find(({ channel }) => channel === NATIVE_HOST_SET_WINDOW_DIMMED_CHANNEL);
 	const syncSystemWideKeybindings = routes.find(
 		({ channel }) => channel === NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL,
 	);
@@ -89,6 +93,7 @@ test("native host routes validate folder picking and developer tools", async () 
 	assert.ok(pickFolder);
 	assert.ok(pickFile);
 	assert.ok(setWindowTheme);
+	assert.ok(setWindowDimmed);
 	assert.ok(toggleDeveloperTools);
 	assert.ok(saveFile);
 	assert.ok(syncSystemWideKeybindings);
@@ -124,18 +129,23 @@ test("native host routes validate folder picking and developer tools", async () 
 	);
 	assert.equal(accessibilitySupport.invoke(accessibilitySupport.validate(undefined)), false);
 	assert.throws(
-		() => setWindowTheme.validate({ backgroundColor: "white", symbolColor: "#000000" }),
+		() => setWindowTheme.validate({ backgroundColor: "white", symbolColor: "#000000", backdropColor: '#00000073' }),
 		/backgroundColor must be an opaque hexadecimal color/,
 	);
 	const validatedTheme = setWindowTheme.validate({
 		backgroundColor: "#F3F3F3",
 		symbolColor: "#424242",
+		backdropColor: '#00000073',
 	});
 	setWindowTheme.invoke(validatedTheme);
 	assert.deepEqual(windowThemes, [{
 		backgroundColor: "#f3f3f3",
 		symbolColor: "#424242",
+		backdropColor: '#00000073',
 	}]);
+	assert.throws(() => setWindowDimmed.validate('true'), /boolean/);
+	setWindowDimmed.invoke(setWindowDimmed.validate(true));
+	assert.deepEqual(windowDimmed, [true]);
 	assert.throws(
 		() => toggleDeveloperTools.validate(null),
 		/does not accept parameters/,
@@ -174,6 +184,7 @@ test("desktop commands are available from the command palette", async () => {
 		isAccessibilitySupportEnabled: async () => false,
 		onDidChangeAccessibilitySupport: () => ({ dispose() {} }),
 		setWindowTheme: async () => {},
+		setWindowDimmed: async () => {},
 		async toggleDeveloperTools() {
 			toggles += 1;
 		},

@@ -15,6 +15,7 @@ import {
 import { NativeMenubarControl } from "./menubarControl.js";
 import { IThemeService } from "../../../../platform/theme/common/themeService.js";
 import { titleBarActionForeground, titleBarBackground } from "../../../common/theme.js";
+import { dialogBackdropBackground } from '../../../../platform/theme/common/colors/componentColors.js';
 import { INativeHostService } from "../../../common/services.js";
 import type { INativeHostApi } from "../../../../platform/native/common/nativeHost.js";
 import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
@@ -49,10 +50,11 @@ export class NativeTitlebarPart extends BrowserTitlebarPart {
 		const theme = this.themeService.getColorTheme();
 		const backgroundColor = theme.getColorCss(titleBarBackground);
 		const symbolColor = theme.getColorCss(titleBarActionForeground);
-		if (!backgroundColor || !symbolColor) {
+		const backdropColor = theme.getColorCss(dialogBackdropBackground);
+		if (!backgroundColor || !symbolColor || !backdropColor) {
 			throw new Error(`Theme '${theme.id}' does not define window control colors`);
 		}
-		void this.hostService.setWindowTheme({ backgroundColor, symbolColor }).catch((error: unknown) => {
+		void this.hostService.setWindowTheme({ backgroundColor, symbolColor, backdropColor }).catch((error: unknown) => {
 			console.error("Failed to apply window control colors", error);
 		});
 	}

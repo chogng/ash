@@ -38,6 +38,38 @@ test('Workbench follows system color changes without reopening the window', asyn
 	await expect.poll(() => workbench.element.evaluate(element => getComputedStyle(element).colorScheme)).toBe('light');
 });
 
+test('Settings modal dims and restores Electron window controls', async ({ application, target, workbench }) => {
+	test.skip(target.kind !== 'electron', 'Requires Electron window controls');
+	if (!('windows' in application)) return;
+	const hasOverlay = await application.evaluate(({ BrowserWindow }) => {
+		if (process.platform === 'darwin') return false;
+		const state = globalThis as unknown as { modalControlColors: { color?: string; symbolColor?: string }[] };
+		state.modalControlColors = [];
+		const window = BrowserWindow.getAllWindows()[0]!;
+		const setOverlay = window.setTitleBarOverlay.bind(window);
+		window.setTitleBarOverlay = options => {
+			state.modalControlColors.push({ color: options.color, symbolColor: options.symbolColor });
+			setOverlay(options);
+		};
+		return true;
+	});
+	test.skip(!hasOverlay, 'macOS window buttons use a separate host control');
+	const page = workbench.page;
+	await page.emulateMedia({ colorScheme: 'light' });
+	await expect(workbench.element).toHaveAttribute('data-color-theme', 'ash-light');
+	await page.keyboard.press('ControlOrMeta+Shift+P');
+	await page.getByPlaceholder('Type the name of a command to run').fill('Ash Settings');
+	await page.keyboard.press('Enter');
+	await expect(page.getByRole('dialog', { name: 'Ash Settings' })).toBeVisible();
+	await expect.poll(() => application.evaluate(() => {
+		const colors = (globalThis as unknown as { modalControlColors: { color?: string; symbolColor?: string }[] }).modalControlColors.at(-1);
+		return !!colors && colors.color !== '#ffffff' && colors.symbolColor !== '#424242';
+	})).toBe(true);
+	await page.getByRole('button', { name: 'Close Ash Settings' }).click();
+	await expect(page.getByRole('dialog', { name: 'Ash Settings' })).toHaveCount(0);
+	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { modalControlColors: { color?: string; symbolColor?: string }[] }).modalControlColors.at(-1))).toEqual({ color: '#ffffff', symbolColor: '#424242' });
+});
+
 test('Desktop migrates a user theme through the file provider and applies its colors', async ({ application, target, workbench }) => {
 	test.skip(target.kind !== 'electron', 'Requires the desktop profile file provider');
 	if (!('windows' in application)) return;

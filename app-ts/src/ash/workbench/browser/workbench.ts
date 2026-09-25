@@ -813,6 +813,11 @@ export class Workbench extends Disposable {
 			},
 		};
 		const editor = this._register(new EditorPart(workbenchRoot, editorOptions));
+		if (nativeHostApi) {
+			this._register(editor.onDidChangeModalVisibility(visible => {
+				void nativeHostApi.setWindowDimmed(visible).catch(error => console.error('Failed to update window controls', error));
+			}));
+		}
 		const auxiliaryWindows = this._register(new BrowserAuxiliaryWindowService(ownerWindow));
 		services.registerInstance(IAuxiliaryWindowService, auxiliaryWindows);
 		const editorParts = this._register(new EditorParts(editor, auxiliaryWindows, container => {

@@ -8,6 +8,7 @@ import {
 	NATIVE_HOST_GET_ACCESSIBILITY_SUPPORT_CHANNEL,
 	NATIVE_HOST_SAVE_FILE_CHANNEL,
 	NATIVE_HOST_SET_WINDOW_THEME_CHANNEL,
+	NATIVE_HOST_SET_WINDOW_DIMMED_CHANNEL,
 	NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL,
 	NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL,
 	NATIVE_HOST_SHELL_COMMAND_CHANNEL,
@@ -22,6 +23,7 @@ import {
 	type NativeDialogOperation,
 	validateAccessibilitySupportRead,
 	validateNativeWindowTheme,
+	validateWindowDimmed,
 	validatePickFolder,
 	validatePickFile,
 	validateOpenWorkspace,
@@ -44,6 +46,7 @@ export interface INativeHostMainService {
 	saveFile(options: INativeSaveFileOptions): Promise<string | undefined>;
 	isAccessibilitySupportEnabled(): boolean;
 	setWindowTheme(theme: INativeWindowTheme): void;
+	setWindowDimmed(dimmed: boolean): void;
 	toggleDeveloperTools(): void;
 	syncSystemWideKeybindings(bindings: readonly INativeSystemWideKeybinding[]): INativeSystemWideKeybindingResult;
 }
@@ -97,6 +100,11 @@ export function nativeHostIpcRoutes(
 			channel: NATIVE_HOST_SET_WINDOW_THEME_CHANNEL,
 			validate: validateNativeWindowTheme,
 			invoke: (theme) => service.setWindowTheme(theme as INativeWindowTheme),
+		},
+		{
+			channel: NATIVE_HOST_SET_WINDOW_DIMMED_CHANNEL,
+			validate: validateWindowDimmed,
+			invoke: dimmed => service.setWindowDimmed(dimmed as boolean),
 		},
 		{
 			channel: NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL,

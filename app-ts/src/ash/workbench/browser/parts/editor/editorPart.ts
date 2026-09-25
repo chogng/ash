@@ -149,6 +149,7 @@ export interface IEditorPartOptions {
 export class EditorPart extends WorkbenchPart implements IEditorPart {
 	private readonly editorChangeEmitter = this._register(new Emitter<EditorPartChangeEvent>());
 	readonly onDidChangeEditors: Event<EditorPartChangeEvent> = this.editorChangeEmitter.event;
+	readonly onDidChangeModalVisibility: Event<boolean>;
 	private readonly gridSlot = this._register(new MutableDisposable<SerializableGrid<EditorGroupGridView>>());
 	private readonly groupHosts = this._register(new DisposableMap<EditorGroupId, EditorGroupHost>());
 	private readonly modalEditor: ModalEditorPart;
@@ -258,6 +259,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 				} : {}),
 			},
 		}));
+		this.onDidChangeModalVisibility = this.modalEditor.onDidChangeVisibility;
 		this.editorsObserver = this._register(new EditorsObserver(this));
 		this._register(this.modalEditor.onDidRequestClose(input => {
 			void this.closeEditor(input).catch(reportEditorCloseError);

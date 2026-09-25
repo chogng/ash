@@ -8,6 +8,7 @@ import {
 	NATIVE_HOST_PICK_FILE_CHANNEL,
 	NATIVE_HOST_SAVE_FILE_CHANNEL,
 	NATIVE_HOST_SET_WINDOW_THEME_CHANNEL,
+	NATIVE_HOST_SET_WINDOW_DIMMED_CHANNEL,
 	NATIVE_HOST_SHELL_COMMAND_CHANNEL,
 	NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL,
 	NATIVE_HOST_REVEAL_FILE_CHANNEL,
@@ -56,6 +57,7 @@ export function createNativeHostApi(): INativeHostApi {
 		openWorkspace: (root) => invoke<void>(NATIVE_HOST_OPEN_WORKSPACE_CHANNEL, root),
 		revealFile: path => invoke<void>(NATIVE_HOST_REVEAL_FILE_CHANNEL, path),
 		setWindowTheme: (theme) => invoke<void>(NATIVE_HOST_SET_WINDOW_THEME_CHANNEL, theme),
+		setWindowDimmed: dimmed => invoke<void>(NATIVE_HOST_SET_WINDOW_DIMMED_CHANNEL, dimmed),
 		toggleDeveloperTools: () => invoke<void>(NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL),
 		saveFile: (options) => invoke<string | undefined>(NATIVE_HOST_SAVE_FILE_CHANNEL, options),
 		async isAccessibilitySupportEnabled(): Promise<boolean> {

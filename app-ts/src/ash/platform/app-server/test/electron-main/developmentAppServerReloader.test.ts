@@ -141,7 +141,7 @@ test("development Server Host queues a generation until initial startup is stabl
 function launcherAt(executable: string): LocalAppServerProcessLauncher {
 	return new LocalAppServerProcessLauncher({
 		executable: "/test/ash-app-server-daemon",
-		args: ["connect"],
+		args: ["connect-selected"],
 		environment: { ASH_APP_SERVER_PATH: executable },
 		fileExists: () => true,
 	});

@@ -207,6 +207,7 @@ test('editor action labels use the selected Chinese language catalog', async () 
 		assert.equal(localize('chat.providerKeys.inputTitle', 'API key for {0}', 'OpenAI'), 'OpenAI 的 API 密钥');
 		assert.equal(localize('onboarding.stepProgress', 'Step {0} of {1}', 2, 3), '第 2 步，共 3 步');
 		assert.equal(localize('onboarding.commandCenter.title', 'Find commands quickly'), '快速查找命令');
+		assert.equal(localize('settings.appearance.layout.description', 'Configure the Workbench layout and window zoom.'), '配置工作台布局和窗口缩放。');
 		assert.equal(localize('releaseNotes.open', 'Show Release Notes'), '显示版本说明');
 		assert.equal(localize({ bundle: 'ash', key: 'workbench.copyPath' }, 'Copy Path'), '复制路径');
 		assert.equal(localize({ bundle: 'ash', key: 'workbench.copyRelativePath' }, 'Copy Relative Path'), '复制相对路径');

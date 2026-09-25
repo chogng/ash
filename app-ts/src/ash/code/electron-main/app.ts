@@ -54,7 +54,7 @@ import { resolveHome } from "../../platform/home/node/home.js";
 import { diskFileSystemProviderRoutes } from "../../platform/files/electron-main/diskFileSystemProviderServer.js";
 import { URI } from "../../base/common/uri.js";
 import { DiskFileSystemProvider } from "../../platform/files/node/diskFileSystemProvider.js";
-import { applyWindowState, resolveBrowserWindowOptions } from "../../platform/windows/electron-main/windows.js";
+import { applyWindowState, resolveBrowserWindowOptions, WindowControlsOverlay } from "../../platform/windows/electron-main/windows.js";
 import { WindowsStateHandler } from "../../platform/windows/electron-main/windowsStateHandler.js";
 import { WindowsMainService, trackWindowResourceChanges, windowCloseResponseIpcRoute, windowOperationIpcRoute, windowResourceIpcRoutes } from "../../platform/windows/electron-main/windowsMainService.js";
 import { focusWindow } from "../../platform/window/electron-main/window.js";
@@ -454,7 +454,8 @@ export class AshApplication extends Disposable {
 			: new LocalAppServerProcessLauncher({
 				executable: packagedExecutable,
 				expectedSha256: expectedPackagedSha256,
-				args: ["connect"],
+				// The profile may still have a daemon from an older package with incompatible capabilities.
+				args: ["connect-selected"],
 				environment: { ...this.appServerEnvironment(workspace), ASH_APP_SERVER_PATH: selectDevelopmentAppServerExecutable(appServerExecutablePath(packageLocation), developmentExecutable) },
 			});
 		const supervisor = new AppServerConnectionRelay({
@@ -713,6 +714,9 @@ export class AshApplication extends Disposable {
 		};
 		record.openWorkspace = (root) => transitionToFolder(root, true);
 		const windowDialogs = windowDisposables.add(new WindowDialogHost(window, (target, options) => dialog.showMessageBox(target, options)));
+		const windowControlsOverlay = new WindowControlsOverlay(colors => {
+			if (process.platform === 'win32' || process.platform === 'linux') window.setTitleBarOverlay(colors);
+		});
 		const ipcRoutes = [
 			...workspaceHost.routes(),
 			...supervisor.routes(window.webContents, () => ({ workspaceId: workspaceContext.getWorkspace().id, workspaceRoot: workspaceContext.getResolvedWorkspace().folders[0]?.uri.fsPath ?? this.profileRoot }), this.appServerStartupMode === "required"),
@@ -763,11 +767,8 @@ export class AshApplication extends Disposable {
 					return result.canceled || !result.filePath ? undefined : result.filePath;
 				},
 				isAccessibilitySupportEnabled: () => app.isAccessibilitySupportEnabled(),
-				setWindowTheme: ({ backgroundColor, symbolColor }) => {
-					if (process.platform === "win32" || process.platform === "linux") {
-						window.setTitleBarOverlay({ color: backgroundColor, symbolColor, height: 35 });
-					}
-				},
+				setWindowTheme: theme => windowControlsOverlay.setTheme(theme),
+				setWindowDimmed: dimmed => windowControlsOverlay.setDimmed(dimmed),
 				toggleDeveloperTools: () => window.webContents.toggleDevTools(),
 				syncSystemWideKeybindings: bindings => this.globalKeybindings.updateKeybindings(
 					record.id,

@@ -61,6 +61,7 @@ test('Electron titlebar applies the active theme and releases its subscription w
 			performNativeTabAction: async () => {},
 			openNewWindowTab: async () => {},
 			setWindowTheme: async theme => { applied.push(theme); },
+			setWindowDimmed: async () => {},
 			pickFolder: async () => undefined,
 			pickFile: async () => undefined,
 			openWorkspace: async () => {},
@@ -76,7 +77,7 @@ test('Electron titlebar applies the active theme and releases its subscription w
 		assert.throws(() => factory(environment.window.document.body, options, missingServices), /service/i);
 		using titlebar = factory(environment.window.document.body, options, services);
 		themes.setColorTheme(lightColorTheme);
-		assert.deepEqual(applied, [darkColorTheme, lightColorTheme].map(theme => ({ backgroundColor: theme.getColorCss('titleBar.background'), symbolColor: theme.getColorCss('titleBar.actionForeground') })));
+		assert.deepEqual(applied, [darkColorTheme, lightColorTheme].map(theme => ({ backgroundColor: theme.getColorCss('titleBar.background'), symbolColor: theme.getColorCss('titleBar.actionForeground'), backdropColor: theme.getColorCss('dialog.backdropBackground') })));
 		titlebar.dispose();
 		themes.setColorTheme(darkColorTheme);
 		assert.equal(applied.length, 2);

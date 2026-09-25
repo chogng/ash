@@ -30,6 +30,7 @@ let nextModalEditorId = 1;
 export class ModalEditorPart extends Disposable {
 	public readonly domNode: HTMLElement;
 	public readonly onDidRequestClose: Event<EditorInput>;
+	public readonly onDidChangeVisibility: Event<boolean>;
 
 	private readonly active = this._register(new MutableDisposable<ModalEditorPaneInstance>());
 	private readonly closeButton: Button;
@@ -37,6 +38,7 @@ export class ModalEditorPart extends Disposable {
 	private readonly hostDomNode: HTMLDivElement;
 	private readonly pending = this._register(new DisposableMap<number, ModalEditorPaneInstance>());
 	private readonly requestCloseEmitter = this._register(new Emitter<EditorInput>());
+	private readonly visibilityEmitter = this._register(new Emitter<boolean>());
 	private readonly titleDomNode: HTMLHeadingElement;
 	private currentEntry: ModalEditorEntry | undefined;
 	private dimension: IDimension = Dimension.Zero;
@@ -78,6 +80,7 @@ export class ModalEditorPart extends Disposable {
 		options.container.append(this.hostDomNode);
 
 		this.onDidRequestClose = this.requestCloseEmitter.event;
+		this.onDidChangeVisibility = this.visibilityEmitter.event;
 		this._register(observeElementSize(this.contentDomNode, size => this.layout(size)));
 		this._register(trapTabFocus(this.domNode));
 		this._register(addDisposableListener(this.hostDomNode, 'mousedown', event => {
@@ -182,6 +185,7 @@ export class ModalEditorPart extends Disposable {
 		this.visible = false;
 		this.active.value?.setVisible(EditorPaneVisibility.Hidden);
 		this.hostDomNode.hidden = true;
+		this.visibilityEmitter.fire(false);
 		const focusToRestore = this.focusToRestore;
 		this.focusToRestore = undefined;
 		if (focusToRestore) restoreFocus(focusToRestore);
@@ -203,6 +207,7 @@ export class ModalEditorPart extends Disposable {
 			this.focusToRestore = isHTMLElement(activeElement) ? activeElement : undefined;
 			this.visible = true;
 			this.hostDomNode.hidden = false;
+			this.visibilityEmitter.fire(true);
 			this.active.value?.setVisible(EditorPaneVisibility.Visible);
 			this.activePane?.layout(this.dimension);
 		}

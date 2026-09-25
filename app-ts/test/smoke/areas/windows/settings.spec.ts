@@ -10,3 +10,17 @@ test('Settings opens with editor display controls', async ({ workbench }) => {
 	await expect(page.locator('[data-configuration-key="editor.renderWhitespace"]')).toBeVisible();
 	await expect(page.locator('[data-configuration-key="editor.renderControlCharacters"]')).toBeVisible();
 });
+
+test.describe('without an open workspace', () => {
+	test.use({ openWorkspace: false });
+
+	test('title bar Settings opens from the welcome page', async ({ workbench }) => {
+		const page = workbench.page;
+		await page.getByRole('dialog', { name: 'Find commands quickly' }).getByRole('button', { name: 'Dismiss' }).click();
+		await page.getByRole('button', { name: 'Ash Settings' }).click();
+		await expect(page.getByRole('dialog', { name: 'Ash Settings' })).toBeVisible();
+		await expect(page.locator('.ash-settings-editor')).toBeVisible();
+		await page.locator('[data-settings-category-id="appearance"]').click();
+		await expect(page.locator('[data-configuration-key="window.zoomLevel"]')).toBeVisible();
+	});
+});

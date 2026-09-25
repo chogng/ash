@@ -12,6 +12,8 @@ export const NATIVE_HOST_OPEN_WORKSPACE_CHANNEL =
 	"ash:native-host:open-workspace";
 export const NATIVE_HOST_SET_WINDOW_THEME_CHANNEL =
 	"ash:native-host:set-window-theme";
+export const NATIVE_HOST_SET_WINDOW_DIMMED_CHANNEL =
+	"ash:native-host:set-window-dimmed";
 export const NATIVE_HOST_SAVE_FILE_CHANNEL =
 	"ash:native-host:save-file";
 export const NATIVE_HOST_GET_ACCESSIBILITY_SUPPORT_CHANNEL =
@@ -99,6 +101,7 @@ export function validateSystemWideKeybindingsResult(value: unknown): INativeSyst
 export interface INativeWindowTheme {
 	readonly backgroundColor: string;
 	readonly symbolColor: string;
+	readonly backdropColor: string;
 }
 
 /** Native save-dialog defaults supplied by a renderer Workbench. */
@@ -142,6 +145,7 @@ export interface INativeHostApi {
 	openWorkspace(root: string): Promise<void>;
 	revealFile(path: string): Promise<void>;
 	setWindowTheme(theme: INativeWindowTheme): Promise<void>;
+	setWindowDimmed(dimmed: boolean): Promise<void>;
 	toggleDeveloperTools(): Promise<void>;
 	saveFile(options?: INativeSaveFileOptions): Promise<string | undefined>;
 	isAccessibilitySupportEnabled(): Promise<boolean>;
@@ -247,14 +251,25 @@ export function validateNativeWindowTheme(value: unknown): INativeWindowTheme {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error("window theme must be an object");
 	const candidate = value as Record<string, unknown>;
 	const keys = Object.keys(candidate).sort();
-	if (keys.length !== 2 || keys[0] !== "backgroundColor" || keys[1] !== "symbolColor") throw new Error("window theme contains unknown fields");
+	if (keys.length !== 3 || keys[0] !== "backdropColor" || keys[1] !== "backgroundColor" || keys[2] !== "symbolColor") throw new Error("window theme contains unknown fields");
 	return {
 		backgroundColor: validateOpaqueHexColor(candidate.backgroundColor, "backgroundColor"),
 		symbolColor: validateOpaqueHexColor(candidate.symbolColor, "symbolColor"),
+		backdropColor: validateHexColor(candidate.backdropColor, "backdropColor"),
 	};
+}
+
+export function validateWindowDimmed(value: unknown): boolean {
+	if (typeof value !== 'boolean') throw new TypeError('Window dimmed state must be a boolean');
+	return value;
 }
 
 function validateOpaqueHexColor(value: unknown, name: string): string {
 	if (typeof value !== "string" || !/^#[0-9a-f]{6}$/i.test(value)) throw new Error(`${name} must be an opaque hexadecimal color`);
+	return value.toLowerCase();
+}
+
+function validateHexColor(value: unknown, name: string): string {
+	if (typeof value !== 'string' || !/^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(value)) throw new TypeError(`${name} must be a hexadecimal color`);
 	return value.toLowerCase();
 }

@@ -1,4 +1,6 @@
 import { isFiniteNumber } from "../../../base/common/numbers.js";
+import { Color } from '../../../base/common/color.js';
+import type { INativeWindowTheme } from '../../native/common/nativeHost.js';
 import {
 	WINDOW_MINIMUM_SIZE,
 } from "../../window/common/window.js";
@@ -83,6 +85,37 @@ export function resolveBrowserWindowOptions({
 	}
 
 	return browserWindowOptions;
+}
+
+/** Keeps Electron's window controls in step with the theme and modal backdrop. */
+export class WindowControlsOverlay {
+	private theme: INativeWindowTheme | undefined;
+	private dimmed = false;
+
+	constructor(private readonly apply: (colors: { color: string; symbolColor: string; height: number }) => void) {}
+
+	setTheme(theme: INativeWindowTheme): void {
+		this.theme = theme;
+		this.update();
+	}
+
+	setDimmed(dimmed: boolean): void {
+		if (this.dimmed === dimmed) return;
+		this.dimmed = dimmed;
+		this.update();
+	}
+
+	private update(): void {
+		if (!this.theme) return;
+		const { backgroundColor, symbolColor, backdropColor } = this.theme;
+		const backdrop = Color.fromHex(backdropColor);
+		this.apply({
+			color: this.dimmed ? Color.Format.CSS.formatHex(backdrop.flatten(Color.fromHex(backgroundColor))) : backgroundColor,
+			// An opaque high-contrast backdrop must not erase the window buttons.
+			symbolColor: this.dimmed && !backdrop.isOpaque() ? Color.Format.CSS.formatHex(backdrop.flatten(Color.fromHex(symbolColor))) : symbolColor,
+			height: 35,
+		});
+	}
 }
 
 /** A BrowserWindow-like target that can receive a restored non-normal mode. */

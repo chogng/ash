@@ -149,6 +149,11 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, SashConfiguration.size), 'general');
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.colorTheme), 'appearance');
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.layoutStyle), 'appearance');
+	const iconThemeSetting = defaults.get(WorkbenchConfiguration.iconTheme);
+	assert.equal(iconThemeSetting.valueType, 'select');
+	if (iconThemeSetting.valueType === 'select') {
+		assert.equal(iconThemeSetting.options.some(option => option.value === iconThemeSetting.configuration.defaultValue), true);
+	}
 	assert.equal(findSettingCategory(layout, EditorSelectionConfiguration.defaultNewDocumentEditor), 'editor');
 	assert.equal(findSettingCategory(layout, 'breadcrumbs.filePath'), 'editor');
 	assert.equal(findSettingCategory(layout, 'breadcrumbs.symbolPath'), 'editor');

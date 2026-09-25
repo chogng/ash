@@ -8,6 +8,7 @@ import { defaultWorkbenchColorThemePreference, SystemColorThemePreference, Workb
 export type WorkbenchLayoutStyle = "modern" | "flat";
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+const defaultFileIconThemeId = 'vs-seti';
 
 /** Typed configuration keys owned by the workbench layer. */
 export const WorkbenchConfiguration = Object.freeze({
@@ -22,7 +23,7 @@ export const WorkbenchConfiguration = Object.freeze({
 	}),
 	iconTheme: configurationRegistry.registerConfiguration<string>({
 		key: 'workbench.iconTheme',
-		defaultValue: 'vs-seti',
+		defaultValue: defaultFileIconThemeId,
 		parse(value: unknown): string {
 			if (value === null || value === '') { return ''; }
 			if (typeof value === 'string' && /^[a-zA-Z0-9._-]{1,256}$/.test(value)) { return value; }
@@ -31,7 +32,15 @@ export const WorkbenchConfiguration = Object.freeze({
 		serialize: value => value === '' ? null : value,
 		setting: {
 			valueType: 'select', title: 'File icon theme', description: 'Choose the file icons contributed by an installed extension.',
-			get options() { return [{ value: '', label: 'None' }, ...WorkbenchFileIconThemesRegistry.getThemes().map(theme => ({ value: theme.id, label: theme.label }))]; },
+			get options() {
+				return [
+					{ value: '', label: 'None' },
+					{ value: defaultFileIconThemeId, label: 'Seti' },
+					...WorkbenchFileIconThemesRegistry.getThemes()
+						.filter(theme => theme.id !== defaultFileIconThemeId)
+						.map(theme => ({ value: theme.id, label: theme.label })),
+				];
+			},
 		},
 	}),
 	productIconTheme: configurationRegistry.registerConfiguration<string>({
