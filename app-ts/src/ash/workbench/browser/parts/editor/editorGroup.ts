@@ -18,7 +18,8 @@ import type { IDocumentCollaborationApi } from "../../../../platform/collaborati
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import type { EditorInput, EditorOpenOptions } from "./editorInput.js";
 import type { TextResourceLanguageResolver } from "../../../../platform/language/common/textResourceLanguage.js";
-import { isEditorPaneWithViewState, type IEditorPane } from "./editorPane.js";
+import type { IEditorPane } from "./editorPane.js";
+import { isEditorPaneWithViewState } from "./editorWithViewState.js";
 import { EditorPanes, type EditorPaneInstance } from './editorPanes.js';
 import { extractExternalEditorInputs } from "./editorDropData.js";
 import { EditorPaneRegistry } from "./editorRegistry.js";
@@ -36,6 +37,13 @@ import type { IContextKeyService, IScopedContextKeyService } from "../../../../p
 import type { EditorCloseReason, EditorGroupChangeEvent, EditorGroupId, EditorGroupState, EditorInstanceId, EditorInstanceState } from "../../../services/editor/common/editorState.js";
 import type { SerializedEditorViewState } from "../../../services/editor/common/editorWorkingSet.js";
 import { EditorGroupContextKeyController } from './editorContextKeys.js';
+import type { FileElement } from './breadcrumbsModel.js';
+import type { IBreadcrumbsService } from './breadcrumbs.js';
+import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
+import type { LanguageDocumentSymbol } from '../../../../editor/common/languages.js';
+import type { Range } from '../../../../editor/common/core/range.js';
+import { isDiffEditorInput } from '../../../common/editor/diffEditorInput.js';
+import { associatedEditorId, DefaultBinaryEditorConfiguration, DiffEditorAssociationsConfiguration, EditorAssociationsConfiguration, type EditorAssociations } from './editorConfiguration.js';
 
 /** Operations and state owned independently by one EditorGroup. */
 export interface IEditorGroup {
@@ -43,13 +51,18 @@ export interface IEditorGroup {
 	readonly domNode: HTMLElement;
 	readonly onDidChangeEditors: Event<EditorGroupChangeEvent>;
 	readonly inputs: readonly EditorInput[];
+	readonly selectedInputs: readonly EditorInput[];
 	readonly editors: readonly EditorInstanceState[];
 	readonly activeInput: EditorInput | undefined;
+	readonly isLocked: boolean;
+	setLocked(locked: boolean): void;
 	readonly activePane: IEditorPane | undefined;
 	getEditorState(): EditorGroupState;
 	saveEditorViewState(input: EditorInput): SerializedEditorViewState | undefined;
 	restoreEditorViewState(input: EditorInput, state: SerializedEditorViewState | undefined): boolean;
 	isPreview(input: EditorInput): boolean;
+	isSticky(input: EditorInput): boolean;
+	toggleSticky(input: EditorInput): void;
 
 	openEditor(
 		input: EditorInput,
@@ -99,6 +112,10 @@ export interface EditorGroupOptions {
 	readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
 	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit) => void | Promise<void>;
 	readonly titleActions?: EditorHeaderActions;
+	readonly showBreadcrumbPicker?: (element: FileElement, openFile: (resource: URI) => Promise<void>) => void;
+	readonly breadcrumbsService?: IBreadcrumbsService;
+	readonly languageFeaturesService?: ILanguageFeaturesService;
+	readonly showBreadcrumbSymbolPicker?: (symbols: readonly LanguageDocumentSymbol[], selected: LanguageDocumentSymbol, reveal: (range: Range) => void) => void;
 	readonly welcome?: EditorWelcomeOptions;
 	readonly welcomeVisible?: boolean;
 	readonly onDidActivate?: () => void;
@@ -110,6 +127,7 @@ interface EditorGroupEntry extends EditorTabDescriptor {
 	paneInstance: EditorPaneInstance;
 	input: EditorInput;
 	preview: boolean;
+	sticky: boolean;
 }
 
 /**
@@ -149,6 +167,9 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 	private readonly titleActions: EditorHeaderActions | undefined;
 	private readonly entries: EditorGroupEntry[] = [];
 	private activeEntry: EditorGroupEntry | undefined;
+	private locked = false;
+	private readonly selectedEntryIds = new Set<EditorInstanceId>();
+	private selectionAnchorId: EditorInstanceId | undefined;
 	private ordinaryContent: Element | undefined;
 	private groupDimension: IDimension = Dimension.Zero;
 	private dimension: IDimension = Dimension.Zero;
@@ -180,12 +201,15 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 		this.onOpenLocation = options.onOpenLocation;
 		this.onApplyWorkspaceEdit = options.onApplyWorkspaceEdit;
 		this.titleActions = options.titleActions;
+		const showBreadcrumbPicker = options.showBreadcrumbPicker;
 		this.view = this._register(new EditorGroupView(container, {
 			activate: input => this.activateEntry(this.requireEntry(input), true),
 			preview: input => this.activateEntry(this.requireEntry(input), false),
+			select: (input, modifiers) => this.selectTab(input, modifiers),
 			close: input => {
 				void this.closeEditor(input).catch(reportEditorCloseError);
 			},
+			toggleSticky: input => this.toggleSticky(input),
 			startDrag: input => options.dragAndDrop?.start(this, input),
 			isDragging: () => options.dragAndDrop?.isDragging() ?? false,
 			drop: (target, position) => options.dragAndDrop?.drop(this, target, position),
@@ -195,7 +219,12 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 				});
 			},
 			endDrag: () => options.dragAndDrop?.end(),
-		}, options));
+		}, options, showBreadcrumbPicker
+			? element => showBreadcrumbPicker(element, async resource => {
+				await this.openEditor({ resource });
+				this.focus();
+			})
+			: undefined, this.id));
 		this.domNode = this.view.domNode;
 		this.panes = this.view.panes;
 		this.scopedContextKeyService = this.view.scopedContextKeyService;
@@ -224,12 +253,27 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 		return this.entries.map(({ input }) => input);
 	}
 
+	get selectedInputs(): readonly EditorInput[] {
+		return this.entries.filter(entry => this.selectedEntryIds.has(entry.instanceId)).map(entry => entry.input);
+	}
+
 	get editors(): readonly EditorInstanceState[] {
 		return this.entries.map(entry => this.editorState(entry));
 	}
 
 	get activeInput(): EditorInput | undefined {
 		return this.activeEntry?.input;
+	}
+
+	get isLocked(): boolean {
+		return this.locked;
+	}
+
+	setLocked(locked: boolean): void {
+		this.locked = locked;
+		this.domNode.classList.toggle("ash-editor-group-locked", locked);
+		this.domNode.setAttribute("aria-label", locked ? "Editor group, locked" : "Editor group");
+		this.view.setLocked(locked);
 	}
 
 	get activePane(): IEditorPane | undefined {
@@ -264,6 +308,26 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 		return this.entry(input)?.preview ?? false;
 	}
 
+	isSticky(input: EditorInput): boolean {
+		return this.entry(input)?.sticky ?? false;
+	}
+
+	toggleSticky(input: EditorInput): void {
+		const entry = this.requireEntry(input);
+		const previousIndex = this.entries.indexOf(entry);
+		const focusedTab = this.domNode.ownerDocument.activeElement?.closest(".ash-tab");
+		const restoreTabFocus = !!focusedTab && this.domNode.contains(focusedTab);
+		entry.sticky = !entry.sticky;
+		if (entry.sticky) entry.preview = false;
+		this.entries.splice(previousIndex, 1);
+		this.entries.splice(this.stickyCount, 0, entry);
+		if (this.entries.indexOf(entry) !== previousIndex) {
+			this.editorChangeEmitter.fire(Object.freeze({ kind: "editorMoved", editor: this.editorState(entry), previousIndex }));
+		}
+		this.publishEditorState(entry);
+		if (restoreTabFocus) this.domNode.ownerDocument.getElementById(entry.tabId)?.focus();
+	}
+
 	async openEditor(
 		input: EditorInput,
 		options: EditorOpenOptions = {},
@@ -277,7 +341,13 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 			const matchInput = this.languageResolver
 				? { ...input, languageId: this.languageResolver.resolveLanguageId({ resource: input.resource, ...(input.contentType === undefined ? {} : { contentType: input.contentType }) }) }
 				: input;
-			descriptor = this.registry.resolve(matchInput, options);
+			const association = options.preferredEditorId === undefined && this.configurationService
+				? associatedEditorId(
+					isDiffEditorInput(input) ? input.modified.resource.path : matchInput.resource.path,
+					this.configurationService.getValue<EditorAssociations>(isDiffEditorInput(input) ? DiffEditorAssociationsConfiguration : EditorAssociationsConfiguration),
+				)
+				: undefined;
+			descriptor = this.registry.resolve(matchInput, association ? { ...options, preferredEditorId: association } : options);
 		} catch (error) {
 			this.showOpenError(input, options, error, existing);
 			throw error;
@@ -382,6 +452,7 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 			tabId: paneInstance.tabId,
 			paneInstance,
 			preview: options.pinned === false,
+			sticky: existing?.sticky ?? false,
 			get isDirty() { return paneInstance.pane.workingCopy?.isDirty ?? false; },
 			get hasExternalChange() { return paneInstance.pane.workingCopy?.hasExternalChange ?? false; },
 		};
@@ -425,8 +496,9 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 			return;
 		}
 		if (existing || this.activeEntry) return;
+		const binaryEditorId = this.configurationService?.getValue<string>(DefaultBinaryEditorConfiguration) || "ash.editor.binary";
 		const binaryEditor = error instanceof TextFileBinaryError
-			? this.registry.getEditors(input).find(candidate => candidate.id === "ash.editor.binary")
+			? this.registry.getEditors(input).find(candidate => candidate.id === binaryEditorId)
 			: undefined;
 		const pane = new ErrorPlaceholderEditor(
 			error,
@@ -474,8 +546,14 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 		const index = this.entries.indexOf(entry);
 		if (index < 0) return;
 		this.entries.splice(index, 1);
+		this.selectedEntryIds.delete(entry.instanceId);
+		if (this.selectionAnchorId === entry.instanceId) this.selectionAnchorId = this.activeEntry?.instanceId;
 		const closedState = this.editorState(entry, index);
 		const wasActive = this.activeEntry === entry;
+		if (!wasActive && this.selectedEntryIds.size === 0 && this.activeEntry) {
+			this.selectedEntryIds.add(this.activeEntry.instanceId);
+			this.selectionAnchorId = this.activeEntry.instanceId;
+		}
 		if (wasActive) {
 			this.activeEntry = undefined;
 		}
@@ -497,7 +575,9 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 			(candidate) => editorInputKey(candidate.input) === editorInputKey(input),
 		);
 		if (index < 0) throw new RangeError(`Editor is not open in this group: ${input.resource}`);
+		const wasSticky = this.isSticky(input);
 		await this.openEditor(replacement, { index });
+		if (wasSticky) this.toggleSticky(replacement);
 		await this.closeEditor(input, { skipConfirmation: true, reason: "replace" });
 	}
 
@@ -527,8 +607,8 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 		const [entry] = this.entries.splice(sourceIndex, 1);
 		if (!entry) return;
 		const adjustedIndex = Math.min(
-			Math.max(0, targetIndex > sourceIndex ? targetIndex - 1 : targetIndex),
-			this.entries.length,
+			Math.max(entry.sticky ? 0 : this.stickyCount, targetIndex > sourceIndex ? targetIndex - 1 : targetIndex),
+			entry.sticky ? this.stickyCount : this.entries.length,
 		);
 		this.entries.splice(adjustedIndex, 0, entry);
 		this.renderContent();
@@ -553,6 +633,7 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 		}
 		const entry = this.requireEntry(input);
 		await target.openEditor(input, { index: targetIndex }, entry.instanceId);
+		if (entry.sticky) target.toggleSticky(input);
 		await this.closeEditor(input, { skipConfirmation: true, reason: "move" });
 		target.activateEditor(input);
 	}
@@ -586,6 +667,9 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 
 	private activateEntry(entry: EditorGroupEntry, focus: boolean): void {
 		const changed = this.activeEntry !== entry;
+		this.selectedEntryIds.clear();
+		this.selectedEntryIds.add(entry.instanceId);
+		this.selectionAnchorId = entry.instanceId;
 		if (this.activeEntry !== entry) {
 			this.activeEntry = entry;
 		}
@@ -608,13 +692,35 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 	}
 
 	private renderChrome(): void {
-		this.view.setEditors(this.entries, this.activeInput);
+		this.view.setEditors(this.entries, this.activeInput, this.activePane, this.selectedEntryIds);
+	}
+
+	private selectTab(input: EditorInput, modifiers: { toggle: boolean; range: boolean }): boolean {
+		if (!modifiers.toggle && !modifiers.range) return false;
+		const entry = this.requireEntry(input);
+		const restoreFocus = this.domNode.ownerDocument.activeElement?.id === entry.tabId;
+		if (modifiers.range) {
+			const anchorIndex = this.entries.findIndex(candidate => candidate.instanceId === this.selectionAnchorId);
+			const targetIndex = this.entries.indexOf(entry);
+			const start = anchorIndex < 0 ? targetIndex : Math.min(anchorIndex, targetIndex);
+			const end = anchorIndex < 0 ? targetIndex : Math.max(anchorIndex, targetIndex);
+			if (!modifiers.toggle) this.selectedEntryIds.clear();
+			for (let index = start; index <= end; index++) this.selectedEntryIds.add(this.entries[index]!.instanceId);
+		} else {
+			if (this.selectedEntryIds.size === 0 && this.activeEntry) this.selectedEntryIds.add(this.activeEntry.instanceId);
+			if (this.selectedEntryIds.has(entry.instanceId) && this.selectedEntryIds.size > 1) this.selectedEntryIds.delete(entry.instanceId);
+			else this.selectedEntryIds.add(entry.instanceId);
+			this.selectionAnchorId = entry.instanceId;
+		}
+		this.renderChrome();
+		if (restoreFocus) this.domNode.ownerDocument.getElementById(entry.tabId)?.focus();
+		return true;
 	}
 
 	private insertEntry(entry: EditorGroupEntry, index: number | undefined): void {
 		const targetIndex = index === undefined
 			? this.entries.length
-			: Math.min(Math.max(0, index), this.entries.length);
+			: Math.min(Math.max(this.stickyCount, index), this.entries.length);
 		this.entries.splice(targetIndex, 0, entry);
 	}
 
@@ -623,7 +729,10 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 		const currentIndex = this.entries.indexOf(entry);
 		if (currentIndex < 0) return;
 		this.entries.splice(currentIndex, 1);
-		const targetIndex = Math.min(Math.max(0, index), this.entries.length);
+		const targetIndex = Math.min(
+			Math.max(entry.sticky ? 0 : this.stickyCount, index),
+			entry.sticky ? this.stickyCount : this.entries.length,
+		);
 		this.entries.splice(targetIndex, 0, entry);
 		if (currentIndex !== targetIndex) this.editorChangeEmitter.fire(Object.freeze({ kind: "editorMoved", editor: this.editorState(entry), previousIndex: currentIndex }));
 	}
@@ -632,6 +741,10 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 		if (!this.entries.includes(entry)) return;
 		this.renderChrome();
 		this.editorChangeEmitter.fire(Object.freeze({ kind: "editorStateChanged", editor: this.editorState(entry) }));
+	}
+
+	private get stickyCount(): number {
+		return this.entries.filter(entry => entry.sticky).length;
 	}
 
 	private editorState(entry: EditorGroupEntry, index = this.entries.indexOf(entry)): EditorInstanceState {
@@ -644,6 +757,7 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 			index,
 			isActive: this.activeEntry === entry,
 			isPreview: entry.preview,
+			isSticky: entry.sticky,
 			isDirty: workingCopy?.isDirty ?? false,
 			canRevert: workingCopy !== undefined,
 			hasExternalChange: workingCopy?.hasExternalChange ?? false,

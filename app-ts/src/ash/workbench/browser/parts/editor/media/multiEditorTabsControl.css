@@ -8,6 +8,37 @@
   overflow: hidden;
 }
 
+.ash-multi-row-editor-tabs-control {
+	display: flex;
+	min-width: 0;
+	flex: 1 1 auto;
+	flex-direction: column;
+}
+
+.ash-multi-row-editor-tabs-control > .ash-multi-editor-tabs-control {
+	width: 100%;
+	height: var(--ash-pane-title-height);
+	flex: 0 0 var(--ash-pane-title-height);
+}
+
+.ash-multi-row-editor-tabs-control > .ash-multi-editor-tabs-control[hidden] {
+	display: none;
+}
+
+.ash-connected-editor-tabs .ash-tab.checked {
+	border-bottom: 2px solid var(--ash-border);
+	border-bottom-right-radius: 0;
+	border-bottom-left-radius: 0;
+}
+
+.ash-connected-editor-tabs .ash-tab.checked.connected-tab-left-clipped {
+	border-top-left-radius: 0;
+}
+
+.ash-connected-editor-tabs .ash-tab.checked.connected-tab-right-clipped {
+	border-top-right-radius: 0;
+}
+
 .ash-multi-editor-tabs-control .ash-tab[data-state] .ash-tab-close-action {
   visibility: visible;
 }

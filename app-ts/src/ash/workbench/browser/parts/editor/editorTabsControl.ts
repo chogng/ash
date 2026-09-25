@@ -1,3 +1,4 @@
+import "./media/editortabscontrol.css";
 import type { TabListDropPosition } from "../../../../base/browser/ui/tablist/tabList.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { EditorInput } from "./editorInput.js";
@@ -11,6 +12,7 @@ export interface EditorTabDescriptor {
 	readonly panelId: string;
 	readonly tabId: string;
 	readonly preview?: boolean;
+	readonly sticky?: boolean;
 	readonly isDirty?: boolean;
 	readonly hasExternalChange?: boolean;
 }
@@ -18,8 +20,10 @@ export interface EditorTabDescriptor {
 /** Callbacks through which an Editor tab presentation requests group-level mutations. */
 export interface EditorTabsDelegate {
 	activate(input: EditorInput): void;
+	select?(input: EditorInput, modifiers: { readonly toggle: boolean; readonly range: boolean }): boolean;
 	preview(input: EditorInput): void;
 	close(input: EditorInput): void;
+	toggleSticky(input: EditorInput): void;
 	startDrag(input: EditorInput): void;
 	isDragging(): boolean;
 	drop(target: EditorInput | undefined, position: TabListDropPosition): void;
@@ -39,7 +43,7 @@ export abstract class EditorTabsControl extends Disposable {
 		this._register(toDisposable(() => this.domNode.remove()));
 	}
 
-	abstract setEditors(editors: readonly EditorTabDescriptor[], activeInput: EditorInput | undefined): void;
+	abstract setEditors(editors: readonly EditorTabDescriptor[], activeInput: EditorInput | undefined, selectedIds?: ReadonlySet<EditorInstanceId>): void;
 }
 
 export function editorInputKey(input: EditorInput): string {

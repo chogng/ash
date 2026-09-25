@@ -90,7 +90,6 @@ export class EditorWelcome extends Disposable {
 		const mark = h(ownerDocument, "div");
 		mark.className = "ash-editor-group-welcome-mark";
 		mark.setAttribute("aria-hidden", "true");
-		appendIcon(Lxicon.model, mark);
 
 		const name = h(ownerDocument, "div");
 		name.className = "ash-editor-group-welcome-name";

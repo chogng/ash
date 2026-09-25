@@ -1447,19 +1447,20 @@ Grammar catalog 由共享 Workbench `ITextMateService` 拥有，声明式 extens
 
 ### Current 47：Workbench Editor 宿主与 VS Code 文件边界
 
-Ash 不以 VS Code `workbench/browser/parts/editor` 的文件数量作为完成度指标；对齐对象是宿主不变量和用户行为。VS Code 为兼容多代编辑器、配置组合与平台服务拆分了大量类，Ash 在保持 `base → platform → editor → workbench` 依赖方向的前提下合并同一所有者内的实现，并把格式专用视图放入 contribution。
+本轮审计的 VS Code `workbench/browser/parts/editor` 独有路径均已落到对应目录。文件存在本身不算完成：每项仍需实际调用方、唯一所有者和行为验证，并保持 `base → platform → editor → workbench` 依赖方向。下表区分已接通的行为和仍需继续补齐的能力。
 
 | 能力或 VS Code 文件族 | Ash 所有者 | 当前结论 |
 | --- | --- | --- |
 | `editorPart`、`editorGroupView`、`editorParts`、`auxiliaryEditorPart` | `workbench/browser/parts/editor/{editorPart,editorGroup,editorParts}.ts` + `services/auxiliaryWindow` | 已具备二维 Grid、稳定 group/editor identity、跨窗口活动 part、移动与关闭 veto |
-| `editorTabsControl`、multi/single/no tabs | Editor title/tabs controls | 已具备 multiple/single/none、preview/pinned、dirty/conflict decoration、reorder 与 edge split；multi-row tabs 未引入，因为当前产品没有对应配置与密度需求 |
-| `editorQuickAccess`、`editorTypePicker`、`editorsObserver` | `editorActions.ts` + `EditorParts`/`EditorPart` 可观察状态 | 已具备 Show All Editors、Reopen With、MRU、recently closed；不复制第二套 observer model |
-| `editorWithViewState`、placeholder、drop target、auto save、status | pane capability + group/part contributions | 已具备 JSON-safe view state、retry/close/binary fallback、内部/外部 DnD、自动保存和状态栏 |
-| breadcrumbs model/picker | `breadcrumbsControl.ts` | 当前只投影资源路径；符号 breadcrumbs 和目录 picker 需要 outline/file navigation service，不能在 control 内私建索引 |
-| `textEditor`、`textCodeEditor`、`textResourceEditor` | `workbench/contrib/codeEditor` + `src/ash/editor` | 不在 Workbench 复制；模型、selection、undo、viewport 与 language runtime 归 editor 域 |
-| binary editor | `workbench/contrib/binaryEditor` | 已具备有界只读 hex/ascii 预览；binary diff 尚无产品交互需求，不用文本 diff 伪装 |
-| side-by-side/text diff | `workbench/contrib/codeEditor` 的 diff pane/model 与 multi-diff contribution | 不复制 VS Code 继承树；版本 gate 和 diff 取消归 diff model/service |
-| editor commands/context | action registry、Workbench context-key projection、editor services | 已按命令/菜单/快捷键和稳定事件契约拆分，不建立同名转发文件 |
+| `editorTabsControl`、multi/single/no tabs | Editor title/tabs controls | 已具备 multiple/single/none、preview/pinned、置顶标签独立行、多行布局、dirty/conflict decoration、reorder、edge split，以及 Ctrl/Shift/键盘标签多选与批量关闭 |
+| `editorQuickAccess`、`editorTypePicker`、`editorsObserver` | `editorQuickAccess.ts`、`editorsObserver.ts`、`EditorParts` | 已具备 Show All Editors、按组关闭结果、Reopen With、跨组 MRU、recently closed 和编辑器前进/后退记录 |
+| `editorWithViewState`、placeholder、drop target、auto save、status | pane capability + group/part contributions | 已具备 JSON-safe view state、retry/close/binary fallback、内部/外部 DnD、自动保存、状态栏和屏幕阅读器模式说明 |
+| breadcrumbs model/picker/service | `breadcrumbs.ts`、`breadcrumbsModel.ts`、`breadcrumbsControl.ts`、`breadcrumbsPicker.ts` | 已具备文件与符号路径计算、显示、目录和文档符号选择器、按组注册及聚焦；符号会随光标与文档版本更新 |
+| `textEditor`、`textCodeEditor`、`textResourceEditor` | `workbench/browser/parts/editor` + `src/ash/editor` | Workbench pane 职责和调用方已迁入对应路径；模型、selection、undo、viewport 与 language runtime 继续由 editor 域负责 |
+| binary editor/diff | `workbench/browser/parts/editor/{binaryEditor,binaryDiffEditor}.ts` | 已具备有界只读 hex/ascii 预览及双侧二进制差异输入、布局与切换 |
+| side-by-side/text diff | `workbench/browser/parts/editor/{sideBySideEditor,textDiffEditor}.ts` 与 diff model/service | 已具备双侧/行内显示、差异命令和版本 gate；不复制 VS Code 继承树 |
+| editor commands/context/configuration | `editorCommandsContext.ts`、`editorConfiguration.ts`、action registry | 已具备资源/组参数及标签选中集合定向关闭、动态二进制编辑器选项、普通与差异文件关联、自动锁定分组与锁定状态恢复、大文件打开确认 |
+| Touch Bar navigation | `editorActions.ts`、Electron menu service 与 `media/{back,forward}-tb.png` | macOS 窗口的前进/后退按钮已接入命令与编辑器历史；仍需在 macOS 设备上验证实际显示与触发 |
 
 Workbench editor 宿主负责资源视图的“在哪个 group/window、以哪个 pane、何时激活或关闭”；具体 pane 负责“如何解释和编辑内容”。跨窗口服务只注册同源 UI 窗口、镜像样式并提供布局/卸载事件，不获得文件或模型权限。Binary Pane 只消费 `IFileService.readFileBytes`，TextFile service 只向文本模型发布经过验证的 UTF-8，二者不会共享可写模型。
 

@@ -1,4 +1,5 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import type { Page } from "@playwright/test";
 import { expect, test } from "../../../automation/test.js";
 
@@ -55,12 +56,25 @@ test("Show All Editors searches recent editors and restores editor focus", async
 	const page = workbench.page;
 	const fileRow = page.locator(".ash-explorer .ash-tree-row").filter({ hasText: "main.ts" });
 	await expect.poll(() => fileRow.count(), { timeout: 15_000 }).toBe(1);
-	await fileRow.click();
+	await fileRow.dblclick();
 	const group = workbench.editors.groupAt(0);
 	await expect(group.tabs).toHaveCount(1);
 	const breadcrumbs = group.title.getByRole("navigation", { name: "Editor breadcrumbs" });
 	await expect(breadcrumbs).toBeVisible();
-	await expect(breadcrumbs.locator('[aria-current="page"]')).toHaveText("main.ts");
+	const currentBreadcrumb = breadcrumbs.locator('[aria-current="page"]');
+	await expect(currentBreadcrumb).toHaveText("main.ts");
+	await expect(currentBreadcrumb).toHaveClass(/current/u);
+	await expect(currentBreadcrumb).toHaveAttribute("title", "main.ts");
+	const breadcrumbStyle = await breadcrumbs.evaluate(element => ({
+		display: getComputedStyle(element).display,
+		gap: getComputedStyle(element).gap,
+		color: getComputedStyle(element.querySelector('.current')!).color,
+	}));
+	expect(breadcrumbStyle.display).toBe("flex");
+	expect(breadcrumbStyle.gap).toBe("4px");
+	expect(breadcrumbStyle.color).not.toBe("rgba(0, 0, 0, 0)");
+	await page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.rs' }).click();
+	await expect(group.tabs).toHaveCount(2);
 
 	await page.keyboard.press("F1");
 	const picker = page.locator(".ash-quick-pick");
@@ -71,10 +85,161 @@ test("Show All Editors searches recent editors and restores editor focus", async
 	const search = picker.getByRole("combobox");
 	await expect(search).toHaveValue("edt mru ");
 	await search.fill("edt mru main");
+	const otherEditor = picker.locator('.ash-quick-pick-row-content').filter({ hasText: 'main.rs' });
+	await otherEditor.getByRole('button', { name: 'Close Editor' }).click();
+	await expect(otherEditor).toHaveCount(0);
+	await expect(picker).toBeVisible();
+	await expect(group.tabs).toHaveCount(1);
 	await expect(picker.locator(".ash-quick-pick-row-label", { hasText: "main.ts" })).toBeVisible();
-	await page.keyboard.press("Enter");
+	await search.press("Enter");
 	await expect(picker).toHaveCount(0);
 	await expect(group.content.locator(".stanza-editor-input")).toBeFocused();
+});
+
+test("Editor tabs support modifier selection and close the selected set", async ({ target, workbench }) => {
+	test.skip(target.appServerMode !== "required" || target.workbenchMode !== "code", "This scenario requires the Code App Server product");
+	const page = workbench.page;
+	const explorer = page.locator(".ash-explorer .ash-tree-row");
+	await explorer.filter({ hasText: "main.ts" }).dblclick();
+	await explorer.filter({ hasText: "main.rs" }).dblclick();
+	const group = workbench.editors.groupAt(0);
+	await expect(group.tabs).toHaveCount(2);
+	const first = group.tabs.filter({ hasText: "main.ts" });
+	const second = group.tabs.filter({ hasText: "main.rs" });
+	await first.click({ modifiers: [process.platform === "darwin" ? "Meta" : "Control"] });
+	await expect(first).toHaveAttribute("aria-selected", "true");
+	await expect(second).toHaveAttribute("aria-selected", "true");
+	await expect(group.content.getByRole("textbox", { name: "main.rs" })).toBeAttached();
+	await page.keyboard.press("F1");
+	const picker = page.locator(".ash-quick-pick");
+	const search = picker.getByRole("combobox");
+	await search.fill("Close Editor");
+	await expect(picker.locator(".ash-quick-pick-row-label", { hasText: "Close Editor" })).toBeVisible();
+	await search.press("Enter");
+	await expect(group.tabs).toHaveCount(0);
+});
+
+test("Editor breadcrumbs open sibling and nested files", async ({ target, testWorkspace, workbench }) => {
+	test.skip(
+		target.appServerMode !== "required" || target.workbenchMode !== "code",
+		"This scenario requires the Code App Server product",
+	);
+
+	const page = workbench.page;
+	const explorer = page.locator(".ash-explorer .ash-tree-row");
+	await explorer.filter({ hasText: "main.ts" }).click();
+	const group = workbench.editors.groupAt(0);
+	const breadcrumbs = group.title.getByRole("navigation", { name: "Editor breadcrumbs" });
+	const pathItems = breadcrumbs.getByRole("button");
+	await expect(pathItems.last()).toHaveText("main.ts");
+	await pathItems.nth(-2).focus();
+	await page.keyboard.press("Enter");
+
+	const picker = page.locator(".ash-quick-pick");
+	await expect(picker.getByRole("combobox")).toBeFocused();
+	await picker.getByRole("combobox").fill("main.rs");
+	await expect(picker.locator(".ash-quick-pick-row-label", { hasText: "main.rs" })).toBeVisible();
+	await page.keyboard.press("Enter");
+
+	await expect(picker).toHaveCount(0);
+	await expect(group.tabs.filter({ hasText: "main.rs" })).toHaveCount(1);
+	await expect(group.content.getByRole("textbox", { name: "main.rs" })).toBeFocused();
+	await expect(breadcrumbs.locator('[aria-current="page"]')).toHaveText("main.rs");
+
+	const nestedDirectory = join(testWorkspace.directory, "breadcrumb-folder");
+	await mkdir(nestedDirectory);
+	await writeFile(join(nestedDirectory, "nested.ts"), "export const nested = true;\n");
+	await breadcrumbs.getByRole("button").nth(-2).click();
+	await picker.getByRole("combobox").fill("breadcrumb-folder");
+	await page.keyboard.press("Enter");
+	await picker.getByRole("combobox").fill("nested.ts");
+	await expect(picker.locator(".ash-quick-pick-row-label", { hasText: "nested.ts" })).toBeVisible();
+	await page.keyboard.press("Enter");
+	await expect(group.tabs.filter({ hasText: "nested.ts" })).toHaveCount(1);
+});
+
+test("Sticky and ordinary editors occupy separate tab rows", async ({ target, workbench }) => {
+	test.skip(
+		target.appServerMode !== "required" || target.workbenchMode !== "code",
+		"This scenario requires the Code App Server product",
+	);
+
+	const explorer = workbench.page.locator(".ash-explorer .ash-tree-row");
+	await explorer.filter({ hasText: "main.ts" }).dblclick();
+	await explorer.filter({ hasText: "main.rs" }).dblclick();
+	const group = workbench.editors.groupAt(0);
+	const ordinary = group.title.locator(".ash-ordinary-editor-tabs-row");
+	const sticky = group.title.locator(".ash-sticky-editor-tabs-row");
+	await expect(ordinary.locator(".ash-tab")).toHaveCount(2);
+	await ordinary.locator('.ash-tab').filter({ hasText: "main.ts" })
+		.locator('[data-action-id="workbench.editor.toggleSticky"] button').click();
+	await expect(sticky.locator(".ash-tab")).toHaveCount(1);
+	await expect(ordinary.locator(".ash-tab")).toHaveCount(1);
+	await expect(sticky.getByRole("tab", { name: "main.ts" })).toBeFocused();
+	const stickyBox = await sticky.boundingBox();
+	const ordinaryBox = await ordinary.boundingBox();
+	expect(stickyBox).not.toBeNull();
+	expect(ordinaryBox).not.toBeNull();
+	expect(ordinaryBox!.y).toBeGreaterThanOrEqual(stickyBox!.y + stickyBox!.height);
+	await sticky.locator('[data-action-id="workbench.editor.toggleSticky"] button').click();
+	await expect(sticky.locator(".ash-tab")).toHaveCount(0);
+	await expect(ordinary.locator(".ash-tab")).toHaveCount(2);
+});
+
+test("Connected editor tab follows horizontal tab scrolling", async ({ target, workbench }) => {
+	test.skip(
+		target.appServerMode !== "required" || target.workbenchMode !== "code",
+		"This scenario requires the Code App Server product",
+	);
+
+	const page = workbench.page;
+	const explorer = page.locator(".ash-explorer .ash-tree-row");
+	for (const name of ["main.ts", "main.rs", "Cargo.toml"]) {
+		await explorer.filter({ hasText: name }).dblclick();
+	}
+	await page.setViewportSize({ width: 600, height: 720 });
+	const group = workbench.editors.groupAt(0);
+	const selected = group.title.locator(".ash-ordinary-editor-tabs-row .ash-tab.checked");
+	const viewport = group.title.locator(".ash-ordinary-editor-tabs-row .ash-scrollbar-viewport");
+	await expect(selected).toHaveCount(1);
+	await viewport.evaluate(element => { element.scrollLeft = 0; });
+	await expect.poll(() => selected.evaluate(tab => {
+		const edge = tab.closest(".ash-scrollbar-viewport")!.getBoundingClientRect().right;
+		return tab.getBoundingClientRect().right > edge && tab.classList.contains("connected-tab-right-clipped");
+	})).toBe(true);
+	await viewport.evaluate(element => { element.scrollLeft = element.scrollWidth; });
+	await expect(selected).not.toHaveClass(/connected-tab-right-clipped/u);
+	await expect.poll(() => selected.evaluate(tab => getComputedStyle(tab).borderBottomWidth)).toBe("2px");
+});
+
+test("Single editor tab uses the available title width", async ({ target, workbench }) => {
+	test.skip(
+		target.appServerMode !== "required" || target.workbenchMode !== "code",
+		"This scenario requires the Code App Server product",
+	);
+
+	const page = workbench.page;
+	const mainFile = page.locator(".ash-explorer .ash-tree-row").filter({ hasText: "main.ts" });
+	await mainFile.click();
+	await page.getByRole("button", { name: "Ash Settings" }).click();
+	const settings = page.locator(".ash-settings-editor");
+	await expect(settings).toBeVisible();
+	await settings.locator('[data-settings-category-id="editor"]').click();
+	await settings.getByRole("searchbox", { name: "Search settings" }).fill("workbench.editor.showTabs");
+	const mode = settings.locator('[data-configuration-key="workbench.editor.showTabs"]');
+	await expect(mode).toBeVisible();
+	await mode.getByRole("combobox").click();
+	await page.getByRole("option", { name: "Single" }).click();
+	await page.locator(".ash-modal-editor-close").click();
+	await mainFile.click();
+
+	const control = workbench.editors.groupAt(0).title.locator(".ash-single-editor-tabs-control");
+	await expect(control.getByRole("tab", { name: "main.ts" })).toBeVisible();
+	const widths = await control.evaluate(element => ({
+		available: element.getBoundingClientRect().width,
+		tab: element.querySelector(".ash-tab")!.getBoundingClientRect().width,
+	}));
+	expect(widths.tab).toBeGreaterThan(widths.available * 0.8);
 });
 
 test("Binary content shows an editor error with a working alternative", async ({ target, testWorkspace, workbench }) => {
@@ -108,6 +273,33 @@ test("Binary content shows an editor error with a working alternative", async ({
 	await alternative.click();
 	await expect(content.locator(".ash-binary-editor-content")).toContainText("48 69 00 ff");
 	await expect(error).toHaveCount(0);
+});
+
+test("Compare open files as binary shows both byte views", async ({ target, workbench }) => {
+	test.skip(
+		target.appServerMode !== "required" || target.workbenchMode !== "code",
+		"This scenario requires the Code App Server product",
+	);
+	const page = workbench.page;
+	const explorer = page.locator(".ash-explorer .ash-tree-row");
+	await explorer.filter({ hasText: "main.ts" }).dblclick();
+	await explorer.filter({ hasText: "main.rs" }).dblclick();
+	await page.keyboard.press("F1");
+	const picker = page.locator(".ash-quick-pick");
+	const search = picker.getByRole("combobox");
+	await search.fill("Compare Active File as Binary With");
+	await expect(picker.locator(".ash-quick-pick-row-label", { hasText: "Compare Active File as Binary With" })).toBeVisible();
+	await search.press("Enter");
+	const candidateSearch = picker.getByRole("combobox");
+	await expect(candidateSearch).toHaveAttribute("placeholder", "Select the original file to compare");
+	await candidateSearch.fill("main.ts");
+	await candidateSearch.press("Enter");
+	const sides = workbench.editors.groupAt(0).content.locator(".ash-side-by-side-editor > section");
+	await expect(sides).toHaveCount(2);
+	await expect(sides.first().locator(".ash-binary-editor-content")).toContainText("00000000");
+	await expect(sides.last().locator(".ash-binary-editor-content")).toContainText("00000000");
+	const boxes = await sides.evaluateAll(elements => elements.map(element => element.getBoundingClientRect().toJSON()));
+	expect(boxes[1].left).toBeGreaterThanOrEqual(boxes[0].right);
 });
 
 test("Reopen Editor With switches the active file to Binary Editor", async ({ target, workbench }) => {

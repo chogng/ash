@@ -12,6 +12,12 @@ test("empty editor distinguishes an empty window from an open workspace", async 
 	await expect(group.content).toBeVisible();
 	await expect(group.watermark).toBeVisible({ visible: welcomeVisible });
 	await expect(group.tabs).toHaveCount(0);
+	if (welcomeVisible) {
+		const mark = group.watermark.locator('.ash-editor-group-welcome-mark');
+		await expect(mark).toHaveAttribute('aria-hidden', 'true');
+		const backgroundImage = await mark.evaluate(element => getComputedStyle(element).backgroundImage);
+		expect(backgroundImage).toMatch(/ash-(light|dark).*\.svg/u);
+	}
 
 	await expect.poll(async () => editorGeometry(editors.element, group.element, group.title, group.content, group.watermark)).toEqual({
 		groupFillsEditorClient: true,

@@ -35,9 +35,8 @@ import {
 	InQuickInputContext,
 	ShowAllCommandsCommandId,
 } from "../../../../../workbench/browser/quickaccess.js";
-await import("../../../../../workbench/contrib/quickaccess/browser/commandsQuickAccess.js");
-await import("../../../../../workbench/contrib/quickaccess/browser/helpQuickAccess.js");
-await import('../../../../../workbench/contrib/quickaccess/browser/workspaceSymbolsQuickAccess.js');
+await import('../../../../../workbench/contrib/quickaccess/browser/quickAccess.contribution.js');
+await import('../../../../../workbench/contrib/search/browser/searchQuickAccess.contribution.js');
 import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
 
 test("Show All Commands is not duplicated in the titlebar action menu", () => {
@@ -63,6 +62,26 @@ test("Quick Pick filtering matches ordered characters and favors labels", () => 
 		["Format Document"],
 	);
 	assert.deepEqual(filterQuickPickItems(items, "missing"), []);
+});
+
+test('Quick Pick item button fires without accepting its row', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	installDomGlobals(dom);
+	const list = new QuickInputList(dom.window.document.body);
+	const triggered: string[] = [];
+	const accepted: string[] = [];
+	list.onDidTriggerItemButton(({ item, button }) => triggered.push(`${item.label}:${button.id}`));
+	list.onDidAccept(item => accepted.push(item.label));
+	list.items = [{ label: 'main.ts', className: 'ash-editor-quick-pick-item dirty', buttons: [{ id: 'close', label: 'Close Editor' }] }];
+	const button = list.element.querySelector<HTMLButtonElement>('.ash-quick-pick-row-action');
+	assert.ok(button);
+	assert.equal(button.getAttribute('aria-label'), 'Close Editor');
+	button.click();
+	assert.deepEqual(triggered, ['main.ts:close']);
+	assert.deepEqual(accepted, []);
+	assert.equal(button.closest('.ash-editor-quick-pick-item.dirty') !== null, true);
+	list.dispose();
+	dom.window.close();
 });
 
 test("QuickInputList owns filtering, looping focus, and acceptance", () => {

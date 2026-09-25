@@ -19,7 +19,9 @@ export class TabAction<T> implements IAction {
 	constructor(
 		readonly tab: TabListItem<T>,
 		readonly checked: boolean,
+		readonly selected: boolean,
 		readonly activate: (value: T) => void,
+		readonly select?: (value: T, event: MouseEvent | KeyboardEvent) => boolean,
 	) {
 		this.label = tab.label;
 		this.tooltip = tab.tooltip ?? tab.label;
@@ -55,6 +57,7 @@ export class TabActionViewItem<T> extends ActionViewItem {
 		const item = this.tabAction.tab;
 		container.classList.add("ash-tab");
 		container.classList.toggle("checked", this.tabAction.checked);
+		container.classList.toggle("selected", this.tabAction.selected);
 		container.classList.toggle("icon", item.icon !== undefined);
 		container.classList.toggle("preview", item.preview === true);
 		if (item.state !== undefined) container.dataset.state = item.state;
@@ -65,7 +68,7 @@ export class TabActionViewItem<T> extends ActionViewItem {
 		tab.className = "ash-tab-label";
 		tab.type = "button";
 		tab.setAttribute("role", "tab");
-		tab.setAttribute("aria-selected", String(this.tabAction.checked));
+		tab.setAttribute("aria-selected", String(this.tabAction.selected));
 		tab.setAttribute("aria-label", item.ariaLabel ?? item.label);
 		if (item.panelId) tab.setAttribute("aria-controls", item.panelId);
 		this.setupHover(tab, this.tabAction.tooltip);
@@ -79,15 +82,22 @@ export class TabActionViewItem<T> extends ActionViewItem {
 		this._register(addDisposableListener(tab, "click", (event) => {
 			event.preventDefault();
 			event.stopPropagation();
+			if (this.tabAction.select?.(item.value, event)) return;
 			this.tabAction.run();
 		}));
-		if (this.onClose) {
-			tab.setAttribute("aria-keyshortcuts", "Delete");
+		if (this.onClose || this.tabAction.select) {
+			tab.setAttribute("aria-keyshortcuts", [this.onClose ? "Delete" : "", this.tabAction.select ? "Control+Space Shift+Space" : ""].filter(Boolean).join(" "));
 			this._register(addDisposableListener(tab, "keydown", (event) => {
-				if (event.key !== "Delete") return;
+				if (this.tabAction.select && event.key === " " && (event.ctrlKey || event.metaKey || event.shiftKey)) {
+					event.preventDefault();
+					event.stopPropagation();
+					this.tabAction.select(item.value, event);
+					return;
+				}
+				if (!this.onClose || event.key !== "Delete") return;
 				event.preventDefault();
 				event.stopPropagation();
-				this.onClose?.(item.value);
+				this.onClose(item.value);
 			}));
 		}
 		const actions = [

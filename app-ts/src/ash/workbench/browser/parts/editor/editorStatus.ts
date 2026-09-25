@@ -1,4 +1,7 @@
-import { Disposable, MutableDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
+import "./media/editorstatus.css";
+import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
+import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
 import type { IWorkbenchContribution } from "../../../common/contributions.js";
 import { isEditorPaneWithStatus } from "./editorPane.js";
 import type { IEditorPart } from "./editorPart.js";
@@ -12,12 +15,63 @@ export class EditorStatusContribution extends Disposable implements IWorkbenchCo
 	private readonly format = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
 	private readonly language = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
 	private readonly state = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
+	private readonly screenReaderMode = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
+	private readonly explanation = this._register(new MutableDisposable<DisposableStore>());
 	private readonly paneListener = this._register(new MutableDisposable<IDisposable>());
 
-	constructor(private readonly editorPart: IEditorPart, private readonly statusbar: IStatusbarService) {
+	constructor(private readonly editorPart: IEditorPart, private readonly statusbar: IStatusbarService, private readonly accessibility: IAccessibilityService) {
 		super();
 		this._register(editorPart.onDidChangeEditors(() => this.update()));
+		this._register(accessibility.onDidChangeScreenReaderOptimized(() => this.updateScreenReaderMode()));
 		this.update();
+		this.updateScreenReaderMode();
+	}
+
+	private updateScreenReaderMode(): void {
+		if (!this.accessibility.isScreenReaderOptimized()) {
+			this.screenReaderMode.clear();
+			this.explanation.clear();
+			return;
+		}
+		this.setEntry(this.screenReaderMode, {
+			text: "Screen Reader Mode",
+			ariaLabel: "Screen reader mode enabled. Open explanation",
+			tooltip: "Screen reader mode is enabled. Open explanation",
+			run: () => this.showScreenReaderExplanation(),
+		}, "ash.status.editor.screenReaderMode", 100);
+	}
+
+	private showScreenReaderExplanation(): void {
+		if (this.explanation.value) return;
+		const doc = this.editorPart.domNode.ownerDocument;
+		const previousFocus = doc.activeElement instanceof doc.defaultView!.HTMLElement ? doc.activeElement : undefined;
+		const resources = new DisposableStore();
+		const dialog = doc.createElement("section");
+		dialog.className = "ash-screen-reader-explanation";
+		dialog.setAttribute("role", "dialog");
+		dialog.setAttribute("aria-labelledby", "ash-screen-reader-explanation-title");
+		const heading = doc.createElement("h2");
+		heading.id = "ash-screen-reader-explanation-title";
+		heading.textContent = "Screen reader mode is on";
+		const details = doc.createElement("p");
+		details.textContent = "Ash has adjusted editor interactions for a screen reader. You can change this in Settings under Screen reader optimization.";
+		const close = doc.createElement("button");
+		close.type = "button";
+		close.textContent = "Close";
+		dialog.append(heading, details, close);
+		doc.body.append(dialog);
+		resources.add(toDisposable(() => {
+			dialog.remove();
+			if (previousFocus?.isConnected) previousFocus.focus();
+		}));
+		resources.add(addDisposableListener(close, "click", () => this.explanation.clear()));
+		resources.add(addDisposableListener(dialog, "keydown", (event: KeyboardEvent) => {
+			if (event.key !== "Escape") return;
+			event.preventDefault();
+			this.explanation.clear();
+		}));
+		this.explanation.value = resources;
+		close.focus();
 	}
 
 	private update(): void {

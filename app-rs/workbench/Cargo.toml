@@ -46,6 +46,9 @@ ash-ui-components = { workspace = true }
 ash-ui-theme = { workspace = true }
 zui = { workspace = true, features = ["wgpu"] }
 
+[target.'cfg(target_os = "windows")'.dependencies]
+image = { workspace = true, features = ["png"] }
+
 [lints]
 workspace = true
 

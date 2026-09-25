@@ -2,8 +2,8 @@ import { OAuthCallbackHost } from "../../platform/connectors/electron-main/oauth
 import { RendererWorkspaceHost } from "../../platform/workspaces/electron-main/rendererWorkspaceHost.js";
 import { BrowserAutomationHost } from "../../platform/browser/electron-main/browserAutomationHostRoutes.js";
 import { rendererSystemHostRoutes } from "../../platform/native/electron-main/rendererSystemHostRoutes.js";
-import { shell } from "electron";
-import { app, BrowserWindow, dialog, ipcMain, Menu, screen, type Event as ElectronEvent, type MenuItemConstructorOptions } from "electron/main";
+import { nativeImage, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, screen, TouchBar, type Event as ElectronEvent, type MenuItemConstructorOptions } from "electron/main";
 import type { DirGrant } from "../../platform/dirPermissions/common/dirPermissionsService.js";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -158,6 +158,15 @@ export class AshApplication extends Disposable {
 				setApplicationMenu: (template) => Menu.setApplicationMenu(
 					template ? Menu.buildFromTemplate([...template] as MenuItemConstructorOptions[]) : null,
 				),
+				setWindowTouchBar: (window, items, select) => {
+					const browserWindow = window as BrowserWindow;
+					browserWindow.setTouchBar(items.length ? new TouchBar({ items: items.map(item => new TouchBar.TouchBarButton({
+						label: item.label,
+						icon: nativeImage.createFromDataURL(item.icon),
+						enabled: item.enabled,
+						click: () => select(item.id),
+					})) }) : null);
+				},
 			}))
 			: undefined;
 		this.profileRoot = resolveHome();

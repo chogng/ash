@@ -34,6 +34,14 @@ export interface INativeMenubarMenu {
 export interface INativeMenubarData {
 	readonly revision: number;
 	readonly menus: readonly INativeMenubarMenu[];
+	readonly touchBar?: readonly INativeTouchBarItem[];
+}
+
+export interface INativeTouchBarItem {
+	readonly id: string;
+	readonly label: string;
+	readonly enabled: boolean;
+	readonly icon: string;
 }
 
 export interface INativeMenubarSelection {
@@ -64,7 +72,8 @@ const MAX_LABEL_LENGTH = 512;
 export function validateNativeMenubarData(
 	value: unknown,
 ): INativeMenubarData {
-	const data = exactRecord(value, ["menus", "revision"]);
+	const record = looseRecord(value);
+	const data = exactRecord(value, record.touchBar === undefined ? ["menus", "revision"] : ["menus", "revision", "touchBar"]);
 	if (!Array.isArray(data.menus)) {
 		throw new Error("menubar menus must be an array");
 	}
@@ -76,8 +85,10 @@ export function validateNativeMenubarData(
 		itemCount: 0,
 		ids: new Set(),
 	};
+	const touchBar = data.touchBar === undefined ? undefined : validateTouchBar(data.touchBar, state);
 	return {
 		revision: safeRevision(data.revision),
+		...(touchBar ? { touchBar } : {}),
 		menus: data.menus.map((candidate, index) => {
 			const menu = exactRecord(candidate, ["items", "label"]);
 			return {
@@ -90,6 +101,21 @@ export function validateNativeMenubarData(
 			};
 		}),
 	};
+}
+
+function validateTouchBar(value: unknown, state: IValidationState): readonly INativeTouchBarItem[] {
+	if (!Array.isArray(value) || value.length > 8) throw new Error("touch bar must contain at most 8 items");
+	return value.map((candidate, index) => {
+		const item = exactRecord(candidate, ["enabled", "icon", "id", "label"]);
+		const icon = boundedString(item.icon, `touchBar[${index}].icon`, 16_000);
+		if (!/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/u.test(icon)) throw new Error("touch bar icons must be PNG data URLs");
+		return {
+			id: uniqueActionId(item.id, `touchBar[${index}].id`, state),
+			label: boundedString(item.label, `touchBar[${index}].label`, MAX_LABEL_LENGTH),
+			enabled: boolean(item.enabled, `touchBar[${index}].enabled`),
+			icon,
+		};
+	});
 }
 
 interface IValidationState {

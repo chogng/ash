@@ -1,0 +1,50 @@
+.ash-editor-breadcrumbs {
+	display: flex;
+	height: 22px;
+	min-width: 0;
+	align-items: center;
+	gap: var(--ash-spacing-size40);
+	overflow: hidden;
+	padding: 0 var(--ash-spacing-size100);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
+	white-space: nowrap;
+}
+
+.ash-editor-breadcrumb-item {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ash-editor-breadcrumb-item.ash-button {
+	min-height: 20px;
+	max-width: 100%;
+	padding: 0 var(--ash-spacing-size40);
+	color: inherit;
+}
+
+.ash-editor-breadcrumb-item.ash-button:hover {
+	background: var(--ash-button-hover-background);
+}
+
+.ash-editor-breadcrumb-item .ash-button-content,
+.ash-editor-breadcrumb-item .ash-button-label {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.ash-editor-breadcrumb-item.current {
+	color: var(--ash-foreground);
+}
+
+.ash-editor-breadcrumb-separator {
+	flex: 0 0 auto;
+	opacity: 0.7;
+}
+
+.ash-editor-breadcrumbs[hidden] {
+	display: none;
+}

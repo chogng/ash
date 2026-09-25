@@ -1,5 +1,8 @@
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../../../platform/configuration/common/configurationRegistry.js";
 import { Registry } from "../../../../platform/registry/common/platform.js";
+import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
+import { EditorLineWrapping } from "../../../../editor/common/config/editorOptions.js";
+import type { IDocumentDiffProviderOptions } from "../../../../editor/common/diff/documentDiffProvider.js";
 
 export type EditorAutoSaveMode = "off" | "afterDelay" | "onFocusChange" | "onWindowChange";
 export type EditorTabsMode = "multiple" | "single" | "none";
@@ -19,17 +22,6 @@ export const EditorTabsModeConfiguration = configurationRegistry.registerConfigu
 			{ value: "single", label: "Single" },
 			{ value: "none", label: "None" },
 		],
-	},
-});
-
-export const EditorBreadcrumbsEnabledConfiguration = configurationRegistry.registerConfiguration<boolean>({
-	key: "breadcrumbs.enabled",
-	defaultValue: true,
-	parse: value => typeof value === "boolean" ? value : true,
-	setting: {
-		title: "Breadcrumbs: Enabled",
-		description: "Shows the active editor resource path below the editor title.",
-		valueType: "boolean",
 	},
 });
 
@@ -62,3 +54,17 @@ export const EditorAutoSaveDelayConfiguration = configurationRegistry.registerCo
 		maximum: 60_000,
 	},
 });
+
+/** Reads computation settings shared by single-file and multi-file diff panes. */
+export function getDiffComputationOptions(configuration: IConfigurationService, languageId: string): IDocumentDiffProviderOptions {
+	return {
+		ignoreTrimWhitespace: configuration.getValue<boolean>("diffEditor.ignoreTrimWhitespace", { overrideIdentifier: languageId }),
+		maxComputationTimeMs: configuration.getValue<number>("diffEditor.maxComputationTime", { overrideIdentifier: languageId }),
+		computeMoves: false,
+	};
+}
+
+export function getDiffWordWrap(configuration: IConfigurationService): boolean {
+	const value = configuration.getValue<"off" | "on" | "inherit">("diffEditor.wordWrap");
+	return value === "on" || (value === "inherit" && configuration.getValue<EditorLineWrapping>("editor.wordWrap") === EditorLineWrapping.On);
+}

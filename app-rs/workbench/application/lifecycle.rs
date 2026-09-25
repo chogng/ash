@@ -11,6 +11,8 @@ impl App<WorkbenchEvent> for WorkbenchApplication {
         let options = WindowOptions::new(APP_DISPLAY_NAME)
             .with_inner_size(LogicalSize::new(INITIAL_WIDTH, INITIAL_HEIGHT))
             .with_chrome(WindowChrome::ContentUnderTitlebar);
+        #[cfg(target_os = "windows")]
+        let options = options.with_icon(workbench_window_icon());
         let opened_window = match context.open_window(options) {
             Ok(opened_window) => opened_window,
             Err(error) => {
@@ -391,3 +393,18 @@ impl App<WorkbenchEvent> for WorkbenchApplication {
         context.set_control_flow(control_flow);
     }
 }
+
+#[cfg(target_os = "windows")]
+fn workbench_window_icon() -> WindowIcon {
+    let artwork = image::load_from_memory(include_bytes!("../../../resources/win32/ash-512.png"))
+        .expect("bundled Ash application icon is a valid PNG")
+        .into_rgba8();
+    let width = artwork.width();
+    let height = artwork.height();
+    WindowIcon::from_rgba(artwork.into_raw(), width, height)
+        .expect("decoded Ash application icon has valid RGBA dimensions")
+}
+
+#[cfg(all(test, target_os = "windows"))]
+#[path = "lifecycle_tests.rs"]
+mod tests;

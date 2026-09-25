@@ -17,6 +17,7 @@ export interface EditorInstanceState extends EditorIdentifier {
 	readonly index: number;
 	readonly isActive: boolean;
 	readonly isPreview: boolean;
+	readonly isSticky: boolean;
 	readonly isDirty: boolean;
 	readonly canRevert: boolean;
 	readonly hasExternalChange: boolean;

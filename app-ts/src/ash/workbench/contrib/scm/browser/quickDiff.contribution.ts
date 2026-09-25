@@ -9,7 +9,7 @@ import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/c
 import { ActiveEditorContext } from '../../../common/contextkeys.js';
 import { IGitService } from '../../../services/git/common/gitService.js';
 import { IDiffService } from '../../../services/diff/common/diffService.js';
-import { CODE_EDITOR_ID } from '../../codeEditor/browser/codeEditorInput.js';
+import { CODE_EDITOR_ID } from '../../../browser/parts/editor/textResourceEditor.js';
 import { IQuickDiffEditorControllerService, IQuickDiffModelService, IQuickDiffService } from '../common/quickDiff.js';
 import { GitQuickDiffProvider } from './gitQuickDiffProvider.js';
 import { QuickDiffEditorController, QuickDiffEditorControllerService } from './quickDiffEditorController.js';

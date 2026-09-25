@@ -5,6 +5,8 @@ import { Disposable, type IDisposable, DisposableStore, toDisposable } from "../
 import type { CommandId } from "../../../../platform/commands/common/commands.js";
 import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
 import { h } from "../../../../base/browser/dom.js";
+import { localize } from "../../../../nls.js";
+import { ShowAllCommandsCommandId } from "../../quickaccess.js";
 
 /** One command presented while an editor group has no active editor. */
 export interface IEditorGroupWatermarkEntry {
@@ -42,6 +44,12 @@ class EditorGroupWatermarkRegistry {
 /** Registry populated by command contributions shown in the empty editor. */
 export const EditorGroupWatermarkEntries =
 	new EditorGroupWatermarkRegistry();
+
+EditorGroupWatermarkEntries.register({
+	id: ShowAllCommandsCommandId,
+	get label() { return localize('quickAccess.showAllCommands', 'Show All Commands'); },
+	command: ShowAllCommandsCommandId,
+});
 
 /** Renders command shortcuts when an editor group has no active editor. */
 export class EditorGroupWatermark extends Disposable {

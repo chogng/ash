@@ -1,14 +1,29 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
+import { JSDOM } from "jsdom";
 import { URI } from "../../../../../base/common/uri.js";
 import { ACADEMIC_DOCUMENT_CONTENT_TYPE } from "../../../../services/documentEditor/common/documentTypes.js";
-import { EditorPaneRegistry } from "../../../../browser/parts/editor/editorRegistry.js";
-import { binaryEditorDescriptor, BINARY_EDITOR_ID } from "../../../binaryEditor/browser/binaryEditorPane.js";
-import { matchPdfEditor, PDF_EDITOR_ID } from "../../../pdf/browser/pdfEditorInput.js";
-import { EditorPaneMatch } from "../../../../browser/parts/editor/editorPane.js";
-import { CODE_EDITOR_ID, languageForEditorInput, matchCodeEditor } from "../../browser/codeEditorInput.js";
 import { LanguageService } from '../../../../../editor/common/services/languageService.js';
-import { DIFF_EDITOR_ID, createDiffEditorInput, matchDiffEditor } from "../../browser/diffEditorInput.js";
+
+const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+for (const [name, value] of Object.entries({
+	window: browserEnvironment.window,
+	document: browserEnvironment.window.document,
+	Node: browserEnvironment.window.Node,
+	Element: browserEnvironment.window.Element,
+	HTMLElement: browserEnvironment.window.HTMLElement,
+	navigator: browserEnvironment.window.navigator,
+})) {
+	Object.defineProperty(globalThis, name, { configurable: true, value });
+}
+
+const { EditorPaneRegistry } = await import("../../../../browser/parts/editor/editorRegistry.js");
+const { binaryEditorDescriptor, BINARY_EDITOR_ID } = await import("../../../../browser/parts/editor/binaryEditor.js");
+const { matchPdfEditor, PDF_EDITOR_ID } = await import("../../../pdf/browser/pdfEditorInput.js");
+const { EditorPaneMatch } = await import("../../../../browser/parts/editor/editorPane.js");
+const { languageForEditorInput, matchCodeEditor, matchDiffEditor } = await import("../../browser/codeEditorInput.js");
+const { CODE_EDITOR_ID } = await import("../../../../browser/parts/editor/textResourceEditor.js");
+const { DIFF_EDITOR_ID, createDiffEditorInput } = await import("../../../../common/editor/diffEditorInput.js");
 
 test("Stanza opens text files while registered languages own resource detection", () => {
 	using languages = new LanguageService();

@@ -1,10 +1,9 @@
 import type { IModelContentChangedEvent } from '../../../../editor/common/textModelEvents.js';
-import "./media/editorPane.css";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { type IDimension } from "../../../../base/browser/dom.js";
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { Disposable, DisposableStore, MutableDisposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { Emitter, type Event } from "../../../../base/common/event.js";
+import { type Event } from "../../../../base/common/event.js";
 import { assertDefined } from "../../../../base/common/types.js";
 import * as strings from '../../../../base/common/strings.js';
 import type { URI } from "../../../../base/common/uri.js";
@@ -14,7 +13,6 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { type EditorInput } from "../../../browser/parts/editor/editorInput.js";
 import { type IEditorPane } from "../../../browser/parts/editor/editorPane.js";
 import { EditorPaneVisibility } from "../../../browser/parts/editor/editorPane.js";
-import { CODE_EDITOR_ID } from "./codeEditorInput.js";
 import { type ITextResourceStore } from "../../../services/textmodelResolver/common/textResourceStore.js";
 import { CodeEditorWidget, type CodeEditorWidgetOptions } from '../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
 import { type ICodeEditorViewState } from '../../../../editor/common/editorCommon.js';
@@ -33,9 +31,15 @@ import type { IAccessibilityService } from "../../../../platform/accessibility/c
 import { trimTrailingWhitespace } from "../../../../editor/common/commands/trimTrailingWhitespaceCommand.js";
 import { EditOperation } from '../../../../editor/common/core/editOperation.js';
 import { Position } from '../../../../editor/common/core/position.js';
-import { CodeEditorConfiguration } from '../common/editorConfiguration.js';
+import { AbstractTextCodeEditor, type ITextCodeEditorControl } from './textCodeEditor.js';
 
-export interface EditorPanePart extends IDisposable {
+const wordWrapConfiguration = "editor.wordWrap";
+const renderWhitespaceConfiguration = "editor.renderWhitespace";
+const renderControlCharactersConfiguration = "editor.renderControlCharacters";
+
+export const CODE_EDITOR_ID = "stanza.editor.code";
+
+export interface EditorPanePart extends IDisposable, ITextCodeEditorControl {
 	readonly onDidChangeModelContent?: Event<IModelContentChangedEvent>;
 	readonly onDidChangeCursorSelection?: Event<ICursorSelectionChangedEvent>;
 	getSelections?(): Selection[] | null;
@@ -109,20 +113,16 @@ export interface EditorPaneOptions {
 }
 
 /** Workbench pane that composes the text model, input, view, and language services. */
-export class CodeEditorPane extends Disposable implements IEditorPane {
+export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> implements IEditorPane {
 	readonly id = CODE_EDITOR_ID;
 	readonly viewStateTypeId = "stanza.code.textView";
 	private readonly workingCopySlot = this._register(new MutableDisposable<IWorkingCopy>());
 	private readonly part = this._register(new MutableDisposable<EditorPanePart>());
 	private readonly statusListener = this._register(new MutableDisposable<IDisposable>());
-	private readonly statusChangeEmitter = this._register(new Emitter<void>());
 	private readonly createPart: (options: EditorPanePartOptions) => EditorPanePart;
 	private container: HTMLDivElement | undefined;
-	private dimension: IDimension = { width: 0, height: 0 };
 	private saving = false;
 	private beforeSaveHooks: Array<() => void | Promise<void>> = [];
-	private languageId: string | undefined;
-	readonly onDidChangeStatus = this.statusChangeEmitter.event;
 
 	getControl(): EditorPanePart | undefined {
 		return this.part.value;
@@ -154,8 +154,8 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 				renderWhitespace?: IEditorOptions['renderWhitespace'];
 				renderControlCharacters?: IEditorOptions['renderControlCharacters'];
 			} = {};
-			if (this.options.lineWrapping === undefined && event.affectsConfiguration(CodeEditorConfiguration.wordWrap)) {
-				update.wordWrap = this.configurationService.getValue(CodeEditorConfiguration.wordWrap) === EditorLineWrapping.On ? 'on' : 'off';
+			if (this.options.lineWrapping === undefined && event.affectsConfiguration(wordWrapConfiguration)) {
+				update.wordWrap = this.configurationService.getValue(wordWrapConfiguration) === EditorLineWrapping.On ? 'on' : 'off';
 			}
 			if (this.options.minimap === undefined && [
 				EditorMinimapConfiguration.enabled,
@@ -166,11 +166,11 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 			].some(key => event.affectsConfiguration(key))) {
 				update.minimap = this.readMinimapOptions();
 			}
-			if (event.affectsConfiguration(CodeEditorConfiguration.renderWhitespace)) {
-				update.renderWhitespace = this.configurationService.getValue(CodeEditorConfiguration.renderWhitespace);
+			if (event.affectsConfiguration(renderWhitespaceConfiguration)) {
+				update.renderWhitespace = this.configurationService.getValue(renderWhitespaceConfiguration);
 			}
-			if (event.affectsConfiguration(CodeEditorConfiguration.renderControlCharacters)) {
-				update.renderControlCharacters = this.configurationService.getValue(CodeEditorConfiguration.renderControlCharacters);
+			if (event.affectsConfiguration(renderControlCharactersConfiguration)) {
+				update.renderControlCharacters = this.configurationService.getValue(renderControlCharactersConfiguration);
 			}
 			if (Object.keys(update).length > 0) part.updateOptions(update);
 		}));
@@ -216,7 +216,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 				textMateService: this.options.textMateService,
 				languageDiagnosticsService: this.options.languageDiagnosticsService,
 				accessibilityService: this.options.accessibilityService,
-				lineWrapping: this.options.lineWrapping ?? this.configurationService.getValue(CodeEditorConfiguration.wordWrap),
+				lineWrapping: this.options.lineWrapping ?? this.configurationService.getValue(wordWrapConfiguration),
 				wrappingIndent: this.options.wrappingIndent,
 				fontFamily: this.options.fontFamily,
 				fontSize: this.options.fontSize,
@@ -224,8 +224,8 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 				fontLigatures: this.options.fontLigatures,
 				experimentalGpuAcceleration: this.options.experimentalGpuAcceleration,
 				minimap: this.options.minimap ?? this.readMinimapOptions(),
-				renderWhitespace: this.configurationService.getValue(CodeEditorConfiguration.renderWhitespace),
-				renderControlCharacters: this.configurationService.getValue(CodeEditorConfiguration.renderControlCharacters),
+				renderWhitespace: this.configurationService.getValue(renderWhitespaceConfiguration),
+				renderControlCharacters: this.configurationService.getValue(renderControlCharactersConfiguration),
 				renderLineHighlight: this.options.renderLineHighlight,
 				renderLineHighlightOnlyWhenFocus: this.options.renderLineHighlightOnlyWhenFocus,
 				cursorStyle: this.options.cursorStyle,
@@ -326,26 +326,10 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 		this.statusChangeEmitter.fire();
 	}
 
-	layout(dimension: IDimension): void {
-		this.dimension = {
-			width: Math.max(0, dimension.width),
-			height: Math.max(0, dimension.height),
-		};
-		this.part.value?.layout(this.dimension);
-	}
-
 	setVisible(visibility: EditorPaneVisibility): void {
 		if (!this.container) return;
 		this.container.hidden = visibility === EditorPaneVisibility.Hidden;
 		if (visibility === EditorPaneVisibility.Visible) this.part.value?.layout(this.dimension);
-	}
-
-	focus(): void {
-		this.part.value?.focus();
-	}
-
-	getValue(): string {
-		return this.part.value?.getValue() ?? "";
 	}
 
 	async saveAs(resource: URI): Promise<void> {
@@ -354,6 +338,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 			await workingCopy.saveAs(resource, new AbortController().signal);
 			return;
 		}
+		if (!this.getControl()) throw new Error('Cannot save an unloaded text editor');
 		await this.resourceStore.save({ resource, text: this.getValue() }, new AbortController().signal);
 	}
 
@@ -372,33 +357,6 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 
 	async revert(): Promise<void> {
 		await this.workingCopy?.revert(new AbortController().signal);
-	}
-
-	revealRange(range: Range): void {
-		this.part.value?.revealRange?.(range);
-	}
-
-	saveViewState(): unknown {
-		return this.part.value?.saveViewState?.();
-	}
-
-	restoreViewState(state: unknown): void {
-		if (!isCodeEditorViewState(state)) throw new TypeError("Invalid code editor view state");
-		const part = this.part.value;
-		if (!part?.restoreViewState) throw new Error("Stanza code editor view-state restoration is unavailable");
-		part.restoreViewState(state);
-	}
-
-	getStatus(): EditorPaneStatus {
-		const selections = this.part.value?.getSelections?.();
-		const active = selections?.[0]?.getPosition();
-		return Object.freeze({
-			...(active ? { lineNumber: active.lineNumber, columnNumber: active.column } : {}),
-			...(selections && selections.length > 1 ? { selectionCount: selections.length } : {}),
-			...(this.languageId ? { languageId: this.languageId } : {}),
-			encoding: "UTF-8",
-			endOfLine: "LF",
-		});
 	}
 
 	private handleSaveKeydown(event: KeyboardEvent): void {
@@ -422,15 +380,6 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 		assertDefined(this.container, new ReferenceError("EditorPane has not been created"));
 		return this.container;
 	}
-}
-
-function isCodeEditorViewState(value: unknown): value is ICodeEditorViewState {
-	if (!value || typeof value !== 'object') return false;
-	const state = value as Partial<ICodeEditorViewState>;
-	return Array.isArray(state.cursorState)
-		&& Boolean(state.viewState)
-		&& typeof state.viewState?.scrollLeft === 'number'
-		&& Boolean(state.viewState?.firstPosition);
 }
 
 function reportSaveError(error: unknown): void {

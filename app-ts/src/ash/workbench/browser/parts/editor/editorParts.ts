@@ -5,6 +5,7 @@ import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableMap, Disposable, DisposableStore } from "../../../../base/common/lifecycle.js";
 import { rot } from "../../../../base/common/numbers.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
+import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
 import type { EditorInput, EditorOpenOptions, EditorOpenTarget } from "../../../services/editor/common/editorService.js";
 import type { ApplyEditorWorkingSetOptions, EditorWorkingSet, EditorWorkingSetTarget } from "../../../services/editor/common/editorWorkingSet.js";
 import type { EditorIdentifier, EditorPartChangeEvent, EditorPartState } from "../../../services/editor/common/editorState.js";
@@ -46,6 +47,7 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		readonly mainPart: IEditorPart,
 		private readonly windows: IAuxiliaryWindowService,
 		private readonly createPart: AuxiliaryEditorPartFactory,
+		private readonly accessibility: IAccessibilityService,
 	) {
 		super();
 		this._activePart = mainPart;
@@ -57,6 +59,7 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 	get domNode(): HTMLElement { return this._activePart.domNode; }
 	get groups(): readonly IEditorGroup[] { return this.parts.flatMap(part => part.groups); }
 	get activeGroup(): IEditorGroup { return this._activePart.activeGroup; }
+	toggleActiveGroupLock(): boolean { return this._activePart.toggleActiveGroupLock(); }
 	get activeInput(): EditorInput | undefined { return this._activePart.activeInput; }
 	get activePane(): IEditorPane | undefined { return this._activePart.activePane; }
 	get isModalEditorVisible(): boolean { return this._activePart.isModalEditorVisible; }
@@ -78,7 +81,7 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 			auxiliaryWindow[Symbol.dispose]();
 			throw error;
 		}
-		const handle = new AuxiliaryEditorPart(auxiliaryWindow, creation);
+		const handle = new AuxiliaryEditorPart(auxiliaryWindow, creation, this.accessibility);
 		this.auxiliary.set(creation.part, handle);
 		this.registerPart(creation.part, auxiliaryWindow);
 		this.setActivePart(creation.part);
@@ -134,9 +137,18 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		return this.activateEditorIdentifier(editors[index]!);
 	}
 
+	navigateEditorHistory(direction: -1 | 1): IEditorPane | undefined {
+		return this._activePart.navigateEditorHistory(direction);
+	}
+
 	async closeEditor(input: EditorInput): Promise<boolean> {
 		const part = this.findPartForInput(input) ?? this._activePart;
 		return part.closeEditor(input);
+	}
+
+	closeEditorIdentifier(identifier: EditorIdentifier): Promise<boolean> {
+		const part = this.parts.find(candidate => candidate.groups.some(group => group.id === identifier.groupId));
+		return part?.closeEditorIdentifier(identifier) ?? Promise.resolve(false);
 	}
 
 	async confirmCloseAllEditors(): Promise<boolean> {

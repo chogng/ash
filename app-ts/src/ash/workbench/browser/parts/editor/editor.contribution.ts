@@ -1,4 +1,5 @@
 import { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
+import { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
 import { QuickAccessRegistry } from "../../../../platform/quickinput/common/quickAccess.js";
 import { localize } from "../../../../nls.js";
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
@@ -6,10 +7,21 @@ import { IStatusbarService } from "../../../services/statusbar/browser/statusbar
 import { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import "./editorActions.js";
 import "./editorCommands.js";
+import "./diffEditor.workbench.contribution.js";
+import { registerDiffEditorCommands } from "./diffEditorCommands.js";
 import { EditorAutoSave } from "./editorAutoSave.js";
 import { IEditorPart } from "./editorPart.js";
 import { AllEditorsByMostRecentlyUsedQuickAccess } from "./editorQuickAccess.js";
 import { EditorStatusContribution } from "./editorStatus.js";
+import { DynamicEditorConfigurations } from "./editorConfiguration.js";
+
+registerDiffEditorCommands();
+
+registerWorkbenchContribution(
+	DynamicEditorConfigurations.ID,
+	WorkbenchPhase.AfterRestored,
+	() => new DynamicEditorConfigurations(),
+);
 
 QuickAccessRegistry.register({
 	prefix: AllEditorsByMostRecentlyUsedQuickAccess.PREFIX,
@@ -24,6 +36,7 @@ registerWorkbenchContribution(
 	accessor => new EditorStatusContribution(
 		accessor.get(IEditorPart),
 		accessor.get(IStatusbarService),
+		accessor.get(IAccessibilityService),
 	),
 );
 

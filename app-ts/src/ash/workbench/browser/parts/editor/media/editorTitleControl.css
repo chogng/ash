@@ -1,53 +1,20 @@
 .ash-editor-title-control {
   position: relative;
   min-width: 0;
-  height: var(--ash-pane-title-height);
-  flex: 0 0 var(--ash-pane-title-height);
+  height: calc(var(--ash-pane-title-height) * var(--ash-editor-tab-rows, 1));
+  flex: 0 0 calc(var(--ash-pane-title-height) * var(--ash-editor-tab-rows, 1));
 }
 
 .ash-editor-title-control.ash-editor-title-with-breadcrumbs {
-  height: calc(var(--ash-pane-title-height) + 22px);
-  flex-basis: calc(var(--ash-pane-title-height) + 22px);
+  height: calc(var(--ash-pane-title-height) * var(--ash-editor-tab-rows, 1) + 22px);
+  flex-basis: calc(var(--ash-pane-title-height) * var(--ash-editor-tab-rows, 1) + 22px);
 }
 
 .ash-editor-tabs-and-actions {
   position: relative;
   display: flex;
   min-width: 0;
-  height: var(--ash-pane-title-height);
-}
-
-.ash-editor-tabs-and-actions > .ash-editor-tabs-control {
-  min-width: 0;
-  flex: 1 1 auto;
-}
-
-.ash-editor-breadcrumbs {
-  display: flex;
-  height: 22px;
-  min-width: 0;
-  align-items: center;
-  gap: 4px;
-  overflow: hidden;
-  padding: 0 10px;
-  color: var(--ash-description-foreground);
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.ash-editor-breadcrumb-item {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.ash-editor-breadcrumb-item[aria-current="page"] {
-  color: var(--ash-foreground);
-}
-
-.ash-editor-breadcrumb-separator {
-  flex: 0 0 auto;
-  opacity: 0.7;
+  height: calc(var(--ash-pane-title-height) * var(--ash-editor-tab-rows, 1));
 }
 
 .ash-editor-title-control::after {
@@ -62,13 +29,15 @@
 
 .ash-editor-title-actions {
   display: flex;
-  height: 100%;
+  height: var(--ash-pane-title-height);
   flex: 0 0 auto;
   align-items: center;
   margin-left: auto;
   padding: 0 4px;
 }
-
-.ash-editor-breadcrumbs[hidden] {
-  display: none;
+.ash-editor-group-lock-indicator {
+  align-self: center;
+  flex: 0 0 auto;
+  padding: 0 6px;
+  color: var(--ash-description-foreground);
 }

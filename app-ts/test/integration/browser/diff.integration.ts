@@ -74,6 +74,9 @@ let compressedEditor: MultiDiffEditorWidget | undefined;
 let compressedViewState: unknown;
 
 const harness = {
+	setViewMode(renderSideBySide: boolean, useInlineViewWhenSpaceIsLimited: boolean): void {
+		single.setViewMode(renderSideBySide, useInlineViewWhenSpaceIsLimited);
+	},
 	showManyComparisons(count: number): void {
 		const manyResources = resources.add(new DisposableStore());
 		manyResources.add(editorServices.createInstance(MultiDiffEditorWidget, {

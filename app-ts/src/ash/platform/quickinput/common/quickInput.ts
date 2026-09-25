@@ -10,6 +10,13 @@ export interface IQuickPickItem {
 	readonly description?: string;
 	readonly detail?: string;
 	readonly keybinding?: string;
+	readonly className?: string;
+	readonly buttons?: readonly IQuickPickItemButton[];
+}
+
+export interface IQuickPickItemButton {
+	readonly id: string;
+	readonly label: string;
 }
 
 export interface IQuickInputSelection {
@@ -24,6 +31,7 @@ export interface IQuickPick<TItem extends IQuickPickItem>
 	readonly onDidChangeValue: Event<string>;
 	readonly onDidHide: Event<void>;
 	readonly onDidBlur: Event<void>;
+	readonly onDidTriggerItemButton: Event<{ readonly item: TItem; readonly button: IQuickPickItemButton }>;
 
 	items: readonly TItem[];
 	ariaLabel: string;

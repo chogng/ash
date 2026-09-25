@@ -10,12 +10,14 @@ export interface SerializedEditorViewState {
 export interface EditorWorkingSetEntry {
 	readonly input: SerializedEditorInput;
 	readonly preview: boolean;
+	readonly sticky?: boolean;
 	readonly viewState?: SerializedEditorViewState;
 }
 
 export interface EditorGroupWorkingSet {
 	/** Stable identity used by the serialized two-dimensional layout tree. */
 	readonly id?: string;
+	readonly locked?: boolean;
 	readonly editors: readonly EditorWorkingSetEntry[];
 	readonly activeEditorIndex: number;
 	/** Legacy horizontal-layout ratio retained for backward compatibility. */

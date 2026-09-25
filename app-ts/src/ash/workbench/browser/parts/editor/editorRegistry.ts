@@ -2,6 +2,7 @@ import {
 	type IDisposable,
 	toDisposable,
 } from "../../../../base/common/lifecycle.js";
+import { Emitter, type Event } from "../../../../base/common/event.js";
 import type {
 	EditorOpenOptions,
 	EditorInput,
@@ -14,12 +15,15 @@ import {
 /** Owns the editor implementations available in one product module graph. */
 export class EditorPaneRegistry {
 	private readonly descriptors = new Map<string, IEditorPaneDescriptor>();
+	private readonly changeEmitter = new Emitter<void>();
+	readonly onDidChange: Event<void> = this.changeEmitter.event;
 
 	register(descriptor: IEditorPaneDescriptor): IDisposable {
 		this.add(descriptor);
 		return toDisposable(() => {
 			if (this.descriptors.get(descriptor.id) === descriptor) {
 				this.descriptors.delete(descriptor.id);
+				this.changeEmitter.fire();
 			}
 		});
 	}
@@ -31,6 +35,10 @@ export class EditorPaneRegistry {
 
 	get(id: string): IEditorPaneDescriptor | undefined {
 		return this.descriptors.get(id);
+	}
+
+	getAll(): readonly IEditorPaneDescriptor[] {
+		return [...this.descriptors.values()];
 	}
 
 	/**
@@ -84,6 +92,7 @@ export class EditorPaneRegistry {
 			throw new Error(`Editor pane is already registered: ${descriptor.id}`);
 		}
 		this.descriptors.set(descriptor.id, descriptor);
+		this.changeEmitter.fire();
 	}
 }
 

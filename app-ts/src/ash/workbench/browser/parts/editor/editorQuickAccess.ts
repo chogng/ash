@@ -1,3 +1,4 @@
+import './media/editorquickaccess.css';
 import { DisposableStore } from "../../../../base/common/lifecycle.js";
 import { onDidChangeNls, localize } from "../../../../nls.js";
 import type { IQuickAccessProvider } from "../../../../platform/quickinput/common/quickAccess.js";
@@ -18,8 +19,13 @@ export class AllEditorsByMostRecentlyUsedQuickAccess implements IQuickAccessProv
 	provide(picker: IQuickPick<IQuickPickItem>): DisposableStore {
 		const disposables = new DisposableStore();
 		const update = (): void => {
+			const editorState = new Map(this.editorPart.groups.flatMap(group => group.editors.map(editor => [editor.instanceId, editor] as const)));
 			picker.items = this.editorPart.editorsMru.map(editor => ({
 				editor,
+				className: editorState.get(editor.instanceId)?.isDirty
+					? 'ash-editor-quick-pick-item dirty'
+					: 'ash-editor-quick-pick-item',
+				buttons: [{ id: 'close', label: localize('workbench.closeEditor', 'Close Editor') }],
 				label: editorInputLabel(editor.input),
 				description: localize(
 					"workbench.editorGroupNumber",
@@ -35,6 +41,12 @@ export class AllEditorsByMostRecentlyUsedQuickAccess implements IQuickAccessProv
 			picker.hide();
 			this.editorPart.activateEditorIdentifier((item as EditorQuickPickItem).editor);
 			this.editorPart.focus();
+		}));
+		disposables.add(picker.onDidTriggerItemButton(({ item, button }) => {
+			if (button.id !== 'close') return;
+			void this.editorPart.closeEditorIdentifier((item as EditorQuickPickItem).editor).catch(error => {
+				console.error('Could not close editor from Quick Pick', error);
+			});
 		}));
 		update();
 		return disposables;

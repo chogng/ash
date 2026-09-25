@@ -20,7 +20,7 @@ import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.j
 import type { IMenuService } from '../../../../platform/actions/common/actions.js';
 import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { type EditorInput } from '../../../browser/parts/editor/editorInput.js';
-import { type IEditorPaneWithViewState } from '../../../browser/parts/editor/editorPane.js';
+import { type IEditorPaneWithViewState } from '../../../browser/parts/editor/editorWithViewState.js';
 import { EditorPaneVisibility } from '../../../browser/parts/editor/editorPane.js';
 import type { IChatService } from '../../../services/chat/common/chatService.js';
 import type { IEditorService } from '../../../services/editor/common/editorService.js';
@@ -31,7 +31,8 @@ import { GIT_VIEW_ID } from '../../scm/browser/scmViewPane.js';
 import { createGitMultiDiffEditorInput } from './scmMultiDiffAction.js';
 import { isMultiDiffEditorInput, MULTI_DIFF_EDITOR_ID, multiDiffEditorItemKey, type MultiDiffEditorInput, type MultiDiffEditorInputItem } from './multiDiffEditorInput.js';
 import { MultiDiffEditorToolbar } from './multiDiffEditorToolbar.js';
-import { CodeEditorConfiguration, getDiffComputationOptions, getDiffWordWrap } from '../../codeEditor/common/editorConfiguration.js';
+import { CodeEditorConfiguration } from '../../codeEditor/common/editorConfiguration.js';
+import { getDiffComputationOptions, getDiffWordWrap } from '../../../services/editor/common/editorConfiguration.js';
 
 export interface MultiDiffEditorPaneOptions {
 	readonly modelService: ITextModelResourceService;

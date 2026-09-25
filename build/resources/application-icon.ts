@@ -4,16 +4,17 @@ import { resolve } from "node:path";
 
 const repositoryRoot = resolve(import.meta.dirname, "../..");
 const source = resolve(repositoryRoot, "resources/win32/ash.svg");
-const output = resolve(repositoryRoot, "resources/win32/ash.ico");
+const windowSource = resolve(repositoryRoot, "resources/branding/ash-app-black-512.png");
+const executableOutput = resolve(repositoryRoot, "resources/win32/ash.ico");
+const windowOutput = resolve(repositoryRoot, "resources/win32/ash-512.png");
 const sizes = [16, 24, 32, 48, 64, 128, 256] as const;
 
-export async function generateWindowsApplicationIcon(): Promise<Buffer> {
+export async function generateWindowsApplicationIcons(): Promise<{ executable: Buffer; window: Buffer }> {
   const artwork = (await readFile(source)).toString("base64");
   const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage();
-    const images: Buffer[] = [];
-    for (const size of sizes) {
+    const renderPng = async (size: number): Promise<Buffer> => {
       const dataUrl = await page.evaluate(async ({ artwork, size }) => {
         const image = new Image();
         image.src = `data:image/svg+xml;base64,${artwork}`;
@@ -24,7 +25,11 @@ export async function generateWindowsApplicationIcon(): Promise<Buffer> {
         canvas.getContext("2d")!.drawImage(image, 0, 0, size, size);
         return canvas.toDataURL("image/png");
       }, { artwork, size });
-      images.push(Buffer.from(dataUrl.slice(dataUrl.indexOf(",") + 1), "base64"));
+      return Buffer.from(dataUrl.slice(dataUrl.indexOf(",") + 1), "base64");
+    };
+    const images: Buffer[] = [];
+    for (const size of sizes) {
+      images.push(await renderPng(size));
     }
 
     const directory = Buffer.alloc(6 + images.length * 16);
@@ -41,7 +46,7 @@ export async function generateWindowsApplicationIcon(): Promise<Buffer> {
       directory.writeUInt32LE(offset, entry + 12);
       offset += image.length;
     }
-    return Buffer.concat([directory, ...images]);
+    return { executable: Buffer.concat([directory, ...images]), window: await readFile(windowSource) };
   } finally {
     await browser.close();
   }
@@ -49,13 +54,17 @@ export async function generateWindowsApplicationIcon(): Promise<Buffer> {
 
 if (import.meta.main) {
   const check = process.argv.slice(2).includes("--check");
-  const generated = await generateWindowsApplicationIcon();
+  const generated = await generateWindowsApplicationIcons();
   if (check) {
-    const current = await readFile(output);
-    if (!generated.equals(current)) throw new Error("Windows application icon is stale. Run pnpm app-icon:generate.");
-    console.log(`Validated ${sizes.length} Windows application icon sizes.`);
+    const executable = await readFile(executableOutput);
+    const window = await readFile(windowOutput);
+    if (!generated.executable.equals(executable) || !generated.window.equals(window)) {
+      throw new Error("Windows application icons are stale. Run pnpm app-icon:generate.");
+    }
+    console.log(`Validated ${sizes.length} Windows executable icon sizes and the 512px window icon.`);
   } else {
-    await writeFile(output, generated);
-    console.log(`Generated ${sizes.length} Windows application icon sizes.`);
+    await writeFile(executableOutput, generated.executable);
+    await writeFile(windowOutput, generated.window);
+    console.log(`Generated ${sizes.length} Windows executable icon sizes and the 512px window icon.`);
   }
 }

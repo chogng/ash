@@ -1,0 +1,9 @@
+.ash-single-editor-tabs-control .ash-tab-list-scroll-content > .ash-action-bar {
+	width: 100%;
+}
+
+.ash-single-editor-tabs-control .ash-tab-list-inset .ash-tab,
+.ash-single-editor-tabs-control .ash-tab-list-flush .ash-tab {
+	max-width: none;
+	flex: 1 1 auto;
+}

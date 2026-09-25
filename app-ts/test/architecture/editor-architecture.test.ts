@@ -563,8 +563,9 @@ test("ViewLine owns text rows while overlays own their row DOM", () => {
 test("Stanza owns its public protocol and DOM vocabulary without renaming the editor domain", () => {
 	const api = readFileSync(join(editorRoot, "editor.api.ts"), "utf8");
 	const codeInput = readFileSync(join(workbenchRoot, "contrib/codeEditor/browser/codeEditorInput.ts"), "utf8");
+	const codePane = readFileSync(join(workbenchRoot, "browser/parts/editor/textResourceEditor.ts"), "utf8");
 	const documentInput = readFileSync(join(workbenchRoot, "contrib/documentEditor/browser/documentEditorInput.ts"), "utf8");
-	const diffInput = readFileSync(join(workbenchRoot, "contrib/codeEditor/browser/diffEditorInput.ts"), "utf8");
+	const diffInput = readFileSync(join(workbenchRoot, "common/editor/diffEditorInput.ts"), "utf8");
 	const viewport = readFileSync(join(editorRoot, "browser/view.ts"), "utf8");
 	const structuredSurface = [
 		readFileSync(join(editorRoot, "browser/widget/richTextEditor/richTextEditorWidget.ts"), "utf8"),
@@ -573,7 +574,8 @@ test("Stanza owns its public protocol and DOM vocabulary without renaming the ed
 		readFileSync(join(workbenchRoot, "contrib/documentEditor/browser/documentEditorPane.ts"), "utf8"),
 	].join("\n");
 	assert.match(api, /Stable Stanza API for standalone editors/u);
-	assert.match(codeInput, /stanza\.editor\.code/u);
+	assert.match(codeInput, /CODE_EDITOR_ID/u);
+	assert.match(codePane, /stanza\.editor\.code/u);
 	assert.match(documentInput, /stanza\.editor\.document/u);
 	assert.match(diffInput, /stanza\.editor\.diff/u);
 	assert.match(diffInput, /application\/vnd\.stanza\.editor-diff/u);

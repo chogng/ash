@@ -24,6 +24,7 @@ test('titlebar command center opens command search and restores focus', async ({
 	await expect(commandCenter).toBeVisible();
 
 	const titlebar = page.locator('.ash-workbench-titlebar');
+	await expect(titlebar.locator('.ash-titlebar-app-icon')).toHaveCSS('background-image', /ash-(light|dark).*\.svg/u);
 	const [titlebarBounds, controlBounds] = await Promise.all([titlebar.boundingBox(), commandCenter.boundingBox()]);
 	expect(titlebarBounds).not.toBeNull();
 	expect(controlBounds).not.toBeNull();

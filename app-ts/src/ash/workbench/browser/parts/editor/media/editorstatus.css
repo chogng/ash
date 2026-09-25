@@ -1,0 +1,36 @@
+.ash-screen-reader-explanation {
+	position: fixed;
+	right: var(--ash-spacing-size160);
+	bottom: calc(var(--ash-spacing-size160) * 2);
+	z-index: 100;
+	max-width: 26rem;
+	padding: var(--ash-spacing-size160);
+	border: var(--ash-strokeThickness) solid var(--ash-focus-border);
+	border-radius: var(--ash-cornerRadius-small);
+	background: var(--ash-editor-background);
+	color: var(--ash-foreground);
+	box-shadow: 0 4px 16px var(--ash-widget-shadow);
+}
+
+.ash-screen-reader-explanation h2 {
+	margin: 0 0 var(--ash-spacing-size80);
+	font-size: var(--ash-fontSize-body2);
+}
+
+.ash-screen-reader-explanation p {
+	margin: 0 0 var(--ash-spacing-size160);
+}
+
+.ash-screen-reader-explanation button {
+	border: var(--ash-strokeThickness) solid var(--ash-focus-border);
+	border-radius: var(--ash-cornerRadius-small);
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+	background: var(--ash-button-background);
+	color: var(--ash-button-foreground);
+	cursor: pointer;
+}
+
+.ash-screen-reader-explanation button:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focus-border);
+	outline-offset: var(--ash-spacing-size40);
+}

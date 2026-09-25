@@ -13,6 +13,39 @@ import { IUntitledTextEditorService } from "../../../services/untitled/common/un
 import { EditorsVisibleContext } from "../../../common/contextkeys.js";
 import { IEditorPartsService } from "./editorParts.js";
 import { AllEditorsByMostRecentlyUsedQuickAccess } from "./editorQuickAccess.js";
+import { IBreadcrumbsService } from "./breadcrumbs.js";
+
+export const FocusBreadcrumbsCommandId = "workbench.action.focusBreadcrumbs";
+export const ToggleEditorGroupLockCommandId = "workbench.action.toggleEditorGroupLock";
+
+registerAction2(class ToggleEditorGroupLockAction extends Action2 {
+	constructor() {
+		super({
+			id: ToggleEditorGroupLockCommandId,
+			title: localizedString("ash", "workbench.toggleEditorGroupLock", "Toggle Editor Group Lock"),
+			f1: true,
+		});
+	}
+
+	override run(accessor: ServicesAccessor): void {
+		accessor.get(IEditorPart).toggleActiveGroupLock();
+	}
+});
+
+registerAction2(class FocusBreadcrumbsAction extends Action2 {
+	constructor() {
+		super({
+			id: FocusBreadcrumbsCommandId,
+			title: localizedString("ash", "workbench.focusBreadcrumbs", "Focus Breadcrumbs"),
+			f1: true,
+		});
+	}
+
+	override run(accessor: ServicesAccessor): void {
+		const editor = accessor.get(IEditorPart);
+		accessor.get(IBreadcrumbsService).getWidget(editor.activeGroup.id)?.focus();
+	}
+});
 
 export const SplitEditorHorizontalCommandId =
 	"workbench.action.splitEditorHorizontal";
@@ -92,6 +125,38 @@ registerAction2(class ReopenClosedEditorAction extends Action2 {
 
 export const NavigateEditorMruCommandId = "workbench.action.navigateEditorMru";
 export const NavigateEditorMruBackwardsCommandId = "workbench.action.navigateEditorMruBackwards";
+export const NavigateEditorBackCommandId = "workbench.action.navigateBack";
+export const NavigateEditorForwardCommandId = "workbench.action.navigateForward";
+
+registerAction2(class NavigateEditorBackAction extends Action2 {
+	constructor() {
+		super({
+			id: NavigateEditorBackCommandId,
+			title: localizedString("ash", "workbench.navigateEditorBack", "Go Back in Editor History"),
+			f1: true,
+			menu: { id: MenuId.TouchBarContext, group: "navigation", order: 0 },
+		});
+	}
+
+	override run(accessor: ServicesAccessor): void {
+		accessor.get(IEditorPart).navigateEditorHistory(-1);
+	}
+});
+
+registerAction2(class NavigateEditorForwardAction extends Action2 {
+	constructor() {
+		super({
+			id: NavigateEditorForwardCommandId,
+			title: localizedString("ash", "workbench.navigateEditorForward", "Go Forward in Editor History"),
+			f1: true,
+			menu: { id: MenuId.TouchBarContext, group: "navigation", order: 1 },
+		});
+	}
+
+	override run(accessor: ServicesAccessor): void {
+		accessor.get(IEditorPart).navigateEditorHistory(1);
+	}
+});
 
 registerAction2(class NavigateEditorMruAction extends Action2 {
 	constructor() {

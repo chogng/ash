@@ -18,7 +18,7 @@ import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import { type ILanguageDiagnosticsService, type LanguageDiagnosticsPublisher, type LanguageDiagnosticSnapshot } from "../../../../services/language/common/languageDiagnosticsService.js";
 import { type TextModel } from "../../../../../editor/common/model/textModel.js";
 import { EDITOR_FONT_DEFAULTS } from "../../../../../editor/common/config/fontInfo.js";
-import type { EditorPaneOptions, EditorPanePartOptions } from "../../browser/codeEditorPane.js";
+import type { EditorPaneOptions, EditorPanePartOptions } from "../../../../browser/parts/editor/textResourceEditor.js";
 import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ITextModelResourceService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
@@ -64,7 +64,7 @@ await import('../../browser/quickaccess/gotoLineQuickAccess.js');
 await import('../../browser/toggleMinimap.js');
 await import('../../browser/toggleRenderWhitespace.js');
 await import('../../browser/toggleRenderControlCharacter.js');
-const { CodeEditorPane: EditorPane } = await import("../../browser/codeEditorPane.js");
+const { TextResourceEditor: EditorPane } = await import("../../../../browser/parts/editor/textResourceEditor.js");
 const { createBrowserEditorPart } = await import('../../browser/browserEditorPart.js');
 const { CodeEditorWidget } = await import('../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor, registerCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
@@ -120,6 +120,7 @@ test("Stanza editor pane loads, lays out, focuses, hides, and clears one editor 
 
 	pane.clearInput();
 	assert.equal(pane.getValue(), "");
+	await assert.rejects(() => pane.saveAs(URI.file("C:\\project\\empty.ts")), /unloaded text editor/);
 	assert.equal(parent.querySelectorAll(".stanza-editor").length, 0);
 	pane.dispose();
 	assert.equal(parent.children.length, 0);

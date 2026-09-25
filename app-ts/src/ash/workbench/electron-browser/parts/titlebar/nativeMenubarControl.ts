@@ -7,6 +7,7 @@ import {
 	Disposable,
 	toDisposable,
 } from "../../../../base/common/lifecycle.js";
+import { isMacintosh } from "../../../../base/common/platform.js";
 import {
 	type IMenu,
 	type IMenuService,
@@ -17,6 +18,7 @@ import type {
 	INativeMenubarApi,
 	INativeMenubarData,
 	NativeMenubarItem,
+	INativeTouchBarItem,
 } from "../../../../platform/menubar/common/nativeMenubar.js";
 import type {
 	IMenubarControl,
@@ -27,6 +29,8 @@ export class NativeMenubarControl extends Disposable
 	implements IMenubarControl {
 	private readonly api: INativeMenubarApi;
 	private readonly menu: IMenu;
+	private readonly touchBarMenu: IMenu | undefined;
+	private readonly touchBarIcons: Promise<readonly string[]> | undefined;
 	private readonly actionsByRevision = new Map<
 		number,
 		ReadonlyMap<string, IAction>
@@ -44,6 +48,14 @@ export class NativeMenubarControl extends Disposable
 		this.api = api;
 		this.menu = this._register(menuService.createMenu(MenuId.MenubarMainMenu));
 		this._register(this.menu.onDidChange(() => this.synchronize()));
+		if (isMacintosh) {
+			this.touchBarMenu = this._register(menuService.createMenu(MenuId.TouchBarContext));
+			this._register(this.touchBarMenu.onDidChange(() => this.synchronize()));
+			this.touchBarIcons = Promise.all([
+				pngDataUrl(new URL("../../../browser/parts/editor/media/back-tb.png", import.meta.url).href),
+				pngDataUrl(new URL("../../../browser/parts/editor/media/forward-tb.png", import.meta.url).href),
+			]);
+		}
 		const selection = api.onDidSelect(({ revision, id }) => {
 			const action = this.actionsByRevision.get(revision)?.get(id);
 			if (action) runAction(action);
@@ -57,14 +69,14 @@ export class NativeMenubarControl extends Disposable
 
 	private synchronize(): void {
 		const revision = this.nextRevision();
-		const serialized = serializeMenubar(
-			this.menu.getActions().flatMap(([, actions]) => actions),
-			revision,
-		);
+		const menuActions = this.menu.getActions().flatMap(([, actions]) => actions);
+		const touchBarActions = this.touchBarMenu?.getActions().flatMap(([, actions]) => actions) ?? [];
 
 		this.updateTail = this.updateTail
 			.then(async () => {
 				if (this.isDisposed) return;
+				const icons = await this.touchBarIcons;
+				const serialized = serializeMenubar(menuActions, revision, touchBarActions, icons);
 				this.actionsByRevision.set(revision, serialized.actions);
 				try {
 					await this.api.update(serialized.data);
@@ -99,6 +111,8 @@ interface ISerializedMenubar {
 function serializeMenubar(
 	actions: readonly IAction[],
 	revision: number,
+	touchBarActions: readonly IAction[] = [],
+	touchBarIcons: readonly string[] = [],
 ): ISerializedMenubar {
 	const actionMap = new Map<string, IAction>();
 	let nextId = 1;
@@ -148,9 +162,17 @@ function serializeMenubar(
 		return trimSeparators(items);
 	};
 
+	const touchBar: INativeTouchBarItem[] = touchBarActions.flatMap((action, index) => {
+		if (action instanceof Separator || action instanceof SubmenuAction || !touchBarIcons[index]) return [];
+		const id = `action-${nextId++}`;
+		actionMap.set(id, action);
+		return [{ id, label: action.label, enabled: action.enabled, icon: touchBarIcons[index]! }];
+	});
+
 	return {
 		data: {
 			revision,
+			...(touchBar.length ? { touchBar } : {}),
 			menus: actions
 				.filter((action): action is SubmenuAction =>
 					action instanceof SubmenuAction
@@ -163,6 +185,14 @@ function serializeMenubar(
 		},
 		actions: actionMap,
 	};
+}
+
+async function pngDataUrl(url: string): Promise<string> {
+	if (url.startsWith("data:image/png;base64,")) return url;
+	const response = await fetch(url);
+	if (!response.ok) throw new Error(`Could not load Touch Bar icon: ${response.status}`);
+	const bytes = new Uint8Array(await response.arrayBuffer());
+	return `data:image/png;base64,${btoa(String.fromCharCode(...bytes))}`;
 }
 
 function trimSeparators(

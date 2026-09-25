@@ -32,6 +32,28 @@ test('editable diff renders Unicode changes and shares models with Multi Diff', 
 	expect(errors).toEqual([]);
 });
 
+test('inline diff keeps removed text readable and restores both sides', async ({ page }) => {
+	await openDiffPage(page);
+	const editor = page.locator('#single .stanza-diff-editor');
+	await page.evaluate(() => window.ashDiffIntegration.setViewMode(false, false));
+	await expect(editor).toHaveClass(/inline-view/);
+	await expect(editor.locator('.stanza-diff-editor-side.original')).toBeHidden();
+	await expect(editor.locator('.stanza-diff-editor-side.modified')).toBeVisible();
+	await expect(editor.locator('.stanza-diff-inline-original-line')).toContainText('before 😀 after');
+	await expect(editor.locator('.stanza-diff-inline-original-line').first()).toHaveAttribute('aria-label', /Removed line/);
+	await editor.locator('.stanza-diff-editor-side.modified .stanza-editor').focus();
+	await page.evaluate(() => window.ashDiffIntegration.setViewMode(true, false));
+	await expect(editor).not.toHaveClass(/inline-view/);
+	await expect(editor.locator('.stanza-diff-editor-side.original')).toBeVisible();
+	await expect(editor.locator('.stanza-diff-inline-original-line')).toHaveCount(0);
+	await expect.poll(() => editor.locator('.stanza-diff-editor-side.modified').evaluate(element => element.contains(document.activeElement))).toBe(true);
+	await page.evaluate(() => window.ashDiffIntegration.setViewMode(true, true));
+	await page.locator('#single').evaluate(element => { element.style.width = '400px'; });
+	await expect(editor).toHaveClass(/inline-view/);
+	await page.locator('#single').evaluate(element => { element.style.width = '800px'; });
+	await expect(editor).not.toHaveClass(/inline-view/);
+});
+
 test('unchanged regions collapse on both sides and symbol navigation reveals the target', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));

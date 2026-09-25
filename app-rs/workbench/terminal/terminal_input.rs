@@ -514,8 +514,11 @@ impl WorkbenchApplication {
         };
         let viewport = ash_session::interaction_list_bounds(interaction_bounds);
         let content = ash_session::interaction_content_size(viewport, view.items().len());
+        let Some(selected) = view.selected() else {
+            return;
+        };
         let Some(command) = ash_session::interaction_selection_scroll_command(
-            view.selected(),
+            selected,
             view.items().len(),
             content.width,
         ) else {

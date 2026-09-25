@@ -4,8 +4,11 @@ import type { Event } from '../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { IScopedContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import type { EditorInput } from './editorInput.js';
+import type { FileElement } from './breadcrumbsModel.js';
 import type { EditorTabDescriptor, EditorTabsDelegate } from './editorTabsControl.js';
 import type { EditorGroupOptions } from './editorGroup.js';
+import type { EditorGroupId } from '../../../services/editor/common/editorState.js';
+import type { IEditorPane } from './editorPane.js';
 import { EditorGroupWatermark } from './editorGroupWatermark.js';
 import { EditorPanes, type EditorPaneInstance } from './editorPanes.js';
 import { EditorTitleControl } from './editorTitleControl.js';
@@ -21,7 +24,13 @@ export class EditorGroupView extends Disposable {
 	private readonly welcome: EditorWelcome;
 	private welcomeVisible: boolean;
 
-	constructor(container: HTMLElement, titleDelegate: EditorTabsDelegate, options: EditorGroupOptions) {
+	constructor(
+		container: HTMLElement,
+		titleDelegate: EditorTabsDelegate,
+		options: EditorGroupOptions,
+		onSelectBreadcrumb?: (element: FileElement) => void,
+		group?: EditorGroupId,
+	) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		this.domNode = h(ownerDocument, 'section');
@@ -40,6 +49,11 @@ export class EditorGroupView extends Disposable {
 				contextKeyService: this.scopedContextKeyService,
 			} : undefined,
 			options.configurationService,
+			onSelectBreadcrumb,
+			group,
+			options.breadcrumbsService,
+			options.languageFeaturesService,
+			options.showBreadcrumbSymbolPicker,
 		));
 		this.contentDomNode = h(ownerDocument, 'div');
 		this.contentDomNode.className = 'ash-editor-group-content';
@@ -60,12 +74,16 @@ export class EditorGroupView extends Disposable {
 		return this.titleControl.height;
 	}
 
+	setLocked(locked: boolean): void {
+		this.titleControl.setLocked(locked);
+	}
+
 	get onDidChangeTitleHeight(): Event<void> {
 		return this.titleControl.onDidChangeHeight;
 	}
 
-	setEditors(editors: readonly EditorTabDescriptor[], activeInput: EditorInput | undefined): void {
-		this.titleControl.setEditors(editors, activeInput);
+	setEditors(editors: readonly EditorTabDescriptor[], activeInput: EditorInput | undefined, activePane?: IEditorPane, selectedIds?: ReadonlySet<string>): void {
+		this.titleControl.setEditors(editors, activeInput, activePane, selectedIds);
 	}
 
 	setWelcomeRecentProjects(projects: readonly IEditorWelcomeProject[]): void {

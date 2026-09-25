@@ -37,6 +37,8 @@ export interface DiffEditorWidgetOptions {
 	readonly readOnly?: boolean;
 	readonly scrollBeyondLastLine?: boolean;
 	readonly hideUnchangedRegions?: HideUnchangedRegionsOptions;
+	readonly renderSideBySide?: boolean;
+	readonly useInlineViewWhenSpaceIsLimited?: boolean;
 }
 
 /** Owns two editor views over caller-owned source models and one versioned diff. */
@@ -61,6 +63,9 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 	private readonly modifiedLabel: string;
 	private configuredWordWrap: boolean;
 	private temporaryWordWrap: boolean | undefined;
+	private renderSideBySide: boolean;
+	private useInlineViewWhenSpaceIsLimited: boolean;
+	private inlineView = false;
 	private activeChangeRow = -1;
 	private viewportWidth = 0;
 	private viewportHeight = 0;
@@ -81,6 +86,8 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		this.showInlineChanges = options.showInlineChanges ?? true;
 		this.loopChanges = options.loopChanges ?? true;
 		this.configuredWordWrap = options.wordWrap ?? false;
+		this.renderSideBySide = options.renderSideBySide ?? true;
+		this.useInlineViewWhenSpaceIsLimited = options.useInlineViewWhenSpaceIsLimited ?? false;
 		this.originalLabel = options.originalAriaLabel ?? localize('diffEditor.original', 'Original');
 		this.modifiedLabel = options.modifiedAriaLabel ?? localize('diffEditor.modified', 'Modified');
 		const ownerDocument = options.container.ownerDocument;
@@ -178,6 +185,10 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		return this.activeChangeRow;
 	}
 
+	public get viewMode(): 'inline' | 'sideBySide' {
+		return this.inlineView ? 'inline' : 'sideBySide';
+	}
+
 	public focus(): void {
 		this.modifiedEditor.focus();
 	}
@@ -189,6 +200,12 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 
 	public setHideUnchangedRegionsOptions(options: HideUnchangedRegionsOptions): void {
 		this.hiddenRegions.setOptions(options);
+	}
+
+	public setViewMode(renderSideBySide: boolean, useInlineViewWhenSpaceIsLimited: boolean): void {
+		this.renderSideBySide = renderSideBySide;
+		this.useInlineViewWhenSpaceIsLimited = useInlineViewWhenSpaceIsLimited;
+		this.layout({ width: this.viewportWidth, height: this.viewportHeight });
 	}
 
 	public toggleWordWrap(): void {
@@ -205,7 +222,14 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		}
 		this.viewportWidth = size.width;
 		this.viewportHeight = size.height;
-		const editorWidth = Math.max(0, (size.width - this.overviewRuler.width) / 2);
+		const inlineView = !this.renderSideBySide || this.useInlineViewWhenSpaceIsLimited && size.width < 600;
+		if (inlineView !== this.inlineView) {
+			this.inlineView = inlineView;
+			this.element.classList.toggle('inline-view', inlineView);
+			this.originalContainer.setAttribute('aria-hidden', String(inlineView));
+			if (inlineView && this.originalContainer.contains(this.element.ownerDocument.activeElement)) this.modifiedEditor.focus();
+		}
+		const editorWidth = Math.max(0, (size.width - this.overviewRuler.width) / (inlineView ? 1 : 2));
 		this.originalEditor.layout({ width: editorWidth, height: size.height });
 		this.modifiedEditor.layout({ width: editorWidth, height: size.height });
 		this.updateZones();
@@ -242,10 +266,13 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 			const lineNumber = row.modifiedLineIndex + 1;
 			const column = (row.modifiedChanges[0]?.startColumn ?? 0) + 1;
 			this.modifiedEditor.revealRange(new Range(lineNumber, column, lineNumber, column), ScrollType.Immediate);
-		} else if (row.originalLineIndex !== undefined) {
+		} else if (row.originalLineIndex !== undefined && !this.inlineView) {
 			const lineNumber = row.originalLineIndex + 1;
 			const column = (row.originalChanges[0]?.startColumn ?? 0) + 1;
 			this.originalEditor.revealRange(new Range(lineNumber, column, lineNumber, column), ScrollType.Immediate);
+		} else if (this.inlineView) {
+			const lineNumber = Math.min(this.model.modified.getLineCount(), Math.max(1, (row.originalLineIndex ?? 0) + 1));
+			this.modifiedEditor.revealRange(new Range(lineNumber, 1, lineNumber, 1), ScrollType.Immediate);
 		}
 		if (announce) {
 			const changedRows = rows.flatMap((candidate, index) => candidate.kind === LineDiffKind.Unchanged ? [] : [index]);
@@ -292,6 +319,34 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 	}
 
 	private updateZones(): void {
+		if (this.inlineView) {
+			this.originalEditor.changeViewZones(accessor => {
+				for (const id of this.originalZones) accessor.removeZone(id);
+				this.originalZones = [];
+			});
+			this.modifiedEditor.changeViewZones(accessor => {
+				for (const id of this.modifiedZones) accessor.removeZone(id);
+				this.modifiedZones = [];
+				let precedingModifiedLine = 0;
+				for (const [ordinal, row] of (this.model.diff?.rows ?? []).entries()) {
+					if (row.kind !== LineDiffKind.Unchanged && row.originalLineIndex !== undefined) {
+						const line = h(this.element.ownerDocument, 'div');
+						line.className = 'stanza-diff-inline-original-line';
+						line.textContent = this.model.original.getLineContent(row.originalLineIndex + 1);
+						line.setAttribute('aria-label', localize('diffEditor.removedLine', 'Removed line {0}: {1}', row.originalLineIndex + 1, line.textContent));
+						this.modifiedZones.push(accessor.addZone({
+							afterLineNumber: row.modifiedLineIndex ?? precedingModifiedLine,
+							heightInPx: this.lineHeight,
+							ordinal,
+							domNode: line,
+							isAccessible: true,
+						}));
+					}
+					if (row.modifiedLineIndex !== undefined) precedingModifiedLine = row.modifiedLineIndex + 1;
+				}
+			});
+			return;
+		}
 		const original: DiffViewZone[] = [];
 		const modified: DiffViewZone[] = [];
 		let originalAfterLineNumber = 0;
@@ -472,6 +527,8 @@ function validateOptions(options: DiffEditorWidgetOptions): void {
 		['wordWrap', options.wordWrap],
 		['readOnly', options.readOnly],
 		['scrollBeyondLastLine', options.scrollBeyondLastLine],
+		['renderSideBySide', options.renderSideBySide],
+		['useInlineViewWhenSpaceIsLimited', options.useInlineViewWhenSpaceIsLimited],
 	] as const) {
 		if (value !== undefined && typeof value !== 'boolean') throw new TypeError(`Diff editor option '${name}' must be boolean`);
 	}

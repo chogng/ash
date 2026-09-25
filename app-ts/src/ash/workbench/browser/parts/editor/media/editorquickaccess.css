@@ -1,0 +1,36 @@
+.ash-editor-quick-pick-item .ash-quick-pick-row-action {
+	flex: 0 0 auto;
+	width: var(--ash-spacing-size160);
+	height: var(--ash-spacing-size160);
+	border: 0;
+	border-radius: var(--ash-cornerRadius-small);
+	color: var(--ash-description-foreground);
+	background: transparent;
+	cursor: pointer;
+}
+
+.ash-editor-quick-pick-item .ash-quick-pick-row-action:hover,
+.ash-editor-quick-pick-item .ash-quick-pick-row-action:focus-visible {
+	color: var(--ash-foreground);
+	background: var(--ash-list-hover-background);
+}
+
+.ash-editor-quick-pick-item .ash-quick-pick-row-action:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
+}
+
+.ash-editor-quick-pick-item.dirty .ash-quick-pick-row-action {
+	font-size: 0;
+}
+
+.ash-editor-quick-pick-item.dirty .ash-quick-pick-row-action::before {
+	content: '●';
+	font-size: var(--ash-fontSize-body2);
+}
+
+.ash-editor-quick-pick-item.dirty .ash-quick-pick-row-action:hover::before,
+.ash-editor-quick-pick-item.dirty .ash-quick-pick-row-action:focus-visible::before {
+	content: '×';
+	font-size: var(--ash-lxiconFontSize);
+}

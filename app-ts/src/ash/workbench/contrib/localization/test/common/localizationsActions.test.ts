@@ -156,6 +156,7 @@ class TestQuickPick<TItem extends IQuickPickItem> extends Disposable implements 
 	public readonly onDidChangeValue = this.changed.event;
 	public readonly onDidHide = this.hidden.event;
 	public readonly onDidBlur = Event.None;
+	public readonly onDidTriggerItemButton = Event.None;
 	public ariaLabel = '';
 	public placeholder = '';
 	public value = '';

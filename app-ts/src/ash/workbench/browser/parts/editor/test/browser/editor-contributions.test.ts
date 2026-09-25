@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
-import { Emitter } from "../../../../../../base/common/event.js";
+import { Emitter, Event } from "../../../../../../base/common/event.js";
+import type { IAccessibilityService } from "../../../../../../platform/accessibility/common/accessibility.js";
 import { Disposable } from "../../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../../base/common/uri.js";
 import { InMemoryConfigurationService } from "../../../../../../platform/configuration/common/inMemoryConfigurationService.js";
@@ -171,7 +172,10 @@ test("EditorStatusContribution projects and clears active pane status", () => {
 		onDidChangeEditors: editorChanges.event,
 	} as unknown as IEditorPart;
 	using statusbar = new StatusbarService();
-	using contribution = new EditorStatusContribution(editorPart, statusbar);
+	using contribution = new EditorStatusContribution(editorPart, statusbar, {
+		onDidChangeScreenReaderOptimized: Event.None,
+		isScreenReaderOptimized: () => false,
+	} as unknown as IAccessibilityService);
 
 	assert.deepEqual(statusTexts(statusbar), ["Ln 4, Col 9", "LF  UTF-8", "TypeScript"]);
 	workingCopy.markDirty();
@@ -191,6 +195,49 @@ test("EditorStatusContribution projects and clears active pane status", () => {
 	pane.dispose();
 	workingCopy.dispose();
 	editorChanges.dispose();
+	dom.window.close();
+});
+
+test("EditorStatusContribution explains screen reader mode and restores focus", () => {
+	const dom = new JSDOM("<!doctype html><body><button id='previous'>Previous</button></body>");
+	const changes = new Emitter<void>();
+	let optimized = false;
+	const accessibility = {
+		onDidChangeScreenReaderOptimized: changes.event,
+		isScreenReaderOptimized: () => optimized,
+	} as unknown as IAccessibilityService;
+	const editorPart = {
+		domNode: dom.window.document.body,
+		activeInput: undefined,
+		activePane: undefined,
+		onDidChangeEditors: Event.None,
+	} as unknown as IEditorPart;
+	using statusbar = new StatusbarService();
+	using contribution = new EditorStatusContribution(editorPart, statusbar, accessibility);
+	assert.equal(statusTexts(statusbar).length, 0);
+
+	optimized = true;
+	changes.fire();
+	const entry = statusbar.getEntries(StatusbarAlignment.Right)[0]?.entry;
+	assert.equal(entry?.text, "Screen Reader Mode");
+	const previous = dom.window.document.querySelector<HTMLButtonElement>("#previous")!;
+	previous.focus();
+	entry?.run?.();
+	const dialog = dom.window.document.querySelector<HTMLElement>(".ash-screen-reader-explanation");
+	assert.equal(dialog?.getAttribute("role"), "dialog");
+	assert.equal(dom.window.document.activeElement?.textContent, "Close");
+	assert.match(dialog?.textContent ?? "", /Screen reader optimization/);
+	assert.equal(dialog?.getAttribute("aria-labelledby"), dialog?.querySelector("h2")?.id);
+	(dialog?.querySelector("button") as HTMLButtonElement).dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+	assert.equal(dom.window.document.querySelector(".ash-screen-reader-explanation"), null);
+	assert.equal(dom.window.document.activeElement, previous);
+
+	entry?.run?.();
+	optimized = false;
+	changes.fire();
+	assert.equal(statusTexts(statusbar).length, 0);
+	assert.equal(dom.window.document.querySelector(".ash-screen-reader-explanation"), null);
+	changes.dispose();
 	dom.window.close();
 });
 

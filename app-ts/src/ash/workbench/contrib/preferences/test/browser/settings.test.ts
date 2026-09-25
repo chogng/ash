@@ -133,6 +133,9 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.colorTheme), 'appearance');
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.layoutStyle), 'appearance');
 	assert.equal(findSettingCategory(layout, EditorSelectionConfiguration.defaultNewDocumentEditor), 'editor');
+	assert.equal(findSettingCategory(layout, 'breadcrumbs.filePath'), 'editor');
+	assert.equal(findSettingCategory(layout, 'breadcrumbs.symbolPath'), 'editor');
+	assert.equal(findSettingCategory(layout, 'workbench.editorLargeFileConfirmation'), 'editor');
 	assert.equal(findSettingCategory(layout, CodeEditorConfiguration.fontFamily), 'editor');
 	assert.equal(findSettingCategory(layout, CodeEditorConfiguration.renderWhitespace), 'editor');
 	assert.equal(findSettingCategory(layout, CodeEditorConfiguration.renderControlCharacters), 'editor');

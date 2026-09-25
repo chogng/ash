@@ -1,0 +1,4 @@
+.ash-editor-tabs-and-actions > .ash-editor-tabs-control {
+	min-width: 0;
+	flex: 1 1 auto;
+}

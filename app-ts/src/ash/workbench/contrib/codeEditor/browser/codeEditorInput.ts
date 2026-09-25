@@ -2,10 +2,10 @@ import { ACADEMIC_DOCUMENT_CONTENT_TYPE } from "../../../services/documentEditor
 import { type EditorInput } from "../../../browser/parts/editor/editorInput.js";
 import { EditorPaneMatch } from "../../../browser/parts/editor/editorPane.js";
 import { isTextResourceLanguageInput, resolveTextResourceLanguageId, type TextResourceLanguageResolver } from "../../../../platform/language/common/textResourceLanguage.js";
-import { isDiffEditorInput } from "./diffEditorInput.js";
+import { isDiffEditorInput } from "../../../common/editor/diffEditorInput.js";
 import { isRemoteResource } from "../../../../platform/remote/common/remote.js";
+import { CODE_EDITOR_ID } from "../../../browser/parts/editor/textResourceEditor.js";
 
-export const CODE_EDITOR_ID = "stanza.editor.code";
 
 /** Selects the canonical editor for plain-text resources. */
 export function matchCodeEditor(input: EditorInput): EditorPaneMatch {
@@ -14,6 +14,11 @@ export function matchCodeEditor(input: EditorInput): EditorPaneMatch {
 	if (input.resource.scheme === "untitled") return EditorPaneMatch.Default;
 	if (input.languageId !== undefined || isTextResourceLanguageInput(input)) return EditorPaneMatch.Default;
 	return input.resource.scheme === "file" || isRemoteResource(input.resource) ? EditorPaneMatch.Builtin : EditorPaneMatch.None;
+}
+
+/** Selects the dedicated text diff pane only for explicit diff inputs. */
+export function matchDiffEditor(input: EditorInput): EditorPaneMatch {
+	return isDiffEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None;
 }
 
 /** Resolves the language identity shared by editor input, syntax, and completion. */

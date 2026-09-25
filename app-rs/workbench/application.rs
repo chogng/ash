@@ -99,6 +99,8 @@ use zui::window::WindowChrome;
 use zui::window::WindowControlInsets;
 use zui::window::WindowEvent;
 use zui::window::WindowHandle;
+#[cfg(target_os = "windows")]
+use zui::window::WindowIcon;
 use zui::window::WindowOptions;
 
 #[path = "app_server.rs"]

@@ -1,7 +1,13 @@
 import "./media/multiEditorTabsControl.css";
 import { DataTransfers } from "../../../../base/browser/dnd.js";
+import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { observeResize } from "../../../../base/browser/observer.js";
+import { Lxicon } from "../../../../base/common/lxicons.js";
 import { TabList, type TabListPresentation } from "../../../../base/browser/ui/tablist/tabList.js";
+import { localize } from "../../../../nls.js";
 import { containsExternalEditorDrop } from "./editorDropData.js";
+import { clearConnectedTabClipping, updateConnectedTabClipping } from "./connectedTabClipping.js";
+import { CONNECTED_EDITOR_TABS_CLASS } from "./editor.js";
 import type { EditorInput } from "./editorInput.js";
 import { EditorTabsControl, editorInputKey, type EditorTabDescriptor, type EditorTabsDelegate } from "./editorTabsControl.js";
 
@@ -10,9 +16,12 @@ const DRAG_OVER_ACTIVATE_DELAY = 1500;
 /** Renders every open Editor in one reorderable tab list. */
 export class MultiEditorTabsControl extends EditorTabsControl {
 	private readonly tabList: TabList<EditorTabDescriptor>;
+	private readonly viewport: HTMLElement;
+	private connectedTab: HTMLElement | undefined;
+	private connected = true;
 	private previewedInput: EditorInput | undefined;
 
-	constructor(container: HTMLElement, delegate: EditorTabsDelegate) {
+	constructor(container: HTMLElement, private readonly delegate: EditorTabsDelegate) {
 		super(container);
 		this.domNode.classList.add("ash-multi-editor-tabs-control");
 		this.tabList = this._register(new TabList(this.domNode, {
@@ -52,11 +61,18 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 				},
 			},
 			onActivate: (editor) => delegate.activate(editor.input),
+			onSelect: (editor, event) => delegate.select?.(editor.input, { toggle: event.ctrlKey || event.metaKey, range: event.shiftKey }) ?? false,
 			onClose: (editor) => delegate.close(editor.input),
 		}));
+		const viewport = this.tabList.element.querySelector<HTMLElement>(".ash-scrollbar-viewport");
+		if (!viewport) throw new Error("Editor tabs require a scroll viewport");
+		this.viewport = viewport;
+		this.domNode.classList.add(CONNECTED_EDITOR_TABS_CLASS);
+		this._register(addDisposableListener(viewport, "scroll", () => this.updateConnectedTab()));
+		this._register(observeResize(viewport, () => this.updateConnectedTab()));
 	}
 
-	setEditors(editors: readonly EditorTabDescriptor[], activeInput: EditorInput | undefined): void {
+	setEditors(editors: readonly EditorTabDescriptor[], activeInput: EditorInput | undefined, selectedIds?: ReadonlySet<string>): void {
 		const activeKey = activeInput ? editors.find(editor => editorInputKey(editor.input) === editorInputKey(activeInput))?.instanceId : undefined;
 		this.tabList.setTabs(editors.map((editor) => {
 			const label = editorInputLabel(editor.input);
@@ -71,15 +87,55 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 				ariaLabel: stateLabel ? `${label.name}, ${stateLabel}` : label.name,
 				...(state ? { state } : {}),
 				preview: editor.preview,
+				actions: {
+					ariaLabel: localize("workbench.editorTabActions", "{0} actions", label.name),
+					items: [{
+						id: "workbench.editor.toggleSticky",
+						label: editor.sticky
+							? localize("workbench.editorUnstickTab", "Unstick Editor")
+							: localize("workbench.editorStickTab", "Stick Editor"),
+						tooltip: editor.sticky
+							? localize("workbench.editorUnstickTab", "Unstick Editor")
+							: localize("workbench.editorStickTab", "Stick Editor"),
+						icon: editor.sticky ? Lxicon.unpin : Lxicon.pinned,
+						enabled: true,
+						run: () => this.delegate.toggleSticky(editor.input),
+					}],
+				},
 				tabId: editor.tabId,
 				panelId: editor.panelId,
 			};
-		}), activeKey);
+		}), activeKey, selectedIds);
+		clearConnectedTabClipping(this.connectedTab, this.tabList.element);
+		this.connectedTab = this.tabList.element.querySelector<HTMLElement>(".ash-tab.checked") ?? undefined;
+		this.updateConnectedTab();
 		this.tabList.element.hidden = editors.length === 0;
 	}
 
 	setPresentation(presentation: TabListPresentation): void {
 		this.tabList.setPresentation(presentation);
+		this.connected = presentation === "inset";
+		this.domNode.classList.toggle(CONNECTED_EDITOR_TABS_CLASS, this.connected);
+		this.updateConnectedTab();
+	}
+
+	private updateConnectedTab(): void {
+		const tab = this.connectedTab;
+		if (!tab || !this.connected) {
+			clearConnectedTabClipping(tab, this.tabList.element);
+			return;
+		}
+		const tabBounds = tab.getBoundingClientRect();
+		const viewportBounds = this.viewport.getBoundingClientRect();
+		updateConnectedTabClipping({
+			tab,
+			overflowEdge: this.tabList.element,
+			fillLeft: tabBounds.left - viewportBounds.left + this.viewport.scrollLeft,
+			fillRight: tabBounds.right - viewportBounds.left + this.viewport.scrollLeft,
+			viewportLeft: 0,
+			viewportRight: this.viewport.clientWidth,
+			shoulderExtent: 6,
+		}, this.viewport.scrollLeft);
 	}
 }
 

@@ -28,6 +28,25 @@ test("editor commands close the active tab and reopen it with a chosen editor", 
 	try {
 		const { CLOSE_EDITOR_COMMAND_ID, REOPEN_WITH_COMMAND_ID } = await import("../../editorCommands.js");
 		const activeInput = { resource: URI.file("C:\\project\\main.ts") };
+		const otherInput = { resource: URI.file("C:\\project\\other.ts") };
+		const additionalInput = { resource: URI.file("C:\\project\\additional.ts") };
+		const closedInputs: typeof activeInput[] = [];
+		const activeGroup = {
+			id: "main",
+			inputs: [activeInput],
+			selectedInputs: [activeInput],
+			editors: [{ input: activeInput }],
+			activeInput,
+			closeEditor: async (input: typeof activeInput) => { closed = input; closedInputs.push(input); return true; },
+		};
+		const otherGroup = {
+			id: "other",
+			inputs: [otherInput],
+			selectedInputs: [otherInput],
+			editors: [{ input: otherInput }],
+			activeInput: otherInput,
+			closeEditor: async (input: typeof activeInput) => { closed = input; return true; },
+		};
 		const editorTypes = [
 			{ id: "ash.editor.binary", name: "Binary Editor" },
 			{ id: "stanza.editor.code", name: "Code Editor" },
@@ -36,6 +55,8 @@ test("editor commands close the active tab and reopen it with a chosen editor", 
 		let chosen: string | undefined;
 		const editorPart = {
 			activeInput,
+			groups: [activeGroup, otherGroup],
+			activeGroup,
 			closeEditor: (input: typeof activeInput) => {
 				closed = input;
 				return Promise.resolve(true);
@@ -57,6 +78,13 @@ test("editor commands close the active tab and reopen it with a chosen editor", 
 
 		await commands.executeCommand(CLOSE_EDITOR_COMMAND_ID);
 		assert.equal(closed, activeInput);
+		await commands.executeCommand(CLOSE_EDITOR_COMMAND_ID, { groupId: "other", editorIndex: 0, preserveFocus: true });
+		assert.equal(closed, otherInput);
+		await commands.executeCommand(CLOSE_EDITOR_COMMAND_ID, activeInput.resource);
+		assert.equal(closed, activeInput);
+		activeGroup.selectedInputs.push(additionalInput);
+		await commands.executeCommand(CLOSE_EDITOR_COMMAND_ID);
+		assert.deepEqual(closedInputs.slice(-2), [activeInput, additionalInput]);
 		await commands.executeCommand(REOPEN_WITH_COMMAND_ID);
 		const picker = dom.window.document.querySelector(".ash-quick-pick");
 		assert.ok(picker);

@@ -12,6 +12,8 @@ import { EditorLineWrapping, EditorOption, RenderLineNumbersType } from '../../.
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import { type DiffEditorWidget } from '../../../../../editor/browser/widget/diffEditor/diffEditorWidget.js';
 import { IEditorPartsService } from '../../../../browser/parts/editor/editorParts.js';
+import { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
+import { IEditorService, type EditorInput } from '../../../../services/editor/common/editorService.js';
 import { type IDocumentDiff, type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from "../../../../../editor/common/diff/documentDiffProvider.js";
 import { DefaultLinesDiffComputer } from "../../../../../editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js";
 import { type ITextModel } from '../../../../../editor/common/model.js';
@@ -30,13 +32,75 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { DiffEditorPane } = await import("../../browser/diffEditorPane.js");
+const { TextDiffEditor: DiffEditorPane } = await import("../../../../browser/parts/editor/textDiffEditor.js");
 await import('../../../../../editor/contrib/diffEditorBreadcrumbs/browser/contribution.js');
 await import('../../browser/toggleWordWrap.js');
 const { createCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
 const { BrowserTextModelService } = await import("../../../../services/textmodelResolver/browser/browserTextModelService.js");
 const { BrowserTextResourceStore } = await import("../../browser/browserTextResourceStore.js");
-const { createDiffEditorInput } = await import("../../browser/diffEditorInput.js");
+const { createDiffEditorInput, isDiffEditorInput } = await import("../../../../common/editor/diffEditorInput.js");
+const { DiffEditorCommandsService, IDiffEditorCommandsService } = await import('../../../../browser/parts/editor/diffEditorCommandsService.js');
+const { DIFF_FOCUS_SECONDARY_SIDE, DIFF_OPEN_SIDE, DIFF_SWAP_SIDES, GOTO_NEXT_CHANGE, SET_DIFF_VIEW_MODE_INLINE, SET_DIFF_VIEW_MODE_SIDE_BY_SIDE, SET_DIFF_VIEW_MODE_AUTOMATIC, TOGGLE_DIFF_IGNORE_TRIM_WHITESPACE, registerDiffEditorCommands } = await import('../../../../browser/parts/editor/diffEditorCommands.js');
+registerDiffEditorCommands();
+
+test('Diff commands navigate and focus the active comparison through the Workbench service', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
+	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
+	using models = new BrowserTextModelService(resourceStore);
+	using services = new DisposableStore();
+	const container = createCodeEditorServices(services);
+	const pane = container.createInstance(DiffEditorPane, resourceStore, {
+		modelService: models,
+		createComputationService: () => new PaneTestDiffComputationService(),
+	});
+	pane.create(parent);
+	pane.layout({ width: 600, height: 300 });
+	const input = createDiffEditorInput(
+		{ resource: URI.file('/command-before.ts'), initialText: 'before\nshared', label: 'before.ts' },
+		{ resource: URI.file('/command-after.ts'), initialText: 'after\nshared', label: 'after.ts' },
+	);
+	await pane.setInput(input, new AbortController().signal);
+	await Promise.resolve();
+	const opened: unknown[] = [];
+	const closed: unknown[] = [];
+	container.registerInstance(IEditorPart, {
+		activeInput: input,
+		activePane: pane,
+		closeEditor: async (editor: unknown) => { closed.push(editor); return true; },
+	} as never);
+	container.registerInstance(IEditorService, { openEditor: async (next: unknown) => { opened.push(next); } } as never);
+	container.registerSingleton(IDiffEditorCommandsService, () => container.createInstance(DiffEditorCommandsService));
+	const commands = container.get(ICommandService);
+	const widget = pane.getControl();
+	assert.ok(widget);
+	await commands.executeCommand(GOTO_NEXT_CHANGE);
+	assert.ok(widget.currentChangeRow >= 0);
+	await commands.executeCommand(SET_DIFF_VIEW_MODE_INLINE);
+	assert.equal(widget.viewMode, 'inline');
+	assert.equal(parent.querySelector('.stanza-diff-inline-original-line')?.textContent, 'before');
+	await commands.executeCommand(SET_DIFF_VIEW_MODE_SIDE_BY_SIDE);
+	assert.equal(widget.viewMode, 'sideBySide');
+	assert.equal(parent.querySelector('.stanza-diff-inline-original-line'), null);
+	await commands.executeCommand(SET_DIFF_VIEW_MODE_AUTOMATIC);
+	pane.layout({ width: 480, height: 300 });
+	assert.equal(widget.viewMode, 'inline');
+	pane.layout({ width: 800, height: 300 });
+	assert.equal(widget.viewMode, 'sideBySide');
+	await commands.executeCommand(DIFF_FOCUS_SECONDARY_SIDE);
+	assert.equal(widget.originalEditor.getDomNode().contains(dom.window.document.activeElement), true);
+	await commands.executeCommand(DIFF_OPEN_SIDE);
+	assert.deepEqual(opened, [input.original]);
+	await commands.executeCommand(TOGGLE_DIFF_IGNORE_TRIM_WHITESPACE);
+	assert.equal(container.get(IConfigurationService).getValue('diffEditor.ignoreTrimWhitespace'), false);
+	await commands.executeCommand(DIFF_SWAP_SIDES);
+	const swapped = opened[1] as EditorInput;
+	assert.ok(isDiffEditorInput(swapped));
+	assert.equal(swapped.original.resource.toString(), input.modified.resource.toString());
+	assert.deepEqual(closed, [input]);
+	pane.dispose();
+	dom.window.close();
+});
 
 test("Stanza diff pane rejects a missing Workbench diff computation service", () => {
 	using services = new DisposableStore();

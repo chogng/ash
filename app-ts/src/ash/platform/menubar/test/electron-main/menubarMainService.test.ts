@@ -52,12 +52,36 @@ test('application menubar selects an alternative action while Option is held', (
 	assert.deepEqual(window.selections, [{ revision: 4, id: 'save-as' }]);
 });
 
+test('Touch Bar selection is routed to the owning workbench window', () => {
+	const host = new TestMenubarHost();
+	using service = new NativeMenubarMainService(host);
+	const window = new TestBrowserWindow(3);
+	using registration = service.registerWindow(window.value);
+	service.update(window.value, {
+		revision: 5,
+		menus: [],
+		touchBar: [{ id: 'history-back', label: 'Back', enabled: true, icon: 'data:image/png;base64,iVBORw0KGgo=' }],
+	});
+	assert.equal(host.touchBar[0]?.label, 'Back');
+	host.touchBarSelect?.('history-back');
+	assert.deepEqual(window.selections, [{ revision: 5, id: 'history-back' }]);
+	registration.dispose();
+	assert.deepEqual(host.touchBar, []);
+});
+
 class TestMenubarHost implements INativeMenubarMainHost {
 	readonly applicationName = 'Ash';
 	template: readonly INativeMenubarMainMenuItem[] | undefined;
+	touchBar: readonly import('../../../../platform/menubar/common/nativeMenubar.js').INativeTouchBarItem[] = [];
+	touchBarSelect: ((id: string) => void) | undefined;
 
 	setApplicationMenu(template: readonly INativeMenubarMainMenuItem[] | undefined): void {
 		this.template = template;
+	}
+
+	setWindowTouchBar(_window: INativeMenubarMainWindow, items: readonly import('../../../../platform/menubar/common/nativeMenubar.js').INativeTouchBarItem[], select: (id: string) => void): void {
+		this.touchBar = items;
+		this.touchBarSelect = select;
 	}
 }
 

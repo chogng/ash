@@ -1,4 +1,3 @@
-import "./media/binaryEditorPane.css";
 import { h } from "../../../../base/browser/dom.js";
 import type { IDimension } from "../../../../base/browser/dom.js";
 import { raceCancellationError } from "../../../../base/common/async.js";
@@ -6,19 +5,20 @@ import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IFileService } from "../../../../platform/files/common/files.js";
 import { isRemoteResource } from "../../../../platform/remote/common/remote.js";
-import type { EditorInput } from "../../../browser/parts/editor/editorInput.js";
-import { EditorPaneMatch, EditorPaneVisibility, type IEditorPane, type IEditorPaneDescriptor } from "../../../browser/parts/editor/editorPane.js";
+import type { EditorInput } from "./editorInput.js";
+import { EditorPaneMatch, EditorPaneVisibility, type IEditorPane, type IEditorPaneDescriptor } from "./editorPane.js";
 
 export const BINARY_EDITOR_ID = "ash.editor.binary";
 const MAX_BINARY_EDITOR_BYTES = 128 * 1024 * 1024;
 const MAX_RENDERED_BYTES = 64 * 1024;
 
 /** Read-only hexadecimal/ascii projection for resources that are not safe text. */
-export class BinaryEditorPane extends Disposable implements IEditorPane {
+export class BaseBinaryResourceEditor extends Disposable implements IEditorPane {
 	readonly id = BINARY_EDITOR_ID;
 	private container: HTMLElement | undefined;
 	private content: HTMLPreElement | undefined;
 	private summary: HTMLElement | undefined;
+	private metadata: string | undefined;
 
 	constructor(private readonly files: IFileService) {
 		super();
@@ -54,11 +54,13 @@ export class BinaryEditorPane extends Disposable implements IEditorPane {
 		const resolved = await raceCancellationError(this.files.readFileBytes(input.resource), signal, "Binary editor loading was cancelled");
 		throwIfCancelled(signal, "Binary editor loading was cancelled");
 		const visible = resolved.bytes.subarray(0, MAX_RENDERED_BYTES);
+		this.metadata = formatByteCount(resolved.bytes.length);
 		summary.textContent = `${formatByteCount(resolved.bytes.length)} · read-only hexadecimal preview${resolved.bytes.length > visible.length ? ` · first ${formatByteCount(visible.length)}` : ""}`;
 		content.textContent = renderHexDump(visible);
 	}
 
 	clearInput(): void {
+		this.metadata = undefined;
 		if (this.summary) this.summary.textContent = "";
 		if (this.content) this.content.textContent = "";
 	}
@@ -70,6 +72,8 @@ export class BinaryEditorPane extends Disposable implements IEditorPane {
 	}
 
 	focus(): void { this.container?.focus(); }
+
+	getMetadata(): string | undefined { return this.metadata; }
 
 	private requireSummary(): HTMLElement {
 		if (!this.summary) throw new ReferenceError("Binary editor pane has not been created");
@@ -92,7 +96,7 @@ export function binaryEditorDescriptor(): IEditorPaneDescriptor {
 		},
 		create: options => {
 			if (!options.fileService) throw new Error("Binary editor requires the Workbench file service");
-			return new BinaryEditorPane(options.fileService);
+			return new BaseBinaryResourceEditor(options.fileService);
 		},
 	};
 }

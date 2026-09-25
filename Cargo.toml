@@ -255,6 +255,7 @@ shared_library = { version = "0.1.9" }
 socket2 = { version = "0.6" }
 tinyjson = { version = "2.5.1" }
 winapi = { version = "0.3.9" }
+winresource = { version = "0.1.31", default-features = false }
 # Explicit SDK API version; consumers retain their existing ABI and feature selection.
 windows-sys-052 = { package = "windows-sys", version = "0.52" }
 # Explicit SDK API version; consumers retain their existing ABI and feature selection.

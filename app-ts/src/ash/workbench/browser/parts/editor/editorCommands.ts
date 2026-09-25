@@ -5,6 +5,7 @@ import type { ServicesAccessor } from "../../../../platform/instantiation/common
 import { IQuickInputService } from "../../../../platform/quickinput/common/quickInput.js";
 import { EditorsVisibleContext } from "../../../common/contextkeys.js";
 import { IEditorPart } from "./editorPart.js";
+import { resolveCommandsContext } from "./editorCommandsContext.js";
 import { showEditorTypePicker } from "./editorTypePicker.js";
 
 export const CLOSE_EDITOR_COMMAND_ID = "workbench.action.closeActiveEditor";
@@ -25,9 +26,16 @@ registerAction2(class CloseActiveEditorAction extends Action2 {
 		});
 	}
 
-	override async run(accessor: ServicesAccessor): Promise<void> {
+	override async run(accessor: ServicesAccessor, ...args: readonly unknown[]): Promise<void> {
 		const editor = accessor.get(IEditorPart);
-		if (editor.activeInput) await editor.closeEditor(editor.activeInput);
+		if (args.length > 0) {
+			const context = resolveCommandsContext(args, editor);
+			for (const { group, editors } of context.groupedEditors) {
+				for (const input of editors) await group.closeEditor(input);
+			}
+			return;
+		}
+		for (const input of [...editor.activeGroup.selectedInputs]) await editor.activeGroup.closeEditor(input);
 	}
 });
 

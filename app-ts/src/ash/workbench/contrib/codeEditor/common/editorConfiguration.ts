@@ -3,8 +3,6 @@ import { Registry } from "../../../../platform/registry/common/platform.js";
 import { EditorIndentationKind } from "../../../../editor/common/core/misc/indentation.js";
 import { EditorLineWrapping } from "../../../../editor/common/config/editorOptions.js";
 import '../../../../editor/common/config/editorConfigurationSchema.js';
-import type { IDocumentDiffProviderOptions } from '../../../../editor/common/diff/documentDiffProvider.js';
-import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 
 export type WrappingIndentSetting = "none" | "same" | "indent" | "deepIndent";
 export type MatchBracketsSetting = "never" | "near" | "always";
@@ -400,6 +398,18 @@ export const CodeEditorConfiguration = Object.freeze({
 		parse: value => parseBoolean(value, "diffEditor.showInlineChanges"),
 		setting: booleanSetting("Inline change highlights", "Highlight the exact changed ranges within modified lines."),
 	}),
+	diffRenderSideBySide: configurationRegistry.registerConfiguration<boolean>({
+		key: 'diffEditor.renderSideBySide',
+		defaultValue: true,
+		parse: value => parseBoolean(value, 'diffEditor.renderSideBySide'),
+		setting: booleanSetting('Side by side diff', 'Show the original and modified files in separate columns.'),
+	}),
+	diffUseInlineViewWhenSpaceIsLimited: configurationRegistry.registerConfiguration<boolean>({
+		key: 'diffEditor.useInlineViewWhenSpaceIsLimited',
+		defaultValue: true,
+		parse: value => parseBoolean(value, 'diffEditor.useInlineViewWhenSpaceIsLimited'),
+		setting: booleanSetting('Inline diff in narrow groups', 'Show one column when the comparison is too narrow for two editors.'),
+	}),
 	diffLoopChanges: configurationRegistry.registerConfiguration<boolean>({
 		key: "diffEditor.loopChanges",
 		defaultValue: true,
@@ -413,26 +423,6 @@ export const CodeEditorConfiguration = Object.freeze({
 		setting: booleanSetting("Insert final newline", "Ensure non-empty files end with a line feed when saved."),
 	}),
 });
-
-export function getDiffComputationOptions(configuration: IConfigurationService, languageId: string): IDocumentDiffProviderOptions {
-	return {
-		ignoreTrimWhitespace: configuration.getValue<boolean>(
-			CodeEditorConfiguration.diffIgnoreTrimWhitespace,
-			{ overrideIdentifier: languageId },
-		),
-		maxComputationTimeMs: configuration.getValue<number>(
-			CodeEditorConfiguration.diffMaxComputationTime,
-			{ overrideIdentifier: languageId },
-		),
-		computeMoves: false,
-	};
-}
-
-export function getDiffWordWrap(configuration: IConfigurationService): boolean {
-	const value = configuration.getValue<'off' | 'on' | 'inherit'>(CodeEditorConfiguration.diffWordWrap);
-	return value === 'on' || (value === 'inherit'
-		&& configuration.getValue<EditorLineWrapping>(CodeEditorConfiguration.wordWrap) === EditorLineWrapping.On);
-}
 
 function booleanSetting(title: string, description: string) {
 	return { valueType: "boolean", title, description } as const;

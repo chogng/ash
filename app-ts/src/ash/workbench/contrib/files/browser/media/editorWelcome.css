@@ -36,17 +36,14 @@
 }
 
 .ash-editor-group-welcome-mark {
-  display: flex;
   width: 42px;
   height: 42px;
-  align-items: center;
-  justify-content: center;
-  color: var(--ash-foreground);
+  background: center / contain no-repeat url("../../../../browser/media/ash-light.svg");
 }
 
-.ash-editor-group-welcome-mark .ash-icon {
-  width: 42px;
-  height: 42px;
+.ash-workbench[data-color-scheme="dark"] .ash-editor-group-welcome-mark,
+.ash-workbench[data-color-scheme="high-contrast-dark"] .ash-editor-group-welcome-mark {
+  background-image: url("../../../../browser/media/ash-dark.svg");
 }
 
 .ash-editor-group-welcome-name {

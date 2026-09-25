@@ -7,6 +7,7 @@ import {
 	NATIVE_MENUBAR_SELECT_CHANNEL,
 	NATIVE_MENUBAR_UPDATE_CHANNEL,
 	type NativeMenubarItem,
+	type INativeTouchBarItem,
 	validateNativeMenubarData,
 } from "../common/nativeMenubar.js";
 
@@ -15,6 +16,7 @@ export interface INativeMenubarMainHost {
 	setApplicationMenu(
 		template: readonly INativeMenubarMainMenuItem[] | undefined,
 	): void;
+	setWindowTouchBar(window: INativeMenubarMainWindow, items: readonly INativeTouchBarItem[], select: (id: string) => void): void;
 }
 
 export interface INativeMenubarMainWindow {
@@ -71,6 +73,7 @@ export class NativeMenubarMainService extends Disposable {
 		if (window.isFocused()) this.activateWindow(window.id);
 
 		return toDisposable(() => {
+			this.host.setWindowTouchBar(window, [], () => {});
 			window.removeListener("focus", handleFocus);
 			this.windows.delete(window.id);
 			const activationIndex = this.activationOrder.indexOf(window.id);
@@ -85,6 +88,7 @@ export class NativeMenubarMainService extends Disposable {
 		const state = this.windows.get(window.id);
 		if (!state || state.window !== window || window.isDestroyed()) return;
 		state.data = data;
+		this.host.setWindowTouchBar(window, data.touchBar ?? [], id => this.select(window, data.revision, id));
 		if (window.isFocused() || this.activeWindowId === undefined) {
 			this.activateWindow(window.id);
 			return;

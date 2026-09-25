@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 license-file = "../LICENSE"
 publish = false
+build = "build.rs"
 
 [[bin]]
 name = "app"
@@ -13,6 +14,9 @@ test = false
 [dependencies]
 process-hardening = { workspace = true }
 ash-workbench = { workspace = true }
+
+[build-dependencies]
+winresource = { workspace = true }
 
 [lints]
 workspace = true

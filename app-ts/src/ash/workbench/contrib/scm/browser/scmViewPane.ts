@@ -12,7 +12,7 @@ import type { IResourceIconRenderer } from "../../../browser/labels.js";
 import type { GitChangeFileComparison, GitChangeStatus, GitRepositoryChange, GitStatus, IGitService } from "../../../services/git/common/gitService.js";
 import type { IEditorService } from "../../../services/editor/common/editorService.js";
 import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
-import { createDiffEditorInput } from "../../codeEditor/browser/diffEditorInput.js";
+import { createDiffEditorInput } from "../../../common/editor/diffEditorInput.js";
 import { OpenScmMultiDiffEditorCommandId, type OpenScmMultiDiffEditorOptions, type OpenScmMultiDiffEditorResult } from "../../multiDiffEditor/browser/scmMultiDiffAction.js";
 import { repositoryFileUri, resolveGitChangeInputs } from "./scmChangeEditorInput.js";
 import { gitErrorMessage } from "./scmError.js";

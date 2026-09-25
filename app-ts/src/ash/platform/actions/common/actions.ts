@@ -68,6 +68,7 @@ export class MenuId {
 	static readonly TitleBar = new MenuId("TitleBar");
 	static readonly TitleBarLeft = new MenuId("TitleBarLeft");
 	static readonly EditorTitle = new MenuId("EditorTitle");
+	static readonly TouchBarContext = new MenuId("TouchBarContext");
 	static readonly EditorContext = new MenuId("EditorContext");
 	static readonly StickyScrollContext = new MenuId("StickyScrollContext");
 	static readonly SimpleEditorContext = new MenuId("SimpleEditorContext");

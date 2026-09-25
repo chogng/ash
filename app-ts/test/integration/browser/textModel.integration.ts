@@ -23,7 +23,7 @@ import { URI } from "../../../src/ash/base/common/uri.js";
 import { DisposableStore, toDisposable } from "../../../src/ash/base/common/lifecycle.js";
 import { Event } from "../../../src/ash/base/common/event.js";
 import { createBrowserEditorPart } from "../../../src/ash/workbench/contrib/codeEditor/browser/browserEditorPart.js";
-import { CodeEditorPane, type EditorPaneOptions } from "../../../src/ash/workbench/contrib/codeEditor/browser/codeEditorPane.js";
+import { TextResourceEditor, type EditorPaneOptions } from "../../../src/ash/workbench/browser/parts/editor/textResourceEditor.js";
 import { ILanguageConfigurationService, LanguageConfigurationService } from "../../../src/ash/editor/common/languages/languageConfigurationRegistry.js";
 import { ILanguageFeaturesService } from '../../../src/ash/editor/common/services/languageFeatures.js';
 import { ITextModelResourceService } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
@@ -177,7 +177,7 @@ services.registerInstance(IQuickInputService, disposables.add(new WorkbenchQuick
 registerCodeEditorServices(services);
 services.get(IAccessibilityService).setAccessibilitySupport(AccessibilitySupport.Enabled);
 services.get(IKeybindingService);
-const pane = disposables.add(services.createInstance(CodeEditorPane, resourceStore, {
+const pane = disposables.add(services.createInstance(TextResourceEditor, resourceStore, {
 	createPart: options => {
 		editorPart = createBrowserEditorPart(services, options);
 		return editorPart;

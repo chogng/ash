@@ -148,6 +148,8 @@ import type { WorkbenchPart } from "./part.js";
 import { AuxiliarybarPart } from "./parts/auxiliarybar/auxiliarybarPart.js";
 import { EditorContextKeyController } from './parts/editor/editorContextKeys.js';
 import { EditorPart, IEditorPart, type IEditorPartOptions } from "./parts/editor/editorPart.js";
+import { BreadcrumbsFilePicker, BreadcrumbsSymbolPicker } from "./parts/editor/breadcrumbsPicker.js";
+import { BreadcrumbsService, IBreadcrumbsService } from "./parts/editor/breadcrumbs.js";
 import { EditorParts, IEditorPartsService } from "./parts/editor/editorParts.js";
 import { EditorPanes } from './parts/editor/editorRegistry.js';
 import { PanelPart } from "./parts/panel/panelPart.js";
@@ -725,7 +727,15 @@ export class Workbench extends Disposable {
 				onOpen: () => recentWorkspaces.openWorkspace(project.root),
 			} : {}),
 		}));
+		const breadcrumbsService = new BreadcrumbsService();
+		services.registerInstance(IBreadcrumbsService, breadcrumbsService);
 		const editorOptions: IEditorPartOptions = {
+			breadcrumbsService,
+			languageFeaturesService,
+			showBreadcrumbSymbolPicker: (symbols, selected, reveal) => {
+				const picker = instantiationService.createInstance(BreadcrumbsSymbolPicker, symbols, selected, reveal);
+				picker.show();
+			},
 			configurationService: configuration,
 			contextKeyService: contextKeys,
 			keybindingService: keybindings,
@@ -754,6 +764,13 @@ export class Workbench extends Disposable {
 				menuService: menus,
 				contextMenuProvider: contextMenus,
 			},
+			showBreadcrumbPicker: (element, openFile) => {
+				const picker = instantiationService.createInstance(BreadcrumbsFilePicker, element, openFile);
+				void picker.show().catch(error => {
+					picker.dispose();
+					console.error("Could not show breadcrumb files", error);
+				});
+			},
 			welcomeVisible: workbenchState === WorkbenchState.EMPTY,
 			welcome: {
 				productName: mode.title,
@@ -779,7 +796,7 @@ export class Workbench extends Disposable {
 				}),
 				resources: [contextKeyService],
 			};
-		}));
+		}, accessibilityService));
 		services.registerInstance(IEditorPartsService, editorParts);
 		this._register(new EditorContextKeyController(contextKeys, editorParts, EditorPanes, languageService));
 		services.registerInstance(IEditorPart, editorParts);

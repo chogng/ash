@@ -1,6 +1,7 @@
 import "./media/auxiliaryEditorPart.css";
 import { Dimension } from "../../../../base/browser/dom.js";
 import { Disposable, DisposableStore, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
 import type { IAuxiliaryWindow } from "../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js";
 import { StatusbarService } from "../../../services/statusbar/browser/statusbar.js";
 import { StatusbarHeight } from "../workbenchPartDimensions.js";
@@ -17,7 +18,7 @@ export type AuxiliaryEditorPartFactory = (container: HTMLElement) => AuxiliaryEd
 
 /** Owns the editor UI and workbench chrome inside an auxiliary window. */
 export class AuxiliaryEditorPart extends Disposable {
-	constructor(window: IAuxiliaryWindow, creation: AuxiliaryEditorPartCreation) {
+	constructor(window: IAuxiliaryWindow, creation: AuxiliaryEditorPartCreation, accessibility: IAccessibilityService) {
 		super();
 		// The window service owns registry lifetime; this part only requests close.
 		this._register(toDisposable(() => window[Symbol.dispose]()));
@@ -26,7 +27,7 @@ export class AuxiliaryEditorPart extends Disposable {
 		this._register(creation.part);
 		const statusbarService = this._register(new StatusbarService());
 		const statusbarPart = this._register(new StatusbarPart(window.container, statusbarService));
-		this._register(new EditorStatusContribution(creation.part, statusbarService));
+		this._register(new EditorStatusContribution(creation.part, statusbarService, accessibility));
 		this._register(window.onBeforeUnload(event => {
 			if (creation.part.getEditorState().groups.some(group => group.editors.some(editor => editor.isDirty))) {
 				event.veto("The auxiliary editor window contains unsaved changes.");

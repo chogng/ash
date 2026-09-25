@@ -1,7 +1,6 @@
-import { URI } from "../../../../base/common/uri.js";
-import { type EditorInput } from "../../../browser/parts/editor/editorInput.js";
-import { EditorPaneMatch } from "../../../browser/parts/editor/editorPane.js";
-import { EditorInputSerializers, requireRecord, requireSerializedEditorInput } from "../../../services/editor/common/editorInputSerializer.js";
+import { URI } from "../../../base/common/uri.js";
+import { type EditorInput } from "../../services/editor/common/editorService.js";
+import { EditorInputSerializers, requireRecord, requireSerializedEditorInput } from "../../services/editor/common/editorInputSerializer.js";
 
 export const DIFF_EDITOR_ID = "stanza.editor.diff";
 export const DIFF_EDITOR_CONTENT_TYPE = "application/vnd.stanza.editor-diff";
@@ -60,11 +59,6 @@ export function isDiffEditorInput(input: EditorInput): input is DiffEditorInput 
 		"modified" in input &&
 		isTextResourceInput(input.original) &&
 		isTextResourceInput(input.modified);
-}
-
-/** Selects the dedicated diff pane only for explicit diff inputs. */
-export function matchDiffEditor(input: EditorInput): EditorPaneMatch {
-	return isDiffEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None;
 }
 
 function assertTextResourceInput(value: unknown, owner: string): asserts value is EditorInput {

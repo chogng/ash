@@ -26,17 +26,26 @@ Ash then updates its pinned copy before requiring metadata signed only by the ro
 ## Application branding
 
 Application icons are fixed and do not change with the editor color theme.
-The Windows artwork comes from `win32/ash.svg`; the macOS, Linux, and Web
-artwork comes from `app-ts/src/ash/workbench/browser/media/ash-light.svg`.
+`branding/ash-mark.svg` is the transparent vector source for the Ash mark;
+`branding/ash-app-black-512.png` is the supplied full-size black application icon.
+The application icon uses that mark on a rounded square: black with a white
+mark in `win32/ash.svg` and `app-ts/src/ash/workbench/browser/media/ash-light.svg`,
+and white with a black mark in the titlebar-only `ash-dark.svg`. The macOS,
+Linux, and Web icons use the black application icon.
 
 - `win32/ash.ico` contains 16, 24, 32, 48, 64, 128, and 256 pixel PNG images
-  rendered from `win32/ash.svg`. Run `pnpm app-icon:generate` after changing
-  the SVG and `pnpm app-icon:check` to verify the generated icon. Electron
-  development windows load the ICO directly. The Windows packaging command
-  embeds it in `Ash.exe`.
+  rendered from `win32/ash.svg`; `win32/ash-512.png` is the Rust window icon
+  copied from `branding/ash-app-black-512.png`. Run `pnpm app-icon:generate`
+  after changing either source and `pnpm app-icon:check` to verify both outputs.
+  Electron development windows load the ICO directly. The Electron packaging
+  command embeds it in `Ash.exe`, and the Rust `app` build embeds it in `app.exe`.
 - `darwin/ash.icns` is the macOS application bundle icon.
 - `linux/ash.png` is the Linux desktop and window icon.
+- The Rust Workbench embeds `win32/ash-512.png` for its Windows window icon.
 - `server/` contains the Web favicon, install icons, and manifest.
+- `tray/ash-black.svg` and `tray/ash-white.svg` are transparent monochrome
+  tray artwork. The matching 16, 24, and 32 pixel PNGs are ready for hosts
+  that need raster tray icons.
 
 Vite copies `server/` unchanged to the renderer output root, and the browser
 Workbench and Sessions pages link those stable paths. On Windows x64,
@@ -50,7 +59,8 @@ use the same application ID as the running Electron process. Run
 Playwright after building the bundle.
 
 `ash-dark.svg` remains a renderer-only titlebar variant and is not a packaging
-source.
+source. The tray artwork is a resource; each host controls whether it creates
+a system tray item.
 
 ## Icons
 

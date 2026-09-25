@@ -4,7 +4,7 @@ import { localize2 } from '../../../../nls.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IEditorPartsService } from '../../../browser/parts/editor/editorParts.js';
-import { DiffEditorPane } from './diffEditorPane.js';
+import { TextDiffEditor } from '../../../browser/parts/editor/textDiffEditor.js';
 import { MultiDiffEditorPane } from '../../multiDiffEditor/browser/multiDiffEditorPane.js';
 
 class ToggleWordWrapAction extends Action2 {
@@ -18,7 +18,7 @@ class ToggleWordWrapAction extends Action2 {
 
 	override run(accessor: ServicesAccessor): void {
 		const pane = accessor.getOptional(IEditorPartsService)?.activePane;
-		if (pane instanceof DiffEditorPane) {
+		if (pane instanceof TextDiffEditor) {
 			pane.toggleWordWrap();
 			return;
 		}

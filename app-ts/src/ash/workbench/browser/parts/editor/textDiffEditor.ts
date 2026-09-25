@@ -1,4 +1,3 @@
-import "./media/diffEditorPane.css";
 import { type IDimension } from "../../../../base/browser/dom.js";
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { Disposable, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
@@ -6,7 +5,7 @@ import { assertDefined } from "../../../../base/common/types.js";
 import { type IEditorPane } from "../../../browser/parts/editor/editorPane.js";
 import { EditorPaneVisibility } from "../../../browser/parts/editor/editorPane.js";
 import { type EditorInput } from "../../../browser/parts/editor/editorInput.js";
-import { DIFF_EDITOR_ID, isDiffEditorInput } from "./diffEditorInput.js";
+import { DIFF_EDITOR_ID, isDiffEditorInput } from "../../../common/editor/diffEditorInput.js";
 import { type ITextResourceStore } from "../../../services/textmodelResolver/common/textResourceStore.js";
 import { DiffModel } from "../../../../editor/common/diff/diffModel.js";
 import { type HideUnchangedRegionsOptions } from '../../../../editor/common/config/diffEditor.js';
@@ -16,7 +15,7 @@ import { type TextModelReference, type ITextModelResourceService } from "../../.
 import { h } from "../../../../base/browser/dom.js";
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { CodeEditorConfiguration, getDiffComputationOptions, getDiffWordWrap } from '../common/editorConfiguration.js';
+import { getDiffComputationOptions, getDiffWordWrap } from "../../../services/editor/common/editorConfiguration.js";
 
 export interface DiffEditorPaneOptions {
 	readonly modelService: ITextModelResourceService;
@@ -31,12 +30,16 @@ export interface DiffEditorPaneOptions {
 }
 
 /** Workbench pane that owns an editable comparison over two acquired text references. */
-export class DiffEditorPane extends Disposable implements IEditorPane {
+export class TextDiffEditor extends Disposable implements IEditorPane {
 	readonly id = DIFF_EDITOR_ID;
 	private readonly session = this._register(new MutableDisposable<DiffEditorPaneSession>());
 	private readonly modelService: ITextModelResourceService;
 	private container: HTMLDivElement | undefined;
 	private dimension: IDimension = { width: 0, height: 0 };
+
+	getControl(): DiffEditorWidget | undefined {
+		return this.session.value?.editor;
+	}
 
 	constructor(
 		private readonly resourceStore: ITextResourceStore,
@@ -160,18 +163,25 @@ class DiffEditorPaneSession extends Disposable {
 		}));
 		this._register(configuration.onDidChangeConfiguration(event => {
 			const languageId = model.modified.getLanguageId();
-			if (event.affectsConfiguration(CodeEditorConfiguration.diffWordWrap) || event.affectsConfiguration(CodeEditorConfiguration.wordWrap)) {
+			if (event.affectsConfiguration("diffEditor.wordWrap") || event.affectsConfiguration("editor.wordWrap")) {
 				this.editor.setConfiguredWordWrap(getDiffWordWrap(configuration));
 			}
-			if (event.affectsConfiguration(CodeEditorConfiguration.diffIgnoreTrimWhitespace, { overrideIdentifier: languageId })
-				|| event.affectsConfiguration(CodeEditorConfiguration.diffMaxComputationTime, { overrideIdentifier: languageId })) {
+			if (event.affectsConfiguration("diffEditor.ignoreTrimWhitespace", { overrideIdentifier: languageId })
+				|| event.affectsConfiguration("diffEditor.maxComputationTime", { overrideIdentifier: languageId })) {
 				this.updateOptions(getDiffComputationOptions(configuration, languageId));
 			}
-			if (event.affectsConfiguration(CodeEditorConfiguration.diffHideUnchangedRegionsEnabled)
-				|| event.affectsConfiguration(CodeEditorConfiguration.diffHideUnchangedRegionsContextLineCount)
-				|| event.affectsConfiguration(CodeEditorConfiguration.diffHideUnchangedRegionsMinimumLineCount)
-				|| event.affectsConfiguration(CodeEditorConfiguration.diffHideUnchangedRegionsRevealLineCount)) {
+			if (event.affectsConfiguration("diffEditor.hideUnchangedRegions.enabled")
+				|| event.affectsConfiguration("diffEditor.hideUnchangedRegions.contextLineCount")
+				|| event.affectsConfiguration("diffEditor.hideUnchangedRegions.minimumLineCount")
+				|| event.affectsConfiguration("diffEditor.hideUnchangedRegions.revealLineCount")) {
 				this.editor.setHideUnchangedRegionsOptions(getHideUnchangedRegionsOptions(configuration));
+			}
+			if (event.affectsConfiguration('diffEditor.renderSideBySide')
+				|| event.affectsConfiguration('diffEditor.useInlineViewWhenSpaceIsLimited')) {
+				this.editor.setViewMode(
+					configuration.getValue('diffEditor.renderSideBySide'),
+					configuration.getValue('diffEditor.useInlineViewWhenSpaceIsLimited'),
+				);
 			}
 		}));
 		this._register(modified.model.onDidChangeLanguage(() => {
@@ -181,6 +191,8 @@ class DiffEditorPaneSession extends Disposable {
 			container,
 			model,
 			wordWrap: getDiffWordWrap(configuration),
+			renderSideBySide: configuration.getValue('diffEditor.renderSideBySide'),
+			useInlineViewWhenSpaceIsLimited: configuration.getValue('diffEditor.useInlineViewWhenSpaceIsLimited'),
 			hideUnchangedRegions: getHideUnchangedRegionsOptions(configuration),
 			lineHeight: options.lineHeight,
 			fontFamily: options.fontFamily,
@@ -209,9 +221,9 @@ class DiffEditorPaneSession extends Disposable {
 
 function getHideUnchangedRegionsOptions(configuration: IConfigurationService): HideUnchangedRegionsOptions {
 	return {
-		enabled: configuration.getValue<boolean>(CodeEditorConfiguration.diffHideUnchangedRegionsEnabled),
-		contextLineCount: configuration.getValue<number>(CodeEditorConfiguration.diffHideUnchangedRegionsContextLineCount),
-		minimumLineCount: configuration.getValue<number>(CodeEditorConfiguration.diffHideUnchangedRegionsMinimumLineCount),
-		revealLineCount: configuration.getValue<number>(CodeEditorConfiguration.diffHideUnchangedRegionsRevealLineCount),
+		enabled: configuration.getValue<boolean>("diffEditor.hideUnchangedRegions.enabled"),
+		contextLineCount: configuration.getValue<number>("diffEditor.hideUnchangedRegions.contextLineCount"),
+		minimumLineCount: configuration.getValue<number>("diffEditor.hideUnchangedRegions.minimumLineCount"),
+		revealLineCount: configuration.getValue<number>("diffEditor.hideUnchangedRegions.revealLineCount"),
 	};
 }

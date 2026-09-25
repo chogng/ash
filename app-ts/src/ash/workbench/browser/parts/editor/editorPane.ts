@@ -63,18 +63,6 @@ export interface IEditorPane extends IDisposable {
 	saveAs?(resource: URI): Promise<void>;
 }
 
-/** Optional pane capability for JSON-safe, instance-local view state. */
-export interface IEditorPaneWithViewState extends IEditorPane {
-	readonly viewStateTypeId: string;
-	saveViewState(): unknown;
-	restoreViewState(state: unknown): void;
-}
-
-export function isEditorPaneWithViewState(pane: IEditorPane): pane is IEditorPaneWithViewState {
-	const candidate = pane as Partial<IEditorPaneWithViewState>;
-	return typeof candidate.viewStateTypeId === "string" && candidate.viewStateTypeId.length > 0 && typeof candidate.saveViewState === "function" && typeof candidate.restoreViewState === "function";
-}
-
 /** Format-neutral status details projected into the Workbench status bar. */
 export interface EditorPaneStatus {
 	readonly lineNumber?: number;

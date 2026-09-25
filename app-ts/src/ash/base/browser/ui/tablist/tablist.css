@@ -92,6 +92,11 @@
   background: var(--ash-tab-list-active-background);
 }
 
+.ash-tab-list .ash-tab.selected:not(.checked) {
+  color: var(--ash-foreground);
+  background: color-mix(in srgb, var(--ash-tab-list-active-background) 65%, var(--ash-tab-list-inactive-background, transparent));
+}
+
 .ash-tab-label {
   display: flex;
   box-sizing: border-box;

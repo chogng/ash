@@ -61,7 +61,7 @@ export const SettingsNavigation = [
 				id: 'interaction',
 				label: 'Interaction',
 				description: 'Tune hover feedback and resize handles.',
-				settings: ['workbench.hover.*', 'workbench.sash.*'],
+				settings: ['workbench.hover.*', 'workbench.sash.*', 'onboarding.enabled'],
 			},
 		],
 	},
@@ -75,7 +75,7 @@ export const SettingsNavigation = [
 				id: 'theme',
 				label: 'Color theme',
 				description: 'Choose the colors used by the Workbench.',
-				settings: ['workbench.colorTheme', 'workbench.iconTheme'],
+				settings: ['workbench.colorTheme', 'workbench.iconTheme', 'workbench.productIconTheme'],
 			},
 			{
 				id: 'layout',
@@ -107,13 +107,13 @@ export const SettingsNavigation = [
 				id: 'display',
 				label: 'Display',
 				description: 'Configure line wrapping, guides, highlighting, and scrolling aids.',
-				settings: ['breadcrumbs.enabled', 'editor.wordWrap', 'editor.wrappingIndent', 'editor.renderWhitespace', 'editor.renderControlCharacters', 'editor.lineNumbers', 'editor.cursorStyle', 'editor.cursorBlinking', 'editor.cursorSmoothCaretAnimation', 'editor.cursorWidth', 'editor.cursorHeight', 'editor.guides.*', 'editor.matchBrackets', 'editor.bracketPairColorization.*', 'editor.stickyScroll.*', 'editor.renderLineHighlight', 'editor.renderLineHighlightOnlyWhenFocus', 'editor.unicodeHighlights'],
+				settings: ['breadcrumbs.*', 'editor.wordWrap', 'editor.wrappingIndent', 'editor.renderWhitespace', 'editor.renderControlCharacters', 'editor.lineNumbers', 'editor.cursorStyle', 'editor.cursorBlinking', 'editor.cursorSmoothCaretAnimation', 'editor.cursorWidth', 'editor.cursorHeight', 'editor.guides.*', 'editor.matchBrackets', 'editor.bracketPairColorization.*', 'editor.stickyScroll.*', 'editor.renderLineHighlight', 'editor.renderLineHighlightOnlyWhenFocus', 'editor.unicodeHighlights'],
 			},
 			{
 				id: 'performance',
 				label: 'Performance',
 				description: 'Configure editor rendering performance.',
-				settings: ['editor.experimentalGpuAcceleration'],
+				settings: ['editor.experimentalGpuAcceleration', 'workbench.editorLargeFileConfirmation'],
 			},
 			{
 				id: 'minimap',

@@ -29,6 +29,12 @@ import type { IDocumentCollaborationApi } from "../../../../platform/collaborati
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import { WorkbenchPart } from "../../part.js";
 import { EditorGroup, type EditorGroupOptions, type IEditorGroup } from "./editorGroup.js";
+import { AutoLockGroupsConfiguration, EditorLargeFileConfirmationConfiguration, type AutoLockGroups } from "./editorConfiguration.js";
+import type { FileElement } from "./breadcrumbsModel.js";
+import type { IBreadcrumbsService } from "./breadcrumbs.js";
+import type { ILanguageFeaturesService } from "../../../../editor/common/services/languageFeatures.js";
+import type { LanguageDocumentSymbol } from "../../../../editor/common/languages.js";
+import type { Range } from "../../../../editor/common/core/range.js";
 import { EditorDropTarget } from "./editorDropTarget.js";
 import { EditorsObserver } from "./editorsObserver.js";
 import { EditorTabDragAndDropController, type EditorTabDropEvent } from "./editorTabDragAndDrop.js";
@@ -58,6 +64,7 @@ export interface IEditorPart extends IEditorStateSource, IDisposable {
 	readonly onDidChangeEditors: Event<EditorPartChangeEvent>;
 	readonly groups: readonly IEditorGroup[];
 	readonly activeGroup: IEditorGroup;
+	toggleActiveGroupLock(): boolean;
 	readonly activeInput: EditorInput | undefined;
 	readonly activePane: IEditorPane | undefined;
 	readonly isModalEditorVisible: boolean;
@@ -68,7 +75,9 @@ export interface IEditorPart extends IEditorStateSource, IDisposable {
 	activateEditor(input: EditorInput): IEditorPane;
 	activateEditorIdentifier(identifier: EditorIdentifier): IEditorPane | undefined;
 	activateEditorMru(offset: number): IEditorPane | undefined;
+	navigateEditorHistory(direction: -1 | 1): IEditorPane | undefined;
 	closeEditor(input: EditorInput): Promise<boolean>;
+	closeEditorIdentifier(identifier: EditorIdentifier): Promise<boolean>;
 	confirmCloseAllEditors(): Promise<boolean>;
 	closeAllEditors(options?: EditorCloseAllOptions): Promise<boolean>;
 	moveActiveEditorTo(target: IEditorPart): Promise<boolean>;
@@ -126,6 +135,10 @@ export interface IEditorPartOptions {
 		readonly menuService: IMenuService;
 		readonly contextMenuProvider: IContextMenuProvider;
 	};
+	readonly showBreadcrumbPicker?: (element: FileElement, openFile: (resource: URI) => Promise<void>) => void;
+	readonly breadcrumbsService?: IBreadcrumbsService;
+	readonly languageFeaturesService?: ILanguageFeaturesService;
+	readonly showBreadcrumbSymbolPicker?: (symbols: readonly LanguageDocumentSymbol[], selected: LanguageDocumentSymbol, reveal: (range: Range) => void) => void;
 	readonly welcome?: EditorWelcomeOptions;
 	readonly welcomeVisible?: boolean;
 	readonly saveAsResource?: (defaultName: string) => Promise<URI | undefined>;
@@ -184,6 +197,10 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 			onOpenLocation: location => this.openEditor({ resource: location.resource }, { selection: location.selectionRange ?? location.range }).then(() => undefined),
 			onApplyWorkspaceEdit: options.bulkEditService ? edit => options.bulkEditService!.apply(edit).then(() => undefined) : undefined,
 			titleActions: options.titleActions,
+			showBreadcrumbPicker: options.showBreadcrumbPicker,
+			breadcrumbsService: options.breadcrumbsService,
+			languageFeaturesService: options.languageFeaturesService,
+			showBreadcrumbSymbolPicker: options.showBreadcrumbSymbolPicker,
 			welcome: options.welcome,
 			welcomeVisible: options.welcomeVisible,
 			...(options.saveAsResource ? {
@@ -293,7 +310,9 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		});
 	}
 
-	async openEditor(input: EditorInput, options: EditorOpenOptions = {}, target: EditorOpenTarget = "activeGroup"): Promise<IEditorPane> {
+	async openEditor(input: EditorInput, options: EditorOpenOptions = {}, target?: EditorOpenTarget): Promise<IEditorPane> {
+		const largeFileConfirmation = this.confirmLargeFileOpen(input);
+		if (largeFileConfirmation) await largeFileConfirmation;
 		if (target === "modalGroup") {
 			const modalInput = this.modalEditor.activeInput;
 			if (modalInput && editorInputKey(modalInput) !== editorInputKey(input) && !await this.closeEditor(modalInput)) {
@@ -304,7 +323,19 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 			return pane;
 		}
 		if (!await this.closeActiveModalEditor()) throw new CancellationError("Opening the editor was cancelled");
-		if (target === "activeGroup") return this._activeGroup.openEditor(input, options);
+		if (target === undefined && this._groups.length > 1 && this._activeGroup.isLocked && !this._activeGroup.inputs.some(candidate => editorInputKey(candidate) === editorInputKey(input))) {
+			const unlocked = this._groups.find(({ group }) => !group.isLocked);
+			const host = unlocked ?? this.insertGroup(this._activeGroup, Direction.Right);
+			try {
+				const pane = await host.group.openEditor(input, options);
+				if (!options.preserveFocus) this.setActiveGroup(host.group);
+				return pane;
+			} catch (error) {
+				if (!unlocked) this.removeGroup(host);
+				throw error;
+			}
+		}
+		if (target === undefined || target === "activeGroup") return this._activeGroup.openEditor(input, options);
 		const source = this._activeGroup;
 		const { host, created } = this.resolveSideGroup(source);
 		try {
@@ -318,6 +349,31 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 			this.setActiveGroup(source);
 			throw error;
 		}
+	}
+
+	private confirmLargeFileOpen(input: EditorInput): Promise<void> | undefined {
+		const fileService = this.groupOptions.fileService;
+		const configuration = this.groupOptions.configurationService;
+		const dialogService = this.dialogService;
+		if (!fileService || !configuration || !dialogService || input.resource.scheme !== "file" || this._groups.some(({ group }) => group.inputs.some(open => editorInputKey(open) === editorInputKey(input)))) return undefined;
+		const thresholdMiB = configuration.getValue<number>(EditorLargeFileConfirmationConfiguration);
+		return fileService.stat(input.resource).then(async stat => {
+			if (stat.sizeBytes < thresholdMiB * 1024 * 1024) return;
+			const confirmed = await dialogService.confirm({
+				title: "Open Large File",
+				message: `Open ${input.label ?? input.resource.path.split("/").at(-1) ?? input.resource.path}?`,
+				detail: `This file is ${(stat.sizeBytes / 1024 / 1024).toFixed(1)} MiB. Opening it may take time and use substantial memory.`,
+				primaryButton: "Open File",
+				cancelButton: "Cancel",
+			});
+			if (!confirmed) throw new CancellationError("Opening the large file was cancelled");
+		});
+	}
+
+	toggleActiveGroupLock(): boolean {
+		const locked = !this._activeGroup.isLocked;
+		this._activeGroup.setLocked(locked);
+		return locked;
 	}
 
 	activateEditor(input: EditorInput): IEditorPane {
@@ -344,6 +400,14 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		return this.activateEditorIdentifier(editors[index]!);
 	}
 
+	navigateEditorHistory(direction: -1 | 1): IEditorPane | undefined {
+		const target = this.editorsObserver.navigateHistory(direction);
+		if (!target) return undefined;
+		const pane = this.activateEditorIdentifier(target);
+		if (!pane) this.editorsObserver.cancelHistoryNavigation();
+		return pane;
+	}
+
 	async closeEditor(input: EditorInput): Promise<boolean> {
 		if (this.modalEditor.activeInput && editorInputKey(this.modalEditor.activeInput) === editorInputKey(input)) {
 			const pane = this.modalEditor.activePane;
@@ -354,6 +418,12 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 			return true;
 		}
 		return await this._activeGroup.closeEditor(input);
+	}
+
+	async closeEditorIdentifier(identifier: EditorIdentifier): Promise<boolean> {
+		const host = this._groups.find(candidate => candidate.group.id === identifier.groupId);
+		const editor = host?.group.editors.find(candidate => candidate.instanceId === identifier.instanceId);
+		return host && editor ? host.group.closeEditor(editor.input) : false;
 	}
 
 	async closeAllEditors(options: EditorCloseAllOptions = {}): Promise<boolean> {
@@ -633,11 +703,13 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 			activeGroupIndex: this._groups.findIndex(({ group }) => group === this._activeGroup),
 			groups: Object.freeze(this._groups.map(({ group }, index) => Object.freeze({
 				id: group.id,
+				locked: group.isLocked,
 				editors: Object.freeze(group.inputs.map(input => {
 					const viewState = group.saveEditorViewState(input);
 					return Object.freeze({
 						input: this.inputSerializers.serialize(input),
 						preview: group.isPreview(input),
+						sticky: group.isSticky(input),
 						...(viewState ? { viewState } : {}),
 					});
 				})),
@@ -668,9 +740,11 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 					preserveFocus: true,
 				});
 				group.restoreEditorViewState(input, state.editors[inputIndex]!.viewState);
+				if (state.editors[inputIndex]!.sticky) group.toggleSticky(input);
 			}
 			const activeInput = state.inputs[state.activeEditorIndex];
 			if (activeInput) group.activateEditor(activeInput);
+			group.setLocked(state.locked === true);
 		}
 		const activeGroup = this._groups[target.activeGroupIndex] ?? this._groups[0]!;
 		this.setActiveGroup(activeGroup.group);
@@ -710,6 +784,11 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 	}
 
 	private handleEditorGroupChange(event: EditorGroupChangeEvent): void {
+		if (event.kind === "editorOpened" && this._groups.length > 1) {
+			const group = this._groups.find(host => host.group.id === event.editor.groupId)?.group;
+			const autoLock = this.groupOptions.configurationService?.getValue<AutoLockGroups>(AutoLockGroupsConfiguration);
+			if (group?.inputs.length === 1 && autoLock?.[event.editor.paneId]) group.setLocked(true);
+		}
 		if (event.kind !== "editorClosed") return;
 		if (event.reason === "close") this.addRecentlyClosed(event.editor.input, event.editor.paneId);
 	}
@@ -753,7 +832,7 @@ function validateWorkingSet(value: EditorWorkingSet): EditorWorkingSet {
 	let sizeTotal = 0;
 	const groupIds = new Set<string>();
 	for (const group of value.groups) {
-		if (!group || typeof group !== "object" || !Array.isArray(group.editors) || !Number.isInteger(group.activeEditorIndex) || group.activeEditorIndex < -1 || group.activeEditorIndex >= group.editors.length || !Number.isFinite(group.size) || group.size < 0) {
+		if (!group || typeof group !== "object" || !Array.isArray(group.editors) || !Number.isInteger(group.activeEditorIndex) || group.activeEditorIndex < -1 || group.activeEditorIndex >= group.editors.length || (group.locked !== undefined && typeof group.locked !== "boolean") || !Number.isFinite(group.size) || group.size < 0) {
 			throw new TypeError("Invalid editor group working set");
 		}
 		if (group.id !== undefined) {
@@ -761,7 +840,7 @@ function validateWorkingSet(value: EditorWorkingSet): EditorWorkingSet {
 			groupIds.add(group.id);
 		}
 		for (const editor of group.editors) {
-			if (!editor || typeof editor !== "object" || typeof editor.preview !== "boolean" || !isSerializedEditorInput(editor.input)) {
+			if (!editor || typeof editor !== "object" || typeof editor.preview !== "boolean" || (editor.sticky !== undefined && typeof editor.sticky !== "boolean") || (editor.sticky === true && editor.preview) || !isSerializedEditorInput(editor.input)) {
 				throw new TypeError("Invalid editor working set entry");
 			}
 			if (editor.viewState !== undefined) {

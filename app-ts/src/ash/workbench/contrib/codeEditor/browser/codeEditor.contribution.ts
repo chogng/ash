@@ -7,10 +7,10 @@ import { getBrowserTextModelService } from "../../../services/textmodelResolver/
 import { registerEditorPane } from "../../../browser/parts/editor/editorRegistry.js";
 import { getBrowserTextResourceStore } from "./browserTextResourceStore.js";
 import { createBrowserEditorPart } from "./browserEditorPart.js";
-import { CODE_EDITOR_ID, matchCodeEditor } from "./codeEditorInput.js";
-import { CodeEditorPane, type EditorPaneOptions } from "./codeEditorPane.js";
-import { DIFF_EDITOR_ID, matchDiffEditor } from "./diffEditorInput.js";
-import { DiffEditorPane } from "./diffEditorPane.js";
+import { matchCodeEditor, matchDiffEditor } from "./codeEditorInput.js";
+import { CODE_EDITOR_ID, TextResourceEditor, type EditorPaneOptions } from "../../../browser/parts/editor/textResourceEditor.js";
+import { DIFF_EDITOR_ID } from "../../../common/editor/diffEditorInput.js";
+import { TextDiffEditor } from "../../../browser/parts/editor/textDiffEditor.js";
 import { bindCodeLensCacheStorage } from "../../../../editor/contrib/codelens/browser/codeLensCache.js";
 import { IStorageService } from "../../../../platform/storage/common/storage.js";
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
@@ -28,7 +28,7 @@ registerEditorPane({
 		const configuration = options.configurationService;
 		const instantiationService = options.instantiationService;
 		if (!instantiationService) throw new Error('Stanza Code requires the Workbench instantiation service');
-		return instantiationService.createInstance(CodeEditorPane, resourceStore, {
+		return instantiationService.createInstance(TextResourceEditor, resourceStore, {
 			createPart: partOptions => createBrowserEditorPart(instantiationService, partOptions),
 			textMateService: options.textMateService,
 			languageDiagnosticsService: options.languageDiagnosticsService,
@@ -100,7 +100,7 @@ registerEditorPane({
 		if (!diffService) throw new Error("Stanza Diff requires the Workbench diff service");
 		const resourceStore = getBrowserTextResourceStore(options.textFileService);
 		const configuration = options.configurationService;
-		return instantiationService.createInstance(DiffEditorPane, resourceStore, {
+		return instantiationService.createInstance(TextDiffEditor, resourceStore, {
 			modelService: getBrowserTextModelService(resourceStore),
 			createComputationService: () => diffService.createComputationService(),
 			lineHeight: configuration?.getValue(CodeEditorConfiguration.lineHeight),
@@ -113,3 +113,5 @@ registerEditorPane({
 		});
 	},
 });
+import "./media/editorPane.css";
+import "./media/diffEditorPane.css";

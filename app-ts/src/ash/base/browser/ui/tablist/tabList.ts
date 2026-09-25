@@ -53,6 +53,8 @@ export interface TabListOptions<T> {
 	readonly presentation?: TabListPresentation;
 	readonly orientation?: ActionBarOrientation;
 	readonly onActivate: (value: T) => void;
+	/** Returns true when a modifier selection consumed the activation. */
+	readonly onSelect?: (value: T, event: MouseEvent | KeyboardEvent) => boolean;
 	readonly onClose?: (value: T) => void;
 	readonly closeActionIcon?: Icon;
 	/** Makes tab items native drag sources without defining any drop behavior. */
@@ -71,11 +73,13 @@ export class TabList<T> extends Disposable {
 	private readonly actionBar: ActionBar;
 	private readonly scrollable: ScrollableElement;
 	private readonly activate: (value: T) => void;
+	private readonly select: ((value: T, event: MouseEvent | KeyboardEvent) => boolean) | undefined;
 	private presentation: TabListPresentation;
 
 	constructor(container: HTMLElement, options: TabListOptions<T>) {
 		super();
 		this.activate = options.onActivate;
+		this.select = options.onSelect;
 		const onClose = options.onClose;
 		const closeActionIcon = options.closeActionIcon;
 		const presentation = options.presentation ?? "flush";
@@ -123,6 +127,7 @@ export class TabList<T> extends Disposable {
 			"ash-tab-list-scroll-content",
 		);
 		this.element = this.scrollable.element;
+		if (this.select) this.actionBar.element.setAttribute("aria-multiselectable", "true");
 	}
 
 	setPresentation(presentation: TabListPresentation): void {
@@ -135,6 +140,7 @@ export class TabList<T> extends Disposable {
 	setTabs(
 		tabs: readonly TabListItem<T>[],
 		selectedId: string | undefined,
+		selectedIds?: ReadonlySet<string>,
 	): void {
 		const ids = new Set<string>();
 		const tabIds = new Set<string>();
@@ -154,7 +160,9 @@ export class TabList<T> extends Disposable {
 		this.actionBar.setActions(tabs.map((tab) => new TabAction(
 			tab,
 			tab.id === selectedId,
+			selectedIds?.has(tab.id) ?? tab.id === selectedId,
 			this.activate,
+			this.select,
 		)));
 		if (selectedId !== undefined) this.actionBar.setTabStop(selectedId);
 		this.scrollable.layout();

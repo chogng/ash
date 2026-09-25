@@ -2,8 +2,8 @@ import { List } from "../../../base/browser/ui/list/listWidget.js";
 import { setRole } from "../../../base/browser/ui/aria/aria.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
-import type { IQuickPickItem } from "../common/quickInput.js";
-import { h } from "../../../base/browser/dom.js";
+import type { IQuickPickItem, IQuickPickItemButton } from "../common/quickInput.js";
+import { h, stopEvent } from "../../../base/browser/dom.js";
 import { localize } from '../../../nls.js';
 
 export interface QuickInputListActiveChangeEvent<TItem> {
@@ -20,6 +20,7 @@ export class QuickInputList<TItem extends IQuickPickItem>
 	private readonly _onDidAccept = this._register(new Emitter<TItem>());
 	private readonly _onDidChangeActive =
 		this._register(new Emitter<QuickInputListActiveChangeEvent<TItem>>());
+	private readonly buttonEmitter = this._register(new Emitter<{ readonly item: TItem; readonly button: IQuickPickItemButton }>());
 	private _items: readonly TItem[] = [];
 	private _visibleItems: readonly TItem[] = [];
 	private query = "";
@@ -28,6 +29,7 @@ export class QuickInputList<TItem extends IQuickPickItem>
 	readonly onDidChangeActive:
 		Event<QuickInputListActiveChangeEvent<TItem>> =
 			this._onDidChangeActive.event;
+	readonly onDidTriggerItemButton = this.buttonEmitter.event;
 
 	constructor(container: HTMLElement) {
 		super();
@@ -111,6 +113,7 @@ export class QuickInputList<TItem extends IQuickPickItem>
 		const ownerDocument = this.element.ownerDocument;
 		const content = h(ownerDocument, "div");
 		content.className = "ash-quick-pick-row-content";
+		if (item.className) content.classList.add(...item.className.split(/\s+/).filter(Boolean));
 		const text = h(ownerDocument, "span");
 		text.className = "ash-quick-pick-row-text";
 		const label = h(ownerDocument, "span");
@@ -135,6 +138,18 @@ export class QuickInputList<TItem extends IQuickPickItem>
 			keybinding.className = "ash-quick-pick-row-keybinding";
 			keybinding.textContent = item.keybinding;
 			content.append(keybinding);
+		}
+		for (const button of item.buttons ?? []) {
+			const action = h(ownerDocument, 'button');
+			action.type = 'button';
+			action.className = 'ash-quick-pick-row-action';
+			action.textContent = button.label;
+			action.setAttribute('aria-label', button.label);
+			action.addEventListener('click', event => {
+				stopEvent(event);
+				this.buttonEmitter.fire({ item, button });
+			});
+			content.append(action);
 		}
 		return content;
 	}

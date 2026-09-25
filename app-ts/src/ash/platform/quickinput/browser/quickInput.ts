@@ -12,6 +12,7 @@ import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import type {
 	IQuickPick,
 	IQuickPickItem,
+	IQuickPickItemButton,
 } from "../common/quickInput.js";
 import { QuickInputList } from "./quickInputList.js";
 import { localize } from '../../../nls.js';
@@ -41,6 +42,7 @@ export class QuickPick<TItem extends IQuickPickItem>
 	private readonly _onDidChangeValue = this._register(new Emitter<string>());
 	private readonly _onDidHide = this._register(new Emitter<void>());
 	private readonly _onDidBlur = this._register(new Emitter<void>());
+	private readonly _onDidTriggerItemButton = this._register(new Emitter<{ readonly item: TItem; readonly button: IQuickPickItemButton }>());
 	private readonly options: BrowserQuickInputHostOptions;
 	private visible = false;
 	private _ariaLabel = localize('quickInput.title', 'Quick Pick');
@@ -52,6 +54,7 @@ export class QuickPick<TItem extends IQuickPickItem>
 		this._onDidChangeValue.event;
 	readonly onDidHide: Event<void> = this._onDidHide.event;
 	readonly onDidBlur: Event<void> = this._onDidBlur.event;
+	readonly onDidTriggerItemButton = this._onDidTriggerItemButton.event;
 
 	constructor(host: HTMLElement, options: BrowserQuickInputHostOptions) {
 		super();
@@ -92,6 +95,7 @@ export class QuickPick<TItem extends IQuickPickItem>
 		this._register(this.list.onDidChangeActive(({ rowId }) => {
 			this.inputBox.ariaActiveDescendant = rowId;
 		}));
+		this._register(this.list.onDidTriggerItemButton(event => this._onDidTriggerItemButton.fire(event)));
 		this._register(this.inputBox.onKeyDown(
 			(event: KeyboardEvent) => this.handleKeyDown(event),
 		));
