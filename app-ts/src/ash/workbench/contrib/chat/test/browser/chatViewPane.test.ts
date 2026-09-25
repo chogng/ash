@@ -38,6 +38,11 @@ import { DialogResult, IDialogService, type IMessageDialogOptions } from '../../
 import { ViewDescriptorService } from "../../../../../workbench/services/views/common/viewDescriptorService.js";
 import { WorkbenchQuickInputService } from "../../../../../workbench/services/quickinput/browser/quickInputService.js";
 import { h } from "../../../../../base/browser/dom.js";
+import type { IFileService } from '../../../../../platform/files/common/files.js';
+import { URI } from "../../../../../base/common/uri.js";
+import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
+import type { IOpenerService } from "../../../../../platform/opener/common/openerService.js";
+import type { IEditorService } from "../../../../../workbench/services/editor/common/editorService.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 const emptyChatContextPickService = new ChatContextPickService();
@@ -45,6 +50,9 @@ const unavailableQuickInputService = {
 	createQuickPick: () => { throw new Error("Quick input is unavailable in this test"); },
 	input: () => { throw new Error('Quick input is unavailable in this test'); },
 } as IQuickInputService;
+const unavailableFileService = {
+	readFileBytes: async () => { throw new Error('File read is unavailable in this test'); },
+} as unknown as IFileService;
 
 class AppServerSessionsManagementService extends SessionsManagementService {
 	constructor(api: IRendererHost) {
@@ -77,6 +85,7 @@ const { ChatViewPane } = await import(
 const { ChatListWidget } = await import(
 	"../../../../../workbench/contrib/chat/browser/list/chatListWidget.js"
 );
+const { openChatMarkdownLink } = await import("../../browser/pane/chatPane.js");
 await import(
 	"../../../../../workbench/contrib/preferences/browser/preferences.contribution.js"
 );
@@ -93,6 +102,41 @@ suiteTeardown(() => {
 	]) {
 		Reflect.deleteProperty(globalThis, name);
 	}
+});
+
+test("Chat Markdown links route resource, command, and external targets through their owning services", async () => {
+	const editorResources: URI[] = [];
+	const externalTargets: string[] = [];
+	const commands: Array<{ readonly id: string; readonly args: readonly unknown[] }> = [];
+	const editorService = {
+		openEditor: async ({ resource }: { readonly resource: URI }) => { editorResources.push(resource); },
+	} as unknown as IEditorService;
+	const openerService = {
+		openExternal: async (target: string) => { externalTargets.push(target); },
+	} as unknown as IOpenerService;
+	const commandService = {
+		executeCommand: async (id: string, ...args: readonly unknown[]) => { commands.push({ id, args }); },
+	} as unknown as ICommandService;
+
+	await openChatMarkdownLink("vscode-remote://ssh-remote+host/src/file.ts", commandService, openerService, editorService);
+	await openChatMarkdownLink("vscode-file://vscode-app/workspace/readme.md", commandService, openerService, editorService);
+	await openChatMarkdownLink('vscode-remote-resource://ssh-remote+host/workspace/image.png', commandService, openerService, editorService);
+	await openChatMarkdownLink('vscode-notebook-cell:///workspace/notebook.ipynb#cell-4', commandService, openerService, editorService);
+	await openChatMarkdownLink('vscode-file://other-host/workspace/secret.md', commandService, openerService, editorService);
+	await openChatMarkdownLink('vscode-remote-resource://127.0.0.1:9999/vscode-remote-resource?path=%2Fworkspace%2Fsecret.png', commandService, openerService, editorService);
+	await openChatMarkdownLink("command:ash.open?%5B%22readme.md%22%5D", commandService, openerService, editorService);
+	await openChatMarkdownLink("mailto:help@example.com", commandService, openerService, editorService);
+	await openChatMarkdownLink("private:///workbench/resource", commandService, openerService, editorService);
+	await openChatMarkdownLink("#section", commandService, openerService, editorService);
+
+	assert.deepEqual(editorResources.map(resource => resource.toString()), [
+		'ash-remote://ssh+host/src/file.ts',
+		'file:///workspace/readme.md',
+		'ash-remote://ssh+host/workspace/image.png',
+		'vscode-notebook-cell:///workspace/notebook.ipynb#cell-4',
+	]);
+	assert.deepEqual(commands, [{ id: "ash.open", args: ["readme.md"] }]);
+	assert.deepEqual(externalTargets, ["mailto:help@example.com"]);
 });
 
 function chatTitleContent(pane: { readonly partTitleProjection: { readonly content?: HTMLElement } | undefined }): HTMLElement {
@@ -190,6 +234,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		layout,
 		emptyChatContextPickService,
 		unavailableQuickInputService,
+		unavailableFileService,
 		contextKeys,
 	);
 	chatView = pane;
@@ -554,6 +599,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
 		layout,
 		emptyChatContextPickService,
 		unavailableQuickInputService,
+		unavailableFileService,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -673,6 +719,7 @@ test("the New Chat slash command opens an untitled session", async () => {
 		layout,
 		emptyChatContextPickService,
 		unavailableQuickInputService,
+		unavailableFileService,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -748,6 +795,7 @@ test("failed first send keeps the untitled session and its input draft", async (
 		layout,
 		emptyChatContextPickService,
 		unavailableQuickInputService,
+		unavailableFileService,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -829,6 +877,7 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
 		layout,
 		emptyChatContextPickService,
 		unavailableQuickInputService,
+		unavailableFileService,
 	);
 	dom.window.document.body.append(pane.element);
 

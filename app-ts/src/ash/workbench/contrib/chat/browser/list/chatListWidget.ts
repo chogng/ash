@@ -2,11 +2,14 @@ import { MarkdownElement } from "../../../../../base/browser/markdownRenderer.js
 import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
 import { ScrollableElement } from "../../../../../base/browser/ui/scrollbar/scrollableElement.js";
 import { Disposable, DisposableMap, DisposableStore } from "../../../../../base/common/lifecycle.js";
+import type { URI } from '../../../../../base/common/uri.js';
 import type { ChatTurnErrorAction, IChatListItem } from "./chatListItems.js";
 
 interface ChatListWidgetOptions {
 	readonly onDidRequestMemoryReference?: (reference: string) => void;
 	readonly onDidRequestErrorAction?: (action: ChatTurnErrorAction) => void;
+	readonly onDidRequestLink?: (target: string) => void;
+	readonly imageResourceLoader?: (resource: URI) => Promise<Blob>;
 }
 
 class RenderedItem extends Disposable {
@@ -29,6 +32,8 @@ export class ChatListWidget extends Disposable {
 	private readonly renderedItems = this._register(new DisposableMap<string, RenderedItem>());
 	private readonly onDidRequestErrorAction: ((action: ChatTurnErrorAction) => void) | undefined;
 	private readonly onDidRequestMemoryReference: ((reference: string) => void) | undefined;
+	private readonly onDidRequestLink: ((target: string) => void) | undefined;
+	private readonly imageResourceLoader: ChatListWidgetOptions['imageResourceLoader'];
 	private readonly advisorExpansion = new Map<string, boolean>();
 	private visible = false;
 	private shouldFollow = true;
@@ -37,6 +42,8 @@ export class ChatListWidget extends Disposable {
 		super();
 		this.onDidRequestErrorAction = options.onDidRequestErrorAction;
 		this.onDidRequestMemoryReference = options.onDidRequestMemoryReference;
+		this.onDidRequestLink = options.onDidRequestLink;
+		this.imageResourceLoader = options.imageResourceLoader;
 		this.scrollable = this._register(new ScrollableElement(container, {
 			direction: "vertical",
 			vertical: "auto",
@@ -133,8 +140,11 @@ export class ChatListWidget extends Disposable {
 		if (item.type === "agentMessage" || item.type === "reasoning" || item.type === "plan" || item.type === "advisor") {
 			const markdown = disposables.add(new MarkdownElement({
 				ownerDocument: this.element.ownerDocument,
-				markdown: item.text,
+				markdown: { value: item.text, supportThemeIcons: true, supportAlertSyntax: true },
 				breaks: true,
+				fillInIncompleteTokens: item.transient,
+				linkHandler: target => this.onDidRequestLink?.(target),
+				imageResourceLoader: this.imageResourceLoader,
 			}));
 			body.append(markdown.element);
 		} else {

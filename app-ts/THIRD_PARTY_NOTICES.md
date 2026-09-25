@@ -7,9 +7,8 @@ texts.
 | Component | Version | License used by Ash | License text |
 | --- | --- | --- | --- |
 | OpenAI Codex socket-security helpers | commit `dafb6781ee` | Apache-2.0 | [`LICENSE-APACHE`](../ash-rs/uds/LICENSE-APACHE), [`NOTICE`](../ash-rs/uds/NOTICE) |
-| [DOMPurify](https://github.com/cure53/DOMPurify) | 3.4.12 | Apache-2.0, selected from `MPL-2.0 OR Apache-2.0` | [`licenses/DOMPurify.txt`](licenses/DOMPurify.txt) |
-| [Marked](https://github.com/markedjs/marked) | 18.0.7 | MIT and bundled Markdown notice | [`licenses/Marked.txt`](licenses/Marked.txt) |
-| [markdown-it](https://github.com/markdown-it/markdown-it) | 14.3.0 | MIT | [`licenses/markdown-it.txt`](licenses/markdown-it.txt) |
+| [DOMPurify](https://github.com/cure53/DOMPurify) | 3.4.16 | Apache-2.0, selected from `MPL-2.0 OR Apache-2.0` | [`licenses/DOMPurify.txt`](licenses/DOMPurify.txt) |
+| [Marked](https://github.com/markedjs/marked) | 18.0.14 | MIT and bundled Markdown notice | [`licenses/Marked.txt`](licenses/Marked.txt) |
 | [Visual Studio Code](https://github.com/microsoft/vscode) editor source | commit `004a1fbb1658e61048b29d76e2ce380adfa18680` | MIT | [`third_party/vscode/LICENSE.txt`](../third_party/vscode/LICENSE.txt) |
 | [Seti UI](https://github.com/jesseweed/seti-ui) | commit `2d6c5e68b4ded73c92dac291845ee44e1182d511` | MIT | [`src/ash/platform/theme/browser/media/seti/ThirdPartyNotices.txt`](src/ash/platform/theme/browser/media/seti/ThirdPartyNotices.txt) |
 | [Typst](https://github.com/typst/typst) | 0.15.1 | Apache-2.0; includes separately attributed third-party material | [`Typst.txt`](../ash-rs/utils/typst/licenses/Typst.txt), [`Typst-NOTICE.txt`](../ash-rs/utils/typst/licenses/Typst-NOTICE.txt) |

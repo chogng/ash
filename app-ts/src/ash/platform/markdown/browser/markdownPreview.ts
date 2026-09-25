@@ -1,7 +1,7 @@
-import MarkdownIt from "markdown-it";
 import { DEFAULT_FONT_FAMILY } from "../../../base/browser/fonts.js";
 import {
 	isSafeMarkdownLink,
+	renderWorkbenchMarkdown,
 	sanitizeMarkdownHtmlToString,
 } from "../../../base/browser/markdownRenderer.js";
 import {
@@ -13,6 +13,7 @@ import {
 
 	toDisposable,
 } from "../../../base/common/lifecycle.js";
+import type { URI } from "../../../base/common/uri.js";
 import {
 	WebviewElement,
 } from "../../webview/browser/webviewElement.js";
@@ -20,6 +21,7 @@ import {
 export interface MarkdownPreviewOptions {
 	readonly markdown?: string;
 	readonly title?: string;
+	readonly baseUri?: URI;
 }
 
 interface OpenLinkMessage {
@@ -27,11 +29,6 @@ interface OpenLinkMessage {
 	readonly href: string;
 }
 
-const markdownParser = new MarkdownIt({
-	breaks: true,
-	html: true,
-	linkify: true,
-});
 const MAX_MARKDOWN_LENGTH = 4 * 1024 * 1024;
 
 const PREVIEW_STYLE = `
@@ -62,6 +59,15 @@ h1, h2, h3, h4, h5, h6 { line-height: 1.25; margin: 1.35em 0 0.55em; }
 h1, h2 { border-bottom: 1px solid GrayText; padding-bottom: 0.25em; }
 p, blockquote, pre, table, ul, ol { margin: 0.85em 0; }
 blockquote { border-left: 3px solid GrayText; margin-left: 0; padding-left: 1em; }
+blockquote.ash-markdown-alert {
+  background: color-mix(in srgb, CanvasText 6%, Canvas);
+  border-left-color: Highlight;
+  border-radius: 3px;
+  color: CanvasText;
+  padding: .65em 1em;
+}
+.ash-markdown-alert-label { color: Highlight; }
+.ash-markdown-alert-icon { margin-inline-end: .4em; vertical-align: -.1em; }
 code, pre { font-family: var(--ash-font-family-monospace); }
 code { background: color-mix(in srgb, CanvasText 10%, Canvas); border-radius: 3px; padding: 0.12em 0.3em; }
 pre { background: color-mix(in srgb, CanvasText 8%, Canvas); overflow: auto; padding: 1em; }
@@ -107,6 +113,7 @@ const LINK_BRIDGE_SCRIPT = `
  */
 export class MarkdownPreview extends Disposable {
 	private readonly ownerDocument: Document;
+	private readonly baseUri: URI | undefined;
 	private readonly webview: WebviewElement;
 	private readonly _onDidOpenLink = this._register(new Emitter<string>());
 	private active = true;
@@ -117,12 +124,13 @@ export class MarkdownPreview extends Disposable {
 	constructor(container: HTMLElement, options: MarkdownPreviewOptions = {}) {
 		super();
 		this.ownerDocument = container.ownerDocument;
+		this.baseUri = options.baseUri;
 		this.webview = this._register(new WebviewElement(container, {
 			title: options.title ?? "Markdown preview",
 		}));
 		this.element = this.webview.element;
 		this._register(this.webview.onDidMessage((message) => {
-			const openLink = validateOpenLinkMessage(message);
+			const openLink = validateOpenLinkMessage(message, this.baseUri);
 			if (openLink) this._onDidOpenLink.fire(openLink.href);
 		}));
 		this._register(toDisposable(() => {
@@ -139,9 +147,16 @@ export class MarkdownPreview extends Disposable {
 		if (markdown.length > MAX_MARKDOWN_LENGTH) {
 			throw new Error("Markdown exceeds the supported size");
 		}
-		const parserHtml = markdownParser.render(markdown);
+		const markdownContent = {
+			value: markdown,
+			supportHtml: true,
+			supportAlertSyntax: true,
+			...(this.baseUri ? { baseUri: this.baseUri } : {}),
+		};
+		const parserHtml = renderWorkbenchMarkdown(markdownContent, true);
 		const safeHtml = sanitizeMarkdownHtmlToString({
 			ownerDocument: this.ownerDocument,
+			markdown: markdownContent,
 		}, parserHtml);
 		this.webview.setHtml(
 			`<style>${PREVIEW_STYLE}</style>` +
@@ -164,6 +179,7 @@ export class MarkdownPreview extends Disposable {
 
 function validateOpenLinkMessage(
 	message: unknown,
+	baseUri?: URI,
 ): OpenLinkMessage | undefined {
 	if (typeof message !== "object" || message === null) return undefined;
 	const candidate = message as Record<string, unknown>;
@@ -171,7 +187,7 @@ function validateOpenLinkMessage(
 		Object.keys(candidate).length !== 2 ||
 		candidate.type !== "openLink" ||
 		typeof candidate.href !== "string" ||
-		!isSafeMarkdownLink(candidate.href)
+		!isSafeMarkdownLink(candidate.href, baseUri ? { value: "", baseUri } : undefined)
 	) {
 		return undefined;
 	}

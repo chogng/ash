@@ -1,5 +1,5 @@
 import { h, addDisposableListener } from '../../../../base/browser/dom.js';
-import { MarkdownElement } from '../../../../base/browser/markdownRenderer.js';
+import { MarkdownElement, renderAsPlaintext } from '../../../../base/browser/markdownRenderer.js';
 import { alert } from '../../../../base/browser/ui/aria/aria.js';
 import { disposableWindowTimeout } from '../../../../base/browser/scheduler.js';
 import type { IMarkdownString } from '../../../../base/common/htmlContent.js';
@@ -8,12 +8,16 @@ import { Disposable, DisposableStore, MutableDisposable, type IDisposable, toDis
 import { RawContextKey, type IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
 import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { IOpenerService } from '../../../../platform/opener/common/openerService.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { ContentWidgetPositionPreference, type ICodeEditor, type IContentWidget, type IContentWidgetPosition } from '../../../browser/editorBrowser.js';
 import { EditorCommand, EditorContributionInstantiation, registerEditorCommand, registerEditorContribution } from '../../../browser/editorExtensions.js';
 import { type IPosition, Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import type { IEditorContribution } from '../../../common/editorCommon.js';
 import { PositionAffinity } from '../../../common/model.js';
+import { URI } from '../../../../base/common/uri.js';
+import { Schemas } from '../../../../base/common/network.js';
+import { ICodeEditorService } from '../../../browser/services/codeEditorService.js';
 import './messageController.css';
 
 /** Owns the active editor-positioned message and its dismissal lifecycle. */
@@ -79,14 +83,30 @@ export class MessageController extends Disposable implements IEditorContribution
 				markdown: message,
 				linkHandler: target => {
 					this.closeMessage();
+					if (target.startsWith('command:')) {
+						const command = parseCommandLink(target);
+						const commandService = this.editor.invokeWithinContext(accessor => accessor.getOptional(ICommandService));
+						if (command && commandService) {
+							void commandService.executeCommand(command.id, ...command.args).catch(error => console.error('Could not run Markdown command', error));
+						}
+						return;
+					}
+					if (isEditorResourceLink(target)) {
+						const editorService = this.editor.invokeWithinContext(accessor => accessor.getOptional(ICodeEditorService));
+						if (editorService) {
+							void editorService.openCodeEditor({ resource: URI.parse(target) }, this.editor).catch(error => console.error('Could not open Markdown resource', error));
+						}
+						return;
+					}
+					if (target.startsWith(`${Schemas.internal}:`)) return;
 					const opener = this.editor.invokeWithinContext(accessor => accessor.getOptional(IOpenerService));
-					if (opener) void opener.openExternal(target);
+					if (opener) void opener.openExternal(target).catch(error => console.error('Could not open Markdown link', error));
 				},
 			});
 			content = markdown.element;
 			contentOwner = markdown;
 		}
-		alert(typeof content === 'string' ? content : content.textContent ?? '');
+		alert(isMarkdownString(message) ? renderAsPlaintext(message) : text);
 		const widget = new MessageWidget(this.editor, position, content, contentOwner);
 		this.widget.value = widget;
 		this.setVisible(true);
@@ -135,6 +155,31 @@ export class MessageController extends Disposable implements IEditorContribution
 		this.visible = visible;
 		if (visible) this.visibleKey?.set(true);
 		else this.visibleKey?.reset();
+	}
+}
+
+function isEditorResourceLink(target: string): boolean {
+	const scheme = URI.parse(target).scheme;
+	return scheme === Schemas.file
+		|| scheme === Schemas.vscodeFileResource
+		|| scheme === Schemas.vscodeRemote
+		|| scheme === Schemas.vscodeRemoteResource
+		|| scheme === Schemas.vscodeNotebookCell;
+}
+
+function parseCommandLink(target: string): { readonly id: string; readonly args: readonly unknown[] } | undefined {
+	const match = /^command:(?:\/\/\/)?([^/?#]+)(?:\?([^#]*))?$/i.exec(target);
+	if (!match) return undefined;
+	let id: string;
+	try { id = decodeURIComponent(match[1]!); }
+	catch { return undefined; }
+	if (!id) return undefined;
+	if (!match[2]) return { id, args: [] };
+	try {
+		const args: unknown = JSON.parse(decodeURIComponent(match[2]));
+		return Array.isArray(args) ? { id, args } : undefined;
+	} catch {
+		return undefined;
 	}
 }
 

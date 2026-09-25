@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
+import type { IFileService } from '../../../../../platform/files/common/files.js';
 import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import type { IMenu, IMenuService } from "../../../../../platform/actions/common/actions.js";
@@ -49,6 +50,7 @@ test("opens a local Chat tab before the backend session request settles", () => 
 		layoutService,
 		{} as IChatContextPickService,
 		{} as IQuickInputService,
+		{} as IFileService,
 	);
 
 	assert.equal(sessionService.untitledSessions.length, 1);

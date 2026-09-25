@@ -1,4 +1,5 @@
 import { URI } from './uri.js';
+import { escapeIcons } from './iconLabels.js';
 
 export interface MarkdownStringTrustedOptions {
 	readonly enabledCommands?: readonly string[];
@@ -9,6 +10,7 @@ export interface IMarkdownString {
 	readonly isTrusted?: boolean | MarkdownStringTrustedOptions;
 	readonly supportThemeIcons?: boolean;
 	readonly supportHtml?: boolean;
+	readonly supportAlertSyntax?: boolean;
 	readonly baseUri?: URI;
 }
 
@@ -17,6 +19,7 @@ export class MarkdownString implements IMarkdownString {
 	isTrusted: boolean | MarkdownStringTrustedOptions | undefined;
 	supportThemeIcons: boolean;
 	supportHtml: boolean;
+	supportAlertSyntax: boolean;
 	baseUri: URI | undefined;
 
 	static lift(value: IMarkdownString): MarkdownString {
@@ -31,11 +34,13 @@ export class MarkdownString implements IMarkdownString {
 		this.isTrusted = typeof options === 'boolean' ? options : options.isTrusted;
 		this.supportThemeIcons = typeof options === 'boolean' ? false : options.supportThemeIcons ?? false;
 		this.supportHtml = typeof options === 'boolean' ? false : options.supportHtml ?? false;
+		this.supportAlertSyntax = typeof options === 'boolean' ? false : options.supportAlertSyntax ?? false;
 		this.baseUri = typeof options === 'boolean' ? undefined : options.baseUri;
 	}
 
 	appendText(value: string): this {
-		this.value += escapeMarkdownSyntaxTokens(value).replace(/([ \t]+)/g, spaces => '&nbsp;'.repeat(spaces.length)).replace(/\n/g, '\n\n');
+		const escaped = escapeMarkdownSyntaxTokens(this.supportThemeIcons ? escapeIcons(value) : value);
+		this.value += escaped.replace(/([ \t]+)/g, spaces => '&nbsp;'.repeat(spaces.length)).replace(/\n/g, '\n\n');
 		return this;
 	}
 
@@ -54,13 +59,35 @@ export function isMarkdownString(value: unknown): value is IMarkdownString {
 	if (!value || typeof value !== 'object') return false;
 	const candidate = value as IMarkdownString;
 	return typeof candidate.value === 'string'
-		&& (candidate.isTrusted === undefined || typeof candidate.isTrusted === 'boolean' || typeof candidate.isTrusted === 'object')
+		&& isMarkdownStringTrust(candidate.isTrusted)
 		&& (candidate.supportThemeIcons === undefined || typeof candidate.supportThemeIcons === 'boolean')
-		&& (candidate.supportHtml === undefined || typeof candidate.supportHtml === 'boolean');
+		&& (candidate.supportHtml === undefined || typeof candidate.supportHtml === 'boolean')
+		&& (candidate.supportAlertSyntax === undefined || typeof candidate.supportAlertSyntax === 'boolean')
+		&& (candidate.baseUri === undefined || candidate.baseUri instanceof URI);
+}
+
+function isMarkdownStringTrust(value: unknown): boolean {
+	if (value === undefined || typeof value === 'boolean') return true;
+	if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+	const enabledCommands = (value as MarkdownStringTrustedOptions).enabledCommands;
+	return enabledCommands === undefined
+		|| Array.isArray(enabledCommands) && enabledCommands.every(command => typeof command === 'string');
 }
 
 export function escapeMarkdownSyntaxTokens(value: string): string {
 	return value.replace(/[\\`*_{}[\]()#+!~]/g, '\\$&').replace(/^([ \t]*)-/gm, '$1\\-');
+}
+
+export function parseHrefAndDimensions(href: string): { href: string; dimensions: string[] } {
+	const [source, parameters = ''] = href.split('|', 2);
+	const dimensions: string[] = [];
+	for (const name of ['width', 'height'] as const) {
+		const match = new RegExp(`(?:^|[,\\s])${name}=(\\d+)`).exec(parameters);
+		if (match) {
+			dimensions.push(`${name}="${match[1]}"`);
+		}
+	}
+	return { href: source!.trim(), dimensions };
 }
 
 function escapedCodeBlock(code: string, languageId: string): string {

@@ -9,11 +9,15 @@ import type { IWorkbenchLayoutService } from "../../../../services/layout/browse
 import type { IChatService } from "../../../../services/chat/common/chatService.js";
 import type { IActiveSessionThread, IChat, ISession, IUntitledChatSession, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
 import type { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
-import { ChatPane } from "../pane/chatPane.js";
+import { ChatPane, resolveMarkdownWorkspaceResource } from "../pane/chatPane.js";
 import { ChatTitleControl } from "./chatTitleControl.js";
 import { h, isHTMLElement } from "../../../../../base/browser/dom.js";
 import type { IChatContextPickService, ChatContextAttachment } from "../../../../services/chat/common/chatContextService.js";
 import type { IQuickInputService } from "../../../../../platform/quickinput/common/quickInput.js";
+import type { IOpenerService } from "../../../../../platform/opener/common/openerService.js";
+import type { IEditorService } from "../../../../services/editor/common/editorService.js";
+import type { IFileService } from '../../../../../platform/files/common/files.js';
+import { URI } from '../../../../../base/common/uri.js';
 import { type IContextKey } from "../../../../../platform/contextkey/common/contextkey.js";
 import { ContextKeyService, type IContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
 import { ChatSessionInspectorVisibleContext } from "../../common/chat.js";
@@ -65,7 +69,10 @@ export class ChatViewPane extends ViewPane {
 		private readonly layoutService: IWorkbenchLayoutService,
 		private readonly contextPickService: IChatContextPickService,
 		private readonly quickInputService: IQuickInputService,
+		private readonly fileService: IFileService,
 		contextKeyService?: IContextKeyService,
+		private readonly openerService?: IOpenerService,
+		private readonly editorService?: IEditorService,
 	) {
 		super(container, options);
 		this.chatService = chatService;
@@ -177,6 +184,9 @@ export class ChatViewPane extends ViewPane {
 					this.commandService,
 					this.contextPickService,
 					this.quickInputService,
+					this.openerService,
+					this.editorService,
+					resource => readMarkdownImageResource(this.fileService, resource),
 				);
 				setDisposableOwner(pane, this);
 				this.panes.set(paneId, pane);
@@ -204,6 +214,9 @@ export class ChatViewPane extends ViewPane {
 					this.commandService,
 					this.contextPickService,
 					this.quickInputService,
+					this.openerService,
+					this.editorService,
+					resource => readMarkdownImageResource(this.fileService, resource),
 				);
 				setDisposableOwner(pane, this);
 				this.panes.set(paneId, pane);
@@ -394,4 +407,21 @@ function sessionPaneId(session: ISession): string {
 
 function sessionPaneIdFromId(sessionId: string): string {
 	return `session:${sessionId}`;
+}
+
+async function readMarkdownImageResource(fileService: IFileService, resource: URI): Promise<Blob> {
+	const file = resolveMarkdownWorkspaceResource(resource);
+	if (!file) throw new Error('Unsupported Markdown image resource');
+	const extension = /\.([A-Za-z]+)$/u.exec(file.path)?.[1]?.toLowerCase();
+	let mime: string | undefined;
+	switch (extension) {
+		case 'png': mime = 'image/png'; break;
+		case 'jpg':
+		case 'jpeg': mime = 'image/jpeg'; break;
+		case 'gif': mime = 'image/gif'; break;
+		case 'webp': mime = 'image/webp'; break;
+	}
+	if (!mime) throw new Error('Unsupported Markdown image type');
+	const { bytes } = await fileService.readFileBytes(file);
+	return new Blob([new Uint8Array(bytes)], { type: mime });
 }

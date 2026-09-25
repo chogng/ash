@@ -15,6 +15,11 @@ import { h } from "../../../../../base/browser/dom.js";
 import type { ChatContextAttachment } from "../../../../services/chat/common/chatContextService.js";
 import type { IChatContextPickService } from "../../../../services/chat/common/chatContextService.js";
 import type { IQuickInputService } from "../../../../../platform/quickinput/common/quickInput.js";
+import type { IOpenerService } from "../../../../../platform/opener/common/openerService.js";
+import type { IEditorService } from "../../../../services/editor/common/editorService.js";
+import { URI } from "../../../../../base/common/uri.js";
+import { Schemas } from "../../../../../base/common/network.js";
+import { createSshRemoteWorkspaceUri } from '../../../../../platform/remote/common/remote.js';
 import { OPEN_CHAT_SETTINGS_COMMAND_ID } from "../../common/chat.js";
 
 /** Owns the content and interaction state for one local or durable Chat tab. */
@@ -27,7 +32,21 @@ export class ChatPane extends Disposable {
 	private readonly sessionService: ISessionsManagementService;
 	private submittedMessage = false;
 
-	constructor(container: HTMLElement, panelId: string, chatService: IChatService, selection: ChatPaneSelection, sessionService: ISessionsManagementService, contextMenuService: IContextMenuService, contextViewService: IContextViewService, commandService: ICommandService, contextPickService: IChatContextPickService, quickInputService: IQuickInputService) {
+	constructor(
+		container: HTMLElement,
+		panelId: string,
+		chatService: IChatService,
+		selection: ChatPaneSelection,
+		sessionService: ISessionsManagementService,
+		contextMenuService: IContextMenuService,
+		contextViewService: IContextViewService,
+		commandService: ICommandService,
+		contextPickService: IChatContextPickService,
+		quickInputService: IQuickInputService,
+		openerService?: IOpenerService,
+		editorService?: IEditorService,
+		imageResourceLoader?: (resource: URI) => Promise<Blob>,
+	) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		this.element = h(ownerDocument, "div");
@@ -42,6 +61,10 @@ export class ChatPane extends Disposable {
 		this.goalElement.className = "ash-chat-goal";
 		this.goalElement.hidden = true;
 		this.listWidget = this._register(new ChatListWidget(this.element, {
+			imageResourceLoader,
+			onDidRequestLink: target => {
+				void openChatMarkdownLink(target, commandService, openerService, editorService).catch(error => console.error("Could not open Markdown link", error));
+			},
 			onDidRequestMemoryReference: reference => { void commandService.executeCommand('ash.memories.openReference', reference).catch(error => console.error('Could not open memory reference', error)); },
 			onDidRequestErrorAction: (action) => void this.handleTurnErrorAction(action).catch(() => undefined),
 		}));
@@ -197,6 +220,71 @@ export class ChatPane extends Disposable {
 		else this.element.removeAttribute("data-thread-id");
 		if (untitledSessionId) this.element.dataset.untitledSessionId = untitledSessionId;
 		else this.element.removeAttribute("data-untitled-session-id");
+	}
+}
+
+export async function openChatMarkdownLink(
+	target: string,
+	commandService: ICommandService,
+	openerService: IOpenerService | undefined,
+	editorService: IEditorService | undefined,
+): Promise<void> {
+	if (target.startsWith("#") || target.startsWith(`${Schemas.internal}:`)) return;
+	if (target.startsWith(`${Schemas.command}:`)) {
+		const command = parseCommandLink(target);
+		if (command) await commandService.executeCommand(command.id, ...command.args);
+		return;
+	}
+	const resource = URI.parse(target);
+	if (resource.scheme === Schemas.vscodeNotebookCell) {
+		if (editorService) await editorService.openEditor({ resource });
+		return;
+	}
+	if (isEditorResourceScheme(resource.scheme)) {
+		const workspaceResource = resolveMarkdownWorkspaceResource(resource);
+		if (workspaceResource && editorService) await editorService.openEditor({ resource: workspaceResource });
+		return;
+	}
+	if (openerService) await openerService.openExternal(target);
+}
+
+function isEditorResourceScheme(scheme: string): boolean {
+	return scheme === Schemas.file
+		|| scheme === Schemas.vscodeFileResource
+		|| scheme === Schemas.vscodeRemote
+		|| scheme === Schemas.vscodeRemoteResource
+		|| scheme === Schemas.vscodeNotebookCell;
+}
+
+/** Maps direct workspace addresses; transport URLs without a remote identity cannot be resolved here. */
+export function resolveMarkdownWorkspaceResource(resource: URI): URI | undefined {
+	if (resource.query || resource.fragment) return undefined;
+	if (resource.scheme === Schemas.file) return resource;
+	if (resource.scheme === Schemas.vscodeFileResource) {
+		return resource.authority === 'vscode-app' ? URI.parse(`file://${resource.path}`) : undefined;
+	}
+	if (resource.scheme === Schemas.vscodeRemote || resource.scheme === Schemas.vscodeRemoteResource) {
+		const match = /^ssh-remote\+([A-Za-z0-9._-]+)$/u.exec(resource.authority);
+		if (!match) return undefined;
+		try { return createSshRemoteWorkspaceUri(match[1]!, decodeURIComponent(resource.path)); }
+		catch { return undefined; }
+	}
+	return undefined;
+}
+
+function parseCommandLink(target: string): { readonly id: string; readonly args: readonly unknown[] } | undefined {
+	const match = /^command:(?:\/\/\/)?([^/?#]+)(?:\?([^#]*))?$/i.exec(target);
+	if (!match) return undefined;
+	let id: string;
+	try { id = decodeURIComponent(match[1]!); }
+	catch { return undefined; }
+	if (!id) return undefined;
+	if (!match[2]) return { id, args: [] };
+	try {
+		const args: unknown = JSON.parse(decodeURIComponent(match[2]));
+		return Array.isArray(args) ? { id, args } : undefined;
+	} catch {
+		return undefined;
 	}
 }
 

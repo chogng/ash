@@ -38,6 +38,42 @@
   padding-left: 0.9em;
 }
 
+.ash-markdown blockquote.ash-markdown-alert {
+  background: var(--ash-input-background);
+  border-left-color: var(--ash-markdown-alert-color, var(--ash-border));
+  border-radius: var(--ash-corner-radius-small);
+  color: var(--ash-foreground);
+  padding: 0.6em 0.9em;
+}
+
+.ash-markdown-alert-note,
+.ash-markdown-alert-important {
+  --ash-markdown-alert-color: var(--ash-accent-foreground);
+}
+
+.ash-markdown-alert-tip {
+  --ash-markdown-alert-color: var(--ash-success-foreground);
+}
+
+.ash-markdown-alert-warning {
+  --ash-markdown-alert-color: var(--ash-warning-foreground);
+}
+
+.ash-markdown-alert-caution {
+  --ash-markdown-alert-color: var(--ash-error-foreground);
+}
+
+.ash-markdown .ash-markdown-alert-label {
+  color: var(--ash-markdown-alert-color);
+  font-weight: 600;
+}
+
+.ash-markdown .ash-markdown-alert-icon {
+  color: var(--ash-markdown-alert-color);
+  margin-inline-end: 0.4em;
+  vertical-align: -0.1em;
+}
+
 .ash-markdown code,
 .ash-markdown pre {
   font-family: var(--ash-font-family-monospace, ui-monospace, monospace);

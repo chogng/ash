@@ -23,6 +23,8 @@ import { type ILayoutService as ILayoutServiceContract } from "../../platform/la
 import { IQuickInputService } from "../../platform/quickinput/common/quickInput.js";
 import { IQuickAccessController } from "../../platform/quickinput/common/quickAccess.js";
 import { QuickAccessController } from "../../platform/quickinput/browser/quickAccess.js";
+import { IOpenerService } from "../../platform/opener/common/openerService.js";
+import { BrowserOpenerService } from "../../platform/opener/browser/browserOpenerService.js";
 import { CommandService } from "../services/commands/common/commandService.js";
 import { BrowserKeyboardLayoutService } from "../services/keybinding/browser/keyboardLayoutService.js";
 import { WorkbenchKeybindingService } from "../services/keybinding/browser/keybindingService.js";
@@ -94,6 +96,7 @@ export class WorkbenchInteractionServices extends Disposable {
 		const ownerWindow = ownerDocument.defaultView;
 		if (!ownerWindow) throw new Error("Workbench interaction services require an owner window");
 		const container = options.container;
+		container.registerInstance(IOpenerService, new BrowserOpenerService(ownerWindow));
 		const userKeyboardLayoutService = options.userKeyboardLayoutApi ?? UnavailableUserKeyboardLayoutService;
 		container.registerInstance(IUserKeyboardLayoutService, userKeyboardLayoutService);
 

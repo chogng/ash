@@ -18,7 +18,10 @@ import { ChatInputEditors } from "./input/chatInputEditorRegistry.js";
 import { ChatViewPane } from "./view/chatViewPane.js";
 import { IChatContextPickService } from "../../../services/chat/common/chatContextService.js";
 import { IQuickInputService } from "../../../../platform/quickinput/common/quickInput.js";
+import { IOpenerService } from "../../../../platform/opener/common/openerService.js";
 import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
+import { IEditorService } from "../../../services/editor/common/editorService.js";
+import { IFileService } from '../../../../platform/files/common/files.js';
 
 registerWorkbenchContribution('workbench.contrib.chatInputEditor', WorkbenchPhase.BlockStartup, accessor => {
 	const instantiationService = accessor.get(IInstantiationService);
@@ -53,7 +56,10 @@ export function registerChatViews(registry: WorkbenchViewRegistry = ViewsRegistr
 				IWorkbenchLayoutService,
 				IChatContextPickService,
 				IQuickInputService,
+				IFileService,
 				IContextKeyService,
+				IOpenerService,
+				IEditorService,
 			],
 		}),
 	}]);

@@ -3,11 +3,13 @@ import {
 
 	toDisposable,
 } from "../../../../base/common/lifecycle.js";
+import type { URI } from "../../../../base/common/uri.js";
 import { MarkdownPreview } from "../../../../platform/markdown/browser/markdownPreview.js";
 
 export interface MarkdownDocumentViewOptions {
 	readonly markdown?: string;
 	readonly title?: string;
+	readonly baseUri?: URI;
 	readonly openLink: (href: string) => void | Promise<void>;
 }
 
@@ -30,6 +32,7 @@ export class MarkdownDocumentView extends Disposable {
 		this.preview = this._register(new MarkdownPreview(container, {
 			markdown: options.markdown,
 			title: options.title,
+			baseUri: options.baseUri,
 		}));
 		this.element = this.preview.element;
 		this.element.classList.add("ash-markdown-document-view");

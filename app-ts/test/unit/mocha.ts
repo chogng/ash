@@ -17,11 +17,12 @@ export function runUnitTests(patterns: readonly string[], editorEnvironment: boo
 	if (process.versions.node.split('.')[0] !== requiredVersion.split('.')[0]) {
 		throw new Error(`Unit tests require the Node major version specified in .nvmrc (${requiredVersion}); found ${process.version}.`);
 	}
-	// TypeScript resolves marked.d.ts but does not emit its adjacent JavaScript implementation.
-	const markedSource = resolve(desktopDirectory, 'src/ash/base/common/marked/marked.js');
-	const markedOutput = resolve(outputDirectory, 'src/ash/base/common/marked/marked.js');
-	mkdirSync(dirname(markedOutput), { recursive: true });
-	copyFileSync(markedSource, markedOutput);
+	// TypeScript resolves vendored declarations but does not emit their adjacent JavaScript implementations.
+	for (const path of ['src/ash/base/common/marked/marked.js', 'src/ash/base/browser/dompurify/dompurify.js']) {
+		const output = resolve(outputDirectory, path);
+		mkdirSync(dirname(output), { recursive: true });
+		copyFileSync(resolve(desktopDirectory, path), output);
+	}
 	const selection = parseSelection(process.argv.slice(2));
 	let names: string[];
 	if (selection.runs.length > 0) {

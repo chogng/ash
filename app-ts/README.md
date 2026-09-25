@@ -232,13 +232,17 @@ iframe 内容只能通过一次性获取的 `acquireAshWebviewApi().postMessage(
 
 ## Markdown
 
-DOMPurify 作为 `app-ts/package.json` 的运行时依赖安装，源码中的唯一直接适配器是
-`base/browser/domSanitize.ts`。`base/browser/markdownRenderer.ts` 提供用于 Workbench
-标签、Hover 和消息等短内容的 `MarkdownElement`，采用 `marked` 解析后再由 DOMPurify
-统一清洗。
-`platform/markdown/browser/markdownPreview.ts` 提供完整文档 `MarkdownPreview`，采用
-`markdown-it` 解析、同一套 DOMPurify allowlist 清洗，再交给 `WebviewElement` 的
-opaque-origin sandbox iframe。解析器输出不能直接写入 DOM 或 iframe。
+`base/common/marked/` 保留 Marked 源码，`base/browser/dompurify/` 保留 DOMPurify 源码；
+`base/browser/domSanitize.ts` 是 HTML 清理入口。`base/browser/markdownRenderer.ts` 提供
+Workbench 短内容的 `MarkdownElement` 和同步 `renderWorkbenchMarkdown`。完整文档预览也走同一
+Marked renderer，再经同一套 DOMPurify 策略清理后交给 `WebviewElement` 的 sandbox iframe。
+解析器输出不能直接写入 DOM 或 iframe。
+
+渲染入口支持 GFM、硬换行、自定义 Marked 扩展、链接和图片 URI 改写、代码块渲染回调、流式
+未完成语法、GitHub 风格提示块、主题图标和显式 HTML。HTML 与自定义扩展输出始终经过 sanitizer；
+命令链接按 `MarkdownString.isTrusted` 检查，HTTP(S) 图片默认允许，调用方可用 `remoteImageIsAllowed`
+按资源策略进一步限制。
+代码块渲染器由调用方提供，当前没有默认语法着色器。
 
 `workbench/contrib/markdown/browser/markdownDocumentRenderer.ts` 提供产品层
 `MarkdownDocumentView`，将平台预览适配为 Editor Part 可持有的视图，并接管链接打开回调。
@@ -256,8 +260,11 @@ Chat 的运行中普通文本 Send 由 `ChatPaneModel` 路由到生成协议中�
 running 或交互等待期间输入工具栏同时显示 Send 与 Stop。Renderer 不自行排队或判定消息已生效，
 最终 transcript、delivery 和错误始终以 App Server 的 canonical Thread projection 为准。
 
-当前链接只允许 HTTP、HTTPS 和页内 fragment，并交由宿主处理；图片只允许内嵌的 PNG、
-JPEG、GIF 与 WebP。语法高亮、Markdown 插件、Mermaid、KaTeX 和工作区相对资源映射尚未实现。
+链接支持 HTTP、HTTPS、mailto、页内 fragment 和 VS Code 资源 URI；`command:` 需要明确授权，
+`file:` 需要文件资源上下文或完全信任。工作区资源链接由编辑器打开，外部链接交由宿主处理。
+图片支持内嵌的 PNG、JPEG、GIF 与 WebP、文件资源和 HTTP(S) 图片；`remoteImageIsAllowed` 可按
+资源策略拒绝远程图片。自定义 Marked 插件和代码块 renderer 可由调用方注入；默认语法着色、
+Mermaid 和 KaTeX 尚未提供。
 详细边界见
 [`docs/ash-desktop-architecture.md`](../docs/ash-desktop-architecture.md#63-markdown)。
 
