@@ -17,7 +17,7 @@ import { type IDocumentDiffProvider } from '../../../../editor/common/diff/docum
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { type ITextModelResourceService } from '../../../services/textmodelResolver/common/textModelResourceService.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
-import type { IMenuService } from '../../../../platform/actions/common/menuService.js';
+import type { IMenuService } from '../../../../platform/actions/common/actions.js';
 import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { type EditorInput } from '../../../browser/parts/editor/editorInput.js';
 import { type IEditorPaneWithViewState } from '../../../browser/parts/editor/editorPane.js';

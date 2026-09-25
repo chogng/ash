@@ -279,7 +279,7 @@ test("menu toolbar applies custom primary groups and submenu inlining", async ()
 	const menuService = {
 		createMenu: () => menu,
 		getMenuActions: () => groups,
-	} as import("../../../../platform/actions/common/menuService.js").IMenuService;
+	} as import("../../../../platform/actions/common/actions.js").IMenuService;
 	using toolbar = new MenuWorkbenchToolBar(
 		dom.window.document.body,
 		menuService,

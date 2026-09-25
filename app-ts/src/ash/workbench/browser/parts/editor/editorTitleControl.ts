@@ -3,8 +3,7 @@ import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.
 import { Disposable, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { MenuWorkbenchToolBar, WorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
-import { MenuId } from "../../../../platform/actions/common/actions.js";
-import type { IMenuService } from "../../../../platform/actions/common/menuService.js";
+import { type IMenuService, MenuId } from "../../../../platform/actions/common/actions.js";
 import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IRegisteredConfiguration } from "../../../../platform/configuration/common/configurationRegistry.js";

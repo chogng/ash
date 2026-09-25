@@ -24,7 +24,8 @@ import { IWorkspaceContextService } from '../../../platform/workspace/common/wor
 import { ICommandService } from '../../../platform/commands/common/commands.js';
 import { IKeybindingService } from '../../../platform/keybinding/common/keybinding.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
-import { IMenuService, MenuService } from '../../../platform/actions/common/menuService.js';
+import { IMenuService } from '../../../platform/actions/common/actions.js';
+import { MenuService } from '../../../platform/actions/common/menuService.js';
 import { IContextMenuService, IContextViewService } from '../../../platform/contextview/browser/contextView.js';
 import { HoverService, IHoverService } from '../../../platform/hover/browser/hoverService.js';
 import { BrowserContextViewService } from '../../../platform/contextview/browser/contextViewService.js';

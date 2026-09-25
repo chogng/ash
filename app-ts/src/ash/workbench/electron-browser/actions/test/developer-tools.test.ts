@@ -180,4 +180,13 @@ test("desktop commands are available from the command palette", async () => {
 	assert.equal(openFolder?.label, "Open Folder...");
 	await openFolder?.run();
 	assert.equal(folderOpens, 1);
+	const fileMenuActions = new MenuService(commands, contexts)
+		.getMenuActions(MenuId.MenubarFileMenu)
+		.flatMap(([, actions]) => actions);
+	const openFolderFromMenu = fileMenuActions.find(
+		({ id }) => id === OpenFolderCommandId,
+	);
+	assert.equal(openFolderFromMenu?.label, "Open Folder...");
+	await openFolderFromMenu?.run();
+	assert.equal(folderOpens, 2);
 });

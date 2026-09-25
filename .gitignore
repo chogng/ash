@@ -1,5 +1,6 @@
 # Canonical local build products
 .build/
+/dist/
 
 # Legacy output paths remain ignored so older tools cannot re-add them.
 target/

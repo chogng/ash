@@ -1,5 +1,6 @@
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
+import { localizedString } from '../../../../platform/action/common/action.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IPreferencesService } from '../../../services/preferences/common/preferences.js';
@@ -9,8 +10,8 @@ registerAction2(class OpenSettingsAction extends Action2 {
 	constructor() {
 		super({
 			id: OpenSettingsCommandId,
-			title: 'Ash Settings',
-			tooltip: 'Ash Settings',
+			title: localizedString('ash', 'workbench.settings', 'Ash Settings'),
+			tooltip: localizedString('ash', 'workbench.settings', 'Ash Settings'),
 			icon: Lxicon.gear,
 			menu: [
 				{
@@ -22,6 +23,11 @@ registerAction2(class OpenSettingsAction extends Action2 {
 					id: MenuId.EditorTitle,
 					group: 'settings',
 					order: 100,
+				},
+				{
+					id: MenuId.MenubarFileMenu,
+					group: '5_preferences',
+					order: 1,
 				},
 			],
 			keybinding: {
@@ -40,8 +46,9 @@ registerAction2(class OpenKeyboardShortcutsAction extends Action2 {
 	constructor() {
 		super({
 			id: OpenKeyboardShortcutsCommandId,
-			title: 'Preferences: Open Keyboard Shortcuts',
+			title: localizedString('ash', 'workbench.openKeyboardShortcuts', 'Preferences: Open Keyboard Shortcuts'),
 			f1: true,
+			menu: { id: MenuId.MenubarHelpMenu, group: '2_reference', order: 1 },
 		});
 	}
 

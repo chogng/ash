@@ -1,7 +1,7 @@
 import { TabList, type TabListDropPosition } from "../../../../base/browser/ui/tablist/tabList.js";
 import { Disposable, DisposableMap } from "../../../../base/common/lifecycle.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
-import type { IMenuService } from "../../../../platform/actions/common/menuService.js";
+import type { IMenuService } from "../../../../platform/actions/common/actions.js";
 import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import type { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
 import type { IThemeService } from "../../../../platform/theme/common/themeService.js";

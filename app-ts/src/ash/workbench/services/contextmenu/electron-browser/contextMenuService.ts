@@ -17,7 +17,7 @@ import {
 	type ResolvedKeybinding,
 	type ResolvedKeybindingChord,
 } from "../../../../base/common/keybindings.js";
-import type { IMenuService } from "../../../../platform/actions/common/menuService.js";
+import type { IMenuService } from "../../../../platform/actions/common/actions.js";
 import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import type {
 	IKeybindingService,

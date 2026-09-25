@@ -9,6 +9,9 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "devDependencies": {
+    "@electron/packager": "20.0.4",
+    "@electron/rebuild": "4.2.0",
+    "@playwright/test": "1.61.1",
     "@types/node": "^24.0.0",
     "svgo": "4.0.1",
     "typescript": "^5.9.0",

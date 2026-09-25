@@ -8,6 +8,7 @@ import { builtinLanguagePackCatalogs } from "../../common/localizationCatalogs.j
 import { LocalizationConfiguration, WorkbenchLocaleService, normalizeLocale, resolveLocale } from "../../common/locale.js";
 import { WorkbenchLocalizationService } from "../../browser/workbenchLocalizationService.js";
 import { resetNlsResolver } from '../../../../../nls.js';
+import { commandActionLabel, localizedString } from '../../../../../platform/action/common/action.js';
 import { JSDOM } from 'jsdom';
 import { QuickInputController } from '../../../../../platform/quickinput/browser/quickInputController.js';
 import { JsonSchemasRegistry } from '../../../../../platform/jsonschemas/common/jsonSchemaRegistry.js';
@@ -43,6 +44,11 @@ test("localization lookup falls back to English and formats parameters", async (
 	assert.equal(localization.translate("ash.settings", "displayLanguage.title", "Fallback"), "Display Language");
 	assert.equal(localization.translate("ash.missing", "missing", "Hello {name}", { name: "Ada" }), "Hello Ada");
 	await localeService.setLocale('zh-CN');
+	assert.deepEqual([
+		commandActionLabel(localizedString('ash.menu', 'file', 'File')),
+		commandActionLabel(localizedString('ash.actions', 'showPanel', 'Show Panel')),
+		commandActionLabel(localizedString('ash', 'workbench.openFolder', 'Open Folder...')),
+	], ['文件', '显示面板', '打开文件夹...']);
 	assert.equal(localization.translate('ash.regions', 'searchCommands', 'Search commands'), '搜索命令');
 	assert.equal(localization.translate('ash', 'iPadShowKeyboard.label', 'Show Keyboard'), '显示键盘');
 	assert.equal(localization.translate('ash', 'inspectTokens.label', 'Developer: Inspect Tokens'), '开发者：检查词法单元');

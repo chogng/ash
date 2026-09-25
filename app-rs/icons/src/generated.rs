@@ -81,6 +81,7 @@ mod artwork {
     pub(crate) const ERROR: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/error.svg"));
     pub(crate) const EXPORT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/export.svg"));
     pub(crate) const EXPORT_TRAY: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/export-tray.svg"));
+    pub(crate) const EXTENSIONS: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/extensions.svg"));
     pub(crate) const EYE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/eye.svg"));
     pub(crate) const EYE_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/eye-filled.svg"));
     pub(crate) const FILE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/file.svg"));
@@ -275,6 +276,7 @@ pub mod icons {
     pub const ERROR: Icon = Icon::new(IconId::new("error"), artwork::ERROR);
     pub const EXPORT: Icon = Icon::new(IconId::new("export"), artwork::EXPORT);
     pub const EXPORT_TRAY: Icon = Icon::new(IconId::new("export-tray"), artwork::EXPORT_TRAY);
+    pub const EXTENSIONS: Icon = Icon::new(IconId::new("extensions"), artwork::EXTENSIONS);
     pub const EYE: Icon = Icon::new(IconId::new("eye"), artwork::EYE);
     pub const EYE_FILLED: Icon = Icon::new(IconId::new("eye-filled"), artwork::EYE_FILLED);
     pub const FILE: Icon = Icon::new(IconId::new("file"), artwork::FILE);
@@ -465,6 +467,7 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::ERROR,
     icons::EXPORT,
     icons::EXPORT_TRAY,
+    icons::EXTENSIONS,
     icons::EYE,
     icons::EYE_FILLED,
     icons::FILE,
@@ -656,6 +659,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("error", artwork::ERROR),
     ("export", artwork::EXPORT),
     ("export-tray", artwork::EXPORT_TRAY),
+    ("extensions", artwork::EXTENSIONS),
     ("eye", artwork::EYE),
     ("eye-filled", artwork::EYE_FILLED),
     ("file", artwork::FILE),

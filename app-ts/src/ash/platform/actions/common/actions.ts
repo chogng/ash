@@ -29,8 +29,9 @@ import type {
 import {
 	ContextKeyExpr,
 } from "../../contextkey/common/contextkey.js";
-import type {
-	ServicesAccessor,
+import {
+	createServiceIdentifier,
+	type ServicesAccessor,
 } from "../../instantiation/common/instantiation.js";
 import {
 	KeybindingsRegistry,
@@ -116,35 +117,55 @@ export class MenuId {
 }
 
 export interface IMenuRegistryChangeEvent {
-	readonly menuId: MenuId;
+	has(id: MenuId): boolean;
+}
+
+/** Keeps each placement's lifetime separate when callers reuse one menu item object. */
+interface MenuContribution {
+	readonly id: MenuId;
+	readonly item: MenuRegistryItem;
 }
 
 /** Realm-wide registry of static and dynamic action placements. */
 export class MenuRegistry {
-	private readonly items = new Map<MenuId, MenuRegistryItem[]>();
+	private readonly items = new Map<MenuId, MenuContribution[]>();
 	private readonly _onDidChangeMenu = new Emitter<IMenuRegistryChangeEvent>();
 
 	readonly onDidChangeMenu: Event<IMenuRegistryChangeEvent> =
 		this._onDidChangeMenu.event;
 
 	appendMenuItem(id: MenuId, item: MenuRegistryItem): IDisposable {
-		const items = getOrSet(this.items, id, []);
-		items.push(item);
-		this._onDidChangeMenu.fire({ menuId: id });
+		return this.appendMenuItems([{ id, item }]);
+	}
+
+	appendMenuItems(
+		entries: Iterable<{ readonly id: MenuId; readonly item: MenuRegistryItem }>,
+	): IDisposable {
+		const contributions = Array.from(entries, ({ id, item }) => ({ id, item }));
+		const changed = new Set<MenuId>();
+		for (const contribution of contributions) {
+			getOrSet(this.items, contribution.id, []).push(contribution);
+			changed.add(contribution.id);
+		}
+		if (changed.size > 0) this._onDidChangeMenu.fire(changed);
 
 		return toDisposable(() => {
-			const current = this.items.get(id);
-			if (!current) return;
-			const index = current.indexOf(item);
-			if (index < 0) return;
-			current.splice(index, 1);
-			if (current.length === 0) this.items.delete(id);
-			this._onDidChangeMenu.fire({ menuId: id });
+			const removed = new Set<MenuId>();
+			for (const contribution of contributions) {
+				const current = this.items.get(contribution.id);
+				if (!current) continue;
+				const index = current.indexOf(contribution);
+				if (index < 0) continue;
+				current.splice(index, 1);
+				if (current.length === 0) this.items.delete(contribution.id);
+				removed.add(contribution.id);
+			}
+			if (removed.size > 0) this._onDidChangeMenu.fire(removed);
 		});
 	}
 
 	getMenuItems(id: MenuId): readonly MenuRegistryItem[] {
-		return [...(this.items.get(id) ?? [])];
+		return (this.items.get(id) ?? []).map(({ item }) => item);
 	}
 }
 
@@ -158,6 +179,39 @@ export interface IMenuActionOptions {
 	readonly renderShortTitle?: boolean;
 	readonly preserveEmptySubmenus?: boolean;
 }
+
+export type MenuActionGroup = readonly [
+	group: string,
+	actions: readonly IAction[],
+];
+
+export interface IMenuChangeEvent {
+	readonly isStructuralChange: boolean;
+	readonly isEnablementChange: boolean;
+	readonly isToggleChange: boolean;
+}
+
+export interface IMenu extends IDisposable {
+	readonly onDidChange: Event<IMenuChangeEvent>;
+
+	getActions(options?: IMenuActionOptions): readonly MenuActionGroup[];
+}
+
+export interface IMenuService {
+	createMenu(
+		id: MenuId,
+		contextKeyService?: IContextKeyService,
+	): IMenu;
+
+	getMenuActions(
+		id: MenuId,
+		options?: IMenuActionOptions,
+		contextKeyService?: IContextKeyService,
+	): readonly MenuActionGroup[];
+}
+
+export const IMenuService =
+	createServiceIdentifier<IMenuService>("menuService");
 
 /** A command contribution resolved into a runnable UI action. */
 export class MenuItemAction implements IAction {
@@ -307,23 +361,27 @@ export function registerAction2(
 			}
 		}
 
+		const menuItems: Array<{ id: MenuId; item: MenuRegistryItem }> = [];
 		for (const placement of toArray(action.desc.menu)) {
-			registrations.add(MenusRegistry.appendMenuItem(placement.id, {
-				command: action.desc,
-				when: placement.when,
-				group: placement.group,
-				order: placement.order,
-			}));
+			menuItems.push({
+				id: placement.id,
+				item: {
+					command: action.desc,
+					when: placement.when,
+					group: placement.group,
+					order: placement.order,
+				},
+			});
 		}
 
 		if (action.desc.f1) {
-			registrations.add(MenusRegistry.appendMenuItem(
-				MenuId.CommandPalette,
-				{
-					command: action.desc,
-					when: action.desc.precondition,
-				},
-			));
+			menuItems.push({
+				id: MenuId.CommandPalette,
+				item: { command: action.desc, when: action.desc.precondition },
+			});
+		}
+		if (menuItems.length > 0) {
+			registrations.add(MenusRegistry.appendMenuItems(menuItems));
 		}
 	} catch (error) {
 		registrations.dispose();

@@ -17,6 +17,7 @@ export interface RemoteRuntimeInstallRendererEntry {
 
 export interface ElectronRemoteRuntimeInstallWindowOptions {
 	readonly productName: string;
+	readonly icon: string | undefined;
 	readonly rendererEntry: RemoteRuntimeInstallRendererEntry;
 	readonly webPreferences: WebPreferences;
 	readonly trustedIpcRouter: TrustedIpcRouter;
@@ -64,6 +65,7 @@ export class ElectronRemoteRuntimeInstallWindow extends Disposable {
 		const state = this.options.progress.getState();
 		if (!state || state.status === "cancelling") return;
 		const window = new BrowserWindow({
+			icon: this.options.icon,
 			width: 540,
 			height: 280,
 			minWidth: 420,

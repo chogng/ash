@@ -2,8 +2,8 @@ import {
 	Separator,
 	type IAction,
 } from "../../../base/common/actions.js";
-import { Emitter, type Event } from "../../../base/common/event.js";
-import { Disposable, type IDisposable } from "../../../base/common/lifecycle.js";
+import { Emitter } from "../../../base/common/event.js";
+import { Disposable } from "../../../base/common/lifecycle.js";
 import { isCommandActionToggleInfo } from "../../action/common/action.js";
 import type {
 	ICommandService,
@@ -12,54 +12,21 @@ import type {
 	ContextKeyExpression,
 	IContextKeyService,
 } from "../../contextkey/common/contextkey.js";
-import {
-	createServiceIdentifier,
-} from "../../instantiation/common/instantiation.js";
 import { onDidChangeNls } from "../../../nls.js";
 import {
 	type IMenuActionOptions,
+	type IMenu,
+	type IMenuChangeEvent,
 	type IMenuRegistryChangeEvent,
+	type IMenuService,
 	isMenuItem,
 	MenuId,
 	MenuItemAction,
+	type MenuActionGroup,
 	MenusRegistry,
 	type MenuRegistryItem,
 	SubmenuItemAction,
 } from "./actions.js";
-
-export type MenuActionGroup = readonly [
-	group: string,
-	actions: readonly IAction[],
-];
-
-/** Describes which projection of a menu changed. */
-export interface IMenuChangeEvent {
-	readonly isStructuralChange: boolean;
-	readonly isEnablementChange: boolean;
-	readonly isToggleChange: boolean;
-}
-
-export interface IMenu extends IDisposable {
-	readonly onDidChange: Event<IMenuChangeEvent>;
-
-	getActions(options?: IMenuActionOptions): readonly MenuActionGroup[];
-}
-
-export interface IMenuService {
-	createMenu(
-		id: MenuId,
-		contextKeyService?: IContextKeyService,
-	): IMenu;
-
-	getMenuActions(
-		id: MenuId,
-		options?: IMenuActionOptions,
-		contextKeyService?: IContextKeyService,
-	): readonly MenuActionGroup[];
-}
-
-export const IMenuService =
-	createServiceIdentifier<IMenuService>("menuService");
 
 /** Resolves registered menu contributions for one workbench context. */
 export class MenuService implements IMenuService {
@@ -116,7 +83,14 @@ class Menu extends Disposable implements IMenu {
 		this.snapshot = new MenuInfoSnapshot(this.id);
 		this._register(MenusRegistry.onDidChangeMenu(
 			(event: IMenuRegistryChangeEvent) => {
-				if (!this.snapshot.menuIds.has(event.menuId)) return;
+				let affected = false;
+				for (const menuId of this.snapshot.menuIds) {
+					if (event.has(menuId)) {
+						affected = true;
+						break;
+					}
+				}
+				if (!affected) return;
 				this.snapshot.refresh();
 				this._onDidChange.fire({
 					isStructuralChange: true,
@@ -191,17 +165,17 @@ class MenuInfoSnapshot {
 				this.collectMenu(item.submenu);
 				continue;
 			}
-			addExpressionKeys(
-				item.command.precondition,
-				this.enablementContextKeys,
-			);
-			const toggled = item.command.toggled;
-			addExpressionKeys(
-				toggled && isCommandActionToggleInfo(toggled)
-					? toggled.condition
-					: toggled,
-				this.toggleContextKeys,
-			);
+			for (const command of [item.command, item.alt]) {
+				if (!command) continue;
+				addExpressionKeys(command.precondition, this.enablementContextKeys);
+				const toggled = command.toggled;
+				addExpressionKeys(
+					toggled && isCommandActionToggleInfo(toggled)
+						? toggled.condition
+						: toggled,
+					this.toggleContextKeys,
+				);
+			}
 		}
 	}
 }
@@ -224,11 +198,12 @@ function resolveMenu(
 
 	const nextAncestors = new Set(ancestors);
 	nextAncestors.add(id);
-	const sorted = [...MenusRegistry.getMenuItems(id)].sort(compareMenuItems);
+	const sorted = MenusRegistry.getMenuItems(id)
+		.filter(item => contextKeyService.contextMatchesRules(item.when))
+		.sort(compareMenuItems);
 	const groups = new Map<string, IAction[]>();
 
 	for (const item of sorted) {
-		if (!contextKeyService.contextMatchesRules(item.when)) continue;
 		const action = resolveItem(
 			item,
 			commandService,

@@ -25,7 +25,7 @@ import type { IKeybindingsResourceService } from "../../../../platform/keybindin
 import type { IKeyboardLayoutService } from "../../../../platform/keyboardLayout/common/keyboardLayout.js";
 import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
-import type { IMenuService } from "../../../../platform/actions/common/menuService.js";
+import type { IMenuService } from "../../../../platform/actions/common/actions.js";
 import type { Event } from "../../../../base/common/event.js";
 import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
 import type { TextResourceLanguageResolver } from '../../../../platform/language/common/textResourceLanguage.js';

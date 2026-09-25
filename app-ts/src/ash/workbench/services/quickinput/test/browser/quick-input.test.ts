@@ -1,11 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
-import { Action2, MenuId, MenusRegistry, registerAction2 } from "../../../../../platform/actions/common/actions.js";
-import {
-	IMenuService,
-	MenuService,
-} from "../../../../../platform/actions/common/menuService.js";
+import { Action2, IMenuService, MenuId, MenusRegistry, registerAction2 } from "../../../../../platform/actions/common/actions.js";
+import { MenuService } from "../../../../../platform/actions/common/menuService.js";
 import {
 	ICommandService,
 } from "../../../../../platform/commands/common/commands.js";

@@ -36,11 +36,13 @@ let resolver: NlsResolver = fallbackResolver;
 export const onDidChangeNls: Event<void> = changes.event;
 
 export function localize(info: ILocalizeInfo, message: string, ...args: LocalizeArgument[]): string;
+export function localize(info: LocalizationKey, message: string, ...args: LocalizeArgument[]): string;
 export function localize(key: string, message: string, ...args: LocalizeArgument[]): string;
-export function localize(info: ILocalizeInfo | string, message: string, ...args: LocalizeArgument[]): string {
+export function localize(info: ILocalizeInfo | LocalizationKey | string, message: string, ...args: LocalizeArgument[]): string {
 	const key = typeof info === "string" ? info : info.key;
+	const bundle = typeof info === "string" || !("bundle" in info) ? "ash" : info.bundle;
 	const parameters = args.length === 0 ? undefined : Object.fromEntries(args.map((value, index) => [String(index), String(value)]));
-	return resolver("ash", key, message, parameters);
+	return resolver(bundle, key, message, parameters);
 }
 
 export function localize2(info: ILocalizeInfo, message: string, ...args: LocalizeArgument[]): ILocalizedString;

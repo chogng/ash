@@ -15,11 +15,12 @@ const applicationMenus = [
 	[localizedString("ash.menu", "help", "Help"), MenuId.MenubarHelpMenu],
 ] as const;
 
-for (const [index, [title, submenu]] of applicationMenus.entries()) {
-	MenusRegistry.appendMenuItem(MenuId.MenubarMainMenu, {
+MenusRegistry.appendMenuItems(applicationMenus.map(([title, submenu], index) => ({
+	id: MenuId.MenubarMainMenu,
+	item: {
 		title,
 		submenu,
 		group: "navigation",
 		order: index + 1,
-	});
-}
+	},
+})));

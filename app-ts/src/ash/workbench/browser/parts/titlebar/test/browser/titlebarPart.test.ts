@@ -237,11 +237,14 @@ test("browser titlebar uses one icon trigger for the application menus", () => {
 	);
 	const contextKeyService = disposables.add(new ContextKeyService());
 	const menuService = new MenuService(commandService, contextKeyService);
-	const emptyFileMenu = new MenuId("test.titlebar.file");
+	const fileMenu = new MenuId("test.titlebar.file");
 	const emptyEditMenu = new MenuId("test.titlebar.edit");
+	disposables.add(MenusRegistry.appendMenuItem(fileMenu, {
+		command: { id: "test.titlebar.newFile", title: "New File" },
+	}));
 	disposables.add(MenusRegistry.appendMenuItem(MenuId.MenubarMainMenu, {
 		title: "File",
-		submenu: emptyFileMenu,
+		submenu: fileMenu,
 		group: "navigation",
 		order: 1,
 	}));
@@ -274,6 +277,6 @@ test("browser titlebar uses one icon trigger for the application menus", () => {
 	assert.equal(menubar.domNode.querySelectorAll("button").length, 1);
 
 	button.click();
-	assert.deepEqual(menuLabels, ["File", "Edit"]);
+	assert.deepEqual(menuLabels, ["File"]);
 	assert.equal(button.getAttribute("aria-expanded"), "true");
 });

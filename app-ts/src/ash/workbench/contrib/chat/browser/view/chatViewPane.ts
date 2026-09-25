@@ -1,6 +1,6 @@
 import "../media/chat.css";
 import { setDisposableOwner, toDisposable } from "../../../../../base/common/lifecycle.js";
-import type { IMenuService } from "../../../../../platform/actions/common/menuService.js";
+import type { IMenuService } from "../../../../../platform/actions/common/actions.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { IContextViewService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";

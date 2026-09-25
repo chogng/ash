@@ -1,6 +1,7 @@
 import { setHoverDelegate } from "../../base/browser/ui/hover/hoverDelegate.js";
 import { Disposable, type IDisposable } from "../../base/common/lifecycle.js";
-import { IMenuService, MenuService } from "../../platform/actions/common/menuService.js";
+import { IMenuService } from "../../platform/actions/common/actions.js";
+import { MenuService } from "../../platform/actions/common/menuService.js";
 import { ICommandService } from "../../platform/commands/common/commands.js";
 import { type IConfigurationService as IConfigurationServiceContract } from "../../platform/configuration/common/configuration.js";
 import { IContextKeyService, ContextKeyService } from "../../platform/contextkey/browser/contextKeyService.js";

@@ -8,13 +8,11 @@ import {
 	toDisposable,
 } from "../../../../base/common/lifecycle.js";
 import {
+	type IMenu,
+	type IMenuService,
 	MenuId,
 	MenuItemAction,
 } from "../../../../platform/actions/common/actions.js";
-import type {
-	IMenu,
-	IMenuService,
-} from "../../../../platform/actions/common/menuService.js";
 import type {
 	INativeMenubarApi,
 	INativeMenubarData,

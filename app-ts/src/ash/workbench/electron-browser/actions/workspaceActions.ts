@@ -1,4 +1,5 @@
-import { Action2 } from "../../../platform/actions/common/actions.js";
+import { localizedString } from "../../../platform/action/common/action.js";
+import { Action2, MenuId } from "../../../platform/actions/common/actions.js";
 import type { ServicesAccessor } from "../../../platform/instantiation/common/instantiation.js";
 import { IWorkspaceOpenService } from "../../services/workspaces/browser/workspaceOpenService.js";
 
@@ -9,8 +10,9 @@ export class OpenFolderAction extends Action2 {
 	constructor() {
 		super({
 			id: OpenFolderCommandId,
-			title: "Open Folder...",
+			title: localizedString("ash", "workbench.openFolder", "Open Folder..."),
 			f1: true,
+			menu: { id: MenuId.MenubarFileMenu, group: "2_open", order: 1 },
 		});
 	}
 

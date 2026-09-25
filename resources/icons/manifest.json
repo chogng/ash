@@ -367,6 +367,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "extensions",
+      "file": "extensions.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "eye",
       "file": "eye.svg",
       "rendering": "symbolic"

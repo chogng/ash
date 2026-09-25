@@ -44,7 +44,10 @@ export function localizedString(bundle: string, key: string, original: string): 
 
 export function commandActionLabel(title: CommandActionTitle): string {
 	if (typeof title === "string") return title;
-	return title.key ? localize(title.key, title.original) : title.value;
+	if (!title.key) return title.value;
+	return title.bundle !== undefined
+		? localize({ bundle: title.bundle, key: title.key }, title.original)
+		: localize(title.key, title.original);
 }
 
 export function isCommandActionToggleInfo(

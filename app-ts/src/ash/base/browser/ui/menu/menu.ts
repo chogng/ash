@@ -1,11 +1,12 @@
 import { type IAction, type IActionRunner, Separator, SubmenuAction } from "../../../common/actions.js";
+import { RunOnceScheduler } from "../../../common/async.js";
 import { addDisposableListener, isNode, h } from "../../dom.js";
 import { FocusNavigationBoundary, FocusNavigationDirection, focusFirst, focusLast, moveFocus } from "../../focus.js";
 import type { ResolvedKeybinding } from "../../../common/keybindings.js";
 import { Disposable, toDisposable } from "../../../common/lifecycle.js";
 import { Lxicon } from "../../../common/lxicons.js";
 import { ActionViewItem, ButtonActionViewItem, SeparatorActionViewItem } from "../actionbar/actionViewItems.js";
-import { AnchorAxisAlignment, AnchorPosition, ContextView, ContextViewFocusRestore } from "../contextview/contextview.js";
+import { AnchorAxisAlignment, AnchorPosition, ContextView, ContextViewFocusRestore, ContextViewHideReason } from "../contextview/contextview.js";
 import { appendIcon } from "../lxicons/lxicon.js";
 import { KeybindingLabel } from "../keybindinglabel/keybindinglabel.js";
 
@@ -20,6 +21,7 @@ export interface MenuActionViewItemOptions {
 	readonly actionRunner?: IActionRunner;
 	readonly actionContext?: unknown;
 	readonly checkedActionRepresentation?: "radio" | "checkbox";
+	readonly onWillOpenSubmenu?: (item: ActionViewItem) => void;
 }
 
 function prependMenuLeadingSlot(
@@ -111,9 +113,19 @@ class SubmenuMenuActionViewItem extends ButtonActionViewItem {
 		| undefined;
 	private readonly actionRunner: IActionRunner | undefined;
 	private readonly actionContext: unknown;
+	private readonly onWillOpenSubmenu: ((item: ActionViewItem) => void) | undefined;
+	private readonly showScheduler = this._register(new RunOnceScheduler(() => {
+		if (this.pointerInside) this.openSubmenu(false);
+	}, 250));
+	private readonly hideScheduler = this._register(new RunOnceScheduler(() => {
+		const activeElement = this.button.domNode.ownerDocument.activeElement;
+		if (this.ownsTrigger(activeElement) || (isNode(activeElement) && this.contains(activeElement))) return;
+		this.close();
+	}, 750));
 	private contextView: ContextView | undefined;
 	private menu: Menu | undefined;
-	private open = false;
+	private pointerInside = false;
+	private lastPointerPosition: { x: number; y: number } | undefined;
 
 	constructor(
 		action: SubmenuAction,
@@ -127,6 +139,7 @@ class SubmenuMenuActionViewItem extends ButtonActionViewItem {
 		this.getKeybinding = options.getKeybinding;
 		this.actionRunner = options.actionRunner;
 		this.actionContext = options.actionContext;
+		this.onWillOpenSubmenu = options.onWillOpenSubmenu;
 	}
 
 	override render(container: HTMLElement): void {
@@ -150,17 +163,20 @@ class SubmenuMenuActionViewItem extends ButtonActionViewItem {
 			actionRunner: this.actionRunner,
 			actionContext: this.actionContext,
 			onDidSelect: () => {
-				this.hide();
+				this.close();
 				this.onDidSelect?.();
 			},
 			onDidRequestClose: () => {
-				this.hide();
+				this.close();
 				this.button.focus();
 			},
 		}));
-		this._register(this.contextView.onDidHide(() => {
-			this.open = false;
+		this._register(this.contextView.onDidHide((reason) => {
+			this.showScheduler.cancel();
+			this.hideScheduler.cancel();
+			this.menu?.closeSubmenus();
 			this.button.domNode.setAttribute("aria-expanded", "false");
+			if (reason === ContextViewHideReason.Escape) this.button.focus();
 		}));
 		this.button.domNode.setAttribute("role", "menuitem");
 		this.button.domNode.setAttribute("aria-haspopup", "menu");
@@ -169,33 +185,57 @@ class SubmenuMenuActionViewItem extends ButtonActionViewItem {
 		indicator.className = "ash-submenu-indicator";
 		appendIcon(Lxicon.chevronRight, indicator);
 		this.button.domNode.append(indicator);
+		this._register(addDisposableListener(container, "mousemove", (event) => {
+			const previous = this.lastPointerPosition;
+			// Some input paths report zero deltas, so compare positions before ignoring movement.
+			const moved = Boolean(
+				event.movementX || event.movementY ||
+				(previous && (previous.x !== event.clientX || previous.y !== event.clientY))
+			);
+			this.lastPointerPosition = { x: event.clientX, y: event.clientY };
+			if (!moved || this.pointerInside || !this.action.enabled) return;
+			this.pointerInside = true;
+			this.showScheduler.schedule();
+		}));
+		this._register(addDisposableListener(container, "mouseleave", () => {
+			this.pointerInside = false;
+			this.lastPointerPosition = undefined;
+			this.showScheduler.cancel();
+		}));
+		this._register(addDisposableListener(container, "focusout", () => this.hideScheduler.schedule()));
+		this._register(addDisposableListener(this.contextView.element, "focusout", () => this.hideScheduler.schedule()));
+		this._register(addDisposableListener(container, "focusin", () => this.hideScheduler.cancel()));
+		this._register(addDisposableListener(this.contextView.element, "focusin", () => this.hideScheduler.cancel()));
 	}
 
 	protected override runAction(): void {
-		if (this.open) {
-			this.hide();
-			return;
-		}
-		if (!this.contextView || !this.menu) return;
-		this.contextView.show({
-			anchor: this.button.domNode,
-			content: this.menu.element,
-			anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
-			anchorPosition: AnchorPosition.Below,
-			gap: 2,
-			presentation: "menu",
-			layer: this.submenuLayer,
-			focusRestore: ContextViewFocusRestore.Previous,
-			isTargetWithin: (target) => this.menu?.contains(target) ?? false,
-		});
-		this.open = true;
-		this.button.domNode.setAttribute("aria-expanded", "true");
-		this.menu.focusFirst();
+		this.openSubmenu(true);
 	}
 
-	private hide(): void {
-		if (!this.open) return;
-		this.open = false;
+	private openSubmenu(focusFirst: boolean): void {
+		if (!this.contextView || !this.menu) return;
+		if (!this.contextView.visible) {
+			this.onWillOpenSubmenu?.(this);
+			const shown = this.contextView.show({
+				anchor: this.button.domNode,
+				content: this.menu.element,
+				anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
+				anchorPosition: AnchorPosition.Below,
+				gap: 2,
+				presentation: "menu",
+				layer: this.submenuLayer,
+				focusRestore: ContextViewFocusRestore.None,
+				isTargetWithin: (target) => this.menu?.contains(target) ?? false,
+			});
+			if (!shown) return;
+			this.button.domNode.setAttribute("aria-expanded", "true");
+		}
+		if (focusFirst) this.menu.focusFirst();
+	}
+
+	close(): void {
+		this.showScheduler.cancel();
+		this.hideScheduler.cancel();
 		this.contextView?.hide();
 	}
 
@@ -209,7 +249,11 @@ class SubmenuMenuActionViewItem extends ButtonActionViewItem {
 	}
 
 	openFromKeyboard(): void {
-		if (!this.open) this.runAction();
+		this.openSubmenu(true);
+	}
+
+	openFromHover(): void {
+		this.openSubmenu(false);
 	}
 }
 
@@ -283,6 +327,10 @@ export class Menu extends Disposable {
 				actionRunner: options.actionRunner,
 				actionContext: options.actionContext,
 				checkedActionRepresentation: options.getCheckedActionsRepresentation?.(action),
+				onWillOpenSubmenu: (submenu) => {
+					this.closeSubmenus(submenu);
+					this.setFocusedEntry(this.entries.find((entry) => entry.item === submenu), true);
+				},
 			};
 			const item = this._register(
 				options.actionViewItemProvider?.(action, itemOptions) ??
@@ -315,11 +363,17 @@ export class Menu extends Disposable {
 			if (isNode(event.relatedTarget) && this.contains(event.relatedTarget)) return;
 			this.setFocusedEntry(undefined);
 		}));
+		this._register(addDisposableListener(container, "scroll", (event) => {
+			if (isNode(event.target) && event.target.contains(this.element)) {
+				this.closeSubmenus();
+			}
+		}, true));
 		this._register(addDisposableListener(element, "keydown", (event) => {
 			if (event.isComposing) return;
 			let handled = true;
 			switch (event.key) {
 				case "ArrowDown":
+					this.closeSubmenus();
 					moveFocus(
 						element,
 						FocusNavigationDirection.Forward,
@@ -327,6 +381,7 @@ export class Menu extends Disposable {
 					);
 					break;
 				case "ArrowUp":
+					this.closeSubmenus();
 					moveFocus(
 						element,
 						FocusNavigationDirection.Backward,
@@ -334,9 +389,11 @@ export class Menu extends Disposable {
 					);
 					break;
 				case "Home":
+					this.closeSubmenus();
 					focusFirst(element);
 					break;
 				case "End":
+					this.closeSubmenus();
 					focusLast(element);
 					break;
 				case "ArrowRight":
@@ -364,6 +421,12 @@ export class Menu extends Disposable {
 
 	focusFirst(): void {
 		focusFirst(this.element);
+	}
+
+	closeSubmenus(except?: ActionViewItem): void {
+		for (const submenu of this.submenus) {
+			if (submenu !== except) submenu.close();
+		}
 	}
 
 	contains(target: Node): boolean {

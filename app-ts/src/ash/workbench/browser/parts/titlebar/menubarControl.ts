@@ -4,8 +4,7 @@ import { Button } from "../../../../base/browser/ui/button/button.js";
 import { SubmenuAction } from "../../../../base/common/actions.js";
 import { Disposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
-import { MenuId } from "../../../../platform/actions/common/actions.js";
-import type { IMenu, IMenuService } from "../../../../platform/actions/common/menuService.js";
+import { type IMenu, type IMenuService, MenuId } from "../../../../platform/actions/common/actions.js";
 import type { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
 import { localize, type ILocalizationService } from "../../../services/localization/common/localizationService.js";
 
@@ -98,9 +97,7 @@ export class BrowserMenubarControl extends Disposable
 	}
 
 	private showMenu(): void {
-		const actions = this.menu.getActions({
-			preserveEmptySubmenus: true,
-		})
+		const actions = this.menu.getActions()
 			.flatMap(([, groupActions]) => groupActions)
 			.filter((action): action is SubmenuAction =>
 				action instanceof SubmenuAction

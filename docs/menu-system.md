@@ -47,7 +47,8 @@ Menu 系统解决的是 **action 的跨模块发现、条件投影、排序和�
 | 位置标识 | `MenuId` | 标识一个稳定的 action 贡献槽位 | 菜单实例、DOM ID、业务服务定位 |
 | 静态注册表 | `MenusRegistry` | 保存 `MenuId → contribution[]`，提供注册和释放事件 | 判断当前 context、执行命令 |
 | 条件状态 | `IContextKeyService` | 提供 visibility、enablement、checked 等规则的输入 | 业务权限和最终执行校验 |
-| 解析层 | `MenuService`、`IMenu` | 按 context 过滤、排序、分组、解析 submenu，并生成 runtime action | 控件布局和视觉样式 |
+| 菜单契约 | `platform/actions/common/actions.ts` 中的 `IMenu`、`IMenuService`、`IMenuChangeEvent` | 定义菜单查询、变化事件和服务注入入口 | 具体解析流程 |
+| 解析层 | `platform/actions/common/menuService.ts` 中的 `MenuService` | 按 context 过滤、排序、分组、解析 submenu，并生成 runtime action | 控件布局和视觉样式 |
 | Runtime action | `MenuItemAction`、`SubmenuItemAction` | 暴露 label、icon、enabled、checked，并桥接到 `CommandService` | Command 的业务实现 |
 | Base 呈现 | `ToolBar` | primary/secondary 排列、More Actions、键盘与 DOM | platform action 类型、MenuId |
 | Workbench 适配 | `WorkbenchToolBar` | 接受调用方提供的 actions，并把 platform menu action 适配为 base action view item | 自动查询 MenuId |
@@ -96,7 +97,7 @@ Menu 系统解决的是 **action 的跨模块发现、条件投影、排序和�
 
 ## 注册操作（Action）
 
-内建、静态加载的功能优先使用 `Action2`。一个声明可以原子地注册 Command、一个或多个
+内建、静态加载的功能优先使用 `Action2`。一个声明可以统一注册 Command、一个或多个
 Menu placement、快捷键和 Command Palette 入口：
 
 ```ts
@@ -135,6 +136,8 @@ registerAction2(class TogglePanelAction extends Action2 {
 静态 contribution module 可以让该注册随当前 JavaScript realm 存活。动态功能必须保存并
 释放 `registerAction2()` 返回的 `IDisposable`。如果任一步注册失败，
 `registerAction2()` 会释放此前已完成的注册，不留下半注册状态。
+同一个 action 的多个 Menu placement 与 F1 入口会一次写入 Registry；Menu 的监听者在
+注册和释放时各收到一次完整的变化事件。
 
 ### 动态添加位置
 
@@ -156,6 +159,8 @@ registration.dispose();
 ```
 
 这段代码只注册 placement；`editor.action.preview` 仍必须由 Command 系统注册执行入口。
+同一 owner 要同时添加多个位置时使用 `appendMenuItems()`。每次注册都有独立的释放身份，
+即使复用了同一个 contribution 对象，释放时也只移除对应位置。
 
 ### 声明子菜单（Submenu）
 
@@ -212,7 +217,8 @@ Toolbar/Button 等呈现层负责，详见
 4. `order` 相同时按 title 排序。
 5. 递归解析 submenu。
 
-`MenuWorkbenchToolBar` 对 group 还有一层明确的呈现规则：
+`MenuWorkbenchToolBar` 默认按以下规则呈现 group；host 可以通过 `toolbarOptions` 指定
+primary group、内联 submenu 和 primary separator：
 
 | Group | 当前 Toolbar 呈现 |
 | --- | --- |
@@ -228,10 +234,10 @@ Host 只选择槽位，不收集功能模块：
 
 ```ts
 const toolbar = new MenuWorkbenchToolBar(
+  container,
   menuService,
   contextMenuService,
   MenuId.TitleBar,
-  ownerDocument,
   { presentation: "inherit-foreground" },
 );
 ```
@@ -310,8 +316,9 @@ Titlebar、Editor title、Chat title 与 Terminal title 当前都使用
 - `appendMenuItem()` 与 `registerAction2()` 都返回可释放注册；动态调用方必须与自己的
   生命周期绑定。
 - `MenuService.getMenuActions()` 是一次性解析；`createMenu()` 返回可观察、可释放的 `IMenu`。
-- 当前 `IMenu.onDidChange` 会响应任意 Menu Registry 变化和任意 Context Key 变化，调用方
-  应假设事件表示“可能需要重算”，不能把它当成某个字段的精确变更通知。
+- `IMenu.onDidChange` 只响应自身及子菜单相关的 Registry 变化、相关 Context Key 变化和
+  语言变化。事件分别标记结构、可用状态和选中状态的变化；语言变化时三个标记都为 `false`，
+  调用方仍需更新可见文本。
 - `getMenuItems()` 返回数组副本，调用方不能借此修改 Registry。
 - Submenu 循环会报错；空 submenu 默认丢弃。
 - Command 的执行错误由 `CommandService.executeCommand()` 返回的 Promise 向调用方传播。
@@ -336,7 +343,7 @@ Titlebar、Editor title、Chat title 与 Terminal title 当前都使用
 
 | 能力 | 状态 |
 | --- | --- |
-| 一个 Action 原子注册 Command、Menu、Keybinding 和 F1 | ✅ |
+| 一个 Action 统一注册 Command、Menu、Keybinding 和 F1 | ✅ |
 | 一个 Command 贡献到多个 MenuId | ✅ |
 | Context 驱动 visibility、enablement、checked | ✅ |
 | Group/order 排序与递归 Submenu | ✅ |
@@ -344,19 +351,15 @@ Titlebar、Editor title、Chat title 与 Terminal title 当前都使用
 | Submenu 循环检测和空 Submenu 策略 | ✅ |
 | `ToolBar → WorkbenchToolBar → MenuWorkbenchToolBar` 分层 | ✅ |
 | Terminal title actions 接入 `MenuId.TerminalTitle` | ✅ |
-| 只通知受影响 MenuId 和相关 Context Key | 尚未完成 |
+| 只通知受影响 MenuId 和相关 Context Key | ✅ |
 | 每个 MenuId 的显式 owner catalog | 尚未完成 |
-| 每个 Toolbar 自定义 group 到 primary/secondary 的策略 | 尚未完成 |
+| 每个 Toolbar 自定义 group 到 primary/secondary 的策略 | ✅ |
 
 ### 当前限制
 
-1. `Menu` 当前订阅所有 Menu Registry 与 Context Key 变化，还没有按自身 `MenuId` 和表达式
-   依赖做精确失效。
-2. `MenuWorkbenchToolBar` 当前固定把 `navigation` 作为 primary，把所有其他 group 作为
-   secondary；host 不能声明更丰富的分组呈现策略。
-3. `MenuId` 的 owner 目前主要依赖静态定义和命名，没有独立 catalog。新增槽位时必须由
+1. `MenuId` 的 owner 目前主要依赖静态定义和命名，没有独立 catalog。新增槽位时必须由
    实际消费它的 host/domain 拥有并导出。
-4. `WorkbenchToolBar` 当前只拥有 platform action representation 适配；VS Code 中的 action
+2. `WorkbenchToolBar` 当前只拥有 platform action representation 适配；VS Code 中的 action
    隐藏、配置快捷键、遥测和复杂 overflow 策略尚未实现，不能描述为当前能力。
 
 ## 扩展原则

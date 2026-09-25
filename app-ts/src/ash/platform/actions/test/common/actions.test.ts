@@ -11,6 +11,7 @@ import { KeyCode, KeyMod } from "../../../../base/common/keyCodes.js";
 import {
 	Action2,
 	MenuId,
+	MenuItemAction,
 	MenusRegistry,
 	registerAction2,
 	SubmenuItemAction,
@@ -98,6 +99,65 @@ test("registerAction2 connects command execution and menu placement", async () =
 		.flatMap(([, actions]) => actions)
 		.map((action) => action.id);
 	assert.ok(paletteIds.includes("test.actions.registered"));
+});
+
+test("registerAction2 publishes all menu placements as one change", () => {
+	using registrations = new DisposableStore();
+	const rootMenu = new MenuId("test.actions.batch.root");
+	const firstMenu = new MenuId("test.actions.batch.first");
+	const secondMenu = new MenuId("test.actions.batch.second");
+	for (const [title, submenu] of [["First", firstMenu], ["Second", secondMenu]] as const) {
+		registrations.add(MenusRegistry.appendMenuItem(rootMenu, { title, submenu }));
+	}
+	const contexts = registrations.add(new ContextKeyService());
+	const commands = new CommandService(new ServiceContainer());
+	const menu = registrations.add(new MenuService(commands, contexts).createMenu(rootMenu));
+	const snapshots: string[][] = [];
+	const changedMenus: boolean[][] = [];
+	registrations.add(menu.onDidChange(() => {
+		snapshots.push(menu.getActions().flatMap(([, actions]) => actions.map(action => action.label)));
+	}));
+	registrations.add(MenusRegistry.onDidChangeMenu(event => {
+		if (event.has(firstMenu) || event.has(secondMenu)) {
+			changedMenus.push([event.has(firstMenu), event.has(secondMenu), event.has(MenuId.CommandPalette)]);
+		}
+	}));
+
+	const action = registrations.add(registerAction2(class BatchAction extends Action2 {
+		constructor() {
+			super({
+				id: "test.actions.batch.command",
+				title: "Batch action",
+				menu: [{ id: firstMenu }, { id: secondMenu }],
+				f1: true,
+			});
+		}
+
+		override run(): void {}
+	}));
+	assert.deepEqual(snapshots, [["First", "Second"]]);
+	assert.deepEqual(changedMenus, [[true, true, true]]);
+	assert.deepEqual(menu.getActions().flatMap(([, actions]) => actions.map(action => action.label)), ["First", "Second"]);
+
+	action.dispose();
+	assert.deepEqual(snapshots, [["First", "Second"], []]);
+	assert.deepEqual(changedMenus, [[true, true, true], [true, true, true]]);
+});
+
+test("menu registration disposes its own placement when an item is reused", () => {
+	using registrations = new DisposableStore();
+	const menuId = new MenuId("test.actions.reused-item");
+	const shared = { command: { id: "test.actions.shared", title: "Shared" } };
+	const middle = { command: { id: "test.actions.middle", title: "Middle" } };
+	const first = registrations.add(MenusRegistry.appendMenuItem(menuId, shared));
+	registrations.add(MenusRegistry.appendMenuItem(menuId, middle));
+	const last = registrations.add(MenusRegistry.appendMenuItem(menuId, shared));
+
+	assert.deepEqual(MenusRegistry.getMenuItems(menuId), [shared, middle, shared]);
+	last.dispose();
+	assert.deepEqual(MenusRegistry.getMenuItems(menuId), [shared, middle]);
+	first.dispose();
+	assert.deepEqual(MenusRegistry.getMenuItems(menuId), [middle]);
 });
 
 test("registerAction2 accepts independently conditioned keybinding contributions", () => {
@@ -225,6 +285,38 @@ test("menu actions react to visibility, enablement, and toggle context", () => {
 	assert.equal(changes.length, 3);
 });
 
+test("menu actions react to alternate enablement and toggle context", () => {
+	using registrations = new DisposableStore();
+	const menuId = new MenuId("test.actions.alternate-context");
+	registrations.add(MenusRegistry.appendMenuItem(menuId, {
+		command: { id: "test.actions.primary", title: "Primary" },
+		alt: {
+			id: "test.actions.alternate",
+			title: "Alternate",
+			precondition: ContextKeyExpr.has("test.alternateReady"),
+			toggled: ContextKeyExpr.has("test.alternateActive"),
+		},
+	}));
+	const contexts = registrations.add(new ContextKeyService());
+	const menu = registrations.add(new MenuService(new CommandService(new ServiceContainer()), contexts).createMenu(menuId));
+	const changes: Array<[boolean, boolean, boolean]> = [];
+	registrations.add(menu.onDidChange(event => {
+		changes.push([event.isStructuralChange, event.isEnablementChange, event.isToggleChange]);
+	}));
+	const action = () => {
+		const candidate = menu.getActions()[0][1][0];
+		assert.ok(candidate instanceof MenuItemAction);
+		assert.ok(candidate.alt);
+		return candidate.alt;
+	};
+
+	assert.deepEqual([action().enabled, action().checked], [false, false]);
+	contexts.setContext("test.alternateReady", true);
+	contexts.setContext("test.alternateActive", true);
+	assert.deepEqual(changes, [[false, true, false], [false, false, true]]);
+	assert.deepEqual([action().enabled, action().checked], [true, true]);
+});
+
 test("menus can resolve actions against a caller-owned context scope", () => {
 	using registrations = new DisposableStore();
 	const menuId = new MenuId("test.actions.scoped-menu");
@@ -333,19 +425,56 @@ test("menu service sorts groups and resolves submenus", () => {
 	);
 });
 
+test("menu service does not read titles of actions hidden by context", () => {
+	using registrations = new DisposableStore();
+	const menuId = new MenuId("test.actions.hidden-title");
+	let hiddenTitleReads = 0;
+	registrations.add(MenusRegistry.appendMenuItem(menuId, {
+		command: {
+			id: "test.actions.hidden",
+			get title() {
+				hiddenTitleReads += 1;
+				return "Hidden";
+			},
+		},
+		when: ContextKeyExpr.has("test.showHidden"),
+	}));
+	registrations.add(MenusRegistry.appendMenuItem(menuId, {
+		command: { id: "test.actions.visible", title: "Visible" },
+	}));
+	const contexts = registrations.add(new ContextKeyService());
+	const menus = new MenuService(new CommandService(new ServiceContainer()), contexts);
+
+	assert.deepEqual(menus.getMenuActions(menuId).flatMap(([, actions]) => actions.map(action => action.label)), ["Visible"]);
+	assert.equal(hiddenTitleReads, 0);
+	contexts.setContext("test.showHidden", true);
+	assert.deepEqual(menus.getMenuActions(menuId).flatMap(([, actions]) => actions.map(action => action.label)), ["Hidden", "Visible"]);
+	assert.ok(hiddenTitleReads > 0);
+});
+
 test("menu actions refresh localized labels when the locale changes", () => {
 	using registrations = new DisposableStore();
 	const menuId = new MenuId("test.actions.localization");
+	const childMenuId = new MenuId("test.actions.localization.child");
 	const commandId = "test.actions.localization.command";
 	registrations.add(CommandsRegistry.register(commandId, () => undefined));
 	registrations.add(MenusRegistry.appendMenuItem(menuId, {
+		title: localizedString("ash.menu", "file", "File"),
+		submenu: childMenuId,
+	}));
+	registrations.add(MenusRegistry.appendMenuItem(childMenuId, {
 		command: {
 			id: commandId,
 			title: localizedString("ash.test", "command", "Open"),
 		},
 	}));
 	let locale = "en";
-	const resolve = (_bundle: string, key: string, fallback: string) => key === "command" && locale === "zh-CN" ? "打开" : fallback;
+	const resolve = (bundle: string, key: string, fallback: string) => {
+		if (locale !== "zh-CN") return fallback;
+		if (bundle === "ash.menu" && key === "file") return "文件";
+		if (bundle === "ash.test" && key === "command") return "打开";
+		return fallback;
+	};
 	setNlsResolver(resolve);
 	try {
 		const commands = new CommandService(new ServiceContainer());
@@ -353,12 +482,17 @@ test("menu actions refresh localized labels when the locale changes", () => {
 		const menu = registrations.add(new MenuService(commands, contexts).createMenu(menuId));
 		const changes: boolean[] = [];
 		registrations.add(menu.onDidChange((event) => changes.push(event.isStructuralChange)));
+		const labels = () => {
+			const submenu = menu.getActions()[0][1][0];
+			assert.ok(submenu instanceof SubmenuItemAction);
+			return [submenu.label, submenu.actions[0].label];
+		};
 
-		assert.equal(menu.getActions()[0][1][0].label, "Open");
+		assert.deepEqual(labels(), ["File", "Open"]);
 		locale = "zh-CN";
 		setNlsResolver(resolve);
 		assert.deepEqual(changes, [false]);
-		assert.equal(menu.getActions()[0][1][0].label, "打开");
+		assert.deepEqual(labels(), ["文件", "打开"]);
 	} finally {
 		resetNlsResolver();
 	}

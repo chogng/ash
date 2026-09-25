@@ -3,7 +3,7 @@ import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { toDisposable } from "../../../../../base/common/lifecycle.js";
-import type { IMenu, IMenuService } from "../../../../../platform/actions/common/menuService.js";
+import type { IMenu, IMenuService } from "../../../../../platform/actions/common/actions.js";
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, ThreadRead, ThreadSubscription, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope } from "../../../../services/chat/common/chatService.js";

@@ -1,5 +1,5 @@
 import { Lxicon } from "../../../../base/common/lxicons.js";
-import { IMenuService } from "../../../../platform/actions/common/menuService.js";
+import { IMenuService } from "../../../../platform/actions/common/actions.js";
 import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
 import { ICommandService } from "../../../../platform/commands/common/commands.js";

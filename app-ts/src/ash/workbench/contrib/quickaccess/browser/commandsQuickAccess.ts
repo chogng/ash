@@ -1,8 +1,7 @@
 import { getKeybindingLabel } from '../../../../base/common/keybindingLabels.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
-import { Action2, MenuId, MenuItemAction, registerAction2 } from '../../../../platform/actions/common/actions.js';
-import { IMenuService } from '../../../../platform/actions/common/menuService.js';
+import { Action2, IMenuService, MenuId, MenuItemAction, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
@@ -78,6 +77,10 @@ registerAction2(class ShowAllCommandsAction extends Action2 {
 		super({
 			id: ShowAllCommandsCommandId,
 			get title() { return localize2('quickAccess.showAllCommands', 'Show All Commands'); },
+			menu: [
+				{ id: MenuId.MenubarViewMenu, group: '1_commands', order: 1 },
+				{ id: MenuId.MenubarHelpMenu, group: '1_commands', order: 1 },
+			],
 			keybinding: {
 				primary: Keybinding.single(logicalKey('p', { primaryKey: true, shiftKey: true })),
 				secondary: [Keybinding.single(logicalKey('F1'))],

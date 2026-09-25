@@ -3,7 +3,7 @@ import "./actions/chatActions.js";
 import "./actions/chatLayoutActions.js";
 import "../common/widget/chatColors.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
-import { IMenuService } from "../../../../platform/actions/common/menuService.js";
+import { IMenuService } from "../../../../platform/actions/common/actions.js";
 import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
 import { IContextViewService } from "../../../../platform/contextview/browser/contextView.js";
 import { ICommandService } from "../../../../platform/commands/common/commands.js";

@@ -1,5 +1,6 @@
 import { Lxicon } from "../../../../base/common/lxicons.js";
 import { DisposableStore } from "../../../../base/common/lifecycle.js";
+import { localizedString } from "../../../../platform/action/common/action.js";
 import { Action2, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
 import { Keybinding, logicalKey } from "../../../../base/common/keybindings.js";
 import type { ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
@@ -9,6 +10,7 @@ import type { ExtensionFileTemplateDefinition } from "../../../services/extensio
 import { IExtensionService } from "../../../services/extensions/common/extensionService.js";
 import { IUntitledTextEditorService } from "../../../services/untitled/common/untitledTextEditorService.js";
 import type { EditorIdentifier } from "../../../services/editor/common/editorState.js";
+import { EditorsVisibleContext } from "../../../common/contextkeys.js";
 import type { IEditorPaneDescriptor } from "./editorPane.js";
 import { IEditorPartsService } from "./editorParts.js";
 
@@ -59,8 +61,9 @@ registerAction2(class CloseActiveEditorAction extends Action2 {
 	constructor() {
 		super({
 			id: CloseActiveEditorCommandId,
-			title: "Close Editor",
+			title: localizedString("ash", "workbench.closeEditor", "Close Editor"),
 			f1: true,
+			menu: { id: MenuId.MenubarFileMenu, when: EditorsVisibleContext.isEqualTo(true), group: "4_close", order: 1 },
 			keybinding: { primary: Keybinding.single(logicalKey("w", { primaryKey: true })) },
 		});
 	}
@@ -75,7 +78,12 @@ export const CloseAllEditorsCommandId = "workbench.action.closeAllEditors";
 
 registerAction2(class CloseAllEditorsAction extends Action2 {
 	constructor() {
-		super({ id: CloseAllEditorsCommandId, title: "Close All Editors", f1: true });
+		super({
+			id: CloseAllEditorsCommandId,
+			title: localizedString("ash", "workbench.closeAllEditors", "Close All Editors"),
+			f1: true,
+			menu: { id: MenuId.MenubarFileMenu, when: EditorsVisibleContext.isEqualTo(true), group: "4_close", order: 2 },
+		});
 	}
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
@@ -89,8 +97,9 @@ registerAction2(class ReopenClosedEditorAction extends Action2 {
 	constructor() {
 		super({
 			id: ReopenClosedEditorCommandId,
-			title: "Reopen Closed Editor",
+			title: localizedString("ash", "workbench.reopenClosedEditor", "Reopen Closed Editor"),
 			f1: true,
+			menu: { id: MenuId.MenubarFileMenu, group: "4_close", order: 3 },
 			keybinding: { primary: Keybinding.single(logicalKey("t", { primaryKey: true, shiftKey: true })) },
 		});
 	}
@@ -107,8 +116,9 @@ registerAction2(class NavigateEditorMruAction extends Action2 {
 	constructor() {
 		super({
 			id: NavigateEditorMruCommandId,
-			title: "Open Next Recently Used Editor",
+			title: localizedString("ash", "workbench.nextRecentlyUsedEditor", "Open Next Recently Used Editor"),
 			f1: true,
+			menu: { id: MenuId.MenubarGoMenu, when: EditorsVisibleContext.isEqualTo(true), group: "1_editor", order: 1 },
 			keybinding: { primary: Keybinding.single(logicalKey("tab", { primaryKey: true })) },
 		});
 	}
@@ -122,8 +132,9 @@ registerAction2(class NavigateEditorMruBackwardsAction extends Action2 {
 	constructor() {
 		super({
 			id: NavigateEditorMruBackwardsCommandId,
-			title: "Open Previous Recently Used Editor",
+			title: localizedString("ash", "workbench.previousRecentlyUsedEditor", "Open Previous Recently Used Editor"),
 			f1: true,
+			menu: { id: MenuId.MenubarGoMenu, when: EditorsVisibleContext.isEqualTo(true), group: "1_editor", order: 2 },
 			keybinding: { primary: Keybinding.single(logicalKey("tab", { primaryKey: true, shiftKey: true })) },
 		});
 	}
@@ -143,8 +154,9 @@ registerAction2(class ShowAllEditorsAction extends Action2 {
 	constructor() {
 		super({
 			id: ShowAllEditorsCommandId,
-			title: "Show All Editors",
+			title: localizedString("ash", "workbench.showAllEditors", "Show All Editors"),
 			f1: true,
+			menu: { id: MenuId.MenubarGoMenu, when: EditorsVisibleContext.isEqualTo(true), group: "1_editor", order: 3 },
 			keybinding: { primary: Keybinding.chord(logicalKey("k", { primaryKey: true }), logicalKey("p", { primaryKey: true })) },
 		});
 	}
@@ -215,10 +227,11 @@ registerAction2(class NewUntitledTextEditorAction extends Action2 {
 	constructor() {
 		super({
 			id: NewUntitledTextEditorCommandId,
-			title: "New Untitled Text Editor",
-			tooltip: "New Untitled Text Editor",
+			title: localizedString("ash", "workbench.newUntitledFile", "New Untitled Text Editor"),
+			tooltip: localizedString("ash", "workbench.newUntitledFile", "New Untitled Text Editor"),
 			icon: Lxicon.add,
 			f1: true,
+			menu: { id: MenuId.MenubarFileMenu, group: "1_file", order: -1 },
 			keybinding: {
 				primary: Keybinding.single(logicalKey("n", { primaryKey: true })),
 			},
@@ -246,8 +259,8 @@ registerAction2(class NewFileFromTemplateAction extends Action2 {
 	constructor() {
 		super({
 			id: NewFileFromTemplateCommandId,
-			title: "New File from Template",
-			tooltip: "New File from Template",
+			title: localizedString("ash", "workbench.newFileFromTemplate", "New File from Template"),
+			tooltip: localizedString("ash", "workbench.newFileFromTemplate", "New File from Template"),
 			f1: true,
 			menu: { id: MenuId.MenubarFileMenu, group: "1_file", order: 0 },
 		});
@@ -289,12 +302,13 @@ registerAction2(class SaveActiveEditorAction extends Action2 {
 	constructor() {
 		super({
 			id: SaveActiveEditorCommandId,
-			title: "Save",
-			tooltip: "Save",
+			title: localizedString("ash", "workbench.save", "Save"),
+			tooltip: localizedString("ash", "workbench.save", "Save"),
 			f1: true,
 			menu: {
 				id: MenuId.MenubarFileMenu,
-				group: "1_file",
+				when: EditorsVisibleContext.isEqualTo(true),
+				group: "3_save",
 				order: 1,
 			},
 			keybinding: {

@@ -128,6 +128,7 @@ export class AshApplication extends Disposable {
 	private readonly nativeKeyboardLayout: NativeKeyboardLayoutMainService;
 	private readonly nativeMenubar: NativeMenubarMainService | undefined;
 	private readonly profileRoot: string;
+	private readonly windowIconPath: string | undefined;
 
 	private readonly workbenchWindows = new WorkbenchWindowRegistry<WorkbenchWindowRecord>();
 	private readonly pendingWindowLaunches: PendingWindowLaunch[] = [];
@@ -160,6 +161,10 @@ export class AshApplication extends Disposable {
 			}))
 			: undefined;
 		this.profileRoot = resolveHome();
+		// Development uses the stock Electron executable; a Windows package must embed this icon in its executable.
+		this.windowIconPath = process.platform === 'win32' && !app.isPackaged
+			? join(app.getAppPath(), '..', 'resources', 'win32', 'ash.ico')
+			: undefined;
 
 		app.on("before-quit", this.onBeforeQuit);
 		app.on("will-quit", this.onWillQuit);
@@ -436,6 +441,7 @@ export class AshApplication extends Disposable {
 		}));
 		resources.add(new ElectronRemoteRuntimeInstallWindow({
 			productName: WorkbenchModeRegistry.get(this.defaultModeId).title,
+			icon: this.windowIconPath,
 			rendererEntry: this.resolveRendererEntry("remoteRuntimeInstall"),
 			webPreferences: this.createSandboxWebPreferences(),
 			trustedIpcRouter: this.trustedIpcRouter,
@@ -501,6 +507,7 @@ export class AshApplication extends Disposable {
 		});
 		const window = new BrowserWindow({
 			...browserWindowOptions,
+			icon: this.windowIconPath,
 			show: false,
 		});
 		const windowStateTracking = windowsStateHandler.trackWindow(window);
@@ -748,6 +755,7 @@ export class AshApplication extends Disposable {
 		});
 		const window = new BrowserWindow({
 			...browserWindowOptions,
+			icon: this.windowIconPath,
 			show: false,
 			title: `${mode.title} Sessions`,
 		});

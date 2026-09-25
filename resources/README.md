@@ -25,19 +25,29 @@ Ash then updates its pinned copy before requiring metadata signed only by the ro
 
 ## Application branding
 
-The fixed application icon is derived from
-`app-ts/src/ash/workbench/browser/media/ash-light.svg`. Unlike renderer UI,
-launcher, package, taskbar, and Web icons do not change with the editor color theme.
+Application icons are fixed and do not change with the editor color theme.
+The Windows artwork comes from `win32/ash.svg`; the macOS, Linux, and Web
+artwork comes from `app-ts/src/ash/workbench/browser/media/ash-light.svg`.
 
-- `win32/ash.ico` is the Windows application and package icon.
+- `win32/ash.ico` contains 16, 24, 32, 48, 64, 128, and 256 pixel PNG images
+  rendered from `win32/ash.svg`. Run `pnpm app-icon:generate` after changing
+  the SVG and `pnpm app-icon:check` to verify the generated icon. Electron
+  development windows load the ICO directly. The Windows packaging command
+  embeds it in `Ash.exe`.
 - `darwin/ash.icns` is the macOS application bundle icon.
 - `linux/ash.png` is the Linux desktop and window icon.
 - `server/` contains the Web favicon, install icons, and manifest.
 
 Vite copies `server/` unchanged to the renderer output root, and the browser
-Workbench and Sessions pages link those stable paths. The repository does not
-currently contain an Electron bundle or installer stage; that stage must consume
-the three platform files directly when it is introduced.
+Workbench and Sessions pages link those stable paths. On Windows x64,
+`pnpm package:desktop:win32` creates an Electron bundle and an Inno Setup
+installer under `dist/`. The bundle command builds the TypeScript host and
+renderer, packages a Windows App Server, embeds `win32/ash.ico` in `Ash.exe`,
+and includes the required resources. The installer requires Inno Setup 6's
+`ISCC.exe` on `PATH`, or its full path in `ISCC_PATH`. Both installer shortcuts
+use the same application ID as the running Electron process. Run
+`pnpm --dir app-ts package:win32:verify` to launch the packaged Workbench with
+Playwright after building the bundle.
 
 `ash-dark.svg` remains a renderer-only titlebar variant and is not a packaging
 source.
