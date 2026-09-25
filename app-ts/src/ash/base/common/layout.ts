@@ -11,6 +11,7 @@ export interface IRectangle extends ISize {
 export enum AnchorAlignment {
 	Left,
 	Right,
+	Center,
 }
 
 export enum AnchorPosition {
@@ -182,6 +183,17 @@ function alignWithAnchor(
 	requested: AnchorAlignment,
 ): CrossPlacement {
 	const viewportEnd = viewportStart + viewportSize;
+	if (requested === AnchorAlignment.Center) {
+		return {
+			offset: clampToViewport(
+				anchorStart + (anchorSize - viewSize) / 2,
+				viewSize,
+				viewportStart,
+				viewportEnd,
+			),
+			alignment: AnchorAlignment.Center,
+		};
+	}
 	const leftAligned = anchorStart;
 	const rightAligned = anchorStart + anchorSize - viewSize;
 	const leftFits = leftAligned + viewSize <= viewportEnd &&

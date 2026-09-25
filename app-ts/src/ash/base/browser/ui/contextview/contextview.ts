@@ -224,6 +224,15 @@ export class ContextView
 			result.anchorAlignment === AnchorAlignment.Left,
 		);
 		this.element.classList.toggle(
+			"ash-context-view-align-center",
+			result.anchorAlignment === AnchorAlignment.Center,
+		);
+		if (result.anchorAlignment === AnchorAlignment.Center && options.anchorAxisAlignment !== AnchorAxisAlignment.Horizontal) {
+			this.element.style.setProperty("--ash-context-view-anchor-offset", `${anchor.left + anchor.width / 2 - result.left}px`);
+		} else {
+			this.element.style.removeProperty("--ash-context-view-anchor-offset");
+		}
+		this.element.classList.toggle(
 			"ash-context-view-axis-horizontal",
 			options.anchorAxisAlignment === AnchorAxisAlignment.Horizontal,
 		);

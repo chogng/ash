@@ -57,6 +57,10 @@
   right: 14px;
 }
 
+.ash-context-view-hover.ash-context-view-align-center::before {
+  left: clamp(4px, calc(var(--ash-context-view-anchor-offset) - 4px), calc(100% - 12px));
+}
+
 .ash-context-view-hover.ash-context-view-axis-horizontal.ash-context-view-below::before {
   top: 14px;
   right: auto;

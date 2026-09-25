@@ -73,7 +73,7 @@ export class Hover extends Disposable {
 		this.enabled = options.enabled;
 		this.pointerHoverEnabled = options.pointerHoverEnabled;
 		this.anchorAlignment = options.anchorAlignment ??
-			AnchorAlignment.Left;
+			AnchorAlignment.Center;
 		this.anchorAxisAlignment = options.anchorAxisAlignment ??
 			AnchorAxisAlignment.Vertical;
 		this.anchorPosition = options.anchorPosition ??

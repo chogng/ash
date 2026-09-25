@@ -37,6 +37,8 @@ test("Hover replaces native title with managed accessible content", () => {
 	assert.equal(tooltip.textContent, "Managed title");
 	assert.equal(tooltip.getAttribute("role"), "tooltip");
 	assert.equal(target.getAttribute("aria-describedby"), tooltip.id);
+	assert.equal(contextView.element.style.left, "0px");
+	assert.equal(contextView.element.classList.contains("ash-context-view-align-center"), true);
 
 	hover.update("Updated title");
 	assert.equal(tooltip.textContent, "Updated title");
