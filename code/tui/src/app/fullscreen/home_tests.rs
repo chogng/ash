@@ -2,6 +2,7 @@ use crate::app::App;
 use crate::app::AppCommand;
 use crate::app::fullscreen::pointer::PointerTarget;
 use crate::sessions::Command as SessionCommand;
+use crate::thread::Command as ThreadCommand;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -129,6 +130,26 @@ fn home_keeps_actions_above_the_fixed_composer() {
         text(&render(&app, terminal.width, terminal.height))
     );
     assert!(app.messages().is_empty());
+}
+
+#[test]
+fn home_shift_tab_in_input_cycles_permissions_without_selecting_an_action() {
+    let mut app = unstarted_app();
+    app.open_home();
+
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT)),
+        Some(AppCommand::Thread(ThreadCommand::CycleNextApprovalMode))
+    );
+    assert!(app.fullscreen.input_focused());
+    assert_eq!(app.fullscreen.home.selected, None);
+    crate::tui_assert_snapshot!("home_after_shift_tab", text(&render(&app, 80, 24)));
+
+    app.handle_key(key(KeyCode::Tab));
+    assert_eq!(app.fullscreen.home.selected, Some(0));
+    app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
+    assert!(app.fullscreen.input_focused());
+    assert_eq!(app.fullscreen.home.selected, None);
 }
 
 #[test]

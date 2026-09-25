@@ -280,12 +280,8 @@ pub(super) fn handle_key(app: &mut App, key: KeyEvent) -> Option<Option<AppComma
                 _ => None,
             };
         }
-        (_, KeyCode::BackTab) => {
-            app.fullscreen.home.selected = match selected {
-                None => Some(ACTIONS.len() - 1),
-                Some(0) => None,
-                Some(i) => Some(i - 1),
-            };
+        (_, KeyCode::BackTab) if selected.is_some() => {
+            app.fullscreen.home.selected = selected.and_then(|index| index.checked_sub(1));
         }
         (KeyModifiers::NONE, KeyCode::Up | KeyCode::Down) if selected.is_some() => {
             let index = selected.unwrap();
