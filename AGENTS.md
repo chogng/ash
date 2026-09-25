@@ -18,13 +18,11 @@ Before modifying this repository:
 
 - 回复时请说人话, 避免抽象语言描述
 - 禁止 native, projection name
-- crate 主要负责能力和依赖隔离
 - 禁止兜底写法，过渡设计，过渡思考，防御性编程
 - 当你思考项目架构时，请考虑从长期架构的终极形态去设计，而不是基于当前架构的优化方向
 - 拆分文件时，避免拆过头
 - 使用playwright测试web and electron-ui 以及electron , 调试不通过截图
 - 禁止使用 mod.rs, 有 mod.rs 让其退场
 - 思考问题时，避免局部视角看问题，从整体看
-- Read [`pull_request_template.md`](.github/pull_request_template.md) for pr
 - 对无法从代码直接看出的设计原因、关键约束、生命周期和接口约定写注释；避免复述代码行为
 - Skill 是代码工作的约束。严禁为了迁就现有代码实现而反向修改 Skill；代码与 Skill 冲突时，应按 Skill 修正代码。若认为 Skill 本身有误，只能向用户说明，未经用户明确要求不得修改 Skill。
