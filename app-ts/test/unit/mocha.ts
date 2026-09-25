@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, globSync, readFileSync } from 'node:fs';
-import { resolve, sep } from 'node:path';
+import { copyFileSync, existsSync, globSync, mkdirSync, readFileSync } from 'node:fs';
+import { dirname, resolve, sep } from 'node:path';
 
 interface Selection {
 	readonly runs: readonly string[];
@@ -17,6 +17,11 @@ export function runUnitTests(patterns: readonly string[], editorEnvironment: boo
 	if (process.versions.node.split('.')[0] !== requiredVersion.split('.')[0]) {
 		throw new Error(`Unit tests require the Node major version specified in .nvmrc (${requiredVersion}); found ${process.version}.`);
 	}
+	// TypeScript resolves marked.d.ts but does not emit its adjacent JavaScript implementation.
+	const markedSource = resolve(desktopDirectory, 'src/ash/base/common/marked/marked.js');
+	const markedOutput = resolve(outputDirectory, 'src/ash/base/common/marked/marked.js');
+	mkdirSync(dirname(markedOutput), { recursive: true });
+	copyFileSync(markedSource, markedOutput);
 	const selection = parseSelection(process.argv.slice(2));
 	let names: string[];
 	if (selection.runs.length > 0) {

@@ -1,4 +1,4 @@
-import { Marked, marked } from "marked";
+import { Marked, marked } from "../common/marked/marked.js";
 import { addDisposableListener, reset, h } from "./dom.js";
 import {
 	type HtmlSanitizerConfig,
