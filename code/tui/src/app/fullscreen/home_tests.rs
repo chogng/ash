@@ -133,7 +133,7 @@ fn home_keeps_actions_above_the_fixed_composer() {
 }
 
 #[test]
-fn home_shift_tab_in_input_cycles_permissions_without_selecting_an_action() {
+fn home_shift_tab_cycles_permissions_without_changing_focus() {
     let mut app = unstarted_app();
     app.open_home();
 
@@ -147,9 +147,22 @@ fn home_shift_tab_in_input_cycles_permissions_without_selecting_an_action() {
 
     app.handle_key(key(KeyCode::Tab));
     assert_eq!(app.fullscreen.home.selected, Some(0));
-    app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
-    assert!(app.fullscreen.input_focused());
-    assert_eq!(app.fullscreen.home.selected, None);
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT)),
+        Some(AppCommand::Thread(ThreadCommand::CycleNextApprovalMode))
+    );
+    assert!(!app.fullscreen.input_focused());
+    assert_eq!(app.fullscreen.home.selected, Some(0));
+
+    app.handle_key(key(KeyCode::Esc));
+    app.handle_key(key(KeyCode::F(6)));
+    let selected = app.fullscreen.header.selected();
+    assert!(selected.is_some());
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT)),
+        Some(AppCommand::Thread(ThreadCommand::CycleNextApprovalMode))
+    );
+    assert_eq!(app.fullscreen.header.selected(), selected);
 }
 
 #[test]

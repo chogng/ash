@@ -36,6 +36,15 @@ pub(in crate::app) fn handle_key(
         return command;
     }
     if key.kind == KeyEventKind::Press
+        && key.code == KeyCode::BackTab
+        && app.fullscreen.header_focused()
+    {
+        let context = app.app_keymap_context(true);
+        if let Some(action) = app.app_keymap.resolve_single(&key, context) {
+            return app.apply_app_keymap_action(action, now);
+        }
+    }
+    if key.kind == KeyEventKind::Press
         && bindings::ESC_RETURN.matches(key)
         && app.session_manager_view().is_some()
         && app.issue_manager().is_none()
@@ -77,6 +86,12 @@ pub(in crate::app) fn handle_key(
             AppChordMatch::PassThrough => {}
             AppChordMatch::Pending | AppChordMatch::Consumed => return None,
             AppChordMatch::Command(action) => return app.apply_app_keymap_action(action, now),
+        }
+        if key.kind == KeyEventKind::Press
+            && key.code == KeyCode::BackTab
+            && let Some(action) = app.app_keymap.resolve_single(&key, context)
+        {
+            return app.apply_app_keymap_action(action, now);
         }
         if !app.accepts_input() {
             return None;
