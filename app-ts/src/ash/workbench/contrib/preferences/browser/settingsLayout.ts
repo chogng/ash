@@ -48,8 +48,8 @@ export const SettingsNavigation = [
 			{
 				id: 'source-control',
 				get label() { return localize('git.settings.group', 'Source Control'); },
-				get description() { return localize('git.settings.groupDescription', 'Configure how Git checks for remote updates.'); },
-				settings: ['git.autofetch', 'git.autofetchPeriod'],
+				get description() { return localize('git.settings.groupDescription', 'Configure Git fetching and Source Control diff decorations.'); },
+				settings: ['git.autofetch', 'git.autofetchPeriod', 'scm.diffDecorationsIgnoreTrimWhitespace'],
 			},
 			{
 				id: 'accessibility',
@@ -107,7 +107,7 @@ export const SettingsNavigation = [
 				id: 'display',
 				label: 'Display',
 				description: 'Configure line wrapping, guides, highlighting, and scrolling aids.',
-				settings: ['breadcrumbs.enabled', 'editor.wordWrap', 'editor.wrappingIndent', 'editor.lineNumbers', 'editor.cursorStyle', 'editor.cursorBlinking', 'editor.cursorSmoothCaretAnimation', 'editor.cursorWidth', 'editor.cursorHeight', 'editor.guides.*', 'editor.matchBrackets', 'editor.bracketPairColorization.*', 'editor.stickyScroll.*', 'editor.renderLineHighlight', 'editor.renderLineHighlightOnlyWhenFocus', 'editor.unicodeHighlights'],
+				settings: ['breadcrumbs.enabled', 'editor.wordWrap', 'editor.wrappingIndent', 'editor.renderWhitespace', 'editor.renderControlCharacters', 'editor.lineNumbers', 'editor.cursorStyle', 'editor.cursorBlinking', 'editor.cursorSmoothCaretAnimation', 'editor.cursorWidth', 'editor.cursorHeight', 'editor.guides.*', 'editor.matchBrackets', 'editor.bracketPairColorization.*', 'editor.stickyScroll.*', 'editor.renderLineHighlight', 'editor.renderLineHighlightOnlyWhenFocus', 'editor.unicodeHighlights'],
 			},
 			{
 				id: 'performance',

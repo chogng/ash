@@ -56,6 +56,7 @@ const { EditorSelectionConfiguration } = await import('../../../../../workbench/
 const { CodeEditorConfiguration } = await import('../../../../../workbench/contrib/codeEditor/common/editorConfiguration.js');
 const { ContentSearchConfiguration } = await import('../../../../../workbench/contrib/search/common/searchConfiguration.js');
 const { GitConfiguration } = await import('../../../../../workbench/services/git/common/gitConfiguration.js');
+const { ScmConfiguration } = await import('../../../../../workbench/contrib/scm/common/scmConfiguration.js');
 const { IGitService: GitServiceId } = await import('../../../../../workbench/services/git/common/gitService.js');
 const configurationRegistry = Registry.as<InstanceType<typeof ConfigurationRegistry>>(ConfigurationExtensions.Configuration);
 const { EditorPart } = await import('../../../../../workbench/browser/parts/editor/editorPart.js');
@@ -133,7 +134,10 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.layoutStyle), 'appearance');
 	assert.equal(findSettingCategory(layout, EditorSelectionConfiguration.defaultNewDocumentEditor), 'editor');
 	assert.equal(findSettingCategory(layout, CodeEditorConfiguration.fontFamily), 'editor');
+	assert.equal(findSettingCategory(layout, CodeEditorConfiguration.renderWhitespace), 'editor');
+	assert.equal(findSettingCategory(layout, CodeEditorConfiguration.renderControlCharacters), 'editor');
 	assert.equal(findSettingCategory(layout, ContentSearchConfiguration.maxResults), 'editor');
+	assert.equal(findSettingCategory(layout, ScmConfiguration.diffDecorationsIgnoreTrimWhitespace), 'general');
 	assert.equal(defaults.all.some(setting => setting.id === GitConfiguration.autofetch), false);
 	assert.equal(configurationRegistry.getConfiguration(GitConfiguration.autofetch)?.defaultValue, false);
 	assert.equal(configurationRegistry.getConfiguration(GitConfiguration.autofetchPeriod)?.defaultValue, 180);

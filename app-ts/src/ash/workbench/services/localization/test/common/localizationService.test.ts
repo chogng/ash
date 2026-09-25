@@ -48,7 +48,7 @@ test("localization lookup falls back to English and formats parameters", async (
 	assert.equal(localization.translate('ash', 'inspectTokens.scope', 'Token type'), '词法单元类型');
 	assert.equal(localization.translate('ash', 'quickHelp.dialog', 'Quick Access Help'), '快速访问帮助');
 	assert.equal(localization.translate('ash', 'quickCommand.placeholder', 'Type > for commands, ? for help, or @ for symbols'), '输入 > 查找命令、? 查看帮助，或 @ 查找符号');
-	assert.equal(localization.translate('ash', 'chat.settings.advisorOff', 'No advisor'), '不使用顾问');
+	assert.equal(localization.translate('ash', 'chat.settings.advisorDisable', 'Turn Advisor off'), '关闭顾问');
 	assert.equal(localization.translate('ash', 'chat.advisor.configure', 'Configure an advisor model in Chat Settings before asking for a second opinion'), '请先在聊天设置中配置顾问模型，再请求第二意见');
 });
 
@@ -208,7 +208,7 @@ test('Go to Offset uses the selected Chinese language catalog', async () => {
 	}
 });
 
-test('Git Auto Fetch settings use the selected Chinese language catalog', async () => {
+test('Source Control settings use the selected Chinese language catalog', async () => {
 	using configuration = new InMemoryConfigurationService();
 	using languagePacks = new MarketplaceLanguagePackService(createMarketplace(), builtinLanguagePackCatalogs);
 	using localeService = new WorkbenchLocaleService(configuration, languagePacks);
@@ -216,13 +216,22 @@ test('Git Auto Fetch settings use the selected Chinese language catalog', async 
 	try {
 		await localization.whenReady;
 		await localeService.setLocale('zh-CN');
-		const { GitConfiguration } = await import('../../../git/common/gitConfiguration.js');
-		const { Extensions } = await import('../../../../../platform/configuration/common/configurationRegistry.js');
-		const { Registry } = await import('../../../../../platform/registry/common/platform.js');
-		const registered = Registry.as<import('../../../../../platform/configuration/common/configurationRegistry.js').IConfigurationRegistry>(Extensions.Configuration)
-			.getConfiguration(GitConfiguration.autofetch);
-		assert.equal(registered?.setting?.title, '自动获取远端更新');
-		assert.equal(registered?.setting?.description, '定期获取所有已打开仓库的远端更新，不更改本地分支或文件。');
+		const { localize } = await import('../../../../../nls.js');
+		assert.deepEqual([
+			localize('git.settings.groupDescription', 'Configure Git fetching and Source Control diff decorations.'),
+			localize('git.autofetch.title', 'Auto Fetch'),
+			localize('git.autofetch.description', 'Periodically fetch updates without changing local branches or files.'),
+			localize('git.autofetch.off', 'Off'),
+			localize('git.autofetch.default', 'Default remote'),
+			localize('git.autofetch.all', 'All remotes'),
+		], [
+			'配置 Git 自动获取和源代码管理差异标记。',
+			'自动获取远端更新',
+			'定期获取所有已打开仓库的远端更新，不更改本地分支或文件。',
+			'关闭',
+			'默认远端',
+			'所有远端',
+		]);
 	} finally {
 		resetNlsResolver();
 	}
