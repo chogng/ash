@@ -32,7 +32,7 @@ test("Explicit invocation requests providers through the completion service", as
 	assert.equal(requests.length, 1);
 	assert.equal(requests[0]!.context.kind, LanguageCompletionTriggerKind.Invoke);
 	assert.equal(requests[0]!.snapshot.getText(), "con");
-	assert.equal(fixture.session.state!.selectedItem.providerId, "typescript");
+	assert.equal(fixture.session.state!.selectedItem!.providerId, "typescript");
 	assert.equal(fixture.suggest.widget.visible, true);
 });
 
@@ -109,7 +109,7 @@ test("Typing after an incomplete result retriggers all providers at the new vers
 	]);
 	assert.equal(Position.compare(requests[1]!.position, new Position((0) + 1, (4) + 1)), 0);
 	assert.equal(requests[1]!.snapshot.getText(), "cont");
-	assert.equal(fixture.session.state!.selectedItem.label, "continue");
+	assert.equal(fixture.session.state!.selectedItem!.label, "continue");
 });
 
 test("Deleting after an incomplete result retriggers providers at the new version", async () => {

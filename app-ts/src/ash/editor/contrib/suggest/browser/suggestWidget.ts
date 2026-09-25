@@ -92,11 +92,13 @@ export class CompletionWidget extends Disposable {
 				return;
 			case "Enter":
 				if (event.shiftKey) return;
+				if (this.readState()?.selectedIndex === -1) return;
 				stopEvent(event);
 				this.accept();
 				return;
 			case "Tab":
 				if (event.shiftKey) return;
+				if (this.readState()?.selectedIndex === -1) return;
 				stopEvent(event);
 				this.accept();
 				return;
@@ -156,9 +158,10 @@ export class CompletionWidget extends Disposable {
 				kind.classList.add('ash-themed-file-icon', ...iconClasses, ...(fileKind === FileKind.Directory ? detailClasses : []));
 			}
 			label.className = "stanza-editor-completion-label";
-			label.textContent = item.label;
+			appendHighlightedText(label, item.label, item.labelMatchIndices);
 			detail.className = "stanza-editor-completion-detail";
-			detail.textContent = focused ? state.details.detail ?? "" : item.detail ?? "";
+			const detailText = focused ? state.details.detail ?? "" : item.detail ?? "";
+			appendHighlightedText(detail, detailText, detailText === item.detail ? item.detailMatchIndices : undefined);
 			option.append(kind, label, detail);
 			if (focused && state.details.documentation !== undefined) {
 				documentation.className = "stanza-editor-completion-documentation";
@@ -170,7 +173,7 @@ export class CompletionWidget extends Disposable {
 		reset(this.element, fragment);
 		this.element.hidden = false;
 		this.element.classList.add("visible");
-		this.viewport.setAriaOptions({ activeDescendant: `${this.widgetId}-option-${state.selectedIndex}` });
+		this.viewport.setAriaOptions({ activeDescendant: state.selectedIndex < 0 ? undefined : `${this.widgetId}-option-${state.selectedIndex}` });
 		this.position(state);
 	}
 
@@ -197,6 +200,25 @@ export class CompletionWidget extends Disposable {
 		if (!option || !this.element.contains(option)) return undefined;
 		const index = Number(option.dataset.completionIndex);
 		return Number.isSafeInteger(index) ? index : undefined;
+	}
+}
+
+function appendHighlightedText(element: HTMLElement, value: string, indices: readonly number[] | undefined): void {
+	if (!indices?.length) {
+		element.textContent = value;
+		return;
+	}
+	const characters = [...value];
+	const matched = new Set(indices);
+	for (let index = 0; index < characters.length; index++) {
+		const character = characters[index]!;
+		if (matched.has(index)) {
+			const strong = h(element.ownerDocument, 'strong');
+			strong.textContent = character;
+			element.append(strong);
+		} else {
+			element.append(character);
+		}
 	}
 }
 

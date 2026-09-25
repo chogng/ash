@@ -1,0 +1,24 @@
+---
+source: code/tui/src/app/fullscreen/frame_tests.rs
+expression: rendered
+---
+  .                                                        [— / —] [Dashboard]  
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+  ─────────────────────────────────────────────────────────────────────── 0/2   
+  /config                    show the current configuration                     
+  /mcp                       list configured MCP tools                          
+  ╭──────────────────────────────────────────────────────────────────────────╮  
+  │ > /cofig                                                                 │  
+  ╰──────────────────────────────────────────────────────── Automatic model ─╯  
+                                                                                
+  Enter send  ·  shift+tab permissions  ·  /home

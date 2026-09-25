@@ -1647,7 +1647,7 @@ fn slash_popup_clears_covered_transcript_rows_edge_to_edge() {
         CompletionView::Slash(view) => (view.selected, view.commands.len()),
         _ => panic!("expected Slash Commands completion"),
     };
-    let position = format!(" {}/{} ", selected + 1, command_count);
+    let position = format!(" {}/{} ", selected.unwrap() + 1, command_count);
     let position_start = terminal_area.width - 2 - position.len() as u16;
 
     for column in 2..position_start {
@@ -1717,6 +1717,20 @@ fn slash_popup_uses_focus_colored_text_without_a_selection_surface() {
     assert_eq!(hovered.fg, test_context().focus());
     assert_eq!(hovered.bg, surface_background);
     assert!(!hovered.modifier.contains(Modifier::BOLD));
+
+    let mut prefix_app = App::new();
+    prefix_app.insert_text("/confi");
+    let command_row = render(&prefix_app, 80, 20)
+        .lines()
+        .position(|line| line.contains("/config"))
+        .unwrap() as u16;
+    let prefix_buffer = render_buffer(&prefix_app, 80, 20);
+    assert_eq!(prefix_buffer[(3, command_row)].fg, test_context().focus());
+    assert!(
+        prefix_buffer[(3, command_row)]
+            .modifier
+            .contains(Modifier::BOLD)
+    );
 }
 
 #[test]
@@ -1783,7 +1797,7 @@ fn slash_popup_position_and_scrollbar_follow_keyboard_navigation() {
         CompletionView::Slash(view) => (view.selected, view.commands.len()),
         _ => panic!("expected Slash Commands completion"),
     };
-    assert_eq!(selected, command_count - 1);
+    assert_eq!(selected, Some(command_count - 1));
 
     let rendered = render(&app, terminal_area.width, terminal_area.height);
     assert!(rendered.contains(&format!(" {command_count}/{command_count} ")));
@@ -1900,6 +1914,51 @@ fn slash_query_filters_the_rendered_commands() {
 
     assert!(rendered.contains("/quit"));
     assert!(!rendered.contains("/exit"));
+}
+
+#[test]
+fn slash_popup_suggests_a_command_when_the_query_omits_a_character() {
+    let mut app = App::new();
+    app.insert_text("/cofig");
+
+    let CompletionView::Slash(view) = app.completion().unwrap() else {
+        panic!("expected Slash Command completion");
+    };
+    assert_eq!(
+        view.commands
+            .iter()
+            .map(|command| command.name.as_str())
+            .collect::<Vec<_>>(),
+        ["config", "mcp"]
+    );
+    assert_eq!(view.selected, None);
+    let rendered = render(&app, 80, 20);
+    assert!(rendered.contains("/config"));
+    assert!(!rendered.contains("No matching commands"));
+    let first_row = layout(&app, Rect::new(0, 0, 80, 20)).input.y - 2;
+    let buffer = render_buffer(&app, 80, 20);
+    assert_eq!(buffer[(2, first_row)].fg, test_context().muted());
+    assert_eq!(buffer[(3, first_row)].symbol(), "c");
+    assert_eq!(buffer[(3, first_row)].fg, test_context().foreground());
+    assert!(buffer[(3, first_row)].modifier.contains(Modifier::BOLD));
+    assert_eq!(buffer[(5, first_row)].symbol(), "n");
+    assert!(!buffer[(5, first_row)].modifier.contains(Modifier::BOLD));
+    assert_eq!(buffer[(34, first_row + 1)].symbol(), "c");
+    assert!(
+        buffer[(34, first_row + 1)]
+            .modifier
+            .contains(Modifier::BOLD)
+    );
+    crate::tui_assert_snapshot!("slash_popup_missing_character_match", rendered);
+
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)),
+        None
+    );
+    assert_eq!(app.input(), "/cofig");
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    assert_eq!(app.input(), "/config ");
 }
 
 #[test]

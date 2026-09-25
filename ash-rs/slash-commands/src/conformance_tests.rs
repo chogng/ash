@@ -13,7 +13,7 @@ struct Fixture {
 
 #[derive(Deserialize)]
 struct MatchingCase {
-    prefix: String,
+    query: String,
     names: Vec<String>,
 }
 
@@ -34,7 +34,7 @@ fn rust_core_matches_cross_runtime_conformance_fixture() {
     for case in fixture.matching {
         assert_eq!(
             catalog
-                .matching(&case.prefix)
+                .matching(&case.query)
                 .iter()
                 .map(|command| command.name.clone())
                 .collect::<Vec<_>>(),

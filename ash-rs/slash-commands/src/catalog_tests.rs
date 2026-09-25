@@ -66,6 +66,81 @@ fn catalog_preserves_local_then_server_order_and_origin() {
 }
 
 #[test]
+fn matching_ranks_exact_prefix_word_and_missing_character_candidates() {
+    let catalog = SlashCommandCatalog::new([
+        command("update-config"),
+        command("compact"),
+        command("config"),
+        command("diagnose"),
+    ])
+    .unwrap();
+    let names = |query: &str| {
+        catalog
+            .matching(query)
+            .into_iter()
+            .map(|command| command.name)
+            .collect::<Vec<_>>()
+    };
+
+    assert_eq!(
+        names(""),
+        ["update-config", "compact", "config", "diagnose"]
+    );
+    assert_eq!(names("config"), ["config", "update-config"]);
+    assert_eq!(names("co"), ["compact", "config", "update-config"]);
+    assert_eq!(names("cofig"), ["config", "update-config"]);
+    assert_eq!(names("D"), ["diagnose"]);
+    assert!(names("zz").is_empty());
+}
+
+#[test]
+fn description_matches_follow_name_matches_and_expose_character_positions() {
+    let catalog = SlashCommandCatalog::new([
+        SlashCommandDefinition {
+            description: "Open settings".into(),
+            ..command("config")
+        },
+        SlashCommandDefinition {
+            description: "Inspect configuration".into(),
+            ..command("doctor")
+        },
+        command("settings"),
+    ])
+    .unwrap();
+    assert_eq!(
+        catalog
+            .matching("settings")
+            .into_iter()
+            .map(|item| item.name)
+            .collect::<Vec<_>>(),
+        ["settings", "config"]
+    );
+    assert_eq!(
+        catalog
+            .matching("config")
+            .into_iter()
+            .map(|item| item.name)
+            .collect::<Vec<_>>(),
+        ["config", "doctor"]
+    );
+    assert_eq!(
+        crate::matched_character_indices("config", "cofig"),
+        [0, 1, 3, 4, 5]
+    );
+    assert_eq!(
+        crate::matched_character_indices("Open settings", "settings"),
+        [5, 6, 7, 8, 9, 10, 11, 12]
+    );
+    let localized = SlashCommandCatalog::new([SlashCommandDefinition {
+        description: "检查设置".into(),
+        ..command("config")
+    }])
+    .unwrap();
+    assert!(localized.matching("设").is_empty());
+    assert_eq!(localized.matching("设置")[0].name, "config");
+}
+
+#[test]
 fn catalog_rejects_invalid_duplicate_and_blank_definitions() {
     assert!(
         SlashCommandCatalog::new([command("Diagnose")])

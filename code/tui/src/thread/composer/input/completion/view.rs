@@ -241,8 +241,10 @@ mod slash {
     use super::draw_position;
     use crate::render::RenderContext;
     use crate::render::horizontal_margin;
+    use ash_slash_commands::matched_character_indices;
     use ratatui::Frame;
     use ratatui::layout::Rect;
+    use ratatui::style::Modifier;
     use ratatui::style::Style;
     use ratatui::text::Line;
     use ratatui::text::Span;
@@ -299,18 +301,37 @@ mod slash {
         for (offset, height) in layout.list.item_heights.iter().copied().enumerate() {
             let index = layout.list.first_item + offset;
             let command = &popup.commands[index];
-            let command_style = super::item_style(index, popup.selected, hovered, pressed, context);
+            let command_style = super::item_style(
+                index,
+                popup.selected.unwrap_or(usize::MAX),
+                hovered,
+                pressed,
+                context,
+            );
             let command_width = COMMAND_COLUMN_DISPLAY_WIDTH.min(layout.list.area.width);
+            let label = format!("/{:<width$}", command.name, width = COMMAND_COLUMN_WIDTH);
             frame.render_widget(
-                Paragraph::new(Span::styled(
-                    format!("/{:<width$}", command.name, width = COMMAND_COLUMN_WIDTH),
+                Paragraph::new(Line::from(highlighted_spans(
+                    &label,
+                    popup.query,
                     command_style,
-                )),
+                    context,
+                    1,
+                    popup.selected == Some(index),
+                ))),
                 Rect::new(layout.list.area.x, y, command_width, 1),
             );
+            let description = description(command, language);
             frame.render_widget(
-                Paragraph::new(Span::styled(description(command, language), command_style))
-                    .wrap(Wrap { trim: true }),
+                Paragraph::new(Line::from(highlighted_spans(
+                    &description,
+                    popup.query,
+                    command_style,
+                    context,
+                    0,
+                    popup.selected == Some(index),
+                )))
+                .wrap(Wrap { trim: true }),
                 Rect::new(
                     layout.list.area.x.saturating_add(command_width),
                     y,
@@ -397,7 +418,7 @@ mod slash {
                 })
                 .collect()
         };
-        let list = description_popup_layout(area, popup.selected, &item_heights)?;
+        let list = description_popup_layout(area, popup.selected.unwrap_or(0), &item_heights)?;
         let scrollable = popup.commands.len() > list.item_heights.len();
         let scrollbar_area = scrollable.then(|| {
             Rect::new(
@@ -437,6 +458,40 @@ mod slash {
             .thumb_symbol("┃")
             .thumb_style(Style::default().fg(context.muted()));
         frame.render_stateful_widget(scrollbar, scrollbar_area, &mut state);
+    }
+
+    fn highlighted_spans<'a>(
+        text: &str,
+        query: &str,
+        style: Style,
+        context: RenderContext<'_>,
+        prefix_chars: usize,
+        selected: bool,
+    ) -> Vec<Span<'a>> {
+        if query.is_empty() {
+            return vec![Span::styled(text.to_owned(), style)];
+        }
+        let matched =
+            matched_character_indices(&text.chars().skip(prefix_chars).collect::<String>(), query);
+        if matched.is_empty() {
+            return vec![Span::styled(text.to_owned(), style)];
+        }
+        text.chars()
+            .enumerate()
+            .map(|(index, character)| {
+                let style = if index >= prefix_chars && matched.contains(&(index - prefix_chars)) {
+                    (if selected {
+                        style
+                    } else {
+                        style.fg(context.foreground())
+                    })
+                    .add_modifier(Modifier::BOLD)
+                } else {
+                    style
+                };
+                Span::styled(character.to_string(), style)
+            })
+            .collect()
     }
 }
 
@@ -486,14 +541,18 @@ fn draw_position(
     frame: &mut Frame<'_>,
     available_area: Rect,
     content_area: Rect,
-    selected: usize,
+    selected: Option<usize>,
     item_count: usize,
     context: RenderContext<'_>,
 ) {
     let position = if item_count == 0 {
         " 0 ".to_owned()
     } else {
-        format!(" {}/{} ", selected.min(item_count - 1) + 1, item_count)
+        format!(
+            " {}/{} ",
+            selected.map_or(0, |index| index.min(item_count - 1) + 1),
+            item_count
+        )
     };
     let surface_top = content_area.y.saturating_sub(1);
     let border_area = horizontal_margin(

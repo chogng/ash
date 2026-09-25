@@ -1140,11 +1140,13 @@ export interface LanguageCompletionItem {
 	readonly providerId: string;
 	readonly id: string;
 	readonly label: string;
+	readonly labelMatchIndices?: readonly number[];
 	readonly kind: LanguageCompletionItemKind;
 	readonly range: Range;
 	readonly insertText: string;
 	readonly insertTextFormat?: LanguageCompletionInsertTextFormat;
 	readonly detail?: string;
+	readonly detailMatchIndices?: readonly number[];
 	readonly documentation?: string;
 	readonly filterText?: string;
 	readonly sortText?: string;
@@ -1284,6 +1286,8 @@ export function normalizeLanguageCompletionResult(
 		}
 		identities.add(identity);
 		assertNonEmptyText(item.label, "Language completion item label");
+		const labelMatchIndices = normalizeCompletionMatchIndices(item.labelMatchIndices, item.label, "label");
+		const detailMatchIndices = normalizeCompletionMatchIndices(item.detailMatchIndices, item.detail ?? "", "detail");
 		if (!Object.values(LanguageCompletionItemKind).includes(item.kind)) {
 			throw new TypeError(`Unknown language completion item kind '${item.kind}'`);
 		}
@@ -1321,11 +1325,13 @@ export function normalizeLanguageCompletionResult(
 			providerId: item.providerId,
 			id: item.id,
 			label: item.label,
+			...(labelMatchIndices === undefined ? {} : { labelMatchIndices }),
 			kind: item.kind,
 			range: item.range,
 			insertText: normalizeTextLineEndings(item.insertText),
 			...(item.insertTextFormat === undefined ? {} : { insertTextFormat: item.insertTextFormat }),
 			...(item.detail === undefined ? {} : { detail: item.detail }),
+			...(detailMatchIndices === undefined ? {} : { detailMatchIndices }),
 			...(item.documentation === undefined ? {} : { documentation: item.documentation }),
 			...(item.filterText === undefined ? {} : { filterText: item.filterText }),
 			...(item.sortText === undefined ? {} : { sortText: item.sortText }),
@@ -1341,6 +1347,20 @@ export function normalizeLanguageCompletionResult(
 		items: Object.freeze(items),
 		isIncomplete: value.isIncomplete,
 	});
+}
+
+function normalizeCompletionMatchIndices(indices: readonly number[] | undefined, text: string, field: string): readonly number[] | undefined {
+	if (indices === undefined) return undefined;
+	if (!Array.isArray(indices)) throw new TypeError(`Language completion ${field} match indices must be an array`);
+	const length = [...text].length;
+	let previous = -1;
+	for (const index of indices) {
+		if (!Number.isSafeInteger(index) || index <= previous || index >= length) {
+			throw new RangeError(`Language completion ${field} match indices must be increasing positions in the text`);
+		}
+		previous = index;
+	}
+	return Object.freeze([...indices]);
 }
 
 function normalizeCompletionCommand(value: unknown): LanguageCompletionCommand | undefined {

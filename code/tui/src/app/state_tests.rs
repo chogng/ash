@@ -1686,6 +1686,17 @@ fn slash_popup_selection_executes_without_an_exact_query() {
 }
 
 #[test]
+fn weak_slash_popup_does_not_execute_a_command_without_selection() {
+    let mut app = App::new();
+    app.insert_text("/cofig");
+
+    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert_text_submission(action, "/cofig");
+    assert_eq!(app.messages()[0].text(), "/cofig");
+}
+
+#[test]
 fn enhanced_mouse_capture_covers_the_full_screen() {
     let mut app = App::new();
     assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);

@@ -31,7 +31,7 @@ test("Completion session opens at the matching cursor and navigates cyclically",
 	const events: unknown[] = [];
 	using listener = session.onDidChange(event => events.push({
 		reason: event.reason,
-		selected: event.state?.selectedItem.id,
+		selected: event.state?.selectedItem?.id,
 	}));
 	accept(store, model, 1, [
 		completion("constant", "const"),
@@ -39,19 +39,35 @@ test("Completion session opens at the matching cursor and navigates cyclically",
 		completion("continue", "continue"),
 	]);
 
-	assert.equal(session.state!.selectedItem.id, "console");
+	assert.equal(session.state!.selectedItem!.id, "console");
 	assert.equal(session.selectNext(), true);
-	assert.equal(session.state!.selectedItem.id, "continue");
+	assert.equal(session.state!.selectedItem!.id, "continue");
 	assert.equal(session.selectNext(), true);
-	assert.equal(session.state!.selectedItem.id, "constant");
+	assert.equal(session.state!.selectedItem!.id, "constant");
 	assert.equal(session.selectPrevious(), true);
-	assert.equal(session.state!.selectedItem.id, "continue");
+	assert.equal(session.state!.selectedItem!.id, "continue");
 	assert.deepEqual(events.map(event => (event as { reason: string }).reason), [
 		LanguageCompletionSessionChangeReason.Store,
 		LanguageCompletionSessionChangeReason.Focus,
 		LanguageCompletionSessionChangeReason.Focus,
 		LanguageCompletionSessionChangeReason.Focus,
 	]);
+});
+
+test('Completion candidates can remain unselected until keyboard navigation', () => {
+	using model = new TextModel('con');
+	using editor = editorAt(model, new Position(1, 4));
+	using store = createLanguageCompletionStore(model);
+	using session = new SuggestModel(store, editor);
+	accept(store, model, 1, [
+		{ ...completion('config', 'config'), preselect: false },
+		{ ...completion('compact', 'compact'), preselect: false },
+	]);
+	assert.equal(session.state?.selectedIndex, -1);
+	assert.equal(session.state?.selectedItem, undefined);
+	assert.equal(session.acceptSelected(), false);
+	assert.equal(session.selectNext(), true);
+	assert.equal(session.state!.selectedItem!.id, 'config');
 });
 
 test("Same-version completion refresh retains focused item identity", () => {
@@ -72,8 +88,8 @@ test("Same-version completion refresh retains focused item identity", () => {
 
 	assert.equal(session.state!.requestId, 2);
 	assert.equal(session.state!.selectedIndex, 0);
-	assert.equal(session.state!.selectedItem.id, "two");
-	assert.equal(session.state!.selectedItem.label, "two updated");
+	assert.equal(session.state!.selectedItem!.id, "two");
+	assert.equal(session.state!.selectedItem!.label, "two updated");
 });
 
 test("Accepting a completion is one isolated selection-aware undo step", () => {

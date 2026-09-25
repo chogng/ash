@@ -22,6 +22,8 @@ Slash Command 是一种真正可调用的命令；斜杠启动面板只是用户
 
 App Server 当前在 `initialize.slashCommands` 发布服务端命令；每个客户端再与自身真正可执行的本地命令合并。TUI 的 `/` 补全和 `/help` 同时投影这份合并目录，因此本地与服务端命令使用同一名称、描述和参数声明。命令定义、名称冲突、补全和提交解析属于 Slash Commands；列表组合、跨来源匹配和面板选择属于 Slash Launcher；行布局、DOM、WGPU、Ratatui 绘制和平台输入事件仍留在各呈现层。默认服务端快照包含 `/compact`，允许保留可选的行内提示。
 
+命令候选先按名称相关程度排序：完整名称、开头、连字符后的词首、连续片段、有序字符；然后按 description 的词首、连续片段、有序字符排序。`/cofig` 因而能找到 `/config`，`/settings` 也能找到描述中写有 settings 的命令。单字符仍只匹配名称开头，避免候选过多。候选检索忽略 ASCII 大小写；命中字符逐字加粗，未选中候选使用主题前景色，选中候选使用选中色。名称开头匹配可默认选中；词中、跳字和 description 命中只展示候选，需先用方向键或点击选择。每个命令只有一个名称；`/chats` 不再作为 `/history` 的别名。只有补全为完整规范名称后才会执行。
+
 ## Launcher 分层
 
 `ash-slash-launcher` 只接受产品构造的 `SlashLauncherList`，并返回稳定的 `(list_id, item_id)` 选择。它不依赖 `ash-slash-commands`，但产品的 `/` 入口只传 Slash Command list：
@@ -156,7 +158,7 @@ Marketplace 精确路由搜索。可用表示已启用且程序可解析，不�
 Rust surfaces 直接共享 `ash-slash-commands` 的 headless state。Desktop 直接消费同一个 generated
 `SlashCommandDefinition` model，并由 Stanza Editor 的通用 completion/session state 投影交互；TypeScript
 只保留运行时 catalog binding。Rust crate 与 Desktop adapter 共同执行
-`ash-rs/slash-commands/fixtures/conformance.json`，确保名称校验、大小写、前缀匹配和参数规则一致。
+`ash-rs/slash-commands/fixtures/conformance.json`，确保名称校验、大小写、候选排序和参数规则一致。
 
 ## 修改影响
 

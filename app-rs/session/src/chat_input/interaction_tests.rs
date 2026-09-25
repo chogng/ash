@@ -4,6 +4,8 @@ use super::ComposerInteractionActivation;
 use super::ComposerModelOption;
 use super::SelectionDirection;
 use ash_protocol::{ModelId, ModelRef, ProviderId};
+use ash_slash_commands::SlashCommandArgumentMode;
+use ash_slash_commands::SlashCommandDefinition;
 
 fn model_option(provider: &str, model: &str, display_name: &str) -> ComposerModelOption {
     let model = ModelRef::new(
@@ -61,7 +63,45 @@ fn slash_filter_and_keyboard_selection_share_one_visible_list() {
     assert_eq!(view.items()[0].label(), "/model");
 
     model.move_selection(SelectionDirection::Next);
-    assert_eq!(model.view().unwrap().selected(), 0);
+    assert_eq!(model.view().unwrap().selected(), Some(0));
+}
+
+#[test]
+fn slash_typo_completion_requires_keyboard_selection() {
+    let mut model = ChatInputInteractionState::new();
+    model
+        .set_catalog(
+            ["update-config", "config"]
+                .into_iter()
+                .map(|name| SlashCommandDefinition {
+                    name: name.into(),
+                    description: format!("open {name}"),
+                    argument_mode: SlashCommandArgumentMode::None,
+                    argument_hint: None,
+                })
+                .collect(),
+            Vec::new(),
+        )
+        .unwrap();
+    model.sync_input("/cofig", ComposerRoute::Agent);
+
+    let view = model.view().unwrap();
+    assert_eq!(
+        view.items()
+            .iter()
+            .map(|item| item.label())
+            .collect::<Vec<_>>(),
+        ["/config", "/update-config"]
+    );
+    assert_eq!(view.selected(), None);
+    assert_eq!(model.activate_selected(), None);
+    model.move_selection(SelectionDirection::Next);
+    assert_eq!(
+        model.activate_selected(),
+        Some(ComposerInteractionActivation::ComposerText(
+            "/config ".into()
+        ))
+    );
 }
 
 #[test]

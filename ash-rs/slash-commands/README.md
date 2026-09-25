@@ -29,9 +29,10 @@ native 可以依赖本 crate；本 crate 禁止反向依赖这些消费者。
 - `SlashCommandCatalog::default` 构造包含 `/advisor`、`/compact`、`/init`、`/team` 与 `/develop` 的服务端快照；`/advisor` 无参数打开配置，`/advisor <provider/model|off|clear>` 调整配置，其他参数作为直接咨询的问题；
   前者由产品 adapter 绑定到 typed context-compaction request，后两者分别冻结细分 Instruction 与 `ASH.md` 的创建提示；
 - `SlashCommandCatalog::with_local_and_server` 按 local、server 顺序合并并拒绝任何重名；
+- `SlashCommandCatalog::matching` 先对命令名按完整、前缀、连字符后词首、连续片段、有序字符排序，再按描述的词首、连续片段、有序字符排序；空查询保留 catalog 顺序，单字符查询只匹配名称前缀，同分保留 catalog 顺序。候选匹配忽略 ASCII 大小写，提交解析仍要求完整的规范命令名；
 - `SlashCommandInput` 对同一 catalog 提供 query、completion、invocation、argument hint 与 command element range；
   - `argument_hint(self)`：当输入命令有效、紧随空格、参数文本为空且光标停留在空格末尾时返回 `Some(&'c str)`；开始输入参数或光标离开末尾时返回 `None`；
-- `SlashCommandsState` 保存当前输入对应的匹配、选择与 dismiss 状态；暴露 `argument_hint(&self)` 供输入组件呈现行内提示；viewport、可见范围与滚动由各 renderer 保存；
+- `SlashCommandsState` 保存当前输入对应的匹配、选择与 dismiss 状态；只有名称前缀命中会默认选中，其他命中等待显式选择；暴露 `argument_hint(&self)` 供输入组件呈现行内提示；viewport、可见范围与滚动由各 renderer 保存；
 - `SlashCommandsView` 是 renderer 只读 projection，不允许渲染过程改变状态。
 
 输入校验按 Rust UTF-8 byte range 工作。名称只允许 lowercase ASCII letters、digits 与 interior
@@ -82,12 +83,13 @@ prompt command 可以继续提交 unchanged invocation text。
 运行：
 
 ```bash
-cargo test -p ash-slash-commands
-cargo clippy -p ash-slash-commands --all-targets -- -D warnings
+just test ash-slash-commands
+just check ash-slash-commands
+just rust-warnings ash-slash-commands
 ```
 
 修改名称语法、匹配顺序、completion range、selection 或 dismiss 规则时，必须同步更新本 crate tests、
-App Server initialization tests、TUI/native adapter tests 和 Desktop 的跨语言 fixture tests。
+App Server initialization tests、TUI/Rust UI adapter tests 和 Desktop 的跨语言 fixture tests。
 
 ## 6. 当前限制与扩展点
 

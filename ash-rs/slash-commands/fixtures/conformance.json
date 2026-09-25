@@ -1,12 +1,17 @@
 {
   "definitions": [
     { "name": "diagnose", "description": "Inspect the workspace", "argumentMode": "optional", "argumentHint": "<path>" },
-    { "name": "status", "description": "Show current status", "argumentMode": "none" }
+    { "name": "status", "description": "Show current status", "argumentMode": "none" },
+    { "name": "update-config", "description": "Update settings", "argumentMode": "none" },
+    { "name": "config", "description": "Open settings", "argumentMode": "none" }
   ],
   "matching": [
-    { "prefix": "", "names": ["diagnose", "status"] },
-    { "prefix": "d", "names": ["diagnose"] },
-    { "prefix": "D", "names": [] }
+    { "query": "", "names": ["diagnose", "status", "update-config", "config"] },
+    { "query": "d", "names": ["diagnose"] },
+    { "query": "D", "names": ["diagnose"] },
+    { "query": "config", "names": ["config", "update-config"] },
+    { "query": "cofig", "names": ["config", "update-config"] },
+    { "query": "settings", "names": ["config", "update-config"] }
   ],
   "inputs": [
     { "text": "hello /status", "kind": "message" },

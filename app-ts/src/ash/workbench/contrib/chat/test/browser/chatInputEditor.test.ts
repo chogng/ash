@@ -93,6 +93,25 @@ test("Chat completion providers use one-based editor positions and ranges", asyn
 	assert.deepEqual(skillResult?.items[0]?.range, new Range(2, 5, 2, 9));
 });
 
+test('Chat slash provider finds description text without preselecting it', async () => {
+	const catalog = new SlashCommandCatalog([], [
+		{ name: 'doctor', description: 'Inspect workspace health', argumentMode: 'none' },
+		{ name: 'config', description: 'Open workspace settings', argumentMode: 'none' },
+	]);
+	using model = new TextModel('/workspace');
+	const result = await createChatCommandCompletionProvider(catalog).provideCompletions({
+		requestId: 1,
+		languageId: 'ash-chat-input',
+		position: new Position(1, 11),
+		context: { kind: LanguageCompletionTriggerKind.Invoke },
+		snapshot: model.createVersionedSnapshot(),
+	}, new AbortController().signal);
+	assert.deepEqual(result?.items.map(item => [item.label, item.preselect, item.detailMatchIndices]), [
+		['/config', false, [5, 6, 7, 8, 9, 10, 11, 12, 13]],
+		['/doctor', false, [8, 9, 10, 11, 12, 13, 14, 15, 16]],
+	]);
+});
+
 test("Chat input completes slash commands before submitting", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
@@ -126,6 +145,69 @@ test("Chat input completes slash commands before submitting", async () => {
 	input.dispatchEvent(submit);
 	assert.equal(submit.defaultPrevented, true);
 	assert.equal(submissions, 1);
+	dom.window.close();
+});
+
+test('Chat input shows a missing-character match without choosing it', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using editorServices = new DisposableStore();
+	using editor = createCodeEditorServices(editorServices).createInstance(ChatInputEditor, {
+		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
+		placeholder: 'Ask Ash',
+		ariaLabel: 'Chat message',
+		slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []),
+		skills: new SkillSelectorCatalog(),
+	});
+	let submissions = 0;
+	using submitListener = editor.onDidSubmit(() => submissions += 1);
+	const input = requiredElement<HTMLTextAreaElement>(editor.element, '.stanza-editor-input');
+	editor.focus();
+	input.dispatchEvent(beforeInputEvent(dom.window, '/'));
+	await waitFor(() => completionLabels(editor.element).length === 7);
+	for (const character of 'cofig') {
+		input.dispatchEvent(beforeInputEvent(dom.window, character));
+	}
+
+	assert.equal(editor.value, '/cofig');
+	await waitFor(() => completionLabels(editor.element).length > 0);
+	assert.deepEqual(completionLabels(editor.element), ['/config']);
+	assert.equal(editor.element.querySelector('.stanza-editor-completion-option.focused'), null);
+	assert.deepEqual([...editor.element.querySelectorAll('.stanza-editor-completion-label strong')].map(element => element.textContent), ['c', 'o', 'f', 'i', 'g']);
+	assert.equal(submissions, 0);
+
+	const navigate = keyboardEvent(dom.window, 'ArrowDown');
+	input.dispatchEvent(navigate);
+	assert.equal(navigate.defaultPrevented, true);
+	assert.equal(editor.element.querySelector('.stanza-editor-completion-option.focused .stanza-editor-completion-label')?.textContent, '/config');
+	const accept = keyboardEvent(dom.window, 'Enter');
+	input.dispatchEvent(accept);
+	assert.equal(accept.defaultPrevented, true);
+	assert.equal(editor.value, '/config ');
+	assert.equal(submissions, 0);
+	dom.window.close();
+});
+
+test('Chat input emphasizes a description-only command match', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using editorServices = new DisposableStore();
+	using editor = createCodeEditorServices(editorServices).createInstance(ChatInputEditor, {
+		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
+		placeholder: 'Ask Ash',
+		ariaLabel: 'Chat message',
+		slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []),
+		skills: new SkillSelectorCatalog(),
+	});
+	const input = requiredElement<HTMLTextAreaElement>(editor.element, '.stanza-editor-input');
+	editor.focus();
+	input.dispatchEvent(beforeInputEvent(dom.window, '/'));
+	await waitFor(() => completionLabels(editor.element).length === 7);
+	for (const character of 'settings') input.dispatchEvent(beforeInputEvent(dom.window, character));
+	await waitFor(() => completionLabels(editor.element).includes('/config'));
+	assert.deepEqual(completionLabels(editor.element), ['/config']);
+	assert.equal(editor.element.querySelector('.stanza-editor-completion-option.focused'), null);
+	assert.deepEqual([...editor.element.querySelectorAll('.stanza-editor-completion-detail strong')].map(element => element.textContent), [...'settings']);
 	dom.window.close();
 });
 
@@ -175,8 +257,8 @@ test('Chat command completion replaces the whole command and preserves arguments
 		input.dispatchEvent(keyboardEvent(dom.window, 'ArrowRight'));
 	}
 	await services.get(ICommandService).executeCommand('editor.action.triggerSuggest');
-	await waitFor(() => completionLabels(editor.element).length === 1);
-	assert.deepEqual(completionLabels(editor.element), ['/history']);
+	await waitFor(() => completionLabels(editor.element)[0] === '/history');
+	assert.equal(editor.element.querySelector('.stanza-editor-completion-option.focused .stanza-editor-completion-label')?.textContent, '/history');
 	input.dispatchEvent(keyboardEvent(dom.window, 'Enter'));
 	assert.equal(editor.value, '/history argument');
 });

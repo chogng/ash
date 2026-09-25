@@ -472,7 +472,9 @@ fn pointer_move_tracks_hover_without_changing_the_keyboard_completion() {
     let third_completion_row = crate::app::fullscreen::layout(&app, area).input.y - 4;
 
     update_pointer_hover(&mut app, area, 2, third_completion_row);
-    assert!(matches!(app.completion(), Some(CompletionView::Slash(view)) if view.selected == 0));
+    assert!(
+        matches!(app.completion(), Some(CompletionView::Slash(view)) if view.selected == Some(0))
+    );
     assert!(matches!(
         app.fullscreen.pointer.hovered(),
         Some(PointerTarget::Composer(
@@ -481,7 +483,9 @@ fn pointer_move_tracks_hover_without_changing_the_keyboard_completion() {
     ));
 
     update_pointer_hover(&mut app, area, 1, third_completion_row);
-    assert!(matches!(app.completion(), Some(CompletionView::Slash(view)) if view.selected == 0));
+    assert!(
+        matches!(app.completion(), Some(CompletionView::Slash(view)) if view.selected == Some(0))
+    );
     assert!(app.fullscreen.pointer.hovered().is_none());
 }
 
@@ -492,7 +496,9 @@ fn mouse_wheel_scrolls_the_slash_command_completion() {
     let area = Rect::new(0, 0, 80, 20);
     let popup_row = crate::app::fullscreen::layout(&app, area).input.y - 1;
 
-    assert!(matches!(app.completion(), Some(CompletionView::Slash(view)) if view.selected == 0));
+    assert!(
+        matches!(app.completion(), Some(CompletionView::Slash(view)) if view.selected == Some(0))
+    );
     assert!(matches!(
         handle_mouse(
             &mut app,
@@ -506,7 +512,9 @@ fn mouse_wheel_scrolls_the_slash_command_completion() {
         ),
         super::MouseAction::Command(None)
     ));
-    assert!(matches!(app.completion(), Some(CompletionView::Slash(view)) if view.selected == 1));
+    assert!(
+        matches!(app.completion(), Some(CompletionView::Slash(view)) if view.selected == Some(1))
+    );
 
     handle_mouse(
         &mut app,
@@ -518,7 +526,9 @@ fn mouse_wheel_scrolls_the_slash_command_completion() {
             modifiers: KeyModifiers::NONE,
         },
     );
-    assert!(matches!(app.completion(), Some(CompletionView::Slash(view)) if view.selected == 0));
+    assert!(
+        matches!(app.completion(), Some(CompletionView::Slash(view)) if view.selected == Some(0))
+    );
 }
 
 #[test]

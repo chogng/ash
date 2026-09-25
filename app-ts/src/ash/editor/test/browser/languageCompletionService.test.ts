@@ -192,7 +192,7 @@ test("Provider request flows through store, session, acceptance, and undo", asyn
 	using session = new SuggestModel(service.results, editor);
 
 	await service.request("typescript", new Position((0) + 1, (3) + 1), createLanguageCompletionInvokeContext());
-	assert.equal(session.state!.selectedItem.providerId, "typescript");
+	assert.equal(session.state!.selectedItem!.providerId, "typescript");
 	assert.equal(session.acceptSelected(), true);
 	assert.equal(model.getText(), "console");
 	assert.equal(session.state, undefined);

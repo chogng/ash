@@ -9,7 +9,8 @@ use crate::{
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct SlashCommandsView<'a> {
     pub commands: &'a [SlashCommandDefinition],
-    pub selected: usize,
+    pub query: &'a str,
+    pub selected: Option<usize>,
 }
 
 /// Headless query, selection, dismissal, completion, and submission state.
@@ -20,7 +21,7 @@ pub struct SlashCommandsState {
     cursor: usize,
     query: Option<String>,
     commands: Vec<SlashCommandDefinition>,
-    selected: usize,
+    selected: Option<usize>,
     dismissed_input: Option<String>,
 }
 
@@ -51,13 +52,14 @@ impl SlashCommandsState {
         (self.query.is_some() && self.dismissed_input.as_deref() != self.input.as_deref())
             .then_some(SlashCommandsView {
                 commands: &self.commands,
+                query: self.query.as_deref().unwrap_or_default(),
                 selected: self.selected,
             })
     }
 
     pub fn selected_command(&self) -> Option<&SlashCommandDefinition> {
         self.view()
-            .and_then(|view| view.commands.get(view.selected))
+            .and_then(|view| view.commands.get(view.selected?))
     }
 
     pub fn command_at(&self, index: usize) -> Option<&SlashCommandDefinition> {
@@ -68,16 +70,21 @@ impl SlashCommandsState {
         if self.commands.is_empty() {
             return;
         }
-        self.selected = if self.selected == 0 {
-            self.commands.len() - 1
-        } else {
-            self.selected - 1
-        };
+        self.selected = Some(self.selected.map_or(self.commands.len() - 1, |selected| {
+            if selected == 0 {
+                self.commands.len() - 1
+            } else {
+                selected - 1
+            }
+        }));
     }
 
     pub fn select_next(&mut self) {
         if !self.commands.is_empty() {
-            self.selected = (self.selected + 1) % self.commands.len();
+            self.selected = Some(
+                self.selected
+                    .map_or(0, |selected| (selected + 1) % self.commands.len()),
+            );
         }
     }
 
@@ -85,7 +92,7 @@ impl SlashCommandsState {
         if index >= self.commands.len() || self.view().is_none() {
             return false;
         }
-        self.selected = index;
+        self.selected = Some(index);
         true
     }
 
@@ -120,7 +127,7 @@ impl SlashCommandsState {
         self.cursor = 0;
         self.query = None;
         self.commands.clear();
-        self.selected = 0;
+        self.selected = None;
         self.dismissed_input = None;
     }
 
@@ -134,7 +141,7 @@ impl SlashCommandsState {
         let Some(query) = slash_input.query() else {
             self.query = None;
             self.commands.clear();
-            self.selected = 0;
+            self.selected = None;
             self.dismissed_input = None;
             return;
         };
@@ -144,9 +151,16 @@ impl SlashCommandsState {
             .matching_commands()
             .expect("a Slash Command query has matches");
         if query_changed {
-            self.selected = 0;
+            // A weak match is discoverable, but only an explicit choice may turn it into a command.
+            self.selected = self.commands.first().and_then(|command| {
+                (query.text.is_empty()
+                    || command.name.starts_with(&query.text.to_ascii_lowercase()))
+                .then_some(0)
+            });
         } else {
-            self.selected = self.selected.min(self.commands.len().saturating_sub(1));
+            self.selected = self
+                .selected
+                .filter(|&selected| selected < self.commands.len());
         }
         if self.dismissed_input.as_deref() != Some(input) {
             self.dismissed_input = None;

@@ -110,13 +110,165 @@ impl SlashCommandCatalog {
         self.origins.get(name).copied()
     }
 
-    pub fn matching(&self, prefix: &str) -> Vec<SlashCommandDefinition> {
-        self.commands
+    /// Orders name matches before description matches, retaining catalog order for ties.
+    pub fn matching(&self, query: &str) -> Vec<SlashCommandDefinition> {
+        if query.is_empty() {
+            return self.commands.clone();
+        }
+        let query = query.to_ascii_lowercase();
+        let mut matches = self
+            .commands
             .iter()
-            .filter(|command| command.name.starts_with(prefix))
-            .cloned()
-            .collect()
+            .enumerate()
+            .filter_map(|(index, command)| {
+                command_match_score(&command.name, &query)
+                    .or_else(|| description_match_score(&command.description, &query))
+                    .map(|score| (score, index, command.clone()))
+            })
+            .collect::<Vec<_>>();
+        matches.sort_by_key(|(score, index, _)| (*score, *index));
+        matches.into_iter().map(|(_, _, command)| command).collect()
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+enum MatchKind {
+    Exact,
+    Prefix,
+    WordPrefix,
+    Substring,
+    Subsequence,
+    DescriptionWordPrefix,
+    DescriptionSubstring,
+    DescriptionSubsequence,
+}
+
+type MatchScore = (MatchKind, usize, usize);
+
+fn command_match_score(name: &str, query: &str) -> Option<MatchScore> {
+    if name == query {
+        return Some((MatchKind::Exact, 0, 0));
+    }
+    if name.starts_with(query) {
+        return Some((MatchKind::Prefix, 0, 0));
+    }
+    // A single character away from the start would flood the popup with weak matches.
+    if query.chars().count() < 2 {
+        return None;
+    }
+    if let Some(start) = name
+        .match_indices(query)
+        .map(|(start, _)| start)
+        .find(|&start| start > 0 && name.as_bytes()[start - 1] == b'-')
+    {
+        return Some((MatchKind::WordPrefix, 0, start));
+    }
+    if let Some(start) = name.find(query) {
+        return Some((MatchKind::Substring, 0, start));
+    }
+    let (gap, start) = subsequence_score(name, query)?;
+    Some((MatchKind::Subsequence, gap, start))
+}
+
+fn description_match_score(description: &str, query: &str) -> Option<MatchScore> {
+    if query.chars().count() < 2 {
+        return None;
+    }
+    let description = description.to_ascii_lowercase();
+    if let Some(start) = description
+        .match_indices(query)
+        .map(|(start, _)| start)
+        .find(|&start| {
+            description[..start]
+                .chars()
+                .last()
+                .is_none_or(|character| !character.is_alphanumeric())
+        })
+    {
+        return Some((
+            MatchKind::DescriptionWordPrefix,
+            0,
+            description[..start].chars().count(),
+        ));
+    }
+    if let Some(start) = description.find(query) {
+        return Some((
+            MatchKind::DescriptionSubstring,
+            0,
+            description[..start].chars().count(),
+        ));
+    }
+    let (gap, start) = subsequence_score(&description, query)?;
+    Some((MatchKind::DescriptionSubsequence, gap, start))
+}
+
+/// Character positions to emphasize in a displayed command name or description.
+pub fn matched_character_indices(text: &str, query: &str) -> Vec<usize> {
+    if query.is_empty() {
+        return Vec::new();
+    }
+    let text = text
+        .chars()
+        .map(|character| character.to_ascii_lowercase())
+        .collect::<Vec<_>>();
+    let query = query
+        .chars()
+        .map(|character| character.to_ascii_lowercase())
+        .collect::<Vec<_>>();
+    if query.len() > text.len() {
+        return Vec::new();
+    }
+    for start in 0..=text.len() - query.len() {
+        if text[start..start + query.len()] == query {
+            return (start..start + query.len()).collect();
+        }
+    }
+    let mut best: Option<(usize, usize, Vec<usize>)> = None;
+    for start in 0..text.len() {
+        if text[start] != query[0] {
+            continue;
+        }
+        let mut indices = vec![start];
+        for (index, character) in text.iter().enumerate().skip(start + 1) {
+            if *character == query[indices.len()] {
+                indices.push(index);
+                if indices.len() == query.len() {
+                    let score = (index - start + 1 - query.len(), start);
+                    if best
+                        .as_ref()
+                        .is_none_or(|(gap, offset, _)| score < (*gap, *offset))
+                    {
+                        best = Some((score.0, score.1, indices));
+                    }
+                    break;
+                }
+            }
+        }
+    }
+    best.map_or_else(Vec::new, |(_, _, indices)| indices)
+}
+
+fn subsequence_score(name: &str, query: &str) -> Option<(usize, usize)> {
+    let name = name.chars().collect::<Vec<_>>();
+    let query = query.chars().collect::<Vec<_>>();
+    let mut best = None;
+    for start in 0..name.len() {
+        if name[start] != query[0] {
+            continue;
+        }
+        let mut matched = 1;
+        for (end, &character) in name.iter().enumerate().skip(start + 1) {
+            if character == query[matched] {
+                matched += 1;
+                if matched == query.len() {
+                    let score = (end - start + 1 - query.len(), start);
+                    best = Some(best.map_or(score, |current: (usize, usize)| current.min(score)));
+                    break;
+                }
+            }
+        }
+    }
+    best
 }
 
 /// Failure to construct one canonical Slash Commands catalog.

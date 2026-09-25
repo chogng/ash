@@ -37,7 +37,7 @@ export interface LanguageCompletionSessionState {
 	readonly position: Position;
 	readonly items: readonly LanguageCompletionItem[];
 	readonly selectedIndex: number;
-	readonly selectedItem: LanguageCompletionItem;
+	readonly selectedItem: LanguageCompletionItem | undefined;
 	readonly isIncomplete: boolean;
 	readonly detailsStatus: LanguageCompletionDetailsStatus;
 	readonly details: LanguageCompletionItemDetails;
@@ -174,16 +174,17 @@ export class SuggestModel extends Disposable {
 	acceptSelectedWithCommitCharacter(commitCharacter?: string): boolean {
 		this.assertNotDisposed();
 		const state = this.currentState;
-		if (!state || !this.selectionMatches(state.position) || this.editor.getOption(EditorOption.readOnly)) return false;
+		if (!state || !state.selectedItem || !this.selectionMatches(state.position) || this.editor.getOption(EditorOption.readOnly)) return false;
+		const item = state.selectedItem;
 		if (commitCharacter !== undefined) {
 			assertLanguageCompletionCommitCharacter(commitCharacter);
-			if (!state.selectedItem.commitCharacters?.includes(commitCharacter)) return false;
+			if (!item.commitCharacters?.includes(commitCharacter)) return false;
 		}
-		const insertion = resolveLanguageCompletionInsertion(state.selectedItem, commitCharacter, this.textModel, this.snippetVariables);
+		const insertion = resolveLanguageCompletionInsertion(item, commitCharacter, this.textModel, this.snippetVariables);
 		const command = createLanguageCompletionAcceptCommand(
 			this.textModel,
 			this.editor,
-			state.selectedItem,
+			item,
 			commitCharacter,
 			this.snippetVariables,
 		);
@@ -208,7 +209,7 @@ export class SuggestModel extends Disposable {
 			throw error;
 		}
 		this.accepting = false;
-		if (state.selectedItem.command && this.onDidAccept) void Promise.resolve().then(() => this.onDidAccept!(state.selectedItem)).catch(this.onResolveError);
+		if (item.command && this.onDidAccept) void Promise.resolve().then(() => this.onDidAccept!(item)).catch(this.onResolveError);
 		this.close(LanguageCompletionSessionChangeReason.Accepted);
 		return true;
 	}
@@ -217,7 +218,7 @@ export class SuggestModel extends Disposable {
 		this.assertNotDisposed();
 		const state = this.currentState;
 		if (!state) return false;
-		return this.selectIndex(rot(state.selectedIndex + delta, state.items.length));
+		return this.selectIndex(state.selectedIndex < 0 ? (delta > 0 ? 0 : state.items.length - 1) : rot(state.selectedIndex + delta, state.items.length));
 	}
 
 	private replaceState(result: VersionedLanguageResult<LanguageCompletionResult> | undefined, reason: LanguageCompletionSessionChangeReason): void {
@@ -241,18 +242,21 @@ export class SuggestModel extends Disposable {
 				item.id === previousItem.id
 			));
 		const preselectedIndex = result.value.items.findIndex(item => item.preselect === true);
-		const selectedIndex = retainedIndex >= 0
+		const selectedIndex = retainedIndex >= 0 &&
+			this.currentState?.modelVersion === result.modelVersion &&
+			Position.compare(this.currentState.position, result.value.position) === 0
 			? retainedIndex
-			: Math.max(0, preselectedIndex);
+			: preselectedIndex >= 0 ? preselectedIndex : result.value.items.every(item => item.preselect === false) ? -1 : 0;
+		const selectedItem = result.value.items[selectedIndex];
 		return Object.freeze({
 			requestId: result.requestId,
 			modelVersion: result.modelVersion,
 			position: result.value.position,
 			items: result.value.items,
 			selectedIndex,
-			selectedItem: result.value.items[selectedIndex]!,
+			selectedItem,
 			isIncomplete: result.value.isIncomplete,
-			...createDetailsState(result.value.items[selectedIndex]!, this.resolver !== undefined),
+			...createDetailsState(selectedItem, this.resolver !== undefined),
 		});
 	}
 
@@ -281,17 +285,18 @@ export class SuggestModel extends Disposable {
 
 	private startResolution(): void {
 		const state = this.currentState;
-		if (!state || state.detailsStatus !== LanguageCompletionDetailsStatus.Loading || !this.resolver) return;
+		if (!state || !state.selectedItem || state.detailsStatus !== LanguageCompletionDetailsStatus.Loading || !this.resolver) return;
+		const item = state.selectedItem;
 		const controller = new AbortController();
 		this.resolveController = controller;
-		const request = createResolveRequest(state);
+		const request = createResolveRequest(state, item);
 		void Promise.resolve().then(() => this.resolver!.resolveCompletionItem(request, controller.signal)).then(details => {
 			if (controller.signal.aborted || this.currentState !== state) return;
 			this.resolveController = undefined;
 			this.currentState = Object.freeze({
 				...state,
 				detailsStatus: LanguageCompletionDetailsStatus.Complete,
-				details: mergeDetails(state.selectedItem, normalizeLanguageCompletionItemDetails(details)),
+				details: mergeDetails(item, normalizeLanguageCompletionItemDetails(details)),
 			});
 			this.fire(LanguageCompletionSessionChangeReason.Details);
 		}, error => {
@@ -392,7 +397,8 @@ function createStateSnapshot(state: LanguageCompletionSessionState, selectedInde
 	});
 }
 
-function createDetailsState(item: LanguageCompletionItem, resolverAvailable: boolean): Pick<LanguageCompletionSessionState, "details" | "detailsStatus"> {
+function createDetailsState(item: LanguageCompletionItem | undefined, resolverAvailable: boolean): Pick<LanguageCompletionSessionState, "details" | "detailsStatus"> {
+	if (!item) return Object.freeze({ details: Object.freeze({}), detailsStatus: LanguageCompletionDetailsStatus.Unavailable });
 	return Object.freeze({
 		details: mergeDetails(item, undefined),
 		detailsStatus: item.hasDeferredDetails
@@ -410,12 +416,12 @@ function mergeDetails(item: LanguageCompletionItem, resolved: LanguageCompletion
 	});
 }
 
-function createResolveRequest(state: LanguageCompletionSessionState): LanguageCompletionResolveRequest {
+function createResolveRequest(state: LanguageCompletionSessionState, item: LanguageCompletionItem): LanguageCompletionResolveRequest {
 	return Object.freeze({
 		completionRequestId: state.requestId,
 		modelVersion: state.modelVersion,
-		providerId: state.selectedItem.providerId,
-		itemId: state.selectedItem.id,
+		providerId: item.providerId,
+		itemId: item.id,
 	});
 }
 

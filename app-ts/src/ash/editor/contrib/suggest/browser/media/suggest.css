@@ -58,6 +58,16 @@
   font-size: 0.9em;
 }
 
+.stanza-editor-completion-label strong,
+.stanza-editor-completion-detail strong {
+  color: var(--ash-editor-foreground);
+  font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.stanza-editor-completion-option.focused strong {
+  color: inherit;
+}
+
 .stanza-editor-completion-option.resolving
   .stanza-editor-completion-detail::after {
   content: " …";

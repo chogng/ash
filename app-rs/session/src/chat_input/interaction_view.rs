@@ -1,8 +1,10 @@
+use ash_slash_commands::matched_character_indices;
 use ash_ui_components::ListView;
 use ash_ui_components::ScrollState;
 use zui::ui::AccessibilityRole;
 use zui::ui::AccessibilitySelection;
 use zui::ui::Border;
+use zui::ui::Color;
 use zui::ui::ComponentContext;
 use zui::ui::CornerRadii;
 use zui::ui::CursorFeedback;
@@ -14,6 +16,7 @@ use zui::ui::Point;
 use zui::ui::Rect;
 use zui::ui::Size;
 use zui::ui::TextBlock;
+use zui::ui::TextSpan;
 use zui::ui::TextStyle;
 use zui::ui::UiDispatch;
 
@@ -116,7 +119,7 @@ pub(crate) fn draw_chat_input_interaction(
                 .with_parent(COMPOSER_INTERACTION)
                 .with_cursor(CursorFeedback::Pointer)
                 .with_action(NodeAction::Activate)
-                .with_selection(if index == view.selected() {
+                .with_selection(if Some(index) == view.selected() {
                     AccessibilitySelection::Selected
                 } else {
                     AccessibilitySelection::Unselected
@@ -129,7 +132,7 @@ pub(crate) fn draw_chat_input_interaction(
             let item_bounds = layout.bounds();
             let y = item_bounds.origin.y;
             let id = composer_interaction_item_id(index);
-            let selected = index == view.selected();
+            let selected = Some(index) == view.selected();
             if selected || dispatch.is_hovered(id) || dispatch.is_pressed(id) {
                 scene.draw_rect(PaintRect::new(
                     item_bounds,
@@ -141,16 +144,32 @@ pub(crate) fn draw_chat_input_interaction(
                 ));
             }
             let label_width = (item_bounds.size.width * 0.34).max(100.0);
-            scene.draw_text(TextBlock::new(
-                item.label(),
+            let label_style = TextStyle::new(12.0, style.text)
+                .with_family(FontFamily::Monospace)
+                .with_line_height(20.0);
+            scene.draw_text(TextBlock::from_spans(
+                highlighted_spans(
+                    item.label(),
+                    view.query(),
+                    label_style.clone(),
+                    style.text,
+                    1,
+                ),
                 Point::new(item_bounds.origin.x + INTERACTION_TEXT_INSET, y + 7.0),
                 Size::new(label_width, 20.0),
-                TextStyle::new(12.0, style.text)
-                    .with_family(FontFamily::Monospace)
-                    .with_line_height(20.0),
+                label_style,
             ));
-            scene.draw_text(TextBlock::new(
-                item.description(),
+            let description_style = TextStyle::new(12.0, style.text_muted)
+                .with_family(FontFamily::Monospace)
+                .with_line_height(20.0);
+            scene.draw_text(TextBlock::from_spans(
+                highlighted_spans(
+                    item.description(),
+                    view.query(),
+                    description_style.clone(),
+                    style.text,
+                    0,
+                ),
                 Point::new(
                     item_bounds.origin.x + INTERACTION_TEXT_INSET + label_width,
                     y + 7.0,
@@ -159,10 +178,42 @@ pub(crate) fn draw_chat_input_interaction(
                     (item_bounds.size.width - INTERACTION_TEXT_INSET * 3.0 - label_width).max(1.0),
                     20.0,
                 ),
-                TextStyle::new(12.0, style.text_muted)
-                    .with_family(FontFamily::Monospace)
-                    .with_line_height(20.0),
+                description_style,
             ));
         });
     });
 }
+
+fn highlighted_spans(
+    text: &str,
+    query: &str,
+    base: TextStyle,
+    matched_color: Color,
+    prefix_chars: usize,
+) -> Vec<TextSpan> {
+    if query.is_empty() {
+        return vec![TextSpan::new(text, base)];
+    }
+    let matched =
+        matched_character_indices(&text.chars().skip(prefix_chars).collect::<String>(), query);
+    if matched.is_empty() {
+        return vec![TextSpan::new(text, base)];
+    }
+    text.chars()
+        .enumerate()
+        .map(|(index, character)| {
+            let style = if index >= prefix_chars && matched.contains(&(index - prefix_chars)) {
+                base.clone()
+                    .with_color(matched_color)
+                    .with_weight(FontWeight::Bold)
+            } else {
+                base.clone()
+            };
+            TextSpan::new(character.to_string(), style)
+        })
+        .collect()
+}
+
+#[cfg(test)]
+#[path = "interaction_view_tests.rs"]
+mod tests;

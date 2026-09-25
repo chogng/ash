@@ -8,7 +8,9 @@ pub use ash_app_server_protocol::protocol::slash_commands::{
     ProductSlashCommand, SlashCommandArgumentModeDto as SlashCommandArgumentMode,
     SlashCommandDefinition,
 };
-pub use catalog::{SlashCommandCatalog, SlashCommandCatalogError, SlashCommandOrigin};
+pub use catalog::{
+    SlashCommandCatalog, SlashCommandCatalogError, SlashCommandOrigin, matched_character_indices,
+};
 pub use input::{
     SlashCommandCompletion, SlashCommandInput, SlashCommandInvocation, SlashCommandQuery,
 };

@@ -84,7 +84,8 @@ pub enum ComposerInteractionActivation {
 pub struct ChatInputInteractionView<'a> {
     title: &'static str,
     items: &'a [ChatInputInteractionItem],
-    selected: usize,
+    selected: Option<usize>,
+    query: &'a str,
     can_go_back: bool,
 }
 
@@ -97,8 +98,12 @@ impl<'a> ChatInputInteractionView<'a> {
         self.items
     }
 
-    pub const fn selected(self) -> usize {
+    pub const fn selected(self) -> Option<usize> {
         self.selected
+    }
+
+    pub const fn query(self) -> &'a str {
+        self.query
     }
 
     pub const fn can_go_back(self) -> bool {
@@ -184,7 +189,8 @@ impl ChatInputInteractionState {
             return Some(ChatInputInteractionView {
                 title: "Select model",
                 items: &view.items,
-                selected: view.selected,
+                selected: Some(view.selected),
+                query: "",
                 can_go_back: true,
             });
         }
@@ -193,6 +199,7 @@ impl ChatInputInteractionState {
             title: "Commands",
             items: &self.slash_items,
             selected: view.selected,
+            query: view.query,
             can_go_back: false,
         })
     }

@@ -35,6 +35,32 @@ fn state_direct_selection_only_changes_the_selected_command() {
     let mut state = SlashCommandsState::new(catalog);
     state.sync_input("/", 1);
     assert!(state.select(8));
-    assert_eq!(state.view().unwrap().selected, 8);
+    assert_eq!(state.view().unwrap().selected, Some(8));
     assert_eq!(state.selected_command().unwrap().name, "command-8");
+}
+
+#[test]
+fn weak_name_and_description_matches_need_explicit_selection() {
+    let catalog = SlashCommandCatalog::new([
+        SlashCommandDefinition {
+            description: "Open settings".into(),
+            ..command("config")
+        },
+        SlashCommandDefinition {
+            description: "Inspect health and settings".into(),
+            ..command("doctor")
+        },
+    ])
+    .unwrap();
+    let mut state = SlashCommandsState::new(catalog);
+    state.sync_input("/confi", 6);
+    assert_eq!(state.view().unwrap().selected, Some(0));
+    state.sync_input("/cofig", 6);
+    assert_eq!(state.view().unwrap().selected, None);
+    assert!(state.selected_completion().is_none());
+    state.select_next();
+    assert_eq!(state.selected_command().unwrap().name, "config");
+    state.sync_input("/settings", 9);
+    assert_eq!(state.view().unwrap().selected, None);
+    assert_eq!(state.view().unwrap().commands.len(), 2);
 }

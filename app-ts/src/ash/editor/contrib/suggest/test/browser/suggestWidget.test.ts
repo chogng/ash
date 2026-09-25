@@ -106,7 +106,7 @@ test("Completion keyboard navigation accepts one item before ordinary input rout
 	const down = keyboardEvent(fixture.dom.window, "ArrowDown");
 	fixture.input.element.dispatchEvent(down);
 	assert.equal(down.defaultPrevented, true);
-	assert.equal(fixture.session.state!.selectedItem.id, "console");
+	assert.equal(fixture.session.state!.selectedItem!.id, "console");
 
 	const enter = keyboardEvent(fixture.dom.window, "Enter");
 	fixture.input.element.dispatchEvent(enter);

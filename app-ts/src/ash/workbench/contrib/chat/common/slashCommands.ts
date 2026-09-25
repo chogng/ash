@@ -21,7 +21,6 @@ export type SlashCommandInput =
 export interface LocalSlashCommandRegistration {
 	readonly definition: SlashCommandDefinition;
 	readonly actionId: string;
-	readonly aliases?: readonly string[];
 }
 
 interface CatalogEntry {
@@ -53,20 +52,16 @@ export class SlashCommandCatalog {
 	private rebuild(): void {
 		const entriesByName = new Map<string, CatalogEntry>();
 		const commands: SlashCommandDefinition[] = [];
-		const append = (command: SlashCommandDefinition, binding: SlashCommandBinding, aliases: readonly string[] = []): void => {
+		const append = (command: SlashCommandDefinition, binding: SlashCommandBinding): void => {
 			const normalized = validateDefinition(command);
-			const names = [normalized.name, ...aliases.map(validateName)];
-			if (new Set(names).size !== names.length) throw new RangeError(`Duplicate Slash Command name: /${normalized.name}`);
-			for (const name of names) {
-				if (entriesByName.has(name)) throw new RangeError(`Duplicate Slash Command name: /${name}`);
-			}
+			if (entriesByName.has(normalized.name)) throw new RangeError(`Duplicate Slash Command name: /${normalized.name}`);
 			const entry = Object.freeze({ command: normalized, binding });
-			for (const name of names) entriesByName.set(name, entry);
+			entriesByName.set(normalized.name, entry);
 			commands.push(normalized);
 		};
 		for (const local of this.local) {
 			if (!local.actionId.trim()) throw new TypeError(`Local Slash Command /${local.definition.name} requires an action ID`);
-			append(local.definition, Object.freeze({ origin: "local", actionId: local.actionId }), local.aliases);
+			append(local.definition, Object.freeze({ origin: "local", actionId: local.actionId }));
 		}
 		for (const command of this.server) append(command, Object.freeze({ origin: "server" }));
 		this.entriesByName = entriesByName;
@@ -81,9 +76,106 @@ export class SlashCommandCatalog {
 		return this.entriesByName.get(name)?.binding;
 	}
 
-	matching(prefix: string): readonly SlashCommandDefinition[] {
-		return this.commands.filter(command => command.name.startsWith(prefix) || [...this.entriesByName].some(([name, entry]) => entry.command === command && name.startsWith(prefix)));
+	matching(query: string): readonly SlashCommandDefinition[] {
+		if (!query) return this.commands;
+		const normalizedQuery = query.replace(/[A-Z]/g, character => character.toLowerCase());
+		return this.commands
+			.flatMap((command, index) => {
+				const score = commandMatchScore(command.name, normalizedQuery) ?? descriptionMatchScore(command.description, normalizedQuery);
+				return score ? [{ command, index, score }] : [];
+			})
+			.sort((left, right) => compareMatchScores(left.score, right.score) || left.index - right.index)
+			.map(match => match.command);
 	}
+}
+
+const enum MatchKind {
+	Exact,
+	Prefix,
+	WordPrefix,
+	Substring,
+	Subsequence,
+	DescriptionWordPrefix,
+	DescriptionSubstring,
+	DescriptionSubsequence,
+}
+
+type MatchScore = readonly [kind: MatchKind, gap: number, start: number];
+
+function commandMatchScore(name: string, query: string): MatchScore | undefined {
+	if (name === query) return [MatchKind.Exact, 0, 0];
+	if (name.startsWith(query)) return [MatchKind.Prefix, 0, 0];
+	if ([...query].length < 2) return undefined;
+	const wordStart = name.indexOf(`-${query}`);
+	if (wordStart >= 0) return [MatchKind.WordPrefix, 0, wordStart + 1];
+	const substringStart = name.indexOf(query);
+	if (substringStart >= 0) return [MatchKind.Substring, 0, substringStart];
+	const characters = [...name];
+	const needle = [...query];
+	let best: MatchScore | undefined;
+	for (let start = 0; start < characters.length; start++) {
+		if (characters[start] !== needle[0]) continue;
+		let matched = 1;
+		for (let end = start + 1; end < characters.length; end++) {
+			if (characters[end] !== needle[matched]) continue;
+			matched++;
+			if (matched === needle.length) {
+				const score: MatchScore = [MatchKind.Subsequence, end - start + 1 - needle.length, start];
+				if (!best || compareMatchScores(score, best) < 0) best = score;
+				break;
+			}
+		}
+	}
+	return best;
+}
+
+function descriptionMatchScore(description: string, query: string): MatchScore | undefined {
+	if ([...query].length < 2) return undefined;
+	const normalized = description.replace(/[A-Z]/g, character => character.toLowerCase());
+	for (const match of normalized.matchAll(new RegExp(escapeRegExp(query), 'g'))) {
+		const start = match.index;
+		if (start === 0 || !/[\p{L}\p{N}]/u.test([...normalized.slice(0, start)].at(-1)!)) return [MatchKind.DescriptionWordPrefix, 0, [...normalized.slice(0, start)].length];
+	}
+	const substringStart = normalized.indexOf(query);
+	if (substringStart >= 0) return [MatchKind.DescriptionSubstring, 0, [...normalized.slice(0, substringStart)].length];
+	const subsequence = commandMatchScore(normalized, query);
+	return subsequence?.[0] === MatchKind.Subsequence
+		? [MatchKind.DescriptionSubsequence, subsequence[1], subsequence[2]]
+		: undefined;
+}
+
+function escapeRegExp(value: string): string {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function compareMatchScores(left: MatchScore, right: MatchScore): number {
+	return left[0] - right[0] || left[1] - right[1] || left[2] - right[2];
+}
+
+export function matchedCharacterIndices(text: string, query: string): readonly number[] {
+	if (!query) return [];
+	const characters = [...text.replace(/[A-Z]/g, character => character.toLowerCase())];
+	const needle = [...query.replace(/[A-Z]/g, character => character.toLowerCase())];
+	if (needle.length > characters.length) return [];
+	for (let start = 0; start <= characters.length - needle.length; start++) {
+		if (needle.every((character, offset) => characters[start + offset] === character)) {
+			return needle.map((_, offset) => start + offset);
+		}
+	}
+	let best: { gap: number; start: number; indices: number[] } | undefined;
+	for (let start = 0; start < characters.length; start++) {
+		if (characters[start] !== needle[0]) continue;
+		const indices = [start];
+		for (let index = start + 1; index < characters.length && indices.length < needle.length; index++) {
+			if (characters[index] !== needle[indices.length]) continue;
+			indices.push(index);
+			if (indices.length === needle.length) {
+				const gap = index - start + 1 - needle.length;
+				if (!best || gap < best.gap || (gap === best.gap && start < best.start)) best = { gap, start, indices };
+			}
+		}
+	}
+	return best?.indices ?? [];
 }
 
 const productActions: Record<keyof typeof ProductSlashCommands, string> = {
@@ -95,7 +187,7 @@ const productActions: Record<keyof typeof ProductSlashCommands, string> = {
 
 export const DesktopSlashCommands: readonly LocalSlashCommandRegistration[] = Object.freeze([
 	localCommand("new", "Start a new chat", NEW_CHAT_COMMAND_ID),
-	localCommand("history", "Show chat history", SHOW_CHAT_HISTORY_COMMAND_ID, ["chats"]),
+	localCommand("history", "Show chat history", SHOW_CHAT_HISTORY_COMMAND_ID),
 	localCommand("config", localize('chat.settings.openCommand', 'Open chat settings'), OPEN_CHAT_SETTINGS_COMMAND_ID),
 	...Object.entries(productActions).map(([id, actionId]) => ({ definition: ProductSlashCommands[id as keyof typeof ProductSlashCommands], actionId })),
 ]);
@@ -113,8 +205,8 @@ export function parseSlashCommandInput(value: string, catalog: SlashCommandCatal
 	return { kind: "command", command, binding, argumentsText };
 }
 
-function localCommand(name: string, description: string, actionId: string, aliases?: readonly string[]): LocalSlashCommandRegistration {
-	return Object.freeze({ definition: Object.freeze({ name, description, argumentMode: "none" }), actionId, ...(aliases ? { aliases: Object.freeze([...aliases]) } : {}) });
+function localCommand(name: string, description: string, actionId: string): LocalSlashCommandRegistration {
+	return Object.freeze({ definition: Object.freeze({ name, description, argumentMode: "none" }), actionId });
 }
 
 function validateDefinition(definition: SlashCommandDefinition): SlashCommandDefinition {

@@ -144,7 +144,7 @@ export class SuggestController extends Disposable {
 			!event.altKey &&
 			!event.metaKey &&
 			event.key === 'Enter' &&
-			state
+			state && state.selectedIndex >= 0
 		) {
 			stopEvent(event);
 			this.acceptSelected();
@@ -171,7 +171,7 @@ export class SuggestController extends Disposable {
 			!event.metaKey &&
 			event.key === 'Tab'
 		) {
-			if (!event.shiftKey && state) {
+			if (!event.shiftKey && state && state.selectedIndex >= 0) {
 				stopEvent(event);
 				this.acceptSelected();
 			}
