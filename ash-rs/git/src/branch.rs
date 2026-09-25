@@ -4,6 +4,20 @@ use crate::GitRepository;
 use crate::GitResult;
 
 impl GitClient {
+    /// Creates a local branch at HEAD without changing or adding a checkout.
+    pub async fn create_branch(&self, repository: &GitRepository, name: &str) -> GitResult<()> {
+        self.run_query(
+            repository.worktree_root(),
+            ["check-ref-format", "--branch", name],
+        )
+        .await?
+        .require_success()?;
+        self.run_mutation(repository.worktree_root(), ["branch", "--", name, "HEAD"])
+            .await?
+            .require_success()?;
+        Ok(())
+    }
+
     /// Pushes exactly the reviewed commit to a task branch, without force or checkout changes.
     pub async fn push_branch_commit(
         &self,

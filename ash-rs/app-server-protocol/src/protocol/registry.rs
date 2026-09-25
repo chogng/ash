@@ -613,6 +613,8 @@ use crate::protocol::fs::FsWriteFileParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsWriteFileResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitBranchCreateParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitBranchDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitBranchListResult;
@@ -3369,6 +3371,11 @@ client_methods! {
         response: GitOperationResult,
         serialization: GlobalExclusive,
     },
+    GitBranchCreate => "git/branch/create" {
+        params: GitBranchCreateParams,
+        response: GitBranchListResult,
+        serialization: GlobalExclusive,
+    },
     GitStage => "git/stage" {
         params: GitPathsParams,
         response: GitOperationResult,
@@ -4702,6 +4709,7 @@ typescript_bindings! {
     GitStatusResult,
     GitStatusChanged,
     GitBranchDto,
+    GitBranchCreateParams,
     GitBranchListResult,
     GitCommitSummaryDto,
     GitHistoryResult,

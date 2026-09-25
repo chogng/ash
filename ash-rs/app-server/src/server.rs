@@ -2478,6 +2478,7 @@ impl AppServer {
             Some(ClientMethod::GitCommitFile) => self.git_commit_file(&request.params),
             Some(ClientMethod::GitChangeFile) => self.git_change_file(&request.params),
             Some(ClientMethod::GitBranchSwitch) => self.git_branch_switch(&request.params),
+            Some(ClientMethod::GitBranchCreate) => self.git_branch_create(&request.params),
             Some(ClientMethod::GitStage) => self.git_stage(&request.params),
             Some(ClientMethod::GitUnstage) => self.git_unstage(&request.params),
             Some(ClientMethod::GitDiscardWorktree) => self.git_discard_worktree(&request.params),

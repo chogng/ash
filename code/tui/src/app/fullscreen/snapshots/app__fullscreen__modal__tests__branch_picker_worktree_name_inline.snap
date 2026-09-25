@@ -22,13 +22,13 @@ expression: frame_text(&app)
                                                                                                     
                                                                                                     
                                                                                                     
-─ New branch ───────────────────────────────────────────────────────────────────────────────────────
+─ New task › New branch worktree ───────────────────────────────────────────────────────────────────
                                                                                                     
-  Create branch                                                                                     
+  Create branch worktree                                                                            
                                                                                                     
   ╭──────────────────────────────────────────────────────────────────────────────────────────────╮  
   │ ash/topic                                                                                    │  
   ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  
-  New session on this branch. Project branch unchanged.                                             
+  New task in an ash/ branch and its own worktree.                                                  
                                                                                                     
   Enter to create  ·  Esc to back

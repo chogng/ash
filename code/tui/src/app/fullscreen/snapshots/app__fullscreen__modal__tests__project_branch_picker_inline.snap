@@ -21,14 +21,14 @@ expression: frame_text(&app)
                                                                                                     
                                                                                                     
                                                                                                     
+─ Project branches ─────────────────────────────────────────────────────────────────────────────────
                                                                                                     
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────╮  
+  │ Search branches                                                                              │  
+  ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  
+  New branch  ·  At HEAD · no checkout change                                                       
+  Project branches                                                                                  
+> main  ·  Current                                                                                  
+  topic  ·  In another worktree                                                                     
                                                                                                     
-                                                                                                    
-                                                                                                    
-                                                                                                    
-─ New task ─────────────────────────────────────────────────────────────────────────────────────────
-                                                                                                    
-> New worktree  ·  Detached · new session                                                           
-  New branch worktree  ·  ash/ branch · new session                                                 
-                                                                                                    
-  w New worktree · b New branch worktree · Esc close
+  b New branch · / search · Esc close

@@ -137,6 +137,7 @@ import type { FsReadFileResult } from './types/FsReadFileResult.js';
 import type { FsRenameParams } from './types/FsRenameParams.js';
 import type { FsWriteFileParams } from './types/FsWriteFileParams.js';
 import type { FsWriteFileResult } from './types/FsWriteFileResult.js';
+import type { GitBranchCreateParams } from './types/GitBranchCreateParams.js';
 import type { GitBranchListResult } from './types/GitBranchListResult.js';
 import type { GitBranchSwitchParams } from './types/GitBranchSwitchParams.js';
 import type { GitChangeFileParams } from './types/GitChangeFileParams.js';
@@ -632,6 +633,7 @@ export interface AppServerRequestMap {
   "git/commitFile": { params: GitCommitFileParams; response: GitCommitFileResult };
   "git/changeFile": { params: GitChangeFileParams; response: GitChangeFileResult };
   "git/branch/switch": { params: GitBranchSwitchParams; response: GitOperationResult };
+  "git/branch/create": { params: GitBranchCreateParams; response: GitBranchListResult };
   "git/stage": { params: GitPathsParams; response: GitOperationResult };
   "git/unstage": { params: GitPathsParams; response: GitOperationResult };
   "git/discardWorktree": { params: GitPathsParams; response: GitOperationResult };
@@ -920,6 +922,7 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "git/commitFile": { method: "git/commitFile" },
   "git/changeFile": { method: "git/changeFile" },
   "git/branch/switch": { method: "git/branch/switch" },
+  "git/branch/create": { method: "git/branch/create" },
   "git/stage": { method: "git/stage" },
   "git/unstage": { method: "git/unstage" },
   "git/discardWorktree": { method: "git/discardWorktree" },

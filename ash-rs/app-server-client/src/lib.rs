@@ -64,9 +64,9 @@ use ash_app_server_protocol::protocol::fs::{
 };
 use ash_app_server_protocol::protocol::git::GitStatusResult;
 use ash_app_server_protocol::protocol::git::{
-    GitBranchListResult, GitBranchSwitchParams, GitCommitParams, GitCommitResult,
-    GitOperationResult, GitPathsParams, GitRepositoriesResult, GitRepositoryParams,
-    GitTextDiffResult,
+    GitBranchCreateParams, GitBranchListResult, GitBranchSwitchParams, GitCommitParams,
+    GitCommitResult, GitOperationResult, GitPathsParams, GitRepositoriesResult,
+    GitRepositoryParams, GitTextDiffResult,
 };
 use ash_app_server_protocol::protocol::initialize::{InitializeParams, InitializeResult};
 use ash_app_server_protocol::protocol::language::LanguageCloseParams;
@@ -623,6 +623,13 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         params: GitBranchSwitchParams,
     ) -> Result<GitOperationResult, ClientError> {
         self.call(ClientMethod::GitBranchSwitch, params)
+    }
+
+    pub fn create_git_branch(
+        &mut self,
+        params: GitBranchCreateParams,
+    ) -> Result<GitBranchListResult, ClientError> {
+        self.call(ClientMethod::GitBranchCreate, params)
     }
 
     pub fn list_projects(&mut self) -> Result<ProjectListResult, ClientError> {

@@ -80,7 +80,7 @@ pub(super) fn target_at(
     }
     let panel = app.command_panel()?;
     if let Some(parent) = panel.parent_title() {
-        if parent_area(layout, parent).contains(position) {
+        if parent_area(layout, &crate::nls::localize(app.language(), parent)).contains(position) {
             return Some(Target::Parent);
         }
     }
@@ -228,14 +228,7 @@ pub(super) fn draw_panel(
     context: RenderContext<'_>,
 ) {
     let body = panel.body();
-    let title = panel.parent_title().map(|parent| {
-        format!(
-            "{} › {}",
-            context.localize(parent),
-            body.title(context.language())
-        )
-    });
-    let body_title = body.title(context.language());
+    let title = panel.navigation_title(context.language());
     let alert_hints;
     let hints = if blocked_alert {
         alert_hints = crate::widgets::key_hint::KeyHints::new()
@@ -248,7 +241,7 @@ pub(super) fn draw_panel(
     crate::widgets::modal::draw(
         frame,
         layout,
-        title.as_deref().unwrap_or(&body_title),
+        &title,
         hints,
         close,
         blocked_alert,
@@ -268,9 +261,10 @@ pub(super) fn draw_panel(
                     ..Default::default()
                 },
             ));
+        let area = parent_area(layout, &localized_parent);
         frame.render_widget(
             ratatui::widgets::Paragraph::new(localized_parent).style(style),
-            parent_area(layout, parent),
+            area,
         );
     }
     let tabs = Rect {

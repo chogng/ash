@@ -29,7 +29,7 @@ impl AppCommand {
     pub(super) fn panel_title(&self) -> Option<&'static str> {
         match self {
             Self::Config(crate::config::Command::OpenEditor) => Some("Settings"),
-            Self::Git(crate::git::Command::OpenPicker) => Some("Switch branch"),
+            Self::Git(crate::git::Command::OpenPicker) => Some("Project branches"),
             Self::Projects(crate::projects::Command::OpenRoots) => Some("Switch project folder"),
             Self::Projects(crate::projects::Command::OpenAddRoot) => Some("Add project folder"),
             Self::Status(crate::status::Command::OpenPanel) => Some("Status"),

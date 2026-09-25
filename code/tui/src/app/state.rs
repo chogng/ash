@@ -491,7 +491,7 @@ impl App {
                 Some(ModelCommand::Pin { preference, pinned }.into())
             }
             CommandPanelOutcome::GitBranch(action) => match action {
-                crate::git::BranchSelectionAction::CreateBranch { branch_name } => Some(
+                crate::git::BranchSelectionAction::CreateBranchWorktree { branch_name } => Some(
                     SessionCommand::CreateWorktree {
                         language: self.language(),
                         branch_name: Some(branch_name),
@@ -506,6 +506,11 @@ impl App {
                     .into(),
                 ),
                 crate::git::BranchSelectionAction::NewBranch => None,
+                crate::git::BranchSelectionAction::NewBranchWorktree => None,
+                crate::git::BranchSelectionAction::Occupied { .. } => None,
+                crate::git::BranchSelectionAction::CreateBranch { branch_name } => {
+                    Some(GitCommand::Create { name: branch_name }.into())
+                }
                 crate::git::BranchSelectionAction::Switch { name, current } => {
                     if current {
                         self.close_command_panel();
@@ -1953,6 +1958,16 @@ impl App {
                 GitEvent::SwitchFinished(Err(error)) => {
                     self.panels_mut().set_command_message(error)
                 }
+                GitEvent::CreateFinished {
+                    name,
+                    result: Ok(branches),
+                } => match crate::git::choices_after_create(branches, &name) {
+                    Ok(choices) => self.open_command_panel(CommandPanel::git_branches(choices)),
+                    Err(error) => self.panels_mut().set_command_message(error),
+                },
+                GitEvent::CreateFinished {
+                    result: Err(error), ..
+                } => self.panels_mut().set_command_message(error),
             },
             AppEvent::Host(event) => self.apply_host_event(event),
             AppEvent::Config(event) => self.apply_config_event(event),
@@ -2090,7 +2105,7 @@ impl App {
             ) = &event
             {
                 match self.panels_mut().command_mut() {
-                    Some(CommandPanel::GitBranches(panel)) if panel.is_worktree_name_prompt() => {
+                    Some(CommandPanel::GitBranches(panel)) if panel.is_branch_name_prompt() => {
                         panel.state_mut().set_message(Some(error.clone()));
                     }
                     Some(CommandPanel::Marketplace(panel)) => panel.fail(error.clone()),
@@ -2102,6 +2117,10 @@ impl App {
             return;
         }
         match event {
+            AppEvent::Git(GitEvent::SwitchFinished(Ok(status))) => {
+                self.apply_status_event(StatusEvent::GitStatusReceived(status));
+            }
+            AppEvent::Git(_) => {}
             AppEvent::Config(
                 ConfigEvent::Updated(result) | ConfigEvent::AdvisorSaved(result, _),
             ) => {

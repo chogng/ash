@@ -86,7 +86,7 @@ fn home_keeps_actions_above_the_fixed_composer() {
     let actions = super::layout(area.session.transcript).actions;
     let buffer = render(&app, terminal.width, terminal.height);
     assert_eq!(buffer[(actions.x, actions.y)].symbol(), ">");
-    assert_eq!(buffer[(actions.x + 2, actions.y)].symbol(), "R");
+    assert_eq!(buffer[(actions.x + 2, actions.y)].symbol(), "N");
     assert_eq!(
         buffer[(actions.x, actions.y)].bg,
         app.render_context().selection_background()
@@ -136,7 +136,7 @@ fn home_help_localizes_the_complete_selection_model() {
     app.update(crate::config::Event::SettingsReceived(settings));
     app.open_home();
     app.handle_key(key(KeyCode::Tab));
-    for _ in 0..3 {
+    for _ in 0..4 {
         app.handle_key(key(KeyCode::Down));
     }
 
@@ -234,6 +234,24 @@ fn home_card_uses_the_page_width_without_an_empty_top_band() {
 }
 
 #[test]
+fn home_new_task_action_opens_worktree_choice() {
+    let mut app = unstarted_app();
+    app.open_home();
+    assert_eq!(app.handle_key(key(KeyCode::Tab)), None);
+    assert_eq!(app.fullscreen.home.selected, Some(0));
+    assert_eq!(app.handle_key(key(KeyCode::Enter)), None);
+    assert_eq!(app.list_selection().unwrap().title(), "New task");
+    assert_eq!(
+        app.list_selection()
+            .unwrap()
+            .selected_item()
+            .unwrap()
+            .label(),
+        "New worktree"
+    );
+}
+
+#[test]
 fn home_action_hover_and_press_do_not_change_keyboard_selection() {
     let mut app = unstarted_app();
     app.open_home();
@@ -256,8 +274,8 @@ fn home_action_hover_and_press_do_not_change_keyboard_selection() {
         hovered[(actions.x + 2, actions.y)].bg,
         app.render_context().selection_background()
     );
-    assert_eq!(hovered[(actions.x, actions.y + 2)].symbol(), " ");
-    assert_eq!(hovered[(actions.x + 2, actions.y + 2)].symbol(), "S");
+    assert_eq!(hovered[(actions.x, actions.y + 3)].symbol(), " ");
+    assert_eq!(hovered[(actions.x + 2, actions.y + 3)].symbol(), "S");
     for row in 0..actions.height {
         assert!(
             hovered[(actions.x + 2, actions.y + row)]
@@ -268,7 +286,7 @@ fn home_action_hover_and_press_do_not_change_keyboard_selection() {
     }
     for x in actions.x..actions.right() {
         assert_eq!(
-            hovered[(x, actions.y + 2)].bg,
+            hovered[(x, actions.y + 3)].bg,
             app.render_context().hover_background()
         );
     }
@@ -278,7 +296,7 @@ fn home_action_hover_and_press_do_not_change_keyboard_selection() {
             crate::app::fullscreen::layout(&app, terminal)
                 .session
                 .transcript,
-            ratatui::layout::Position::new(actions.right() - 1, actions.y + 2),
+            ratatui::layout::Position::new(actions.right() - 1, actions.y + 3),
         ),
         Some(super::Action::Settings)
     );
@@ -289,7 +307,7 @@ fn home_action_hover_and_press_do_not_change_keyboard_selection() {
     let pressed = render(&app, terminal.width, terminal.height);
     for x in actions.x..actions.right() {
         assert_eq!(
-            pressed[(x, actions.y + 2)].bg,
+            pressed[(x, actions.y + 3)].bg,
             app.render_context().pressed_background()
         );
     }
@@ -324,10 +342,10 @@ fn home_submission_failure_restores_the_complete_draft() {
 fn home_menu_scrolls_to_every_action_on_short_terminals() {
     let mut app = unstarted_app();
     app.open_home();
-    for _ in 0..5 {
+    for _ in 0..6 {
         app.handle_key(key(KeyCode::Tab));
     }
-    assert_eq!(app.fullscreen.home.selected, Some(4));
+    assert_eq!(app.fullscreen.home.selected, Some(5));
     crate::tui_assert_snapshot!("home_narrow", text(&render(&app, 40, 16)));
     assert_eq!(app.handle_key(key(KeyCode::Enter)), Some(AppCommand::Quit));
 }
@@ -355,7 +373,7 @@ fn short_home_keeps_the_input_and_selected_action_visible() {
     let mut app = unstarted_app();
     app.open_home();
     let terminal = ratatui::layout::Rect::new(0, 0, 40, 12);
-    for _ in 0..5 {
+    for _ in 0..6 {
         app.handle_key_in_area(key(KeyCode::Tab), terminal);
     }
     let areas = crate::app::fullscreen::layout(&app, terminal);

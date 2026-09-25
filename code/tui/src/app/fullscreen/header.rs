@@ -22,7 +22,7 @@ pub(in crate::app) enum Target {
 impl Target {
     pub(super) const fn label(self) -> &'static str {
         match self {
-            Self::Branch => "Project branches and worktrees",
+            Self::Branch => "Project branches",
             Self::Workspace => "Switch project folder",
             Self::Context => "Context usage",
             Self::Dashboard => "Dashboard",

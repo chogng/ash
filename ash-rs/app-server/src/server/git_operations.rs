@@ -5,6 +5,7 @@ use super::result;
 use crate::git_service::GitServiceError;
 use crate::server::git_runtime::GitRuntimeError;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
+use ash_app_server_protocol::protocol::git::GitBranchCreateParams;
 use ash_app_server_protocol::protocol::git::GitBranchListResult;
 use ash_app_server_protocol::protocol::git::GitBranchSwitchParams;
 use ash_app_server_protocol::protocol::git::GitChangeFileParams;
@@ -136,6 +137,18 @@ impl AppServer {
             .switch_branch_for(params.repository_id.as_deref(), &params.name)
             .map_err(git_error)?;
         result(&GitOperationResult { status })
+    }
+
+    pub(super) fn git_branch_create(&self, value: &Value) -> Result<Value, RpcError> {
+        let params: GitBranchCreateParams = decode(value)?;
+        if params.name.trim().is_empty() || params.name.len() > 1024 || params.name.contains('\0') {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let branches = self
+            .git_runtime_service()?
+            .create_branch_for(params.repository_id.as_deref(), &params.name)
+            .map_err(git_error)?;
+        result(&GitBranchListResult { branches })
     }
 
     pub(super) fn git_stage(&self, params: &Value) -> Result<Value, RpcError> {

@@ -7,10 +7,10 @@ expression: render(&app)
   ╭────────────────────────────────────────────╮  
   │                                            │  
   │  Ash Code v0.1.0                           │  
+  │  New task                                  │  
   │  Resume session                            │  
   │  Dashboard                                 │  
   │  Settings                                  │  
-  │  Help and shortcuts                        │  
   ╰────────────────────────────────────────────╯  
   ⏸ ask permissions on                            
   ╭────────────────────────────────────────────╮  

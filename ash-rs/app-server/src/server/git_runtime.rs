@@ -238,6 +238,14 @@ impl GitRuntime {
         self.repository(repository_id)?.local_branches()
     }
 
+    pub(super) fn create_branch_for(
+        &self,
+        repository_id: Option<&str>,
+        name: &str,
+    ) -> Result<Vec<GitBranchDto>, GitRuntimeError> {
+        self.repository(repository_id)?.create_branch(name)
+    }
+
     pub(super) fn local_branches(&self) -> Result<Vec<GitBranchDto>, GitRuntimeError> {
         self.local_branches_for(None)
     }
@@ -528,6 +536,14 @@ impl GitRepositoryRuntime {
             .operation
             .lock()
             .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        self.local_branches_locked()
+    }
+
+    fn local_branches_locked(&self) -> Result<Vec<GitBranchDto>, GitRuntimeError> {
+        let occupied = self
+            .service
+            .checked_out_branches_elsewhere()
+            .map_err(GitRuntimeError::Service)?;
         self.service
             .local_branches()
             .map(|branches| {
@@ -538,10 +554,22 @@ impl GitRepositoryRuntime {
                         object_id: branch.object_id().into(),
                         current: branch.is_current(),
                         upstream: branch.upstream().map(Into::into),
+                        checked_out_elsewhere: Some(occupied.contains(branch.name())),
                     })
                     .collect()
             })
             .map_err(GitRuntimeError::Service)
+    }
+
+    fn create_branch(&self, name: &str) -> Result<Vec<GitBranchDto>, GitRuntimeError> {
+        let _operation = self
+            .operation
+            .lock()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        self.service
+            .create_branch(name)
+            .map_err(GitRuntimeError::Service)?;
+        self.local_branches_locked()
     }
 
     pub(super) fn recent_commits(&self) -> Result<Vec<GitCommitSummaryDto>, GitRuntimeError> {

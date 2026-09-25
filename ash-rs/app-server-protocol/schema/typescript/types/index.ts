@@ -344,6 +344,7 @@ export type { FsRenameParams } from './FsRenameParams.js';
 export type { FsWriteFileParams } from './FsWriteFileParams.js';
 export type { FsWriteFileResult } from './FsWriteFileResult.js';
 export type { GitAutoFetchModeDto } from './GitAutoFetchModeDto.js';
+export type { GitBranchCreateParams } from './GitBranchCreateParams.js';
 export type { GitBranchDto } from './GitBranchDto.js';
 export type { GitBranchListResult } from './GitBranchListResult.js';
 export type { GitBranchSwitchParams } from './GitBranchSwitchParams.js';

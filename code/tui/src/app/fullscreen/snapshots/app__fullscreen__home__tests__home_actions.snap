@@ -10,12 +10,12 @@ expression: text(&buffer)
   │  ▗█▛██▜█▖                                                                                                                            │  
   │  ▝▜████▛▘    Start a task below, or continue a previous session.                                                                     │  
   │    ▝  ▘                                                                                                                              │  
-  │            > Resume session                                                                                                          │  
+  │            > New task                                                                                                                │  
+  │              Resume session                                                                                                          │  
   │              Dashboard                                                                                                               │  
   │              Settings                                                                                                                │  
   │              Help and shortcuts                                                                                                      │  
   │              Quit                                                                                                                    │  
-  │                                                                                                                                      │  
   ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯  
                                                                                                                                             
                                                                                                                                             

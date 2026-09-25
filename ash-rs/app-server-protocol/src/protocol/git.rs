@@ -141,6 +141,10 @@ pub struct GitBranchDto {
     pub object_id: String,
     pub current: bool,
     pub upstream: Option<String>,
+    /// Whether another worktree has checked out this branch. Older servers omit this field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub checked_out_elsewhere: Option<bool>,
 }
 
 impl GitBranchDto {
@@ -356,6 +360,17 @@ pub struct GitChangeFileResult {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitBranchSwitchParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub repository_id: Option<String>,
+    #[schemars(length(min = 1, max = 1024))]
+    pub name: String,
+}
+
+/// Creates a local branch at the selected checkout's HEAD without switching it or starting a task.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitBranchCreateParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub repository_id: Option<String>,

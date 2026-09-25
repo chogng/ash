@@ -133,14 +133,26 @@ impl CommandPanel {
     pub(super) fn parent_title(&self) -> Option<&str> {
         match self {
             Self::Config(editor) => editor.parent_title(),
+            Self::GitBranches(panel) => panel.parent_title(),
             Self::Memories(panel) => panel.parent_title(),
             _ => None,
+        }
+    }
+
+    pub(super) fn navigation_title(&self, language: crate::nls::Language) -> String {
+        let title = self.body().title(language);
+        match self.parent_title() {
+            Some(parent) => format!("{} › {title}", crate::nls::localize(language, parent)),
+            None => title.into_owned(),
         }
     }
 
     pub(super) fn return_to_parent(&mut self) {
         if let Self::Config(editor) = self {
             editor.return_to_parent();
+        }
+        if let Self::GitBranches(panel) = self {
+            panel.return_to_parent();
         }
         if let Self::Memories(panel) = self {
             panel.handle_key(KeyEvent::new(
@@ -182,7 +194,7 @@ impl CommandPanel {
 
     pub(crate) fn allows_backdrop_dismiss(&self) -> bool {
         if let Self::GitBranches(panel) = self {
-            return !panel.is_worktree_name_prompt();
+            return !panel.is_branch_name_prompt();
         }
         self.body().allows_backdrop_dismiss()
     }
@@ -201,6 +213,10 @@ impl CommandPanel {
 
     pub(crate) fn git_branches(spec: BranchChoices) -> Self {
         Self::GitBranches(BranchPanel::new(spec))
+    }
+
+    pub(crate) fn new_task_worktrees() -> Self {
+        Self::GitBranches(BranchPanel::new_task())
     }
 
     pub(crate) fn project_roots(spec: RootChoices) -> Self {

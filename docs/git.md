@@ -143,7 +143,7 @@ Native 的底栏分支按钮复用通用 `ContextMenu`，候选项来自 `git/br
 
 `worktree` 已能从任意 repository nested cwd 列出 primary、linked、locked 与 prunable checkout，并按 branch 或 checkout path 返回可用 worktree target。它还在 Thread 执行前创建持久化的独占受管目录：Git 默认使用 detached linked worktree，显式新分支请求同时创建本地分支与 linked worktree；非 Git 使用一次性隔离目录副本，不创建 ChangeSet。失败时 Thread 创建失败，不会转回来源目录。
 
-`ash code` 顶部分支选择器提供两个入口：“新建工作树”（`w`）通过普通 `session/create` 为新根 Thread 创建 detached 受管 worktree；“新建分支”（`b`）预填 `ash/` 分支名前缀，通过 `session/create.branchName` 创建新分支并绑定受管 worktree。两个快捷键仅在选择器列表获得焦点时生效。两者都开启新 Session，不改变来源目录当前分支。顶部 Git 分支与目录仍显示来源项目目录；选择已有分支仍使用 `git/branch/switch` 切换该目录。
+`ash code` 首页“新建任务”提供两个入口：“新建工作树”（`w`）通过普通 `session/create` 为新根 Thread 创建 detached 受管 worktree；“新建分支工作树”（`b`）预填 `ash/` 分支名前缀，通过 `session/create.branchName` 创建新分支并绑定受管 worktree。两个快捷键仅在新任务面板列表获得焦点时生效。两者都开启新 Session，不改变来源目录当前分支。顶部“项目分支”面板只管理来源项目目录：选择已有分支使用 `git/branch/switch`；“新建分支”（`b`）使用 `git/branch/create` 基于 HEAD 创建本地分支，不切换目录或创建 Session。`git/branch/list` 同时返回其他工作树的占用状态，避免将占用分支当成可切换项。
 
 稳定失败边界为 `GitUnavailable`、`GitNotRepository` 和 `GitOperationFailed`。内部 executable、
 stderr、磁盘绝对路径和非 UTF-8 path 不进入 Renderer。
@@ -154,7 +154,7 @@ stderr、磁盘绝对路径和非 UTF-8 path 不进入 Renderer。
 - Workbench SCM 尚无通用 provider registry；现有 panes 直接依赖 `IGitService`，因此第二种 VCS
   仍会迫使 UI 分支。这是明确的前端架构债务，不是后端增加 `scm/*` facade 的理由；
 - operation 由 runtime mutex 串行化，但尚无可观测 queue、progress、caller cancellation 或 retry；
-- App Server 与 Native 已支持切换现有本地分支；除根 Thread 的新分支工作树外，系统仍无通用 branch 新建/删除/重命名、
+- App Server 已支持切换现有本地分支和基于 HEAD 新建本地分支，系统仍无通用 branch 删除/重命名、
   tag/worktree 创建删除 mutation 或 credential prompt；`worktree` 已解析现有 worktree target，但 App Server 和产品选择器尚未接入 directory retarget；`ash code` TUI 可通过新 Session 创建独立受管 worktree，
   当前产品定义不包含通用 SCM 管理 UI；
 - pull 固定为 fast-forward only；discard 不删除 untracked 文件；

@@ -5,15 +5,15 @@ expression: frame_text(&app)
   .                                                                            [— / —] [Dashboard]  
                                                                                                     
 ● branch already exists                                                                             
-            ┌── New branch ───────────────────────────────────────────────────────[✗]─┐             
+            ┌── New task › New branch worktree ───────────────────────────────────[✗]─┐             
             │                                                                         │             
-            │  Create branch                                                          │             
+            │  Create branch worktree                                                 │             
             │                                                                         │             
             │  ╭────────────────────────────────────────────────────────────────────╮ │             
             │  │ ash/topic                                                          │ │             
             │  ╰────────────────────────────────────────────────────────────────────╯ │             
             │  branch already exists                                                  │             
-            │  New session on this branch. Project branch unchanged.                  │             
+            │  New task in an ash/ branch and its own worktree.                       │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             

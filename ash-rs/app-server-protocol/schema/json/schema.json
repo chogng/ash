@@ -7704,6 +7704,22 @@
         {
           "properties": {
             "method": {
+              "const": "git/branch/create",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitBranchCreateParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "git/stage",
               "type": "string"
             },
@@ -12113,6 +12129,22 @@
             },
             "result": {
               "$ref": "#/$defs/GitOperationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "git/branch/create",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitBranchListResult"
             }
           },
           "required": [
@@ -18442,9 +18474,36 @@
       ],
       "type": "string"
     },
+    "GitBranchCreateParams": {
+      "description": "Creates a local branch at the selected checkout's HEAD without switching it or starting a task.",
+      "properties": {
+        "name": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "type": "string"
+        },
+        "repositoryId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
     "GitBranchDto": {
       "description": "One local branch returned by the directory Git runtime.",
       "properties": {
+        "checkedOutElsewhere": {
+          "description": "Whether another worktree has checked out this branch. Older servers omit this field.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "current": {
           "type": "boolean"
         },

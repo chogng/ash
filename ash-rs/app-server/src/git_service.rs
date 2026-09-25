@@ -18,6 +18,7 @@ use ash_git::GitRepository;
 use ash_git::GitRepositorySnapshot;
 use ash_git::GitTextDiffLimits;
 use ash_git::GitTextDiffSnapshot;
+use std::collections::HashSet;
 use std::num::NonZeroUsize;
 use std::path::Path;
 use std::path::PathBuf;
@@ -138,6 +139,38 @@ impl GitService {
             let repository = self.open_repository().await?;
             self.client
                 .local_branches(&repository)
+                .await
+                .map_err(GitServiceError::Git)
+        })
+    }
+
+    pub(crate) fn checked_out_branches_elsewhere(
+        &self,
+    ) -> Result<HashSet<String>, GitServiceError> {
+        self.ensure_readable()?;
+        let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
+        runtime.block_on(async {
+            let repository = self.open_repository().await?;
+            let worktrees = self
+                .client
+                .worktrees(&repository)
+                .await
+                .map_err(GitServiceError::Git)?;
+            Ok(worktrees
+                .into_iter()
+                .filter(|worktree| worktree.checkout_root() != repository.worktree_root())
+                .filter_map(|worktree| worktree.branch().map(str::to_owned))
+                .collect())
+        })
+    }
+
+    pub(crate) fn create_branch(&self, name: &str) -> Result<(), GitServiceError> {
+        self.ensure_mutable()?;
+        let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
+        runtime.block_on(async {
+            let repository = self.open_repository().await?;
+            self.client
+                .create_branch(&repository, name)
                 .await
                 .map_err(GitServiceError::Git)
         })

@@ -270,21 +270,8 @@ fn frame_text(app: &crate::app::App) -> String {
 #[test]
 fn branch_picker_new_worktree_action_works_in_both_screen_modes() {
     use crate::app::AppCommand;
-    use crate::git::Event;
+    use crate::app::command_panel::CommandPanel;
     use crate::sessions::Command;
-    use ash_app_server_protocol::protocol::git::GitBranchDto;
-    use ash_app_server_protocol::protocol::git::GitBranchListResult;
-
-    let branch_picker = || {
-        crate::git::choices(GitBranchListResult {
-            branches: vec![GitBranchDto {
-                name: "main".into(),
-                object_id: "commit-main".into(),
-                current: true,
-                upstream: None,
-            }],
-        })
-    };
     for (mode, picker_snapshot, prompt_snapshot) in [
         (
             crate::terminal::ScreenMode::Fullscreen,
@@ -301,10 +288,7 @@ fn branch_picker_new_worktree_action_works_in_both_screen_modes() {
         let mut settings = crate::config::TerminalSettings::default();
         settings.set_screen_mode(mode);
         app.update(crate::config::Event::SettingsReceived(settings));
-        app.update(Event::PickerOpened(branch_picker()));
-        for _ in 0..2 {
-            app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
-        }
+        app.open_command_panel(CommandPanel::new_task_worktrees());
         assert_eq!(
             app.list_selection()
                 .unwrap()
@@ -321,15 +305,15 @@ fn branch_picker_new_worktree_action_works_in_both_screen_modes() {
                 ..
             }))
         ));
-        app.update(Event::PickerOpened(branch_picker()));
-        app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+        app.open_command_panel(CommandPanel::new_task_worktrees());
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
         assert_eq!(
             app.list_selection()
                 .unwrap()
                 .selected_item()
                 .unwrap()
                 .label(),
-            "New branch"
+            "New branch worktree"
         );
         assert_eq!(
             app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
@@ -343,7 +327,7 @@ fn branch_picker_new_worktree_action_works_in_both_screen_modes() {
                 .selected_item()
                 .unwrap()
                 .label(),
-            "New branch"
+            "New branch worktree"
         );
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         for character in "topic".chars() {
@@ -379,7 +363,7 @@ fn branch_picker_new_worktree_action_works_in_both_screen_modes() {
     }
 
     let mut app = crate::app::App::new();
-    app.update(Event::PickerOpened(branch_picker()));
+    app.open_command_panel(CommandPanel::new_task_worktrees());
     let area = Rect::new(0, 0, 100, 30);
     let target = (0..area.height)
         .flat_map(|y| (0..area.width).map(move |x| (x, y)))
@@ -389,9 +373,7 @@ fn branch_picker_new_worktree_action_works_in_both_screen_modes() {
                 super::Target::List(
                     crate::widgets::list_selection::ListSelectionPointerTarget::Item(id),
                 ) if id
-                    == &crate::widgets::list_selection::ListSelectionItemId::new(
-                        "worktree:new-branch",
-                    ) =>
+                    == &crate::widgets::list_selection::ListSelectionItemId::new("task:branch") =>
                 {
                     Some(target)
                 }
@@ -411,7 +393,7 @@ fn branch_picker_new_worktree_action_works_in_both_screen_modes() {
     assert_eq!(app.list_selection().unwrap().query(), "ash/");
 
     let mut shortcuts = crate::app::App::new();
-    shortcuts.update(Event::PickerOpened(branch_picker()));
+    shortcuts.open_command_panel(CommandPanel::new_task_worktrees());
     assert!(matches!(
         shortcuts.handle_key(KeyEvent::new(KeyCode::Char('w'), KeyModifiers::NONE)),
         Some(AppCommand::Sessions(Command::CreateWorktree {
@@ -419,12 +401,161 @@ fn branch_picker_new_worktree_action_works_in_both_screen_modes() {
             ..
         }))
     ));
-    shortcuts.update(Event::PickerOpened(branch_picker()));
+    shortcuts.open_command_panel(CommandPanel::new_task_worktrees());
     assert_eq!(
         shortcuts.handle_key(KeyEvent::new(KeyCode::Char('b'), KeyModifiers::NONE)),
         None
     );
     assert_eq!(shortcuts.list_selection().unwrap().query(), "ash/");
+}
+
+#[test]
+fn project_branch_picker_shows_occupied_branch_and_pure_creation_in_both_modes() {
+    use crate::app::AppCommand;
+    use crate::git::Command as GitCommand;
+    use crate::git::Event;
+    use ash_app_server_protocol::protocol::git::{GitBranchDto, GitBranchListResult};
+
+    for (mode, snapshot) in [
+        (
+            crate::terminal::ScreenMode::Fullscreen,
+            "project_branch_picker_fullscreen",
+        ),
+        (
+            crate::terminal::ScreenMode::Inline,
+            "project_branch_picker_inline",
+        ),
+    ] {
+        let mut app = crate::app::App::new();
+        let mut settings = crate::config::TerminalSettings::default();
+        settings.set_screen_mode(mode);
+        app.update(crate::config::Event::SettingsReceived(settings));
+        app.update(Event::PickerOpened(crate::git::choices(
+            GitBranchListResult {
+                branches: vec![
+                    GitBranchDto {
+                        name: "main".into(),
+                        object_id: "main".into(),
+                        current: true,
+                        upstream: None,
+                        checked_out_elsewhere: Some(false),
+                    },
+                    GitBranchDto {
+                        name: "topic".into(),
+                        object_id: "topic".into(),
+                        current: false,
+                        upstream: None,
+                        checked_out_elsewhere: Some(true),
+                    },
+                ],
+            },
+        )));
+        crate::tui_assert_snapshot!(snapshot, frame_text(&app));
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert_eq!(
+            app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+            None
+        );
+        assert_eq!(
+            app.list_selection().unwrap().message(),
+            Some("Branch is checked out in another worktree")
+        );
+        app.handle_key(KeyEvent::new(KeyCode::Char('b'), KeyModifiers::NONE));
+        assert_eq!(
+            app.command_panel().unwrap().parent_title(),
+            Some("Project branches")
+        );
+        assert_eq!(app.list_selection().unwrap().title(), "New branch");
+        crate::tui_assert_snapshot!(
+            match mode {
+                crate::terminal::ScreenMode::Fullscreen => "project_branch_creation_fullscreen",
+                crate::terminal::ScreenMode::Inline => "project_branch_creation_inline",
+            },
+            frame_text(&app)
+        );
+        for character in "topic".chars() {
+            app.handle_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
+        }
+        assert!(
+            matches!(app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+            Some(AppCommand::Git(GitCommand::Create { name })) if name == "ash/topic")
+        );
+    }
+}
+
+#[test]
+fn project_branch_parent_title_returns_to_the_picker() {
+    use ash_app_server_protocol::protocol::git::GitBranchListResult;
+
+    let mut app = crate::app::App::new();
+    let mut settings = crate::config::TerminalSettings::default();
+    settings.set_language(crate::nls::Language::Chinese);
+    app.update(crate::config::Event::SettingsReceived(settings));
+    app.update(crate::git::Event::PickerOpened(crate::git::choices(
+        GitBranchListResult {
+            branches: Vec::new(),
+        },
+    )));
+    app.handle_key(KeyEvent::new(KeyCode::Char('b'), KeyModifiers::NONE));
+    assert_eq!(
+        app.command_panel()
+            .unwrap()
+            .navigation_title(app.language()),
+        "项目分支 › 新建分支"
+    );
+    let area = Rect::new(0, 0, 100, 30);
+    let layout = super::layout(area);
+    let parent = super::target_at(
+        &app,
+        area,
+        ratatui::layout::Position::new(layout.title.x + 2, layout.title.y),
+    )
+    .unwrap();
+    assert_eq!(parent, super::Target::Parent);
+    assert_ne!(
+        super::target_at(
+            &app,
+            area,
+            ratatui::layout::Position::new(layout.title.x + 10, layout.title.y),
+        ),
+        Some(super::Target::Parent)
+    );
+    assert_eq!(
+        super::activate(
+            &mut app,
+            area,
+            parent,
+            crate::widgets::list_selection::ListSelectionClick::Single,
+        ),
+        None
+    );
+    assert_eq!(app.command_panel().unwrap().parent_title(), None);
+    assert_eq!(app.list_selection().unwrap().title(), "项目分支");
+}
+
+#[test]
+fn late_branch_creation_does_not_reopen_a_closed_picker() {
+    use crate::git::Event;
+    use ash_app_server_protocol::protocol::git::GitBranchListResult;
+
+    let mut app = crate::app::App::new();
+    app.update(Event::PickerOpened(crate::git::choices(
+        GitBranchListResult {
+            branches: Vec::new(),
+        },
+    )));
+    let generation = app.panels().generation();
+    app.close_command_panel();
+    app.update_for_panel(
+        generation,
+        Event::CreateFinished {
+            name: "ash/topic".into(),
+            result: Ok(GitBranchListResult {
+                branches: Vec::new(),
+            }),
+        },
+    );
+    assert!(app.command_panel().is_none());
 }
 
 #[test]

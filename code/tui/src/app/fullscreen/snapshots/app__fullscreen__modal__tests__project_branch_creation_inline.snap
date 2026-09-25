@@ -22,13 +22,13 @@ expression: frame_text(&app)
                                                                                                     
                                                                                                     
                                                                                                     
+─ Project branches › New branch ────────────────────────────────────────────────────────────────────
                                                                                                     
+  Create branch                                                                                     
                                                                                                     
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────╮  
+  │ ash/                                                                                         │  
+  ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  
+  Create a branch at HEAD without switching worktrees.                                              
                                                                                                     
-                                                                                                    
-─ New task ─────────────────────────────────────────────────────────────────────────────────────────
-                                                                                                    
-> New worktree  ·  Detached · new session                                                           
-  New branch worktree  ·  ash/ branch · new session                                                 
-                                                                                                    
-  w New worktree · b New branch worktree · Esc close
+  Enter to create  ·  Esc to back

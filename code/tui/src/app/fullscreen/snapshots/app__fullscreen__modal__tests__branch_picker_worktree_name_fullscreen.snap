@@ -5,14 +5,14 @@ expression: frame_text(&app)
   .                                                                            [— / —] [Dashboard]  
                                                                                                     
                                                                                                     
-            ┌── New branch ───────────────────────────────────────────────────────[✗]─┐             
+            ┌── New task › New branch worktree ───────────────────────────────────[✗]─┐             
             │                                                                         │             
-            │  Create branch                                                          │             
+            │  Create branch worktree                                                 │             
             │                                                                         │             
             │  ╭────────────────────────────────────────────────────────────────────╮ │             
             │  │ ash/topic                                                          │ │             
             │  ╰────────────────────────────────────────────────────────────────────╯ │             
-            │  New session on this branch. Project branch unchanged.                  │             
+            │  New task in an ash/ branch and its own worktree.                       │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             

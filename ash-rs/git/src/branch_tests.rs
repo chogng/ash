@@ -3,6 +3,32 @@ use crate::test_support::TestBareRepository;
 use crate::test_support::TestRepository;
 
 #[tokio::test]
+async fn creating_a_local_branch_keeps_the_current_checkout() {
+    let repository = TestRepository::init();
+    repository.write("tracked", "base");
+    repository.commit_all("base");
+    let git = GitClient::system();
+    let opened = git.open_repository(repository.root()).await.unwrap();
+    git.create_branch(&opened, "ash/topic").await.unwrap();
+    assert!(
+        git.local_branches(&opened)
+            .await
+            .unwrap()
+            .iter()
+            .any(|branch| branch.name() == "ash/topic" && !branch.is_current())
+    );
+    assert!(
+        git.local_branches(&opened)
+            .await
+            .unwrap()
+            .iter()
+            .any(|branch| branch.name() == "main" && branch.is_current())
+    );
+    assert!(git.create_branch(&opened, "ash/topic").await.is_err());
+    assert!(git.create_branch(&opened, "../escape").await.is_err());
+}
+
+#[tokio::test]
 async fn task_branch_uses_head_without_copying_dirty_files_or_switching_checkout() {
     let repository = TestRepository::init();
     repository.write("tracked", "original");

@@ -48,6 +48,7 @@ impl Home {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::app) enum Action {
+    NewTask,
     Resume,
     Dashboard,
     Settings,
@@ -55,7 +56,8 @@ pub(in crate::app) enum Action {
     Quit,
 }
 
-const ACTIONS: [(Action, &str); 5] = [
+const ACTIONS: [(Action, &str); 6] = [
+    (Action::NewTask, "New task"),
     (Action::Resume, "Resume session"),
     (Action::Dashboard, "Dashboard"),
     (Action::Settings, "Settings"),
@@ -239,6 +241,10 @@ pub(super) fn activate(app: &mut App, action: Action) -> Option<AppCommand> {
         .position(|(candidate, _)| *candidate == action);
     app.fullscreen.focus_page();
     match action {
+        Action::NewTask => {
+            app.open_command_panel(CommandPanel::new_task_worktrees());
+            None
+        }
         Action::Resume => {
             let choices = crate::sessions::session_choices(
                 app.sessions.catalog(),

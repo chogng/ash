@@ -325,7 +325,7 @@ bazel test //ash-rs/git:git-unit-tests
 
 当前限制：
 
-- local branch switch 和受管 linked worktree 创建/清理已实现；尚无普通用户 branch 新建/删除/重命名与 tag mutation；
+- local branch switch、基于 HEAD 新建本地分支，以及受管 linked worktree 创建/清理已实现；尚无普通用户 branch 删除/重命名与 tag mutation；
 - App Server 已有单 directory projection、watch、revision/event 和 operation serialization，
   但尚无 multi-repository registry、可观测 queue、progress 或 caller cancellation；
 - 不支持 bare repository，`open_repository` 要求 working tree；

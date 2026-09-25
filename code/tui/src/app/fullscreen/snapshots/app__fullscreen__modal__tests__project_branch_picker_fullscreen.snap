@@ -5,17 +5,15 @@ expression: frame_text(&app)
   .                                                                            [— / —] [Dashboard]  
                                                                                                     
                                                                                                     
-            ┌── New task ─────────────────────────────────────────────────────────[✗]─┐             
+            ┌── Project branches ─────────────────────────────────────────────────[✗]─┐             
             │                                                                         │             
-            │> New worktree  ·  Detached · new session                                │             
-            │  New branch worktree  ·  ash/ branch · new session                      │             
-            │                                                                         │             
-            │                                                                         │             
-            │                                                                         │             
-            │                                                                         │             
-            │                                                                         │             
-            │                                                                         │             
-            │                                                                         │             
+            │  ╭────────────────────────────────────────────────────────────────────╮ │             
+            │  │ Search branches                                                    │ │             
+            │  ╰────────────────────────────────────────────────────────────────────╯ │             
+            │  New branch  ·  At HEAD · no checkout change                            │             
+            │  Project branches                                                       │             
+            │> main  ·  Current                                                       │             
+            │  topic  ·  In another worktree                                          │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
@@ -27,6 +25,8 @@ expression: frame_text(&app)
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
-  ╭─────────│  w New worktree · b New branch worktree · Esc close                     │──────────╮  
+            │                                                                         │             
+            │                                                                         │             
+  ╭─────────│  b New branch · / search · Esc close                                    │──────────╮  
   │ > Build └─────────────────────────────────────────────────────────────────────────┘          │  
   ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯
