@@ -36,7 +36,7 @@ pub(super) fn definition() -> ProviderDefinition {
 pub(super) fn subscription_definition() -> ProviderDefinition {
     let mut definition = default_provider(
         "zai",
-        "GLM Coding Plan",
+        "zai",
         ProviderAdapter::Zai,
         ApiProfile::OpenAiChatCompletions,
         ZAI_CODING_PLAN_BASE_URL,

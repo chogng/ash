@@ -44,6 +44,7 @@ ash-app-server-protocol = { workspace = true }
 ash-file-search = { workspace = true }
 ash-file-access = { workspace = true }
 ash-keybinding = { workspace = true }
+ash-model-provider-config = { workspace = true }
 ash-protocol = { workspace = true }
 ash-product-update = { workspace = true }
 ash-slash-commands = { workspace = true }

@@ -1089,6 +1089,12 @@ fn enter_provider_row(app: &mut App, label: &str) -> Option<AppCommand> {
                     api_key_policy: ProviderApiKeyPolicyDto::Required,
                     api_key_configured: false,
                 },
+                ProviderCatalogEntryDto {
+                    provider: "zai".into(),
+                    display_name: "Z.AI (GLM)".into(),
+                    api_key_policy: ProviderApiKeyPolicyDto::Required,
+                    api_key_configured: false,
+                },
             ],
         },
         TerminalSettings::default(),
@@ -2769,7 +2775,7 @@ fn xai_subscription_login_stays_separate_from_chatgpt_after_navigation() {
     use ash_app_server_protocol::protocol::account::AccountReadResult;
     let mut app = App::new();
     assert_eq!(
-        enter_provider_row(&mut app, "xAI Subscription"),
+        enter_provider_row(&mut app, "xAI"),
         Some(AppCommand::Config(ConfigCommand::Subscription(
             SubscriptionProvider::Xai,
             SubscriptionCommand::Read
@@ -2827,7 +2833,7 @@ fn xai_subscription_login_stays_separate_from_chatgpt_after_navigation() {
     for _ in 0..2 {
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     }
-    enter_provider_row(&mut app, "xAI Subscription");
+    enter_provider_row(&mut app, "xAI");
     app.update(ConfigEvent::SubscriptionReply(
         SubscriptionProvider::Xai,
         SubscriptionEvent::Read(AccountReadResult {
@@ -2845,7 +2851,7 @@ fn xai_subscription_browser_failure_keeps_the_manual_challenge_visible() {
     use ash_app_server_protocol::protocol::account::AccountLoginStartResult;
     use ash_app_server_protocol::protocol::account::AccountReadResult;
     let mut app = App::new();
-    enter_provider_row(&mut app, "xAI Subscription");
+    enter_provider_row(&mut app, "xAI");
     app.update(ConfigEvent::SubscriptionReply(
         SubscriptionProvider::Xai,
         SubscriptionEvent::Read(AccountReadResult {
@@ -2871,4 +2877,96 @@ fn xai_subscription_browser_failure_keeps_the_manual_challenge_visible() {
     assert!(screen.contains("https://auth.x.ai/device"));
     assert!(screen.contains("XAI-1234"));
     crate::tui_assert_snapshot!("xai_subscription_browser_failure", screen);
+}
+
+#[test]
+fn zai_subscription_accepts_a_masked_key_and_returns_to_its_status() {
+    use crate::config::PlanStatus;
+    use crate::config::SubscriptionEvent;
+    use crate::config::SubscriptionProvider;
+
+    let mut app = App::new();
+    assert_eq!(
+        enter_provider_row(&mut app, "zai"),
+        Some(AppCommand::Config(ConfigCommand::Subscription(
+            SubscriptionProvider::Zai,
+            crate::config::SubscriptionCommand::Read,
+        )))
+    );
+    app.update(ConfigEvent::SubscriptionReply(
+        SubscriptionProvider::Zai,
+        SubscriptionEvent::Plan(PlanStatus {
+            key_saved: false,
+            enabled: false,
+        }),
+    ));
+    crate::tui_assert_snapshot!(
+        "zai_subscription_sign_in",
+        crate::app::usage_tests::render(&app, 96, 24)
+    );
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    assert_eq!(
+        app.list_selection()
+            .unwrap()
+            .selected_item()
+            .unwrap()
+            .label(),
+        "Sign in with zai"
+    );
+    assert!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+            .is_none()
+    );
+    app.handle_paste("secret-zai-key".into());
+    let screen = crate::app::usage_tests::render(&app, 96, 24);
+    assert!(screen.contains("zai › API key"));
+    assert!(!screen.contains("secret-zai-key"));
+    assert!(app.list_selection().is_none());
+    crate::tui_assert_snapshot!("zai_subscription_key_prompt", screen);
+
+    assert!(
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))
+            .is_none()
+    );
+    assert_eq!(app.list_selection().unwrap().title(), "zai");
+    assert!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+            .is_none()
+    );
+    app.handle_paste("secret-zai-key".into());
+    let Some(AppCommand::Config(ConfigCommand::SetProviderApiKey(edit))) =
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("expected zai key save");
+    };
+    assert!(!format!("{edit:?}").contains("secret-zai-key"));
+    assert_eq!(edit.into_parts(), ("zai".into(), "secret-zai-key".into()));
+
+    app.update(ConfigEvent::ApiKeySaved {
+        provider: "zai".into(),
+        choices: config_choices(
+            &empty_config_snapshot(),
+            &ProviderListResult { providers: vec![] },
+            TerminalSettings::default(),
+            StatusLineSettings::default(),
+        ),
+        plan: Some(PlanStatus {
+            key_saved: true,
+            enabled: true,
+        }),
+    });
+    let labels = app
+        .list_selection()
+        .unwrap()
+        .visible_items()
+        .iter()
+        .map(|item| item.label())
+        .collect::<Vec<_>>();
+    assert!(labels.contains(&"API key saved"));
+    assert!(labels.contains(&"Coding plan enabled"));
+    assert!(labels.contains(&"Disable zai"));
+    crate::tui_assert_snapshot!(
+        "zai_subscription_configured",
+        crate::app::usage_tests::render(&app, 96, 24)
+    );
 }

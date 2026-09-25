@@ -682,6 +682,11 @@ fn provider_subscription_mode_replaces_the_api_catalog_and_endpoint() {
     }
 }
 
+        match provider {
+            "xai" => assert_eq!(definition.name, "xAI"),
+            "zai" => assert_eq!(definition.name, "zai"),
+            _ => {}
+        }
 #[test]
 fn normalization_rejects_a_selected_provider_mismatch() {
     let registry = ProviderConfigRegistry::builtin();

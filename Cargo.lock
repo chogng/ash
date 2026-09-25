@@ -2718,6 +2718,7 @@ dependencies = [
  "ash-memory-diagnostics",
  "ash-mermaid",
  "ash-message-history",
+ "ash-model-provider-config",
  "ash-product-update",
  "ash-protocol",
  "ash-queue",

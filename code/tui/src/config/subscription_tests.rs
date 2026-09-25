@@ -338,3 +338,166 @@ fn browser_open_failure_keeps_the_device_challenge_available() {
     );
     assert!(labels(&subscription).contains(&"Cancel sign-in".into()));
 }
+
+#[test]
+fn kimi_subscription_selects_the_kimi_device_code_login() {
+    let mut client = AppServerClient::new(Transport {
+        requests: Vec::new(),
+        results: VecDeque::from([
+            serde_json::json!({"type":"deviceCode","loginId":"kimi-login","verificationUrl":"https://auth.kimi.com/device","userCode":"KIMI-1234"}),
+            serde_json::json!({"revision":2,"accounts":[]}),
+        ]),
+    });
+    assert!(matches!(
+        execute_with_browser(
+            &mut client,
+            SubscriptionProvider::Kimi,
+            SubscriptionCommand::SignIn,
+            |url| {
+                assert_eq!(url, "https://auth.kimi.com/device");
+                Ok(())
+            }
+        ),
+        SubscriptionEvent::Started {
+            login: AccountLoginStartResult::DeviceCode { login_id, .. },
+            browser_error: None,
+        } if login_id == "kimi-login"
+    ));
+    assert_eq!(
+        client.into_transport().requests[0]["params"],
+        serde_json::json!({"method":{"type":"kimiDeviceCode"}})
+    );
+}
+
+fn zai_providers(
+    key_configured: bool,
+) -> ash_app_server_protocol::protocol::provider::ProviderListResult {
+    ash_app_server_protocol::protocol::provider::ProviderListResult {
+        providers: vec![
+            ash_app_server_protocol::protocol::provider::ProviderCatalogEntryDto {
+                provider: "zai".into(),
+                display_name: "Z.AI (GLM)".into(),
+                api_key_policy:
+                    ash_app_server_protocol::protocol::provider::ProviderApiKeyPolicyDto::Required,
+                api_key_configured: key_configured,
+            },
+        ],
+    }
+}
+
+#[test]
+fn zai_plan_panel_shows_key_and_plan_status_with_the_matching_toggle() {
+    let mut subscription = Subscription::new(SubscriptionProvider::Zai);
+    assert!(labels(&subscription).contains(&"API key not saved".into()));
+    assert!(labels(&subscription).contains(&"Sign in with zai".into()));
+    let choices = subscription.choices();
+    assert!(matches!(
+        choices
+            .actions
+            .get(&ListSelectionItemId::new("Sign in with zai")),
+        Some(ConfigSelectionAction::OpenProviderApiKey {
+            target: ApiKeyTarget::ZaiCodingPlan,
+            ..
+        })
+    ));
+
+    subscription.update(SubscriptionEvent::Plan(PlanStatus {
+        key_saved: false,
+        enabled: true,
+    }));
+    assert!(labels(&subscription).contains(&"Coding plan enabled".into()));
+    assert!(labels(&subscription).contains(&"Sign in with zai".into()));
+
+    subscription.update(SubscriptionEvent::Plan(PlanStatus {
+        key_saved: true,
+        enabled: true,
+    }));
+    assert!(labels(&subscription).contains(&"API key saved".into()));
+    assert!(labels(&subscription).contains(&"Disable zai".into()));
+
+    subscription.update(SubscriptionEvent::Plan(PlanStatus {
+        key_saved: true,
+        enabled: false,
+    }));
+    assert!(labels(&subscription).contains(&"Coding plan not enabled".into()));
+    assert!(labels(&subscription).contains(&"Enable zai".into()));
+}
+
+#[test]
+fn zai_sign_in_action_is_localized_in_chinese() {
+    let subscription = Subscription::new(SubscriptionProvider::Zai);
+    let mut choices = subscription.choices();
+    choices.model.localize(crate::nls::Language::Chinese);
+    let state = ListSelectionState::new(choices.model);
+    assert!(
+        state
+            .visible_items()
+            .iter()
+            .any(|item| item.label() == "使用 zai 登录")
+    );
+}
+
+#[test]
+fn zai_plan_read_derives_status_from_config_and_provider_catalog() {
+    let mut client = AppServerClient::new(Transport {
+        requests: Vec::new(),
+        results: VecDeque::from([
+            serde_json::to_value(crate::test_support::empty_config_snapshot()).unwrap(),
+            serde_json::to_value(zai_providers(true)).unwrap(),
+        ]),
+    });
+    assert_eq!(
+        execute(
+            &mut client,
+            SubscriptionProvider::Zai,
+            SubscriptionCommand::Read
+        ),
+        SubscriptionEvent::Plan(PlanStatus {
+            key_saved: true,
+            enabled: false,
+        })
+    );
+}
+
+#[test]
+fn zai_plan_toggle_writes_the_coding_endpoint_and_rereads_status() {
+    let mut config = crate::test_support::empty_config_snapshot();
+    config.providers.insert(
+        "zai".into(),
+        ash_app_server_protocol::protocol::config::ProviderConfigDto {
+            provider: "zai".into(),
+            custom: None,
+            base_url: Some(ash_model_provider_config::ZAI_CODING_PLAN_BASE_URL.into()),
+            max_output_tokens: None,
+            model_context: BTreeMap::new(),
+        },
+    );
+    let configured = serde_json::to_value(config).unwrap();
+    let mut client = AppServerClient::new(Transport {
+        requests: Vec::new(),
+        results: VecDeque::from([
+            serde_json::to_value(crate::test_support::empty_config_snapshot()).unwrap(),
+            serde_json::json!({"revision": 2, "generation": 1, "disposition": "updated"}),
+            configured,
+            serde_json::to_value(zai_providers(true)).unwrap(),
+        ]),
+    });
+    assert_eq!(
+        execute(
+            &mut client,
+            SubscriptionProvider::Zai,
+            SubscriptionCommand::SetPlan { enabled: true }
+        ),
+        SubscriptionEvent::Plan(PlanStatus {
+            key_saved: true,
+            enabled: true,
+        })
+    );
+    let requests = client.into_transport().requests;
+    assert_eq!(requests[1]["method"], "provider/configure");
+    assert_eq!(requests[1]["params"]["config"]["provider"], "zai");
+    assert_eq!(
+        requests[1]["params"]["config"]["baseUrl"],
+        ash_model_provider_config::ZAI_CODING_PLAN_BASE_URL
+    );
+}

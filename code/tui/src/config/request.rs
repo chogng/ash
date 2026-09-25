@@ -7,6 +7,8 @@ use super::ProviderApiKeyEdit;
 use super::TerminalSettings;
 use super::advisor_choices;
 use super::config_choices;
+use super::editor::ApiKeyTarget;
+use super::subscription::PlanStatus;
 use crate::client::new_command_id;
 use crate::nls;
 use crate::nls::Message;
@@ -22,6 +24,7 @@ use std::fmt;
 pub(crate) struct ProviderApiKeyUpdate {
     pub(crate) provider: String,
     pub(crate) choices: ConfigChoices,
+    pub(crate) plan: Option<PlanStatus>,
 }
 
 impl Command {
@@ -86,6 +89,7 @@ where
                 choices: update.choices,
             })
         }
+                plan: update.plan,
     }
     .map_err(|error| error.to_string())
 }
@@ -372,20 +376,24 @@ where
 {
     let (provider, api_key) = edit.into_parts();
     let current = client.read_config()?;
-    if !current.providers.contains_key(&provider) || current.model.is_none() {
-        let config = current
-            .providers
-            .get(&provider)
-            .cloned()
-            .unwrap_or_else(
-                || ash_app_server_protocol::protocol::config::ProviderConfigDto {
-                    provider: provider.clone(),
-                    custom: None,
-                    base_url: None,
-                    max_output_tokens: None,
-                    model_context: Default::default(),
-                },
-            );
+    let target = edit.target();
+    let mut config = current
+        .providers
+        .get(&provider)
+        .cloned()
+        .unwrap_or_else(
+            || ash_app_server_protocol::protocol::config::ProviderConfigDto {
+                provider: provider.clone(),
+                custom: None,
+                base_url: None,
+                max_output_tokens: None,
+                model_context: Default::default(),
+            },
+        );
+    if target == ApiKeyTarget::ZaiCodingPlan {
+        config.base_url = Some(ash_model_provider_config::ZAI_CODING_PLAN_BASE_URL.into());
+    }
+    if current.providers.get(&provider) != Some(&config) || current.model.is_none() {
         client.configure_provider(
             ash_app_server_protocol::protocol::config::ProviderConfigureParams {
                 command_id: new_command_id("provider-config"),
@@ -396,7 +404,14 @@ where
     }
     client.set_provider_api_key(ProviderApiKeySetRequest::new(provider.clone(), api_key))?;
     let choices = read_config_choices(client)?;
-    Ok(ProviderApiKeyUpdate { provider, choices })
+    Ok(ProviderApiKeyUpdate {
+        provider,
+        choices,
+        plan: (target == ApiKeyTarget::ZaiCodingPlan).then_some(PlanStatus {
+            key_saved: true,
+            enabled: true,
+        }),
+    })
 }
 
 pub(crate) fn set_settings<T>(

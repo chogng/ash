@@ -37,6 +37,64 @@ fn providers() -> ProviderListResult {
 }
 
 #[test]
+fn provider_rows_place_kimi_and_glm_subscriptions_in_the_subscription_section() {
+    let mut catalog = providers();
+    catalog.providers.push(ProviderCatalogEntryDto {
+        provider: "kimi".into(),
+        display_name: "Kimi".into(),
+        api_key_policy: ProviderApiKeyPolicyDto::Required,
+        api_key_configured: false,
+    });
+    catalog.providers.push(ProviderCatalogEntryDto {
+        provider: "zai".into(),
+        display_name: "Z.AI (GLM)".into(),
+        api_key_policy: ProviderApiKeyPolicyDto::Required,
+        api_key_configured: false,
+    });
+    let choices = config_choices(
+        &empty_config_snapshot(),
+        &catalog,
+        TerminalSettings::default(),
+        StatusLineSettings::default(),
+    );
+    let mut state = ListSelectionState::new(choices.model);
+    state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    let labels = state
+        .visible_items()
+        .iter()
+        .map(|item| item.label())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        labels,
+        vec![
+            "Subscriptions",
+            "ChatGPT",
+            "Kimi Subscription",
+            "zai",
+            "API",
+            "OpenAI API key",
+            "Ollama",
+            "Kimi",
+            "Z.AI (GLM)",
+            "New custom provider",
+        ]
+    );
+    let actions = &choices.actions;
+    for label in ["Kimi Subscription", "zai"] {
+        let id = state
+            .visible_items()
+            .iter()
+            .find(|item| item.label() == label)
+            .and_then(|item| item.id())
+            .unwrap_or_else(|| panic!("{label} row must open its subscription panel"));
+        assert!(matches!(
+            actions.get(&id),
+            Some(ConfigSelectionAction::OpenSubscription(_))
+        ));
+    }
+}
+
+#[test]
 fn advisor_choices_are_localized_and_config_owned() {
     let choices = advisor_choices(
         &empty_config_snapshot(),
@@ -380,7 +438,7 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
     assert_eq!(state.visible_items().len(), 6);
     assert_eq!(state.visible_items()[0].label(), "Subscriptions");
     assert_eq!(state.visible_items()[1].label(), "ChatGPT");
-    assert_eq!(state.visible_items()[2].label(), "API and local services");
+    assert_eq!(state.visible_items()[2].label(), "API");
     assert_eq!(state.visible_items()[3].label(), "OpenAI API key");
     assert_eq!(state.visible_items()[4].label(), "Ollama");
     assert_eq!(state.visible_items()[5].label(), "New custom provider");
@@ -405,7 +463,7 @@ fn provider_sections_keep_subscription_navigation_and_search_actionable() {
     let mut catalog = providers();
     catalog.providers.push(ProviderCatalogEntryDto {
         provider: "xai".into(),
-        display_name: "xAI Subscription".into(),
+        display_name: "xAI".into(),
         api_key_policy: ProviderApiKeyPolicyDto::Unsupported,
         api_key_configured: false,
     });
@@ -422,18 +480,12 @@ fn provider_sections_keep_subscription_navigation_and_search_actionable() {
         .iter()
         .map(|item| item.label())
         .collect::<Vec<_>>();
-    assert_eq!(
-        labels
-            .iter()
-            .filter(|label| **label == "xAI Subscription")
-            .count(),
-        1
-    );
+    assert_eq!(labels.iter().filter(|label| **label == "xAI").count(), 1);
     assert!(!labels.contains(&"xAI (Grok) API key"));
     let xai_id = state
         .visible_items()
         .iter()
-        .find(|item| item.label() == "xAI Subscription")
+        .find(|item| item.label() == "xAI")
         .unwrap()
         .id()
         .unwrap()

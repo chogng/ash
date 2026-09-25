@@ -140,7 +140,7 @@ pub(crate) struct App {
     welcome: WelcomeModel,
     status: Status,
     terminal_settings: TerminalSettings,
-    subscriptions: [crate::config::Subscription; 2],
+    subscriptions: [crate::config::Subscription; 4],
     selected_subscription: crate::config::SubscriptionProvider,
     pub(super) fullscreen: Fullscreen,
     pub(super) inline: super::inline::Inline,
@@ -171,6 +171,8 @@ impl App {
             subscriptions: [
                 crate::config::Subscription::new(crate::config::SubscriptionProvider::ChatGpt),
                 crate::config::Subscription::new(crate::config::SubscriptionProvider::Xai),
+                crate::config::Subscription::new(crate::config::SubscriptionProvider::Kimi),
+                crate::config::Subscription::new(crate::config::SubscriptionProvider::Zai),
             ],
             selected_subscription: crate::config::SubscriptionProvider::ChatGpt,
             fullscreen: Fullscreen::new(
@@ -253,6 +255,8 @@ impl App {
             subscriptions: [
                 crate::config::Subscription::new(crate::config::SubscriptionProvider::ChatGpt),
                 crate::config::Subscription::new(crate::config::SubscriptionProvider::Xai),
+                crate::config::Subscription::new(crate::config::SubscriptionProvider::Kimi),
+                crate::config::Subscription::new(crate::config::SubscriptionProvider::Zai),
             ],
             selected_subscription: crate::config::SubscriptionProvider::ChatGpt,
             fullscreen: Fullscreen::new(
@@ -2548,12 +2552,28 @@ impl App {
             ConfigEvent::EditorOpened(view) => {
                 self.open_command_panel(CommandPanel::config(view));
             }
-            ConfigEvent::ApiKeySaved { provider, choices } => {
+            ConfigEvent::ApiKeySaved {
+                provider,
+                mut choices,
+                plan,
+            } => {
+                self.localize_selection(&mut choices);
                 self.panels_mut().finish_config_prompt(choices);
-                self.thread
-                    .update(ThreadPresentationEvent::NoticeReceived(format!(
-                        "Saved API key for {provider}"
-                    )));
+                if let Some(plan) = plan {
+                    let provider = crate::config::SubscriptionProvider::Zai;
+                    self.subscriptions[provider.index()]
+                        .update(crate::config::SubscriptionEvent::Plan(plan));
+                    if self.selected_subscription == provider {
+                        let mut choices = self.subscriptions[provider.index()].choices();
+                        self.localize_selection(&mut choices);
+                        self.panels_mut().update_subscription(choices);
+                    }
+                } else {
+                    self.thread
+                        .update(ThreadPresentationEvent::NoticeReceived(format!(
+                            "Saved API key for {provider}"
+                        )));
+                }
                 self.set_status(Status::Ready);
                 self.chat_panel.start_input();
             }

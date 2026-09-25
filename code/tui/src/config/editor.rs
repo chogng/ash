@@ -65,13 +65,21 @@ pub(crate) enum ConfigSelectionAction {
     OpenProviderApiKey {
         provider: String,
         display_name: String,
+        target: ApiKeyTarget,
     },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ApiKeyTarget {
+    Provider,
+    ZaiCodingPlan,
 }
 
 #[derive(Clone, Eq, PartialEq)]
 pub(crate) struct ProviderApiKeyEdit {
     provider: String,
     api_key: Zeroizing<String>,
+    target: ApiKeyTarget,
 }
 
 impl ProviderApiKeyEdit {
@@ -79,7 +87,17 @@ impl ProviderApiKeyEdit {
         Self {
             provider,
             api_key: Zeroizing::new(api_key),
+            target: ApiKeyTarget::Provider,
         }
+    }
+
+    pub(crate) fn for_zai_coding_plan(mut self) -> Self {
+        self.target = ApiKeyTarget::ZaiCodingPlan;
+        self
+    }
+
+    pub(crate) fn target(&self) -> ApiKeyTarget {
+        self.target
     }
 
     pub(crate) fn into_parts(mut self) -> (String, String) {
@@ -125,6 +143,7 @@ pub(crate) struct ConfigEditor {
 #[derive(Debug)]
 struct ProviderApiKeyPromptState {
     provider: String,
+    target: ApiKeyTarget,
     prompt: TextPrompt,
     key_hints: crate::widgets::key_hint::KeyHints,
 }
@@ -207,6 +226,11 @@ impl ConfigEditor {
                 return Some(advisor.settings.state().title());
             }
         }
+        if self.prompt.is_some() {
+            if let Some(subscription) = &self.subscription {
+                return Some(subscription.state().title());
+            }
+        }
         (self.provider_panel.is_some()
             || self.prompt.is_some()
             || self.subscription.is_some()
@@ -222,8 +246,10 @@ impl ConfigEditor {
         {
             return;
         }
+        if self.prompt.take().is_some() {
+            return;
+        }
         self.provider_panel = None;
-        self.prompt = None;
         self.subscription = None;
         if let Some(advisor) = self.advisor.as_mut() {
             if advisor.models.take().is_some() {
@@ -282,10 +308,6 @@ impl ConfigEditor {
                 _ => ConfigEditorOutcome::Consumed,
             };
         }
-        if let Some(subscription) = self.subscription.as_mut() {
-            let outcome = subscription.handle_key(key);
-            return self.handle_subscription_outcome(outcome);
-        }
         if let Some(prompt) = self.prompt.as_mut() {
             return match prompt.prompt.handle_key(key) {
                 TextPromptOutcome::Consumed => ConfigEditorOutcome::Consumed,
@@ -293,10 +315,18 @@ impl ConfigEditor {
                     self.prompt = None;
                     ConfigEditorOutcome::Consumed
                 }
-                TextPromptOutcome::Submit(value) => ConfigEditorOutcome::SaveApiKey(
-                    ProviderApiKeyEdit::new(prompt.provider.clone(), value),
-                ),
+                TextPromptOutcome::Submit(value) => {
+                    let edit = ProviderApiKeyEdit::new(prompt.provider.clone(), value);
+                    ConfigEditorOutcome::SaveApiKey(match prompt.target {
+                        ApiKeyTarget::Provider => edit,
+                        ApiKeyTarget::ZaiCodingPlan => edit.for_zai_coding_plan(),
+                    })
+                }
             };
+        }
+        if let Some(subscription) = self.subscription.as_mut() {
+            let outcome = subscription.handle_key(key);
+            return self.handle_subscription_outcome(outcome);
         }
         if let Some(provider_panel) = &mut self.provider_panel {
             let outcome = provider_panel.handle_key(key);
@@ -483,8 +513,9 @@ impl ConfigEditor {
             ListSelectionOutcome::Activate(ConfigSelectionAction::OpenProviderApiKey {
                 provider,
                 display_name,
+                target,
             }) => {
-                self.open_provider_prompt(provider, display_name);
+                self.open_provider_prompt(provider, display_name, target);
                 ConfigEditorOutcome::Consumed
             }
             ListSelectionOutcome::Activate(action) => ConfigEditorOutcome::Action(action),
@@ -523,10 +554,10 @@ impl ConfigEditor {
     pub(crate) fn handle_paste(&mut self, pasted: String) {
         if let Some(advisor) = self.advisor.as_mut() {
             advisor.selection_mut().handle_paste(pasted);
-        } else if let Some(subscription) = self.subscription.as_mut() {
-            subscription.handle_paste(pasted);
         } else if let Some(prompt) = self.prompt.as_mut() {
             prompt.prompt.handle_paste(pasted);
+        } else if let Some(subscription) = self.subscription.as_mut() {
+            subscription.handle_paste(pasted);
         } else if let Some(provider_panel) = self.provider_panel.as_mut() {
             provider_panel.handle_paste(pasted);
         } else {
@@ -538,16 +569,16 @@ impl ConfigEditor {
         if let Some(advisor) = &self.advisor {
             return ConfigEditorPage::Selection(advisor.selection().state());
         }
+        if let Some(prompt) = &self.prompt {
+            return ConfigEditorPage::Prompt(&prompt.prompt);
+        }
         if let Some(subscription) = &self.subscription {
             return ConfigEditorPage::Selection(subscription.state());
         }
-        match &self.prompt {
-            Some(prompt) => ConfigEditorPage::Prompt(&prompt.prompt),
-            None => self.provider_panel.as_ref().map_or_else(
-                || ConfigEditorPage::Selection(self.selection.state()),
-                ConfigEditorPage::Provider,
-            ),
-        }
+        self.provider_panel.as_ref().map_or_else(
+            || ConfigEditorPage::Selection(self.selection.state()),
+            ConfigEditorPage::Provider,
+        )
     }
 
     pub(crate) fn key_hints(&self) -> &KeyHints {
@@ -569,27 +600,29 @@ impl ConfigEditor {
         if let Some(advisor) = &self.advisor {
             return advisor.selection().key_hints();
         }
+        if let Some(prompt) = &self.prompt {
+            return &prompt.key_hints;
+        }
         if let Some(subscription) = &self.subscription {
             return subscription.key_hints();
         }
-        self.prompt
-            .as_ref()
-            .map(|prompt| &prompt.key_hints)
-            .unwrap_or_else(|| {
-                if let Some(provider_panel) = &self.provider_panel {
-                    provider_panel.key_hints()
-                } else {
-                    if self.selection.state().items_focused() && self.selected_setting().is_some() {
-                        return &RESET;
-                    }
-                    if self.selection.state().items_focused() && self.selection.state().selected_item().and_then(ListSelectionItem::id).and_then(|id| self.selection.action(id)).is_some_and(|action| matches!(action, ConfigSelectionAction::OpenProvider(settings) if settings.config.custom.is_some())) {
-                        &CUSTOM_PROVIDER
-                    } else { self.selection.key_hints() }
-                }
-            })
+        if let Some(provider_panel) = &self.provider_panel {
+            return provider_panel.key_hints();
+        }
+        if self.selection.state().items_focused() && self.selected_setting().is_some() {
+            return &RESET;
+        }
+        if self.selection.state().items_focused() && self.selection.state().selected_item().and_then(ListSelectionItem::id).and_then(|id| self.selection.action(id)).is_some_and(|action| matches!(action, ConfigSelectionAction::OpenProvider(settings) if settings.config.custom.is_some())) {
+            &CUSTOM_PROVIDER
+        } else {
+            self.selection.key_hints()
+        }
     }
 
     pub(crate) fn selection(&self) -> Option<&crate::widgets::list_selection::ListSelectionState> {
+        if self.prompt.is_some() {
+            return None;
+        }
         if let Some(advisor) = &self.advisor {
             return Some(advisor.selection().state());
         }
@@ -602,6 +635,9 @@ impl ConfigEditor {
     pub(crate) fn selection_mut(
         &mut self,
     ) -> Option<&mut crate::widgets::list_selection::ListSelectionState> {
+        if self.prompt.is_some() {
+            return None;
+        }
         if let Some(advisor) = &mut self.advisor {
             return Some(advisor.selection_mut().state_mut());
         }
@@ -696,6 +732,14 @@ impl ConfigEditor {
         outcome: ListSelectionOutcome<ConfigSelectionAction>,
     ) -> ConfigEditorOutcome {
         match outcome {
+            ListSelectionOutcome::Activate(ConfigSelectionAction::OpenProviderApiKey {
+                provider,
+                display_name,
+                target,
+            }) => {
+                self.open_provider_prompt(provider, display_name, target);
+                ConfigEditorOutcome::Consumed
+            }
             ListSelectionOutcome::Activate(action) => ConfigEditorOutcome::Action(action),
             ListSelectionOutcome::Dismiss => {
                 self.subscription = None;
@@ -705,10 +749,20 @@ impl ConfigEditor {
         }
     }
 
-    fn open_provider_prompt(&mut self, provider: String, display_name: String) {
-        let prompt = provider_api_key_prompt(provider, display_name);
+    fn open_provider_prompt(
+        &mut self,
+        provider: String,
+        display_name: String,
+        target: ApiKeyTarget,
+    ) {
+        let mut prompt = provider_api_key_prompt(provider, display_name);
+        if target == ApiKeyTarget::ZaiCodingPlan {
+            prompt.spec.title = "API key".into();
+            prompt.spec.explanation = "Enter the API key from your zai Coding Plan".into();
+        }
         self.prompt = Some(ProviderApiKeyPromptState {
             provider: prompt.provider,
+            target,
             prompt: TextPrompt::new(prompt.spec),
             key_hints: crate::widgets::key_hint::KeyHints::new()
                 .with_binding(bindings::SAVE)
@@ -1391,7 +1445,9 @@ fn provider_items(
         }
         let subscription = match provider.provider.as_str() {
             "openai" => Some(("ChatGPT", super::SubscriptionProvider::ChatGpt)),
-            "xai" => Some(("xAI Subscription", super::SubscriptionProvider::Xai)),
+            "xai" => Some(("xAI", super::SubscriptionProvider::Xai)),
+            "kimi" => Some(("Kimi Subscription", super::SubscriptionProvider::Kimi)),
+            "zai" => Some(("zai", super::SubscriptionProvider::Zai)),
             _ => None,
         };
         if let Some((label, subscription)) = subscription {
@@ -1426,10 +1482,8 @@ fn provider_items(
         );
         items.extend(subscriptions);
     }
-    items.push(
-        ListSelectionItem::new(nls::text(language, Message::ConfigApiAndLocalServices))
-            .as_section_divider(),
-    );
+    items
+        .push(ListSelectionItem::new(nls::text(language, Message::ConfigApi)).as_section_divider());
     items.extend(api_items);
     items
 }
@@ -1454,6 +1508,7 @@ fn provider_item(
         ConfigSelectionAction::OpenProviderApiKey {
             provider: provider.provider.clone(),
             display_name: display_name.to_owned(),
+            target: ApiKeyTarget::Provider,
         },
     );
     item.with_id(id)

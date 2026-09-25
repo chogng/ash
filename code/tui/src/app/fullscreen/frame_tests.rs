@@ -2174,6 +2174,18 @@ fn config_providers_show_subscription_and_api_sections() {
                         api_key_configured: false,
                     },
                     ProviderCatalogEntryDto {
+                        provider: "kimi".into(),
+                        display_name: "Kimi".into(),
+                        api_key_policy: ProviderApiKeyPolicyDto::Required,
+                        api_key_configured: false,
+                    },
+                    ProviderCatalogEntryDto {
+                        provider: "zai".into(),
+                        display_name: "Z.AI (GLM)".into(),
+                        api_key_policy: ProviderApiKeyPolicyDto::Required,
+                        api_key_configured: false,
+                    },
+                    ProviderCatalogEntryDto {
                         provider: "ollama".into(),
                         display_name: "Ollama".into(),
                         api_key_policy: ProviderApiKeyPolicyDto::Unsupported,
