@@ -19,7 +19,7 @@ import type { IOpenerService } from "../../../../../platform/opener/common/opene
 import type { IEditorService } from "../../../../services/editor/common/editorService.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { Schemas } from "../../../../../base/common/network.js";
-import { createSshRemoteWorkspaceUri } from '../../../../../platform/remote/common/remote.js';
+import { ASH_REMOTE_SCHEME, createSshRemoteWorkspaceUri, getRemoteWorkspacePath } from '../../../../../platform/remote/common/remote.js';
 import { OPEN_CHAT_SETTINGS_COMMAND_ID } from "../../common/chat.js";
 
 /** Owns the content and interaction state for one local or durable Chat tab. */
@@ -250,6 +250,7 @@ export async function openChatMarkdownLink(
 
 function isEditorResourceScheme(scheme: string): boolean {
 	return scheme === Schemas.file
+		|| scheme === ASH_REMOTE_SCHEME
 		|| scheme === Schemas.vscodeFileResource
 		|| scheme === Schemas.vscodeRemote
 		|| scheme === Schemas.vscodeRemoteResource
@@ -260,6 +261,10 @@ function isEditorResourceScheme(scheme: string): boolean {
 export function resolveMarkdownWorkspaceResource(resource: URI): URI | undefined {
 	if (resource.query || resource.fragment) return undefined;
 	if (resource.scheme === Schemas.file) return resource;
+	if (resource.scheme === ASH_REMOTE_SCHEME) {
+		try { getRemoteWorkspacePath(resource); return resource; }
+		catch { return undefined; }
+	}
 	if (resource.scheme === Schemas.vscodeFileResource) {
 		return resource.authority === 'vscode-app' ? URI.parse(`file://${resource.path}`) : undefined;
 	}

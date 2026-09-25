@@ -119,6 +119,7 @@ test("Chat Markdown links route resource, command, and external targets through 
 	} as unknown as ICommandService;
 
 	await openChatMarkdownLink("vscode-remote://ssh-remote+host/src/file.ts", commandService, openerService, editorService);
+	await openChatMarkdownLink('ash-remote://ssh+host/src/ash.ts', commandService, openerService, editorService);
 	await openChatMarkdownLink("vscode-file://vscode-app/workspace/readme.md", commandService, openerService, editorService);
 	await openChatMarkdownLink('vscode-remote-resource://ssh-remote+host/workspace/image.png', commandService, openerService, editorService);
 	await openChatMarkdownLink('vscode-notebook-cell:///workspace/notebook.ipynb#cell-4', commandService, openerService, editorService);
@@ -131,12 +132,61 @@ test("Chat Markdown links route resource, command, and external targets through 
 
 	assert.deepEqual(editorResources.map(resource => resource.toString()), [
 		'ash-remote://ssh+host/src/file.ts',
+		'ash-remote://ssh+host/src/ash.ts',
 		'file:///workspace/readme.md',
 		'ash-remote://ssh+host/workspace/image.png',
 		'vscode-notebook-cell:///workspace/notebook.ipynb#cell-4',
 	]);
 	assert.deepEqual(commands, [{ id: "ash.open", args: ["readme.md"] }]);
 	assert.deepEqual(externalTargets, ["mailto:help@example.com"]);
+});
+
+test('Chat loads an Ash remote workspace image through the file service', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	dom.window.HTMLElement.prototype.scrollTo = () => {};
+	const resource = 'ash-remote://ssh+host/workspace/pixel.png';
+	const fake = fakeApi({ sessions: [session('session-1', 'thread-1')], thread: () => thread(`![pixel](${resource})`) });
+	const requests: URI[] = [];
+	const fileService = {
+		readFileBytes: async (requested: URI) => {
+			requests.push(requested);
+			return { resource: requested, bytes: new Uint8Array([137, 80, 78, 71]), revision: '1' };
+		},
+	} as unknown as IFileService;
+	const objectUrl = 'blob:https://ash.invalid/remote-image';
+	Object.defineProperty(dom.window.URL, 'createObjectURL', { configurable: true, value: () => objectUrl });
+	Object.defineProperty(dom.window.URL, 'revokeObjectURL', { configurable: true, value: () => undefined });
+	try {
+		using contextViewService = new BrowserContextViewService(dom.window.document.body);
+		using sessions = new AppServerSessionsManagementService(fake.api);
+		using contextKeys = new ContextKeyService();
+		const services = new ServiceContainer();
+		using commands = new CommandService(services);
+		const menuService = new MenuService(commands, contextKeys);
+		const contextMenuService = { showContextMenu: () => undefined } as unknown as IContextMenuService;
+		using pane = new ChatViewPane(
+			dom.window.document.body,
+			{ id: CHAT_VIEW_ID, title: 'Chat' },
+			createChatService(fake.api),
+			sessions,
+			menuService,
+			contextMenuService,
+			contextViewService,
+			commands,
+			testLayoutService(),
+			emptyChatContextPickService,
+			unavailableQuickInputService,
+			fileService,
+			contextKeys,
+		);
+		dom.window.document.body.append(pane.element);
+		await sessions.initialize();
+		await waitFor(() => pane.element.querySelector('img')?.getAttribute('src') === objectUrl);
+		assert.deepEqual(requests.map(requested => requested.toString()), [resource]);
+		assert.equal(pane.element.querySelector('img')?.getAttribute('alt'), 'pixel');
+	} finally {
+		dom.window.close();
+	}
 });
 
 function chatTitleContent(pane: { readonly partTitleProjection: { readonly content?: HTMLElement } | undefined }): HTMLElement {

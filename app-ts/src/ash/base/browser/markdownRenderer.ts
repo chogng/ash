@@ -134,6 +134,7 @@ function isImageDimension(element: Element, data: { readonly attrValue: string }
 const SAFE_DATA_IMAGE =
 	/^data:image\/(?:png|jpeg|gif|webp);base64,[a-z0-9+/]+={0,2}$/i;
 const RESOURCE_LINK_SCHEMES = [
+	Schemas.ashRemote,
 	Schemas.vscodeFileResource, Schemas.vscodeRemote, Schemas.vscodeRemoteResource,
 	Schemas.vscodeNotebookCell, Schemas.internal,
 ] as const;
@@ -142,11 +143,11 @@ const DEFAULT_LINK_SCHEMES = [
 	...RESOURCE_LINK_SCHEMES,
 ] as const;
 const DEFAULT_MEDIA_SCHEMES = [
-	Schemas.data, Schemas.http, Schemas.https, Schemas.file,
+	Schemas.data, Schemas.http, Schemas.https, Schemas.file, Schemas.ashRemote,
 	Schemas.vscodeFileResource, Schemas.vscodeRemote, Schemas.vscodeRemoteResource,
 ] as const;
 const RESOURCE_IMAGE_SCHEMES = [
-	Schemas.file, Schemas.vscodeFileResource, Schemas.vscodeRemote, Schemas.vscodeRemoteResource,
+	Schemas.file, Schemas.ashRemote, Schemas.vscodeFileResource, Schemas.vscodeRemote, Schemas.vscodeRemoteResource,
 ] as const;
 const SANITIZER_CONFIG: DomSanitizerConfig = {
 	allowedTags: { override: ALLOWED_TAGS },

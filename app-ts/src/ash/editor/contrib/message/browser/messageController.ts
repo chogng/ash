@@ -161,6 +161,7 @@ export class MessageController extends Disposable implements IEditorContribution
 function isEditorResourceLink(target: string): boolean {
 	const scheme = URI.parse(target).scheme;
 	return scheme === Schemas.file
+		|| scheme === Schemas.ashRemote
 		|| scheme === Schemas.vscodeFileResource
 		|| scheme === Schemas.vscodeRemote
 		|| scheme === Schemas.vscodeRemoteResource

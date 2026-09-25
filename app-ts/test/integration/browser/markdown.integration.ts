@@ -25,12 +25,12 @@ const advanced = new MarkdownElement({
 });
 const resources = new MarkdownElement({
 	ownerDocument: document,
-	markdown: '[remote](vscode-remote://ssh-remote+host/src/file.ts) ![resource](vscode-file://vscode-app/images/pixel.gif|width=24)',
+	markdown: '[remote](ash-remote://ssh+host/src/file.ts) ![resource](ash-remote://ssh+host/images/pixel.gif|width=24)',
 });
 const loadedResources: string[] = [];
 const loadedResource = new MarkdownElement({
 	ownerDocument: document,
-	markdown: '![pixel](vscode-file://vscode-app/images/pixel.gif)',
+	markdown: '![pixel](ash-remote://ssh+host/images/pixel.gif)',
 	imageResourceLoader: async resource => {
 		loadedResources.push(resource.toString());
 		return fetch('data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=').then(response => response.blob());

@@ -72,8 +72,8 @@ test('Markdown renders alerts, registered icons, and an incomplete emphasis tail
 test('Markdown keeps supported resource URIs and image dimensions in the browser DOM', async ({ page }) => {
 	await page.goto('/markdown.html');
 	const resources = page.locator('#resources .ash-markdown');
-	await expect(resources.locator('a')).toHaveAttribute('href', 'vscode-remote://ssh-remote+host/src/file.ts');
-	await expect(resources.locator('img')).toHaveAttribute('src', 'vscode-file://vscode-app/images/pixel.gif');
+	await expect(resources.locator('a')).toHaveAttribute('href', 'ash-remote://ssh+host/src/file.ts');
+	await expect(resources.locator('img')).toHaveAttribute('src', 'ash-remote://ssh+host/images/pixel.gif');
 	await expect(resources.locator('img')).toHaveAttribute('width', '24');
 });
 
@@ -84,7 +84,7 @@ test('Markdown displays host-provided image bytes and releases the image URL aft
 	const url = await image.getAttribute('src');
 	expect(url).toMatch(/^blob:/);
 	expect(await page.evaluate(() => window.ashMarkdownIntegration.loadedResources())).toEqual([
-		'vscode-file://vscode-app/images/pixel.gif',
+		'ash-remote://ssh+host/images/pixel.gif',
 	]);
 	await page.evaluate(() => window.ashMarkdownIntegration.clearLoadedResource());
 	await expect(page.locator('#loaded-resource img')).toHaveCount(0);

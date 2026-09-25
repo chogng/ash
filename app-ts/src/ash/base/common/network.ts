@@ -6,6 +6,7 @@ export namespace Schemas {
 	export const https = 'https';
 	export const mailto = 'mailto';
 	export const command = 'command';
+	export const ashRemote = 'ash-remote';
 	export const internal = 'private';
 	export const vscodeFileResource = 'vscode-file';
 	export const vscodeRemote = 'vscode-remote';

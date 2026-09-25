@@ -82,6 +82,15 @@ test('Markdown resource links open through the code editor service', async () =>
 	assert.ok(link);
 	link.dispatchEvent(new environment.window.MouseEvent('click', { bubbles: true, cancelable: true }));
 	await Promise.resolve();
-	assert.deepEqual(openedResources.map(resource => resource.toString()), ['vscode-remote://ssh-remote+host/src/file.ts']);
+	messages.showMessage(new MarkdownString('[Ash remote](ash-remote://ssh+host/src/ash.ts)'), new Position(1, 1));
+	editor.layout({ width: 400, height: 100 });
+	const ashLink = environment.window.document.body.querySelector<HTMLAnchorElement>('.stanza-editor-overlay-message a');
+	assert.ok(ashLink);
+	ashLink.dispatchEvent(new environment.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+	await Promise.resolve();
+	assert.deepEqual(openedResources.map(resource => resource.toString()), [
+		'vscode-remote://ssh-remote+host/src/file.ts',
+		'ash-remote://ssh+host/src/ash.ts',
+	]);
 	messages.dispose();
 });

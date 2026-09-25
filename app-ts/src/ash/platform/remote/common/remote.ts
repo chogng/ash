@@ -1,6 +1,7 @@
 import { URI } from "../../../base/common/uri.js";
+import { Schemas } from '../../../base/common/network.js';
 
-export const ASH_REMOTE_SCHEME = "ash-remote";
+export const ASH_REMOTE_SCHEME = Schemas.ashRemote;
 const SSH_AUTHORITY_PREFIX = "ssh+";
 const SSH_HOST_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,251}[A-Za-z0-9])?$/;
 

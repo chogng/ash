@@ -240,6 +240,7 @@ test('Markdown image dimensions survive sanitization only as numeric image attri
 test('Markdown preserves supported resource schemes and filters remote media by policy', () => {
 	const dom = createDom();
 	const resourceLinks = [
+		'ash-remote://ssh+host/images/pixel.gif',
 		'vscode-file://vscode-app/images/pixel.gif',
 		'vscode-remote://ssh-remote+host/src/file.ts',
 		'vscode-remote-resource://ssh-remote+host/images/pixel.gif',
@@ -251,6 +252,8 @@ test('Markdown preserves supported resource schemes and filters remote media by 
 	}
 	const remoteMarkdown = { value: '', baseUri: URI.parse('vscode-remote://ssh-remote+host/docs/readme.md') };
 	assert.equal(resolveMarkdownLinkTarget('../src/file.ts', remoteMarkdown), 'vscode-remote://ssh-remote+host/src/file.ts');
+	const ashMarkdown = { value: '', baseUri: URI.parse('ash-remote://ssh+host/docs/readme.md') };
+	assert.equal(resolveMarkdownLinkTarget('../src/file.ts', ashMarkdown), 'ash-remote://ssh+host/src/file.ts');
 	assert.equal(resolveMarkdownLinkTarget('vscode-file://user:secret@vscode-app/image.png'), undefined);
 	const html = sanitizeMarkdownHtmlToString({ ownerDocument: dom.window.document },
 		'<img src="vscode-file://vscode-app/images/pixel.gif"><img src="https://example.com/pixel.gif"><img src="data:image/svg+xml,<svg></svg>">');
@@ -263,6 +266,8 @@ test('Markdown preserves supported resource schemes and filters remote media by 
 	]);
 	assert.match(sanitizeMarkdownHtmlToString({ ownerDocument: dom.window.document, markdown: remoteMarkdown },
 		'<img src="../images/pixel.gif">'), /src="vscode-remote:\/\/ssh-remote\+host\/images\/pixel\.gif"/);
+	assert.match(sanitizeMarkdownHtmlToString({ ownerDocument: dom.window.document, markdown: ashMarkdown },
+		'<img src="../images/pixel.gif">'), /src="ash-remote:\/\/ssh\+host\/images\/pixel\.gif"/);
 	assert.equal(sanitizeMarkdownHtmlToString({
 		ownerDocument: dom.window.document,
 		markdown: { value: '', baseUri: URI.parse('https://example.com/docs/') },
