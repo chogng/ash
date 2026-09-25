@@ -2387,6 +2387,17 @@ fn custom_model_choices(
                 model_reasoning_effort: None,
                 default_personality: None,
             },
+            ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
+                ash_protocol::ModelRef::new(
+                    ash_protocol::ProviderId::new("openai").unwrap(),
+                    ash_protocol::ModelId::new("gpt-unconfigured").unwrap(),
+                ),
+                &ash_protocol::ModelInfo::new(
+                    ash_protocol::ModelId::new("gpt-unconfigured").unwrap(),
+                    "Unconfigured model",
+                ),
+                ash_protocol::ModelOutputTransport::Unary,
+            ),
         ],
     };
     crate::models::model_choices(
@@ -2409,7 +2420,38 @@ fn model_favorites_empty_state_explains_pinning_from_provider_tabs() {
         app.list_selection().unwrap().tabs()[1].label(),
         "My gateway"
     );
+    assert_eq!(app.list_selection().unwrap().tabs().len(), 2);
     crate::tui_assert_snapshot!("model_favorites_empty", render(&app, 100, 18));
+}
+
+#[test]
+fn model_picker_without_configured_models_shows_setup_hint() {
+    let mut app = App::new();
+    let model = ash_protocol::ModelRef::new(
+        ash_protocol::ProviderId::new("openai").unwrap(),
+        ash_protocol::ModelId::new("gpt-unconfigured").unwrap(),
+    );
+    let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
+        models: vec![
+            ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
+                model.clone(),
+                &ash_protocol::ModelInfo::new(model.model, "Unconfigured model"),
+                ash_protocol::ModelOutputTransport::Unary,
+            ),
+        ],
+    };
+    app.update(ModelEvent::PickerOpened(
+        crate::models::model_choices(
+            &catalog,
+            &crate::test_support::empty_config_snapshot(),
+            &ash_app_server_protocol::protocol::provider::ProviderListResult { providers: vec![] },
+        )
+        .unwrap(),
+    ));
+
+    assert_eq!(app.list_selection().unwrap().tabs().len(), 1);
+    assert!(app.list_selection().unwrap().visible_items().is_empty());
+    crate::tui_assert_snapshot!("model_no_configured_models", render(&app, 100, 18));
 }
 
 #[test]

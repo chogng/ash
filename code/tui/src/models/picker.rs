@@ -48,6 +48,11 @@ pub(crate) fn model_choices(
     let mut groups = BTreeMap::<String, Vec<ListSelectionItem>>::new();
     let mut favorites = Vec::new();
     for entry in &catalog.models {
+        // The catalog also contains models for provider setup. Match the configured-provider
+        // requirement used when applying a /model selection.
+        if !config.providers.contains_key(entry.model.provider.as_str()) {
+            continue;
+        }
         let model = ModelRefDto {
             provider: entry.model.provider.to_string(),
             model: entry.model.model.to_string(),
@@ -80,10 +85,12 @@ pub(crate) fn model_choices(
             .then_with(|| a.provider.cmp(&b.provider))
     });
     for provider in custom {
-        tabs.push(ListSelectionGroup::new(
-            &provider.custom.as_ref().unwrap().name,
-            groups.remove(&provider.provider).unwrap_or_default(),
-        ));
+        if let Some(items) = groups.remove(&provider.provider) {
+            tabs.push(ListSelectionGroup::new(
+                &provider.custom.as_ref().unwrap().name,
+                items,
+            ));
+        }
     }
     for provider in &providers.providers {
         if config
@@ -100,13 +107,17 @@ pub(crate) fn model_choices(
     for (provider, items) in groups {
         tabs.push(ListSelectionGroup::new(provider, items));
     }
-    Ok(ModelChoices {
-        model: ListSelectionModel::new("Model", tabs)
+    let has_models = tabs.len() > 1;
+    let mut model = ListSelectionModel::new("Model", tabs);
+    if has_models {
+        model = model
             .with_activation(bindings::MODEL_APPLY)
             .with_key_hint_note("P to pin/unpin")
-            .with_empty_message("No models here · Pin models from a provider tab to Favorites"),
-        actions,
-    })
+            .with_empty_message("No models here · Pin models from a provider tab to Favorites");
+    } else {
+        model = model.with_empty_message("No configured models · Configure a provider in /config");
+    }
+    Ok(ModelChoices { model, actions })
 }
 
 #[cfg(test)]

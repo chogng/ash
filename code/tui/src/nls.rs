@@ -2028,6 +2028,12 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Aucun raccourci correspondant",
     ),
     translation(
+        "No configured models · Configure a provider in /config",
+        "設定済みのモデルがありません · /config でプロバイダーを設定してください",
+        "没有已配置的模型 · 请在 /config 中配置提供商",
+        "Aucun modèle configuré · Configurez un fournisseur dans /config",
+    ),
+    translation(
         "No models here · Pin models from a provider tab to Favorites",
         "モデルがありません · プロバイダーのタブからお気に入りに固定してください",
         "这里没有模型 · 可在提供商标签页中固定到收藏",

@@ -1,35 +1,46 @@
 use super::ModelSelectionAction;
 use super::model_choices;
 use crate::widgets::list_selection::ListSelectionState;
+use ash_app_server_protocol::protocol::config::CustomProviderConfigDto;
+use ash_app_server_protocol::protocol::config::CustomProviderProtocolDto;
 use ash_app_server_protocol::protocol::config::ModelRefDto;
+use ash_app_server_protocol::protocol::config::ProviderConfigDto;
 use ash_app_server_protocol::protocol::model::ModelCatalogEntry;
 use ash_app_server_protocol::protocol::model::ModelListResult;
+use ash_app_server_protocol::protocol::provider::ProviderApiKeyPolicyDto;
+use ash_app_server_protocol::protocol::provider::ProviderCatalogEntryDto;
+use ash_app_server_protocol::protocol::provider::ProviderListResult;
 use ash_protocol::ModelAccess;
-use ash_protocol::ModelCapabilities;
 use ash_protocol::ModelId;
+use ash_protocol::ModelInfo;
 use ash_protocol::ModelOutputTransport;
 use ash_protocol::ModelRef;
 use ash_protocol::ProviderId;
 
+fn catalog_entry(provider: &str, model: &str, name: &str) -> ModelCatalogEntry {
+    let model = ModelRef::new(
+        ProviderId::new(provider).unwrap(),
+        ModelId::new(model).unwrap(),
+    );
+    let mut info = ModelInfo::new(model.model.clone(), name);
+    info.access = ModelAccess::ApiKey;
+    ModelCatalogEntry::from_info(model, &info, ModelOutputTransport::Unary)
+}
+
+fn provider_config(provider: &str) -> ProviderConfigDto {
+    ProviderConfigDto {
+        provider: provider.into(),
+        custom: None,
+        base_url: None,
+        max_output_tokens: None,
+        model_context: Default::default(),
+    }
+}
+
 #[test]
 fn model_picker_shows_names_only_and_keeps_selection_identity_and_pin_state() {
     let catalog = ModelListResult {
-        models: vec![ModelCatalogEntry {
-            model: ModelRef::new(
-                ProviderId::new("openai").unwrap(),
-                ModelId::new("gpt-ash").unwrap(),
-            ),
-            display_name: "GPT Ash".into(),
-            access: ModelAccess::Unknown,
-            output_transport: ModelOutputTransport::Unary,
-            context_window: None,
-            auto_compact_token_limit: None,
-            available_context_window: None,
-            capabilities: ModelCapabilities::UNKNOWN,
-            supported_reasoning_efforts: Vec::new(),
-            model_reasoning_effort: None,
-            default_personality: None,
-        }],
+        models: vec![catalog_entry("openai", "gpt-ash", "GPT Ash")],
     };
     let model = ModelRefDto {
         provider: "openai".into(),
@@ -39,15 +50,13 @@ fn model_picker_shows_names_only_and_keeps_selection_identity_and_pin_state() {
     let mut config = crate::test_support::empty_config_snapshot();
     config.model = Some(model.clone());
     config
+        .providers
+        .insert("openai".into(), provider_config("openai"));
+    config
         .tui
         .0
         .insert("pinnedModels".into(), serde_json::json!([model]));
-    let view = model_choices(
-        &catalog,
-        &config,
-        &ash_app_server_protocol::protocol::provider::ProviderListResult { providers: vec![] },
-    )
-    .unwrap();
+    let view = model_choices(&catalog, &config, &ProviderListResult { providers: vec![] }).unwrap();
     let state = ListSelectionState::new(view.model);
 
     assert_eq!(state.title(), "Model");
@@ -62,6 +71,94 @@ fn model_picker_shows_names_only_and_keeps_selection_identity_and_pin_state() {
                 pinned: true,
             }
     }));
+}
+
+#[test]
+fn model_picker_only_offers_models_from_configured_providers() {
+    let catalog = ModelListResult {
+        models: vec![
+            catalog_entry("openai", "gpt-ash", "GPT Ash"),
+            catalog_entry("mimo", "mimo-v2.5-pro", "MiMo V2.5 Pro"),
+        ],
+    };
+    let mut config = crate::test_support::empty_config_snapshot();
+    config
+        .providers
+        .insert("mimo".into(), provider_config("mimo"));
+    config.providers.insert(
+        "custom-empty".into(),
+        ProviderConfigDto {
+            provider: "custom-empty".into(),
+            custom: Some(CustomProviderConfigDto {
+                context_window: 100_000,
+                order: 1,
+                name: "Empty gateway".into(),
+                model: None,
+                protocol: CustomProviderProtocolDto::Responses,
+            }),
+            ..provider_config("custom-empty")
+        },
+    );
+    config.tui.0.insert(
+        "pinnedModels".into(),
+        serde_json::json!([
+            {"provider":"openai","model":"gpt-ash"},
+            {"provider":"mimo","model":"mimo-v2.5-pro"}
+        ]),
+    );
+    let providers = ProviderListResult {
+        providers: vec![
+            ProviderCatalogEntryDto {
+                provider: "openai".into(),
+                display_name: "OpenAI".into(),
+                api_key_policy: ProviderApiKeyPolicyDto::Required,
+                api_key_configured: false,
+            },
+            ProviderCatalogEntryDto {
+                provider: "mimo".into(),
+                display_name: "Xiaomi MiMo".into(),
+                api_key_policy: ProviderApiKeyPolicyDto::Required,
+                api_key_configured: true,
+            },
+        ],
+    };
+
+    let view = model_choices(&catalog, &config, &providers).unwrap();
+    assert_eq!(view.actions.len(), 1);
+    assert_eq!(
+        view.actions.values().next(),
+        Some(&ModelSelectionAction::Select {
+            preference: "mimo/mimo-v2.5-pro".into(),
+            pinned: true,
+        })
+    );
+    let state = ListSelectionState::new(view.model);
+    assert_eq!(
+        state
+            .tabs()
+            .iter()
+            .map(|tab| tab.label())
+            .collect::<Vec<_>>(),
+        ["Favorites", "Xiaomi MiMo"]
+    );
+    assert_eq!(state.visible_items()[0].label(), "MiMo V2.5 Pro");
+}
+
+#[test]
+fn model_picker_without_configured_models_points_to_provider_setup() {
+    let catalog = ModelListResult {
+        models: vec![catalog_entry("openai", "gpt-ash", "GPT Ash")],
+    };
+    let config = crate::test_support::empty_config_snapshot();
+    let view = model_choices(&catalog, &config, &ProviderListResult { providers: vec![] }).unwrap();
+    assert!(view.actions.is_empty());
+    let state = ListSelectionState::new(view.model);
+    assert_eq!(state.tabs().len(), 1);
+    assert!(state.visible_items().is_empty());
+    assert_eq!(
+        state.empty_message(),
+        "No configured models · Configure a provider in /config"
+    );
 }
 
 #[test]

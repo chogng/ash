@@ -95,6 +95,13 @@ fn product_chrome_is_localized_without_changing_source_content() {
         localize(Language::French, "Search help"),
         "Rechercher dans l’aide"
     );
+    assert_eq!(
+        localize(
+            Language::Chinese,
+            "No configured models · Configure a provider in /config"
+        ),
+        "没有已配置的模型 · 请在 /config 中配置提供商"
+    );
     assert_eq!(localize(Language::Chinese, "All (12)"), "全部 (12)");
     assert_eq!(
         localize(Language::Chinese, "Reading: on · Model saving: off"),
