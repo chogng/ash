@@ -10,6 +10,7 @@ use ratatui::backend::TestBackend;
 use ratatui::layout::Position;
 use ratatui::layout::Rect;
 use ratatui::style::Modifier;
+use unicode_width::UnicodeWidthStr;
 
 fn app_with_branch() -> App {
     let mut app = App::for_dir(std::path::Path::new("/work/ash"));
@@ -65,7 +66,7 @@ fn header_places_branch_and_path_without_repeating_them_below() {
     assert_eq!(text.matches("/work/ash").count(), 1);
     assert_eq!(buffer[(2, 0)].symbol(), "\u{e0a0}");
     assert_eq!(buffer[(2, 0)].fg, app.render_context().foreground());
-    assert!(buffer[(2, 0)].modifier.contains(Modifier::BOLD));
+    assert!(!buffer[(2, 0)].modifier.contains(Modifier::BOLD));
     assert_eq!(buffer[(9, 0)].fg, app.render_context().muted());
     crate::tui_assert_snapshot!("workspace_header_and_hintbar", text);
 
@@ -268,8 +269,9 @@ fn keyboard_focus_reaches_header_and_context_uses_the_existing_progress_bar() {
 }
 
 #[test]
-fn header_hovers_never_paint_a_background_or_move_keyboard_selection() {
+fn header_hovers_underline_only_the_target_without_background_or_keyboard_selection() {
     let area = Rect::new(0, 0, 100, 20);
+    let mut identity_hover_style = None;
     for target in [
         super::Target::Branch,
         super::Target::Workspace,
@@ -289,12 +291,87 @@ fn header_hovers_never_paint_a_background_or_move_keyboard_selection() {
         terminal
             .draw(|frame| crate::app::frame::draw(frame, &app))
             .unwrap();
-        let cell = &terminal.backend().buffer()[(position.x, position.y)];
+        let text_position = |target, position: Position| {
+            if target == super::Target::Branch {
+                Position::new(
+                    position.x + app.status_line().branch_marker().width() as u16 + 1,
+                    position.y,
+                )
+            } else {
+                position
+            }
+        };
+        let label_position = text_position(target, position);
+        let cell = &terminal.backend().buffer()[(label_position.x, label_position.y)];
         if target != super::Target::Context {
             assert_eq!(cell.fg, app.render_context().hover_foreground());
         }
+        assert!(cell.modifier.contains(Modifier::UNDERLINED));
+        assert_eq!(
+            cell.underline_color,
+            app.render_context().hover_foreground()
+        );
         assert_eq!(cell.bg, app.render_context().background());
         assert_eq!(app.fullscreen.header.selected(), None);
+        if target == super::Target::Branch || target == super::Target::Workspace {
+            let style = (cell.fg, cell.bg, cell.modifier);
+            if let Some(previous) = identity_hover_style {
+                assert_eq!(style, previous);
+            } else {
+                identity_hover_style = Some(style);
+            }
+            if target == super::Target::Branch {
+                for column in position.x..label_position.x {
+                    assert!(
+                        !terminal.backend().buffer()[(column, position.y)]
+                            .modifier
+                            .contains(Modifier::UNDERLINED)
+                    );
+                }
+            }
+            let other = if target == super::Target::Branch {
+                super::Target::Workspace
+            } else {
+                super::Target::Branch
+            };
+            let other_position = (0..area.width)
+                .map(|column| Position::new(column, header.y))
+                .find(|position| super::target_at(&app, header, *position) == Some(other))
+                .unwrap();
+            let other_position = text_position(other, other_position);
+            let other_cell = &terminal.backend().buffer()[(other_position.x, other_position.y)];
+            assert!(!other_cell.modifier.contains(Modifier::UNDERLINED));
+        }
+    }
+}
+
+#[test]
+fn branch_and_workspace_keyboard_focus_keep_the_same_underline_color_as_hover() {
+    let area = Rect::new(0, 0, 100, 20);
+    for target in [super::Target::Branch, super::Target::Workspace] {
+        let mut app = app_with_branch();
+        app.fullscreen.focus_header(target);
+        let header = super::super::layout(&app, area).header;
+        let position = (0..area.width)
+            .map(|column| Position::new(column, header.y))
+            .find(|position| super::target_at(&app, header, *position) == Some(target))
+            .unwrap();
+        let label_x = if target == super::Target::Branch {
+            position.x + app.status_line().branch_marker().width() as u16 + 1
+        } else {
+            position.x
+        };
+        let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
+        terminal
+            .draw(|frame| crate::app::frame::draw(frame, &app))
+            .unwrap();
+        let cell = &terminal.backend().buffer()[(label_x, position.y)];
+        assert_eq!(cell.fg, app.render_context().focus());
+        assert_eq!(
+            cell.underline_color,
+            app.render_context().hover_foreground()
+        );
+        assert!(cell.modifier.contains(Modifier::UNDERLINED));
     }
 }
 

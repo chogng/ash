@@ -6,6 +6,8 @@ use ratatui::layout::Position;
 use ratatui::layout::Rect;
 use ratatui::style::Modifier;
 use ratatui::style::Style;
+use ratatui::text::Line;
+use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
 use unicode_width::UnicodeWidthStr;
 
@@ -64,19 +66,30 @@ pub(super) fn draw(frame: &mut Frame<'_>, area: Rect, app: &App, context: Render
     if !areas.branch.is_empty()
         && let Some(branch) = app.status_line().branch_label()
     {
-        let branch_text = format!("{} {branch}", app.status_line().branch_marker());
-        let line =
-            crate::render::truncate_with_ellipsis(&branch_text, usize::from(areas.branch.width));
+        let marker_prefix = format!("{} ", app.status_line().branch_marker());
+        let text = crate::render::truncate_with_ellipsis(
+            &format!("{marker_prefix}{branch}"),
+            usize::from(areas.branch.width),
+        );
+        let (marker, branch) = if let Some(branch) = text.strip_prefix(&marker_prefix) {
+            (marker_prefix.as_str(), branch)
+        } else {
+            (text.as_str(), "")
+        };
         let style = Style::default()
             .fg(context.foreground())
-            .add_modifier(Modifier::BOLD)
             .patch(action_surface(
                 app,
                 Target::Branch,
                 branch_enabled(app),
                 context,
             ));
-        frame.render_widget(Paragraph::new(line).style(style), areas.branch);
+        // Only the branch name gets the link underline; the marker identifies the control.
+        let line = Line::from(vec![
+            Span::styled(marker, style.remove_modifier(Modifier::UNDERLINED)),
+            Span::styled(branch, style),
+        ]);
+        frame.render_widget(Paragraph::new(line), areas.branch);
     }
 
     if !areas.workspace.is_empty() {
@@ -164,10 +177,14 @@ fn action_surface(app: &App, target: Target, enabled: bool, context: RenderConte
     if app.fullscreen.header.selected() == Some(target) {
         return Style::default()
             .fg(context.focus())
+            .underline_color(context.hover_foreground())
             .add_modifier(Modifier::UNDERLINED);
     }
     if state.hovered {
-        return Style::default().fg(context.hover_foreground());
+        return Style::default()
+            .fg(context.hover_foreground())
+            .underline_color(context.hover_foreground())
+            .add_modifier(Modifier::UNDERLINED);
     }
     Style::default()
 }
