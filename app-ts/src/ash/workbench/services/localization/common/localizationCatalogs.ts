@@ -526,7 +526,6 @@ const chinese: LanguagePackCatalog = {
 			"color.scrollbar.sliderActiveBackground": "拖动滚动条滑块时的背景色。",
 			"color.sash.hoverBackground": "鼠标悬停时分隔条的背景色。",
 			"color.quickInput.background": "快速选择面板的背景色。",
-			"color.quickInput.backdropBackground": "快速选择界面遮罩的背景色。",
 			"color.search.matchBackground": "搜索匹配内容的高亮背景色。",
 			"color.selection.foreground": "选中文字的前景色。",
 			"color.selection.background": "选中文字的背景色。",

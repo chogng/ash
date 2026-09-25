@@ -1,5 +1,5 @@
 import './media/quickInput.css';
-import { addDisposableListener, h, isHTMLElement, stopEvent } from '../../../base/browser/dom.js';
+import { addDisposableListener, h, isHTMLElement } from '../../../base/browser/dom.js';
 import { setAriaAttribute, setRole } from '../../../base/browser/ui/aria/aria.js';
 import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
@@ -28,12 +28,11 @@ export class QuickInputController extends Disposable {
 		}
 		this.host.hidden = true;
 		container.append(this.host);
-		this._register(addDisposableListener(this.host, 'mousedown', event => {
-			if (event.target === this.host) {
-				stopEvent(event);
-				this.active?.hide();
+		this._register(addDisposableListener(this.host.ownerDocument, 'mousedown', event => {
+			if (this.active && !event.composedPath().includes(this.host)) {
+				this.active.hide();
 			}
-		}));
+		}, true));
 		this._register(toDisposable(() => {
 			for (const quickInput of [...this.quickInputs]) {
 				quickInput.hide();

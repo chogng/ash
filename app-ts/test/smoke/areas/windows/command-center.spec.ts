@@ -2,6 +2,21 @@ import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
 
+test('Quick Access has no backdrop and lets workbench controls receive clicks', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	await page.keyboard.press('F1');
+	const host = page.locator('.ash-quick-input-host');
+	const picker = page.locator('.ash-quick-pick');
+	await expect(picker.getByRole('combobox')).toBeFocused();
+	await expect(host).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+	await expect(host).toHaveCSS('pointer-events', 'none');
+	await expect(picker).toHaveCSS('pointer-events', 'auto');
+	await page.getByRole('button', { name: 'Application menu' }).click();
+	await expect(picker).toHaveCount(0);
+	await expect(page.getByRole('menu').first()).toBeVisible();
+});
+
 test('titlebar command center opens command search and restores focus', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;

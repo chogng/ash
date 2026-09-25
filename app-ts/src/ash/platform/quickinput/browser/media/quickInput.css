@@ -5,8 +5,8 @@
   align-items: flex-start;
   justify-content: center;
   padding: 8px 16px;
-  background: var(--ash-quick-input-backdrop-background);
   inset: 0;
+  pointer-events: none;
 }
 
 .ash-quick-input-host[hidden] {
@@ -15,6 +15,7 @@
 
 .ash-quick-pick {
   display: flex;
+  pointer-events: auto;
   width: min(620px, calc(100vw - 32px));
   max-height: min(520px, calc(100vh - 48px));
   overflow: hidden;

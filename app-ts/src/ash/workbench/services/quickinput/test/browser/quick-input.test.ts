@@ -38,7 +38,7 @@ import {
 await import("../../../../../workbench/contrib/quickaccess/browser/commandsQuickAccess.js");
 await import("../../../../../workbench/contrib/quickaccess/browser/helpQuickAccess.js");
 await import('../../../../../workbench/contrib/quickaccess/browser/workspaceSymbolsQuickAccess.js');
-import { h } from "../../../../../base/browser/dom.js";
+import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
 
 test("Show All Commands is not duplicated in the titlebar action menu", () => {
 	const titlebarCommandIds = MenusRegistry.getMenuItems(MenuId.TitleBar)
@@ -374,6 +374,29 @@ test('Quick Pick labels its input and reports focus leaving the picker', async (
 		service.dispose();
 		dom.window.close();
 	}
+});
+
+test('Quick Input keeps clicks inside the picker and passes outside clicks to the workbench', () => {
+	const dom = new JSDOM('<!doctype html><body><button>Editor</button><button>Workbench action</button></body>');
+	installDomGlobals(dom);
+	{
+		using contextKeys = new ContextKeyService();
+		using service = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
+		const [editor, action] = dom.window.document.querySelectorAll('button');
+		const picker = service.createQuickPick();
+		let clicks = 0;
+		using clickListener = addDisposableListener(action, 'click', () => { clicks++; });
+		editor.focus();
+		picker.show();
+		const input = dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick-input input');
+		assert.ok(input);
+		input.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true }));
+		assert.equal(contextKeys.getValue(InQuickInputContext.key), true);
+		action.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true }));
+		action.click();
+		assert.deepEqual({ clicks, pickerVisible: contextKeys.getValue(InQuickInputContext.key) }, { clicks: 1, pickerVisible: false });
+	}
+	dom.window.close();
 });
 
 function emptyKeybindingService(): KeybindingService {

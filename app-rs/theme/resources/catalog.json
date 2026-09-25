@@ -632,16 +632,6 @@
       }
     },
     {
-      "id": "quickInput.backdropBackground",
-      "needsTransparency": false,
-      "defaults": {
-        "dark": "#00000026",
-        "light": "#0000001f",
-        "high-contrast-dark": "#00000026",
-        "high-contrast-light": "#0000001f"
-      }
-    },
-    {
       "id": "textLink.activeForeground",
       "needsTransparency": false,
       "defaults": {
