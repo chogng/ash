@@ -1,5 +1,5 @@
 import { VSBuffer } from "../../../../base/common/buffer.js";
-import { type LanguageWorkspaceSymbol } from '../../../../editor/common/languages.js';
+import type { LanguageWorkspaceSymbol } from '../../../../editor/common/languages.js';
 import { type IFileService } from "../../../../platform/files/common/files.js";
 import { type IEditorService } from "../../../services/editor/common/editorService.js";
 import { type IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";

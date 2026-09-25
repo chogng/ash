@@ -33,6 +33,40 @@ pub struct WebSessionInfo {
     pub workspace_root: String,
 }
 
+/// A browser may inspect directory names before choosing a workspace grant.
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(rename_all = "camelCase")]
+pub struct WebWorkspaceListRequest {
+    pub path: String,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(rename_all = "camelCase")]
+pub struct WebWorkspaceDirectory {
+    pub name: String,
+    pub path: String,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(rename_all = "camelCase")]
+pub struct WebWorkspaceListResult {
+    pub path: String,
+    pub parent: Option<String>,
+    pub directories: Vec<WebWorkspaceDirectory>,
+}
+
+/// Approval is a distinct user action after the server has identified the selected directory.
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(rename_all = "camelCase")]
+pub struct WebWorkspaceOpenRequest {
+    pub path: String,
+    pub approved: bool,
+}
+
 #[cfg(test)]
 #[path = "web_tests.rs"]
 mod tests;

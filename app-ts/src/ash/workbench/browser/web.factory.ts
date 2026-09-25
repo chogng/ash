@@ -25,6 +25,7 @@ import type {
 } from "./web.api.js";
 import { startWorkbench } from "./workbench.js";
 import { switchBrowserWorkbenchMode } from "../services/workbenchMode/browser/browserWorkbenchModeHost.js";
+import { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
 
 /** Creates a browser-hosted Workbench with the shared Web adapters. */
 export function createWebWorkbench(
@@ -36,6 +37,8 @@ export function createWebWorkbench(
 		modeId,
 		defaultLayout: options.defaultLayout,
 		api: options.api,
+		webWorkspaceClient: options.webWorkspaceClient,
+		browserFileSystemProvider: options.browserFileSystemProvider,
 		container: options.container,
 		workspace: workspaceFromIdentifier(options.workspace ?? UNKNOWN_EMPTY_WINDOW_WORKSPACE),
 		createContextMenuService: createBrowserWorkbenchContextMenuService,
@@ -56,8 +59,14 @@ export function startWebWorkbench(
 	const host = readWebWorkbenchHost();
 	const workbench = new DisposableStore();
 	workbench.add(hostLifetime);
+	const picker = window as Window & { showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle> };
+	const browserFileSystemProvider = !host && picker.showDirectoryPicker && globalThis.indexedDB
+		? new HTMLFileSystemProvider(globalThis.indexedDB)
+		: undefined;
 	const instance = createWebWorkbench(modeId, {
 		api: host?.api ?? createDisconnectedRendererApi(),
+		webWorkspaceClient: host?.webWorkspaceClient,
+		browserFileSystemProvider,
 		defaultLayout: host?.defaultLayout,
 		workspace: host?.workspace,
 		container: host?.container ??

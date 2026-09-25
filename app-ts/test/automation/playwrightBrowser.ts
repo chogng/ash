@@ -22,8 +22,10 @@ export async function launchBrowser(options: BrowserLaunchOptions): Promise<Brow
 		if (!serialized) { throw new Error('Run the browser App Server suite through test:smoke:browser:full'); }
 		const { endpoint, session } = JSON.parse(serialized) as { endpoint: string; session: { token: string } };
 		await page.addInitScript(({ endpoint, token }) => {
-			sessionStorage.setItem('ash.appServer.endpoint', endpoint);
-			sessionStorage.setItem(`ash.appServer.session:${new URL(endpoint).origin}`, token);
+			if (!sessionStorage.getItem('ash.appServer.endpoint')) {
+				sessionStorage.setItem('ash.appServer.endpoint', endpoint);
+				sessionStorage.setItem(`ash.appServer.session:${new URL(endpoint).origin}`, token);
+			}
 		}, { endpoint, token: session.token });
 	}
 	const consoleErrors: string[] = [];

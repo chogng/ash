@@ -3,7 +3,7 @@ import type { IContextKey } from "../../platform/contextkey/common/contextkey.js
 import type { IContextKeyService } from "../../platform/contextkey/browser/contextKeyService.js";
 import { IsLinuxContext, IsMacContext, IsNativeContext, IsWebContext, IsWindowsContext } from '../../platform/contextkey/common/contextkeys.js';
 import { type IWorkspaceContextService, workbenchStateToString } from '../../platform/workspace/common/workspace.js';
-import { ActiveEditorGroupEmptyContext, ActiveEditorGroupIndexContext, ActiveEditorGroupLastContext, AgentSidebarVisibleContext, AuxiliaryBarVisibleContext, DirtyWorkingCopiesContext, EditorAreaVisibleContext, EditorsVisibleContext, MultipleEditorGroupsContext, PanelMaximizedContext, PanelVisibleContext, SideBarVisibleContext, WorkbenchStateContext, WorkspaceFolderCountContext } from '../common/contextkeys.js';
+import { ActiveEditorGroupEmptyContext, ActiveEditorGroupIndexContext, ActiveEditorGroupLastContext, AgentSidebarVisibleContext, AuxiliaryBarVisibleContext, BrowserLocalFolderSupportContext, DirtyWorkingCopiesContext, EditorAreaVisibleContext, EditorsVisibleContext, MultipleEditorGroupsContext, OpenFolderWorkspaceSupportContext, PanelMaximizedContext, PanelVisibleContext, SideBarVisibleContext, WorkbenchStateContext, WorkspaceFolderCountContext } from '../common/contextkeys.js';
 import type { IEditorGroupsService } from '../services/editor/common/editorGroupsService.js';
 import type { IEditorService } from '../services/editor/common/editorService.js';
 import type { IWorkbenchLayoutService, WorkbenchPartId } from '../services/layout/common/workbenchLayoutService.js';
@@ -18,15 +18,26 @@ export class WorkbenchContextKeysHandler extends Disposable {
 		private readonly editorService: IEditorService,
 		private readonly layoutService: IWorkbenchLayoutService,
 		private readonly workingCopyService: IWorkingCopyService,
+		private readonly openFolderWorkspaceSupported: boolean,
+		private readonly browserLocalFolderSupported: boolean,
 	) {
 		super();
 		contextKeyService.bufferChangeEvents(() => {
 			this.bindPlatformKeys(contextKeyService);
 			this.bindWorkspaceKeys(contextKeyService, workspaceContextService);
+			this.bindOpenFolderKey(contextKeyService);
 			this.bindWorkingCopyKeys(contextKeyService, workingCopyService);
 			this.bindLayoutKeys(contextKeyService, layoutService);
 			this.bindEditorKeys(contextKeyService, editorGroupsService, editorService);
 		});
+	}
+
+	private bindOpenFolderKey(contextKeyService: IContextKeyService): void {
+		const key = OpenFolderWorkspaceSupportContext.bindTo(contextKeyService);
+		key.set(this.openFolderWorkspaceSupported);
+		const browserKey = BrowserLocalFolderSupportContext.bindTo(contextKeyService);
+		browserKey.set(this.browserLocalFolderSupported);
+		this._register(toDisposable(() => { key.reset(); browserKey.reset(); }));
 	}
 
 	private bindPlatformKeys(contextKeyService: IContextKeyService): void {

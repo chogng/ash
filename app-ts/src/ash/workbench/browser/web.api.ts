@@ -6,6 +6,8 @@ import type {
 } from "../../platform/workspace/common/workspace.js";
 import type { WorkbenchModeId } from "../common/workbenchMode.js";
 import type { WorkbenchDefaultLayout } from "./layout.js";
+import type { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
+import type { IWebWorkspaceClient } from '../services/workspaces/browser/workspaceOpenService.js';
 
 /**
  * Capabilities and identity supplied by an embedding Web application.
@@ -15,6 +17,7 @@ import type { WorkbenchDefaultLayout } from "./layout.js";
  */
 export interface IWebWorkbenchHost {
 	readonly api: IRendererHost;
+	readonly webWorkspaceClient?: IWebWorkspaceClient;
 	readonly workspace?: IAnyWorkspaceIdentifier;
 	readonly container?: HTMLElement | null;
 	readonly defaultLayout?: WorkbenchDefaultLayout;
@@ -24,6 +27,8 @@ export interface IWebWorkbenchHost {
 /** Inputs used to create one browser-hosted Workbench instance. */
 export interface IWebWorkbenchConstructionOptions {
 	readonly api: IRendererHost;
+	readonly webWorkspaceClient?: IWebWorkspaceClient;
+	readonly browserFileSystemProvider?: HTMLFileSystemProvider;
 	readonly workspace?: IAnyWorkspaceIdentifier;
 	readonly container: HTMLElement;
 	readonly defaultLayout?: WorkbenchDefaultLayout;

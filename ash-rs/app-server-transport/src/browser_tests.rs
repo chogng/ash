@@ -22,6 +22,7 @@ fn authenticates_browser_sessions_and_preserves_independent_connections() {
         let listener = start_browser_listener(
             BrowserOptions {
                 session_directory: None,
+                workspace: None,
                 port: 0,
                 assets: None,
                 origin: None,
@@ -152,6 +153,94 @@ fn authenticates_browser_sessions_and_preserves_independent_connections() {
 }
 
 #[test]
+fn workspace_control_requires_an_authenticated_same_origin_session() {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime.block_on(async {
+        let listener = start_browser_listener(
+            BrowserOptions {
+                session_directory: None,
+                workspace: Some(BrowserWorkspaceOperations {
+                    list: Arc::new(|body| Box::pin(async move { Ok(body) })),
+                    open: Arc::new(|_| {
+                        Box::pin(async {
+                            Err(io::Error::new(
+                                io::ErrorKind::PermissionDenied,
+                                "Approval required",
+                            ))
+                        })
+                    }),
+                }),
+                port: 0,
+                assets: None,
+                origin: None,
+            },
+            |_, _| {},
+            |token| serde_json::json!({ "token": token }).to_string(),
+        )
+        .await
+        .unwrap();
+        let origin = format!("http://{}", listener.address);
+        let body = r#"{"path":"/chosen"}"#;
+        let unauthorized = request(
+            listener.address,
+            "POST",
+            "/ash/workspace/list",
+            &origin,
+            "",
+            body,
+        );
+        assert!(unauthorized.starts_with("HTTP/1.1 401"));
+        let exchanged = request(
+            listener.address,
+            "POST",
+            "/ash/session",
+            &origin,
+            "",
+            listener.ticket(),
+        );
+        let metadata: serde_json::Value =
+            serde_json::from_str(exchanged.split("\r\n\r\n").nth(1).unwrap()).unwrap();
+        let authorization = format!(
+            "Authorization: Bearer {}\r\n",
+            metadata["token"].as_str().unwrap()
+        );
+        let foreign = request(
+            listener.address,
+            "POST",
+            "/ash/workspace/list",
+            "http://evil.test",
+            &authorization,
+            body,
+        );
+        assert!(foreign.starts_with("HTTP/1.1 403"));
+        let listing = request(
+            listener.address,
+            "POST",
+            "/ash/workspace/list",
+            &origin,
+            &authorization,
+            body,
+        );
+        assert!(listing.starts_with("HTTP/1.1 200"));
+        assert_eq!(listing.split("\r\n\r\n").nth(1), Some(body));
+        let denied = request(
+            listener.address,
+            "POST",
+            "/ash/workspace/open",
+            &origin,
+            &authorization,
+            body,
+        );
+        assert!(denied.starts_with("HTTP/1.1 403"));
+        listener.shutdown().await.unwrap();
+    });
+}
+
+#[test]
 fn static_assets_cannot_escape_the_launch_root_or_accept_another_host() {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
@@ -167,6 +256,7 @@ fn static_assets_cannot_escape_the_launch_root_or_accept_another_host() {
         let listener = start_browser_listener(
             BrowserOptions {
                 session_directory: None,
+                workspace: None,
                 port: 0,
                 assets: Some(root),
                 origin: None,

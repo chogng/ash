@@ -4,6 +4,10 @@ export type { JsonRpcError, JsonRpcFailure, JsonRpcId, JsonRpcNotification, Json
 export type { AppServerListenInfo } from './AppServerListenInfo.js';
 export type { WebListenInfo } from './WebListenInfo.js';
 export type { WebSessionInfo } from './WebSessionInfo.js';
+export type { WebWorkspaceDirectory } from './WebWorkspaceDirectory.js';
+export type { WebWorkspaceListRequest } from './WebWorkspaceListRequest.js';
+export type { WebWorkspaceListResult } from './WebWorkspaceListResult.js';
+export type { WebWorkspaceOpenRequest } from './WebWorkspaceOpenRequest.js';
 export { APP_SERVER_METHODS } from './AppServerRequestMap.js';
 export { PRODUCT_SLASH_COMMANDS } from './ProductSlashCommands.js';
 export type { AppServerMethod, AppServerMethodDefinition, AppServerRequest, AppServerRequestMap, AppServerResponse, MethodParams, MethodResult } from './AppServerRequestMap.js';

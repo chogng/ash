@@ -73,6 +73,8 @@ import {
 	BrowserFileService,
 } from "../../platform/files/browser/fileService.js";
 import { MultiplexFileService } from "../../platform/files/browser/multiplexFileService.js";
+import { IQuickInputService } from "../../platform/quickinput/common/quickInput.js";
+import type { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
 import { IFileSystemProviderService } from "../../platform/files/common/fileSystemProviderService.js";
 import {
 	IFileService,
@@ -108,6 +110,9 @@ import {
 import {
 	IWorkspaceOpenService,
 	WorkspaceOpenService,
+	BrowserWorkspaceOpenService,
+	WebWorkspaceOpenService,
+	type IWebWorkspaceClient,
 } from "../services/workspaces/browser/workspaceOpenService.js";
 import { RecentWorkspacesService } from "../services/workspaces/browser/recentWorkspacesService.js";
 import { IRecentWorkspacesService } from "../services/workspaces/common/recentWorkspacesService.js";
@@ -260,6 +265,8 @@ export interface IStartWorkbenchOptions {
 	readonly modeId: WorkbenchModeId;
 	readonly defaultLayout?: WorkbenchDefaultLayout;
 	readonly api: IRendererHost;
+	readonly browserFileSystemProvider?: HTMLFileSystemProvider;
+	readonly webWorkspaceClient?: IWebWorkspaceClient;
 	readonly browserViewApi?: IBrowserViewApi;
 	readonly container: HTMLElement;
 	readonly workspace: IWorkspace;
@@ -279,6 +286,8 @@ export function startWorkbench({
 	modeId,
 	defaultLayout,
 	api,
+	browserFileSystemProvider,
+	webWorkspaceClient,
 	container,
 	workspace,
 	configurationApi,
@@ -308,6 +317,8 @@ export function startWorkbench({
 		createTitlebarPart,
 		switchWorkbenchMode,
 		browserViewApi,
+		browserFileSystemProvider,
+		webWorkspaceClient,
 	);
 }
 
@@ -345,6 +356,8 @@ export class Workbench extends Disposable {
 		createTitlebarPart: TitlebarPartFactory,
 		switchWorkbenchMode: (modeId: WorkbenchModeId) => Promise<void>,
 		browserViewApi?: IBrowserViewApi,
+		browserFileSystemProvider?: HTMLFileSystemProvider,
+		webWorkspaceClient?: IWebWorkspaceClient,
 	) {
 		super();
 		this._register(FormattingConflicts.setFormatterSelector(async formatters => formatters[0]));
@@ -374,7 +387,27 @@ export class Workbench extends Disposable {
 		if (nativeHostApi) {
 			services.registerInstance(INativeHostService, nativeHostApi);
 		}
-		const workspaceOpenService = new WorkspaceOpenService(nativeHostApi);
+		if (browserFileSystemProvider) this._register(browserFileSystemProvider);
+		const workspaceOpenService = browserFileSystemProvider
+			? new BrowserWorkspaceOpenService(
+				browserFileSystemProvider,
+				workspace => this.updateWorkspace(workspace),
+				() => (window as unknown as { showDirectoryPicker: () => Promise<FileSystemDirectoryHandle> }).showDirectoryPicker(),
+			)
+			: webWorkspaceClient
+				? new WebWorkspaceOpenService(
+					webWorkspaceClient,
+					() => services.get(IQuickInputService),
+					() => services.get(IDialogService),
+					async () => {
+						await this.workingCopyBackupTracker.flush();
+						if (!await this.editor.closeAllEditors({ reason: 'reset' })) return false;
+						await this.workingCopyBackupTracker.flush();
+						await this.storage.flush(WillSaveStateReason.WORKSPACE_CHANGE);
+						return true;
+					},
+				)
+				: new WorkspaceOpenService(nativeHostApi);
 		services.registerInstance(IWorkspaceOpenService, workspaceOpenService);
 		const workspaceContext = this._register(new WorkspaceContextService(workspace));
 		this.workspaceContext = workspaceContext;
@@ -400,6 +433,7 @@ export class Workbench extends Disposable {
 		});
 		this._register(workspaceFileService);
 		const fileService = this._register(new MultiplexFileService(workspaceFileService));
+		if (browserFileSystemProvider) this._register(fileService.registerProvider('file', browserFileSystemProvider));
 		services.registerInstance(IFileService, fileService);
 		services.registerInstance(IFileSystemProviderService, fileService);
 		const textFileService = new TextFileService(fileService);
@@ -872,7 +906,7 @@ export class Workbench extends Disposable {
 		this.workbenchLayout = layout;
 		services.registerInstance(IWorkbenchLayoutService, layout);
 		services.registerInstance(IWorkbenchLayoutStyleService, layout);
-		this._register(new WorkbenchContextKeysHandler(contextKeys, workspaceContext, editorService, editorService, layout, workingCopyService));
+		this._register(new WorkbenchContextKeysHandler(contextKeys, workspaceContext, editorService, editorService, layout, workingCopyService, nativeHostApi !== undefined || webWorkspaceClient !== undefined, browserFileSystemProvider !== undefined));
 		this._register(bindResizableLayout(layoutService.onDidLayoutMainContainer, layout));
 		const openAuxiliaryComposite = (compositeId: string): PaneComposite => {
 			const viewContainer = viewDescriptors

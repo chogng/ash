@@ -16,6 +16,8 @@ export interface TestWorkbenchContextKeyServices {
 	readonly editorService?: IEditorService;
 	readonly layoutService?: IWorkbenchLayoutService;
 	readonly workingCopyService?: IWorkingCopyService;
+	readonly openFolderWorkspaceSupported?: boolean;
+	readonly browserLocalFolderSupported?: boolean;
 }
 
 /** Creates the production handler with explicit no-op services for unrelated test domains. */
@@ -27,6 +29,8 @@ export function createTestWorkbenchContextKeysHandler(contextKeyService: IContex
 		services.editorService ?? emptyEditorService,
 		services.layoutService ?? emptyLayoutService,
 		services.workingCopyService ?? emptyWorkingCopyService,
+		services.openFolderWorkspaceSupported ?? false,
+		services.browserLocalFolderSupported ?? false,
 	);
 }
 

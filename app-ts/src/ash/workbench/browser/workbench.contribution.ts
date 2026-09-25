@@ -29,15 +29,16 @@ import { registerPanelViews } from "../contrib/panel/browser/panel.contribution.
 import { registerProblemsView } from "../contrib/problems/browser/problems.contribution.js";
 import { registerTerminalView } from "../contrib/terminal/browser/terminal.contribution.js";
 import { Lxicon } from "../../base/common/lxicons.js";
+import { registerAction2 } from '../../platform/actions/common/actions.js';
+import { OpenFolderAction, OpenFolderViaWorkspaceAction } from './actions/workspaceActions.js';
 import "../contrib/bulkEdit/browser/bulkEdit.contribution.js";
 import "../contrib/binaryEditor/browser/binaryEditor.contribution.js";
 import "../contrib/markdown/browser/markdown.contribution.js";
 import "../contrib/multiDiffEditor/browser/multiDiffEditor.contribution.js";
 import "../contrib/pdf/browser/pdf.contribution.js";
 import "../contrib/preferences/browser/preferences.contribution.js";
-import "../contrib/quickaccess/browser/commandsQuickAccess.js";
-import "../contrib/quickaccess/browser/helpQuickAccess.js";
-import "../contrib/quickaccess/browser/workspaceSymbolsQuickAccess.js";
+import "../contrib/quickaccess/browser/quickAccess.contribution.js";
+import "../contrib/search/browser/searchQuickAccess.contribution.js";
 import { registerRemoteViews } from "../contrib/remote/browser/remote.contribution.js";
 import "../contrib/sash/browser/sash.contribution.js";
 import "./parts/dialogs/dialog.contribution.js";
@@ -62,6 +63,8 @@ registerProblemsView();
 registerPanelViews();
 registerRemoteViews();
 registerTerminalView();
+registerAction2(OpenFolderAction);
+registerAction2(OpenFolderViaWorkspaceAction);
 
 registerWorkbenchContribution(
 	"workbench.contrib.keybindingsResource",

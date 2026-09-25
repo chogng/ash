@@ -64,7 +64,12 @@ test('application menu opens real commands and updates Go when an editor opens',
 	await fileMenuItem.click();
 	await expect(fileMenuItem).toHaveAttribute('aria-expanded', 'true');
 	const fileMenu = page.getByRole('menu').last();
-	await expect(fileMenu.getByRole('menuitem', { name: 'Open Folder...' })).toBeVisible();
+	const openFolder = fileMenu.getByRole('menuitem', { name: 'Open Folder...' });
+	if (target.kind === 'electron' || target.appServerMode === 'required') {
+		await expect(openFolder).toBeVisible();
+	} else {
+		await expect(openFolder).toHaveCount(0);
+	}
 	await expect(fileMenu.getByRole('menuitem', { name: 'Ash Settings' })).toBeVisible();
 	const newEditorItem = fileMenu.getByRole('menuitem', { name: 'New Untitled Text Editor' });
 	await newEditorItem.hover();

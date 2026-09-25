@@ -56,3 +56,19 @@ fn web_launch_lease_is_required_and_has_a_fixed_identity() {
     value.as_object_mut().unwrap().remove("leaseId");
     assert!(serde_json::from_value::<WebLaunchOptions>(value).is_err());
 }
+
+#[test]
+fn workspace_selection_requires_explicit_approval_and_strict_fields() {
+    let request = WebWorkspaceOpenRequest {
+        path: "/chosen".into(),
+        approved: true,
+    };
+    let value = serde_json::to_value(request).unwrap();
+    assert_eq!(value, json!({ "path": "/chosen", "approved": true }));
+    let mut missing = value.clone();
+    missing.as_object_mut().unwrap().remove("approved");
+    assert!(serde_json::from_value::<WebWorkspaceOpenRequest>(missing).is_err());
+    let mut injected = value;
+    injected["dirPermissionsHost"] = json!(true);
+    assert!(serde_json::from_value::<WebWorkspaceOpenRequest>(injected).is_err());
+}

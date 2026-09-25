@@ -61,6 +61,9 @@ struct ProtocolSchema {
     listen_info: AppServerListenInfo,
     web_listen_info: crate::WebListenInfo,
     web_session_info: crate::WebSessionInfo,
+    web_workspace_list_request: crate::WebWorkspaceListRequest,
+    web_workspace_list_result: crate::WebWorkspaceListResult,
+    web_workspace_open_request: crate::WebWorkspaceOpenRequest,
     client_request: JsonRpcRequest<ClientRequestSchema>,
     client_response: JsonRpcResponse<ClientResultSchema, AppServerError>,
     host_request: JsonRpcRequest<HostRequestSchema>,
@@ -303,6 +306,22 @@ pub fn typescript_files() -> Vec<(PathBuf, String)> {
             <crate::WebSessionInfo as ts_rs::TS>::decl(&ts_rs::Config::default())
         ),
     ));
+    files.push((PathBuf::from("WebWorkspaceDirectory.ts"), format!(
+        "{GENERATED_TYPESCRIPT_HEADER}export {}\n",
+        <crate::WebWorkspaceDirectory as ts_rs::TS>::decl(&ts_rs::Config::default())
+    )));
+    files.push((PathBuf::from("WebWorkspaceListRequest.ts"), format!(
+        "{GENERATED_TYPESCRIPT_HEADER}export {}\n",
+        <crate::WebWorkspaceListRequest as ts_rs::TS>::decl(&ts_rs::Config::default())
+    )));
+    files.push((PathBuf::from("WebWorkspaceListResult.ts"), format!(
+        "{GENERATED_TYPESCRIPT_HEADER}import type {{ WebWorkspaceDirectory }} from './WebWorkspaceDirectory.js';\nexport {}\n",
+        <crate::WebWorkspaceListResult as ts_rs::TS>::decl(&ts_rs::Config::default())
+    )));
+    files.push((PathBuf::from("WebWorkspaceOpenRequest.ts"), format!(
+        "{GENERATED_TYPESCRIPT_HEADER}export {}\n",
+        <crate::WebWorkspaceOpenRequest as ts_rs::TS>::decl(&ts_rs::Config::default())
+    )));
     files.sort_by(|left, right| left.0.cmp(&right.0));
     files
 }
@@ -358,6 +377,10 @@ fn generated_index() -> String {
          export type {{ AppServerListenInfo }} from './AppServerListenInfo.js';\n\
          export type {{ WebListenInfo }} from './WebListenInfo.js';\n\
          export type {{ WebSessionInfo }} from './WebSessionInfo.js';\n\
+         export type {{ WebWorkspaceDirectory }} from './WebWorkspaceDirectory.js';\n\
+         export type {{ WebWorkspaceListRequest }} from './WebWorkspaceListRequest.js';\n\
+         export type {{ WebWorkspaceListResult }} from './WebWorkspaceListResult.js';\n\
+         export type {{ WebWorkspaceOpenRequest }} from './WebWorkspaceOpenRequest.js';\n\
          export {{ APP_SERVER_METHODS }} from './AppServerRequestMap.js';\n\
          export {{ PRODUCT_SLASH_COMMANDS }} from './ProductSlashCommands.js';\n\
          export type {{ AppServerMethod, AppServerMethodDefinition, AppServerRequest, AppServerRequestMap, AppServerResponse, MethodParams, MethodResult }} from './AppServerRequestMap.js';\n\

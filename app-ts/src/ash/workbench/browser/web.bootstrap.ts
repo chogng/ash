@@ -8,6 +8,7 @@ import { startWebWorkbench } from "./web.factory.js";
 import { showStartupError } from "./startupError.js";
 import { toDisposable, type IDisposable } from "../../base/common/lifecycle.js";
 import { addDisposableListener } from '../../base/browser/dom.js';
+import { AppServerWebWorkspaceClient } from '../services/workspaces/browser/appServerWebWorkspaceClient.js';
 
 declare const __ASH_WEB_APP_SERVER__: boolean;
 
@@ -36,6 +37,7 @@ async function startBrowserWorkbenchAsync(modeId: WorkbenchModeId, rendererCapab
 		}, {}, rendererCapabilities);
 		globalThis.ashWebWorkbenchHost = {
 			api: connected.api,
+			webWorkspaceClient: new AppServerWebWorkspaceClient(endpoint, transport.sessionToken, window),
 			workspace: Object.freeze({
 				id: connected.metadata.workspaceId,
 				uri: URI.file(connected.metadata.workspaceRoot),

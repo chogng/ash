@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "mocha";
 import {
 	MenuId,
+	registerAction2,
 } from "../../../../platform/actions/common/actions.js";
 import {
 	MenuService,
@@ -27,12 +28,13 @@ import {
 import {
 	ToggleDeveloperToolsCommandId,
 } from "../../../../workbench/electron-browser/actions/developerActions.js";
-import { OpenFolderCommandId } from "../../../../workbench/electron-browser/actions/workspaceActions.js";
+import { OpenFolderAction, OpenFolderCommandId } from '../../../../workbench/browser/actions/workspaceActions.js';
 import "../../../../workbench/electron-browser/desktop.contribution.js";
 import {
 	CommandService,
 } from "../../../../workbench/services/commands/common/commandService.js";
 import { IWorkspaceOpenService } from "../../../../workbench/services/workspaces/browser/workspaceOpenService.js";
+import { OpenFolderWorkspaceSupportContext } from '../../../../workbench/common/contextkeys.js';
 
 test("native host routes validate folder opening and developer tools", async () => {
 	let folderOpens = 0;
@@ -135,6 +137,7 @@ test("native host routes validate folder opening and developer tools", async () 
 });
 
 test("desktop commands are available from the command palette", async () => {
+	registerAction2(OpenFolderAction);
 	const services = new ServiceContainer();
 	let toggles = 0;
 	services.registerInstance(INativeHostService, {
@@ -163,6 +166,7 @@ test("desktop commands are available from the command palette", async () => {
 	});
 	using commands = new CommandService(services);
 	using contexts = new ContextKeyService();
+	OpenFolderWorkspaceSupportContext.bindTo(contexts).set(true);
 	const paletteActions = new MenuService(commands, contexts)
 		.getMenuActions(MenuId.CommandPalette)
 		.flatMap(([, actions]) => actions);

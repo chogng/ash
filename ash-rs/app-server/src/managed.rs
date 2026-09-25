@@ -76,12 +76,13 @@ pub(crate) fn run(profile_root: PathBuf) -> Result<(), String> {
             let registration = active_connections
                 .register(shutdown_stream)
                 .map_err(|error| error.to_string())?;
+            let web_registry = Arc::clone(&registry);
             thread::Builder::new()
                 .name("ash-local-app-server-connection".into())
                 .spawn(move || {
                     let _registration = registration;
                     if let Some(options) = connection.web.take() {
-                        if let Err(error) = web::serve(server, connection, options) {
+                        if let Err(error) = web::serve(server, web_registry, connection, options) {
                             eprintln!("Managed Web listener failed: {error}");
                         }
                         return;

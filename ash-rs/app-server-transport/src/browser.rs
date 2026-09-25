@@ -2,9 +2,11 @@
 
 use std::collections::BTreeMap;
 use std::convert::Infallible;
+use std::future::Future;
 use std::io;
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -50,6 +52,15 @@ pub struct BrowserOptions {
     pub assets: Option<PathBuf>,
     pub origin: Option<String>,
     pub session_directory: Option<PathBuf>,
+    pub workspace: Option<BrowserWorkspaceOperations>,
+}
+
+pub type BrowserWorkspaceFuture = Pin<Box<dyn Future<Output = io::Result<String>> + Send>>;
+
+/// Authenticated Web control operations supplied by the process that owns workspace grants.
+pub struct BrowserWorkspaceOperations {
+    pub list: Arc<dyn Fn(String) -> BrowserWorkspaceFuture + Send + Sync>,
+    pub open: Arc<dyn Fn(String) -> BrowserWorkspaceFuture + Send + Sync>,
 }
 
 /// Listener lease. Dropping it closes connections; the launcher owns persisted authorization revocation.
@@ -216,6 +227,7 @@ struct Boundary {
     origin: String,
     assets: Option<PathBuf>,
     authority: Mutex<Authority>,
+    workspace: Option<BrowserWorkspaceOperations>,
 }
 
 /// Starts an authenticated browser endpoint and a separately scoped JSONL connection per socket.
@@ -240,6 +252,7 @@ where
         host: address.to_string(),
         origin,
         assets,
+        workspace: options.workspace,
         authority: Mutex::new(Authority::load(
             options
                 .session_directory
@@ -312,7 +325,11 @@ where
     {
         return Ok(response(StatusCode::FORBIDDEN, "Invalid origin"));
     }
-    let result = if request.method() == Method::OPTIONS && request.uri().path() == "/ash/session" {
+    let result = if request.method() == Method::OPTIONS
+        && matches!(
+            request.uri().path(),
+            "/ash/session" | "/ash/workspace/list" | "/ash/workspace/open"
+        ) {
         let mut result = response(StatusCode::NO_CONTENT, "");
         result.headers_mut().insert(
             "access-control-allow-methods",
@@ -363,6 +380,47 @@ where
                 json_response(metadata(token.to_owned()))
             }
             _ => response(StatusCode::UNAUTHORIZED, "Session expired"),
+        }
+    } else if matches!(
+        request.uri().path(),
+        "/ash/workspace/list" | "/ash/workspace/open"
+    ) && request.method() == Method::POST
+    {
+        let token =
+            header(&request, "authorization").and_then(|value| value.strip_prefix("Bearer "));
+        if !token.is_some_and(|token| authorized(&boundary, token)) {
+            response(StatusCode::UNAUTHORIZED, "Session expired")
+        } else if let Some(workspace) = &boundary.workspace {
+            let operation = if request.uri().path() == "/ash/workspace/list" {
+                &workspace.list
+            } else {
+                &workspace.open
+            };
+            match tokio::time::timeout(
+                HANDSHAKE_TIMEOUT,
+                Limited::new(request.into_body(), 4096).collect(),
+            )
+            .await
+            {
+                Ok(Ok(body)) => match String::from_utf8(body.to_bytes().to_vec()) {
+                    Ok(body) => match operation(body).await {
+                        Ok(result) => json_response(result),
+                        Err(error) => response(
+                            match error.kind() {
+                                io::ErrorKind::InvalidInput => StatusCode::BAD_REQUEST,
+                                io::ErrorKind::NotFound => StatusCode::NOT_FOUND,
+                                io::ErrorKind::PermissionDenied => StatusCode::FORBIDDEN,
+                                _ => StatusCode::INTERNAL_SERVER_ERROR,
+                            },
+                            &error.to_string(),
+                        ),
+                    },
+                    Err(_) => response(StatusCode::BAD_REQUEST, "Invalid UTF-8 request"),
+                },
+                _ => response(StatusCode::BAD_REQUEST, "Invalid workspace request"),
+            }
+        } else {
+            response(StatusCode::NOT_FOUND, "Not found")
         }
     } else if request.uri().path() == "/ash/app-server" && request.method() == Method::GET {
         let protocol = header(&request, "sec-websocket-protocol")

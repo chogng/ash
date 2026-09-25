@@ -37378,6 +37378,77 @@
       ],
       "type": "object"
     },
+    "WebWorkspaceDirectory": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "path"
+      ],
+      "type": "object"
+    },
+    "WebWorkspaceListRequest": {
+      "additionalProperties": false,
+      "description": "A browser may inspect directory names before choosing a workspace grant.",
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "WebWorkspaceListResult": {
+      "additionalProperties": false,
+      "properties": {
+        "directories": {
+          "items": {
+            "$ref": "#/$defs/WebWorkspaceDirectory"
+          },
+          "type": "array"
+        },
+        "parent": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "directories"
+      ],
+      "type": "object"
+    },
+    "WebWorkspaceOpenRequest": {
+      "additionalProperties": false,
+      "description": "Approval is a distinct user action after the server has identified the selected directory.",
+      "properties": {
+        "approved": {
+          "type": "boolean"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "approved"
+      ],
+      "type": "object"
+    },
     "WorkspaceCheckpoint": {
       "description": "File restoration evidence. Missing coverage is explicit and cannot restore current files.",
       "oneOf": [
@@ -37463,12 +37534,24 @@
     },
     "webSessionInfo": {
       "$ref": "#/$defs/WebSessionInfo"
+    },
+    "webWorkspaceListRequest": {
+      "$ref": "#/$defs/WebWorkspaceListRequest"
+    },
+    "webWorkspaceListResult": {
+      "$ref": "#/$defs/WebWorkspaceListResult"
+    },
+    "webWorkspaceOpenRequest": {
+      "$ref": "#/$defs/WebWorkspaceOpenRequest"
     }
   },
   "required": [
     "listenInfo",
     "webListenInfo",
     "webSessionInfo",
+    "webWorkspaceListRequest",
+    "webWorkspaceListResult",
+    "webWorkspaceOpenRequest",
     "clientRequest",
     "clientResponse",
     "hostRequest",

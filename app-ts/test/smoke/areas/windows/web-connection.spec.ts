@@ -1,7 +1,7 @@
 import { expect, test } from '../../../automation/test.js';
 import type { IWebWorkbenchHost } from '../../../../src/ash/workbench/browser/web.api.js';
-import { join, relative } from 'node:path';
-import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
+import { basename, join, relative } from 'node:path';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { launchElectron } from '../../../automation/playwrightElectron.js';
 import type { ISandboxGlobals } from "../../../../src/ash/base/parts/sandbox/electron-browser/sandboxTypes.js";
@@ -73,6 +73,49 @@ test('authenticated Web cannot claim directory authority or read an ungranted wo
 		} catch { return 'denied'; }
 	});
 	expect(foreignRead).toBe('denied');
+});
+
+test('Web opens a selected server folder with explicit authorization and a separate session', async ({ target, workbench }) => {
+	test.skip(target.kind !== 'browser' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires the connected Code browser');
+	const page = workbench.page;
+	const original = await page.evaluate(() => {
+		const endpoint = new URL(sessionStorage.getItem('ash.appServer.endpoint')!);
+		return {
+			endpoint: endpoint.href,
+			token: sessionStorage.getItem(`ash.appServer.session:${endpoint.origin}`)!,
+			root: 'uri' in globalThis.ashWebWorkbenchHost!.workspace! ? globalThis.ashWebWorkbenchHost!.workspace!.uri.fsPath : '',
+		};
+	});
+	const selectedDirectory = join(original.root, 'selected-web-workspace');
+	await mkdir(selectedDirectory);
+	await writeFile(join(selectedDirectory, 'selected.txt'), 'selected workspace\n');
+	const denied = await page.request.post(new URL('/ash/workspace/open', original.endpoint).href, {
+		headers: { Origin: new URL(original.endpoint).origin, Authorization: `Bearer ${original.token}` },
+		data: { path: selectedDirectory, approved: false },
+	});
+	expect(denied.status()).toBe(403);
+	await page.getByRole('button', { name: 'Application menu' }).click();
+	await page.getByRole('menu').first().getByRole('menuitem', { name: 'File' }).click();
+	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Open Folder...' }).click();
+	const picker = page.getByRole('dialog', { name: 'Choose a server folder' });
+	await picker.getByText(basename(selectedDirectory), { exact: true }).click();
+	await picker.getByText('Select this folder', { exact: true }).click();
+	await page.getByRole('dialog', { name: 'Authorize Server Folder' }).getByRole('button', { name: 'Open Folder' }).click();
+	await page.waitForFunction(path => {
+		const workspace = globalThis.ashWebWorkbenchHost?.workspace;
+		return workspace && 'uri' in workspace && workspace.uri.fsPath === path;
+	}, selectedDirectory);
+	await workbench.waitForReady();
+	const file = await page.evaluate(async path => {
+		const host = globalThis.ashWebWorkbenchHost!;
+		return host.api.fs.readFile({ dirId: host.workspace!.id, path });
+	}, 'selected.txt');
+	expect(file.content).toBe('selected workspace\n');
+	const prior = await page.request.get(new URL('/ash/session', original.endpoint).href, {
+		headers: { Origin: new URL(original.endpoint).origin, Authorization: `Bearer ${original.token}` },
+	});
+	expect(prior.status()).toBe(200);
+	expect((await prior.json() as { workspaceRoot: string }).workspaceRoot).toBe(original.root);
 });
 
 test('built Web workbench reads workspace files and reconnects after reload', async ({ target, testWorkspace, workbench }) => {

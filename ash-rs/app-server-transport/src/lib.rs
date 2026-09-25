@@ -8,6 +8,8 @@ pub use browser::BrowserListener;
 pub use browser::BrowserOptions;
 pub use browser::browser_session_directory;
 pub use browser::start_browser_listener;
+pub use browser::BrowserWorkspaceOperations;
+pub use browser::BrowserWorkspaceFuture;
 
 pub use deadline_stream::DeadlineStream;
 pub use local_socket::LocalConnectionGuard;

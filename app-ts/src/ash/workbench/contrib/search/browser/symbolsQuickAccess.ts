@@ -1,25 +1,21 @@
-import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
-import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
-import { type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import { IQuickAccessController, QuickAccessRegistry, type IQuickAccessProvider } from '../../../../platform/quickinput/common/quickAccess.js';
+import { type IQuickAccessProvider } from '../../../../platform/quickinput/common/quickAccess.js';
 import type { IQuickPick, IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { type LanguageWorkspaceSymbol } from '../../../../editor/common/languages.js';
-import { localize, localize2 } from '../../../../nls.js';
 import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
-import { getWorkspaceSymbols } from '../../search/common/search.js';
+import { getWorkspaceSymbols } from '../common/search.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IWorkingCopyService } from '../../../services/workingCopy/common/workingCopyService.js';
 import { acceptWorkspaceSymbol } from './workspaceSymbolNavigation.js';
-
-export const ShowAllSymbolsCommandId = 'workbench.action.showAllSymbols';
 
 interface WorkspaceSymbolQuickPickItem extends IQuickPickItem {
 	readonly symbol: LanguageWorkspaceSymbol;
 }
 
-class WorkspaceSymbolsQuickAccessProvider implements IQuickAccessProvider {
+export class SymbolsQuickAccessProvider implements IQuickAccessProvider {
+	static readonly PREFIX = '@';
+
 	constructor(
 		@ILanguageFeaturesService private readonly languageFeatures: ILanguageFeaturesService,
 		@IEditorService private readonly editor: IEditorService,
@@ -57,29 +53,6 @@ class WorkspaceSymbolsQuickAccessProvider implements IQuickAccessProvider {
 		return disposables;
 	}
 }
-
-QuickAccessRegistry.register({
-	prefix: '@',
-	get placeholder() { return localize('quickAccess.symbolPlaceholder', 'Type the name of a symbol in the workspace'); },
-	get helpLabel() { return localize('quickAccess.workspaceSymbols', 'Symbols in Workspace'); },
-	ctor: WorkspaceSymbolsQuickAccessProvider,
-});
-
-registerAction2(class ShowAllSymbolsAction extends Action2 {
-	constructor() {
-		super({
-			id: ShowAllSymbolsCommandId,
-			get title() { return localize2('quickAccess.goToWorkspaceSymbol', 'Go to Symbol in Workspace'); },
-			f1: true,
-			menu: { id: MenuId.MenubarGoMenu, group: '2_navigation', order: 2 },
-			keybinding: { primary: Keybinding.single(logicalKey('t', { primaryKey: true })) },
-		});
-	}
-
-	override run(accessor: ServicesAccessor): void {
-		accessor.get(IQuickAccessController).show('@');
-	}
-});
 
 function resourceLabel(resource: LanguageWorkspaceSymbol['resource']): string {
 	const path = decodeURIComponent(resource.path);

@@ -7,6 +7,12 @@ export const WorkbenchStateContext = new RawContextKey<WorkbenchStateValue>('wor
 /** Number of root folders in the current workspace. */
 export const WorkspaceFolderCountContext = new RawContextKey<number>('workspaceFolderCount', 0);
 
+/** Whether this window can open a folder as its workspace. */
+export const OpenFolderWorkspaceSupportContext = new RawContextKey<boolean>('openFolderWorkspaceSupport', false);
+
+/** Whether this browser window can access an authorized local directory handle. */
+export const BrowserLocalFolderSupportContext = new RawContextKey<boolean>('browserLocalFolderSupport', false);
+
 /** Whether any registered working copy has unsaved changes. */
 export const DirtyWorkingCopiesContext = new RawContextKey<boolean>('dirtyWorkingCopies', false);
 
