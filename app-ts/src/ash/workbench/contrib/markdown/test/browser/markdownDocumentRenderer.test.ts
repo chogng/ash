@@ -41,15 +41,37 @@ test("workbench Markdown renders GFM structure through DOMPurify", () => {
 	dom.window.close();
 });
 
+test('workbench Markdown strips raw HTML by default and honors explicit HTML support', () => {
+	const dom = createDom();
+	const source = 'a<em>b</em>c and `<span>code</span>`';
+	const plain = new MarkdownElement({ ownerDocument: dom.window.document, markdown: source });
+	const supported = new MarkdownElement({
+		ownerDocument: dom.window.document,
+		markdown: { value: source, supportHtml: true },
+	});
+
+	assert.equal(plain.element.querySelector('em'), null);
+	assert.match(plain.element.textContent ?? '', /abc and <span>code<\/span>/);
+	assert.equal(supported.element.querySelector('em')?.textContent, 'b');
+	assert.match(supported.element.textContent ?? '', /abc and <span>code<\/span>/);
+
+	plain.dispose();
+	supported.dispose();
+	dom.window.close();
+});
+
 test("Markdown sanitization rejects executable markup and unsafe URLs", () => {
 	const dom = createDom();
-	const html = renderWorkbenchMarkdown([
-		"<script>globalThis.compromised = true</script>",
-		"<img src=x onerror=\"globalThis.compromised = true\">",
-		"[unsafe](javascript:alert(1))",
-		"![svg](data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=)",
-		"[safe](https://example.com/docs)",
-	].join("\n\n"));
+	const html = renderWorkbenchMarkdown({
+		value: [
+			"<script>globalThis.compromised = true</script>",
+			"<img src=x onerror=\"globalThis.compromised = true\">",
+			"[unsafe](javascript:alert(1))",
+			"![svg](data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=)",
+			"[safe](https://example.com/docs)",
+		].join("\n\n"),
+		supportHtml: true,
+	});
 	const safeHtml = sanitizeMarkdownHtmlToString({
 		ownerDocument: dom.window.document,
 	}, html);

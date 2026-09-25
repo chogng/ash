@@ -1,6 +1,7 @@
 import '../../../../test/browser/testEditorDom.js';
 import { browserEnvironment as environment } from '../../../../test/browser/testEditorDom.js';
 import { h } from '../../../../../base/browser/dom.js';
+import { MarkdownString } from '../../../../../base/common/htmlContent.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { setARIAContainer } from '../../../../../base/browser/ui/aria/aria.js';
@@ -43,6 +44,11 @@ test('read-only edit attempts use MessageController and close after cursor movem
 	assert.equal(messages?.isVisible(), false);
 	messages.showMessage('Closing message', new Position(1, 1));
 	assert.equal(messages.isVisible(), true);
+	messages.showMessage(new MarkdownString('a<em>b</em>c'), new Position(1, 1));
+	assert.equal(environment.window.document.querySelector('.stanza-editor-overlay-message em'), null);
+	assert.match(environment.window.document.querySelector('.stanza-editor-overlay-message')?.textContent ?? '', /abc/);
+	messages.showMessage(new MarkdownString('a<em>b</em>c', { supportHtml: true }), new Position(1, 1));
+	assert.equal(environment.window.document.querySelector('.stanza-editor-overlay-message em')?.textContent, 'b');
 	messages.dispose();
 	assert.equal(messages.isVisible(), false);
 	assert.equal(environment.window.document.body.querySelector('.stanza-editor-overlay-message'), null);

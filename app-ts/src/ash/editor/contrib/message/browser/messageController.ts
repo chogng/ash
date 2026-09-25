@@ -65,7 +65,6 @@ export class MessageController extends Disposable implements IEditorContribution
 	public showMessage(message: IMarkdownString | string, position: IPosition): void {
 		const text = isMarkdownString(message) ? message.value : message;
 		if (typeof text !== 'string' || text.trim().length === 0) throw new TypeError('Editor message must not be empty');
-		alert(text);
 		this.closeTimer.clear();
 		this.blurTimer.clear();
 		this.listeners.clear();
@@ -77,7 +76,7 @@ export class MessageController extends Disposable implements IEditorContribution
 		if (isMarkdownString(message)) {
 			const markdown = new MarkdownElement({
 				ownerDocument: this.editor.getContainerDomNode().ownerDocument,
-				markdown: message.value,
+				markdown: message,
 				linkHandler: target => {
 					this.closeMessage();
 					const opener = this.editor.invokeWithinContext(accessor => accessor.getOptional(IOpenerService));
@@ -87,6 +86,7 @@ export class MessageController extends Disposable implements IEditorContribution
 			content = markdown.element;
 			contentOwner = markdown;
 		}
+		alert(typeof content === 'string' ? content : content.textContent ?? '');
 		const widget = new MessageWidget(this.editor, position, content, contentOwner);
 		this.widget.value = widget;
 		this.setVisible(true);

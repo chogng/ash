@@ -1,15 +1,16 @@
-import { marked } from "marked";
+import { Marked, marked } from "marked";
 import { addDisposableListener, reset, h } from "./dom.js";
 import {
 	type HtmlSanitizerConfig,
 	sanitizeHtmlToFragment,
 } from "./domSanitize.js";
 import { Checkbox } from "./ui/toggle/toggle.js";
+import type { IMarkdownString } from "../common/htmlContent.js";
 import { Disposable, DisposableStore, toDisposable } from "../common/lifecycle.js";
 
 export interface MarkdownElementOptions {
 	readonly ownerDocument: Document;
-	readonly markdown?: string;
+	readonly markdown?: string | IMarkdownString;
 	readonly breaks?: boolean;
 	readonly linkHandler?: (href: string) => void;
 }
@@ -76,6 +77,8 @@ const SANITIZER_CONFIG: HtmlSanitizerConfig = {
 };
 const SAFE_DATA_IMAGE =
 	/^data:image\/(?:png|jpeg|gif|webp);base64,[a-z0-9+/]+={0,2}$/i;
+// Parser extensions persist, so keep the default HTML policy in its own instance.
+const markedWithoutHtml = new Marked({ renderer: { html: () => '' } });
 
 /**
  * Renders short Workbench Markdown into a normal DOM element.
@@ -118,7 +121,7 @@ export class MarkdownElement extends Disposable {
 		this.setMarkdown(options.markdown ?? "");
 	}
 
-	setMarkdown(markdown: string): void {
+	setMarkdown(markdown: string | IMarkdownString): void {
 		this.requireActive();
 		const rawHtml = renderWorkbenchMarkdown(markdown, this.breaks);
 		const fragment = sanitizeMarkdownHtmlToFragment({
@@ -145,11 +148,13 @@ export class MarkdownElement extends Disposable {
 
 /** Parses Workbench Markdown without trusting the returned HTML. */
 export function renderWorkbenchMarkdown(
-	markdown: string,
+	markdown: string | IMarkdownString,
 	breaks = false,
 ): string {
-	validateMarkdown(markdown);
-	const result = marked.parse(markdown, {
+	const value = typeof markdown === 'string' ? markdown : markdown.value;
+	validateMarkdown(value);
+	const parser = typeof markdown !== 'string' && markdown.supportHtml ? marked : markedWithoutHtml;
+	const result = parser.parse(value, {
 		async: false,
 		breaks,
 		gfm: true,

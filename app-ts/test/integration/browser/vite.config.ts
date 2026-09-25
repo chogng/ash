@@ -16,6 +16,7 @@ export default defineConfig({
 				language: resolve(import.meta.dirname, "language.html"),
 				marketplace: resolve(import.meta.dirname, "marketplace.html"),
 				advisor: resolve(import.meta.dirname, "advisor.html"),
+				markdown: resolve(import.meta.dirname, 'markdown.html'),
 				themes: resolve(import.meta.dirname, "themes.html"),
 				webTransport: resolve(import.meta.dirname, 'webTransport.html'),
 				dialog: resolve(import.meta.dirname, "dialog.html"),
