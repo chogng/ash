@@ -256,11 +256,13 @@ test("browser titlebar uses one icon trigger for the application menus", () => {
 	}));
 
 	let menuLabels: readonly string[] = [];
+	let openSubmenusImmediatelyOnHover: boolean | undefined;
 	const menuContextService: IContextMenuService = {
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
 		showContextMenu(options) {
 			menuLabels = options.getActions?.().map((action) => action.label) ?? [];
+			openSubmenusImmediatelyOnHover = options.openSubmenusImmediatelyOnHover;
 		},
 		hideContextMenu() {},
 	};
@@ -278,5 +280,6 @@ test("browser titlebar uses one icon trigger for the application menus", () => {
 
 	button.click();
 	assert.deepEqual(menuLabels, ["File"]);
+	assert.equal(openSubmenusImmediatelyOnHover, true);
 	assert.equal(button.getAttribute("aria-expanded"), "true");
 });

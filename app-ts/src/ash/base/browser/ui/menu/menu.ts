@@ -22,6 +22,7 @@ export interface MenuActionViewItemOptions {
 	readonly actionContext?: unknown;
 	readonly checkedActionRepresentation?: "radio" | "checkbox";
 	readonly onWillOpenSubmenu?: (item: ActionViewItem) => void;
+	readonly openSubmenusImmediatelyOnHover?: boolean;
 }
 
 function prependMenuLeadingSlot(
@@ -114,6 +115,7 @@ class SubmenuMenuActionViewItem extends ButtonActionViewItem {
 	private readonly actionRunner: IActionRunner | undefined;
 	private readonly actionContext: unknown;
 	private readonly onWillOpenSubmenu: ((item: ActionViewItem) => void) | undefined;
+	private readonly openImmediatelyOnHover: boolean;
 	private readonly showScheduler = this._register(new RunOnceScheduler(() => {
 		if (this.pointerInside) this.openSubmenu(false);
 	}, 250));
@@ -140,6 +142,7 @@ class SubmenuMenuActionViewItem extends ButtonActionViewItem {
 		this.actionRunner = options.actionRunner;
 		this.actionContext = options.actionContext;
 		this.onWillOpenSubmenu = options.onWillOpenSubmenu;
+		this.openImmediatelyOnHover = options.openSubmenusImmediatelyOnHover ?? false;
 	}
 
 	override render(container: HTMLElement): void {
@@ -185,6 +188,9 @@ class SubmenuMenuActionViewItem extends ButtonActionViewItem {
 		indicator.className = "ash-submenu-indicator";
 		appendIcon(Lxicon.chevronRight, indicator);
 		this.button.domNode.append(indicator);
+		this._register(addDisposableListener(container, "mouseenter", () => {
+			if (this.openImmediatelyOnHover) this.openFromPointer();
+		}));
 		this._register(addDisposableListener(container, "mousemove", (event) => {
 			const previous = this.lastPointerPosition;
 			// Some input paths report zero deltas, so compare positions before ignoring movement.
@@ -193,9 +199,7 @@ class SubmenuMenuActionViewItem extends ButtonActionViewItem {
 				(previous && (previous.x !== event.clientX || previous.y !== event.clientY))
 			);
 			this.lastPointerPosition = { x: event.clientX, y: event.clientY };
-			if (!moved || this.pointerInside || !this.action.enabled) return;
-			this.pointerInside = true;
-			this.showScheduler.schedule();
+			if (moved) this.openFromPointer();
 		}));
 		this._register(addDisposableListener(container, "mouseleave", () => {
 			this.pointerInside = false;
@@ -210,6 +214,13 @@ class SubmenuMenuActionViewItem extends ButtonActionViewItem {
 
 	protected override runAction(): void {
 		this.openSubmenu(true);
+	}
+
+	private openFromPointer(): void {
+		if (this.pointerInside || !this.action.enabled) return;
+		this.pointerInside = true;
+		if (this.openImmediatelyOnHover) this.openSubmenu(false);
+		else this.showScheduler.schedule();
 	}
 
 	private openSubmenu(focusFirst: boolean): void {
@@ -273,6 +284,8 @@ function createMenuActionViewItem(
 
 export interface MenuOptions {
 	readonly actions: readonly IAction[];
+	/** Applies only to submenu actions in this menu, not nested menus they create. */
+	readonly openSubmenusImmediatelyOnHover?: boolean;
 	readonly contextViewContainer?: HTMLElement;
 	readonly onDidSelect?: () => void;
 	readonly onDidRequestClose?: () => void;
@@ -320,6 +333,7 @@ export class Menu extends Disposable {
 		for (const action of options.actions) {
 			const itemOptions: MenuActionViewItemOptions = {
 				onDidSelect: options.onDidSelect,
+				openSubmenusImmediatelyOnHover: options.openSubmenusImmediatelyOnHover,
 				submenuLayer: (options.layer ?? 20) + 1,
 				contextViewContainer: options.contextViewContainer,
 				keybinding: options.getKeybinding?.(action),

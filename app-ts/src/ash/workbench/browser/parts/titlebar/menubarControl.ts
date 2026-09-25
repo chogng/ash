@@ -110,6 +110,8 @@ export class BrowserMenubarControl extends Disposable
 		this.contextMenuService.showContextMenu({
 			getAnchor: () => this.button.domNode,
 			getActions: () => actions,
+			// These categories switch like top-level menubar entries once the application menu is open.
+			openSubmenusImmediatelyOnHover: true,
 			onHide: () => {
 				this.active = false;
 				this.button.toggleClassName("active", false);

@@ -230,6 +230,79 @@ test("Menu delays pointer expansion and switches the expanded submenu", async ()
 	}
 });
 
+test("Menu opens immediate root submenus on pointer entry without changing nested hover delay", async () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	mock.timers.enable({ apis: ["setTimeout"] });
+	Object.defineProperty(dom.window.Element.prototype, "scrollTo", {
+		configurable: true,
+		value(): void {},
+	});
+	Object.defineProperty(globalThis, "window", {
+		configurable: true,
+		value: dom.window,
+	});
+	Object.defineProperty(globalThis, "Node", {
+		configurable: true,
+		value: dom.window.Node,
+	});
+	const [{ SubmenuAction }, { Menu }] = await Promise.all([
+		import("../../common/actions.js"),
+		import("../../browser/ui/menu/menu.js"),
+	]);
+	const menu = new Menu(dom.window.document.body, {
+		actions: [
+			new SubmenuAction("first", "First", [
+				new SubmenuAction("nested", "Nested", [{
+					id: "nested.child",
+					label: "Child",
+					tooltip: "Child",
+					enabled: true,
+					run(): void {},
+				}]),
+			]),
+			new SubmenuAction("second", "Second", []),
+		],
+		openSubmenusImmediatelyOnHover: true,
+	});
+	const first = menu.element.querySelector<HTMLButtonElement>('[data-action-id="first"] button')!;
+	const second = menu.element.querySelector<HTMLButtonElement>('[data-action-id="second"] button')!;
+	const enter = (button: HTMLButtonElement): void => {
+		button.parentElement!.dispatchEvent(new dom.window.MouseEvent("mouseenter"));
+	};
+	const leave = (button: HTMLButtonElement): void => {
+		button.parentElement!.dispatchEvent(new dom.window.MouseEvent("mouseleave"));
+	};
+
+	try {
+		enter(first);
+		assert.equal(first.getAttribute("aria-expanded"), "true");
+
+		leave(first);
+		enter(second);
+		assert.equal(first.getAttribute("aria-expanded"), "false");
+		assert.equal(second.getAttribute("aria-expanded"), "true");
+
+		leave(second);
+		enter(first);
+		const nested = dom.window.document.querySelector<HTMLButtonElement>('.ash-context-view-menu:not([hidden]) [data-action-id="nested"] button')!;
+		enter(nested);
+		assert.equal(nested.getAttribute("aria-expanded"), "false");
+		const movement = new dom.window.MouseEvent("mousemove", { bubbles: true });
+		Object.defineProperty(movement, "movementX", { value: 1 });
+		nested.dispatchEvent(movement);
+		mock.timers.tick(249);
+		assert.equal(nested.getAttribute("aria-expanded"), "false");
+		mock.timers.tick(1);
+		assert.equal(nested.getAttribute("aria-expanded"), "true");
+	} finally {
+		menu.dispose();
+		dom.window.close();
+		Reflect.deleteProperty(globalThis, "window");
+		Reflect.deleteProperty(globalThis, "Node");
+		mock.timers.reset();
+	}
+});
+
 test("Menu preserves submenu focus and closes after focus leaves or the parent scrolls", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	mock.timers.enable({ apis: ["setTimeout"] });

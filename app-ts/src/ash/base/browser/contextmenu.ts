@@ -43,6 +43,7 @@ export interface IContextMenuDelegate {
 	readonly anchorAxisAlignment?: AnchorAxisAlignment;
 	readonly anchorPosition?: AnchorPosition;
 	readonly layer?: number;
+	readonly openSubmenusImmediatelyOnHover?: boolean;
 }
 
 /**

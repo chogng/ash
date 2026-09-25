@@ -60,6 +60,7 @@ export class ContextMenuHandler extends Disposable {
 
 		const menu = disposables.add(new Menu(this.contextViewService.container, {
 			actions,
+			openSubmenusImmediatelyOnHover: delegate.openSubmenusImmediatelyOnHover,
 			contextViewContainer: this.contextViewService.container,
 			layer: delegate.layer ?? 10,
 			className: delegate.getMenuClassName?.(),
