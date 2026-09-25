@@ -3,6 +3,7 @@ import { DisposableStore } from "../../../../base/common/lifecycle.js";
 import { localizedString } from "../../../../platform/action/common/action.js";
 import { Action2, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
 import { Keybinding, logicalKey } from "../../../../base/common/keybindings.js";
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import type { ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
 import { IQuickInputService, type IQuickPickItem } from "../../../../platform/quickinput/common/quickInput.js";
 import { IQuickAccessController } from "../../../../platform/quickinput/common/quickAccess.js";
@@ -14,6 +15,7 @@ import { EditorsVisibleContext } from "../../../common/contextkeys.js";
 import { IEditorPartsService } from "./editorParts.js";
 import { AllEditorsByMostRecentlyUsedQuickAccess } from "./editorQuickAccess.js";
 import { IBreadcrumbsService } from "./breadcrumbs.js";
+import { IHistoryService } from '../../../services/history/common/history.js';
 
 export const FocusBreadcrumbsCommandId = "workbench.action.focusBreadcrumbs";
 export const ToggleEditorGroupLockCommandId = "workbench.action.toggleEditorGroupLock";
@@ -132,14 +134,25 @@ registerAction2(class NavigateEditorBackAction extends Action2 {
 	constructor() {
 		super({
 			id: NavigateEditorBackCommandId,
-			title: localizedString("ash", "workbench.navigateEditorBack", "Go Back in Editor History"),
+			title: localizedString("ash", "workbench.navigateEditorBack", "Go Back"),
+			icon: Lxicon.arrowLeft,
+			precondition: ContextKeyExpr.has('canNavigateBack'),
 			f1: true,
-			menu: { id: MenuId.TouchBarContext, group: "navigation", order: 0 },
+			keybinding: {
+				primary: Keybinding.single(logicalKey('ArrowLeft', { altKey: true })),
+				linux: { primary: Keybinding.single(logicalKey('-', { ctrlKey: true, altKey: true })) },
+				mac: { primary: Keybinding.single(logicalKey('-', { ctrlKey: true })) },
+			},
+			menu: [
+				{ id: MenuId.TouchBarContext, group: 'navigation', order: 0 },
+				{ id: MenuId.MenubarGoMenu, group: '1_history_nav', order: 1 },
+				{ id: MenuId.CommandCenter, group: 'navigation', order: 1 },
+			],
 		});
 	}
 
-	override run(accessor: ServicesAccessor): void {
-		accessor.get(IEditorPart).navigateEditorHistory(-1);
+	override run(accessor: ServicesAccessor): Promise<void> {
+		return accessor.get(IHistoryService).goBack();
 	}
 });
 
@@ -147,14 +160,25 @@ registerAction2(class NavigateEditorForwardAction extends Action2 {
 	constructor() {
 		super({
 			id: NavigateEditorForwardCommandId,
-			title: localizedString("ash", "workbench.navigateEditorForward", "Go Forward in Editor History"),
+			title: localizedString("ash", "workbench.navigateEditorForward", "Go Forward"),
+			icon: Lxicon.arrowRight,
+			precondition: ContextKeyExpr.has('canNavigateForward'),
 			f1: true,
-			menu: { id: MenuId.TouchBarContext, group: "navigation", order: 1 },
+			keybinding: {
+				primary: Keybinding.single(logicalKey('ArrowRight', { altKey: true })),
+				linux: { primary: Keybinding.single(logicalKey('-', { ctrlKey: true, shiftKey: true })) },
+				mac: { primary: Keybinding.single(logicalKey('-', { ctrlKey: true, shiftKey: true })) },
+			},
+			menu: [
+				{ id: MenuId.TouchBarContext, group: 'navigation', order: 1 },
+				{ id: MenuId.MenubarGoMenu, group: '1_history_nav', order: 2 },
+				{ id: MenuId.CommandCenter, group: 'navigation', order: 2 },
+			],
 		});
 	}
 
-	override run(accessor: ServicesAccessor): void {
-		accessor.get(IEditorPart).navigateEditorHistory(1);
+	override run(accessor: ServicesAccessor): Promise<void> {
+		return accessor.get(IHistoryService).goForward();
 	}
 });
 

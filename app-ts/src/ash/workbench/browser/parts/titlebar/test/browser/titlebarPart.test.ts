@@ -31,9 +31,10 @@ for (const [name, value] of Object.entries({
 const { DisposableStore } = await import(
 	"../../../../../../base/common/lifecycle.js"
 );
-const { MenuId, MenusRegistry } = await import(
+const { MenuId, MenusRegistry, IMenuService } = await import(
 	"../../../../../../platform/actions/common/actions.js"
 );
+const { IContextMenuService: ContextMenuServiceId } = await import('../../../../../../platform/contextview/browser/contextView.js');
 const { MenuService } = await import(
 	"../../../../../../platform/actions/common/menuService.js"
 );
@@ -76,6 +77,8 @@ test("titlebar owns a menu-driven actions container", async () => {
 	services.registerInstance(IQuickAccessController, { onDidChangeVisibility: Event.None, show() {} });
 	const contextKeyService = disposables.add(new ContextKeyService());
 	const menuService = new MenuService(commandService, contextKeyService);
+	services.registerInstance(IMenuService, menuService);
+	services.registerInstance(ContextMenuServiceId, contextMenuService);
 	let runs = 0;
 	const commandId = "test.titlebar.action";
 	disposables.add(CommandsRegistry.register(commandId, () => {
@@ -165,6 +168,8 @@ test("titlebar renders its product icon, command center, and application menu", 
 	services.registerInstance(IQuickAccessController, { onDidChangeVisibility: Event.None, show() {} });
 	const contextKeyService = disposables.add(new ContextKeyService());
 	const menuService = new MenuService(commandService, contextKeyService);
+	services.registerInstance(IMenuService, menuService);
+	services.registerInstance(ContextMenuServiceId, contextMenuService);
 	const localeChanged = disposables.add(new Emitter<void>());
 	let commandCenterLabel = "Search commands";
 	const localizationService: ILocalizationService = {
@@ -178,6 +183,16 @@ test("titlebar renders its product icon, command center, and application menu", 
 			title: "Left title action",
 		},
 		group: "navigation",
+	}));
+	disposables.add(MenusRegistry.appendMenuItem(MenuId.CommandCenter, {
+		command: { id: 'test.titlebar.back', title: 'Go Back' },
+		group: 'navigation',
+		order: 1,
+	}));
+	disposables.add(MenusRegistry.appendMenuItem(MenuId.CommandCenter, {
+		command: { id: 'test.titlebar.forward', title: 'Go Forward' },
+		group: 'navigation',
+		order: 2,
 	}));
 	const menubarElement = h(ownerDocument, "nav");
 	const menubar: IMenubarControl = {
@@ -215,20 +230,23 @@ test("titlebar renders its product icon, command center, and application menu", 
 	assert.equal(titleChildren.length, 3);
 	assert.equal(titlebar.domNode.querySelector(".ash-titlebar-label"), null);
 	const commandCenter = titlebar.domNode.querySelector<HTMLButtonElement>(".ash-titlebar-command-center-button");
+	const navigation = titlebar.domNode.querySelector('.ash-titlebar-command-center-navigation');
+	assert.deepEqual([...navigation?.querySelectorAll('button') ?? []].map(button => button.textContent), ['Go Back', 'Go Forward']);
+	assert.equal(navigation?.nextElementSibling, commandCenter);
 	assert.equal(commandCenter?.textContent, "Search commands");
 	assert.equal(commandCenter?.getAttribute("aria-label"), "Search commands");
 	assert.equal(commandCenter?.type, "button");
 	assert.equal(commandCenter?.getAttribute('aria-haspopup'), 'dialog');
 	assert.equal(commandCenter?.getAttribute('aria-expanded'), 'false');
-	assert.equal(commandCenter?.parentElement?.previousElementSibling?.className, "ash-workbench-part-title");
-	assert.equal(commandCenter?.parentElement?.nextElementSibling?.className, "ash-workbench-part-content");
+	assert.equal(commandCenter?.closest(".ash-titlebar-center")?.previousElementSibling?.className, "ash-workbench-part-title");
+	assert.equal(commandCenter?.closest(".ash-titlebar-center")?.nextElementSibling?.className, "ash-workbench-part-content");
 	commandCenterLabel = "搜索命令";
 	localeChanged.fire();
 	assert.equal(commandCenter?.textContent, "搜索命令");
 	assert.equal(commandCenter?.getAttribute("aria-label"), "搜索命令");
 });
 
-test("browser titlebar uses one icon trigger for the application menus", () => {
+test("browser titlebar hosts the application menu in an ActionBar", () => {
 	using disposables = new DisposableStore();
 	const ownerDocument = browserEnvironment.window.document;
 	ownerDocument.body.replaceChildren();
@@ -274,11 +292,21 @@ test("browser titlebar uses one icon trigger for the application menus", () => {
 
 	const button = menubar.domNode.querySelector("button");
 	assert.ok(button);
+	assert.equal(menubar.domNode.classList.contains("ash-action-bar"), true);
+	assert.equal(menubar.domNode.getAttribute("role"), "toolbar");
+	assert.equal(menubar.domNode.getAttribute("aria-label"), "Application menu");
+	assert.equal(button.closest(".ash-action-view-item")?.parentElement, menubar.domNode);
+	assert.equal(button.tabIndex, 0);
 	assert.equal(button.title, "Application menu");
 	assert.ok(button.querySelector(".ash-icon"));
 	assert.equal(menubar.domNode.querySelectorAll("button").length, 1);
 
-	button.click();
+	button.focus();
+	button.dispatchEvent(new browserEnvironment.window.KeyboardEvent("keydown", {
+		key: "ArrowDown",
+		bubbles: true,
+		cancelable: true,
+	}));
 	assert.deepEqual(menuLabels, ["File"]);
 	assert.equal(openSubmenusImmediatelyOnHover, true);
 	assert.equal(button.getAttribute("aria-expanded"), "true");

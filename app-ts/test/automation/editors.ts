@@ -6,13 +6,15 @@ export class EditorGroup {
 	readonly title: Locator;
 	readonly content: Locator;
 	readonly watermark: Locator;
+	readonly welcome: Locator;
 	readonly tabs: Locator;
 
 	constructor(element: Locator) {
 		this.element = element;
 		this.title = element.locator(".ash-editor-title-control");
 		this.content = element.locator(".ash-editor-group-content");
-		this.watermark = this.content.locator(".ash-editor-group-watermark");
+		this.watermark = this.content.locator('.ash-editor-group-watermark-shortcuts');
+		this.welcome = this.content.locator('.ash-getting-started');
 		this.tabs = element.getByRole("tab");
 	}
 

@@ -12,17 +12,15 @@ import type { IEditorPane } from './editorPane.js';
 import { EditorGroupWatermark } from './editorGroupWatermark.js';
 import { EditorPanes, type EditorPaneInstance } from './editorPanes.js';
 import { EditorTitleControl } from './editorTitleControl.js';
-import { EditorWelcome, type IEditorWelcomeProject } from '../../../contrib/files/browser/editorWelcome.js';
 
-/** Owns the title, welcome content, and pane container for one editor group. */
+/** Owns the title, empty-group shortcuts, and pane container for one editor group. */
 export class EditorGroupView extends Disposable {
 	readonly domNode: HTMLElement;
 	readonly panes: EditorPanes;
 	readonly scopedContextKeyService: IScopedContextKeyService | undefined;
 	private readonly contentDomNode: HTMLDivElement;
 	private readonly titleControl: EditorTitleControl;
-	private readonly welcome: EditorWelcome;
-	private welcomeVisible: boolean;
+	private readonly watermark: EditorGroupWatermark | undefined;
 
 	constructor(
 		container: HTMLElement,
@@ -58,15 +56,9 @@ export class EditorGroupView extends Disposable {
 		this.contentDomNode = h(ownerDocument, 'div');
 		this.contentDomNode.className = 'ash-editor-group-content';
 		this.panes = this._register(new EditorPanes(this.contentDomNode));
-		const shortcuts = options.keybindingService
+		this.watermark = options.keybindingService
 			? this._register(new EditorGroupWatermark(this.contentDomNode, options.keybindingService))
 			: undefined;
-		this.welcome = this._register(new EditorWelcome(this.contentDomNode, {
-			...options.welcome,
-			...(shortcuts ? { shortcuts: shortcuts.domNode } : {}),
-		}));
-		this.welcomeVisible = options.welcomeVisible ?? true;
-		this.welcome.element.hidden = !this.welcomeVisible;
 		this.domNode.append(this.titleControl.domNode, this.contentDomNode);
 	}
 
@@ -86,23 +78,16 @@ export class EditorGroupView extends Disposable {
 		this.titleControl.setEditors(editors, activeInput, activePane, selectedIds);
 	}
 
-	setWelcomeRecentProjects(projects: readonly IEditorWelcomeProject[]): void {
-		this.welcome.setRecentProjects(projects);
-	}
-
-	setWelcomeVisible(visible: boolean): boolean {
-		if (this.welcomeVisible === visible) return false;
-		this.welcomeVisible = visible;
-		return true;
-	}
-
 	renderContent(instances: readonly EditorPaneInstance[], pending: EditorPaneInstance | undefined, ordinaryContent: Element | undefined): void {
 		const children: Element[] = [];
 		if (ordinaryContent) {
 			children.push(ordinaryContent);
 		} else {
-			this.welcome.element.hidden = !this.welcomeVisible || instances.length > 0;
-			children.push(this.welcome.element, ...instances.map(instance => instance.domNode));
+			if (this.watermark) {
+				this.watermark.domNode.hidden = instances.length > 0;
+				children.push(this.watermark.domNode);
+			}
+			children.push(...instances.map(instance => instance.domNode));
 		}
 		if (pending) children.push(pending.domNode);
 		this.contentDomNode.replaceChildren(...children);

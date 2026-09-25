@@ -1,6 +1,6 @@
 import { registerColor } from '../../../../platform/theme/common/colorUtils.js';
 
-const owner = 'workbench.files';
+const owner = 'workbench.welcomeGettingStarted';
 
 registerColor('editorWelcome.cardBackground', {
 	dark: '#303030', light: '#f3f3f3', highContrastDark: '#000000', highContrastLight: '#ffffff',

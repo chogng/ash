@@ -9,6 +9,7 @@ import type { TextModel } from "../../../../editor/common/model/textModel.js";
 import type { ILanguageFeaturesService } from "../../../../editor/common/services/languageFeatures.js";
 import { OutlineModel } from "../../../../editor/contrib/documentSymbols/browser/outlineModel.js";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
+import { AnchorPosition } from "../../../../base/browser/ui/contextview/contextview.js";
 import { MenuWorkbenchToolBar, WorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
 import { type IMenuService, MenuId } from "../../../../platform/actions/common/actions.js";
 import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
@@ -69,6 +70,7 @@ export class EditorHeaderControl extends Disposable {
 				MenuId.EditorTitle,
 				{
 					highlightToggledItems: true,
+					hoverAnchorPosition: AnchorPosition.Below,
 					contextKeyService: actions.contextKeyService,
 				},
 			)
@@ -78,6 +80,7 @@ export class EditorHeaderControl extends Disposable {
 				{
 					ariaLabel: "Editor actions",
 					highlightToggledItems: true,
+					hoverAnchorPosition: AnchorPosition.Below,
 				},
 			));
 		this._register(toDisposable(() => actionsContainer.remove()));

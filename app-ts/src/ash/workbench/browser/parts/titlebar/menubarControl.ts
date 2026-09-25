@@ -1,7 +1,8 @@
 import "./menubarControl.css";
-import { addDisposableListener, h } from "../../../../base/browser/dom.js";
-import { Button } from "../../../../base/browser/ui/button/button.js";
-import { SubmenuAction } from "../../../../base/common/actions.js";
+import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { ActionBar } from "../../../../base/browser/ui/actionbar/actionbar.js";
+import { ButtonActionViewItem } from "../../../../base/browser/ui/actionbar/actionViewItems.js";
+import { SubmenuAction, type IAction } from "../../../../base/common/actions.js";
 import { Disposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
 import { type IMenu, type IMenuService, MenuId } from "../../../../platform/actions/common/actions.js";
@@ -13,12 +14,34 @@ export interface IMenubarControl extends IDisposable {
 	readonly domNode: HTMLElement | undefined;
 }
 
+class ApplicationMenuActionViewItem extends ButtonActionViewItem {
+	public override render(container: HTMLElement): void {
+		super.render(container);
+		this.button.toggleClassName("ash-menubar-item", true);
+		this.button.domNode.setAttribute("aria-haspopup", "menu");
+		this.button.domNode.setAttribute("aria-expanded", "false");
+	}
+
+	public get anchor(): HTMLElement { return this.button.domNode; }
+
+	public setLabel(label: string): void {
+		this.button.label = label;
+		this.button.domNode.setAttribute("aria-label", label);
+		this.button.setTitle(label);
+	}
+
+	public setExpanded(expanded: boolean): void {
+		this.button.toggleClassName("active", expanded);
+		this.button.domNode.setAttribute("aria-expanded", String(expanded));
+	}
+}
+
 /** Compact application-menu trigger used by web, Windows, and Linux. */
 export class BrowserMenubarControl extends Disposable
 	implements IMenubarControl {
 	private readonly menu: IMenu;
 	private readonly contextMenuService: IContextMenuService;
-	private readonly button: Button;
+	private readonly menuItem: ApplicationMenuActionViewItem;
 	private active = false;
 
 	readonly domNode: HTMLElement;
@@ -30,38 +53,35 @@ export class BrowserMenubarControl extends Disposable
 		localizationService?: ILocalizationService,
 	) {
 		super();
-		const ownerDocument = container.ownerDocument;
 		this.contextMenuService = contextMenuService;
-		this.domNode = h(ownerDocument, "nav");
-		this.domNode.className = "ash-menubar";
 		const applicationMenuLabel = () => localize(localizationService, { bundle: "ash.regions", key: "applicationMenu" }, "Application menu");
-		this.domNode.setAttribute("aria-label", applicationMenuLabel());
-		container.append(this.domNode);
-		this._register(toDisposable(() => this.domNode.remove()));
-
 		this.menu = this._register(menuService.createMenu(MenuId.MenubarMainMenu));
-		this.button = this._register(new Button(this.domNode, {
+		const action: IAction = {
+			id: "ash.applicationMenu",
 			label: applicationMenuLabel(),
-			title: applicationMenuLabel(),
+			tooltip: applicationMenuLabel(),
 			icon: Lxicon.menu,
-			onClick: () => this.toggleMenu(),
+			enabled: true,
+			run: () => this.toggleMenu(),
+		};
+		this.menuItem = new ApplicationMenuActionViewItem(action);
+		const actionBar = this._register(new ActionBar(container, {
+			actions: [action],
+			ariaLabel: applicationMenuLabel(),
+			actionViewItemProvider: () => this.menuItem,
 		}));
-		this.button.domNode.setAttribute("aria-label", applicationMenuLabel());
+		this.domNode = actionBar.element;
+		this.domNode.classList.add("ash-menubar");
 		if (localizationService) this._register(localizationService.onDidChange(() => {
 			const label = applicationMenuLabel();
 			this.domNode.setAttribute("aria-label", label);
-			this.button.domNode.setAttribute("aria-label", label);
-			this.button.label = label;
-			this.button.setTitle(label);
+			this.menuItem.setLabel(label);
 		}));
-		this.button.toggleClassName("ash-menubar-item", true);
-		this.button.domNode.setAttribute("aria-haspopup", "menu");
-		this.button.domNode.setAttribute("aria-expanded", "false");
 		this._register(this.menu.onDidChange(() => {
 			if (this.active) this.contextMenuService.hideContextMenu();
 		}));
 		this._register(addDisposableListener(
-			this.button.domNode,
+			this.menuItem.anchor,
 			"keydown",
 			(event: KeyboardEvent) => {
 				if (
@@ -105,17 +125,15 @@ export class BrowserMenubarControl extends Disposable
 		if (actions.length === 0) return;
 
 		this.active = true;
-		this.button.toggleClassName("active", true);
-		this.button.domNode.setAttribute("aria-expanded", "true");
+		this.menuItem.setExpanded(true);
 		this.contextMenuService.showContextMenu({
-			getAnchor: () => this.button.domNode,
+			getAnchor: () => this.menuItem.anchor,
 			getActions: () => actions,
 			// These categories switch like top-level menubar entries once the application menu is open.
 			openSubmenusImmediatelyOnHover: true,
 			onHide: () => {
 				this.active = false;
-				this.button.toggleClassName("active", false);
-				this.button.domNode.setAttribute("aria-expanded", "false");
+				this.menuItem.setExpanded(false);
 			},
 		});
 	}

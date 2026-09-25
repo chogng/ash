@@ -156,6 +156,8 @@ import { EditorPart, IEditorPart, type IEditorPartOptions } from "./parts/editor
 import { BreadcrumbsFilePicker, BreadcrumbsSymbolPicker } from "./parts/editor/breadcrumbsPicker.js";
 import { BreadcrumbsService, IBreadcrumbsService } from "./parts/editor/breadcrumbs.js";
 import { EditorParts, IEditorPartsService } from "./parts/editor/editorParts.js";
+import { HistoryService } from '../services/history/browser/historyService.js';
+import { IHistoryService } from '../services/history/common/history.js';
 import { EditorPanes } from './parts/editor/editorRegistry.js';
 import { PanelPart } from "./parts/panel/panelPart.js";
 import { SidebarPart } from "./parts/sidebar/sidebarPart.js";
@@ -252,7 +254,6 @@ import { IEditorGroupsService } from '../services/editor/common/editorGroupsServ
 import { OUTPUT_VIEW_ID } from "../contrib/output/common/output.js";
 import { installWorkbenchServiceContributions } from "./workbenchServiceContributions.js";
 import { type WorkbenchContextMenuServiceFactory, WorkbenchInteractionServices } from "./workbenchInteractionServices.js";
-import { ConnectToRemoteCommandId } from "../contrib/remote/browser/remoteActions.js";
 import type { IUserKeyboardLayoutApi } from "../../platform/keyboardLayout/common/userKeyboardLayout.js";
 import { WorkbenchModeService } from "../services/workbenchMode/browser/workbenchModeService.js";
 import { IWorkbenchModeService } from "../services/workbenchMode/common/workbenchModeService.js";
@@ -680,7 +681,6 @@ export class Workbench extends Disposable {
 			notificationService,
 			createContextMenuService,
 		}));
-		const commands = interactionServices.commandService;
 		const contextKeys = interactionServices.contextKeyService;
 		const menus = interactionServices.menuService;
 		const contextViews = interactionServices.contextViewService;
@@ -753,13 +753,6 @@ export class Workbench extends Disposable {
 				menuId: MenuId.AgentSidebarTitle,
 			},
 		}));
-		const welcomeRecentProjects = () => recentWorkspaces.recentWorkspaces.map(project => ({
-			name: project.name,
-			path: project.path,
-			...(workspaceOpenService.canOpenWorkspace ? {
-				onOpen: () => recentWorkspaces.openWorkspace(project.root),
-			} : {}),
-		}));
 		const breadcrumbsService = new BreadcrumbsService();
 		services.registerInstance(IBreadcrumbsService, breadcrumbsService);
 		const editorOptions: IEditorPartOptions = {
@@ -801,16 +794,6 @@ export class Workbench extends Disposable {
 					console.error("Could not show breadcrumb files", error);
 				});
 			},
-			welcomeVisible: workbenchState === WorkbenchState.EMPTY,
-			welcome: {
-				recentProjects: welcomeRecentProjects(),
-				actions: {
-					openFolder: workspaceOpenService.canOpenFolder
-						? () => workspaceOpenService.openFolder()
-						: undefined,
-					connectViaSsh: () => commands.executeCommand(ConnectToRemoteCommandId),
-				},
-			},
 		};
 		const editor = this._register(new EditorPart(workbenchRoot, editorOptions));
 		if (nativeHostApi) {
@@ -826,7 +809,6 @@ export class Workbench extends Disposable {
 				part: new EditorPart(container, {
 					...editorOptions,
 					contextKeyService,
-					welcomeVisible: false,
 				}),
 				resources: [contextKeyService],
 			};
@@ -834,6 +816,8 @@ export class Workbench extends Disposable {
 		services.registerInstance(IEditorPartsService, editorParts);
 		this._register(new EditorContextKeyController(contextKeys, editorParts, EditorPanes, languageService));
 		services.registerInstance(IEditorPart, editorParts);
+		const historyService = this._register(instantiationService.createInstance(HistoryService));
+		services.registerInstance(IHistoryService, historyService);
 		const editorService = this._register(new BrowserEditorService(editorParts));
 		services.registerInstance(IEditorService, editorService);
 		services.registerInstance(IEditorGroupsService, editorService);
@@ -900,9 +884,6 @@ export class Workbench extends Disposable {
 			},
 		}));
 		this.editor = editorParts;
-		this._register(recentWorkspaces.onDidChange(() => {
-			editor.setWelcomeRecentProjects(welcomeRecentProjects());
-		}));
 		const openPanelComposite = (
 			compositeId: string,
 		): PaneComposite => {
@@ -1128,7 +1109,6 @@ export class Workbench extends Disposable {
 		const nextWorkbenchState = workbenchStateFromWorkspace(workspace);
 		this.workbenchWindow.setWorkbenchState(nextWorkbenchState);
 		this.workspaceContext.updateWorkspace(workspace);
-		this.editor.setWelcomeVisible(nextWorkbenchState === WorkbenchState.EMPTY);
 		this.workbenchLayout.restoreWorkspaceState();
 		this.restoreActiveViewContainers?.();
 		await this.restoreWorkingCopyBackups(this.workingCopyBackups, this.editor);

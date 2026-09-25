@@ -10,32 +10,57 @@ test("empty editor distinguishes an empty window from an open workspace", async 
 	await expect(group.element).toBeVisible();
 	await expect(group.title).toBeVisible();
 	await expect(group.content).toBeVisible();
-	await expect(group.watermark).toBeVisible({ visible: welcomeVisible });
-	await expect(group.tabs).toHaveCount(0);
+	await expect(group.welcome).toBeVisible({ visible: welcomeVisible });
+	await expect(group.tabs).toHaveCount(welcomeVisible ? 1 : 0);
 
-	await expect.poll(async () => editorGeometry(editors.element, group.element, group.title, group.content, group.watermark)).toEqual({
+	await expect.poll(async () => editorGeometry(editors.element, group.element, group.title, group.content, group.welcome)).toEqual({
 		groupFillsEditorClient: true,
 		titleAboveContent: true,
 		titleHasHeight: true,
 		contentHasArea: true,
-		watermarkInsideContent: welcomeVisible ? true : null,
+		welcomeInsideContent: welcomeVisible ? true : null,
 	});
 });
 
 test.describe('welcome brand', () => {
 	test.use({ openWorkspace: false });
 
+	test('Welcome reopens as an editor from the command palette', async ({ workbench }) => {
+		const group = workbench.editors.groupAt(0);
+		await expect(group.tabs).toHaveCount(1);
+		await group.tabs.first().hover();
+		await group.element.locator('.ash-tab-close-action button').click();
+		await expect(group.tabs).toHaveCount(0);
+		await workbench.page.keyboard.press('F1');
+		await workbench.page.locator('.ash-quick-pick').getByRole('combobox').fill('Welcome');
+		await workbench.page.keyboard.press('Enter');
+		await expect(group.tabs).toHaveCount(1);
+		await expect(group.welcome).toBeVisible();
+		await expect(group.title.getByRole('button', { name: 'Reveal in File Explorer' })).toHaveCount(0);
+	});
+
+	test('Welcome provides keyboard accessibility help', async ({ workbench }) => {
+		const page = workbench.page;
+		const openFolder = workbench.editors.groupAt(0).welcome.getByRole('button', { name: 'open folder' });
+		await openFolder.focus();
+		await page.keyboard.press('Alt+F1');
+		const help = page.getByRole('dialog', { name: 'Accessibility Help' });
+		await expect(help.getByRole('textbox', { name: 'Accessibility Help' })).toHaveValue(/Use Tab and Shift\+Tab/);
+		await page.keyboard.press('Escape');
+		await expect(openFolder).toBeFocused();
+	});
+
 	test('welcome displays only the Ash name above the actions', async ({ workbench }) => {
-		const welcome = workbench.editors.groupAt(0).watermark;
-		await expect(welcome.locator('.ash-editor-group-welcome-name')).toHaveText('ASH');
-		await expect(welcome.locator('.ash-editor-group-welcome-plan')).toHaveCount(0);
+		const welcome = workbench.editors.groupAt(0).welcome;
+		await expect(welcome.locator('.ash-getting-started-name')).toHaveText('ASH');
+		await expect(welcome.locator('.ash-getting-started-plan')).toHaveCount(0);
 		await expect(welcome.getByRole('button', { name: 'open folder' })).toBeVisible();
 	});
 
 	test('welcome actions use gray cards and a black GitHub card', async ({ workbench }) => {
-		const cards = workbench.editors.groupAt(0).watermark.locator('.ash-editor-group-welcome-card');
+		const cards = workbench.editors.groupAt(0).welcome.locator('.ash-getting-started-card');
 		await expect(cards).toHaveCount(4);
-		await expect(cards.locator('.ash-editor-group-welcome-card-label')).toHaveText(['open folder', 'clone repo', 'connect via ssh', 'connect github']);
+		await expect(cards.locator('.ash-getting-started-card-label')).toHaveText(['open folder', 'clone repo', 'connect via ssh', 'connect github']);
 		for (const index of [0, 1, 2]) {
 			const card = cards.nth(index);
 			await expect(card).toHaveCSS('background-color', 'rgb(243, 243, 243)');
@@ -55,7 +80,7 @@ test.describe('welcome brand', () => {
 	});
 
 	test('welcome uses the theme-colored mark without a filled icon tile', async ({ workbench }) => {
-		const mark = workbench.editors.groupAt(0).watermark.locator('.ash-editor-group-welcome-mark');
+		const mark = workbench.editors.groupAt(0).welcome.locator('.ash-getting-started-mark');
 		await expect(mark).toBeVisible();
 		await expect(mark).toHaveAttribute('aria-hidden', 'true');
 		await expect(mark).toHaveCSS('mask-image', /ash-mark.*\.svg/u);
@@ -73,12 +98,12 @@ test("editor layout remains valid across workbench window sizes", async ({ targe
 	for (const size of [{ width: 900, height: 700 }, { width: 1200, height: 800 }, { width: 1494, height: 1104 }]) {
 		const actualSize = await driver.setWindowSize(size);
 		observedSizes.add(`${actualSize.width}x${actualSize.height}`);
-		await expect.poll(async () => editorGeometry(editors.element, group.element, group.title, group.content, group.watermark), { message: `editor geometry at ${size.width}x${size.height}` }).toEqual({
+		await expect.poll(async () => editorGeometry(editors.element, group.element, group.title, group.content, group.welcome), { message: `editor geometry at ${size.width}x${size.height}` }).toEqual({
 			groupFillsEditorClient: true,
 			titleAboveContent: true,
 			titleHasHeight: true,
 			contentHasArea: true,
-			watermarkInsideContent: welcomeVisible ? true : null,
+			welcomeInsideContent: welcomeVisible ? true : null,
 		});
 	}
 
@@ -118,8 +143,8 @@ test("split editor groups keep visible boundaries", async ({ target, workbench }
 	]);
 });
 
-async function editorGeometry(editor: Locator, group: Locator, title: Locator, content: Locator, watermark: Locator) {
-	const [editorBox, editorClient, groupBox, titleBox, contentBox, watermarkBox] = await Promise.all([
+async function editorGeometry(editor: Locator, group: Locator, title: Locator, content: Locator, welcome: Locator) {
+	const [editorBox, editorClient, groupBox, titleBox, contentBox, welcomeCount] = await Promise.all([
 		editor.boundingBox(),
 		editor.evaluate(element => {
 			const editorElement = element as HTMLElement;
@@ -133,8 +158,10 @@ async function editorGeometry(editor: Locator, group: Locator, title: Locator, c
 		group.boundingBox(),
 		title.boundingBox(),
 		content.boundingBox(),
-		watermark.boundingBox(),
+		welcome.count(),
 	]);
+	// The Welcome editor exists only in empty windows; open workspaces render no welcome content.
+	const welcomeBox = welcomeCount > 0 ? await welcome.boundingBox() : null;
 	if (!editorBox || !groupBox || !titleBox || !contentBox) {
 		return null;
 	}
@@ -147,7 +174,7 @@ async function editorGeometry(editor: Locator, group: Locator, title: Locator, c
 		titleAboveContent: titleBox.y + titleBox.height <= contentBox.y + tolerance,
 		titleHasHeight: titleBox.height > 0,
 		contentHasArea: contentBox.width > 0 && contentBox.height > 0,
-		watermarkInsideContent: watermarkBox ? contains(contentBox, watermarkBox, tolerance) : null,
+		welcomeInsideContent: welcomeBox ? contains(contentBox, welcomeBox, tolerance) : null,
 	};
 }
 

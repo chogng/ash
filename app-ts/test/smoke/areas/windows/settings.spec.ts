@@ -32,4 +32,18 @@ test.describe('without an open workspace', () => {
 		await page.locator('[data-settings-category-id="appearance"]').click();
 		await expect(page.locator('[data-configuration-key="window.zoomLevel"]')).toBeVisible();
 	});
+
+	test('editor More Actions tooltip clears the window controls', async ({ workbench }) => {
+		const page = workbench.page;
+		await page.getByRole('dialog', { name: 'Find commands quickly' }).getByRole('button', { name: 'Dismiss' }).click();
+		const moreActions = page.locator('.ash-editor-title-actions').getByRole('button', { name: 'More Actions' });
+		await moreActions.focus();
+		const tooltip = page.locator('.ash-hover', { hasText: 'More Actions' });
+		await expect(tooltip).toBeVisible();
+		const buttonBounds = await moreActions.boundingBox();
+		const tooltipBounds = await tooltip.boundingBox();
+		expect(buttonBounds).not.toBeNull();
+		expect(tooltipBounds).not.toBeNull();
+		expect(tooltipBounds!.y).toBeGreaterThanOrEqual(buttonBounds!.y + buttonBounds!.height);
+	});
 });

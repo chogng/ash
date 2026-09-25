@@ -65,6 +65,7 @@ export class MenuId {
 	private static readonly instances = new Map<string, MenuId>();
 
 	static readonly CommandPalette = new MenuId("CommandPalette");
+	static readonly CommandCenter = new MenuId("CommandCenter");
 	static readonly TitleBar = new MenuId("TitleBar");
 	static readonly TitleBarLeft = new MenuId("TitleBarLeft");
 	static readonly TitleBarAdjacentCenter = new MenuId("TitleBarAdjacentCenter");

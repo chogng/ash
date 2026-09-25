@@ -28,6 +28,8 @@ suiteTeardown(() => {
 
 const { createElectronTitlebarPartFactory } = await import('../../titlebarPart.js');
 const { MenuService } = await import('../../../../../../platform/actions/common/menuService.js');
+const { IMenuService } = await import('../../../../../../platform/actions/common/actions.js');
+const { IContextMenuService } = await import('../../../../../../platform/contextview/browser/contextView.js');
 const { ContextKeyService } = await import('../../../../../../platform/contextkey/browser/contextKeyService.js');
 const { CommandService } = await import('../../../../../services/commands/common/commandService.js');
 
@@ -40,6 +42,7 @@ test('Electron titlebar applies the active theme and releases its subscription w
 		using commands = new CommandService(services);
 		using contextKeys = new ContextKeyService();
 		const menus = new MenuService(commands, contextKeys);
+		services.registerInstance(IMenuService, menus);
 		services.registerInstance(ICommandService, commands);
 		services.registerInstance(IQuickAccessController, { onDidChangeVisibility: Event.None, show() {} });
 		const applied: INativeWindowTheme[] = [];
@@ -73,6 +76,7 @@ test('Electron titlebar applies the active theme and releases its subscription w
 		});
 		const factory = createElectronTitlebarPartFactory({ update: async () => {}, onDidSelect: () => ({ dispose() {} }) });
 		const options = { menuService: menus, contextMenuService: { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() {}, hideContextMenu() {} } };
+		services.registerInstance(IContextMenuService, options.contextMenuService);
 		using missingServices = new ServiceContainer();
 		assert.throws(() => factory(environment.window.document.body, options, missingServices), /service/i);
 		using titlebar = factory(environment.window.document.body, options, services);

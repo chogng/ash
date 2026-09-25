@@ -26,7 +26,6 @@ import { EditorPaneRegistry } from "./editorRegistry.js";
 import type { IEditorTabDragAndDrop, EditorTabDropPosition } from "./editorTabDragAndDrop.js";
 import { EditorGroupView } from './editorGroupView.js';
 import { ErrorPlaceholderEditor } from "./editorPlaceholder.js";
-import type { EditorWelcomeOptions, IEditorWelcomeProject } from "../../../contrib/files/browser/editorWelcome.js";
 import { editorInputKey, type EditorTabDescriptor } from "./editorTabsControl.js";
 import type { EditorHeaderActions } from "./editorHeaderControl.js";
 import { type LanguageLocation, type LanguageWorkspaceEdit } from "../../../../editor/common/languages.js";
@@ -74,8 +73,6 @@ export interface IEditorGroup {
 	closeEditor(input: EditorInput, options?: EditorCloseOptions): Promise<boolean>;
 	replaceEditor(input: EditorInput, replacement: EditorInput): Promise<void>;
 	moveEditorTo(input: EditorInput, target: IEditorGroup, targetIndex: number): Promise<void>;
-	setWelcomeRecentProjects(projects: readonly IEditorWelcomeProject[]): void;
-	setWelcomeVisible(visible: boolean): void;
 	setContent(content: Element): Promise<boolean>;
 	layout(dimension: IDimension): void;
 	focus(): void;
@@ -116,8 +113,6 @@ export interface EditorGroupOptions {
 	readonly breadcrumbsService?: IBreadcrumbsService;
 	readonly languageFeaturesService?: ILanguageFeaturesService;
 	readonly showBreadcrumbSymbolPicker?: (symbols: readonly LanguageDocumentSymbol[], selected: LanguageDocumentSymbol, reveal: (range: Range) => void) => void;
-	readonly welcome?: EditorWelcomeOptions;
-	readonly welcomeVisible?: boolean;
 	readonly onDidActivate?: () => void;
 	readonly dragAndDrop?: IEditorTabDragAndDrop;
 }
@@ -579,15 +574,6 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 		await this.openEditor(replacement, { index });
 		if (wasSticky) this.toggleSticky(replacement);
 		await this.closeEditor(input, { skipConfirmation: true, reason: "replace" });
-	}
-
-	setWelcomeRecentProjects(projects: readonly IEditorWelcomeProject[]): void {
-		this.view.setWelcomeRecentProjects(projects);
-	}
-
-	setWelcomeVisible(visible: boolean): void {
-		if (!this.view.setWelcomeVisible(visible)) return;
-		this.renderContent();
 	}
 
 	getEditorInsertionIndex(target: EditorInput | undefined, position: EditorTabDropPosition): number {

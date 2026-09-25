@@ -2,6 +2,54 @@ import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
 
+test('titlebar navigation moves through editor history beside Quick Access', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	const navigation = page.locator('.ash-titlebar-command-center-navigation');
+	const back = navigation.getByRole('button', { name: 'Go Back' });
+	const forward = navigation.getByRole('button', { name: 'Go Forward' });
+	const search = page.getByRole('button', { name: 'Search commands' });
+	await expect(back).toBeDisabled();
+	await expect(forward).toBeDisabled();
+	for (const width of [1200, 700]) {
+		await page.setViewportSize({ width, height: 800 });
+		const [leftBounds, navigationBounds, searchBounds] = await Promise.all([
+			page.locator('.ash-workbench-titlebar > .ash-workbench-part-title').boundingBox(),
+			navigation.boundingBox(),
+			search.boundingBox(),
+		]);
+		expect(leftBounds).not.toBeNull();
+		expect(navigationBounds).not.toBeNull();
+		expect(searchBounds).not.toBeNull();
+		expect(navigationBounds!.x - leftBounds!.x - leftBounds!.width).toBeGreaterThanOrEqual(0);
+		expect(searchBounds!.x - navigationBounds!.x - navigationBounds!.width).toBeGreaterThanOrEqual(6);
+	}
+
+	const openUntitled = async () => {
+		await page.getByRole('button', { name: 'Application menu' }).click();
+		await page.getByRole('menu').first().getByRole('menuitem', { name: 'File' }).hover();
+		await page.getByRole('menu').last().getByRole('menuitem', { name: 'New Untitled Text Editor' }).click();
+	};
+	await openUntitled();
+	await openUntitled();
+	await openUntitled();
+	await expect(back).toBeEnabled();
+	await expect(forward).toBeDisabled();
+	await back.click();
+	await expect(page.locator('.ash-tab.checked')).toContainText('Untitled-2');
+	await expect(forward).toBeEnabled();
+	await back.focus();
+	await back.press('ArrowRight');
+	await expect(forward).toBeFocused();
+	await forward.click();
+	await expect(page.locator('.ash-tab.checked')).toContainText('Untitled-3');
+	const backShortcut = process.platform === 'darwin' ? 'Control+-' : process.platform === 'linux' ? 'Control+Alt+-' : 'Alt+ArrowLeft';
+	await page.keyboard.press(backShortcut);
+	await expect(page.locator('.ash-tab.checked')).toContainText('Untitled-2');
+	await openUntitled();
+	await expect(forward).toBeDisabled();
+});
+
 test('Sessions entry sits beside Quick Access and animates its Ash mark on intent', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;

@@ -40,6 +40,7 @@ import "../contrib/multiDiffEditor/browser/multiDiffEditor.contribution.js";
 import "../contrib/pdf/browser/pdf.contribution.js";
 import "../contrib/preferences/browser/preferences.contribution.js";
 import "../contrib/quickaccess/browser/quickAccess.contribution.js";
+import "../contrib/welcomeGettingStarted/browser/gettingStarted.contribution.js";
 import "../contrib/search/browser/searchQuickAccess.contribution.js";
 import { registerRemoteViews } from "../contrib/remote/browser/remote.contribution.js";
 import "../contrib/sash/browser/sash.contribution.js";

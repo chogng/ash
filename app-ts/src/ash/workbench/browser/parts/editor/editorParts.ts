@@ -137,10 +137,6 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		return this.activateEditorIdentifier(editors[index]!);
 	}
 
-	navigateEditorHistory(direction: -1 | 1): IEditorPane | undefined {
-		return this._activePart.navigateEditorHistory(direction);
-	}
-
 	async closeEditor(input: EditorInput): Promise<boolean> {
 		const part = this.findPartForInput(input) ?? this._activePart;
 		return part.closeEditor(input);
@@ -172,11 +168,6 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		return this._activePart.moveActiveEditorTo(target === this ? this._activePart : target);
 	}
 
-	setWelcomeRecentProjects(projects: readonly import("../../../contrib/files/browser/editorWelcome.js").IEditorWelcomeProject[]): void {
-		for (const part of this.parts) part.setWelcomeRecentProjects(projects);
-	}
-
-	setWelcomeVisible(visible: boolean): void { this.mainPart.setWelcomeVisible(visible); }
 	saveActiveEditor(): Promise<void> { return this._activePart.saveActiveEditor(); }
 	setContent(content: Element): Promise<void> { return this._activePart.setContent(content); }
 	splitActiveGroup(direction: GridDirection): Promise<void> { return this._activePart.splitActiveGroup(direction); }

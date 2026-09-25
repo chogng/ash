@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
-import { formatNlsMessage, resetNlsResolver, setNlsResolver } from "../../../../../../nls.js";
-import { builtinLanguagePackCatalogs } from "../../../../../services/localization/common/localizationCatalogs.js";
 import type {
 	IDimension,
 } from "../../../../../../base/browser/dom.js";
@@ -98,6 +96,7 @@ const { SplitEditorHorizontalCommandId } = await import(
 	"../../../../../../workbench/browser/parts/editor/editorActions.js"
 );
 const { BrowserEditorService } = await import("../../../../../../workbench/services/editor/browser/browserEditorService.js");
+const { HistoryService } = await import("../../../../../../workbench/services/history/browser/historyService.js");
 const { EditorParts } = await import("../../../../../../workbench/browser/parts/editor/editorParts.js");
 const { BrowserAuxiliaryWindowService } = await import("../../../../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js");
 await import(
@@ -318,7 +317,7 @@ test("EditorPart shows command shortcuts until an editor opens", async () => {
 	await editor.openEditor(input("C:\\project\\main.ts"));
 	assert.equal(
 		editor.domNode.querySelector<HTMLElement>(
-			".ash-editor-group-watermark",
+			".ash-editor-group-watermark-shortcuts",
 		)?.hidden,
 		true,
 	);
@@ -326,90 +325,6 @@ test("EditorPart shows command shortcuts until an editor opens", async () => {
 	editor.dispose();
 	entry.dispose();
 	keybindings.dispose();
-	dom.window.close();
-});
-
-test("EditorPart renders the project welcome page and dispatches available cards", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
-	let openFolderCount = 0;
-	const editor = new EditorPart(dom.window.document.body, {
-		registry: new EditorPaneRegistry(),
-		welcome: {
-			actions: {
-				openFolder: () => {
-					openFolderCount += 1;
-				},
-			},
-			recentProjects: [{ name: "ash", path: "~/Desktop" }],
-		},
-	});
-	dom.window.document.body.append(editor.domNode);
-
-	const welcome = editor.domNode.querySelector<HTMLElement>(
-		".ash-editor-group-welcome",
-	);
-	assert.ok(welcome);
-	assert.equal(welcome.querySelector(".ash-editor-group-welcome-name")?.textContent, "ASH");
-	assert.equal(welcome.querySelector(".ash-editor-group-welcome-plan"), null);
-	assert.match(welcome.textContent ?? "", /Recent projects/);
-	assert.deepEqual(
-		[...welcome.querySelectorAll<HTMLButtonElement>(".ash-editor-group-welcome-card")]
-			.map((card) => card.textContent),
-		["open folder", "clone repo", "connect via ssh", "connect github↗"],
-	);
-	const cards = welcome.querySelectorAll<HTMLButtonElement>(
-		".ash-editor-group-welcome-card",
-	);
-	assert.deepEqual([...cards].map(card => card.querySelector('svg')?.getAttribute('data-ash-icon-id')), ['folders', 'git-branch', 'remote', 'github']);
-	assert.equal(cards[0]?.disabled, false);
-	assert.equal(cards[1]?.disabled, true);
-	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	try {
-		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
-		assert.deepEqual([...cards].map(card => card.querySelector('.ash-editor-group-welcome-card-label')?.textContent), ['打开文件夹', '克隆仓库', '通过 SSH 连接', '连接 GitHub']);
-		assert.equal(cards[1]?.title, '“克隆仓库”暂不可用');
-	} finally {
-		resetNlsResolver();
-	}
-	cards[0]?.click();
-	assert.equal(openFolderCount, 1);
-
-	editor.setWelcomeVisible(false);
-	assert.equal(welcome.hidden, true);
-	editor.setWelcomeVisible(true);
-	assert.equal(welcome.hidden, false);
-
-	editor.dispose();
-	dom.window.close();
-});
-
-test("EditorPart updates Recent projects and expands the complete list", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
-	const editor = new EditorPart(dom.window.document.body, {
-		registry: new EditorPaneRegistry(),
-		welcome: {
-			recentProjects: Array.from({ length: 6 }, (_, index) => ({
-				name: `project-${index + 1}`,
-				path: `/workspaces/project-${index + 1}`,
-			})),
-		},
-	});
-	dom.window.document.body.append(editor.domNode);
-
-	const welcome = editor.domNode.querySelector<HTMLElement>(".ash-editor-group-welcome");
-	assert.ok(welcome);
-	assert.equal(welcome.querySelectorAll(".ash-editor-group-welcome-recent-item").length, 5);
-	const viewAll = welcome.querySelector<HTMLButtonElement>(".ash-editor-group-welcome-view-all");
-	assert.equal(viewAll?.textContent, "View all (6)");
-	viewAll?.click();
-	assert.equal(welcome.querySelectorAll(".ash-editor-group-welcome-recent-item").length, 6);
-	assert.equal(welcome.querySelector<HTMLButtonElement>(".ash-editor-group-welcome-view-all")?.textContent, "Show less");
-
-	editor.setWelcomeRecentProjects([{ name: "new-project", path: "/workspaces/new-project" }]);
-	assert.equal(welcome.querySelectorAll(".ash-editor-group-welcome-recent-item").length, 1);
-	assert.equal(welcome.querySelector<HTMLButtonElement>(".ash-editor-group-welcome-view-all")?.disabled, true);
-
-	editor.dispose();
 	dom.window.close();
 });
 
@@ -962,25 +877,33 @@ test("EditorPart registers and releases focusable breadcrumbs for its group", as
 	dom.window.close();
 });
 
-test("EditorPart navigates backward and forward through opened editors", async () => {
+test("HistoryService navigates backward and forward through opened editors", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
 	registry.register(descriptor("ash.test.history", ".ts", () => new TestEditorPane("ash.test.history")));
 	const editor = new EditorPart(dom.window.document.body, { registry });
+	const contextKeys = new ContextKeyService();
+	const history = new HistoryService(editor, contextKeys);
 	const first = input("C:\\project\\first.ts");
 	const second = input("C:\\project\\second.ts");
 	const third = input("C:\\project\\third.ts");
 	await editor.openEditor(first, { pinned: true });
 	await editor.openEditor(second, { pinned: true });
 	await editor.openEditor(third, { pinned: true });
-	assert.equal(editor.navigateEditorHistory(-1), editor.activePane);
+	assert.equal(contextKeys.getValue('canNavigateBack'), true);
+	assert.equal(contextKeys.getValue('canNavigateForward'), false);
+	await history.goBack();
 	assert.equal(editor.activeInput?.resource.toString(), second.resource.toString());
-	editor.navigateEditorHistory(-1);
+	await history.goBack();
 	assert.equal(editor.activeInput?.resource.toString(), first.resource.toString());
-	editor.navigateEditorHistory(1);
+	assert.equal(contextKeys.getValue('canNavigateBack'), false);
+	assert.equal(contextKeys.getValue('canNavigateForward'), true);
+	await history.goForward();
 	assert.equal(editor.activeInput?.resource.toString(), second.resource.toString());
 	await editor.openEditor(input("C:\\project\\new.ts"), { pinned: true });
-	assert.equal(editor.navigateEditorHistory(1), undefined);
+	assert.equal(contextKeys.getValue('canNavigateForward'), false);
+	history.dispose();
+	contextKeys.dispose();
 	editor.dispose();
 	dom.window.close();
 });

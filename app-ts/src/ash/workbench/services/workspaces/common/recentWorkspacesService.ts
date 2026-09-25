@@ -1,7 +1,7 @@
 import type { Event } from "../../../../base/common/event.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 
-/** A project that can be reopened from the editor welcome page. */
+/** A project that can be reopened from the Welcome page. */
 export interface IRecentWorkspace {
 	readonly name: string;
 	readonly path: string;

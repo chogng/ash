@@ -6,7 +6,8 @@ test.use({ openWorkspace: false });
 test('application menu switches its root submenus on pointer entry', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
-	await page.getByRole('button', { name: 'Application menu' }).click();
+	const trigger = page.getByRole('toolbar', { name: 'Application menu' }).getByRole('button', { name: 'Application menu' });
+	await trigger.click();
 	const mainMenu = page.getByRole('menu').first();
 	const fileMenuItem = mainMenu.getByRole('menuitem', { name: 'File' });
 	const editMenuItem = mainMenu.getByRole('menuitem', { name: 'Edit' });

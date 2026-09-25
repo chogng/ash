@@ -1,4 +1,10 @@
-.ash-editor-group-welcome {
+.ash-getting-started-pane {
+	position: relative;
+	width: 100%;
+	height: 100%;
+}
+
+.ash-getting-started {
   position: absolute;
   inset: 0;
   container-type: inline-size;
@@ -9,47 +15,47 @@
   background: var(--ash-editor-background);
 }
 
-.ash-editor-group-welcome[hidden] {
+.ash-getting-started[hidden] {
   display: none;
 }
 
-.ash-editor-group-welcome-scroll {
+.ash-getting-started-scroll {
   display: flex;
   min-width: 100%;
   min-height: 100%;
   justify-content: center;
 }
 
-.ash-editor-group-welcome-content {
+.ash-getting-started-content {
   width: min(384px, calc(100% - 48px));
   margin: clamp(72px, 15vh, 176px) 0 64px;
 }
 
-.ash-editor-group-welcome-intro {
+.ash-getting-started-intro {
   text-align: center;
 }
 
-.ash-editor-group-welcome-brand {
+.ash-getting-started-brand {
   display: inline-flex;
   align-items: center;
   gap: 12px;
 }
 
-.ash-editor-group-welcome-mark {
+.ash-getting-started-mark {
   width: 42px;
   height: 42px;
   background-color: currentColor;
   mask: center / contain no-repeat url("../../../../browser/media/ash-mark.svg");
 }
 
-.ash-editor-group-welcome-name {
+.ash-getting-started-name {
   font-size: var(--ash-font-size-heading1);
   font-weight: var(--ash-font-weight-semi-bold);
   letter-spacing: .06em;
   line-height: 1;
 }
 
-.ash-editor-group-welcome-cards {
+.ash-getting-started-cards {
   display: grid;
   width: 100%;
   grid-template-columns: repeat(2, 180px);
@@ -59,7 +65,7 @@
   margin-top: 40px;
 }
 
-.ash-editor-group-welcome-card {
+.ash-getting-started-card {
   position: relative;
   display: flex;
   width: 180px;
@@ -81,34 +87,34 @@
   transition: background-color var(--ash-animation-duration-fast) ease, border-color var(--ash-animation-duration-fast) ease;
 }
 
-.ash-editor-group-welcome-card:hover {
+.ash-getting-started-card:hover {
   background: var(--ash-editor-welcome-card-hover-background);
 }
 
-.ash-editor-group-welcome-card:not(.featured) {
+.ash-getting-started-card:not(.featured) {
   padding-right: 16px;
 }
 
-.ash-editor-group-welcome-card:focus-visible {
+.ash-getting-started-card:focus-visible {
   outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
   outline-offset: 2px;
 }
 
-.ash-editor-group-welcome-card.featured {
+.ash-getting-started-card.featured {
   border-color: var(--ash-editor-welcome-featured-card-border);
   color: var(--ash-editor-welcome-featured-card-foreground);
   background: var(--ash-editor-welcome-featured-card-background);
 }
 
-.ash-editor-group-welcome-card.featured:hover {
+.ash-getting-started-card.featured:hover {
   background: var(--ash-editor-welcome-featured-card-hover-background);
 }
 
-.ash-editor-group-welcome-card.is-disabled {
+.ash-getting-started-card.is-disabled {
   cursor: default;
 }
 
-.ash-editor-group-welcome-card-icon {
+.ash-getting-started-card-icon {
   display: flex;
   width: 20px;
   height: 20px;
@@ -117,12 +123,12 @@
   justify-content: center;
 }
 
-.ash-editor-group-welcome-card-icon .ash-icon {
+.ash-getting-started-card-icon .ash-icon {
   width: var(--ash-lxicon-font-size);
   height: var(--ash-lxicon-font-size);
 }
 
-.ash-editor-group-welcome-card-label {
+.ash-getting-started-card-label {
   min-width: 0;
   overflow: hidden;
   font-size: 13px;
@@ -132,7 +138,7 @@
   white-space: nowrap;
 }
 
-.ash-editor-group-welcome-card-arrow {
+.ash-getting-started-card-arrow {
   position: absolute;
   top: 50%;
   right: 10px;
@@ -141,25 +147,25 @@
   transform: translateY(-50%);
 }
 
-.ash-editor-group-welcome-recent {
+.ash-getting-started-recent {
   margin-top: 40px;
 }
 
-.ash-editor-group-welcome-section-heading {
+.ash-getting-started-section-heading {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 16px;
 }
 
-.ash-editor-group-welcome-section-heading h2 {
+.ash-getting-started-section-heading h2 {
   margin: 0;
   color: var(--ash-description-foreground);
   font-size: var(--ash-font-size-heading2);
   font-weight: var(--ash-font-weight-regular);
 }
 
-.ash-editor-group-welcome-view-all {
+.ash-getting-started-view-all {
   padding: 0;
   border: 0;
   color: var(--ash-description-foreground);
@@ -169,21 +175,21 @@
   cursor: pointer;
 }
 
-.ash-editor-group-welcome-view-all:not(:disabled):hover {
+.ash-getting-started-view-all:not(:disabled):hover {
   color: var(--ash-accent-foreground);
 }
 
-.ash-editor-group-welcome-view-all:disabled {
+.ash-getting-started-view-all:disabled {
   cursor: default;
 }
 
-.ash-editor-group-welcome-recent-list {
+.ash-getting-started-recent-list {
   display: grid;
   margin-top: 16px;
   grid-template-columns: minmax(0, 1fr);
 }
 
-.ash-editor-group-welcome-recent-item {
+.ash-getting-started-recent-item {
   display: grid;
   width: 100%;
   min-width: 0;
@@ -197,58 +203,58 @@
   text-align: left;
 }
 
-button.ash-editor-group-welcome-recent-item {
+button.ash-getting-started-recent-item {
   cursor: pointer;
 }
 
-button.ash-editor-group-welcome-recent-item:hover {
+button.ash-getting-started-recent-item:hover {
   color: var(--ash-accent-foreground);
 }
 
-.ash-editor-group-welcome-recent-name,
-.ash-editor-group-welcome-recent-path {
+.ash-getting-started-recent-name,
+.ash-getting-started-recent-path {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.ash-editor-group-welcome-recent-path,
-.ash-editor-group-welcome-recent-empty {
+.ash-getting-started-recent-path,
+.ash-getting-started-recent-empty {
   color: var(--ash-description-foreground);
 }
 
-.ash-editor-group-welcome-recent-empty {
+.ash-getting-started-recent-empty {
   margin: 16px 0 0;
   font-size: var(--ash-font-size-body1);
 }
 
-.ash-editor-group-welcome > .ash-editor-group-welcome-scroll .ash-editor-group-watermark-shortcuts {
+.ash-getting-started > .ash-getting-started-scroll .ash-editor-group-watermark-shortcuts {
   margin: 40px auto 0;
 }
 
 @container (max-width: 680px) {
-  .ash-editor-group-welcome-content {
+  .ash-getting-started-content {
     width: min(384px, calc(100% - 32px));
     margin-top: 40px;
   }
 
-  .ash-editor-group-welcome-cards {
+  .ash-getting-started-cards {
     margin-top: 36px;
   }
 
-  .ash-editor-group-welcome-recent {
+  .ash-getting-started-recent {
     margin-top: 40px;
   }
 }
 
 @container (max-width: 420px) {
-  .ash-editor-group-welcome-cards {
+  .ash-getting-started-cards {
     grid-template-columns: 180px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ash-editor-group-welcome-card {
+  .ash-getting-started-card {
     transition: none;
   }
 }

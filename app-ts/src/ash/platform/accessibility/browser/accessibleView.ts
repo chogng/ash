@@ -3,6 +3,7 @@ import { createServiceIdentifier } from '../../instantiation/common/instantiatio
 
 export const enum AccessibleViewProviderId {
 	Explorer = 'explorer',
+	GettingStarted = 'gettingStarted',
 	OpenEditors = 'openEditors',
 }
 
@@ -13,6 +14,7 @@ export const enum AccessibleViewType {
 
 export const enum AccessibilityVerbositySettingId {
 	Explorer = 'accessibility.verbosity.explorer',
+	GettingStarted = 'accessibility.verbosity.gettingStarted',
 	OpenEditors = 'accessibility.verbosity.openEditors',
 }
 

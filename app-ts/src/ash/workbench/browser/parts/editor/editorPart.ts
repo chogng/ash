@@ -45,7 +45,6 @@ import type { IEditorPane } from "./editorPane.js";
 import { EditorPaneRegistry, EditorPanes } from "./editorRegistry.js";
 import type { IBulkEditService } from "../../../../editor/browser/services/bulkEditService.js";
 import type { ILanguageDiagnosticsService } from "../../../services/language/common/languageDiagnosticsService.js";
-import type { EditorWelcomeOptions, IEditorWelcomeProject } from "../../../contrib/files/browser/editorWelcome.js";
 import { EditorInputSerializers, type EditorInputSerializerRegistry, isSerializedEditorInput } from "../../../services/editor/common/editorInputSerializer.js";
 import type { ApplyEditorWorkingSetOptions, EditorWorkingSet, EditorWorkingSetLayout, EditorWorkingSetTarget } from "../../../services/editor/common/editorWorkingSet.js";
 import { ModalEditorPart } from "./modalEditorPart.js";
@@ -75,14 +74,11 @@ export interface IEditorPart extends IEditorStateSource, IDisposable {
 	activateEditor(input: EditorInput): IEditorPane;
 	activateEditorIdentifier(identifier: EditorIdentifier): IEditorPane | undefined;
 	activateEditorMru(offset: number): IEditorPane | undefined;
-	navigateEditorHistory(direction: -1 | 1): IEditorPane | undefined;
 	closeEditor(input: EditorInput): Promise<boolean>;
 	closeEditorIdentifier(identifier: EditorIdentifier): Promise<boolean>;
 	confirmCloseAllEditors(): Promise<boolean>;
 	closeAllEditors(options?: EditorCloseAllOptions): Promise<boolean>;
 	moveActiveEditorTo(target: IEditorPart): Promise<boolean>;
-	setWelcomeRecentProjects(projects: readonly IEditorWelcomeProject[]): void;
-	setWelcomeVisible(visible: boolean): void;
 	saveActiveEditor(): Promise<void>;
 	setContent(content: Element): Promise<void>;
 	splitActiveGroup(direction: GridDirection): Promise<void>;
@@ -139,8 +135,6 @@ export interface IEditorPartOptions {
 	readonly breadcrumbsService?: IBreadcrumbsService;
 	readonly languageFeaturesService?: ILanguageFeaturesService;
 	readonly showBreadcrumbSymbolPicker?: (symbols: readonly LanguageDocumentSymbol[], selected: LanguageDocumentSymbol, reveal: (range: Range) => void) => void;
-	readonly welcome?: EditorWelcomeOptions;
-	readonly welcomeVisible?: boolean;
 	readonly saveAsResource?: (defaultName: string) => Promise<URI | undefined>;
 	readonly inputSerializers?: EditorInputSerializerRegistry;
 }
@@ -157,7 +151,6 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 	private readonly _groups: EditorGroupHost[] = [];
 	private _activeGroup: EditorGroup;
 	private readonly tabDragAndDrop: EditorTabDragAndDropController;
-	private welcomeRecentProjects: readonly IEditorWelcomeProject[];
 	private dimension = Dimension.Zero;
 	private readonly saveAsResource: ((defaultName: string) => Promise<URI | undefined>) | undefined;
 	private readonly inputSerializers: EditorInputSerializerRegistry;
@@ -202,13 +195,10 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 			breadcrumbsService: options.breadcrumbsService,
 			languageFeaturesService: options.languageFeaturesService,
 			showBreadcrumbSymbolPicker: options.showBreadcrumbSymbolPicker,
-			welcome: options.welcome,
-			welcomeVisible: options.welcomeVisible,
 			...(options.saveAsResource ? {
 				onSave: (group: IEditorGroup, input: EditorInput, pane: IEditorPane) => this.saveEditor(group, input, pane),
 			} : {}),
 		};
-		this.welcomeRecentProjects = options.welcome?.recentProjects ?? [];
 		this.saveAsResource = options.saveAsResource;
 		this.inputSerializers = options.inputSerializers ?? EditorInputSerializers;
 		this.dialogService = options.dialogService;
@@ -402,14 +392,6 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		return this.activateEditorIdentifier(editors[index]!);
 	}
 
-	navigateEditorHistory(direction: -1 | 1): IEditorPane | undefined {
-		const target = this.editorsObserver.navigateHistory(direction);
-		if (!target) return undefined;
-		const pane = this.activateEditorIdentifier(target);
-		if (!pane) this.editorsObserver.cancelHistoryNavigation();
-		return pane;
-	}
-
 	async closeEditor(input: EditorInput): Promise<boolean> {
 		if (this.modalEditor.activeInput && editorInputKey(this.modalEditor.activeInput) === editorInputKey(input)) {
 			const pane = this.modalEditor.activePane;
@@ -462,15 +444,6 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		if (!input || target === this) return false;
 		await this._activeGroup.moveEditorTo(input, target.activeGroup, target.activeGroup.inputs.length);
 		return true;
-	}
-
-	setWelcomeRecentProjects(projects: readonly IEditorWelcomeProject[]): void {
-		this.welcomeRecentProjects = projects;
-		for (const { group } of this._groups) group.setWelcomeRecentProjects(projects);
-	}
-
-	setWelcomeVisible(visible: boolean): void {
-		for (const { group } of this._groups) group.setWelcomeVisible(visible);
 	}
 
 	async saveActiveEditor(): Promise<void> {
@@ -598,9 +571,6 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		group = new EditorGroup(this.contentDomNode, {
 			...this.groupOptions,
 			...(id ? { id } : {}),
-			...(this.groupOptions.welcome ? {
-				welcome: { ...this.groupOptions.welcome, recentProjects: this.welcomeRecentProjects },
-			} : {}),
 			onDidActivate: () => {
 				this.setActiveGroup(group);
 			},

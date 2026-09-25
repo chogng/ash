@@ -34,7 +34,19 @@
 }
 
 .ash-titlebar-command-center {
+  position: relative;
   width: 100%;
+}
+
+.ash-titlebar-command-center-navigation {
+  position: absolute;
+  right: calc(100% + var(--ash-spacing-size80));
+  top: 50%;
+  display: flex;
+  height: 100%;
+  align-items: center;
+  color: var(--ash-title-bar-action-foreground);
+  transform: translateY(-50%);
 }
 
 .ash-titlebar-center-adjacent-actions {
