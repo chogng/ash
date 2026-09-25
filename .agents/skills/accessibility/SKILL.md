@@ -1,6 +1,6 @@
 ---
 name: accessibility
-description: Primary accessibility skill for VS Code. REQUIRED for new feature and contribution work, and also applies to updates of existing UI. Covers accessibility help dialogs, accessible views, verbosity settings, signals, ARIA announcements, keyboard navigation, and ARIA labels/roles.
+description: Primary accessibility skill for Ash. REQUIRED for new feature and contribution work, and also applies to updates of existing UI. Covers accessibility help dialogs, accessible views, verbosity settings, signals, ARIA announcements, keyboard navigation, and ARIA labels/roles.
 ---
 
 ## When to Use This Skill
@@ -16,7 +16,7 @@ Trigger examples:
 
 Do not skip this skill just because accessibility is not named in the prompt.
 
-When adding a **new interactive UI surface** to VS Code — a panel, view, widget, editor overlay, dialog, or any rich focusable component the user interacts with — you **must** provide three accessibility components (if they do not already exist for the feature):
+When adding a **new interactive UI surface** to Ash — a panel, view, widget, editor overlay, dialog, or any rich focusable component the user interacts with — you **must** provide three accessibility components (if they do not already exist for the feature):
 
 1. **An Accessibility Help Dialog** — opened via the accessibility help keybinding when the feature has focus.
 2. **An Accessible View** — a plain-text read-only editor that presents the feature's content to screen reader users (when the feature displays non-trivial visual content).
@@ -42,7 +42,7 @@ An accessibility help dialog tells the user what the feature does, which keyboar
    - `getProvider(accessor)` returns an `AccessibleContentProvider`.
 
 2. **Create a content-provider class** implementing `IAccessibleViewContentProvider`.
-   - `id` — add a new entry in the `AccessibleViewProviderId` enum in `src/vs/platform/accessibility/browser/accessibleView.ts`.
+   - `id` — add a new entry in the `AccessibleViewProviderId` enum in `src/ash/platform/accessibility/browser/accessibleView.ts`.
    - `verbositySettingKey` — reference the new `AccessibilityVerbositySettingId` entry (see §3).
    - `options` — `{ type: AccessibleViewType.Help }`.
    - `provideContent()` — return localized, multi-line help text.
@@ -216,7 +216,7 @@ this._accessibilitySignalService.playSignal(AccessibilitySignal.error, { userGes
 
 ## 5. ARIA Alerts vs. Status Messages
 
-Use the `alert()` and `status()` functions from `src/vs/base/browser/ui/aria/aria.ts` to announce dynamic changes to screen readers.
+Use the `alert()` and `status()` functions from `src/ash/base/browser/ui/aria/aria.ts` to announce dynamic changes to screen readers.
 
 ### `alert(msg)` — Assertive live region (`role="alert"`)
 - **Use for**: Urgent, important information that the user must know immediately.
@@ -245,7 +245,7 @@ Every interactive UI element must be fully operable via the keyboard.
 
 - **Tab order**: All interactive elements must be reachable via `Tab` / `Shift+Tab` in a logical order.
 - **Arrow key navigation**: Lists, trees, grids, and toolbars must support arrow key navigation following WAI-ARIA patterns.
-- **Focus visibility**: Focused elements must have a visible focus indicator (VS Code's theme system provides this via `focusBorder`).
+- **Focus visibility**: Focused elements must have a visible focus indicator (Ash's theme system provides this via `focusBorder`).
 - **No mouse-only interactions**: Every action reachable by click or hover must also be reachable via keyboard (context menus, buttons, toggles, etc.).
 - **Escape to dismiss**: Overlays, dialogs, and popups must be dismissable with `Escape`, returning focus to the previous element.
 - **Focus trapping**: Modal dialogs must trap focus within the dialog until dismissed.
