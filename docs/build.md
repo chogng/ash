@@ -238,6 +238,12 @@ just bench-build ash-keybinding --jobs 4 --compare .build/build-health/<run>/rep
 
 同次实验没有采用全局 Profile 候选：`4 CGU + ThinLTO` 的单次冷构建约快 9%，但仅修改 CLI 入口后的 Release 重编译中位数从 6.50 秒增加到 159.24 秒；build-override O1 加六个宏相关包 O3 则使开发冷构建从约 313 秒增加到 341 秒，touch 重编译中位数只减少约 0.36 秒。默认参数保留，实际改进来自消除重复生成和实例化。
 
+2026-09-24 在 macOS aarch64、Rust 1.98.0、12 个 Cargo 任务、第三方源码已缓存的条件下，移除产品宿主到 App Server 实现的普通依赖后，分别对单个程序使用三个独立空目标目录测量。`ash-cli` 的 `dev-small` 冷编译中位数为 131.82 秒，无改动重跑 1.60 秒，仅触碰入口文件 2.26 秒；程序为 25,885,952 字节，Cargo timings 记录 552 个编译单元。`app` 的 `dev` 对应数据为 191.84、1.87、1.75 秒；程序为 87,874,120 字节，Cargo timings 记录 758 个编译单元。报告分别保存在 `.build/build-health/ash-cli-dev-small-vlkzv1fs/report.json` 和 `.build/build-health/app-dev-xvx7lkqe/report.json`。这些是各宿主程序的测量；`just build-code` 和 `just build-app` 仍会另外构建 `ash-app-server` 与 `ash-code-mode-host`，两条实际产品构建命令也已通过。
+
+在复用本机共享 Cargo 输出的实际产品命令中，分别修改一次 TUI 的帧间隔常量和 Rust App 的窗口宽度常量，再恢复原值；每条路径重复三次。`just build-code` 重编译 `ash-tui` 与 `ash-cli` 的三次用时为 7.45、4.84、4.67 秒，中位数 4.84 秒；`just build-app` 重编译 `ash-workbench` 与 `app` 的三次用时为 22.80、5.25、4.85 秒，中位数 5.25 秒。无改动重跑分别为 2.12 和 2.30 秒。运行日志保存在 `.build/build-health/edit-loop-20260924/report.json`，临时源码修改已恢复。首轮较慢，不能把后两轮的耗时当作稳定下界。
+
+变更前 `ash-cli` 的一次三轮冷编译中位数约 403.53 秒、程序约 158 MB、编译单元 1134 个，但测量期间 HEAD 和源码时间戳发生变化，不能作为严格配对的提速百分比；无改动与 touch 数据同样作废。变更后的有效报告证明普通 TUI/App 宿主图已不再包含 Typst、LiveKit/WebRTC 和 App Server 实现；测量时工作区尚有后来退出工作区的 Git 分支草稿，数字只适用于报告记录的源码快照。完整产品冷构建尚无同条件前后对照，不能把单包结果当作完整产品提速。
+
 2026-09-24 在 macOS aarch64、Rust 1.98.0、`dev` profile、六个 Cargo 任务和离线依赖缓存下，对 `ash-app-server-protocol` 各使用三个独立空目标目录测量。源码位于同一工作区，目标目录位于本机内置磁盘。协议包原先只为 `PreparedFeedback` 类型依赖整个反馈服务，使 HTTP/TLS 构建进入关键路径；把该类型移入独立的反馈契约包后，协议包不再编译 `ash-client`、`ash-http-client`、`reqwest` 和 `aws-lc-sys`。冷构建中位数从 89.55 秒降至 69.27 秒（减少 22.6%），其中原先单次 `aws-lc-sys` 构建步骤耗时 46.5 秒。无改动重跑中位数为 0.91→0.75 秒；在协议注册表文件末尾临时加入注释触发重编译的中位数为 3.87→4.05 秒，这项注释编辑仅验证增量失效范围，不代表实际功能编辑。`time` 报告的最大 RSS 为 1.33→1.36 GB，协议 `.rlib` 均约 52 MiB；一个测量目标目录从 1.81 降至 1.55 GiB。完整产品构建耗时未由这组包级测量推断。
 
 同日在 macOS aarch64、Rust 1.98.0、`dev` profile、四个 Cargo 任务、`CARGO_INCREMENTAL=0` 和相同源码下，分别用三个独立空目标目录对照普通构建与已预热的本机 sccache 0.16.0。协议包空目标目录构建中位数为 66.03→47.88 秒（减少 27.5%），无改动重跑为 0.72→0.80 秒，触碰 `lib.rs` 时间戳后的重编译为 19.97→1.86 秒；后者复用了内容未变的编译结果，不代表修改代码后的重编译速度。两组包产物合计均为 85,773,398 字节。`time` 的最大 RSS 不覆盖独立运行的 sccache 服务，不能据此判断总内存变化。GitHub Actions 缓存和整个 CI 作业的耗时尚未由这组本机包级测量验证。

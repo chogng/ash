@@ -50,6 +50,7 @@ zui = { workspace = true, features = ["wgpu"] }
 workspace = true
 
 [dev-dependencies]
+ash-app-server-client = { workspace = true, features = ["in-process"] }
 flate2 = { workspace = true }
 sha2 = { workspace = true }
 tar = { workspace = true }

@@ -9,8 +9,9 @@
 
 ## 快速理解
 
-App Server 客户端把“启动后端、初始化连接、配对请求、转发事件和正确关闭”封装成一个可交付的
-就绪会话，使 CLI、TUI 和无交互宿主不必各自实现一遍。
+App Server 客户端把“连接后端进程、初始化连接、配对请求、转发事件和正确关闭”封装成一个
+就绪会话，使 CLI、TUI 和无交互宿主不必各自实现一遍。产品端通过 stdio 连接单独打包的
+`ash-app-server`；进程内连接只供本 crate 测试及显式启用 `in-process` 特性的契约测试使用。
 
 | 调用方动作 | 客户端保证 | 调用方仍负责 |
 | --- | --- | --- |
@@ -23,12 +24,12 @@ App Server 客户端把“启动后端、初始化连接、配对请求、转发
 
 ## 1. 结论
 
-`ash-app-server-client` 存在的原因，不只是复用一组 typed RPC method。`ash-exec` 与
-`ash-tui` 都需要完成同一套本地 App Server 宿主流程：
+`ash-app-server-client` 除 typed RPC method 外，还统一 `ash-exec`、`ash-tui` 与 Rust App 的
+连接流程：
 
-1. 根据启动配置创建并启动 App Server；
-2. 建立 client 到 App Server 的请求通道；
-3. 建立 App Server 到 client 的结果与事件通道；
+1. 启动产品选定的 App Server 程序；
+2. 建立到 App Server 的请求通道；
+3. 建立返回结果与事件的通道；
 4. 通过请求通道完成 `initialize` 与 schema/capability 校验；
 5. 只在初始化成功后向调用方交付 ready client；
 6. 运行期间正确配对请求结果，并持续转发 server notification；
@@ -37,20 +38,18 @@ App Server 客户端把“启动后端、初始化连接、配对请求、转发
 这套启动、连接和关闭逻辑不能在 `ash-exec` 与 `ash-tui` 中各写一份，因此抽成共享 crate。
 
 ```text
-ash-exec ─┐
-           ├─► ash-app-server-client ─► start App Server
-ash-tui ──┘             │
-                         ├─ request channel ──► App Server
-                         └─ result/event  ◄──── App Server
+ash-exec / ash-tui / app
+          │
+          ▼
+ash-app-server-client ── JSONL/stdio ──► ash-app-server 程序
 ```
 
-直接依赖和启动 `ash-app-server` 是 embedded backend 的职责，不是依赖方向错误。当前
-`AppServerSession::start_stdio` 已能在同一 public facade 下连接 product-selected child，`app`
-用它承载 SSH Remote App Server；它仍只连接相同的 App Server contract，不是 scheduler protocol，
-也不是 remote process executor。Desktop 的 JSONL/stdio client 仍不要求复用这个 Rust crate。
+普通客户端依赖图不包含 App Server 实现。`AppServerSession::start_stdio` 连接产品选定的子进程，
+`app` 也用它承载 SSH Remote App Server；客户端只负责 App Server contract，不负责 scheduler
+或远程进程执行。Desktop 的 JSONL/stdio client 仍不要求复用这个 Rust crate。
 
-`ash-exec` 是无交互界面的 Agent 执行宿主。当前它启动 embedded App Server；交互式 TUI 则通过
-stdio 连接 profile-scoped local App Server，并把初始 `cwd` 作为执行位置交给服务端。
+`ash-exec` 是无交互界面的 Agent 执行宿主。它与交互式 TUI 均通过 stdio 连接独立 App Server，
+并把初始 `cwd` 作为执行位置交给服务端。
 后续远程调度系统以它作为 headless execution entry。Job/Attempt/lease/event cursor 属于
 [`exec.md`](exec.md) 定义的 scheduler adapter，不进入 App Server Client。
 
@@ -70,7 +69,7 @@ pub struct AppServerSession {
 
 `AppServerSession` 拥有：
 
-- embedded App Server runner，或产品选择的 child-process JSONL connection；
+- 产品选择的 child-process JSONL connection；契约测试可使用进程内 runner；
 - 唯一 App Server connection；
 - request channel 的 server 端；
 - server message/event channel 的 client 端；
@@ -106,15 +105,11 @@ impl AppServerSession {
 
 ## 3. 为什么由这个 crate 统一连接 App Server
 
-`ash-exec` 和 `ash-tui` 都是本地 App Server 的宿主，而不是已经存在的外部 server 的普通
-调用方。两者需要相同的 composition：
+`ash-exec`、`ash-tui` 和 Rust App 都需要相同的连接语义：
 
-- 用户 profile root 与本地 SQLite state repository；
-- config、credentials、model provider 和 tool runtime；
-- App Server dispatcher；
-- connection-scoped subscription 与 Resource ownership；
-- client/server channel；
 - initialize 参数、schema hash 与 capabilities；
+- 请求结果配对与通知转发；
+- connection-scoped subscription 与 Resource ownership 的关闭；
 - shutdown 与错误回收。
 
 如果这些步骤留在各自 consumer，会形成两套不同的启动语义：一个可能忘记 schema gate，另一个
@@ -124,19 +119,20 @@ connection。
 依赖方向应是：
 
 ```text
-ash-exec / ash-tui
+ash-exec / ash-tui / app
           │
           ▼
 ash-app-server-client
-   ├─► ash-app-server
    ├─► ash-app-server-protocol
    └─► channel/task runtime
+
+in-process 契约测试特性 ─► ash-app-server 实现
 ```
 
-Consumer 不直接创建 `AppServer`、`ConnectionState`、dispatcher 或 notification broker。
-这些类型可以在 client crate 内部使用，但不能泄漏到 `ash-exec` 或 TUI 的业务代码。
+产品 consumer 不直接创建 `AppServer`、`ConnectionState`、dispatcher 或 notification broker。
+服务端组合归 `ash-app-server` 程序所有；客户端的进程内测试特性复用这套组合。
 
-当前 `ash-exec` 已是非交互 Agent 宿主，并通过本 crate 启动 embedded App Server；底层 process
+当前 `ash-exec` 已是非交互 Agent 宿主，并通过本 crate 连接独立 App Server；底层 process
 execution 已迁移到独立 `ash-tool-executor`。后续 remote scheduler 仍位于 `ash-exec` 上层，不能让
 “执行一个 tool process”和“宿主化完整 App Server”重新共享同一个模块或协议。
 
@@ -169,19 +165,21 @@ Workbench 的 App Server host 使用它导出的 session/event contract；`zui`�
 
 ## 4. 启动流程
 
-客户端暴露两个自解释入口；产品宿主负责在 backend 分支中选择它们：
+产品宿主选择 App Server 程序及其参数，客户端负责启动并初始化：
 
 ```rust
-let mut session = AppServerSession::start_embedded(options)?;
+let mut session = AppServerSession::start_stdio(command, client_info, capabilities)?;
 let client = session.client();
 let events = session.take_events()?;
 ```
+
+`start_embedded` 只在客户端自身测试或显式启用 `in-process` 特性的契约测试中提供。
 
 Remote 不需要额外的 `connect_remote` client API：它通过产品宿主构造
 `StdioAppServerCommand`，或由 Remote connection adapter 直接创建同一个
 `AppServerSession`。因此 App Server 是横向核心 contract，Remote 只是其中一种可替换 backend。
 
-Embedded start 必须按以下顺序执行：
+进程内契约测试的启动顺序如下；产品 stdio 路径遵守相同的 initialize 与 ready 边界：
 
 ```text
 validate options
@@ -247,7 +245,7 @@ typed params
   → typed result / typed server error
 ```
 
-Embedded hot path 推荐使用 protocol-owned typed request enum：
+进程内测试路径使用 protocol-owned typed request enum：
 
 ```rust
 enum ClientRequest {
@@ -377,7 +375,7 @@ connection driver
   └─ observe shutdown ─────────► close + join
 ```
 
-进程内连接仍应经过同一个 App Server protocol dispatcher。Typed channel 可以避免 JSON 编解码、
+进程内测试连接仍应经过同一个 App Server protocol dispatcher。Typed channel 可以避免 JSON 编解码、
 stdio 与子进程开销，但不能直接调用 Core、Store 或私有 App Server operation。它复用相同
 request/result/error/notification 语义，而不是复制第二份 in-process response contract。
 
@@ -437,7 +435,7 @@ source；client event pump 与 request driver 独立，因此空闲连接和长 
 它不自行创建 App Server、初始化 connection 或实现 notification pump。
 
 后续 scheduler-facing protocol、worker registration、lease、heartbeat、Job/Attempt mapping 和
-event ack 属于 [`exec.md`](exec.md)。App Server Client 只提供 embedded/remote App Server
+event ack 属于 [`exec.md`](exec.md)。App Server Client 只提供 stdio App Server
 connection，不理解 scheduler Job。
 
 ### 9.2 `ash-tui`
@@ -456,18 +454,18 @@ TUI 不再接收一个同步 `&mut AppServerClient<T>`，也不调用 `drain_not
 
 当前已经落地：
 
-- `AppServerSession::start_embedded` 只在 initialize 与 schema gate 成功后返回 ready session；
+- 产品端 `AppServerSession::start_stdio` 只在 initialize 与 schema gate 成功后返回 ready session；
+- `start_embedded` 与进程内 transport 由客户端测试或 `in-process` 特性启用；
 - `AppServerRequestHandle` 可克隆，clone 共享 connection-local atomic request ID allocator；
 - bounded request channel、per-request completion 与独立 connection driver；
-- `ConnectionNotifications` 在 server publish 时主动唤醒独立 event pump；
+- 进程内测试的 `ConnectionNotifications` 在 server publish 时主动唤醒独立 event pump；
 - response completion 在同一 request 产生的 causal notification 交付前发送；
 - `AppServerEvents` 是单消费者 typed notification/connection lifecycle stream；
 - `AppServerEvents` channel 限 1024 项，背压到 App Server 4096 项 connection queue；transient
   backlog 可清除，durable/control 不静默丢弃；
 - `shutdown` 拒绝后续请求、关闭 connection、唤醒 event pump 并 join 两个 background task；
-- CLI interactive 路径使用 `AppServerSession::start_stdio` 连接 local authority；headless 路径仍可
-  使用 `start_embedded` composition；
-- `start_in_process_client` 已经体现“由共享 crate 创建本地 App Server”的正确方向；
+- CLI interactive 与 headless 路径都使用 `AppServerSession::start_stdio` 连接 local authority；
+- `start_in_process_client` 供契约测试复用正式请求协议；
 - `open_in_process_app_server` 返回可克隆的 `InProcessAppServer` host；
 - `InProcessAppServer::connect` 为同一个 `Arc<AppServer>` 建立各自 initialize 完成的 typed
   connection，供 embedded host 和 contract tests 共享一个 composition；
@@ -490,14 +488,14 @@ TUI 不再接收一个同步 `&mut AppServerClient<T>`，也不调用 `drain_not
 
 | 边界 | 状态 |
 | --- | --- |
-| `start_in_process_client` / generic `AppServerClient<T>` | rust-app 与 contract tests 的同步适配面；TUI/CLI 不再依赖 drain |
+| `start_in_process_client` / generic `AppServerClient<T>` | 前者仅供契约测试，后者是 typed request 的通用接口；TUI/CLI 不再依赖 drain |
 | typed method 同步等待 completion | shared handle 保持同步 typed API；TUI 已用 `RequestTask` 把等待移出单写者 loop |
 | bounded event/data plane | Current：1024 event + 4096 server queue；显式 `Lagged` event 尚未提供 |
 | stdio child backend | 已实现；`AppServerSession::start_stdio` 完成 initialize 的协议和必需能力校验，并使用同一 request/event contract；本地与 Remote `ash code` 的 30 秒有界重连和 snapshot 恢复由 CLI 宿主负责 |
 | initialize gate 只存在于一个 helper | 裸 `AppServerClient::new` 可以在未初始化时发送业务请求 |
 | server error 被压成 code/string | 丢失 typed error name/data |
 
-因此 owned embedded session 的 request/event/shutdown 与有界交付主路径已经完成；下一阶段集中在 typed error、显式 lag lifecycle，以及其他产品宿主需要的连接恢复。不要把这些策略回退到 notification drain，也不要把 durable subscription restoration 偷塞进低层 stdio transport。
+因此 stdio session 的 request/event/shutdown 与有界交付主路径已经完成；下一阶段集中在 typed error、显式 lag lifecycle，以及其他产品宿主需要的连接恢复。不要把这些策略回退到 notification drain，也不要把 durable subscription restoration 偷塞进低层 stdio transport。
 
 ## 11. 目标模块
 
@@ -525,7 +523,7 @@ app-server-client/src/
 - `client.rs`：cloneable typed request handle；
 - `events.rs`：单消费者 event stream；
 - `driver.rs`：request/result/notification/shutdown multiplexing；
-- `embedded.rs`：typed in-process channel 与 local App Server runner；
+- `embedded.rs`：仅供契约测试的 typed in-process channel 与 local App Server runner；
 - `remote.rs`：相同 contract 的 remote App Server transport；
 - `pending.rs`：request ID 与 completion pairing；
 - `shutdown.rs`：关闭顺序与 task join；

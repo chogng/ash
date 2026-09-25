@@ -945,7 +945,6 @@ dependencies = [
 name = "ash-cli"
 version = "0.1.0"
 dependencies = [
- "ash-app-server",
  "ash-app-server-client",
  "ash-app-server-daemon",
  "ash-app-server-protocol",

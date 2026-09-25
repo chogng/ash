@@ -5,6 +5,7 @@ mod memories;
 mod memory;
 pub use memory::MemoryRecording;
 
+#[cfg(any(test, feature = "in-process"))]
 mod in_process;
 mod notification;
 mod session;
@@ -160,12 +161,13 @@ use std::sync::{Arc, OnceLock};
 use zeroize::Zeroize;
 use zeroize::Zeroizing;
 
+#[cfg(any(test, feature = "in-process"))]
 pub use ash_app_server::SessionStateMode;
-pub use in_process::InProcessAppServer;
-pub use in_process::InProcessClientOptions;
-pub use in_process::InProcessTransport;
-pub use in_process::open_in_process_app_server;
-pub use in_process::start_in_process_client;
+#[cfg(any(test, feature = "in-process"))]
+pub use in_process::{
+    InProcessAppServer, InProcessClientOptions, InProcessTransport, open_in_process_app_server,
+    start_in_process_client,
+};
 pub use notification::ServerNotification;
 pub use session::{
     AppServerEvent, AppServerEvents, AppServerRequestHandle, AppServerSession,

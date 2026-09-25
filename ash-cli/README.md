@@ -37,7 +37,7 @@
 | `ash plugin grant ID` / `revoke ID` | 授予或撤销包声明的权限 |
 | `ash plugin uninstall ID` | 卸载指定已安装包 |
 | `ash doctor [--json]` | 检查安装、服务握手、配置、账户与运行诊断 |
-| `ash app-server ...` | 服务监听与 daemon 生命周期；参数交给对应 crate |
+| `ash app-server ...` | 服务监听交给随 CLI 一起打包的 `ash-app-server` 程序；`connect` 和 `daemon` 管理本地服务进程 |
 | `ash remote ...` | 远程连接、探测、安装与运行配置管理 |
 | `ash update [--channel latest\|stable]` | 更新程序；`--status` 查看状态 |
 

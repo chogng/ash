@@ -1,13 +1,20 @@
+#[cfg(any(test, feature = "in-process"))]
 use crate::in_process::{InProcessClientOptions, open_in_process_app_server};
-use crate::{AppServerClient, ClientError, JsonRpcTransport, ServerNotification, notification};
+use crate::notification;
+use crate::{AppServerClient, ClientError, JsonRpcTransport, ServerNotification};
+#[cfg(any(test, feature = "in-process"))]
 use ash_app_server::{AppServer, ConnectionNotifications};
 use ash_app_server_protocol::protocol::common::ClientCapabilities;
 use ash_app_server_protocol::protocol::common::ClientInfo;
-use ash_app_server_protocol::protocol::initialize::InitializeParams;
-use ash_app_server_protocol::protocol::initialize::REQUIRED_SESSION_CAPABILITIES;
-use ash_app_server_protocol::protocol::initialize::ensure_protocol_compatible;
+#[cfg(any(test, feature = "in-process"))]
+use ash_app_server_protocol::protocol::initialize::{
+    InitializeParams, REQUIRED_SESSION_CAPABILITIES, ensure_protocol_compatible,
+};
 use std::fmt;
 use std::process::Child;
+use std::sync::Arc;
+#[cfg(any(test, feature = "in-process"))]
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
@@ -15,7 +22,6 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::sync::mpsc::SyncSender;
 use std::sync::mpsc::TryRecvError;
 use std::sync::mpsc::TrySendError;
-use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
@@ -77,12 +83,13 @@ impl AppServerEvents {
 
 /// Owns one initialized App Server connection and its background drivers.
 ///
-/// A session can either compose the server in-process or bind the same typed client contract to a
-/// child process's JSON Lines stdio stream. The latter is used by Remote host connections.
+/// Product hosts connect to an App Server process through JSON Lines stdio. Contract tests can
+/// also compose the server in-process when the `in-process` feature is enabled.
 pub struct AppServerSession {
     client: AppServerRequestHandle,
     events: Option<AppServerEvents>,
     commands: SyncSender<DriverCommand>,
+    #[cfg(any(test, feature = "in-process"))]
     notifications: Option<Arc<ConnectionNotifications>>,
     closing: Arc<AtomicBool>,
     driver: Option<JoinHandle<()>>,
@@ -92,6 +99,7 @@ pub struct AppServerSession {
 
 impl AppServerSession {
     /// Starts an embedded App Server, initializes its connection, and returns a ready session.
+    #[cfg(any(test, feature = "in-process"))]
     pub fn start_embedded(options: InProcessClientOptions) -> Result<Self, ClientError> {
         let host = open_in_process_app_server(options)?;
         Self::from_embedded_host(
@@ -136,6 +144,7 @@ impl AppServerSession {
         self.close_and_join()
     }
 
+    #[cfg(any(test, feature = "in-process"))]
     fn from_embedded_host(
         server: Arc<AppServer>,
         client_info: ClientInfo,
@@ -238,6 +247,7 @@ impl AppServerSession {
         if !was_closing {
             let _ = self.commands.send(DriverCommand::Shutdown);
         }
+        #[cfg(any(test, feature = "in-process"))]
         if let Some(notifications) = &self.notifications {
             notifications.close();
         }
@@ -272,6 +282,7 @@ impl Drop for AppServerSession {
     fn drop(&mut self) {
         if !self.closing.swap(true, Ordering::AcqRel) {
             let _ = self.commands.try_send(DriverCommand::Shutdown);
+            #[cfg(any(test, feature = "in-process"))]
             if let Some(notifications) = &self.notifications {
                 notifications.close();
             }
@@ -311,6 +322,7 @@ pub(super) enum DriverCommand {
     Shutdown,
 }
 
+#[cfg(any(test, feature = "in-process"))]
 fn drive_connection(
     server: Arc<AppServer>,
     mut connection: ash_app_server::ConnectionState,
@@ -338,6 +350,7 @@ fn drive_connection(
     notifications.close();
 }
 
+#[cfg(any(test, feature = "in-process"))]
 fn pump_notifications(
     notifications: Arc<ConnectionNotifications>,
     delivery: Arc<Mutex<()>>,

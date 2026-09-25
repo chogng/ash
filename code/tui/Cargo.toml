@@ -70,6 +70,7 @@ arboard = { workspace = true }
 image = { workspace = true, features = ["gif", "jpeg", "png", "webp"] }
 
 [dev-dependencies]
+ash-app-server-client = { workspace = true, features = ["in-process"] }
 insta = { workspace = true }
 tempfile = { workspace = true }
 ash-client = { workspace = true }

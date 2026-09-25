@@ -67,8 +67,15 @@ def main(arguments: list[str] | None = None) -> int:
     if (
         cargo_arguments[0] in {"test", "run"}
         and "ASH_TGREP_PATH" not in environment
-        and cargo_command_uses_package(
-            args.cargo, cargo_arguments, REPOSITORY_ROOT, "ash-tgrep"
+        and (
+            cargo_command_uses_package(
+                args.cargo, cargo_arguments, REPOSITORY_ROOT, "ash-tgrep"
+            )
+            # The CLI starts a sibling App Server; its runtime inputs no longer appear in
+            # the CLI's Cargo dependency graph.
+            or cargo_command_uses_package(
+                args.cargo, cargo_arguments, REPOSITORY_ROOT, "ash-cli"
+            )
         )
     ):
         from build.ash_rs.tgrep import resolve_tgrep

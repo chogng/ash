@@ -225,6 +225,7 @@ pub(super) fn start(
             receiver: event_receiver,
         }),
         commands,
+        #[cfg(any(test, feature = "in-process"))]
         notifications: None,
         closing,
         driver: Some(writer),

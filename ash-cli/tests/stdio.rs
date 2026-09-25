@@ -87,6 +87,31 @@ fn ash_code_cli_serves_the_remote_stdio_contract() {
     std::fs::remove_dir_all(root).unwrap();
 }
 
+#[cfg(unix)]
+#[test]
+fn ash_code_cli_forwards_app_server_output_and_exit_status() {
+    let root = test_root("forward-exit");
+    fs::create_dir_all(&root).unwrap();
+    let backend = root.join("ash-app-server-test");
+    fs::write(
+        &backend,
+        "#!/bin/sh\nprintf 'forwarded:%s\\n' \"$1\"\nexit 17\n",
+    )
+    .unwrap();
+    let mut permissions = fs::metadata(&backend).unwrap().permissions();
+    permissions.set_mode(0o755);
+    fs::set_permissions(&backend, permissions).unwrap();
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_ash"))
+        .args(["app-server", "--listen", "stdio://"])
+        .env("ASH_APP_SERVER_PATH", &backend)
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(17));
+    assert_eq!(output.stdout, b"forwarded:--listen\n");
+    fs::remove_dir_all(root).unwrap();
+}
+
 #[test]
 fn ash_code_app_server_without_dir_does_not_inherit_its_current_directory() {
     let root = test_root("empty-dir");

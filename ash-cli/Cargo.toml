@@ -19,7 +19,6 @@ clap = { workspace = true, features = ["derive"] }
 rand = { workspace = true }
 ash-utils-home-dir = { workspace = true }
 ash-app-server-daemon = { workspace = true }
-ash-app-server = { workspace = true }
 process-hardening = { workspace = true }
 build-info = { workspace = true }
 flate2 = { workspace = true }

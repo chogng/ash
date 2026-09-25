@@ -108,7 +108,7 @@ pub fn run(arguments: impl IntoIterator<Item = impl Into<OsString> + Clone>) -> 
         }
     };
     match dispatch(cli) {
-        Ok(()) => 0,
+        Ok(code) => code,
         Err(error) => {
             eprintln!("ash: {}", error.message);
             error.exit_code
@@ -116,8 +116,8 @@ pub fn run(arguments: impl IntoIterator<Item = impl Into<OsString> + Clone>) -> 
     }
 }
 
-fn dispatch(cli: Cli) -> Result<(), CliError> {
-    match cli.command {
+fn dispatch(cli: Cli) -> Result<i32, CliError> {
+    let result = match cli.command {
         None => local_tui::run(configured_dir()?, profile_root()?).map_err(CliError::failure),
         Some(Command::Ask { prompt }) => exec::ask(prompt.join(" ")),
         Some(Command::Exec(options)) => exec::execute(options),
@@ -153,7 +153,7 @@ fn dispatch(cli: Cli) -> Result<(), CliError> {
         Some(Command::Mcp { command }) => management::mcp(command),
         Some(Command::Plugin { command }) => management::plugin(command),
         Some(Command::Doctor(options)) => doctor::run(options),
-        Some(Command::AppServer(arguments)) => run_app_server(arguments.arguments),
+        Some(Command::AppServer(arguments)) => return run_app_server(arguments.arguments),
         Some(Command::Remote(arguments)) => {
             remote::run(arguments.arguments).map_err(CliError::failure)
         }
@@ -167,22 +167,41 @@ fn dispatch(cli: Cli) -> Result<(), CliError> {
             };
             update::run_manual(arguments).map_err(CliError::failure)
         }
-    }
+    };
+    result.map(|()| 0)
 }
 
-fn run_app_server(arguments: Vec<String>) -> Result<(), CliError> {
+fn run_app_server(arguments: Vec<String>) -> Result<i32, CliError> {
     match arguments.first().map(String::as_str) {
-        Some("connect") => ash_app_server_daemon::run_command(
-            arguments,
-            &ash_app_server_daemon::backend_executable_path()?,
-        ),
-        Some("daemon") => ash_app_server_daemon::run_command(
-            arguments.into_iter().skip(1),
-            &ash_app_server_daemon::backend_executable_path()?,
-        ),
-        _ => ash_app_server::run(arguments),
+        Some("connect") => {
+            ash_app_server_daemon::run_command(
+                arguments,
+                &ash_app_server_daemon::backend_executable_path()?,
+            )
+            .map_err(CliError::failure)?;
+            Ok(0)
+        }
+        Some("daemon") => {
+            ash_app_server_daemon::run_command(
+                arguments.into_iter().skip(1),
+                &ash_app_server_daemon::backend_executable_path()?,
+            )
+            .map_err(CliError::failure)?;
+            Ok(0)
+        }
+        _ => {
+            // The App Server ships beside the CLI; launching that program keeps its service graph
+            // out of the interactive CLI and TUI build while preserving stdio and exit status.
+            let backend = ash_app_server_daemon::backend_executable_path()?;
+            let status = std::process::Command::new(backend)
+                .args(arguments)
+                .status()
+                .map_err(CliError::failure)?;
+            status
+                .code()
+                .ok_or_else(|| CliError::failure(format!("App Server terminated: {status}")))
+        }
     }
-    .map_err(CliError::failure)
 }
 
 fn configured_dir() -> Result<PathBuf, String> {

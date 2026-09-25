@@ -5,6 +5,10 @@ edition.workspace = true
 license-file.workspace = true
 publish.workspace = true
 
+[features]
+# Product hosts connect to a separate server process; embedding is used by contract tests.
+in-process = ["dep:ash-app-server", "dep:ash-client"]
+
 [lib]
 doctest = false
 name = "ash_app_server_client"
@@ -20,11 +24,10 @@ ash-memory-diagnostics = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 zeroize = { workspace = true }
-ash-app-server = { workspace = true }
+ash-app-server = { workspace = true, optional = true }
 ash-app-server-protocol = { workspace = true }
 ash-app-server-transport = { workspace = true }
-ash-client = { workspace = true }
-ash-protocol = { workspace = true }
+ash-client = { workspace = true, optional = true }
 [lints]
 workspace = true
 
@@ -32,6 +35,9 @@ workspace = true
 ash-utils-pty = { workspace = true }
 
 [dev-dependencies]
+ash-app-server = { workspace = true }
+ash-client = { workspace = true }
+ash-protocol = { workspace = true }
 core-api = { workspace = true }
 ash-async-utils = { workspace = true }
 ash-core = { workspace = true }

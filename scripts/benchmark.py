@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import hashlib
 import json
 import os
@@ -21,6 +22,7 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 SCENARIOS = ("clean", "unchanged", "touch")
 BUILD_ENV = (
+    "ASH_BUILD_COMMIT",
     "RUSTC",
     "RUSTFLAGS",
     "CARGO_ENCODED_RUSTFLAGS",
@@ -99,6 +101,26 @@ def artifacts(log: Path, package_id: str, target: Path) -> dict[str, int]:
             if path.is_file():
                 sizes[str(path.relative_to(target))] = path.stat().st_size
     return sizes
+
+
+def remove_run_target(target: Path) -> None:
+    # Finder can add .DS_Store while rmtree walks a macOS build output tree.
+    for attempt in range(3):
+        try:
+            shutil.rmtree(target)
+            return
+        except OSError as error:
+            if error.errno != errno.ENOTEMPTY or attempt == 2:
+                raise
+
+
+def tracked_build_timestamps(root: Path) -> dict[str, int]:
+    names = output(["git", "ls-files", "-z", "--", "*.rs", "*.toml"], root)
+    return {
+        name: (root / name).stat().st_mtime_ns
+        for name in names.split("\0")
+        if name
+    }
 
 
 def compare(
@@ -252,6 +274,7 @@ def main(arguments: list[str] | None = None) -> int:
             str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
             for path in sorted(inputs)
         }
+        build_timestamps = tracked_build_timestamps(root)
         if args.compare:
             baseline = json.loads(args.compare.read_text())
             if baseline["environment"] != report["environment"]:
@@ -299,12 +322,18 @@ def main(arguments: list[str] | None = None) -> int:
             finally:
                 # This directory was allocated by this run; shared Cargo output is never cleaned.
                 if target.exists():
-                    shutil.rmtree(target)
+                    remove_run_target(target)
         for name, digest in report["inputs"].items():
             if hashlib.sha256((root / name).read_bytes()).hexdigest() != digest:
                 raise ValueError(
                     f"{name} changed during measurement; repeat with stable inputs"
                 )
+        if output(["git", "rev-parse", "HEAD"], root) != report["commit"]:
+            raise ValueError("HEAD changed during measurement; repeat with stable inputs")
+        if tracked_build_timestamps(root) != build_timestamps:
+            raise ValueError(
+                "tracked Rust or TOML timestamps changed during measurement; repeat with stable inputs"
+            )
         report["medians"] = {
             scenario: {
                 metric: statistics.median(v[metric] for v in values)
