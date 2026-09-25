@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Onboarding integration</title>
+    <style>
+      :root {
+        --ash-foreground: #111;
+        --ash-editor-background: #fff;
+        --ash-widget-border: #777;
+        --ash-focus-border: #165dba;
+        --ash-stroke-thickness: 1px;
+        --ash-corner-radius-small: 4px;
+        --ash-corner-radius-large: 8px;
+        --ash-spacing-size80: 8px;
+        --ash-spacing-size120: 12px;
+        --ash-spacing-size160: 16px;
+        --ash-font-size-heading3: 13px;
+        --ash-font-size-body1: 13px;
+        --ash-font-weight-semi-bold: 600;
+      }
+      body { margin: 0; }
+      main { position: relative; width: 100vw; height: 100vh; }
+      #previous { position: absolute; top: 24px; left: 24px; }
+      #first { position: absolute; top: 100px; left: 80px; }
+      #second { position: absolute; top: 160px; left: 350px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <button id="previous">Previous focus</button>
+      <button id="first">First target</button>
+      <button id="second">Second target</button>
+    </main>
+    <script type="module" src="./onboarding.integration.ts"></script>
+  </body>
+</html>

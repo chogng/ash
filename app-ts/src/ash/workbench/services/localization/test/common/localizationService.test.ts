@@ -172,6 +172,9 @@ test('editor action labels use the selected Chinese language catalog', async () 
 		assert.equal(localize('parameterHints.dialog', 'Parameter hints'), '参数提示');
 		assert.equal(localize('chat.providerKeys.manage', 'Manage Model API Keys'), '管理模型 API 密钥');
 		assert.equal(localize('chat.providerKeys.inputTitle', 'API key for {0}', 'OpenAI'), 'OpenAI 的 API 密钥');
+		assert.equal(localize('onboarding.stepProgress', 'Step {0} of {1}', 2, 3), '第 2 步，共 3 步');
+		assert.equal(localize('onboarding.commandCenter.title', 'Find commands quickly'), '快速查找命令');
+		assert.equal(localize('releaseNotes.open', 'Show Release Notes'), '显示版本说明');
 	} finally {
 		resetNlsResolver();
 	}

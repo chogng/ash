@@ -1,0 +1,48 @@
+.ash-onboarding-spotlight {
+	position: absolute;
+	inset: 0;
+	z-index: 1000;
+	pointer-events: none;
+}
+
+.ash-onboarding-spotlight-frame {
+	position: absolute;
+	box-sizing: border-box;
+	border: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	border-radius: var(--ash-corner-radius-small);
+	pointer-events: none;
+}
+
+.ash-onboarding-spotlight-card {
+	position: absolute;
+	box-sizing: border-box;
+	width: min(360px, calc(100% - 24px));
+	padding: var(--ash-spacing-size160);
+	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-corner-radius-large);
+	background: var(--ash-editor-background);
+	color: var(--ash-foreground);
+	box-shadow: 0 8px 28px var(--ash-widget-shadow);
+	pointer-events: auto;
+}
+
+.ash-onboarding-spotlight-card h2 {
+	margin: 0 0 var(--ash-spacing-size80);
+	font-size: var(--ash-font-size-heading3);
+	font-weight: var(--ash-font-weight-semi-bold);
+}
+
+.ash-onboarding-spotlight-card p {
+	margin: 0 0 var(--ash-spacing-size120);
+	font-size: var(--ash-font-size-body1);
+}
+
+.ash-onboarding-spotlight-progress {
+	opacity: .7;
+}
+
+.ash-onboarding-spotlight-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: var(--ash-spacing-size80);
+}

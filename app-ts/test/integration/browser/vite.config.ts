@@ -20,6 +20,8 @@ export default defineConfig({
 				themes: resolve(import.meta.dirname, "themes.html"),
 				webTransport: resolve(import.meta.dirname, 'webTransport.html'),
 				dialog: resolve(import.meta.dirname, "dialog.html"),
+				onboarding: resolve(import.meta.dirname, 'onboarding.html'),
+				releaseNotes: resolve(import.meta.dirname, 'releaseNotes.html'),
 				terminal: resolve(import.meta.dirname, "terminal.html"),
 				textModel: resolve(import.meta.dirname, "textModel.html"),
 				standalone: resolve(import.meta.dirname, 'standalone.html'),

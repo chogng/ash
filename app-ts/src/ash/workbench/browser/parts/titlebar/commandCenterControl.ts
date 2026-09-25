@@ -5,6 +5,7 @@ import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { IQuickAccessController } from '../../../../platform/quickinput/common/quickAccess.js';
 import { localize, type ILocalizationService } from '../../../services/localization/common/localizationService.js';
+import { registerOnboardingTargetProvider } from '../../../contrib/onboarding/browser/spotlight/onboardingTarget.js';
 
 export class CommandCenterControl extends Disposable {
 	public readonly domNode: HTMLElement;
@@ -32,6 +33,7 @@ export class CommandCenterControl extends Disposable {
 			},
 		}));
 		this.button.toggleClassName('ash-titlebar-command-center-button', true);
+		this._register(registerOnboardingTargetProvider('workbench.commandCenter.button', () => this.button.domNode));
 		setAriaAttribute(this.button.domNode, 'haspopup', 'dialog');
 		setAriaAttribute(this.button.domNode, 'expanded', false);
 		this._register(this.quickAccess.onDidChangeVisibility(visible => {
