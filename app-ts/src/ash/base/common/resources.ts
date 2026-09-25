@@ -1,6 +1,29 @@
 import { isMacintosh, isWindows } from "./platform.js";
 import { URI } from "./uri.js";
 
+/** Metadata carried in a data URI before its content. */
+export namespace DataUri {
+	export const META_DATA_LABEL = 'label';
+	export const META_DATA_MIME = 'mime';
+
+	export function parseMetaData(resource: URI): Map<string, string> {
+		const comma = resource.path.indexOf(',');
+		const header = comma === -1 ? resource.path : resource.path.slice(0, comma);
+		const [mime, ...parameters] = header.split(';');
+		const metadata = new Map<string, string>();
+		if (mime) {
+			metadata.set(META_DATA_MIME, mime);
+		}
+		for (const parameter of parameters) {
+			const separator = parameter.indexOf(':');
+			if (separator > 0 && separator < parameter.length - 1) {
+				metadata.set(parameter.slice(0, separator), decodeURIComponent(parameter.slice(separator + 1)));
+			}
+		}
+		return metadata;
+	}
+}
+
 /** Path comparison behavior selected for a resource. */
 export enum ResourcePathCasing {
 	Sensitive = "sensitive",

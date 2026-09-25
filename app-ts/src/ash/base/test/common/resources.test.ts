@@ -4,6 +4,7 @@ import { ResourceMap, ResourceSet } from "../../common/map.js";
 import {
 	ExtUri,
 	extUri,
+	DataUri,
 	ResourcePathCasing,
 } from "../../common/resources.js";
 import { URI } from "../../common/uri.js";
@@ -11,6 +12,19 @@ import { URI } from "../../common/uri.js";
 const caseInsensitiveExtUri = new ExtUri(
 	() => ResourcePathCasing.Insensitive,
 );
+
+test("DataUri reads encoded metadata without consuming the payload", () => {
+	const resource = URI.parse("data:text/typescript;label:Demo%20File.ts;description:Part%3BOne;base64,AA");
+
+	assert.deepEqual([...DataUri.parseMetaData(resource)], [
+		[DataUri.META_DATA_MIME, "text/typescript"],
+		[DataUri.META_DATA_LABEL, "Demo File.ts"],
+		["description", "Part;One"],
+	]);
+	assert.deepEqual([...DataUri.parseMetaData(URI.parse("data:text/plain,content"))], [
+		[DataUri.META_DATA_MIME, "text/plain"],
+	]);
+});
 
 test("ExtUri preserves fragments unless explicitly ignored", () => {
 	const firstAnchor = URI.parse("ash://workspace/item?rev=2#anchor=1");

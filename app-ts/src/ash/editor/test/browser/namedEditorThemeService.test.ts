@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { suiteTeardown, test } from 'mocha';
+import { JSDOM } from 'jsdom';
 import { darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme, lightColorTheme } from '../../../platform/theme/common/colorTheme.js';
 import { colorCssVariable } from '../../../platform/theme/common/colorUtils.js';
 import { ColorScheme } from '../../../platform/theme/common/theme.js';
@@ -8,6 +9,9 @@ import { registerColor } from '../../../platform/theme/common/colorUtils.js';
 import { Color } from '../../../base/common/color.js';
 import { TokenMetadata } from '../../common/encodedTokenAttributes.js';
 import { TokenizationRegistry } from '../../common/languages.js';
+
+const browserEnvironment = new JSDOM('<!doctype html><body></body>');
+suiteTeardown(() => browserEnvironment.window.close());
 
 class TestMediaQueryList extends EventTarget {
 	public matches = false;
@@ -24,6 +28,7 @@ class TestMediaQueryList extends EventTarget {
 function createThemeService(): { readonly mediaQuery: TestMediaQueryList; readonly service: StandaloneThemeService } {
 	const mediaQuery = new TestMediaQueryList();
 	const ownerWindow = {
+		document: browserEnvironment.window.document,
 		matchMedia(query: string): MediaQueryList {
 			assert.equal(query, '(forced-colors: active)');
 			return mediaQuery as unknown as MediaQueryList;
@@ -229,7 +234,7 @@ test('editor ruler colors preserve the editor theme contract', () => {
 	});
 });
 
-test('overview ruler colors preserve transparent normal borders and a solid high-contrast light border', () => {
+test('overview ruler colors preserve transparent normal borders and solid high-contrast borders', () => {
 	assert.deepEqual({
 		darkBorder: darkColorTheme.colors[editorOverviewRulerBorder],
 		lightBorder: lightColorTheme.colors[editorOverviewRulerBorder],
@@ -240,8 +245,8 @@ test('overview ruler colors preserve transparent normal borders and a solid high
 	}, {
 		darkBorder: '#7f7f7f4d',
 		lightBorder: '#7f7f7f4d',
-		highContrastDarkBorder: '#7f7f7f4d',
-		highContrastLightBorder: '#666666',
+		highContrastDarkBorder: '#ffffff',
+		highContrastLightBorder: '#000000',
 		darkBackground: '#1e1e1e00',
 		lightBackground: '#ffffff00',
 	});

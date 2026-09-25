@@ -2,11 +2,9 @@
 
 ## 文件图标类与主题接线（2026-09-25）
 
-`common/services/getIconClasses.ts` 已按同路径补入：根据资源、文件类型、已打开模型与语言关联生成文件名、复合扩展名和语言类名；数据 URI 使用 `base/common/network.ts` 的 scheme 常量。Editor 补全列表的 File/Folder 项现在使用这些类名；普通编辑器和 Chat 输入框均通过依赖注入创建补全控制器。Workbench 主题数据将同一组类名生成补全图标样式，并匹配资源标签的文件名、扩展名及语言关联；语言注册变化会通知已有资源标签重绘。当前 Workbench 未提供 `IModelService`，资源标签按已注册的文件语言关联选择图标；工具函数的模型优先语义由 Editor 单测验证。下文较早的“没有消费者”和缺失文件清单是当时的审计记录。
+`common/services/getIconClasses.ts` 已按同路径补入：根据资源、文件类型、已打开模型与语言关联生成文件名、复合扩展名和语言类名；数据 URI 元数据由 `base/common/resources.ts` 的 `DataUri` 解析，纯文本语言 ID 由 `common/languages/modesRegistry.ts` 提供。语言注册仍由每个 `LanguageService` 持有，不增加全局注册源。Editor 补全列表的 File/Folder 项现在使用这些类名；普通编辑器和 Chat 输入框均通过依赖注入创建补全控制器。Workbench 主题数据将同一组类名生成补全图标样式，并匹配资源标签的文件名、扩展名及语言关联；语言注册变化会通知已有资源标签重绘。当前 Workbench 未提供 `IModelService`，资源标签按已注册的文件语言关联选择图标；工具函数的模型优先语义由 Editor 单测验证。下文较早的“没有消费者”和缺失文件清单是当时的审计记录。
 
-定向单测 5 个文件通过；Chromium 文件图标场景通过，覆盖真实字体、类名、明暗主题与关闭/恢复。`typecheck:stanza`、`typecheck:renderer`、`build:renderer` 曾通过，本批文件的 `git diff --check` 通过。随后同时进行的 `colorRegistry.ts` 改动把高对比度默认值改为必填，最后一次 `typecheck:stanza` 因范围外颜色注册调用缺失字段而失败，不能把当前全工作区类型检查记为通过。完整 Editor 单测在 Find 图标 `find-selection` 未注册处失败；全工作区的 `git diff --check` 受同时进行的 `editorActions.ts` 尾部空行改动影响，均未记为通过。
-
-补齐 Editor 调用后，`typecheck:stanza`、`typecheck:renderer`、`build:renderer` 和测试 TypeScript 编译通过；新增的 Editor 补全、文件夹主题定向单测通过。Chromium 分别验证了补全控制器的真实创建路径，以及主题图标字体、明暗切换和关闭后的文字恢复。较宽的 Suggest 单测文件仍有两条 snippet 选区用例失败；Chat 输入单测文件另有日志服务重复注册及布局用例失败，不能将这两个测试文件记为整体通过。Chat 输入的两条补全行为定向单测通过。
+本次补齐后，整组 Editor 单测 250/250 个文件通过。测试编辑器、Standalone Editor 和 Workbench 编辑器窗格的测试 DOM 均装配图标解析器，Find 测试在构造失败时也会释放已创建资源；Suggest 测试装配真实的 Snippet 控制器，Monarch 和主题测试提供完整的 DOM。`ZoneWidget` 将可访问性选项传给视图区，Chromium 场景验证其按钮能被无障碍角色定位并获得焦点。`build:stanza`、`build:renderer` 和相关 Chromium 场景通过；补齐图标解析器后，Standalone Editor 的 31 项与 Workbench 编辑器窗格的 14 项单测单独复跑通过，且没有图标创建失败日志。
 
 ## Drop / Paste Into Editor（2026-09-24）
 

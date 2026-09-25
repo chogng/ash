@@ -31,8 +31,16 @@ import { EditorOption } from '../../../../../editor/common/config/editorOptions.
 import { EditorMinimapConfiguration } from '../../../../../editor/common/config/editorConfigurationSchema.js';
 import { CodeEditorConfiguration } from '../../common/editorConfiguration.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { setIconResolver } from '../../../../../base/browser/ui/lxicons/lxicon.js';
+import { getIconDefinition } from '../../../../../platform/theme/common/iconRegistry.js';
 
-const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+function createTestDom(markup: string): JSDOM {
+	const dom = new JSDOM(markup);
+	setIconResolver(dom.window.document, icon => getIconDefinition(icon));
+	return dom;
+}
+
+const browserEnvironment = createTestDom("<!doctype html><body></body>");
 browserEnvironment.window.HTMLCanvasElement.prototype.getContext = () => null;
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
@@ -69,7 +77,7 @@ const { EditorLineWrapping } = await import("../../../../../editor/common/config
 suiteTeardown(() => browserEnvironment.window.close());
 
 test("Stanza editor pane loads, lays out, focuses, hides, and clears one editor part", async () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	const dom = createTestDom("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const parent = dom.window.document.querySelector<HTMLElement>("main")!;
 	const textFiles = new ImmediateTextFiles("from disk");
@@ -90,6 +98,7 @@ test("Stanza editor pane loads, lays out, focuses, hides, and clears one editor 
 	assert.equal(pane.getValue(), "const alpha = 1;");
 	const control = pane.getControl();
 	assert.ok(control instanceof CodeEditorWidget);
+	assert.ok(control.getContribution('editor.contrib.findController'));
 	assert.ok(control.getContribution('editor.contrib.inlayHints'));
 	assert.ok(control.getContribution('store.contrib.stickyScrollController'));
 	assert.deepEqual(pane.getStatus(), { lineNumber: 1, columnNumber: 1, languageId: "typescript", encoding: "UTF-8", endOfLine: "LF" });
@@ -118,7 +127,7 @@ test("Stanza editor pane loads, lays out, focuses, hides, and clears one editor 
 });
 
 test('open code editor applies live view settings and actions without replacing its control', async () => {
-	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const dom = createTestDom('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using closeWindow = toDisposable(() => dom.window.close());
 	const parent = dom.window.document.querySelector<HTMLElement>('main')!;
@@ -164,7 +173,7 @@ test('open code editor applies live view settings and actions without replacing 
 });
 
 test('Workbench Go to Line command opens the active editor dialog and focuses its input', async () => {
-	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const dom = createTestDom('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using closeWindow = toDisposable(() => dom.window.close());
 	const parent = dom.window.document.querySelector<HTMLElement>('main')!;
@@ -188,7 +197,7 @@ test('Workbench Go to Line command opens the active editor dialog and focuses it
 });
 
 test('Stanza editor pane switches files without leaving the old model, DOM, or keyboard focus behind', async () => {
-	const dom = new JSDOM('<!doctype html><body><main></main><button id="outside">Outside</button></body>');
+	const dom = createTestDom('<!doctype html><body><main></main><button id="outside">Outside</button></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const parent = dom.window.document.querySelector<HTMLElement>('main')!;
 	const resourceStore = new BrowserTextResourceStore(new ImmediateTextFiles('first file'));
@@ -260,7 +269,7 @@ test('Stanza editor pane switches files without leaving the old model, DOM, or k
 });
 
 test("Stanza editor pane acquires the Workbench language service for its detected model", async () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	const dom = createTestDom("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const parent = dom.window.document.querySelector<HTMLElement>("main")!;
 	const textFiles = new ImmediateTextFiles("const value = 1;");
@@ -300,7 +309,7 @@ class RecordingLanguageDiagnosticsService implements ILanguageDiagnosticsService
 }
 
 test("Stanza editor pane releases a load cancelled before content resolution", async () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	const dom = createTestDom("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const parent = dom.window.document.querySelector<HTMLElement>("main")!;
 	const pending = deferred<ResolvedTextFileContent>();
@@ -328,7 +337,7 @@ test("Stanza editor pane releases a load cancelled before content resolution", a
 });
 
 test("Stanza editor pane saves and reverts its shared model reference", async () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	const dom = createTestDom("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const parent = dom.window.document.querySelector<HTMLElement>("main")!;
 	const textFiles = new ImmediateTextFiles("from disk");
@@ -365,7 +374,7 @@ test("Stanza editor pane saves and reverts its shared model reference", async ()
 });
 
 test("Stanza editor pane trims trailing whitespace before saving", async () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	const dom = createTestDom("<!doctype html><body><main></main></body>");
 	const parent = dom.window.document.querySelector<HTMLElement>("main")!;
 	const textFiles = new ImmediateTextFiles("alpha  \n beta\t\n");
 	const resourceStore = new BrowserTextResourceStore(textFiles);
@@ -386,7 +395,7 @@ test("Stanza editor pane trims trailing whitespace before saving", async () => {
 });
 
 test("Stanza editor pane inserts the configured final newline before saving", async () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	const dom = createTestDom("<!doctype html><body><main></main></body>");
 	const parent = dom.window.document.querySelector<HTMLElement>("main")!;
 	const textFiles = new ImmediateTextFiles("alpha");
 	const resourceStore = new BrowserTextResourceStore(textFiles);
@@ -407,7 +416,7 @@ test("Stanza editor pane inserts the configured final newline before saving", as
 });
 
 test("Stanza editor pane resolves extension first-line languages after loading an unknown file", async () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	const dom = createTestDom("<!doctype html><body><main></main></body>");
 	const parent = dom.window.document.querySelector<HTMLElement>("main")!;
 	const textFiles = new ImmediateTextFiles("#!/usr/bin/env demo\nprint('ok')");
 	const resourceStore = new BrowserTextResourceStore(textFiles);
@@ -433,7 +442,7 @@ test("Stanza editor pane resolves extension first-line languages after loading a
 });
 
 test("Stanza editor pane forwards Workbench editor preferences to each created part", async () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	const dom = createTestDom("<!doctype html><body><main></main></body>");
 	const parent = dom.window.document.querySelector<HTMLElement>("main")!;
 	const textFiles = new ImmediateTextFiles("const value = 1;");
 	const resourceStore = new BrowserTextResourceStore(textFiles);
@@ -529,7 +538,7 @@ test("Stanza editor pane forwards Workbench editor preferences to each created p
 });
 
 test("Workbench owns the code editor save shortcut and reports failures", async () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	const dom = createTestDom("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const parent = dom.window.document.querySelector<HTMLElement>("main")!;
 	const textFiles = new ImmediateTextFiles("alpha");
@@ -615,7 +624,7 @@ function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value
 }
 
 test('Workbench status follows cursor movement through public editor events', async () => {
-	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const dom = createTestDom('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using closeWindow = toDisposable(() => dom.window.close());
 	const parent = dom.window.document.querySelector<HTMLElement>('main')!;

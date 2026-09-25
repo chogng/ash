@@ -23,8 +23,16 @@ import { StandaloneServiceCollection, StandaloneServices } from "../../standalon
 import { WorkerTextModelSyncServer } from '../../common/services/textModelSync/textModelSync.impl.js';
 import type { IMonarchLanguage } from '../../editor.api.js';
 import { installEditorTestDom } from './editorTestGlobals.js';
+import { setIconResolver } from '../../../base/browser/ui/lxicons/lxicon.js';
+import { getIconDefinition } from '../../../platform/theme/common/iconRegistry.js';
 
-const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+function createTestDom(markup: string): JSDOM {
+	const dom = new JSDOM(markup);
+	setIconResolver(dom.window.document, icon => getIconDefinition(icon));
+	return dom;
+}
+
+const browserEnvironment = createTestDom("<!doctype html><body></body>");
 const forcedColors = new browserEnvironment.window.EventTarget();
 Object.defineProperties(forcedColors, {
 	matches: { configurable: true, value: false, writable: true },
@@ -252,7 +260,7 @@ test('standalone colorization escapes markup, expands tabs and creates no model 
 });
 
 test("standalone theme APIs register, select, and project a named theme", () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	const dom = createTestDom("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	stanza.editor.defineNamedTheme("standalone-test", {
 		label: "Standalone Test",
@@ -427,7 +435,7 @@ test("standalone languages API feeds the shared editor registries", async () => 
 });
 
 test("standalone completion providers execute in a live editor", async () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	const dom = createTestDom("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	let requests = 0;
 	stanza.languages.register({ id: "stanza-completion-test" });
@@ -516,7 +524,7 @@ test("standalone createModel infers language from URI or first line unless langu
 });
 
 test("standalone editors share caller-owned models and dispose independently", () => {
-	const dom = new JSDOM("<!doctype html><body><main></main><aside></aside></body>");
+	const dom = createTestDom("<!doctype html><body><main></main><aside></aside></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const model = stanza.editor.createModel("shared", "plaintext", URI.parse("inmemory://stanza/shared.txt"));
 	const createdEditors: unknown[] = [];
@@ -540,7 +548,7 @@ test("standalone editors share caller-owned models and dispose independently", (
 });
 
 test('standalone layout follows editor focus, geometry, and disposal', () => {
-	const dom = new JSDOM('<!doctype html><body><main></main><aside></aside></body>');
+	const dom = createTestDom('<!doctype html><body><main></main><aside></aside></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const main = dom.window.document.querySelector<HTMLElement>('main')!;
 	const aside = dom.window.document.querySelector<HTMLElement>('aside')!;
@@ -574,7 +582,7 @@ test('standalone layout follows editor focus, geometry, and disposal', () => {
 });
 
 test('standalone creation event exposes an assembled editor and caller-owned model', () => {
-	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const dom = createTestDom('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	const model = stanza.editor.createModel('caller text', 'plaintext', URI.parse('inmemory://stanza/event-ready.txt'));
@@ -584,6 +592,7 @@ test('standalone creation event exposes an assembled editor and caller-owned mod
 		registered: stanza.editor.getEditors().includes(editor),
 		mounted: container.contains(editor.getDomNode()),
 		placeholder: editor.getContribution('editor.contrib.placeholderText') !== null,
+		find: editor.getContribution('editor.contrib.findController') !== null,
 		theme: container.getAttribute('data-color-theme'),
 	}));
 	const editor = stanza.editor.create(container, { model, placeholder: 'Start typing' });
@@ -593,6 +602,7 @@ test('standalone creation event exposes an assembled editor and caller-owned mod
 		registered: true,
 		mounted: true,
 		placeholder: true,
+		find: true,
 		theme: 'ash-light',
 	}]);
 	editor.dispose();
@@ -604,7 +614,7 @@ test('standalone creation event exposes an assembled editor and caller-owned mod
 });
 
 test('standalone creation listener can release an implicit model and editor immediately', () => {
-	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const dom = createTestDom('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	const resource = URI.parse('inmemory://stanza/event-dispose.txt');
@@ -625,7 +635,7 @@ test('standalone creation listener can release an implicit model and editor imme
 });
 
 test('standalone editor releases its eager contribution with the editor', () => {
-	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const dom = createTestDom('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	let created = 0;
@@ -649,7 +659,7 @@ test('standalone editor releases its eager contribution with the editor', () => 
 });
 
 test("standalone editor owns only the implicit model it creates", () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	const dom = createTestDom("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const editor = stanza.editor.create(dom.window.document.querySelector<HTMLElement>("main")!, {
 		value: "owned",
@@ -667,7 +677,7 @@ test("standalone editor owns only the implicit model it creates", () => {
 });
 
 test('standalone editor releases an implicit model on switch and retains caller-owned replacements', () => {
-	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const dom = createTestDom('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	const ownedResource = URI.parse('inmemory://stanza/switch-owned.txt');
@@ -712,7 +722,7 @@ test('standalone editor releases an implicit model on switch and retains caller-
 });
 
 test('standalone editor rejects an unregistered replacement without disturbing its current model', () => {
-	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const dom = createTestDom('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	const editor = stanza.editor.create(container, { value: 'current' });
@@ -731,7 +741,7 @@ test('standalone editor rejects an unregistered replacement without disturbing i
 });
 
 test('standalone editors keep caller-owned models and selections isolated when one switches', () => {
-	const dom = new JSDOM('<!doctype html><body><main></main><aside></aside></body>');
+	const dom = createTestDom('<!doctype html><body><main></main><aside></aside></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const firstModel = stanza.editor.createModel('shared', 'plaintext', URI.parse('inmemory://stanza/switch-shared.txt'));
 	const secondModel = stanza.editor.createModel('other', 'plaintext', URI.parse('inmemory://stanza/switch-other.txt'));
@@ -768,7 +778,7 @@ test('standalone editors keep caller-owned models and selections isolated when o
 });
 
 test("standalone editor rejects unregistered models and conflicting model options", () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	const dom = createTestDom("<!doctype html><body><main></main></body>");
 	const model = new stanza.TextModel("unregistered");
 	assert.throws(() => stanza.editor.create(dom.window.document.querySelector<HTMLElement>("main")!, { model }), /not registered/);
 	model.dispose();

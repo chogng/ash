@@ -14,6 +14,8 @@ import { Position } from "../../../../common/core/position.js";
 import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { LanguageService } from '../../../../common/services/languageService.js';
+import { EditorContributionInstantiation } from '../../../../browser/editorExtensions.js';
+import { SnippetController2 } from '../../../snippet/browser/snippetController2.js';
 import { SuggestController } from "../../browser/suggestController.js";
 
 const { EditorTextDirection, View } = await import("../../../../browser/view.js");
@@ -335,7 +337,7 @@ function createFixture(text: string, sessionOptions: LanguageCompletionSessionOp
 		container: requiredElement<HTMLElement>(dom.window.document, "main"),
 		model,
 		lineHeight: 20,
-		contributions: [],
+		contributions: [{ id: SnippetController2.ID, ctor: SnippetController2, instantiation: EditorContributionInstantiation.Eager }],
 	});
 	const viewport = editor.view;
 	editor.setPosition(new Position((0) + 1, (text.length) + 1));

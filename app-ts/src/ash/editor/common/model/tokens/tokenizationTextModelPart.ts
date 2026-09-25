@@ -18,6 +18,7 @@ import { SemanticTokensTextModelPart } from './semanticTokensTextModelPart.js';
 import { createSyntaxWorker } from '../../services/editorWebWorker.js';
 import { LanguageRequestCoordinator } from '../languageRequestCoordinator.js';
 import { toStandardTokenType } from '../../languages/supports/tokenization.js';
+import { PLAINTEXT_LANGUAGE_ID } from '../../languages/modesRegistry.js';
 import { Color } from '../../../../base/common/color.js';
 
 export interface TokenizationTextModelPartOptions {
@@ -363,8 +364,8 @@ function isCancellation(error: unknown): boolean {
 }
 
 class ModelLanguageIdCodec implements ILanguageIdCodec {
-	private readonly ids = new Map<string, LanguageId>([['plaintext', LanguageId.PlainText]]);
-	private readonly languages = new Map<LanguageId, string>([[LanguageId.PlainText, 'plaintext']]);
+	private readonly ids = new Map<string, LanguageId>([[PLAINTEXT_LANGUAGE_ID, LanguageId.PlainText]]);
+	private readonly languages = new Map<LanguageId, string>([[LanguageId.PlainText, PLAINTEXT_LANGUAGE_ID]]);
 
 	encodeLanguageId(languageId: string): LanguageId {
 		const current = this.ids.get(languageId);
@@ -378,6 +379,6 @@ class ModelLanguageIdCodec implements ILanguageIdCodec {
 	}
 
 	decodeLanguageId(languageId: LanguageId): string {
-		return this.languages.get(languageId) ?? 'plaintext';
+		return this.languages.get(languageId) ?? PLAINTEXT_LANGUAGE_ID;
 	}
 }

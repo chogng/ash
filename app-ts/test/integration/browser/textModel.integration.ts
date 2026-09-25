@@ -52,6 +52,9 @@ import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser
 import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { WorkbenchQuickInputService } from '../../../src/ash/workbench/services/quickinput/browser/quickInputService.js';
+import { ZoneWidget } from '../../../src/ash/editor/contrib/zoneWidget/browser/zoneWidget.js';
+import { setIconResolver } from '../../../src/ash/base/browser/ui/lxicons/lxicon.js';
+import { getIconDefinition } from '../../../src/ash/platform/theme/common/iconRegistry.js';
 
 interface WorkbenchSwitchResult {
 	readonly paneOwnsEditor: boolean;
@@ -85,6 +88,7 @@ interface IntegrationHarness {
 	setRenderRichScreenReaderContent(enabled: boolean): void;
 	showViewZone(): void;
 	removeViewZone(): void;
+	showAccessibleZoneWidget(): void;
 	showWidgets(): void;
 	moveGlyphWidget(lineIndex: number): void;
 	removeWidgets(): void;
@@ -100,6 +104,7 @@ declare global {
 }
 
 const root = requiredElement("#editor-root");
+setIconResolver(root.ownerDocument, icon => getIconDefinition(icon));
 const disposables = new DisposableStore();
 const resource = URI.parse("inmemory://editor/main.rs");
 const files = new MemoryTextFiles(resource, "fn main() {\n  answer();\n}\n");
@@ -165,11 +170,11 @@ services.registerInstance(ILanguageFeaturesService, languageFeaturesService);
 disposables.add(services.createInstance(WorkbenchLanguageFeatures));
 services.registerInstance(ILanguageConfigurationService, languageConfigurationService);
 services.registerInstance(ILogService, new NullLoggerService());
-registerCodeEditorServices(services);
 services.registerInstance(IQuickInputService, disposables.add(new WorkbenchQuickInputService({
 	container: root,
 	contextKeyService: services.get(IContextKeyService),
 })));
+registerCodeEditorServices(services);
 services.get(IAccessibilityService).setAccessibilitySupport(AccessibilitySupport.Enabled);
 services.get(IKeybindingService);
 const pane = disposables.add(services.createInstance(CodeEditorPane, resourceStore, {
@@ -251,6 +256,19 @@ window.ashTextModelIntegration = {
 		});
 	},
 	removeViewZone,
+	showAccessibleZoneWidget: () => {
+		const widget = disposables.add(new class extends ZoneWidget {
+			protected override _fillContainer(container: HTMLElement): void {
+				const button = h(container.ownerDocument, 'button');
+				button.textContent = 'Accessible zone action';
+				container.append(button);
+			}
+
+			protected override _doLayout(): void {}
+		}(requiredEditorPart(), { isAccessible: true, showFrame: false, showArrow: false }));
+		widget.create();
+		widget.show(new Position(2, 1), 1);
+	},
 	showWidgets: () => {
 		removeWidgets();
 		const contentDomNode = h(document, 'button');

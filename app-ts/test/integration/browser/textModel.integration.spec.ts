@@ -827,6 +827,17 @@ test('view zones use the standard accessor, whitespace geometry, and disposal ch
 	});
 });
 
+test('accessible zone widgets expose their action to keyboard and accessibility APIs', async ({ page }) => {
+	await openEditor(page);
+	await page.evaluate(() => window.ashTextModelIntegration.showAccessibleZoneWidget());
+	const zone = page.locator('.stanza-editor-zone-widget');
+	await expect(zone).toBeVisible();
+	await expect(zone).not.toHaveAttribute('aria-hidden', 'true');
+	const action = page.getByRole('button', { name: 'Accessible zone action' });
+	await action.focus();
+	await expect(action).toBeFocused();
+});
+
 test('content and glyph margin widgets use the standard editor ports in Chromium', async ({ page }) => {
 	await openEditor(page);
 	await page.evaluate(() => window.ashTextModelIntegration.showWidgets());

@@ -1,8 +1,10 @@
 import { Schemas } from '../../../base/common/network.js';
+import { DataUri } from '../../../base/common/resources.js';
 import { ThemeIcon, type ThemeIcon as ThemeIconValue } from '../../../base/common/themables.js';
 import { URI } from '../../../base/common/uri.js';
 import { FileKind } from '../../../platform/files/common/files.js';
 import type { ILanguageService } from '../languages/language.js';
+import { PLAINTEXT_LANGUAGE_ID } from '../languages/modesRegistry.js';
 import type { IModelService } from './model.js';
 
 export function getIconClasses(
@@ -25,9 +27,10 @@ export function getIconClasses(
 		return classes;
 	}
 
+	const metadata = resource.scheme === Schemas.data ? DataUri.parseMetaData(resource) : undefined;
 	let name: string | undefined;
-	if (resource.scheme === Schemas.data) {
-		name = dataMetadata(resource).label;
+	if (metadata) {
+		name = metadata.get(DataUri.META_DATA_LABEL);
 	} else {
 		const path = decodeURIComponent(resource.path).replace(/\/+$/u, '');
 		const segments = path.split('/').filter(Boolean);
@@ -62,10 +65,10 @@ export function getIconClasses(
 		classes.push('ext-file-icon');
 	}
 
-	const languageId = resource.scheme === Schemas.data
-		? languageService.getLanguageIdByMimeType(dataMetadata(resource).mime)
+	const languageId = metadata
+		? languageService.getLanguageIdByMimeType(metadata.get(DataUri.META_DATA_MIME))
 		: modelService?.getModel(resource)?.getLanguageId();
-	const resolvedLanguageId = languageId && languageId !== 'plaintext'
+	const resolvedLanguageId = languageId && languageId !== PLAINTEXT_LANGUAGE_ID
 		? languageId
 		: languageService.guessLanguageIdByFilepathOrFirstLine(resource);
 	if (resolvedLanguageId) {
@@ -80,11 +83,4 @@ export function getIconClassesForLanguageId(languageId: string): string[] {
 
 export function fileIconSelectorEscape(value: string): string {
 	return value.replace(/\s/gu, '/');
-}
-
-function dataMetadata(resource: URI): { readonly mime: string | undefined; readonly label: string | undefined } {
-	const [header] = resource.path.split(',', 1);
-	const [mime, ...parameters] = header?.split(';') ?? [];
-	const label = parameters.find(parameter => parameter.startsWith('label:'))?.slice('label:'.length);
-	return { mime: mime || undefined, label: label ? decodeURIComponent(label) : undefined };
 }

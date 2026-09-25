@@ -6,6 +6,7 @@ import { LanguagesRegistry, type LanguageDescription, type LanguageDescriptionCo
 import { type ILanguageIdCodec } from '../languages.js';
 import { LanguageId } from '../encodedTokenAttributes.js';
 import { type ILanguageExtensionPoint, type ILanguageIcon, type ILanguageNameIdPair, type ILanguageSelection, type IAshLanguageService } from '../languages/language.js';
+import { PLAINTEXT_EXTENSION, PLAINTEXT_LANGUAGE_ID } from '../languages/modesRegistry.js';
 
 /** Owns language identities and file associations independently of feature providers. */
 export class LanguageService extends Disposable implements IAshLanguageService {
@@ -25,7 +26,7 @@ export class LanguageService extends Disposable implements IAshLanguageService {
 	constructor(private readonly warnOnOverwrite = false) {
 		super();
 		LanguageService.instanceCount += 1;
-		this._register(this.languages.register({ id: 'plaintext', extensions: ['.txt'], mimetypes: ['text/plain'] }));
+		this._register(this.languages.register({ id: PLAINTEXT_LANGUAGE_ID, extensions: [PLAINTEXT_EXTENSION], mimetypes: ['text/plain'] }));
 	}
 
 	public registerLanguage(definition: ILanguageExtensionPoint): IDisposable;
@@ -68,13 +69,13 @@ export class LanguageService extends Disposable implements IAshLanguageService {
 	getLanguageIdByMimeType(mimeType: string | null | undefined): string | null { return this.languages.getLanguageIdByMimeType(mimeType); }
 	guessLanguageIdByFilepathOrFirstLine(resource: URI | null, firstLine?: string): string | null { return resource ? this.resolveLanguageId({ resource, firstLine }) ?? null : null; }
 	createById(languageId: string | null | undefined): ILanguageSelection {
-		return new LanguageSelection(this.onDidChange, () => languageId && this.isRegisteredLanguageId(languageId) ? languageId : 'plaintext');
+		return new LanguageSelection(this.onDidChange, () => languageId && this.isRegisteredLanguageId(languageId) ? languageId : PLAINTEXT_LANGUAGE_ID);
 	}
 	createByMimeType(mimeType: string | null | undefined): ILanguageSelection {
-		return new LanguageSelection(this.onDidChange, () => this.getLanguageIdByMimeType(mimeType) ?? 'plaintext');
+		return new LanguageSelection(this.onDidChange, () => this.getLanguageIdByMimeType(mimeType) ?? PLAINTEXT_LANGUAGE_ID);
 	}
 	createByFilepathOrFirstLine(resource: URI | null, firstLine?: string): ILanguageSelection {
-		return new LanguageSelection(this.onDidChange, () => this.guessLanguageIdByFilepathOrFirstLine(resource, firstLine) ?? 'plaintext');
+		return new LanguageSelection(this.onDidChange, () => this.guessLanguageIdByFilepathOrFirstLine(resource, firstLine) ?? PLAINTEXT_LANGUAGE_ID);
 	}
 
 	requestBasicLanguageFeatures(languageId: string): void {
@@ -97,8 +98,8 @@ export class LanguageService extends Disposable implements IAshLanguageService {
 }
 
 class LanguageIdCodec implements ILanguageIdCodec {
-	private readonly ids = new Map<string, LanguageId>([['plaintext', LanguageId.PlainText]]);
-	private readonly languages = new Map<LanguageId, string>([[LanguageId.PlainText, 'plaintext']]);
+	private readonly ids = new Map<string, LanguageId>([[PLAINTEXT_LANGUAGE_ID, LanguageId.PlainText]]);
+	private readonly languages = new Map<LanguageId, string>([[LanguageId.PlainText, PLAINTEXT_LANGUAGE_ID]]);
 
 	encodeLanguageId(languageId: string): LanguageId {
 		const existing = this.ids.get(languageId);
@@ -109,7 +110,7 @@ class LanguageIdCodec implements ILanguageIdCodec {
 		return id;
 	}
 
-	decodeLanguageId(languageId: LanguageId): string { return this.languages.get(languageId) ?? 'plaintext'; }
+	decodeLanguageId(languageId: LanguageId): string { return this.languages.get(languageId) ?? PLAINTEXT_LANGUAGE_ID; }
 }
 
 class LanguageSelection implements ILanguageSelection {

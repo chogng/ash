@@ -43,6 +43,7 @@ import { DefaultEndOfLine, EndOfLinePreference, EndOfLineSequence, FindMatch, Po
 import { type SyntaxRequest, SYNTAX_DIAGNOSTIC_LANE, type SyntaxLane, type SyntaxResult } from '../languages.js';
 import { InternalModelContentChangeEvent, LineInjectedText, ModelFontChanged, ModelFontChangedEvent, ModelInjectedTextChangedEvent, ModelLineHeightChanged, ModelLineHeightChangedEvent, ModelRawContentChangedEvent, ModelRawEOLChanged, ModelRawFlush, ModelRawLineChanged, type IModelContentChangedEvent, type IModelDecorationsChangedEvent, type IModelLanguageChangedEvent, type IModelLanguageConfigurationChangedEvent, type IModelOptionsChangedEvent, type IModelTokensChangedEvent } from '../textModelEvents.js';
 import type { ILanguageSelection } from '../languages/language.js';
+import { PLAINTEXT_LANGUAGE_ID } from '../languages/modesRegistry.js';
 import { ResolvedLanguageConfiguration, type ILanguageConfigurationService } from '../languages/languageConfigurationRegistry.js';
 import { EditSources, type TextModelEditSource } from '../textModelEditSource.js';
 import { UndoRedoGroup } from '../../../platform/undoRedo/common/undoRedo.js';
@@ -236,7 +237,7 @@ export class TextModel implements ITextModel {
 		MODEL_ID += 1;
 		this.id = `$model${MODEL_ID}`;
 		this.uri = options.resource ?? URI.parse(`inmemory://model/${MODEL_ID}`);
-		this.languageId = requireLanguageId(options.languageId ?? 'plaintext');
+		this.languageId = requireLanguageId(options.languageId ?? PLAINTEXT_LANGUAGE_ID);
 		this.modelOptionsValue = new TextModelResolvedOptions({
 			tabSize: options.tabSize ?? EDITOR_MODEL_DEFAULTS.tabSize,
 			indentSize: options.indentSize ?? EDITOR_MODEL_DEFAULTS.indentSize,

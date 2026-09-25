@@ -17,6 +17,7 @@ import { registerSingleton } from '../../../platform/instantiation/common/extens
 import { LanguageBracketsConfiguration } from './supports/languageBracketsConfiguration.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
+import { PLAINTEXT_LANGUAGE_ID } from './modesRegistry.js';
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 
@@ -317,7 +318,7 @@ export class LanguageConfigurationRegistry extends Disposable {
 
 	constructor() {
 		super();
-		this._register(this.register('plaintext', {
+		this._register(this.register(PLAINTEXT_LANGUAGE_ID, {
 			brackets: [
 				['(', ')'],
 				['[', ']'],

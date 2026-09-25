@@ -15,3 +15,11 @@ test('Color uses red for malformed hexadecimal values', () => {
 	assert.equal(Color.fromHex('red').toString(), '#ff0000');
 	assert.equal(Color.fromHex('#12').toString(), '#ff0000');
 });
+
+test('Color caches converted color spaces per instance', () => {
+	const first = Color.fromHex('#336699');
+	const second = Color.fromHex('#336699');
+	assert.equal(first.hsla, first.hsla);
+	assert.equal(first.hsva, first.hsva);
+	assert.notEqual(first.hsla, second.hsla);
+});

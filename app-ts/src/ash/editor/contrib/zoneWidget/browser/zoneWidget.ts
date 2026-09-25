@@ -148,6 +148,7 @@ export abstract class ZoneWidget extends Disposable {
 			afterLineNumber: range.startLineNumber,
 			afterColumn: range.startColumn,
 			heightInPx: this.heightInPixels,
+			isAccessible: this.options.isAccessible,
 			ordinal: this.options.ordinal,
 			showInHiddenAreas: this.options.showInHiddenAreas,
 			domNode: this.domNode,

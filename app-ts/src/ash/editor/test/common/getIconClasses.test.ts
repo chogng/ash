@@ -33,6 +33,9 @@ test('file icon classes prefer an open model and describe folders and data label
 	const models = { getModel: (candidate: URI): TextModel | null => candidate.toString() === resource.toString() ? model : null };
 
 	assert.equal(getIconClasses(models, languages, resource).at(-1), 'rust-lang-file-icon');
+	using plainTextModel = new TextModel('content', { resource, languageId: 'plaintext' });
+	const plainTextModels = { getModel: (candidate: URI): TextModel | null => candidate.toString() === resource.toString() ? plainTextModel : null };
+	assert.equal(getIconClasses(plainTextModels, languages, resource).at(-1), 'typescript-lang-file-icon');
 	assert.deepEqual(getIconClasses(undefined, languages, URI.file('/workspace/src'), FileKind.Directory), [
 		'folder-icon', 'workspace-name-dir-icon', 'src-name-folder-icon',
 	]);

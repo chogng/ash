@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
+import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { EditorOption, type IEditorFindOptions } from "../../../../common/config/editorOptions.js";
 import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
@@ -32,6 +33,7 @@ test("find opens, highlights matches, navigates, and restores focus", () => {
 	assert.equal(fixture.find.getState().isRevealed, true);
 	assert.equal(fixture.searchInput.value, "alpha");
 	assert.equal(fixture.findElement.querySelector(".stanza-editor-find-result")?.textContent, "1 of 2");
+	assert.equal(fixture.findElement.querySelector('svg[data-ash-icon-id="find-selection"]')?.getAttribute('aria-hidden'), 'true');
 	assert.deepEqual(fixture.model.getAllDecorations().filter(decoration => decoration.options.className === 'findMatch' || decoration.options.className === 'currentFindMatch').map(decoration => decoration.range).sort(Range.compareRangesUsingStarts), [
 		new Range(1, 1, 1, 6),
 		new Range(1, 12, 1, 17),
@@ -303,41 +305,45 @@ interface Fixture extends Disposable {
 
 function createFixture(text: string, anchor = new Position((0) + 1, (0) + 1), active = anchor, options?: IEditorFindOptions): Fixture {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
-	const container = requiredElement<HTMLElement>(dom.window.document, "main");
-	const model = new TextModel(text);
-	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	const editor = createTestCodeEditor({
-		container,
-		model,
-		contributions: [],
-		lineHeight: 20,
-		find: options,
-	});
-	editor.layout({ width: 600, height: 120 });
-	editor.setSelection(Selection.fromPositions(anchor, active));
-	const editorInput = requiredElement<HTMLTextAreaElement>(container, ".stanza-editor-input");
-	const keybindings = editor.invokeWithinContext(accessor => accessor.get(IKeybindingService));
-	const hoverService = editor.invokeWithinContext(accessor => accessor.get(IHoverService));
-	const find = new FindController(editor, undefined, keybindings, hoverService);
-	const findElement = requiredElement<HTMLDivElement>(container, ".stanza-editor-find-widget");
-	const searchInput = requiredElement<HTMLInputElement>(findElement, "input[aria-label=\"Find\"]");
-	const replaceInput = requiredElement<HTMLInputElement>(findElement, "input[aria-label=\"Replace\"]");
-	return {
-		dom,
-		model,
-		editor,
-		findElement,
-		searchInput,
-		replaceInput,
-		editorInput,
-		find,
-		[Symbol.dispose](): void {
-			find.dispose();
-			editor.dispose();
-			model.dispose();
-			dom.window.close();
-		},
-	};
+	const resources = new DisposableStore();
+	resources.add(toDisposable(() => dom.window.close()));
+	try {
+		const container = requiredElement<HTMLElement>(dom.window.document, "main");
+		const model = resources.add(new TextModel(text));
+		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+		const editor = resources.add(createTestCodeEditor({
+			container,
+			model,
+			contributions: [],
+			lineHeight: 20,
+			find: options,
+		}));
+		editor.layout({ width: 600, height: 120 });
+		editor.setSelection(Selection.fromPositions(anchor, active));
+		const editorInput = requiredElement<HTMLTextAreaElement>(container, ".stanza-editor-input");
+		const keybindings = editor.invokeWithinContext(accessor => accessor.get(IKeybindingService));
+		const hoverService = editor.invokeWithinContext(accessor => accessor.get(IHoverService));
+		const find = resources.add(new FindController(editor, undefined, keybindings, hoverService));
+		const findElement = requiredElement<HTMLDivElement>(container, ".stanza-editor-find-widget");
+		const searchInput = requiredElement<HTMLInputElement>(findElement, "input[aria-label=\"Find\"]");
+		const replaceInput = requiredElement<HTMLInputElement>(findElement, "input[aria-label=\"Replace\"]");
+		return {
+			dom,
+			model,
+			editor,
+			findElement,
+			searchInput,
+			replaceInput,
+			editorInput,
+			find,
+			[Symbol.dispose](): void {
+				resources.dispose();
+			},
+		};
+	} catch (error) {
+		resources.dispose();
+		throw error;
+	}
 }
 
 function startFind(fixture: Fixture, showReplace = false): void {

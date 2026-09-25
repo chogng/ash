@@ -1,4 +1,5 @@
 import { CharCode } from './charCode.js';
+import { memoize } from './decorators.js';
 
 function roundFloat(number: number, decimalPoints: number): number {
 	const decimal = Math.pow(10, decimalPoints);
@@ -266,6 +267,7 @@ export class Color {
 
 	readonly rgba: RGBA;
 	private _hsla?: HSLA;
+	@memoize
 	get hsla(): HSLA {
 		if (this._hsla) {
 			return this._hsla;
@@ -275,6 +277,7 @@ export class Color {
 	}
 
 	private _hsva?: HSVA;
+	@memoize
 	get hsva(): HSVA {
 		if (this._hsva) {
 			return this._hsva;

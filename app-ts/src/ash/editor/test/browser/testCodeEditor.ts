@@ -7,10 +7,12 @@ import { MarkerDecorationsService } from '../../common/services/markerDecoration
 import { StandaloneCodeEditorService } from '../../standalone/browser/standaloneCodeEditorService.js';
 import { IInlineCompletionsService, InlineCompletionsService } from '../../browser/services/inlineCompletionsService.js';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
+import { setIconResolver } from '../../../base/browser/ui/lxicons/lxicon.js';
 import { IInstantiationService, ServiceContainer, ServiceConstructionDescriptor } from '../../../platform/instantiation/common/instantiation.js';
 import { darkColorTheme } from '../../../platform/theme/common/colorTheme.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { TestThemeService } from '../../../platform/theme/test/common/testThemeService.js';
+import { getIconDefinition } from '../../../platform/theme/common/iconRegistry.js';
 import { CodeEditorWidget, type CodeEditorWidgetOptions } from '../../browser/widget/codeEditor/codeEditorWidget.js';
 import { ICodeEditorService } from '../../browser/services/codeEditorService.js';
 import { createTestLanguageConfigurationService } from '../common/modes/testLanguageConfigurationService.js';
@@ -142,6 +144,7 @@ export function createTestCodeEditor(options: TestCodeEditorOptions): CodeEditor
 	const resources = new DisposableStore();
 	try {
 		const { instantiationService, languageConfigurationService, languageFeaturesService, accessibilityService, ...widgetOptions } = options;
+		setIconResolver(widgetOptions.container.ownerDocument, icon => getIconDefinition(icon));
 		const overrides = resources.add(instantiationService ? instantiationService.createChild() : new ServiceContainer());
 		if (!overrides.has(IQuickInputService)) {
 			overrides.registerSingleton(IQuickInputService, () => new QuickInputController(widgetOptions.container.ownerDocument.body));

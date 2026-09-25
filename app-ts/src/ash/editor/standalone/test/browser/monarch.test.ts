@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { DisposableStore } from '../../../../base/common/lifecycle.js';
+import { JSDOM } from 'jsdom';
+import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { ServiceContainer } from '../../../../platform/instantiation/common/instantiation.js';
@@ -17,8 +18,10 @@ import '../../../common/config/editorConfigurationSchema.js';
 
 function createTokenizer(resources: DisposableStore, definition: IMonarchLanguage) {
 	const services = resources.add(new ServiceContainer());
+	const dom = new JSDOM('<!doctype html><body></body>');
+	resources.add(toDisposable(() => dom.window.close()));
 	const media = Object.assign(new EventTarget(), { matches: false });
-	const ownerWindow = { matchMedia: () => media } as unknown as Window;
+	const ownerWindow = { document: dom.window.document, matchMedia: () => media } as unknown as Window;
 	services.registerSingleton(ILanguageService, () => new LanguageService());
 	services.registerSingleton(IStandaloneThemeService, () => new StandaloneThemeService(ownerWindow));
 	services.registerSingleton(IConfigurationService, () => new InMemoryConfigurationService());

@@ -11,6 +11,7 @@ import { DefaultEndOfLine, EndOfLinePreference, EndOfLineSequence, type ITextBuf
 import { TextModel, type TextModelUndoRedoSnapshot } from "../model/textModel.js";
 import type { ILanguageSelection, IAshLanguageService } from '../languages/language.js';
 import type { ILanguageConfigurationService } from '../languages/languageConfigurationRegistry.js';
+import { PLAINTEXT_LANGUAGE_ID } from '../languages/modesRegistry.js';
 import type { ILanguageFeaturesService } from './languageFeatures.js';
 import { type SyntaxServiceOptions } from '../languages.js';
 import type { IModelService } from "./model.js";
@@ -55,7 +56,7 @@ export class ModelService extends Disposable implements IModelService {
 	createModel(value: string | ITextBufferFactory, languageSelection: ILanguageSelection | null, resource?: URI, isForSimpleWidget = false): TextModel {
 		if (typeof value !== 'string' && !isTextBufferFactory(value)) throw new TypeError('Model value must be a string or ITextBufferFactory');
 		if (resource && this._models.has(resource.toString())) throw new Error(`A model already exists for '${resource.toString()}'`);
-		const creationOptions = this.getCreationOptions(languageSelection?.languageId ?? 'plaintext', resource, isForSimpleWidget);
+		const creationOptions = this.getCreationOptions(languageSelection?.languageId ?? PLAINTEXT_LANGUAGE_ID, resource, isForSimpleWidget);
 		const model = new TextModel(readModelValue(value, creationOptions.defaultEOL), {
 			resource,
 			languageId: languageSelection?.languageId,
