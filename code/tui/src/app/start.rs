@@ -49,6 +49,7 @@ pub(super) fn start(
         profile_root,
         app_server_process,
         recovery,
+        start_empty,
         drafts,
         notices,
         ..
@@ -86,7 +87,8 @@ pub(super) fn start(
     let terminal_settings = crate::config::TerminalSettings::from_tui(&initial_config.tui)
         .map_err(std::io::Error::other)?;
     let show_home = recovery.is_none()
-        && terminal_settings.screen_mode() == crate::terminal::ScreenMode::Fullscreen;
+        && (start_empty
+            || terminal_settings.screen_mode() == crate::terminal::ScreenMode::Fullscreen);
     let initial = match recovery {
         Some(recovery) => Some(ActiveConversation::recover(&mut client, recovery)?),
         None if !show_home => Some(ActiveConversation::start(&mut client, thread_title)?),
@@ -161,7 +163,7 @@ pub(super) fn start(
         apply_thread_snapshot(&mut app, thread, transcript);
         conversation
     });
-    if show_home && terminal_settings.screen_mode() == crate::terminal::ScreenMode::Fullscreen {
+    if show_home {
         app.open_home();
     }
     if let Some(drafts) = drafts {

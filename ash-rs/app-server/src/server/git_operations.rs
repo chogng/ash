@@ -22,10 +22,19 @@ use ash_app_server_protocol::protocol::git::GitPathsParams;
 use ash_app_server_protocol::protocol::git::GitRepositoryParams;
 use ash_app_server_protocol::protocol::git::GitWorktreeCreateParams;
 use ash_app_server_protocol::protocol::git::GitWorktreeCreateResult;
+use ash_app_server_protocol::protocol::git::GitWorktreeDto;
+use ash_app_server_protocol::protocol::git::GitWorktreeListResult;
+use ash_app_server_protocol::protocol::git::GitWorktreeResolveParams;
+use ash_app_server_protocol::protocol::git::GitWorktreeResolveResult;
+use ash_app_server_protocol::protocol::git::GitWorktreeStateDto;
 use ash_git::GitError;
 use serde_json::Value;
 use std::num::NonZeroUsize;
+use std::path::Path;
 use std::path::PathBuf;
+use worktree::WorktreeAvailability;
+use worktree::WorktreeOwner;
+use worktree::WorktreeSelector;
 
 const MAX_GIT_GRAPH_PAGE_SIZE: usize = 1000;
 
@@ -167,8 +176,103 @@ impl AppServer {
             .runtime
             .block_on(dirs.worktrees.create_unbound(&source, &params.name))
             .map_err(|_| RpcError::new(-32061, AppServerErrorName::GitOperationFailed))?;
+        // List results use canonical paths; match that spelling so the new checkout is selected.
+        let path = dunce::canonicalize(path)
+            .map_err(|_| RpcError::new(-32061, AppServerErrorName::GitOperationFailed))?;
         result(&GitWorktreeCreateResult {
-            path: path.to_string_lossy().into_owned(),
+            path: worktree_path(&path)?,
+        })
+    }
+
+    pub(super) fn git_worktree_list(&self, value: &Value) -> Result<Value, RpcError> {
+        let params: GitRepositoryParams = decode(value)?;
+        let source = self
+            .git_runtime_service()?
+            .readable_source_for(params.repository_id.as_deref())
+            .map_err(git_error)?;
+        let dirs = self
+            .dir_services
+            .as_ref()
+            .ok_or_else(|| RpcError::new(-32060, AppServerErrorName::GitUnavailable))?;
+        let worktrees = dirs
+            .runtime
+            .block_on(dirs.worktrees.list(&source))
+            .map_err(|_| RpcError::new(-32061, AppServerErrorName::GitOperationFailed))?
+            .into_iter()
+            .map(|worktree| {
+                let state = match worktree.availability() {
+                    WorktreeAvailability::Prunable { .. } => GitWorktreeStateDto::Prunable,
+                    WorktreeAvailability::Locked { .. } => GitWorktreeStateDto::Locked,
+                    WorktreeAvailability::Ready => match worktree.owner() {
+                        WorktreeOwner::Thread(_) => GitWorktreeStateDto::ThreadOwned,
+                        WorktreeOwner::Invalid => GitWorktreeStateDto::Invalid,
+                        WorktreeOwner::Unbound if !worktree.dir().is_dir() => {
+                            GitWorktreeStateDto::MissingDirectory
+                        }
+                        WorktreeOwner::Unbound => GitWorktreeStateDto::Ready,
+                    },
+                };
+                let (checkout_root, path) = if state == GitWorktreeStateDto::Ready {
+                    let checkout_root =
+                        dunce::canonicalize(worktree.checkout_root()).map_err(|_| {
+                            RpcError::new(-32061, AppServerErrorName::GitOperationFailed)
+                        })?;
+                    let path = dunce::canonicalize(worktree.dir()).map_err(|_| {
+                        RpcError::new(-32061, AppServerErrorName::GitOperationFailed)
+                    })?;
+                    (checkout_root, path)
+                } else {
+                    (
+                        worktree.checkout_root().to_path_buf(),
+                        worktree.dir().to_path_buf(),
+                    )
+                };
+                Ok(GitWorktreeDto {
+                    checkout_root: worktree_path(&checkout_root)?,
+                    path: worktree_path(&path)?,
+                    branch: worktree.branch().map(str::to_owned),
+                    head: worktree.head().to_owned(),
+                    current: worktree.is_current(),
+                    state,
+                })
+            })
+            .collect::<Result<Vec<_>, RpcError>>()?;
+        result(&GitWorktreeListResult { worktrees })
+    }
+
+    pub(super) fn git_worktree_resolve(&self, value: &Value) -> Result<Value, RpcError> {
+        let params: GitWorktreeResolveParams = decode(value)?;
+        if params.checkout_root.is_empty() || params.checkout_root.len() > 32_768 {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let source = self
+            .git_runtime_service()?
+            .readable_source_for(params.repository_id.as_deref())
+            .map_err(git_error)?;
+        let dirs = self
+            .dir_services
+            .as_ref()
+            .ok_or_else(|| RpcError::new(-32060, AppServerErrorName::GitUnavailable))?;
+        let worktree = dirs
+            .runtime
+            .block_on(dirs.worktrees.resolve(
+                &source,
+                &WorktreeSelector::CheckoutRoot(PathBuf::from(params.checkout_root)),
+            ))
+            .map_err(|_| RpcError::new(-32061, AppServerErrorName::GitOperationFailed))?;
+        if !matches!(worktree.availability(), WorktreeAvailability::Ready)
+            || !matches!(worktree.owner(), WorktreeOwner::Unbound)
+        {
+            return Err(RpcError::new(
+                -32061,
+                AppServerErrorName::GitOperationFailed,
+            ));
+        }
+        result(&GitWorktreeResolveResult {
+            path: worktree_path(
+                &dunce::canonicalize(worktree.dir())
+                    .map_err(|_| RpcError::new(-32061, AppServerErrorName::GitOperationFailed))?,
+            )?,
         })
     }
 
@@ -246,6 +350,12 @@ impl AppServer {
             .map_err(git_error)?;
         result(&GitOperationResult { status })
     }
+}
+
+fn worktree_path(path: &Path) -> Result<String, RpcError> {
+    path.to_str()
+        .map(str::to_owned)
+        .ok_or_else(|| RpcError::new(-32061, AppServerErrorName::GitOperationFailed))
 }
 
 fn paths(paths: Vec<String>) -> Result<Vec<PathBuf>, RpcError> {

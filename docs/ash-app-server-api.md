@@ -318,6 +318,9 @@ Desktop 当前实现和 Playwright 后续边界见
 | `git/graph` | repository | 以 `limit`/`cursor` 读取一页 history、local/remote-tracking refs 和 credential-free remote identity，并返回 `hasMore`/`nextCursor` |
 | `git/branch/list` | repository | 列出现有本地分支及 current/upstream 信息 |
 | `git/branch/switch` | repository | 切换到 host 重新解析确认存在的本地分支 |
+| `git/worktree/create` | repository | 在 HEAD 建立独立的 detached 工作树，不创建 Session |
+| `git/worktree/list` | repository | 列出同仓库工作树、对应目录及可打开状态 |
+| `git/worktree/resolve` | repository | 按 checkout root 重新确认工作树可打开，返回对应目录 |
 | `git/stage` | repository | stage 一组 repository-relative path |
 | `git/unstage` | repository | 从 index 移除一组 repository-relative path 的 staged change |
 | `git/discardWorktree` | repository | 恢复 tracked working-tree change，不删除 untracked 文件 |
@@ -562,6 +565,11 @@ changed paths 并确认 path 属于该提交和当前 directory，然后按需�
 server 会重新列出当前仓库分支并按 exact name 解析后才执行 mutation，因此客户端提交的字符串
 不会直接成为未经确认的 Git argv。成功结果包含新的 status；脏工作树或 linked worktree 冲突由
 Git 拒绝，server 不重试或丢弃用户内容。
+
+`git/worktree/create` 仅创建未绑定 Thread 的 detached checkout；`git/worktree/list` 保留来源目录在
+repository 内的相对路径，并标出当前、锁定、失效以及已有 Thread 归属的 checkout。客户端选择后必须
+调用 `git/worktree/resolve`；服务端重新核对该 checkout 属于同一 repository、目录仍存在、未锁定且
+未绑定 Thread。返回的目录供产品 host 建立以该目录为根的新连接；这一步不创建或迁移 Session。
 
 Mutation contract 提供 `git/stage`、`git/unstage`、`git/discardWorktree`、`git/commit`、
 `git/branch/switch`、`git/fetch`、`git/pull` 和 `git/push`。Path mutation 接受 1–5000 个 directory-relative path；

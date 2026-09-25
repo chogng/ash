@@ -5,6 +5,9 @@ use crate::tui_process::Fixture;
 use crate::tui_process::LARGE_SIZE;
 use crate::tui_process::SMALL_SIZE;
 use crate::tui_process::TuiProcess;
+use std::process::Command;
+use std::time::Duration;
+use std::time::Instant;
 
 #[test]
 fn actual_tui_inline_preserves_history_across_panels_resize_and_exit() {
@@ -576,4 +579,82 @@ fn actual_tui_home_creates_only_the_submitted_session_and_resumes_it() {
     assert!(!resumed.screen().contains("Start a task below"));
     assert_eq!(server.request_count(), 1);
     resumed.quit();
+}
+
+#[test]
+fn actual_tui_opens_a_worktree_before_starting_a_new_session() {
+    let fixture = Fixture::new();
+    for args in [
+        vec!["init", "--quiet", "--initial-branch=main"],
+        vec!["config", "user.name", "Ash Test"],
+        vec!["config", "user.email", "ash@example.test"],
+        vec!["commit", "--quiet", "--allow-empty", "-m", "initial"],
+    ] {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(fixture.workspace())
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let server = ScenarioServer::start([HttpResponse::streaming(["WORKTREE-SESSION-REPLY"], None)]);
+    fixture.write_config(&server.base_url());
+
+    let mut process = TuiProcess::start_in_vscode(&fixture, &[], LARGE_SIZE);
+    process.wait_for_stable_screen("Resume session");
+    process.tab();
+    process.enter();
+    process.wait_for_stable_screen("Project worktrees");
+    process.send(b"n");
+    process.wait_for_stable_screen("New worktree");
+    process.type_text("topic");
+    process.enter();
+    process.wait_for_stable_screen("Worktree created. Enter to open it.");
+    assert!(fixture.sessions().is_empty());
+    assert_eq!(server.request_count(), 0);
+    process.enter();
+    wait_for_workspace_home(&mut process, "detached@");
+    assert!(fixture.sessions().is_empty());
+    assert_eq!(server.request_count(), 0);
+
+    process.submit("WORKTREE-TASK");
+    process.wait_for_stable_screen("WORKTREE-SESSION-REPLY");
+    assert_eq!(server.request_count(), 1);
+    assert_eq!(fixture.sessions().len(), 1);
+
+    process.submit("/home");
+    process.wait_for_stable_screen("Resume session");
+    process.tab();
+    process.enter();
+    process.wait_for_stable_screen("Project worktrees");
+    process.send(b"/");
+    process.type_text("workspace");
+    process.enter();
+    process.enter();
+    wait_for_workspace_home(&mut process, "main");
+    assert_eq!(fixture.sessions().len(), 1);
+    assert_eq!(server.request_count(), 1);
+    process.quit();
+}
+
+fn wait_for_workspace_home(process: &mut TuiProcess, branch: &str) {
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        let screen = process.screen();
+        if screen.contains("Start a task below")
+            && !screen.contains("Project worktrees")
+            && screen.lines().next().unwrap_or_default().contains(branch)
+        {
+            return;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "worktree did not open:\n{screen}"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
 }

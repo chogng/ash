@@ -36,10 +36,16 @@ fn branch_picker_shortcut_does_not_steal_search_input() {
 }
 
 #[test]
-fn standalone_branch_prompt_prefills_ash_prefix_and_requires_a_suffix() {
-    let mut panel = BranchPanel::new_branch();
+fn project_branch_prompt_prefills_ash_prefix_and_requires_a_suffix() {
+    let mut panel = BranchPanel::new(choices(GitBranchListResult {
+        branches: vec![branch("main", true)],
+    }));
+    assert_eq!(
+        panel.handle_key(KeyEvent::new(KeyCode::Char('b'), KeyModifiers::NONE)),
+        ListSelectionOutcome::Consumed
+    );
     assert_eq!(panel.state().title(), "New branch");
-    assert_eq!(panel.parent_title(), None);
+    assert_eq!(panel.parent_title(), Some("Project branches"));
     assert_eq!(panel.state().query(), "ash/");
     assert_eq!(
         panel.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
@@ -73,13 +79,26 @@ fn standalone_branch_prompt_prefills_ash_prefix_and_requires_a_suffix() {
     );
     assert_eq!(
         panel.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
-        ListSelectionOutcome::Dismiss
+        ListSelectionOutcome::Consumed
     );
+    assert_eq!(panel.state().title(), "Project branches");
 }
 
 #[test]
-fn standalone_worktree_prompt_creates_only_a_checkout_command() {
-    let mut panel = BranchPanel::new_worktree();
+fn worktree_picker_creates_a_checkout_without_starting_a_session() {
+    let mut panel = super::WorktreePanel::new(super::worktree_choices(
+        ash_app_server_protocol::protocol::git::GitWorktreeListResult {
+            worktrees: vec![worktree("/repo", true)],
+        },
+        None,
+    ));
+    assert_eq!(panel.state().title(), "Project worktrees");
+    assert_eq!(panel.state().selected_item().unwrap().label(), "repo");
+    assert_eq!(
+        panel.handle_key(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE)),
+        ListSelectionOutcome::Consumed
+    );
+    assert_eq!(panel.parent_title(), Some("Project worktrees"));
     assert_eq!(panel.state().title(), "New worktree");
     assert_eq!(panel.state().query(), "");
     assert_eq!(
@@ -91,9 +110,58 @@ fn standalone_worktree_prompt_creates_only_a_checkout_command() {
     }
     assert_eq!(
         panel.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        ListSelectionOutcome::Activate(BranchSelectionAction::CreateWorktree {
+        ListSelectionOutcome::Activate(super::WorktreeSelectionAction::Create {
             name: "topic".into()
         })
+    );
+    assert_eq!(
+        panel.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+        ListSelectionOutcome::Consumed
+    );
+    assert_eq!(panel.state().title(), "Project worktrees");
+}
+
+#[test]
+fn unavailable_worktree_explains_why_it_cannot_open() {
+    let mut managed = worktree("/worktrees/managed", false);
+    managed.state = ash_app_server_protocol::protocol::git::GitWorktreeStateDto::ThreadOwned;
+    let mut panel = super::WorktreePanel::new(super::worktree_choices(
+        ash_app_server_protocol::protocol::git::GitWorktreeListResult {
+            worktrees: vec![worktree("/repo", true), managed],
+        },
+        None,
+    ));
+    panel.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    assert_eq!(
+        panel.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        ListSelectionOutcome::Consumed
+    );
+    assert_eq!(panel.state().message(), Some("Used by another session"));
+}
+
+#[test]
+fn worktree_picker_keeps_directory_names_visible_for_long_paths() {
+    let topic = "/private/var/very/long/project/profile/worktrees/manual/topic";
+    let mut panel = super::WorktreePanel::new(super::worktree_choices(
+        ash_app_server_protocol::protocol::git::GitWorktreeListResult {
+            worktrees: vec![
+                worktree("/private/var/very/long/project/workspace", true),
+                worktree(topic, false),
+            ],
+        },
+        None,
+    ));
+    assert_eq!(panel.state().selected_item().unwrap().label(), "workspace");
+    panel.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    assert_eq!(panel.state().selected_item().unwrap().label(), "topic");
+    assert!(
+        panel
+            .state()
+            .selected_item()
+            .unwrap()
+            .description()
+            .unwrap()
+            .contains(topic)
     );
 }
 
@@ -149,16 +217,70 @@ fn creating_a_worktree_through_app_server_leaves_session_catalog_unchanged() {
         },
     )
     .unwrap();
-    let super::Event::WorktreeCreated(Ok(created)) = created else {
+    let super::Event::WorktreeCreated {
+        path,
+        choices: Ok(choices),
+    } = created
+    else {
         panic!("worktree creation should succeed")
     };
-    let checkout = std::path::PathBuf::from(created.path);
-    assert_eq!(checkout, root.path().join("state/worktrees/manual/topic"));
+    let checkout = std::path::PathBuf::from(&path);
+    assert_eq!(
+        checkout,
+        std::fs::canonicalize(root.path().join("state/worktrees/manual/topic")).unwrap()
+    );
     assert_eq!(
         std::fs::read_to_string(checkout.join("tracked.txt")).unwrap(),
         "base\n"
     );
     assert_eq!(client.list_sessions().unwrap().sessions, before);
+    let created_panel = super::WorktreePanel::new(choices);
+    assert_eq!(created_panel.state().title(), "Project worktrees");
+    assert_eq!(
+        created_panel.state().selected_item().unwrap().label(),
+        "topic"
+    );
+    assert!(
+        created_panel
+            .state()
+            .selected_item()
+            .unwrap()
+            .description()
+            .unwrap()
+            .contains(&path)
+    );
+    let listed = super::execute(&mut client, super::Command::OpenWorktrees).unwrap();
+    let super::Event::WorktreePickerOpened(listed) = listed else {
+        panic!("worktree inventory should be available")
+    };
+    let listed_panel = super::WorktreePanel::new(listed);
+    assert_eq!(
+        listed_panel.state().selected_item().unwrap().label(),
+        "repo"
+    );
+    let resolved = super::execute(
+        &mut client,
+        super::Command::ResolveWorktree {
+            checkout_root: checkout.to_string_lossy().into_owned(),
+        },
+    )
+    .unwrap();
+    assert!(matches!(
+        resolved,
+        super::Event::WorktreeResolved(Ok(path)) if path == checkout.to_string_lossy()
+    ));
+    assert_eq!(client.list_sessions().unwrap().sessions, before);
+}
+
+fn worktree(path: &str, current: bool) -> ash_app_server_protocol::protocol::git::GitWorktreeDto {
+    ash_app_server_protocol::protocol::git::GitWorktreeDto {
+        checkout_root: path.into(),
+        path: path.into(),
+        branch: Some("main".into()),
+        head: "0123456789abcdef0123456789abcdef01234567".into(),
+        current,
+        state: ash_app_server_protocol::protocol::git::GitWorktreeStateDto::Ready,
+    }
 }
 
 #[test]

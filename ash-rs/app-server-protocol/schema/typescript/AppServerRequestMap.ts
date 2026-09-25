@@ -160,6 +160,9 @@ import type { GitStatusResult } from './types/GitStatusResult.js';
 import type { GitTextDiffResult } from './types/GitTextDiffResult.js';
 import type { GitWorktreeCreateParams } from './types/GitWorktreeCreateParams.js';
 import type { GitWorktreeCreateResult } from './types/GitWorktreeCreateResult.js';
+import type { GitWorktreeListResult } from './types/GitWorktreeListResult.js';
+import type { GitWorktreeResolveParams } from './types/GitWorktreeResolveParams.js';
+import type { GitWorktreeResolveResult } from './types/GitWorktreeResolveResult.js';
 import type { GrepIndexDisableAndDeleteParams } from './types/GrepIndexDisableAndDeleteParams.js';
 import type { GrepIndexDisableAndDeleteResult } from './types/GrepIndexDisableAndDeleteResult.js';
 import type { GrepIndexStatusResult } from './types/GrepIndexStatusResult.js';
@@ -637,6 +640,8 @@ export interface AppServerRequestMap {
   "git/branch/switch": { params: GitBranchSwitchParams; response: GitOperationResult };
   "git/branch/create": { params: GitBranchCreateParams; response: GitBranchListResult };
   "git/worktree/create": { params: GitWorktreeCreateParams; response: GitWorktreeCreateResult };
+  "git/worktree/list": { params: GitRepositoryParams; response: GitWorktreeListResult };
+  "git/worktree/resolve": { params: GitWorktreeResolveParams; response: GitWorktreeResolveResult };
   "git/stage": { params: GitPathsParams; response: GitOperationResult };
   "git/unstage": { params: GitPathsParams; response: GitOperationResult };
   "git/discardWorktree": { params: GitPathsParams; response: GitOperationResult };
@@ -927,6 +932,8 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "git/branch/switch": { method: "git/branch/switch" },
   "git/branch/create": { method: "git/branch/create" },
   "git/worktree/create": { method: "git/worktree/create" },
+  "git/worktree/list": { method: "git/worktree/list" },
+  "git/worktree/resolve": { method: "git/worktree/resolve" },
   "git/stage": { method: "git/stage" },
   "git/unstage": { method: "git/unstage" },
   "git/discardWorktree": { method: "git/discardWorktree" },

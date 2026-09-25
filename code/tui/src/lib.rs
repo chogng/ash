@@ -156,6 +156,7 @@ pub struct TuiOptions {
     connection: TuiConnectionKind,
     app_server_process: AppServerProcess,
     recovery: Option<TuiRecoveryState>,
+    start_empty: bool,
     drafts: Option<TuiRecoveryDrafts>,
     notices: Option<TuiNotices>,
 }
@@ -217,6 +218,7 @@ impl TuiOptions {
             connection: TuiConnectionKind::Local,
             app_server_process: AppServerProcess::IncludedInTui,
             recovery: None,
+            start_empty: false,
             drafts: None,
             notices: None,
         }
@@ -265,6 +267,12 @@ impl TuiOptions {
     /// Restores the durable Session and Thread selected before a transport loss.
     pub fn with_recovery(mut self, recovery: TuiRecoveryState) -> Self {
         self.recovery = Some(recovery);
+        self
+    }
+
+    /// Opens a selected workspace before the user starts a Session, including in inline mode.
+    pub fn with_empty_start(mut self) -> Self {
+        self.start_empty = true;
         self
     }
 
@@ -364,6 +372,8 @@ impl TuiRecoveryState {
 pub enum TuiExit {
     /// The user exited through an interactive TUI command or key binding.
     UserRequested,
+    /// Open a selected Git worktree with a new App Server directory root, without creating a Session.
+    OpenWorkspace { path: PathBuf },
     /// The host process received an operating-system termination request.
     TerminationRequested,
     /// The initialized App Server connection ended; a home page may have no durable conversation.

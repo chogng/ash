@@ -39,6 +39,26 @@ fn text(buffer: &Buffer) -> String {
         .join("\n")
 }
 
+fn worktree(path: &str, current: bool) -> ash_app_server_protocol::protocol::git::GitWorktreeDto {
+    ash_app_server_protocol::protocol::git::GitWorktreeDto {
+        checkout_root: path.into(),
+        path: path.into(),
+        branch: Some("main".into()),
+        head: "0123456789abcdef0123456789abcdef01234567".into(),
+        current,
+        state: ash_app_server_protocol::protocol::git::GitWorktreeStateDto::Ready,
+    }
+}
+
+fn worktree_choices(selected: Option<&str>) -> crate::git::WorktreeChoices {
+    crate::git::worktree_choices(
+        ash_app_server_protocol::protocol::git::GitWorktreeListResult {
+            worktrees: vec![worktree("/repo", true), worktree("/worktrees/topic", false)],
+        },
+        selected,
+    )
+}
+
 #[test]
 fn home_dashboard_header_opens_the_session_manager() {
     for keyboard in [false, true] {
@@ -88,7 +108,7 @@ fn home_keeps_actions_above_the_fixed_composer() {
     assert_eq!(buffer[(actions.x, actions.y)].symbol(), ">");
     assert_eq!(buffer[(actions.x + 2, actions.y)].symbol(), "N");
     assert!(text(&buffer).contains("New worktree"));
-    assert!(text(&buffer).contains("New branch"));
+    assert!(!text(&buffer).contains("New branch"));
     assert_eq!(
         buffer[(actions.x, actions.y)].bg,
         app.render_context().selection_background()
@@ -124,28 +144,34 @@ fn home_and_shared_hints_use_the_selected_language() {
     let compact = rendered.replace(' ', "");
 
     assert!(compact.contains("新建工作树"));
-    assert!(compact.contains("新建分支"));
+    assert!(!compact.contains("新建分支"));
     assert!(compact.contains("恢复会话"));
     assert!(compact.contains("帮助与快捷键"));
     assert!(compact.contains("Enter选择"));
     assert!(!rendered.contains("Resume session"));
     crate::tui_assert_snapshot!("home_chinese", rendered);
 
-    assert_eq!(app.handle_key(key(KeyCode::Enter)), None);
-    assert_eq!(app.list_selection().unwrap().title(), "新建工作树");
+    assert_eq!(
+        app.handle_key(key(KeyCode::Enter)),
+        Some(AppCommand::Git(crate::git::Command::OpenWorktrees))
+    );
+    app.update(crate::git::Event::WorktreePickerOpened(worktree_choices(
+        None,
+    )));
+    assert_eq!(app.list_selection().unwrap().title(), "项目工作树");
     assert_eq!(
         app.list_selection()
             .unwrap()
             .search()
             .unwrap()
             .placeholder(),
-        "工作树名称"
+        "搜索工作树"
     );
+    app.handle_key(key(KeyCode::Char('n')));
+    assert_eq!(app.list_selection().unwrap().title(), "新建工作树");
     assert_eq!(app.handle_key(key(KeyCode::Esc)), None);
-
-    app.handle_key(key(KeyCode::Down));
-    assert_eq!(app.handle_key(key(KeyCode::Enter)), None);
-    assert_eq!(app.list_selection().unwrap().title(), "新建分支");
+    assert_eq!(app.list_selection().unwrap().title(), "项目工作树");
+    assert_eq!(app.handle_key(key(KeyCode::Esc)), None);
 }
 
 #[test]
@@ -156,7 +182,7 @@ fn home_help_localizes_the_complete_selection_model() {
     app.update(crate::config::Event::SettingsReceived(settings));
     app.open_home();
     app.handle_key(key(KeyCode::Tab));
-    for _ in 0..4 {
+    for _ in 0..3 {
         app.handle_key(key(KeyCode::Down));
     }
 
@@ -254,14 +280,23 @@ fn home_card_uses_the_page_width_without_an_empty_top_band() {
 }
 
 #[test]
-fn home_new_worktree_action_opens_a_checkout_only_prompt() {
+fn home_worktrees_can_create_and_open_without_starting_a_session() {
     let mut app = unstarted_app();
     app.open_home();
     assert_eq!(app.handle_key(key(KeyCode::Tab)), None);
     assert_eq!(app.fullscreen.home.selected, Some(0));
-    assert_eq!(app.handle_key(key(KeyCode::Enter)), None);
-    assert_eq!(app.list_selection().unwrap().title(), "New worktree");
+    assert_eq!(
+        app.handle_key(key(KeyCode::Enter)),
+        Some(AppCommand::Git(crate::git::Command::OpenWorktrees))
+    );
+    app.update(crate::git::Event::WorktreePickerOpened(worktree_choices(
+        None,
+    )));
+    assert_eq!(app.list_selection().unwrap().title(), "Project worktrees");
     assert!(app.fullscreen_home_visible());
+    crate::tui_assert_snapshot!("home_worktree_picker", text(&render(&app, 80, 24)));
+    app.handle_key(key(KeyCode::Char('n')));
+    assert_eq!(app.list_selection().unwrap().title(), "New worktree");
     crate::tui_assert_snapshot!("home_new_worktree_prompt", text(&render(&app, 80, 24)));
     for character in "topic".chars() {
         app.handle_key(key(KeyCode::Char(character)));
@@ -273,35 +308,67 @@ fn home_new_worktree_action_opens_a_checkout_only_prompt() {
         }))
     );
     assert!(app.fullscreen_home_visible());
-    app.update(crate::git::Event::WorktreeCreated(Ok(
-        ash_app_server_protocol::protocol::git::GitWorktreeCreateResult {
-            path: "/worktrees/topic".into(),
-        },
+    app.update(crate::git::Event::WorktreeCreated {
+        path: "/worktrees/topic".into(),
+        choices: Ok(worktree_choices(Some("/worktrees/topic"))),
+    });
+    assert!(app.fullscreen_home_visible());
+    assert_eq!(app.list_selection().unwrap().title(), "Project worktrees");
+    assert_eq!(
+        app.list_selection()
+            .unwrap()
+            .selected_item()
+            .unwrap()
+            .label(),
+        "topic"
+    );
+    assert_eq!(
+        app.list_selection().unwrap().message(),
+        Some("Worktree created. Enter to open it.")
+    );
+    crate::tui_assert_snapshot!("home_worktree_created", text(&render(&app, 80, 24)));
+    assert_eq!(
+        app.handle_key(key(KeyCode::Enter)),
+        Some(AppCommand::Git(crate::git::Command::ResolveWorktree {
+            checkout_root: "/worktrees/topic".into(),
+        }))
+    );
+    app.update(crate::git::Event::WorktreeResolved(Ok(
+        "/worktrees/topic".into()
     )));
-    assert!(app.fullscreen_home_visible());
     assert!(app.command_panel().is_none());
-    assert!(text(&render(&app, 80, 24)).contains("Worktree created at /worktrees/topic"));
+    assert_eq!(app.take_workspace_open(), Some("/worktrees/topic".into()));
+    assert!(app.starts_new_session());
+    assert!(app.sessions.active_session_id().is_none());
 }
 
 #[test]
-fn home_new_branch_action_opens_a_branch_only_prompt() {
-    let mut app = unstarted_app();
+fn opening_a_worktree_keeps_the_existing_session_bound_to_its_workspace() {
+    let mut app = App::new();
+    let active_session = app.sessions.active_session_id().cloned();
+    let directory = app.welcome().directory().to_owned();
     app.open_home();
-    app.handle_key(key(KeyCode::Tab));
+    app.update(crate::git::Event::WorktreePickerOpened(worktree_choices(
+        None,
+    )));
     app.handle_key(key(KeyCode::Down));
-    assert_eq!(app.fullscreen.home.selected, Some(1));
-    assert_eq!(app.handle_key(key(KeyCode::Enter)), None);
-    assert_eq!(app.list_selection().unwrap().title(), "New branch");
-    assert_eq!(app.list_selection().unwrap().query(), "ash/");
-    assert_eq!(app.command_panel().unwrap().parent_title(), None);
-    crate::tui_assert_snapshot!("home_new_branch_prompt", text(&render(&app, 80, 24)));
-    assert_eq!(app.handle_key(key(KeyCode::Esc)), None);
-    assert!(app.command_panel().is_none());
-    assert!(app.fullscreen_home_visible());
+    assert_eq!(
+        app.handle_key(key(KeyCode::Enter)),
+        Some(AppCommand::Git(crate::git::Command::ResolveWorktree {
+            checkout_root: "/worktrees/topic".into(),
+        }))
+    );
+    app.update(crate::git::Event::WorktreeResolved(Ok(
+        "/worktrees/topic".into()
+    )));
+
+    assert_eq!(app.sessions.active_session_id(), active_session.as_ref());
+    assert_eq!(app.welcome().directory(), directory);
+    assert_eq!(app.take_workspace_open(), Some("/worktrees/topic".into()));
 }
 
 #[test]
-fn home_pointer_actions_use_the_same_worktree_and_branch_paths() {
+fn home_pointer_actions_use_the_same_worktree_and_resume_paths() {
     let terminal = ratatui::layout::Rect::new(0, 0, 100, 30);
     let mut app = unstarted_app();
     app.open_home();
@@ -315,13 +382,16 @@ fn home_pointer_actions_use_the_same_worktree_and_branch_paths() {
             transcript,
             ratatui::layout::Position::new(actions.x, actions.y),
         ),
-        Some(super::Action::NewWorktree)
+        Some(super::Action::Worktrees)
     );
     assert_eq!(
         super::super::pointer::activate_pointer_item(&mut app, terminal, actions.x, actions.y),
-        None
+        Some(AppCommand::Git(crate::git::Command::OpenWorktrees))
     );
-    assert_eq!(app.list_selection().unwrap().title(), "New worktree");
+    app.update(crate::git::Event::WorktreePickerOpened(worktree_choices(
+        None,
+    )));
+    assert_eq!(app.list_selection().unwrap().title(), "Project worktrees");
 
     let mut app = unstarted_app();
     app.open_home();
@@ -331,14 +401,13 @@ fn home_pointer_actions_use_the_same_worktree_and_branch_paths() {
             transcript,
             ratatui::layout::Position::new(actions.x, actions.y + 1),
         ),
-        Some(super::Action::NewBranch)
+        Some(super::Action::Resume)
     );
     assert_eq!(
         super::super::pointer::activate_pointer_item(&mut app, terminal, actions.x, actions.y + 1),
         None
     );
-    assert_eq!(app.list_selection().unwrap().title(), "New branch");
-    assert_eq!(app.list_selection().unwrap().query(), "ash/");
+    assert_eq!(app.list_selection().unwrap().title(), "Resume session");
 }
 
 #[test]
@@ -364,8 +433,8 @@ fn home_action_hover_and_press_do_not_change_keyboard_selection() {
         hovered[(actions.x + 2, actions.y)].bg,
         app.render_context().selection_background()
     );
-    assert_eq!(hovered[(actions.x, actions.y + 3)].symbol(), " ");
-    assert_eq!(hovered[(actions.x + 2, actions.y + 3)].symbol(), "S");
+    assert_eq!(hovered[(actions.x, actions.y + 2)].symbol(), " ");
+    assert_eq!(hovered[(actions.x + 2, actions.y + 2)].symbol(), "S");
     for row in 0..actions.height {
         assert!(
             hovered[(actions.x + 2, actions.y + row)]
@@ -376,7 +445,7 @@ fn home_action_hover_and_press_do_not_change_keyboard_selection() {
     }
     for x in actions.x..actions.right() {
         assert_eq!(
-            hovered[(x, actions.y + 3)].bg,
+            hovered[(x, actions.y + 2)].bg,
             app.render_context().hover_background()
         );
     }
@@ -386,7 +455,7 @@ fn home_action_hover_and_press_do_not_change_keyboard_selection() {
             crate::app::fullscreen::layout(&app, terminal)
                 .session
                 .transcript,
-            ratatui::layout::Position::new(actions.right() - 1, actions.y + 3),
+            ratatui::layout::Position::new(actions.right() - 1, actions.y + 2),
         ),
         Some(super::Action::Settings)
     );
@@ -397,7 +466,7 @@ fn home_action_hover_and_press_do_not_change_keyboard_selection() {
     let pressed = render(&app, terminal.width, terminal.height);
     for x in actions.x..actions.right() {
         assert_eq!(
-            pressed[(x, actions.y + 3)].bg,
+            pressed[(x, actions.y + 2)].bg,
             app.render_context().pressed_background()
         );
     }
@@ -432,10 +501,10 @@ fn home_submission_failure_restores_the_complete_draft() {
 fn home_menu_scrolls_to_every_action_on_short_terminals() {
     let mut app = unstarted_app();
     app.open_home();
-    for _ in 0..6 {
+    for _ in 0..5 {
         app.handle_key(key(KeyCode::Tab));
     }
-    assert_eq!(app.fullscreen.home.selected, Some(5));
+    assert_eq!(app.fullscreen.home.selected, Some(4));
     crate::tui_assert_snapshot!("home_narrow", text(&render(&app, 40, 16)));
     assert_eq!(app.handle_key(key(KeyCode::Enter)), Some(AppCommand::Quit));
 }
@@ -463,7 +532,7 @@ fn short_home_keeps_the_input_and_selected_action_visible() {
     let mut app = unstarted_app();
     app.open_home();
     let terminal = ratatui::layout::Rect::new(0, 0, 40, 12);
-    for _ in 0..6 {
+    for _ in 0..5 {
         app.handle_key_in_area(key(KeyCode::Tab), terminal);
     }
     let areas = crate::app::fullscreen::layout(&app, terminal);

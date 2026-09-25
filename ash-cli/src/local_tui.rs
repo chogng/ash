@@ -29,7 +29,7 @@ enum Entry {
     Resume(ash_tui::TuiRecoveryState),
 }
 
-fn run_entry(dir_root: PathBuf, profile_root: PathBuf, entry: Entry) -> Result<(), String> {
+fn run_entry(mut dir_root: PathBuf, profile_root: PathBuf, entry: Entry) -> Result<(), String> {
     if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
         return Err("interactive mode requires a TTY; use `ash ask` or `ash exec` instead".into());
     }
@@ -46,6 +46,7 @@ fn run_entry(dir_root: PathBuf, profile_root: PathBuf, entry: Entry) -> Result<(
         Entry::Resume(recovery) => Some(recovery),
     };
     let mut drafts = None;
+    let mut start_empty = false;
     loop {
         let mut options = ash_tui::TuiOptions::new("TUI conversation")
             .with_dir_root(&dir_root)
@@ -62,9 +63,24 @@ fn run_entry(dir_root: PathBuf, profile_root: PathBuf, entry: Entry) -> Result<(
         if let Some(state) = drafts.take() {
             options = options.with_drafts(state);
         }
+        if start_empty {
+            options = options.with_empty_start();
+        }
         match ash_tui::run(session, options).map_err(|error| error.to_string())? {
             ash_tui::TuiExit::UserRequested | ash_tui::TuiExit::TerminationRequested => {
                 return Ok(());
+            }
+            ash_tui::TuiExit::OpenWorkspace { path } => {
+                dir_root = std::fs::canonicalize(path)
+                    .map_err(|error| format!("could not open worktree: {error}"))?;
+                session = connect(&executable, &dir_root, &profile_root)
+                    .map_err(|error| error.to_string())?;
+                if let Some(updater) = &updater {
+                    updater.replace_client(session.client());
+                }
+                recovery = None;
+                drafts = None;
+                start_empty = true;
             }
             ash_tui::TuiExit::ConnectionLost {
                 kind: ash_tui::TuiConnectionLossKind::Transport,
@@ -82,6 +98,7 @@ fn run_entry(dir_root: PathBuf, profile_root: PathBuf, entry: Entry) -> Result<(
                 }
                 recovery = next_recovery;
                 drafts = Some(next_drafts);
+                start_empty = recovery.is_none() && start_empty;
             }
             ash_tui::TuiExit::ConnectionLost {
                 kind,

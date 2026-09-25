@@ -1,4 +1,5 @@
 use crate::thread::composer::TuiSlashCommandAction;
+use std::path::PathBuf;
 
 /// A typed side-effect intent emitted by the single-writer application state.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -21,6 +22,7 @@ pub(crate) enum AppCommand {
     Status(crate::status::Command),
     Theme(crate::theme::Command),
     Thread(crate::thread::Command),
+    OpenWorkspace { path: PathBuf },
     Quit,
     Suspend,
 }
@@ -30,6 +32,7 @@ impl AppCommand {
         match self {
             Self::Config(crate::config::Command::OpenEditor) => Some("Settings"),
             Self::Git(crate::git::Command::OpenPicker) => Some("Project branches"),
+            Self::Git(crate::git::Command::OpenWorktrees) => Some("Project worktrees"),
             Self::Projects(crate::projects::Command::OpenRoots) => Some("Switch project folder"),
             Self::Projects(crate::projects::Command::OpenAddRoot) => Some("Add project folder"),
             Self::Status(crate::status::Command::OpenPanel) => Some("Status"),

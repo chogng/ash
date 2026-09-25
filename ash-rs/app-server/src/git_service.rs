@@ -130,6 +130,11 @@ impl GitService {
         Ok(self.projection_root.clone())
     }
 
+    pub(crate) fn readable_source(&self) -> Result<PathBuf, GitServiceError> {
+        self.ensure_readable()?;
+        Ok(self.projection_root.clone())
+    }
+
     pub(crate) fn stage(
         &self,
         paths: Vec<PathBuf>,

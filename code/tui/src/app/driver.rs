@@ -56,6 +56,7 @@ pub(super) enum CommandEffect {
     None,
     Quit,
     Suspend,
+    OpenWorkspace(PathBuf),
 }
 
 #[derive(Default)]
@@ -252,6 +253,12 @@ impl AppDriver {
         command: Option<AppCommand>,
         had_active_turn: bool,
     ) -> Option<ScheduledCommand> {
+        if let Some(path) = self.app.take_workspace_open() {
+            return Some(ScheduledCommand::new(
+                AppCommand::OpenWorkspace { path },
+                &self.app,
+            ));
+        }
         let command = command.map(|command| {
             match (&command, self.app.panels_mut().command_mut()) {
                 (

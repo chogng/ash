@@ -4,15 +4,15 @@ expression: "text(&render(&app, 80, 24))"
 ---
   .                                                        [— / —] [Dashboard]  
                                                                                 
-  ╭─────┌── New branch ────────────────────────────────────────────[✗]─┐─────╮  
+  ╭─────┌── Project worktrees ─────────────────────────────────────[✗]─┐─────╮  
   │     │                                                              │     │  
-  │    ▄│  Create branch                                               │     │  
-  │  ▗█▛│                                                              │     │  
-  │  ▝▜█│  ╭─────────────────────────────────────────────────────────╮ │     │  
-  │    ▝│  │ ash/                                                    │ │     │  
-  │     │  ╰─────────────────────────────────────────────────────────╯ │     │  
-  │     │  Create a branch at HEAD without switching worktrees.        │     │  
-  │     │                                                              │     │  
+  │    ▄│  ╭─────────────────────────────────────────────────────────╮ │     │  
+  │  ▗█▛│  │ Search worktrees                                        │ │     │  
+  │  ▝▜█│  ╰─────────────────────────────────────────────────────────╯ │     │  
+  │    ▝│  Worktree created. Enter to open it.                         │     │  
+  │     │  New worktree  ·  Create at HEAD · no session                │     │  
+  │     │  repo  ·  Current · main · /repo                             │     │  
+  │     │> topic  ·  Enter to open · main · /worktrees/topic           │     │  
   │     │                                                              │     │  
   │     │                                                              │     │  
   │     │                                                              │     │  
@@ -21,6 +21,6 @@ expression: "text(&render(&app, 80, 24))"
         │                                                              │        
         │                                                              │        
         │                                                              │ction.  
-  ╭─────│  Enter to create  ·  Esc to close                            │─────╮  
+  ╭─────│  n New worktree · / search · Esc close                       │─────╮  
   │ > Bu└──────────────────────────────────────────────────────────────┘     │  
   ╰──────────────────────────────────────────────────────── Automatic model ─╯

@@ -48,17 +48,15 @@ impl Home {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::app) enum Action {
-    NewWorktree,
-    NewBranch,
+    Worktrees,
     Resume,
     Settings,
     Help,
     Quit,
 }
 
-const ACTIONS: [(Action, &str); 6] = [
-    (Action::NewWorktree, "New worktree"),
-    (Action::NewBranch, "New branch"),
+const ACTIONS: [(Action, &str); 5] = [
+    (Action::Worktrees, "New worktree"),
     (Action::Resume, "Resume session"),
     (Action::Settings, "Settings"),
     (Action::Help, "Help and shortcuts"),
@@ -241,14 +239,7 @@ pub(super) fn activate(app: &mut App, action: Action) -> Option<AppCommand> {
         .position(|(candidate, _)| *candidate == action);
     app.fullscreen.focus_page();
     match action {
-        Action::NewWorktree => {
-            app.open_command_panel(CommandPanel::new_worktree());
-            None
-        }
-        Action::NewBranch => {
-            app.open_command_panel(CommandPanel::new_branch());
-            None
-        }
+        Action::Worktrees => Some(crate::git::Command::OpenWorktrees.into()),
         Action::Resume => {
             let choices = crate::sessions::session_choices(
                 app.sessions.catalog(),

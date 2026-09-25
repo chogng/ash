@@ -12,6 +12,9 @@ use crate::dirs::DirSelectionAction;
 use crate::git::BranchChoices;
 use crate::git::BranchPanel;
 use crate::git::BranchSelectionAction;
+use crate::git::WorktreeChoices;
+use crate::git::WorktreePanel;
+use crate::git::WorktreeSelectionAction;
 use crate::keymap_setup::KeymapChoices;
 use crate::keymap_setup::KeymapEditor;
 use crate::keymap_setup::KeymapEditorOutcome;
@@ -76,6 +79,7 @@ pub(crate) enum CommandPanel {
     Help(ListSelection<()>),
     Dirs(DirPanel),
     GitBranches(BranchPanel),
+    GitWorktrees(WorktreePanel),
     Config(ConfigEditor),
     Connectors(ListSelection<ConnectorSelectionAction>),
     Keymap(KeymapEditor),
@@ -99,6 +103,7 @@ pub(crate) enum CommandPanel {
 pub(crate) enum CommandPanelOutcome {
     Dirs(DirSelectionAction),
     GitBranch(BranchSelectionAction),
+    GitWorktree(WorktreeSelectionAction),
     Config(ConfigEditorOutcome),
     Connectors(ConnectorSelectionAction),
     Keymap(KeymapEditorOutcome),
@@ -134,6 +139,7 @@ impl CommandPanel {
         match self {
             Self::Config(editor) => editor.parent_title(),
             Self::GitBranches(panel) => panel.parent_title(),
+            Self::GitWorktrees(panel) => panel.parent_title(),
             Self::Memories(panel) => panel.parent_title(),
             _ => None,
         }
@@ -152,6 +158,9 @@ impl CommandPanel {
             editor.return_to_parent();
         }
         if let Self::GitBranches(panel) = self {
+            panel.return_to_parent();
+        }
+        if let Self::GitWorktrees(panel) = self {
             panel.return_to_parent();
         }
         if let Self::Memories(panel) = self {
@@ -196,6 +205,9 @@ impl CommandPanel {
         if let Self::GitBranches(panel) = self {
             return !panel.is_branch_name_prompt();
         }
+        if let Self::GitWorktrees(panel) = self {
+            return !panel.is_name_prompt();
+        }
         self.body().allows_backdrop_dismiss()
     }
 
@@ -215,12 +227,8 @@ impl CommandPanel {
         Self::GitBranches(BranchPanel::new(spec))
     }
 
-    pub(crate) fn new_branch() -> Self {
-        Self::GitBranches(BranchPanel::new_branch())
-    }
-
-    pub(crate) fn new_worktree() -> Self {
-        Self::GitBranches(BranchPanel::new_worktree())
+    pub(crate) fn git_worktrees(spec: WorktreeChoices) -> Self {
+        Self::GitWorktrees(WorktreePanel::new(spec))
     }
 
     pub(crate) fn project_roots(spec: RootChoices) -> Self {
@@ -310,6 +318,9 @@ impl CommandPanel {
             Self::GitBranches(content) => {
                 map_selection(content.handle_key(key), CommandPanelOutcome::GitBranch)
             }
+            Self::GitWorktrees(content) => {
+                map_selection(content.handle_key(key), CommandPanelOutcome::GitWorktree)
+            }
             Self::Config(content) => CommandPanelOutcome::Config(content.handle_key(key)),
             Self::Connectors(content) => {
                 map_selection(content.handle_key(key), CommandPanelOutcome::Connectors)
@@ -374,6 +385,7 @@ impl CommandPanel {
             }
             Self::Dirs(content) => content.handle_paste(pasted),
             Self::GitBranches(content) => content.handle_paste(pasted),
+            Self::GitWorktrees(content) => content.handle_paste(pasted),
             Self::Config(content) => content.handle_paste(pasted),
             Self::Connectors(content) => content.handle_paste(pasted),
             Self::Keymap(content) => content.handle_paste(pasted),
@@ -402,6 +414,7 @@ impl CommandPanel {
                 content.state_mut().localize(language);
             }
             Self::GitBranches(content) => content.localize(language),
+            Self::GitWorktrees(content) => content.localize(language),
             Self::Connectors(content) => content.state_mut().localize(language),
             Self::Marketplace(content) => content.localize(language),
             Self::Lsp(content) => content.localize(language),
@@ -438,6 +451,7 @@ impl CommandPanel {
             }
             Self::Dirs(selection) => Some(selection.state()),
             Self::GitBranches(selection) => Some(selection.state()),
+            Self::GitWorktrees(selection) => Some(selection.state()),
             Self::Config(editor) => editor.selection(),
             Self::Connectors(selection) => Some(selection.state()),
             Self::Keymap(editor) => editor.selection(),
@@ -481,6 +495,7 @@ impl CommandPanel {
             }
             Self::Dirs(s) => s.selection_mut(),
             Self::GitBranches(s) => Some(s.state_mut()),
+            Self::GitWorktrees(s) => Some(s.state_mut()),
             Self::Config(s) => s.selection_mut(),
             Self::Connectors(s) => Some(s.state_mut()),
             Self::Keymap(s) => s.selection_mut(),
@@ -523,6 +538,7 @@ impl CommandPanel {
             }
             Self::Dirs(selection) => CommandPanelBody::Selection(selection.state()),
             Self::GitBranches(selection) => CommandPanelBody::Selection(selection.state()),
+            Self::GitWorktrees(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Config(editor) => match editor.page() {
                 ConfigEditorPage::Selection(selection) => CommandPanelBody::Selection(selection),
                 ConfigEditorPage::Prompt(prompt) => CommandPanelBody::Prompt(prompt),
@@ -556,6 +572,7 @@ impl CommandPanel {
             }
             Self::Dirs(content) => content.key_hints(),
             Self::GitBranches(content) => content.key_hints(),
+            Self::GitWorktrees(content) => content.key_hints(),
             Self::Config(content) => content.key_hints(),
             Self::Connectors(content) => content.key_hints(),
             Self::Keymap(content) => content.key_hints(),
@@ -609,6 +626,7 @@ impl CommandPanel {
     pub(crate) fn set_message(&mut self, message: String) {
         match self {
             Self::GitBranches(selection) => selection.state_mut().set_message(Some(message)),
+            Self::GitWorktrees(selection) => selection.state_mut().set_message(Some(message)),
             Self::ProjectRoots(selection) => selection.state_mut().set_message(Some(message)),
             _ => {}
         }

@@ -395,6 +395,51 @@ pub struct GitWorktreeCreateResult {
     pub path: String,
 }
 
+/// One checkout in the selected repository. `path` preserves the caller's relative directory.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitWorktreeDto {
+    pub checkout_root: String,
+    pub path: String,
+    pub branch: Option<String>,
+    pub head: String,
+    pub current: bool,
+    pub state: GitWorktreeStateDto,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum GitWorktreeStateDto {
+    Ready,
+    ThreadOwned,
+    Locked,
+    Prunable,
+    Invalid,
+    MissingDirectory,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitWorktreeListResult {
+    pub worktrees: Vec<GitWorktreeDto>,
+}
+
+/// Revalidates one listed checkout before opening it as a workspace.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitWorktreeResolveParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub repository_id: Option<String>,
+    pub checkout_root: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitWorktreeResolveResult {
+    pub path: String,
+}
+
 /// One bounded UTF-8 text change from `HEAD` to the directory working tree.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

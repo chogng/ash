@@ -698,6 +698,16 @@ use crate::protocol::git::GitWorktreeCreateParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitWorktreeCreateResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitWorktreeDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitWorktreeListResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitWorktreeResolveParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitWorktreeResolveResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitWorktreeStateDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::goal::ThreadGoalClearParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::goal::ThreadGoalClearResponse;
@@ -3385,6 +3395,16 @@ client_methods! {
         response: GitWorktreeCreateResult,
         serialization: GlobalExclusive,
     },
+    GitWorktreeList => "git/worktree/list" {
+        params: GitRepositoryParams,
+        response: GitWorktreeListResult,
+        serialization: GlobalSharedRead,
+    },
+    GitWorktreeResolve => "git/worktree/resolve" {
+        params: GitWorktreeResolveParams,
+        response: GitWorktreeResolveResult,
+        serialization: GlobalSharedRead,
+    },
     GitStage => "git/stage" {
         params: GitPathsParams,
         response: GitOperationResult,
@@ -4721,6 +4741,11 @@ typescript_bindings! {
     GitBranchCreateParams,
     GitWorktreeCreateParams,
     GitWorktreeCreateResult,
+    GitWorktreeDto,
+    GitWorktreeStateDto,
+    GitWorktreeListResult,
+    GitWorktreeResolveParams,
+    GitWorktreeResolveResult,
     GitBranchListResult,
     GitCommitSummaryDto,
     GitHistoryResult,

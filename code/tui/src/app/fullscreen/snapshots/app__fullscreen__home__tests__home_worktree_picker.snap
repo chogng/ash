@@ -4,14 +4,14 @@ expression: "text(&render(&app, 80, 24))"
 ---
   .                                                        [— / —] [Dashboard]  
                                                                                 
-  ╭─────┌── Project worktrees › New worktree ──────────────────────[✗]─┐─────╮  
+  ╭─────┌── Project worktrees ─────────────────────────────────────[✗]─┐─────╮  
   │     │                                                              │     │  
-  │    ▄│  Create worktree                                             │     │  
-  │  ▗█▛│                                                              │     │  
-  │  ▝▜█│  ╭─────────────────────────────────────────────────────────╮ │     │  
-  │    ▝│  │ Worktree name                                           │ │     │  
-  │     │  ╰─────────────────────────────────────────────────────────╯ │     │  
-  │     │  Create at HEAD. No session starts.                          │     │  
+  │    ▄│  ╭─────────────────────────────────────────────────────────╮ │     │  
+  │  ▗█▛│  │ Search worktrees                                        │ │     │  
+  │  ▝▜█│  ╰─────────────────────────────────────────────────────────╯ │     │  
+  │    ▝│  New worktree  ·  Create at HEAD · no session                │     │  
+  │     │> repo  ·  Current · main · /repo                             │     │  
+  │     │  topic  ·  Enter to open · main · /worktrees/topic           │     │  
   │     │                                                              │     │  
   │     │                                                              │     │  
   │     │                                                              │     │  
@@ -21,6 +21,6 @@ expression: "text(&render(&app, 80, 24))"
         │                                                              │        
         │                                                              │        
         │                                                              │ction.  
-  ╭─────│  Enter to create  ·  Esc to back                             │─────╮  
+  ╭─────│  n New worktree · / search · Esc close                       │─────╮  
   │ > Bu└──────────────────────────────────────────────────────────────┘     │  
   ╰──────────────────────────────────────────────────────── Automatic model ─╯

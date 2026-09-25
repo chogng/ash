@@ -268,59 +268,6 @@ fn frame_text(app: &crate::app::App) -> String {
 }
 
 #[test]
-fn standalone_new_branch_prompt_works_in_both_screen_modes() {
-    use crate::app::AppCommand;
-    use crate::app::command_panel::CommandPanel;
-    use crate::git::Command as GitCommand;
-
-    for (mode, snapshot) in [
-        (
-            crate::terminal::ScreenMode::Fullscreen,
-            "standalone_new_branch_fullscreen",
-        ),
-        (
-            crate::terminal::ScreenMode::Inline,
-            "standalone_new_branch_inline",
-        ),
-    ] {
-        let mut app = crate::app::App::new();
-        let mut settings = crate::config::TerminalSettings::default();
-        settings.set_screen_mode(mode);
-        app.update(crate::config::Event::SettingsReceived(settings));
-        app.open_command_panel(CommandPanel::new_branch());
-        assert_eq!(app.list_selection().unwrap().title(), "New branch");
-        assert_eq!(app.command_panel().unwrap().parent_title(), None);
-        assert_eq!(app.list_selection().unwrap().query(), "ash/");
-        for character in "topic".chars() {
-            app.handle_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
-        }
-        crate::tui_assert_snapshot!(snapshot, frame_text(&app));
-        assert_eq!(
-            app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-            Some(AppCommand::Git(GitCommand::Create {
-                name: "ash/topic".into(),
-            }))
-        );
-        app.update(crate::git::Event::CreateFinished {
-            name: "ash/topic".into(),
-            result: Err("branch already exists".into()),
-        });
-        assert_eq!(
-            app.list_selection().unwrap().message(),
-            Some("branch already exists")
-        );
-        if matches!(mode, crate::terminal::ScreenMode::Fullscreen) {
-            crate::tui_assert_snapshot!("standalone_new_branch_error", frame_text(&app));
-        }
-        assert_eq!(
-            app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
-            None
-        );
-        assert!(app.command_panel().is_none());
-    }
-}
-
-#[test]
 fn project_branch_picker_shows_occupied_branch_and_pure_creation_in_both_modes() {
     use crate::app::AppCommand;
     use crate::git::Command as GitCommand;
@@ -391,6 +338,27 @@ fn project_branch_picker_shows_occupied_branch_and_pure_creation_in_both_modes()
             matches!(app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
             Some(AppCommand::Git(GitCommand::Create { name })) if name == "ash/topic")
         );
+        app.update(Event::CreateFinished {
+            name: "ash/topic".into(),
+            result: Err("branch already exists".into()),
+        });
+        assert_eq!(
+            app.list_selection().unwrap().message(),
+            Some("branch already exists")
+        );
+        crate::tui_assert_snapshot!(
+            match mode {
+                crate::terminal::ScreenMode::Fullscreen =>
+                    "project_branch_creation_error_fullscreen",
+                crate::terminal::ScreenMode::Inline => "project_branch_creation_error_inline",
+            },
+            frame_text(&app)
+        );
+        assert_eq!(
+            app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+            None
+        );
+        assert_eq!(app.list_selection().unwrap().title(), "Project branches");
     }
 }
 

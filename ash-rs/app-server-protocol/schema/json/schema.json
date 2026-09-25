@@ -7736,6 +7736,38 @@
         {
           "properties": {
             "method": {
+              "const": "git/worktree/list",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitRepositoryParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "git/worktree/resolve",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitWorktreeResolveParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "git/stage",
               "type": "string"
             },
@@ -12177,6 +12209,38 @@
             },
             "result": {
               "$ref": "#/$defs/GitWorktreeCreateResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "git/worktree/list",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitWorktreeListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "git/worktree/resolve",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitWorktreeResolveResult"
             }
           },
           "required": [
@@ -19478,6 +19542,94 @@
         "path"
       ],
       "type": "object"
+    },
+    "GitWorktreeDto": {
+      "description": "One checkout in the selected repository. `path` preserves the caller's relative directory.",
+      "properties": {
+        "branch": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "checkoutRoot": {
+          "type": "string"
+        },
+        "current": {
+          "type": "boolean"
+        },
+        "head": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/GitWorktreeStateDto"
+        }
+      },
+      "required": [
+        "checkoutRoot",
+        "path",
+        "head",
+        "current",
+        "state"
+      ],
+      "type": "object"
+    },
+    "GitWorktreeListResult": {
+      "properties": {
+        "worktrees": {
+          "items": {
+            "$ref": "#/$defs/GitWorktreeDto"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "worktrees"
+      ],
+      "type": "object"
+    },
+    "GitWorktreeResolveParams": {
+      "description": "Revalidates one listed checkout before opening it as a workspace.",
+      "properties": {
+        "checkoutRoot": {
+          "type": "string"
+        },
+        "repositoryId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "checkoutRoot"
+      ],
+      "type": "object"
+    },
+    "GitWorktreeResolveResult": {
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "GitWorktreeStateDto": {
+      "enum": [
+        "ready",
+        "threadOwned",
+        "locked",
+        "prunable",
+        "invalid",
+        "missingDirectory"
+      ],
+      "type": "string"
     },
     "GrepBackendDto": {
       "description": "Selects the implementation behind the shared grep capability.",

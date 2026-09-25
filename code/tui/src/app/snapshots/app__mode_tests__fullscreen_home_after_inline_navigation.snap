@@ -8,9 +8,9 @@ expression: render(&app)
   │                                            │  
   │  Ash Code v0.1.0                           │  
   │  New worktree                              │  
-  │  New branch                                │  
   │  Resume session                            │  
   │  Settings                                  │  
+  │  Help and shortcuts                        │  
   ╰────────────────────────────────────────────╯  
   ⏸ ask permissions on                            
   ╭────────────────────────────────────────────╮  

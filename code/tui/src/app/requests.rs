@@ -168,6 +168,7 @@ pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
         AppCommand::Host(HostCommand::ExportTranscript { .. }) => Some(RequestKey::FileExport),
         AppCommand::Quit
         | AppCommand::Suspend
+        | AppCommand::OpenWorkspace { .. }
         | AppCommand::Thread(ThreadCommand::CycleNextApprovalMode) => None,
         AppCommand::Config(
             ConfigCommand::SetIssues(_)

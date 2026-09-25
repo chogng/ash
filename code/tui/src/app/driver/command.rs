@@ -298,6 +298,7 @@ impl AppDriver {
             AppCommand::Thread(command) => {
                 self.execute_thread_command(request_key, command, origin)
             }
+            AppCommand::OpenWorkspace { path } => return CommandEffect::OpenWorkspace(path),
             AppCommand::Quit => return CommandEffect::Quit,
             AppCommand::Suspend => return CommandEffect::Suspend,
         }

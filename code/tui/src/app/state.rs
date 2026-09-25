@@ -150,6 +150,7 @@ pub(crate) struct App {
     process_resources: ProcessResourcesModel,
     memory_diagnostics: crate::memory::Status,
     startup_context: TuiStartupContext,
+    pending_workspace_open: Option<PathBuf>,
 }
 
 impl App {
@@ -184,6 +185,7 @@ impl App {
             process_resources: ProcessResourcesModel::default(),
             memory_diagnostics: crate::memory::Status::Disabled,
             startup_context: TuiStartupContext::new("."),
+            pending_workspace_open: None,
         };
         app.sessions.activate_context(
             ash_protocol::SessionId::new("tui-session").unwrap(),
@@ -265,6 +267,7 @@ impl App {
             process_resources,
             memory_diagnostics: crate::memory::Status::Disabled,
             startup_context,
+            pending_workspace_open: None,
         }
     }
 
@@ -496,15 +499,30 @@ impl App {
                 crate::git::BranchSelectionAction::CreateBranch { branch_name } => {
                     Some(GitCommand::Create { name: branch_name }.into())
                 }
-                crate::git::BranchSelectionAction::CreateWorktree { name } => {
-                    Some(GitCommand::CreateWorktree { name }.into())
-                }
                 crate::git::BranchSelectionAction::Switch { name, current } => {
                     if current {
                         self.close_command_panel();
                         None
                     } else {
                         Some(GitCommand::Switch { name }.into())
+                    }
+                }
+            },
+            CommandPanelOutcome::GitWorktree(action) => match action {
+                crate::git::WorktreeSelectionAction::New
+                | crate::git::WorktreeSelectionAction::Unavailable { .. } => None,
+                crate::git::WorktreeSelectionAction::Create { name } => {
+                    Some(GitCommand::CreateWorktree { name }.into())
+                }
+                crate::git::WorktreeSelectionAction::Open {
+                    checkout_root,
+                    current,
+                } => {
+                    if current {
+                        self.close_command_panel();
+                        None
+                    } else {
+                        Some(GitCommand::ResolveWorktree { checkout_root }.into())
                     }
                 }
             },
@@ -1956,18 +1974,40 @@ impl App {
                 GitEvent::CreateFinished {
                     result: Err(error), ..
                 } => self.panels_mut().set_command_message(error),
-                GitEvent::WorktreeCreated(Ok(created)) => {
+                GitEvent::WorktreePickerOpened(choices) => {
+                    self.open_command_panel(CommandPanel::git_worktrees(choices));
+                }
+                GitEvent::WorktreeCreated {
+                    choices: Ok(choices),
+                    ..
+                } => {
+                    self.open_command_panel(CommandPanel::git_worktrees(choices));
+                    self.panels_mut()
+                        .set_command_message("Worktree created. Enter to open it.".into());
+                }
+                GitEvent::WorktreeCreated {
+                    path,
+                    choices: Err(error),
+                } => {
                     self.close_command_panel();
                     self.chat_panel.show_notice(
                         format!(
-                            "{} {}",
+                            "{} {}. {}",
                             crate::nls::localize(self.language(), "Worktree created at"),
-                            created.path
+                            path,
+                            crate::nls::localize(self.language(), &error)
                         ),
                         Instant::now(),
                     );
                 }
-                GitEvent::WorktreeCreated(Err(error)) => {
+                GitEvent::WorktreeCreateFailed(error) => {
+                    self.panels_mut().set_command_message(error)
+                }
+                GitEvent::WorktreeResolved(Ok(path)) => {
+                    self.close_command_panel();
+                    self.pending_workspace_open = Some(PathBuf::from(path));
+                }
+                GitEvent::WorktreeResolved(Err(error)) => {
                     self.panels_mut().set_command_message(error)
                 }
             },
@@ -2068,6 +2108,10 @@ impl App {
         &self.startup_context
     }
 
+    pub(super) fn take_workspace_open(&mut self) -> Option<PathBuf> {
+        self.pending_workspace_open.take()
+    }
+
     pub(super) fn update_from_origin(
         &mut self,
         origin: super::requests::RequestOrigin,
@@ -2108,6 +2152,9 @@ impl App {
             {
                 match self.panels_mut().command_mut() {
                     Some(CommandPanel::GitBranches(panel)) if panel.is_branch_name_prompt() => {
+                        panel.state_mut().set_message(Some(error.clone()));
+                    }
+                    Some(CommandPanel::GitWorktrees(panel)) if panel.is_name_prompt() => {
                         panel.state_mut().set_message(Some(error.clone()));
                     }
                     Some(CommandPanel::Marketplace(panel)) => panel.fail(error.clone()),

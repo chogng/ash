@@ -21,14 +21,14 @@ expression: frame_text(&app)
                                                                                                     
                                                                                                     
                                                                                                     
-                                                                                                    
-─ New branch ───────────────────────────────────────────────────────────────────────────────────────
+─ Project branches › New branch ────────────────────────────────────────────────────────────────────
                                                                                                     
   Create branch                                                                                     
                                                                                                     
   ╭──────────────────────────────────────────────────────────────────────────────────────────────╮  
   │ ash/topic                                                                                    │  
   ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  
+  branch already exists                                                                             
   Create a branch at HEAD without switching worktrees.                                              
                                                                                                     
-  Enter to create  ·  Esc to close
+  Enter to create  ·  Esc to back

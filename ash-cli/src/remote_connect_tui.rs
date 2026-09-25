@@ -2,7 +2,9 @@ use std::path::PathBuf;
 use std::thread;
 use std::time::Instant;
 
+use ash_remote::RemoteDirPath;
 use ash_remote::RemoteProfile;
+use ash_remote::SshTarget;
 use ash_remote_connections::RemoteConnectionFailureKind;
 
 use super::RemoteConnectEntry;
@@ -16,13 +18,14 @@ pub(super) fn run(
     ssh_executable: Option<PathBuf>,
     entry: RemoteConnectEntry,
 ) -> Result<(), String> {
-    let profile = ready.profile;
+    let mut profile = ready.profile;
     let mut session = ready.session;
     let mut recovery = match entry {
         RemoteConnectEntry::New => None,
         RemoteConnectEntry::Resume(recovery) => Some(recovery),
     };
     let mut drafts = None;
+    let mut start_empty = false;
     loop {
         let mut options =
             ash_tui::TuiOptions::new(format!("Remote SSH: {}", profile.target().host().as_str()))
@@ -36,9 +39,25 @@ pub(super) fn run(
         if let Some(state) = drafts.take() {
             options = options.with_drafts(state);
         }
+        if start_empty {
+            options = options.with_empty_start();
+        }
         match ash_tui::run(session, options).map_err(|error| error.to_string())? {
             ash_tui::TuiExit::UserRequested | ash_tui::TuiExit::TerminationRequested => {
                 return Ok(());
+            }
+            ash_tui::TuiExit::OpenWorkspace { path } => {
+                let path = path.to_str().ok_or("remote worktree path is not UTF-8")?;
+                let dir = RemoteDirPath::parse(path).map_err(|error| error.to_string())?;
+                let target = SshTarget::new(profile.target().host().clone(), dir);
+                let selected = RemoteProfile::new(target, profile.runtime().clone());
+                let ready = runtime::reconnect_exact(&selected, ssh_executable.as_deref())
+                    .map_err(|error| error.to_string())?;
+                profile = ready.profile;
+                session = ready.session;
+                recovery = None;
+                drafts = None;
+                start_empty = true;
             }
             ash_tui::TuiExit::ConnectionLost {
                 kind: ash_tui::TuiConnectionLossKind::Transport,
@@ -61,6 +80,7 @@ pub(super) fn run(
                     .session;
                 recovery = next_recovery;
                 drafts = Some(next_drafts);
+                start_empty = recovery.is_none() && start_empty;
             }
             ash_tui::TuiExit::ConnectionLost {
                 kind,
