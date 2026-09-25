@@ -5,6 +5,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import call
 from unittest.mock import patch
 
 from build.code import run
@@ -12,6 +13,68 @@ from build.code import build
 
 
 class SourceRunnerTests(unittest.TestCase):
+    def test_main_selects_the_built_server_before_launching_the_tui(self) -> None:
+        staged = self._executables(Path("C:/staged"))
+        with (
+            patch.dict(run.os.environ, {"PATH": "tools"}, clear=True),
+            patch.object(
+                run,
+                "build_binaries",
+                return_value=(0, self._executables(Path("C:/built"))),
+            ),
+            patch.object(run, "stage_runtime", return_value=staged),
+            patch.object(run, "resolve_tgrep") as tgrep,
+            patch.object(run, "default_target", return_value="x86_64-pc-windows-msvc"),
+            patch.object(run.subprocess, "run") as subprocess_run,
+        ):
+            tgrep.return_value.executable = staged["tgrep"]
+            subprocess_run.side_effect = [
+                run.subprocess.CompletedProcess([], 0),
+                run.subprocess.CompletedProcess([], 0),
+            ]
+
+            self.assertEqual(run.main([]), 0)
+
+        runtime = run.runtime_environment({"PATH": "tools"}, staged)
+        subprocess_run.assert_has_calls(
+            [
+                call(
+                    [str(staged["ash"]), "app-server", "daemon", "ensure-selected"],
+                    cwd=run.REPOSITORY_ROOT,
+                    env=runtime,
+                    stdout=run.subprocess.DEVNULL,
+                    check=False,
+                ),
+                call(
+                    [str(staged["ash"])],
+                    cwd=run.REPOSITORY_ROOT,
+                    env=runtime,
+                    check=False,
+                ),
+            ]
+        )
+
+    def test_main_does_not_launch_the_tui_if_server_selection_fails(self) -> None:
+        staged = self._executables(Path("C:/staged"))
+        with (
+            patch.dict(run.os.environ, {"PATH": "tools"}, clear=True),
+            patch.object(
+                run,
+                "build_binaries",
+                return_value=(0, self._executables(Path("C:/built"))),
+            ),
+            patch.object(run, "stage_runtime", return_value=staged),
+            patch.object(run, "resolve_tgrep") as tgrep,
+            patch.object(run, "default_target", return_value="x86_64-pc-windows-msvc"),
+            patch.object(run.subprocess, "run") as subprocess_run,
+        ):
+            tgrep.return_value.executable = staged["tgrep"]
+            subprocess_run.return_value = run.subprocess.CompletedProcess([], 23)
+
+            self.assertEqual(run.main([]), 23)
+
+        subprocess_run.assert_called_once()
+
     def test_main_builds_once_and_runs_the_staged_ash(self) -> None:
         staged = self._executables(Path("C:/staged"))
         built = self._executables(Path("C:/built"))

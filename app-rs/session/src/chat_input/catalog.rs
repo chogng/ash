@@ -8,7 +8,6 @@ pub fn composer_model_options(entries: Vec<ModelCatalogEntry>) -> Vec<ComposerMo
     entries
         .into_iter()
         .map(|entry| ComposerModelOption {
-            description: format!("{}/{}", entry.model.provider, entry.model.model),
             label: entry.display_name,
             model: entry.model,
         })

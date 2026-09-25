@@ -118,18 +118,98 @@ fn start_reuses_a_compatible_daemon_from_another_installation() {
     };
 
     let first = run_lifecycle(LifecycleCommand::Start, options.clone(), &first_executable).unwrap();
-    let attached = run_lifecycle(LifecycleCommand::Start, options, &second_executable).unwrap();
+    let attached =
+        run_lifecycle(LifecycleCommand::Start, options.clone(), &second_executable).unwrap();
+    let selected = run_lifecycle(
+        LifecycleCommand::EnsureSelected,
+        options.clone(),
+        &second_executable,
+    )
+    .unwrap();
+    let repeated = run_lifecycle(
+        LifecycleCommand::EnsureSelected,
+        options,
+        &second_executable,
+    )
+    .unwrap();
 
     assert_eq!(first.status, LifecycleStatus::Started);
     assert_eq!(attached.status, LifecycleStatus::AlreadyRunning);
     assert_eq!(attached.pid, first.pid);
     assert_eq!(attached.instance_id, first.instance_id);
+    assert_eq!(selected.status, LifecycleStatus::Restarted);
+    assert_ne!(selected.pid, first.pid);
+    assert_ne!(selected.instance_id, first.instance_id);
+    assert_eq!(repeated.status, LifecycleStatus::AlreadyRunning);
+    assert_eq!(repeated.pid, selected.pid);
+    drop(cleanup);
+}
+
+#[test]
+fn selected_package_replaces_a_daemon_when_only_bundled_resources_change() {
+    let root = tempfile::tempdir().unwrap();
+    let profile = root.path().join("profile");
+    let dir = root.path().join("dir");
+    std::fs::create_dir(&profile).unwrap();
+    std::fs::create_dir(&dir).unwrap();
+    let options = ConnectionOptions::new(&profile, Some(dir), GrantSource::HostConfiguration, None);
+    let executable_name = if cfg!(windows) {
+        "ash-app-server.exe"
+    } else {
+        "ash-app-server"
+    };
+    let first_package = root.path().join("versions/first");
+    let second_package = root.path().join("versions/second");
+    let first_executable = first_package.join("bin").join(executable_name);
+    let second_executable = second_package.join("bin").join(executable_name);
+    for (package, executable, resource, digest_digit) in [
+        (&first_package, &first_executable, "first", "1"),
+        (&second_package, &second_executable, "second", "2"),
+    ] {
+        std::fs::create_dir_all(executable.parent().unwrap()).unwrap();
+        std::fs::copy(env!("CARGO_BIN_EXE_ash-app-server"), executable).unwrap();
+        std::fs::write(
+            package.join("ash-package.json"),
+            serde_json::to_vec(&json!({
+                "buildId": format!("sha256:{}", digest_digit.repeat(64))
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        std::fs::write(package.join("resource.txt"), resource).unwrap();
+    }
+    let cleanup = StopOnDrop {
+        options: options.clone(),
+        executable: &second_executable,
+    };
+
+    let first = run_lifecycle(LifecycleCommand::Start, options.clone(), &first_executable).unwrap();
+    let selected = run_lifecycle(
+        LifecycleCommand::EnsureSelected,
+        options.clone(),
+        &second_executable,
+    )
+    .unwrap();
+    let repeated = run_lifecycle(
+        LifecycleCommand::EnsureSelected,
+        options.clone(),
+        &second_executable,
+    )
+    .unwrap();
+    let old_client = run_lifecycle(LifecycleCommand::Start, options, &first_executable).unwrap();
+
+    assert_eq!(selected.status, LifecycleStatus::Restarted);
+    assert_ne!(selected.pid, first.pid);
+    assert_eq!(repeated.status, LifecycleStatus::AlreadyRunning);
+    assert_eq!(repeated.pid, selected.pid);
+    assert_eq!(old_client.status, LifecycleStatus::AlreadyRunning);
+    assert_eq!(old_client.pid, selected.pid);
     drop(cleanup);
 }
 
 #[cfg(unix)]
 #[test]
-fn changed_source_executable_does_not_interrupt_a_running_daemon() {
+fn changed_source_requires_ensure_selected_to_replace_a_running_daemon() {
     let root = tempfile::tempdir().unwrap();
     let profile = root.path().join("profile");
     let dir = root.path().join("dir");
@@ -162,7 +242,7 @@ fn changed_source_executable_does_not_interrupt_a_running_daemon() {
     assert_eq!(started.status, LifecycleStatus::Started);
     assert_eq!(attached.status, LifecycleStatus::AlreadyRunning);
     assert_eq!(started.instance_id, attached.instance_id);
-    let restarted = run_lifecycle(LifecycleCommand::Restart, options, &source).unwrap();
+    let restarted = run_lifecycle(LifecycleCommand::EnsureSelected, options, &source).unwrap();
     assert_eq!(restarted.status, LifecycleStatus::Restarted);
     assert_ne!(started.instance_id, restarted.instance_id);
     drop(cleanup);

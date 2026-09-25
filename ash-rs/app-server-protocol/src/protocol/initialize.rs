@@ -11,9 +11,9 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 pub const APP_SERVER_PROTOCOL_MAJOR: u32 = 7;
-pub const APP_SERVER_PROTOCOL_REVISION: u32 = 3;
-// Version 7 includes the Advisor enabled switch while retaining its saved model.
-pub const APP_SERVER_CAPABILITY_VERSION: u32 = 7;
+pub const APP_SERVER_PROTOCOL_REVISION: u32 = 4;
+// Version 8 requires model/list callers to choose the fixed or discovered catalog.
+pub const APP_SERVER_CAPABILITY_VERSION: u32 = 8;
 
 pub const REQUIRED_SESSION_CAPABILITIES: &[CapabilityRequirement] = &[
     CapabilityRequirement::exact("sessions", APP_SERVER_CAPABILITY_VERSION),

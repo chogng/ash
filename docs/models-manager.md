@@ -2,7 +2,7 @@
 
 > 物理位置：`ash-rs/models-manager/`
 > Rust crate：`ash_models_manager`
-> 当前状态：Phase 1 core、Ollama/ChatGPT/xAI 动态目录及按供应商分文件的持久缓存已实现；跨 provider 的 Agent 模型选择和完整 App Server snapshot API 尚未实现
+> 当前状态：Phase 1 core、Ollama/ChatGPT/xAI/Kimi 及部分 API 连接的动态目录、按供应商分文件的持久缓存已实现；跨 provider 的 Agent 模型选择和完整 App Server snapshot API 尚未实现
 > Crate 实现说明：[`ash-models-manager` README](../ash-rs/models-manager/README.md)
 > Canonical model contract：[`ash-protocol` model catalog](../ash-rs/protocol/src/model/catalog.rs)
 > Provider wire adapter：[`ash-api.md`](ash-api.md)
@@ -18,11 +18,11 @@
 
 模型目录系统回答“当前有哪些模型可选、这些信息有多可信”；它管理发现、内存缓存和合并，不执行
 模型调用。当前静态目录、动态 source port、snapshot/generation、singleflight、merge/filter/resolve
-已经落地；Ollama、ChatGPT 与 xAI 的目录读取已接入，其他 provider discovery 与完整客户端协议仍按后续阶段推进。
+已经落地；Ollama、ChatGPT、xAI、Kimi 和部分 API 连接的目录读取已接入，其他 provider discovery 与完整客户端协议仍按后续阶段推进。
 
 | 读者首先会问 | 直接答案 | 深入阅读 |
 | --- | --- | --- |
-| 模型列表来自哪里？ | 供应商发现、内置资料、用户配置和本地状态按字段来源合并 | [核心领域模型](#5-核心领域模型) |
+| 模型列表来自哪里？ | 桌面选择器显示内置固定目录；TUI 显示当前连接发现或缓存观察到的模型；目录元数据由来源合并 | [当前实现状态与仓库审计](#2-当前实现状态与仓库审计) |
 | 为什么某个模型没有出现？ | 可能是供应商不支持发现、缓存尚未刷新、生命周期过滤或能力不匹配 | [供应商发现策略](#6-供应商发现策略) |
 | 什么时候访问供应商？ | 依据新鲜度、显式刷新和缓存状态决定，并使用 singleflight 合并并发刷新 | [何时请求](#7-何时请求) |
 | 模型目录能否证明模型支持某项能力？ | 不能；缺失字段表示未知，不能被解释为明确不支持 | [发现能力不是模型能力](#63-发现能力不是模型能力) |
@@ -82,8 +82,9 @@ model provider 负责“如何用已选模型执行一次调用”
 
 `ProviderDefinition.models` 当前只作为启动 seed 和内置 metadata 来源，不兼任动态可用性缓存。
 `ModelProviderRuntime::resolve_model` 已消费 manager 的 static resolution；Local App Server 的
-`model/list` 和 Session model validation 也使用同一个 manager clone，不再独立维护
-`ListedOnly` / `AllowUnlisted` 判断。
+`model/list` 的 `discovered` 视图读取同一个 manager clone 中当前 scope 最新成功发现的模型身份；
+`builtIn` 视图读取 `STATIC_MODEL_CATALOG`，不读取登录状态或发现结果。Session model validation
+仍使用同一个 manager 的静态解析，不另行维护 `ListedOnly` / `AllowUnlisted` 判断。
 
 当前实现边界如下：
 
@@ -92,10 +93,11 @@ model provider 负责“如何用已选模型执行一次调用”
 | 静态 seed、确定排序、typed resolution | ✅ | `ModelsManager::{static_snapshot,list_static,resolve_static}` |
 | 动态 source port、scope 校验、partial/complete merge | ✅ | `ModelCatalogSource`、`commit_discovery`、`apply_discovery` |
 | per-scope memory cache、freshness、singleflight | ✅ | `ManagedScope`、`ScopeState`、`ModelsManager::{read,refresh}` |
+| 按账户持久缓存和最新发现身份筛选 | ✅ | `ModelCatalogDiskCache`、`ModelsManager::list_discovered` |
 | 字段 provenance 与 Unknown 保留 | ✅ | `CatalogRecord`、`ModelMetadataProvenance` |
 | 配置生效后的模型信息、上下文裁剪和压缩建议 | ✅ | `ModelCatalogEntry::model_info`；保留原始目录证据，App Server 消费结果 |
 | model-provider/App Server 静态目录统一 | ✅ | `ModelProviderRuntime::models_manager`、`ConfigBackedModelService` |
-| 真实 provider discovery adapters | 部分具备 | Ollama、ChatGPT、xAI 已接入；其他 provider 留在后续阶段 |
+| 真实 provider discovery adapters | 部分具备 | Ollama、ChatGPT、xAI、Kimi 和部分 API 连接已接入；其他 provider 留在后续阶段 |
 | Agent 启动时的继承、覆盖和跨 provider 替换 | 尚未完成 | 当前 `resolve` 只校验一个准确 `ModelRef`；尚无统一候选选择、替换记录和客户端警告 |
 | persisted observation cache | ✅ | profile 内的 `cache/models/<provider>.json`，按供应商分文件、按账户 scope 隔离、原子写入 |
 | backoff/jitter、并发总闸 | 尚未完成 | 后续 core hardening |
@@ -811,20 +813,21 @@ Context builder 根据有效信息、输出预留和安全余量计算可用输�
 
 ### 11.2 App Server API
 
-建议增加：
+当前已经有 `model/list` 的 `builtIn` / `discovered` 视图和显式 `provider/models/list` 刷新。
+后续如需发布完整 catalog snapshot，可在现有视图上扩展 typed query、read policy 和通知：
 
 ```text
 model/list
-model/refresh
+provider/models/list
 model/updated
 ```
 
-- `model/list` 接受 typed query/read policy，返回 snapshot；
-- `model/refresh` 是显式动作，返回新 snapshot 或带 last-known snapshot 的 typed error；
+- `model/list` 保持桌面固定目录与 TUI 发现目录的选择语义，再增加 typed query/read policy 和 snapshot；
+- `provider/models/list` 继续作为显式刷新入口，可扩展为返回新 snapshot 或带 last-known snapshot 的 typed error；
 - `model/updated` 只在 consumer-visible generation 变化后通知；
 - initialize result 可包含 catalog capability/version，不内嵌完整目录；
 - App Server 负责 connection subscription 和 DTO 映射，不维护第二份 catalog；
-- Desktop、CLI、TUI 都消费同一 snapshot，不自行读取 provider 文档或拼 `/models`。
+- Desktop 与 TUI 从同一个 App Server 接口选择各自视图，不自行读取 provider 文档或拼 `/models`。
 
 Provider credential 缺失时，静态模型仍可展示为 `AuthenticationRequired/Unverified`；API 不返回
 credential account 的秘密信息。普通客户端也不需要看到 opaque cache scope fingerprint。

@@ -544,7 +544,15 @@ fn chatgpt_model_catalog_is_shared_by_login_picker_and_disk_cache() {
         let models = local_call(
             &server,
             &mut connection,
-            serde_json::json!({"jsonrpc":"2.0","id":4,"method":"model/list","params":{}}),
+            serde_json::json!({"jsonrpc":"2.0","id":4,"method":"model/list","params":{"view":"discovered"}}),
+        );
+        assert!(
+            !models["result"]["models"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|entry| entry["model"]["provider"] == "openai"
+                    && entry["model"]["model"] == "gpt-5.4")
         );
         let entry = models["result"]["models"]
             .as_array()
@@ -558,6 +566,33 @@ fn chatgpt_model_catalog_is_shared_by_login_picker_and_disk_cache() {
         assert_eq!(entry["access"], "subscription");
         assert!(
             !models["result"]["models"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|entry| {
+                    entry["model"]["provider"] == "openai"
+                        && entry["model"]["model"] == "gpt-5.6"
+                        && entry["access"] == "apiKey"
+                })
+        );
+        let built_in = local_call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc":"2.0","id":5,"method":"model/list","params":{"view":"builtIn"}}),
+        );
+        assert!(
+            built_in["result"]["models"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|entry| {
+                    entry["model"]["provider"] == "openai"
+                        && entry["model"]["model"] == "gpt-5.6-sol"
+                        && entry["access"] == "subscription"
+                })
+        );
+        assert!(
+            built_in["result"]["models"]
                 .as_array()
                 .unwrap()
                 .iter()
@@ -581,8 +616,9 @@ fn chatgpt_model_catalog_is_shared_by_login_picker_and_disk_cache() {
             let api_models = local_call(
                 &server,
                 &mut connection,
-                serde_json::json!({"jsonrpc":"2.0","id":52,"method":"model/list","params":{}}),
+                serde_json::json!({"jsonrpc":"2.0","id":52,"method":"model/list","params":{"view":"builtIn"}}),
             );
+            assert_eq!(api_models["result"]["models"], built_in["result"]["models"]);
             assert!(
                 api_models["result"]["models"]
                     .as_array()
@@ -603,13 +639,13 @@ fn chatgpt_model_catalog_is_shared_by_login_picker_and_disk_cache() {
 }
 
 #[test]
-fn kimi_subscription_catalog_wins_over_api_and_persists_by_vendor() {
+fn kimi_discovered_catalog_tracks_the_active_connection_and_persists_by_vendor() {
     use ash_secrets::SecretStore;
 
     struct NoCatalogNetwork;
     impl OperationClient for NoCatalogNetwork {
         fn execute(&self, _: &ClientRequest) -> Result<ClientResponse, ClientError> {
-            panic!("Kimi's known catalog should not require a network request")
+            Ok(ClientResponse::new(200, vec![], br#"{"data":[]}"#.to_vec()))
         }
     }
 
@@ -663,7 +699,16 @@ fn kimi_subscription_catalog_wins_over_api_and_persists_by_vendor() {
             model_provider: runtime,
         }),
     };
-    let subscribed = service.list().unwrap();
+    let subscribed = service.list(ModelListView::Discovered).unwrap();
+    assert_eq!(
+        service
+            .current_access(&ModelRef::new(
+                provider.clone(),
+                ModelId::new("kimi-k2.7-code").unwrap(),
+            ))
+            .unwrap(),
+        ModelAccess::Subscription
+    );
     assert!(subscribed.iter().any(|entry| {
         entry.model == ModelRef::new(provider.clone(), ModelId::new("kimi-k2.7-code").unwrap())
             && entry.access == ModelAccess::Subscription
@@ -679,11 +724,17 @@ fn kimi_subscription_catalog_wins_over_api_and_persists_by_vendor() {
     assert!(!persisted.contains("kimi-api-key"));
 
     secrets.delete(&oauth_key).unwrap();
-    let api = service.list().unwrap();
-    assert!(api.iter().any(|entry| {
-        entry.model == ModelRef::new(provider.clone(), ModelId::new("kimi-k2.6").unwrap())
-            && entry.access == ModelAccess::ApiKey
-    }));
+    assert_eq!(
+        service
+            .current_access(&ModelRef::new(
+                provider.clone(),
+                ModelId::new("kimi-k2.6").unwrap(),
+            ))
+            .unwrap(),
+        ModelAccess::ApiKey
+    );
+    let api = service.list(ModelListView::Discovered).unwrap();
+    assert!(!api.iter().any(|entry| entry.model.provider == provider));
     assert!(!api.iter().any(|entry| {
         entry.model == ModelRef::new(provider.clone(), ModelId::new("kimi-k2.7-code").unwrap())
     }));
@@ -1986,18 +2037,18 @@ fn configured_model_context_enables_core_managed_compaction() {
             ContextCompactionLimit::Tokens(ContextTokenCount::new(15_000)),
         )
     );
-    let models = service.list().unwrap();
+    let models = service.list(ModelListView::BuiltIn).unwrap();
     let entry = models
         .iter()
         .find(|entry| entry.model == ModelRef::new(provider.clone(), model.clone()))
         .unwrap();
-    assert_eq!(entry.context_window, Some(20_000));
-    assert_eq!(entry.auto_compact_token_limit, Some(15_000));
-    assert_eq!(entry.available_context_window, Some(11_928));
+    assert_eq!(entry.context_window, None);
+    assert_eq!(entry.auto_compact_token_limit, None);
+    assert_eq!(entry.available_context_window, None);
     let serialized = serde_json::to_value(entry).unwrap();
-    assert_eq!(serialized["contextWindow"], 20_000);
-    assert_eq!(serialized["autoCompactTokenLimit"], 15_000);
-    assert_eq!(serialized["availableContextWindow"], 11_928);
+    assert_eq!(serialized["contextWindow"], serde_json::Value::Null);
+    assert_eq!(serialized["autoCompactTokenLimit"], serde_json::Value::Null);
+    assert!(serialized.get("availableContextWindow").is_none());
 }
 
 #[test]
@@ -2400,7 +2451,7 @@ model = "dir-model"
 }
 
 #[test]
-fn local_catalog_projects_static_models_without_runtime_availability() {
+fn built_in_catalog_excludes_configured_custom_models() {
     let path = config_path("models-manager-catalog");
     let config = Arc::new(ConfigStore::open(&path).unwrap());
     let configured = configure_test_provider(&config, ConfigRevision::INITIAL);
@@ -2419,7 +2470,7 @@ fn local_catalog_projects_static_models_without_runtime_availability() {
         }),
     };
 
-    let models = model.list().unwrap();
+    let models = model.list(ModelListView::BuiltIn).unwrap();
 
     let api_models = models
         .iter()
@@ -2431,16 +2482,19 @@ fn local_catalog_projects_static_models_without_runtime_availability() {
         .collect::<Vec<_>>();
     assert_eq!(api_models, ["gpt-6-astra", "gpt-5.6"]);
 
-    let custom = models
-        .iter()
-        .find(|entry| entry.model == model_ref("custom-model"))
-        .unwrap();
-    assert_eq!(custom.display_name, "custom-model");
-    assert_eq!(custom.access, ash_protocol::ModelAccess::Unknown);
-    assert_eq!(custom.context_window, None);
+    assert!(
+        models
+            .iter()
+            .all(|entry| entry.model != model_ref("custom-model"))
+    );
     assert_eq!(
-        custom.capabilities,
-        ash_protocol::ModelCapabilities::UNKNOWN
+        models
+            .iter()
+            .filter(|entry| {
+                entry.model.provider.as_str() == "zai" && entry.model.model.as_str() == "glm-5.1"
+            })
+            .count(),
+        1
     );
     let openai = models
         .iter()
@@ -2460,7 +2514,7 @@ fn local_catalog_projects_static_models_without_runtime_availability() {
 struct OllamaCatalogClient;
 
 #[test]
-fn custom_provider_discovery_preserves_configured_model_choices() {
+fn custom_provider_discovery_controls_discovered_view_without_mutating_config() {
     struct Client {
         calls: std::sync::atomic::AtomicUsize,
     }
@@ -2527,14 +2581,11 @@ fn custom_provider_discovery_preserves_configured_model_choices() {
         }),
     };
     let configured = model.config.read_snapshot().unwrap();
-    let initial = model.list().unwrap();
-    assert_eq!(
-        initial
+    let built_in = model.list(ModelListView::BuiltIn).unwrap();
+    assert!(
+        built_in
             .iter()
-            .filter(|entry| entry.model.provider == provider)
-            .map(|entry| entry.model.model.as_str())
-            .collect::<Vec<_>>(),
-        ["gpt-5.6", "gpt-6-astra", "grok-4.5"]
+            .all(|entry| entry.model.provider != provider)
     );
     assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 0);
     let fetched = model.refresh(&provider).unwrap();
@@ -2548,22 +2599,51 @@ fn custom_provider_discovery_preserves_configured_model_choices() {
             ModelId::new("custom-model").unwrap(),
         )]
     );
-    assert_eq!(model.list().unwrap(), initial);
+    assert_eq!(
+        model
+            .list(ModelListView::Discovered)
+            .unwrap()
+            .into_iter()
+            .filter(|entry| entry.model.provider == provider)
+            .collect::<Vec<_>>(),
+        fetched
+    );
+    assert_eq!(model.list(ModelListView::BuiltIn).unwrap(), built_in);
     assert_eq!(model.config.read_snapshot().unwrap(), configured);
     assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 1);
     assert!(model.refresh(&provider).unwrap().is_empty());
-    assert_eq!(model.list().unwrap(), initial);
+    assert!(
+        model
+            .list(ModelListView::Discovered)
+            .unwrap()
+            .into_iter()
+            .all(|entry| entry.model.provider != provider)
+    );
     assert_eq!(model.config.read_snapshot().unwrap(), configured);
     assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 2);
     assert_eq!(
         model.refresh(&provider),
         Err(crate::model_catalog::ModelCatalogRefreshError::Authentication)
     );
-    assert_eq!(model.list().unwrap(), initial);
+    assert!(
+        model
+            .list(ModelListView::Discovered)
+            .unwrap()
+            .into_iter()
+            .all(|entry| entry.model.provider != provider)
+    );
     assert_eq!(model.config.read_snapshot().unwrap(), configured);
     assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 3);
     assert_eq!(model.refresh(&provider).unwrap(), fetched);
-    assert_eq!(model.list().unwrap(), initial);
+    assert_eq!(
+        model
+            .list(ModelListView::Discovered)
+            .unwrap()
+            .into_iter()
+            .filter(|entry| entry.model.provider == provider)
+            .collect::<Vec<_>>(),
+        fetched
+    );
     assert_eq!(model.config.read_snapshot().unwrap(), configured);
     assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 4);
 
@@ -2582,14 +2662,14 @@ fn custom_provider_discovery_preserves_configured_model_choices() {
         .unwrap();
     assert_eq!(
         model
-            .list()
+            .list(ModelListView::Discovered)
             .unwrap()
             .into_iter()
             .filter(|entry| entry.model.provider == provider)
             .collect::<Vec<_>>(),
         fetched
     );
-    assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 4);
+    assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 5);
     drop(model);
     remove_config_files(&path);
 }
@@ -2638,7 +2718,7 @@ fn local_catalog_includes_models_installed_in_configured_ollama() {
         }),
     };
 
-    let models = model.list().unwrap();
+    let models = model.list(ModelListView::Discovered).unwrap();
 
     assert!(models.iter().any(|entry| {
         entry.model.provider.as_str() == "ollama" && entry.model.model.as_str() == "qwen3:8b"
@@ -2925,7 +3005,7 @@ fn xai_subscription_catalog_drives_model_selection_context_and_invocation() {
             model_provider: runtime,
         }),
     };
-    let entries = service.list().unwrap();
+    let entries = service.list(ModelListView::Discovered).unwrap();
     let model = ModelRef::new(
         ProviderId::new("xai").unwrap(),
         ModelId::new("grok-test").unwrap(),

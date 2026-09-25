@@ -58,3 +58,23 @@ fn invalid_requests_are_rejected_before_connecting() {
         .is_err()
     );
 }
+
+#[test]
+fn model_list_selects_the_requested_catalog_view() {
+    for (args, expected_view) in [
+        (vec!["client", "model-list"], "discovered"),
+        (
+            vec!["client", "model-list", "--view", "built-in"],
+            "builtIn",
+        ),
+    ] {
+        let cli = Cli::try_parse_from(args).unwrap();
+        let PreparedCommand::Request { method, params, .. } =
+            PreparedCommand::new(cli.command).unwrap()
+        else {
+            panic!("model-list must prepare a request");
+        };
+        assert_eq!(method, ClientMethod::ModelList.as_str());
+        assert_eq!(params, serde_json::json!({"view": expected_view}));
+    }
+}

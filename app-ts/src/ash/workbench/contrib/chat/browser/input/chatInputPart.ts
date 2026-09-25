@@ -15,7 +15,6 @@ import type { IContextViewService } from "../../../../../platform/contextview/br
 import type { IQuickInputService } from "../../../../../platform/quickinput/common/quickInput.js";
 import type { ModelCatalogEntry } from "../../../../services/chat/common/chatService.js";
 import type { ChatContextAttachment, IChatContextPickService } from "../../../../services/chat/common/chatContextService.js";
-import { modelAccessLabel } from "../../../../services/chat/common/modelCatalog.js";
 import type { ModelRef } from "../../../../../sessions/services/sessions/common/session.js";
 import { DesktopSlashCommands, parseSlashCommandInput, SlashCommandCatalog } from "../../common/slashCommands.js";
 import { SkillSelectorCatalog } from "../../common/skillSelectors.js";
@@ -251,10 +250,8 @@ export class ChatInputPart extends Disposable {
 				"model",
 				() => void this.delegate.selectModel(entry.model),
 				sameModel(entry.model, this.toolbarState.selectedModel),
-				modelAccessBadge(entry),
 			)),
 			this.toolbarState.models.length > 0,
-			selectedModel ? modelAccessBadge(selectedModel) : undefined,
 		);
 		const attachmentAction = new ChatInputAction(
 			"ash.chat.input.attachment",
@@ -439,7 +436,6 @@ class ChatInputAction implements IAction {
 		readonly presentation: ChatInputToolbarPresentation,
 		readonly callback: () => void,
 		readonly checked: boolean | undefined = undefined,
-		readonly badge: string | undefined = undefined,
 	) {}
 
 	run(): void {
@@ -450,8 +446,8 @@ class ChatInputAction implements IAction {
 class SelectorAction extends ChatInputAction {
 	readonly actions: readonly IAction[] | (() => readonly IAction[]);
 
-	constructor(id: string, label: string, tooltip: string, icon: Icon | undefined, presentation: "mode" | "model", actions: readonly IAction[] | (() => readonly IAction[]), enabled = true, badge?: string) {
-		super(id, label, tooltip, icon, enabled, presentation, () => {}, undefined, badge);
+	constructor(id: string, label: string, tooltip: string, icon: Icon | undefined, presentation: "mode" | "model", actions: readonly IAction[] | (() => readonly IAction[]), enabled = true) {
+		super(id, label, tooltip, icon, enabled, presentation, () => {});
 		this.actions = actions;
 	}
 }
@@ -475,17 +471,7 @@ class ChatInputSelectorViewItem extends DropdownMenuActionViewItem {
 		const button = container.querySelector<HTMLButtonElement>(":scope > .ash-button");
 		button?.classList.add("ash-chat-input-action", `ash-chat-input-${this.presentation}-action`);
 		button?.classList.toggle("disabled", !this.action.enabled);
-		if (this.presentation === "model" && this.action.badge && button) {
-			const badge = h(container.ownerDocument, "span");
-			badge.className = "ash-chat-input-model-access-badge";
-			badge.textContent = this.action.badge;
-			button.append(badge);
-		}
 	}
-}
-
-function modelAccessBadge(entry: ModelCatalogEntry): string | undefined {
-	return entry.access === "subscription" ? modelAccessLabel(entry) : undefined;
 }
 
 /** Chat-owned HTML popup presentation for the mode selector. */

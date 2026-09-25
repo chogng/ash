@@ -222,7 +222,7 @@ fn run_connection(
     send_event(event_sink, SessionRuntimeEvent::SessionCatalog(sessions))
         .map_err(SessionRuntimeFailure::fatal)?;
     let models = client
-        .list_models()
+        .list_builtin_models()
         .map_err(|error| SessionRuntimeFailure::connection(anyhow!(error.to_string())))?
         .models;
     send_event(

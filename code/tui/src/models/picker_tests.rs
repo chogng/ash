@@ -145,7 +145,7 @@ fn model_picker_only_offers_models_from_configured_providers() {
 }
 
 #[test]
-fn model_picker_without_configured_models_points_to_provider_setup() {
+fn model_picker_without_discovered_models_explains_manual_selection() {
     let catalog = ModelListResult {
         models: vec![catalog_entry("openai", "gpt-ash", "GPT Ash")],
     };
@@ -157,7 +157,7 @@ fn model_picker_without_configured_models_points_to_provider_setup() {
     assert!(state.visible_items().is_empty());
     assert_eq!(
         state.empty_message(),
-        "No configured models · Configure a provider in /config"
+        "No discovered models · Use /model provider/model or /config"
     );
 }
 

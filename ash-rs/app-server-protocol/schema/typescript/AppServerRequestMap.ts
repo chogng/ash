@@ -291,6 +291,7 @@ import type { MemoryStart } from './types/MemoryStart.js';
 import type { MemoryUpdateParams } from './types/MemoryUpdateParams.js';
 import type { MessageCheckpointsParams } from './types/MessageCheckpointsParams.js';
 import type { MessageCheckpointsResult } from './types/MessageCheckpointsResult.js';
+import type { ModelListParams } from './types/ModelListParams.js';
 import type { ModelListResult } from './types/ModelListResult.js';
 import type { PluginCommandResultDto } from './types/PluginCommandResultDto.js';
 import type { PluginListResult } from './types/PluginListResult.js';
@@ -527,7 +528,7 @@ export interface AppServerRequestMap {
   "plugin/grant": { params: PluginPackageCommandParams; response: PluginCommandResultDto };
   "plugin/revokeGrant": { params: PluginPackageCommandParams; response: PluginCommandResultDto };
   "plugin/uninstall": { params: PluginPackageCommandParams; response: PluginCommandResultDto };
-  "model/list": { params: Record<string, never>; response: ModelListResult };
+  "model/list": { params: ModelListParams; response: ModelListResult };
   "provider/list": { params: Record<string, never>; response: ProviderListResult };
   "provider/probe": { params: ProviderProbeParams; response: ProviderProbeResult };
   "provider/models/list": { params: ProviderModelsListParams; response: ProviderModelsListResult };

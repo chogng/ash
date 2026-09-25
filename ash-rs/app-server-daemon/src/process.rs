@@ -43,6 +43,7 @@ const HOME_ENV: &str = "ASH_HOME";
 const DIR_ROOT_ENV: &str = "ASH_WORKSPACE_ROOT";
 const DIR_GRANT_SOURCE_ENV: &str = "ASH_DIR_GRANT_SOURCE";
 const EXECUTABLE_HASH_BUFFER_BYTES: usize = 64 * 1024;
+const MAX_PACKAGE_METADATA_BYTES: u64 = 1024 * 1024;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -55,12 +56,14 @@ pub(crate) struct ProcessRecord {
     pub(crate) executable_identity: Option<ExecutableIdentity>,
 }
 
-/// Content identity for selecting and validating an immutable daemon generation.
+/// Binary contents and immutable package identity selected for one daemon generation.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ExecutableIdentity {
     #[serde(default)]
     sha256: String,
+    #[serde(default)]
+    package_build_id: Option<String>,
 }
 
 impl ExecutableIdentity {
@@ -68,8 +71,10 @@ impl ExecutableIdentity {
         self.sha256 == expected
     }
 
-    pub(crate) fn same_contents(&self, other: &Self) -> bool {
-        !self.sha256.is_empty() && self.sha256 == other.sha256
+    pub(crate) fn same_generation(&self, other: &Self) -> bool {
+        !self.sha256.is_empty()
+            && self.sha256 == other.sha256
+            && self.package_build_id == other.package_build_id
     }
 }
 
@@ -103,7 +108,8 @@ impl ProcessRecord {
             process_start_identity,
             daemon_version: build_info::VERSION.into(),
             executable_identity: Some(executable_identity(
-                &std::env::current_exe().map_err(io_error)?,
+                &dunce::canonicalize(std::env::current_exe().map_err(io_error)?)
+                    .map_err(io_error)?,
             )?),
         })
     }
@@ -122,7 +128,47 @@ pub(crate) fn executable_identity(path: &Path) -> Result<ExecutableIdentity, Str
     }
     Ok(ExecutableIdentity {
         sha256: format!("{:x}", digest.finalize()),
+        package_build_id: package_build_id(path)?,
     })
+}
+
+fn package_build_id(executable: &Path) -> Result<Option<String>, String> {
+    let Some(root) = executable
+        .parent()
+        .filter(|directory| directory.file_name().is_some_and(|name| name == "bin"))
+        .and_then(Path::parent)
+    else {
+        return Ok(None);
+    };
+    let file = match File::open(root.join("ash-package.json")) {
+        Ok(file) => file,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(io_error(error)),
+    };
+    let mut bytes = Vec::new();
+    file.take(MAX_PACKAGE_METADATA_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(io_error)?;
+    if bytes.len() as u64 > MAX_PACKAGE_METADATA_BYTES {
+        return Err("package buildId is invalid".into());
+    }
+    let metadata: serde_json::Value =
+        serde_json::from_slice(&bytes).map_err(|_| "package buildId is invalid")?;
+    let build_id = metadata
+        .get("buildId")
+        .and_then(serde_json::Value::as_str)
+        .ok_or("package buildId is invalid")?;
+    let digest = build_id
+        .strip_prefix("sha256:")
+        .ok_or("package buildId is invalid")?;
+    if digest.len() != 64
+        || !digest
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err("package buildId is invalid".into());
+    }
+    Ok(Some(build_id.to_owned()))
 }
 
 pub(crate) fn resolve_backend_executable(

@@ -34,7 +34,6 @@ impl ChatInputInteractionItem {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ComposerModelOption {
     pub label: String,
-    pub description: String,
     pub model: ModelRef,
 }
 
@@ -146,7 +145,7 @@ impl ChatInputInteractionState {
             .into_iter()
             .map(|option| ChatInputInteractionItem {
                 label: option.label,
-                description: option.description,
+                description: String::new(),
                 action: InteractionItemAction::SelectModel(option.model),
             })
             .collect();

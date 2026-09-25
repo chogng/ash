@@ -56,6 +56,20 @@ impl ModelCatalogEntry {
     }
 }
 
+/// Selects the product's fixed catalog or the account-scoped observed catalog.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ModelListView {
+    BuiltIn,
+    Discovered,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelListParams {
+    pub view: ModelListView,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelListResult {
@@ -68,6 +82,24 @@ mod tests {
     use ash_protocol::CapabilitySupport;
     use ash_protocol::ModelId;
     use ash_protocol::ProviderId;
+
+    #[test]
+    fn model_list_requires_an_explicit_view() {
+        assert_eq!(
+            serde_json::to_value(ModelListParams {
+                view: ModelListView::BuiltIn,
+            })
+            .unwrap(),
+            serde_json::json!({"view":"builtIn"})
+        );
+        assert_eq!(
+            serde_json::from_value::<ModelListParams>(serde_json::json!({"view":"discovered"}))
+                .unwrap()
+                .view,
+            ModelListView::Discovered
+        );
+        assert!(serde_json::from_value::<ModelListParams>(serde_json::json!({})).is_err());
+    }
 
     #[test]
     fn catalog_entry_projects_all_public_static_metadata() {

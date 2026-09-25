@@ -21,6 +21,7 @@ use crate::LifecycleOutput;
 use crate::LifecycleStatus;
 use crate::endpoint::EndpointPaths;
 use crate::endpoint::connect_existing;
+use crate::process::BackendExecutable;
 use crate::process::ExecutableIdentity;
 use crate::process::ProcessRecord;
 use crate::process::force_terminate;
@@ -61,6 +62,9 @@ pub(crate) fn run_lifecycle(
     let _operation_lock = endpoint.acquire_operation_lock()?;
     match command {
         LifecycleCommand::Start => start_unlocked(&endpoint, &options, backend_executable),
+        LifecycleCommand::EnsureSelected => {
+            ensure_selected_unlocked(&endpoint, &options, backend_executable)
+        }
         LifecycleCommand::Restart => {
             let _ = stop_unlocked(&endpoint)?;
             let mut output = start_unlocked(&endpoint, &options, backend_executable)?;
@@ -74,10 +78,26 @@ pub(crate) fn run_lifecycle(
 
 pub(crate) fn connect(options: ConnectionOptions, backend_executable: &Path) -> Result<(), String> {
     run_lifecycle(LifecycleCommand::Start, options.clone(), backend_executable)?;
+    connect_ready(&options)
+}
+
+pub(crate) fn connect_selected(
+    options: ConnectionOptions,
+    backend_executable: &Path,
+) -> Result<(), String> {
+    run_lifecycle(
+        LifecycleCommand::EnsureSelected,
+        options.clone(),
+        backend_executable,
+    )?;
+    connect_ready(&options)
+}
+
+fn connect_ready(options: &ConnectionOptions) -> Result<(), String> {
     let endpoint = EndpointPaths::prepare(options.profile_root())?;
     let stream = connect_existing(&endpoint.socket)?
         .ok_or_else(|| "Local App Server daemon exited before the client connected".to_string())?;
-    proxy_stdio(stream, &options).map_err(|error| error.to_string())
+    proxy_stdio(stream, options).map_err(|error| error.to_string())
 }
 
 pub(crate) fn launch_web(
@@ -211,6 +231,14 @@ fn start_unlocked(
     }
 
     let daemon = resolve_backend_executable(backend_executable)?;
+    start_new_unlocked(endpoint, options, &daemon)
+}
+
+fn start_new_unlocked(
+    endpoint: &EndpointPaths,
+    options: &ConnectionOptions,
+    daemon: &BackendExecutable,
+) -> Result<LifecycleOutput, String> {
     remove_stale_process_record(&endpoint.pid)?;
     let mut spawned = spawn_backend(endpoint, options, &daemon.path)?;
     let result = (|| {
@@ -261,6 +289,43 @@ fn start_unlocked(
             Err(error)
         }
     }
+}
+
+fn ensure_selected_unlocked(
+    endpoint: &EndpointPaths,
+    options: &ConnectionOptions,
+    backend_executable: &Path,
+) -> Result<LifecycleOutput, String> {
+    let selected = resolve_backend_executable(backend_executable)?;
+    let mut replaced = false;
+    if let Some(control) = request_control(endpoint, ControlCommand::Status)? {
+        if control.state == ControlState::Stopping {
+            return Err("Local App Server daemon is stopping".into());
+        }
+        let record = validate_managed_response(endpoint, &control)?;
+        if validate_executable_identity(&record, &selected.identity).is_ok() {
+            let probe = probe_app_server(endpoint, options)
+                .map_err(|error| diagnostic_error(endpoint, &error))?;
+            return Ok(lifecycle_output(
+                LifecycleStatus::AlreadyRunning,
+                endpoint,
+                Some(&control),
+                Some(&probe),
+            ));
+        }
+        stop_unlocked(endpoint)?;
+        // A service can remove its process record before all worker threads exit.
+        // The old generation must be gone before the selected binary binds.
+        if record_is_active(&record)? {
+            force_terminate(&record)?;
+        }
+        replaced = true;
+    }
+    let mut output = start_new_unlocked(endpoint, options, &selected)?;
+    if replaced {
+        output.status = LifecycleStatus::Restarted;
+    }
+    Ok(output)
 }
 
 fn stop_unlocked(endpoint: &EndpointPaths) -> Result<LifecycleOutput, String> {
@@ -364,7 +429,7 @@ fn validate_executable_identity(
     if !record
         .executable_identity
         .as_ref()
-        .is_some_and(|actual| actual.same_contents(expected))
+        .is_some_and(|actual| actual.same_generation(expected))
     {
         return Err("running Local App Server daemon executable is stale".into());
     }

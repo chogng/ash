@@ -145,7 +145,6 @@ const BUILT_INS: &[InstructionGroup] = &[
             ("openai", "gpt-5.6-terra"),
             ("openai", "gpt-5.6-luna"),
             ("openai", "gpt-5.5"),
-            ("openai", "gpt-5.4"),
         ],
     },
     InstructionGroup {

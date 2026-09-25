@@ -6,7 +6,12 @@ use crate::LifecycleCommand;
 fn lifecycle_and_connection_commands_preserve_explicit_product_services() {
     for (argument, expected) in [
         ("connect", Command::Connect),
+        ("connect-selected", Command::ConnectSelected),
         ("start", Command::Lifecycle(LifecycleCommand::Start)),
+        (
+            "ensure-selected",
+            Command::Lifecycle(LifecycleCommand::EnsureSelected),
+        ),
         ("restart", Command::Lifecycle(LifecycleCommand::Restart)),
         ("stop", Command::Lifecycle(LifecycleCommand::Stop)),
         ("version", Command::Lifecycle(LifecycleCommand::Version)),

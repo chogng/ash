@@ -157,7 +157,7 @@ cache_hit_rate = cached_input_tokens / input_tokens
 
 | Ash 模型 | 接入方式 | 首版计价状态 |
 | --- | --- | --- |
-| `openai/gpt-5.6-sol`、`gpt-5.6-terra`、`gpt-5.6-luna`、`gpt-5.5`、`gpt-5.4` | ChatGPT subscription | `Unpriced(SubscriptionPlan)` |
+| `openai/gpt-5.6-sol`、`gpt-5.6-terra`、`gpt-5.6-luna`、`gpt-5.5` | ChatGPT subscription | `Unpriced(SubscriptionPlan)` |
 | `openai/gpt-5.6` | OpenAI 按量 API；当前别名指向 `gpt-5.6-sol` | 使用 OpenAI API 表；仍记录实际返回模型 |
 | `anthropic/claude-sonnet-4-20250514` | Anthropic API key | 有公开历史价格；供应商当前标记为 retired，新调用需按实际计费平台判断 |
 | `google/gemini-3.6-flash` | Gemini 按量 API | 已覆盖 Standard、Batch、Flex、Priority |

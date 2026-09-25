@@ -144,6 +144,63 @@ struct ManagedInstall {
     update_public_key: ash_product_update::UpdatePublicKey,
 }
 
+pub(super) fn selected_managed_install() -> Result<bool, String> {
+    let executable = std::env::current_exe()
+        .map_err(|error| format!("could not locate the running Ash executable: {error}"))?;
+    selected_managed_executable(&executable)
+}
+
+fn selected_managed_executable(executable: &Path) -> Result<bool, String> {
+    let executable = fs::canonicalize(executable)
+        .map_err(|error| format!("could not resolve the Ash executable: {error}"))?;
+    let Some((root, _, package)) = managed_install_paths(&executable) else {
+        return Ok(false);
+    };
+    if !root.join(INSTALL_MARKER).exists() {
+        return Ok(false);
+    }
+    require_install_marker(root)?;
+    selected_package_matches(root, package)
+}
+
+fn managed_install_paths(executable: &Path) -> Option<(&Path, &Path, &Path)> {
+    let binary_directory = executable
+        .parent()
+        .filter(|path| path.file_name().is_some_and(|name| name == "bin"))?;
+    let package = binary_directory.parent()?;
+    let versions = package
+        .parent()
+        .filter(|path| path.file_name().is_some_and(|name| name == "versions"))?;
+    Some((versions.parent()?, versions, package))
+}
+
+fn require_install_marker(root: &Path) -> Result<(), String> {
+    let marker: InstallMarker = serde_json::from_slice(
+        &fs::read(root.join(INSTALL_MARKER)).map_err(|_| managed_install_required())?,
+    )
+    .map_err(|_| managed_install_required())?;
+    if marker.schema_version != 1 || marker.repository != REPOSITORY {
+        return Err(managed_install_required());
+    }
+    Ok(())
+}
+
+fn selected_package_matches(root: &Path, package: &Path) -> Result<bool, String> {
+    #[cfg(unix)]
+    {
+        let selected = fs::canonicalize(root.join("current"))
+            .map_err(|error| format!("could not resolve the selected Ash version: {error}"))?;
+        Ok(selected == package)
+    }
+    #[cfg(windows)]
+    {
+        let versions = package.parent().ok_or_else(managed_install_required)?;
+        let selected = fs::read_to_string(root.join("current"))
+            .map_err(|error| format!("could not read the selected Ash version: {error}"))?;
+        Ok(versions.join(selected.trim()) == package)
+    }
+}
+
 impl ManagedInstall {
     fn current() -> Result<Self, String> {
         let executable =
@@ -157,30 +214,11 @@ impl ManagedInstall {
     fn detect(executable: &Path) -> Result<Self, String> {
         let executable = fs::canonicalize(executable)
             .map_err(|error| format!("could not resolve the Ash executable: {error}"))?;
-        let binary_directory = executable
-            .parent()
-            .filter(|path| path.file_name().is_some_and(|name| name == "bin"))
-            .ok_or_else(managed_install_required)?;
-        let package = binary_directory
-            .parent()
-            .ok_or_else(managed_install_required)?;
-        let versions = package.parent().ok_or_else(managed_install_required)?;
-        if versions.file_name().is_none_or(|name| name != "versions") {
-            return Err(managed_install_required());
-        }
-        let root = versions
-            .parent()
-            .ok_or_else(managed_install_required)?
-            .to_owned();
-        let marker: InstallMarker = serde_json::from_slice(
-            &fs::read(root.join(INSTALL_MARKER)).map_err(|_| managed_install_required())?,
-        )
-        .map_err(|_| managed_install_required())?;
-        if marker.schema_version != 1 || marker.repository != REPOSITORY {
-            return Err(managed_install_required());
-        }
+        let (root, versions, package) =
+            managed_install_paths(&executable).ok_or_else(managed_install_required)?;
+        require_install_marker(root)?;
         let install = Self {
-            root,
+            root: root.to_owned(),
             package: package.to_owned(),
             versions: versions.to_owned(),
             update_public_key: read_update_public_key(package)?,
@@ -190,27 +228,10 @@ impl ManagedInstall {
     }
 
     fn require_selected_package(&self) -> Result<(), String> {
-        #[cfg(unix)]
-        {
-            let selected = fs::canonicalize(self.root.join("current"))
-                .map_err(|error| format!("could not resolve the selected Ash version: {error}"))?;
-            if selected != self.package {
-                return Err(
-                    "the running Ash version is pinned and cannot update the managed launcher"
-                        .into(),
-                );
-            }
-        }
-        #[cfg(windows)]
-        {
-            let selected = fs::read_to_string(self.root.join("current"))
-                .map_err(|error| format!("could not read the selected Ash version: {error}"))?;
-            if self.versions.join(selected.trim()) != self.package {
-                return Err(
-                    "the running Ash version is pinned and cannot update the managed launcher"
-                        .into(),
-                );
-            }
+        if !selected_package_matches(&self.root, &self.package)? {
+            return Err(
+                "the running Ash version is pinned and cannot update the managed launcher".into(),
+            );
         }
         Ok(())
     }

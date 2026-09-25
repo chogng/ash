@@ -240,6 +240,54 @@ async fn partial_absence_is_preserved_but_complete_absence_is_unavailable() {
 }
 
 #[tokio::test]
+async fn discovered_list_uses_latest_observation_without_static_seeds() {
+    let manager = ModelsManager::new(registry());
+    let scope = dynamic_scope("strict", "account-a");
+    let source = Arc::new(QueueSource::new([
+        Ok(modified(
+            &scope,
+            DiscoveryCoverage::Partial,
+            [DiscoveredModel::new(model_id("alpha"))],
+        )),
+        Ok(modified(
+            &scope,
+            DiscoveryCoverage::Partial,
+            [DiscoveredModel::new(model_id("remote"))],
+        )),
+    ]));
+
+    assert!(
+        manager
+            .list_discovered(&[scope.clone()], &CatalogQuery::selectable())
+            .unwrap()
+            .is_empty()
+    );
+    manager
+        .refresh(scope.clone(), source.clone())
+        .await
+        .unwrap();
+    assert_eq!(
+        manager
+            .list_discovered(&[scope.clone()], &CatalogQuery::selectable())
+            .unwrap()
+            .iter()
+            .map(|entry| entry.model().model.clone())
+            .collect::<Vec<_>>(),
+        vec![model_id("alpha")]
+    );
+    manager.refresh(scope.clone(), source).await.unwrap();
+    assert_eq!(
+        manager
+            .list_discovered(&[scope], &CatalogQuery::selectable())
+            .unwrap()
+            .iter()
+            .map(|entry| entry.model().model.clone())
+            .collect::<Vec<_>>(),
+        vec![model_id("remote")]
+    );
+}
+
+#[tokio::test]
 async fn unknown_live_fields_do_not_erase_known_seed_metadata() {
     let manager = ModelsManager::new(registry());
     let scope = dynamic_scope("strict", "account-a");
@@ -596,6 +644,15 @@ async fn disk_cache_restores_each_subscription_scope_after_restart() {
         assert_eq!(
             snapshot.entries()[0].info().display_name,
             format!("Model {model_name}")
+        );
+        assert_eq!(
+            restarted
+                .list_discovered(&[scope], &CatalogQuery::selectable())
+                .unwrap()
+                .iter()
+                .map(|entry| entry.model().model.clone())
+                .collect::<Vec<_>>(),
+            vec![model_id(model_name)]
         );
     }
     assert!(

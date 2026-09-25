@@ -24,6 +24,7 @@ Windows 下可执行路径加 `.exe`。未指定连接参数时从 PATH 启动 `
 
 ```text
 ash-app-server-test-client model-list
+ash-app-server-test-client model-list --view built-in
 ash-app-server-test-client session-list
 ash-app-server-test-client request session/read @params.json
 ash-app-server-test-client request session/subscribe @params.json --watch
@@ -31,6 +32,7 @@ ash-app-server-test-client watch --session-id SESSION_ID
 ```
 
 - `request` 的参数为 JSON 对象，默认 `{}`；`@文件路径` 用于避免 shell 转义。
+- `model-list` 默认读取已发现模型；`--view built-in` 读取桌面端的固定目录。
 - `watch` 不指定会话时观察当前连接收到的通知；指定会话时先调用 `session/subscribe`。
 - 每次运行只有一条连接。需要保留订阅时，使用 `watch` 或 `request --watch`，按 Ctrl+C 关闭。
 - stdout 每行输出一个 JSON：请求结果、通知或服务端反向请求；错误写入 stderr 并返回非零退出码。

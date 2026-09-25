@@ -336,8 +336,17 @@ struct FixedModelCatalog {
 impl crate::model_catalog::ModelCatalog for FixedModelCatalog {
     fn list(
         &self,
+        _: ash_app_server_protocol::protocol::model::ModelListView,
     ) -> Result<Vec<ash_app_server_protocol::protocol::model::ModelCatalogEntry>, CoreError> {
         Ok(self.models.clone())
+    }
+
+    fn current_access(&self, model: &ModelRef) -> Result<ash_protocol::ModelAccess, CoreError> {
+        Ok(self
+            .models
+            .iter()
+            .find(|entry| &entry.model == model)
+            .map_or(ash_protocol::ModelAccess::Unknown, |entry| entry.access))
     }
 
     fn configured_default(&self) -> Result<Option<ModelRef>, CoreError> {
@@ -420,8 +429,14 @@ fn provider_models_rpc_distinguishes_models_empty_and_classified_failure() {
             assert_eq!(provider.as_str(), "openai");
             self.0.clone()
         }
-        fn list(&self) -> Result<Vec<ModelCatalogEntry>, CoreError> {
+        fn list(
+            &self,
+            _: ash_app_server_protocol::protocol::model::ModelListView,
+        ) -> Result<Vec<ModelCatalogEntry>, CoreError> {
             Ok(vec![])
+        }
+        fn current_access(&self, _: &ModelRef) -> Result<ash_protocol::ModelAccess, CoreError> {
+            Ok(ash_protocol::ModelAccess::Unknown)
         }
         fn configured_default(&self) -> Result<Option<ModelRef>, CoreError> {
             Ok(None)
@@ -2007,7 +2022,7 @@ fn model_catalog_is_global_and_session_views_do_not_own_model_selection() {
     let listed = call(
         &server,
         &mut connection,
-        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"model/list","params":{}}),
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"model/list","params":{"view":"builtIn"}}),
     );
     assert_eq!(listed["result"]["models"].as_array().unwrap().len(), 2);
     let session = create_session(&server, &mut connection, 3, "session");
@@ -3262,7 +3277,19 @@ fn session_request_routes_thread_mutations_and_freezes_turn_approval_mode() {
 fn session_request_steers_a_running_turn_retry_safely_and_replans() {
     let model = Arc::new(AppServerSteeringModel::default());
     let _release_on_drop = ReleaseSteeringModel(Arc::clone(&model));
-    let server = server_with_model(model.clone());
+    let selected = model_ref("steering");
+    let mut info = ash_protocol::ModelInfo::new(selected.model.clone(), "Steering model");
+    info.access = ash_protocol::ModelAccess::Subscription;
+    let server = server_with_model(model.clone()).with_model_catalog(Arc::new(FixedModelCatalog {
+        models: vec![
+            ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
+                selected.clone(),
+                &info,
+                ash_protocol::ModelOutputTransport::Unary,
+            ),
+        ],
+        default: selected,
+    }));
     let mut connection = server.connection();
     initialize(&server, &mut connection);
     let session = create_session(&server, &mut connection, 2, "steer-session");
@@ -3284,6 +3311,26 @@ fn session_request_steers_a_running_turn_retry_safely_and_replans() {
     let turn_id = started["result"]["value"]["turnId"].as_str().unwrap();
     let start_sequence = started["result"]["value"]["sequence"].as_u64().unwrap();
     model.wait_for_first_call();
+
+    let blocked = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":40,"method":"session/request",
+            "params":{
+                "commandId":"steer-subscription-image",
+                "sessionId":session_id,
+                "request":{
+                    "type":"steerTurn",
+                    "expectedSequence":start_sequence,
+                    "threadId":thread_id,
+                    "turnId":turn_id,
+                    "input":[{"type":"image","url":"https://example.test/image.png"}]
+                }
+            }
+        }),
+    );
+    assert_eq!(blocked["error"]["message"], "CoreOperationFailed");
 
     let steer_request = |id| {
         serde_json::json!({

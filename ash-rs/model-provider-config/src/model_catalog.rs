@@ -44,13 +44,6 @@ pub const STATIC_MODEL_CATALOG: &[StaticModelSpec] = &[
         access: subscription,
         runtime: chatgpt_subscription,
     },
-    static_model! {
-        provider: "openai",
-        id: "gpt-5.4",
-        name: "GPT-5.4",
-        access: subscription,
-        runtime: chatgpt_subscription,
-    },
     // Direct API-key models.
     static_model! {
         provider: "openai",

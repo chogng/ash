@@ -11,6 +11,70 @@ from build.code import run_package
 
 
 class PackageRunnerTests(unittest.TestCase):
+    def test_main_selects_the_package_server_before_launching_the_tui(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            package = Path(temporary) / "package"
+            suffix = ".exe" if run_package.os.name == "nt" else ""
+            backend = package / "bin" / f"ash-app-server{suffix}"
+            services = package / "ash-resources/product-services/product-services.json"
+            backend.parent.mkdir(parents=True)
+            services.parent.mkdir(parents=True)
+            backend.touch()
+            services.touch()
+            staged = Path(temporary) / "staged-ash"
+            environment = {"PATH": "tools"}
+            with (
+                patch.dict(run_package.os.environ, environment, clear=True),
+                patch.object(run_package, "current_package", return_value=package),
+                patch.object(
+                    run_package.code_build,
+                    "build_binaries",
+                    return_value=(0, {"ash": Path(temporary) / "built-ash"}),
+                ),
+                patch.object(
+                    run_package.code_build,
+                    "stage_runtime",
+                    return_value={"ash": staged},
+                ),
+                patch.object(run_package.subprocess, "run") as subprocess_run,
+            ):
+                subprocess_run.side_effect = [
+                    run_package.subprocess.CompletedProcess([], 0),
+                    run_package.subprocess.CompletedProcess([], 0),
+                    run_package.subprocess.CompletedProcess([], 0),
+                ]
+
+                self.assertEqual(run_package.main([]), 0)
+
+            runtime = {
+                **environment,
+                "ASH_APP_SERVER_PATH": str(backend.resolve()),
+                "ASH_PRODUCT_SERVICES_PATH": str(services.resolve()),
+            }
+            subprocess_run.assert_has_calls(
+                [
+                    call(
+                        [run_package.sys.executable, "-B", "build/ash_rs/prepare.py"],
+                        cwd=run_package.run.REPOSITORY_ROOT,
+                        env=environment,
+                        check=False,
+                    ),
+                    call(
+                        [str(staged), "app-server", "daemon", "ensure-selected"],
+                        cwd=run_package.run.REPOSITORY_ROOT,
+                        env=runtime,
+                        stdout=run_package.subprocess.DEVNULL,
+                        check=False,
+                    ),
+                    call(
+                        [str(staged)],
+                        cwd=run_package.run.REPOSITORY_ROOT,
+                        env=runtime,
+                        check=False,
+                    ),
+                ]
+            )
+
     def test_main_packages_then_runs_the_staged_cli_against_that_package(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             package = Path(temporary) / "package"

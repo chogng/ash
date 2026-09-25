@@ -974,22 +974,43 @@ fn model_pins_keep_provider_identity_and_provider_deletion_cleans_preferences() 
                 }),
             },
         }).unwrap();
-        crate::models::execute(
-            &mut *client,
-            ModelCommand::Pin {
-                preference: format!("{id}/shared-alias"),
-                pinned: true,
+    }
+    let config = client.read_config().unwrap();
+    let mut tui = config.tui.clone();
+    tui.0.insert(
+        "pinnedModels".into(),
+        serde_json::json!([
+            {"provider":"custom-first","model":"shared-alias"},
+            {"provider":"custom-second","model":"shared-alias"}
+        ]),
+    );
+    client
+        .update_config(
+            ash_app_server_protocol::protocol::config::ConfigUpdateParams {
+                command_id: CommandId::new("save-existing-pins").unwrap(),
+                expected_revision: config.revision,
+                advisor: Default::default(),
+                time_context: Default::default(),
+                features: Default::default(),
+                model: Default::default(),
+                model_reasoning_effort: Default::default(),
+                commit_message_model: Default::default(),
+                approval_review_model: Default::default(),
+                tool_mode: Default::default(),
+                grep_backend: Default::default(),
+                git: Default::default(),
+                gui: Default::default(),
+                tui: ash_protocol::Patch::Value(tui),
             },
         )
         .unwrap();
-    }
     let config = client.read_config().unwrap();
     assert_eq!(config.tui.0["pinnedModels"].as_array().unwrap().len(), 2);
     let choices = crate::models::load_selection(&mut *client).unwrap();
     let state = crate::widgets::list_selection::ListSelectionState::new(choices.model);
     assert_eq!(state.active_tab().label(), "Favorites");
-    assert_eq!(state.visible_items().len(), 2);
-    assert_eq!(state.tabs()[1].label(), "custom-second");
+    assert!(state.visible_items().is_empty());
+    assert_eq!(state.tabs().len(), 1);
     crate::models::execute(
         &mut *client,
         ModelCommand::Pin {
@@ -1014,17 +1035,16 @@ fn model_pins_keep_provider_identity_and_provider_deletion_cleans_preferences() 
     let config = client.read_config().unwrap();
     assert_eq!(config.tui.0["pinnedModels"], serde_json::json!([]));
     assert!(!config.providers.contains_key("custom-second"));
-    assert_eq!(
-        model.calls(),
-        0,
-        "listing and pinning custom models never fetches remote models"
+    assert!(
+        model.calls() > 0,
+        "the picker attempts discovery for configured providers"
     );
     drop(client);
     let _ = fs::remove_dir_all(root);
 }
 
 #[test]
-fn custom_model_picker_replaces_inherited_ids_with_the_configured_id() {
+fn custom_model_picker_only_shows_discovered_ids() {
     let (mut client, root, transport) = client_with_model_probe();
     let mut config = ProviderConfigDto {
         provider: "custom-gateway".into(),
@@ -1052,12 +1072,11 @@ fn custom_model_picker_replaces_inherited_ids_with_the_configured_id() {
         .unwrap();
     assert!(
         client
-            .list_models()
+            .list_discovered_models()
             .unwrap()
             .models
             .iter()
-            .any(|entry| entry.model.provider.as_str() == "custom-gateway"
-                && entry.model.model.as_str() == "gpt-5.6")
+            .all(|entry| entry.model.provider.as_str() != "custom-gateway")
     );
     crate::models::set_model(&mut *client, "custom-gateway/gpt-5.6").unwrap();
     config.custom.as_mut().unwrap().model = Some("private-alias".into());
@@ -1069,15 +1088,15 @@ fn custom_model_picker_replaces_inherited_ids_with_the_configured_id() {
             config,
         })
         .unwrap();
-    let catalog = client.list_models().unwrap();
+    let catalog = client.list_discovered_models().unwrap();
     let models = catalog
         .models
         .iter()
         .filter(|entry| entry.model.provider.as_str() == "custom-gateway")
         .map(|entry| entry.model.model.as_str())
         .collect::<Vec<_>>();
-    assert_eq!(models, vec!["private-alias"]);
-    assert_eq!(transport.calls(), 0);
+    assert!(models.is_empty());
+    assert!(transport.calls() > 0);
     drop(client);
     let _ = fs::remove_dir_all(root);
 }
@@ -1111,11 +1130,11 @@ fn set_model_sets_and_clears_model_reasoning_effort() {
     let read = client.read_config().unwrap();
     assert_eq!(read.model_reasoning_effort, Some(ReasoningEffort::High));
 
-    // Unsupported model fails
-    let err = crate::models::set_model(&mut *client, "openai/gpt-5.6 high").unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("does not support reasoning effort")
+    // An unobserved model can be selected manually; support is checked when it runs.
+    let update = crate::models::set_model(&mut *client, "openai/gpt-5.6 high").unwrap();
+    assert_eq!(
+        update.summary.model_reasoning_effort(),
+        Some(ReasoningEffort::High)
     );
 
     // Invalid effort fails

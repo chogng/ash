@@ -48,8 +48,7 @@ pub(crate) fn model_choices(
     let mut groups = BTreeMap::<String, Vec<ListSelectionItem>>::new();
     let mut favorites = Vec::new();
     for entry in &catalog.models {
-        // The catalog also contains models for provider setup. Match the configured-provider
-        // requirement used when applying a /model selection.
+        // Selection still requires a configured provider when another caller supplies a wider catalog.
         if !config.providers.contains_key(entry.model.provider.as_str()) {
             continue;
         }
@@ -115,7 +114,7 @@ pub(crate) fn model_choices(
             .with_key_hint_note("P to pin/unpin")
             .with_empty_message("No models here · Pin models from a provider tab to Favorites");
     } else {
-        model = model.with_empty_message("No configured models · Configure a provider in /config");
+        model = model.with_empty_message("No discovered models · Use /model provider/model or /config");
     }
     Ok(ModelChoices { model, actions })
 }

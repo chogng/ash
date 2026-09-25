@@ -52,7 +52,9 @@ where
     match command {
         Command::OpenAdvisor => (|| -> Result<Event, ConfigCommandError> {
             let config = client.read_config().map_err(ConfigCommandError::from)?;
-            let models = client.list_models().map_err(ConfigCommandError::from)?;
+            let models = client
+                .list_discovered_models()
+                .map_err(ConfigCommandError::from)?;
             let terminal = TerminalSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
             let status_line =
                 StatusLineSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
@@ -64,7 +66,7 @@ where
         })(),
         Command::SelectAdvisor(selection) => select_advisor(client, selection).map(Event::Updated),
         Command::SetAdvisor(advisor) => (|| -> Result<Event, ConfigCommandError> {
-            let models = client.list_models()?;
+            let models = client.list_discovered_models()?;
             let (result, config) = set_advisor(client, advisor)?;
             let choices = advisor_choices(&config, &models, result.terminal.language());
             Ok(Event::AdvisorSaved(result, choices))
@@ -87,9 +89,9 @@ where
             set_provider_api_key(client, edit).map(|update| Event::ApiKeySaved {
                 provider: update.provider,
                 choices: update.choices,
+                plan: update.plan,
             })
         }
-                plan: update.plan,
     }
     .map_err(|error| error.to_string())
 }
@@ -108,7 +110,7 @@ fn select_advisor<T: JsonRpcTransport>(
             advisor
         })
     } else {
-        let models = client.list_models()?;
+        let models = client.list_discovered_models()?;
         let model = models
             .models
             .iter()
@@ -374,9 +376,9 @@ pub(crate) fn set_provider_api_key<T>(
 where
     T: JsonRpcTransport,
 {
+    let target = edit.target();
     let (provider, api_key) = edit.into_parts();
     let current = client.read_config()?;
-    let target = edit.target();
     let mut config = current
         .providers
         .get(&provider)

@@ -73,6 +73,7 @@ fn advisor_model_selection_updates_global_config() {
         ]
     );
     assert_eq!(requests[2]["params"]["expectedRevision"], 4);
+    assert_eq!(requests[0]["params"]["view"], "discovered");
     assert_eq!(
         requests[2]["params"]["advisor"]["model"],
         serde_json::json!({"provider":"openai","model":"gpt-ash"})
@@ -497,7 +498,6 @@ fn saving_key_configures_default_model_without_fetching_models() {
 }
 
 #[test]
-#[test]
 fn zai_sign_in_saves_the_key_on_the_coding_plan_endpoint() {
     let mut current = empty_config_snapshot();
     let mut zai = ash_app_server_protocol::protocol::config::ProviderConfigDto {
@@ -566,6 +566,7 @@ fn zai_sign_in_saves_the_key_on_the_coding_plan_endpoint() {
     assert_eq!(requests[2]["params"]["apiKey"], "secret-zai-key");
 }
 
+#[test]
 fn saving_unchanged_connection_with_no_model_still_configures_provider() {
     let mut current = empty_config_snapshot();
     let config = ash_app_server_protocol::protocol::config::ProviderConfigDto {

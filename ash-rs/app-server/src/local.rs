@@ -7,6 +7,7 @@ use crate::server::DirGrantPolicy;
 use crate::server::EnvToolPorts;
 use crate::server::update_broker::UpdateBroker;
 use crate::tool_composition::ToolPort;
+use ash_app_server_protocol::protocol::model::ModelListView;
 use ash_async_utils::CancellationToken;
 use ash_chatgpt::ChatGptOAuth;
 use ash_client::OperationClient;
@@ -67,7 +68,6 @@ use ash_model_provider_config::ProviderAccessMode;
 use ash_model_provider_config::ProviderConfigRegistry;
 use ash_model_provider_config::find_static_model;
 use ash_models_manager::CatalogQuery;
-use ash_models_manager::CatalogScopeKey;
 use ash_models_manager::ModelRequirements;
 use ash_models_manager::ModelsManager;
 use ash_protocol::ContextWindow;
@@ -2190,22 +2190,36 @@ impl ModelCatalog for ConfigBackedModelService {
     }
     fn list(
         &self,
+        view: ModelListView,
     ) -> Result<Vec<ash_app_server_protocol::protocol::model::ModelCatalogEntry>, CoreError> {
+        if view == ModelListView::BuiltIn {
+            let mut seen = BTreeSet::new();
+            return Ok(ash_model_provider_config::STATIC_MODEL_CATALOG
+                .iter()
+                .filter_map(|spec| {
+                    let model = spec.model_ref();
+                    seen.insert((spec.provider_id, spec.model_id)).then(|| {
+                        let definition = self
+                            .provider_configs
+                            .get(&model.provider)
+                            .expect("built-in model belongs to a built-in provider");
+                        ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
+                            model,
+                            &spec.model(),
+                            definition.output_transport,
+                        )
+                    })
+                })
+                .collect());
+        }
         let config = self.resolved_config()?;
         let registry = self
             .provider_configs
             .with_configs(config.providers.values())
             .map_err(|error| CoreError::Model(error.to_string()))?;
         let manager = self.models_manager.with_registry(registry.clone());
-        let mut scopes = registry
-            .providers()
-            .map(|provider| CatalogScopeKey::provider_seed(provider.id.clone()))
-            .collect::<Vec<_>>();
-        for provider in config
-            .providers
-            .values()
-            .filter(|provider| provider.custom.is_none())
-        {
+        let mut scopes = Vec::new();
+        for provider in config.providers.values() {
             let binding = match self.catalog_provider.catalog_binding(provider) {
                 Ok(Some(binding)) => binding,
                 Ok(None) => continue,
@@ -2220,14 +2234,7 @@ impl ModelCatalog for ConfigBackedModelService {
             let scope = binding.scope().clone();
             if let Err(error) = self.catalog_runtime.block_on(manager.read(
                 scope.clone(),
-                if provider.provider.as_str() == "ollama"
-                    || provider.access_mode == ProviderAccessMode::Subscription
-                    || scope.source_scope().as_str().starts_with("chatgpt:")
-                {
-                    ash_models_manager::CatalogReadPolicy::CachePreferred
-                } else {
-                    ash_models_manager::CatalogReadPolicy::CacheOnly
-                },
+                ash_models_manager::CatalogReadPolicy::CachePreferred,
                 ash_models_manager::CatalogReadSource::dynamic(binding.source()),
             )) {
                 log::warn!(
@@ -2235,57 +2242,14 @@ impl ModelCatalog for ConfigBackedModelService {
                     provider.provider
                 );
             }
-            if let Some(seed) = scopes
-                .iter_mut()
-                .find(|candidate| candidate.provider() == &provider.provider)
-            {
-                *seed = scope;
-            } else {
-                scopes.push(scope);
-            }
+            scopes.push(scope);
         }
         let mut models = manager
-            .list(&scopes, &CatalogQuery::all())
+            .list_discovered(&scopes, &CatalogQuery::selectable())
             .map_err(|error| CoreError::Model(error.to_string()))?
             .into_iter()
             .map(|entry| runtime_catalog_entry(&entry, &config, &registry))
             .collect::<Result<Vec<_>, CoreError>>()?;
-        for provider in config
-            .providers
-            .values()
-            .filter(|provider| provider.custom.is_some())
-        {
-            if let Some(id) = provider
-                .custom
-                .as_ref()
-                .and_then(|custom| custom.model.as_ref())
-            {
-                let model = ash_protocol::ModelRef::new(provider.provider.clone(), id.clone());
-                if models.iter().any(|entry| entry.model == model) {
-                    continue;
-                }
-                let resolved = manager
-                    .resolve_static(&model, &ModelRequirements::agent())
-                    .map_err(|error| CoreError::Model(error.to_string()))?;
-                models.push(runtime_catalog_entry(resolved.entry(), &config, &registry)?);
-            }
-        }
-        if let Some(model) = config.model.clone()
-            && config
-                .providers
-                .get(&model.provider)
-                .is_none_or(|provider| provider.custom.is_none())
-            && config
-                .providers
-                .get(&model.provider)
-                .is_none_or(|provider| provider.access_mode == ProviderAccessMode::Api)
-            && !models.iter().any(|entry| entry.model == model)
-        {
-            let resolved = manager
-                .resolve_static(&model, &ModelRequirements::agent())
-                .map_err(|error| CoreError::Model(error.to_string()))?;
-            models.push(runtime_catalog_entry(resolved.entry(), &config, &registry)?);
-        }
         models.sort_by(|left, right| {
             let catalog_position = |model: &ash_protocol::ModelRef| {
                 ash_model_provider_config::STATIC_MODEL_CATALOG
@@ -2303,6 +2267,17 @@ impl ModelCatalog for ConfigBackedModelService {
                 .then_with(|| left.model.model.cmp(&right.model.model))
         });
         Ok(models)
+    }
+
+    fn current_access(&self, model: &ash_protocol::ModelRef) -> Result<ModelAccess, CoreError> {
+        let config = self.resolved_config()?;
+        let provider = config.providers.get(&model.provider).ok_or_else(|| {
+            CoreError::Model(format!("provider '{}' is not configured", model.provider))
+        })?;
+        self.catalog_provider
+            .model_info(provider, model)
+            .map(|info| info.access)
+            .map_err(|error| CoreError::Model(error.to_string()))
     }
 
     fn configured_default(&self) -> Result<Option<ash_protocol::ModelRef>, CoreError> {

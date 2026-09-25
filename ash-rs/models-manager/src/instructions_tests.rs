@@ -1,6 +1,7 @@
 use super::*;
 use ash_protocol::ModelId;
 use ash_protocol::ProviderId;
+use std::collections::HashSet;
 
 const GUIDANCE: PromptArtifact = PromptArtifact::new(
     "models-manager",
@@ -79,7 +80,13 @@ fn built_in_guidance_covers_the_static_catalog_with_valid_exact_registrations() 
     let catalog = ModelInstructionCatalog::built_in();
     assert!(Arc::ptr_eq(&catalog, &ModelInstructionCatalog::built_in()));
     let models = ash_model_provider_config::STATIC_MODEL_CATALOG;
-    assert_eq!(catalog.profiles.len(), models.len());
+    assert_eq!(
+        catalog.profiles.keys().cloned().collect::<HashSet<_>>(),
+        models
+            .iter()
+            .map(|spec| spec.model_ref())
+            .collect::<HashSet<_>>()
+    );
     for spec in models {
         let model = spec.model_ref();
         let selected = catalog.resolve(Some(&model));

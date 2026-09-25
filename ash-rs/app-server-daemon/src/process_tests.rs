@@ -25,6 +25,22 @@ fn resolves_the_selected_backend_in_its_package_directory() {
 }
 
 #[test]
+fn malformed_package_identity_cannot_select_a_daemon_generation() {
+    let root = tempfile::tempdir().unwrap();
+    let binary_directory = root.path().join("package/bin");
+    fs::create_dir_all(&binary_directory).unwrap();
+    let daemon = binary_directory.join(if cfg!(windows) {
+        "ash-app-server.exe"
+    } else {
+        "ash-app-server"
+    });
+    fs::copy(std::env::current_exe().unwrap(), &daemon).unwrap();
+    fs::write(root.path().join("package/ash-package.json"), "{}").unwrap();
+
+    assert!(resolve_backend_executable(&daemon).is_err());
+}
+
+#[test]
 fn stale_records_cannot_remove_a_successor_generation() {
     use super::ProcessRecord;
     use super::ProcessRecordGuard;

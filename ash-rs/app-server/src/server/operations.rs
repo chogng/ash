@@ -22,6 +22,7 @@ use ash_app_server_protocol::protocol::initialize::InitializeParams;
 use ash_app_server_protocol::protocol::initialize::InitializeResult;
 use ash_app_server_protocol::protocol::initialize::ProtocolVersion;
 use ash_app_server_protocol::protocol::initialize::ServerCapabilities;
+use ash_app_server_protocol::protocol::model::ModelListParams;
 use ash_app_server_protocol::protocol::model::ModelListResult;
 use ash_app_server_protocol::protocol::provider::ProviderModelsListFailureCodeDto;
 use ash_app_server_protocol::protocol::provider::ProviderModelsListFailureDto;
@@ -297,9 +298,10 @@ impl AppServer {
         })
     }
 
-    pub(super) fn model_list(&self) -> Result<Value, RpcError> {
+    pub(super) fn model_list(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: ModelListParams = decode(params)?;
         result(&ModelListResult {
-            models: self.model_catalog.list().map_err(core_error)?,
+            models: self.model_catalog.list(params.view).map_err(core_error)?,
         })
     }
 
@@ -491,12 +493,21 @@ impl AppServer {
                     config
                         .validate()
                         .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
-                    if !self
+                    let listed = self
                         .model_catalog
-                        .list()
+                        .list(ash_app_server_protocol::protocol::model::ModelListView::BuiltIn)
                         .map_err(core_error)?
                         .iter()
-                        .any(|entry| entry.model == config.model)
+                        .any(|entry| entry.model == config.model);
+                    if !listed
+                        && !self
+                            .model_catalog
+                            .list(
+                                ash_app_server_protocol::protocol::model::ModelListView::Discovered,
+                            )
+                            .map_err(core_error)?
+                            .iter()
+                            .any(|entry| entry.model == config.model)
                     {
                         return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
                     }
@@ -1338,15 +1349,17 @@ impl AppServer {
             .iter()
             .find(|turn| turn.turn_id == turn_id)
             .ok_or_else(|| RpcError::new(-32011, AppServerErrorName::CoreOperationFailed))?;
-        let subscription = if let Some(model) = turn.model.as_ref() {
-            self.model_catalog
-                .list()
-                .map_err(core_error)?
-                .iter()
-                .any(|entry| entry.model == *model && entry.access == ModelAccess::Subscription)
-        } else {
-            false
-        };
+        let subscription = turn
+            .model
+            .as_ref()
+            .map(|model| {
+                self.model_catalog
+                    .current_access(model)
+                    .map(|access| access == ModelAccess::Subscription)
+            })
+            .transpose()
+            .map_err(core_error)?
+            .unwrap_or(false);
         if subscription
             && input.iter().any(|item| {
                 !matches!(

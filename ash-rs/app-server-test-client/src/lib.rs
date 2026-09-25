@@ -17,6 +17,8 @@ use app_server_protocol::protocol::common::SessionId;
 use app_server_protocol::protocol::initialize::InitializeParams;
 use app_server_protocol::protocol::initialize::InitializeResult;
 use app_server_protocol::protocol::initialize::ensure_protocol_compatible;
+use app_server_protocol::protocol::model::ModelListParams;
+use app_server_protocol::protocol::model::ModelListView;
 use app_server_protocol::protocol::registry::ClientMethod;
 use app_server_protocol::protocol::session::SessionSubscribeParams;
 use app_server_protocol::rpc::JsonRpcError;
@@ -27,6 +29,7 @@ use app_server_protocol::rpc::JsonRpcRequest;
 use app_server_protocol::rpc::JsonRpcResponse;
 use clap::Parser;
 use clap::Subcommand;
+use clap::ValueEnum;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -67,8 +70,11 @@ struct Cli {
 enum Command {
     /// Print the initialization result, including protocol version and capabilities.
     Initialize,
-    /// List available models.
-    ModelList,
+    /// List the observed models or the fixed product catalog.
+    ModelList {
+        #[arg(long, value_enum, default_value_t = ModelListViewArg::Discovered)]
+        view: ModelListViewArg,
+    },
     /// List stored sessions.
     SessionList,
     /// Send any RPC method with inline JSON parameters or @path/to/params.json.
@@ -85,6 +91,21 @@ enum Command {
         #[arg(long)]
         session_id: Option<String>,
     },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+enum ModelListViewArg {
+    BuiltIn,
+    Discovered,
+}
+
+impl From<ModelListViewArg> for ModelListView {
+    fn from(value: ModelListViewArg) -> Self {
+        match value {
+            ModelListViewArg::BuiltIn => Self::BuiltIn,
+            ModelListViewArg::Discovered => Self::Discovered,
+        }
+    }
 }
 
 /// Runs the developer client using command-line arguments and JSON output on stdout.
@@ -144,9 +165,9 @@ impl PreparedCommand {
     fn new(command: Command) -> Result<Self> {
         Ok(match command {
             Command::Initialize => Self::Initialize,
-            Command::ModelList => Self::Request {
+            Command::ModelList { view } => Self::Request {
                 method: ClientMethod::ModelList.as_str().into(),
-                params: serde_json::to_value(EmptyParams {})?,
+                params: serde_json::to_value(ModelListParams { view: view.into() })?,
                 follow: Follow::Finish,
             },
             Command::SessionList => Self::Request {

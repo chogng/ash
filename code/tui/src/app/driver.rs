@@ -400,7 +400,9 @@ impl AppDriver {
                 move || {
                     Completion::ConfigRefreshed((|| {
                         let config = client.read_config().map_err(|error| error.to_string())?;
-                        let models = client.list_models().map_err(|error| error.to_string())?;
+                        let models = client
+                            .list_discovered_models()
+                            .map_err(|error| error.to_string())?;
                         Ok((config, models))
                     })())
                 },

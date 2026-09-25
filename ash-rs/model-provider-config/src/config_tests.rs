@@ -571,6 +571,23 @@ fn static_model_catalog_has_unique_valid_rows() {
 }
 
 #[test]
+fn chatgpt_subscription_seeds_only_current_models() {
+    let mut config = ModelProviderConfig::new(provider_id("openai"));
+    config.access_mode = ProviderAccessMode::Subscription;
+    let registry = ProviderConfigRegistry::builtin()
+        .with_configs([&config])
+        .unwrap();
+    let models = &registry.get(&provider_id("openai")).unwrap().models;
+    assert_eq!(
+        models
+            .iter()
+            .map(|model| model.id.as_str())
+            .collect::<Vec<_>>(),
+        ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5"]
+    );
+}
+
+#[test]
 fn builtin_provider_models_and_defaults_derive_from_static_catalog() {
     let registry = ProviderConfigRegistry::builtin();
 
@@ -665,6 +682,11 @@ fn provider_subscription_mode_replaces_the_api_catalog_and_endpoint() {
             .with_configs([&config])
             .unwrap();
         let definition = registry.get(&config.provider).unwrap();
+        match provider {
+            "xai" => assert_eq!(definition.name, "xAI"),
+            "zai" => assert_eq!(definition.name, "zai"),
+            _ => {}
+        }
         assert_eq!(definition.api_key_policy, api_key_policy);
         assert!(
             matches!(&definition.endpoint, EndpointPolicy::ProviderDefault { base_url } if base_url == endpoint)
@@ -682,11 +704,6 @@ fn provider_subscription_mode_replaces_the_api_catalog_and_endpoint() {
     }
 }
 
-        match provider {
-            "xai" => assert_eq!(definition.name, "xAI"),
-            "zai" => assert_eq!(definition.name, "zai"),
-            _ => {}
-        }
 #[test]
 fn normalization_rejects_a_selected_provider_mismatch() {
     let registry = ProviderConfigRegistry::builtin();

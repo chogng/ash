@@ -186,18 +186,6 @@
   font-size: 13px;
 }
 
-.ash-chat-input-model-access-badge {
-  flex: 0 0 auto;
-  margin-left: 6px;
-  padding: 2px 6px;
-  border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
-  border-radius: var(--ash-corner-radius-circle);
-  color: var(--ash-description-foreground);
-  font-size: var(--ash-font-size-label3);
-  font-weight: var(--ash-font-weight-semi-bold);
-  line-height: 14px;
-}
-
 .ash-chat-input-mode-menu {
   font-size: 12px;
 }

@@ -13,7 +13,6 @@ fn model_option(provider: &str, model: &str, display_name: &str) -> ComposerMode
         ModelId::new(model).unwrap(),
     );
     ComposerModelOption {
-        description: format!("{}/{}", model.provider, model.model),
         label: display_name.into(),
         model,
     }
@@ -46,6 +45,8 @@ fn model_activation_returns_exact_catalog_identity_and_closes() {
         .unwrap();
     model.sync_input("/model", ComposerRoute::Agent);
     model.activate_selected();
+
+    assert_eq!(model.view().unwrap().items()[0].description(), "");
 
     assert_eq!(
         model.activate_selected(),

@@ -437,14 +437,14 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, "Agent");
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.model'] button .ash-button-label")?.textContent, "GPT-5.6 Sol");
-		assert.equal(inputToolbar?.querySelector(".ash-chat-input-model-access-badge")?.textContent, "ChatGPT subscription");
+		assert.equal(inputToolbar?.querySelector(".ash-chat-input-model-access-badge"), null);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.attachment'] button")?.disabled, false);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.send'] button")?.disabled, true);
 	}
 	const firstChatPane = chatPanes[0]!;
 	firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.model'] button")?.click();
-	assert.deepEqual(shownContextMenuActions.map(action => ({ label: action.label, badge: action.badge })), [
-		{ label: "GPT-5.6 Sol", badge: "ChatGPT subscription" },
+	assert.deepEqual(shownContextMenuActions.map(action => action.label), [
+		"GPT-5.6 Sol",
 	]);
 	shownContextMenuActions = [];
 	firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.click();
@@ -1848,7 +1848,7 @@ function fakeApi(options: FakeOptions = {}): {
 			},
 		},
 		model: {
-			list: async () => {
+			listBuiltIn: async () => {
 				modelListRequests.push(undefined);
 				return { models: [...(options.models ?? [])] };
 			},

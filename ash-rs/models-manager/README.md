@@ -125,8 +125,9 @@ Explicit `refresh` 仍返回 typed error，调用方可另行读取 last-known s
 - `ash-model-provider-config` 提供 immutable `ProviderConfigRegistry` 和 seed，不依赖本 crate。
 - `ash-model-provider` 持有并公开同一个 `ModelsManager` clone；`Provider::resolve_model` 消费 manager
   的 static resolution，不再维护第二套 catalog gate。
-- Local App Server 从 provider runtime 取得该 manager；`model/list` 只投影 manager entries，Session
-  model validation 同样调用 manager。
+- Local App Server 从 provider runtime 取得该 manager；`model/list` 的 `discovered` 视图只列出
+  最新成功发现或当前账户持久缓存观察到的模型身份；`builtIn` 视图读取内置固定目录，Session
+  model validation 调用 manager。
 - 动态 provider adapter 应在 `ash-model-provider`/`ash-api` 边界实现 `ModelCatalogSource`，本 crate
   不增加 provider switch。
 
@@ -142,7 +143,7 @@ Unknown merge、fresh/stale/expired、304 generation 稳定和 per-scope singlef
 scope 或 resolution 时必须同步相应 table test、本文和系统文档；新增 protocol-visible 字段还要同步
 App Server DTO/schema fixture。
 
-当前实现只有进程内 memory cache，没有 persisted observation、全局/per-provider 并发上限、退避抖动或用户 trust/policy override。Ollama 已通过 provider runtime 接入 `/api/tags` 与 `/api/show`；其他 provider 动态目录仍未实现。App Server 的 `model/list` DTO 投影 identity、display name、access、context、capabilities 与 defaults；本 crate 的 availability、generation、freshness 和 warnings 都不进入产品模型列表，也不作为发送消息的门禁。App Server 还没有 `model/refresh` / `model/updated` wire method。
+当前实现有 per-scope 进程内缓存及按供应商文件、账户 scope 隔离的持久发现记录；尚无全局/per-provider 并发上限、退避抖动或用户 trust/policy override。Ollama、ChatGPT、xAI、Kimi 和部分 API 连接已接入动态目录；不支持发现的供应商在 TUI 中没有发现条目。App Server 的 `model/list` DTO 投影 identity、display name、access、context、capabilities 与 defaults；本 crate 的 availability、generation、freshness 和 warnings 都不进入产品模型列表，也不作为发送消息的门禁。App Server 还没有 `model/updated` 通知；显式刷新使用 `provider/models/list`。
 
 跨 provider 模型选择同样尚未实现：当前 `ModelsManager::resolve` 只校验一个准确 `ModelRef`，没有候选排序、`ModelSelectionDecision`、替换原因或客户端警告。计划实现必须复用本 crate 的同一批 snapshot 与 `ModelRequirements`，只在 Agent 或工作流运行创建前选择一次；准确模型不可用时先检查同 catalog scope 的已验证兼容候选，再检查同 provider 的其他允许 scope，最后检查其他允许 provider。选择结果冻结后，catalog refresh 或真实调用失败都不能触发后台换模型。完整行为与类型边界见 [`docs/models-manager.md`](../../docs/models-manager.md#103-模型选择与替换)。
 
@@ -170,7 +171,7 @@ Codex 针对未知模型写入的固定规格不适用于这里的多供应商�
 ## Agent 指令边界
 
 - 共同规则归 `ash-prompts::AGENT_INSTRUCTIONS`；这里的模板只补充模型表达和工具调用指导。
-- `ModelInstructionCatalog::built_in()` 返回共享的内置初版目录，当前覆盖静态模型目录中的 17 个准确 provider/model 身份。
+- `ModelInstructionCatalog::built_in()` 返回共享的内置初版目录，当前覆盖静态模型目录中的 16 个准确 provider/model 身份。
 - `ModelInstructionCatalog::new` 校验自定义目录；`default()` 明确创建空目录，已知模型也使用 Generic。
 - `resolve` 只做准确匹配，不按 provider、型号前缀、显示名或 API 地址推断；同一正文可以由多个准确条目共用。
 - App Server 和委托工具默认使用内置目录。嵌入方可在环境创建前通过 `with_model_instructions` 整体替换它，包含用空目录建立 Generic 对照。
@@ -180,7 +181,7 @@ Codex 针对未知模型写入的固定规格不适用于这里的多供应商�
 
 | 文件 | 当前登记 | 指导重点 |
 | --- | --- | --- |
-| [gpt.md](templates/instructions/gpt.md) | OpenAI 的 GPT-6 Astra、GPT-5.6/sol/terra/luna、GPT-5.5、GPT-5.4 | 结果与范围、适量验证、保留交付证据 |
+| [gpt.md](templates/instructions/gpt.md) | OpenAI 的 GPT-6 Astra、GPT-5.6/sol/terra/luna、GPT-5.5 | 结果与范围、适量验证、保留交付证据 |
 | [claude.md](templates/instructions/claude.md) | `anthropic/claude-sonnet-4-20250514` | 从建议推进到所需产物，限制额外抽象和改动 |
 | [gemini.md](templates/instructions/gemini.md) | `google/gemini-3.6-flash` | 长上下文中的当前任务、直接输出与证据定位 |
 | [function_calling.md](templates/instructions/function_calling.md) | 当前 Grok、Qwen、Kimi、DeepSeek、GLM、MiniMax、MiMo 共 8 个准确条目 | 结构化调用、参数与自然语言分开、收到结果后继续 |

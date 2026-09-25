@@ -1,0 +1,27 @@
+---
+source: code/tui/src/app/fullscreen/home_tests.rs
+assertion_line: 297
+expression: "text(&render(&app, 80, 24))"
+---
+  .                                                        [— / —] [Dashboard]  
+                                                                                
+  ╭─────┌── Project worktrees ─────────────────────────────────────[✗]─┐─────╮  
+  │     │                                                              │     │  
+  │    ▄│  ╭─────────────────────────────────────────────────────────╮ │     │  
+  │  ▗█▛│  │ Search worktrees                                        │ │     │  
+  │  ▝▜█│  ╰─────────────────────────────────────────────────────────╯ │     │  
+  │    ▝│  New worktree  ·  Create at HEAD · no session                │     │  
+  │     │> repo  ·  Current · main · /repo                             │     │  
+  │     │  topic  ·  Enter to open · main · /worktrees/topic           │     │  
+  │     │                                                              │     │  
+  │     │                                                              │     │  
+  │     │                                                              │     │  
+  │     │                                                              │     │  
+  ╰─────│                                                              │─────╯  
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │ction.  
+  ╭─────│  n New worktree · d delete · / search · Esc close            │─────╮  
+  │ > Bu└──────────────────────────────────────────────────────────────┘     │  
+  ╰──────────────────────────────────────────────────────── Automatic model ─╯

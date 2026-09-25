@@ -8,7 +8,7 @@ expression: "render(&app, 100, 18)"
             │                                                                         │             
             │   Favorites                                                             │             
             │                                                                         │             
-            │  No configured models · Configure a provider in /config                 │             
+            │  No discovered models · Use /model provider/model or /config            │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             

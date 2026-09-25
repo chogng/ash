@@ -1064,8 +1064,22 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         self.call(ClientMethod::PluginUninstall, params)
     }
 
-    pub fn list_models(&mut self) -> Result<ModelListResult, ClientError> {
-        self.call(ClientMethod::ModelList, EmptyParams {})
+    pub fn list_builtin_models(&mut self) -> Result<ModelListResult, ClientError> {
+        self.call(
+            ClientMethod::ModelList,
+            ash_app_server_protocol::protocol::model::ModelListParams {
+                view: ash_app_server_protocol::protocol::model::ModelListView::BuiltIn,
+            },
+        )
+    }
+
+    pub fn list_discovered_models(&mut self) -> Result<ModelListResult, ClientError> {
+        self.call(
+            ClientMethod::ModelList,
+            ash_app_server_protocol::protocol::model::ModelListParams {
+                view: ash_app_server_protocol::protocol::model::ModelListView::Discovered,
+            },
+        )
     }
 
     pub fn list_provider_models(

@@ -2549,7 +2549,7 @@ fn model_favorites_empty_state_explains_pinning_from_provider_tabs() {
 }
 
 #[test]
-fn model_picker_without_configured_models_shows_setup_hint() {
+fn model_picker_without_discovered_models_shows_manual_selection_hint() {
     let mut app = App::new();
     let model = ash_protocol::ModelRef::new(
         ash_protocol::ProviderId::new("openai").unwrap(),

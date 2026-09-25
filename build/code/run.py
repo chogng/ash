@@ -34,7 +34,20 @@ def runtime_environment(
     return runtime
 
 
+def requires_selected_server(arguments: list[str]) -> bool:
+    return not arguments or arguments[0] not in {
+        "--help",
+        "-h",
+        "--version",
+        "-V",
+        "app-server",
+        "remote",
+        "update",
+    }
+
+
 def main(arguments: list[str] | None = None) -> int:
+    arguments = arguments or []
     environment = os.environ.copy()
     binaries = development_binaries()
     returncode, built = build_binaries(binaries, environment)
@@ -48,8 +61,18 @@ def main(arguments: list[str] | None = None) -> int:
         ).executable
     executables = stage_runtime(built)
     environment = runtime_environment(environment, executables)
+    if requires_selected_server(arguments):
+        prepared = subprocess.run(
+            [str(executables["ash"]), "app-server", "daemon", "ensure-selected"],
+            cwd=REPOSITORY_ROOT,
+            env=environment,
+            stdout=subprocess.DEVNULL,
+            check=False,
+        )
+        if prepared.returncode != 0:
+            return prepared.returncode
     return subprocess.run(
-        [str(executables["ash"]), *(arguments or [])],
+        [str(executables["ash"]), *arguments],
         cwd=REPOSITORY_ROOT,
         env=environment,
         check=False,

@@ -110,11 +110,15 @@ pub(crate) fn draw_chat_input_interaction(
                     id,
                     item_bounds,
                     AccessibilityRole::ListItem,
-                    format!(
-                        "{}, {}",
-                        view.items()[index].label(),
-                        view.items()[index].description()
-                    ),
+                    if view.items()[index].description().is_empty() {
+                        view.items()[index].label().to_owned()
+                    } else {
+                        format!(
+                            "{}, {}",
+                            view.items()[index].label(),
+                            view.items()[index].description()
+                        )
+                    },
                 )
                 .with_parent(COMPOSER_INTERACTION)
                 .with_cursor(CursorFeedback::Pointer)
@@ -143,7 +147,11 @@ pub(crate) fn draw_chat_input_interaction(
                     },
                 ));
             }
-            let label_width = (item_bounds.size.width * 0.34).max(100.0);
+            let label_width = if item.description().is_empty() {
+                (item_bounds.size.width - INTERACTION_TEXT_INSET * 2.0).max(1.0)
+            } else {
+                (item_bounds.size.width * 0.34).max(100.0)
+            };
             let label_style = TextStyle::new(12.0, style.text)
                 .with_family(FontFamily::Monospace)
                 .with_line_height(20.0);

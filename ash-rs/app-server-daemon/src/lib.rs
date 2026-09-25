@@ -77,6 +77,8 @@ impl ConnectionOptions {
 pub enum LifecycleCommand {
     /// Starts the daemon when it is not already ready.
     Start,
+    /// Ensures the running daemon uses the selected App Server executable.
+    EnsureSelected,
     /// Stops a managed daemon and starts a new process generation.
     Restart,
     /// Gracefully stops the managed daemon.
@@ -145,6 +147,15 @@ pub fn connect(options: ConnectionOptions, backend_executable: &Path) -> Result<
     client::connect(options, backend_executable)
 }
 
+/// Connects through the selected package generation, replacing a stale managed process first.
+#[cfg(any(unix, windows))]
+pub fn connect_selected(
+    options: ConnectionOptions,
+    backend_executable: &Path,
+) -> Result<(), String> {
+    client::connect_selected(options, backend_executable)
+}
+
 /// Requests a browser listener from the existing managed process and leases it until stdin closes.
 #[cfg(any(unix, windows))]
 pub fn launch_web(
@@ -172,6 +183,14 @@ pub fn run_lifecycle(
 
 #[cfg(not(any(unix, windows)))]
 pub fn connect(_options: ConnectionOptions, _backend_executable: &Path) -> Result<(), String> {
+    Err("Local App Server daemon requires Unix-domain socket support".into())
+}
+
+#[cfg(not(any(unix, windows)))]
+pub fn connect_selected(
+    _options: ConnectionOptions,
+    _backend_executable: &Path,
+) -> Result<(), String> {
     Err("Local App Server daemon requires Unix-domain socket support".into())
 }
 

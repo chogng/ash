@@ -187,8 +187,15 @@ struct SelectedModel(ash_protocol::ModelRef);
 impl crate::model_catalog::ModelCatalog for SelectedModel {
     fn list(
         &self,
+        _: ash_app_server_protocol::protocol::model::ModelListView,
     ) -> Result<Vec<ash_app_server_protocol::protocol::model::ModelCatalogEntry>, CoreError> {
         Ok(Vec::new())
+    }
+    fn current_access(
+        &self,
+        _: &ash_protocol::ModelRef,
+    ) -> Result<ash_protocol::ModelAccess, CoreError> {
+        Ok(ash_protocol::ModelAccess::Unknown)
     }
     fn configured_default(&self) -> Result<Option<ash_protocol::ModelRef>, CoreError> {
         Ok(Some(self.0.clone()))

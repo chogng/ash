@@ -1,11 +1,13 @@
 ---
 name: app-server-api-integration
-description: Expand a Rust app-server into the desktop product business backend while preserving the TypeScript editor platform. Use for backend ownership decisions, TypeScript host replacement, renderer protocol clients, Main relays, generated bidirectional protocol, domain adapters, lifecycle, cancellation, conflict gating, and exact file placement. Do not use it to move UI, editor models, or extension runtime into Rust.
+description: Expand a Rust app-server into the desktop product business backend while preserving the TypeScript editor platform. Use for backend ownership decisions, TypeScript host replacement, renderer protocol clients, Main relays, generated bidirectional protocol, domain adapters, integration lifecycle, cancellation, conflict gating, and exact file placement. Do not use for standalone daemon or CLI startup defects, or to move UI, editor models, or extension runtime into Rust.
 ---
 
 # App-server API 对接
 
 目标是保留 TypeScript 编辑器前端与桌面平台，把 Rust app-server 扩展成产品业务后端。应由后端长期拥有的业务状态、执行、资源和后台能力迁入 Rust；编辑器模型、扩展运行时、Workbench UI 和 Electron 平台能力留在前端。前端公共接口继续按领域组织，renderer 通过领域 adapter 使用 app-server；生成协议只存在于 adapter 和 protocol client 边界。
+
+本 skill 只约束桌面前后端接入和迁移。单独修复 `ash-app-server-daemon` 的进程管理、CLI 启动或版本更新缺陷时，按对应 owner 与测试规范处理，不套用下面的跨端迁移门禁和完成标准。
 
 ## 目标产品边界
 
@@ -61,7 +63,7 @@ renderer contribution
 
 ## 冲突门禁
 
-修改前检查两侧源码、目标 owner、公开 API、用户已有改动和协议语义。发现任何会改变所有权、公开行为、文件位置或最终调用链的冲突，立即停止写入，只继续只读调查；一次性向用户报告准确路径、符号、两种行为、影响范围和需要决定的问题，然后等待用户选择。
+实施跨端接入前检查两侧源码、目标 owner、公开 API、用户已有改动和协议语义。只有目标行为或 owner 与本 skill 冲突，而且用户目标与现有授权尚未决定取舍时，才停止依赖该决定的写入；继续只读调查，一次性向用户报告准确路径、符号、两种行为、影响范围和需要决定的问题。用户已明确要求修复或改变某个现有行为时，该行为变化本身不构成需要再次确认的冲突。
 
 以下情况必须停下来问用户：
 
@@ -69,7 +71,7 @@ renderer contribution
 - 只能使用单路 stdio、实验 transport、每窗口进程或 Main 共享线上 connection；
 - 正式实现依赖实验 method/field，且用户未决定先稳定还是放弃该能力；
 - 缺少生成 response map、运行时 decoder、结构化错误、取消、资源终止、兼容或 server request 唯一 connection owner；
-- 现有公开 API、身份、生命周期、文件位置或用户改动与最终 owner 冲突；
+- 现有公开 API、身份、生命周期、文件位置或用户改动与最终 owner 冲突，且用户目标尚未决定如何取舍；
 - 一个能力同时依赖 Rust 持久状态与前端 editor/extension 对象，且无法确定唯一 owner 或机械 adapter；
 - Sessions 映射无法唯一确定 Session、Chat、Thread、Project、Workspace 或 Environment 的关系。
 
@@ -100,4 +102,4 @@ renderer contribution
 
 ## 完成标准
 
-最终答复必须给出：迁入 Rust、保留前端和条件迁移的能力边界；各 Rust 领域 crate 与前端领域 contract 的 owner；退出生产调用链的旧 Host 文件/注册；领域 adapter、renderer protocol client、Main starter/relay、process/connection 拓扑、线上消息、准确文件位置、生成物与 decoder、取消和关闭、dirty file 处理、实际测试，以及仍阻止接入的后端缺口。涉及 Agents Window 时再给出 Provider、Session/Chat/Thread、Project/Workspace/Environment 映射。没有取得冲突决定时不能把任务描述为完成。
+完整跨端 API 接入任务的最终答复必须给出：迁入 Rust、保留前端和条件迁移的能力边界；各 Rust 领域 crate 与前端领域 contract 的 owner；退出生产调用链的旧 Host 文件/注册；领域 adapter、renderer protocol client、Main starter/relay、process/connection 拓扑、线上消息、准确文件位置、生成物与 decoder、取消和关闭、dirty file 处理、实际测试，以及仍阻止接入的后端缺口。涉及 Agents Window 时再给出 Provider、Session/Chat/Thread、Project/Workspace/Environment 映射。没有取得冲突决定时不能把跨端接入任务描述为完成。

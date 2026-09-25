@@ -12,6 +12,7 @@ use ash_model_provider_config::ProviderDefinition;
 use ash_protocol::ModelCatalogFreshness;
 use ash_protocol::ModelId;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::time::Duration;
@@ -42,6 +43,7 @@ impl ManagedScope {
             definition,
             state: RwLock::new(ScopeState {
                 records,
+                last_discovered_ids: BTreeSet::new(),
                 snapshot,
                 last_success: None,
                 cache_hint: CatalogCacheHint::unspecified(),
@@ -58,6 +60,8 @@ impl ManagedScope {
 
 pub(crate) struct ScopeState {
     pub(crate) records: BTreeMap<ModelId, CatalogRecord>,
+    /// Membership of the latest account-scoped observation, independent of seed metadata.
+    pub(crate) last_discovered_ids: BTreeSet<ModelId>,
     pub(crate) snapshot: Arc<ModelCatalogSnapshot>,
     pub(crate) last_success: Option<SystemTime>,
     pub(crate) cache_hint: CatalogCacheHint,

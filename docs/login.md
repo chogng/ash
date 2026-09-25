@@ -33,8 +33,8 @@ reauthentication-required 状态；它不把不同 Provider 的 credential 协�
 
 本地默认组合同时安装两个登录适配器。`ash-chatgpt` 与 `ash-kimi` 各自使用对应 device OAuth endpoint 和 public client ID，在本机交换或刷新 token；ChatGPT 使用 Codex 兼容的本地登录存储，Kimi 使用 profile SecretStore。两者都只向控制面提供脱敏账户信息。
 
-默认目录中的 `openai/gpt-5.6-sol` 等订阅模型显式标记 `runtime = chatgpt_subscription`，`kimi/kimi-k2.7-code` 标记 `runtime = kimi_code`。`ModelRef` 始终使用供应商 ID；当前账户状态决定有效接入方式，目录只展示该方式的模型，同名模型不会出现两次。订阅切换后，原来选择的模型若不在当前目录，需要在 `/model` 中重选。
-App Server 读取到已就绪的 ChatGPT 账户时登记 `openai` 供应商，使订阅模型出现在 `/model`；取消或尚未完成的登录不会登记。Ash 首次读取订阅目录时，若 Codex 有本地模型缓存，会通过 Codex 的本地 `model/list` 校验当前账户并转换可见条目；否则由 Ash 使用当前登录读取 ChatGPT 目录。转换后的模型信息存入 Ash profile 的 `cache/models/openai.json`，同一文件内按账户和接入方式隔离。xAI 写入 `xai.json`，Kimi Code 写入 `kimi.json`；这些文件都按供应商和账户 scope 管理。旧配置的 `xai-subscription` 模型引用迁为 `xai`；OpenAI 与 Kimi 的原有模型引用保持供应商 ID 不变。
+默认目录中的 `openai/gpt-5.6-sol` 等订阅模型显式标记 `runtime = chatgpt_subscription`，`kimi/kimi-k2.7-code` 标记 `runtime = kimi_code`。`ModelRef` 始终使用供应商 ID；当前账户状态决定有效接入方式。桌面端的固定模型列表不因登录或填入 API key 增减条目；TUI `/model` 只显示当前连接发现或同账户缓存观察到的模型。订阅切换后，TUI 的可选条目会随目录变化；已选择的准确模型是否能请求成功由调用时的接线和认证决定。
+App Server 读取到已就绪的 ChatGPT 账户时登记 `openai` 供应商，供 TUI 读取该账户的发现目录。Ash 首次读取订阅目录时，若 Codex 有本地模型缓存，会通过 Codex 的本地 `model/list` 校验当前账户并转换可见条目；否则由 Ash 使用当前登录读取 ChatGPT 目录。转换后的模型信息存入 Ash profile 的 `cache/models/openai.json`，同一文件内按账户和接入方式隔离。xAI 写入 `xai.json`，Kimi Code 写入 `kimi.json`；这些文件都按供应商和账户 scope 管理。旧配置的 `xai-subscription` 模型引用迁为 `xai`；OpenAI 与 Kimi 的原有模型引用保持供应商 ID 不变。
 
 Kimi wire contract 以 [Kimi CLI 的官方 OAuth 实现](https://github.com/MoonshotAI/kimi-cli/blob/main/src/kimi_cli/auth/oauth.py) 为主依据，并与 [CLIProxyAPI 的 Kimi adapter](https://github.com/router-for-me/CLIProxyAPI/blob/main/internal/auth/kimi/kimi.go) 交叉验证。Ash 请求使用真实 `User-Agent: Ash/*` 与 `X-Msh-Platform: Ash`，不伪装成 Kimi CLI 或 CPA。
 

@@ -227,6 +227,38 @@ impl ModelsManager {
         Ok(entries)
     }
 
+    /// Lists only models named by each scope's latest successful discovery or persisted observation.
+    pub fn list_discovered(
+        &self,
+        scopes: &[CatalogScopeKey],
+        query: &CatalogQuery,
+    ) -> Result<Vec<ModelCatalogEntry>, ModelsManagerError> {
+        let mut entries = Vec::new();
+        for scope in scopes {
+            let managed = self.ensure_scope(scope)?;
+            self.update_freshness(scope, &managed);
+            let state = read_lock(&managed.state);
+            entries.extend(
+                state
+                    .snapshot
+                    .entries()
+                    .iter()
+                    .filter(|entry| {
+                        state.last_discovered_ids.contains(&entry.model().model)
+                            && matches_query(entry, query)
+                    })
+                    .cloned(),
+            );
+        }
+        entries.sort_by(|left, right| {
+            left.model()
+                .provider
+                .cmp(&right.model().provider)
+                .then_with(|| left.model().model.cmp(&right.model().model))
+        });
+        Ok(entries)
+    }
+
     pub fn resolve_static(
         &self,
         model: &ModelRef,
@@ -346,6 +378,11 @@ impl ModelsManager {
                 Ok(Some(catalog)) => {
                     let mut state = write_lock(&managed.state);
                     apply_discovery(&mut state.records, &catalog);
+                    state.last_discovered_ids = catalog
+                        .models
+                        .iter()
+                        .map(|model| model.id.clone())
+                        .collect();
                     state.last_success = Some(catalog.observed_at);
                     state.cache_hint = catalog.cache_hint;
                     state.validator = catalog.validator;
@@ -428,6 +465,11 @@ impl ModelsManager {
         match outcome {
             CatalogDiscoveryOutcome::Modified(catalog) => {
                 apply_discovery(&mut state.records, &catalog);
+                state.last_discovered_ids = catalog
+                    .models
+                    .iter()
+                    .map(|model| model.id.clone())
+                    .collect();
                 state.last_success = Some(catalog.observed_at);
                 state.cache_hint = catalog.cache_hint;
                 state.validator = catalog.validator;

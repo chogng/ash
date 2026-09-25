@@ -1,4 +1,6 @@
 use ash_app_server_protocol::protocol::model::ModelCatalogEntry;
+use ash_app_server_protocol::protocol::model::ModelListView;
+use ash_protocol::ModelAccess;
 use ash_protocol::ModelRef;
 use core_api::CoreError;
 use std::sync::Arc;
@@ -57,15 +59,21 @@ pub(crate) trait ModelCatalog: Send + Sync {
     ) -> Result<Vec<ModelCatalogEntry>, ModelCatalogRefreshError> {
         Err(ModelCatalogRefreshError::Unsupported)
     }
-    fn list(&self) -> Result<Vec<ModelCatalogEntry>, CoreError>;
+    fn list(&self, view: ModelListView) -> Result<Vec<ModelCatalogEntry>, CoreError>;
+    /// Reads the current request path for a model; catalog metadata can differ from the active account.
+    fn current_access(&self, model: &ModelRef) -> Result<ModelAccess, CoreError>;
     fn configured_default(&self) -> Result<Option<ModelRef>, CoreError>;
 }
 
 pub(crate) struct UnavailableModelCatalog;
 
 impl ModelCatalog for UnavailableModelCatalog {
-    fn list(&self) -> Result<Vec<ModelCatalogEntry>, CoreError> {
+    fn list(&self, _: ModelListView) -> Result<Vec<ModelCatalogEntry>, CoreError> {
         Ok(Vec::new())
+    }
+
+    fn current_access(&self, _: &ModelRef) -> Result<ModelAccess, CoreError> {
+        Ok(ModelAccess::Unknown)
     }
 
     fn configured_default(&self) -> Result<Option<ModelRef>, CoreError> {

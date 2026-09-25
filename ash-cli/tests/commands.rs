@@ -236,6 +236,89 @@ fn exec_reuses_the_profile_daemon_without_a_local_backend_executable() {
 }
 
 #[test]
+fn selected_managed_cli_switches_the_local_daemon_without_a_pinned_cli_switching_it_back() {
+    let mut harness = Harness::new();
+    harness.start_server();
+    let initial = harness.json(&["app-server", "daemon", "version"]);
+    let install = harness.root.path().join("install");
+    let old_package = install.join("versions/old");
+    let selected_package = install.join("versions/selected");
+    let cli_name = format!("ash{}", std::env::consts::EXE_SUFFIX);
+    let backend_name = format!("ash-app-server{}", std::env::consts::EXE_SUFFIX);
+    for (package, digit) in [(&old_package, "1"), (&selected_package, "2")] {
+        let binaries = package.join("bin");
+        std::fs::create_dir_all(&binaries).unwrap();
+        std::fs::copy(env!("CARGO_BIN_EXE_ash"), binaries.join(&cli_name)).unwrap();
+        std::fs::copy(&harness.backend, binaries.join(&backend_name)).unwrap();
+        std::fs::write(
+            package.join("ash-package.json"),
+            serde_json::to_vec(&serde_json::json!({
+                "buildId": format!("sha256:{}", digit.repeat(64))
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+    }
+    std::fs::write(
+        install.join("install.json"),
+        br#"{"schemaVersion":1,"repository":"chogng/ash"}"#,
+    )
+    .unwrap();
+    #[cfg(unix)]
+    std::os::unix::fs::symlink("versions/selected", install.join("current")).unwrap();
+    #[cfg(windows)]
+    std::fs::write(install.join("current"), "selected").unwrap();
+
+    let sessions = |package: &PathBuf| {
+        Command::new(package.join("bin").join(&cli_name))
+            .arg("sessions")
+            .current_dir(harness.root.path())
+            .env_remove("HOME")
+            .env_remove("USERPROFILE")
+            .env("ASH_HOME", &harness.profile)
+            .env("CODEX_HOME", harness.root.path().join("codex"))
+            .env(
+                "ASH_APP_SERVER_PATH",
+                package.join("bin").join(&backend_name),
+            )
+            .env_remove("ASH_APP_SERVER_SHA256")
+            .env_remove("ASH_PRODUCT_SERVICES_PATH")
+            .env_remove("ASH_WORKSPACE_ROOT")
+            .output()
+            .unwrap()
+    };
+
+    let mut selected_pid = None;
+    for package in [&selected_package, &old_package, &selected_package] {
+        let output = sessions(package);
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            serde_json::from_slice::<Value>(&output.stdout).unwrap()["sessions"],
+            serde_json::json!([])
+        );
+        let running = harness.json(&["app-server", "daemon", "version"]);
+        if let Some(pid) = &selected_pid {
+            assert_eq!(&running["pid"], pid);
+        } else {
+            assert_ne!(running["pid"], initial["pid"]);
+            selected_pid = Some(running["pid"].clone());
+        }
+    }
+    let record_path = ash_app_server_daemon::daemon_endpoint_path(&harness.profile)
+        .unwrap()
+        .with_extension("pid.json");
+    let record: Value = serde_json::from_slice(&std::fs::read(record_path).unwrap()).unwrap();
+    assert_eq!(
+        record["executableIdentity"]["packageBuildId"],
+        format!("sha256:{}", "2".repeat(64))
+    );
+}
+
+#[test]
 fn mcp_commands_persist_declarations_and_enablement_across_processes() {
     let mut harness = Harness::new();
     harness.start_server();

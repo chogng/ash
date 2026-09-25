@@ -171,9 +171,12 @@ fn dispatch(cli: Cli) -> Result<i32, CliError> {
     result.map(|()| 0)
 }
 
-fn run_app_server(arguments: Vec<String>) -> Result<i32, CliError> {
+fn run_app_server(mut arguments: Vec<String>) -> Result<i32, CliError> {
     match arguments.first().map(String::as_str) {
         Some("connect") => {
+            if update::selected_managed_install().map_err(CliError::failure)? {
+                arguments[0] = "connect-selected".into();
+            }
             ash_app_server_daemon::run_command(
                 arguments,
                 &ash_app_server_daemon::backend_executable_path()?,

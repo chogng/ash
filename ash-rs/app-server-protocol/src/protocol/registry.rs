@@ -1098,7 +1098,11 @@ use crate::protocol::memory_diagnostics::MemoryDiagnosticsSessionParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::model::ModelCatalogEntry;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::model::ModelListParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::model::ModelListResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::model::ModelListView;
 use crate::protocol::notification::ThreadTranscriptUpdateEnvelope;
 use crate::protocol::notification::ThreadUpdateEnvelope;
 #[cfg(any(test, feature = "export"))]
@@ -2799,7 +2803,7 @@ client_methods! {
         serialization: GlobalExclusive,
     },
     ModelList => "model/list" {
-        params: EmptyParams,
+        params: ModelListParams,
         response: ModelListResult,
         serialization: GlobalSharedRead,
     },
@@ -4329,7 +4333,9 @@ typescript_bindings! {
     ReasoningState,
     Personality,
     ModelCatalogEntry,
+    ModelListParams,
     ModelListResult,
+    ModelListView,
     ProviderApiKeyDto,
     ProviderApiKeyPolicyDto,
     ProviderApiKeySetParams,

@@ -16,16 +16,6 @@ export interface ModelCatalogEntry {
 	readonly outputTransport: ModelOutputTransport;
 }
 
-export function modelAccessLabel(entry: Pick<ModelCatalogEntry, 'access' | 'model'>): string {
-	switch (entry.access) {
-		case 'apiKey': return 'API key';
-		case 'subscription': return entry.model.provider === 'openai' ? 'ChatGPT subscription' : 'Subscription';
-		case 'local': return 'Local';
-		case 'enterprise': return 'Enterprise';
-		case 'unknown': return 'Unknown';
-	}
-}
-
 /** User-owned presentation preferences for the shared model catalog. */
 export const ModelCatalogConfiguration = Object.freeze({
 	hiddenModels: configurationRegistry.registerConfiguration<readonly ModelRef[]>({

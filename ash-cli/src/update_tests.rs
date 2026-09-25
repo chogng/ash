@@ -69,6 +69,7 @@ fn managed_install_requires_the_selected_versioned_package() {
 
     assert_eq!(install.root, fs::canonicalize(root).unwrap());
     assert_eq!(install.package, fs::canonicalize(&package).unwrap());
+    assert!(selected_managed_executable(&executable).unwrap());
 
     let other =
         root.join("versions/0.2.0-test/bin")
@@ -77,6 +78,7 @@ fn managed_install_requires_the_selected_versioned_package() {
     fs::write(&other, b"ash").unwrap();
     write_installed_metadata(other.parent().unwrap().parent().unwrap());
     assert!(ManagedInstall::detect(&other).is_err());
+    assert!(!selected_managed_executable(&other).unwrap());
 }
 
 #[test]

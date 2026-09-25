@@ -44,6 +44,7 @@
 - `exec` 中需要把选项样式的文字作为任务内容时，用 `--` 分隔。
 - 同一个插件 ID 安装了多个版本时，变更命令必须加 `--version VERSION`。启用不自动授予权限。
 - 管理命令连接当前 `ASH_HOME` 的 daemon；尚未运行时按既有生命周期启动。命令退出只关闭自身连接。
+- 受管理安装的当前选中版本在首次连接本地 daemon 前核对 App Server 程序和随包 `buildId`；新包接管旧进程。旧版本的固定路径 CLI 不切回旧包。
 - `ask` 和 `exec` 也通过相同的 profile daemon 执行 Turn；与同时运行的桌面端共用 Session、Thread 和后台任务状态。
 - `doctor` 的账户为空属于提示，API-key Provider 仍可使用；检查失败返回非零退出码。
 - `mcp add` 拒绝覆盖同名声明；当前入口只配置无认证 transport。

@@ -5900,7 +5900,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/EmptyParams"
+              "$ref": "#/$defs/ModelListParams"
             }
           },
           "required": [
@@ -26986,6 +26986,17 @@
       ],
       "type": "object"
     },
+    "ModelListParams": {
+      "properties": {
+        "view": {
+          "$ref": "#/$defs/ModelListView"
+        }
+      },
+      "required": [
+        "view"
+      ],
+      "type": "object"
+    },
     "ModelListResult": {
       "properties": {
         "models": {
@@ -26999,6 +27010,14 @@
         "models"
       ],
       "type": "object"
+    },
+    "ModelListView": {
+      "description": "Selects the product's fixed catalog or the account-scoped observed catalog.",
+      "enum": [
+        "builtIn",
+        "discovered"
+      ],
+      "type": "string"
     },
     "ModelMoneyAmount": {
       "description": "Exact monetary amount encoded as a decimal integer to remain lossless in JSON clients.",

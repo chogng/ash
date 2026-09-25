@@ -59,7 +59,7 @@ export interface IModelApi {
 	readAdvisorDefault(): Promise<AdvisorConfig | null>;
 	readConfiguredProviderIds(): Promise<readonly string[]>;
 	setAdvisorDefault(params: { readonly commandId: string; readonly advisor: AdvisorConfig | null }): Promise<void>;
-	list(): Promise<ModelListResult>;
+	listBuiltIn(): Promise<ModelListResult>;
 	listProviders(): Promise<ProviderListResult>;
 	setProviderApiKey(params: ProviderApiKeySetParams): Promise<ProviderApiKeySetResult>;
 	readModel(): Promise<ModelRef | null>;
