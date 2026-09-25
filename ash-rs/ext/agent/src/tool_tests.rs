@@ -132,6 +132,7 @@ fn spawn_tool_uses_frozen_intent_parent_to_launch_private_investigator() {
         .start_thread(
             &ash_core::NoThreadWorktreeBinder,
             StartThreadRequest {
+                branch_name: None,
                 agent_id: None,
                 agent: Some(protocol::AgentConfiguration {
                     role: role.role,
@@ -308,6 +309,7 @@ fn wait_timeout_returns_a_durable_waiting_join_without_losing_the_delegation() {
         .start_thread(
             &ash_core::NoThreadWorktreeBinder,
             StartThreadRequest {
+                branch_name: None,
                 agent_id: None,
                 agent: None,
                 command_id: CommandId::new("timeout-parent").unwrap(),

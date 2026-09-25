@@ -4,6 +4,7 @@ use super::GitWorktreeAvailability;
 use super::parse_worktrees;
 use crate::GitClient;
 use crate::GitError;
+use crate::GitNamedWorktreeRequest;
 use crate::test_support::TestRepository;
 
 #[tokio::test(flavor = "current_thread")]
@@ -58,6 +59,33 @@ async fn lists_primary_linked_locked_and_prunable_worktrees() {
         worktrees[2].availability(),
         GitWorktreeAvailability::Prunable { .. }
     ));
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn creates_a_linked_worktree_on_a_new_named_branch() {
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "base\n");
+    repository.commit_all("base");
+    let git = GitClient::system();
+    let opened = git.open_repository(repository.root()).await.unwrap();
+    let head = git.resolve_commit(&opened, "HEAD").await.unwrap();
+    let checkout = repository.path("named-worktree");
+    let request =
+        GitNamedWorktreeRequest::new(checkout.clone(), head.clone(), "ash/topic".into()).unwrap();
+    git.create_named_worktree(&opened, &request).await.unwrap();
+
+    assert_eq!(repository.git(&["branch", "--show-current"]), "main");
+    assert_eq!(
+        repository.git(&["-C", checkout.to_str().unwrap(), "branch", "--show-current"]),
+        "ash/topic"
+    );
+    assert_eq!(
+        git.resolve_commit(&opened, "refs/heads/ash/topic")
+            .await
+            .unwrap(),
+        head
+    );
+    assert!(git.create_named_worktree(&opened, &request).await.is_err());
 }
 
 #[tokio::test(flavor = "current_thread")]

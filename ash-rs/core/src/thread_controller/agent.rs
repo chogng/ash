@@ -60,6 +60,7 @@ impl ThreadController {
         binder.provision(&crate::ThreadWorktreeBindingRequest {
             session_id: request.session_id.clone(),
             thread_id: request.thread_id.clone(),
+            branch_name: None,
             origin: ThreadOrigin::AgentSpawn {
                 parent_thread_id: request.context_seed.parent_thread_id.clone(),
                 parent_sequence: request.context_seed.parent_sequence,

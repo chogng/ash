@@ -490,14 +490,31 @@ impl App {
             CommandPanelOutcome::Model(ModelSelectionAction::Pin { preference, pinned }) => {
                 Some(ModelCommand::Pin { preference, pinned }.into())
             }
-            CommandPanelOutcome::GitBranch(action) => {
-                if action.current {
-                    self.close_command_panel();
-                    None
-                } else {
-                    Some(GitCommand::Switch { name: action.name }.into())
+            CommandPanelOutcome::GitBranch(action) => match action {
+                crate::git::BranchSelectionAction::CreateBranch { branch_name } => Some(
+                    SessionCommand::CreateWorktree {
+                        language: self.language(),
+                        branch_name: Some(branch_name),
+                    }
+                    .into(),
+                ),
+                crate::git::BranchSelectionAction::NewWorktree => Some(
+                    SessionCommand::CreateWorktree {
+                        language: self.language(),
+                        branch_name: None,
+                    }
+                    .into(),
+                ),
+                crate::git::BranchSelectionAction::NewBranch => None,
+                crate::git::BranchSelectionAction::Switch { name, current } => {
+                    if current {
+                        self.close_command_panel();
+                        None
+                    } else {
+                        Some(GitCommand::Switch { name }.into())
+                    }
                 }
-            }
+            },
             CommandPanelOutcome::ProjectRoot(action) => match action {
                 crate::projects::RootSelectionAction::Switch { path, current } => {
                     self.close_command_panel();
@@ -2073,6 +2090,9 @@ impl App {
             ) = &event
             {
                 match self.panels_mut().command_mut() {
+                    Some(CommandPanel::GitBranches(panel)) if panel.is_worktree_name_prompt() => {
+                        panel.state_mut().set_message(Some(error.clone()));
+                    }
                     Some(CommandPanel::Marketplace(panel)) => panel.fail(error.clone()),
                     Some(CommandPanel::Lsp(panel)) => panel.fail(error.clone()),
                     _ => {}

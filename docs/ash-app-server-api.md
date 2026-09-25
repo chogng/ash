@@ -684,6 +684,8 @@ spawn 前执行 `env_clear`，所以 PTY 看不到最终 map 之外的 App Serve
 
 `agentId` 可指定已存在的长期 Agent 身份；省略时创建新身份。未知 ID 返回错误。角色选择 `agent` 与长期身份 `agentId` 分别表达，执行配置仍按新任务冻结。
 
+可选的 `branchName` 要求在创建根 Thread 时同时创建同名本地 Git 分支和独立 linked worktree，并让新 Thread 在该分支内运行。分支名由调用方提供，后端按 Git ref 规则校验；重名或非 Git 来源返回创建错误，来源目录的 HEAD 不变。省略时沿用默认的 detached 受管 worktree。
+
 `agent/read` 接受 `{ "agentId": "..." }`，返回 `{ "agentId", "createdAtUnixMs", "threads": [{ "sessionId", "threadId", "origin" }] }`。分支按 ThreadId 稳定排序，包含归档分支；任务删除后相应分支消失，Agent 记录保留。
 
 ### 创建 Thread

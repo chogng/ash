@@ -51,6 +51,10 @@ pub(crate) enum Event {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Command {
+    CreateWorktree {
+        language: crate::nls::Language,
+        branch_name: Option<String>,
+    },
     Fork {
         prompt: String,
     },

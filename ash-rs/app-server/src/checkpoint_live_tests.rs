@@ -213,6 +213,7 @@ fn luna_cache_survives_fork_and_message_restore_after_restart() {
         .start_thread(
             &NoThreadWorktreeBinder,
             core_api::StartThreadRequest {
+                branch_name: None,
                 agent_id: None,
                 agent: None,
                 command_id: CommandId::new(format!("luna-cache-{nonce}")).unwrap(),

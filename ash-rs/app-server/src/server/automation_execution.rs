@@ -39,6 +39,7 @@ impl AppServer {
                             return Ok(observed);
                         }
                         None => match self.agent_runtime().start_thread(StartThreadRequest {
+                            branch_name: None,
                             agent_id: None,
                             agent: None,
                             command_id: session_command.clone(),

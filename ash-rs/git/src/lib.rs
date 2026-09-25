@@ -77,6 +77,7 @@ pub use text_diff::GitTextDiff;
 pub use text_diff::GitTextDiffLimits;
 pub use text_diff::GitTextDiffSnapshot;
 pub use worktree::GitDetachedWorktreeRequest;
+pub use worktree::GitNamedWorktreeRequest;
 pub use worktree::GitWorktree;
 pub use worktree::GitWorktreeAvailability;
 pub use worktree::GitWorktreeRemovalMode;

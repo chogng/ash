@@ -7,4 +7,8 @@ export type SessionCreateParams = {
 /**
  * Reuse an existing Agent identity in a new task; omission allocates a new identity.
  */
-agentId?: AgentId | null, agent: AgentRoleSelection, commandId: CommandId, title: string, };
+agentId?: AgentId | null, agent: AgentRoleSelection, commandId: CommandId, title: string,
+/**
+ * Creates the new session's linked worktree on a new local Git branch.
+ */
+branchName?: string | null, };

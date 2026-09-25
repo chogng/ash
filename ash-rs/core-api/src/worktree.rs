@@ -9,6 +9,7 @@ pub struct ThreadWorktreeBindingRequest {
     pub session_id: SessionId,
     pub thread_id: ThreadId,
     pub origin: ThreadOrigin,
+    pub branch_name: Option<String>,
 }
 
 /// Host boundary that must persist an isolated Worktree binding before Thread execution exists.

@@ -50,6 +50,10 @@ pub(crate) enum SessionCompletion {
 }
 
 pub(crate) enum CommandRequest {
+    CreateWorktree {
+        language: crate::nls::Language,
+        branch_name: Option<String>,
+    },
     Fork {
         prompt: String,
         approval_mode: ApprovalMode,
@@ -84,6 +88,7 @@ pub(crate) enum CommandRequest {
 impl Command {
     pub(crate) fn command_line(&self) -> Option<String> {
         match self {
+            Self::CreateWorktree { .. } => None,
             Self::Fork { prompt } => Some(fork_command(prompt)),
             Self::Resume { session_id, .. } => Some(format!("/resume {session_id}")),
             Self::Preview { .. }
@@ -99,6 +104,7 @@ impl Command {
 impl CommandRequest {
     pub(crate) const fn name(&self) -> &'static str {
         match self {
+            Self::CreateWorktree { .. } => "ash-tui-create-worktree-session",
             Self::Fork { .. } => "ash-tui-fork-session",
             Self::Preview { .. } => "ash-tui-preview-session",
             Self::Restore { .. } => "ash-tui-restore-session",
@@ -116,6 +122,38 @@ impl CommandRequest {
         current: Option<Conversation>,
     ) -> SessionCompletion {
         match self {
+            Self::CreateWorktree {
+                language,
+                branch_name,
+            } => {
+                let command = branch_name.clone().unwrap_or_else(|| "New worktree".into());
+                let result = match branch_name {
+                    Some(branch_name) => ActiveConversation::start_in_branch(
+                        &mut client,
+                        branch_name.clone(),
+                        branch_name,
+                    ),
+                    None => ActiveConversation::start(&mut client, "New worktree".into()),
+                }
+                .map_err(|error| error.to_string())
+                .and_then(|conversation| {
+                    let change = ConversationChange {
+                        notice: crate::nls::localize(
+                            language,
+                            "Started a new session in its own worktree. The project branch stays unchanged.",
+                        )
+                        .into_owned(),
+                        transcript: super::ConversationTranscript::Clear,
+                    };
+                    finish_conversation_request(
+                        &mut client,
+                        conversation,
+                        current.map(|current| current.subscription),
+                        change,
+                    )
+                });
+                SessionCompletion::Changed { command, result }
+            }
             Self::Fork {
                 prompt,
                 approval_mode,
@@ -203,6 +241,13 @@ impl CommandRequest {
 
 pub(crate) fn prepare_command(approval_mode: ApprovalMode, command: Command) -> CommandRequest {
     match command {
+        Command::CreateWorktree {
+            language,
+            branch_name,
+        } => CommandRequest::CreateWorktree {
+            language,
+            branch_name,
+        },
         Command::Fork { prompt } => CommandRequest::Fork {
             prompt,
             approval_mode,

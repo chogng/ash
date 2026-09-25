@@ -55,6 +55,11 @@ impl AppServer {
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: SessionCreateParams = decode(params)?;
+        if params.branch_name.is_some() && self.git_turn_changes.is_none() {
+            return Err(core_error(core_api::CoreError::InvalidInput(
+                "creating a named worktree requires a Git worktree runtime".into(),
+            )));
+        }
         let created = if let Some(existing) = self
             .agent_runtime()
             .read_started_thread(&params.command_id)
@@ -80,6 +85,14 @@ impl AppServer {
             if !matches
                 || params.title != existing.title
                 || (expected_agent_id != existing.agent_id && !legacy_creation)
+                || params.branch_name.as_deref().is_some_and(|name| {
+                    self.git_turn_changes
+                        .as_ref()
+                        .and_then(|runtime| runtime.binding(&existing.thread_id))
+                        .and_then(|binding| binding.target_branch().map(str::to_owned))
+                        .as_deref()
+                        != Some(name)
+                })
             {
                 return Err(core_error(core_api::CoreError::CommandConflict));
             }
@@ -98,6 +111,7 @@ impl AppServer {
                     command_id: params.command_id,
                     title: params.title,
                     agent,
+                    branch_name: params.branch_name,
                 })
                 .map_err(core_error)?
         };

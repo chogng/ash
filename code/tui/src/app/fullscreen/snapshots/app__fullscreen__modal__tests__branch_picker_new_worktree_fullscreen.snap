@@ -1,0 +1,32 @@
+---
+source: code/tui/src/app/fullscreen/modal_tests.rs
+expression: frame_text(&app)
+---
+  .                                                                            [— / —] [Dashboard]  
+                                                                                                    
+                                                                                                    
+            ┌── Project branches and worktrees ───────────────────────────────────[✗]─┐             
+            │                                                                         │             
+            │  ╭────────────────────────────────────────────────────────────────────╮ │             
+            │  │ Search branches                                                    │ │             
+            │  ╰────────────────────────────────────────────────────────────────────╯ │             
+            │  Worktrees                                                              │             
+            │> New worktree  ·  Detached · new session                                │             
+            │  New branch  ·  ash/ branch · new session                               │             
+            │  Project branches                                                       │             
+            │  main  ·  Current                                                       │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+  ╭─────────│  w New worktree · b New branch · / search · Esc close                   │──────────╮  
+  │ > Build └─────────────────────────────────────────────────────────────────────────┘          │  
+  ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯

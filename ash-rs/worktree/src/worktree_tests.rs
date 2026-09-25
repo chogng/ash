@@ -351,6 +351,60 @@ async fn thread_recovery_repairs_links_after_the_source_repository_moves() {
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn named_provision_creates_the_requested_branch_only_in_the_new_worktree() {
+    let fixture = RepositoryFixture::new();
+    fs::write(fixture.repository.join("README.md"), "dirty source\n").unwrap();
+    let manager = fixture.manager();
+    let request = ManagedDirProvisionRequest {
+        source: ManagedDirSource::CurrentDirectory {
+            source_directory: fixture.repository.clone(),
+        },
+        target: ManagedDirTarget::NewBranch {
+            name: "ash/topic".into(),
+        },
+        repository_targets: BTreeMap::new(),
+        source_dir_id: "dir-named".into(),
+        owner: thread_owner("named-thread"),
+    };
+    let binding = manager.provision(&request).await.unwrap();
+
+    assert_eq!(binding.target_branch(), Some("ash/topic"));
+    assert_eq!(
+        run_git(&fixture.repository, &["branch", "--show-current"]),
+        "main"
+    );
+    assert_eq!(
+        run_git(binding.checkout_root(), &["branch", "--show-current"]),
+        "ash/topic"
+    );
+    assert_eq!(
+        fs::read_to_string(binding.checkout_root().join("README.md")).unwrap(),
+        "dirty source\n"
+    );
+    assert_eq!(manager.provision(&request).await.unwrap(), binding);
+    let renamed_retry = ManagedDirProvisionRequest {
+        target: ManagedDirTarget::NewBranch {
+            name: "ash/other".into(),
+        },
+        ..request.clone()
+    };
+    assert!(manager.provision(&renamed_retry).await.is_err());
+    assert_eq!(
+        run_git(&fixture.repository, &["branch", "--list", "ash/other"]),
+        ""
+    );
+    let duplicate = ManagedDirProvisionRequest {
+        owner: thread_owner("another-thread"),
+        ..request
+    };
+    assert!(manager.provision(&duplicate).await.is_err());
+    assert_eq!(
+        run_git(&fixture.repository, &["branch", "--show-current"]),
+        "main"
+    );
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn pending_codex_owner_is_unbound_and_can_be_claimed() {
     let fixture = RepositoryFixture::new();
     let manager = fixture.manager();

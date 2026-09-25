@@ -29756,6 +29756,13 @@
           ],
           "description": "Reuse an existing Agent identity in a new task; omission allocates a new identity."
         },
+        "branchName": {
+          "description": "Creates the new session's linked worktree on a new local Git branch.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "commandId": {
           "$ref": "#/$defs/CommandId"
         },

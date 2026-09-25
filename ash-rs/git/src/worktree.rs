@@ -39,6 +39,35 @@ pub struct GitDetachedWorktreeRequest {
     start_object_id: String,
 }
 
+/// Inputs for creating a linked worktree on one new local branch.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GitNamedWorktreeRequest {
+    checkout_root: PathBuf,
+    start_object_id: String,
+    branch_name: String,
+}
+
+impl GitNamedWorktreeRequest {
+    pub fn new(
+        checkout_root: PathBuf,
+        start_object_id: String,
+        branch_name: String,
+    ) -> GitResult<Self> {
+        let detached = GitDetachedWorktreeRequest::new(checkout_root, start_object_id)?;
+        if branch_name.trim().is_empty() {
+            return Err(GitError::InvalidConfiguration {
+                field: "worktree branch name",
+                requirement: "must not be empty",
+            });
+        }
+        Ok(Self {
+            checkout_root: detached.checkout_root,
+            start_object_id: detached.start_object_id,
+            branch_name,
+        })
+    }
+}
+
 impl GitDetachedWorktreeRequest {
     pub fn new(checkout_root: PathBuf, start_object_id: String) -> GitResult<Self> {
         let checkout_root = validate_checkout_path(&checkout_root)?;
@@ -108,6 +137,36 @@ impl GitClient {
             OsString::from("add"),
             OsString::from("--detach"),
             OsString::from("--no-checkout"),
+            request.checkout_root.as_os_str().to_owned(),
+            OsString::from(&request.start_object_id),
+        ];
+        self.run_mutation(repository.worktree_root(), arguments)
+            .await?
+            .require_success()?;
+        self.open_repository(&request.checkout_root).await
+    }
+
+    /// Creates a linked worktree and a new branch as one Git operation.
+    pub async fn create_named_worktree(
+        &self,
+        repository: &GitRepository,
+        request: &GitNamedWorktreeRequest,
+    ) -> GitResult<GitRepository> {
+        self.run_query(
+            repository.worktree_root(),
+            [
+                "check-ref-format",
+                &format!("refs/heads/{}", request.branch_name),
+            ],
+        )
+        .await?
+        .require_success()?;
+        let arguments = vec![
+            OsString::from("worktree"),
+            OsString::from("add"),
+            OsString::from("--no-checkout"),
+            OsString::from("-b"),
+            OsString::from(&request.branch_name),
             request.checkout_root.as_os_str().to_owned(),
             OsString::from(&request.start_object_id),
         ];

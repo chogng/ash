@@ -75,6 +75,7 @@ impl ThreadController {
             session_id: source.session_id.clone(),
             thread_id: thread_id.clone(),
             origin: origin.clone(),
+            branch_name: None,
         })?;
         self.create_thread(CreateThreadRequest {
             agent_id: source.agent_id.clone(),

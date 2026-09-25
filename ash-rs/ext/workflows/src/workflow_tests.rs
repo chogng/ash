@@ -46,6 +46,7 @@ impl Fixture {
             .start_thread(
                 &NoThreadWorktreeBinder,
                 StartThreadRequest {
+                    branch_name: None,
                     agent_id: None,
                     agent: None,
                     command_id: CommandId::new("root").unwrap(),
@@ -460,6 +461,7 @@ fn prepared_and_accepted_commands_recover_once_with_core_and_workflow_in_the_sam
             .start_thread(
                 &NoThreadWorktreeBinder,
                 StartThreadRequest {
+                    branch_name: None,
                     agent_id: None,
                     agent: None,
                     command_id: CommandId::new("durable-root").unwrap(),

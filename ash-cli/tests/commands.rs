@@ -306,6 +306,7 @@ fn session_commands_fork_archive_and_restore_the_exact_session() {
     let created = connection
         .client()
         .create_session(SessionCreateParams {
+            branch_name: None,
             agent_id: None,
             agent: Default::default(),
             command_id: CommandId::new("create-cli-fixture").unwrap(),

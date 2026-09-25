@@ -651,6 +651,7 @@ impl ThreadController {
             session_id: session_id.clone(),
             thread_id: thread_id.clone(),
             origin: ThreadOrigin::Root,
+            branch_name: request.branch_name,
         })?;
         self.create_thread(CreateThreadRequest {
             agent_id,
@@ -682,6 +683,7 @@ impl ThreadController {
             session_id: request.session_id.clone(),
             thread_id: thread_id.clone(),
             origin: ThreadOrigin::Root,
+            branch_name: None,
         })?;
         self.create_thread(CreateThreadRequest {
             agent_id,
@@ -742,6 +744,7 @@ impl ThreadController {
         binder.provision(&ThreadWorktreeBindingRequest {
             session_id: session_id.clone(),
             thread_id: thread_id.clone(),
+            branch_name: None,
             origin: ThreadOrigin::Fork {
                 parent_thread_id: source.thread_id.clone(),
                 parent_sequence: source.sequence,
@@ -775,6 +778,7 @@ impl ThreadController {
         binder.provision(&ThreadWorktreeBindingRequest {
             session_id: source.session_id.clone(),
             thread_id: thread_id.clone(),
+            branch_name: None,
             origin: ThreadOrigin::Rewind {
                 parent_thread_id: source.thread_id.clone(),
                 before_turn_id: request.before_turn_id.clone(),

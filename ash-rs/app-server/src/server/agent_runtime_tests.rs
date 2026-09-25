@@ -48,6 +48,7 @@ fn recovered_spawn_starts_a_new_child_turn_once() {
         .start_thread(
             &ash_core::NoThreadWorktreeBinder,
             StartThreadRequest {
+                branch_name: None,
                 agent_id: None,
                 agent: None,
                 command_id: CommandId::new("create-parent").unwrap(),

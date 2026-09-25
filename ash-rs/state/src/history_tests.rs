@@ -78,6 +78,7 @@ fn root(threads: &ThreadController) -> ash_core::ThreadSnapshot {
         .start_thread(
             &NoThreadWorktreeBinder,
             core_api::StartThreadRequest {
+                branch_name: None,
                 agent: None,
                 agent_id: None,
                 command_id: CommandId::new("root").unwrap(),

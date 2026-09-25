@@ -22,6 +22,7 @@ fn fixture() -> (Arc<ThreadController>, ThreadSnapshot) {
         .start_thread(
             &crate::NoThreadWorktreeBinder,
             crate::StartThreadRequest {
+                branch_name: None,
                 agent_id: None,
                 agent: None,
                 command_id: CommandId::new("root").unwrap(),

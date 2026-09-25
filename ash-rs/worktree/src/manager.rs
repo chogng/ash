@@ -10,6 +10,7 @@ use ash_git::GitClient;
 use ash_git::GitDetachedWorktreeRequest;
 use ash_git::GitError;
 use ash_git::GitHead;
+use ash_git::GitNamedWorktreeRequest;
 use ash_git::GitPrivateRef;
 use ash_git::GitRepository;
 use ash_git::GitWorktreeRemovalMode;
@@ -127,6 +128,9 @@ impl ManagedDirSource {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ManagedDirTarget {
     SourceHead,
+    NewBranch {
+        name: String,
+    },
     Branch {
         name: String,
         object_id: String,
@@ -512,6 +516,9 @@ impl WorktreeManager {
         let source_repository = match self.git.open_repository(&source_directory).await {
             Ok(repository) => repository,
             Err(ash_git::GitError::NotAWorkingTree { .. }) => {
+                if matches!(&request.target, ManagedDirTarget::NewBranch { .. }) {
+                    bail!("a named worktree requires a Git repository");
+                }
                 return self.provision_directory(request, &source_directory).await;
             }
             Err(error) => return Err(error.into()),
@@ -545,6 +552,23 @@ impl WorktreeManager {
                     ),
                 }
             }
+            ManagedDirTarget::NewBranch { name } => {
+                if name.trim().is_empty() {
+                    bail!("managed worktree branch name cannot be empty");
+                }
+                let snapshot = self.git.snapshot(&source_repository).await?;
+                let head = match snapshot.head() {
+                    GitHead::Branch { object_id, .. } | GitHead::Detached { object_id } => {
+                        object_id.clone()
+                    }
+                    GitHead::Unborn { .. } => {
+                        self.git
+                            .create_worktree_anchor(&source_repository, &baseline_tree)
+                            .await?
+                    }
+                };
+                (Some(name.clone()), head, false)
+            }
             ManagedDirTarget::Branch { name, object_id } => {
                 if name.trim().is_empty() {
                     bail!("managed directory target branch cannot be empty");
@@ -565,7 +589,13 @@ impl WorktreeManager {
         let digest = request.owner.managed_dir_id();
         let checkout_root = self.settings.root.join(&digest[..4]).join(&digest);
         if checkout_root.exists() {
-            return self.recover(&checkout_root, &request.owner).await;
+            let binding = self.recover(&checkout_root, &request.owner).await?;
+            if let ManagedDirTarget::NewBranch { name } = &request.target
+                && binding.target_branch() != Some(name.as_str())
+            {
+                bail!("existing managed worktree uses a different branch");
+            }
+            return Ok(binding);
         }
         std::fs::create_dir_all(
             checkout_root
@@ -576,12 +606,26 @@ impl WorktreeManager {
         self.git
             .pin_private_ref(&source_repository, &baseline_ref, &baseline_tree)
             .await?;
-        let creation = GitDetachedWorktreeRequest::new(checkout_root.clone(), target_head.clone())?;
-        let linked_repository = match self
-            .git
-            .create_detached_worktree(&source_repository, &creation)
-            .await
-        {
+        let created = match &request.target {
+            ManagedDirTarget::NewBranch { name } => {
+                let creation = GitNamedWorktreeRequest::new(
+                    checkout_root.clone(),
+                    target_head.clone(),
+                    name.clone(),
+                )?;
+                self.git
+                    .create_named_worktree(&source_repository, &creation)
+                    .await
+            }
+            _ => {
+                let creation =
+                    GitDetachedWorktreeRequest::new(checkout_root.clone(), target_head.clone())?;
+                self.git
+                    .create_detached_worktree(&source_repository, &creation)
+                    .await
+            }
+        };
+        let linked_repository = match created {
             Ok(repository) => repository,
             Err(error) => {
                 let _ = self
@@ -632,6 +676,12 @@ impl WorktreeManager {
                     GitWorktreeRemovalMode::DiscardVerifiedContents,
                 )
                 .await;
+            if let ManagedDirTarget::NewBranch { name } = &request.target {
+                let _ = self
+                    .git
+                    .delete_branch_at(&source_repository, name, &target_head)
+                    .await;
+            }
             let _ = self
                 .git
                 .delete_private_ref(&source_repository, &baseline_ref)
@@ -675,6 +725,12 @@ impl WorktreeManager {
                         GitWorktreeRemovalMode::DiscardVerifiedContents,
                     )
                     .await;
+                if let ManagedDirTarget::NewBranch { name } = &request.target {
+                    let _ = self
+                        .git
+                        .delete_branch_at(&source_repository, name, &target_head)
+                        .await;
+                }
                 let _ = self
                     .git
                     .delete_private_ref(&source_repository, &baseline_ref)
@@ -772,6 +828,9 @@ impl WorktreeManager {
                     anchor_object_id,
                 }) => (Some(name.clone()), anchor_object_id.clone(), true),
                 Some(ManagedDirTarget::Detached { object_id }) => (None, object_id.clone(), false),
+                Some(ManagedDirTarget::NewBranch { .. }) => {
+                    bail!("nested managed repositories cannot create a new branch")
+                }
                 Some(ManagedDirTarget::SourceHead) | None => match inherited {
                     Some(record) if record.kind == binding::BindingKind::Git => (
                         record.target_branch,

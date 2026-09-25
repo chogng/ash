@@ -104,6 +104,27 @@ impl GitClient {
         .require_success()?;
         Ok(())
     }
+
+    /// Removes a branch created during a failed worktree operation only at its original commit.
+    pub async fn delete_branch_at(
+        &self,
+        repository: &GitRepository,
+        name: &str,
+        object_id: &str,
+    ) -> GitResult<()> {
+        let reference = format!("refs/heads/{name}");
+        self.run_query(repository.worktree_root(), ["check-ref-format", &reference])
+            .await?
+            .require_success()?;
+        let commit = self.resolve_commit(repository, object_id).await?;
+        self.run_mutation(
+            repository.worktree_root(),
+            ["update-ref", "-d", &reference, &commit],
+        )
+        .await?
+        .require_success()?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]

@@ -10,6 +10,7 @@ use crate::dirs::DirChoices;
 use crate::dirs::DirPanel;
 use crate::dirs::DirSelectionAction;
 use crate::git::BranchChoices;
+use crate::git::BranchPanel;
 use crate::git::BranchSelectionAction;
 use crate::keymap_setup::KeymapChoices;
 use crate::keymap_setup::KeymapEditor;
@@ -74,7 +75,7 @@ pub(crate) enum CommandPanel {
     Loading(ListSelection<()>),
     Help(ListSelection<()>),
     Dirs(DirPanel),
-    GitBranches(ListSelection<BranchSelectionAction>),
+    GitBranches(BranchPanel),
     Config(ConfigEditor),
     Connectors(ListSelection<ConnectorSelectionAction>),
     Keymap(KeymapEditor),
@@ -180,6 +181,9 @@ impl CommandPanel {
     }
 
     pub(crate) fn allows_backdrop_dismiss(&self) -> bool {
+        if let Self::GitBranches(panel) = self {
+            return !panel.is_worktree_name_prompt();
+        }
         self.body().allows_backdrop_dismiss()
     }
 
@@ -196,7 +200,7 @@ impl CommandPanel {
     }
 
     pub(crate) fn git_branches(spec: BranchChoices) -> Self {
-        Self::GitBranches(ListSelection::new(spec.model, spec.actions))
+        Self::GitBranches(BranchPanel::new(spec))
     }
 
     pub(crate) fn project_roots(spec: RootChoices) -> Self {
@@ -377,7 +381,7 @@ impl CommandPanel {
             | Self::Usage(content) => {
                 content.state_mut().localize(language);
             }
-            Self::GitBranches(content) => content.state_mut().localize(language),
+            Self::GitBranches(content) => content.localize(language),
             Self::Connectors(content) => content.state_mut().localize(language),
             Self::Marketplace(content) => content.localize(language),
             Self::Lsp(content) => content.localize(language),

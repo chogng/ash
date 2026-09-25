@@ -22,6 +22,7 @@ fn start(
         .start_thread(
             &NoThreadWorktreeBinder,
             StartThreadRequest {
+                branch_name: None,
                 agent_id,
                 agent: None,
                 command_id: CommandId::new(command).unwrap(),

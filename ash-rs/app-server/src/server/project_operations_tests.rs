@@ -193,6 +193,7 @@ impl Fixture {
     fn start_root(&self, command_id: &str) -> ash_core::ThreadSnapshot {
         self.server
             .start_thread(StartThreadRequest {
+                branch_name: None,
                 agent_id: None,
                 agent: None,
                 command_id: CommandId::new(command_id).unwrap(),

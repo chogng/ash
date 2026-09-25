@@ -176,6 +176,7 @@ fn start_session<T: ash_app_server_client::JsonRpcTransport>(
     let created = client
         .create_session(
             ash_app_server_protocol::protocol::session::SessionCreateParams {
+                branch_name: None,
                 agent_id: None,
                 command_id: command_id.clone(),
                 title: if numbers.len() <= 4 {

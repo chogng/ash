@@ -20,6 +20,7 @@ pub struct StartThreadRequest {
     pub agent: Option<ash_protocol::AgentConfiguration>,
     pub command_id: CommandId,
     pub title: String,
+    pub branch_name: Option<String>,
 }
 
 pub struct CreateBranchRequest {

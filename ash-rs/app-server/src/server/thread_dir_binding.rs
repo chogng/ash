@@ -414,11 +414,26 @@ fn primary_tree(trees: &BTreeMap<PathBuf, String>) -> Result<String, CoreError> 
 
 impl ThreadWorktreeBinder for GitTurnChangesRuntime {
     fn provision(&self, request: &ThreadWorktreeBindingRequest) -> Result<(), CoreError> {
+        if request.branch_name.is_some() && !matches!(&request.origin, ThreadOrigin::Root) {
+            return Err(CoreError::InvalidInput(
+                "only a root Thread can create a worktree branch".into(),
+            ));
+        }
         if let Some(binding) = self.binding(&request.thread_id) {
+            if request
+                .branch_name
+                .as_deref()
+                .is_some_and(|name| binding.target_branch() != Some(name))
+            {
+                return Err(CoreError::CommandConflict);
+            }
             self.bind_thread_services(&request.thread_id, &binding)?;
             return Ok(());
         }
-        let (source, target) = self.source_for(&request.origin)?;
+        let (source, mut target) = self.source_for(&request.origin)?;
+        if let Some(name) = &request.branch_name {
+            target = ManagedDirTarget::NewBranch { name: name.clone() };
+        }
         self.provision_source(request, source, target)
     }
 }

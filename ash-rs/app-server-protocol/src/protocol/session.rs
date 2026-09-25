@@ -31,7 +31,15 @@ pub struct SessionCreateParams {
     pub agent: ash_protocol::AgentRoleSelection,
     pub command_id: CommandId,
     pub title: String,
+    /// Creates the new session's linked worktree on a new local Git branch.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub branch_name: Option<String>,
 }
+
+#[cfg(test)]
+#[path = "session_tests.rs"]
+mod tests;
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

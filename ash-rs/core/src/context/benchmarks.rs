@@ -37,6 +37,7 @@ impl Fixture {
             .start_thread(
                 &crate::NoThreadWorktreeBinder,
                 StartThreadRequest {
+                    branch_name: None,
                     agent_id: None,
                     agent,
                     command_id: CommandId::new("benchmark-root").unwrap(),
