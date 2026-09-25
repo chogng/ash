@@ -377,10 +377,14 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
     state.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     state.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     let _ = state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-    assert_eq!(state.visible_items().len(), 4);
-    assert_eq!(state.visible_items()[0].label(), "OpenAI API key");
+    assert_eq!(state.visible_items().len(), 6);
+    assert_eq!(state.visible_items()[0].label(), "Subscriptions");
     assert_eq!(state.visible_items()[1].label(), "ChatGPT");
-    assert_eq!(state.visible_items()[2].label(), "Ollama");
+    assert_eq!(state.visible_items()[2].label(), "API and local services");
+    assert_eq!(state.visible_items()[3].label(), "OpenAI API key");
+    assert_eq!(state.visible_items()[4].label(), "Ollama");
+    assert_eq!(state.visible_items()[5].label(), "New custom provider");
+    assert_eq!(state.selected_item().unwrap().label(), "ChatGPT");
     assert!(
         state
             .visible_items()
@@ -389,11 +393,102 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
     );
     assert!(matches!(
         view.actions
-            .get(state.visible_items()[0].id().unwrap())
+            .get(state.visible_items()[3].id().unwrap())
             .unwrap(),
         ConfigSelectionAction::OpenProviderApiKey { .. }
     ));
-    assert!(state.visible_items()[2].id().is_none());
+    assert!(state.visible_items()[4].id().is_none());
+}
+
+#[test]
+fn provider_sections_keep_subscription_navigation_and_search_actionable() {
+    let mut catalog = providers();
+    catalog.providers.push(ProviderCatalogEntryDto {
+        provider: "xai".into(),
+        display_name: "xAI Subscription".into(),
+        api_key_policy: ProviderApiKeyPolicyDto::Unsupported,
+        api_key_configured: false,
+    });
+    let choices = config_choices(
+        &empty_config_snapshot(),
+        &catalog,
+        TerminalSettings::default(),
+        StatusLineSettings::default(),
+    );
+    let mut state = ListSelectionState::new(choices.model);
+    state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    let labels = state
+        .visible_items()
+        .iter()
+        .map(|item| item.label())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        labels
+            .iter()
+            .filter(|label| **label == "xAI Subscription")
+            .count(),
+        1
+    );
+    assert!(!labels.contains(&"xAI (Grok) API key"));
+    let xai_id = state
+        .visible_items()
+        .iter()
+        .find(|item| item.label() == "xAI Subscription")
+        .unwrap()
+        .id()
+        .unwrap()
+        .clone();
+    assert!(state.focus_item(&xai_id));
+    assert!(matches!(
+        choices
+            .actions
+            .get(state.selected_item().unwrap().id().unwrap()),
+        Some(ConfigSelectionAction::OpenSubscription(
+            super::super::SubscriptionProvider::Xai
+        ))
+    ));
+
+    state.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+    state.handle_paste("OpenAI".into());
+    assert_eq!(state.visible_items().len(), 1);
+    assert_eq!(state.visible_items()[0].label(), "OpenAI API key");
+}
+
+#[test]
+fn provider_sections_open_connection_from_the_same_list() {
+    let catalog = providers();
+    let choices = || {
+        config_choices(
+            &empty_config_snapshot(),
+            &catalog,
+            TerminalSettings::default(),
+            StatusLineSettings::default(),
+        )
+    };
+    let mut subscription = super::ConfigEditor::new(choices());
+    for code in [KeyCode::Tab, KeyCode::Down, KeyCode::Down] {
+        subscription.handle_key(KeyEvent::new(code, KeyModifiers::NONE));
+    }
+    assert!(matches!(
+        subscription.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        super::ConfigEditorOutcome::Action(ConfigSelectionAction::OpenSubscription(
+            super::super::SubscriptionProvider::ChatGpt
+        ))
+    ));
+
+    let mut api = super::ConfigEditor::new(choices());
+    for code in [KeyCode::Tab, KeyCode::Down, KeyCode::Down, KeyCode::Down] {
+        api.handle_key(KeyEvent::new(code, KeyModifiers::NONE));
+    }
+    assert_eq!(
+        api.selection().unwrap().selected_item().unwrap().label(),
+        "OpenAI API key"
+    );
+    assert!(matches!(
+        api.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        super::ConfigEditorOutcome::Consumed
+    ));
+    assert!(matches!(api.page(), super::ConfigEditorPage::Prompt(_)));
 }
 
 #[test]

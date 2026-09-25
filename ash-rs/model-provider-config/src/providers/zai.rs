@@ -31,6 +31,8 @@ pub(super) fn definition() -> ProviderDefinition {
 
 /// GLM Coding Plan models are served through the coding endpoint with the same API key and
 /// adapter as the standard endpoint, so the catalog is restricted to the plan's listed models.
+/// The coding gateway routes the standard `POST /tokenizer` measurement endpoint to the same
+/// key, so plan access keeps the provider preflight measurement.
 pub(super) fn subscription_definition() -> ProviderDefinition {
     let mut definition = default_provider(
         "zai",
@@ -39,7 +41,11 @@ pub(super) fn subscription_definition() -> ProviderDefinition {
         ApiProfile::OpenAiChatCompletions,
         ZAI_CODING_PLAN_BASE_URL,
     )
-    .with_native_streaming();
+    .with_native_streaming()
+    .with_input_token_count(
+        InputTokenCountDefinition::invocation_base(InputTokenCountProfile::ZaiChatCompletions)
+            .with_models([ModelId::new("glm-5.1").expect("valid model ID")]),
+    );
     definition.model_catalog_policy = crate::ModelCatalogPolicy::ListedOnly;
     definition
 }

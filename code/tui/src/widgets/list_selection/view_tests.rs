@@ -138,6 +138,58 @@ fn render_with_pointer(state: &ListSelectionState, hovered_item: Option<usize>) 
 }
 
 #[test]
+fn ruled_sections_have_one_blank_row_and_no_pointer_target_on_the_divider() {
+    let state = ListSelectionState::new(
+        ListSelectionModel::new(
+            "Providers",
+            vec![ListSelectionGroup::new(
+                "All",
+                vec![
+                    ListSelectionItem::new("Subscriptions").as_section_divider(),
+                    ListSelectionItem::new("ChatGPT").with_id(ListSelectionItemId::new("chatgpt")),
+                    ListSelectionItem::new("API").as_section_divider(),
+                    ListSelectionItem::new("OpenAI").with_id(ListSelectionItemId::new("openai")),
+                ],
+            )],
+        )
+        .without_tab_bar(),
+    );
+    let buffer = render(&state);
+
+    assert_eq!(
+        state.item_rows(36),
+        vec![(0, 0), (1, 0), (2, 1), (2, 0), (3, 0)]
+    );
+    assert_eq!(buffer[(2, 0)].symbol(), "S");
+    assert_eq!(buffer[(16, 0)].symbol(), "─");
+    assert_eq!(buffer[(2, 1)].symbol(), "C");
+    assert_eq!(buffer[(2, 2)].symbol(), " ");
+    assert_eq!(buffer[(2, 3)].symbol(), "A");
+    assert_eq!(buffer[(6, 3)].symbol(), "─");
+
+    let body = ratatui::layout::Rect::new(2, 0, 36, 10);
+    assert_eq!(
+        super::pointer_target_at(
+            &state,
+            ratatui::layout::Rect::default(),
+            body,
+            ratatui::layout::Position::new(2, 2),
+        ),
+        None
+    );
+
+    let mut narrow = Terminal::new(TestBackend::new(12, 6)).unwrap();
+    narrow
+        .draw(|frame| {
+            draw_body_with_pointer(frame, frame.area(), &state, None, None, test_context());
+        })
+        .unwrap();
+    let narrow = narrow.backend().buffer();
+    assert_eq!(narrow[(2, 0)].symbol(), "S");
+    assert_eq!(narrow[(6, 3)].symbol(), "─");
+}
+
+#[test]
 fn tabs_search_and_items_share_the_same_state_column() {
     let state = state();
     let buffer = render(&state);

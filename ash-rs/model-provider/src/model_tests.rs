@@ -1637,6 +1637,50 @@ fn zai_runtime_exposes_the_documented_remote_tokenizer() {
 }
 
 #[test]
+fn zai_subscription_runtime_measures_through_the_coding_endpoint_tokenizer() {
+    let transport = Arc::new(CapturingTransport::new(
+        json!({"usage": {"prompt_tokens": 300, "total_tokens": 300}}),
+    ));
+    let secrets = Arc::new(MemorySecretStore::default());
+    secrets
+        .store(
+            &provider_api_key_secret_key(&provider_id("zai")),
+            &SecretValue::new(b"plan-key".to_vec()),
+        )
+        .unwrap();
+    let runtime = ModelProviderRuntime::with_client_and_secrets(
+        ProviderConfigRegistry::builtin(),
+        transport.clone(),
+        secrets,
+    );
+    let config = provider_config_with_endpoint(
+        "zai",
+        ash_model_provider_config::ZAI_CODING_PLAN_BASE_URL,
+    );
+    let model = runtime
+        .build_model(&config, &model_ref("zai", "glm-5.1"))
+        .unwrap();
+
+    assert_eq!(
+        model.input_token_measurement_capability(),
+        ContextTokenMeasurementCapability::Remote
+    );
+    let ContextTokenMeasurementOutcome::Measured(measurement) =
+        model.measure_input(&ModelRequest::text("hello")).unwrap()
+    else {
+        panic!("expected a provider measurement");
+    };
+    assert_eq!(measurement.measured_input().get(), 300);
+    let (endpoint, headers, _) = transport.request.lock().unwrap().clone().unwrap();
+    assert_eq!(endpoint, "https://api.z.ai/api/coding/paas/v4/tokenizer");
+    assert!(
+        headers
+            .iter()
+            .any(|header| header.name() == "Authorization" && header.value() == "Bearer plan-key")
+    );
+}
+
+#[test]
 fn request_output_limit_overrides_the_provider_default() {
     let transport = Arc::new(CapturingTransport::new(json!({
         "id": "msg_1",

@@ -144,6 +144,7 @@ pub const STATIC_MODEL_CATALOG: &[StaticModelSpec] = &[
         name: "GLM-5.1",
         access: subscription,
         runtime: zai_coding_plan,
+        input_token_count: true,
     },
     static_model! {
         provider: "minimax",

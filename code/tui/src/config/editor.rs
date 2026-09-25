@@ -1053,7 +1053,7 @@ pub(crate) fn config_choices(
                 ),
             ),
     );
-    let provider_items = provider_items(config, providers, &mut actions);
+    let provider_items = provider_items(config, providers, language, &mut actions);
     let mut choices = ConfigChoices {
         model: ListSelectionModel::new(
             nls::text(language, Message::ConfigTitle),
@@ -1349,6 +1349,7 @@ pub(crate) fn provider_api_key_prompt(
 fn provider_items(
     config: &ConfigReadResult,
     catalog: &ProviderListResult,
+    language: Language,
     actions: &mut BTreeMap<ListSelectionItemId, ConfigSelectionAction>,
 ) -> Vec<ListSelectionItem> {
     let mut custom = config
@@ -1365,7 +1366,7 @@ fn provider_items(
             .cmp(&left.custom.as_ref().unwrap().order)
             .then_with(|| left.provider.cmp(&right.provider))
     });
-    let mut items = Vec::new();
+    let mut api_items = Vec::new();
     for entry in custom {
         let id = ListSelectionItemId::new(&entry.provider);
         actions.insert(
@@ -1376,8 +1377,9 @@ fn provider_items(
                 &entry.provider,
             )),
         );
-        items.push(ListSelectionItem::new(&entry.custom.as_ref().unwrap().name).with_id(id));
+        api_items.push(ListSelectionItem::new(&entry.custom.as_ref().unwrap().name).with_id(id));
     }
+    let mut subscriptions = Vec::new();
     for provider in &catalog.providers {
         if config
             .providers
@@ -1387,13 +1389,6 @@ fn provider_items(
         {
             continue;
         }
-        let mut api = provider_item(provider, actions);
-        if matches!(provider.provider.as_str(), "openai" | "xai") {
-            api = ListSelectionItem::new(format!("{} API key", provider.display_name)).with_id(
-                ListSelectionItemId::new(format!("provider-api-key-{}", provider.provider)),
-            );
-        }
-        items.push(api);
         let subscription = match provider.provider.as_str() {
             "openai" => Some(("ChatGPT", super::SubscriptionProvider::ChatGpt)),
             "xai" => Some(("xAI Subscription", super::SubscriptionProvider::Xai)),
@@ -1405,7 +1400,16 @@ fn provider_items(
                 id.clone(),
                 ConfigSelectionAction::OpenSubscription(subscription),
             );
-            items.push(ListSelectionItem::new(label).with_id(id));
+            subscriptions.push(ListSelectionItem::new(label).with_id(id));
+        }
+        let api_name = match provider.provider.as_str() {
+            "openai" => "OpenAI",
+            "xai" => "xAI (Grok)",
+            _ => &provider.display_name,
+        };
+        if subscription.is_none() || provider.api_key_policy != ProviderApiKeyPolicyDto::Unsupported
+        {
+            api_items.push(provider_item(provider, api_name, actions));
         }
     }
     let id = ListSelectionItemId::new("new-custom-provider");
@@ -1413,15 +1417,34 @@ fn provider_items(
         id.clone(),
         ConfigSelectionAction::OpenProvider(super::provider::Settings::new(config, catalog, "")),
     );
-    items.push(ListSelectionItem::new("New custom provider").with_id(id));
+    api_items.push(ListSelectionItem::new("New custom provider").with_id(id));
+    let mut items = Vec::new();
+    if !subscriptions.is_empty() {
+        items.push(
+            ListSelectionItem::new(nls::text(language, Message::ConfigSubscriptions))
+                .as_section_divider(),
+        );
+        items.extend(subscriptions);
+    }
+    items.push(
+        ListSelectionItem::new(nls::text(language, Message::ConfigApiAndLocalServices))
+            .as_section_divider(),
+    );
+    items.extend(api_items);
     items
 }
 
 fn provider_item(
     provider: &ProviderCatalogEntryDto,
+    display_name: &str,
     actions: &mut BTreeMap<ListSelectionItemId, ConfigSelectionAction>,
 ) -> ListSelectionItem {
-    let item = ListSelectionItem::new(&provider.display_name);
+    let label = if matches!(provider.provider.as_str(), "openai" | "xai") {
+        format!("{display_name} API key")
+    } else {
+        display_name.to_owned()
+    };
+    let item = ListSelectionItem::new(label);
     if provider.api_key_policy == ProviderApiKeyPolicyDto::Unsupported {
         return item;
     }
@@ -1430,7 +1453,7 @@ fn provider_item(
         id.clone(),
         ConfigSelectionAction::OpenProviderApiKey {
             provider: provider.provider.clone(),
-            display_name: provider.display_name.clone(),
+            display_name: display_name.to_owned(),
         },
     );
     item.with_id(id)

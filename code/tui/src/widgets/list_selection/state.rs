@@ -32,6 +32,7 @@ pub(crate) struct ListSelectionItem {
     presentation_focus: Option<Color>,
     preview: Option<ListSelectionPreview>,
     section_heading: bool,
+    section_divider: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -52,6 +53,7 @@ impl ListSelectionItem {
             presentation_focus: None,
             preview: None,
             section_heading: false,
+            section_divider: false,
         }
     }
 
@@ -70,8 +72,18 @@ impl ListSelectionItem {
         self
     }
 
+    pub(crate) fn as_section_divider(mut self) -> Self {
+        self.section_heading = true;
+        self.section_divider = true;
+        self
+    }
+
     pub(crate) fn section_heading(&self) -> bool {
         self.section_heading
+    }
+
+    pub(super) fn section_divider(&self) -> bool {
+        self.section_divider
     }
 
     pub(crate) fn with_columns(
@@ -888,6 +900,9 @@ impl ListSelectionState {
             .iter()
             .enumerate()
             .filter_map(|(index, item)| {
+                if item.section_heading() {
+                    return None;
+                }
                 selection_match_score(item.label(), item.description(), &normalized_query)
                     .map(|score| (index, score))
             })

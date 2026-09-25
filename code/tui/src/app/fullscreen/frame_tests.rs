@@ -2153,6 +2153,59 @@ fn config_general_tab_uses_localized_label() {
 }
 
 #[test]
+fn config_providers_show_subscription_and_api_sections() {
+    use ash_app_server_protocol::protocol::provider::ProviderApiKeyPolicyDto;
+    use ash_app_server_protocol::protocol::provider::ProviderCatalogEntryDto;
+    use ash_app_server_protocol::protocol::provider::ProviderListResult;
+
+    let mut app = App::new();
+    let mut settings = crate::config::TerminalSettings::default();
+    settings.set_language(crate::nls::Language::Chinese);
+    app.update(crate::config::Event::SettingsReceived(settings));
+    app.update(crate::config::Event::EditorOpened(
+        crate::config::config_choices(
+            &crate::test_support::empty_config_snapshot(),
+            &ProviderListResult {
+                providers: vec![
+                    ProviderCatalogEntryDto {
+                        provider: "openai".into(),
+                        display_name: "OpenAI".into(),
+                        api_key_policy: ProviderApiKeyPolicyDto::Required,
+                        api_key_configured: false,
+                    },
+                    ProviderCatalogEntryDto {
+                        provider: "ollama".into(),
+                        display_name: "Ollama".into(),
+                        api_key_policy: ProviderApiKeyPolicyDto::Unsupported,
+                        api_key_configured: false,
+                    },
+                    ProviderCatalogEntryDto {
+                        provider: "xai".into(),
+                        display_name: "xAI (Grok)".into(),
+                        api_key_policy: ProviderApiKeyPolicyDto::Required,
+                        api_key_configured: false,
+                    },
+                ],
+            },
+            settings,
+            StatusLineSettings::default(),
+        ),
+    ));
+    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    assert_eq!(
+        app.list_selection()
+            .unwrap()
+            .selected_item()
+            .unwrap()
+            .label(),
+        "ChatGPT"
+    );
+    crate::tui_assert_snapshot!("config_providers_sections", render(&app, 100, 26));
+}
+
+#[test]
 fn config_issues_tab_shows_one_auto_refresh_value() {
     let mut app = App::new();
     let mut config = crate::test_support::empty_config_snapshot();

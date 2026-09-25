@@ -169,6 +169,9 @@ pub(crate) fn draw_body_with_pointer(
                 1,
             );
             if detail > 0 {
+                if item.section_divider() {
+                    continue;
+                }
                 let description = item.detail().unwrap_or_default();
                 frame.render_widget(
                     Paragraph::new(description)
@@ -318,6 +321,9 @@ impl ListSelectionState {
     pub(super) fn item_rows(&self, width: u16) -> Vec<(usize, usize)> {
         let mut rows = Vec::new();
         for (index, item) in self.visible_items().iter().enumerate() {
+            if index > 0 && item.section_divider() {
+                rows.push((index, 1));
+            }
             rows.push((index, 0));
             if self.expandable() && self.expanded(item) {
                 let description = item.detail().unwrap_or_default();
@@ -494,14 +500,22 @@ fn draw_item(
     context: RenderContext<'_>,
 ) {
     if item.section_heading() {
-        frame.render_widget(
-            Paragraph::new(format!("  {}", item.label())).style(
-                Style::default()
-                    .fg(context.muted())
-                    .add_modifier(Modifier::BOLD),
-            ),
-            area,
-        );
+        let prefix = format!("  {} ", item.label());
+        let label_style = Style::default()
+            .fg(context.muted())
+            .add_modifier(Modifier::BOLD);
+        let heading = if item.section_divider() {
+            Line::from(vec![
+                Span::styled(prefix.clone(), label_style),
+                Span::styled(
+                    "─".repeat(usize::from(area.width).saturating_sub(prefix.width())),
+                    Style::default().fg(context.muted()),
+                ),
+            ])
+        } else {
+            Line::from(Span::styled(format!("  {}", item.label()), label_style))
+        };
+        frame.render_widget(Paragraph::new(heading), area);
         return;
     }
     let row_style = item_style(context, selected, hovered, pressed);

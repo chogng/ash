@@ -1151,6 +1151,9 @@ impl ModelProviderRuntime {
                 .api_target()
                 .map(|target| ProviderConnection::Subscription { target })
                 .map_err(|error| ModelProviderError::Credential(error.to_string())),
+            // The GLM Coding Plan authorizes with the same stored API key as the standard
+            // endpoint, so the subscription connection is the direct key-authenticated route.
+            (ProviderAccessMode::Subscription, "zai") => self.direct_connection(normalized),
             (ProviderAccessMode::Subscription, "openai") => {
                 let auth = self.chatgpt_oauth.as_ref().ok_or_else(|| {
                     ModelProviderError::Credential("ChatGPT OAuth is unavailable".into())

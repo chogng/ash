@@ -619,7 +619,6 @@ fn builtin_provider_models_and_defaults_derive_from_static_catalog() {
         if spec.runtime == StaticModelRuntime::ZaiCodingPlan {
             assert_eq!(spec.provider_id, "zai");
             assert!(!spec.is_approval_review_default);
-            assert!(!spec.supports_input_token_count);
         }
         if spec.supports_input_token_count {
             assert!(

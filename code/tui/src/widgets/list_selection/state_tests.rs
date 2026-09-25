@@ -98,6 +98,46 @@ fn explicit_search_focus_routes_text_to_the_query() {
 }
 
 #[test]
+fn search_omits_section_headings_and_keeps_matching_actions() {
+    let mut state = ListSelectionState::new(
+        ListSelectionModel::new(
+            "Providers",
+            vec![ListSelectionGroup::new(
+                "All",
+                vec![
+                    ListSelectionItem::new("Subscriptions").as_section_heading(),
+                    ListSelectionItem::new("ChatGPT").with_id(ListSelectionItemId::new("chatgpt")),
+                ],
+            )],
+        )
+        .with_search(SearchBoxModel::new("Search providers")),
+    );
+
+    state.handle_key(key(KeyCode::Char('/')));
+    state.handle_paste("Subscriptions".into());
+    assert!(state.visible_items().is_empty());
+    assert!(state.selected_item().is_none());
+
+    let mut state = ListSelectionState::new(
+        ListSelectionModel::new(
+            "Providers",
+            vec![ListSelectionGroup::new(
+                "All",
+                vec![
+                    ListSelectionItem::new("Subscriptions").as_section_heading(),
+                    ListSelectionItem::new("ChatGPT").with_id(ListSelectionItemId::new("chatgpt")),
+                ],
+            )],
+        )
+        .with_search(SearchBoxModel::new("Search providers")),
+    );
+    state.handle_key(key(KeyCode::Char('/')));
+    state.handle_paste("ChatGPT".into());
+    assert_eq!(state.visible_items().len(), 1);
+    assert_eq!(state.selected_item().unwrap().label(), "ChatGPT");
+}
+
+#[test]
 fn tab_keys_switch_tabs_and_wrap() {
     let mut state = state();
     state.handle_key(key(KeyCode::Up));

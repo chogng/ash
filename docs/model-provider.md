@@ -225,6 +225,23 @@ binding 都由 `ProviderDefinition.input_token_count` 明确声明 profile、tar
 | MiMo | [Responses API](https://mimo.mi.com/docs/en-US/api/chat/responses) | ❌ verified preflight unavailable | 当前官方文档只确认 response `usage.input_tokens` |
 | Generic OpenAI-compatible | 无统一标准 | ❌ unavailable | 必须由具体 provider definition 显式增加 count profile |
 
+#### 订阅网关的服务端计量覆盖
+
+订阅网关与标准 API 网关是两套路由：标准 API 声明了 count endpoint 不代表订阅网关也能调用。
+四个订阅的结论（2026-09 核实）：
+
+| 订阅 | 订阅网关 | 服务端计量 | 依据 |
+| --- | --- | --- | --- |
+| Z.AI GLM Coding Plan | `https://api.z.ai/api/coding/paas/v4` | 部分具备：estimated remote，路由与标准端点同为 `POST /tokenizer` | 同一网关家族探测该路由返回 401（路由存在、缺鉴权），标准端点 `/tokenizer` 见 [Z.AI API reference](https://docs.z.ai/api-reference/tools/tokenizer)；最终边界以真实 plan key 实连为准 |
+| Kimi Code | `https://api.kimi.com/coding/v1` | ❌ preflight unavailable，退回本地 tokenizer | 官方 [Kimi Code 文档](https://www.kimi.com/code/docs/en)只声明 chat/completions；[`estimate-token-count`](https://platform.kimi.ai/docs/api/estimate) 仅存在于平台 API（`api.moonshot.ai/v1`），coding 网关探测该路由返回 404 |
+| ChatGPT 订阅（Codex 后端） | `https://chatgpt.com/backend-api/codex` | ❌ preflight unavailable，退回本地 tokenizer | Codex 后端没有公开 contract；[`/responses/input_tokens`](https://developers.openai.com/api/reference/resources/responses/subresources/input_tokens) 属于 Platform API，Codex 生态（CLI `/status`、社区监控工具）均按本地或调用完成后的 usage 统计 |
+| xAI 订阅（Grok CLI 代理） | `https://cli-chat-proxy.grok.com/v1` | ❌ preflight unavailable，退回本地 tokenizer | 订阅代理探测 tokenize 路由返回 404；[`tokenize-text`](https://docs.x.ai/developers/rest-api-reference/inference/other) 只在 Platform API（`api.x.ai`）且只接受裸文本，无法表达完整请求 |
+
+本地回退由 `LocalInputTokenCounter` 承担：remote 计量不可用的连接自动尝试本地 tokenizer
+binding（`ManagedLocalTokenizerService` 按 `ModelRef` 按需下载并缓存 tokenizer 资产），仍不可用
+时计量能力保持 `Unavailable`。不得因为订阅网关外形兼容就为它伪造 count profile；上游新增
+count 路由时，先复核官方文档再更新对应的 subscription definition。
+
 ### 5.3 调用完成后的 token 使用量
 
 调用完成后的统计统一进入 `ModelUsage`，但字段必须先按模型商官方定义换算，不能直接照搬同名
