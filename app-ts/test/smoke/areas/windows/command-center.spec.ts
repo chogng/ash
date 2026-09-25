@@ -39,7 +39,8 @@ test('titlebar command center opens command search and restores focus', async ({
 	await query.fill('@');
 	await expect(query).toHaveAttribute('placeholder', 'Type the name of a symbol in the workspace');
 	await query.fill('?');
-	await picker.locator('.ash-quick-pick-row-label', { hasText: '> Commands' }).click();
+	await expect(picker.locator('.ash-quick-pick-row-label', { hasText: '? Show Search Modes' })).toHaveCount(0);
+	await query.press('Enter');
 	await expect(query).toHaveValue('>');
 	await expect(query).toHaveAttribute('placeholder', 'Type the name of a command to run');
 	expect(await query.evaluate(input => (input as HTMLInputElement).selectionStart)).toBe(1);

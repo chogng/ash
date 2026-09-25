@@ -6,6 +6,7 @@ import { type ServicesAccessor } from '../../../../platform/instantiation/common
 import { IQuickAccessController, QuickAccessRegistry, type IQuickAccessProvider } from '../../../../platform/quickinput/common/quickAccess.js';
 import type { IQuickPick, IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { type LanguageWorkspaceSymbol } from '../../../../editor/common/languages.js';
+import { localize, localize2 } from '../../../../nls.js';
 import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import { getWorkspaceSymbols } from '../../search/common/search.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
@@ -57,13 +58,18 @@ class WorkspaceSymbolsQuickAccessProvider implements IQuickAccessProvider {
 	}
 }
 
-QuickAccessRegistry.register({ prefix: '@', placeholder: 'Type the name of a symbol in the workspace', helpLabel: 'Symbols in Workspace', ctor: WorkspaceSymbolsQuickAccessProvider });
+QuickAccessRegistry.register({
+	prefix: '@',
+	get placeholder() { return localize('quickAccess.symbolPlaceholder', 'Type the name of a symbol in the workspace'); },
+	get helpLabel() { return localize('quickAccess.workspaceSymbols', 'Symbols in Workspace'); },
+	ctor: WorkspaceSymbolsQuickAccessProvider,
+});
 
 registerAction2(class ShowAllSymbolsAction extends Action2 {
 	constructor() {
 		super({
 			id: ShowAllSymbolsCommandId,
-			title: 'Go to Symbol in Workspace',
+			get title() { return localize2('quickAccess.goToWorkspaceSymbol', 'Go to Symbol in Workspace'); },
 			f1: true,
 			keybinding: { primary: Keybinding.single(logicalKey('t', { primaryKey: true })) },
 		});

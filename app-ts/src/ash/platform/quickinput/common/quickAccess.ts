@@ -11,6 +11,7 @@ export interface IQuickAccessProvider {
 
 export interface IQuickAccessProviderDescriptor {
 	readonly prefix: string;
+	/** Read when shown so a long-lived registration can use the current language. */
 	readonly placeholder: string;
 	readonly helpLabel: string;
 	readonly ctor: Constructor<IQuickAccessProvider>;

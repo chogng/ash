@@ -26,18 +26,21 @@ import {
 } from "../../../../../platform/quickinput/common/quickInput.js";
 import { IQuickAccessController } from "../../../../../platform/quickinput/common/quickAccess.js";
 import { QuickAccessController } from "../../../../../platform/quickinput/browser/quickAccess.js";
+import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
 import {
 	CommandService,
 } from "../../../../../workbench/services/commands/common/commandService.js";
 import {
 	WorkbenchQuickInputService,
 } from "../../../../../workbench/services/quickinput/browser/quickInputService.js";
+import { builtinLanguagePackCatalogs } from '../../../../../workbench/services/localization/common/localizationCatalogs.js';
 import {
 	InQuickInputContext,
 	ShowAllCommandsCommandId,
 } from "../../../../../workbench/browser/quickaccess.js";
 await import("../../../../../workbench/contrib/quickaccess/browser/commandsQuickAccess.js");
 await import("../../../../../workbench/contrib/quickaccess/browser/helpQuickAccess.js");
+await import('../../../../../workbench/contrib/quickaccess/browser/workspaceSymbolsQuickAccess.js');
 import { h } from "../../../../../base/browser/dom.js";
 
 test("Show All Commands is not duplicated in the titlebar action menu", () => {
@@ -233,6 +236,31 @@ test('Quick Access switches search modes in one picker and restores focus on clo
 		input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Escape' }));
 		assert.equal(dom.window.document.querySelector('.ash-quick-pick'), null);
 		assert.equal(dom.window.document.activeElement, button);
+		const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN');
+		assert.ok(chinese);
+		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+		try {
+			quickAccess.show('>');
+			const localizedPicker = dom.window.document.querySelector('.ash-quick-pick');
+			const localizedInput = localizedPicker?.querySelector<HTMLInputElement>('.ash-quick-pick-input input');
+			assert.ok(localizedPicker);
+			assert.ok(localizedInput);
+			assert.equal(localizedInput.placeholder, '输入要运行的命令名称');
+			assert.equal(localizedInput.getAttribute('aria-label'), '输入要运行的命令名称');
+			assert.equal([...localizedPicker.querySelectorAll<HTMLElement>('.ash-quick-pick-row-label')].some(label => label.textContent === '转到工作区中的符号'), true);
+			quickAccess.show('?');
+			assert.equal(localizedInput.placeholder, '选择搜索模式');
+			const labels = [...localizedPicker.querySelectorAll<HTMLElement>('.ash-quick-pick-row-label')].map(label => label.textContent);
+			assert.deepEqual(labels, ['> 命令', '@ 工作区中的符号']);
+			quickAccess.show('?missing');
+			assert.equal(localizedPicker.querySelector('.ash-quick-pick-empty')?.textContent, '没有匹配结果');
+			assert.equal(localizedPicker.querySelector('.ash-quick-pick-list-items')?.getAttribute('aria-label'), '快速选择结果');
+			localizedInput.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Escape' }));
+			assert.equal(dom.window.document.querySelector('.ash-quick-pick'), null);
+			assert.equal(dom.window.document.activeElement, button);
+		} finally {
+			resetNlsResolver();
+		}
 	}
 	dom.window.close();
 });

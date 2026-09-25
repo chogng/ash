@@ -8,12 +8,13 @@ import { type ServicesAccessor } from '../../../../platform/instantiation/common
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { IQuickAccessController, QuickAccessRegistry, type IQuickAccessProvider } from '../../../../platform/quickinput/common/quickAccess.js';
 import type { IQuickPick, IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
+import { localize, localize2 } from '../../../../nls.js';
 import { EditorGroupWatermarkEntries } from '../../../browser/parts/editor/editorGroupWatermark.js';
 import { ShowAllCommandsCommandId } from '../../../browser/quickaccess.js';
 
 EditorGroupWatermarkEntries.register({
 	id: ShowAllCommandsCommandId,
-	label: 'Show All Commands',
+	get label() { return localize('quickAccess.showAllCommands', 'Show All Commands'); },
 	command: ShowAllCommandsCommandId,
 });
 
@@ -59,14 +60,24 @@ class CommandsQuickAccessProvider implements IQuickAccessProvider {
 	}
 }
 
-QuickAccessRegistry.register({ prefix: '', placeholder: 'Search commands (type >, @, or ? for modes)', helpLabel: 'Commands', ctor: CommandsQuickAccessProvider });
-QuickAccessRegistry.register({ prefix: '>', placeholder: 'Type the name of a command to run', helpLabel: 'Commands', ctor: CommandsQuickAccessProvider });
+QuickAccessRegistry.register({
+	prefix: '',
+	get placeholder() { return localize('quickAccess.searchCommands', 'Search commands (type >, @, or ? for modes)'); },
+	get helpLabel() { return localize('quickAccess.commands', 'Commands'); },
+	ctor: CommandsQuickAccessProvider,
+});
+QuickAccessRegistry.register({
+	prefix: '>',
+	get placeholder() { return localize('quickAccess.commandPlaceholder', 'Type the name of a command to run'); },
+	get helpLabel() { return localize('quickAccess.commands', 'Commands'); },
+	ctor: CommandsQuickAccessProvider,
+});
 
 registerAction2(class ShowAllCommandsAction extends Action2 {
 	constructor() {
 		super({
 			id: ShowAllCommandsCommandId,
-			title: 'Show All Commands',
+			get title() { return localize2('quickAccess.showAllCommands', 'Show All Commands'); },
 			keybinding: {
 				primary: Keybinding.single(logicalKey('p', { primaryKey: true, shiftKey: true })),
 				secondary: [Keybinding.single(logicalKey('F1'))],

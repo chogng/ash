@@ -76,6 +76,7 @@ const iconEraser = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\
 const iconError = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><circle cx=\"8\" cy=\"8\" r=\"6.5\" stroke=\"#000\"/><path stroke=\"#000\" stroke-linecap=\"round\" d=\"M10.5 5.5 8 8m-2.5 2.5L8 8m0 0 2.5 2.5M8 8 5.5 5.5\"/></svg>";
 const iconExport = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"#000\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"m9.5 4 4 4-4 4m4-4H4\"/><path stroke=\"#000\" stroke-linecap=\"round\" d=\"M2 4v8.18\"/></svg>";
 const iconExportTray = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"#000\" stroke-linecap=\"round\" d=\"M13.5 9.875v1.667a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2V9.875\"/><path stroke=\"#000\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M4.333 6.167 8 2.5l3.667 3.667M8 2.5v8.708\"/></svg>";
+const iconExtensions = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"#000\" d=\"M8 8V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v5m6 0H2m6 0h5a1 1 0 0 1 1 1v3a2 2 0 0 1-2 2H8m0-6v6M2 8v4a2 2 0 0 0 2 2h4\"/><rect width=\"5\" height=\"5\" x=\"8\" y=\"4.536\" stroke=\"#000\" rx=\"1\" transform=\"rotate(-45 8 4.536)\"/></svg>";
 const iconEye = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"#000\" d=\"M8 6a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z\"/><path stroke=\"#000\" d=\"M1.625 7.635 2.882 6.46a7.5 7.5 0 0 1 10.235 0l1.259 1.174a.5.5 0 0 1 0 .732L13.117 9.54a7.5 7.5 0 0 1-10.235 0L1.625 8.365a.5.5 0 0 1 0-.73Z\"/></svg>";
 const iconEyeFilled = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path fill=\"#000\" stroke=\"#000\" d=\"M8 6a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z\"/><path stroke=\"#000\" d=\"M1.625 7.635 2.882 6.46a7.5 7.5 0 0 1 10.235 0l1.259 1.174a.5.5 0 0 1 0 .732L13.117 9.54a7.5 7.5 0 0 1-10.235 0L1.625 8.365a.5.5 0 0 1 0-.73Z\"/></svg>";
 const iconFile = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"#000\" d=\"M8.5 1.5v3a1 1 0 0 0 1 1h3m-4-4h.086a1 1 0 0 1 .707.293l2.914 2.914a1 1 0 0 1 .293.707V5.5m-4-4H5A1.5 1.5 0 0 0 3.5 3v10A1.5 1.5 0 0 0 5 14.5h6a1.5 1.5 0 0 0 1.5-1.5V5.5\"/></svg>";
@@ -265,6 +266,7 @@ export function createProductIconLibrary<T>(register: (id: string, definition: P
     error: register("error", iconError),
     export: register("export", iconExport),
     exportTray: register("export-tray", iconExportTray),
+    extensions: register("extensions", iconExtensions),
     eye: register("eye", iconEye),
     eyeFilled: register("eye-filled", iconEyeFilled),
     file: register("file", iconFile),

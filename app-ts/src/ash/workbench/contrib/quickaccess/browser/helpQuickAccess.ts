@@ -1,16 +1,17 @@
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { QuickAccessRegistry, type IQuickAccessProvider } from '../../../../platform/quickinput/common/quickAccess.js';
 import type { IQuickPick, IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
+import { localize } from '../../../../nls.js';
 
 interface HelpQuickPickItem extends IQuickPickItem {
 	readonly prefix: string;
 }
 
 class HelpQuickAccessProvider implements IQuickAccessProvider {
-	provide(picker: IQuickPick<IQuickPickItem>): DisposableStore {
+	provide(picker: IQuickPick<IQuickPickItem>, prefix: string): DisposableStore {
 		const disposables = new DisposableStore();
 		picker.items = QuickAccessRegistry.all()
-			.filter(descriptor => descriptor.prefix !== '')
+			.filter(descriptor => descriptor.prefix !== '' && descriptor.prefix !== prefix)
 			.map(descriptor => ({
 				prefix: descriptor.prefix,
 				label: `${descriptor.prefix} ${descriptor.helpLabel}`,
@@ -24,4 +25,9 @@ class HelpQuickAccessProvider implements IQuickAccessProvider {
 	}
 }
 
-QuickAccessRegistry.register({ prefix: '?', placeholder: 'Select a search mode', helpLabel: 'Show Search Modes', ctor: HelpQuickAccessProvider });
+QuickAccessRegistry.register({
+	prefix: '?',
+	get placeholder() { return localize('quickAccess.helpPlaceholder', 'Select a search mode'); },
+	get helpLabel() { return localize('quickAccess.showModes', 'Show Search Modes'); },
+	ctor: HelpQuickAccessProvider,
+});
