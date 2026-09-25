@@ -10,6 +10,7 @@ use ash_app_server_protocol::protocol::config::ModelRefDto;
 use ash_app_server_protocol::protocol::model::ModelListResult;
 use ash_app_server_protocol::protocol::provider::ProviderListResult;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ModelSelectionAction {
@@ -46,6 +47,7 @@ pub(crate) fn model_choices(
     let pins = pinned_models(&config.tui)?;
     let mut actions = BTreeMap::new();
     let mut groups = BTreeMap::<String, Vec<ListSelectionItem>>::new();
+    let mut subscription_providers = BTreeSet::new();
     let mut favorites = Vec::new();
     for entry in &catalog.models {
         // Selection still requires a configured provider when another caller supplies a wider catalog.
@@ -64,6 +66,9 @@ pub(crate) fn model_choices(
             ModelSelectionAction::Select { preference, pinned },
         );
         let item = ListSelectionItem::new(entry.display_name.clone()).with_id(id);
+        if entry.access == ash_protocol::ModelAccess::Subscription {
+            subscription_providers.insert(model.provider.clone());
+        }
         groups.entry(model.provider).or_default().push(item.clone());
         if pinned {
             favorites.push(item);
@@ -100,7 +105,14 @@ pub(crate) fn model_choices(
             continue;
         }
         if let Some(items) = groups.remove(&provider.provider) {
-            tabs.push(ListSelectionGroup::new(&provider.display_name, items));
+            let label = if provider.provider == "openai"
+                && subscription_providers.contains(&provider.provider)
+            {
+                "ChatGPT"
+            } else {
+                &provider.display_name
+            };
+            tabs.push(ListSelectionGroup::new(label, items));
         }
     }
     for (provider, items) in groups {
@@ -114,7 +126,8 @@ pub(crate) fn model_choices(
             .with_key_hint_note("P to pin/unpin")
             .with_empty_message("No models here · Pin models from a provider tab to Favorites");
     } else {
-        model = model.with_empty_message("No discovered models · Use /model provider/model or /config");
+        model =
+            model.with_empty_message("No discovered models · Use /model provider/model or /config");
     }
     Ok(ModelChoices { model, actions })
 }

@@ -2193,7 +2193,7 @@ fn config_providers_show_subscription_and_api_sections() {
                     },
                     ProviderCatalogEntryDto {
                         provider: "xai".into(),
-                        display_name: "xAI (Grok)".into(),
+                        display_name: "xAI".into(),
                         api_key_policy: ProviderApiKeyPolicyDto::Required,
                         api_key_configured: false,
                     },
@@ -2546,6 +2546,79 @@ fn model_favorites_empty_state_explains_pinning_from_provider_tabs() {
     );
     assert_eq!(app.list_selection().unwrap().tabs().len(), 2);
     crate::tui_assert_snapshot!("model_favorites_empty", render(&app, 100, 18));
+}
+
+#[test]
+fn model_picker_shows_signed_in_chatgpt_and_xai_tabs_in_chinese() {
+    use ash_app_server_protocol::protocol::config::ProviderConfigDto;
+    use ash_app_server_protocol::protocol::model::ModelCatalogEntry;
+    use ash_app_server_protocol::protocol::model::ModelListResult;
+    use ash_app_server_protocol::protocol::provider::ProviderApiKeyPolicyDto;
+    use ash_app_server_protocol::protocol::provider::ProviderCatalogEntryDto;
+    use ash_app_server_protocol::protocol::provider::ProviderListResult;
+
+    let mut app = App::new();
+    let mut settings = crate::config::TerminalSettings::default();
+    settings.set_language(crate::nls::Language::Chinese);
+    app.update(crate::config::Event::SettingsReceived(settings));
+    let mut config = crate::test_support::empty_config_snapshot();
+    let mut models = Vec::new();
+    let mut providers = Vec::new();
+    for (provider, id, name) in [
+        ("openai", "gpt-ash", "GPT Ash"),
+        ("xai", "grok-ash", "Grok Ash"),
+    ] {
+        config.providers.insert(
+            provider.into(),
+            ProviderConfigDto {
+                provider: provider.into(),
+                custom: None,
+                base_url: None,
+                max_output_tokens: None,
+                model_context: Default::default(),
+            },
+        );
+        let model = ash_protocol::ModelRef::new(
+            ash_protocol::ProviderId::new(provider).unwrap(),
+            ash_protocol::ModelId::new(id).unwrap(),
+        );
+        let mut info = ash_protocol::ModelInfo::new(model.model.clone(), name);
+        info.access = ash_protocol::ModelAccess::Subscription;
+        models.push(ModelCatalogEntry::from_info(
+            model,
+            &info,
+            ash_protocol::ModelOutputTransport::Unary,
+        ));
+        providers.push(ProviderCatalogEntryDto {
+            provider: provider.into(),
+            display_name: if provider == "openai" {
+                "OpenAI"
+            } else {
+                "xAI"
+            }
+            .into(),
+            api_key_policy: ProviderApiKeyPolicyDto::Unsupported,
+            api_key_configured: false,
+        });
+    }
+    app.update(ModelEvent::PickerOpened(
+        crate::models::model_choices(
+            &ModelListResult { models },
+            &config,
+            &ProviderListResult { providers },
+        )
+        .unwrap(),
+    ));
+    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    assert_eq!(
+        app.list_selection().unwrap().active_tab().label(),
+        "ChatGPT"
+    );
+    assert_eq!(
+        app.list_selection().unwrap().visible_items()[0].label(),
+        "GPT Ash"
+    );
+    crate::tui_assert_snapshot!("model_subscription_provider_tabs", render(&app, 100, 18));
 }
 
 #[test]

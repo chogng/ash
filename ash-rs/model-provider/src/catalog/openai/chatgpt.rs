@@ -248,7 +248,7 @@ fn catalog_cache_hint() -> CatalogCacheHint {
 fn normalize_models(
     entries: Vec<CatalogEntry>,
 ) -> Result<Vec<DiscoveredModel>, CatalogSourceError> {
-    entries
+    let models: Vec<_> = entries
         .into_iter()
         .filter(|entry| entry.visibility.as_deref() == Some("list"))
         .map(|entry| {
@@ -280,7 +280,14 @@ fn normalize_models(
                 ..ModelMetadataPatch::default()
             }))
         })
-        .collect()
+        .collect::<Result<_, _>>()?;
+    if models.is_empty() {
+        return Err(CatalogSourceError::new(
+            CatalogSourceErrorKind::InvalidPayload,
+            "Invalid ChatGPT model catalog",
+        ));
+    }
+    Ok(models)
 }
 
 #[derive(serde::Deserialize)]

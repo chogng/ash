@@ -2237,10 +2237,28 @@ impl ModelCatalog for ConfigBackedModelService {
                 ash_models_manager::CatalogReadPolicy::CachePreferred,
                 ash_models_manager::CatalogReadSource::dynamic(binding.source()),
             )) {
+                if provider.provider.as_str() == "openai"
+                    && provider.access_mode == ProviderAccessMode::Subscription
+                {
+                    return Err(CoreError::Model(error.to_string()));
+                }
                 log::warn!(
                     "could not refresh dynamic model catalog for {}: {error}",
                     provider.provider
                 );
+            }
+            // A prior empty response may still be marked fresh on disk. A ready ChatGPT
+            // account should recheck it before the model picker decides which tabs exist.
+            if provider.provider.as_str() == "openai"
+                && provider.access_mode == ProviderAccessMode::Subscription
+                && manager
+                    .list_discovered(&[scope.clone()], &CatalogQuery::selectable())
+                    .map_err(|error| CoreError::Model(error.to_string()))?
+                    .is_empty()
+            {
+                self.catalog_runtime
+                    .block_on(manager.refresh(scope.clone(), binding.source()))
+                    .map_err(|error| CoreError::Model(error.to_string()))?;
             }
             scopes.push(scope);
         }

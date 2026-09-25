@@ -654,6 +654,13 @@ fn builtin_provider_models_and_defaults_derive_from_static_catalog() {
 
 #[test]
 fn provider_subscription_mode_replaces_the_api_catalog_and_endpoint() {
+    assert_eq!(
+        ProviderConfigRegistry::builtin()
+            .get(&provider_id("xai"))
+            .unwrap()
+            .name,
+        "xAI"
+    );
     for (provider, endpoint, api_key_policy) in [
         (
             "openai",

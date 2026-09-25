@@ -1,5 +1,6 @@
 use super::super::normalize_models;
 use super::*;
+use ash_models_manager::CatalogSourceErrorKind;
 use ash_protocol::ModelAccess;
 
 #[test]
@@ -37,4 +38,10 @@ fn codex_model_list_becomes_subscription_metadata_without_hidden_entries() {
             .len(),
         2
     );
+}
+
+#[test]
+fn empty_chatgpt_catalog_is_rejected() {
+    let error = normalize_models(Vec::new()).unwrap_err();
+    assert_eq!(error.kind(), CatalogSourceErrorKind::InvalidPayload);
 }

@@ -1085,7 +1085,7 @@ fn enter_provider_row(app: &mut App, label: &str) -> Option<AppCommand> {
                 },
                 ProviderCatalogEntryDto {
                     provider: "xai".into(),
-                    display_name: "xAI (Grok)".into(),
+                    display_name: "xAI".into(),
                     api_key_policy: ProviderApiKeyPolicyDto::Required,
                     api_key_configured: false,
                 },

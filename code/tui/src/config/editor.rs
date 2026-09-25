@@ -1460,7 +1460,7 @@ fn provider_items(
         }
         let api_name = match provider.provider.as_str() {
             "openai" => "OpenAI",
-            "xai" => "xAI (Grok)",
+            "xai" => "xAI",
             _ => &provider.display_name,
         };
         if subscription.is_none() || provider.api_key_policy != ProviderApiKeyPolicyDto::Unsupported

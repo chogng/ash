@@ -4,7 +4,7 @@ use crate::{ApiProfile, ProviderAdapter, ProviderDefinition};
 pub(super) fn definition() -> ProviderDefinition {
     default_provider(
         "xai",
-        "xAI (Grok)",
+        "xAI",
         ProviderAdapter::Xai,
         ApiProfile::OpenAiResponses,
         "https://api.x.ai/v1",

@@ -74,6 +74,7 @@ pub(super) fn local_models(cache_path: &Path) -> Option<Vec<CatalogEntry>> {
 fn codex_binary() -> PathBuf {
     if cfg!(target_os = "macos") {
         for path in [
+            "/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex",
             "/Applications/ChatGPT.app/Contents/Resources/codex",
             "/Applications/Codex.app/Contents/Resources/codex",
         ] {

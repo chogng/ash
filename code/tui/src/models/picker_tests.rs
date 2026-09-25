@@ -74,6 +74,46 @@ fn model_picker_shows_names_only_and_keeps_selection_identity_and_pin_state() {
 }
 
 #[test]
+fn subscription_models_use_chatgpt_and_xai_provider_tabs() {
+    let mut chatgpt = catalog_entry("openai", "gpt-ash", "GPT Ash");
+    chatgpt.access = ModelAccess::Subscription;
+    let mut xai = catalog_entry("xai", "grok-ash", "Grok Ash");
+    xai.access = ModelAccess::Subscription;
+    let catalog = ModelListResult {
+        models: vec![chatgpt, xai],
+    };
+    let mut config = crate::test_support::empty_config_snapshot();
+    for provider in ["openai", "xai"] {
+        config
+            .providers
+            .insert(provider.into(), provider_config(provider));
+    }
+    let providers = ProviderListResult {
+        providers: [("openai", "OpenAI"), ("xai", "xAI")]
+            .into_iter()
+            .map(|(provider, display_name)| ProviderCatalogEntryDto {
+                provider: provider.into(),
+                display_name: display_name.into(),
+                api_key_policy: ProviderApiKeyPolicyDto::Unsupported,
+                api_key_configured: false,
+            })
+            .collect(),
+    };
+
+    let view = model_choices(&catalog, &config, &providers).unwrap();
+    assert_eq!(view.actions.len(), 2);
+    let state = ListSelectionState::new(view.model);
+    assert_eq!(
+        state
+            .tabs()
+            .iter()
+            .map(|tab| tab.label())
+            .collect::<Vec<_>>(),
+        ["Favorites", "ChatGPT", "xAI"]
+    );
+}
+
+#[test]
 fn model_picker_only_offers_models_from_configured_providers() {
     let catalog = ModelListResult {
         models: vec![

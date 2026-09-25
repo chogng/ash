@@ -501,7 +501,14 @@ fn chatgpt_model_catalog_is_shared_by_login_picker_and_disk_cache() {
     let client = Arc::new(CatalogClient {
         calls: std::sync::atomic::AtomicUsize::new(0),
     });
-    for (iteration, expected_calls) in [1, 1].into_iter().enumerate() {
+    for (iteration, expected_calls) in [1, 1, 2].into_iter().enumerate() {
+        if iteration == 2 {
+            let path = profile.path().join("cache/models/openai.json");
+            let mut cache: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+            cache["catalogs"][0]["models"] = serde_json::json!([]);
+            std::fs::write(path, serde_json::to_vec(&cache).unwrap()).unwrap();
+        }
         let server = open_local_app_server(
             LocalAppServerOptions::new(profile.path())
                 .with_codex_home(home.path())
@@ -606,7 +613,7 @@ fn chatgpt_model_catalog_is_shared_by_login_picker_and_disk_cache() {
             client.calls.load(std::sync::atomic::Ordering::SeqCst),
             expected_calls
         );
-        if iteration == 1 {
+        if iteration == 2 {
             let disconnected = local_call(
                 &server,
                 &mut connection,
