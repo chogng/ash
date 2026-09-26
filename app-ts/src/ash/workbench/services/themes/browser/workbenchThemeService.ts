@@ -13,7 +13,7 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { FileKind, FileNotFoundError, FileRevisionConflictError, IFileService, type IFileContent } from '../../../../platform/files/common/files.js';
 import { type IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { Colors } from '../../../../platform/theme/common/colorRegistry.js';
-import { defaultProductIconTheme, type IColorTheme, type IProductIconTheme, type IThemeService } from '../../../../platform/theme/common/themeService.js';
+import { defaultProductIconTheme, semanticTokenRuleSpecificity, type IColorTheme, type IProductIconTheme, type IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { getIconDefinition } from '../../../../platform/theme/common/iconRegistry.js';
 import { bindColorTheme } from '../../../../platform/theme/browser/themeStyles.js';
 import type { IResourceIconRenderer } from '../../../browser/labels.js';
@@ -311,9 +311,7 @@ function errorMessage(error: unknown): string { return error instanceof Error ? 
 
 function semanticTokenThemeCss(theme: IColorTheme, enabled: boolean): string {
 	if (!enabled) return '';
-	const rules = [...theme.semanticTokenRules ?? []].sort((left, right) =>
-		Number(left.type !== '*') + left.modifiers.length + Number(left.language !== undefined)
-		- Number(right.type !== '*') - right.modifiers.length - Number(right.language !== undefined));
+	const rules = [...theme.semanticTokenRules ?? []].sort((left, right) => semanticTokenRuleSpecificity(left) - semanticTokenRuleSpecificity(right));
 	return rules.map(rule => {
 		const selector = `.stanza-editor .stanza-editor-token[data-ash-semantic-type${rule.type === '*' ? ']' : `="${rule.type}"]`}`
 			+ rule.modifiers.map(modifier => `[data-ash-semantic-modifiers~="${modifier}"]`).join('')

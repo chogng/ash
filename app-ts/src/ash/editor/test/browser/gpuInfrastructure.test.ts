@@ -20,6 +20,10 @@ import { type ViewLineOptions } from '../../browser/viewParts/viewLines/viewLine
 import { observableValue } from '../../../base/common/observable.js';
 import { Emitter } from '../../../base/common/event.js';
 import { darkColorTheme } from '../../../platform/theme/common/colorTheme.js';
+import { createColorTheme } from '../../../platform/theme/common/colorTheme.js';
+import { ColorScheme } from '../../../platform/theme/common/theme.js';
+import { FontStyle, TokenMetadata } from '../../common/encodedTokenAttributes.js';
+import { SemanticTokenStyleResolver } from '../../browser/gpu/semanticTokenStyle.js';
 import { EditorTheme } from '../../common/editorTheme.js';
 import { EditorOption } from '../../common/config/editorOptions.js';
 import { installEditorTestDom, installEditorTestGlobals } from './editorTestGlobals.js';
@@ -111,6 +115,44 @@ test('Viewport GPU strategy preserves tab stops and complete grapheme cells', as
 			cells[7 * 6 + 4],
 		], [1, 1, 0, 1]);
 	});
+});
+
+test('GPU strategies send semantic colors and font styles to the glyph atlas', async () => {
+	const { ViewportRenderStrategy } = await import('../../browser/gpu/renderStrategy/viewportRenderStrategy.js');
+	const { FullFileRenderStrategy } = await import('../../browser/gpu/renderStrategy/fullFileRenderStrategy.js');
+	const { ViewGpuContext } = await import('../../browser/gpu/viewGpuContext.js');
+	const theme = createColorTheme({ id: 'gpu-semantic-test', label: 'GPU semantic test', colorScheme: ColorScheme.Dark, semanticTokenRules: [
+		{ selector: 'variable', type: 'variable', modifiers: [], foreground: '#123456', fontStyle: 'italic underline' },
+	] });
+	const resolver = new SemanticTokenStyleResolver(theme, true);
+	withGpuBufferUsage(() => {
+		for (const Strategy of [ViewportRenderStrategy, FullFileRenderStrategy]) {
+			const harness = createStrategyHarness();
+			Object.assign(harness.gpuContext, {
+				getSemanticTokens: () => [{ startColumn: 1, endColumn: 2, semanticType: 'variable', semanticModifiers: [] }],
+				resolveSemanticStyle: resolver.resolve.bind(resolver),
+			});
+			using strategy = new Strategy(harness.context, harness.gpuContext, harness.device, { value: harness.rasterizer });
+			strategy.update(viewport(['ab']), viewLineOptions());
+			assert.equal(harness.glyphs.length, 2);
+			assert.equal(harness.glyphs[0]?.styleSetId, 0);
+			assert.equal(TokenMetadata.getFontStyle(harness.glyphs[1]!.metadata), FontStyle.Italic | FontStyle.Underline);
+			assert.equal(ViewGpuContext.decorationStyleCache.getStyleSet(harness.glyphs[1]!.styleSetId)?.color, 0x123456ff);
+		}
+	});
+});
+
+test('semantic GPU rules follow type, modifier, language, and highlighting preference', () => {
+	const theme = createColorTheme({ id: 'gpu-semantic-specificity', label: 'GPU semantic specificity', colorScheme: ColorScheme.Dark, semanticTokenRules: [
+		{ selector: '*.declaration', type: '*', modifiers: ['declaration'], foreground: '#112233' },
+		{ selector: 'variable', type: 'variable', modifiers: [], foreground: '#445566' },
+		{ selector: 'variable.declaration:typescript', type: 'variable', modifiers: ['declaration'], language: 'typescript', foreground: '#778899', fontStyle: 'bold' },
+	] });
+	const token = { startColumn: 0, endColumn: 1, semanticType: 'variable', semanticModifiers: ['declaration'], semanticLanguage: 'typescript' };
+	const enabled = new SemanticTokenStyleResolver(theme, true).resolve(token, 0);
+	const disabled = new SemanticTokenStyleResolver(theme, false).resolve(token, 0);
+	assert.deepEqual({ color: enabled.color, style: TokenMetadata.getFontStyle(enabled.tokenMetadata) }, { color: 0x778899ff, style: FontStyle.Bold });
+	assert.deepEqual(disabled, { tokenMetadata: 0, color: undefined });
 });
 
 test('Rectangle GPU rendering draws a clear pass into the caller-owned frame', async () => {
@@ -316,8 +358,10 @@ function createStrategyHarness(): {
 	readonly device: GPUDevice;
 	readonly rasterizer: GlyphRasterizer;
 	readonly writes: BufferWrite[];
+	readonly glyphs: { readonly chars: string; readonly metadata: number; readonly styleSetId: number }[];
 } {
 	const writes: BufferWrite[] = [];
+	const glyphs: { chars: string; metadata: number; styleSetId: number }[] = [];
 	const labels = new WeakMap<object, string>();
 	const device = {
 		queue: {
@@ -349,17 +393,22 @@ function createStrategyHarness(): {
 	} as unknown as ViewContext;
 	const gpuContext = {
 		devicePixelRatio: observableValue('devicePixelRatio', 1),
-		atlas: fixedGlyphAtlas(),
+		atlas: { getGlyph: (_rasterizer: GlyphRasterizer, chars: string, metadata: number, styleSetId: number) => {
+			glyphs.push({ chars, metadata, styleSetId });
+			return fixedGlyphAtlas().getGlyph(_rasterizer, chars, metadata, styleSetId, 0);
+		} },
 		decorationStyleCache: new DecorationStyleCache(),
 		decorationCssRuleExtractor: { getStyleRules: () => [] },
 		canvas: {},
 		canRender: () => true,
+		getSemanticTokens: () => [],
+		resolveSemanticStyle: (_token: unknown, metadata: number) => ({ tokenMetadata: metadata, color: undefined }),
 	} as unknown as ViewGpuContext;
 	const rasterizer = {
 		devicePixelRatio: 1,
 		getTextMetrics: () => ({ width: 8 }),
 	} as unknown as GlyphRasterizer;
-	return { context, gpuContext, device, rasterizer, writes };
+	return { context, gpuContext, device, rasterizer, writes, glyphs };
 }
 
 function viewport(contents: readonly string[], startLineNumber = 1, bigNumbersDelta = 0): ViewportData {

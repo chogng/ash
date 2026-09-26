@@ -27,6 +27,8 @@
     "icons:check": "node build/resources/icons/generate.ts --check",
     "app-icon:generate": "node build/resources/application-icon.ts",
     "app-icon:check": "node build/resources/application-icon.ts --check",
+    "macos-icon:generate": "node build/resources/macos-icon.ts",
+    "macos-icon:check": "node build/resources/macos-icon.ts --check",
     "test": "pnpm run verify:protocol && pnpm --dir app-ts run test:main",
     "test:build": "pnpm --dir build test",
     "test:integration": "pnpm --dir app-ts run test:browser:integration",

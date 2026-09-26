@@ -4,6 +4,25 @@ import { tmpdir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
 import { launchElectron } from '../../../automation/playwrightElectron.js';
 
+test('Sessions applies an installed extension color theme', async ({ application, target, workbench }) => {
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires Code Sessions and App Server extension resources');
+	if (target.kind !== 'electron' || !('windows' in application)) return;
+	const openSessions = workbench.page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button");
+	const sessionPagePromise = application.waitForEvent('window');
+	await openSessions.click();
+	const sessionsPage = await sessionPagePromise;
+	await expect(sessionsPage.locator('.ash-code-sessions-window')).toBeVisible();
+	await sessionsPage.evaluate(async () => {
+		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
+		const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { source: string } };
+		const values = JSON.parse(snapshot.document.source);
+		values['workbench.colorTheme'] = 'extension-vscode-theme-defaults-visual-studio-dark';
+		await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(values) } });
+	});
+	await expect(sessionsPage.locator('#app')).toHaveAttribute('data-color-theme', 'extension-vscode-theme-defaults-visual-studio-dark');
+	await expect.poll(() => sessionsPage.locator('#app').evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background').trim())).toBe('#1e1e1e');
+});
+
 test("Code opens Sessions in a dedicated Electron window and returns to Workbench", async ({ application, target, workbench }) => {
 	test.skip(
 		target.kind !== "electron" || target.workbenchMode !== "code",

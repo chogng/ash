@@ -29,6 +29,7 @@ import { WorkbenchConfiguration } from "../../workbench/common/configuration.js"
 import { ChatService } from "../../workbench/services/chat/browser/chatService.js";
 import { IChatService } from "../../workbench/services/chat/common/chatService.js";
 import { WorkbenchConfigurationService } from "../../workbench/services/configuration/browser/configurationService.js";
+import { ExtensionColorThemeService } from "../../workbench/services/extensions/browser/extensionColorThemeService.js";
 import { BrowserStorageService } from "../../workbench/services/storage/browser/storageService.js";
 import { IWorkbenchHostService } from "../../workbench/services/host/common/workbenchHostService.js";
 import { AppServerSessionsProvider } from "../contrib/providers/appServer/browser/appServerSessionsProvider.js";
@@ -73,6 +74,8 @@ export class Workbench extends Disposable {
 
 		const configurationService = this._register(new WorkbenchConfigurationService({ api: options.configurationApi }));
 		this._register(bindSessionsTheme(options.container, configurationService));
+		const extensionColorThemes = this._register(new ExtensionColorThemeService(options.api.extensions, options.api.events));
+		void extensionColorThemes.start().catch(error => console.error('Sessions extension color themes failed to load', error));
 		const services = this._register(new ServiceContainer());
 		const workbenchWindow = this._register(new WorkbenchWindow({
 			root: options.container,

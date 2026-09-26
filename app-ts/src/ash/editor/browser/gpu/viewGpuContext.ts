@@ -8,6 +8,7 @@ import { editorBackground, editorForeground } from '../../../platform/theme/comm
 import type { IColorTheme } from '../../../platform/theme/common/themeService.js';
 import { EditorFontLigatures, EditorOption } from '../../common/config/editorOptions.js';
 import { ColorId } from '../../common/encodedTokenAttributes.js';
+import type { ResolvedSemanticToken } from '../../common/tokens/languageTokens.js';
 import { ViewEventHandler } from '../../common/viewEventHandler.js';
 import { type ViewThemeChangedEvent } from '../../common/viewEvents.js';
 import { type ViewportData } from '../../common/viewLayout/viewLinesViewportData.js';
@@ -20,6 +21,7 @@ import { DecorationStyleCache } from './css/decorationStyleCache.js';
 import { GPULifecycle } from './gpuDisposable.js';
 import { ensureNonNullable, observeDevicePixelDimensions } from './gpuUtils.js';
 import { RectangleRenderer } from './rectangleRenderer.js';
+import { SemanticTokenStyleResolver } from './semanticTokenStyle.js';
 
 let sharedDeviceReference: IReference<GPUDevice> | undefined;
 let sharedDevicePagehideListener: IDisposable | undefined;
@@ -54,9 +56,11 @@ export class ViewGpuContext extends Disposable {
 	public readonly canvasDevicePixelDimensions: IObservable<{ width: number; height: number }>;
 	public readonly devicePixelRatio: IObservable<number>;
 	public readonly contentLeft: IObservable<number>;
+	private semanticStyleResolver: SemanticTokenStyleResolver;
 
-	constructor(context: ViewContext) {
+	constructor(context: ViewContext, private readonly semanticTokensForLine: (lineNumber: number) => readonly ResolvedSemanticToken[] = () => [], private readonly semanticHighlightingEnabled: (theme: IColorTheme) => boolean = theme => theme.semanticHighlighting === true) {
 		super();
+		this.semanticStyleResolver = new SemanticTokenStyleResolver(context.theme.value, semanticHighlightingEnabled(context.theme.value));
 		const ownerWindow = getActiveWindow();
 		this.canvas = createFastDomNode(h(ownerWindow.document, 'canvas'));
 		this.canvas.setClassName('stanza-editor-gpu-canvas');
@@ -69,7 +73,10 @@ export class ViewGpuContext extends Disposable {
 
 		this.ctx = ensureNonNullable(this.canvas.domNode.getContext('webgpu'));
 		ViewGpuContext.updateTheme(context.theme.value);
-		this._register(new GpuThemeListener(context, theme => ViewGpuContext.updateTheme(theme)));
+		this._register(new GpuThemeListener(context, theme => {
+			ViewGpuContext.updateTheme(theme);
+			this.refreshSemanticStyles(theme);
+		}));
 
 		if (!ViewGpuContext.device) {
 			ViewGpuContext.device = GPULifecycle.requestDevice(ownerWindow).then(reference => {
@@ -117,6 +124,18 @@ export class ViewGpuContext extends Disposable {
 			this.ctx,
 			ViewGpuContext.device,
 		));
+	}
+
+	public getSemanticTokens(lineNumber: number): readonly ResolvedSemanticToken[] {
+		return this.semanticTokensForLine(lineNumber);
+	}
+
+	public resolveSemanticStyle(token: ResolvedSemanticToken | undefined, tokenMetadata: number): ReturnType<SemanticTokenStyleResolver['resolve']> {
+		return this.semanticStyleResolver.resolve(token, tokenMetadata);
+	}
+
+	public refreshSemanticStyles(theme: IColorTheme): void {
+		this.semanticStyleResolver = new SemanticTokenStyleResolver(theme, this.semanticHighlightingEnabled(theme));
 	}
 
 	public canRender(options: ViewLineOptions, viewportData: ViewportData, lineNumber: number): boolean {

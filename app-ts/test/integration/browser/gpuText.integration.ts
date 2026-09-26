@@ -3,6 +3,9 @@ import * as stanzaApi from '../../../src/ash/editor/editor.main.js';
 import { GlyphRasterizer } from '../../../src/ash/editor/browser/gpu/raster/glyphRasterizer.js';
 import { DecorationStyleCache } from '../../../src/ash/editor/browser/gpu/css/decorationStyleCache.js';
 import { ViewGpuContext } from '../../../src/ash/editor/browser/gpu/viewGpuContext.js';
+import { createColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
+import { IStandaloneThemeService } from '../../../src/ash/editor/standalone/common/standaloneTheme.js';
+import { StandaloneServices } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
 import '../../../src/ash/editor/editor.code.all.js';
 
 const initialText = `interface GeometrySample {
@@ -33,6 +36,7 @@ interface GpuTextIntegrationHarness {
 	readGpuFrameTrace(): readonly GpuRenderPassTrace[];
 	setBracketColor(color: string): void;
 	prepareBracketText(length: number): void;
+	prepareSemanticText(): void;
 	countGlyphPixels(red: number, green: number, blue: number): number;
 	dispose(): void;
 }
@@ -91,6 +95,20 @@ window.ashGpuTextIntegration = {
 	prepareBracketText: length => {
 		editor.updateOptions({ wordWrap: 'off' });
 		editor.setValue(`(${'x'.repeat(length)})`);
+	},
+	prepareSemanticText: () => {
+		disposables.add(stanzaApi.languages.registerDocumentSemanticTokensProvider('typescript', {
+			provideSemanticTokens: request => request.model === model ? { tokens: [{
+				range: new stanzaApi.Range(1, 1, 1, 7), tokenType: 'variable', modifiers: ['readonly'],
+			}] } : undefined,
+		}));
+		StandaloneServices.get(IStandaloneThemeService).setColorTheme(createColorTheme({
+			id: 'gpu-semantic', label: 'GPU semantic', colorScheme: stanzaApi.ColorScheme.Dark,
+			semanticHighlighting: true,
+			semanticTokenRules: [{ selector: 'variable.readonly', type: 'variable', modifiers: ['readonly'], foreground: '#e137ab', fontStyle: 'italic underline' }],
+		}));
+		editor.updateOptions({ wordWrap: 'off' });
+		editor.setValue('sample');
 	},
 	setBracketColor: color => {
 		stanzaApi.editor.defineNamedTheme('gpu-brackets', {

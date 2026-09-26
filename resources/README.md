@@ -45,8 +45,8 @@ artwork from `tray/`.
   and white Ash mark are compiled into the application asset catalog on a macOS 26
   build host with Xcode 26. macOS 26 uses this asset; `darwin/ash.icns` provides
   the icon on earlier macOS versions. `darwin/ash.png` lets Electron set the
-  same artwork on the Dock during development. Update all three when changing
-  the app mark.
+  same artwork on the Dock during development. Run `pnpm macos-icon:generate`
+  after changing the `.icon` file or the macOS menu bar SVG.
 - `linux/ash.png` is the Linux desktop and window icon.
 - The Rust Workbench embeds `win32/ash-512.png` for its Windows window icon.
 - `server/` contains the Web favicon, install icons, and manifest.
@@ -87,31 +87,23 @@ platforms use separate artwork; changing one file does not update the others.
 
 For the macOS Dock, open `darwin/ash.icon` in Xcode's Icon Composer, replace the
 layer artwork, preview the icon at small Dock sizes, and save the `.icon` file.
-Keep `icon.json`'s `image-name` aligned with the file in `Assets/`. Export a
-flattened 1024 × 1024 PNG to `darwin/ash.png`. Create the compatibility `.icns`
-from that PNG with macOS `sips` and `iconutil`:
+Keep `icon.json`'s `image-name` aligned with the file in `Assets/`. If the menu
+bar mark changes, edit `tray/ash-black.svg` as a separate transparent black
+image without the Dock background. Then generate and check all five macOS
+outputs with Xcode 26 installed in `/Applications/Xcode.app`:
 
 ```sh
-iconset_dir="$(mktemp -d)/Ash.iconset"
-mkdir "$iconset_dir"
-for size in 16 32 128 256 512; do
-  sips -z "$size" "$size" resources/darwin/ash.png --out "$iconset_dir/icon_${size}x${size}.png" >/dev/null
-  double_size=$((size * 2))
-  sips -z "$double_size" "$double_size" resources/darwin/ash.png --out "$iconset_dir/icon_${size}x${size}@2x.png" >/dev/null
-done
-iconutil -c icns "$iconset_dir" -o resources/darwin/ash.icns
+pnpm macos-icon:generate
+pnpm macos-icon:check
 ```
 
-For the menu bar, use a transparent black mark without the Dock background.
-Electron marks it as a macOS template image so the system chooses its displayed
-color. Rasterize the SVG at each scale; the first size is the 18-point layout
-size, and the other two cover 1.5× and 2× displays:
+Set `DEVELOPER_DIR` if Xcode is installed elsewhere.
 
-```sh
-for size in 18 27 36; do
-  sips -s format png -z "$size" "$size" resources/tray/ash-black.svg --out "resources/tray/ash-black-${size}.png" >/dev/null
-done
-```
+The command compiles the `.icon` file to `darwin/ash.icns`, extracts
+`darwin/ash.png` for the development Dock, and rasterizes the menu bar SVG to
+18, 27, and 36 pixels. Electron marks the black menu bar image as a macOS
+template so the system chooses its displayed color. The 18-pixel image sets
+the layout size; the others cover 1.5× and 2× displays.
 
 If the Windows notification area artwork also changes, regenerate both colors
 at 16, 24, and 32 pixels:
@@ -129,8 +121,8 @@ PNG dimensions; a large transparent margin makes the menu bar icon appear too
 small.
 
 After replacing assets, run `pnpm app-icon:check` if the Windows application
-icon changed. Select Xcode 26 and set `ASH_UPDATE_PUBLIC_KEY` to a 64-digit hex
-public key, then run `pnpm --dir app-ts package:darwin:bundle --unsigned` and
+icon changed. Set `ASH_UPDATE_PUBLIC_KEY` to a 64-digit hex public key, then run
+`pnpm --dir app-ts package:darwin:bundle --unsigned` and
 `pnpm --dir app-ts package:darwin:verify` for a local macOS package check. The
 bundle command needs the full Xcode toolchain; if Command Line Tools is selected,
 set `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` for that command.

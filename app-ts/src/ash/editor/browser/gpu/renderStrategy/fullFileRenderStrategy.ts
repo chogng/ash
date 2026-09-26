@@ -32,12 +32,15 @@ function writeCells(
 		const lineData = viewportData.getViewLineRenderingData(lineNumber);
 		const segmenter = createContentSegmenter(lineData, viewLineOptions);
 		const tokens = lineData.tokens;
+		const semanticTokens = viewGpuContext.getSemanticTokens(lineNumber);
+		let semanticIndex = 0;
 		let tokenIndex = 0;
 		let tokenEndOffset = tokens.getCount() > 0 ? tokens.getEndOffset(0) : lineData.content.length;
 		let absoluteOffsetX = (lineData.minColumn - 1) * viewLineOptions.spaceWidth * devicePixelRatio;
 		let tabColumnOffset = 0;
 		const lineTop = viewportData.relativeVerticalOffset[lineNumber - viewportData.startLineNumber]! * devicePixelRatio;
 		for (let columnIndex = 0; columnIndex < lineData.content.length && columnIndex < maximumColumns; columnIndex++) {
+			while (semanticIndex < semanticTokens.length && semanticTokens[semanticIndex]!.endColumn <= columnIndex) semanticIndex++;
 			while (tokenIndex + 1 < tokens.getCount() && columnIndex >= tokenEndOffset) {
 				tokenIndex++;
 				tokenEndOffset = tokens.getEndOffset(tokenIndex);
@@ -59,9 +62,10 @@ function writeCells(
 				absoluteOffsetX += advance;
 				continue;
 			}
-			const tokenMetadata = tokens.getCount() > 0 ? tokens.getMetadata(tokenIndex) : 0;
-			const styleSetId = decorationStyleSetId(viewGpuContext, lineNumber, columnIndex, lineData.inlineDecorations);
-			const glyph = viewGpuContext.atlas.getGlyph(glyphRasterizer, chars, tokenMetadata, styleSetId, absoluteOffsetX);
+			const semanticToken = semanticTokens[semanticIndex];
+			const style = viewGpuContext.resolveSemanticStyle(semanticToken && semanticToken.startColumn <= columnIndex ? semanticToken : undefined, tokens.getCount() > 0 ? tokens.getMetadata(tokenIndex) : 0);
+			const styleSetId = decorationStyleSetId(viewGpuContext, lineNumber, columnIndex, lineData.inlineDecorations, style.color);
+			const glyph = viewGpuContext.atlas.getGlyph(glyphRasterizer, chars, style.tokenMetadata, styleSetId, absoluteOffsetX);
 			const baseline = Math.round(
 				lineTop + Math.floor((viewportData.lineHeight * devicePixelRatio - glyph.fontBoundingBoxAscent - glyph.fontBoundingBoxDescent) / 2) + glyph.fontBoundingBoxAscent,
 			);
@@ -77,8 +81,8 @@ function writeCells(
 	return (viewportData.endLineNumber - viewportData.startLineNumber + 1) * maximumColumns;
 }
 
-function decorationStyleSetId(viewGpuContext: ViewGpuContext, lineNumber: number, columnIndex: number, decorations: readonly InlineDecoration[]): number {
-	let color: number | undefined;
+function decorationStyleSetId(viewGpuContext: ViewGpuContext, lineNumber: number, columnIndex: number, decorations: readonly InlineDecoration[], semanticColor: number | undefined): number {
+	let color = semanticColor;
 	let bold: boolean | undefined;
 	let opacity: number | undefined;
 	let strikethrough: boolean | undefined;

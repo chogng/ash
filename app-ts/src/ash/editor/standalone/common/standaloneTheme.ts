@@ -33,6 +33,7 @@ export interface NamedEditorThemeData {
 export interface IStandaloneThemeService extends IThemeService {
 	defineTheme(themeName: string, themeData: IStandaloneThemeData): void;
 	getColorTheme(): IStandaloneTheme;
+	setColorTheme(theme: IColorTheme): void;
 	setColorMapOverride(colorMapOverride: Color[] | null): void;
 	defineNamedTheme(themeId: string, themeData: NamedEditorThemeData): void;
 	setTheme(themeId: string): void;

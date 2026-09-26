@@ -20,6 +20,11 @@ export interface ISemanticTokenThemeRule {
 	readonly fontStyle?: string;
 }
 
+/** Matches the semantic selector ordering used by editor CSS and GPU glyph styling. */
+export function semanticTokenRuleSpecificity(rule: ISemanticTokenThemeRule): number {
+	return Number(rule.type !== '*') + rule.modifiers.length + Number(rule.language !== undefined);
+}
+
 /** Resolved color and size values exposed to editor and Workbench consumers. */
 export interface IColorTheme {
 	readonly tokenColors?: readonly {

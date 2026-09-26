@@ -42,6 +42,7 @@ import { ViewModel } from '../../../common/viewModel/viewModelImpl.js';
 import { OutgoingViewModelEventKind } from '../../../common/viewModelEventDispatcher.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { EditSources, TextModelEditSource } from '../../../common/textModelEditSource.js';
 import { MenuId } from '../../../../platform/actions/common/actions.js';
 import { type IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
@@ -392,6 +393,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				ariaLabel,
 				dimension: options.dimension,
 				semanticTokenSource,
+				configurationService: services.getOptional(IConfigurationService),
 				textDirection: options.textDirection,
 				presentation: options.presentation,
 				indentation: options.indentation,

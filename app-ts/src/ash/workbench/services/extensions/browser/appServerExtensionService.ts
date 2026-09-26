@@ -2,7 +2,6 @@ import { WorkbenchFileIconThemesRegistry, WorkbenchProductIconThemesRegistry } f
 import type { IWorkbenchFileIconTheme, IWorkbenchProductIconTheme } from '../../themes/common/workbenchThemeService.js';
 import { FileIconThemeData } from '../../themes/browser/fileIconThemeData.js';
 import { ProductIconThemeData } from '../../themes/browser/productIconThemeData.js';
-import { VSBuffer } from "../../../../base/common/buffer.js";
 import { Emitter, runWithBufferedEvents, type Event } from "../../../../base/common/event.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type LanguageCompletionProvider, type LanguageCompletionProviderRegistration } from '../../../../editor/common/languages.js';
@@ -24,11 +23,10 @@ import type { TextMateGrammarRegistration } from "../../textMate/common/textMate
 import { normalizeTextMateScopeTheme } from "../../textMate/common/textMateScopeTheme.js";
 import { projectExtensionTokenTheme } from "../../textMate/common/textMateThemeProjection.js";
 import { parseJsonc } from "../common/jsonc.js";
-import { loadColorThemeDocument } from "../../themes/common/colorThemeData.js";
-import { parseExtensionManifest } from "../common/extensionService.js";
+import { parseExtensionManifest, verifyExtensionManifestDigest } from '../common/extensionManifest.js';
 import { ExtensionFileTemplateRegistry, type ExtensionFileTemplateDefinition, type ExtensionFileTemplateSource } from "../common/extensionFileTemplate.js";
 import { createExtensionSnippetProvider, materializeExtensionFileTemplate, parseExtensionSnippetFile, type ExtensionSnippetDefinition } from "../common/extensionSnippetProvider.js";
-import { createExtensionWorkbenchColorTheme, extensionWorkbenchThemeId, ExtensionThemeRegistry, parseExtensionTheme, type ExtensionThemeDefinition, type ExtensionThemeSource } from "../common/extensionTheme.js";
+import { createExtensionWorkbenchColorTheme, ExtensionThemeRegistry, loadExtensionTheme, type ExtensionThemeDefinition, type ExtensionThemeSource } from "../common/extensionTheme.js";
 import type { ExtensionCatalog, ExtensionDescriptor, ExtensionServiceFailure, IExtensionService } from "../common/extensionService.js";
 import { ExtensionDebugAdapterRegistry, validateExtensionDebugAdapterDefinitions, type ExtensionDebugAdapterDefinition, type ExtensionDebugAdapterSource } from "../common/extensionDebugAdapter.js";
 
@@ -190,7 +188,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			const catalog = projectExtensionCatalog(transportCatalog);
 			for (const extension of transportCatalog.extensions) {
 				activeExtension = projectExtensionDescriptor(extension);
-				await verifyManifestDigest(extension);
+				await verifyExtensionManifestDigest(extension);
 				if (this.isDisposed) return;
 				const manifest = parseExtensionManifest(extension.manifestJson, extension);
 				if ((manifest.contributes.languages.length > 0 || manifest.contributes.snippets.length > 0) && !this.options.languageService) {
@@ -236,7 +234,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 					}
 				}
 				for (const [themeIndex, theme] of manifest.contributes.themes.entries()) {
-					const definition = await this.loadTheme(resources, catalog.generation, extension, themeIndex, theme.id, theme.label, theme.path, theme.uiTheme);
+					const definition = await loadExtensionTheme(path => this.loadResource(resources, catalog.generation, extension.id, path), extension.id, theme, themeIndex);
 					themes.push(definition);
 					workbenchThemes.push(createExtensionWorkbenchColorTheme(definition));
 					if (this.isDisposed) return;
@@ -409,15 +407,6 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		return parseExtensionSnippetFile(parseJsonc(text, `Extension '${extensionId}' snippet file '${path}'`), `Extension '${extensionId}' snippet file '${path}'`);
 	}
 
-	private async loadTheme(resources: Map<string, Promise<Uint8Array>>, generation: number, extension: ExtensionDescriptor, index: number, contributionId: string | undefined, label: string, path: string, uiTheme: string | undefined): Promise<ExtensionThemeDefinition> {
-		const document = await loadColorThemeDocument(path, async resource => {
-			const bytes = await this.loadResource(resources, generation, extension.id, resource);
-			const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-			return /\.tmTheme$/iu.test(resource) ? text : parseJsonc(text, `Extension '${extension.id}' theme '${resource}'`);
-		});
-		return parseExtensionTheme(document, extensionWorkbenchThemeId(extension.id, contributionId, index), extension.id, label, uiTheme, `Extension '${extension.id}' theme '${path}'`);
-	}
-
 	private loadResource(resources: Map<string, Promise<Uint8Array>>, generation: number, extensionId: string, path: string): Promise<Uint8Array> {
 		const key = `${extensionId}\0${path}`;
 		const cached = resources.get(key);
@@ -453,11 +442,4 @@ function projectExtensionDescriptor(extension: TransportExtensionDescriptor): Ex
 		manifestSha256: extension.manifestSha256,
 		packageSha256: extension.packageSha256,
 	});
-}
-
-async function verifyManifestDigest(extension: TransportExtensionDescriptor): Promise<void> {
-	const bytes = VSBuffer.fromString(extension.manifestJson).buffer;
-	const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
-	const actual = `sha256:${[...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("")}`;
-	if (actual !== extension.manifestSha256) throw new Error(`Extension '${extension.id}' manifest digest does not match its catalog descriptor`);
 }

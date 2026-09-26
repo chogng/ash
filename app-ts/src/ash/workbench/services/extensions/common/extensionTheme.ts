@@ -5,6 +5,9 @@ import type { IColorTheme } from "../../../../platform/theme/common/themeService
 import { createDocumentColorTheme, parseColorThemeDocument } from "../../themes/common/colorThemeData.js";
 import type { ColorThemeDocument } from "../../themes/common/colorThemeData.js";
 import { ColorScheme } from "../../../../platform/theme/common/theme.js";
+import { loadColorThemeDocument } from '../../themes/common/colorThemeData.js';
+import { parseJsonc } from './jsonc.js';
+import type { ExtensionThemeContribution } from './extensionManifest.js';
 
 export interface ExtensionThemeTokenColorSettings {
 	readonly foreground?: string;
@@ -90,6 +93,21 @@ export function parseExtensionTheme(value: unknown, id: string, extensionId: str
 		...(document.semanticHighlighting === undefined ? {} : { semanticHighlighting: document.semanticHighlighting }),
 		...(document.semanticTokenColors === undefined ? {} : { semanticTokenColors: document.semanticTokenColors }),
 	});
+}
+
+/** Reads one manifest theme and its package-relative resources through the caller's extension resource owner. */
+export async function loadExtensionTheme(
+	read: (path: string) => Promise<Uint8Array>,
+	extensionId: string,
+	contribution: ExtensionThemeContribution,
+	index: number,
+): Promise<ExtensionThemeDefinition> {
+	const document = await loadColorThemeDocument(contribution.path, async resource => {
+		const bytes = await read(resource);
+		const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+		return /\.tmTheme$/iu.test(resource) ? text : parseJsonc(text, `Extension '${extensionId}' theme '${resource}'`);
+	});
+	return parseExtensionTheme(document, extensionWorkbenchThemeId(extensionId, contribution.id, index), extensionId, contribution.label, contribution.uiTheme, `Extension '${extensionId}' theme '${contribution.path}'`);
 }
 
 /** Produces the stable Workbench theme identity owned by one manifest contribution. */

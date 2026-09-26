@@ -56,6 +56,8 @@ import { ContentViewOverlays, MarginViewOverlays } from './view/viewOverlays.js'
 import { LineWidthIndex, ViewLines } from './viewParts/viewLines/viewLines.js';
 import { ViewLinesGpu } from './viewParts/viewLinesGpu/viewLinesGpu.js';
 import { ViewGpuContext } from './gpu/viewGpuContext.js';
+import { EditorSemanticHighlightingConfiguration } from '../common/config/editorConfigurationSchema.js';
+import type { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import { ViewZones } from './viewParts/viewZones/viewZones.js';
 import { type HorizontalPosition, RenderingContext } from './view/renderingContext.js';
 import { ViewportData } from '../common/viewLayout/viewLinesViewportData.js';
@@ -113,6 +115,7 @@ export interface EditorViewportOptions {
 	readonly ariaLabel?: string;
 	readonly textMeasurer?: TextMeasurer & { refresh?(): boolean };
 	readonly semanticTokenSource?: SemanticTokenSource;
+	readonly configurationService?: IConfigurationService;
 	readonly presentation?: EditorViewportPresentation;
 	/** `host` delegates the visible focus outline to the viewport's direct host. */
 	readonly focusOutlineOwner?: EditorFocusOutlineOwner;
@@ -283,8 +286,26 @@ export class View extends ViewEventHandler {
 		this.onDidChangeLayout = viewport.onDidChange;
 		this.viewContext = new ViewContext(this.editorConfiguration, options.theme, this.viewModel);
 		this.viewGpuContext = this.editorConfiguration.options.get(EditorOption.experimentalGpuAcceleration) === 'on'
-			? this._register(new ViewGpuContext(this.viewContext))
+			? this._register(new ViewGpuContext(this.viewContext, lineNumber => {
+				const visualLine = this.visualProjection.lineAt(lineNumber - 1);
+				if (!visualLine || visualLine.projectionData?.injectionOffsets) return [];
+				return options.semanticTokenSource?.getLineTokens(visualLine.logicalLineIndex).flatMap(token => {
+					const startColumn = Math.max(token.startColumn, visualLine.startColumn);
+					const endColumn = Math.min(token.endColumn, visualLine.endColumn);
+					return endColumn > startColumn ? [{ ...token, startColumn: startColumn - visualLine.startColumn, endColumn: endColumn - visualLine.startColumn }] : [];
+				}) ?? [];
+			}, theme => {
+				const preference = options.configurationService?.getValue<boolean | 'configuredByTheme'>(EditorSemanticHighlightingConfiguration);
+				return preference === true || (preference !== false && theme.semanticHighlighting === true);
+			}))
 			: undefined;
+		if (this.viewGpuContext && options.configurationService) {
+			this._register(options.configurationService.onDidChangeConfiguration(event => {
+				if (!event.affectsConfiguration(EditorSemanticHighlightingConfiguration)) return;
+				this.viewGpuContext?.refreshSemanticStyles(this.viewContext.theme.value);
+				this.scheduleProjection();
+			}));
+		}
 		this.controller = this._register(new ViewController(this, options.viewModel, options.controller ?? {}, controller => {
 			const input = createEditContext(this.viewContext, this.domNode.domNode, {
 				...options.controller,
