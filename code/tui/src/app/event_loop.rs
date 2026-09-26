@@ -182,6 +182,14 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             MouseAction::Selection(outcome) => {
                                 finish_pointer_gesture(driver.app_mut(), &terminal, outcome)?
                             }
+                            MouseAction::InputSelection(text) => {
+                                super::fullscreen::selection::apply_copied_text(
+                                    driver.app_mut(),
+                                    &text,
+                                    crate::host::clipboard::write_text,
+                                );
+                                None
+                            }
                             MouseAction::Command(command) => command,
                         }
                     }
@@ -191,6 +199,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     }
                     Event::Resize(_, _) => {
                         driver.app_mut().fullscreen.clear();
+                        driver.app_mut().input_state_mut().reset_pointer_view();
                         None
                     }
                     _ => None,

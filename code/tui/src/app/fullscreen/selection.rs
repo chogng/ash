@@ -157,8 +157,16 @@ pub(super) fn apply_screen_selection(
     let Some(text) = read(range) else {
         return;
     };
+    apply_copied_text(app, &text, write);
+}
+
+pub(in crate::app) fn apply_copied_text(
+    app: &mut App,
+    text: &str,
+    write: impl FnOnce(&str) -> Result<(), String>,
+) {
     let char_count = text.chars().count();
-    match write(&text) {
+    match write(text) {
         Ok(()) => app.update(HostEvent::TopTipNoticeShown(format!(
             "Copied {char_count} chars to clipboard"
         ))),

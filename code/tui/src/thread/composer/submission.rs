@@ -28,6 +28,14 @@ impl ChatComposerView<'_> {
         self.input.cursor_line()
     }
 
+    pub(super) fn input_selection(&self) -> Option<std::ops::Range<usize>> {
+        self.input.selection_range()
+    }
+
+    pub(super) fn input_scroll_row(&self) -> Option<usize> {
+        self.input.pointer_scroll_row()
+    }
+
     pub(super) fn input_prompt(&self) -> &'static str {
         self.input.prompt()
     }

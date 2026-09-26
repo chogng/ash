@@ -35,6 +35,8 @@ impl Renderable for ChatComposerSurface<'_, '_> {
             self.view.input(),
             self.view.input_cursor_width(),
             self.view.input_cursor_line(),
+            self.view.input_selection(),
+            self.view.input_scroll_row(),
             self.view.input_prompt(),
             if self.view.searching_history() {
                 ChatInputCursor::Hidden

@@ -4,6 +4,7 @@ use super::ChatInputFocus;
 use crate::render::test_context;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
+use ratatui::layout::Position;
 use ratatui::layout::Rect;
 
 fn border(focus: ChatInputFocus) -> ratatui::style::Color {
@@ -17,6 +18,8 @@ fn border(focus: ChatInputFocus) -> ratatui::style::Color {
                 "",
                 0,
                 0,
+                None,
+                None,
                 "> ",
                 ChatInputCursor::Hidden,
                 focus,
@@ -51,6 +54,8 @@ fn argument_hint_renders_after_cursor_with_muted_style() {
                 "/cd ",
                 4,
                 0,
+                None,
+                None,
                 "> ",
                 ChatInputCursor::Visible,
                 ChatInputFocus::Focused,
@@ -67,4 +72,28 @@ fn argument_hint_renders_after_cursor_with_muted_style() {
     assert_eq!(buffer[(area.x + 6, text_y)].fg, test_context().muted());
     assert_eq!(buffer[(area.x + 7, text_y)].symbol(), "p");
     assert_eq!(buffer[(area.x + 7, text_y)].fg, test_context().muted());
+}
+
+#[test]
+fn pointer_positions_follow_box_insets_wide_characters_and_wrapping() {
+    let area = Rect::new(0, 0, 16, 4);
+    let hit = |column, row| {
+        super::cursor_at(
+            area,
+            ChatInputChrome::Box,
+            "ab你cdef",
+            0,
+            8,
+            None,
+            Position::new(column, row),
+        )
+        .byte
+    };
+
+    assert_eq!(hit(6, 1), 0);
+    assert_eq!(hit(8, 1), 2);
+    assert_eq!(hit(9, 1), 5);
+    assert_eq!(hit(6, 2), 7);
+    assert_eq!(hit(7, 2), 8);
+    assert_eq!(hit(15, 2), 9);
 }

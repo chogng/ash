@@ -144,32 +144,10 @@ fn fullscreen_selection_copies_text_and_reports_the_clipboard_result() {
         terminal
             .draw(|frame| crate::app::frame::draw(frame, &app))
             .unwrap();
-        let mouse = |kind, column| MouseEvent {
-            kind,
-            column,
-            row,
-            modifiers: KeyModifiers::NONE,
-        };
-        handle_mouse(
-            &mut app,
-            area,
-            mouse(MouseEventKind::Down(MouseButton::Left), 6),
+        let range = crate::terminal::text::ScreenSelectionRange::new(
+            ratatui::layout::Position::new(6, row),
+            ratatui::layout::Position::new(12, row),
         );
-        handle_mouse(
-            &mut app,
-            area,
-            mouse(MouseEventKind::Drag(MouseButton::Left), 12),
-        );
-        let super::MouseAction::Selection(Some(
-            crate::app::fullscreen::selection::ScreenSelectionOutcome::Selection(range),
-        )) = handle_mouse(
-            &mut app,
-            area,
-            mouse(MouseEventKind::Up(MouseButton::Left), 12),
-        )
-        else {
-            panic!("drag must select text");
-        };
         let mut copied = None;
         super::super::selection::apply_screen_selection(
             &mut app,
@@ -203,6 +181,134 @@ fn fullscreen_selection_copies_text_and_reports_the_clipboard_result() {
         }
         crate::tui_assert_snapshot!(name, text);
     }
+}
+
+#[test]
+fn input_click_moves_the_cursor_and_drag_selects_editable_text() {
+    let mut app = App::new();
+    app.insert_text("ab你cd");
+    let area = Rect::new(0, 0, 60, 16);
+    let row = crate::app::fullscreen::layout(&app, area).input.y + 1;
+    let mouse = |kind, column| MouseEvent {
+        kind,
+        column,
+        row,
+        modifiers: KeyModifiers::NONE,
+    };
+
+    handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Down(MouseButton::Left), 7),
+    );
+    handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Up(MouseButton::Left), 7),
+    );
+    assert_eq!(app.input_state().cursor_display_width(), 1);
+    assert_eq!(app.input_state().selection_range(), None);
+
+    handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Down(MouseButton::Left), 7),
+    );
+    handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Drag(MouseButton::Left), 11),
+    );
+    let outcome = handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Up(MouseButton::Left), 11),
+    );
+    assert!(matches!(
+        outcome,
+        super::MouseAction::InputSelection(ref text) if text == "b你c"
+    ));
+    assert_eq!(app.input_state().selection_range(), Some(1..6));
+    assert!(app.fullscreen.selection.range().is_none());
+
+    let mut terminal =
+        ratatui::Terminal::new(ratatui::backend::TestBackend::new(area.width, area.height))
+            .unwrap();
+    terminal.draw(|frame| frame::draw(frame, &app)).unwrap();
+    let buffer = terminal.backend().buffer();
+    assert_eq!(
+        buffer[(7, row)].bg,
+        app.render_context().selection_background()
+    );
+    assert_eq!(
+        buffer[(8, row)].bg,
+        app.render_context().selection_background()
+    );
+    assert_ne!(
+        buffer[(6, row)].bg,
+        app.render_context().selection_background()
+    );
+    assert_ne!(
+        buffer[(11, row)].bg,
+        app.render_context().selection_background()
+    );
+    let text = buffer
+        .content
+        .chunks(usize::from(area.width))
+        .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
+        .collect::<Vec<_>>()
+        .join("\n");
+    crate::tui_assert_snapshot!("input_pointer_selection", text);
+
+    app.handle_paste("X".into());
+    assert_eq!(app.input(), "aXd");
+    assert_eq!(app.input_state().selection_range(), None);
+}
+
+#[test]
+fn dragging_in_a_scrolled_input_keeps_the_clicked_rows_in_place() {
+    let mut app = App::new();
+    app.insert_text("0\n1\n2\n3\n4\n5\n6\n7");
+    let area = Rect::new(0, 0, 60, 24);
+    let input = crate::app::fullscreen::layout(&app, area).input;
+    let mouse = |kind, row| MouseEvent {
+        kind,
+        column: 6,
+        row,
+        modifiers: KeyModifiers::NONE,
+    };
+
+    handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Down(MouseButton::Left), input.y + 1),
+    );
+    assert_eq!(app.input_state().cursor_line(), 2);
+    assert_eq!(app.input_state().pointer_scroll_row(), Some(2));
+    handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Drag(MouseButton::Left), input.y + 2),
+    );
+    handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Up(MouseButton::Left), input.y + 2),
+    );
+    assert_eq!(app.input_state().selection_range(), Some(4..6));
+
+    let mut terminal =
+        ratatui::Terminal::new(ratatui::backend::TestBackend::new(area.width, area.height))
+            .unwrap();
+    terminal.draw(|frame| frame::draw(frame, &app)).unwrap();
+    let buffer = terminal.backend().buffer();
+    assert_eq!(buffer[(6, input.y + 1)].symbol(), "2");
+    assert_eq!(buffer[(6, input.y + 2)].symbol(), "3");
+
+    let mut settings = crate::config::TerminalSettings::default();
+    settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
+    app.update(crate::config::Event::SettingsReceived(settings));
+    assert_eq!(app.input_state().pointer_scroll_row(), None);
 }
 
 #[test]

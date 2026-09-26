@@ -1,0 +1,20 @@
+---
+source: code/tui/src/app/fullscreen/pointer_tests.rs
+expression: text
+---
+  .                                    [— / —] [Dashboard]  
+                                                            
+                                                            
+                                                            
+                                                            
+                                                            
+                                                            
+                                                            
+                                                            
+                                                            
+  ⏸ ask permissions on                                      
+  ╭──────────────────────────────────────────────────────╮  
+  │ > ab你 cd                                             │  
+  ╰──────────────────────────────────── Automatic model ─╯  
+                                                            
+  Enter send  ·  shift+tab permissions  ·  /home

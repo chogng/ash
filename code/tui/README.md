@@ -58,7 +58,7 @@ Skills、Models、Connectors 和 MCP 各自拥有同名模块；目录授权在 
 
 - 全屏入口分别组合首页和对话页，持有页面、鼠标、选区、弹窗和正文浏览状态；会话管理与 Issues 的内容和操作由对应功能模块维护。
 - 每种模式的 `layout.rs` 独立定义整页区域，绘制与命中共用本模式的区域计算；公共 App 不计算输入、正文或浮层坐标。`composer.rs` 组合全屏输入、批准、提问和队列。
-- `navigation.rs` 负责区域间的按键路由、焦点顺序、正文导航与面板打开关闭，功能组件继续处理自身的编辑和操作。全屏 `pointer.rs` 处理鼠标路由，`selection.rs` 处理选区手势、高亮和复制结果。
+- `navigation.rs` 负责区域间的按键路由、焦点顺序、正文导航与面板打开关闭，功能组件继续处理自身的编辑和操作。全屏 `pointer.rs` 处理鼠标路由，`selection.rs` 处理屏幕文字选区和复制结果；输入框的光标与编辑选区由 `thread/composer/input` 持有。
 - `fullscreen/modal.rs` 负责弹窗层的绘制和输入路由；`widgets/modal.rs` 计算外框、标题、关闭按钮、正文与提示区域。`CommandPanel` 共用功能编辑器和操作结果，inline 由自己的 `panel.rs` 承载。
 - `home.rs` 维护欢迎卡片与开始入口；欢迎卡片不进入对话历史。`header.rs` 左侧显示菜单入口、分支和目录，右侧显示其余已配置状态；`footer.rs` 用一行 hintbar 显示有效快捷键与权限状态。输入框保留标识列和左右内边距，模型名称嵌在右下边框，长标签按终端列宽省略。
 - `frame.rs` 只选择屏幕绘制入口和可见资源需求。两种模式彼此不调用，共用正文、输入编辑、通用控件和终端能力。
@@ -75,7 +75,7 @@ Skills、Models、Connectors 和 MCP 各自拥有同名模块；目录授权在 
 
 异步剪贴板读取绑定发起时的草稿身份和代次，返回后写入同一份草稿；切换到其他输入目标不会改变它的去向，已经提交的草稿不会接收迟到的图片。
 
-页面焦点、会话预览和详情不随功能编辑器迁移。鼠标按下、悬停和屏幕选区属于终端当前画面，切换时清除。即使草稿已有文字，Esc 仍可退出正文选中并返回输入框；同一模式的设置重载不改变当前焦点。
+页面焦点、会话预览和详情不随功能编辑器迁移。鼠标按下、悬停和屏幕选区属于终端当前画面，切换时清除；草稿中的编辑选区跟随草稿，切换时结束尚未完成的拖拽。即使草稿已有文字，Esc 仍可退出正文选中并返回输入框；同一模式的设置重载不改变当前焦点。
 
 两种模式的测试与文本快照分别放在 `fullscreen/` 和 `inline/`。定向运行 `just test ash-tui --lib app::fullscreen` 或 `just test ash-tui --lib app::inline`；模式隔离与面板转交运行 `just test ash-tui --lib app::mode_tests`，共用应用流程运行 `just test ash-tui --lib app::`。
 
@@ -286,10 +286,10 @@ language = "en"
 
 | 模式 | 终端控制 | 历史与退出 |
 | --- | --- | --- |
-| `fullscreen` | 备用屏幕、整屏绘制、应用处理鼠标滚动与选文 | 正文内部滚动；退出恢复 shell 画面 |
+| `fullscreen` | 备用屏幕、整屏绘制、应用处理鼠标滚动、屏幕选文和输入框编辑选区 | 正文内部滚动；退出恢复 shell 画面 |
 | `inline` | 主屏局部绘制；保留原始输入、粘贴和焦点事件；不捕获鼠标 | 定稿内容按顺序追加；退出移除交互区域并保留已显示正文 |
 
-全屏按以下顺序获取模式：原始输入 → 备用屏幕并保存、关闭滚轮转方向键 → 粘贴事件 → 焦点上报 → 鼠标捕获。全屏固定启用鼠标捕获和选中复制。退出备用屏幕前恢复进入时的滚轮模式。
+全屏按以下顺序获取模式：原始输入 → 备用屏幕并保存、关闭滚轮转方向键 → 粘贴事件 → 焦点上报 → 鼠标捕获。全屏固定启用鼠标捕获和选中复制。点击输入框会移动草稿光标；拖拽选择草稿文字，松开后复制到剪贴板，并保留可供输入、粘贴或删除替换的编辑选区。输入框之外仍按屏幕文字选取处理。退出备用屏幕前恢复进入时的滚轮模式。
 
 主屏沿用终端滚轮、选文和复制，不启用应用鼠标捕获。切入主屏时立即清除应用悬停、按下和选区状态，进行中的拖选不会触发复制。面板、补全和正文浏览可扩展当前交互区域；关闭后缩回输入与当前回复所需的高度。Ctrl+Home/End 打开历史浏览或返回当前回复。切换 Thread 会追加新的会话标题和该 Thread 当前已加载的历史；已写入的终端历史不重写。缩放与重复快照不会重复追加已输出的消息。
 
@@ -297,7 +297,7 @@ language = "en"
 
 `TerminalModeGuard` 记录每一步是否成功。任一步失败或退出时，逆序关闭鼠标、焦点上报、粘贴事件，结束当前屏幕并关闭原始输入模式。显式恢复可重复调用，Drop 再次清理不会重复操作；退出或挂起时还要重置光标颜色并显示光标。
 
-鼠标交互回归见 [pointer_tests.rs](src/app/fullscreen/pointer_tests.rs)，选区手势与样式见 [selection_tests.rs](src/app/fullscreen/selection_tests.rs)。尺寸变化时清除全屏悬停、按下和选区状态，迟到的释放事件不能触发复制。在窗口至少 40×12 的真实 PTY 中运行 `just test ash-tui --lib real_terminal_mouse_handoff -- --ignored --nocapture --test-threads=1`，由 [event_loop_tests.rs](src/app/event_loop_tests.rs) 验证整屏捕获、补全点击、切换到主屏和退出恢复。该场景不替代各终端自身的选文与复制兼容性验证。
+鼠标交互回归见 [pointer_tests.rs](src/app/fullscreen/pointer_tests.rs)，屏幕选区手势与样式见 [selection_tests.rs](src/app/fullscreen/selection_tests.rs)，输入框编辑选区见 [editor_tests.rs](src/thread/composer/input/editor_tests.rs) 和 [view_tests.rs](src/thread/composer/input/view_tests.rs)。尺寸变化时清除全屏悬停、按下和屏幕选区，并结束输入框拖拽；迟到的释放事件不能触发复制。在窗口至少 40×12 的真实 PTY 中运行 `just test ash-tui --lib real_terminal_mouse_handoff -- --ignored --nocapture --test-threads=1`，由 [event_loop_tests.rs](src/app/event_loop_tests.rs) 验证整屏捕获、补全点击、切换到主屏和退出恢复。该场景不替代各终端自身的选文与复制兼容性验证。
 
 Ctrl+Z 在 Unix 上先恢复终端，再发送 SIGTSTP；`fg` 后重新获取模式并重绘。SIGINT/SIGTERM 进入正常事件循环退出路径。新增模式时同时修改获取标记、逆序清理和 [session_tests.rs](src/terminal/session_tests.rs) 中的部分失败测试。
 

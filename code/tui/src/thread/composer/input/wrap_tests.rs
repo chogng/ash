@@ -7,6 +7,7 @@ fn wraps_logical_lines_and_wide_characters_on_display_boundaries() {
         wrap_input("abcdef\n界界界", 1, 6, 7),
         WrappedInput {
             lines: vec!["abcde".into(), "f".into(), "界界".into(), "界".into()],
+            byte_ranges: vec![0..5, 5..6, 7..13, 13..16],
             cursor_row: 3,
             cursor_column: 2,
         }
@@ -19,6 +20,7 @@ fn exact_boundary_cursor_uses_a_visible_continuation_row() {
         wrap_input("abcde", 0, 5, 7),
         WrappedInput {
             lines: vec!["abcde".into(), String::new()],
+            byte_ranges: vec![0..5, 5..5],
             cursor_row: 1,
             cursor_column: 0,
         }
@@ -31,6 +33,7 @@ fn wide_character_moves_whole_to_the_next_visual_row() {
         wrap_input("aa界", 0, 4, 5),
         WrappedInput {
             lines: vec!["aa".into(), "界".into()],
+            byte_ranges: vec![0..2, 2..5],
             cursor_row: 1,
             cursor_column: 2,
         }

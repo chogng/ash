@@ -30,6 +30,7 @@ pub(crate) use input::built_in_catalog_command;
 pub(crate) use input::built_in_slash_command_definitions;
 pub(crate) use input::completion_index_at;
 pub(crate) use input::content_area;
+pub(crate) use input::cursor_at;
 pub(crate) use input::draw_chat_input;
 pub(crate) use input::draw_completion;
 pub(crate) use steer::Steer;

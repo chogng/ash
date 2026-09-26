@@ -999,6 +999,7 @@ impl App {
             .status_line_mut()
             .set_glyph_set(settings.glyph_set());
         if self.screen_mode() != settings.screen_mode() {
+            self.input_state_mut().reset_pointer_view();
             let editor = self.panels_mut().take_editor();
             self.terminal_settings = settings;
             self.panels_mut().receive_editor(editor);
@@ -1137,6 +1138,14 @@ impl App {
             &self.sessions.input
         } else {
             &self.thread_presentations.active().input
+        }
+    }
+
+    pub(super) fn input_state_mut(&mut self) -> &mut crate::thread::composer::ChatInput {
+        if self.starts_new_session() {
+            &mut self.sessions.input
+        } else {
+            &mut self.thread_presentations.active_mut().input
         }
     }
 

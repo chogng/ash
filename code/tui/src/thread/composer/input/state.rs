@@ -164,6 +164,8 @@ pub(crate) struct ChatInput {
     pub(super) textarea: TextArea,
     pub(super) completion: CompletionState,
     input_mode: ChatInputMode,
+    /// Keeps screen coordinates tied to the rows the user pressed while the cursor moves.
+    pointer_scroll_row: Option<usize>,
     vim: VimState,
     pub(super) slash_command_element: Option<TextElementId>,
     pub(super) skill_bindings: Vec<(TextElementId, SkillRef)>,
@@ -186,6 +188,7 @@ impl ChatInput {
             textarea: TextArea::new(),
             completion: CompletionState::new(catalog),
             input_mode: ChatInputMode::Standard,
+            pointer_scroll_row: None,
             vim: VimState::default(),
             slash_command_element: None,
             skill_bindings: Vec::new(),
@@ -198,6 +201,7 @@ impl ChatInput {
     }
 
     pub(in crate::thread::composer) fn handle_key(&mut self, key: KeyEvent) -> ChatInputOutcome {
+        self.pointer_scroll_row = None;
         if self.history.query().is_some() {
             return self.handle_history_search_key(key);
         }
@@ -257,6 +261,7 @@ impl ChatInput {
 
     #[cfg(test)]
     pub(crate) fn insert_text(&mut self, text: &str) {
+        self.pointer_scroll_row = None;
         self.reset_history_navigation();
         self.textarea.insert_text(text);
         self.sync_completion();
@@ -266,6 +271,7 @@ impl ChatInput {
         &mut self,
         pasted: String,
     ) -> Result<(), String> {
+        self.pointer_scroll_row = None;
         if let Some(query) = self.history.query() {
             let effect = self.history.search(format!("{query}{pasted}"));
             self.apply_history_effect(effect);
@@ -290,6 +296,7 @@ impl ChatInput {
         &mut self,
         bytes: Vec<u8>,
     ) -> Result<(), String> {
+        self.pointer_scroll_row = None;
         self.reset_history_navigation();
         self.attachments
             .attach_image_bytes(&mut self.textarea, bytes)?;
@@ -299,6 +306,39 @@ impl ChatInput {
 
     pub(crate) fn text(&self) -> &str {
         self.textarea.text()
+    }
+
+    pub(crate) fn selection_range(&self) -> Option<std::ops::Range<usize>> {
+        self.textarea.selection_range()
+    }
+
+    pub(crate) fn pointer_scroll_row(&self) -> Option<usize> {
+        self.pointer_scroll_row
+    }
+
+    pub(crate) fn pointer_down(&mut self, hit: super::view::InputHit) {
+        self.reset_history_navigation();
+        self.pointer_scroll_row = Some(hit.scroll_row);
+        self.textarea.pointer_down(hit.byte);
+        self.sync_completion();
+    }
+
+    pub(crate) fn pointer_drag(&mut self, hit: super::view::InputHit) {
+        self.textarea.pointer_drag(hit.byte);
+        self.sync_completion();
+    }
+
+    pub(crate) fn pointer_up(&mut self) {
+        self.textarea.pointer_up();
+    }
+
+    pub(crate) fn reset_pointer_view(&mut self) {
+        self.textarea.pointer_up();
+        self.pointer_scroll_row = None;
+    }
+
+    pub(crate) fn pointer_active(&self) -> bool {
+        self.textarea.pointer_active()
     }
 
     pub(crate) fn set_input_mode(&mut self, input_mode: ChatInputMode) {
@@ -536,6 +576,7 @@ impl ChatInput {
     }
 
     fn clear(&mut self) {
+        self.pointer_scroll_row = None;
         self.generation = self.generation.wrapping_add(1);
         self.textarea.clear();
         self.vim.reset_draft();

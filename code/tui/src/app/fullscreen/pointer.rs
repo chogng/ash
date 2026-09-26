@@ -306,6 +306,7 @@ pub(crate) fn overlay_contains(
 
 pub(in crate::app) enum MouseAction {
     Selection(Option<ScreenSelectionOutcome>),
+    InputSelection(String),
     Command(Option<AppCommand>),
 }
 
@@ -321,6 +322,7 @@ pub(in crate::app) fn handle_mouse(
     }
     let position = ratatui::layout::Position::new(mouse.column, mouse.row);
     if super::modal::is_open(app) {
+        app.input_state_mut().pointer_up();
         let target = target_at(app, area, mouse.column, mouse.row);
         match mouse.kind {
             MouseEventKind::Down(MouseButton::Left) => {
@@ -373,6 +375,53 @@ pub(in crate::app) fn handle_mouse(
             _ => {}
         }
         return MouseAction::Selection(None);
+    }
+    let input_area = super::layout(app, area).input;
+    let input_pointer_active = app.input_state().pointer_active();
+    let input_down = mouse.kind == MouseEventKind::Down(MouseButton::Left)
+        && app.accepts_input()
+        && target_at(app, area, mouse.column, mouse.row)
+            == Some(PointerTarget::Composer(ChatComposerPointerTarget::Input));
+    if input_down
+        || (input_pointer_active
+            && matches!(
+                mouse.kind,
+                MouseEventKind::Drag(MouseButton::Left) | MouseEventKind::Up(MouseButton::Left)
+            ))
+    {
+        let input = app.input_state();
+        let hit = chat_composer::cursor_at(
+            input_area,
+            chat_composer::ChatInputChrome::Box,
+            input.text(),
+            input.cursor_line(),
+            input.cursor_display_width(),
+            input.pointer_scroll_row(),
+            position,
+        );
+        app.fullscreen.pointer.cancel_click();
+        app.fullscreen.selection.clear();
+        match mouse.kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                super::navigation::focus_input(app);
+                app.input_state_mut().pointer_down(hit);
+            }
+            MouseEventKind::Drag(MouseButton::Left) => {
+                app.input_state_mut().pointer_drag(hit);
+            }
+            MouseEventKind::Up(MouseButton::Left) => {
+                app.input_state_mut().pointer_drag(hit);
+                app.input_state_mut().pointer_up();
+                if let Some(range) = app.input_state().selection_range() {
+                    return MouseAction::InputSelection(app.input()[range].to_owned());
+                }
+            }
+            _ => unreachable!(),
+        }
+        return MouseAction::Selection(None);
+    }
+    if mouse.kind == MouseEventKind::Down(MouseButton::Left) {
+        app.input_state_mut().pointer_up();
     }
     if mouse.kind == MouseEventKind::Down(MouseButton::Left) {
         let input = super::layout(app, area).input;

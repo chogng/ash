@@ -31,6 +31,8 @@ struct TextElement {
 pub(super) struct TextArea {
     text: String,
     cursor: usize,
+    selection_anchor: Option<usize>,
+    pointer_anchor: Option<usize>,
     elements: Vec<TextElement>,
     next_element_id: u64,
 }
@@ -40,6 +42,8 @@ impl TextArea {
         Self {
             text: String::new(),
             cursor: 0,
+            selection_anchor: None,
+            pointer_anchor: None,
             elements: Vec::new(),
             next_element_id: 0,
         }
@@ -51,6 +55,24 @@ impl TextArea {
             .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
         {
             return TextAreaOutcome::Unhandled;
+        }
+
+        if let Some(range) = self.selection_range() {
+            match key.code {
+                KeyCode::Backspace | KeyCode::Delete => {
+                    self.remove_editable_range(range);
+                    return TextAreaOutcome::Consumed;
+                }
+                KeyCode::Left => {
+                    self.set_cursor(range.start);
+                    return TextAreaOutcome::Consumed;
+                }
+                KeyCode::Right => {
+                    self.set_cursor(range.end);
+                    return TextAreaOutcome::Consumed;
+                }
+                _ => {}
+            }
         }
 
         match key.code {
@@ -72,10 +94,14 @@ impl TextArea {
             }
             KeyCode::Home => {
                 self.cursor = self.current_line_start();
+                self.selection_anchor = None;
+                self.pointer_anchor = None;
                 TextAreaOutcome::Consumed
             }
             KeyCode::End => {
                 self.cursor = self.current_line_end();
+                self.selection_anchor = None;
+                self.pointer_anchor = None;
                 TextAreaOutcome::Consumed
             }
             KeyCode::Up if self.can_move_up() => {
@@ -96,6 +122,11 @@ impl TextArea {
     }
 
     pub(super) fn insert_text(&mut self, text: &str) {
+        if let Some(range) = self.selection_range() {
+            self.remove_editable_range(range);
+        }
+        self.selection_anchor = None;
+        self.pointer_anchor = None;
         self.shift_elements_for_insertion(self.cursor, text.len());
         self.text.insert_str(self.cursor, text);
         self.cursor += text.len();
@@ -114,6 +145,53 @@ impl TextArea {
 
     pub(super) fn cursor(&self) -> usize {
         self.cursor
+    }
+
+    pub(super) fn selection_range(&self) -> Option<Range<usize>> {
+        let anchor = self.selection_anchor?;
+        (anchor != self.cursor).then(|| anchor.min(self.cursor)..anchor.max(self.cursor))
+    }
+
+    pub(super) fn pointer_down(&mut self, cursor: usize) {
+        let cursor = self.snap_pointer_cursor(cursor, None);
+        self.cursor = cursor;
+        self.selection_anchor = None;
+        self.pointer_anchor = Some(cursor);
+    }
+
+    pub(super) fn pointer_drag(&mut self, cursor: usize) {
+        let Some(anchor) = self.pointer_anchor else {
+            return;
+        };
+        self.cursor = self.snap_pointer_cursor(cursor, Some(anchor));
+        self.selection_anchor = (self.cursor != anchor).then_some(anchor);
+    }
+
+    pub(super) fn pointer_up(&mut self) {
+        self.pointer_anchor = None;
+    }
+
+    pub(super) fn pointer_active(&self) -> bool {
+        self.pointer_anchor.is_some()
+    }
+
+    fn snap_pointer_cursor(&self, cursor: usize, anchor: Option<usize>) -> usize {
+        assert!(cursor <= self.text.len() && self.text.is_char_boundary(cursor));
+        let Some(element) = self
+            .elements
+            .iter()
+            .find(|element| element.range.start < cursor && cursor < element.range.end)
+        else {
+            return cursor;
+        };
+        match anchor {
+            Some(anchor) if cursor >= anchor => element.range.end,
+            Some(_) => element.range.start,
+            None if cursor - element.range.start < element.range.end - cursor => {
+                element.range.start
+            }
+            None => element.range.end,
+        }
     }
 
     pub(super) fn has_element(&self, expected: TextElementId) -> bool {
@@ -164,6 +242,8 @@ impl TextArea {
     }
 
     pub(super) fn replace_element(&mut self, element_id: TextElementId, text: &str) {
+        self.selection_anchor = None;
+        self.pointer_anchor = None;
         let index = self
             .elements
             .iter()
@@ -210,6 +290,8 @@ impl TextArea {
             "editable replacement must not overlap an atomic element"
         );
         self.cursor = range.start;
+        self.selection_anchor = None;
+        self.pointer_anchor = None;
         self.remove_range(range);
         self.insert_text(text);
     }
@@ -240,6 +322,8 @@ impl TextArea {
     pub(super) fn clear(&mut self) {
         self.text.clear();
         self.cursor = 0;
+        self.selection_anchor = None;
+        self.pointer_anchor = None;
         self.elements.clear();
         self.next_element_id = 0;
     }
@@ -286,6 +370,8 @@ impl TextArea {
     }
 
     pub(super) fn move_left(&mut self) {
+        self.selection_anchor = None;
+        self.pointer_anchor = None;
         if let Some(element) = self
             .elements
             .iter()
@@ -301,6 +387,8 @@ impl TextArea {
     }
 
     pub(super) fn move_right(&mut self) {
+        self.selection_anchor = None;
+        self.pointer_anchor = None;
         if let Some(element) = self
             .elements
             .iter()
@@ -316,6 +404,8 @@ impl TextArea {
     }
 
     pub(super) fn move_up(&mut self) {
+        self.selection_anchor = None;
+        self.pointer_anchor = None;
         if !self.can_move_up() {
             return;
         }
@@ -331,6 +421,8 @@ impl TextArea {
     }
 
     pub(super) fn move_down(&mut self) {
+        self.selection_anchor = None;
+        self.pointer_anchor = None;
         if !self.can_move_down() {
             return;
         }
@@ -383,6 +475,8 @@ impl TextArea {
     pub(super) fn set_cursor(&mut self, cursor: usize) {
         assert!(cursor <= self.text.len() && self.text.is_char_boundary(cursor));
         self.cursor = cursor;
+        self.selection_anchor = None;
+        self.pointer_anchor = None;
     }
 
     pub(super) fn remove_editable_range(&mut self, range: Range<usize>) -> String {
@@ -400,6 +494,8 @@ impl TextArea {
         let removed = self.text[start..end].to_owned();
         self.remove_range(start..end);
         self.cursor = start;
+        self.selection_anchor = None;
+        self.pointer_anchor = None;
         removed
     }
 

@@ -28,6 +28,24 @@ fn paste_is_inserted_at_the_cursor() {
 }
 
 #[test]
+fn pointer_selection_replaces_text_and_keeps_atomic_elements_whole() {
+    let mut textarea = TextArea::new();
+    textarea.insert_text("a");
+    let element = textarea.insert_element("[P]");
+    textarea.insert_text("b");
+
+    textarea.pointer_down(0);
+    textarea.pointer_drag(2);
+    textarea.pointer_up();
+    assert_eq!(textarea.selection_range(), Some(0..4));
+
+    textarea.insert_text("x");
+    assert_eq!(textarea.text(), "xb");
+    assert_eq!(textarea.selection_range(), None);
+    assert!(!textarea.has_element(element));
+}
+
+#[test]
 fn control_keys_are_left_for_parent_routing() {
     let mut textarea = TextArea::new();
 
