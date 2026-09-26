@@ -3,7 +3,7 @@ import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
-import { ChatInputEditorRegistry, type ChatInputEditorOptions, type IChatInputEditor } from "../../../../../workbench/contrib/chat/browser/input/chatInputEditorRegistry.js";
+import { ChatInputEditorRegistry, type ChatInputEditorOptions, type IChatInputEditor } from "../../browser/widget/input/chatInputEditorRegistry.js";
 import { SlashCommandCatalog } from "../../../../../workbench/contrib/chat/common/slashCommands.js";
 import { SkillSelectorCatalog } from '../../../../../workbench/contrib/chat/common/skillSelectors.js';
 import { h } from "../../../../../base/browser/dom.js";

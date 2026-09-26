@@ -7,7 +7,7 @@ import type { SessionId, ThreadId } from "../../services/sessions/common/session
 import { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
 import { ISessionsService } from "../../services/sessions/browser/sessionsService.js";
 
-// ChatPane shares these command IDs with the regular Workbench; this window owns their Sessions behavior.
+// ChatWidget shares these command IDs with the regular Workbench; this window owns their Sessions behavior.
 registerAction2(class NewSessionsChatAction extends Action2 {
 	constructor() {
 		super({ id: NEW_CHAT_COMMAND_ID, title: "New Session" });

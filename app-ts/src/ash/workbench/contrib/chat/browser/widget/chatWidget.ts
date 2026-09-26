@@ -1,3 +1,4 @@
+import './media/chat.css';
 import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
@@ -5,12 +6,12 @@ import type { IContextViewService } from "../../../../../platform/contextview/br
 import type { IChatService } from "../../../../services/chat/common/chatService.js";
 import type { IActiveSessionThread, IUntitledChatSession, SessionId, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
 import type { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagement.js";
-import type { ChatInputDelegate } from "../input/chatInput.js";
+import type { ChatInputDelegate } from "./input/chatInput.js";
 import type { SkillReference } from "../../../../../platform/skills/common/skillApi.js";
-import { ChatInputPart } from "../input/chatInputPart.js";
-import type { ChatTurnErrorAction } from "../list/chatListItems.js";
-import { ChatListWidget } from "../list/chatListWidget.js";
-import { ChatPaneModel, type ChatPaneSelection } from "./chatPaneModel.js";
+import { ChatInputPart } from "./input/chatInputPart.js";
+import type { ChatTurnErrorAction } from "./chatListItems.js";
+import { ChatListWidget } from "./chatListWidget.js";
+import { ChatWidgetModel, type ChatWidgetSelection } from "./chatWidgetModel.js";
 import { h } from "../../../../../base/browser/dom.js";
 import type { ChatContextAttachment } from "../../../../services/chat/common/chatContextService.js";
 import type { IChatContextPickService } from "../../../../services/chat/common/chatContextService.js";
@@ -23,9 +24,9 @@ import { ASH_REMOTE_SCHEME, createSshRemoteWorkspaceUri, getRemoteWorkspacePath 
 import { OPEN_CHAT_SETTINGS_COMMAND_ID } from "../../common/chat.js";
 
 /** Owns the content and interaction state for one local or durable Chat tab. */
-export class ChatPane extends Disposable {
+export class ChatWidget extends Disposable {
 	readonly element: HTMLElement;
-	readonly model: ChatPaneModel;
+	readonly model: ChatWidgetModel;
 	private readonly listWidget: ChatListWidget;
 	private readonly inputPart: ChatInputPart;
 	private readonly goalElement: HTMLDivElement;
@@ -36,7 +37,7 @@ export class ChatPane extends Disposable {
 		container: HTMLElement,
 		panelId: string,
 		chatService: IChatService,
-		selection: ChatPaneSelection,
+		selection: ChatWidgetSelection,
 		sessionService: ISessionsManagementService,
 		contextMenuService: IContextMenuService,
 		contextViewService: IContextViewService,
@@ -56,7 +57,7 @@ export class ChatPane extends Disposable {
 		this.element.hidden = true;
 		container.append(this.element);
 		this.sessionService = sessionService;
-		this.model = this._register(new ChatPaneModel(chatService, selection, sessionService));
+		this.model = this._register(new ChatWidgetModel(chatService, selection, sessionService));
 		this.goalElement = h(ownerDocument, "div");
 		this.goalElement.className = "ash-chat-goal";
 		this.goalElement.hidden = true;
@@ -99,7 +100,7 @@ export class ChatPane extends Disposable {
 
 	selectThread(active: IActiveSessionThread): Promise<void> {
 		if (active.session.sessionId !== this.sessionId) {
-			throw new Error(`ChatPane cannot select a Thread from another Session: ${active.session.sessionId}`);
+			throw new Error(`ChatWidget cannot select a Thread from another Session: ${active.session.sessionId}`);
 		}
 		if (active.threadId !== this.threadId) this.submittedMessage = false;
 		return this.model.selectThread(active);
@@ -107,7 +108,7 @@ export class ChatPane extends Disposable {
 
 	selectUntitledSession(session: IUntitledChatSession): void {
 		if (session.untitledSessionId !== this.untitledSessionId) {
-			throw new Error(`ChatPane cannot select another Untitled Chat Session: ${session.untitledSessionId}`);
+			throw new Error(`ChatWidget cannot select another Untitled Chat Session: ${session.untitledSessionId}`);
 		}
 		this.model.selectUntitledSession(session);
 	}

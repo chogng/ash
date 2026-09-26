@@ -142,7 +142,7 @@ import { WorkbenchContextKeysHandler } from './contextkeys.js';
 import { WorkbenchThemeService } from "../services/themes/browser/workbenchThemeService.js";
 import { IResourceIconRenderer, IResourceLabelService, ResourceLabelService } from "./labels.js";
 import { ILabelService, LabelService } from "../../platform/label/common/labelService.js";
-import { WorkbenchLayout, type WorkbenchDefaultLayout } from "./layout.js";
+import { DEFAULT_WORKBENCH_LAYOUT, WorkbenchLayout, type WorkbenchDefaultLayout } from "./layout.js";
 import { IWorkbenchLayoutService, type WorkbenchPartId } from "../services/layout/browser/layoutService.js";
 import { IWorkbenchLayoutStyleService } from "../services/layout/browser/workbenchLayoutStyleService.js";
 import { BrowserStorageService } from "../services/storage/browser/storageService.js";
@@ -265,15 +265,6 @@ import { WorkbenchModeService } from "../services/workbenchMode/browser/workbenc
 import { IWorkbenchModeService } from "../services/workbenchMode/common/workbenchModeService.js";
 import { BrowserClipboardService } from "../../platform/clipboard/browser/browserClipboardService.js";
 import { IClipboardService } from "../../platform/clipboard/common/clipboardService.js";
-
-const DEFAULT_WORKBENCH_LAYOUT = {
-	parts: {
-		sidebar: false,
-		auxiliarybar: false,
-		agentSidebar: false,
-		panel: false,
-	},
-} as const satisfies WorkbenchDefaultLayout;
 
 /** Host-specific inputs required to construct a workbench. */
 export interface IStartWorkbenchOptions {

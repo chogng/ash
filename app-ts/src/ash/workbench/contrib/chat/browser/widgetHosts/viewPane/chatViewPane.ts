@@ -1,27 +1,27 @@
-import "../media/chat.css";
-import { setDisposableOwner, toDisposable } from "../../../../../base/common/lifecycle.js";
-import { IMenuService } from "../../../../../platform/actions/common/actions.js";
-import { IContextMenuService, IContextViewService } from "../../../../../platform/contextview/browser/contextView.js";
-import { ICommandService } from "../../../../../platform/commands/common/commands.js";
-import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../../browser/parts/views/viewPane.js";
-import { IWorkbenchLayoutService } from "../../../../services/layout/browser/layoutService.js";
-import { IChatService } from "../../../../services/chat/common/chatService.js";
-import type { IActiveSessionThread, IChat, ISession, IUntitledChatSession, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
-import { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagement.js";
-import { ChatPane, resolveMarkdownWorkspaceResource } from "../pane/chatPane.js";
-import { ChatTitleControl } from "./chatTitleControl.js";
-import { h, isHTMLElement } from "../../../../../base/browser/dom.js";
-import { IChatContextPickService, type ChatContextAttachment } from "../../../../services/chat/common/chatContextService.js";
-import { IQuickInputService } from "../../../../../platform/quickinput/common/quickInput.js";
-import { IOpenerService } from "../../../../../platform/opener/common/openerService.js";
-import { IEditorService } from "../../../../services/editor/common/editorService.js";
-import { IFileService } from '../../../../../platform/files/common/files.js';
-import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
-import { URI } from '../../../../../base/common/uri.js';
-import { type IContextKey } from "../../../../../platform/contextkey/common/contextkey.js";
-import { ContextKeyService, IContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
-import { ChatSessionInspectorVisibleContext } from "../../common/chat.js";
-import { SessionInspector } from "./sessionInspector.js";
+import "./media/chatViewPane.css";
+import { setDisposableOwner, toDisposable } from "../../../../../../base/common/lifecycle.js";
+import { IMenuService } from "../../../../../../platform/actions/common/actions.js";
+import { IContextMenuService, IContextViewService } from "../../../../../../platform/contextview/browser/contextView.js";
+import { ICommandService } from "../../../../../../platform/commands/common/commands.js";
+import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../../../browser/parts/views/viewPane.js";
+import { IWorkbenchLayoutService } from "../../../../../services/layout/browser/layoutService.js";
+import { IChatService } from "../../../../../services/chat/common/chatService.js";
+import type { IActiveSessionThread, IChat, ISession, IUntitledChatSession, ThreadId } from "../../../../../../sessions/services/sessions/common/session.js";
+import { ISessionsManagementService } from "../../../../../../sessions/services/sessions/common/sessionsManagement.js";
+import { ChatWidget, resolveMarkdownWorkspaceResource } from "../../widget/chatWidget.js";
+import { ChatTitleControl } from "../../view/chatTitleControl.js";
+import { h, isHTMLElement } from "../../../../../../base/browser/dom.js";
+import { IChatContextPickService, type ChatContextAttachment } from "../../../../../services/chat/common/chatContextService.js";
+import { IQuickInputService } from "../../../../../../platform/quickinput/common/quickInput.js";
+import { IOpenerService } from "../../../../../../platform/opener/common/openerService.js";
+import { IEditorService } from "../../../../../services/editor/common/editorService.js";
+import { IFileService } from '../../../../../../platform/files/common/files.js';
+import { IDialogService } from '../../../../../../platform/dialogs/common/dialogs.js';
+import { URI } from '../../../../../../base/common/uri.js';
+import { type IContextKey } from "../../../../../../platform/contextkey/common/contextkey.js";
+import { ContextKeyService, IContextKeyService } from "../../../../../../platform/contextkey/browser/contextKeyService.js";
+import { ChatSessionInspectorVisibleContext } from "../../../common/chat.js";
+import { SessionInspector } from "../../view/sessionInspector.js";
 
 let chatViewInstanceId = 0;
 let chatPaneInstanceId = 0;
@@ -29,13 +29,13 @@ let chatPaneInstanceId = 0;
 interface ChatPaneEntry {
 	readonly tabId: string;
 	readonly label: string;
-	readonly pane: ChatPane;
+	readonly pane: ChatWidget;
 }
 
 /**
  * Chat tab container.
  *
- * Each untitled or active durable Session owns one retained ChatPane. Thread
+ * Each untitled or active durable Session owns one retained ChatWidget. Thread
  * selection remains internal to durable panes, while untitled sessions
  * materialize only when their first message is sent.
  */
@@ -50,9 +50,9 @@ export class ChatViewPane extends ViewPane {
 	private readonly inspector: SessionInspector;
 	private readonly inspectorVisible: IContextKey<boolean>;
 	private readonly empty: HTMLDivElement;
-	private readonly panes = new Map<string, ChatPane>();
+	private readonly panes = new Map<string, ChatWidget>();
 	private readonly tabOrder: string[] = [];
-	private activePane: ChatPane | undefined;
+	private activePane: ChatWidget | undefined;
 	private initialUntitledSessionId: string | undefined;
 	private viewDisposed = false;
 	private focusReturn: (() => void) | undefined;
@@ -174,7 +174,7 @@ export class ChatViewPane extends ViewPane {
 			retainedPaneIds.add(paneId);
 			let pane = this.panes.get(paneId);
 			if (!pane) {
-				pane = new ChatPane(
+				pane = new ChatWidget(
 					this.paneHost,
 					`ash-chat-pane-${++chatPaneInstanceId}`,
 					this.chatService,
@@ -204,7 +204,7 @@ export class ChatViewPane extends ViewPane {
 			retainedPaneIds.add(paneId);
 			let pane = this.panes.get(paneId);
 			if (!pane) {
-				pane = new ChatPane(
+				pane = new ChatWidget(
 					this.paneHost,
 					`ash-chat-pane-${++chatPaneInstanceId}`,
 					this.chatService,
@@ -306,7 +306,7 @@ export class ChatViewPane extends ViewPane {
 		this.syncSessions();
 	}
 
-	private orderEntries(entries: readonly ChatPaneEntry[], activePane: ChatPane | undefined): readonly ChatPaneEntry[] {
+	private orderEntries(entries: readonly ChatPaneEntry[], activePane: ChatWidget | undefined): readonly ChatPaneEntry[] {
 		const entriesByTabId = new Map(entries.map((entry) => [entry.tabId, entry]));
 		const orderedTabIds = this.tabOrder.filter((tabId) => entriesByTabId.has(tabId));
 		for (const entry of entries) {
@@ -363,7 +363,7 @@ export class ChatViewPane extends ViewPane {
 		}
 	}
 
-	private paneForTabId(tabId: string): ChatPane | undefined {
+	private paneForTabId(tabId: string): ChatWidget | undefined {
 		return [...this.panes.values()].find((pane) => pane.element.id === tabId);
 	}
 

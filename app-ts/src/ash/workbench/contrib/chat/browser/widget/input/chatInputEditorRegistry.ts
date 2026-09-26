@@ -1,8 +1,8 @@
-import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
-import { Emitter, type Event } from "../../../../../base/common/event.js";
-import { Disposable, type IDisposable, toDisposable } from "../../../../../base/common/lifecycle.js";
-import type { SlashCommandCatalog } from "../../common/slashCommands.js";
-import type { SkillSelectorCatalog } from '../../common/skillSelectors.js';
+import { addDisposableListener, h } from "../../../../../../base/browser/dom.js";
+import { Emitter, type Event } from "../../../../../../base/common/event.js";
+import { Disposable, type IDisposable, toDisposable } from "../../../../../../base/common/lifecycle.js";
+import type { SlashCommandCatalog } from "../../../common/slashCommands.js";
+import type { SkillSelectorCatalog } from '../../../common/skillSelectors.js';
 
 /** Construction inputs shared by Chat input editor implementations. */
 export interface ChatInputEditorOptions {

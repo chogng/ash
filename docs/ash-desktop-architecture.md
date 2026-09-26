@@ -567,13 +567,13 @@ ISessionsService
   → IChatService
   → ChatService
   → thread.subscribe + thread/stream 事件
-  → ChatPaneModel
+  → ChatWidgetModel
   → ChatViewPane
 ```
 
 `ISessionsService` 负责当前项、可见项、导航和焦点；`ISessionsManagementService` 负责 Session
 列表、草稿和操作；App Server provider 负责把生成 DTO 映射为前端 `ISession / IChat`。
-`IChatService` 隔离 thread、turn 和 App Server lifecycle transport；`ChatPaneModel` 负责单个活动
+`IChatService` 隔离 thread、turn 和 App Server lifecycle transport；`ChatWidgetModel` 负责单个活动
 thread 的可释放订阅、已提交 transcript 与临时 stream projection。活动 Turn 处于 running、
 waitingForApproval 或 waitingForUserInput 时，普通文本 Send 调用 `session/request::SteerTurn`，不会新建
 第二个 Turn；输入工具栏同时保留 Send 和 Stop，显式 Skill 只允许在新 Turn 接受边界选择。重新连接或 stream 序号

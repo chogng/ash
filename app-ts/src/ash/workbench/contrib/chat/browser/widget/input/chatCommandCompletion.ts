@@ -1,8 +1,8 @@
-import { LanguageCompletionItemKind, type LanguageCompletionProvider, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from '../../../../../editor/common/languages.js';
+import { LanguageCompletionItemKind, type LanguageCompletionProvider, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from '../../../../../../editor/common/languages.js';
 
-import { Position } from "../../../../../editor/common/core/position.js";
-import { Range } from "../../../../../editor/common/core/range.js";
-import { matchedCharacterIndices, type SlashCommandCatalog } from "../../common/slashCommands.js";
+import { Position } from "../../../../../../editor/common/core/position.js";
+import { Range } from "../../../../../../editor/common/core/range.js";
+import { matchedCharacterIndices, type SlashCommandCatalog } from "../../../common/slashCommands.js";
 
 export const CHAT_INPUT_LANGUAGE_ID = "ash-chat-input";
 

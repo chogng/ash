@@ -11,7 +11,7 @@ import type { ModelProviderCredentialStatus } from '../../../../services/chat/co
 import { IPreferencesService } from "../../../../services/preferences/common/preferences.js";
 import { IViewsService } from "../../../../services/views/browser/viewsService.js";
 import { ChatSessionInspectorVisibleContext, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, TOGGLE_SESSION_INSPECTOR_COMMAND_ID } from "../../common/chat.js";
-import { ChatViewPane } from "../view/chatViewPane.js";
+import { ChatViewPane } from "../widgetHosts/viewPane/chatViewPane.js";
 
 const ChatBrowserAvailable = ContextKeyExpr.equals("chatBrowserAvailable", true);
 const ChatEditorAreaAvailable = ContextKeyExpr.equals("chatEditorAreaAvailable", true);

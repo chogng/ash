@@ -6,7 +6,7 @@
 
 - [`ash-message-history`](../../ash-rs/message-history/README.md) 已提供输入记录、分页搜索、清理、保留策略和后台读写。
 - [`SqliteMessageHistory`](../../ash-rs/state/src/message_history.rs) 已实现本机 Profile 的 SQLite 存储。
-- TypeScript 输入框入口为 [`chatInputPart.ts`](../src/ash/workbench/contrib/chat/browser/input/chatInputPart.ts) 和 [`chatInputEditor.ts`](../src/ash/workbench/contrib/chat/browser/input/chatInputEditor.ts)。
+- TypeScript 输入框入口为 [`chatInputPart.ts`](../src/ash/workbench/contrib/chat/browser/widget/input/chatInputPart.ts) 和 [`chatInputEditor.ts`](../src/ash/workbench/contrib/chat/browser/widget/input/chatInputEditor.ts)。
 
 ## 待办
 

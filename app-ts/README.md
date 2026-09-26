@@ -266,7 +266,7 @@ host 的 adapter 和 contribution。Mode 入口在 host main 之外独立选择 
 `WorkbenchModeRegistry` 中的 `dedicatedSessions` 定义和模式自己的 `SessionsProfile` 装配。新增功能时不得从
 共享 `Workbench` 构造实现反向导入 Mode 或 Sessions 入口。
 
-Chat 的运行中普通文本 Send 由 `ChatPaneModel` 路由到生成协议中的 `steerTurn` Session operation；
+Chat 的运行中普通文本 Send 由 `ChatWidgetModel` 路由到生成协议中的 `steerTurn` Session operation；
 running 或交互等待期间输入工具栏同时显示 Send 与 Stop。Renderer 不自行排队或判定消息已生效，
 最终 transcript、delivery 和错误始终以 App Server 的 canonical Thread projection 为准。
 

@@ -5,7 +5,7 @@ import { Emitter } from "../../../../../base/common/event.js";
 import type { AgentTreeNode, ISession } from "../../../../../sessions/services/sessions/common/session.js";
 import type { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagement.js";
 import type { TurnChangeDetails, TurnChangeSetSummary } from "../../../../services/chat/common/chatService.js";
-import type { ChatPaneModel } from "../../browser/pane/chatPaneModel.js";
+import type { ChatWidgetModel } from "../../browser/widget/chatWidgetModel.js";
 import { SessionInspector } from "../../browser/view/sessionInspector.js";
 import { DialogResult, type IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 
@@ -67,7 +67,7 @@ test('Session Inspector discards changes only after confirmation', async () => {
 	dom.window.close();
 });
 
-function modelFixture(threadId: string, initial: readonly TurnChangeSetSummary[]): { readonly model: ChatPaneModel; readonly setChanges: (next: readonly TurnChangeSetSummary[]) => void } {
+function modelFixture(threadId: string, initial: readonly TurnChangeSetSummary[]): { readonly model: ChatWidgetModel; readonly setChanges: (next: readonly TurnChangeSetSummary[]) => void } {
 	const changed = new Emitter<void>();
 	let changes = initial;
 	const root: AgentTreeNode = {
@@ -136,7 +136,7 @@ function modelFixture(threadId: string, initial: readonly TurnChangeSetSummary[]
 		updateChangeDraft: async () => undefined,
 		commitChange: async () => undefined,
 		discardChanges: async () => undefined,
-	} as unknown as ChatPaneModel;
+	} as unknown as ChatWidgetModel;
 	return { model, setChanges: (next) => { changes = next; changed.fire(); } };
 }
 

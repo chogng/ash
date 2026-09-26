@@ -6,9 +6,9 @@ import { Lxicon } from "../../../../base/common/lxicons.js";
 import { IInstantiationService, ServiceConstructionDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, ViewsRegistry } from "../../../common/views.js";
 import { CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID } from "../common/chat.js";
-import { ChatInputEditor } from "./input/chatInputEditor.js";
-import { ChatInputEditors } from "./input/chatInputEditorRegistry.js";
-import { ChatViewPane } from "./view/chatViewPane.js";
+import { ChatInputEditor } from "./widget/input/chatInputEditor.js";
+import { ChatInputEditors } from "./widget/input/chatInputEditorRegistry.js";
+import { ChatViewPane } from "./widgetHosts/viewPane/chatViewPane.js";
 
 registerWorkbenchContribution('workbench.contrib.chatInputEditor', WorkbenchPhase.BlockStartup, accessor => {
 	const instantiationService = accessor.get(IInstantiationService);

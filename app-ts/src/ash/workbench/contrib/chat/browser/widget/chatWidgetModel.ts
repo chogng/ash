@@ -6,16 +6,16 @@ import type { SkillReference } from "../../../../../platform/skills/common/skill
 import type { ResolvedChatContext } from "../../../../services/chat/common/chatContextService.js";
 import type { IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
 import type { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagement.js";
-import { chatTranscriptListItems, type IChatListItem } from "../list/chatListItems.js";
+import { chatTranscriptListItems, type IChatListItem } from "./chatListItems.js";
 
-export type ChatPaneState =
+export type ChatWidgetState =
 	| "loading"
 	| "ready"
 	| "submitting"
 	| "error";
 
 /** The local or durable identity currently displayed by a Chat pane. */
-export type ChatPaneSelection =
+export type ChatWidgetSelection =
 	| { readonly kind: "session"; readonly active: IActiveSessionThread }
 	| { readonly kind: "untitled"; readonly session: IUntitledChatSession };
 
@@ -25,16 +25,16 @@ export type ChatPaneSelection =
  * Canonical committed state is refreshed from `session/thread/read`. Transcript
  * entries arrive already assembled by App Server and are applied by stable ID.
  */
-export class ChatPaneModel extends Disposable {
+export class ChatWidgetModel extends Disposable {
 	private readonly chatService: IChatService;
 	private readonly sessionService: ISessionsManagementService;
 	private readonly _onDidChange = this._register(new Emitter<void>());
 	private transcriptEntries: ThreadTranscriptEntry[] = [];
 	private transcriptRevision = 0;
-	private selection: ChatPaneSelection;
+	private selection: ChatWidgetSelection;
 	private _thread: Thread | undefined;
 	private _interaction: TurnInteraction | undefined;
-	private _state: ChatPaneState = "loading";
+	private _state: ChatWidgetState = "loading";
 	private _error: string | undefined;
 	private generation = 0;
 	private readPending = false;
@@ -50,7 +50,7 @@ export class ChatPaneModel extends Disposable {
 
 	readonly onDidChange: Event<void> = this._onDidChange.event;
 
-	constructor(chatService: IChatService, selection: ChatPaneSelection, sessionService: ISessionsManagementService) {
+	constructor(chatService: IChatService, selection: ChatWidgetSelection, sessionService: ISessionsManagementService) {
 		super();
 		this.chatService = chatService;
 		this.sessionService = sessionService;
@@ -79,7 +79,7 @@ export class ChatPaneModel extends Disposable {
 		void this.initialize();
 	}
 
-	get state(): ChatPaneState {
+	get state(): ChatWidgetState {
 		return this._state;
 	}
 
@@ -182,7 +182,7 @@ export class ChatPaneModel extends Disposable {
 	async selectThread(active: IActiveSessionThread): Promise<void> {
 		const current = this.activeSession;
 		if (!current || active.session.sessionId !== current.session.sessionId) {
-			throw new Error(`ChatPaneModel cannot select a Thread from another Session: ${active.session.sessionId}`);
+			throw new Error(`ChatWidgetModel cannot select a Thread from another Session: ${active.session.sessionId}`);
 		}
 		const previousThreadId = current.threadId;
 		const previousModel = current.session.model;
@@ -200,7 +200,7 @@ export class ChatPaneModel extends Disposable {
 
 	selectUntitledSession(session: IUntitledChatSession): void {
 		if (this.selection.kind !== "untitled" || this.selection.session.untitledSessionId !== session.untitledSessionId) {
-			throw new Error(`ChatPaneModel cannot select another Untitled Chat Session: ${session.untitledSessionId}`);
+			throw new Error(`ChatWidgetModel cannot select another Untitled Chat Session: ${session.untitledSessionId}`);
 		}
 		this.selection = { kind: "untitled", session };
 		void this.loadModels();
@@ -633,7 +633,7 @@ export class ChatPaneModel extends Disposable {
 		}
 	}
 
-	private setState(state: ChatPaneState, error?: string): void {
+	private setState(state: ChatWidgetState, error?: string): void {
 		this._state = state;
 		this._error = error;
 		this._onDidChange.fire();

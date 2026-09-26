@@ -15,7 +15,7 @@ Session Inspector 始终跟随 Chat 当前选中的 `Session + Thread`，正式�
 | Activity | 当前 Thread 最近的 Turn 状态与工具数量 |
 | Changes | 按 Turn、仓库列出的不可变 ChangeSet、提交信息与后台提交状态 |
 
-它与 transcript 共用 `ChatPaneModel` 已有的 `thread/read + subscribe + cursor`，不会为 Inspector
+它与 transcript 共用 `ChatWidgetModel` 已有的 `thread/read + subscribe + cursor`，不会为 Inspector
 再开一条 Thread 订阅。旧的 Chat 私有 Agent Sidebar ViewContainer、View 和全局开关已经移除；
 Workbench 通用 Agent Sidebar 不受影响。
 

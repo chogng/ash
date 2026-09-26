@@ -1,3 +1,4 @@
+import './media/chatListWidget.css';
 import { MarkdownElement } from "../../../../../base/browser/markdownRenderer.js";
 import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
 import { ScrollableElement } from "../../../../../base/browser/ui/scrollbar/scrollableElement.js";

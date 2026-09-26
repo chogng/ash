@@ -1,7 +1,6 @@
-import { ChatListWidget } from '../../../src/ash/workbench/contrib/chat/browser/list/chatListWidget.js';
-import { chatTranscriptListItems, type IChatListItem } from '../../../src/ash/workbench/contrib/chat/browser/list/chatListItems.js';
+import { ChatListWidget } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatListWidget.js';
+import { chatTranscriptListItems, type IChatListItem } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatListItems.js';
 import type { ThreadTranscriptEntry } from '../../../src/ash/workbench/services/chat/common/chatService.js';
-import '../../../src/ash/workbench/contrib/chat/browser/media/chat.css';
 
 const container = document.createElement('main');
 document.body.append(container);

@@ -16,8 +16,8 @@ import { IQuickInputService } from "../../../../../platform/quickinput/common/qu
 import { CommandService } from "../../../../../workbench/services/commands/common/commandService.js";
 import type { ViewPaneContainer } from "../../../../../workbench/browser/parts/views/viewPaneContainer.js";
 import { ViewContainerLocation, WorkbenchViewRegistry } from "../../../../../workbench/common/views.js";
-import { chatTranscriptListItems, chatListItem, chatTurnErrorListItem, type ChatTurnErrorAction } from "../../../../../workbench/contrib/chat/browser/list/chatListItems.js";
-import { ChatPaneModel } from "../../../../../workbench/contrib/chat/browser/pane/chatPaneModel.js";
+import { chatTranscriptListItems, chatListItem, chatTurnErrorListItem, type ChatTurnErrorAction } from "../../browser/widget/chatListItems.js";
+import { ChatWidgetModel } from "../../browser/widget/chatWidgetModel.js";
 import { CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, NEW_CHAT_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, TOGGLE_SESSION_INSPECTOR_COMMAND_ID } from "../../../../../workbench/contrib/chat/common/chat.js";
 import { IPreferencesService, type IPreferencesService as PreferencesService } from "../../../../../workbench/services/preferences/common/preferences.js";
 import { PreferencesService as BrowserPreferencesService } from "../../../../../workbench/services/preferences/browser/preferencesService.js";
@@ -87,12 +87,12 @@ const { BrowserContextViewService } = await import(
 	"../../../../../platform/contextview/browser/contextViewService.js"
 );
 const { ChatViewPane } = await import(
-	"../../../../../workbench/contrib/chat/browser/view/chatViewPane.js"
+	"../../../../../workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewPane.js"
 );
 const { ChatListWidget } = await import(
-	"../../../../../workbench/contrib/chat/browser/list/chatListWidget.js"
+	"../../browser/widget/chatListWidget.js"
 );
-const { openChatMarkdownLink } = await import("../../browser/pane/chatPane.js");
+const { openChatMarkdownLink } = await import("../../browser/widget/chatWidget.js");
 await import(
 	"../../../../../workbench/contrib/preferences/browser/preferences.contribution.js"
 );
@@ -1166,7 +1166,7 @@ test("SessionsManagementService persists and reflects the model", async () => {
 	assert.deepEqual(fake.modelRequests.map(request => request.model), [model]);
 });
 
-test("ChatPaneModel applies backend-assembled transcript entries", async () => {
+test("ChatWidgetModel applies backend-assembled transcript entries", async () => {
 	const activeSession = session("session-1", "thread-1");
 	let currentThread = thread();
 	const fake = fakeApi({
@@ -1174,7 +1174,7 @@ test("ChatPaneModel applies backend-assembled transcript entries", async () => {
 		thread: () => currentThread,
 	});
 	using sessions = new SessionsManagementService(fake.api);
-	using model = new ChatPaneModel(createChatService(fake.api), {
+	using model = new ChatWidgetModel(createChatService(fake.api), {
 		kind: "session",
 		active: {
 			session: activeSession,
@@ -1231,7 +1231,7 @@ test("ChatPaneModel applies backend-assembled transcript entries", async () => {
 	assert.equal(model.thread?.sequence, 4);
 });
 
-test("ChatPaneModel projects and refreshes the canonical durable Turn plan", async () => {
+test("ChatWidgetModel projects and refreshes the canonical durable Turn plan", async () => {
 	const activeSession = session("session-1", "thread-1");
 	let currentThread: Thread = {
 		...thread(),
@@ -1255,7 +1255,7 @@ test("ChatPaneModel projects and refreshes the canonical durable Turn plan", asy
 	};
 	const fake = fakeApi({ sessions: [activeSession], thread: () => currentThread });
 	using sessions = new SessionsManagementService(fake.api);
-	using model = new ChatPaneModel(createChatService(fake.api), {
+	using model = new ChatWidgetModel(createChatService(fake.api), {
 		kind: "session",
 		active: { session: activeSession, threadId: "thread-1" },
 	}, sessions);
@@ -1302,14 +1302,14 @@ test("ChatPaneModel projects and refreshes the canonical durable Turn plan", asy
 	assert.match(model.items[0]?.text ?? "", /In progress:\*\* Verify/);
 });
 
-test("ChatPaneModel mechanically clears and replaces transient transcript entries", async () => {
+test("ChatWidgetModel mechanically clears and replaces transient transcript entries", async () => {
 	const activeSession = session("session-1", "thread-1");
 	const fake = fakeApi({
 		sessions: [activeSession],
 		thread: () => thread(),
 	});
 	using sessions = new SessionsManagementService(fake.api);
-	using model = new ChatPaneModel(createChatService(fake.api), {
+	using model = new ChatWidgetModel(createChatService(fake.api), {
 		kind: "session",
 		active: {
 			session: activeSession,
@@ -1361,7 +1361,7 @@ test("ChatPaneModel mechanically clears and replaces transient transcript entrie
 	assert.equal(model.items.length, 0);
 });
 
-test("ChatPaneModel projects a durable Turn failure into the conversation", async () => {
+test("ChatWidgetModel projects a durable Turn failure into the conversation", async () => {
 	const activeSession = session("session-1", "thread-1");
 	const failedThread: Thread = {
 		advisor: { type: "default" },
@@ -1391,7 +1391,7 @@ test("ChatPaneModel projects a durable Turn failure into the conversation", asyn
 	};
 	const fake = fakeApi({ sessions: [activeSession], thread: () => failedThread });
 	using sessions = new SessionsManagementService(fake.api);
-	using model = new ChatPaneModel(createChatService(fake.api), {
+	using model = new ChatWidgetModel(createChatService(fake.api), {
 		kind: "session",
 		active: { session: activeSession, threadId: "thread-1" },
 	}, sessions);
@@ -1444,12 +1444,12 @@ test("Turn error presentation is selected only from the stable error code", () =
 	]);
 });
 
-test("ChatPaneModel rebuilds error actions from canonical Thread state after refresh and reconnect", async () => {
+test("ChatWidgetModel rebuilds error actions from canonical Thread state after refresh and reconnect", async () => {
 	const activeSession = session("session-1", "thread-1");
 	let currentThread = threadWithFailure("providerAuth", false);
 	const fake = fakeApi({ sessions: [activeSession], thread: () => currentThread });
 	using sessions = new SessionsManagementService(fake.api);
-	using model = new ChatPaneModel(createChatService(fake.api), {
+	using model = new ChatWidgetModel(createChatService(fake.api), {
 		kind: "session",
 		active: { session: activeSession, threadId: "thread-1" },
 	}, sessions);
@@ -1482,12 +1482,12 @@ test("ChatPaneModel rebuilds error actions from canonical Thread state after ref
 	assert.equal(model.items[0]?.action?.type, "chooseModel");
 });
 
-test("ChatPaneModel retries only the latest retryable failed Turn as a new visible Turn", async () => {
+test("ChatWidgetModel retries only the latest retryable failed Turn as a new visible Turn", async () => {
 	const activeSession = session("session-1", "thread-1");
 	const failedThread = threadWithFailure("modelInvocationFailed", true);
 	const fake = fakeApi({ sessions: [activeSession], thread: () => failedThread });
 	using sessions = new SessionsManagementService(fake.api);
-	using model = new ChatPaneModel(createChatService(fake.api), {
+	using model = new ChatWidgetModel(createChatService(fake.api), {
 		kind: "session",
 		active: { session: activeSession, threadId: "thread-1" },
 	}, sessions);
@@ -1658,7 +1658,7 @@ test("Chat picker retains the selected model when it is hidden", async () => {
 	await configuration.updateValue(ModelCatalogConfiguration.hiddenModels, [entry.model]);
 	using chat = createChatService(fake.api, configuration);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = new ChatPaneModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
+	using model = new ChatWidgetModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
 
 	await model.initialize();
 
@@ -1667,7 +1667,7 @@ test("Chat picker retains the selected model when it is hidden", async () => {
 	assert.deepEqual(model.selectedModel, entry.model);
 });
 
-test("ChatPaneModel steers an active Turn instead of starting another Turn", async () => {
+test("ChatWidgetModel steers an active Turn instead of starting another Turn", async () => {
 	const activeSession = session("session-1", "thread-1");
 	const activeThread: Thread = {
 		...thread(),
@@ -1690,7 +1690,7 @@ test("ChatPaneModel steers an active Turn instead of starting another Turn", asy
 	const fake = fakeApi({ sessions: [activeSession], thread: () => activeThread });
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = new ChatPaneModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
+	using model = new ChatWidgetModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
 	await model.initialize();
 
 	await model.send("focus on the failing test");
@@ -1706,12 +1706,12 @@ test("ChatPaneModel steers an active Turn instead of starting another Turn", asy
 	}]);
 });
 
-test("ChatPaneModel dispatches compact as a standalone server command", async () => {
+test("ChatWidgetModel dispatches compact as a standalone server command", async () => {
 	const activeSession = session("session-1", "thread-1");
 	const fake = fakeApi({ sessions: [activeSession], thread: () => thread("previous answer") });
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = new ChatPaneModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
+	using model = new ChatWidgetModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
 	await model.initialize();
 
 	await model.executeServerCommand("compact", "preserve the deployment decision");
@@ -2101,7 +2101,7 @@ test("Advisor question consults directly without starting the worker", async () 
 	});
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = new ChatPaneModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
+	using model = new ChatWidgetModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
 	await model.initialize();
 	await model.executeServerCommand("advisor", "Check src/app.rs cancellation");
 	assert.equal(fake.turnStartRequests.length, 0);
@@ -2115,7 +2115,7 @@ test("Advisor without a configured model keeps an untitled chat", async () => {
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
 	const untitled = sessions.createUntitledSession();
-	using model = new ChatPaneModel(chat, { kind: "untitled", session: untitled }, sessions);
+	using model = new ChatWidgetModel(chat, { kind: "untitled", session: untitled }, sessions);
 	await model.initialize();
 	await assert.rejects(model.executeServerCommand("advisor", "Check cancellation"), /Configure an advisor model in Chat Settings/);
 	assert.equal(fake.createSessionRequests.length, 0);
@@ -2129,7 +2129,7 @@ test("Advisor command selects a model and the off switch preserves its settings"
 	});
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = new ChatPaneModel(chat, { kind: "untitled", session: sessions.createUntitledSession() }, sessions);
+	using model = new ChatWidgetModel(chat, { kind: "untitled", session: sessions.createUntitledSession() }, sessions);
 	await model.initialize();
 	await model.executeServerCommand("advisor", "openai/reviewer");
 	assert.equal(fake.savedAdvisorDefaults[0]?.enabled, true);

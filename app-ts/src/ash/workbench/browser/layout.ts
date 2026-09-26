@@ -55,6 +55,15 @@ export interface WorkbenchDefaultLayout {
 	readonly force?: boolean;
 }
 
+export const DEFAULT_WORKBENCH_LAYOUT = {
+	parts: {
+		sidebar: false,
+		auxiliarybar: false,
+		agentSidebar: false,
+		panel: false,
+	},
+} as const satisfies WorkbenchDefaultLayout;
+
 /** The durable, mutable portion of Workbench layout state. */
 export interface WorkbenchLayoutState {
 	readonly version: 3;

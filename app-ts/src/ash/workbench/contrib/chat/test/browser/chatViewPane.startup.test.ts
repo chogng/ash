@@ -37,7 +37,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { ChatViewPane } = await import("../../browser/view/chatViewPane.js");
+const { ChatViewPane } = await import("../../browser/widgetHosts/viewPane/chatViewPane.js");
 const { BrowserContextViewService } = await import("../../../../../platform/contextview/browser/contextViewService.js");
 
 suiteTeardown(() => browserEnvironment.window.close());

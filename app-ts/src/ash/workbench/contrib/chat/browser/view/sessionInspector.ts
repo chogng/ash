@@ -1,9 +1,10 @@
+import './sessionInspector.css';
 import { h } from "../../../../../base/browser/dom.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../../../base/common/lifecycle.js";
 import type { AgentTreeNode } from "../../../../../sessions/services/sessions/common/session.js";
 import type { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagement.js";
 import type { TurnChangeSetSummary } from "../../../../services/chat/common/chatService.js";
-import type { ChatPaneModel } from "../pane/chatPaneModel.js";
+import type { ChatWidgetModel } from "../widget/chatWidgetModel.js";
 import type { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 
 export interface SessionInspectorDelegate {
@@ -16,7 +17,7 @@ export class SessionInspector extends Disposable {
 	private readonly content: HTMLDivElement;
 	private readonly binding = this._register(new DisposableStore());
 	private readonly editedDrafts = new Map<string, string>();
-	private model: ChatPaneModel | undefined;
+	private model: ChatWidgetModel | undefined;
 
 	constructor(container: HTMLElement, private readonly sessions: ISessionsManagementService, delegate: SessionInspectorDelegate, private readonly dialogs: IDialogService) {
 		super();
@@ -43,7 +44,7 @@ export class SessionInspector extends Disposable {
 		this.render();
 	}
 
-	bind(model: ChatPaneModel | undefined): void {
+	bind(model: ChatWidgetModel | undefined): void {
 		if (this.model === model) return;
 		this.binding.clear();
 		this.model = model;
@@ -71,7 +72,7 @@ export class SessionInspector extends Disposable {
 		);
 	}
 
-	private planSection(model: ChatPaneModel): HTMLElement {
+	private planSection(model: ChatWidgetModel): HTMLElement {
 		const section = inspectorSection(this.content.ownerDocument, "Plan");
 		const turn = [...(model.thread?.turns ?? [])].reverse().find((candidate) => candidate.plan);
 		if (!turn?.plan) {
@@ -96,7 +97,7 @@ export class SessionInspector extends Disposable {
 		return section.root;
 	}
 
-	private threadsSection(model: ChatPaneModel): HTMLElement {
+	private threadsSection(model: ChatWidgetModel): HTMLElement {
 		const section = inspectorSection(this.content.ownerDocument, "Threads");
 		const tree = h(section.body.ownerDocument, "div");
 		tree.className = "ash-session-inspector-threads";
@@ -111,7 +112,7 @@ export class SessionInspector extends Disposable {
 		return section.root;
 	}
 
-	private appendThread(tree: HTMLElement, model: ChatPaneModel, node: AgentTreeNode, depth: number): void {
+	private appendThread(tree: HTMLElement, model: ChatWidgetModel, node: AgentTreeNode, depth: number): void {
 		const title = node.title || (node.origin.type === "root" ? model.session!.title : "Agent Thread");
 		const item = button(tree.ownerDocument, title, `Open ${node.title || "Agent Thread"}`);
 		item.className = "ash-session-inspector-thread";
@@ -127,7 +128,7 @@ export class SessionInspector extends Disposable {
 		for (const child of node.children) this.appendThread(tree, model, child, depth + 1);
 	}
 
-	private activitySection(model: ChatPaneModel): HTMLElement {
+	private activitySection(model: ChatWidgetModel): HTMLElement {
 		const section = inspectorSection(this.content.ownerDocument, "Activity");
 		const turns = [...(model.thread?.turns ?? [])].reverse().slice(0, 12);
 		if (turns.length === 0) section.body.append(empty(section.body.ownerDocument, "No Turn activity yet."));
@@ -141,7 +142,7 @@ export class SessionInspector extends Disposable {
 		return section.root;
 	}
 
-	private changesSection(model: ChatPaneModel): HTMLElement {
+	private changesSection(model: ChatWidgetModel): HTMLElement {
 		const section = inspectorSection(this.content.ownerDocument, "Changes");
 		const changes = model.changeSets;
 		if (changes.length === 0) {
@@ -163,13 +164,13 @@ export class SessionInspector extends Disposable {
 		return section.root;
 	}
 
-	private async confirmDiscard(model: ChatPaneModel): Promise<void> {
+	private async confirmDiscard(model: ChatWidgetModel): Promise<void> {
 		const decision = await this.dialogs.confirm({ message: 'Discard every uncommitted change in this Thread?' });
 		if (!decision.confirmed || this.isDisposed || this.model !== model || model.changeSets.some(changeSet => changeSet.captureState === 'open')) return;
 		void model.discardChanges().catch((error) => this.showOperationError(error));
 	}
 
-	private changeCard(model: ChatPaneModel, changeSet: TurnChangeSetSummary): HTMLElement {
+	private changeCard(model: ChatWidgetModel, changeSet: TurnChangeSetSummary): HTMLElement {
 		const document = this.content.ownerDocument;
 		const card = h(document, "article");
 		card.className = "ash-session-inspector-change";
@@ -202,7 +203,7 @@ export class SessionInspector extends Disposable {
 		return card;
 	}
 
-	private messageEditor(model: ChatPaneModel, changeSet: TurnChangeSetSummary): HTMLElement {
+	private messageEditor(model: ChatWidgetModel, changeSet: TurnChangeSetSummary): HTMLElement {
 		const document = this.content.ownerDocument;
 		const container = h(document, "div");
 		container.className = "ash-session-inspector-message";

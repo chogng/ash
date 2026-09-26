@@ -1,4 +1,3 @@
-import "../../../workbench/contrib/chat/browser/media/chat.css";
 import "./media/sessionsChatView.css";
 import { addDisposableListener, h } from "../../../base/browser/dom.js";
 import type { IDimension } from "../../../base/browser/dom.js";
@@ -9,7 +8,7 @@ import type { ICommandService } from "../../../platform/commands/common/commands
 import type { IContextMenuService } from "../../../platform/contextview/browser/contextView.js";
 import type { IContextViewService } from "../../../platform/contextview/browser/contextView.js";
 import type { IQuickInputService } from "../../../platform/quickinput/common/quickInput.js";
-import { ChatPane } from "../../../workbench/contrib/chat/browser/pane/chatPane.js";
+import { ChatWidget } from "../../../workbench/contrib/chat/browser/widget/chatWidget.js";
 import type { IChatContextPickService } from "../../../workbench/services/chat/common/chatContextService.js";
 import type { IChatService } from "../../../workbench/services/chat/common/chatService.js";
 import type { SessionId } from "../../services/sessions/common/session.js";
@@ -36,7 +35,7 @@ export class SessionsChatView extends Disposable {
 	private readonly grid: Grid<SessionsChatGridView>;
 	private readonly empty: SessionsChatEmptyView;
 	private readonly entries = new Map<string, SessionsChatGridEntry>();
-	private activePane: ChatPane | undefined;
+	private activePane: ChatWidget | undefined;
 	private dimension: IDimension | undefined;
 
 	private readonly chatService: IChatService;
@@ -185,7 +184,7 @@ interface SessionsChatGridEntryOptions extends SessionsChatViewOptions {
 
 class SessionsChatGridEntry extends Disposable implements IView {
 	readonly element: HTMLElement;
-	readonly pane: ChatPane;
+	readonly pane: ChatWidget;
 	readonly minimumWidth = 300;
 	readonly maximumWidth = Number.POSITIVE_INFINITY;
 	readonly minimumHeight = 240;
@@ -213,7 +212,7 @@ class SessionsChatGridEntry extends Disposable implements IView {
 		close.setAttribute("aria-label", "Close visible session");
 		close.textContent = "×";
 		header.append(activate, close);
-		this.pane = this._register(new ChatPane(
+		this.pane = this._register(new ChatWidget(
 			this.element,
 			`ash-sessions-chat-pane-${sessionsChatPaneInstanceId}`,
 			options.chatService,

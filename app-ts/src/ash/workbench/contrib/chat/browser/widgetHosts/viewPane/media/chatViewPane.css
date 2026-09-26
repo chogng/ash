@@ -1,0 +1,50 @@
+.ash-chat-view-pane,
+.ash-chat-view {
+  min-height: 0;
+  height: 100%;
+}
+
+.ash-chat-view {
+  display: flex;
+  flex-direction: column;
+}
+
+.ash-chat-body {
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.ash-chat-pane-host {
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.ash-chat-body.compact {
+  position: relative;
+}
+
+.ash-chat-body.compact.inspector-visible .ash-session-inspector {
+  position: absolute;
+  inset: 0 0 0 auto;
+  z-index: 2;
+  width: min(92%, 360px);
+  min-width: 0;
+  box-shadow: -4px 0 12px var(--ash-widget-shadow);
+  border-inline-start: var(--ash-stroke-thickness) solid var(--ash-contrast-border);
+}
+
+.ash-chat-pane-host > .ash-chat {
+  height: 100%;
+}
+
+.ash-chat-pane-host > .ash-chat[hidden] {
+  display: none;
+}
+
+.ash-chat-view-empty {
+  align-self: center;
+  width: 100%;
+}

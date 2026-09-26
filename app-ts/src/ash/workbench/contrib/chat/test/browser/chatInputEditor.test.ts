@@ -18,9 +18,9 @@ for (const [name, value] of Object.entries({
 }
 
 const { createCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
-const { ChatInputEditor } = await import("../../browser/input/chatInputEditor.js");
-const { createChatCommandCompletionProvider } = await import("../../browser/input/chatCommandCompletion.js");
-const { createChatSkillCompletionProvider } = await import("../../browser/input/chatSkillCompletion.js");
+const { ChatInputEditor } = await import("../../browser/widget/input/chatInputEditor.js");
+const { createChatCommandCompletionProvider } = await import("../../browser/widget/input/chatCommandCompletion.js");
+const { createChatSkillCompletionProvider } = await import("../../browser/widget/input/chatSkillCompletion.js");
 const { DesktopSlashCommands, SlashCommandCatalog } = await import("../../common/slashCommands.js");
 const { SkillSelectorCatalog } = await import('../../common/skillSelectors.js');
 const { Position } = await import("../../../../../editor/common/core/position.js");

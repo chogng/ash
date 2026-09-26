@@ -1,8 +1,8 @@
-import { Position } from "../../../../../editor/common/core/position.js";
-import { Range } from "../../../../../editor/common/core/range.js";
-import { LanguageCompletionItemKind, type LanguageCompletionProvider, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from '../../../../../editor/common/languages.js';
+import { Position } from "../../../../../../editor/common/core/position.js";
+import { Range } from "../../../../../../editor/common/core/range.js";
+import { LanguageCompletionItemKind, type LanguageCompletionProvider, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from '../../../../../../editor/common/languages.js';
 
-import type { SkillSelectorCatalog } from "../../common/skillSelectors.js";
+import type { SkillSelectorCatalog } from "../../../common/skillSelectors.js";
 import { CHAT_INPUT_LANGUAGE_ID } from "./chatCommandCompletion.js";
 
 /** Adapts the Chat Skill catalog to the `$skill` completion contract. */
