@@ -73,7 +73,7 @@ export class NativeMenubarMainService extends Disposable {
 		if (window.isFocused()) this.activateWindow(window.id);
 
 		return toDisposable(() => {
-			this.host.setWindowTouchBar(window, [], () => {});
+			if (!window.isDestroyed()) this.host.setWindowTouchBar(window, [], () => {});
 			window.removeListener("focus", handleFocus);
 			this.windows.delete(window.id);
 			const activationIndex = this.activationOrder.indexOf(window.id);

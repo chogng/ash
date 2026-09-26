@@ -22,10 +22,11 @@ export class AppServerConnectionRelay extends Disposable {
 	private diagnostic = '';
 	private nonce: string | undefined;
 
-	constructor(public readonly options: { readonly processLauncher: IAppServerProcessLauncher }) { super(); }
+	constructor(public readonly options: { readonly enabled: false } | { readonly enabled: true; readonly processLauncher: IAppServerProcessLauncher }) { super(); }
 
 	public async start(): Promise<void> {
 		this.assertNotDisposed();
+		if (!this.options.enabled) { throw new Error('App Server is disabled'); }
 		await this.options.processLauncher.validate();
 		this.setState('starting');
 		if (this.renderer && !this.renderer.isDestroyed()) {
@@ -55,8 +56,9 @@ export class AppServerConnectionRelay extends Disposable {
 
 	public diagnostics(): string { return this.transport.value?.diagnostics() ?? this.diagnostic; }
 
-	public routes(renderer: WebContents, metadata: () => { workspaceId: string; workspaceRoot: string }, enabled: boolean): readonly IpcRoute<unknown, unknown>[] {
+	public routes(renderer: WebContents, metadata: () => { workspaceId: string; workspaceRoot: string }): readonly IpcRoute<unknown, unknown>[] {
 		this.renderer = renderer;
+		const processLauncher = this.options.enabled ? this.options.processLauncher : undefined;
 		const reset = (): void => { void this.stop(); };
 		renderer.on('render-process-gone', reset);
 		const navigating = (_event: unknown, _url: string, inPlace: boolean, mainFrame: boolean): void => { if (mainFrame && !inPlace) { reset(); } };
@@ -70,10 +72,10 @@ export class AppServerConnectionRelay extends Disposable {
 				return value.nonce;
 			},
 			invoke: async nonce => {
-				if (!enabled) { return { enabled: false }; }
-				await this.options.processLauncher.validate();
+				if (!processLauncher) { return { enabled: false }; }
+				await processLauncher.validate();
 				await this.stop();
-				this.attach(renderer, nonce as string);
+				this.attach(renderer, nonce as string, processLauncher);
 				return { enabled: true, protocolVersion: 1, ...metadata() };
 			},
 		}, {
@@ -86,21 +88,21 @@ export class AppServerConnectionRelay extends Disposable {
 					return new AppServerProtocolIncompatibleError(value.kind === 'missingCapability' ? { kind: value.kind, ...common } : { kind: value.kind, ...common, received: number('received') });
 				}
 				throw new Error('Invalid runtime incompatibility');
-			}, invoke: value => this.options.processLauncher.recoverInitializationFailure?.(value) ?? false,
+			}, invoke: value => processLauncher?.recoverInitializationFailure?.(value) ?? false,
 		}, {
 			channel: 'ash:app-server:initialized', validate: value => value,
 			invoke: async value => {
 				if (!isRecord(value) || value.nonce !== this.nonce || this.nonce === undefined) { throw new Error('Connection initialization superseded'); }
-				await this.options.processLauncher.didInitialize?.();
+				await processLauncher?.didInitialize?.();
 				this.setState('ready');
 			},
 		}];
 	}
 
-	private attach(renderer: WebContents, nonce: string): void {
+	private attach(renderer: WebContents, nonce: string, processLauncher: IAppServerProcessLauncher): void {
 		this.nonce = nonce;
 		const { port1, port2 } = new MessageChannelMain();
-		const transport = new ChildProcessJsonlTransport(this.options.processLauncher.launch());
+		const transport = new ChildProcessJsonlTransport(processLauncher.launch());
 		this.transport.value = transport;
 		this.setState('initializing');
 		const sent: number[] = [];

@@ -1,3 +1,4 @@
+import type { ElectronApplication } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
@@ -47,6 +48,7 @@ test('editor tab uses the editor surface and shares its pin and close slot', asy
 
 test('editor tab menu targets the clicked tab and opens from the keyboard', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	test.skip(target.kind === 'electron' && process.platform === 'darwin', 'macOS displays this menu through Electron');
 	const page = workbench.page;
 	const createUntitled = async (): Promise<void> => {
 		await page.getByRole('button', { name: 'Application menu' }).click();
@@ -79,4 +81,47 @@ test('editor tab menu targets the clicked tab and opens from the keyboard', asyn
 	await menu.getByRole('menuitem', { name: 'Close Other Editors' }).click();
 	await expect(group.tabs).toHaveCount(1);
 	await expect(remaining).toHaveCount(1);
+});
+
+test('macOS Electron editor tab menu targets mouse and keyboard actions', async ({ target, application, workbench }) => {
+	test.skip(target.kind !== 'electron' || process.platform !== 'darwin' || target.workbenchMode !== 'code', 'This scenario requires the macOS Code desktop product');
+	const electron = application as ElectronApplication;
+	const page = workbench.page;
+	const group = workbench.editors.groupAt(0);
+	await page.keyboard.press('ControlOrMeta+N');
+	const untitledTabs = group.tabs.filter({ hasText: /Untitled-/u });
+	const firstName = await untitledTabs.last().getAttribute('aria-label');
+	await page.keyboard.press('ControlOrMeta+N');
+	await expect(untitledTabs).toHaveCount(2);
+	const remainingName = await untitledTabs.last().getAttribute('aria-label');
+
+	// Electron menus are outside the renderer DOM; capture the popup and select its actions in the main process.
+	await electron.evaluate(({ Menu }) => {
+		const probe = { menus: [] as string[][], selected: 'Close Editor' as string | undefined };
+		(globalThis as typeof globalThis & { ashEditorTabMenuProbe?: typeof probe }).ashEditorTabMenuProbe = probe;
+		const popup = Menu.prototype.popup;
+		Menu.prototype.popup = function (options) {
+			const labels = this.items.map(item => item.label);
+			if (!labels.includes('Close Editor')) return popup.call(this, options);
+			probe.menus.push(labels);
+			if (probe.selected) this.items.find(item => item.label === probe.selected)?.click();
+			probe.selected = undefined;
+			options?.callback?.();
+		};
+	});
+
+	const first = group.element.getByRole('tab', { name: firstName! });
+	const remaining = group.element.getByRole('tab', { name: remainingName! });
+	await first.click({ button: 'right' });
+	await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashEditorTabMenuProbe?: { menus: string[][] } }).ashEditorTabMenuProbe?.menus.length)).toBe(1);
+	await expect(first).toHaveCount(0);
+	await expect(remaining).toHaveCount(1);
+
+	await electron.evaluate(() => {
+		(globalThis as typeof globalThis & { ashEditorTabMenuProbe?: { selected?: string } }).ashEditorTabMenuProbe!.selected = 'Pin Editor';
+	});
+	await remaining.focus();
+	await remaining.press('Shift+F10');
+	await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashEditorTabMenuProbe?: { menus: string[][] } }).ashEditorTabMenuProbe?.menus.length)).toBe(2);
+	await expect(remaining).toHaveAttribute('aria-description', /Pinned tab/u);
 });

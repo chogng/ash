@@ -91,7 +91,18 @@ export async function launchElectron(options: ElectronLaunchOptions): Promise<El
 		}
 		return { application, driver, close };
 	} catch (error) {
-		await close();
-		throw error;
+		const bufferedError = application.process().stderr?.read();
+		if (bufferedError) {
+			onProcessError(Buffer.isBuffer(bufferedError) ? bufferedError : Buffer.from(String(bufferedError)));
+		}
+		const exitCode = application.process().exitCode;
+		try {
+			await close();
+		} catch (closeError) {
+			processErrors = `${processErrors}\nCleanup: ${String(closeError)}`;
+		}
+		throw new Error(`Electron startup failed${exitCode === null ? '' : ` (exit code ${exitCode})`}: ${String(error)}${processErrors ? `\n${processErrors}` : ''}`, { cause: error });
+	} finally {
+		application.process().stderr?.off('data', onProcessError);
 	}
 }

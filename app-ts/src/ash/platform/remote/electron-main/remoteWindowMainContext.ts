@@ -72,7 +72,7 @@ export class RemoteWindowMainContext extends Disposable {
 	}
 
 	private createConnectionRecovery(): IRemoteAgentRecoveryMainService | undefined {
-		const launcher = this.options.supervisor.options.processLauncher;
+		const launcher = this.options.supervisor.options.enabled ? this.options.supervisor.options.processLauncher : undefined;
 		if (!(launcher instanceof SshAppServerProcessLauncher)) return undefined;
 		const prepareForRuntimeReplacement = (): void => {
 			try {

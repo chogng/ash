@@ -92,8 +92,10 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> {
 			clearPending();
 			this.closeStates.delete(window);
 			window.off('close', onClose);
-			window.webContents.off('did-start-loading', onRendererLoading);
-			window.webContents.off('render-process-gone', onRendererLoading);
+			if (!window.isDestroyed()) {
+				window.webContents.off('did-start-loading', onRendererLoading);
+				window.webContents.off('render-process-gone', onRendererLoading);
+			}
 		});
 	}
 
@@ -134,7 +136,7 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> {
 		window.webContents.on('zoom-changed', onZoomChanged);
 		return toDisposable(() => {
 			active = false;
-			window.webContents.off('zoom-changed', onZoomChanged);
+			if (!window.isDestroyed()) window.webContents.off('zoom-changed', onZoomChanged);
 		});
 	}
 

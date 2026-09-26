@@ -69,6 +69,16 @@ test('Touch Bar selection is routed to the owning workbench window', () => {
 	assert.deepEqual(host.touchBar, []);
 });
 
+test('closed windows release their menubar without touching the destroyed window', () => {
+	const host = new TestMenubarHost();
+	using service = new NativeMenubarMainService(host);
+	const window = new TestBrowserWindow(4);
+	const registration = service.registerWindow(window.value);
+	window.destroy();
+	registration.dispose();
+	assert.equal(host.template, undefined);
+});
+
 class TestMenubarHost implements INativeMenubarMainHost {
 	readonly applicationName = 'Ash';
 	template: readonly INativeMenubarMainMenuItem[] | undefined;
@@ -80,6 +90,7 @@ class TestMenubarHost implements INativeMenubarMainHost {
 	}
 
 	setWindowTouchBar(_window: INativeMenubarMainWindow, items: readonly import('../../../../platform/menubar/common/nativeMenubar.js').INativeTouchBarItem[], select: (id: string) => void): void {
+		if (_window.isDestroyed()) throw new Error('Touch Bar cannot be changed after its window is destroyed');
 		this.touchBar = items;
 		this.touchBarSelect = select;
 	}
@@ -119,6 +130,10 @@ class TestBrowserWindow {
 
 	fireFocus(): void {
 		for (const listener of this.focusListeners) listener();
+	}
+
+	destroy(): void {
+		this.destroyed = true;
 	}
 }
 

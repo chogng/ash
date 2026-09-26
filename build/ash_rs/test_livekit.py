@@ -12,6 +12,24 @@ from build.ash_rs.livekit import resolve_livekit
 
 
 class LivekitTests(unittest.TestCase):
+    def test_macos_requires_go_before_downloading_source(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            lock_path = root / "third_party/livekit/runtime-lock.json"
+            lock_path.parent.mkdir(parents=True)
+            lock_path.write_text(json.dumps({
+                "version": "1.0",
+                "artifacts": {},
+                "source": {"url": "https://example.invalid/source.tar.gz", "sha256": "0" * 64},
+            }))
+            with (
+                patch("build.ash_rs.livekit.sys.platform", "darwin"),
+                patch("build.ash_rs.livekit.shutil.which", return_value=None),
+                patch("build.ash_rs.livekit.download_and_verify", side_effect=AssertionError("unexpected download")),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "requires Go 1.26"):
+                    resolve_livekit("aarch64-apple-darwin", root=root)
+
     def test_verified_archive_extracts_only_the_server(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

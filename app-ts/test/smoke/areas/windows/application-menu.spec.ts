@@ -31,6 +31,7 @@ test('application menu trigger uses the titlebar action size', async ({ target, 
 
 test('application menu switches its root submenus on pointer entry', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	test.skip(target.kind === 'electron' && process.platform === 'darwin', 'macOS uses the system menu');
 	const page = workbench.page;
 	const trigger = page.getByRole('toolbar', { name: 'Title bar left actions' }).getByRole('button', { name: 'Application menu' });
 	await trigger.click();
@@ -47,6 +48,7 @@ test('application menu switches its root submenus on pointer entry', async ({ ta
 
 test('application menu keeps submenu arrows inside their menu rows', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	test.skip(target.kind === 'electron' && process.platform === 'darwin', 'macOS uses the system menu');
 	const page = workbench.page;
 	await page.getByRole('button', { name: 'Application menu' }).click();
 	const mainMenu = page.getByRole('menu').first();
@@ -63,6 +65,7 @@ test('application menu keeps submenu arrows inside their menu rows', async ({ ta
 
 test('application menu aligns command labels with and without icons', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	test.skip(target.kind === 'electron' && process.platform === 'darwin', 'macOS uses the system menu');
 	const page = workbench.page;
 	await page.getByRole('button', { name: 'Application menu' }).click();
 	const fileItem = page.getByRole('menu').first().getByRole('menuitem', { name: 'File' });
@@ -80,6 +83,7 @@ test('application menu aligns command labels with and without icons', async ({ t
 
 test('application menu opens real commands and updates Go when an editor opens', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	test.skip(target.kind === 'electron' && process.platform === 'darwin', 'macOS uses the system menu');
 	const page = workbench.page;
 	const trigger = page.getByRole('button', { name: 'Application menu' });
 	const hoverMenuItem = async (item: Locator) => {
@@ -125,11 +129,7 @@ test('application menu opens real commands and updates Go when an editor opens',
 	await expect(fileMenuItem).toHaveAttribute('aria-expanded', 'true');
 	const fileMenu = page.getByRole('menu').last();
 	const openFolder = fileMenu.getByRole('menuitem', { name: 'Open Folder...' });
-	if (target.kind === 'electron' || target.appServerMode === 'required') {
-		await expect(openFolder).toBeVisible();
-	} else {
-		await expect(openFolder).toHaveCount(0);
-	}
+	await expect(openFolder).toBeVisible();
 	await expect(fileMenu.getByRole('menuitem', { name: 'Ash Settings' })).toBeVisible();
 	const newEditorItem = fileMenu.getByRole('menuitem', { name: 'New Untitled Text Editor' });
 	await newEditorItem.hover();

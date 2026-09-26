@@ -13,7 +13,7 @@ class TestWindow implements IWorkbenchWindow<TestWindow> {
 		getZoomLevel: (): number => this.zoomLevel,
 		setZoomLevel: (level: number): void => { this.zoomLevel = level; },
 		on: (event: 'zoom-changed' | 'did-start-loading' | 'render-process-gone', listener: () => void): void => { const listeners = event === 'zoom-changed' ? this.zoomListeners : this.rendererListeners.get(event) ?? new Set<() => void>(); listeners.add(listener); if (event !== 'zoom-changed') this.rendererListeners.set(event, listeners); },
-		off: (event: 'zoom-changed' | 'did-start-loading' | 'render-process-gone', listener: () => void): void => { (event === 'zoom-changed' ? this.zoomListeners : this.rendererListeners.get(event))?.delete(listener); },
+		off: (event: 'zoom-changed' | 'did-start-loading' | 'render-process-gone', listener: () => void): void => { if (this.destroyed) throw new Error('Object has been destroyed'); (event === 'zoom-changed' ? this.zoomListeners : this.rendererListeners.get(event))?.delete(listener); },
 		send: (channel: string, level: number): void => { this.messages.push({ channel, level }); },
 	};
 	public destroyed = false;
@@ -121,6 +121,14 @@ test('WindowsMainService sends zoom changes and releases its window listener', a
 	await new Promise<void>(resolve => setImmediate(resolve));
 	window.emitZoomChanged();
 	assert.equal(window.messages.length, 2);
+});
+
+test('WindowsMainService disposes zoom tracking after window destruction', () => {
+	const window = new TestWindow(1, 'First');
+	const service = new WindowsMainService(() => [window], async () => undefined);
+	const tracking = service.trackZoomLevel(window);
+	window.destroyed = true;
+	assert.doesNotThrow(() => tracking.dispose());
 });
 
 test('WindowsMainService creates a new macOS window tab and joins it to its parent', async () => {

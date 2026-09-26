@@ -3,15 +3,19 @@
 from __future__ import annotations
 
 import hashlib
+import http.client
 import os
 import shutil
+import ssl
 import stat
 import tarfile
 import tempfile
+import time
 import zipfile
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator, Protocol
+from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 
@@ -78,29 +82,46 @@ def download_and_verify(
     if not isinstance(limit, int) or isinstance(limit, bool) or limit <= 0:
         raise ValueError("Downloads require a positive byte limit")
     request = Request(artifact.url, headers={"User-Agent": "ash-package-builder"})
-    with temporary_file(destination) as temporary:
-        digest = hashlib.sha256()
-        size = 0
-        with (
-            urlopen(request, timeout=timeout) as response,
-            temporary.open("wb") as output,
-        ):
-            while block := response.read(1024 * 1024):
-                size += len(block)
-                if size > limit:
+    for attempt in range(3):
+        try:
+            with temporary_file(destination) as temporary:
+                digest = hashlib.sha256()
+                size = 0
+                with (
+                    urlopen(request, timeout=timeout) as response,
+                    temporary.open("wb") as output,
+                ):
+                    while block := response.read(1024 * 1024):
+                        size += len(block)
+                        if size > limit:
+                            raise RuntimeError(
+                                f"Archive exceeds locked size: {destination.name}"
+                            )
+                        digest.update(block)
+                        output.write(block)
+                actual_digest = digest.hexdigest()
+                if (
+                    artifact.size is not None and size != artifact.size
+                ) or actual_digest != artifact.sha256:
                     raise RuntimeError(
-                        f"Archive exceeds locked size: {destination.name}"
+                        f"Archive failed locked size or SHA-256 validation: {destination.name}"
                     )
-                digest.update(block)
-                output.write(block)
-        actual_digest = digest.hexdigest()
-        if (
-            artifact.size is not None and size != artifact.size
-        ) or actual_digest != artifact.sha256:
-            raise RuntimeError(
-                f"Archive failed locked size or SHA-256 validation: {destination.name}"
-            )
-        publish(temporary, destination, actual_digest)
+                publish(temporary, destination, actual_digest)
+            return
+        except (ConnectionError, TimeoutError, http.client.IncompleteRead, ssl.SSLError, URLError) as error:
+            if not retryable_download_error(error):
+                raise
+            if attempt == 2:
+                raise RuntimeError(f"Download failed after 3 attempts: {artifact.url}") from error
+            time.sleep(2**attempt)
+
+
+def retryable_download_error(error: BaseException) -> bool:
+    if isinstance(error, URLError):
+        return isinstance(error.reason, BaseException) and retryable_download_error(error.reason)
+    if isinstance(error, ssl.SSLError):
+        return "UNEXPECTED_EOF_WHILE_READING" in str(error)
+    return isinstance(error, (ConnectionError, TimeoutError, http.client.IncompleteRead))
 
 
 def extract_member(
