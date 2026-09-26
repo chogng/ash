@@ -33,7 +33,7 @@ Ash 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保
 - Visual Studio Installer 的“语言包”需安装 **English**，已有中文安装可直接补装。Rust 会向 MSVC 请求英文诊断；缺少英文资源时，中文“正在创建库”进度会被误报为 `linker_messages` warning，见 [Rust #159133](https://github.com/rust-lang/rust/issues/159133)。
 - 普通构建和启动入口只准备项目依赖与产物，不调用系统工具安装器。分别用 `just ash`、`just ash-desktop`、`just app` 启动产品。
 - Bazel 由 Bazelisk 管理；它读取仓库根的 [`.bazelversion`](../.bazelversion)，不需要手动选择 Bazel 版本。Windows 运行测试前需让 `BAZEL_SH` 指向 Git Bash，例如 `C:\Program Files\Git\bin\bash.exe`。
-- 当前未提供 Dev Container。Windows 桌面构建、调试和平台验证在 Windows 上完成。
+- Dev Container 提供 Linux Web 和 Rust 后端开发环境；Windows 桌面构建、调试和平台验证仍在 Windows 上完成。
 
 | 工具 | 版本要求与来源 | 安装来源或组件 |
 | --- | --- | --- |
@@ -59,6 +59,20 @@ Ash 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保
 1. 按根 [README](../README.md#quick-start) 配置 Node 和 pnpm，确认 `node --version`、`pnpm --version` 与仓库要求一致。
 2. 执行 `pnpm install` 安装 Node workspace 依赖。
 3. 执行 `just install` 获取 Rust 依赖并通过 uv 准备 Python 工具环境。Windows 上此入口使用系统自带的 `powershell.exe`，不要求预先安装 `pwsh`；缺少 PowerShell 7 时会调用 winget 安装。安装后重启终端和编辑器，让后续 Just 命令读取更新后的 PATH。
+
+### Dev Container：Linux Web 与后端
+
+安装 Docker 和 VS Code Dev Containers 扩展后，在仓库根目录执行 **Dev Containers: Reopen in Container**。配置位于 [`.devcontainer/`](../.devcontainer/)。首次创建会安装仓库固定的 Node、pnpm、Rust、uv，以及 Browser Playwright 所需的 Chromium 和系统库，并执行 `pnpm install`。依赖下载需要联网。
+
+在容器终端运行：
+
+```sh
+pnpm --dir app-ts dev:web --host 0.0.0.0
+pnpm --dir app-ts run test:smoke:browser
+pnpm --dir app-ts run test:smoke:browser:full
+```
+
+第一个命令启动不连接后端的 Web 页面，再打开转发的 5173 端口。完整 Web 模式沿用仓库的 App Server 打包入口；Linux 的 LiveKit 程序由构建脚本下载并校验。完整 Web 开发服务及 App Server 只监听容器内的回环地址，因此在容器中运行其 Playwright 测试，不能通过端口转发在宿主机浏览器中打开。容器卷保存依赖、Cargo 缓存和 `.build/`，因此不会混用宿主机的构建产物。Electron 桌面窗口与菜单的 Playwright 测试仍需在目标桌面操作系统上运行。
 
 ### 项目命令
 

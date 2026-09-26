@@ -1,0 +1,26 @@
+{
+  "name": "Ash Web and backend",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "workspaceFolder": "/workspaces/ash",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/ash,type=bind",
+  "remoteUser": "node",
+  "mounts": [
+    "source=ash-${devcontainerId}-node-modules,target=/workspaces/ash/node_modules,type=volume,volume-nocopy",
+    "source=ash-${devcontainerId}-app-ts-node-modules,target=/workspaces/ash/app-ts/node_modules,type=volume,volume-nocopy",
+    "source=ash-${devcontainerId}-build-node-modules,target=/workspaces/ash/build/node_modules,type=volume,volume-nocopy",
+    "source=ash-${devcontainerId}-build-output,target=/workspaces/ash/.build,type=volume,volume-nocopy",
+    "source=ash-${devcontainerId}-python-env,target=/workspaces/ash/scripts/.venv,type=volume,volume-nocopy",
+    "source=ash-${devcontainerId}-third-party-cache,target=/workspaces/ash/third_party/.cache,type=volume,volume-nocopy",
+    "source=ash-${devcontainerId}-tool-cache,target=/home/node/.cache,type=volume,volume-nocopy",
+    "source=ash-${devcontainerId}-cargo-registry,target=/home/node/.cargo/registry,type=volume,volume-nocopy",
+    "source=ash-${devcontainerId}-cargo-git,target=/home/node/.cargo/git,type=volume,volume-nocopy"
+  ],
+  "postCreateCommand": "sudo chown node:node node_modules app-ts/node_modules build/node_modules .build scripts/.venv third_party/.cache /home/node/.cache /home/node/.cargo/registry /home/node/.cargo/git && pnpm install --frozen-lockfile && pnpm --dir app-ts exec playwright install chromium",
+  "forwardPorts": [5173],
+  "portsAttributes": {
+    "5173": { "label": "Ash Web UI" }
+  }
+}

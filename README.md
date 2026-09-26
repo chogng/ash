@@ -79,6 +79,9 @@ matrix checks can set `ASH_WORKBENCH_MODE=academic` without changing the command
 
 ### Browser Workbench
 
+For a Linux Web and Rust backend environment, open the repository in the
+[Dev Container](docs/build.md#dev-containerlinux-web-与后端).
+
 ```bash
 pnpm dev:web       # disconnected UI at http://127.0.0.1:5173/
 pnpm dev:web:full # Rust-backed UI at http://127.0.0.1:5174/
