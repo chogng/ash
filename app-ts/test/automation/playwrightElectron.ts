@@ -24,6 +24,8 @@ export async function launchElectron(options: ElectronLaunchOptions): Promise<El
 		executablePath: configuration.executablePath,
 		timeout: 30_000,
 	});
+	// Playwright releases the application channel on exit; retain the child process for startup diagnostics and cleanup.
+	const electronProcess = application.process();
 	const close = async (): Promise<void> => {
 		// Stop this launch's private daemon before waiting for Electron's process
 		// tree to close. Explicit shared profiles remain owned by their caller.
@@ -38,7 +40,7 @@ export async function launchElectron(options: ElectronLaunchOptions): Promise<El
 	};
 	let processErrors = '';
 	const onProcessError = (chunk: Buffer): void => { processErrors = (processErrors + chunk.toString()).slice(-16_384); };
-	application.process().stderr?.on('data', onProcessError);
+	electronProcess.stderr?.on('data', onProcessError);
 	try {
 		if (options.appServerMode === 'required' && options.workspaceDirectory && options.workspacePermissions === 'development') {
 			const workspacePaths = [options.workspaceDirectory, await realpath(options.workspaceDirectory)];
@@ -87,15 +89,15 @@ export async function launchElectron(options: ElectronLaunchOptions): Promise<El
 			page.off('request', onRequest);
 			page.off('requestfinished', onRequestFinished);
 			page.off('requestfailed', onRequestFailed);
-			application.process().stderr?.off('data', onProcessError);
+			electronProcess.stderr?.off('data', onProcessError);
 		}
 		return { application, driver, close };
 	} catch (error) {
-		const bufferedError = application.process().stderr?.read();
+		const bufferedError = electronProcess.stderr?.read();
 		if (bufferedError) {
 			onProcessError(Buffer.isBuffer(bufferedError) ? bufferedError : Buffer.from(String(bufferedError)));
 		}
-		const exitCode = application.process().exitCode;
+		const exitCode = electronProcess.exitCode;
 		try {
 			await close();
 		} catch (closeError) {
@@ -103,6 +105,6 @@ export async function launchElectron(options: ElectronLaunchOptions): Promise<El
 		}
 		throw new Error(`Electron startup failed${exitCode === null ? '' : ` (exit code ${exitCode})`}: ${String(error)}${processErrors ? `\n${processErrors}` : ''}`, { cause: error });
 	} finally {
-		application.process().stderr?.off('data', onProcessError);
+		electronProcess.stderr?.off('data', onProcessError);
 	}
 }

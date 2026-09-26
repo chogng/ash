@@ -77,10 +77,10 @@ product groups are `Ash Code (TUI)`, `Ash Desktop (Electron)`, and `App (Rust De
 The Desktop command is shared by both Workbench build modes. The default mode is `code`; build
 matrix checks can set `ASH_WORKBENCH_MODE=academic` without changing the command name.
 
-### Browser Workbench
+For a Linux Electron Desktop, Web, and Rust backend environment, open the repository in the
+[Dev Container](docs/build.md#dev-containerlinux-desktopweb-与后端).
 
-For a Linux Web and Rust backend environment, open the repository in the
-[Dev Container](docs/build.md#dev-containerlinux-web-与后端).
+### Browser Workbench
 
 ```bash
 pnpm dev:web       # disconnected UI at http://127.0.0.1:5173/

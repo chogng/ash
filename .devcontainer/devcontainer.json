@@ -1,9 +1,14 @@
 {
-  "name": "Ash Web and backend",
+  "name": "Ash Desktop, Web and backend",
   "build": {
     "dockerfile": "Dockerfile",
     "context": ".."
   },
+  "containerEnv": {
+    "VNC_PASSWORD": "vscode"
+  },
+  "overrideCommand": false,
+  "privileged": true,
   "workspaceFolder": "/workspaces/ash",
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/ash,type=bind",
   "remoteUser": "node",
@@ -19,8 +24,9 @@
     "source=ash-${devcontainerId}-cargo-git,target=/home/node/.cargo/git,type=volume,volume-nocopy"
   ],
   "postCreateCommand": "sh .devcontainer/post-create.sh",
-  "forwardPorts": [5173],
+  "forwardPorts": [5173, 6080],
   "portsAttributes": {
-    "5173": { "label": "Ash Web UI" }
+    "5173": { "label": "Ash Web UI" },
+    "6080": { "label": "Ash Desktop (noVNC)", "onAutoForward": "silent" }
   }
 }

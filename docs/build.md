@@ -33,7 +33,7 @@ Ash 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保
 - Visual Studio Installer 的“语言包”需安装 **English**，已有中文安装可直接补装。Rust 会向 MSVC 请求英文诊断；缺少英文资源时，中文“正在创建库”进度会被误报为 `linker_messages` warning，见 [Rust #159133](https://github.com/rust-lang/rust/issues/159133)。
 - 普通构建和启动入口只准备项目依赖与产物，不调用系统工具安装器。分别用 `just ash`、`just ash-desktop`、`just app` 启动产品。
 - Bazel 由 Bazelisk 管理；它读取仓库根的 [`.bazelversion`](../.bazelversion)，不需要手动选择 Bazel 版本。Windows 运行测试前需让 `BAZEL_SH` 指向 Git Bash，例如 `C:\Program Files\Git\bin\bash.exe`。
-- Dev Container 提供 Linux Web 和 Rust 后端开发环境；Windows 桌面构建、调试和平台验证仍在 Windows 上完成。
+- Dev Container 提供 Linux Desktop、Web 和 Rust 后端开发环境；Windows 桌面构建、调试和平台验证仍在 Windows 上完成。
 
 | 工具 | 版本要求与来源 | 安装来源或组件 |
 | --- | --- | --- |
@@ -59,19 +59,20 @@ Ash 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保
 2. 执行 `pnpm install` 安装 Node workspace 依赖。
 3. 执行 `just install` 获取 Rust 依赖，并创建 `scripts/.venv`、安装 [`requirements.txt`](../scripts/requirements.txt) 中固定版本和摘要的 Ruff。Windows 上此入口使用系统自带的 `powershell.exe`，不要求预先安装 `pwsh`；缺少 PowerShell 7 时会调用 winget 安装。安装后重启终端和编辑器，让后续 Just 命令读取更新后的 PATH。
 
-### Dev Container：Linux Web 与后端
+### Dev Container：Linux Desktop、Web 与后端
 
-安装 Docker 和 VS Code Dev Containers 扩展后，在仓库根目录执行 **Dev Containers: Reopen in Container**。配置位于 [`.devcontainer/`](../.devcontainer/)。首次创建会安装仓库固定的 Node、pnpm、Rust、Just、Python，以及 Browser Playwright 所需的 Chromium 和系统库；创建容器时会运行 `just install` 获取 Cargo 依赖和固定版本的 Ruff，执行 `pnpm install`、安装 Chromium，并下载和校验当前 Linux 平台的 LiveKit Server。容器终端可直接运行 `python` 和 `ruff`。镜像从 LLVM 官方软件源安装 Clang 21，供 LiveKit WebRTC 的 C++ 代码编译使用，并设置 UTF-8 字符集以支持 Browser 文件测试中的中文文件名。依赖下载需要联网。
+安装 Docker 和 VS Code Dev Containers 扩展后，在仓库根目录执行 **Dev Containers: Reopen in Container**。配置位于 [`.devcontainer/`](../.devcontainer/)。首次创建会安装仓库固定的 Node、pnpm、Rust、Just、Python，以及 Browser Playwright 所需的 Chromium 和系统库；镜像还安装 Linux 桌面、VNC、noVNC 和供源码启动 App Server 使用的 ripgrep。创建容器时会运行 `just install` 获取 Cargo 依赖和固定版本的 Ruff，执行 `pnpm install`、安装 Chromium，并下载和校验当前 Linux 平台的 LiveKit Server。容器终端可直接运行 `python` 和 `ruff`。镜像从 LLVM 官方软件源安装 Clang 21，供 LiveKit WebRTC 的 C++ 代码编译使用，并设置 UTF-8 字符集以支持 Browser 文件测试中的中文文件名。依赖下载需要联网。
 
 在容器终端运行：
 
 ```sh
+just ash-desktop
 pnpm --dir app-ts dev:web --host 0.0.0.0
 pnpm --dir app-ts run test:smoke:browser
 pnpm --dir app-ts run test:smoke:browser:full
 ```
 
-第一个命令启动不连接后端的 Web 页面，再打开转发的 5173 端口。完整 Web 模式沿用仓库的 App Server 打包入口；容器创建时预先运行同一 LiveKit 下载脚本，完整 Web 构建复用已校验的程序。完整 Web 开发服务及 App Server 只监听容器内的回环地址，因此在容器中运行其 Playwright 测试，不能通过端口转发在宿主机浏览器中打开。容器卷保存依赖、Cargo 缓存和 `.build/`，因此不会混用宿主机的构建产物。Electron 桌面窗口与菜单的 Playwright 测试仍需在目标桌面操作系统上运行。
+`just ash-desktop` 启动 Electron 桌面版。在宿主机打开转发的 6080 端口，输入 VNC 密码 `vscode` 查看容器桌面；VS Code 的 `Ash Desktop (Electron)` F5 配置使用同一命令。配置启用 `privileged` 供 Electron 创建 Linux 沙箱，`post-create.sh` 自动设置沙箱程序权限。`dev:web` 启动不连接后端的 Web 页面，打开转发的 5173 端口即可。完整 Web 模式沿用仓库的 App Server 打包入口；容器创建时预先运行同一 LiveKit 下载脚本，完整 Web 构建复用已校验的程序。完整 Web 开发服务及 App Server 只监听容器内的回环地址，因此在容器中运行其 Playwright 测试，不能通过端口转发在宿主机浏览器中打开。容器卷保存依赖、Cargo 缓存和 `.build/`，因此不会混用宿主机的构建产物。Electron 桌面窗口与菜单的 Playwright 测试在容器桌面上运行。
 
 ### 项目命令
 

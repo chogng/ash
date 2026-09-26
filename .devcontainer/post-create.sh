@@ -14,6 +14,7 @@ sudo chown node:node \
 
 just install
 pnpm install --frozen-lockfile
+sudo /usr/local/bin/ash-configure-electron-sandbox
 pnpm --dir app-ts exec playwright install chromium
 
 # Fetch the locked Linux media server before the first full Web build.

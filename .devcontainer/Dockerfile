@@ -52,9 +52,12 @@ RUN test "$(node --version)" = "v$(cat /tmp/ash-node-version)" \
     && chown -R node:node "$PNPM_HOME"
 
 RUN printf '%s\n' 'node ALL=(root) NOPASSWD: /usr/bin/chown' > /etc/sudoers.d/ash-node \
+    && printf '%s\n' 'node ALL=(root) NOPASSWD: /usr/local/bin/ash-configure-electron-sandbox' >> /etc/sudoers.d/ash-node \
     && chmod 0440 /etc/sudoers.d/ash-node \
     && mkdir -p /workspaces/ash \
     && chown node:node /workspaces/ash
+
+COPY --chmod=0755 .devcontainer/configure-electron-sandbox.sh /usr/local/bin/ash-configure-electron-sandbox
 
 ENV CARGO_HOME=/home/node/.cargo \
     RUSTUP_HOME=/home/node/.rustup \
@@ -76,3 +79,22 @@ ENV CXX=clang++-21 \
     PATH=${PATH}:/workspaces/ash/scripts/.venv/bin
 
 WORKDIR /workspaces/ash
+
+# The desktop entrypoint prepares the system socket as root; VS Code terminals use remoteUser node.
+USER root
+RUN apt-get update && apt-get install --yes --no-install-recommends \
+    dbus-x11 \
+    fluxbox \
+    novnc \
+    ripgrep \
+    tigervnc-standalone-server \
+    tigervnc-tools \
+    websockify \
+    x11-utils \
+    xauth \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --chmod=0755 .devcontainer/desktop-init.sh /usr/local/bin/ash-desktop-init
+ENV DISPLAY=:1
+ENTRYPOINT ["/usr/local/bin/ash-desktop-init"]
+CMD ["sleep", "infinity"]
