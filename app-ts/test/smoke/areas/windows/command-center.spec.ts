@@ -356,7 +356,8 @@ test('top activity bar places the view selector inside the sidebar', async ({ ta
 	await expect.poll(leftInsets).toEqual({ tab: 9, title: 17, paneTwisty: 17 });
 	await page.getByRole('button', { name: 'Manage' }).click();
 	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Settings' }).click();
-	await page.locator('[data-settings-category-id="appearance"]').click();
+	await page.locator('[data-settings-group-id="workbench"]').click();
+	await page.locator('[data-settings-category-id="layout"]').click();
 	const layoutStyle = page.locator('[data-configuration-key="workbench.layoutStyle"]').getByRole('combobox');
 	await layoutStyle.click();
 	await page.getByRole('option', { name: 'Flat' }).click();

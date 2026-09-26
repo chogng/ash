@@ -133,6 +133,7 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.deepEqual(SettingsCategories.map(category => category.id), [
 		'general',
 		'appearance',
+		'layout',
 		'editor',
 		'agents',
 		'teams',
@@ -148,7 +149,8 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, HoverConfiguration.delay), 'general');
 	assert.equal(findSettingCategory(layout, SashConfiguration.size), 'general');
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.colorTheme), 'appearance');
-	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.layoutStyle), 'appearance');
+	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.layoutStyle), 'layout');
+	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.activityBarLocation), 'layout');
 	const iconThemeSetting = defaults.get(WorkbenchConfiguration.iconTheme);
 	assert.equal(iconThemeSetting.valueType, 'select');
 	if (iconThemeSetting.valueType === 'select') {
@@ -364,8 +366,20 @@ test('PreferencesEditor renders and updates registry-backed settings only', asyn
 	assert.equal(root.querySelector('.ash-modal-editor')?.getAttribute('role'), 'dialog');
 	assert.deepEqual(
 		[...root.querySelectorAll<HTMLElement>('[data-settings-category-id]')].map(element => element.dataset.settingsCategoryId),
-		['general', 'appearance', 'editor'],
+		['general', 'editor'],
 	);
+	const workbenchGroup = root.querySelector<HTMLElement>('[data-settings-group-id="workbench"]');
+	assert.ok(workbenchGroup);
+	assert.equal(workbenchGroup.closest('.ash-tree-row')?.getAttribute('aria-expanded'), 'false');
+	workbenchGroup.closest<HTMLElement>('.ash-tree-row')?.click();
+	assert.deepEqual(
+		[...root.querySelectorAll<HTMLElement>('[data-settings-category-id]')].map(element => element.dataset.settingsCategoryId),
+		['general', 'appearance', 'layout', 'editor'],
+	);
+	assert.equal(root.querySelector('[data-settings-category-id="appearance"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
+	assert.equal(root.querySelector('[data-settings-category-id="layout"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
+	assert.equal(root.querySelector('[data-settings-target-id="appearance.group.theme"]'), null);
+	assert.equal(root.querySelector('[data-settings-target-id="layout.group.layout"]'), null);
 	const agentsGroup = root.querySelector<HTMLElement>('[data-settings-group-id="agents"]');
 	assert.ok(agentsGroup);
 	assert.equal(agentsGroup.textContent, 'Agents');
@@ -439,6 +453,10 @@ test('PreferencesEditor renders and updates registry-backed settings only', asyn
 	assert.equal(root.querySelector('[data-settings-category-id="teams"]'), null);
 	search.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Escape' }));
 	assert.equal(search.value, '');
+	search.value = 'workbench.colorTheme';
+	search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
+	assert.equal(root.querySelector('[data-settings-category-id="appearance"]')?.textContent, 'Appearance');
+	search.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Escape' }));
 
 	root.querySelector<HTMLElement>('[data-settings-category-id="editor"]')?.click();
 	assert.equal(root.querySelector<HTMLElement>('[data-settings-container]')?.dataset.activeSettingsCategory, 'editor');

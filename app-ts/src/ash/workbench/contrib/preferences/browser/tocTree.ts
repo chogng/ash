@@ -17,7 +17,7 @@ export interface SettingsTOCTarget {
 
 export type SettingsTOCEntry =
 	| { readonly kind: 'group'; readonly id: string; readonly group: SettingsCategoryGroupDescriptor }
-	| { readonly kind: 'category'; readonly id: string; readonly category: SettingsCategoryDescriptor }
+	| { readonly kind: 'category'; readonly id: string; readonly category: SettingsCategoryDescriptor; readonly searchKeywords: readonly string[] }
 	| { readonly kind: 'target'; readonly id: string; readonly category: SettingsCategoryDescriptor; readonly target: SettingsTOCTarget };
 
 export type SettingsTOCOpenEntry = Exclude<SettingsTOCEntry, { readonly kind: 'group' }>;
@@ -58,14 +58,15 @@ export class TOCTreeModel {
 			targetId: node.element.id,
 			keywords: tocSearchKeywords(node),
 		}));
-		const children = targets.map((target): ObjectTreeElement<SettingsTOCEntry> => ({
+		const showGroupTargets = targets.length > 1;
+		const children = (showGroupTargets ? targets : []).map((target): ObjectTreeElement<SettingsTOCEntry> => ({
 			element: { kind: 'target', id: target.id, category, target },
 		}));
 		return {
-			element: { kind: 'category', id: category.id, category },
+			element: { kind: 'category', id: category.id, category, searchKeywords: showGroupTargets ? [] : targets.flatMap(target => [target.label, ...(target.keywords ?? [])]) },
 			children,
-			collapsible: children.length > 0,
-			collapsed: children.length > 0,
+			collapsible: showGroupTargets,
+			collapsed: showGroupTargets,
 		};
 	}
 }
@@ -165,6 +166,7 @@ export class TOCTree extends Disposable {
 				this.options.categoryLabel(entry.category),
 				this.options.categoryDescription(entry.category),
 				...(entry.category.keywords ?? []),
+				...entry.searchKeywords,
 			].join(' ');
 		}
 		return [entry.target.label, ...(entry.target.keywords ?? [])].join(' ');

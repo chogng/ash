@@ -109,7 +109,14 @@ test.describe('without an open workspace', () => {
 		} else {
 			await expect(page.locator('[data-configuration-key="update.policy"]')).toHaveCount(0);
 		}
+		await page.locator('[data-settings-group-id="workbench"]').click();
+		const appearanceRow = page.locator('.ash-tree-row', { has: page.locator('[data-settings-category-id="appearance"]') });
+		expect(await appearanceRow.getAttribute('aria-expanded')).toBeNull();
+		await expect(page.locator('[data-settings-target-id="appearance.group.theme"]')).toHaveCount(0);
 		await page.locator('[data-settings-category-id="appearance"]').click();
+		await expect(page.locator('[data-configuration-key="workbench.colorTheme"]')).toBeVisible();
+		await expect(page.locator('[data-configuration-key="workbench.layoutStyle"]')).toHaveCount(0);
+		await page.locator('[data-settings-category-id="layout"]').click();
 		await expect(page.locator('[data-configuration-key="workbench.layoutStyle"]')).toBeVisible();
 		if (target.kind === 'electron') {
 			await expect(page.locator('[data-configuration-key="window.zoomLevel"]')).toBeVisible();
