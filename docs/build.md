@@ -26,7 +26,7 @@ Ash 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保
 
 ### Windows 开发环境
 
-以下工具用于源码开发和仓库维护，安装后的 Ash 产品不依赖 Just、Python 或 uv。
+以下工具用于源码开发和仓库维护，安装后的 Ash 产品不依赖 Just 或 Python。
 
 - 开发者根据下表自行安装并确认工具版本；`cargo-insta` 等测试维护工具按任务需要另行准备。项目依赖安装入口保留 Node、pnpm 版本校验，编译器和 SDK 缺项由构建工具报告。
 - Windows 本机拥有 MSVC、Windows SDK 和桌面运行环境。安装后使用对应目标架构的 Visual Studio Developer PowerShell 构建。LLVM 的 `bin` 目录需在构建终端 PATH 中；使用自定义 LLVM 路径时，在该终端设置 `LIBCLANG_PATH` 指向含 `libclang.dll` 的目录。无需全局设置 `CC`、`CXX`。
@@ -38,16 +38,15 @@ Ash 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保
 | 工具 | 版本要求与来源 | 安装来源或组件 |
 | --- | --- | --- |
 | Node.js | [`.nvmrc`](../.nvmrc) 声明的版本 | Node.js 官方发行包或 fnm |
-| pnpm | 根 [`package.json`](../package.json) 的 `packageManager` | npm；操作见根 README |
+| pnpm | 根 [`package.json`](../package.json) 的 `packageManager` | pnpm 官方独立安装器；操作见根 README |
 | Rust | [`rust-toolchain.toml`](../rust-toolchain.toml) 的工具链与组件 | rustup |
 | PowerShell 7 | Windows 的 Just shell，需支持 `-CommandWithArgs` 以保留参数边界 | winget `Microsoft.PowerShell`；`just install` 可安装缺失的工具 |
-| Python | [`scripts/pyproject.toml`](../scripts/pyproject.toml) 的 `requires-python`；建议 3.12 | 由 uv 管理；Just 中的 Python 脚本通过 `uv run` 执行，无需单独配置 `python` 的 PATH |
+| Python | [`scripts/pyproject.toml`](../scripts/pyproject.toml) 的 `requires-python`；建议 3.12 | Python 官方发行包；Windows 的 `python` 命令需指向所选版本 |
 | Visual Studio Build Tools | 2022 / MSVC v143，匹配目标架构 | Visual Studio Installer 的“使用 C++ 的桌面开发” |
 | Windows SDK | 提供目标架构头文件和库；未固定补丁版本 | Visual Studio Installer 的 Windows SDK 组件 |
 | Git | 未固定版本，命令需在 PATH 中可用 | git-scm.com 或 winget `Git.Git` |
 | ripgrep | 开发工具未固定版本；产品使用独立锁定产物 | winget `BurntSushi.ripgrep.MSVC` |
 | just | 未固定版本，命令需在 PATH 中可用 | winget `Casey.Just` |
-| uv | Python 工具环境由 `scripts/uv.lock` 锁定 | winget `astral-sh.uv` |
 | CMake | 未固定版本，命令需在 PATH 中可用 | cmake.org 或 winget `Kitware.CMake` |
 | LLVM/Clang | 未固定版本；需要 Clang 和 libclang | LLVM 官方发行包或 winget `LLVM.LLVM` |
 | Bazelisk | [`.bazelversion`](../.bazelversion) 固定 Bazel 版本 | winget `Bazel.Bazelisk`；CI 使用 `setup-bazel` |
@@ -58,11 +57,11 @@ Ash 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保
 
 1. 按根 [README](../README.md#quick-start) 配置 Node 和 pnpm，确认 `node --version`、`pnpm --version` 与仓库要求一致。
 2. 执行 `pnpm install` 安装 Node workspace 依赖。
-3. 执行 `just install` 获取 Rust 依赖并通过 uv 准备 Python 工具环境。Windows 上此入口使用系统自带的 `powershell.exe`，不要求预先安装 `pwsh`；缺少 PowerShell 7 时会调用 winget 安装。安装后重启终端和编辑器，让后续 Just 命令读取更新后的 PATH。
+3. 执行 `just install` 获取 Rust 依赖，并创建 `scripts/.venv`、安装 [`requirements.txt`](../scripts/requirements.txt) 中固定版本和摘要的 Ruff。Windows 上此入口使用系统自带的 `powershell.exe`，不要求预先安装 `pwsh`；缺少 PowerShell 7 时会调用 winget 安装。安装后重启终端和编辑器，让后续 Just 命令读取更新后的 PATH。
 
 ### Dev Container：Linux Web 与后端
 
-安装 Docker 和 VS Code Dev Containers 扩展后，在仓库根目录执行 **Dev Containers: Reopen in Container**。配置位于 [`.devcontainer/`](../.devcontainer/)。首次创建会安装仓库固定的 Node、pnpm、Rust、uv，以及 Browser Playwright 所需的 Chromium 和系统库，并执行 `pnpm install`。依赖下载需要联网。
+安装 Docker 和 VS Code Dev Containers 扩展后，在仓库根目录执行 **Dev Containers: Reopen in Container**。配置位于 [`.devcontainer/`](../.devcontainer/)。首次创建会安装仓库固定的 Node、pnpm、Rust、Just、Python，以及 Browser Playwright 所需的 Chromium 和系统库；创建容器时会运行 `just install` 获取 Cargo 依赖和固定版本的 Ruff，执行 `pnpm install`、安装 Chromium，并下载和校验当前 Linux 平台的 LiveKit Server。容器终端可直接运行 `python` 和 `ruff`。镜像从 LLVM 官方软件源安装 Clang 21，供 LiveKit WebRTC 的 C++ 代码编译使用，并设置 UTF-8 字符集以支持 Browser 文件测试中的中文文件名。依赖下载需要联网。
 
 在容器终端运行：
 
@@ -72,7 +71,7 @@ pnpm --dir app-ts run test:smoke:browser
 pnpm --dir app-ts run test:smoke:browser:full
 ```
 
-第一个命令启动不连接后端的 Web 页面，再打开转发的 5173 端口。完整 Web 模式沿用仓库的 App Server 打包入口；Linux 的 LiveKit 程序由构建脚本下载并校验。完整 Web 开发服务及 App Server 只监听容器内的回环地址，因此在容器中运行其 Playwright 测试，不能通过端口转发在宿主机浏览器中打开。容器卷保存依赖、Cargo 缓存和 `.build/`，因此不会混用宿主机的构建产物。Electron 桌面窗口与菜单的 Playwright 测试仍需在目标桌面操作系统上运行。
+第一个命令启动不连接后端的 Web 页面，再打开转发的 5173 端口。完整 Web 模式沿用仓库的 App Server 打包入口；容器创建时预先运行同一 LiveKit 下载脚本，完整 Web 构建复用已校验的程序。完整 Web 开发服务及 App Server 只监听容器内的回环地址，因此在容器中运行其 Playwright 测试，不能通过端口转发在宿主机浏览器中打开。容器卷保存依赖、Cargo 缓存和 `.build/`，因此不会混用宿主机的构建产物。Electron 桌面窗口与菜单的 Playwright 测试仍需在目标桌面操作系统上运行。
 
 ### 项目命令
 
@@ -80,7 +79,7 @@ pnpm --dir app-ts run test:smoke:browser:full
 
 - Just 在 Windows 上调用 PowerShell 7 的 `-CommandWithArgs`，保留参数边界；其他平台调用 `sh`。
 - `just ash-desktop` 内部执行 `pnpm --dir app-ts dev`；VS Code 的 `Ash Desktop (Electron)` 默认 F5 配置使用同一入口，前端走热更新，后端输入变化才重新构建和换代。`Ash Desktop UI (reuse App Server)` 只构建前端并复用兼容的服务。
-- Rust 构建、打包和源码启动脚本由 Just 通过 `uv run --frozen --project scripts python` 执行，统一使用锁定的 Python 环境。
+- Rust 构建、打包和源码启动脚本由 Just 直接调用 Python：Unix 使用 `python3`，Windows 使用 PATH 中选定的 `python`；Python 工具使用 `scripts/.venv` 中固定版本的 Ruff。
 
 前端 Node 工具与 Desktop 单测使用 Node 24 LTS，具体版本由仓库根 `.nvmrc` 和 `package.json` 的 `devEngines.runtime` 共同固定。按 [README 初始化步骤](../README.md#quick-start) 安装根 `package.json` 声明的 pnpm 后，`pnpm install` 会下载并使用固定的 Node 版本，后续 pnpm 脚本也使用该版本。直接运行 Node 命令时仍需自行切换到 `.nvmrc` 指定版本。安装检查要求 pnpm 版本与声明完全一致；其他 Node 主版本不受支持。
 
@@ -341,7 +340,7 @@ Desktop 的 Node、Browser 和 Playwright 测试入口与 loader 归 `app-ts/tes
 
 同理，`.bazelrc`、根 `BUILD.bazel`、`.cargo/config.toml` 和 `tsconfig.base.json` 是对应工具从仓库根发现的协议文件，不能为了让 `build/` 看起来更大而移动。文档站框架配置、内容生成、打包和验收全部归独立的 `ash-docs` 仓库。
 
-前端构建与 Node 工具使用可擦除语法范围内的 TypeScript（`.ts`），由当前 Node.js 直接执行；后端构建、资源下载、包组装和发布使用 Python。`build/resources/icons/` 是共享 SVG 的生成入口，分别生成 Rust 和 TypeScript 资源，不持有运行时组包逻辑。`build/tsconfig.json` 检查 Node 构建工具，`build/app_ts/vite/stanza/tsconfig.json` 检查浏览器中的 Stanza 开发入口；`scripts/pyproject.toml` 和 `scripts/uv.lock` 锁定 Python 仓库工具。
+前端构建与 Node 工具使用可擦除语法范围内的 TypeScript（`.ts`），由当前 Node.js 直接执行；后端构建、资源下载、包组装和发布使用 Python。`build/resources/icons/` 是共享 SVG 的生成入口，分别生成 Rust 和 TypeScript 资源，不持有运行时组包逻辑。`build/tsconfig.json` 检查 Node 构建工具，`build/app_ts/vite/stanza/tsconfig.json` 检查浏览器中的 Stanza 开发入口；`scripts/pyproject.toml` 规定 Python 版本范围，`scripts/requirements.txt` 固定 Ruff 版本与各平台安装文件摘要。
 
 `app-ts/` 只保存产品源码、测试内容和产品清单；构建、资源生成、下载与发布逻辑由根 `build/` 拥有，跨产品测试和维护编排由根 `scripts/` 拥有。Renderer、Workbench 和平台服务不得拥有构建工具配置或仓库操作入口。
 

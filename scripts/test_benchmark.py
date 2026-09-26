@@ -19,9 +19,7 @@ class BenchmarkTests(unittest.TestCase):
             manifest = root / "Cargo.toml"
             source.write_text("pub fn value() {}\n")
             manifest.write_text("[package]\n")
-            with patch(
-                "benchmark.output", return_value="lib.rs\0Cargo.toml\0"
-            ):
+            with patch("benchmark.output", return_value="lib.rs\0Cargo.toml\0"):
                 before = benchmark.tracked_build_timestamps(root)
                 os.utime(source, ns=(1_000_000_000, 2_000_000_000))
                 after = benchmark.tracked_build_timestamps(root)

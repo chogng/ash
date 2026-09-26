@@ -1,9 +1,10 @@
 set working-directory := "."
-set positional-arguments
+set positional-arguments := true
 set shell := ["sh", "-cu"]
 set windows-shell := ["pwsh", "-NoLogo", "-NoProfile", "-CommandWithArgs"]
 
-python := "uv run --frozen --project scripts python"
+python := if os_family() == "windows" { "python" } else { "python3" }
+ruff := if os_family() == "windows" { "./scripts/.venv/Scripts/ruff.exe" } else { "./scripts/.venv/bin/ruff" }
 recipe_args := if os_family() == "windows" { "@($args | Select-Object -Skip 1)" } else { '"$@"' }
 tui_profile := ""
 tui_profile_arg := if tui_profile == "" { "" } else { "--profile " + tui_profile }
@@ -18,7 +19,15 @@ fmt-check:
 
 # Check Python build and repository tools with the pinned linter.
 lint:
-    uv run --frozen --project scripts ruff check build scripts
+    {{ ruff }} check build scripts
+
+# Check Python formatting with the pinned repository formatter.
+python-format-check:
+    {{ ruff }} format --check build scripts
+
+# Install the exact Python tool wheel before running lint or formatting.
+install-python:
+    {{ python }} -B scripts/install_python_tools.py
 
 # Run repository-owned Python tests, optionally selecting scripts, code, or build.
 test-python *args:
@@ -151,7 +160,7 @@ code-package *args:
 install:
     rustup show active-toolchain
     cargo fetch
-    uv sync --frozen --project scripts
+    just install-python
 
 [windows]
 install:
@@ -165,5 +174,5 @@ install:
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     cargo fetch
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    uv sync --frozen --project scripts
+    just install-python
     exit $LASTEXITCODE

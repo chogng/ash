@@ -56,12 +56,17 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version-file: .nvmrc
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: '3.11'
       - uses: taiki-e/install-action@a6b2e2dcd845ddd7f509ce4f3ed3d922b80cc5d9
         with:
-          tool: uv,just
+          tool: just@1.46.0
+      - name: Install pinned Python tools
+        run: just install-python
       - name: Check Python lint
         run: just lint
       - name: Check Python format
-        run: uv run --frozen --project scripts ruff format --check build scripts
+        run: just python-format-check
       - name: Test build, package, signing and repository contracts
         run: just test-python build scripts code

@@ -103,10 +103,10 @@ jobs:
         shell: bash
         run: ${{ matrix.python }} -B scripts/test-python.py code
 
-      - name: Set up Node for package contract tests
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - name: Set up Node and pnpm for package contract tests
+        uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3
         with:
-          node-version-file: .nvmrc
+          install: false
 
       - name: Test build tooling
         if: matrix.checks != false
@@ -292,9 +292,7 @@ jobs:
       - name: Install Desktop packaging dependencies
         if: github.event_name == 'release' && matrix.release_package != false && (runner.os == 'macOS' || runner.os == 'Windows')
         shell: bash
-        run: |
-          npm install --global "$(node --print "require('./package.json').packageManager")"
-          pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Package and verify macOS Desktop
         if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'macOS'

@@ -3,6 +3,7 @@ import { type FSWatcher, watch } from 'node:fs';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 
 import { generateProtocol } from '../protocol/generate.ts';
+import { pythonCommand } from '../python.ts';
 
 const repositoryRoot = resolve(import.meta.dirname, '../..');
 const sharedRustSource = resolve(repositoryRoot, 'ash-rs');
@@ -78,9 +79,8 @@ export async function watchAppServer(options: { skipInitial?: boolean } = {}): P
 
   function runBackendBuild(): Promise<void> {
     return new Promise<void>((resolvePromise, reject) => {
-      const child = spawn('uv', [
-        'run', '--frozen', '--project', 'scripts', 'python', '-B', 'build/ash_rs/develop.py',
-      ], { cwd: repositoryRoot, env: process.env, stdio: 'inherit', windowsHide: true });
+      const { command, args } = pythonCommand(['-B', 'build/ash_rs/develop.py']);
+      const child = spawn(command, args, { cwd: repositoryRoot, env: process.env, stdio: 'inherit', windowsHide: true });
       activeBuild = child;
       child.once('error', error => {
         activeBuild = undefined;

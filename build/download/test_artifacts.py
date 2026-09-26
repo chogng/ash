@@ -27,7 +27,10 @@ class ArtifactTests(unittest.TestCase):
             with (
                 patch(
                     "build.download.artifacts.urlopen",
-                    side_effect=[http.client.IncompleteRead(b"partial", 4), io.BytesIO(body)],
+                    side_effect=[
+                        http.client.IncompleteRead(b"partial", 4),
+                        io.BytesIO(body),
+                    ],
                 ) as download,
                 patch("build.download.artifacts.time.sleep") as sleep,
             ):
@@ -49,7 +52,10 @@ class ArtifactTests(unittest.TestCase):
             with (
                 patch(
                     "build.download.artifacts.urlopen",
-                    side_effect=[ssl.SSLError(8, "UNEXPECTED_EOF_WHILE_READING"), io.BytesIO(body)],
+                    side_effect=[
+                        ssl.SSLError(8, "UNEXPECTED_EOF_WHILE_READING"),
+                        io.BytesIO(body),
+                    ],
                 ) as download,
                 patch("build.download.artifacts.time.sleep"),
             ):

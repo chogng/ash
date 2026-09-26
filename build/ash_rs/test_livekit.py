@@ -17,15 +17,25 @@ class LivekitTests(unittest.TestCase):
             root = Path(temporary)
             lock_path = root / "third_party/livekit/runtime-lock.json"
             lock_path.parent.mkdir(parents=True)
-            lock_path.write_text(json.dumps({
-                "version": "1.0",
-                "artifacts": {},
-                "source": {"url": "https://example.invalid/source.tar.gz", "sha256": "0" * 64},
-            }))
+            lock_path.write_text(
+                json.dumps(
+                    {
+                        "version": "1.0",
+                        "artifacts": {},
+                        "source": {
+                            "url": "https://example.invalid/source.tar.gz",
+                            "sha256": "0" * 64,
+                        },
+                    }
+                )
+            )
             with (
                 patch("build.ash_rs.livekit.sys.platform", "darwin"),
                 patch("build.ash_rs.livekit.shutil.which", return_value=None),
-                patch("build.ash_rs.livekit.download_and_verify", side_effect=AssertionError("unexpected download")),
+                patch(
+                    "build.ash_rs.livekit.download_and_verify",
+                    side_effect=AssertionError("unexpected download"),
+                ),
             ):
                 with self.assertRaisesRegex(RuntimeError, "requires Go 1.26"):
                     resolve_livekit("aarch64-apple-darwin", root=root)

@@ -11,8 +11,8 @@
 从仓库根目录执行；先构建需要调试的服务端：
 
 ```text
-uv run --frozen --project scripts python -B scripts/cargo.py build -p ash-app-server --bin ash-app-server
-uv run --frozen --project scripts python -B scripts/cargo.py run -p ash-app-server-test-client -- --server-bin .build/cargo/debug/ash-app-server --home .build/test-client-profile initialize
+python3 -B scripts/cargo.py build -p ash-app-server --bin ash-app-server
+python3 -B scripts/cargo.py run -p ash-app-server-test-client -- --server-bin .build/cargo/debug/ash-app-server --home .build/test-client-profile initialize
 ```
 
 Windows 下可执行路径加 `.exe`。未指定连接参数时从 PATH 启动 `ash-app-server`。
@@ -45,7 +45,7 @@ ash-app-server-test-client watch --session-id SESSION_ID
 
 ```powershell
 $env:ASH_APP_SERVER_TOKEN = '<capability-token>'
-uv run --frozen --project scripts python -B scripts/cargo.py run -p ash-app-server-test-client -- --url ws://127.0.0.1:4222 model-list
+python -B scripts/cargo.py run -p ash-app-server-test-client -- --url ws://127.0.0.1:4222 model-list
 ```
 
 `ASH_APP_SERVER_BIN`、`ASH_APP_SERVER_URL` 分别对应 `--server-bin`、`--url`，两种连接方式互斥。

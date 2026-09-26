@@ -18,7 +18,7 @@
     "source=ash-${devcontainerId}-cargo-registry,target=/home/node/.cargo/registry,type=volume,volume-nocopy",
     "source=ash-${devcontainerId}-cargo-git,target=/home/node/.cargo/git,type=volume,volume-nocopy"
   ],
-  "postCreateCommand": "sudo chown node:node node_modules app-ts/node_modules build/node_modules .build scripts/.venv third_party/.cache /home/node/.cache /home/node/.cargo/registry /home/node/.cargo/git && pnpm install --frozen-lockfile && pnpm --dir app-ts exec playwright install chromium",
+  "postCreateCommand": "sh .devcontainer/post-create.sh",
   "forwardPorts": [5173],
   "portsAttributes": {
     "5173": { "label": "Ash Web UI" }

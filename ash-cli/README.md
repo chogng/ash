@@ -149,7 +149,7 @@ Thread, and exits through the terminal input path.
 ```text
 just check ash-cli
 just test ash-cli --lib
-uv run --frozen --project scripts python -B scripts/cargo.py build -p ash-cli --bin ash -p ash-app-server --bin ash-app-server
+python3 -B scripts/cargo.py build -p ash-cli --bin ash -p ash-app-server --bin ash-app-server
 just test ash-cli --test commands --test stdio
 just rust-warnings ash-cli
 just dependencies

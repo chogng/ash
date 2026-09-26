@@ -22,5 +22,5 @@ const name = manifest.packageManager.slice(0, separator);
 const version = manifest.packageManager.slice(separator + 1);
 const actual = process.env.npm_config_user_agent?.split(" ", 1)[0];
 if (actual !== `${name}/${version}`) {
-  throw new Error(`Use ${name}@${version}; received ${actual ?? "no package manager"}. Install it with npm install -g ${name}@${version}.`);
+  throw new Error(`Use ${name}@${version}; received ${actual ?? "no package manager"}. Install it from https://pnpm.io/installation/.`);
 }

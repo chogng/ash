@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import { decodeWebListenInfo, decodeWebSessionInfo } from '../../src/ash/platform/app-server/common/generated/WebProtocolDecoder.ts';
 import { developmentAshPackagePath } from '../../../build/app_ts/runtimeStore.ts';
+import { pythonCommand } from '../../../build/python.ts';
 
 const desktopDirectory = resolve(import.meta.dirname, '../..');
 const mode = process.argv[2];
@@ -14,12 +15,8 @@ if (mode !== 'disconnected' && mode !== 'full') {
 }
 
 if (mode === 'full') {
-	const python = ['run', '--frozen', '--project', '../scripts', 'python', '-B', '../build/ash_rs/prepare.py'];
-	const preparation = await run('uv', [
-		...python,
-		'--javascript-runtime',
-		'packaged-node',
-	], process.env);
+	const { command, args } = pythonCommand(['-B', '../build/ash_rs/prepare.py', '--javascript-runtime', 'packaged-node']);
+	const preparation = await run(command, args, process.env);
 	if (preparation !== 0) {
 		process.exitCode = preparation;
 		process.exit();

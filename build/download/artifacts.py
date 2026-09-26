@@ -108,20 +108,32 @@ def download_and_verify(
                     )
                 publish(temporary, destination, actual_digest)
             return
-        except (ConnectionError, TimeoutError, http.client.IncompleteRead, ssl.SSLError, URLError) as error:
+        except (
+            ConnectionError,
+            TimeoutError,
+            http.client.IncompleteRead,
+            ssl.SSLError,
+            URLError,
+        ) as error:
             if not retryable_download_error(error):
                 raise
             if attempt == 2:
-                raise RuntimeError(f"Download failed after 3 attempts: {artifact.url}") from error
+                raise RuntimeError(
+                    f"Download failed after 3 attempts: {artifact.url}"
+                ) from error
             time.sleep(2**attempt)
 
 
 def retryable_download_error(error: BaseException) -> bool:
     if isinstance(error, URLError):
-        return isinstance(error.reason, BaseException) and retryable_download_error(error.reason)
+        return isinstance(error.reason, BaseException) and retryable_download_error(
+            error.reason
+        )
     if isinstance(error, ssl.SSLError):
         return "UNEXPECTED_EOF_WHILE_READING" in str(error)
-    return isinstance(error, (ConnectionError, TimeoutError, http.client.IncompleteRead))
+    return isinstance(
+        error, (ConnectionError, TimeoutError, http.client.IncompleteRead)
+    )
 
 
 def extract_member(

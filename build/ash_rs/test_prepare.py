@@ -111,7 +111,12 @@ class PrepareTests(unittest.TestCase):
                     original,
                     prepare.development_source_digest(root, args, "target", {}),
                 )
-                for unrelated in (editor_backend, code_backend, cli_source, code_signer):
+                for unrelated in (
+                    editor_backend,
+                    code_backend,
+                    cli_source,
+                    code_signer,
+                ):
                     unrelated.write_text("second content")
                     self.assertEqual(
                         original,
@@ -131,7 +136,9 @@ class PrepareTests(unittest.TestCase):
             self.assertNotEqual(after_backend, after_resource)
             self.assertNotEqual(after_resource, after_lock)
 
-    def test_development_source_digest_ignores_unrelated_git_commit_and_path(self) -> None:
+    def test_development_source_digest_ignores_unrelated_git_commit_and_path(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             for directory in (

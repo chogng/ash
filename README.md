@@ -32,16 +32,16 @@ build-time Protocol Buffers compiler; no system `protoc` installation is
 required.
 
 For Electron or Browser Workbench development, install the pnpm version declared
-by `package.json`, then install workspace dependencies from the repository root.
-pnpm downloads and uses the Node version pinned in `devEngines.runtime`; `.nvmrc`
-pins the same version for commands run outside pnpm:
+by `package.json` using the [standalone installer](https://pnpm.io/installation/),
+then install workspace dependencies from the repository root. pnpm downloads and
+uses the Node version pinned in `devEngines.runtime`; `.nvmrc` pins the same
+version for commands run outside pnpm:
 
 ```bash
-npm install -g "$(node -p 'require("./package.json").packageManager')"
 pnpm install
 ```
 
-These commands work in PowerShell and Bash. The install check requires the exact
+This command works in PowerShell and Bash. The install check requires the exact
 declared pnpm version.
 
 Build definitions live in [`build/`](build), while reproducible local artifacts are collected under the ignored `.build/` root. See [`docs/build.md`](docs/build.md) for the command and output layout.

@@ -117,9 +117,7 @@ def remove_run_target(target: Path) -> None:
 def tracked_build_timestamps(root: Path) -> dict[str, int]:
     names = output(["git", "ls-files", "-z", "--", "*.rs", "*.toml"], root)
     return {
-        name: (root / name).stat().st_mtime_ns
-        for name in names.split("\0")
-        if name
+        name: (root / name).stat().st_mtime_ns for name in names.split("\0") if name
     }
 
 
@@ -329,7 +327,9 @@ def main(arguments: list[str] | None = None) -> int:
                     f"{name} changed during measurement; repeat with stable inputs"
                 )
         if output(["git", "rev-parse", "HEAD"], root) != report["commit"]:
-            raise ValueError("HEAD changed during measurement; repeat with stable inputs")
+            raise ValueError(
+                "HEAD changed during measurement; repeat with stable inputs"
+            )
         if tracked_build_timestamps(root) != build_timestamps:
             raise ValueError(
                 "tracked Rust or TOML timestamps changed during measurement; repeat with stable inputs"

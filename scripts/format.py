@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shlex
 import subprocess
 import sys
@@ -24,15 +25,13 @@ class Command:
 def commands(check: bool) -> tuple[Command, ...]:
     just = ["just", "--unstable", "--fmt"]
     rust = ["cargo", "fmt", "--manifest-path", "Cargo.toml", "--all", "--"]
-    python = [
-        "uv",
-        "run",
-        "--frozen",
-        "--project",
-        "scripts",
-        "ruff",
-        "format",
-    ]
+    ruff = (
+        REPOSITORY_ROOT
+        / "scripts"
+        / ".venv"
+        / ("Scripts/ruff.exe" if os.name == "nt" else "bin/ruff")
+    )
+    python = [str(ruff), "format"]
     if check:
         just.append("--check")
         rust.append("--check")

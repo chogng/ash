@@ -40,7 +40,7 @@ test('workspace-root watcher accepts only canonical root manifests', () => {
 });
 
 test('watcher stops before the backend build when protocol generation fails', async (t) => {
-  const commands: string[] = [];
+  const commands: { command: string; args: string[] }[] = [];
   const failure = Promise.withResolvers<string>();
   t.after(() => {
     t.mock.restoreAll();
@@ -49,7 +49,7 @@ test('watcher stops before the backend build when protocol generation fails', as
   t.mock.method(fs, 'watch', () => ({ close() {} }));
   t.mock.method(console, 'error', (message: string) => failure.resolve(message));
   t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
-    commands.push(args[0]);
+    commands.push({ command: _command, args: [...args] });
     const child = new ChildProcess();
     setImmediate(() => child.emit('close', 1, null));
     return child;
@@ -58,7 +58,10 @@ test('watcher stops before the backend build when protocol generation fails', as
   const stop = await watchAppServer();
   t.after(stop);
   assert.match(await failure.promise, /Protocol generation exited with status 1/);
-  assert.deepEqual(commands, ['run']);
+  assert.deepEqual(commands, [{
+    command: process.platform === 'win32' ? 'python' : 'python3',
+    args: ['-B', 'build/ash_rs/protocol.py'],
+  }]);
 });
 
 test('watcher invokes the Python backend builder after protocol synchronization', async (t) => {

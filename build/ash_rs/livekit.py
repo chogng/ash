@@ -50,7 +50,9 @@ def resolve_livekit(target: str, *, root: Path = ROOT) -> Path:
     archive = cache / "source.tar.gz"
     go = shutil.which("go")
     if go is None:
-        raise RuntimeError("Building LiveKit Server for macOS requires Go 1.26 or newer on PATH")
+        raise RuntimeError(
+            "Building LiveKit Server for macOS requires Go 1.26 or newer on PATH"
+        )
     locked = SimpleNamespace(url=source["url"], sha256=source["sha256"], size=None)
     if not archive.is_file() or sha256(archive) != locked.sha256:
         download_and_verify(locked, archive, max_bytes=10 * 1024 * 1024)

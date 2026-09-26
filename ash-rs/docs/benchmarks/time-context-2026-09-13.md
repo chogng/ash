@@ -42,7 +42,9 @@
 - [可复现计数脚本](../../model-tokenizer/benchmarks/time_context.py)
 
 ```sh
-uv run --script ash-rs/model-tokenizer/benchmarks/time_context.py \
+python3.12 -m venv .build/time-context-python
+.build/time-context-python/bin/python -m pip install tiktoken==0.12.0
+.build/time-context-python/bin/python ash-rs/model-tokenizer/benchmarks/time_context.py \
   --output ash-rs/docs/benchmarks/time-context-tokens-2026-09-13.json
 ```
 
@@ -127,7 +129,7 @@ B 多出一次约 3.3 万输入 Token 的模型请求，但大部分命中缓存
 [全部试运行与正式样本、事件时间和 usage](time-context-sol-2026-09-13.json) 保留子任务来源摘要；[提取脚本](../../core/benchmarks/codex_time.py) 只读取父任务明确登记的这组测试子任务。
 
 ```sh
-uv run --python 3.12 python ash-rs/core/benchmarks/codex_time.py \
+python3.12 ash-rs/core/benchmarks/codex_time.py \
   --parent-log /absolute/path/to/parent-rollout.jsonl \
   --output ash-rs/docs/benchmarks/time-context-sol-2026-09-13.json
 ```
