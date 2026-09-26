@@ -366,6 +366,30 @@ pub(in crate::app) fn handle_mouse(
                     );
                     return MouseAction::Selection(None);
                 }
+                if app.command_panel().is_some_and(|panel| {
+                    matches!(
+                        panel.body(),
+                        super::super::command_panel::CommandPanelBody::Selection(_)
+                    )
+                }) {
+                    if let Some(body) = body.filter(|body| body.contains(position))
+                        && let Some(selection) = app
+                            .fullscreen
+                            .panels
+                            .command_mut()
+                            .and_then(|panel| panel.list_selection_mut())
+                    {
+                        selection.scroll_with_selection(
+                            body,
+                            if mouse.kind == MouseEventKind::ScrollUp {
+                                -1
+                            } else {
+                                1
+                            },
+                        );
+                    }
+                    return MouseAction::Selection(None);
+                }
                 let key = crossterm::event::KeyEvent::new(
                     if mouse.kind == MouseEventKind::ScrollUp {
                         crossterm::event::KeyCode::Up

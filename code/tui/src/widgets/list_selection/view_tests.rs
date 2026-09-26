@@ -3,6 +3,7 @@ use super::draw_tabs;
 use crate::render::horizontal_margin;
 use crate::render::test_context;
 use crate::widgets::list_selection::ListSelectionGroup;
+use crate::widgets::list_selection::ListSelectionInputOutcome;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionItemId;
 use crate::widgets::list_selection::ListSelectionModel;
@@ -77,6 +78,70 @@ fn overflowing_lists_keep_selection_visible_and_notices_inside_the_area() {
         })
         .unwrap();
     assert!(!terminal.backend().to_string().contains("more"));
+}
+
+#[test]
+fn wheel_scroll_advances_one_rendered_row_across_section_dividers() {
+    use ratatui::layout::Rect;
+
+    let mut view = ListSelectionState::new(
+        ListSelectionModel::new(
+            "Providers",
+            vec![ListSelectionGroup::new(
+                "All",
+                vec![
+                    ListSelectionItem::new("Subscriptions").as_section_divider(),
+                    ListSelectionItem::new("Kimi").with_id(ListSelectionItemId::new("kimi")),
+                    ListSelectionItem::new("ChatGPT").with_id(ListSelectionItemId::new("chatgpt")),
+                    ListSelectionItem::new("API").as_section_divider(),
+                    ListSelectionItem::new("OpenAI").with_id(ListSelectionItemId::new("openai")),
+                    ListSelectionItem::new("Ollama").with_id(ListSelectionItemId::new("ollama")),
+                ],
+            )],
+        )
+        .without_tab_bar(),
+    );
+    let area = Rect::new(0, 0, 40, 5);
+    assert_eq!(view.selected_item().unwrap().label(), "Kimi");
+
+    view.scroll_with_selection(area, 1);
+    assert_eq!(view.scroll_offset, Some(1));
+    assert_eq!(view.selected_item().unwrap().label(), "Kimi");
+    view.scroll_with_selection(area, 1);
+    assert_eq!(view.scroll_offset, Some(2));
+    assert_eq!(view.selected_item().unwrap().label(), "ChatGPT");
+    view.scroll_with_selection(area, 1);
+    assert_eq!(view.scroll_offset, Some(3));
+    view.scroll_with_selection(area, -1);
+    assert_eq!(view.scroll_offset, Some(2));
+    assert_eq!(view.selected_item().unwrap().label(), "ChatGPT");
+}
+
+#[test]
+fn wheel_scroll_does_not_leave_an_offscreen_item_activatable() {
+    use ratatui::layout::Rect;
+
+    let mut view = ListSelectionState::new(
+        ListSelectionModel::new(
+            "Providers",
+            vec![ListSelectionGroup::new(
+                "All",
+                vec![
+                    ListSelectionItem::new("A").with_id(ListSelectionItemId::new("a")),
+                    ListSelectionItem::new("API").as_section_divider(),
+                    ListSelectionItem::new("B").with_id(ListSelectionItemId::new("b")),
+                ],
+            )],
+        )
+        .without_tab_bar(),
+    );
+    let area = Rect::new(0, 0, 20, 3);
+    view.scroll_with_selection(area, 1);
+    assert_eq!(view.selected_visible_index(), None);
+    assert_eq!(
+        view.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        ListSelectionInputOutcome::Consumed
+    );
 }
 
 fn state() -> ListSelectionState {

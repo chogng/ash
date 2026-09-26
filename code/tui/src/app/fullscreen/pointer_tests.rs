@@ -639,6 +639,142 @@ fn mouse_wheel_scrolls_the_slash_command_completion() {
 }
 
 #[test]
+fn mouse_wheel_scrolls_modal_list_by_rows_without_moving_keyboard_focus() {
+    use crate::widgets::list_selection::ListSelectionItemId;
+
+    let mut app = App::new();
+    let mut items = vec![ListSelectionItem::new("Subscriptions").as_section_divider()];
+    items.extend((0..14).map(|index| {
+        ListSelectionItem::new(format!("Provider {index}"))
+            .with_id(ListSelectionItemId::new(index.to_string()))
+    }));
+    app.update(AppEvent::HelpOpened(ListSelectionModel::new(
+        "Providers",
+        vec![ListSelectionGroup::new("All", items)],
+    )));
+    let area = Rect::new(0, 0, 80, 24);
+    let body = super::super::modal::body_area(
+        app.command_panel().unwrap(),
+        super::super::modal::layout(area).content,
+    );
+    let selected = app
+        .command_panel()
+        .unwrap()
+        .list_selection()
+        .unwrap()
+        .selected_visible_index();
+
+    assert!(matches!(
+        handle_mouse(
+            &mut app,
+            area,
+            MouseEvent {
+                kind: MouseEventKind::ScrollDown,
+                column: body.x,
+                row: body.y + 3,
+                modifiers: KeyModifiers::NONE,
+            },
+        ),
+        super::MouseAction::Selection(None)
+    ));
+    let selection = app.command_panel().unwrap().list_selection().unwrap();
+    assert_eq!(selection.selected_visible_index(), selected);
+    assert!(selection.items_focused());
+    let first_item = (body.y..body.bottom()).find_map(|row| {
+        match super::super::modal::target_at(
+            &app,
+            area,
+            ratatui::layout::Position::new(body.x, row),
+        ) {
+            Some(super::super::modal::Target::List(
+                crate::widgets::list_selection::ListSelectionPointerTarget::Item(id),
+            )) => Some(id),
+            _ => None,
+        }
+    });
+    assert_eq!(first_item, Some(ListSelectionItemId::new("0")));
+
+    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(80, 24)).unwrap();
+    terminal.draw(|frame| frame::draw(frame, &app)).unwrap();
+    crate::tui_assert_snapshot!(
+        "modal_list_wheel_row_scroll",
+        terminal.backend().to_string()
+    );
+
+    app.handle_key_in_area(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE), area);
+    let selection = app.command_panel().unwrap().list_selection().unwrap();
+    assert_eq!(selection.selected_visible_index(), Some(2));
+}
+
+#[test]
+fn mouse_wheel_scrolls_config_providers_without_switching_tabs() {
+    use crate::widgets::list_selection::ListSelectionItemId;
+    use crate::widgets::list_selection::ListSelectionSpec;
+
+    let mut app = App::new();
+    let mut providers = vec![ListSelectionItem::new("Subscriptions").as_section_divider()];
+    providers.extend((0..14).map(|index| {
+        ListSelectionItem::new(format!("Provider {index}"))
+            .with_id(ListSelectionItemId::new(index.to_string()))
+    }));
+    app.update(crate::config::Event::EditorOpened(ListSelectionSpec {
+        model: ListSelectionModel::new(
+            "Config",
+            vec![
+                ListSelectionGroup::new("General", vec![ListSelectionItem::new("Settings")]),
+                ListSelectionGroup::new("Providers", providers),
+            ],
+        )
+        .with_search(SearchBoxModel::new("Search settings")),
+        actions: Default::default(),
+    }));
+    let area = Rect::new(0, 0, 80, 24);
+    app.handle_key_in_area(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE), area);
+    app.handle_key_in_area(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE), area);
+    app.handle_key_in_area(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE), area);
+    let selected = app
+        .command_panel()
+        .unwrap()
+        .list_selection()
+        .unwrap()
+        .selected_item()
+        .unwrap()
+        .label()
+        .to_owned();
+    let body = super::super::modal::body_area(
+        app.command_panel().unwrap(),
+        super::super::modal::layout(area).content,
+    );
+    handle_mouse(
+        &mut app,
+        area,
+        MouseEvent {
+            kind: MouseEventKind::ScrollDown,
+            column: body.x,
+            row: body.y + 4,
+            modifiers: KeyModifiers::NONE,
+        },
+    );
+
+    let selection = app.command_panel().unwrap().list_selection().unwrap();
+    assert_eq!(selection.active_tab().label(), "Providers");
+    assert_eq!(selection.selected_item().unwrap().label(), selected);
+    assert!(selection.items_focused());
+    assert!((body.y..body.bottom()).any(|row| {
+        matches!(
+            super::super::modal::target_at(
+                &app,
+                area,
+                ratatui::layout::Position::new(body.x, row),
+            ),
+            Some(super::super::modal::Target::List(
+                crate::widgets::list_selection::ListSelectionPointerTarget::Item(id)
+            )) if id == ListSelectionItemId::new("0")
+        )
+    }));
+}
+
+#[test]
 fn session_manager_items_hover_and_activate_without_changing_the_draft() {
     let mut app = App::new();
     let session_id = SessionId::new("pointer-session").unwrap();

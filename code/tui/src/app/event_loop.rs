@@ -22,6 +22,7 @@ use ash_app_server_client::AppServerSession;
 use ash_memory_diagnostics::ProcessResourceDemand;
 use crossterm::event::Event;
 use crossterm::event::KeyEventKind;
+use crossterm::event::MouseEventKind;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -75,6 +76,14 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
             };
             match &runtime_event {
                 RuntimeEvent::Client(_) => {
+                    redraw.request(Instant::now(), RedrawPriority::Batched);
+                }
+                RuntimeEvent::Terminal(terminal::TerminalEvent::Input(Event::Mouse(mouse)))
+                    if matches!(
+                        mouse.kind,
+                        MouseEventKind::ScrollUp | MouseEventKind::ScrollDown
+                    ) =>
+                {
                     redraw.request(Instant::now(), RedrawPriority::Batched);
                 }
                 RuntimeEvent::Terminal(terminal::TerminalEvent::Input(_)) => {

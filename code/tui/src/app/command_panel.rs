@@ -471,6 +471,33 @@ impl CommandPanel {
         }
     }
 
+    pub(super) fn list_selection_mut(&mut self) -> Option<&mut ListSelectionState> {
+        match self {
+            Self::Help(selection) | Self::Loading(selection) | Self::Usage(selection) => {
+                Some(selection.state_mut())
+            }
+            Self::Dirs(selection) => selection.selection_mut(),
+            Self::GitBranches(selection) => Some(selection.state_mut()),
+            Self::GitWorktrees(selection) => Some(selection.state_mut()),
+            Self::Config(editor) => editor.selection_mut(),
+            Self::Connectors(selection) => Some(selection.state_mut()),
+            Self::Keymap(editor) => editor.selection_mut(),
+            Self::Memories(_) => None,
+            Self::Marketplace(selection) => Some(selection.state_mut()),
+            Self::Lsp(selection) => Some(selection.state_mut()),
+            Self::Mcp(selection) => Some(selection.state_mut()),
+            Self::Model(selection) => Some(selection.state_mut()),
+            Self::ProjectRoots(selection) => Some(selection.state_mut()),
+            Self::Rewind(selection) => Some(selection.state_mut()),
+            Self::Sessions(selection) => Some(selection.state_mut()),
+            Self::Skills(selection) => Some(selection.state_mut()),
+            Self::Startup(selection) => Some(selection.state_mut()),
+            Self::StatusLine(selection) => Some(selection.state_mut()),
+            Self::Theme(picker) => Some(picker.selection_mut()),
+            Self::Status(_) => None,
+        }
+    }
+
     pub(super) fn handle_click(
         &mut self,
         target: &list_selection::ListSelectionPointerTarget,
@@ -489,30 +516,9 @@ impl CommandPanel {
                 .unwrap_or(CommandPanelOutcome::Consumed);
         }
 
-        let selection = match self {
-            Self::Help(s) | Self::Startup(s) | Self::Loading(s) | Self::Usage(s) => {
-                Some(s.state_mut())
-            }
-            Self::Dirs(s) => s.selection_mut(),
-            Self::GitBranches(s) => Some(s.state_mut()),
-            Self::GitWorktrees(s) => Some(s.state_mut()),
-            Self::Config(s) => s.selection_mut(),
-            Self::Connectors(s) => Some(s.state_mut()),
-            Self::Keymap(s) => s.selection_mut(),
-            Self::Memories(_) => None,
-            Self::Marketplace(s) => Some(s.state_mut()),
-            Self::Lsp(s) => Some(s.state_mut()),
-            Self::Mcp(s) => Some(s.state_mut()),
-            Self::Model(s) => Some(s.state_mut()),
-            Self::ProjectRoots(s) => Some(s.state_mut()),
-            Self::Rewind(s) => Some(s.state_mut()),
-            Self::Sessions(s) => Some(s.state_mut()),
-            Self::Skills(s) => Some(s.state_mut()),
-            Self::StatusLine(s) => Some(s.state_mut()),
-            Self::Theme(s) => Some(s.selection_mut()),
-            Self::Status(_) => None,
-        };
-        if selection.is_some_and(|selection| selection.focus_pointer(target))
+        if self
+            .list_selection_mut()
+            .is_some_and(|selection| selection.focus_pointer(target))
             && matches!(
                 target,
                 list_selection::ListSelectionPointerTarget::Item(_)
@@ -943,6 +949,10 @@ impl Panels {
         if let Some(command) = self.command.as_mut() {
             command.open_subscription(choices);
         }
+    }
+
+    pub(crate) fn subscription_open(&self) -> bool {
+        matches!(self.command.as_ref(), Some(CommandPanel::Config(editor)) if editor.subscription_open())
     }
 
     pub(crate) fn open_advisor(&mut self, choices: crate::config::AdvisorChoices) {

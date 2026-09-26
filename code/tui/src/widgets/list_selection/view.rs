@@ -272,23 +272,62 @@ pub(crate) fn draw_body_with_pointer(
 impl ListSelectionState {
     pub(crate) fn scroll(&mut self, area: Rect, lines: i16) -> bool {
         let list = body_areas(area, self)[1];
-        let start = self.viewport(list).start;
-        let count = self.item_rows(list.width).len();
+        let rows = self.item_rows(list.width);
+        self.scroll_rows(list, &rows, lines).end == rows.len()
+    }
+
+    fn scroll_rows(&mut self, list: Rect, rows: &[(usize, usize)], lines: i16) -> ListViewport {
+        if list.is_empty() || rows.len() <= usize::from(list.height) {
+            return self.viewport_with_rows(list, rows);
+        }
         let capacity = usize::from(if self.scroll_counts() {
             list.height.saturating_sub(2).max(1)
         } else {
-            list.height.max(1)
+            list.height
         });
-        self.scroll_offset = Some(
-            start
-                .saturating_add_signed(isize::from(lines))
-                .min(count.saturating_sub(capacity)),
-        );
-        self.viewport(list).end == count
+        let start = self
+            .viewport_with_rows(list, rows)
+            .start
+            .saturating_add_signed(isize::from(lines))
+            .min(rows.len().saturating_sub(capacity));
+        self.scroll_offset = Some(start);
+        self.viewport_with_rows(list, rows)
+    }
+
+    /// Keep wheel movement tied to rendered rows while preventing activation of an offscreen item.
+    pub(crate) fn scroll_with_selection(&mut self, area: Rect, lines: i16) {
+        let list = body_areas(area, self)[1];
+        let rows = self.item_rows(list.width);
+        let viewport = self.scroll_rows(list, &rows, lines);
+        let visible = &rows[viewport.start..viewport.end];
+        if visible
+            .iter()
+            .any(|&(index, detail)| detail == 0 && self.selected_visible_index() == Some(index))
+        {
+            return;
+        }
+        let items = self.visible_items();
+        let selectable = visible.iter().filter_map(|&(index, detail)| {
+            (detail == 0 && items[index].id().is_some()).then_some(index)
+        });
+        let next = if lines > 0 {
+            selectable.min()
+        } else {
+            selectable.max()
+        };
+        if let Some(index) = next {
+            self.select_visible_item(index);
+        } else {
+            self.clear_visible_selection();
+        }
     }
 
     fn viewport(&self, area: Rect) -> ListViewport {
         let rows = self.item_rows(area.width);
+        self.viewport_with_rows(area, &rows)
+    }
+
+    fn viewport_with_rows(&self, area: Rect, rows: &[(usize, usize)]) -> ListViewport {
         if !self.scroll_counts() {
             let capacity = usize::from(area.height);
             let start = self
