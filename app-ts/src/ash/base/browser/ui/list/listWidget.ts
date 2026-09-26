@@ -50,6 +50,7 @@ export interface ListAcceptEvent<T> {
 /** Selection, focus, keyboard, and pointer semantics over a flat ListView. */
 export class List<T> extends Disposable {
 	readonly element: HTMLDivElement;
+	readonly domNode: HTMLDivElement;
 	private readonly view: ListView<T>;
 	private readonly loopNavigation: boolean;
 	private readonly _onDidChangeActive = this._register(new Emitter<ListActiveChangeEvent<T>>());
@@ -84,6 +85,7 @@ export class List<T> extends Disposable {
 			renderItem: options.renderItem,
 		}));
 		this.element = this.view.element;
+		this.domNode = this.view.domNode;
 		this.onDidScroll = this.view.onDidScroll;
 		this._register(addDisposableListener(this.element, "mousemove", (event: MouseEvent) => {
 			if (options.focusOnMouseMove === false) return;
@@ -100,6 +102,7 @@ export class List<T> extends Disposable {
 	}
 
 	get items(): readonly T[] { return this.view.items; }
+	layout(height: number): void { this.view.layout(height); }
 
 	set items(items: readonly T[]) {
 		const focusedId = this.activeItem === undefined ? undefined : this.itemId(this.activeItem, this._activeIndex);

@@ -7,6 +7,7 @@ import { isFiniteNumber } from "../../../common/numbers.js";
 import { disposableWindowTimeout, scheduleAtNextAnimationFrame } from "../../scheduler.js";
 import { setAriaAttribute, setRole } from "../aria/aria.js";
 import { DndCssClasses, DragAndDropDataKind, type DragAndDropData, type DragAndDropDataKind as DragDataKind } from "../dnd/dnd.js";
+import { ScrollableElement } from "../scrollbar/scrollableElement.js";
 import { ListDragOverPosition, ListDragTargetSector, type ListAccessibilityProvider, type ListDragAndDrop, type ListDragOverReaction, type ListDragOverPosition as DragOverPosition, type ListScrolling, type ListDragTargetSector as DragTargetSector } from "./list.js";
 
 export interface ListViewOptions<T> {
@@ -25,6 +26,8 @@ export interface ListViewOptions<T> {
 /** Low-level flat row view that owns DOM, sizing, scrolling, and DnD. */
 export class ListView<T> extends Disposable {
 	readonly element: HTMLDivElement;
+	readonly domNode: HTMLDivElement;
+	private readonly scrollable: ScrollableElement | undefined;
 	private readonly _onDidScroll = this._register(new Emitter<number>());
 	private readonly heightOverrides = new Map<string, number>();
 	private _items: readonly T[] = [];
@@ -40,14 +43,28 @@ export class ListView<T> extends Disposable {
 		setRole(this.element, options.role ?? "listbox");
 		if (options.ariaLabel) setAriaAttribute(this.element, "label", options.ariaLabel);
 		if (options.domFocusable === true) this.element.tabIndex = 0;
-		this.element.style.overflow = options.scrolling === "external" ? "visible" : "auto";
-		container.append(this.element);
+		this.element.style.overflow = options.scrolling === "external" || options.scrolling === "managed" ? "visible" : "auto";
+		if (options.scrolling === "managed") {
+			this.scrollable = this._register(new ScrollableElement(container, { direction: "vertical", tabIndex: -1 }));
+			this.scrollable.setContent(this.element);
+			this.domNode = this.scrollable.element;
+		} else {
+			this.scrollable = undefined;
+			this.domNode = this.element;
+			container.append(this.element);
+		}
 		this._register(toDisposable(() => this.element.remove()));
-		this._register(addDisposableListener(this.element, "scroll", () => this._onDidScroll.fire(this.element.scrollTop)));
+		if (this.scrollable) this._register(this.scrollable.onDidScroll(event => this._onDidScroll.fire(event.current.top)));
+		else this._register(addDisposableListener(this.element, "scroll", () => this._onDidScroll.fire(this.element.scrollTop)));
 		if (options.dnd) this._register(new ListViewDragAndDrop(this, options.dnd, options.getDragElements ?? ((item) => [item])));
 	}
 
 	get items(): readonly T[] { return this._items; }
+
+	layout(height: number): void {
+		this.domNode.style.height = `${height}px`;
+		this.scrollable?.layout();
+	}
 
 	set items(items: readonly T[]) {
 		const nextItems = [...items];

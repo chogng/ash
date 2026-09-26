@@ -1,5 +1,6 @@
 import './media/quickInput.css';
 import { addDisposableListener, h, isHTMLElement } from '../../../base/browser/dom.js';
+import { observeResize } from '../../../base/browser/observer.js';
 import { setAriaAttribute, setRole } from '../../../base/browser/ui/aria/aria.js';
 import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
@@ -28,6 +29,9 @@ export class QuickInputController extends Disposable {
 		}
 		this.host.hidden = true;
 		container.append(this.host);
+		this._register(observeResize(this.host, () => {
+			if (this.active instanceof QuickPick) this.active.layout();
+		}));
 		this._register(addDisposableListener(this.host.ownerDocument, 'mousedown', event => {
 			if (this.active && !event.composedPath().includes(this.host)) {
 				this.active.hide();
@@ -97,6 +101,7 @@ export class QuickInputController extends Disposable {
 	/** The caller owns container geometry; the overlay only consumes its top offset. */
 	public layout(_dimension: { readonly width: number; readonly height: number }, titleBarOffset: number): void {
 		this.host.style.paddingTop = `${titleBarOffset + 8}px`;
+		if (this.active instanceof QuickPick) this.active.layout();
 	}
 
 	private show(quickPick: IBrowserQuickInputHost): void {

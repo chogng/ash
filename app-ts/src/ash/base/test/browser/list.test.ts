@@ -29,6 +29,37 @@ test("ListView owns flat rows and sizing without Widget selection policy", () =>
 	dom.window.close();
 });
 
+test("ListView owns the managed scrollbar and reports its scroll position", () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const view = new ListView<string>(dom.window.document.body, {
+		scrolling: "managed",
+		renderItem: item => {
+			const label = h(dom.window.document, "span");
+			label.textContent = item;
+			return label;
+		},
+	});
+	view.items = ["First", "Second"];
+	const viewport = view.domNode.querySelector<HTMLElement>(".ash-scrollbar-viewport");
+	assert.ok(viewport);
+	assert.equal(view.domNode.parentElement, dom.window.document.body);
+	assert.equal(view.element.parentElement?.className, "ash-scrollbar-content");
+	Object.defineProperties(viewport, {
+		clientWidth: { value: 100 },
+		clientHeight: { value: 100 },
+		scrollHeight: { value: 400 },
+	});
+	const positions: number[] = [];
+	view.onDidScroll(position => positions.push(position));
+	view.layout(100);
+	viewport.scrollTop = 35;
+	viewport.dispatchEvent(new dom.window.Event("scroll"));
+	assert.equal(positions.at(-1), 35);
+	view.dispose();
+	assert.equal(view.domNode.isConnected, false);
+	dom.window.close();
+});
+
 test("List renders in its owner document and owns active navigation", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const list = new List<string>(dom.window.document.body, {

@@ -56,7 +56,7 @@ export class QuickPick<TItem extends IQuickPickItem>
 	readonly onDidBlur: Event<void> = this._onDidBlur.event;
 	readonly onDidTriggerItemButton = this._onDidTriggerItemButton.event;
 
-	constructor(host: HTMLElement, options: BrowserQuickInputHostOptions) {
+	constructor(private readonly host: HTMLElement, options: BrowserQuickInputHostOptions) {
 		super();
 		this.options = options;
 		const ownerDocument = host.ownerDocument;
@@ -168,8 +168,27 @@ export class QuickPick<TItem extends IQuickPickItem>
 		}
 		this.visible = true;
 		this.options.onShow(this);
-		this.list.layout();
+		this.layout();
 		this.focus();
+	}
+
+	layout(): void {
+		const ownerWindow = this.element.ownerDocument.defaultView!;
+		const hostBounds = this.host.getBoundingClientRect();
+		const pickerBounds = this.element.getBoundingClientRect();
+		const inputHeight = this.inputBox.element.getBoundingClientRect().height;
+		const pickerStyle = ownerWindow.getComputedStyle(this.element);
+		const maxPickerHeight = Number.parseFloat(pickerStyle.maxHeight);
+		if (!Number.isFinite(maxPickerHeight) || hostBounds.height === 0) return;
+		const hostStyle = ownerWindow.getComputedStyle(this.host);
+		const listStyle = ownerWindow.getComputedStyle(this.list.element);
+		const roomBelow = hostBounds.bottom - pickerBounds.top - Number.parseFloat(hostStyle.paddingBottom);
+		const reservedHeight = inputHeight
+			+ Number.parseFloat(pickerStyle.borderTopWidth)
+			+ Number.parseFloat(pickerStyle.borderBottomWidth)
+			+ Number.parseFloat(listStyle.paddingTop)
+			+ Number.parseFloat(listStyle.paddingBottom);
+		this.list.layout(Math.max(0, Math.min(maxPickerHeight, roomBelow) - reservedHeight));
 	}
 
 	hide(): void {

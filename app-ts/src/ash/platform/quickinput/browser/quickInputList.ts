@@ -1,5 +1,4 @@
 import { List } from "../../../base/browser/ui/list/listWidget.js";
-import { ScrollableElement } from "../../../base/browser/ui/scrollbar/scrollableElement.js";
 import { setRole } from "../../../base/browser/ui/aria/aria.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
@@ -18,13 +17,13 @@ export class QuickInputList<TItem extends IQuickPickItem>
 	readonly element: HTMLDivElement;
 	private readonly empty: HTMLDivElement;
 	private readonly list: List<TItem>;
-	private readonly scrollable: ScrollableElement;
 	private readonly _onDidAccept = this._register(new Emitter<TItem>());
 	private readonly _onDidChangeActive =
 		this._register(new Emitter<QuickInputListActiveChangeEvent<TItem>>());
 	private readonly buttonEmitter = this._register(new Emitter<{ readonly item: TItem; readonly button: IQuickPickItemButton }>());
 	private _items: readonly TItem[] = [];
 	private _visibleItems: readonly TItem[] = [];
+	private maxHeight = Number.POSITIVE_INFINITY;
 	private query = "";
 
 	readonly onDidAccept: Event<TItem> = this._onDidAccept.event;
@@ -43,17 +42,12 @@ export class QuickInputList<TItem extends IQuickPickItem>
 
 		this.list = this._register(new List<TItem>(this.element, {
 			ariaLabel: localize('quickInput.results', 'Quick Pick results'),
-			scrolling: 'external',
+			scrolling: 'managed',
 			renderItem: (item) => this.renderItem(item),
 		}));
 		this.list.element.classList.add("ash-quick-pick-list-items");
-		this.scrollable = this._register(new ScrollableElement(this.element, {
-			direction: 'vertical',
-			tabIndex: -1,
-		}));
-		this.scrollable.element.classList.add('ash-quick-pick-list-scrollable');
-		this.scrollable.setContent(this.list.element);
-		this.scrollable.element.hidden = true;
+		this.list.domNode.classList.add('ash-quick-pick-list-scrollable');
+		this.list.domNode.hidden = true;
 		this.empty = h(ownerDocument, "div");
 		this.empty.className = "ash-quick-pick-empty";
 		setRole(this.empty, "status");
@@ -108,10 +102,21 @@ export class QuickInputList<TItem extends IQuickPickItem>
 		this.list.acceptActive();
 	}
 
-	layout(): void {
-		if (this.scrollable.element.hidden) return;
-		this.scrollable.element.style.height = `${this.list.element.scrollHeight}px`;
-		this.scrollable.layout();
+	layout(maxHeight = this.maxHeight): void {
+		this.maxHeight = maxHeight;
+		if (this.list.domNode.hidden) return;
+		const contentHeight = this.list.element.scrollHeight;
+		let height = Math.min(contentHeight, maxHeight);
+		if (height < contentHeight) {
+			let fullRowsHeight = 0;
+			for (let index = 0; index < this._visibleItems.length; index++) {
+				const rowHeight = this.list.getElementHeight(index);
+				if (fullRowsHeight + rowHeight > height) break;
+				fullRowsHeight += rowHeight;
+			}
+			if (fullRowsHeight > 0) height = fullRowsHeight;
+		}
+		this.list.layout(height);
 	}
 
 	private render(): void {
@@ -121,7 +126,7 @@ export class QuickInputList<TItem extends IQuickPickItem>
 		);
 		this.list.items = this._visibleItems;
 		const empty = this._visibleItems.length === 0;
-		this.scrollable.element.hidden = empty;
+		this.list.domNode.hidden = empty;
 		this.empty.hidden = !empty;
 		this.layout();
 	}

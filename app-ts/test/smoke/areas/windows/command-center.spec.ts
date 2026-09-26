@@ -254,6 +254,7 @@ test('Quick Access scrolls its results within the list', async ({ target, workbe
 			containerHeight: container.clientHeight,
 			listScrollHeight: viewport.scrollHeight,
 			listHeight: viewport.clientHeight,
+			rowHeight: container.querySelector<HTMLElement>('.ash-list-row')!.getBoundingClientRect().height,
 			scrollbarRightInset: picker.getBoundingClientRect().right - scrollbar.getBoundingClientRect().right,
 			thumbBorder: getComputedStyle(thumb).borderRightWidth,
 			thumbWidth: thumb.getBoundingClientRect().width,
@@ -263,6 +264,7 @@ test('Quick Access scrolls its results within the list', async ({ target, workbe
 	expect(initial.containerOverflow).toBe('hidden');
 	expect(initial.containerScrollHeight).toBeLessThanOrEqual(initial.containerHeight + 1);
 	expect(initial.listScrollHeight).toBeGreaterThan(initial.listHeight);
+	expect(Math.abs(initial.listHeight / initial.rowHeight - Math.round(initial.listHeight / initial.rowHeight))).toBeLessThan(0.03);
 	expect(initial.scrollbarRightInset).toBeLessThanOrEqual(2);
 	expect(initial.thumbBorder).toBe('0px');
 	expect(initial.thumbWidth).toBe(initial.trackWidth);
@@ -296,8 +298,12 @@ test('Quick Access scrolls its results within the list', async ({ target, workbe
 	await expect(scrollable).toBeHidden();
 	await expect(picker.locator('.ash-quick-pick-empty')).toBeVisible();
 	await picker.getByRole('combobox').fill('>');
+	const restoredListHeight = await viewport.evaluate(element => element.clientHeight);
+	expect(Math.abs(restoredListHeight / initial.rowHeight - Math.round(restoredListHeight / initial.rowHeight))).toBeLessThan(0.03);
 	await page.setViewportSize({ width: 900, height: 400 });
 	await expect.poll(() => viewport.evaluate(element => element.clientHeight)).toBeLessThan(initial.listHeight);
+	const compactListHeight = await viewport.evaluate(element => element.clientHeight);
+	expect(Math.abs(compactListHeight / initial.rowHeight - Math.round(compactListHeight / initial.rowHeight))).toBeLessThan(0.03);
 	const resized = await picker.evaluate(element => ({
 		bottom: element.getBoundingClientRect().bottom,
 		viewportHeight: window.innerHeight,
