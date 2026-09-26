@@ -1,150 +1,81 @@
 ---
 name: smoke-tests
-description: Use when running Ash smoke tests or working on smoke-test CI steps. Covers npm run smoketest / smoketest-no-compile, grep filtering tests, and a temporary repeat-loop technique for tracking down flaky smoke tests in CI.
+description: Run Ash Browser and Electron smoke tests with pnpm, reproduce intermittent CI failures through temporary repeat loops, and inspect Playwright diagnostics.
 ---
 
 # Running Smoke Tests
 
-Smoke tests live in `test/smoke/` and drive a full VS Code instance (Electron, web, or remote) through end-to-end user flows.
+Smoke tests live in `app-ts/test/smoke/` and drive complete Browser or Electron user flows with Playwright. Run these commands from the repository root.
 
 ## Scripts
 
-- `npm run smoketest` — compiles the smoke tests first (`test/smoke`), then runs them.
-- `npm run smoketest-no-compile` — runs the already-compiled smoke tests. CI uses this after an explicit compile step.
+| Target | Prepare and run | Run after preparation |
+| --- | --- | --- |
+| Electron UI | `pnpm --dir app-ts run test:smoke:ui` | `pnpm --dir app-ts run test:smoke:ui:no-compile` |
+| Electron with App Server | `pnpm --dir app-ts run test:smoke:desktop` | `pnpm --dir app-ts run test:smoke:desktop:no-compile` |
+| Browser UI | `pnpm --dir app-ts run test:smoke:browser` | `pnpm --dir app-ts run test:smoke:browser:no-compile` |
+| Browser with App Server | `pnpm --dir app-ts run test:smoke:browser:full` | `pnpm --dir app-ts run test:smoke:browser:full:no-compile` |
 
-Both forward extra arguments after `--` to the runner (`test/smoke/test/index.js`).
+The regular commands run their matching `pretest:smoke:*` preparation first. The `no-compile` commands require that preparation to have completed against the current source. CI runs preparation and execution as separate steps so a temporary repeat loop can rerun tests without rebuilding on every iteration. Extra arguments after the script name go to Playwright; no `--` separator is needed.
 
 ## Common options
 
 | Option | Description |
-|--------|-------------|
-| `-g <pattern>` (alias `-f`) | Grep filter on test/suite titles (mocha `grep`). |
-| `--build <path>` | Run against a packaged build instead of the compiled-from-source dev build. |
-| `--tracing` | Capture Playwright traces (and screenshots on failure). |
-| `--web` | Run the browser smoke tests instead of Electron. |
-| `--headless` | Headless browser (used with `--web`). |
-| `--remote` | Run the remote smoke tests. |
+| --- | --- |
+| `test/smoke/areas/<area>/<file>.spec.ts` | Select one spec file. |
+| `--grep "<pattern>"` | Filter Playwright test titles. |
+| `--list` | Show selected tests without running them. |
+| `--repeat-each=N` | Repeat every selected test N times in one run. |
+| `--max-failures=1` | Stop after the first failed test. |
 
 ```bash
-# Run everything (Electron, from source)
-npm run smoketest
+# Run the Browser UI suite after preparing its build
+pnpm --dir app-ts run test:smoke:browser
 
-# Run only a subset of suites by name, with tracing (replace <suite name> with your suite, e.g. "Agents Window")
-npm run smoketest -- -g "<suite name>" --tracing
+# Select a spec and check its tests before running
+pnpm --dir app-ts run test:smoke:ui:no-compile test/smoke/areas/windows/home.spec.ts --list
 
-# Run against a packaged build (CI style)
-npm run smoketest-no-compile -- --tracing --build "/path/to/Ash-darwin-arm64/Code - OSS.app"
+# Run only tests whose titles match a pattern
+pnpm --dir app-ts run test:smoke:ui --grep "<test title>"
 ```
 
-The `-g` pattern matches against test/suite titles. For example, `-g "Agents Window"` matches all three Agents Window suites (`Agents Window`, `Agents Window (local AgentHost)`, and `Agents Window (local AgentHost, SDK sandbox)`); use whatever substring identifies the suite(s) you care about.
+A grep pattern can select more than one test. Check the selected list when the title is not unique. The runner exits nonzero if a selected test fails.
 
-The runner exits non-zero if any test fails, so a `0` exit code means every selected test passed.
+## Temporarily loop a test to reproduce a CI failure
 
-## Temporarily looping a suite to hunt flaky CI tests
+For an intermittent failure that appears only in CI, run the affected test repeatedly in the failing CI environment and stop on the first failure. This is a temporary diagnostic change, not a permanent CI step.
 
-When a smoke test fails intermittently only in CI, a useful technique is to **temporarily** run the suspect suite many times in a row and fail on the first failure. This reproduces the flake under the real CI environment and captures its traces/screenshots, instead of waiting for it to recur naturally across unrelated PRs.
-
-This is a debugging aid, **not a permanent CI fixture**:
-
-- Add it on a throwaway branch, push, and let CI run it. Iterate until you reproduce (and then fix) the flake.
-- **Remove the loop before merging** — leaving it in would add ~an hour per platform to every run.
-- It is **not specific to any one suite**. Point the `-g` filter at whichever suite you are investigating (the examples below use `"Agents Window"`, but substitute your own).
-
-### Where to add it
-
-Drop the loop next to the existing Electron smoke step, gated on the same condition, in the test step(s) for the platform(s) where the flake reproduces:
-
-**GitHub PR workflows** (run from source, no `--build`):
-- `.github/workflows/pr-linux-test.yml` (bash; sets `DISPLAY: ":10"`)
-- `.github/workflows/pr-darwin-test.yml` (bash; no `DISPLAY`)
-- `.github/workflows/pr-win32-test.yml` (PowerShell)
-
-**Azure DevOps test steps** (run against the packaged build via `--build`):
-- `build/azure-pipelines/linux/steps/product-build-linux-test.yml`
-- `build/azure-pipelines/darwin/steps/product-build-darwin-test.yml`
-- `build/azure-pipelines/win32/steps/product-build-win32-test.yml`
-
-### Shape
-
-Loop N iterations (e.g. 20) and abort on the first failing run. Give it a generous timeout — N sequential runs of a ~3-minute suite can take roughly an hour.
-
-Bash (Linux/macOS):
+1. Identify the failing surface and test title from the job log. The Browser UI job runs on Linux and the Electron UI job runs on Windows in `.github/workflows/frontend.yml`.
+2. On a temporary branch, keep the existing preparation step. Replace the matching smoke test step with a loop over its `no-compile` command. The example below replaces the Electron UI step; use `test:smoke:browser:no-compile` for Browser UI.
+3. Increase the job's `timeout-minutes` if the selected test needs more time for all iterations. Keep the existing failure artifact upload step.
+4. Fix the failure, then remove the loop and restore the normal CI command and timeout before merging.
 
 ```yaml
-# TEMPORARY: loop the suite to reproduce a flaky failure. Remove before merge.
-# Replace <suite name> with the suite you're investigating (e.g. "Agents Window").
-- name: 🧪 Smoke test flakiness probe (TEMPORARY)
-  if: ${{ inputs.electron_tests }}
-  timeout-minutes: 60
+# TEMPORARY: replace the Electron UI test step while investigating a CI-only failure.
+- name: Test Electron UI
+  if: matrix.surface == 'electron'
   run: |
     for i in $(seq 1 20); do
       echo "::group::Smoke probe run $i/20"
-      npm run smoketest-no-compile -- --tracing -g "<suite name>" || { echo "::error::Smoke test failed on run $i/20"; exit 1; }
+      pnpm --dir app-ts run test:smoke:ui:no-compile --grep "<test title>" --max-failures=1 || { echo "::error::Smoke test failed on run $i/20"; exit 1; }
       echo "::endgroup::"
     done
 ```
 
-PowerShell (Windows) checks `$LASTEXITCODE` after each run and `exit 1` on failure. The AzDO variants use `set -e` (bash) / `$LASTEXITCODE` (pwsh) for fail-fast and append `--build "<packaged app path>"`.
-
-### Why fail-fast
-
-The loop is a probe: the first failure is the signal. Stopping immediately preserves the failing run's traces/screenshots (under the logs artifact) and avoids burning ~an hour of agent time finishing a run that has already proven flaky.
+The first failure is enough to reproduce the problem. Stopping there preserves its diagnostics and avoids spending CI time on further runs.
 
 ## Debugging CI smoke failures
 
-Both CI systems publish the smoke runner's per-platform logs (the `.build/logs` directory) as a downloadable artifact. The artifact's internal layout is identical on both — only the artifact name and the download tool differ.
-
-### Downloading the logs artifact
-
-#### GitHub Actions
-
-The GitHub PR workflows upload the artifact as `logs-<os>-<arch>-<suite>-<attempt>`, where `<os>` is `linux` / `macos` / `windows`, `<suite>` is `electron` / `browser` / `remote`, and `<attempt>` is the run attempt (e.g. `logs-macos-arm64-electron-1`).
-
-The run id is the number in the run/job URL — for `…/actions/runs/<run-id>/job/<job-id>` use `<run-id>`. Download with the `gh` CLI:
+Start with the failing test and error in the GitHub Actions job log. The workflow uploads `.build/app-ts/playwright/` on failure as `frontend-browser` or `frontend-electron`. The run ID appears in the Actions run URL. Download the artifact for the failing surface:
 
 ```bash
-# A specific artifact into ./logs
-gh run download <run-id> -n logs-<os>-<arch>-<suite>-<attempt> -D ./logs
-
-# Or every artifact from the run
-gh run download <run-id>
+gh run download <run-id> -n frontend-electron -D ./logs
 ```
 
-`gh run view <run-id>` lists the run's jobs/artifacts; the run summary page in the browser also has an **Artifacts** section at the bottom.
-
-#### Azure DevOps
-
-The artifact name depends on which pipeline produced it:
-
-- **Product build** (`product-build-<os>.yml`): `logs-<os>-<arch>-<attempt>` — no suite segment, e.g. `logs-macos-arm64-1`.
-- **Suite-split CI build** (`product-build-<os>-ci.yml`): `logs-<os>-<arch>-<suite>-<attempt>` — the `<suite>` segment is `lower(ASH_TEST_SUITE)` (e.g. `electron`), so e.g. `logs-macos-arm64-electron-1` (same shape as GitHub).
-
-`<os>` is `linux` / `macos` / `windows`, `<arch>` is `x64` / `arm64`, and `<attempt>` is `$(System.JobAttempt)`. Download with the Azure CLI:
-
-```bash
-az pipelines runs artifact download \
-  --org <ORG_URL> --project <PROJECT_NAME> \
-  --run-id <BUILD_ID> --artifact-name <artifact-name> \
-  --path ./logs
-```
-
-For the VS Code build that is `--org https://dev.azure.com/monacotools --project Monaco`; see the `azure-pipelines` skill for finding the `<BUILD_ID>`.
-
-### Inside the artifact
-
-Under `smoke-tests-<suite>/` (`smoke-tests-electron/`, `smoke-tests-browser/`, or `smoke-tests-remote/`, matching the suite that ran):
-
-- `smoke-test-runner.log` — the mocha driver output plus, for suites that use the mock LLM server, its verbose request/response bodies (look for `request body:`). On a Copilot CLI / Copilot session failure it also carries a tail of the captured Copilot runtime logs (see below).
-- `<N>_suite_<Suite_Name>/copilot-runtime-logs/process-*.log` — the Copilot runtime (`@github/copilot` CLI) process logs, captured by `dumpFailureDiagnostics` when a Copilot-runtime session fails. **Check these first for a hang or "Timed out waiting for response"**: they are the SDK/CLI's own account of what it did (startup, auth, model request, turn lifecycle, and any panic / out-of-order event / protocol error) and explain a timeout that the test error alone does not. **Agent Host** sessions (Agents Window / local AgentHost) write a full log run at `trace` (`chat.agentHost.copilotSdk.logLevel`). Chat Sessions editor (Copilot CLI / Claude) and Local sessions run the SDK in-process and write only a minimal startup log here (`Server started, waiting for requests`) — enough to tell whether the runtime came up; their detailed model/turn diagnostics are in the `GitHub Copilot Chat.log` below. (Claude / Codex sessions use a different runtime and are not captured here.)
-- `<N>_suite_<Suite_Name>/window2/exthost/<extension>/…log` — per-suite extension-host logs (e.g. `GitHub.copilot-chat/GitHub Copilot Chat.log`). Many diagnostics are gated behind a setting the suite enables in its `before` hook, so check the suite's setup if an expected log line is missing.
-- `<N>_suite_<Suite_Name>/playwright-screenshot-*.png` — last-frame screenshot captured when a test fails (only when the suite ran with `--tracing`).
-
-`<Suite_Name>` is the mocha suite title with non-word characters replaced by `_`. See also the `code-oss-logs` skill.
-
-
+Use `frontend-browser` for the Browser job. The artifact contains `test-results/` and, when generated, `report/`. A failed test that reaches the Workbench fixture attaches `trace.zip` under its test result. Inspect the error and trace to find the failing action, then run that test locally with the same target and filter. If it fails only in CI, use the temporary loop above.
 
 ## Distinction from other test types
 
-- **Unit tests** (`.test.ts`) → `scripts/test.sh` / `runTests` tool (see the `unit-tests` skill).
-- **Integration tests** (`.integrationTest.ts` + extension tests) → `scripts/test-integration.sh` (see the `integration-tests` skill).
-- **Smoke tests** (`test/smoke/`) → `npm run smoketest` — full end-to-end UI flows.
+- Unit tests: `pnpm --dir app-ts run test:unit`.
+- Editor browser integration tests: `pnpm --dir app-ts run test:editor:browser`.
+- Smoke tests: the Playwright scripts above.

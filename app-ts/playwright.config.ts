@@ -31,7 +31,8 @@ export default defineConfig({
 		? undefined
 		: browserServerMode === "disconnected"
 		? {
-				command: "pnpm run build:renderer && node ../build/app_ts/launch/web.ts ../.build/app-ts/renderer/ash 5173",
+				// The browser smoke preparation script builds the renderer before Playwright starts.
+				command: "node ../build/app_ts/launch/web.ts ../.build/app-ts/renderer/ash 5173",
 				url: "http://127.0.0.1:5173/",
 				reuseExistingServer: false,
 				timeout: 120_000,

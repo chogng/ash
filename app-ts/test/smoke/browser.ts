@@ -5,26 +5,14 @@ import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import { decodeWebListenInfo, decodeWebSessionInfo } from '../../src/ash/platform/app-server/common/generated/WebProtocolDecoder.ts';
 import { developmentAshPackagePath } from '../../../build/app_ts/runtimeStore.ts';
-import { pythonCommand } from '../../../build/python.ts';
 
 const desktopDirectory = resolve(import.meta.dirname, '../..');
+// Package scripts prepare the build before launch so CI can repeat this runner without recompiling.
 const mode = process.argv[2];
 const playwrightArguments = process.argv.slice(3);
 if (mode !== 'disconnected' && mode !== 'full') {
 	throw new Error('Usage: node test/smoke/browser.ts <disconnected|full>');
 }
-
-if (mode === 'full') {
-	const { command, args } = pythonCommand(['-B', '../build/ash_rs/prepare.py', '--javascript-runtime', 'packaged-node']);
-	const preparation = await run(command, args, process.env);
-	if (preparation !== 0) {
-		process.exitCode = preparation;
-		process.exit();
-	}
-}
-
-const build = await run(process.execPath, ['node_modules/vite/bin/vite.js', 'build', '--config', '../build/app_ts/vite/vite.config.ts'], { ...process.env, ASH_WEB_APP_SERVER: mode === 'full' ? '1' : '0' });
-if (build !== 0) process.exit(build);
 
 const port = mode === 'full' ? 5174 : 5173;
 const serverUrl = `http://127.0.0.1:${port}/`;

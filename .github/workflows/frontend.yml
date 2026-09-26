@@ -90,12 +90,18 @@ jobs:
       - name: Test editor browser integration
         if: matrix.surface == 'browser'
         run: pnpm --dir app-ts run test:editor:browser --project=chromium
+      - name: Prepare production browser UI smoke tests
+        if: matrix.surface == 'browser'
+        run: pnpm --dir app-ts run pretest:smoke:browser
       - name: Test production browser UI
         if: matrix.surface == 'browser'
-        run: pnpm test:desktop:smoke:browser
-      - name: Build and test Electron UI
+        run: pnpm --dir app-ts run test:smoke:browser:no-compile
+      - name: Prepare Electron UI smoke tests
         if: matrix.surface == 'electron'
-        run: pnpm test:desktop:smoke:ui
+        run: pnpm --dir app-ts run pretest:smoke:ui
+      - name: Test Electron UI
+        if: matrix.surface == 'electron'
+        run: pnpm --dir app-ts run test:smoke:ui:no-compile
       - name: Upload test diagnostics
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
