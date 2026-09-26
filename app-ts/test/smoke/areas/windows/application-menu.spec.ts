@@ -35,6 +35,39 @@ test('application menu switches its root submenus on pointer entry', async ({ ta
 	await expect(editMenuItem).toHaveAttribute('aria-expanded', 'true');
 });
 
+test('application menu keeps submenu arrows inside their menu rows', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	await page.getByRole('button', { name: 'Application menu' }).click();
+	const mainMenu = page.getByRole('menu').first();
+	const fileItem = mainMenu.getByRole('menuitem', { name: 'File' });
+	await fileItem.hover();
+	await expect(fileItem).toHaveAttribute('aria-expanded', 'true');
+	const arrow = fileItem.locator('.ash-submenu-indicator > .ash-icon');
+	const [itemBounds, arrowBounds] = await Promise.all([fileItem.boundingBox(), arrow.boundingBox()]);
+	expect(itemBounds).not.toBeNull();
+	expect(arrowBounds).not.toBeNull();
+	expect(arrowBounds!.width).toBe(12);
+	expect(itemBounds!.x + itemBounds!.width - arrowBounds!.x - arrowBounds!.width).toBeGreaterThanOrEqual(8);
+});
+
+test('application menu aligns command labels with and without icons', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	await page.getByRole('button', { name: 'Application menu' }).click();
+	const fileItem = page.getByRole('menu').first().getByRole('menuitem', { name: 'File' });
+	await fileItem.hover();
+	await expect(fileItem).toHaveAttribute('aria-expanded', 'true');
+	const fileMenu = page.getByRole('menu').last();
+	await expect(fileMenu.locator('..')).toHaveCSS('border-radius', '8px');
+	const iconLabel = fileMenu.getByRole('menuitem', { name: 'New Untitled Text Editor' }).locator('.ash-button-label');
+	const plainLabel = fileMenu.getByRole('menuitem', { name: 'New File from Template' }).locator('.ash-button-label');
+	const [iconBounds, plainBounds] = await Promise.all([iconLabel.boundingBox(), plainLabel.boundingBox()]);
+	expect(iconBounds).not.toBeNull();
+	expect(plainBounds).not.toBeNull();
+	expect(Math.abs(iconBounds!.x - plainBounds!.x)).toBeLessThanOrEqual(1);
+});
+
 test('application menu opens real commands and updates Go when an editor opens', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;

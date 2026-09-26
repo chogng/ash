@@ -2,7 +2,7 @@
   color: var(--ash-foreground);
   background: var(--ash-editor-background);
   border: var(--ash-stroke-thickness) solid var(--ash-border);
-  border-radius: var(--ash-corner-radius-small);
+  border-radius: var(--ash-corner-radius-large);
   box-shadow: 0 2px 8px var(--ash-widget-shadow);
   overflow: auto;
 }
@@ -42,6 +42,9 @@
 .ash-menu .ash-button.checked > .ash-menu-leading-check > .ash-icon {
   visibility: visible;
 }
+.ash-menu .ash-button.checked > .ash-menu-leading-check > .ash-icon-label-icon {
+  visibility: hidden;
+}
 .ash-menu .ash-action-view-item-separator {
   width: auto;
   height: 1px;
@@ -53,8 +56,12 @@
   justify-content: center;
   width: 16px;
   height: 16px;
+  flex: 0 0 16px;
   margin-left: auto;
-  padding-left: 12px;
+}
+.ash-menu .ash-submenu-indicator > .ash-icon {
+  width: 12px;
+  height: 12px;
 }
 .ash-menu .ash-submenu-indicator > .ash-icon [stroke] {
   stroke-width: 1.5;

@@ -32,9 +32,10 @@ function prependMenuLeadingSlot(
 	const slot = h(button.ownerDocument, "span");
 	slot.className = "ash-menu-leading-slot";
 	slot.setAttribute("aria-hidden", "true");
-	const icon = button.querySelector<SVGElement>(":scope > .ash-icon");
+	// Keep IconLabel's icon node so Button.icon updates still reach the menu slot.
+	const icon = button.querySelector<HTMLElement>(":scope > .ash-button-content > .ash-icon-label-icon");
 	if (icon) slot.append(icon);
-	else if (checked !== undefined) {
+	if (checked !== undefined) {
 		slot.classList.add("ash-menu-leading-check");
 		appendIcon(Lxicon.check, slot);
 	}
