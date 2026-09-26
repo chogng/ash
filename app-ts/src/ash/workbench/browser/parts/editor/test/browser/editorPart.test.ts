@@ -23,12 +23,17 @@ import { Disposable, toDisposable } from "../../../../../../base/common/lifecycl
 import { URI } from "../../../../../../base/common/uri.js";
 import { Position } from "../../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../../editor/common/core/range.js";
+import { TextEditorSelectionSource } from '../../../../../../platform/editor/common/editor.js';
+import { EditorPaneSelectionChangeReason, type IEditorPaneWithSelection } from '../../../../../../workbench/common/editor.js';
 import type { LanguageLocation } from "../../../../../../editor/common/languages.js";
 import type {
 	CommandId,
 } from "../../../../../../platform/commands/common/commands.js";
 import { type Context } from "../../../../../../platform/contextkey/common/contextkey.js";
 import { ContextKeyService } from "../../../../../../platform/contextkey/browser/contextKeyService.js";
+import { ServiceContainer } from '../../../../../../platform/instantiation/common/instantiation.js';
+import { CommandService } from '../../../../../../workbench/services/commands/common/commandService.js';
+import { IHistoryService } from '../../../../../../workbench/services/history/common/history.js';
 import type {
 	IKeybindingService,
 } from "../../../../../../platform/keybinding/common/keybinding.js";
@@ -97,6 +102,7 @@ const { SplitEditorHorizontalCommandId } = await import(
 );
 const { BrowserEditorService } = await import("../../../../../../workbench/services/editor/browser/browserEditorService.js");
 const { HistoryService } = await import("../../../../../../workbench/services/history/browser/historyService.js");
+const { GoFilter } = await import('../../../../../../workbench/services/history/common/history.js');
 const { EditorParts } = await import("../../../../../../workbench/browser/parts/editor/editorParts.js");
 const { BrowserAuxiliaryWindowService } = await import("../../../../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js");
 await import(
@@ -908,6 +914,72 @@ test("HistoryService navigates backward and forward through opened editors", asy
 	dom.window.close();
 });
 
+test('HistoryService restores cursor, edit, and navigation locations', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const registry = new EditorPaneRegistry();
+	let pane: TestSelectionPane | undefined;
+	registry.register(descriptor('ash.test.selectionHistory', '.ts', () => pane = new TestSelectionPane('ash.test.selectionHistory')));
+	const editor = new EditorPart(dom.window.document.body, { registry });
+	const contextKeys = new ContextKeyService();
+	const history = new HistoryService(editor, contextKeys);
+	await editor.openEditor(input('C:\\project\\locations.ts'), { pinned: true });
+	assert.ok(pane);
+	using services = new ServiceContainer();
+	services.registerInstance(IHistoryService, history);
+	using commands = new CommandService(services);
+
+	const activePane = pane;
+	activePane.setPosition(20, EditorPaneSelectionChangeReason.USER);
+	activePane.setPosition(40, EditorPaneSelectionChangeReason.USER);
+	await history.goBack();
+	assert.equal(activePane.getSelection()?.startLineNumber, 20);
+	await history.goBack();
+	assert.equal(activePane.getSelection()?.startLineNumber, 1);
+	await history.goForward();
+	assert.equal(activePane.getSelection()?.startLineNumber, 20);
+	assert.equal(activePane.lastRestoreSource, TextEditorSelectionSource.PROGRAMMATIC);
+
+	activePane.setPosition(35, EditorPaneSelectionChangeReason.EDIT);
+	activePane.setPosition(50, EditorPaneSelectionChangeReason.EDIT);
+	activePane.setPosition(70, EditorPaneSelectionChangeReason.USER);
+	assert.equal(contextKeys.getValue('canNavigateBackInEditLocations'), true);
+	await commands.executeCommand('workbench.action.navigateBackInEditLocations');
+	assert.equal(activePane.getSelection()?.startLineNumber, 50);
+	await history.goBack(GoFilter.EDITS);
+	assert.equal(activePane.getSelection()?.startLineNumber, 35);
+	await commands.executeCommand('workbench.action.navigateForwardInEditLocations');
+	assert.equal(activePane.getSelection()?.startLineNumber, 50);
+	await history.goBack(GoFilter.EDITS);
+	activePane.setPosition(36, EditorPaneSelectionChangeReason.EDIT);
+	assert.equal(contextKeys.getValue('canNavigateForwardInEditLocations'), false);
+
+	activePane.setPosition(55, EditorPaneSelectionChangeReason.USER);
+	activePane.setPosition(80, EditorPaneSelectionChangeReason.JUMP);
+	assert.equal(contextKeys.getValue('canNavigateBackInNavigationLocations'), true);
+	await commands.executeCommand('workbench.action.navigateBackInNavigationLocations');
+	assert.equal(activePane.getSelection()?.startLineNumber, 55);
+	await commands.executeCommand('workbench.action.navigateForwardInNavigationLocations');
+	assert.equal(activePane.getSelection()?.startLineNumber, 80);
+	const nextPane = await editor.openEditor(input('C:\\project\\jump-target.ts'), {
+		pinned: true,
+		selection: new Range(12, 3, 12, 3),
+		selectionSource: TextEditorSelectionSource.JUMP,
+	});
+	assert.ok(nextPane instanceof TestSelectionPane);
+	assert.equal(nextPane.getSelection()?.startLineNumber, 12);
+	await history.goBack(GoFilter.NAVIGATION);
+	assert.equal(editor.activePane, activePane);
+	assert.equal(activePane.getSelection()?.startLineNumber, 80);
+	await history.goForward(GoFilter.NAVIGATION);
+	assert.equal(editor.activePane, nextPane);
+	assert.equal(nextPane.getSelection()?.startLineNumber, 12);
+
+	history.dispose();
+	contextKeys.dispose();
+	editor.dispose();
+	dom.window.close();
+});
+
 test("EditorPart restores nested horizontal and vertical Grid layouts", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
@@ -1408,6 +1480,37 @@ class TestEditorPane extends Disposable implements IEditorPane {
 
 	async save(): Promise<void> {
 		this.saveCount += 1;
+	}
+}
+
+class TestSelectionPane extends TestEditorPane implements IEditorPaneWithSelection {
+	private readonly selectionEmitter = this._register(new Emitter<EditorPaneSelectionChangeReason>());
+	readonly onDidChangeSelection = this.selectionEmitter.event;
+	private selection = new Range(1, 1, 1, 1);
+	lastRestoreSource: TextEditorSelectionSource | undefined;
+
+	getSelection(): Range {
+		return this.selection;
+	}
+
+	setPosition(line: number, reason: EditorPaneSelectionChangeReason): void {
+		this.selection = new Range(line, 1, line, 1);
+		this.selectionEmitter.fire(reason);
+	}
+
+	restoreSelection(selection: Range, source: TextEditorSelectionSource): void {
+		this.selection = selection;
+		this.lastRestoreSource = source;
+		switch (source) {
+			case TextEditorSelectionSource.JUMP:
+				this.selectionEmitter.fire(EditorPaneSelectionChangeReason.JUMP);
+				break;
+			case TextEditorSelectionSource.NAVIGATION:
+				this.selectionEmitter.fire(EditorPaneSelectionChangeReason.NAVIGATION);
+				break;
+			default:
+				this.selectionEmitter.fire(EditorPaneSelectionChangeReason.PROGRAMMATIC);
+		}
 	}
 }
 

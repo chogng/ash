@@ -3,7 +3,7 @@ import { addDisposableListener, stopEvent, h } from "../../../../base/browser/do
 import { type IDimension } from "../../../../base/browser/dom.js";
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { Disposable, DisposableStore, MutableDisposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { type Event } from "../../../../base/common/event.js";
+import { Emitter, type Event } from "../../../../base/common/event.js";
 import { assertDefined } from "../../../../base/common/types.js";
 import * as strings from '../../../../base/common/strings.js';
 import type { URI } from "../../../../base/common/uri.js";
@@ -11,8 +11,9 @@ import { type ITextMateService } from "../../../services/textMate/common/textMat
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { type EditorInput } from "../../../browser/parts/editor/editorInput.js";
-import { type IEditorPane } from "../../../browser/parts/editor/editorPane.js";
 import { EditorPaneVisibility } from "../../../browser/parts/editor/editorPane.js";
+import { EditorPaneSelectionChangeReason, type IEditorPaneWithSelection } from '../../../common/editor.js';
+import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
 import { type ITextResourceStore } from "../../../services/textmodelResolver/common/textResourceStore.js";
 import { CodeEditorWidget, type CodeEditorWidgetOptions } from '../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
 import { type ICodeEditorViewState } from '../../../../editor/common/editorCommon.js';
@@ -32,6 +33,7 @@ import { trimTrailingWhitespace } from "../../../../editor/common/commands/trimT
 import { EditOperation } from '../../../../editor/common/core/editOperation.js';
 import { Position } from '../../../../editor/common/core/position.js';
 import { AbstractTextCodeEditor, type ITextCodeEditorControl } from './textCodeEditor.js';
+import { toEditorPaneSelectionChangeReason } from './textEditor.js';
 
 const wordWrapConfiguration = "editor.wordWrap";
 const renderWhitespaceConfiguration = "editor.renderWhitespace";
@@ -41,9 +43,10 @@ export { CODE_EDITOR_ID } from '../../../common/editor/codeEditorId.js';
 import { CODE_EDITOR_ID } from '../../../common/editor/codeEditorId.js';
 
 export interface EditorPanePart extends IDisposable, ITextCodeEditorControl {
-	readonly onDidChangeModelContent?: Event<IModelContentChangedEvent>;
-	readonly onDidChangeCursorSelection?: Event<ICursorSelectionChangedEvent>;
-	getSelections?(): Selection[] | null;
+	readonly onDidChangeModelContent: Event<IModelContentChangedEvent>;
+	readonly onDidChangeCursorSelection: Event<ICursorSelectionChangedEvent>;
+	getSelections(): Selection[] | null;
+	setSelection(selection: Range, source?: string): void;
 	layout(dimension: IDimension): void;
 	focus(): void;
 	getValue(): string;
@@ -114,9 +117,11 @@ export interface EditorPaneOptions {
 }
 
 /** Workbench pane that composes the text model, input, view, and language services. */
-export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> implements IEditorPane {
+export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> implements IEditorPaneWithSelection {
 	readonly id = CODE_EDITOR_ID;
 	readonly viewStateTypeId = "stanza.code.textView";
+	private readonly selectionChangeEmitter = this._register(new Emitter<EditorPaneSelectionChangeReason>());
+	readonly onDidChangeSelection = this.selectionChangeEmitter.event;
 	private readonly workingCopySlot = this._register(new MutableDisposable<IWorkingCopy>());
 	private readonly part = this._register(new MutableDisposable<EditorPanePart>());
 	private readonly statusListener = this._register(new MutableDisposable<IDisposable>());
@@ -127,6 +132,17 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 
 	getControl(): EditorPanePart | undefined {
 		return this.part.value;
+	}
+
+	getSelection(): Range | undefined {
+		return this.part.value?.getSelections()?.[0];
+	}
+
+	restoreSelection(selection: Range, source: TextEditorSelectionSource): void {
+		const part = this.part.value;
+		if (!part) return;
+		part.setSelection(selection, source);
+		part.revealRange?.(selection);
 	}
 
 	get workingCopy(): IWorkingCopy | undefined {
@@ -304,8 +320,14 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 		this.workingCopySlot.value = workingCopy;
 		this.languageId = modelReference.model.getLanguageId();
 		const statusListeners = new DisposableStore();
-		if (part.onDidChangeCursorSelection) statusListeners.add(part.onDidChangeCursorSelection(() => this.statusChangeEmitter.fire()));
-		if (part.onDidChangeModelContent) statusListeners.add(part.onDidChangeModelContent(() => this.statusChangeEmitter.fire()));
+		statusListeners.add(part.onDidChangeCursorSelection(event => {
+			this.statusChangeEmitter.fire();
+			this.selectionChangeEmitter.fire(toEditorPaneSelectionChangeReason(event.source));
+		}));
+		statusListeners.add(part.onDidChangeModelContent(() => {
+			this.statusChangeEmitter.fire();
+			this.selectionChangeEmitter.fire(EditorPaneSelectionChangeReason.EDIT);
+		}));
 		statusListeners.add(modelReference.onDidChangeExternalChange(() => {
 			if (modelReference.hasExternalChange) part.announceAccessibilityStatus?.("File changed on disk. Local edits are preserved.");
 			this.statusChangeEmitter.fire();

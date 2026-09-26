@@ -1,9 +1,12 @@
 import { type IDimension } from "../../../../base/browser/dom.js";
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
-import { Disposable, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { Emitter } from '../../../../base/common/event.js';
+import type { Range } from '../../../../editor/common/core/range.js';
+import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
 import { assertDefined } from "../../../../base/common/types.js";
-import { type IEditorPane } from "../../../browser/parts/editor/editorPane.js";
 import { EditorPaneVisibility } from "../../../browser/parts/editor/editorPane.js";
+import { EditorPaneSelectionChangeReason, type IEditorPaneWithSelection } from '../../../common/editor.js';
 import { type EditorInput } from "../../../browser/parts/editor/editorInput.js";
 import { DIFF_EDITOR_ID, isDiffEditorInput } from "../../../common/editor/diffEditorInput.js";
 import { type ITextResourceStore } from "../../../services/textmodelResolver/common/textResourceStore.js";
@@ -16,6 +19,7 @@ import { h } from "../../../../base/browser/dom.js";
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { getDiffComputationOptions, getDiffWordWrap } from "../../../services/editor/common/editorConfiguration.js";
+import { toEditorPaneSelectionChangeReason } from './textEditor.js';
 
 export interface DiffEditorPaneOptions {
 	readonly modelService: ITextModelResourceService;
@@ -30,15 +34,29 @@ export interface DiffEditorPaneOptions {
 }
 
 /** Workbench pane that owns an editable comparison over two acquired text references. */
-export class TextDiffEditor extends Disposable implements IEditorPane {
+export class TextDiffEditor extends Disposable implements IEditorPaneWithSelection {
 	readonly id = DIFF_EDITOR_ID;
 	private readonly session = this._register(new MutableDisposable<DiffEditorPaneSession>());
+	private readonly selectionListener = this._register(new MutableDisposable<IDisposable>());
+	private readonly selectionChangeEmitter = this._register(new Emitter<EditorPaneSelectionChangeReason>());
+	readonly onDidChangeSelection = this.selectionChangeEmitter.event;
 	private readonly modelService: ITextModelResourceService;
 	private container: HTMLDivElement | undefined;
 	private dimension: IDimension = { width: 0, height: 0 };
 
 	getControl(): DiffEditorWidget | undefined {
 		return this.session.value?.editor;
+	}
+
+	getSelection(): Range | undefined {
+		return this.session.value?.editor.modifiedEditor.getSelection() ?? undefined;
+	}
+
+	restoreSelection(selection: Range, source: TextEditorSelectionSource): void {
+		const editor = this.session.value?.editor.modifiedEditor;
+		if (!editor) return;
+		editor.setSelection(selection, source);
+		editor.revealRange(selection);
 	}
 
 	constructor(
@@ -100,11 +118,21 @@ export class TextDiffEditor extends Disposable implements IEditorPane {
 			}
 			throw error;
 		}
+		this.selectionListener.clear();
 		this.session.value = next;
+		const listeners = new DisposableStore();
+		listeners.add(next.editor.modifiedEditor.onDidChangeCursorSelection(event => {
+			this.selectionChangeEmitter.fire(toEditorPaneSelectionChangeReason(event.source));
+		}));
+		listeners.add(next.editor.modifiedEditor.onDidChangeModelContent(() => {
+			this.selectionChangeEmitter.fire(EditorPaneSelectionChangeReason.EDIT);
+		}));
+		this.selectionListener.value = listeners;
 		next.layout(this.dimension);
 	}
 
 	clearInput(): void {
+		this.selectionListener.clear();
 		this.session.clear();
 	}
 

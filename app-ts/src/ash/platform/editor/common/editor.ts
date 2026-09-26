@@ -20,6 +20,12 @@ export interface EditorActivationOptions {
 	readonly preserveFocus?: boolean;
 }
 
+export const enum TextEditorSelectionSource {
+	PROGRAMMATIC = 'api',
+	NAVIGATION = 'code.navigation',
+	JUMP = 'code.jump',
+}
+
 export interface ITextEditorOptions extends EditorActivationOptions {
 	readonly selection?: {
 		readonly startLineNumber: number;

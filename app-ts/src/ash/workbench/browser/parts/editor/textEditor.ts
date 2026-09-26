@@ -1,7 +1,18 @@
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import type { Selection } from '../../../../editor/common/core/selection.js';
+import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
+import { EditorPaneSelectionChangeReason } from '../../../common/editor.js';
 import type { EditorPaneStatus } from './editorPane.js';
+
+export function toEditorPaneSelectionChangeReason(source: string): EditorPaneSelectionChangeReason {
+	switch (source) {
+		case TextEditorSelectionSource.PROGRAMMATIC: return EditorPaneSelectionChangeReason.PROGRAMMATIC;
+		case TextEditorSelectionSource.NAVIGATION: return EditorPaneSelectionChangeReason.NAVIGATION;
+		case TextEditorSelectionSource.JUMP: return EditorPaneSelectionChangeReason.JUMP;
+		default: return EditorPaneSelectionChangeReason.USER;
+	}
+}
 
 /** Selection details shared by text-based Workbench panes. */
 export interface ITextEditorControl {

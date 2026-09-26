@@ -12,6 +12,7 @@ import { Direction, SerializableGrid, Sizing, type Direction as GridDirection, t
 import { DisposableMap, Disposable, MutableDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { rot } from "../../../../base/common/numbers.js";
 import type { IMenuService } from "../../../../platform/actions/common/actions.js";
+import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
 import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
@@ -188,7 +189,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 			serverEvents: options.serverEvents,
 			workingCopyService: options.workingCopyService,
 			onWillCloseEditor: (group, input, pane) => this.confirmEditorClose(group, input, pane),
-			onOpenLocation: location => this.openEditor({ resource: location.resource }, { selection: location.selectionRange ?? location.range }).then(() => undefined),
+			onOpenLocation: location => this.openEditor({ resource: location.resource }, { selection: location.selectionRange ?? location.range, selectionSource: TextEditorSelectionSource.JUMP }).then(() => undefined),
 			onApplyWorkspaceEdit: options.bulkEditService ? edit => options.bulkEditService!.apply(edit).then(() => undefined) : undefined,
 			titleActions: options.titleActions,
 			showBreadcrumbPicker: options.showBreadcrumbPicker,
@@ -238,7 +239,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 				documentCollaborationApi: options.documentCollaborationApi,
 				serverEvents: options.serverEvents,
 				workingCopyService: options.workingCopyService,
-				onOpenLocation: location => this.openEditor({ resource: location.resource }, { selection: location.selectionRange ?? location.range }).then(() => undefined),
+				onOpenLocation: location => this.openEditor({ resource: location.resource }, { selection: location.selectionRange ?? location.range, selectionSource: TextEditorSelectionSource.JUMP }).then(() => undefined),
 				onApplyWorkspaceEdit: options.bulkEditService ? edit => options.bulkEditService!.apply(edit).then(() => undefined) : undefined,
 				...(options.titleActions ? {
 					actionServices: {

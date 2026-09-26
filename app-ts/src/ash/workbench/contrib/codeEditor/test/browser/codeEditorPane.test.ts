@@ -10,15 +10,18 @@ import { isCancellationError } from "../../../../../base/common/errors.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../editor/common/core/range.js";
+import { TextEditorSelectionSource } from '../../../../../platform/editor/common/editor.js';
 import { EditorPaneVisibility } from "../../../../browser/parts/editor/editorPane.js";
+import { EditorPaneSelectionChangeReason } from '../../../../common/editor.js';
 import { TextFileContentSource, type ITextFileService, type ResolvedTextFileContent, type TextFileResolveRequest } from "../../../../services/textfile/common/textFileService.js";
 import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';
 import { LanguageService } from '../../../../../editor/common/services/languageService.js';
 import { toDisposable } from "../../../../../base/common/lifecycle.js";
+import { Event } from '../../../../../base/common/event.js';
 import { type ILanguageDiagnosticsService, type LanguageDiagnosticsPublisher, type LanguageDiagnosticSnapshot } from "../../../../services/language/common/languageDiagnosticsService.js";
 import { type TextModel } from "../../../../../editor/common/model/textModel.js";
 import { EDITOR_FONT_DEFAULTS } from "../../../../../editor/common/config/fontInfo.js";
-import type { EditorPaneOptions, EditorPanePartOptions } from "../../../../browser/parts/editor/textResourceEditor.js";
+import type { EditorPaneOptions, EditorPanePart, EditorPanePartOptions } from "../../../../browser/parts/editor/textResourceEditor.js";
 import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ITextModelResourceService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
@@ -125,6 +128,34 @@ test("Stanza editor pane loads, lays out, focuses, hides, and clears one editor 
 	pane.dispose();
 	assert.equal(parent.children.length, 0);
 	dom.window.close();
+});
+
+test('Stanza editor pane reports cursor navigation and edit locations', async () => {
+	const dom = createTestDom('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using closeWindow = toDisposable(() => dom.window.close());
+	const parent = dom.window.document.querySelector<HTMLElement>('main')!;
+	const resourceStore = new BrowserTextResourceStore(new ImmediateTextFiles(Array.from({ length: 30 }, (_, index) => `line ${index + 1}`).join('\n')));
+	using models = new BrowserTextModelService(resourceStore);
+	using services = paneServices(models);
+	using pane = createPane(services, resourceStore, {});
+	pane.create(parent);
+	await pane.setInput({ resource: URI.file('/project/history.ts') }, new AbortController().signal);
+	const control = pane.getControl();
+	assert.ok(control instanceof CodeEditorWidget);
+	const reasons: EditorPaneSelectionChangeReason[] = [];
+	using listener = pane.onDidChangeSelection(reason => reasons.push(reason));
+
+	control.setSelection(new Range(2, 1, 2, 1), 'keyboard');
+	pane.restoreSelection(new Range(15, 2, 15, 2), TextEditorSelectionSource.NAVIGATION);
+	control.executeEdits('keyboard', [{ range: new Range(15, 2, 15, 2), text: 'x' }]);
+	pane.restoreSelection(new Range(5, 1, 5, 1), TextEditorSelectionSource.PROGRAMMATIC);
+
+	assert.equal(pane.getSelection()?.startLineNumber, 5);
+	assert.ok(reasons.includes(EditorPaneSelectionChangeReason.USER));
+	assert.ok(reasons.includes(EditorPaneSelectionChangeReason.NAVIGATION));
+	assert.ok(reasons.includes(EditorPaneSelectionChangeReason.EDIT));
+	assert.ok(reasons.includes(EditorPaneSelectionChangeReason.PROGRAMMATIC));
 });
 
 test('open code editor applies live view settings and actions without replacing its control', async () => {
@@ -383,7 +414,7 @@ test("Stanza editor pane trims trailing whitespace before saving", async () => {
 	using services = paneServices(models);
 	const pane = createPane(services, resourceStore, {
 		trimTrailingWhitespace: true,
-		createPart: () => ({ layout: () => {}, focus: () => {}, getValue: () => "", updateOptions: () => {}, dispose: () => {}, [Symbol.dispose]: () => {} }),
+		createPart: createInertEditorPart,
 	});
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\trim.ts") }, new AbortController().signal);
@@ -404,7 +435,7 @@ test("Stanza editor pane inserts the configured final newline before saving", as
 	using services = paneServices(models);
 	const pane = createPane(services, resourceStore, {
 		insertFinalNewLine: true,
-		createPart: () => ({ layout: () => {}, focus: () => {}, getValue: () => "", updateOptions: () => {}, dispose: () => {}, [Symbol.dispose]: () => {} }),
+		createPart: createInertEditorPart,
 	});
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\final-newline.ts") }, new AbortController().signal);
@@ -430,7 +461,7 @@ test("Stanza editor pane resolves extension first-line languages after loading a
 	const pane = createPane(services, resourceStore, {
 		createPart: options => {
 			languageId = options.model?.getLanguageId();
-			return { layout: () => {}, focus: () => {}, getValue: () => "", updateOptions: () => {}, dispose: () => {}, [Symbol.dispose]: () => {} };
+			return createInertEditorPart();
 		},
 	});
 	pane.create(parent);
@@ -490,7 +521,7 @@ test("Stanza editor pane forwards Workbench editor preferences to each created p
 		insertFinalNewLine: true,
 		createPart: options => {
 			received = options;
-			return { layout: () => {}, focus: () => {}, getValue: () => "", updateOptions: () => {}, dispose: () => {}, [Symbol.dispose]: () => {} };
+			return createInertEditorPart();
 		},
 	});
 	pane.create(parent);
@@ -664,6 +695,21 @@ function paneServices(models: ITextModelResourceService, languages?: LanguageFea
 
 function createPane(services: ServiceContainer, resourceStore: ConstructorParameters<typeof EditorPane>[0], options: EditorPaneOptions): InstanceType<typeof EditorPane> {
 	return services.createInstance(EditorPane, resourceStore, options);
+}
+
+function createInertEditorPart(): EditorPanePart {
+	return {
+		onDidChangeCursorSelection: Event.None,
+		onDidChangeModelContent: Event.None,
+		layout: () => {},
+		focus: () => {},
+		getValue: () => '',
+		getSelections: () => null,
+		setSelection: () => {},
+		updateOptions: () => {},
+		dispose: () => {},
+		[Symbol.dispose]: () => {},
+	};
 }
 
 test('code editor creation rejects a missing language configuration registration', async () => {

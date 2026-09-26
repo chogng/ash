@@ -15,7 +15,7 @@ import { EditorsVisibleContext } from "../../../common/contextkeys.js";
 import { IEditorPartsService } from "./editorParts.js";
 import { AllEditorsByMostRecentlyUsedQuickAccess } from "./editorQuickAccess.js";
 import { IBreadcrumbsService } from "./breadcrumbs.js";
-import { IHistoryService } from '../../../services/history/common/history.js';
+import { GoFilter, IHistoryService } from '../../../services/history/common/history.js';
 
 export const FocusBreadcrumbsCommandId = "workbench.action.focusBreadcrumbs";
 export const ToggleEditorGroupLockCommandId = "workbench.action.toggleEditorGroupLock";
@@ -179,6 +179,62 @@ registerAction2(class NavigateEditorForwardAction extends Action2 {
 
 	override run(accessor: ServicesAccessor): Promise<void> {
 		return accessor.get(IHistoryService).goForward();
+	}
+});
+
+registerAction2(class NavigateBackwardsInEditsAction extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.action.navigateBackInEditLocations',
+			title: localizedString('ash', 'workbench.navigateBackInEditLocations', 'Go Back in Edit Locations'),
+			f1: true,
+		});
+	}
+
+	override run(accessor: ServicesAccessor): Promise<void> {
+		return accessor.get(IHistoryService).goBack(GoFilter.EDITS);
+	}
+});
+
+registerAction2(class NavigateForwardInEditsAction extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.action.navigateForwardInEditLocations',
+			title: localizedString('ash', 'workbench.navigateForwardInEditLocations', 'Go Forward in Edit Locations'),
+			f1: true,
+		});
+	}
+
+	override run(accessor: ServicesAccessor): Promise<void> {
+		return accessor.get(IHistoryService).goForward(GoFilter.EDITS);
+	}
+});
+
+registerAction2(class NavigateBackwardsInNavigationsAction extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.action.navigateBackInNavigationLocations',
+			title: localizedString('ash', 'workbench.navigateBackInNavigationLocations', 'Go Back in Navigation Locations'),
+			f1: true,
+		});
+	}
+
+	override run(accessor: ServicesAccessor): Promise<void> {
+		return accessor.get(IHistoryService).goBack(GoFilter.NAVIGATION);
+	}
+});
+
+registerAction2(class NavigateForwardInNavigationsAction extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.action.navigateForwardInNavigationLocations',
+			title: localizedString('ash', 'workbench.navigateForwardInNavigationLocations', 'Go Forward in Navigation Locations'),
+			f1: true,
+		});
+	}
+
+	override run(accessor: ServicesAccessor): Promise<void> {
+		return accessor.get(IHistoryService).goForward(GoFilter.NAVIGATION);
 	}
 });
 

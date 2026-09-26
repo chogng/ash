@@ -5,6 +5,7 @@ import { validateJsonValue } from "../../../../base/common/jsonValue.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { localize } from "../../../../nls.js";
 import type { URI } from "../../../../base/common/uri.js";
+import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
 import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import { TextFileBinaryError, type ITextFileService } from "../../../services/textfile/common/textFileService.js";
@@ -19,6 +20,7 @@ import type { IServerEventApi } from "../../../../platform/app-server/common/app
 import type { EditorInput, EditorOpenOptions } from "./editorInput.js";
 import type { TextResourceLanguageResolver } from "../../../../platform/language/common/textResourceLanguage.js";
 import type { IEditorPane } from "./editorPane.js";
+import { isEditorPaneWithSelection } from '../../../common/editor.js';
 import { isEditorPaneWithViewState } from "./editorWithViewState.js";
 import { EditorPanes, type EditorPaneInstance } from './editorPanes.js';
 import { extractExternalEditorInputs } from "./editorDropData.js";
@@ -659,12 +661,12 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 		if (this.activeEntry !== entry) {
 			this.activeEntry = entry;
 		}
-		if (changed) {
-			this.editorChangeEmitter.fire(Object.freeze({ kind: "activeEditorChanged", editor: this.editorState(entry) }));
-		}
 		this.ordinaryContent = undefined;
 		this.renderContent();
 		this.panes.activate(entry.paneInstance, this.dimension);
+		if (changed) {
+			this.editorChangeEmitter.fire(Object.freeze({ kind: "activeEditorChanged", editor: this.editorState(entry) }));
+		}
 		this.renderChrome();
 		if (focus) this.panes.focus();
 	}
@@ -773,7 +775,12 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 }
 
 function applyEditorOpenOptions(pane: IEditorPane, options: EditorOpenOptions): void {
-	if (options.selection) pane.revealRange?.(options.selection);
+	if (!options.selection) return;
+	if (isEditorPaneWithSelection(pane)) {
+		pane.restoreSelection(options.selection, options.selectionSource ?? TextEditorSelectionSource.NAVIGATION);
+		return;
+	}
+	pane.revealRange?.(options.selection);
 }
 
 let editorGroupId = 0;

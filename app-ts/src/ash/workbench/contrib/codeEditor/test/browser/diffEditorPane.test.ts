@@ -5,6 +5,8 @@ import { type CancellationToken } from '../../../../../base/common/cancellation.
 import { Event } from '../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { URI } from "../../../../../base/common/uri.js";
+import { Range } from '../../../../../editor/common/core/range.js';
+import { TextEditorSelectionSource } from '../../../../../platform/editor/common/editor.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { CodeEditorConfiguration } from '../../common/editorConfiguration.js';
@@ -18,6 +20,7 @@ import { type IDocumentDiff, type IDocumentDiffProvider, type IDocumentDiffProvi
 import { DefaultLinesDiffComputer } from "../../../../../editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js";
 import { type ITextModel } from '../../../../../editor/common/model.js';
 import { EditorPaneVisibility } from "../../../../browser/parts/editor/editorPane.js";
+import { EditorPaneSelectionChangeReason } from '../../../../common/editor.js';
 import { TextFileContentSource, type ITextFileService, type ResolvedTextFileContent, type TextFileResolveRequest } from "../../../../services/textfile/common/textFileService.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
@@ -144,6 +147,15 @@ test("Stanza diff pane acquires both models, lays out the review view, and relea
 	assert.equal(diffWidget.modifiedEditor.getOption(EditorOption.fontFamily), 'Test Mono');
 	assert.equal(diffWidget.modifiedEditor.getOption(EditorOption.fontSize), 15);
 	assert.match(diffWidget.modifiedEditor.getOption(EditorOption.fontLigatures), /"liga" on/);
+	const selectionReasons: EditorPaneSelectionChangeReason[] = [];
+	using selectionListener = pane.onDidChangeSelection(reason => selectionReasons.push(reason));
+	diffWidget.modifiedEditor.setSelection(new Range(1, 2, 1, 2), 'keyboard');
+	pane.restoreSelection(new Range(1, 5, 1, 5), TextEditorSelectionSource.NAVIGATION);
+	assert.equal(pane.getSelection()?.startColumn, 5);
+	diffWidget.modifiedEditor.executeEdits('keyboard', [{ range: new Range(1, 5, 1, 5), text: 'x' }]);
+	assert.ok(selectionReasons.includes(EditorPaneSelectionChangeReason.USER));
+	assert.ok(selectionReasons.includes(EditorPaneSelectionChangeReason.NAVIGATION));
+	assert.ok(selectionReasons.includes(EditorPaneSelectionChangeReason.EDIT));
 	assert.match(parent.querySelector(".stanza-diff-editor")?.getAttribute("aria-label") ?? "", /before\.ts/);
 	assert.equal(codeEditorService.listDiffEditors().length, 1);
 	pane.focus();

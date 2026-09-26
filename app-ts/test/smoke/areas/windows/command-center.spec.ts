@@ -52,6 +52,28 @@ test('titlebar navigation moves through editor history beside Quick Access', asy
 	await expect(forward).toBeDisabled();
 });
 
+test('titlebar navigation restores a cursor location in the same editor', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	await page.getByRole('button', { name: 'Application menu' }).click();
+	await page.getByRole('menu').first().getByRole('menuitem', { name: 'File' }).hover();
+	await page.getByRole('menu').last().getByRole('menuitem', { name: 'New Untitled Text Editor' }).click();
+	const input = workbench.editors.groupAt(0).content.locator('.stanza-editor-input');
+	await input.focus();
+	await page.keyboard.insertText(Array.from({ length: 40 }, (_, index) => `line ${index + 1}`).join('\n'));
+	const cursor = page.locator('[data-statusbar-item-id="ash.status.editor.cursor"]');
+	const start = process.platform === 'darwin' ? 'Meta+ArrowUp' : 'Control+Home';
+	const end = process.platform === 'darwin' ? 'Meta+ArrowDown' : 'Control+End';
+	await page.keyboard.press(start);
+	await expect(cursor).toContainText('Ln 1, Col 1');
+	await page.keyboard.press(end);
+	await expect(cursor).toContainText('Ln 40, Col 8');
+	await page.locator('.ash-titlebar-command-center-navigation').getByRole('button', { name: 'Go Back' }).click();
+	await expect(cursor).toContainText('Ln 1, Col 1');
+	await page.locator('.ash-titlebar-command-center-navigation').getByRole('button', { name: 'Go Forward' }).click();
+	await expect(cursor).toContainText('Ln 40, Col 8');
+});
+
 test('Sessions entry sits beside Quick Access and animates its Ash mark on intent', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
@@ -66,11 +88,15 @@ test('Sessions entry sits beside Quick Access and animates its Ash mark on inten
 
 	for (const width of [1200, 700]) {
 		await page.setViewportSize({ width, height: 800 });
+		await expect.poll(async () => {
+			const searchBounds = await commandCenter.boundingBox();
+			const entryBounds = await entry.boundingBox();
+			return searchBounds && entryBounds ? entryBounds.x - searchBounds.x - searchBounds.width : -1;
+		}).toBeGreaterThanOrEqual(6);
 		const searchBounds = await commandCenter.boundingBox();
 		const entryBounds = await entry.boundingBox();
 		expect(searchBounds).not.toBeNull();
 		expect(entryBounds).not.toBeNull();
-		expect(entryBounds!.x - searchBounds!.x - searchBounds!.width).toBeGreaterThanOrEqual(6);
 		expect(Math.abs(entryBounds!.y + entryBounds!.height / 2 - searchBounds!.y - searchBounds!.height / 2)).toBeLessThan(1);
 	}
 
