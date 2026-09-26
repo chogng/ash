@@ -17,7 +17,7 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	}
 
 	const workbenchPage = workbench.page;
-	const openSessions = workbenchPage.locator("[data-action-id='workbench.action.openAgentsWindow'] button");
+	const openSessions = workbenchPage.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button");
 	await expect(openSessions).toBeVisible();
 	const sessionPagePromise = application.waitForEvent("window");
 	await openSessions.click();
@@ -154,7 +154,7 @@ test('closing the parent Workbench closes its dedicated Sessions window', async 
 		try {
 			const parent = driver.workbench.page;
 			const childPromise = application.waitForEvent('window');
-			await parent.locator("[data-action-id='workbench.action.openAgentsWindow'] button").click();
+			await parent.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 			const child = await childPromise;
 			await expect(child.locator('.ash-code-sessions-window')).toBeVisible();
 			const childClosed = child.waitForEvent('close');

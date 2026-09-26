@@ -3,7 +3,6 @@ import { RawContextKey } from "../../../../platform/contextkey/common/contextkey
 export const CHAT_VIEW_CONTAINER_ID = "ash.chat";
 export const CHAT_VIEW_ID = "ash.chat.view";
 export const OPEN_CHAT_COMMAND_ID = "workbench.action.chat.open";
-export const OPEN_AGENTS_WINDOW_COMMAND_ID = 'workbench.action.openAgentsWindow';
 export const NEW_CHAT_COMMAND_ID = "workbench.action.chat.new";
 export const SHOW_CHAT_HISTORY_COMMAND_ID =
 	"workbench.action.chat.showHistory";

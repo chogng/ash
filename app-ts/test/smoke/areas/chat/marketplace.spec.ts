@@ -1,5 +1,18 @@
 import { expect, test } from '../../../automation/test.js';
 
+test('Marketplace view tab uses the extensions icon', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code');
+	const page = workbench.page;
+	if (!await page.getByRole('region', { name: 'Primary sidebar' }).isVisible()) {
+		await page.getByRole('button', { name: 'Show Primary Side Bar', exact: true }).click();
+	}
+	const marketplaceTab = page.getByRole('tab', { name: 'Marketplace', exact: true });
+	await expect(marketplaceTab.locator('svg[data-ash-icon-id="extensions"]')).toBeVisible();
+	await marketplaceTab.click();
+	await expect(page.locator('.ash-marketplace')).toBeVisible();
+	await expect(marketplaceTab).toHaveAttribute('aria-selected', 'true');
+});
+
 test('Marketplace slash commands open their Workbench owners without sending a chat message', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
 	const page = workbench.page;

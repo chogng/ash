@@ -46,12 +46,22 @@
 }
 
 .ash-quick-pick-list {
+  display: flex;
+  flex-direction: column;
   min-height: 0;
-  overflow: auto;
-  padding: 4px;
+  overflow: hidden;
+  padding: 4px 0 4px 4px;
 }
 
-.ash-quick-pick-list-items {
+.ash-quick-pick-list .ash-quick-pick-list-items {
+  min-height: 0;
+  box-sizing: border-box;
+  /* Keep the selection background out of the translucent scrollbar. */
+  padding-right: var(--ash-scrollbar-size);
+}
+
+.ash-quick-pick-list-scrollable {
+  flex: 0 1 auto;
   min-height: 0;
 }
 

@@ -245,6 +245,27 @@ test("ActionBar maps vertical navigation to up and down", () => {
 	dom.window.close();
 });
 
+test("ActionBar retains focus when an action view item is updated", () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const actionBar = new ActionBar(dom.window.document.body, {
+		actions: [action("first"), action("second")],
+	});
+	const second = actionBar.element.querySelector<HTMLButtonElement>('[data-action-id="second"] button');
+	assert.ok(second);
+	second.focus();
+	actionBar.updateActions([action("first"), action("second")]);
+	const replacement = actionBar.element.querySelector<HTMLButtonElement>('[data-action-id="second"] button');
+	assert.ok(replacement);
+	assert.notEqual(replacement, second);
+	assert.equal(dom.window.document.activeElement, replacement);
+	actionBar.setActions([action("first"), action("second"), action("third")]);
+	const afterStructuralChange = actionBar.element.querySelector<HTMLButtonElement>('[data-action-id="second"] button');
+	assert.ok(afterStructuralChange);
+	assert.equal(dom.window.document.activeElement, afterStructuralChange);
+	actionBar.dispose();
+	dom.window.close();
+});
+
 function action(
 	id: string,
 	enabled = true,

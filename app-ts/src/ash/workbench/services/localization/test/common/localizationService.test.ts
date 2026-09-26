@@ -59,6 +59,8 @@ test("localization lookup falls back to English and formats parameters", async (
 		commandActionLabel(localizedString('ash.menu', 'file', 'File')),
 		commandActionLabel(localizedString('ash.actions', 'showPanel', 'Show Panel')),
 		commandActionLabel(localizedString('ash.actions', 'openAgentsWindow', 'Open Agents Window')),
+		commandActionLabel(localizedString('ash.actions', 'openInAgents', 'Open in Agents')),
+		commandActionLabel(localizedString('ash.actions', 'openInAgentsWindow', 'Open in Agents Window')),
 		commandActionLabel(localizedString('ash', 'workbench.openFolder', 'Open Folder...')),
 		commandActionLabel(localizedString('ash', 'workbench.toggleDeveloperTools', 'Developer: Toggle Developer Tools')),
 		commandActionLabel(localizedString('ash', 'workbench.switchWindow', 'Switch Window...')),
@@ -69,11 +71,12 @@ test("localization lookup falls back to English and formats parameters", async (
 		commandActionLabel(localizedString('ash', 'workbench.navigateBackInNavigationLocations', 'Go Back in Navigation Locations')),
 		commandActionLabel(localizedString('ash', 'workbench.navigateForwardInNavigationLocations', 'Go Forward in Navigation Locations')),
 		commandActionLabel(localizedString('ash', 'workbench.installShellCommand', 'Install ash Command in PATH')),
-	], ['文件', '显示面板', '打开 Agents 窗口', '打开文件夹...', '开发者：切换开发者工具', '切换窗口...', '后退', '前进', '返回上一编辑位置', '前往下一编辑位置', '返回上一跳转位置', '前往下一跳转位置', '在 PATH 中安装 ash 命令']);
+	], ['文件', '显示面板', '打开 Agents 窗口', '在 Agents 中打开', '在 Agents 窗口中打开', '打开文件夹...', '开发者：切换开发者工具', '切换窗口...', '后退', '前进', '返回上一编辑位置', '前往下一编辑位置', '返回上一跳转位置', '前往下一跳转位置', '在 PATH 中安装 ash 命令']);
 	assert.equal(localization.translate('ash', 'openAgentsWindow.systemWideFailed', 'Some system-wide shortcuts could not be registered ({0}); they may be used by another application.', { '0': 'Ctrl+A' }), '部分系统级快捷键无法注册（Ctrl+A）；它们可能已被其他应用占用。');
 	assert.equal(localization.translate('ash', 'dialog.input', 'Input'), '输入');
 	assert.equal(localization.translate('ash', 'collaboration.dialog.tokenMessage', 'Enter the remote collaboration server bearer token.'), '输入远程协作服务器的访问令牌。');
 	assert.equal(localization.translate('ash.regions', 'searchCommands', 'Search commands'), '搜索命令');
+	assert.equal(localization.translate('ash.regions', 'titleBarLeftActions', 'Title bar left actions'), '标题栏左侧操作');
 	assert.equal(localization.translate('ash', 'iPadShowKeyboard.label', 'Show Keyboard'), '显示键盘');
 	assert.equal(localization.translate('ash', 'inspectTokens.label', 'Developer: Inspect Tokens'), '开发者：检查词法单元');
 	assert.equal(localization.translate('ash', 'inspectTokens.scope', 'Token type'), '词法单元类型');

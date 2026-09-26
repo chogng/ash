@@ -1,4 +1,5 @@
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { ServiceConstructionDescriptor, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
@@ -17,7 +18,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 
 registerWorkbenchContribution('workbench.contrib.marketplace', WorkbenchPhase.BlockStartup, () => {
 	const registrations = new DisposableStore();
-	registrations.add(ViewsRegistry.registerViewContainer({ id: 'ash.marketplace', title: 'Marketplace', location: ViewContainerLocation.Sidebar, order: 8 }));
+	registrations.add(ViewsRegistry.registerViewContainer({ id: 'ash.marketplace', title: 'Marketplace', location: ViewContainerLocation.Sidebar, icon: Lxicon.extensions, order: 8 }));
 	registrations.add(ViewsRegistry.registerViews('ash.marketplace', [{ id: 'ash.marketplace.view', title: 'Marketplace', canToggleVisibility: false, ctorDescriptor: new ServiceConstructionDescriptor(MarketplaceViewPane) }]));
 	registrations.add(registerAction2(class OpenMarketplace extends Action2 {
 		constructor() { super({ id: OPEN_MARKETPLACE_COMMAND_ID, title: 'Open Marketplace', f1: true }); }

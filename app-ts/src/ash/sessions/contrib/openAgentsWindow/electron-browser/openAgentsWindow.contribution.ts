@@ -5,7 +5,7 @@ import { IKeybindingsResourceService, type IKeybindingsResourceService as Keybin
 import { ILogService, type ILogService as LogService } from '../../../../platform/log/common/log.js';
 import { INotificationService, type INotificationService as NotificationService } from '../../../../platform/notification/common/notification.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
-import { OPEN_AGENTS_WINDOW_COMMAND_ID } from '../../../../workbench/contrib/chat/common/chat.js';
+import { OPEN_AGENTS_WINDOW_COMMAND_ID } from '../../../../workbench/contrib/chat/common/constants.js';
 import { selectSystemWideKeybindings } from '../../../../workbench/contrib/keybindings/electron-browser/systemWideKeybindings.js';
 import { SystemWideKeybindingsSynchronizer } from '../../../../workbench/contrib/keybindings/electron-browser/systemWideKeybindingsSynchronizer.js';
 

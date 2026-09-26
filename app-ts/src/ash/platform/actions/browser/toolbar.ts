@@ -46,6 +46,7 @@ export class WorkbenchToolBar extends ToolBar {
 }
 
 export interface IMenuWorkbenchToolBarOptions extends IWorkbenchToolBarOptions {
+	readonly leadingActions?: readonly IAction[];
 	readonly menuOptions?: IMenuActionOptions;
 	readonly contextKeyService?: IContextKeyService;
 	readonly toolbarOptions?: IToolBarRenderOptions;
@@ -63,6 +64,7 @@ export class MenuWorkbenchToolBar extends WorkbenchToolBar {
 	readonly onDidChangeMenuItems = this.changeMenuItemsEmitter.event;
 	private readonly menuOptions: IMenuActionOptions | undefined;
 	private readonly toolbarOptions: IToolBarRenderOptions | undefined;
+	private readonly leadingActions: readonly IAction[];
 	private readonly menu: IMenu;
 
 	constructor(
@@ -73,6 +75,7 @@ export class MenuWorkbenchToolBar extends WorkbenchToolBar {
 		options: IMenuWorkbenchToolBarOptions = {},
 	) {
 		super(container, contextMenuProvider, options);
+		this.leadingActions = options.leadingActions ?? [];
 		this.menuOptions = options.menuOptions;
 		this.toolbarOptions = options.toolbarOptions;
 		const menu = this._register(menuService.createMenu(menuId, options.contextKeyService));
@@ -100,13 +103,14 @@ export class MenuWorkbenchToolBar extends WorkbenchToolBar {
 			this.toolbarOptions?.shouldInlineSubmenu,
 			this.toolbarOptions?.useSeparatorsInPrimaryActions,
 		);
-		const empty = primary.length === 0 && secondary.length === 0;
+		const actions = [...this.leadingActions, ...primary];
+		const empty = actions.length === 0 && secondary.length === 0;
 		this.element.hidden = empty;
 		this.element.classList.toggle("empty", empty);
 		if (event?.isStructuralChange === false) {
-			super.updateActions(primary, secondary);
+			super.updateActions(actions, secondary);
 			return;
 		}
-		super.setActions(primary, secondary);
+		super.setActions(actions, secondary);
 	}
 }

@@ -2,6 +2,38 @@ import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
 
+test('primary sidebar toggle sits immediately after the application menu', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	const actionId = 'workbench.action.toggleSideBar';
+	const toggle = page.locator(`.ash-titlebar-left-actions [data-action-id="${actionId}"] button`);
+	const toolbar = page.getByRole('toolbar', { name: 'Title bar left actions' });
+	const menu = toolbar.getByRole('button', { name: 'Application menu' });
+	await expect(page.locator(`.ash-titlebar-actions [data-action-id="${actionId}"]`)).toHaveCount(0);
+	await expect(toggle).toBeVisible();
+	await expect(menu).toBeVisible();
+	expect(await toolbar.locator('.ash-action-view-item').evaluateAll(elements =>
+		elements.slice(0, 2).map(element => element.getAttribute('data-action-id')))).toEqual([
+		'ash.applicationMenu',
+		actionId,
+	]);
+	const rightGap = await page.locator('.ash-titlebar-actions .ash-action-bar').evaluate(element =>
+		Number.parseFloat(getComputedStyle(element).columnGap));
+	const [menuBounds, toggleBounds] = await Promise.all([menu.boundingBox(), toggle.boundingBox()]);
+	expect(menuBounds).not.toBeNull();
+	expect(toggleBounds).not.toBeNull();
+	expect(toggleBounds!.x - menuBounds!.x - menuBounds!.width).toBeCloseTo(rightGap, 0);
+	const sidebar = page.locator('[data-part="sidebar"]');
+	const wasVisible = await sidebar.isVisible();
+	await toggle.click();
+	await expect(toggle).toBeFocused();
+	if (wasVisible) {
+		await expect(sidebar).toBeHidden();
+	} else {
+		await expect(sidebar).toBeVisible();
+	}
+});
+
 test('command center opens without a first-run guide', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
@@ -88,13 +120,18 @@ test('Sessions entry sits beside Quick Access and animates its Ash mark on inten
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
 	const commandCenter = page.locator('.ash-titlebar-command-center-button');
-	const actionId = target.kind === 'electron' ? 'workbench.action.openAgentsWindow' : 'ash.code.open-sessions';
+	const actionId = target.kind === 'electron' ? 'workbench.action.chat.openAgentsWindow.titleBar' : 'ash.code.open-sessions';
 	const entry = page.locator(`.ash-titlebar-center-adjacent-actions [data-action-id="${actionId}"] button`);
 	await expect(page.locator(`.ash-titlebar-left-actions [data-action-id="${actionId}"]`)).toHaveCount(0);
 	await expect(entry).toBeVisible();
-	await expect(entry).toHaveAttribute('aria-label', target.kind === 'electron' ? 'Open Agents Window' : 'Open Code Sessions');
+	await expect(entry).toHaveAttribute('aria-label', target.kind === 'electron' ? 'Open in Agents' : 'Open Code Sessions');
 	const mark = entry.locator('svg.ash-titlebar-mark');
 	await expect(mark.locator('path')).toHaveCount(9);
+	const expandedLabel = entry.locator('.ash-icon-label-container');
+	if (target.kind === 'electron') {
+		await expect(expandedLabel).toHaveText('Open in Agents');
+		await expect(expandedLabel).toHaveCSS('opacity', '0');
+	}
 
 	for (const width of [1200, 700]) {
 		await page.setViewportSize({ width, height: 800 });
@@ -117,16 +154,30 @@ test('Sessions entry sits beside Quick Access and animates its Ash mark on inten
 		expect(Math.abs(entryBounds!.y + entryBounds!.height / 2 - searchBounds!.y - searchBounds!.height / 2)).toBeLessThan(1);
 	}
 
+	const collapsedWidth = await entry.evaluate(button => button.getBoundingClientRect().width);
 	const petal = mark.locator('#petal-north');
-	await entry.hover();
+	await entry.hover({ position: { x: 2, y: 11 } });
 	await expect(petal).toHaveCSS('animation-name', 'ash-titlebar-mark-bloom');
+	if (target.kind === 'electron') {
+		await expect(expandedLabel).toHaveCSS('opacity', '1');
+		await expect.poll(() => entry.evaluate(button => button.getBoundingClientRect().width)).toBeGreaterThan(collapsedWidth + 20);
+	}
 	await page.mouse.move(400, 180);
+	if (target.kind === 'electron') {
+		await expect(expandedLabel).toHaveCSS('opacity', '0');
+	}
 	await commandCenter.focus();
 	await page.keyboard.press('Tab');
 	await expect(entry).toBeFocused();
 	await expect(petal).toHaveCSS('animation-name', 'ash-titlebar-mark-bloom');
+	if (target.kind === 'electron') {
+		await expect(expandedLabel).toHaveCSS('opacity', '1');
+	}
 	await page.emulateMedia({ reducedMotion: 'reduce' });
 	await expect(petal).toHaveCSS('animation-name', 'none');
+	if (target.kind === 'electron') {
+		await expect.poll(() => expandedLabel.evaluate(element => Number.parseFloat(getComputedStyle(element).transitionDuration))).toBeLessThan(0.001);
+	}
 
 	if (target.kind === 'browser') {
 		await entry.click();
@@ -179,6 +230,79 @@ test('Quick Access has no backdrop and lets workbench controls receive clicks', 
 	await page.getByRole('button', { name: 'Application menu' }).click();
 	await expect(picker).toHaveCount(0);
 	await expect(page.getByRole('menu').first()).toBeVisible();
+});
+
+test('Quick Access scrolls its results within the list', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	await page.keyboard.press('F1');
+	const picker = page.locator('.ash-quick-pick');
+	const listContainer = picker.locator('.ash-quick-pick-list');
+	const scrollable = picker.locator('.ash-quick-pick-list-scrollable');
+	const viewport = scrollable.locator('.ash-scrollbar-viewport');
+	const scrollbar = scrollable.locator('.ash-scrollbar-track-vertical');
+	await picker.getByRole('combobox').fill('>');
+	await expect(picker.locator('.ash-list-row').nth(20)).toBeVisible();
+	const initial = await listContainer.evaluate(container => {
+		const viewport = container.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
+		const scrollbar = container.querySelector<HTMLElement>('.ash-scrollbar-track-vertical')!;
+		const thumb = scrollbar.querySelector<HTMLElement>('.ash-scrollbar-thumb')!;
+		const picker = container.closest('.ash-quick-pick')!;
+		return {
+			containerOverflow: getComputedStyle(container).overflowY,
+			containerScrollHeight: container.scrollHeight,
+			containerHeight: container.clientHeight,
+			listScrollHeight: viewport.scrollHeight,
+			listHeight: viewport.clientHeight,
+			scrollbarRightInset: picker.getBoundingClientRect().right - scrollbar.getBoundingClientRect().right,
+			thumbBorder: getComputedStyle(thumb).borderRightWidth,
+			thumbWidth: thumb.getBoundingClientRect().width,
+			trackWidth: scrollbar.getBoundingClientRect().width,
+		};
+	});
+	expect(initial.containerOverflow).toBe('hidden');
+	expect(initial.containerScrollHeight).toBeLessThanOrEqual(initial.containerHeight + 1);
+	expect(initial.listScrollHeight).toBeGreaterThan(initial.listHeight);
+	expect(initial.scrollbarRightInset).toBeLessThanOrEqual(2);
+	expect(initial.thumbBorder).toBe('0px');
+	expect(initial.thumbWidth).toBe(initial.trackWidth);
+	const [rowBounds, trackBounds] = await Promise.all([
+		picker.locator('.ash-list-row.is-active').boundingBox(),
+		scrollbar.boundingBox(),
+	]);
+	expect(rowBounds).not.toBeNull();
+	expect(trackBounds).not.toBeNull();
+	expect(Math.abs(rowBounds!.x + rowBounds!.width - trackBounds!.x)).toBeLessThanOrEqual(1);
+	const [bindingBounds, scrollbarBounds] = await Promise.all([
+		picker.locator('.ash-quick-pick-row-keybinding').first().boundingBox(),
+		scrollbar.boundingBox(),
+	]);
+	expect(bindingBounds).not.toBeNull();
+	expect(scrollbarBounds).not.toBeNull();
+	expect(bindingBounds!.x + bindingBounds!.width).toBeLessThanOrEqual(scrollbarBounds!.x - 4);
+	for (let index = 0; index < 20; index++) {
+		await picker.getByRole('combobox').press('ArrowDown');
+	}
+	const scrolled = await viewport.evaluate(element => element.scrollTop);
+	expect(scrolled).toBeGreaterThan(0);
+	expect(await listContainer.evaluate(element => element.scrollTop)).toBe(0);
+	const active = picker.locator('.ash-list-row.is-active');
+	await expect(active).toBeInViewport();
+	await expect(scrollbar).toHaveAttribute('aria-orientation', 'vertical');
+	await picker.getByRole('combobox').fill('>Toggle Minimap');
+	await expect(picker.locator('.ash-list-row')).toHaveCount(2);
+	await expect.poll(() => scrollable.evaluate(element => element.getBoundingClientRect().height)).toBeLessThan(initial.listHeight);
+	await picker.getByRole('combobox').fill('>no-such-command-quick-access-scroll');
+	await expect(scrollable).toBeHidden();
+	await expect(picker.locator('.ash-quick-pick-empty')).toBeVisible();
+	await picker.getByRole('combobox').fill('>');
+	await page.setViewportSize({ width: 900, height: 400 });
+	await expect.poll(() => viewport.evaluate(element => element.clientHeight)).toBeLessThan(initial.listHeight);
+	const resized = await picker.evaluate(element => ({
+		bottom: element.getBoundingClientRect().bottom,
+		viewportHeight: window.innerHeight,
+	}));
+	expect(resized.bottom).toBeLessThanOrEqual(resized.viewportHeight);
 });
 
 test('titlebar command center opens command search and restores focus', async ({ target, workbench }) => {

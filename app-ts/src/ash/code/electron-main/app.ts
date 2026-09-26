@@ -48,7 +48,7 @@ import { WindowDialogHost } from '../../platform/dialogs/electron-main/windowDia
 import { openDedicatedWindowIpcRoute, returnToParentWindowIpcRoute } from "../../platform/windows/electron-main/dedicatedWindowIpc.js";
 import { DedicatedWindowHost } from "../../platform/windows/electron-main/dedicatedWindowHost.js";
 import { GlobalKeybindingsMainService } from '../../platform/globalKeybindings/electron-main/globalKeybindingsMainService.js';
-import { OPEN_AGENTS_WINDOW_COMMAND_ID } from '../../workbench/contrib/chat/common/chat.js';
+import { OPEN_AGENTS_WINDOW_COMMAND_ID } from '../../workbench/contrib/chat/common/constants.js';
 import { StateService } from "../../platform/state/node/stateService.js";
 import { migrateLegacyLocalProfile } from "../../platform/profile/node/localProfile.js";
 import { resolveHome } from "../../platform/home/node/home.js";

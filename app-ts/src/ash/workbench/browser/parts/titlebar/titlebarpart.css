@@ -143,13 +143,6 @@
   color: var(--ash-title-bar-action-foreground);
 }
 
-.ash-titlebar-left-actions {
-  display: flex;
-  height: 100%;
-  align-items: center;
-  color: var(--ash-title-bar-action-foreground);
-}
-
 .ash-titlebar-mark path {
   transform-box: fill-box;
   transform-origin: center;

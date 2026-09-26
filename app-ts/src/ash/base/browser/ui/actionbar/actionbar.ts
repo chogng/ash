@@ -128,10 +128,19 @@ export class ActionBar extends Disposable {
 	}
 
 	setActions(actions: readonly IAction[]): void {
+		const activeElement = this.element.ownerDocument.activeElement;
+		const focusedActionId = this.entries.find(({ container }) => container.contains(activeElement))?.action.id;
 		this.clearActions();
 		this.tabStop = undefined;
 		this.element.replaceChildren();
 		for (const action of actions) this.add(action);
+		if (focusedActionId) {
+			const entry = this.entries.find(({ action }) => action.id === focusedActionId && action.enabled);
+			if (entry) {
+				this._setTabStop(entry.item);
+				entry.item.focus();
+			}
+		}
 	}
 
 	/** Updates retained action slots when menu structure and ordering are stable. */
@@ -392,6 +401,7 @@ export class ActionBar extends Disposable {
 
 	private replaceEntry(entry: ActionBarEntry, action: IAction): void {
 		const wasTabStop = entry.item === this.tabStop;
+		const hadFocus = entry.container.contains(entry.container.ownerDocument.activeElement);
 		entry.store.dispose();
 		entry.container.replaceChildren();
 		entry.container.classList.toggle("icon", action.icon !== undefined);
@@ -401,6 +411,7 @@ export class ActionBar extends Disposable {
 		entry.store = replacement.store;
 		if (wasTabStop) this.tabStop = entry.item;
 		entry.item.setTabbable(wasTabStop);
+		if (hadFocus && action.enabled) entry.item.focus();
 	}
 
 	private navigationDirection(

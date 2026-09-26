@@ -3,10 +3,26 @@ import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
 
+test('application menu trigger uses the titlebar action size', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	const trigger = page.getByRole('toolbar', { name: 'Title bar left actions' }).getByRole('button', { name: 'Application menu' });
+	const adjacentAction = page.locator('.ash-titlebar-left-actions [data-action-id="workbench.action.toggleSideBar"] .ash-button');
+	const [triggerBounds, actionBounds] = await Promise.all([trigger.boundingBox(), adjacentAction.boundingBox()]);
+	expect(triggerBounds).not.toBeNull();
+	expect(actionBounds).not.toBeNull();
+	expect({ width: triggerBounds!.width, height: triggerBounds!.height }).toEqual({
+		width: actionBounds!.width,
+		height: actionBounds!.height,
+	});
+	await trigger.hover();
+	await expect(trigger).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+});
+
 test('application menu switches its root submenus on pointer entry', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
-	const trigger = page.getByRole('toolbar', { name: 'Application menu' }).getByRole('button', { name: 'Application menu' });
+	const trigger = page.getByRole('toolbar', { name: 'Title bar left actions' }).getByRole('button', { name: 'Application menu' });
 	await trigger.click();
 	const mainMenu = page.getByRole('menu').first();
 	const fileMenuItem = mainMenu.getByRole('menuitem', { name: 'File' });

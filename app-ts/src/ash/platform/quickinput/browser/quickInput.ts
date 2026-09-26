@@ -168,6 +168,7 @@ export class QuickPick<TItem extends IQuickPickItem>
 		}
 		this.visible = true;
 		this.options.onShow(this);
+		this.list.layout();
 		this.focus();
 	}
 

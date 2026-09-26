@@ -21,7 +21,7 @@ is canonical for the renderer implementation and extension points.
 | Main conversation | `browser/parts/sessionsChatView.ts` | renders visible durable and untitled Sessions as retained full `ChatPane` Grid leaves |
 | Parts | `browser/parts/` | owns product chrome, list, primary surface, and typed active context |
 | Session chat commands | `browser/actions/sessionsChatActions.ts` | maps the reused ChatPane New Chat and History commands to the Sessions window's draft and active-chat selection |
-| Open Agents Window | `code/browser/workbench/modes/code.ts`, `contrib/openAgentsWindow/electron-browser/`, and `workbench/browser/parts/titlebar/` | the Code browser mode owns page navigation; the Sessions desktop contribution owns the window command; the Workbench titlebar owns the shared mark and motion. Shared shortcut selection and synchronization live in `workbench/contrib/keybindings/`, while `platform/globalKeybindings/` owns operating-system registrations |
+| Open Agents Window | `code/browser/workbench/modes/code.ts`, `workbench/contrib/chat/electron-browser/`, `contrib/openAgentsWindow/electron-browser/`, and `workbench/browser/parts/titlebar/` | the Code browser mode owns page navigation; the Chat desktop contribution owns the titlebar action, hover label, and window command; the Sessions desktop contribution owns system-wide shortcut synchronization; the Workbench titlebar owns the shared mark and motion. Shared shortcut selection lives in `workbench/contrib/keybindings/`, while `platform/globalKeybindings/` owns operating-system registrations |
 
 The dedicated Sessions renderer may reuse backend-neutral Workbench mechanisms
 and Chat contributions. Platform and regular Workbench code still import

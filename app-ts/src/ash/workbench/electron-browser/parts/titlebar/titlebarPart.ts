@@ -61,8 +61,8 @@ export class NativeTitlebarPart extends BrowserTitlebarPart {
 }
 
 /**
- * Keeps the compact renderer menu on every platform and mirrors it into the
- * native macOS application menu.
+ * Windows and Linux show the shared menu tree through the compact titlebar button.
+ * macOS keeps that button and also presents the same tree in the system menu bar.
  */
 class ElectronMenubarControl extends Disposable
 	implements IMenubarControl {

@@ -1,0 +1,40 @@
+.ash-titlebar-center-adjacent-actions .ash-action-view-item.icon:has(.ash-titlebar-mark) > .ash-button {
+  width: auto;
+  white-space: nowrap;
+}
+
+.ash-titlebar-center-adjacent-actions .ash-action-view-item.icon:has(.ash-titlebar-mark) .ash-button-content {
+  gap: 0;
+}
+
+.ash-titlebar-center-adjacent-actions .ash-action-view-item.icon:has(.ash-titlebar-mark) .ash-icon-label-container {
+  flex: 0 1 auto;
+  max-width: 0;
+  margin-inline-start: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-width 160ms ease, margin-inline-start 160ms ease, opacity 160ms ease;
+}
+
+.ash-titlebar-center-adjacent-actions .ash-action-view-item.icon:has(.ash-titlebar-mark) .ash-button-label {
+  position: static;
+  width: auto;
+  height: auto;
+  clip-path: none;
+}
+
+.ash-titlebar-center-adjacent-actions .ash-action-view-item.icon:has(.ash-titlebar-mark) > .ash-button:is(:hover, :focus-visible) .ash-icon-label-container {
+  max-width: 160px;
+  margin-inline-start: var(--ash-spacing-size60);
+  opacity: 1;
+}
+
+.ash-workbench.ash-reduce-motion .ash-titlebar-center-adjacent-actions .ash-action-view-item.icon:has(.ash-titlebar-mark) .ash-icon-label-container {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ash-titlebar-center-adjacent-actions .ash-action-view-item.icon:has(.ash-titlebar-mark) .ash-icon-label-container {
+    transition: none;
+  }
+}

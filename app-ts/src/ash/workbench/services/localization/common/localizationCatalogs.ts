@@ -423,6 +423,8 @@ const english: LanguagePackCatalog = {
 		},
 		"ash.actions": {
 			openAgentsWindow: "Open Agents Window",
+			openInAgents: "Open in Agents",
+			openInAgentsWindow: "Open in Agents Window",
 			showPrimarySidebar: "Show Primary Side Bar",
 			hidePrimarySidebar: "Hide Primary Side Bar",
 			showSecondarySidebar: "Show Secondary Side Bar",
@@ -464,6 +466,7 @@ const english: LanguagePackCatalog = {
 			panelViews: "Panel views",
 			additionalViews: "Additional views",
 			applicationMenu: "Application menu",
+			titleBarLeftActions: "Title bar left actions",
 			searchCommands: "Search commands",
 			editor: "Editor",
 			editorActions: "Editor actions",
@@ -1055,6 +1058,8 @@ const chinese: LanguagePackCatalog = {
 		},
 		"ash.actions": {
 			openAgentsWindow: "打开 Agents 窗口",
+			openInAgents: "在 Agents 中打开",
+			openInAgentsWindow: "在 Agents 窗口中打开",
 			showPrimarySidebar: "显示主侧栏",
 			hidePrimarySidebar: "隐藏主侧栏",
 			showSecondarySidebar: "显示辅助侧栏",
@@ -1096,6 +1101,7 @@ const chinese: LanguagePackCatalog = {
 			panelViews: "面板视图",
 			additionalViews: "其他视图",
 			applicationMenu: "应用程序菜单",
+			titleBarLeftActions: "标题栏左侧操作",
 			searchCommands: "搜索命令",
 			editor: "编辑器",
 			editorActions: "编辑器操作",

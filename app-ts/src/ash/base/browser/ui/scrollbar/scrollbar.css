@@ -101,11 +101,8 @@
 .ash-scrollbar-thumb {
   position: absolute;
   box-sizing: border-box;
-  border: 2px solid transparent;
   border-radius: calc(var(--ash-scrollbar-size) / 2);
-  background:
-    var(--ash-scrollbar-slider-background)
-    padding-box;
+  background: var(--ash-scrollbar-slider-background);
   cursor: default;
   forced-color-adjust: none;
   will-change: transform;
@@ -125,15 +122,11 @@
 }
 
 .ash-scrollbar-track:hover > .ash-scrollbar-thumb {
-  background:
-    var(--ash-scrollbar-slider-hover-background)
-    padding-box;
+  background: var(--ash-scrollbar-slider-hover-background);
 }
 
 .ash-scrollbar-track.active > .ash-scrollbar-thumb {
-  background:
-    var(--ash-scrollbar-slider-active-background)
-    padding-box;
+  background: var(--ash-scrollbar-slider-active-background);
 }
 
 .ash-scrollbar-track:focus-visible {
@@ -154,8 +147,7 @@
 
 @media (forced-colors: active) {
   .ash-scrollbar-thumb {
-    border-color: ButtonText;
-    background: ButtonFace padding-box;
+    background: ButtonText;
   }
 }
 

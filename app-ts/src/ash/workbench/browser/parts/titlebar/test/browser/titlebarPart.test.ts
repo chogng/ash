@@ -10,6 +10,7 @@ import type {
 import type { ILocalizationService } from "../../../../../../workbench/services/localization/common/localizationService.js";
 import { h } from "../../../../../../base/browser/dom.js";
 import { Emitter, Event } from "../../../../../../base/common/event.js";
+import { Lxicon } from "../../../../../../base/common/lxicons.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -194,16 +195,7 @@ test("titlebar renders its product icon, command center, and application menu", 
 		group: 'navigation',
 		order: 2,
 	}));
-	const menubarElement = h(ownerDocument, "nav");
-	const menubar: IMenubarControl = {
-		domNode: menubarElement,
-		dispose() {
-			menubarElement.remove();
-		},
-		[Symbol.dispose]() {
-			this.dispose();
-		},
-	};
+	const menubar = new BrowserMenubarControl(ownerDocument.body, menuService, contextMenuService);
 	const titlebar = disposables.add(services.createInstance(BrowserTitlebarPart, ownerDocument.body, {
 		menuService,
 		contextMenuService,
@@ -218,16 +210,16 @@ test("titlebar renders its product icon, command center, and application menu", 
 		true,
 	);
 	assert.equal(titleChildren[0]?.getAttribute("aria-hidden"), "true");
+	assert.equal(titleChildren[1], menubar.domNode);
 	assert.equal(
 		titleChildren[1]?.classList.contains("ash-titlebar-left-actions"),
 		true,
 	);
-	assert.equal(titleChildren[2], menubarElement);
 	assert.equal(
-		titleChildren[1]?.querySelector("button")?.textContent,
+		titleChildren[1]?.querySelector('[data-action-id="test.titlebar.leftAction"] button')?.textContent,
 		"Left title action",
 	);
-	assert.equal(titleChildren.length, 3);
+	assert.equal(titleChildren.length, 2);
 	assert.equal(titlebar.domNode.querySelector(".ash-titlebar-label"), null);
 	const commandCenter = titlebar.domNode.querySelector<HTMLButtonElement>(".ash-titlebar-command-center-button");
 	const navigation = titlebar.domNode.querySelector('.ash-titlebar-command-center-navigation');
@@ -272,6 +264,14 @@ test("browser titlebar hosts the application menu in an ActionBar", () => {
 		group: "navigation",
 		order: 2,
 	}));
+	disposables.add(MenusRegistry.appendMenuItem(MenuId.TitleBarLeft, {
+		command: {
+			id: "test.titlebar.toggleSidebar",
+			title: "Toggle sidebar",
+			icon: Lxicon.layoutSidebarLeft,
+		},
+		group: "navigation",
+	}));
 
 	let menuLabels: readonly string[] = [];
 	let openSubmenusImmediatelyOnHover: boolean | undefined;
@@ -284,30 +284,69 @@ test("browser titlebar hosts the application menu in an ActionBar", () => {
 		},
 		hideContextMenu() {},
 	};
+	const localeChanged = disposables.add(new Emitter<void>());
+	let applicationMenuLabel = "Application menu";
+	const localizationService: ILocalizationService = {
+		onDidChange: localeChanged.event,
+		whenReady: Promise.resolve(),
+		translate: (_bundle, key, fallback) => key === "applicationMenu" ? applicationMenuLabel : fallback,
+	};
 	const menubar = disposables.add(new BrowserMenubarControl(
 		ownerDocument.body,
 		menuService,
 		menuContextService,
+		localizationService,
 	));
 
-	const button = menubar.domNode.querySelector("button");
+	const button = menubar.domNode.querySelector<HTMLButtonElement>('[data-action-id="ash.applicationMenu"] button');
+	const sidebarButton = menubar.domNode.querySelector<HTMLButtonElement>('[data-action-id="test.titlebar.toggleSidebar"] button');
 	assert.ok(button);
+	assert.ok(sidebarButton);
 	assert.equal(menubar.domNode.classList.contains("ash-action-bar"), true);
+	assert.equal(menubar.domNode.classList.contains("ash-toolbar"), true);
+	assert.equal(button.closest(".ash-action-view-item")?.classList.contains("icon"), true);
 	assert.equal(menubar.domNode.getAttribute("role"), "toolbar");
-	assert.equal(menubar.domNode.getAttribute("aria-label"), "Application menu");
+	assert.equal(menubar.domNode.getAttribute("aria-label"), "Title bar left actions");
 	assert.equal(button.closest(".ash-action-view-item")?.parentElement, menubar.domNode);
+	assert.equal(sidebarButton.closest(".ash-action-view-item")?.parentElement, menubar.domNode);
 	assert.equal(button.tabIndex, 0);
 	assert.equal(button.title, "Application menu");
 	assert.ok(button.querySelector(".ash-icon"));
-	assert.equal(menubar.domNode.querySelectorAll("button").length, 1);
+	assert.equal(menubar.domNode.querySelectorAll("button").length, 2);
 
 	button.focus();
 	button.dispatchEvent(new browserEnvironment.window.KeyboardEvent("keydown", {
+		key: "ArrowRight",
+		bubbles: true,
+		cancelable: true,
+	}));
+	assert.equal(ownerDocument.activeElement, sidebarButton);
+	sidebarButton.dispatchEvent(new browserEnvironment.window.KeyboardEvent("keydown", {
+		key: "ArrowLeft",
+		bubbles: true,
+		cancelable: true,
+	}));
+	assert.equal(ownerDocument.activeElement, button);
+	applicationMenuLabel = "应用程序菜单";
+	localeChanged.fire();
+	assert.equal(button.getAttribute("aria-label"), applicationMenuLabel);
+	const extraAction = disposables.add(MenusRegistry.appendMenuItem(MenuId.TitleBarLeft, {
+		command: { id: "test.titlebar.extra", title: "Extra action" },
+		group: "navigation",
+		order: 20,
+	}));
+	const updatedButton = menubar.domNode.querySelector<HTMLButtonElement>('[data-action-id="ash.applicationMenu"] button');
+	assert.ok(updatedButton);
+	assert.notEqual(updatedButton, button);
+	assert.equal(ownerDocument.activeElement, updatedButton);
+	assert.equal(updatedButton.getAttribute("aria-label"), applicationMenuLabel);
+	updatedButton.dispatchEvent(new browserEnvironment.window.KeyboardEvent("keydown", {
 		key: "ArrowDown",
 		bubbles: true,
 		cancelable: true,
 	}));
 	assert.deepEqual(menuLabels, ["File"]);
 	assert.equal(openSubmenusImmediatelyOnHover, true);
-	assert.equal(button.getAttribute("aria-expanded"), "true");
+	assert.equal(updatedButton.getAttribute("aria-expanded"), "true");
+	extraAction.dispose();
 });

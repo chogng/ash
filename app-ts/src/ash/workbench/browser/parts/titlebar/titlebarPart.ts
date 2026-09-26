@@ -27,7 +27,6 @@ export type TitlebarPartFactory = (
 /** The host-neutral workbench title area and its actions. */
 export class BrowserTitlebarPart extends WorkbenchPart {
 	private readonly menubar: IMenubarControl;
-	private readonly leftActions: MenuWorkbenchToolBar;
 	private readonly centerAdjacentActions: MenuWorkbenchToolBar;
 	private readonly actions: MenuWorkbenchToolBar;
 
@@ -47,18 +46,10 @@ export class BrowserTitlebarPart extends WorkbenchPart {
 		appIconDomNode.className = "ash-titlebar-app-icon";
 		appIconDomNode.setAttribute("aria-hidden", "true");
 		this.titleDomNode.append(appIconDomNode);
-		const leftActionsDomNode = h(ownerDocument, "div");
-		leftActionsDomNode.className = "ash-titlebar-left-actions ash-titlebar-interactive-region";
-		this.titleDomNode.append(leftActionsDomNode);
-		this.leftActions = this._register(
-			new MenuWorkbenchToolBar(
-				leftActionsDomNode,
-				options.menuService,
-				options.contextMenuService,
-				MenuId.TitleBarLeft,
-				{ presentation: "inherit-foreground" },
-			),
-		);
+		if (this.menubar.domNode) {
+			this.menubar.domNode.classList.add("ash-titlebar-interactive-region");
+			this.titleDomNode.append(this.menubar.domNode);
+		}
 		const centerDomNode = h(ownerDocument, "div");
 		centerDomNode.className = "ash-titlebar-center";
 		this.contentDomNode.before(centerDomNode);
@@ -87,10 +78,6 @@ export class BrowserTitlebarPart extends WorkbenchPart {
 				{ presentation: "inherit-foreground" },
 			),
 		);
-		if (this.menubar.domNode) {
-			this.menubar.domNode.classList.add("ash-titlebar-interactive-region");
-			this.titleDomNode.append(this.menubar.domNode);
-		}
 	}
 }
 
