@@ -15,7 +15,7 @@ suite('Welcome page', () => {
 		});
 		const cards = page.domNode.querySelectorAll<HTMLButtonElement>('.ash-getting-started-card');
 		assert.equal(page.domNode.querySelector('.ash-getting-started-name')?.textContent, 'ASH');
-		assert.deepEqual([...cards].map(card => card.textContent), ['open folder', 'clone repo', 'connect via ssh', 'connect github↗']);
+		assert.deepEqual([...cards].map(card => card.textContent), ['Open folder', 'Clone repo', 'Connect via SSH', 'Connect GitHub↗']);
 		assert.deepEqual([...cards].map(card => card.disabled), [false, true, true, true]);
 		cards[0]?.click();
 		assert.equal(openFolderCount, 1);
@@ -32,21 +32,35 @@ suite('Welcome page', () => {
 		dom.window.close();
 	});
 
-	test('updates and expands recent projects', () => {
+	test('shows all recent projects and hides the section when empty', () => {
 		const dom = new JSDOM('<!doctype html><body></body>');
+		let openCount = 0;
 		const page = new GettingStarted(dom.window.document.body, {
 			recentProjects: Array.from({ length: 6 }, (_, index) => ({
 				name: `project-${index + 1}`,
 				path: `/workspaces/project-${index + 1}`,
+				onOpen: () => { openCount += 1; },
 			})),
 		});
-		assert.equal(page.domNode.querySelectorAll('.ash-getting-started-recent-item').length, 5);
-		page.domNode.querySelector<HTMLButtonElement>('.ash-getting-started-view-all')?.click();
-		assert.equal(page.domNode.querySelectorAll('.ash-getting-started-recent-item').length, 6);
-		assert.equal(page.domNode.querySelector('.ash-getting-started-view-all')?.textContent, 'Show less');
+		const section = page.domNode.querySelector<HTMLElement>('.ash-getting-started-recent')!;
+		const items = section.querySelectorAll<HTMLButtonElement>('.ash-getting-started-recent-item');
+		assert.equal(section.hidden, false);
+		assert.deepEqual([...items].map(item => [
+			item.querySelector('.ash-getting-started-recent-name')?.textContent,
+			item.querySelector('.ash-getting-started-recent-path')?.textContent,
+		]), Array.from({ length: 6 }, (_, index) => [`project-${index + 1}`, `/workspaces/project-${index + 1}`]));
+		assert.equal(section.querySelector('.ash-getting-started-view-all'), null);
+		items[0]?.click();
+		assert.equal(openCount, 1);
+		page.setRecentProjects([]);
+		assert.equal(section.hidden, true);
+		assert.equal(section.childElementCount, 0);
+		items[0]?.click();
+		assert.equal(openCount, 1);
 		page.setRecentProjects([{ name: 'new-project', path: '/workspaces/new-project' }]);
-		assert.equal(page.domNode.querySelectorAll('.ash-getting-started-recent-item').length, 1);
-		assert.equal(page.domNode.querySelector<HTMLButtonElement>('.ash-getting-started-view-all')?.disabled, true);
+		assert.equal(section.hidden, false);
+		assert.equal(section.querySelector('.ash-getting-started-recent-name')?.textContent, 'new-project');
+		assert.equal(section.querySelector('.ash-getting-started-recent-path')?.textContent, '/workspaces/new-project');
 		page.dispose();
 		dom.window.close();
 	});

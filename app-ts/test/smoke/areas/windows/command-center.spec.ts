@@ -233,8 +233,11 @@ test('titlebar command center opens command search and restores focus', async ({
 	expect(Math.abs(contentBounds!.x + contentBounds!.width / 2 - controlBounds!.x - controlBounds!.width / 2)).toBeLessThan(1);
 	await expect(commandCenter).toHaveCSS('background-color', 'rgb(246, 246, 246)');
 	await expect(commandCenter).toHaveCSS('border-color', 'rgb(208, 208, 208)');
+	await page.mouse.move(0, 100);
 	await commandCenter.hover();
 	await expect(commandCenter).toHaveCSS('background-color', 'rgb(235, 235, 235)');
+	await page.waitForTimeout(600);
+	await expect(page.locator('.ash-hover')).toHaveCount(0);
 
 	await commandCenter.click();
 	await expect(commandCenter).toHaveAttribute('aria-expanded', 'true');
@@ -243,6 +246,7 @@ test('titlebar command center opens command search and restores focus', async ({
 	const query = picker.getByRole('combobox');
 	await expect(query).toBeFocused();
 	await expect(query).toHaveAttribute('placeholder', 'Search commands (type >, @, or ? for modes)');
+	await expect(page.locator('.ash-hover')).toHaveCount(0);
 	const initialPicker = await picker.elementHandle();
 	await query.fill('?');
 	await expect(query).toHaveAttribute('placeholder', 'Select a search mode');
@@ -263,6 +267,7 @@ test('titlebar command center opens command search and restores focus', async ({
 	await expect(picker).toHaveCount(0);
 	await expect(commandCenter).toHaveAttribute('aria-expanded', 'false');
 	await expect(commandCenter).toBeFocused();
+	await expect(page.locator('.ash-hover')).toHaveCount(0);
 
 	await commandCenter.press('Enter');
 	await expect(picker.getByRole('combobox')).toBeFocused();

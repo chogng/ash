@@ -83,10 +83,10 @@ test("localization lookup falls back to English and formats parameters", async (
 	assert.equal(localization.translate('ash', 'chat.settings.advisorDisable', 'Turn Advisor off'), '关闭顾问');
 	assert.equal(localization.translate('ash', 'chat.advisor.configure', 'Configure an advisor model in Chat Settings before asking for a second opinion'), '请先在聊天设置中配置顾问模型，再请求第二意见');
 	assert.deepEqual([
-		localization.translate('ash', 'editorWelcome.openFolder', 'open folder'),
-		localization.translate('ash', 'editorWelcome.cloneRepo', 'clone repo'),
-		localization.translate('ash', 'editorWelcome.connectViaSsh', 'connect via ssh'),
-		localization.translate('ash', 'editorWelcome.connectGitHub', 'connect github'),
+		localization.translate('ash', 'editorWelcome.openFolder', 'Open folder'),
+		localization.translate('ash', 'editorWelcome.cloneRepo', 'Clone repo'),
+		localization.translate('ash', 'editorWelcome.connectViaSsh', 'Connect via SSH'),
+		localization.translate('ash', 'editorWelcome.connectGitHub', 'Connect GitHub'),
 	], ['打开文件夹', '克隆仓库', '通过 SSH 连接', '连接 GitHub']);
 	assert.deepEqual([
 		localization.translate('ash', 'files.openEditors.title', 'Open Editors'),

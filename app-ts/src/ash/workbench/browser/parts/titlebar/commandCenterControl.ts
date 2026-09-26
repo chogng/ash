@@ -36,7 +36,6 @@ export class CommandCenterControl extends Disposable {
 		this.button = this._register(new Button(this.domNode, {
 			label: label(),
 			ariaLabel: label(),
-			title: label(),
 			icon: Lxicon.search,
 			onClick: () => {
 				this.quickAccess.show();
@@ -54,7 +53,6 @@ export class CommandCenterControl extends Disposable {
 				const text = label();
 				this.button.label = text;
 				this.button.domNode.setAttribute('aria-label', text);
-				this.button.setTitle(text);
 			}));
 		}
 	}

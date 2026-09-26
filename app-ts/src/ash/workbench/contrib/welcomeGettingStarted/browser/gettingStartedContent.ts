@@ -3,10 +3,8 @@ import './gettingStartedColors.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import { Disposable, MutableDisposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize, onDidChangeNls } from '../../../../nls.js';
-
-const MAX_VISIBLE_RECENT_PROJECTS = 5;
 
 /** A host callback invoked by one welcome-page action. */
 type GettingStartedAction = () => void | Promise<void>;
@@ -27,7 +25,6 @@ interface GettingStartedOptions {
 		readonly connectGitHub?: GettingStartedAction;
 	};
 	readonly recentProjects?: readonly IGettingStartedProject[];
-	readonly shortcuts?: HTMLElement;
 }
 
 interface WelcomeCardOptions {
@@ -42,10 +39,9 @@ interface WelcomeCardOptions {
 /** Renders the Welcome editor content. */
 export class GettingStarted extends Disposable {
 	public readonly domNode: HTMLElement;
-	private readonly recentDisposables = this._register(new MutableDisposable<DisposableStore>());
+	private readonly recentDisposables = this._register(new DisposableStore());
 	private readonly recentSection: HTMLElement;
 	private recentProjects: readonly IGettingStartedProject[];
-	private showAllRecentProjects = false;
 
 	constructor(
 		container: HTMLElement,
@@ -72,7 +68,6 @@ export class GettingStarted extends Disposable {
 		content.append(this.createCards(ownerDocument, options.actions));
 		this.recentSection = this.createRecentProjects(ownerDocument);
 		content.append(this.recentSection);
-		if (options.shortcuts) content.append(options.shortcuts);
 		this._register(onDidChangeNls(() => {
 			this.domNode.setAttribute('aria-label', localize('gettingStarted.title', 'Welcome'));
 			this.renderRecentProjects(this.recentSection);
@@ -81,7 +76,6 @@ export class GettingStarted extends Disposable {
 
 	public setRecentProjects(projects: readonly IGettingStartedProject[]): void {
 		this.recentProjects = projects;
-		this.showAllRecentProjects = false;
 		this.renderRecentProjects(this.recentSection);
 	}
 
@@ -112,25 +106,25 @@ export class GettingStarted extends Disposable {
 		cards.className = 'ash-getting-started-cards';
 		const cardOptions: readonly WelcomeCardOptions[] = [
 			{
-				label: 'open folder',
+				label: 'Open folder',
 				labelKey: 'editorWelcome.openFolder',
 				icon: Lxicon.folders,
 				action: actions?.openFolder,
 			},
 			{
-				label: 'clone repo',
+				label: 'Clone repo',
 				labelKey: 'editorWelcome.cloneRepo',
 				icon: Lxicon.gitBranch,
 				action: actions?.cloneRepository,
 			},
 			{
-				label: 'connect via ssh',
+				label: 'Connect via SSH',
 				labelKey: 'editorWelcome.connectViaSsh',
 				icon: Lxicon.remote,
 				action: actions?.connectViaSsh,
 			},
 			{
-				label: 'connect github',
+				label: 'Connect GitHub',
 				labelKey: 'editorWelcome.connectGitHub',
 				icon: Lxicon.github,
 				action: actions?.connectGitHub,
@@ -195,64 +189,33 @@ export class GettingStarted extends Disposable {
 	}
 
 	private renderRecentProjects(section: HTMLElement): void {
+		this.recentDisposables.clear();
+		section.replaceChildren();
+		section.hidden = this.recentProjects.length === 0;
+		if (section.hidden) return;
+
 		const ownerDocument = section.ownerDocument;
-		const heading = h(ownerDocument, 'div');
-		heading.className = 'ash-getting-started-section-heading';
 		const title = h(ownerDocument, 'h2');
 		title.textContent = localize('gettingStarted.recentProjects', 'Recent projects');
-		heading.append(title);
-		const projects = this.recentProjects;
-		const viewAll = h(ownerDocument, 'button');
-		viewAll.type = 'button';
-		viewAll.className = 'ash-getting-started-view-all';
-		viewAll.disabled = projects.length <= MAX_VISIBLE_RECENT_PROJECTS;
-		viewAll.setAttribute('aria-expanded', String(this.showAllRecentProjects));
-		viewAll.textContent = this.showAllRecentProjects
-			? localize('gettingStarted.showLess', 'Show less')
-			: localize('gettingStarted.viewAll', 'View all ({0})', projects.length);
-		if (!viewAll.disabled) {
-			this.recentDisposables.value = new DisposableStore();
-			this.recentDisposables.value?.add(addDisposableListener(viewAll, 'click', () => {
-				this.showAllRecentProjects = !this.showAllRecentProjects;
-				this.renderRecentProjects(section);
-			}));
-		} else {
-			this.recentDisposables.value = new DisposableStore();
-		}
-		heading.append(viewAll);
-		section.replaceChildren(heading);
-
-		if (projects.length === 0) {
-			const empty = h(ownerDocument, 'p');
-			empty.className = 'ash-getting-started-recent-empty';
-			empty.textContent = localize('gettingStarted.emptyRecent', 'Your recent projects will appear here.');
-			section.append(empty);
-			return;
-		}
 
 		const list = h(ownerDocument, 'div');
 		list.className = 'ash-getting-started-recent-list';
-		const visibleProjects = this.showAllRecentProjects
-			? projects
-			: projects.slice(0, MAX_VISIBLE_RECENT_PROJECTS);
-		const disposables = this.recentDisposables.value;
-		for (const project of visibleProjects) {
-			list.append(this.createRecentProject(ownerDocument, project, disposables));
+		for (const project of this.recentProjects) {
+			list.append(this.createRecentProject(ownerDocument, project));
 		}
-		section.append(list);
+		section.append(title, list);
 	}
 
 	private createRecentProject(
 		ownerDocument: Document,
 		project: IGettingStartedProject,
-		disposables: DisposableStore | undefined,
 	): HTMLElement {
 		if (project.onOpen) {
 			const item = h(ownerDocument, 'button');
 			item.type = 'button';
 			item.className = 'ash-getting-started-recent-item';
 			const onOpen = project.onOpen;
-			disposables?.add(addDisposableListener(item, 'click', () => this.run(onOpen)));
+			this.recentDisposables.add(addDisposableListener(item, 'click', () => this.run(onOpen)));
 			this.appendRecentProjectContent(ownerDocument, item, project);
 			return item;
 		}
@@ -270,9 +233,11 @@ export class GettingStarted extends Disposable {
 		const name = h(ownerDocument, 'span');
 		name.className = 'ash-getting-started-recent-name';
 		name.textContent = project.name;
+		name.title = project.name;
 		const path = h(ownerDocument, 'span');
 		path.className = 'ash-getting-started-recent-path';
 		path.textContent = project.path;
+		path.title = project.path;
 		item.append(name, path);
 	}
 

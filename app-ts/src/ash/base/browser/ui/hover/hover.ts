@@ -1,6 +1,6 @@
 import { Emitter } from "../../../common/event.js";
 import { Disposable, MutableDisposable, DisposableStore, type IDisposable, toDisposable } from "../../../common/lifecycle.js";
-import { addDisposableListener, getWindow, isNode, h } from "../../dom.js";
+import { addDisposableListener, getWindow, isHTMLElement, isNode, h } from "../../dom.js";
 import { disposableWindowTimeout } from "../../scheduler.js";
 import { getAriaAttribute, setAriaAttribute } from "../aria/aria.js";
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, ContextView, type ContextViewHideReason, type IContextViewProvider } from "../contextview/contextview.js";
@@ -97,7 +97,7 @@ export class Hover extends Disposable {
 
 		this._register(addDisposableListener(target, "pointerenter", () => {
 			this.hideTimer.clear();
-			this.scheduleShow();
+			this.scheduleShow("pointer");
 		}));
 		this._register(addDisposableListener(target, "pointerdown", () => {
 			this.pointerDown = true;
@@ -114,8 +114,14 @@ export class Hover extends Disposable {
 			if (this.isInsideHover(event.relatedTarget)) return;
 			this.scheduleHide();
 		}));
-		this._register(addDisposableListener(target, "focusin", () => {
-			if (!this.pointerDown) this.show();
+		this._register(addDisposableListener(target, "focusin", (event: FocusEvent) => {
+			// Focus returning from a dismissed hover or removed overlay must not reopen it.
+			const fromHover = isHTMLElement(event.relatedTarget) &&
+				event.relatedTarget.closest(".ash-hover") !== null;
+			if (this.pointerDown || !event.relatedTarget || fromHover) {
+				return;
+			}
+			this.scheduleShow("focus");
 		}));
 		this._register(addDisposableListener(target, "focusout", (event) => {
 			if (this.isInsideHover(event.relatedTarget)) return;
@@ -230,7 +236,7 @@ export class Hover extends Disposable {
 		this.contextView.layout();
 	}
 
-	private scheduleShow(): void {
+	private scheduleShow(trigger: "pointer" | "focus"): void {
 		if (this.visible || this.showTimer.value) return;
 		const delayMs = Math.max(
 			0,
@@ -242,7 +248,7 @@ export class Hover extends Disposable {
 			getWindow(this.element),
 			() => {
 				this.showTimer.clear();
-				if (this.pointerHoverEnabled?.() === false) return;
+				if (trigger === "pointer" && this.pointerHoverEnabled?.() === false) return;
 				this.show();
 			},
 			delayMs,

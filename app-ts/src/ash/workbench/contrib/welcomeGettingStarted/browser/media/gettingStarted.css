@@ -27,7 +27,7 @@
 }
 
 .ash-getting-started-content {
-  width: min(384px, calc(100% - 48px));
+  width: min(372px, calc(100% - 48px));
   margin: clamp(72px, 15vh, 176px) 0 64px;
 }
 
@@ -60,8 +60,8 @@
   width: 100%;
   grid-template-columns: repeat(2, 180px);
   grid-auto-rows: 60px;
-  gap: 24px;
-  justify-content: space-between;
+  gap: var(--ash-spacing-size120);
+  justify-content: center;
   margin-top: 40px;
 }
 
@@ -151,36 +151,11 @@
   margin-top: 40px;
 }
 
-.ash-getting-started-section-heading {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.ash-getting-started-section-heading h2 {
+.ash-getting-started-recent h2 {
   margin: 0;
   color: var(--ash-description-foreground);
   font-size: var(--ash-font-size-heading2);
   font-weight: var(--ash-font-weight-regular);
-}
-
-.ash-getting-started-view-all {
-  padding: 0;
-  border: 0;
-  color: var(--ash-description-foreground);
-  background: transparent;
-  font: inherit;
-  font-size: var(--ash-font-size-body1);
-  cursor: pointer;
-}
-
-.ash-getting-started-view-all:not(:disabled):hover {
-  color: var(--ash-accent-foreground);
-}
-
-.ash-getting-started-view-all:disabled {
-  cursor: default;
 }
 
 .ash-getting-started-recent-list {
@@ -196,7 +171,7 @@
   padding: 8px 0;
   border: 0;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 32px;
+  gap: var(--ash-spacing-size120);
   color: var(--ash-foreground);
   background: transparent;
   font: inherit;
@@ -218,23 +193,14 @@ button.ash-getting-started-recent-item:hover {
   white-space: nowrap;
 }
 
-.ash-getting-started-recent-path,
-.ash-getting-started-recent-empty {
+.ash-getting-started-recent-path {
   color: var(--ash-description-foreground);
-}
-
-.ash-getting-started-recent-empty {
-  margin: 16px 0 0;
-  font-size: var(--ash-font-size-body1);
-}
-
-.ash-getting-started > .ash-getting-started-scroll .ash-editor-group-watermark-shortcuts {
-  margin: 40px auto 0;
+  text-align: right;
 }
 
 @container (max-width: 680px) {
   .ash-getting-started-content {
-    width: min(384px, calc(100% - 32px));
+    width: min(372px, calc(100% - 32px));
     margin-top: 40px;
   }
 
@@ -250,6 +216,11 @@ button.ash-getting-started-recent-item:hover {
 @container (max-width: 420px) {
   .ash-getting-started-cards {
     grid-template-columns: 180px;
+  }
+
+  .ash-getting-started-recent {
+    width: 180px;
+    margin-inline: auto;
   }
 }
 

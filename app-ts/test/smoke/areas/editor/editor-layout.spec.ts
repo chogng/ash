@@ -41,7 +41,7 @@ test.describe('welcome brand', () => {
 
 	test('Welcome provides keyboard accessibility help', async ({ workbench }) => {
 		const page = workbench.page;
-		const openFolder = workbench.editors.groupAt(0).welcome.getByRole('button', { name: 'open folder' });
+		const openFolder = workbench.editors.groupAt(0).welcome.getByRole('button', { name: 'Open folder' });
 		await openFolder.focus();
 		await page.keyboard.press('Alt+F1');
 		const help = page.getByRole('dialog', { name: 'Accessibility Help' });
@@ -54,13 +54,19 @@ test.describe('welcome brand', () => {
 		const welcome = workbench.editors.groupAt(0).welcome;
 		await expect(welcome.locator('.ash-getting-started-name')).toHaveText('ASH');
 		await expect(welcome.locator('.ash-getting-started-plan')).toHaveCount(0);
-		await expect(welcome.getByRole('button', { name: 'open folder' })).toBeVisible();
+		await expect(welcome.getByRole('button', { name: 'Open folder' })).toBeVisible();
+	});
+
+	test('welcome omits the command hint and empty recent projects', async ({ workbench }) => {
+		const welcome = workbench.editors.groupAt(0).welcome;
+		await expect(welcome.locator('.ash-editor-group-watermark-shortcuts')).toHaveCount(0);
+		await expect(welcome.locator('.ash-getting-started-recent')).toBeHidden();
 	});
 
 	test('welcome actions use gray cards and a black GitHub card', async ({ workbench }) => {
 		const cards = workbench.editors.groupAt(0).welcome.locator('.ash-getting-started-card');
 		await expect(cards).toHaveCount(4);
-		await expect(cards.locator('.ash-getting-started-card-label')).toHaveText(['open folder', 'clone repo', 'connect via ssh', 'connect github']);
+		await expect(cards.locator('.ash-getting-started-card-label')).toHaveText(['Open folder', 'Clone repo', 'Connect via SSH', 'Connect GitHub']);
 		for (const index of [0, 1, 2]) {
 			const card = cards.nth(index);
 			await expect(card).toHaveCSS('background-color', 'rgb(243, 243, 243)');
@@ -79,6 +85,24 @@ test.describe('welcome brand', () => {
 		await expect(github).toHaveCSS('background-color', 'rgb(38, 38, 38)');
 	});
 
+	test('welcome actions have compact, even spacing', async ({ workbench }) => {
+		const cards = workbench.editors.groupAt(0).welcome.locator('.ash-getting-started-card');
+		await expect(cards).toHaveCount(4);
+		const boxes = await Promise.all([0, 1, 2, 3].map(index => cards.nth(index).boundingBox()));
+		const [topLeft, topRight, bottomLeft, bottomRight] = boxes;
+		expect(topLeft && topRight && bottomLeft && bottomRight ? {
+			columnGap: Math.round(topRight.x - topLeft.x - topLeft.width),
+			rowGap: Math.round(bottomLeft.y - topLeft.y - topLeft.height),
+			leftColumnAligned: topLeft.x === bottomLeft.x,
+			rightColumnAligned: topRight.x === bottomRight.x,
+		} : null).toEqual({
+			columnGap: 12,
+			rowGap: 12,
+			leftColumnAligned: true,
+			rightColumnAligned: true,
+		});
+	});
+
 	test('welcome uses the theme-colored mark without a filled icon tile', async ({ workbench }) => {
 		const mark = workbench.editors.groupAt(0).welcome.locator('.ash-getting-started-mark');
 		await expect(mark).toBeVisible();
@@ -87,6 +111,31 @@ test.describe('welcome brand', () => {
 		await expect(mark).toHaveCSS('background-image', 'none');
 		await expect(mark).toHaveCSS('background-color', await mark.evaluate(element => getComputedStyle(element).color));
 	});
+});
+
+test('recent projects align with the welcome action cards', async ({ target, workbench }) => {
+	test.skip(target.kind !== 'electron', 'This scenario requires a local workspace');
+	const page = workbench.page;
+	await page.keyboard.press('F1');
+	await page.locator('.ash-quick-pick').getByRole('combobox').fill('Welcome');
+	await page.keyboard.press('Enter');
+	const welcome = workbench.editors.groupAt(0).welcome;
+	const recent = welcome.locator('.ash-getting-started-recent');
+	await expect(recent).toBeVisible();
+	await expect(recent.locator('.ash-getting-started-recent-item')).toHaveCount(1);
+	const [leftCard, rightCard, heading, name, path] = await Promise.all([
+		welcome.locator('.ash-getting-started-card').first().boundingBox(),
+		welcome.locator('.ash-getting-started-card').nth(1).boundingBox(),
+		recent.locator('h2').boundingBox(),
+		recent.locator('.ash-getting-started-recent-name').boundingBox(),
+		recent.locator('.ash-getting-started-recent-path').boundingBox(),
+	]);
+	expect(leftCard && rightCard && heading && name && path ? {
+		headingLeft: Math.round(heading.x - leftCard.x),
+		nameLeft: Math.round(name.x - leftCard.x),
+		pathRight: Math.round(path.x + path.width - rightCard.x - rightCard.width),
+	} : null).toEqual({ headingLeft: 0, nameLeft: 0, pathRight: 0 });
+	await expect(recent.locator('.ash-getting-started-recent-path')).toHaveCSS('text-align', 'right');
 });
 
 test("editor layout remains valid across workbench window sizes", async ({ target, driver, workbench }) => {

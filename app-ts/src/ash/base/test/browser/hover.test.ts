@@ -80,6 +80,38 @@ test("Hover skips empty content and sticky persistence requires explicit dismiss
 	contextView.dispose();
 });
 
+test("Hover delays keyboard focus and ignores focus restored from dismissed overlays", async () => {
+	const container = requiredElement<HTMLElement>("main");
+	const target = requiredElement<HTMLButtonElement>("#target");
+	const previous = h(environment.window.document, "button");
+	const dismissedHover = h(environment.window.document, "div");
+	dismissedHover.className = "ash-hover";
+	const hoverAction = h(environment.window.document, "button");
+	dismissedHover.append(hoverAction);
+	container.append(previous, dismissedHover);
+	const contextView = new ContextView(container);
+	const hover = new Hover({
+		target,
+		content: "Managed title",
+		delayMs: 1,
+		contextViewProvider: contextView,
+	});
+
+	target.dispatchEvent(new environment.window.FocusEvent("focusin", { bubbles: true }));
+	assert.equal(hover.visible, false);
+	target.dispatchEvent(new environment.window.FocusEvent("focusin", { bubbles: true, relatedTarget: hoverAction }));
+	assert.equal(hover.visible, false);
+	target.dispatchEvent(new environment.window.FocusEvent("focusin", { bubbles: true, relatedTarget: previous }));
+	assert.equal(hover.visible, false);
+	await nextTimer();
+	assert.equal(hover.visible, true);
+
+	hover.dispose();
+	contextView.dispose();
+	previous.remove();
+	dismissedHover.remove();
+});
+
 test("Hover closes an in-flight ContextView when target layout disposes it", () => {
 	const container = requiredElement<HTMLElement>("main");
 	const target = h(environment.window.document, "button");

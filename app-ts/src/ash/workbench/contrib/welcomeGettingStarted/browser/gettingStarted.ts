@@ -3,11 +3,9 @@ import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { RawContextKey, type IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
-import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import type { EditorInput } from '../../../services/editor/common/editorService.js';
 import { IRecentWorkspacesService } from '../../../services/workspaces/common/recentWorkspacesService.js';
 import { IWorkspaceOpenService } from '../../../services/workspaces/browser/workspaceOpenService.js';
-import { EditorGroupWatermark } from '../../../browser/parts/editor/editorGroupWatermark.js';
 import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { ConnectToRemoteCommandId } from '../../remote/browser/remoteActions.js';
 import { GettingStarted, type IGettingStartedProject } from './gettingStartedContent.js';
@@ -27,7 +25,6 @@ export class GettingStartedPage extends Disposable implements IEditorPane {
 		@IRecentWorkspacesService private readonly recentWorkspaces: IRecentWorkspacesService,
 		@IWorkspaceOpenService private readonly workspaceOpenService: IWorkspaceOpenService,
 		@ICommandService private readonly commandService: ICommandService,
-		@IKeybindingService private readonly keybindingService: IKeybindingService,
 		@IContextKeyService private readonly contextKeyService: IContextKeyService,
 	) {
 		super();
@@ -47,10 +44,8 @@ export class GettingStartedPage extends Disposable implements IEditorPane {
 			if (!domNode.contains(event.relatedTarget as Node | null)) this.focusedContext?.set(false);
 		}));
 
-		const shortcuts = this._register(new EditorGroupWatermark(domNode, this.keybindingService));
 		this.content = this._register(new GettingStarted(domNode, {
 			recentProjects: this.projects(),
-			shortcuts: shortcuts.domNode,
 			actions: {
 				openFolder: this.workspaceOpenService.canOpenFolder ? () => this.workspaceOpenService.openFolder() : undefined,
 				connectViaSsh: () => this.commandService.executeCommand(ConnectToRemoteCommandId),

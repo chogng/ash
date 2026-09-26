@@ -135,6 +135,9 @@ test("HoverService suppresses replacement Hovers until the pointer moves after a
 
 	target.dispatchEvent(new environment.window.FocusEvent("focusout", { bubbles: true }));
 	target.dispatchEvent(new environment.window.FocusEvent("focusin", { bubbles: true }));
+	assert.equal(hover.visible, false);
+	target.dispatchEvent(new environment.window.FocusEvent("focusin", { bubbles: true, relatedTarget: previousTarget }));
+	await nextTimer();
 	assert.equal(hover.visible, true);
 
 	hoverService.dispose();
