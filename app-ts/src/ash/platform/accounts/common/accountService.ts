@@ -24,7 +24,7 @@ export type AccountLoginMethod =
 	| { readonly type: 'openAiChatGptDeviceCode' }
 	| { readonly type: 'kimiDeviceCode' }
 	| { readonly type: 'xaiDeviceCode' }
-	| { readonly type: 'gitHubDeviceCode' };
+	| { readonly type: 'gitHubBrowser' };
 
 export type AccountLoginChallenge =
 	| { readonly type: 'connected'; readonly loginId: string }

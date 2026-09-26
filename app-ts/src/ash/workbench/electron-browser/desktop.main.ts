@@ -15,6 +15,7 @@ import { loadUserThemes } from '../services/themes/browser/workbenchThemeService
 import { switchElectronWorkbenchMode } from '../services/workbenchMode/electron-browser/electronWorkbenchModeHost.js';
 import { createElectronTitlebarPartFactory } from './parts/titlebar/titlebarPart.js';
 import { NativeDialogHandler } from './parts/dialogs/dialogHandler.js';
+import { DirectoryPermissionDialog } from './parts/dialogs/directoryPermissionDialog.js';
 
 /** Owns desktop startup and the resources of one renderer window. */
 export class DesktopMain extends Disposable {
@@ -35,8 +36,9 @@ export class DesktopMain extends Disposable {
 		const tracker = import.meta.env.DEV ? new DisposableTracker() : undefined;
 		const tracking = tracker ? installDisposableTracker(tracker) : undefined;
 		try {
-			const api = this._register(await createElectronRendererApi(this.rendererCapabilities));
 			const container = document.querySelector<HTMLElement>('#app') ?? document.body;
+			const permissionDialog = this._register(new DirectoryPermissionDialog(container));
+			const api = this._register(await createElectronRendererApi(this.rendererCapabilities, { browser: true }, path => permissionDialog.select(path)));
 			const profileServices = this._register(new ServiceContainer());
 			profileServices.registerInstance(IFileService, api.localFiles);
 			const userThemes = this._register(await loadUserThemes(profileServices, URI.parse(api.userDataHome.toString().replace(/\/$/u, '') + '/themes')));

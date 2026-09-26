@@ -128,7 +128,7 @@ export class GlobalCompositeBar extends Disposable {
 		const signInLabel = this.label('workbench.signInWithChatGPT', 'Sign in with ChatGPT');
 		const githubConnected = this.accounts.some(account => account.provider === 'github');
 		const githubLabel = this.githubConnection.isConnecting
-			? this.label('workbench.connectingGitHub', 'Connecting GitHub…')
+			? this.label('workbench.cancelGitHubConnection', 'Cancel GitHub connection')
 			: this.label('workbench.connectGitHub', 'Connect GitHub');
 		return [
 			...this.accounts.map(account => {
@@ -139,7 +139,7 @@ export class GlobalCompositeBar extends Disposable {
 				return { id: `ash.activityBar.signOut.${account.provider}`, label, tooltip: label, enabled: true, run: () => this.accountService.logout(account.provider) };
 			}),
 			{ id: 'ash.activityBar.signIn', label: signInLabel, tooltip: signInLabel, enabled: true, run: () => this.accountService.startLogin({ type: 'openAiChatGptBrowser' }) },
-			...(!githubConnected ? [{ id: 'ash.activityBar.connectGitHub', label: githubLabel, tooltip: githubLabel, enabled: !this.githubConnection.isConnecting, run: () => this.githubConnection.connect() }] : []),
+			...(!githubConnected ? [{ id: 'ash.activityBar.connectGitHub', label: githubLabel, tooltip: githubLabel, enabled: true, run: () => this.githubConnection.isConnecting ? this.githubConnection.cancel() : this.githubConnection.connect() }] : []),
 		];
 	}
 

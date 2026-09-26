@@ -37,6 +37,37 @@ test('desktop GitHub connection error uses a window dialog', async ({ target, ap
 	}
 });
 
+test('desktop GitHub authorization opens a browser URL and can be cancelled without a code dialog', async ({ target, application, workbench }) => {
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required');
+	const electron = application as ElectronApplication;
+	await electron.evaluate(({ shell }) => {
+		const original = shell.openExternal.bind(shell);
+		const state = globalThis as typeof globalThis & { ashGitHubBrowser?: { url?: string; restore: () => void } };
+		state.ashGitHubBrowser = { restore: () => { shell.openExternal = original; } };
+		shell.openExternal = async url => { state.ashGitHubBrowser!.url = url; };
+	});
+	try {
+		const page = workbench.page;
+		await page.getByRole('button', { name: 'Accounts' }).click();
+		await page.getByRole('menu').last().getByRole('menuitem', { name: 'Connect GitHub' }).click();
+		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashGitHubBrowser?: { url?: string } }).ashGitHubBrowser?.url)).toBeTruthy();
+		const authorizationUrl = await electron.evaluate(() => (globalThis as typeof globalThis & { ashGitHubBrowser?: { url?: string } }).ashGitHubBrowser?.url);
+		const url = new URL(authorizationUrl!);
+		expect(url.origin).toBe('https://ash-github-auth.lanxiang0901.workers.dev');
+		expect(url.pathname).toBe('/v1/oauth/github/authorize');
+		expect(url.searchParams.get('client_id')).toBe('Iv23lieaFUjG1LamZy3K');
+		expect(url.searchParams.get('code_challenge_method')).toBe('S256');
+		await page.getByRole('button', { name: 'Accounts' }).click();
+		await page.getByRole('menu').last().getByRole('menuitem', { name: 'Cancel GitHub connection' }).click();
+		await page.getByRole('button', { name: 'Accounts' }).click();
+		await expect(page.getByRole('menu').last().getByRole('menuitem', { name: 'Connect GitHub' })).toBeVisible();
+		await expect(page.getByRole('dialog', { name: 'Connect GitHub' })).toHaveCount(0);
+		await expect(page.locator('.ash-notification')).toHaveCount(0);
+	} finally {
+		await electron.evaluate(() => (globalThis as typeof globalThis & { ashGitHubBrowser?: { restore: () => void } }).ashGitHubBrowser?.restore());
+	}
+});
+
 test('primary sidebar toggle sits immediately after the application menu', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;

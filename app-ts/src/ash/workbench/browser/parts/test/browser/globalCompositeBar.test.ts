@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import type { IAction } from '../../../../../base/common/actions.js';
-import type { IAccountService, AccountState, AccountLoginCompletion } from '../../../../../platform/accounts/common/accountService.js';
+import type { IAccountService, AccountState, AccountLoginCompletion, AccountLoginChallenge } from '../../../../../platform/accounts/common/accountService.js';
 import type { IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
 import type { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import type { ILogService } from '../../../../../platform/log/common/log.js';
@@ -61,14 +61,15 @@ test('Activity Bar global actions open account and management menus', async () =
 	const loginMethods: string[] = [];
 	const loggedOutProviders: string[] = [];
 	const cancelledLogins: string[] = [];
+	let delayedGitHubStart: Promise<AccountLoginChallenge> | undefined;
 	const accountService: IAccountService = {
 		onDidChangeAccounts: accountsChanged.event,
 		onDidCompleteLogin: loginCompleted.event,
 		read: async () => accountState,
 		startLogin: async method => {
 			loginMethods.push(method.type);
-			return method.type === 'gitHubDeviceCode'
-				? { type: 'deviceCode', loginId: 'github-login', verificationUrl: 'https://github.com/login/device', userCode: 'ABCD-1234' }
+			return method.type === 'gitHubBrowser'
+				? delayedGitHubStart ?? { type: 'browser', loginId: 'github-login', authorizationUrl: 'https://broker.example/authorize' }
 				: { type: 'connected', loginId: 'one' };
 		},
 		cancelLogin: async loginId => { cancelledLogins.push(loginId); },
@@ -108,17 +109,18 @@ test('Activity Bar global actions open account and management menus', async () =
 	await actions[1]?.run();
 	assert.deepEqual(loginMethods, ['openAiChatGptBrowser']);
 	await actions[2]?.run();
-	assert.deepEqual(loginMethods, ['openAiChatGptBrowser', 'gitHubDeviceCode']);
-	assert.deepEqual(dialogs.model.dialogs.map(dialog => dialog.request.kind === 'confirmation' ? [dialog.request.title, dialog.request.message, dialog.request.primaryButton] : []), [['Connect GitHub', 'Enter code ABCD-1234 on GitHub', 'Continue in browser']]);
+	assert.deepEqual(loginMethods, ['openAiChatGptBrowser', 'gitHubBrowser']);
+	assert.equal(dialogs.model.dialogs.length, 0);
+	assert.deepEqual(announcements, ['Authorize Ash in your browser to connect GitHub.']);
 	closeMenu(false);
 	accountsButton.click();
-	assert.equal(actions[2]?.label, 'Connecting GitHub…');
-	assert.equal(actions[2]?.enabled, false);
+	assert.equal(actions[2]?.label, 'Cancel GitHub connection');
+	assert.equal(actions[2]?.enabled, true);
 	accountState = { revision: 2n, accounts: [...accountState.accounts, { provider: 'github', accountId: 'octocat', displayName: 'octocat', status: 'ready', credentialRevision: 1n }] };
 	loginCompleted.fire({ loginId: 'github-login', status: { type: 'succeeded' }, account: accountState });
 	accountsChanged.fire(accountState);
 	assert.equal(dialogs.model.dialogs.length, 0);
-	assert.deepEqual(announcements, ['GitHub account connected.']);
+	assert.deepEqual(announcements, ['Authorize Ash in your browser to connect GitHub.', 'GitHub account connected.']);
 	closeMenu(false);
 	accountsButton.click();
 	assert.deepEqual(actions.map(action => action.label), ['Sign out of Ash User', 'Sign out of GitHub (octocat)', 'Sign in with ChatGPT']);
@@ -129,12 +131,28 @@ test('Activity Bar global actions open account and management menus', async () =
 	closeMenu(false);
 	accountsButton.click();
 	await actions[2]?.run();
-	dialogs.model.dialogs[0]?.cancel();
+	closeMenu(false);
+	accountsButton.click();
+	assert.equal(actions[2]?.label, 'Cancel GitHub connection');
+	await actions[2]?.run();
 	await Promise.resolve();
 	assert.deepEqual(cancelledLogins, ['github-login']);
 	closeMenu(false);
 	accountsButton.click();
 	assert.equal(actions[2]?.enabled, true);
+	let finishStart: ((value: AccountLoginChallenge) => void) | undefined;
+	delayedGitHubStart = new Promise(resolve => { finishStart = resolve; });
+	const connecting = actions[2]?.run();
+	closeMenu(false);
+	accountsButton.click();
+	assert.equal(actions[2]?.label, 'Cancel GitHub connection');
+	await actions[2]?.run();
+	finishStart?.({ type: 'browser', loginId: 'late-github-login', authorizationUrl: 'https://broker.example/authorize' });
+	await connecting;
+	delayedGitHubStart = undefined;
+	assert.deepEqual(cancelledLogins, ['github-login', 'late-github-login']);
+	closeMenu(false);
+	accountsButton.click();
 	await actions[2]?.run();
 	loginCompleted.fire({ loginId: 'github-login', status: { type: 'failed', failure: { code: 'denied', message: 'Authorization denied' } }, account: accountState });
 	assert.deepEqual(dialogs.model.dialogs.map(dialog => dialog.request.message), ['Could not connect GitHub. Try again.']);

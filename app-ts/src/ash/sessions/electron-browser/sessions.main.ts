@@ -7,6 +7,7 @@ import { DisposableStore, toDisposable, type IDisposable } from "../../base/comm
 import { onUnexpectedError } from "../../base/common/errors.js";
 import type { WorkbenchModeId } from "../../workbench/common/workbenchMode.js";
 import { createElectronRendererApi } from "../../platform/native/electron-browser/rendererApi.js";
+import { DirectoryPermissionDialog } from '../../workbench/electron-browser/parts/dialogs/directoryPermissionDialog.js';
 import { createElectronWorkbenchContextMenuService } from "../../workbench/services/contextmenu/electron-browser/contextMenuService.js";
 import type { SessionsProfile } from "../common/sessionsProfile.js";
 import { Workbench } from "../browser/workbench.js";
@@ -21,17 +22,18 @@ import { WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_ZOO
 /** Starts the Code-specific Electron Sessions page. */
 export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): Promise<IDisposable> {
 	installBaseUiStyles();
-	let api: Awaited<ReturnType<typeof createElectronRendererApi>>;
-	try { api = await createElectronRendererApi([], { browser: false }); }
-	catch (error) { return showStartupError(error); }
+	const container = document.querySelector<HTMLElement>("#app");
+	if (!container) throw new Error("Sessions renderer requires an #app container");
 	const sessions = new DisposableStore();
+	const permissionDialog = sessions.add(new DirectoryPermissionDialog(container));
+	let api: Awaited<ReturnType<typeof createElectronRendererApi>>;
+	try { api = await createElectronRendererApi([], { browser: false }, path => permissionDialog.select(path)); }
+	catch (error) { sessions.dispose(); return showStartupError(error); }
 	sessions.add(api);
 	const profileServices = sessions.add(new ServiceContainer());
 	profileServices.registerInstance(IFileService, api.localFiles);
 	const { loadUserThemes } = await import('../../workbench/services/themes/browser/workbenchThemeService.js');
 	sessions.add(await loadUserThemes(profileServices, URI.parse(api.userDataHome.toString().replace(/\/$/u, '') + '/themes')));
-	const container = document.querySelector<HTMLElement>("#app");
-	if (!container) throw new Error("Sessions renderer requires an #app container");
 	const windowApi = createReturnToParentWindowApi();
 	const setFullscreen = (fullscreen: boolean): void => { container.classList.toggle('ash-sessions-fullscreen', fullscreen); };
 	setFullscreen(await invoke<boolean>(WINDOW_OPERATION_CHANNEL, { kind: 'getFullscreen' }));

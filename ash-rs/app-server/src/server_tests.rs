@@ -5290,7 +5290,10 @@ fn account_rpc_projects_login_completion_without_credentials() {
     );
     assert_eq!(read["result"]["accounts"][0]["plan"], "plus");
     assert_eq!(read["result"]["revision"], "1");
-    assert_eq!(read["result"]["accounts"][0]["credentialRevision"], u64::MAX.to_string());
+    assert_eq!(
+        read["result"]["accounts"][0]["credentialRevision"],
+        u64::MAX.to_string()
+    );
     *driver.account.lock().unwrap() = None;
     let read = call(
         &server,
@@ -6773,7 +6776,7 @@ fn device_subscription_login_registers_its_provider_once_for_model_selection() {
 }
 
 #[test]
-fn github_account_login_routes_device_challenge_without_model_provider_configuration() {
+fn github_account_login_routes_browser_challenge_without_model_provider_configuration() {
     struct Driver;
     impl InteractiveLoginDriver for Driver {
         fn provider_id(&self) -> &'static str {
@@ -6783,11 +6786,10 @@ fn github_account_login_routes_device_challenge_without_model_provider_configura
             Ok(None)
         }
         fn begin(&self, request: BeginLoginRequest) -> Result<BeginLogin, LoginError> {
-            assert_eq!(request.method, ash_login::LoginMethod::GitHubDeviceCode);
-            Ok(BeginLogin::DeviceCode {
+            assert_eq!(request.method, ash_login::LoginMethod::GitHubBrowser);
+            Ok(BeginLogin::Browser {
                 login_id: request.login_id,
-                verification_url: "https://github.com/login/device".into(),
-                user_code: "ABCD-EFGH".into(),
+                authorization_url: "https://github.com/login/oauth/authorize".into(),
             })
         }
         fn cancel(&self, _: &LoginId) -> Result<CancelLoginOutcome, LoginError> {
@@ -6810,14 +6812,13 @@ fn github_account_login_routes_device_challenge_without_model_provider_configura
         &mut connection,
         serde_json::json!({
             "jsonrpc":"2.0","id":2,"method":"account/login/start",
-            "params":{"method":{"type":"gitHubDeviceCode"}}
+            "params":{"method":{"type":"gitHubBrowser"}}
         }),
     );
     assert_eq!(
-        response["result"]["verificationUrl"],
-        "https://github.com/login/device"
+        response["result"]["authorizationUrl"],
+        "https://github.com/login/oauth/authorize"
     );
-    assert_eq!(response["result"]["userCode"], "ABCD-EFGH");
     assert!(config.read_snapshot().unwrap().values.providers.is_empty());
     let cancelled = call(
         &server,

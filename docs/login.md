@@ -18,7 +18,7 @@
 | ChatGPT 设备码登录 | 本机 `ash-chatgpt` | 授权地址、一次性用户码和脱敏账户状态；首次 token 保存为 Codex 兼容 auth.json；有 Codex 时只读复用，无 Codex 时由 Ash 维护 |
 | Kimi 设备码登录 | 本机 `ash-kimi` | 授权地址、一次性用户码和脱敏账户状态；凭据由 Kimi 适配器保存到 profile SecretStore |
 | xAI 设备码登录 | 本机 `ash-xai` | 授权地址、一次性用户码和脱敏账户状态；Ash 登录凭据保存在 profile SecretStore，没有 Ash 凭据时可只读使用宿主 Grok 登录文件 |
-| GitHub 设备码登录 | 本机 `ash-github` | 授权地址、一次性用户码和脱敏账户状态；凭据保存在 profile SecretStore，欢迎页可发起连接 |
+| GitHub 浏览器登录 | 本机 `ash-github` 与 Cloudflare Worker | 浏览器授权地址和脱敏账户状态；Worker 保存 GitHub App Client Secret，本机接收回调并把凭据保存在 profile SecretStore |
 | 登出、取消或切换账户 | 登录控制面协调，供应商适配器执行 | 稳定状态和脱敏结果 |
 | 没有受支持订阅 OAuth 的供应商 API key | 对应模型凭据领域 | 不属于交互式登录，也不是 OAuth 失败后的降级 |
 | AWS 凭据链、Google ADC、Azure 托管身份 | 对应供应商运行时 | 不包装成通用 OAuth |
@@ -49,7 +49,7 @@ reauthentication-required 状态；它不把不同 Provider 的 credential 协�
 
 产品边界按认证能力划分：ChatGPT、Kimi、xAI 的订阅接入通过 `ash-login` 暴露交互式账户登录；开发者 API 通过模型凭据领域接受 API key。两种凭据可以同时保存；订阅账户就绪时，该供应商的模型列表与文本请求优先使用订阅。订阅不可用时才使用已保存的 API key，不会在一次失败的订阅请求中改走 API。BigModel 使用 zAI 密钥和 Coding Plan 端点，由提供商配置决定接入方式，不产生 `ash-login` 账户。
 
-本地默认组合安装 ChatGPT、Kimi 和 xAI 三个订阅登录适配器；发行配置中的公开 Client ID 另启用 GitHub 账户适配器。它们各自使用对应的设备授权流程，在本机交换或刷新 token；ChatGPT 使用 Codex 兼容的本地登录存储，Kimi、xAI 和 GitHub 的 Ash 登录凭据保存在 profile SecretStore，xAI 在没有 Ash 凭据时还能只读使用宿主 Grok 登录文件。它们只向控制面提供脱敏账户信息。
+本地默认组合安装 ChatGPT、Kimi 和 xAI 三个订阅登录适配器；发行配置中的公开 GitHub App Client ID 和授权服务地址另启用 GitHub 账户适配器。ChatGPT、Kimi、xAI 使用各自的设备授权流程。GitHub 使用系统浏览器授权、PKCE 和本机回调；Cloudflare Worker 持有 GitHub App Client Secret 并交换或刷新 token，本机将凭据保存到 profile SecretStore。ChatGPT 使用 Codex 兼容的本地登录存储，Kimi、xAI 的 Ash 登录凭据也保存在 profile SecretStore，xAI 在没有 Ash 凭据时还能只读使用宿主 Grok 登录文件。它们只向控制面提供脱敏账户信息。
 
 默认目录中的 `openai/gpt-5.6-sol` 等订阅模型显式标记 `runtime = chatgpt_subscription`，`kimi/kimi-k2.7-code` 标记 `runtime = kimi_code`。`ModelRef` 始终使用供应商 ID；当前账户状态决定有效接入方式。桌面端的固定模型列表不因登录或填入 API key 增减条目；TUI `/model` 只显示当前连接发现或同账户缓存观察到的模型。订阅切换后，TUI 的可选条目会随目录变化；已选择的准确模型是否能请求成功由调用时的接线和认证决定。
 App Server 读取到已就绪的 ChatGPT 账户时登记 `openai` 供应商，供 TUI 读取该账户的发现目录。Ash 首次读取订阅目录时，若 Codex 有本地模型缓存，会通过 Codex 的本地 `model/list` 校验当前账户并转换可见条目；否则由 Ash 使用当前登录读取 ChatGPT 目录。转换后的模型信息存入 Ash profile 的 `cache/models/openai.json`，同一文件内按账户和接入方式隔离。xAI 写入 `xai.json`，Kimi Code 写入 `kimi.json`；这些文件都按供应商和账户 scope 管理。旧配置的 `xai-subscription` 模型引用迁为 `xai`；OpenAI 与 Kimi 的原有模型引用保持供应商 ID 不变。
@@ -57,6 +57,8 @@ App Server 读取到已就绪的 ChatGPT 账户时登记 `openai` 供应商，�
 Kimi wire contract 以 [Kimi CLI 的官方 OAuth 实现](https://github.com/MoonshotAI/kimi-cli/blob/main/src/kimi_cli/auth/oauth.py) 为主依据，并与 [CLIProxyAPI 的 Kimi adapter](https://github.com/router-for-me/CLIProxyAPI/blob/main/internal/auth/kimi/kimi.go) 交叉验证。Ash 请求使用真实 `User-Agent: Ash/*` 与 `X-Msh-Platform: Ash`，不伪装成 Kimi CLI 或 CPA。
 
 Desktop 的 Models 设置页已接入这条控制面：ChatGPT 与 Kimi 使用独立账户卡；主进程用系统浏览器打开验证页并把一次性 user code 写入剪贴板，Renderer 只显示 challenge 和脱敏完成状态。一个 provider 暂时不可用时，`LoginService` 仍返回其他 provider 的账户；已有但读取失败的账户会投影为 `Unavailable`。
+
+`account/read` 和账户事件中的集合 revision、credential revision 均以十进制字符串传输；Renderer 转为 `bigint`。这两个值来自 Rust `u64`，不能作为 JSON 数字传给 JavaScript，否则较大的凭据修订号会失去精度并使协议解码失败。
 
 ## 2. 所有权
 

@@ -34,11 +34,12 @@ import type { RendererHostCapabilities } from "../../renderer/common/rendererHos
 import { createRemoteAgentApi } from "../../remote/electron-browser/remoteAgentApi.js";
 import { createRemoteConnectionApi } from "../../remote/electron-browser/remoteConnectionApi.js";
 import { createRemoteTunnelApi } from "../../remote/electron-browser/remoteTunnelApi.js";
+import type { DirPermissionChoice } from '../../dirPermissions/common/dirPermissionsService.js';
 
 export type ElectronRendererCapabilityContribution = RendererCapabilityContribution;
 
 /** Composes Electron renderer capabilities from domain-owned IPC adapters. */
-export async function createElectronRendererApi(contributions: readonly ElectronRendererCapabilityContribution[] = [], hostCapabilities: { readonly browser: boolean } = { browser: true }): Promise<AshElectronRendererApi & IDisposable> {
+export async function createElectronRendererApi(contributions: readonly ElectronRendererCapabilityContribution[], hostCapabilities: { readonly browser: boolean }, selectDirectoryPermissions: (path: string) => Promise<DirPermissionChoice>): Promise<AshElectronRendererApi & IDisposable> {
 	const resources = new DisposableStore();
 	let connecting: Promise<void> = Promise.resolve();
 	const transport = resources.add(new AppServerMessagePortTransport(() => {
@@ -49,7 +50,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 	const client = new AppServerProtocolClient(transport, { clientName: 'ash-desktop', initializeTimeoutMs: 30_000, capabilities: { ...(hostCapabilities.browser ? { browser: { version: 1, observe: true, input: true } } : {}), dirPermissionsHost: { version: 1 } } });
 	resources.add(toDisposable(() => client.dispose()));
 	if (hostCapabilities.browser) { resources.add(registerAppServerBrowserHost(client)); }
-	resources.add(registerAppServerWorkspaceHost(client, () => connecting));
+	resources.add(registerAppServerWorkspaceHost(client, () => connecting, selectDirectoryPermissions));
 	const initialize = async (): Promise<void> => {
 		try { await client.connect(); }
 		catch (error) {
@@ -120,7 +121,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 				const replacement = subscribe('ash:terminal:prepareReplacement', () => terminals.prepareForServerReplacement());
 				resources.add(toDisposable(() => replacement.dispose()));
 			}
-			await initializeWorkspace(client);
+			await initializeWorkspace(client, selectDirectoryPermissions);
 			started = true;
 		} else {
 			backend = createDisconnectedRendererApi();

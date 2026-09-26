@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "githubAccount": { "clientId": "Ov23linTZCPimNOTyngv" },
+  "githubAccount": { "clientId": "Iv23lieaFUjG1LamZy3K", "brokerBaseUrl": "https://ash-github-auth.lanxiang0901.workers.dev/" },
   "marketplaces": [
     {
       "name": "ash",

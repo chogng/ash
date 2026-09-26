@@ -124,7 +124,7 @@ impl AppServer {
             AccountLoginMethodDto::OpenAiChatGptDeviceCode => LoginMethod::OpenAiChatGptDeviceCode,
             AccountLoginMethodDto::KimiDeviceCode => LoginMethod::KimiDeviceCode,
             AccountLoginMethodDto::XaiDeviceCode => LoginMethod::XaiDeviceCode,
-            AccountLoginMethodDto::GitHubDeviceCode => LoginMethod::GitHubDeviceCode,
+            AccountLoginMethodDto::GitHubBrowser => LoginMethod::GitHubBrowser,
         };
         let login = self.login_service()?;
         match method {

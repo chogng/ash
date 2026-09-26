@@ -4,6 +4,7 @@ import { createServiceIdentifier } from '../../../../platform/instantiation/comm
 export interface IGitHubConnectionService {
 	readonly isConnecting: boolean;
 	connect(): Promise<void>;
+	cancel(): Promise<void>;
 }
 
 export const IGitHubConnectionService = createServiceIdentifier<IGitHubConnectionService>('gitHubConnectionService');

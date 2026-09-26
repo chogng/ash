@@ -28,7 +28,7 @@ const MAX_PRODUCT_SERVICES_BYTES: u64 = 1024 * 1024;
 pub struct LocalProductServicesConfig {
     pub(crate) marketplaces: BTreeMap<MarketplaceName, ash_core_plugins::RemoteMarketplaceConfig>,
     pub(crate) connector_oauth: Vec<ProductConnectorOAuthConfig>,
-    pub(crate) github_account_client_id: Option<String>,
+    pub(crate) github_account: Option<GitHubAccountConfig>,
     pub(crate) image_generation: Option<ProductImageGenerationConfig>,
     pub(crate) git_attribution: Option<ProductGitAttributionConfig>,
     authority_identity: [u8; 32],
@@ -92,15 +92,10 @@ impl LocalProductServicesConfig {
             .map(ProductConnectorOAuthConfig::try_from)
             .collect::<Result<Vec<_>, _>>()?;
         validate_unique_configuration(&connector_oauth)?;
-        if document.github_account.as_ref().is_some_and(|account| {
-            account.client_id.is_empty()
-                || !account
-                    .client_id
-                    .bytes()
-                    .all(|byte| byte.is_ascii_alphanumeric())
-        }) {
-            return Err(product_config_error(()));
-        }
+        let github_account = document
+            .github_account
+            .map(GitHubAccountConfig::try_from)
+            .transpose()?;
         if let Some(image) = &document.image_generation {
             let endpoint = Url::parse(&image.endpoint).map_err(product_config_error)?;
             if endpoint.scheme() != "https"
@@ -125,7 +120,7 @@ impl LocalProductServicesConfig {
             git_attribution: document.git_attribution,
             marketplaces,
             connector_oauth,
-            github_account_client_id: document.github_account.map(|account| account.client_id),
+            github_account,
             authority_identity: authority_identity.finalize().into(),
         })
     }
@@ -195,6 +190,44 @@ struct ProductServicesDocument {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct GitHubAccountDocument {
     client_id: String,
+    broker_base_url: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct GitHubAccountConfig {
+    pub client_id: String,
+    pub broker_base_url: Url,
+}
+
+impl TryFrom<GitHubAccountDocument> for GitHubAccountConfig {
+    type Error = OpenAppServerError;
+
+    fn try_from(value: GitHubAccountDocument) -> Result<Self, Self::Error> {
+        if value.client_id.is_empty()
+            || !value
+                .client_id
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric())
+        {
+            return Err(product_config_error(()));
+        }
+        let broker_base_url = Url::parse(&value.broker_base_url).map_err(product_config_error)?;
+        if broker_base_url.scheme() != "https"
+            || broker_base_url.cannot_be_a_base()
+            || broker_base_url.host_str().is_none()
+            || !broker_base_url.username().is_empty()
+            || broker_base_url.password().is_some()
+            || broker_base_url.query().is_some()
+            || broker_base_url.fragment().is_some()
+            || !broker_base_url.path().ends_with('/')
+        {
+            return Err(product_config_error(()));
+        }
+        Ok(Self {
+            client_id: value.client_id,
+            broker_base_url,
+        })
+    }
 }
 
 #[derive(Deserialize)]

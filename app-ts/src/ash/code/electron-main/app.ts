@@ -47,6 +47,7 @@ import { nativeHostIpcRoutes, windowAppearanceIpcRoutes } from "../../platform/n
 import { UpdateMainService, updateIpcRoutes } from '../../platform/update/electron-main/updateMainService.js';
 import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL } from "../../platform/native/common/nativeHost.js";
 import { WindowDialogHost } from '../../platform/dialogs/electron-main/windowDialogHost.js';
+import type { DialogRequest } from '../../platform/dialogs/common/dialogs.js';
 import { openDedicatedWindowIpcRoute, returnToParentWindowIpcRoute } from "../../platform/windows/electron-main/dedicatedWindowIpc.js";
 import { DedicatedWindowHost } from "../../platform/windows/electron-main/dedicatedWindowHost.js";
 import { GlobalKeybindingsMainService } from '../../platform/globalKeybindings/electron-main/globalKeybindingsMainService.js';
@@ -716,7 +717,7 @@ export class AshApplication extends Disposable {
 				? await this.resolveRemoteFolderWorkspace(currentWorkspace, folderPath, workspaces)
 				: await workspaces.resolveFolder(folderPath);
 			if (nextWorkspace.id === currentWorkspace.id) return;
-			const grant = await this.resolveDirGrant(workspaceHost, folderPath, window);
+			const grant = await this.resolveDirGrant(workspaceHost, folderPath);
 			if (grant === undefined) {
 				if (selectionRequired) throw new Error(`Directory permissions were not selected for '${folderPath}'`);
 				return;
@@ -743,7 +744,7 @@ export class AshApplication extends Disposable {
 			...supervisor.routes(window.webContents, () => ({ workspaceId: workspaceContext.getWorkspace().id, workspaceRoot: workspaceContext.getResolvedWorkspace().folders[0]?.uri.fsPath ?? this.profileRoot })),
 			...windowDisposables.add(new BrowserAutomationHost(browserAutomationMainService)).routes(),
 			...windowDisposables.add(new OAuthCallbackHost()).routes(),
-			...rendererSystemHostRoutes(window, path => this.selectDirectoryPermissions(window, path)),
+			...rendererSystemHostRoutes(window, path => this.directoryPermissionPrompt(path)),
 			...remoteWindowContext.ipcRoutes,
 			...browserViewIpcRoutes(browserViewMainService),
 			...windowResourceIpcRoutes(windowResources),
@@ -872,7 +873,7 @@ export class AshApplication extends Disposable {
 				};
 				const ipcRoutes = [
 					...sessionsRelay.routes(window.webContents, () => ({ workspaceId: record.workspaceId, workspaceRoot: record.workspaceContext.getResolvedWorkspace().folders[0]?.uri.fsPath ?? this.profileRoot })),
-					...rendererSystemHostRoutes(window, path => this.selectDirectoryPermissions(window, path)),
+					...rendererSystemHostRoutes(window, path => this.directoryPermissionPrompt(path)),
 					...remoteWindowContext.ipcRoutes,
 					...windowResourceIpcRoutes(windowResources),
 					...windowAppearanceIpcRoutes({
@@ -1250,38 +1251,34 @@ export class AshApplication extends Disposable {
 		return this.closePersistentServicesPromise;
 	}
 
-	private async resolveDirGrant(workspaceHost: RendererWorkspaceHost, path: string, window: BrowserWindow): Promise<DirGrant | undefined> {
+	private async resolveDirGrant(workspaceHost: RendererWorkspaceHost, path: string): Promise<DirGrant | undefined> {
 		if (this.appServerStartupMode === "disabled") return { type: "config" };
 		const persisted = await readAppServerDirPermissions(workspaceHost, path);
 		if (persisted !== undefined) return { type: "config" };
-		const choice = await this.selectDirectoryPermissions(window, path);
-		if (choice === 2) return undefined;
-		return createUserDirGrant(workspaceHost, path, choice === 0 ? DEVELOPMENT_DIR_PERMISSIONS : READ_DIR_PERMISSIONS);
+		const choice = await workspaceHost.selectPermissions(path);
+		if (choice === 'cancel') return undefined;
+		if (choice !== 'development' && choice !== 'readOnly') throw new Error('Invalid directory permission selection');
+		return createUserDirGrant(workspaceHost, path, choice === 'development' ? DEVELOPMENT_DIR_PERMISSIONS : READ_DIR_PERMISSIONS);
 	}
 
-	private async selectDirectoryPermissions(window: BrowserWindow, path: string): Promise<number> {
+	private directoryPermissionPrompt(path: string): DialogRequest {
 		const configuredLocale = configurationValues(this.services.configuration.read().document)[LocalizationConfiguration.locale];
 		const locale = typeof configuredLocale === 'string' ? configuredLocale : 'en';
 		const catalog = builtinLanguagePackCatalogs.find(candidate => candidate.locale === locale)
 			?? builtinLanguagePackCatalogs.find(candidate => candidate.locale === 'en')!;
 		const translate = (key: string, english: string): string => catalog.bundles.ash?.[key] ?? english;
-		const result = await dialog.showMessageBox(window, {
-			type: 'question',
-			buttons: [
-				translate('workspaceTrust.trust', 'Trust Folder & Enable Features'),
-				translate('workspaceTrust.readOnly', 'Open Read Only'),
-				translate('dialog.cancel', 'Cancel'),
-			],
-			defaultId: 1,
-			cancelId: 2,
-			noLink: true,
+		return {
+			kind: 'prompt',
+			title: AshApplicationName,
+			primaryButton: translate('workspaceTrust.readOnly', 'Open Read Only'),
+			secondaryButton: translate('workspaceTrust.trust', 'Trust Folder & Enable Features'),
+			cancelButton: translate('dialog.cancel', 'Cancel'),
 			message: translate('workspaceTrust.question', 'Do you trust the files in this folder?'),
 			detail: formatNlsMessage(
 				translate('workspaceTrust.detail', 'Folder: {0}\n\nTrusting this folder allows Ash to edit files, run commands, change the repository, and load project instructions and configuration. Read Only allows browsing, searching, and repository inspection.'),
 				{ '0': path },
 			),
-		});
-		return result.response;
+		};
 	}
 
 	private appServerEnvironment(workspace: IAnyWorkspaceIdentifier): Readonly<Record<string, string>> {

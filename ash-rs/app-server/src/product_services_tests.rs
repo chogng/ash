@@ -18,7 +18,7 @@ fn product_services_loads_public_oauth_and_pins_marketplace_root() {
             "trustedRoot": "root.json",
             "catalogRefreshIntervalSeconds": 900
           }],
-          "githubAccount": {"clientId": "Ov23publicclient"},
+          "githubAccount": {"clientId": "Ov23publicclient", "brokerBaseUrl": "https://broker.example/"},
           "connectorOauth": [{
             "type": "githubDevice",
             "connectorId": "openai/github:connector:account",
@@ -37,7 +37,10 @@ fn product_services_loads_public_oauth_and_pins_marketplace_root() {
 
     assert_eq!(config.marketplaces().len(), 1);
     assert_eq!(
-        config.github_account_client_id.as_deref(),
+        config
+            .github_account
+            .as_ref()
+            .map(|value| value.client_id.as_str()),
         Some("Ov23publicclient")
     );
     assert_eq!(
@@ -65,8 +68,11 @@ fn production_product_services_delegates_to_the_plugins_manager() {
 
     let config = LocalProductServicesConfig::load(product_services, profile.path()).unwrap();
     assert_eq!(
-        config.github_account_client_id.as_deref(),
-        Some("Ov23linTZCPimNOTyngv")
+        config
+            .github_account
+            .as_ref()
+            .map(|value| value.client_id.as_str()),
+        Some("Iv23lieaFUjG1LamZy3K")
     );
 
     let registry = config.marketplaces().values().next().unwrap();
@@ -93,11 +99,31 @@ fn product_services_rejects_invalid_github_account_client_id() {
             &path,
             serde_json::json!({
                 "schemaVersion": 2,
-                "githubAccount": { "clientId": client_id }
+                "githubAccount": { "clientId": client_id, "brokerBaseUrl": "https://broker.example/" }
             })
             .to_string(),
         )
         .unwrap();
+        assert!(LocalProductServicesConfig::load(&path, root.path()).is_err());
+    }
+}
+
+#[test]
+fn product_services_rejects_non_https_github_broker() {
+    let root = TempDir::new().unwrap();
+    let path = root.path().join("product-services.json");
+    for broker_base_url in [
+        "http://broker.example/",
+        "https://broker.example/path",
+        "https://user@broker.example/",
+    ] {
+        fs::write(
+            &path,
+            serde_json::json!({
+                "schemaVersion": 2,
+                "githubAccount": { "clientId": "Iv23publicclient", "brokerBaseUrl": broker_base_url }
+            }).to_string(),
+        ).unwrap();
         assert!(LocalProductServicesConfig::load(&path, root.path()).is_err());
     }
 }

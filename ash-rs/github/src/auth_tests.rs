@@ -38,34 +38,65 @@ impl HttpClient for FakeHttp {
 fn driver() -> (Arc<GitHubOAuth>, Arc<FakeHttp>, Arc<MemorySecretStore>) {
     let http = Arc::new(FakeHttp::default());
     let secrets = Arc::new(MemorySecretStore::default());
-    let driver =
-        GitHubOAuth::new("Ov23publicclient".into(), http.clone(), secrets.clone()).unwrap();
+    let driver = GitHubOAuth::new(
+        "Iv23publicclient".into(),
+        Url::parse("https://broker.example/").unwrap(),
+        http.clone(),
+        secrets.clone(),
+    )
+    .unwrap();
     (driver, http, secrets)
 }
 
 #[test]
-fn device_authorization_stores_only_the_account_projection_and_reuses_it() {
+fn browser_authorization_uses_pkce_and_stores_only_the_account_projection() {
     let (driver, http, _) = driver();
-    http.push(r#"{"device_code":"private-device","user_code":"ABCD-EFGH","verification_uri":"https://github.com/login/device","expires_in":900,"interval":0}"#);
-    let grant = driver.request_device_code().unwrap();
-    http.push(r#"{"error":"authorization_pending"}"#);
+    let grant = driver.authorize().unwrap();
+    let authorization_url = Url::parse(&grant.authorization_url).unwrap();
+    assert_eq!(
+        authorization_url.origin().ascii_serialization(),
+        "https://broker.example"
+    );
+    assert_eq!(authorization_url.path(), "/v1/oauth/github/authorize");
+    assert_eq!(
+        authorization_url
+            .query_pairs()
+            .find(|(key, _)| key == "code_challenge_method")
+            .unwrap()
+            .1,
+        "S256"
+    );
     http.push(r#"{"access_token":"private-access","refresh_token":"private-refresh","expires_in":28800,"refresh_token_expires_in":15724800,"token_type":"bearer"}"#);
     http.push(r#"{"id":42,"login":"octocat"}"#);
-    let credential = driver
-        .poll(&grant, &AtomicBool::new(false), Duration::ZERO)
+    let state = grant.state.clone();
+    let address = grant.listener.local_addr().unwrap();
+    let path = grant.path.clone();
+    let driver_for_thread = driver.clone();
+    let result = thread::spawn(move || {
+        driver_for_thread.await_authorization(grant, &AtomicBool::new(false))
+    });
+    let mut stream = TcpStream::connect(address).unwrap();
+    stream
+        .write_all(
+            format!(
+                "GET {path}?state={state}&code=private-code HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n"
+            )
+            .as_bytes(),
+        )
         .unwrap();
+    let mut response = String::new();
+    stream.read_to_string(&mut response).unwrap();
+    assert!(response.starts_with("HTTP/1.1 200 OK"));
+    let credential = result.join().unwrap().unwrap();
     driver.store_credential(&credential).unwrap();
-    let snapshot = driver.read_account().unwrap().unwrap();
-    assert_eq!(snapshot.account.provider, "github");
-    assert_eq!(snapshot.account.account_id, "42");
-    assert_eq!(snapshot.display_name.as_deref(), Some("octocat"));
-    assert_eq!(snapshot.status, AccountStatus::Ready);
-    assert!(!format!("{snapshot:?}").contains("private-access"));
+    let account = driver.read_account().unwrap().unwrap();
+    assert_eq!(account.account.account_id, "42");
+    assert_eq!(account.display_name.as_deref(), Some("octocat"));
+    assert!(!format!("{account:?}").contains("private-access"));
     let requests = http.requests.lock().unwrap();
-    assert_eq!(requests.len(), 4);
-    assert!(requests[0].1.contains("scope=read%3Auser"));
-    assert!(requests[1].1.contains("device_code=private-device"));
-    assert!(requests[2].1.contains("device_code=private-device"));
+    assert!(requests[0].0.ends_with("/v1/oauth/github/token"));
+    assert!(requests[0].1.contains("code=private-code"));
+    assert!(requests[0].1.contains("code_verifier="));
 }
 
 #[test]
@@ -73,6 +104,7 @@ fn expired_access_token_refreshes_and_logout_removes_the_credential() {
     let (driver, http, _) = driver();
     driver
         .store_credential(&Credential {
+            client_id: driver.client_id.clone(),
             access_token: "expired-access".into(),
             refresh_token: "old-refresh".into(),
             expires_at: Some(now().saturating_sub(1)),
@@ -86,7 +118,6 @@ fn expired_access_token_refreshes_and_logout_removes_the_credential() {
     http.push(r#"{"id":42,"login":"octocat"}"#);
     let account = driver.read_account().unwrap().unwrap();
     assert_eq!(account.credential_revision, 2);
-    assert_eq!(account.status, AccountStatus::Ready);
     assert!(
         http.requests.lock().unwrap()[0]
             .1
@@ -97,46 +128,77 @@ fn expired_access_token_refreshes_and_logout_removes_the_credential() {
 }
 
 #[test]
-fn cancellation_stops_polling_before_a_token_request() {
+fn callback_requires_matching_state_and_cancellation_stops_exchange() {
     let (driver, http, _) = driver();
-    let grant = DeviceGrant {
-        device_code: "private-device".into(),
-        user_code: "ABCD-EFGH".into(),
-        verification_uri: "https://github.com/login/device".into(),
-        expires_in: 900,
-        interval: 0,
-    };
+    let grant = driver.authorize().unwrap();
+    let mut stream = TcpStream::connect(grant.listener.local_addr().unwrap()).unwrap();
+    stream
+        .write_all(
+            format!(
+                "GET {}?state=wrong&code=stolen HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n",
+                grant.path
+            )
+            .as_bytes(),
+        )
+        .unwrap();
+    let (mut incoming, _) = grant.listener.accept().unwrap();
+    assert!(
+        read_callback(&mut incoming, &grant.path, &grant.state)
+            .unwrap()
+            .is_none()
+    );
     let cancelled = AtomicBool::new(true);
-    assert!(driver.poll(&grant, &cancelled, Duration::ZERO).is_err());
+    assert!(driver.await_authorization(grant, &cancelled).is_err());
     assert!(http.requests.lock().unwrap().is_empty());
 }
 
 #[test]
 fn login_service_receives_the_completed_github_account() {
     let (driver, http, _) = driver();
-    http.push(r#"{"device_code":"private-device","user_code":"ABCD-EFGH","verification_uri":"https://github.com/login/device","expires_in":900,"interval":0}"#);
     http.push(r#"{"access_token":"private-access","refresh_token":"private-refresh","expires_in":28800,"refresh_token_expires_in":15724800,"token_type":"bearer"}"#);
     http.push(r#"{"id":42,"login":"octocat"}"#);
     let service = Arc::new(LoginService::deferred(driver.clone()));
     driver.install_login_service(&service).unwrap();
-    let started = service.begin(LoginMethod::GitHubDeviceCode).unwrap();
-    assert!(matches!(started, BeginLogin::DeviceCode { .. }));
-    let deadline = std::time::Instant::now() + Duration::from_secs(8);
+    let started = service.begin(LoginMethod::GitHubBrowser).unwrap();
+    let BeginLogin::Browser {
+        authorization_url, ..
+    } = started
+    else {
+        panic!("expected browser authorization")
+    };
+    let url = Url::parse(&authorization_url).unwrap();
+    let redirect_uri = url
+        .query_pairs()
+        .find(|(key, _)| key == "redirect_uri")
+        .unwrap()
+        .1
+        .into_owned();
+    let state = url
+        .query_pairs()
+        .find(|(key, _)| key == "state")
+        .unwrap()
+        .1
+        .into_owned();
+    let callback = Url::parse(&redirect_uri).unwrap();
+    let mut stream = TcpStream::connect(("127.0.0.1", callback.port().unwrap())).unwrap();
+    stream
+        .write_all(
+            format!(
+                "GET {}?state={state}&code=private-code HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n",
+                callback.path()
+            )
+            .as_bytes(),
+        )
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
     loop {
-        let state = service.read().unwrap();
-        if !state.accounts.is_empty() {
-            assert_eq!(state.accounts[0].account.provider, GITHUB_PROVIDER_ID);
-            assert_eq!(state.accounts[0].display_name.as_deref(), Some("octocat"));
+        let accounts = service.read().unwrap().accounts;
+        if !accounts.is_empty() {
+            assert_eq!(accounts[0].account.provider, GITHUB_PROVIDER_ID);
+            assert_eq!(accounts[0].display_name.as_deref(), Some("octocat"));
             break;
         }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "GitHub login did not complete"
-        );
+        assert!(Instant::now() < deadline, "GitHub login did not complete");
         thread::sleep(Duration::from_millis(20));
     }
-    assert_eq!(
-        driver.read_account().unwrap().unwrap().account.account_id,
-        "42"
-    );
 }

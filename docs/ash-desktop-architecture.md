@@ -314,6 +314,10 @@ contribution 不得通过该服务直接访问文件系统。单根 Folder 启�
 [`search.md`](search.md)。Desktop 的保存命令、dirty state、watcher 消费、多根 Workspace 与
 搜索结果打开仍未实现。
 
+首次进入未授权目录时，Electron Renderer 在窗口内显示目录权限选择，启动阶段也先完成选择再
+建立 Workbench。Electron Main 提供按当前语言翻译的文案并等待选择；App Server 保存目录能力。
+只读目录在状态栏显示“只读文件夹”，编辑器自身的只读状态只针对有文件工作副本的编辑器。
+
 编辑器窗口的 Workspace 不归 Session catalog 所有。前端 `ISession.workspace` 只描述该 Session
 使用的 Environment、`cwd` 和目录；它可以帮助界面显示位置或请求切换运行环境，但不能改变窗口
 Workspace，也不能授予目录权限。选择另一个 Environment 中的 Session 时，由宿主建立对应

@@ -1,5 +1,3 @@
-import type { BrowserWindow, MessageBoxOptions } from "electron";
-import { realpath } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { resolve } from "node:path";
 import { promisify } from "node:util";
@@ -42,21 +40,6 @@ export async function launchElectron(options: ElectronLaunchOptions): Promise<El
 	const onProcessError = (chunk: Buffer): void => { processErrors = (processErrors + chunk.toString()).slice(-16_384); };
 	electronProcess.stderr?.on('data', onProcessError);
 	try {
-		if (options.appServerMode === 'required' && options.workspaceDirectory && options.workspacePermissions === 'development') {
-			const workspacePaths = [options.workspaceDirectory, await realpath(options.workspaceDirectory)];
-			await application.evaluate(({ dialog }, paths) => {
-				const showMessageBox = dialog.showMessageBox.bind(dialog);
-				dialog.showMessageBox = (async (...args: [MessageBoxOptions] | [BrowserWindow, MessageBoxOptions]) => {
-					const options = args.length === 1 ? args[0] : args[1];
-					if (options.message === 'Do you trust the files in this folder?'
-						&& paths.some(path => options.detail?.startsWith(`Folder: ${path}\n`))
-						&& options.buttons?.[0] === 'Trust Folder & Enable Features') {
-						return { response: 0, checkboxChecked: false };
-					}
-					return args.length === 1 ? showMessageBox(args[0]) : showMessageBox(args[0], args[1]);
-				}) as typeof dialog.showMessageBox;
-			}, workspacePaths);
-		}
 		const page = application.windows()[0] ?? await application.waitForEvent("window", { timeout: 30_000 });
 		const driver = new ElectronPlaywrightDriver(application, page);
 		const pageErrors: string[] = [];
@@ -74,7 +57,15 @@ export async function launchElectron(options: ElectronLaunchOptions): Promise<El
 		page.on('requestfinished', onRequestFinished);
 		page.on('requestfailed', onRequestFailed);
 		try {
-			await driver.workbench.waitForReady();
+			const ready = driver.workbench.waitForReady();
+			if (options.appServerMode === 'required' && options.workspaceDirectory && options.workspacePermissions === 'development') {
+				const prompt = page.getByRole('dialog', { name: 'Ash' });
+				await Promise.race([ready, prompt.waitFor({ state: 'visible' })]);
+				if (await prompt.isVisible()) {
+					await prompt.getByRole('button', { name: 'Trust Folder & Enable Features' }).click();
+				}
+			}
+			await ready;
 		} catch (error) {
 			const text = await page.locator('body').innerText().catch(() => 'Document is unavailable');
 			const details = [

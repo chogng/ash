@@ -20,9 +20,17 @@ use ash_login::LoginService;
 use ash_secrets::SecretKey;
 use ash_secrets::SecretStore;
 use ash_secrets::SecretValue;
+use base64::Engine as _;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use serde::Deserialize;
 use serde::Serialize;
+use sha2::Digest;
+use sha2::Sha256;
 use std::collections::BTreeMap;
+use std::io::Read;
+use std::io::Write;
+use std::net::TcpListener;
+use std::net::TcpStream;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::Weak;
@@ -30,25 +38,26 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::thread;
 use std::time::Duration;
+use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
+use url::Url;
 use url::form_urlencoded;
 use zeroize::Zeroize;
 
 pub const GITHUB_PROVIDER_ID: &str = "github";
 
-const DEVICE_CODE_URL: &str = "https://github.com/login/device/code";
-const TOKEN_URL: &str = "https://github.com/login/oauth/access_token";
 const USER_URL: &str = "https://api.github.com/user";
 const CREDENTIAL_KEY: &str = "provider/github/current/oauth";
-const DEVICE_GRANT_TYPE: &str = "urn:ietf:params:oauth:grant-type:device_code";
 const REFRESH_MARGIN: u64 = 300;
-const MINIMUM_POLL_INTERVAL: Duration = Duration::from_secs(5);
 const CANCELLATION_POLL_INTERVAL: Duration = Duration::from_millis(100);
+const LOGIN_TIMEOUT: Duration = Duration::from_secs(600);
 
-/// Owns Ash's GitHub account session and public-client device authorization.
+/// Owns Ash's GitHub account session and browser authorization through Ash's token broker.
 pub struct GitHubOAuth {
     client_id: String,
+    authorize_url: Url,
+    token_url: Url,
     http: Arc<dyn HttpClient>,
     secrets: Arc<dyn SecretStore>,
     self_weak: Weak<Self>,
@@ -60,6 +69,7 @@ pub struct GitHubOAuth {
 impl GitHubOAuth {
     pub fn new(
         client_id: String,
+        broker_base_url: Url,
         http: Arc<dyn HttpClient>,
         secrets: Arc<dyn SecretStore>,
     ) -> Result<Arc<Self>, LoginError> {
@@ -69,8 +79,30 @@ impl GitHubOAuth {
                 "GitHub client ID is invalid",
             ));
         }
+        if broker_base_url.scheme() != "https"
+            || broker_base_url.cannot_be_a_base()
+            || broker_base_url.host_str().is_none()
+            || !broker_base_url.username().is_empty()
+            || broker_base_url.password().is_some()
+            || broker_base_url.query().is_some()
+            || broker_base_url.fragment().is_some()
+            || !broker_base_url.path().ends_with('/')
+        {
+            return Err(error(
+                LoginErrorKind::InvalidInput,
+                "GitHub broker URL is invalid",
+            ));
+        }
+        let authorize_url = broker_base_url
+            .join("v1/oauth/github/authorize")
+            .map_err(|_| error(LoginErrorKind::InvalidInput, "GitHub broker URL is invalid"))?;
+        let token_url = broker_base_url
+            .join("v1/oauth/github/token")
+            .map_err(|_| error(LoginErrorKind::InvalidInput, "GitHub broker URL is invalid"))?;
         Ok(Arc::new_cyclic(|self_weak| Self {
             client_id,
+            authorize_url,
+            token_url,
             http,
             secrets,
             self_weak: self_weak.clone(),
@@ -131,6 +163,9 @@ impl GitHubOAuth {
         let Some(mut credential) = self.load_credential()? else {
             return Ok(None);
         };
+        if credential.client_id != self.client_id {
+            return Ok(None);
+        }
         if credential.needs_refresh() && credential.can_refresh() {
             match self.refresh_token(&credential) {
                 Ok(token) => {
@@ -151,116 +186,106 @@ impl GitHubOAuth {
         Ok(Some(credential))
     }
 
-    fn request_device_code(&self) -> Result<DeviceGrant, LoginError> {
-        let response = self.post_form(
-            DEVICE_CODE_URL,
-            &[("client_id", &self.client_id), ("scope", "read:user")],
-        )?;
-        let grant: DeviceGrant = serde_json::from_slice(response.body()).map_err(|_| {
-            error(
-                LoginErrorKind::Driver,
-                "GitHub returned an invalid device code",
-            )
-        })?;
-        if grant.device_code.is_empty() || grant.user_code.is_empty() || grant.expires_in == 0 {
-            return Err(error(
-                LoginErrorKind::Driver,
-                "GitHub returned an incomplete device code",
-            ));
-        }
-        if grant.verification_uri != "https://github.com/login/device" {
-            return Err(error(
-                LoginErrorKind::Driver,
-                "GitHub returned an unexpected verification URL",
-            ));
-        }
-        Ok(grant)
+    fn authorize(&self) -> Result<BrowserGrant, LoginError> {
+        let state = random_base64url()?;
+        let verifier = random_base64url()?;
+        let path = format!("/github-oauth/{}", random_base64url()?);
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .map_err(|_| error(LoginErrorKind::Unavailable, "GitHub callback cannot listen"))?;
+        listener
+            .set_nonblocking(true)
+            .map_err(|_| error(LoginErrorKind::Unavailable, "GitHub callback cannot listen"))?;
+        let port = listener
+            .local_addr()
+            .map_err(|_| {
+                error(
+                    LoginErrorKind::Unavailable,
+                    "GitHub callback address is unavailable",
+                )
+            })?
+            .port();
+        let redirect_uri = format!("http://127.0.0.1:{port}{path}");
+        let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
+        let mut authorization_url = self.authorize_url.clone();
+        authorization_url
+            .query_pairs_mut()
+            .append_pair("client_id", &self.client_id)
+            .append_pair("redirect_uri", &redirect_uri)
+            .append_pair("state", &state)
+            .append_pair("code_challenge", &challenge)
+            .append_pair("code_challenge_method", "S256");
+        Ok(BrowserGrant {
+            listener,
+            redirect_uri,
+            path,
+            state,
+            verifier,
+            authorization_url: authorization_url.into(),
+        })
     }
 
-    fn poll(
+    fn await_authorization(
         &self,
-        grant: &DeviceGrant,
+        grant: BrowserGrant,
         cancelled: &AtomicBool,
-        minimum_interval: Duration,
     ) -> Result<Credential, LoginError> {
-        let mut interval = Duration::from_secs(grant.interval).max(minimum_interval);
-        let deadline = SystemTime::now() + Duration::from_secs(grant.expires_in.min(900));
+        let deadline = Instant::now() + LOGIN_TIMEOUT;
         loop {
             if cancelled.load(Ordering::Acquire) {
                 return Err(error(
                     LoginErrorKind::Driver,
-                    "GitHub device authorization was cancelled",
+                    "GitHub authorization was cancelled",
                 ));
             }
-            wait(interval, cancelled)?;
-            if cancelled.load(Ordering::Acquire) {
+            if Instant::now() >= deadline {
                 return Err(error(
                     LoginErrorKind::Driver,
-                    "GitHub device authorization was cancelled",
+                    "GitHub authorization expired",
                 ));
             }
-            if SystemTime::now() >= deadline {
-                return Err(error(
-                    LoginErrorKind::Driver,
-                    "GitHub device authorization expired",
-                ));
-            }
-            let response = self.post_form(
-                TOKEN_URL,
-                &[
-                    ("client_id", &self.client_id),
-                    ("device_code", &grant.device_code),
-                    ("grant_type", DEVICE_GRANT_TYPE),
-                ],
-            )?;
-            let token: TokenResponse = serde_json::from_slice(response.body()).map_err(|_| {
-                error(
-                    LoginErrorKind::Driver,
-                    "GitHub returned an invalid token response",
-                )
-            })?;
-            match token.error.as_deref() {
-                Some("authorization_pending") => continue,
-                Some("slow_down") => {
-                    interval += Duration::from_secs(5);
-                    continue;
-                }
-                Some("expired_token") => {
-                    return Err(error(
-                        LoginErrorKind::Driver,
-                        "GitHub device authorization expired",
-                    ));
-                }
-                Some("access_denied") => {
-                    return Err(error(
-                        LoginErrorKind::Driver,
-                        "GitHub device authorization was denied",
-                    ));
-                }
-                Some(_) => {
-                    return Err(error(
-                        LoginErrorKind::Driver,
-                        "GitHub device authorization failed",
-                    ));
-                }
-                None => {
+            match grant.listener.accept() {
+                Ok((mut stream, _)) => {
+                    let Some(code) = read_callback(&mut stream, &grant.path, &grant.state)? else {
+                        continue;
+                    };
                     if cancelled.load(Ordering::Acquire) {
                         return Err(error(
                             LoginErrorKind::Driver,
-                            "GitHub device authorization was cancelled",
+                            "GitHub authorization was cancelled",
                         ));
                     }
+                    let response = self.post_form(
+                        self.token_url.as_str(),
+                        &[
+                            ("client_id", &self.client_id),
+                            ("grant_type", "authorization_code"),
+                            ("code", &code),
+                            ("redirect_uri", &grant.redirect_uri),
+                            ("code_verifier", &grant.verifier),
+                        ],
+                    )?;
+                    let token: TokenResponse =
+                        serde_json::from_slice(response.body()).map_err(|_| {
+                            error(
+                                LoginErrorKind::Driver,
+                                "GitHub returned an invalid token response",
+                            )
+                        })?;
                     let token = token.into_token()?;
                     let user = self.user(&token.access_token)?;
-                    return Ok(Credential::new(token, user));
+                    return Ok(Credential::new(token, user, self.client_id.clone()));
                 }
+                Err(failure) if failure.kind() == std::io::ErrorKind::WouldBlock => {
+                    thread::sleep(CANCELLATION_POLL_INTERVAL);
+                }
+                Err(_) => return Err(error(LoginErrorKind::Unavailable, "GitHub callback failed")),
             }
         }
     }
 
     fn refresh_token(&self, credential: &Credential) -> Result<Token, LoginError> {
         let response = self.post_form(
-            TOKEN_URL,
+            self.token_url.as_str(),
             &[
                 ("client_id", &self.client_id),
                 ("grant_type", "refresh_token"),
@@ -401,10 +426,10 @@ impl InteractiveLoginDriver for GitHubOAuth {
     }
 
     fn begin(&self, request: BeginLoginRequest) -> Result<BeginLogin, LoginError> {
-        if request.method != LoginMethod::GitHubDeviceCode {
+        if request.method != LoginMethod::GitHubBrowser {
             return Err(error(
                 LoginErrorKind::InvalidInput,
-                "GitHub supports device-code login",
+                "GitHub supports browser authorization",
             ));
         }
         let mut active = self.active.lock().map_err(lock_error)?;
@@ -422,23 +447,21 @@ impl InteractiveLoginDriver for GitHubOAuth {
                 account: credential.snapshot(),
             });
         }
-        let grant = self.request_device_code()?;
-        let verification_url = grant.verification_uri.clone();
-        let user_code = grant.user_code.clone();
+        let grant = self.authorize()?;
+        let authorization_url = grant.authorization_url.clone();
         let cancelled = Arc::new(AtomicBool::new(false));
         active.insert(request.login_id.clone(), Arc::clone(&cancelled));
         let weak = self.self_weak.clone();
         let login_id = request.login_id.clone();
         thread::spawn(move || {
             if let Some(runtime) = weak.upgrade() {
-                let result = runtime.poll(&grant, &cancelled, MINIMUM_POLL_INTERVAL);
+                let result = runtime.await_authorization(grant, &cancelled);
                 runtime.finish_login(login_id, result);
             }
         });
-        Ok(BeginLogin::DeviceCode {
+        Ok(BeginLogin::Browser {
             login_id: request.login_id,
-            verification_url,
-            user_code,
+            authorization_url,
         })
     }
 
@@ -475,18 +498,18 @@ impl InteractiveLoginDriver for GitHubOAuth {
     }
 }
 
-#[derive(Deserialize)]
-struct DeviceGrant {
-    device_code: String,
-    user_code: String,
-    verification_uri: String,
-    expires_in: u64,
-    interval: u64,
+struct BrowserGrant {
+    listener: TcpListener,
+    redirect_uri: String,
+    path: String,
+    state: String,
+    verifier: String,
+    authorization_url: String,
 }
 
-impl Drop for DeviceGrant {
+impl Drop for BrowserGrant {
     fn drop(&mut self) {
-        self.device_code.zeroize();
+        self.verifier.zeroize();
     }
 }
 
@@ -556,6 +579,8 @@ struct Token {
 
 #[derive(Deserialize, Serialize)]
 struct Credential {
+    #[serde(default)]
+    client_id: String,
     access_token: String,
     refresh_token: String,
     expires_at: Option<u64>,
@@ -566,8 +591,9 @@ struct Credential {
 }
 
 impl Credential {
-    fn new(token: Token, user: GitHubUser) -> Self {
+    fn new(token: Token, user: GitHubUser, client_id: String) -> Self {
         Self {
+            client_id,
             access_token: token.access_token,
             refresh_token: token.refresh_token,
             expires_at: token.expires_at,
@@ -637,20 +663,108 @@ struct GitHubUser {
     login: String,
 }
 
-fn wait(duration: Duration, cancelled: &AtomicBool) -> Result<(), LoginError> {
-    let mut remaining = duration;
-    while !remaining.is_zero() {
-        if cancelled.load(Ordering::Acquire) {
-            return Err(error(
-                LoginErrorKind::Driver,
-                "GitHub device authorization was cancelled",
-            ));
+fn random_base64url() -> Result<String, LoginError> {
+    let mut bytes = [0_u8; 32];
+    getrandom::getrandom(&mut bytes).map_err(|_| {
+        error(
+            LoginErrorKind::Unavailable,
+            "GitHub authorization randomness is unavailable",
+        )
+    })?;
+    Ok(URL_SAFE_NO_PAD.encode(bytes))
+}
+
+fn read_callback(
+    stream: &mut TcpStream,
+    path: &str,
+    state: &str,
+) -> Result<Option<String>, LoginError> {
+    stream
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .map_err(|_| error(LoginErrorKind::Unavailable, "GitHub callback failed"))?;
+    let mut buffer = [0_u8; 8192];
+    let mut length = 0;
+    while length < buffer.len() {
+        let received = stream
+            .read(&mut buffer[length..])
+            .map_err(|_| error(LoginErrorKind::Driver, "GitHub callback failed"))?;
+        if received == 0 {
+            break;
         }
-        let slice = remaining.min(CANCELLATION_POLL_INTERVAL);
-        thread::sleep(slice);
-        remaining -= slice;
+        length += received;
+        if buffer[..length]
+            .windows(4)
+            .any(|window| window == b"\r\n\r\n")
+        {
+            break;
+        }
     }
-    Ok(())
+    let request = std::str::from_utf8(&buffer[..length])
+        .map_err(|_| error(LoginErrorKind::Driver, "GitHub callback failed"))?;
+    let Some(target) = request
+        .lines()
+        .next()
+        .and_then(|line| line.strip_prefix("GET "))
+        .and_then(|line| line.split_once(' ').map(|(target, _)| target))
+    else {
+        let _ = stream.write_all(
+            b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        return Ok(None);
+    };
+    if !target.starts_with('/') || target.starts_with("//") {
+        return Ok(None);
+    }
+    let Ok(url) = Url::parse(&format!("http://127.0.0.1{target}")) else {
+        return Ok(None);
+    };
+    if url.path() != path {
+        return Ok(None);
+    }
+    let values = url.query_pairs().collect::<Vec<_>>();
+    let matching_state = values
+        .iter()
+        .filter(|(key, _)| key == "state")
+        .collect::<Vec<_>>();
+    let codes = values
+        .iter()
+        .filter(|(key, _)| key == "code")
+        .collect::<Vec<_>>();
+    let denied = values.iter().any(|(key, _)| key == "error");
+    if matching_state.len() != 1 || matching_state[0].1 != state || codes.len() > 1 {
+        let _ = stream.write_all(
+            b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        return Ok(None);
+    }
+    if denied {
+        let body = b"Authorization declined. You may close this window.";
+        let headers = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: {}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n",
+            body.len()
+        );
+        let _ = stream.write_all(headers.as_bytes());
+        let _ = stream.write_all(body);
+        return Err(error(
+            LoginErrorKind::Driver,
+            "GitHub authorization was declined",
+        ));
+    }
+    let Some(code) = codes
+        .first()
+        .map(|(_, value)| value.to_string())
+        .filter(|value| !value.is_empty())
+    else {
+        return Ok(None);
+    };
+    let body = b"Authorization received. You may return to Ash.";
+    let headers = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: {}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n",
+        body.len()
+    );
+    let _ = stream.write_all(headers.as_bytes());
+    let _ = stream.write_all(body);
+    Ok(Some(code))
 }
 
 fn now() -> u64 {

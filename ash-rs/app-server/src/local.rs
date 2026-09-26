@@ -1009,9 +1009,9 @@ pub fn open_local_app_server_with_codebase_providers(
     providers: LocalCodebaseProviders,
 ) -> Result<AppServer, OpenAppServerError> {
     let product_services = options.product_services.take();
-    let github_account_client_id = product_services
+    let github_account = product_services
         .as_ref()
-        .and_then(|services| services.github_account_client_id.clone());
+        .and_then(|services| services.github_account.clone());
     let pty_helper = options.pty_helper.take();
     if options.plugin_package_service.is_none()
         && let Some(sources) = product_services
@@ -1385,10 +1385,11 @@ pub fn open_local_app_server_with_codebase_providers(
     });
     let built_in_skill_root = resolve_built_in_skill_root(options.built_in_skills);
     let extension_roots = resolve_extension_roots(&options.profile_root);
-    let github_oauth = github_account_client_id
-        .map(|client_id| {
+    let github_oauth = github_account
+        .map(|config| {
             GitHubOAuth::new(
-                client_id,
+                config.client_id,
+                config.broker_base_url,
                 Arc::clone(&application_http),
                 Arc::clone(&profile_secrets),
             )

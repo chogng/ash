@@ -1,7 +1,6 @@
 import { expect, test } from '../../../automation/test.js';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { BrowserWindow, MessageBoxOptions } from 'electron';
 import { parseWorkspace } from '../../../../src/ash/platform/workspace/common/workspace.js';
 
 test.use({ openWorkspace: false });
@@ -68,28 +67,29 @@ test('opening a folder names the target and explains the permission choice in th
 		});
 	});
 	await application.evaluate(({ dialog }, folder) => {
-		const showMessageBox = dialog.showMessageBox.bind(dialog);
 		dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [folder] })) as typeof dialog.showOpenDialog;
-		dialog.showMessageBox = (async (...args: [MessageBoxOptions] | [BrowserWindow, MessageBoxOptions]) => {
-			const options = args.length === 1 ? args[0] : args[1];
-			if (options.detail?.includes(folder)) {
-				(globalThis as typeof globalThis & { ashPermissionPrompt?: MessageBoxOptions }).ashPermissionPrompt = options;
-				return { response: 1, checkboxChecked: false };
-			}
-			return args.length === 1 ? showMessageBox(args[0]) : showMessageBox(args[0], args[1]);
-		}) as typeof dialog.showMessageBox;
 	}, testWorkspace.directory);
 
-	await workbench.page.getByRole('button', { name: /^(Open Folder|打开文件夹)$/ }).click();
-	await expect.poll(() => application.evaluate(() => (globalThis as typeof globalThis & { ashPermissionPrompt?: MessageBoxOptions }).ashPermissionPrompt)).toMatchObject({
-		message: '是否信任此文件夹中的文件？',
-		buttons: ['信任文件夹并启用开发功能', '以只读模式打开', '取消'],
-		defaultId: 1,
-		cancelId: 2,
+	const page = workbench.page;
+	await expect(page.locator('[data-statusbar-item-id="ash.status.editor.state"]')).toHaveCount(0);
+	await page.getByRole('button', { name: /^(Open Folder|打开文件夹)$/ }).click();
+	const prompt = page.getByRole('dialog', { name: 'Ash' });
+	await expect(prompt).toBeVisible();
+	await expect(prompt.locator('.ash-dialog-message')).toHaveText('是否信任此文件夹中的文件？');
+	await expect(prompt.locator('.ash-dialog-detail')).toContainText(`文件夹：${testWorkspace.directory}`);
+	await expect(prompt.locator('.ash-dialog-detail')).toContainText('Ash 可以修改文件、运行命令');
+	const readOnly = prompt.getByRole('button', { name: '以只读模式打开' });
+	await expect(readOnly).toBeFocused();
+	await expect(page.getByText('No Folder Opened')).toHaveCount(1);
+	await prompt.getByRole('button', { name: '取消' }).click();
+	await expect(prompt).toHaveCount(0);
+	const workspaceAfterCancel = await page.evaluate(() => {
+		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
+		return ipc.invoke('ash:workspace:context:read');
 	});
-	const prompt = await application.evaluate(() => (globalThis as typeof globalThis & { ashPermissionPrompt?: MessageBoxOptions }).ashPermissionPrompt);
-	expect(prompt?.detail).toContain(`文件夹：${testWorkspace.directory}`);
-	expect(prompt?.detail).toContain('Ash 可以修改文件、运行命令');
+	expect(parseWorkspace(workspaceAfterCancel).folders).toHaveLength(0);
+	await page.getByRole('button', { name: /^(Open Folder|打开文件夹)$/ }).click();
+	await page.getByRole('dialog', { name: 'Ash' }).getByRole('button', { name: '以只读模式打开' }).click();
 	await expect.poll(async () => {
 		const value = await workbench.page.evaluate(() => {
 			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
@@ -97,4 +97,5 @@ test('opening a folder names the target and explains the permission choice in th
 		});
 		return parseWorkspace(value).folders[0]?.uri.fsPath;
 	}).toBe(testWorkspace.directory);
+	await expect(page.locator('[data-statusbar-item-id="ash.status.workspacePermissions"]')).toContainText('只读文件夹');
 });

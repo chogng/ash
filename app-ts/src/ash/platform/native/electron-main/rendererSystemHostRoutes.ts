@@ -3,10 +3,11 @@ import type { BrowserWindow } from 'electron/main';
 import { ElectronClipboardService } from '../../clipboard/electron-main/electronClipboardService.js';
 import { ElectronOpenerService } from '../../opener/electron-main/electronOpenerService.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
+import type { DialogRequest } from '../../dialogs/common/dialogs.js';
 
 export function rendererSystemHostRoutes(
 	window: BrowserWindow,
-	selectDirectoryPermissions: (path: string) => Promise<number>,
+	directoryPermissionPrompt: (path: string) => DialogRequest,
 ): readonly IpcRoute<unknown, unknown>[] {
 	const clipboard = new ElectronClipboardService();
 	const opener = new ElectronOpenerService();
@@ -16,6 +17,6 @@ export function rendererSystemHostRoutes(
 		{ channel: 'ash:host:openExternal', validate: text, invoke: value => opener.openExternal(value as string) },
 		{ channel: 'ash:host:readClipboard', validate: value => { if (value !== undefined) { throw new Error('Unexpected clipboard arguments'); } }, invoke: () => clipboard.readText() },
 		{ channel: 'ash:host:writeClipboard', validate: text, invoke: value => clipboard.writeText(value as string) },
-		{ channel: 'ash:host:selectDirectoryPermissions', validate: text, invoke: value => selectDirectoryPermissions(value as string) },
+		{ channel: 'ash:host:directoryPermissionPrompt', validate: text, invoke: value => directoryPermissionPrompt(value as string) },
 	];
 }

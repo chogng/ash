@@ -1,5 +1,4 @@
 import type { ElectronApplication, Page } from "@playwright/test";
-import type { BrowserWindow, MessageBoxOptions } from 'electron';
 import { realpath } from "node:fs/promises";
 import { parseWorkspace } from "../../../../src/ash/platform/workspace/common/workspace.js";
 import { expect, test } from "../../../automation/test.js";
@@ -22,6 +21,9 @@ test("a second instance opens an independent Workbench and reuses an existing Wo
 		const secondPagePromise = application.waitForEvent("window");
 		await emitSecondInstance(application, secondWorkspace.directory);
 		secondPage = await secondPagePromise;
+		if (target.appServerMode === 'required') {
+			await secondPage.getByRole('dialog', { name: 'Ash' }).getByRole('button', { name: 'Trust Folder & Enable Features' }).click();
+		}
 		const secondWorkbench = new Workbench(secondPage);
 		await secondWorkbench.waitForReady();
 
@@ -56,6 +58,7 @@ test('dirty editor content survives an immediate Electron window close', async (
 		const opened = application.waitForEvent('window');
 		await emitSecondInstance(application, workspace.directory);
 		secondPage = await opened;
+		await secondPage.getByRole('dialog', { name: 'Ash' }).getByRole('button', { name: 'Trust Folder & Enable Features' }).click();
 		const secondWorkbench = new Workbench(secondPage);
 		await secondWorkbench.waitForReady();
 		await secondPage.bringToFront();
@@ -90,19 +93,6 @@ test('dirty editor content survives an immediate Electron window close', async (
 });
 
 async function emitSecondInstance(application: ElectronApplication, workspaceDirectory: string): Promise<void> {
-	const paths = [workspaceDirectory, await realpath(workspaceDirectory)];
-	await application.evaluate(({ dialog }, allowedPaths) => {
-		const showMessageBox = dialog.showMessageBox.bind(dialog);
-		dialog.showMessageBox = (async (...args: [MessageBoxOptions] | [BrowserWindow, MessageBoxOptions]) => {
-			const options = args.length === 1 ? args[0] : args[1];
-			if (options.message === 'Do you trust the files in this folder?'
-				&& allowedPaths.some(path => options.detail?.startsWith(`Folder: ${path}\n`))
-				&& options.buttons?.[0] === 'Trust Folder & Enable Features') {
-				return { response: 0, checkboxChecked: false };
-			}
-			return args.length === 1 ? showMessageBox(args[0]) : showMessageBox(args[0], args[1]);
-		}) as typeof dialog.showMessageBox;
-	}, paths);
 	await application.evaluate(({ app }, directory) => {
 		app.emit("second-instance", {} as never, [process.execPath, app.getAppPath(), "--folder", directory], process.cwd(), {});
 	}, workspaceDirectory);
