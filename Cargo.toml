@@ -616,6 +616,20 @@ opt-level = "s"
 inherits = "dev"
 debug = "none"
 strip = "symbols"
+# Fewer codegen units shorten a clean Code build without changing its unwind behavior.
+codegen-units = 16
+
+[profile.dev-small.package.ash-tui]
+# TUI source edits recompile this crate on each local launch.
+codegen-units = 256
+
+[profile.dev-small.package.ash-cli]
+# Keep the dependent CLI rebuild short after a TUI edit.
+codegen-units = 256
+
+[profile.dev-small.package.ash-app-server]
+# App Server source edits need the wider incremental partitioning as well.
+codegen-units = 256
 
 [profile.ci-test]
 # Reduce binary size and disk pressure in CI test builds.
