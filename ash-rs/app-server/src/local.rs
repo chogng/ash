@@ -2264,10 +2264,7 @@ impl ModelCatalog for ConfigBackedModelService {
         }
         let mut models = manager
             .list_discovered(&scopes, &CatalogQuery::selectable())
-            .map_err(|error| CoreError::Model(error.to_string()))?
-            .into_iter()
-            .map(|entry| runtime_catalog_entry(&entry, &config, &registry))
-            .collect::<Result<Vec<_>, CoreError>>()?;
+            .map_err(|error| CoreError::Model(error.to_string()))?;
         models.sort_by(|left, right| {
             let catalog_position = |model: &ash_protocol::ModelRef| {
                 ash_model_provider_config::STATIC_MODEL_CATALOG
@@ -2278,13 +2275,21 @@ impl ModelCatalog for ConfigBackedModelService {
                     })
                     .unwrap_or(usize::MAX)
             };
-            left.model
+            left.model()
                 .provider
-                .cmp(&right.model.provider)
-                .then_with(|| catalog_position(&left.model).cmp(&catalog_position(&right.model)))
-                .then_with(|| left.model.model.cmp(&right.model.model))
+                .cmp(&right.model().provider)
+                .then_with(|| {
+                    left.catalog_order()
+                        .unwrap_or(usize::MAX)
+                        .cmp(&right.catalog_order().unwrap_or(usize::MAX))
+                })
+                .then_with(|| catalog_position(left.model()).cmp(&catalog_position(right.model())))
+                .then_with(|| left.model().model.cmp(&right.model().model))
         });
-        Ok(models)
+        models
+            .iter()
+            .map(|entry| runtime_catalog_entry(entry, &config, &registry))
+            .collect()
     }
 
     fn current_access(&self, model: &ash_protocol::ModelRef) -> Result<ModelAccess, CoreError> {

@@ -20,6 +20,7 @@ use std::collections::BTreeMap;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct CatalogRecord {
     info: ModelInfo,
+    catalog_order: Option<usize>,
     availability: ModelAvailability,
     lifecycle: ModelLifecycle,
     provenance: ModelMetadataProvenance,
@@ -57,6 +58,7 @@ impl CatalogRecord {
         };
         Self {
             info,
+            catalog_order: None,
             availability: ModelAvailability::Unverified,
             lifecycle: ModelLifecycle::Unknown,
             provenance,
@@ -67,6 +69,7 @@ impl CatalogRecord {
     fn discovered(id: ModelId) -> Self {
         Self {
             info: ModelInfo::new(id.clone(), id.as_str()),
+            catalog_order: None,
             availability: ModelAvailability::Available,
             lifecycle: ModelLifecycle::Unknown,
             provenance: ModelMetadataProvenance::default(),
@@ -85,6 +88,7 @@ impl CatalogRecord {
         ModelCatalogEntry::new(
             ModelRef::new(provider.clone(), self.info.id.clone()),
             self.info.clone(),
+            self.catalog_order,
             self.availability,
             self.lifecycle,
             quality,
@@ -112,11 +116,12 @@ pub(crate) fn apply_discovery(
             record.availability = ModelAvailability::Unavailable;
         }
     }
-    for discovered in &catalog.models {
+    for (order, discovered) in catalog.models.iter().enumerate() {
         let record = records
             .entry(discovered.id.clone())
             .or_insert_with(|| CatalogRecord::discovered(discovered.id.clone()));
         record.observed_live = true;
+        record.catalog_order = Some(order);
         record.availability = ModelAvailability::Available;
         apply_live_patch(record, &discovered.metadata);
     }

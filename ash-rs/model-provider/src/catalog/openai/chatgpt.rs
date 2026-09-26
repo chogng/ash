@@ -246,8 +246,11 @@ fn catalog_cache_hint() -> CatalogCacheHint {
 }
 
 fn normalize_models(
-    entries: Vec<CatalogEntry>,
+    mut entries: Vec<CatalogEntry>,
 ) -> Result<Vec<DiscoveredModel>, CatalogSourceError> {
+    // The subscription catalog's priority is the same ordering Codex uses in its picker.
+    // Codex model/list already arrives in that order and has no priority field.
+    entries.sort_by_key(|entry| entry.priority.unwrap_or(i32::MAX));
     let models: Vec<_> = entries
         .into_iter()
         .filter(|entry| entry.visibility.as_deref() == Some("list"))
@@ -298,6 +301,8 @@ struct Catalog {
 #[derive(serde::Deserialize)]
 struct CatalogEntry {
     slug: String,
+    #[serde(default)]
+    priority: Option<i32>,
     display_name: Option<String>,
     visibility: Option<String>,
     context_window: Option<u32>,

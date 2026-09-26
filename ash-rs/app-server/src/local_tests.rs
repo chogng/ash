@@ -466,9 +466,14 @@ fn chatgpt_model_catalog_is_shared_by_login_picker_and_disk_cache() {
                 Vec::new(),
                 serde_json::to_vec(&serde_json::json!({"models":[{
                     "slug":"gpt-5.6", "display_name":"Subscription Test",
-                    "visibility":"list", "context_window":100000,
+                    "visibility":"list", "priority":4, "context_window":100000,
                     "default_reasoning_level":"medium",
                     "supported_reasoning_levels":[{"effort":"low"},{"effort":"medium"}]
+                }, {
+                    "slug":"gpt-6-astra", "display_name":"Newer Subscription Test",
+                    "visibility":"list", "priority":1,
+                    "default_reasoning_level":"high",
+                    "supported_reasoning_levels":[{"effort":"medium"},{"effort":"high"}]
                 }]}))
                 .unwrap(),
             ))
@@ -553,6 +558,11 @@ fn chatgpt_model_catalog_is_shared_by_login_picker_and_disk_cache() {
             &mut connection,
             serde_json::json!({"jsonrpc":"2.0","id":4,"method":"model/list","params":{"view":"discovered"}}),
         );
+        assert_eq!(
+            models["result"]["models"][0]["model"]["model"],
+            "gpt-6-astra"
+        );
+        assert_eq!(models["result"]["models"][1]["model"]["model"], "gpt-5.6");
         assert!(
             !models["result"]["models"]
                 .as_array()
@@ -2972,7 +2982,7 @@ fn xai_subscription_catalog_drives_model_selection_context_and_invocation() {
                 request.url(),
                 "https://cli-chat-proxy.grok.com/v1/models-v2"
             );
-            Ok(ClientResponse::new(200, vec![], br#"{"data":[{"model":"grok-test","apiBackend":"responses","contextWindow":500000,"reasoningEfforts":["high"],"reasoningEffort":"high"}]}"#.to_vec()))
+            Ok(ClientResponse::new(200, vec![], br#"{"data":[{"model":"grok-test","apiBackend":"responses","contextWindow":500000,"reasoningEfforts":["high"],"reasoningEffort":"high"},{"model":"grok-older","apiBackend":"responses"}]}"#.to_vec()))
         }
         fn execute_streaming(
             &self,
@@ -3013,6 +3023,13 @@ fn xai_subscription_catalog_drives_model_selection_context_and_invocation() {
         }),
     };
     let entries = service.list(ModelListView::Discovered).unwrap();
+    assert_eq!(
+        entries
+            .iter()
+            .map(|entry| entry.model.model.as_str())
+            .collect::<Vec<_>>(),
+        ["grok-test", "grok-older"]
+    );
     let model = ModelRef::new(
         ProviderId::new("xai").unwrap(),
         ModelId::new("grok-test").unwrap(),

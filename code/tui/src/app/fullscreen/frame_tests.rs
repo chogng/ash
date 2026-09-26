@@ -2565,7 +2565,7 @@ fn model_picker_shows_signed_in_chatgpt_and_xai_tabs_in_chinese() {
     let mut models = Vec::new();
     let mut providers = Vec::new();
     for (provider, id, name) in [
-        ("openai", "gpt-ash", "GPT Ash"),
+        ("openai", "gpt-5.6-sol", "GPT-5.6-Sol"),
         ("xai", "grok-ash", "Grok Ash"),
     ] {
         config.providers.insert(
@@ -2601,6 +2601,16 @@ fn model_picker_shows_signed_in_chatgpt_and_xai_tabs_in_chinese() {
             api_key_configured: false,
         });
     }
+    let newest = ash_protocol::ModelRef::new(
+        ash_protocol::ProviderId::new("openai").unwrap(),
+        ash_protocol::ModelId::new("gpt-6-astra").unwrap(),
+    );
+    let mut info = ash_protocol::ModelInfo::new(newest.model.clone(), "GPT-6-Astra");
+    info.access = ash_protocol::ModelAccess::Subscription;
+    models.insert(
+        0,
+        ModelCatalogEntry::from_info(newest, &info, ash_protocol::ModelOutputTransport::Unary),
+    );
     app.update(ModelEvent::PickerOpened(
         crate::models::model_choices(
             &ModelListResult { models },
@@ -2616,7 +2626,11 @@ fn model_picker_shows_signed_in_chatgpt_and_xai_tabs_in_chinese() {
     );
     assert_eq!(
         app.list_selection().unwrap().visible_items()[0].label(),
-        "GPT Ash"
+        "GPT-6-Astra"
+    );
+    assert_eq!(
+        app.list_selection().unwrap().visible_items()[1].label(),
+        "GPT-5.6-Sol"
     );
     crate::tui_assert_snapshot!("model_subscription_provider_tabs", render(&app, 100, 18));
 }

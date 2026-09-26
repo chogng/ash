@@ -108,6 +108,7 @@ impl CatalogWarning {
 pub struct ModelCatalogEntry {
     model: ModelRef,
     info: ModelInfo,
+    catalog_order: Option<usize>,
     availability: ModelAvailability,
     lifecycle: ModelLifecycle,
     metadata_quality: ModelMetadataQuality,
@@ -119,6 +120,7 @@ impl ModelCatalogEntry {
     pub(crate) fn new(
         model: ModelRef,
         info: ModelInfo,
+        catalog_order: Option<usize>,
         availability: ModelAvailability,
         lifecycle: ModelLifecycle,
         metadata_quality: ModelMetadataQuality,
@@ -128,6 +130,7 @@ impl ModelCatalogEntry {
         Self {
             model,
             info,
+            catalog_order,
             availability,
             lifecycle,
             metadata_quality,
@@ -142,6 +145,11 @@ impl ModelCatalogEntry {
 
     pub fn info(&self) -> &ModelInfo {
         &self.info
+    }
+
+    /// Position supplied by the account-scoped model catalog, when discovered.
+    pub fn catalog_order(&self) -> Option<usize> {
+        self.catalog_order
     }
 
     pub fn availability(&self) -> ModelAvailability {

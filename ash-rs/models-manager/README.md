@@ -22,7 +22,7 @@
 | `CatalogReadPolicy` | `CachePreferred` / `RequireFresh` / `CacheOnly` | 禁止用 `fresh: bool` 模糊表达阻塞语义 |
 | `CatalogQuery` | list filter | availability 与 unknown capability policy 显式命名 |
 | `ModelRequirements` | invocation-safe resolution | unknown、unsupported、unavailable 和 retired 分开处理 |
-| `DiscoveredCatalog` | source 的一次完整提交 | `CompleteAgentCatalog` 缺席可下架；`Partial` 缺席不改变 availability |
+| `DiscoveredCatalog` | source 的一次完整提交 | `models` 保留来源展示顺序；`CompleteAgentCatalog` 缺席可下架，`Partial` 缺席不改变 availability |
 | `ModelMetadataPatch` | provider 明确返回的字段 | `Unknown` 不覆盖已有 known metadata |
 | `ResolvedModel` | exact model + catalog generation + warnings | `AllowUnlisted` 产生 unverified synthetic metadata |
 | `ModelCatalogEntry::model_info` | 取得配置生效后的 `ModelInfo` | 校验 provider 身份、裁剪上下文和压缩阈值；不修改原始条目 |
@@ -32,6 +32,10 @@
 `CatalogSourceScopeId` 不是 endpoint 或 credential reference。Host 必须先对 normalized endpoint、tenant、
 credential revision 和 provider config revision 生成不可逆、无秘密的稳定指纹；任一输入变化都使用新
 scope。晚到的旧请求只可能提交到旧 scope。
+
+订阅目录的展示排序由来源负责：有明确优先级时稳定排序，没有时保留返回顺序。Manager 合并与
+持久缓存保留该顺序，App Server 的发现列表按顺序显示；它不参与自动选模。各订阅来源的现行
+规则见[列表展示顺序](../../docs/models-manager.md#104-列表展示顺序)。
 
 ## 模块与内部所有权
 

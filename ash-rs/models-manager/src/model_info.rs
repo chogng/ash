@@ -97,6 +97,7 @@ pub(crate) fn unlisted_entry(provider: &ProviderId, model: &ModelId) -> ModelCat
     ModelCatalogEntry::new(
         ModelRef::new(provider.clone(), model.clone()),
         ModelInfo::new(model.clone(), model.as_str()),
+        None,
         ModelAvailability::Unverified,
         ModelLifecycle::Unknown,
         ModelMetadataQuality::Unknown,

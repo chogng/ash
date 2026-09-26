@@ -102,6 +102,7 @@ impl CatalogCacheHint {
 pub struct DiscoveredCatalog {
     pub scope: CatalogScopeKey,
     pub coverage: DiscoveryCoverage,
+    /// Source presentation order, preserved for model list callers.
     pub models: Vec<DiscoveredModel>,
     pub validator: Option<CatalogValidator>,
     pub cache_hint: CatalogCacheHint,

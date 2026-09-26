@@ -101,6 +101,7 @@ impl CodexModel {
     fn into_catalog_entry(self) -> CatalogEntry {
         CatalogEntry {
             slug: self.id,
+            priority: None,
             display_name: Some(self.display_name),
             visibility: (!self.hidden).then_some("list".into()),
             context_window: None,

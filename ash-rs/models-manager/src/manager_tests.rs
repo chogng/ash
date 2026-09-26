@@ -288,6 +288,30 @@ async fn discovered_list_uses_latest_observation_without_static_seeds() {
 }
 
 #[tokio::test]
+async fn discovered_entries_keep_catalog_order() {
+    let manager = ModelsManager::new(registry());
+    let scope = dynamic_scope("strict", "account-a");
+    let source = Arc::new(QueueSource::new([Ok(modified(
+        &scope,
+        DiscoveryCoverage::Partial,
+        [
+            DiscoveredModel::new(model_id("later-alphabetically")),
+            DiscoveredModel::new(model_id("earlier-alphabetically")),
+        ],
+    ))]));
+
+    manager.refresh(scope.clone(), source).await.unwrap();
+    let entries = manager
+        .list_discovered(&[scope], &CatalogQuery::selectable())
+        .unwrap();
+    assert_eq!(entries.len(), 2);
+    assert_eq!(entries[0].model().model, model_id("earlier-alphabetically"));
+    assert_eq!(entries[0].catalog_order(), Some(1));
+    assert_eq!(entries[1].model().model, model_id("later-alphabetically"));
+    assert_eq!(entries[1].catalog_order(), Some(0));
+}
+
+#[tokio::test]
 async fn unknown_live_fields_do_not_erase_known_seed_metadata() {
     let manager = ModelsManager::new(registry());
     let scope = dynamic_scope("strict", "account-a");
