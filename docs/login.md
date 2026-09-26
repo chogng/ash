@@ -3,7 +3,7 @@
 > 物理位置：`ash-rs/login/`
 > Rust crate：`ash_login`
 > 当前状态：多 Provider 控制面、App Server RPC、ChatGPT/Kimi/xAI 订阅认证与本地模型执行已实现；zAI Coding Plan 通过密钥与专用端点接入
-> ChatGPT 订阅适配器：[`chatgpt-subscription.md`](chatgpt-subscription.md)
+> 订阅接入与额度：[`subscriptions.md`](subscriptions.md)
 > Kimi OAuth owner：`ash-rs/kimi/`
 > xAI OAuth owner：`ash-rs/xai/`
 > Provider runtime：[`model-provider.md`](model-provider.md)

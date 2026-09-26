@@ -36,7 +36,7 @@ just ash
 | 持续内存诊断 | [memory.rs](src/memory.rs)；Config 提供开关，Status 只读展示 |
 | 界面语言与类型化文案 | [nls.rs](src/nls.rs)；持久化由 [config/settings.rs](src/config/settings.rs) 负责 |
 | 状态信息和本机资源 | [status](src/status)、[process_resources.rs](../../ash-rs/memory-diagnostics/src/process_resources.rs) |
-| ChatGPT / xAI 订阅额度、余额与重置时间（`/usage`） | [usage.rs](src/usage.rs)，每次打开通过 App Server 查询；多订阅用 Tab 切换，Esc 关闭，再次运行刷新 |
+| ChatGPT / xAI 订阅额度、余额与重置时间（`/usage`） | [usage.rs](src/usage.rs)，每次打开通过 App Server 查询；多订阅用 Tab 切换，Esc 关闭，再次运行刷新。各订阅入口的额度支持见[订阅接入与额度](../../docs/subscriptions.md#账户额度与刷新) |
 | 终端恢复、鼠标捕获协议和历史输出 | [session.rs](src/terminal/session.rs)、[scrollback.rs](src/terminal/scrollback.rs)、[terminal.rs](src/terminal.rs) |
 | 屏幕模式与页面组合 | [frame.rs](src/app/frame.rs)、[fullscreen.rs](src/app/fullscreen.rs)、[inline.rs](src/app/inline.rs) |
 | 全屏布局、鼠标和选区 | [layout.rs](src/app/fullscreen/layout.rs)、[pointer.rs](src/app/fullscreen/pointer.rs)、[selection.rs](src/app/fullscreen/selection.rs) |

@@ -5,4 +5,4 @@
 - 向模型请求和登录控制面提供当前认证状态；断开仅影响 Ash，真实模型测试固定 Luna / low。
 - 通过 `backend-client::chatgpt` 查询指定账号额度；复用认证维护，账号改变时拒绝返回旧结果，HTTP 401 最多恢复一次。
 
-[存储约定与验证](../../docs/chatgpt-subscription.md)。
+[存储约定与验证](../../docs/subscriptions.md#chatgptcodex-兼容登录)。

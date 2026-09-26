@@ -463,7 +463,7 @@ authoring 规则以最严格交集为准：
 
 ## 15. 实现状态
 
-M0–M6 是本文行为规格的覆盖总账，不再充当阶段性构建计划。ChatGPT 订阅剩余兼容工作由 [`chatgpt-subscription.md`](chatgpt-subscription.md#当前状态与待完成项) 维护；内置与自定义 Agent 的统一定义由 [`agents.md`](agents.md) 维护；运行时观测与发布门由 [§14.5](#145-运行时观测与发布门) 维护。
+M0–M6 是本文行为规格的覆盖总账，不再充当阶段性构建计划。ChatGPT 订阅剩余兼容工作由 [`subscriptions.md`](subscriptions.md#chatgpt-当前状态与待完成项) 维护；内置与自定义 Agent 的统一定义由 [`agents.md`](agents.md) 维护；运行时观测与发布门由 [§14.5](#145-运行时观测与发布门) 维护。
 
 | 里程碑 | 内容 | 关键改动点 | 前置接线 |
 | --- | --- | --- | --- |

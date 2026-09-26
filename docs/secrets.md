@@ -115,7 +115,7 @@ provider/kimi/current/oauth
 ```
 
 这里的 account segment 必须是 opaque ID，不能直接放 email、token 或 workspace name。
-ChatGPT 凭据按 [Codex 兼容约定](chatgpt-subscription.md) 保存于 Codex 用户存储，Ash 按 Codex 是否可发现选择只读复用或维护，不在 profile SecretStore 中保存 token 副本；SecretStore 仅保存 `provider/chatgpt-subscription/disconnected`，旧断开标记在读取时一次性迁移。Kimi 的凭据和刷新仍由本机适配器及 profile SecretStore 负责。
+ChatGPT 凭据按 [Codex 兼容约定](subscriptions.md#chatgptcodex-兼容登录) 保存于 Codex 用户存储，Ash 按 Codex 是否可发现选择只读复用或维护，不在 profile SecretStore 中保存 token 副本；SecretStore 仅保存 `provider/chatgpt-subscription/disconnected`，旧断开标记在读取时一次性迁移。Kimi 的凭据和刷新仍由本机适配器及 profile SecretStore 负责。
 MCP/Connector 使用自己的 namespace，不能把 Provider key schema 当成通用 credential schema。
 
 ## 5. Backend 策略
@@ -202,7 +202,7 @@ ash-rs/keyring-store/
 - “敏感”只改变传输、展示和记录规则，不自动授予工具、网络、账户或外部修改权限；
 - 只有明确的“保存凭据”流程才能把值交给对应领域的凭据 owner，再由该 owner 写入 `SecretStore`。
 
-ChatGPT 订阅的 `isSecret` 请求是首个明确消费者，完成门见 [`chatgpt-subscription.md`](chatgpt-subscription.md#当前状态与待完成项)。
+ChatGPT 订阅的 `isSecret` 请求是首个明确消费者，完成门见 [`subscriptions.md`](subscriptions.md#chatgpt-当前状态与待完成项)。
 
 ## 9. 依赖方向
 

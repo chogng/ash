@@ -38,12 +38,13 @@
 [`ash-app-server-api.md`](ash-app-server-api.md)、[`app-server-client.md`](app-server-client.md)、
 [`ash-api.md`](ash-api.md)、[`ash-api-interface-requirements.md`](ash-api-interface-requirements.md)、
 [`ash-api-interface-template.md`](ash-api-interface-template.md)（模板）、
-[`ash-client.md`](ash-client.md)、[`chatgpt-subscription.md`](chatgpt-subscription.md)（参考）
+[`ash-client.md`](ash-client.md)（参考）
 
 ## 模型与配置
 
 [`model-provider.md`](model-provider.md)、[`model-provider-config.md`](model-provider-config.md)、
 [`models-manager.md`](models-manager.md)、[`config.md`](config.md)、[`login.md`](login.md)、
+[`subscriptions.md`](subscriptions.md)（订阅接入与额度）、
 [`secrets.md`](secrets.md)
 
 ## 安全与权限

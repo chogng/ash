@@ -86,7 +86,7 @@ flowchart TD
 | 权限系统 | 某个具体动作能否执行？ | 授权规则、批准范围、批准有效期与最终授权决定 | 权限、Auto Review、工具调度和沙箱是否都在做最终决定 | [`permissions.md`](permissions.md)、[`auto-review.md`](auto-review.md) |
 | 沙箱系统 | 已获准动作实际能触及什么？ | 文件、网络、进程能力和平台强制执行 | 策略选择、用户批准与操作系统强制执行是否分开 | [`sandboxing.md`](sandboxing.md) |
 | 配置系统 | 当前作用域下哪个值最终生效？ | 配置来源、优先级、作用域、合并和不可变领域快照 | 通用合并与各领域验证是否有清楚交接 | [`config.md`](config.md) |
-| 身份与秘密系统 | 用户如何登录，敏感凭据保存在哪里？ | 登录流程、账户状态和秘密的安全存取 | 身份、账户展示、供应商凭据和网络调用是否解耦 | [`login.md`](login.md)、[`secrets.md`](secrets.md)、[`chatgpt-subscription.md`](chatgpt-subscription.md) |
+| 身份与秘密系统 | 用户如何登录，敏感凭据保存在哪里？ | 登录流程、账户状态和秘密的安全存取 | 身份、账户展示、供应商凭据和网络调用是否解耦 | [`login.md`](login.md)、[`secrets.md`](secrets.md)、[`subscriptions.md`](subscriptions.md) |
 
 ### 3.3 扩展、接口与产品入口
 

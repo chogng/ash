@@ -16,7 +16,7 @@
 > - WebSocket transport：[`ash-websocket-client` README](../ash-rs/websocket-client/README.md)
 > - Secret persistence：[`secrets.md`](secrets.md)
 > - Interactive login control plane：[`login.md`](login.md)
-> - ChatGPT 订阅运行时：[`chatgpt-subscription.md`](chatgpt-subscription.md)
+> - 订阅接入方式：[`subscriptions.md`](subscriptions.md)
 
 ## 快速理解
 
@@ -293,7 +293,7 @@ pub struct OpenAiExecutionBinding {
 
 ChatGPT 订阅不是 `OpenAiCompatibleAdapter` 的用户自定义 base URL 选项。Platform API key、custom-compatible credential 与 ChatGPT 订阅运行时彼此不能复用或降级转换。
 
-ChatGPT 订阅由 [`ash-chatgpt`](chatgpt-subscription.md) 构造固定 `ResolvedApiTarget + OAuth headers` binding。`ash-model-provider` 使用同一个 OpenAI Responses adapter 执行单次模型 operation，Ash Core 继续执行 Agent loop。
+ChatGPT 订阅由 [`ash-chatgpt`](subscriptions.md#chatgptcodex-兼容登录) 构造固定 `ResolvedApiTarget + OAuth headers` binding。`ash-model-provider` 使用同一个 OpenAI Responses adapter 执行单次模型 operation，Ash Core 继续执行 Agent loop。
 
 ## 6. 供应商凭据边界
 
