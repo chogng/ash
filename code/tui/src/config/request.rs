@@ -53,7 +53,7 @@ where
         Command::OpenAdvisor => (|| -> Result<Event, ConfigCommandError> {
             let config = client.read_config().map_err(ConfigCommandError::from)?;
             let models = client
-                .list_discovered_models()
+                .list_builtin_models()
                 .map_err(ConfigCommandError::from)?;
             let terminal = TerminalSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
             let status_line =
@@ -66,7 +66,7 @@ where
         })(),
         Command::SelectAdvisor(selection) => select_advisor(client, selection).map(Event::Updated),
         Command::SetAdvisor(advisor) => (|| -> Result<Event, ConfigCommandError> {
-            let models = client.list_discovered_models()?;
+            let models = client.list_builtin_models()?;
             let (result, config) = set_advisor(client, advisor)?;
             let choices = advisor_choices(&config, &models, result.terminal.language());
             Ok(Event::AdvisorSaved(result, choices))
@@ -110,7 +110,7 @@ fn select_advisor<T: JsonRpcTransport>(
             advisor
         })
     } else {
-        let models = client.list_discovered_models()?;
+        let models = client.list_builtin_models()?;
         let model = models
             .models
             .iter()

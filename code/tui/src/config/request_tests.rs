@@ -73,7 +73,7 @@ fn advisor_model_selection_updates_global_config() {
         ]
     );
     assert_eq!(requests[2]["params"]["expectedRevision"], 4);
-    assert_eq!(requests[0]["params"]["view"], "discovered");
+    assert_eq!(requests[0]["params"]["view"], "builtIn");
     assert_eq!(
         requests[2]["params"]["advisor"]["model"],
         serde_json::json!({"provider":"openai","model":"gpt-ash"})

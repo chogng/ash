@@ -25,7 +25,7 @@ where
 {
     let Some(scope) = scope else {
         let config = client.read_config()?;
-        let catalog = client.list_discovered_models()?;
+        let catalog = client.list_builtin_models()?;
         let entry = config.model.as_ref().and_then(|selected| {
             catalog.models.iter().find(|entry| {
                 entry.model.provider.as_str() == selected.provider
@@ -59,7 +59,7 @@ where
         })?
         .thread;
     let model = thread.turns.last().and_then(|turn| turn.model.as_ref());
-    let models = client.list_discovered_models()?;
+    let models = client.list_builtin_models()?;
     let model_entry =
         model.and_then(|model| models.models.iter().find(|entry| &entry.model == model));
     let available = model_entry

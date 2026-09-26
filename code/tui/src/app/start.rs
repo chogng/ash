@@ -141,7 +141,7 @@ pub(super) fn start(
             app.input_history_unavailable(format!("Could not open input history: {error}"))
         }
     }
-    let initial_model_catalog = client.list_discovered_models().ok();
+    let initial_model_catalog = client.list_builtin_models().ok();
     let theme_preference = theme_feature::preference(&initial_config);
     match theme_resource.load(theme_preference) {
         Ok(loaded) => {

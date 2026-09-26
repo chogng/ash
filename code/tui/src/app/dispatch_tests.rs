@@ -1035,16 +1035,13 @@ fn model_pins_keep_provider_identity_and_provider_deletion_cleans_preferences() 
     let config = client.read_config().unwrap();
     assert_eq!(config.tui.0["pinnedModels"], serde_json::json!([]));
     assert!(!config.providers.contains_key("custom-second"));
-    assert!(
-        model.calls() > 0,
-        "the picker attempts discovery for configured providers"
-    );
+    assert_eq!(model.calls(), 0, "the picker reads the built-in catalog");
     drop(client);
     let _ = fs::remove_dir_all(root);
 }
 
 #[test]
-fn custom_model_picker_only_shows_discovered_ids() {
+fn model_picker_uses_builtin_catalog_and_allows_manual_custom_selection() {
     let (mut client, root, transport) = client_with_model_probe();
     let mut config = ProviderConfigDto {
         provider: "custom-gateway".into(),
@@ -1070,14 +1067,8 @@ fn custom_model_picker_only_shows_discovered_ids() {
             config: config.clone(),
         })
         .unwrap();
-    assert!(
-        client
-            .list_discovered_models()
-            .unwrap()
-            .models
-            .iter()
-            .all(|entry| entry.model.provider.as_str() != "custom-gateway")
-    );
+    let choices = crate::models::load_selection(&mut *client).unwrap();
+    assert!(choices.actions.is_empty());
     crate::models::set_model(&mut *client, "custom-gateway/gpt-5.6").unwrap();
     config.custom.as_mut().unwrap().model = Some("private-alias".into());
     let revision = client.read_config().unwrap().revision;
@@ -1088,15 +1079,39 @@ fn custom_model_picker_only_shows_discovered_ids() {
             config,
         })
         .unwrap();
-    let catalog = client.list_discovered_models().unwrap();
-    let models = catalog
-        .models
-        .iter()
-        .filter(|entry| entry.model.provider.as_str() == "custom-gateway")
-        .map(|entry| entry.model.model.as_str())
-        .collect::<Vec<_>>();
-    assert!(models.is_empty());
-    assert!(transport.calls() > 0);
+    let choices = crate::models::load_selection(&mut *client).unwrap();
+    assert!(choices.actions.is_empty());
+    assert_eq!(transport.calls(), 0);
+    drop(client);
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn model_picker_lists_builtin_models_without_provider_discovery() {
+    let (mut client, root, transport) = client_with_model_probe();
+    let revision = client.read_config().unwrap().revision;
+    client
+        .configure_provider(ProviderConfigureParams {
+            command_id: CommandId::new("configure-openai-picker").unwrap(),
+            expected_revision: revision,
+            config: ProviderConfigDto {
+                provider: "openai".into(),
+                base_url: None,
+                max_output_tokens: None,
+                model_context: Default::default(),
+                custom: None,
+            },
+        })
+        .unwrap();
+
+    let choices = crate::models::load_selection(&mut *client).unwrap();
+    assert!(choices.actions.values().any(|action| matches!(
+        action,
+        crate::models::ModelSelectionAction::Select { preference, .. }
+            if preference == "openai/gpt-6-astra"
+    )));
+    assert_eq!(transport.calls(), 0);
+
     drop(client);
     let _ = fs::remove_dir_all(root);
 }
@@ -1130,8 +1145,8 @@ fn set_model_sets_and_clears_model_reasoning_effort() {
     let read = client.read_config().unwrap();
     assert_eq!(read.model_reasoning_effort, Some(ReasoningEffort::High));
 
-    // An unobserved model can be selected manually; support is checked when it runs.
-    let update = crate::models::set_model(&mut *client, "openai/gpt-5.6 high").unwrap();
+    // An unlisted model can be selected manually; support is checked when it runs.
+    let update = crate::models::set_model(&mut *client, "openai/gpt-unlisted high").unwrap();
     assert_eq!(
         update.summary.model_reasoning_effort(),
         Some(ReasoningEffort::High)

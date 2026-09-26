@@ -50,7 +50,7 @@ pub(crate) fn model_choices(
     let mut subscription_providers = BTreeSet::new();
     let mut favorites = Vec::new();
     for entry in &catalog.models {
-        // Selection still requires a configured provider when another caller supplies a wider catalog.
+        // The product catalog is global; this client only offers configured providers.
         if !config.providers.contains_key(entry.model.provider.as_str()) {
             continue;
         }
@@ -126,8 +126,7 @@ pub(crate) fn model_choices(
             .with_key_hint_note("P to pin/unpin")
             .with_empty_message("No models here · Pin models from a provider tab to Favorites");
     } else {
-        model =
-            model.with_empty_message("No discovered models · Use /model provider/model or /config");
+        model = model.with_empty_message("No configured models · Configure a provider in /config");
     }
     Ok(ModelChoices { model, actions })
 }

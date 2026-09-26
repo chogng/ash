@@ -2642,7 +2642,7 @@ fn model_picker_shows_signed_in_chatgpt_and_xai_tabs_in_chinese() {
 }
 
 #[test]
-fn model_picker_without_discovered_models_shows_manual_selection_hint() {
+fn model_picker_without_configured_models_shows_configuration_hint() {
     let mut app = App::new();
     let model = ash_protocol::ModelRef::new(
         ash_protocol::ProviderId::new("openai").unwrap(),
