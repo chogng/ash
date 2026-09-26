@@ -7,10 +7,8 @@ import {
 import { InstallShellCommandAction, UninstallShellCommandAction } from './actions/installActions.js';
 import './parts/dialogs/dialog.contribution.js';
 import '../contrib/files/electron-browser/fileActions.contribution.js';
-import { ICommandService } from '../../platform/commands/common/commands.js';
 import { INativeHostService } from '../common/services.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../common/contributions.js';
-import { IStatusbarService } from '../services/statusbar/browser/statusbar.js';
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../platform/registry/common/platform.js';
@@ -73,7 +71,5 @@ registerAction2(InstallShellCommandAction);
 registerAction2(UninstallShellCommandAction);
 registerWorkbenchContribution('workbench.contrib.nativeWindow', WorkbenchPhase.AfterRestored, accessor => new NativeWindow(
 	accessor.get(INativeHostService),
-	accessor.get(IStatusbarService),
-	accessor.get(ICommandService),
 	accessor.get(IConfigurationService),
 ));

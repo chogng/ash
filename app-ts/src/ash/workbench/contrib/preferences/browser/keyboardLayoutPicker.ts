@@ -1,7 +1,6 @@
 import { URI } from '../../../../base/common/uri.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
-import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { KeyboardConfiguration } from '../../../../platform/keyboardLayout/common/keyboardConfiguration.js';
@@ -12,7 +11,6 @@ import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/c
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IKeyboardShortcutTroubleshootingService } from '../../../services/keybinding/common/keyboardShortcutTroubleshooting.js';
 import { IOutputService } from '../../../services/output/common/outputService.js';
-import { IStatusbarService, StatusbarAlignment } from '../../../services/statusbar/browser/statusbar.js';
 import {
 	ChangeKeyboardLayoutCommandId,
 	InspectKeyMappingsCommandId,
@@ -159,26 +157,6 @@ registerAction2(class ToggleKeyboardShortcutsTroubleshootingAction extends Actio
 });
 
 registerWorkbenchContribution(
-	'workbench.contrib.keyboardLayoutPicker',
-	WorkbenchPhase.BlockRestore,
-	(accessor) => {
-		const disposables = new DisposableStore();
-		const keyboardLayouts = accessor.get(IKeyboardLayoutService);
-		const commands = accessor.get(ICommandService);
-		const statusbar = accessor.get(IStatusbarService);
-		const entry = disposables.add(statusbar.addEntry(keyboardLayoutStatusEntry(keyboardLayouts.getCurrentKeyboardLayout(), commands), {
-			id: 'ash.status.keyboardLayout',
-			alignment: StatusbarAlignment.Right,
-			priority: 10,
-		}));
-		disposables.add(keyboardLayouts.onDidChangeKeyboardLayout(() => {
-			entry.update(keyboardLayoutStatusEntry(keyboardLayouts.getCurrentKeyboardLayout(), commands));
-		}));
-		return disposables;
-	},
-);
-
-registerWorkbenchContribution(
 	'workbench.contrib.keyboardShortcutTroubleshooting',
 	WorkbenchPhase.BlockRestore,
 	(accessor) => {
@@ -200,16 +178,6 @@ registerWorkbenchContribution(
 		return disposables;
 	},
 );
-
-function keyboardLayoutStatusEntry(layout: IKeyboardLayoutInfo, commands: ICommandService) {
-	const text = `Layout: ${layout.label}`;
-	return {
-		text,
-		ariaLabel: text,
-		tooltip: `Keyboard layout (${layout.source})`,
-		run: () => commands.executeCommand(ChangeKeyboardLayoutCommandId),
-	};
-}
 
 function layoutSourceLabel(layout: IKeyboardLayoutInfo): string {
 	switch (layout.source) {

@@ -23,6 +23,7 @@ test("status bar entries render an icon before their text", () => {
 	assert.equal(part.minimumHeight, 32);
 	assert.equal(part.maximumHeight, 32);
 	assert.equal(part.domNode.getAttribute("role"), "status");
+	assert.equal(part.domNode.getAttribute("aria-live"), "off");
 	assert.deepEqual([...part.domNode.children].map(element => element.className), [
 		"ash-statusbar-items ash-statusbar-items-left",
 		"ash-statusbar-items ash-statusbar-items-right",

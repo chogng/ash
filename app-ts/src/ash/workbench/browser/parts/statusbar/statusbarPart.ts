@@ -28,7 +28,7 @@ export class StatusbarPart extends WorkbenchPart {
 		this.titleDomNode.remove();
 		this.contentDomNode.remove();
 		this.domNode.setAttribute("role", "status");
-		this.domNode.setAttribute("aria-live", "polite");
+		this.domNode.setAttribute("aria-live", "off");
 		this.domNode.tabIndex = 0;
 		this._register(addDisposableListener(this.domNode, "keydown", (event) => {
 			if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
