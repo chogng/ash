@@ -498,72 +498,103 @@ fn saving_key_configures_default_model_without_fetching_models() {
 }
 
 #[test]
-fn zai_sign_in_saves_the_key_on_the_coding_plan_endpoint() {
-    let mut current = empty_config_snapshot();
-    let mut zai = ash_app_server_protocol::protocol::config::ProviderConfigDto {
-        provider: "zai".into(),
-        custom: None,
-        base_url: Some("https://api.z.ai/api/paas/v4".into()),
-        max_output_tokens: None,
-        model_context: Default::default(),
-    };
-    current.providers.insert("zai".into(), zai.clone());
-    zai.base_url = Some(ash_model_provider_config::ZAI_CODING_PLAN_BASE_URL.into());
-    let mut saved = current.clone();
-    saved.providers.insert("zai".into(), zai.clone());
-    let requests = Arc::new(Mutex::new(Vec::new()));
-    let mut client = AppServerClient::new(RecordingTransport {
-        requests: requests.clone(),
-        responses: VecDeque::from([
-            response(1, serde_json::to_value(&current).unwrap()),
-            response(
-                2,
-                serde_json::json!({"revision":2,"generation":1,"disposition":"updated"}),
-            ),
-            response(
-                3,
-                serde_json::json!({"provider":"zai","apiKeyConfigured":true}),
-            ),
-            response(4, serde_json::to_value(&saved).unwrap()),
-            response(
-                5,
-                serde_json::json!({"providers":[{"provider":"zai","displayName":"zAI","apiKeyPolicy":"required","apiKeyConfigured":true}]}),
-            ),
-        ]),
-    });
-    let update = super::set_provider_api_key(
-        &mut client,
-        crate::config::ProviderApiKeyEdit::new("zai".into(), "secret-zai-key".into())
-            .for_zai_coding_plan(),
-    )
-    .unwrap();
-    assert_eq!(
-        update.plan,
-        Some(crate::config::PlanStatus {
-            key_saved: true,
-            enabled: true,
-        })
-    );
-    let requests = requests.lock().unwrap();
-    assert_eq!(
-        requests
-            .iter()
-            .map(|request| request["method"].as_str().unwrap())
-            .collect::<Vec<_>>(),
-        [
-            "config/read",
-            "provider/configure",
-            "provider/apiKey/set",
-            "config/read",
-            "provider/list"
-        ]
-    );
-    assert_eq!(
-        requests[1]["params"]["config"],
-        serde_json::to_value(zai).unwrap()
-    );
-    assert_eq!(requests[2]["params"]["provider"], "zai");
-    assert_eq!(requests[2]["params"]["apiKey"], "secret-zai-key");
+fn coding_plan_sign_in_saves_each_key_on_its_own_endpoint() {
+    for (subscription, plan_id, api_id, api_endpoint, plan_endpoint) in [
+        (
+            crate::config::SubscriptionProvider::BigModel,
+            "bigmodel-coding-plan",
+            "bigmodel",
+            "https://open.bigmodel.cn/api/paas/v4",
+            ash_model_provider_config::BIGMODEL_CODING_PLAN_BASE_URL,
+        ),
+        (
+            crate::config::SubscriptionProvider::Zai,
+            "zai-coding-plan",
+            "zai",
+            "https://api.z.ai/api/paas/v4",
+            ash_model_provider_config::ZAI_CODING_PLAN_BASE_URL,
+        ),
+    ] {
+        let mut current = empty_config_snapshot();
+        let mut plan = ash_app_server_protocol::protocol::config::ProviderConfigDto {
+            provider: plan_id.into(),
+            custom: None,
+            base_url: None,
+            max_output_tokens: None,
+            model_context: Default::default(),
+        };
+        current.providers.insert(plan_id.into(), plan.clone());
+        current.providers.insert(
+            api_id.into(),
+            ash_app_server_protocol::protocol::config::ProviderConfigDto {
+                provider: api_id.into(),
+                custom: None,
+                base_url: Some(api_endpoint.into()),
+                max_output_tokens: None,
+                model_context: Default::default(),
+            },
+        );
+        plan.base_url = Some(plan_endpoint.into());
+        let mut saved = current.clone();
+        saved.providers.insert(plan_id.into(), plan.clone());
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let mut client = AppServerClient::new(RecordingTransport {
+            requests: requests.clone(),
+            responses: VecDeque::from([
+                response(1, serde_json::to_value(&current).unwrap()),
+                response(
+                    2,
+                    serde_json::json!({"revision":2,"generation":1,"disposition":"updated"}),
+                ),
+                response(
+                    3,
+                    serde_json::json!({"provider":plan_id,"apiKeyConfigured":true}),
+                ),
+                response(4, serde_json::to_value(&saved).unwrap()),
+                response(
+                    5,
+                    serde_json::json!({"providers":[{"provider":plan_id,"displayName":plan_id,"apiKeyPolicy":"required","apiKeyConfigured":true}]}),
+                ),
+            ]),
+        });
+        let update = super::set_provider_api_key(
+            &mut client,
+            crate::config::ProviderApiKeyEdit::new(api_id.into(), "plan-key".into())
+                .for_coding_plan(subscription),
+        )
+        .unwrap();
+        assert_eq!(
+            update.plan,
+            Some((
+                subscription,
+                crate::config::PlanStatus {
+                    key_saved: true,
+                    enabled: true,
+                }
+            ))
+        );
+        let requests = requests.lock().unwrap();
+        assert_eq!(
+            requests
+                .iter()
+                .map(|request| request["method"].as_str().unwrap())
+                .collect::<Vec<_>>(),
+            [
+                "config/read",
+                "provider/configure",
+                "provider/apiKey/set",
+                "config/read",
+                "provider/list"
+            ]
+        );
+        assert_eq!(
+            requests[1]["params"]["config"],
+            serde_json::to_value(plan).unwrap()
+        );
+        assert_eq!(requests[2]["params"]["provider"], plan_id);
+        assert_eq!(requests[2]["params"]["apiKey"], "plan-key");
+        assert_eq!(saved.providers.get(api_id), current.providers.get(api_id));
+    }
 }
 
 #[test]

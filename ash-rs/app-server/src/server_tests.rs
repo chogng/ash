@@ -135,7 +135,9 @@ fn xai_account_and_usage_rpc_use_the_subscription_backend_and_observe_logout() {
                 "user?include=subscription" => {
                     r#"{"userId":"user-a","email":"ada@example.test","firstName":"Ada","subscriptionTier":"SuperGrokPro"}"#
                 }
-                "settings" => r#"{"allow_access":true,"on_demand_enabled":false}"#,
+                "settings" => {
+                    r#"{"subscription_tier_display":"SuperGrok Heavy","allow_access":true,"on_demand_enabled":false}"#
+                }
                 "billing?format=credits" => {
                     r#"{"config":{"creditUsagePercent":12.125,"prepaidBalance":{"val":"9007199254740993"},"onDemandUsed":{},"currentPeriod":{"type":"USAGE_PERIOD_TYPE_WEEKLY","end":"2026-09-28T00:00:00Z"}}}"#
                 }
@@ -179,6 +181,7 @@ fn xai_account_and_usage_rpc_use_the_subscription_backend_and_observe_logout() {
         "ada@example.test"
     );
     assert_eq!(account["result"]["accounts"][0]["displayName"], "Ada");
+    assert_eq!(account["result"]["accounts"][0]["plan"], "SuperGrok Heavy");
     let read = |connection: &mut ConnectionState, request_id: u64, account_id: &str| {
         call(
             &server,
@@ -187,23 +190,23 @@ fn xai_account_and_usage_rpc_use_the_subscription_backend_and_observe_logout() {
         )
     };
     let result = read(&mut connection, 3, "login-a");
-    assert_eq!(result["result"]["plan"], "SuperGrokPro");
+    assert_eq!(result["result"]["plan"], "SuperGrok Heavy");
     assert_eq!(result["result"]["xai"]["usedPercent"], 12.125);
     assert_eq!(result["result"]["xai"]["prepaidCents"], "9007199254740993");
     assert_eq!(result["result"]["xai"]["onDemandUsedCents"], "0");
     assert!(result["result"]["xai"]["onDemandCapCents"].is_null());
-    assert_eq!(proxy.requests.lock().unwrap().len(), 4);
+    assert_eq!(proxy.requests.lock().unwrap().len(), 5);
     assert_eq!(
         read(&mut connection, 4, "other")["error"]["message"],
         "AccountChanged"
     );
-    assert_eq!(proxy.requests.lock().unwrap().len(), 4);
+    assert_eq!(proxy.requests.lock().unwrap().len(), 5);
     proxy.status.store(429, Ordering::SeqCst);
     assert_eq!(
         read(&mut connection, 5, "login-a")["error"]["message"],
         "AccountOperationFailed"
     );
-    assert_eq!(proxy.requests.lock().unwrap().len(), 5);
+    assert_eq!(proxy.requests.lock().unwrap().len(), 6);
     call(
         &server,
         &mut connection,
@@ -213,7 +216,7 @@ fn xai_account_and_usage_rpc_use_the_subscription_backend_and_observe_logout() {
         read(&mut connection, 7, "login-a")["error"]["message"],
         "AccountChanged"
     );
-    assert_eq!(proxy.requests.lock().unwrap().len(), 5);
+    assert_eq!(proxy.requests.lock().unwrap().len(), 6);
     assert!(
         !format!(
             "{account}{result}{:?}",

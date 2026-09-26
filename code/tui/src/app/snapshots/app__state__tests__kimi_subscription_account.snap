@@ -1,17 +1,17 @@
 ---
 source: code/tui/src/app/state_tests.rs
-expression: screen
+expression: "crate::app::usage_tests::render(&app, 96, 24)"
 ---
   .                                                                        [— / —] [Dashboard]
 
-            ┌── Config › Z.AI ─────────────────────────────────────────────────[✗]─┐
+            ┌── Config › Kimi ─────────────────────────────────────────────────[✗]─┐
             │                                                                      │
-            │   Status                                                             │
+            │   Account                                                            │
             │                                                                      │
-            │> Coding plan enabled                                                 │
+            │> Account  ·  person@example.test                                     │
             │                                                                      │
-            │                                                                      │
-            │                                                                      │
+            │  Models ──────────────────────────────────────────────────────────── │
+            │  No models available                                                 │
             │                                                                      │
             │                                                                      │
             │                                                                      │

@@ -4,15 +4,15 @@ expression: screen
 ---
   .                                                                        [— / —] [Dashboard]
 
-            ┌── Config › Z.AI ─────────────────────────────────────────────────[✗]─┐
+            ┌── Config › Super Grok ───────────────────────────────────────────[✗]─┐
             │                                                                      │
-            │   Status                                                             │
+            │   Account                                                            │
             │                                                                      │
-            │> Coding plan enabled                                                 │
+            │> Account  ·  ada@example.test                                        │
+            │  Plan  ·  SuperGrok Heavy                                            │
             │                                                                      │
-            │                                                                      │
-            │                                                                      │
-            │                                                                      │
+            │  Models ──────────────────────────────────────────────────────────── │
+            │  No models available                                                 │
             │                                                                      │
             │                                                                      │
             │                                                                      │

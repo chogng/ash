@@ -646,9 +646,13 @@ impl CommandPanel {
         true
     }
 
-    pub(crate) fn open_subscription(&mut self, spec: ConfigChoices) {
+    pub(crate) fn open_subscription(
+        &mut self,
+        spec: ConfigChoices,
+        sign_out: crate::config::SignOutAvailability,
+    ) {
         if let Self::Config(content) = self {
-            content.open_subscription(spec);
+            content.open_subscription(spec, sign_out);
         }
     }
 
@@ -664,9 +668,13 @@ impl CommandPanel {
         }
     }
 
-    pub(crate) fn update_subscription(&mut self, spec: ConfigChoices) {
+    pub(crate) fn update_subscription(
+        &mut self,
+        spec: ConfigChoices,
+        sign_out: crate::config::SignOutAvailability,
+    ) {
         if let Self::Config(content) = self {
-            content.update_subscription(spec);
+            content.update_subscription(spec, sign_out);
         }
     }
 
@@ -945,9 +953,13 @@ impl Panels {
         }
     }
 
-    pub(crate) fn open_subscription(&mut self, choices: ConfigChoices) {
+    pub(crate) fn open_subscription(
+        &mut self,
+        choices: ConfigChoices,
+        sign_out: crate::config::SignOutAvailability,
+    ) {
         if let Some(command) = self.command.as_mut() {
-            command.open_subscription(choices);
+            command.open_subscription(choices, sign_out);
         }
     }
 
@@ -973,9 +985,13 @@ impl Panels {
         }
     }
 
-    pub(crate) fn update_subscription(&mut self, choices: ConfigChoices) {
+    pub(crate) fn update_subscription(
+        &mut self,
+        choices: ConfigChoices,
+        sign_out: crate::config::SignOutAvailability,
+    ) {
         if let Some(command) = self.command.as_mut() {
-            command.update_subscription(choices);
+            command.update_subscription(choices, sign_out);
         }
     }
 

@@ -38,7 +38,7 @@ fn providers() -> ProviderListResult {
 }
 
 #[test]
-fn provider_rows_use_distinct_subscription_and_api_names() {
+fn provider_rows_use_section_names_and_distinct_connection_actions() {
     let mut catalog = providers();
     catalog.providers.push(ProviderCatalogEntryDto {
         provider: "kimi".into(),
@@ -48,7 +48,25 @@ fn provider_rows_use_distinct_subscription_and_api_names() {
     });
     catalog.providers.push(ProviderCatalogEntryDto {
         provider: "zai".into(),
-        display_name: "zAI".into(),
+        display_name: "Z.ai API".into(),
+        api_key_policy: ProviderApiKeyPolicyDto::Required,
+        api_key_configured: false,
+    });
+    catalog.providers.push(ProviderCatalogEntryDto {
+        provider: "bigmodel".into(),
+        display_name: "BigModel API".into(),
+        api_key_policy: ProviderApiKeyPolicyDto::Required,
+        api_key_configured: false,
+    });
+    catalog.providers.push(ProviderCatalogEntryDto {
+        provider: "bigmodel-coding-plan".into(),
+        display_name: "BigModel Coding Plan".into(),
+        api_key_policy: ProviderApiKeyPolicyDto::Required,
+        api_key_configured: false,
+    });
+    catalog.providers.push(ProviderCatalogEntryDto {
+        provider: "zai-coding-plan".into(),
+        display_name: "Z.ai Coding Plan".into(),
         api_key_policy: ProviderApiKeyPolicyDto::Required,
         api_key_configured: false,
     });
@@ -84,12 +102,14 @@ fn provider_rows_use_distinct_subscription_and_api_names() {
             "ChatGPT",
             "Kimi",
             "BigModel",
+            "Z.AI",
             "Super Grok",
             "API",
             "OpenAI",
             "Ollama",
             "Kimi",
-            "zAI",
+            "Z.AI",
+            "BigModel",
             "xAI",
             "Google",
             "New custom provider",
@@ -98,7 +118,8 @@ fn provider_rows_use_distinct_subscription_and_api_names() {
     let actions = &choices.actions;
     for (label, row_id) in [
         ("Kimi", "kimi-subscription"),
-        ("BigModel", "zai-subscription"),
+        ("BigModel", "bigmodel-coding-plan-subscription"),
+        ("Z.AI", "zai-coding-plan-subscription"),
         ("Super Grok", "xai-subscription"),
     ] {
         let id = state
@@ -112,6 +133,24 @@ fn provider_rows_use_distinct_subscription_and_api_names() {
         assert!(matches!(
             actions.get(&id),
             Some(ConfigSelectionAction::OpenSubscription(_))
+        ));
+    }
+    for (label, row_id, provider) in [
+        ("BigModel", "provider-api-key-bigmodel", "bigmodel"),
+        ("Z.AI", "provider-api-key-zai", "zai"),
+    ] {
+        let id = state
+            .visible_items()
+            .iter()
+            .find(|item| {
+                item.label() == label && item.id() == Some(&ListSelectionItemId::new(row_id))
+            })
+            .and_then(|item| item.id())
+            .unwrap_or_else(|| panic!("{label} API row must open its own connection"));
+        assert!(matches!(
+            actions.get(&id),
+            Some(ConfigSelectionAction::OpenProviderApiKey { provider: actual, .. })
+                if actual == provider
         ));
     }
 }

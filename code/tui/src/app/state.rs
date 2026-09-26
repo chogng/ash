@@ -142,7 +142,7 @@ pub(crate) struct App {
     welcome: WelcomeModel,
     status: Status,
     terminal_settings: TerminalSettings,
-    subscriptions: [crate::config::Subscription; 4],
+    subscriptions: [crate::config::Subscription; 5],
     selected_subscription: crate::config::SubscriptionProvider,
     pub(super) fullscreen: Fullscreen,
     pub(super) inline: super::inline::Inline,
@@ -175,6 +175,7 @@ impl App {
                 crate::config::Subscription::new(crate::config::SubscriptionProvider::ChatGpt),
                 crate::config::Subscription::new(crate::config::SubscriptionProvider::Xai),
                 crate::config::Subscription::new(crate::config::SubscriptionProvider::Kimi),
+                crate::config::Subscription::new(crate::config::SubscriptionProvider::BigModel),
                 crate::config::Subscription::new(crate::config::SubscriptionProvider::Zai),
             ],
             selected_subscription: crate::config::SubscriptionProvider::ChatGpt,
@@ -264,6 +265,7 @@ impl App {
                 crate::config::Subscription::new(crate::config::SubscriptionProvider::ChatGpt),
                 crate::config::Subscription::new(crate::config::SubscriptionProvider::Xai),
                 crate::config::Subscription::new(crate::config::SubscriptionProvider::Kimi),
+                crate::config::Subscription::new(crate::config::SubscriptionProvider::BigModel),
                 crate::config::Subscription::new(crate::config::SubscriptionProvider::Zai),
             ],
             selected_subscription: crate::config::SubscriptionProvider::ChatGpt,
@@ -702,7 +704,9 @@ impl App {
                 self.selected_subscription = provider;
                 let mut choices = self.subscriptions[self.selected_subscription.index()].choices();
                 self.localize_selection(&mut choices);
-                self.panels_mut().open_subscription(choices);
+                let sign_out =
+                    self.subscriptions[self.selected_subscription.index()].sign_out_availability();
+                self.panels_mut().open_subscription(choices, sign_out);
                 self.begin_subscription_command(crate::config::SubscriptionCommand::Read)
             }
             crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::Subscription(
@@ -745,7 +749,9 @@ impl App {
         }
         let mut choices = self.subscriptions[self.selected_subscription.index()].choices();
         self.localize_selection(&mut choices);
-        self.panels_mut().update_subscription(choices);
+        let sign_out =
+            self.subscriptions[self.selected_subscription.index()].sign_out_availability();
+        self.panels_mut().update_subscription(choices, sign_out);
         Some(ConfigCommand::Subscription(self.selected_subscription, command).into())
     }
 
@@ -2596,14 +2602,17 @@ impl App {
                 }
                 let mut choices = self.subscriptions[self.selected_subscription.index()].choices();
                 self.localize_selection(&mut choices);
-                self.panels_mut().update_subscription(choices);
+                let sign_out =
+                    self.subscriptions[self.selected_subscription.index()].sign_out_availability();
+                self.panels_mut().update_subscription(choices, sign_out);
             }
             ConfigEvent::SubscriptionReply(provider, event) => {
                 self.subscriptions[provider.index()].update(event);
                 if provider == self.selected_subscription {
                     let mut choices = self.subscriptions[provider.index()].choices();
                     self.localize_selection(&mut choices);
-                    self.panels_mut().update_subscription(choices);
+                    let sign_out = self.subscriptions[provider.index()].sign_out_availability();
+                    self.panels_mut().update_subscription(choices, sign_out);
                 }
             }
             ConfigEvent::SettingsReceived(settings) => {
@@ -2628,14 +2637,14 @@ impl App {
             } => {
                 self.localize_selection(&mut choices);
                 self.panels_mut().finish_config_prompt(choices);
-                if let Some(plan) = plan {
-                    let provider = crate::config::SubscriptionProvider::Zai;
+                if let Some((provider, plan)) = plan {
                     self.subscriptions[provider.index()]
                         .update(crate::config::SubscriptionEvent::Plan(plan));
                     if self.selected_subscription == provider {
                         let mut choices = self.subscriptions[provider.index()].choices();
                         self.localize_selection(&mut choices);
-                        self.panels_mut().update_subscription(choices);
+                        let sign_out = self.subscriptions[provider.index()].sign_out_availability();
+                        self.panels_mut().update_subscription(choices, sign_out);
                     }
                 } else {
                     self.thread

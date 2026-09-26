@@ -44,6 +44,7 @@ impl OperationClient for ScriptedClient {
 fn credential(expires_at: u64) -> TokenCredential {
     TokenCredential {
         profile: None,
+        subscription_tier_display: None,
         access_token: "old-access".into(),
         refresh_token: "old-refresh".into(),
         token_type: "Bearer".into(),

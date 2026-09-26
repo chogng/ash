@@ -16,18 +16,18 @@ expression: "render(&app, 100, 34)"
             │  ChatGPT                                                                │             
             │> Kimi                                                                   │             
             │  BigModel                                                               │             
+            │  Z.AI                                                                   │             
             │  Super Grok                                                             │             
             │                                                                         │             
             │  API ────────────────────────────────────────────────────────────────── │             
             │  OpenAI                                                                 │             
             │  Kimi                                                                   │             
-            │  zAI                                                                    │             
+            │  Z.AI                                                                   │             
+            │  BigModel                                                               │             
             │  Ollama                                                                 │             
             │  xAI                                                                    │             
             │  Google                                                                 │             
             │  新 建 自 定 义 提 供 商                                                        │             
-            │                                                                         │             
-            │                                                                         │             
             │                                                                         │             
             │                                                                         │             
             │  Enter/Space 更 改  · ←/→ 详 情  · Tab 标 签 页  · / 搜 索  · Esc 关 闭            │             

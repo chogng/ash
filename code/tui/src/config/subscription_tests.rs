@@ -84,11 +84,13 @@ fn signed_in_account_shows_only_its_discovered_subscription_models() {
     assert!(rows.contains(&"GPT New".into()));
     assert!(!rows.contains(&"Loading models…".into()));
     let state = ListSelectionState::new(subscription.choices().model);
-    assert!(state
-        .visible_items()
-        .iter()
-        .filter(|item| item.label() == "GPT Ash" || item.label() == "GPT New")
-        .all(|item| item.description().is_none()));
+    assert!(
+        state
+            .visible_items()
+            .iter()
+            .filter(|item| item.label() == "GPT Ash" || item.label() == "GPT New")
+            .all(|item| item.description().is_none())
+    );
 
     subscription.update(SubscriptionEvent::Updated(AccountReadResult {
         revision: 2,
@@ -142,7 +144,7 @@ fn model_catalog_failure_keeps_account_visible_and_reports_error() {
         models: Some(Err("catalog unavailable".into())),
     });
     let state = ListSelectionState::new(subscription.choices().model);
-    assert!(labels(&subscription).contains(&"Signed in".into()));
+    assert!(!labels(&subscription).contains(&"Signed in".into()));
     assert!(state.visible_items().iter().any(|item| {
         item.label() == "Could not load models" && item.description() == Some("catalog unavailable")
     }));
@@ -172,7 +174,7 @@ fn login_waits_without_blocking_and_completion_shows_account_and_plan() {
     );
     assert!(labels(&subscription).contains(&"Cancel sign-in".into()));
     subscription.update(SubscriptionEvent::Completed(completion()));
-    assert!(labels(&subscription).contains(&"Signed in".into()));
+    assert!(!labels(&subscription).contains(&"Signed in".into()));
     let state = ListSelectionState::new(subscription.choices().model);
     assert!(
         state
@@ -192,7 +194,7 @@ fn completion_before_start_response_does_not_restore_a_finished_login() {
     other.login_id = "another-provider-login".into();
     subscription.update(SubscriptionEvent::Completed(other));
     subscription.update(started_event());
-    assert!(labels(&subscription).contains(&"Signed in".into()));
+    assert!(!labels(&subscription).contains(&"Signed in".into()));
     assert!(!labels(&subscription).contains(&"Cancel sign-in".into()));
 }
 
@@ -231,7 +233,7 @@ fn older_account_reads_and_unrelated_completions_cannot_replace_current_state() 
     let mut other = completion();
     other.login_id = "another-login".into();
     subscription.update(SubscriptionEvent::Completed(other));
-    assert!(labels(&subscription).contains(&"Signed in".into()));
+    assert!(!labels(&subscription).contains(&"Signed in".into()));
     assert!(labels(&subscription).contains(&"Cancel sign-in".into()));
 }
 
@@ -246,7 +248,15 @@ fn cancellation_after_completion_preserves_the_successful_account() {
     subscription.update(SubscriptionEvent::Cancelled {
         login_id: "login-1".into(),
     });
-    assert!(labels(&subscription).contains(&"Signed in to ChatGPT".into()));
+    assert_eq!(
+        subscription.sign_out_availability(),
+        SignOutAvailability::Available
+    );
+    assert!(
+        !labels(&subscription)
+            .iter()
+            .any(|label| label.contains("Signed in"))
+    );
     assert!(!labels(&subscription).contains(&"Sign-in cancelled".into()));
 }
 
@@ -489,14 +499,14 @@ fn kimi_subscription_selects_the_kimi_device_code_login() {
     );
 }
 
-fn zai_providers(
+fn bigmodel_providers(
     key_configured: bool,
 ) -> ash_app_server_protocol::protocol::provider::ProviderListResult {
     ash_app_server_protocol::protocol::provider::ProviderListResult {
         providers: vec![
             ash_app_server_protocol::protocol::provider::ProviderCatalogEntryDto {
-                provider: "zai".into(),
-                display_name: "zAI".into(),
+                provider: "bigmodel-coding-plan".into(),
+                display_name: "BigModel Coding Plan".into(),
                 api_key_policy:
                     ash_app_server_protocol::protocol::provider::ProviderApiKeyPolicyDto::Required,
                 api_key_configured: key_configured,
@@ -506,8 +516,8 @@ fn zai_providers(
 }
 
 #[test]
-fn zai_plan_panel_shows_subscription_status_and_the_matching_action() {
-    let mut subscription = Subscription::new(SubscriptionProvider::Zai);
+fn bigmodel_plan_panel_shows_subscription_status_and_the_matching_action() {
+    let mut subscription = Subscription::new(SubscriptionProvider::BigModel);
     assert_eq!(labels(&subscription), vec!["Sign in with BigModel"]);
     let choices = subscription.choices();
     assert!(matches!(
@@ -515,7 +525,7 @@ fn zai_plan_panel_shows_subscription_status_and_the_matching_action() {
             .actions
             .get(&ListSelectionItemId::new("Sign in with BigModel")),
         Some(ConfigSelectionAction::OpenProviderApiKey {
-            target: ApiKeyTarget::ZaiCodingPlan,
+            target: ApiKeyTarget::CodingPlan(SubscriptionProvider::BigModel),
             ..
         })
     ));
@@ -531,59 +541,136 @@ fn zai_plan_panel_shows_subscription_status_and_the_matching_action() {
         key_saved: true,
         enabled: true,
     }));
-    assert!(!labels(&subscription).iter().any(|label| label.contains("API key")));
-    assert!(labels(&subscription).contains(&"Disable BigModel".into()));
+    assert!(
+        !labels(&subscription)
+            .iter()
+            .any(|label| label.contains("API key"))
+    );
+    assert_eq!(
+        subscription.sign_out_availability(),
+        SignOutAvailability::Available
+    );
+    assert!(!labels(&subscription).contains(&"Disable BigModel".into()));
 
     subscription.update(SubscriptionEvent::Plan(PlanStatus {
         key_saved: true,
         enabled: false,
     }));
     assert!(labels(&subscription).contains(&"Coding plan not enabled".into()));
-    assert!(labels(&subscription).contains(&"Enable BigModel".into()));
+    assert_eq!(
+        subscription.sign_out_availability(),
+        SignOutAvailability::Unavailable
+    );
+    assert!(labels(&subscription).contains(&"Sign in with BigModel".into()));
 }
 
 #[test]
 fn subscription_sign_in_actions_are_localized_in_chinese() {
     for (provider, expected) in [
-        (SubscriptionProvider::Zai, "使用 BigModel 登录"),
+        (SubscriptionProvider::ChatGpt, "使用 ChatGPT 登录"),
+        (SubscriptionProvider::Kimi, "使用 Kimi 登录"),
+        (SubscriptionProvider::BigModel, "使用 BigModel 登录"),
+        (SubscriptionProvider::Zai, "使用 Z.AI 登录"),
         (SubscriptionProvider::Xai, "使用 Super Grok 登录"),
     ] {
-        let subscription = Subscription::new(provider);
+        let mut subscription = Subscription::new(provider);
+        assert_eq!(
+            labels(&subscription),
+            vec![format!("Sign in with {}", provider.name())],
+            "{provider:?} before account status loads"
+        );
+        if provider.account_login() {
+            subscription.update(SubscriptionEvent::Read {
+                account: AccountReadResult {
+                    revision: 1,
+                    accounts: vec![],
+                },
+                models: None,
+            });
+        }
         let mut choices = subscription.choices();
         choices.model.localize(crate::nls::Language::Chinese);
         let state = ListSelectionState::new(choices.model);
-        if provider == SubscriptionProvider::Zai {
-            assert_eq!(
-                state
-                    .visible_items()
-                    .iter()
-                    .map(|item| item.label())
-                    .collect::<Vec<_>>(),
-                vec!["使用 BigModel 登录"]
-            );
-        }
-        assert!(
+        assert_eq!(
             state
                 .visible_items()
                 .iter()
-                .any(|item| item.label() == expected)
+                .map(|item| item.label())
+                .collect::<Vec<_>>(),
+            vec![expected],
+            "{provider:?}"
         );
     }
 }
 
 #[test]
-fn zai_plan_read_derives_status_from_config_and_provider_catalog() {
+fn subscription_sign_out_hint_is_localized_and_only_shown_when_connected() {
+    for provider in [
+        SubscriptionProvider::ChatGpt,
+        SubscriptionProvider::Xai,
+        SubscriptionProvider::Kimi,
+    ] {
+        let mut subscription = Subscription::new(provider);
+        let mut connected = account(1);
+        connected.accounts[0].provider = provider.id().into();
+        subscription.update(SubscriptionEvent::Read {
+            account: connected,
+            models: Some(Ok(vec![])),
+        });
+        let mut choices = subscription.choices();
+        choices.model.localize(crate::nls::Language::Chinese);
+        assert!(
+            choices
+                .model
+                .key_hints()
+                .localized_text(crate::nls::Language::Chinese)
+                .contains("l 退出登录")
+        );
+        assert!(!labels(&subscription).contains(&"Disconnect from Ash".into()));
+    }
+
+    for provider in [SubscriptionProvider::BigModel, SubscriptionProvider::Zai] {
+        let mut subscription = Subscription::new(provider);
+        subscription.update(SubscriptionEvent::Plan(PlanStatus {
+            key_saved: true,
+            enabled: true,
+        }));
+        assert!(
+            subscription
+                .choices()
+                .model
+                .key_hints()
+                .localized_text(crate::nls::Language::Chinese)
+                .contains("l 退出登录")
+        );
+        subscription.update(SubscriptionEvent::Plan(PlanStatus {
+            key_saved: true,
+            enabled: false,
+        }));
+        assert!(
+            !subscription
+                .choices()
+                .model
+                .key_hints()
+                .localized_text(crate::nls::Language::Chinese)
+                .contains("退出登录")
+        );
+    }
+}
+
+#[test]
+fn bigmodel_plan_read_derives_status_from_config_and_provider_catalog() {
     let mut client = AppServerClient::new(Transport {
         requests: Vec::new(),
         results: VecDeque::from([
             serde_json::to_value(crate::test_support::empty_config_snapshot()).unwrap(),
-            serde_json::to_value(zai_providers(true)).unwrap(),
+            serde_json::to_value(bigmodel_providers(true)).unwrap(),
         ]),
     });
     assert_eq!(
         execute(
             &mut client,
-            SubscriptionProvider::Zai,
+            SubscriptionProvider::BigModel,
             SubscriptionCommand::Read
         ),
         SubscriptionEvent::Plan(PlanStatus {
@@ -594,14 +681,14 @@ fn zai_plan_read_derives_status_from_config_and_provider_catalog() {
 }
 
 #[test]
-fn zai_plan_toggle_writes_the_coding_endpoint_and_rereads_status() {
+fn bigmodel_sign_in_connects_the_coding_endpoint_and_rereads_status() {
     let mut config = crate::test_support::empty_config_snapshot();
     config.providers.insert(
-        "zai".into(),
+        "bigmodel-coding-plan".into(),
         ash_app_server_protocol::protocol::config::ProviderConfigDto {
-            provider: "zai".into(),
+            provider: "bigmodel-coding-plan".into(),
             custom: None,
-            base_url: Some(ash_model_provider_config::ZAI_CODING_PLAN_BASE_URL.into()),
+            base_url: Some(ash_model_provider_config::BIGMODEL_CODING_PLAN_BASE_URL.into()),
             max_output_tokens: None,
             model_context: BTreeMap::new(),
         },
@@ -613,14 +700,14 @@ fn zai_plan_toggle_writes_the_coding_endpoint_and_rereads_status() {
             serde_json::to_value(crate::test_support::empty_config_snapshot()).unwrap(),
             serde_json::json!({"revision": 2, "generation": 1, "disposition": "updated"}),
             configured,
-            serde_json::to_value(zai_providers(true)).unwrap(),
+            serde_json::to_value(bigmodel_providers(true)).unwrap(),
         ]),
     });
     assert_eq!(
         execute(
             &mut client,
-            SubscriptionProvider::Zai,
-            SubscriptionCommand::SetPlan { enabled: true }
+            SubscriptionProvider::BigModel,
+            SubscriptionCommand::SignIn
         ),
         SubscriptionEvent::Plan(PlanStatus {
             key_saved: true,
@@ -629,9 +716,151 @@ fn zai_plan_toggle_writes_the_coding_endpoint_and_rereads_status() {
     );
     let requests = client.into_transport().requests;
     assert_eq!(requests[1]["method"], "provider/configure");
-    assert_eq!(requests[1]["params"]["config"]["provider"], "zai");
+    assert_eq!(
+        requests[1]["params"]["config"]["provider"],
+        "bigmodel-coding-plan"
+    );
     assert_eq!(
         requests[1]["params"]["config"]["baseUrl"],
-        ash_model_provider_config::ZAI_CODING_PLAN_BASE_URL
+        ash_model_provider_config::BIGMODEL_CODING_PLAN_BASE_URL
+    );
+}
+
+#[test]
+fn bigmodel_sign_out_disables_the_plan_connection_and_keeps_the_api_key() {
+    let mut configured = crate::test_support::empty_config_snapshot();
+    configured.providers.insert(
+        "bigmodel-coding-plan".into(),
+        ProviderConfigDto {
+            provider: "bigmodel-coding-plan".into(),
+            custom: None,
+            base_url: Some(ash_model_provider_config::BIGMODEL_CODING_PLAN_BASE_URL.into()),
+            max_output_tokens: None,
+            model_context: BTreeMap::new(),
+        },
+    );
+    let mut client = AppServerClient::new(Transport {
+        requests: Vec::new(),
+        results: VecDeque::from([
+            serde_json::to_value(configured).unwrap(),
+            serde_json::json!({"revision": 2, "generation": 1, "disposition": "updated"}),
+            serde_json::to_value(crate::test_support::empty_config_snapshot()).unwrap(),
+            serde_json::to_value(bigmodel_providers(true)).unwrap(),
+        ]),
+    });
+    assert_eq!(
+        execute(
+            &mut client,
+            SubscriptionProvider::BigModel,
+            SubscriptionCommand::SignOut,
+        ),
+        SubscriptionEvent::Plan(PlanStatus {
+            key_saved: true,
+            enabled: false,
+        })
+    );
+    let requests = client.into_transport().requests;
+    assert_eq!(requests[1]["method"], "provider/configure");
+    assert!(requests[1]["params"]["config"]["baseUrl"].is_null());
+    assert!(
+        requests
+            .iter()
+            .all(|request| request["method"] != "provider/apiKey/set")
+    );
+}
+
+#[test]
+fn coding_plan_status_and_sign_out_use_the_selected_subscription_only() {
+    use ash_app_server_protocol::protocol::provider::{
+        ProviderApiKeyPolicyDto, ProviderCatalogEntryDto, ProviderListResult,
+    };
+
+    let mut config = crate::test_support::empty_config_snapshot();
+    for (id, endpoint) in [
+        (
+            "bigmodel-coding-plan",
+            ash_model_provider_config::BIGMODEL_CODING_PLAN_BASE_URL,
+        ),
+        (
+            "zai-coding-plan",
+            ash_model_provider_config::ZAI_CODING_PLAN_BASE_URL,
+        ),
+    ] {
+        config.providers.insert(
+            id.into(),
+            ProviderConfigDto {
+                provider: id.into(),
+                custom: None,
+                base_url: Some(endpoint.into()),
+                max_output_tokens: None,
+                model_context: BTreeMap::new(),
+            },
+        );
+    }
+    let providers = ProviderListResult {
+        providers: ["bigmodel-coding-plan", "zai-coding-plan"]
+            .into_iter()
+            .map(|id| ProviderCatalogEntryDto {
+                provider: id.into(),
+                display_name: id.into(),
+                api_key_policy: ProviderApiKeyPolicyDto::Required,
+                api_key_configured: true,
+            })
+            .collect(),
+    };
+    assert_eq!(
+        plan_status(&config, &providers, SubscriptionProvider::BigModel),
+        PlanStatus {
+            key_saved: true,
+            enabled: true
+        }
+    );
+    assert_eq!(
+        plan_status(&config, &providers, SubscriptionProvider::Zai),
+        PlanStatus {
+            key_saved: true,
+            enabled: true
+        }
+    );
+
+    let mut after = config.clone();
+    after.providers.get_mut("zai-coding-plan").unwrap().base_url = None;
+    let mut client = AppServerClient::new(Transport {
+        requests: Vec::new(),
+        results: VecDeque::from([
+            serde_json::to_value(config).unwrap(),
+            serde_json::json!({"revision": 2, "generation": 1, "disposition": "updated"}),
+            serde_json::to_value(&after).unwrap(),
+            serde_json::to_value(&providers).unwrap(),
+        ]),
+    });
+    assert_eq!(
+        execute(
+            &mut client,
+            SubscriptionProvider::Zai,
+            SubscriptionCommand::SignOut
+        ),
+        SubscriptionEvent::Plan(PlanStatus {
+            key_saved: true,
+            enabled: false
+        })
+    );
+    assert_eq!(
+        plan_status(&after, &providers, SubscriptionProvider::BigModel),
+        PlanStatus {
+            key_saved: true,
+            enabled: true
+        }
+    );
+    let requests = client.into_transport().requests;
+    assert_eq!(
+        requests[1]["params"]["config"]["provider"],
+        "zai-coding-plan"
+    );
+    assert!(requests[1]["params"]["config"]["baseUrl"].is_null());
+    assert!(
+        requests
+            .iter()
+            .all(|request| request["method"] != "provider/apiKey/set")
     );
 }

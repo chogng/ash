@@ -3,6 +3,7 @@ use crate::{
 };
 
 mod anthropic;
+pub(super) mod bigmodel;
 mod deepseek;
 mod google;
 mod huggingface;
@@ -16,7 +17,7 @@ mod qwen;
 mod xai;
 pub(super) mod zai;
 
-pub(crate) fn builtin() -> [ProviderDefinition; 13] {
+pub(crate) fn builtin() -> [ProviderDefinition; 16] {
     [
         openai::definition(),
         openai_compatible::definition(),
@@ -27,7 +28,10 @@ pub(crate) fn builtin() -> [ProviderDefinition; 13] {
         deepseek::definition(),
         ollama::definition(),
         huggingface::definition(),
+        bigmodel::definition(),
+        bigmodel::coding_plan_definition(),
         zai::definition(),
+        zai::coding_plan_definition(),
         minimax::definition(),
         mimo::definition(),
         anthropic::definition(),
@@ -39,7 +43,8 @@ pub(crate) fn subscription_definition(id: &str) -> Option<ProviderDefinition> {
         "openai" => Some(openai::subscription_definition()),
         "xai" => Some(xai::subscription_definition()),
         "kimi" => Some(kimi::subscription_definition()),
-        "zai" => Some(zai::subscription_definition()),
+        "bigmodel-coding-plan" => Some(bigmodel::subscription_definition()),
+        "zai-coding-plan" => Some(zai::subscription_definition()),
         _ => None,
     }
 }

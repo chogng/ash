@@ -24,7 +24,7 @@ use std::fmt;
 pub(crate) struct ProviderApiKeyUpdate {
     pub(crate) provider: String,
     pub(crate) choices: ConfigChoices,
-    pub(crate) plan: Option<PlanStatus>,
+    pub(crate) plan: Option<(super::SubscriptionProvider, PlanStatus)>,
 }
 
 impl Command {
@@ -392,8 +392,13 @@ where
                 model_context: Default::default(),
             },
         );
-    if target == ApiKeyTarget::ZaiCodingPlan {
-        config.base_url = Some(ash_model_provider_config::ZAI_CODING_PLAN_BASE_URL.into());
+    if let ApiKeyTarget::CodingPlan(subscription) = target {
+        config.base_url = Some(
+            subscription
+                .coding_plan_endpoint()
+                .expect("Coding Plan endpoint")
+                .into(),
+        );
     }
     if current.providers.get(&provider) != Some(&config) || current.model.is_none() {
         client.configure_provider(
@@ -409,10 +414,16 @@ where
     Ok(ProviderApiKeyUpdate {
         provider,
         choices,
-        plan: (target == ApiKeyTarget::ZaiCodingPlan).then_some(PlanStatus {
-            key_saved: true,
-            enabled: true,
-        }),
+        plan: match target {
+            ApiKeyTarget::Provider => None,
+            ApiKeyTarget::CodingPlan(subscription) => Some((
+                subscription,
+                PlanStatus {
+                    key_saved: true,
+                    enabled: true,
+                },
+            )),
+        },
     })
 }
 

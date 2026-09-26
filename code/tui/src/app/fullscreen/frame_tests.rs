@@ -2181,7 +2181,25 @@ fn config_providers_show_subscription_and_api_sections() {
                     },
                     ProviderCatalogEntryDto {
                         provider: "zai".into(),
-                        display_name: "zAI".into(),
+                        display_name: "Z.ai API".into(),
+                        api_key_policy: ProviderApiKeyPolicyDto::Required,
+                        api_key_configured: false,
+                    },
+                    ProviderCatalogEntryDto {
+                        provider: "bigmodel".into(),
+                        display_name: "BigModel API".into(),
+                        api_key_policy: ProviderApiKeyPolicyDto::Required,
+                        api_key_configured: false,
+                    },
+                    ProviderCatalogEntryDto {
+                        provider: "bigmodel-coding-plan".into(),
+                        display_name: "BigModel Coding Plan".into(),
+                        api_key_policy: ProviderApiKeyPolicyDto::Required,
+                        api_key_configured: false,
+                    },
+                    ProviderCatalogEntryDto {
+                        provider: "zai-coding-plan".into(),
+                        display_name: "Z.ai Coding Plan".into(),
                         api_key_policy: ProviderApiKeyPolicyDto::Required,
                         api_key_configured: false,
                     },

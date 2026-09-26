@@ -14,7 +14,7 @@ pub enum StaticModelRuntime {
     ProviderApi,
     ChatGptSubscription,
     KimiCode,
-    ZaiCodingPlan,
+    GlmCodingPlan,
 }
 
 /// One row in Ash's product-level static model catalog.
@@ -116,7 +116,7 @@ macro_rules! static_model {
     (@runtime provider_api) => { $crate::static_model_spec::StaticModelRuntime::ProviderApi };
     (@runtime chatgpt_subscription) => { $crate::static_model_spec::StaticModelRuntime::ChatGptSubscription };
     (@runtime kimi_code) => { $crate::static_model_spec::StaticModelRuntime::KimiCode };
-    (@runtime zai_coding_plan) => { $crate::static_model_spec::StaticModelRuntime::ZaiCodingPlan };
+    (@runtime glm_coding_plan) => { $crate::static_model_spec::StaticModelRuntime::GlmCodingPlan };
 
     (@context_window) => { ash_protocol::ContextWindow::Unknown };
     (@context_window $tokens:expr) => { ash_protocol::ContextWindow::Known($tokens) };

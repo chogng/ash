@@ -41,7 +41,10 @@ fn borrowed_grok_login_reads_subscription_without_writing_grok_or_ash_credential
             200,
             r#"{"userId":"user-a","principalId":"principal-a","email":"ada@example.test","subscriptionTier":"SuperGrokPro"}"#,
         ),
-        (200, r#"{"allow_access":true}"#),
+        (
+            200,
+            r#"{"subscription_tier_display":"SuperGrok Heavy","allow_access":true}"#,
+        ),
         (200, r#"{"config":{"creditUsagePercent":12.5}}"#),
     ]);
     let auth = XaiOAuth::with_grok_auth_file(
@@ -57,6 +60,10 @@ fn borrowed_grok_login_reads_subscription_without_writing_grok_or_ash_credential
     assert_eq!(
         data.account.subscription_tier.as_deref(),
         Some("SuperGrokPro")
+    );
+    assert_eq!(
+        auth.read_account().unwrap().unwrap().plan.as_deref(),
+        Some("SuperGrok Heavy")
     );
     assert_eq!(transport.requests.lock().unwrap().len(), 3);
     assert_eq!(std::fs::read(&path).unwrap(), contents);
@@ -155,6 +162,7 @@ fn credential() -> TokenCredential {
         account_id: "login-a".into(),
         credential_revision: 1,
         profile: None,
+        subscription_tier_display: None,
         grok_email: None,
         grok_identity: None,
     }
@@ -165,7 +173,10 @@ fn subscription_load_updates_login_metadata_and_reads_all_business_endpoints() {
     let dir = tempfile::tempdir().unwrap();
     let transport = Transport::new(&[
         (200, PROFILE),
-        (200, r#"{"allow_access":false,"on_demand_enabled":false}"#),
+        (
+            200,
+            r#"{"subscription_tier_display":"SuperGrok Heavy","allow_access":false,"on_demand_enabled":false}"#,
+        ),
         (
             200,
             r#"{"config":{"creditUsagePercent":12.5,"prepaidBalance":{"val":"12345"}}}"#,
@@ -182,12 +193,13 @@ fn subscription_load_updates_login_metadata_and_reads_all_business_endpoints() {
     let data = auth
         .read_subscription("login-a", &CancellationSource::new().token())
         .unwrap();
+    assert_eq!(data.plan(), Some("SuperGrok Heavy"));
     assert_eq!(data.settings.allow_access, Some(false));
     assert_eq!(data.billing.unwrap().credit_usage_percent, Some(12.5));
     let account = &service.read().unwrap().accounts[0];
     assert_eq!(account.email.as_deref(), Some("ada@example.test"));
     assert_eq!(account.display_name.as_deref(), Some("Ada Lovelace"));
-    assert_eq!(account.plan.as_deref(), Some("SuperGrokPro"));
+    assert_eq!(account.plan.as_deref(), Some("SuperGrok Heavy"));
     assert_eq!(account.account.account_id, "login-a");
     let credential = auth.load_credential().unwrap().unwrap();
     assert_eq!(credential.access_token, "access");
@@ -210,9 +222,39 @@ fn subscription_load_updates_login_metadata_and_reads_all_business_endpoints() {
 }
 
 #[test]
+fn account_refresh_shows_settings_tier_when_user_has_no_tier() {
+    let dir = tempfile::tempdir().unwrap();
+    let transport = Transport::new(&[
+        (200, r#"{"userId":"user-a","email":"ada@example.test"}"#),
+        (200, r#"{"subscription_tier_display":"SuperGrok"}"#),
+    ]);
+    let auth = XaiOAuth::with_client(
+        Arc::new(MemorySecretStore::default()),
+        transport,
+        dir.path().join("lock"),
+    );
+    auth.store_credential(&credential()).unwrap();
+    let service = Arc::new(LoginService::new(auth.clone()).unwrap());
+    auth.install_login_service(&service).unwrap();
+
+    auth.refresh_account("login-a", &CancellationSource::new().token())
+        .unwrap();
+    assert_eq!(
+        service.read().unwrap().accounts[0].plan.as_deref(),
+        Some("SuperGrok")
+    );
+}
+
+#[test]
 fn profile_refresh_recovers_one_401_and_preserves_metadata_across_token_rotation() {
     let dir = tempfile::tempdir().unwrap();
-    let transport = Transport::new(&[(401, "private"), (200, TOKEN), (200, PROFILE), (200, TOKEN)]);
+    let transport = Transport::new(&[
+        (401, "private"),
+        (200, TOKEN),
+        (200, PROFILE),
+        (200, r#"{"subscription_tier_display":"SuperGrok Heavy"}"#),
+        (200, TOKEN),
+    ]);
     let auth = XaiOAuth::with_client(
         Arc::new(MemorySecretStore::default()),
         transport.clone(),
@@ -227,10 +269,14 @@ fn profile_refresh_recovers_one_401_and_preserves_metadata_across_token_rotation
     assert_eq!(saved.refresh_token, "new-refresh");
     assert_eq!(saved.credential_revision, 3);
     assert_eq!(
+        auth.read_account().unwrap().unwrap().plan.as_deref(),
+        Some("SuperGrok Heavy")
+    );
+    assert_eq!(
         auth.read_account().unwrap().unwrap().email.as_deref(),
         Some("ada@example.test")
     );
-    assert_eq!(transport.requests.lock().unwrap().len(), 4);
+    assert_eq!(transport.requests.lock().unwrap().len(), 5);
 }
 
 #[test]
@@ -341,6 +387,7 @@ fn profile_commit_keeps_a_concurrently_rotated_token_and_discards_cancelled_resu
     let dir = tempfile::tempdir().unwrap();
     let transport = Transport::new(&[
         (200, PROFILE),
+        (200, r#"{"subscription_tier_display":"SuperGrok Heavy"}"#),
         (200, r#"{"userId":"user-a","email":"changed@example.test"}"#),
     ]);
     let auth = XaiOAuth::with_client(
@@ -392,10 +439,12 @@ fn a_slower_profile_read_cannot_overwrite_a_newer_read() {
     let dir = tempfile::tempdir().unwrap();
     let transport = Transport::new(&[
         (200, PROFILE),
+        (200, r#"{"subscription_tier_display":"SuperGrok Heavy"}"#),
         (
             200,
             r#"{"userId":"user-a","email":"old@example.test","teamId":"team-a"}"#,
         ),
+        (200, r#"{"subscription_tier_display":"SuperGrok"}"#),
     ]);
     let auth = XaiOAuth::with_client(
         Arc::new(MemorySecretStore::default()),

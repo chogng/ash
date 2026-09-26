@@ -5,6 +5,7 @@ mod settings;
 mod subscription;
 
 pub(crate) use subscription::PlanStatus;
+pub(crate) use subscription::SignOutAvailability;
 pub(crate) use subscription::Subscription;
 pub(crate) use subscription::SubscriptionCommand;
 pub(crate) use subscription::SubscriptionEvent;
@@ -55,7 +56,7 @@ pub(crate) enum Event {
     ApiKeySaved {
         provider: String,
         choices: ConfigChoices,
-        plan: Option<PlanStatus>,
+        plan: Option<(SubscriptionProvider, PlanStatus)>,
     },
 }
 

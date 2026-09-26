@@ -919,14 +919,20 @@ impl ModelProviderRuntime {
                 .transpose()
                 .map_err(|error| ModelProviderError::Credential(error.to_string()))?
                 .unwrap_or(false),
-            "zai" => {
-                // The GLM Coding Plan is selected by pointing the zai connection at the coding
-                // endpoint; the plan reuses the standard stored API key, which subscription
-                // mode then requires. A default or custom endpoint stays in API mode.
-                let coding_plan_selected = config.base_url.as_deref().is_some_and(|base_url| {
-                    base_url.trim().trim_end_matches('/')
-                        == ash_model_provider_config::ZAI_CODING_PLAN_BASE_URL
-                });
+            "bigmodel-coding-plan" | "zai-coding-plan" => {
+                // Each plan has its own connection and credential, even when the wire adapter
+                // and model catalog are shared with the corresponding API connection.
+                let endpoint = match config.provider.as_str() {
+                    "bigmodel-coding-plan" => {
+                        ash_model_provider_config::BIGMODEL_CODING_PLAN_BASE_URL
+                    }
+                    "zai-coding-plan" => ash_model_provider_config::ZAI_CODING_PLAN_BASE_URL,
+                    _ => unreachable!(),
+                };
+                let coding_plan_selected = config
+                    .base_url
+                    .as_deref()
+                    .is_some_and(|base_url| base_url.trim().trim_end_matches('/') == endpoint);
                 coding_plan_selected
                     && self
                         .credentials
@@ -999,7 +1005,10 @@ impl ModelProviderRuntime {
                 .map(Option::flatten);
         }
         if normalized.access_mode == ProviderAccessMode::Subscription
-            && normalized.provider.as_str() == "zai"
+            && matches!(
+                normalized.provider.as_str(),
+                "bigmodel-coding-plan" | "zai-coding-plan"
+            )
         {
             let api_key = self
                 .credentials
@@ -1008,7 +1017,7 @@ impl ModelProviderRuntime {
                 .transpose()
                 .map_err(|error| ModelProviderError::Credential(error.to_string()))?
                 .flatten();
-            return crate::catalog::zai_catalog_binding(api_key);
+            return crate::catalog::glm_coding_plan_catalog_binding(&normalized.provider, api_key);
         }
         let definition = runtime
             .configs
@@ -1151,9 +1160,9 @@ impl ModelProviderRuntime {
                 .api_target()
                 .map(|target| ProviderConnection::Subscription { target })
                 .map_err(|error| ModelProviderError::Credential(error.to_string())),
-            // The GLM Coding Plan authorizes with the same stored API key as the standard
-            // endpoint, so the subscription connection is the direct key-authenticated route.
-            (ProviderAccessMode::Subscription, "zai") => self.direct_connection(normalized),
+            (ProviderAccessMode::Subscription, "bigmodel-coding-plan" | "zai-coding-plan") => {
+                self.direct_connection(normalized)
+            }
             (ProviderAccessMode::Subscription, "openai") => {
                 let auth = self.chatgpt_oauth.as_ref().ok_or_else(|| {
                     ModelProviderError::Credential("ChatGPT OAuth is unavailable".into())

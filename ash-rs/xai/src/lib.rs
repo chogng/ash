@@ -135,6 +135,8 @@ pub struct XaiOAuth {
     active: Mutex<BTreeMap<LoginId, CancellationSource>>,
     refresh: Mutex<()>,
     account_reads: AtomicU64,
+    // Grok owns its credential file; keep fetched account data only for the matching token.
+    borrowed_account: Mutex<Option<BorrowedAccount>>,
     lock_path: std::path::PathBuf,
     grok_auth_path: Option<std::path::PathBuf>,
     rejected_grok: Mutex<Option<(String, u64)>>,
@@ -219,6 +221,7 @@ impl XaiOAuth {
             active: Mutex::new(BTreeMap::new()),
             refresh: Mutex::new(()),
             account_reads: AtomicU64::new(0),
+            borrowed_account: Mutex::new(None),
             lock_path,
             grok_auth_path,
             rejected_grok: Mutex::new(None),
@@ -347,6 +350,7 @@ impl XaiOAuth {
             refreshed.refresh_token = std::mem::take(&mut credential.refresh_token);
         }
         refreshed.profile = credential.profile.clone();
+        refreshed.subscription_tier_display = credential.subscription_tier_display.clone();
         refreshed.account_id = credential.account_id.clone();
         refreshed.credential_revision = credential.credential_revision.saturating_add(1);
         self.store_credential(&refreshed)?;
@@ -642,7 +646,21 @@ impl XaiOAuth {
         let Some(entry) = entry else {
             return Ok(None);
         };
-        entry.into_credential()
+        let mut credential = entry.into_credential()?;
+        if let Some(credential) = &mut credential {
+            let borrowed = self
+                .borrowed_account
+                .lock()
+                .map_err(|_| XaiError::new("Xai account metadata is unavailable"))?;
+            if let Some(metadata) = borrowed.as_ref().filter(|metadata| {
+                metadata.account_id == credential.account_id
+                    && metadata.credential_revision == credential.credential_revision
+            }) {
+                credential.profile = Some(metadata.profile.clone());
+                credential.subscription_tier_display = metadata.subscription_tier_display.clone();
+            }
+        }
+        Ok(credential)
     }
 
     fn grok_rejected(&self, credential: &TokenCredential) -> bool {
@@ -697,10 +715,14 @@ impl XaiOAuth {
                 .profile
                 .as_ref()
                 .and_then(|profile| profile.organization_name.clone()),
-            plan: credential
-                .profile
-                .as_ref()
-                .and_then(|profile| profile.subscription_tier.clone()),
+            plan: credential.subscription_tier_display.clone().or_else(|| {
+                credential
+                    .profile
+                    .as_ref()
+                    .and_then(|profile| profile.subscription_tier.as_ref())
+                    .filter(|tier| !tier.trim().is_empty())
+                    .cloned()
+            }),
             status: if credential.is_usable() && !self.grok_rejected(credential) {
                 AccountStatus::Ready
             } else {
@@ -933,6 +955,7 @@ impl TokenResponse {
             account_id,
             credential_revision,
             profile: None,
+            subscription_tier_display: None,
             grok_email: None,
             grok_identity: None,
         })
@@ -1016,6 +1039,7 @@ impl GrokCredential {
         let revision = Sha256::digest(self.key.as_bytes());
         Ok(Some(TokenCredential {
             profile: None,
+            subscription_tier_display: None,
             access_token: std::mem::take(&mut self.key),
             refresh_token: String::new(),
             token_type: "Bearer".into(),
@@ -1074,6 +1098,8 @@ impl Drop for GrokIdentity {
 struct TokenCredential {
     #[serde(default)]
     profile: Option<backend_client::xai::Account>,
+    #[serde(default)]
+    subscription_tier_display: Option<String>,
     access_token: String,
     refresh_token: String,
     token_type: String,
@@ -1085,6 +1111,13 @@ struct TokenCredential {
     grok_email: Option<String>,
     #[serde(skip)]
     grok_identity: Option<GrokIdentity>,
+}
+
+struct BorrowedAccount {
+    account_id: String,
+    credential_revision: u64,
+    profile: backend_client::xai::Account,
+    subscription_tier_display: Option<String>,
 }
 
 impl TokenCredential {

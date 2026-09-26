@@ -248,10 +248,12 @@ fn local_composition_reads_existing_grok_login_without_importing_it() {
                 "userId": "user-a",
                 "principalId": "principal-a",
                 "teamId": "team-a",
-                "email": "person@example.test",
-                "subscriptionTier": "SuperGrokPro"
+                "email": "person@example.test"
             }),
         )),
+        settings_response: Some(serde_json::json!({
+            "subscription_tier_display": "SuperGrok Heavy"
+        })),
         requests: Mutex::new(Vec::new()),
         during_request: Mutex::new(None),
     });
@@ -282,12 +284,14 @@ fn local_composition_reads_existing_grok_login_without_importing_it() {
         .expect("xAI account missing");
     assert_eq!(xai["status"], "ready");
     assert_eq!(xai["email"], "person@example.test");
-    assert_eq!(client.requests.lock().unwrap().len(), 1);
+    assert_eq!(xai["plan"], "SuperGrok Heavy");
+    assert_eq!(client.requests.lock().unwrap().len(), 2);
     assert_eq!(std::fs::read(&grok_auth).unwrap(), contents);
 }
 
 struct AccountUsageClient {
     response: Mutex<(u16, serde_json::Value)>,
+    settings_response: Option<serde_json::Value>,
     requests: Mutex<Vec<ClientRequest>>,
     during_request: Mutex<Option<Box<dyn FnOnce() + Send>>>,
 }
@@ -298,7 +302,17 @@ impl OperationClient for AccountUsageClient {
         if let Some(action) = self.during_request.lock().unwrap().take() {
             action();
         }
-        let (status, body) = self.response.lock().unwrap().clone();
+        let (status, body) = if request.url().ends_with("/settings") {
+            (
+                200,
+                self.settings_response
+                    .as_ref()
+                    .expect("unexpected Grok settings request")
+                    .clone(),
+            )
+        } else {
+            self.response.lock().unwrap().clone()
+        };
         Ok(ClientResponse::new(
             status,
             Vec::new(),
@@ -336,6 +350,7 @@ fn local_account_rate_limits_use_the_signed_in_account_and_redact_failures() {
                 "credits":{"has_credits":false,"unlimited":false,"balance":null}
             }),
         )),
+        settings_response: None,
         requests: Mutex::new(Vec::new()),
         during_request: Mutex::new(None),
     });
@@ -856,6 +871,7 @@ fn local_codex_expiration_reports_external_login_and_reconnects_after_renewal() 
     std::fs::write(&path, &original).unwrap();
     let client = Arc::new(AccountUsageClient {
         response: Mutex::new((500, serde_json::json!({}))),
+        settings_response: None,
         requests: Mutex::new(Vec::new()),
         during_request: Mutex::new(None),
     });
@@ -2497,22 +2513,41 @@ fn built_in_catalog_excludes_configured_custom_models() {
         })
         .map(|entry| entry.model.model.as_str())
         .collect::<Vec<_>>();
-    assert_eq!(api_models, ["gpt-6-astra", "gpt-5.6"]);
+    assert!(api_models.contains(&"gpt-5.6"));
+    assert!(api_models.contains(&"gpt-5.4"));
+    assert!(models.iter().any(|entry| {
+        entry.model.provider.as_str() == "openai"
+            && entry.model.model.as_str() == "gpt-6-astra"
+            && entry.access == ash_protocol::ModelAccess::Subscription
+    }));
 
     assert!(
         models
             .iter()
             .all(|entry| entry.model != model_ref("custom-model"))
     );
-    assert_eq!(
-        models
-            .iter()
-            .filter(|entry| {
-                entry.model.provider.as_str() == "zai" && entry.model.model.as_str() == "glm-5.1"
-            })
-            .count(),
-        1
-    );
+    for (provider, access) in [
+        ("bigmodel", ash_protocol::ModelAccess::ApiKey),
+        ("zai", ash_protocol::ModelAccess::ApiKey),
+        (
+            "bigmodel-coding-plan",
+            ash_protocol::ModelAccess::Subscription,
+        ),
+        ("zai-coding-plan", ash_protocol::ModelAccess::Subscription),
+    ] {
+        assert_eq!(
+            models
+                .iter()
+                .filter(|entry| {
+                    entry.model.provider.as_str() == provider
+                        && entry.model.model.as_str() == "glm-5.1"
+                        && entry.access == access
+                })
+                .count(),
+            1,
+            "{provider} GLM-5.1 must keep its own model identity"
+        );
+    }
     let openai = models
         .iter()
         .find(|entry| {

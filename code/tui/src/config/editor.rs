@@ -72,7 +72,7 @@ pub(crate) enum ConfigSelectionAction {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ApiKeyTarget {
     Provider,
-    ZaiCodingPlan,
+    CodingPlan(super::SubscriptionProvider),
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -91,8 +91,9 @@ impl ProviderApiKeyEdit {
         }
     }
 
-    pub(crate) fn for_zai_coding_plan(mut self) -> Self {
-        self.target = ApiKeyTarget::ZaiCodingPlan;
+    pub(crate) fn for_coding_plan(mut self, provider: super::SubscriptionProvider) -> Self {
+        self.provider = provider.model_provider().into();
+        self.target = ApiKeyTarget::CodingPlan(provider);
         self
     }
 
@@ -135,6 +136,7 @@ pub(crate) struct ConfigEditor {
     selection: ListSelection<ConfigSelectionAction>,
     provider_panel: Option<super::provider::Panel>,
     subscription: Option<ListSelection<ConfigSelectionAction>>,
+    subscription_sign_out: super::SignOutAvailability,
     advisor: Option<AdvisorEditor>,
     prompt: Option<ProviderApiKeyPromptState>,
     removing: Option<super::provider::Request>,
@@ -214,6 +216,7 @@ impl ConfigEditor {
             selection: ListSelection::new(spec.model, spec.actions),
             provider_panel: None,
             subscription: None,
+            subscription_sign_out: super::SignOutAvailability::Unavailable,
             advisor: None,
             prompt: None,
             removing: None,
@@ -319,12 +322,20 @@ impl ConfigEditor {
                     let edit = ProviderApiKeyEdit::new(prompt.provider.clone(), value);
                     ConfigEditorOutcome::SaveApiKey(match prompt.target {
                         ApiKeyTarget::Provider => edit,
-                        ApiKeyTarget::ZaiCodingPlan => edit.for_zai_coding_plan(),
+                        ApiKeyTarget::CodingPlan(provider) => edit.for_coding_plan(provider),
                     })
                 }
             };
         }
         if let Some(subscription) = self.subscription.as_mut() {
+            if self.subscription_sign_out == super::SignOutAvailability::Available
+                && key.kind == crossterm::event::KeyEventKind::Press
+                && bindings::SUBSCRIPTION_SIGN_OUT.matches(key)
+            {
+                return ConfigEditorOutcome::Action(ConfigSelectionAction::Subscription(
+                    super::SubscriptionCommand::SignOut,
+                ));
+            }
             let outcome = subscription.handle_key(key);
             return self.handle_subscription_outcome(outcome);
         }
@@ -647,7 +658,12 @@ impl ConfigEditor {
         (self.prompt.is_none() && self.provider_panel.is_none()).then(|| self.selection.state_mut())
     }
 
-    pub(crate) fn open_subscription(&mut self, spec: ConfigChoices) {
+    pub(crate) fn open_subscription(
+        &mut self,
+        spec: ConfigChoices,
+        sign_out: super::SignOutAvailability,
+    ) {
+        self.subscription_sign_out = sign_out;
         self.subscription = Some(ListSelection::new(spec.model, spec.actions));
     }
 
@@ -725,8 +741,13 @@ impl ConfigEditor {
         }
     }
 
-    pub(crate) fn update_subscription(&mut self, spec: ConfigChoices) {
+    pub(crate) fn update_subscription(
+        &mut self,
+        spec: ConfigChoices,
+        sign_out: super::SignOutAvailability,
+    ) {
         if let Some(subscription) = self.subscription.as_mut() {
+            self.subscription_sign_out = sign_out;
             subscription.replace(spec.model, spec.actions);
         }
     }
@@ -759,10 +780,11 @@ impl ConfigEditor {
         display_name: String,
         target: ApiKeyTarget,
     ) {
+        let explanation = format!("Enter the API key from your {display_name}");
         let mut prompt = provider_api_key_prompt(provider, display_name);
-        if target == ApiKeyTarget::ZaiCodingPlan {
+        if matches!(target, ApiKeyTarget::CodingPlan(_)) {
             prompt.spec.title = "API key".into();
-            prompt.spec.explanation = "Enter the API key from your BigModel Coding Plan".into();
+            prompt.spec.explanation = explanation;
         }
         self.prompt = Some(ProviderApiKeyPromptState {
             provider: prompt.provider,
@@ -1451,7 +1473,8 @@ fn provider_items(
             "openai" => Some(("ChatGPT", super::SubscriptionProvider::ChatGpt)),
             "xai" => Some(("Super Grok", super::SubscriptionProvider::Xai)),
             "kimi" => Some(("Kimi", super::SubscriptionProvider::Kimi)),
-            "zai" => Some(("BigModel", super::SubscriptionProvider::Zai)),
+            "bigmodel-coding-plan" => Some(("BigModel", super::SubscriptionProvider::BigModel)),
+            "zai-coding-plan" => Some(("Z.AI", super::SubscriptionProvider::Zai)),
             _ => None,
         };
         if let Some((label, subscription)) = subscription {
@@ -1465,9 +1488,15 @@ fn provider_items(
         let api_name = match provider.provider.as_str() {
             "openai" => "OpenAI",
             "xai" => "xAI",
+            "bigmodel" => "BigModel",
+            "zai" => "Z.AI",
             _ => &provider.display_name,
         };
-        if subscription.is_none() || provider.api_key_policy != ProviderApiKeyPolicyDto::Unsupported
+        if !matches!(
+            provider.provider.as_str(),
+            "bigmodel-coding-plan" | "zai-coding-plan"
+        ) && (subscription.is_none()
+            || provider.api_key_policy != ProviderApiKeyPolicyDto::Unsupported)
         {
             api_items.push(provider_item(provider, api_name, actions));
         }

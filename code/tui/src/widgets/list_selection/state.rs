@@ -268,6 +268,11 @@ impl ListSelectionModel {
         self
     }
 
+    pub(crate) fn with_key_hint_action(mut self, shortcut: Keybinding) -> Self {
+        self.presentation.key_hints = self.presentation.key_hints.with_binding(shortcut);
+        self
+    }
+
     pub(crate) fn without_tab_bar(mut self) -> Self {
         self.presentation.show_tabs = false;
         self

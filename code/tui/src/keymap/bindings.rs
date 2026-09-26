@@ -651,6 +651,8 @@ pub(crate) const SKILL_TOGGLE: Keybinding = Keybinding::new(ENTER_SPACE, "toggle
 pub(crate) const MCP_TOGGLE: Keybinding = Keybinding::new(ENTER_SPACE, "toggle");
 pub(crate) const STATUS_TOGGLE: Keybinding = Keybinding::new(ENTER_SPACE, "toggle");
 pub(crate) const CONNECTOR_TOGGLE: Keybinding = Keybinding::new(ENTER, "connect/disconnect");
+pub(crate) const SUBSCRIPTION_SIGN_OUT: Keybinding =
+    Keybinding::new(&[(NONE, KeyCode::Char('l'))], "sign out");
 pub(crate) const KEYMAP_EDIT: Keybinding = Keybinding::new(ENTER, "edit");
 pub(crate) const KEYMAP_CHOOSE: Keybinding = Keybinding::new(ENTER, "choose");
 pub(crate) const REWIND: Keybinding = Keybinding::new(ENTER, "rewind");

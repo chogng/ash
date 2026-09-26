@@ -51,7 +51,7 @@ flowchart TD
 安全重试与分帧，网络层负责真实连接；任何一层都不能根据 URL 或模型名称重新猜测上层已经作出
 的选择。
 
-ChatGPT、Kimi 与 Super Grok 订阅在这里都只是一次模型调用：各自的 OAuth owner 提供已刷新的请求目标，模型调用系统完成协议适配，Ash Core 继续拥有上下文、工具、批准和循环控制。BigModel 则使用 zAI 密钥和 Coding Plan 端点。订阅认证不得创建 Thread、推进 Turn 或实现 `TurnExecutionBackend`。
+ChatGPT、Kimi 与 Super Grok 订阅在这里都只是一次模型调用：各自的 OAuth owner 提供已刷新的请求目标，模型调用系统完成协议适配，Ash Core 继续拥有上下文、工具、批准和循环控制。BigModel 与 Z.AI Coding Plan 则分别使用各自的密钥和 Coding Plan 端点。订阅认证不得创建 Thread、推进 Turn 或实现 `TurnExecutionBackend`。
 
 一次绑定必须明确回答：
 
@@ -325,7 +325,7 @@ ash-model-provider → KimiAdapter → ash-api OpenAI Chat Completions → Kimi 
 
 Ash Code 将 xAI 订阅入口显示为 Super Grok，将开发者 API 入口显示为 xAI。前者使用设备授权和固定的 Grok 订阅代理，后者使用 xAI API key 与 Platform 端点；两者保留 `xai` 供应商 ID，但凭据和请求目标不互换。
 
-BigModel 是 zAI Coding Plan 的订阅入口，标准 API 入口显示为 zAI。它们都保留 `zai` 供应商 ID 与密钥配置；启用 BigModel 时选择 Coding Plan 端点 `https://api.z.ai/api/coding/paas/v4`，关闭后使用标准 zAI 端点。本地的“密钥已保存”和“Coding Plan 已启用”仅反映配置状态，不能证明上游套餐权限。完整的入口与名称对照见[订阅入口与 API 入口](login.md#订阅入口与-api-入口)。
+BigModel Coding Plan、Z.AI Coding Plan、BigModel API、Z.AI API 分别使用 `bigmodel-coding-plan`、`zai-coding-plan`、`bigmodel`、`zai` 连接 ID 和独立保存的密钥。两个订阅分别连接 `https://open.bigmodel.cn/api/coding/paas/v4` 与 `https://api.z.ai/api/coding/paas/v4`；API 连接使用各自的标准端点。退出某个订阅只停用该订阅连接，不切换其他连接，也不删除密钥。本地的“密钥已保存”和“Coding Plan 已启用”仅反映配置状态，不能证明上游套餐权限。完整的入口与名称对照见[订阅入口与 API 入口](login.md#订阅入口与-api-入口)。
 
 401 recovery 也按身份所有者处理：direct-provider credential 可由其 provider runtime 做一次受限 refresh/rebuild；Kimi 与 ChatGPT token 分别由 `ash-kimi`、`ash-chatgpt` 在调用前按 expiry margin 刷新。`ash-client` 不读取 secrets，也不自行刷新或重试认证。
 

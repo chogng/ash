@@ -44,6 +44,7 @@ pub use input_token_count::NormalizedInputTokenCountConfig;
 pub use model_catalog::STATIC_MODEL_CATALOG;
 pub use model_catalog::find_static_model;
 pub use model_catalog::find_static_model_for_mode;
+pub use providers::bigmodel::BIGMODEL_CODING_PLAN_BASE_URL;
 pub use providers::zai::ZAI_CODING_PLAN_BASE_URL;
 pub use registry::ProviderConfigRegistry;
 pub use registry::RegistryMergePolicy;

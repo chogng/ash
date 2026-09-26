@@ -1092,8 +1092,32 @@ fn enter_provider_row(app: &mut App, label: &str) -> Option<AppCommand> {
                     api_key_configured: false,
                 },
                 ProviderCatalogEntryDto {
+                    provider: "kimi".into(),
+                    display_name: "Kimi".into(),
+                    api_key_policy: ProviderApiKeyPolicyDto::Unsupported,
+                    api_key_configured: false,
+                },
+                ProviderCatalogEntryDto {
                     provider: "zai".into(),
-                    display_name: "zAI".into(),
+                    display_name: "Z.ai API".into(),
+                    api_key_policy: ProviderApiKeyPolicyDto::Required,
+                    api_key_configured: false,
+                },
+                ProviderCatalogEntryDto {
+                    provider: "bigmodel".into(),
+                    display_name: "BigModel API".into(),
+                    api_key_policy: ProviderApiKeyPolicyDto::Required,
+                    api_key_configured: false,
+                },
+                ProviderCatalogEntryDto {
+                    provider: "bigmodel-coding-plan".into(),
+                    display_name: "BigModel Coding Plan".into(),
+                    api_key_policy: ProviderApiKeyPolicyDto::Required,
+                    api_key_configured: false,
+                },
+                ProviderCatalogEntryDto {
+                    provider: "zai-coding-plan".into(),
+                    display_name: "Z.ai Coding Plan".into(),
                     api_key_policy: ProviderApiKeyPolicyDto::Required,
                     api_key_configured: false,
                 },
@@ -1232,6 +1256,120 @@ fn chatgpt_subscription_shows_fetched_models_in_chinese() {
             SubscriptionCommand::Read,
         )))
     );
+}
+
+#[test]
+fn subscription_sign_out_shortcut_uses_each_connection_owner() {
+    use crate::config::SubscriptionCommand;
+    use crate::config::SubscriptionEvent;
+    use crate::config::SubscriptionProvider;
+    use ash_app_server_protocol::protocol::account::AccountDto;
+    use ash_app_server_protocol::protocol::account::AccountReadResult;
+    use ash_app_server_protocol::protocol::account::AccountStatusDto;
+
+    for (name, provider, account_provider) in [
+        (
+            "ChatGPT",
+            SubscriptionProvider::ChatGpt,
+            "chatgpt-subscription",
+        ),
+        ("Super Grok", SubscriptionProvider::Xai, "xai-subscription"),
+        ("Kimi", SubscriptionProvider::Kimi, "kimi-subscription"),
+    ] {
+        let mut app = App::new();
+        enter_provider_row(&mut app, name);
+        app.update(ConfigEvent::SubscriptionReply(
+            provider,
+            SubscriptionEvent::Read {
+                account: AccountReadResult {
+                    revision: 1,
+                    accounts: vec![AccountDto {
+                        provider: account_provider.into(),
+                        account_id: "account-1".into(),
+                        email: Some("person@example.test".into()),
+                        display_name: None,
+                        organization: None,
+                        plan: None,
+                        status: AccountStatusDto::Ready,
+                        credential_revision: 1,
+                    }],
+                },
+                models: Some(Ok(vec![])),
+            },
+        ));
+        assert!(!crate::app::usage_tests::render(&app, 96, 24).contains("Signed in"));
+        assert!(
+            app.handle_key(KeyEvent::new(KeyCode::Char('l'), KeyModifiers::ALT))
+                .is_none()
+        );
+        assert_eq!(
+            app.handle_key(KeyEvent::new(KeyCode::Char('l'), KeyModifiers::NONE)),
+            Some(AppCommand::Config(ConfigCommand::Subscription(
+                provider,
+                SubscriptionCommand::SignOut,
+            )))
+        );
+        assert!(
+            app.handle_key(KeyEvent::new(KeyCode::Char('l'), KeyModifiers::NONE))
+                .is_none()
+        );
+    }
+
+    for (name, provider, sign_in) in [
+        (
+            "BigModel",
+            SubscriptionProvider::BigModel,
+            "Sign in with BigModel",
+        ),
+        ("Z.AI", SubscriptionProvider::Zai, "Sign in with Z.AI"),
+    ] {
+        let mut app = App::new();
+        enter_provider_row(&mut app, name);
+        app.update(ConfigEvent::SubscriptionReply(
+            provider,
+            SubscriptionEvent::Plan(crate::config::PlanStatus {
+                key_saved: true,
+                enabled: true,
+            }),
+        ));
+        assert!(
+            app.handle_key(KeyEvent::new(KeyCode::Char('l'), KeyModifiers::ALT))
+                .is_none()
+        );
+        assert_eq!(
+            app.handle_key(KeyEvent::new(KeyCode::Char('l'), KeyModifiers::NONE)),
+            Some(AppCommand::Config(ConfigCommand::Subscription(
+                provider,
+                SubscriptionCommand::SignOut,
+            )))
+        );
+        app.update(ConfigEvent::SubscriptionReply(
+            provider,
+            SubscriptionEvent::Plan(crate::config::PlanStatus {
+                key_saved: true,
+                enabled: false,
+            }),
+        ));
+        assert!(
+            app.handle_key(KeyEvent::new(KeyCode::Char('l'), KeyModifiers::NONE))
+                .is_none()
+        );
+        assert!(
+            app.list_selection()
+                .unwrap()
+                .visible_items()
+                .iter()
+                .any(|item| item.label() == sign_in)
+        );
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert_eq!(
+            app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+            Some(AppCommand::Config(ConfigCommand::Subscription(
+                provider,
+                SubscriptionCommand::SignIn,
+            )))
+        );
+    }
 }
 
 #[test]
@@ -2867,6 +3005,113 @@ fn fork_rejects_image_arguments_before_session_creation() {
 }
 
 #[test]
+fn xai_subscription_displays_server_plan() {
+    use crate::config::SubscriptionEvent;
+    use crate::config::SubscriptionProvider;
+    use ash_app_server_protocol::protocol::account::AccountDto;
+    use ash_app_server_protocol::protocol::account::AccountReadResult;
+    use ash_app_server_protocol::protocol::account::AccountStatusDto;
+
+    let mut app = App::new();
+    enter_provider_row(&mut app, "Super Grok");
+    app.update(ConfigEvent::SubscriptionReply(
+        SubscriptionProvider::Xai,
+        SubscriptionEvent::Read {
+            account: AccountReadResult {
+                revision: 1,
+                accounts: vec![AccountDto {
+                    provider: "xai-subscription".into(),
+                    account_id: "login-a".into(),
+                    email: Some("ada@example.test".into()),
+                    display_name: None,
+                    organization: None,
+                    plan: Some("SuperGrok Heavy".into()),
+                    status: AccountStatusDto::Ready,
+                    credential_revision: 1,
+                }],
+            },
+            models: Some(Ok(vec![])),
+        },
+    ));
+    let screen = crate::app::usage_tests::render(&app, 96, 24);
+    assert!(screen.contains("SuperGrok Heavy"));
+    crate::tui_assert_snapshot!("xai_subscription_plan", screen);
+}
+
+#[test]
+fn kimi_subscription_shows_account_and_sign_out_shortcut() {
+    use crate::config::SubscriptionEvent;
+    use crate::config::SubscriptionProvider;
+    use ash_app_server_protocol::protocol::account::AccountDto;
+    use ash_app_server_protocol::protocol::account::AccountReadResult;
+    use ash_app_server_protocol::protocol::account::AccountStatusDto;
+
+    let mut app = App::new();
+    enter_provider_row(&mut app, "Kimi");
+    app.update(ConfigEvent::SubscriptionReply(
+        SubscriptionProvider::Kimi,
+        SubscriptionEvent::Read {
+            account: AccountReadResult {
+                revision: 1,
+                accounts: vec![AccountDto {
+                    provider: "kimi-subscription".into(),
+                    account_id: "kimi-a".into(),
+                    email: Some("person@example.test".into()),
+                    display_name: None,
+                    organization: None,
+                    plan: None,
+                    status: AccountStatusDto::Ready,
+                    credential_revision: 1,
+                }],
+            },
+            models: Some(Ok(vec![])),
+        },
+    ));
+    crate::tui_assert_snapshot!(
+        "kimi_subscription_account",
+        crate::app::usage_tests::render(&app, 96, 24)
+    );
+}
+
+#[test]
+fn kimi_subscription_signed_out_shows_only_the_sign_in_action_in_chinese() {
+    use crate::config::SubscriptionCommand;
+    use crate::config::SubscriptionEvent;
+    use crate::config::SubscriptionProvider;
+    use ash_app_server_protocol::protocol::account::AccountReadResult;
+
+    let mut app = App::new();
+    let mut settings = TerminalSettings::default();
+    settings.set_language(Language::Chinese);
+    app.update(ConfigEvent::SettingsReceived(settings));
+    enter_provider_row(&mut app, "Kimi");
+    app.update(ConfigEvent::SubscriptionReply(
+        SubscriptionProvider::Kimi,
+        SubscriptionEvent::Read {
+            account: AccountReadResult {
+                revision: 1,
+                accounts: vec![],
+            },
+            models: None,
+        },
+    ));
+    let selection = app.list_selection().unwrap();
+    assert_eq!(selection.visible_items().len(), 1);
+    assert_eq!(selection.selected_item().unwrap().label(), "使用 Kimi 登录");
+    crate::tui_assert_snapshot!(
+        "kimi_subscription_signed_out_chinese",
+        crate::app::usage_tests::render(&app, 96, 24)
+    );
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::Config(ConfigCommand::Subscription(
+            SubscriptionProvider::Kimi,
+            SubscriptionCommand::SignIn,
+        )))
+    );
+}
+
+#[test]
 fn xai_subscription_login_stays_separate_from_chatgpt_after_navigation() {
     use crate::config::SubscriptionCommand;
     use crate::config::SubscriptionEvent;
@@ -2992,7 +3237,7 @@ fn xai_subscription_browser_failure_keeps_the_manual_challenge_visible() {
 }
 
 #[test]
-fn zai_subscription_accepts_a_masked_key_and_returns_to_its_status() {
+fn bigmodel_subscription_accepts_a_masked_key_and_returns_to_its_status() {
     use crate::config::PlanStatus;
     use crate::config::SubscriptionEvent;
     use crate::config::SubscriptionProvider;
@@ -3001,19 +3246,19 @@ fn zai_subscription_accepts_a_masked_key_and_returns_to_its_status() {
     assert_eq!(
         enter_provider_row(&mut app, "BigModel"),
         Some(AppCommand::Config(ConfigCommand::Subscription(
-            SubscriptionProvider::Zai,
+            SubscriptionProvider::BigModel,
             crate::config::SubscriptionCommand::Read,
         )))
     );
     app.update(ConfigEvent::SubscriptionReply(
-        SubscriptionProvider::Zai,
+        SubscriptionProvider::BigModel,
         SubscriptionEvent::Plan(PlanStatus {
             key_saved: false,
             enabled: false,
         }),
     ));
     crate::tui_assert_snapshot!(
-        "zai_subscription_sign_in",
+        "bigmodel_subscription_sign_in",
         crate::app::usage_tests::render(&app, 96, 24)
     );
     assert_eq!(
@@ -3033,7 +3278,12 @@ fn zai_subscription_accepts_a_masked_key_and_returns_to_its_status() {
     assert!(screen.contains("BigModel › API key"));
     assert!(!screen.contains("secret-zai-key"));
     assert!(app.list_selection().is_none());
-    crate::tui_assert_snapshot!("zai_subscription_key_prompt", screen);
+    crate::tui_assert_snapshot!("bigmodel_subscription_key_prompt", screen);
+    assert!(
+        app.handle_key(KeyEvent::new(KeyCode::Char('l'), KeyModifiers::NONE))
+            .is_none()
+    );
+    assert!(app.list_selection().is_none());
 
     assert!(
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))
@@ -3051,20 +3301,26 @@ fn zai_subscription_accepts_a_masked_key_and_returns_to_its_status() {
         panic!("expected zai key save");
     };
     assert!(!format!("{edit:?}").contains("secret-zai-key"));
-    assert_eq!(edit.into_parts(), ("zai".into(), "secret-zai-key".into()));
+    assert_eq!(
+        edit.into_parts(),
+        ("bigmodel-coding-plan".into(), "secret-zai-key".into())
+    );
 
     app.update(ConfigEvent::ApiKeySaved {
-        provider: "zai".into(),
+        provider: "bigmodel-coding-plan".into(),
         choices: config_choices(
             &empty_config_snapshot(),
             &ProviderListResult { providers: vec![] },
             TerminalSettings::default(),
             StatusLineSettings::default(),
         ),
-        plan: Some(PlanStatus {
-            key_saved: true,
-            enabled: true,
-        }),
+        plan: Some((
+            SubscriptionProvider::BigModel,
+            PlanStatus {
+                key_saved: true,
+                enabled: true,
+            },
+        )),
     });
     let labels = app
         .list_selection()
@@ -3075,9 +3331,37 @@ fn zai_subscription_accepts_a_masked_key_and_returns_to_its_status() {
         .collect::<Vec<_>>();
     assert!(!labels.iter().any(|label| label.contains("API key")));
     assert!(labels.contains(&"Coding plan enabled"));
-    assert!(labels.contains(&"Disable BigModel"));
+    assert!(!labels.contains(&"Disable BigModel"));
     crate::tui_assert_snapshot!(
-        "zai_subscription_configured",
+        "bigmodel_subscription_configured",
         crate::app::usage_tests::render(&app, 96, 24)
     );
+}
+
+#[test]
+fn zai_subscription_shows_its_own_connection_and_exit_key() {
+    use crate::config::PlanStatus;
+    use crate::config::SubscriptionCommand;
+    use crate::config::SubscriptionEvent;
+    use crate::config::SubscriptionProvider;
+
+    let mut app = App::new();
+    assert_eq!(
+        enter_provider_row(&mut app, "Z.AI"),
+        Some(AppCommand::Config(ConfigCommand::Subscription(
+            SubscriptionProvider::Zai,
+            SubscriptionCommand::Read,
+        )))
+    );
+    app.update(ConfigEvent::SubscriptionReply(
+        SubscriptionProvider::Zai,
+        SubscriptionEvent::Plan(PlanStatus {
+            key_saved: true,
+            enabled: true,
+        }),
+    ));
+    let screen = crate::app::usage_tests::render(&app, 96, 24);
+    assert!(screen.contains("Z.AI"));
+    assert!(screen.contains("l to sign out"));
+    crate::tui_assert_snapshot!("zai_subscription_configured", screen);
 }

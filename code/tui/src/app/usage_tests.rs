@@ -30,7 +30,7 @@ use unicode_width::UnicodeWidthStr;
 #[test]
 fn usage_displays_xai_credits_without_rounding_or_inventing_missing_balances() {
     let accounts = json!({"revision":1,"accounts":[{"provider":"xai-subscription","accountId":"xai-1","status":"ready","credentialRevision":1}]});
-    let data = json!({"provider":"xai-subscription","accountId":"xai-1","plan":"SuperGrokPro","limits":[],"credits":null,
+    let data = json!({"provider":"xai-subscription","accountId":"xai-1","plan":"SuperGrok Heavy","limits":[],"credits":null,
         "xai":{"usedPercent":12.125,"allowed":true,"periodType":"USAGE_PERIOD_TYPE_WEEKLY","periodEnd":"2026-09-28T00:00:00Z","prepaidCents":"9007199254740993","onDemandUsedCents":"0"}});
     let (mut client, requests) = client(vec![accounts, data]);
     let mut app = App::new();
@@ -41,6 +41,7 @@ fn usage_displays_xai_credits_without_rounding_or_inventing_missing_balances() {
     );
     let screen = render(&app, 90, 30);
     assert!(screen.contains("12.125%"));
+    assert!(screen.contains("xAI plan  ·  SuperGrok Heavy"));
     assert!(screen.contains("USD 90071992547409.93"));
     assert!(screen.contains("Not reported"));
     assert!(!screen.contains("Auto top-up"));

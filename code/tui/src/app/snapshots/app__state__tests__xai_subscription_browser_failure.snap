@@ -8,11 +8,11 @@ expression: screen
             │                                                                      │
             │   Account                                                            │
             │                                                                      │
-            │  Not signed in                                                       │
             │> Could not open browser  ·  browser command unavailable              │
             │  Open in your browser  ·  https://auth.x.ai/device                   │
             │  Enter code  ·  XAI-1234                                             │
             │  Cancel sign-in                                                      │
+            │                                                                      │
             │                                                                      │
             │                                                                      │
             │                                                                      │

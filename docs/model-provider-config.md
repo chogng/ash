@@ -15,7 +15,7 @@
 模型供应商配置只描述“允许怎样配置”，并以确定性方式校验和归一化；它不读取凭据、不访问网络，
 也不执行模型请求。
 
-内置定义的展示名称与稳定 `ProviderId` 分开：标准 zAI API 的名称是 `zAI`，Coding Plan 连接的名称是 `BigModel`；xAI 订阅连接显示 `Super Grok`，标准 API 仍显示 `xAI`。同一供应商的两种接入方式不需要两个模型引用 ID。终端设置中完整的订阅/API 名称及凭据边界见[登录与账户系统](login.md#订阅入口与-api-入口)。
+内置定义中订阅与 API 连接都显示 `BigModel` 或 `Z.AI`；它们分别拥有 `bigmodel-coding-plan`、`zai-coding-plan`、`bigmodel`、`zai` 四个稳定 `ProviderId`。两个 Coding Plan 共享协议实现，但模型引用、连接、密钥和端点各自独立。xAI 订阅连接显示 `Super Grok`，标准 API 仍显示 `xAI`。终端设置中的订阅/API 分组及凭据边界见[登录与账户系统](login.md#订阅入口与-api-入口)。
 
 | 读者首先会问 | 直接答案 | 深入阅读 |
 | --- | --- | --- |

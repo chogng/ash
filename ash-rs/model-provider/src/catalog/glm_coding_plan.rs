@@ -23,11 +23,12 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
 
-/// Binds the GLM Coding Plan catalog to the stored zai API key.
+/// Binds one GLM Coding Plan catalog to its own stored credential.
 ///
 /// The coding endpoint exposes no model listing, so discovery publishes the plan's fixed
 /// Ash-supported model rows under a key-scoped subscription cache instead of fetching them.
-pub(crate) fn zai_catalog_binding(
+pub(crate) fn glm_coding_plan_catalog_binding(
+    provider: &ProviderId,
     api_key: Option<SecretValue>,
 ) -> Result<Option<ModelCatalogBinding>, ModelProviderError> {
     let Some(api_key) = api_key else {
@@ -35,27 +36,27 @@ pub(crate) fn zai_catalog_binding(
     };
     let digest = Sha256::digest(api_key.expose());
     let scope = CatalogScopeKey::new(
-        ProviderId::new("zai").expect("constant provider ID"),
-        CatalogSourceScopeId::new(format!("zai-subscription:{digest:x}"))
+        provider.clone(),
+        CatalogSourceScopeId::new(format!("coding-plan:{digest:x}"))
             .map_err(|error| ModelProviderError::Unavailable(error.to_string()))?,
     );
     Ok(Some(ModelCatalogBinding {
         scope: scope.clone(),
-        source: Arc::new(ZaiCatalogSource { scope }),
+        source: Arc::new(GlmCodingPlanCatalogSource { scope }),
     }))
 }
 
-struct ZaiCatalogSource {
+struct GlmCodingPlanCatalogSource {
     scope: CatalogScopeKey,
 }
 
-impl ModelCatalogSource for ZaiCatalogSource {
+impl ModelCatalogSource for GlmCodingPlanCatalogSource {
     fn discover<'a>(&'a self, request: CatalogDiscoveryRequest) -> CatalogSourceFuture<'a> {
         Box::pin(async move {
             if request.scope() != &self.scope {
                 return Err(CatalogSourceError::new(
                     CatalogSourceErrorKind::InvalidRequest,
-                    "Zai catalog scope changed",
+                    "Coding Plan catalog scope changed",
                 ));
             }
             Ok(CatalogDiscoveryOutcome::Modified(
@@ -64,14 +65,14 @@ impl ModelCatalogSource for ZaiCatalogSource {
                     DiscoveryCoverage::CompleteAgentCatalog,
                     SystemTime::now(),
                 )
-                .with_models(vec![DiscoveredModel::new(
-                    ModelId::new("glm-5.1").expect("constant model ID"),
-                )
-                .with_metadata(ModelMetadataPatch {
-                    access: Some(ModelAccess::Subscription),
-                    display_name: Some("GLM-5.1".into()),
-                    ..ModelMetadataPatch::default()
-                })])
+                .with_models(vec![
+                    DiscoveredModel::new(ModelId::new("glm-5.1").expect("constant model ID"))
+                        .with_metadata(ModelMetadataPatch {
+                            access: Some(ModelAccess::Subscription),
+                            display_name: Some("GLM-5.1".into()),
+                            ..ModelMetadataPatch::default()
+                        }),
+                ])
                 .with_cache_hint(
                     CatalogCacheHint::unspecified()
                         .with_fresh_for(Duration::from_secs(300))

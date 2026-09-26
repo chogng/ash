@@ -1,3 +1,5 @@
+use crate::BorrowedAccount;
+use crate::TokenCredential;
 use crate::XaiError;
 use crate::XaiErrorKind;
 use crate::XaiOAuth;
@@ -18,6 +20,31 @@ pub struct Subscription {
     pub billing: Option<Billing>,
 }
 
+impl Subscription {
+    /// Returns the account's current tier using the service's user-facing name when available.
+    pub fn plan(&self) -> Option<&str> {
+        settings_plan(&self.settings).or_else(|| {
+            self.account
+                .subscription_tier
+                .as_deref()
+                .filter(|tier| !tier.trim().is_empty())
+        })
+    }
+}
+
+fn settings_plan(settings: &Settings) -> Option<&str> {
+    settings
+        .subscription_tier_display
+        .as_deref()
+        .filter(|tier| !tier.trim().is_empty())
+        .or_else(|| {
+            settings
+                .subscription_tier
+                .as_deref()
+                .filter(|tier| !tier.trim().is_empty())
+        })
+}
+
 impl XaiOAuth {
     pub fn models(
         &self,
@@ -35,6 +62,15 @@ impl XaiOAuth {
         account_id: &str,
         cancellation: &CancellationToken,
     ) -> Result<Account, XaiError> {
+        self.refresh_account_and_settings(account_id, cancellation)
+            .map(|(account, _)| account)
+    }
+
+    fn refresh_account_and_settings(
+        &self,
+        account_id: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<(Account, Settings), XaiError> {
         let generation = {
             let _lock = self.lock_credentials()?;
             self.check_account(account_id, cancellation)?;
@@ -43,36 +79,72 @@ impl XaiOAuth {
         let account = self.read_backend(account_id, cancellation, |client| {
             client.read_account(cancellation)
         })?;
+        {
+            let _lock = self.lock_credentials()?;
+            check_cancelled(cancellation)?;
+            let mut credential = self.active_credential()?.ok_or_else(account_changed)?;
+            if self.account_reads.load(Ordering::Relaxed) != generation
+                || credential.account_id != account_id
+                || credential.profile.as_ref().is_some_and(|previous| {
+                    previous.user_id != account.user_id
+                        || previous.principal_id != account.principal_id
+                        || previous.team_id != account.team_id
+                })
+            {
+                return Err(account_changed());
+            }
+            if let Some(identity) = &credential.grok_identity {
+                if account.user_id != identity.user_id
+                    || account.principal_id.as_deref() != Some(identity.principal_id.as_str())
+                    || account
+                        .team_id
+                        .as_ref()
+                        .is_some_and(|team| team != &identity.team_id)
+                {
+                    return Err(account_changed());
+                }
+            }
+            credential.profile = Some(account.clone());
+            credential.subscription_tier_display = None;
+            self.save_account_metadata(&credential, &account)?;
+        }
+        let settings = self.read_backend(account_id, cancellation, |client| {
+            client.read_settings(cancellation)
+        })?;
         let _lock = self.lock_credentials()?;
         check_cancelled(cancellation)?;
         let mut credential = self.active_credential()?.ok_or_else(account_changed)?;
         if self.account_reads.load(Ordering::Relaxed) != generation
             || credential.account_id != account_id
-            || credential.profile.as_ref().is_some_and(|previous| {
-                previous.user_id != account.user_id
-                    || previous.principal_id != account.principal_id
-                    || previous.team_id != account.team_id
-            })
         {
             return Err(account_changed());
         }
-        if let Some(identity) = &credential.grok_identity {
-            if account.user_id != identity.user_id
-                || account.principal_id.as_deref() != Some(identity.principal_id.as_str())
-                || account
-                    .team_id
-                    .as_ref()
-                    .is_some_and(|team| team != &identity.team_id)
-            {
-                return Err(account_changed());
-            }
-        }
-        credential.profile = Some(account.clone());
-        if !super::is_grok_account(account_id) {
-            self.store_credential(&credential)?;
-        }
+        credential.subscription_tier_display = settings_plan(&settings).map(str::to_owned);
+        self.save_account_metadata(&credential, &account)?;
         self.publish_account_update(&credential);
-        Ok(account)
+        Ok((account, settings))
+    }
+
+    fn save_account_metadata(
+        &self,
+        credential: &TokenCredential,
+        account: &Account,
+    ) -> Result<(), XaiError> {
+        if super::is_grok_account(&credential.account_id) {
+            *self
+                .borrowed_account
+                .lock()
+                .map_err(|_| XaiError::new("Xai account metadata is unavailable"))? =
+                Some(BorrowedAccount {
+                    account_id: credential.account_id.clone(),
+                    credential_revision: credential.credential_revision,
+                    profile: account.clone(),
+                    subscription_tier_display: credential.subscription_tier_display.clone(),
+                });
+        } else {
+            self.store_credential(credential)?;
+        }
+        Ok(())
     }
 
     pub fn read_subscription(
@@ -80,10 +152,7 @@ impl XaiOAuth {
         account_id: &str,
         cancellation: &CancellationToken,
     ) -> Result<Subscription, XaiError> {
-        let account = self.refresh_account(account_id, cancellation)?;
-        let settings = self.read_backend(account_id, cancellation, |client| {
-            client.read_settings(cancellation)
-        })?;
+        let (account, settings) = self.refresh_account_and_settings(account_id, cancellation)?;
         let billing = self.read_backend(account_id, cancellation, |client| {
             client.read_billing(cancellation)
         })?;

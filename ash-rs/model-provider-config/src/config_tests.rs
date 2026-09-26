@@ -210,7 +210,10 @@ fn builtins_declare_websocket_protocol_without_inference_from_http_compatibility
         "deepseek",
         "ollama",
         "huggingface",
+        "bigmodel",
+        "bigmodel-coding-plan",
         "zai",
+        "zai-coding-plan",
         "minimax",
         "mimo",
     ] {
@@ -355,7 +358,8 @@ fn builtin_provider_api_key_policies_are_explicit() {
     let registry = ProviderConfigRegistry::builtin();
 
     assert_eq!(registry.get(&provider_id("google")).unwrap().name, "Google");
-    assert_eq!(registry.get(&provider_id("zai")).unwrap().name, "zAI");
+    assert_eq!(registry.get(&provider_id("bigmodel")).unwrap().name, "BigModel");
+    assert_eq!(registry.get(&provider_id("zai")).unwrap().name, "Z.AI");
 
     assert_eq!(
         registry.get(&provider_id("ollama")).unwrap().api_key_policy,
@@ -517,7 +521,7 @@ fn registry_merge_has_explicit_conflict_semantics() {
 #[test]
 fn builtins_are_valid_and_include_all_supported_adapters() {
     let registry = ProviderConfigRegistry::builtin();
-    assert_eq!(registry.providers().count(), 13);
+    assert_eq!(registry.providers().count(), 16);
     assert_eq!(
         registry.get(&provider_id("openai")).unwrap().adapter,
         ProviderAdapter::OpenAi
@@ -586,8 +590,62 @@ fn chatgpt_subscription_seeds_only_current_models() {
             .iter()
             .map(|model| model.id.as_str())
             .collect::<Vec<_>>(),
-        ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5"]
+        [
+            "gpt-6-astra",
+            "gpt-6-sol",
+            "gpt-6-luna",
+            "gpt-5.6-sol",
+            "gpt-5.6-terra",
+            "gpt-5.6-luna",
+            "gpt-5.5",
+        ]
     );
+}
+
+#[test]
+fn builtin_catalog_includes_current_chat_model_families() {
+    let registry = ProviderConfigRegistry::builtin();
+    for (provider, model) in [
+        ("openai", "gpt-6-sol"),
+        ("openai", "gpt-5.6-terra"),
+        ("anthropic", "claude-opus-5-5"),
+        ("anthropic", "claude-sonnet-5"),
+        ("google", "gemini-3.8-flash"),
+        ("google", "gemini-3.1-pro-preview"),
+        ("xai", "grok-4.7"),
+        ("qwen", "qwen3.8-max"),
+        ("qwen", "qwen3-coder-next"),
+        ("kimi", "kimi-k3"),
+        ("deepseek", "deepseek-flash"),
+        ("zai", "glm-5.3"),
+        ("bigmodel", "glm-5.2"),
+        ("minimax", "MiniMax-M3"),
+        ("mimo", "mimo-v2.6-pro"),
+    ] {
+        assert!(
+            registry
+                .get(&provider_id(provider))
+                .unwrap()
+                .models
+                .iter()
+                .any(|candidate| candidate.id.as_str() == model),
+            "missing {provider}/{model}"
+        );
+    }
+    for (provider, model) in [
+        ("anthropic", "claude-sonnet-4-20250514"),
+        ("deepseek", "deepseek-v4-flash"),
+    ] {
+        assert!(
+            registry
+                .get(&provider_id(provider))
+                .unwrap()
+                .models
+                .iter()
+                .all(|candidate| candidate.id.as_str() != model),
+            "retired {provider}/{model} remains listed"
+        );
+    }
 }
 
 #[test]
@@ -636,8 +694,11 @@ fn builtin_provider_models_and_defaults_derive_from_static_catalog() {
         if spec.runtime == StaticModelRuntime::KimiCode {
             assert_eq!(spec.provider_id, "kimi");
         }
-        if spec.runtime == StaticModelRuntime::ZaiCodingPlan {
-            assert_eq!(spec.provider_id, "zai");
+        if spec.runtime == StaticModelRuntime::GlmCodingPlan {
+            assert!(matches!(
+                spec.provider_id,
+                "bigmodel-coding-plan" | "zai-coding-plan"
+            ));
             assert!(!spec.is_approval_review_default);
         }
         if spec.supports_input_token_count {
@@ -681,7 +742,12 @@ fn provider_subscription_mode_replaces_the_api_catalog_and_endpoint() {
             ApiKeyPolicy::Unsupported,
         ),
         (
-            "zai",
+            "bigmodel-coding-plan",
+            crate::BIGMODEL_CODING_PLAN_BASE_URL,
+            ApiKeyPolicy::Required,
+        ),
+        (
+            "zai-coding-plan",
             crate::ZAI_CODING_PLAN_BASE_URL,
             ApiKeyPolicy::Required,
         ),
@@ -694,7 +760,8 @@ fn provider_subscription_mode_replaces_the_api_catalog_and_endpoint() {
         let definition = registry.get(&config.provider).unwrap();
         match provider {
             "xai" => assert_eq!(definition.name, "Super Grok"),
-            "zai" => assert_eq!(definition.name, "BigModel"),
+            "bigmodel-coding-plan" => assert_eq!(definition.name, "BigModel"),
+            "zai-coding-plan" => assert_eq!(definition.name, "Z.AI"),
             "kimi" => assert_eq!(definition.name, "Kimi"),
             _ => {}
         }
@@ -708,6 +775,16 @@ fn provider_subscription_mode_replaces_the_api_catalog_and_endpoint() {
                 .iter()
                 .all(|model| model.access == ash_protocol::ModelAccess::Subscription)
         );
+        if provider == "zai-coding-plan" {
+            assert_eq!(
+                definition
+                    .models
+                    .iter()
+                    .map(|model| model.id.as_str())
+                    .collect::<Vec<_>>(),
+                ["glm-5.3", "glm-5.3-flash", "glm-5.1"]
+            );
+        }
         assert_eq!(
             registry.normalize(&config).unwrap().access_mode,
             crate::ProviderAccessMode::Subscription

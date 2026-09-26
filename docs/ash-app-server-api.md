@@ -917,6 +917,21 @@ connection 会接收这些 child Thread 的实时 update。产品宿主应先应
 必须读取当前表并保留未知键，`null` 清除整张表，缺失字段的默认值由对应前端决定。Settings 与手工
 TOML 编辑共享同一 Config revision/generation 和 `config/changed` 通知链。
 
+### Coding Plan 连接规范
+
+BigModel 与 Z.ai 的四条连接使用同一组 Provider RPC，但以精确 ID 隔离配置、密钥、模型引用和请求地址：
+
+| 连接 | Provider ID | 默认或连接地址 | 退出登录 |
+| --- | --- | --- | --- |
+| BigModel Coding Plan | `bigmodel-coding-plan` | `https://open.bigmodel.cn/api/coding/paas/v4` | `provider/configure` 将该连接的 `baseUrl` 设为 `null` |
+| Z.ai Coding Plan | `zai-coding-plan` | `https://api.z.ai/api/coding/paas/v4` | `provider/configure` 将该连接的 `baseUrl` 设为 `null` |
+| BigModel API | `bigmodel` | `https://open.bigmodel.cn/api/paas/v4` | 无订阅登录 |
+| Z.ai API | `zai` | `https://api.z.ai/api/paas/v4` | 无订阅登录 |
+
+四种地址对应 [ZCode 官方连接说明](https://zcode.z.ai/cn/docs/configuration)中的 Coding Plan 与通用 API 端点。
+
+Coding Plan 首次连接时对对应 ID 使用 `provider/configure` 启用专用端点，并用 `provider/apiKey/set` 保存密钥；已有密钥时只需启用端点。`provider/list` 的 `apiKeyConfigured` 只表示该 ID 是否保存了密钥。退出不调用 `provider/apiKey/set`，也不改动其他三个 ID。ChatGPT、Kimi、Super Grok 的订阅登出仍使用各自的 `account/logout`。
+
 `execPolicy/rule/upsert` 接收完整 typed rule：selector 支持 action digest/kind、trusted source、
 tokenized command prefix、structured network target、capability scope 和显式 `all`；effect 支持
 `continue`、`allowUnsandboxed`、`requireApproval`、`requireSandbox` 与带理由的 `deny`。
@@ -1042,7 +1057,8 @@ account/updated
 `account/rateLimits/read` 按 `{ provider, accountId }` 查询指定账号。支持 `provider = "chatgpt-subscription"` 和 `"xai-subscription"`。本地组合复用对应供应商的登录与模型认证对象，通过 `backend-client::chatgpt` 或 `backend-client::xai` 读取后台数据，不接触客户端凭据。
 
 - xAI 的 `limits` 为空、`credits` 为 `null`；`xai` 保留独立的信用额度合约：`usedPercent` 为小数，`periodType/periodStart/periodEnd` 为上游周期，`allowed/message` 为访问状态。`prepaidCents/onDemandUsedCents/onDemandCapCents` 为整数 USD 分字符串，避免跨语言精度损失。未提供的数据为 `null`；ChatGPT 不序列化 `xai`。
-- `account/read` 查询已就绪 xAI 账号的实时资料和套餐，并通过登录服务更新邮箱、姓名与组织；账号资料和额度查询均不持有全局读写锁。请求前后检查登录身份，取消或退出登录后的旧响应不进入账号状态。订阅接入不提供充值、购卡、充值提醒或付款入口。已有重置卡的查询和使用保留在 `backend-client::chatgpt`，尚未暴露为 RPC。
+- `account/read` 查询已就绪 xAI 账号的 `/user?include=subscription` 与 Grok Build `/settings`，并通过登录服务更新邮箱、姓名、组织及 `plan`。xAI 的 `plan` 优先使用设置接口给出的完整 `subscription_tier_display`，其次使用 `subscription_tier` 或账户接口的 `subscriptionTier`；没有服务端等级时为 `null`。`account/rateLimits/read` 的 xAI `plan` 使用同一优先顺序。
+- 账号资料和额度查询均不持有全局读写锁。请求前后检查登录身份，取消或退出登录后的旧响应不进入账号状态。订阅接入不提供充值、购卡、充值提醒或付款入口。已有重置卡的查询和使用保留在 `backend-client::chatgpt`，尚未暴露为 RPC。
 
 - 结果为 `{ provider, accountId, plan, limits, credits, xai? }`；`plan` 未提供时为 `null`。ChatGPT 的 `limits` 包含 `codex` 主额度和上游提供的附加模型额度，各项含 `id`、`name`、`model`、`allowed`、`limitReached`、`primary`、`secondary`。
 - 每个窗口返回已使用百分比 `usedPercent`、精确时长 `windowSeconds` 和 Unix 秒时间戳 `resetsAt`。余额为 `{ hasCredits, unlimited, balance }`，金额保留上游十进制字符串；缺失窗口、状态和余额保持 `null`。

@@ -384,10 +384,11 @@ fn xai_usage(
     use ash_app_server_protocol::protocol::account::AccountXaiUsageDto;
     let billing = subscription.billing.as_ref();
     let period = billing.and_then(|billing| billing.current_period.as_ref());
+    let plan = subscription.plan().map(str::to_owned);
     AccountRateLimitsReadResult {
         provider: params.provider,
         account_id: params.account_id,
-        plan: subscription.account.subscription_tier,
+        plan,
         limits: Vec::new(),
         credits: None,
         xai: Some(AccountXaiUsageDto {
