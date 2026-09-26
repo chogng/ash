@@ -31,6 +31,7 @@ import { BrowserViewMainService } from "../../platform/browser/electron-main/bro
 import { BrowserAutomationMainService } from "../../platform/browser/electron-main/browserAutomationMainService.js";
 import { BrowserTargetRegistry } from "../../platform/browser/electron-main/browserTargetRegistry.js";
 import { configurationValues } from '../../platform/configuration/common/configurationIpc.js';
+import { formatNlsMessage } from '../../nls.js';
 import { editJsonObjectProperty } from '../../base/common/json.js';
 import { ConfigurationMainService } from "../../platform/configuration/electron-main/configurationMainService.js";
 import { nativeContextMenuIpcRoutes } from "../../platform/contextview/electron-main/contextMenuIpc.js";
@@ -80,6 +81,8 @@ import { type IWorkspaceTransitionFailure, type WorkspaceTransitionMainServiceOp
 import { WorkspaceContextMainService, WorkspacesMainService, parseWorkspaceLaunchArguments, workspaceContextIpcRoutes } from "../../platform/workspaces/electron-main/workspacesMainService.js";
 import type { IWorkbenchWindowRecord } from "./workbenchWindowRegistry.js";
 import { WorkbenchWindowRegistry } from "./workbenchWindowRegistry.js";
+import { LocalizationConfiguration } from '../../workbench/services/localization/common/locale.js';
+import { builtinLanguagePackCatalogs } from '../../workbench/services/localization/common/localizationCatalogs.js';
 import { electronWorkspaceLaunchArguments } from "./electronWindowLaunch.js";
 import { workbenchModeIpcRoutes } from "../../workbench/services/workbenchMode/electron-main/workbenchModeIpc.js";
 export type AppServerStartupMode = "required" | "disabled";
@@ -722,7 +725,7 @@ export class AshApplication extends Disposable {
 			...supervisor.routes(window.webContents, () => ({ workspaceId: workspaceContext.getWorkspace().id, workspaceRoot: workspaceContext.getResolvedWorkspace().folders[0]?.uri.fsPath ?? this.profileRoot }), this.appServerStartupMode === "required"),
 			...windowDisposables.add(new BrowserAutomationHost(browserAutomationMainService)).routes(),
 			...windowDisposables.add(new OAuthCallbackHost()).routes(),
-			...rendererSystemHostRoutes(window),
+			...rendererSystemHostRoutes(window, path => this.selectDirectoryPermissions(window, path)),
 			...remoteWindowContext.ipcRoutes,
 			...browserViewIpcRoutes(browserViewMainService),
 			...windowResourceIpcRoutes(windowResources),
@@ -842,7 +845,7 @@ export class AshApplication extends Disposable {
 				};
 				const ipcRoutes = [
 					...sessionsRelay.routes(window.webContents, () => ({ workspaceId: record.workspaceId, workspaceRoot: record.workspaceContext.getResolvedWorkspace().folders[0]?.uri.fsPath ?? this.profileRoot }), this.appServerStartupMode === "required"),
-					...rendererSystemHostRoutes(window),
+					...rendererSystemHostRoutes(window, path => this.selectDirectoryPermissions(window, path)),
 					...remoteWindowContext.ipcRoutes,
 					...windowResourceIpcRoutes(windowResources),
 					windowOperationIpcRoute(this.windowsMainService, window),
@@ -1214,24 +1217,38 @@ export class AshApplication extends Disposable {
 		return this.closePersistentServicesPromise;
 	}
 
-	private async resolveDirGrant(workspaceHost: RendererWorkspaceHost, path: string, window?: BrowserWindow): Promise<DirGrant | undefined> {
+	private async resolveDirGrant(workspaceHost: RendererWorkspaceHost, path: string, window: BrowserWindow): Promise<DirGrant | undefined> {
 		if (this.appServerStartupMode === "disabled") return { type: "config" };
 		const persisted = await readAppServerDirPermissions(workspaceHost, path);
 		if (persisted !== undefined) return { type: "config" };
-		const options = {
-			type: "question" as const,
-			buttons: ["Allow Development Features", "Read Only", "Cancel"],
-			defaultId: 0,
+		const choice = await this.selectDirectoryPermissions(window, path);
+		if (choice === 2) return undefined;
+		return createUserDirGrant(workspaceHost, path, choice === 0 ? DEVELOPMENT_DIR_PERMISSIONS : READ_DIR_PERMISSIONS);
+	}
+
+	private async selectDirectoryPermissions(window: BrowserWindow, path: string): Promise<number> {
+		const configuredLocale = configurationValues(this.services.configuration.read().document)[LocalizationConfiguration.locale];
+		const locale = typeof configuredLocale === 'string' ? configuredLocale : 'en';
+		const catalog = builtinLanguagePackCatalogs.find(candidate => candidate.locale === locale)
+			?? builtinLanguagePackCatalogs.find(candidate => candidate.locale === 'en')!;
+		const translate = (key: string, english: string): string => catalog.bundles.ash?.[key] ?? english;
+		const result = await dialog.showMessageBox(window, {
+			type: 'question',
+			buttons: [
+				translate('workspaceTrust.trust', 'Trust Folder & Enable Features'),
+				translate('workspaceTrust.readOnly', 'Open Read Only'),
+				translate('dialog.cancel', 'Cancel'),
+			],
+			defaultId: 1,
 			cancelId: 2,
 			noLink: true,
-			message: "Which capabilities should this directory receive?",
-			detail: "Development features allow file changes, commands, repository mutations, language services, and directory-provided configuration. Read Only allows browsing, searching, watching, and repository inspection.",
-		};
-		const prompt = window
-			? await dialog.showMessageBox(window, options)
-			: await dialog.showMessageBox(options);
-		if (prompt.response === 2) return undefined;
-		return createUserDirGrant(workspaceHost, path, prompt.response === 0 ? DEVELOPMENT_DIR_PERMISSIONS : READ_DIR_PERMISSIONS);
+			message: translate('workspaceTrust.question', 'Do you trust the files in this folder?'),
+			detail: formatNlsMessage(
+				translate('workspaceTrust.detail', 'Folder: {0}\n\nTrusting this folder allows Ash to edit files, run commands, change the repository, and load project instructions and configuration. Read Only allows browsing, searching, and repository inspection.'),
+				{ '0': path },
+			),
+		});
+		return result.response;
 	}
 
 	private appServerEnvironment(workspace: IAnyWorkspaceIdentifier): Readonly<Record<string, string>> {

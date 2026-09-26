@@ -95,9 +95,9 @@ async function emitSecondInstance(application: ElectronApplication, workspaceDir
 		const showMessageBox = dialog.showMessageBox.bind(dialog);
 		dialog.showMessageBox = (async (...args: [MessageBoxOptions] | [BrowserWindow, MessageBoxOptions]) => {
 			const options = args.length === 1 ? args[0] : args[1];
-			if (options.message === 'Which capabilities should this directory receive?'
-				&& allowedPaths.includes(options.detail?.split('\n')[0] ?? '')
-				&& options.buttons?.[0] === 'Allow Development Features') {
+			if (options.message === 'Do you trust the files in this folder?'
+				&& allowedPaths.some(path => options.detail?.startsWith(`Folder: ${path}\n`))
+				&& options.buttons?.[0] === 'Trust Folder & Enable Features') {
 				return { response: 0, checkboxChecked: false };
 			}
 			return args.length === 1 ? showMessageBox(args[0]) : showMessageBox(args[0], args[1]);
