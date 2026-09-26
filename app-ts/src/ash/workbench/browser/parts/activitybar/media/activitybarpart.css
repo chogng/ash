@@ -14,13 +14,3 @@
 	height: auto;
 	min-height: 0;
 }
-
-.ash-workbench-activitybar.horizontal > .ash-workbench-part-content {
-	flex-direction: row;
-	align-items: center;
-}
-
-.ash-workbench-activitybar.horizontal > .ash-workbench-part-content > .ash-composite-bar {
-	min-width: 0;
-	height: 100%;
-}

@@ -29,6 +29,7 @@ export class BrowserTitlebarPart extends WorkbenchPart {
 	private readonly menubar: IMenubarControl;
 	private readonly centerAdjacentActions: MenuWorkbenchToolBar;
 	private readonly actions: MenuWorkbenchToolBar;
+	private readonly activityActionsDomNode: HTMLElement;
 
 	override get minimumHeight(): number { return WorkbenchWindowBarHeight; }
 	override get maximumHeight(): number { return WorkbenchWindowBarHeight; }
@@ -69,6 +70,9 @@ export class BrowserTitlebarPart extends WorkbenchPart {
 		const actionsDomNode = h(ownerDocument, "div");
 		actionsDomNode.className = "ash-titlebar-actions ash-titlebar-interactive-region";
 		this.contentDomNode.append(actionsDomNode);
+		this.activityActionsDomNode = h(ownerDocument, "div");
+		this.activityActionsDomNode.className = "ash-titlebar-activity-actions ash-titlebar-interactive-region";
+		this.contentDomNode.append(this.activityActionsDomNode);
 		this.actions = this._register(
 			new MenuWorkbenchToolBar(
 				actionsDomNode,
@@ -78,6 +82,10 @@ export class BrowserTitlebarPart extends WorkbenchPart {
 				{ presentation: "inherit-foreground" },
 			),
 		);
+	}
+
+	public hostActivityActions(domNode: HTMLElement): void {
+		this.activityActionsDomNode.append(domNode);
 	}
 }
 

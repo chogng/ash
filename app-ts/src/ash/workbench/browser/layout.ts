@@ -126,6 +126,7 @@ export class WorkbenchLayout
 		validateParts(parts);
 		this.domNode = h(container.ownerDocument, "div");
 		this.domNode.className = "ash-workbench-layout";
+		this.domNode.classList.toggle('activitybar-absent', this.activityBarLocation !== 'default');
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 
@@ -195,6 +196,7 @@ export class WorkbenchLayout
 	setActivityBarLocation(location: ActivityBarLocation): void {
 		if (this.activityBarLocation === location) return;
 		this.activityBarLocation = location;
+		this.domNode.classList.toggle('activitybar-absent', location !== 'default');
 		this.rebuildGrid();
 	}
 
@@ -356,15 +358,17 @@ export class WorkbenchLayout
 		const metrics = this.layoutStyle === "modern"
 			? modernWorkbenchLayoutMetrics
 			: flatWorkbenchLayoutMetrics;
+		// The sidebar owns the outer window inset whenever the vertical Activity Bar is hidden.
+		const activityBarBesideSidebar = this.activityBarLocation === 'default';
 		const secondaryVisible = auxiliarybarVisible || agentSidebarVisible;
 		const centralInsets = this.sideBarLocation === 'left'
 			? { left: sidebarVisible ? metrics.partGutterHalf : metrics.partGutterHalf * 2, right: secondaryVisible ? metrics.partGutterHalf : metrics.windowRightEdgeInset }
 			: { left: secondaryVisible ? metrics.partGutterHalf : metrics.windowLeftEdgeInset, right: sidebarVisible ? metrics.partGutterHalf : metrics.windowRightEdgeInset };
 		this.view("sidebar").setFrameInsets({
 			top: 0,
-			right: this.sideBarLocation === 'left' ? metrics.partGutterHalf : 0,
+			right: this.sideBarLocation === 'left' ? metrics.partGutterHalf : (activityBarBesideSidebar ? 0 : metrics.windowRightEdgeInset),
 			bottom: 0,
-			left: this.sideBarLocation === 'right' ? metrics.partGutterHalf : 0,
+			left: this.sideBarLocation === 'right' ? metrics.partGutterHalf : (activityBarBesideSidebar ? 0 : metrics.windowLeftEdgeInset),
 		});
 		this.view("activitybar").setFrameInsets({
 			top: 0,
@@ -463,8 +467,6 @@ function createWorkbenchGridDescriptor(
 	const titlebarHeight = requiredView(views, "titlebar").minimumHeight;
 	const statusbarHeight = requiredView(views, "statusbar").minimumHeight;
 	const activitybarWidth = requiredView(views, "activitybar").minimumWidth;
-	const activitybarHeight = requiredView(views, "activitybar").minimumHeight;
-	const horizontalActivityBar = activityBarLocation === 'top' || activityBarLocation === 'bottom';
 	const bodyHeight = Math.max(
 		0,
 		dimension.height - titlebarHeight - statusbarHeight,
@@ -477,21 +479,14 @@ function createWorkbenchGridDescriptor(
 	const editorWidth = Math.max(
 		0,
 		dimension.width -
-			(horizontalActivityBar || activityBarLocation === 'hidden' ? 0 : activitybarWidth) -
+			(activityBarLocation === 'default' ? activitybarWidth : 0) -
 			(state.sidebar.visible ? state.sidebar.width : 0) -
 			(state.auxiliarybar.visible ? state.auxiliarybar.width : 0) -
 			(state.agentSidebar.visible ? state.agentSidebar.width : 0),
 	);
-	const primary: SerializedGridDescriptor[] = horizontalActivityBar
-		? [{
-			type: 'branch', orientation: 'vertical', size: state.sidebar.visible ? state.sidebar.width : activitybarWidth, priority: 'normal',
-			children: activityBarLocation === 'top'
-				? [leaf('activitybar', activitybarHeight), leaf('sidebar', Math.max(0, bodyHeight - activitybarHeight), state.sidebar.visible)]
-				: [leaf('sidebar', Math.max(0, bodyHeight - activitybarHeight), state.sidebar.visible), leaf('activitybar', activitybarHeight)],
-		}]
-		: sideBarLocation === 'left'
-			? [leaf('activitybar', activitybarWidth, activityBarLocation !== 'hidden'), leaf('sidebar', state.sidebar.width, state.sidebar.visible)]
-			: [leaf('sidebar', state.sidebar.width, state.sidebar.visible), leaf('activitybar', activitybarWidth, activityBarLocation !== 'hidden')];
+	const primary: SerializedGridDescriptor[] = sideBarLocation === 'left'
+		? [leaf('activitybar', activitybarWidth, activityBarLocation === 'default'), leaf('sidebar', state.sidebar.width, state.sidebar.visible)]
+		: [leaf('sidebar', state.sidebar.width, state.sidebar.visible), leaf('activitybar', activitybarWidth, activityBarLocation === 'default')];
 	const secondary: SerializedGridDescriptor[] = [
 		leaf('auxiliarybar', state.auxiliarybar.width, state.auxiliarybar.visible),
 		leaf('agentSidebar', state.agentSidebar.width, state.agentSidebar.visible),

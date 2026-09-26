@@ -310,6 +310,51 @@ test("Workbench layout switches between modern and flat geometry without replaci
 	dom.window.close();
 });
 
+test('Activity Bar top and bottom positions keep the full sidebar height', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const harness = createLayoutHarness(dom.window.document, { initialDimension: new Dimension(1_200, 800), layoutStyle: 'modern' });
+	harness.layout.layout(new Dimension(1_200, 800));
+	const sidebarHeight = harness.layout.getPartSize('sidebar').height;
+	const sidebarFrame = harness.container.querySelector<HTMLElement>("[data-part='sidebar']")?.parentElement;
+	assert.equal(sidebarFrame?.style.paddingLeft, '0px');
+
+	for (const location of ['top', 'bottom'] as const) {
+		harness.layout.setActivityBarLocation(location);
+		assert.equal(harness.layout.isPartVisible('activitybar'), false);
+		assert.equal(harness.layout.domNode.classList.contains('activitybar-absent'), true);
+		assert.equal(harness.layout.getPartSize('sidebar').height, sidebarHeight);
+		assert.equal(sidebarFrame?.style.paddingLeft, '6px');
+	}
+
+	harness.layout.setSideBarLocation('right');
+	assert.equal(sidebarFrame?.style.paddingRight, '8px');
+	harness.layout.setActivityBarLocation('hidden');
+	assert.equal(sidebarFrame?.style.paddingRight, '8px');
+	harness.layout.setActivityBarLocation('default');
+	assert.equal(harness.layout.isPartVisible('activitybar'), true);
+	assert.equal(harness.layout.domNode.classList.contains('activitybar-absent'), false);
+	assert.equal(sidebarFrame?.style.paddingRight, '0px');
+	harness.disposables.dispose();
+	dom.window.close();
+});
+
+test('Workbench layout assigns the window edge inset on startup from the Activity Bar position', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const harness = createLayoutHarness(dom.window.document, {
+		initialDimension: new Dimension(1_200, 800),
+		layoutStyle: 'modern',
+		activityBarLocation: 'top',
+	});
+	harness.layout.layout(new Dimension(1_200, 800));
+	const sidebarFrame = harness.container.querySelector<HTMLElement>("[data-part='sidebar']")?.parentElement;
+	assert.equal(harness.layout.domNode.classList.contains('activitybar-absent'), true);
+	assert.equal(sidebarFrame?.style.paddingLeft, '6px');
+	harness.layout.setLayoutStyle('flat');
+	assert.equal(sidebarFrame?.style.paddingLeft, '0px');
+	harness.disposables.dispose();
+	dom.window.close();
+});
+
 test("Workbench pane sashes snap closed and remain available for drag restore", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const contextKeys = new ContextKeyService();
@@ -725,10 +770,13 @@ test("Activity Bar hosts the primary sidebar selector independently of sidebar v
 	const globalBar = { domNode: globalActions, setOrientation() {}, getContextMenuActions: () => [] };
 	const localization = { translate: (_bundle: string, _key: string, fallback: string) => fallback } as ILocalizationService;
 	const activitybar = disposables.add(new ActivitybarPart(dom.window.document.body, compositeBar, globalBar, configuration, localization));
-	assert.equal(activitybar.minimumWidth, 36);
+	assert.equal(activitybar.minimumWidth, 44);
 	activitybar.setLayoutStyle('flat');
 	assert.equal(activitybar.minimumWidth, 48);
 	activitybar.setLayoutStyle('modern');
+	activitybar.setCompact(true);
+	assert.equal(activitybar.minimumWidth, 36);
+	activitybar.setCompact(false);
 	activitybar.setSidebarVisible(true);
 	assert.equal(activitybar.domNode.classList.contains('sidebar-open'), true);
 	activitybar.setSidebarVisible(false);
@@ -754,7 +802,16 @@ test("Activity Bar hosts the primary sidebar selector independently of sidebar v
 	assert.ok(title);
 	assert.equal(compositeBar.domNode.parentElement, activitybar.domNode.querySelector('.ash-workbench-part-content'));
 	assert.equal(globalActions.parentElement, activitybar.domNode.querySelector('.ash-workbench-part-content'));
-	assert.equal(sidebar.domNode.firstElementChild, title);
+	assert.equal(title?.parentElement, sidebar.domNode);
+	sidebar.setActivityBarLocation('top');
+	assert.equal(compositeBar.domNode.parentElement, sidebar.domNode.querySelector('.ash-sidebar-composite-bar-top'));
+	assert.equal(compositeBar.domNode.querySelector('[role="tablist"]')?.getAttribute('aria-orientation'), 'horizontal');
+	sidebar.setActivityBarLocation('bottom');
+	assert.equal(compositeBar.domNode.parentElement, sidebar.domNode.querySelector('.ash-sidebar-composite-bar-bottom'));
+	sidebar.setActivityBarLocation('default');
+	activitybar.hostCompositeBar();
+	assert.equal(compositeBar.domNode.parentElement, activitybar.domNode.querySelector('.ash-workbench-part-content'));
+	assert.equal(compositeBar.domNode.querySelector('[role="tablist"]')?.getAttribute('aria-orientation'), 'vertical');
 	assert.equal(title.textContent, '');
 	assert.equal(
 		compositeBar.domNode.className,
@@ -1232,6 +1289,9 @@ test('Activity Bar context menu persists hidden views and keeps one pinned view'
 	const globalBar = { domNode: dom.window.document.createElement('div'), setOrientation() {}, getContextMenuActions: () => [] };
 	const localization = { translate: (_bundle: string, _key: string, fallback: string) => fallback } as ILocalizationService;
 	const activitybar = firstBar.add(new ActivitybarPart(dom.window.document.body, compositeBar, globalBar, configuration, localization));
+	activitybar.domNode.dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true }));
+	assert.deepEqual(actions.slice(0, 2).map(action => [action.label, action.checked]), [['Explorer', true], ['Search', true]]);
+	assert.ok(actions.some(action => action.id === 'workbench.action.activityBar.position'));
 	const search = activitybar.domNode.querySelector<HTMLElement>('[data-action-id="ash.search"]');
 	assert.ok(search);
 	search.dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true }));

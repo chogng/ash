@@ -744,9 +744,13 @@ export class Workbench extends Disposable {
 		}));
 		const globalCompositeBar = this._register(services.createInstance(GlobalCompositeBar, workbenchRoot));
 		const activitybar = this._register(services.createInstance(ActivitybarPart, workbenchRoot, sidebar.compositeBar, globalCompositeBar));
+		const initialActivityBarLocation = configuration.getValue<ActivityBarLocation>(WorkbenchConfiguration.activityBarLocation);
+		sidebar.setActivityBarLocation(initialActivityBarLocation);
+		if (initialActivityBarLocation === 'top' || initialActivityBarLocation === 'bottom') {
+			globalCompositeBar.setOrientation('horizontal');
+			titlebar.hostActivityActions(globalCompositeBar.domNode);
+		}
 		sidebar.domNode.classList.toggle('sidebar-right', configuration.getValue(WorkbenchConfiguration.sideBarLocation) === 'right');
-		sidebar.domNode.classList.toggle('activitybar-top', configuration.getValue(WorkbenchConfiguration.activityBarLocation) === 'top');
-		sidebar.domNode.classList.toggle('activitybar-bottom', configuration.getValue(WorkbenchConfiguration.activityBarLocation) === 'bottom');
 		const activityService = this._register(new ActivityService(sidebar.compositeBar));
 		services.registerInstance(IActivityService, activityService);
 		const agentSidebar = this._register(new SidebarPart(workbenchRoot, {
@@ -962,9 +966,15 @@ export class Workbench extends Disposable {
 			if (event.affectsConfiguration(WorkbenchConfiguration.activityBarCompact)) activitybar.setCompact(configuration.getValue<boolean>(WorkbenchConfiguration.activityBarCompact));
 			if (event.affectsConfiguration(WorkbenchConfiguration.activityBarLocation)) {
 				const location = configuration.getValue<ActivityBarLocation>(WorkbenchConfiguration.activityBarLocation);
-				activitybar.setLocation(location);
-				sidebar.domNode.classList.toggle('activitybar-top', location === 'top');
-				sidebar.domNode.classList.toggle('activitybar-bottom', location === 'bottom');
+				sidebar.setActivityBarLocation(location);
+				if (location === 'top' || location === 'bottom') {
+					globalCompositeBar.setOrientation('horizontal');
+					titlebar.hostActivityActions(globalCompositeBar.domNode);
+				} else {
+					activitybar.hostCompositeBar();
+					globalCompositeBar.setOrientation('vertical');
+					activitybar.hostGlobalActions();
+				}
 				layout.setActivityBarLocation(location);
 			}
 			if (event.affectsConfiguration(WorkbenchConfiguration.sideBarLocation)) {

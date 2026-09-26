@@ -22,7 +22,6 @@ registerColor("editorGroup.border", {
 color("editor.tabBackground", "#EEEEEE", "#EEEEEE", "#000000", "#ffffff", "Background for inactive Editor tabs.");
 
 export const titleBarBackground = color("titleBar.background", "#FFFFFF", "#FFFFFF", "#000000", "#ffffff", "Title bar background.");
-alias('activityBar.background', titleBarBackground, 'Activity Bar background.');
 color('modernActivityBarItem.activeBackground', '#e6e6e6', '#e6e6e6', '#000000', '#ffffff', 'Selected Activity Bar item background.');
 color('modernActivityBarItem.hoverBackground', '#f0f0f0', '#f0f0f0', '#000000', '#ffffff', 'Hovered Activity Bar item background.');
 color('modernActivityBarItem.activeForeground', '#1f1f1f', '#1f1f1f', foreground, foreground, 'Selected Activity Bar icon foreground.');
@@ -36,6 +35,7 @@ registerColor('commandCenter.hoverBackground', { dark: '#ebebeb', light: '#ebebe
 registerColor('commandCenter.activeBorder', { dark: '#888888', light: '#888888', highContrastDark: contrastBorder, highContrastLight: contrastBorder }, { description: 'Active Command Center search border.', owner: colorOwner });
 
 const sideBarBackground = color("sideBar.background", "#F8F8F8", "#F8F8F8", "#000000", "#ffffff", "Primary side bar background.");
+alias('activityBar.background', sideBarBackground, 'Activity Bar background.');
 alias("auxiliaryBar.background", sideBarBackground, "Auxiliary side bar background.");
 alias("panel.background", sideBarBackground, "Panel background.");
 const emptyExplorerOpenFolderBackground = registerColor("files.emptyExplorerOpenFolderBackground", {

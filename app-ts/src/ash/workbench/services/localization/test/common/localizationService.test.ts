@@ -79,7 +79,12 @@ test("localization lookup falls back to English and formats parameters", async (
 	assert.equal(localization.translate('ash.regions', 'titleBarLeftActions', 'Title bar left actions'), '标题栏左侧操作');
 	assert.deepEqual([
 		localization.translate('ash', 'workbench.activityBarGlobalActions', 'Activity Bar global actions'),
+		localization.translate('ash', 'workbench.titleBarGlobalActions', 'Title Bar global actions'),
 		localization.translate('ash', 'workbench.activityBarPosition', 'Activity Bar Position'),
+		localization.translate('ash', 'workbench.activityBarPositionDefault', 'Default'),
+		localization.translate('ash', 'workbench.activityBarPositionTop', 'Top'),
+		localization.translate('ash', 'workbench.activityBarPositionBottom', 'Bottom'),
+		localization.translate('ash', 'workbench.activityBarPositionHidden', 'Hidden'),
 		localization.translate('ash', 'workbench.activityBarSize', 'Activity Bar Size'),
 		localization.translate('ash', 'workbench.activityBar.location.description', 'Choose where the Activity Bar appears.'),
 		localization.translate('ash', 'workbench.activityBar.compact.title', 'Compact Activity Bar'),
@@ -90,7 +95,7 @@ test("localization lookup falls back to English and formats parameters", async (
 		localization.translate('ash', 'workbench.accounts', 'Accounts'),
 		localization.translate('ash', 'workbench.signInWithChatGPT', 'Sign in with ChatGPT'),
 		localization.translate('ash', 'workbench.signOutAccount', 'Sign out of {0}', { '0': 'Ada' }),
-	], ['活动栏全局操作', '活动栏位置', '活动栏大小', '选择活动栏的显示位置。', '紧凑活动栏', '主侧栏位置', '将主侧栏移到右侧', '隐藏“资源管理器”', '保留“资源管理器”', '账户', '使用 ChatGPT 登录', '退出 Ada']);
+	], ['活动栏全局操作', '标题栏全局操作', '活动栏位置', '默认', '顶部', '底部', '隐藏', '活动栏大小', '选择活动栏的显示位置。', '紧凑活动栏', '主侧栏位置', '将主侧栏移到右侧', '隐藏“资源管理器”', '保留“资源管理器”', '账户', '使用 ChatGPT 登录', '退出 Ada']);
 	assert.deepEqual([
 		localization.translate('ash', 'workbench.manage', 'Manage'),
 		commandActionLabel(localizedString('ash', 'workbench.commandPalette', 'Command Palette...')),

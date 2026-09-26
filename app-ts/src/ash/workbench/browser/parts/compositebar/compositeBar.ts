@@ -186,9 +186,7 @@ export class CompositeBar extends Disposable {
 			: target ?? this.domNode;
 		this.contextMenuProvider.showContextMenu({
 			getAnchor: () => anchor,
-			getActions: () => containerId || additionalActions.length === 0
-				? Separator.join([...this.createContextMenuActions(containerId)], [...additionalActions])
-				: additionalActions,
+			getActions: () => Separator.join([...this.createContextMenuActions(containerId)], [...additionalActions]),
 			getCheckedActionsRepresentation: () => 'checkbox',
 			onHide: didCancel => {
 				if (didCancel && target?.isConnected) target.focus();

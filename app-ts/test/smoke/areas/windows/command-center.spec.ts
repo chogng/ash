@@ -61,11 +61,40 @@ test('activity bar remains visible and reopens a selected sidebar view', async (
 	await expect(sidebar).toBeVisible();
 	await expect(page.locator('.ash-workbench')).toHaveClass(/modern-ui/);
 	await expect(explorer).toHaveCSS('height', '36px');
+	await expect(explorer).toHaveCSS('width', '36px');
+	await expect(explorer.locator('.ash-icon')).toHaveCSS('width', '24px');
+	await expect(accounts.locator('.ash-button-content .ash-icon').first()).toHaveCSS('width', '24px');
 	const selectedBackground = await explorer.evaluate(element => getComputedStyle(element, '::after').backgroundColor);
 	expect(selectedBackground).not.toBe('rgba(0, 0, 0, 0)');
+	const selectedSpacing = await explorer.evaluate(element => {
+		const style = getComputedStyle(element, '::after');
+		return { width: style.width, height: style.height, radius: style.borderRadius };
+	});
+	expect(selectedSpacing).toEqual({ width: '32px', height: '32px', radius: '4px' });
+	const [outerBox, itemBox] = await Promise.all([activitybar.boundingBox(), explorer.boundingBox()]);
+	expect(outerBox).not.toBeNull();
+	expect(itemBox).not.toBeNull();
+	expect(itemBox!.x - outerBox!.x).toBe(4);
+	expect(itemBox!.y - outerBox!.y).toBe(4);
+	const selectedBackgroundGap = await explorer.evaluate(element => {
+		const outer = element.closest<HTMLElement>('[data-part="activitybar"]')!.getBoundingClientRect();
+		const item = element.getBoundingClientRect();
+		const style = getComputedStyle(element, '::after');
+		const width = Number.parseFloat(style.width);
+		const x = item.left + Number.parseFloat(style.left) + new DOMMatrixReadOnly(style.transform).m41;
+		return {
+			left: x - outer.left,
+			right: outer.right - x - width,
+			top: item.top + Number.parseFloat(style.top) - outer.top,
+		};
+	});
+	expect(selectedBackgroundGap).toEqual({ left: 6, right: 6, top: 6 });
 	await expect(activitybar).toHaveClass(/sidebar-open/);
 	await expect(activitybar).toHaveCSS('border-top-left-radius', '8px');
 	await expect(activitybar).toHaveCSS('border-top-right-radius', '0px');
+	await expect(activitybar).toHaveCSS('border-right-width', '1px');
+	await expect(activitybar).toHaveCSS('border-right-color', 'rgb(229, 229, 229)');
+	await expect(sidebar).toHaveCSS('border-left-width', '0px');
 	await expect(sidebar).toHaveCSS('border-top-left-radius', '0px');
 	await expect(sidebar.locator('.ash-sidebar-title-label')).toHaveText('Explorer');
 	const sidebarActions = sidebar.locator('.ash-pane-composite-title-actions');
@@ -78,8 +107,9 @@ test('activity bar remains visible and reopens a selected sidebar view', async (
 	const [railBounds, sidebarBounds] = await Promise.all([activitybar.boundingBox(), sidebar.boundingBox()]);
 	expect(railBounds).not.toBeNull();
 	expect(sidebarBounds).not.toBeNull();
-	expect(railBounds!.width).toBe(36);
-	await expect(activitybar).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+	expect(railBounds!.width).toBe(44);
+	await expect(activitybar).toHaveCSS('background-color', 'rgb(248, 248, 248)');
+	await expect(sidebar).toHaveCSS('background-color', 'rgb(248, 248, 248)');
 	expect(Math.abs(railBounds!.x + railBounds!.width - sidebarBounds!.x)).toBeLessThan(1);
 	await explorer.focus();
 	await explorer.press('ArrowDown');
@@ -147,10 +177,35 @@ test('activity bar context menu hides and restores view icons', async ({ target,
 	await expect(page.getByRole('menu').last().getByRole('menuitem', { name: "Hide 'Explorer'" })).toBeVisible();
 });
 
+test('blank activity bar context menu lists and toggles views', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const activitybar = workbench.page.locator('[data-part="activitybar"]');
+	const compositeBar = activitybar.locator('.ash-composite-bar');
+	const search = activitybar.getByRole('tab', { name: 'Search' });
+	const bounds = await compositeBar.boundingBox();
+	expect(bounds).not.toBeNull();
+	await compositeBar.click({ button: 'right', position: { x: 2, y: bounds!.height - 4 } });
+	let menu = workbench.page.getByRole('menu').last();
+	for (const name of ['Explorer', 'Search', 'Git', 'Run and Debug', 'Testing', 'Marketplace', 'Language servers', 'Skills']) {
+		await expect(menu.getByRole('menuitemcheckbox', { name })).toHaveAttribute('aria-checked', 'true');
+	}
+	await expect(menu.getByRole('menuitemcheckbox', { name: 'Accounts' })).toBeVisible();
+	await expect(menu.getByRole('menuitem', { name: 'Activity Bar Position' })).toBeVisible();
+	await menu.getByRole('menuitemcheckbox', { name: 'Search' }).click();
+	await expect(search).toBeHidden();
+
+	await compositeBar.click({ button: 'right', position: { x: 2, y: bounds!.height - 4 } });
+	menu = workbench.page.getByRole('menu').last();
+	await expect(menu.getByRole('menuitemcheckbox', { name: 'Search' })).toHaveAttribute('aria-checked', 'false');
+	await menu.getByRole('menuitemcheckbox', { name: 'Search' }).click();
+	await expect(search).toBeVisible();
+});
+
 test('activity bar context menu changes size and position', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
 	const activitybar = page.locator('[data-part="activitybar"]');
+	const titlebar = page.locator('[data-part="titlebar"]');
 	const sidebar = page.locator('[data-part="sidebar"]');
 	const editor = page.locator('[data-part="editor"]');
 	await activitybar.getByRole('tab', { name: 'Explorer' }).click();
@@ -163,7 +218,21 @@ test('activity bar context menu changes size and position', async ({ target, wor
 	await expect(menu.getByRole('menuitem', { name: 'Move Primary Side Bar Right' })).toBeVisible();
 	await menu.getByRole('menuitem', { name: 'Activity Bar Size' }).hover();
 	await page.getByRole('menu').last().getByRole('menuitemcheckbox', { name: 'Compact' }).click();
-	await expect(activitybar).toHaveCSS('width', '28px');
+	await expect(activitybar).toHaveCSS('width', '36px');
+	const compactExplorer = activitybar.getByRole('tab', { name: 'Explorer' });
+	await expect(compactExplorer).toHaveCSS('height', '28px');
+	await expect(compactExplorer).toHaveCSS('width', '28px');
+	await expect(compactExplorer.locator('.ash-icon')).toHaveCSS('width', '16px');
+	await expect(activitybar.getByRole('button', { name: 'Accounts' }).locator('.ash-button-content .ash-icon').first()).toHaveCSS('width', '16px');
+	expect(await compactExplorer.evaluate(element => {
+		const style = getComputedStyle(element, '::after');
+		return { width: style.width, height: style.height, radius: style.borderRadius };
+	})).toEqual({ width: '24px', height: '24px', radius: '4px' });
+	const [compactOuterBox, compactItemBox] = await Promise.all([activitybar.boundingBox(), compactExplorer.boundingBox()]);
+	expect(compactOuterBox).not.toBeNull();
+	expect(compactItemBox).not.toBeNull();
+	expect(compactItemBox!.x - compactOuterBox!.x).toBe(4);
+	expect(compactItemBox!.y - compactOuterBox!.y).toBe(4);
 	await activitybar.getByRole('button', { name: 'Accounts' }).click({ button: 'right' });
 	menu = page.getByRole('menu').last();
 	await menu.getByRole('menuitem', { name: 'Move Primary Side Bar Right' }).click();
@@ -173,21 +242,66 @@ test('activity bar context menu changes size and position', async ({ target, wor
 	expect(activityBounds).not.toBeNull();
 	expect(sidebarBounds!.x).toBeGreaterThan(editorBounds!.x);
 	expect(activityBounds!.x).toBeGreaterThan(sidebarBounds!.x);
+	await expect(activitybar).toHaveCSS('border-left-width', '1px');
+	await expect(sidebar).toHaveCSS('border-right-width', '0px');
 	await activitybar.getByRole('button', { name: 'Manage' }).click({ button: 'right' });
 	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Activity Bar Position' }).hover();
-	await page.getByRole('menu').last().getByRole('menuitemcheckbox', { name: 'Move Activity Bar to Top' }).click();
-	await expect(activitybar.getByRole('tablist')).toHaveAttribute('aria-orientation', 'horizontal');
-	const [topBar, topSidebar] = await Promise.all([activitybar.boundingBox(), sidebar.boundingBox()]);
-	expect(topBar!.y + topBar!.height).toBeLessThanOrEqual(topSidebar!.y + 1);
-	await activitybar.getByRole('button', { name: 'Manage' }).click({ button: 'right' });
+	const positionMenu = page.getByRole('menu').last();
+	await expect(positionMenu.getByRole('menuitemcheckbox')).toHaveText(['Default', 'Top', 'Bottom', 'Hidden']);
+	await expect(positionMenu.getByRole('menuitemcheckbox', { name: 'Default' })).toHaveAttribute('aria-checked', 'true');
+	await positionMenu.getByRole('menuitemcheckbox', { name: 'Top' }).click();
+	await expect(activitybar).toBeHidden();
+	const topSelector = sidebar.locator('.ash-sidebar-composite-bar-top').getByRole('tablist');
+	await expect(topSelector).toHaveAttribute('aria-orientation', 'horizontal');
+	await expect(sidebar).toHaveCSS('border-right-width', '1px');
+	await expect(sidebar).toHaveCSS('border-top-right-radius', '8px');
+	const [rightSidebar, workbenchBounds] = await Promise.all([sidebar.boundingBox(), page.locator('.ash-workbench').boundingBox()]);
+	expect(rightSidebar).not.toBeNull();
+	expect(workbenchBounds).not.toBeNull();
+	expect(workbenchBounds!.x + workbenchBounds!.width - rightSidebar!.x - rightSidebar!.width).toBe(8);
+	await expect(topSelector.getByRole('tab', { name: 'Explorer' }).locator('.ash-icon')).toHaveCSS('width', '16px');
+	await topSelector.getByRole('tab', { name: 'Explorer' }).click({ button: 'right' });
+	await expect(page.getByRole('menu').last().getByRole('menuitem', { name: 'Activity Bar Position' })).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(sidebar).toHaveCSS('border-top-width', '1px');
+	const titlebarAccounts = titlebar.getByRole('button', { name: 'Accounts' });
+	const titlebarManage = titlebar.getByRole('button', { name: 'Manage' });
+	await expect(titlebar.getByRole('toolbar', { name: 'Title Bar global actions' })).toBeVisible();
+	await expect(titlebarAccounts).toBeVisible();
+	await expect(titlebarManage).toHaveCSS('width', '28px');
+	await expect(titlebarManage.locator('.ash-icon').first()).toHaveCSS('width', '16px');
+	const [titlebarBounds, accountBounds, manageBounds] = await Promise.all([titlebar.boundingBox(), titlebarAccounts.boundingBox(), titlebarManage.boundingBox()]);
+	expect(titlebarBounds).not.toBeNull();
+	expect(accountBounds).not.toBeNull();
+	expect(manageBounds).not.toBeNull();
+	expect(accountBounds!.x).toBeLessThan(manageBounds!.x);
+	expect(manageBounds!.y).toBeGreaterThanOrEqual(titlebarBounds!.y);
+	expect(manageBounds!.y + manageBounds!.height).toBeLessThanOrEqual(titlebarBounds!.y + titlebarBounds!.height);
+	await titlebarAccounts.click();
+	await expect(page.getByRole('menu').last().getByRole('menuitem', { name: 'Sign in with ChatGPT' })).toBeVisible();
+	await page.keyboard.press('Escape');
+	await titlebarManage.click();
+	await expect(page.getByRole('menu').last().getByRole('menuitem', { name: 'Settings' })).toBeVisible();
+	await page.keyboard.press('Escape');
+	await titlebarManage.focus();
+	await titlebarManage.press('Shift+F10');
+	await expect(page.getByRole('menu').last().getByRole('menuitem', { name: 'Activity Bar Position' })).toBeVisible();
+	await page.keyboard.press('Escape');
+	await titlebarManage.click({ button: 'right' });
 	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Activity Bar Position' }).hover();
-	await page.getByRole('menu').last().getByRole('menuitemcheckbox', { name: 'Move Activity Bar to Bottom' }).click();
-	const [bottomBar, bottomSidebar] = await Promise.all([activitybar.boundingBox(), sidebar.boundingBox()]);
-	expect(bottomBar!.y).toBeGreaterThanOrEqual(bottomSidebar!.y + bottomSidebar!.height - 1);
-	await activitybar.getByRole('button', { name: 'Manage' }).click({ button: 'right' });
+	await page.getByRole('menu').last().getByRole('menuitemcheckbox', { name: 'Bottom' }).click();
+	await expect(activitybar).toBeHidden();
+	const bottomSelector = sidebar.locator('.ash-sidebar-composite-bar-bottom').getByRole('tablist');
+	await expect(bottomSelector).toHaveAttribute('aria-orientation', 'horizontal');
+	const [bottomBar, bottomSidebar] = await Promise.all([bottomSelector.boundingBox(), sidebar.boundingBox()]);
+	await expect(sidebar).toHaveCSS('border-bottom-width', '1px');
+	expect(bottomBar!.y + bottomBar!.height).toBeGreaterThanOrEqual(bottomSidebar!.y + bottomSidebar!.height - 1);
+	await titlebarManage.click({ button: 'right' });
 	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Activity Bar Position' }).hover();
-	await page.getByRole('menu').last().getByRole('menuitemcheckbox', { name: 'Move Activity Bar to Side' }).click();
+	await page.getByRole('menu').last().getByRole('menuitemcheckbox', { name: 'Default' }).click();
+	await expect(activitybar).toBeVisible();
 	await expect(activitybar.getByRole('tablist')).toHaveAttribute('aria-orientation', 'vertical');
+	await expect(titlebarManage).toHaveCount(0);
 	await activitybar.getByRole('button', { name: 'Manage' }).click({ button: 'right' });
 	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Move Primary Side Bar Left' }).click();
 	const [leftSidebar, leftEditor, leftBar] = await Promise.all([sidebar.boundingBox(), editor.boundingBox(), activitybar.boundingBox()]);
@@ -201,8 +315,33 @@ test('activity bar context menu changes size and position', async ({ target, wor
 	await expect(activitybar.getByRole('button', { name: 'Accounts' })).toBeVisible();
 	await activitybar.getByRole('button', { name: 'Manage' }).click({ button: 'right' });
 	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Activity Bar Position' }).hover();
-	await page.getByRole('menu').last().getByRole('menuitemcheckbox', { name: 'Hide Activity Bar' }).click();
+	await page.getByRole('menu').last().getByRole('menuitemcheckbox', { name: 'Hidden' }).click();
 	await expect(activitybar).toBeHidden();
+});
+
+test('top activity bar places the view selector inside the sidebar', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	const activitybar = page.locator('[data-part="activitybar"]');
+	const sidebar = page.locator('[data-part="sidebar"]');
+	await activitybar.getByRole('tab', { name: 'Explorer' }).click();
+	await expect(sidebar).toBeVisible();
+	const initialSidebar = await sidebar.boundingBox();
+	await activitybar.getByRole('button', { name: 'Manage' }).click({ button: 'right' });
+	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Activity Bar Position' }).hover();
+	await page.getByRole('menu').last().getByRole('menuitemcheckbox', { name: 'Top' }).click();
+
+	await expect(activitybar).toBeHidden();
+	const selector = sidebar.locator('.ash-sidebar-composite-bar-top').getByRole('tablist');
+	await expect(selector).toHaveAttribute('aria-orientation', 'horizontal');
+	await expect(selector.getByRole('tab', { name: 'Explorer' })).toBeVisible();
+	const nextSidebar = await sidebar.boundingBox();
+	expect(initialSidebar).not.toBeNull();
+	expect(nextSidebar).not.toBeNull();
+	expect(nextSidebar!.height).toBe(initialSidebar!.height);
+	expect(nextSidebar!.x).toBe(6);
+	await expect(sidebar).toHaveCSS('border-left-width', '1px');
+	await expect(sidebar).toHaveCSS('border-bottom-left-radius', '8px');
 });
 
 test('command center opens without a first-run guide', async ({ target, workbench }) => {

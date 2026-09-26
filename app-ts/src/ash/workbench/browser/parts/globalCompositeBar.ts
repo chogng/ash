@@ -13,13 +13,14 @@ import { ILogService } from '../../../platform/log/common/log.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import { ILocalizationService } from '../../services/localization/common/localizationService.js';
 
-/** Account and management actions anchored to the bottom of the Activity Bar. */
+/** Account and management actions shared by the Activity Bar and title bar. */
 export class GlobalCompositeBar extends Disposable {
 	private static readonly accountsVisibilityKey = 'workbench.activity.showAccounts';
 	public readonly domNode: HTMLDivElement;
 	private readonly actionBar: ActionBar;
 	private readonly manageMenu;
 	private accountsVisible: boolean;
+	private orientation: 'horizontal' | 'vertical' = 'vertical';
 	private accounts: readonly Account[] = [];
 	private accountRevision = -1n;
 
@@ -52,7 +53,7 @@ export class GlobalCompositeBar extends Disposable {
 		}));
 		this.renderActions();
 		this._register(this.localizationService.onDidChange(() => {
-			this.actionBar.element.setAttribute('aria-label', this.label('workbench.activityBarGlobalActions', 'Activity Bar global actions'));
+			this.updateAriaLabel();
 			this.renderActions();
 		}));
 		this._register(this.storageService.onDidChangeValue(event => {
@@ -82,7 +83,17 @@ export class GlobalCompositeBar extends Disposable {
 	}
 
 	setOrientation(orientation: 'horizontal' | 'vertical'): void {
+		this.orientation = orientation;
+		this.domNode.classList.toggle('ash-global-composite-bar-titlebar', orientation === 'horizontal');
 		this.actionBar.setOrientation(orientation);
+		this.updateAriaLabel();
+	}
+
+	private updateAriaLabel(): void {
+		const label = this.orientation === 'horizontal'
+			? this.label('workbench.titleBarGlobalActions', 'Title Bar global actions')
+			: this.label('workbench.activityBarGlobalActions', 'Activity Bar global actions');
+		this.actionBar.element.setAttribute('aria-label', label);
 	}
 
 	getContextMenuActions(): readonly IAction[] {
