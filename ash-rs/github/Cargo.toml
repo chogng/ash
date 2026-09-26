@@ -13,6 +13,10 @@ url = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["io-util", "process", "rt", "time", "macros"] }
+ash-http-client = { workspace = true }
+ash-login = { workspace = true }
+ash-secrets = { workspace = true }
+zeroize = { workspace = true }
 [dev-dependencies]
 tempfile = { workspace = true }
 

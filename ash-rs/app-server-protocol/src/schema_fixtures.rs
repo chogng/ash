@@ -872,7 +872,12 @@ fn schema_fixtures_match_the_generators() {
     assert_eq!(fixture_names, expected_names);
     for (path, expected) in typescript_files() {
         let actual = std::fs::read_to_string(fixture_directory.join(&path)).unwrap();
-        assert_eq!(actual.replace("\r\n", "\n"), expected, "{}", path.display());
+        assert_eq!(
+            actual.replace("\r\n", "\n"),
+            expected.replace("\r\n", "\n"),
+            "{}",
+            path.display()
+        );
     }
 }
 

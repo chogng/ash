@@ -89,6 +89,22 @@ test('App Server response decoding selects the result schema from its pending me
 	);
 });
 
+test('account revisions preserve the full unsigned 64-bit value across the generated boundary', () => {
+	const result = {
+		revision: '18446744073709551615',
+		accounts: [{
+			provider: 'openai', accountId: 'account-1', email: null, displayName: null,
+			organization: null, plan: null, status: 'ready', credentialRevision: '18446744073709551615',
+		}],
+	};
+	const response = { jsonrpc: '2.0', id: 8, result };
+	assert.deepEqual(decodeAppServerResponse('account/read', response), response);
+	assert.throws(() => decodeAppServerResponse('account/read', {
+		...response,
+		result: { ...result, accounts: [{ ...result.accounts[0], credentialRevision: Number.MAX_SAFE_INTEGER + 1 }] },
+	}), AppServerProtocolDecodeError);
+});
+
 test('App Server notification decoding rejects unknown methods and envelope fields', () => {
 	const notification = {
 		jsonrpc: '2.0',

@@ -178,6 +178,17 @@ test("EditorStatusContribution projects and clears active pane status", () => {
 	} as unknown as IAccessibilityService);
 
 	assert.deepEqual(statusTexts(statusbar), ["Ln 4, Col 9", "LF  UTF-8", "TypeScript"]);
+	state.activeInput = { ...input, readOnly: true };
+	editorChanges.fire();
+	assert.equal(statusTexts(statusbar)[0], "Read-only");
+	using welcomePane = new TestStatusPane(undefined);
+	state.activeInput = { resource: URI.parse('ash-welcome:/welcome'), readOnly: true };
+	state.activePane = welcomePane;
+	editorChanges.fire();
+	assert.ok(!statusTexts(statusbar).includes("Read-only"));
+	state.activeInput = input;
+	state.activePane = pane;
+	editorChanges.fire();
 	workingCopy.markDirty();
 	editorChanges.fire();
 	assert.deepEqual(statusTexts(statusbar), ["Unsaved", "Ln 4, Col 9", "LF  UTF-8", "TypeScript"]);
@@ -272,7 +283,7 @@ class TestStatusPane extends Disposable implements IEditorPane {
 	readonly onDidChangeStatus = this.statusEmitter.event;
 	private status: EditorPaneStatus = { lineNumber: 4, columnNumber: 9, languageId: "typescript", encoding: "UTF-8", endOfLine: "LF" };
 
-	constructor(readonly workingCopy: IWorkingCopy) { super(); }
+	constructor(readonly workingCopy: IWorkingCopy | undefined) { super(); }
 	getStatus(): EditorPaneStatus { return this.status; }
 	setStatus(status: EditorPaneStatus): void { this.status = status; this.statusEmitter.fire(); }
 	create(): void {}

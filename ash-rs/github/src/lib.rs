@@ -1,7 +1,13 @@
-//! GitHub repository operations using the host's authenticated GitHub CLI.
+//! GitHub account authorization and repository operations.
+//!
+//! Account credentials belong to Ash's profile secret store. Repository issue and PR
+//! operations currently use the host's authenticated GitHub CLI.
 
+mod auth;
 mod issues;
 mod process;
+pub use auth::GITHUB_PROVIDER_ID;
+pub use auth::GitHubOAuth;
 pub use issues::IssueAssignee;
 pub use issues::IssueLabel;
 pub use issues::IssueMetadata;

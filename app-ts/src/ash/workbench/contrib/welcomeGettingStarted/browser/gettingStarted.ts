@@ -3,6 +3,7 @@ import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { RawContextKey, type IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { IGitHubConnectionService } from '../../../services/accounts/common/gitHubConnectionService.js';
 import type { EditorInput } from '../../../services/editor/common/editorService.js';
 import { IRecentWorkspacesService } from '../../../services/workspaces/common/recentWorkspacesService.js';
 import { IWorkspaceOpenService } from '../../../services/workspaces/browser/workspaceOpenService.js';
@@ -26,6 +27,7 @@ export class GettingStartedPage extends Disposable implements IEditorPane {
 		@IWorkspaceOpenService private readonly workspaceOpenService: IWorkspaceOpenService,
 		@ICommandService private readonly commandService: ICommandService,
 		@IContextKeyService private readonly contextKeyService: IContextKeyService,
+		@IGitHubConnectionService private readonly githubConnection: IGitHubConnectionService,
 	) {
 		super();
 		this._register(this.recentWorkspaces.onDidChange(() => this.content?.setRecentProjects(this.projects())));
@@ -49,6 +51,7 @@ export class GettingStartedPage extends Disposable implements IEditorPane {
 			actions: {
 				openFolder: this.workspaceOpenService.canOpenFolder ? () => this.workspaceOpenService.openFolder() : undefined,
 				connectViaSsh: () => this.commandService.executeCommand(ConnectToRemoteCommandId),
+				connectGitHub: () => this.githubConnection.connect(),
 			},
 		}));
 	}

@@ -124,6 +124,7 @@ impl AppServer {
             AccountLoginMethodDto::OpenAiChatGptDeviceCode => LoginMethod::OpenAiChatGptDeviceCode,
             AccountLoginMethodDto::KimiDeviceCode => LoginMethod::KimiDeviceCode,
             AccountLoginMethodDto::XaiDeviceCode => LoginMethod::XaiDeviceCode,
+            AccountLoginMethodDto::GitHubDeviceCode => LoginMethod::GitHubDeviceCode,
         };
         let login = self.login_service()?;
         match method {
@@ -325,7 +326,7 @@ impl LoginEvents for AppServerLoginEvents {
 
 fn account_state_dto(state: AccountState) -> AccountReadResult {
     AccountReadResult {
-        revision: state.revision,
+        revision: state.revision.to_string(),
         accounts: state.accounts.into_iter().map(account_dto).collect(),
     }
 }
@@ -343,7 +344,7 @@ fn account_dto(account: AccountSnapshot) -> AccountDto {
             AccountStatus::ReauthenticationRequired => AccountStatusDto::ReauthenticationRequired,
             AccountStatus::Unavailable => AccountStatusDto::Unavailable,
         },
-        credential_revision: account.credential_revision,
+        credential_revision: account.credential_revision.to_string(),
     }
 }
 

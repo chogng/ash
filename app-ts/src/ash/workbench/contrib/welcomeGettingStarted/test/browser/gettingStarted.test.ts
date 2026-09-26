@@ -9,16 +9,19 @@ suite('Welcome page', () => {
 	test('shows actions, translates labels, and dispatches the available action', () => {
 		const dom = new JSDOM('<!doctype html><body></body>');
 		let openFolderCount = 0;
+		let connectGitHubCount = 0;
 		const page = new GettingStarted(dom.window.document.body, {
-			actions: { openFolder: () => { openFolderCount += 1; } },
+			actions: { openFolder: () => { openFolderCount += 1; }, connectGitHub: () => { connectGitHubCount += 1; } },
 			recentProjects: [{ name: 'ash', path: '~/Desktop' }],
 		});
 		const cards = page.domNode.querySelectorAll<HTMLButtonElement>('.ash-getting-started-card');
 		assert.equal(page.domNode.querySelector('.ash-getting-started-name')?.textContent, 'ASH');
 		assert.deepEqual([...cards].map(card => card.textContent), ['Open folder', 'Clone repo', 'Connect via SSH', 'Connect GitHub']);
-		assert.deepEqual([...cards].map(card => card.disabled), [false, true, true, true]);
+		assert.deepEqual([...cards].map(card => card.disabled), [false, true, true, false]);
 		cards[0]?.click();
+		cards[3]?.click();
 		assert.equal(openFolderCount, 1);
+		assert.equal(connectGitHubCount, 1);
 
 		const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 		try {

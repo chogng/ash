@@ -17,6 +17,11 @@ App Server client + `ash-install-context` boundary. Each host explicitly injects
 an explicit `ASH_PRODUCT_SERVICES_PATH` remains authoritative for development and specialized hosts.
 Marketplace URLs or root replacement must not move into user configuration or Plugin metadata.
 
+`githubAccount.clientId` is the public Client ID of Ash Desktop's GitHub OAuth App. The
+Welcome page uses it for GitHub device authorization. The GitHub adapter stores access and
+refresh tokens in the profile secret store and exposes only the account name and status to
+the editor. This account connection is separate from Plugin connector OAuth settings.
+
 The independent Marketplace source, public root owner, publishing pipeline, and key rotation
 procedure live in the private [`marketplace`](https://github.com/chogng/marketplace) repository.
 Ash is one optional consumer: this product bundle chooses to pin that root, while Marketplace

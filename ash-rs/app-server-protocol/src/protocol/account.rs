@@ -24,16 +24,16 @@ pub struct AccountDto {
     pub organization: Option<String>,
     pub plan: Option<String>,
     pub status: AccountStatusDto,
-    #[ts(type = "number")]
-    pub credential_revision: u64,
+    /// Decimal text preserves the full Rust revision in JavaScript clients.
+    pub credential_revision: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(rename_all = "camelCase")]
 pub struct AccountReadResult {
-    #[ts(type = "number")]
-    pub revision: u64,
+    /// Decimal text preserves the full Rust revision in JavaScript clients.
+    pub revision: String,
     pub accounts: Vec<AccountDto>,
 }
 
@@ -116,6 +116,7 @@ pub enum AccountLoginMethodDto {
     OpenAiChatGptDeviceCode,
     KimiDeviceCode,
     XaiDeviceCode,
+    GitHubDeviceCode,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

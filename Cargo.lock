@@ -1583,11 +1583,15 @@ dependencies = [
 name = "ash-github"
 version = "0.1.0"
 dependencies = [
+ "ash-http-client",
+ "ash-login",
+ "ash-secrets",
  "serde",
  "serde_json",
  "tempfile",
  "tokio",
  "url",
+ "zeroize",
 ]
 
 [[package]]

@@ -5260,7 +5260,7 @@ fn account_rpc_projects_login_completion_without_credentials() {
                     organization: None,
                     plan: Some("plus".into()),
                     status: AccountStatus::Ready,
-                    credential_revision: 7,
+                    credential_revision: u64::MAX,
                 },
             },
         })
@@ -5289,7 +5289,8 @@ fn account_rpc_projects_login_completion_without_credentials() {
         serde_json::json!({"jsonrpc":"2.0","id":4,"method":"account/read","params":{}}),
     );
     assert_eq!(read["result"]["accounts"][0]["plan"], "plus");
-    assert_eq!(read["result"]["accounts"][0]["credentialRevision"], 7);
+    assert_eq!(read["result"]["revision"], "1");
+    assert_eq!(read["result"]["accounts"][0]["credentialRevision"], u64::MAX.to_string());
     *driver.account.lock().unwrap() = None;
     let read = call(
         &server,
@@ -6769,6 +6770,64 @@ fn device_subscription_login_registers_its_provider_once_for_model_selection() {
             assert!(snapshot.values.model.is_none());
         }
     }
+}
+
+#[test]
+fn github_account_login_routes_device_challenge_without_model_provider_configuration() {
+    struct Driver;
+    impl InteractiveLoginDriver for Driver {
+        fn provider_id(&self) -> &'static str {
+            "github"
+        }
+        fn read_account(&self) -> Result<Option<AccountSnapshot>, LoginError> {
+            Ok(None)
+        }
+        fn begin(&self, request: BeginLoginRequest) -> Result<BeginLogin, LoginError> {
+            assert_eq!(request.method, ash_login::LoginMethod::GitHubDeviceCode);
+            Ok(BeginLogin::DeviceCode {
+                login_id: request.login_id,
+                verification_url: "https://github.com/login/device".into(),
+                user_code: "ABCD-EFGH".into(),
+            })
+        }
+        fn cancel(&self, _: &LoginId) -> Result<CancelLoginOutcome, LoginError> {
+            Ok(CancelLoginOutcome::Cancelled)
+        }
+        fn logout(&self, _: &AccountRef) -> Result<(), LoginError> {
+            Ok(())
+        }
+    }
+
+    let profile = tempfile::tempdir().unwrap();
+    let config = Arc::new(ConfigStore::open(profile.path().join("config.sqlite3")).unwrap());
+    let server = server()
+        .with_config_store(config.clone())
+        .with_login_service(Arc::new(LoginService::new(Arc::new(Driver)).unwrap()));
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let response = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":2,"method":"account/login/start",
+            "params":{"method":{"type":"gitHubDeviceCode"}}
+        }),
+    );
+    assert_eq!(
+        response["result"]["verificationUrl"],
+        "https://github.com/login/device"
+    );
+    assert_eq!(response["result"]["userCode"], "ABCD-EFGH");
+    assert!(config.read_snapshot().unwrap().values.providers.is_empty());
+    let cancelled = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":3,"method":"account/login/cancel",
+            "params":{"loginId":response["result"]["loginId"]}
+        }),
+    );
+    assert_eq!(cancelled["result"]["status"], "cancelled");
 }
 
 #[test]

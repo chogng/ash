@@ -77,6 +77,7 @@ test.describe('welcome brand', () => {
 			await expect(card).toHaveCSS('background-color', 'rgb(228, 228, 228)');
 		}
 		const github = cards.nth(3);
+		await expect(github).toBeEnabled();
 		await expect(github.locator('.ash-getting-started-card-arrow')).toHaveCount(0);
 		await expect(github).toHaveCSS('background-color', 'rgb(0, 0, 0)');
 		await expect(github).toHaveCSS('color', 'rgb(255, 255, 255)');
@@ -84,6 +85,20 @@ test.describe('welcome brand', () => {
 		await expect(github.locator('svg.ash-icon path').first()).toHaveCSS('fill', 'rgb(255, 255, 255)');
 		await github.hover();
 		await expect(github).toHaveCSS('background-color', 'rgb(38, 38, 38)');
+	});
+
+	test('Connect GitHub reports when account service is unavailable', async ({ target, workbench }) => {
+		test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled');
+		await workbench.editors.groupAt(0).welcome.getByRole('button', { name: 'Connect GitHub' }).click();
+		const dialog = workbench.page.getByRole('dialog', { name: 'Connect GitHub' });
+		await expect(dialog).toContainText('Could not connect GitHub. Try again.');
+		await expect(workbench.page.locator('.ash-notification')).toHaveCount(0);
+		const [bounds, titlebarBounds] = await Promise.all([dialog.boundingBox(), workbench.page.locator('[data-part="titlebar"]').boundingBox()]);
+		const viewport = workbench.page.viewportSize();
+		expect(bounds && titlebarBounds && viewport ? {
+			centered: Math.abs(bounds.x + bounds.width / 2 - viewport.width / 2) < 8,
+			clearOfTitlebar: bounds.y > titlebarBounds.y + titlebarBounds.height,
+		} : null).toEqual({ centered: true, clearOfTitlebar: true });
 	});
 
 	test('welcome actions have compact, even spacing', async ({ workbench }) => {

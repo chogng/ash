@@ -2,7 +2,7 @@
 
 > 物理位置：`ash-rs/login/`
 > Rust crate：`ash_login`
-> 当前状态：多 Provider 控制面、App Server RPC、ChatGPT/Kimi/xAI 订阅认证与本地模型执行已实现；zAI Coding Plan 通过密钥与专用端点接入
+> 当前状态：多 Provider 控制面、App Server RPC、ChatGPT/Kimi/xAI 订阅认证、GitHub 账户连接与本地模型执行已实现；zAI Coding Plan 通过密钥与专用端点接入
 > 订阅接入与额度：[`subscriptions.md`](subscriptions.md)
 > Kimi OAuth owner：`ash-rs/kimi/`
 > xAI OAuth owner：`ash-rs/xai/`
@@ -18,6 +18,7 @@
 | ChatGPT 设备码登录 | 本机 `ash-chatgpt` | 授权地址、一次性用户码和脱敏账户状态；首次 token 保存为 Codex 兼容 auth.json；有 Codex 时只读复用，无 Codex 时由 Ash 维护 |
 | Kimi 设备码登录 | 本机 `ash-kimi` | 授权地址、一次性用户码和脱敏账户状态；凭据由 Kimi 适配器保存到 profile SecretStore |
 | xAI 设备码登录 | 本机 `ash-xai` | 授权地址、一次性用户码和脱敏账户状态；Ash 登录凭据保存在 profile SecretStore，没有 Ash 凭据时可只读使用宿主 Grok 登录文件 |
+| GitHub 设备码登录 | 本机 `ash-github` | 授权地址、一次性用户码和脱敏账户状态；凭据保存在 profile SecretStore，欢迎页可发起连接 |
 | 登出、取消或切换账户 | 登录控制面协调，供应商适配器执行 | 稳定状态和脱敏结果 |
 | 没有受支持订阅 OAuth 的供应商 API key | 对应模型凭据领域 | 不属于交互式登录，也不是 OAuth 失败后的降级 |
 | AWS 凭据链、Google ADC、Azure 托管身份 | 对应供应商运行时 | 不包装成通用 OAuth |
@@ -44,11 +45,11 @@ BigModel 的本地状态只表示密钥已保存、Coding Plan 端点已启用�
 reauthentication-required 状态；它不把不同 Provider 的 credential 协议伪装成一套通用 OAuth
 实现。
 
-当前实现是 provider-neutral control plane：`InteractiveLoginDriver` 声明自己的 stable provider ID，接收 service-owned `LoginId`，返回 browser/device-code 挑战或立即连接成功，以及脱敏账户摘要。App Server 已暴露 `account/read`、`account/login/start`、`account/login/cancel`、带 provider 参数的 `account/logout`，并主动发布 `account/login/completed` 与 `account/updated`；`account/read` 返回 `accounts[]`，所以 ChatGPT、Kimi 和 xAI 可以同时登录。
+当前实现是 provider-neutral control plane：`InteractiveLoginDriver` 声明自己的 stable provider ID，接收 service-owned `LoginId`，返回 browser/device-code 挑战或立即连接成功，以及脱敏账户摘要。App Server 已暴露 `account/read`、`account/login/start`、`account/login/cancel`、带 provider 参数的 `account/logout`，并主动发布 `account/login/completed` 与 `account/updated`；`account/read` 返回 `accounts[]`，所以 ChatGPT、Kimi、xAI 和 GitHub 可以同时登录。
 
 产品边界按认证能力划分：ChatGPT、Kimi、xAI 的订阅接入通过 `ash-login` 暴露交互式账户登录；开发者 API 通过模型凭据领域接受 API key。两种凭据可以同时保存；订阅账户就绪时，该供应商的模型列表与文本请求优先使用订阅。订阅不可用时才使用已保存的 API key，不会在一次失败的订阅请求中改走 API。BigModel 使用 zAI 密钥和 Coding Plan 端点，由提供商配置决定接入方式，不产生 `ash-login` 账户。
 
-本地默认组合安装 ChatGPT、Kimi 和 xAI 三个登录适配器。它们各自使用对应的设备授权流程，在本机交换或刷新 token；ChatGPT 使用 Codex 兼容的本地登录存储，Kimi 和 xAI 的 Ash 登录凭据保存在 profile SecretStore，xAI 在没有 Ash 凭据时还能只读使用宿主 Grok 登录文件。它们只向控制面提供脱敏账户信息。
+本地默认组合安装 ChatGPT、Kimi 和 xAI 三个订阅登录适配器；发行配置中的公开 Client ID 另启用 GitHub 账户适配器。它们各自使用对应的设备授权流程，在本机交换或刷新 token；ChatGPT 使用 Codex 兼容的本地登录存储，Kimi、xAI 和 GitHub 的 Ash 登录凭据保存在 profile SecretStore，xAI 在没有 Ash 凭据时还能只读使用宿主 Grok 登录文件。它们只向控制面提供脱敏账户信息。
 
 默认目录中的 `openai/gpt-5.6-sol` 等订阅模型显式标记 `runtime = chatgpt_subscription`，`kimi/kimi-k2.7-code` 标记 `runtime = kimi_code`。`ModelRef` 始终使用供应商 ID；当前账户状态决定有效接入方式。桌面端的固定模型列表不因登录或填入 API key 增减条目；TUI `/model` 只显示当前连接发现或同账户缓存观察到的模型。订阅切换后，TUI 的可选条目会随目录变化；已选择的准确模型是否能请求成功由调用时的接线和认证决定。
 App Server 读取到已就绪的 ChatGPT 账户时登记 `openai` 供应商，供 TUI 读取该账户的发现目录。Ash 首次读取订阅目录时，若 Codex 有本地模型缓存，会通过 Codex 的本地 `model/list` 校验当前账户并转换可见条目；否则由 Ash 使用当前登录读取 ChatGPT 目录。转换后的模型信息存入 Ash profile 的 `cache/models/openai.json`，同一文件内按账户和接入方式隔离。xAI 写入 `xai.json`，Kimi Code 写入 `kimi.json`；这些文件都按供应商和账户 scope 管理。旧配置的 `xai-subscription` 模型引用迁为 `xai`；OpenAI 与 Kimi 的原有模型引用保持供应商 ID 不变。

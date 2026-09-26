@@ -83,6 +83,7 @@ use core_api::CoreError;
 use core_api::ModelSelection;
 use core_api::ModelService;
 use core_api::ModelStreamSink as CoreModelStreamSink;
+use github::GitHubOAuth;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::fmt;
@@ -1008,6 +1009,9 @@ pub fn open_local_app_server_with_codebase_providers(
     providers: LocalCodebaseProviders,
 ) -> Result<AppServer, OpenAppServerError> {
     let product_services = options.product_services.take();
+    let github_account_client_id = product_services
+        .as_ref()
+        .and_then(|services| services.github_account_client_id.clone());
     let pty_helper = options.pty_helper.take();
     if options.plugin_package_service.is_none()
         && let Some(sources) = product_services
@@ -1381,8 +1385,21 @@ pub fn open_local_app_server_with_codebase_providers(
     });
     let built_in_skill_root = resolve_built_in_skill_root(options.built_in_skills);
     let extension_roots = resolve_extension_roots(&options.profile_root);
-    let login_drivers: Vec<Arc<dyn InteractiveLoginDriver>> =
+    let github_oauth = github_account_client_id
+        .map(|client_id| {
+            GitHubOAuth::new(
+                client_id,
+                Arc::clone(&application_http),
+                Arc::clone(&profile_secrets),
+            )
+        })
+        .transpose()
+        .map_err(|error| OpenAppServerError(error.to_string()))?;
+    let mut login_drivers: Vec<Arc<dyn InteractiveLoginDriver>> =
         vec![chatgpt_oauth.clone(), kimi_oauth.clone(), xai_oauth.clone()];
+    if let Some(github) = &github_oauth {
+        login_drivers.push(github.clone());
+    }
     let login_service = Arc::new(
         LoginService::deferred_with_drivers(login_drivers)
             .map_err(|error| OpenAppServerError(error.to_string()))?,
@@ -1396,6 +1413,11 @@ pub fn open_local_app_server_with_codebase_providers(
     xai_oauth
         .install_login_service(&login_service)
         .map_err(|error| OpenAppServerError(error.to_string()))?;
+    if let Some(github) = &github_oauth {
+        github
+            .install_login_service(&login_service)
+            .map_err(|error| OpenAppServerError(error.to_string()))?;
+    }
     let direct_catalog: Arc<dyn ModelCatalog> = configured_model.clone();
     let agent_model: Arc<dyn ModelService> = options
         .agent_model_service

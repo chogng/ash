@@ -13,6 +13,7 @@ import { IAccountService, type Account, type AccountState } from '../../../platf
 import { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
 import { ILogService } from '../../../platform/log/common/log.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
+import { IGitHubConnectionService } from '../../services/accounts/common/gitHubConnectionService.js';
 import { ILocalizationService } from '../../services/localization/common/localizationService.js';
 
 /** Account and management actions shared by the Activity Bar and title bar. */
@@ -33,6 +34,7 @@ export class GlobalCompositeBar extends Disposable {
 		@IMenuService private readonly menuService: IMenuService,
 		@IContextMenuService private readonly contextMenuService: IContextMenuService,
 		@IAccountService private readonly accountService: IAccountService,
+		@IGitHubConnectionService private readonly githubConnection: IGitHubConnectionService,
 		@ILocalizationService private readonly localizationService: ILocalizationService,
 		@ILogService private readonly logService: ILogService,
 		@IStorageService private readonly storageService: IStorageService,
@@ -124,13 +126,20 @@ export class GlobalCompositeBar extends Disposable {
 
 	private accountActions(): readonly IAction[] {
 		const signInLabel = this.label('workbench.signInWithChatGPT', 'Sign in with ChatGPT');
+		const githubConnected = this.accounts.some(account => account.provider === 'github');
+		const githubLabel = this.githubConnection.isConnecting
+			? this.label('workbench.connectingGitHub', 'Connecting GitHub…')
+			: this.label('workbench.connectGitHub', 'Connect GitHub');
 		return [
 			...this.accounts.map(account => {
 				const name = account.displayName ?? account.email ?? account.provider;
-				const label = this.localizationService.translate('ash', 'workbench.signOutAccount', 'Sign out of {0}', { '0': name });
+				const label = account.provider === 'github'
+					? this.localizationService.translate('ash', 'workbench.signOutGitHub', 'Sign out of GitHub ({0})', { '0': name })
+					: this.localizationService.translate('ash', 'workbench.signOutAccount', 'Sign out of {0}', { '0': name });
 				return { id: `ash.activityBar.signOut.${account.provider}`, label, tooltip: label, enabled: true, run: () => this.accountService.logout(account.provider) };
 			}),
 			{ id: 'ash.activityBar.signIn', label: signInLabel, tooltip: signInLabel, enabled: true, run: () => this.accountService.startLogin({ type: 'openAiChatGptBrowser' }) },
+			...(!githubConnected ? [{ id: 'ash.activityBar.connectGitHub', label: githubLabel, tooltip: githubLabel, enabled: !this.githubConnection.isConnecting, run: () => this.githubConnection.connect() }] : []),
 		];
 	}
 

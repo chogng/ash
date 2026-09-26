@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import type { IAction } from '../../../../../base/common/actions.js';
-import type { IAccountService } from '../../../../../platform/accounts/common/accountService.js';
+import type { IAccountService, AccountState, AccountLoginCompletion } from '../../../../../platform/accounts/common/accountService.js';
+import type { IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
 import type { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import type { ILogService } from '../../../../../platform/log/common/log.js';
 import type { ILocalizationService } from '../../../../services/localization/common/localizationService.js';
@@ -16,11 +17,17 @@ const { DisposableStore } = await import('../../../../../base/common/lifecycle.j
 const { formatNlsMessage } = await import('../../../../../nls.js');
 const { Emitter, Event } = await import('../../../../../base/common/event.js');
 const { IAccountService: AccountServiceId } = await import('../../../../../platform/accounts/common/accountService.js');
+const { IAccessibilityService: AccessibilityServiceId } = await import('../../../../../platform/accessibility/common/accessibility.js');
 const { IContextMenuService: ContextMenuServiceId } = await import('../../../../../platform/contextview/browser/contextView.js');
 const { ILogService: LogServiceId } = await import('../../../../../platform/log/common/log.js');
+const { IDialogService: DialogServiceId } = await import('../../../../../platform/dialogs/common/dialogs.js');
+const { IDialogsModel: DialogsModelId } = await import('../../../../common/dialogs.js');
 const { IStorageService: StorageServiceId } = await import('../../../../../platform/storage/common/storage.js');
 const { BrowserStorageService } = await import('../../../../services/storage/browser/storageService.js');
 const { ILocalizationService: LocalizationServiceId } = await import('../../../../services/localization/common/localizationService.js');
+const { IGitHubConnectionService: GitHubConnectionServiceId } = await import('../../../../services/accounts/common/gitHubConnectionService.js');
+const { GitHubConnectionService } = await import('../../../../services/accounts/browser/gitHubConnectionService.js');
+const { DialogService } = await import('../../../../services/dialogs/common/dialogService.js');
 const { IMenuService, MenuId, MenusRegistry } = await import('../../../../../platform/actions/common/actions.js');
 const { MenuService } = await import('../../../../../platform/actions/common/menuService.js');
 const { ICommandService, CommandsRegistry } = await import('../../../../../platform/commands/common/commands.js');
@@ -40,22 +47,32 @@ test('Activity Bar global actions open account and management menus', async () =
 	const menus = new MenuService(commands, contextKeys);
 	services.registerInstance(IMenuService, menus);
 	let actions: readonly IAction[] = [];
+	let closeMenu: (didCancel: boolean) => void = () => {};
 	const contextMenu: IContextMenuService = {
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
-		showContextMenu(options) { actions = options.getActions?.() ?? []; },
+		showContextMenu(options) { actions = options.getActions?.() ?? []; closeMenu = options.onHide ?? (() => {}); },
 		hideContextMenu() {},
 	};
 	services.registerInstance(ContextMenuServiceId, contextMenu);
-	const accountsChanged = disposables.add(new Emitter<Awaited<ReturnType<IAccountService['read']>>>());
-	let loginCount = 0;
+	const accountsChanged = disposables.add(new Emitter<AccountState>());
+	const loginCompleted = disposables.add(new Emitter<AccountLoginCompletion>());
+	let accountState: AccountState = { revision: 1n, accounts: [{ provider: 'openai', accountId: 'one', displayName: 'Ash User', status: 'ready', credentialRevision: 1n }] };
+	const loginMethods: string[] = [];
+	const loggedOutProviders: string[] = [];
+	const cancelledLogins: string[] = [];
 	const accountService: IAccountService = {
 		onDidChangeAccounts: accountsChanged.event,
-		onDidCompleteLogin: Event.None,
-		read: async () => ({ revision: 1n, accounts: [{ provider: 'openai', accountId: 'one', displayName: 'Ash User', status: 'ready', credentialRevision: 1n }] }),
-		startLogin: async () => { loginCount += 1; return { type: 'connected', loginId: 'one' }; },
-		cancelLogin: async () => {},
-		logout: async () => {},
+		onDidCompleteLogin: loginCompleted.event,
+		read: async () => accountState,
+		startLogin: async method => {
+			loginMethods.push(method.type);
+			return method.type === 'gitHubDeviceCode'
+				? { type: 'deviceCode', loginId: 'github-login', verificationUrl: 'https://github.com/login/device', userCode: 'ABCD-1234' }
+				: { type: 'connected', loginId: 'one' };
+		},
+		cancelLogin: async loginId => { cancelledLogins.push(loginId); },
+		logout: async provider => { loggedOutProviders.push(provider); },
 	};
 	services.registerInstance(AccountServiceId, accountService);
 	const localizationChanged = disposables.add(new Emitter<void>());
@@ -68,6 +85,13 @@ test('Activity Bar global actions open account and management menus', async () =
 	services.registerInstance(LocalizationServiceId, localization);
 	const logService: ILogService = { trace() {}, debug() {}, info() {}, warn() {}, error() {} };
 	services.registerInstance(LogServiceId, logService);
+	const announcements: string[] = [];
+	services.registerInstance(AccessibilityServiceId, { status: (message: string) => { announcements.push(message); } } as unknown as IAccessibilityService);
+	const dialogs = disposables.add(new DialogService());
+	services.registerInstance(DialogServiceId, dialogs);
+	services.registerInstance(DialogsModelId, dialogs.model);
+	const githubConnection = disposables.add(services.createInstance(GitHubConnectionService));
+	services.registerInstance(GitHubConnectionServiceId, githubConnection);
 	const storage = disposables.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, applicationId: 'code', workspaceId: 'test', backend: browser.window.localStorage, flushInterval: 0 }));
 	services.registerInstance(StorageServiceId, storage);
 	let settingsOpened = false;
@@ -80,9 +104,44 @@ test('Activity Bar global actions open account and management menus', async () =
 	assert.ok(accountsButton);
 	assert.ok(manageButton);
 	accountsButton.click();
-	assert.deepEqual(actions.map(action => action.label), ['Sign out of Ash User', 'Sign in with ChatGPT']);
+	assert.deepEqual(actions.map(action => action.label), ['Sign out of Ash User', 'Sign in with ChatGPT', 'Connect GitHub']);
 	await actions[1]?.run();
-	assert.equal(loginCount, 1);
+	assert.deepEqual(loginMethods, ['openAiChatGptBrowser']);
+	await actions[2]?.run();
+	assert.deepEqual(loginMethods, ['openAiChatGptBrowser', 'gitHubDeviceCode']);
+	assert.deepEqual(dialogs.model.dialogs.map(dialog => dialog.request.kind === 'confirmation' ? [dialog.request.title, dialog.request.message, dialog.request.primaryButton] : []), [['Connect GitHub', 'Enter code ABCD-1234 on GitHub', 'Continue in browser']]);
+	closeMenu(false);
+	accountsButton.click();
+	assert.equal(actions[2]?.label, 'Connecting GitHub…');
+	assert.equal(actions[2]?.enabled, false);
+	accountState = { revision: 2n, accounts: [...accountState.accounts, { provider: 'github', accountId: 'octocat', displayName: 'octocat', status: 'ready', credentialRevision: 1n }] };
+	loginCompleted.fire({ loginId: 'github-login', status: { type: 'succeeded' }, account: accountState });
+	accountsChanged.fire(accountState);
+	assert.equal(dialogs.model.dialogs.length, 0);
+	assert.deepEqual(announcements, ['GitHub account connected.']);
+	closeMenu(false);
+	accountsButton.click();
+	assert.deepEqual(actions.map(action => action.label), ['Sign out of Ash User', 'Sign out of GitHub (octocat)', 'Sign in with ChatGPT']);
+	await actions[1]?.run();
+	assert.deepEqual(loggedOutProviders, ['github']);
+	accountState = { revision: 3n, accounts: accountState.accounts.filter(account => account.provider !== 'github') };
+	accountsChanged.fire(accountState);
+	closeMenu(false);
+	accountsButton.click();
+	await actions[2]?.run();
+	dialogs.model.dialogs[0]?.cancel();
+	await Promise.resolve();
+	assert.deepEqual(cancelledLogins, ['github-login']);
+	closeMenu(false);
+	accountsButton.click();
+	assert.equal(actions[2]?.enabled, true);
+	await actions[2]?.run();
+	loginCompleted.fire({ loginId: 'github-login', status: { type: 'failed', failure: { code: 'denied', message: 'Authorization denied' } }, account: accountState });
+	assert.deepEqual(dialogs.model.dialogs.map(dialog => dialog.request.message), ['Could not connect GitHub. Try again.']);
+	closeMenu(false);
+	accountsButton.click();
+	assert.equal(actions[2]?.label, 'Connect GitHub');
+	assert.equal(actions[2]?.enabled, true);
 	manageButton.click();
 	assert.equal(actions.find(action => action.id === 'test.activityBar.settings')?.label, 'Settings');
 	await actions.find(action => action.id === 'test.activityBar.settings')?.run();

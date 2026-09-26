@@ -102,7 +102,7 @@ export class EditorStatusContribution extends Disposable implements IWorkbenchCo
 		const language = status?.languageId ?? input.languageId;
 		this.setEntry(this.language, language ? { text: languageDisplayName(language), ariaLabel: `Language ${languageDisplayName(language)}` } : undefined, "ash.status.editor.language", 60);
 		const workingCopy = pane.workingCopy;
-		const stateText = workingCopy?.hasExternalChange ? "Conflict" : workingCopy?.isDirty ? "Unsaved" : input.readOnly ? "Read-only" : undefined;
+		const stateText = workingCopy?.hasExternalChange ? "Conflict" : workingCopy?.isDirty ? "Unsaved" : workingCopy && input.readOnly ? "Read-only" : undefined;
 		this.setEntry(this.state, stateText ? { text: stateText, ariaLabel: `Editor state ${stateText}`, tooltip: stateText === "Conflict" ? "The file changed on disk while this editor has unsaved changes." : undefined } : undefined, "ash.status.editor.state", 90);
 	}
 

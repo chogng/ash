@@ -203,6 +203,8 @@ import { IConnectorService } from "../../platform/connectors/common/connectorSer
 import { AppServerConnectorService } from "../services/connectors/browser/appServerConnectorService.js";
 import { IAccountService } from "../../platform/accounts/common/accountService.js";
 import { AppServerAccountService } from "../services/accounts/browser/appServerAccountService.js";
+import { GitHubConnectionService } from "../services/accounts/browser/gitHubConnectionService.js";
+import { IGitHubConnectionService } from "../services/accounts/common/gitHubConnectionService.js";
 import { IPluginService } from "../../platform/plugins/common/pluginService.js";
 import { AppServerPluginService } from "../services/plugins/browser/appServerPluginService.js";
 import { IMarketplaceService } from "../../platform/marketplace/common/marketplaceService.js";
@@ -700,6 +702,7 @@ export class Workbench extends Disposable {
 				configurationService: configuration,
 			}));
 		services.registerInstance(IAccessibilityService, accessibilityService);
+		services.registerInstance(IGitHubConnectionService, this._register(services.createInstance(GitHubConnectionService)));
 		const viewDescriptors = this._register(new ViewDescriptorService({
 			contextKeyService: contextKeys,
 		}));

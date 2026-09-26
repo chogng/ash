@@ -1,6 +1,41 @@
+import type { ElectronApplication } from '@playwright/test';
+import type { BrowserWindow, MessageBoxOptions } from 'electron';
 import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
+
+test('desktop GitHub connection error uses a window dialog', async ({ target, application, workbench }) => {
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'disabled');
+	const electron = application as ElectronApplication;
+	await electron.evaluate(({ dialog }) => {
+		const original = dialog.showMessageBox.bind(dialog);
+		const state = globalThis as typeof globalThis & { ashGitHubDialog?: { options?: MessageBoxOptions; finish?: () => void; restore: () => void } };
+		state.ashGitHubDialog = { restore: () => { dialog.showMessageBox = original; } };
+		dialog.showMessageBox = ((...args: [MessageBoxOptions] | [BrowserWindow, MessageBoxOptions]) => new Promise(resolve => {
+			state.ashGitHubDialog!.options = args.length === 1 ? args[0] : args[1];
+			state.ashGitHubDialog!.finish = () => resolve({ response: 0, checkboxChecked: false });
+		})) as typeof dialog.showMessageBox;
+	});
+	try {
+		const page = workbench.page;
+		await page.getByRole('button', { name: 'Accounts' }).click();
+		await page.getByRole('menu').last().getByRole('menuitem', { name: 'Connect GitHub' }).click();
+		await expect.poll(() => electron.evaluate(() => {
+			const options = (globalThis as typeof globalThis & { ashGitHubDialog?: { options?: MessageBoxOptions } }).ashGitHubDialog?.options;
+			return options ? { title: options.title, message: options.message } : undefined;
+		})).toEqual({
+			title: 'Connect GitHub',
+			message: 'Could not connect GitHub. Try again.',
+		});
+		await expect(page.locator('.ash-notification')).toHaveCount(0);
+	} finally {
+		await electron.evaluate(() => {
+			const state = (globalThis as typeof globalThis & { ashGitHubDialog?: { finish?: () => void; restore: () => void } }).ashGitHubDialog;
+			state?.finish?.();
+			state?.restore();
+		});
+	}
+});
 
 test('primary sidebar toggle sits immediately after the application menu', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
@@ -54,6 +89,7 @@ test('activity bar remains visible and reopens a selected sidebar view', async (
 	expect(manageBounds!.y).toBeGreaterThan(accountsBounds!.y);
 	await accounts.click();
 	await expect(page.getByRole('menu').last().getByRole('menuitem', { name: 'Sign in with ChatGPT' })).toBeVisible();
+	await expect(page.getByRole('menu').last().getByRole('menuitem', { name: 'Connect GitHub' })).toBeVisible();
 	await page.keyboard.press('Escape');
 	await expect(activitybar.getByRole('tablist')).toHaveAttribute('aria-orientation', 'vertical');
 	await expect(explorer).toHaveAttribute('aria-selected', 'true');
@@ -298,7 +334,17 @@ test('activity bar context menu changes size and position', async ({ target, wor
 	expect(manageBounds!.y + manageBounds!.height).toBeLessThanOrEqual(titlebarBounds!.y + titlebarBounds!.height);
 	await titlebarAccounts.click();
 	await expect(page.getByRole('menu').last().getByRole('menuitem', { name: 'Sign in with ChatGPT' })).toBeVisible();
-	await page.keyboard.press('Escape');
+	const connectGitHub = page.getByRole('menu').last().getByRole('menuitem', { name: 'Connect GitHub' });
+	await expect(connectGitHub).toBeVisible();
+	if (target.kind === 'browser' && target.appServerMode === 'disabled') {
+		await connectGitHub.click();
+		const dialog = page.getByRole('dialog', { name: 'Connect GitHub' });
+		await expect(dialog).toContainText('Could not connect GitHub. Try again.');
+		await expect(page.locator('.ash-notification')).toHaveCount(0);
+		await dialog.getByRole('button', { name: 'OK' }).click();
+	} else {
+		await page.keyboard.press('Escape');
+	}
 	await titlebarManage.click();
 	await expect(page.getByRole('menu').last().getByRole('menuitem', { name: 'Settings' })).toBeVisible();
 	await page.keyboard.press('Escape');

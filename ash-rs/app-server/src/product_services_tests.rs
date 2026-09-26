@@ -18,6 +18,7 @@ fn product_services_loads_public_oauth_and_pins_marketplace_root() {
             "trustedRoot": "root.json",
             "catalogRefreshIntervalSeconds": 900
           }],
+          "githubAccount": {"clientId": "Ov23publicclient"},
           "connectorOauth": [{
             "type": "githubDevice",
             "connectorId": "openai/github:connector:account",
@@ -35,6 +36,10 @@ fn product_services_loads_public_oauth_and_pins_marketplace_root() {
     .unwrap();
 
     assert_eq!(config.marketplaces().len(), 1);
+    assert_eq!(
+        config.github_account_client_id.as_deref(),
+        Some("Ov23publicclient")
+    );
     assert_eq!(
         config
             .marketplaces()
@@ -59,6 +64,10 @@ fn production_product_services_delegates_to_the_plugins_manager() {
     let profile = TempDir::new().unwrap();
 
     let config = LocalProductServicesConfig::load(product_services, profile.path()).unwrap();
+    assert_eq!(
+        config.github_account_client_id.as_deref(),
+        Some("Ov23linTZCPimNOTyngv")
+    );
 
     let registry = config.marketplaces().values().next().unwrap();
     assert_eq!(
@@ -73,6 +82,24 @@ fn production_product_services_delegates_to_the_plugins_manager() {
         registry.catalog_refresh_interval(),
         Duration::from_secs(300)
     );
+}
+
+#[test]
+fn product_services_rejects_invalid_github_account_client_id() {
+    let root = TempDir::new().unwrap();
+    let path = root.path().join("product-services.json");
+    for client_id in ["", "bad client", "client-secret:private"] {
+        fs::write(
+            &path,
+            serde_json::json!({
+                "schemaVersion": 2,
+                "githubAccount": { "clientId": client_id }
+            })
+            .to_string(),
+        )
+        .unwrap();
+        assert!(LocalProductServicesConfig::load(&path, root.path()).is_err());
+    }
 }
 
 #[test]

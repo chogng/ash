@@ -28,6 +28,7 @@ const MAX_PRODUCT_SERVICES_BYTES: u64 = 1024 * 1024;
 pub struct LocalProductServicesConfig {
     pub(crate) marketplaces: BTreeMap<MarketplaceName, ash_core_plugins::RemoteMarketplaceConfig>,
     pub(crate) connector_oauth: Vec<ProductConnectorOAuthConfig>,
+    pub(crate) github_account_client_id: Option<String>,
     pub(crate) image_generation: Option<ProductImageGenerationConfig>,
     pub(crate) git_attribution: Option<ProductGitAttributionConfig>,
     authority_identity: [u8; 32],
@@ -91,6 +92,15 @@ impl LocalProductServicesConfig {
             .map(ProductConnectorOAuthConfig::try_from)
             .collect::<Result<Vec<_>, _>>()?;
         validate_unique_configuration(&connector_oauth)?;
+        if document.github_account.as_ref().is_some_and(|account| {
+            account.client_id.is_empty()
+                || !account
+                    .client_id
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric())
+        }) {
+            return Err(product_config_error(()));
+        }
         if let Some(image) = &document.image_generation {
             let endpoint = Url::parse(&image.endpoint).map_err(product_config_error)?;
             if endpoint.scheme() != "https"
@@ -115,6 +125,7 @@ impl LocalProductServicesConfig {
             git_attribution: document.git_attribution,
             marketplaces,
             connector_oauth,
+            github_account_client_id: document.github_account.map(|account| account.client_id),
             authority_identity: authority_identity.finalize().into(),
         })
     }
@@ -173,9 +184,17 @@ struct ProductServicesDocument {
     #[serde(default)]
     connector_oauth: Vec<ProductConnectorOAuthDocument>,
     #[serde(default)]
+    github_account: Option<GitHubAccountDocument>,
+    #[serde(default)]
     image_generation: Option<ProductImageGenerationConfig>,
     #[serde(default)]
     git_attribution: Option<ProductGitAttributionConfig>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct GitHubAccountDocument {
+    client_id: String,
 }
 
 #[derive(Deserialize)]
