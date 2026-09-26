@@ -541,6 +541,8 @@ test('Sessions entry sits beside Quick Access and animates its Ash mark on inten
 	if (target.kind === 'browser') {
 		await entry.click();
 		await expect(page).toHaveURL(/sessions-code\.html/u);
+		await expect(page.locator('.ash-code-sessions-window')).toBeVisible();
+		await expect(page.locator('#app')).toHaveAttribute('data-color-theme', /ash-(?:light|dark)/u);
 	}
 });
 

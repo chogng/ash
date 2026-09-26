@@ -21,6 +21,8 @@ test('Sessions applies an installed extension color theme', async ({ application
 	});
 	await expect(sessionsPage.locator('#app')).toHaveAttribute('data-color-theme', 'extension-vscode-theme-defaults-visual-studio-dark');
 	await expect.poll(() => sessionsPage.locator('#app').evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background').trim())).toBe('#1e1e1e');
+	await expect(workbench.element).toHaveAttribute('data-color-theme', 'extension-vscode-theme-defaults-visual-studio-dark');
+	await expect.poll(() => workbench.element.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background').trim())).toBe('#1e1e1e');
 });
 
 test("Code opens Sessions in a dedicated Electron window and returns to Workbench", async ({ application, target, workbench }) => {

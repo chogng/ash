@@ -40,6 +40,9 @@ import Sessions product UI or add Sessions-specific layout branches.
    `WorkbenchInteractionServices`, so Chat uses the same commands, context
    keys, menus, keybindings, overlays, quick input, settings, and hover
    mechanisms as the regular Workbench.
+   Sessions creates the same `WorkbenchThemeService` as the regular Workbench
+   against its own document. On desktop, both renderers read the shared
+   `workbench.colorTheme` setting, so changes apply to both windows.
    `WorkbenchWindow` registers the renderer window and its document styles;
    `BrowserLifecycleService` joins storage flush before disposal.
 4. `SessionsWorkbenchLayout` deserializes the fixed Part grid. Titlebar,
