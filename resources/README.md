@@ -26,10 +26,12 @@ Ash then updates its pinned copy before requiring metadata signed only by the ro
 ## Application branding
 
 Application icons are fixed and do not change with the editor color theme.
-`branding/ash-app-black-512.png` is the supplied full-size black application icon
-used by macOS, Linux, and Web. The Windows application icon uses the same mark
-on a black rounded square in `win32/ash.svg`. The titlebar and editor welcome
-page use the cropped transparent `app-ts/src/ash/workbench/browser/media/ash-mark.svg`,
+`branding/ash-app-black-512.png` is the supplied flat reference artwork for
+application icons. The macOS Dock uses the layered `darwin/ash.icon`; the Linux
+and Web clients have their own raster files. The Windows application icon uses
+the same mark on a black rounded square in `win32/ash.svg`. The titlebar and
+editor welcome page use the cropped transparent
+`app-ts/src/ash/workbench/browser/media/ash-mark.svg`,
 tinted by their foreground color. The system tray uses transparent monochrome
 artwork from `tray/`.
 
@@ -68,6 +70,76 @@ The Windows Electron host installs a theme-aware tray icon, and the macOS host
 installs a template menu bar icon. Clicking either icon focuses the Workbench.
 Closing the last window still exits the application on Windows; macOS keeps the
 application running so the Dock and menu bar icon can reopen a Workbench window.
+
+## Replacing the application icon
+
+Run the commands below from the repository root. The Dock, menu bar, and other
+platforms use separate artwork; changing one file does not update the others.
+
+| Where it appears | Edit | Update alongside it |
+| --- | --- | --- |
+| macOS Dock and Finder | `darwin/ash.icon/Assets/ash-white.svg` in Icon Composer; adjust `darwin/ash.icon/icon.json` there if the layer name, background, or scale changes | `darwin/ash.png` for the development Dock and `darwin/ash.icns` for older macOS releases |
+| macOS menu bar | `tray/ash-black.svg` | `tray/ash-black-{18,27,36}.png` |
+| Windows notification area | `tray/ash-black.svg` and `tray/ash-white.svg` | Both colors at 16, 24, and 32 pixels |
+| Windows application and Rust window | `win32/ash.svg` | Run `pnpm app-icon:generate` to update `ash.ico` and `ash-512.png` |
+| Linux and Web | The chosen application artwork | `linux/ash.png`, `server/favicon.ico`, `server/ash-192.png`, and `server/ash-512.png` |
+| Workbench titlebar and welcome page | `app-ts/src/ash/workbench/browser/media/ash-mark.svg` | Check its appearance in each theme |
+
+For the macOS Dock, open `darwin/ash.icon` in Xcode's Icon Composer, replace the
+layer artwork, preview the icon at small Dock sizes, and save the `.icon` file.
+Keep `icon.json`'s `image-name` aligned with the file in `Assets/`. Export a
+flattened 1024 × 1024 PNG to `darwin/ash.png`. Create the compatibility `.icns`
+from that PNG with macOS `sips` and `iconutil`:
+
+```sh
+iconset_dir="$(mktemp -d)/Ash.iconset"
+mkdir "$iconset_dir"
+for size in 16 32 128 256 512; do
+  sips -z "$size" "$size" resources/darwin/ash.png --out "$iconset_dir/icon_${size}x${size}.png" >/dev/null
+  double_size=$((size * 2))
+  sips -z "$double_size" "$double_size" resources/darwin/ash.png --out "$iconset_dir/icon_${size}x${size}@2x.png" >/dev/null
+done
+iconutil -c icns "$iconset_dir" -o resources/darwin/ash.icns
+```
+
+For the menu bar, use a transparent black mark without the Dock background.
+Electron marks it as a macOS template image so the system chooses its displayed
+color. Rasterize the SVG at each scale; the first size is the 18-point layout
+size, and the other two cover 1.5× and 2× displays:
+
+```sh
+for size in 18 27 36; do
+  sips -s format png -z "$size" "$size" resources/tray/ash-black.svg --out "resources/tray/ash-black-${size}.png" >/dev/null
+done
+```
+
+If the Windows notification area artwork also changes, regenerate both colors
+at 16, 24, and 32 pixels:
+
+```sh
+for color in black white; do
+  for size in 16 24 32; do
+    sips -s format png -z "$size" "$size" "resources/tray/ash-${color}.svg" --out "resources/tray/ash-${color}-${size}.png" >/dev/null
+  done
+done
+```
+
+Keep the transparent canvas and check the **visible mark size**, not only the
+PNG dimensions; a large transparent margin makes the menu bar icon appear too
+small.
+
+After replacing assets, run `pnpm app-icon:check` if the Windows application
+icon changed. Select Xcode 26 and set `ASH_UPDATE_PUBLIC_KEY` to a 64-digit hex
+public key, then run `pnpm --dir app-ts package:darwin:bundle --unsigned` and
+`pnpm --dir app-ts package:darwin:verify` for a local macOS package check. The
+bundle command needs the full Xcode toolchain; if Command Line Tools is selected,
+set `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` for that command.
+Bundling compiles `ash.icon` and checks the menu bar PNGs are present; the
+verification step launches the packaged app with Playwright. Relaunch the
+development or installed application to load changed menu bar PNGs, and check
+the Dock and menu bar at their actual display sizes. Apple's [Icon Composer
+guide](https://developer.apple.com/documentation/xcode/creating-your-app-icon-using-icon-composer)
+explains layer replacement and platform previews.
 
 ## Icons
 
