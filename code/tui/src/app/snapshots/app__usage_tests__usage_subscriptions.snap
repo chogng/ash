@@ -9,7 +9,7 @@ expression: screen
         │                                                              │
         │   ChatGPT    xAI                                             │
         │                                                              │
-        │  xAI plan  ·  Not reported                                   │
+        │> xAI plan  ·  Not reported                                   │
         │  Access  ·  Unavailable                                      │
         │  Credits used  ·  105.125%                                   │
         │  Period  ·  Not reported                                     │
@@ -25,6 +25,6 @@ expression: screen
         │                                                              │
         │                                                              │
         │                                                              │
-  ╭─────│  Tab/Shift+Tab to switch · Enter to return · Esc to close    │─────╮
+  ╭─────│  Tab/Shift+Tab to switch · Esc to close                      │─────╮
   │ > Bu└──────────────────────────────────────────────────────────────┘     │
   ╰──────────────────────────────────────────────────────── Automatic model ─╯

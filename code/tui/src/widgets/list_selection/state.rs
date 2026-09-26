@@ -534,7 +534,7 @@ impl ListSelectionState {
                     TabListInputOutcome::ActiveChanged => self.select_first_visible(),
                     TabListInputOutcome::Consumed => {}
                 }
-                self.set_focus(ListSelectionFocus::Tabs);
+                self.focus_selected_item_or_tabs();
                 true
             }
             super::ListSelectionPointerTarget::Search => self.focus_search(),
@@ -653,7 +653,7 @@ impl ListSelectionState {
                 self.select_first_visible();
             }
             if key.kind == KeyEventKind::Press {
-                self.set_focus(ListSelectionFocus::Tabs);
+                self.focus_selected_item_or_tabs();
             }
             return ListSelectionInputOutcome::Consumed;
         }
@@ -698,6 +698,7 @@ impl ListSelectionState {
             match self.tabs.handle_focused_key(key) {
                 FocusedTabListInputOutcome::ActiveChanged => {
                     self.select_first_visible();
+                    self.focus_selected_item_or_tabs();
                     return ListSelectionInputOutcome::Consumed;
                 }
                 FocusedTabListInputOutcome::EnterContent => {
@@ -843,19 +844,13 @@ impl ListSelectionState {
     fn move_focus_down(&mut self) {
         match self.focus {
             ListSelectionFocus::Tabs => {
-                // Down continues from the visibly selected row instead of restarting at search.
-                if !self.has_action() && self.selected_visible.is_some() {
-                    self.set_focus(ListSelectionFocus::Items);
-                    self.move_selection(ListSelectionDirection::Next);
+                self.set_focus(if self.has_action() {
+                    ListSelectionFocus::Action
+                } else if self.search.is_some() {
+                    ListSelectionFocus::Search
                 } else {
-                    self.set_focus(if self.has_action() {
-                        ListSelectionFocus::Action
-                    } else if self.search.is_some() {
-                        ListSelectionFocus::Search
-                    } else {
-                        ListSelectionFocus::Items
-                    });
-                }
+                    ListSelectionFocus::Items
+                });
             }
             ListSelectionFocus::Action => self.set_focus(if self.search.is_some() {
                 ListSelectionFocus::Search
@@ -870,6 +865,15 @@ impl ListSelectionState {
     fn set_focus(&mut self, focus: ListSelectionFocus) {
         self.focus = focus;
         self.sync_search_focus();
+    }
+
+    fn focus_selected_item_or_tabs(&mut self) {
+        // Page entry targets its selected row; empty results keep the tab bar reachable.
+        self.set_focus(if self.selected_visible.is_some() {
+            ListSelectionFocus::Items
+        } else {
+            ListSelectionFocus::Tabs
+        });
     }
 
     fn sync_search_focus(&mut self) {

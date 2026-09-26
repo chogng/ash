@@ -143,7 +143,7 @@ fn down_from_provider_tab_advances_from_the_highlighted_kimi_row() {
 
     editor.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     let selection = editor.selection().unwrap();
-    assert!(selection.tabs_focused());
+    assert!(selection.items_focused());
     assert_eq!(selection.selected_item().unwrap().label(), "Kimi");
 
     editor.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
@@ -577,9 +577,7 @@ fn provider_sections_open_connection_from_the_same_list() {
         )
     };
     let mut subscription = super::ConfigEditor::new(choices());
-    for code in [KeyCode::Tab, KeyCode::Enter] {
-        subscription.handle_key(KeyEvent::new(code, KeyModifiers::NONE));
-    }
+    subscription.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     assert!(matches!(
         subscription.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         super::ConfigEditorOutcome::Action(ConfigSelectionAction::OpenSubscription(
@@ -1049,19 +1047,30 @@ fn only_custom_provider_rows_offer_delete_and_order_does_not_follow_names() {
 }
 
 #[test]
-fn tab_from_config_option_switches_page_without_changing_setting() {
+fn tab_enters_the_first_item_of_each_config_page() {
     let mut editor = super::ConfigEditor::new(config_choices(
         &empty_config_snapshot(),
         &providers(),
         TerminalSettings::default(),
         StatusLineSettings::default(),
     ));
-    for (code, expected) in [(KeyCode::Tab, "Providers"), (KeyCode::BackTab, "General")] {
+    for (code, expected_tab, expected_item) in [
+        (KeyCode::Tab, "Providers", "openai-subscription"),
+        (KeyCode::Tab, "Issues", "issue-refresh"),
+        (KeyCode::Tab, "General", "terminal-vim-mode"),
+        (KeyCode::BackTab, "Issues", "issue-refresh"),
+    ] {
         assert!(matches!(
             editor.handle_key(KeyEvent::new(code, KeyModifiers::NONE)),
             super::ConfigEditorOutcome::Consumed
         ));
-        assert_eq!(editor.selection.state().active_tab().label(), expected);
+        let selection = editor.selection.state();
+        assert_eq!(selection.active_tab().label(), expected_tab);
+        assert!(selection.items_focused());
+        assert_eq!(
+            selection.selected_item().unwrap().id(),
+            Some(&ListSelectionItemId::new(expected_item))
+        );
     }
 }
 

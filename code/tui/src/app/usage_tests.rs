@@ -118,6 +118,9 @@ fn usage_keeps_chatgpt_and_xai_in_separate_keyboard_selectable_groups() {
     );
     assert!(render(&app, 80, 28).contains("ChatGPT plan"));
     app.handle_key(key(KeyCode::Tab));
+    let selection = app.list_selection().unwrap();
+    assert!(selection.items_focused());
+    assert_eq!(selection.selected_item().unwrap().label(), "xAI plan");
     let screen = render(&app, 80, 28);
     assert!(screen.contains("xAI plan"));
     assert!(screen.contains("105.125%"));
