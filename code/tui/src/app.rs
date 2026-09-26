@@ -24,6 +24,9 @@ mod interaction_flow_tests;
 #[cfg(test)]
 #[path = "app/mode_tests.rs"]
 mod mode_tests;
+#[cfg(test)]
+#[path = "app/mermaid_preview_tests.rs"]
+mod mermaid_preview_tests;
 mod recovery;
 mod redraw;
 mod requests;

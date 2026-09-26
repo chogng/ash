@@ -48,6 +48,7 @@ use crate::models::ModelChoices;
 use crate::models::ModelSelectionAction;
 use crate::projects::Command as ProjectCommand;
 use crate::projects::Event as ProjectEvent;
+use crate::render::MermaidPreviews;
 use crate::render::RenderContext;
 use crate::render::RenderTheme;
 use crate::sessions::Command as SessionCommand;
@@ -98,6 +99,7 @@ use crate::thread::rewind::RewindSelectionAction;
 use crate::thread::transcript::CellView;
 use crate::thread::transcript::ChatHistoryRenderCache;
 use crate::thread::transcript::ChatHistoryScroll;
+use crate::thread::transcript::MessageRole;
 use crate::thread::transcript::TranscriptScrollAnchor;
 use crate::thread::transcript::TranscriptScrollDirection;
 use crate::thread::transcript::first_scroll_target;
@@ -146,6 +148,7 @@ pub(crate) struct App {
     pub(super) inline: super::inline::Inline,
     render_theme: RenderTheme,
     render_theme_revision: u64,
+    mermaid_previews: Option<MermaidPreviews>,
     skill_diagnostic_warnings: SkillDiagnosticWarnings,
     process_resources: ProcessResourcesModel,
     memory_diagnostics: crate::memory::Status,
@@ -183,6 +186,7 @@ impl App {
             ),
             render_theme: RenderTheme::fallback(),
             render_theme_revision: 0,
+            mermaid_previews: None,
             skill_diagnostic_warnings: SkillDiagnosticWarnings::default(),
             process_resources: ProcessResourcesModel::default(),
             memory_diagnostics: crate::memory::Status::Disabled,
@@ -239,6 +243,10 @@ impl App {
         startup_context: TuiStartupContext,
     ) -> Self {
         let process_resources = ProcessResourcesModel::new(startup_context.app_server_process);
+        let mermaid_previews = startup_context
+            .profile_root
+            .as_deref()
+            .map(MermaidPreviews::new);
         Self {
             next_panel_generation: 1,
             chat_panel: ChatPanel::new(),
@@ -267,6 +275,7 @@ impl App {
             ),
             render_theme: RenderTheme::fallback(),
             render_theme_revision: 0,
+            mermaid_previews,
             skill_diagnostic_warnings: SkillDiagnosticWarnings::default(),
             process_resources,
             memory_diagnostics: crate::memory::Status::Disabled,
@@ -276,8 +285,40 @@ impl App {
     }
 
     pub(crate) fn render_context(&self) -> RenderContext<'_> {
-        RenderContext::new(&self.render_theme, self.render_theme_revision)
-            .with_language(self.language())
+        let context = RenderContext::new(&self.render_theme, self.render_theme_revision)
+            .with_language(self.language());
+        match &self.mermaid_previews {
+            Some(previews) => context.with_mermaid_previews(previews),
+            None => context,
+        }
+    }
+
+    fn sync_mermaid_previews(&mut self) {
+        let Some(previews) = self.mermaid_previews.as_mut() else {
+            return;
+        };
+        let views = self.thread.views(&Default::default(), None);
+        let mut errors = Vec::new();
+        for view in views {
+            if !matches!(view.role(), MessageRole::Agent | MessageRole::Plan) {
+                continue;
+            }
+            let Some(cell_id) = view.cell_id.as_deref() else {
+                continue;
+            };
+            if let Err(error) =
+                previews.prepare_message(cell_id, view.render_revision, &view.text())
+            {
+                errors.push(error);
+            }
+        }
+        for error in errors {
+            let label = crate::nls::localize(self.language(), "Could not prepare Mermaid preview");
+            self.thread
+                .update(ThreadPresentationEvent::FailureReported(format!(
+                    "{label}: {error}"
+                )));
+        }
     }
 
     pub(crate) const fn language(&self) -> crate::nls::Language {
@@ -1004,6 +1045,8 @@ impl App {
             self.terminal_settings = settings;
             self.panels_mut().receive_editor(editor);
             self.fullscreen.clear();
+            self.inline.selection.clear();
+            self.inline.completion_pressed = None;
             self.fullscreen.escape.reset();
             self.inline.escape.reset();
             self.reconcile_transcript_scroll_anchor();
@@ -1092,9 +1135,10 @@ impl App {
     }
 
     pub(crate) fn mouse_mode(&self) -> MouseMode {
+        // The main screen must report mouse events for editing the inline composer.
         match self.screen_mode() {
             crate::terminal::ScreenMode::Fullscreen => MouseMode::TuiCapture,
-            crate::terminal::ScreenMode::Inline => MouseMode::TerminalSelection,
+            crate::terminal::ScreenMode::Inline => MouseMode::TuiCapture,
         }
     }
 
@@ -2300,6 +2344,9 @@ impl App {
                 let context_changed = self.sessions.active_session_id() != Some(&session_id)
                     || self.sessions.remembered_thread(&session_id) != Some(&thread_id);
                 if context_changed {
+                    if let Some(previews) = self.mermaid_previews.as_mut() {
+                        previews.reset_message_revisions();
+                    }
                     self.sessions.pending_submission = None;
                     self.sessions.creation_error = None;
                     self.thread
@@ -2364,6 +2411,7 @@ impl App {
                     .update(ThreadPresentationEvent::TranscriptSnapshotReceived(
                         transcript,
                     ));
+                self.sync_mermaid_previews();
                 self.reconcile_transcript_scroll_anchor();
                 self.hide_navigation_for_existing_conversation();
             }
@@ -2373,6 +2421,7 @@ impl App {
                     .update(ThreadPresentationEvent::TranscriptHistoryPageReceived(
                         transcript,
                     ));
+                self.sync_mermaid_previews();
                 if reveal_older_history {
                     let messages = self.visible_transcript_views();
                     if let Some(target) = first_scroll_target(true, &messages) {
@@ -2386,6 +2435,7 @@ impl App {
             ThreadEvent::TranscriptUpdateReceived(update) => {
                 self.thread
                     .update(ThreadPresentationEvent::TranscriptUpdateReceived(update));
+                self.sync_mermaid_previews();
                 self.reconcile_transcript_scroll_anchor();
                 self.hide_navigation_for_existing_conversation();
             }

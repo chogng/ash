@@ -1,0 +1,8 @@
+---
+source: code/tui/src/render/markdown_tests.rs
+expression: "rows.iter().map(|row| row.line.to_string()).collect::<Vec<_>>().join(\"\\n\")"
+---
+┌───┐      ┌───┐
+│ A │─────▶│ B │
+└───┘      └───┘
+Open Mermaid in browser

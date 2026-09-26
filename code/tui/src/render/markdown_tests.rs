@@ -163,6 +163,57 @@ fn mermaid_diagrams_render_after_closing_and_keep_theme_and_container_width() {
 }
 
 #[test]
+fn mermaid_browser_link_uses_only_ash_created_preview_files() {
+    let profile = tempfile::tempdir().unwrap();
+    let mut previews = crate::render::MermaidPreviews::new(profile.path());
+    let source = "```mermaid\nflowchart LR\nA --> B\n```";
+    previews.prepare_message("agent-1", 1, source).unwrap();
+    let context = test_context().with_mermaid_previews(&previews);
+    let rows = blocks(source)
+        .iter()
+        .flat_map(|block| {
+            render(block, 60, context, &mut |_, language, code| {
+                crate::render::highlight_code(code, language, context.into())
+            })
+        })
+        .collect::<Vec<_>>();
+    let link = rows
+        .iter()
+        .flat_map(|row| &row.links)
+        .find(|link| link.destination.starts_with("file://"))
+        .unwrap();
+    assert!(
+        rows.iter()
+            .any(|row| row.line.to_string().contains("Open Mermaid in browser"))
+    );
+    assert!(link.destination.ends_with(".html"));
+    let chinese = test_context()
+        .with_language(crate::nls::Language::Chinese)
+        .with_mermaid_previews(&previews);
+    let translated = blocks(source)
+        .iter()
+        .flat_map(|block| {
+            render(block, 60, chinese, &mut |_, language, code| {
+                crate::render::highlight_code(code, language, chinese.into())
+            })
+        })
+        .map(|row| row.line.to_string())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(translated.contains("在浏览器中打开 Mermaid"));
+    crate::tui_assert_snapshot!(
+        "markdown_mermaid_browser_preview",
+        rows.iter()
+            .map(|row| row.line.to_string())
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+
+    let untrusted = render_text("[open](file:///tmp/arbitrary.html)", 60);
+    assert!(untrusted.iter().all(|row| row.links.is_empty()));
+}
+
+#[test]
 fn mermaid_shapes_cycles_states_and_dashed_self_messages_render_as_diagrams() {
     let source = "Flow\n\n```mermaid\nflowchart LR\nA(检查) --> B{通过}\nB -->|yes| C[完成]\nB -.->|retry| A\n```\n\nState\n\n```mermaid\nstateDiagram-v2\ndirection LR\n[*] --> Ready\nstate \"等待\" as Ready\nReady --> Work: run\nWork: 处理\nWork --> Ready: retry\nWork --> [*]\n```\n\nSequence\n\n```mermaid\nsequenceDiagram\nparticipant S as Service\nS-->>S: lookup\n```";
     let rows = render_text(source, 72);

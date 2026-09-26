@@ -54,10 +54,10 @@ pub(super) fn text(buffer: &Buffer) -> String {
 }
 
 #[test]
-fn input_keeps_terminal_selection_and_uses_a_bounded_area() {
+fn input_captures_mouse_and_uses_a_bounded_area() {
     let mut app = app();
-    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
-    assert!(!app.mouse_mode().enables_pointer_actions());
+    assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
+    assert!(app.mouse_mode().enables_pointer_actions());
     app.insert_text("继续检查终端历史");
     let buffer = render(&app, 80, 32);
     assert!(buffer.area.height < 32);

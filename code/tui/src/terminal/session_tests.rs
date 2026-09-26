@@ -49,7 +49,7 @@ fn startup_error_preserves_failure_kind_and_reports_terminal_facts() {
 }
 
 #[test]
-fn main_screen_keeps_mouse_and_screen_with_the_terminal_across_resume() {
+fn main_screen_captures_mouse_without_switching_screens_and_restores_it_across_resume() {
     let calls = Rc::new(RefCell::new(Vec::new()));
     let mut guard =
         TerminalModeGuard::acquire(FakeOperations::new(calls.clone(), None), ScreenMode::Inline)
@@ -62,6 +62,8 @@ fn main_screen_keeps_mouse_and_screen_with_the_terminal_across_resume() {
         ENABLE_RAW_MODE,
         ENABLE_BRACKETED_PASTE,
         ENABLE_FOCUS_CHANGE,
+        ENABLE_MOUSE_CAPTURE,
+        DISABLE_MOUSE_CAPTURE,
         DISABLE_FOCUS_CHANGE,
         DISABLE_BRACKETED_PASTE,
         DISABLE_RAW_MODE,

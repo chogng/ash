@@ -1804,7 +1804,7 @@ fn switching_to_main_screen_clears_selection() {
     settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
     app.update(ConfigEvent::SettingsReceived(settings));
 
-    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
+    assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
     assert!(app.fullscreen.selection.range().is_none());
 }
 
@@ -1835,7 +1835,7 @@ fn saved_main_screen_mode_clears_pointer_feedback_and_selection() {
             StatusLineSettings::default(),
         ),
     }));
-    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
+    assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
     assert!(app.fullscreen.pointer.hovered().is_none());
     assert!(app.fullscreen.pointer.pressed().is_none());
     assert!(app.fullscreen.selection.range().is_none());

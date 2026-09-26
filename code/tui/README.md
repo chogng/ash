@@ -27,7 +27,7 @@ just ash
 | 正文、执行输出、缓存与滚动 | [transcript](src/thread/transcript) |
 | Issue 分组、搜索、分页与工作详情 | [issues.rs](src/issues.rs) |
 | Markdown 排版与表格 | [markdown.rs](src/render/markdown.rs)、[table.rs](src/render/markdown/table.rs) |
-| Mermaid 流程图、状态图和时序图 | [独立排版 crate](../mermaid/README.md)；完整围栏后绘图，未支持或宽度不足时保留源码 |
+| Mermaid 流程图、状态图和时序图 | [独立排版 crate](../mermaid/README.md) 在终端绘图；完整围栏同时生成[浏览器预览](src/render/mermaid_preview.rs)，未支持或宽度不足时保留源码 |
 | 流式显示进度与提交队列 | [streaming.rs](src/thread/transcript/streaming.rs) |
 | 流式块复用与节奏策略 | [render.rs](src/thread/transcript/streaming/render.rs)、[chunking.rs](src/thread/transcript/streaming/chunking.rs) |
 | 链接范围、换行与 OSC 8 输出 | [hyperlinks.rs](src/terminal/hyperlinks.rs) |
@@ -219,9 +219,11 @@ Thread 保存真实消息和独立的显示进度。流式队列保留源码范�
 
 ## 产品支持边界
 
-Agent 回复与计划支持 Markdown 标题、列表、引用、强调、代码块、表格和链接；窄屏表格按字段逐项展示。HTTP(S) 链接通过 OSC 8 交给终端打开，本地路径保留可复制目标。用户输入和命令保持字面显示，HTML 标签作为文字显示。全屏模式提供点击、悬停、滚动和文字选择；拖选、双击选词或三击选行后自动复制，并显示复制结果。主屏模式的滚轮、选文和复制由终端处理。补全处理自己的事件，Vim 只改变输入框编辑。
+Agent 回复与计划支持 Markdown 标题、列表、引用、强调、代码块、表格和链接；窄屏表格按字段逐项展示。HTTP(S) 链接通过 OSC 8 交给终端打开，本地路径保留可复制目标。用户输入和命令保持字面显示，HTML 标签作为文字显示。全屏模式提供点击、悬停、滚动和文字选择；正文拖选、双击选词或三击选行后自动复制，并显示复制结果。主屏模式在当前交互区域内处理鼠标选文和滚轮。补全处理自己的事件，Vim 只改变输入框编辑。
 
 `/export [relative-path]` 导出当前已加载正文，路径限制在本机工作目录内，不能覆盖已有文件。Ctrl+O 复制最后一条 Agent 回复。
+
+Agent 回复和计划中的完整 Mermaid 围栏会附带“Open Mermaid in browser”链接。预览文件保存在本机 profile 的 `ash-code/mermaid-previews/`，会话重开后仍可打开。链接只指向 Ash 生成的页面；普通消息中的本地文件链接仍仅显示为可复制文字。预览页从固定版本的 CDN 加载 Mermaid，因此浏览器需要联网才能绘制完整图。
 
 断线后，TUI 丢弃旧连接的待执行请求和操作；存在活动会话时返回其持久化身份，首页尚无会话时返回 `None`，重连后重新进入首页。本地和远程 CLI 在 30 秒窗口内重连；失败时分别给出 `ash resume SESSION_ID THREAD_ID` 或 `ash remote connect ... --resume SESSION_ID THREAD_ID`。正常服务端关闭和协议错误不进入传输重试。
 
@@ -287,17 +289,17 @@ language = "en"
 | 模式 | 终端控制 | 历史与退出 |
 | --- | --- | --- |
 | `fullscreen` | 备用屏幕、整屏绘制、应用处理鼠标滚动、屏幕选文和输入框编辑选区 | 正文内部滚动；退出恢复 shell 画面 |
-| `inline` | 主屏局部绘制；保留原始输入、粘贴和焦点事件；不捕获鼠标 | 定稿内容按顺序追加；退出移除交互区域并保留已显示正文 |
+| `inline` | 主屏局部绘制；接收原始输入、粘贴、焦点和鼠标事件 | 定稿内容按顺序追加；退出移除交互区域并保留已显示正文 |
 
-全屏按以下顺序获取模式：原始输入 → 备用屏幕并保存、关闭滚轮转方向键 → 粘贴事件 → 焦点上报 → 鼠标捕获。全屏固定启用鼠标捕获和选中复制。点击输入框会移动草稿光标；拖拽选择草稿文字，松开后复制到剪贴板，并保留可供输入、粘贴或删除替换的编辑选区。输入框之外仍按屏幕文字选取处理。退出备用屏幕前恢复进入时的滚轮模式。
+全屏按以下顺序获取模式：原始输入 → 备用屏幕并保存、关闭滚轮转方向键 → 粘贴事件 → 焦点上报 → 鼠标捕获。全屏固定启用鼠标捕获和选中复制。点击输入框会移动草稿光标；拖拽选择草稿文字，松开后复制到剪贴板并保留编辑选区，按 Backspace 或 Delete 删除，输入或粘贴替换。输入框之外仍按屏幕文字选取处理。退出备用屏幕前恢复进入时的滚轮模式。
 
-主屏沿用终端滚轮、选文和复制，不启用应用鼠标捕获。切入主屏时立即清除应用悬停、按下和选区状态，进行中的拖选不会触发复制。面板、补全和正文浏览可扩展当前交互区域；关闭后缩回输入与当前回复所需的高度。Ctrl+Home/End 打开历史浏览或返回当前回复。切换 Thread 会追加新的会话标题和该 Thread 当前已加载的历史；已写入的终端历史不重写。缩放与重复快照不会重复追加已输出的消息。
+主屏启用鼠标捕获。点击输入框会移动草稿光标；拖拽选择草稿文字，松开后复制到剪贴板并保留可编辑选区，按 Backspace 或 Delete 删除，输入或粘贴替换。点击补全项可选用补全；在当前交互区域内拖拽正文会复制可见文字，滚轮浏览正文。主屏中已写入的终端历史仍由终端保存，捕获期间需使用终端的鼠标捕获绕过键访问它。切入主屏时清除全屏悬停、按下和选区状态。面板、补全和正文浏览可扩展当前交互区域；关闭后缩回输入与当前回复所需的高度。Ctrl+Home/End 打开历史浏览或返回当前回复。切换 Thread 会追加新的会话标题和该 Thread 当前已加载的历史；已写入的终端历史不重写。缩放与重复快照不会重复追加已输出的消息。
 
 历史输出使用有界分块和普通终端滚动，不依赖局部滚动区域。临时输出缓冲区在最后写出时附加 OSC 8 链接并处理宽字符续列；它不参与后续布局、差分、复制或导出。
 
 `TerminalModeGuard` 记录每一步是否成功。任一步失败或退出时，逆序关闭鼠标、焦点上报、粘贴事件，结束当前屏幕并关闭原始输入模式。显式恢复可重复调用，Drop 再次清理不会重复操作；退出或挂起时还要重置光标颜色并显示光标。
 
-鼠标交互回归见 [pointer_tests.rs](src/app/fullscreen/pointer_tests.rs)，屏幕选区手势与样式见 [selection_tests.rs](src/app/fullscreen/selection_tests.rs)，输入框编辑选区见 [editor_tests.rs](src/thread/composer/input/editor_tests.rs) 和 [view_tests.rs](src/thread/composer/input/view_tests.rs)。尺寸变化时清除全屏悬停、按下和屏幕选区，并结束输入框拖拽；迟到的释放事件不能触发复制。在窗口至少 40×12 的真实 PTY 中运行 `just test ash-tui --lib real_terminal_mouse_handoff -- --ignored --nocapture --test-threads=1`，由 [event_loop_tests.rs](src/app/event_loop_tests.rs) 验证整屏捕获、补全点击、切换到主屏和退出恢复。该场景不替代各终端自身的选文与复制兼容性验证。
+鼠标交互回归见 [pointer_tests.rs](src/app/fullscreen/pointer_tests.rs) 和 [inline/pointer_tests.rs](src/app/inline/pointer_tests.rs)，屏幕选区手势与样式见 [selection_tests.rs](src/app/fullscreen/selection_tests.rs)，输入框编辑选区见 [editor_tests.rs](src/thread/composer/input/editor_tests.rs) 和 [view_tests.rs](src/thread/composer/input/view_tests.rs)。尺寸变化时清除两种模式的屏幕选区，并结束输入框拖拽；迟到的释放事件不能触发复制。在窗口至少 40×12 的真实 PTY 中运行 `just test ash-tui --lib real_terminal_mouse_handoff -- --ignored --nocapture --test-threads=1`，由 [event_loop_tests.rs](src/app/event_loop_tests.rs) 验证整屏捕获、补全点击、切换到主屏后输入框的拖选和退出恢复。该场景不替代各终端自身的选文与复制兼容性验证。
 
 Ctrl+Z 在 Unix 上先恢复终端，再发送 SIGTSTP；`fg` 后重新获取模式并重绘。SIGINT/SIGTERM 进入正常事件循环退出路径。新增模式时同时修改获取标记、逆序清理和 [session_tests.rs](src/terminal/session_tests.rs) 中的部分失败测试。
 

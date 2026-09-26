@@ -6,6 +6,7 @@ mod layout;
 pub(super) mod navigation;
 mod output;
 mod panel;
+pub(super) mod pointer;
 
 pub(super) use layout::layout;
 
@@ -40,6 +41,8 @@ pub(super) struct Inline {
     pub(super) escape: crate::app::escape::ScreenEscapeSequence,
     pub(super) panels: crate::app::command_panel::Panels,
     pub(super) viewports: crate::thread::transcript::viewport::Viewports,
+    pub(super) completion_pressed: Option<usize>,
+    pub(super) selection: crate::app::fullscreen::selection::ScreenSelection,
 }
 
 impl Inline {
@@ -52,6 +55,8 @@ impl Inline {
             escape: Default::default(),
             panels: Default::default(),
             viewports: crate::thread::transcript::viewport::Viewports::new(thread),
+            completion_pressed: None,
+            selection: Default::default(),
         }
     }
 }
@@ -240,6 +245,7 @@ fn draw_content(
             context,
         );
     }
+    app.inline.selection.draw(frame.buffer_mut(), context);
 }
 
 #[cfg(test)]

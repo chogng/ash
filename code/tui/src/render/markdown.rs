@@ -84,6 +84,35 @@ pub(crate) fn blocks(source: &str) -> Vec<MarkdownBlock<'_>> {
     result
 }
 
+pub(super) fn closed_mermaid_sources(source: &str) -> Vec<String> {
+    let mut sources = Vec::new();
+    for block in blocks(source) {
+        let mut code = None;
+        for (event, closed) in block.events {
+            match event {
+                Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(info)))
+                    if info.split_whitespace().next() == Some("mermaid") =>
+                {
+                    code = Some(String::new());
+                }
+                Event::Text(text) => {
+                    if let Some(code) = code.as_mut() {
+                        code.push_str(&text);
+                    }
+                }
+                Event::End(TagEnd::CodeBlock) => {
+                    if closed && let Some(source) = code.take() {
+                        sources.push(source);
+                    }
+                    code = None;
+                }
+                _ => {}
+            }
+        }
+    }
+    sources
+}
+
 pub(crate) fn render(
     block: &MarkdownBlock<'_>,
     width: usize,
@@ -139,6 +168,20 @@ pub(crate) fn render(
                         if writer.current.line.spans.is_empty() {
                             writer.current.line.push_span(Span::raw(""));
                         }
+                        writer.flush();
+                    }
+                    if *closed
+                        && language == "mermaid"
+                        && let Some(destination) = context.mermaid_preview_url(&source)
+                    {
+                        writer.current = HyperlinkLine::default();
+                        writer.current.push_trusted_file(
+                            &context.localize("Open Mermaid in browser"),
+                            Style::default()
+                                .fg(context.accent())
+                                .add_modifier(Modifier::UNDERLINED),
+                            &destination,
+                        );
                         writer.flush();
                     }
                     writer.code_index += 1;

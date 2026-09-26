@@ -57,6 +57,26 @@ fn unsafe_destinations_cannot_emit_terminal_commands() {
     assert_eq!(line.line.to_string(), "hello");
 }
 
+#[test]
+fn ash_created_preview_links_survive_wrapping_without_enabling_message_file_links() {
+    let mut line = HyperlinkLine::default();
+    line.push_trusted_file(
+        "Open Mermaid in browser",
+        Style::default(),
+        "file:///tmp/ash-mermaid-preview.html",
+    );
+    let rows = wrap(&line, 12);
+    assert!(rows.len() > 1);
+    assert!(
+        rows.iter()
+            .flat_map(|row| &row.links)
+            .all(|link| { link.destination == "file:///tmp/ash-mermaid-preview.html" })
+    );
+    let mut untrusted = HyperlinkLine::default();
+    untrusted.push("open", Style::default(), Some("file:///tmp/arbitrary.html"));
+    assert!(untrusted.links.is_empty());
+}
+
 fn frame(destination: &str) -> FrameLinks {
     let mut links = FrameLinks::default();
     links.cells.insert((0, 0), destination.into());

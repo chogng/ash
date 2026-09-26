@@ -490,6 +490,7 @@ impl RenderTheme {
 pub(crate) struct RenderContext<'a> {
     theme: &'a RenderTheme,
     hyperlinks: Option<&'a std::cell::RefCell<crate::terminal::hyperlinks::FrameLinks>>,
+    mermaid_previews: Option<&'a super::MermaidPreviews>,
     theme_revision: u64,
     language: crate::nls::Language,
 }
@@ -539,6 +540,15 @@ impl<'a> RenderContext<'a> {
         self
     }
 
+    pub(crate) fn with_mermaid_previews(mut self, previews: &'a super::MermaidPreviews) -> Self {
+        self.mermaid_previews = Some(previews);
+        self
+    }
+
+    pub(crate) fn mermaid_preview_url(self, source: &str) -> Option<String> {
+        self.mermaid_previews?.url(source)
+    }
+
     pub(crate) fn hyperlinks(
         self,
     ) -> Option<&'a std::cell::RefCell<crate::terminal::hyperlinks::FrameLinks>> {
@@ -558,6 +568,7 @@ impl<'a> RenderContext<'a> {
         Self {
             theme,
             hyperlinks: None,
+            mermaid_previews: None,
             theme_revision,
             language: crate::nls::Language::English,
         }

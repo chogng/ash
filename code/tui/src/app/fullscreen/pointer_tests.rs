@@ -469,8 +469,8 @@ fn assert_base_pointer_targets(app: &mut App, area: Rect) {
     }
 }
 
-fn assert_terminal_selection(app: &mut App) {
-    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
+fn assert_fullscreen_pointer_cleared(app: &mut App) {
+    assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
     app.fullscreen.clear();
     assert!(app.fullscreen.pointer.hovered().is_none());
     assert!(app.fullscreen.pointer.pressed().is_none());
@@ -478,7 +478,7 @@ fn assert_terminal_selection(app: &mut App) {
 }
 
 #[test]
-fn main_screen_leaves_completion_clicks_to_terminal_and_keeps_keyboard_navigation() {
+fn inline_mode_stops_fullscreen_pointer_targets_and_keeps_keyboard_navigation() {
     let mut app = App::new();
     app.insert_text("/q");
     let area = Rect::new(0, 0, 80, 24);
@@ -494,7 +494,8 @@ fn main_screen_leaves_completion_clicks_to_terminal_and_keeps_keyboard_navigatio
     let mut settings = crate::config::TerminalSettings::default();
     settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
     app.update(crate::config::Event::SettingsReceived(settings));
-    assert_terminal_selection(&mut app);
+    assert_fullscreen_pointer_cleared(&mut app);
+    assert_eq!(super::target_at(&app, area, target.0, target.1), None);
     assert_eq!(app.input(), "/q");
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
@@ -751,7 +752,7 @@ fn mouse_wheel_scrolls_the_full_screen_transcript() {
 }
 
 #[test]
-fn main_screen_leaves_wheel_input_to_terminal() {
+fn fullscreen_handler_ignores_inline_wheel_input() {
     let mut app = App::new();
     for index in 0..12 {
         app.update(ThreadEvent::FailureReported(format!("failure {index}")));
@@ -778,7 +779,7 @@ fn main_screen_leaves_wheel_input_to_terminal() {
         super::MouseAction::Selection(None)
     ));
     assert!(app.transcript_scroll().anchor().is_none());
-    assert_terminal_selection(&mut app);
+    assert_fullscreen_pointer_cleared(&mut app);
 }
 
 #[test]
@@ -1142,7 +1143,7 @@ fn switching_to_main_screen_during_a_drag_discards_the_pending_copy() {
         ),
         super::MouseAction::Selection(None)
     ));
-    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
+    assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
     assert!(app.fullscreen.pointer.hovered().is_none());
     assert!(app.fullscreen.pointer.pressed().is_none());
     assert!(app.fullscreen.selection.range().is_none());

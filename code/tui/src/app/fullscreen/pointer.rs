@@ -162,7 +162,9 @@ pub(crate) fn target_at(
     column: u16,
     row: u16,
 ) -> Option<PointerTarget> {
-    if !app.mouse_mode().enables_pointer_actions() {
+    if app.screen_mode() != terminal::ScreenMode::Fullscreen
+        || !app.mouse_mode().enables_pointer_actions()
+    {
         return None;
     }
     let areas = super::layout(app, terminal_area);
@@ -316,7 +318,9 @@ pub(in crate::app) fn handle_mouse(
     mouse: MouseEvent,
 ) -> MouseAction {
     let mouse_mode = app.mouse_mode();
-    if !mouse_mode.captures_terminal_input() {
+    if app.screen_mode() != terminal::ScreenMode::Fullscreen
+        || !mouse_mode.captures_terminal_input()
+    {
         app.fullscreen.clear();
         return MouseAction::Selection(None);
     }

@@ -3,6 +3,7 @@ mod highlight_streaming;
 mod interaction;
 mod layout;
 pub(crate) mod markdown;
+mod mermaid_preview;
 mod palette;
 mod text;
 
@@ -17,6 +18,7 @@ pub(crate) use interaction::interaction_style;
 pub(crate) use interaction::selection_marker;
 pub(crate) use layout::bottom_anchored_area;
 pub(crate) use layout::horizontal_margin;
+pub(crate) use mermaid_preview::MermaidPreviews;
 pub(crate) use palette::RenderContext;
 pub(crate) use palette::RenderTheme;
 pub(crate) use palette::ThemePalette;

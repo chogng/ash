@@ -34,6 +34,27 @@ impl HyperlinkLine {
         destination: Option<&str>,
     ) {
         let destination = destination.and_then(web_destination);
+        self.push_validated(text, style, destination.as_deref());
+    }
+
+    /// Only Ash-created preview files may bypass the web-only Markdown link rule.
+    pub(crate) fn push_trusted_file(
+        &mut self,
+        text: &str,
+        style: ratatui::style::Style,
+        destination: &str,
+    ) {
+        if Url::parse(destination).is_ok_and(|url| url.scheme() == "file") {
+            self.push_validated(text, style, Some(destination));
+        }
+    }
+
+    fn push_validated(
+        &mut self,
+        text: &str,
+        style: ratatui::style::Style,
+        destination: Option<&str>,
+    ) {
         let start = if destination.is_some() {
             self.line.width()
         } else {
@@ -64,7 +85,7 @@ impl HyperlinkLine {
             } else {
                 self.links.push(Hyperlink {
                     columns: start..end,
-                    destination,
+                    destination: destination.to_owned(),
                 });
             }
         }
@@ -113,7 +134,7 @@ pub(crate) fn wrap(line: &HyperlinkLine, width: usize) -> Vec<HyperlinkLine> {
                     result.push(std::mem::take(&mut row));
                 }
                 if glyph_width <= width {
-                    row.push(glyph, line.line.style.patch(span.style), destination);
+                    row.push_validated(glyph, line.line.style.patch(span.style), destination);
                 }
                 column += glyph_width;
             }

@@ -566,6 +566,13 @@ pub(in crate::app) fn chat_input_focused(app: &App) -> bool {
         && !app.inline.panels.command_active()
 }
 
+pub(super) fn focus_input(app: &mut App) {
+    app.inline.sessions.manager_mut().blur();
+    app.inline.agent_thread_switcher.blur();
+    app.inline.viewports.active_mut().queue.blur();
+    app.inline.viewports.active_mut().selected_cell = None;
+}
+
 pub(in crate::app) fn transcript_selection_active(app: &App) -> bool {
     matches!(
         app.inline.sessions.screen(),

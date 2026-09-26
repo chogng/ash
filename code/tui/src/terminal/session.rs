@@ -295,7 +295,7 @@ impl<O: TerminalModeOperations> TerminalModeGuard<O> {
             self.bracketed_paste = true;
             self.operations.enable_focus_change()?;
             self.focus_change = true;
-            if self.mode == ScreenMode::Fullscreen && self.mouse_mode.captures_terminal_input() {
+            if self.mouse_mode.captures_terminal_input() {
                 self.operations.enable_mouse_capture()?;
                 self.mouse_capture = true;
             }
@@ -308,11 +308,6 @@ impl<O: TerminalModeOperations> TerminalModeGuard<O> {
     }
 
     fn set_mouse_mode(&mut self, mode: MouseMode) -> io::Result<()> {
-        let mode = if self.mode == ScreenMode::Inline {
-            MouseMode::TerminalSelection
-        } else {
-            mode
-        };
         if self.mouse_mode == mode {
             return Ok(());
         }
@@ -324,7 +319,7 @@ impl<O: TerminalModeOperations> TerminalModeGuard<O> {
                 }
             }
             MouseMode::TuiCapture => {
-                if self.screen_active && !self.mouse_capture {
+                if !self.mouse_capture {
                     self.operations.enable_mouse_capture()?;
                     self.mouse_capture = true;
                 }

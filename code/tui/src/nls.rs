@@ -2082,6 +2082,18 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Ouvrir dans le navigateur",
     ),
     translation(
+        "Open Mermaid in browser",
+        "Mermaid をブラウザーで開く",
+        "在浏览器中打开 Mermaid",
+        "Ouvrir Mermaid dans le navigateur",
+    ),
+    translation(
+        "Could not prepare Mermaid preview",
+        "Mermaid のプレビューを準備できませんでした",
+        "无法准备 Mermaid 预览",
+        "Impossible de préparer l’aperçu Mermaid",
+    ),
+    translation(
         "Browser opened",
         "ブラウザーを開きました",
         "已打开浏览器",
