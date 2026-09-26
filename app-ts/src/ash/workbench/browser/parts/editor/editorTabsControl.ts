@@ -23,6 +23,7 @@ export interface EditorTabsDelegate {
 	select?(input: EditorInput, modifiers: { readonly toggle: boolean; readonly range: boolean }): boolean;
 	preview(input: EditorInput): void;
 	close(input: EditorInput): void;
+	showContextMenu?(input: EditorInput, event: MouseEvent | KeyboardEvent, tab: HTMLElement): void;
 	toggleSticky(input: EditorInput): void;
 	startDrag(input: EditorInput): void;
 	isDragging(): boolean;

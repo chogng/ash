@@ -1,4 +1,5 @@
 import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { Separator, type IAction } from "../../../../base/common/actions.js";
 import { Dimension, type IDimension } from "../../../../base/browser/dom.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { validateJsonValue } from "../../../../base/common/jsonValue.js";
@@ -35,6 +36,8 @@ import type { ILanguageDiagnosticsService } from "../../../services/language/com
 import type { IKeybindingsResourceService } from "../../../../platform/keybinding/common/keybindingsResource.js";
 import type { IKeyboardLayoutService } from "../../../../platform/keyboardLayout/common/keyboardLayout.js";
 import type { IContextKeyService, IScopedContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
+import { getFlatContextMenuActions } from "../../../../platform/actions/browser/menuEntryActionViewItem.js";
+import { MenuId } from "../../../../platform/actions/common/actions.js";
 import type { EditorCloseReason, EditorGroupChangeEvent, EditorGroupId, EditorGroupState, EditorInstanceId, EditorInstanceState } from "../../../services/editor/common/editorState.js";
 import type { SerializedEditorViewState } from "../../../services/editor/common/editorWorkingSet.js";
 import { EditorGroupContextKeyController } from './editorContextKeys.js';
@@ -206,6 +209,7 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 			close: input => {
 				void this.closeEditor(input).catch(reportEditorCloseError);
 			},
+			showContextMenu: (input, event, tab) => this.showTabContextMenu(input, event, tab),
 			toggleSticky: input => this.toggleSticky(input),
 			startDrag: input => options.dragAndDrop?.start(this, input),
 			isDragging: () => options.dragAndDrop?.isDragging() ?? false,
@@ -244,6 +248,60 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 			this.entries.length = 0;
 		}));
 		this.renderChrome();
+	}
+
+	private showTabContextMenu(input: EditorInput, event: MouseEvent | KeyboardEvent, tab: HTMLElement): void {
+		const actions = this.titleActions;
+		if (!actions) {
+			return;
+		}
+		const entry = this.requireEntry(input);
+		const editorIndex = this.entries.indexOf(entry);
+		const context = { groupId: this.id, editorIndex };
+		const anchor = event.type === "contextmenu"
+			? { x: (event as MouseEvent).clientX, y: (event as MouseEvent).clientY, targetWindow: tab.ownerDocument.defaultView ?? undefined }
+			: tab;
+		const pinAction: IAction = {
+			id: "workbench.action.toggleEditorPin",
+			label: entry.sticky
+				? localize("workbench.unpinEditor", "Unpin Editor")
+				: localize("workbench.pinEditor", "Pin Editor"),
+			tooltip: "",
+			enabled: true,
+			run: () => this.toggleSticky(entry.input),
+		};
+		const closeOthersAction: IAction = {
+			id: "workbench.action.closeOtherEditorsInGroup",
+			label: localize("workbench.closeOtherEditors", "Close Other Editors"),
+			tooltip: "",
+			enabled: this.entries.length > 1,
+			run: async () => {
+				for (const other of [...this.entries]) {
+					if (other !== entry) {
+						if (!await this.closeEditor(other.input)) {
+							break;
+						}
+					}
+				}
+			},
+		};
+		actions.contextMenuProvider.showContextMenu({
+			getAnchor: () => anchor,
+			getActions: () => Separator.join(
+				[pinAction],
+				getFlatContextMenuActions(actions.menuService.getMenuActions(MenuId.EditorTitleContext, { arg: context }, this.scopedContextKeyService), undefined, tab.ownerDocument.defaultView ?? undefined),
+				[closeOthersAction],
+			),
+			getActionsContext: () => context,
+			onHide: didCancel => {
+				const survivingTab = tab.ownerDocument.getElementById(entry.tabId);
+				if (didCancel && survivingTab) {
+					survivingTab.focus();
+				} else {
+					this.focus();
+				}
+			},
+		});
 	}
 
 	get inputs(): readonly EditorInput[] {

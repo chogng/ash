@@ -44,3 +44,39 @@ test('editor tab uses the editor surface and shares its pin and close slot', asy
 	await ordinary.locator('.ash-tab-close-action button').click();
 	await expect(page.getByRole('tab', { name: untitledName! })).toHaveCount(0);
 });
+
+test('editor tab menu targets the clicked tab and opens from the keyboard', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	const createUntitled = async (): Promise<void> => {
+		await page.getByRole('button', { name: 'Application menu' }).click();
+		await page.getByRole('menu').first().getByRole('menuitem', { name: 'File' }).hover();
+		await page.getByRole('menu').last().getByRole('menuitem', { name: 'New Untitled Text Editor' }).click();
+	};
+	await createUntitled();
+	const group = workbench.editors.groupAt(0);
+	const untitledTabs = group.tabs.filter({ hasText: /Untitled-/u });
+	const firstName = await untitledTabs.last().getAttribute('aria-label');
+	await createUntitled();
+	await expect(untitledTabs).toHaveCount(2);
+	const remainingName = await untitledTabs.last().getAttribute('aria-label');
+	const first = group.element.getByRole('tab', { name: firstName! });
+	const remaining = group.element.getByRole('tab', { name: remainingName! });
+	await first.click({ button: 'right' });
+	const menu = page.getByRole('menu').last();
+	await expect(menu.getByRole('menuitem', { name: 'Close Editor' })).toBeVisible();
+	await menu.getByRole('menuitem', { name: 'Close Editor' }).click();
+	await expect(first).toHaveCount(0);
+	await expect(remaining).toHaveCount(1);
+	await remaining.focus();
+	await remaining.press('Shift+F10');
+	await expect(menu.getByRole('menuitem', { name: 'Pin Editor' })).toBeVisible();
+	await menu.getByRole('menuitem', { name: 'Pin Editor' }).click();
+	await expect(remaining).toHaveAttribute('aria-description', /Pinned tab/u);
+	await createUntitled();
+	await expect(untitledTabs).toHaveCount(2);
+	await remaining.click({ button: 'right' });
+	await menu.getByRole('menuitem', { name: 'Close Other Editors' }).click();
+	await expect(group.tabs).toHaveCount(1);
+	await expect(remaining).toHaveCount(1);
+});

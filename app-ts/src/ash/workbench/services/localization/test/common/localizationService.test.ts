@@ -80,6 +80,11 @@ test("localization lookup falls back to English and formats parameters", async (
 	assert.equal(localization.translate('ash', 'quickHelp.dialog', 'Quick Access Help'), '快速访问帮助');
 	assert.equal(localization.translate('ash', 'quickCommand.placeholder', 'Type > for commands, ? for help, or @ for symbols'), '输入 > 查找命令、? 查看帮助，或 @ 查找符号');
 	assert.equal(localization.translate('ash', 'workbench.editorPinnedTabHint', 'Pinned tab. Double-click or press Alt+Enter to unpin.'), '已固定的标签。双击或按 Alt+Enter 可取消固定。');
+	assert.deepEqual([
+		localization.translate('ash', 'workbench.closeOtherEditors', 'Close Other Editors'),
+		localization.translate('ash', 'workbench.pinEditor', 'Pin Editor'),
+		localization.translate('ash', 'workbench.unpinEditor', 'Unpin Editor'),
+	], ['关闭其他编辑器', '固定编辑器', '取消固定编辑器']);
 	assert.equal(localization.translate('ash', 'chat.settings.advisorDisable', 'Turn Advisor off'), '关闭顾问');
 	assert.equal(localization.translate('ash', 'chat.advisor.configure', 'Configure an advisor model in Chat Settings before asking for a second opinion'), '请先在聊天设置中配置顾问模型，再请求第二意见');
 	assert.deepEqual([

@@ -75,6 +75,15 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 		this.domNode.classList.add(CONNECTED_EDITOR_TABS_CLASS);
 		this._register(addDisposableListener(viewport, "scroll", () => this.updateConnectedTab()));
 		this._register(observeResize(viewport, () => this.updateConnectedTab()));
+		this._register(addDisposableListener(this.tabList.element, "contextmenu", event => {
+			this.showTabContextMenu(event);
+		}));
+		this._register(addDisposableListener(this.tabList.element, "keydown", event => {
+			if (!event.shiftKey || event.key !== "F10") {
+				return;
+			}
+			this.showTabContextMenu(event);
+		}));
 		// Activation rebuilds tabs, so the browser's dblclick event may lose its original target.
 		this._register(addDisposableListener(this.domNode, "click", event => {
 			if (event.detail === 0) return;
@@ -93,6 +102,24 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 			event.stopPropagation();
 			this.delegate.toggleSticky(editor.input);
 		}, true));
+	}
+
+	private showTabContextMenu(event: MouseEvent | KeyboardEvent): void {
+		const target = event.target;
+		if (!(target instanceof this.domNode.ownerDocument.defaultView!.Element)) {
+			return;
+		}
+		const tab = target.closest<HTMLElement>(".ash-tab");
+		if (!tab || !this.tabList.element.contains(tab)) {
+			return;
+		}
+		const editor = this.editors.find(candidate => candidate.instanceId === tab.dataset.actionId);
+		if (!editor || !this.delegate.showContextMenu) {
+			return;
+		}
+		event.preventDefault();
+		event.stopPropagation();
+		this.delegate.showContextMenu(editor.input, event, tab);
 	}
 
 	setEditors(editors: readonly EditorTabDescriptor[], activeInput: EditorInput | undefined, selectedIds?: ReadonlySet<string>): void {
