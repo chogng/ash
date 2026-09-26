@@ -7,6 +7,7 @@ import { Disposable, MutableDisposable, toDisposable } from "../../base/common/l
 import { isRecord } from "../../base/common/types.js";
 import type { ILayoutOffsetInfo } from "../../platform/layout/browser/layoutService.js";
 import { type IStorageService, StorageScope, StorageTarget } from "../../platform/storage/common/storage.js";
+import { WorkbenchState } from "../../platform/workspace/common/workspace.js";
 import type { ActivityBarLocation, SideBarLocation, WorkbenchLayoutStyle } from "../common/configuration.js";
 import { type IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent, workbenchPartIds } from "../services/layout/common/workbenchLayoutService.js";
 import type { IWorkbenchLayoutStyleService } from "../services/layout/browser/workbenchLayoutStyleService.js";
@@ -55,15 +56,6 @@ export interface WorkbenchDefaultLayout {
 	readonly force?: boolean;
 }
 
-export const DEFAULT_WORKBENCH_LAYOUT = {
-	parts: {
-		sidebar: false,
-		auxiliarybar: false,
-		agentSidebar: false,
-		panel: false,
-	},
-} as const satisfies WorkbenchDefaultLayout;
-
 /** The durable, mutable portion of Workbench layout state. */
 export interface WorkbenchLayoutState {
 	readonly version: 3;
@@ -87,8 +79,8 @@ export interface WorkbenchLayoutState {
 
 export interface WorkbenchLayoutOptions {
 	readonly initialDimension?: IDimension;
-	/** Product fallback used whenever no persisted or host-supplied value applies. */
-	readonly fallbackPartVisibility?: WorkbenchDefaultLayout["parts"];
+	readonly workbenchState: WorkbenchState;
+	readonly showChatOnFirstLaunch: boolean;
 	readonly defaultLayout?: WorkbenchDefaultLayout;
 	readonly storageService?: IStorageService;
 	readonly layoutStyle?: WorkbenchLayoutStyle;
@@ -125,7 +117,7 @@ export class WorkbenchLayout
 	constructor(
 		container: HTMLElement,
 		parts: ReadonlyMap<WorkbenchPartId, WorkbenchPart>,
-		options: WorkbenchLayoutOptions = {},
+		options: WorkbenchLayoutOptions,
 	) {
 		super();
 		this.container = container;
@@ -152,16 +144,10 @@ export class WorkbenchLayout
 			options.initialDimension,
 		);
 		validateWorkbenchDefaultLayout(options.defaultLayout);
-		const fallbackDefaults = createDefaultWorkbenchLayoutState(
-			options.fallbackPartVisibility,
-		);
 		this.stateModel = new WorkbenchLayoutStateModel(
 			options.storageService,
-			fallbackDefaults,
-			createDefaultWorkbenchLayoutState({
-				...options.fallbackPartVisibility,
-				...options.defaultLayout?.parts,
-			}),
+			options.workbenchState,
+			options.showChatOnFirstLaunch,
 			options.defaultLayout,
 		);
 		const initialState = this.stateModel.state;
@@ -185,6 +171,7 @@ export class WorkbenchLayout
 			this.projectPartFrameInsets();
 			this.publishPartVisibility();
 		});
+		this.stateModel.markFirstLaunchComplete();
 		if (options.storageService) {
 			this._register(options.storageService.onWillSaveState(() => {
 				this.saveState();
@@ -283,7 +270,8 @@ export class WorkbenchLayout
 	}
 
 	/** Re-applies the layout state from the currently selected storage workspace. */
-	restoreWorkspaceState(): void {
+	restoreWorkspaceState(workbenchState: WorkbenchState = this.stateModel.workbenchState): void {
+		this.stateModel.workbenchState = workbenchState;
 		this.applyState(this.stateModel.state);
 		this.saveState();
 	}
@@ -676,18 +664,28 @@ function parseWorkbenchLayoutState(value: unknown): WorkbenchLayoutState {
 
 /** Bridges Workbench layout semantics to the generic scoped storage service. */
 class WorkbenchLayoutStateModel {
+	private readonly isFirstApplicationRun: boolean;
+
 	constructor(
 		private readonly storageService: IStorageService | undefined,
-		private readonly fallbackDefaults: WorkbenchLayoutState,
-		private readonly initialDefaults: WorkbenchLayoutState,
+		public workbenchState: WorkbenchState,
+		private readonly showChatOnFirstLaunch: boolean,
 		private readonly defaultLayout: WorkbenchDefaultLayout | undefined,
-	) {}
+	) {
+		this.isFirstApplicationRun = storageService?.isNew(StorageScope.APPLICATION) ?? false;
+	}
 
 	get state(): WorkbenchLayoutState {
 		const storage = this.storageService;
+		const fallbackParts = {
+			sidebar: this.workbenchState !== WorkbenchState.EMPTY,
+			auxiliarybar: this.workbenchState !== WorkbenchState.EMPTY || (this.isFirstApplicationRun && this.showChatOnFirstLaunch),
+			agentSidebar: false,
+			panel: false,
+		} as const satisfies NonNullable<WorkbenchDefaultLayout["parts"]>;
 		const defaults = this.shouldApplyDefaultLayout(storage)
-			? this.initialDefaults
-			: this.fallbackDefaults;
+			? createDefaultWorkbenchLayoutState({ ...fallbackParts, ...this.defaultLayout?.parts })
+			: createDefaultWorkbenchLayoutState(fallbackParts);
 		if (!storage) return defaults;
 		return {
 			version: 3,
@@ -756,6 +754,12 @@ class WorkbenchLayoutStateModel {
 				),
 			},
 		};
+	}
+
+	markFirstLaunchComplete(): void {
+		if (!this.isFirstApplicationRun || !this.showChatOnFirstLaunch) return;
+		// An empty application scope remains new across restarts until it contains a value.
+		this.storageService?.store("workbench.layout.initialized", true, StorageScope.APPLICATION, StorageTarget.MACHINE);
 	}
 
 	private shouldApplyDefaultLayout(storage: IStorageService | undefined): boolean {

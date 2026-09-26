@@ -31,6 +31,7 @@ const { Dimension } = await import("../../../base/browser/dom.js");
 const { bindResizableLayout } = await import("../../../base/browser/ui/resizable/resizable.js");
 const { Lxicon } = await import("../../../base/common/lxicons.js");
 const { StorageScope, WillSaveStateReason } = await import("../../../platform/storage/common/storage.js");
+const { WorkbenchState } = await import("../../../platform/workspace/common/workspace.js");
 const { MenuId } = await import(
 	"../../../platform/actions/common/actions.js"
 );
@@ -140,7 +141,7 @@ class TestPart extends WorkbenchPart {
 
 function createLayoutHarness(
 	ownerDocument: Document,
-	options: WorkbenchLayoutOptions = {},
+	options: Partial<WorkbenchLayoutOptions> = {},
 	existingContainer?: HTMLElement,
 ): {
 	readonly disposables: DisposableStore;
@@ -165,14 +166,18 @@ function createLayoutHarness(
 	}
 	if (!editor) throw new Error("Test layout requires an editor Part");
 
-	const layout = disposables.add(new WorkbenchLayout(container, parts, options));
+	const layout = disposables.add(new WorkbenchLayout(container, parts, {
+		workbenchState: WorkbenchState.FOLDER,
+		showChatOnFirstLaunch: false,
+		...options,
+	}));
 	return { disposables, container, editor, layout };
 }
 
 test("Workbench layout hides and restores Parts with context keys", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const contextKeys = new ContextKeyService();
-	const harness = createLayoutHarness(dom.window.document);
+	const harness = createLayoutHarness(dom.window.document, { defaultLayout: { parts: { panel: true } } });
 	harness.disposables.add(contextKeys);
 	harness.disposables.add(createTestWorkbenchContextKeysHandler(contextKeys, { layoutService: harness.layout }));
 	const overlay = h(dom.window.document, "div");
@@ -418,7 +423,7 @@ test("platform layout service drives Workbench Part geometry", () => {
 
 test("Workbench layout state is versioned and excludes topology", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
-	const harness = createLayoutHarness(dom.window.document);
+	const harness = createLayoutHarness(dom.window.document, { defaultLayout: { parts: { panel: true } } });
 	harness.layout.layout(new Dimension(1_000, 700));
 	harness.layout.resizePart(
 		"sidebar",
@@ -453,6 +458,7 @@ test("Workbench layout derives flexible editor size from the container", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const harness = createLayoutHarness(dom.window.document, {
 		initialDimension: new Dimension(1_200, 800),
+		defaultLayout: { parts: { panel: true } },
 	});
 	harness.layout.layout(new Dimension(1_200, 800));
 
@@ -533,6 +539,67 @@ test("Workbench layout applies host defaults without exposing persisted state", 
 	dom.window.close();
 });
 
+test("Workbench startup defaults follow workspace state and first launch without replacing saved visibility", async () => {
+	const dom = new JSDOM("<!doctype html><body></body>", { url: "https://ash.test" });
+	const createStorage = (workspaceId: string) => new BrowserStorageService({
+		ownerWindow: dom.window as unknown as Window,
+		applicationId: "code-startup-defaults",
+		workspaceId,
+		backend: dom.window.localStorage,
+		flushInterval: 0,
+	});
+	const firstStorage = createStorage("empty-a");
+	const first = createLayoutHarness(dom.window.document, {
+		workbenchState: WorkbenchState.EMPTY,
+		showChatOnFirstLaunch: true,
+		storageService: firstStorage,
+	});
+	assert.deepEqual([
+		first.layout.isPartVisible("sidebar"),
+		first.layout.isPartVisible("auxiliarybar"),
+		first.layout.isPartVisible("panel"),
+	], [false, true, false]);
+	assert.equal(firstStorage.getBoolean("workbench.layout.initialized", StorageScope.APPLICATION), true);
+	await firstStorage.flush(WillSaveStateReason.SHUTDOWN);
+	first.disposables.dispose();
+	firstStorage.dispose();
+
+	const storage = createStorage("empty-b");
+	assert.equal(storage.isNew(StorageScope.APPLICATION), false);
+	const restored = createLayoutHarness(dom.window.document, {
+		workbenchState: WorkbenchState.EMPTY,
+		showChatOnFirstLaunch: true,
+		storageService: storage,
+	});
+	assert.deepEqual([
+		restored.layout.isPartVisible("sidebar"),
+		restored.layout.isPartVisible("auxiliarybar"),
+	], [false, false]);
+	storage.switchWorkspace("folder-a");
+	restored.layout.restoreWorkspaceState(WorkbenchState.FOLDER);
+	assert.deepEqual([
+		restored.layout.isPartVisible("sidebar"),
+		restored.layout.isPartVisible("auxiliarybar"),
+		restored.layout.isPartVisible("panel"),
+	], [true, true, false]);
+	restored.layout.hidePart("auxiliarybar");
+	await storage.flush(WillSaveStateReason.SHUTDOWN);
+	restored.disposables.dispose();
+	storage.dispose();
+
+	const savedStorage = createStorage("folder-a");
+	const saved = createLayoutHarness(dom.window.document, {
+		workbenchState: WorkbenchState.FOLDER,
+		showChatOnFirstLaunch: true,
+		storageService: savedStorage,
+	});
+	assert.equal(saved.layout.isPartVisible("sidebar"), true);
+	assert.equal(saved.layout.isPartVisible("auxiliarybar"), false);
+	saved.disposables.dispose();
+	savedStorage.dispose();
+	dom.window.close();
+});
+
 test("Workbench default layout applies to new workspaces unless forced", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>", {
 		url: "https://ash.test",
@@ -580,7 +647,7 @@ test("Workbench default layout applies to new workspaces unless forced", async (
 		storageService: forcedStorage,
 	});
 	assert.equal(forced.layout.isPartVisible("sidebar"), false);
-	assert.equal(forced.layout.isPartVisible("panel"), true);
+	assert.equal(forced.layout.isPartVisible("panel"), false);
 	forced.disposables.dispose();
 	forcedStorage.dispose();
 	dom.window.close();
@@ -1538,7 +1605,7 @@ test("CompositeBar reorders view container tabs through drag and drop", () => {
 
 test("titlebar layout commands toggle shell regions", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
-	const harness = createLayoutHarness(dom.window.document);
+	const harness = createLayoutHarness(dom.window.document, { defaultLayout: { parts: { panel: true } } });
 	const services = new ServiceContainer();
 	services.registerInstance(IWorkbenchLayoutService, harness.layout);
 	const commands = harness.disposables.add(new CommandService(services));

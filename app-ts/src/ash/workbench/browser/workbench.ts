@@ -142,7 +142,7 @@ import { WorkbenchContextKeysHandler } from './contextkeys.js';
 import { WorkbenchThemeService } from "../services/themes/browser/workbenchThemeService.js";
 import { IResourceIconRenderer, IResourceLabelService, ResourceLabelService } from "./labels.js";
 import { ILabelService, LabelService } from "../../platform/label/common/labelService.js";
-import { DEFAULT_WORKBENCH_LAYOUT, WorkbenchLayout, type WorkbenchDefaultLayout } from "./layout.js";
+import { WorkbenchLayout, type WorkbenchDefaultLayout } from "./layout.js";
 import { IWorkbenchLayoutService, type WorkbenchPartId } from "../services/layout/browser/layoutService.js";
 import { IWorkbenchLayoutStyleService } from "../services/layout/browser/workbenchLayoutStyleService.js";
 import { BrowserStorageService } from "../services/storage/browser/storageService.js";
@@ -945,7 +945,8 @@ export class Workbench extends Disposable {
 		]);
 		const layout = this._register(new WorkbenchLayout(workbenchRoot, parts, {
 			initialDimension: layoutService.mainContainerDimension,
-			fallbackPartVisibility: DEFAULT_WORKBENCH_LAYOUT.parts,
+			workbenchState,
+			showChatOnFirstLaunch: nativeHostApi !== undefined || webWorkspaceClient !== undefined,
 			defaultLayout,
 			storageService: storage,
 			layoutStyle: configuration.getValue(WorkbenchConfiguration.layoutStyle),
@@ -1162,7 +1163,7 @@ export class Workbench extends Disposable {
 		const nextWorkbenchState = workbenchStateFromWorkspace(workspace);
 		this.workbenchWindow.setWorkbenchState(nextWorkbenchState);
 		this.workspaceContext.updateWorkspace(workspace);
-		this.workbenchLayout.restoreWorkspaceState();
+		this.workbenchLayout.restoreWorkspaceState(nextWorkbenchState);
 		this.restoreActiveViewContainers?.();
 		await this.restoreWorkingCopyBackups(this.workingCopyBackups, this.editor);
 	}

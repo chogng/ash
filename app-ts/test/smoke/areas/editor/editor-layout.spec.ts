@@ -1,6 +1,25 @@
 import type { Locator } from "@playwright/test";
 import { expect, test } from "../../../automation/test.js";
 
+test.describe('startup layout defaults', () => {
+	test.use({ openWorkspace: false });
+
+	test('empty window keeps Explorer and Panel hidden and shows first-launch desktop Chat', async ({ target, workbench }) => {
+		const page = workbench.page;
+		await expect(page.locator("[data-part='sidebar']")).toBeHidden();
+		await expect(page.locator("[data-part='panel']")).toBeHidden();
+		await expect(page.locator("[data-part='auxiliarybar']")).toBeVisible({ visible: target.kind === 'electron' });
+	});
+});
+
+test('new desktop workspace shows Explorer and Chat with Panel hidden', async ({ target, workbench }) => {
+	test.skip(target.kind !== 'electron');
+	const page = workbench.page;
+	await expect(page.locator("[data-part='sidebar']")).toBeVisible();
+	await expect(page.locator("[data-part='auxiliarybar']")).toBeVisible();
+	await expect(page.locator("[data-part='panel']")).toBeHidden();
+});
+
 test("empty editor distinguishes an empty window from an open workspace", async ({ target, workbench }) => {
 	const editors = workbench.editors;
 	const group = editors.groupAt(0);
