@@ -267,10 +267,11 @@ function isMissing(error: unknown): boolean {
 }
 
 export function updateIpcRoutes(service: UpdateMainService): readonly IpcRoute<unknown, unknown>[] {
+	// The router validates each request before invoke; the route collection erases that parameter type.
 	return [
-		{ channel: UPDATE_CHECK_CHANNEL, validate: validateUpdateRequest, invoke: policy => service.checkForUpdates(policy) },
-		{ channel: UPDATE_AUTO_CHECK_CHANNEL, validate: validateUpdateRequest, invoke: policy => service.checkAutomatically(policy) },
-		{ channel: UPDATE_DOWNLOAD_CHANNEL, validate: validateUpdateRequest, invoke: policy => service.downloadUpdate(policy) },
+		{ channel: UPDATE_CHECK_CHANNEL, validate: validateUpdateRequest, invoke: policy => service.checkForUpdates(policy as ReturnType<typeof validateUpdateRequest>) },
+		{ channel: UPDATE_AUTO_CHECK_CHANNEL, validate: validateUpdateRequest, invoke: policy => service.checkAutomatically(policy as ReturnType<typeof validateUpdateRequest>) },
+		{ channel: UPDATE_DOWNLOAD_CHANNEL, validate: validateUpdateRequest, invoke: policy => service.downloadUpdate(policy as ReturnType<typeof validateUpdateRequest>) },
 		{ channel: UPDATE_INSTALL_CHANNEL, validate: validateInstallRequest, invoke: () => service.installUpdate() },
 	];
 }
