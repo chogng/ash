@@ -1,0 +1,28 @@
+---
+source: code/tui/src/app/fullscreen/pointer_tests.rs
+expression: terminal.backend().to_string()
+---
+"  .                                                        [— / —] [Dashboard]  "
+"                                                                                "
+"        ┌── Providers ─────────────────────────────────────────────[✗]─┐        "
+"        │                                                              │        "
+"        │   All                                                        │        "
+"        │                                                              │        "
+"        │  1 more above                                                │        "
+"        │> Provider 0                                                  │        "
+"        │  Provider 1                                                  │        "
+"        │  Provider 2                                                  │        "
+"        │  Provider 3                                                  │        "
+"        │  Provider 4                                                  │        "
+"        │  Provider 5                                                  │        "
+"        │  Provider 6                                                  │        "
+"        │  Provider 7                                                  │        "
+"        │  Provider 8                                                  │        "
+"        │  Provider 9                                                  │        "
+"        │  Provider 10                                                 │        "
+"        │  3 more below                                                │        "
+"  ╭─────│  Tab/Shift+Tab to switch  ·  Esc to close                    │─────╮  "
+"  │ > Bu└──────────────────────────────────────────────────────────────┘     │  "
+"  ╰──────────────────────────────────────────────────────── Automatic model ─╯  "
+"                                                                                "
+"                                                                                "

@@ -616,6 +616,10 @@ impl ListSelectionState {
         true
     }
 
+    pub(super) fn clear_visible_selection(&mut self) {
+        self.selected_visible = None;
+    }
+
     pub(crate) fn tab_rows(&self, width: u16) -> u16 {
         if self.show_tabs() {
             tab_list::desired_height(self.tabs(), width)
@@ -839,13 +843,19 @@ impl ListSelectionState {
     fn move_focus_down(&mut self) {
         match self.focus {
             ListSelectionFocus::Tabs => {
-                self.set_focus(if self.has_action() {
-                    ListSelectionFocus::Action
-                } else if self.search.is_some() {
-                    ListSelectionFocus::Search
+                // Down continues from the visibly selected row instead of restarting at search.
+                if !self.has_action() && self.selected_visible.is_some() {
+                    self.set_focus(ListSelectionFocus::Items);
+                    self.move_selection(ListSelectionDirection::Next);
                 } else {
-                    ListSelectionFocus::Items
-                });
+                    self.set_focus(if self.has_action() {
+                        ListSelectionFocus::Action
+                    } else if self.search.is_some() {
+                        ListSelectionFocus::Search
+                    } else {
+                        ListSelectionFocus::Items
+                    });
+                }
             }
             ListSelectionFocus::Action => self.set_focus(if self.search.is_some() {
                 ListSelectionFocus::Search

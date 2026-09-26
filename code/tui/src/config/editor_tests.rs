@@ -117,6 +117,43 @@ fn provider_rows_use_distinct_subscription_and_api_names() {
 }
 
 #[test]
+fn down_from_provider_tab_advances_from_the_highlighted_kimi_row() {
+    let catalog = ProviderListResult {
+        providers: vec![
+            ProviderCatalogEntryDto {
+                provider: "kimi".into(),
+                display_name: "Kimi".into(),
+                api_key_policy: ProviderApiKeyPolicyDto::Required,
+                api_key_configured: false,
+            },
+            ProviderCatalogEntryDto {
+                provider: "openai".into(),
+                display_name: "OpenAI".into(),
+                api_key_policy: ProviderApiKeyPolicyDto::Required,
+                api_key_configured: false,
+            },
+        ],
+    };
+    let mut editor = super::ConfigEditor::new(config_choices(
+        &empty_config_snapshot(),
+        &catalog,
+        TerminalSettings::default(),
+        StatusLineSettings::default(),
+    ));
+
+    editor.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    let selection = editor.selection().unwrap();
+    assert!(selection.tabs_focused());
+    assert_eq!(selection.selected_item().unwrap().label(), "Kimi");
+
+    editor.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    let selection = editor.selection().unwrap();
+    assert!(selection.items_focused());
+    assert_eq!(selection.selected_item().unwrap().label(), "ChatGPT");
+    assert!(!selection.search().unwrap().input_active());
+}
+
+#[test]
 fn advisor_choices_are_localized_and_config_owned() {
     let choices = advisor_choices(
         &empty_config_snapshot(),
@@ -540,7 +577,7 @@ fn provider_sections_open_connection_from_the_same_list() {
         )
     };
     let mut subscription = super::ConfigEditor::new(choices());
-    for code in [KeyCode::Tab, KeyCode::Down, KeyCode::Down] {
+    for code in [KeyCode::Tab, KeyCode::Enter] {
         subscription.handle_key(KeyEvent::new(code, KeyModifiers::NONE));
     }
     assert!(matches!(
@@ -551,7 +588,7 @@ fn provider_sections_open_connection_from_the_same_list() {
     ));
 
     let mut api = super::ConfigEditor::new(choices());
-    for code in [KeyCode::Tab, KeyCode::Down, KeyCode::Down, KeyCode::Down] {
+    for code in [KeyCode::Tab, KeyCode::Down] {
         api.handle_key(KeyEvent::new(code, KeyModifiers::NONE));
     }
     assert_eq!(

@@ -2211,14 +2211,13 @@ fn config_providers_show_subscription_and_api_sections() {
     ));
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     assert_eq!(
         app.list_selection()
             .unwrap()
             .selected_item()
             .unwrap()
             .label(),
-        "ChatGPT"
+        "Kimi"
     );
     crate::tui_assert_snapshot!("config_providers_sections", render(&app, 100, 34));
 }

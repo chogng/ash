@@ -1102,7 +1102,7 @@ fn enter_provider_row(app: &mut App, label: &str) -> Option<AppCommand> {
         settings,
         StatusLineSettings::default(),
     )));
-    for code in [KeyCode::Up, KeyCode::Up, KeyCode::Tab, KeyCode::Down] {
+    for code in [KeyCode::Tab, KeyCode::Char('/')] {
         app.handle_key(KeyEvent::new(code, KeyModifiers::NONE));
     }
     app.handle_paste(label.into());

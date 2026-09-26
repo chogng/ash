@@ -332,7 +332,7 @@ fn enter_and_space_activate_actionable_items() {
 }
 
 #[test]
-fn arrows_follow_items_search_and_tabs_in_visual_order() {
+fn arrows_reach_search_and_tabs_and_resume_from_the_selected_item() {
     let mut view = state();
     view.handle_key(key(KeyCode::Down));
     view.handle_key(key(KeyCode::Up));
@@ -350,9 +350,10 @@ fn arrows_follow_items_search_and_tabs_in_visual_order() {
     view.handle_key(key(KeyCode::Left));
     assert_eq!(active_tab_label(&view), "Commands");
     view.handle_key(key(KeyCode::Down));
-    assert!(view.search_focused());
-    view.handle_key(key(KeyCode::Down));
     assert!(view.items_focused());
+    assert_eq!(view.selected_item().unwrap().label(), "/model");
+    view.handle_key(key(KeyCode::Up));
+    assert!(view.search_focused());
 }
 
 #[test]
@@ -612,7 +613,7 @@ fn hidden_tab_list_neither_switches_nor_adjusts_values_on_tab() {
 }
 
 #[test]
-fn tab_from_items_focuses_tabs_and_arrows_follow_the_visual_regions() {
+fn tab_from_items_focuses_tabs_then_down_advances_the_selected_item() {
     let mut view = state();
     assert!(view.items_focused());
     view.handle_key(key(KeyCode::Tab));
@@ -622,9 +623,11 @@ fn tab_from_items_focuses_tabs_and_arrows_follow_the_visual_regions() {
     assert_eq!(view.active_tab().label(), "Commands");
     assert!(view.tabs_focused());
     view.handle_key(key(KeyCode::Down));
-    assert!(view.search_focused());
-    view.handle_key(key(KeyCode::Down));
     assert!(view.items_focused());
+    assert_eq!(view.selected_item().unwrap().label(), "/model");
+    view.handle_key(key(KeyCode::Up));
+    view.handle_key(key(KeyCode::Up));
+    assert!(view.search_focused());
     view.handle_key(key(KeyCode::BackTab));
     assert!(view.tabs_focused());
     assert_eq!(view.active_tab().label(), "Keys");
