@@ -1,3 +1,4 @@
+import type { Event } from '../../../base/common/event.js';
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
 
 export type DirPermission =
@@ -35,6 +36,7 @@ export interface DirPermissionsCommandResult {
 
 /** Frontend contract for explicit capability sets attached to directories. */
 export interface IDirPermissionsService {
+	readonly onDidChangePermissions: Event<void>;
 	list(): Promise<DirPermissionsSnapshot>;
 	read(path: string): Promise<readonly DirPermission[] | undefined>;
 	set(path: string, permissions: readonly DirPermission[], expectedRevision: number): Promise<DirPermissionsCommandResult>;

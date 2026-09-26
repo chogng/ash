@@ -1,9 +1,21 @@
+import { Emitter } from '../../../../base/common/event.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import type { IServerEventApi } from '../../../../platform/app-server/common/appServerApi.js';
 import type { IDirPermissionsApi } from "../../../../platform/dirPermissions/common/dirPermissionsApi.js";
 import type { DirPermission, DirPermissionsCommandResult, DirPermissionsSnapshot, IDirPermissionsService } from "../../../../platform/dirPermissions/common/dirPermissionsService.js";
 
 /** App Server transport adapter for directory permissions. */
-export class AppServerDirPermissionsService implements IDirPermissionsService {
-	constructor(private readonly api: IDirPermissionsApi) {}
+export class AppServerDirPermissionsService extends Disposable implements IDirPermissionsService {
+	private readonly changed = this._register(new Emitter<void>());
+	readonly onDidChangePermissions = this.changed.event;
+
+	constructor(private readonly api: IDirPermissionsApi, events: IServerEventApi) {
+		super();
+		const subscription = events.subscribe(event => {
+			if (event.method === 'config/changed') this.changed.fire();
+		});
+		this._register(toDisposable(() => subscription.dispose()));
+	}
 
 	async list(): Promise<DirPermissionsSnapshot> {
 		const result = await this.api.list();

@@ -18,13 +18,13 @@ import {
 	WorkbenchState,
 } from "../../../../platform/workspace/common/workspace.js";
 import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/remote.js";
-import {
-	WorkspaceOpenTargetKind,
-} from "../../../../platform/workspaces/common/workspaces.js";
+import { WorkspaceOpenTargetKind } from '../../../../platform/environment/common/argv.js';
 import { WorkspaceTransitionFailureKind, WorkspaceTransitionFailureStage, WorkspaceTransitionMainService, WorkspaceTransitionPhase, WorkspaceTransitionRecovery, WorkspaceTransitionStatus } from "../../../../platform/workspaces/electron-main/workspaceTransitionMainService.js";
 import { AppServerWorkspaceTransitionAdapter, type IAppServerWorkspaceTransitionHost } from "../../../../platform/workspaces/electron-main/appServerWorkspaceTransition.js";
 import { AppServerRemoteError } from "../../../../platform/app-server/common/appServerError.js";
-import { parseWorkspaceLaunchArguments, WorkspaceContextMainService, WorkspacesMainService, workspaceContextIpcRoutes } from "../../../../platform/workspaces/electron-main/workspacesMainService.js";
+import { WorkspaceContextMainService } from '../../../../platform/window/electron-main/window.js';
+import { WindowsMainService, workspaceContextIpcRoutes } from '../../../../platform/windows/electron-main/windowsMainService.js';
+import { WorkspacesManagementMainService } from '../../../../platform/workspaces/electron-main/workspacesManagementMainService.js';
 import {
 	getSingleFolderWorkspaceIdentifier,
 	getWorkspaceIdentifier,
@@ -35,56 +35,18 @@ import {
 	WorkspaceContextService,
 } from "../../../../workbench/services/workspaces/browser/workspaceContextService.js";
 
-test("workspace launch arguments distinguish automatic and named targets", () => {
-	assert.equal(parseWorkspaceLaunchArguments([]), undefined);
-	assert.deepEqual(parseWorkspaceLaunchArguments(["project"]), {
-		kind: WorkspaceOpenTargetKind.Automatic,
-		path: "project",
-	});
-	assert.deepEqual(parseWorkspaceLaunchArguments(["--folder", "project"]), {
-		kind: WorkspaceOpenTargetKind.Folder,
-		path: "project",
-	});
-	assert.deepEqual(
-		parseWorkspaceLaunchArguments(["--workspace=team.ash-workspace"]),
-		{
-			kind: WorkspaceOpenTargetKind.Workspace,
-			path: "team.ash-workspace",
-		},
-	);
-	assert.deepEqual(parseWorkspaceLaunchArguments(["--", "-project"]), {
-		kind: WorkspaceOpenTargetKind.Automatic,
-		path: "-project",
-	});
-	assert.deepEqual(parseWorkspaceLaunchArguments(["--remote-ssh", "work-server", "--folder", "/home/ash/project"]), {
-		kind: WorkspaceOpenTargetKind.RemoteFolder,
-		path: "/home/ash/project",
-		sshHost: "work-server",
-	});
+function windowsForWorkspacePaths(paths: IWorkspacePathService): WindowsMainService<never> {
+	return new WindowsMainService<never>(() => [], async () => undefined, process.platform, () => undefined, () => {}, paths);
+}
 
-	assert.throws(
-		() => parseWorkspaceLaunchArguments(["one", "two"]),
-		/only one project/,
-	);
-	assert.throws(
-		() => parseWorkspaceLaunchArguments(["--folder"]),
-		/requires a path/,
-	);
-	assert.throws(() => parseWorkspaceLaunchArguments(["--remote-ssh", "work-server"]), /requires a Remote folder/);
-	assert.throws(() => parseWorkspaceLaunchArguments(["--remote-ssh", "work-server", "--workspace", "/remote/team.ash-workspace"]), /multi-root/);
-});
-
-test("workspaces service resolves SSH folders without reading the local filesystem", async () => {
+test("windows service resolves SSH folders without reading the local filesystem", async () => {
 	let localReads = 0;
-	const workspace = await new WorkspacesMainService({
+	const workspace = await windowsForWorkspacePaths({
 		async resolvePath() {
 			localReads += 1;
 			throw new Error("Remote path must not be read locally");
 		},
-	}).resolveStartupWorkspace({
-		arguments: ["--remote-ssh=work-server", "--folder=/home/ash/project"],
-		cwd: resolve("launch-root"),
-	});
+	}).resolveWorkspaceOpenTarget({ kind: WorkspaceOpenTargetKind.RemoteFolder, path: '/home/ash/project', sshHost: 'work-server' }, resolve('launch-root'));
 
 	assert.equal(localReads, 0);
 	assert.ok(isRemoteWorkspaceIdentifier(workspace));
@@ -93,7 +55,7 @@ test("workspaces service resolves SSH folders without reading the local filesyst
 	assert.equal(new WorkspaceContextService(workspace).getWorkspace().folders[0]?.name, "project");
 });
 
-test("workspaces service resolves a canonical single-folder identity", async () => {
+test("windows service resolves a canonical single-folder identity", async () => {
 	const cwd = resolve("launch-root");
 	const canonicalPath = resolve("canonical", "project");
 	let requestedPath: string | undefined;
@@ -107,11 +69,8 @@ test("workspaces service resolves a canonical single-folder identity", async () 
 		},
 	};
 
-	const workspace = await new WorkspacesMainService(pathService)
-		.resolveStartupWorkspace({
-			arguments: ["project"],
-			cwd,
-		});
+	const workspace = await windowsForWorkspacePaths(pathService)
+		.resolveWorkspaceOpenTarget({ kind: WorkspaceOpenTargetKind.Automatic, path: 'project' }, cwd);
 
 	assert.equal(requestedPath, resolve(cwd, "project"));
 	assert.ok(isSingleFolderWorkspaceIdentifier(workspace));
@@ -127,7 +86,7 @@ test("workspaces service resolves a canonical single-folder identity", async () 
 	assert.equal(context.getWorkspace().folders[0]?.name, "project");
 });
 
-test("workspaces service recognizes explicit workspace files", async () => {
+test("windows service recognizes explicit workspace files", async () => {
 	const canonicalPath = resolve("canonical", "team.ash-workspace");
 	const pathService: IWorkspacePathService = {
 		async resolvePath() {
@@ -138,13 +97,17 @@ test("workspaces service recognizes explicit workspace files", async () => {
 		},
 	};
 
-	const workspace = await new WorkspacesMainService(pathService)
-		.resolveStartupWorkspace({
-			arguments: ["--workspace", "team.ash-workspace"],
-			cwd: resolve("launch-root"),
-		});
+	const workspace = await windowsForWorkspacePaths(pathService)
+		.resolveWorkspaceOpenTarget({ kind: WorkspaceOpenTargetKind.Workspace, path: 'team.ash-workspace' }, resolve('launch-root'));
 
 	assert.ok(isWorkspaceIdentifier(workspace));
+	assert.deepEqual(
+		await windowsForWorkspacePaths(pathService).resolveWorkspaceOpenTarget(
+			{ kind: WorkspaceOpenTargetKind.Automatic, path: 'team.ash-workspace' },
+			resolve('launch-root'),
+		),
+		workspace,
+	);
 	assert.equal(
 		workspace.configPath.toString(),
 		URI.file(canonicalPath).toString(),
@@ -174,11 +137,8 @@ test("workspaces service resolves ordered folders from VS Code workspace files",
 			}`;
 		},
 	};
-	const service = new WorkspacesMainService(pathService);
-	const identity = await service.resolveStartupWorkspace({
-		arguments: ["--workspace", configPath],
-		cwd: resolve("launch-root"),
-	});
+	const service = new WorkspacesManagementMainService(pathService);
+	const identity = await windowsForWorkspacePaths(pathService).resolveWorkspaceOpenTarget({ kind: WorkspaceOpenTargetKind.Workspace, path: configPath }, resolve('launch-root'));
 	assert.ok(isWorkspaceIdentifier(identity));
 
 	const workspace = await service.resolveWorkspace(identity);
@@ -216,19 +176,13 @@ test("loose files and launches without a target remain empty", async () => {
 			};
 		},
 	};
-	const service = new WorkspacesMainService(pathService);
+	const service = windowsForWorkspacePaths(pathService);
 
 	assert.deepEqual(
-		await service.resolveStartupWorkspace({
-			arguments: [],
-			cwd: resolve("launch-root"),
-		}),
+		await service.resolveWorkspaceOpenTarget(undefined, resolve('launch-root')),
 		UNKNOWN_EMPTY_WINDOW_WORKSPACE,
 	);
-	const looseFileWorkspace = await service.resolveStartupWorkspace({
-		arguments: ["notes.txt"],
-		cwd: resolve("launch-root"),
-	});
+	const looseFileWorkspace = await service.resolveWorkspaceOpenTarget({ kind: WorkspaceOpenTargetKind.Automatic, path: 'notes.txt' }, resolve('launch-root'));
 	assert.deepEqual(looseFileWorkspace, UNKNOWN_EMPTY_WINDOW_WORKSPACE);
 	assert.equal(
 		workbenchStateFromWorkspaceIdentifier(looseFileWorkspace),
@@ -239,10 +193,7 @@ test("loose files and launches without a target remain empty", async () => {
 		WorkbenchState.EMPTY,
 	);
 	await assert.rejects(
-		service.resolveStartupWorkspace({
-			arguments: ["--folder", "notes.txt"],
-			cwd: resolve("launch-root"),
-		}),
+		service.resolveWorkspaceOpenTarget({ kind: WorkspaceOpenTargetKind.Folder, path: 'notes.txt' }, resolve('launch-root')),
 		/not a directory/,
 	);
 });
@@ -311,12 +262,8 @@ test("resolved workspace IPC preserves ordered folder identities", () => {
 	assert.throws(() => parseWorkspace({ ...serialized, folders: [serialized.folders[1], serialized.folders[0]] }), /indices/);
 });
 
-test("workspaces main service exposes a window-owned identity through IPC", async () => {
-	const workspace = await new WorkspacesMainService()
-		.resolveStartupWorkspace({
-			arguments: [],
-			cwd: resolve("launch-root"),
-		});
+test("window workspace context exposes its identity through IPC", async () => {
+	const workspace = UNKNOWN_EMPTY_WINDOW_WORKSPACE;
 	const context = new WorkspaceContextMainService(workspace);
 	const [route] = workspaceContextIpcRoutes(context);
 	const changes: string[] = [];
@@ -332,7 +279,7 @@ test("workspaces main service exposes a window-owned identity through IPC", asyn
 		serializeWorkspace(workspaceFromIdentifier(UNKNOWN_EMPTY_WINDOW_WORKSPACE)),
 	);
 
-	const folder = await new WorkspacesMainService({
+	const folder = await new WorkspacesManagementMainService({
 		async resolvePath(path) {
 			return { kind: WorkspacePathKind.Directory, path };
 		},
@@ -349,7 +296,7 @@ test("workspaces main service exposes a window-owned identity through IPC", asyn
 });
 
 test("workspace transition commits only after the runtime accepts the folder", async () => {
-	const workspaces = new WorkspacesMainService({
+	const workspaces = new WorkspacesManagementMainService({
 		async resolvePath(path) {
 			return { kind: WorkspacePathKind.Directory, path };
 		},
@@ -394,7 +341,7 @@ test("workspace transition commits only after the runtime accepts the folder", a
 });
 
 test("workspace transition accepts a validated Remote identity without reading it as a local path", async () => {
-	const workspaces = new WorkspacesMainService();
+	const workspaces = new WorkspacesManagementMainService();
 	const original = getSingleFolderWorkspaceIdentifier(createSshRemoteWorkspaceUri("build-host", "/srv/one"));
 	const target = getSingleFolderWorkspaceIdentifier(createSshRemoteWorkspaceUri("build-host", "/srv/two"));
 	const context = new WorkspaceContextMainService(original);
@@ -418,7 +365,7 @@ test("workspace transition accepts a validated Remote identity without reading i
 });
 
 test("workspace transition serializes concurrent folder requests", async () => {
-	const workspaces = new WorkspacesMainService({
+	const workspaces = new WorkspacesManagementMainService({
 		async resolvePath(path) {
 			return { kind: WorkspacePathKind.Directory, path };
 		},
@@ -460,7 +407,7 @@ test("workspace transition serializes concurrent folder requests", async () => {
 });
 
 test("workspace transition exposes phases and safely retries recovered runtime loss", async () => {
-	const workspaces = new WorkspacesMainService({
+	const workspaces = new WorkspacesManagementMainService({
 		async resolvePath(path) {
 			return { kind: WorkspacePathKind.Directory, path };
 		},
@@ -502,7 +449,7 @@ test("workspace transition exposes phases and safely retries recovered runtime l
 });
 
 test("workspace transition routes Busy without committing and accepts a later backend transition", async () => {
-	const workspaces = new WorkspacesMainService({
+	const workspaces = new WorkspacesManagementMainService({
 		async resolvePath(path) {
 			return { kind: WorkspacePathKind.Directory, path };
 		},
@@ -563,7 +510,7 @@ test("App Server workspace adapter routes only connection recovery into a retry"
 		WorkspaceTransitionFailureKind.RuntimeUnavailable,
 	);
 
-	const workspace = await new WorkspacesMainService({
+	const workspace = await new WorkspacesManagementMainService({
 		async resolvePath(path) {
 			return { kind: WorkspacePathKind.Directory, path };
 		},

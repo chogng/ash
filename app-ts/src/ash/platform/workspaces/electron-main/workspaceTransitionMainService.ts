@@ -2,7 +2,8 @@ import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable } from "../../../base/common/lifecycle.js";
 import type { IAnyWorkspaceIdentifier, ISingleFolderWorkspaceIdentifier } from "../../workspace/common/workspace.js";
 import type { DirGrant } from "../../dirPermissions/common/dirPermissionsService.js";
-import type { WorkspaceContextMainService, WorkspacesMainService } from "./workspacesMainService.js";
+import type { WorkspaceContextMainService } from '../../window/electron-main/window.js';
+import type { WorkspacesManagementMainService } from './workspacesManagementMainService.js';
 
 export enum WorkspaceTransitionPhase {
 	Idle = "idle",
@@ -94,7 +95,7 @@ export interface IWorkspaceTransitionResult {
 }
 
 export interface WorkspaceTransitionMainServiceOptions {
-	readonly workspaces: WorkspacesMainService;
+	readonly workspaces: WorkspacesManagementMainService;
 	readonly context: WorkspaceContextMainService;
 	readonly runtime: IWorkspaceRuntimeSwitcher;
 	readonly classifyRuntimeError: (error: unknown) => WorkspaceTransitionFailureKind;
@@ -114,7 +115,7 @@ interface IRuntimeSwitchResult {
  * committed identity through the application assembly boundary.
  */
 export class WorkspaceTransitionMainService extends Disposable {
-	private readonly workspaces: WorkspacesMainService;
+	private readonly workspaces: WorkspacesManagementMainService;
 	private readonly context: WorkspaceContextMainService;
 	private readonly runtime: IWorkspaceRuntimeSwitcher;
 	private readonly classifyRuntimeError: (error: unknown) => WorkspaceTransitionFailureKind;

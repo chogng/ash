@@ -71,6 +71,7 @@ export class StandaloneWorkspaceContextService implements IWorkspaceContextServi
 
 	getWorkspace(): IWorkspace { return this.workspace; }
 	getWorkbenchState(): WorkbenchState { return WorkbenchState.EMPTY; }
+	getWorkspaceFolder(_resource: URI): IWorkspaceFolder | null { return null; }
 }
 
 /** Applies editor-local workspace edits for embedded editors. */

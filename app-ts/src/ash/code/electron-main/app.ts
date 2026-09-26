@@ -61,8 +61,8 @@ import { DiskFileSystemProvider } from "../../platform/files/node/diskFileSystem
 import { LOCAL_FILE_SYSTEM_CHANGED_CHANNEL } from "../../platform/files/common/diskFileSystemProviderClient.js";
 import { applyWindowState, resolveBrowserWindowOptions, WindowControlsOverlay } from "../../platform/windows/electron-main/windows.js";
 import { WindowsStateHandler } from "../../platform/windows/electron-main/windowsStateHandler.js";
-import { WindowsMainService, trackWindowResourceChanges, windowCloseResponseIpcRoute, windowOperationIpcRoute, windowResourceIpcRoutes } from "../../platform/windows/electron-main/windowsMainService.js";
-import { focusWindow, WindowMode, type IWindowState } from "../../platform/window/electron-main/window.js";
+import { WindowsMainService, trackWindowResourceChanges, windowCloseResponseIpcRoute, windowOperationIpcRoute, windowResourceIpcRoutes, workspaceContextIpcRoutes } from "../../platform/windows/electron-main/windowsMainService.js";
+import { focusWindow, WindowMode, WorkspaceContextMainService, type IWindowState } from "../../platform/window/electron-main/window.js";
 import { type IAnyWorkspaceIdentifier, isRemoteWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, serializeWorkspace, UNKNOWN_EMPTY_WINDOW_WORKSPACE } from "../../platform/workspace/common/workspace.js";
 import { packagedRemoteRuntimeCatalogSource } from "../../platform/remote/electron-main/packagedRemoteRuntimeCatalog.js";
 import { RemoteRuntimeInstaller, remoteRuntimeArtifactFromEnvironment } from "../../platform/remote/electron-main/remoteRuntimeInstaller.js";
@@ -83,7 +83,9 @@ import { RemoteWindowMainContext } from "../../platform/remote/electron-main/rem
 import { WORKSPACE_CONTEXT_CHANGED_CHANNEL } from "../../platform/workspace/common/workspaceIpc.js";
 import { createAppServerWorkspaceTransitionAdapter, createUserDirGrant, DEVELOPMENT_DIR_PERMISSIONS, readAppServerDirPermissions, READ_DIR_PERMISSIONS, setAppServerWorkspaceFolders, switchAppServerWorkspace } from "../../platform/workspaces/electron-main/appServerWorkspaceTransition.js";
 import { type IWorkspaceTransitionFailure, type WorkspaceTransitionMainServiceOptions, WorkspaceTransitionFailureKind, WorkspaceTransitionMainService, WorkspaceTransitionStatus } from "../../platform/workspaces/electron-main/workspaceTransitionMainService.js";
-import { WorkspaceContextMainService, WorkspacesMainService, parseWorkspaceLaunchArguments, workspaceContextIpcRoutes } from "../../platform/workspaces/electron-main/workspacesMainService.js";
+import { WorkspacesManagementMainService } from '../../platform/workspaces/electron-main/workspacesManagementMainService.js';
+import { WorkspaceOpenTargetKind } from '../../platform/environment/common/argv.js';
+import { parseWorkspaceLaunchArguments } from '../../platform/environment/node/argvHelper.js';
 import type { IWorkbenchWindowRecord } from "./workbenchWindowRegistry.js";
 import { WorkbenchWindowRegistry } from "./workbenchWindowRegistry.js";
 import { LocalizationConfiguration } from '../../workbench/services/localization/common/locale.js';
@@ -175,7 +177,7 @@ export class AshApplication extends Disposable {
 		},
 	);
 	private readonly pendingWindowLaunches: PendingWindowLaunch[] = [];
-	private workspaces: WorkspacesMainService | undefined;
+	private workspaces: WorkspacesManagementMainService | undefined;
 	private persistentServices: PersistentServices | undefined;
 	private closePersistentServicesPromise: Promise<void> | undefined;
 	private quitRequested = false;
@@ -250,9 +252,9 @@ export class AshApplication extends Disposable {
 		}
 
 		await this.createPersistentServices();
-		const workspaces = new WorkspacesMainService();
+		const workspaces = new WorkspacesManagementMainService();
 		this.workspaces = workspaces;
-		const workspace = await this.resolveWorkspace(workspaces);
+		const workspace = await this.resolveWorkspace();
 		const record = await this.openWorkspace(workspace, workspaces);
 		if (!record) {
 			if (!this.quitRequested) app.quit();
@@ -366,14 +368,9 @@ export class AshApplication extends Disposable {
 		}
 	}
 
-	private async resolveWorkspace(
-		workspaces: WorkspacesMainService,
-	): Promise<IAnyWorkspaceIdentifier> {
+	private async resolveWorkspace(): Promise<IAnyWorkspaceIdentifier> {
 		try {
-			return await workspaces.resolveStartupWorkspace({
-				arguments: this.workspaceLaunchArguments(process.argv),
-				cwd: process.cwd(),
-			});
+			return await this.windowsMainService.resolveWorkspaceOpenTarget(parseWorkspaceLaunchArguments(this.workspaceLaunchArguments(process.argv)), process.cwd());
 		} catch (error) {
 			console.error("Failed to resolve startup workspace", error);
 			return UNKNOWN_EMPTY_WINDOW_WORKSPACE;
@@ -392,11 +389,12 @@ export class AshApplication extends Disposable {
 		const workspaces = this.workspaces;
 		if (!workspaces) throw new Error("Workspace service is not initialized");
 		const arguments_ = this.workspaceLaunchArguments(launch.arguments);
-		if (!parseWorkspaceLaunchArguments(arguments_)) {
+		const target = parseWorkspaceLaunchArguments(arguments_);
+		if (!target) {
 			this.focusMainWindow();
 			return;
 		}
-		const workspace = await workspaces.resolveStartupWorkspace({ arguments: arguments_, cwd: launch.cwd });
+		const workspace = await this.windowsMainService.resolveWorkspaceOpenTarget(target, launch.cwd);
 		await this.openWorkspace(workspace, workspaces);
 	}
 
@@ -411,11 +409,11 @@ export class AshApplication extends Disposable {
 		}
 	}
 
-	private openWorkspace(workspace: IAnyWorkspaceIdentifier, workspaces: WorkspacesMainService): Promise<WorkbenchWindowRecord | undefined> {
+	private openWorkspace(workspace: IAnyWorkspaceIdentifier, workspaces: WorkspacesManagementMainService): Promise<WorkbenchWindowRecord | undefined> {
 		return this.workbenchWindows.openWorkspace(workspace.id, () => this.performOpenWorkspace(workspace, workspaces));
 	}
 
-	private async performOpenWorkspace(workspace: IAnyWorkspaceIdentifier, workspaces: WorkspacesMainService): Promise<WorkbenchWindowRecord | undefined> {
+	private async performOpenWorkspace(workspace: IAnyWorkspaceIdentifier, workspaces: WorkspacesManagementMainService): Promise<WorkbenchWindowRecord | undefined> {
 		const resources = this._register(new DisposableStore());
 		try {
 			const resolvedWorkspace = await workspaces.resolveWorkspace(workspace);
@@ -585,7 +583,7 @@ export class AshApplication extends Disposable {
 
 	private async openWorkbenchWindow(
 		workspaceContext: WorkspaceContextMainService,
-		workspaces: WorkspacesMainService,
+		workspaces: WorkspacesManagementMainService,
 		supervisor: AppServerConnectionRelay,
 		browserAutomationMainService: BrowserAutomationMainService,
 		resources: DisposableStore,
@@ -714,7 +712,7 @@ export class AshApplication extends Disposable {
 		const transitionToFolder = async (folderPath: string, selectionRequired: boolean): Promise<void> => {
 			const currentWorkspace = workspaceContext.getWorkspace();
 			const nextWorkspace = isRemoteWorkspaceIdentifier(currentWorkspace)
-				? await this.resolveRemoteFolderWorkspace(currentWorkspace, folderPath, workspaces)
+				? await this.resolveRemoteFolderWorkspace(currentWorkspace, folderPath)
 				: await workspaces.resolveFolder(folderPath);
 			if (nextWorkspace.id === currentWorkspace.id) return;
 			const grant = await this.resolveDirGrant(workspaceHost, folderPath);
@@ -1151,27 +1149,20 @@ export class AshApplication extends Disposable {
 	private async resolveRemoteFolderWorkspace(
 		currentWorkspace: IAnyWorkspaceIdentifier,
 		folderPath: string,
-		workspaces: WorkspacesMainService,
 	) {
 		if (!isRemoteWorkspaceIdentifier(currentWorkspace)) throw new Error("Remote Workspace resolution requires a Remote window");
 		const authority = getRemoteAuthority(currentWorkspace.uri);
 		if (!authority || authority.type !== "ssh") throw new Error("Unsupported Remote Workspace authority");
-		const workspace = await workspaces.resolveStartupWorkspace({
-			arguments: ["--remote-ssh", authority.host, "--folder", folderPath],
-			cwd: process.cwd(),
-		});
+		const workspace = await this.windowsMainService.resolveWorkspaceOpenTarget({ kind: WorkspaceOpenTargetKind.RemoteFolder, path: folderPath, sshHost: authority.host }, process.cwd());
 		if (!isSingleFolderWorkspaceIdentifier(workspace) || !isRemoteWorkspaceIdentifier(workspace)) {
 			throw new Error("Remote folder did not resolve to a Remote Workspace");
 		}
 		return workspace;
 	}
 
-	private async openRemoteConnection(connection: RemoteConnectionDefinition, workspaces: WorkspacesMainService): Promise<void> {
+	private async openRemoteConnection(connection: RemoteConnectionDefinition, workspaces: WorkspacesManagementMainService): Promise<void> {
 		if (this.quitRequested) return;
-		const workspace = await workspaces.resolveStartupWorkspace({
-			arguments: ["--remote-ssh", connection.host, "--folder", connection.workspace],
-			cwd: process.cwd(),
-		});
+		const workspace = await this.windowsMainService.resolveWorkspaceOpenTarget({ kind: WorkspaceOpenTargetKind.RemoteFolder, path: connection.workspace, sshHost: connection.host }, process.cwd());
 		await this.openWorkspace(workspace, workspaces);
 	}
 

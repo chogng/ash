@@ -1,6 +1,9 @@
+import { resolve } from 'node:path';
 import { DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { URI } from '../../../base/common/uri.js';
 import { CONFIGURATION_CHANGED_CHANNEL } from '../../configuration/common/configurationIpc.js';
 import { configurationIpcRoutes, type ConfigurationMainService } from '../../configuration/electron-main/configurationMainService.js';
+import { type IWorkspaceOpenTarget, WorkspaceOpenTargetKind } from '../../environment/common/argv.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
 import { KEYBINDINGS_RESOURCE_CHANGED_CHANNEL } from '../../keybinding/common/keybindingsResource.js';
 import { keybindingsResourceIpcRoutes, type KeybindingsResourceMainService } from '../../keybinding/electron-main/keybindingsResourceMainService.js';
@@ -8,8 +11,12 @@ import { NATIVE_KEYBOARD_LAYOUT_CHANGED_CHANNEL } from '../../keyboardLayout/com
 import { USER_KEYBOARD_LAYOUT_CHANGED_CHANNEL } from '../../keyboardLayout/common/userKeyboardLayout.js';
 import { nativeKeyboardLayoutIpcRoutes, type NativeKeyboardLayoutMainService } from '../../keyboardLayout/electron-main/nativeKeyboardLayoutMainService.js';
 import { userKeyboardLayoutIpcRoutes, type UserKeyboardLayoutMainService } from '../../keyboardLayout/electron-main/userKeyboardLayoutMainService.js';
+import { createSshRemoteWorkspaceUri } from '../../remote/common/remote.js';
+import { type IAnyWorkspaceIdentifier, UNKNOWN_EMPTY_WINDOW_WORKSPACE, hasWorkspaceFileExtension, serializeWorkspace } from '../../workspace/common/workspace.js';
+import { WORKSPACE_CONTEXT_READ_CHANNEL, validateWorkspaceContextRead } from '../../workspace/common/workspaceIpc.js';
+import { getSingleFolderWorkspaceIdentifier, getWorkspaceIdentifier, nodeWorkspacePathService, type IWorkspacePathService, WorkspacePathKind } from '../../workspaces/node/workspaces.js';
 import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL, validateWindowCloseResponse, validateWindowOperation, type WindowCloseResponse, type WindowOperation, type IWorkbenchWindowInfo } from '../../window/common/window.js';
-import { focusWindow, type IFocusableWindow } from '../../window/electron-main/window.js';
+import { focusWindow, type IFocusableWindow, type WorkspaceContextMainService } from '../../window/electron-main/window.js';
 
 export interface IWorkbenchWindow<TWindow> extends IFocusableWindow {
 	readonly id: number;
@@ -49,7 +56,33 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> {
 		private readonly platform: NodeJS.Platform = process.platform,
 		private readonly getParentWindowId: (window: TWindow) => number | undefined = () => undefined,
 		private readonly reportCloseFailure: (window: TWindow, message: string) => void | Promise<void> = () => {},
+		private readonly workspacePaths: IWorkspacePathService = nodeWorkspacePathService,
 	) {}
+
+	public async resolveWorkspaceOpenTarget(target: IWorkspaceOpenTarget | undefined, cwd: string): Promise<IAnyWorkspaceIdentifier> {
+		if (!target) {
+			return UNKNOWN_EMPTY_WINDOW_WORKSPACE;
+		}
+		if (target.kind === WorkspaceOpenTargetKind.RemoteFolder) {
+			return getSingleFolderWorkspaceIdentifier(createSshRemoteWorkspaceUri(target.sshHost, target.path));
+		}
+		const requestedPath = resolve(cwd, target.path);
+		const resolved = await this.workspacePaths.resolvePath(requestedPath);
+		if (target.kind === WorkspaceOpenTargetKind.Folder && resolved.kind !== WorkspacePathKind.Directory) {
+			throw new Error(`Workspace folder is not a directory: ${target.path}`);
+		}
+		if (target.kind === WorkspaceOpenTargetKind.Workspace && resolved.kind !== WorkspacePathKind.File) {
+			throw new Error(`Workspace configuration is not a file: ${target.path}`);
+		}
+		if (resolved.kind === WorkspacePathKind.Directory) {
+			return getSingleFolderWorkspaceIdentifier(URI.file(resolved.path));
+		}
+		if (resolved.kind === WorkspacePathKind.File &&
+			(target.kind === WorkspaceOpenTargetKind.Workspace || hasWorkspaceFileExtension(resolved.path))) {
+			return getWorkspaceIdentifier(URI.file(resolved.path));
+		}
+		return UNKNOWN_EMPTY_WINDOW_WORKSPACE;
+	}
 
 	public trackClose(window: TWindow, beforeClose?: () => Promise<void>): IDisposable {
 		const state = { ready: false, authorized: false, closingChild: false, childClosed: false, pendingToken: undefined as number | undefined, timer: undefined as ReturnType<typeof setTimeout> | undefined };
@@ -238,6 +271,15 @@ export function windowCloseResponseIpcRoute<TWindow extends IWorkbenchWindow<TWi
 		validate: validateWindowCloseResponse,
 		invoke: response => service.respondToClose(window, response as WindowCloseResponse),
 	};
+}
+
+/** Publishes one window's committed workspace through the trusted IPC router. */
+export function workspaceContextIpcRoutes(service: WorkspaceContextMainService): readonly IpcRoute<unknown, unknown>[] {
+	return [{
+		channel: WORKSPACE_CONTEXT_READ_CHANNEL,
+		validate: validateWorkspaceContextRead,
+		invoke: () => serializeWorkspace(service.getResolvedWorkspace()),
+	}];
 }
 
 export interface IWindowResourceIpcServices {

@@ -4,7 +4,7 @@ import { Emitter, Event } from '../../base/common/event.js';
 import { Disposable, type IDisposable } from '../../base/common/lifecycle.js';
 import { basenameOrAuthority, dirnameResource, isEqualResource } from './resourceLabelHelpers.js';
 import type { URI } from '../../base/common/uri.js';
-import { operatingSystem, OperatingSystem } from '../../base/common/platform.js';
+import { operatingSystem } from '../../base/common/platform.js';
 import { createServiceIdentifier } from '../../platform/instantiation/common/instantiation.js';
 import { FileKind } from '../../platform/files/common/files.js';
 import type { ILabelService } from '../../platform/label/common/labelService.js';
@@ -260,7 +260,7 @@ class ResourceLabelWidget extends Disposable {
 	}
 
 	setFile(resource: URI, options: IFileLabelOptions = {}): void {
-		const workspaceFolder = options.fileKind === FileKind.Directory ? workspaceFolderFor(this.services.workspaceContextService, resource) : undefined;
+		const workspaceFolder = options.fileKind === FileKind.Directory ? this.services.workspaceContextService.getWorkspaceFolder(resource) : undefined;
 		const name = options.hideLabel
 			? undefined
 			: workspaceFolder && isEqualResource(workspaceFolder.uri, resource)
@@ -344,7 +344,7 @@ class ResourceLabelWidget extends Disposable {
 		let displayDescription = current.description;
 		if (this.fromFileLabel && resource) {
 			const workspaceFolder = fileKind === FileKind.Directory
-				? workspaceFolderFor(this.services.workspaceContextService, resource)
+				? this.services.workspaceContextService.getWorkspaceFolder(resource)
 				: undefined;
 			const fileName = fileOptions.hideLabel
 				? undefined
@@ -396,19 +396,6 @@ function resourceOf(props: IResourceLabelProps | undefined): URI | undefined {
 		: props.resource as URI;
 }
 
-function workspaceFolderFor(context: IWorkspaceContextService, resource: URI): { readonly uri: URI; readonly name: string } | undefined {
-	const folders = context.getWorkspace().folders;
-	return folders.find(folder => isResourceInFolder(folder.uri, resource));
-}
-
-function isResourceInFolder(folder: URI, resource: URI): boolean {
-	if (folder.scheme !== resource.scheme || folder.authority !== resource.authority) return false;
-	const folderPath = decodeURIComponent(folder.path).replace(/\/+$/u, '') || '/';
-	const resourcePath = decodeURIComponent(resource.path).replace(/\/+$/u, '') || '/';
-	if (operatingSystem === OperatingSystem.Windows) return resourcePath.toLowerCase() === folderPath.toLowerCase() || resourcePath.toLowerCase().startsWith(`${folderPath.toLowerCase()}/`);
-	return resourcePath === folderPath || resourcePath.startsWith(`${folderPath}/`);
-}
-
 function parentLabel(resource: URI, context: IWorkspaceContextService, labelService?: ILabelService): string | undefined {
 	const parent = dirnameResource(resource);
 	if (!parent) return undefined;
@@ -419,7 +406,7 @@ function pathLabel(resource: URI, context: IWorkspaceContextService, labelServic
 	if (labelService) return labelService.getUriLabel(resource, { relative: true });
 	const relative: IRelativePathProvider = {
 		getWorkspace: () => context.getWorkspace(),
-		getWorkspaceFolder: candidate => workspaceFolderFor(context, candidate) ?? null,
+		getWorkspaceFolder: candidate => context.getWorkspaceFolder(candidate),
 	};
 	try {
 		return getPathLabel(resource, { os: operatingSystem, relative });

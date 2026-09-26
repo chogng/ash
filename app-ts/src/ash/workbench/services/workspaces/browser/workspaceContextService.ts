@@ -1,5 +1,7 @@
 import { Emitter } from "../../../../base/common/event.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
+import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
+import type { URI } from '../../../../base/common/uri.js';
 import type {
 	IAnyWorkspaceIdentifier,
 	IWorkspace,
@@ -37,6 +39,20 @@ export class WorkspaceContextService extends Disposable implements IWorkspaceCon
 			return WorkbenchState.FOLDER;
 		}
 		return WorkbenchState.EMPTY;
+	}
+
+	getWorkspaceFolder(resource: URI): IWorkspaceFolder | null {
+		const candidate = resource.withoutQuery().withoutFragment();
+		let match: IWorkspaceFolder | null = null;
+		for (const folder of this.workspace.folders) {
+			if (
+				extUriBiasedIgnorePathCase.isEqualOrParent(candidate, folder.uri)
+				&& (!match || folder.uri.path.length > match.uri.path.length)
+			) {
+				match = folder;
+			}
+		}
+		return match;
 	}
 
 	/** Atomically replaces the current window workspace and publishes its projection. */

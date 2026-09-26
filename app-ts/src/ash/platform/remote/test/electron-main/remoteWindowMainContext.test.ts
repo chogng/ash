@@ -24,7 +24,7 @@ import type { IRemoteTunnelService } from "../../../../platform/remote/common/re
 import type { RemoteTunnelChange } from "../../../../platform/remote/common/remoteTunnelService.js";
 import { RemoteWindowMainContext } from "../../../../platform/remote/electron-main/remoteWindowMainContext.js";
 import { SshAppServerProcessLauncher } from "../../../../platform/remote/electron-main/sshAppServerProcessLauncher.js";
-import { WorkspaceContextMainService } from "../../../../platform/workspaces/electron-main/workspacesMainService.js";
+import { WorkspaceContextMainService } from "../../../../platform/window/electron-main/window.js";
 
 test("Remote window context owns routes, projections, and Workspace tunnel cleanup", async () => {
 	const stateListeners = new Set<(state: AppServerConnectionState) => void>();

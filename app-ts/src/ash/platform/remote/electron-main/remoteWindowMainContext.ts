@@ -4,7 +4,7 @@ import type { IDisposable } from "../../../base/common/lifecycle.js";
 import type { AppServerConnectionRelay } from "../../app-server/electron-main/appServerConnectionRelay.js";
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
 import type { IAnyWorkspaceIdentifier } from "../../workspace/common/workspace.js";
-import type { IWorkspaceContextMainChangeEvent } from "../../workspaces/electron-main/workspacesMainService.js";
+import type { IWorkspaceContextMainChangeEvent } from "../../window/electron-main/window.js";
 import { REMOTE_AGENT_CONNECTION_CHANGED_CHANNEL } from "../common/remoteAgentApi.js";
 import type { IRemoteConnectionService } from "../common/remoteConnectionService.js";
 import { REMOTE_TUNNEL_CHANGED_CHANNEL } from "../common/remoteTunnelService.js";

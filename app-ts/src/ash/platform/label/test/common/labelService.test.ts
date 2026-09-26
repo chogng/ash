@@ -13,6 +13,7 @@ test('LabelService formats workspace paths and invalidates registered formatters
 		onDidChangeWorkspace: Event.None,
 		getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'root', uri: root, name: 'workspace', index: 0 }] }),
 		getWorkbenchState: () => WorkbenchState.FOLDER,
+		getWorkspaceFolder: () => ({ id: 'root', uri: root, name: 'workspace', index: 0 }),
 	};
 	using labels = new LabelService(workspace, OperatingSystem.Linux);
 

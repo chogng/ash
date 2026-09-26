@@ -61,3 +61,23 @@ test('ResourceLabels formats files and reacts to icon and decoration changes', (
 
 	dom.window.close();
 });
+
+test('Workspace labels use the closest folder for nested resources', () => {
+	const root = URI.file('/project');
+	const nested = URI.file('/project/src');
+	using workspace = new WorkspaceContextService({
+		id: 'workspace',
+		configuration: URI.file('/project.code-workspace'),
+		folders: [
+			{ id: 'root', uri: root, name: 'project', index: 0 },
+			{ id: 'nested', uri: nested, name: 'src', index: 1 },
+		],
+	});
+	using labels = new LabelService(workspace, OperatingSystem.Linux);
+	const resource = URI.file('/project/src/main.ts').withQuery('preview');
+
+	assert.equal(workspace.getWorkspaceFolder(resource)?.id, 'nested');
+	assert.equal(labels.getUriLabel(resource, { relative: true }), 'src • main.ts');
+	assert.equal(workspace.getWorkspaceFolder(URI.file('/project/src-other/main.ts'))?.id, 'root');
+	assert.equal(workspace.getWorkspaceFolder(URI.file('/elsewhere/main.ts')), null);
+});

@@ -1,3 +1,6 @@
+import { Emitter, type Event } from '../../../base/common/event.js';
+import { Disposable } from '../../../base/common/lifecycle.js';
+import { type IAnyWorkspaceIdentifier, type IWorkspace, workspaceFromIdentifier } from '../../workspace/common/workspace.js';
 import {
 	DEFAULT_EMPTY_WINDOW_SIZE,
 	DEFAULT_WORKSPACE_WINDOW_SIZE,
@@ -66,4 +69,43 @@ export function focusWindow(window: IFocusableWindow): void {
 	if (window.isDestroyed()) return;
 	if (window.isMinimized()) window.restore();
 	window.focus();
+}
+
+export interface IWorkspaceContextMainChangeEvent {
+	readonly previous: IAnyWorkspaceIdentifier;
+	readonly workspace: IAnyWorkspaceIdentifier;
+	readonly resolvedWorkspace: IWorkspace;
+}
+
+/** Holds the workspace currently opened in one desktop window. */
+export class WorkspaceContextMainService extends Disposable {
+	private workspace: IAnyWorkspaceIdentifier;
+	private resolvedWorkspace: IWorkspace;
+	private readonly _onDidChangeWorkspace = this._register(new Emitter<IWorkspaceContextMainChangeEvent>());
+
+	public readonly onDidChangeWorkspace: Event<IWorkspaceContextMainChangeEvent> = this._onDidChangeWorkspace.event;
+
+	constructor(workspace: IAnyWorkspaceIdentifier, resolvedWorkspace: IWorkspace = workspaceFromIdentifier(workspace)) {
+		super();
+		this.workspace = workspace;
+		this.resolvedWorkspace = resolvedWorkspace;
+	}
+
+	public getWorkspace(): IAnyWorkspaceIdentifier {
+		return this.workspace;
+	}
+
+	public getResolvedWorkspace(): IWorkspace {
+		return this.resolvedWorkspace;
+	}
+
+	public updateWorkspace(workspace: IAnyWorkspaceIdentifier, resolvedWorkspace: IWorkspace = workspaceFromIdentifier(workspace)): void {
+		if (workspace.id === this.workspace.id) {
+			return;
+		}
+		const previous = this.workspace;
+		this.workspace = workspace;
+		this.resolvedWorkspace = resolvedWorkspace;
+		this._onDidChangeWorkspace.fire({ previous, workspace, resolvedWorkspace });
+	}
 }

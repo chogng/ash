@@ -17,6 +17,7 @@ class WorkspacePermissionStatus extends Disposable implements IWorkbenchContribu
 	) {
 		super();
 		this._register(workspace.onDidChangeWorkspace(() => { void this.refresh(); }));
+		this._register(permissions.onDidChangePermissions(() => { void this.refresh(); }));
 		this._register(onDidChangeNls(() => this.updateEntry()));
 		void this.refresh();
 	}

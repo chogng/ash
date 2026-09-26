@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
+import { Event } from "../../../../../base/common/event.js";
 import { CancellationToken } from "../../../../../base/common/cancellation.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { Position } from "../../../../../editor/common/core/position.js";
@@ -263,6 +264,7 @@ class FakeServerEvents implements IServerEventApi {
 }
 
 class FakeDirPermissionsService implements IDirPermissionsService {
+	readonly onDidChangePermissions = Event.None;
 	constructor(private readonly dir: string, public value: readonly PermissionDto[]) {}
 	async list() { return { revision: 1, entries: [{ dir: this.dir, path: "C:\\project", permissions: this.value }] }; }
 	async read(): ReturnType<IDirPermissionsService["read"]> { return this.value; }

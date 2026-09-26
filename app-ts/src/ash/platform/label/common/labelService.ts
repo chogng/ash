@@ -58,7 +58,7 @@ export class LabelService extends Disposable implements ILabelService {
 			? {
 				noPrefix: options.noPrefix,
 				getWorkspace: () => this.workspaceContextService.getWorkspace(),
-				getWorkspaceFolder: candidate => this.workspaceContextService.getWorkspace().folders.find(folder => isResourceInFolder(folder.uri, candidate)) ?? null,
+				getWorkspaceFolder: candidate => this.workspaceContextService.getWorkspaceFolder(candidate),
 			}
 			: undefined;
 		const formatting: IPathLabelFormatting = {
@@ -106,18 +106,6 @@ export class LabelService extends Disposable implements ILabelService {
 			},
 		};
 	}
-}
-
-function isResourceInFolder(folder: URI, resource: URI): boolean {
-	if (folder.scheme !== resource.scheme || folder.authority !== resource.authority) return false;
-	const folderPath = decodeURIComponent(folder.path).replace(/\/+$/u, '') || '/';
-	const resourcePath = decodeURIComponent(resource.path).replace(/\/+$/u, '') || '/';
-	if (operatingSystem === 'windows') {
-		const comparableFolder = folderPath.toLowerCase();
-		const comparableResource = resourcePath.toLowerCase();
-		return comparableResource === comparableFolder || comparableResource.startsWith(`${comparableFolder}/`);
-	}
-	return resourcePath === folderPath || resourcePath.startsWith(`${folderPath}/`);
 }
 
 function replaceSeparators(value: string, separator: string): string {

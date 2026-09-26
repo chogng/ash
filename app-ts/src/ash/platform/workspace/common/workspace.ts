@@ -104,6 +104,7 @@ export interface IWorkspaceContextService {
 	readonly onDidChangeWorkspace: Event<IWorkspaceChangeEvent>;
 	getWorkspace(): IWorkspace;
 	getWorkbenchState(): WorkbenchState;
+	getWorkspaceFolder(resource: URI): IWorkspaceFolder | null;
 }
 
 /** Returns the durable path that reopens the current folder or workspace file. */
@@ -111,6 +112,12 @@ export function workspaceOpenTarget(workspace: IWorkspace): string | undefined {
 	const resource = workspace.configuration ?? (workspace.folders.length === 1 ? workspace.folders[0]?.uri : undefined);
 	if (!resource) return undefined;
 	return isRemoteResource(resource) ? getRemoteWorkspacePath(resource) : resource.fsPath;
+}
+
+/** Recognizes workspace configuration paths accepted by the desktop host. */
+export function hasWorkspaceFileExtension(path: string | URI): boolean {
+	const value = (typeof path === 'string' ? path : path.fsPath).toLowerCase();
+	return value.endsWith('.ash-workspace') || value.endsWith('.code-workspace');
 }
 
 export const IWorkspaceContextService =

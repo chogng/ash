@@ -453,7 +453,7 @@ export class Workbench extends Disposable {
 		const labelService = this._register(new LabelService(workspaceContext));
 		services.registerInstance(ILabelService, labelService);
 		services.registerInstance(IFileLabelDecorationService, this._register(new FileLabelDecorationService()));
-		const dirPermissionsService = new AppServerDirPermissionsService(api.dirPermissions);
+		const dirPermissionsService = this._register(new AppServerDirPermissionsService(api.dirPermissions, api.events));
 		services.registerInstance(IDirPermissionsService, dirPermissionsService);
 		const workspaceFileService = new BrowserFileService({
 			api: api.fs,

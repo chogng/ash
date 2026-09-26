@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
+import { Event } from "../../../../../base/common/event.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../editor/common/core/range.js";
@@ -245,6 +246,7 @@ test("App Server diagnostics service gates Editor synchronization on directory p
 });
 
 class FakeDirPermissionsService implements IDirPermissionsService {
+	readonly onDidChangePermissions = Event.None;
 	constructor(private readonly dir: string, public value: readonly PermissionDto[]) {}
 	async list() { return { revision: 1, entries: [{ dir: this.dir, path: "C:\\project", permissions: this.value }] }; }
 	async read(): ReturnType<IDirPermissionsService["read"]> { return this.value; }

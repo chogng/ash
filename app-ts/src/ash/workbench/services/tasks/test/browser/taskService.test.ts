@@ -21,6 +21,7 @@ test("TaskService discovers tasks, writes one terminal command, and tracks its e
 		onDidChangeWorkspace: Event.None,
 		getWorkspace: () => ({ id: "workspace", folders: [{ id: "workspace", uri: root, name: "project", index: 0 }] }),
 		getWorkbenchState: () => 2,
+		getWorkspaceFolder: () => null,
 	};
 	using terminals = new FakeTerminalService();
 	using output = new OutputService();
@@ -52,7 +53,12 @@ test("TaskService discovers tasks, writes one terminal command, and tracks its e
 test("TaskService atomically owns dynamic providers and merges their tasks on refresh", async () => {
 	const root = URI.file("C:\\project");
 	const files = new FakeFileService(root, { ".vscode/tasks.json": '{"version":"2.0.0","tasks":[{"label":"Build","command":"build","group":"build"}]}' });
-	const workspace: IWorkspaceContextService = { onDidChangeWorkspace: Event.None, getWorkspace: () => ({ id: "workspace", folders: [{ id: "workspace", uri: root, name: "project", index: 0 }] }), getWorkbenchState: () => 2 };
+	const workspace: IWorkspaceContextService = {
+		onDidChangeWorkspace: Event.None,
+		getWorkspace: () => ({ id: "workspace", folders: [{ id: "workspace", uri: root, name: "project", index: 0 }] }),
+		getWorkbenchState: () => 2,
+		getWorkspaceFolder: () => null,
+	};
 	using terminals = new FakeTerminalService();
 	using service = new TaskService(files, workspace, terminals);
 	const registration = service.registerTaskProviders([{ id: "demo.provider", provideTasks: () => [{ id: "verify", label: "Verify", command: "demo --verify", group: "test" }] }]);
@@ -77,7 +83,12 @@ test("TaskService atomically owns dynamic providers and merges their tasks on re
 
 test("TaskService retains the last good task set when a provider refresh fails", async () => {
 	const root = URI.file("C:\\project");
-	const workspace: IWorkspaceContextService = { onDidChangeWorkspace: Event.None, getWorkspace: () => ({ id: "workspace", folders: [{ id: "workspace", uri: root, name: "project", index: 0 }] }), getWorkbenchState: () => 2 };
+	const workspace: IWorkspaceContextService = {
+		onDidChangeWorkspace: Event.None,
+		getWorkspace: () => ({ id: "workspace", folders: [{ id: "workspace", uri: root, name: "project", index: 0 }] }),
+		getWorkbenchState: () => 2,
+		getWorkspaceFolder: () => null,
+	};
 	using terminals = new FakeTerminalService();
 	using service = new TaskService(new FakeFileService(root, {}), workspace, terminals);
 	let fail = false;
