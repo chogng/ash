@@ -27,8 +27,8 @@
 }
 
 .ash-getting-started-content {
-  width: min(372px, calc(100% - 48px));
-  margin: clamp(72px, 15vh, 176px) 0 64px;
+  width: min(372px, calc(100% - 32px));
+  margin: clamp(40px, 8vh, 96px) 0 64px;
 }
 
 .ash-getting-started-intro {
@@ -58,21 +58,21 @@
 .ash-getting-started-cards {
   display: grid;
   width: 100%;
-  grid-template-columns: repeat(2, 180px);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
   grid-auto-rows: 60px;
   gap: var(--ash-spacing-size120);
-  justify-content: center;
+  justify-items: center;
   margin-top: 40px;
 }
 
 .ash-getting-started-card {
-  position: relative;
   display: flex;
-  width: 180px;
+  width: 100%;
+  max-width: 180px;
   height: 60px;
   min-width: 0;
   min-height: 60px;
-  padding: 10px 28px 10px 16px;
+  padding: 10px 16px;
   border: var(--ash-stroke-thickness) solid var(--ash-editor-welcome-card-border);
   border-radius: var(--ash-corner-radius-large);
   flex-direction: row;
@@ -89,10 +89,6 @@
 
 .ash-getting-started-card:hover {
   background: var(--ash-editor-welcome-card-hover-background);
-}
-
-.ash-getting-started-card:not(.featured) {
-  padding-right: 16px;
 }
 
 .ash-getting-started-card:focus-visible {
@@ -136,15 +132,6 @@
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.ash-getting-started-card-arrow {
-  position: absolute;
-  top: 50%;
-  right: 10px;
-  font-size: var(--ash-font-size-heading2);
-  line-height: 1;
-  transform: translateY(-50%);
 }
 
 .ash-getting-started-recent {
@@ -198,26 +185,8 @@ button.ash-getting-started-recent-item:hover {
   text-align: right;
 }
 
-@container (max-width: 680px) {
-  .ash-getting-started-content {
-    width: min(372px, calc(100% - 32px));
-    margin-top: 40px;
-  }
-
-  .ash-getting-started-cards {
-    margin-top: 36px;
-  }
-
-  .ash-getting-started-recent {
-    margin-top: 40px;
-  }
-}
-
-@container (max-width: 420px) {
-  .ash-getting-started-cards {
-    grid-template-columns: 180px;
-  }
-
+/* Two 160px cards, their 12px gap, and the page's 32px horizontal inset need 364px. */
+@container (max-width: 363px) {
   .ash-getting-started-recent {
     width: 180px;
     margin-inline: auto;

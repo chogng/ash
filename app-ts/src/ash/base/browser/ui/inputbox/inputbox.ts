@@ -17,7 +17,7 @@ import { Disposable, toDisposable } from "../../../common/lifecycle.js";
 export interface InputBoxOptions {
 	readonly placeholder?: string;
 	readonly type?: "text" | "number" | "password" | "search";
-	readonly presentation?: "default" | "field";
+	readonly presentation?: "default" | "field" | "compact";
 	readonly readOnly?: boolean;
 	readonly enabled?: boolean;
 	readonly ariaLabel?: string;
@@ -52,7 +52,8 @@ export class InputBox extends Disposable {
 		const ownerDocument = container.ownerDocument;
 		this.element = h(ownerDocument, "div");
 		this.element.className = "ash-input-box";
-		if (options.presentation === "field") this.element.classList.add("ash-input-box-field");
+		if (options.presentation === "field" || options.presentation === "compact") this.element.classList.add("ash-input-box-field");
+		if (options.presentation === "compact") this.element.classList.add("ash-input-box-compact");
 		this._register(toDisposable(() => this.element.remove()));
 
 		this.inputElement = h(ownerDocument, "input");

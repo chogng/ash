@@ -65,6 +65,7 @@ export class MenuWorkbenchToolBar extends WorkbenchToolBar {
 	private readonly menuOptions: IMenuActionOptions | undefined;
 	private readonly toolbarOptions: IToolBarRenderOptions | undefined;
 	private readonly leadingActions: readonly IAction[];
+	private menuTrailingActions: readonly IAction[] = [];
 	private readonly menu: IMenu;
 
 	constructor(
@@ -91,6 +92,11 @@ export class MenuWorkbenchToolBar extends WorkbenchToolBar {
 		this.update();
 	}
 
+	setTrailingActions(actions: readonly IAction[]): void {
+		this.menuTrailingActions = actions;
+		this.update();
+	}
+
 	override setActions(_primaryActions: readonly IAction[], _secondaryActions: readonly IAction[] = []): never {
 		throw new Error("MenuWorkbenchToolBar actions are owned by its MenuId");
 	}
@@ -104,13 +110,13 @@ export class MenuWorkbenchToolBar extends WorkbenchToolBar {
 			this.toolbarOptions?.useSeparatorsInPrimaryActions,
 		);
 		const actions = [...this.leadingActions, ...primary];
-		const empty = actions.length === 0 && secondary.length === 0;
+		const empty = actions.length === 0 && secondary.length === 0 && this.menuTrailingActions.length === 0;
 		this.element.hidden = empty;
 		this.element.classList.toggle("empty", empty);
 		if (event?.isStructuralChange === false) {
-			super.updateActions(actions, secondary);
+			super.updateActions(actions, secondary, this.menuTrailingActions);
 			return;
 		}
-		super.setActions(actions, secondary);
+		super.setActions(actions, secondary, this.menuTrailingActions);
 	}
 }

@@ -38,8 +38,10 @@ test("ToolBar renders primary actions and trails More Actions", () => {
 		["secondary"],
 	);
 	assert.equal(buttons[1]?.getAttribute("aria-expanded"), "true");
+	assert.equal(buttons[1]?.classList.contains("active"), true);
 	contextMenuProvider.lastOptions?.onHide?.(false);
 	assert.equal(buttons[1]?.getAttribute("aria-expanded"), "false");
+	assert.equal(buttons[1]?.classList.contains("active"), false);
 
 	toolbar.dispose();
 	dom.window.close();
@@ -122,12 +124,13 @@ test("ToolBar can place More Actions before a named primary action", () => {
 	toolbar.setActions(
 		[action("kill"), action("maximize"), action("close")],
 		[action("clear")],
+		[action("account"), action("manage")],
 	);
 
 	assert.deepEqual(
 		[...toolbar.element.querySelectorAll<HTMLElement>("[data-action-id]")]
 			.map((item) => item.dataset.actionId),
-		["kill", "ash.toolbar.moreActions", "maximize", "close"],
+		["kill", "ash.toolbar.moreActions", "maximize", "close", "account", "manage"],
 	);
 
 	toolbar.dispose();

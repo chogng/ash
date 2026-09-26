@@ -15,7 +15,7 @@ suite('Welcome page', () => {
 		});
 		const cards = page.domNode.querySelectorAll<HTMLButtonElement>('.ash-getting-started-card');
 		assert.equal(page.domNode.querySelector('.ash-getting-started-name')?.textContent, 'ASH');
-		assert.deepEqual([...cards].map(card => card.textContent), ['Open folder', 'Clone repo', 'Connect via SSH', 'Connect GitHub↗']);
+		assert.deepEqual([...cards].map(card => card.textContent), ['Open folder', 'Clone repo', 'Connect via SSH', 'Connect GitHub']);
 		assert.deepEqual([...cards].map(card => card.disabled), [false, true, true, true]);
 		cards[0]?.click();
 		assert.equal(openFolderCount, 1);

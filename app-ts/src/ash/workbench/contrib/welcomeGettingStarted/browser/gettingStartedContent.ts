@@ -33,7 +33,6 @@ interface WelcomeCardOptions {
 	readonly icon: Parameters<typeof appendIcon>[0];
 	readonly action: GettingStartedAction | undefined;
 	readonly variant?: 'default' | 'featured';
-	readonly external?: boolean;
 }
 
 /** Renders the Welcome editor content. */
@@ -129,7 +128,6 @@ export class GettingStarted extends Disposable {
 				icon: Lxicon.github,
 				action: actions?.connectGitHub,
 				variant: 'featured',
-				external: true,
 			},
 		];
 		const renderedCards = cardOptions.map(card => this.createCard(ownerDocument, card));
@@ -164,13 +162,6 @@ export class GettingStarted extends Disposable {
 		const label = h(ownerDocument, 'span');
 		label.className = 'ash-getting-started-card-label';
 		card.append(icon, label);
-		if (options.external) {
-			const arrow = h(ownerDocument, 'span');
-			arrow.className = 'ash-getting-started-card-arrow';
-			arrow.setAttribute('aria-hidden', 'true');
-			arrow.textContent = '↗';
-			card.append(arrow);
-		}
 		this.updateCardLabel(card, options);
 		return card;
 	}

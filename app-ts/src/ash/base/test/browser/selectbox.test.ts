@@ -3,7 +3,7 @@ import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { h } from "../../browser/dom.js";
 
-test("SelectBox owns its unfold trigger and trailing selected check inside a themed ContextView", async () => {
+test("SelectBox uses the default chevron trigger and trailing selected check inside a themed ContextView", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>", { pretendToBeVisual: true });
 	Object.defineProperties(globalThis, {
 		window: { configurable: true, value: dom.window },
@@ -43,7 +43,7 @@ test("SelectBox owns its unfold trigger and trailing selected check inside a the
 	button.getBoundingClientRect = () => ({ width: 192 } as DOMRect);
 	const indicator = selectBox.element.querySelector<HTMLElement>(".ash-dropdown-indicator")!;
 	const expectedIndicator = h(dom.window.document, "span");
-	appendIcon(Lxicon.unfold, expectedIndicator);
+	appendIcon(Lxicon.chevronDown, expectedIndicator);
 	assert.equal(indicator.innerHTML, expectedIndicator.innerHTML);
 
 	selectBox.show();

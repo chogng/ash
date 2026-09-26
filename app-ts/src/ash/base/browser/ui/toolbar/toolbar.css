@@ -32,12 +32,15 @@
   padding: 3px;
 }
 
-.ash-toolbar .ash-action-view-item.icon .ash-button-label,
-.ash-toolbar-more-actions .ash-dropdown-menu-indicator {
+.ash-toolbar .ash-action-view-item.icon .ash-button-label {
   position: absolute;
   overflow: hidden;
   width: 1px;
   height: 1px;
   clip-path: inset(50%);
   white-space: nowrap;
+}
+
+.ash-toolbar .ash-action-view-item.icon .ash-dropdown-menu-indicator {
+  display: none;
 }

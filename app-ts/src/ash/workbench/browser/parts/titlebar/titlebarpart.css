@@ -143,18 +143,6 @@
   color: var(--ash-title-bar-action-foreground);
 }
 
-.ash-titlebar-activity-actions {
-  display: flex;
-  height: 100%;
-  align-items: center;
-  margin-left: var(--ash-spacing-size80);
-  color: var(--ash-title-bar-action-foreground);
-}
-
-.ash-titlebar-activity-actions:empty {
-  display: none;
-}
-
 .ash-titlebar-mark path {
   transform-box: fill-box;
   transform-origin: center;

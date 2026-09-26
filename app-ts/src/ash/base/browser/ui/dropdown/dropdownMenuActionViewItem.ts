@@ -100,6 +100,7 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 		if (this.visible === visible) return;
 		this.visible = visible;
 		this.button?.domNode.setAttribute("aria-expanded", String(visible));
+		this.button?.toggleClassName("active", visible);
 		this._onDidChangeVisibility.fire(visible);
 	}
 }

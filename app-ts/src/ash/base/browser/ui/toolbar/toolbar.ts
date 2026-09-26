@@ -28,7 +28,8 @@ export interface MoreActionsPlacement {
 export type ToolBarPresentation = "default" | "inherit-foreground";
 
 /**
- * Presents primary actions inline and secondary actions in a trailing menu.
+ * Presents primary actions inline, secondary actions in a menu, and pinned
+ * trailing actions after that menu.
  *
  * Callers own action classification. The toolbar owns the synthetic More
  * Actions item and delegates its secondary menu to the supplied provider.
@@ -39,6 +40,7 @@ export class ToolBar extends Disposable {
 	private readonly moreActions = new MoreActionsAction();
 	private readonly moreActionsPlacement: MoreActionsPlacement | undefined;
 	private secondaryActions: readonly IAction[] = [];
+	private trailingActions: readonly IAction[] = [];
 
 	constructor(container: HTMLElement, options: ToolBarOptions) {
 		super();
@@ -68,9 +70,11 @@ export class ToolBar extends Disposable {
 	setActions(
 		primaryActions: readonly IAction[],
 		secondaryActions: readonly IAction[] = [],
+		trailingActions: readonly IAction[] = [],
 	): void {
 		const primary = cleanSeparators(primaryActions);
 		this.secondaryActions = cleanSeparators(secondaryActions);
+		this.trailingActions = cleanSeparators(trailingActions);
 		this.actionBar.setActions(this.withMoreActions(primary));
 	}
 
@@ -82,23 +86,26 @@ export class ToolBar extends Disposable {
 	protected updateActions(
 		primaryActions: readonly IAction[],
 		secondaryActions: readonly IAction[] = [],
+		trailingActions: readonly IAction[] = [],
 	): void {
 		const primary = cleanSeparators(primaryActions);
 		this.secondaryActions = cleanSeparators(secondaryActions);
+		this.trailingActions = cleanSeparators(trailingActions);
 		this.actionBar.updateActions(this.withMoreActions(primary));
 	}
 
 	private withMoreActions(primary: readonly IAction[]): readonly IAction[] {
-		if (this.secondaryActions.length === 0) return primary;
+		if (this.secondaryActions.length === 0) return [...primary, ...this.trailingActions];
 		const beforeActionId = this.moreActionsPlacement?.beforeActionId;
 		const index = beforeActionId === undefined
 			? -1
 			: primary.findIndex((action) => action.id === beforeActionId);
-		if (index < 0) return [...primary, this.moreActions];
+		if (index < 0) return [...primary, this.moreActions, ...this.trailingActions];
 		return [
 			...primary.slice(0, index),
 			this.moreActions,
 			...primary.slice(index),
+			...this.trailingActions,
 		];
 	}
 }

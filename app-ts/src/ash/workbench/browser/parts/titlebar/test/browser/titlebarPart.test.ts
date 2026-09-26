@@ -107,6 +107,7 @@ test("titlebar owns a menu-driven actions container", async () => {
 	const titlebar = disposables.add(services.createInstance(BrowserTitlebarPart, ownerDocument.body, {
 		menuService,
 		contextMenuService,
+		localizationService: { onDidChange: Event.None, whenReady: Promise.resolve(), translate: (_bundle: string, _key: string, fallback: string) => fallback },
 	}, menubar));
 
 	const actionsContainer = titlebar.domNode.querySelector(

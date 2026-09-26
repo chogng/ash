@@ -1,11 +1,11 @@
 ---
 name: smoke-tests
-description: Run Ash Browser and Electron smoke tests with pnpm, reproduce intermittent CI failures through temporary repeat loops, and inspect Playwright diagnostics.
+description: Use when running Ash smoke tests or working on smoke-test CI steps. Covers npm run smoketest / smoketest-no-compile, grep filtering tests, and a temporary repeat-loop technique for tracking down flaky smoke tests in CI.
 ---
 
 # Running Smoke Tests
 
-Smoke tests live in `app-ts/test/smoke/` and drive complete Browser or Electron user flows with Playwright. Run these commands from the repository root.
+Smoke tests live in `app-ts/test/smoke/` and drive a full Ash instance (Electron, web, or remote) through end-to-end user flows.
 
 ## Scripts
 

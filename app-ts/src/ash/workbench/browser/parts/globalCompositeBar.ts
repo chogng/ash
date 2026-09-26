@@ -1,8 +1,10 @@
 import './media/globalCompositeBar.css';
 import { h } from '../../../base/browser/dom.js';
 import { ActionBar } from '../../../base/browser/ui/actionbar/actionbar.js';
+import type { ActionViewItem, ActionViewItemOptions } from '../../../base/browser/ui/actionbar/actionViewItems.js';
 import { DropdownMenuActionViewItem } from '../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
 import type { IAction } from '../../../base/common/actions.js';
+import { Emitter } from '../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../base/common/lxicons.js';
 import { getFlatContextMenuActions } from '../../../platform/actions/browser/menuEntryActionViewItem.js';
@@ -18,6 +20,8 @@ export class GlobalCompositeBar extends Disposable {
 	private static readonly accountsVisibilityKey = 'workbench.activity.showAccounts';
 	public readonly domNode: HTMLDivElement;
 	private readonly actionBar: ActionBar;
+	private readonly changeActionsEmitter = this._register(new Emitter<void>());
+	readonly onDidChangeActions = this.changeActionsEmitter.event;
 	private readonly manageMenu;
 	private accountsVisible: boolean;
 	private orientation: 'horizontal' | 'vertical' = 'vertical';
@@ -43,13 +47,7 @@ export class GlobalCompositeBar extends Disposable {
 		this.actionBar = this._register(new ActionBar(this.domNode, {
 			ariaLabel: this.label('workbench.activityBarGlobalActions', 'Activity Bar global actions'),
 			orientation: 'vertical',
-			actionViewItemProvider: action => new DropdownMenuActionViewItem(
-				action,
-				() => action.id === 'ash.activityBar.accounts'
-					? this.accountActions()
-					: getFlatContextMenuActions(this.manageMenu.getActions()),
-				this.contextMenuService,
-			),
+			actionViewItemProvider: (action, options) => this.createActionViewItem(action, options),
 		}));
 		this.renderActions();
 		this._register(this.localizationService.onDidChange(() => {
@@ -74,17 +72,33 @@ export class GlobalCompositeBar extends Disposable {
 	}
 
 	private renderActions(): void {
+		this.actionBar.setActions(this.getActions());
+		this.changeActionsEmitter.fire();
+	}
+
+	getActions(): readonly IAction[] {
 		const accountsLabel = this.label('workbench.accounts', 'Accounts');
 		const manageLabel = this.label('workbench.manage', 'Manage');
-		this.actionBar.setActions([
+		return [
 			...(this.accountsVisible ? [{ id: 'ash.activityBar.accounts', label: accountsLabel, tooltip: accountsLabel, icon: Lxicon.account, enabled: true, run() {} }] : []),
 			{ id: 'ash.activityBar.manage', label: manageLabel, tooltip: manageLabel, icon: Lxicon.gear, enabled: true, run() {} },
-		]);
+		];
+	}
+
+	createActionViewItem(action: IAction, options: ActionViewItemOptions): ActionViewItem | undefined {
+		if (action.id !== 'ash.activityBar.accounts' && action.id !== 'ash.activityBar.manage') return undefined;
+		return new DropdownMenuActionViewItem(
+			action,
+			() => action.id === 'ash.activityBar.accounts'
+				? this.accountActions()
+				: getFlatContextMenuActions(this.manageMenu.getActions()),
+			this.contextMenuService,
+			options,
+		);
 	}
 
 	setOrientation(orientation: 'horizontal' | 'vertical'): void {
 		this.orientation = orientation;
-		this.domNode.classList.toggle('ash-global-composite-bar-titlebar', orientation === 'horizontal');
 		this.actionBar.setOrientation(orientation);
 		this.updateAriaLabel();
 	}

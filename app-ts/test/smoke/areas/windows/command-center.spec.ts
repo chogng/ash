@@ -266,10 +266,29 @@ test('activity bar context menu changes size and position', async ({ target, wor
 	await expect(sidebar).toHaveCSS('border-top-width', '1px');
 	const titlebarAccounts = titlebar.getByRole('button', { name: 'Accounts' });
 	const titlebarManage = titlebar.getByRole('button', { name: 'Manage' });
-	await expect(titlebar.getByRole('toolbar', { name: 'Title Bar global actions' })).toBeVisible();
+	const titlebarActions = titlebar.getByRole('toolbar', { name: 'Title Bar global actions' });
+	await expect(titlebarActions).toBeVisible();
 	await expect(titlebarAccounts).toBeVisible();
-	await expect(titlebarManage).toHaveCSS('width', '28px');
-	await expect(titlebarManage.locator('.ash-icon').first()).toHaveCSS('width', '16px');
+	await expect(titlebarManage).toHaveCSS('width', '22px');
+	for (const button of [titlebarAccounts, titlebarManage]) {
+		await expect(button.locator('.ash-button-content .ash-icon')).toHaveCSS('width', '16px');
+		await expect(button.locator('.ash-dropdown-menu-indicator')).toBeHidden();
+	}
+	const panelToggle = titlebarActions.locator('[data-action-id="workbench.action.togglePanel"] button');
+	await expect(panelToggle).toHaveCSS('width', '22px');
+	await expect(titlebarActions.locator('[data-action-id="ash.activityBar.accounts"]')).toHaveCount(1);
+	await expect(titlebarActions.locator('[data-action-id="ash.activityBar.manage"]')).toHaveCount(1);
+	const appearance = async (button: typeof panelToggle) => button.evaluate(element => {
+		const style = getComputedStyle(element);
+		return { width: style.width, height: style.height, color: style.color, background: style.backgroundColor, radius: style.borderRadius };
+	});
+	expect(await appearance(titlebarAccounts)).toEqual(await appearance(panelToggle));
+	expect(await appearance(titlebarManage)).toEqual(await appearance(panelToggle));
+	await titlebarAccounts.focus();
+	await titlebarAccounts.press('ArrowRight');
+	await expect(titlebarManage).toBeFocused();
+	await titlebarManage.press('ArrowLeft');
+	await expect(titlebarAccounts).toBeFocused();
 	const [titlebarBounds, accountBounds, manageBounds] = await Promise.all([titlebar.boundingBox(), titlebarAccounts.boundingBox(), titlebarManage.boundingBox()]);
 	expect(titlebarBounds).not.toBeNull();
 	expect(accountBounds).not.toBeNull();
@@ -286,7 +305,16 @@ test('activity bar context menu changes size and position', async ({ target, wor
 	await titlebarManage.focus();
 	await titlebarManage.press('Shift+F10');
 	await expect(page.getByRole('menu').last().getByRole('menuitem', { name: 'Activity Bar Position' })).toBeVisible();
+	const keyboardMenuBounds = await page.getByRole('menu').last().boundingBox();
+	expect(keyboardMenuBounds).not.toBeNull();
+	expect(keyboardMenuBounds!.x + keyboardMenuBounds!.width).toBeGreaterThan(manageBounds!.x);
 	await page.keyboard.press('Escape');
+	await titlebarManage.click({ button: 'right' });
+	await page.getByRole('menu').last().getByRole('menuitemcheckbox', { name: 'Accounts' }).click();
+	await expect(titlebarAccounts).toHaveCount(0);
+	await titlebarManage.click({ button: 'right' });
+	await page.getByRole('menu').last().getByRole('menuitemcheckbox', { name: 'Accounts' }).click();
+	await expect(titlebarAccounts).toBeVisible();
 	await titlebarManage.click({ button: 'right' });
 	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Activity Bar Position' }).hover();
 	await page.getByRole('menu').last().getByRole('menuitemcheckbox', { name: 'Bottom' }).click();

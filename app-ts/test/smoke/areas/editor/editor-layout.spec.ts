@@ -77,6 +77,7 @@ test.describe('welcome brand', () => {
 			await expect(card).toHaveCSS('background-color', 'rgb(228, 228, 228)');
 		}
 		const github = cards.nth(3);
+		await expect(github.locator('.ash-getting-started-card-arrow')).toHaveCount(0);
 		await expect(github).toHaveCSS('background-color', 'rgb(0, 0, 0)');
 		await expect(github).toHaveCSS('color', 'rgb(255, 255, 255)');
 		await expect(github.locator('svg.ash-icon')).toHaveCSS('color', 'rgb(255, 255, 255)');
@@ -101,6 +102,74 @@ test.describe('welcome brand', () => {
 			leftColumnAligned: true,
 			rightColumnAligned: true,
 		});
+	});
+
+	test('secondary sidebar narrows welcome cards without rearranging them', async ({ driver, workbench }) => {
+		await driver.setWindowSize({ width: 1050, height: 800 });
+		const page = workbench.page;
+		const welcome = workbench.editors.groupAt(0).welcome;
+		const primaryBar = page.locator("[data-part='sidebar']");
+		const auxiliaryBar = page.locator("[data-part='auxiliarybar']");
+		const toggle = page.locator('[data-action-id="workbench.action.toggleAuxiliaryBar"] button');
+		const geometry = async () => welcome.evaluate(element => {
+			const content = element.querySelector('.ash-getting-started-content')!.getBoundingClientRect();
+			const cards = [...element.querySelectorAll('.ash-getting-started-card')].map(card => card.getBoundingClientRect());
+			const viewport = element.getBoundingClientRect();
+			return {
+				editorWidth: Math.round(viewport.width),
+				contentTop: Math.round(content.top - viewport.top),
+				cardsTop: Math.round(cards[0].top - content.top),
+				cardWidth: Math.round(cards[0].width),
+				secondCardOnFirstRow: cards[0].top === cards[1].top,
+			};
+		});
+
+		if (await primaryBar.isHidden()) {
+			await page.locator('[data-action-id="workbench.action.toggleSideBar"] button').click();
+		}
+		await expect(primaryBar).toBeVisible();
+		if (await auxiliaryBar.isHidden()) {
+			await toggle.click();
+		}
+		await expect(auxiliaryBar).toBeVisible();
+		const expanded = await geometry();
+		await toggle.click();
+		await expect(auxiliaryBar).toBeHidden();
+		const collapsed = await geometry();
+		expect(expanded.editorWidth).toBeLessThan(collapsed.editorWidth);
+		expect(expanded.cardWidth).toBeGreaterThanOrEqual(160);
+		expect(expanded.cardWidth).toBeLessThan(180);
+		expect(collapsed.cardWidth).toBe(180);
+		expect({
+			contentTop: collapsed.contentTop,
+			cardsTop: collapsed.cardsTop,
+			secondCardOnFirstRow: collapsed.secondCardOnFirstRow,
+		}).toEqual({
+			contentTop: expanded.contentTop,
+			cardsTop: expanded.cardsTop,
+			secondCardOnFirstRow: true,
+		});
+	});
+
+	test('welcome cards shrink before wrapping in a narrow editor', async ({ workbench }) => {
+		const welcome = workbench.editors.groupAt(0).welcome;
+		const cardGeometry = async () => welcome.evaluate(element => {
+			const cards = [...element.querySelectorAll<HTMLElement>('.ash-getting-started-card')];
+			const [first, second] = cards.map(card => card.getBoundingClientRect());
+			return {
+				cardWidth: Math.round(first.width),
+				secondCardOnFirstRow: first.top === second.top,
+				labelOverflow: Math.max(0, ...cards.map(card => {
+					const label = card.querySelector<HTMLElement>('.ash-getting-started-card-label')!;
+					return label.scrollWidth - label.clientWidth;
+				})),
+			};
+		});
+
+		await welcome.evaluate(element => { element.style.width = '364px'; });
+		expect(await cardGeometry()).toEqual({ cardWidth: 160, secondCardOnFirstRow: true, labelOverflow: 0 });
+		await welcome.evaluate(element => { element.style.width = '350px'; });
+		expect(await cardGeometry()).toEqual({ cardWidth: 180, secondCardOnFirstRow: false, labelOverflow: 0 });
 	});
 
 	test('welcome uses the theme-colored mark without a filled icon tile', async ({ workbench }) => {

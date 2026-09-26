@@ -13,7 +13,7 @@
   color: var(--ash-foreground);
   background: var(--ash-editor-background);
   border: var(--ash-stroke-thickness) solid var(--ash-border);
-  border-radius: var(--ash-corner-radius-small);
+  border-radius: var(--ash-corner-radius-medium);
   box-shadow: 0 2px 8px var(--ash-widget-shadow);
   overflow: auto;
 }

@@ -109,20 +109,82 @@ test.describe('without an open workspace', () => {
 		} else {
 			await expect(page.locator('[data-configuration-key="update.policy"]')).toHaveCount(0);
 		}
+		const quickDiffWhitespace = page.locator('[data-configuration-key="scm.diffDecorationsIgnoreTrimWhitespace"]').getByRole('combobox');
+		await expect(quickDiffWhitespace).toHaveCSS('height', '24px');
+		const autoFetchPeriod = page.locator('[data-configuration-key="git.autofetchPeriod"]');
+		await expect(autoFetchPeriod).toHaveCSS('height', '24px');
+		await expect(autoFetchPeriod).toHaveCSS('width', '96px');
+		await expect(autoFetchPeriod).toHaveCSS('justify-self', 'end');
+		await expect(autoFetchPeriod).toHaveCSS('appearance', 'textfield');
+		const autoFetch = page.locator('[data-configuration-key="git.autofetch"]').getByRole('combobox');
+		await autoFetch.click();
+		const autoFetchPopup = page.locator('.ash-context-view-default', { has: page.locator('.ash-select-box-list') });
+		const [autoFetchBounds, popupBounds] = await Promise.all([autoFetch.boundingBox(), autoFetchPopup.boundingBox()]);
+		expect(autoFetchBounds).not.toBeNull();
+		expect(popupBounds).not.toBeNull();
+		expect(popupBounds!.width).toBeGreaterThan(autoFetchBounds!.width);
+		expect(Math.abs(popupBounds!.x + popupBounds!.width - autoFetchBounds!.x - autoFetchBounds!.width)).toBeLessThanOrEqual(1);
+		await page.keyboard.press('Escape');
 		await page.locator('[data-settings-group-id="workbench"]').click();
 		const appearanceRow = page.locator('.ash-tree-row', { has: page.locator('[data-settings-category-id="appearance"]') });
 		expect(await appearanceRow.getAttribute('aria-expanded')).toBeNull();
 		await expect(page.locator('[data-settings-target-id="appearance.group.theme"]')).toHaveCount(0);
 		await page.locator('[data-settings-category-id="appearance"]').click();
+		const appearanceGroup = page.locator('.ash-settings-content-group:not(.is-settings-root)');
+		await expect(appearanceGroup.locator('.ash-settings-tree-group-title')).toBeHidden();
+		await expect(appearanceGroup.locator('.ash-settings-tree-group-description')).toBeHidden();
 		await expect(page.locator('[data-configuration-key="workbench.colorTheme"]')).toBeVisible();
+		await expect(page.locator('[data-configuration-key="workbench.colorTheme"]').getByRole('combobox')).toBeVisible();
+		const appearanceSettings = appearanceGroup.locator('.ash-configuration-setting');
+		await expect(appearanceSettings).toHaveCount(3);
+		for (const setting of await appearanceSettings.all()) {
+			await expect(setting.locator('.ash-settings-indicators')).toHaveCSS('display', 'none');
+			await expect(setting).toHaveCSS('height', '68px');
+		}
 		await expect(page.locator('[data-configuration-key="workbench.layoutStyle"]')).toHaveCount(0);
 		await page.locator('[data-settings-category-id="layout"]').click();
-		await expect(page.locator('[data-configuration-key="workbench.layoutStyle"]')).toBeVisible();
+		const layoutStyle = page.locator('[data-configuration-key="workbench.layoutStyle"]');
+		await expect(layoutStyle).toBeVisible();
+		const modernWidth = (await layoutStyle.getByRole('combobox').boundingBox())?.width;
+		expect(modernWidth).toBeDefined();
+		expect(modernWidth!).toBeLessThan(120);
+		const layoutIndicator = layoutStyle.locator('.ash-dropdown-indicator [data-ash-icon-id="chevron-down"]');
+		await expect(layoutIndicator).toBeVisible();
+		await expect(layoutStyle.getByRole('combobox')).toHaveCSS('gap', '4px');
+		await expect(layoutIndicator).toHaveCSS('width', '16px');
+		await expect(layoutIndicator).toHaveCSS('height', '16px');
+		await layoutStyle.getByRole('combobox').click();
+		const selectedCheck = page.locator('.ash-select-box-option-selected .ash-select-box-option-check [data-ash-icon-id="check"]');
+		await expect(selectedCheck).toHaveCSS('width', '16px');
+		await expect(selectedCheck).toHaveCSS('height', '16px');
+		const clippedOptions = await page.locator('.ash-select-box-option-label').evaluateAll(labels => labels.some(label => label.scrollWidth > label.clientWidth));
+		expect(clippedOptions).toBe(false);
+		await expect(page.locator('.ash-context-view-default', { has: page.locator('.ash-select-box-list') })).toHaveCSS('border-radius', '6px');
+		const fontSizes = await page.evaluate(() => {
+			const trigger = document.querySelector('[data-configuration-key="workbench.layoutStyle"] .ash-dropdown-label');
+			const option = document.querySelector('.ash-select-box-option-label');
+			return { trigger: getComputedStyle(trigger!).fontSize, option: getComputedStyle(option!).fontSize };
+		});
+		expect(fontSizes.option).toBe(fontSizes.trigger);
+		await page.getByRole('option', { name: 'Flat' }).click();
+		const flatWidth = (await layoutStyle.getByRole('combobox').boundingBox())?.width;
+		expect(flatWidth).toBeDefined();
+		expect(flatWidth!).toBeLessThan(modernWidth!);
+		await layoutStyle.getByRole('combobox').click();
+		await page.getByRole('option', { name: 'Modern' }).click();
 		if (target.kind === 'electron') {
 			await expect(page.locator('[data-configuration-key="window.zoomLevel"]')).toBeVisible();
 		} else {
 			await expect(page.locator('[data-configuration-key="window.zoomLevel"]')).toHaveCount(0);
 		}
+		await page.locator('[data-settings-category-id="editor"]').click();
+		const fontSizeControl = page.locator('[data-configuration-key="editor.fontSize"]').locator('..');
+		await expect(fontSizeControl).toHaveCSS('height', '24px');
+		await expect(fontSizeControl).toHaveCSS('width', '96px');
+		await expect(fontSizeControl).toHaveCSS('justify-self', 'end');
+		await expect(page.locator('[data-configuration-key="editor.fontFamily"]')).toHaveCSS('height', '24px');
+		await expect(page.locator('[data-configuration-key="editor.wordWrap"]').getByRole('combobox')).toHaveCSS('height', '24px');
+		await expect(page.locator('[data-configuration-key="explorer.fileNesting.patterns"] .ash-string-map-row input').first()).toHaveCSS('height', '24px');
 	});
 
 	test('Manage menu starts a desktop update check', async ({ target, workbench }) => {

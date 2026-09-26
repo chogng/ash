@@ -27,7 +27,7 @@
 }
 
 .ash-global-composite-bar .ash-action-view-item > button:hover,
-.ash-global-composite-bar .ash-action-view-item > button[aria-expanded='true'] {
+.ash-global-composite-bar .ash-action-view-item > button.active {
 	color: var(--ash-composite-bar-foreground);
 	background: var(--ash-tab-list-active-background);
 }
@@ -39,30 +39,4 @@
 
 .ash-global-composite-bar .ash-dropdown-menu-indicator {
 	display: none;
-}
-
-.ash-global-composite-bar-titlebar {
-	width: auto;
-}
-
-.ash-global-composite-bar-titlebar > .ash-action-bar {
-	height: 100%;
-	flex-direction: row;
-	align-items: center;
-	gap: var(--ash-spacing-size40);
-}
-
-.ash-global-composite-bar-titlebar .ash-action-view-item,
-.ash-global-composite-bar-titlebar .ash-action-view-item > button {
-	width: var(--ash-spacing-size280);
-	height: var(--ash-spacing-size280);
-}
-
-.ash-global-composite-bar-titlebar .ash-action-view-item > button {
-	padding: var(--ash-spacing-size60);
-	color: var(--ash-title-bar-action-foreground);
-}
-
-.ash-global-composite-bar-titlebar .ash-action-view-item > button:hover {
-	background: var(--ash-command-center-hover-background);
 }

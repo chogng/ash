@@ -323,7 +323,7 @@ class NumberSettingWidget extends AbstractSettingWidget<INumberSetting, number> 
 			this.inputBox = this._register(new InputBox(this.domNode, {
 				type: 'number',
 				ariaLabel: descriptor.title,
-				presentation: 'field',
+				presentation: 'compact',
 			}));
 			this.inputBox.element.classList.add('ash-editor-setting-number');
 			this.input = this.inputBox.inputElement;

@@ -22,6 +22,15 @@
   background: transparent;
 }
 
+.ash-input-box-field.ash-input-box-compact {
+  min-height: 24px;
+}
+
+.ash-input-box-field.ash-input-box-compact input {
+  min-height: 22px;
+  padding: 0 8px;
+}
+
 .ash-input-box-field input::placeholder {
   color: var(--ash-input-placeholder-foreground);
 }

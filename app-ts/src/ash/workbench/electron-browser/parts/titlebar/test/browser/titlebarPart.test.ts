@@ -75,7 +75,7 @@ test('Electron titlebar applies the active theme and releases its subscription w
 			onDidChangeAccessibilitySupport: () => ({ dispose() {} }),
 		});
 		const factory = createElectronTitlebarPartFactory({ update: async () => {}, onDidSelect: () => ({ dispose() {} }) });
-		const options = { menuService: menus, contextMenuService: { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() {}, hideContextMenu() {} } };
+		const options = { menuService: menus, contextMenuService: { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() {}, hideContextMenu() {} }, localizationService: { onDidChange: Event.None, whenReady: Promise.resolve(), translate: (_bundle: string, _key: string, fallback: string) => fallback } };
 		services.registerInstance(IContextMenuService, options.contextMenuService);
 		using missingServices = new ServiceContainer();
 		assert.throws(() => factory(environment.window.document.body, options, missingServices), /service/i);

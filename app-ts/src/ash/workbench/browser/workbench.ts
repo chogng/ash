@@ -747,8 +747,7 @@ export class Workbench extends Disposable {
 		const initialActivityBarLocation = configuration.getValue<ActivityBarLocation>(WorkbenchConfiguration.activityBarLocation);
 		sidebar.setActivityBarLocation(initialActivityBarLocation);
 		if (initialActivityBarLocation === 'top' || initialActivityBarLocation === 'bottom') {
-			globalCompositeBar.setOrientation('horizontal');
-			titlebar.hostActivityActions(globalCompositeBar.domNode);
+			titlebar.setActivityActions({ bar: globalCompositeBar, showContextMenu: event => activitybar.showContextMenu(event) });
 		}
 		sidebar.domNode.classList.toggle('sidebar-right', configuration.getValue(WorkbenchConfiguration.sideBarLocation) === 'right');
 		const activityService = this._register(new ActivityService(sidebar.compositeBar));
@@ -968,12 +967,11 @@ export class Workbench extends Disposable {
 				const location = configuration.getValue<ActivityBarLocation>(WorkbenchConfiguration.activityBarLocation);
 				sidebar.setActivityBarLocation(location);
 				if (location === 'top' || location === 'bottom') {
-					globalCompositeBar.setOrientation('horizontal');
-					titlebar.hostActivityActions(globalCompositeBar.domNode);
+					titlebar.setActivityActions({ bar: globalCompositeBar, showContextMenu: event => activitybar.showContextMenu(event) });
 				} else {
 					activitybar.hostCompositeBar();
-					globalCompositeBar.setOrientation('vertical');
 					activitybar.hostGlobalActions();
+					titlebar.setActivityActions(undefined);
 				}
 				layout.setActivityBarLocation(location);
 			}

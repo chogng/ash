@@ -32,19 +32,19 @@ export class ActivitybarPart extends WorkbenchPart {
 		this.sideBarLocation = this.configurationService.getValue<SideBarLocation>(WorkbenchConfiguration.sideBarLocation);
 		this.contentDomNode.append(compositeBar.domNode, globalCompositeBar.domNode);
 		this.applyPosition();
-		this._register(addDisposableListener(this.domNode, 'contextmenu', event => compositeBar.showContextMenu(event, this.getContextMenuActions())));
+		this._register(addDisposableListener(this.domNode, 'contextmenu', event => this.showContextMenu(event)));
 		this._register(addDisposableListener(compositeBar.domNode, 'contextmenu', event => {
 			if (!this.domNode.contains(compositeBar.domNode)) compositeBar.showContextMenu(event, this.getContextMenuActions());
 		}));
 		this._register(addDisposableListener(globalCompositeBar.domNode, 'contextmenu', event => {
-			if (!this.domNode.contains(globalCompositeBar.domNode)) compositeBar.showContextMenu(event, this.getContextMenuActions());
+			if (!this.domNode.contains(globalCompositeBar.domNode)) this.showContextMenu(event);
 		}));
 		this._register(addDisposableListener(this.domNode, 'keydown', event => {
-			if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) compositeBar.showContextMenu(event, this.getContextMenuActions());
+			if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) this.showContextMenu(event);
 		}));
 		for (const domNode of [compositeBar.domNode, globalCompositeBar.domNode]) {
 			this._register(addDisposableListener(domNode, 'keydown', event => {
-				if (!this.domNode.contains(domNode) && (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey))) compositeBar.showContextMenu(event, this.getContextMenuActions());
+				if (!this.domNode.contains(domNode) && (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey))) this.showContextMenu(event);
 			}));
 		}
 	}
@@ -55,6 +55,10 @@ export class ActivitybarPart extends WorkbenchPart {
 
 	public hostGlobalActions(): void {
 		this.contentDomNode.append(this.globalCompositeBar.domNode);
+	}
+
+	public showContextMenu(event: MouseEvent | KeyboardEvent): void {
+		this.compositeBar.showContextMenu(event, this.getContextMenuActions());
 	}
 
 	public setCompact(compact: boolean): void {

@@ -183,7 +183,7 @@ export class CompositeBar extends Disposable {
 		const containerId = target && this.domNode.contains(target) ? target.dataset.actionId : undefined;
 		const anchor = event.type === 'contextmenu'
 			? { x: (event as MouseEvent).clientX, y: (event as MouseEvent).clientY, targetWindow: this.domNode.ownerDocument.defaultView ?? undefined }
-			: target ?? this.domNode;
+			: target ?? (event.target as HTMLElement | null) ?? this.domNode;
 		this.contextMenuProvider.showContextMenu({
 			getAnchor: () => anchor,
 			getActions: () => Separator.join([...this.createContextMenuActions(containerId)], [...additionalActions]),

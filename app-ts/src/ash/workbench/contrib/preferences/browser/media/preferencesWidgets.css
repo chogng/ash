@@ -88,6 +88,11 @@
   gap: 32px;
 }
 
+.ash-settings-tree-group.is-settings-root > .ash-configuration-settings-list > .ash-settings-tree-group:only-child > .ash-settings-tree-group-title,
+.ash-settings-tree-group.is-settings-root > .ash-configuration-settings-list > .ash-settings-tree-group:only-child > .ash-settings-tree-group-description {
+	display: none;
+}
+
 .ash-settings-tree-group:not(.is-settings-root) > .ash-configuration-settings-list > * {
 	position: relative;
 }
@@ -150,6 +155,10 @@
   color: var(--ash-description-foreground);
   font-size: 11px;
   gap: 6px;
+}
+
+.ash-settings-indicators[hidden] {
+  display: none;
 }
 
 .ash-settings-indicators.is-modified::before {
@@ -228,8 +237,14 @@
 .ash-editor-setting-number,
 .ash-editor-setting-text {
 	width: 100%;
-	min-height: 30px;
+	min-height: 24px;
 	box-sizing: border-box;
+}
+
+.ash-general-setting-control[type="number"],
+.ash-editor-setting-number {
+	width: 96px;
+	justify-self: end;
 }
 
 .ash-general-setting-control.ash-select-box {
@@ -238,7 +253,7 @@
 
 .ash-general-setting-control:not(.ash-select-box),
 .ash-editor-setting-text {
-	padding: 4px 8px;
+	padding: 0 8px;
 	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
 	border-radius: var(--ash-corner-radius-small);
 	outline: none;
@@ -250,6 +265,17 @@
 .ash-general-setting-control:not(.ash-select-box):focus-visible {
 	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
 	outline-offset: var(--ash-stroke-thickness);
+}
+
+.ash-general-setting-control[type="number"] {
+	-moz-appearance: textfield;
+	appearance: textfield;
+}
+
+.ash-general-setting-control[type="number"]::-webkit-inner-spin-button,
+.ash-general-setting-control[type="number"]::-webkit-outer-spin-button {
+	margin: 0;
+	-webkit-appearance: none;
 }
 
 .ash-editor-setting {
@@ -282,9 +308,9 @@
 .ash-string-map-row input {
 	width: 100%;
 	min-width: 0;
-	min-height: 30px;
+	min-height: 24px;
 	box-sizing: border-box;
-	padding: 4px 8px;
+	padding: 0 8px;
 	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
 	border-radius: var(--ash-corner-radius-small);
 	outline: none;

@@ -4,7 +4,7 @@ import { Lxicon } from "../../../common/lxicons.js";
 import { addDisposableListener, isHTMLElement, stopEvent, h } from "../../dom.js";
 import { focusPreservingScroll } from "../../focus.js";
 import { setAriaAttribute, setRole } from "../aria/aria.js";
-import type { IContextViewProvider } from "../contextview/contextview.js";
+import { AnchorAlignment, type IContextViewProvider } from "../contextview/contextview.js";
 import { Dropdown } from "../dropdown/dropdown.js";
 import { appendIcon } from "../lxicons/lxicon.js";
 
@@ -62,7 +62,7 @@ export class SelectBox extends Disposable {
 			content: list,
 			ariaLabel: options.ariaLabel,
 			gap: 2,
-			indicator: Lxicon.unfold,
+			anchorAlignment: AnchorAlignment.Right,
 			contentWidth: "at-least-trigger",
 			contextViewProvider: options.contextViewProvider,
 		}));
