@@ -33,6 +33,7 @@ test('browser opens an authorized local folder and saves its files', async ({ ta
 	if (await showSidebar.isVisible()) await showSidebar.click();
 	await expect(explorer).toBeVisible();
 	await expect(fileRow).toBeVisible();
+	await expect(page.locator('[data-statusbar-item-id="ash.status.workspacePermissions"]')).toHaveCount(0);
 	const fileTree = explorer.getByRole('tree');
 	await fileTree.focus();
 	await page.keyboard.press('Alt+F1');

@@ -199,6 +199,8 @@ import { IDirPermissionsService } from "../../platform/dirPermissions/common/dir
 import { IKeybindingsResourceService } from "../../platform/keybinding/common/keybindingsResource.js";
 import { IKeyboardLayoutService } from "../../platform/keyboardLayout/common/keyboardLayout.js";
 import { AppServerDirPermissionsService } from "../services/dirPermissions/browser/appServerDirPermissionsService.js";
+import { IWorkspaceTrustManagementService } from '../../platform/workspace/common/workspaceTrust.js';
+import { WorkspaceTrustManagementService } from '../services/workspaces/common/workspaceTrust.js';
 import { IConnectorService } from "../../platform/connectors/common/connectorService.js";
 import { AppServerConnectorService } from "../services/connectors/browser/appServerConnectorService.js";
 import { IAccountService } from "../../platform/accounts/common/accountService.js";
@@ -455,6 +457,8 @@ export class Workbench extends Disposable {
 		services.registerInstance(IFileLabelDecorationService, this._register(new FileLabelDecorationService()));
 		const dirPermissionsService = this._register(new AppServerDirPermissionsService(api.dirPermissions, api.events));
 		services.registerInstance(IDirPermissionsService, dirPermissionsService);
+		const workspaceTrustService = this._register(services.createInstance(WorkspaceTrustManagementService));
+		services.registerInstance(IWorkspaceTrustManagementService, workspaceTrustService);
 		const workspaceFileService = new BrowserFileService({
 			api: api.fs,
 			resourceApi: api.resource,

@@ -316,7 +316,11 @@ contribution 不得通过该服务直接访问文件系统。单根 Folder 启�
 
 首次进入未授权目录时，Electron Renderer 在窗口内显示目录权限选择，启动阶段也先完成选择再
 建立 Workbench。Electron Main 提供按当前语言翻译的文案并等待选择；App Server 保存目录能力。
-只读目录在状态栏显示“只读文件夹”，编辑器自身的只读状态只针对有文件工作副本的编辑器。
+前端 `IWorkspaceTrustRequestService` 负责取得选择，`IWorkspaceTrustManagementService` 按当前
+Workspace 各目录的实际权限提供界面状态和变化通知；它每次从 App Server 读取权限，不保存独立的
+“已信任”配置。只有全部目录具备开发权限时，界面才视为已信任。只读授权显示“只读文件夹”；
+允许部分开发操作的目录显示“受限工作区”。文件读写和命令执行仍由 App Server 按具体权限检查，
+编辑器自身的只读状态只针对有文件工作副本的编辑器。
 
 编辑器窗口的 Workspace 不归 Session catalog 所有。前端 `ISession.workspace` 只描述该 Session
 使用的 Environment、`cwd` 和目录；它可以帮助界面显示位置或请求切换运行环境，但不能改变窗口

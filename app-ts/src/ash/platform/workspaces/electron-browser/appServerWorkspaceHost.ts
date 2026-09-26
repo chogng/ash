@@ -10,9 +10,9 @@ import { parseWorkspace } from '../../workspace/common/workspace.js';
 import { createWorkspaceContextApi } from '../../workspace/electron-browser/workspaceContextApi.js';
 import { getRemoteWorkspacePath, isRemoteResource } from '../../remote/common/remote.js';
 import type { EnvDirSetEntry, PermissionDto } from '../../app-server/common/generated/index.js';
-import type { DirPermissionChoice } from '../../dirPermissions/common/dirPermissionsService.js';
+import { DEVELOPMENT_DIR_PERMISSIONS, READ_DIR_PERMISSIONS, type IWorkspaceTrustRequestService } from '../../workspace/common/workspaceTrust.js';
 
-export async function initializeWorkspace(client: AppServerProtocolClient, selectPermissions: (path: string) => Promise<DirPermissionChoice>): Promise<void> {
+export async function initializeWorkspace(client: AppServerProtocolClient, workspaceTrust: IWorkspaceTrustRequestService): Promise<void> {
 	const workspace = parseWorkspace(await createWorkspaceContextApi().getWorkspace());
 	const dirs: EnvDirSetEntry[] = [];
 	for (const folder of workspace.folders) {
@@ -22,11 +22,10 @@ export async function initializeWorkspace(client: AppServerProtocolClient, selec
 			dirs.push({ id: folder.id, path, grant: { type: 'config' } });
 			continue;
 		}
-		const choice = await selectPermissions(path);
+		const choice = await workspaceTrust.requestWorkspaceTrust(path);
 		if (choice === 'cancel') { throw new Error('Directory permission selection cancelled'); }
 		if (choice !== 'development' && choice !== 'readOnly') { throw new TypeError('Invalid directory permission selection'); }
-		const read: PermissionDto[] = ['readFiles', 'watchFiles', 'browseFiles', 'searchFiles', 'inspectRepository'];
-		const permissions: PermissionDto[] = choice === 'readOnly' ? read : [...read, 'writeFiles', 'executeCommands', 'loadInstructions', 'loadConfig', 'discoverSkills', 'discoverMcp', 'useLanguageServices', 'discoverHooks', 'discoverPlugins', 'mutateRepository'];
+		const permissions: PermissionDto[] = [...(choice === 'readOnly' ? READ_DIR_PERMISSIONS : DEVELOPMENT_DIR_PERMISSIONS)];
 		const config = await client.request(APP_SERVER_METHODS['config/read'], {});
 		const grant = { type: 'user' as const, commandId: generateUuid(), expectedRevision: config.revision, permissions };
 		await client.request(APP_SERVER_METHODS['env/dirs/set'], { dirs: [...dirs, { id: folder.id, path, grant }] });
@@ -35,7 +34,7 @@ export async function initializeWorkspace(client: AppServerProtocolClient, selec
 	if (dirs.length) { await client.request(APP_SERVER_METHODS['env/dirs/set'], { dirs }); }
 }
 
-export function registerAppServerWorkspaceHost(client: AppServerProtocolClient, ready: () => Promise<void>, selectPermissions: (path: string) => Promise<DirPermissionChoice>): IDisposable {
+export function registerAppServerWorkspaceHost(client: AppServerProtocolClient, ready: () => Promise<void>, workspaceTrust: IWorkspaceTrustRequestService): IDisposable {
 	const subscription = subscribe('ash:workspace:operation', (value: unknown) => {
 		if (!isRecord(value) || typeof value.nonce !== 'string' || !isRecord(value.params)) { return; }
 		const { nonce, operation, params } = value;
@@ -44,7 +43,7 @@ export function registerAppServerWorkspaceHost(client: AppServerProtocolClient, 
 			switch (operation) {
 				case 'selectPermissions': {
 					if (typeof params.path !== 'string') throw new TypeError('Invalid directory path');
-					return selectPermissions(params.path);
+					return workspaceTrust.requestWorkspaceTrust(params.path);
 				}
 				case 'readPermissions': {
 					const request = decodeAppServerRequestParams('config/dirPermissions/read', params);

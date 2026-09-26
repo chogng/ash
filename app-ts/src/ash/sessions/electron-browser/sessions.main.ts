@@ -27,7 +27,7 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 	const sessions = new DisposableStore();
 	const permissionDialog = sessions.add(new DirectoryPermissionDialog(container));
 	let api: Awaited<ReturnType<typeof createElectronRendererApi>>;
-	try { api = await createElectronRendererApi([], { browser: false }, path => permissionDialog.select(path)); }
+	try { api = await createElectronRendererApi([], { browser: false }, permissionDialog); }
 	catch (error) { sessions.dispose(); return showStartupError(error); }
 	sessions.add(api);
 	const profileServices = sessions.add(new ServiceContainer());

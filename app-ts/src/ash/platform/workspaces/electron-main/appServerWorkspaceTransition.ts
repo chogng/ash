@@ -6,16 +6,6 @@ import { AppServerRemoteError } from "../../app-server/common/appServerError.js"
 import type { AppServerConnectionRelay } from "../../app-server/electron-main/appServerConnectionRelay.js";
 import { type IWorkspaceRuntimeSwitcher, type IWorkspaceTransitionContext, type IWorkspaceTransitionFailure, type IWorkspaceTransitionRecoveryRouter, WorkspaceTransitionFailureKind, WorkspaceTransitionRecovery } from "./workspaceTransitionMainService.js";
 
-export const READ_DIR_PERMISSIONS: readonly DirPermission[] = [
-	"readFiles", "watchFiles", "browseFiles", "searchFiles", "inspectRepository",
-];
-
-export const DEVELOPMENT_DIR_PERMISSIONS: readonly DirPermission[] = [
-	...READ_DIR_PERMISSIONS,
-	"writeFiles", "executeCommands", "loadInstructions", "loadConfig", "discoverSkills",
-	"discoverMcp", "useLanguageServices", "discoverHooks", "discoverPlugins", "mutateRepository",
-];
-
 export interface IAppServerWorkspaceTransitionHost {
 	getState(): AppServerConnectionState;
 	switchWorkspace(root: string, grant: IWorkspaceTransitionContext["grant"]): Promise<void>;

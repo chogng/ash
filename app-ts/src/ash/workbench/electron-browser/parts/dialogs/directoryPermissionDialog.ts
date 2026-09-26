@@ -3,7 +3,7 @@ import { Event } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { DialogResult, type DialogRequest } from '../../../../platform/dialogs/common/dialogs.js';
-import type { DirPermissionChoice } from '../../../../platform/dirPermissions/common/dirPermissionsService.js';
+import type { IWorkspaceTrustRequestService, WorkspaceTrustChoice } from '../../../../platform/workspace/common/workspaceTrust.js';
 import { invoke } from '../../../../platform/ipc/electron-browser/rendererIpc.js';
 import { bindColorTheme } from '../../../../platform/theme/browser/themeStyles.js';
 import { darkColorTheme, lightColorTheme } from '../../../../platform/theme/common/colorTheme.js';
@@ -11,7 +11,7 @@ import { defaultProductIconTheme, type IThemeService } from '../../../../platfor
 import { BrowserDialogHandler } from '../../../browser/parts/dialogs/dialogHandler.js';
 
 /** Presents directory authorization in the window before or after Workbench startup. */
-export class DirectoryPermissionDialog extends Disposable {
+export class DirectoryPermissionDialog extends Disposable implements IWorkspaceTrustRequestService {
 	private readonly activeRequest = this._register(new MutableDisposable<DisposableStore>());
 	private readonly handler: BrowserDialogHandler;
 
@@ -20,7 +20,7 @@ export class DirectoryPermissionDialog extends Disposable {
 		this.handler = new BrowserDialogHandler(container);
 	}
 
-	public async select(path: string): Promise<DirPermissionChoice> {
+	public async requestWorkspaceTrust(path: string): Promise<WorkspaceTrustChoice> {
 		this.assertNotDisposed();
 		if (this.activeRequest.value) throw new Error('Directory permission selection is already in progress');
 		const prompt = parseDirectoryPermissionPrompt(await invoke<unknown>('ash:host:directoryPermissionPrompt', path));

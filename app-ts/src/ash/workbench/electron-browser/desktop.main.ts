@@ -38,7 +38,7 @@ export class DesktopMain extends Disposable {
 		try {
 			const container = document.querySelector<HTMLElement>('#app') ?? document.body;
 			const permissionDialog = this._register(new DirectoryPermissionDialog(container));
-			const api = this._register(await createElectronRendererApi(this.rendererCapabilities, { browser: true }, path => permissionDialog.select(path)));
+			const api = this._register(await createElectronRendererApi(this.rendererCapabilities, { browser: true }, permissionDialog));
 			const profileServices = this._register(new ServiceContainer());
 			profileServices.registerInstance(IFileService, api.localFiles);
 			const userThemes = this._register(await loadUserThemes(profileServices, URI.parse(api.userDataHome.toString().replace(/\/$/u, '') + '/themes')));

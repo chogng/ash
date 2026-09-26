@@ -8,9 +8,6 @@ export type DirPermission =
 	| "discoverMcp" | "useLanguageServices" | "discoverHooks"
 	| "discoverPlugins" | "inspectRepository" | "mutateRepository";
 
-/** Choice made by the user before a new folder receives directory permissions. */
-export type DirPermissionChoice = 'development' | 'readOnly' | 'cancel';
-
 /** Authorization selected by the host before entering a directory. */
 export type DirGrant =
 	| { readonly type: "config" }

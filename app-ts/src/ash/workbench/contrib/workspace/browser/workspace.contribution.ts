@@ -1,56 +1,50 @@
 import { Disposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { localize, onDidChangeNls } from '../../../../nls.js';
-import { IDirPermissionsService } from '../../../../platform/dirPermissions/common/dirPermissionsService.js';
-import { IWorkspaceContextService, workspaceOpenTarget } from '../../../../platform/workspace/common/workspace.js';
+import { IWorkspaceTrustManagementService, type IWorkspaceTrustInfo } from '../../../../platform/workspace/common/workspaceTrust.js';
 import { registerWorkbenchContribution, WorkbenchPhase, type IWorkbenchContribution } from '../../../common/contributions.js';
 import { StatusbarAlignment, IStatusbarService, type IStatusbarEntryAccessor } from '../../../services/statusbar/browser/statusbar.js';
 
 class WorkspacePermissionStatus extends Disposable implements IWorkbenchContribution {
 	private readonly entry = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
 	private generation = 0;
-	private readOnly = false;
+	private trustInfo: IWorkspaceTrustInfo | undefined;
 
 	constructor(
-		private readonly workspace: IWorkspaceContextService,
-		private readonly permissions: IDirPermissionsService,
+		private readonly trust: IWorkspaceTrustManagementService,
 		private readonly statusbar: IStatusbarService,
 	) {
 		super();
-		this._register(workspace.onDidChangeWorkspace(() => { void this.refresh(); }));
-		this._register(permissions.onDidChangePermissions(() => { void this.refresh(); }));
+		this._register(trust.onDidChangeTrust(() => { void this.refresh(); }));
 		this._register(onDidChangeNls(() => this.updateEntry()));
 		void this.refresh();
 	}
 
 	private async refresh(): Promise<void> {
 		const generation = ++this.generation;
-		const current = this.workspace.getWorkspace();
-		const path = current.folders.length === 1 ? workspaceOpenTarget(current) : undefined;
-		if (!path) {
-			this.readOnly = false;
-			this.updateEntry();
-			return;
-		}
 		try {
-			const permissions = await this.permissions.read(path);
+			const trustInfo = await this.trust.getWorkspaceTrustInfo();
 			if (this.isDisposed || generation !== this.generation) return;
-			this.readOnly = permissions !== undefined && !permissions.includes('writeFiles');
+			this.trustInfo = trustInfo;
 			this.updateEntry();
 		} catch (error) {
 			if (this.isDisposed || generation !== this.generation) return;
-			console.error('Failed to read workspace directory permissions', error);
-			this.readOnly = false;
+			console.error('Failed to read workspace trust information', error);
+			this.trustInfo = undefined;
 			this.updateEntry();
 		}
 	}
 
 	private updateEntry(): void {
-		if (!this.readOnly) {
+		if (!this.trustInfo || this.trustInfo.isTrusted) {
 			this.entry.clear();
 			return;
 		}
-		const text = localize('workspaceTrust.readOnlyStatus', 'Read-only folder');
-		const tooltip = localize('workspaceTrust.readOnlyStatusDetail', 'Files in this folder cannot be edited.');
+		const text = this.trustInfo.isReadOnly
+			? localize('workspaceTrust.readOnlyStatus', 'Read-only folder')
+			: localize('workspaceTrust.restrictedStatus', 'Restricted workspace');
+		const tooltip = this.trustInfo.isReadOnly
+			? localize('workspaceTrust.readOnlyStatusDetail', 'Files in this folder cannot be edited.')
+			: localize('workspaceTrust.restrictedStatusDetail', 'Some workspace features are limited by directory permissions.');
 		const content = { text, ariaLabel: `${text}. ${tooltip}`, tooltip };
 		if (this.entry.value) this.entry.value.update(content);
 		else this.entry.value = this.statusbar.addEntry(content, { id: 'ash.status.workspacePermissions', alignment: StatusbarAlignment.Left, priority: 850 });
@@ -61,8 +55,7 @@ registerWorkbenchContribution(
 	'workbench.contrib.workspacePermissionStatus',
 	WorkbenchPhase.AfterRestored,
 	accessor => new WorkspacePermissionStatus(
-		accessor.get(IWorkspaceContextService),
-		accessor.get(IDirPermissionsService),
+		accessor.get(IWorkspaceTrustManagementService),
 		accessor.get(IStatusbarService),
 	),
 );

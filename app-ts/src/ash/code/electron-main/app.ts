@@ -81,7 +81,8 @@ import { ElectronRemoteRuntimeInstallWindow } from "../../platform/remote/electr
 import { electronRemoteWindowMainHost } from "../../platform/remote/electron-main/electronRemoteWindowMainHost.js";
 import { RemoteWindowMainContext } from "../../platform/remote/electron-main/remoteWindowMainContext.js";
 import { WORKSPACE_CONTEXT_CHANGED_CHANNEL } from "../../platform/workspace/common/workspaceIpc.js";
-import { createAppServerWorkspaceTransitionAdapter, createUserDirGrant, DEVELOPMENT_DIR_PERMISSIONS, readAppServerDirPermissions, READ_DIR_PERMISSIONS, setAppServerWorkspaceFolders, switchAppServerWorkspace } from "../../platform/workspaces/electron-main/appServerWorkspaceTransition.js";
+import { createAppServerWorkspaceTransitionAdapter, createUserDirGrant, readAppServerDirPermissions, setAppServerWorkspaceFolders, switchAppServerWorkspace } from "../../platform/workspaces/electron-main/appServerWorkspaceTransition.js";
+import { DEVELOPMENT_DIR_PERMISSIONS, READ_DIR_PERMISSIONS } from '../../platform/workspace/common/workspaceTrust.js';
 import { type IWorkspaceTransitionFailure, type WorkspaceTransitionMainServiceOptions, WorkspaceTransitionFailureKind, WorkspaceTransitionMainService, WorkspaceTransitionStatus } from "../../platform/workspaces/electron-main/workspaceTransitionMainService.js";
 import { WorkspacesManagementMainService } from '../../platform/workspaces/electron-main/workspacesManagementMainService.js';
 import { WorkspaceOpenTargetKind } from '../../platform/environment/common/argv.js';

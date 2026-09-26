@@ -261,6 +261,8 @@ test('editor action labels use the selected Chinese language catalog', async () 
 		assert.equal(localize({ bundle: 'ash.settings', key: 'groups.workbench.label' }, 'Workbench'), '工作台');
 		assert.equal(localize({ bundle: 'ash.settings', key: 'categories.layout.label' }, 'Layout'), '布局');
 		assert.equal(localize('releaseNotes.open', 'Show Release Notes'), '显示版本说明');
+		assert.equal(localize('workspaceTrust.restrictedStatus', 'Restricted workspace'), '受限工作区');
+		assert.equal(localize('workspaceTrust.restrictedStatusDetail', 'Some workspace features are limited by directory permissions.'), '目录权限限制了部分工作区功能。');
 		assert.equal(localize({ bundle: 'ash', key: 'workbench.copyPath' }, 'Copy Path'), '复制路径');
 		assert.equal(localize({ bundle: 'ash', key: 'workbench.copyRelativePath' }, 'Copy Relative Path'), '复制相对路径');
 		assert.equal(localize({ bundle: 'ash', key: 'workbench.newFile' }, 'New File...'), '新建文件...');
