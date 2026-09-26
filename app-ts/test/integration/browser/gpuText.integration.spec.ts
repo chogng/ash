@@ -216,7 +216,7 @@ test('GPU rejection markers follow renderer capability changes and use the activ
 
 test('GPU text uses semantic token colors from the active theme', async ({ page }) => {
 	await page.goto('/gpuText.html');
-	await expect(page.locator('.stanza-editor-gpu-canvas')).toBeVisible();
+	await expect.poll(() => gpuEditorState(page)).toEqual(healthyGpuEditorState());
 	await page.evaluate(() => window.ashGpuTextIntegration.prepareSemanticText());
 	await expect(page.locator('.view-line.gpu-rendered')).toHaveCount(1);
 	await expect.poll(() => page.evaluate(() => window.ashGpuTextIntegration.countGlyphPixels(225, 55, 171))).toBeGreaterThan(0);
