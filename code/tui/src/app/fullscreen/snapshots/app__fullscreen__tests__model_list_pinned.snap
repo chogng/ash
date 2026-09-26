@@ -6,15 +6,15 @@ expression: "render(&app, 100, 18)"
                                                                                                     
             ┌── Model ────────────────────────────────────────────────────────────[✗]─┐             
             │                                                                         │             
-            │   Favorites    My gateway                                               │             
-            │                                                                         │             
-            │  No models here · Pin models from a provider tab to Favorites           │             
-            │                                                                         │             
-            │                                                                         │             
+            │  ╭────────────────────────────────────────────────────────────────────╮ │             
+            │  │ Search models                                                      │ │             
+            │  ╰────────────────────────────────────────────────────────────────────╯ │             
+            │  Pinned ─────────────────────────────────────────────────────────────── │             
+            │> gateway-model                                                          │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
   ╭─────────│                                                                         │──────────╮  
-  │ > Build │  Enter to apply · Tab/Shift+Tab to switch · Esc to close                │          │  
+  │ > Build │  Enter to apply  ·  / to search  ·  Esc to close  ·  P to pin/unpin     │          │  
   ╰─────────└─────────────────────────────────────────────────────────────────────────┘ic model ─╯

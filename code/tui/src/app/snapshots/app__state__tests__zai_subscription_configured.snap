@@ -8,9 +8,9 @@ expression: "crate::app::usage_tests::render(&app, 96, 24)"
             │                                                                      │
             │   Status                                                             │
             │                                                                      │
-            │  API key saved                                                       │
             │> Coding plan enabled                                                 │
             │  Disable BigModel                                                    │
+            │                                                                      │
             │                                                                      │
             │                                                                      │
             │                                                                      │

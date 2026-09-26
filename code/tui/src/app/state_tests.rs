@@ -1073,6 +1073,8 @@ fn directory_permission_selection_emits_a_revision_bound_server_edit() {
 }
 
 fn enter_provider_row(app: &mut App, label: &str) -> Option<AppCommand> {
+    let mut settings = TerminalSettings::default();
+    settings.set_language(app.language());
     app.update(ConfigEvent::EditorOpened(config_choices(
         &empty_config_snapshot(),
         &ProviderListResult {
@@ -1097,7 +1099,7 @@ fn enter_provider_row(app: &mut App, label: &str) -> Option<AppCommand> {
                 },
             ],
         },
-        TerminalSettings::default(),
+        settings,
         StatusLineSettings::default(),
     )));
     for code in [KeyCode::Up, KeyCode::Up, KeyCode::Tab, KeyCode::Down] {
@@ -1138,6 +1140,101 @@ fn escape_cancels_key_edit_without_saving_and_returns_to_providers() {
 }
 
 #[test]
+fn chatgpt_subscription_shows_fetched_models_in_chinese() {
+    use crate::config::SubscriptionCommand;
+    use crate::config::SubscriptionEvent;
+    use crate::config::SubscriptionProvider;
+    use ash_app_server_protocol::protocol::account::AccountDto;
+    use ash_app_server_protocol::protocol::account::AccountReadResult;
+    use ash_app_server_protocol::protocol::account::AccountStatusDto;
+    use ash_app_server_protocol::protocol::model::ModelCatalogEntry;
+    use ash_protocol::ModelAccess;
+    use ash_protocol::ModelId;
+    use ash_protocol::ModelInfo;
+    use ash_protocol::ModelOutputTransport;
+    use ash_protocol::ModelRef;
+    use ash_protocol::ProviderId;
+
+    let mut app = App::new();
+    let mut settings = TerminalSettings::default();
+    settings.set_language(Language::Chinese);
+    app.update(ConfigEvent::SettingsReceived(settings));
+    enter_provider_row(&mut app, "ChatGPT");
+    let model = ModelRef::new(
+        ProviderId::new("openai").unwrap(),
+        ModelId::new("gpt-ash").unwrap(),
+    );
+    let mut info = ModelInfo::new(model.model.clone(), "GPT Ash");
+    info.access = ModelAccess::Subscription;
+    let account = AccountDto {
+        provider: "chatgpt-subscription".into(),
+        account_id: "account-1".into(),
+        email: Some("person@example.com".into()),
+        display_name: Some("ChatGPT".into()),
+        organization: None,
+        plan: Some("pro".into()),
+        status: AccountStatusDto::Ready,
+        credential_revision: 1,
+    };
+    app.update(ConfigEvent::SubscriptionReply(
+        SubscriptionProvider::ChatGpt,
+        SubscriptionEvent::Read {
+            account: AccountReadResult {
+                revision: 1,
+                accounts: vec![account.clone()],
+            },
+            models: Some(Ok(vec![ModelCatalogEntry::from_info(
+                model,
+                &info,
+                ModelOutputTransport::Unary,
+            )])),
+        },
+    ));
+    let screen = crate::app::usage_tests::render(&app, 96, 24);
+    assert!(screen.contains("模型"));
+    assert!(screen.contains("GPT Ash"));
+    assert!(!screen.contains("gpt-ash"));
+    assert!(!screen.contains("OpenAI"));
+    crate::tui_assert_snapshot!("chatgpt_subscription_models_chinese", screen);
+
+    for revision in 2..=3 {
+        app.update(ConfigEvent::Subscription(SubscriptionEvent::Updated(
+            AccountReadResult {
+                revision,
+                accounts: vec![AccountDto {
+                    credential_revision: revision,
+                    ..account.clone()
+                }],
+            },
+        )));
+        let screen = crate::app::usage_tests::render(&app, 96, 24);
+        assert!(screen.contains("GPT Ash"));
+        assert!(!screen.contains("正在处理"));
+        assert_eq!(app.refresh_subscription(), None);
+    }
+
+    app.update(ConfigEvent::Subscription(SubscriptionEvent::Updated(
+        AccountReadResult {
+            revision: 4,
+            accounts: vec![AccountDto {
+                account_id: "account-2".into(),
+                ..account
+            }],
+        },
+    )));
+    let screen = crate::app::usage_tests::render(&app, 96, 24);
+    assert!(screen.contains("正在加载模型"));
+    assert!(!screen.contains("GPT Ash"));
+    assert_eq!(
+        app.refresh_subscription(),
+        Some(AppCommand::Config(ConfigCommand::Subscription(
+            SubscriptionProvider::ChatGpt,
+            SubscriptionCommand::Read,
+        )))
+    );
+}
+
+#[test]
 fn chatgpt_subscription_keeps_pending_login_across_navigation_and_cancels_by_id() {
     use crate::config::SubscriptionCommand;
     use crate::config::SubscriptionEvent;
@@ -1151,12 +1248,13 @@ fn chatgpt_subscription_keeps_pending_login_across_navigation_and_cancels_by_id(
             SubscriptionCommand::Read
         )))
     );
-    app.update(ConfigEvent::Subscription(SubscriptionEvent::Read(
-        AccountReadResult {
+    app.update(ConfigEvent::Subscription(SubscriptionEvent::Read {
+        account: AccountReadResult {
             revision: 1,
             accounts: vec![],
         },
-    )));
+        models: None,
+    }));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
@@ -1185,12 +1283,13 @@ fn chatgpt_subscription_keeps_pending_login_across_navigation_and_cancels_by_id(
             SubscriptionCommand::Read
         )))
     );
-    app.update(ConfigEvent::Subscription(SubscriptionEvent::Read(
-        AccountReadResult {
+    app.update(ConfigEvent::Subscription(SubscriptionEvent::Read {
+        account: AccountReadResult {
             revision: 1,
             accounts: vec![],
         },
-    )));
+        models: None,
+    }));
     for _ in 0..3 {
         app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     }
@@ -1209,12 +1308,13 @@ fn chatgpt_subscription_keeps_pending_login_across_navigation_and_cancels_by_id(
     for _ in 0..2 {
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     }
-    app.update(ConfigEvent::Subscription(SubscriptionEvent::Read(
-        AccountReadResult {
+    app.update(ConfigEvent::Subscription(SubscriptionEvent::Read {
+        account: AccountReadResult {
             revision: 2,
             accounts: vec![],
         },
-    )));
+        models: None,
+    }));
     assert!(app.command_panel().is_none());
 }
 
@@ -2783,10 +2883,13 @@ fn xai_subscription_login_stays_separate_from_chatgpt_after_navigation() {
     );
     app.update(ConfigEvent::SubscriptionReply(
         SubscriptionProvider::Xai,
-        SubscriptionEvent::Read(AccountReadResult {
-            revision: 1,
-            accounts: vec![],
-        }),
+        SubscriptionEvent::Read {
+            account: AccountReadResult {
+                revision: 1,
+                accounts: vec![],
+            },
+            models: None,
+        },
     ));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     assert_eq!(
@@ -2822,10 +2925,13 @@ fn xai_subscription_login_stays_separate_from_chatgpt_after_navigation() {
     );
     app.update(ConfigEvent::SubscriptionReply(
         SubscriptionProvider::ChatGpt,
-        SubscriptionEvent::Read(AccountReadResult {
-            revision: 1,
-            accounts: vec![],
-        }),
+        SubscriptionEvent::Read {
+            account: AccountReadResult {
+                revision: 1,
+                accounts: vec![],
+            },
+            models: None,
+        },
     ));
     let screen = crate::app::usage_tests::render(&app, 96, 24);
     assert!(screen.contains("Sign in with ChatGPT"));
@@ -2836,10 +2942,13 @@ fn xai_subscription_login_stays_separate_from_chatgpt_after_navigation() {
     enter_provider_row(&mut app, "Super Grok");
     app.update(ConfigEvent::SubscriptionReply(
         SubscriptionProvider::Xai,
-        SubscriptionEvent::Read(AccountReadResult {
-            revision: 1,
-            accounts: vec![],
-        }),
+        SubscriptionEvent::Read {
+            account: AccountReadResult {
+                revision: 1,
+                accounts: vec![],
+            },
+            models: None,
+        },
     ));
     assert!(crate::app::usage_tests::render(&app, 96, 24).contains("XAI-1234"));
 }
@@ -2854,10 +2963,13 @@ fn xai_subscription_browser_failure_keeps_the_manual_challenge_visible() {
     enter_provider_row(&mut app, "Super Grok");
     app.update(ConfigEvent::SubscriptionReply(
         SubscriptionProvider::Xai,
-        SubscriptionEvent::Read(AccountReadResult {
-            revision: 1,
-            accounts: vec![],
-        }),
+        SubscriptionEvent::Read {
+            account: AccountReadResult {
+                revision: 1,
+                accounts: vec![],
+            },
+            models: None,
+        },
     ));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -2904,7 +3016,6 @@ fn zai_subscription_accepts_a_masked_key_and_returns_to_its_status() {
         "zai_subscription_sign_in",
         crate::app::usage_tests::render(&app, 96, 24)
     );
-    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     assert_eq!(
         app.list_selection()
             .unwrap()
@@ -2962,7 +3073,7 @@ fn zai_subscription_accepts_a_masked_key_and_returns_to_its_status() {
         .iter()
         .map(|item| item.label())
         .collect::<Vec<_>>();
-    assert!(labels.contains(&"API key saved"));
+    assert!(!labels.iter().any(|label| label.contains("API key")));
     assert!(labels.contains(&"Coding plan enabled"));
     assert!(labels.contains(&"Disable BigModel"));
     crate::tui_assert_snapshot!(

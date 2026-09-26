@@ -61,8 +61,7 @@ where
     client.read_accounts()?;
     let config = client.read_config()?;
     let catalog = client.list_builtin_models()?;
-    let providers = client.list_providers()?;
-    model_choices(&catalog, &config, &providers).map_err(ModelCommandError)
+    model_choices(&catalog, &config).map_err(ModelCommandError)
 }
 
 pub(crate) fn set_model<T>(

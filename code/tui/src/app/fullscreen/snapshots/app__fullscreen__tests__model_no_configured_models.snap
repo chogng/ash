@@ -6,8 +6,6 @@ expression: "render(&app, 100, 18)"
                                                                                                     
             ┌── Model ────────────────────────────────────────────────────────────[✗]─┐             
             │                                                                         │             
-            │   Favorites                                                             │             
-            │                                                                         │             
             │  No configured models · Configure a provider in /config                 │             
             │                                                                         │             
             │                                                                         │             
@@ -15,6 +13,8 @@ expression: "render(&app, 100, 18)"
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
   ╭─────────│                                                                         │──────────╮  
-  │ > Build │  Tab/Shift+Tab to switch  ·  Esc to close                               │          │  
+  │ > Build │  Esc to close                                                           │          │  
   ╰─────────└─────────────────────────────────────────────────────────────────────────┘ic model ─╯

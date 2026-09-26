@@ -8,6 +8,7 @@ use crate::widgets::list_selection::ListSelectionModel;
 use ash_app_server_client::AppServerClient;
 use ash_app_server_client::ClientError;
 use ash_app_server_client::JsonRpcTransport;
+use ash_app_server_protocol::protocol::account::AccountDto;
 use ash_app_server_protocol::protocol::account::AccountLoginCancelParams;
 use ash_app_server_protocol::protocol::account::AccountLoginCompleted;
 use ash_app_server_protocol::protocol::account::AccountLoginCompletionStatusDto;
@@ -20,7 +21,9 @@ use ash_app_server_protocol::protocol::account::AccountStatusDto;
 use ash_app_server_protocol::protocol::config::ConfigReadResult;
 use ash_app_server_protocol::protocol::config::ProviderConfigDto;
 use ash_app_server_protocol::protocol::config::ProviderConfigureParams;
+use ash_app_server_protocol::protocol::model::ModelCatalogEntry;
 use ash_app_server_protocol::protocol::provider::ProviderListResult;
+use ash_protocol::ModelAccess;
 use std::collections::BTreeMap;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -74,8 +77,17 @@ impl SubscriptionProvider {
             Self::Zai => None,
         }
     }
-    fn account_login(self) -> bool {
+    pub(crate) fn account_login(self) -> bool {
         self.method().is_some()
+    }
+
+    fn model_provider(self) -> &'static str {
+        match self {
+            Self::ChatGpt => "openai",
+            Self::Xai => "xai",
+            Self::Kimi => "kimi",
+            Self::Zai => "zai",
+        }
     }
 }
 
@@ -97,7 +109,10 @@ pub(crate) struct PlanStatus {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum SubscriptionEvent {
-    Read(AccountReadResult),
+    Read {
+        account: AccountReadResult,
+        models: Option<Result<Vec<ModelCatalogEntry>, String>>,
+    },
     Started {
         login: AccountLoginStartResult,
         browser_error: Option<String>,
@@ -117,6 +132,7 @@ pub(crate) enum SubscriptionEvent {
 pub(crate) struct Subscription {
     provider: SubscriptionProvider,
     account: Option<AccountReadResult>,
+    models: Option<Result<Vec<ModelCatalogEntry>, String>>,
     plan: Option<PlanStatus>,
     login: Option<AccountLoginStartResult>,
     browser_error: Option<String>,
@@ -150,7 +166,9 @@ impl Subscription {
 
     pub(crate) fn update(&mut self, event: SubscriptionEvent) {
         match event {
-            SubscriptionEvent::Updated(account) => self.update_account(account),
+            SubscriptionEvent::Updated(account) => {
+                self.update_account(account);
+            }
             SubscriptionEvent::Plan(plan) => {
                 self.pending = None;
                 self.message = None;
@@ -172,9 +190,19 @@ impl Subscription {
             event => {
                 self.pending = None;
                 match event {
-                    SubscriptionEvent::Read(account) => {
+                    SubscriptionEvent::Read { account, models } => {
                         self.early_completions.clear();
-                        self.update_account(account);
+                        // Catalog fetching may rotate the same account's credential and advance
+                        // its revision. The fetched models still belong to that account.
+                        let same_account = self.account.as_ref().is_some_and(|current| {
+                            same_catalog_account(
+                                account_for(current, self.provider),
+                                account_for(&account, self.provider),
+                            )
+                        });
+                        if self.update_account(account) || same_account {
+                            self.models = models;
+                        }
                     }
                     SubscriptionEvent::Started {
                         login,
@@ -222,14 +250,33 @@ impl Subscription {
         }
     }
 
-    fn update_account(&mut self, account: AccountReadResult) {
+    fn update_account(&mut self, account: AccountReadResult) -> bool {
         if self
             .account
             .as_ref()
             .is_none_or(|current| account.revision >= current.revision)
         {
+            let before = self
+                .account
+                .as_ref()
+                .and_then(|current| account_for(current, self.provider));
+            let after = account_for(&account, self.provider);
+            if !same_catalog_account(before, after) {
+                self.models = None;
+            }
             self.account = Some(account);
+            return true;
         }
+        false
+    }
+
+    pub(crate) fn needs_model_refresh(&self) -> bool {
+        self.models.is_none()
+            && self
+                .account
+                .as_ref()
+                .and_then(|account| account_for(account, self.provider))
+                .is_some_and(|account| account.status == AccountStatusDto::Ready)
     }
 
     fn finish(&mut self, completed: AccountLoginCompleted) {
@@ -249,12 +296,10 @@ impl Subscription {
         }
         let mut actions = BTreeMap::new();
         let mut items = Vec::new();
-        let account = self.account.as_ref().and_then(|result| {
-            result
-                .accounts
-                .iter()
-                .find(|account| account.provider == self.provider.id())
-        });
+        let account = self
+            .account
+            .as_ref()
+            .and_then(|result| account_for(result, self.provider));
         if let Some(account) = account {
             let status = match account.status {
                 AccountStatusDto::Ready => "Signed in",
@@ -267,6 +312,25 @@ impl Subscription {
             }
             if let Some(plan) = &account.plan {
                 items.push(ListSelectionItem::new("Plan").with_description(plan));
+            }
+            if account.status == AccountStatusDto::Ready {
+                items.push(ListSelectionItem::new("Models").as_section_divider());
+                match &self.models {
+                    Some(Ok(models)) if models.is_empty() => {
+                        items.push(ListSelectionItem::new("No models available"));
+                    }
+                    Some(Ok(models)) => {
+                        items.extend(models.iter().map(|model| {
+                            ListSelectionItem::new(crate::nls::Text::literal(
+                                model.display_name.clone(),
+                            ))
+                        }));
+                    }
+                    Some(Err(error)) => items.push(
+                        ListSelectionItem::new("Could not load models").with_description(error),
+                    ),
+                    None => items.push(ListSelectionItem::new("Loading models…")),
+                }
             }
         } else {
             items.push(ListSelectionItem::new(if self.account.is_some() {
@@ -358,13 +422,6 @@ impl Subscription {
         let mut actions = BTreeMap::new();
         let mut items = Vec::new();
         let status = self.plan.as_ref();
-        items.push(ListSelectionItem::new(
-            if status.is_some_and(|plan| plan.key_saved) {
-                "API key saved"
-            } else {
-                "API key not saved"
-            },
-        ));
         if status.is_some_and(|plan| plan.key_saved || plan.enabled) {
             items.push(ListSelectionItem::new(
                 if status.is_some_and(|plan| plan.enabled) {
@@ -417,6 +474,27 @@ impl Subscription {
     }
 }
 
+fn account_for(result: &AccountReadResult, provider: SubscriptionProvider) -> Option<&AccountDto> {
+    result
+        .accounts
+        .iter()
+        .find(|account| account.provider == provider.id())
+}
+
+// Credential rotation changes the account revision without changing the model entitlement.
+fn same_catalog_account(before: Option<&AccountDto>, after: Option<&AccountDto>) -> bool {
+    match (before, after) {
+        (Some(before), Some(after)) => {
+            before.account_id == after.account_id
+                && before.status == after.status
+                && before.organization == after.organization
+                && before.plan == after.plan
+        }
+        (None, None) => true,
+        _ => false,
+    }
+}
+
 fn add_action(
     items: &mut Vec<ListSelectionItem>,
     actions: &mut BTreeMap<ListSelectionItemId, ConfigSelectionAction>,
@@ -464,7 +542,7 @@ fn execute_with_browser<T: JsonRpcTransport>(
         .unwrap_or_else(|error| SubscriptionEvent::Failed(error.to_string()));
     }
     let result = match command {
-        SubscriptionCommand::Read => client.read_accounts().map(SubscriptionEvent::Read),
+        SubscriptionCommand::Read => read_account_and_models(client, provider),
         SubscriptionCommand::SignIn => {
             let method = provider
                 .method()
@@ -473,7 +551,7 @@ fn execute_with_browser<T: JsonRpcTransport>(
                 .start_account_login(AccountLoginStartParams { method })
                 .and_then(|started| match started {
                     AccountLoginStartResult::Connected { .. } => {
-                        client.read_accounts().map(SubscriptionEvent::Read)
+                        read_account_and_models(client, provider)
                     }
                     challenge => {
                         let url = match &challenge {
@@ -515,6 +593,33 @@ fn execute_with_browser<T: JsonRpcTransport>(
             error => error.to_string(),
         })
     })
+}
+
+fn read_account_and_models<T: JsonRpcTransport>(
+    client: &mut AppServerClient<T>,
+    provider: SubscriptionProvider,
+) -> Result<SubscriptionEvent, ClientError> {
+    let account = client.read_accounts()?;
+    let ready = account
+        .accounts
+        .iter()
+        .any(|entry| entry.provider == provider.id() && entry.status == AccountStatusDto::Ready);
+    let models = ready.then(|| {
+        client
+            .list_discovered_models()
+            .map(|catalog| {
+                catalog
+                    .models
+                    .into_iter()
+                    .filter(|entry| {
+                        entry.model.provider.as_str() == provider.model_provider()
+                            && entry.access == ModelAccess::Subscription
+                    })
+                    .collect()
+            })
+            .map_err(|error| error.to_string())
+    });
+    Ok(SubscriptionEvent::Read { account, models })
 }
 
 /// Reads the Z.AI Coding Plan state from the saved provider connection and stored key.

@@ -8,8 +8,8 @@ expression: "crate::app::usage_tests::render(&app, 96, 24)"
             │                                                                      │
             │   Status                                                             │
             │                                                                      │
-            │> API key not saved                                                   │
-            │  Sign in with BigModel                                               │
+            │> Sign in with BigModel                                               │
+            │                                                                      │
             │                                                                      │
             │                                                                      │
             │                                                                      │

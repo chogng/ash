@@ -3,6 +3,12 @@ use crate::widgets::list_selection::ListSelectionState;
 use ash_app_server_client::ClientError;
 use ash_app_server_protocol::protocol::account::AccountDto;
 use ash_app_server_protocol::protocol::account::AccountLoginFailureDto;
+use ash_app_server_protocol::protocol::model::ModelListResult;
+use ash_protocol::ModelId;
+use ash_protocol::ModelInfo;
+use ash_protocol::ModelOutputTransport;
+use ash_protocol::ModelRef;
+use ash_protocol::ProviderId;
 use std::collections::VecDeque;
 
 fn account(revision: u64) -> AccountReadResult {
@@ -19,6 +25,16 @@ fn account(revision: u64) -> AccountReadResult {
             credential_revision: 1,
         }],
     }
+}
+
+fn model(provider: &str, id: &str, name: &str, access: ModelAccess) -> ModelCatalogEntry {
+    let model = ModelRef::new(
+        ProviderId::new(provider).unwrap(),
+        ModelId::new(id).unwrap(),
+    );
+    let mut info = ModelInfo::new(model.model.clone(), name);
+    info.access = access;
+    ModelCatalogEntry::from_info(model, &info, ModelOutputTransport::Unary)
 }
 
 fn started() -> AccountLoginStartResult {
@@ -53,12 +69,95 @@ fn labels(subscription: &Subscription) -> Vec<String> {
 }
 
 #[test]
-fn login_waits_without_blocking_and_completion_shows_account_and_plan() {
+fn signed_in_account_shows_only_its_discovered_subscription_models() {
     let mut subscription = Subscription::default();
-    subscription.update(SubscriptionEvent::Read(AccountReadResult {
-        revision: 1,
+    subscription.update(SubscriptionEvent::Read {
+        account: account(1),
+        models: Some(Ok(vec![
+            model("openai", "gpt-ash", "GPT Ash", ModelAccess::Subscription),
+            model("openai", "gpt-new", "GPT New", ModelAccess::Subscription),
+        ])),
+    });
+    let rows = labels(&subscription);
+    assert!(rows.contains(&"Models".into()));
+    assert!(rows.contains(&"GPT Ash".into()));
+    assert!(rows.contains(&"GPT New".into()));
+    assert!(!rows.contains(&"Loading models…".into()));
+    let state = ListSelectionState::new(subscription.choices().model);
+    assert!(state
+        .visible_items()
+        .iter()
+        .filter(|item| item.label() == "GPT Ash" || item.label() == "GPT New")
+        .all(|item| item.description().is_none()));
+
+    subscription.update(SubscriptionEvent::Updated(AccountReadResult {
+        revision: 2,
         accounts: vec![],
     }));
+    assert!(!labels(&subscription).contains(&"GPT Ash".into()));
+    subscription.update(SubscriptionEvent::Read {
+        account: account(1),
+        models: Some(Ok(vec![model(
+            "openai",
+            "stale",
+            "Stale",
+            ModelAccess::Subscription,
+        )])),
+    });
+    assert!(!labels(&subscription).contains(&"Stale".into()));
+}
+
+#[test]
+fn credential_rotation_during_model_fetch_does_not_start_another_fetch() {
+    let mut subscription = Subscription::default();
+    let mut rotated = account(2);
+    rotated.accounts[0].credential_revision = 2;
+    subscription.update(SubscriptionEvent::Updated(rotated));
+    assert!(subscription.needs_model_refresh());
+
+    subscription.update(SubscriptionEvent::Read {
+        account: account(1),
+        models: Some(Ok(vec![model(
+            "openai",
+            "gpt-ash",
+            "GPT Ash",
+            ModelAccess::Subscription,
+        )])),
+    });
+    assert!(labels(&subscription).contains(&"GPT Ash".into()));
+    assert!(!subscription.needs_model_refresh());
+
+    let mut rotated_again = account(3);
+    rotated_again.accounts[0].credential_revision = 3;
+    subscription.update(SubscriptionEvent::Updated(rotated_again));
+    assert!(labels(&subscription).contains(&"GPT Ash".into()));
+    assert!(!subscription.needs_model_refresh());
+}
+
+#[test]
+fn model_catalog_failure_keeps_account_visible_and_reports_error() {
+    let mut subscription = Subscription::default();
+    subscription.update(SubscriptionEvent::Read {
+        account: account(1),
+        models: Some(Err("catalog unavailable".into())),
+    });
+    let state = ListSelectionState::new(subscription.choices().model);
+    assert!(labels(&subscription).contains(&"Signed in".into()));
+    assert!(state.visible_items().iter().any(|item| {
+        item.label() == "Could not load models" && item.description() == Some("catalog unavailable")
+    }));
+}
+
+#[test]
+fn login_waits_without_blocking_and_completion_shows_account_and_plan() {
+    let mut subscription = Subscription::default();
+    subscription.update(SubscriptionEvent::Read {
+        account: AccountReadResult {
+            revision: 1,
+            accounts: vec![],
+        },
+        models: None,
+    });
     assert!(labels(&subscription).contains(&"Sign in with ChatGPT".into()));
     assert!(subscription.begin(&SubscriptionCommand::SignIn));
     assert!(!subscription.begin(&SubscriptionCommand::SignIn));
@@ -121,10 +220,13 @@ fn failed_login_and_request_errors_allow_retry() {
 fn older_account_reads_and_unrelated_completions_cannot_replace_current_state() {
     let mut subscription = Subscription::default();
     subscription.update(SubscriptionEvent::Updated(account(5)));
-    subscription.update(SubscriptionEvent::Read(AccountReadResult {
-        revision: 4,
-        accounts: vec![],
-    }));
+    subscription.update(SubscriptionEvent::Read {
+        account: AccountReadResult {
+            revision: 4,
+            accounts: vec![],
+        },
+        models: None,
+    });
     subscription.update(started_event());
     let mut other = completion();
     other.login_id = "another-login".into();
@@ -160,6 +262,14 @@ fn reconnecting_existing_codex_credentials_reads_the_account_without_a_challenge
         results: VecDeque::from([
             serde_json::json!({"type":"connected","loginId":"login-1"}),
             serde_json::to_value(account(2)).unwrap(),
+            serde_json::to_value(ModelListResult {
+                models: vec![
+                    model("openai", "gpt-ash", "GPT Ash", ModelAccess::Subscription),
+                    model("xai", "grok-ash", "Grok Ash", ModelAccess::Subscription),
+                    model("openai", "api-model", "API Model", ModelAccess::ApiKey),
+                ],
+            })
+            .unwrap(),
         ]),
     });
     assert_eq!(
@@ -169,7 +279,15 @@ fn reconnecting_existing_codex_credentials_reads_the_account_without_a_challenge
             SubscriptionCommand::SignIn,
             |_| panic!("an existing login must not open a browser"),
         ),
-        SubscriptionEvent::Read(account(2))
+        SubscriptionEvent::Read {
+            account: account(2),
+            models: Some(Ok(vec![model(
+                "openai",
+                "gpt-ash",
+                "GPT Ash",
+                ModelAccess::Subscription
+            )])),
+        }
     );
     let requests = client.into_transport().requests;
     assert_eq!(
@@ -177,7 +295,7 @@ fn reconnecting_existing_codex_credentials_reads_the_account_without_a_challenge
             .iter()
             .map(|request| request["method"].as_str().unwrap())
             .collect::<Vec<_>>(),
-        vec!["account/login/start", "account/read"]
+        vec!["account/login/start", "account/read", "model/list"]
     );
 }
 
@@ -196,6 +314,7 @@ fn account_actions_use_only_redacted_account_rpcs_and_logout_refreshes() {
         requests: Vec::new(),
         results: VecDeque::from([
             serde_json::to_value(account(1)).unwrap(),
+            serde_json::json!({ "models": [] }),
             serde_json::to_value(started()).unwrap(),
             serde_json::json!({ "status": "cancelled" }),
             serde_json::json!({ "status": "loggedOut" }),
@@ -208,7 +327,7 @@ fn account_actions_use_only_redacted_account_rpcs_and_logout_refreshes() {
             SubscriptionProvider::ChatGpt,
             SubscriptionCommand::Read
         ),
-        SubscriptionEvent::Read(_)
+        SubscriptionEvent::Read { .. }
     ));
     assert_eq!(
         execute_with_browser(
@@ -251,6 +370,7 @@ fn account_actions_use_only_redacted_account_rpcs_and_logout_refreshes() {
         calls,
         vec![
             serde_json::json!({ "method": "account/read", "params": {} }),
+            serde_json::json!({ "method": "model/list", "params": { "view": "discovered" } }),
             serde_json::json!({ "method": "account/login/start", "params": { "method": { "type": "openAiChatGptDeviceCode" } } }),
             serde_json::json!({ "method": "account/login/cancel", "params": { "loginId": "login-1" } }),
             serde_json::json!({ "method": "account/logout", "params": { "provider": "chatgpt-subscription" } }),
@@ -386,10 +506,9 @@ fn zai_providers(
 }
 
 #[test]
-fn zai_plan_panel_shows_key_and_plan_status_with_the_matching_toggle() {
+fn zai_plan_panel_shows_subscription_status_and_the_matching_action() {
     let mut subscription = Subscription::new(SubscriptionProvider::Zai);
-    assert!(labels(&subscription).contains(&"API key not saved".into()));
-    assert!(labels(&subscription).contains(&"Sign in with BigModel".into()));
+    assert_eq!(labels(&subscription), vec!["Sign in with BigModel"]);
     let choices = subscription.choices();
     assert!(matches!(
         choices
@@ -412,7 +531,7 @@ fn zai_plan_panel_shows_key_and_plan_status_with_the_matching_toggle() {
         key_saved: true,
         enabled: true,
     }));
-    assert!(labels(&subscription).contains(&"API key saved".into()));
+    assert!(!labels(&subscription).iter().any(|label| label.contains("API key")));
     assert!(labels(&subscription).contains(&"Disable BigModel".into()));
 
     subscription.update(SubscriptionEvent::Plan(PlanStatus {
@@ -433,6 +552,16 @@ fn subscription_sign_in_actions_are_localized_in_chinese() {
         let mut choices = subscription.choices();
         choices.model.localize(crate::nls::Language::Chinese);
         let state = ListSelectionState::new(choices.model);
+        if provider == SubscriptionProvider::Zai {
+            assert_eq!(
+                state
+                    .visible_items()
+                    .iter()
+                    .map(|item| item.label())
+                    .collect::<Vec<_>>(),
+                vec!["使用 BigModel 登录"]
+            );
+        }
         assert!(
             state
                 .visible_items()

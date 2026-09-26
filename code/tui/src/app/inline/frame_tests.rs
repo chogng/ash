@@ -3,6 +3,7 @@ use super::layout::height;
 use crate::app::App;
 use crate::config::Event as ConfigEvent;
 use crate::config::TerminalSettings;
+use crate::models::Event as ModelEvent;
 use crate::terminal::MouseMode;
 use crate::terminal::ScreenMode;
 use crossterm::event::KeyCode;
@@ -96,6 +97,51 @@ fn config_opens_and_closes_without_reprinting_history() {
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.command_panel().is_none());
     crate::tui_assert_snapshot!("config_closed", text(&render(&app, 100, 32)));
+}
+
+#[test]
+fn model_list_opens_inline_and_restores_input_after_close() {
+    let mut app = app();
+    app.insert_text("keep this draft");
+    let mut config = crate::test_support::empty_config_snapshot();
+    config.providers.insert(
+        "openai".into(),
+        ash_app_server_protocol::protocol::config::ProviderConfigDto {
+            provider: "openai".into(),
+            custom: None,
+            base_url: None,
+            max_output_tokens: None,
+            model_context: Default::default(),
+        },
+    );
+    let model = ash_protocol::ModelRef::new(
+        ash_protocol::ProviderId::new("openai").unwrap(),
+        ash_protocol::ModelId::new("gpt-test").unwrap(),
+    );
+    let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
+        models: vec![
+            ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
+                model.clone(),
+                &ash_protocol::ModelInfo::new(model.model, "GPT Test"),
+                ash_protocol::ModelOutputTransport::Unary,
+            ),
+        ],
+    };
+    let choices = crate::models::model_choices(&catalog, &config).unwrap();
+    app.update(ModelEvent::PickerOpened(choices));
+    assert!(!app.list_selection().unwrap().show_tabs());
+    assert_eq!(
+        app.list_selection().unwrap().selected_visible_index(),
+        Some(0)
+    );
+    let buffer = render(&app, 100, 32);
+    assert!(text(&buffer).contains("GPT Test"));
+    assert!(!text(&buffer).contains("openai"));
+    crate::tui_assert_snapshot!("model_list", text(&buffer));
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(app.command_panel().is_none());
+    assert!(app.chat_input_focused());
+    assert_eq!(app.input(), "keep this draft");
 }
 
 #[test]

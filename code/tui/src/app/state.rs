@@ -749,6 +749,16 @@ impl App {
         Some(ConfigCommand::Subscription(self.selected_subscription, command).into())
     }
 
+    pub(crate) fn refresh_subscription(&mut self) -> Option<AppCommand> {
+        if !self.selected_subscription.account_login()
+            || !self.panels().subscription_open()
+            || !self.subscriptions[self.selected_subscription.index()].needs_model_refresh()
+        {
+            return None;
+        }
+        self.begin_subscription_command(crate::config::SubscriptionCommand::Read)
+    }
+
     fn handle_theme_picker_outcome(&mut self, outcome: ThemePickerOutcome) -> Option<AppCommand> {
         match outcome {
             ThemePickerOutcome::Select { preference } => {

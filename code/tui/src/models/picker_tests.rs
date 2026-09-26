@@ -7,9 +7,6 @@ use ash_app_server_protocol::protocol::config::ModelRefDto;
 use ash_app_server_protocol::protocol::config::ProviderConfigDto;
 use ash_app_server_protocol::protocol::model::ModelCatalogEntry;
 use ash_app_server_protocol::protocol::model::ModelListResult;
-use ash_app_server_protocol::protocol::provider::ProviderApiKeyPolicyDto;
-use ash_app_server_protocol::protocol::provider::ProviderCatalogEntryDto;
-use ash_app_server_protocol::protocol::provider::ProviderListResult;
 use ash_protocol::ModelAccess;
 use ash_protocol::ModelId;
 use ash_protocol::ModelInfo;
@@ -38,7 +35,7 @@ fn provider_config(provider: &str) -> ProviderConfigDto {
 }
 
 #[test]
-fn model_picker_shows_names_only_and_keeps_selection_identity_and_pin_state() {
+fn model_picker_shows_name_only_and_keeps_selection_identity_and_pin_state() {
     let catalog = ModelListResult {
         models: vec![catalog_entry("openai", "gpt-ash", "GPT Ash")],
     };
@@ -56,14 +53,16 @@ fn model_picker_shows_names_only_and_keeps_selection_identity_and_pin_state() {
         .tui
         .0
         .insert("pinnedModels".into(), serde_json::json!([model]));
-    let view = model_choices(&catalog, &config, &ProviderListResult { providers: vec![] }).unwrap();
+    let view = model_choices(&catalog, &config).unwrap();
     let state = ListSelectionState::new(view.model);
 
     assert_eq!(state.title(), "Model");
-    assert!(state.search().is_none());
-    assert_eq!(state.visible_items()[0].label(), "GPT Ash");
-    assert_eq!(state.visible_items()[0].description(), None);
-    assert_eq!(state.selected_visible_index(), Some(0));
+    assert!(!state.show_tabs());
+    assert!(state.search().is_some());
+    assert_eq!(state.visible_items()[0].label(), "Pinned");
+    assert_eq!(state.visible_items()[1].label(), "GPT Ash");
+    assert_eq!(state.visible_items()[1].description(), None);
+    assert_eq!(state.selected_visible_index(), Some(1));
     assert!(view.actions.values().any(|action| {
         action
             == &ModelSelectionAction::Select {
@@ -74,7 +73,7 @@ fn model_picker_shows_names_only_and_keeps_selection_identity_and_pin_state() {
 }
 
 #[test]
-fn subscription_models_use_chatgpt_and_xai_provider_tabs() {
+fn subscription_models_share_one_list_without_provider_names() {
     let mut chatgpt = catalog_entry("openai", "gpt-ash", "GPT Ash");
     chatgpt.access = ModelAccess::Subscription;
     let mut xai = catalog_entry("xai", "grok-ash", "Grok Ash");
@@ -88,29 +87,62 @@ fn subscription_models_use_chatgpt_and_xai_provider_tabs() {
             .providers
             .insert(provider.into(), provider_config(provider));
     }
-    let providers = ProviderListResult {
-        providers: [("openai", "OpenAI"), ("xai", "xAI")]
-            .into_iter()
-            .map(|(provider, display_name)| ProviderCatalogEntryDto {
-                provider: provider.into(),
-                display_name: display_name.into(),
-                api_key_policy: ProviderApiKeyPolicyDto::Unsupported,
-                api_key_configured: false,
-            })
-            .collect(),
-    };
-
-    let view = model_choices(&catalog, &config, &providers).unwrap();
+    let view = model_choices(&catalog, &config).unwrap();
     assert_eq!(view.actions.len(), 2);
     let state = ListSelectionState::new(view.model);
+    assert!(!state.show_tabs());
+    assert_eq!(state.tabs().len(), 1);
     assert_eq!(
         state
-            .tabs()
+            .visible_items()
             .iter()
-            .map(|tab| tab.label())
+            .map(|item| (item.label(), item.description()))
             .collect::<Vec<_>>(),
-        ["Favorites", "ChatGPT", "xAI"]
+        [("GPT Ash", None), ("Grok Ash", None)]
     );
+}
+
+#[test]
+fn pinned_models_lead_the_same_searchable_list_without_duplicate_entries() {
+    let catalog = ModelListResult {
+        models: vec![
+            catalog_entry("openai", "gpt-first", "Shared name"),
+            catalog_entry("xai", "grok-pinned", "Shared name"),
+            catalog_entry("openai", "gpt-last", "Last model"),
+        ],
+    };
+    let mut config = crate::test_support::empty_config_snapshot();
+    for provider in ["openai", "xai"] {
+        config
+            .providers
+            .insert(provider.into(), provider_config(provider));
+    }
+    config.tui.0.insert(
+        "pinnedModels".into(),
+        serde_json::json!([{"provider":"xai","model":"grok-pinned"}]),
+    );
+    let view = model_choices(&catalog, &config).unwrap();
+    assert_eq!(view.actions.len(), 3);
+    let mut state = ListSelectionState::new(view.model);
+    assert_eq!(
+        state
+            .visible_items()
+            .iter()
+            .map(|item| (item.label(), item.description()))
+            .collect::<Vec<_>>(),
+        [
+            ("Pinned", None),
+            ("Shared name", None),
+            ("Other models", None),
+            ("Shared name", None),
+            ("Last model", None),
+        ]
+    );
+    assert_eq!(state.selected_visible_index(), Some(1));
+    assert!(state.focus_search());
+    state.handle_paste("Last".into());
+    assert_eq!(state.visible_items().len(), 1);
+    assert_eq!(state.visible_items()[0].label(), "Last model");
 }
 
 #[test]
@@ -146,24 +178,7 @@ fn model_picker_only_offers_models_from_configured_providers() {
             {"provider":"mimo","model":"mimo-v2.5-pro"}
         ]),
     );
-    let providers = ProviderListResult {
-        providers: vec![
-            ProviderCatalogEntryDto {
-                provider: "openai".into(),
-                display_name: "OpenAI".into(),
-                api_key_policy: ProviderApiKeyPolicyDto::Required,
-                api_key_configured: false,
-            },
-            ProviderCatalogEntryDto {
-                provider: "mimo".into(),
-                display_name: "Xiaomi MiMo".into(),
-                api_key_policy: ProviderApiKeyPolicyDto::Required,
-                api_key_configured: true,
-            },
-        ],
-    };
-
-    let view = model_choices(&catalog, &config, &providers).unwrap();
+    let view = model_choices(&catalog, &config).unwrap();
     assert_eq!(view.actions.len(), 1);
     assert_eq!(
         view.actions.values().next(),
@@ -173,15 +188,11 @@ fn model_picker_only_offers_models_from_configured_providers() {
         })
     );
     let state = ListSelectionState::new(view.model);
-    assert_eq!(
-        state
-            .tabs()
-            .iter()
-            .map(|tab| tab.label())
-            .collect::<Vec<_>>(),
-        ["Favorites", "Xiaomi MiMo"]
-    );
-    assert_eq!(state.visible_items()[0].label(), "MiMo V2.5 Pro");
+    assert!(!state.show_tabs());
+    assert_eq!(state.tabs().len(), 1);
+    assert_eq!(state.visible_items()[0].label(), "Pinned");
+    assert_eq!(state.visible_items()[1].label(), "MiMo V2.5 Pro");
+    assert_eq!(state.visible_items()[1].description(), None);
 }
 
 #[test]
@@ -190,10 +201,11 @@ fn model_picker_without_configured_models_explains_configuration() {
         models: vec![catalog_entry("openai", "gpt-ash", "GPT Ash")],
     };
     let config = crate::test_support::empty_config_snapshot();
-    let view = model_choices(&catalog, &config, &ProviderListResult { providers: vec![] }).unwrap();
+    let view = model_choices(&catalog, &config).unwrap();
     assert!(view.actions.is_empty());
     let state = ListSelectionState::new(view.model);
     assert_eq!(state.tabs().len(), 1);
+    assert!(!state.show_tabs());
     assert!(state.visible_items().is_empty());
     assert_eq!(
         state.empty_message(),

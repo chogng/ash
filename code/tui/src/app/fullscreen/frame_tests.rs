@@ -2530,38 +2530,26 @@ fn custom_model_choices(
             ),
         ],
     };
-    crate::models::model_choices(
-        &catalog,
-        &config,
-        &ash_app_server_protocol::protocol::provider::ProviderListResult { providers: vec![] },
-    )
-    .unwrap()
+    crate::models::model_choices(&catalog, &config).unwrap()
 }
 
 #[test]
-fn model_favorites_empty_state_explains_pinning_from_provider_tabs() {
+fn model_list_shows_configured_models_without_pins() {
     let mut app = App::new();
     app.update(ModelEvent::PickerOpened(custom_model_choices(vec![])));
-    assert_eq!(
-        app.list_selection().unwrap().active_tab().label(),
-        "Favorites"
-    );
-    assert_eq!(
-        app.list_selection().unwrap().tabs()[1].label(),
-        "My gateway"
-    );
-    assert_eq!(app.list_selection().unwrap().tabs().len(), 2);
-    crate::tui_assert_snapshot!("model_favorites_empty", render(&app, 100, 18));
+    let selection = app.list_selection().unwrap();
+    assert!(!selection.show_tabs());
+    assert_eq!(selection.tabs().len(), 1);
+    assert_eq!(selection.visible_items()[0].label(), "gateway-model");
+    assert_eq!(selection.visible_items()[0].description(), None);
+    crate::tui_assert_snapshot!("model_list_unpinned", render(&app, 100, 18));
 }
 
 #[test]
-fn model_picker_shows_signed_in_chatgpt_and_xai_tabs_in_chinese() {
+fn model_picker_shows_signed_in_chatgpt_and_xai_in_one_chinese_list() {
     use ash_app_server_protocol::protocol::config::ProviderConfigDto;
     use ash_app_server_protocol::protocol::model::ModelCatalogEntry;
     use ash_app_server_protocol::protocol::model::ModelListResult;
-    use ash_app_server_protocol::protocol::provider::ProviderApiKeyPolicyDto;
-    use ash_app_server_protocol::protocol::provider::ProviderCatalogEntryDto;
-    use ash_app_server_protocol::protocol::provider::ProviderListResult;
 
     let mut app = App::new();
     let mut settings = crate::config::TerminalSettings::default();
@@ -2569,7 +2557,6 @@ fn model_picker_shows_signed_in_chatgpt_and_xai_tabs_in_chinese() {
     app.update(crate::config::Event::SettingsReceived(settings));
     let mut config = crate::test_support::empty_config_snapshot();
     let mut models = Vec::new();
-    let mut providers = Vec::new();
     for (provider, id, name) in [
         ("openai", "gpt-5.6-sol", "GPT-5.6-Sol"),
         ("xai", "grok-ash", "Grok Ash"),
@@ -2595,18 +2582,11 @@ fn model_picker_shows_signed_in_chatgpt_and_xai_tabs_in_chinese() {
             &info,
             ash_protocol::ModelOutputTransport::Unary,
         ));
-        providers.push(ProviderCatalogEntryDto {
-            provider: provider.into(),
-            display_name: if provider == "openai" {
-                "OpenAI"
-            } else {
-                "xAI"
-            }
-            .into(),
-            api_key_policy: ProviderApiKeyPolicyDto::Unsupported,
-            api_key_configured: false,
-        });
     }
+    config.tui.0.insert(
+        "pinnedModels".into(),
+        serde_json::json!([{"provider":"xai","model":"grok-ash"}]),
+    );
     let newest = ash_protocol::ModelRef::new(
         ash_protocol::ProviderId::new("openai").unwrap(),
         ash_protocol::ModelId::new("gpt-6-astra").unwrap(),
@@ -2618,27 +2598,28 @@ fn model_picker_shows_signed_in_chatgpt_and_xai_tabs_in_chinese() {
         ModelCatalogEntry::from_info(newest, &info, ash_protocol::ModelOutputTransport::Unary),
     );
     app.update(ModelEvent::PickerOpened(
-        crate::models::model_choices(
-            &ModelListResult { models },
-            &config,
-            &ProviderListResult { providers },
-        )
-        .unwrap(),
+        crate::models::model_choices(&ModelListResult { models }, &config).unwrap(),
     ));
-    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-    assert_eq!(
-        app.list_selection().unwrap().active_tab().label(),
-        "ChatGPT"
-    );
     assert_eq!(
         app.list_selection().unwrap().visible_items()[0].label(),
-        "GPT-6-Astra"
+        "已固定"
     );
     assert_eq!(
         app.list_selection().unwrap().visible_items()[1].label(),
-        "GPT-5.6-Sol"
+        "Grok Ash"
     );
-    crate::tui_assert_snapshot!("model_subscription_provider_tabs", render(&app, 100, 18));
+    assert_eq!(
+        app.list_selection().unwrap().visible_items()[2].label(),
+        "其他模型"
+    );
+    assert!(
+        app.list_selection()
+            .unwrap()
+            .visible_items()
+            .iter()
+            .all(|item| item.description().is_none())
+    );
+    crate::tui_assert_snapshot!("model_subscription_list", render(&app, 100, 18));
 }
 
 #[test]
@@ -2658,12 +2639,8 @@ fn model_picker_without_configured_models_shows_configuration_hint() {
         ],
     };
     app.update(ModelEvent::PickerOpened(
-        crate::models::model_choices(
-            &catalog,
-            &crate::test_support::empty_config_snapshot(),
-            &ash_app_server_protocol::protocol::provider::ProviderListResult { providers: vec![] },
-        )
-        .unwrap(),
+        crate::models::model_choices(&catalog, &crate::test_support::empty_config_snapshot())
+            .unwrap(),
     ));
 
     assert_eq!(app.list_selection().unwrap().tabs().len(), 1);
@@ -2672,16 +2649,9 @@ fn model_picker_without_configured_models_shows_configuration_hint() {
 }
 
 #[test]
-fn model_provider_tab_pins_without_changing_the_selected_model() {
+fn model_list_pins_without_changing_the_selected_model() {
     let mut app = App::new();
     app.update(ModelEvent::PickerOpened(custom_model_choices(vec![])));
-    for code in [KeyCode::Tab, KeyCode::Down] {
-        app.handle_key(KeyEvent::new(code, KeyModifiers::NONE));
-    }
-    assert_eq!(
-        app.list_selection().unwrap().active_tab().label(),
-        "My gateway"
-    );
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::NONE)),
         Some(AppCommand::Models(crate::models::Command::Pin {
@@ -2696,8 +2666,12 @@ fn model_provider_tab_pins_without_changing_the_selected_model() {
         },
     ])));
     assert_eq!(
-        app.list_selection().unwrap().active_tab().label(),
-        "My gateway"
+        app.list_selection().unwrap().visible_items()[0].label(),
+        "Pinned"
+    );
+    assert_eq!(
+        app.list_selection().unwrap().selected_visible_index(),
+        Some(1)
     );
     assert_eq!(
         app.list_selection()
@@ -2707,11 +2681,11 @@ fn model_provider_tab_pins_without_changing_the_selected_model() {
             .label(),
         "gateway-model"
     );
-    crate::tui_assert_snapshot!("model_provider_pinned", render(&app, 100, 18));
+    crate::tui_assert_snapshot!("model_list_pinned", render(&app, 100, 18));
 }
 
 #[test]
-fn model_favorites_reopens_with_saved_pins_and_unpin_action() {
+fn model_list_reopens_with_saved_pins_and_unpin_action() {
     let mut app = App::new();
     app.update(ModelEvent::PickerOpened(custom_model_choices(vec![
         ModelRefDto {
@@ -2720,8 +2694,12 @@ fn model_favorites_reopens_with_saved_pins_and_unpin_action() {
         },
     ])));
     assert_eq!(
-        app.list_selection().unwrap().active_tab().label(),
-        "Favorites"
+        app.list_selection().unwrap().visible_items()[0].label(),
+        "Pinned"
+    );
+    assert_eq!(
+        app.list_selection().unwrap().selected_visible_index(),
+        Some(1)
     );
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::NONE)),
@@ -2730,45 +2708,42 @@ fn model_favorites_reopens_with_saved_pins_and_unpin_action() {
             pinned: false
         }))
     );
-    crate::tui_assert_snapshot!("model_favorites_pinned", render(&app, 100, 18));
+    app.update(ModelEvent::PickerUpdated(custom_model_choices(vec![])));
+    assert_eq!(app.list_selection().unwrap().visible_items().len(), 1);
+    assert_eq!(
+        app.list_selection().unwrap().selected_visible_index(),
+        Some(0)
+    );
+    assert_eq!(
+        app.list_selection()
+            .unwrap()
+            .selected_item()
+            .unwrap()
+            .label(),
+        "gateway-model"
+    );
 }
 
 #[test]
-fn model_tab_from_items_moves_the_visible_focus_to_the_tab_bar() {
+fn model_list_search_filters_models_and_escape_returns_to_list() {
     let mut app = App::new();
-    app.update(ModelEvent::PickerOpened(custom_model_choices(vec![
-        ModelRefDto {
-            provider: "custom-gateway".into(),
-            model: "gateway-model".into(),
-        },
-    ])));
+    app.update(ModelEvent::PickerOpened(custom_model_choices(vec![])));
     assert!(app.list_selection().unwrap().items_focused());
-    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-    assert_eq!(
-        app.list_selection().unwrap().active_tab().label(),
-        "My gateway"
-    );
-    assert!(app.list_selection().unwrap().tabs_focused());
-    let buffer = render_buffer(&app, 100, 18);
-    let modal = super::modal::layout(Rect::new(0, 0, 100, 18));
-    let text = render(&app, 100, 18);
-    let row = text.lines().nth(usize::from(modal.content.y)).unwrap();
-    let column = row[..row.find("My gateway").unwrap()].width() as u16;
-    assert_eq!(buffer[(column, modal.content.y)].symbol(), "M");
-    assert_eq!(
-        buffer[(column, modal.content.y)].bg,
-        test_context().selection_background()
-    );
-    assert_eq!(
-        buffer[(column, modal.content.y)].fg,
-        test_context().selection_foreground()
-    );
-    crate::tui_assert_snapshot!("model_tab_bar_focused", render(&app, 100, 18));
-    assert!(app.list_selection().unwrap().search().is_none());
-    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+    for code in [KeyCode::Char('g'), KeyCode::Char('a'), KeyCode::Char('t')] {
+        app.handle_key(KeyEvent::new(code, KeyModifiers::NONE));
+    }
+    assert_eq!(app.list_selection().unwrap().query(), "gat");
+    assert_eq!(app.list_selection().unwrap().visible_items().len(), 1);
+    crate::tui_assert_snapshot!("model_list_search", render(&app, 100, 18));
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.list_selection().unwrap().items_focused());
-    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
-    assert!(app.list_selection().unwrap().tabs_focused());
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::Models(crate::models::Command::SetModel {
+            preference: "custom-gateway/gateway-model".into(),
+        }))
+    );
 }
 
 #[test]

@@ -4,13 +4,12 @@ use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionItemId;
 use crate::widgets::list_selection::ListSelectionModel;
 use crate::widgets::list_selection::ListSelectionSpec;
+use crate::widgets::search_box::SearchBoxModel;
 use ash_app_server_protocol::protocol::config::ConfigReadResult;
 use ash_app_server_protocol::protocol::config::FrontendConfigDto;
 use ash_app_server_protocol::protocol::config::ModelRefDto;
 use ash_app_server_protocol::protocol::model::ModelListResult;
-use ash_app_server_protocol::protocol::provider::ProviderListResult;
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ModelSelectionAction {
@@ -42,13 +41,11 @@ pub(super) fn pinned_models(tui: &FrontendConfigDto) -> Result<Vec<ModelRefDto>,
 pub(crate) fn model_choices(
     catalog: &ModelListResult,
     config: &ConfigReadResult,
-    providers: &ProviderListResult,
 ) -> Result<ModelChoices, String> {
     let pins = pinned_models(&config.tui)?;
     let mut actions = BTreeMap::new();
-    let mut groups = BTreeMap::<String, Vec<ListSelectionItem>>::new();
-    let mut subscription_providers = BTreeSet::new();
-    let mut favorites = Vec::new();
+    let mut pinned_items = Vec::new();
+    let mut other_items = Vec::new();
     for entry in &catalog.models {
         // The product catalog is global; this client only offers configured providers.
         if !config.providers.contains_key(entry.model.provider.as_str()) {
@@ -66,65 +63,31 @@ pub(crate) fn model_choices(
             ModelSelectionAction::Select { preference, pinned },
         );
         let item = ListSelectionItem::new(entry.display_name.clone()).with_id(id);
-        if entry.access == ash_protocol::ModelAccess::Subscription {
-            subscription_providers.insert(model.provider.clone());
-        }
-        groups.entry(model.provider).or_default().push(item.clone());
         if pinned {
-            favorites.push(item);
+            pinned_items.push(item);
+        } else {
+            other_items.push(item);
         }
     }
-    let mut tabs = vec![ListSelectionGroup::new("Favorites", favorites)];
-    let mut custom = config
-        .providers
-        .values()
-        .filter(|provider| provider.custom.is_some())
-        .collect::<Vec<_>>();
-    custom.sort_by(|a, b| {
-        b.custom
-            .as_ref()
-            .unwrap()
-            .order
-            .cmp(&a.custom.as_ref().unwrap().order)
-            .then_with(|| a.provider.cmp(&b.provider))
-    });
-    for provider in custom {
-        if let Some(items) = groups.remove(&provider.provider) {
-            tabs.push(ListSelectionGroup::new(
-                &provider.custom.as_ref().unwrap().name,
-                items,
-            ));
-        }
+    let has_models = !pinned_items.is_empty() || !other_items.is_empty();
+    let mut items = Vec::new();
+    if !pinned_items.is_empty() {
+        items.push(ListSelectionItem::new("Pinned").as_section_divider());
+        items.extend(pinned_items);
     }
-    for provider in &providers.providers {
-        if config
-            .providers
-            .get(&provider.provider)
-            .is_some_and(|provider| provider.custom.is_some())
-        {
-            continue;
+    if !other_items.is_empty() {
+        if !items.is_empty() {
+            items.push(ListSelectionItem::new("Other models").as_section_divider());
         }
-        if let Some(items) = groups.remove(&provider.provider) {
-            let label = if provider.provider == "openai"
-                && subscription_providers.contains(&provider.provider)
-            {
-                "ChatGPT"
-            } else {
-                &provider.display_name
-            };
-            tabs.push(ListSelectionGroup::new(label, items));
-        }
+        items.extend(other_items);
     }
-    for (provider, items) in groups {
-        tabs.push(ListSelectionGroup::new(provider, items));
-    }
-    let has_models = tabs.len() > 1;
-    let mut model = ListSelectionModel::new("Model", tabs);
+    let mut model = ListSelectionModel::new("Model", vec![ListSelectionGroup::new("Model", items)])
+        .without_tab_bar();
     if has_models {
         model = model
             .with_activation(bindings::MODEL_APPLY)
             .with_key_hint_note("P to pin/unpin")
-            .with_empty_message("No models here · Pin models from a provider tab to Favorites");
+            .with_search(SearchBoxModel::new("Search models"));
     } else {
         model = model.with_empty_message("No configured models · Configure a provider in /config");
     }

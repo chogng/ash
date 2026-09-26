@@ -651,6 +651,10 @@ impl ConfigEditor {
         self.subscription = Some(ListSelection::new(spec.model, spec.actions));
     }
 
+    pub(crate) fn subscription_open(&self) -> bool {
+        self.subscription.is_some() && self.prompt.is_none()
+    }
+
     pub(crate) fn open_advisor(&mut self, choices: AdvisorChoices) {
         self.advisor = Some(AdvisorEditor::new(choices));
     }

@@ -62,6 +62,7 @@ pub(super) enum CommandEffect {
 #[derive(Default)]
 struct ServerRefresh {
     config: bool,
+    subscription: bool,
     connectors: bool,
     sessions: bool,
     thread: bool,
@@ -73,6 +74,7 @@ struct ServerRefresh {
 impl ServerRefresh {
     fn merge(&mut self, refresh: Self) {
         self.config |= refresh.config;
+        self.subscription |= refresh.subscription;
         self.connectors |= refresh.connectors;
         self.sessions |= refresh.sessions;
         self.thread |= refresh.thread;
@@ -327,6 +329,12 @@ impl AppDriver {
 
     pub(super) fn schedule_refreshes(&mut self) {
         let origin = RequestOrigin::current(&self.app);
+        if self.refresh.subscription && self.requests.is_idle(Some(RequestKey::Config)) {
+            self.refresh.subscription = false;
+            if let Some(command) = self.app.refresh_subscription() {
+                self.execute(ScheduledCommand::new(command, &self.app));
+            }
+        }
         if self.requests.is_idle(Some(RequestKey::Memories)) {
             let command = match self.app.panels_mut().command_mut() {
                 Some(super::command_panel::CommandPanel::Memories(panel)) => panel.take_refresh(),
@@ -600,7 +608,10 @@ fn refresh_server_event(
     match event {
         client::ClientEvent::Account(event) => {
             app.update(crate::config::Event::Subscription(event));
-            ServerRefresh::default()
+            ServerRefresh {
+                subscription: true,
+                ..ServerRefresh::default()
+            }
         }
         client::ClientEvent::QueueChanged => ServerRefresh::default(),
         client::ClientEvent::ConfigChanged => ServerRefresh {

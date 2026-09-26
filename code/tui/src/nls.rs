@@ -1572,7 +1572,6 @@ const UI_TRANSLATIONS: &[Translation] = &[
     ),
     translation("Enter code", "コードを入力", "输入代码", "Saisir le code"),
     translation("Error", "エラー", "错误", "Erreur"),
-    translation("Favorites", "お気に入り", "收藏", "Favoris"),
     translation(
         "File read",
         "ファイル読み取り",
@@ -2044,12 +2043,6 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Aucun modèle configuré · Configurez un fournisseur dans /config",
     ),
     translation(
-        "No models here · Pin models from a provider tab to Favorites",
-        "モデルがありません · プロバイダーのタブからお気に入りに固定してください",
-        "这里没有模型 · 可在提供商标签页中固定到收藏",
-        "Aucun modèle · Épinglez-en depuis l’onglet d’un fournisseur",
-    ),
-    translation(
         "No sessions yet",
         "セッションはまだありません",
         "还没有会话",
@@ -2107,6 +2100,31 @@ const UI_TRANSLATIONS: &[Translation] = &[
     ),
     translation("Parent", "親", "父级", "Parent"),
     translation("Passed", "成功", "已通过", "Réussi"),
+    translation(
+        "Other models",
+        "その他のモデル",
+        "其他模型",
+        "Autres modèles",
+    ),
+    translation("Models", "モデル", "模型", "Modèles"),
+    translation(
+        "No models available",
+        "利用可能なモデルはありません",
+        "没有可用模型",
+        "Aucun modèle disponible",
+    ),
+    translation(
+        "Could not load models",
+        "モデルを読み込めませんでした",
+        "无法加载模型",
+        "Impossible de charger les modèles",
+    ),
+    translation(
+        "Loading models…",
+        "モデルを読み込み中…",
+        "正在加载模型…",
+        "Chargement des modèles…",
+    ),
     translation("Pinned", "固定済み", "已固定", "Épinglées"),
     translation("Plan", "プラン", "计划", "Plan"),
     translation("Preview", "プレビュー", "预览", "Aperçu"),
@@ -2196,6 +2214,12 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Rechercher des mots-clés ou un n°",
     ),
     translation(
+        "Search models",
+        "モデルを検索",
+        "搜索模型",
+        "Rechercher des modèles",
+    ),
+    translation(
         "Search shortcuts",
         "ショートカットを検索",
         "搜索快捷键",
@@ -2264,18 +2288,6 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Ash で Kimi から切断しました",
         "已在 Ash 中断开 Kimi 连接",
         "Déconnecté de Kimi dans Ash",
-    ),
-    translation(
-        "API key saved",
-        "API キーを保存済み",
-        "API 密钥已保存",
-        "Clé API enregistrée",
-    ),
-    translation(
-        "API key not saved",
-        "API キー未保存",
-        "API 密钥未保存",
-        "Clé API non enregistrée",
     ),
     translation(
         "Coding plan enabled",

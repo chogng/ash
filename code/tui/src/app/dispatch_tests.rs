@@ -626,10 +626,7 @@ fn resume_and_model_without_arguments_open_actionable_pickers() {
         &mut app,
     );
     assert_eq!(app.list_selection().unwrap().title(), "Model");
-    assert_eq!(
-        app.list_selection().unwrap().active_tab().label(),
-        "Favorites"
-    );
+    assert!(!app.list_selection().unwrap().show_tabs());
     assert!(app.list_selection().unwrap().visible_items().is_empty());
     assert!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
@@ -1008,7 +1005,7 @@ fn model_pins_keep_provider_identity_and_provider_deletion_cleans_preferences() 
     assert_eq!(config.tui.0["pinnedModels"].as_array().unwrap().len(), 2);
     let choices = crate::models::load_selection(&mut *client).unwrap();
     let state = crate::widgets::list_selection::ListSelectionState::new(choices.model);
-    assert_eq!(state.active_tab().label(), "Favorites");
+    assert!(!state.show_tabs());
     assert!(state.visible_items().is_empty());
     assert_eq!(state.tabs().len(), 1);
     crate::models::execute(
