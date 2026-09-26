@@ -32,6 +32,7 @@ interface IPlatformGlobals {
 	readonly process?: INodeProcess;
 	readonly ash?: {
 		readonly environment?: IRuntimeEnvironment;
+		readonly process?: { readonly platform: string; readonly arch: string };
 	};
 	readonly navigator?: {
 		readonly userAgent: string;
@@ -47,6 +48,14 @@ function detectEnvironment(): IRuntimeEnvironment {
 			runtime: bridgedEnvironment.runtime,
 			os: bridgedEnvironment.os,
 			arch: bridgedEnvironment.arch,
+		};
+	}
+	const sandboxProcess = runtimeGlobal.ash?.process;
+	if (sandboxProcess) {
+		return {
+			runtime: "electron",
+			os: operatingSystemFromNodePlatform(sandboxProcess.platform),
+			arch: sandboxProcess.arch,
 		};
 	}
 

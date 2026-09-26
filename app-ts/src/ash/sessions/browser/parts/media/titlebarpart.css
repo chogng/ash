@@ -3,23 +3,60 @@
   background: color-mix(in srgb, var(--ash-title-bar-background, var(--ash-workbench-background)) 88%, var(--ash-editor-background));
 }
 
-.ash-workbench-titlebar > .ash-workbench-part-content {
+.ash-sessions-titlebar > .ash-workbench-part-content {
   position: relative;
-  flex-direction: row;
+  display: grid;
+  width: 100%;
+  box-sizing: border-box;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: center;
-  gap: 10px;
   padding: 0 16px;
 }
 
-.ash-workbench-titlebar > .ash-workbench-part-content::before {
-  width: 8px;
-  height: 8px;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  background: var(--sessions-accent);
-  box-shadow: 0 0 0 4px var(--ash-sessions-accent-glow);
-  outline: var(--ash-stroke-thickness) solid var(--ash-contrast-border);
-  content: "";
+.ash-sessions-titlebar-left,
+.ash-sessions-titlebar-navigation,
+.ash-sessions-titlebar-right {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.ash-sessions-titlebar-center {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(56px, 1fr) minmax(0, auto) minmax(56px, 1fr);
+  align-items: center;
+}
+
+.ash-sessions-titlebar-navigation {
+  grid-column: 1;
+  justify-self: end;
+}
+
+.ash-sessions-titlebar-title {
+  grid-column: 2;
+}
+
+.ash-sessions-titlebar-right {
+  justify-content: flex-end;
+}
+
+.ash-workbench[data-runtime="electron"] .ash-sessions-titlebar {
+  -webkit-app-region: drag;
+}
+
+.ash-workbench[data-runtime="electron"] .ash-sessions-titlebar button {
+  -webkit-app-region: no-drag;
+}
+
+.ash-sessions-window-controls-spacer {
+  flex: 0 0 max(70px, calc(70px * var(--ash-sessions-inverse-zoom-factor)));
+  align-self: stretch;
+}
+
+.ash-workbench.ash-sessions-fullscreen .ash-sessions-window-controls-spacer {
+  display: none;
 }
 
 .ash-sessions-titlebar-title {

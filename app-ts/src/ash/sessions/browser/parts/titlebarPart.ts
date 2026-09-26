@@ -2,6 +2,7 @@ import "../../common/sessionsColors.js";
 import "./media/titlebarpart.css";
 import "./media/sessionsControls.css";
 import { addDisposableListener, h } from "../../../base/browser/dom.js";
+import { environment } from "../../../base/common/platform.js";
 import type { SessionsProfile } from "../../common/sessionsProfile.js";
 import type { ISessionsService } from "../../services/sessions/browser/sessionsService.js";
 import { WorkbenchPart } from "../../../workbench/browser/part.js";
@@ -18,7 +19,22 @@ export class TitlebarPart extends WorkbenchPart {
 
 	constructor(container: HTMLElement, profile: SessionsProfile, viewService: ISessionsService, delegate: TitlebarPartDelegate) {
 		super(container, "titlebar");
+		this.domNode.classList.add("ash-sessions-titlebar");
 		const ownerDocument = container.ownerDocument;
+		const left = h(ownerDocument, "div");
+		left.className = "ash-sessions-titlebar-left";
+		const center = h(ownerDocument, "div");
+		center.className = "ash-sessions-titlebar-center";
+		const navigation = h(ownerDocument, "div");
+		navigation.className = "ash-sessions-titlebar-navigation";
+		const right = h(ownerDocument, "div");
+		right.className = "ash-sessions-titlebar-right";
+		if (environment.runtime === "electron" && environment.os === "mac") {
+			const windowControlsSpacer = h(ownerDocument, "div");
+			windowControlsSpacer.className = "ash-sessions-window-controls-spacer";
+			windowControlsSpacer.setAttribute("aria-hidden", "true");
+			left.append(windowControlsSpacer);
+		}
 		const returnButton = h(ownerDocument, "button");
 		returnButton.type = "button";
 		returnButton.className = "ash-sessions-button ash-sessions-titlebar-button";
@@ -32,7 +48,11 @@ export class TitlebarPart extends WorkbenchPart {
 		newSession.type = "button";
 		newSession.className = "ash-sessions-button ash-sessions-titlebar-new-session";
 		newSession.textContent = "New session";
-		this.contentDomNode.append(returnButton, backButton, forwardButton, title, newSession);
+		left.append(returnButton);
+		navigation.append(backButton, forwardButton);
+		center.append(navigation, title);
+		right.append(newSession);
+		this.contentDomNode.append(left, center, right);
 		this._register(addDisposableListener(returnButton, "click", () => delegate.returnToWorkbench()));
 		this._register(addDisposableListener(backButton, "click", () => viewService.navigateBack()));
 		this._register(addDisposableListener(forwardButton, "click", () => viewService.navigateForward()));

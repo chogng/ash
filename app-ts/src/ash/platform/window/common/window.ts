@@ -18,6 +18,7 @@ export const WINDOW_MINIMUM_SIZE = {
 
 export const WINDOW_OPERATION_CHANNEL = 'ash:window:operation';
 export const WINDOW_ZOOM_CHANGED_CHANNEL = 'ash:window:zoom-changed';
+export const WINDOW_FULLSCREEN_CHANGED_CHANNEL = 'ash:window:fullscreen-changed';
 export const WINDOW_PREPARE_CLOSE_CHANNEL = 'ash:window:prepare-close';
 export const WINDOW_CLOSE_RESPONSE_CHANNEL = 'ash:window:close-response';
 export const WINDOW_ZOOM_LEVEL_SETTING = 'window.zoomLevel';
@@ -50,7 +51,9 @@ export type WindowOperation =
 	| { readonly kind: 'close' }
 	| { readonly kind: 'closeOthers' }
 	| { readonly kind: 'getZoom' }
+	| { readonly kind: 'getZoomFactor' }
 	| { readonly kind: 'setZoom'; readonly level: number }
+	| { readonly kind: 'getFullscreen' }
 	| { readonly kind: 'getAlwaysOnTop' }
 	| { readonly kind: 'setAlwaysOnTop'; readonly enabled: boolean }
 	| { readonly kind: 'nativeTab'; readonly action: 'next' | 'previous' | 'newWindow' | 'merge' | 'toggleBar' }
@@ -67,6 +70,8 @@ export function validateWindowOperation(value: unknown): WindowOperation {
 		case 'close':
 		case 'closeOthers':
 		case 'getZoom':
+		case 'getZoomFactor':
+		case 'getFullscreen':
 		case 'getAlwaysOnTop':
 			if (keys === 'kind') return operation as WindowOperation;
 			break;

@@ -1,30 +1,43 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL } from '../../../window/common/window.js';
+import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL } from '../../../window/common/window.js';
 import { WindowsMainService, windowCloseResponseIpcRoute, windowOperationIpcRoute, type IWorkbenchWindow } from '../../electron-main/windowsMainService.js';
 
 class TestWindow implements IWorkbenchWindow<TestWindow> {
 	public readonly calls: string[] = [];
-	public readonly messages: { readonly channel: string; readonly level: number }[] = [];
+	public readonly messages: { readonly channel: string; readonly level: number | boolean }[] = [];
 	private readonly zoomListeners = new Set<() => void>();
 	private readonly closeListeners = new Set<(event: { preventDefault(): void }) => void>();
+	private readonly fullscreenListeners = new Map<string, Set<() => void>>();
 	private readonly rendererListeners = new Map<string, Set<() => void>>();
 	public readonly webContents = {
 		getZoomLevel: (): number => this.zoomLevel,
+		getZoomFactor: (): number => 1.2 ** this.zoomLevel,
 		setZoomLevel: (level: number): void => { this.zoomLevel = level; },
 		on: (event: 'zoom-changed' | 'did-start-loading' | 'render-process-gone', listener: () => void): void => { const listeners = event === 'zoom-changed' ? this.zoomListeners : this.rendererListeners.get(event) ?? new Set<() => void>(); listeners.add(listener); if (event !== 'zoom-changed') this.rendererListeners.set(event, listeners); },
 		off: (event: 'zoom-changed' | 'did-start-loading' | 'render-process-gone', listener: () => void): void => { if (this.destroyed) throw new Error('Object has been destroyed'); (event === 'zoom-changed' ? this.zoomListeners : this.rendererListeners.get(event))?.delete(listener); },
-		send: (channel: string, level: number): void => { this.messages.push({ channel, level }); },
+		send: (channel: string, level: number | boolean): void => { this.messages.push({ channel, level }); },
 	};
 	public destroyed = false;
 	public minimized = false;
 	public focused = false;
 	public zoomLevel = 0;
 	public alwaysOnTop = false;
+	public fullscreen = false;
 
 	constructor(public readonly id: number, private readonly title: string) {}
-	public on(_event: 'close', listener: (event: { preventDefault(): void }) => void): void { this.closeListeners.add(listener); }
-	public off(_event: 'close', listener: (event: { preventDefault(): void }) => void): void { this.closeListeners.delete(listener); }
+	public on(event: 'close', listener: (event: { preventDefault(): void }) => void): void;
+	public on(event: 'enter-full-screen' | 'leave-full-screen', listener: () => void): void;
+	public on(event: 'close' | 'enter-full-screen' | 'leave-full-screen', listener: ((event: { preventDefault(): void }) => void) | (() => void)): void {
+		if (event === 'close') this.closeListeners.add(listener as (event: { preventDefault(): void }) => void);
+		else { const listeners = this.fullscreenListeners.get(event) ?? new Set<() => void>(); listeners.add(listener as () => void); this.fullscreenListeners.set(event, listeners); }
+	}
+	public off(event: 'close', listener: (event: { preventDefault(): void }) => void): void;
+	public off(event: 'enter-full-screen' | 'leave-full-screen', listener: () => void): void;
+	public off(event: 'close' | 'enter-full-screen' | 'leave-full-screen', listener: ((event: { preventDefault(): void }) => void) | (() => void)): void {
+		if (event === 'close') this.closeListeners.delete(listener as (event: { preventDefault(): void }) => void);
+		else this.fullscreenListeners.get(event)?.delete(listener as () => void);
+	}
 
 	public isDestroyed(): boolean { return this.destroyed; }
 	public isMinimized(): boolean { return this.minimized; }
@@ -32,6 +45,7 @@ class TestWindow implements IWorkbenchWindow<TestWindow> {
 	public focus(): void { this.focused = true; this.calls.push('focus'); }
 	public getTitle(): string { return this.title; }
 	public isFocused(): boolean { return this.focused; }
+	public isFullScreen(): boolean { return this.fullscreen; }
 	public close(): void { this.calls.push('close'); let prevented = false; for (const listener of this.closeListeners) listener({ preventDefault: () => { prevented = true; } }); if (!prevented) this.destroyed = true; }
 	public isAlwaysOnTop(): boolean { return this.alwaysOnTop; }
 	public setAlwaysOnTop(enabled: boolean): void { this.alwaysOnTop = enabled; }
@@ -42,6 +56,7 @@ class TestWindow implements IWorkbenchWindow<TestWindow> {
 	public toggleTabBar(): void { this.calls.push('toggleBar'); }
 	public addTabbedWindow(window: TestWindow): void { this.calls.push(`tab:${window.id}`); }
 	public emitZoomChanged(): void { for (const listener of this.zoomListeners) listener(); }
+	public emitFullscreenChanged(fullscreen: boolean): void { this.fullscreen = fullscreen; for (const listener of this.fullscreenListeners.get(fullscreen ? 'enter-full-screen' : 'leave-full-screen') ?? []) listener(); }
 	public emitRendererEvent(event: 'did-start-loading' | 'render-process-gone'): void { for (const listener of this.rendererListeners.get(event) ?? []) listener(); }
 }
 
@@ -94,8 +109,9 @@ test('WindowsMainService applies zoom, always-on-top, and platform tab operation
 	service.perform(window, { kind: 'setAlwaysOnTop', enabled: true });
 	assert.deepEqual([
 		service.perform(window, { kind: 'getZoom' }),
+		service.perform(window, { kind: 'getZoomFactor' }),
 		service.perform(window, { kind: 'getAlwaysOnTop' }),
-	], [2, true]);
+	], [2, 1.44, true]);
 	assert.throws(() => service.perform(window, { kind: 'nativeTab', action: 'next' }), /require macOS/);
 
 	const macService = new WindowsMainService(windows, async () => undefined, 'darwin');
@@ -120,6 +136,23 @@ test('WindowsMainService sends zoom changes and releases its window listener', a
 	tracking.dispose();
 	await new Promise<void>(resolve => setImmediate(resolve));
 	window.emitZoomChanged();
+	assert.equal(window.messages.length, 2);
+});
+
+test('WindowsMainService reports fullscreen changes and releases its window listeners', () => {
+	const window = new TestWindow(1, 'First');
+	const service = new WindowsMainService(() => [window], async () => undefined);
+	assert.equal(service.perform(window, { kind: 'getFullscreen' }), false);
+	const tracking = service.trackFullscreen(window);
+	window.emitFullscreenChanged(true);
+	assert.equal(service.perform(window, { kind: 'getFullscreen' }), true);
+	window.emitFullscreenChanged(false);
+	assert.deepEqual(window.messages, [
+		{ channel: WINDOW_FULLSCREEN_CHANGED_CHANNEL, level: true },
+		{ channel: WINDOW_FULLSCREEN_CHANGED_CHANNEL, level: false },
+	]);
+	tracking.dispose();
+	window.emitFullscreenChanged(true);
 	assert.equal(window.messages.length, 2);
 });
 
@@ -167,6 +200,8 @@ test('window operation IPC validates commands before dispatching to the window h
 	assert.throws(() => route.validate({ kind: 'focus', windowId: -1 }), /Invalid window operation/);
 	assert.throws(() => route.validate({ kind: 'setZoom', level: 100 }), /Invalid window operation/);
 	assert.throws(() => route.validate({ kind: 'close', windowId: 1 }), /Invalid window operation/);
+	assert.deepEqual(route.validate({ kind: 'getFullscreen' }), { kind: 'getFullscreen' });
+	assert.deepEqual(route.validate({ kind: 'getZoomFactor' }), { kind: 'getZoomFactor' });
 	route.invoke(route.validate({ kind: 'focusSelf' }));
 	assert.deepEqual(window.calls, ['focus']);
 });

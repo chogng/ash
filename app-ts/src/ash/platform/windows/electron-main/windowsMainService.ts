@@ -8,22 +8,26 @@ import { NATIVE_KEYBOARD_LAYOUT_CHANGED_CHANNEL } from '../../keyboardLayout/com
 import { USER_KEYBOARD_LAYOUT_CHANGED_CHANNEL } from '../../keyboardLayout/common/userKeyboardLayout.js';
 import { nativeKeyboardLayoutIpcRoutes, type NativeKeyboardLayoutMainService } from '../../keyboardLayout/electron-main/nativeKeyboardLayoutMainService.js';
 import { userKeyboardLayoutIpcRoutes, type UserKeyboardLayoutMainService } from '../../keyboardLayout/electron-main/userKeyboardLayoutMainService.js';
-import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL, validateWindowCloseResponse, validateWindowOperation, type WindowCloseResponse, type WindowOperation, type IWorkbenchWindowInfo } from '../../window/common/window.js';
+import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL, validateWindowCloseResponse, validateWindowOperation, type WindowCloseResponse, type WindowOperation, type IWorkbenchWindowInfo } from '../../window/common/window.js';
 import { focusWindow, type IFocusableWindow } from '../../window/electron-main/window.js';
 
 export interface IWorkbenchWindow<TWindow> extends IFocusableWindow {
 	readonly id: number;
 	on(event: 'close', listener: (event: { preventDefault(): void }) => void): unknown;
 	off(event: 'close', listener: (event: { preventDefault(): void }) => void): unknown;
+	on(event: 'enter-full-screen' | 'leave-full-screen', listener: () => void): unknown;
+	off(event: 'enter-full-screen' | 'leave-full-screen', listener: () => void): unknown;
 	readonly webContents: {
 		getZoomLevel(): number;
+		getZoomFactor(): number;
 		setZoomLevel(level: number): void;
 		on(event: 'zoom-changed' | 'did-start-loading' | 'render-process-gone', listener: () => void): unknown;
 		off(event: 'zoom-changed' | 'did-start-loading' | 'render-process-gone', listener: () => void): unknown;
-		send(channel: string, level: number): void;
+		send(channel: string, value: number | boolean): void;
 	};
 	getTitle(): string;
 	isFocused(): boolean;
+	isFullScreen(): boolean;
 	close(): void;
 	isAlwaysOnTop(): boolean;
 	setAlwaysOnTop(enabled: boolean): void;
@@ -140,6 +144,18 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> {
 		});
 	}
 
+	public trackFullscreen(window: TWindow): IDisposable {
+		const onChange = (): void => {
+			if (!window.isDestroyed()) window.webContents.send(WINDOW_FULLSCREEN_CHANGED_CHANNEL, window.isFullScreen());
+		};
+		window.on('enter-full-screen', onChange);
+		window.on('leave-full-screen', onChange);
+		return toDisposable(() => {
+			window.off('enter-full-screen', onChange);
+			window.off('leave-full-screen', onChange);
+		});
+	}
+
 	public perform(source: TWindow, operation: WindowOperation): void | number | boolean | readonly IWorkbenchWindowInfo[] | Promise<void> {
 		const windows = this.getWindows().filter(window => !window.isDestroyed());
 		if (!windows.includes(source)) throw new Error('Workbench window is closed');
@@ -168,6 +184,10 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> {
 				return;
 			case 'getZoom':
 				return source.webContents.getZoomLevel();
+			case 'getZoomFactor':
+				return source.webContents.getZoomFactor();
+			case 'getFullscreen':
+				return source.isFullScreen();
 			case 'setZoom':
 				source.webContents.setZoomLevel(operation.level);
 				// Programmatic changes do not emit Electron's wheel-only zoom event.

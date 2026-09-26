@@ -107,6 +107,7 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	expect(configurationChange.updatedRevision).toBe(configurationChange.notifiedRevision);
 	await expect(sessionsPage.locator(".ash-code-sessions-window")).toHaveCSS("display", "flex");
 	await expect(sessionsPage.locator("#app")).toHaveAttribute("data-workbench-mode", "code");
+	await expect(sessionsPage.locator("#app")).toHaveAttribute("data-runtime", "electron");
 	await expect(sessionsPage.locator("#app")).toHaveAttribute("data-workbench-state", "empty");
 	await sessionsPage.emulateMedia({ colorScheme: "dark" });
 	await expect(sessionsPage.locator("#app")).toHaveAttribute("data-color-theme", "ash-dark");
@@ -131,7 +132,47 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 		await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document });
 	}, originalThemeSettings);
 	await expect(sessionsPage.locator('#app')).toHaveAttribute('data-color-theme', 'ash-dark');
-	await expect(sessionsPage.locator("[data-part='titlebar']")).toBeVisible();
+	const titlebar = sessionsPage.locator("[data-part='titlebar']");
+	await expect(titlebar).toBeVisible();
+	await expect(titlebar).toHaveCSS('-webkit-app-region', 'drag');
+	await expect(sessionsPage.getByRole('button', { name: 'Workbench' })).toHaveCSS('-webkit-app-region', 'no-drag');
+	const [titleBounds, titlebarBounds] = await Promise.all([
+		titlebar.locator('.ash-sessions-titlebar-title').boundingBox(),
+		titlebar.boundingBox(),
+	]);
+	expect(titleBounds).not.toBeNull();
+	expect(titlebarBounds).not.toBeNull();
+	expect(Math.abs(titleBounds!.x + titleBounds!.width / 2 - titlebarBounds!.x - titlebarBounds!.width / 2)).toBeLessThan(2);
+	if (process.platform === 'darwin') {
+		const returnButton = sessionsPage.getByRole('button', { name: 'Workbench' });
+		const spacer = sessionsPage.locator('.ash-sessions-window-controls-spacer');
+		await expect(spacer).toBeVisible();
+		const bounds = await returnButton.boundingBox();
+		expect(bounds?.x).toBeGreaterThanOrEqual(80);
+		await sessionsPage.evaluate(async () => {
+			const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string, params: unknown): Promise<unknown> } } }).ash.ipcRenderer;
+			await ipc.invoke('ash:window:operation', { kind: 'setZoom', level: -2 });
+		});
+		await expect.poll(() => spacer.evaluate(element => Number.parseFloat(getComputedStyle(element).width))).toBeGreaterThan(90);
+		await sessionsPage.evaluate(async () => {
+			const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string, params: unknown): Promise<unknown> } } }).ash.ipcRenderer;
+			await ipc.invoke('ash:window:operation', { kind: 'setZoom', level: 0 });
+		});
+		await application.evaluate(({ BrowserWindow }) => {
+			const window = BrowserWindow.getAllWindows().find(candidate => candidate.webContents.getURL().includes('sessions-code.html'));
+			if (!window) throw new Error('Sessions window is missing');
+			window.setFullScreen(true);
+		});
+		await expect(sessionsPage.locator('#app')).toHaveClass(/ash-sessions-fullscreen/u);
+		await expect(spacer).toBeHidden();
+		expect((await returnButton.boundingBox())?.x).toBeLessThan(50);
+		await application.evaluate(({ BrowserWindow }) => {
+			const window = BrowserWindow.getAllWindows().find(candidate => candidate.webContents.getURL().includes('sessions-code.html'));
+			if (!window) throw new Error('Sessions window is missing');
+			window.setFullScreen(false);
+		});
+		await expect(spacer).toBeVisible();
+	}
 	await expect(sessionsPage.locator("[data-part='sidebar']")).toBeVisible();
 	await expect(sessionsPage.locator("[data-part='sessions']")).toBeVisible();
 	await expect(sessionsPage.locator("[data-part='auxiliarybar']")).toBeVisible();

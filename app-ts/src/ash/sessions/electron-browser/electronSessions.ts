@@ -3,7 +3,7 @@ import { URI } from "../../base/common/uri.js";
 import { IFileService } from "../../platform/files/common/files.js";
 import { ServiceContainer } from "../../platform/instantiation/common/instantiation.js";
 import { addDisposableListener } from "../../base/browser/dom.js";
-import { DisposableStore, type IDisposable } from "../../base/common/lifecycle.js";
+import { DisposableStore, toDisposable, type IDisposable } from "../../base/common/lifecycle.js";
 import { onUnexpectedError } from "../../base/common/errors.js";
 import type { WorkbenchModeId } from "../../workbench/common/workbenchMode.js";
 import { createElectronRendererApi } from "../../platform/native/electron-browser/rendererApi.js";
@@ -16,8 +16,8 @@ import { showStartupError } from "../../workbench/browser/startupError.js";
 import { Keybinding, logicalKey } from '../../base/common/keybindings.js';
 import { Action2, registerAction2 } from '../../platform/actions/common/actions.js';
 import { localizedString } from '../../platform/action/common/action.js';
-import { invoke } from '../../platform/ipc/electron-browser/rendererIpc.js';
-import { WINDOW_OPERATION_CHANNEL, type IWorkbenchWindowInfo } from '../../platform/window/common/window.js';
+import { invoke, subscribe } from '../../platform/ipc/electron-browser/rendererIpc.js';
+import { WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL, type IWorkbenchWindowInfo } from '../../platform/window/common/window.js';
 
 registerAction2(class QuickSwitchWindowAction extends Action2 {
 	constructor() {
@@ -47,6 +47,19 @@ export async function startElectronSessions(modeId: WorkbenchModeId, profile: Se
 	const container = document.querySelector<HTMLElement>("#app");
 	if (!container) throw new Error("Sessions renderer requires an #app container");
 	const windowApi = createReturnToParentWindowApi();
+	const setFullscreen = (fullscreen: boolean): void => { container.classList.toggle('ash-sessions-fullscreen', fullscreen); };
+	setFullscreen(await invoke<boolean>(WINDOW_OPERATION_CHANNEL, { kind: 'getFullscreen' }));
+	sessions.add(toDisposable(() => container.classList.remove('ash-sessions-fullscreen')));
+	const fullscreenSubscription = subscribe<boolean>(WINDOW_FULLSCREEN_CHANGED_CHANNEL, setFullscreen);
+	sessions.add(toDisposable(() => fullscreenSubscription.dispose()));
+	const updateZoomFactor = async (): Promise<void> => {
+		const factor = await invoke<number>(WINDOW_OPERATION_CHANNEL, { kind: 'getZoomFactor' });
+		container.style.setProperty('--ash-sessions-inverse-zoom-factor', (1 / factor).toString());
+	};
+	await updateZoomFactor();
+	sessions.add(toDisposable(() => container.style.removeProperty('--ash-sessions-inverse-zoom-factor')));
+	const zoomSubscription = subscribe<number>(WINDOW_ZOOM_CHANGED_CHANNEL, () => { void updateZoomFactor().catch(onUnexpectedError); });
+	sessions.add(toDisposable(() => zoomSubscription.dispose()));
 	const workbench = sessions.add(new Workbench({
 		modeId,
 		profile,

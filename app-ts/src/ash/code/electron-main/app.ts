@@ -887,6 +887,7 @@ export class AshApplication extends Disposable {
 					ipcRoutes,
 				));
 				windowDisposables.add(this.windowsMainService.trackZoomLevel(window));
+				windowDisposables.add(this.windowsMainService.trackFullscreen(window));
 				windowDisposables.add(this.windowsMainService.trackClose(window));
 				windowDisposables.add(trackWindowResourceChanges(window, windowResources));
 				windowDisposables.add(record.workspaceContext.onDidChangeWorkspace(({ resolvedWorkspace }) => {
