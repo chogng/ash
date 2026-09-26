@@ -62,10 +62,6 @@
     {
       "source": "third_party/livekit-rust-sdks/NOTICE",
       "destination": "ash-resources/licenses/livekit-rust-sdks/NOTICE"
-    },
-    {
-      "source": "third_party/livekit-rust-sdks/webrtc-sys/NOTICE.md",
-      "destination": "ash-resources/licenses/livekit-rust-sdks/webrtc-sys/NOTICE.md"
     }
   ]
 }

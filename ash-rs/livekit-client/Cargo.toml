@@ -13,14 +13,23 @@ livekit-net.workspace = true
 async-trait.workspace = true
 ash-http-client = { path = "../http-client" }
 ash-websocket-client = { path = "../websocket-client" }
-livekit.workspace = true
-futures = { workspace = true }
+livekit-signaling.workspace = true
+livekit-protocol.workspace = true
+webrtc.workspace = true
+rtc.workspace = true
+opus-rs.workspace = true
+oxideav-vp8.workspace = true
+serde_json.workspace = true
+rand.workspace = true
+bytes.workspace = true
+rubato = { workspace = true, features = ["fft_resampler"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
 thiserror = { workspace = true }
 url = { workspace = true }
 ash-screen-capture = { path = "../screen-capture" }
 
 [dev-dependencies]
+futures.workspace = true
 rustls.workspace = true
 tokio-rustls.workspace = true
 tokio-tungstenite.workspace = true

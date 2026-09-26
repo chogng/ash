@@ -9,8 +9,8 @@ reason = "Current upstream API families: 0.35.0 via accesskit_windows; 0.36.0 vi
 
 [[multiple_versions]]
 name = "base64"
-versions = ["0.13.1", "0.21.7", "0.22.1"]
-reason = "0.13 via spm_precompiled; 0.21 via LiveKit signaling/net and pbjson 0.6; 0.22 via application APIs and LiveKit 0.9. The removed point-to-point transport no longer requires pem 4/base64 0.23."
+versions = ["0.13.1", "0.21.7", "0.22.1", "0.23.1"]
+reason = "0.13 via spm_precompiled; 0.21 via LiveKit signaling and pbjson; 0.22 via application APIs and rtc-stun; 0.23 via rtc-shared -> rcgen -> pem 4."
 
 [[multiple_versions]]
 name = "bit-set"
@@ -69,18 +69,18 @@ reason = "Current upstream API families: 0.1.7 via cipher, digest; 0.2.2 via dig
 
 [[multiple_versions]]
 name = "darling"
-versions = ["0.14.4", "0.20.11", "0.24.0"]
-reason = "0.14 via LiveKit from_variants_impl; 0.20 via cached/derive_builder; 0.24 via instability. Macro API families remain isolated."
+versions = ["0.20.11", "0.24.0"]
+reason = "0.20 via cached/derive_builder; 0.24 via instability. Macro API families remain isolated."
 
 [[multiple_versions]]
 name = "darling_core"
-versions = ["0.14.4", "0.20.11", "0.24.0"]
-reason = "Matches darling and darling_macro 0.14 (LiveKit from_variants), 0.20 (cached/derive_builder), and 0.24 (instability)."
+versions = ["0.20.11", "0.24.0"]
+reason = "Matches darling and darling_macro 0.20 (cached/derive_builder) and 0.24 (instability)."
 
 [[multiple_versions]]
 name = "darling_macro"
-versions = ["0.14.4", "0.20.11", "0.24.0"]
-reason = "Derive implementations for the reviewed darling 0.14, 0.20, and 0.24 API families."
+versions = ["0.20.11", "0.24.0"]
+reason = "Derive implementations for the reviewed darling 0.20 and 0.24 API families."
 
 [[multiple_versions]]
 name = "digest"
@@ -454,8 +454,8 @@ reason = "Current upstream API families: 3.0.0 via zbus; 4.3.4 via atspi-common,
 
 [[multiple_versions]]
 name = "zip"
-versions = ["0.6.6", "4.6.1", "7.2.0"]
-reason = "0.6 extracts the libwebrtc SDK in webrtc-sys-build; 4.6 serves Ash CLI/plugins; 7.2 serves candle-core model artifacts."
+versions = ["4.6.1", "7.2.0"]
+reason = "4.6 serves Ash CLI/plugins; 7.2 serves candle-core model artifacts."
 
 [[multiple_versions]]
 name = "zvariant"
@@ -486,7 +486,7 @@ reason = "0.4 via petgraph 0.6 for LiveKit protobuf builds; 0.5 via petgraph 0.8
 [[multiple_versions]]
 name = "jni"
 versions = ["0.21.1", "0.22.4"]
-reason = "0.21 via LiveKit device-info/libwebrtc; 0.22 via android-activity and rustls-platform-verifier. Distinct Android JNI API families."
+reason = "0.21 via LiveKit device-info; 0.22 via android-activity and rustls-platform-verifier. Distinct Android JNI API families."
 
 [[multiple_versions]]
 name = "objc2-cloud-kit"
@@ -546,12 +546,7 @@ reason = "0.12 descriptors belong to LiveKit pbjson/prost-build; 0.14 descriptor
 [[multiple_versions]]
 name = "reqwest"
 versions = ["0.12.28", "0.13.4"]
-reason = "0.12 via LiveKit administration/net and webrtc-sys-build; 0.13 via rmcp and tough. These are upstream-owned HTTP clients."
-
-[[multiple_versions]]
-name = "strsim"
-versions = ["0.10.0", "0.11.1"]
-reason = "0.10 via LiveKit darling_core 0.14; 0.11 via clap_builder and darling_core 0.20/0.24."
+reason = "0.12 via LiveKit administration; 0.13 via Ash HTTP client, rmcp and tough. These are upstream-owned HTTP clients."
 
 [[multiple_versions]]
 name = "tokio-tungstenite"
@@ -562,3 +557,53 @@ reason = "0.28 owns Ash WebSocket transport and its tests; 0.29 is internal to l
 name = "tungstenite"
 versions = ["0.28.0", "0.29.0"]
 reason = "Paired with the reviewed tokio-tungstenite 0.28 Ash transport and 0.29 LiveKit transport."
+
+[[multiple_versions]]
+name = "asn1-rs"
+versions = ["0.6.2", "0.7.2"]
+reason = "0.6 through rtc-dtls and x509-parser 0.16; 0.7 through rcgen and x509-parser 0.18. Both certificate parser families are upstream-owned."
+
+[[multiple_versions]]
+name = "asn1-rs-derive"
+versions = ["0.5.1", "0.6.0"]
+reason = "Derive macros paired with asn1-rs 0.6 and 0.7 in the WebRTC certificate parser families."
+
+[[multiple_versions]]
+name = "chacha20"
+versions = ["0.10.1", "0.9.1"]
+reason = "0.9 through rtc-dtls -> chacha20poly1305; 0.10 through rtc's rand 0.10."
+
+[[multiple_versions]]
+name = "curve25519-dalek"
+versions = ["4.1.3", "5.0.0"]
+reason = "4.1 through rtc-dtls -> x25519-dalek 2; 5.0 through ed25519-dalek 3."
+
+[[multiple_versions]]
+name = "der-parser"
+versions = ["10.0.0", "9.0.0"]
+reason = "9.0 through rtc-dtls and x509-parser 0.16; 10.0 through rcgen -> x509-parser 0.18."
+
+[[multiple_versions]]
+name = "fiat-crypto"
+versions = ["0.2.9", "0.3.0"]
+reason = "0.2 through curve25519-dalek 4; 0.3 through curve25519-dalek 5."
+
+[[multiple_versions]]
+name = "oid-registry"
+versions = ["0.7.1", "0.8.1"]
+reason = "0.7 through rtc-dtls -> x509-parser 0.16; 0.8 through rcgen -> x509-parser 0.18."
+
+[[multiple_versions]]
+name = "pem"
+versions = ["3.0.6", "4.0.0"]
+reason = "3.0 through product-update -> tough; 4.0 through rtc-shared -> rcgen."
+
+[[multiple_versions]]
+name = "quinn-udp"
+versions = ["0.5.15", "0.6.2"]
+reason = "0.5 through quinn used by the existing product; 0.6 through webrtc-rs 0.20."
+
+[[multiple_versions]]
+name = "x509-parser"
+versions = ["0.16.0", "0.18.1"]
+reason = "0.16 through rtc-dtls; 0.18 through rcgen. Certificate parsing remains in the respective upstream WebRTC packages."

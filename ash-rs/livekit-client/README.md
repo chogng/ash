@@ -1,6 +1,6 @@
 # ash-livekit-client
 
-- 隔离官方 LiveKit Rust SDK 与 libwebrtc 依赖。
+- 使用官方 LiveKit 信令协议与 `webrtc-rs`，自行管理房间、轨道和媒体收发。
 - 发布、接收 48 kHz 单声道 PCM，保留参与者和轨道身份。
 - 输出有界控制事件、音频和共享视频队列，丢弃超过 200 ms 的积压帧。
 - 按轨道分别缓冲和混音；保留音源身份，支持轨道音量与移除后清理。
@@ -12,8 +12,6 @@
 - 停止共享先停止采集，再注销轨道；窗口关闭或采集错误通过媒体事件返回。
 - 共享帧最长边不超过 8192 像素，总像素不超过 16,777,216；队列满时丢弃新帧。
 
-macOS 最终二进制需要 `-ObjC` 链接选项，已在工作区 Cargo 配置设置；产品其他构建入口仍需分别验证。
-
 真实服务测试需要显式提供已核验的 LiveKit Server。当前验证版本为 1.13.7：
 
 ```sh
@@ -22,6 +20,6 @@ ASH_TEST_LIVEKIT_SERVER=/absolute/path/livekit-server just test ash-livekit-clie
 
 测试启动临时回环服务，验证实际 Opus 音频双向传输，以及共享视频的解码、停止和重新发布。视频源为确定性测试画面；不打开麦克风，不代表真实设备或公网连通性验收。
 
-- 进程内所有房间共享 Ash 的 HTTP／WebSocket 传输；首次连接前注册一次，重连、连接诊断和区域发现继续使用同一网络策略。
+- 进程内所有房间共享 Ash 的 HTTP／WebSocket 传输；首次连接前注册一次，再次入房、连接诊断和区域发现继续使用同一网络策略。
 - `stats` 返回 Ash 自己的发布端与订阅端报告计数，不向调用方暴露 SDK 类型。
-- `livekit` 与 `livekit-signaling` 使用官方 crate；`webrtc-sys` 固定到包含 UTF-8 错误解析修复的上游提交，直至该修复发布到 crates.io。
+- `livekit-signaling` 与 `livekit-protocol` 负责服务端信令，`webrtc-rs` 负责 ICE、DTLS、SRTP 与 RTP；PCM 和共享画面的编解码分别使用 `opus-rs` 与 `oxideav-vp8`。

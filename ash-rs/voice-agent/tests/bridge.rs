@@ -37,7 +37,7 @@ use voice_agent::AgentCommand;
 use voice_agent::AgentEvent;
 use voice_agent::VoiceAgent;
 
-/// Uses real SFU/libwebrtc media and a deterministic local implementation of the Live wire contract.
+/// Uses a real SFU/WebRTC media path and a deterministic local implementation of the Live wire contract.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[ignore = "requires the pinned LiveKit Server executable"]
 async fn agent_receives_human_audio_publishes_reply_and_delegates_without_executing() {

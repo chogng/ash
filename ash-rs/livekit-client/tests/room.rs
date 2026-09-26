@@ -189,10 +189,59 @@ async fn real_room_transmits_audio_both_ways_and_enforces_listener_permissions()
     );
     alice.mute().unwrap();
     alice.unmute().unwrap();
+    timeout(Duration::from_secs(5), async {
+        let mut saw_mute = false;
+        loop {
+            match bob.next_event().await {
+                Some(livekit_client::MediaEvent::TrackMuted { .. }) => saw_mute = true,
+                Some(livekit_client::MediaEvent::TrackUnmuted { .. }) if saw_mute => break,
+                Some(_) => {}
+                None => panic!("Bob disconnected before observing Alice's mute sequence"),
+            }
+        }
+    })
+    .await
+    .expect("Bob did not observe mute then unmute in order");
     alice.close().await.unwrap();
     bob.close().await.unwrap();
     observer.close().await.unwrap();
     server.service.delete_room("audio-test").await.unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "requires the pinned LiveKit Server executable"]
+async fn server_loss_closes_room_media_for_product_rejoin() {
+    let mut server = Server::start();
+    server.service.create_room("server-loss").await.unwrap();
+    let ticket = server
+        .service
+        .issue_join(
+            "server-loss",
+            "listener",
+            MediaPermissions {
+                subscribe: true,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let mut room = MediaRoom::connect(
+        &ticket.server_url,
+        ticket.token(),
+        AudioPublication::SubscribeOnly,
+    )
+    .await
+    .unwrap();
+    server.child.kill().unwrap();
+    timeout(Duration::from_secs(10), async {
+        loop {
+            match room.next_event().await {
+                Some(livekit_client::MediaEvent::Disconnected) | None => break,
+                _ => {}
+            }
+        }
+    })
+    .await
+    .expect("room media must close when its signaling server exits");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

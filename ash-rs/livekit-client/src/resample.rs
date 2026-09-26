@@ -1,5 +1,7 @@
 use crate::MediaError;
-use livekit::webrtc::native::audio_resampler::AudioResampler as RtcResampler;
+use rubato::FixedSync;
+use rubato::Resampler;
+use rubato::audioadapter_buffers::direct::InterleavedSlice;
 
 #[derive(Clone, Copy)]
 pub enum AudioRate {
@@ -8,7 +10,7 @@ pub enum AudioRate {
 }
 
 impl AudioRate {
-    fn hz(self) -> u32 {
+    fn hz(self) -> usize {
         match self {
             Self::Voice => 24_000,
             Self::Room => 48_000,
@@ -16,33 +18,56 @@ impl AudioRate {
     }
 }
 
-/// Converts one 10 ms mono packet while preserving the SDK resampler's filter history.
+/// Converts one 10 ms mono packet while preserving filter history between packets.
 pub struct AudioResampler {
-    engine: RtcResampler,
+    engine: rubato::Fft<f32>,
     input: AudioRate,
     output: AudioRate,
+    buffer: Vec<f32>,
 }
 
 impl AudioResampler {
     pub fn new(input: AudioRate, output: AudioRate) -> Self {
+        let engine = rubato::Fft::new(
+            input.hz(),
+            output.hz(),
+            input.hz() / 100,
+            1,
+            FixedSync::Both,
+        )
+        .expect("fixed 24/48 kHz mono resampling is valid");
+        let buffer = vec![0.0; engine.output_frames_max()];
         Self {
-            engine: RtcResampler::default(),
+            engine,
             input,
             output,
+            buffer,
         }
     }
 
     pub fn process(&mut self, samples: &[i16]) -> Result<Vec<i16>, MediaError> {
-        let count = self.input.hz() / 100;
-        if samples.len() != count as usize {
+        if samples.len() != self.input.hz() / 100 {
             return Err(MediaError::AudioFrame);
         }
-        let output =
-            self.engine
-                .remix_and_resample(samples, count, 1, self.input.hz(), 1, self.output.hz());
-        if output.len() != (self.output.hz() / 100) as usize {
+        let input: Vec<f32> = samples
+            .iter()
+            .map(|sample| f32::from(*sample) / 32768.0)
+            .collect();
+        let input =
+            InterleavedSlice::new(&input, 1, samples.len()).map_err(|_| MediaError::AudioFrame)?;
+        let output_len = self.buffer.len();
+        let mut destination = InterleavedSlice::new_mut(&mut self.buffer, 1, output_len)
+            .map_err(|_| MediaError::AudioFrame)?;
+        let (_, written) = self
+            .engine
+            .process_into_buffer(&input, &mut destination, None)
+            .map_err(|_| MediaError::AudioFrame)?;
+        if written != self.output.hz() / 100 {
             return Err(MediaError::AudioFrame);
         }
-        Ok(output.to_vec())
+        Ok(self.buffer[..written]
+            .iter()
+            .map(|sample| (sample.clamp(-1.0, 1.0) * 32767.0).round() as i16)
+            .collect())
     }
 }

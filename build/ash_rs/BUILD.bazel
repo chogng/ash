@@ -20,7 +20,6 @@ filegroup(
         "//third_party/livekit:LICENSE",
         "//third_party/livekit-rust-sdks:LICENSE",
         "//third_party/livekit-rust-sdks:NOTICE",
-        "//third_party/livekit-rust-sdks:webrtc-sys/NOTICE.md",
         "//third_party/livekit:NOTICE",
         "//third_party/livekit:pkg/sfu/NOTICE",
         "//build/download:python_sources",

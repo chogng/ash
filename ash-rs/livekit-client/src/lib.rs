@@ -1,7 +1,12 @@
 //! Device-independent LiveKit room media. Room permissions belong to the caller.
 
+mod codec;
 mod mixer;
 mod resample;
+#[cfg(test)]
+#[path = "resample_tests.rs"]
+mod resample_tests;
+mod rtc;
 pub use mixer::AudioMixer;
 mod room;
 mod transport;

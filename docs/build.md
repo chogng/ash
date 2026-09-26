@@ -222,7 +222,7 @@ just bench-build ash-cli --profile release --jobs 4
 
 报告保存在 `.build/build-health/`。RSS 是 `time` 报告的最大驻留集，不是全部并行编译进程内存之和；产物大小是 Cargo 报告的文件大小，不是签名、剥离符号和压缩后的发布包大小。空 Cargo 输出不代表清空操作系统、下载或外部编译器缓存。依赖下载应在测量前完成，构建使用 `--offline`。
 
-Code 的 `webrtc-sys` 构建脚本还会下载预编译的 WebRTC 库；`cargo fetch --locked` 不包含这份资源，且默认缓存位于当前 Cargo 输出目录。比较独立输出目录的编译时间时，应让各轮的 `LK_CUSTOM_WEBRTC` 指向同一份已准备好、与锁定 WebRTC 版本及目标平台匹配的库目录（包含 `include/`、`lib/` 和 `.ninja` 文件），否则网络下载会混入编译时间。
+当前媒体客户端使用 `webrtc-rs`，构建不再下载 `webrtc-sys` 的预编译 WebRTC 库。下面保留的 2026-09-26 测量记录属于切换前的依赖图，不能用于当前构建的耗时判断。
 
 同机、同工具链、同 profile/target、并发数、输入文件和环境参数的报告可以显式比较：
 
@@ -270,7 +270,7 @@ just bench-build ash-keybinding --jobs 4 --compare .build/build-health/<run>/rep
 
 在显式选包基础上，Windows Code 构建改用 Rust 工具链自带的 `rust-lld`。三次独立冷编译为 503.16、507.59、521.97 秒；相对于上一组的冷编差异包含机器负载波动，不能全归因于链接器。对同一处 TUI 文案做三轮实际源码编辑，原链接器与 `rust-lld` 的重编中位数为 11.31→7.84 秒（减少 30.6%），其中 `ash.exe` 链接单元约为 7.21→3.66 秒；无改动重跑中位数为 1.23→1.21 秒。三个程序的产物约为 165.12/151.12/52.37 MiB → 164.50/150.52/51.39 MiB。Windows 手工测量未采集进程树最大 RSS；其他平台未测链接器改动，因为该设置仅用于 Windows x86_64 的 Code 源码构建。
 
-2026-09-26 在 macOS arm64、Rust 1.98.0、`dev-small`、12 个 Cargo 任务下，确认 [LiveKit PR #1466](https://github.com/livekit/rust-sdks/pull/1466) 的修复已随 [webrtc-sys 0.3.47](https://github.com/livekit/rust-sdks/releases/tag/webrtc-sys/v0.3.47) 发布，Ash 移除了固定 Git 提交的补丁。用同一份已缓存 WebRTC 库测 Code 三个程序的独立输出目录冷编译，单次完整构建为 364.01 秒；先单独构建 `webrtc-sys` 再构建三个程序合计为 358.78 秒（其中第一步 32.24 秒）。两次的程序大小分别约为 26.5、193.0、44.5 MB，最大 RSS 分别为 2.28、2.37 GB。约 1.4% 的总耗时差只有各一次测量，不能证明构建顺序提速，因此未改启动入口。另两项试验——将 `webrtc-sys` 的优化级别降为 0、将 Cargo 任务数增至 16——在各自的单次完整冷编中也未改善总时间，且未统一外部资源缓存，不作为严格配对结果。日志及 Cargo 时间线保存在 `.build/build-health/code-startup-20260926-*`；共享输出目录下资源与程序都已缓存后的 `just ash --version` 用时 1.49 秒。
+切换前的 2026-09-26 测量在 macOS arm64、Rust 1.98.0、`dev-small`、12 个 Cargo 任务下进行。当时 [LiveKit PR #1466](https://github.com/livekit/rust-sdks/pull/1466) 的修复已随 [webrtc-sys 0.3.47](https://github.com/livekit/rust-sdks/releases/tag/webrtc-sys/v0.3.47) 发布，Ash 移除了固定 Git 提交的补丁。用同一份已缓存 WebRTC 库测 Code 三个程序的独立输出目录冷编译，单次完整构建为 364.01 秒；先单独构建 `webrtc-sys` 再构建三个程序合计为 358.78 秒（其中第一步 32.24 秒）。两次的程序大小分别约为 26.5、193.0、44.5 MB，最大 RSS 分别为 2.28、2.37 GB。约 1.4% 的总耗时差只有各一次测量，不能证明构建顺序提速，因此未改启动入口。另两项试验——将 `webrtc-sys` 的优化级别降为 0、将 Cargo 任务数增至 16——在各自的单次完整冷编中也未改善总时间，且未统一外部资源缓存，不作为严格配对结果。日志及 Cargo 时间线保存在 `.build/build-health/code-startup-20260926-*`；共享输出目录下资源与程序都已缓存后的 `just ash --version` 用时 1.49 秒。
 
 同日测量 `just ash-desktop`：本机当前输出目录首次执行 `predev` 用时 237.03 秒，其中 Cargo 构建 223 秒；复用已发布后端包再执行 `predev` 用时 1.82 秒。Vite 8 的默认依赖扫描在 Workbench 构造参数装饰器处报错，随后首次打开窗口时分批优化依赖并重载页面。改为显式预先优化五个前端依赖后，在两次都因配置变化而失效依赖缓存的单次 Playwright 对比中，菜单和编辑区可见耗时为 4507→2873 毫秒，首次窗口后的重载次数为 1→0。这个对比只说明依赖缓存失效时的首次加载，不代表日常热启动或 Rust 冷编译也同比例提速。日志和测量条件保存在 `.build/build-health/electron-startup-20260926/`。
 

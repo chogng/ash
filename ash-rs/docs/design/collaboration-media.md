@@ -3,7 +3,7 @@
 Ash 的多人通话、屏幕共享和 GPT Voice 统一使用 LiveKit 房间。GPT Voice 以 AI 协作者身份入房，开发任务交给 Ash 既有 Agent 执行链；`realtime-webrtc` 从目标架构中移除。
 
 - 状态：音频通话已接入 App Server、设备助手和 TypeScript 通话面板；已接入 Windows 显示器/窗口共享与远端画面；完整 AI 协作仍在实施。
-- 核对日期：2026-09-22。
+- 核对日期：2026-09-26。
 - 本文负责：crate 边界、部署、房间与权限、AI 接入、实施顺序和验收要求。
 - 已新增 `call`、`livekit-client`、`livekit-api`、`voice-agent`，并删除无人调用的 `realtime-webrtc`。
 
@@ -11,10 +11,10 @@ Ash 的多人通话、屏幕共享和 GPT Voice 统一使用 LiveKit 房间。GP
 
 | 能力 | 当前结果 |
 | --- | --- |
-| LiveKit 双向音频 | 真实 Server 1.13.7 与 Rust SDK 测试通过 |
+| LiveKit 双向音频 | 真实 Server 1.13.7 与 LiveKit 信令、`webrtc-rs`、Opus 收发测试通过 |
 | 成员邀请、撤销、角色变更、房间换代 | SQLite 测试与真实服务 HTTP 测试通过 |
 | GPT-Live 会话协议 | 本地 WebSocket 契约测试通过；尚未连接真实模型账户 |
-| AI 混音、重采样与播放清理 | 单元测试与真实 LiveKit + 本地 GPT-Live 模拟服务的桥接测试通过 |
+| AI 混音、重采样与播放清理 | 单元测试通过；真实 LiveKit + 本地 GPT-Live 模拟服务的三项桥接测试通过 |
 | 自建服务接入 | HTTP 宿主接受部署者的 LiveKit 地址和密钥 |
 | 设备发言权 | 同一成员只向选中设备签发麦克风权限；切换设备更换房间，双 SQLite 宿主竞争测试通过 |
 | 成员通知 | HTTP 按修订号等待，App Server 向所属窗口发送 `call/changed` |
@@ -31,14 +31,14 @@ Ash 的多人通话、屏幕共享和 GPT Voice 统一使用 LiveKit 房间。GP
 | --- | --- |
 | 所有通话进入 LiveKit 房间 | 单人与 AI 对话、多人讨论使用同一条媒体路径 |
 | GPT Voice 是房间参与者 | 可以被邀请、移除、静音，并显示运行状态 |
-| 使用 LiveKit 官方 Rust SDK | 房间协议、WebRTC 和编解码交给 SDK |
+| 使用 LiveKit 信令和 `webrtc-rs` | Ash 管理房间、轨道和媒体编解码，移除 `webrtc-sys` |
 | 保留 `voice-host` | 专门处理用户机器上的音频设备和音频处理 |
 | 移除 `realtime-webrtc` | 不再维护单独的点对点语音产品路径 |
 | 支持用户自建服务 | Ash 不要求用户依赖 Ash 运营的公共媒体服务器 |
 | 单机由产品管理本地服务 | 用户无需先租服务器，也能使用同一套房间架构 |
 | 开发任务沿用 Ash 执行链 | 房间成员身份不等于工作区、文件或工具权限 |
 
-LiveKit 的 SFU（选择性转发服务器）负责将参与者发布的音视频轨道转发给订阅者。Rust SDK 同时处理 LiveKit 房间信令与底层媒体连接；它依赖 libwebrtc，因此本方案不承诺依赖树全部由 Rust 编写。[SFU 架构](https://docs.livekit.io/reference/internals/livekit-sfu/)、[Rust SDK](https://github.com/livekit/rust-sdks)
+LiveKit 的 SFU（选择性转发服务器）负责将参与者发布的音视频轨道转发给订阅者。`livekit-client` 使用 LiveKit 的信令 crate 接入房间，用 `webrtc-rs` 建立媒体连接，并自行处理 Opus 与 VP8 帧。[SFU 架构](https://docs.livekit.io/reference/internals/livekit-sfu/)、[LiveKit 信令](https://github.com/livekit/rust-sdks)、[webrtc-rs](https://github.com/webrtc-rs/webrtc)
 
 ### 学习 Zed 的范围
 
@@ -74,8 +74,8 @@ LiveKit 的 SFU（选择性转发服务器）负责将参与者发布的音视�
 
 | Crate | 状态 | 唯一职责 | 主要依赖边界 |
 | --- | --- | --- | --- |
-| `call` | 新增 | 协作通话身份、成员权限、房间生命周期、客户端通话协调 | 不引入 UI、libwebrtc 或设备驱动 |
-| `livekit-client` | 新增 | SDK 封装、入退房、轨道、媒体帧、连接状态 | 隔离 LiveKit SDK 与 libwebrtc |
+| `call` | 新增 | 协作通话身份、成员权限、房间生命周期、客户端通话协调 | 不引入 UI、WebRTC 或设备驱动 |
+| `livekit-client` | 新增 | LiveKit 信令、WebRTC 连接、轨道、媒体帧、连接状态 | 隔离媒体协议与编解码依赖 |
 | `livekit-api` | 新增 | 房间管理、票据签发、参与者权限、服务事件校验 | 复用官方服务端 SDK；不引入媒体客户端 |
 | `voice-agent` | 新增 | AI 参与者、多人输入、模型会话、语音与开发任务衔接 | 依赖媒体客户端和模型能力；不打开设备 |
 | `voice-host` | 保留 | 本机采集、播放、设备切换、回声与降噪 | 隔离 CPAL、重采样与音频处理依赖 |
@@ -84,7 +84,7 @@ LiveKit 的 SFU（选择性转发服务器）负责将参与者发布的音视�
 
 ### 装配与依赖约束
 
-- `call` 定义业务需要的媒体、设备和服务管理接口；具体实现由宿主注入，避免服务端因复用成员规则而链接 libwebrtc。
+- `call` 定义业务需要的媒体、设备和服务管理接口；具体实现由宿主注入，避免服务端因复用成员规则而链接 WebRTC 媒体栈。
 - `livekit-client` 同时服务人类客户端和 AI 参与者，公开轨道与帧接口，不依赖 `voice-host`、UI 或具体模型。
 - `livekit-api` 负责 LiveKit API 适配；成员能否入房由 `call` 判断，密钥由已有凭据存储提供。
 - `voice-agent` 使用 App Server 注入的任务执行接口，不复制 Core 的工具循环、权限审批或 Thread 存储。
@@ -257,18 +257,18 @@ GPT-Live 当前支持文本和音频，不支持图像或视频输入。人类�
 | 模型输入混音与输出发布 | `voice-agent` | 与物理设备无关，不重复做设备回声处理 |
 | 屏幕捕获与显示 | 产品宿主 | 系统授权、帧生命周期和停止共享可验证 |
 
-- 通话设备链使用 48 kHz；`voice-host` 当前 20 ms PCM 帧在适配处转换为 SDK 所需格式，不把帧大小当作网络协议。
-- SDK 对此输入的回声、降噪和增益处理关闭，避免与 `voice-host` 重复处理；能否完整关闭须用选定 SDK 版本验证。
+- 通话设备链使用 48 kHz；`voice-host` 当前 20 ms PCM 帧在适配处转换为 Opus 输入，不把帧大小当作网络协议。
+- 回声、降噪和增益处理只由 `voice-host` 执行，媒体连接不重复处理。
 - 每条轨道与跨进程队列有容量、时间戳和代次；音频过期按明确策略丢弃并计数，控制指令不能静默丢失。
 - 切换设备、静音、停止共享和重连都会使相关旧帧失效；音视频资源关闭后不得继续向 UI 或设备发送事件。
 - 记录端到端延迟、队列时长、丢帧、欠载、重连原因和音频处理耗时；诊断日志不记录 token 或原始音频。
-- 视频走媒体帧通道与 SDK，JSON 只传资源句柄和控制状态；不要把视频帧编码成业务通知。
+- 视频走媒体帧通道与 WebRTC，JSON 只传资源句柄和控制状态；不要把视频帧编码成业务通知。
 
 ## 9. 实施顺序与退场范围
 
 以下顺序用于交付同一个最终架构，不形成两套长期运行路径。
 
-1. **确定 SDK 与构建依赖。** 固定 LiveKit SDK、libwebrtc 和服务端版本，验证三平台构建、媒体帧 API、音频处理开关及打包依赖。
+1. **确定媒体与构建依赖。** 固定 LiveKit 信令、`webrtc-rs` 和服务端版本，验证三平台构建、媒体帧 API 及打包依赖。
 2. **实现通话与服务端能力。** 新建 `call`、`livekit-api`，扩展 `collaboration-server` 的成员、入房与媒体代次管理。
 3. **实现媒体客户端。** 新建 `livekit-client`，接通 `voice-host`、多人轨道、屏幕共享和真实服务测试。
 4. **实现 AI 参与者。** 新建 `voice-agent`，补 GPT-Live 协议与模型能力，接入明确归属的开发任务链。
