@@ -2181,7 +2181,7 @@ fn config_providers_show_subscription_and_api_sections() {
                     },
                     ProviderCatalogEntryDto {
                         provider: "zai".into(),
-                        display_name: "Z.AI (GLM)".into(),
+                        display_name: "zAI".into(),
                         api_key_policy: ProviderApiKeyPolicyDto::Required,
                         api_key_configured: false,
                     },
@@ -2194,6 +2194,12 @@ fn config_providers_show_subscription_and_api_sections() {
                     ProviderCatalogEntryDto {
                         provider: "xai".into(),
                         display_name: "xAI".into(),
+                        api_key_policy: ProviderApiKeyPolicyDto::Required,
+                        api_key_configured: false,
+                    },
+                    ProviderCatalogEntryDto {
+                        provider: "google".into(),
+                        display_name: "Google".into(),
                         api_key_policy: ProviderApiKeyPolicyDto::Required,
                         api_key_configured: false,
                     },
@@ -2214,7 +2220,7 @@ fn config_providers_show_subscription_and_api_sections() {
             .label(),
         "ChatGPT"
     );
-    crate::tui_assert_snapshot!("config_providers_sections", render(&app, 100, 26));
+    crate::tui_assert_snapshot!("config_providers_sections", render(&app, 100, 34));
 }
 
 #[test]

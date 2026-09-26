@@ -13,7 +13,7 @@ pub const ZAI_CODING_PLAN_BASE_URL: &str = "https://api.z.ai/api/coding/paas/v4"
 pub(super) fn definition() -> ProviderDefinition {
     default_provider(
         "zai",
-        "Z.AI (GLM)",
+        "zAI",
         ProviderAdapter::Zai,
         ApiProfile::OpenAiChatCompletions,
         "https://api.z.ai/api/paas/v4",
@@ -36,7 +36,7 @@ pub(super) fn definition() -> ProviderDefinition {
 pub(super) fn subscription_definition() -> ProviderDefinition {
     let mut definition = default_provider(
         "zai",
-        "zai",
+        "BigModel",
         ProviderAdapter::Zai,
         ApiProfile::OpenAiChatCompletions,
         ZAI_CODING_PLAN_BASE_URL,

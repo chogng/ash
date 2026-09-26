@@ -10,7 +10,7 @@ use crate::ProviderDefinition;
 pub(super) fn definition() -> ProviderDefinition {
     default_provider(
         "google",
-        "Google (Gemini)",
+        "Google",
         ProviderAdapter::Google,
         ApiProfile::OpenAiChatCompletions,
         "https://generativelanguage.googleapis.com/v1beta/openai",

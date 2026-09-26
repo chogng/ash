@@ -52,17 +52,17 @@ impl SubscriptionProvider {
     fn name(self) -> &'static str {
         match self {
             Self::ChatGpt => "ChatGPT",
-            Self::Xai => "xAI",
+            Self::Xai => "Super Grok",
             Self::Kimi => "Kimi",
-            Self::Zai => "zai",
+            Self::Zai => "BigModel",
         }
     }
     fn title(self) -> &'static str {
         match self {
             Self::ChatGpt => "ChatGPT subscription",
-            Self::Xai => "xAI",
-            Self::Kimi => "Kimi subscription",
-            Self::Zai => "zai",
+            Self::Xai => "Super Grok",
+            Self::Kimi => "Kimi",
+            Self::Zai => "BigModel",
         }
     }
     /// The device-code login surface. Z.AI authorizes its Coding Plan with an API key.
@@ -381,14 +381,14 @@ impl Subscription {
             items.push(ListSelectionItem::new("Working…"));
         } else {
             if !status.is_some_and(|plan| plan.key_saved) {
-                let label = "Sign in with zai";
+                let label = "Sign in with BigModel";
                 let id = ListSelectionItemId::new(label);
                 items.push(ListSelectionItem::new(label).with_id(id.clone()));
                 actions.insert(
                     id,
                     ConfigSelectionAction::OpenProviderApiKey {
                         provider: "zai".into(),
-                        display_name: "zai".into(),
+                        display_name: "BigModel".into(),
                         target: ApiKeyTarget::ZaiCodingPlan,
                     },
                 );
@@ -397,7 +397,11 @@ impl Subscription {
                 add_action(
                     &mut items,
                     &mut actions,
-                    if enabled { "Disable zai" } else { "Enable zai" },
+                    if enabled {
+                        "Disable BigModel"
+                    } else {
+                        "Enable BigModel"
+                    },
                     SubscriptionCommand::SetPlan { enabled: !enabled },
                 );
             }

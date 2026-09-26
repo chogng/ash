@@ -16,7 +16,7 @@ pub(super) fn definition() -> ProviderDefinition {
 pub(super) fn subscription_definition() -> ProviderDefinition {
     let mut definition = default_provider(
         "xai",
-        "xAI",
+        "Super Grok",
         ProviderAdapter::Xai,
         ApiProfile::OpenAiResponses,
         "https://cli-chat-proxy.grok.com/v1",

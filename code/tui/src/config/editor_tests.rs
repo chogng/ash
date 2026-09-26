@@ -7,6 +7,7 @@ use crate::nls::Language;
 use crate::status::StatusLineSettings;
 use crate::test_support::empty_config_snapshot;
 use crate::thread::composer::ChatInputMode;
+use crate::widgets::list_selection::ListSelectionItemId;
 use crate::widgets::list_selection::ListSelectionState;
 use crate::widgets::text_prompt::TextPrompt;
 use crate::widgets::text_prompt::TextPromptOutcome;
@@ -37,7 +38,7 @@ fn providers() -> ProviderListResult {
 }
 
 #[test]
-fn provider_rows_place_kimi_and_glm_subscriptions_in_the_subscription_section() {
+fn provider_rows_use_distinct_subscription_and_api_names() {
     let mut catalog = providers();
     catalog.providers.push(ProviderCatalogEntryDto {
         provider: "kimi".into(),
@@ -47,7 +48,19 @@ fn provider_rows_place_kimi_and_glm_subscriptions_in_the_subscription_section() 
     });
     catalog.providers.push(ProviderCatalogEntryDto {
         provider: "zai".into(),
-        display_name: "Z.AI (GLM)".into(),
+        display_name: "zAI".into(),
+        api_key_policy: ProviderApiKeyPolicyDto::Required,
+        api_key_configured: false,
+    });
+    catalog.providers.push(ProviderCatalogEntryDto {
+        provider: "xai".into(),
+        display_name: "xAI".into(),
+        api_key_policy: ProviderApiKeyPolicyDto::Required,
+        api_key_configured: false,
+    });
+    catalog.providers.push(ProviderCatalogEntryDto {
+        provider: "google".into(),
+        display_name: "Google".into(),
         api_key_policy: ProviderApiKeyPolicyDto::Required,
         api_key_configured: false,
     });
@@ -69,22 +82,31 @@ fn provider_rows_place_kimi_and_glm_subscriptions_in_the_subscription_section() 
         vec![
             "Subscriptions",
             "ChatGPT",
-            "Kimi Subscription",
-            "zai",
+            "Kimi",
+            "BigModel",
+            "Super Grok",
             "API",
-            "OpenAI API key",
+            "OpenAI",
             "Ollama",
             "Kimi",
-            "Z.AI (GLM)",
+            "zAI",
+            "xAI",
+            "Google",
             "New custom provider",
         ]
     );
     let actions = &choices.actions;
-    for label in ["Kimi Subscription", "zai"] {
+    for (label, row_id) in [
+        ("Kimi", "kimi-subscription"),
+        ("BigModel", "zai-subscription"),
+        ("Super Grok", "xai-subscription"),
+    ] {
         let id = state
             .visible_items()
             .iter()
-            .find(|item| item.label() == label)
+            .find(|item| {
+                item.label() == label && item.id() == Some(&ListSelectionItemId::new(row_id))
+            })
             .and_then(|item| item.id())
             .unwrap_or_else(|| panic!("{label} row must open its subscription panel"));
         assert!(matches!(
@@ -439,7 +461,7 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
     assert_eq!(state.visible_items()[0].label(), "Subscriptions");
     assert_eq!(state.visible_items()[1].label(), "ChatGPT");
     assert_eq!(state.visible_items()[2].label(), "API");
-    assert_eq!(state.visible_items()[3].label(), "OpenAI API key");
+    assert_eq!(state.visible_items()[3].label(), "OpenAI");
     assert_eq!(state.visible_items()[4].label(), "Ollama");
     assert_eq!(state.visible_items()[5].label(), "New custom provider");
     assert_eq!(state.selected_item().unwrap().label(), "ChatGPT");
@@ -480,12 +502,12 @@ fn provider_sections_keep_subscription_navigation_and_search_actionable() {
         .iter()
         .map(|item| item.label())
         .collect::<Vec<_>>();
-    assert_eq!(labels.iter().filter(|label| **label == "xAI").count(), 1);
-    assert!(!labels.contains(&"xAI (Grok) API key"));
+    assert!(labels.contains(&"Super Grok"));
+    assert!(!labels.contains(&"xAI"));
     let xai_id = state
         .visible_items()
         .iter()
-        .find(|item| item.label() == "xAI")
+        .find(|item| item.label() == "Super Grok")
         .unwrap()
         .id()
         .unwrap()
@@ -503,7 +525,7 @@ fn provider_sections_keep_subscription_navigation_and_search_actionable() {
     state.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
     state.handle_paste("OpenAI".into());
     assert_eq!(state.visible_items().len(), 1);
-    assert_eq!(state.visible_items()[0].label(), "OpenAI API key");
+    assert_eq!(state.visible_items()[0].label(), "OpenAI");
 }
 
 #[test]
@@ -534,7 +556,7 @@ fn provider_sections_open_connection_from_the_same_list() {
     }
     assert_eq!(
         api.selection().unwrap().selected_item().unwrap().label(),
-        "OpenAI API key"
+        "OpenAI"
     );
     assert!(matches!(
         api.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
@@ -971,7 +993,7 @@ fn only_custom_provider_rows_offer_delete_and_order_does_not_follow_names() {
     let id = crate::widgets::list_selection::ListSelectionItemId::new("custom-a");
     editor.selection.state_mut().focus_item(&id);
     assert_eq!(
-        editor.selection().unwrap().visible_items()[0].label(),
+        editor.selection().unwrap().selected_item().unwrap().label(),
         "Zulu"
     );
     assert!(editor.key_hints().text().contains("Delete"));

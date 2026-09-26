@@ -1091,7 +1091,7 @@ fn enter_provider_row(app: &mut App, label: &str) -> Option<AppCommand> {
                 },
                 ProviderCatalogEntryDto {
                     provider: "zai".into(),
-                    display_name: "Z.AI (GLM)".into(),
+                    display_name: "zAI".into(),
                     api_key_policy: ProviderApiKeyPolicyDto::Required,
                     api_key_configured: false,
                 },
@@ -2775,7 +2775,7 @@ fn xai_subscription_login_stays_separate_from_chatgpt_after_navigation() {
     use ash_app_server_protocol::protocol::account::AccountReadResult;
     let mut app = App::new();
     assert_eq!(
-        enter_provider_row(&mut app, "xAI"),
+        enter_provider_row(&mut app, "Super Grok"),
         Some(AppCommand::Config(ConfigCommand::Subscription(
             SubscriptionProvider::Xai,
             SubscriptionCommand::Read
@@ -2833,7 +2833,7 @@ fn xai_subscription_login_stays_separate_from_chatgpt_after_navigation() {
     for _ in 0..2 {
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     }
-    enter_provider_row(&mut app, "xAI");
+    enter_provider_row(&mut app, "Super Grok");
     app.update(ConfigEvent::SubscriptionReply(
         SubscriptionProvider::Xai,
         SubscriptionEvent::Read(AccountReadResult {
@@ -2851,7 +2851,7 @@ fn xai_subscription_browser_failure_keeps_the_manual_challenge_visible() {
     use ash_app_server_protocol::protocol::account::AccountLoginStartResult;
     use ash_app_server_protocol::protocol::account::AccountReadResult;
     let mut app = App::new();
-    enter_provider_row(&mut app, "xAI");
+    enter_provider_row(&mut app, "Super Grok");
     app.update(ConfigEvent::SubscriptionReply(
         SubscriptionProvider::Xai,
         SubscriptionEvent::Read(AccountReadResult {
@@ -2887,7 +2887,7 @@ fn zai_subscription_accepts_a_masked_key_and_returns_to_its_status() {
 
     let mut app = App::new();
     assert_eq!(
-        enter_provider_row(&mut app, "zai"),
+        enter_provider_row(&mut app, "BigModel"),
         Some(AppCommand::Config(ConfigCommand::Subscription(
             SubscriptionProvider::Zai,
             crate::config::SubscriptionCommand::Read,
@@ -2911,7 +2911,7 @@ fn zai_subscription_accepts_a_masked_key_and_returns_to_its_status() {
             .selected_item()
             .unwrap()
             .label(),
-        "Sign in with zai"
+        "Sign in with BigModel"
     );
     assert!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
@@ -2919,7 +2919,7 @@ fn zai_subscription_accepts_a_masked_key_and_returns_to_its_status() {
     );
     app.handle_paste("secret-zai-key".into());
     let screen = crate::app::usage_tests::render(&app, 96, 24);
-    assert!(screen.contains("zai › API key"));
+    assert!(screen.contains("BigModel › API key"));
     assert!(!screen.contains("secret-zai-key"));
     assert!(app.list_selection().is_none());
     crate::tui_assert_snapshot!("zai_subscription_key_prompt", screen);
@@ -2928,7 +2928,7 @@ fn zai_subscription_accepts_a_masked_key_and_returns_to_its_status() {
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))
             .is_none()
     );
-    assert_eq!(app.list_selection().unwrap().title(), "zai");
+    assert_eq!(app.list_selection().unwrap().title(), "BigModel");
     assert!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
             .is_none()
@@ -2964,7 +2964,7 @@ fn zai_subscription_accepts_a_masked_key_and_returns_to_its_status() {
         .collect::<Vec<_>>();
     assert!(labels.contains(&"API key saved"));
     assert!(labels.contains(&"Coding plan enabled"));
-    assert!(labels.contains(&"Disable zai"));
+    assert!(labels.contains(&"Disable BigModel"));
     crate::tui_assert_snapshot!(
         "zai_subscription_configured",
         crate::app::usage_tests::render(&app, 96, 24)

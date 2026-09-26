@@ -37,7 +37,7 @@ pub(super) fn definition() -> ProviderDefinition {
 pub(super) fn subscription_definition() -> ProviderDefinition {
     let mut definition = default_provider(
         "kimi",
-        "Kimi Subscription",
+        "Kimi",
         ProviderAdapter::Kimi,
         ApiProfile::OpenAiChatCompletions,
         "https://api.kimi.com/coding/v1",

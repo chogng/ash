@@ -376,7 +376,7 @@ fn zai_providers(
         providers: vec![
             ash_app_server_protocol::protocol::provider::ProviderCatalogEntryDto {
                 provider: "zai".into(),
-                display_name: "Z.AI (GLM)".into(),
+                display_name: "zAI".into(),
                 api_key_policy:
                     ash_app_server_protocol::protocol::provider::ProviderApiKeyPolicyDto::Required,
                 api_key_configured: key_configured,
@@ -389,12 +389,12 @@ fn zai_providers(
 fn zai_plan_panel_shows_key_and_plan_status_with_the_matching_toggle() {
     let mut subscription = Subscription::new(SubscriptionProvider::Zai);
     assert!(labels(&subscription).contains(&"API key not saved".into()));
-    assert!(labels(&subscription).contains(&"Sign in with zai".into()));
+    assert!(labels(&subscription).contains(&"Sign in with BigModel".into()));
     let choices = subscription.choices();
     assert!(matches!(
         choices
             .actions
-            .get(&ListSelectionItemId::new("Sign in with zai")),
+            .get(&ListSelectionItemId::new("Sign in with BigModel")),
         Some(ConfigSelectionAction::OpenProviderApiKey {
             target: ApiKeyTarget::ZaiCodingPlan,
             ..
@@ -406,35 +406,40 @@ fn zai_plan_panel_shows_key_and_plan_status_with_the_matching_toggle() {
         enabled: true,
     }));
     assert!(labels(&subscription).contains(&"Coding plan enabled".into()));
-    assert!(labels(&subscription).contains(&"Sign in with zai".into()));
+    assert!(labels(&subscription).contains(&"Sign in with BigModel".into()));
 
     subscription.update(SubscriptionEvent::Plan(PlanStatus {
         key_saved: true,
         enabled: true,
     }));
     assert!(labels(&subscription).contains(&"API key saved".into()));
-    assert!(labels(&subscription).contains(&"Disable zai".into()));
+    assert!(labels(&subscription).contains(&"Disable BigModel".into()));
 
     subscription.update(SubscriptionEvent::Plan(PlanStatus {
         key_saved: true,
         enabled: false,
     }));
     assert!(labels(&subscription).contains(&"Coding plan not enabled".into()));
-    assert!(labels(&subscription).contains(&"Enable zai".into()));
+    assert!(labels(&subscription).contains(&"Enable BigModel".into()));
 }
 
 #[test]
-fn zai_sign_in_action_is_localized_in_chinese() {
-    let subscription = Subscription::new(SubscriptionProvider::Zai);
-    let mut choices = subscription.choices();
-    choices.model.localize(crate::nls::Language::Chinese);
-    let state = ListSelectionState::new(choices.model);
-    assert!(
-        state
-            .visible_items()
-            .iter()
-            .any(|item| item.label() == "使用 zai 登录")
-    );
+fn subscription_sign_in_actions_are_localized_in_chinese() {
+    for (provider, expected) in [
+        (SubscriptionProvider::Zai, "使用 BigModel 登录"),
+        (SubscriptionProvider::Xai, "使用 Super Grok 登录"),
+    ] {
+        let subscription = Subscription::new(provider);
+        let mut choices = subscription.choices();
+        choices.model.localize(crate::nls::Language::Chinese);
+        let state = ListSelectionState::new(choices.model);
+        assert!(
+            state
+                .visible_items()
+                .iter()
+                .any(|item| item.label() == expected)
+        );
+    }
 }
 
 #[test]

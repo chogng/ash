@@ -4,13 +4,13 @@ expression: "crate::app::usage_tests::render(&app, 96, 24)"
 ---
   .                                                                        [— / —] [Dashboard]
 
-            ┌── Config › zai ──────────────────────────────────────────────────[✗]─┐
+            ┌── Config › BigModel ─────────────────────────────────────────────[✗]─┐
             │                                                                      │
             │   Status                                                             │
             │                                                                      │
             │  API key saved                                                       │
             │> Coding plan enabled                                                 │
-            │  Disable zai                                                         │
+            │  Disable BigModel                                                    │
             │                                                                      │
             │                                                                      │
             │                                                                      │

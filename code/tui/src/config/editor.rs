@@ -758,7 +758,7 @@ impl ConfigEditor {
         let mut prompt = provider_api_key_prompt(provider, display_name);
         if target == ApiKeyTarget::ZaiCodingPlan {
             prompt.spec.title = "API key".into();
-            prompt.spec.explanation = "Enter the API key from your zai Coding Plan".into();
+            prompt.spec.explanation = "Enter the API key from your BigModel Coding Plan".into();
         }
         self.prompt = Some(ProviderApiKeyPromptState {
             provider: prompt.provider,
@@ -1445,9 +1445,9 @@ fn provider_items(
         }
         let subscription = match provider.provider.as_str() {
             "openai" => Some(("ChatGPT", super::SubscriptionProvider::ChatGpt)),
-            "xai" => Some(("xAI", super::SubscriptionProvider::Xai)),
-            "kimi" => Some(("Kimi Subscription", super::SubscriptionProvider::Kimi)),
-            "zai" => Some(("zai", super::SubscriptionProvider::Zai)),
+            "xai" => Some(("Super Grok", super::SubscriptionProvider::Xai)),
+            "kimi" => Some(("Kimi", super::SubscriptionProvider::Kimi)),
+            "zai" => Some(("BigModel", super::SubscriptionProvider::Zai)),
             _ => None,
         };
         if let Some((label, subscription)) = subscription {
@@ -1493,12 +1493,7 @@ fn provider_item(
     display_name: &str,
     actions: &mut BTreeMap<ListSelectionItemId, ConfigSelectionAction>,
 ) -> ListSelectionItem {
-    let label = if matches!(provider.provider.as_str(), "openai" | "xai") {
-        format!("{display_name} API key")
-    } else {
-        display_name.to_owned()
-    };
-    let item = ListSelectionItem::new(label);
+    let item = ListSelectionItem::new(display_name);
     if provider.api_key_policy == ProviderApiKeyPolicyDto::Unsupported {
         return item;
     }

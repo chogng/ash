@@ -527,7 +527,7 @@ fn zai_sign_in_saves_the_key_on_the_coding_plan_endpoint() {
             response(4, serde_json::to_value(&saved).unwrap()),
             response(
                 5,
-                serde_json::json!({"providers":[{"provider":"zai","displayName":"Z.AI (GLM)","apiKeyPolicy":"required","apiKeyConfigured":true}]}),
+                serde_json::json!({"providers":[{"provider":"zai","displayName":"zAI","apiKeyPolicy":"required","apiKeyConfigured":true}]}),
             ),
         ]),
     });

@@ -354,6 +354,9 @@ fn explicit_review_model_must_pass_the_static_catalog_gate() {
 fn builtin_provider_api_key_policies_are_explicit() {
     let registry = ProviderConfigRegistry::builtin();
 
+    assert_eq!(registry.get(&provider_id("google")).unwrap().name, "Google");
+    assert_eq!(registry.get(&provider_id("zai")).unwrap().name, "zAI");
+
     assert_eq!(
         registry.get(&provider_id("ollama")).unwrap().api_key_policy,
         ApiKeyPolicy::Unsupported
@@ -690,8 +693,9 @@ fn provider_subscription_mode_replaces_the_api_catalog_and_endpoint() {
             .unwrap();
         let definition = registry.get(&config.provider).unwrap();
         match provider {
-            "xai" => assert_eq!(definition.name, "xAI"),
-            "zai" => assert_eq!(definition.name, "zai"),
+            "xai" => assert_eq!(definition.name, "Super Grok"),
+            "zai" => assert_eq!(definition.name, "BigModel"),
+            "kimi" => assert_eq!(definition.name, "Kimi"),
             _ => {}
         }
         assert_eq!(definition.api_key_policy, api_key_policy);
