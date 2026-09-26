@@ -6,6 +6,7 @@ import { assertDefined } from "../../../common/types.js";
 import { ActionBar } from "../actionbar/actionbar.js";
 import { ActionViewItem } from "../actionbar/actionViewItems.js";
 import { IconLabel } from "../iconlabel/iconlabel.js";
+import { appendIcon } from "../lxicons/lxicon.js";
 import type { TabListItem } from "./tabList.js";
 
 export const TAB_CLOSE_ACTION_ID = "ash.tab.close";
@@ -41,13 +42,15 @@ export class TabActionViewItem<T> extends ActionViewItem {
 	private readonly tabAction: TabAction<T>;
 	private readonly onClose: ((value: T) => void) | undefined;
 	private readonly closeActionIcon: Icon | undefined;
+	private readonly onSecondaryActivate: ((value: T) => void) | undefined;
 	private tabElement: HTMLButtonElement | undefined;
 
-	constructor(action: TabAction<T>, onClose: ((value: T) => void) | undefined, closeActionIcon: Icon | undefined, draggable: boolean) {
+	constructor(action: TabAction<T>, onClose: ((value: T) => void) | undefined, closeActionIcon: Icon | undefined, onSecondaryActivate: ((value: T) => void) | undefined, draggable: boolean) {
 		super(action, { draggable });
 		this.tabAction = action;
 		this.onClose = onClose;
 		this.closeActionIcon = closeActionIcon;
+		this.onSecondaryActivate = onSecondaryActivate;
 	}
 
 	override render(container: HTMLElement): void {
@@ -70,6 +73,7 @@ export class TabActionViewItem<T> extends ActionViewItem {
 		tab.setAttribute("role", "tab");
 		tab.setAttribute("aria-selected", String(this.tabAction.selected));
 		tab.setAttribute("aria-label", item.ariaLabel ?? item.label);
+		if (item.ariaDescription) tab.setAttribute("aria-description", item.ariaDescription);
 		if (item.panelId) tab.setAttribute("aria-controls", item.panelId);
 		this.setupHover(tab, this.tabAction.tooltip);
 		const label = this._register(new IconLabel(tab, {
@@ -85,9 +89,15 @@ export class TabActionViewItem<T> extends ActionViewItem {
 			if (this.tabAction.select?.(item.value, event)) return;
 			this.tabAction.run();
 		}));
-		if (this.onClose || this.tabAction.select) {
-			tab.setAttribute("aria-keyshortcuts", [this.onClose ? "Delete" : "", this.tabAction.select ? "Control+Space Shift+Space" : ""].filter(Boolean).join(" "));
+		if (this.onClose || this.tabAction.select || this.onSecondaryActivate) {
+			tab.setAttribute("aria-keyshortcuts", [this.onClose ? "Delete" : "", this.tabAction.select ? "Control+Space Shift+Space" : "", this.onSecondaryActivate ? "Alt+Enter" : ""].filter(Boolean).join(" "));
 			this._register(addDisposableListener(tab, "keydown", (event) => {
+				if (this.onSecondaryActivate && event.key === "Enter" && event.altKey) {
+					event.preventDefault();
+					event.stopPropagation();
+					this.onSecondaryActivate(item.value);
+					return;
+				}
 				if (this.tabAction.select && event.key === " " && (event.ctrlKey || event.metaKey || event.shiftKey)) {
 					event.preventDefault();
 					event.stopPropagation();
@@ -116,6 +126,12 @@ export class TabActionViewItem<T> extends ActionViewItem {
 					throw new Error("TabList close action was not rendered");
 				}
 				closeActionContainer.classList.add("ash-tab-close-action");
+				if (item.closeActionIndicatorIcon) {
+					const button = closeActionContainer.querySelector<HTMLButtonElement>("button");
+					if (!button) throw new Error("TabList close action button was not rendered");
+					appendIcon(item.closeActionIndicatorIcon, button).classList.add("ash-tab-close-indicator");
+					closeActionContainer.classList.add("has-indicator");
+				}
 			}
 		}
 	}

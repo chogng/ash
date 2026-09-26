@@ -33,8 +33,6 @@ test('browser opens an authorized local folder and saves its files', async ({ ta
 	if (await showSidebar.isVisible()) await showSidebar.click();
 	await expect(explorer).toBeVisible();
 	await expect(fileRow).toBeVisible();
-	const onboarding = page.getByRole('dialog', { name: 'Find commands quickly' });
-	if (await onboarding.isVisible()) await onboarding.getByRole('button', { name: 'Dismiss' }).click();
 	const fileTree = explorer.getByRole('tree');
 	await fileTree.focus();
 	await page.keyboard.press('Alt+F1');

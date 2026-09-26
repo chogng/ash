@@ -49,6 +49,7 @@ test("MultiEditorTabsControl reports the tab edge used as a drag drop insertion 
 	const secondTab = tabs[1];
 	assert.ok(firstTab);
 	assert.ok(secondTab);
+	assert.match(firstTab.querySelector('.ash-tab-label')?.getAttribute('aria-description') ?? '', /Alt\+Enter to pin/u);
 	Object.defineProperty(secondTab, "getBoundingClientRect", {
 		value: () => ({ left: 100, width: 100 }),
 	});
@@ -61,7 +62,11 @@ test("MultiEditorTabsControl reports the tab edge used as a drag drop insertion 
 	secondTab.dispatchEvent(dragEvent(dom.window, "drop", 175));
 
 	assert.deepEqual(drops, [{ target: second, position: "after" }]);
-	firstTab.querySelector<HTMLButtonElement>('[data-action-id="workbench.editor.toggleSticky"] button')?.click();
+	assert.equal(firstTab.querySelectorAll('.ash-tab-close-action').length, 1);
+	assert.equal(firstTab.querySelector('[data-action-id="workbench.editor.toggleSticky"]'), null);
+	const firstLabel = firstTab.querySelector<HTMLButtonElement>('.ash-tab-label');
+	firstLabel?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, detail: 1 }));
+	firstLabel?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, detail: 2 }));
 	assert.deepEqual(stickyToggles, [first]);
 	assert.equal(firstTab.classList.contains(DndCssClasses.Dragging), false);
 	control.dispose();

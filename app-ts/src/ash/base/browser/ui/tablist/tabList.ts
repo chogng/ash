@@ -22,6 +22,7 @@ export interface TabListItem<T> {
 	readonly label: string;
 	readonly description?: string;
 	readonly ariaLabel?: string;
+	readonly ariaDescription?: string;
 	readonly tooltip?: string;
 	readonly icon?: Icon;
 	readonly state?: string;
@@ -30,6 +31,8 @@ export interface TabListItem<T> {
 	readonly tabId: string;
 	readonly panelId?: string;
 	readonly actions?: TabListActions;
+	/** Passive icon shown in the close action slot until the tab is hovered or focused. */
+	readonly closeActionIndicatorIcon?: Icon;
 }
 
 /** Named visual presentation for the ActionBar and tabs rendered by a TabList. */
@@ -56,6 +59,8 @@ export interface TabListOptions<T> {
 	/** Returns true when a modifier selection consumed the activation. */
 	readonly onSelect?: (value: T, event: MouseEvent | KeyboardEvent) => boolean;
 	readonly onClose?: (value: T) => void;
+	/** Invoked by Alt+Enter on a tab label. */
+	readonly onSecondaryActivate?: (value: T) => void;
 	readonly closeActionIcon?: Icon;
 	/** Makes tab items native drag sources without defining any drop behavior. */
 	readonly draggable?: boolean;
@@ -118,7 +123,7 @@ export class TabList<T> extends Disposable {
 				if (!(action instanceof TabAction)) {
 					throw new TypeError(`Unsupported TabList action: ${action.id}`);
 				}
-				return new TabActionViewItem(action, onClose, closeActionIcon, options.draggable === true);
+				return new TabActionViewItem(action, onClose, closeActionIcon, options.onSecondaryActivate, options.draggable === true);
 			},
 		}));
 		this.scrollable.element.classList.add("ash-tab-list");

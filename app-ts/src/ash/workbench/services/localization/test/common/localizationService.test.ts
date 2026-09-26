@@ -79,6 +79,7 @@ test("localization lookup falls back to English and formats parameters", async (
 	assert.equal(localization.translate('ash', 'inspectTokens.scope', 'Token type'), '词法单元类型');
 	assert.equal(localization.translate('ash', 'quickHelp.dialog', 'Quick Access Help'), '快速访问帮助');
 	assert.equal(localization.translate('ash', 'quickCommand.placeholder', 'Type > for commands, ? for help, or @ for symbols'), '输入 > 查找命令、? 查看帮助，或 @ 查找符号');
+	assert.equal(localization.translate('ash', 'workbench.editorPinnedTabHint', 'Pinned tab. Double-click or press Alt+Enter to unpin.'), '已固定的标签。双击或按 Alt+Enter 可取消固定。');
 	assert.equal(localization.translate('ash', 'chat.settings.advisorDisable', 'Turn Advisor off'), '关闭顾问');
 	assert.equal(localization.translate('ash', 'chat.advisor.configure', 'Configure an advisor model in Chat Settings before asking for a second opinion'), '请先在聊天设置中配置顾问模型，再请求第二意见');
 	assert.deepEqual([
@@ -212,7 +213,6 @@ test('editor action labels use the selected Chinese language catalog', async () 
 		assert.equal(localize('chat.providerKeys.manage', 'Manage Model API Keys'), '管理模型 API 密钥');
 		assert.equal(localize('chat.providerKeys.inputTitle', 'API key for {0}', 'OpenAI'), 'OpenAI 的 API 密钥');
 		assert.equal(localize('onboarding.stepProgress', 'Step {0} of {1}', 2, 3), '第 2 步，共 3 步');
-		assert.equal(localize('onboarding.commandCenter.title', 'Find commands quickly'), '快速查找命令');
 		assert.equal(localize('settings.appearance.layout.description', 'Configure the Workbench layout and window zoom.'), '配置工作台布局和窗口缩放。');
 		assert.equal(localize('releaseNotes.open', 'Show Release Notes'), '显示版本说明');
 		assert.equal(localize({ bundle: 'ash', key: 'workbench.copyPath' }, 'Copy Path'), '复制路径');

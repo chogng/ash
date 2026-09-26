@@ -713,10 +713,12 @@ test("Editor tabs keep sticky editors in their own row across working-set restor
 	await editor.openEditor(second);
 
 	const stick = editor.domNode.querySelector<HTMLButtonElement>(
-		'.ash-ordinary-editor-tabs-row .ash-tab:first-child [data-action-id="workbench.editor.toggleSticky"] button',
+		'.ash-ordinary-editor-tabs-row .ash-tab:first-child .ash-tab-label',
 	);
 	assert.ok(stick);
-	stick.click();
+	stick.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, detail: 1 }));
+	editor.domNode.querySelector<HTMLButtonElement>('.ash-ordinary-editor-tabs-row .ash-tab:first-child .ash-tab-label')
+		?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, detail: 2 }));
 	assert.equal(editor.activeGroup.isSticky(first), true);
 	assert.equal(editor.activeGroup.isPreview(first), false);
 	assert.equal(editor.domNode.querySelectorAll(".ash-sticky-editor-tabs-row .ash-tab").length, 1);
@@ -729,10 +731,11 @@ test("Editor tabs keep sticky editors in their own row across working-set restor
 	assert.equal(editor.domNode.querySelectorAll(".ash-sticky-editor-tabs-row .ash-tab").length, 1);
 
 	const unstick = editor.domNode.querySelector<HTMLButtonElement>(
-		'.ash-sticky-editor-tabs-row .ash-tab [data-action-id="workbench.editor.toggleSticky"] button',
+		'.ash-sticky-editor-tabs-row .ash-tab .ash-tab-label',
 	);
 	assert.ok(unstick);
-	unstick.click();
+	assert.ok(editor.domNode.querySelector('.ash-sticky-editor-tabs-row .ash-tab-close-indicator'));
+	unstick.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', altKey: true, bubbles: true }));
 	assert.equal(editor.activeGroup.isSticky(first), false);
 	assert.equal(editor.domNode.querySelectorAll(".ash-sticky-editor-tabs-row .ash-tab").length, 0);
 

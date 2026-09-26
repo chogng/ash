@@ -222,17 +222,39 @@ test("Sticky and ordinary editors occupy separate tab rows", async ({ target, wo
 	const ordinary = group.title.locator(".ash-ordinary-editor-tabs-row");
 	const sticky = group.title.locator(".ash-sticky-editor-tabs-row");
 	await expect(ordinary.locator(".ash-tab")).toHaveCount(2);
-	await ordinary.locator('.ash-tab').filter({ hasText: "main.ts" })
-		.locator('[data-action-id="workbench.editor.toggleSticky"] button').click();
+	await ordinary.locator('.ash-tab').filter({ hasText: "main.ts" }).getByRole('tab').dblclick();
 	await expect(sticky.locator(".ash-tab")).toHaveCount(1);
 	await expect(ordinary.locator(".ash-tab")).toHaveCount(1);
 	await expect(sticky.getByRole("tab", { name: "main.ts" })).toBeFocused();
+	const pinnedTab = sticky.locator('.ash-tab');
+	const appearance = await pinnedTab.evaluate(element => {
+		const close = element.querySelector<HTMLElement>('.ash-tab-close-action')!;
+		const indicator = close.querySelector<SVGElement>('.ash-tab-close-indicator')!;
+		const button = close.querySelector<HTMLButtonElement>('button')!;
+		const reference = document.createElement('span');
+		reference.style.background = 'var(--ash-editor-background)';
+		element.append(reference);
+		const editorBackground = getComputedStyle(reference).backgroundColor;
+		reference.remove();
+		return {
+			background: getComputedStyle(element).backgroundColor,
+			editorBackground,
+			indicatorInsideClose: button.contains(indicator),
+			closeActions: element.querySelectorAll('.ash-tab-close-action').length,
+		};
+	});
+	expect(appearance.background).toBe(appearance.editorBackground);
+	expect(appearance.indicatorInsideClose).toBe(true);
+	expect(appearance.closeActions).toBe(1);
 	const stickyBox = await sticky.boundingBox();
 	const ordinaryBox = await ordinary.boundingBox();
 	expect(stickyBox).not.toBeNull();
 	expect(ordinaryBox).not.toBeNull();
 	expect(ordinaryBox!.y).toBeGreaterThanOrEqual(stickyBox!.y + stickyBox!.height);
-	await sticky.locator('[data-action-id="workbench.editor.toggleSticky"] button').click();
+	await expect(sticky.locator('.ash-tab-close-indicator')).toHaveCount(1);
+	await sticky.getByRole('tab', { name: 'main.ts' }).hover();
+	await expect.poll(() => sticky.locator('.ash-tab-close-indicator').evaluate(element => getComputedStyle(element).display)).toBe('none');
+	await sticky.getByRole('tab', { name: 'main.ts' }).press('Alt+Enter');
 	await expect(sticky.locator(".ash-tab")).toHaveCount(0);
 	await expect(ordinary.locator(".ash-tab")).toHaveCount(2);
 });

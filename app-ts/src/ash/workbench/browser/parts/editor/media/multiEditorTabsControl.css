@@ -1,4 +1,5 @@
 .ash-multi-editor-tabs-control {
+  --ash-tab-list-active-background: var(--ash-editor-background);
   --ash-tab-list-inactive-background: var(--ash-editor-tab-background);
 
   display: flex;
@@ -45,6 +46,10 @@
 
 .ash-multi-editor-tabs-control .ash-tab[data-state]:not(:hover) .ash-tab-close-action svg {
   visibility: hidden;
+}
+
+.ash-multi-editor-tabs-control .ash-tab[data-state]:not(:hover) .ash-tab-close-indicator {
+  display: none;
 }
 
 .ash-multi-editor-tabs-control .ash-tab[data-state]:not(:hover) .ash-tab-close-action button::after {

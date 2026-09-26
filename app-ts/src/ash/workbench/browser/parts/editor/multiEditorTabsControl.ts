@@ -3,6 +3,7 @@ import { DataTransfers } from "../../../../base/browser/dnd.js";
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { observeResize } from "../../../../base/browser/observer.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
+import { assertDefined } from "../../../../base/common/types.js";
 import { TabList, type TabListPresentation } from "../../../../base/browser/ui/tablist/tabList.js";
 import { localize } from "../../../../nls.js";
 import { containsExternalEditorDrop } from "./editorDropData.js";
@@ -12,6 +13,7 @@ import type { EditorInput } from "./editorInput.js";
 import { EditorTabsControl, editorInputKey, type EditorTabDescriptor, type EditorTabsDelegate } from "./editorTabsControl.js";
 
 const DRAG_OVER_ACTIVATE_DELAY = 1500;
+const DOUBLE_CLICK_MAX_INTERVAL = 500;
 
 /** Renders every open Editor in one reorderable tab list. */
 export class MultiEditorTabsControl extends EditorTabsControl {
@@ -20,6 +22,8 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 	private connectedTab: HTMLElement | undefined;
 	private connected = true;
 	private previewedInput: EditorInput | undefined;
+	private editors: readonly EditorTabDescriptor[] = [];
+	private previousLabelClick: { readonly tabId: string; readonly time: number } | undefined;
 
 	constructor(container: HTMLElement, private readonly delegate: EditorTabsDelegate) {
 		super(container);
@@ -63,6 +67,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 			onActivate: (editor) => delegate.activate(editor.input),
 			onSelect: (editor, event) => delegate.select?.(editor.input, { toggle: event.ctrlKey || event.metaKey, range: event.shiftKey }) ?? false,
 			onClose: (editor) => delegate.close(editor.input),
+			onSecondaryActivate: (editor) => delegate.toggleSticky(editor.input),
 		}));
 		const viewport = this.tabList.element.querySelector<HTMLElement>(".ash-scrollbar-viewport");
 		if (!viewport) throw new Error("Editor tabs require a scroll viewport");
@@ -70,9 +75,28 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 		this.domNode.classList.add(CONNECTED_EDITOR_TABS_CLASS);
 		this._register(addDisposableListener(viewport, "scroll", () => this.updateConnectedTab()));
 		this._register(observeResize(viewport, () => this.updateConnectedTab()));
+		// Activation rebuilds tabs, so the browser's dblclick event may lose its original target.
+		this._register(addDisposableListener(this.domNode, "click", event => {
+			if (event.detail === 0) return;
+			const label = (event.target as Element).closest<HTMLButtonElement>(".ash-tab-label");
+			if (!label || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
+				this.previousLabelClick = undefined;
+				return;
+			}
+			const previous = this.previousLabelClick;
+			this.previousLabelClick = { tabId: label.id, time: event.timeStamp };
+			if (previous?.tabId !== label.id || event.timeStamp - previous.time > DOUBLE_CLICK_MAX_INTERVAL) return;
+			this.previousLabelClick = undefined;
+			const editor = this.editors.find(candidate => candidate.tabId === label.id);
+			assertDefined(editor, `Editor tab is not available: ${label.id}`);
+			event.preventDefault();
+			event.stopPropagation();
+			this.delegate.toggleSticky(editor.input);
+		}, true));
 	}
 
 	setEditors(editors: readonly EditorTabDescriptor[], activeInput: EditorInput | undefined, selectedIds?: ReadonlySet<string>): void {
+		this.editors = editors;
 		const activeKey = activeInput ? editors.find(editor => editorInputKey(editor.input) === editorInputKey(activeInput))?.instanceId : undefined;
 		this.tabList.setTabs(editors.map((editor) => {
 			const label = editorInputLabel(editor.input);
@@ -85,23 +109,12 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 				description: label.description,
 				tooltip: stateLabel ? `${editor.input.resource.toString()} — ${stateLabel}` : editor.input.resource.toString(),
 				ariaLabel: stateLabel ? `${label.name}, ${stateLabel}` : label.name,
+				ariaDescription: editor.sticky
+					? localize("workbench.editorPinnedTabHint", "Pinned tab. Double-click or press Alt+Enter to unpin.")
+					: localize("workbench.editorUnpinnedTabHint", "Double-click or press Alt+Enter to pin this tab."),
 				...(state ? { state } : {}),
 				preview: editor.preview,
-				actions: {
-					ariaLabel: localize("workbench.editorTabActions", "{0} actions", label.name),
-					items: [{
-						id: "workbench.editor.toggleSticky",
-						label: editor.sticky
-							? localize("workbench.editorUnstickTab", "Unstick Editor")
-							: localize("workbench.editorStickTab", "Stick Editor"),
-						tooltip: editor.sticky
-							? localize("workbench.editorUnstickTab", "Unstick Editor")
-							: localize("workbench.editorStickTab", "Stick Editor"),
-						icon: editor.sticky ? Lxicon.unpin : Lxicon.pinned,
-						enabled: true,
-						run: () => this.delegate.toggleSticky(editor.input),
-					}],
-				},
+				closeActionIndicatorIcon: editor.sticky ? Lxicon.pinned : undefined,
 				tabId: editor.tabId,
 				panelId: editor.panelId,
 			};

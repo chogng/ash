@@ -2,6 +2,16 @@ import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
 
+test('command center opens without a first-run guide', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	const search = page.getByRole('button', { name: 'Search commands' });
+	await expect(search).toBeVisible();
+	await expect(page.getByRole('dialog', { name: 'Find commands quickly' })).toHaveCount(0);
+	await search.click();
+	await expect(page.locator('.ash-quick-pick').getByRole('combobox')).toBeFocused();
+});
+
 test('titlebar navigation moves through editor history beside Quick Access', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;

@@ -14,28 +14,34 @@ test('Settings opens with editor display controls', async ({ workbench }) => {
 test.describe('without an open workspace', () => {
 	test.use({ openWorkspace: false });
 
-	test('title bar Settings opens from the welcome page', async ({ workbench }) => {
+	test('title bar Settings opens from the welcome page', async ({ target, workbench }) => {
 		const page = workbench.page;
-		await page.getByRole('dialog', { name: 'Find commands quickly' }).getByRole('button', { name: 'Dismiss' }).click();
 		const settingsButton = page.getByRole('button', { name: 'Ash Settings' });
 		await settingsButton.focus();
 		const tooltip = page.locator('.ash-hover', { hasText: 'Ash Settings' });
 		await expect(tooltip).toBeVisible();
 		const buttonBounds = await settingsButton.boundingBox();
-		const tooltipBounds = await tooltip.boundingBox();
+		const tooltipBounds = await page.locator('.ash-context-view-hover', { has: tooltip }).boundingBox();
 		expect(buttonBounds).not.toBeNull();
 		expect(tooltipBounds).not.toBeNull();
-		expect(Math.abs((buttonBounds!.x + buttonBounds!.width / 2) - (tooltipBounds!.x + tooltipBounds!.width / 2))).toBeLessThan(1);
+		const viewportWidth = await page.evaluate(() => window.innerWidth);
+		const centeredX = buttonBounds!.x + buttonBounds!.width / 2 - tooltipBounds!.width / 2;
+		const expectedX = Math.min(centeredX, viewportWidth - tooltipBounds!.width);
+		expect(Math.abs(tooltipBounds!.x - expectedX)).toBeLessThan(1);
 		await settingsButton.click();
 		await expect(page.getByRole('dialog', { name: 'Ash Settings' })).toBeVisible();
 		await expect(page.locator('.ash-settings-editor')).toBeVisible();
 		await page.locator('[data-settings-category-id="appearance"]').click();
-		await expect(page.locator('[data-configuration-key="window.zoomLevel"]')).toBeVisible();
+		await expect(page.locator('[data-configuration-key="workbench.layoutStyle"]')).toBeVisible();
+		if (target.kind === 'electron') {
+			await expect(page.locator('[data-configuration-key="window.zoomLevel"]')).toBeVisible();
+		} else {
+			await expect(page.locator('[data-configuration-key="window.zoomLevel"]')).toHaveCount(0);
+		}
 	});
 
 	test('editor More Actions tooltip clears the window controls', async ({ workbench }) => {
 		const page = workbench.page;
-		await page.getByRole('dialog', { name: 'Find commands quickly' }).getByRole('button', { name: 'Dismiss' }).click();
 		const moreActions = page.locator('.ash-editor-title-actions').getByRole('button', { name: 'More Actions' });
 		await moreActions.focus();
 		const tooltip = page.locator('.ash-hover', { hasText: 'More Actions' });
