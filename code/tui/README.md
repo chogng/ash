@@ -50,6 +50,8 @@ just ash
 
 Skills、Models、Connectors 和 MCP 各自拥有同名模块；目录授权在 [dirs.rs](src/dirs.rs)。新增功能从对应模块进入，不在 App 里再建一套状态和请求流程。
 
+“配置 → 提供商”按订阅和 API 分组；名称、稳定供应商 ID、凭据与套餐权限的区别见[订阅入口与 API 入口](../../docs/login.md#订阅入口与-api-入口)。列表文案由 [config](src/config) 与 [nls.rs](src/nls.rs) 维护。
+
 一级模块按能力归属组织，模块内部按实际职责拆文件；小组件直接在同名文件中保留状态、交互和绘制。只有需要能力和依赖隔离时才另拆 crate。共享 `widgets` 提供列表、输入和提示绘制，`TopTip`、`ChatPanel`、`CommandPanel` 等应用交互组件归 `app`。
 
 全屏界面的维护入口是 `app/fullscreen.rs` 与 `app/fullscreen/`：

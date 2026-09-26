@@ -15,6 +15,8 @@
 模型供应商配置只描述“允许怎样配置”，并以确定性方式校验和归一化；它不读取凭据、不访问网络，
 也不执行模型请求。
 
+内置定义的展示名称与稳定 `ProviderId` 分开：标准 zAI API 的名称是 `zAI`，Coding Plan 连接的名称是 `BigModel`；xAI 订阅连接显示 `Super Grok`，标准 API 仍显示 `xAI`。同一供应商的两种接入方式不需要两个模型引用 ID。终端设置中完整的订阅/API 名称及凭据边界见[登录与账户系统](login.md#订阅入口与-api-入口)。
+
 | 读者首先会问 | 直接答案 | 深入阅读 |
 | --- | --- | --- |
 | 这里保存什么？ | 可序列化的供应商定义、API 配置档案、默认值和唯一静态模型目录 | [静态模型元数据](#7-静态模型元数据) |
@@ -148,8 +150,8 @@ pub enum ApiProfileConfig {
 负责把它映射为具体 endpoint implementation，配置 crate 不依赖 `ash-api`。
 
 当前 `WebSocketApiProfile::{Unavailable, OpenAiResponses}` 只表达 exact wire eligibility。OpenAI
-definition 声明 `OpenAiResponses`；xAI 虽然上游另有 Responses WebSocket，但当前 definition 仍绑定
-Chat Completions，因此保持 `Unavailable`。Generic OpenAI-compatible 也始终默认 unavailable，不能从
+definition 声明 `OpenAiResponses`；xAI 的 definition 已使用 Responses HTTP，但尚未声明已验证的
+WebSocket profile，因此保持 `Unavailable`。Generic OpenAI-compatible 也始终默认 unavailable，不能从
 HTTP compatibility 推导 WebSocket。
 
 `RealtimeApiProfile::{Unavailable, OpenAiRealtime}` 独立声明公共 Realtime GA 协议。OpenAI 内置定义启用它，其他定义默认不可用；反序列化旧定义时缺少 `realtimeApiProfile` 也保持不可用。该声明表示协议可用性，不代表账户已经获得服务权限。运行时还需使用对应凭据与模型；Luna 等 ChatGPT 文本订阅不能用于公共 Realtime。实现及验证范围见[端点实现](ash-api.md#46-端点归属与-websocket-实现)。
