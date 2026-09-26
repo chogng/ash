@@ -1,4 +1,7 @@
 import { installBaseUiStyles } from "../../base/browser/ui/styles.js";
+import { URI } from "../../base/common/uri.js";
+import { IFileService } from "../../platform/files/common/files.js";
+import { ServiceContainer } from "../../platform/instantiation/common/instantiation.js";
 import { addDisposableListener } from "../../base/browser/dom.js";
 import { DisposableStore, type IDisposable } from "../../base/common/lifecycle.js";
 import { onUnexpectedError } from "../../base/common/errors.js";
@@ -37,6 +40,10 @@ export async function startElectronSessions(modeId: WorkbenchModeId, profile: Se
 	catch (error) { return showStartupError(error); }
 	const sessions = new DisposableStore();
 	sessions.add(api);
+	const profileServices = sessions.add(new ServiceContainer());
+	profileServices.registerInstance(IFileService, api.localFiles);
+	const { loadUserThemes } = await import('../../workbench/services/themes/browser/workbenchThemeService.js');
+	sessions.add(await loadUserThemes(profileServices, URI.parse(api.userDataHome.toString().replace(/\/$/u, '') + '/themes')));
 	const container = document.querySelector<HTMLElement>("#app");
 	if (!container) throw new Error("Sessions renderer requires an #app container");
 	const windowApi = createReturnToParentWindowApi();

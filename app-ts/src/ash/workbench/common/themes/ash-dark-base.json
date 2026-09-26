@@ -1,0 +1,19 @@
+{
+	"colors": {
+		"foreground": "#cccccc",
+		"editor.background": "#1e1e1e",
+		"editor.foreground": "#d4d4d4",
+		"editor.token.commentForeground": "#6a9955",
+		"editor.token.keywordForeground": "#c586c0",
+		"editor.token.stringForeground": "#ce9178",
+		"editor.token.numberForeground": "#b5cea8",
+		"editor.token.typeForeground": "#4ec9b0",
+		"editor.token.functionForeground": "#dcdcaa"
+	},
+	"tokenColors": [
+		{ "scope": "comment", "settings": { "foreground": "#6a9955" } },
+		{ "scope": "keyword", "settings": { "foreground": "#c586c0" } },
+		{ "scope": "string", "settings": { "foreground": "#ce9178" } },
+		{ "scope": "constant.numeric", "settings": { "foreground": "#b5cea8" } }
+	]
+}

@@ -21,7 +21,10 @@ export interface IColorThemeOptions {
 	readonly label: string;
 	readonly colorScheme: ColorScheme;
 	readonly colorOverrides?: Readonly<Record<string, ColorValue>>;
+	readonly allowUnregisteredColorOverrides?: boolean;
 	readonly tokenColors?: IColorTheme['tokenColors'];
+	readonly semanticHighlighting?: boolean;
+	readonly semanticTokenRules?: IColorTheme['semanticTokenRules'];
 }
 
 /** Keeps color resolution current without giving each theme its own registry listener. */
@@ -31,10 +34,10 @@ export function createColorTheme(options: IColorThemeOptions): IColorTheme {
 	const colorScheme = options.colorScheme;
 	const overrides = Object.freeze({ ...options.colorOverrides });
 	let catalog = Colors.getColors();
-	let resolved = resolveThemeColors(colorScheme, overrides);
+	let resolved = resolveThemeColors(colorScheme, overrides, options.allowUnregisteredColorOverrides === true);
 	const currentColors = (): typeof resolved => {
 		if (catalog !== Colors.getColors()) {
-			resolved = resolveThemeColors(colorScheme, overrides);
+			resolved = resolveThemeColors(colorScheme, overrides, options.allowUnregisteredColorOverrides === true);
 			catalog = Colors.getColors();
 		}
 		return resolved;
@@ -58,15 +61,21 @@ export function createColorTheme(options: IColorThemeOptions): IColorTheme {
 	if (options.tokenColors) {
 		Object.assign(theme, { tokenColors: options.tokenColors });
 	}
+	if (options.semanticHighlighting !== undefined) Object.assign(theme, { semanticHighlighting: options.semanticHighlighting });
+	if (options.semanticTokenRules) Object.assign(theme, { semanticTokenRules: options.semanticTokenRules });
 	return Object.freeze(theme);
 }
 
-function resolveThemeColors(scheme: ColorScheme, overrides: Readonly<Record<string, ColorValue>>): {
+function resolveThemeColors(scheme: ColorScheme, overrides: Readonly<Record<string, ColorValue>>, allowUnregisteredColorOverrides: boolean): {
 	readonly entries: readonly ResolvedColorContribution[];
 	readonly map: ReadonlyMap<ColorIdentifier, Color | null>;
 	readonly colors: ThemeColors;
 } {
-	const entries = Colors.resolve(scheme, overrides);
+	const registeredIds = allowUnregisteredColorOverrides ? new Set(Colors.getColors().map(color => color.id)) : undefined;
+	const registeredOverrides = registeredIds
+		? Object.fromEntries(Object.entries(overrides).filter(([id]) => registeredIds.has(id)))
+		: overrides;
+	const entries = Colors.resolve(scheme, registeredOverrides);
 	const map = new Map(entries.map(({ id, value }) => [id, value] as const));
 	const colors = Object.freeze(Object.fromEntries(entries.flatMap(({ id, value }) => value ? [[id, Color.Format.CSS.formatHexA(value, true)]] : [])));
 	return { entries, map, colors };

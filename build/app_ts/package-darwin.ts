@@ -35,6 +35,7 @@ try {
 	for (const part of ['main', 'preload', 'renderer']) {
 		await cp(join(buildRoot, part), join(appStage, 'dist', part), { recursive: true });
 	}
+	await cp(join(repositoryRoot, 'resources', 'tray'), join(appStage, 'resources', 'tray'), { recursive: true });
 	const electronMetadata = JSON.parse(await readFile(join(appRoot, 'node_modules', 'electron', 'package.json'), 'utf8'));
 	await rebuild({ buildPath: appStage, electronVersion: electronMetadata.version, platform: 'darwin', arch, onlyModules: ['native-keymap'], force: true });
 
@@ -66,7 +67,10 @@ try {
 		platform: 'darwin',
 		arch,
 		electronVersion: electronMetadata.version,
-		icon: join(repositoryRoot, 'resources', 'darwin', 'ash.icns'),
+		icon: [
+			join(repositoryRoot, 'resources', 'darwin', 'ash.icns'),
+			join(repositoryRoot, 'resources', 'darwin', 'ash.icon'),
+		],
 		asar: false,
 		prune: false,
 		derefSymlinks: true,
@@ -75,7 +79,7 @@ try {
 		ignore: path => {
 			const [top, second] = path.slice(1).split('/');
 			if (!top) return false;
-			if (!['package.json', 'node_modules', 'dist', 'THIRD_PARTY_NOTICES.md'].includes(top)) return true;
+			if (!['package.json', 'node_modules', 'dist', 'resources', 'THIRD_PARTY_NOTICES.md'].includes(top)) return true;
 			return top === 'node_modules' && ['.bin', 'electron'].includes(second);
 		},
 	});
@@ -86,11 +90,18 @@ try {
 		'Contents/Resources/app/dist/main/src/main.js',
 		'Contents/Resources/app/dist/preload/src/ash/base/parts/sandbox/electron-browser/preload.cjs',
 		'Contents/Resources/app/dist/renderer/ash/electron-browser/workbench/workbench.html',
+		'Contents/Resources/app/resources/tray/ash-black-18.png',
+		'Contents/Resources/app/resources/tray/ash-black-27.png',
+		'Contents/Resources/app/resources/tray/ash-black-36.png',
+		'Contents/Resources/Assets.car',
 		'Contents/Resources/ash-package.json',
 		'Contents/Resources/bin/ash-app-server',
 		'Contents/Resources/bin/ash-update-host',
 		'Contents/Resources/update-public-key',
 	]) await lstat(join(bundlePath, file));
+	if (!(await readFile(join(bundlePath, 'Contents', 'Resources', 'electron.icns'))).equals(await readFile(join(repositoryRoot, 'resources', 'darwin', 'ash.icns')))) {
+		throw new Error('The packaged macOS Dock icon does not match Ash artwork');
+	}
 	if (!options.unsigned) await run('codesign', ['--verify', '--deep', '--strict', '--verbose=2', bundlePath], repositoryRoot);
 	console.log(`Packaged macOS application: ${bundlePath}`);
 } finally {

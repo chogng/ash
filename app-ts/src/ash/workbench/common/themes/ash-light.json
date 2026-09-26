@@ -1,0 +1,30 @@
+{
+	"$schema": "vscode://schemas/color-theme",
+	"name": "Ash Light",
+	"type": "light",
+	"include": "./ash-light-base.json",
+	"colors": {
+		"workbench.background": "#ffffff",
+		"editor.tabBackground": "#eeeeee",
+		"titleBar.background": "#ffffff",
+		"titleBar.foreground": "#1f1f1f",
+		"titleBar.actionForeground": "#424242",
+		"titleBar.hoverBackground": "#e5e5e5",
+		"commandCenter.background": "#f6f6f6",
+		"commandCenter.foreground": "#424242",
+		"commandCenter.border": "#d0d0d0",
+		"commandCenter.hoverBackground": "#ebebeb",
+		"commandCenter.activeBorder": "#888888",
+		"sideBar.background": "#f8f8f8",
+		"activityBar.background": "#f8f8f8",
+		"auxiliaryBar.background": "#f8f8f8",
+		"panel.background": "#f8f8f8",
+		"modernActivityBarItem.activeBackground": "#e6e6e6",
+		"modernActivityBarItem.hoverBackground": "#f0f0f0",
+		"modernActivityBarItem.activeForeground": "#1f1f1f",
+		"compositeBar.foreground": "#1f1f1f",
+		"compositeBar.inactiveForeground": "#616161",
+		"statusBar.background": "#ffffff",
+		"statusBar.foreground": "#1f1f1f"
+	}
+}

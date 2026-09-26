@@ -120,7 +120,7 @@ test("server semantic tokens replace intersecting syntax presentation and preser
 	using lexicalIndex = new LanguageTokenLineIndex(lexicalStore);
 	using semanticIndex = new LanguageTokenLineIndex(semanticStore);
 	using lexicalSource = new StyledTokenSource(lexicalIndex);
-	using semanticSource = new StyledTokenSource(semanticIndex);
+	using semanticSource = new StyledTokenSource(semanticIndex, 'semantic');
 	const source = overlayTokenSources(lexicalSource, semanticSource);
 
 	assert.deepEqual(source.getLineTokens(0), [{
@@ -133,7 +133,19 @@ test("server semantic tokens replace intersecting syntax presentation and preser
 		endColumn: 11,
 		presentation: SemanticTokenPresentation.Function,
 		modifiers: [SemanticTokenModifier.Declaration],
+		semanticType: 'function',
+		semanticModifiers: ['declaration'],
+		semanticLanguage: model.getLanguageId(),
 	}]);
+	const dom = new JSDOM('<!doctype html><body><code></code></body>');
+	const element = requiredElement<HTMLElement>(dom.window.document, 'code');
+	projectStanzaSemanticTokenLine(element, 'const value', source.getLineTokens(0));
+	assert.deepEqual({
+		type: element.querySelector<HTMLElement>('[data-ash-semantic-type]')?.dataset.ashSemanticType,
+		modifiers: element.querySelector<HTMLElement>('[data-ash-semantic-type]')?.dataset.ashSemanticModifiers,
+		language: element.querySelector<HTMLElement>('[data-ash-semantic-type]')?.dataset.ashSemanticLanguage,
+	}, { type: 'function', modifiers: 'declaration', language: model.getLanguageId() });
+	dom.window.close();
 });
 
 test("Semantic line projection is HTML-safe and preserves exact text", () => {

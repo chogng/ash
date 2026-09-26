@@ -11,12 +11,23 @@ import type { ColorScheme } from "./theme.js";
 
 export type ThemeColors = Readonly<Record<ColorIdentifier, string>>;
 
+export interface ISemanticTokenThemeRule {
+	readonly selector: string;
+	readonly type: string;
+	readonly modifiers: readonly string[];
+	readonly language?: string;
+	readonly foreground?: string;
+	readonly fontStyle?: string;
+}
+
 /** Resolved color and size values exposed to editor and Workbench consumers. */
 export interface IColorTheme {
 	readonly tokenColors?: readonly {
 		readonly scopes: readonly string[];
 		readonly settings: { readonly foreground?: string; readonly background?: string; readonly fontStyle?: string };
 	}[];
+	readonly semanticHighlighting?: boolean;
+	readonly semanticTokenRules?: readonly ISemanticTokenThemeRule[];
 	readonly id: string;
 	readonly label: string;
 	readonly colorScheme: ColorScheme;

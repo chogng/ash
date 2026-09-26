@@ -9,7 +9,7 @@ export const colorThemeSchemaId = 'vscode://schemas/color-theme';
 
 const color: JsonSchema = { type: 'string', pattern: '^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$' };
 
-/** The self-contained theme document accepted by both user and extension loaders. */
+/** Color-theme document shared by built-in, user, and extension themes. */
 export const colorThemeSchema: JsonSchema = {
 	type: 'object',
 	allowComments: true,
@@ -17,6 +17,7 @@ export const colorThemeSchema: JsonSchema = {
 	additionalProperties: false,
 	properties: {
 		$schema: { type: 'string' },
+		include: { type: 'string', minLength: 1, maxLength: 1024 },
 		name: { type: 'string', minLength: 1, maxLength: 256 },
 		type: { enum: ['dark', 'light', 'hcDark', 'hcLight'] },
 		colors: {
@@ -26,7 +27,7 @@ export const colorThemeSchema: JsonSchema = {
 			},
 			additionalProperties: color,
 		},
-		tokenColors: {
+		tokenColors: { anyOf: [{ type: 'string', minLength: 1, maxLength: 1024 }, {
 			type: 'array',
 			maxItems: 1024,
 			items: {
@@ -47,7 +48,7 @@ export const colorThemeSchema: JsonSchema = {
 					},
 				},
 			},
-		},
+		}] },
 		semanticHighlighting: { type: 'boolean' },
 		semanticTokenColors: {
 			type: 'object',
@@ -55,7 +56,7 @@ export const colorThemeSchema: JsonSchema = {
 				anyOf: [color, {
 					type: 'object',
 					additionalProperties: false,
-					properties: { foreground: color, fontStyle: { type: 'string' }, bold: { type: 'boolean' }, italic: { type: 'boolean' }, underline: { type: 'boolean' }, strikethrough: { type: 'boolean' } },
+					properties: { foreground: color, fontStyle: { type: 'string', pattern: '^\\s*(?:(?:italic|bold|underline|strikethrough)\\s*)*$' }, bold: { type: 'boolean' }, italic: { type: 'boolean' }, underline: { type: 'boolean' }, strikethrough: { type: 'boolean' } },
 				}],
 			},
 		},

@@ -13,7 +13,7 @@ test('desktop file transport preserves resources, revisions, and root boundaries
 	const directory = await mkdtemp(join(tmpdir(), 'ash-local-files-'));
 	using provider = new DiskFileSystemProvider([URI.file(directory)]);
 	const route = diskFileSystemProviderRoutes(provider, URI.file(directory)).find(route => route.channel === LOCAL_FILE_SYSTEM_CHANNEL_NAME)!;
-	using client = new DiskFileSystemProviderClient(async request => structuredClone(await route.invoke(route.validate(structuredClone(request)))));
+	using client = new DiskFileSystemProviderClient(async request => structuredClone(await route.invoke(route.validate(structuredClone(request)))), () => ({ dispose() {} }));
 	try {
 		const resource = URI.file(join(directory, 'test.json'));
 		await client.createFile(resource, 'error');

@@ -1,10 +1,13 @@
 import { WorkbenchFileIconThemesRegistry, WorkbenchProductIconThemesRegistry } from '../common/themeExtensionPoints.js';
 import type { IWorkbenchFileIconTheme } from '../common/workbenchThemeService.js';
 import { Emitter } from '../../../../base/common/event.js';
+import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { setIconResolver } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Disposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
+import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { ILanguageService } from '../../../../editor/common/languages/language.js';
+import { EditorSemanticHighlightingConfiguration } from '../../../../editor/common/config/editorConfigurationSchema.js';
 import { getIconClasses } from '../../../../editor/common/services/getIconClasses.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { FileKind, FileNotFoundError, FileRevisionConflictError, IFileService, type IFileContent } from '../../../../platform/files/common/files.js';
@@ -18,7 +21,7 @@ import { isDarkColorScheme } from '../../../../platform/theme/common/theme.js';
 import { WorkbenchConfiguration } from '../../../common/configuration.js';
 import { resolveWorkbenchColorTheme, SystemColorThemePreference, WorkbenchThemesRegistry } from '../../../common/theme.js';
 import type { IUserThemeDeleteResult, IUserThemeLoadIssue, IUserThemeSaveResult, IUserThemeService, IUserThemeSource } from '../../../common/userThemes.js';
-import { parseUserColorTheme, userThemeId } from '../common/colorThemeData.js';
+import { loadUserColorTheme, parseUserColorTheme, userThemeId } from '../common/colorThemeData.js';
 import { migrateUserTheme } from '../common/themeMigration.js';
 import { registerColorThemeSchemas } from '../common/colorThemeSchema.js';
 
@@ -36,6 +39,7 @@ export class WorkbenchThemeService extends Disposable implements IThemeService, 
 	private readonly productIconThemeChange = this._register(new Emitter<IProductIconTheme>());
 	public readonly onDidProductIconThemeChange = this.productIconThemeChange.event;
 	private iconStyles: HTMLStyleElement | undefined;
+	private semanticStyles: HTMLStyleElement | undefined;
 
 	constructor(
 		private readonly container: HTMLElement,
@@ -61,11 +65,16 @@ export class WorkbenchThemeService extends Disposable implements IThemeService, 
 		this.container.ownerDocument.head.append(iconStyles);
 		this.iconStyles = iconStyles;
 		this._register(toDisposable(() => iconStyles.remove()));
+		const semanticStyles = this.container.ownerDocument.createElement('style');
+		this.container.ownerDocument.head.append(semanticStyles);
+		this.semanticStyles = semanticStyles;
+		this._register(toDisposable(() => semanticStyles.remove()));
 		this._register(registerColorThemeSchemas());
 		this._register(this.configurationService.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(WorkbenchConfiguration.colorTheme)) {
 				this.updateColorTheme();
 			}
+			if (event.affectsConfiguration(EditorSemanticHighlightingConfiguration)) { this.updateSemanticStyles(); }
 			if (event.affectsConfiguration(WorkbenchConfiguration.iconTheme)) { this.updateFileIconTheme(); }
 			if (event.affectsConfiguration(WorkbenchConfiguration.productIconTheme)) { this.updateProductIconTheme(); }
 		}));
@@ -80,6 +89,7 @@ export class WorkbenchThemeService extends Disposable implements IThemeService, 
 		this.systemDarkQuery.addEventListener('change', updateSystemTheme);
 		this._register(toDisposable(() => this.systemDarkQuery.removeEventListener('change', updateSystemTheme)));
 		this.updateColorTheme();
+		this.updateSemanticStyles();
 		this._register(bindColorTheme(this, this.container));
 		this.updateFileIconTheme();
 		this.updateProductIconTheme();
@@ -103,8 +113,14 @@ export class WorkbenchThemeService extends Disposable implements IThemeService, 
 			return;
 		}
 		this.colorTheme = theme;
+		this.updateSemanticStyles();
 		this.colorThemeChange.fire(theme);
 		this.resourceIconChange.fire();
+	}
+
+	private updateSemanticStyles(): void {
+		const preference = this.configurationService.getValue<boolean | 'configuredByTheme'>(EditorSemanticHighlightingConfiguration);
+		if (this.semanticStyles) this.semanticStyles.textContent = semanticTokenThemeCss(this.colorTheme, preference === true || (preference !== false && this.colorTheme.semanticHighlighting === true));
 	}
 
 	private updateFileIconTheme(): void {
@@ -153,15 +169,32 @@ class UserThemeResources extends Disposable implements IUserThemeService {
 	private readonly registration = this._register(WorkbenchThemesRegistry.registerColorThemes([]));
 	private sources = new Map<string, ThemeSource>();
 	private loadIssues: readonly IUserThemeLoadIssue[] = [];
+	private reloadQueue: Promise<void> = Promise.resolve();
 
-	constructor(private readonly resource: URI, @IFileService private readonly files: IFileService) { super(); }
+	constructor(private readonly resource: URI, @IFileService private readonly files: IFileService) {
+		super();
+		const refresh = this._register(new RunOnceScheduler(() => {
+			void this.reload().catch(error => console.error('Failed to reload user themes', error));
+		}, 75));
+		this._register(files.onDidChangeFiles(event => {
+			if (event.resources === undefined || event.resources.some(resource => extUriBiasedIgnorePathCase.isEqualOrParent(resource, this.resource))) {
+				refresh.schedule();
+			}
+		}));
+	}
 
 	public get directory(): string { return this.resource.fsPath; }
 	public get issues(): readonly IUserThemeLoadIssue[] { return this.loadIssues; }
 	public sourceFor(id: string): IUserThemeSource | undefined { return this.sources.get(id); }
 	public getSource(id: string): string | undefined { return this.sources.get(id)?.fileContent.content; }
 
-	public async reload(): Promise<void> {
+	public reload(): Promise<void> {
+		const operation = this.reloadQueue.then(() => this.reloadResources());
+		this.reloadQueue = operation.then(() => {}, () => {});
+		return operation;
+	}
+
+	private async reloadResources(): Promise<void> {
 		const sources = new Map<string, ThemeSource>();
 		const issues: IUserThemeLoadIssue[] = [];
 		try {
@@ -186,12 +219,16 @@ class UserThemeResources extends Disposable implements IUserThemeService {
 					}
 					const file = decodeURIComponent(content.resource.path.slice(content.resource.path.lastIndexOf('/') + 1));
 					const id = userThemeId(file.slice(0, -5));
-					const theme = parseUserColorTheme(content.content, id);
+					const theme = await this.compileTheme(file, content.content, id);
 					const existing = WorkbenchThemesRegistry.getColorTheme(id);
 					if (existing && !this.sources.has(id)) throw new Error('Theme id is already in use: ' + id);
 					if (sources.has(id) && sources.get(id)!.file !== file) throw new Error('Duplicate user theme id: ' + id);
 					sources.set(id, { id, file, fileContent: content, theme });
-				} catch (error) { issues.push({ file: entry.name, message: errorMessage(error) }); }
+				} catch (error) {
+					const previous = [...this.sources.values()].find(source => source.file === entry.name);
+					if (previous && !sources.has(previous.id)) sources.set(previous.id, previous);
+					issues.push({ file: entry.name, message: errorMessage(error) });
+				}
 			}
 		} catch (error) {
 			if (!(error instanceof FileNotFoundError)) {
@@ -207,14 +244,14 @@ class UserThemeResources extends Disposable implements IUserThemeService {
 	public async save(id: string, source: string): Promise<IUserThemeSaveResult> {
 		const existing = this.sources.get(id);
 		if (!existing) throw new Error('User theme is not loaded: ' + id);
-		parseUserColorTheme(source, id);
+		await this.compileTheme(existing.file, source, id);
 		await this.files.writeFile({ resource: existing.fileContent.resource, content: source, expectedRevision: existing.fileContent.revision });
 		await this.reload();
 		return this.saved(id);
 	}
 
 	public async saveAs(source: string): Promise<IUserThemeSaveResult> {
-		const theme = parseUserColorTheme(source);
+		const theme = await this.compileTheme('draft.json', source);
 		if (WorkbenchThemesRegistry.getColorTheme(theme.id)) throw new Error('Theme id is already in use: ' + theme.id);
 		await this.create(this.child(theme.id + '.json'), source);
 		await this.reload();
@@ -235,6 +272,10 @@ class UserThemeResources extends Disposable implements IUserThemeService {
 		return this.files.readFile(resource);
 	}
 
+	private compileTheme(path: string, source: string, id?: string): Promise<IColorTheme> {
+		return loadUserColorTheme(path, async resource => resource === path ? source : (await this.read(this.child(resource))).content, id);
+	}
+
 	private async create(resource: URI, content: string): Promise<void> {
 		const temporary = URI.parse(resource.toString() + '.' + crypto.randomUUID() + '.tmp');
 		try {
@@ -250,7 +291,7 @@ class UserThemeResources extends Disposable implements IUserThemeService {
 	}
 
 	private child(name: string): URI {
-		return URI.parse(this.resource.toString().replace(/\/$/u, '') + '/' + encodeURIComponent(name));
+		return URI.parse(this.resource.toString().replace(/\/$/u, '') + '/' + name.split('/').map(encodeURIComponent).join('/'));
 	}
 
 	private saved(id: string): IUserThemeSaveResult {
@@ -267,3 +308,24 @@ export async function loadUserThemes(services: IInstantiationService, directory:
 }
 
 function errorMessage(error: unknown): string { return error instanceof Error ? error.message : String(error); }
+
+function semanticTokenThemeCss(theme: IColorTheme, enabled: boolean): string {
+	if (!enabled) return '';
+	const rules = [...theme.semanticTokenRules ?? []].sort((left, right) =>
+		Number(left.type !== '*') + left.modifiers.length + Number(left.language !== undefined)
+		- Number(right.type !== '*') - right.modifiers.length - Number(right.language !== undefined));
+	return rules.map(rule => {
+		const selector = `.stanza-editor .stanza-editor-token[data-ash-semantic-type${rule.type === '*' ? ']' : `="${rule.type}"]`}`
+			+ rule.modifiers.map(modifier => `[data-ash-semantic-modifiers~="${modifier}"]`).join('')
+			+ (rule.language ? `[data-ash-semantic-language="${rule.language}"]` : '');
+		const declarations = [];
+		if (rule.foreground) declarations.push(`color: ${rule.foreground};`);
+		if (rule.fontStyle !== undefined) {
+			const styles = new Set(rule.fontStyle.split(/\s+/u).filter(Boolean));
+			declarations.push(`font-style: ${styles.has('italic') ? 'italic' : 'normal'};`);
+			declarations.push(`font-weight: ${styles.has('bold') ? 'bold' : 'normal'};`);
+			declarations.push(`text-decoration: ${[styles.has('underline') && 'underline', styles.has('strikethrough') && 'line-through'].filter(Boolean).join(' ') || 'none'};`);
+		}
+		return declarations.length ? `${selector} { ${declarations.join(' ')} }` : '';
+	}).filter(Boolean).join('\n');
+}

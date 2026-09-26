@@ -10,8 +10,8 @@ import { homedir } from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { randomUUID } from 'node:crypto';
-import { access, chmod, lstat, readFile, unlink, writeFile } from "node:fs/promises";
-import { constants, readFileSync } from "node:fs";
+import { access, chmod, lstat, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { constants, readFileSync, watch } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { isCancellationError } from "../../base/common/errors.js";
 import { Disposable, DisposableStore, DisposableTracker, installDisposableTracker, type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
@@ -57,6 +57,7 @@ import { resolveHome } from "../../platform/home/node/home.js";
 import { diskFileSystemProviderRoutes } from "../../platform/files/electron-main/diskFileSystemProviderServer.js";
 import { URI } from "../../base/common/uri.js";
 import { DiskFileSystemProvider } from "../../platform/files/node/diskFileSystemProvider.js";
+import { LOCAL_FILE_SYSTEM_CHANGED_CHANNEL } from "../../platform/files/common/diskFileSystemProviderClient.js";
 import { applyWindowState, resolveBrowserWindowOptions, WindowControlsOverlay } from "../../platform/windows/electron-main/windows.js";
 import { WindowsStateHandler } from "../../platform/windows/electron-main/windowsStateHandler.js";
 import { WindowsMainService, trackWindowResourceChanges, windowCloseResponseIpcRoute, windowOperationIpcRoute, windowResourceIpcRoutes } from "../../platform/windows/electron-main/windowsMainService.js";
@@ -129,9 +130,17 @@ interface PendingWindowLaunch {
 	readonly cwd: string;
 }
 
-/**
- * Owns the Electron application's persistent services, Workbench windows, IPC, and shutdown.
- */
+async function watchProfileThemeFiles(profileRoot: string, window: BrowserWindow, resources: DisposableStore): Promise<void> {
+	const directory = join(profileRoot, 'themes');
+	await mkdir(directory, { recursive: true });
+	const watcher = watch(directory, { persistent: false, recursive: true }, () => {
+		window.webContents.send(LOCAL_FILE_SYSTEM_CHANGED_CHANNEL);
+	});
+	watcher.on('error', error => console.error('Failed to watch user themes', error));
+	resources.add(toDisposable(() => watcher.close()));
+}
+
+/** Owns the Electron application's persistent services, Workbench windows, IPC, and shutdown. */
 export class AshApplication extends Disposable {
 	private defaultModeId: WorkbenchModeId;
 	private readonly rendererRoot: string;
@@ -229,7 +238,13 @@ export class AshApplication extends Disposable {
 		if (!app.isReady()) {
 			throw new Error("Ash application startup requires Electron to be ready");
 		}
-		if (process.platform !== "darwin") {
+		if (process.platform === "darwin") {
+			assertDefined(app.dock, 'macOS Dock API is unavailable');
+			if (!app.isPackaged) {
+				app.dock.setIcon(join(app.getAppPath(), '..', 'resources', 'darwin', 'ash.png'));
+			}
+			await app.dock.show();
+		} else {
 			clearElectronApplicationMenu();
 		}
 
@@ -247,27 +262,29 @@ export class AshApplication extends Disposable {
 	}
 
 	private createTray(): void {
-		if (process.platform !== 'win32') return;
+		if (process.platform !== 'win32' && process.platform !== 'darwin') return;
 		const iconDirectory = app.isPackaged
 			? join(app.getAppPath(), 'resources', 'tray')
 			: join(app.getAppPath(), '..', 'resources', 'tray');
+		const iconSize = process.platform === 'darwin' ? 18 : 16;
 		const loadIcon = (color: 'black' | 'white') => {
-			const icon = nativeImage.createFromPath(join(iconDirectory, `ash-${color}-16.png`));
-			icon.addRepresentation({ scaleFactor: 1.5, buffer: readFileSync(join(iconDirectory, `ash-${color}-24.png`)) });
-			icon.addRepresentation({ scaleFactor: 2, buffer: readFileSync(join(iconDirectory, `ash-${color}-32.png`)) });
+			const icon = nativeImage.createFromPath(join(iconDirectory, `ash-${color}-${iconSize}.png`));
+			icon.addRepresentation({ scaleFactor: 1.5, buffer: readFileSync(join(iconDirectory, `ash-${color}-${iconSize * 1.5}.png`)) });
+			icon.addRepresentation({ scaleFactor: 2, buffer: readFileSync(join(iconDirectory, `ash-${color}-${iconSize * 2}.png`)) });
 			return icon;
 		};
 		const blackIcon = loadIcon('black');
-		const whiteIcon = loadIcon('white');
-		const tray = new Tray(nativeTheme.shouldUseDarkColorsForSystemIntegratedUI ? whiteIcon : blackIcon);
+		if (process.platform === 'darwin') blackIcon.setTemplateImage(true);
+		const whiteIcon = process.platform === 'win32' ? loadIcon('white') : undefined;
+		const tray = new Tray(whiteIcon && nativeTheme.shouldUseDarkColorsForSystemIntegratedUI ? whiteIcon : blackIcon);
 		tray.setToolTip(AshApplicationName);
 		tray.on('click', () => this.handleActivate());
-		const updateIcon = (): void => tray.setImage(nativeTheme.shouldUseDarkColorsForSystemIntegratedUI ? whiteIcon : blackIcon);
-		nativeTheme.on('updated', updateIcon);
-		this._register(toDisposable(() => {
-			nativeTheme.removeListener('updated', updateIcon);
-			tray.destroy();
-		}));
+		this._register(toDisposable(() => tray.destroy()));
+		if (whiteIcon) {
+			const updateIcon = (): void => tray.setImage(nativeTheme.shouldUseDarkColorsForSystemIntegratedUI ? whiteIcon : blackIcon);
+			nativeTheme.on('updated', updateIcon);
+			this._register(toDisposable(() => nativeTheme.removeListener('updated', updateIcon)));
+		}
 	}
 
 	async disposeAfterStartupFailure(): Promise<void> {
@@ -785,6 +802,7 @@ export class AshApplication extends Disposable {
 			...updateIpcRoutes(this.updateMainService),
 		];
 		ipcRoutes.push(openDedicatedWindowIpcRoute(() => this.openSessionsWindow(record)));
+		await watchProfileThemeFiles(this.profileRoot, window, windowDisposables);
 		if (this.nativeMenubar) {
 			const nativeContextMenu = windowDisposables.add(
 				new ElectronContextMenu(window),
@@ -856,6 +874,7 @@ export class AshApplication extends Disposable {
 					returnToParentWindowIpcRoute(() => record.dedicatedWindow.returnToParent(window)),
 					windowCloseResponseIpcRoute(this.windowsMainService, window),
 				];
+				await watchProfileThemeFiles(this.profileRoot, window, windowDisposables);
 				if (this.nativeMenubar) {
 					const nativeContextMenu = windowDisposables.add(new ElectronContextMenu(window));
 					ipcRoutes.push(...nativeContextMenuIpcRoutes(nativeContextMenu));

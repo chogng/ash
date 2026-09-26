@@ -471,6 +471,7 @@ function clipSemanticTokens(tokens: readonly ResolvedSemanticToken[], startColum
 			presentation: token.presentation,
 			...(token.modifiers && token.modifiers.length > 0 ? { modifiers: token.modifiers } : {}),
 			...(token.syntaxPresentation === undefined ? {} : { syntaxPresentation: token.syntaxPresentation }),
+			...(token.semanticType === undefined ? {} : { semanticType: token.semanticType, semanticModifiers: token.semanticModifiers, semanticLanguage: token.semanticLanguage }),
 		})];
 	}));
 }

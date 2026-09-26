@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { test } from "mocha";
 import { readFile } from 'node:fs/promises';
 import { WorkbenchFileIconThemesRegistry } from '../../../themes/common/themeExtensionPoints.js';
+import { WorkbenchThemesRegistry } from '../../../../common/theme.js';
 import { DisposableTracker, installDisposableTracker, toDisposable } from "../../../../../base/common/lifecycle.js";
 import type { ExtensionCatalog, ExtensionDescriptor, IExtensionApi } from "../../../../../platform/extensions/common/extensionApi.js";
 import type { IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
@@ -292,6 +293,50 @@ test("reads each generation-scoped resource once while preparing one catalog", a
 
 	assert.equal(reads, 1);
 	assert.equal(service.themes.currentCatalog.themes.length, 2);
+});
+
+test('loads an extension theme include through its package resources', async () => {
+	const themedDescriptor = descriptorWithManifest({
+		name: 'demo', publisher: 'ash', version: '1.0.0',
+		contributes: { themes: [{ id: 'inherited', label: 'Inherited', path: 'themes/child.json', uiTheme: 'vs-dark' }] },
+	});
+	const resources = new Map([
+		['themes/child.json', JSON.stringify({ include: './base.json', colors: { 'editor.background': '#445566' }, tokenColors: [{ scope: 'string', settings: { foreground: '#556677' } }] })],
+		['themes/base.json', JSON.stringify({ colors: { 'editor.background': '#112233', 'statusBar.background': '#223344' }, tokenColors: [{ scope: 'comment', settings: { foreground: '#334455' } }] })],
+	]);
+	const reads: string[] = [];
+	const api: IExtensionApi = {
+		list: async () => ({ generation: 1, extensions: [themedDescriptor], diagnostics: [] }),
+		readResource: async request => {
+			reads.push(request.path);
+			return new TextEncoder().encode(resources.get(request.path)!);
+		},
+	};
+	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() });
+	await service.start();
+	const theme = service.themes.currentCatalog.themes[0]!;
+	assert.deepEqual(reads, ['themes/child.json', 'themes/base.json']);
+	assert.deepEqual(theme.colors, { 'editor.background': '#445566', 'statusBar.background': '#223344' });
+	assert.deepEqual(theme.tokenColors.map(rule => rule.scopes), [['comment'], ['string']]);
+	assert.equal(WorkbenchThemesRegistry.getColorTheme(theme.id)?.getColorCss('statusBar.background'), '#223344');
+});
+
+test('loads an extension theme with a TextMate tokenColors resource', async () => {
+	const themedDescriptor = descriptorWithManifest({
+		name: 'demo', publisher: 'ash', version: '1.0.0',
+		contributes: { themes: [{ id: 'textmate', label: 'TextMate', path: 'themes/main.json', uiTheme: 'vs-dark' }] },
+	});
+	const resources = new Map([
+		['themes/main.json', JSON.stringify({ colors: { 'editor.background': '#112233' }, tokenColors: './syntax.tmTheme' })],
+		['themes/syntax.tmTheme', '<?xml version="1.0"?><plist version="1.0"><dict><key>settings</key><array><dict><key>scope</key><string>comment</string><key>settings</key><dict><key>foreground</key><string>#123456</string></dict></dict></array></dict></plist>'],
+	]);
+	const api: IExtensionApi = {
+		list: async () => ({ generation: 1, extensions: [themedDescriptor], diagnostics: [] }),
+		readResource: async request => new TextEncoder().encode(resources.get(request.path)!),
+	};
+	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() });
+	await service.start();
+	assert.deepEqual(service.themes.currentCatalog.themes[0]?.tokenColors.map(rule => rule.scopes), [['comment']]);
 });
 
 test("rejects a catalog whose canonical manifest digest does not match", async () => {

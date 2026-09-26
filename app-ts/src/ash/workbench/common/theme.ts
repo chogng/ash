@@ -2,8 +2,17 @@ import { Emitter, type Event } from "../../base/common/event.js";
 import { type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
 import { registerColor } from "../../platform/theme/common/colorUtils.js";
 import { accentBackground, border, contrastBorder, descriptionForeground, foreground, selectionBackground } from "../../platform/theme/common/colors/baseColors.js";
-import { darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme, lightColorTheme } from "../../platform/theme/common/colorTheme.js";
 import type { IColorTheme } from "../../platform/theme/common/themeService.js";
+import { colorThemeType, resolveColorThemeDocument } from "../services/themes/common/colorThemeData.js";
+import { parseExtensionManifest } from "../services/extensions/common/extensionManifest.js";
+import { createExtensionWorkbenchColorTheme, parseExtensionTheme } from "../services/extensions/common/extensionTheme.js";
+import themeManifest from "./themes/package.json" with { type: "json" };
+import darkThemeDocument from "./themes/ash-dark.json" with { type: "json" };
+import lightThemeDocument from "./themes/ash-light.json" with { type: "json" };
+import highContrastDarkThemeDocument from "./themes/ash-high-contrast-dark.json" with { type: "json" };
+import highContrastLightThemeDocument from "./themes/ash-high-contrast-light.json" with { type: "json" };
+import darkBaseThemeDocument from "./themes/ash-dark-base.json" with { type: "json" };
+import lightBaseThemeDocument from "./themes/ash-light-base.json" with { type: "json" };
 
 const colorOwner = "workbench.shell";
 const color = (id: string, dark: string, light: string, highContrastDark: string, highContrastLight: string, description: string): string =>
@@ -12,29 +21,29 @@ const alias = (id: string, value: string, description: string): string =>
 	registerColor(id, { dark: value, light: value, highContrastDark: value, highContrastLight: value }, { description, owner: colorOwner });
 
 alias("sectionHeader.foreground", descriptionForeground, "Section header foreground.");
-color("workbench.background", "#1e1e1e", "#ffffff", "#000000", "#ffffff", "Workbench root background.");
+const workbenchBackground = color("workbench.background", "#1e1e1e", "#ffffff", "#000000", "#ffffff", "Workbench root background.");
 registerColor("editorGroup.border", {
 	dark: border,
 	light: border,
 	highContrastDark: contrastBorder,
 	highContrastLight: contrastBorder,
 }, { description: "Border between editor groups.", owner: colorOwner });
-color("editor.tabBackground", "#EEEEEE", "#EEEEEE", "#000000", "#ffffff", "Background for inactive Editor tabs.");
+color("editor.tabBackground", "#252526", "#EEEEEE", "#000000", "#ffffff", "Background for inactive Editor tabs.");
 
-export const titleBarBackground = color("titleBar.background", "#FFFFFF", "#FFFFFF", "#000000", "#ffffff", "Title bar background.");
-color('modernActivityBarItem.activeBackground', '#e6e6e6', '#e6e6e6', '#000000', '#ffffff', 'Selected Activity Bar item background.');
-color('modernActivityBarItem.hoverBackground', '#f0f0f0', '#f0f0f0', '#000000', '#ffffff', 'Hovered Activity Bar item background.');
-color('modernActivityBarItem.activeForeground', '#1f1f1f', '#1f1f1f', foreground, foreground, 'Selected Activity Bar icon foreground.');
-color("titleBar.foreground", "#1f1f1f", "#1f1f1f", foreground, foreground, "Title bar foreground.");
-export const titleBarActionForeground = color("titleBar.actionForeground", "#424242", "#424242", foreground, foreground, "Title bar action foreground.");
-color("titleBar.hoverBackground", "#e5e5e5", "#e5e5e5", "#333333", "#dddddd", "Hovered title bar item background.");
-registerColor('commandCenter.foreground', { dark: '#424242', light: '#424242', highContrastDark: '#ffffff', highContrastLight: '#000000' }, { description: 'Command Center search text and icon.', owner: colorOwner });
-registerColor('commandCenter.background', { dark: '#f6f6f6', light: '#f6f6f6', highContrastDark: '#000000', highContrastLight: '#ffffff' }, { description: 'Command Center search background.', owner: colorOwner });
-registerColor('commandCenter.border', { dark: '#d0d0d0', light: '#d0d0d0', highContrastDark: contrastBorder, highContrastLight: contrastBorder }, { description: 'Command Center search border.', owner: colorOwner });
-registerColor('commandCenter.hoverBackground', { dark: '#ebebeb', light: '#ebebeb', highContrastDark: '#333333', highContrastLight: '#dddddd' }, { description: 'Hovered Command Center search background.', owner: colorOwner });
+export const titleBarBackground = color("titleBar.background", workbenchBackground, "#FFFFFF", "#000000", "#ffffff", "Title bar background.");
+color('modernActivityBarItem.activeBackground', '#373737', '#e6e6e6', '#000000', '#ffffff', 'Selected Activity Bar item background.');
+color('modernActivityBarItem.hoverBackground', '#333333', '#f0f0f0', '#000000', '#ffffff', 'Hovered Activity Bar item background.');
+color('modernActivityBarItem.activeForeground', foreground, '#1f1f1f', foreground, foreground, 'Selected Activity Bar icon foreground.');
+color("titleBar.foreground", foreground, "#1f1f1f", foreground, foreground, "Title bar foreground.");
+export const titleBarActionForeground = color("titleBar.actionForeground", "#b8b8b8", "#424242", foreground, foreground, "Title bar action foreground.");
+color("titleBar.hoverBackground", "#333333", "#e5e5e5", "#333333", "#dddddd", "Hovered title bar item background.");
+registerColor('commandCenter.foreground', { dark: foreground, light: '#424242', highContrastDark: '#ffffff', highContrastLight: '#000000' }, { description: 'Command Center search text and icon.', owner: colorOwner });
+registerColor('commandCenter.background', { dark: '#2b2b2b', light: '#f6f6f6', highContrastDark: '#000000', highContrastLight: '#ffffff' }, { description: 'Command Center search background.', owner: colorOwner });
+registerColor('commandCenter.border', { dark: '#454545', light: '#d0d0d0', highContrastDark: contrastBorder, highContrastLight: contrastBorder }, { description: 'Command Center search border.', owner: colorOwner });
+registerColor('commandCenter.hoverBackground', { dark: '#333333', light: '#ebebeb', highContrastDark: '#333333', highContrastLight: '#dddddd' }, { description: 'Hovered Command Center search background.', owner: colorOwner });
 registerColor('commandCenter.activeBorder', { dark: '#888888', light: '#888888', highContrastDark: contrastBorder, highContrastLight: contrastBorder }, { description: 'Active Command Center search border.', owner: colorOwner });
 
-const sideBarBackground = color("sideBar.background", "#F8F8F8", "#F8F8F8", "#000000", "#ffffff", "Primary side bar background.");
+const sideBarBackground = color("sideBar.background", "#252526", "#F8F8F8", "#000000", "#ffffff", "Primary side bar background.");
 alias('activityBar.background', sideBarBackground, 'Activity Bar background.');
 alias("auxiliaryBar.background", sideBarBackground, "Auxiliary side bar background.");
 alias("panel.background", sideBarBackground, "Panel background.");
@@ -49,8 +58,8 @@ registerColor("files.emptyExplorerOpenFolderHoverBackground", {
 color("compositeBar.foreground", "#ffffff", "#1f1f1f", foreground, foreground, "Active composite bar foreground.");
 color("compositeBar.inactiveForeground", "#858585", "#616161", foreground, foreground, "Inactive composite bar foreground.");
 
-const statusBarForeground = color("statusBar.foreground", "#1f1f1f", "#1f1f1f", foreground, foreground, "Status bar foreground.");
-color("statusBar.background", "#FFFFFF", "#FFFFFF", "#000000", "#ffffff", "Status bar background.");
+const statusBarForeground = color("statusBar.foreground", foreground, "#1f1f1f", foreground, foreground, "Status bar foreground.");
+color("statusBar.background", workbenchBackground, "#FFFFFF", "#000000", "#ffffff", "Status bar background.");
 const statusBarItemHoverForeground = alias("statusBarItem.hoverForeground", statusBarForeground, "Hovered status bar item foreground.");
 const statusBarItemHoverBackground = color(
 	"statusBarItem.hoverBackground", "#5a5d5e50", "#5a5d5e29", "#333333", "#dddddd", "Hovered status bar item background.",
@@ -150,12 +159,36 @@ export class WorkbenchThemeRegistry {
 	}
 }
 
+// Compile after shell token registration; configuration and Sessions need these themes before window creation.
+// The manifest owns selectable identities while the bundled documents supply their colors and syntax rules.
+const builtInThemeDocuments = new Map<string, unknown>([
+	["ash-light.json", lightThemeDocument],
+	["ash-dark.json", darkThemeDocument],
+	["ash-high-contrast-light.json", highContrastLightThemeDocument],
+	["ash-high-contrast-dark.json", highContrastDarkThemeDocument],
+	["ash-light-base.json", lightBaseThemeDocument],
+	["ash-dark-base.json", darkBaseThemeDocument],
+]);
+const builtInThemeExtensionId = `${themeManifest.publisher}.${themeManifest.name}`;
+const builtInThemeManifest = parseExtensionManifest(JSON.stringify(themeManifest), {
+	id: builtInThemeExtensionId,
+	name: themeManifest.name,
+	publisher: themeManifest.publisher,
+	version: themeManifest.version,
+});
+const builtInWorkbenchThemes = builtInThemeManifest.contributes.themes.map(contribution => {
+	if (!contribution.id || !contribution.uiTheme) throw new Error(`Incomplete built-in theme contribution: ${contribution.path}`);
+	const document = resolveColorThemeDocument(contribution.path, path => builtInThemeDocuments.get(path));
+	const theme = createExtensionWorkbenchColorTheme(parseExtensionTheme(
+		document, contribution.id, builtInThemeExtensionId, contribution.label, contribution.uiTheme, contribution.path,
+	));
+	if (!document.type || colorThemeType(document.type) !== theme.colorScheme) throw new Error(`Built-in theme scheme mismatch: ${contribution.path}`);
+	return theme;
+});
+
 /** Built-in and contributed color themes selectable by configuration. */
 export const WorkbenchThemesRegistry = new WorkbenchThemeRegistry([
-	lightColorTheme,
-	darkColorTheme,
-	highContrastLightColorTheme,
-	highContrastDarkColorTheme,
+	...builtInWorkbenchThemes,
 ]);
 
 /** Theme preference used before persisted configuration has been loaded. */
@@ -175,7 +208,7 @@ export function resolveWorkbenchColorTheme(
 	systemPrefersDark: boolean,
 ): IColorTheme {
 	if (preference === SystemColorThemePreference) {
-		return systemPrefersDark ? darkColorTheme : lightColorTheme;
+		return getWorkbenchColorTheme(systemPrefersDark ? "ash-dark" : "ash-light");
 	}
 	return getWorkbenchColorTheme(preference);
 }

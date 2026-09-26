@@ -1,16 +1,21 @@
 import { Emitter } from '../../../base/common/event.js';
-import { Disposable } from '../../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
 import { FileNotFoundError, FileRevisionConflictError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileContent, type IFileEntry, type IFileService, type IFileStat, type IFileWriteRequest, type IFileWriteResult } from './files.js';
 
 export const LOCAL_FILE_SYSTEM_CHANNEL_NAME = 'ash:files';
+export const LOCAL_FILE_SYSTEM_CHANGED_CHANNEL = 'ash:files:changed';
 
 /** URI serialization and error transport for the desktop file provider. */
 export class DiskFileSystemProviderClient extends Disposable implements IFileService {
 	private readonly changes = this._register(new Emitter<IFileChangeEvent>());
 	public readonly onDidChangeFiles = this.changes.event;
 
-	constructor(private readonly invoke: (request: unknown) => Promise<unknown>) { super(); }
+	constructor(private readonly invoke: (request: unknown) => Promise<unknown>, onDidChange: (listener: () => void) => { dispose(): void }) {
+		super();
+		const subscription = onDidChange(() => this.changes.fire({ resources: undefined }));
+		this._register(toDisposable(() => subscription.dispose()));
+	}
 
 	public async stat(resource: URI): Promise<IFileStat> {
 		const stat = await this.call<IFileStat>('stat', resource);

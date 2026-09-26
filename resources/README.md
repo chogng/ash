@@ -39,13 +39,19 @@ artwork from `tray/`.
   Windows source and `pnpm app-icon:check` to verify both outputs.
   Electron development windows load the ICO directly. The Electron packaging
   command embeds it in `Ash.exe`, and the Rust `app` build embeds it in `app.exe`.
-- `darwin/ash.icns` is the macOS application bundle icon.
+- `darwin/ash.icon` is the editable layered macOS app icon. Its black background
+  and white Ash mark are compiled into the application asset catalog on a macOS 26
+  build host with Xcode 26. macOS 26 uses this asset; `darwin/ash.icns` provides
+  the icon on earlier macOS versions. `darwin/ash.png` lets Electron set the
+  same artwork on the Dock during development. Update all three when changing
+  the app mark.
 - `linux/ash.png` is the Linux desktop and window icon.
 - The Rust Workbench embeds `win32/ash-512.png` for its Windows window icon.
 - `server/` contains the Web favicon, install icons, and manifest.
 - `tray/ash-black.svg` and `tray/ash-white.svg` are transparent monochrome
-  tray artwork. The matching 16, 24, and 32 pixel PNGs are packaged with the
-  Windows Electron application for different display scales.
+  tray artwork. Windows uses 16, 24, and 32 pixel PNGs across display scales.
+  macOS uses 18, 27, and 36 pixel black PNGs as a system template; the 18-point
+  canvas keeps Ash's visible mark in scale with other menu bar icons.
 
 Vite copies `server/` unchanged to the renderer output root, and the browser
 Workbench and Sessions pages link those stable paths. On Windows x64,
@@ -58,9 +64,10 @@ use the same application ID as the running Electron process. Run
 `pnpm --dir app-ts package:win32:verify` to launch the packaged Workbench with
 Playwright after building the bundle.
 
-The Windows Electron host installs a theme-aware tray icon while the application
-runs; clicking it focuses the Workbench. Closing the last window still exits the
-application.
+The Windows Electron host installs a theme-aware tray icon, and the macOS host
+installs a template menu bar icon. Clicking either icon focuses the Workbench.
+Closing the last window still exits the application on Windows; macOS keeps the
+application running so the Dock and menu bar icon can reopen a Workbench window.
 
 ## Icons
 

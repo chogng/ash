@@ -65,8 +65,8 @@ test('workbench colors follow theme changes and keep editor group borders visibl
 	});
 	await configuration.updateValue(WorkbenchConfiguration.colorTheme, 'ash-dark');
 	assert.deepEqual(colors(), {
-		workbench: '#1e1e1e', tab: '#eeeeee', titleBar: '#ffffff',
-		sideBar: '#f8f8f8', groupBorder: '#2b2b2b',
+		workbench: '#1e1e1e', tab: '#252526', titleBar: '#1e1e1e',
+		sideBar: '#252526', groupBorder: '#2b2b2b',
 	});
 	await configuration.updateValue(WorkbenchConfiguration.colorTheme, highContrastDarkColorTheme.id);
 	assert.equal(colors().groupBorder, '#ffffff');

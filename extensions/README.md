@@ -45,9 +45,8 @@ The current declarative pack contains the following package directories:
   `toml`, `typescript-basics`, `xml`, and `yaml` provide language IDs, file associations, language
   configuration, TextMate grammars, and—where upstream provides them—snippets.
 - `theme-seti` provides the Seti file icon document, font, and third-party notices.
-- `theme-defaults` provides four self-contained VS Code-derived color-theme documents. Themes that
-  rely on VS Code `include` composition are intentionally excluded until the packaging pipeline
-  can flatten them deterministically.
+- `theme-defaults` currently provides four self-contained VS Code-derived color-theme documents.
+  The Workbench loader also resolves package-relative JSON `include` files when a theme uses them.
 
 The manifest is the only source of contribution metadata. `AppServerExtensionService` receives
 Rust-validated package resources and projects languages/configuration/snippets/grammars/themes/

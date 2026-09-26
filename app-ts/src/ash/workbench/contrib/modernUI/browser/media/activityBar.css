@@ -13,7 +13,6 @@
 	min-width: 36px;
 	height: 36px;
 	min-height: 36px;
-	color: var(--ash-composite-bar-inactive-foreground);
 }
 
 .ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar-vertical .ash-composite-bar-item.checked::before {

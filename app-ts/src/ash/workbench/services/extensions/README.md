@@ -33,7 +33,7 @@ filesystem access.
 | language `configuration` | Parsed JSONC to Stanza language configuration | Only the existing Stanza configuration vocabulary |
 | `snippets` | Prefix-bearing snippets become completion providers; file templates power `New File from Template` | Template bodies create language-tagged untitled editors |
 | `grammars` | Root/injection loader plus advanced embedded/token/bracket metadata | TextMate service owns later materialization |
-| `themes` | Strictly parsed versioned catalog, selectable Workbench color themes, and active TextMate token projection | `include` is rejected; manifest NLS placeholders use deterministic fallback labels |
+| `themes` | Strictly parsed versioned catalog, selectable Workbench color themes, and active TextMate token projection | Package-relative JSON `include` is resolved before registration; manifest NLS placeholders use deterministic fallback labels |
 | `iconThemes` | Package-relative fonts and SVG/PNG file icons; selectable through `workbench.iconTheme` | File associations and light variants; folder-specific associations are not consumed by the current file label contract |
 | `productIconThemes` | Package-relative SVG artwork for semantic product icon IDs; selectable through `workbench.productIconTheme` | Unspecified IDs keep Ash's built-in SVG artwork |
 | `debuggers` | Unique type, label, adapter program, and args | Discovery only; no VS Code Debug Extension API |
@@ -41,8 +41,9 @@ filesystem access.
 `configurationDefaults`, `semanticTokenScopes`, extension JavaScript, LSP declarations, and dynamic
 UI are not activated by this loader.
 
-Theme documents accept only the four supported `uiTheme` values, hexadecimal colors, and token
-settings composed of `foreground`, `background`, and supported `fontStyle` values. Unknown
+Theme documents accept the four supported `uiTheme` values, hexadecimal colors, package-relative
+JSON `include` files, `tokenColors` arrays or package-relative TextMate theme files, and semantic token styles. Token
+settings use `foreground`, `background`, and supported `fontStyle` values. Unknown
 Workbench color token IDs remain catalog data but are ignored when compiling product color themes.
 
 Product icon themes use the manifest entry `{ "id": "my-icons", "label": "My icons", "path": "./icons/theme.json" }`.

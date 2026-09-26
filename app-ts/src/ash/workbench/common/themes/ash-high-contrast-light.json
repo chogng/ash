@@ -1,0 +1,25 @@
+{
+	"$schema": "vscode://schemas/color-theme",
+	"name": "Ash High Contrast Light",
+	"type": "hcLight",
+	"colors": {
+		"foreground": "#000000",
+		"editor.background": "#ffffff",
+		"editor.foreground": "#000000",
+		"workbench.background": "#ffffff",
+		"editor.tabBackground": "#ffffff",
+		"titleBar.background": "#ffffff",
+		"titleBar.foreground": "#000000",
+		"titleBar.actionForeground": "#000000",
+		"commandCenter.background": "#ffffff",
+		"commandCenter.foreground": "#000000",
+		"sideBar.background": "#ffffff",
+		"activityBar.background": "#ffffff",
+		"auxiliaryBar.background": "#ffffff",
+		"panel.background": "#ffffff",
+		"modernActivityBarItem.activeBackground": "#ffffff",
+		"modernActivityBarItem.activeForeground": "#000000",
+		"statusBar.background": "#ffffff",
+		"statusBar.foreground": "#000000"
+	}
+}

@@ -20,12 +20,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: macos-15
+          - runner: macos-26
             target: aarch64-apple-darwin
             python: python3
             archive: zip
             update_format: zip
-          - runner: macos-15-intel
+          - runner: macos-26-intel
             target: x86_64-apple-darwin
             python: python3
             archive: zip

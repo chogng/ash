@@ -526,6 +526,14 @@ configurationRegistry.registerConfiguration({
 		return value;
 	},
 });
+export const EditorSemanticHighlightingConfiguration = configurationRegistry.registerConfiguration<boolean | 'configuredByTheme'>({
+	key: 'editor.semanticHighlighting.enabled',
+	defaultValue: 'configuredByTheme',
+	parse(value) {
+		if (value === true || value === false || value === 'configuredByTheme') return value;
+		throw new TypeError('editor.semanticHighlighting.enabled must be true, false, or configuredByTheme');
+	},
+});
 configurationRegistry.registerConfiguration({
 	key: 'editor.tabSize',
 	defaultValue: EDITOR_MODEL_DEFAULTS.tabSize,

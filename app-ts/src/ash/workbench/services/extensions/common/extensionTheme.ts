@@ -3,6 +3,7 @@ import { Color } from "../../../../base/common/color.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IColorTheme } from "../../../../platform/theme/common/themeService.js";
 import { createDocumentColorTheme, parseColorThemeDocument } from "../../themes/common/colorThemeData.js";
+import type { ColorThemeDocument } from "../../themes/common/colorThemeData.js";
 import { ColorScheme } from "../../../../platform/theme/common/theme.js";
 
 export interface ExtensionThemeTokenColorSettings {
@@ -23,6 +24,8 @@ export interface ExtensionThemeDefinition {
 	readonly uiTheme?: string;
 	readonly colors: Readonly<Record<string, string>>;
 	readonly tokenColors: readonly ExtensionThemeTokenColorRule[];
+	readonly semanticHighlighting?: boolean;
+	readonly semanticTokenColors?: ColorThemeDocument['semanticTokenColors'];
 }
 
 export interface ExtensionThemeCatalog {
@@ -84,6 +87,8 @@ export function parseExtensionTheme(value: unknown, id: string, extensionId: str
 		...(uiTheme === undefined ? {} : { uiTheme }),
 		colors,
 		tokenColors,
+		...(document.semanticHighlighting === undefined ? {} : { semanticHighlighting: document.semanticHighlighting }),
+		...(document.semanticTokenColors === undefined ? {} : { semanticTokenColors: document.semanticTokenColors }),
 	});
 }
 
@@ -96,7 +101,12 @@ export function extensionWorkbenchThemeId(extensionId: string, contributionId: s
 
 /** Compiles supported VS Code color keys over Ash's complete theme defaults. */
 export function createExtensionWorkbenchColorTheme(theme: ExtensionThemeDefinition): IColorTheme {
-	return createDocumentColorTheme({ colors: theme.colors, tokenColors: theme.tokenColors.map(rule => ({ scope: rule.scopes, settings: rule.settings })) }, theme.id, theme.label, extensionColorScheme(theme.uiTheme));
+	return createDocumentColorTheme({
+		colors: theme.colors,
+		tokenColors: theme.tokenColors.map(rule => ({ scope: rule.scopes, settings: rule.settings })),
+		semanticHighlighting: theme.semanticHighlighting,
+		semanticTokenColors: theme.semanticTokenColors,
+	}, theme.id, theme.label, extensionColorScheme(theme.uiTheme));
 }
 
 function normalizeTheme(theme: ExtensionThemeDefinition): ExtensionThemeDefinition {
@@ -110,7 +120,16 @@ function normalizeTheme(theme: ExtensionThemeDefinition): ExtensionThemeDefiniti
 		...(uiTheme === undefined ? {} : { uiTheme }),
 		colors: normalizeColors(theme.colors),
 		tokenColors: normalizeTokenColors(theme.tokenColors),
+		...(theme.semanticHighlighting === undefined ? {} : { semanticHighlighting: theme.semanticHighlighting }),
+		...(theme.semanticTokenColors === undefined ? {} : { semanticTokenColors: normalizeSemanticTokenColors(theme.semanticTokenColors) }),
 	});
+}
+
+function normalizeSemanticTokenColors(value: NonNullable<ExtensionThemeDefinition['semanticTokenColors']>): NonNullable<ExtensionThemeDefinition['semanticTokenColors']> {
+	parseColorThemeDocument({ semanticTokenColors: value });
+	return Object.freeze(Object.fromEntries(Object.entries(value).map(([selector, style]) => [
+		selector, typeof style === 'string' ? style : Object.freeze({ ...style }),
+	])));
 }
 
 function parseTokenColors(value: unknown, owner: string): readonly ExtensionThemeTokenColorRule[] {

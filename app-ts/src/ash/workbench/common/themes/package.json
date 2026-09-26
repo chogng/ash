@@ -1,0 +1,13 @@
+{
+	"name": "ash-theme-defaults",
+	"publisher": "ash",
+	"version": "1.0.0",
+	"contributes": {
+		"themes": [
+			{ "id": "ash-light", "label": "Ash Light", "uiTheme": "vs", "path": "./ash-light.json" },
+			{ "id": "ash-dark", "label": "Ash Dark", "uiTheme": "vs-dark", "path": "./ash-dark.json" },
+			{ "id": "ash-high-contrast-light", "label": "Ash High Contrast Light", "uiTheme": "hc-light", "path": "./ash-high-contrast-light.json" },
+			{ "id": "ash-high-contrast-dark", "label": "Ash High Contrast Dark", "uiTheme": "hc-black", "path": "./ash-high-contrast-dark.json" }
+		]
+	}
+}

@@ -24,6 +24,7 @@ import type { TextMateGrammarRegistration } from "../../textMate/common/textMate
 import { normalizeTextMateScopeTheme } from "../../textMate/common/textMateScopeTheme.js";
 import { projectExtensionTokenTheme } from "../../textMate/common/textMateThemeProjection.js";
 import { parseJsonc } from "../common/jsonc.js";
+import { loadColorThemeDocument } from "../../themes/common/colorThemeData.js";
 import { parseExtensionManifest } from "../common/extensionService.js";
 import { ExtensionFileTemplateRegistry, type ExtensionFileTemplateDefinition, type ExtensionFileTemplateSource } from "../common/extensionFileTemplate.js";
 import { createExtensionSnippetProvider, materializeExtensionFileTemplate, parseExtensionSnippetFile, type ExtensionSnippetDefinition } from "../common/extensionSnippetProvider.js";
@@ -409,9 +410,12 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	}
 
 	private async loadTheme(resources: Map<string, Promise<Uint8Array>>, generation: number, extension: ExtensionDescriptor, index: number, contributionId: string | undefined, label: string, path: string, uiTheme: string | undefined): Promise<ExtensionThemeDefinition> {
-		const bytes = await this.loadResource(resources, generation, extension.id, path);
-		const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-		return parseExtensionTheme(parseJsonc(text, `Extension '${extension.id}' theme '${path}'`), extensionWorkbenchThemeId(extension.id, contributionId, index), extension.id, label, uiTheme, `Extension '${extension.id}' theme '${path}'`);
+		const document = await loadColorThemeDocument(path, async resource => {
+			const bytes = await this.loadResource(resources, generation, extension.id, resource);
+			const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+			return /\.tmTheme$/iu.test(resource) ? text : parseJsonc(text, `Extension '${extension.id}' theme '${resource}'`);
+		});
+		return parseExtensionTheme(document, extensionWorkbenchThemeId(extension.id, contributionId, index), extension.id, label, uiTheme, `Extension '${extension.id}' theme '${path}'`);
 	}
 
 	private loadResource(resources: Map<string, Promise<Uint8Array>>, generation: number, extensionId: string, path: string): Promise<Uint8Array> {

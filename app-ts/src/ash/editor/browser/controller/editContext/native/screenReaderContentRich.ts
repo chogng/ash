@@ -120,6 +120,7 @@ function clipSemanticTokens(
 			...(token.presentation === undefined ? {} : { presentation: token.presentation }),
 			...(token.modifiers === undefined ? {} : { modifiers: token.modifiers }),
 			...(token.syntaxPresentation === undefined ? {} : { syntaxPresentation: token.syntaxPresentation }),
+			...(token.semanticType === undefined ? {} : { semanticType: token.semanticType, semanticModifiers: token.semanticModifiers, semanticLanguage: token.semanticLanguage }),
 		})];
 	}));
 }

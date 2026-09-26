@@ -184,6 +184,9 @@ export interface SemanticTokenStyling {
 export interface ResolvedSemanticToken {
 	readonly startColumn: number;
 	readonly endColumn: number;
+	readonly semanticType?: string;
+	readonly semanticModifiers?: readonly string[];
+	readonly semanticLanguage?: string;
 	readonly presentation?: SemanticTokenPresentation;
 	readonly modifiers?: readonly SemanticTokenModifier[];
 	readonly syntaxPresentation?: LanguageToken['presentation'];

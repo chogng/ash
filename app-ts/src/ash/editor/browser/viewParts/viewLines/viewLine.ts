@@ -258,6 +258,11 @@ export function projectStanzaSemanticTokenLine(
 		if (token || decorations.length > 0) tokenElement.className = "stanza-editor-token";
 		if (token?.presentation) tokenElement.classList.add(token.presentation);
 		for (const modifier of token?.modifiers ?? []) tokenElement.classList.add(modifier);
+		if (token?.semanticType) {
+			tokenElement.dataset.ashSemanticType = token.semanticType;
+			tokenElement.dataset.ashSemanticModifiers = token.semanticModifiers?.join(' ') ?? '';
+			if (token.semanticLanguage) tokenElement.dataset.ashSemanticLanguage = token.semanticLanguage;
+		}
 		if (token?.syntaxPresentation) applySyntaxPresentation(tokenElement, token.syntaxPresentation);
 		for (const decoration of decorations) tokenElement.classList.add(...decoration.inlineClassName.split(/\s+/u).filter(Boolean));
 		tokenElement.textContent = visibleText.slice(startColumn, endColumn);
@@ -297,6 +302,7 @@ export function snapshotStanzaSemanticTokenLines(source: SemanticTokenSource): R
 			presentation: token.presentation,
 			...(token.modifiers && token.modifiers.length > 0 ? { modifiers: Object.freeze([...token.modifiers]) } : {}),
 			...(token.syntaxPresentation === undefined ? {} : { syntaxPresentation: token.syntaxPresentation }),
+			...(token.semanticType === undefined ? {} : { semanticType: token.semanticType, semanticModifiers: token.semanticModifiers, semanticLanguage: token.semanticLanguage }),
 		})));
 		validateLineTokens(source.textModel.getLineContent((line.lineIndex) + 1), tokens);
 		result.set(line.lineIndex, tokens);

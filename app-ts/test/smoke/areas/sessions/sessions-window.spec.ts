@@ -89,8 +89,27 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	await expect(sessionsPage.locator("#app")).toHaveAttribute("data-workbench-state", "empty");
 	await sessionsPage.emulateMedia({ colorScheme: "dark" });
 	await expect(sessionsPage.locator("#app")).toHaveAttribute("data-color-theme", "ash-dark");
+	await expect.poll(() => sessionsPage.locator("#app").evaluate(element => getComputedStyle(element).getPropertyValue("--ash-title-bar-background").trim())).toBe("#1e1e1e");
 	await sessionsPage.emulateMedia({ colorScheme: "light" });
 	await expect(sessionsPage.locator("#app")).toHaveAttribute("data-color-theme", "ash-light");
+	await expect.poll(() => sessionsPage.locator("#app").evaluate(element => getComputedStyle(element).getPropertyValue("--ash-title-bar-background").trim())).toBe("#ffffff");
+	const originalThemeSettings = await sessionsPage.evaluate(async () => {
+		const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
+		const snapshot = await ipc.invoke('ash:configuration:read') as { readonly revision: number; readonly document: { readonly version: 1; readonly source: string } };
+		const values = JSON.parse(snapshot.document.source);
+		values['workbench.colorTheme'] = 'ash-dark';
+		await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(values) } });
+		return snapshot.document;
+	});
+	await expect(sessionsPage.locator('#app')).toHaveAttribute('data-color-theme', 'ash-dark');
+	await expect(workbench.element).toHaveAttribute('data-color-theme', 'ash-dark');
+	await sessionsPage.emulateMedia({ colorScheme: 'dark' });
+	await sessionsPage.evaluate(async document => {
+		const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
+		const snapshot = await ipc.invoke('ash:configuration:read') as { readonly revision: number };
+		await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document });
+	}, originalThemeSettings);
+	await expect(sessionsPage.locator('#app')).toHaveAttribute('data-color-theme', 'ash-dark');
 	await expect(sessionsPage.locator("[data-part='titlebar']")).toBeVisible();
 	await expect(sessionsPage.locator("[data-part='sidebar']")).toBeVisible();
 	await expect(sessionsPage.locator("[data-part='sessions']")).toBeVisible();

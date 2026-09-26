@@ -48,12 +48,45 @@ void app.whenReady().then(async () => {
 			ready: app.isReady(),
 			windows: BrowserWindow.getAllWindows().length,
 		}))).toEqual({ ready: true, windows: 1 });
-		if (process.platform === 'win32') {
+		if (process.platform === 'win32' || process.platform === 'darwin') {
 			expect(await application.evaluate(() => (globalThis as typeof globalThis & { __ashTrayTooltip?: string }).__ashTrayTooltip)).toBe('Ash');
+			if (process.platform === 'darwin') {
+				expect(await application.evaluate(({ app }) => app.dock!.isVisible())).toBe(true);
+				const menuBarIconPaths = [18, 27, 36].map(size => resolve(desktop, `../resources/tray/ash-black-${size}.png`));
+				const menuBarIconSizes = await application.evaluate(({ nativeImage }, paths) => paths.map(path => nativeImage.createFromPath(path).getSize()), menuBarIconPaths);
+				expect(menuBarIconSizes).toEqual([{ width: 18, height: 18 }, { width: 27, height: 27 }, { width: 36, height: 36 }]);
+				const visibleMarkSize = await application.evaluate(({ nativeImage }, path) => {
+					const image = nativeImage.createFromPath(path);
+					const bitmap = image.toBitmap();
+					const { width, height } = image.getSize();
+					let left = width, top = height, right = -1, bottom = -1;
+					for (let y = 0; y < height; y++) {
+						for (let x = 0; x < width; x++) {
+							if (bitmap[(y * width + x) * 4 + 3] <= 32) continue;
+							left = Math.min(left, x);
+							top = Math.min(top, y);
+							right = Math.max(right, x);
+							bottom = Math.max(bottom, y);
+						}
+					}
+					return { width: right - left + 1, height: bottom - top + 1 };
+				}, menuBarIconPaths[2]);
+				expect(visibleMarkSize.width).toBeGreaterThanOrEqual(30);
+				expect(visibleMarkSize.height).toBeGreaterThanOrEqual(30);
+				const trayBounds = await application.evaluate(() => (globalThis as typeof globalThis & { __ashTray: { getBounds(): { width: number; height: number } } }).__ashTray.getBounds());
+				expect(trayBounds.width).toBeGreaterThan(0);
+				expect(trayBounds.height).toBeGreaterThan(0);
+			}
 			await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].minimize());
 			await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isMinimized())).toBe(true);
 			await application.evaluate(() => (globalThis as typeof globalThis & { __ashTray: { emit(event: string): void } }).__ashTray.emit('click'));
 			await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isMinimized())).toBe(false);
+			if (process.platform === 'darwin') {
+				await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].close());
+				await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(0);
+				await application.evaluate(() => (globalThis as typeof globalThis & { __ashTray: { emit(event: string): void } }).__ashTray.emit('click'));
+				await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(1);
+			}
 		}
 	} finally {
 		await application.close();

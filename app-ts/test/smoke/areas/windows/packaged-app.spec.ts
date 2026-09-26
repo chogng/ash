@@ -58,7 +58,7 @@ test('macOS package launches, opens a window tab, and installs its shell command
 	try {
 		const page = await application.firstWindow();
 		await new Workbench(page).waitForReady();
-		expect(await application.evaluate(({ app }) => app.isPackaged)).toBe(true);
+		expect(await application.evaluate(({ app }) => ({ packaged: app.isPackaged, dockVisible: app.dock!.isVisible() }))).toEqual({ packaged: true, dockVisible: true });
 		const commandPath = await page.evaluate(async () => {
 			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
 			return ipc.invoke('ash:native-host:shell-command', 'install') as Promise<string>;

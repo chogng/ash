@@ -17,13 +17,15 @@ import { INotificationService } from "../../platform/notification/common/notific
 import type { IRendererHost } from "../../platform/renderer/common/rendererHost.js";
 import { IStorageService, WillSaveStateReason } from "../../platform/storage/common/storage.js";
 import { bindColorTheme } from "../../platform/theme/browser/themeStyles.js";
-import { darkColorTheme, lightColorTheme } from "../../platform/theme/common/colorTheme.js";
+import { Colors } from "../../platform/theme/common/colorRegistry.js";
 import { defaultProductIconTheme, type IColorTheme, type IThemeService } from "../../platform/theme/common/themeService.js";
 import { WorkbenchState } from "../../platform/workspace/common/workspace.js";
 import type { WorkbenchPart } from "../../workbench/browser/part.js";
 import { WorkbenchInteractionServices, type WorkbenchContextMenuServiceFactory } from "../../workbench/browser/workbenchInteractionServices.js";
 import { WorkbenchWindow } from "../../workbench/browser/window.js";
 import { WorkbenchModeRegistry, type WorkbenchModeId } from "../../workbench/common/workbenchMode.js";
+import { SystemColorThemePreference, WorkbenchThemesRegistry, resolveWorkbenchColorTheme } from "../../workbench/common/theme.js";
+import { WorkbenchConfiguration } from "../../workbench/common/configuration.js";
 import { ChatService } from "../../workbench/services/chat/browser/chatService.js";
 import { IChatService } from "../../workbench/services/chat/common/chatService.js";
 import { WorkbenchConfigurationService } from "../../workbench/services/configuration/browser/configurationService.js";
@@ -69,8 +71,8 @@ export class Workbench extends Disposable {
 		const ownerWindow = ownerDocument.defaultView;
 		if (!ownerWindow) throw new Error("Sessions renderer requires an owner window");
 
-		this._register(bindSessionsTheme(options.container));
 		const configurationService = this._register(new WorkbenchConfigurationService({ api: options.configurationApi }));
+		this._register(bindSessionsTheme(options.container, configurationService));
 		const services = this._register(new ServiceContainer());
 		const workbenchWindow = this._register(new WorkbenchWindow({
 			root: options.container,
@@ -169,14 +171,15 @@ export class Workbench extends Disposable {
 		}));
 		this._register(bindResizableLayout(this.layoutService.onDidLayoutMainContainer, layout));
 		this.layoutService.layout();
-		void this.initialize(view);
+		void this.initialize(view, configurationService);
 	}
 
 	shutdown(reason: ShutdownReason): Promise<void> {
 		return this.lifecycleService.shutdown(reason);
 	}
 
-	private async initialize(view: SessionsService): Promise<void> {
+	private async initialize(view: SessionsService, configurationService: WorkbenchConfigurationService): Promise<void> {
+		await configurationService.reloadConfiguration();
 		await view.initialize();
 		if (!view.activeSelection) view.openNewSession("New code session");
 	}
@@ -184,16 +187,21 @@ export class Workbench extends Disposable {
 
 const darkColorSchemeQuery = "(prefers-color-scheme: dark)";
 
-/** Projects the system color scheme into the standalone Sessions window. */
-function bindSessionsTheme(root: HTMLElement): IDisposable {
+/** Applies the profile theme selection to the dedicated Sessions window. */
+function bindSessionsTheme(root: HTMLElement, configurationService: WorkbenchConfigurationService): IDisposable {
 	const ownerWindow = root.ownerDocument.defaultView;
 	if (!ownerWindow) throw new Error("Sessions theme requires an owner window");
 	const systemColorScheme = ownerWindow.matchMedia(darkColorSchemeQuery);
 	const themeChanges = new Emitter<IColorTheme>();
+	const getColorTheme = (): IColorTheme => {
+		const preference = configurationService.getValue<string>(WorkbenchConfiguration.colorTheme);
+		return WorkbenchThemesRegistry.getColorTheme(preference)
+			?? resolveWorkbenchColorTheme(SystemColorThemePreference, systemColorScheme.matches);
+	};
 	const themeService: IThemeService = {
 		onDidColorThemeChange: themeChanges.event,
 		onDidProductIconThemeChange: Event.None,
-		getColorTheme: () => systemColorScheme.matches ? darkColorTheme : lightColorTheme,
+		getColorTheme,
 		getProductIconTheme: () => defaultProductIconTheme,
 	};
 	const handleSystemColorSchemeChange = (): void => themeChanges.fire(themeService.getColorTheme());
@@ -201,6 +209,11 @@ function bindSessionsTheme(root: HTMLElement): IDisposable {
 	return combinedDisposable(
 		themeChanges,
 		bindColorTheme(themeService, root),
+		configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(WorkbenchConfiguration.colorTheme)) themeChanges.fire(getColorTheme());
+		}),
+		WorkbenchThemesRegistry.onDidChange(() => themeChanges.fire(getColorTheme())),
+		Colors.onDidChange(() => themeChanges.fire(getColorTheme())),
 		toDisposable(() => systemColorScheme.removeEventListener("change", handleSystemColorSchemeChange)),
 	);
 }

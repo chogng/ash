@@ -72,7 +72,7 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 		if (this.semanticTokens) this._register(this.semanticTokens.onDidEncounterError(error => this.errorEmitter.fire(error)));
 		const lexicalSource = this._register(new StyledTokenSource(this.languageTokens));
 		this.renderedTokens = this.semanticTokens
-			? overlayTokenSources(lexicalSource, this._register(new StyledTokenSource(this.semanticTokens)))
+			? overlayTokenSources(lexicalSource, this._register(new StyledTokenSource(this.semanticTokens, 'semantic')))
 			: lexicalSource;
 		this._register(this.languageTokenLineIndex.onDidChange(() => this.changeEmitter.fire()));
 		this._register(textModel.onDidChangeContent(change => {

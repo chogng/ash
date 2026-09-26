@@ -424,7 +424,7 @@ export class StyledTokenSource extends Disposable implements SemanticTokenSource
 	private readonly changeEmitter = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changeEmitter.event;
 
-	constructor(private readonly source: SemanticTokenModelSource) {
+	constructor(private readonly source: SemanticTokenModelSource, private readonly kind: 'syntax' | 'semantic' = 'syntax') {
 		super();
 		this._register(source.onDidChange(() => {
 			this.lineTokens.clear();
@@ -445,7 +445,7 @@ export class StyledTokenSource extends Disposable implements SemanticTokenSource
 		this.assertNotDisposed();
 		let tokens = this.lineTokens.get(lineIndex);
 		if (!tokens) {
-			tokens = resolveLineTokens(this.source.getLineTokens(lineIndex));
+			tokens = resolveLineTokens(this.source.getLineTokens(lineIndex), this.kind, this.source.textModel.getLanguageId());
 			this.lineTokens.set(lineIndex, tokens);
 		}
 		return tokens;
@@ -473,14 +473,19 @@ export function overlayTokenSources(base: SemanticTokenSource, overlay: Semantic
 	});
 }
 
-function resolveLineTokens(tokens: readonly LanguageToken[]): readonly ResolvedSemanticToken[] {
+function resolveLineTokens(tokens: readonly LanguageToken[], kind: 'syntax' | 'semantic', languageId: string): readonly ResolvedSemanticToken[] {
 	const resolved: ResolvedSemanticToken[] = [];
 	for (const token of tokens) {
 		const tokenStyling = resolveSemanticTokenStyling(token);
-		if (tokenStyling.presentation === undefined && token.presentation === undefined) continue;
+		if (kind === 'syntax' && tokenStyling.presentation === undefined && token.presentation === undefined) continue;
 		resolved.push(Object.freeze({
 			startColumn: token.range.startColumn - 1,
 			endColumn: token.range.endColumn - 1,
+			...(kind === 'semantic' ? {
+				semanticType: token.tokenType,
+				semanticModifiers: token.modifiers,
+				semanticLanguage: token.languageId ?? languageId,
+			} : {}),
 			...(tokenStyling.presentation === undefined ? {} : { presentation: tokenStyling.presentation }),
 			...(tokenStyling.modifiers.length === 0 ? {} : { modifiers: tokenStyling.modifiers }),
 			...(token.presentation === undefined ? {} : { syntaxPresentation: token.presentation }),
@@ -506,6 +511,7 @@ function mergeResolvedLineTokens(base: readonly ResolvedSemanticToken[], overlay
 			endColumn,
 			...(token.presentation === undefined ? {} : { presentation: token.presentation }),
 			...(token.modifiers === undefined ? {} : { modifiers: token.modifiers }),
+			...(token.semanticType === undefined ? {} : { semanticType: token.semanticType, semanticModifiers: token.semanticModifiers, semanticLanguage: token.semanticLanguage }),
 			...(semantic || token.syntaxPresentation === undefined ? {} : { syntaxPresentation: token.syntaxPresentation }),
 		}));
 	}

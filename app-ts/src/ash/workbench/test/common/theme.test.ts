@@ -2,7 +2,33 @@ import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import { createColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from "../../../platform/theme/common/colorTheme.js";
 import { ColorScheme } from "../../../platform/theme/common/theme.js";
-import { WorkbenchThemeRegistry, WorkbenchThemesRegistry } from "../../common/theme.js";
+import { WorkbenchThemeRegistry, WorkbenchThemesRegistry, getWorkbenchColorTheme, resolveWorkbenchColorTheme } from "../../common/theme.js";
+import darkThemeDocument from "../../common/themes/ash-dark.json" with { type: "json" };
+import lightThemeDocument from "../../common/themes/ash-light.json" with { type: "json" };
+import highContrastDarkThemeDocument from "../../common/themes/ash-high-contrast-dark.json" with { type: "json" };
+import highContrastLightThemeDocument from "../../common/themes/ash-high-contrast-light.json" with { type: "json" };
+import darkBaseThemeDocument from "../../common/themes/ash-dark-base.json" with { type: "json" };
+import lightBaseThemeDocument from "../../common/themes/ash-light-base.json" with { type: "json" };
+import themeManifest from "../../common/themes/package.json" with { type: "json" };
+
+test('built-in Workbench themes apply every color in their JSON documents', () => {
+	assert.deepEqual(WorkbenchThemesRegistry.getColorThemes().map(theme => theme.id), themeManifest.contributes.themes.map(theme => theme.id));
+	for (const [id, document, inherited] of [
+		['ash-dark', darkThemeDocument, darkBaseThemeDocument],
+		['ash-light', lightThemeDocument, lightBaseThemeDocument],
+		['ash-high-contrast-dark', highContrastDarkThemeDocument, undefined],
+		['ash-high-contrast-light', highContrastLightThemeDocument, undefined],
+	] as const) {
+		const theme = getWorkbenchColorTheme(id);
+		assert.equal(theme.label, document.name);
+		for (const [color, value] of Object.entries({ ...inherited?.colors, ...document.colors })) {
+			assert.equal(theme.getColorCss(color), value, `${id}: ${color}`);
+		}
+		if (inherited) assert.equal(theme.tokenColors?.length, inherited.tokenColors.length);
+	}
+	assert.equal(resolveWorkbenchColorTheme('system', true), getWorkbenchColorTheme('ash-dark'));
+	assert.equal(resolveWorkbenchColorTheme('system', false), getWorkbenchColorTheme('ash-light'));
+});
 
 test('built-in high contrast themes keep common foreground and background pairs readable', () => {
 	assert.deepEqual(WorkbenchThemesRegistry.getColorThemes().filter(theme => theme.colorScheme.startsWith('high-contrast')).map(theme => theme.id), [
@@ -29,7 +55,7 @@ test('built-in high contrast themes keep common foreground and background pairs 
 		['statusBar.foreground', 'statusBarItem.hoverBackground'],
 		['statusBarItem.remoteForeground', 'statusBarItem.remoteBackground'],
 	] as const;
-	for (const theme of [highContrastDarkColorTheme, highContrastLightColorTheme]) {
+	for (const theme of [getWorkbenchColorTheme(highContrastDarkColorTheme.id), getWorkbenchColorTheme(highContrastLightColorTheme.id)]) {
 		for (const [foreground, background] of pairs) {
 			const text = theme.getColor(foreground);
 			const surface = theme.getColor(background);

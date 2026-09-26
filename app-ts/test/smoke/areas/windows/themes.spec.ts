@@ -38,6 +38,41 @@ test('Workbench follows system color changes without reopening the window', asyn
 	await expect.poll(() => workbench.element.evaluate(element => getComputedStyle(element).colorScheme)).toBe('light');
 });
 
+test.describe('Workbench shell colors', () => {
+	test.use({ openWorkspace: false });
+
+	test('Dark and light themes color the shell and Welcome together', async ({ workbench }) => {
+		const titleBar = workbench.element.locator('.ash-workbench-titlebar');
+		const activityBar = workbench.element.locator('.ash-workbench-activitybar');
+		const selectedActivity = activityBar.locator('.ash-composite-bar-item.checked').first();
+		const statusBar = workbench.element.locator('.ash-workbench-statusbar');
+		const commandCenter = titleBar.locator('.ash-titlebar-command-center-button');
+		const welcome = workbench.editors.groupAt(0).welcome;
+
+		await workbench.page.emulateMedia({ colorScheme: 'dark' });
+		await expect(workbench.element).toHaveAttribute('data-color-theme', 'ash-dark');
+		await expect(welcome).toHaveCSS('background-color', 'rgb(30, 30, 30)');
+		await expect(titleBar).toHaveCSS('background-color', 'rgb(30, 30, 30)');
+		await expect(titleBar).toHaveCSS('color', 'rgb(204, 204, 204)');
+		await expect(activityBar).toHaveCSS('background-color', 'rgb(37, 37, 38)');
+		await expect(selectedActivity).toHaveCSS('color', 'rgb(204, 204, 204)');
+		await expect.poll(() => selectedActivity.evaluate(element => getComputedStyle(element, '::after').backgroundColor)).toBe('rgb(55, 55, 55)');
+		await expect(statusBar).toHaveCSS('background-color', 'rgb(30, 30, 30)');
+		await expect(commandCenter).toHaveCSS('background-color', 'rgb(43, 43, 43)');
+		await expect(commandCenter).toHaveCSS('color', 'rgb(204, 204, 204)');
+		await expect(statusBar).toHaveCSS('color', 'rgb(204, 204, 204)');
+
+		await workbench.page.emulateMedia({ colorScheme: 'light' });
+		await expect(workbench.element).toHaveAttribute('data-color-theme', 'ash-light');
+		await expect(welcome).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+		await expect(titleBar).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+		await expect(activityBar).toHaveCSS('background-color', 'rgb(248, 248, 248)');
+		await expect(selectedActivity).toHaveCSS('color', 'rgb(31, 31, 31)');
+		await expect(statusBar).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+		await expect(commandCenter).toHaveCSS('background-color', 'rgb(246, 246, 246)');
+	});
+});
+
 test('Settings modal dims and restores Electron window controls', async ({ application, target, workbench }) => {
 	test.skip(target.kind !== 'electron', 'Requires Electron window controls');
 	if (!('windows' in application)) return;
@@ -101,6 +136,11 @@ test('Desktop migrates a user theme through the file provider and applies its co
 		await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(values) } });
 	});
 	await expect.poll(() => workbench.element.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background').trim())).toBe('#123456');
+	await writeFile(join(home, 'themes', 'test-migration.json'), JSON.stringify({
+		name: 'Test Migration', type: 'dark',
+		colors: { 'editor.background': '#304050', 'titleBar.background': '#18293a', 'titleBar.actionForeground': '#fedcba' },
+	}));
+	await expect.poll(() => workbench.element.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background').trim())).toBe('#304050');
 	if (hasOverlay) {
 		await expect.poll(() => application.evaluate(() => (globalThis as unknown as { themeUpdates: { color?: string; symbolColor?: string }[] }).themeUpdates.at(-1))).toEqual({ color: '#18293a', symbolColor: '#fedcba' });
 	}
