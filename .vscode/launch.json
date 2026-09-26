@@ -35,6 +35,18 @@
 			}
 		},
 		{
+			"name": "Ash Browser UI (TypeScript only)",
+			"type": "chrome",
+			"request": "launch",
+			"url": "http://127.0.0.1:5173/browser/workbench/workbench.html",
+			"webRoot": "${workspaceFolder}/app-ts/src/ash/code",
+			"preLaunchTask": "Launch Ash Browser Vite",
+			"presentation": {
+				"group": "1_ash_desktop",
+				"order": 3
+			}
+		},
+		{
 			"name": "App (Rust Desktop)",
 			"type": "node-terminal",
 			"request": "launch",

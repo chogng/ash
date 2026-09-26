@@ -83,7 +83,7 @@ test('Sessions entry sits beside Quick Access and animates its Ash mark on inten
 	await expect(page.locator(`.ash-titlebar-left-actions [data-action-id="${actionId}"]`)).toHaveCount(0);
 	await expect(entry).toBeVisible();
 	await expect(entry).toHaveAttribute('aria-label', target.kind === 'electron' ? 'Open Agents Window' : 'Open Code Sessions');
-	const mark = entry.locator('svg.ash-sessions-titlebar-mark');
+	const mark = entry.locator('svg.ash-titlebar-mark');
 	await expect(mark.locator('path')).toHaveCount(9);
 
 	for (const width of [1200, 700]) {
@@ -91,7 +91,14 @@ test('Sessions entry sits beside Quick Access and animates its Ash mark on inten
 		await expect.poll(async () => {
 			const searchBounds = await commandCenter.boundingBox();
 			const entryBounds = await entry.boundingBox();
-			return searchBounds && entryBounds ? entryBounds.x - searchBounds.x - searchBounds.width : -1;
+			if (!searchBounds || !entryBounds) return -Infinity;
+			if (width >= 800) {
+				return entryBounds.x - searchBounds.x - searchBounds.width;
+			}
+			return Math.max(
+				entryBounds.x - searchBounds.x - searchBounds.width,
+				searchBounds.x - entryBounds.x - entryBounds.width,
+			);
 		}).toBeGreaterThanOrEqual(6);
 		const searchBounds = await commandCenter.boundingBox();
 		const entryBounds = await entry.boundingBox();
@@ -102,12 +109,12 @@ test('Sessions entry sits beside Quick Access and animates its Ash mark on inten
 
 	const petal = mark.locator('#petal-north');
 	await entry.hover();
-	await expect(petal).toHaveCSS('animation-name', 'ash-sessions-mark-bloom');
+	await expect(petal).toHaveCSS('animation-name', 'ash-titlebar-mark-bloom');
 	await page.mouse.move(400, 180);
 	await commandCenter.focus();
 	await page.keyboard.press('Tab');
 	await expect(entry).toBeFocused();
-	await expect(petal).toHaveCSS('animation-name', 'ash-sessions-mark-bloom');
+	await expect(petal).toHaveCSS('animation-name', 'ash-titlebar-mark-bloom');
 	await page.emulateMedia({ reducedMotion: 'reduce' });
 	await expect(petal).toHaveCSS('animation-name', 'none');
 

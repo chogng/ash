@@ -21,6 +21,41 @@
 			}
 		},
 		{
+			"label": "Launch Ash Browser Vite",
+			"type": "shell",
+			"command": "pnpm --dir app-ts dev:web",
+			"isBackground": true,
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": {
+				"owner": "vite",
+				"fileLocation": "absolute",
+				"pattern": {
+					"regexp": "^(.+?):(\\d+):(\\d+):\\s+(error|warning)\\s+(.*)$",
+					"file": 1,
+					"line": 2,
+					"column": 3,
+					"severity": 4,
+					"message": 5
+				},
+				"background": {
+					"activeOnStart": true,
+					"beginsPattern": ".*VITE.*",
+					"endsPattern": "(Local|Network):.*"
+				}
+			},
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated",
+				"group": "ash-browser-ui",
+				"clear": true
+			},
+			"runOptions": {
+				"instanceLimit": 1
+			}
+		},
+		{
 			"label": "Launch Stanza Vite",
 			"type": "shell",
 			"command": "pnpm run dev:stanza",

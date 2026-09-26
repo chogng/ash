@@ -149,3 +149,67 @@
   align-items: center;
   color: var(--ash-title-bar-action-foreground);
 }
+
+.ash-titlebar-mark path {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.ash-titlebar-center-adjacent-actions .ash-button:is(:hover, :focus-visible) .ash-titlebar-mark path {
+  animation: ash-titlebar-mark-bloom 780ms cubic-bezier(0.16, 1, 0.3, 1) var(--ash-mark-delay) both;
+}
+
+.ash-titlebar-mark #petal-center {
+  --ash-mark-delay: 170ms;
+  --ash-mark-x: 0px;
+  --ash-mark-y: 0px;
+  --ash-mark-twist: 0deg;
+}
+
+.ash-titlebar-mark #petal-north,
+.ash-titlebar-mark #petal-south {
+  --ash-mark-delay: 320ms;
+}
+
+.ash-titlebar-mark #petal-north { --ash-mark-y: 42px; --ash-mark-twist: -5deg; }
+.ash-titlebar-mark #petal-south { --ash-mark-y: -42px; --ash-mark-twist: 5deg; }
+.ash-titlebar-mark #petal-northwest { --ash-mark-delay: 400ms; --ash-mark-x: 32px; --ash-mark-y: 32px; --ash-mark-twist: -5deg; }
+.ash-titlebar-mark #petal-southeast { --ash-mark-delay: 400ms; --ash-mark-x: -32px; --ash-mark-y: -32px; --ash-mark-twist: 5deg; }
+.ash-titlebar-mark #petal-northeast { --ash-mark-delay: 480ms; --ash-mark-x: -32px; --ash-mark-y: 32px; --ash-mark-twist: 5deg; }
+.ash-titlebar-mark #petal-southwest { --ash-mark-delay: 480ms; --ash-mark-x: 32px; --ash-mark-y: -32px; --ash-mark-twist: -5deg; }
+.ash-titlebar-mark #petal-west { --ash-mark-delay: 560ms; --ash-mark-x: 42px; --ash-mark-twist: -5deg; }
+.ash-titlebar-mark #petal-east { --ash-mark-delay: 560ms; --ash-mark-x: -42px; --ash-mark-twist: 5deg; }
+
+@keyframes ash-titlebar-mark-bloom {
+  0% {
+    opacity: 0;
+    translate: var(--ash-mark-x, 0px) var(--ash-mark-y, 0px);
+    scale: 0.78;
+    rotate: var(--ash-mark-twist, 0deg);
+  }
+
+  72% {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1.015;
+    rotate: 0deg;
+    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  100% {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+    rotate: 0deg;
+  }
+}
+
+.ash-workbench.ash-reduce-motion .ash-titlebar-mark path {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ash-titlebar-mark path {
+    animation: none !important;
+  }
+}
