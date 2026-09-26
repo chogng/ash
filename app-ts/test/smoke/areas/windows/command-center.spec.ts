@@ -11,6 +11,7 @@ test('titlebar navigation moves through editor history beside Quick Access', asy
 	const search = page.getByRole('button', { name: 'Search commands' });
 	await expect(back).toBeDisabled();
 	await expect(forward).toBeDisabled();
+	const originalViewport = await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
 	for (const width of [1200, 700]) {
 		await page.setViewportSize({ width, height: 800 });
 		const [leftBounds, navigationBounds, searchBounds] = await Promise.all([
@@ -24,6 +25,7 @@ test('titlebar navigation moves through editor history beside Quick Access', asy
 		expect(navigationBounds!.x - leftBounds!.x - leftBounds!.width).toBeGreaterThanOrEqual(0);
 		expect(searchBounds!.x - navigationBounds!.x - navigationBounds!.width).toBeGreaterThanOrEqual(6);
 	}
+	await page.setViewportSize(originalViewport);
 
 	const openUntitled = async () => {
 		await page.getByRole('button', { name: 'Application menu' }).click();
