@@ -1,7 +1,17 @@
-import type { Locator } from '@playwright/test';
+import type { ElectronApplication, Locator } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
+
+test('macOS system menu receives workbench commands', async ({ target, application }) => {
+	test.skip(target.kind !== 'electron' || process.platform !== 'darwin' || target.workbenchMode !== 'code', 'This scenario requires the macOS Code desktop product');
+	const electron = application as ElectronApplication;
+
+	await expect.poll(() => electron.evaluate(({ Menu }) => {
+		const fileMenu = Menu.getApplicationMenu()?.items.find(item => item.label === 'File');
+		return fileMenu?.submenu?.items.map(item => item.label);
+	})).toContain('New Untitled Text Editor');
+});
 
 test('application menu trigger uses the titlebar action size', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');

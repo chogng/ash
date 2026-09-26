@@ -3,7 +3,7 @@ import { RendererWorkspaceHost } from "../../platform/workspaces/electron-main/r
 import { BrowserAutomationHost } from "../../platform/browser/electron-main/browserAutomationHostRoutes.js";
 import { rendererSystemHostRoutes } from "../../platform/native/electron-main/rendererSystemHostRoutes.js";
 import { nativeImage, nativeTheme, shell } from "electron";
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, screen, TouchBar, Tray, type Event as ElectronEvent, type MenuItemConstructorOptions } from "electron/main";
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, screen, Tray, type Event as ElectronEvent } from "electron/main";
 import type { DirGrant } from "../../platform/dirPermissions/common/dirPermissionsService.js";
 import { basename, delimiter, dirname, isAbsolute, join } from "node:path";
 import { homedir } from 'node:os';
@@ -42,6 +42,7 @@ import { KeybindingsResourceMainService } from "../../platform/keybinding/electr
 import { NativeKeyboardLayoutMainService } from "../../platform/keyboardLayout/electron-main/nativeKeyboardLayoutMainService.js";
 import { UserKeyboardLayoutMainService } from "../../platform/keyboardLayout/electron-main/userKeyboardLayoutMainService.js";
 import { NativeMenubarMainService, nativeMenubarIpcRoutes } from "../../platform/menubar/electron-main/menubarMainService.js";
+import { clearElectronApplicationMenu, createElectronMenubarHost } from "../../platform/menubar/electron-main/menubar.js";
 import { nativeHostIpcRoutes } from "../../platform/native/electron-main/nativeHostIpc.js";
 import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL } from "../../platform/native/common/nativeHost.js";
 import { WindowDialogHost } from '../../platform/dialogs/electron-main/windowDialogHost.js';
@@ -65,6 +66,7 @@ import { RemoteRuntimeInstaller, remoteRuntimeArtifactFromEnvironment } from "..
 import { RemoteRuntimeProvisioner } from "../../platform/remote/electron-main/remoteRuntimeProvisioner.js";
 import { RemoteConnectionProfiles } from "../../platform/remote/electron-main/remoteConnectionProfiles.js";
 import { RemoteConnections } from "../../platform/remote/electron-main/remoteConnections.js";
+import { UnavailableRemoteConnectionService, type IRemoteConnectionService } from "../../platform/remote/common/remoteConnectionService.js";
 import type { RemoteConnectionDefinition } from "../../platform/remote/common/remoteConnectionService.js";
 import { getRemoteAuthority, isRemoteResource } from "../../platform/remote/common/remote.js";
 import { RemoteBrowserViewNavigationResolver } from "../../platform/remote/electron-main/remoteBrowserViewNavigationResolver.js";
@@ -114,7 +116,7 @@ interface WorkbenchWindowRecord extends IWorkbenchWindowRecord {
 	readonly supervisor: AppServerConnectionRelay;
 	readonly resources: DisposableStore;
 	readonly dedicatedWindow: DedicatedWindowHost<BrowserWindow>;
-	readonly remoteConnections: RemoteConnections;
+	readonly remoteConnections: IRemoteConnectionService;
 	modeId: WorkbenchModeId;
 	windowsStateHandler: WindowsStateHandler;
 	windowStateTracking: IDisposable;
@@ -192,21 +194,7 @@ export class AshApplication extends Disposable {
 			onError: error => console.error('Failed to open Agents Window from a system-wide shortcut', error),
 		}));
 		this.nativeMenubar = process.platform === "darwin"
-			? this._register(new NativeMenubarMainService({
-				applicationName: app.name,
-				setApplicationMenu: (template) => Menu.setApplicationMenu(
-					template ? Menu.buildFromTemplate([...template] as MenuItemConstructorOptions[]) : null,
-				),
-				setWindowTouchBar: (window, items, select) => {
-					const browserWindow = window as BrowserWindow;
-					browserWindow.setTouchBar(items.length ? new TouchBar({ items: items.map(item => new TouchBar.TouchBarButton({
-						label: item.label,
-						icon: nativeImage.createFromDataURL(item.icon),
-						enabled: item.enabled,
-						click: () => select(item.id),
-					})) }) : null);
-				},
-			}))
+			? this._register(new NativeMenubarMainService(createElectronMenubarHost()))
 			: undefined;
 		this.profileRoot = resolveHome();
 		// Development uses the stock Electron executable; a Windows package must embed this icon in its executable.
@@ -239,7 +227,7 @@ export class AshApplication extends Disposable {
 			throw new Error("Ash application startup requires Electron to be ready");
 		}
 		if (process.platform !== "darwin") {
-			Menu.setApplicationMenu(null);
+			clearElectronApplicationMenu();
 		}
 
 		await this.createPersistentServices();
@@ -310,6 +298,11 @@ export class AshApplication extends Disposable {
 		const workspaces = this.workspaces;
 		if (!workspaces || !this.persistentServices) return;
 		void this.openWorkspace(UNKNOWN_EMPTY_WINDOW_WORKSPACE, workspaces).catch(error => this.reportWindowOpenFailure(error));
+	}
+
+	/** Electron does not finish a macOS quit after the state-save retry closes the last window. */
+	handleWindowAllClosed(): void {
+		if (this.quitRequested || process.platform !== 'darwin') app.quit();
 	}
 
 	private async createPersistentServices(): Promise<void> {
@@ -432,6 +425,9 @@ export class AshApplication extends Disposable {
 		workspace: IAnyWorkspaceIdentifier,
 		resources: DisposableStore,
 	): AppServerConnectionRelay {
+		if (this.appServerStartupMode === "disabled") {
+			return new AppServerConnectionRelay({ enabled: false });
+		}
 		const packageLocation = {
 			appPath: app.getAppPath(),
 			expectedVersion: app.getVersion(),
@@ -462,8 +458,8 @@ export class AshApplication extends Disposable {
 				environment: { ...this.appServerEnvironment(workspace), ASH_APP_SERVER_PATH: selectDevelopmentAppServerExecutable(appServerExecutablePath(packageLocation), developmentExecutable) },
 			});
 		const supervisor = new AppServerConnectionRelay({
+			enabled: true,
 			processLauncher,
-
 		});
 		if (generationFile && processLauncher instanceof LocalAppServerProcessLauncher) {
 			resources.add(new DevelopmentAppServerReloader({ generationFile, launcher: processLauncher, supervisor }));
@@ -592,11 +588,13 @@ export class AshApplication extends Disposable {
 			options => new BrowserWindow(options),
 			() => focusWindow(window),
 		));
-		const remoteConnections = new RemoteConnections({
-			remoteExecutable: remoteExecutablePath({ appPath: app.getAppPath(), isPackaged: app.isPackaged, platform: process.platform, resourcesPath: process.resourcesPath }),
-			environment: { ...process.env, ASH_HOME: this.profileRoot },
-			scheduleConnect: connection => this.openRemoteConnection(connection, workspaces),
-		});
+		const remoteConnections = this.appServerStartupMode === "disabled"
+			? UnavailableRemoteConnectionService
+			: new RemoteConnections({
+				remoteExecutable: remoteExecutablePath({ appPath: app.getAppPath(), isPackaged: app.isPackaged, platform: process.platform, resourcesPath: process.resourcesPath }),
+				environment: { ...process.env, ASH_HOME: this.profileRoot },
+				scheduleConnect: connection => this.openRemoteConnection(connection, workspaces),
+			});
 		const windowStateTracking = windowsStateHandler.trackWindow(window);
 		const record: WorkbenchWindowRecord = {
 			id: window.id,
@@ -722,7 +720,7 @@ export class AshApplication extends Disposable {
 		});
 		const ipcRoutes = [
 			...workspaceHost.routes(),
-			...supervisor.routes(window.webContents, () => ({ workspaceId: workspaceContext.getWorkspace().id, workspaceRoot: workspaceContext.getResolvedWorkspace().folders[0]?.uri.fsPath ?? this.profileRoot }), this.appServerStartupMode === "required"),
+			...supervisor.routes(window.webContents, () => ({ workspaceId: workspaceContext.getWorkspace().id, workspaceRoot: workspaceContext.getResolvedWorkspace().folders[0]?.uri.fsPath ?? this.profileRoot })),
 			...windowDisposables.add(new BrowserAutomationHost(browserAutomationMainService)).routes(),
 			...windowDisposables.add(new OAuthCallbackHost()).routes(),
 			...rendererSystemHostRoutes(window, path => this.selectDirectoryPermissions(window, path)),
@@ -844,7 +842,7 @@ export class AshApplication extends Disposable {
 					userKeyboardLayout: this.services.userKeyboardLayout,
 				};
 				const ipcRoutes = [
-					...sessionsRelay.routes(window.webContents, () => ({ workspaceId: record.workspaceId, workspaceRoot: record.workspaceContext.getResolvedWorkspace().folders[0]?.uri.fsPath ?? this.profileRoot }), this.appServerStartupMode === "required"),
+					...sessionsRelay.routes(window.webContents, () => ({ workspaceId: record.workspaceId, workspaceRoot: record.workspaceContext.getResolvedWorkspace().folders[0]?.uri.fsPath ?? this.profileRoot })),
 					...rendererSystemHostRoutes(window, path => this.selectDirectoryPermissions(window, path)),
 					...remoteWindowContext.ipcRoutes,
 					...windowResourceIpcRoutes(windowResources),
@@ -1042,7 +1040,7 @@ export class AshApplication extends Disposable {
 				classifyRuntimeError: () => WorkspaceTransitionFailureKind.RuntimeUnavailable,
 			};
 		}
-		const launcher = supervisor.options.processLauncher;
+		const launcher = supervisor.options.enabled ? supervisor.options.processLauncher : undefined;
 		const appServerWorkspace = createAppServerWorkspaceTransitionAdapter(
 			supervisor,
 			workspaceHost,
