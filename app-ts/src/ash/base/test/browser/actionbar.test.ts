@@ -240,6 +240,11 @@ test("ActionBar maps vertical navigation to up and down", () => {
 	assert.equal(dom.window.document.activeElement, first);
 	first.dispatchEvent(keyboardEvent(dom.window, "ArrowRight"));
 	assert.equal(dom.window.document.activeElement, first);
+	actionBar.setOrientation('horizontal');
+	assert.equal(actionBar.element.getAttribute('aria-orientation'), 'horizontal');
+	assert.equal(actionBar.element.classList.contains('horizontal'), true);
+	first.dispatchEvent(keyboardEvent(dom.window, 'ArrowRight'));
+	assert.equal(dom.window.document.activeElement, second);
 
 	actionBar.dispose();
 	dom.window.close();

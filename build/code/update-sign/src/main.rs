@@ -89,6 +89,7 @@ fn sign_release(arguments: Arguments, encoded_key: &str) -> Result<(), String> {
         "macos-package" => ash_product_update::PackageFormat::MacOsPackage,
         "linux-app-image" => ash_product_update::PackageFormat::LinuxAppImage,
         "windows-msi" => ash_product_update::PackageFormat::WindowsMsi,
+        "windows-exe" => ash_product_update::PackageFormat::WindowsExe,
         _ => return Err("update package format is unsupported".into()),
     };
     let url = format!(

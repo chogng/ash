@@ -1,0 +1,72 @@
+name: Promote Ash Desktop stable release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Semantic version to promote without the v prefix
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      ASH_UPDATE_PUBLIC_KEY: ${{ vars.ASH_UPDATE_PUBLIC_KEY }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build update signer
+        run: python3 -B scripts/cargo.py build --package ash-update-sign --bin ash-update-sign
+
+      - name: Sign stable Desktop pointers
+        env:
+          ASH_UPDATE_SIGNING_KEY: ${{ secrets.ASH_UPDATE_SIGNING_KEY }}
+        run: |
+          version="${{ inputs.version }}"
+          case "$version" in
+            *[!0-9.]*|.*|*.) exit 2 ;;
+          esac
+          release_tag="v${version}"
+          output=".build/stable-desktop"
+          mkdir -p "$output"
+          for target in aarch64-apple-darwin x86_64-apple-darwin x86_64-pc-windows-msvc
+          do
+            case "$target" in
+              *-apple-darwin)
+                case "$target" in
+                  aarch64-*) arch="arm64" ;;
+                  *) arch="x64" ;;
+                esac
+                archive="Ash-darwin-${arch}.zip"; format="zip" ;;
+              *) archive="AshSetup-${version}-win32-x64.exe"; format="windows-exe" ;;
+            esac
+            gh release download "$release_tag" --pattern "$archive" --dir "$output"
+            .build/cargo/debug/ash-update-sign \
+              --repository chogng/ash \
+              --product ash-desktop \
+              --channel stable \
+              --version "$version" \
+              --release-tag "$release_tag" \
+              --target "$target" \
+              --format "$format" \
+              --archive "$output/$archive" \
+              --output "$output/ash-desktop-stable-${target}.update.json" \
+              --public-key "$ASH_UPDATE_PUBLIC_KEY"
+          done
+
+      - name: Publish stable Desktop pointers
+        run: |
+          gh release view ash-desktop-stable >/dev/null 2>&1 || \
+            gh release create ash-desktop-stable \
+              --target "$GITHUB_SHA" \
+              --title "Ash Desktop stable channel" \
+              --notes "Signed pointers managed by the stable promotion workflow." \
+              --prerelease \
+              --latest=false
+          gh release upload ash-desktop-stable .build/stable-desktop/*.update.json --clobber

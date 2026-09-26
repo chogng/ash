@@ -1,0 +1,57 @@
+.ash-global-composite-bar {
+	flex: 0 0 auto;
+	width: 100%;
+}
+
+.ash-global-composite-bar > .ash-action-bar {
+	width: 100%;
+	align-items: stretch;
+}
+
+.ash-global-composite-bar .ash-action-view-item {
+	display: flex;
+	width: 100%;
+	height: 48px;
+	align-items: center;
+	justify-content: center;
+}
+
+.ash-global-composite-bar .ash-action-view-item > button {
+	width: 32px;
+	height: 32px;
+	padding: 8px;
+	border: 0;
+	border-radius: var(--ash-corner-radius-small);
+	color: var(--ash-composite-bar-inactive-foreground);
+	background: transparent;
+}
+
+.ash-global-composite-bar .ash-action-view-item > button:hover,
+.ash-global-composite-bar .ash-action-view-item > button[aria-expanded='true'] {
+	color: var(--ash-composite-bar-foreground);
+	background: var(--ash-tab-list-active-background);
+}
+
+.ash-global-composite-bar .ash-action-view-item > button:focus-visible {
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: 0;
+}
+
+.ash-global-composite-bar .ash-dropdown-menu-indicator {
+	display: none;
+}
+
+.ash-workbench-activitybar.horizontal .ash-global-composite-bar {
+	width: auto;
+	height: 100%;
+}
+
+.ash-workbench-activitybar.horizontal .ash-global-composite-bar > .ash-action-bar {
+	height: 100%;
+	flex-direction: row;
+}
+
+.ash-workbench-activitybar.horizontal .ash-global-composite-bar .ash-action-view-item {
+	width: 36px;
+	height: 100%;
+}

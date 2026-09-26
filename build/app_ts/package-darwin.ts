@@ -16,6 +16,8 @@ const target = arch === 'arm64' ? 'aarch64-apple-darwin' : 'x86_64-apple-darwin'
 if (process.platform !== 'darwin' || !arch) throw new Error('macOS packaging requires a macOS arm64 or x64 host');
 const options = parseOptions(process.argv.slice(2));
 const signingIdentity = process.env.ASH_MACOS_SIGNING_IDENTITY;
+const updatePublicKey = process.env.ASH_UPDATE_PUBLIC_KEY;
+if (!updatePublicKey || !/^[a-fA-F0-9]{64}$/u.test(updatePublicKey)) throw new Error('ASH_UPDATE_PUBLIC_KEY must be a 64-digit Ed25519 public key');
 if (!options.unsigned && !signingIdentity) throw new Error('ASH_MACOS_SIGNING_IDENTITY is required; use --unsigned only for local testing');
 const destination = options.output ?? outputRoot;
 const bundlePath = join(destination, `Ash-darwin-${arch}`, 'Ash.app');
@@ -46,7 +48,14 @@ try {
 		], repositoryRoot);
 	}
 	await validateBackend(backend);
-	const resources = (await readdir(backend)).filter(entry => entry !== '.lease').map(entry => join(backend, entry));
+	await run('cargo', ['build', '--release', '--target', target, '-p', 'ash-product-update', '--bin', 'ash-update-host'], repositoryRoot);
+	const cargoTarget = resolve(repositoryRoot, process.env.CARGO_TARGET_DIR ?? '.build/cargo');
+	const updateBin = join(stage, 'bin');
+	await cp(join(backend, 'bin'), updateBin, { recursive: true });
+	await cp(join(cargoTarget, target, 'release', 'ash-update-host'), join(updateBin, 'ash-update-host'), { errorOnExist: true, force: false });
+	const updateKeyFile = join(stage, 'update-public-key');
+	await writeFile(updateKeyFile, `${updatePublicKey.toLowerCase()}\n`, { flag: 'wx' });
+	const resources = [...(await readdir(backend)).filter(entry => entry !== '.lease' && entry !== 'bin').map(entry => join(backend, entry)), updateBin, updateKeyFile];
 	await mkdir(destination, { recursive: true });
 	const packages = await packager({
 		dir: appStage,
@@ -79,6 +88,8 @@ try {
 		'Contents/Resources/app/dist/renderer/ash/electron-browser/workbench/workbench.html',
 		'Contents/Resources/ash-package.json',
 		'Contents/Resources/bin/ash-app-server',
+		'Contents/Resources/bin/ash-update-host',
+		'Contents/Resources/update-public-key',
 	]) await lstat(join(bundlePath, file));
 	if (!options.unsigned) await run('codesign', ['--verify', '--deep', '--strict', '--verbose=2', bundlePath], repositoryRoot);
 	console.log(`Packaged macOS application: ${bundlePath}`);

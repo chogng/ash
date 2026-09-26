@@ -1,0 +1,120 @@
+.ash-workbench.modern-ui .ash-workbench-activitybar {
+	background: var(--ash-activity-bar-background);
+}
+
+.ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar-vertical > .ash-action-bar {
+	gap: var(--ash-spacing-size80);
+	padding-top: var(--ash-spacing-size20);
+}
+
+.ash-workbench.modern-ui .ash-workbench-activitybar.horizontal .ash-composite-bar-horizontal > .ash-action-bar {
+	gap: var(--ash-spacing-size80);
+	padding-left: var(--ash-spacing-size20);
+}
+
+.ash-workbench.modern-ui .ash-workbench-activitybar.horizontal .ash-composite-bar-horizontal.ash-composite-bar-icon > .ash-action-bar > .ash-composite-bar-item {
+	width: 36px;
+	min-width: 36px;
+	height: 36px;
+	min-height: 36px;
+}
+
+.ash-workbench.modern-ui .ash-workbench-activitybar.horizontal .ash-composite-bar-horizontal .ash-composite-bar-item.checked {
+	background: transparent;
+}
+
+.ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar-vertical.ash-composite-bar-icon > .ash-action-bar > .ash-composite-bar-item {
+	height: 36px;
+	min-height: 36px;
+	color: var(--ash-composite-bar-inactive-foreground);
+}
+
+.ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar:is(.ash-composite-bar-vertical, .ash-composite-bar-horizontal) .ash-composite-bar-item.checked::before {
+	display: none;
+}
+
+.ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar:is(.ash-composite-bar-vertical, .ash-composite-bar-horizontal) .ash-composite-bar-item::after {
+	position: absolute;
+	inset: 2px;
+	z-index: 0;
+	border-radius: var(--ash-corner-radius-small);
+	content: '';
+	pointer-events: none;
+}
+
+.ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar:is(.ash-composite-bar-vertical, .ash-composite-bar-horizontal) .ash-composite-bar-item.checked::after {
+	background: var(--ash-modern-activity-bar-item-active-background);
+}
+
+.ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar:is(.ash-composite-bar-vertical, .ash-composite-bar-horizontal) .ash-composite-bar-item:not(.checked):hover::after {
+	background: var(--ash-modern-activity-bar-item-hover-background);
+}
+
+.ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar:is(.ash-composite-bar-vertical, .ash-composite-bar-horizontal) .ash-composite-bar-item.checked {
+	color: var(--ash-modern-activity-bar-item-active-foreground);
+}
+
+.ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar:is(.ash-composite-bar-vertical, .ash-composite-bar-horizontal) .ash-composite-bar-item > .ash-composite-bar-action,
+.ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar:is(.ash-composite-bar-vertical, .ash-composite-bar-horizontal) .ash-composite-bar-item > .ash-composite-bar-badge {
+	position: relative;
+	z-index: 1;
+}
+
+.ash-workbench.modern-ui .ash-workbench-activitybar .ash-global-composite-bar .ash-action-view-item {
+	height: 36px;
+}
+
+.ash-workbench.modern-ui .ash-workbench-activitybar .ash-global-composite-bar .ash-action-view-item > button:hover,
+.ash-workbench.modern-ui .ash-workbench-activitybar .ash-global-composite-bar .ash-action-view-item > button[aria-expanded='true'] {
+	color: var(--ash-modern-activity-bar-item-active-foreground);
+	background: var(--ash-modern-activity-bar-item-hover-background);
+}
+
+.ash-workbench.modern-ui .ash-workbench-activitybar .ash-global-composite-bar > .ash-action-bar {
+	gap: var(--ash-spacing-size80);
+	padding-bottom: var(--ash-spacing-size20);
+}
+
+.ash-workbench.modern-ui .ash-workbench-activitybar.horizontal .ash-global-composite-bar > .ash-action-bar {
+	padding-right: var(--ash-spacing-size20);
+	padding-bottom: 0;
+}
+
+.ash-workbench.modern-ui .ash-workbench-activitybar.compact .ash-composite-bar-vertical > .ash-action-bar,
+.ash-workbench.modern-ui .ash-workbench-activitybar.compact .ash-global-composite-bar > .ash-action-bar {
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-workbench.modern-ui .ash-workbench-activitybar.compact .ash-composite-bar-vertical.ash-composite-bar-icon > .ash-action-bar > .ash-composite-bar-item,
+.ash-workbench.modern-ui .ash-workbench-activitybar.compact .ash-global-composite-bar .ash-action-view-item {
+	height: 28px;
+	min-height: 28px;
+}
+
+.ash-workbench.modern-ui .ash-workbench-activitybar.compact .ash-global-composite-bar .ash-action-view-item > button {
+	width: 24px;
+	height: 24px;
+	padding: var(--ash-spacing-size40);
+}
+
+.ash-workbench.modern-ui:is([data-color-scheme='high-contrast-dark'], [data-color-scheme='high-contrast-light']) .ash-workbench-activitybar .ash-composite-bar:is(.ash-composite-bar-vertical, .ash-composite-bar-horizontal) .ash-composite-bar-item.checked::after {
+	background: transparent;
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+}
+
+.ash-workbench.modern-ui:is([data-color-scheme='high-contrast-dark'], [data-color-scheme='high-contrast-light']) .ash-workbench-activitybar .ash-composite-bar:is(.ash-composite-bar-vertical, .ash-composite-bar-horizontal) .ash-composite-bar-item:not(.checked):hover::after {
+	background: transparent;
+	outline: var(--ash-stroke-thickness) dashed var(--ash-focus-border);
+}
+
+@media (forced-colors: active) {
+	.ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar:is(.ash-composite-bar-vertical, .ash-composite-bar-horizontal) .ash-composite-bar-item.checked::after {
+		background: transparent;
+		outline: var(--ash-stroke-thickness) solid Highlight;
+	}
+
+	.ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar:is(.ash-composite-bar-vertical, .ash-composite-bar-horizontal) .ash-composite-bar-item:not(.checked):hover::after {
+		background: transparent;
+		outline: var(--ash-stroke-thickness) dashed Highlight;
+	}
+}

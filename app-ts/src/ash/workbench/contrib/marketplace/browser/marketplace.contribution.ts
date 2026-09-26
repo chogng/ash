@@ -1,6 +1,7 @@
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { localizedString } from '../../../../platform/action/common/action.js';
 import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { ServiceConstructionDescriptor, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { OPEN_MARKETPLACE_COMMAND_ID, OPEN_PLUGINS_COMMAND_ID, type MarketplaceOpenOptions } from '../../../../platform/marketplace/common/marketplaceService.js';
@@ -35,4 +36,10 @@ registerWorkbenchContribution('workbench.contrib.marketplace', WorkbenchPhase.Bl
 		}
 	}));
 	return registrations;
+});
+
+MenusRegistry.appendMenuItem(MenuId.GlobalActivity, {
+	command: { id: OPEN_MARKETPLACE_COMMAND_ID, title: localizedString('ash', 'workbench.manageExtensions', 'Extensions') },
+	group: '2_configuration',
+	order: 3,
 });

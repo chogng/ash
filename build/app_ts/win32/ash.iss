@@ -18,6 +18,7 @@ AppVersion={#AppVersion}
 DefaultDirName={localappdata}\Programs\Ash
 DefaultGroupName=Ash
 PrivilegesRequired=lowest
+RestartApplications=no
 MinVersion=10.0
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -36,3 +37,6 @@ Source: "{#BundleDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 [Icons]
 Name: "{autoprograms}\Ash"; Filename: "{app}\Ash.exe"; IconFilename: "{app}\Ash.exe"; AppUserModelID: "{#AppUserId}"
 Name: "{autodesktop}\Ash"; Filename: "{app}\Ash.exe"; IconFilename: "{app}\Ash.exe"; AppUserModelID: "{#AppUserId}"; Tasks: desktopicon
+
+[Run]
+Filename: "{app}\Ash.exe"; Flags: nowait; Description: "Start Ash"

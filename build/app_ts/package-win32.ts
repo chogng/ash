@@ -53,6 +53,7 @@ async function bundle(options: Map<string, string>): Promise<void> {
 }
 
 async function assembleBundle(stage: string, bundlePath: string, options: Map<string, string>): Promise<void> {
+  const updatePublicKey = requireUpdatePublicKey();
   const destination = dirname(bundlePath);
   const appStage = join(stage, 'app');
   await runPnpm(['--filter', 'ash-desktop', 'deploy', '--prod', '--ignore-scripts', appStage]);
@@ -108,6 +109,10 @@ async function assembleBundle(stage: string, bundlePath: string, options: Map<st
     if (entry === '.lease') continue;
     await cp(join(backend, entry), join(resources, entry), { recursive: true, errorOnExist: true, force: false });
   }
+  await run('cargo', ['build', '--release', '--target', 'x86_64-pc-windows-msvc', '-p', 'ash-product-update', '--bin', 'ash-update-host'], repositoryRoot);
+  const cargoTarget = resolve(repositoryRoot, process.env.CARGO_TARGET_DIR ?? '.build/cargo');
+  await cp(join(cargoTarget, 'x86_64-pc-windows-msvc', 'release', 'ash-update-host.exe'), join(resources, 'bin', 'ash-update-host.exe'), { errorOnExist: true, force: false });
+  await writeFile(join(resources, 'update-public-key'), `${updatePublicKey}\n`, { flag: 'wx' });
   await validateBundle(bundlePath);
   console.log(`Packaged Windows application: ${bundlePath}`);
 }
@@ -155,7 +160,15 @@ async function validateBundle(path: string): Promise<void> {
     'resources/app/resources/tray/ash-white-32.png',
     'resources/ash-package.json',
     'resources/bin/ash-app-server.exe',
+    'resources/bin/ash-update-host.exe',
+    'resources/update-public-key',
   ]) await lstat(join(path, file));
+}
+
+function requireUpdatePublicKey(): string {
+  const key = process.env.ASH_UPDATE_PUBLIC_KEY;
+  if (!key || !/^[a-fA-F0-9]{64}$/u.test(key)) throw new Error('ASH_UPDATE_PUBLIC_KEY must be a 64-digit Ed25519 public key');
+  return key.toLowerCase();
 }
 
 async function installer(options: Map<string, string>): Promise<void> {

@@ -22,6 +22,7 @@ export interface PaneCompositeTitleActions {
 	readonly menuService: IMenuService;
 	readonly contextMenuProvider: IContextMenuProvider;
 	readonly menuId: MenuId;
+	readonly primaryGroup?: string;
 }
 
 /** Construction inputs shared by Sidebars, Auxiliary Bar, and Panel. */
@@ -37,6 +38,7 @@ export interface PaneCompositePartOptions {
 	readonly viewsAriaLabel: string;
 	readonly viewsAriaLabelKey?: LocalizationKey;
 	readonly compositeBarPresentation?: CompositeBarPresentation;
+	readonly compositeBarOrientation?: "horizontal" | "vertical";
 	readonly compositeBarContextMenuProvider?: IContextMenuProvider;
 	/** Selects which registered containers receive items in the hosted CompositeBar. */
 	readonly compositeBarContainerFilter?: (container: IViewContainerDescriptor) => boolean;
@@ -58,7 +60,7 @@ export class PaneCompositePart extends CompositePart {
 	private readonly activeCompositeContext: IContextKey<string> | undefined;
 	private readonly storageService: IStorageService | undefined;
 	private readonly location: ViewContainerLocation;
-	private readonly titleContentDomNode: HTMLDivElement;
+	protected readonly titleContentDomNode: HTMLDivElement;
 	protected readonly titleActionsSlotDomNode: HTMLDivElement;
 	private readonly viewTitleActionsDomNode: HTMLDivElement;
 	private readonly partTitleActionsDomNode: HTMLDivElement;
@@ -87,7 +89,9 @@ export class PaneCompositePart extends CompositePart {
 			location: options.location,
 			ariaLabel: viewsAriaLabel,
 			presentation: options.compositeBarPresentation,
+			orientation: options.compositeBarOrientation,
 			contextMenuProvider: options.compositeBarContextMenuProvider,
+			storageService: options.storageService,
 			containerFilter: options.compositeBarContainerFilter,
 		}));
 		if (options.localizationService) this._register(options.localizationService.onDidChange(() => {
@@ -110,7 +114,7 @@ export class PaneCompositePart extends CompositePart {
 				options.titleActions.menuService,
 				options.titleActions.contextMenuProvider,
 				options.titleActions.menuId,
-				{ highlightToggledItems: true },
+				{ highlightToggledItems: true, toolbarOptions: { primaryGroup: options.titleActions.primaryGroup } },
 			));
 			actions.element.classList.add("ash-pane-composite-title-menu-actions");
 		}

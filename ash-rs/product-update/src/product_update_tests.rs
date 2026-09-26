@@ -1,5 +1,6 @@
 use super::*;
 use ed25519_dalek::SigningKey;
+use sha2::Digest;
 
 #[test]
 fn signed_release_round_trips_through_the_shared_contract() {
@@ -53,6 +54,24 @@ fn signer_rejects_never_insecure_urls_paths_and_empty_packages() {
     let mut empty = release(UpdatePolicy::Latest);
     empty.package.size = 0;
     assert!(sign_release(empty, &key).is_err());
+}
+
+#[test]
+fn staging_requires_the_signed_size_and_digest_before_publishing() {
+    let staging = tempfile::tempdir().unwrap();
+    let bytes = b"verified desktop package";
+    let package = VerifiedPackage {
+        url: "https://github.com/chogng/ash/releases/download/v1/AshSetup.exe".into(),
+        file_name: "AshSetup.exe".into(),
+        format: PackageFormat::WindowsExe,
+        size: bytes.len() as u64,
+        sha256: sha2::Sha256::digest(bytes).into(),
+    };
+    assert!(stage_package_reader(&package, staging.path(), &b"altered desktop package"[..]).is_err());
+    assert!(!staging.path().join(&package.file_name).exists());
+    assert!(!staging.path().join(format!(".{}.part", package.file_name)).exists());
+    let staged = stage_package_reader(&package, staging.path(), &bytes[..]).unwrap();
+    assert_eq!(std::fs::read(staged).unwrap(), bytes);
 }
 
 fn verify(

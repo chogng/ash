@@ -8,6 +8,7 @@ import './media/editorBorder.css';
 import './media/roundedCorners.css';
 import './media/statusBar.css';
 import './media/tabs.css';
+import './media/activityBar.css';
 
 /** Applies the selected Workbench layout style to the main and auxiliary windows. */
 export class ModernUIContribution extends Disposable {

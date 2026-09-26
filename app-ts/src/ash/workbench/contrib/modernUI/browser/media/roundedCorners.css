@@ -7,3 +7,76 @@
   border: var(--ash-stroke-thickness) solid var(--ash-border);
   border-radius: var(--ash-corner-radius-large);
 }
+
+.ash-workbench.modern-ui .ash-workbench-activitybar {
+	box-sizing: border-box;
+	border: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-radius: var(--ash-corner-radius-large);
+	overflow: hidden;
+}
+
+.ash-workbench.modern-ui .ash-workbench-activitybar.sidebar-open {
+	border-right: 0;
+	border-top-right-radius: 0;
+	border-bottom-right-radius: 0;
+}
+
+.ash-workbench.modern-ui .ash-workbench-activitybar.sidebar-open.sidebar-right {
+	border-right: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-left: 0;
+	border-top-right-radius: var(--ash-corner-radius-large);
+	border-bottom-right-radius: var(--ash-corner-radius-large);
+	border-top-left-radius: 0;
+	border-bottom-left-radius: 0;
+}
+
+.ash-workbench.modern-ui .ash-workbench-activitybar.horizontal.sidebar-open {
+	border-right: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-bottom: 0;
+	border-top-left-radius: var(--ash-corner-radius-large);
+	border-top-right-radius: var(--ash-corner-radius-large);
+	border-bottom-left-radius: 0;
+	border-bottom-right-radius: 0;
+}
+
+.ash-workbench.modern-ui .ash-workbench-activitybar.location-bottom.sidebar-open {
+	border-top: 0;
+	border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-top-left-radius: 0;
+	border-top-right-radius: 0;
+	border-bottom-left-radius: var(--ash-corner-radius-large);
+	border-bottom-right-radius: var(--ash-corner-radius-large);
+}
+
+.ash-workbench.modern-ui .ash-workbench-sidebar {
+	border-left: 0;
+	border-top-left-radius: 0;
+	border-bottom-left-radius: 0;
+}
+
+.ash-workbench.modern-ui .ash-workbench-sidebar.sidebar-right {
+	border-left: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-right: 0;
+	border-top-left-radius: var(--ash-corner-radius-large);
+	border-bottom-left-radius: var(--ash-corner-radius-large);
+	border-top-right-radius: 0;
+	border-bottom-right-radius: 0;
+}
+
+.ash-workbench.modern-ui .ash-workbench-sidebar.activitybar-top {
+	border-top: 0;
+	border-left: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-top-left-radius: 0;
+	border-top-right-radius: 0;
+	border-bottom-left-radius: var(--ash-corner-radius-large);
+	border-bottom-right-radius: var(--ash-corner-radius-large);
+}
+
+.ash-workbench.modern-ui .ash-workbench-sidebar.activitybar-bottom {
+	border-bottom: 0;
+	border-left: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-top-left-radius: var(--ash-corner-radius-large);
+	border-top-right-radius: var(--ash-corner-radius-large);
+	border-bottom-left-radius: 0;
+	border-bottom-right-radius: 0;
+}

@@ -10,12 +10,21 @@ use ed25519_dalek::VerifyingKey;
 use semver::Version;
 use serde::Deserialize;
 use serde::Serialize;
+use sha2::Digest;
+use sha2::Sha256;
 use std::error::Error;
 use std::fmt;
+use std::fs;
+use std::fs::OpenOptions;
+use std::io::Read;
+use std::io::Write;
 use std::path::Component;
 use std::path::Path;
+use std::path::PathBuf;
+use std::time::Duration;
 
 const SCHEMA_VERSION: u8 = 1;
+const MAX_PACKAGE_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 
 /// Automatic update selection shared by product hosts.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -53,6 +62,7 @@ pub enum PackageFormat {
     MacOsPackage,
     LinuxAppImage,
     WindowsMsi,
+    WindowsExe,
 }
 
 /// Ed25519 public key trusted by one installed product generation.
@@ -100,6 +110,83 @@ pub struct VerifiedPackage {
     pub format: PackageFormat,
     pub size: u64,
     pub sha256: [u8; 32],
+}
+
+/// Downloads one signed package into a new file after checking its exact size and digest.
+pub fn stage_verified_package(
+    package: &VerifiedPackage,
+    directory: &Path,
+) -> Result<PathBuf, UpdateError> {
+    let response = ureq::get(&package.url)
+        .set("User-Agent", "Ash-Product-Update")
+        .set("Accept", "application/octet-stream")
+        .timeout(Duration::from_secs(900))
+        .call()
+        .map_err(|error| UpdateError::new(format!("could not download signed update: {error}")))?;
+    stage_package_reader(package, directory, response.into_reader())
+}
+
+fn stage_package_reader(
+    package: &VerifiedPackage,
+    directory: &Path,
+    mut reader: impl Read,
+) -> Result<PathBuf, UpdateError> {
+    if package.size == 0 || package.size > MAX_PACKAGE_BYTES {
+        return Err(UpdateError::new("signed update package size is unsupported"));
+    }
+    let name = Path::new(&package.file_name);
+    if name.components().count() != 1
+        || !matches!(name.components().next(), Some(Component::Normal(_)))
+    {
+        return Err(UpdateError::new("signed update file name is invalid"));
+    }
+    fs::create_dir_all(directory)
+        .map_err(|error| UpdateError::new(format!("could not create update staging: {error}")))?;
+    let destination = directory.join(name);
+    if destination.exists() {
+        return Err(UpdateError::new("staged update already exists"));
+    }
+    let temporary = directory.join(format!(".{}.part", package.file_name));
+    let result = (|| {
+        let mut output = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)
+            .map_err(|error| UpdateError::new(format!("could not create update file: {error}")))?;
+        let mut digest = Sha256::new();
+        let mut size = 0u64;
+        let mut buffer = [0u8; 64 * 1024];
+        loop {
+            let count = reader
+                .read(&mut buffer)
+                .map_err(|error| UpdateError::new(format!("could not read update package: {error}")))?;
+            if count == 0 {
+                break;
+            }
+            size += count as u64;
+            if size > package.size {
+                return Err(UpdateError::new("downloaded update exceeds signed size"));
+            }
+            digest.update(&buffer[..count]);
+            output
+                .write_all(&buffer[..count])
+                .map_err(|error| UpdateError::new(format!("could not stage update package: {error}")))?;
+        }
+        let actual_digest: [u8; 32] = digest.finalize().into();
+        if size != package.size || actual_digest != package.sha256 {
+            return Err(UpdateError::new("downloaded update does not match signed size and SHA-256"));
+        }
+        output
+            .sync_all()
+            .map_err(|error| UpdateError::new(format!("could not sync update package: {error}")))?;
+        fs::rename(&temporary, &destination)
+            .map_err(|error| UpdateError::new(format!("could not publish staged update: {error}")))?;
+        Ok(destination)
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    result
 }
 
 /// Serializable release input used by the release signer.

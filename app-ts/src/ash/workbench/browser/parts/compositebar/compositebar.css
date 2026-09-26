@@ -154,6 +154,64 @@
   bottom: 2px;
 }
 
+.ash-composite-bar-vertical {
+	width: 100%;
+	height: 100%;
+}
+
+.ash-composite-bar-vertical > .ash-action-bar {
+	width: 100%;
+	height: auto;
+	max-height: 100%;
+	flex-direction: column;
+	align-items: stretch;
+	padding: 0;
+	overflow-y: hidden;
+}
+
+.ash-composite-bar-vertical.ash-composite-bar-icon > .ash-action-bar > .ash-composite-bar-item {
+	width: 100%;
+	min-width: 0;
+	height: 48px;
+	min-height: 48px;
+}
+
+.ash-composite-bar-vertical .ash-composite-bar-item.checked {
+	background: transparent;
+}
+
+.ash-composite-bar-horizontal > .ash-action-bar {
+	height: 100%;
+	flex-direction: row;
+	padding: 0;
+}
+
+.ash-composite-bar-vertical .ash-composite-bar-item.checked::before {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 2px;
+	height: 100%;
+	content: '';
+	background: var(--ash-focus-border);
+}
+
+.ash-composite-bar-vertical > .ash-action-bar.ash-action-bar-dnd.vertical > .ash-composite-bar-item.ash-dnd-drop-before::before,
+.ash-composite-bar-vertical > .ash-action-bar.ash-action-bar-dnd.vertical > .ash-composite-bar-item.ash-dnd-drop-after::before {
+	left: 0;
+	width: 100%;
+	height: 2px;
+}
+
+.ash-composite-bar-vertical > .ash-action-bar.ash-action-bar-dnd.vertical > .ash-composite-bar-item.ash-dnd-drop-before::before {
+	top: 0;
+}
+
+.ash-composite-bar-vertical > .ash-action-bar.ash-action-bar-dnd.vertical > .ash-composite-bar-item.ash-dnd-drop-after::before {
+	top: auto;
+	bottom: 0;
+}
+
 /* Keep the visual gap inside a Composite action's native drop hit area. */
 .ash-composite-bar > .ash-action-bar.ash-action-bar-dnd.horizontal > .ash-composite-bar-item:not(:last-child)::after {
   position: absolute;

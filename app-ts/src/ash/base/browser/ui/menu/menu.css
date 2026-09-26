@@ -36,19 +36,23 @@
   height: 16px;
   flex: 0 0 16px;
 }
+/* A hidden check must not reserve space beside the action icon. */
 .ash-menu-leading-check > .ash-icon {
-  visibility: hidden;
+  display: none;
 }
 .ash-menu .ash-button.checked > .ash-menu-leading-check > .ash-icon {
-  visibility: visible;
+  display: block;
 }
 .ash-menu .ash-button.checked > .ash-menu-leading-check > .ash-icon-label-icon {
-  visibility: hidden;
+  display: none;
 }
+/* Override ActionBar's dimmed separator so the theme border stays visible in high contrast. */
 .ash-menu .ash-action-view-item-separator {
   width: auto;
   height: 1px;
   margin: 4px 8px;
+  background: var(--ash-border);
+  opacity: 1;
 }
 .ash-menu .ash-submenu-indicator {
   display: inline-flex;
@@ -69,7 +73,15 @@
 .ash-menu .ash-menu-keybinding {
   margin-left: auto;
   padding-left: 24px;
-  opacity: .8;
+  color: var(--ash-muted-foreground);
+}
+/* Selected rows need their own foreground to keep the shortcut readable. */
+.ash-menu .ash-action-view-item.focused > .ash-button .ash-menu-keybinding {
+  color: var(--ash-menu-selection-foreground);
+}
+/* User-agent kbd styling otherwise switches menu shortcuts to monospace. */
+.ash-menu .ash-menu-keybinding kbd {
+  font: inherit;
 }
 .ash-menu .ash-menu-badge {
   margin-left: auto;

@@ -821,7 +821,7 @@ export const UndoCommand = registerCommand(new MultiCommand({
 	menuOpts: [{
 		menuId: MenuId.MenubarEditMenu,
 		group: '1_do',
-		title: nls.localize({ key: 'miUndo', comment: ['&& denotes a mnemonic'] }, "&&Undo"),
+		title: nls.localize('miUndo', "Undo"),
 		order: 1
 	}, {
 		menuId: MenuId.CommandPalette,
@@ -850,7 +850,7 @@ export const RedoCommand = registerCommand(new MultiCommand({
 	menuOpts: [{
 		menuId: MenuId.MenubarEditMenu,
 		group: '1_do',
-		title: nls.localize({ key: 'miRedo', comment: ['&& denotes a mnemonic'] }, "&&Redo"),
+		title: nls.localize('miRedo', "Redo"),
 		order: 2
 	}, {
 		menuId: MenuId.CommandPalette,
@@ -878,7 +878,7 @@ export const SelectAllCommand = registerCommand(new MultiCommand({
 	menuOpts: [{
 		menuId: MenuId.MenubarSelectionMenu,
 		group: '1_basic',
-		title: nls.localize({ key: 'miSelectAll', comment: ['&& denotes a mnemonic'] }, "&&Select All"),
+		title: nls.localize('miSelectAll', "Select All"),
 		order: 1
 	}, {
 		menuId: MenuId.CommandPalette,

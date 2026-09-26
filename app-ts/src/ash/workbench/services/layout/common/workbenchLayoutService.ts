@@ -2,7 +2,7 @@ import type { ISize } from "../../../../base/common/layout.js";
 import type { Event } from "../../../../base/common/event.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 
-export const workbenchPartIds = ["titlebar", "statusbar", "sidebar", "auxiliarybar", "agentSidebar", "editor", "panel"] as const;
+export const workbenchPartIds = ["titlebar", "statusbar", "activitybar", "sidebar", "auxiliarybar", "agentSidebar", "editor", "panel"] as const;
 
 export type WorkbenchPartId = typeof workbenchPartIds[number];
 

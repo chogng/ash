@@ -44,9 +44,13 @@ const { createTestWorkbenchContextKeysHandler } = await import('../../../workben
 const { BrowserLayoutService } = await import("../../../platform/layout/browser/layoutService.js");
 const { IWorkbenchLayoutService, workbenchPartIds } = await import("../../../workbench/services/layout/browser/layoutService.js");
 const { BrowserStorageService } = await import("../../../workbench/services/storage/browser/storageService.js");
+const { InMemoryConfigurationService } = await import('../../../platform/configuration/common/inMemoryConfigurationService.js');
 const { WorkbenchPart } = await import("../../../workbench/browser/part.js");
 const { SidebarPart } = await import(
 	"../../../workbench/browser/parts/sidebar/sidebarPart.js"
+);
+const { ActivitybarPart } = await import(
+	"../../../workbench/browser/parts/activitybar/activitybarPart.js"
 );
 const { PanelPart } = await import(
 	"../../../workbench/browser/parts/panel/panelPart.js"
@@ -104,6 +108,7 @@ class TestPart extends WorkbenchPart {
 	}
 
 	override get minimumWidth(): number {
+		if (this.id === "activitybar") return 48;
 		return this.id === "sidebar" || this.id === "auxiliarybar" || this.id === "agentSidebar"
 			? 180
 			: this.id === "editor"
@@ -112,6 +117,7 @@ class TestPart extends WorkbenchPart {
 	}
 
 	override get maximumWidth(): number {
+		if (this.id === "activitybar") return 48;
 		return this.id === "sidebar" || this.id === "auxiliarybar" || this.id === "agentSidebar"
 			? 600
 			: Number.POSITIVE_INFINITY;
@@ -205,7 +211,7 @@ test("Workbench layout hides and restores Parts with context keys", () => {
 	assert.equal(editorFrame?.style.paddingRight, "3px");
 	assert.equal(editorFrame?.style.paddingBottom, "3px");
 	assert.equal(panelFrame?.style.paddingTop, "3px");
-	assert.equal(sidebarFrame?.style.paddingLeft, "6px");
+	assert.equal(sidebarFrame?.style.paddingLeft, "0px");
 	assert.equal(sidebarFrame?.style.paddingRight, "3px");
 	assert.equal(auxiliarybarFrame?.style.paddingLeft, "3px");
 	assert.equal(auxiliarybarFrame?.style.paddingRight, "8px");
@@ -240,6 +246,8 @@ test("Workbench layout hides and restores Parts with context keys", () => {
 	assert.equal(editorFrame?.style.paddingRight, "8px");
 	assert.equal(editorFrame?.style.paddingBottom, "0px");
 	assert.equal(panelFrame?.style.paddingLeft, "6px");
+	assert.equal(harness.layout.isPartVisible('activitybar'), true);
+	assert.equal(harness.layout.getPartSize('activitybar').width, 54);
 	assert.equal(panelFrame?.style.paddingRight, "8px");
 	harness.layout.showPart("agentSidebar");
 	assert.equal(contextKeys.getValue("agentSidebarVisible"), true);
@@ -277,7 +285,7 @@ test("Workbench layout switches between modern and flat geometry without replaci
 	const editorFrame = editor?.parentElement as HTMLElement | undefined;
 	const sidebarFrame = harness.container.querySelector<HTMLElement>("[data-part='sidebar']")?.parentElement as HTMLElement | undefined;
 	assert.equal(editorFrame?.style.paddingLeft, "3px");
-	assert.equal(sidebarFrame?.style.paddingLeft, "6px");
+	assert.equal(sidebarFrame?.style.paddingLeft, "0px");
 	assert.equal(harness.container.querySelectorAll(".ash-sash-inset").length, 4);
 
 	harness.layout.setLayoutStyle("flat");
@@ -294,7 +302,7 @@ test("Workbench layout switches between modern and flat geometry without replaci
 	harness.layout.setLayoutStyle("modern");
 
 	assert.equal(editorFrame?.style.paddingLeft, "3px");
-	assert.equal(sidebarFrame?.style.paddingLeft, "6px");
+	assert.equal(sidebarFrame?.style.paddingLeft, "0px");
 	assert.equal(harness.container.querySelectorAll(".ash-sash-inset").length, 4);
 	assert.deepEqual(harness.layout.state, state);
 
@@ -413,14 +421,14 @@ test("Workbench layout derives flexible editor size from the container", () => {
 	);
 	assert.deepEqual(
 		harness.layout.getPartSize("editor"),
-		new Dimension(600, 530),
+		new Dimension(546, 530),
 	);
 	assert.equal(harness.layout.getPartSize("panel").height, 200);
 
 	harness.layout.layout(new Dimension(1_300, 800));
 	assert.equal(harness.layout.getPartSize("sidebar").width, 220);
 	assert.equal(harness.layout.getPartSize("auxiliarybar").width, 380);
-	assert.equal(harness.layout.getPartSize("editor").width, 700);
+	assert.equal(harness.layout.getPartSize("editor").width, 646);
 
 	harness.disposables.dispose();
 	dom.window.close();
@@ -678,7 +686,7 @@ test("Workbench layout retains resized Part dimensions across visibility", () =>
 	dom.window.close();
 });
 
-test("Sidebar hosts its Composite Bar before content", () => {
+test("Activity Bar hosts the primary sidebar selector independently of sidebar visibility", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const disposables = new DisposableStore();
 	const registry = new WorkbenchViewRegistry();
@@ -712,6 +720,19 @@ test("Sidebar hosts its Composite Bar before content", () => {
 	}));
 	dom.window.document.body.append(sidebar.domNode);
 	const compositeBar = sidebar.compositeBar;
+	const globalActions = dom.window.document.createElement('div');
+	const configuration = disposables.add(new InMemoryConfigurationService());
+	const globalBar = { domNode: globalActions, setOrientation() {}, getContextMenuActions: () => [] };
+	const localization = { translate: (_bundle: string, _key: string, fallback: string) => fallback } as ILocalizationService;
+	const activitybar = disposables.add(new ActivitybarPart(dom.window.document.body, compositeBar, globalBar, configuration, localization));
+	assert.equal(activitybar.minimumWidth, 36);
+	activitybar.setLayoutStyle('flat');
+	assert.equal(activitybar.minimumWidth, 48);
+	activitybar.setLayoutStyle('modern');
+	activitybar.setSidebarVisible(true);
+	assert.equal(activitybar.domNode.classList.contains('sidebar-open'), true);
+	activitybar.setSidebarVisible(false);
+	assert.equal(activitybar.domNode.classList.contains('sidebar-open'), false);
 	const selections: string[] = [];
 	disposables.add(sidebar.onDidSelectComposite(
 		({ compositeId }) => selections.push(compositeId),
@@ -731,11 +752,13 @@ test("Sidebar hosts its Composite Bar before content", () => {
 		":scope > .ash-workbench-part-title.ash-pane-composite-title",
 	);
 	assert.ok(title);
-	assert.equal(compositeBar.domNode.parentElement?.parentElement, title);
+	assert.equal(compositeBar.domNode.parentElement, activitybar.domNode.querySelector('.ash-workbench-part-content'));
+	assert.equal(globalActions.parentElement, activitybar.domNode.querySelector('.ash-workbench-part-content'));
 	assert.equal(sidebar.domNode.firstElementChild, title);
+	assert.equal(title.textContent, '');
 	assert.equal(
 		compositeBar.domNode.className,
-		"ash-composite-bar ash-composite-bar-icon",
+		"ash-composite-bar ash-composite-bar-icon ash-composite-bar-vertical",
 	);
 	const content = sidebar.domNode.querySelector(
 		":scope > .ash-composite-content",
@@ -746,9 +769,9 @@ test("Sidebar hosts its Composite Bar before content", () => {
 		":scope > .ash-action-bar",
 	);
 	assert.equal(actionbar?.classList.contains("ash-action-bar"), true);
-	assert.equal(actionbar?.classList.contains("horizontal"), true);
+	assert.equal(actionbar?.classList.contains("vertical"), true);
 	assert.equal(actionbar?.getAttribute("role"), "tablist");
-	assert.equal(actionbar?.getAttribute("aria-orientation"), "horizontal");
+	assert.equal(actionbar?.getAttribute("aria-orientation"), "vertical");
 	assert.deepEqual(
 		[...(actionbar?.children ?? [])].map(
 			(item) => item.classList.contains("ash-tab"),
@@ -805,14 +828,14 @@ test("Sidebar hosts its Composite Bar before content", () => {
 	explorerTab.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
 		bubbles: true,
 		cancelable: true,
-		key: "ArrowRight",
+		key: "ArrowDown",
 	}));
 	assert.equal(dom.window.document.activeElement, searchTab);
 	assert.deepEqual(selections, []);
 	explorerTab.click();
-	assert.deepEqual(selections, []);
+	assert.deepEqual(selections, ["ash.explorer"]);
 	searchTab.click();
-	assert.deepEqual(selections, ["ash.search"]);
+	assert.deepEqual(selections, ["ash.explorer", "ash.search"]);
 	assert.equal(compositeBar.activeCompositeId, "ash.explorer");
 
 	const instantiationService = new ServiceContainer();
@@ -837,6 +860,7 @@ test("Sidebar hosts its Composite Bar before content", () => {
 	sidebar.addComposite(explorerComposite);
 	sidebar.addComposite(searchComposite);
 	sidebar.showComposite(explorerComposite.id);
+	assert.equal(title.textContent, "Explorer");
 	assert.equal(sidebar.activeCompositeId, explorerComposite.id);
 	assert.equal(contextKeys.getValue('activeViewlet'), explorerComposite.id);
 	assert.equal(explorerComposite.element.hidden, false);
@@ -1034,7 +1058,7 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
 	dom.window.document.body.append(panel.domNode);
 
 	const tablist = panel.domNode.querySelector(".ash-panel-title-control [role='tablist']");
-	assert.equal(panel.compositeBar.domNode.className, "ash-composite-bar ash-composite-bar-label");
+	assert.equal(panel.compositeBar.domNode.className, "ash-composite-bar ash-composite-bar-label ash-composite-bar-horizontal");
 	assert.equal(tablist?.getAttribute("aria-label"), "Panel views");
 	assert.deepEqual(
 		[...(tablist?.querySelectorAll("[role='tab']") ?? [])].map((tab) => tab.textContent),
@@ -1180,6 +1204,59 @@ test("CompositeBar moves non-fitting label tabs into its overflow menu", () => {
 	assert.equal(overflowItem.isConnected, true);
 
 	disposables.dispose();
+	dom.window.close();
+});
+
+test('Activity Bar context menu persists hidden views and keeps one pinned view', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	using disposables = new DisposableStore();
+	const registry = new WorkbenchViewRegistry();
+	for (const [id, title] of [['ash.explorer', 'Explorer'], ['ash.search', 'Search']] as const) {
+		disposables.add(registry.registerViewContainer({ id, title, location: ViewContainerLocation.Sidebar }));
+	}
+	const contextKeys = disposables.add(new ContextKeyService());
+	const viewDescriptors = disposables.add(new ViewDescriptorService({ contextKeyService: contextKeys, registry }));
+	const storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, applicationId: 'code', workspaceId: 'test', backend: dom.window.localStorage, flushInterval: 0 });
+	const firstBar = new DisposableStore();
+	let actions: readonly IAction[] = [];
+	const contextMenuProvider: IContextMenuProvider = { showContextMenu(options) { actions = options.getActions(); } };
+	const compositeBar = firstBar.add(new CompositeBar(dom.window.document.body, {
+		viewDescriptorService: viewDescriptors,
+		location: ViewContainerLocation.Sidebar,
+		ariaLabel: 'Primary side bar views',
+		orientation: 'vertical',
+		contextMenuProvider,
+		storageService: storage,
+	}));
+	const configuration = firstBar.add(new InMemoryConfigurationService());
+	const globalBar = { domNode: dom.window.document.createElement('div'), setOrientation() {}, getContextMenuActions: () => [] };
+	const localization = { translate: (_bundle: string, _key: string, fallback: string) => fallback } as ILocalizationService;
+	const activitybar = firstBar.add(new ActivitybarPart(dom.window.document.body, compositeBar, globalBar, configuration, localization));
+	const search = activitybar.domNode.querySelector<HTMLElement>('[data-action-id="ash.search"]');
+	assert.ok(search);
+	search.dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true }));
+	assert.equal(actions[0]?.label, "Hide 'Search'");
+	actions[0]?.run();
+	assert.equal(activitybar.domNode.querySelector('[data-action-id="ash.search"]'), null);
+	activitybar.domNode.querySelector<HTMLElement>('[data-action-id="ash.explorer"]')?.dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true }));
+	assert.equal(actions.find(action => action.id === 'ash.activityBar.togglePinned.ash.explorer')?.enabled, false);
+	assert.equal(actions.find(action => action.id === 'ash.activityBar.togglePinned.ash.search')?.checked, false);
+	await storage.flush(WillSaveStateReason.SHUTDOWN);
+	firstBar.dispose();
+	storage.dispose();
+
+	const restoredStorage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, applicationId: 'code', workspaceId: 'other', backend: dom.window.localStorage, flushInterval: 0 });
+	const restored = new CompositeBar(dom.window.document.body, {
+		viewDescriptorService: viewDescriptors,
+		location: ViewContainerLocation.Sidebar,
+		ariaLabel: 'Primary side bar views',
+		orientation: 'vertical',
+		contextMenuProvider,
+		storageService: restoredStorage,
+	});
+	assert.equal(restored.domNode.querySelector('[data-action-id="ash.search"]'), null);
+	restored.dispose();
+	restoredStorage.dispose();
 	dom.window.close();
 });
 

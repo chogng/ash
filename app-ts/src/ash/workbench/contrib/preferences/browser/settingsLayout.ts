@@ -46,6 +46,12 @@ export const SettingsNavigation = [
 		presentation: 'general',
 		groups: [
 			{
+				id: 'updates',
+				get label() { return localize('update.settingsGroup', 'Updates'); },
+				get description() { return localize('update.settingsGroupDescription', 'Choose how Ash Desktop checks for product updates.'); },
+				settings: ['update.policy'],
+			},
+			{
 				id: 'source-control',
 				get label() { return localize('git.settings.group', 'Source Control'); },
 				get description() { return localize('git.settings.groupDescription', 'Configure Git fetching and Source Control diff decorations.'); },
@@ -81,7 +87,7 @@ export const SettingsNavigation = [
 				id: 'layout',
 				label: 'Layout',
 				get description() { return localize('settings.appearance.layout.description', 'Configure the Workbench layout and window zoom.'); },
-				settings: ['workbench.layoutStyle', 'window.zoomLevel'],
+				settings: ['workbench.layoutStyle', 'workbench.activityBar.location', 'workbench.activityBar.compact', 'workbench.sideBar.location', 'window.zoomLevel'],
 			},
 		],
 	},

@@ -1,8 +1,8 @@
 import "./compositebar.css";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
 import type { ActionViewItem } from "../../../../base/browser/ui/actionbar/actionViewItems.js";
-import { ActionBar, type ActionBarDropPosition } from "../../../../base/browser/ui/actionbar/actionbar.js";
-import type { IAction } from "../../../../base/common/actions.js";
+import { ActionBar, type ActionBarDropPosition, type ActionBarOrientation } from "../../../../base/browser/ui/actionbar/actionbar.js";
+import { Separator, type IAction } from "../../../../base/common/actions.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
@@ -12,6 +12,7 @@ import type { IViewDescriptorService } from "../../../services/views/common/view
 import { CompositeBarAction, CompositeBarActionViewItem, CompositeBarOverflowViewItem } from "./compositeBarActionViewItem.js";
 import { h } from "../../../../base/browser/dom.js";
 import { observeResize } from "../../../../base/browser/observer.js";
+import { StorageScope, StorageTarget, type IStorageService } from '../../../../platform/storage/common/storage.js';
 
 /** Selection of an inactive Composite requested from a CompositeBar. */
 export interface CompositeBarSelectionEvent {
@@ -25,10 +26,12 @@ export interface CompositeBarOptions {
 	readonly location: ViewContainerLocation;
 	readonly ariaLabel: string;
 	readonly presentation?: CompositeBarPresentation;
+	readonly orientation?: ActionBarOrientation;
 	/** Selects the View Containers represented as Composite Bar action items. */
 	readonly containerFilter?: (container: IViewContainerDescriptor) => boolean;
 	/** Host-owned menu surface used to reveal label tabs that do not fit. */
 	readonly contextMenuProvider?: IContextMenuProvider;
+	readonly storageService?: IStorageService;
 }
 
 /** Visual density selected by the Part hosting a CompositeBar. */
@@ -36,6 +39,7 @@ export type CompositeBarPresentation = "icon" | "label";
 
 const OVERFLOW_BUTTON_WIDTH = 24;
 const OVERFLOW_ACTION_ID = "ash.compositeBar.overflow";
+const HIDDEN_VIEW_CONTAINERS_KEY = 'workbench.activityBar.hiddenViewContainers';
 
 /**
  * Maps registered workbench Composites onto an ActionBar tablist.
@@ -48,13 +52,17 @@ export class CompositeBar extends Disposable {
 	private readonly viewDescriptorService: IViewDescriptorService;
 	private readonly localizationService: ILocalizationService | undefined;
 	private readonly location: ViewContainerLocation;
+	private orientation: ActionBarOrientation;
 	private readonly actionBar: ActionBar;
 	private readonly contextMenuProvider: IContextMenuProvider | undefined;
+	private readonly storageService: IStorageService | undefined;
 	private readonly overflowEnabled: boolean;
 	private readonly containerFilter: (container: IViewContainerDescriptor) => boolean;
 	private readonly _onDidSelectComposite =
 		this._register(new Emitter<CompositeBarSelectionEvent>());
 	private containers: readonly IViewContainerDescriptor[] = [];
+	private displayedContainers: readonly IViewContainerDescriptor[] = [];
+	private hiddenContainerIds = new Set<string>();
 	private readonly tabWidths = new Map<string, number>();
 	private readonly badges = new Map<string, { readonly count: number; readonly description: string }>();
 	private actionBarInsetWidth = 0;
@@ -73,11 +81,16 @@ export class CompositeBar extends Disposable {
 		this.viewDescriptorService = options.viewDescriptorService;
 		this.localizationService = options.localizationService;
 		this.location = options.location;
+		this.orientation = options.orientation ?? 'horizontal';
 		this.contextMenuProvider = options.contextMenuProvider;
-		this.overflowEnabled = presentation === "label" && this.contextMenuProvider !== undefined;
+		this.storageService = this.orientation === 'vertical' ? options.storageService : undefined;
+		this.hiddenContainerIds = this.readHiddenContainerIds();
+		this.overflowEnabled = (presentation === 'label' || this.orientation === 'vertical') && this.contextMenuProvider !== undefined;
 		this.containerFilter = options.containerFilter ?? (() => true);
 		this.domNode = h(container.ownerDocument, "section");
 		this.domNode.className = `ash-composite-bar ash-composite-bar-${presentation}`;
+		this.domNode.classList.toggle('ash-composite-bar-vertical', options.orientation === 'vertical');
+		this.domNode.classList.toggle('ash-composite-bar-horizontal', options.orientation !== 'vertical');
 		this.domNode.setAttribute("aria-label", options.ariaLabel);
 		this.domNode.dataset.viewContainerLocation = options.location;
 		container.append(this.domNode);
@@ -85,6 +98,7 @@ export class CompositeBar extends Disposable {
 		this.actionBar = this._register(new ActionBar(this.domNode, {
 			ariaLabel: options.ariaLabel,
 			ariaRole: "tablist",
+			orientation: options.orientation,
 			actionViewItemProvider: (action): ActionViewItem => {
 				if (action instanceof CompositeBarAction) {
 					return new CompositeBarActionViewItem(action);
@@ -116,6 +130,11 @@ export class CompositeBar extends Disposable {
 			if (location === this.location) this.render();
 		}));
 		if (this.localizationService) this._register(this.localizationService.onDidChange(() => this.render()));
+		if (this.storageService) this._register(this.storageService.onDidChangeValue(event => {
+			if (event.key !== HIDDEN_VIEW_CONTAINERS_KEY || event.scope !== StorageScope.PROFILE || !event.external) return;
+			this.hiddenContainerIds = this.readHiddenContainerIds();
+			this.render();
+		}));
 		if (this.overflowEnabled) this._register(observeResize(this.domNode, () => this.layout()));
 		this.render();
 	}
@@ -147,15 +166,50 @@ export class CompositeBar extends Disposable {
 		this.render();
 	}
 
+	setOrientation(orientation: ActionBarOrientation): void {
+		if (this.orientation === orientation) return;
+		this.orientation = orientation;
+		this.domNode.classList.toggle('ash-composite-bar-vertical', orientation === 'vertical');
+		this.domNode.classList.toggle('ash-composite-bar-horizontal', orientation === 'horizontal');
+		this.actionBar.setOrientation(orientation);
+		this.render();
+	}
+
+	showContextMenu(event: MouseEvent | KeyboardEvent, additionalActions: readonly IAction[] = []): void {
+		if (!this.contextMenuProvider) return;
+		event.preventDefault();
+		event.stopPropagation();
+		const target = event.target && 'closest' in event.target ? (event.target as Element).closest<HTMLElement>('.ash-composite-bar-destination') : null;
+		const containerId = target && this.domNode.contains(target) ? target.dataset.actionId : undefined;
+		const anchor = event.type === 'contextmenu'
+			? { x: (event as MouseEvent).clientX, y: (event as MouseEvent).clientY, targetWindow: this.domNode.ownerDocument.defaultView ?? undefined }
+			: target ?? this.domNode;
+		this.contextMenuProvider.showContextMenu({
+			getAnchor: () => anchor,
+			getActions: () => containerId || additionalActions.length === 0
+				? Separator.join([...this.createContextMenuActions(containerId)], [...additionalActions])
+				: additionalActions,
+			getCheckedActionsRepresentation: () => 'checkbox',
+			onHide: didCancel => {
+				if (didCancel && target?.isConnected) target.focus();
+			},
+		});
+	}
+
 	/** Reconciles visible label tabs with the width assigned by the hosting Part. */
 	layout(): void {
-		if (!this.overflowEnabled || !this.measureTabWidths()) return;
+		if (!this.overflowEnabled) return;
+		if (this.orientation === 'vertical') {
+			this.layoutVertical();
+			return;
+		}
+		if (!this.measureTabWidths()) return;
 		const availableWidth = this.domNode.clientWidth;
 		if (availableWidth <= 0) return;
 
 		const visibleContainers = this.visibleContainersForWidth(availableWidth, OVERFLOW_BUTTON_WIDTH + this.actionBarItemGap);
 		const visibleContainerIds = visibleContainers.map((container) => container.id);
-		const overflowingContainerIds = new Set(this.containers
+		const overflowingContainerIds = new Set(this.displayedContainers
 			.filter((container) => !visibleContainerIds.includes(container.id))
 			.map((container) => container.id));
 		const overflowChanged = !sameIds([...this.overflowingContainerIds], [...overflowingContainerIds]);
@@ -165,9 +219,30 @@ export class CompositeBar extends Disposable {
 		}
 	}
 
+	private layoutVertical(): void {
+		const availableHeight = this.domNode.clientHeight;
+		if (availableHeight <= 0 || this.displayedContainers.length === 0) return;
+		const firstItem = this.actionBar.element.querySelector<HTMLElement>(':scope > .ash-composite-bar-item');
+		if (!firstItem) return;
+		const itemHeight = firstItem.getBoundingClientRect().height;
+		if (itemHeight <= 0) return;
+		const gap = Number.parseFloat(getComputedStyle(this.actionBar.element).rowGap) || 0;
+		const fit = Math.floor((availableHeight + gap) / (itemHeight + gap));
+		const visibleCount = fit >= this.displayedContainers.length ? this.displayedContainers.length : Math.max(0, fit - 1);
+		const visible = this.displayedContainers.slice(0, visibleCount);
+		const active = this.displayedContainers.find(container => container.id === this._activeCompositeId);
+		if (active && visibleCount > 0 && !visible.includes(active)) visible[visible.length - 1] = active;
+		const visibleIds = new Set(visible.map(container => container.id));
+		const overflowingIds = new Set(this.displayedContainers.filter(container => !visibleIds.has(container.id)).map(container => container.id));
+		if (sameIds(this.renderedContainerIds, visible.map(container => container.id)) && sameIds([...this.overflowingContainerIds], [...overflowingIds])) return;
+		this.setOverflowingContainerIds(overflowingIds);
+		this.renderTabs(visible);
+	}
+
 	private render(): void {
 		const availableContainers = this.viewDescriptorService.getViewContainers(this.location);
 		this.containers = availableContainers.filter(this.containerFilter);
+		this.displayedContainers = this.containers.filter(container => !this.hiddenContainerIds.has(container.id) || container.id === this._activeCompositeId);
 		if (
 			this._activeCompositeId !== undefined &&
 			!availableContainers.some((container) => container.id === this._activeCompositeId)
@@ -176,7 +251,7 @@ export class CompositeBar extends Disposable {
 		}
 		this.tabWidths.clear();
 		this.setOverflowingContainerIds(new Set());
-		this.renderTabs(this.containers);
+		this.renderTabs(this.displayedContainers);
 		this.layout();
 	}
 
@@ -208,10 +283,7 @@ export class CompositeBar extends Disposable {
 					panelId: compositePanelId(this.location, container.id),
 					checked: container.id === this._activeCompositeId,
 					badge: this.badges.get(container.id),
-					onActivate: (compositeId) => {
-						if (this._activeCompositeId === compositeId) return;
-						this._onDidSelectComposite.fire({ compositeId });
-					},
+					onActivate: (compositeId) => this._onDidSelectComposite.fire({ compositeId }),
 				});
 			}),
 			...(showOverflow ? [new CompositeBarOverflowAction(localize(this.localizationService, { bundle: "ash.regions", key: "additionalViews" }, "Additional views"))] : []),
@@ -245,26 +317,26 @@ export class CompositeBar extends Disposable {
 				this.actionBarItemGap = Math.max(0, (itemSpan - totalTabWidth) / (tabBounds.length - 1));
 			}
 		}
-		if (!this.containers.every((container) => this.tabWidths.has(container.id))) {
+		if (!this.displayedContainers.every((container) => this.tabWidths.has(container.id))) {
 			return false;
 		}
 		return true;
 	}
 
 	private visibleContainersForWidth(availableWidth: number, overflowWidth: number): readonly IViewContainerDescriptor[] {
-		const totalWidth = this.containersWidth(this.containers);
-		if (totalWidth <= availableWidth) return this.containers;
+		const totalWidth = this.containersWidth(this.displayedContainers);
+		if (totalWidth <= availableWidth) return this.displayedContainers;
 
 		const widthLimit = Math.max(0, availableWidth - overflowWidth);
 		const visible: IViewContainerDescriptor[] = [];
-		for (const container of this.containers) {
+		for (const container of this.displayedContainers) {
 			if (this.containersWidth([...visible, container]) > widthLimit) break;
 			visible.push(container);
 		}
 
 		const activeCompositeId = this._activeCompositeId;
 		if (activeCompositeId && !visible.some((container) => container.id === activeCompositeId)) {
-			const activeContainer = this.containers.find((container) => container.id === activeCompositeId);
+			const activeContainer = this.displayedContainers.find((container) => container.id === activeCompositeId);
 			if (activeContainer) {
 				while (visible.length > 0 && this.containersWidth([...visible, activeContainer]) > widthLimit) visible.pop();
 				if (this.containersWidth([...visible, activeContainer]) <= widthLimit) visible.push(activeContainer);
@@ -281,7 +353,7 @@ export class CompositeBar extends Disposable {
 	}
 
 	private createOverflowActions(): readonly IAction[] {
-		return this.containers
+		return this.displayedContainers
 			.filter((container) => this.overflowingContainerIds.has(container.id))
 			.map((container) => {
 				const label = localize(this.localizationService, container.localizationKey, container.title);
@@ -291,12 +363,55 @@ export class CompositeBar extends Disposable {
 					tooltip: label,
 					enabled: true,
 					checked: container.id === this._activeCompositeId,
-					run: () => {
-						if (container.id === this._activeCompositeId) return;
-						this._onDidSelectComposite.fire({ compositeId: container.id });
-					},
+					run: () => this._onDidSelectComposite.fire({ compositeId: container.id }),
 				};
 			});
+	}
+
+	private createContextMenuActions(containerId: string | undefined): readonly IAction[] {
+		const pinnedCount = this.containers.filter(container => !this.hiddenContainerIds.has(container.id)).length;
+		const selected = this.containers.find(container => container.id === containerId);
+		const toggleActions = this.containers.map(container => {
+			const isPinned = !this.hiddenContainerIds.has(container.id);
+			const label = localize(this.localizationService, container.localizationKey, container.title);
+			return {
+				id: `ash.activityBar.togglePinned.${encodeURIComponent(container.id)}`,
+				label,
+				tooltip: label,
+				enabled: !isPinned || pinnedCount > 1,
+				checked: isPinned,
+				run: () => this.setPinned(container.id, !isPinned),
+			};
+		});
+		if (!selected) return toggleActions;
+		const isPinned = !this.hiddenContainerIds.has(selected.id);
+		const name = localize(this.localizationService, selected.localizationKey, selected.title);
+		const label = this.localizationService?.translate('ash', isPinned ? 'workbench.hideActivityBarView' : 'workbench.keepActivityBarView', isPinned ? "Hide '{0}'" : "Keep '{0}'", { '0': name }) ?? (isPinned ? `Hide '${name}'` : `Keep '${name}'`);
+		return Separator.join([{
+			id: `ash.activityBar.toggleSelected.${encodeURIComponent(selected.id)}`,
+			label,
+			tooltip: label,
+			enabled: !isPinned || pinnedCount > 1,
+			run: () => this.setPinned(selected.id, !isPinned),
+		}], toggleActions);
+	}
+
+	private setPinned(containerId: string, pinned: boolean): void {
+		if (pinned) this.hiddenContainerIds.delete(containerId);
+		else this.hiddenContainerIds.add(containerId);
+		this.storageService?.store(HIDDEN_VIEW_CONTAINERS_KEY, JSON.stringify([...this.hiddenContainerIds]), StorageScope.PROFILE, StorageTarget.USER);
+		this.render();
+	}
+
+	private readHiddenContainerIds(): Set<string> {
+		const stored = this.storageService?.get(HIDDEN_VIEW_CONTAINERS_KEY, StorageScope.PROFILE);
+		if (!stored) return new Set();
+		try {
+			const ids: unknown = JSON.parse(stored);
+			return new Set(Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : []);
+		} catch {
+			return new Set();
+		}
 	}
 
 	private setOverflowingContainerIds(ids: Set<string>): void {

@@ -1,7 +1,7 @@
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localizedString } from '../../../../platform/action/common/action.js';
-import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IPreferencesService } from '../../../services/preferences/common/preferences.js';
 import { OpenKeyboardShortcutsCommandId, OpenSettingsCommandId, OpenSettingsJsonCommandId } from '../common/preferences.js';
@@ -14,11 +14,6 @@ registerAction2(class OpenSettingsAction extends Action2 {
 			tooltip: localizedString('ash', 'workbench.settings', 'Ash Settings'),
 			icon: Lxicon.gear,
 			menu: [
-				{
-					id: MenuId.TitleBar,
-					group: 'navigation',
-					order: 100,
-				},
 				{
 					id: MenuId.EditorTitle,
 					group: 'settings',
@@ -42,6 +37,12 @@ registerAction2(class OpenSettingsAction extends Action2 {
 	}
 });
 
+MenusRegistry.appendMenuItem(MenuId.GlobalActivity, {
+	command: { id: OpenSettingsCommandId, title: localizedString('ash', 'workbench.manageSettings', 'Settings') },
+	group: '2_configuration',
+	order: 2,
+});
+
 registerAction2(class OpenKeyboardShortcutsAction extends Action2 {
 	constructor() {
 		super({
@@ -55,6 +56,12 @@ registerAction2(class OpenKeyboardShortcutsAction extends Action2 {
 	override run(accessor: ServicesAccessor): Promise<void> {
 		return accessor.get(IPreferencesService).openKeybindings();
 	}
+});
+
+MenusRegistry.appendMenuItem(MenuId.GlobalActivity, {
+	command: { id: OpenKeyboardShortcutsCommandId, title: localizedString('ash', 'workbench.manageKeyboardShortcuts', 'Keyboard Shortcuts') },
+	group: '2_configuration',
+	order: 4,
 });
 
 registerAction2(class OpenSettingsJsonAction extends Action2 {

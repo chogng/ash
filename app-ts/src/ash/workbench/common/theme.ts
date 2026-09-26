@@ -22,6 +22,10 @@ registerColor("editorGroup.border", {
 color("editor.tabBackground", "#EEEEEE", "#EEEEEE", "#000000", "#ffffff", "Background for inactive Editor tabs.");
 
 export const titleBarBackground = color("titleBar.background", "#FFFFFF", "#FFFFFF", "#000000", "#ffffff", "Title bar background.");
+alias('activityBar.background', titleBarBackground, 'Activity Bar background.');
+color('modernActivityBarItem.activeBackground', '#e6e6e6', '#e6e6e6', '#000000', '#ffffff', 'Selected Activity Bar item background.');
+color('modernActivityBarItem.hoverBackground', '#f0f0f0', '#f0f0f0', '#000000', '#ffffff', 'Hovered Activity Bar item background.');
+color('modernActivityBarItem.activeForeground', '#1f1f1f', '#1f1f1f', foreground, foreground, 'Selected Activity Bar icon foreground.');
 color("titleBar.foreground", "#1f1f1f", "#1f1f1f", foreground, foreground, "Title bar foreground.");
 export const titleBarActionForeground = color("titleBar.actionForeground", "#424242", "#424242", foreground, foreground, "Title bar action foreground.");
 color("titleBar.hoverBackground", "#e5e5e5", "#e5e5e5", "#333333", "#dddddd", "Hovered title bar item background.");

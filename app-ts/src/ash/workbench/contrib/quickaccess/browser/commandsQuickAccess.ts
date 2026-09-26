@@ -1,7 +1,8 @@
 import { getKeybindingLabel } from '../../../../base/common/keybindingLabels.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
-import { Action2, IMenuService, MenuId, MenuItemAction } from '../../../../platform/actions/common/actions.js';
+import { Action2, IMenuService, MenuId, MenuItemAction, MenusRegistry } from '../../../../platform/actions/common/actions.js';
+import { localizedString } from '../../../../platform/action/common/action.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
@@ -51,6 +52,12 @@ export class CommandsQuickAccessProvider implements IQuickAccessProvider {
 		return disposables;
 	}
 }
+
+MenusRegistry.appendMenuItem(MenuId.GlobalActivity, {
+	command: { id: ShowAllCommandsCommandId, title: localizedString('ash', 'workbench.commandPalette', 'Command Palette...') },
+	group: '1_command',
+	order: 1,
+});
 
 export class ShowAllCommandsAction extends Action2 {
 	constructor() {

@@ -1,0 +1,26 @@
+.ash-workbench-activitybar {
+	background: var(--ash-side-bar-background);
+}
+
+.ash-workbench-activitybar > .ash-workbench-part-content {
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+}
+
+.ash-workbench-activitybar > .ash-workbench-part-content > .ash-composite-bar {
+	flex: 1 1 auto;
+	height: auto;
+	min-height: 0;
+}
+
+.ash-workbench-activitybar.horizontal > .ash-workbench-part-content {
+	flex-direction: row;
+	align-items: center;
+}
+
+.ash-workbench-activitybar.horizontal > .ash-workbench-part-content > .ash-composite-bar {
+	min-width: 0;
+	height: 100%;
+}

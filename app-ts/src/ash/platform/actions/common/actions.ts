@@ -66,6 +66,8 @@ export class MenuId {
 
 	static readonly CommandPalette = new MenuId("CommandPalette");
 	static readonly CommandCenter = new MenuId("CommandCenter");
+	static readonly GlobalActivity = new MenuId("GlobalActivity");
+	static readonly SidebarTitle = new MenuId('SidebarTitle');
 	static readonly TitleBar = new MenuId("TitleBar");
 	static readonly TitleBarLeft = new MenuId("TitleBarLeft");
 	static readonly TitleBarAdjacentCenter = new MenuId("TitleBarAdjacentCenter");

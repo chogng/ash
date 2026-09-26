@@ -168,7 +168,8 @@ test('browser nests related files when Explorer file nesting is enabled', async 
 	await expect(parent).toBeVisible();
 	await expect(child).toBeVisible();
 
-	await page.getByRole('button', { name: 'Ash Settings' }).click();
+	await page.getByRole('button', { name: 'Manage' }).click();
+	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Settings' }).click();
 	const settings = page.locator('.ash-settings-editor');
 	await expect(settings).toBeVisible();
 	await settings.locator('[data-settings-category-id="editor"]').click();

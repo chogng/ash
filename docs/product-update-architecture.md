@@ -13,6 +13,12 @@
 3. 每个产品宿主负责自己的安装格式、进程退出、版本切换和重启；
 4. 每个 UI 只编辑本产品策略，并展示共享领域产生的类型化状态。
 
+更新单位是**已发布的产品安装包**，不是实现它的语言。Electron Desktop 的 Renderer、Electron Main、
+随包 Rust App Server 和 update host 共用一个产品版本与发布身份，必须作为一个安装包一起更新；
+打包时校验 TS 包与 Rust 后端的版本、协议和二进制身份。单独替换随包后端会使已安装产品失去这项保证。
+`ash code` 和 Rust Desktop `app` 是另外两条产品线，各自选择和安装自己的完整包，可以与 Electron
+Desktop 处于不同版本。Remote runtime 按连接兼容性独立安装，见下文“App Server 与 Remote 边界”。
+
 ```mermaid
 flowchart TD
     Release["签名发布源\nlatest / stable"] --> Core["ash-product-update\n版本 · 签名 · 下载 · 校验 · 状态"]
@@ -162,6 +168,12 @@ Renderer 中的领域 service 只暴露策略、状态、检查、安装和重�
 host，并通过私有 typed channel 接收已经验证的产物身份；Main 只把该身份交给 Electron Desktop
 安装 adapter，并协调窗口关闭与重启。
 
+TS 的 `platform/update` 定义服务契约、设置和 Electron adapter，`workbench/services/update` 注册桌面服务，
+`workbench/contrib/update` 提供菜单和状态展示。Rust 的 `ash-rs/product-update` 拥有发布描述校验、
+版本选择及下载文件的大小与摘要校验。这里按职责分开代码，更新时仍替换同一个 Electron Desktop 安装包。
+`update.policy` 存在本机 UI profile：`latest` 或 `stable` 每天自动检查，`never` 停止自动检查；
+手动检查在 `never` 下仍使用 `latest`。Remote workspace 不改变此策略。
+
 禁止以下调用链：
 
 ```text
@@ -243,11 +255,11 @@ Remote runtime 的下载、兼容握手、安装与回滚继续由 `ash-remote-c
 | Ash Code 策略 UI | `Latest / Stable / Never` 已在 TUI 实现 | 保留 UI，类型迁到共享领域后由 adapter 映射 |
 | Ash Code 更新 | CLI 已改用共享策略与签名验证；调度、下载、诊断和安装仍在 `ash-cli/src/update.rs` | 保留 CLI 安装 adapter，继续迁出通用调度、下载和诊断 |
 | Rust Desktop 更新 | `app-rs/zui/src/services/update.rs` 已改用共享签名描述；HTTP staging 与安装 facade 仍在 `zui` | 继续迁出通用下载，`zui` 只保留 facade |
-| Electron Desktop 更新 | 尚无完整产品更新调用链 | 增加 update host、Main adapter、Renderer service 与 UI |
-| 系统签名 | App 与 Ash Code 已共用 `build/lib/signing.py`；Ash Code macOS/Windows 发布会签完并验证每个可执行文件，macOS 压缩包还会公证 | Electron 打包和三端最终安装器接入同一入口；Desktop `.pkg` / `.dmg` 公证后附加票据，Windows 安装器再次签名 |
+| Electron Desktop 更新 | Manage 菜单和每日自动检查可选择最新或稳定通道；签名验证后下载完整安装包，核对大小与 SHA-256，再由 Main 执行 Windows 安装器或 macOS 应用包替换与重启。当前状态只在运行中的 Main 保存，未验证真实跨版本升级 | 将检查时间、下载进度和已准备版本迁入共享状态；完成安装失败恢复与真实跨版本验证 |
+| 系统签名 | App 与 Ash Code 已共用 `build/lib/signing.py`；Ash Code macOS/Windows 发布会签完并验证每个可执行文件，macOS 压缩包还会公证；Electron Desktop 的 macOS `.app` 已签名并公证，Windows bundle 可执行文件和最终 `.exe` 安装器已接入发布签名与验证 | 三端最终安装器接入同一入口；Desktop `.pkg` / `.dmg` 公证后附加票据 |
 | 更新描述签名 | `code/update-sign` 已直接消费共享发布描述与 canonical encoding | 保留密钥输入和 release artifact adapter |
-| 发布工作流 | Ash Code 已有系统签名、macOS 公证、最新版本描述签名和稳定版本晋升工作流 | 扩展为按 product/target 发布 Electron 与 Rust Desktop 产物 |
-| 共享更新 crate | `ash-rs/product-update` 已拥有策略、product/target/package 描述、签名与验证 | 继续迁入通用下载、调度、状态与错误 |
+| 发布工作流 | Ash Code 已有系统签名、macOS 公证、最新版本描述签名和稳定版本晋升工作流；Electron Desktop 的 macOS zip 和 Windows exe 已接入签名描述生成与发布，也有独立的稳定通道晋升工作流 | 扩展 Rust Desktop 产物并完成三端稳定通道 |
+| 共享更新 crate | `ash-rs/product-update` 已拥有策略、product/target/package 描述、签名验证及有界下载与摘要校验 | 继续迁入通用调度、状态与错误 |
 
 “已有代码”不代表共享架构已经完成。当前 Ash Code 和 `zui` 仍各自拥有下载与调度代码，这些逻辑
 需要继续迁到共享领域，不能被 Electron 复制为第三套实现。

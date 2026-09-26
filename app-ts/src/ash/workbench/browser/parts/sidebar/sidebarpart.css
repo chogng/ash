@@ -16,3 +16,15 @@
   background: var(--ash-side-bar-background);
 }
 .ash-sidebar-part > .ash-composite-content { overflow: auto; }
+
+.ash-sidebar-title-label {
+	min-width: 0;
+	align-self: center;
+	padding: 0 var(--ash-spacing-size120);
+	overflow: hidden;
+	color: var(--ash-foreground);
+	font-size: var(--ash-font-size-body1);
+	font-weight: var(--ash-font-weight-semi-bold);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}

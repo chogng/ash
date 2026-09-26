@@ -1,4 +1,5 @@
 import { WorkbenchFileIconThemesRegistry, WorkbenchProductIconThemesRegistry } from '../services/themes/common/themeExtensionPoints.js';
+import { localize } from '../../nls.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../platform/configuration/common/configurationRegistry.js";
 import { AccessibilityConfiguration } from "../../platform/accessibility/common/accessibility.js";
 import { Registry } from "../../platform/registry/common/platform.js";
@@ -6,6 +7,8 @@ import { WorkbenchModeConfigurationKey, WorkbenchModeRegistry } from "./workbenc
 import { defaultWorkbenchColorThemePreference, SystemColorThemePreference, WorkbenchThemesRegistry } from "./theme.js";
 
 export type WorkbenchLayoutStyle = "modern" | "flat";
+export type ActivityBarLocation = 'default' | 'top' | 'bottom' | 'hidden';
+export type SideBarLocation = 'left' | 'right';
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 const defaultFileIconThemeId = 'vs-seti';
@@ -89,6 +92,59 @@ export const WorkbenchConfiguration = Object.freeze({
 				{ value: "modern", label: "Modern" },
 				{ value: "flat", label: "Flat" },
 			],
+		},
+	}),
+	activityBarLocation: configurationRegistry.registerConfiguration<ActivityBarLocation>({
+		key: 'workbench.activityBar.location',
+		defaultValue: 'default',
+		parse(value: unknown): ActivityBarLocation {
+			if (value === 'default' || value === 'top' || value === 'bottom' || value === 'hidden') return value;
+			throw new TypeError(`Unknown Activity Bar location: ${String(value)}`);
+		},
+		setting: {
+			valueType: 'select',
+			get title() { return localize('workbench.activityBar.location.title', 'Activity Bar Position'); },
+			get description() { return localize('workbench.activityBar.location.description', 'Choose where the Activity Bar appears.'); },
+			get options() {
+				return [
+					{ value: 'default', label: localize('workbench.activityBar.location.side', 'Side') },
+					{ value: 'top', label: localize('workbench.activityBar.location.top', 'Top') },
+					{ value: 'bottom', label: localize('workbench.activityBar.location.bottom', 'Bottom') },
+					{ value: 'hidden', label: localize('workbench.activityBar.location.hidden', 'Hidden') },
+				] as const;
+			},
+		},
+	}),
+	activityBarCompact: configurationRegistry.registerConfiguration<boolean>({
+		key: 'workbench.activityBar.compact',
+		defaultValue: false,
+		parse(value: unknown): boolean {
+			if (typeof value === 'boolean') return value;
+			throw new TypeError(`Invalid Activity Bar compact value: ${String(value)}`);
+		},
+		setting: {
+			valueType: 'boolean',
+			get title() { return localize('workbench.activityBar.compact.title', 'Compact Activity Bar'); },
+			get description() { return localize('workbench.activityBar.compact.description', 'Use smaller Activity Bar items when the bar is on the side.'); },
+		},
+	}),
+	sideBarLocation: configurationRegistry.registerConfiguration<SideBarLocation>({
+		key: 'workbench.sideBar.location',
+		defaultValue: 'left',
+		parse(value: unknown): SideBarLocation {
+			if (value === 'left' || value === 'right') return value;
+			throw new TypeError(`Unknown primary side bar location: ${String(value)}`);
+		},
+		setting: {
+			valueType: 'select',
+			get title() { return localize('workbench.sideBar.location.title', 'Primary Side Bar Position'); },
+			get description() { return localize('workbench.sideBar.location.description', 'Choose which side contains the primary side bar.'); },
+			get options() {
+				return [
+					{ value: 'left', label: localize('workbench.sideBar.location.left', 'Left') },
+					{ value: 'right', label: localize('workbench.sideBar.location.right', 'Right') },
+				] as const;
+			},
 		},
 	}),
 });

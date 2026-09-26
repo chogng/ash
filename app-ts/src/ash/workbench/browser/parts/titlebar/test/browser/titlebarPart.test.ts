@@ -131,7 +131,7 @@ test("titlebar owns a menu-driven actions container", async () => {
 	);
 	assert.equal(menubarElement.classList.contains("ash-titlebar-interactive-region"), true);
 
-	const button = actionsContainer.querySelector("button");
+	const button = actionsContainer.querySelector<HTMLButtonElement>('[data-action-id="test.titlebar.action"] button');
 	assert.equal(button?.textContent, "Title action");
 	button?.click();
 	await Promise.resolve();
@@ -148,7 +148,7 @@ test("titlebar owns a menu-driven actions container", async () => {
 		}),
 	);
 	assert.deepEqual(
-		[...actionsContainer.querySelectorAll("button")]
+		[...actionsContainer.querySelectorAll('[data-action-id="test.titlebar.action"] button')]
 			.map((element) => element.textContent),
 		["Title action", "Second title action"],
 	);
@@ -176,7 +176,7 @@ test("titlebar renders its product icon, command center, and application menu", 
 	const localizationService: ILocalizationService = {
 		onDidChange: localeChanged.event,
 		whenReady: Promise.resolve(),
-		translate: () => commandCenterLabel,
+		translate: (_bundle, key, fallback) => key === "searchCommands" ? commandCenterLabel : fallback,
 	};
 	disposables.add(MenusRegistry.appendMenuItem(MenuId.TitleBarLeft, {
 		command: {

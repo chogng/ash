@@ -294,7 +294,8 @@ test("Single editor tab uses the available title width", async ({ target, workbe
 	const page = workbench.page;
 	const mainFile = page.locator(".ash-explorer .ash-tree-row").filter({ hasText: "main.ts" });
 	await mainFile.click();
-	await page.getByRole("button", { name: "Ash Settings" }).click();
+	await page.getByRole("button", { name: "Manage" }).click();
+	await page.getByRole("menu").last().getByRole("menuitem", { name: "Settings" }).click();
 	const settings = page.locator(".ash-settings-editor");
 	await expect(settings).toBeVisible();
 	await settings.locator('[data-settings-category-id="editor"]').click();

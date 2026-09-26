@@ -88,7 +88,7 @@ import {
 	IThemeService,
 } from "../../platform/theme/common/themeService.js";
 import { type IWorkspace, IWorkspaceContextService, WorkbenchState, workbenchStateFromWorkspace, workspaceOpenTarget } from "../../platform/workspace/common/workspace.js";
-import { WorkbenchConfiguration } from "../common/configuration.js";
+import { WorkbenchConfiguration, type ActivityBarLocation, type SideBarLocation, type WorkbenchLayoutStyle } from "../common/configuration.js";
 import {
 	type WorkbenchContributionHost,
 	WorkbenchContributionsRegistry,
@@ -161,6 +161,8 @@ import { IHistoryService } from '../services/history/common/history.js';
 import { EditorPanes } from './parts/editor/editorRegistry.js';
 import { PanelPart } from "./parts/panel/panelPart.js";
 import { SidebarPart } from "./parts/sidebar/sidebarPart.js";
+import { ActivitybarPart } from "./parts/activitybar/activitybarPart.js";
+import { GlobalCompositeBar } from './parts/globalCompositeBar.js';
 import { StatusbarPart } from "./parts/statusbar/statusbarPart.js";
 import type {
 	TitlebarPartFactory,
@@ -727,12 +729,24 @@ export class Workbench extends Disposable {
 		}, services));
 		const sidebar = this._register(new SidebarPart(workbenchRoot, {
 			viewDescriptorService: viewDescriptors,
+			compositeBarContextMenuProvider: contextMenus,
 			contextKeyService: contextKeys,
 			storageService: storage,
 			localizationService,
 			ariaLabelKey: { bundle: "ash.regions", key: "primarySidebar" },
 			viewsAriaLabelKey: { bundle: "ash.regions", key: "primarySidebarViews" },
+			titleActions: {
+				menuService: menus,
+				contextMenuProvider: contextMenus,
+				menuId: MenuId.SidebarTitle,
+				primaryGroup: 'navigation',
+			},
 		}));
+		const globalCompositeBar = this._register(services.createInstance(GlobalCompositeBar, workbenchRoot));
+		const activitybar = this._register(services.createInstance(ActivitybarPart, workbenchRoot, sidebar.compositeBar, globalCompositeBar));
+		sidebar.domNode.classList.toggle('sidebar-right', configuration.getValue(WorkbenchConfiguration.sideBarLocation) === 'right');
+		sidebar.domNode.classList.toggle('activitybar-top', configuration.getValue(WorkbenchConfiguration.activityBarLocation) === 'top');
+		sidebar.domNode.classList.toggle('activitybar-bottom', configuration.getValue(WorkbenchConfiguration.activityBarLocation) === 'bottom');
 		const activityService = this._register(new ActivityService(sidebar.compositeBar));
 		services.registerInstance(IActivityService, activityService);
 		const agentSidebar = this._register(new SidebarPart(workbenchRoot, {
@@ -921,6 +935,7 @@ export class Workbench extends Disposable {
 		const parts = new Map<WorkbenchPartId, WorkbenchPart>([
 			["titlebar", titlebar],
 			["statusbar", statusbar],
+			["activitybar", activitybar],
 			["sidebar", sidebar],
 			["auxiliarybar", auxiliarybar],
 			["agentSidebar", agentSidebar],
@@ -933,9 +948,36 @@ export class Workbench extends Disposable {
 			defaultLayout,
 			storageService: storage,
 			layoutStyle: configuration.getValue(WorkbenchConfiguration.layoutStyle),
+			activityBarLocation: configuration.getValue(WorkbenchConfiguration.activityBarLocation),
+			sideBarLocation: configuration.getValue(WorkbenchConfiguration.sideBarLocation),
 		}));
 		workbenchLayout = layout;
 		this.workbenchLayout = layout;
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(WorkbenchConfiguration.layoutStyle)) {
+				const style = configuration.getValue<WorkbenchLayoutStyle>(WorkbenchConfiguration.layoutStyle);
+				activitybar.setLayoutStyle(style);
+				layout.setLayoutStyle(style);
+			}
+			if (event.affectsConfiguration(WorkbenchConfiguration.activityBarCompact)) activitybar.setCompact(configuration.getValue<boolean>(WorkbenchConfiguration.activityBarCompact));
+			if (event.affectsConfiguration(WorkbenchConfiguration.activityBarLocation)) {
+				const location = configuration.getValue<ActivityBarLocation>(WorkbenchConfiguration.activityBarLocation);
+				activitybar.setLocation(location);
+				sidebar.domNode.classList.toggle('activitybar-top', location === 'top');
+				sidebar.domNode.classList.toggle('activitybar-bottom', location === 'bottom');
+				layout.setActivityBarLocation(location);
+			}
+			if (event.affectsConfiguration(WorkbenchConfiguration.sideBarLocation)) {
+				const location = configuration.getValue<SideBarLocation>(WorkbenchConfiguration.sideBarLocation);
+				activitybar.setSideBarLocation(location);
+				sidebar.domNode.classList.toggle('sidebar-right', location === 'right');
+				layout.setSideBarLocation(location);
+			}
+		}));
+		activitybar.setSidebarVisible(layout.isPartVisible('sidebar'));
+		this._register(layout.onDidChangePartVisibility(({ partId, visible }) => {
+			if (partId === 'sidebar') activitybar.setSidebarVisible(visible);
+		}));
 		services.registerInstance(IWorkbenchLayoutService, layout);
 		services.registerInstance(IWorkbenchLayoutStyleService, layout);
 		this._register(new WorkbenchContextKeysHandler(contextKeys, workspaceContext, editorService, editorService, layout, workingCopyService, nativeHostApi !== undefined || webWorkspaceClient !== undefined, browserFileSystemProvider !== undefined));
@@ -1017,6 +1059,11 @@ export class Workbench extends Disposable {
 		}));
 		this._register(sidebar.onDidSelectComposite(
 			({ compositeId }) => {
+				if (sidebar.activeCompositeId === compositeId && layout.isPartVisible("sidebar")) {
+					layout.hidePart("sidebar");
+					return;
+				}
+				layout.showPart("sidebar");
 				if (sidebar.activeCompositeId === compositeId) return;
 				openSidebarComposite(compositeId);
 			},

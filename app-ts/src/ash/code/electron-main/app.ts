@@ -44,6 +44,7 @@ import { UserKeyboardLayoutMainService } from "../../platform/keyboardLayout/ele
 import { NativeMenubarMainService, nativeMenubarIpcRoutes } from "../../platform/menubar/electron-main/menubarMainService.js";
 import { clearElectronApplicationMenu, createElectronMenubarHost } from "../../platform/menubar/electron-main/menubar.js";
 import { nativeHostIpcRoutes } from "../../platform/native/electron-main/nativeHostIpc.js";
+import { UpdateMainService, updateIpcRoutes } from '../../platform/update/electron-main/updateMainService.js';
 import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL } from "../../platform/native/common/nativeHost.js";
 import { WindowDialogHost } from '../../platform/dialogs/electron-main/windowDialogHost.js';
 import { openDedicatedWindowIpcRoute, returnToParentWindowIpcRoute } from "../../platform/windows/electron-main/dedicatedWindowIpc.js";
@@ -138,6 +139,7 @@ export class AshApplication extends Disposable {
 	private readonly disposableTracker: DisposableTracker | undefined;
 	private readonly tracking: globalThis.Disposable | undefined;
 	private readonly trustedIpcRouter: TrustedIpcRouter;
+	private readonly updateMainService: UpdateMainService;
 	private readonly nativeKeyboardLayout: NativeKeyboardLayoutMainService;
 	private readonly globalKeybindings: GlobalKeybindingsMainService;
 	private readonly nativeMenubar: NativeMenubarMainService | undefined;
@@ -182,6 +184,7 @@ export class AshApplication extends Disposable {
 		this.disposableTracker = disposableTracker;
 		this.tracking = tracking;
 		this.trustedIpcRouter = this._register(new TrustedIpcRouter(ipcMain));
+		this.updateMainService = this._register(new UpdateMainService());
 		this.nativeKeyboardLayout = this._register(new NativeKeyboardLayoutMainService());
 		this.globalKeybindings = this._register(new GlobalKeybindingsMainService({
 			shortcuts: globalShortcut,
@@ -779,6 +782,7 @@ export class AshApplication extends Disposable {
 			...workbenchModeIpcRoutes(modeId => this.scheduleWorkbenchModeSwitch(record, modeId)),
 			...diskFileSystemProviderRoutes(windowDisposables.add(new DiskFileSystemProvider([URI.file(this.profileRoot)])), URI.file(this.profileRoot)),
 			...workspaceContextIpcRoutes(workspaceContext),
+			...updateIpcRoutes(this.updateMainService),
 		];
 		ipcRoutes.push(openDedicatedWindowIpcRoute(() => this.openSessionsWindow(record)));
 		if (this.nativeMenubar) {

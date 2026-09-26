@@ -1,6 +1,7 @@
 import { DisposableStore } from "../../../../base/common/lifecycle.js";
 import { Keybinding, logicalKey } from "../../../../base/common/keybindings.js";
-import { Action2, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
+import { Action2, MenuId, MenusRegistry, registerAction2 } from "../../../../platform/actions/common/actions.js";
+import { localizedString } from "../../../../platform/action/common/action.js";
 import { type ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
 import { IQuickInputService, type IQuickPickItem } from "../../../../platform/quickinput/common/quickInput.js";
 import { ITaskService, type ITaskRun, type IWorkspaceTask } from "../../../services/tasks/common/taskService.js";
@@ -15,6 +16,12 @@ interface TaskQuickPickItem extends IQuickPickItem {
 interface TaskRunQuickPickItem extends IQuickPickItem {
 	readonly run: ITaskRun;
 }
+
+MenusRegistry.appendMenuItem(MenuId.GlobalActivity, {
+	command: { id: RUN_TASK_COMMAND_ID, title: localizedString("ash", "workbench.manageRunTask", "Run Task...") },
+	group: "2_configuration",
+	order: 6,
+});
 
 registerAction2(class RunTaskAction extends Action2 {
 	constructor() {

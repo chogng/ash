@@ -5,10 +5,11 @@ import type { IContextViewProvider } from '../../../../base/browser/ui/contextvi
 import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
-import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { ConfigurationTarget, type IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
+import { DESKTOP_UPDATE_POLICY_SETTING, type DesktopUpdatePolicy } from '../../../../platform/update/common/updateService.js';
 import { localize } from '../../../../nls.js';
 import { GitConfiguration, type GitAutofetch } from '../../../services/git/common/gitConfiguration.js';
 import type { IGitService } from '../../../services/git/common/gitService.js';
@@ -56,7 +57,10 @@ export class SettingsEditorPane extends Disposable implements IPreferencesEditor
 		super();
 		this.configurationService = configurationService;
 		this.localizationService = localizationService;
-		this.settingsModel = this._register(new SettingsEditorModel([...new DefaultSettings().all, ...gitSettings(gitService)]));
+		this.settingsModel = this._register(new SettingsEditorModel([
+			...new DefaultSettings().all.map(setting => setting.id === DESKTOP_UPDATE_POLICY_SETTING ? localUpdatePolicySetting(setting, configurationService) : setting),
+			...gitSettings(gitService),
+		]));
 		const settingsLayout = createSettingsLayout(this.settingsModel.settings);
 		const preferencesRenderer = this._register(new PreferencesRenderer(container, {
 			clipboardService,
@@ -257,6 +261,23 @@ export class SettingsEditorPane extends Disposable implements IPreferencesEditor
 	private localizedGroupDescription(group: SettingsCategoryGroupDescriptor): string {
 		return this.localized(`groups.${group.id}.description`, group.description);
 	}
+}
+
+function localUpdatePolicySetting(setting: ISetting, configuration: IConfigurationService): ISetting {
+	if (setting.valueType !== 'select') throw new TypeError('Desktop update policy requires a select setting');
+	return {
+		...setting,
+		binding: {
+			id: setting.id,
+			defaultValue: 'latest',
+			onDidChange: listener => configuration.onDidChangeConfiguration(event => {
+				if (event.affectsConfiguration(DESKTOP_UPDATE_POLICY_SETTING)) listener();
+			}),
+			getValue: () => configuration.inspect<DesktopUpdatePolicy>(DESKTOP_UPDATE_POLICY_SETTING).userLocalValue ?? 'latest',
+			updateValue: (value: string | boolean) => configuration.updateValue(DESKTOP_UPDATE_POLICY_SETTING, value, ConfigurationTarget.USER_LOCAL),
+			resetValue: () => configuration.updateValue(DESKTOP_UPDATE_POLICY_SETTING, undefined, ConfigurationTarget.USER_LOCAL),
+		},
+	};
 }
 
 function gitSettings(gitService: IGitService): readonly ISetting[] {

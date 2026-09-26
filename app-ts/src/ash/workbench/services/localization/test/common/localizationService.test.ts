@@ -77,6 +77,37 @@ test("localization lookup falls back to English and formats parameters", async (
 	assert.equal(localization.translate('ash', 'collaboration.dialog.tokenMessage', 'Enter the remote collaboration server bearer token.'), '输入远程协作服务器的访问令牌。');
 	assert.equal(localization.translate('ash.regions', 'searchCommands', 'Search commands'), '搜索命令');
 	assert.equal(localization.translate('ash.regions', 'titleBarLeftActions', 'Title bar left actions'), '标题栏左侧操作');
+	assert.deepEqual([
+		localization.translate('ash', 'workbench.activityBarGlobalActions', 'Activity Bar global actions'),
+		localization.translate('ash', 'workbench.activityBarPosition', 'Activity Bar Position'),
+		localization.translate('ash', 'workbench.activityBarSize', 'Activity Bar Size'),
+		localization.translate('ash', 'workbench.activityBar.location.description', 'Choose where the Activity Bar appears.'),
+		localization.translate('ash', 'workbench.activityBar.compact.title', 'Compact Activity Bar'),
+		localization.translate('ash', 'workbench.sideBar.location.title', 'Primary Side Bar Position'),
+		localization.translate('ash', 'workbench.movePrimarySideBarRight', 'Move Primary Side Bar Right'),
+		localization.translate('ash', 'workbench.hideActivityBarView', "Hide '{0}'", { '0': '资源管理器' }),
+		localization.translate('ash', 'workbench.keepActivityBarView', "Keep '{0}'", { '0': '资源管理器' }),
+		localization.translate('ash', 'workbench.accounts', 'Accounts'),
+		localization.translate('ash', 'workbench.signInWithChatGPT', 'Sign in with ChatGPT'),
+		localization.translate('ash', 'workbench.signOutAccount', 'Sign out of {0}', { '0': 'Ada' }),
+	], ['活动栏全局操作', '活动栏位置', '活动栏大小', '选择活动栏的显示位置。', '紧凑活动栏', '主侧栏位置', '将主侧栏移到右侧', '隐藏“资源管理器”', '保留“资源管理器”', '账户', '使用 ChatGPT 登录', '退出 Ada']);
+	assert.deepEqual([
+		localization.translate('ash', 'workbench.manage', 'Manage'),
+		commandActionLabel(localizedString('ash', 'workbench.commandPalette', 'Command Palette...')),
+		commandActionLabel(localizedString('ash', 'workbench.manageSettings', 'Settings')),
+		commandActionLabel(localizedString('ash', 'workbench.manageExtensions', 'Extensions')),
+		commandActionLabel(localizedString('ash', 'workbench.manageKeyboardShortcuts', 'Keyboard Shortcuts')),
+		commandActionLabel(localizedString('ash', 'workbench.manageRunTask', 'Run Task...')),
+		commandActionLabel(localizedString('ash', 'workbench.manageThemes', 'Themes')),
+		commandActionLabel(localizedString('ash', 'update.checkForUpdates', 'Check for Updates...')),
+		commandActionLabel(localizedString('ash', 'workbench.selectColorTheme', 'Color Theme')),
+		commandActionLabel(localizedString('ash', 'workbench.selectFileIconTheme', 'File Icon Theme')),
+		commandActionLabel(localizedString('ash', 'workbench.selectProductIconTheme', 'Product Icon Theme')),
+	], ['管理', '命令面板...', '设置', '扩展', '键盘快捷方式', '运行任务...', '主题', '检查更新...', '颜色主题', '文件图标主题', '产品图标主题']);
+	assert.equal(localization.translate('ash', 'update.available', 'Ash {0} is available. You are using {1}.', { '0': '0.2.0', '1': '0.1.0' }), 'Ash 0.2.0 已可更新。当前版本为 0.1.0。');
+	assert.equal(localization.translate('ash', 'update.ready', 'Ash {0} is ready to install.', { '0': '0.2.0' }), 'Ash 0.2.0 已准备好安装。');
+	assert.equal(localization.translate('ash', 'update.install', 'Install and Restart'), '安装并重启');
+	assert.equal(localization.translate('ash', 'update.policyTitle', 'Update channel'), '更新通道');
 	assert.equal(localization.translate('ash', 'iPadShowKeyboard.label', 'Show Keyboard'), '显示键盘');
 	assert.equal(localization.translate('ash', 'inspectTokens.label', 'Developer: Inspect Tokens'), '开发者：检查词法单元');
 	assert.equal(localization.translate('ash', 'inspectTokens.scope', 'Token type'), '词法单元类型');

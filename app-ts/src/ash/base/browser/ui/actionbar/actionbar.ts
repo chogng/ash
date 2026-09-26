@@ -55,7 +55,7 @@ export class ActionBar extends Disposable {
 	private readonly entries: ActionBarEntry[] = [];
 	private readonly actionViewItemProvider: ActionViewItemProvider | undefined;
 	private readonly actionViewItemOptions: ActionViewItemOptions;
-	private readonly orientation: ActionBarOrientation;
+	private orientation: ActionBarOrientation;
 	private readonly dragAndDrop: ActionBarDragAndDrop | undefined;
 	private tabStop: ActionViewItem | undefined;
 	private dragging = false;
@@ -108,6 +108,13 @@ export class ActionBar extends Disposable {
 		}
 		this._register(toDisposable(() => this.clearActions()));
 		this.setActions(options.actions ?? []);
+	}
+
+	setOrientation(orientation: ActionBarOrientation): void {
+		if (this.orientation === orientation) return;
+		this.element.classList.replace(this.orientation, orientation);
+		this.orientation = orientation;
+		this.element.setAttribute('aria-orientation', orientation);
 	}
 
 	add(action: IAction): ActionViewItem {

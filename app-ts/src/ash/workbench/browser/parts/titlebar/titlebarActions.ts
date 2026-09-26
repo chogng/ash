@@ -34,6 +34,12 @@ registerAction2(class ToggleSideBarAction extends Action2 {
 					group: "2_appearance",
 					order: 9,
 				},
+				{
+					id: MenuId.SidebarTitle,
+					when: SideBarVisibleContext.isEqualTo(true),
+					group: '2_visibility',
+					order: 1,
+				},
 			],
 			f1: true,
 		});

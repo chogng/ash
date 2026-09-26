@@ -3,11 +3,11 @@ import { Dimension, getClientArea, type IDimension } from "../../base/browser/do
 import { SerializableGrid, type SerializedGridDescriptor } from "../../base/browser/ui/grid/grid.js";
 import type { IResizable } from "../../base/browser/ui/resizable/resizable.js";
 import { Emitter } from "../../base/common/event.js";
-import { Disposable, toDisposable } from "../../base/common/lifecycle.js";
+import { Disposable, MutableDisposable, toDisposable } from "../../base/common/lifecycle.js";
 import { isRecord } from "../../base/common/types.js";
 import type { ILayoutOffsetInfo } from "../../platform/layout/browser/layoutService.js";
 import { type IStorageService, StorageScope, StorageTarget } from "../../platform/storage/common/storage.js";
-import type { WorkbenchLayoutStyle } from "../common/configuration.js";
+import type { ActivityBarLocation, SideBarLocation, WorkbenchLayoutStyle } from "../common/configuration.js";
 import { type IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent, workbenchPartIds } from "../services/layout/common/workbenchLayoutService.js";
 import type { IWorkbenchLayoutStyleService } from "../services/layout/browser/workbenchLayoutStyleService.js";
 import type { WorkbenchPart } from "./part.js";
@@ -83,6 +83,8 @@ export interface WorkbenchLayoutOptions {
 	readonly defaultLayout?: WorkbenchDefaultLayout;
 	readonly storageService?: IStorageService;
 	readonly layoutStyle?: WorkbenchLayoutStyle;
+	readonly activityBarLocation?: ActivityBarLocation;
+	readonly sideBarLocation?: SideBarLocation;
 }
 
 /**
@@ -96,13 +98,17 @@ export class WorkbenchLayout
 	implements IResizable, IWorkbenchLayoutService, IWorkbenchLayoutStyleService {
 	readonly container: HTMLElement;
 	private readonly views = new Map<WorkbenchPartId, WorkbenchPartView>();
-	private readonly grid: SerializableGrid<WorkbenchPartView>;
+	private grid: SerializableGrid<WorkbenchPartView>;
+	private readonly gridHandle = this._register(new MutableDisposable<SerializableGrid<WorkbenchPartView>>());
+	private readonly gridChangeHandle = this._register(new MutableDisposable());
 	private readonly stateModel: WorkbenchLayoutStateModel;
 	private readonly partVisibility = new Map<WorkbenchPartId, boolean>();
 	private readonly _onDidChangePartVisibility = this._register(
 		new Emitter<WorkbenchPartVisibilityChangeEvent>(),
 	);
 	private layoutStyle: WorkbenchLayoutStyle;
+	private activityBarLocation: ActivityBarLocation;
+	private sideBarLocation: SideBarLocation;
 
 	readonly onDidChangePartVisibility = this._onDidChangePartVisibility.event;
 	readonly domNode: HTMLDivElement;
@@ -115,6 +121,8 @@ export class WorkbenchLayout
 		super();
 		this.container = container;
 		this.layoutStyle = options.layoutStyle ?? "modern";
+		this.activityBarLocation = options.activityBarLocation ?? 'default';
+		this.sideBarLocation = options.sideBarLocation ?? 'left';
 		validateParts(parts);
 		this.domNode = h(container.ownerDocument, "div");
 		this.domNode.className = "ash-workbench-layout";
@@ -153,19 +161,20 @@ export class WorkbenchLayout
 			initialState.agentSidebar.visible,
 			initialState.panel.visible,
 		);
-		this.grid = this._register(SerializableGrid.deserialize(
+		this.grid = SerializableGrid.deserialize(
 			this.domNode,
-			createWorkbenchGridDescriptor(this.views, initialDimension, initialState),
+			createWorkbenchGridDescriptor(this.views, initialDimension, initialState, this.activityBarLocation, this.sideBarLocation),
 			{ fromJSON: (data) => this.view(parseWorkbenchPartId(data)) },
 			{
 				sashPresentation: this.layoutStyle === "modern" ? { type: "inset", gap: PART_GUTTER_SIZE } : undefined,
 				edgeSnapping: true,
 			},
-		));
-		this._register(this.grid.onDidChange(() => {
+		);
+		this.gridHandle.value = this.grid;
+		this.gridChangeHandle.value = this.grid.onDidChange(() => {
 			this.projectPartFrameInsets();
 			this.publishPartVisibility();
-		}));
+		});
 		if (options.storageService) {
 			this._register(options.storageService.onWillSaveState(() => {
 				this.saveState();
@@ -181,6 +190,37 @@ export class WorkbenchLayout
 		if (this.grid.width > 0 && this.grid.height > 0) {
 			this.layout(new Dimension(this.grid.width, this.grid.height));
 		}
+	}
+
+	setActivityBarLocation(location: ActivityBarLocation): void {
+		if (this.activityBarLocation === location) return;
+		this.activityBarLocation = location;
+		this.rebuildGrid();
+	}
+
+	setSideBarLocation(location: SideBarLocation): void {
+		if (this.sideBarLocation === location) return;
+		this.sideBarLocation = location;
+		this.rebuildGrid();
+	}
+
+	private rebuildGrid(): void {
+		const state = this.state;
+		const dimension = new Dimension(this.grid.width || getClientArea(this.domNode).width, this.grid.height || getClientArea(this.domNode).height);
+		this.gridChangeHandle.clear();
+		this.gridHandle.clear();
+		this.grid = SerializableGrid.deserialize(
+			this.domNode,
+			createWorkbenchGridDescriptor(this.views, dimension, state, this.activityBarLocation, this.sideBarLocation),
+			{ fromJSON: data => this.view(parseWorkbenchPartId(data)) },
+			{ sashPresentation: this.layoutStyle === 'modern' ? { type: 'inset', gap: PART_GUTTER_SIZE } : undefined, edgeSnapping: true },
+		);
+		this.gridHandle.value = this.grid;
+		this.gridChangeHandle.value = this.grid.onDidChange(() => {
+			this.projectPartFrameInsets();
+			this.publishPartVisibility();
+		});
+		this.layout(dimension);
 	}
 
 	/** Offset information consumed by the platform layout service for overlays. */
@@ -316,29 +356,33 @@ export class WorkbenchLayout
 		const metrics = this.layoutStyle === "modern"
 			? modernWorkbenchLayoutMetrics
 			: flatWorkbenchLayoutMetrics;
-		const centralInsets = {
-			left: sidebarVisible ? metrics.partGutterHalf : metrics.windowLeftEdgeInset,
-			right: auxiliarybarVisible || agentSidebarVisible
-				? metrics.partGutterHalf
-				: metrics.windowRightEdgeInset,
-		};
+		const secondaryVisible = auxiliarybarVisible || agentSidebarVisible;
+		const centralInsets = this.sideBarLocation === 'left'
+			? { left: sidebarVisible ? metrics.partGutterHalf : metrics.partGutterHalf * 2, right: secondaryVisible ? metrics.partGutterHalf : metrics.windowRightEdgeInset }
+			: { left: secondaryVisible ? metrics.partGutterHalf : metrics.windowLeftEdgeInset, right: sidebarVisible ? metrics.partGutterHalf : metrics.windowRightEdgeInset };
 		this.view("sidebar").setFrameInsets({
 			top: 0,
-			right: metrics.partGutterHalf,
+			right: this.sideBarLocation === 'left' ? metrics.partGutterHalf : 0,
 			bottom: 0,
-			left: metrics.windowLeftEdgeInset,
+			left: this.sideBarLocation === 'right' ? metrics.partGutterHalf : 0,
+		});
+		this.view("activitybar").setFrameInsets({
+			top: 0,
+			right: this.sideBarLocation === 'right' ? metrics.windowRightEdgeInset : 0,
+			bottom: 0,
+			left: this.sideBarLocation === 'left' ? metrics.windowLeftEdgeInset : 0,
 		});
 		this.view("auxiliarybar").setFrameInsets({
 			top: 0,
-			right: agentSidebarVisible ? metrics.partGutterHalf : metrics.windowRightEdgeInset,
+			right: this.sideBarLocation === 'left' ? (agentSidebarVisible ? metrics.partGutterHalf : metrics.windowRightEdgeInset) : metrics.partGutterHalf,
 			bottom: 0,
-			left: metrics.partGutterHalf,
+			left: this.sideBarLocation === 'right' && !agentSidebarVisible ? metrics.windowLeftEdgeInset : metrics.partGutterHalf,
 		});
 		this.view("agentSidebar").setFrameInsets({
 			top: 0,
-			right: metrics.windowRightEdgeInset,
+			right: this.sideBarLocation === 'left' ? metrics.windowRightEdgeInset : metrics.partGutterHalf,
 			bottom: 0,
-			left: metrics.partGutterHalf,
+			left: this.sideBarLocation === 'right' ? metrics.windowLeftEdgeInset : metrics.partGutterHalf,
 		});
 		this.view("editor").setFrameInsets({
 			top: 0,
@@ -401,6 +445,8 @@ function createWorkbenchGridDescriptor(
 	views: ReadonlyMap<WorkbenchPartId, WorkbenchPartView>,
 	dimension: IDimension,
 	state: WorkbenchLayoutState,
+	activityBarLocation: ActivityBarLocation,
+	sideBarLocation: SideBarLocation,
 ): SerializedGridDescriptor {
 	const leaf = (
 		partId: WorkbenchPartId,
@@ -416,6 +462,9 @@ function createWorkbenchGridDescriptor(
 	});
 	const titlebarHeight = requiredView(views, "titlebar").minimumHeight;
 	const statusbarHeight = requiredView(views, "statusbar").minimumHeight;
+	const activitybarWidth = requiredView(views, "activitybar").minimumWidth;
+	const activitybarHeight = requiredView(views, "activitybar").minimumHeight;
+	const horizontalActivityBar = activityBarLocation === 'top' || activityBarLocation === 'bottom';
 	const bodyHeight = Math.max(
 		0,
 		dimension.height - titlebarHeight - statusbarHeight,
@@ -428,10 +477,29 @@ function createWorkbenchGridDescriptor(
 	const editorWidth = Math.max(
 		0,
 		dimension.width -
+			(horizontalActivityBar || activityBarLocation === 'hidden' ? 0 : activitybarWidth) -
 			(state.sidebar.visible ? state.sidebar.width : 0) -
 			(state.auxiliarybar.visible ? state.auxiliarybar.width : 0) -
 			(state.agentSidebar.visible ? state.agentSidebar.width : 0),
 	);
+	const primary: SerializedGridDescriptor[] = horizontalActivityBar
+		? [{
+			type: 'branch', orientation: 'vertical', size: state.sidebar.visible ? state.sidebar.width : activitybarWidth, priority: 'normal',
+			children: activityBarLocation === 'top'
+				? [leaf('activitybar', activitybarHeight), leaf('sidebar', Math.max(0, bodyHeight - activitybarHeight), state.sidebar.visible)]
+				: [leaf('sidebar', Math.max(0, bodyHeight - activitybarHeight), state.sidebar.visible), leaf('activitybar', activitybarHeight)],
+		}]
+		: sideBarLocation === 'left'
+			? [leaf('activitybar', activitybarWidth, activityBarLocation !== 'hidden'), leaf('sidebar', state.sidebar.width, state.sidebar.visible)]
+			: [leaf('sidebar', state.sidebar.width, state.sidebar.visible), leaf('activitybar', activitybarWidth, activityBarLocation !== 'hidden')];
+	const secondary: SerializedGridDescriptor[] = [
+		leaf('auxiliarybar', state.auxiliarybar.width, state.auxiliarybar.visible),
+		leaf('agentSidebar', state.agentSidebar.width, state.agentSidebar.visible),
+	];
+	const center: SerializedGridDescriptor = {
+		type: 'branch', orientation: 'vertical', size: editorWidth, priority: EDITOR_LAYOUT_PRIORITY,
+		children: [leaf('editor', editorHeight, true, EDITOR_LAYOUT_PRIORITY), leaf('panel', panelHeight, state.panel.visible)],
+	};
 	return {
 		type: "branch",
 		orientation: "vertical",
@@ -444,29 +512,7 @@ function createWorkbenchGridDescriptor(
 				orientation: "horizontal",
 				size: bodyHeight,
 				priority: EDITOR_LAYOUT_PRIORITY,
-				children: [
-					leaf("sidebar", state.sidebar.width, state.sidebar.visible),
-					{
-						type: "branch",
-						orientation: "vertical",
-						size: editorWidth,
-						priority: EDITOR_LAYOUT_PRIORITY,
-						children: [
-							leaf("editor", editorHeight, true, EDITOR_LAYOUT_PRIORITY),
-							leaf("panel", panelHeight, state.panel.visible),
-						],
-					},
-					leaf(
-						"auxiliarybar",
-						state.auxiliarybar.width,
-						state.auxiliarybar.visible,
-					),
-					leaf(
-						"agentSidebar",
-						state.agentSidebar.width,
-						state.agentSidebar.visible,
-					),
-				],
+				children: sideBarLocation === 'left' ? [...primary, center, ...secondary] : [...secondary.slice().reverse(), center, ...primary],
 			},
 			leaf("statusbar", statusbarHeight),
 		],

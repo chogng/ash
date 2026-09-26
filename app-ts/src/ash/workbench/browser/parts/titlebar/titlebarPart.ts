@@ -1,13 +1,13 @@
 import "./titlebarpart.css";
+import { h } from "../../../../base/browser/dom.js";
 import { MenuWorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
 import { type IMenuService, MenuId } from "../../../../platform/actions/common/actions.js";
 import type { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
+import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import { WorkbenchPart } from "../../part.js";
 import { WorkbenchWindowBarHeight } from "../workbenchPartDimensions.js";
 import { BrowserMenubarControl, type IMenubarControl } from "./menubarControl.js";
-import { h } from "../../../../base/browser/dom.js";
 import type { ILocalizationService } from "../../../services/localization/common/localizationService.js";
-import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import { CommandCenterControl } from "./commandCenterControl.js";
 
 /** Inputs shared by web and Electron titlebar factories. */

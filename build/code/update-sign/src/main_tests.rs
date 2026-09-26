@@ -122,6 +122,51 @@ fn release_descriptor_signs_the_exact_archive_identity() {
 }
 
 #[test]
+fn desktop_windows_installer_uses_the_signed_executable_format() {
+    let directory = TempDir::new().unwrap();
+    let archive = directory.path().join("AshSetup-1.2.3-win32-x64.exe");
+    fs::write(&archive, b"installer").unwrap();
+    let output = directory.path().join("desktop.update.json");
+    let signing_key = SigningKey::from_bytes(&[7u8; 32]);
+    let public_key: String = signing_key
+        .verifying_key()
+        .to_bytes()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    sign_release(
+        Arguments {
+            repository: "chogng/ash".into(),
+            product: "ash-desktop".into(),
+            channel: "latest".into(),
+            version: "1.2.3".into(),
+            release_tag: "v1.2.3".into(),
+            target: "x86_64-pc-windows-msvc".into(),
+            format: "windows-exe".into(),
+            archive,
+            output: output.clone(),
+            public_key,
+        },
+        &"07".repeat(32),
+    )
+    .unwrap();
+    let verified = ash_product_update::verify_release(
+        &fs::read(output).unwrap(),
+        ash_product_update::UpdatePublicKey::from_bytes(signing_key.verifying_key().to_bytes()),
+        &ash_product_update::ExpectedRelease {
+            product: ash_product_update::UpdateProduct::ElectronDesktop,
+            policy: ash_product_update::UpdatePolicy::Latest,
+            target: "x86_64-pc-windows-msvc".into(),
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        verified.package.format,
+        ash_product_update::PackageFormat::WindowsExe
+    );
+}
+
+#[test]
 fn release_descriptor_rejects_unversioned_tags_and_unknown_channels() {
     let directory = TempDir::new().unwrap();
     let archive = directory

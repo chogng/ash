@@ -290,7 +290,7 @@ jobs:
             ".build/releases/ash-code-${{ matrix.target }}.update.json"
 
       - name: Install Desktop packaging dependencies
-        if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'macOS'
+        if: github.event_name == 'release' && matrix.release_package != false && (runner.os == 'macOS' || runner.os == 'Windows')
         shell: bash
         run: |
           npm install --global "$(node --print "require('./package.json').packageManager")"
@@ -301,6 +301,7 @@ jobs:
         shell: bash
         env:
           ASH_MACOS_SIGNING_IDENTITY: ${{ vars.ASH_MACOS_SIGNING_IDENTITY }}
+          ASH_UPDATE_PUBLIC_KEY: ${{ vars.ASH_UPDATE_PUBLIC_KEY }}
         run: pnpm run package:desktop:darwin
 
       - name: Notarize and publish macOS Desktop
@@ -308,6 +309,8 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          ASH_UPDATE_PUBLIC_KEY: ${{ vars.ASH_UPDATE_PUBLIC_KEY }}
+          ASH_UPDATE_SIGNING_KEY: ${{ secrets.ASH_UPDATE_SIGNING_KEY }}
         run: |
           arch="$(node -p 'process.arch')"
           bundle="dist/Ash-darwin-${arch}/Ash.app"
@@ -318,4 +321,126 @@ jobs:
           xcrun stapler validate "$bundle"
           rm "$archive"
           ditto -c -k --sequesterRsrc --keepParent "$bundle" "$archive"
-          gh release upload "$GITHUB_REF_NAME" "$archive"
+          .build/cargo/debug/ash-update-sign \
+            --repository chogng/ash \
+            --product ash-desktop \
+            --channel latest \
+            --version "${GITHUB_REF_NAME#v}" \
+            --release-tag "$GITHUB_REF_NAME" \
+            --target "${{ matrix.target }}" \
+            --format zip \
+            --archive "$archive" \
+            --output ".build/releases/ash-desktop-${{ matrix.target }}.update.json" \
+            --public-key "$ASH_UPDATE_PUBLIC_KEY"
+          gh release upload "$GITHUB_REF_NAME" "$archive" ".build/releases/ash-desktop-${{ matrix.target }}.update.json"
+
+      - name: Package Windows Desktop bundle
+        if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'Windows'
+        shell: bash
+        env:
+          ASH_UPDATE_PUBLIC_KEY: ${{ vars.ASH_UPDATE_PUBLIC_KEY }}
+        run: pnpm --dir app-ts package:win32:bundle
+
+      - name: Sign Windows Desktop executables
+        if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'Windows'
+        uses: Azure/artifact-signing-action@208f8af4bf26cf2af8597424e3cb5582801523ba # v2.0.0
+        with:
+          endpoint: ${{ vars.ASH_WINDOWS_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.ASH_WINDOWS_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.ASH_WINDOWS_CERTIFICATE_PROFILE }}
+          files-folder: ${{ github.workspace }}\dist\Ash-win32-x64
+          files-folder-filter: exe
+          files-folder-recurse: true
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Sign Windows Desktop libraries
+        if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'Windows'
+        uses: Azure/artifact-signing-action@208f8af4bf26cf2af8597424e3cb5582801523ba # v2.0.0
+        with:
+          endpoint: ${{ vars.ASH_WINDOWS_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.ASH_WINDOWS_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.ASH_WINDOWS_CERTIFICATE_PROFILE }}
+          files-folder: ${{ github.workspace }}\dist\Ash-win32-x64
+          files-folder-filter: dll
+          files-folder-recurse: true
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Sign Windows Desktop Node modules
+        if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'Windows'
+        uses: Azure/artifact-signing-action@208f8af4bf26cf2af8597424e3cb5582801523ba # v2.0.0
+        with:
+          endpoint: ${{ vars.ASH_WINDOWS_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.ASH_WINDOWS_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.ASH_WINDOWS_CERTIFICATE_PROFILE }}
+          files-folder: ${{ github.workspace }}\dist\Ash-win32-x64
+          files-folder-filter: node
+          files-folder-recurse: true
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Verify and package Windows Desktop installer
+        if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $signTool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1
+          if (-not $signTool) { throw "signtool.exe is not installed" }
+          Get-ChildItem dist/Ash-win32-x64 -File -Recurse | Where-Object { $_.Extension -in '.exe', '.dll', '.node' } | ForEach-Object {
+            & $signTool.FullName verify /pa /all /v $_.FullName
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          pnpm --dir app-ts package:win32:verify
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm --dir app-ts package:win32:installer
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Sign Windows Desktop installer
+        if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'Windows'
+        uses: Azure/artifact-signing-action@208f8af4bf26cf2af8597424e3cb5582801523ba # v2.0.0
+        with:
+          endpoint: ${{ vars.ASH_WINDOWS_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.ASH_WINDOWS_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.ASH_WINDOWS_CERTIFICATE_PROFILE }}
+          files-folder: ${{ github.workspace }}\dist
+          files-folder-filter: exe
+          files-folder-recurse: false
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Verify Windows Desktop installer signature
+        if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $signTool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1
+          if (-not $signTool) { throw "signtool.exe is not installed" }
+          $installer = "dist/AshSetup-$($env:GITHUB_REF_NAME.TrimStart('v'))-win32-x64.exe"
+          & $signTool.FullName verify /pa /all /v $installer
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Sign and publish Windows Desktop update
+        if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'Windows'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ASH_UPDATE_PUBLIC_KEY: ${{ vars.ASH_UPDATE_PUBLIC_KEY }}
+          ASH_UPDATE_SIGNING_KEY: ${{ secrets.ASH_UPDATE_SIGNING_KEY }}
+        run: |
+          archive="dist/AshSetup-${GITHUB_REF_NAME#v}-win32-x64.exe"
+          signer=".build/cargo/debug/ash-update-sign.exe"
+          "$signer" \
+            --repository chogng/ash \
+            --product ash-desktop \
+            --channel latest \
+            --version "${GITHUB_REF_NAME#v}" \
+            --release-tag "$GITHUB_REF_NAME" \
+            --target "${{ matrix.target }}" \
+            --format windows-exe \
+            --archive "$archive" \
+            --output ".build/releases/ash-desktop-${{ matrix.target }}.update.json" \
+            --public-key "$ASH_UPDATE_PUBLIC_KEY"
+          gh release upload "$GITHUB_REF_NAME" "$archive" ".build/releases/ash-desktop-${{ matrix.target }}.update.json"
