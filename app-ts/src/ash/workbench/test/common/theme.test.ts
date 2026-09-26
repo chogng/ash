@@ -21,6 +21,7 @@ test('built-in high contrast themes keep common foreground and background pairs 
 		['foreground', 'list.hoverBackground'],
 		['foreground', 'toolbar.hoverBackground'],
 		['foreground', 'actionBar.toggledBackground'],
+		['foreground', 'tabList.activeBackground'],
 		['foreground', 'tabList.hoverBackground'],
 		['titleBar.foreground', 'titleBar.hoverBackground'],
 		['menu.foreground', 'menu.hoverBackground'],

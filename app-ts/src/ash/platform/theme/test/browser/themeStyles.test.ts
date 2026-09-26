@@ -39,7 +39,7 @@ test("color theme binding applies changes and restores prior root styles", () =>
 	assert.equal(target.style.getPropertyValue(menuSelectionForegroundVariable), "#cccccc");
 	assert.equal(target.style.getPropertyValue(menuSelectionBackgroundVariable), "#2a2d2e");
 	assert.equal(target.style.getPropertyValue(actionBarToggledBackgroundVariable), "#37373d");
-	assert.equal(target.style.getPropertyValue(tabListActiveBackgroundVariable), "#04395e");
+	assert.equal(target.style.getPropertyValue(tabListActiveBackgroundVariable), "#37373d");
 	assert.equal(target.style.getPropertyValue("color-scheme"), "dark");
 	assert.equal(target.style.getPropertyValue(asCssVariableName("scrollbar.size")), "10px");
 	assert.equal(target.style.getPropertyValue(asCssVariableName("tabList.contentInset")), "4px");
@@ -58,7 +58,7 @@ test("color theme binding applies changes and restores prior root styles", () =>
 	assert.equal(target.style.getPropertyValue(menuSelectionForegroundVariable), "#3b3b3b");
 	assert.equal(target.style.getPropertyValue(menuSelectionBackgroundVariable), "#e8e8e8");
 	assert.equal(target.style.getPropertyValue(actionBarToggledBackgroundVariable), "#e4e6f2");
-	assert.equal(target.style.getPropertyValue(tabListActiveBackgroundVariable), "#0060c0");
+	assert.equal(target.style.getPropertyValue(tabListActiveBackgroundVariable), "#e4e6f2");
 	assert.equal(target.style.getPropertyValue("color-scheme"), "light");
 	assert.equal(target.getAttribute("data-color-theme"), "ash-light");
 

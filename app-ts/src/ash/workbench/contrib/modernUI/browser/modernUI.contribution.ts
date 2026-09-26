@@ -5,6 +5,7 @@ import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/c
 import { IAuxiliaryWindowService, type IAuxiliaryWindow } from '../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { IWorkbenchLayoutStyleService } from '../../../services/layout/browser/workbenchLayoutStyleService.js';
 import './media/editorBorder.css';
+import './media/padding.css';
 import './media/roundedCorners.css';
 import './media/statusBar.css';
 import './media/tabs.css';

@@ -1,0 +1,13 @@
+.ash-workbench.modern-ui .ash-sidebar-part > .ash-composite-content {
+	box-sizing: border-box;
+	padding: 0 var(--ash-spacing-size80);
+}
+
+.ash-workbench.modern-ui :is(.ash-sidebar-composite-bar-top, .ash-sidebar-composite-bar-bottom) {
+	box-sizing: border-box;
+	padding: 0 var(--ash-spacing-size80);
+}
+
+.ash-workbench.modern-ui .ash-sidebar-title-label {
+	padding: 0 var(--ash-spacing-size160);
+}

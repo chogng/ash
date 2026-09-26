@@ -342,6 +342,26 @@ test('top activity bar places the view selector inside the sidebar', async ({ ta
 	expect(nextSidebar!.x).toBe(6);
 	await expect(sidebar).toHaveCSS('border-left-width', '1px');
 	await expect(sidebar).toHaveCSS('border-bottom-left-radius', '8px');
+	const leftInsets = () => sidebar.evaluate(root => {
+		const left = root.getBoundingClientRect().x;
+		const title = root.querySelector<HTMLElement>('.ash-sidebar-title-label')!;
+		const titleText = document.createRange();
+		titleText.selectNodeContents(title);
+		return {
+			tab: root.querySelector<HTMLElement>('.ash-sidebar-composite-bar-top .ash-composite-bar-item')!.getBoundingClientRect().x - left,
+			title: titleText.getBoundingClientRect().x - left,
+			paneTwisty: root.querySelector<HTMLElement>('.ash-pane-view-header-twisty-container')!.getBoundingClientRect().x - left,
+		};
+	});
+	await expect.poll(leftInsets).toEqual({ tab: 9, title: 17, paneTwisty: 17 });
+	await page.getByRole('button', { name: 'Manage' }).click();
+	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Settings' }).click();
+	await page.locator('[data-settings-category-id="appearance"]').click();
+	const layoutStyle = page.locator('[data-configuration-key="workbench.layoutStyle"]').getByRole('combobox');
+	await layoutStyle.click();
+	await page.getByRole('option', { name: 'Flat' }).click();
+	await expect(page.locator('.ash-workbench')).not.toHaveClass(/modern-ui/);
+	await expect.poll(leftInsets).toEqual({ tab: 0, title: 12, paneTwisty: 8 });
 });
 
 test('command center opens without a first-run guide', async ({ target, workbench }) => {
