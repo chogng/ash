@@ -16,12 +16,14 @@ import { ILifecycleService, type ShutdownReason } from "../../platform/lifecycle
 import { BrowserNotificationService } from "../../platform/notification/browser/notificationService.js";
 import { INotificationService } from "../../platform/notification/common/notification.js";
 import type { IRendererHost } from "../../platform/renderer/common/rendererHost.js";
+import type { INativeHostApi } from '../../platform/native/common/nativeHost.js';
 import { IStorageService, WillSaveStateReason } from "../../platform/storage/common/storage.js";
 import { IThemeService } from "../../platform/theme/common/themeService.js";
 import { WorkbenchState } from "../../platform/workspace/common/workspace.js";
 import type { WorkbenchPart } from "../../workbench/browser/part.js";
 import { WorkbenchInteractionServices, type WorkbenchContextMenuServiceFactory } from "../../workbench/browser/workbenchInteractionServices.js";
 import { WorkbenchWindow } from "../../workbench/browser/window.js";
+import { INativeHostService } from '../../workbench/common/services.js';
 import { WorkbenchModeRegistry, type WorkbenchModeId } from "../../workbench/common/workbenchMode.js";
 import { ChatService } from "../../workbench/services/chat/browser/chatService.js";
 import { IChatService } from "../../workbench/services/chat/common/chatService.js";
@@ -45,6 +47,7 @@ export interface IWorkbenchOptions {
 	readonly modeId: WorkbenchModeId;
 	readonly profile: SessionsProfile;
 	readonly api: IRendererHost;
+	readonly nativeHostApi?: INativeHostApi;
 	readonly returnToWorkbench: () => void;
 	readonly configurationApi?: IConfigurationApi;
 	readonly keybindingsResourceApi?: IKeybindingsResourceApi;
@@ -55,6 +58,8 @@ export interface IWorkbenchOptions {
 /** Owns the dedicated Sessions window's services, Parts, layout, and disposal. */
 export class Workbench extends Disposable {
 	readonly domNode: HTMLElement;
+	readonly configurationService: WorkbenchConfigurationService;
+	readonly themeService: WorkbenchThemeService;
 	private readonly layoutService: BrowserLayoutService;
 	private readonly lifecycleService: ILifecycleService;
 
@@ -70,12 +75,13 @@ export class Workbench extends Disposable {
 		const ownerWindow = ownerDocument.defaultView;
 		if (!ownerWindow) throw new Error("Sessions renderer requires an owner window");
 
-		const configurationService = this._register(new WorkbenchConfigurationService({ api: options.configurationApi }));
+		const configurationService = this.configurationService = this._register(new WorkbenchConfigurationService({ api: options.configurationApi }));
 		const services = this._register(new ServiceContainer());
 		services.registerInstance(IConfigurationService, configurationService);
+		if (options.nativeHostApi) services.registerInstance(INativeHostService, options.nativeHostApi);
 		const languageService = this._register(new LanguageService());
 		services.registerInstance(ILanguageService, languageService);
-		const themeService = this._register(services.createInstance(WorkbenchThemeService, options.container));
+		const themeService = this.themeService = this._register(services.createInstance(WorkbenchThemeService, options.container));
 		services.registerInstance(IThemeService, themeService);
 		themeService.initialize();
 		const extensionColorThemes = this._register(new ExtensionColorThemeService(options.api.extensions, options.api.events));

@@ -427,6 +427,33 @@ test("empty windows persist their backup identity", async () => {
 	});
 });
 
+test("dedicated window state restores without changing the main window state", async () => {
+	const stateService = new TestStateService();
+	const main = createHandler(stateService, folderWorkspace);
+	const dedicatedOptions = {
+		stateService,
+		workspace: UNKNOWN_EMPTY_WINDOW_WORKSPACE,
+		storageKey: 'sessionsWindowState',
+		defaultState: { mode: WindowMode.Normal, width: 1180, height: 780 },
+		displayService: {
+			getAllDisplays: () => [primaryDisplay],
+			getDisplayMatching: () => primaryDisplay,
+		},
+	};
+	const dedicated = new WindowsStateHandler(dedicatedOptions);
+	assert.deepEqual(dedicated.restoreWindowState(), dedicatedOptions.defaultState);
+	const mainWindow = new TestWindow();
+	await main.saveWindowState(mainWindow);
+	const mainState = stateService.getItem('windowsState');
+	const dedicatedWindow = new TestWindow();
+	dedicatedWindow.bounds = { x: 180, y: 140, width: 1180, height: 780 };
+	await dedicated.saveWindowState(dedicatedWindow);
+	assert.deepEqual(stateService.getItem('windowsState'), mainState);
+	assert.deepEqual(new WindowsStateHandler(dedicatedOptions).restoreWindowState(), {
+		mode: WindowMode.Normal, x: 180, y: 140, width: 1180, height: 780, displayId: undefined,
+	});
+});
+
 test("independent handlers merge exact Workspace window state instead of overwriting it", async () => {
 	const stateService = new TestStateService();
 	const folderHandler = createHandler(stateService, folderWorkspace);

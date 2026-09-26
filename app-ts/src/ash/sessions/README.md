@@ -9,7 +9,7 @@ is canonical for the renderer implementation and extension points.
 
 | Area | Owner | Current implementation |
 | --- | --- | --- |
-| Window host | `browser/web.main.ts` and `electron-browser/electronSessions.ts` | start the browser or Electron Sessions renderer |
+| Window host | `browser/web.main.ts`, `sessions.desktop.main.ts`, and `electron-browser/sessions.main.ts` | start the browser or Electron Sessions renderer and register desktop actions |
 | Dedicated window host | `platform/windows/` | owns the parent-child window lifecycle, parent-only open IPC, child-only return IPC, and child resources; `code/electron-main/app.ts` supplies the Sessions entry and connections |
 | Browser window navigation | `platform/windows/browser/dedicatedWindowNavigation.ts` | resolves and navigates between sibling renderer pages |
 | Code profile | `code/common/codeSessionsProfile.ts` | defines the Code window identity and page route used by both browser and Electron entries |

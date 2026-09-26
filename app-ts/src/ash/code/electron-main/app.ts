@@ -43,7 +43,7 @@ import { NativeKeyboardLayoutMainService } from "../../platform/keyboardLayout/e
 import { UserKeyboardLayoutMainService } from "../../platform/keyboardLayout/electron-main/userKeyboardLayoutMainService.js";
 import { NativeMenubarMainService, nativeMenubarIpcRoutes } from "../../platform/menubar/electron-main/menubarMainService.js";
 import { clearElectronApplicationMenu, createElectronMenubarHost } from "../../platform/menubar/electron-main/menubar.js";
-import { nativeHostIpcRoutes } from "../../platform/native/electron-main/nativeHostIpc.js";
+import { nativeHostIpcRoutes, windowAppearanceIpcRoutes } from "../../platform/native/electron-main/nativeHostIpc.js";
 import { UpdateMainService, updateIpcRoutes } from '../../platform/update/electron-main/updateMainService.js';
 import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL } from "../../platform/native/common/nativeHost.js";
 import { WindowDialogHost } from '../../platform/dialogs/electron-main/windowDialogHost.js';
@@ -61,7 +61,7 @@ import { LOCAL_FILE_SYSTEM_CHANGED_CHANNEL } from "../../platform/files/common/d
 import { applyWindowState, resolveBrowserWindowOptions, WindowControlsOverlay } from "../../platform/windows/electron-main/windows.js";
 import { WindowsStateHandler } from "../../platform/windows/electron-main/windowsStateHandler.js";
 import { WindowsMainService, trackWindowResourceChanges, windowCloseResponseIpcRoute, windowOperationIpcRoute, windowResourceIpcRoutes } from "../../platform/windows/electron-main/windowsMainService.js";
-import { focusWindow } from "../../platform/window/electron-main/window.js";
+import { focusWindow, WindowMode, type IWindowState } from "../../platform/window/electron-main/window.js";
 import { type IAnyWorkspaceIdentifier, isRemoteWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, serializeWorkspace, UNKNOWN_EMPTY_WINDOW_WORKSPACE } from "../../platform/workspace/common/workspace.js";
 import { packagedRemoteRuntimeCatalogSource } from "../../platform/remote/electron-main/packagedRemoteRuntimeCatalog.js";
 import { RemoteRuntimeInstaller, remoteRuntimeArtifactFromEnvironment } from "../../platform/remote/electron-main/remoteRuntimeInstaller.js";
@@ -837,13 +837,20 @@ export class AshApplication extends Disposable {
 			throw new Error(`${mode.title} does not provide a dedicated Sessions window`);
 		}
 		const sessionsEntry = this.resolveRendererEntry("sessions", record.modeId);
+		const sessionsWindowState = this.createWindowsStateHandler(UNKNOWN_EMPTY_WINDOW_WORKSPACE, {
+			storageKey: 'sessionsWindowState',
+			defaultState: { mode: WindowMode.Normal, width: 1_180, height: 780 },
+		});
 		await record.dedicatedWindow.open({
 			title: `${mode.title} Sessions`,
 			icon: this.windowIconPath,
-			width: 1_180,
-			height: 780,
+			state: sessionsWindowState.restoreWindowState(),
 			webPreferences: this.createSandboxWebPreferences(),
 			initialize: async (window, windowDisposables) => {
+				windowDisposables.add(sessionsWindowState.trackWindow(window));
+				const windowControlsOverlay = new WindowControlsOverlay(colors => {
+					if (process.platform === 'win32' || process.platform === 'linux') window.setTitleBarOverlay(colors);
+				});
 				const sessionsRelay = windowDisposables.add(this.createAppServerConnectionRelay(record.workspaceContext.getWorkspace(), windowDisposables));
 				const remoteWindowContext = windowDisposables.add(new RemoteWindowMainContext({
 					supervisor: sessionsRelay,
@@ -868,6 +875,10 @@ export class AshApplication extends Disposable {
 					...rendererSystemHostRoutes(window, path => this.selectDirectoryPermissions(window, path)),
 					...remoteWindowContext.ipcRoutes,
 					...windowResourceIpcRoutes(windowResources),
+					...windowAppearanceIpcRoutes({
+						setWindowTheme: theme => windowControlsOverlay.setTheme(theme),
+						setWindowDimmed: dimmed => windowControlsOverlay.setDimmed(dimmed),
+					}),
 					windowOperationIpcRoute(this.windowsMainService, window),
 					...diskFileSystemProviderRoutes(windowDisposables.add(new DiskFileSystemProvider([URI.file(this.profileRoot)])), URI.file(this.profileRoot)),
 					...workspaceContextIpcRoutes(record.workspaceContext),
@@ -1303,10 +1314,12 @@ export class AshApplication extends Disposable {
 
 	private createWindowsStateHandler(
 		workspace: IAnyWorkspaceIdentifier,
+		options?: { readonly storageKey: string; readonly defaultState: IWindowState },
 	): WindowsStateHandler {
 		return new WindowsStateHandler({
 			stateService: this.services.state,
 			workspace,
+			...options,
 			displayService: {
 				getAllDisplays: () => screen.getAllDisplays(),
 				getDisplayMatching: (bounds) => screen.getDisplayMatching(bounds),

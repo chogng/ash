@@ -51,21 +51,25 @@ export interface IWindowsStateHandlerOptions {
 	readonly displayService: IWindowDisplayService;
 	readonly workspace: IAnyWorkspaceIdentifier;
 	readonly backupPath?: string;
+	readonly storageKey?: string;
+	readonly defaultState?: IWindowState;
 	readonly onError?: (error: unknown) => void;
 }
 
 /**
- * Owns the persisted schema and lifecycle for the main Electron window state.
+ * Owns the persisted schema and lifecycle for one Electron window role.
  *
  * Window placement is associated with a concrete workspace, folder, or empty
- * window backup. The last active window remains the fallback for the first
- * window of a new session, matching VS Code's restore order.
+ * window backup. Separate storage keys keep a dedicated window's placement
+ * from replacing the main window's last-active placement.
  */
 export class WindowsStateHandler {
 	private readonly stateService: IStateService;
 	private readonly displayService: IWindowDisplayService;
 	private readonly workspace: IAnyWorkspaceIdentifier;
 	private readonly backupPath: string | undefined;
+	private readonly storageKey: string;
+	private readonly defaultState: IWindowState | undefined;
 	private readonly workbenchState: WorkbenchState;
 	private readonly onError: (error: unknown) => void;
 	private windowsState: IWindowsState;
@@ -76,16 +80,20 @@ export class WindowsStateHandler {
 		displayService,
 		workspace,
 		backupPath,
+		storageKey = WINDOWS_STATE_STORAGE_KEY,
+		defaultState,
 		onError = () => undefined,
 	}: IWindowsStateHandlerOptions) {
 		this.stateService = stateService;
 		this.displayService = displayService;
 		this.workspace = workspace;
 		this.backupPath = backupPath;
+		this.storageKey = storageKey;
+		this.defaultState = defaultState;
 		this.workbenchState = workbenchStateFromWorkspaceIdentifier(workspace);
 		this.onError = onError;
 		this.windowsState = parseWindowsState(
-			this.stateService.getItem(WINDOWS_STATE_STORAGE_KEY),
+			this.stateService.getItem(this.storageKey),
 		);
 	}
 
@@ -118,7 +126,7 @@ export class WindowsStateHandler {
 			}
 		}
 
-		return defaultWindowState(this.workbenchState);
+		return this.defaultState ?? defaultWindowState(this.workbenchState);
 	}
 
 	/** Saves immediately on blur and before the BrowserWindow closes. */
@@ -147,7 +155,7 @@ export class WindowsStateHandler {
 			this.backupPath,
 			uiState,
 		);
-		const latestState = parseWindowsState(this.stateService.getItem(WINDOWS_STATE_STORAGE_KEY));
+		const latestState = parseWindowsState(this.stateService.getItem(this.storageKey));
 		const otherWindows = latestState.openedWindows.filter(windowState => !matchesWindowIdentity(windowState, this.workspace, this.backupPath));
 		const windowsState: IWindowsState = {
 			lastActiveWindow: currentWindow,
@@ -155,7 +163,7 @@ export class WindowsStateHandler {
 		};
 		this.windowsState = windowsState;
 		this.stateService.setItem(
-			WINDOWS_STATE_STORAGE_KEY,
+			this.storageKey,
 			serializeWindowsState(windowsState),
 		);
 		await this.stateService.flush();
@@ -225,7 +233,8 @@ function matchesWindowIdentity(
 				resourceComparisonKey(workspace.uri);
 	}
 	return isEmptyWorkspaceIdentifier(workspace) &&
-		backupPath !== undefined &&
+		state.workspace === undefined &&
+		state.folderUri === undefined &&
 		state.backupPath === backupPath;
 }
 

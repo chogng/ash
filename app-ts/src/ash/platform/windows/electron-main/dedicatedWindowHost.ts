@@ -1,14 +1,19 @@
 import { Disposable, DisposableStore, MutableDisposable } from '../../../base/common/lifecycle.js';
-import { resolveBrowserWindowOptions, type IWindowConstructorOptions, type IWindowWebPreferences } from './windows.js';
-import { WindowMode } from '../../window/electron-main/window.js';
+import { applyWindowState, resolveBrowserWindowOptions, type IWindowConstructorOptions, type IWindowWebPreferences } from './windows.js';
+import type { IWindowState } from '../../window/electron-main/window.js';
 
 interface IDedicatedWindow {
+	readonly webContents: {
+		once(event: 'render-process-gone', listener: () => void): unknown;
+	};
 	once(event: 'ready-to-show' | 'closed', listener: () => void): this;
 	isDestroyed(): boolean;
 	isMinimized(): boolean;
 	restore(): void;
 	focus(): void;
 	show(): void;
+	maximize(): void;
+	setFullScreen(fullscreen: boolean): void;
 	close(): void;
 	destroy(): void;
 }
@@ -21,8 +26,7 @@ interface IDedicatedWindowConstructorOptions extends IWindowConstructorOptions {
 export interface IDedicatedWindowOpenOptions<T extends IDedicatedWindow> {
 	readonly title: string;
 	readonly icon?: string;
-	readonly width: number;
-	readonly height: number;
+	readonly state: IWindowState;
 	readonly webPreferences: IWindowWebPreferences;
 	readonly initialize: (window: T, resources: DisposableStore) => Promise<void>;
 }
@@ -33,6 +37,7 @@ export class DedicatedWindowHost<T extends IDedicatedWindow> extends Disposable 
 	private window: T | undefined;
 	private opening: Promise<void> | undefined;
 	private closing: Promise<void> | undefined;
+	private resolveClosing: (() => void) | undefined;
 	private rejectClosing: ((error: Error) => void) | undefined;
 
 	public get currentWindow(): T | undefined {
@@ -61,7 +66,7 @@ export class DedicatedWindowHost<T extends IDedicatedWindow> extends Disposable 
 
 		const window = this.createWindow({
 			...resolveBrowserWindowOptions({
-				state: { mode: WindowMode.Normal, width: options.width, height: options.height },
+				state: options.state,
 				webPreferences: options.webPreferences,
 			}),
 			show: false,
@@ -72,9 +77,17 @@ export class DedicatedWindowHost<T extends IDedicatedWindow> extends Disposable 
 		this.childResources.value = resources;
 		this.window = window;
 		window.once('ready-to-show', () => {
-			if (this.window === window && !window.isDestroyed()) window.show();
+			if (this.window === window && !window.isDestroyed()) {
+				applyWindowState(window, options.state);
+				window.show();
+			}
 		});
+		const onRendererGone = (): void => {
+			if (this.window === window && !window.isDestroyed()) window.destroy();
+		};
+		window.webContents.once('render-process-gone', onRendererGone);
 		window.once('closed', () => {
+			this.resolveClosing?.();
 			if (this.window !== window) return;
 			this.window = undefined;
 			this.childResources.clear();
@@ -104,13 +117,14 @@ export class DedicatedWindowHost<T extends IDedicatedWindow> extends Disposable 
 		if (!window) return Promise.resolve();
 		if (this.closing) return this.closing;
 		const closing = new Promise<void>((resolve, reject) => {
+			this.resolveClosing = resolve;
 			this.rejectClosing = reject;
-			window.once('closed', resolve);
 		});
 		this.closing = closing;
 		const clearClosing = (): void => {
 			if (this.closing === closing) {
 				this.closing = undefined;
+				this.resolveClosing = undefined;
 				this.rejectClosing = undefined;
 			}
 		};

@@ -96,16 +96,7 @@ export function nativeHostIpcRoutes(
 			validate: validateSaveFileOptions,
 			invoke: (options) => service.saveFile(options as INativeSaveFileOptions),
 		},
-		{
-			channel: NATIVE_HOST_SET_WINDOW_THEME_CHANNEL,
-			validate: validateNativeWindowTheme,
-			invoke: (theme) => service.setWindowTheme(theme as INativeWindowTheme),
-		},
-		{
-			channel: NATIVE_HOST_SET_WINDOW_DIMMED_CHANNEL,
-			validate: validateWindowDimmed,
-			invoke: dimmed => service.setWindowDimmed(dimmed as boolean),
-		},
+		...windowAppearanceIpcRoutes(service),
 		{
 			channel: NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL,
 			validate: validateToggleDeveloperTools,
@@ -115,6 +106,22 @@ export function nativeHostIpcRoutes(
 			channel: NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL,
 			validate: validateSystemWideKeybindings,
 			invoke: bindings => service.syncSystemWideKeybindings(bindings as readonly INativeSystemWideKeybinding[]),
+		},
+	];
+}
+
+/** Window appearance is available to every Electron renderer, including Sessions. */
+export function windowAppearanceIpcRoutes(service: Pick<INativeHostMainService, 'setWindowTheme' | 'setWindowDimmed'>): readonly IpcRoute<unknown, unknown>[] {
+	return [
+		{
+			channel: NATIVE_HOST_SET_WINDOW_THEME_CHANNEL,
+			validate: validateNativeWindowTheme,
+			invoke: theme => service.setWindowTheme(theme as INativeWindowTheme),
+		},
+		{
+			channel: NATIVE_HOST_SET_WINDOW_DIMMED_CHANNEL,
+			validate: validateWindowDimmed,
+			invoke: dimmed => service.setWindowDimmed(dimmed as boolean),
 		},
 	];
 }

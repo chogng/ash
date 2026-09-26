@@ -10,6 +10,7 @@
     "src/ash/base/**/*.ts",
     "src/ash/code/browser/**/*.ts",
     "src/ash/code/electron-browser/workbench/**/*.ts",
+    "src/ash/code/electron-browser/sessions/**/*.ts",
     "src/ash/editor/*/browser/**/*.ts",
     "src/ash/editor/*/common/**/*.ts",
     "src/ash/editor/*/contrib/**/*.ts",

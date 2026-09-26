@@ -10,30 +10,16 @@ import { createElectronRendererApi } from "../../platform/native/electron-browse
 import { createElectronWorkbenchContextMenuService } from "../../workbench/services/contextmenu/electron-browser/contextMenuService.js";
 import type { SessionsProfile } from "../common/sessionsProfile.js";
 import { Workbench } from "../browser/workbench.js";
+import { NativeWindow } from '../../workbench/electron-browser/window.js';
+import { bindWindowControlTheme } from '../../workbench/electron-browser/parts/titlebar/titlebarPart.js';
 import { createReturnToParentWindowApi } from "../../platform/windows/electron-browser/dedicatedWindowApi.js";
 import { registerWindowCloseHandler } from '../../platform/windows/electron-browser/windowClose.js';
 import { showStartupError } from "../../workbench/browser/startupError.js";
-import { Keybinding, logicalKey } from '../../base/common/keybindings.js';
-import { Action2, registerAction2 } from '../../platform/actions/common/actions.js';
-import { localizedString } from '../../platform/action/common/action.js';
 import { invoke, subscribe } from '../../platform/ipc/electron-browser/rendererIpc.js';
-import { WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL, type IWorkbenchWindowInfo } from '../../platform/window/common/window.js';
-
-registerAction2(class QuickSwitchWindowAction extends Action2 {
-	constructor() {
-		super({ id: 'workbench.action.quickSwitchWindow', title: localizedString('ash', 'workbench.quickSwitchWindow', 'Quick Switch Window'), keybinding: { primary: Keybinding.single(logicalKey('w', { primaryKey: true, altKey: true })) } });
-	}
-
-	override async run(): Promise<void> {
-		const windows = await invoke<readonly IWorkbenchWindowInfo[]>(WINDOW_OPERATION_CHANNEL, { kind: 'list' });
-		if (windows.length < 2) return;
-		const focusedIndex = windows.findIndex(window => window.focused);
-		await invoke<void>(WINDOW_OPERATION_CHANNEL, { kind: 'focus', windowId: windows[(focusedIndex + 1) % windows.length]!.id });
-	}
-});
+import { WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL } from '../../platform/window/common/window.js';
 
 /** Starts the Code-specific Electron Sessions page. */
-export async function startElectronSessions(modeId: WorkbenchModeId, profile: SessionsProfile): Promise<IDisposable> {
+export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): Promise<IDisposable> {
 	installBaseUiStyles();
 	let api: Awaited<ReturnType<typeof createElectronRendererApi>>;
 	try { api = await createElectronRendererApi([], { browser: false }); }
@@ -64,12 +50,15 @@ export async function startElectronSessions(modeId: WorkbenchModeId, profile: Se
 		modeId,
 		profile,
 		api,
+		nativeHostApi: api.nativeHost,
 		returnToWorkbench: () => { void windowApi.returnToParentWindow().catch(onUnexpectedError); },
 		configurationApi: api.configuration,
 		keybindingsResourceApi: api.keybindings,
 		createContextMenuService: options => createElectronWorkbenchContextMenuService(options, api.nativeContextMenu),
 		container,
 	}));
+	sessions.add(new NativeWindow(api.nativeHost, workbench.configurationService));
+	sessions.add(bindWindowControlTheme(workbench.themeService, api.nativeHost));
 	sessions.add(addDisposableListener(window, "pagehide", () => {
 		void workbench.shutdown("pageHide").catch(error => console.error("Failed to shut down Sessions Workbench", error)).finally(() => sessions.dispose());
 	}, { once: true }));

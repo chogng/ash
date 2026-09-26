@@ -1,5 +1,5 @@
 import { isMacintosh } from "../../../../base/common/platform.js";
-import { Disposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import type {
 	INativeMenubarApi,
 } from "../../../../platform/menubar/common/nativeMenubar.js";
@@ -32,8 +32,8 @@ export class NativeTitlebarPart extends BrowserTitlebarPart {
 		options: ITitlebarPartFactoryOptions,
 		nativeMenubar: INativeMenubarApi,
 		@IInstantiationService instantiationService: IInstantiationService,
-		@IThemeService private readonly themeService: IThemeService,
-		@INativeHostService private readonly hostService: INativeHostApi,
+		@IThemeService themeService: IThemeService,
+		@INativeHostService hostService: INativeHostApi,
 	) {
 		super(
 			container,
@@ -42,22 +42,27 @@ export class NativeTitlebarPart extends BrowserTitlebarPart {
 			instantiationService,
 		);
 		this.domNode.classList.add("ash-electron-titlebar");
-		this._register(this.themeService.onDidColorThemeChange(() => this.updateStyles()));
-		this.updateStyles();
+		this._register(bindWindowControlTheme(themeService, hostService));
 	}
+}
 
-	public updateStyles(): void {
-		const theme = this.themeService.getColorTheme();
+/** Applies titlebar colors to the operating-system window controls for one renderer. */
+export function bindWindowControlTheme(themeService: IThemeService, hostService: INativeHostApi): IDisposable {
+	const update = (): void => {
+		const theme = themeService.getColorTheme();
 		const backgroundColor = theme.getColorCss(titleBarBackground);
 		const symbolColor = theme.getColorCss(titleBarActionForeground);
 		const backdropColor = theme.getColorCss(dialogBackdropBackground);
 		if (!backgroundColor || !symbolColor || !backdropColor) {
 			throw new Error(`Theme '${theme.id}' does not define window control colors`);
 		}
-		void this.hostService.setWindowTheme({ backgroundColor, symbolColor, backdropColor }).catch((error: unknown) => {
-			console.error("Failed to apply window control colors", error);
+		void hostService.setWindowTheme({ backgroundColor, symbolColor, backdropColor }).catch((error: unknown) => {
+			console.error('Failed to apply window control colors', error);
 		});
-	}
+	};
+	const subscription = themeService.onDidColorThemeChange(update);
+	update();
+	return toDisposable(() => subscription.dispose());
 }
 
 /**

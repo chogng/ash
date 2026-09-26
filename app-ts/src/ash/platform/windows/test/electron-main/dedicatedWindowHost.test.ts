@@ -2,9 +2,14 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { DedicatedWindowHost, type IDedicatedWindowOpenOptions } from '../../electron-main/dedicatedWindowHost.js';
+import { WindowMode } from '../../../window/electron-main/window.js';
 
 class TestWindow {
 	private readonly listeners = new Map<string, Set<() => void>>();
+	public readonly webContents = {
+		once: (_event: 'render-process-gone', listener: () => void): void => { this.rendererGone = listener; },
+	};
+	private rendererGone: (() => void) | undefined;
 	private destroyed = false;
 	public minimized = false;
 	public focused = 0;
@@ -12,6 +17,8 @@ class TestWindow {
 	public shown = 0;
 	public closed = 0;
 	public deferClose = false;
+	public maximized = 0;
+	public fullscreen = false;
 
 	public once(event: 'ready-to-show' | 'closed', listener: () => void): this {
 		let listeners = this.listeners.get(event);
@@ -34,6 +41,9 @@ class TestWindow {
 	public restore(): void { this.minimized = false; this.restored += 1; }
 	public focus(): void { this.focused += 1; }
 	public show(): void { this.shown += 1; }
+	public maximize(): void { this.maximized += 1; }
+	public setFullScreen(fullscreen: boolean): void { this.fullscreen = fullscreen; }
+	public crashRenderer(): void { this.rendererGone?.(); }
 	public close(): void { this.closed += 1; if (!this.deferClose) this.destroy(); }
 	public destroy(): void { this.destroyed = true; this.emit('closed'); }
 }
@@ -48,8 +58,7 @@ test('dedicated window host reuses a live child and releases each child with its
 	);
 	const options: IDedicatedWindowOpenOptions<TestWindow> = {
 		title: 'Sessions',
-		width: 1180,
-		height: 780,
+		state: { mode: WindowMode.Normal, width: 1180, height: 780 },
 		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
 		initialize: async (_window, resources) => {
 			resources.add(toDisposable(() => { released += 1; }));
@@ -85,8 +94,7 @@ test('dedicated window return waits for close before focusing its parent', async
 	using host = new DedicatedWindowHost(() => window, () => { parentFocuses += 1; });
 	await host.open({
 		title: 'Sessions',
-		width: 1180,
-		height: 780,
+		state: { mode: WindowMode.Normal, width: 1180, height: 780 },
 		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
 		initialize: async () => {},
 	});
@@ -106,8 +114,7 @@ test('dedicated window host waits for a closing child before reopening', async (
 	}, () => {});
 	const options: IDedicatedWindowOpenOptions<TestWindow> = {
 		title: 'Sessions',
-		width: 1180,
-		height: 780,
+		state: { mode: WindowMode.Normal, width: 1180, height: 780 },
 		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
 		initialize: async () => {},
 	};
@@ -130,8 +137,7 @@ test('a failed close releases the pending return and allows a later close', asyn
 	using host = new DedicatedWindowHost(() => window, () => { parentFocuses += 1; });
 	await host.open({
 		title: 'Sessions',
-		width: 1180,
-		height: 780,
+		state: { mode: WindowMode.Normal, width: 1180, height: 780 },
 		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
 		initialize: async () => {},
 	});
@@ -152,8 +158,7 @@ test('dedicated window host destroys a child when initialization fails', async (
 	using host = new DedicatedWindowHost(() => window, () => {});
 	await assert.rejects(host.open({
 		title: 'Sessions',
-		width: 1180,
-		height: 780,
+		state: { mode: WindowMode.Normal, width: 1180, height: 780 },
 		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
 		initialize: async (_window, resources) => {
 			resources.add(toDisposable(() => { released = true; }));
@@ -161,4 +166,26 @@ test('dedicated window host destroys a child when initialization fails', async (
 		},
 	}), /load failed/);
 	assert.deepEqual({ destroyed: window.isDestroyed(), released }, { destroyed: true, released: true });
+});
+
+test('dedicated window host replaces a crashed renderer on the next open', async () => {
+	const windows: TestWindow[] = [];
+	using host = new DedicatedWindowHost(() => {
+		const window = new TestWindow();
+		windows.push(window);
+		return window;
+	}, () => {});
+	const options: IDedicatedWindowOpenOptions<TestWindow> = {
+		title: 'Sessions',
+		state: { mode: WindowMode.Maximized, x: 80, y: 60, width: 1180, height: 780 },
+		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
+		initialize: async () => {},
+	};
+	await host.open(options);
+	windows[0]!.emit('ready-to-show');
+	assert.equal(windows[0]!.maximized, 1);
+	windows[0]!.crashRenderer();
+	assert.equal(host.currentWindow, undefined);
+	await host.open(options);
+	assert.equal(windows.length, 2);
 });

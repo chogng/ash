@@ -79,6 +79,10 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 		return { count: windows.length, childParentId: child.parentId, changedZoom, zoom };
 	});
 	expect(childWindowOperations).toEqual({ count: 2, childParentId: expect.any(Number), changedZoom: 1, zoom: 1 });
+	await sessionsPage.keyboard.press(process.platform === 'darwin' ? 'Meta+Alt+W' : 'Control+Alt+W');
+	await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getFocusedWindow()?.webContents.getURL().includes('/workbench/workbench.html'))).toBe(true);
+	await openSessions.click();
+	await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getFocusedWindow()?.webContents.getURL().includes('/sessions/sessions-code.html'))).toBe(true);
 	const configurationChange = await sessionsPage.evaluate(async () => {
 		const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: {
 			invoke(channel: string, params?: unknown): Promise<unknown>;
@@ -216,12 +220,30 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 		const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
 		return ipc.invoke('ash:dedicated-window:return-to-parent');
 	})).rejects.toThrow(/Untrusted renderer IPC sender/);
+	const expectedBounds = await application.evaluate(({ BrowserWindow }) => {
+		const child = BrowserWindow.getAllWindows().find(window => window.webContents.getURL().includes('sessions-code.html'));
+		if (!child) throw new Error('Sessions window is missing');
+		child.setBounds({ ...child.getBounds(), width: 1000, height: 700 });
+		return child.getBounds();
+	});
 
 	const closed = sessionsPage.waitForEvent("close");
 	await sessionsPage.getByRole("button", { name: "Workbench" }).click();
 	await closed;
 	await expect.poll(() => application.windows().length).toBe(1);
 	await expect(workbenchPage.locator(".ash-workbench")).toBeVisible();
+	await openSessions.click();
+	await expect.poll(() => application.windows().length).toBe(2);
+	const reopenedPage = application.windows().find(page => page !== workbenchPage);
+	if (!reopenedPage) throw new Error('Reopened Sessions window is missing');
+	await expect(reopenedPage.locator('.ash-code-sessions-window')).toBeVisible();
+	await expect.poll(() => application.evaluate(({ BrowserWindow }) => {
+		const child = BrowserWindow.getAllWindows().find(window => window.webContents.getURL().includes('sessions-code.html'));
+		return child?.getBounds();
+	})).toEqual(expectedBounds);
+	const reopenedClosed = reopenedPage.waitForEvent('close');
+	await reopenedPage.getByRole('button', { name: 'Workbench' }).click();
+	await reopenedClosed;
 	const parentClosed = workbenchPage.waitForEvent('close');
 	await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.close());
 	await parentClosed;
