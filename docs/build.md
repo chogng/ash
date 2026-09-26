@@ -258,6 +258,10 @@ just bench-build ash-keybinding --jobs 4 --compare .build/build-health/<run>/rep
 
 2026-09-26 在 macOS arm64、Rust 1.98.0、`dev-small`、12 个 Cargo 任务下，确认 [LiveKit PR #1466](https://github.com/livekit/rust-sdks/pull/1466) 的修复已随 [webrtc-sys 0.3.47](https://github.com/livekit/rust-sdks/releases/tag/webrtc-sys/v0.3.47) 发布，Ash 移除了固定 Git 提交的补丁。用同一份已缓存 WebRTC 库测 Code 三个程序的独立输出目录冷编译，单次完整构建为 364.01 秒；先单独构建 `webrtc-sys` 再构建三个程序合计为 358.78 秒（其中第一步 32.24 秒）。两次的程序大小分别约为 26.5、193.0、44.5 MB，最大 RSS 分别为 2.28、2.37 GB。约 1.4% 的总耗时差只有各一次测量，不能证明构建顺序提速，因此未改启动入口。另两项试验——将 `webrtc-sys` 的优化级别降为 0、将 Cargo 任务数增至 16——在各自的单次完整冷编中也未改善总时间，且未统一外部资源缓存，不作为严格配对结果。日志及 Cargo 时间线保存在 `.build/build-health/code-startup-20260926-*`；共享输出目录下资源与程序都已缓存后的 `just ash --version` 用时 1.49 秒。
 
+同日测量 `just ash-desktop`：本机当前输出目录首次执行 `predev` 用时 237.03 秒，其中 Cargo 构建 223 秒；复用已发布后端包再执行 `predev` 用时 1.82 秒。Vite 8 的默认依赖扫描在 Workbench 构造参数装饰器处报错，随后首次打开窗口时分批优化依赖并重载页面。改为显式预先优化五个前端依赖后，在两次都因配置变化而失效依赖缓存的单次 Playwright 对比中，菜单和编辑区可见耗时为 4507→2873 毫秒，首次窗口后的重载次数为 1→0。这个对比只说明依赖缓存失效时的首次加载，不代表日常热启动或 Rust 冷编译也同比例提速。日志和测量条件保存在 `.build/build-health/electron-startup-20260926/`。
+
+同一输出目录下，只在 `code/tui/src` 放入一个未参与编译的临时文件，原来的后端包输入摘要会失效，`pnpm --dir app-ts prepare:backend` 因而运行 Cargo 和资源准备，单次耗时 13.41 秒。后端包输入改为只跟踪实际打包的后端源码后，同样的临时文件不再触发准备，单次耗时 0.16 秒；两次都选中同一已发布包。临时文件已删除。此对比是跨产品源码变化后的复用路径，不代表后端源码实际修改后的编译耗时。
+
 ## 构建源码与仓库脚本边界
 
 `build/` 按产品宿主、共享后端和交付物划分。前端 Node 构建逻辑使用 TypeScript；共享后端构建、下载与组包使用 Python。开发与正式发布共用后端包布局和校验实现；发布顺序、凭据注入和上传由 `.github/workflows/` 编排。`just build-code`、`just build-desktop` 和 `just build-app` 分别构建产品宿主；`just build` 聚合这三个入口。完整共享包由 `just ash-package` 单独组装，根 Cargo workspace 的完整构建保留在显式的 `just build-rust`。

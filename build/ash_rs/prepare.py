@@ -226,13 +226,9 @@ def package_sources(root: Path) -> list[Path]:
 
 
 def development_source_paths(root: Path) -> list[Path]:
-    """Collect Rust workspace and package resources that can invalidate a published package."""
+    """Collect packaged backend sources and resources that can invalidate a published package."""
     return package_sources(root) + [
         root / "ash-rs",
-        root / "app-rs",
-        root / "ash-cli",
-        root / "code",
-        root / "build/code/update-sign",
         root / "Cargo.lock",
         root / ".cargo",
         root / "rust-toolchain.toml",

@@ -97,6 +97,9 @@ Renderer 开发服务器使用 Vite HMR。`build/app_ts/vite/setup-dev.ts` 在�
 现有实例，因此 Workbench 状态和当前窗口不需要重建。其他确实只修改原型方法的派生 UI 类可以用
 `@ash-hot-reload patch-prototype` 显式加入同一机制。
 
+Vite 开发入口预先优化前端使用的第三方依赖，不扫描 Workbench 源码来发现依赖。这样依赖扫描器不会在
+TypeScript 转换前解析构造参数装饰器，也不会在首次打开窗口时分批优化依赖并重载页面。
+
 Vite 插件会在模块执行前比较 TypeScript 语法结构。只有普通实例方法、getter 和 setter 的变化进入
 原型热替换；构造器、实例字段、静态状态、装饰器、模块声明/副作用或继承关系变化都会自动执行完整
 页面重载，并在开发服务器日志中说明原因。这样旧实例不会静默保留过期的初始化状态。Electron Main

@@ -69,7 +69,7 @@ class PrepareTests(unittest.TestCase):
                 ),
             )
 
-    def test_development_source_digest_tracks_backend_and_resource_changes(
+    def test_development_source_digest_tracks_packaged_backend_and_resource_changes(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -97,6 +97,8 @@ class PrepareTests(unittest.TestCase):
             cli_source.write_text("first")
             code_backend = root / "code/mermaid.rs"
             code_backend.write_text("first")
+            code_signer = root / "build/code/update-sign/sign.py"
+            code_signer.write_text("first")
             frontend = root / "app-ts/src/ash/workbench/view.ts"
             frontend.write_text("first")
             resource = root / "resources/icon.svg"
@@ -109,20 +111,14 @@ class PrepareTests(unittest.TestCase):
                     original,
                     prepare.development_source_digest(root, args, "target", {}),
                 )
+                for unrelated in (editor_backend, code_backend, cli_source, code_signer):
+                    unrelated.write_text("second content")
+                    self.assertEqual(
+                        original,
+                        prepare.development_source_digest(root, args, "target", {}),
+                    )
                 backend.write_text("second content")
                 after_backend = prepare.development_source_digest(
-                    root, args, "target", {}
-                )
-                editor_backend.write_text("second content")
-                after_editor_backend = prepare.development_source_digest(
-                    root, args, "target", {}
-                )
-                code_backend.write_text("second content")
-                after_code_backend = prepare.development_source_digest(
-                    root, args, "target", {}
-                )
-                cli_source.write_text("second content")
-                after_cli_source = prepare.development_source_digest(
                     root, args, "target", {}
                 )
                 resource.write_text("second content")
@@ -132,10 +128,7 @@ class PrepareTests(unittest.TestCase):
                 (root / "Cargo.lock").write_text("updated lock")
                 after_lock = prepare.development_source_digest(root, args, "target", {})
             self.assertNotEqual(original, after_backend)
-            self.assertNotEqual(after_backend, after_editor_backend)
-            self.assertNotEqual(after_editor_backend, after_code_backend)
-            self.assertNotEqual(after_code_backend, after_cli_source)
-            self.assertNotEqual(after_cli_source, after_resource)
+            self.assertNotEqual(after_backend, after_resource)
             self.assertNotEqual(after_resource, after_lock)
 
     def test_development_source_digest_ignores_unrelated_git_commit_and_path(self) -> None:

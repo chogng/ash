@@ -105,11 +105,14 @@ guessing a `target` layout. Normal compact host builds, the development
 assembler, and the Rust watcher therefore reuse one compilation cache without
 creating a second target-triple tree.
 On later development starts, checksum-locked archives reuse verified extracted files.
-On later development starts, `prepare.py` first fingerprints the Rust workspace,
+On later development starts, `prepare.py` first fingerprints packaged backend sources,
 build settings, package resources, and runtime locks. An unchanged fingerprint
 reuses the package selected by the latest manifest before Cargo or runtime
 archive resolution runs. When this first check changes, Cargo incrementally
 builds the executables and the resolved package inputs get a second fingerprint.
+Changes confined to the Rust Desktop, CLI, Code TUI, or Code signing helper do not
+invalidate the Electron backend package; none of those sources are inputs to its
+executables or package layout.
 If the executable and asset inputs remain unchanged, the selected package is
 reused; otherwise the assembler validates and publishes a new package.
 The Python release builder calls the same `layout.py` assembler with resolved inputs. It also honors `CARGO_TARGET_DIR`,
