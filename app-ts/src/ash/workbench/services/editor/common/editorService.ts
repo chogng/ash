@@ -1,7 +1,7 @@
 import type { URI } from "../../../../base/common/uri.js";
 import type { Event } from '../../../../base/common/event.js';
 import type { Range } from "../../../../editor/common/core/range.js";
-import type { EditorActivationOptions, TextEditorSelectionSource } from "../../../../platform/editor/common/editor.js";
+import type { IEditorOptions, TextEditorSelectionSource } from "../../../../platform/editor/common/editor.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 
 /** A resource requested through the Workbench editor service. */
@@ -17,7 +17,7 @@ export interface EditorInput {
 }
 
 /** Optional caller preferences for opening and revealing an editor resource. */
-export interface EditorOpenOptions extends EditorActivationOptions {
+export interface EditorOpenOptions extends IEditorOptions {
 	readonly preferredEditorId?: string;
 	readonly index?: number;
 	readonly selection?: Range;

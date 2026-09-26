@@ -47,6 +47,57 @@ test("App Server workspace files open in Stanza and save through the editor regi
 	).toBe("const value = 2;");
 });
 
+test('Find input recalls saved searches with arrow keys and restores the draft', async ({ target, workbench }) => {
+	test.skip(
+		target.appServerMode !== 'required' || target.workbenchMode !== 'code',
+		'This scenario requires the Code App Server product',
+	);
+
+	const fileRow = workbench.page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
+	await expect.poll(() => fileRow.count(), { timeout: 15_000 }).toBe(1);
+	await fileRow.click();
+	const editorInput = workbench.editors.groupAt(0).content.locator('.stanza-editor-input');
+	await editorInput.focus();
+	await editorInput.press(process.platform === 'darwin' ? 'Meta+F' : 'Control+F');
+	const findInput = workbench.editors.groupAt(0).content.getByRole('textbox', { name: 'Find' });
+	await expect(findInput).toBeFocused();
+	expect(await findInput.evaluate(input => {
+		const bounds = input.getBoundingClientRect();
+		return bounds.width >= 80 && bounds.height >= 20;
+	})).toBe(true);
+	await findInput.fill('history-query-one');
+	await findInput.press('Enter');
+	await expect(findInput).toHaveAttribute('aria-keyshortcuts', 'ArrowUp ArrowDown');
+	await findInput.fill('history-query-two');
+	await findInput.press('Enter');
+	await findInput.fill('unfinished query');
+
+	await findInput.press('ArrowUp');
+	await expect(findInput).toHaveValue('history-query-two');
+	await findInput.press('ArrowUp');
+	await expect(findInput).toHaveValue('history-query-one');
+	await findInput.press('ArrowDown');
+	await findInput.press('ArrowDown');
+	await expect(findInput).toHaveValue('unfinished query');
+
+	const replaceToggle = workbench.editors.groupAt(0).content.getByRole('button', { name: 'Toggle replace' });
+	await replaceToggle.focus();
+	await replaceToggle.press('Enter');
+	const replaceInput = workbench.editors.groupAt(0).content.getByRole('textbox', { name: 'Replace' });
+	await replaceInput.fill('replacement-one');
+	await expect(replaceInput).toHaveValue('replacement-one');
+	await replaceInput.press('Enter');
+	await replaceInput.focus();
+	await expect(replaceInput).toBeFocused();
+	await expect(replaceInput).toHaveValue('replacement-one');
+	await expect(replaceInput).toHaveAttribute('aria-keyshortcuts', 'ArrowUp ArrowDown');
+	await replaceInput.fill('replacement draft');
+	await replaceInput.press('ArrowUp');
+	await expect(replaceInput).toHaveValue('replacement-one');
+	await replaceInput.press('ArrowDown');
+	await expect(replaceInput).toHaveValue('replacement draft');
+});
+
 test("Show All Editors searches recent editors and restores editor focus", async ({ target, workbench }) => {
 	test.skip(
 		target.appServerMode !== "required" || target.workbenchMode !== "code",

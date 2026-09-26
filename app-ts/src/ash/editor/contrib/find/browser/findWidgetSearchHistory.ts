@@ -1,8 +1,9 @@
 import { Emitter, type Event } from '../../../../base/common/event.js';
+import type { IHistory } from '../../../../base/common/history.js';
 import { type IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 
 /** Workspace search terms shared by editor find widgets. */
-export class FindWidgetSearchHistory {
+export class FindWidgetSearchHistory implements IHistory<string> {
 	public static readonly FIND_HISTORY_KEY = 'workbench.find.history';
 	private static instance: FindWidgetSearchHistory | null = null;
 	private values = new Set<string>();

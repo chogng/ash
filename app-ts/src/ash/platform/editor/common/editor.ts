@@ -13,7 +13,7 @@ export function isResolvedEditorModel(model: IDisposable | undefined | null): mo
 }
 
 /** Editor activation preferences shared by resource-navigation surfaces. */
-export interface EditorActivationOptions {
+export interface IEditorOptions {
 	/** Keeps the opened resource as a durable tab instead of a replaceable preview. */
 	readonly pinned?: boolean;
 	/** Leaves DOM focus with the navigation surface that requested the open. */
@@ -26,7 +26,7 @@ export const enum TextEditorSelectionSource {
 	JUMP = 'code.jump',
 }
 
-export interface ITextEditorOptions extends EditorActivationOptions {
+export interface ITextEditorOptions extends IEditorOptions {
 	readonly selection?: {
 		readonly startLineNumber: number;
 		readonly startColumn: number;

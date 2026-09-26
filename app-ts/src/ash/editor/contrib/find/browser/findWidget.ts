@@ -9,7 +9,11 @@ import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { Icon } from '../../../../base/common/icon.js';
 import { localize } from '../../../../nls.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { ContextScopedFindInput, ContextScopedReplaceInput } from '../../../../platform/history/browser/contextScopedHistoryWidget.js';
+import { showHistoryKeybindingHint } from '../../../../platform/history/browser/historyWidgetKeybindingHint.js';
 import { type IHoverService } from '../../../../platform/hover/browser/hoverService.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { type IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { registerIcon } from '../../../../platform/theme/common/iconRegistry.js';
 import { type ICodeEditor, type IOverlayWidget, type IOverlayWidgetPosition, OverlayWidgetPositionPreference, type IViewZone } from '../../../browser/editorBrowser.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
@@ -104,6 +108,8 @@ export class FindWidget extends Disposable implements IOverlayWidget {
 	private dragStartWidth = 0;
 	private readonly findInput: HTMLInputElement;
 	private readonly replaceInput: HTMLInputElement;
+	private readonly findControl: ContextScopedFindInput;
+	private readonly replaceControl: ContextScopedReplaceInput;
 	private readonly resultLabel: HTMLSpanElement;
 	private readonly replaceRow: HTMLDivElement;
 	private readonly replaceToggle: SimpleButton;
@@ -132,11 +138,13 @@ export class FindWidget extends Disposable implements IOverlayWidget {
 		private readonly state: FindReplaceState,
 		private readonly model: FindModelBoundToEditorModel,
 		private readonly hoverService: IHoverService,
-		private readonly searchHistory?: FindWidgetSearchHistory,
-		private readonly replaceHistory?: ReplaceWidgetHistory,
+		keybindingService: IKeybindingService,
+		searchHistory?: FindWidgetSearchHistory,
+		replaceHistory?: ReplaceWidgetHistory,
 	) {
 		super();
 		const contextKeys = editor.invokeWithinContext(accessor => accessor.get(IContextKeyService));
+		const instantiationService = editor.invokeWithinContext(accessor => accessor.get(IInstantiationService));
 		this.widgetFocused = CONTEXT_FIND_WIDGET_FOCUSED.bindTo(contextKeys);
 		this.findFocused = CONTEXT_FIND_INPUT_FOCUSED.bindTo(contextKeys);
 		this.replaceFocused = CONTEXT_REPLACE_INPUT_FOCUSED.bindTo(contextKeys);
@@ -156,7 +164,15 @@ export class FindWidget extends Disposable implements IOverlayWidget {
 			() => this.state.change({ isReplaceRevealed: !this.state.isReplaceRevealed }, false),
 		);
 		this.replaceToggle.domNode.classList.add('stanza-editor-find-replace-toggle');
-		this.findInput = this.input(ownerDocument, localize('label.find', 'Find'));
+		const findLabel = localize('label.find', 'Find');
+		this.findControl = this._register(instantiationService.createInstance(ContextScopedFindInput, findRow, {
+			label: findLabel,
+			history: searchHistory,
+			showHistoryHint: () => showHistoryKeybindingHint(keybindingService, contextKeys.getContext(this.findInput)),
+		}));
+		this.findInput = this.findControl.inputBox.inputElement;
+		this.findControl.domNode.classList.add('stanza-editor-find-input-box');
+		this.findInput.classList.add('stanza-editor-find-input');
 		this.resultLabel = h(ownerDocument, 'span');
 		this.resultLabel.className = 'stanza-editor-find-result';
 		this.resultLabel.setAttribute('aria-live', 'polite');
@@ -168,7 +184,7 @@ export class FindWidget extends Disposable implements IOverlayWidget {
 		this.nextButton = this.button(ownerDocument, localize('label.nextMatch', 'Next match'), '', () => this.controller.moveToNextMatch(), findNextMatchIcon);
 		const close = this.button(ownerDocument, localize('label.closeFind', 'Close find'), '×', () => this.controller.closeFindWidget());
 		findRow.append(
-			this.replaceToggle.domNode, this.findInput, this.resultLabel,
+			this.replaceToggle.domNode, this.findControl.domNode, this.resultLabel,
 			this.matchCaseButton.domNode, this.wholeWordButton.domNode, this.regexButton.domNode,
 			this.scopeButton.domNode, this.previousButton.domNode, this.nextButton.domNode, close.domNode,
 		);
@@ -178,7 +194,15 @@ export class FindWidget extends Disposable implements IOverlayWidget {
 		this.replaceRow.hidden = true;
 		const spacer = h(ownerDocument, 'span');
 		spacer.className = 'stanza-editor-replace-spacer';
-		this.replaceInput = this.input(ownerDocument, localize('label.replace', 'Replace'));
+		const replaceLabel = localize('label.replace', 'Replace');
+		this.replaceControl = this._register(instantiationService.createInstance(ContextScopedReplaceInput, this.replaceRow, {
+			label: replaceLabel,
+			history: replaceHistory,
+			showHistoryHint: () => showHistoryKeybindingHint(keybindingService, contextKeys.getContext(this.replaceInput)),
+		}));
+		this.replaceInput = this.replaceControl.inputBox.inputElement;
+		this.replaceControl.domNode.classList.add('stanza-editor-find-input-box');
+		this.replaceInput.classList.add('stanza-editor-find-input');
 		this.preserveCaseButton = this.toggle(
 			ownerDocument, localize('label.preserveCase', 'Preserve case'), 'AB',
 			() => this.state.change({ preserveCase: !this.state.preserveCase }, false),
@@ -191,7 +215,7 @@ export class FindWidget extends Disposable implements IOverlayWidget {
 			ownerDocument, localize('label.replaceAll', 'Replace all matches'),
 			localize('label.replaceAllButton', 'All'), () => this.controller.replaceAll(), findReplaceAllIcon,
 		);
-		this.replaceRow.append(spacer, this.replaceInput, this.preserveCaseButton.domNode, this.replaceButton.domNode, this.replaceAllButton.domNode);
+		this.replaceRow.append(spacer, this.replaceControl.domNode, this.preserveCaseButton.domNode, this.replaceButton.domNode, this.replaceAllButton.domNode);
 		this.root.append(findRow, this.replaceRow);
 		this.resizeSash = this._register(new Sash(this.root, 'vertical'));
 		this.resizeSash.element.setAttribute('aria-label', localize('label.resizeFindWidget', 'Resize find widget'));
@@ -210,8 +234,8 @@ export class FindWidget extends Disposable implements IOverlayWidget {
 			this.layout();
 		}));
 
-		this._register(addDisposableListener(this.findInput, 'input', () => this.state.change({ searchString: this.findInput.value }, true)));
-		this._register(addDisposableListener(this.replaceInput, 'input', () => this.state.change({ replaceString: this.replaceInput.value }, false)));
+		this._register(this.findControl.inputBox.onDidChange(value => this.state.change({ searchString: value }, true)));
+		this._register(this.replaceControl.inputBox.onDidChange(value => this.state.change({ replaceString: value }, false)));
 		this._register(addDisposableListener(this.root, 'keydown', event => this.onKeyDown(event)));
 		this._register(addDisposableListener(this.root, 'mousedown', event => {
 			if (event.target !== this.findInput && event.target !== this.replaceInput) event.preventDefault();
@@ -263,6 +287,7 @@ export class FindWidget extends Disposable implements IOverlayWidget {
 	public focusLastElement(): void { (this.lastFocused ?? this.findInput).focus({ preventScroll: true }); }
 	public focusFindInput(): void { this.findInput.focus({ preventScroll: true }); this.findInput.select(); }
 	public focusReplaceInput(): void { this.replaceInput.focus({ preventScroll: true }); this.replaceInput.select(); }
+	public recordReplaceHistory(): void { this.replaceControl.inputBox.addToHistory(); }
 	public isFindInputFocused(): boolean { return this.root.ownerDocument.activeElement === this.findInput; }
 	public highlightFindOptions(): void {
 		for (const button of [this.matchCaseButton, this.wholeWordButton, this.regexButton]) button.domNode.classList.add('find-options-highlight');
@@ -270,16 +295,6 @@ export class FindWidget extends Disposable implements IOverlayWidget {
 	}
 	public updateSearchScopeAvailability(): void { this.scopeButton.setEnabled(this.state.searchScope !== null || this.controller.isSearchScopeAvailable()); }
 
-	private input(ownerDocument: Document, label: string): HTMLInputElement {
-		const input = h(ownerDocument, 'input');
-		input.className = 'stanza-editor-find-input';
-		input.type = 'text';
-		input.placeholder = label;
-		input.setAttribute('aria-label', label);
-		input.autocomplete = 'off';
-		input.spellcheck = false;
-		return input;
-	}
 	private button(ownerDocument: Document, label: string, text: string, onTrigger: () => void, icon?: Icon): SimpleButton {
 		const button = this._register(new SimpleButton({
 			label,
@@ -296,8 +311,8 @@ export class FindWidget extends Disposable implements IOverlayWidget {
 		return button;
 	}
 	private onStateChange(event: Partial<FindReplaceStateChangedEvent>): void {
-		if (event.searchString || this.findInput.value !== this.state.searchString) this.findInput.value = this.state.searchString;
-		if (event.replaceString || this.replaceInput.value !== this.state.replaceString) this.replaceInput.value = this.state.replaceString;
+		this.findControl.inputBox.value = this.state.searchString;
+		this.replaceControl.inputBox.value = this.state.replaceString;
 		this.checked(this.matchCaseButton, this.state.matchCase);
 		this.checked(this.wholeWordButton, this.state.wholeWord);
 		this.checked(this.regexButton, this.state.isRegex);
@@ -379,11 +394,10 @@ export class FindWidget extends Disposable implements IOverlayWidget {
 		}
 		if (event.target === this.findInput && event.key === 'Enter' && !event.ctrlKey && !event.altKey && !event.metaKey) {
 			stopEvent(event);
-			if (this.state.searchString) this.searchHistory?.add(this.state.searchString);
+			this.findControl.inputBox.addToHistory();
 			if (event.shiftKey) this.controller.moveToPrevMatch(); else this.controller.moveToNextMatch();
 		} else if (event.target === this.replaceInput && event.key === 'Enter' && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) {
 			stopEvent(event);
-			if (this.state.replaceString) this.replaceHistory?.add(this.state.replaceString);
 			this.controller.replace();
 		}
 	}

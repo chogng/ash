@@ -11,6 +11,7 @@ import { type IMenuService, MenuId } from "../../../../platform/actions/common/a
 import type { IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
 import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import type { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
+import { registerOpenEditorListeners, type IOpenEditorOptions } from "../../../../platform/editor/browser/editor.js";
 import type { IHoverService } from "../../../../platform/hover/browser/hoverService.js";
 import type { IResourceIconRenderer } from "../../../browser/labels.js";
 import type { GitCommitChange, GitCommitChanges, GitCommitSummary, GraphPage, GitHead, GitReference, GitRemoteProvider, IGitService } from "../../../services/git/common/gitService.js";
@@ -430,15 +431,8 @@ export class ScmGraphViewPane extends ViewPane {
 			status.className = `ash-scm-graph-change-status ${change.status}`;
 			status.textContent = changeStatusLabel(change.status);
 			button.append(fileLabel.element, status);
-			this.hovers.add(addDisposableListener(button, "click", (event) => {
-				event.stopPropagation();
-				if (event.detail > 1) return;
-				void this.openCommitChange(commit, change, expanded.result, false);
-			}));
-			this.hovers.add(addDisposableListener(button, "dblclick", (event) => {
-				event.preventDefault();
-				event.stopPropagation();
-				void this.openCommitChange(commit, change, expanded.result, true);
+			this.hovers.add(registerOpenEditorListeners(button, options => {
+				void this.openCommitChange(commit, change, expanded.result, options);
 			}));
 			this.hovers.add(addDisposableListener(button, "contextmenu", event => {
 				event.preventDefault();
@@ -478,7 +472,7 @@ export class ScmGraphViewPane extends ViewPane {
 		this.renderRows();
 	}
 
-	private async openCommitChange(commit: GitCommitSummary, change: GitCommitChange, expanded: GitCommitChanges, pinned: boolean): Promise<void> {
+	private async openCommitChange(commit: GitCommitSummary, change: GitCommitChange, expanded: GitCommitChanges, options: IOpenEditorOptions): Promise<void> {
 		const file = await this.gitService.commitFile(commit.objectId, change.path, commit.repositoryId);
 		const name = change.path.split("/").at(-1) ?? change.path;
 		const original = file.original.kind === "text" ? {
@@ -493,12 +487,13 @@ export class ScmGraphViewPane extends ViewPane {
 			readOnly: true,
 			initialText: file.modified.text,
 		} : undefined;
+		const group = options.openToSide ? 'sideGroup' : 'activeGroup';
 		if (original && modified) {
-			await this.editorService.openEditor(createDiffEditorInput(original, modified, `${original.label} ↔ ${modified.label}`), { pinned });
+			await this.editorService.openEditor(createDiffEditorInput(original, modified, `${original.label} ↔ ${modified.label}`), options.editorOptions, group);
 		} else if (modified) {
-			await this.editorService.openEditor(modified, { pinned });
+			await this.editorService.openEditor(modified, options.editorOptions, group);
 		} else if (original) {
-			await this.editorService.openEditor(original, { pinned });
+			await this.editorService.openEditor(original, options.editorOptions, group);
 		}
 	}
 

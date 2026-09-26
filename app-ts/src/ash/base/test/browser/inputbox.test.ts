@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
-import { InputBox } from "../../browser/ui/inputbox/inputbox.js";
+import { HistoryInputBox, InputBox } from "../../browser/ui/inputbox/inputbox.js";
 
 test("InputBox exposes value, keyboard, focus, and selection behavior", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
@@ -86,5 +86,32 @@ test("InputBox supports numeric field presentation", () => {
 	inputBox.step = "1";
 	assert.equal(inputBox.step, "1");
 	assert.equal(inputBox.element.classList.contains("ash-input-box-field"), true);
+	dom.window.close();
+});
+
+test('HistoryInputBox navigates saved values and restores the uncommitted input', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const inputBox = new HistoryInputBox(dom.window.document.body, {
+		history: new Set(['first', 'second']),
+		showHistoryHint: () => true,
+	});
+	inputBox.value = 'draft';
+	inputBox.focus();
+	assert.equal(inputBox.inputElement.getAttribute('aria-keyshortcuts'), 'ArrowUp ArrowDown');
+	inputBox.showPreviousValue();
+	assert.equal(inputBox.value, 'second');
+	inputBox.showPreviousValue();
+	assert.equal(inputBox.value, 'first');
+	inputBox.showNextValue();
+	inputBox.showNextValue();
+	assert.equal(inputBox.value, 'draft');
+
+	inputBox.showPreviousValue();
+	inputBox.value = 'edited';
+	inputBox.showNextValue();
+	assert.equal(inputBox.value, 'edited');
+	inputBox.addToHistory();
+	assert.deepEqual(inputBox.getHistory(), ['first', 'second', 'edited']);
+	inputBox.dispose();
 	dom.window.close();
 });

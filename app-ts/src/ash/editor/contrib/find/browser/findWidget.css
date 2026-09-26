@@ -47,6 +47,10 @@
   outline: none;
 }
 
+.stanza-editor-find-input-box {
+  min-width: 0;
+}
+
 .stanza-editor-find-input:focus {
   border-color: var(--ash-focus-border);
 }

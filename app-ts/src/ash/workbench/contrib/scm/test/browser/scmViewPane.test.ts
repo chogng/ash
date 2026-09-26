@@ -451,7 +451,14 @@ test("ScmGraphViewPane expands commit files and opens a selected change in the d
 		await waitFor(() => opened.length === 2);
 		assert.equal(fileRequests, 2);
 		assert.equal(opened[1].options?.pinned, true);
+		change?.dispatchEvent(new browser.window.KeyboardEvent("keydown", { bubbles: true, key: " " }));
+		await waitFor(() => opened.length === 3);
+		assert.deepEqual(opened[2].options, { pinned: false, preserveFocus: true });
+		change?.dispatchEvent(new browser.window.KeyboardEvent("keydown", { bubbles: true, key: "Enter", altKey: true }));
+		assert.equal(opened.length, 3);
 		pane.dispose();
+		change?.click();
+		assert.equal(opened.length, 3);
 		commit.dispatchEvent(new browser.window.MouseEvent("contextmenu", { bubbles: true }));
 		change?.dispatchEvent(new browser.window.MouseEvent("contextmenu", { bubbles: true }));
 		assert.equal(contextMenus.length, 2);

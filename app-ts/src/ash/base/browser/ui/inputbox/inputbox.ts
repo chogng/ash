@@ -1,4 +1,6 @@
+import './inputbox.css';
 import { addDisposableListener, h } from "../../dom.js";
+import type { IHistoryNavigationWidget } from '../../history.js';
 import { DomEmitter, type DOMEventMap } from "../../event.js";
 import {
 	type AriaAutoComplete,
@@ -8,6 +10,7 @@ import {
 	setRole,
 } from "../aria/aria.js";
 import { Emitter, type Event } from "../../../common/event.js";
+import { HistoryNavigator, type IHistory } from '../../../common/history.js';
 import { IME } from "../../../common/ime.js";
 import { Disposable, toDisposable } from "../../../common/lifecycle.js";
 
@@ -215,6 +218,111 @@ export class InputBox extends Disposable {
 
 	private syncReadOnly(): void {
 		this.inputElement.readOnly = this._readOnly || !IME.enabled;
+	}
+}
+
+export interface IHistoryInputOptions extends InputBoxOptions {
+	readonly history?: IHistory<string>;
+	readonly showHistoryHint?: () => boolean;
+}
+
+export class HistoryInputBox extends InputBox implements IHistoryNavigationWidget {
+	private readonly navigator: HistoryNavigator<string>;
+	private draft = '';
+	private navigating = false;
+	private applyingHistory = false;
+
+	constructor(container: HTMLElement, private readonly historyOptions: IHistoryInputOptions = {}) {
+		super(container, historyOptions);
+		this.navigator = this._register(new HistoryNavigator(historyOptions.history, 100));
+		this._register(this.onDidChange(() => {
+			if (!this.applyingHistory) {
+				this.resetNavigation();
+			}
+		}));
+		this._register(this.onDidFocus(() => this.updateHistoryHint()));
+		this._register(this.onDidBlur(() => this.inputElement.removeAttribute('aria-keyshortcuts')));
+		if (historyOptions.history?.onDidChange) {
+			this._register(historyOptions.history.onDidChange(() => this.updateHistoryHint()));
+		}
+	}
+
+	public addToHistory(always = false): void {
+		if (!this.value || (!always && this.navigator.getHistory().at(-1) === this.value)) {
+			return;
+		}
+		this.navigator.add(this.value);
+		this.resetNavigation();
+		this.updateHistoryHint();
+	}
+
+	public prependHistory(values: readonly string[]): void {
+		const current = this.navigator.getHistory();
+		this.navigator.clear();
+		for (const value of [...values, ...current]) {
+			this.navigator.add(value);
+		}
+		this.resetNavigation();
+		this.updateHistoryHint();
+	}
+
+	public getHistory(): string[] { return this.navigator.getHistory(); }
+	public isAtFirstInHistory(): boolean { return this.navigator.isFirst(); }
+	public isAtLastInHistory(): boolean { return this.navigator.isLast(); }
+	public isNowhereInHistory(): boolean { return this.navigator.isNowhere(); }
+
+	public showPreviousValue(): void {
+		if (!this.navigating) {
+			this.draft = this.value;
+			this.navigator.reset();
+		}
+		const previous = this.navigator.previous();
+		if (previous === null) {
+			return;
+		}
+		this.navigating = true;
+		this.applyHistory(previous);
+	}
+
+	public showNextValue(): void {
+		if (!this.navigating) {
+			return;
+		}
+		const next = this.navigator.next();
+		if (next === null) {
+			this.applyHistory(this.draft);
+			this.resetNavigation();
+			return;
+		}
+		this.applyHistory(next);
+	}
+
+	public clearHistory(): void {
+		this.navigator.clear();
+		this.resetNavigation();
+		this.updateHistoryHint();
+	}
+
+	public resetNavigation(): void {
+		this.navigating = false;
+		this.navigator.reset();
+	}
+
+	private applyHistory(value: string): void {
+		this.applyingHistory = true;
+		try {
+			this.value = value;
+		} finally {
+			this.applyingHistory = false;
+		}
+	}
+
+	public updateHistoryHint(): void {
+		if (this.hasFocus() && this.navigator.getHistory().length > 0 && this.historyOptions.showHistoryHint?.()) {
+			this.inputElement.setAttribute('aria-keyshortcuts', 'ArrowUp ArrowDown');
+		} else {
+			this.inputElement.removeAttribute('aria-keyshortcuts');
+		}
 	}
 }
 

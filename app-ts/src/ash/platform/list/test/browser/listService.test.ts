@@ -60,13 +60,15 @@ test("WorkbenchObjectTree derives preview, pinned, and side-by-side open intent"
 	tree.setFocus("readme");
 	tree.element.dispatchEvent(keyboard(dom, "Enter", { metaKey: true }));
 	assertOpen(opens[4], first, true, false, true);
+	tree.element.dispatchEvent(keyboard(dom, " "));
+	assertOpen(opens[5], first, false, true, false);
 
 	tree.setSelection(["source"], keyboard(dom, "ArrowDown"));
-	assertOpen(opens[5], second, false, true, false);
+	assertOpen(opens[6], second, false, true, false);
 
 	await configuration.updateValue(ListConfiguration.openMode, "doubleClick");
 	firstRow.dispatchEvent(mouse(dom, "click", { detail: 1 }));
-	assert.equal(opens.length, 6);
+	assert.equal(opens.length, 7);
 	dom.window.close();
 });
 

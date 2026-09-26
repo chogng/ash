@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { Event } from '../../../../../base/common/event.js';
 import { EditorOption, type IEditorFindOptions } from "../../../../common/config/editorOptions.js";
 import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
@@ -10,6 +11,10 @@ import { TextModel } from "../../../../common/model/textModel.js";
 import { installEditorTestDom } from '../../../../test/browser/editorTestGlobals.js';
 import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
 import { IHoverService } from '../../../../../platform/hover/browser/hoverService.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { showHistoryKeybindingHint } from '../../../../../platform/history/browser/historyWidgetKeybindingHint.js';
+import { type IStorageService, type StorageValue, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 const installedGlobals = installEditorTestDom(browserEnvironment, [
@@ -51,6 +56,46 @@ test("find opens, highlights matches, navigates, and restores focus", () => {
 	assert.equal(fixture.find.getState().isRevealed, false);
 	assert.equal(matchDecorationCount(fixture), 0);
 	assert.equal(fixture.dom.window.document.activeElement, fixture.editorInput);
+});
+
+test('find and replace inputs traverse saved history and restore the draft', async () => {
+	const stored = new Map<string, string>([
+		['workbench.find.history', JSON.stringify(['alpha', 'beta'])],
+		['workbench.replace.history', JSON.stringify(['one', 'two'])],
+	]);
+	using fixture = createFixture('alpha beta', new Position(1, 1), new Position(1, 1), undefined, stored);
+	startFind(fixture, true);
+	const commands = fixture.editor.invokeWithinContext(accessor => accessor.get(ICommandService));
+
+	setInputValue(fixture.searchInput, 'draft');
+	fixture.searchInput.focus();
+	const contextKeys = fixture.editor.invokeWithinContext(accessor => accessor.get(IContextKeyService));
+	const keybindings = fixture.editor.invokeWithinContext(accessor => accessor.get(IKeybindingService));
+	const historyContext = contextKeys.getContext(fixture.searchInput);
+	assert.equal(historyContext.getValue('historyNavigationWidgetFocus'), true);
+	assert.equal(showHistoryKeybindingHint(keybindings, historyContext), true);
+	assert.equal(fixture.searchInput.getAttribute('aria-keyshortcuts'), 'ArrowUp ArrowDown');
+	await commands.executeCommand('history.showPrevious');
+	assert.equal(fixture.searchInput.value, 'beta');
+	await commands.executeCommand('history.showPrevious');
+	assert.equal(fixture.searchInput.value, 'alpha');
+	await commands.executeCommand('history.showNext');
+	await commands.executeCommand('history.showNext');
+	assert.equal(fixture.searchInput.value, 'draft');
+
+	setInputValue(fixture.replaceInput, 'replacement draft');
+	fixture.replaceInput.focus();
+	assert.equal(historyContext.getValue('historyNavigationWidgetFocus'), false);
+	const replaceContext = contextKeys.getContext(fixture.replaceInput);
+	assert.equal(replaceContext.getValue('historyNavigationWidgetFocus'), true);
+	assert.equal(showHistoryKeybindingHint(keybindings, replaceContext), true);
+	assert.equal(fixture.replaceInput.getAttribute('aria-keyshortcuts'), 'ArrowUp ArrowDown');
+	await commands.executeCommand('history.showPrevious');
+	assert.equal(fixture.replaceInput.value, 'two');
+	assert.equal(fixture.searchInput.value, 'draft');
+	setInputValue(fixture.replaceInput, 'edited');
+	await commands.executeCommand('history.showNext');
+	assert.equal(fixture.replaceInput.value, 'edited');
 });
 
 test('find seeds the word at the cursor through the public selection API', () => {
@@ -303,7 +348,7 @@ interface Fixture extends Disposable {
 	readonly find: InstanceType<typeof FindController>;
 }
 
-function createFixture(text: string, anchor = new Position((0) + 1, (0) + 1), active = anchor, options?: IEditorFindOptions): Fixture {
+function createFixture(text: string, anchor = new Position((0) + 1, (0) + 1), active = anchor, options?: IEditorFindOptions, stored?: Map<string, string>): Fixture {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const resources = new DisposableStore();
 	resources.add(toDisposable(() => dom.window.close()));
@@ -323,7 +368,8 @@ function createFixture(text: string, anchor = new Position((0) + 1, (0) + 1), ac
 		const editorInput = requiredElement<HTMLTextAreaElement>(container, ".stanza-editor-input");
 		const keybindings = editor.invokeWithinContext(accessor => accessor.get(IKeybindingService));
 		const hoverService = editor.invokeWithinContext(accessor => accessor.get(IHoverService));
-		const find = resources.add(new FindController(editor, undefined, keybindings, hoverService));
+		const storageService = stored ? new TestHistoryStorageService(stored) : undefined;
+		const find = resources.add(new FindController(editor, storageService, keybindings, hoverService));
 		const findElement = requiredElement<HTMLDivElement>(container, ".stanza-editor-find-widget");
 		const searchInput = requiredElement<HTMLInputElement>(findElement, "input[aria-label=\"Find\"]");
 		const replaceInput = requiredElement<HTMLInputElement>(findElement, "input[aria-label=\"Replace\"]");
@@ -344,6 +390,50 @@ function createFixture(text: string, anchor = new Position((0) + 1, (0) + 1), ac
 		resources.dispose();
 		throw error;
 	}
+}
+
+class TestHistoryStorageService implements IStorageService {
+	public readonly onDidChangeValue = Event.None;
+	public readonly onWillSaveState = Event.None;
+
+	constructor(private readonly values: Map<string, string>) {}
+
+	public get(key: string, _scope: StorageScope, fallbackValue: string): string;
+	public get(key: string, _scope: StorageScope): string | undefined;
+	public get(key: string, _scope: StorageScope, fallbackValue?: string): string | undefined {
+		return this.values.get(key) ?? fallbackValue;
+	}
+
+	public getBoolean(_key: string, _scope: StorageScope, fallbackValue: boolean): boolean;
+	public getBoolean(_key: string, _scope: StorageScope): boolean | undefined;
+	public getBoolean(_key: string, _scope: StorageScope, fallbackValue?: boolean): boolean | undefined {
+		return fallbackValue;
+	}
+
+	public getNumber(_key: string, _scope: StorageScope, fallbackValue: number): number;
+	public getNumber(_key: string, _scope: StorageScope): number | undefined;
+	public getNumber(_key: string, _scope: StorageScope, fallbackValue?: number): number | undefined {
+		return fallbackValue;
+	}
+
+	public store(key: string, value: StorageValue, _scope: StorageScope, _target: StorageTarget): void {
+		if (value === undefined || value === null) return;
+		this.values.set(key, String(value));
+	}
+
+	public remove(key: string, _scope: StorageScope): void {
+		this.values.delete(key);
+	}
+
+	public keys(_scope: StorageScope, _target: StorageTarget): readonly string[] {
+		return [...this.values.keys()];
+	}
+
+	public isNew(_scope: StorageScope): boolean {
+		return false;
+	}
+
+	public async flush(): Promise<void> {}
 }
 
 function startFind(fixture: Fixture, showReplace = false): void {

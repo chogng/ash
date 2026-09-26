@@ -190,6 +190,7 @@ export class CommonFindController extends Disposable {
 		return true;
 	}
 	public replace(): boolean {
+		this.widget?.recordReplaceHistory();
 		if (!this.state.matchesCount || this._editor.getOption(EditorOption.readOnly)) return false;
 		this.model.replace();
 		return true;
@@ -234,7 +235,7 @@ export class FindController extends CommonFindController {
 			closeFindWidget: () => this.closeFindWidget(),
 			toggleSearchScope: () => this.toggleSearchScope(),
 			isSearchScopeAvailable: () => this.hasSelectionScope,
-		}, this.state, this.model, hoverService,
+		}, this.state, this.model, hoverService, keybindingService,
 			storageService && findOptions.history !== 'never' ? FindWidgetSearchHistory.getOrCreate(storageService) : undefined,
 			storageService && findOptions.replaceHistory !== 'never' ? ReplaceWidgetHistory.getOrCreate(storageService) : undefined));
 		this.optionsWidget = this._register(new FindOptionsWidget(editor, this.state, keybindingService, hoverService));

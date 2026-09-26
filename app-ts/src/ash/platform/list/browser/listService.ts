@@ -1,15 +1,17 @@
 import { AsyncDataTree, type AsyncDataTreeOptions } from "../../../base/browser/ui/tree/asyncDataTree.js";
+import { StandardMouseEvent } from "../../../base/browser/mouseEvent.js";
 import { ObjectTree, type ObjectTreeAcceptEvent, type ObjectTreeOptions, type ObjectTreePointerEvent, type ObjectTreeSelectionChangeEvent } from "../../../base/browser/ui/tree/objectTree.js";
 import type { AsyncTreeDataSource } from "../../../base/browser/ui/tree/tree.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable } from "../../../base/common/lifecycle.js";
 import type { IConfigurationService } from "../../configuration/common/configuration.js";
-import type { EditorActivationOptions } from "../../editor/common/editor.js";
+import type { IEditorOptions } from "../../editor/common/editor.js";
+import { toOpenEditorOptions, type IOpenEditorOptions } from "../../editor/browser/editor.js";
 import { ListConfiguration, type ListOpenMode } from "../common/listConfiguration.js";
 
 export interface ResourceOpenEvent<T> {
 	readonly element: T;
-	readonly editorOptions: Required<Pick<EditorActivationOptions, "pinned" | "preserveFocus">>;
+	readonly editorOptions: IEditorOptions;
 	readonly sideBySide: boolean;
 	readonly browserEvent: MouseEvent | KeyboardEvent;
 }
@@ -75,33 +77,32 @@ class TreeResourceNavigator<T> extends Disposable {
 
 	private onPointer(event: ObjectTreePointerEvent<T>): void {
 		if (!this.shouldOpenOnSingleClick() || event.browserEvent.detail === 2) return;
-		this.open(event.element, { pinned: event.browserEvent.button === 1, preserveFocus: true }, hasSideBySideModifier(event.browserEvent), event.browserEvent);
+		this.open(event.element, toOpenEditorOptions(new StandardMouseEvent(event.browserEvent)), event.browserEvent);
 	}
 
 	private onDoubleClick(event: ObjectTreePointerEvent<T>): void {
-		this.open(event.element, { pinned: true, preserveFocus: false }, hasSideBySideModifier(event.browserEvent), event.browserEvent);
+		this.open(event.element, toOpenEditorOptions(new StandardMouseEvent(event.browserEvent), true), event.browserEvent);
 	}
 
 	private onAccept(event: ObjectTreeAcceptEvent<T>): void {
-		this.open(event.element, { pinned: true, preserveFocus: false }, hasSideBySideModifier(event.browserEvent), event.browserEvent);
+		this.open(event.element, {
+			editorOptions: { pinned: event.browserEvent.key !== " ", preserveFocus: event.browserEvent.key === " " },
+			openToSide: event.browserEvent.ctrlKey || event.browserEvent.metaKey || event.browserEvent.altKey,
+		}, event.browserEvent);
 	}
 
 	private onSelection(event: ObjectTreeSelectionChangeEvent<T>): void {
 		if (!isKeyboardEvent(event.browserEvent) || event.elements.length !== 1 || event.browserEvent.key === "Enter" || event.browserEvent.key === " ") return;
-		this.open(event.elements[0]!, { pinned: false, preserveFocus: true }, false, event.browserEvent);
+		this.open(event.elements[0]!, { editorOptions: { pinned: false, preserveFocus: true }, openToSide: false }, event.browserEvent);
 	}
 
 	private shouldOpenOnSingleClick(): boolean {
 		return this.openOnSingleClick ?? this.configurationService.getValue<ListOpenMode>(ListConfiguration.openMode) === "singleClick";
 	}
 
-	private open(element: T, editorOptions: Required<Pick<EditorActivationOptions, "pinned" | "preserveFocus">>, sideBySide: boolean, browserEvent: MouseEvent | KeyboardEvent): void {
-		this._onDidOpen.fire(Object.freeze({ element, editorOptions: Object.freeze(editorOptions), sideBySide, browserEvent }));
+	private open(element: T, options: IOpenEditorOptions, browserEvent: MouseEvent | KeyboardEvent): void {
+		this._onDidOpen.fire(Object.freeze({ element, editorOptions: Object.freeze(options.editorOptions), sideBySide: options.openToSide, browserEvent }));
 	}
-}
-
-function hasSideBySideModifier(event: MouseEvent | KeyboardEvent): boolean {
-	return event.ctrlKey || event.metaKey || event.altKey;
 }
 
 function isKeyboardEvent(event: UIEvent | undefined): event is KeyboardEvent {
