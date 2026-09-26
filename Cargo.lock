@@ -9341,7 +9341,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d8fae84b431384b68627d0f9b3b1245fcf9f46f6c0e3dc902e9dce64edd1967"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.45.0",
 ]
 
 [[package]]
@@ -10056,7 +10056,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22505a5c94da8e3b7c2996394d1c933236c4d743e81a410bcca4e6989fc066a4"
 dependencies = [
  "bytes",
- "heck 0.5.0",
+ "heck 0.4.1",
  "itertools 0.12.1",
  "log",
  "multimap",
@@ -10076,7 +10076,7 @@ version = "0.14.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "03da047801ff44bb6a4d407d4860c05fd70bb81714e6b2f3812603d5b145b042"
 dependencies = [
- "heck 0.5.0",
+ "heck 0.4.1",
  "itertools 0.14.0",
  "log",
  "multimap",
@@ -11887,7 +11887,7 @@ version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1c97747dbf44bb1ca44a561ece23508e99cb592e862f22222dcf42f51d1e451"
 dependencies = [
- "heck 0.5.0",
+ "heck 0.4.1",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
@@ -12462,7 +12462,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.4",
  "windows-sys 0.61.2",
@@ -14336,8 +14336,9 @@ dependencies = [
 
 [[package]]
 name = "webrtc-sys"
-version = "0.3.46"
-source = "git+https://github.com/livekit/rust-sdks?rev=bbcb62cc4973acd51eeb69f39ad0fc19032f7c49#bbcb62cc4973acd51eeb69f39ad0fc19032f7c49"
+version = "0.3.47"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "434f9b6ba0e4609ff2729978e9e48318249625cd96e56ddc44016b2d18d47997"
 dependencies = [
  "cc",
  "cxx",
@@ -14351,7 +14352,8 @@ dependencies = [
 [[package]]
 name = "webrtc-sys-build"
 version = "0.3.19"
-source = "git+https://github.com/livekit/rust-sdks?rev=bbcb62cc4973acd51eeb69f39ad0fc19032f7c49#bbcb62cc4973acd51eeb69f39ad0fc19032f7c49"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0cd4f418e16f4b7ba028e6b5c70e4f532c7d2b5ca39726d42b699f3e4591ed5c"
 dependencies = [
  "anyhow",
  "fs2",
