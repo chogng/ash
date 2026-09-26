@@ -39,7 +39,24 @@ test('Chat input explicitly opens slash suggestions from the keyboard', async ({
 	await page.keyboard.press('Home');
 	for (let index = 0; index < 3; index++) await page.keyboard.press('ArrowRight');
 	await page.keyboard.press('Control+Space');
-	await expect(editor.locator('.stanza-editor-completion-label')).toHaveText(['/history']);
+	await expect(editor.locator('.stanza-editor-completion-label')).toHaveText(['/history', '/config']);
+	await expect(input).toBeFocused();
+});
+
+test('Chat input returns to the empty message state when a slash command is deleted', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
+	const page = workbench.page;
+	await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	const editor = page.locator('.ash-chat-input-editor');
+	const input = editor.locator('.stanza-editor-input');
+	await input.focus();
+	await page.keyboard.insertText('/x');
+	await expect(editor.locator('.stanza-editor-completion.visible')).toHaveCount(0);
+	await page.keyboard.press('Backspace');
+	await expect(editor.locator('.stanza-editor-line-text')).toHaveText('/');
+	await page.keyboard.press('Backspace');
+	await expect(editor.locator('.stanza-editor-completion.visible')).toHaveCount(0);
+	await expect(editor.locator('.stanza-editor-placeholder-text')).toBeVisible();
 	await expect(input).toBeFocused();
 });
 

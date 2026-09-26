@@ -8,8 +8,8 @@ export const rendererOutput: Rolldown.OutputOptions = {
 			name: 'shared',
 			test: () => true,
 			entriesAware: true,
-			// Rolldown measures modules before minification. Current builds yield chunks below 500 kB.
-			maxSize: 800_000,
+			// Rolldown splits before minification; buildMetricsPlugin checks final emitted bytes.
+			maxSize: 500_000,
 		}],
 	},
 };

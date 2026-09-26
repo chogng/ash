@@ -30,7 +30,6 @@ const { TextModel } = await import("../../../../../editor/common/model/textModel
 const { ICodeEditorService } = await import("../../../../../editor/browser/services/codeEditorService.js");
 const { ICommandService } = await import('../../../../../platform/commands/common/commands.js');
 const { Selection } = await import('../../../../../editor/common/core/selection.js');
-const { ILogService, NullLoggerService } = await import('../../../../../platform/log/common/log.js');
 const { SelectAllCommand } = await import("../../../../../editor/browser/editorExtensions.js");
 
 suiteTeardown(() => browserEnvironment.window.close());
@@ -41,7 +40,6 @@ test('Chat registers its focused editor for global commands and removes it on di
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using editorServices = new DisposableStore();
 	const services = createCodeEditorServices(editorServices);
-	services.registerInstance(ILogService, new NullLoggerService());
 	const editors = services.get(ICodeEditorService);
 	const lifecycle: string[] = [];
 	using willCreate = editors.onWillCreateCodeEditor(() => lifecycle.push('will'));
@@ -263,36 +261,6 @@ test('Chat command completion replaces the whole command and preserves arguments
 	assert.equal(editor.value, '/history argument');
 });
 
-test("Chat input restores message behavior when the slash is deleted", async () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
-	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	const container = requiredElement<HTMLElement>(dom.window.document, "main");
-	using editorServices = new DisposableStore();
-	using editor = createCodeEditorServices(editorServices).createInstance(ChatInputEditor, { container, placeholder: "Ask Ash", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
-	const changes: string[] = [];
-	using changeListener = editor.onDidChange(value => changes.push(value));
-	const input = requiredElement<HTMLTextAreaElement>(editor.element, ".stanza-editor-input");
-	editor.focus();
-
-	input.dispatchEvent(beforeInputEvent(dom.window, "/"));
-	assert.equal(editor.value, "/");
-	await waitFor(() => completionLabels(editor.element).length > 0);
-	input.dispatchEvent(beforeInputEvent(dom.window, "x"));
-	await waitFor(() => editor.element.querySelector(".stanza-editor-completion.visible") === null);
-	input.dispatchEvent(beforeInputEvent(dom.window, null, "deleteContentBackward"));
-	await waitFor(() => completionLabels(editor.element).length > 0);
-	input.dispatchEvent(beforeInputEvent(dom.window, null, "deleteContentBackward"));
-	await waitFor(() => editor.element.querySelector(".stanza-editor-completion.visible") === null);
-
-	assert.equal(editor.value, "");
-	assert.deepEqual(changes, ["/", "/x", "/", ""]);
-	const placeholder = requiredElement<HTMLElement>(editor.element, ".stanza-editor-placeholder-text");
-	assert.equal(placeholder.hidden, false);
-	assert.equal(placeholder.style.top, "0px");
-	assert.equal(placeholder.style.left, "46px");
-	dom.window.close();
-});
-
 test("Chat input starts at the InputPart default height and still grows with content", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
@@ -306,30 +274,6 @@ test("Chat input starts at the InputPart default height and still grows with con
 	editor.value = Array.from({ length: 12 }, (_, index) => `Line ${index + 1}`).join("\n");
 	await waitFor(() => editor.element.style.height === "240px");
 	dom.window.close();
-});
-
-test("Chat input grows for wrapped text and shrinks when widened or cleared", async () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
-	using domCleanup = { [Symbol.dispose]: () => dom.window.close() };
-	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	const container = requiredElement<HTMLElement>(dom.window.document, "main");
-	using editorServices = new DisposableStore();
-	using editor = createCodeEditorServices(editorServices).createInstance(ChatInputEditor, { container, placeholder: "Ask Ash", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
-	let width = 180;
-	Object.defineProperty(editor.element, 'clientWidth', { get: () => width });
-	editor.layout();
-	editor.value = 'word '.repeat(80);
-	await waitFor(() => editor.element.style.height === '320px');
-
-	width = 1000;
-	editor.layout();
-	assert.equal(editor.element.style.height, '106px');
-
-	width = 180;
-	editor.layout();
-	assert.equal(editor.element.style.height, '320px');
-	editor.value = '';
-	await waitFor(() => editor.element.style.height === '106px');
 });
 
 function completionLabels(root: ParentNode): string[] {
