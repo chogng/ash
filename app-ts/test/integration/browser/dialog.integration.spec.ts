@@ -114,3 +114,15 @@ test('confirmation returns the checkbox state after the primary action', async (
 		button: 'primary', checkboxChecked: true, values: undefined,
 	});
 });
+
+test('a failed Command Palette action opens an error dialog', async ({ page }) => {
+	await page.goto('/dialog.html');
+	await page.evaluate(() => window.ashDialogIntegration.showCommandFailure());
+	const dialog = page.getByRole('dialog', { name: 'Error' });
+	await expect(dialog).toBeVisible();
+	await expect(dialog.locator('.ash-dialog-message')).toHaveText("Command 'Failing command' resulted in an error");
+	await expect(dialog.locator('.ash-dialog-detail')).toHaveText('The command could not finish.');
+	await expect(dialog.getByRole('button', { name: 'OK' })).toBeFocused();
+	await dialog.getByRole('button', { name: 'OK' }).click();
+	await expect(dialog).toHaveCount(0);
+});

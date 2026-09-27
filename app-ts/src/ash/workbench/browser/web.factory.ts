@@ -13,8 +13,8 @@ import {
 	workspaceFromIdentifier,
 } from "../../platform/workspace/common/workspace.js";
 import {
-	createBrowserWorkbenchContextMenuService,
-} from "./workbenchInteractionServices.js";
+	createBrowserContextMenuService,
+} from "../../platform/contextview/browser/contextMenuService.js";
 import {
 	createBrowserTitlebarPart,
 } from "./parts/titlebar/titlebarPart.js";
@@ -46,7 +46,7 @@ export function createWebWorkbench(
 		container: options.container,
 		lifecycleService: new BrowserLifecycleService({ ownerWindow, onError: onUnexpectedError }),
 		workspace: workspaceFromIdentifier(options.workspace ?? getEmptyWorkspaceIdentifier()),
-		createContextMenuService: createBrowserWorkbenchContextMenuService,
+		createContextMenuService: createBrowserContextMenuService,
 		createTitlebarPart: createBrowserTitlebarPart,
 		switchWorkbenchMode: options.switchWorkbenchMode ?? (targetModeId => switchBrowserWorkbenchMode(window, targetModeId)),
 	});

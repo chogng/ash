@@ -5,6 +5,7 @@ import {
 	StandardKeyboardEvent,
 } from "../../../../base/browser/keyboardEvent.js";
 import { Emitter } from "../../../../base/common/event.js";
+import { getErrorMessage } from "../../../../base/common/errors.js";
 import { IME } from "../../../../base/common/ime.js";
 import {
 	getKeybindingLabel,
@@ -45,6 +46,7 @@ import {
 import type {
 	IKeyboardLayoutService,
 } from "../../../../platform/keyboardLayout/common/keyboardLayout.js";
+import { INotificationService } from "../../../../platform/notification/common/notification.js";
 import type {
 	IStatusbarEntryAccessor,
 	IStatusbarService,
@@ -62,7 +64,6 @@ export interface WorkbenchKeybindingServiceOptions {
 	readonly statusbarService?: IStatusbarService;
 	readonly registry?: KeybindingRegistry;
 	readonly chordTimeoutMs?: number;
-	readonly onCommandError?: (error: unknown, command: CommandId) => void;
 }
 
 /**
@@ -81,7 +82,6 @@ export class WorkbenchKeybindingService
 	private readonly statusbarService: IStatusbarService | undefined;
 	private readonly resolver: KeybindingResolver;
 	private readonly chordTimeoutMs: number;
-	private readonly onCommandError: (error: unknown, command: CommandId) => void;
 	private readonly _onDidUpdateKeybindings = this._register(new Emitter<void>());
 	private readonly _onDidLog = this._register(new Emitter<string>());
 	private readonly chordTimeout = this._register(new MutableDisposable<IDisposable>());
@@ -98,7 +98,10 @@ export class WorkbenchKeybindingService
 	readonly onDidUpdateKeybindings = this._onDidUpdateKeybindings.event;
 	readonly onDidLog = this._onDidLog.event;
 
-	constructor(options: WorkbenchKeybindingServiceOptions) {
+	constructor(
+		options: WorkbenchKeybindingServiceOptions,
+		@INotificationService private readonly notificationService: INotificationService,
+	) {
 		super();
 		this.ownerDocument = options.ownerDocument;
 		const ownerWindow = options.ownerDocument.defaultView;
@@ -115,10 +118,6 @@ export class WorkbenchKeybindingService
 				.resolveKeybinding(keybinding),
 		});
 		this.chordTimeoutMs = options.chordTimeoutMs ?? 5_000;
-		this.onCommandError = options.onCommandError ??
-			((error, command) => {
-				console.error(`Keybinding command failed: ${command}`, error);
-			});
 		this.inChordModeKey = KeybindingContextKeys.inChordMode.bindTo(
 			this.contextKeyService,
 		);
@@ -346,9 +345,7 @@ export class WorkbenchKeybindingService
 				event.stop();
 				void this.commandService
 					.executeCommand(result.command, ...result.args)
-					.catch((error: unknown) =>
-						this.onCommandError(error, result.command)
-					);
+					.catch((error: unknown) => this.notificationService.warning(getErrorMessage(error)));
 				return true;
 
 			case KeybindingResolveKind.Blocked:

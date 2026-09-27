@@ -27,6 +27,8 @@ import {
 import {
 	ServiceContainer,
 } from "../../../../../platform/instantiation/common/instantiation.js";
+import { BrowserNotificationService } from "../../../../../platform/notification/browser/notificationService.js";
+import { INotificationService, NotificationSeverity } from "../../../../../platform/notification/common/notification.js";
 import {
 	KeybindingResolveKind,
 	KeybindingResolver,
@@ -168,7 +170,7 @@ test("browser service executes chords and restores IME state", async () => {
 		keyboardLayoutService: keyboardLayout,
 		statusbarService: statusbar,
 		registry,
-	}));
+	}, registrations.add(new BrowserNotificationService(dom.window.document.body))));
 
 	IME.enable();
 	const first = keyboardEvent({ code: "KeyK", key: "k" });
@@ -226,7 +228,7 @@ test("browser service dispatches Ctrl+Shift+P with a shifted key value", async (
 		contextKeyService: contexts,
 		keyboardLayoutService: keyboardLayout,
 		registry,
-	}));
+	}, registrations.add(new BrowserNotificationService(dom.window.document.body))));
 	const shortcut = keyboardEvent({
 		code: "KeyP",
 		key: "P",
@@ -236,6 +238,41 @@ test("browser service dispatches Ctrl+Shift+P with a shifted key value", async (
 	assert.equal(service.dispatchEvent(shortcut.event), true);
 	await executed;
 	assert.equal(shortcut.prevented, true);
+});
+
+test('failed keyboard command appears as a warning notification', async () => {
+	using resources = new DisposableStore();
+	const dom = new JSDOM('<!doctype html><body></body>');
+	resources.add(toDisposable(() => dom.window.close()));
+	const registry = new KeybindingRegistry();
+	const commands = new CommandRegistry();
+	resources.add(commands.register('test.failedShortcut', () => { throw new Error('Shortcut failed'); }));
+	resources.add(registry.registerKeybindingRule({
+		command: 'test.failedShortcut',
+		keybinding: Keybinding.single(logicalKey('p', { ctrlKey: true })),
+	}));
+	const contexts = resources.add(new ContextKeyService());
+	const keyboardLayout = resources.add(new BrowserKeyboardLayoutService({
+		navigator: fakeNavigator(),
+		operatingSystem: OperatingSystem.Windows,
+	}));
+	const notifications = resources.add(new BrowserNotificationService(dom.window.document.body));
+	const services = resources.add(new ServiceContainer());
+	services.registerInstance(INotificationService, notifications);
+	const keybindings = resources.add(services.createInstance(WorkbenchKeybindingService, {
+		ownerDocument: dom.window.document,
+		commandService: resources.add(new CommandService(services, commands)),
+		contextKeyService: contexts,
+		keyboardLayoutService: keyboardLayout,
+		registry,
+	}));
+
+	assert.equal(keybindings.dispatchEvent(keyboardEvent().event), true);
+	await Promise.resolve();
+	assert.deepEqual(notifications.getNotifications().map(item => ({ severity: item.severity, message: item.message })), [
+		{ severity: NotificationSeverity.Warning, message: 'Shortcut failed' },
+	]);
+	assert.equal(dom.window.document.querySelector('.ash-notification')?.getAttribute('role'), 'status');
 });
 
 test("keyboard shortcut troubleshooting traces native, mapped, and resolved events", async () => {
@@ -262,7 +299,7 @@ test("keyboard shortcut troubleshooting traces native, mapped, and resolved even
 		contextKeyService: contexts,
 		keyboardLayoutService: keyboardLayout,
 		registry,
-	}));
+	}, registrations.add(new BrowserNotificationService(dom.window.document.body))));
 	const messages: string[] = [];
 	registrations.add(service.onDidLog(message => messages.push(message)));
 
@@ -322,7 +359,7 @@ test("single modifier bindings dispatch on keyup only when the modifier was unus
 		contextKeyService: contexts,
 		keyboardLayoutService: keyboardLayout,
 		registry,
-	}));
+	}, registrations.add(new BrowserNotificationService(dom.window.document.body))));
 
 	const firstDown = keyboardEvent({ key: "Control", code: "ControlLeft", keyCode: 17, ctrlKey: true });
 	const firstUp = keyboardEvent({ key: "Control", code: "ControlLeft", keyCode: 17, ctrlKey: false });

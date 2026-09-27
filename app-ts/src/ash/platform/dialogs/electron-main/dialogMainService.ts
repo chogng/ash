@@ -2,9 +2,10 @@ import type { BrowserWindow, MessageBoxOptions, MessageBoxReturnValue } from 'el
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { DialogResult, type IDialogOutcome } from '../common/dialogs.js';
 import type { NativeDialogOperation } from '../../native/common/nativeHost.js';
+import { messageBoxOptions, messageBoxOutcome } from './dialogMainUtils.js';
 
-/** Owns the in-flight system dialogs requested by one renderer window. */
-export class WindowDialogHost extends Disposable {
+/** Owns system dialogs and their cancellation for one renderer window. */
+export class DialogMainService extends Disposable {
 	private readonly active = new Map<number, AbortController>();
 
 	constructor(
@@ -12,7 +13,7 @@ export class WindowDialogHost extends Disposable {
 		private readonly showMessageBox: (window: BrowserWindow, options: MessageBoxOptions) => Promise<MessageBoxReturnValue>,
 	) { super(); }
 
-	public async perform(operation: NativeDialogOperation): Promise<IDialogOutcome | void> {
+	async perform(operation: NativeDialogOperation): Promise<IDialogOutcome | void> {
 		this.assertNotDisposed();
 		if (operation.kind === 'cancel') {
 			this.active.get(operation.id)?.abort();
@@ -23,28 +24,9 @@ export class WindowDialogHost extends Disposable {
 		if (request.kind === 'input') throw new TypeError('Input dialogs are handled in the renderer');
 		const controller = new AbortController();
 		this.active.set(operation.id, controller);
-		const buttons = request.kind === 'message'
-			? [request.primaryButton ?? 'OK']
-			: request.kind === 'confirmation'
-				? [request.primaryButton ?? 'Confirm', request.cancelButton ?? 'Cancel']
-				: [request.primaryButton, request.secondaryButton, request.cancelButton ?? 'Cancel'];
 		try {
-			const result = await this.showMessageBox(this.window, {
-				type: request.kind === 'message' ? request.severity : 'question',
-				title: request.title,
-				message: request.message,
-				detail: request.detail,
-				buttons,
-				checkboxLabel: request.checkbox?.label,
-				checkboxChecked: request.checkbox?.checked,
-				cancelId: buttons.length - 1,
-				defaultId: 0,
-				signal: controller.signal,
-			});
-			if (controller.signal.aborted || result.response === buttons.length - 1 && request.kind !== 'message') {
-				return { button: DialogResult.Cancel, checkboxChecked: result.checkboxChecked };
-			}
-			return { button: result.response === 0 ? DialogResult.Primary : DialogResult.Secondary, checkboxChecked: result.checkboxChecked };
+			const result = await this.showMessageBox(this.window, messageBoxOptions(request, controller.signal));
+			return controller.signal.aborted ? { button: DialogResult.Cancel } : messageBoxOutcome(request, result);
 		} catch (error) {
 			if (controller.signal.aborted) return { button: DialogResult.Cancel };
 			throw error;

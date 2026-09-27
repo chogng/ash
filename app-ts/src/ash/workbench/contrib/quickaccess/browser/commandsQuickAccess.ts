@@ -1,14 +1,16 @@
 import { getKeybindingLabel } from '../../../../base/common/keybindingLabels.js';
+import { getErrorMessage, isCancellationError, onUnexpectedError } from '../../../../base/common/errors.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { Action2, IMenuService, MenuId, MenuItemAction, MenusRegistry } from '../../../../platform/actions/common/actions.js';
 import { localizedString } from '../../../../platform/action/common/action.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { DialogSeverity, IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { IQuickAccessController, type IQuickAccessProvider } from '../../../../platform/quickinput/common/quickAccess.js';
 import type { IQuickPick, IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
-import { localize2 } from '../../../../nls.js';
+import { localize, localize2 } from '../../../../nls.js';
 import { ShowAllCommandsCommandId } from '../../../browser/quickaccess.js';
 
 interface ICommandQuickPickItem extends IQuickPickItem {
@@ -20,6 +22,7 @@ export class CommandsQuickAccessProvider implements IQuickAccessProvider {
 		@ICommandService private readonly commandService: ICommandService,
 		@IMenuService private readonly menuService: IMenuService,
 		@IKeybindingService private readonly keybindingService: IKeybindingService,
+		@IDialogService private readonly dialogService: IDialogService,
 	) {}
 
 	provide(picker: IQuickPick<IQuickPickItem>): DisposableStore {
@@ -43,9 +46,15 @@ export class CommandsQuickAccessProvider implements IQuickAccessProvider {
 		disposables.add(this.keybindingService.onDidUpdateKeybindings(updateItems));
 		disposables.add(picker.onDidAccept(item => {
 			picker.hide();
-			const commandId = (item as ICommandQuickPickItem).commandId;
+			const command = item as ICommandQuickPickItem;
+			const commandId = command.commandId;
 			void this.commandService.executeCommand(commandId).catch((error: unknown) => {
-				console.error(`Command Palette command failed: ${commandId}`, error);
+				if (isCancellationError(error)) return;
+				void this.dialogService.showMessage({
+					severity: DialogSeverity.Error,
+					message: localize('quickAccess.commandFailed', "Command '{0}' resulted in an error", command.label),
+					detail: getErrorMessage(error),
+				}).catch(onUnexpectedError);
 			});
 		}));
 		updateItems();

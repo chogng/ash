@@ -1,6 +1,6 @@
 import { DialogResult, type DialogRequest, type IDialogHandler, type IDialogOutcome } from '../../../../platform/dialogs/common/dialogs.js';
 import type { INativeHostApi } from '../../../../platform/native/common/nativeHost.js';
-import { BrowserDialogHandler } from '../../../browser/parts/dialogs/dialogHandler.js';
+import { BrowserDialogHandler } from '../../../browser/parts/dialogs/dialog.js';
 
 /** Presents the workbench's queued dialogs in their owning Electron window. */
 export class NativeDialogHandler implements IDialogHandler {

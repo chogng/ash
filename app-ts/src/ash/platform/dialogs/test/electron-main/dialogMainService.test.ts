@@ -2,12 +2,12 @@ import assert from 'node:assert/strict';
 import type { BrowserWindow, MessageBoxOptions, MessageBoxReturnValue } from 'electron';
 import { test } from 'mocha';
 import { DialogResult, DialogSeverity } from '../../common/dialogs.js';
-import { WindowDialogHost } from '../../electron-main/windowDialogHost.js';
+import { DialogMainService } from '../../electron-main/dialogMainService.js';
 
-test('window dialog host maps message, confirmation, and prompt results', async () => {
+test('dialog main service maps message, confirmation, and prompt results', async () => {
 	const options: MessageBoxOptions[] = [];
 	const responses = [0, 1, 1, 2];
-	using host = new WindowDialogHost({} as BrowserWindow, async (_window, value) => {
+	using host = new DialogMainService({} as BrowserWindow, async (_window, value) => {
 		options.push(value);
 		return { response: responses.shift()!, checkboxChecked: true };
 	});
@@ -24,13 +24,13 @@ test('window dialog host maps message, confirmation, and prompt results', async 
 	});
 });
 
-test('window dialog host returns cancellation when a request or window is aborted', async () => {
+test('dialog main service returns cancellation when a request or window is aborted', async () => {
 	let requested!: MessageBoxOptions;
 	const showMessageBox = async (_window: BrowserWindow, options: MessageBoxOptions): Promise<MessageBoxReturnValue> => {
 		requested = options;
 		return new Promise((_resolve, reject) => options.signal!.addEventListener('abort', () => reject(new Error('aborted')), { once: true }));
 	};
-	const host = new WindowDialogHost({} as BrowserWindow, showMessageBox);
+	const host = new DialogMainService({} as BrowserWindow, showMessageBox);
 	const first = host.perform({ kind: 'show', id: 1, request: { kind: 'message', severity: DialogSeverity.Error, message: 'Error' } });
 	await host.perform({ kind: 'cancel', id: 1 });
 	assert.equal(requested.signal?.aborted, true);

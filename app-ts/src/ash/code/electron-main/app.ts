@@ -45,7 +45,7 @@ import { clearElectronApplicationMenu, createElectronMenubarHost } from "../../p
 import { nativeHostIpcRoutes, windowAppearanceIpcRoutes } from "../../platform/native/electron-main/nativeHostIpc.js";
 import { UpdateMainService, updateIpcRoutes } from '../../platform/update/electron-main/updateMainService.js';
 import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL } from "../../platform/native/common/nativeHost.js";
-import { WindowDialogHost } from '../../platform/dialogs/electron-main/windowDialogHost.js';
+import { DialogMainService } from '../../platform/dialogs/electron-main/dialogMainService.js';
 import type { DialogRequest } from '../../platform/dialogs/common/dialogs.js';
 import { RETURN_TO_WORKBENCH_CHANNEL, validateReturnToWorkbench } from '../../sessions/common/windowNavigation.js';
 import { GlobalKeybindingsMainService } from '../../platform/globalKeybindings/electron-main/globalKeybindingsMainService.js';
@@ -722,7 +722,7 @@ export class AshApplication extends Disposable {
 			}
 		};
 		record.openWorkspace = (root) => transitionToFolder(root, true);
-		const windowDialogs = windowDisposables.add(new WindowDialogHost(window, (target, options) => dialog.showMessageBox(target, options)));
+		const windowDialogs = windowDisposables.add(new DialogMainService(window, (target, options) => dialog.showMessageBox(target, options)));
 		const windowControlsOverlay = new WindowControlsOverlay(colors => {
 			if (process.platform === 'win32' || process.platform === 'linux') window.setTitleBarOverlay(colors);
 		});

@@ -8,7 +8,7 @@ import { invoke } from '../../../../platform/ipc/electron-browser/rendererIpc.js
 import { bindColorTheme } from '../../../../platform/theme/browser/themeStyles.js';
 import { darkColorTheme, lightColorTheme } from '../../../../platform/theme/common/colorTheme.js';
 import { defaultProductIconTheme, type IThemeService } from '../../../../platform/theme/common/themeService.js';
-import { BrowserDialogHandler } from '../../../browser/parts/dialogs/dialogHandler.js';
+import { BrowserDialogHandler } from '../../../browser/parts/dialogs/dialog.js';
 
 /** Presents directory authorization in the window before or after Workbench startup. */
 export class DirectoryPermissionDialog extends Disposable implements IWorkspaceTrustRequestService {

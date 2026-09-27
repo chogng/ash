@@ -1,7 +1,6 @@
 import { invoke, subscribe } from "../../ipc/electron-browser/rendererIpc.js";
 import {
 	NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL,
-	NATIVE_HOST_DIALOG_CHANNEL,
 	NATIVE_HOST_GET_ACCESSIBILITY_SUPPORT_CHANNEL,
 	NATIVE_HOST_OPEN_WORKSPACE_CHANNEL,
 	NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL,
@@ -21,24 +20,11 @@ import {
 	WINDOW_ZOOM_CHANGED_CHANNEL,
 	type IWorkbenchWindowInfo,
 } from '../../window/common/window.js';
-import { DialogResult } from '../../dialogs/common/dialogs.js';
-
-let nextDialogId = 0;
+import { showNativeDialog } from '../../dialogs/electron-browser/dialog.js';
 
 export function createNativeHostApi(): INativeHostApi {
 	return {
-		async showNativeDialog(request, signal) {
-			if (signal.aborted) return { button: DialogResult.Cancel };
-			const id = ++nextDialogId;
-			const abort = (): void => { void invoke<void>(NATIVE_HOST_DIALOG_CHANNEL, { kind: 'cancel', id }).catch(error => console.error('Failed to cancel system dialog', error)); };
-			signal.addEventListener('abort', abort, { once: true });
-			try {
-				const result = await invoke<{ button: DialogResult; checkboxChecked?: boolean }>(NATIVE_HOST_DIALOG_CHANNEL, { kind: 'show', id, request });
-				return signal.aborted ? { button: DialogResult.Cancel } : result;
-			} finally {
-				signal.removeEventListener('abort', abort);
-			}
-		},
+		showNativeDialog,
 		installShellCommand: () => invoke<string>(NATIVE_HOST_SHELL_COMMAND_CHANNEL, 'install'),
 		uninstallShellCommand: () => invoke<string>(NATIVE_HOST_SHELL_COMMAND_CHANNEL, 'uninstall'),
 		listWindows: () => invoke<readonly IWorkbenchWindowInfo[]>(WINDOW_OPERATION_CHANNEL, { kind: 'list' }),

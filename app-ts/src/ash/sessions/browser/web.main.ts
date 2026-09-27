@@ -4,7 +4,7 @@ import { onUnexpectedError } from "../../base/common/errors.js";
 import { DisposableStore, type IDisposable } from "../../base/common/lifecycle.js";
 import { createDisconnectedRendererApi } from "../../platform/app-server/browser/rendererApi.js";
 import { BrowserLifecycleService } from '../../workbench/services/lifecycle/browser/lifecycleService.js';
-import { createBrowserWorkbenchContextMenuService } from "../../workbench/browser/workbenchInteractionServices.js";
+import { createBrowserContextMenuService } from "../../platform/contextview/browser/contextMenuService.js";
 import type { WorkbenchModeId } from "../../workbench/common/workbenchMode.js";
 import type { SessionsProfile } from "../common/sessionsProfile.js";
 import { Workbench } from "./workbench.js";
@@ -27,7 +27,7 @@ export function startBrowserSessions(modeId: WorkbenchModeId, profile: SessionsP
 			const location = container.ownerDocument.location;
 			location.assign(new URL(profile.workbenchRelativePath, location.href).href);
 		},
-		createContextMenuService: createBrowserWorkbenchContextMenuService,
+		createContextMenuService: createBrowserContextMenuService,
 		container,
 	}));
 	sessions.add(addDisposableListener(window, "pagehide", () => {

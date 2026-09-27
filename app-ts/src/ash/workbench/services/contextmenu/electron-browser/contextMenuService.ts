@@ -1,6 +1,6 @@
 import { isMacintosh } from "../../../../base/common/platform.js";
 import { BrowserContextMenuService } from "../../../../platform/contextview/browser/contextMenuService.js";
-import type { WorkbenchContextMenuServiceOptions } from "../../../browser/workbenchInteractionServices.js";
+import type { ContextMenuServiceOptions } from "../../../../platform/contextview/browser/contextMenuService.js";
 import { isNode } from "../../../../base/browser/dom.js";
 import { Emitter } from "../../../../base/common/event.js";
 import {
@@ -238,7 +238,7 @@ function toErrorMessage(error: unknown): string {
 
 /** Creates the Electron workbench context-menu service. */
 export function createElectronWorkbenchContextMenuService(
-	options: WorkbenchContextMenuServiceOptions,
+	options: ContextMenuServiceOptions,
 	nativeApi: INativeContextMenuApi,
 ): NativeContextMenuService | BrowserContextMenuService {
 	return isMacintosh

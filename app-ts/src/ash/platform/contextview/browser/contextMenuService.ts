@@ -2,7 +2,7 @@ import type { IContextMenuDelegate } from "../../../base/browser/contextmenu.js"
 import { isNode } from "../../../base/browser/dom.js";
 import { Separator, type IAction } from "../../../base/common/actions.js";
 import { Emitter } from "../../../base/common/event.js";
-import { Disposable } from "../../../base/common/lifecycle.js";
+import { Disposable, type IDisposable } from "../../../base/common/lifecycle.js";
 import {
 	getFlatContextMenuActions,
 	resolveAlternativeMenuActions,
@@ -69,6 +69,26 @@ export class BrowserContextMenuService extends Disposable
 	hideContextMenu(): void {
 		this.handler.hideContextMenu();
 	}
+}
+
+export interface ContextMenuServiceOptions {
+	readonly menuService: IMenuService;
+	readonly contextKeyService: IContextKeyService;
+	readonly keybindingService: IKeybindingService;
+	readonly contextViewService: IContextViewService;
+	readonly notificationService: INotificationService;
+}
+
+export type ContextMenuServiceFactory = (options: ContextMenuServiceOptions) => IContextMenuService & IDisposable;
+
+export function createBrowserContextMenuService(options: ContextMenuServiceOptions): BrowserContextMenuService {
+	return new BrowserContextMenuService(
+		options.menuService,
+		options.contextKeyService,
+		options.keybindingService,
+		options.contextViewService,
+		options.notificationService,
+	);
 }
 
 export function transformContextMenuDelegate(

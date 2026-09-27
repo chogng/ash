@@ -25,7 +25,35 @@ import { IStorageService, WillSaveStateReason } from "../../platform/storage/com
 import { IThemeService } from "../../platform/theme/common/themeService.js";
 import { WorkbenchState } from "../../platform/workspace/common/workspace.js";
 import type { WorkbenchPart } from "../../workbench/browser/part.js";
-import { WorkbenchInteractionServices, type WorkbenchContextMenuServiceFactory } from "../../workbench/browser/workbenchInteractionServices.js";
+import type { ContextMenuServiceFactory } from "../../platform/contextview/browser/contextMenuService.js";
+import { setHoverDelegate } from "../../base/browser/ui/hover/hoverDelegate.js";
+import { IMenuService } from "../../platform/actions/common/actions.js";
+import { MenuService } from "../../platform/actions/common/menuService.js";
+import { ICommandService } from "../../platform/commands/common/commands.js";
+import { IContextKeyService, ContextKeyService } from "../../platform/contextkey/browser/contextKeyService.js";
+import { IContextMenuService, IContextViewService } from "../../platform/contextview/browser/contextView.js";
+import { BrowserContextViewService } from "../../platform/contextview/browser/contextViewService.js";
+import { HoverService, IHoverService } from "../../platform/hover/browser/hoverService.js";
+import { IKeybindingService } from "../../platform/keybinding/common/keybinding.js";
+import { IKeyboardLayoutService } from "../../platform/keyboardLayout/common/keyboardLayout.js";
+import { IUserKeyboardLayoutService, UnavailableUserKeyboardLayoutService } from "../../platform/keyboardLayout/common/userKeyboardLayout.js";
+import { IKeybindingsResourceService } from "../../platform/keybinding/common/keybindingsResource.js";
+import { IQuickInputService } from "../../platform/quickinput/common/quickInput.js";
+import { IQuickAccessController } from "../../platform/quickinput/common/quickAccess.js";
+import { QuickAccessController } from "../../platform/quickinput/browser/quickAccess.js";
+import { IOpenerService } from "../../platform/opener/common/openerService.js";
+import { BrowserOpenerService } from "../../platform/opener/browser/browserOpenerService.js";
+import { CommandService } from "../../workbench/services/commands/common/commandService.js";
+import { BrowserKeyboardLayoutService } from "../../workbench/services/keybinding/browser/keyboardLayoutService.js";
+import { WorkbenchKeybindingService } from "../../workbench/services/keybinding/browser/keybindingService.js";
+import { IKeyboardShortcutTroubleshootingService } from "../../workbench/services/keybinding/common/keyboardShortcutTroubleshooting.js";
+import { WorkbenchKeybindingsResourceService } from "../../workbench/services/keybinding/browser/keybindingsResourceService.js";
+import { IPreferencesService } from "../../workbench/services/preferences/common/preferences.js";
+import { PreferencesService } from "../../workbench/services/preferences/browser/preferencesService.js";
+import { IEditorService } from "../../workbench/services/editor/common/editorService.js";
+import { WorkbenchQuickInputService } from "../../workbench/services/quickinput/browser/quickInputService.js";
+import { ChatContextPickService } from "../../workbench/services/chat/browser/chatContextPickService.js";
+import { IChatContextPickService } from "../../workbench/services/chat/common/chatContextService.js";
 import { WorkbenchWindow } from "../../workbench/browser/window.js";
 import { AccessibleViewService } from '../../workbench/contrib/accessibility/browser/accessibleView.js';
 import { IAccountService } from '../../platform/accounts/common/accountService.js';
@@ -66,7 +94,7 @@ export interface IWorkbenchOptions {
 	readonly returnToWorkbench: () => void;
 	readonly configurationApi?: IConfigurationApi;
 	readonly keybindingsResourceApi?: IKeybindingsResourceApi;
-	readonly createContextMenuService: WorkbenchContextMenuServiceFactory;
+	readonly createContextMenuService: ContextMenuServiceFactory;
 	readonly container: HTMLElement;
 }
 
@@ -158,25 +186,65 @@ export class Workbench extends Disposable {
 		services.registerInstance(ILayoutService, this.layoutService);
 		const notificationService = this._register(new BrowserNotificationService(this.domNode));
 		services.registerInstance(INotificationService, notificationService);
-		const interactionServices = this._register(new WorkbenchInteractionServices({
-			container: services,
-			layoutService: this.layoutService,
+		services.registerInstance(IOpenerService, new BrowserOpenerService(ownerWindow));
+		services.registerInstance(IUserKeyboardLayoutService, UnavailableUserKeyboardLayoutService);
+		const commandService = this._register(new CommandService(services));
+		services.registerInstance(ICommandService, commandService);
+		const contextKeys = this._register(new ContextKeyService());
+		services.registerInstance(IContextKeyService, contextKeys);
+		const keyboardLayoutService = this._register(new BrowserKeyboardLayoutService({
+			navigator: ownerWindow.navigator,
 			configurationService,
-			keybindingsResourceApi: options.keybindingsResourceApi,
-			notificationService,
-			createContextMenuService: options.createContextMenuService,
+			userLayoutProvider: UnavailableUserKeyboardLayoutService,
 		}));
+		services.registerInstance(IKeyboardLayoutService, keyboardLayoutService);
+		const keybindingsResourceService = this._register(new WorkbenchKeybindingsResourceService({ api: options.keybindingsResourceApi }));
+		services.registerInstance(IKeybindingsResourceService, keybindingsResourceService);
+		const keybindings = this._register(services.createInstance(WorkbenchKeybindingService, {
+			ownerDocument,
+			commandService,
+			contextKeyService: contextKeys,
+			keyboardLayoutService,
+		}));
+		services.registerInstance(IKeybindingService, keybindings);
+		services.registerInstance(IKeyboardShortcutTroubleshootingService, keybindings);
+		const menus = new MenuService(commandService, contextKeys);
+		services.registerInstance(IMenuService, menus);
+		const contextViews = this._register(new BrowserContextViewService(this.layoutService.activeContainer, this.layoutService));
+		services.registerInstance(IContextViewService, contextViews);
+		const quickInputService = this._register(new WorkbenchQuickInputService({
+			container: this.layoutService.activeContainer,
+			contextKeyService: contextKeys,
+			layoutService: this.layoutService,
+		}));
+		services.registerInstance(IQuickInputService, quickInputService);
+		services.registerInstance(IQuickAccessController, this._register(services.createInstance(QuickAccessController)));
+		services.registerInstance(IChatContextPickService, new ChatContextPickService());
+		services.registerInstance(IPreferencesService, this._register(new PreferencesService(() => services.get(IEditorService))));
+		const contextMenus = this._register(options.createContextMenuService({
+			menuService: menus,
+			contextKeyService: contextKeys,
+			keybindingService: keybindings,
+			contextViewService: contextViews,
+			notificationService,
+		}));
+		services.registerInstance(IContextMenuService, contextMenus);
+		const hoverService = this._register(new HoverService(configurationService, contextViews, contextMenus));
+		services.registerInstance(IHoverService, hoverService);
+		this._register(setHoverDelegate(hoverService));
+		void configurationService.reloadConfiguration().catch((error: unknown) => console.error("Failed to initialize configuration", error));
+		void keybindingsResourceService.reload().catch((error: unknown) => console.error("Failed to initialize keybindings resource", error));
 		const accessibleViewService = this._register(services.createInstance(AccessibleViewService));
 		services.registerInstance(IAccessibleViewService, accessibleViewService);
 		const preferences = this._register(new SessionsPreferences(
 			this.domNode,
 			configurationService,
 			new BrowserClipboardService(ownerWindow.navigator.clipboard),
-			interactionServices.contextMenuService,
-			interactionServices.contextKeyService,
+			contextMenus,
+			contextKeys,
 			accessibleViewService,
 		));
-		const accountMenu = this._register(new SessionsAccountMenu(accountService, interactionServices.contextMenuService, preferences, options.returnToWorkbench));
+		const accountMenu = this._register(new SessionsAccountMenu(accountService, contextMenus, preferences, options.returnToWorkbench));
 
 		const titlebar = this._register(new TitlebarPart(this.domNode, view, {
 			focusSessions: () => sessionsPart?.focus(),
@@ -193,7 +261,7 @@ export class Workbench extends Disposable {
 		const activityBarLocation = configurationService.getValue<ActivityBarPosition>(SessionsConfiguration.activityBarLocation);
 		activitybar.setCompact(configurationService.getValue<boolean>(SessionsConfiguration.activityBarCompact));
 		activitybar.setLocation(activityBarLocation, sidebar.setActivityBarLocation(activityBarLocation));
-		const activityBarContext = this._register(interactionServices.contextKeyService.createScoped(activitybar.focusContainer));
+		const activityBarContext = this._register(contextKeys.createScoped(activitybar.focusContainer));
 		activityBarContext.createKey('sessionsActivityBarFocused', true);
 		this._register(AccessibleViewRegistry.register({
 			type: AccessibleViewType.Help,
@@ -220,9 +288,9 @@ export class Workbench extends Disposable {
 			sessionService: sessions,
 			chatService: chat,
 			dictation: options.api.dictation,
-			contextMenuService: interactionServices.contextMenuService,
-			contextViewService: interactionServices.contextViewService,
-			commandService: interactionServices.commandService,
+			contextMenuService: contextMenus,
+			contextViewService: contextViews,
+			commandService,
 			activateSelection: selection => view.activateSelection(selection),
 			closeSelection: selection => view.closeVisibleSelection(selection),
 		}));

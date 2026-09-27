@@ -6,7 +6,7 @@ import { ICodeEditorService } from '../../../src/ash/editor/browser/services/cod
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { ServiceContainer } from '../../../src/ash/platform/instantiation/common/instantiation.js';
-import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialogHandler.js';
+import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.js';
 import { DialogResult, IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { ILanguageServerService } from '../../../src/ash/platform/language/common/languageServerService.js';
 import type { IMarketplaceApi } from '../../../src/ash/platform/marketplace/common/marketplaceApi.js';

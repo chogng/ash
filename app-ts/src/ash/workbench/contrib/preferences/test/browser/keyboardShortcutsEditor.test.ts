@@ -25,6 +25,7 @@ const { OperatingSystem } = await import('../../../../../base/common/platform.js
 const { CommandsRegistry } = await import('../../../../../platform/commands/common/commands.js');
 const { ContextKeyService } = await import('../../../../../platform/contextkey/browser/contextKeyService.js');
 const { ServiceContainer } = await import('../../../../../platform/instantiation/common/instantiation.js');
+const { BrowserNotificationService } = await import('../../../../../platform/notification/browser/notificationService.js');
 const { KeybindingsRegistry } = await import('../../../../../platform/keybinding/common/keybindingsRegistry.js');
 const { EditorPart } = await import('../../../../../workbench/browser/parts/editor/editorPart.js');
 const { EditorPaneMatch } = await import('../../../../../workbench/browser/parts/editor/editorPane.js');
@@ -72,7 +73,7 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 		commandService: commands,
 		contextKeyService: contextKeys,
 		keyboardLayoutService: keyboardLayout,
-	}));
+	}, disposables.add(new BrowserNotificationService(ownerDocument.body))));
 	const registry = new EditorPaneRegistry();
 	registry.register({
 		id: 'test.preferences',

@@ -64,7 +64,7 @@ import type { IKeybindingsResourceApi } from "../../platform/keybinding/common/k
 import type { IKeyboardLayoutProvider } from "../../platform/keyboardLayout/common/keyboardLayout.js";
 import {
 	BrowserDialogHandler,
-} from "./parts/dialogs/dialogHandler.js";
+} from "./parts/dialogs/dialog.js";
 import {
 	IDialogService,
 	IFileDialogService,
@@ -254,7 +254,31 @@ import { IEditorService } from "../services/editor/common/editorService.js";
 import { IEditorGroupsService } from '../services/editor/common/editorGroupsService.js';
 import { OUTPUT_VIEW_ID } from "../contrib/output/common/output.js";
 import { installWorkbenchServiceContributions } from "./workbenchServiceContributions.js";
-import { type WorkbenchContextMenuServiceFactory, WorkbenchInteractionServices } from "./workbenchInteractionServices.js";
+import type { ContextMenuServiceFactory } from "../../platform/contextview/browser/contextMenuService.js";
+import { setHoverDelegate } from "../../base/browser/ui/hover/hoverDelegate.js";
+import { IMenuService } from "../../platform/actions/common/actions.js";
+import { MenuService } from "../../platform/actions/common/menuService.js";
+import { ICommandService } from "../../platform/commands/common/commands.js";
+import { IContextKeyService, ContextKeyService } from "../../platform/contextkey/browser/contextKeyService.js";
+import { IContextMenuService, IContextViewService } from "../../platform/contextview/browser/contextView.js";
+import { BrowserContextViewService } from "../../platform/contextview/browser/contextViewService.js";
+import { HoverService, IHoverService } from "../../platform/hover/browser/hoverService.js";
+import { IKeybindingService } from "../../platform/keybinding/common/keybinding.js";
+import { IUserKeyboardLayoutService, UnavailableUserKeyboardLayoutService } from "../../platform/keyboardLayout/common/userKeyboardLayout.js";
+import { IQuickAccessController } from "../../platform/quickinput/common/quickAccess.js";
+import { QuickAccessController } from "../../platform/quickinput/browser/quickAccess.js";
+import { IOpenerService } from "../../platform/opener/common/openerService.js";
+import { BrowserOpenerService } from "../../platform/opener/browser/browserOpenerService.js";
+import { CommandService } from "../services/commands/common/commandService.js";
+import { BrowserKeyboardLayoutService } from "../services/keybinding/browser/keyboardLayoutService.js";
+import { WorkbenchKeybindingService } from "../services/keybinding/browser/keybindingService.js";
+import { IKeyboardShortcutTroubleshootingService } from "../services/keybinding/common/keyboardShortcutTroubleshooting.js";
+import { WorkbenchKeybindingsResourceService } from "../services/keybinding/browser/keybindingsResourceService.js";
+import { IPreferencesService } from "../services/preferences/common/preferences.js";
+import { PreferencesService } from "../services/preferences/browser/preferencesService.js";
+import { WorkbenchQuickInputService } from "../services/quickinput/browser/quickInputService.js";
+import { ChatContextPickService } from "../services/chat/browser/chatContextPickService.js";
+import { IChatContextPickService } from "../services/chat/common/chatContextService.js";
 import type { IUserKeyboardLayoutApi } from "../../platform/keyboardLayout/common/userKeyboardLayout.js";
 import { WorkbenchModeService } from "../services/workbenchMode/browser/workbenchModeService.js";
 import { IWorkbenchModeService } from "../services/workbenchMode/common/workbenchModeService.js";
@@ -279,7 +303,7 @@ export interface IStartWorkbenchOptions {
 	readonly nativeHostApi?: INativeHostApi;
 	readonly dialogHandler?: IDialogHandler;
 	readonly userThemeService?: IUserThemeServiceContract;
-	readonly createContextMenuService: WorkbenchContextMenuServiceFactory;
+	readonly createContextMenuService: ContextMenuServiceFactory;
 	readonly createTitlebarPart: TitlebarPartFactory;
 	readonly switchWorkbenchMode: (modeId: WorkbenchModeId) => Promise<void>;
 }
@@ -362,7 +386,7 @@ export class Workbench extends Disposable {
 		nativeHostApi: INativeHostApi | undefined,
 		dialogHandler: IDialogHandler | undefined,
 		userThemeService: IUserThemeServiceContract | undefined,
-		createContextMenuService: WorkbenchContextMenuServiceFactory,
+		createContextMenuService: ContextMenuServiceFactory,
 		createTitlebarPart: TitlebarPartFactory,
 		switchWorkbenchMode: (modeId: WorkbenchModeId) => Promise<void>,
 		browserViewApi?: IBrowserViewApi,
@@ -671,21 +695,57 @@ export class Workbench extends Disposable {
 			IWorkbenchDialogHandler,
 			dialogHandler ?? new BrowserDialogHandler(workbenchRoot),
 		);
-		const interactionServices = this._register(new WorkbenchInteractionServices({
-			container: services,
-			layoutService,
+		services.registerInstance(IOpenerService, new BrowserOpenerService(ownerWindow));
+		const userKeyboardLayoutService = userKeyboardLayoutApi ?? UnavailableUserKeyboardLayoutService;
+		services.registerInstance(IUserKeyboardLayoutService, userKeyboardLayoutService);
+		const commandService = this._register(new CommandService(services));
+		services.registerInstance(ICommandService, commandService);
+		const contextKeys = this._register(new ContextKeyService());
+		services.registerInstance(IContextKeyService, contextKeys);
+		const keyboardLayoutService = this._register(new BrowserKeyboardLayoutService({
+			navigator: ownerWindow.navigator,
 			configurationService: configuration,
-			keybindingsResourceApi,
-			keyboardLayoutProvider,
-			userKeyboardLayoutApi,
-			statusbarService,
-			notificationService,
-			createContextMenuService,
+			layoutProvider: keyboardLayoutProvider,
+			userLayoutProvider: userKeyboardLayoutService,
 		}));
-		const contextKeys = interactionServices.contextKeyService;
-		const menus = interactionServices.menuService;
-		const contextViews = interactionServices.contextViewService;
-		const contextMenus = interactionServices.contextMenuService;
+		services.registerInstance(IKeyboardLayoutService, keyboardLayoutService);
+		const keybindingsResourceService = this._register(new WorkbenchKeybindingsResourceService({ api: keybindingsResourceApi }));
+		services.registerInstance(IKeybindingsResourceService, keybindingsResourceService);
+		const keybindings = this._register(services.createInstance(WorkbenchKeybindingService, {
+			ownerDocument: workbenchRoot.ownerDocument,
+			commandService,
+			contextKeyService: contextKeys,
+			keyboardLayoutService,
+			statusbarService,
+		}));
+		services.registerInstance(IKeybindingService, keybindings);
+		services.registerInstance(IKeyboardShortcutTroubleshootingService, keybindings);
+		const menus = new MenuService(commandService, contextKeys);
+		services.registerInstance(IMenuService, menus);
+		const contextViews = this._register(new BrowserContextViewService(layoutService.activeContainer, layoutService));
+		services.registerInstance(IContextViewService, contextViews);
+		const quickInputService = this._register(new WorkbenchQuickInputService({
+			container: layoutService.activeContainer,
+			contextKeyService: contextKeys,
+			layoutService,
+		}));
+		services.registerInstance(IQuickInputService, quickInputService);
+		services.registerInstance(IQuickAccessController, this._register(services.createInstance(QuickAccessController)));
+		services.registerInstance(IChatContextPickService, new ChatContextPickService());
+		services.registerInstance(IPreferencesService, this._register(new PreferencesService(() => services.get(IEditorService))));
+		const contextMenus = this._register(createContextMenuService({
+			menuService: menus,
+			contextKeyService: contextKeys,
+			keybindingService: keybindings,
+			contextViewService: contextViews,
+			notificationService,
+		}));
+		services.registerInstance(IContextMenuService, contextMenus);
+		const hoverService = this._register(new HoverService(configuration, contextViews, contextMenus));
+		services.registerInstance(IHoverService, hoverService);
+		this._register(setHoverDelegate(hoverService));
+		void configuration.reloadConfiguration().catch((error: unknown) => console.error("Failed to initialize configuration", error));
+		void keybindingsResourceService.reload().catch((error: unknown) => console.error("Failed to initialize keybindings resource", error));
 		const accessibilityService = this._register(nativeHostApi
 			? new NativeAccessibilityService({
 				root: workbenchRoot,
@@ -704,7 +764,6 @@ export class Workbench extends Disposable {
 			contextKeyService: contextKeys,
 		}));
 		services.registerInstance(IViewDescriptorService, viewDescriptors);
-		const keybindings = interactionServices.keybindingService;
 		const contributions = this._register(
 			WorkbenchContributionsRegistry.createHost(services),
 		);

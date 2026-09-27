@@ -45,10 +45,10 @@ model supplied by Sessions and does not create or select Sessions itself.
    `ISessionsManagementService`, one window `ISessionsService`, and one
    `ChatService`, then registers their frontend contracts in a window-local
    `ServiceContainer`.
-3. The Sessions `Workbench` creates `BrowserLayoutService` and the shared
-   `WorkbenchInteractionServices`, so Chat uses the same commands, context
-   keys, menus, keybindings, overlays, quick input, settings, and hover
-   mechanisms as the regular Workbench.
+3. The Sessions `Workbench` creates `BrowserLayoutService` and registers
+   commands, context keys, menus, keybindings, overlays, quick input, settings,
+   and hover services for its own window, using the same service implementations
+   as the regular Workbench.
    Sessions creates the same `WorkbenchThemeService` as the regular Workbench
    against its own document. On desktop, both renderers read the shared
    `workbench.colorTheme` setting, so changes apply to both windows.
