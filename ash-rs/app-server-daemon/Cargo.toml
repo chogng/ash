@@ -25,13 +25,16 @@ libc = { workspace = true }
 rustix = { workspace = true, features = ["process"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
-sha2 = { workspace = true }
 ash-app-server-protocol = { workspace = true }
 ash-app-server-transport = { workspace = true }
 ash-package-store = { workspace = true }
 ash-uds = { workspace = true }
 
+[target.'cfg(unix)'.dependencies]
+sha2 = { workspace = true, features = ["asm"] }
+
 [target.'cfg(windows)'.dependencies]
+sha2 = { workspace = true }
 windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_System_Threading"] }
 
 [dev-dependencies]
