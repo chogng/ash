@@ -532,28 +532,33 @@
       "rendering": "symbolic"
     },
     {
-      "id": "layout-panel",
-      "file": "layout-panel.svg",
+      "id": "layout-panel-1",
+      "file": "layout-panel-1.svg",
       "rendering": "symbolic"
     },
     {
-      "id": "layout-panel-off",
-      "file": "layout-panel-off.svg",
+      "id": "layout-panel-off-1",
+      "file": "layout-panel-off-1.svg",
       "rendering": "multicolor"
     },
     {
-      "id": "layout-sidebar-left",
-      "file": "layout-sidebar-left.svg",
+      "id": "layout-sidebar-left-1",
+      "file": "layout-sidebar-left-1.svg",
       "rendering": "symbolic"
     },
     {
-      "id": "layout-sidebar-left-off",
-      "file": "layout-sidebar-left-off.svg",
+      "id": "layout-sidebar-left-2",
+      "file": "layout-sidebar-left-2.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "layout-sidebar-left-off-1",
+      "file": "layout-sidebar-left-off-1.svg",
       "rendering": "multicolor"
     },
     {
-      "id": "layout-sidebar-left-off-empty",
-      "file": "layout-sidebar-left-off-empty.svg",
+      "id": "layout-sidebar-left-off-2",
+      "file": "layout-sidebar-left-off-2.svg",
       "rendering": "symbolic"
     },
     {

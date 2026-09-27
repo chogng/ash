@@ -31,7 +31,7 @@ test('Empty chat keeps its input near the pane edges', async ({ target, workbenc
 	expect(layout.composerRightInset).toBe(12);
 });
 
-test('Chat input hides unused editor chrome and aligns text with the input edge', async ({ target, workbench }) => {
+test('Chat input hides unused editor chrome and keeps its text evenly inset', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
@@ -44,13 +44,22 @@ test('Chat input hides unused editor chrome and aligns text with the input edge'
 		const viewport = editor.querySelector<HTMLElement>('.stanza-editor');
 		const placeholder = editor.querySelector<HTMLElement>('.stanza-editor-placeholder-text');
 		const ruler = editor.querySelector<HTMLElement>('.decorationsOverviewRuler');
-		if (!viewport || !placeholder || !ruler) throw new Error('Chat editor viewport is incomplete');
+		const container = editor.closest<HTMLElement>('.ash-chat-input-container');
+		const attachments = container?.querySelector<HTMLElement>('.ash-chat-input-attachments');
+		if (!viewport || !placeholder || !ruler || !container || !attachments) throw new Error('Chat editor viewport is incomplete');
+		const placeholderBounds = placeholder.getBoundingClientRect();
+		const containerBounds = container.getBoundingClientRect();
 		return {
-			textInset: placeholder.getBoundingClientRect().left - viewport.getBoundingClientRect().left,
+			textInset: placeholderBounds.left - viewport.getBoundingClientRect().left,
+			textTopInset: placeholderBounds.top - containerBounds.top,
+			textLeftInset: placeholderBounds.left - containerBounds.left,
+			attachmentsDisplay: getComputedStyle(attachments).display,
 			rulerDisplay: getComputedStyle(ruler).display,
 		};
 	});
 	expect(editorChrome.textInset).toBeLessThanOrEqual(4);
+	expect(editorChrome.textTopInset).toBeCloseTo(editorChrome.textLeftInset, 0);
+	expect(editorChrome.attachmentsDisplay).toBe('none');
 	expect(editorChrome.rulerDisplay).toBe('none');
 });
 

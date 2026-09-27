@@ -72,7 +72,7 @@ registerAction2(class MoveChatToEditorAction extends Action2 {
 		super({
 			id: MOVE_CHAT_TO_EDITOR_COMMAND_ID,
 			title: "Move Chat to Editor Area",
-			icon: Lxicon.layoutPanel,
+			icon: Lxicon.layoutPanel1,
 			precondition: ChatEditorAreaAvailable,
 			menu: {
 				id: MenuId.ChatTitle,

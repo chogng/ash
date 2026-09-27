@@ -114,11 +114,12 @@ mod artwork {
     pub(crate) const ITALICS: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/italics.svg"));
     pub(crate) const KEBAB_VERTICAL: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/kebab-vertical.svg"));
     pub(crate) const LAYOUT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout.svg"));
-    pub(crate) const LAYOUT_PANEL: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout-panel.svg"));
-    pub(crate) const LAYOUT_PANEL_OFF: IconDefinition = IconDefinition::multicolor(include_bytes!("../../../resources/icons/layout-panel-off.svg"));
-    pub(crate) const LAYOUT_SIDEBAR_LEFT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout-sidebar-left.svg"));
-    pub(crate) const LAYOUT_SIDEBAR_LEFT_OFF: IconDefinition = IconDefinition::multicolor(include_bytes!("../../../resources/icons/layout-sidebar-left-off.svg"));
-    pub(crate) const LAYOUT_SIDEBAR_LEFT_OFF_EMPTY: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout-sidebar-left-off-empty.svg"));
+    pub(crate) const LAYOUT_PANEL_1: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout-panel-1.svg"));
+    pub(crate) const LAYOUT_PANEL_OFF_1: IconDefinition = IconDefinition::multicolor(include_bytes!("../../../resources/icons/layout-panel-off-1.svg"));
+    pub(crate) const LAYOUT_SIDEBAR_LEFT_1: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout-sidebar-left-1.svg"));
+    pub(crate) const LAYOUT_SIDEBAR_LEFT_2: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout-sidebar-left-2.svg"));
+    pub(crate) const LAYOUT_SIDEBAR_LEFT_OFF_1: IconDefinition = IconDefinition::multicolor(include_bytes!("../../../resources/icons/layout-sidebar-left-off-1.svg"));
+    pub(crate) const LAYOUT_SIDEBAR_LEFT_OFF_2: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout-sidebar-left-off-2.svg"));
     pub(crate) const LAYOUT_SIDEBAR_RIGHT_1: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout-sidebar-right-1.svg"));
     pub(crate) const LAYOUT_SIDEBAR_RIGHT_2: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout-sidebar-right-2.svg"));
     pub(crate) const LAYOUT_SIDEBAR_RIGHT_OFF_1: IconDefinition = IconDefinition::multicolor(include_bytes!("../../../resources/icons/layout-sidebar-right-off-1.svg"));
@@ -315,11 +316,12 @@ pub mod icons {
     pub const ITALICS: Icon = Icon::new(IconId::new("italics"), artwork::ITALICS);
     pub const KEBAB_VERTICAL: Icon = Icon::new(IconId::new("kebab-vertical"), artwork::KEBAB_VERTICAL);
     pub const LAYOUT: Icon = Icon::new(IconId::new("layout"), artwork::LAYOUT);
-    pub const LAYOUT_PANEL: Icon = Icon::new(IconId::new("layout-panel"), artwork::LAYOUT_PANEL);
-    pub const LAYOUT_PANEL_OFF: Icon = Icon::new(IconId::new("layout-panel-off"), artwork::LAYOUT_PANEL_OFF);
-    pub const LAYOUT_SIDEBAR_LEFT: Icon = Icon::new(IconId::new("layout-sidebar-left"), artwork::LAYOUT_SIDEBAR_LEFT);
-    pub const LAYOUT_SIDEBAR_LEFT_OFF: Icon = Icon::new(IconId::new("layout-sidebar-left-off"), artwork::LAYOUT_SIDEBAR_LEFT_OFF);
-    pub const LAYOUT_SIDEBAR_LEFT_OFF_EMPTY: Icon = Icon::new(IconId::new("layout-sidebar-left-off-empty"), artwork::LAYOUT_SIDEBAR_LEFT_OFF_EMPTY);
+    pub const LAYOUT_PANEL_1: Icon = Icon::new(IconId::new("layout-panel-1"), artwork::LAYOUT_PANEL_1);
+    pub const LAYOUT_PANEL_OFF_1: Icon = Icon::new(IconId::new("layout-panel-off-1"), artwork::LAYOUT_PANEL_OFF_1);
+    pub const LAYOUT_SIDEBAR_LEFT_1: Icon = Icon::new(IconId::new("layout-sidebar-left-1"), artwork::LAYOUT_SIDEBAR_LEFT_1);
+    pub const LAYOUT_SIDEBAR_LEFT_2: Icon = Icon::new(IconId::new("layout-sidebar-left-2"), artwork::LAYOUT_SIDEBAR_LEFT_2);
+    pub const LAYOUT_SIDEBAR_LEFT_OFF_1: Icon = Icon::new(IconId::new("layout-sidebar-left-off-1"), artwork::LAYOUT_SIDEBAR_LEFT_OFF_1);
+    pub const LAYOUT_SIDEBAR_LEFT_OFF_2: Icon = Icon::new(IconId::new("layout-sidebar-left-off-2"), artwork::LAYOUT_SIDEBAR_LEFT_OFF_2);
     pub const LAYOUT_SIDEBAR_RIGHT_1: Icon = Icon::new(IconId::new("layout-sidebar-right-1"), artwork::LAYOUT_SIDEBAR_RIGHT_1);
     pub const LAYOUT_SIDEBAR_RIGHT_2: Icon = Icon::new(IconId::new("layout-sidebar-right-2"), artwork::LAYOUT_SIDEBAR_RIGHT_2);
     pub const LAYOUT_SIDEBAR_RIGHT_OFF_1: Icon = Icon::new(IconId::new("layout-sidebar-right-off-1"), artwork::LAYOUT_SIDEBAR_RIGHT_OFF_1);
@@ -512,11 +514,12 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::ITALICS,
     icons::KEBAB_VERTICAL,
     icons::LAYOUT,
-    icons::LAYOUT_PANEL,
-    icons::LAYOUT_PANEL_OFF,
-    icons::LAYOUT_SIDEBAR_LEFT,
-    icons::LAYOUT_SIDEBAR_LEFT_OFF,
-    icons::LAYOUT_SIDEBAR_LEFT_OFF_EMPTY,
+    icons::LAYOUT_PANEL_1,
+    icons::LAYOUT_PANEL_OFF_1,
+    icons::LAYOUT_SIDEBAR_LEFT_1,
+    icons::LAYOUT_SIDEBAR_LEFT_2,
+    icons::LAYOUT_SIDEBAR_LEFT_OFF_1,
+    icons::LAYOUT_SIDEBAR_LEFT_OFF_2,
     icons::LAYOUT_SIDEBAR_RIGHT_1,
     icons::LAYOUT_SIDEBAR_RIGHT_2,
     icons::LAYOUT_SIDEBAR_RIGHT_OFF_1,
@@ -710,11 +713,12 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("italics", artwork::ITALICS),
     ("kebab-vertical", artwork::KEBAB_VERTICAL),
     ("layout", artwork::LAYOUT),
-    ("layout-panel", artwork::LAYOUT_PANEL),
-    ("layout-panel-off", artwork::LAYOUT_PANEL_OFF),
-    ("layout-sidebar-left", artwork::LAYOUT_SIDEBAR_LEFT),
-    ("layout-sidebar-left-off", artwork::LAYOUT_SIDEBAR_LEFT_OFF),
-    ("layout-sidebar-left-off-empty", artwork::LAYOUT_SIDEBAR_LEFT_OFF_EMPTY),
+    ("layout-panel-1", artwork::LAYOUT_PANEL_1),
+    ("layout-panel-off-1", artwork::LAYOUT_PANEL_OFF_1),
+    ("layout-sidebar-left-1", artwork::LAYOUT_SIDEBAR_LEFT_1),
+    ("layout-sidebar-left-2", artwork::LAYOUT_SIDEBAR_LEFT_2),
+    ("layout-sidebar-left-off-1", artwork::LAYOUT_SIDEBAR_LEFT_OFF_1),
+    ("layout-sidebar-left-off-2", artwork::LAYOUT_SIDEBAR_LEFT_OFF_2),
     ("layout-sidebar-right-1", artwork::LAYOUT_SIDEBAR_RIGHT_1),
     ("layout-sidebar-right-2", artwork::LAYOUT_SIDEBAR_RIGHT_2),
     ("layout-sidebar-right-off-1", artwork::LAYOUT_SIDEBAR_RIGHT_OFF_1),

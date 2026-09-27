@@ -269,7 +269,7 @@ test("browser titlebar hosts the application menu in an ActionBar", () => {
 		command: {
 			id: "test.titlebar.toggleSidebar",
 			title: "Toggle sidebar",
-			icon: Lxicon.layoutSidebarLeft,
+			icon: Lxicon.layoutSidebarLeft1,
 		},
 		group: "navigation",
 	}));
@@ -313,6 +313,9 @@ test("browser titlebar hosts the application menu in an ActionBar", () => {
 	assert.equal(button.tabIndex, 0);
 	assert.equal(button.title, "Application menu");
 	assert.ok(button.querySelector(".ash-icon"));
+	assert.equal(sidebarButton.getAttribute("aria-label"), "Toggle sidebar");
+	assert.ok(sidebarButton.querySelector(".ash-icon"));
+	assert.equal(sidebarButton.closest(".ash-action-view-item")?.classList.contains("icon"), true);
 	assert.equal(menubar.domNode.querySelectorAll("button").length, 2);
 
 	button.focus();

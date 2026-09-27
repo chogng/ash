@@ -101,8 +101,8 @@ impl WorkbenchUiStyle {
             icons::ADD,
             icons::CLOSE,
             icons::PINNED,
-            icons::LAYOUT_SIDEBAR_LEFT,
-            icons::LAYOUT_SIDEBAR_LEFT_OFF_EMPTY,
+            icons::LAYOUT_SIDEBAR_LEFT_1,
+            icons::LAYOUT_SIDEBAR_LEFT_OFF_2,
             icons::DIFF,
         )
     }

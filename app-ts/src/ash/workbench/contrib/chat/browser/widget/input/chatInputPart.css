@@ -87,6 +87,10 @@
   padding: 6px 8px 0;
 }
 
+.ash-chat-input-attachments.empty {
+  display: none;
+}
+
 .ash-chat-input-attachment-item {
   display: flex;
   align-items: center;

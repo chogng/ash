@@ -663,7 +663,19 @@ test('Sessions entry sits beside Quick Access and animates its Ash mark on inten
 
 test('titlebar toolbar icons fit inside their buttons', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
-	const buttons = workbench.page.locator('.ash-workbench-titlebar .ash-toolbar .ash-action-view-item.icon > .ash-button');
+	const page = workbench.page;
+	const sidebarToggle = page.locator('.ash-titlebar-left-actions [data-action-id="workbench.action.toggleSideBar"] button');
+	const panelToggle = page.locator('.ash-titlebar-actions [data-action-id="workbench.action.togglePanel"] button');
+	for (const [toggle, accessibleName] of [
+		[sidebarToggle, /(?:Show|Hide) Primary Side Bar/u],
+		[panelToggle, /(?:Show|Hide) Panel/u],
+	] as const) {
+		await expect(toggle).toBeVisible();
+		await expect(toggle).toHaveAccessibleName(accessibleName);
+		await expect(toggle.locator('.ash-icon')).toBeVisible();
+		await expect(toggle.locator('.ash-button-label')).toHaveCSS('clip-path', 'inset(50%)');
+	}
+	const buttons = page.locator('.ash-workbench-titlebar .ash-toolbar .ash-action-view-item.icon > .ash-button');
 	await expect(buttons.first()).toBeVisible();
 	const iconBounds = await buttons.evaluateAll(elements => elements.map(button => {
 		const label = button.querySelector('.ash-icon-label');

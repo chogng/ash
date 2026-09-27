@@ -29,7 +29,7 @@ fn collapsed_sidebar_keeps_titlebar_actions() {
     assert_eq!(frame.scene().icons().len(), 3);
     assert_eq!(
         frame.scene().icons()[0].icon(),
-        icons::LAYOUT_SIDEBAR_LEFT_OFF_EMPTY
+        icons::LAYOUT_SIDEBAR_LEFT_OFF_2
     );
     assert_eq!(frame.scene().icons()[1].icon(), icons::DIFF);
     assert_eq!(frame.scene().icons()[2].icon(), icons::GEAR);
@@ -110,7 +110,10 @@ fn expanded_sidebar_updates_the_toggle_icon() {
     frame.draw_component(&titlebar);
 
     assert_eq!(frame.scene().icons().len(), 3);
-    assert_eq!(frame.scene().icons()[0].icon(), icons::LAYOUT_SIDEBAR_LEFT);
+    assert_eq!(
+        frame.scene().icons()[0].icon(),
+        icons::LAYOUT_SIDEBAR_LEFT_1
+    );
     assert_eq!(frame.scene().icons()[1].icon(), icons::DIFF);
     assert_eq!(frame.scene().icons()[2].icon(), icons::GEAR);
     assert!(

@@ -16,12 +16,12 @@ registerAction2(class ToggleSideBarAction extends Action2 {
 			id: ToggleSideBarCommandId,
 			title: localizedString("ash.actions", "showPrimarySidebar", "Show Primary Side Bar"),
 			tooltip: localizedString("ash.actions", "showPrimarySidebar", "Show Primary Side Bar"),
-			icon: Lxicon.layoutSidebarLeftOff,
+			icon: Lxicon.layoutSidebarLeftOff1,
 			toggled: {
 				condition: SideBarVisibleContext.isEqualTo(true),
 				title: localizedString("ash.actions", "hidePrimarySidebar", "Hide Primary Side Bar"),
 				tooltip: localizedString("ash.actions", "hidePrimarySidebar", "Hide Primary Side Bar"),
-				icon: Lxicon.layoutSidebarLeft,
+				icon: Lxicon.layoutSidebarLeft1,
 			},
 			menu: [
 				{
@@ -100,12 +100,12 @@ registerAction2(class TogglePanelAction extends Action2 {
 			id: TogglePanelCommandId,
 			title: localizedString("ash.actions", "showPanel", "Show Panel"),
 			tooltip: localizedString("ash.actions", "showPanel", "Show Panel"),
-			icon: Lxicon.layoutPanelOff,
+			icon: Lxicon.layoutPanelOff1,
 			toggled: {
 				condition: PanelVisibleContext.isEqualTo(true),
 				title: localizedString("ash.actions", "hidePanel", "Hide Panel"),
 				tooltip: localizedString("ash.actions", "hidePanel", "Hide Panel"),
-				icon: Lxicon.layoutPanel,
+				icon: Lxicon.layoutPanel1,
 			},
 			menu: [
 				{

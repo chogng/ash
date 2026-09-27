@@ -1671,14 +1671,21 @@ test("panel layout actions use state icons", () => {
 		.getMenuActions(MenuId.TitleBar)
 		.flatMap(([, actions]) => actions)
 		.find((action) => action.id === TogglePanelCommandId);
+	const sidebarAction = () => menuService
+		.getMenuActions(MenuId.TitleBarLeft)
+		.flatMap(([, actions]) => actions)
+		.find((action) => action.id === ToggleSideBarCommandId);
 	const maximizePanelAction = () => menuService
 		.getMenuActions(MenuId.PanelTitle)
 		.flatMap(([, actions]) => actions)
 		.find((action) => action.id === ToggleMaximizedPanelCommandId);
 
-	assert.equal(panelAction()?.icon, Lxicon.layoutPanelOff);
+	assert.equal(sidebarAction()?.icon, Lxicon.layoutSidebarLeftOff1);
+	assert.equal(panelAction()?.icon, Lxicon.layoutPanelOff1);
+	contextKeys.setContext("sideBarVisible", true);
+	assert.equal(sidebarAction()?.icon, Lxicon.layoutSidebarLeft1);
 	contextKeys.setContext("panelVisible", true);
-	assert.equal(panelAction()?.icon, Lxicon.layoutPanel);
+	assert.equal(panelAction()?.icon, Lxicon.layoutPanel1);
 	assert.equal(maximizePanelAction()?.icon, Lxicon.screenFull);
 	assert.equal(maximizePanelAction()?.checked, false);
 	contextKeys.setContext('panelMaximized', true);

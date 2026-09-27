@@ -27,7 +27,7 @@ fn semantic_library_distinguishes_symbolic_and_multicolor_artwork() {
         IconRendering::Symbolic
     );
     assert_eq!(
-        icons::LAYOUT_PANEL_OFF.definition().rendering(),
+        icons::LAYOUT_PANEL_OFF_1.definition().rendering(),
         IconRendering::Multicolor
     );
 }
@@ -35,8 +35,8 @@ fn semantic_library_distinguishes_symbolic_and_multicolor_artwork() {
 #[test]
 fn sidebar_toggle_icons_preserve_their_rendering_contracts() {
     for icon in [
-        icons::LAYOUT_SIDEBAR_LEFT,
-        icons::LAYOUT_SIDEBAR_LEFT_OFF_EMPTY,
+        icons::LAYOUT_SIDEBAR_LEFT_1,
+        icons::LAYOUT_SIDEBAR_LEFT_OFF_2,
         icons::LAYOUT_SIDEBAR_RIGHT_1,
         icons::LAYOUT_SIDEBAR_RIGHT_2,
         icons::LAYOUT_SIDEBAR_RIGHT_OFF_2,

@@ -324,7 +324,9 @@ export class ChatInputPart extends Disposable {
 			children.push(item);
 		}
 		this.attachmentList.replaceChildren(...children);
-		this.attachmentList.hidden = children.length === 0;
+		const isEmpty = children.length === 0;
+		this.attachmentList.classList.toggle('empty', isEmpty);
+		this.attachmentList.hidden = isEmpty;
 	}
 
 	private createToolbarViewItem(action: IAction, contextMenuService: IContextMenuService, contextViewService: IContextViewService): ActionViewItem | undefined {

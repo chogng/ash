@@ -372,7 +372,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 				id: MOVE_CHAT_TO_EDITOR_COMMAND_ID,
 				label: "Move Chat to Editor Area",
 				enabled: false,
-				icon: Lxicon.layoutPanel,
+				icon: Lxicon.layoutPanel1,
 			},
 			{
 				id: MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID,
