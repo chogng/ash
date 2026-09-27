@@ -51,9 +51,19 @@ impl<'a> KeyHintBar<'a> {
         }
         match self.route {
             ComposerRoute::Agent => {
-                "/ for commands, Up and Down to recall inputs, Control R to search history"
+                if cfg!(target_os = "windows") {
+                    "/ for commands, Up and Down to recall inputs, Control R to search history, Control Shift M to dictate"
+                } else {
+                    "/ for commands, Up and Down to recall inputs, Control R to search history"
+                }
             }
-            ComposerRoute::Shell => "Up and Down for input history, Control R to search history",
+            ComposerRoute::Shell => {
+                if cfg!(target_os = "windows") {
+                    "Up and Down for input history, Control R to search history, Control Shift M to dictate"
+                } else {
+                    "Up and Down for input history, Control R to search history"
+                }
+            }
         }
     }
 
@@ -66,8 +76,20 @@ impl<'a> KeyHintBar<'a> {
 
     const fn label(&self) -> &'static str {
         match self.route {
-            ComposerRoute::Agent => "commands · Ctrl+R history",
-            ComposerRoute::Shell => "history · Ctrl+R search",
+            ComposerRoute::Agent => {
+                if cfg!(target_os = "windows") {
+                    "commands · Ctrl+R history · Ctrl+Shift+M dictate"
+                } else {
+                    "commands · Ctrl+R history"
+                }
+            }
+            ComposerRoute::Shell => {
+                if cfg!(target_os = "windows") {
+                    "history · Ctrl+R search · Ctrl+Shift+M dictate"
+                } else {
+                    "history · Ctrl+R search"
+                }
+            }
         }
     }
 }

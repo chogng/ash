@@ -159,11 +159,28 @@ impl AppDriver {
     }
 
     pub(super) fn handle_client_event(&mut self, event: client::ClientEvent) {
+        let stale_dictation = match &event {
+            client::ClientEvent::DictationTranscript(transcript) => self
+                .app
+                .dictation_scope_changed(&transcript.resource_id)
+                .then(|| transcript.resource_id.clone()),
+            _ => None,
+        };
+        let ended_dictation = match &event {
+            client::ClientEvent::DictationEnded(ended) => Some(ended.resource_id.clone()),
+            _ => None,
+        };
         if matches!(event, client::ClientEvent::QueueChanged) {
             self.queue_refresh_requested = true;
         }
         let refresh = refresh_server_event(event, self.conversation.as_mut(), &mut self.app);
         self.refresh.merge(refresh);
+        if let Some(resource_id) = ended_dictation {
+            let _ = self.client.clone().stop_dictation(resource_id);
+        }
+        if let Some(resource_id) = stale_dictation {
+            let _ = self.client.clone().stop_dictation(resource_id);
+        }
     }
 
     pub(super) fn poll_request_completions(&mut self) -> bool {
@@ -604,6 +621,14 @@ fn refresh_server_event(
     app: &mut App,
 ) -> ServerRefresh {
     match event {
+        client::ClientEvent::DictationTranscript(transcript) => {
+            app.dictation_transcript(&transcript.resource_id, &transcript.text);
+            ServerRefresh::default()
+        }
+        client::ClientEvent::DictationEnded(ended) => {
+            app.dictation_ended(&ended.resource_id, ended.error);
+            ServerRefresh::default()
+        }
         client::ClientEvent::Account(event) => {
             app.update(crate::config::Event::Subscription(event));
             ServerRefresh {

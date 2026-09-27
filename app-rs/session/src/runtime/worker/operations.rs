@@ -366,6 +366,7 @@ pub(super) fn submit_agent_message(
                 thread_id: active.thread_id.clone(),
                 expected_sequence: active.sequence,
                 approval_mode: active.approval_mode,
+                model: None,
                 tool_mode: None,
                 input: vec![InputItem::Text { text }],
             },

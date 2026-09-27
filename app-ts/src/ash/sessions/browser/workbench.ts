@@ -220,6 +220,7 @@ export class Workbench extends Disposable {
 		sessionsPart = this._register(new SessionsPart(this.domNode, {
 			sessionService: sessions,
 			chatService: chat,
+			dictation: options.api.dictation,
 			contextMenuService: interactionServices.contextMenuService,
 			contextViewService: interactionServices.contextViewService,
 			commandService: interactionServices.commandService,

@@ -65,41 +65,50 @@ fn builtins_follow_enum_presentation_order() {
             .iter()
             .map(|definition| definition.name.as_str())
             .collect::<Vec<_>>(),
-        vec![
-            "status",
-            "usage",
-            "statusline",
-            "skills",
-            "memories",
-            "mcp",
-            "resume",
-            "archive",
-            "connectors",
-            "rewind",
-            "config",
-            "startup",
-            "home",
-            "add-dir",
-            "cd",
-            "branch",
-            "fork",
-            "help",
-            "shortcuts",
-            "export",
-            "model",
-            "theme",
-            "new",
-            "quit",
-            "dashboard",
-            "subagents",
-            "issue",
-            "pr",
-            "marketplace",
-            "plugins",
-            "lsp",
-        ]
+        {
+            let mut names = vec![
+                "status",
+                "usage",
+                "statusline",
+                "skills",
+                "memories",
+                "mcp",
+                "resume",
+                "archive",
+                "connectors",
+                "rewind",
+                "config",
+                "startup",
+                "home",
+                "add-dir",
+                "cd",
+                "branch",
+                "fork",
+                "help",
+                "shortcuts",
+                "export",
+                "model",
+                "theme",
+                "new",
+                "quit",
+                "dashboard",
+                "subagents",
+                "issue",
+                "pr",
+                "marketplace",
+                "plugins",
+                "lsp",
+            ];
+            if cfg!(target_os = "windows") {
+                names.push("dictate");
+            }
+            names
+        }
     );
-    assert_eq!(definitions.len(), 31);
+    assert_eq!(
+        definitions.len(),
+        if cfg!(target_os = "windows") { 32 } else { 31 }
+    );
 }
 
 #[test]

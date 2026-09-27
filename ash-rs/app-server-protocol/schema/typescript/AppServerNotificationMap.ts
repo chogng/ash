@@ -5,6 +5,8 @@ import type { AgentRequestEnvelope } from './types/AgentRequestEnvelope.js';
 import type { CallStatus } from './types/CallStatus.js';
 import type { ConfigChanged } from './types/ConfigChanged.js';
 import type { ConnectorsChanged } from './types/ConnectorsChanged.js';
+import type { DictationEnded } from './types/DictationEnded.js';
+import type { DictationTranscript } from './types/DictationTranscript.js';
 import type { DocumentCollaborationPresenceSnapshot } from './types/DocumentCollaborationPresenceSnapshot.js';
 import type { DocumentCollaborationUpdate } from './types/DocumentCollaborationUpdate.js';
 import type { ExtensionHostChanged } from './types/ExtensionHostChanged.js';
@@ -35,6 +37,8 @@ export interface AppServerNotificationMap {
   "session/changed": SessionChanged;
   "session/deleted": SessionDeleted;
   "call/changed": CallStatus;
+  "dictation/transcript": DictationTranscript;
+  "dictation/ended": DictationEnded;
   "document/collaboration/update": DocumentCollaborationUpdate;
   "document/collaboration/presence": DocumentCollaborationPresenceSnapshot;
   "session/thread/update": ThreadUpdateEnvelope;
@@ -80,6 +84,8 @@ export const APP_SERVER_NOTIFICATIONS: {
   "session/changed": { method: "session/changed" },
   "session/deleted": { method: "session/deleted" },
   "call/changed": { method: "call/changed" },
+  "dictation/transcript": { method: "dictation/transcript" },
+  "dictation/ended": { method: "dictation/ended" },
   "document/collaboration/update": { method: "document/collaboration/update" },
   "document/collaboration/presence": { method: "document/collaboration/presence" },
   "session/thread/update": { method: "session/thread/update" },

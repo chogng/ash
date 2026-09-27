@@ -85,6 +85,8 @@ mod connector_operations;
 mod connector_runtime;
 mod debug_operations;
 mod diagnostics_operations;
+mod dictation_operations;
+mod dictation_runtime;
 mod diff_operations;
 mod dir_contributions;
 mod environment_operations;
@@ -195,6 +197,7 @@ pub struct AppServer {
     memories: Option<Arc<memories::Memories>>,
     pub(super) attachment_uploads: Mutex<AttachmentUploadStore>,
     calls: call_runtime::Calls,
+    dictation: dictation_runtime::DictationRuntime,
     pub(super) collaboration: Mutex<collaboration_runtime::DocumentCollaborationStore>,
     pub(super) extensions: Mutex<ExtensionCatalog>,
     pub(super) config: Option<Arc<ConfigStore>>,
@@ -531,6 +534,7 @@ impl AppServer {
             memories: None,
             attachment_uploads: Mutex::new(AttachmentUploadStore::default()),
             calls: call_runtime::Calls::default(),
+            dictation: dictation_runtime::DictationRuntime::default(),
             collaboration: Mutex::new(collaboration_runtime::DocumentCollaborationStore::default()),
             extensions: Mutex::new(ExtensionCatalog::default()),
             config: None,
@@ -839,6 +843,7 @@ impl AppServer {
             .close_owner(connection.connection_id);
         self.feedback.close(connection.connection_id);
         self.calls.close(connection.connection_id);
+        self.dictation.close(connection.connection_id);
         self.request_scheduler
             .cancel_connection(connection.connection_id);
         self.request_cancellations
@@ -2360,6 +2365,8 @@ impl AppServer {
             Some(ClientMethod::AttachmentUploadStart) => {
                 self.attachment_upload_start(connection, &request.params)
             }
+            Some(ClientMethod::DictationStart) => self.dictation_start(connection, &request.params),
+            Some(ClientMethod::DictationStop) => self.dictation_stop(connection, &request.params),
             Some(ClientMethod::AttachmentUploadWrite) => {
                 self.attachment_upload_write(connection, &request.params)
             }

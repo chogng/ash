@@ -33,6 +33,27 @@ impl AppDriver {
         let ScheduledCommand { command, origin } = scheduled;
         let request_key = request_key(&command);
         match command {
+            AppCommand::Dictation { resource_id, start } => {
+                let mut client = self.client.clone();
+                self.requests.spawn_presentation(
+                    request_key,
+                    "ash-tui-dictation",
+                    move || {
+                        let result = if start {
+                            client.start_dictation(resource_id.clone())
+                        } else {
+                            client.stop_dictation(resource_id.clone())
+                        };
+                        Ok::<_, String>(crate::app::AppEvent::DictationResult {
+                            resource_id,
+                            start,
+                            error: result.err().map(|error| error.to_string()),
+                        })
+                    },
+                    &mut self.app,
+                    origin,
+                );
+            }
             AppCommand::Issues(command) => {
                 let mut client = self.client.clone();
                 if let crate::issues::Command::Start { generation, .. } = &command {

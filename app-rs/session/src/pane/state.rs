@@ -94,6 +94,28 @@ impl SessionPaneState {
         self.chat_input().input().selected_text()
     }
 
+    pub fn composer_text(&self) -> &str {
+        self.chat_input().input().text()
+    }
+
+    pub fn append_dictation_text(&mut self, text: &str) {
+        let current = self.composer_text();
+        let separator = if current
+            .chars()
+            .last()
+            .is_some_and(|character| character.is_ascii_alphanumeric())
+            && text
+                .chars()
+                .next()
+                .is_some_and(|character| character.is_ascii_alphanumeric())
+        {
+            " "
+        } else {
+            ""
+        };
+        self.set_composer_text(format!("{current}{separator}{text}"));
+    }
+
     pub const fn composer_route(&self) -> ComposerRoute {
         self.chat_input().route()
     }

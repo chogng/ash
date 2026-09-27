@@ -83,7 +83,6 @@ impl ChatPanel {
         self.composer.activate_completion(input, index)
     }
 
-    #[cfg(test)]
     pub(crate) fn insert_text(&mut self, input: &mut ChatInput, text: &str) {
         self.composer.insert_text(input, text);
     }

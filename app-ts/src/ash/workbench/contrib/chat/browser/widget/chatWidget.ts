@@ -22,6 +22,7 @@ import { Schemas } from "../../../../../base/common/network.js";
 import { ASH_REMOTE_SCHEME, createSshRemoteWorkspaceUri, getRemoteWorkspacePath } from '../../../../../platform/remote/common/remote.js';
 import { OPEN_CHAT_SETTINGS_COMMAND_ID } from "../../common/chat.js";
 import { OpenSettingsCommandId } from '../../../preferences/common/preferences.js';
+import type { IDictationService } from '../../../../../platform/dictation/common/dictationService.js';
 
 /** The presentation consumes one conversation model owned by its product. */
 export interface IChatWidgetModel extends IDisposable {
@@ -61,6 +62,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		openerService?: IOpenerService,
 		editorService?: IEditorService,
 		imageResourceLoader?: (resource: URI) => Promise<Blob>,
+		dictation?: IDictationService,
 	) {
 		super();
 		const ownerDocument = container.ownerDocument;
@@ -93,7 +95,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			openModelSettings: () => commandService.executeCommand(OpenSettingsCommandId),
 			resolveInteraction: (response) => this.model.resolveInteraction(response),
 		};
-		this.inputPart = this._register(new ChatInputPart(this.element, inputDelegate, contextMenuService, contextViewService));
+		this.inputPart = this._register(new ChatInputPart(this.element, inputDelegate, contextMenuService, contextViewService, dictation));
 		this.element.append(this.goalElement, this.listWidget.element, this.inputPart.element);
 		this._register(this.model.onDidChange(() => this.render()));
 		this._register(toDisposable(() => this.element.remove()));

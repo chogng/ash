@@ -14,6 +14,7 @@ pub mod config;
 pub mod connectors;
 pub mod debug;
 pub mod diagnostics;
+pub mod dictation;
 pub mod diff;
 pub mod document;
 pub mod environment;

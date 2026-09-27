@@ -95,6 +95,25 @@ test('Chat input shows a round voice action when empty and a send arrow for text
 	await expect(toolbar.locator('[data-action-id="ash.chat.input.voice"] button')).toBeVisible();
 });
 
+test('Windows desktop Chat exposes system dictation on its microphone button', async ({ target, workbench }) => {
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code' || process.platform !== 'win32', 'Requires the connected Windows desktop');
+	const page = workbench.page;
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	}
+	const button = page.locator('.ash-chat-view-pane .ash-chat:visible [data-action-id="ash.chat.input.mic"] button');
+	await expect(button).toBeEnabled();
+	await expect(button).toHaveAttribute('aria-label', 'Dictate message');
+	await button.click();
+	await expect(button).toBeEnabled({ timeout: 10_000 });
+	if (await button.getAttribute('aria-pressed') === 'true') {
+		await button.click();
+		await expect(button).not.toHaveAttribute('aria-pressed', 'true');
+	} else {
+		await expect(page.locator('.ash-chat-view-pane .ash-chat:visible .ash-chat-status')).toContainText('Dictation failed');
+	}
+});
+
 test('Chat input resizes with wrapped text and retains keyboard focus', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
 	const page = workbench.page;

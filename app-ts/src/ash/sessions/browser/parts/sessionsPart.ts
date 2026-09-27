@@ -10,10 +10,12 @@ import type { SessionsViewSelection } from "../../services/sessions/browser/sess
 import { SessionsChatView } from "./sessionsChatView.js";
 import { h } from "../../../base/browser/dom.js";
 import { localize } from '../../../nls.js';
+import type { IDictationService } from '../../../platform/dictation/common/dictationService.js';
 
 export interface SessionsPartOptions {
 	readonly sessionService: ISessionsManagementService;
 	readonly chatService: IChatService;
+	readonly dictation?: IDictationService;
 	readonly contextMenuService: IContextMenuService;
 	readonly contextViewService: IContextViewService;
 	readonly commandService: ICommandService;
@@ -39,6 +41,7 @@ export class SessionsPart extends WorkbenchPart {
 		header.append(this.heading, this.description);
 		this.chat = this._register(new SessionsChatView(this.contentDomNode, {
 			chatService: options.chatService,
+			dictation: options.dictation,
 			sessionService: options.sessionService,
 			contextMenuService: options.contextMenuService,
 			contextViewService: options.contextViewService,

@@ -211,6 +211,15 @@ impl WorkbenchApplication {
     }
 
     fn composer_keyboard_input(&mut self, event: &KeyEvent) {
+        if cfg!(target_os = "windows")
+            && self.modifiers.control_key()
+            && self.modifiers.shift_key()
+            && !self.modifiers.alt_key()
+            && matches!(&event.logical_key, Key::Character(key) if key.eq_ignore_ascii_case("m"))
+        {
+            self.toggle_composer_dictation();
+            return;
+        }
         if self.modifiers.control_key()
             && matches!(&event.logical_key, Key::Character(key) if key.eq_ignore_ascii_case("r"))
         {

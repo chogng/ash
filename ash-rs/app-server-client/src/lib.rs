@@ -48,6 +48,7 @@ use ash_app_server_protocol::protocol::connectors::ConnectorOAuthCancelParams;
 use ash_app_server_protocol::protocol::connectors::ConnectorOAuthRefreshParams;
 use ash_app_server_protocol::protocol::connectors::ConnectorOAuthStartParams;
 use ash_app_server_protocol::protocol::connectors::ConnectorOAuthStartResult;
+use ash_app_server_protocol::protocol::dictation::DictationResourceParams;
 use ash_app_server_protocol::protocol::diff::DiffComputeParams;
 use ash_app_server_protocol::protocol::diff::DiffComputeResult;
 use ash_app_server_protocol::protocol::document::{TypstCompileParams, TypstCompileResult};
@@ -1387,6 +1388,20 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
             .into_iter()
             .map(|raw| notification::decode(&raw))
             .collect()
+    }
+
+    pub fn start_dictation(&mut self, resource_id: String) -> Result<(), ClientError> {
+        self.call(
+            ClientMethod::DictationStart,
+            DictationResourceParams { resource_id },
+        )
+    }
+
+    pub fn stop_dictation(&mut self, resource_id: String) -> Result<(), ClientError> {
+        self.call(
+            ClientMethod::DictationStop,
+            DictationResourceParams { resource_id },
+        )
     }
 
     pub fn into_transport(self) -> T {

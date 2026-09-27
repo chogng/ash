@@ -40,14 +40,30 @@ fn key_hint_bar_paints_agent_and_shell_hints_with_dark_keycaps() {
         (
             ComposerRoute::Agent,
             &["/"][..],
-            "commands · Ctrl+R history",
-            "/ for commands, Up and Down to recall inputs, Control R to search history",
+            if cfg!(target_os = "windows") {
+                "commands · Ctrl+R history · Ctrl+Shift+M dictate"
+            } else {
+                "commands · Ctrl+R history"
+            },
+            if cfg!(target_os = "windows") {
+                "/ for commands, Up and Down to recall inputs, Control R to search history, Control Shift M to dictate"
+            } else {
+                "/ for commands, Up and Down to recall inputs, Control R to search history"
+            },
         ),
         (
             ComposerRoute::Shell,
             &["↑", "↓"][..],
-            "history · Ctrl+R search",
-            "Up and Down for input history, Control R to search history",
+            if cfg!(target_os = "windows") {
+                "history · Ctrl+R search · Ctrl+Shift+M dictate"
+            } else {
+                "history · Ctrl+R search"
+            },
+            if cfg!(target_os = "windows") {
+                "Up and Down for input history, Control R to search history, Control Shift M to dictate"
+            } else {
+                "Up and Down for input history, Control R to search history"
+            },
         ),
     ] {
         let mut frame = UiFrame::<InteractionFrame>::new(Color::WHITE);

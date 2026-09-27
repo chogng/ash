@@ -759,6 +759,60 @@ fn product_command_is_delegated_to_the_typed_dispatcher() {
 }
 
 #[test]
+fn dictate_command_adds_recognized_text_to_the_draft_and_stops() {
+    let mut app = App::new();
+    app.insert_text("/dictate");
+    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    let Some(AppCommand::Dictation {
+        resource_id,
+        start: true,
+    }) = action
+    else {
+        panic!("expected dictation start command");
+    };
+    app.update(AppEvent::DictationResult {
+        resource_id: resource_id.clone(),
+        start: true,
+        error: None,
+    });
+    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(80, 24)).unwrap();
+    terminal
+        .draw(|frame| crate::app::frame::draw(frame, &app))
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    let rendered = (0..24)
+        .map(|y| (0..80).map(|x| buffer[(x, y)].symbol()).collect::<String>())
+        .collect::<Vec<_>>()
+        .join("\n");
+    crate::tui_assert_snapshot!("dictation_listening", rendered);
+    app.dictation_transcript("other", "ignored");
+    app.dictation_transcript(&resource_id, "recognized text");
+    assert_eq!(app.input(), "recognized text");
+    app.thread_presentations
+        .switch(ThreadId::new("another-thread").unwrap());
+    assert!(app.dictation_scope_changed(&resource_id));
+    app.dictation_transcript(&resource_id, "wrong draft");
+    assert_eq!(app.input(), "");
+    app.thread_presentations
+        .switch(ThreadId::new("tui-local").unwrap());
+    let stop = app.handle_key(KeyEvent::new(KeyCode::F(8), KeyModifiers::NONE));
+    assert_eq!(
+        stop,
+        Some(AppCommand::Dictation {
+            resource_id: resource_id.clone(),
+            start: false
+        })
+    );
+    app.update(AppEvent::DictationResult {
+        resource_id: resource_id.clone(),
+        start: false,
+        error: None,
+    });
+    app.dictation_transcript(&resource_id, "late");
+    assert_eq!(app.input(), "recognized text");
+}
+
+#[test]
 fn shortcut_slash_command_is_owned_by_the_local_host() {
     let mut app = App::new();
     app.insert_text("/shortcuts");

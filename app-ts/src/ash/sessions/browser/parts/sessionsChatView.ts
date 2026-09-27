@@ -13,11 +13,13 @@ import type { IChatService } from "../../../workbench/services/chat/common/chatS
 import type { SessionId } from "../../services/sessions/common/session.js";
 import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
 import type { SessionsViewSelection } from "../../services/sessions/browser/sessionsService.js";
+import type { IDictationService } from '../../../platform/dictation/common/dictationService.js';
 
 let sessionsChatPaneInstanceId = 0;
 
 export interface SessionsChatViewOptions {
 	readonly chatService: IChatService;
+	readonly dictation?: IDictationService;
 	readonly sessionService: ISessionsManagementService;
 	readonly contextMenuService: IContextMenuService;
 	readonly contextViewService: IContextViewService;
@@ -36,6 +38,7 @@ export class SessionsChatView extends Disposable {
 	private dimension: IDimension | undefined;
 
 	private readonly chatService: IChatService;
+	private readonly dictation: IDictationService | undefined;
 	private readonly sessionService: ISessionsManagementService;
 	private readonly contextMenuService: IContextMenuService;
 	private readonly contextViewService: IContextViewService;
@@ -47,6 +50,7 @@ export class SessionsChatView extends Disposable {
 		super();
 		const ownerDocument = container.ownerDocument;
 		this.chatService = options.chatService;
+		this.dictation = options.dictation;
 		this.sessionService = options.sessionService;
 		this.contextMenuService = options.contextMenuService;
 		this.contextViewService = options.contextViewService;
@@ -93,6 +97,7 @@ export class SessionsChatView extends Disposable {
 				entry = new SessionsChatGridEntry(this.domNode, {
 					selection,
 					chatService: this.chatService,
+					dictation: this.dictation,
 					sessionService: this.sessionService,
 					contextMenuService: this.contextMenuService,
 					contextViewService: this.contextViewService,
@@ -211,6 +216,10 @@ class SessionsChatGridEntry extends Disposable implements IView {
 			options.contextMenuService,
 			options.contextViewService,
 			options.commandService,
+			undefined,
+			undefined,
+			undefined,
+			options.dictation,
 		));
 		this.pane.setTabId(this.title.id);
 		this.pane.setVisible(true);

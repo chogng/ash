@@ -6802,6 +6802,38 @@
         {
           "properties": {
             "method": {
+              "const": "dictation/start",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/DictationResourceParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "dictation/stop",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/DictationResourceParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "fs/getMetadata",
               "type": "string"
             },
@@ -11334,6 +11366,38 @@
         {
           "properties": {
             "method": {
+              "const": "dictation/start",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "dictation/stop",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "fs/getMetadata",
               "type": "string"
             },
@@ -15589,6 +15653,52 @@
         "recent",
         "usage",
         "responses"
+      ],
+      "type": "object"
+    },
+    "DictationEnded": {
+      "properties": {
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "resourceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "resourceId"
+      ],
+      "type": "object"
+    },
+    "DictationResourceParams": {
+      "additionalProperties": false,
+      "properties": {
+        "resourceId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "resourceId"
+      ],
+      "type": "object"
+    },
+    "DictationTranscript": {
+      "properties": {
+        "resourceId": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "resourceId",
+        "text"
       ],
       "type": "object"
     },
@@ -29762,6 +29872,38 @@
             },
             "params": {
               "$ref": "#/$defs/CallStatus"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "dictation/transcript",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/DictationTranscript"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "dictation/ended",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/DictationEnded"
             }
           },
           "required": [

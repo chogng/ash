@@ -42,6 +42,30 @@ pub(crate) use ash_session::SessionRuntime;
 pub(crate) use ash_session::SessionRuntimeEvent;
 
 impl WorkbenchApplication {
+    pub(crate) fn toggle_composer_dictation(&mut self) {
+        let Some(client) = self.app_server_client.as_mut() else {
+            return;
+        };
+        if let Some(resource_id) = self.dictation_resource_id.take() {
+            if let Err(error) = client.stop_dictation(resource_id) {
+                eprintln!("could not stop dictation: {error}");
+            }
+            self.rebuild_presentation_on_next_redraw();
+            return;
+        }
+        if self.app_server_host.is_remote() {
+            eprintln!("dictation requires a local Windows microphone");
+            return;
+        }
+        self.dictation_next_id += 1;
+        let resource_id = format!("desktop-dictation-{}", self.dictation_next_id);
+        match client.start_dictation(resource_id.clone()) {
+            Ok(()) => self.dictation_resource_id = Some(resource_id),
+            Err(error) => eprintln!("could not start dictation: {error}"),
+        }
+        self.rebuild_presentation_on_next_redraw();
+    }
+
     pub(crate) fn add_session(&mut self) {
         let Some(session) = self.session_runtime.as_ref() else {
             eprintln!("could not create session: App Server session is unavailable");
@@ -54,6 +78,9 @@ impl WorkbenchApplication {
 
     /// Mounts the Session Pane selected by Workbench. Tab selection itself stays in Workbench.
     pub(crate) fn mount_session_pane(&mut self, key: &TabInputKey) {
+        if self.dictation_resource_id.is_some() {
+            self.toggle_composer_dictation();
+        }
         let Some(tab) = self.workbench.workbench().sidebar_part().input(key) else {
             return;
         };
@@ -138,6 +165,7 @@ impl WorkbenchApplication {
             }
             SessionRuntimeEvent::Disconnected => {
                 self.app_server_client = None;
+                self.dictation_resource_id = None;
                 self.settings.set_model_connections(Vec::new());
                 self.settings
                     .set_model_connection_error("App Server connection is unavailable".into());
@@ -182,6 +210,25 @@ impl WorkbenchApplication {
                     .apply_transcript_update(*update, scroll_limit);
             }
             SessionRuntimeEvent::Notification(notification) => match notification {
+                ServerNotification::DictationTranscript(transcript) => {
+                    if self.dictation_resource_id.as_deref()
+                        == Some(transcript.resource_id.as_str())
+                    {
+                        self.session_pane.append_dictation_text(&transcript.text);
+                        self.composer_changed();
+                    }
+                }
+                ServerNotification::DictationEnded(ended) => {
+                    if self.dictation_resource_id.as_deref() == Some(ended.resource_id.as_str()) {
+                        self.dictation_resource_id = None;
+                        if let Some(client) = self.app_server_client.as_mut() {
+                            let _ = client.stop_dictation(ended.resource_id);
+                        }
+                        if let Some(error) = ended.error {
+                            eprintln!("dictation ended: {error}");
+                        }
+                    }
+                }
                 ServerNotification::GitStatusChanged(_) => {
                     if let Err(error) = self.refresh_git_from_app_server() {
                         eprintln!("could not refresh Git state: {error}");
@@ -210,6 +257,7 @@ impl WorkbenchApplication {
             }
             SessionRuntimeEvent::Closed => {
                 self.app_server_client = None;
+                self.dictation_resource_id = None;
             }
         }
         self.rebuild_presentation_on_next_redraw();

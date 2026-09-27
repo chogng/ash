@@ -69,6 +69,7 @@ where
 
     match command {
         TuiSlashCommandAction::Pr
+        | TuiSlashCommandAction::Dictate
         | TuiSlashCommandAction::Issue
         | TuiSlashCommandAction::Dashboard
         | TuiSlashCommandAction::Subagents => {

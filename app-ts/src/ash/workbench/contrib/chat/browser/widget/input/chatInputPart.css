@@ -211,6 +211,11 @@
   opacity: 1;
 }
 
+.ash-chat-input-mic-action.checked {
+  color: var(--ash-button-primary-foreground);
+  background: var(--ash-button-primary-background);
+}
+
 .ash-chat-input-toolbars .ash-chat-input-send,
 .ash-chat-input-toolbars .ash-chat-input-voice,
 .ash-chat-input-toolbars .ash-chat-input-interrupt {

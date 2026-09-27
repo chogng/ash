@@ -50,6 +50,7 @@ pub(crate) enum TuiSlashCommandAction {
     Marketplace,
     Plugins,
     Lsp,
+    Dictate,
 }
 
 impl TuiSlashCommandAction {
@@ -110,6 +111,7 @@ impl TuiSlashCommandAction {
             Self::Theme => "show or set the terminal color theme",
             Self::New => "start a new chat",
             Self::Quit => "quit Ash",
+            Self::Dictate => "dictate speech into the draft; F8 to stop",
         };
         let name: &'static str = self.into();
         SlashCommandDefinition {
@@ -164,6 +166,7 @@ impl std::str::FromStr for TuiSlashCommandAction {
 
 pub(crate) fn built_in_slash_command_definitions() -> Vec<SlashCommandDefinition> {
     TuiSlashCommandAction::iter()
+        .filter(|action| cfg!(target_os = "windows") || *action != TuiSlashCommandAction::Dictate)
         .map(TuiSlashCommandAction::definition)
         .collect()
 }

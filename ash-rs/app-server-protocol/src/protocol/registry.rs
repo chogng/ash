@@ -430,6 +430,10 @@ use crate::protocol::debug::DebugAdapterStartResult;
 use crate::protocol::diagnostics::FeedbackPrepareParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::diagnostics::FeedbackUploadParams;
+use crate::protocol::dictation::DictationEnded;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::dictation::DictationResourceParams;
+use crate::protocol::dictation::DictationTranscript;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::diff::DiffComputeParams;
 #[cfg(any(test, feature = "export"))]
@@ -3082,6 +3086,16 @@ client_methods! {
         response: AttachmentMaterializeResult,
         serialization: ConnectionExclusive("attachmentIngress"),
     },
+    DictationStart => "dictation/start" {
+        params: DictationResourceParams,
+        response: (),
+        serialization: ConnectionExclusive("dictation"),
+    },
+    DictationStop => "dictation/stop" {
+        params: DictationResourceParams,
+        response: (),
+        serialization: ConnectionExclusive("dictation"),
+    },
     FsGetMetadata => "fs/getMetadata" {
         params: FsGetMetadataParams,
         response: FsGetMetadataResult,
@@ -3807,6 +3821,8 @@ server_notifications! {
         params: SessionDeleted,
     },
     CallChanged => "call/changed" { params: CallStatus, },
+    DictationTranscript => "dictation/transcript" { params: DictationTranscript, },
+    DictationEnded => "dictation/ended" { params: DictationEnded, },
     DocumentCollaborationUpdate => "document/collaboration/update" {
         params: DocumentCollaborationUpdate,
     },
@@ -4054,6 +4070,9 @@ typescript_bindings! {
     CallMemberParams,
     CallRoleParams,
     CallStatus,
+    DictationResourceParams,
+    DictationTranscript,
+    DictationEnded,
     CallScreenSource,
     CallScreenSources,
     CallScreenFrame,

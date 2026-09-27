@@ -31,6 +31,7 @@ members = [
     "ash-rs/livekit-api",
     "ash-rs/call",
     "ash-rs/voice-host",
+    "ash-rs/system-dictation",
     "ash-rs/screen-capture",
     "ash-rs/agent-environment",
     "ash-rs/agent-graph-store",

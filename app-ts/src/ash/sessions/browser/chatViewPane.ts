@@ -22,6 +22,7 @@ import { ContextKeyService, IContextKeyService } from "../../platform/contextkey
 import { ChatSessionInspectorVisibleContext } from "../../workbench/contrib/chat/common/chat.js";
 import { SessionInspector } from "./sessionInspector.js";
 import { ChatWidgetModel } from './chatWidgetModel.js';
+import { IRendererHostService, type IRendererHost } from '../../platform/renderer/common/rendererHost.js';
 
 let chatViewInstanceId = 0;
 let chatPaneInstanceId = 0;
@@ -72,6 +73,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		@IContextKeyService contextKeyService?: IContextKeyService,
 		@IOpenerService private readonly openerService?: IOpenerService,
 		@IEditorService private readonly editorService?: IEditorService,
+		@IRendererHostService private readonly rendererHost?: IRendererHost,
 	) {
 		super(container, options);
 		this.chatService = chatService;
@@ -183,6 +185,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 					this.openerService,
 					this.editorService,
 					resource => readMarkdownImageResource(this.fileService, resource),
+					this.rendererHost?.dictation,
 				);
 				setDisposableOwner(pane, this);
 				this.panes.set(paneId, pane);
@@ -210,6 +213,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 					this.openerService,
 					this.editorService,
 					resource => readMarkdownImageResource(this.fileService, resource),
+					this.rendererHost?.dictation,
 				);
 				setDisposableOwner(pane, this);
 				this.panes.set(paneId, pane);

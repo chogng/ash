@@ -17,6 +17,15 @@ use ash_protocol::TurnStatus;
 use ash_thread_transcript::ThreadTranscriptSnapshot;
 
 #[test]
+fn dictation_appends_phrases_to_the_current_draft_without_sending() {
+    let mut pane = super::SessionPaneState::default();
+    pane.set_composer_text("Hello");
+    pane.append_dictation_text("world");
+    pane.append_dictation_text("，你好");
+    assert_eq!(pane.composer_text(), "Hello world，你好");
+}
+
+#[test]
 fn switching_threads_cancels_submission_even_with_identical_history() {
     use crate::ComposerClassificationUpdate;
     use crate::ComposerSubmission;

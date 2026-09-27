@@ -1,0 +1,28 @@
+---
+source: code/tui/src/app/state_tests.rs
+expression: rendered
+---
+  .                                                        [— / —] [Dashboard]  
+                                                                                
+> /dictate                                                                      
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                  Listening. Press F8 to stop.  
+  ╭──────────────────────────────────────────────────────────────────────────╮  
+  │ >                                                                        │  
+  ╰──────────────────────────────────────────────────────── Automatic model ─╯  
+                                                                                
+  Enter send  ·  shift+tab permissions  ·  /home

@@ -19,6 +19,7 @@ use std::collections::BTreeMap;
 /// A backend or host resource whose operations must remain ordered.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub(super) enum RequestKey {
+    Dictation,
     Interrupt,
     Interaction,
     Thread,
@@ -158,6 +159,7 @@ impl RequestTasks {
 
 pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
     match command {
+        AppCommand::Dictation { .. } => Some(RequestKey::Dictation),
         AppCommand::Thread(ThreadCommand::Interrupt) => Some(RequestKey::Interrupt),
         AppCommand::Thread(ThreadCommand::ResolveRequest(_)) => Some(RequestKey::Interaction),
         AppCommand::Host(

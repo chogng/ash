@@ -668,6 +668,7 @@ dependencies = [
  "ash-state",
  "ash-supergrok",
  "ash-syntax",
+ "ash-system-dictation",
  "ash-thread-transcript",
  "ash-tools",
  "ash-typst",
@@ -2653,6 +2654,13 @@ dependencies = [
  "tree-sitter-json",
  "tree-sitter-rust",
  "tree-sitter-typescript",
+]
+
+[[package]]
+name = "ash-system-dictation"
+version = "0.1.0"
+dependencies = [
+ "windows",
 ]
 
 [[package]]

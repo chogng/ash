@@ -1,0 +1,13 @@
+[package]
+name = "ash-system-dictation"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lints.rust]
+# COM calls and event ownership are isolated in the Windows adapter.
+unsafe_code = "allow"
+
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = ["Win32_Foundation", "Win32_Media_Speech", "Win32_System_Com"] }

@@ -131,9 +131,19 @@ pub(crate) enum Status {
     Error,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum DictationTarget {
+    NewSession,
+    Thread(ash_protocol::ThreadId),
+}
+
 #[derive(Debug)]
 pub(crate) struct App {
     next_panel_generation: u64,
+    dictation_resource_id: Option<String>,
+    dictation_target: Option<DictationTarget>,
+    dictation_pending: bool,
+    dictation_next_id: u64,
     pub(super) chat_panel: ChatPanel,
     pub(super) app_keymap: AppKeymap,
     pub(super) thread: ThreadState,
@@ -161,6 +171,10 @@ impl App {
     pub(crate) fn new() -> Self {
         let mut app = Self {
             next_panel_generation: 1,
+            dictation_resource_id: None,
+            dictation_target: None,
+            dictation_pending: false,
+            dictation_next_id: 0,
             chat_panel: ChatPanel::new(),
             app_keymap: AppKeymap::default(),
             thread: ThreadState::default(),
@@ -250,6 +264,10 @@ impl App {
             .map(MermaidPreviews::new);
         Self {
             next_panel_generation: 1,
+            dictation_resource_id: None,
+            dictation_target: None,
+            dictation_pending: false,
+            dictation_next_id: 0,
             chat_panel: ChatPanel::new(),
             app_keymap: AppKeymap::default(),
             thread: ThreadState::default(),
@@ -351,6 +369,15 @@ impl App {
         now: Instant,
         terminal_area: Rect,
     ) -> Option<AppCommand> {
+        if cfg!(target_os = "windows")
+            && key.code == crossterm::event::KeyCode::F(8)
+            && key.modifiers.is_empty()
+            && self.accepts_input()
+            && self.command_panel().is_none()
+            && self.overlay().is_none()
+        {
+            return self.toggle_dictation();
+        }
         let command = match self.screen_mode() {
             crate::terminal::ScreenMode::Fullscreen => {
                 super::fullscreen::navigation::handle_key(self, key, now, terminal_area)
@@ -829,6 +856,83 @@ impl App {
             let (panel, input) = self.composer_parts_mut();
             panel.insert_text(input, text);
             self.dismiss_fullscreen_welcome_on_input();
+        }
+    }
+
+    pub(crate) fn dictation_transcript(&mut self, resource_id: &str, text: &str) {
+        if self.dictation_resource_id.as_deref() != Some(resource_id)
+            || self.dictation_target.as_ref() != Some(&self.current_dictation_target())
+        {
+            return;
+        }
+        let separator = if self
+            .input_state()
+            .text()
+            .chars()
+            .last()
+            .is_some_and(|character| character.is_ascii_alphanumeric())
+            && text
+                .chars()
+                .next()
+                .is_some_and(|character| character.is_ascii_alphanumeric())
+        {
+            " "
+        } else {
+            ""
+        };
+        let (panel, input) = self.composer_parts_mut();
+        panel.insert_text(input, &format!("{separator}{text}"));
+        self.dismiss_fullscreen_welcome_on_input();
+    }
+
+    pub(crate) fn dictation_ended(&mut self, resource_id: &str, error: Option<String>) {
+        if self.dictation_resource_id.as_deref() != Some(resource_id) {
+            return;
+        }
+        self.dictation_resource_id = None;
+        self.dictation_target = None;
+        self.dictation_pending = false;
+        self.chat_panel.show_notice(
+            error.map_or_else(
+                || "Dictation stopped.".to_owned(),
+                |error| format!("Dictation failed: {error}"),
+            ),
+            Instant::now(),
+        );
+    }
+
+    fn toggle_dictation(&mut self) -> Option<AppCommand> {
+        if self.dictation_pending {
+            return None;
+        }
+        if let Some(resource_id) = self.dictation_resource_id.clone() {
+            self.dictation_pending = true;
+            return Some(AppCommand::Dictation {
+                resource_id,
+                start: false,
+            });
+        }
+        self.dictation_next_id += 1;
+        let resource_id = format!("tui-dictation-{}", self.dictation_next_id);
+        self.dictation_resource_id = Some(resource_id.clone());
+        self.dictation_target = Some(self.current_dictation_target());
+        self.dictation_pending = true;
+        Some(AppCommand::Dictation {
+            resource_id,
+            start: true,
+        })
+    }
+
+    pub(crate) fn dictation_scope_changed(&self, resource_id: &str) -> bool {
+        self.dictation_resource_id.as_deref() == Some(resource_id)
+            && self.dictation_target.as_ref() != Some(&self.current_dictation_target())
+    }
+
+    fn current_dictation_target(&self) -> DictationTarget {
+        if self.starts_new_session() {
+            DictationTarget::NewSession
+        } else {
+            DictationTarget::Thread(self.thread_presentations.active_id().clone())
         }
     }
 
@@ -2042,6 +2146,30 @@ impl App {
             self.fullscreen.pointer.clear();
         }
         match event {
+            AppEvent::DictationResult {
+                resource_id,
+                start,
+                error,
+            } => {
+                if self.dictation_resource_id.as_deref() != Some(resource_id.as_str()) {
+                    return;
+                }
+                self.dictation_pending = false;
+                if !start || error.is_some() {
+                    self.dictation_resource_id = None;
+                    self.dictation_target = None;
+                }
+                if let Some(error) = error {
+                    self.chat_panel
+                        .show_notice(format!("Dictation failed: {error}"), Instant::now());
+                } else if start {
+                    self.chat_panel
+                        .show_notice("Listening. Press F8 to stop.".into(), Instant::now());
+                } else {
+                    self.chat_panel
+                        .show_notice("Dictation stopped.".into(), Instant::now());
+                }
+            }
             AppEvent::Issues(event) => self.issues_mut().update(event),
             AppEvent::Dirs(event) => self.apply_dir_event(event),
             AppEvent::Git(event) => match event {
@@ -3026,7 +3154,10 @@ impl App {
         if matches!(self.status, Status::Working)
             && !self.fullscreen_home_visible()
             && invocation.origin == SlashCommandOrigin::Local
-            && !matches!(local, Some(TuiSlashCommandAction::Export))
+            && !matches!(
+                local,
+                Some(TuiSlashCommandAction::Export | TuiSlashCommandAction::Dictate)
+            )
         {
             self.thread.update(ThreadPresentationEvent::CommandFailed {
                 command: invocation.display_text(),
@@ -3035,6 +3166,9 @@ impl App {
             return None;
         }
         match (invocation.origin, local) {
+            (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Dictate)) => {
+                self.toggle_dictation()
+            }
             (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Quit))
                 if invocation.arguments.is_empty() =>
             {

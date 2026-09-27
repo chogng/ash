@@ -10,6 +10,7 @@ import { Disposable, MutableDisposable, DisposableStore, toDisposable } from "..
 import { Lxicon } from "../../../../../../base/common/lxicons.js";
 import { localize } from "../../../../../../nls.js";
 import { WorkbenchToolBar } from "../../../../../../platform/actions/browser/toolbar.js";
+import type { IDictationService, IDictationSession } from "../../../../../../platform/dictation/common/dictationService.js";
 import type { IContextMenuService } from "../../../../../../platform/contextview/browser/contextView.js";
 import type { IContextViewService } from "../../../../../../platform/contextview/browser/contextView.js";
 import type { ModelCatalogEntry } from "../../../../../services/chat/common/chatService.js";
@@ -61,8 +62,13 @@ export class ChatInputPart extends Disposable {
 	private serverSlashCommands: ChatInputState["slashCommands"] = [];
 	private skillSelectors: ChatInputState["skillSelectors"] = [];
 	private mode: ChatInputMode = "agent";
+	private dictationSession: IDictationSession | undefined;
+	private dictationStarting = false;
+	private dictationCancelStart = false;
+	private dictationError: string | undefined;
+	private visible = true;
 
-	constructor(container: HTMLElement, delegate: ChatInputDelegate, contextMenuService: IContextMenuService, contextViewService: IContextViewService) {
+	constructor(container: HTMLElement, delegate: ChatInputDelegate, contextMenuService: IContextMenuService, contextViewService: IContextViewService, private readonly dictation?: IDictationService) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		this.delegate = delegate;
@@ -113,6 +119,7 @@ export class ChatInputPart extends Disposable {
 		this.renderToolbarActions();
 		this.renderAttachments();
 		this._register(toDisposable(() => this.element.remove()));
+		this._register(toDisposable(() => { void this.stopDictation(); }));
 	}
 
 	private async submit(value: string, contexts: readonly ChatContextAttachment[], operation: Promise<void>): Promise<void> {
@@ -146,6 +153,7 @@ export class ChatInputPart extends Disposable {
 
 	async acceptInput(value?: string): Promise<void> {
 		if (value !== undefined) this.input.value = value;
+		if (this.dictationSession || this.dictationStarting) await this.stopDictation();
 		const inputValue = this.input.value;
 		if (!inputValue.trim()) return;
 		const input = parseSlashCommandInput(inputValue, this.slashCommands);
@@ -173,7 +181,9 @@ export class ChatInputPart extends Disposable {
 	}
 
 	setVisible(visible: boolean): void {
+		this.visible = visible;
 		if (visible) this.input.layout();
+		if (!visible && (this.dictationSession || this.dictationStarting)) void this.stopDictation();
 	}
 
 	render(state: ChatInputState): void {
@@ -250,11 +260,12 @@ export class ChatInputPart extends Disposable {
 		const micAction = new ChatInputAction(
 			"ash.chat.input.mic",
 			localize('chat.input.dictate', 'Dictate message'),
-			localize('chat.input.dictationUnavailable', 'Dictation is unavailable'),
+			this.dictationSession ? localize('chat.input.dictationStop', 'Stop dictation') : this.dictation ? localize('chat.input.dictate', 'Dictate message') : localize('chat.input.dictationUnavailable', 'Dictation is unavailable'),
 			Lxicon.mic,
-			false,
+			!!this.dictation && !this.dictationStarting,
 			"mic",
-			() => {},
+			() => { void this.toggleDictation(); },
+			!!this.dictationSession,
 		);
 		let sendAction: ChatInputAction;
 		if (this.toolbarState.hasInput) {
@@ -271,6 +282,63 @@ export class ChatInputPart extends Disposable {
 			: [sendAction];
 		const inputActions = this.toolbarState.inputKind === "command" ? [modeAction] : [modeAction, modelAction, micAction];
 		this.inputToolbar.setActions([...inputActions, ...trailingActions]);
+	}
+
+	private async toggleDictation(): Promise<void> {
+		if (this.dictationSession) {
+			await this.stopDictation();
+			return;
+		}
+		if (!this.dictation || this.dictationStarting) return;
+		this.dictationStarting = true;
+		this.dictationCancelStart = false;
+		this.dictationError = undefined;
+		this.status.textContent = this.statusText(this.state);
+		this.renderToolbarActions();
+		let ended = false;
+		try {
+			const session = await this.dictation.start(text => {
+				if (this.isDisposed || this.dictationCancelStart || !this.visible) return;
+				const existing = this.input.value;
+				const separator = /[A-Za-z0-9]$/u.test(existing) && /^[A-Za-z0-9]/u.test(text) ? ' ' : '';
+				this.input.value = `${existing}${separator}${text}`;
+				this.input.focus();
+			}, error => {
+				ended = true;
+				this.dictationSession = undefined;
+				if (this.isDisposed) return;
+				this.dictationError = error;
+				this.status.textContent = this.statusText(this.state);
+				this.renderToolbarActions();
+			});
+			if (this.isDisposed || !this.visible || ended || this.dictationCancelStart) {
+				await session.stop();
+				return;
+			}
+			this.dictationSession = session;
+		} catch (error) {
+			this.dictationError = String(error);
+		} finally {
+			this.dictationStarting = false;
+			if (!this.isDisposed) {
+				this.status.textContent = this.statusText(this.state);
+				this.renderToolbarActions();
+			}
+		}
+	}
+
+	private async stopDictation(): Promise<void> {
+		this.dictationCancelStart = true;
+		const session = this.dictationSession;
+		if (!session) return;
+		this.dictationSession = undefined;
+		if (!this.isDisposed) this.renderToolbarActions();
+		try {
+			await session.stop();
+		} catch (error) {
+			this.dictationError = String(error);
+			if (!this.isDisposed) this.status.textContent = this.statusText(this.state);
+		}
 	}
 
 	private renderAttachments(): void {
@@ -403,6 +471,8 @@ export class ChatInputPart extends Disposable {
 
 	private statusText(state: ChatInputState): string {
 		if (state.error) return state.error;
+		if (this.dictationError) return localize('chat.input.dictationFailed', 'Dictation failed: {0}', this.dictationError);
+		if (this.dictationSession || this.dictationStarting) return localize('chat.input.dictationListening', 'Listening…');
 		switch (state.phase) {
 			case "loading":
 				return "Loading chat...";

@@ -259,7 +259,6 @@ impl ChatInput {
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn insert_text(&mut self, text: &str) {
         self.pointer_scroll_row = None;
         self.reset_history_navigation();
