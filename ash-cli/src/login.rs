@@ -44,6 +44,10 @@ enum LoginCommand {
     Kimi,
     /// Sign in with an xAI subscription.
     Xai,
+    /// Sign in with a BigModel Coding Plan account.
+    Bigmodel,
+    /// Sign in with a Z.AI Coding Plan account.
+    Zai,
     /// Read an API key from stdin for an existing configured provider.
     ApiKey { provider: String },
 }
@@ -62,6 +66,8 @@ pub(super) fn run(options: Options) -> Result<(), CliError> {
         }
         Some(LoginCommand::Kimi) => AccountLoginMethodDto::KimiDeviceCode,
         Some(LoginCommand::Xai) => AccountLoginMethodDto::XaiDeviceCode,
+        Some(LoginCommand::Bigmodel) => AccountLoginMethodDto::BigModelBrowser,
+        Some(LoginCommand::Zai) => AccountLoginMethodDto::ZaiBrowser,
     };
     let interrupt = InterruptSignal::register()?;
     let mut session = management::connect()?;

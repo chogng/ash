@@ -35,6 +35,8 @@ use ash_core_plugins::PluginActivationSnapshot;
 use ash_extensions::ExtensionRoot;
 use ash_file_access::Dir;
 use ash_file_access::Permission as DirPermission;
+use ash_glm_subscription::GlmOAuth;
+use ash_glm_subscription::GlmProvider;
 use ash_http_client::NetworkAccess;
 use ash_http_client::OutboundNetworkPolicy;
 use ash_install_context::InstallContext;
@@ -103,6 +105,7 @@ pub struct LocalAppServerOptions {
     pub profile_root: PathBuf,
     codex_home: Option<PathBuf>,
     grok_auth_path: Option<PathBuf>,
+    host_zcode_credentials: bool,
     pub dir_config: Option<LocalDirConfigOptions>,
     pub slash_commands: SlashCommandCatalog,
     pub dir_root: Option<PathBuf>,
@@ -162,6 +165,7 @@ impl LocalAppServerOptions {
             execution_environments: Vec::new(),
             codex_home: None,
             grok_auth_path: None,
+            host_zcode_credentials: false,
             dir_config: None,
             slash_commands: SlashCommandCatalog::default(),
             dir_root: None,
@@ -199,6 +203,12 @@ impl LocalAppServerOptions {
     /// Reads the backend host's Grok login when Ash has no xAI credential.
     pub fn with_host_grok_auth(mut self) -> Self {
         self.grok_auth_path = supergrok::grok_auth_path();
+        self
+    }
+
+    /// Reads the backend host's ZCode login for both GLM Coding Plan connections.
+    pub fn with_host_zcode_credentials(mut self) -> Self {
+        self.host_zcode_credentials = true;
         self
     }
 
@@ -391,6 +401,7 @@ impl fmt::Debug for LocalAppServerOptions {
             )
             .field("profile_root", &self.profile_root)
             .field("codex_home", &self.codex_home)
+            .field("host_zcode_credentials", &self.host_zcode_credentials)
             .field("dir_config", &self.dir_config)
             .field("slash_commands", &self.slash_commands)
             .field("dir_root", &self.dir_root)
@@ -444,6 +455,7 @@ impl PartialEq for LocalAppServerOptions {
             .eq(other.execution_environments.iter().map(|env| env.info()))
             && self.profile_root == other.profile_root
             && self.codex_home == other.codex_home
+            && self.host_zcode_credentials == other.host_zcode_credentials
             && self.dir_config == other.dir_config
             && self.slash_commands == other.slash_commands
             && self.dir_root == other.dir_root
@@ -1300,7 +1312,7 @@ pub fn open_local_app_server_with_codebase_providers(
             telemetry.instrument_http(Arc::clone(&application_http)),
         )),
     };
-    let model_operation_client = Some(model_client);
+    let model_operation_client = Some(Arc::clone(&model_client));
     let codex_home = match options.codex_home.take() {
         Some(home) => home,
         None => ash_chatgpt::codex_home().map_err(|error| OpenAppServerError(error.to_string()))?,
@@ -1320,6 +1332,24 @@ pub fn open_local_app_server_with_codebase_providers(
         None => KimiOAuth::production(Arc::clone(&profile_secrets))
             .map_err(|error| OpenAppServerError(error.to_string()))?,
     };
+    let glm_auth = |provider| {
+        if options.host_zcode_credentials {
+            GlmOAuth::with_zcode_credentials(
+                provider,
+                Arc::clone(&profile_secrets),
+                Arc::clone(&model_client),
+            )
+            .map_err(|error| OpenAppServerError(error.to_string()))
+        } else {
+            Ok(GlmOAuth::with_client(
+                provider,
+                Arc::clone(&profile_secrets),
+                Arc::clone(&model_client),
+            ))
+        }
+    };
+    let bigmodel_oauth = glm_auth(GlmProvider::BigModel)?;
+    let zai_oauth = glm_auth(GlmProvider::Zai)?;
     let supergrok_oauth = match (&model_operation_client, &options.grok_auth_path) {
         (Some(client), Some(path)) => supergrok::SuperGrokOAuth::with_grok_auth_file(
             Arc::clone(&profile_secrets),
@@ -1354,6 +1384,7 @@ pub fn open_local_app_server_with_codebase_providers(
     .with_local_tokenizers(local_tokenizers)
     .with_chatgpt_oauth(Arc::clone(&chatgpt_oauth))
     .with_kimi_oauth(Arc::clone(&kimi_oauth))
+    .with_glm_oauth(Arc::clone(&bigmodel_oauth), Arc::clone(&zai_oauth))
     .with_supergrok_oauth(Arc::clone(&supergrok_oauth));
     let models_manager = model_provider.models_manager();
     let model_provider = Arc::new(model_provider);
@@ -1405,6 +1436,8 @@ pub fn open_local_app_server_with_codebase_providers(
     let mut login_drivers: Vec<Arc<dyn InteractiveLoginDriver>> = vec![
         chatgpt_oauth.clone(),
         kimi_oauth.clone(),
+        bigmodel_oauth.clone(),
+        zai_oauth.clone(),
         supergrok_oauth.clone(),
     ];
     if let Some(github) = &github_oauth {
@@ -1418,6 +1451,12 @@ pub fn open_local_app_server_with_codebase_providers(
         .install_login_service(&login_service)
         .map_err(|error| OpenAppServerError(error.to_string()))?;
     kimi_oauth
+        .install_login_service(&login_service)
+        .map_err(|error| OpenAppServerError(error.to_string()))?;
+    bigmodel_oauth
+        .install_login_service(&login_service)
+        .map_err(|error| OpenAppServerError(error.to_string()))?;
+    zai_oauth
         .install_login_service(&login_service)
         .map_err(|error| OpenAppServerError(error.to_string()))?;
     supergrok_oauth
@@ -2196,7 +2235,11 @@ impl ModelCatalog for ConfigBackedModelService {
                 // Login can be ready before the user selects a subscription connection.
                 matches!(
                     id.as_str(),
-                    "chatgpt-subscription" | "kimi-subscription" | "xai-subscription"
+                    "chatgpt-subscription"
+                        | "kimi-subscription"
+                        | "xai-subscription"
+                        | "bigmodel-coding-plan"
+                        | "zai-coding-plan"
                 )
                 .then(|| ash_model_provider_config::ModelProviderConfig::for_connection(id.clone()))
             })

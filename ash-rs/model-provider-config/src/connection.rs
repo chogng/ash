@@ -10,6 +10,7 @@ pub enum ModelConnectionRuntime {
     ChatGptSubscription,
     KimiCode,
     XaiSubscription,
+    GlmSubscription,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -69,7 +70,11 @@ pub fn builtin_connections() -> Vec<ModelConnectionDefinition> {
             } else {
                 ProviderAccessMode::Api
             },
-            ModelConnectionRuntime::ProviderApi,
+            if subscription {
+                ModelConnectionRuntime::GlmSubscription
+            } else {
+                ModelConnectionRuntime::ProviderApi
+            },
         ));
     }
     for (id, provider, runtime) in [

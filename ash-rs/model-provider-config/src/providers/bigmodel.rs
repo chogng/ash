@@ -1,4 +1,5 @@
 use super::default_provider;
+use crate::ApiKeyPolicy;
 use crate::ApiProfile;
 use crate::InputTokenCountDefinition;
 use crate::InputTokenCountProfile;
@@ -41,4 +42,5 @@ pub(super) fn coding_plan_definition() -> ProviderDefinition {
         InputTokenCountDefinition::invocation_base(InputTokenCountProfile::ZaiChatCompletions)
             .with_models([ModelId::new("glm-5.1").expect("valid model ID")]),
     )
+    .with_api_key_policy(ApiKeyPolicy::Unsupported)
 }

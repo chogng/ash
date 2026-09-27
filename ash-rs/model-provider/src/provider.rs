@@ -33,6 +33,8 @@ use ash_client::OperationStreamSink;
 use ash_client::ResolvedApiTarget;
 use ash_context_engine::ContextTokenMeasurementCapability;
 use ash_context_engine::ContextTokenMeasurementOutcome;
+use ash_glm_subscription::GlmApiTarget;
+use ash_glm_subscription::GlmOAuth;
 use ash_http_client::UreqHttpClient;
 use ash_kimi::KimiOAuth;
 use ash_model_provider_config::Model;
@@ -62,6 +64,10 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
+#[cfg(test)]
+#[path = "provider_tests.rs"]
+mod tests;
+
 enum ProviderConnection {
     ChatGpt {
         auth: Arc<ChatGptOAuth>,
@@ -75,6 +81,9 @@ enum ProviderConnection {
     Kimi {
         auth: Arc<KimiOAuth>,
     },
+    Glm {
+        auth: Arc<GlmOAuth>,
+    },
 }
 
 #[derive(Clone)]
@@ -83,6 +92,7 @@ enum ProviderTarget {
     ChatGpt(Arc<ChatGptOAuth>),
     Xai(Arc<supergrok::SuperGrokOAuth>),
     Kimi(Arc<KimiOAuth>),
+    Glm(Arc<GlmOAuth>),
 }
 
 enum ResolvedProviderTarget<'a> {
@@ -90,6 +100,7 @@ enum ResolvedProviderTarget<'a> {
     ChatGpt(ChatGptApiTarget),
     Xai(supergrok::SuperGrokApiTarget),
     Kimi(ResolvedApiTarget),
+    Glm(GlmApiTarget),
 }
 
 impl ResolvedProviderTarget<'_> {
@@ -97,6 +108,7 @@ impl ResolvedProviderTarget<'_> {
         match self {
             Self::Fixed(target) => target,
             Self::Kimi(target) => target,
+            Self::Glm(target) => &target.target,
             Self::ChatGpt(target) => target.api_target(),
             Self::Xai(target) => &target.target,
         }
@@ -106,9 +118,21 @@ impl ResolvedProviderTarget<'_> {
         match self {
             Self::Fixed(target) => target.clone(),
             Self::Kimi(target) => target,
+            Self::Glm(target) => target.target,
             Self::ChatGpt(target) => target.into_api_target(),
             Self::Xai(target) => target.target,
         }
+    }
+
+    fn ensure_account(&self, expected: &Option<String>) -> Result<(), ModelProviderError> {
+        if let Self::Glm(target) = self
+            && expected.as_deref() != Some(target.account_id.as_str())
+        {
+            return Err(ModelProviderError::Credential(
+                "the connection account changed or is no longer ready".into(),
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -125,6 +149,9 @@ impl ProviderTarget {
             Self::Kimi(auth) => auth
                 .subscription_catalog_identity()
                 .map_err(|error| ModelProviderError::Credential(error.to_string())),
+            Self::Glm(auth) => auth
+                .account_id()
+                .map_err(|error| ModelProviderError::Credential(error.to_string())),
         }
     }
 
@@ -132,7 +159,7 @@ impl ProviderTarget {
         match self {
             Self::ChatGpt(_) => ApiEndpoint::ChatGptResponses,
             Self::Xai(_) => ApiEndpoint::XaiSubscriptionResponses,
-            Self::Fixed(_) | Self::Kimi(_) => direct,
+            Self::Fixed(_) | Self::Kimi(_) | Self::Glm(_) => direct,
         }
     }
 
@@ -142,6 +169,10 @@ impl ProviderTarget {
             Self::Kimi(auth) => auth
                 .api_target()
                 .map(ResolvedProviderTarget::Kimi)
+                .map_err(|error| ModelProviderError::Credential(error.to_string())),
+            Self::Glm(auth) => auth
+                .api_target()
+                .map(ResolvedProviderTarget::Glm)
                 .map_err(|error| ModelProviderError::Credential(error.to_string())),
             Self::Xai(auth) => auth
                 .api_target()
@@ -261,6 +292,7 @@ impl ModelEventSink for AttemptEvents<'_> {
 #[derive(Clone)]
 enum RemoteMeasurement {
     Enabled(Vec<ash_http_client::HttpHeader>),
+    Authenticated,
     Disabled,
 }
 
@@ -310,6 +342,9 @@ impl Provider {
             }
             ProviderConnection::Kimi { auth } => {
                 (ProviderTarget::Kimi(auth), RemoteMeasurement::Disabled)
+            }
+            ProviderConnection::Glm { auth } => {
+                (ProviderTarget::Glm(auth), RemoteMeasurement::Authenticated)
             }
             ProviderConnection::Xai { auth } => {
                 (ProviderTarget::Xai(auth), RemoteMeasurement::Disabled)
@@ -422,6 +457,7 @@ impl Provider {
             let request = self.prepare_request(&model, request);
             check_cancellation(cancellation)?;
             let target = self.target.resolve()?;
+            target.ensure_account(&self.account_identity)?;
             let attempt_client = AttemptClient::new(&diagnostic);
             let mut attempt = AttemptEvents {
                 sink,
@@ -565,7 +601,7 @@ impl Provider {
         model_id: &ModelId,
     ) -> Result<ContextTokenMeasurementCapability, ModelProviderError> {
         let model = self.resolve_model(model_id)?;
-        let provider = if matches!(self.remote_measurement, RemoteMeasurement::Enabled(_)) {
+        let provider = if !matches!(self.remote_measurement, RemoteMeasurement::Disabled) {
             self.adapter
                 .input_token_measurement_capability(model.id.as_str())
         } else {
@@ -587,8 +623,19 @@ impl Provider {
         cancellation: &CancellationToken,
     ) -> Result<ContextTokenMeasurementOutcome, ModelProviderError> {
         let model = self.resolve_model(model_id)?;
-        let provider = if let RemoteMeasurement::Enabled(headers) = &self.remote_measurement {
-            let target = ResolvedApiTarget::new(self.config.base_url.clone(), headers.clone());
+        let target = match &self.remote_measurement {
+            RemoteMeasurement::Enabled(headers) => Some(ResolvedApiTarget::new(
+                self.config.base_url.clone(),
+                headers.clone(),
+            )),
+            RemoteMeasurement::Authenticated => {
+                let target = self.target.resolve()?;
+                target.ensure_account(&self.account_identity)?;
+                Some(target.into_api_target())
+            }
+            RemoteMeasurement::Disabled => None,
+        };
+        let provider = if let Some(target) = target {
             let diagnostic = DiagnosticClient::new(
                 self.client.clone(),
                 self.diagnostics.clone(),
@@ -663,6 +710,8 @@ pub struct ModelProviderRuntime {
     chatgpt_oauth: Option<Arc<ChatGptOAuth>>,
     kimi_oauth: Option<Arc<KimiOAuth>>,
     supergrok_oauth: Option<Arc<supergrok::SuperGrokOAuth>>,
+    bigmodel_oauth: Option<Arc<GlmOAuth>>,
+    zai_oauth: Option<Arc<GlmOAuth>>,
     diagnostics: Option<Arc<dyn ResponseDiagnosticSink>>,
 }
 
@@ -700,6 +749,8 @@ impl ModelProviderRuntime {
             chatgpt_oauth: None,
             kimi_oauth: None,
             supergrok_oauth: None,
+            bigmodel_oauth: None,
+            zai_oauth: None,
             diagnostics: None,
         }
     }
@@ -728,6 +779,8 @@ impl ModelProviderRuntime {
             chatgpt_oauth: None,
             kimi_oauth: None,
             supergrok_oauth: None,
+            bigmodel_oauth: None,
+            zai_oauth: None,
             diagnostics: None,
         }
     }
@@ -752,6 +805,13 @@ impl ModelProviderRuntime {
     /// Installs the xAI subscription credential authority.
     pub fn with_supergrok_oauth(mut self, auth: Arc<supergrok::SuperGrokOAuth>) -> Self {
         self.supergrok_oauth = Some(auth);
+        self
+    }
+
+    /// Installs the two independent Coding Plan account authorities.
+    pub fn with_glm_oauth(mut self, bigmodel: Arc<GlmOAuth>, zai: Arc<GlmOAuth>) -> Self {
+        self.bigmodel_oauth = Some(bigmodel);
+        self.zai_oauth = Some(zai);
         self
     }
 
@@ -956,11 +1016,12 @@ impl ModelProviderRuntime {
                 .transpose()
                 .map(Option::flatten);
         }
-        if matches!(
-            normalized.connection.as_str(),
-            "bigmodel-coding-plan" | "zai-coding-plan"
-        ) {
-            return Ok(None);
+        if let Some(auth) = match normalized.connection.as_str() {
+            "bigmodel-coding-plan" => self.bigmodel_oauth.as_ref(),
+            "zai-coding-plan" => self.zai_oauth.as_ref(),
+            _ => None,
+        } {
+            return crate::catalog::glm_catalog_binding(&normalized, Arc::clone(auth));
         }
         let definition = runtime
             .configs
@@ -1108,6 +1169,21 @@ impl ModelProviderRuntime {
             })?;
         match connection.runtime {
             ModelConnectionRuntime::XaiSubscription => self.xai_connection(),
+            ModelConnectionRuntime::GlmSubscription => {
+                let auth = match normalized.connection.as_str() {
+                    "bigmodel-coding-plan" => self.bigmodel_oauth.as_ref(),
+                    "zai-coding-plan" => self.zai_oauth.as_ref(),
+                    _ => None,
+                }
+                .ok_or_else(|| {
+                    ModelProviderError::Credential("GLM Coding Plan login is unavailable".into())
+                })?;
+                auth.api_target()
+                    .map_err(|error| ModelProviderError::Credential(error.to_string()))?;
+                Ok(ProviderConnection::Glm {
+                    auth: Arc::clone(auth),
+                })
+            }
             ModelConnectionRuntime::KimiCode => {
                 let auth = self.kimi_oauth.as_ref().ok_or_else(|| {
                     ModelProviderError::Credential("Kimi Code OAuth is unavailable".into())

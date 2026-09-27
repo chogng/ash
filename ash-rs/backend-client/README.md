@@ -3,6 +3,7 @@
 - 封装各供应商的后台业务 HTTP API，按供应商模块组织路由和响应类型。
 - `chatgpt` 提供账号、额度、账单、配置、统计与云任务接口。
 - `supergrok` 提供订阅模型目录、账号、访问设置、订阅额度、余额和用量历史查询。
+- `bigmodel`、`zai` 提供 Coding Plan 账号登录后的业务令牌交换与内部模型请求凭据获取。
 - 使用调用方提供的当前认证；凭据存储、刷新与账号生命周期由认证 crate 负责。
 - 共享 URL 校验、JSON 请求、取消传递和脱敏错误，复用 `ash-client` 与 `ash-http-client`。
 - 模型生成与流式协议由 `model-provider` 和 `ash-api` 负责。
@@ -14,13 +15,14 @@
 | --- | --- | --- |
 | `chatgpt` | `chatgpt::Client`、`chatgpt::RouteStyle`、供应商响应类型 | ChatGPT `/wham`、Codex `/api/codex` 和 API key 费用路由 |
 | `supergrok` | `supergrok::Client`、供应商响应类型 | Grok 订阅后台路由、账号、模型与账单 |
+| `bigmodel`、`zai` | `issue_api_key` | 登录后取得 Coding Plan 内部请求凭据 |
 | crate 根 | `RequestError` | 不包含认证头或响应正文的请求错误 |
 
 - `ash-chatgpt`、`ash-supergrok` 认证 crate 依赖本 crate；本 crate 不依赖登录、凭据存储或模型运行时。
 - 各供应商客户端独立接收 `OperationClient` 与已解析的 `ResolvedApiTarget`；不同供应商不共享认证状态。
 - 生产 transport 必须拒绝重定向；Ash 默认 HTTP 配置满足此要求。
 - 新供应商在本 crate 内增加模块，只有真实接口需要时才增加子文件；后台请求不抽象成统一套餐或云任务模型。
-- Kimi 当前由 `ash-kimi` 管理登录并调用模型服务，尚无账户额度后台接口；BigModel 与 Z.AI Coding Plan 使用独立 API key 连接，不产生订阅登录账户，因此目前没有对应的后台业务客户端。
+- Kimi 当前由 `ash-kimi` 管理登录并调用模型服务，尚无账户额度后台接口；BigModel 与 Z.AI Coding Plan 分别由 `ash-glm-subscription` 管理账号登录，本 crate 处理其后台凭据接口，用户无需录入 Coding Plan Key。
 - 原根级 `BackendClient`、`RouteStyle` 和 ChatGPT 响应类型已迁到 `chatgpt`，调用方直接使用新路径。
 
 ## ChatGPT 接口

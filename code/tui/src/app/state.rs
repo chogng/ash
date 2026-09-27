@@ -795,8 +795,7 @@ impl App {
     }
 
     pub(crate) fn refresh_subscription(&mut self) -> Option<AppCommand> {
-        if !self.selected_subscription.account_login()
-            || !self.panels().subscription_open()
+        if !self.panels().subscription_open()
             || !self.subscriptions[self.selected_subscription.index()].needs_model_refresh()
         {
             return None;
@@ -2773,21 +2772,10 @@ impl App {
             ConfigEvent::ApiKeySaved {
                 provider,
                 mut choices,
-                plan,
                 models,
             } => {
                 self.localize_selection(&mut choices);
                 self.panels_mut().finish_config_prompt(choices);
-                if let Some((provider, plan)) = plan {
-                    self.subscriptions[provider.index()]
-                        .update(crate::config::SubscriptionEvent::Plan(plan));
-                    if self.selected_subscription == provider {
-                        let mut choices = self.subscriptions[provider.index()].choices();
-                        self.localize_selection(&mut choices);
-                        let sign_out = self.subscriptions[provider.index()].sign_out_availability();
-                        self.panels_mut().update_subscription(choices, sign_out);
-                    }
-                }
                 if let Some(models) = models {
                     let mut notice = match models {
                         Ok(count) => crate::nls::Text::template(

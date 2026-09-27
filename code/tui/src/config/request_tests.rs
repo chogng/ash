@@ -461,72 +461,42 @@ fn rejected_connection_update_does_not_send_key_or_report_saved() {
 
 #[test]
 fn saving_keys_targets_the_exact_connection_and_leaves_activation_to_the_backend() {
-    for (id, subscription) in [
-        ("openai", None),
-        (
-            "bigmodel-coding-plan",
-            Some(crate::config::SubscriptionProvider::BigModel),
-        ),
-        (
-            "zai-coding-plan",
-            Some(crate::config::SubscriptionProvider::Zai),
-        ),
-    ] {
-        let requests = Arc::new(Mutex::new(Vec::new()));
-        let mut responses = vec![response(
-            1,
-            serde_json::json!({"connection":id,"apiKeyConfigured":true}),
-        )];
-        if subscription.is_none() {
-            responses.push(response(
-                2,
-                serde_json::json!({"type":"models","models":[]}),
-            ));
-        }
-        let next = responses.len() as u64 + 1;
-        responses.push(response(
-            next,
-            serde_json::to_value(empty_config_snapshot()).unwrap(),
-        ));
-        responses.push(response(next + 1, serde_json::json!({"providers":[]})));
-        let mut client = AppServerClient::new(RecordingTransport {
-            requests: requests.clone(),
-            responses: VecDeque::from(responses),
-        });
-        let mut edit = crate::config::ProviderApiKeyEdit::new(id.into(), "fixture-key".into());
-        if let Some(subscription) = subscription {
-            edit = edit.for_coding_plan(subscription);
-        }
-        let update = super::set_provider_api_key(&mut client, edit).unwrap();
-        assert_eq!(update.provider, id);
-        assert_eq!(update.models, subscription.is_none().then_some(Ok(0)));
-        assert_eq!(
-            update
-                .plan
-                .map(|(provider, status)| (provider, status.enabled)),
-            subscription.map(|provider| (provider, true))
-        );
-        let requests = requests.lock().unwrap();
-        let mut methods = vec!["provider/apiKey/set"];
-        if subscription.is_none() {
-            methods.push("provider/models/list");
-        }
-        methods.extend(["config/read", "provider/list"]);
-        assert_eq!(
-            requests
-                .iter()
-                .map(|request| request["method"].as_str().unwrap())
-                .collect::<Vec<_>>(),
-            methods
-        );
-        assert_eq!(
-            requests[0]["params"],
-            serde_json::json!({"connection":id,"apiKey":"fixture-key"})
-        );
-        if subscription.is_none() {
-            assert_eq!(requests[1]["params"], serde_json::json!({"connection":id}));
-        }
-    }
+    let id = "openai";
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let mut client = AppServerClient::new(RecordingTransport {
+        requests: requests.clone(),
+        responses: VecDeque::from([
+            response(
+                1,
+                serde_json::json!({"connection":id,"apiKeyConfigured":true}),
+            ),
+            response(2, serde_json::json!({"type":"models","models":[]})),
+            response(3, serde_json::to_value(empty_config_snapshot()).unwrap()),
+            response(4, serde_json::json!({"providers":[]})),
+        ]),
+    });
+    let edit = crate::config::ProviderApiKeyEdit::new(id.into(), "fixture-key".into());
+    let update = super::set_provider_api_key(&mut client, edit).unwrap();
+    assert_eq!(update.provider, id);
+    assert_eq!(update.models, Some(Ok(0)));
+    let requests = requests.lock().unwrap();
+    assert_eq!(
+        requests
+            .iter()
+            .map(|request| request["method"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        [
+            "provider/apiKey/set",
+            "provider/models/list",
+            "config/read",
+            "provider/list"
+        ]
+    );
+    assert_eq!(
+        requests[0]["params"],
+        serde_json::json!({"connection":id,"apiKey":"fixture-key"})
+    );
+    assert_eq!(requests[1]["params"], serde_json::json!({"connection":id}));
 }
 
 #[test]
@@ -553,7 +523,6 @@ fn failed_model_discovery_does_not_report_api_key_save_as_failed() {
     )
     .unwrap();
     assert_eq!(update.models, Some(Err("Authentication".into())));
-    assert!(update.plan.is_none());
 }
 
 #[test]

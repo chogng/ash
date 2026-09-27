@@ -915,18 +915,18 @@ TOML 编辑共享同一 Config revision/generation 和 `config/changed` 通知�
 
 ### Coding Plan 连接规范
 
-BigModel 与 Z.ai 的四条连接使用同一组 Provider RPC，但以精确 ID 隔离配置、密钥、模型引用和请求地址：
+BigModel 与 Z.AI 的四条连接使用精确 ID 隔离配置、凭据、模型引用和请求地址。Coding Plan 登录走 Account RPC；开发者 API 密钥走 Provider RPC：
 
 | 连接 | Provider ID | 默认或连接地址 | 退出登录 |
 | --- | --- | --- | --- |
-| BigModel Coding Plan | `bigmodel-coding-plan` | `https://open.bigmodel.cn/api/coding/paas/v4` | `provider/remove` 移除该接入 |
-| Z.ai Coding Plan | `zai-coding-plan` | `https://api.z.ai/api/coding/paas/v4` | `provider/remove` 移除该接入 |
+| BigModel Coding Plan | `bigmodel-coding-plan` | `https://open.bigmodel.cn/api/coding/paas/v4` | `account/logout` 删除该账户凭据 |
+| Z.AI Coding Plan | `zai-coding-plan` | `https://api.z.ai/api/coding/paas/v4` | `account/logout` 删除该账户凭据 |
 | BigModel API | `bigmodel` | `https://open.bigmodel.cn/api/paas/v4` | 无订阅登录 |
 | Z.ai API | `zai` | `https://api.z.ai/api/paas/v4` | 无订阅登录 |
 
 四种地址对应 [ZCode 官方连接说明](https://zcode.z.ai/cn/docs/configuration)中的 Coding Plan 与通用 API 端点。
 
-Coding Plan 首次连接使用 `provider/apiKey/set` 保存密钥并自动启用；已有接入使用 `provider/activate`，无需重新输入密钥。四条接入互斥且凭据独立。ChatGPT、Kimi、Super Grok 登出使用各自的 `account/logout`，当前选择保持未就绪，不切换其他接入。
+Coding Plan 首次连接使用 `account/login/start` 浏览器授权，登录完成后自动启用；后端取得并保存内部请求凭据，用户无需输入 Key。四条接入互斥且凭据独立。五种订阅登出均使用各自的 `account/logout`，当前选择保持未就绪，不切换其他接入。
 
 `execPolicy/rule/upsert` 接收完整 typed rule：selector 支持 action digest/kind、trusted source、
 tokenized command prefix、structured network target、capability scope 和显式 `all`；effect 支持

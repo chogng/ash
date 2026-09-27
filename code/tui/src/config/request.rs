@@ -7,8 +7,6 @@ use super::ProviderApiKeyEdit;
 use super::TerminalSettings;
 use super::advisor_choices;
 use super::config_choices;
-use super::editor::ApiKeyTarget;
-use super::subscription::PlanStatus;
 use crate::client::new_command_id;
 use crate::nls;
 use crate::nls::Message;
@@ -25,7 +23,6 @@ use std::fmt;
 pub(crate) struct ProviderApiKeyUpdate {
     pub(crate) provider: String,
     pub(crate) choices: ConfigChoices,
-    pub(crate) plan: Option<(super::SubscriptionProvider, PlanStatus)>,
     pub(crate) models: Option<Result<usize, String>>,
 }
 
@@ -105,7 +102,6 @@ where
             set_provider_api_key(client, edit).map(|update| Event::ApiKeySaved {
                 provider: update.provider,
                 choices: update.choices,
-                plan: update.plan,
                 models: update.models,
             })
         }
@@ -403,10 +399,9 @@ pub(crate) fn set_provider_api_key<T>(
 where
     T: JsonRpcTransport,
 {
-    let target = edit.target();
     let (provider, api_key) = edit.into_parts();
     client.set_provider_api_key(ProviderApiKeySetRequest::new(provider.clone(), api_key))?;
-    let models = (target == ApiKeyTarget::Provider).then(|| {
+    let models = Some({
         client
             .list_provider_models(provider.clone())
             .map(|result| match result {
@@ -421,16 +416,6 @@ where
         provider,
         choices,
         models,
-        plan: match target {
-            ApiKeyTarget::Provider => None,
-            ApiKeyTarget::CodingPlan(subscription) => Some((
-                subscription,
-                PlanStatus {
-                    key_saved: true,
-                    enabled: true,
-                },
-            )),
-        },
     })
 }
 

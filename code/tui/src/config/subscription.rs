@@ -1,6 +1,5 @@
 use super::ConfigChoices;
 use super::ConfigSelectionAction;
-use super::editor::ApiKeyTarget;
 use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionItemId;
@@ -18,9 +17,7 @@ use ash_app_server_protocol::protocol::account::AccountLoginStartResult;
 use ash_app_server_protocol::protocol::account::AccountLogoutParams;
 use ash_app_server_protocol::protocol::account::AccountReadResult;
 use ash_app_server_protocol::protocol::account::AccountStatusDto;
-use ash_app_server_protocol::protocol::config::ConfigReadResult;
 use ash_app_server_protocol::protocol::model::ModelCatalogEntry;
-use ash_app_server_protocol::protocol::provider::ProviderListResult;
 use ash_app_server_protocol::protocol::provider::ProviderModelsListResult;
 use std::collections::BTreeMap;
 
@@ -71,25 +68,13 @@ impl SubscriptionProvider {
             Self::Zai => "Z.AI",
         }
     }
-    /// The device-code login surface. Coding Plans authorize with their own saved keys.
-    fn method(self) -> Option<AccountLoginMethodDto> {
+    fn method(self) -> AccountLoginMethodDto {
         match self {
-            Self::ChatGpt => Some(AccountLoginMethodDto::OpenAiChatGptDeviceCode),
-            Self::Xai => Some(AccountLoginMethodDto::XaiDeviceCode),
-            Self::Kimi => Some(AccountLoginMethodDto::KimiDeviceCode),
-            Self::BigModel | Self::Zai => None,
-        }
-    }
-    pub(crate) fn account_login(self) -> bool {
-        self.method().is_some()
-    }
-
-    pub(crate) fn model_provider(self) -> &'static str {
-        match self {
-            Self::ChatGpt => "openai",
-            Self::Xai => "xai",
-            Self::Kimi => "kimi",
-            Self::BigModel | Self::Zai => "zai",
+            Self::ChatGpt => AccountLoginMethodDto::OpenAiChatGptDeviceCode,
+            Self::Xai => AccountLoginMethodDto::XaiDeviceCode,
+            Self::Kimi => AccountLoginMethodDto::KimiDeviceCode,
+            Self::BigModel => AccountLoginMethodDto::BigModelBrowser,
+            Self::Zai => AccountLoginMethodDto::ZaiBrowser,
         }
     }
 }
@@ -102,24 +87,11 @@ pub(crate) enum SubscriptionCommand {
     SignOut,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum PlanConnection {
-    Connected,
-    Disconnected,
-}
-
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) enum SignOutAvailability {
     #[default]
     Unavailable,
     Available,
-}
-
-/// One snapshot of the GLM Coding Plan's local credential and endpoint state.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct PlanStatus {
-    pub(crate) key_saved: bool,
-    pub(crate) enabled: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -139,7 +111,6 @@ pub(crate) enum SubscriptionEvent {
     Failed(String),
     Updated(AccountReadResult),
     Completed(AccountLoginCompleted),
-    Plan(PlanStatus),
 }
 
 /// Keeps a pending sign-in available when the user leaves and reopens Providers.
@@ -148,7 +119,6 @@ pub(crate) struct Subscription {
     provider: SubscriptionProvider,
     account: Option<AccountReadResult>,
     models: Option<Result<Vec<ModelCatalogEntry>, String>>,
-    plan: Option<PlanStatus>,
     login: Option<AccountLoginStartResult>,
     browser_error: Option<String>,
     pending: Option<SubscriptionCommand>,
@@ -183,11 +153,6 @@ impl Subscription {
         match event {
             SubscriptionEvent::Updated(account) => {
                 self.update_account(account);
-            }
-            SubscriptionEvent::Plan(plan) => {
-                self.pending = None;
-                self.message = None;
-                self.plan = Some(plan);
             }
             SubscriptionEvent::Completed(completed) => {
                 self.update_account(completed.account.clone());
@@ -303,9 +268,6 @@ impl Subscription {
     }
 
     pub(crate) fn choices(&self) -> ConfigChoices {
-        if !self.provider.account_login() {
-            return self.plan_choices();
-        }
         let mut actions = BTreeMap::new();
         let mut items = Vec::new();
         let account = self
@@ -423,13 +385,6 @@ impl Subscription {
         if self.pending.is_some() {
             return SignOutAvailability::Unavailable;
         }
-        if !self.provider.account_login() {
-            return if self.plan.is_some_and(|plan| plan.enabled && plan.key_saved) {
-                SignOutAvailability::Available
-            } else {
-                SignOutAvailability::Unavailable
-            };
-        }
         if self.login.is_none()
             && self
                 .account
@@ -441,58 +396,6 @@ impl Subscription {
         } else {
             SignOutAvailability::Unavailable
         }
-    }
-
-    /// Builds one Coding Plan view from its own credential and selected endpoint.
-    fn plan_choices(&self) -> ConfigChoices {
-        let mut actions = BTreeMap::new();
-        let mut items = Vec::new();
-        let status = self.plan.as_ref();
-        if status.is_some_and(|plan| plan.key_saved || plan.enabled) {
-            items.push(ListSelectionItem::new(
-                if status.is_some_and(|plan| plan.enabled) {
-                    "Coding plan enabled"
-                } else {
-                    "Coding plan not enabled"
-                },
-            ));
-        }
-        if let Some(message) = &self.message {
-            items.push(ListSelectionItem::new(message));
-        }
-        if self.pending.is_some() {
-            items.push(ListSelectionItem::new("Working…"));
-        } else {
-            if !status.is_some_and(|plan| plan.key_saved) {
-                let label = format!("Sign in with {}", self.provider.name());
-                let id = ListSelectionItemId::new(&label);
-                items.push(ListSelectionItem::new(&label).with_id(id.clone()));
-                actions.insert(
-                    id,
-                    ConfigSelectionAction::OpenProviderApiKey {
-                        provider: self.provider.id().into(),
-                        display_name: self.provider.title().into(),
-                        target: ApiKeyTarget::CodingPlan(self.provider),
-                    },
-                );
-            } else if !status.is_some_and(|plan| plan.enabled) {
-                add_action(
-                    &mut items,
-                    &mut actions,
-                    &format!("Sign in with {}", self.provider.name()),
-                    SubscriptionCommand::SignIn,
-                );
-            }
-        }
-        let mut model = ListSelectionModel::new(
-            self.provider.title(),
-            vec![ListSelectionGroup::new("Status", items)],
-        )
-        .with_dismiss(crate::keymap::bindings::RETURN_LIST);
-        if self.sign_out_availability() == SignOutAvailability::Available {
-            model = model.with_key_hint_action(crate::keymap::bindings::SUBSCRIPTION_SIGN_OUT);
-        }
-        ConfigChoices { model, actions }
     }
 }
 
@@ -550,31 +453,10 @@ fn execute_with_browser<T: JsonRpcTransport>(
     command: SubscriptionCommand,
     open_browser: impl FnOnce(&str) -> Result<(), String>,
 ) -> SubscriptionEvent {
-    if !provider.account_login() {
-        return match command {
-            SubscriptionCommand::Read => {
-                read_plan_status(client, provider).map(SubscriptionEvent::Plan)
-            }
-            SubscriptionCommand::SignIn => {
-                set_plan(client, provider, PlanConnection::Connected).map(SubscriptionEvent::Plan)
-            }
-            SubscriptionCommand::SignOut => {
-                set_plan(client, provider, PlanConnection::Disconnected)
-                    .map(SubscriptionEvent::Plan)
-            }
-            _ => Ok(SubscriptionEvent::Failed(format!(
-                "{} does not use account sign-in",
-                provider.name()
-            ))),
-        }
-        .unwrap_or_else(|error| SubscriptionEvent::Failed(error.to_string()));
-    }
     let result = match command {
         SubscriptionCommand::Read => read_account_and_models(client, provider),
         SubscriptionCommand::SignIn => {
-            let method = provider
-                .method()
-                .expect("account providers declare a method");
+            let method = provider.method();
             client
                 .start_account_login(AccountLoginStartParams { method })
                 .and_then(|started| match started {
@@ -613,7 +495,12 @@ fn execute_with_browser<T: JsonRpcTransport>(
     result.unwrap_or_else(|error| {
         SubscriptionEvent::Failed(match error {
             ClientError::Server { message, .. } if message == "AccountExternalLoginRequired" => {
-                "Sign in to ChatGPT in Codex, then reconnect here.".into()
+                match provider {
+                    SubscriptionProvider::BigModel | SubscriptionProvider::Zai => {
+                        "Sign out of this Coding Plan account in ZCode.".into()
+                    }
+                    _ => "Sign in to ChatGPT in Codex, then reconnect here.".into(),
+                }
             }
             error => error.to_string(),
         })
@@ -640,65 +527,6 @@ fn read_account_and_models<T: JsonRpcTransport>(
             .unwrap_or_else(|error| Err(error.to_string()))
     });
     Ok(SubscriptionEvent::Read { account, models })
-}
-
-/// Reads the Z.AI Coding Plan state from the saved provider connection and stored key.
-fn read_plan_status<T: JsonRpcTransport>(
-    client: &mut AppServerClient<T>,
-    provider: SubscriptionProvider,
-) -> Result<PlanStatus, ClientError> {
-    let config = client.read_config()?;
-    let providers = client.list_providers()?;
-    Ok(plan_status(&config, &providers, provider))
-}
-
-fn plan_status(
-    config: &ConfigReadResult,
-    providers: &ProviderListResult,
-    provider: SubscriptionProvider,
-) -> PlanStatus {
-    let key_saved = providers
-        .providers
-        .iter()
-        .any(|entry| entry.connection == provider.id() && entry.api_key_configured);
-    let enabled = config
-        .active_connections
-        .get(provider.model_provider())
-        .is_some_and(|connection| connection == provider.id());
-    PlanStatus {
-        key_saved,
-        enabled: enabled && key_saved,
-    }
-}
-
-fn set_plan<T: JsonRpcTransport>(
-    client: &mut AppServerClient<T>,
-    subscription: SubscriptionProvider,
-    connection: PlanConnection,
-) -> Result<PlanStatus, ClientError> {
-    let id = subscription.id();
-    let config = client.read_config()?;
-    match connection {
-        PlanConnection::Connected => {
-            client.activate_provider(
-                ash_app_server_protocol::protocol::provider::ProviderActivateParams {
-                    command_id: crate::client::new_command_id(id),
-                    expected_revision: config.revision,
-                    connection: id.into(),
-                },
-            )?;
-        }
-        PlanConnection::Disconnected => {
-            client.remove_provider(
-                ash_app_server_protocol::protocol::config::ProviderRemoveParams {
-                    command_id: crate::client::new_command_id(id),
-                    expected_revision: config.revision,
-                    connection: id.into(),
-                },
-            )?;
-        }
-    }
-    read_plan_status(client, subscription)
 }
 
 #[cfg(test)]

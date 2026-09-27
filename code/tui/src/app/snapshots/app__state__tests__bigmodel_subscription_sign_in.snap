@@ -6,7 +6,7 @@ expression: "crate::app::usage_tests::render(&app, 96, 24)"
 
             ┌── Config › BigModel ─────────────────────────────────────────────[✗]─┐
             │                                                                      │
-            │   Status                                                             │
+            │   Account                                                            │
             │                                                                      │
             │> Sign in with BigModel                                               │
             │                                                                      │

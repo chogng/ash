@@ -2,6 +2,7 @@ use ash_client::ClientError;
 use ash_client::ClientRequest;
 use ash_client::ClientResponse;
 use ash_client::OperationClient;
+use ash_glm_subscription::{GlmOAuth, GlmProvider};
 use ash_model_provider_config::ModelId;
 use ash_model_provider_config::ModelProviderConfig;
 use ash_model_provider_config::ProviderConfigRegistry;
@@ -11,6 +12,7 @@ use ash_models_manager::CatalogReadSource;
 use ash_models_manager::CatalogSourceErrorKind;
 use ash_protocol::CapabilitySupport;
 use ash_protocol::ProviderId;
+use ash_secrets::{SecretKey, SecretStore, SecretValue};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -266,12 +268,17 @@ fn coding_plans_use_the_shared_catalog_without_a_second_discovery_list() {
 #[test]
 fn api_and_coding_plan_connections_have_separate_credentials() {
     let secrets = Arc::new(ash_secrets::MemorySecretStore::default());
+    let client = Arc::new(CatalogClient {
+        request: Mutex::new(None),
+    });
     let runtime = crate::ModelProviderRuntime::with_client_and_secrets(
         ProviderConfigRegistry::builtin(),
-        Arc::new(CatalogClient {
-            request: Mutex::new(None),
-        }),
+        client.clone(),
         secrets.clone(),
+    )
+    .with_glm_oauth(
+        GlmOAuth::with_client(GlmProvider::BigModel, secrets.clone(), client.clone()),
+        GlmOAuth::with_client(GlmProvider::Zai, secrets.clone(), client),
     );
     let mut config = ModelProviderConfig::for_connection(
         ash_protocol::ModelConnectionId::new("zai-coding-plan").unwrap(),
@@ -282,7 +289,8 @@ fn api_and_coding_plan_connections_have_separate_credentials() {
         "Coding Plans do not invent a discovery source"
     );
 
-    let credentials = ProviderCredentialService::new(ProviderConfigRegistry::builtin(), secrets);
+    let credentials =
+        ProviderCredentialService::new(ProviderConfigRegistry::builtin(), secrets.clone());
     credentials
         .set_api_key(
             &ash_protocol::ModelConnectionId::new(ProviderId::new("zai").unwrap().as_str())
@@ -291,15 +299,44 @@ fn api_and_coding_plan_connections_have_separate_credentials() {
         )
         .unwrap();
     assert!(runtime.catalog_binding(&config).unwrap().is_none());
-    credentials
-        .set_api_key(
-            &ash_protocol::ModelConnectionId::new(
-                ProviderId::new("zai-coding-plan").unwrap().as_str(),
+    assert!(matches!(
+        credentials
+            .set_api_key(
+                &ash_protocol::ModelConnectionId::new(
+                    ProviderId::new("zai-coding-plan").unwrap().as_str(),
+                )
+                .unwrap(),
+                b"plan-key".to_vec(),
             )
-            .unwrap(),
-            b"plan-key".to_vec(),
+            .unwrap_err(),
+        crate::ProviderCredentialError::ApiKeyUnsupported
+    ));
+    secrets
+        .store(
+            &SecretKey::new("provider/zai/current/oauth").unwrap(),
+            &SecretValue::new(
+                serde_json::to_vec(&serde_json::json!({
+                    "account_id":"account-1", "email":null, "display_name":null,
+                    "model_key":"plan-key", "revision":1
+                }))
+                .unwrap(),
+            ),
         )
         .unwrap();
+    let binding = runtime.catalog_binding(&config).unwrap().unwrap();
+    let manager = runtime.models_manager();
+    tokio::runtime::Builder::new_current_thread()
+        .build()
+        .unwrap()
+        .block_on(manager.refresh(binding.scope().clone(), binding.source()))
+        .unwrap();
+    assert!(
+        manager
+            .list(&[binding.scope().clone()], &CatalogQuery::all())
+            .unwrap()
+            .iter()
+            .any(|entry| entry.model().model.as_str() == "glm-5.1")
+    );
     let config = ModelProviderConfig::new(ProviderId::new("zai").unwrap());
     assert!(
         runtime.catalog_binding(&config).unwrap().is_none(),

@@ -398,6 +398,25 @@ fn provider_rpc_lists_the_backend_catalog_and_stores_api_keys_without_projecting
             .connections()
             .len()
     );
+    for id in ["bigmodel-coding-plan", "zai-coding-plan"] {
+        let entry = initial["result"]["providers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|entry| entry["connection"] == id)
+            .unwrap();
+        assert_eq!(entry["ready"], false);
+        assert_eq!(entry["apiKeyPolicy"], "unsupported");
+        let attempted = call(
+            &server,
+            &mut connection,
+            serde_json::json!({
+                "jsonrpc":"2.0","id":5,"method":"provider/apiKey/set",
+                "params":{"connection":id,"apiKey":"manual-plan-key"}
+            }),
+        );
+        assert!(attempted.get("error").is_some());
+    }
 
     let saved = call(
         &server,
@@ -426,6 +445,69 @@ fn provider_rpc_lists_the_backend_catalog_and_stores_api_keys_without_projecting
                 |provider| provider["provider"] == "openai" && provider["apiKeyConfigured"] == true
             )
     );
+}
+
+#[test]
+fn provider_list_discovers_a_deferred_subscription_before_account_read() {
+    let profile = tempfile::tempdir().unwrap();
+    let secrets = Arc::new(MemorySecretStore::default());
+    let driver = Arc::new(TestLoginDriver {
+        account: Mutex::new(Some(AccountSnapshot {
+            account: AccountRef {
+                provider: "chatgpt-subscription".into(),
+                account_id: "account-1".into(),
+            },
+            email: None,
+            display_name: None,
+            organization: None,
+            plan: Some("plus".into()),
+            status: AccountStatus::Ready,
+            credential_revision: 1,
+        })),
+    });
+    let login = Arc::new(LoginService::deferred(driver.clone()));
+    assert!(login.read().unwrap().accounts.is_empty());
+    let server = server()
+        .with_config_store(Arc::new(
+            ConfigStore::open(profile.path().join("config.sqlite3")).unwrap(),
+        ))
+        .with_provider_credentials(Arc::new(
+            ash_model_provider::ProviderCredentialService::new(
+                ash_model_provider_config::ProviderConfigRegistry::builtin(),
+                secrets,
+            ),
+        ))
+        .with_login_service(login.clone());
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let response = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"provider/list","params":{}}),
+    );
+    let chatgpt = response["result"]["providers"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|provider| provider["connection"] == "chatgpt-subscription")
+        .unwrap();
+    assert_eq!(chatgpt["ready"], true);
+    assert_eq!(chatgpt["configured"], true);
+    assert_eq!(login.read().unwrap().accounts.len(), 1);
+
+    *driver.account.lock().unwrap() = None;
+    let changed = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"provider/list","params":{}}),
+    );
+    let chatgpt = changed["result"]["providers"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|provider| provider["connection"] == "chatgpt-subscription")
+        .unwrap();
+    assert_eq!(chatgpt["ready"], false);
 }
 
 #[test]
@@ -6774,7 +6856,7 @@ fn advisor_requests_are_typed_retry_safe_and_separate_from_worker_turns() {
 }
 
 #[test]
-fn cancelled_device_subscription_login_preserves_connection_selection() {
+fn cancelled_subscription_login_preserves_connection_selection() {
     struct Driver {
         provider: &'static str,
         method: ash_login::LoginMethod,
@@ -6788,11 +6870,21 @@ fn cancelled_device_subscription_login_preserves_connection_selection() {
         }
         fn begin(&self, request: BeginLoginRequest) -> Result<BeginLogin, LoginError> {
             assert_eq!(request.method, self.method);
-            Ok(BeginLogin::DeviceCode {
-                login_id: request.login_id,
-                verification_url: "https://auth.example.test/device".into(),
-                user_code: "SUBSCRIPTION-CODE".into(),
-            })
+            if matches!(
+                request.method,
+                ash_login::LoginMethod::BigModelBrowser | ash_login::LoginMethod::ZaiBrowser
+            ) {
+                Ok(BeginLogin::Browser {
+                    login_id: request.login_id,
+                    authorization_url: "https://zcode.z.ai/authorize".into(),
+                })
+            } else {
+                Ok(BeginLogin::DeviceCode {
+                    login_id: request.login_id,
+                    verification_url: "https://auth.example.test/device".into(),
+                    user_code: "SUBSCRIPTION-CODE".into(),
+                })
+            }
         }
         fn cancel(&self, _: &LoginId) -> Result<CancelLoginOutcome, LoginError> {
             Ok(CancelLoginOutcome::Cancelled)
@@ -6812,6 +6904,16 @@ fn cancelled_device_subscription_login_preserves_connection_selection() {
             ash_login::LoginMethod::KimiDeviceCode,
             "kimiDeviceCode",
         ),
+        (
+            "bigmodel-coding-plan",
+            ash_login::LoginMethod::BigModelBrowser,
+            "bigModelBrowser",
+        ),
+        (
+            "zai-coding-plan",
+            ash_login::LoginMethod::ZaiBrowser,
+            "zaiBrowser",
+        ),
     ] {
         let profile = tempfile::tempdir().unwrap();
         let config = Arc::new(ConfigStore::open(profile.path().join("config.sqlite3")).unwrap());
@@ -6828,10 +6930,20 @@ fn cancelled_device_subscription_login_preserves_connection_selection() {
                 &mut connection,
                 serde_json::json!({"jsonrpc":"2.0","id":id,"method":"account/login/start","params":{"method":{"type":rpc_method}}}),
             );
-            assert_eq!(
-                response["result"]["userCode"], "SUBSCRIPTION-CODE",
-                "{response}"
-            );
+            if matches!(
+                method,
+                ash_login::LoginMethod::BigModelBrowser | ash_login::LoginMethod::ZaiBrowser
+            ) {
+                assert_eq!(
+                    response["result"]["authorizationUrl"],
+                    "https://zcode.z.ai/authorize"
+                );
+            } else {
+                assert_eq!(
+                    response["result"]["userCode"], "SUBSCRIPTION-CODE",
+                    "{response}"
+                );
+            }
             let cancelled = call(
                 &server,
                 &mut connection,
@@ -6844,6 +6956,96 @@ fn cancelled_device_subscription_login_preserves_connection_selection() {
             assert!(snapshot.values.active_connections.is_empty());
             assert!(snapshot.values.model.is_none());
         }
+    }
+}
+
+#[test]
+fn glm_account_login_activates_the_selected_coding_plan_connection() {
+    struct Driver(&'static str, ash_login::LoginMethod);
+    impl InteractiveLoginDriver for Driver {
+        fn provider_id(&self) -> &'static str {
+            self.0
+        }
+        fn read_account(&self) -> Result<Option<AccountSnapshot>, LoginError> {
+            Ok(None)
+        }
+        fn begin(&self, request: BeginLoginRequest) -> Result<BeginLogin, LoginError> {
+            assert_eq!(request.method, self.1);
+            Ok(BeginLogin::Browser {
+                login_id: request.login_id,
+                authorization_url: "https://zcode.z.ai/authorize".into(),
+            })
+        }
+        fn cancel(&self, _: &LoginId) -> Result<CancelLoginOutcome, LoginError> {
+            Ok(CancelLoginOutcome::Cancelled)
+        }
+        fn logout(&self, _: &AccountRef) -> Result<(), LoginError> {
+            Ok(())
+        }
+    }
+    for (provider, method, rpc_method) in [
+        (
+            "bigmodel-coding-plan",
+            ash_login::LoginMethod::BigModelBrowser,
+            "bigModelBrowser",
+        ),
+        (
+            "zai-coding-plan",
+            ash_login::LoginMethod::ZaiBrowser,
+            "zaiBrowser",
+        ),
+    ] {
+        let profile = tempfile::tempdir().unwrap();
+        let config = Arc::new(ConfigStore::open(profile.path().join("config.sqlite3")).unwrap());
+        let login = Arc::new(LoginService::new(Arc::new(Driver(provider, method))).unwrap());
+        let server = server()
+            .with_config_store(config.clone())
+            .with_login_service(login.clone());
+        let mut connection = server.connection();
+        initialize(&server, &mut connection);
+        let started = call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc":"2.0","id":2,"method":"account/login/start","params":{"method":{"type":rpc_method}}}),
+        );
+        assert_eq!(
+            started["result"]["authorizationUrl"],
+            "https://zcode.z.ai/authorize"
+        );
+        let login_id = LoginId::new(started["result"]["loginId"].as_str().unwrap()).unwrap();
+        login
+            .complete(CompleteLogin {
+                login_id,
+                outcome: LoginCompletionOutcome::Succeeded {
+                    account: AccountSnapshot {
+                        account: AccountRef {
+                            provider: provider.into(),
+                            account_id: "account-1".into(),
+                        },
+                        email: Some("person@example.test".into()),
+                        display_name: None,
+                        organization: None,
+                        plan: None,
+                        status: AccountStatus::Ready,
+                        credential_revision: 1,
+                    },
+                },
+            })
+            .unwrap();
+        let snapshot = config.read_snapshot().unwrap();
+        assert_eq!(
+            snapshot
+                .values
+                .active_connections
+                .get(&ash_protocol::ProviderId::new("zai").unwrap())
+                .map(|id| id.as_str()),
+            Some(provider)
+        );
+        let notifications = server.drain_notifications(&mut connection);
+        assert!(notifications.iter().any(|value| {
+            value.contains("\"method\":\"account/login/completed\"")
+                && value.contains("\"type\":\"succeeded\"")
+        }));
     }
 }
 

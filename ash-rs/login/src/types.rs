@@ -71,6 +71,8 @@ pub enum LoginMethod {
     OpenAiChatGptDeviceCode,
     KimiDeviceCode,
     XaiDeviceCode,
+    BigModelBrowser,
+    ZaiBrowser,
     GitHubBrowser,
 }
 
@@ -80,6 +82,8 @@ impl LoginMethod {
             Self::OpenAiChatGptBrowser | Self::OpenAiChatGptDeviceCode => "chatgpt-subscription",
             Self::KimiDeviceCode => "kimi-subscription",
             Self::XaiDeviceCode => "xai-subscription",
+            Self::BigModelBrowser => "bigmodel-coding-plan",
+            Self::ZaiBrowser => "zai-coding-plan",
             Self::GitHubBrowser => "github",
         }
     }

@@ -69,21 +69,13 @@ pub(crate) enum ConfigSelectionAction {
     OpenProviderApiKey {
         provider: String,
         display_name: String,
-        target: ApiKeyTarget,
     },
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ApiKeyTarget {
-    Provider,
-    CodingPlan(super::SubscriptionProvider),
 }
 
 #[derive(Clone, Eq, PartialEq)]
 pub(crate) struct ProviderApiKeyEdit {
     provider: String,
     api_key: Zeroizing<String>,
-    target: ApiKeyTarget,
 }
 
 impl ProviderApiKeyEdit {
@@ -91,18 +83,7 @@ impl ProviderApiKeyEdit {
         Self {
             provider,
             api_key: Zeroizing::new(api_key),
-            target: ApiKeyTarget::Provider,
         }
-    }
-
-    pub(crate) fn for_coding_plan(mut self, provider: super::SubscriptionProvider) -> Self {
-        self.provider = provider.id().into();
-        self.target = ApiKeyTarget::CodingPlan(provider);
-        self
-    }
-
-    pub(crate) fn target(&self) -> ApiKeyTarget {
-        self.target
     }
 
     pub(crate) fn into_parts(mut self) -> (String, String) {
@@ -149,7 +130,6 @@ pub(crate) struct ConfigEditor {
 #[derive(Debug)]
 struct ProviderApiKeyPromptState {
     provider: String,
-    target: ApiKeyTarget,
     prompt: TextPrompt,
     key_hints: crate::widgets::key_hint::KeyHints,
 }
@@ -324,10 +304,7 @@ impl ConfigEditor {
                 }
                 TextPromptOutcome::Submit(value) => {
                     let edit = ProviderApiKeyEdit::new(prompt.provider.clone(), value);
-                    ConfigEditorOutcome::SaveApiKey(match prompt.target {
-                        ApiKeyTarget::Provider => edit,
-                        ApiKeyTarget::CodingPlan(provider) => edit.for_coding_plan(provider),
-                    })
+                    ConfigEditorOutcome::SaveApiKey(edit)
                 }
             };
         }
@@ -528,9 +505,8 @@ impl ConfigEditor {
             ListSelectionOutcome::Activate(ConfigSelectionAction::OpenProviderApiKey {
                 provider,
                 display_name,
-                target,
             }) => {
-                self.open_provider_prompt(provider, display_name, target);
+                self.open_provider_prompt(provider, display_name);
                 ConfigEditorOutcome::Consumed
             }
             ListSelectionOutcome::Activate(action) => ConfigEditorOutcome::Action(action),
@@ -762,14 +738,6 @@ impl ConfigEditor {
         outcome: ListSelectionOutcome<ConfigSelectionAction>,
     ) -> ConfigEditorOutcome {
         match outcome {
-            ListSelectionOutcome::Activate(ConfigSelectionAction::OpenProviderApiKey {
-                provider,
-                display_name,
-                target,
-            }) => {
-                self.open_provider_prompt(provider, display_name, target);
-                ConfigEditorOutcome::Consumed
-            }
             ListSelectionOutcome::Activate(action) => ConfigEditorOutcome::Action(action),
             ListSelectionOutcome::Dismiss => {
                 self.subscription = None;
@@ -779,21 +747,10 @@ impl ConfigEditor {
         }
     }
 
-    fn open_provider_prompt(
-        &mut self,
-        provider: String,
-        display_name: String,
-        target: ApiKeyTarget,
-    ) {
-        let explanation = format!("Enter the API key from your {display_name}");
-        let mut prompt = provider_api_key_prompt(provider, display_name);
-        if matches!(target, ApiKeyTarget::CodingPlan(_)) {
-            prompt.spec.title = "API key".into();
-            prompt.spec.explanation = explanation;
-        }
+    fn open_provider_prompt(&mut self, provider: String, display_name: String) {
+        let prompt = provider_api_key_prompt(provider, display_name);
         self.prompt = Some(ProviderApiKeyPromptState {
             provider: prompt.provider,
-            target,
             prompt: TextPrompt::new(prompt.spec),
             key_hints: crate::widgets::key_hint::KeyHints::new()
                 .with_binding(bindings::SAVE)
@@ -1598,7 +1555,6 @@ fn provider_item(
         ConfigSelectionAction::OpenProviderApiKey {
             provider: provider.connection.clone(),
             display_name: display_name.to_owned(),
-            target: ApiKeyTarget::Provider,
         },
     );
     item.with_id(id)

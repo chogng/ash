@@ -123,6 +123,8 @@ impl AppServer {
             AccountLoginMethodDto::OpenAiChatGptDeviceCode => LoginMethod::OpenAiChatGptDeviceCode,
             AccountLoginMethodDto::KimiDeviceCode => LoginMethod::KimiDeviceCode,
             AccountLoginMethodDto::XaiDeviceCode => LoginMethod::XaiDeviceCode,
+            AccountLoginMethodDto::BigModelBrowser => LoginMethod::BigModelBrowser,
+            AccountLoginMethodDto::ZaiBrowser => LoginMethod::ZaiBrowser,
             AccountLoginMethodDto::GitHubBrowser => LoginMethod::GitHubBrowser,
         };
         let login = self.login_service()?;
@@ -227,7 +229,11 @@ impl AppServerLoginEvents {
     fn activate_subscription(&self, id: &str) -> Result<(), String> {
         if !matches!(
             id,
-            "chatgpt-subscription" | "kimi-subscription" | "xai-subscription"
+            "chatgpt-subscription"
+                | "kimi-subscription"
+                | "xai-subscription"
+                | "bigmodel-coding-plan"
+                | "zai-coding-plan"
         ) {
             return Ok(());
         }

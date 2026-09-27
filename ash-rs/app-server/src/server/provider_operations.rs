@@ -64,7 +64,7 @@ impl AppServer {
         let accounts = self
             .login
             .as_ref()
-            .map(|login| login.read())
+            .map(|login| login.refresh())
             .transpose()
             .map_err(|_| provider_credentials_unavailable())?;
         let providers = self
@@ -75,7 +75,11 @@ impl AppServer {
             .map(|entry| {
                 let oauth = matches!(
                     entry.connection.as_str(),
-                    "chatgpt-subscription" | "kimi-subscription" | "xai-subscription"
+                    "chatgpt-subscription"
+                        | "kimi-subscription"
+                        | "xai-subscription"
+                        | "bigmodel-coding-plan"
+                        | "zai-coding-plan"
                 );
                 let ready = if oauth {
                     accounts.as_ref().is_some_and(|state| {
@@ -129,7 +133,11 @@ impl AppServer {
         } else {
             if !matches!(
                 connection.as_str(),
-                "chatgpt-subscription" | "kimi-subscription" | "xai-subscription"
+                "chatgpt-subscription"
+                    | "kimi-subscription"
+                    | "xai-subscription"
+                    | "bigmodel-coding-plan"
+                    | "zai-coding-plan"
             ) {
                 return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
             }
@@ -137,7 +145,7 @@ impl AppServer {
                 .login
                 .as_ref()
                 .ok_or_else(provider_credentials_unavailable)?
-                .read()
+                .refresh()
                 .map_err(|_| provider_credentials_unavailable())?;
             if !accounts.accounts.iter().any(|account| {
                 account.account.provider == connection.as_str()

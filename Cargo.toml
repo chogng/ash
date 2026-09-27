@@ -59,6 +59,7 @@ members = [
     "ash-rs/code-mode-runtime",
     "ash-rs/v8-poc",
     "ash-rs/chatgpt",
+    "ash-rs/glm-subscription",
     "ash-rs/backend-client",
     "ash-rs/apply-patch",
     "ash-rs/async-utils",
@@ -220,6 +221,8 @@ publish = false
 version = "0.1.0"
 
 [workspace.dependencies]
+aes-gcm = "0.10"
+whoami = "1"
 guardian-context = { package = "ash-guardian-context", path = "ash-rs/guardian-context" }
 mermaid = { package = "ash-mermaid", path = "code/mermaid" }
 appcontainer_common = { git = "https://github.com/microsoft/mxc", rev = "ca7ea12ac6bd9f5420d6adecb37e32a8158da476" }
@@ -510,6 +513,7 @@ ash-input-classifier = { path = "app-rs/input-classifier" }
 ash-instructions = { path = "ash-rs/instructions" }
 ash-keyring-store = { path = "ash-rs/keyring-store" }
 ash-kimi = { path = "ash-rs/kimi" }
+ash-glm-subscription = { path = "ash-rs/glm-subscription" }
 supergrok = { package = "ash-supergrok", path = "ash-rs/supergrok" }
 ash-keybinding = { path = "ash-rs/keybinding" }
 ash-keybindings-host = { path = "app-rs/keybindings" }

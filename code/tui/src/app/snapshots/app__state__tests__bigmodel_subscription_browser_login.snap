@@ -4,14 +4,12 @@ expression: screen
 ---
   .                                                                        [— / —] [Dashboard]
 
-            ┌── Config › Z.AI ─────────────────────────────────────────────────[✗]─┐
+            ┌── Config › BigModel ─────────────────────────────────────────────[✗]─┐
             │                                                                      │
             │   Account                                                            │
             │                                                                      │
-            │> Account  ·  person@example.test                                     │
-            │                                                                      │
-            │  Models ──────────────────────────────────────────────────────────── │
-            │  No models available                                                 │
+            │> Browser opened  ·  https://zcode.z.ai/authorize                     │
+            │  Cancel sign-in                                                      │
             │                                                                      │
             │                                                                      │
             │                                                                      │
@@ -21,6 +19,8 @@ expression: screen
             │                                                                      │
             │                                                                      │
             │                                                                      │
-  ╭─────────│  Tab/Shift+Tab to switch  ·  Esc to return  ·  l to sign out         │─────────╮
+            │                                                                      │
+            │                                                                      │
+  ╭─────────│  Tab/Shift+Tab to switch  ·  Esc to return                           │─────────╮
   │ > Build └──────────────────────────────────────────────────────────────────────┘         │
   ╰──────────────────────────────────────────────────────────────────────── Automatic model ─╯

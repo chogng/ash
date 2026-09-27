@@ -3,7 +3,6 @@ use crate::widgets::list_selection::ListSelectionState;
 use ash_app_server_client::ClientError;
 use ash_app_server_protocol::protocol::account::AccountDto;
 use ash_app_server_protocol::protocol::account::AccountLoginFailureDto;
-use ash_app_server_protocol::protocol::config::ProviderConfigDto;
 use ash_app_server_protocol::protocol::provider::ProviderModelsListFailureCodeDto;
 use ash_app_server_protocol::protocol::provider::ProviderModelsListFailureDto;
 use ash_app_server_protocol::protocol::provider::ProviderModelsListResult;
@@ -331,6 +330,26 @@ impl JsonRpcTransport for Transport {
 }
 
 #[test]
+fn external_coding_plan_logout_points_to_zcode() {
+    struct ExternalLoginRequired;
+    impl JsonRpcTransport for ExternalLoginRequired {
+        fn round_trip(&mut self, _: &str) -> Result<String, ClientError> {
+            Err(ClientError::Server {
+                code: -32030,
+                message: "AccountExternalLoginRequired".into(),
+            })
+        }
+    }
+    for provider in [SubscriptionProvider::BigModel, SubscriptionProvider::Zai] {
+        let mut client = AppServerClient::new(ExternalLoginRequired);
+        assert_eq!(
+            execute(&mut client, provider, SubscriptionCommand::SignOut),
+            SubscriptionEvent::Failed("Sign out of this Coding Plan account in ZCode.".into())
+        );
+    }
+}
+
+#[test]
 fn account_actions_use_only_redacted_account_rpcs_and_logout_refreshes() {
     let mut client = AppServerClient::new(Transport {
         requests: Vec::new(),
@@ -546,101 +565,84 @@ fn kimi_subscription_selects_the_kimi_device_code_login() {
     );
 }
 
-fn bigmodel_providers(
-    key_configured: bool,
-) -> ash_app_server_protocol::protocol::provider::ProviderListResult {
-    ash_app_server_protocol::protocol::provider::ProviderListResult {
-        providers: vec![
-            ash_app_server_protocol::protocol::provider::ProviderCatalogEntryDto {
-                connection: "bigmodel-coding-plan".into(),
-                access: ash_protocol::ModelAccess::Subscription,
-                active: false,
-                configured: key_configured,
-                ready: key_configured,
-                provider: "zai".into(),
-                display_name: "BigModel Coding Plan".into(),
-                api_key_policy:
-                    ash_app_server_protocol::protocol::provider::ProviderApiKeyPolicyDto::Required,
-                api_key_configured: key_configured,
-            },
-        ],
-    }
-}
-
 #[test]
-fn bigmodel_plan_panel_shows_subscription_status_and_the_matching_action() {
-    let mut subscription = Subscription::new(SubscriptionProvider::BigModel);
-    assert_eq!(labels(&subscription), vec!["Sign in with BigModel"]);
-    let choices = subscription.choices();
-    assert!(matches!(
-        choices
-            .actions
-            .get(&ListSelectionItemId::new("Sign in with BigModel")),
-        Some(ConfigSelectionAction::OpenProviderApiKey {
-            target: ApiKeyTarget::CodingPlan(SubscriptionProvider::BigModel),
-            ..
-        })
-    ));
-
-    subscription.update(SubscriptionEvent::Plan(PlanStatus {
-        key_saved: false,
-        enabled: true,
-    }));
-    assert!(labels(&subscription).contains(&"Coding plan enabled".into()));
-    assert!(labels(&subscription).contains(&"Sign in with BigModel".into()));
-
-    subscription.update(SubscriptionEvent::Plan(PlanStatus {
-        key_saved: true,
-        enabled: true,
-    }));
-    assert!(
-        !labels(&subscription)
-            .iter()
-            .any(|label| label.contains("API key"))
-    );
-    assert_eq!(
-        subscription.sign_out_availability(),
-        SignOutAvailability::Available
-    );
-    assert!(!labels(&subscription).contains(&"Disable BigModel".into()));
-
-    subscription.update(SubscriptionEvent::Plan(PlanStatus {
-        key_saved: true,
-        enabled: false,
-    }));
-    assert!(labels(&subscription).contains(&"Coding plan not enabled".into()));
-    assert_eq!(
-        subscription.sign_out_availability(),
-        SignOutAvailability::Unavailable
-    );
-    assert!(labels(&subscription).contains(&"Sign in with BigModel".into()));
-}
-
-#[test]
-fn subscription_sign_in_actions_are_localized_in_chinese() {
-    for (provider, expected) in [
-        (SubscriptionProvider::ChatGpt, "使用 ChatGPT 登录"),
-        (SubscriptionProvider::Kimi, "使用 Kimi 登录"),
-        (SubscriptionProvider::BigModel, "使用 BigModel 登录"),
-        (SubscriptionProvider::Zai, "使用 Z.AI 登录"),
-        (SubscriptionProvider::Xai, "使用 Super Grok 登录"),
+fn glm_subscription_panels_use_account_login_for_both_regions() {
+    for (provider, method) in [
+        (
+            SubscriptionProvider::BigModel,
+            AccountLoginMethodDto::BigModelBrowser,
+        ),
+        (SubscriptionProvider::Zai, AccountLoginMethodDto::ZaiBrowser),
     ] {
         let mut subscription = Subscription::new(provider);
         assert_eq!(
             labels(&subscription),
-            vec![format!("Sign in with {}", provider.name())],
-            "{provider:?} before account status loads"
+            vec![format!("Sign in with {}", provider.name())]
         );
-        if provider.account_login() {
-            subscription.update(SubscriptionEvent::Read {
-                account: AccountReadResult {
-                    revision: 1.to_string(),
-                    accounts: vec![],
-                },
-                models: None,
+        assert!(matches!(
+            subscription
+                .choices()
+                .actions
+                .get(&ListSelectionItemId::new(format!(
+                    "Sign in with {}",
+                    provider.name()
+                ))),
+            Some(ConfigSelectionAction::Subscription(
+                SubscriptionCommand::SignIn
+            ))
+        ));
+        let mut connected = account(1);
+        connected.accounts[0].provider = provider.id().into();
+        subscription.update(SubscriptionEvent::Read {
+            account: connected,
+            models: Some(Ok(vec![])),
+        });
+        assert_eq!(
+            subscription.sign_out_availability(),
+            SignOutAvailability::Available
+        );
+        assert!(
+            !labels(&subscription)
+                .iter()
+                .any(|label| label.contains("API key"))
+        );
+        assert_eq!(provider.method(), method);
+    }
+}
+
+#[test]
+fn glm_browser_login_starts_account_authorization() {
+    for (provider, expected_method) in [
+        (SubscriptionProvider::BigModel, "bigModelBrowser"),
+        (SubscriptionProvider::Zai, "zaiBrowser"),
+    ] {
+        let mut client = AppServerClient::new(Transport {
+            requests: Vec::new(),
+            results: VecDeque::from([serde_json::json!({
+                "type": "browser",
+                "loginId": "glm-login",
+                "authorizationUrl": "https://zcode.z.ai/authorize",
+            })]),
+        });
+        let event =
+            execute_with_browser(&mut client, provider, SubscriptionCommand::SignIn, |_| {
+                Ok(())
             });
-        }
-        let mut choices = subscription.choices();
+        assert!(matches!(event, SubscriptionEvent::Started { .. }));
+        let requests = client.into_transport().requests;
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0]["method"], "account/login/start");
+        assert_eq!(requests[0]["params"]["method"]["type"], expected_method);
+    }
+}
+
+#[test]
+fn glm_subscription_sign_in_actions_are_localized_in_chinese() {
+    for (provider, expected) in [
+        (SubscriptionProvider::BigModel, "使用 BigModel 登录"),
+        (SubscriptionProvider::Zai, "使用 Z.AI 登录"),
+    ] {
+        let mut choices = Subscription::new(provider).choices();
         choices.model.localize(crate::nls::Language::Chinese);
         let state = ListSelectionState::new(choices.model);
         assert_eq!(
@@ -649,232 +651,7 @@ fn subscription_sign_in_actions_are_localized_in_chinese() {
                 .iter()
                 .map(|item| item.label())
                 .collect::<Vec<_>>(),
-            vec![expected],
-            "{provider:?}"
+            vec![expected]
         );
     }
-}
-
-#[test]
-fn subscription_sign_out_hint_is_localized_and_only_shown_when_connected() {
-    for provider in [
-        SubscriptionProvider::ChatGpt,
-        SubscriptionProvider::Xai,
-        SubscriptionProvider::Kimi,
-    ] {
-        let mut subscription = Subscription::new(provider);
-        let mut connected = account(1);
-        connected.accounts[0].provider = provider.id().into();
-        subscription.update(SubscriptionEvent::Read {
-            account: connected,
-            models: Some(Ok(vec![])),
-        });
-        let mut choices = subscription.choices();
-        choices.model.localize(crate::nls::Language::Chinese);
-        assert!(
-            choices
-                .model
-                .key_hints()
-                .localized_text(crate::nls::Language::Chinese)
-                .contains("l 退出登录")
-        );
-        assert!(!labels(&subscription).contains(&"Disconnect from Ash".into()));
-    }
-
-    for provider in [SubscriptionProvider::BigModel, SubscriptionProvider::Zai] {
-        let mut subscription = Subscription::new(provider);
-        subscription.update(SubscriptionEvent::Plan(PlanStatus {
-            key_saved: true,
-            enabled: true,
-        }));
-        assert!(
-            subscription
-                .choices()
-                .model
-                .key_hints()
-                .localized_text(crate::nls::Language::Chinese)
-                .contains("l 退出登录")
-        );
-        subscription.update(SubscriptionEvent::Plan(PlanStatus {
-            key_saved: true,
-            enabled: false,
-        }));
-        assert!(
-            !subscription
-                .choices()
-                .model
-                .key_hints()
-                .localized_text(crate::nls::Language::Chinese)
-                .contains("退出登录")
-        );
-    }
-}
-
-#[test]
-fn bigmodel_plan_read_derives_status_from_config_and_provider_catalog() {
-    let mut client = AppServerClient::new(Transport {
-        requests: Vec::new(),
-        results: VecDeque::from([
-            serde_json::to_value(crate::test_support::empty_config_snapshot()).unwrap(),
-            serde_json::to_value(bigmodel_providers(true)).unwrap(),
-        ]),
-    });
-    assert_eq!(
-        execute(
-            &mut client,
-            SubscriptionProvider::BigModel,
-            SubscriptionCommand::Read
-        ),
-        SubscriptionEvent::Plan(PlanStatus {
-            key_saved: true,
-            enabled: false,
-        })
-    );
-}
-
-#[test]
-fn bigmodel_sign_in_connects_the_coding_endpoint_and_rereads_status() {
-    let mut config = crate::test_support::empty_config_snapshot();
-    config.providers.insert(
-        "bigmodel-coding-plan".into(),
-        ash_app_server_protocol::protocol::config::ProviderConfigDto {
-            connection: "bigmodel-coding-plan".into(),
-            provider: "zai".into(),
-            custom: None,
-            base_url: Some(ash_model_provider_config::BIGMODEL_CODING_PLAN_BASE_URL.into()),
-            max_output_tokens: None,
-            model_context: BTreeMap::new(),
-        },
-    );
-    config.connections = config
-        .providers
-        .values()
-        .map(|config| (config.connection.clone(), config.clone()))
-        .collect();
-    config.active_connections = config
-        .providers
-        .values()
-        .map(|config| (config.provider.clone(), config.connection.clone()))
-        .collect();
-    let configured = serde_json::to_value(config).unwrap();
-    let mut client = AppServerClient::new(Transport {
-        requests: Vec::new(),
-        results: VecDeque::from([
-            serde_json::to_value(crate::test_support::empty_config_snapshot()).unwrap(),
-            serde_json::json!({"revision": 2, "generation": 1, "disposition": "updated"}),
-            configured,
-            serde_json::to_value(bigmodel_providers(true)).unwrap(),
-        ]),
-    });
-    assert_eq!(
-        execute(
-            &mut client,
-            SubscriptionProvider::BigModel,
-            SubscriptionCommand::SignIn
-        ),
-        SubscriptionEvent::Plan(PlanStatus {
-            key_saved: true,
-            enabled: true,
-        })
-    );
-    let requests = client.into_transport().requests;
-    assert_eq!(requests[1]["method"], "provider/activate");
-    assert_eq!(requests[1]["params"]["connection"], "bigmodel-coding-plan");
-}
-
-#[test]
-fn bigmodel_sign_out_removes_only_the_selected_connection() {
-    let mut configured = crate::test_support::empty_config_snapshot();
-    configured.providers.insert(
-        "bigmodel-coding-plan".into(),
-        ProviderConfigDto {
-            connection: "bigmodel-coding-plan".into(),
-            provider: "zai".into(),
-            custom: None,
-            base_url: Some(ash_model_provider_config::BIGMODEL_CODING_PLAN_BASE_URL.into()),
-            max_output_tokens: None,
-            model_context: BTreeMap::new(),
-        },
-    );
-    configured.connections = configured
-        .providers
-        .values()
-        .map(|config| (config.connection.clone(), config.clone()))
-        .collect();
-    configured.active_connections = configured
-        .providers
-        .values()
-        .map(|config| (config.provider.clone(), config.connection.clone()))
-        .collect();
-    let mut client = AppServerClient::new(Transport {
-        requests: Vec::new(),
-        results: VecDeque::from([
-            serde_json::to_value(configured).unwrap(),
-            serde_json::json!({"revision": 2, "generation": 1, "disposition": "updated"}),
-            serde_json::to_value(crate::test_support::empty_config_snapshot()).unwrap(),
-            serde_json::to_value(bigmodel_providers(false)).unwrap(),
-        ]),
-    });
-    assert_eq!(
-        execute(
-            &mut client,
-            SubscriptionProvider::BigModel,
-            SubscriptionCommand::SignOut,
-        ),
-        SubscriptionEvent::Plan(PlanStatus {
-            key_saved: false,
-            enabled: false,
-        })
-    );
-    let requests = client.into_transport().requests;
-    assert_eq!(requests[1]["method"], "provider/remove");
-    assert_eq!(requests[1]["params"]["connection"], "bigmodel-coding-plan");
-    assert!(
-        requests
-            .iter()
-            .all(|request| request["method"] != "provider/apiKey/set")
-    );
-}
-
-#[test]
-fn coding_plan_status_marks_only_the_selected_glm_connection_active() {
-    let mut config = crate::test_support::empty_config_snapshot();
-    config
-        .active_connections
-        .insert("zai".into(), "bigmodel-coding-plan".into());
-    let mut providers = bigmodel_providers(true);
-    let mut zai = providers.providers[0].clone();
-    zai.connection = "zai-coding-plan".into();
-    providers.providers.push(zai);
-    assert_eq!(
-        plan_status(&config, &providers, SubscriptionProvider::BigModel),
-        PlanStatus {
-            key_saved: true,
-            enabled: true
-        }
-    );
-    assert_eq!(
-        plan_status(&config, &providers, SubscriptionProvider::Zai),
-        PlanStatus {
-            key_saved: true,
-            enabled: false
-        }
-    );
-    config
-        .active_connections
-        .insert("zai".into(), "zai-coding-plan".into());
-    assert_eq!(
-        plan_status(&config, &providers, SubscriptionProvider::BigModel),
-        PlanStatus {
-            key_saved: true,
-            enabled: false
-        }
-    );
-    assert_eq!(
-        plan_status(&config, &providers, SubscriptionProvider::Zai),
-        PlanStatus {
-            key_saved: true,
-            enabled: true
-        }
-    );
 }

@@ -3057,7 +3057,9 @@ fn xai_subscription_catalog_drives_model_selection_context_and_invocation() {
 
 #[test]
 fn glm_connections_use_distinct_endpoints_keys_and_billing_without_changing_the_model() {
+    use ash_glm_subscription::{GlmOAuth, GlmProvider};
     use ash_protocol::ModelConnectionId;
+    use ash_secrets::{SecretKey, SecretStore, SecretValue};
     #[derive(Default)]
     struct Requests(Mutex<Vec<(String, String, serde_json::Value)>>);
     impl OperationClient for Requests {
@@ -3095,11 +3097,17 @@ fn glm_connections_use_distinct_endpoints_keys_and_billing_without_changing_the_
     let secrets = Arc::new(MemorySecretStore::default());
     let credentials =
         ash_model_provider::ProviderCredentialService::new(registry.clone(), secrets.clone());
-    let runtime = Arc::new(ModelProviderRuntime::with_client_and_secrets(
-        registry.clone(),
-        requests.clone(),
-        secrets,
-    ));
+    let runtime = Arc::new(
+        ModelProviderRuntime::with_client_and_secrets(
+            registry.clone(),
+            requests.clone(),
+            secrets.clone(),
+        )
+        .with_glm_oauth(
+            GlmOAuth::with_client(GlmProvider::BigModel, secrets.clone(), requests.clone()),
+            GlmOAuth::with_client(GlmProvider::Zai, secrets.clone(), requests.clone()),
+        ),
+    );
     let service = ConfigBackedModelService {
         config: config.clone(),
         dir_config: None,
@@ -3141,9 +3149,24 @@ fn glm_connections_use_distinct_endpoints_keys_and_billing_without_changing_the_
     ];
     for (index, (id, endpoint, billing)) in routes.iter().enumerate() {
         let connection = ModelConnectionId::new(*id).unwrap();
-        credentials
-            .set_api_key(&connection, format!("key-{id}").into_bytes())
-            .unwrap();
+        if let Some(provider) = id.strip_suffix("-coding-plan") {
+            secrets
+                .store(
+                    &SecretKey::new(format!("provider/{provider}/current/oauth")).unwrap(),
+                    &SecretValue::new(
+                        serde_json::to_vec(&serde_json::json!({
+                            "account_id":"account-1", "email":null, "display_name":null,
+                            "model_key":format!("key-{id}"), "revision":1
+                        }))
+                        .unwrap(),
+                    ),
+                )
+                .unwrap();
+        } else {
+            credentials
+                .set_api_key(&connection, format!("key-{id}").into_bytes())
+                .unwrap();
+        }
         config
             .apply(ConfigCommandRequest {
                 command_id: CommandId::new(format!("choose-{id}")).unwrap(),

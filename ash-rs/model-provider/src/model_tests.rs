@@ -11,6 +11,7 @@ use ash_client::{
 use ash_context_engine::ContextTokenMeasurementAccuracy;
 use ash_context_engine::ContextTokenMeasurementCapability;
 use ash_context_engine::ContextTokenMeasurementOutcome;
+use ash_glm_subscription::{GlmOAuth, GlmProvider};
 use ash_http_client::HttpHeader;
 use ash_kimi::KimiOAuth;
 use ash_model_provider_config::{
@@ -1669,18 +1670,31 @@ fn both_coding_plan_runtimes_measure_through_their_own_endpoints() {
             json!({"usage": {"prompt_tokens": 300, "total_tokens": 300}}),
         ));
         let secrets = Arc::new(MemorySecretStore::default());
+        let login_provider = if provider == "bigmodel-coding-plan" {
+            "bigmodel"
+        } else {
+            "zai"
+        };
         secrets
             .store(
-                &provider_api_key_secret_key(
-                    &ash_protocol::ModelConnectionId::new(provider_id(provider).as_str()).unwrap(),
+                &SecretKey::new(format!("provider/{login_provider}/current/oauth")).unwrap(),
+                &SecretValue::new(
+                    serde_json::to_vec(&json!({
+                        "account_id":"account-1", "email":null, "display_name":null,
+                        "model_key":"plan-key", "revision":1
+                    }))
+                    .unwrap(),
                 ),
-                &SecretValue::new(b"plan-key".to_vec()),
             )
             .unwrap();
         let runtime = ModelProviderRuntime::with_client_and_secrets(
             ProviderConfigRegistry::builtin(),
             transport.clone(),
-            secrets,
+            secrets.clone(),
+        )
+        .with_glm_oauth(
+            GlmOAuth::with_client(GlmProvider::BigModel, secrets.clone(), transport.clone()),
+            GlmOAuth::with_client(GlmProvider::Zai, secrets, transport.clone()),
         );
         let config = provider_config_with_endpoint(provider, base_url);
         let model = runtime
@@ -2147,18 +2161,43 @@ fn every_builtin_provider_applies_its_authentication_without_subscription_header
         let capture = Arc::new(Capture(Mutex::new(None)));
         let secrets = Arc::new(MemorySecretStore::default());
         let key = format!("{provider}-fixture-key");
-        secrets
-            .store(
-                &provider_api_key_secret_key(
-                    &ash_protocol::ModelConnectionId::new(provider_id(provider).as_str()).unwrap(),
-                ),
-                &SecretValue::new(key.clone().into_bytes()),
-            )
-            .unwrap();
+        if matches!(provider, "bigmodel-coding-plan" | "zai-coding-plan") {
+            let login_provider = if provider == "bigmodel-coding-plan" {
+                "bigmodel"
+            } else {
+                "zai"
+            };
+            secrets
+                .store(
+                    &SecretKey::new(format!("provider/{login_provider}/current/oauth")).unwrap(),
+                    &SecretValue::new(
+                        serde_json::to_vec(&json!({
+                            "account_id":"account-1", "email":null, "display_name":null,
+                            "model_key":key, "revision":1
+                        }))
+                        .unwrap(),
+                    ),
+                )
+                .unwrap();
+        } else {
+            secrets
+                .store(
+                    &provider_api_key_secret_key(
+                        &ash_protocol::ModelConnectionId::new(provider_id(provider).as_str())
+                            .unwrap(),
+                    ),
+                    &SecretValue::new(key.clone().into_bytes()),
+                )
+                .unwrap();
+        }
         let runtime = ModelProviderRuntime::with_client_and_secrets(
             ProviderConfigRegistry::builtin(),
             capture.clone(),
-            secrets,
+            secrets.clone(),
+        )
+        .with_glm_oauth(
+            GlmOAuth::with_client(GlmProvider::BigModel, secrets.clone(), capture.clone()),
+            GlmOAuth::with_client(GlmProvider::Zai, secrets, capture.clone()),
         );
         let model = runtime
             .build_model(

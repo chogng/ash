@@ -14,4 +14,4 @@
 
 ChatGPT 的 Student 是学生优惠，不是独立套餐。
 
-订阅连接消耗套餐额度或积分；开发者按量 API 按自己的价目表收费。两边即使用了相同数量的 token，也不能直接算成相同费用。BigModel 和 Z.AI 第三列的 ❌ 表示 Ash 当前无法读取套餐，不代表官方没有账号登录：[ZCode 支持账号授权](https://zcode.z.ai/en/docs/configuration)，Ash 目前通过手动填写 Coding Plan Key 接入，仍消耗套餐额度。[OpenAI 官方说明](https://learn.chatgpt.com/docs/pricing)、[Kimi 官方 FAQ](https://www.kimi.com/en/help/kimi-api/api-troubleshooting) 和 [xAI 官方 FAQ](https://docs.x.ai/developers/faq/accounts)均区分订阅与开发者 API 的账单。开发者 API 单价见[模型价格表](ash-host-models.md)。
+订阅连接消耗套餐额度或积分；开发者按量 API 按自己的价目表收费。两边即使用了相同数量的 token，也不能直接算成相同费用。BigModel 和 Z.AI 第三列的 ❌ 表示 Ash 当前无法读取套餐名称；Ash 通过[ZCode 账号授权](https://zcode.z.ai/en/docs/configuration)接入 Coding Plan，仍消耗套餐额度。[OpenAI 官方说明](https://learn.chatgpt.com/docs/pricing)、[Kimi 官方 FAQ](https://www.kimi.com/en/help/kimi-api/api-troubleshooting) 和 [xAI 官方 FAQ](https://docs.x.ai/developers/faq/accounts)均区分订阅与开发者 API 的账单。开发者 API 单价见[模型价格表](ash-host-models.md)。

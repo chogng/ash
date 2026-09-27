@@ -9,12 +9,12 @@ Ash Code 的订阅区目前提供 ChatGPT、Kimi、Super Grok、BigModel 和 Z.A
 | ChatGPT | `chatgpt-subscription` 账户；复用或维护 Codex 兼容登录 | `openai` 的 ChatGPT 订阅 Responses 服务 | 套餐、额度窗口、点数 |
 | Kimi | `kimi-subscription` 账户；Ash 设备码登录和 profile SecretStore | `kimi` 的 Kimi Coding API | 尚未提供账户额度查询 |
 | Super Grok | `xai-subscription` 账户；Ash 设备码登录，或只读使用已有 Grok 登录 | `xai` 的 Grok 订阅代理 | 套餐、使用比例、周期和余额 |
-| BigModel | 独立的 `bigmodel-coding-plan` 密钥与连接；不产生登录账户 | `open.bigmodel.cn` 的 Coding Plan 端点 | 尚未提供账户额度查询 |
-| Z.AI | 独立的 `zai-coding-plan` 密钥与连接；不产生登录账户 | `api.z.ai` 的 Coding Plan 端点 | 尚未提供账户额度查询 |
+| BigModel | 只读复用 ZCode 个人版 Coding Plan 账号，或在 Ash 浏览器登录 | `open.bigmodel.cn` 的 Coding Plan 端点 | 尚未提供账户额度查询 |
+| Z.AI | 只读复用 ZCode 个人版 Coding Plan 账号，或在 Ash 浏览器登录 | `api.z.ai` 的 Coding Plan 端点 | 尚未提供账户额度查询 |
 
-这里“不产生登录账户”指 Ash 当前的接入方式。[官方 ZCode](https://zcode.z.ai/en/docs/configuration) 可以通过账号授权连接 BigModel 和 Z.AI Coding Plan；Ash 目前只支持填写 Coding Plan Key。
+BigModel 与 Z.AI 使用[官方 ZCode](https://zcode.z.ai/en/docs/configuration) 的账号授权；已在 ZCode 登录时直接使用它的请求凭据，否则在 Ash 登录并自动取得请求凭据。用户不填写 Coding Plan Key。
 
-订阅账户与开发者 API 使用各自的凭据和计费路径。ChatGPT、Kimi、Super Grok 的已就绪订阅优先用于该供应商的模型目录和文本请求；订阅不可用时，后续请求可以使用已保存的 API 配置，但已经开始的一次订阅请求不会中途改走 API。两个 Coding Plan 各自使用独立的连接 ID、密钥和端点；本地“已启用”只表示配置完成，不证明上游套餐资格。稳定供应商 ID、入口名称及账户 ID 的区别见[订阅入口与 API 入口](login.md#订阅入口与-api-入口)。
+订阅账户与开发者 API 使用各自的凭据和计费路径。已就绪订阅用于该供应商的模型目录和文本请求；两个 Coding Plan 各自使用独立的账户、连接 ID、内部请求凭据和端点。登录就绪不证明上游套餐资格。稳定供应商 ID、入口名称及账户 ID 的区别见[订阅入口与 API 入口](login.md#订阅入口与-api-入口)。
 
 ## 入口名称、实际套餐与凭据归属
 
@@ -25,16 +25,16 @@ Ash Code 的订阅区目前提供 ChatGPT、Kimi、Super Grok、BigModel 和 Z.A
 | ChatGPT | 检测到 Codex 时只读使用其认证存储；否则 Ash 创建并维护 Codex 兼容认证记录，不向 profile SecretStore 复制 token | 当前 ID token 的 `chatgpt_plan_type`；`/usage` 另从额度接口读取 `plan_type` | `account/read` 重新观察认证存储；Codex 管理的凭据由 Codex 更新，Ash 管理的凭据由 Ash 续期；每次打开 `/usage` 重新查额度 |
 | Kimi | Ash 的 profile SecretStore；`ash-kimi` 负责续期 | 当前没有上游套餐等级查询，账户快照的 `plan` 为 `null` | 认证按 Kimi 适配器的生命周期维护；尚无等级或额度刷新 |
 | Super Grok | Ash 设备码登录保存在 profile SecretStore；没有 Ash 登录时，只读使用后端主机的 `~/.grok/auth.json` | Grok Build `/v1/settings` 的 `subscription_tier_display`，其次是该接口的 `subscription_tier` 或 `/v1/user?include=subscription` 的 `subscriptionTier`；显示服务端返回的完整名称，例如 `SuperGrok Heavy` | `account/read` 请求当前账户和设置；复用 Grok 文件时，Ash 只在内存中保存与当前令牌对应的脱敏账户资料，令牌变化后旧资料失效，下次 `account/read` 重新获取；`/usage` 重新查当期数据 |
-| BigModel | Ash 保存该订阅自己的密钥与端点设置；没有订阅登录账户 | 当前无法查询实际套餐等级；“已启用”仅是本地配置状态 | 用户修改该订阅密钥或连接时更新本地状态；上游资格由实际请求判定 |
-| Z.AI | Ash 保存该订阅自己的密钥与端点设置；没有订阅登录账户 | 当前无法查询实际套餐等级；“已启用”仅是本地配置状态 | 用户修改该订阅密钥或连接时更新本地状态；上游资格由实际请求判定 |
+| BigModel | 只读使用 ZCode 凭据文件；Ash 自己登录时保存在 profile SecretStore | 当前无法查询实际套餐等级 | 每次读取接入列表或账户时刷新账号；每次模型请求重新读取当前凭据；上游资格由实际请求判定 |
+| Z.AI | 只读使用 ZCode 凭据文件；Ash 自己登录时保存在 profile SecretStore | 当前无法查询实际套餐等级 | 每次读取接入列表或账户时刷新账号；每次模型请求重新读取当前凭据；上游资格由实际请求判定 |
 
 读取其他客户端的认证文件，不等于把它导入成 Ash 自己维护的凭据。只读复用时，原客户端仍负责刷新或替换其 token；Ash 每次使用前读取当前凭据，不复制外部 refresh token，也不写回外部认证文件。Ash 自己发起登录时，才由相应供应商适配器保存并维护 Ash 管理的凭据。账户名称、邮箱和等级进入的是脱敏账户状态；认证凭据和额度结果不作为普通 `/config` 配置项保存。Grok Build 的 `/v1/settings` 是服务端 HTTP 接口，不是 Ash 的 `/settings` 命令；用户仍在 `/config` 查看连接，在 `/usage` 主动查询额度。
 
 ### Ash Code 订阅页操作
 
-五个订阅页都用 `l` 断开当前连接；退出入口不在可点击列表中。已连接时页面直接展示账户、套餐或 Coding Plan 状态，不额外列出“已登录”。请求执行中和未连接时不提供退出快捷键。
+五个订阅页都用 `l` 退出当前账户；退出入口不在可点击列表中。已连接时页面直接展示账户和可取得的套餐信息，不额外列出“已登录”。请求执行中和未连接时不提供退出快捷键。
 
-ChatGPT、Kimi 和 Super Grok 的退出调用各自的 `account/logout`，由相应认证适配器处理凭据。BigModel 与 Z.AI Coding Plan 的退出只停用各自的订阅连接，保留各自已保存的密钥；再次连接时可直接复用。BigModel API 和 Z.AI API 的连接及密钥也不受影响。
+五种订阅的退出都调用对应的 `account/logout`。Ash 自己登录的 BigModel 与 Z.AI 账户可在 Ash 删除；只读复用的 ZCode 账户须在 ZCode 退出，Ash 不删除外部文件。BigModel API 和 Z.AI API 的连接及密钥不受影响。
 
 ## 账户额度与刷新
 
@@ -60,4 +60,4 @@ Super Grok 可以在 Ash 登录，也可以只读使用已有的 Grok 登录；�
 
 ## GLM：BigModel 与 Z.AI
 
-两个 Coding Plan 分别使用自己的密钥和端点，不产生登录账户；实际套餐权限由上游请求判定。四个连接的区别见[GLM 接入](models/glm.md)。
+两个 Coding Plan 优先只读使用本机 ZCode 账号；没有对应账号时可通过浏览器在 Ash 登录。两者访问各自端点，实际套餐权限由上游请求判定。四个连接的区别见[GLM 接入](models/glm.md)。

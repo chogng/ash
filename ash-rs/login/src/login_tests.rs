@@ -112,6 +112,8 @@ impl InteractiveLoginDriver for FakeDriver {
             },
             LoginMethod::KimiDeviceCode
             | LoginMethod::XaiDeviceCode
+            | LoginMethod::BigModelBrowser
+            | LoginMethod::ZaiBrowser
             | LoginMethod::GitHubBrowser => unreachable!(),
         })
     }
