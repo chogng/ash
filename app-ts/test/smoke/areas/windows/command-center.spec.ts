@@ -264,6 +264,57 @@ test('activity bar context menu hides and restores view icons', async ({ target,
 	await expect(page.getByRole('menu').last().getByRole('menuitem', { name: "Hide 'Explorer'" })).toBeVisible();
 });
 
+test('macOS context menu converts pointer coordinates at the current window zoom', async ({ target, application, workbench }) => {
+	test.skip(target.kind !== 'electron' || process.platform !== 'darwin', 'This scenario requires macOS Electron');
+	const electron = application as ElectronApplication;
+	await electron.evaluate(({ BrowserWindow, Menu }) => {
+		const window = BrowserWindow.getFocusedWindow()!;
+		const originalPopup = Menu.prototype.popup;
+		const originalZoom = window.webContents.getZoomLevel();
+		const state = globalThis as typeof globalThis & { ashMenuPosition?: { options?: { x?: number; y?: number; positioningItem?: number; zoom: number }; restore: () => void } };
+		state.ashMenuPosition = {
+			restore: () => { Menu.prototype.popup = originalPopup; window.webContents.setZoomLevel(originalZoom); },
+		};
+		Menu.prototype.popup = function(options) {
+			if (!options) throw new Error('Expected context menu popup options');
+			state.ashMenuPosition!.options = { x: options.x, y: options.y, positioningItem: options.positioningItem, zoom: window.webContents.getZoomFactor() };
+			options.callback?.();
+		};
+		window.webContents.setZoomLevel(2);
+	});
+	try {
+		const search = workbench.page.locator('[data-part="activitybar"]').getByRole('tab', { name: 'Search' });
+		await workbench.page.evaluate(() => {
+			window.addEventListener('contextmenu', event => {
+				(window as Window & { ashMenuPointer?: { x: number; y: number } }).ashMenuPointer = { x: event.clientX, y: event.clientY };
+			}, { capture: true, once: true });
+		});
+		await search.click({ button: 'right', position: { x: 2, y: 2 } });
+		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuPosition?: { options?: { x?: number; y?: number } } }).ashMenuPosition?.options)).toBeDefined();
+		const actual = await electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuPosition?: { options?: { x?: number; y?: number; positioningItem?: number; zoom: number } } }).ashMenuPosition?.options);
+		const pointer = await workbench.page.evaluate(() => (window as Window & { ashMenuPointer?: { x: number; y: number } }).ashMenuPointer);
+		expect(pointer).toBeDefined();
+		expect(actual!.zoom).toBeGreaterThan(1);
+		expect(actual).toEqual({ x: Math.floor(pointer!.x * actual!.zoom), y: Math.floor(pointer!.y * actual!.zoom), positioningItem: undefined, zoom: actual!.zoom });
+		await electron.evaluate(() => { (globalThis as typeof globalThis & { ashMenuPosition: { options?: unknown } }).ashMenuPosition.options = undefined; });
+		const accounts = workbench.page.locator('[data-part="activitybar"]').getByRole('button', { name: 'Accounts' });
+		await accounts.evaluate(element => {
+			element.addEventListener('mousedown', () => {
+				const bounds = element.getBoundingClientRect();
+				(window as Window & { ashMenuAnchor?: { x: number; y: number } }).ashMenuAnchor = { x: bounds.left, y: bounds.bottom };
+			}, { once: true });
+		});
+		await accounts.click();
+		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuPosition?: { options?: { x?: number; y?: number } } }).ashMenuPosition?.options)).toBeDefined();
+		const elementMenu = await electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuPosition?: { options?: { x?: number; y?: number; positioningItem?: number; zoom: number } } }).ashMenuPosition?.options);
+		const anchor = await workbench.page.evaluate(() => (window as Window & { ashMenuAnchor?: { x: number; y: number } }).ashMenuAnchor);
+		expect(anchor).toBeDefined();
+		expect(elementMenu).toEqual({ x: Math.floor(anchor!.x * elementMenu!.zoom), y: Math.floor(anchor!.y * elementMenu!.zoom) + 4, positioningItem: undefined, zoom: elementMenu!.zoom });
+	} finally {
+		await electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuPosition?: { restore: () => void } }).ashMenuPosition?.restore());
+	}
+});
+
 test('blank activity bar context menu lists and toggles views', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const activitybar = workbench.page.locator('[data-part="activitybar"]');

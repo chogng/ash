@@ -8,8 +8,10 @@ import {
 test("native context menu validation accepts bounded nested menus", () => {
 	assert.deepEqual(
 		validateNativeContextMenuRequest({
-			x: 12,
+			x: 12.5,
 			y: 34,
+			elementAnchor: true,
+			positioningItem: 0,
 			items: [
 				{
 					type: "action",
@@ -36,8 +38,10 @@ test("native context menu validation accepts bounded nested menus", () => {
 			],
 		}),
 		{
-			x: 12,
+			x: 12.5,
 			y: 34,
+			elementAnchor: true,
+			positioningItem: 0,
 			items: [
 				{
 					type: "action",
@@ -97,6 +101,15 @@ test("native context menu validation rejects unsafe payloads", () => {
 			y: 0,
 			items: [action],
 		}),
-		/bounded safe integer/,
+		/bounded finite number/,
+	);
+	assert.throws(
+		() => validateNativeContextMenuRequest({
+			x: 0,
+			y: 0,
+			positioningItem: 1,
+			items: [action],
+		}),
+		/top-level menu item/,
 	);
 });

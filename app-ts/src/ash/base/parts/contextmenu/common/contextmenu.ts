@@ -32,6 +32,8 @@ export interface INativeContextMenuRequest {
 	readonly items: readonly NativeContextMenuItem[];
 	readonly x: number;
 	readonly y: number;
+	readonly elementAnchor?: boolean;
+	readonly positioningItem?: number;
 }
 
 export interface INativeContextMenuResult {
@@ -57,15 +59,27 @@ const MAX_COORDINATE = 1_000_000;
 export function validateNativeContextMenuRequest(
 	value: unknown,
 ): INativeContextMenuRequest {
-	const request = exactRecord(value, ["items", "x", "y"]);
+	const request = looseRecord(value);
+	const keys = ["items", "x", "y"];
+	const hasElementAnchor = "elementAnchor" in request;
+	const hasPositioningItem = "positioningItem" in request;
+	if (hasElementAnchor) keys.push("elementAnchor");
+	if (hasPositioningItem) keys.push("positioningItem");
+	requireExactKeys(request, keys);
 	const state = {
 		itemCount: 0,
 		ids: new Set<string>(),
 	};
+	const items = validateItems(request.items, 0, state);
+	if (hasPositioningItem && (!Number.isInteger(request.positioningItem) || (request.positioningItem as number) < 0 || (request.positioningItem as number) >= items.length)) {
+		throw new Error("positioningItem must index a top-level menu item");
+	}
 	return {
-		items: validateItems(request.items, 0, state),
+		items,
 		x: coordinate(request.x, "x"),
 		y: coordinate(request.y, "y"),
+		...(hasElementAnchor ? { elementAnchor: boolean(request.elementAnchor, "elementAnchor") } : {}),
+		...(hasPositioningItem ? { positioningItem: request.positioningItem as number } : {}),
 	};
 }
 
@@ -226,10 +240,10 @@ function boolean(value: unknown, field: string): boolean {
 
 function coordinate(value: unknown, field: string): number {
 	if (
-		!Number.isSafeInteger(value) ||
+		typeof value !== "number" || !Number.isFinite(value) ||
 		Math.abs(value as number) > MAX_COORDINATE
 	) {
-		throw new Error(`${field} must be a bounded safe integer`);
+		throw new Error(`${field} must be a bounded finite number`);
 	}
 	return value as number;
 }

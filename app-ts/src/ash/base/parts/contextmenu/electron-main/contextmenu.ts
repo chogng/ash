@@ -45,10 +45,13 @@ export class ElectronContextMenu extends Disposable {
 			this.settle = resolve;
 		});
 		try {
+			// Electron positions menus in unzoomed window coordinates; renderer anchors use CSS pixels.
+			const zoom = this.window.webContents.getZoomFactor();
 			menu.popup({
 				window: this.window,
-				x: request.x,
-				y: request.y,
+				x: Math.floor(request.x * zoom),
+				y: Math.floor(request.y * zoom) + (request.elementAnchor ? 4 : 0),
+				positioningItem: request.positioningItem,
 				callback: () => this.finish(
 					selectedId ? { selectedId } : {},
 				),

@@ -29,6 +29,7 @@ import type {
 	ContextMenuAnchor,
 	IContextMenuDelegate,
 } from "../../../../base/browser/contextmenu.js";
+import { AnchorAlignment, AnchorAxisAlignment } from "../../../../base/browser/ui/contextview/contextview.js";
 import { transformContextMenuDelegate } from "../../../../platform/contextview/browser/contextMenuService.js";
 import type {
 	IContextMenuMenuDelegate,
@@ -81,11 +82,11 @@ export class NativeContextMenuService extends Disposable
 			return;
 		}
 
-		const point = anchorPoint(resolved.getAnchor());
+		const point = anchorPoint(resolved.getAnchor(), resolved);
 		const request: INativeContextMenuRequest = {
 			items: serialized.items,
-			x: point.x,
-			y: point.y,
+			...point,
+			...(resolved.autoSelectFirstItem ? { positioningItem: 0 } : {}),
 		};
 		this.open = true;
 		this._onDidShowContextMenu.fire();
@@ -214,7 +215,8 @@ function trimSerializedSeparators(
 
 function anchorPoint(
 	anchor: ContextMenuAnchor,
-): { readonly x: number; readonly y: number } {
+	delegate: IContextMenuDelegate,
+): { readonly x: number; readonly y: number; readonly elementAnchor?: boolean } {
 	if (!isNode(anchor)) {
 		return {
 			x: normalizeCoordinate(anchor.x),
@@ -222,14 +224,24 @@ function anchorPoint(
 		};
 	}
 	const bounds = anchor.getBoundingClientRect();
+	const targetWindow = anchor.ownerDocument.defaultView;
+	if (!targetWindow) throw new Error("Context menu anchor has no window");
+	const isClipped = bounds.left < 0 || bounds.top < 0 || bounds.right > targetWindow.innerWidth || bounds.bottom > targetWindow.innerHeight;
+	const x = isClipped
+		? Math.min(Math.max(bounds.right, 0), targetWindow.innerWidth)
+		: delegate.anchorAlignment === AnchorAlignment.Right ? bounds.right : bounds.left;
+	const y = isClipped
+		? Math.min(Math.max(bounds.bottom, 0), targetWindow.innerHeight)
+		: delegate.anchorAxisAlignment === AnchorAxisAlignment.Horizontal ? bounds.top : bounds.bottom;
 	return {
-		x: normalizeCoordinate(bounds.left),
-		y: normalizeCoordinate(bounds.bottom),
+		x: normalizeCoordinate(x),
+		y: normalizeCoordinate(y),
+		elementAnchor: true,
 	};
 }
 
 function normalizeCoordinate(value: number): number {
-	return Math.max(-1_000_000, Math.min(1_000_000, Math.round(value)));
+	return Math.max(-1_000_000, Math.min(1_000_000, value));
 }
 
 function toErrorMessage(error: unknown): string {
