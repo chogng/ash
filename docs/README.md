@@ -45,6 +45,10 @@
 [`model-provider.md`](model-provider.md)、[`model-provider-config.md`](model-provider-config.md)、
 [`models-manager.md`](models-manager.md)、[`config.md`](config.md)、[`login.md`](login.md)、
 [`subscriptions.md`](subscriptions.md)（订阅接入与额度）、
+[订阅套餐一览](models/plans-and-pricing.md)、
+[ChatGPT](models/chatgpt.md)、[Kimi](models/kimi.md)、
+[Super Grok](models/supergrok.md)、[GLM](models/glm.md)、
+[开发者 API 模型价格](models/ash-host-models.md)、
 [`secrets.md`](secrets.md)
 
 ## 安全与权限
@@ -77,8 +81,7 @@
 
 [`architecture.md`](architecture.md)（总入口）、[`ash-rs-architecture.md`](ash-rs-architecture.md)、
 [`code/README.md`](../code/README.md)、[`workbench-modes.md`](workbench-modes.md)、
-[`product-lines.md`](product-lines.md)、[`remote-development.md`](remote-development.md)、[`git.md`](git.md)、
-[`documentation-guidelines.md`](documentation-guidelines.md)
+[`product-lines.md`](product-lines.md)、[`remote-development.md`](remote-development.md)、[`git.md`](git.md)
 
 ## 计划与迁移
 

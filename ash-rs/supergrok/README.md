@@ -8,6 +8,8 @@
 
 xAI developer API keys and their model catalog belong to `model-provider`; this crate represents the Super Grok login account used for subscription access.
 
+User-facing sign-in and usage behavior: [Super Grok subscription account](../../docs/models/supergrok.md). Plan names: [subscription plans](../../docs/models/plans-and-pricing.md).
+
 ## Subscription transport
 
 - Device authorization uses `auth.x.ai/oauth2/device/code` and `auth.x.ai/oauth2/token`.

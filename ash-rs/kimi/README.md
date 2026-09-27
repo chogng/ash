@@ -9,3 +9,5 @@
 当前 credential key 是 `provider/kimi/current/oauth`。value 是由本 crate 私有解释并在 token rotation 时整体替换的 JSON envelope；`ash-secrets` 只把它作为 opaque bytes 保存。
 
 Desktop Models 设置页经窄 account IPC 启动登录；系统浏览器和剪贴板副作用由 Electron main 持有。Renderer 不接收 token，refresh 后的 credential revision 通过 `LoginService` 主动更新脱敏账户状态。
+
+用户看到的登录与额度行为见 [Kimi Code 订阅账户](../../docs/models/kimi.md)，套餐名称见[订阅套餐一览](../../docs/models/plans-and-pricing.md)。

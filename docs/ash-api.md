@@ -763,7 +763,7 @@ idle deadline、proxy/TLS、pool 和 HTTP diagnostics 的测试属于 `ash-http-
 
 ### 阶段 4.5：ChatGPT 订阅服务接口面
 
-- 建立 [`ash-chatgpt`](subscriptions.md#chatgptcodex-兼容登录)，提供设备码授权、Codex 兼容凭据管理与固定请求目标；
+- 建立 [`ash-chatgpt`](models/chatgpt.md)，提供设备码授权、Codex 兼容凭据管理与固定请求目标；
 - 将 Platform API key、ChatGPT subscription OAuth 和 custom-compatible target 设为互斥 binding；
 - 复用已验证的 Responses codec，并为 subscription target、headers、refresh 和 streaming 建立脱敏 contract fixture；
 - 其他 endpoint 必须逐项验证，不能从 Responses 兼容性推断。

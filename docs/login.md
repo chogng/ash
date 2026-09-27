@@ -11,7 +11,7 @@
 
 ## 快速理解
 
-登录系统是面向用户的多账户控制面，不是通用 OAuth 实现。当前 `LoginService` 按 provider 注册 driver，拥有稳定 login ID、取消、完成、provider-scoped 登出和 revisioned account collection；ChatGPT、Kimi、Super Grok 的设备授权与凭据生命周期分别由 `ash-chatgpt`、`ash-kimi`、`ash-supergrok` 处理。BigModel 与 Z.AI Coding Plan 分别使用自己的 API key，不进入这套账户登录流程。
+登录系统是面向用户的多账户控制面，不是通用 OAuth 实现。当前 `LoginService` 按 provider 注册 driver，拥有稳定 login ID、取消、完成、provider-scoped 登出和 revisioned account collection；ChatGPT、Kimi、Super Grok 的设备授权与凭据生命周期分别由 `ash-chatgpt`、`ash-kimi`、`ash-supergrok` 处理。官方 ZCode 支持 BigModel 与 Z.AI Coding Plan 的账号授权；Ash 当前仅支持填写各自的套餐 Key，不进入这套账户登录流程，见[GLM 接入](models/glm.md)。
 
 | 用户动作或凭据类型 | 由谁处理 | Ash 登录系统能看到什么 |
 | --- | --- | --- |
