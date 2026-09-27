@@ -16,10 +16,16 @@ pub fn run_command(
     }
     let arguments = arguments.into_iter().collect::<Vec<_>>();
     let (command, product_services) = parse(&arguments)?;
-    match std::env::var("ASH_APP_SERVER_SHA256") {
-        Ok(expected) => validate_backend_digest(backend_executable, &expected)?,
-        Err(std::env::VarError::NotPresent) => {}
+    let expected_digest = match std::env::var("ASH_APP_SERVER_SHA256") {
+        Ok(expected) => Some(expected),
+        Err(std::env::VarError::NotPresent) => None,
         Err(_) => return Err("ASH_APP_SERVER_SHA256 must contain a SHA-256 digest".into()),
+    };
+    // connect-selected checks the signed digest with the generation identity in one file read.
+    if command != Command::ConnectSelected
+        && let Some(expected) = &expected_digest
+    {
+        validate_backend_digest(backend_executable, expected)?;
     }
     let grant_source = match std::env::var("ASH_DIR_GRANT_SOURCE").as_deref() {
         Ok("userConfig") => GrantSource::UserConfig,
@@ -36,7 +42,14 @@ pub fn run_command(
     );
     match command {
         Command::Connect => crate::connect(options, backend_executable),
-        Command::ConnectSelected => crate::connect_selected(options, backend_executable),
+        Command::ConnectSelected => crate::client::connect_selected_with_digest(
+            options,
+            backend_executable,
+            expected_digest
+                .as_deref()
+                .map(crate::process::PackageDigest::Expected)
+                .unwrap_or(crate::process::PackageDigest::NotProvided),
+        ),
         Command::Lifecycle(command) => {
             let output = crate::run_lifecycle(command, options, backend_executable)?;
             println!(
@@ -109,15 +122,5 @@ pub fn backend_executable_path() -> Result<PathBuf, String> {
 mod tests;
 
 fn validate_backend_digest(executable: &Path, expected: &str) -> Result<(), String> {
-    if expected.len() != 64
-        || !expected
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-    {
-        return Err("ASH_APP_SERVER_SHA256 must contain 64 lowercase hexadecimal digits".into());
-    }
-    if !crate::process::executable_identity(executable)?.matches_sha256(expected) {
-        return Err("App Server executable does not match its signed package digest".into());
-    }
-    Ok(())
+    crate::process::executable_identity(executable)?.verify_package_digest(expected)
 }

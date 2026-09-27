@@ -431,6 +431,11 @@ export class AshApplication extends Disposable {
 	}
 
 	private async performOpenWorkspace(workspace: IAnyWorkspaceIdentifier, workspaces: WorkspacesManagementMainService): Promise<WorkbenchWindowRecord | undefined> {
+		const existing = this.workbenchWindows.findWorkspace(workspace);
+		if (existing) {
+			existing.focus();
+			return existing;
+		}
 		const resources = new DisposableStore();
 		try {
 			const resolvedWorkspace = await workspaces.resolveWorkspace(workspace);
@@ -443,12 +448,6 @@ export class AshApplication extends Disposable {
 			if (this.appServerStartupMode === "required" && !await this.startAppServerWithRecovery(supervisor)) {
 				resources.dispose();
 				return undefined;
-			}
-			const existing = this.workbenchWindows.findWorkspace(workspace);
-			if (existing) {
-				existing.focus();
-				resources.dispose();
-				return existing;
 			}
 			return await this.openWorkbenchWindow(workspaceContext, workspaces, supervisor, browserAutomation, resources);
 		} catch (error) {

@@ -23,6 +23,7 @@ use crate::endpoint::EndpointPaths;
 use crate::endpoint::connect_existing;
 use crate::process::BackendExecutable;
 use crate::process::ExecutableIdentity;
+use crate::process::PackageDigest;
 use crate::process::ProcessRecord;
 use crate::process::force_terminate;
 use crate::process::read_process_record;
@@ -62,9 +63,12 @@ pub(crate) fn run_lifecycle(
     let _operation_lock = endpoint.acquire_operation_lock()?;
     match command {
         LifecycleCommand::Start => start_unlocked(&endpoint, &options, backend_executable),
-        LifecycleCommand::EnsureSelected => {
-            ensure_selected_unlocked(&endpoint, &options, backend_executable)
-        }
+        LifecycleCommand::EnsureSelected => ensure_selected_unlocked(
+            &endpoint,
+            &options,
+            backend_executable,
+            PackageDigest::NotProvided,
+        ),
         LifecycleCommand::Restart => {
             let _ = stop_unlocked(&endpoint)?;
             let mut output = start_unlocked(&endpoint, &options, backend_executable)?;
@@ -85,11 +89,19 @@ pub(crate) fn connect_selected(
     options: ConnectionOptions,
     backend_executable: &Path,
 ) -> Result<(), String> {
-    run_lifecycle(
-        LifecycleCommand::EnsureSelected,
-        options.clone(),
-        backend_executable,
-    )?;
+    connect_selected_with_digest(options, backend_executable, PackageDigest::NotProvided)
+}
+
+pub(crate) fn connect_selected_with_digest(
+    options: ConnectionOptions,
+    backend_executable: &Path,
+    package_digest: PackageDigest<'_>,
+) -> Result<(), String> {
+    let endpoint = EndpointPaths::prepare(options.profile_root())?;
+    {
+        let _operation_lock = endpoint.acquire_operation_lock()?;
+        ensure_selected_unlocked(&endpoint, &options, backend_executable, package_digest)?;
+    }
     connect_ready(&options)
 }
 
@@ -230,7 +242,7 @@ fn start_unlocked(
         ));
     }
 
-    let daemon = resolve_backend_executable(backend_executable)?;
+    let daemon = resolve_backend_executable(backend_executable, PackageDigest::NotProvided)?;
     start_new_unlocked(endpoint, options, &daemon)
 }
 
@@ -295,8 +307,9 @@ fn ensure_selected_unlocked(
     endpoint: &EndpointPaths,
     options: &ConnectionOptions,
     backend_executable: &Path,
+    package_digest: PackageDigest<'_>,
 ) -> Result<LifecycleOutput, String> {
-    let selected = resolve_backend_executable(backend_executable)?;
+    let selected = resolve_backend_executable(backend_executable, package_digest)?;
     let mut replaced = false;
     if let Some(control) = request_control(endpoint, ControlCommand::Status)? {
         if control.state == ControlState::Stopping {

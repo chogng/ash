@@ -67,8 +67,20 @@ pub(crate) struct ExecutableIdentity {
 }
 
 impl ExecutableIdentity {
-    pub(crate) fn matches_sha256(&self, expected: &str) -> bool {
-        self.sha256 == expected
+    pub(crate) fn verify_package_digest(&self, expected: &str) -> Result<(), String> {
+        if expected.len() != 64
+            || !expected
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        {
+            return Err(
+                "ASH_APP_SERVER_SHA256 must contain 64 lowercase hexadecimal digits".into(),
+            );
+        }
+        if self.sha256 != expected {
+            return Err("App Server executable does not match its signed package digest".into());
+        }
+        Ok(())
     }
 
     pub(crate) fn same_generation(&self, other: &Self) -> bool {
@@ -82,6 +94,12 @@ pub(crate) struct BackendExecutable {
     pub(crate) path: PathBuf,
     pub(crate) identity: ExecutableIdentity,
     _package_lease: Option<PackageLease>,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum PackageDigest<'a> {
+    NotProvided,
+    Expected(&'a str),
 }
 
 impl ProcessRecord {
@@ -173,6 +191,7 @@ fn package_build_id(executable: &Path) -> Result<Option<String>, String> {
 
 pub(crate) fn resolve_backend_executable(
     backend_executable: &Path,
+    package_digest: PackageDigest<'_>,
 ) -> Result<BackendExecutable, String> {
     let metadata = fs::symlink_metadata(backend_executable).map_err(io_error)?;
     if metadata.file_type().is_symlink() || !metadata.is_file() {
@@ -184,6 +203,9 @@ pub(crate) fn resolve_backend_executable(
     let path = dunce::canonicalize(backend_executable).map_err(io_error)?;
     let package_lease = acquire_package_lease_for_executable(&path).map_err(io_error)?;
     let identity = executable_identity(&path)?;
+    if let PackageDigest::Expected(expected) = package_digest {
+        identity.verify_package_digest(expected)?;
+    }
     Ok(BackendExecutable {
         path,
         identity,

@@ -28,6 +28,8 @@ export class AppServerConnectionRelay extends Disposable {
 		this.assertNotDisposed();
 		if (!this.options.enabled) { throw new Error('App Server is disabled'); }
 		await this.options.processLauncher.validate();
+		if (this.transport.value) { await this.stop(); }
+		this.transport.value = new ChildProcessJsonlTransport(this.options.processLauncher.launch());
 		this.setState('starting');
 		if (this.renderer && !this.renderer.isDestroyed()) {
 			const ready = new Promise<void>((resolve, reject) => {
@@ -61,7 +63,8 @@ export class AppServerConnectionRelay extends Disposable {
 		const processLauncher = this.options.enabled ? this.options.processLauncher : undefined;
 		const reset = (): void => { void this.stop(); };
 		renderer.on('render-process-gone', reset);
-		const navigating = (_event: unknown, _url: string, inPlace: boolean, mainFrame: boolean): void => { if (mainFrame && !inPlace) { reset(); } };
+		// Initial navigation must keep the connection started before the window loaded.
+		const navigating = (_event: unknown, _url: string, inPlace: boolean, mainFrame: boolean): void => { if (mainFrame && !inPlace && this.nonce !== undefined) { reset(); } };
 		renderer.on('did-start-navigation', navigating);
 		this._register(toDisposable(() => renderer.removeListener('render-process-gone', reset)));
 		this._register(toDisposable(() => renderer.removeListener('did-start-navigation', navigating)));
@@ -73,9 +76,14 @@ export class AppServerConnectionRelay extends Disposable {
 			},
 			invoke: async nonce => {
 				if (!processLauncher) { return { enabled: false }; }
-				await processLauncher.validate();
-				await this.stop();
-				this.attach(renderer, nonce as string, processLauncher);
+				if (this.nonce !== undefined) { await this.stop(); }
+				let transport = this.transport.value;
+				if (!transport) {
+					await processLauncher.validate();
+					transport = new ChildProcessJsonlTransport(processLauncher.launch());
+					this.transport.value = transport;
+				}
+				this.attach(renderer, nonce as string, transport);
 				return { enabled: true, protocolVersion: 1, ...metadata() };
 			},
 		}, {
@@ -99,11 +107,9 @@ export class AppServerConnectionRelay extends Disposable {
 		}];
 	}
 
-	private attach(renderer: WebContents, nonce: string, processLauncher: IAppServerProcessLauncher): void {
+	private attach(renderer: WebContents, nonce: string, transport: ChildProcessJsonlTransport): void {
 		this.nonce = nonce;
 		const { port1, port2 } = new MessageChannelMain();
-		const transport = new ChildProcessJsonlTransport(processLauncher.launch());
-		this.transport.value = transport;
 		this.setState('initializing');
 		const sent: number[] = [];
 		let bytes = 0;

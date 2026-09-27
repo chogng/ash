@@ -1,5 +1,6 @@
 use std::fs;
 
+use super::PackageDigest;
 use super::resolve_backend_executable;
 
 #[test]
@@ -14,7 +15,7 @@ fn resolves_the_selected_backend_in_its_package_directory() {
     });
     fs::copy(std::env::current_exe().unwrap(), &daemon).unwrap();
 
-    let resolved = resolve_backend_executable(&daemon).unwrap();
+    let resolved = resolve_backend_executable(&daemon, PackageDigest::NotProvided).unwrap();
     let canonical_binary_directory = dunce::canonicalize(&binary_directory).unwrap();
 
     assert_eq!(resolved.path, dunce::canonicalize(&daemon).unwrap());
@@ -37,7 +38,22 @@ fn malformed_package_identity_cannot_select_a_daemon_generation() {
     fs::copy(std::env::current_exe().unwrap(), &daemon).unwrap();
     fs::write(root.path().join("package/ash-package.json"), "{}").unwrap();
 
-    assert!(resolve_backend_executable(&daemon).is_err());
+    assert!(resolve_backend_executable(&daemon, PackageDigest::NotProvided).is_err());
+}
+
+#[test]
+fn selected_backend_verifies_the_package_digest_with_its_generation_identity() {
+    use sha2::Digest;
+
+    let root = tempfile::tempdir().unwrap();
+    let executable = root.path().join("backend");
+    fs::write(&executable, b"signed backend").unwrap();
+    let digest = format!("{:x}", sha2::Sha256::digest(b"signed backend"));
+
+    assert!(resolve_backend_executable(&executable, PackageDigest::Expected(&digest)).is_ok());
+    fs::write(&executable, b"changed backend").unwrap();
+    assert!(resolve_backend_executable(&executable, PackageDigest::Expected(&digest)).is_err());
+    assert!(resolve_backend_executable(&executable, PackageDigest::Expected("invalid")).is_err());
 }
 
 #[test]
