@@ -4,15 +4,15 @@ import { Extensions, type IConfigurationRegistry } from '../../platform/configur
 import { Registry } from '../../platform/registry/common/platform.js';
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
-	key: AccessibilityVerbositySettingId.SessionsNavigation,
+	key: AccessibilityVerbositySettingId.SessionsActivityBar,
 	defaultValue: true,
 	parse(value: unknown): boolean {
-		if (typeof value !== 'boolean') throw new TypeError('Sessions navigation accessibility verbosity must be boolean');
+		if (typeof value !== 'boolean') throw new TypeError('Sessions Activity Bar accessibility verbosity must be boolean');
 		return value;
 	},
 	setting: {
 		valueType: 'boolean',
-		title: localize('sessions.navigation.verbosityTitle', 'Sessions navigation accessibility help'),
-		description: localize('sessions.navigation.verbosityDescription', 'Announce how to open accessibility help when the Sessions navigation bar receives focus.'),
+		title: localize('sessions.activity.verbosityTitle', 'Sessions Activity Bar accessibility help'),
+		description: localize('sessions.activity.verbosityDescription', 'Announce how to open accessibility help when the Sessions Activity Bar receives focus.'),
 	},
 });

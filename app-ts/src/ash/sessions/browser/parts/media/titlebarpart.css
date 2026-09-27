@@ -75,5 +75,6 @@
 .ash-sessions-titlebar-new-session svg { width: 16px; height: 16px; }
 
 .ash-sessions-titlebar button:hover:not(:disabled) { background: var(--ash-list-hover-background); }
+.ash-sessions-titlebar-button.selected { background: var(--ash-list-hover-background); }
 .ash-sessions-titlebar button:focus-visible { outline: var(--ash-stroke-thickness) solid var(--ash-focus-border); }
 .ash-sessions-titlebar button:disabled { opacity: .35; cursor: default; }

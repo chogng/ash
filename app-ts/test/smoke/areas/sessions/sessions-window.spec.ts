@@ -232,7 +232,17 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 		});
 		await expect(spacer).toBeVisible();
 	}
-	await expect(sessionsPage.locator("[data-part='navigationbar']")).toBeVisible();
+	await expect(sessionsPage.locator("[data-part='activitybar']")).toBeVisible();
+	const activityButtons = sessionsPage.locator("[data-part='activitybar'] button");
+	expect(await activityButtons.locator('svg').evaluateAll(icons => icons.map(icon => icon.getAttribute('data-ash-icon-id')))).toEqual(['chat-2', 'colab', 'device-mobile', 'account']);
+	await expect(activityButtons.nth(1)).toBeDisabled();
+	await expect(activityButtons.nth(2)).toBeDisabled();
+	await activityButtons.nth(3).click();
+	await expect(activityButtons.nth(3)).toHaveAttribute('aria-expanded', 'true');
+	if (process.platform !== 'darwin') {
+		await expect(sessionsPage.getByRole('menuitem', { name: 'Sign in with ChatGPT' })).toBeVisible();
+	}
+	await sessionsPage.keyboard.press('Escape');
 	await expect(sessionsPage.locator("[data-part='sidebar']")).toBeVisible();
 	await expect(sessionsPage.locator("[data-part='sessions']")).toBeVisible();
 	await expect(sessionsPage.locator("[data-part='auxiliarybar']")).toBeVisible();

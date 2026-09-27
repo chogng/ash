@@ -5,7 +5,7 @@ export const enum AccessibleViewProviderId {
 	Explorer = 'explorer',
 	GettingStarted = 'gettingStarted',
 	OpenEditors = 'openEditors',
-	SessionsNavigation = 'sessionsNavigation',
+	SessionsActivityBar = 'sessionsActivityBar',
 }
 
 export const enum AccessibleViewType {
@@ -17,7 +17,7 @@ export const enum AccessibilityVerbositySettingId {
 	Explorer = 'accessibility.verbosity.explorer',
 	GettingStarted = 'accessibility.verbosity.gettingStarted',
 	OpenEditors = 'accessibility.verbosity.openEditors',
-	SessionsNavigation = 'accessibility.verbosity.sessionsNavigation',
+	SessionsActivityBar = 'accessibility.verbosity.sessionsActivityBar',
 }
 
 export interface IAccessibleViewOptions {

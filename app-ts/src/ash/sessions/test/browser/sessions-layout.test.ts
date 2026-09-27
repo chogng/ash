@@ -36,7 +36,7 @@ class TestSessionsPart extends WorkbenchPart {
 	}
 
 	override get minimumWidth(): number {
-		if (this.id === 'navigationbar') return 56;
+		if (this.id === 'activitybar') return 56;
 		if (this.id === "sidebar") return 180;
 		if (this.id === "sessions") return 320;
 		if (this.id === "auxiliarybar") return 180;
@@ -44,7 +44,7 @@ class TestSessionsPart extends WorkbenchPart {
 	}
 
 	override get maximumWidth(): number {
-		if (this.id === 'navigationbar') return 56;
+		if (this.id === 'activitybar') return 56;
 		return this.id === "sidebar" || this.id === "auxiliarybar" ? 640 : Number.POSITIVE_INFINITY;
 	}
 
@@ -66,7 +66,7 @@ test("Sessions layout owns a fixed Sessions-first Part topology", () => {
 	layout.layout(new Dimension(1_200, 800));
 
 	assert.deepEqual(layout.getPartSize("titlebar"), new Dimension(1_200, 46));
-	assert.equal(Math.abs(layout.getPartSize('navigationbar').width - 62) <= 1, true);
+	assert.equal(Math.abs(layout.getPartSize('activitybar').width - 62) <= 1, true);
 	assert.equal(Math.abs(layout.getPartSize("sidebar").width - 260) <= 1, true);
 	assert.equal(Math.abs(layout.getPartSize("auxiliarybar").width - 200) <= 1, true);
 	assert.equal(layout.getPartSize("sessions").height, 754);
@@ -133,7 +133,7 @@ test("Sessions layout only permits the optional auxiliary Part to hide", () => {
 	assert.equal(changes.at(-1)?.partId, "auxiliarybar");
 	assert.equal(changes.at(-1)?.visible, false);
 	assert.throws(() => layout.hidePart("sessions"), /Required Sessions Part/);
-	assert.throws(() => layout.hidePart('navigationbar'), /Required Sessions Part/);
+	assert.throws(() => layout.hidePart('activitybar'), /Required Sessions Part/);
 
 	subscription.dispose();
 	layout.dispose();
@@ -149,8 +149,8 @@ test("Sessions layout validates its complete Part set", () => {
 
 	assert.throws(() => new SessionsWorkbenchLayout(container, parts), /missing Parts: auxiliarybar/);
 	parts.set('auxiliarybar', new TestSessionsPart('auxiliarybar', dom.window.document.body));
-	parts.delete('navigationbar');
-	assert.throws(() => new SessionsWorkbenchLayout(container, parts), /missing Parts: navigationbar/);
+	parts.delete('activitybar');
+	assert.throws(() => new SessionsWorkbenchLayout(container, parts), /missing Parts: activitybar/);
 
 	for (const part of parts.values()) part.dispose();
 	dom.window.close();

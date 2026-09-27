@@ -13,7 +13,7 @@ is canonical for the renderer implementation and extension points.
 | Dedicated window host | `platform/windows/` | owns the parent-child window lifecycle, parent-only open IPC, child-only return IPC, and child resources; `code/electron-main/app.ts` supplies the Sessions entry and connections |
 | Browser window navigation | `platform/windows/browser/dedicatedWindowNavigation.ts` | resolves and navigates between sibling renderer pages |
 | Code profile | `code/common/codeSessionsProfile.ts` | defines the Code window identity and page route used by both browser and Electron entries |
-| Product composition | `browser/workbench.ts` | uses shared window identity and lifecycle services; owns the fixed titlebar/navigationbar/sidebar/sessions/auxiliarybar Part set |
+| Product composition | `browser/workbench.ts` | uses shared window identity and lifecycle services; owns the fixed titlebar/activitybar/sidebar/sessions/auxiliarybar Part set |
 | Layout | `browser/layoutPolicy.ts` | owns Sessions topology, geometry, optional auxiliary visibility, persisted sizes, and Modern/Flat spacing |
 | Appearance | `common/configuration.ts` and `contrib/modernUI/browser/` | own the independent `sessions.layoutStyle` preference and Sessions Part appearance |
 | Window Sessions state | `services/sessions/browser/sessionsService.ts` | owns active/visible selections, focus, and Back/Forward history |
@@ -50,7 +50,10 @@ model supplied by Sessions and does not create or select Sessions itself.
    `WorkbenchWindow` registers the renderer window and its document styles;
    `BrowserLifecycleService` joins storage flush before disposal.
 4. `SessionsWorkbenchLayout` deserializes the fixed Part grid. Titlebar,
-   navigationbar, sidebar, and sessions Parts are required; only the auxiliary Part may hide.
+   activitybar, sidebar, and sessions Parts are required; only the auxiliary Part may hide.
+   The Activity Bar selects Chat and opens the account menu; Collaboration and Mobile devices
+   are visible but unavailable until those views have product data. The titlebar owns new-session,
+   history, and details controls.
    Its spacing follows `sessions.layoutStyle`, independently of the IDE's
    `workbench.layoutStyle`. Both preferences use the same profile settings
    resource; changing either one updates its own window without changing
@@ -120,7 +123,7 @@ and dirs. It does not grant access and is not the editor window Workspace from
   catalog refresh, provider invalidation, drafts, and operations without
   inventing Session sequence state.
 - `test/smoke/areas/sessions/sessions-window.spec.ts` verifies the dedicated
-  Electron window, all five Parts, list search, details visibility, multiple Grid leaves, close, return flow,
+  Electron window, all five Parts, Activity Bar actions, list search, details visibility, multiple Grid leaves, close, return flow,
   and system-wide shortcut registration and release.
 - `platform/windows/test/electron-main/` verifies reuse,
   close and reopen ordering, resource release, initialization failure, and IPC commands.

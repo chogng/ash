@@ -132,6 +132,16 @@
       "rendering": "symbolic"
     },
     {
+      "id": "chat-2",
+      "file": "chat-2.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "chat-2-filled",
+      "file": "chat-2-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "chat-filled",
       "file": "chat-filled.svg",
       "rendering": "symbolic"
@@ -199,6 +209,11 @@
     {
       "id": "colab",
       "file": "colab.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "colab-filled",
+      "file": "colab-filled.svg",
       "rendering": "symbolic"
     },
     {
@@ -279,6 +294,11 @@
     {
       "id": "debug",
       "file": "debug.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "device-mobile",
+      "file": "device-mobile.svg",
       "rendering": "symbolic"
     },
     {
@@ -574,6 +594,11 @@
     {
       "id": "library",
       "file": "library.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "library-filled",
+      "file": "library-filled.svg",
       "rendering": "symbolic"
     },
     {

@@ -11,7 +11,7 @@ import type { WorkbenchPart } from '../../workbench/browser/part.js';
 import { WorkbenchPartView } from '../../workbench/browser/workbenchPartView.js';
 import type { SessionsLayoutStyle } from '../common/configuration.js';
 
-export const sessionsPartIds = ['titlebar', 'navigationbar', 'sidebar', 'sessions', 'auxiliarybar'] as const;
+export const sessionsPartIds = ['titlebar', 'activitybar', 'sidebar', 'sessions', 'auxiliarybar'] as const;
 export type SessionsPartId = typeof sessionsPartIds[number];
 
 export interface SessionsPartVisibilityChangeEvent {
@@ -21,7 +21,7 @@ export interface SessionsPartVisibilityChangeEvent {
 
 const DEFAULT_SIDEBAR_WIDTH = 260;
 const DEFAULT_AUXILIARYBAR_WIDTH = 200;
-const NAVIGATION_BAR_WIDTH = 56;
+const ACTIVITY_BAR_WIDTH = 56;
 
 /** Persisted, Sessions-owned dimensions and visibility for the dedicated window. */
 export interface SessionsWorkbenchLayoutState {
@@ -150,7 +150,7 @@ export function createSessionsWorkbenchGridDescriptor(
 	});
 	const titlebarHeight = requiredView(views, 'titlebar').minimumHeight;
 	const bodyHeight = Math.max(0, dimension.height - titlebarHeight);
-	const sessionsWidth = Math.max(0, dimension.width - NAVIGATION_BAR_WIDTH - state.sidebar.width - (state.auxiliarybar.visible ? state.auxiliarybar.width : 0));
+	const sessionsWidth = Math.max(0, dimension.width - ACTIVITY_BAR_WIDTH - state.sidebar.width - (state.auxiliarybar.visible ? state.auxiliarybar.width : 0));
 	return {
 		type: 'branch',
 		orientation: 'vertical',
@@ -164,7 +164,7 @@ export function createSessionsWorkbenchGridDescriptor(
 				size: bodyHeight,
 				priority: SESSIONS_LAYOUT_PRIORITY,
 				children: [
-					leaf('navigationbar', NAVIGATION_BAR_WIDTH),
+					leaf('activitybar', ACTIVITY_BAR_WIDTH),
 					leaf('sidebar', state.sidebar.width),
 					leaf('sessions', sessionsWidth, true, SESSIONS_LAYOUT_PRIORITY),
 					leaf('auxiliarybar', state.auxiliarybar.width, state.auxiliarybar.visible),
@@ -183,7 +183,7 @@ export function resolveSessionsInitialDimension(container: HTMLElement, dimensio
 }
 
 export function parseSessionsPartId(value: unknown): SessionsPartId {
-	if (value === 'titlebar' || value === 'navigationbar' || value === 'sidebar' || value === 'sessions' || value === 'auxiliarybar') return value;
+	if (value === 'titlebar' || value === 'activitybar' || value === 'sidebar' || value === 'sessions' || value === 'auxiliarybar') return value;
 	throw new TypeError('Sessions Grid contains an unknown Part');
 }
 
@@ -294,7 +294,7 @@ export class SessionsWorkbenchLayout extends Disposable implements IResizable {
 	}
 
 	private updatePartVisibility(partId: SessionsPartId, visible: boolean): void {
-		if (partId === 'titlebar' || partId === 'navigationbar' || partId === 'sidebar' || partId === 'sessions') throw new Error(`Required Sessions Part cannot be hidden: ${partId}`);
+		if (partId === 'titlebar' || partId === 'activitybar' || partId === 'sidebar' || partId === 'sessions') throw new Error(`Required Sessions Part cannot be hidden: ${partId}`);
 		if (this.isPartVisible(partId) === visible) return;
 		this.grid.setViewVisible(this.view(partId), visible);
 		this.projectFrameInsets();
@@ -308,7 +308,7 @@ export class SessionsWorkbenchLayout extends Disposable implements IResizable {
 		const rightEdge = this.layoutStyle === 'modern' ? WINDOW_RIGHT_EDGE_INSET : 0;
 		const halfGutter = this.layoutStyle === 'modern' ? PART_GUTTER_HALF : 0;
 		this.view('titlebar').setFrameInsets({ top: 0, right: 0, bottom: 0, left: 0 });
-		this.view('navigationbar').setFrameInsets({ top: 0, right: 0, bottom: 0, left: leftEdge });
+		this.view('activitybar').setFrameInsets({ top: 0, right: 0, bottom: 0, left: leftEdge });
 		this.view('sidebar').setFrameInsets({ top: 0, right: halfGutter, bottom: 0, left: 0 });
 		this.view('sessions').setFrameInsets({ top: 0, right: auxiliarybarVisible ? halfGutter : rightEdge, bottom: 0, left: halfGutter });
 		this.view('auxiliarybar').setFrameInsets({ top: 0, right: rightEdge, bottom: 0, left: halfGutter });

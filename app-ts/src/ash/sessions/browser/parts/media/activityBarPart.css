@@ -1,0 +1,58 @@
+.ash-sessions-window .ash-workbench-activitybar {
+	border-right: var(--ash-stroke-thickness) solid var(--ash-border);
+	background: var(--ash-side-bar-background);
+}
+
+.ash-sessions-window .ash-workbench-activitybar > .ash-workbench-part-content {
+	justify-content: space-between;
+	align-items: center;
+	padding: var(--ash-spacing-size160) var(--ash-spacing-size80);
+}
+
+.ash-sessions-activity-top,
+.ash-sessions-activity-bottom {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size120);
+}
+
+.ash-sessions-activity-item.ash-button {
+	display: grid;
+	width: 40px;
+	height: 40px;
+	place-items: center;
+	padding: 0;
+	border: 0;
+	border-radius: var(--ash-corner-radius-large);
+	color: var(--ash-foreground);
+	background: transparent;
+}
+
+.ash-sessions-activity-item .ash-button-label {
+	display: none;
+}
+
+.ash-sessions-activity-item.ash-button:hover,
+.ash-sessions-activity-item.ash-button.selected {
+	color: var(--ash-button-primary-foreground);
+	background: var(--ash-button-primary-background);
+}
+
+.ash-sessions-activity-item.ash-button:disabled {
+	opacity: .35;
+}
+
+.ash-sessions-activity-item.ash-button:disabled:hover {
+	color: var(--ash-foreground);
+	background: transparent;
+}
+
+.ash-sessions-activity-item.ash-button:focus-visible {
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: 2px;
+}
+
+.ash-sessions-activity-item .ash-icon {
+	width: var(--ash-lxicon-font-size);
+	height: var(--ash-lxicon-font-size);
+}

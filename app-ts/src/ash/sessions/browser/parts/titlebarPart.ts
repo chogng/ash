@@ -13,10 +13,13 @@ import { WorkbenchPart } from "../../../workbench/browser/part.js";
 export interface TitlebarPartDelegate {
 	returnToWorkbench(): void;
 	focusSessions(): void;
+	toggleDetails(): void;
 }
 
 /** Window chrome and primary product actions for the dedicated Sessions Workbench. */
 export class TitlebarPart extends WorkbenchPart {
+	private readonly detailsButton: HTMLButtonElement;
+
 	override get minimumHeight(): number { return 46; }
 	override get maximumHeight(): number { return 46; }
 
@@ -42,8 +45,8 @@ export class TitlebarPart extends WorkbenchPart {
 		returnButton.setAttribute('aria-label', localize('sessions.titlebar.workbench', 'Return to Workbench'));
 		returnButton.title = returnButton.getAttribute('aria-label')!;
 		appendIcon(Lxicon.layoutSidebarRightOff, returnButton);
-		const backButton = navigationButton(ownerDocument, "←", "Back");
-		const forwardButton = navigationButton(ownerDocument, "→", "Forward");
+		const backButton = navigationButton(ownerDocument, '←', localize('sessions.navigation.back', 'Back'));
+		const forwardButton = navigationButton(ownerDocument, '→', localize('sessions.navigation.forward', 'Forward'));
 		const title = h(ownerDocument, "div");
 		title.className = "ash-sessions-titlebar-title";
 		title.textContent = profile.label;
@@ -57,9 +60,15 @@ export class TitlebarPart extends WorkbenchPart {
 		newSession.setAttribute('aria-label', localize('sessions.navigation.new', 'New session'));
 		newSession.title = newSession.getAttribute('aria-label')!;
 		appendIcon(Lxicon.add, newSession);
+		this.detailsButton = h(ownerDocument, 'button');
+		this.detailsButton.type = 'button';
+		this.detailsButton.className = 'ash-sessions-button ash-sessions-titlebar-button';
+		this.detailsButton.setAttribute('aria-label', localize('sessions.navigation.details', 'Session details'));
+		this.detailsButton.title = this.detailsButton.getAttribute('aria-label')!;
+		appendIcon(Lxicon.layoutSidebarRight, this.detailsButton);
 		left.append(avatar, title);
 		navigation.append(backButton, forwardButton);
-		right.append(navigation, newSession, returnButton);
+		right.append(navigation, newSession, this.detailsButton, returnButton);
 		this.contentDomNode.append(left, right);
 		this._register(addDisposableListener(returnButton, "click", () => delegate.returnToWorkbench()));
 		this._register(addDisposableListener(backButton, "click", () => viewService.navigateBack()));
@@ -68,6 +77,7 @@ export class TitlebarPart extends WorkbenchPart {
 			viewService.openNewSession(localize('sessions.newCodeSession', 'New code session'));
 			delegate.focusSessions();
 		}));
+		this._register(addDisposableListener(this.detailsButton, 'click', () => delegate.toggleDetails()));
 		const updateNavigation = (): void => {
 			backButton.disabled = !viewService.canNavigateBack;
 			forwardButton.disabled = !viewService.canNavigateForward;
@@ -79,6 +89,11 @@ export class TitlebarPart extends WorkbenchPart {
 		};
 		this._register(viewService.onDidChange(updateNavigation));
 		updateNavigation();
+	}
+
+	public updateDetailsVisibility(visible: boolean): void {
+		this.detailsButton.classList.toggle('selected', visible);
+		this.detailsButton.setAttribute('aria-pressed', String(visible));
 	}
 }
 

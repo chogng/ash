@@ -34,6 +34,8 @@ mod artwork {
     pub(crate) const CALENDAR: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/calendar.svg"));
     pub(crate) const CHART: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/chart.svg"));
     pub(crate) const CHAT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/chat.svg"));
+    pub(crate) const CHAT_2: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/chat-2.svg"));
+    pub(crate) const CHAT_2_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/chat-2-filled.svg"));
     pub(crate) const CHAT_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/chat-filled.svg"));
     pub(crate) const CHECK: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/check.svg"));
     pub(crate) const CHEVRON_DOWN: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/chevron-down.svg"));
@@ -48,6 +50,7 @@ mod artwork {
     pub(crate) const CODE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/code.svg"));
     pub(crate) const CODE_REVIEW: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/code-review.svg"));
     pub(crate) const COLAB: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/colab.svg"));
+    pub(crate) const COLAB_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/colab-filled.svg"));
     pub(crate) const COMMAND: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/command.svg"));
     pub(crate) const COPY: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/copy.svg"));
     pub(crate) const COPY_CODE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/copy-code.svg"));
@@ -64,6 +67,7 @@ mod artwork {
     pub(crate) const DATABASE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/database.svg"));
     pub(crate) const DATABASE_FLAT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/database-flat.svg"));
     pub(crate) const DEBUG: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/debug.svg"));
+    pub(crate) const DEVICE_MOBILE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/device-mobile.svg"));
     pub(crate) const DIAGNOSTICS: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/diagnostics.svg"));
     pub(crate) const DIFF: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/diff.svg"));
     pub(crate) const DISCARD: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/discard.svg"));
@@ -123,6 +127,7 @@ mod artwork {
     pub(crate) const LETTER_H: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/letter-h.svg"));
     pub(crate) const LETTER_T: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/letter-t.svg"));
     pub(crate) const LIBRARY: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/library.svg"));
+    pub(crate) const LIBRARY_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/library-filled.svg"));
     pub(crate) const LIGHTNING: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/lightning.svg"));
     pub(crate) const LIGHTNING_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/lightning-filled.svg"));
     pub(crate) const LINK_EXTERNAL: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/link-external.svg"));
@@ -229,6 +234,8 @@ pub mod icons {
     pub const CALENDAR: Icon = Icon::new(IconId::new("calendar"), artwork::CALENDAR);
     pub const CHART: Icon = Icon::new(IconId::new("chart"), artwork::CHART);
     pub const CHAT: Icon = Icon::new(IconId::new("chat"), artwork::CHAT);
+    pub const CHAT_2: Icon = Icon::new(IconId::new("chat-2"), artwork::CHAT_2);
+    pub const CHAT_2_FILLED: Icon = Icon::new(IconId::new("chat-2-filled"), artwork::CHAT_2_FILLED);
     pub const CHAT_FILLED: Icon = Icon::new(IconId::new("chat-filled"), artwork::CHAT_FILLED);
     pub const CHECK: Icon = Icon::new(IconId::new("check"), artwork::CHECK);
     pub const CHEVRON_DOWN: Icon = Icon::new(IconId::new("chevron-down"), artwork::CHEVRON_DOWN);
@@ -243,6 +250,7 @@ pub mod icons {
     pub const CODE: Icon = Icon::new(IconId::new("code"), artwork::CODE);
     pub const CODE_REVIEW: Icon = Icon::new(IconId::new("code-review"), artwork::CODE_REVIEW);
     pub const COLAB: Icon = Icon::new(IconId::new("colab"), artwork::COLAB);
+    pub const COLAB_FILLED: Icon = Icon::new(IconId::new("colab-filled"), artwork::COLAB_FILLED);
     pub const COMMAND: Icon = Icon::new(IconId::new("command"), artwork::COMMAND);
     pub const COPY: Icon = Icon::new(IconId::new("copy"), artwork::COPY);
     pub const COPY_CODE: Icon = Icon::new(IconId::new("copy-code"), artwork::COPY_CODE);
@@ -259,6 +267,7 @@ pub mod icons {
     pub const DATABASE: Icon = Icon::new(IconId::new("database"), artwork::DATABASE);
     pub const DATABASE_FLAT: Icon = Icon::new(IconId::new("database-flat"), artwork::DATABASE_FLAT);
     pub const DEBUG: Icon = Icon::new(IconId::new("debug"), artwork::DEBUG);
+    pub const DEVICE_MOBILE: Icon = Icon::new(IconId::new("device-mobile"), artwork::DEVICE_MOBILE);
     pub const DIAGNOSTICS: Icon = Icon::new(IconId::new("diagnostics"), artwork::DIAGNOSTICS);
     pub const DIFF: Icon = Icon::new(IconId::new("diff"), artwork::DIFF);
     pub const DISCARD: Icon = Icon::new(IconId::new("discard"), artwork::DISCARD);
@@ -318,6 +327,7 @@ pub mod icons {
     pub const LETTER_H: Icon = Icon::new(IconId::new("letter-h"), artwork::LETTER_H);
     pub const LETTER_T: Icon = Icon::new(IconId::new("letter-t"), artwork::LETTER_T);
     pub const LIBRARY: Icon = Icon::new(IconId::new("library"), artwork::LIBRARY);
+    pub const LIBRARY_FILLED: Icon = Icon::new(IconId::new("library-filled"), artwork::LIBRARY_FILLED);
     pub const LIGHTNING: Icon = Icon::new(IconId::new("lightning"), artwork::LIGHTNING);
     pub const LIGHTNING_FILLED: Icon = Icon::new(IconId::new("lightning-filled"), artwork::LIGHTNING_FILLED);
     pub const LINK_EXTERNAL: Icon = Icon::new(IconId::new("link-external"), artwork::LINK_EXTERNAL);
@@ -420,6 +430,8 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::CALENDAR,
     icons::CHART,
     icons::CHAT,
+    icons::CHAT_2,
+    icons::CHAT_2_FILLED,
     icons::CHAT_FILLED,
     icons::CHECK,
     icons::CHEVRON_DOWN,
@@ -434,6 +446,7 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::CODE,
     icons::CODE_REVIEW,
     icons::COLAB,
+    icons::COLAB_FILLED,
     icons::COMMAND,
     icons::COPY,
     icons::COPY_CODE,
@@ -450,6 +463,7 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::DATABASE,
     icons::DATABASE_FLAT,
     icons::DEBUG,
+    icons::DEVICE_MOBILE,
     icons::DIAGNOSTICS,
     icons::DIFF,
     icons::DISCARD,
@@ -509,6 +523,7 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::LETTER_H,
     icons::LETTER_T,
     icons::LIBRARY,
+    icons::LIBRARY_FILLED,
     icons::LIGHTNING,
     icons::LIGHTNING_FILLED,
     icons::LINK_EXTERNAL,
@@ -612,6 +627,8 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("calendar", artwork::CALENDAR),
     ("chart", artwork::CHART),
     ("chat", artwork::CHAT),
+    ("chat-2", artwork::CHAT_2),
+    ("chat-2-filled", artwork::CHAT_2_FILLED),
     ("chat-filled", artwork::CHAT_FILLED),
     ("check", artwork::CHECK),
     ("chevron-down", artwork::CHEVRON_DOWN),
@@ -626,6 +643,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("code", artwork::CODE),
     ("code-review", artwork::CODE_REVIEW),
     ("colab", artwork::COLAB),
+    ("colab-filled", artwork::COLAB_FILLED),
     ("command", artwork::COMMAND),
     ("copy", artwork::COPY),
     ("copy-code", artwork::COPY_CODE),
@@ -642,6 +660,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("database", artwork::DATABASE),
     ("database-flat", artwork::DATABASE_FLAT),
     ("debug", artwork::DEBUG),
+    ("device-mobile", artwork::DEVICE_MOBILE),
     ("diagnostics", artwork::DIAGNOSTICS),
     ("diff", artwork::DIFF),
     ("discard", artwork::DISCARD),
@@ -701,6 +720,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("letter-h", artwork::LETTER_H),
     ("letter-t", artwork::LETTER_T),
     ("library", artwork::LIBRARY),
+    ("library-filled", artwork::LIBRARY_FILLED),
     ("lightning", artwork::LIGHTNING),
     ("lightning-filled", artwork::LIGHTNING_FILLED),
     ("link-external", artwork::LINK_EXTERNAL),
