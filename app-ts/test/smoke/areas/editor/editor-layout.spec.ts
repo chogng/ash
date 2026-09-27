@@ -4,11 +4,12 @@ import { expect, test } from "../../../automation/test.js";
 test.describe('startup layout defaults', () => {
 	test.use({ openWorkspace: false });
 
-	test('empty window keeps Explorer and Panel hidden and shows first-launch desktop Chat', async ({ target, workbench }) => {
+	test('empty window shows Welcome with sidebars and Panel hidden', async ({ workbench }) => {
 		const page = workbench.page;
 		await expect(page.locator("[data-part='sidebar']")).toBeHidden();
 		await expect(page.locator("[data-part='panel']")).toBeHidden();
-		await expect(page.locator("[data-part='auxiliarybar']")).toBeVisible({ visible: target.kind === 'electron' });
+		await expect(page.locator("[data-part='auxiliarybar']")).toBeHidden();
+		await expect(workbench.editors.groupAt(0).welcome).toBeVisible();
 	});
 });
 

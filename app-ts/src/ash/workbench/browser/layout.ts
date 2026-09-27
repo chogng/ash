@@ -80,7 +80,6 @@ export interface WorkbenchLayoutState {
 export interface WorkbenchLayoutOptions {
 	readonly initialDimension?: IDimension;
 	readonly workbenchState: WorkbenchState;
-	readonly showChatOnFirstLaunch: boolean;
 	readonly defaultLayout?: WorkbenchDefaultLayout;
 	readonly storageService?: IStorageService;
 	readonly layoutStyle?: WorkbenchLayoutStyle;
@@ -147,7 +146,6 @@ export class WorkbenchLayout
 		this.stateModel = new WorkbenchLayoutStateModel(
 			options.storageService,
 			options.workbenchState,
-			options.showChatOnFirstLaunch,
 			options.defaultLayout,
 		);
 		const initialState = this.stateModel.state;
@@ -171,7 +169,6 @@ export class WorkbenchLayout
 			this.projectPartFrameInsets();
 			this.publishPartVisibility();
 		});
-		this.stateModel.markFirstLaunchComplete();
 		if (options.storageService) {
 			this._register(options.storageService.onWillSaveState(() => {
 				this.saveState();
@@ -664,22 +661,17 @@ function parseWorkbenchLayoutState(value: unknown): WorkbenchLayoutState {
 
 /** Bridges Workbench layout semantics to the generic scoped storage service. */
 class WorkbenchLayoutStateModel {
-	private readonly isFirstApplicationRun: boolean;
-
 	constructor(
 		private readonly storageService: IStorageService | undefined,
 		public workbenchState: WorkbenchState,
-		private readonly showChatOnFirstLaunch: boolean,
 		private readonly defaultLayout: WorkbenchDefaultLayout | undefined,
-	) {
-		this.isFirstApplicationRun = storageService?.isNew(StorageScope.APPLICATION) ?? false;
-	}
+	) { }
 
 	get state(): WorkbenchLayoutState {
 		const storage = this.storageService;
 		const fallbackParts = {
 			sidebar: this.workbenchState !== WorkbenchState.EMPTY,
-			auxiliarybar: this.workbenchState !== WorkbenchState.EMPTY || (this.isFirstApplicationRun && this.showChatOnFirstLaunch),
+			auxiliarybar: this.workbenchState !== WorkbenchState.EMPTY,
 			agentSidebar: false,
 			panel: false,
 		} as const satisfies NonNullable<WorkbenchDefaultLayout["parts"]>;
@@ -754,12 +746,6 @@ class WorkbenchLayoutStateModel {
 				),
 			},
 		};
-	}
-
-	markFirstLaunchComplete(): void {
-		if (!this.isFirstApplicationRun || !this.showChatOnFirstLaunch) return;
-		// An empty application scope remains new across restarts until it contains a value.
-		this.storageService?.store("workbench.layout.initialized", true, StorageScope.APPLICATION, StorageTarget.MACHINE);
 	}
 
 	private shouldApplyDefaultLayout(storage: IStorageService | undefined): boolean {

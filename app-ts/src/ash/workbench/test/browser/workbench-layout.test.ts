@@ -168,7 +168,6 @@ function createLayoutHarness(
 
 	const layout = disposables.add(new WorkbenchLayout(container, parts, {
 		workbenchState: WorkbenchState.FOLDER,
-		showChatOnFirstLaunch: false,
 		...options,
 	}));
 	return { disposables, container, editor, layout };
@@ -539,7 +538,7 @@ test("Workbench layout applies host defaults without exposing persisted state", 
 	dom.window.close();
 });
 
-test("Workbench startup defaults follow workspace state and first launch without replacing saved visibility", async () => {
+test("empty workbench starts with sidebars hidden and restores saved visibility", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>", { url: "https://ash.test" });
 	const createStorage = (workspaceId: string) => new BrowserStorageService({
 		ownerWindow: dom.window as unknown as Window,
@@ -551,46 +550,57 @@ test("Workbench startup defaults follow workspace state and first launch without
 	const firstStorage = createStorage("empty-a");
 	const first = createLayoutHarness(dom.window.document, {
 		workbenchState: WorkbenchState.EMPTY,
-		showChatOnFirstLaunch: true,
 		storageService: firstStorage,
 	});
 	assert.deepEqual([
 		first.layout.isPartVisible("sidebar"),
 		first.layout.isPartVisible("auxiliarybar"),
 		first.layout.isPartVisible("panel"),
-	], [false, true, false]);
-	assert.equal(firstStorage.getBoolean("workbench.layout.initialized", StorageScope.APPLICATION), true);
+	], [false, false, false]);
 	await firstStorage.flush(WillSaveStateReason.SHUTDOWN);
 	first.disposables.dispose();
 	firstStorage.dispose();
 
 	const storage = createStorage("empty-b");
-	assert.equal(storage.isNew(StorageScope.APPLICATION), false);
+	assert.equal(storage.isNew(StorageScope.APPLICATION), true);
 	const restored = createLayoutHarness(dom.window.document, {
 		workbenchState: WorkbenchState.EMPTY,
-		showChatOnFirstLaunch: true,
 		storageService: storage,
 	});
 	assert.deepEqual([
 		restored.layout.isPartVisible("sidebar"),
 		restored.layout.isPartVisible("auxiliarybar"),
 	], [false, false]);
-	storage.switchWorkspace("folder-a");
-	restored.layout.restoreWorkspaceState(WorkbenchState.FOLDER);
-	assert.deepEqual([
-		restored.layout.isPartVisible("sidebar"),
-		restored.layout.isPartVisible("auxiliarybar"),
-		restored.layout.isPartVisible("panel"),
-	], [true, true, false]);
-	restored.layout.hidePart("auxiliarybar");
+	restored.layout.showPart("sidebar");
+	restored.layout.showPart("auxiliarybar");
 	await storage.flush(WillSaveStateReason.SHUTDOWN);
 	restored.disposables.dispose();
 	storage.dispose();
 
+	const savedEmptyStorage = createStorage("empty-b");
+	const savedEmpty = createLayoutHarness(dom.window.document, {
+		workbenchState: WorkbenchState.EMPTY,
+		storageService: savedEmptyStorage,
+	});
+	assert.deepEqual([
+		savedEmpty.layout.isPartVisible("sidebar"),
+		savedEmpty.layout.isPartVisible("auxiliarybar"),
+	], [true, true]);
+	savedEmptyStorage.switchWorkspace("folder-a");
+	savedEmpty.layout.restoreWorkspaceState(WorkbenchState.FOLDER);
+	assert.deepEqual([
+		savedEmpty.layout.isPartVisible("sidebar"),
+		savedEmpty.layout.isPartVisible("auxiliarybar"),
+		savedEmpty.layout.isPartVisible("panel"),
+	], [true, true, false]);
+	savedEmpty.layout.hidePart("auxiliarybar");
+	await savedEmptyStorage.flush(WillSaveStateReason.SHUTDOWN);
+	savedEmpty.disposables.dispose();
+	savedEmptyStorage.dispose();
+
 	const savedStorage = createStorage("folder-a");
 	const saved = createLayoutHarness(dom.window.document, {
 		workbenchState: WorkbenchState.FOLDER,
-		showChatOnFirstLaunch: true,
 		storageService: savedStorage,
 	});
 	assert.equal(saved.layout.isPartVisible("sidebar"), true);

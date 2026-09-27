@@ -946,7 +946,6 @@ export class Workbench extends Disposable {
 		const layout = this._register(new WorkbenchLayout(workbenchRoot, parts, {
 			initialDimension: layoutService.mainContainerDimension,
 			workbenchState,
-			showChatOnFirstLaunch: nativeHostApi !== undefined || webWorkspaceClient !== undefined,
 			defaultLayout,
 			storageService: storage,
 			layoutStyle: configuration.getValue(WorkbenchConfiguration.layoutStyle),
