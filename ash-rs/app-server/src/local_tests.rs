@@ -2962,11 +2962,15 @@ fn xai_subscription_catalog_drives_model_selection_context_and_invocation() {
     let secrets = Arc::new(MemorySecretStore::default());
     secrets.store(&ash_secrets::SecretKey::new("provider/xai/current/oauth").unwrap(), &ash_secrets::SecretValue::new(br#"{"access_token":"fixture","refresh_token":"fixture-refresh","token_type":"Bearer","scope":"","expires_at":4102444800,"account_id":"a","credential_revision":1}"#.to_vec())).unwrap();
     let client = Arc::new(Proxy);
-    let auth = xai::XaiOAuth::with_client(secrets, client.clone(), profile.path().join("xai.lock"));
+    let auth = supergrok::SuperGrokOAuth::with_client(
+        secrets,
+        client.clone(),
+        profile.path().join("xai.lock"),
+    );
     let registry = ProviderConfigRegistry::builtin();
     let runtime = Arc::new(
         ModelProviderRuntime::with_client(registry.clone(), client)
-            .with_xai_oauth(auth)
+            .with_supergrok_oauth(auth)
             .with_catalog_cache(profile.path().join("models")),
     );
     let service = ConfigBackedModelService {
@@ -2986,6 +2990,15 @@ fn xai_subscription_catalog_drives_model_selection_context_and_invocation() {
         ModelId::new("grok-4.7").unwrap(),
     );
     assert!(entries.iter().any(|entry| entry.model == model));
+    let discovered_before_selection = service
+        .refresh(&ash_protocol::ModelConnectionId::new("xai-subscription").unwrap())
+        .unwrap();
+    assert!(
+        discovered_before_selection
+            .iter()
+            .any(|entry| entry.model.model.as_str() == "grok-test")
+    );
+    assert!(profile.path().join("models/xai.json").is_file());
     let configured = config
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("configure-xai").unwrap(),

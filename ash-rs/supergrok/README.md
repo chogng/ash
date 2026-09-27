@@ -1,10 +1,12 @@
-# ash-xai
+# ash-supergrok
 
-- Own xAI subscription device authorization and cancellation.
+- Own Super Grok account sign-in, cancellation, and credential lifecycle.
 - Store and refresh Ash-owned credentials through the secret store.
 - Resolve authenticated Grok CLI proxy requests per invocation.
 - Delegate model catalog, account, settings, and subscription usage HTTP requests and decoding to `backend-client::xai`; retain account checks and one-time authentication recovery.
 - Read an existing Grok CLI OAuth access token without touching Grok's rotating refresh token or credential file. When Ash signs in, keep its credentials separate from API keys and Grok CLI storage.
+
+xAI developer API keys and their model catalog belong to `model-provider`; this crate represents the Super Grok login account used for subscription access.
 
 ## Subscription transport
 
@@ -12,7 +14,7 @@
 - Inference uses `https://cli-chat-proxy.grok.com/v1/responses` over HTTP/SSE; account models come from `/models-v2`.
 - The account provider ID is `xai-subscription`; model references use the vendor ID `xai` for both subscription and API access. Ash stores subscription credentials in its profile secret store and coordinates refreshes through the profile's `xai.lock`. When both credentials are available, the ready subscription takes precedence.
 - If Ash has no subscription credential, it reads `~/.grok/auth.json` on the backend host for a valid official Grok OAuth access token. It reads only the matching entry's access token, account identity, email, and expiry. Ash never copies the Grok refresh token or writes the file. An Ash-owned credential takes precedence once the user signs in to Ash. A malformed Grok file reports an error instead of silently choosing another account.
-- Start from Ash Code's `/config` → Providers → xAI. Existing valid Grok login connects immediately. Otherwise Ash Code opens the device challenge in the local browser and keeps its URL and code visible in the terminal. Complete the challenge, then select a discovered model.
+- Start from Ash Code's `/config` → Providers → Super Grok. Existing valid Grok login connects immediately. Otherwise Ash Code opens the device challenge in the local browser and keeps its URL and code visible in the terminal. Complete the challenge, then select a discovered model.
 - Disconnecting a borrowed Grok login stores only an Ash-local disconnected flag. Signing in again reconnects a still-valid Grok login without altering its file. An expired Grok access token needs a fresh Ash sign-in unless Grok has renewed the file.
 - A failed rotating-token exchange requires signing in again; the submitted refresh token is never reused after an uncertain network result.
 - `refresh_account` requests `/user?include=subscription` and Grok Build `/settings` for the current login. The account's displayed plan uses `subscription_tier_display` first, then `subscription_tier`, then the user's `subscriptionTier`; it shows the full value returned by the service rather than a hardcoded tier. `/settings` here is an HTTP endpoint, not an Ash slash command.
@@ -37,4 +39,4 @@
 
 Contract checked against [xAI's Grok Build source](https://github.com/xai-org/grok-build/tree/4247f661689354b831191f11eeeac8424993fe3d) and [official Build documentation](https://docs.x.ai/build/enterprise). The [gRPC API](https://docs.x.ai/developers/grpc-api-reference) describes the API-key service; it is not the transport used by this subscription integration.
 
-- Read-only live account/credits check: `just test ash-xai live_subscription_backend -- --ignored --nocapture`. It uses only Grok’s existing access token in memory and verifies that Grok authentication is unchanged.
+- Read-only live account/credits check: `just test ash-supergrok live_subscription_backend -- --ignored --nocapture`. It uses only Grok’s existing access token in memory and verifies that Grok authentication is unchanged.

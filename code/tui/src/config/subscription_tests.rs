@@ -4,7 +4,9 @@ use ash_app_server_client::ClientError;
 use ash_app_server_protocol::protocol::account::AccountDto;
 use ash_app_server_protocol::protocol::account::AccountLoginFailureDto;
 use ash_app_server_protocol::protocol::config::ProviderConfigDto;
-use ash_app_server_protocol::protocol::model::ModelListResult;
+use ash_app_server_protocol::protocol::provider::ProviderModelsListFailureCodeDto;
+use ash_app_server_protocol::protocol::provider::ProviderModelsListFailureDto;
+use ash_app_server_protocol::protocol::provider::ProviderModelsListResult;
 use ash_protocol::ModelAccess;
 use ash_protocol::ModelId;
 use ash_protocol::ModelInfo;
@@ -273,12 +275,13 @@ fn reconnecting_existing_codex_credentials_reads_the_account_without_a_challenge
         results: VecDeque::from([
             serde_json::json!({"type":"connected","loginId":"login-1"}),
             serde_json::to_value(account(2)).unwrap(),
-            serde_json::to_value(ModelListResult {
-                models: vec![
-                    model("openai", "gpt-ash", "GPT Ash", ModelAccess::Subscription),
-                    model("xai", "grok-ash", "Grok Ash", ModelAccess::Subscription),
-                    model("openai", "api-model", "API Model", ModelAccess::ApiKey),
-                ],
+            serde_json::to_value(ProviderModelsListResult::Models {
+                models: vec![model(
+                    "openai",
+                    "gpt-ash",
+                    "GPT Ash",
+                    ModelAccess::Subscription,
+                )],
             })
             .unwrap(),
         ]),
@@ -292,10 +295,12 @@ fn reconnecting_existing_codex_credentials_reads_the_account_without_a_challenge
         ),
         SubscriptionEvent::Read {
             account: account(2),
-            models: Some(Ok(vec![
-                model("openai", "gpt-ash", "GPT Ash", ModelAccess::Subscription),
-                model("openai", "api-model", "API Model", ModelAccess::ApiKey)
-            ])),
+            models: Some(Ok(vec![model(
+                "openai",
+                "gpt-ash",
+                "GPT Ash",
+                ModelAccess::Subscription
+            )])),
         }
     );
     let requests = client.into_transport().requests;
@@ -304,7 +309,15 @@ fn reconnecting_existing_codex_credentials_reads_the_account_without_a_challenge
             .iter()
             .map(|request| request["method"].as_str().unwrap())
             .collect::<Vec<_>>(),
-        vec!["account/login/start", "account/read", "model/list"]
+        vec![
+            "account/login/start",
+            "account/read",
+            "provider/models/list"
+        ]
+    );
+    assert_eq!(
+        requests[2]["params"],
+        serde_json::json!({"connection":"chatgpt-subscription"})
     );
 }
 
@@ -323,7 +336,7 @@ fn account_actions_use_only_redacted_account_rpcs_and_logout_refreshes() {
         requests: Vec::new(),
         results: VecDeque::from([
             serde_json::to_value(account(1)).unwrap(),
-            serde_json::json!({ "models": [] }),
+            serde_json::to_value(ProviderModelsListResult::Empty).unwrap(),
             serde_json::to_value(started()).unwrap(),
             serde_json::json!({ "status": "cancelled" }),
             serde_json::json!({ "status": "loggedOut" }),
@@ -379,12 +392,47 @@ fn account_actions_use_only_redacted_account_rpcs_and_logout_refreshes() {
         calls,
         vec![
             serde_json::json!({ "method": "account/read", "params": {} }),
-            serde_json::json!({ "method": "model/list", "params": {} }),
+            serde_json::json!({ "method": "provider/models/list", "params": {"connection":"chatgpt-subscription"} }),
             serde_json::json!({ "method": "account/login/start", "params": { "method": { "type": "openAiChatGptDeviceCode" } } }),
             serde_json::json!({ "method": "account/login/cancel", "params": { "loginId": "login-1" } }),
             serde_json::json!({ "method": "account/logout", "params": { "provider": "chatgpt-subscription" } }),
             serde_json::json!({ "method": "account/read", "params": {} }),
         ]
+    );
+}
+
+#[test]
+fn xai_account_reads_its_connection_catalog_and_reports_discovery_failure() {
+    let mut xai_account = account(1);
+    xai_account.accounts[0].provider = SubscriptionProvider::Xai.id().into();
+    let mut client = AppServerClient::new(Transport {
+        requests: Vec::new(),
+        results: VecDeque::from([
+            serde_json::to_value(&xai_account).unwrap(),
+            serde_json::to_value(ProviderModelsListResult::Failed {
+                failure: ProviderModelsListFailureDto {
+                    code: ProviderModelsListFailureCodeDto::Authentication,
+                },
+            })
+            .unwrap(),
+        ]),
+    });
+    assert_eq!(
+        execute(
+            &mut client,
+            SubscriptionProvider::Xai,
+            SubscriptionCommand::Read
+        ),
+        SubscriptionEvent::Read {
+            account: xai_account,
+            models: Some(Err("Authentication".into())),
+        }
+    );
+    let requests = client.into_transport().requests;
+    assert_eq!(requests[1]["method"], "provider/models/list");
+    assert_eq!(
+        requests[1]["params"],
+        serde_json::json!({"connection":"xai-subscription"})
     );
 }
 

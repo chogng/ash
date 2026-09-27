@@ -51,13 +51,13 @@ impl AppServer {
         if params.account_id.trim().is_empty() {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
-        if params.provider == xai::XAI_PROVIDER_ID {
+        if params.provider == supergrok::SUPERGROK_SUBSCRIPTION_PROVIDER_ID {
             let subscription = self
-                .xai
+                .supergrok
                 .as_ref()
                 .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::AccountUnavailable))?
                 .read_subscription(&params.account_id, cancellation)
-                .map_err(xai_error)?;
+                .map_err(supergrok_error)?;
             return result(&xai_usage(params, subscription));
         }
         if params.provider != ash_chatgpt::CHATGPT_SUBSCRIPTION_PROVIDER_ID {
@@ -104,13 +104,13 @@ impl AppServer {
     ) -> Result<Value, RpcError> {
         let login = self.login_service()?;
         let state = login.refresh().map_err(login_error)?;
-        if let Some(auth) = &self.xai {
+        if let Some(auth) = &self.supergrok {
             if let Some(account) = state.accounts.iter().find(|account| {
-                account.account.provider == xai::XAI_PROVIDER_ID
+                account.account.provider == supergrok::SUPERGROK_SUBSCRIPTION_PROVIDER_ID
                     && account.status == AccountStatus::Ready
             }) {
                 auth.refresh_account(&account.account.account_id, cancellation)
-                    .map_err(xai_error)?;
+                    .map_err(supergrok_error)?;
             }
         }
         result(&account_state_dto(login.refresh().map_err(login_error)?))
@@ -332,15 +332,17 @@ fn login_error(error: LoginError) -> RpcError {
     RpcError::new(-32030, name)
 }
 
-fn xai_error(error: xai::XaiError) -> RpcError {
+fn supergrok_error(error: supergrok::SuperGrokError) -> RpcError {
     let name = match error.kind() {
-        xai::XaiErrorKind::Cancelled => AppServerErrorName::RequestCancelled,
-        xai::XaiErrorKind::AccountChanged => AppServerErrorName::AccountChanged,
-        xai::XaiErrorKind::Authentication => AppServerErrorName::AccountAuthenticationRequired,
+        supergrok::SuperGrokErrorKind::Cancelled => AppServerErrorName::RequestCancelled,
+        supergrok::SuperGrokErrorKind::AccountChanged => AppServerErrorName::AccountChanged,
+        supergrok::SuperGrokErrorKind::Authentication => {
+            AppServerErrorName::AccountAuthenticationRequired
+        }
         _ => AppServerErrorName::AccountOperationFailed,
     };
     RpcError::new(
-        if error.kind() == xai::XaiErrorKind::Cancelled {
+        if error.kind() == supergrok::SuperGrokErrorKind::Cancelled {
             -32800
         } else {
             -32030
@@ -351,7 +353,7 @@ fn xai_error(error: xai::XaiError) -> RpcError {
 
 fn xai_usage(
     params: AccountRateLimitsReadParams,
-    subscription: xai::Subscription,
+    subscription: supergrok::Subscription,
 ) -> AccountRateLimitsReadResult {
     use ash_app_server_protocol::protocol::account::AccountXaiUsageDto;
     let billing = subscription.billing.as_ref();

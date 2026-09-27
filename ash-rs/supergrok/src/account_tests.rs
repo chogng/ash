@@ -47,7 +47,7 @@ fn borrowed_grok_login_reads_subscription_without_writing_grok_or_ash_credential
         ),
         (200, r#"{"config":{"creditUsagePercent":12.5}}"#),
     ]);
-    let auth = XaiOAuth::with_grok_auth_file(
+    let auth = SuperGrokOAuth::with_grok_auth_file(
         secrets.clone(),
         transport.clone(),
         dir.path().join("lock"),
@@ -68,7 +68,12 @@ fn borrowed_grok_login_reads_subscription_without_writing_grok_or_ash_credential
     assert_eq!(transport.requests.lock().unwrap().len(), 3);
     assert_eq!(std::fs::read(&path).unwrap(), contents);
     use ash_secrets::SecretStore;
-    assert!(secrets.load(&XaiOAuth::credential_key()).unwrap().is_none());
+    assert!(
+        secrets
+            .load(&SuperGrokOAuth::credential_key())
+            .unwrap()
+            .is_none()
+    );
 }
 
 #[test]
@@ -95,7 +100,7 @@ fn borrowed_grok_login_rejects_a_changed_remote_identity() {
         )
         .unwrap();
         let secrets = Arc::new(MemorySecretStore::default());
-        let auth = XaiOAuth::with_grok_auth_file(
+        let auth = SuperGrokOAuth::with_grok_auth_file(
             secrets.clone(),
             Transport::new(&[(200, profile)]),
             dir.path().join("lock"),
@@ -106,10 +111,15 @@ fn borrowed_grok_login_rejects_a_changed_remote_identity() {
             auth.refresh_account(&account_id, &CancellationSource::new().token())
                 .unwrap_err()
                 .kind(),
-            XaiErrorKind::AccountChanged
+            SuperGrokErrorKind::AccountChanged
         );
         use ash_secrets::SecretStore;
-        assert!(secrets.load(&XaiOAuth::credential_key()).unwrap().is_none());
+        assert!(
+            secrets
+                .load(&SuperGrokOAuth::credential_key())
+                .unwrap()
+                .is_none()
+        );
     }
 }
 
@@ -182,7 +192,7 @@ fn subscription_load_updates_login_metadata_and_reads_all_business_endpoints() {
             r#"{"config":{"creditUsagePercent":12.5,"prepaidBalance":{"val":"12345"}}}"#,
         ),
     ]);
-    let auth = XaiOAuth::with_client(
+    let auth = SuperGrokOAuth::with_client(
         Arc::new(MemorySecretStore::default()),
         transport.clone(),
         dir.path().join("lock"),
@@ -217,7 +227,7 @@ fn subscription_load_updates_login_metadata_and_reads_all_business_endpoints() {
             "settings",
             "billing?format=credits",
         ]
-        .map(|path| format!("{}/{path}", crate::XAI_SUBSCRIPTION_API_BASE_URL))
+        .map(|path| format!("{}/{path}", crate::SUPERGROK_SUBSCRIPTION_API_BASE_URL))
     );
 }
 
@@ -228,7 +238,7 @@ fn account_refresh_shows_settings_tier_when_user_has_no_tier() {
         (200, r#"{"userId":"user-a","email":"ada@example.test"}"#),
         (200, r#"{"subscription_tier_display":"SuperGrok"}"#),
     ]);
-    let auth = XaiOAuth::with_client(
+    let auth = SuperGrokOAuth::with_client(
         Arc::new(MemorySecretStore::default()),
         transport,
         dir.path().join("lock"),
@@ -255,7 +265,7 @@ fn profile_refresh_recovers_one_401_and_preserves_metadata_across_token_rotation
         (200, r#"{"subscription_tier_display":"SuperGrok Heavy"}"#),
         (200, TOKEN),
     ]);
-    let auth = XaiOAuth::with_client(
+    let auth = SuperGrokOAuth::with_client(
         Arc::new(MemorySecretStore::default()),
         transport.clone(),
         dir.path().join("lock"),
@@ -283,7 +293,7 @@ fn profile_refresh_recovers_one_401_and_preserves_metadata_across_token_rotation
 fn cancelled_or_wrong_account_requests_do_not_send_or_publish_metadata() {
     let dir = tempfile::tempdir().unwrap();
     let transport = Transport::new(&[(200, PROFILE)]);
-    let auth = XaiOAuth::with_client(
+    let auth = SuperGrokOAuth::with_client(
         Arc::new(MemorySecretStore::default()),
         transport.clone(),
         dir.path().join("lock"),
@@ -295,13 +305,13 @@ fn cancelled_or_wrong_account_requests_do_not_send_or_publish_metadata() {
         auth.refresh_account("login-a", &cancel.token())
             .unwrap_err()
             .kind(),
-        XaiErrorKind::Cancelled
+        SuperGrokErrorKind::Cancelled
     );
     assert_eq!(
         auth.refresh_account("login-b", &CancellationSource::new().token())
             .unwrap_err()
             .kind(),
-        XaiErrorKind::AccountChanged
+        SuperGrokErrorKind::AccountChanged
     );
     assert!(transport.requests.lock().unwrap().is_empty());
     let weak = Arc::downgrade(&auth);
@@ -314,7 +324,7 @@ fn cancelled_or_wrong_account_requests_do_not_send_or_publish_metadata() {
         auth.refresh_account("login-a", &CancellationSource::new().token())
             .unwrap_err()
             .kind(),
-        XaiErrorKind::AccountChanged
+        SuperGrokErrorKind::AccountChanged
     );
     let saved = auth.load_credential().unwrap().unwrap();
     assert_eq!(saved.account_id, "login-b");
@@ -324,14 +334,18 @@ fn cancelled_or_wrong_account_requests_do_not_send_or_publish_metadata() {
 #[test]
 fn a_changed_remote_identity_is_not_saved_and_status_failures_are_not_refreshed() {
     for (status, body, expected) in [
-        (200, r#"{"userId":"other"}"#, XaiErrorKind::AccountChanged),
-        (403, "secret", XaiErrorKind::Permission),
-        (426, "secret", XaiErrorKind::UpgradeRequired),
-        (429, "secret", XaiErrorKind::RateLimited),
+        (
+            200,
+            r#"{"userId":"other"}"#,
+            SuperGrokErrorKind::AccountChanged,
+        ),
+        (403, "secret", SuperGrokErrorKind::Permission),
+        (426, "secret", SuperGrokErrorKind::UpgradeRequired),
+        (429, "secret", SuperGrokErrorKind::RateLimited),
     ] {
         let dir = tempfile::tempdir().unwrap();
         let transport = Transport::new(&[(status, body)]);
-        let auth = XaiOAuth::with_client(
+        let auth = SuperGrokOAuth::with_client(
             Arc::new(MemorySecretStore::default()),
             transport.clone(),
             dir.path().join("lock"),
@@ -367,7 +381,7 @@ fn live_subscription_backend() {
     let before = zeroize::Zeroizing::new(std::fs::read(&path).expect("Grok login required"));
     let dir = tempfile::tempdir().unwrap();
     let secrets = Arc::new(MemorySecretStore::default());
-    let auth = XaiOAuth::production(secrets, dir.path().join("lock")).unwrap();
+    let auth = SuperGrokOAuth::production(secrets, dir.path().join("lock")).unwrap();
     let account_id = auth
         .account_id()
         .unwrap()
@@ -390,7 +404,7 @@ fn profile_commit_keeps_a_concurrently_rotated_token_and_discards_cancelled_resu
         (200, r#"{"subscription_tier_display":"SuperGrok Heavy"}"#),
         (200, r#"{"userId":"user-a","email":"changed@example.test"}"#),
     ]);
-    let auth = XaiOAuth::with_client(
+    let auth = SuperGrokOAuth::with_client(
         Arc::new(MemorySecretStore::default()),
         transport.clone(),
         dir.path().join("lock"),
@@ -419,7 +433,7 @@ fn profile_commit_keeps_a_concurrently_rotated_token_and_discards_cancelled_resu
         auth.refresh_account("login-a", &cancel.token())
             .unwrap_err()
             .kind(),
-        XaiErrorKind::Cancelled
+        SuperGrokErrorKind::Cancelled
     );
     assert_eq!(
         auth.load_credential()
@@ -446,7 +460,7 @@ fn a_slower_profile_read_cannot_overwrite_a_newer_read() {
         ),
         (200, r#"{"subscription_tier_display":"SuperGrok"}"#),
     ]);
-    let auth = XaiOAuth::with_client(
+    let auth = SuperGrokOAuth::with_client(
         Arc::new(MemorySecretStore::default()),
         transport.clone(),
         dir.path().join("lock"),
@@ -465,7 +479,7 @@ fn a_slower_profile_read_cannot_overwrite_a_newer_read() {
         auth.refresh_account("login-a", &CancellationSource::new().token())
             .unwrap_err()
             .kind(),
-        XaiErrorKind::AccountChanged
+        SuperGrokErrorKind::AccountChanged
     );
     assert_eq!(
         auth.read_account().unwrap().unwrap().email.as_deref(),

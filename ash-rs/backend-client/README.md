@@ -71,12 +71,12 @@
 - `xai::BASE_URL` 指向 `https://cli-chat-proxy.grok.com/v1`；调用方提供该目标的当前认证与版本头。
 - 目录只返回可见的 Responses 模型，保留请求模型 ID、显示名称、上下文窗口和推理档位；缺失元数据保持为空。
 - 服务端返回的 `baseUrl`、凭据或路由覆盖值不参与请求目标解析。
-- `ash-xai::XaiOAuth::models` 负责账号检查及一次 HTTP 401 恢复，再委托此客户端读取目录。
+- `supergrok::SuperGrokOAuth::models` 负责账号检查及一次 HTTP 401 恢复，再委托此客户端读取目录。
 - 403、426、429 和其他 HTTP 错误保留状态；后台客户端不刷新认证，也不自动重发。
 - 按官方 Grok Build `4247f661689354b831191f11eeeac8424993fe3d` 的 `manager/enrichment.rs`、`subscription_check.rs`、`remote/client.rs` 和 `extensions/billing.rs` 对照接口；使用当前 credits 合约，不请求旧账单格式。
 - 用量百分比保留小数和超过 100 的值；金额保留整数 USD 分，不转换为浮点数。proto3 明确规定的 `Cent {}` 表示零；缺失金额对象、周期或额度仍为 `None`。
 - 设置仅保留账号访问与用量信息；Grok 自身功能开关不会改变 Ash 的行为。
-- `ash-xai::XaiOAuth::refresh_account/read_subscription` 负责当前账号检查、逐次查询取消和一次 401 恢复；从最新凭据合并资料，避免覆盖刚轮换的 token。
+- `supergrok::SuperGrokOAuth::refresh_account/read_subscription` 负责当前账号检查、逐次查询取消和一次 401 恢复；从最新凭据合并资料，避免覆盖刚轮换的 token。
 - Grok 远程会话同步、分享、网页工作区和技能管理不属于本次订阅账号接入。
 
 ## 调用约定
@@ -100,14 +100,14 @@
 
 - 根级 `client.rs` 统一 URL、认证头传递、JSON 编解码和错误脱敏；取消令牌交给 `ash-client` 执行。供应商路由留在各自模块。
 - ChatGPT 的业务文件和测试已由 `src/*.rs` 迁至 `src/chatgpt/`；`chatgpt.rs` 汇总公开接口。
-- `xai/models.rs` 接管原 `ash-xai/src/catalog.rs` 的 HTTP 请求和解析；原 `catalog_tests.rs` 覆盖迁至 `xai/models_tests.rs`，认证恢复测试仍在 `ash-xai`。
+- `xai/models.rs` 负责订阅模型目录的 HTTP 请求和解析；`xai/models_tests.rs` 覆盖目录行为，认证恢复测试位于 `ash-supergrok`。
 - `transport_tests.rs` 贯穿 `chatgpt::Client / xai::Client → AshClient → UreqHttpClient`，验证业务路由、认证、JSON、任务创建不重发和后端错误映射。
 - 传输重定向、超时与原始响应读取由 `http-client` 验证；取消与重试执行由 `ash-client` 验证。两个下层 crate 的测试使用通用请求，不依赖后端业务类型。
 - HTTPS 测试使用独立 CA、随机回环端口和直接连接，不修改系统信任或代理环境；不访问真实账号。
 - 业务固定响应位于 [`tests/fixtures`](tests/fixtures/README.md)；HTTPS 服务和测试证书由 [`http-test-support`](../http-test-support/README.md) 提供，只通过 `dev-dependencies` 引入。Cargo 与 Bazel 使用同一份资源。
 - 验证命令：`just check ash-backend-client`、`just test ash-backend-client`、`just rust-warnings ash-backend-client`。
 - 小数解析配置回归：`just test ash-backend-client --features serde_json/arbitrary_precision`。
-- 消费方回归：`just check ash-chatgpt -p ash-xai -p ash-model-provider`、`just test ash-chatgpt account::tests`、`just test ash-xai`、`just test ash-model-provider xai_tests`。
+- 消费方回归：`just check ash-chatgpt -p ash-supergrok -p ash-model-provider`、`just test ash-chatgpt account::tests`、`just test ash-supergrok`、`just test ash-model-provider xai_tests`。
 
 | 专项测试 | 主要覆盖 | 单独运行 |
 | --- | --- | --- |
@@ -121,4 +121,4 @@
 | `transport_tests.rs` | 本地 HTTPS 实际调用链 | `just test ash-backend-client transport_tests` |
 | `xai/models_tests.rs` | 目录筛选与元数据解析 | `just test ash-backend-client xai::models::tests` |
 
-- xAI 业务接口验证：`just test ash-backend-client xai::`；认证与资料生命周期：`just test ash-xai`。
+- xAI 业务接口验证：`just test ash-backend-client xai::`；认证与资料生命周期：`just test ash-supergrok`。

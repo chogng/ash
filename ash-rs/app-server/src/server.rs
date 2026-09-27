@@ -224,7 +224,7 @@ pub struct AppServer {
     approval_review_model: Option<ash_core::ApprovalReviewerFactory>,
     login: Option<Arc<ash_login::LoginService>>,
     chatgpt: Option<Arc<ash_chatgpt::ChatGptAccount>>,
-    xai: Option<Arc<xai::XaiOAuth>>,
+    supergrok: Option<Arc<supergrok::SuperGrokOAuth>>,
     pub(super) env_runtime_gate: Arc<Mutex<()>>,
     env_runtime: Arc<RwLock<EnvRuntime>>,
     turn_backend: Arc<turn_backend_router::TurnBackendHandle>,
@@ -563,7 +563,7 @@ impl AppServer {
             approval_review_model: None,
             login: None,
             chatgpt: None,
-            xai: None,
+            supergrok: None,
             env_runtime_gate,
             env_runtime,
             turn_backend,
@@ -991,8 +991,8 @@ impl AppServer {
         self
     }
 
-    pub fn with_xai_account(mut self, xai: Arc<xai::XaiOAuth>) -> Self {
-        self.xai = Some(xai);
+    pub fn with_supergrok_account(mut self, account: Arc<supergrok::SuperGrokOAuth>) -> Self {
+        self.supergrok = Some(account);
         self
     }
 

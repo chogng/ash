@@ -57,6 +57,7 @@ pub(crate) enum Event {
         provider: String,
         choices: ConfigChoices,
         plan: Option<(SubscriptionProvider, PlanStatus)>,
+        models: Option<Result<usize, String>>,
     },
 }
 

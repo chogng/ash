@@ -1,8 +1,8 @@
 use crate::BorrowedAccount;
+use crate::SuperGrokError;
+use crate::SuperGrokErrorKind;
+use crate::SuperGrokOAuth;
 use crate::TokenCredential;
-use crate::XaiError;
-use crate::XaiErrorKind;
-use crate::XaiOAuth;
 use ash_async_utils::CancellationToken;
 use backend_client::RequestError;
 use backend_client::xai::Account;
@@ -45,12 +45,12 @@ fn settings_plan(settings: &Settings) -> Option<&str> {
         })
 }
 
-impl XaiOAuth {
+impl SuperGrokOAuth {
     pub fn models(
         &self,
         account_id: &str,
         cancellation: &CancellationToken,
-    ) -> Result<Vec<CatalogModel>, XaiError> {
+    ) -> Result<Vec<CatalogModel>, SuperGrokError> {
         self.read_backend(account_id, cancellation, |client| {
             client.read_models(cancellation)
         })
@@ -61,7 +61,7 @@ impl XaiOAuth {
         &self,
         account_id: &str,
         cancellation: &CancellationToken,
-    ) -> Result<Account, XaiError> {
+    ) -> Result<Account, SuperGrokError> {
         self.refresh_account_and_settings(account_id, cancellation)
             .map(|(account, _)| account)
     }
@@ -70,7 +70,7 @@ impl XaiOAuth {
         &self,
         account_id: &str,
         cancellation: &CancellationToken,
-    ) -> Result<(Account, Settings), XaiError> {
+    ) -> Result<(Account, Settings), SuperGrokError> {
         let generation = {
             let _lock = self.lock_credentials()?;
             self.check_account(account_id, cancellation)?;
@@ -129,12 +129,12 @@ impl XaiOAuth {
         &self,
         credential: &TokenCredential,
         account: &Account,
-    ) -> Result<(), XaiError> {
+    ) -> Result<(), SuperGrokError> {
         if super::is_grok_account(&credential.account_id) {
             *self
                 .borrowed_account
                 .lock()
-                .map_err(|_| XaiError::new("Xai account metadata is unavailable"))? =
+                .map_err(|_| SuperGrokError::new("Xai account metadata is unavailable"))? =
                 Some(BorrowedAccount {
                     account_id: credential.account_id.clone(),
                     credential_revision: credential.credential_revision,
@@ -151,7 +151,7 @@ impl XaiOAuth {
         &self,
         account_id: &str,
         cancellation: &CancellationToken,
-    ) -> Result<Subscription, XaiError> {
+    ) -> Result<Subscription, SuperGrokError> {
         let (account, settings) = self.refresh_account_and_settings(account_id, cancellation)?;
         let billing = self.read_backend(account_id, cancellation, |client| {
             client.read_billing(cancellation)
@@ -168,7 +168,7 @@ impl XaiOAuth {
         &self,
         account_id: &str,
         cancellation: &CancellationToken,
-    ) -> Result<(), XaiError> {
+    ) -> Result<(), SuperGrokError> {
         check_cancelled(cancellation)?;
         if account_id.trim().is_empty() || self.account_id()?.as_deref() != Some(account_id) {
             return Err(account_changed());
@@ -181,7 +181,7 @@ impl XaiOAuth {
         account_id: &str,
         cancellation: &CancellationToken,
         read: impl Fn(&Client<'_>) -> Result<T, RequestError>,
-    ) -> Result<T, XaiError> {
+    ) -> Result<T, SuperGrokError> {
         self.check_account(account_id, cancellation)?;
         let target = self.api_target()?;
         self.check_account(account_id, cancellation)?;
@@ -214,7 +214,7 @@ impl XaiOAuth {
     }
 }
 
-fn check_cancelled(cancellation: &CancellationToken) -> Result<(), XaiError> {
+fn check_cancelled(cancellation: &CancellationToken) -> Result<(), SuperGrokError> {
     if cancellation.is_cancelled() {
         Err(backend_error(RequestError::Cancelled))
     } else {
@@ -222,39 +222,42 @@ fn check_cancelled(cancellation: &CancellationToken) -> Result<(), XaiError> {
     }
 }
 
-fn account_changed() -> XaiError {
-    XaiError::with_kind(
-        XaiErrorKind::AccountChanged,
+fn account_changed() -> SuperGrokError {
+    SuperGrokError::with_kind(
+        SuperGrokErrorKind::AccountChanged,
         "xAI account changed; retry with the current account",
     )
 }
 
-fn backend_error(error: RequestError) -> XaiError {
+fn backend_error(error: RequestError) -> SuperGrokError {
     let (kind, message) = match error {
-        RequestError::Cancelled => (XaiErrorKind::Cancelled, "xAI request cancelled".into()),
+        RequestError::Cancelled => (
+            SuperGrokErrorKind::Cancelled,
+            "xAI request cancelled".into(),
+        ),
         RequestError::HttpStatus(401) => (
-            XaiErrorKind::Authentication,
+            SuperGrokErrorKind::Authentication,
             "xAI sign-in has expired; sign in again".into(),
         ),
         RequestError::HttpStatus(403) => (
-            XaiErrorKind::Permission,
+            SuperGrokErrorKind::Permission,
             "xAI subscription does not allow this request".into(),
         ),
         RequestError::HttpStatus(426) => (
-            XaiErrorKind::UpgradeRequired,
+            SuperGrokErrorKind::UpgradeRequired,
             "xAI requires a newer Ash client".into(),
         ),
         RequestError::HttpStatus(429) => (
-            XaiErrorKind::RateLimited,
+            SuperGrokErrorKind::RateLimited,
             "xAI request rate limit reached".into(),
         ),
         RequestError::InvalidResponse => (
-            XaiErrorKind::InvalidResponse,
+            SuperGrokErrorKind::InvalidResponse,
             "xAI returned invalid account data".into(),
         ),
-        error => (XaiErrorKind::Unavailable, error.to_string()),
+        error => (SuperGrokErrorKind::Unavailable, error.to_string()),
     };
-    XaiError::with_kind(kind, message)
+    SuperGrokError::with_kind(kind, message)
 }
 
 #[cfg(test)]

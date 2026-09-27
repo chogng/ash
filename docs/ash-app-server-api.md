@@ -1079,7 +1079,7 @@ pub enum AccountLoginMethod {
 
 上述 RPC、带版本的 `accounts[]` 和 `account/login/completed` / `account/updated` 主动通知已实现，并通过注入的 multi-driver `LoginService` 工作；未安装服务时返回稳定 `AccountUnavailable`。`account/logout` 必须携带 provider，避免同时登录多个供应商时误删另一账户。
 
-本地默认组合安装 `ash-chatgpt`、`ash-kimi` 与 `ash-xai` driver。`account/login/start` 直接向对应 authorization server 请求 device code，并在本机后台轮询。API key 继续属于对应模型凭据领域，不进入 account/login payload。
+本地默认组合安装 `ash-chatgpt`、`ash-kimi` 与 `ash-supergrok` driver。`account/login/start` 直接向对应 authorization server 请求 device code，并在本机后台轮询。API key 继续属于对应模型凭据领域，不进入 account/login payload。
 
 Provider 是否支持 interactive login、credential 的实际所有者和 refresh 语义由 [`ash-login`](login.md) 的 exact driver 决定。ChatGPT、Kimi 与 xAI 的 driver 各自执行本地 device OAuth、SecretStore persistence 与 refresh。Ash App Server 只编排和映射 redacted control plane：
 

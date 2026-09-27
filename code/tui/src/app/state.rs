@@ -2646,6 +2646,7 @@ impl App {
                 provider,
                 mut choices,
                 plan,
+                models,
             } => {
                 self.localize_selection(&mut choices);
                 self.panels_mut().finish_config_prompt(choices);
@@ -2658,11 +2659,27 @@ impl App {
                         let sign_out = self.subscriptions[provider.index()].sign_out_availability();
                         self.panels_mut().update_subscription(choices, sign_out);
                     }
-                } else {
+                }
+                if let Some(models) = models {
+                    let mut notice = match models {
+                        Ok(count) => crate::nls::Text::template(
+                            "Saved API key for {0}; loaded {1} models",
+                            vec![
+                                crate::nls::Text::literal(provider),
+                                crate::nls::Text::literal(count.to_string()),
+                            ],
+                        ),
+                        Err(error) => crate::nls::Text::template(
+                            "Saved API key for {0}; model list unavailable ({1})",
+                            vec![
+                                crate::nls::Text::literal(provider),
+                                crate::nls::Text::literal(error),
+                            ],
+                        ),
+                    };
+                    notice.localize(self.language());
                     self.thread
-                        .update(ThreadPresentationEvent::NoticeReceived(format!(
-                            "Saved API key for {provider}"
-                        )));
+                        .update(ThreadPresentationEvent::NoticeReceived(notice.to_string()));
                 }
                 self.set_status(Status::Ready);
                 self.chat_panel.start_input();

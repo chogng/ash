@@ -1,5 +1,5 @@
 [package]
-name = "ash-xai"
+name = "ash-supergrok"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
@@ -7,7 +7,7 @@ publish.workspace = true
 
 [lib]
 doctest = false
-name = "xai"
+name = "supergrok"
 path = "src/lib.rs"
 
 [dependencies]

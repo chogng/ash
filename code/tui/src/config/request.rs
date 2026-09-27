@@ -18,6 +18,7 @@ use ash_app_server_client::ClientError;
 use ash_app_server_client::JsonRpcTransport;
 use ash_app_server_client::ProviderApiKeySetRequest;
 use ash_app_server_protocol::protocol::config::ConfigUpdateParams;
+use ash_app_server_protocol::protocol::provider::ProviderModelsListResult;
 use ash_protocol::Patch;
 use std::fmt;
 
@@ -25,6 +26,7 @@ pub(crate) struct ProviderApiKeyUpdate {
     pub(crate) provider: String,
     pub(crate) choices: ConfigChoices,
     pub(crate) plan: Option<(super::SubscriptionProvider, PlanStatus)>,
+    pub(crate) models: Option<Result<usize, String>>,
 }
 
 impl Command {
@@ -104,6 +106,7 @@ where
                 provider: update.provider,
                 choices: update.choices,
                 plan: update.plan,
+                models: update.models,
             })
         }
     }
@@ -403,10 +406,21 @@ where
     let target = edit.target();
     let (provider, api_key) = edit.into_parts();
     client.set_provider_api_key(ProviderApiKeySetRequest::new(provider.clone(), api_key))?;
+    let models = (target == ApiKeyTarget::Provider).then(|| {
+        client
+            .list_provider_models(provider.clone())
+            .map(|result| match result {
+                ProviderModelsListResult::Models { models } => Ok(models.len()),
+                ProviderModelsListResult::Empty => Ok(0),
+                ProviderModelsListResult::Failed { failure } => Err(format!("{:?}", failure.code)),
+            })
+            .unwrap_or_else(|error| Err(error.to_string()))
+    });
     let choices = read_config_choices(client)?;
     Ok(ProviderApiKeyUpdate {
         provider,
         choices,
+        models,
         plan: match target {
             ApiKeyTarget::Provider => None,
             ApiKeyTarget::CodingPlan(subscription) => Some((

@@ -82,8 +82,8 @@ fn auth_with_grok(
     path: &std::path::Path,
     secrets: Arc<MemorySecretStore>,
     client: Arc<ScriptedClient>,
-) -> Arc<XaiOAuth> {
-    XaiOAuth::with_client_and_grok_auth(
+) -> Arc<SuperGrokOAuth> {
+    SuperGrokOAuth::with_client_and_grok_auth(
         secrets,
         client,
         path.parent().unwrap().join("xai.lock"),
@@ -117,7 +117,12 @@ fn existing_grok_login_is_reused_without_copying_or_refreshing_its_secret() {
     ));
     assert_eq!(std::fs::read(&path).unwrap(), before);
     assert!(client.requests.lock().unwrap().is_empty());
-    assert!(secrets.load(&XaiOAuth::credential_key()).unwrap().is_none());
+    assert!(
+        secrets
+            .load(&SuperGrokOAuth::credential_key())
+            .unwrap()
+            .is_none()
+    );
 }
 
 #[test]
@@ -161,7 +166,7 @@ fn ash_login_takes_ownership_when_grok_login_is_expired() {
         (400, r#"{"error":"authorization_pending"}"#),
         (200, TOKEN),
     ]);
-    let auth = XaiOAuth::with_client_and_grok_auth(
+    let auth = SuperGrokOAuth::with_client_and_grok_auth(
         secrets.clone(),
         client.clone(),
         dir.path().join("lock"),
@@ -187,7 +192,12 @@ fn ash_login_takes_ownership_when_grok_login_is_expired() {
         auth.load_credential().unwrap().unwrap().account_id
     );
     assert_eq!(std::fs::read(&path).unwrap(), before);
-    assert!(secrets.load(&XaiOAuth::credential_key()).unwrap().is_some());
+    assert!(
+        secrets
+            .load(&SuperGrokOAuth::credential_key())
+            .unwrap()
+            .is_some()
+    );
 }
 
 #[test]
@@ -276,7 +286,7 @@ fn device_login_handles_http_pending_and_keeps_oauth_separate_from_proxy_headers
         (200, TOKEN),
     ]);
     let secrets = Arc::new(MemorySecretStore::default());
-    let auth = XaiOAuth::with_client_and_poll_interval(
+    let auth = SuperGrokOAuth::with_client_and_poll_interval(
         secrets,
         client.clone(),
         dir.path().join("lock"),
@@ -296,7 +306,7 @@ fn device_login_handles_http_pending_and_keeps_oauth_separate_from_proxy_headers
         AccountStatus::Ready
     );
     let target = auth.api_target().unwrap();
-    assert_eq!(target.target.base_url, XAI_SUBSCRIPTION_API_BASE_URL);
+    assert_eq!(target.target.base_url, SUPERGROK_SUBSCRIPTION_API_BASE_URL);
     assert!(
         target
             .target
@@ -351,7 +361,7 @@ fn device_login_handles_http_pending_and_keeps_oauth_separate_from_proxy_headers
 fn cancelling_device_login_prevents_token_polling_and_storage() {
     let dir = tempfile::tempdir().unwrap();
     let client = ScriptedClient::new(&[(200, DEVICE)]);
-    let auth = XaiOAuth::with_client(
+    let auth = SuperGrokOAuth::with_client(
         Arc::new(MemorySecretStore::default()),
         client.clone(),
         dir.path().join("lock"),
@@ -372,8 +382,9 @@ fn concurrent_runtimes_refresh_a_rotating_token_once_and_observe_logout() {
     let dir = tempfile::tempdir().unwrap();
     let client = ScriptedClient::new(&[(200, TOKEN)]);
     let secrets = Arc::new(MemorySecretStore::default());
-    let first = XaiOAuth::with_client(secrets.clone(), client.clone(), dir.path().join("lock"));
-    let second = XaiOAuth::with_client(secrets, client.clone(), dir.path().join("lock"));
+    let first =
+        SuperGrokOAuth::with_client(secrets.clone(), client.clone(), dir.path().join("lock"));
+    let second = SuperGrokOAuth::with_client(secrets, client.clone(), dir.path().join("lock"));
     first.store_credential(&credential(0)).unwrap();
     thread::scope(|scope| {
         let a = scope.spawn(|| first.api_target().unwrap());
@@ -397,7 +408,7 @@ fn invalid_grant_requires_login_without_reusing_rejected_refresh_token() {
         400,
         r#"{"error":"invalid_grant","error_description":"sensitive provider detail"}"#,
     )]);
-    let auth = XaiOAuth::with_client(
+    let auth = SuperGrokOAuth::with_client(
         Arc::new(MemorySecretStore::default()),
         client.clone(),
         dir.path().join("lock"),
@@ -423,7 +434,7 @@ fn invalid_grant_requires_login_without_reusing_rejected_refresh_token() {
 fn unauthorized_recovery_never_switches_to_a_new_account() {
     let dir = tempfile::tempdir().unwrap();
     let client = ScriptedClient::new(&[]);
-    let auth = XaiOAuth::with_client(
+    let auth = SuperGrokOAuth::with_client(
         Arc::new(MemorySecretStore::default()),
         client.clone(),
         dir.path().join("lock"),
@@ -448,10 +459,11 @@ fn interrupted_refresh_is_not_submitted_again_by_another_runtime() {
     let dir = tempfile::tempdir().unwrap();
     let client = ScriptedClient::new(&[]);
     let secrets = Arc::new(MemorySecretStore::default());
-    let first = XaiOAuth::with_client(secrets.clone(), client.clone(), dir.path().join("lock"));
+    let first =
+        SuperGrokOAuth::with_client(secrets.clone(), client.clone(), dir.path().join("lock"));
     first.store_credential(&credential(0)).unwrap();
     assert!(first.api_target().is_err());
-    let second = XaiOAuth::with_client(secrets, client.clone(), dir.path().join("lock"));
+    let second = SuperGrokOAuth::with_client(secrets, client.clone(), dir.path().join("lock"));
     assert!(second.api_target().is_err());
     assert_eq!(client.requests.lock().unwrap().len(), 1);
     assert_eq!(
@@ -486,7 +498,7 @@ fn catalog_delegates_wire_requests_and_recovers_one_unauthorized_response() {
                 r#"{"data":[{"id":"grok-test","apiBackend":"responses"}]}"#,
             ),
         ]);
-        let auth = XaiOAuth::with_client(
+        let auth = SuperGrokOAuth::with_client(
             Arc::new(MemorySecretStore::default()),
             client.clone(),
             dir.path().join("lock"),
@@ -497,7 +509,10 @@ fn catalog_delegates_wire_requests_and_recovers_one_unauthorized_response() {
         if final_status == 200 {
             assert_eq!(result.unwrap()[0].id, "grok-test");
         } else {
-            assert_eq!(result.unwrap_err().kind(), XaiErrorKind::Authentication);
+            assert_eq!(
+                result.unwrap_err().kind(),
+                SuperGrokErrorKind::Authentication
+            );
             assert_eq!(
                 auth.read_account().unwrap().unwrap().status,
                 AccountStatus::ReauthenticationRequired
@@ -529,13 +544,13 @@ fn catalog_delegates_wire_requests_and_recovers_one_unauthorized_response() {
 #[test]
 fn catalog_keeps_account_and_non_authentication_failures_out_of_refresh() {
     for (status, kind) in [
-        (403, XaiErrorKind::Permission),
-        (426, XaiErrorKind::UpgradeRequired),
-        (429, XaiErrorKind::RateLimited),
+        (403, SuperGrokErrorKind::Permission),
+        (426, SuperGrokErrorKind::UpgradeRequired),
+        (429, SuperGrokErrorKind::RateLimited),
     ] {
         let dir = tempfile::tempdir().unwrap();
         let client = ScriptedClient::new(&[(status, "private account detail")]);
-        let auth = XaiOAuth::with_client(
+        let auth = SuperGrokOAuth::with_client(
             Arc::new(MemorySecretStore::default()),
             client.clone(),
             dir.path().join("lock"),

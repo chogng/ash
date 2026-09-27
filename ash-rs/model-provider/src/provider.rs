@@ -63,24 +63,32 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
 enum ProviderConnection {
-    ChatGpt { auth: Arc<ChatGptOAuth> },
-    Xai { auth: Arc<xai::XaiOAuth> },
-    Direct { headers: crate::auth::ModelHeaders },
-    Kimi { auth: Arc<KimiOAuth> },
+    ChatGpt {
+        auth: Arc<ChatGptOAuth>,
+    },
+    Xai {
+        auth: Arc<supergrok::SuperGrokOAuth>,
+    },
+    Direct {
+        headers: crate::auth::ModelHeaders,
+    },
+    Kimi {
+        auth: Arc<KimiOAuth>,
+    },
 }
 
 #[derive(Clone)]
 enum ProviderTarget {
     Fixed(ResolvedApiTarget),
     ChatGpt(Arc<ChatGptOAuth>),
-    Xai(Arc<xai::XaiOAuth>),
+    Xai(Arc<supergrok::SuperGrokOAuth>),
     Kimi(Arc<KimiOAuth>),
 }
 
 enum ResolvedProviderTarget<'a> {
     Fixed(&'a ResolvedApiTarget),
     ChatGpt(ChatGptApiTarget),
-    Xai(xai::XaiApiTarget),
+    Xai(supergrok::SuperGrokApiTarget),
     Kimi(ResolvedApiTarget),
 }
 
@@ -654,7 +662,7 @@ pub struct ModelProviderRuntime {
     local_tokenizers: Arc<dyn LocalTokenizerService>,
     chatgpt_oauth: Option<Arc<ChatGptOAuth>>,
     kimi_oauth: Option<Arc<KimiOAuth>>,
-    xai_oauth: Option<Arc<xai::XaiOAuth>>,
+    supergrok_oauth: Option<Arc<supergrok::SuperGrokOAuth>>,
     diagnostics: Option<Arc<dyn ResponseDiagnosticSink>>,
 }
 
@@ -691,7 +699,7 @@ impl ModelProviderRuntime {
             local_tokenizers: Arc::new(LocalTokenizerRegistry::new()),
             chatgpt_oauth: None,
             kimi_oauth: None,
-            xai_oauth: None,
+            supergrok_oauth: None,
             diagnostics: None,
         }
     }
@@ -719,7 +727,7 @@ impl ModelProviderRuntime {
             local_tokenizers: Arc::new(LocalTokenizerRegistry::new()),
             chatgpt_oauth: None,
             kimi_oauth: None,
-            xai_oauth: None,
+            supergrok_oauth: None,
             diagnostics: None,
         }
     }
@@ -742,8 +750,8 @@ impl ModelProviderRuntime {
     }
 
     /// Installs the xAI subscription credential authority.
-    pub fn with_xai_oauth(mut self, auth: Arc<xai::XaiOAuth>) -> Self {
-        self.xai_oauth = Some(auth);
+    pub fn with_supergrok_oauth(mut self, auth: Arc<supergrok::SuperGrokOAuth>) -> Self {
+        self.supergrok_oauth = Some(auth);
         self
     }
 
@@ -915,7 +923,7 @@ impl ModelProviderRuntime {
             && normalized.provider.as_str() == "xai"
         {
             return self
-                .xai_oauth
+                .supergrok_oauth
                 .as_ref()
                 .map(|auth| crate::catalog::xai_catalog_binding(&normalized, Arc::clone(auth)))
                 .transpose()
@@ -959,6 +967,22 @@ impl ModelProviderRuntime {
             .get(&normalized.provider)
             .expect("normalization only succeeds for registered providers");
         match definition.adapter {
+            ash_model_provider_config::ProviderAdapter::Xai => {
+                let headers = runtime
+                    .credentials
+                    .as_ref()
+                    .map(|credentials| credentials.request_headers(&config.connection))
+                    .transpose()
+                    .map_err(|error| ModelProviderError::Credential(error.to_string()))?
+                    .unwrap_or_default();
+                crate::catalog::xai_api_catalog_binding(
+                    &normalized,
+                    headers,
+                    Arc::clone(&self.client),
+                    self.diagnostics.clone(),
+                )
+                .map(Some)
+            }
             ash_model_provider_config::ProviderAdapter::OpenAi
             | ash_model_provider_config::ProviderAdapter::OpenAiCompatible => {
                 let headers = runtime
@@ -1110,7 +1134,7 @@ impl ModelProviderRuntime {
     }
 
     fn xai_connection(&self) -> Result<ProviderConnection, ModelProviderError> {
-        let auth = self.xai_oauth.as_ref().ok_or_else(|| {
+        let auth = self.supergrok_oauth.as_ref().ok_or_else(|| {
             ModelProviderError::Credential("xAI subscription login is unavailable".into())
         })?;
         Ok(ProviderConnection::Xai {

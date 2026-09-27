@@ -150,7 +150,9 @@ Codex 不使用 Ash 的锁，因此不能把安装探测与写入前校验描述
 
 ## Super Grok
 
-`ash-xai` 持有设备码授权和 Ash 登录凭据；若没有 Ash 凭据，可以只读使用后端主机已有的 `~/.grok/auth.json` access token，不复制或刷新 Grok 文件中的 refresh token。账户 provider 为 `xai-subscription`，模型引用仍使用 `xai`。`account/read` 请求当前账户和 Grok Build 设置，优先显示上游给出的完整等级名称；借用登录的资料按令牌保留在内存中，不写入 Grok 文件。`account/rateLimits/read` 获取当前订阅使用量、周期和余额；`/usage` 与 ChatGPT 分页展示。实现和凭据约定见 [`ash-xai` README](../ash-rs/xai/README.md)。
+`ash-supergrok` 持有设备码授权和 Ash 登录凭据；若没有 Ash 凭据，可以只读使用后端主机已有的 `~/.grok/auth.json` access token，不复制或刷新 Grok 文件中的 refresh token。账户 provider 为 `xai-subscription`，模型引用仍使用 `xai`。`account/read` 请求当前账户和 Grok Build 设置，优先显示上游给出的完整等级名称；借用登录的资料按令牌保留在内存中，不写入 Grok 文件。`account/rateLimits/read` 获取当前订阅使用量、周期和余额；`/usage` 与 ChatGPT 分页展示。实现和凭据约定见 [`ash-supergrok` README](../ash-rs/supergrok/README.md)。
+
+Ash Code 的订阅账户页在账户就绪后调用 `provider/models/list`，使用该订阅连接发现的模型；`model/list` 的内置固定目录不表示账户可用型号。刷新由模型目录系统写入 profile 的 `cache/models/xai.json`，按账户和连接 scope 隔离。xAI 开发者 API Key 连接使用独立凭据，保存 Key 后从 Platform 的 `/v1/language-models` 获取语言模型并刷新同一供应商缓存文件中的 API scope。目录请求失败时，界面区分 Key 保存结果与模型列表结果。
 
 ## BigModel Coding Plan
 

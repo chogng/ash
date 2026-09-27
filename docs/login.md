@@ -5,19 +5,19 @@
 > 当前状态：多 Provider 控制面、App Server RPC、ChatGPT/Kimi/xAI 订阅认证、GitHub 账户连接与本地模型执行已实现；BigModel 与 Z.AI Coding Plan 分别通过密钥与各自的专用端点接入
 > 订阅接入与额度：[`subscriptions.md`](subscriptions.md)
 > Kimi OAuth owner：`ash-rs/kimi/`
-> xAI OAuth owner：`ash-rs/xai/`
+> Super Grok 登录 owner：`ash-rs/supergrok/`
 > Provider runtime：[`model-provider.md`](model-provider.md)
 > Secret persistence：[`secrets.md`](secrets.md)
 
 ## 快速理解
 
-登录系统是面向用户的多账户控制面，不是通用 OAuth 实现。当前 `LoginService` 按 provider 注册 driver，拥有稳定 login ID、取消、完成、provider-scoped 登出和 revisioned account collection；ChatGPT、Kimi、xAI 的设备授权与凭据生命周期分别由 `ash-chatgpt`、`ash-kimi`、`ash-xai` 处理。BigModel 与 Z.AI Coding Plan 分别使用自己的 API key，不进入这套账户登录流程。
+登录系统是面向用户的多账户控制面，不是通用 OAuth 实现。当前 `LoginService` 按 provider 注册 driver，拥有稳定 login ID、取消、完成、provider-scoped 登出和 revisioned account collection；ChatGPT、Kimi、Super Grok 的设备授权与凭据生命周期分别由 `ash-chatgpt`、`ash-kimi`、`ash-supergrok` 处理。BigModel 与 Z.AI Coding Plan 分别使用自己的 API key，不进入这套账户登录流程。
 
 | 用户动作或凭据类型 | 由谁处理 | Ash 登录系统能看到什么 |
 | --- | --- | --- |
 | ChatGPT 设备码登录 | 本机 `ash-chatgpt` | 授权地址、一次性用户码和脱敏账户状态；首次 token 保存为 Codex 兼容 auth.json；有 Codex 时只读复用，无 Codex 时由 Ash 维护 |
 | Kimi 设备码登录 | 本机 `ash-kimi` | 授权地址、一次性用户码和脱敏账户状态；凭据由 Kimi 适配器保存到 profile SecretStore |
-| xAI 设备码登录 | 本机 `ash-xai` | 授权地址、一次性用户码和脱敏账户状态；Ash 登录凭据保存在 profile SecretStore，没有 Ash 凭据时可只读使用宿主 Grok 登录文件 |
+| Super Grok 设备码登录 | 本机 `ash-supergrok` | 授权地址、一次性用户码和脱敏账户状态；Ash 登录凭据保存在 profile SecretStore，没有 Ash 凭据时可只读使用宿主 Grok 登录文件 |
 | GitHub 浏览器登录 | 本机 `ash-github` 与 Cloudflare Worker | 浏览器授权地址和脱敏账户状态；Worker 保存 GitHub App Client Secret，本机接收回调并把凭据保存在 profile SecretStore |
 | 登出、取消或切换账户 | 登录控制面协调，供应商适配器执行 | 稳定状态和脱敏结果 |
 | 没有受支持订阅 OAuth 的供应商 API key | 对应模型凭据领域 | 不属于交互式登录，也不是 OAuth 失败后的降级 |
@@ -136,10 +136,10 @@ workspace selection 和 consent semantics 不能由一个宽泛 DTO 正确覆盖
 ash-app-server ──▶ ash-login
 ash-chatgpt ──▶ ash-login / ash-secrets / ash-client
 ash-kimi ──▶ ash-login / ash-secrets / ash-client
-ash-xai ──▶ ash-login / ash-secrets / ash-client
+ash-supergrok ──▶ ash-login / ash-secrets / ash-client
 ash-model-provider ──▶ ash-chatgpt     # consumes fresh ChatGPT API targets
 ash-model-provider ──▶ ash-kimi        # consumes fresh Kimi API targets
-ash-model-provider ──▶ ash-xai         # consumes fresh xAI subscription targets
+ash-model-provider ──▶ ash-supergrok   # consumes fresh Super Grok subscription targets
 
 ash-login -/-> ash-secrets
 ash-login -/-> ash-api / ash-client / ash-http-client
@@ -152,7 +152,7 @@ ash-login -/-> ash-api / ash-client / ash-http-client
 1. `ash-login` 是登录控制面，不是 credential manager 或 OAuth protocol crate。
 2. ChatGPT 订阅读取 Codex 凭据和固定 Responses 目标；缺失时设备码登录创建兼容文件；无 Codex 时 Ash 负责续期和失效后的重新登录，有 Codex 时只读复用。
 3. Kimi 订阅使用本机 device OAuth、SecretStore 与 Kimi Coding API；`ash-kimi` 是 token lifecycle 的唯一 owner。
-4. Super Grok 使用 xAI device OAuth 和订阅代理；`ash-xai` 持有凭据生命周期。BigModel 与 Z.AI Coding Plan 的密钥和端点配置不进入 `ash-login`，也不伪装成 OAuth 账户。
+4. Super Grok 使用 xAI device OAuth 和订阅代理；`ash-supergrok` 持有凭据生命周期。BigModel 与 Z.AI Coding Plan 的密钥和端点配置不进入 `ash-login`，也不伪装成 OAuth 账户。
 5. Secret persistence 仍是各 credential owner 对 `ash-secrets` 的直接依赖；login service 不读取
    secret bytes。
 6. API key 的录入可以由 App Server 的 settings command 触发，但它不是 OAuth login，不能进入 `LoginMethod`、由 `ash-login` 持有或作为登录失败后的降级。

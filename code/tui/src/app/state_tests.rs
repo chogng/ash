@@ -1217,6 +1217,58 @@ fn official_provider_uses_the_api_key_prompt_and_redacts_its_command() {
 }
 
 #[test]
+fn api_key_save_reports_catalog_result_in_chinese() {
+    let mut app = App::new();
+    let mut settings = TerminalSettings::default();
+    settings.set_language(Language::Chinese);
+    app.update(ConfigEvent::SettingsReceived(settings));
+    enter_provider_row(&mut app, "OpenAI");
+    app.handle_paste("test-key".into());
+    assert!(matches!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::Config(ConfigCommand::SetProviderApiKey(_)))
+    ));
+    app.update(ConfigEvent::ApiKeySaved {
+        provider: "openai".into(),
+        choices: config_choices(
+            &empty_config_snapshot(),
+            &ProviderListResult {
+                providers: vec![ProviderCatalogEntryDto {
+                    connection: "openai".into(),
+                    provider: "openai".into(),
+                    display_name: "OpenAI".into(),
+                    access: ash_protocol::ModelAccess::ApiKey,
+                    active: true,
+                    configured: true,
+                    ready: true,
+                    api_key_policy: ProviderApiKeyPolicyDto::Required,
+                    api_key_configured: true,
+                }],
+            },
+            settings,
+            StatusLineSettings::default(),
+        ),
+        plan: None,
+        models: Some(Ok(2)),
+    });
+    let messages = app.messages();
+    let notice = messages.last().unwrap().text();
+    assert_eq!(notice, "已保存 openai 的 API Key，加载了 2 个模型");
+    assert!(!notice.contains("test-key"));
+    for _ in 0..3 {
+        if app.list_selection().is_none() {
+            break;
+        }
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    }
+    assert!(app.list_selection().is_none());
+    crate::tui_assert_snapshot!(
+        "api_key_catalog_loaded_zh",
+        crate::app::usage_tests::render(&app, 96, 24)
+    );
+}
+
+#[test]
 fn escape_cancels_key_edit_without_saving_and_returns_to_providers() {
     let mut app = App::new();
     enter_provider_row(&mut app, "OpenAI");
@@ -3076,6 +3128,19 @@ fn xai_subscription_displays_server_plan() {
     use ash_app_server_protocol::protocol::account::AccountDto;
     use ash_app_server_protocol::protocol::account::AccountReadResult;
     use ash_app_server_protocol::protocol::account::AccountStatusDto;
+    use ash_app_server_protocol::protocol::model::ModelCatalogEntry;
+    use ash_protocol::ModelAccess;
+    use ash_protocol::ModelId;
+    use ash_protocol::ModelInfo;
+    use ash_protocol::ModelRef;
+    use ash_protocol::ProviderId;
+
+    let discovered = ModelRef::new(
+        ProviderId::new("xai").unwrap(),
+        ModelId::new("grok-account-model").unwrap(),
+    );
+    let mut info = ModelInfo::new(discovered.model.clone(), "Grok Account Model");
+    info.access = ModelAccess::Subscription;
 
     let mut app = App::new();
     enter_provider_row(&mut app, "Super Grok");
@@ -3095,11 +3160,13 @@ fn xai_subscription_displays_server_plan() {
                     credential_revision: 1.to_string(),
                 }],
             },
-            models: Some(Ok(vec![])),
+            models: Some(Ok(vec![ModelCatalogEntry::from_info(discovered, &info)])),
         },
     ));
     let screen = crate::app::usage_tests::render(&app, 96, 24);
     assert!(screen.contains("SuperGrok Heavy"));
+    assert!(screen.contains("Grok Account Model"));
+    assert!(!screen.contains("Grok 4.6"));
     crate::tui_assert_snapshot!("xai_subscription_plan", screen);
 }
 
@@ -3386,6 +3453,7 @@ fn bigmodel_subscription_accepts_a_masked_key_and_returns_to_its_status() {
                 enabled: true,
             },
         )),
+        models: None,
     });
     let labels = app
         .list_selection()

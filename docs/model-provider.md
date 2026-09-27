@@ -430,7 +430,7 @@ model-provider
 Runtime 负责 scope identity、credential revision 和 catalog API binding；manager 负责何时刷新、
 缓存、merge 和发布 snapshot。Runtime 不维护第二份 catalog cache。
 
-ChatGPT 订阅的账户身份由 `ash-chatgpt` 从已验证登录 token 提供。`ash-model-provider` 的订阅目录组件用该身份建立隔离的 catalog scope；有 Codex 本地目录时通过 Codex `model/list` 校验并转换，否则通过已认证目标读取 ChatGPT 模型目录。xAI 订阅由自己的目录适配器读取，Kimi Code 的已知型号由 Kimi 目录来源提供并按登录设备隔离。`ash-models-manager` 统一管理刷新，并将目录分别保存到 `cache/models/<provider>.json`，不读取 OAuth token。
+ChatGPT 订阅的账户身份由 `ash-chatgpt` 从已验证登录 token 提供。`ash-model-provider` 的订阅目录组件用该身份建立隔离的 catalog scope；有 Codex 本地目录时通过 Codex `model/list` 校验并转换，否则通过已认证目标读取 ChatGPT 模型目录。xAI 订阅由自己的目录适配器读取 Grok 订阅代理，xAI API Key 连接使用 Platform `/v1/language-models`；两者使用不同的凭据和 catalog scope。Kimi Code 的已知型号由 Kimi 目录来源提供并按登录设备隔离。`ash-models-manager` 统一管理刷新，并将目录分别保存到 `cache/models/<provider>.json`，不读取 OAuth token 或 API Key。
 
 ## 11. 依赖方向
 

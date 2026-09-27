@@ -2123,6 +2123,18 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Impossible de charger les modèles",
     ),
     translation(
+        "Saved API key for {0}; loaded {1} models",
+        "{0} の API キーを保存しました。{1} 件のモデルを読み込みました",
+        "已保存 {0} 的 API Key，加载了 {1} 个模型",
+        "Clé API de {0} enregistrée ; {1} modèles chargés",
+    ),
+    translation(
+        "Saved API key for {0}; model list unavailable ({1})",
+        "{0} の API キーを保存しました。モデル一覧を取得できませんでした（{1}）",
+        "已保存 {0} 的 API Key，但无法获取模型列表（{1}）",
+        "Clé API de {0} enregistrée ; liste des modèles indisponible ({1})",
+    ),
+    translation(
         "Loading models…",
         "モデルを読み込み中…",
         "正在加载模型…",

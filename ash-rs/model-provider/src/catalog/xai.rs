@@ -1,6 +1,8 @@
 use crate::catalog::ModelCatalogBinding;
-use ::xai::XaiOAuth;
+use crate::diagnostics::DiagnosticClient;
+use ::supergrok::SuperGrokOAuth;
 use ash_async_utils::CancellationSource;
+use ash_client::OperationClient;
 use ash_models_manager::CatalogCacheHint;
 use ash_models_manager::CatalogDiscoveryOutcome;
 use ash_models_manager::CatalogScopeKey;
@@ -20,15 +22,193 @@ use ash_protocol::ModelAccess;
 use ash_protocol::ModelId;
 use ash_protocol::ProviderId;
 use ash_protocol::ReasoningEffort;
+use response_debug_context::DiagnosticOutcome;
+use response_debug_context::ResponseDiagnosticSink;
+use response_debug_context::ResponseOperation;
 use sha2::Digest;
 use sha2::Sha256;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
 
+pub(crate) fn xai_api_catalog_binding(
+    config: &ash_model_provider_config::NormalizedModelProviderConfig,
+    headers: Vec<ash_http_client::HttpHeader>,
+    client: Arc<dyn OperationClient>,
+    diagnostics: Option<Arc<dyn ResponseDiagnosticSink>>,
+) -> Result<ModelCatalogBinding, crate::ModelProviderError> {
+    let mut digest = Sha256::new();
+    digest.update(format!("{config:?}").as_bytes());
+    for header in &headers {
+        digest.update(header.name().as_bytes());
+        digest.update(header.value().as_bytes());
+    }
+    let scope = CatalogScopeKey::new(
+        config.provider.clone(),
+        CatalogSourceScopeId::new(format!("xai-api:{:x}", digest.finalize()))
+            .map_err(|error| crate::ModelProviderError::Unavailable(error.to_string()))?,
+    );
+    // /models includes image and other non-Agent models; /language-models is the text catalog.
+    let request = ash_client::ClientRequest::new(
+        ash_http_client::HttpMethod::Get,
+        format!("{}/language-models", config.base_url),
+        headers,
+        Vec::new(),
+        ash_client::RetryPolicy::never(),
+    )
+    .map_err(|_| crate::ModelProviderError::Unavailable("Invalid models endpoint".into()))?;
+    Ok(ModelCatalogBinding {
+        scope: scope.clone(),
+        source: Arc::new(XaiApiCatalogSource {
+            scope,
+            request,
+            client,
+            diagnostics,
+        }),
+    })
+}
+
+struct XaiApiCatalogSource {
+    scope: CatalogScopeKey,
+    request: ash_client::ClientRequest,
+    client: Arc<dyn OperationClient>,
+    diagnostics: Option<Arc<dyn ResponseDiagnosticSink>>,
+}
+
+impl ModelCatalogSource for XaiApiCatalogSource {
+    fn discover<'a>(
+        &'a self,
+        request: ash_models_manager::CatalogDiscoveryRequest,
+    ) -> CatalogSourceFuture<'a> {
+        Box::pin(async move {
+            let diagnostic = Arc::new(DiagnosticClient::new(
+                Arc::clone(&self.client),
+                self.diagnostics.clone(),
+                ResponseOperation::ModelCatalog,
+            ));
+            let result = async {
+                if request.scope() != &self.scope {
+                    return Err(CatalogSourceError::new(
+                        CatalogSourceErrorKind::InvalidRequest,
+                        "xAI API catalog scope changed",
+                    ));
+                }
+                let client = Arc::clone(&diagnostic);
+                let request = self.request.clone();
+                let cancellation = CancellationSource::new();
+                let token = cancellation.token();
+                let cancel_on_drop = cancellation.cancel_on_drop();
+                let response = tokio::task::spawn_blocking(move || {
+                    client.execute_with_cancellation(&request, &token)
+                })
+                .await
+                .map_err(|_| {
+                    CatalogSourceError::new(
+                        CatalogSourceErrorKind::Transient,
+                        "xAI API catalog worker stopped",
+                    )
+                })?
+                .map_err(|error| {
+                    CatalogSourceError::new(
+                        match error {
+                            ash_client::ClientError::Cancelled(_) => {
+                                CatalogSourceErrorKind::Cancelled
+                            }
+                            ash_client::ClientError::InvalidRequest(_) => {
+                                CatalogSourceErrorKind::InvalidRequest
+                            }
+                            ash_client::ClientError::Transport(_) => {
+                                CatalogSourceErrorKind::Unreachable
+                            }
+                            ash_client::ClientError::InvalidResponse(_)
+                            | ash_client::ClientError::Framing(_) => {
+                                CatalogSourceErrorKind::InvalidPayload
+                            }
+                        },
+                        "Could not fetch xAI language models",
+                    )
+                })?;
+                cancel_on_drop.disarm();
+                if !response.is_success() {
+                    let kind = match response.status() {
+                        401 => CatalogSourceErrorKind::Authentication,
+                        403 => CatalogSourceErrorKind::Permission,
+                        404 | 405 | 501 => CatalogSourceErrorKind::Unsupported,
+                        429 => CatalogSourceErrorKind::RateLimited,
+                        400..=499 => CatalogSourceErrorKind::InvalidRequest,
+                        500..=599 => CatalogSourceErrorKind::ProviderUnavailable,
+                        _ => CatalogSourceErrorKind::Transient,
+                    };
+                    return Err(CatalogSourceError::new(
+                        kind,
+                        format!(
+                            "xAI language model request failed (HTTP {})",
+                            response.status()
+                        ),
+                    ));
+                }
+                #[derive(serde::Deserialize)]
+                struct Catalog {
+                    models: Vec<Entry>,
+                }
+                #[derive(serde::Deserialize)]
+                struct Entry {
+                    id: String,
+                    context_length: Option<u32>,
+                }
+                let catalog: Catalog = serde_json::from_slice(response.body()).map_err(|_| {
+                    CatalogSourceError::new(
+                        CatalogSourceErrorKind::InvalidPayload,
+                        "Invalid xAI language model list",
+                    )
+                })?;
+                let mut ids = std::collections::BTreeSet::new();
+                let mut models = Vec::new();
+                for entry in catalog.models {
+                    let id = ModelId::new(entry.id).map_err(|_| {
+                        CatalogSourceError::new(
+                            CatalogSourceErrorKind::InvalidPayload,
+                            "Invalid xAI model ID",
+                        )
+                    })?;
+                    if ids.insert(id.clone()) {
+                        models.push(DiscoveredModel::new(id).with_metadata(ModelMetadataPatch {
+                            access: Some(ModelAccess::ApiKey),
+                            context_window: entry.context_length.map(ContextWindow::Known),
+                            ..ModelMetadataPatch::default()
+                        }));
+                    }
+                }
+                Ok(CatalogDiscoveryOutcome::Modified(
+                    DiscoveredCatalog::new(
+                        self.scope.clone(),
+                        DiscoveryCoverage::CompleteAgentCatalog,
+                        SystemTime::now(),
+                    )
+                    .with_models(models)
+                    .with_cache_hint(
+                        CatalogCacheHint::unspecified()
+                            .with_fresh_for(Duration::from_secs(300))
+                            .with_stale_usable_for(Duration::from_secs(86400)),
+                    ),
+                ))
+            }
+            .await;
+            diagnostic.finish_with(match &result {
+                Ok(_) => DiagnosticOutcome::Succeeded,
+                Err(error) if error.kind() == CatalogSourceErrorKind::Cancelled => {
+                    DiagnosticOutcome::Cancelled
+                }
+                Err(_) => DiagnosticOutcome::Failed,
+            });
+            result
+        })
+    }
+}
+
 pub(crate) fn xai_catalog_binding(
     config: &ash_model_provider_config::NormalizedModelProviderConfig,
-    auth: Arc<XaiOAuth>,
+    auth: Arc<SuperGrokOAuth>,
 ) -> Result<Option<ModelCatalogBinding>, crate::ModelProviderError> {
     let Some(account_id) = auth
         .account_id()
@@ -55,7 +235,7 @@ pub(crate) fn xai_catalog_binding(
 struct XaiCatalogSource {
     scope: CatalogScopeKey,
     account_id: String,
-    auth: Arc<XaiOAuth>,
+    auth: Arc<SuperGrokOAuth>,
 }
 
 impl ModelCatalogSource for XaiCatalogSource {
@@ -86,20 +266,28 @@ impl ModelCatalogSource for XaiCatalogSource {
                 .map_err(|error| {
                     CatalogSourceError::new(
                         match error.kind() {
-                            ::xai::XaiErrorKind::Authentication
-                            | ::xai::XaiErrorKind::AccountChanged => {
+                            ::supergrok::SuperGrokErrorKind::Authentication
+                            | ::supergrok::SuperGrokErrorKind::AccountChanged => {
                                 CatalogSourceErrorKind::Authentication
                             }
-                            ::xai::XaiErrorKind::Permission => CatalogSourceErrorKind::Permission,
-                            ::xai::XaiErrorKind::UpgradeRequired => {
+                            ::supergrok::SuperGrokErrorKind::Permission => {
+                                CatalogSourceErrorKind::Permission
+                            }
+                            ::supergrok::SuperGrokErrorKind::UpgradeRequired => {
                                 CatalogSourceErrorKind::Unsupported
                             }
-                            ::xai::XaiErrorKind::RateLimited => CatalogSourceErrorKind::RateLimited,
-                            ::xai::XaiErrorKind::InvalidResponse => {
+                            ::supergrok::SuperGrokErrorKind::RateLimited => {
+                                CatalogSourceErrorKind::RateLimited
+                            }
+                            ::supergrok::SuperGrokErrorKind::InvalidResponse => {
                                 CatalogSourceErrorKind::InvalidPayload
                             }
-                            ::xai::XaiErrorKind::Cancelled => CatalogSourceErrorKind::Cancelled,
-                            ::xai::XaiErrorKind::Unavailable => CatalogSourceErrorKind::Unreachable,
+                            ::supergrok::SuperGrokErrorKind::Cancelled => {
+                                CatalogSourceErrorKind::Cancelled
+                            }
+                            ::supergrok::SuperGrokErrorKind::Unavailable => {
+                                CatalogSourceErrorKind::Unreachable
+                            }
                         },
                         error.to_string(),
                     )

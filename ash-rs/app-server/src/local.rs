@@ -198,7 +198,7 @@ impl LocalAppServerOptions {
 
     /// Reads the backend host's Grok login when Ash has no xAI credential.
     pub fn with_host_grok_auth(mut self) -> Self {
-        self.grok_auth_path = xai::grok_auth_path();
+        self.grok_auth_path = supergrok::grok_auth_path();
         self
     }
 
@@ -1320,19 +1320,19 @@ pub fn open_local_app_server_with_codebase_providers(
         None => KimiOAuth::production(Arc::clone(&profile_secrets))
             .map_err(|error| OpenAppServerError(error.to_string()))?,
     };
-    let xai_oauth = match (&model_operation_client, &options.grok_auth_path) {
-        (Some(client), Some(path)) => xai::XaiOAuth::with_grok_auth_file(
+    let supergrok_oauth = match (&model_operation_client, &options.grok_auth_path) {
+        (Some(client), Some(path)) => supergrok::SuperGrokOAuth::with_grok_auth_file(
             Arc::clone(&profile_secrets),
             Arc::clone(client),
             options.profile_root.join("xai.lock"),
             path.clone(),
         ),
-        (Some(client), None) => xai::XaiOAuth::with_client(
+        (Some(client), None) => supergrok::SuperGrokOAuth::with_client(
             Arc::clone(&profile_secrets),
             Arc::clone(client),
             options.profile_root.join("xai.lock"),
         ),
-        (None, _) => xai::XaiOAuth::production(
+        (None, _) => supergrok::SuperGrokOAuth::production(
             Arc::clone(&profile_secrets),
             options.profile_root.join("xai.lock"),
         )
@@ -1354,7 +1354,7 @@ pub fn open_local_app_server_with_codebase_providers(
     .with_local_tokenizers(local_tokenizers)
     .with_chatgpt_oauth(Arc::clone(&chatgpt_oauth))
     .with_kimi_oauth(Arc::clone(&kimi_oauth))
-    .with_xai_oauth(Arc::clone(&xai_oauth));
+    .with_supergrok_oauth(Arc::clone(&supergrok_oauth));
     let models_manager = model_provider.models_manager();
     let model_provider = Arc::new(model_provider);
     let catalog_runtime = Arc::new(
@@ -1402,8 +1402,11 @@ pub fn open_local_app_server_with_codebase_providers(
         })
         .transpose()
         .map_err(|error| OpenAppServerError(error.to_string()))?;
-    let mut login_drivers: Vec<Arc<dyn InteractiveLoginDriver>> =
-        vec![chatgpt_oauth.clone(), kimi_oauth.clone(), xai_oauth.clone()];
+    let mut login_drivers: Vec<Arc<dyn InteractiveLoginDriver>> = vec![
+        chatgpt_oauth.clone(),
+        kimi_oauth.clone(),
+        supergrok_oauth.clone(),
+    ];
     if let Some(github) = &github_oauth {
         login_drivers.push(github.clone());
     }
@@ -1417,7 +1420,7 @@ pub fn open_local_app_server_with_codebase_providers(
     kimi_oauth
         .install_login_service(&login_service)
         .map_err(|error| OpenAppServerError(error.to_string()))?;
-    xai_oauth
+    supergrok_oauth
         .install_login_service(&login_service)
         .map_err(|error| OpenAppServerError(error.to_string()))?;
     if let Some(github) = &github_oauth {
@@ -1470,7 +1473,7 @@ pub fn open_local_app_server_with_codebase_providers(
     .with_config_store(Arc::clone(&config))
     .with_login_service(login_service)
     .with_chatgpt_account(Arc::new(ash_chatgpt::ChatGptAccount::new(chatgpt_oauth)))
-    .with_xai_account(xai_oauth)
+    .with_supergrok_account(supergrok_oauth)
     .with_language_server_providers(options.language_server_providers)
     .with_slash_command_catalog(options.slash_commands)
     .with_state_runtime(state_runtime)
@@ -2189,6 +2192,14 @@ impl ModelCatalog for ConfigBackedModelService {
             .connections
             .get(id)
             .cloned()
+            .or_else(|| {
+                // Login can be ready before the user selects a subscription connection.
+                matches!(
+                    id.as_str(),
+                    "chatgpt-subscription" | "kimi-subscription" | "xai-subscription"
+                )
+                .then(|| ash_model_provider_config::ModelProviderConfig::for_connection(id.clone()))
+            })
             .ok_or(ModelCatalogRefreshError::InvalidConfiguration)?;
         config
             .providers

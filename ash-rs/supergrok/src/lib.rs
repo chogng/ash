@@ -1,4 +1,4 @@
-//! xAI subscription device authorization, credential storage, and authenticated proxy requests.
+//! Super Grok account sign-in, credential storage, and authenticated subscription requests.
 
 use ash_async_utils::CancellationSource;
 use ash_async_utils::CancellationToken;
@@ -44,8 +44,8 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 use zeroize::Zeroize;
 
-pub const XAI_PROVIDER_ID: &str = "xai-subscription";
-pub use backend_client::xai::BASE_URL as XAI_SUBSCRIPTION_API_BASE_URL;
+pub const SUPERGROK_SUBSCRIPTION_PROVIDER_ID: &str = "xai-subscription";
+pub use backend_client::xai::BASE_URL as SUPERGROK_SUBSCRIPTION_API_BASE_URL;
 
 /// Grok's credential file on the backend host, if its home directory is known.
 pub fn grok_auth_path() -> Option<std::path::PathBuf> {
@@ -73,15 +73,15 @@ const MAX_POLL_DURATION: Duration = Duration::from_secs(15 * 60);
 const REFRESH_MARGIN: Duration = Duration::from_secs(5 * 60);
 const CANCELLATION_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
-/// Sanitized Xai OAuth or credential failure.
+/// Sanitized Super Grok account or credential failure.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct XaiError {
+pub struct SuperGrokError {
     message: String,
-    kind: XaiErrorKind,
+    kind: SuperGrokErrorKind,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum XaiErrorKind {
+pub enum SuperGrokErrorKind {
     Cancelled,
     AccountChanged,
     Authentication,
@@ -92,11 +92,11 @@ pub enum XaiErrorKind {
     Unavailable,
 }
 
-impl XaiError {
-    pub fn kind(&self) -> XaiErrorKind {
+impl SuperGrokError {
+    pub fn kind(&self) -> SuperGrokErrorKind {
         self.kind
     }
-    fn with_kind(kind: XaiErrorKind, message: impl Into<String>) -> Self {
+    fn with_kind(kind: SuperGrokErrorKind, message: impl Into<String>) -> Self {
         Self {
             kind,
             message: message.into(),
@@ -106,28 +106,28 @@ impl XaiError {
     fn new(message: impl Into<String>) -> Self {
         Self {
             message: message.into(),
-            kind: XaiErrorKind::Unavailable,
+            kind: SuperGrokErrorKind::Unavailable,
         }
     }
 }
 
-impl fmt::Display for XaiError {
+impl fmt::Display for SuperGrokError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(&self.message)
     }
 }
 
-impl std::error::Error for XaiError {}
+impl std::error::Error for SuperGrokError {}
 
 /// One request's bearer target and non-secret login identity.
-pub struct XaiApiTarget {
+pub struct SuperGrokApiTarget {
     pub target: ResolvedApiTarget,
     pub account_id: String,
     pub credential_revision: u64,
 }
 
-/// Owns Xai's device flow, local token lifecycle, and request-time authentication.
-pub struct XaiOAuth {
+/// Owns Super Grok account sign-in, local token lifecycle, and request-time authentication.
+pub struct SuperGrokOAuth {
     client: Arc<dyn OperationClient>,
     secrets: Arc<dyn SecretStore>,
     self_weak: Weak<Self>,
@@ -143,13 +143,13 @@ pub struct XaiOAuth {
     minimum_poll_interval: Duration,
 }
 
-impl XaiOAuth {
+impl SuperGrokOAuth {
     pub fn production(
         secrets: Arc<dyn SecretStore>,
         lock_path: std::path::PathBuf,
-    ) -> Result<Arc<Self>, XaiError> {
+    ) -> Result<Arc<Self>, SuperGrokError> {
         let transport = UreqHttpClient::new()
-            .map_err(|_| XaiError::new("Xai HTTPS transport is unavailable"))?;
+            .map_err(|_| SuperGrokError::new("Xai HTTPS transport is unavailable"))?;
         Ok(Self::with_host_grok_auth(
             secrets,
             Arc::new(AshClient::new(Arc::new(transport))),
@@ -236,32 +236,32 @@ impl XaiOAuth {
     }
 
     /// Resolves a fresh bearer target for one xAI subscription invocation.
-    pub fn api_target(&self) -> Result<XaiApiTarget, XaiError> {
+    pub fn api_target(&self) -> Result<SuperGrokApiTarget, SuperGrokError> {
         let _refresh = self.lock_credentials()?;
         let mut credential = self.active_credential()?.ok_or_else(|| {
-            XaiError::with_kind(
-                XaiErrorKind::Authentication,
+            SuperGrokError::with_kind(
+                SuperGrokErrorKind::Authentication,
                 "xAI Subscription is not signed in",
             )
         })?;
         if self.grok_rejected(&credential) {
-            return Err(XaiError::with_kind(
-                XaiErrorKind::Authentication,
+            return Err(SuperGrokError::with_kind(
+                SuperGrokErrorKind::Authentication,
                 "Grok sign-in has expired; sign in with xAI in Ash",
             ));
         }
         if credential.needs_refresh() {
             if credential.refresh_token.trim().is_empty() {
-                return Err(XaiError::with_kind(
-                    XaiErrorKind::Authentication,
+                return Err(SuperGrokError::with_kind(
+                    SuperGrokErrorKind::Authentication,
                     "xAI Subscription sign-in has expired",
                 ));
             }
             credential = self.renew_credential(credential)?;
         }
-        Ok(XaiApiTarget {
+        Ok(SuperGrokApiTarget {
             target: ResolvedApiTarget::new(
-                XAI_SUBSCRIPTION_API_BASE_URL,
+                SUPERGROK_SUBSCRIPTION_API_BASE_URL,
                 self.api_headers(&credential),
             ),
             account_id: credential.account_id.clone(),
@@ -270,14 +270,14 @@ impl XaiOAuth {
     }
 
     /// Reads the local catalog scope without refreshing or exposing a token.
-    pub fn account_id(&self) -> Result<Option<String>, XaiError> {
+    pub fn account_id(&self) -> Result<Option<String>, SuperGrokError> {
         Ok(self
             .active_credential()?
             .map(|credential| credential.account_id.clone()))
     }
 
     /// Reads subscription readiness from the current local credential without a network call.
-    pub fn subscription_ready(&self) -> Result<bool, XaiError> {
+    pub fn subscription_ready(&self) -> Result<bool, SuperGrokError> {
         Ok(self
             .active_credential()?
             .is_some_and(|credential| credential.is_usable() && !self.grok_rejected(&credential)))
@@ -286,8 +286,8 @@ impl XaiOAuth {
     /// Refreshes a rejected credential at most once, without crossing a login boundary.
     pub fn recover_unauthorized(
         &self,
-        rejected: &XaiApiTarget,
-    ) -> Result<Option<XaiApiTarget>, XaiError> {
+        rejected: &SuperGrokApiTarget,
+    ) -> Result<Option<SuperGrokApiTarget>, SuperGrokError> {
         if is_grok_account(&rejected.account_id) {
             let Some(credential) = self.active_credential()? else {
                 return Ok(None);
@@ -298,9 +298,9 @@ impl XaiOAuth {
             {
                 return Ok(None);
             }
-            return Ok(Some(XaiApiTarget {
+            return Ok(Some(SuperGrokApiTarget {
                 target: ResolvedApiTarget::new(
-                    XAI_SUBSCRIPTION_API_BASE_URL,
+                    SUPERGROK_SUBSCRIPTION_API_BASE_URL,
                     self.api_headers(&credential),
                 ),
                 account_id: credential.account_id.clone(),
@@ -320,9 +320,9 @@ impl XaiOAuth {
             }
             credential = self.renew_credential(credential)?;
         }
-        Ok(Some(XaiApiTarget {
+        Ok(Some(SuperGrokApiTarget {
             target: ResolvedApiTarget::new(
-                XAI_SUBSCRIPTION_API_BASE_URL,
+                SUPERGROK_SUBSCRIPTION_API_BASE_URL,
                 self.api_headers(&credential),
             ),
             account_id: credential.account_id.clone(),
@@ -333,11 +333,11 @@ impl XaiOAuth {
     fn renew_credential(
         &self,
         mut credential: TokenCredential,
-    ) -> Result<TokenCredential, XaiError> {
+    ) -> Result<TokenCredential, SuperGrokError> {
         // Persist consumption before using a rotating token. A transport or storage
         // failure must never let another process submit the same token again.
         let mut consumed = self.load_credential()?.ok_or_else(|| {
-            XaiError::with_kind(XaiErrorKind::Authentication, "xAI is signed out")
+            SuperGrokError::with_kind(SuperGrokErrorKind::Authentication, "xAI is signed out")
         })?;
         consumed.access_token.zeroize();
         consumed.refresh_token.zeroize();
@@ -358,18 +358,20 @@ impl XaiOAuth {
         Ok(refreshed)
     }
 
-    fn lock_credentials(&self) -> Result<(std::sync::MutexGuard<'_, ()>, std::fs::File), XaiError> {
+    fn lock_credentials(
+        &self,
+    ) -> Result<(std::sync::MutexGuard<'_, ()>, std::fs::File), SuperGrokError> {
         let guard = self
             .refresh
             .lock()
-            .map_err(|_| XaiError::new("xAI credential state is unavailable"))?;
+            .map_err(|_| SuperGrokError::new("xAI credential state is unavailable"))?;
         let file = std::fs::OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
             .truncate(false)
             .open(&self.lock_path)
-            .map_err(|_| XaiError::new("xAI credential lock is unavailable"))?;
+            .map_err(|_| SuperGrokError::new("xAI credential lock is unavailable"))?;
         let deadline = std::time::Instant::now() + Duration::from_secs(30);
         loop {
             match fs2::FileExt::try_lock_exclusive(&file) {
@@ -381,7 +383,7 @@ impl XaiOAuth {
                     thread::sleep(CANCELLATION_POLL_INTERVAL)
                 }
                 Err(_) => {
-                    return Err(XaiError::new(
+                    return Err(SuperGrokError::new(
                         "xAI credentials are busy in another Ash process",
                     ));
                 }
@@ -389,7 +391,7 @@ impl XaiOAuth {
         }
     }
 
-    pub fn note_rejected(&self, rejected: &XaiApiTarget) {
+    pub fn note_rejected(&self, rejected: &SuperGrokApiTarget) {
         if is_grok_account(&rejected.account_id) {
             if let Ok(mut current) = self.rejected_grok.lock() {
                 *current = Some((rejected.account_id.clone(), rejected.credential_revision));
@@ -414,7 +416,7 @@ impl XaiOAuth {
         }
     }
 
-    fn request_device_code(&self) -> Result<DeviceAuthorizationResponse, XaiError> {
+    fn request_device_code(&self) -> Result<DeviceAuthorizationResponse, SuperGrokError> {
         let cancellation = CancellationSource::new();
         let response = self.post_form(
             DEVICE_AUTHORIZATION_URL,
@@ -429,13 +431,15 @@ impl XaiOAuth {
             &cancellation.token(),
         )?;
         if !response.is_success() {
-            return Err(XaiError::new(format!(
+            return Err(SuperGrokError::new(format!(
                 "Xai device authorization failed with HTTP {}",
                 response.status()
             )));
         }
         let response: DeviceAuthorizationResponse = serde_json::from_slice(response.body())
-            .map_err(|_| XaiError::new("Xai returned an invalid device authorization response"))?;
+            .map_err(|_| {
+                SuperGrokError::new("Xai returned an invalid device authorization response")
+            })?;
         if response.device_code.trim().is_empty()
             || response.user_code.trim().is_empty()
             || !response
@@ -446,7 +450,7 @@ impl XaiOAuth {
             || !url::Url::parse(response.verification_uri())
                 .is_ok_and(|url| url.scheme() == "https")
         {
-            return Err(XaiError::new(
+            return Err(SuperGrokError::new(
                 "Xai returned an incomplete device authorization response",
             ));
         }
@@ -458,7 +462,7 @@ impl XaiOAuth {
         device: &DeviceAuthorizationResponse,
         account_id: &str,
         cancellation: &CancellationToken,
-    ) -> Result<TokenCredential, XaiError> {
+    ) -> Result<TokenCredential, SuperGrokError> {
         let mut interval = Duration::from_secs(device.interval.unwrap_or_default())
             .max(self.minimum_poll_interval);
         let lifetime =
@@ -468,7 +472,7 @@ impl XaiOAuth {
         loop {
             wait_with_cancellation(interval, cancellation)?;
             if SystemTime::now() >= deadline {
-                return Err(XaiError::new("Xai device authorization expired"));
+                return Err(SuperGrokError::new("Xai device authorization expired"));
             }
             let response = self.post_form(
                 TOKEN_URL,
@@ -481,7 +485,7 @@ impl XaiOAuth {
             )?;
             let status = response.status();
             let response: TokenResponse = serde_json::from_slice(response.body())
-                .map_err(|_| XaiError::new("Xai returned an invalid token response"))?;
+                .map_err(|_| SuperGrokError::new("Xai returned an invalid token response"))?;
             match response.error.as_deref() {
                 Some("authorization_pending") => continue,
                 Some("slow_down") => {
@@ -489,17 +493,17 @@ impl XaiOAuth {
                     continue;
                 }
                 Some("expired_token") => {
-                    return Err(XaiError::new("Xai device authorization expired"));
+                    return Err(SuperGrokError::new("Xai device authorization expired"));
                 }
                 Some("access_denied") => {
-                    return Err(XaiError::new("Xai device authorization was denied"));
+                    return Err(SuperGrokError::new("Xai device authorization was denied"));
                 }
-                Some(_) => return Err(XaiError::new("Xai device authorization failed")),
+                Some(_) => return Err(SuperGrokError::new("Xai device authorization failed")),
                 None if (200..300).contains(&status) => {
                     return response.into_credential(account_id.to_owned(), 1);
                 }
                 None => {
-                    return Err(XaiError::new(format!(
+                    return Err(SuperGrokError::new(format!(
                         "xAI token exchange failed with HTTP {status}"
                     )));
                 }
@@ -507,7 +511,10 @@ impl XaiOAuth {
         }
     }
 
-    fn refresh_token(&self, credential: &TokenCredential) -> Result<TokenCredential, XaiError> {
+    fn refresh_token(
+        &self,
+        credential: &TokenCredential,
+    ) -> Result<TokenCredential, SuperGrokError> {
         let cancellation = CancellationSource::new();
         let response = self.post_form(
             TOKEN_URL,
@@ -520,15 +527,15 @@ impl XaiOAuth {
         )?;
         let status = response.status();
         let response: TokenResponse = serde_json::from_slice(response.body())
-            .map_err(|_| XaiError::new("xAI returned an invalid token refresh response"))?;
+            .map_err(|_| SuperGrokError::new("xAI returned an invalid token refresh response"))?;
         if response.error.as_deref() == Some("invalid_grant") {
-            return Err(XaiError::with_kind(
-                XaiErrorKind::Authentication,
+            return Err(SuperGrokError::with_kind(
+                SuperGrokErrorKind::Authentication,
                 "xAI sign-in has expired; sign in again",
             ));
         }
         if !(200..300).contains(&status) || response.error.is_some() {
-            return Err(XaiError::new(format!(
+            return Err(SuperGrokError::new(format!(
                 "xAI token refresh failed with HTTP {status}"
             )));
         }
@@ -543,7 +550,7 @@ impl XaiOAuth {
         url: &str,
         fields: &[(&str, &str)],
         cancellation: &CancellationToken,
-    ) -> Result<ash_client::ClientResponse, XaiError> {
+    ) -> Result<ash_client::ClientResponse, SuperGrokError> {
         let body = fields
             .iter()
             .map(|(name, value)| {
@@ -556,11 +563,12 @@ impl XaiOAuth {
             .collect::<Vec<_>>()
             .join("&")
             .into_bytes();
-        let request = ClientRequest::post(url, self.common_headers(), body, RetryPolicy::never())
-            .map_err(|_| XaiError::new("Xai OAuth request could not be constructed"))?;
+        let request =
+            ClientRequest::post(url, self.common_headers(), body, RetryPolicy::never())
+                .map_err(|_| SuperGrokError::new("Xai OAuth request could not be constructed"))?;
         self.client
             .execute_with_cancellation(&request, cancellation)
-            .map_err(|_| XaiError::new("Xai OAuth service is unavailable"))
+            .map_err(|_| SuperGrokError::new("Xai OAuth service is unavailable"))
     }
 
     fn common_headers(&self) -> Vec<HttpHeader> {
@@ -603,46 +611,50 @@ impl XaiOAuth {
         SecretKey::new(DISCONNECTED_KEY).expect("static Xai disconnection key is valid")
     }
 
-    fn disconnected(&self) -> Result<bool, XaiError> {
+    fn disconnected(&self) -> Result<bool, SuperGrokError> {
         self.secrets
             .load(&Self::disconnected_key())
             .map(|value| value.is_some())
-            .map_err(|_| XaiError::new("Xai connection state is unavailable"))
+            .map_err(|_| SuperGrokError::new("Xai connection state is unavailable"))
     }
 
-    fn active_credential(&self) -> Result<Option<TokenCredential>, XaiError> {
+    fn active_credential(&self) -> Result<Option<TokenCredential>, SuperGrokError> {
         if self.disconnected()? {
             return Ok(None);
         }
         self.candidate_credential()
     }
 
-    fn candidate_credential(&self) -> Result<Option<TokenCredential>, XaiError> {
+    fn candidate_credential(&self) -> Result<Option<TokenCredential>, SuperGrokError> {
         match self.load_credential()? {
             Some(credential) => Ok(Some(credential)),
             None => self.load_grok_credential(),
         }
     }
 
-    fn load_grok_credential(&self) -> Result<Option<TokenCredential>, XaiError> {
+    fn load_grok_credential(&self) -> Result<Option<TokenCredential>, SuperGrokError> {
         let Some(path) = &self.grok_auth_path else {
             return Ok(None);
         };
         let file = match std::fs::File::open(path) {
             Ok(file) => file,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(_) => return Err(XaiError::new("Grok credential file could not be read")),
+            Err(_) => {
+                return Err(SuperGrokError::new(
+                    "Grok credential file could not be read",
+                ));
+            }
         };
         let mut contents = Vec::new();
         file.take(1024 * 1024 + 1)
             .read_to_end(&mut contents)
-            .map_err(|_| XaiError::new("Grok credential file could not be read"))?;
+            .map_err(|_| SuperGrokError::new("Grok credential file could not be read"))?;
         let bytes = SecretValue::new(contents);
         if bytes.expose().len() > 1024 * 1024 {
-            return Err(XaiError::new("Grok credential file is too large"));
+            return Err(SuperGrokError::new("Grok credential file is too large"));
         }
         let GrokCredentialMap(entry) = serde_json::from_slice(bytes.expose())
-            .map_err(|_| XaiError::new("Grok credential file is invalid"))?;
+            .map_err(|_| SuperGrokError::new("Grok credential file is invalid"))?;
         let Some(entry) = entry else {
             return Ok(None);
         };
@@ -651,7 +663,7 @@ impl XaiOAuth {
             let borrowed = self
                 .borrowed_account
                 .lock()
-                .map_err(|_| XaiError::new("Xai account metadata is unavailable"))?;
+                .map_err(|_| SuperGrokError::new("Xai account metadata is unavailable"))?;
             if let Some(metadata) = borrowed.as_ref().filter(|metadata| {
                 metadata.account_id == credential.account_id
                     && metadata.credential_revision == credential.credential_revision
@@ -672,29 +684,29 @@ impl XaiOAuth {
             })
     }
 
-    fn load_credential(&self) -> Result<Option<TokenCredential>, XaiError> {
+    fn load_credential(&self) -> Result<Option<TokenCredential>, SuperGrokError> {
         self.secrets
             .load(&Self::credential_key())
-            .map_err(|_| XaiError::new("Xai credential store is unavailable"))?
+            .map_err(|_| SuperGrokError::new("Xai credential store is unavailable"))?
             .map(|value| {
                 serde_json::from_slice(value.expose())
-                    .map_err(|_| XaiError::new("stored Xai credential is invalid"))
+                    .map_err(|_| SuperGrokError::new("stored Xai credential is invalid"))
             })
             .transpose()
     }
 
-    fn store_credential(&self, credential: &TokenCredential) -> Result<(), XaiError> {
+    fn store_credential(&self, credential: &TokenCredential) -> Result<(), SuperGrokError> {
         let encoded = serde_json::to_vec(credential)
-            .map_err(|_| XaiError::new("Xai credential could not be encoded"))?;
+            .map_err(|_| SuperGrokError::new("Xai credential could not be encoded"))?;
         self.secrets
             .store(&Self::credential_key(), &SecretValue::new(encoded))
-            .map_err(|_| XaiError::new("Xai credential store is unavailable"))
+            .map_err(|_| SuperGrokError::new("Xai credential store is unavailable"))
     }
 
     fn account_snapshot(&self, credential: &TokenCredential) -> AccountSnapshot {
         AccountSnapshot {
             account: AccountRef {
-                provider: XAI_PROVIDER_ID.into(),
+                provider: SUPERGROK_SUBSCRIPTION_PROVIDER_ID.into(),
                 account_id: credential.account_id.clone(),
             },
             email: credential
@@ -755,9 +767,9 @@ impl XaiOAuth {
     }
 }
 
-impl InteractiveLoginDriver for XaiOAuth {
+impl InteractiveLoginDriver for SuperGrokOAuth {
     fn provider_id(&self) -> &'static str {
-        XAI_PROVIDER_ID
+        SUPERGROK_SUBSCRIPTION_PROVIDER_ID
     }
 
     fn read_account(&self) -> Result<Option<AccountSnapshot>, LoginError> {
@@ -785,7 +797,9 @@ impl InteractiveLoginDriver for XaiOAuth {
                 self.secrets
                     .delete(&Self::disconnected_key())
                     .map_err(|_| {
-                        login_driver_error(XaiError::new("Xai connection state is unavailable"))
+                        login_driver_error(SuperGrokError::new(
+                            "Xai connection state is unavailable",
+                        ))
                     })?;
                 return Ok(BeginLogin::Connected {
                     login_id: request.login_id,
@@ -823,7 +837,7 @@ impl InteractiveLoginDriver for XaiOAuth {
                 runtime
                     .secrets
                     .delete(&Self::disconnected_key())
-                    .map_err(|_| XaiError::new("Xai connection state is unavailable"))?;
+                    .map_err(|_| SuperGrokError::new("Xai connection state is unavailable"))?;
                 Ok(runtime.account_snapshot(&credential))
             }) {
                 Ok(account) => LoginCompletionOutcome::Succeeded { account },
@@ -857,7 +871,7 @@ impl InteractiveLoginDriver for XaiOAuth {
     }
 
     fn logout(&self, account: &AccountRef) -> Result<(), LoginError> {
-        if account.provider != XAI_PROVIDER_ID {
+        if account.provider != SUPERGROK_SUBSCRIPTION_PROVIDER_ID {
             return Err(LoginError::new(
                 LoginErrorKind::InvalidInput,
                 "account is not owned by the Xai login driver",
@@ -932,7 +946,7 @@ impl TokenResponse {
         mut self,
         account_id: String,
         credential_revision: u64,
-    ) -> Result<TokenCredential, XaiError> {
+    ) -> Result<TokenCredential, SuperGrokError> {
         if self.access_token.trim().is_empty()
             || self
                 .expires_in
@@ -942,7 +956,9 @@ impl TokenResponse {
                 .as_deref()
                 .is_some_and(|kind| !kind.eq_ignore_ascii_case("bearer"))
         {
-            return Err(XaiError::new("xAI returned an invalid token response"));
+            return Err(SuperGrokError::new(
+                "xAI returned an invalid token response",
+            ));
         }
         Ok(TokenCredential {
             access_token: std::mem::take(&mut self.access_token),
@@ -1021,7 +1037,7 @@ impl<'de> Deserialize<'de> for GrokCredentialMap {
 }
 
 impl GrokCredential {
-    fn into_credential(mut self) -> Result<Option<TokenCredential>, XaiError> {
+    fn into_credential(mut self) -> Result<Option<TokenCredential>, SuperGrokError> {
         if self.auth_mode != "oidc" {
             return Ok(None);
         }
@@ -1030,12 +1046,12 @@ impl GrokCredential {
             || self.principal_id.trim().is_empty()
             || self.team_id.trim().is_empty()
         {
-            return Err(XaiError::new("Grok credential is incomplete"));
+            return Err(SuperGrokError::new("Grok credential is incomplete"));
         }
         let expires_at = chrono::DateTime::parse_from_rfc3339(&self.expires_at)
             .ok()
             .and_then(|time| u64::try_from(time.timestamp()).ok())
-            .ok_or_else(|| XaiError::new("Grok credential expiry is invalid"))?;
+            .ok_or_else(|| SuperGrokError::new("Grok credential expiry is invalid"))?;
         let revision = Sha256::digest(self.key.as_bytes());
         Ok(Some(TokenCredential {
             profile: None,
@@ -1147,11 +1163,13 @@ impl Drop for TokenCredential {
 fn wait_with_cancellation(
     duration: Duration,
     cancellation: &CancellationToken,
-) -> Result<(), XaiError> {
+) -> Result<(), SuperGrokError> {
     let mut remaining = duration;
     while !remaining.is_zero() {
         if cancellation.is_cancelled() {
-            return Err(XaiError::new("Xai device authorization was cancelled"));
+            return Err(SuperGrokError::new(
+                "Xai device authorization was cancelled",
+            ));
         }
         let slice = remaining.min(CANCELLATION_POLL_INTERVAL);
         thread::sleep(slice);
@@ -1159,13 +1177,13 @@ fn wait_with_cancellation(
     }
     cancellation
         .check()
-        .map_err(|_| XaiError::new("Xai device authorization was cancelled"))
+        .map_err(|_| SuperGrokError::new("Xai device authorization was cancelled"))
 }
 
-fn random_account_id() -> Result<String, XaiError> {
+fn random_account_id() -> Result<String, SuperGrokError> {
     let mut bytes = [0_u8; 16];
     getrandom::getrandom(&mut bytes)
-        .map_err(|_| XaiError::new("Xai device identity could not be generated"))?;
+        .map_err(|_| SuperGrokError::new("Xai device identity could not be generated"))?;
     bytes[6] = (bytes[6] & 0x0f) | 0x40;
     bytes[8] = (bytes[8] & 0x3f) | 0x80;
     Ok(format!(
@@ -1200,7 +1218,7 @@ fn now_epoch_seconds() -> u64 {
         .as_secs()
 }
 
-fn login_driver_error(error: XaiError) -> LoginError {
+fn login_driver_error(error: SuperGrokError) -> LoginError {
     LoginError::new(LoginErrorKind::Driver, error.to_string())
 }
 
@@ -1212,5 +1230,5 @@ fn login_lock_error<T>(_: std::sync::PoisonError<T>) -> LoginError {
 }
 
 #[cfg(test)]
-#[path = "xai_tests.rs"]
+#[path = "supergrok_tests.rs"]
 mod tests;

@@ -17,6 +17,60 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 #[tokio::test]
+async fn xai_api_key_discovers_language_models_and_persists_the_scoped_catalog() {
+    struct ApiCatalog;
+    impl OperationClient for ApiCatalog {
+        fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
+            assert_eq!(request.url(), "https://api.x.ai/v1/language-models");
+            assert!(request.headers().iter().any(|header| {
+                header.name().eq_ignore_ascii_case("authorization")
+                    && header.value() == "Bearer fixture-api-key"
+            }));
+            Ok(ClientResponse::new(
+                200,
+                vec![],
+                br#"{"models":[{"id":"grok-live","context_length":131072},{"id":"grok-new"}]}"#
+                    .to_vec(),
+            ))
+        }
+    }
+    let profile = tempfile::tempdir().unwrap();
+    let secrets = Arc::new(MemorySecretStore::default());
+    secrets
+        .store(
+            &provider_api_key_secret_key(&ash_protocol::ModelConnectionId::new("xai").unwrap()),
+            &SecretValue::new(b"fixture-api-key".to_vec()),
+        )
+        .unwrap();
+    let runtime = ModelProviderRuntime::with_client_and_secrets(
+        ProviderConfigRegistry::builtin(),
+        Arc::new(ApiCatalog),
+        secrets,
+    )
+    .with_catalog_cache(profile.path().join("cache/models"));
+    let config = ModelProviderConfig::new(ProviderId::new("xai").unwrap());
+    let binding = runtime.catalog_binding(&config).unwrap().unwrap();
+    let catalog = runtime
+        .models_manager_for_config(&config)
+        .unwrap()
+        .refresh(binding.scope().clone(), binding.source())
+        .await
+        .unwrap();
+    assert_eq!(
+        catalog
+            .entries()
+            .iter()
+            .filter(|entry| entry.availability() == ash_protocol::ModelAvailability::Available)
+            .map(|entry| entry.model().model.as_str())
+            .collect::<Vec<_>>(),
+        vec!["grok-live", "grok-new"]
+    );
+    let cache = std::fs::read_to_string(profile.path().join("cache/models/xai.json")).unwrap();
+    assert!(cache.contains("grok-live"));
+    assert!(!cache.contains("fixture-api-key"));
+}
+
+#[tokio::test]
 #[ignore = "Real Grok subscription request: grok-4.6 / low, read-only access token, no refresh"]
 async fn live_grok_auth_is_read_only_and_uses_the_ash_model_pipeline() {
     use sha2::Digest;
@@ -61,8 +115,9 @@ async fn live_grok_auth_is_read_only_and_uses_the_ash_model_pipeline() {
     let client = Arc::new(ash_client::AshClient::new(Arc::new(
         ash_http_client::UreqHttpClient::new().unwrap(),
     )));
-    let auth = xai::XaiOAuth::with_client(secrets, client.clone(), dir.path().join("lock"));
-    let runtime = ModelProviderRuntime::builtin_with_client(client).with_xai_oauth(auth);
+    let auth =
+        supergrok::SuperGrokOAuth::with_client(secrets, client.clone(), dir.path().join("lock"));
+    let runtime = ModelProviderRuntime::builtin_with_client(client).with_supergrok_oauth(auth);
     let config = ModelProviderConfig::for_connection(
         ash_protocol::ModelConnectionId::new("xai-subscription").unwrap(),
     );
@@ -206,13 +261,17 @@ async fn xai_subscription_uses_live_catalog_replays_scoped_reasoning_and_observe
         )
         .unwrap();
     let proxy = Arc::new(Proxy::default());
-    let auth = xai::XaiOAuth::with_client(secrets.clone(), proxy.clone(), dir.path().join("lock"));
+    let auth = supergrok::SuperGrokOAuth::with_client(
+        secrets.clone(),
+        proxy.clone(),
+        dir.path().join("lock"),
+    );
     let runtime = ModelProviderRuntime::with_client_and_secrets(
         ProviderConfigRegistry::builtin(),
         proxy.clone(),
         secrets.clone(),
     )
-    .with_xai_oauth(auth);
+    .with_supergrok_oauth(auth);
     let config = ModelProviderConfig::for_connection(
         ash_protocol::ModelConnectionId::new("xai-subscription").unwrap(),
     );
@@ -290,9 +349,10 @@ async fn xai_subscription_retries_only_one_http_401_before_any_stream_output() {
         proxy
             .partial
             .store(partial, std::sync::atomic::Ordering::Relaxed);
-        let auth = xai::XaiOAuth::with_client(secrets, proxy.clone(), dir.path().join("lock"));
-        let runtime =
-            ModelProviderRuntime::builtin_with_client(proxy.clone()).with_xai_oauth(auth.clone());
+        let auth =
+            supergrok::SuperGrokOAuth::with_client(secrets, proxy.clone(), dir.path().join("lock"));
+        let runtime = ModelProviderRuntime::builtin_with_client(proxy.clone())
+            .with_supergrok_oauth(auth.clone());
         let config = ModelProviderConfig::for_connection(
             ash_protocol::ModelConnectionId::new("xai-subscription").unwrap(),
         );

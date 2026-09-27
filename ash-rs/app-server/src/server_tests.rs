@@ -165,10 +165,13 @@ fn xai_account_and_usage_rpc_use_the_subscription_backend_and_observe_logout() {
         requests: Mutex::new(Vec::new()),
         status: AtomicUsize::new(200),
     });
-    let auth = xai::XaiOAuth::with_client(secrets, proxy.clone(), dir.path().join("lock"));
+    let auth =
+        supergrok::SuperGrokOAuth::with_client(secrets, proxy.clone(), dir.path().join("lock"));
     let login = Arc::new(LoginService::new(auth.clone()).unwrap());
     auth.install_login_service(&login).unwrap();
-    let server = server().with_login_service(login).with_xai_account(auth);
+    let server = server()
+        .with_login_service(login)
+        .with_supergrok_account(auth);
     let mut connection = server.connection();
     initialize(&server, &mut connection);
     let account = call(

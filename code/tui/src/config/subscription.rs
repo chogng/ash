@@ -21,6 +21,7 @@ use ash_app_server_protocol::protocol::account::AccountStatusDto;
 use ash_app_server_protocol::protocol::config::ConfigReadResult;
 use ash_app_server_protocol::protocol::model::ModelCatalogEntry;
 use ash_app_server_protocol::protocol::provider::ProviderListResult;
+use ash_app_server_protocol::protocol::provider::ProviderModelsListResult;
 use std::collections::BTreeMap;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -630,15 +631,13 @@ fn read_account_and_models<T: JsonRpcTransport>(
         .any(|entry| entry.provider == provider.id() && entry.status == AccountStatusDto::Ready);
     let models = ready.then(|| {
         client
-            .list_models()
-            .map(|catalog| {
-                catalog
-                    .models
-                    .into_iter()
-                    .filter(|entry| entry.model.provider.as_str() == provider.model_provider())
-                    .collect()
+            .list_provider_models(provider.id().into())
+            .map(|catalog| match catalog {
+                ProviderModelsListResult::Models { models } => Ok(models),
+                ProviderModelsListResult::Empty => Ok(Vec::new()),
+                ProviderModelsListResult::Failed { failure } => Err(format!("{:?}", failure.code)),
             })
-            .map_err(|error| error.to_string())
+            .unwrap_or_else(|error| Err(error.to_string()))
     });
     Ok(SubscriptionEvent::Read { account, models })
 }
