@@ -1,6 +1,6 @@
 import { expect, test } from '../../../automation/test.js';
 
-test('Empty chat keeps its input at the top of the pane', async ({ target, workbench }) => {
+test('Empty chat keeps its input near the pane edges', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
@@ -11,15 +11,24 @@ test('Empty chat keeps its input at the top of the pane', async ({ target, workb
 	const layout = await chat.evaluate(element => {
 		const list = element.querySelector<HTMLElement>('.ash-chat-list-widget');
 		const input = element.querySelector<HTMLElement>('.ash-chat-input-part');
-		if (!list || !input) throw new Error('Chat layout is incomplete');
+		const composer = element.querySelector<HTMLElement>('.ash-chat-input-container');
+		if (!list || !input || !composer) throw new Error('Chat layout is incomplete');
+		const chatBounds = element.getBoundingClientRect();
+		const composerBounds = composer.getBoundingClientRect();
 		return {
-			chatTop: element.getBoundingClientRect().top,
+			chatTop: chatBounds.top,
 			listHeight: list.getBoundingClientRect().height,
 			inputTop: input.getBoundingClientRect().top,
+			composerTopInset: composerBounds.top - chatBounds.top,
+			composerLeftInset: composerBounds.left - chatBounds.left,
+			composerRightInset: chatBounds.right - composerBounds.right,
 		};
 	});
 	expect(layout.listHeight).toBe(0);
 	expect(layout.inputTop).toBeCloseTo(layout.chatTop, 0);
+	expect(layout.composerTopInset).toBe(12);
+	expect(layout.composerLeftInset).toBe(12);
+	expect(layout.composerRightInset).toBe(12);
 });
 
 test('Chat input hides unused editor chrome and aligns text with the input edge', async ({ target, workbench }) => {

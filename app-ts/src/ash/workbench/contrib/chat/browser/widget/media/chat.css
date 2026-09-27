@@ -38,7 +38,7 @@
   box-sizing: border-box;
   min-height: 0;
   flex: 0 0 auto;
-  padding: 24px 24px 24px;
+  padding: var(--ash-spacing-size120);
 }
 
 .ash-chat.has-conversation > .ash-chat-input-part {
