@@ -118,6 +118,7 @@ const iconLetterB = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none
 const iconLetterH = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path fill=\"#000\" d=\"M6 3.5a.5.5 0 0 0-1 0zm-1 9a.5.5 0 0 0 1 0zm6-9a.5.5 0 0 0-1 0zm-1 9a.5.5 0 0 0 1 0zm-4.5-9H5V8h1V3.5zm0 4.5H5v4.5h1V8zm0 0v.5h5v-1h-5zm5-4.5H10v9h1v-9z\"/></svg>";
 const iconLetterT = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"#000\" stroke-linecap=\"round\" d=\"M3 3.5h5m5 0H8m0 0v10\"/></svg>";
 const iconLibrary = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><rect width=\"2\" height=\"11\" x=\"2.5\" y=\"2.5\" stroke=\"#000\" rx=\"1\"/><path stroke=\"#000\" d=\"M7.5 2.5a1 1 0 0 1 1 1v9a1 1 0 1 1-2 0v-9a1 1 0 0 1 1-1Zm3.547.103a1 1 0 0 1 1.23.727l2.183 8.897a1 1 0 0 1-1.942.477l-2.183-8.897a1 1 0 0 1 .712-1.204Z\"/></svg>";
+const iconLibraryFilled = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><rect width=\"2\" height=\"11\" x=\"2.5\" y=\"2.5\" fill=\"#000\" stroke=\"#000\" rx=\"1\"/><path fill=\"#000\" stroke=\"#000\" d=\"M7.5 2.5a1 1 0 0 1 1 1v9a1 1 0 1 1-2 0v-9a1 1 0 0 1 1-1Zm3.547.103a1 1 0 0 1 1.23.727l2.183 8.897a1 1 0 0 1-1.942.477l-2.183-8.897a1 1 0 0 1 .712-1.204Z\"/></svg>";
 const iconLightning = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"#000\" stroke-linejoin=\"round\" d=\"M2.5 8.5 11 1 9 6l4.5 1.5L5 15l2-5z\"/></svg>";
 const iconLightningFilled = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path fill=\"#000\" stroke=\"#000\" stroke-linejoin=\"round\" d=\"M2.5 8.5 11 1 9 6l4.5 1.5L5 15l2-5z\"/></svg>";
 const iconLinkExternal = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"#000\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M5.805 5.305h4.64v4.75m0-4.75-5.14 5.25\"/><rect width=\"11\" height=\"11\" x=\"2.5\" y=\"2.5\" stroke=\"#000\" rx=\"1.5\"/></svg>";
@@ -308,6 +309,7 @@ export function createProductIconLibrary<T>(register: (id: string, definition: P
     letterH: register("letter-h", iconLetterH),
     letterT: register("letter-t", iconLetterT),
     library: register("library", iconLibrary),
+    libraryFilled: register("library-filled", iconLibraryFilled),
     lightning: register("lightning", iconLightning),
     lightningFilled: register("lightning-filled", iconLightningFilled),
     linkExternal: register("link-external", iconLinkExternal),
