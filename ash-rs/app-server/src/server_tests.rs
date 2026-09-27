@@ -2036,6 +2036,77 @@ fn model_catalog_is_global_and_session_views_do_not_own_model_selection() {
 }
 
 #[test]
+fn start_turn_model_is_scoped_to_its_thread_and_does_not_change_the_default() {
+    let default = model_ref("gpt-default");
+    let alternate = model_ref("gpt-alternate");
+    let models = [default.clone(), alternate.clone()]
+        .into_iter()
+        .map(|model| {
+            let mut info =
+                ash_protocol::ModelInfo::new(model.model.clone(), model.model.to_string());
+            info.access = ash_protocol::ModelAccess::ApiKey;
+            ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(model, &info)
+        })
+        .collect();
+    let server = server().with_model_catalog(Arc::new(FixedModelCatalog {
+        models,
+        default: default.clone(),
+    }));
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let session = create_session(&server, &mut connection, 2, "model-session");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let first = create_thread(&server, &mut connection, 3, "first-thread", session_id, 1);
+    let second = create_thread(&server, &mut connection, 4, "second-thread", session_id, 1);
+    let first_id = first["result"]["value"]["threadId"].as_str().unwrap();
+    let second_id = second["result"]["value"]["threadId"].as_str().unwrap();
+
+    let first_turn = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":5,"method":"session/request",
+            "params":{
+                "commandId":"first-turn","sessionId":session_id,
+                "request":{
+                    "type":"startTurn","expectedSequence":1,"threadId":first_id,
+                    "model":alternate,"input":[{"type":"text","text":"first"}]
+                }
+            }
+        }),
+    );
+    assert!(first_turn.get("error").is_none(), "{first_turn}");
+    wait_for_latest_turn(&server, first_id, TurnStatus::Completed);
+    let first_snapshot = server
+        .threads()
+        .read_thread(&ash_protocol::ThreadId::new(first_id).unwrap())
+        .unwrap();
+    assert_eq!(first_snapshot.turns.last().unwrap().model, Some(alternate));
+
+    let second_turn = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":6,"method":"session/request",
+            "params":{
+                "commandId":"second-turn","sessionId":session_id,
+                "request":{
+                    "type":"startTurn","expectedSequence":1,"threadId":second_id,
+                    "input":[{"type":"text","text":"second"}]
+                }
+            }
+        }),
+    );
+    assert!(second_turn.get("error").is_none(), "{second_turn}");
+    wait_for_latest_turn(&server, second_id, TurnStatus::Completed);
+    let second_snapshot = server
+        .threads()
+        .read_thread(&ash_protocol::ThreadId::new(second_id).unwrap())
+        .unwrap();
+    assert_eq!(second_snapshot.turns.last().unwrap().model, Some(default));
+}
+
+#[test]
 fn typed_commands_replay_and_reject_payload_conflicts() {
     let server = server();
     let mut connection = server.connection();

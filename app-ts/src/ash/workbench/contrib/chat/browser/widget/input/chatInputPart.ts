@@ -2,10 +2,9 @@ import "./chatInputPart.css";
 import { addDisposableListener, stopEvent, h } from "../../../../../../base/browser/dom.js";
 import { ButtonActionViewItem, type ActionViewItem } from "../../../../../../base/browser/ui/actionbar/actionViewItems.js";
 import { AnchorPosition, ContextView, ContextViewFocusRestore } from "../../../../../../base/browser/ui/contextview/contextview.js";
-import { DropdownMenuActionViewItem } from "../../../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js";
 import { appendIcon } from "../../../../../../base/browser/ui/lxicons/lxicon.js";
 import { Menu } from "../../../../../../base/browser/ui/menu/menu.js";
-import { SubmenuAction, type IAction } from "../../../../../../base/common/actions.js";
+import type { IAction } from "../../../../../../base/common/actions.js";
 import type { Icon } from "../../../../../../base/common/icon.js";
 import { Disposable, MutableDisposable, DisposableStore, toDisposable } from "../../../../../../base/common/lifecycle.js";
 import { Lxicon } from "../../../../../../base/common/lxicons.js";
@@ -20,6 +19,7 @@ import { DesktopSlashCommands, parseSlashCommandInput, SlashCommandCatalog } fro
 import { SkillSelectorCatalog } from "../../../common/skillSelectors.js";
 import type { ChatInputDelegate, ChatInputState } from "./chatInput.js";
 import { ChatInputEditors, type IChatInputEditor } from "./chatInputEditorRegistry.js";
+import { ModelPickerActionItem } from './modelPicker/modelPickerActionItem.js';
 
 type ChatInputMode = "agent" | "plan" | "debug" | "multitask" | "ask";
 type ChatInputToolbarPresentation = "mode" | "model" | "attachment" | "send" | "interrupt";
@@ -90,7 +90,7 @@ export class ChatInputPart extends Disposable {
 		}));
 		this.inputToolbar = this._register(new WorkbenchToolBar(this.inputContainer, contextMenuService, {
 			ariaLabel: "Chat input actions",
-			actionViewItemProvider: action => this.createToolbarViewItem(action, contextMenuService, contextViewService),
+			actionViewItemProvider: action => this.createToolbarViewItem(action, contextViewService),
 		}));
 		this.inputToolbar.element.classList.add("ash-chat-input-toolbars");
 		this.inputContainer.append(this.attachmentList, editorHost, this.inputToolbar.element);
@@ -235,14 +235,14 @@ export class ChatInputPart extends Disposable {
 				)),
 			);
 		const selectedModel = this.toolbarState.models.find(entry => sameModel(entry.model, this.toolbarState.selectedModel));
-		const modelAction = new SelectorAction(
+		const modelAction = new ChatInputAction(
 			"ash.chat.input.model",
 			selectedModel?.displayName ?? "Model",
 			selectedModel ? `Model: ${selectedModel.displayName}` : "Select model",
 			undefined,
+			true,
 			"model",
-			this.modelMenuActions(),
-			this.toolbarState.models.length > 0,
+			() => {},
 		);
 		const attachmentAction = new ChatInputAction(
 			"ash.chat.input.attachment",
@@ -270,29 +270,6 @@ export class ChatInputPart extends Disposable {
 			: [sendAction];
 		const inputActions = this.toolbarState.inputKind === "command" ? [modeAction] : [modeAction, modelAction, attachmentAction];
 		this.inputToolbar.setActions([...inputActions, ...trailingActions]);
-	}
-
-	private modelMenuActions(): readonly IAction[] {
-		const groups = new Map<string, IAction[]>();
-		for (const entry of this.toolbarState.models) {
-			let actions = groups.get(entry.model.provider);
-			if (!actions) groups.set(entry.model.provider, actions = []);
-			actions.push(new ChatInputAction(
-				`ash.chat.input.model.${entry.model.provider}.${entry.model.model}`,
-				entry.displayName,
-				entry.displayName,
-				undefined,
-				true,
-				"model",
-				() => void this.delegate.selectModel(entry.model),
-				sameModel(entry.model, this.toolbarState.selectedModel),
-			));
-		}
-		return [...groups].map(([provider, actions]) => new SubmenuAction(
-			`ash.chat.input.model.provider.${provider}`,
-			provider,
-			actions,
-		));
 	}
 
 	private async pickContext(): Promise<void> {
@@ -329,12 +306,19 @@ export class ChatInputPart extends Disposable {
 		this.attachmentList.hidden = isEmpty;
 	}
 
-	private createToolbarViewItem(action: IAction, contextMenuService: IContextMenuService, contextViewService: IContextViewService): ActionViewItem | undefined {
+	private createToolbarViewItem(action: IAction, contextViewService: IContextViewService): ActionViewItem | undefined {
 		if (!(action instanceof ChatInputAction)) return undefined;
+		if (action.presentation === 'model') {
+			return new ModelPickerActionItem(action, {
+				getModels: () => this.state.models,
+				getSelectedModel: () => this.state.selectedModel,
+				getModelsError: () => this.state.modelsError,
+				selectModel: model => this.delegate.selectModel(model),
+				openSettings: () => this.delegate.openModelSettings(),
+			}, this.quickInputService);
+		}
 		if (action instanceof SelectorAction) {
-			return action.presentation === "mode"
-				? new ChatInputModeSelectorViewItem(action, contextViewService, () => this.renderToolbarActions())
-				: new ChatInputSelectorViewItem(action, contextMenuService);
+			return new ChatInputModeSelectorViewItem(action, contextViewService, () => this.renderToolbarActions());
 		}
 		return new ChatInputButtonViewItem(action);
 	}
@@ -470,24 +454,6 @@ class SelectorAction extends ChatInputAction {
 
 function sameModel(left: ModelRef | undefined, right: ModelRef | undefined): boolean {
 	return left === right || (left !== undefined && right !== undefined && left.provider === right.provider && left.model === right.model);
-}
-
-class ChatInputSelectorViewItem extends DropdownMenuActionViewItem {
-	private readonly presentation: "mode" | "model";
-
-	constructor(action: SelectorAction, contextMenuService: IContextMenuService) {
-		super(action, action.actions, contextMenuService);
-		this.presentation = action.presentation as "mode" | "model";
-	}
-
-	override render(container: HTMLElement): void {
-		super.render(container);
-		container.classList.add("ash-chat-input-selector", `ash-chat-input-${this.presentation}-selector`);
-		container.classList.toggle("disabled", !this.action.enabled);
-		const button = container.querySelector<HTMLButtonElement>(":scope > .ash-button");
-		button?.classList.add("ash-chat-input-action", `ash-chat-input-${this.presentation}-action`);
-		button?.classList.toggle("disabled", !this.action.enabled);
-	}
 }
 
 /** Chat-owned HTML popup presentation for the mode selector. */

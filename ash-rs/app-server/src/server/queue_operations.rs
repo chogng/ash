@@ -2,6 +2,7 @@ use super::AppServer;
 use super::RpcError;
 use super::decode;
 use super::operations::ThreadMutation;
+use super::operations::TurnModelSelection;
 use super::operations::TurnToolModeSelection;
 use super::result;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
@@ -243,6 +244,7 @@ impl AppServer {
             input,
             ash_protocol::TurnKind::Coding,
             selection,
+            TurnModelSelection::Current,
         );
         let current = self
             .agent_runtime()

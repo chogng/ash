@@ -179,7 +179,7 @@ export class ChatService extends Disposable implements IChatService {
 			...(options.contexts ?? []).map(context => ({ type: "context" as const, name: context.name, content: context.content })),
 			{ type: "text", text: options.text },
 		];
-		await this.options.turnApi.start({ commandId: commandId("turn"), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, approvalMode: "askPermissions", input });
+		await this.options.turnApi.start({ commandId: commandId("turn"), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, approvalMode: "askPermissions", model: options.model, input });
 	}
 
 	async configureAdvisor(options: ConfigureAdvisorOptions): Promise<void> {
@@ -266,6 +266,8 @@ export class ChatService extends Disposable implements IChatService {
 	private acceptModelCatalog(entries: readonly {
 		readonly model: ModelRef;
 		readonly displayName: string;
+		readonly contextWindow?: number | null;
+		readonly supportedReasoningEfforts?: readonly string[];
 	}[]): readonly ModelCatalogEntry[] {
 		const identities = new Set<string>();
 		const catalog = entries.map(entry => {
@@ -275,6 +277,8 @@ export class ChatService extends Disposable implements IChatService {
 			return Object.freeze({
 				model: Object.freeze({ ...entry.model }),
 				displayName: entry.displayName,
+				...(entry.contextWindow !== undefined ? { contextWindow: entry.contextWindow } : {}),
+				...(entry.supportedReasoningEfforts !== undefined ? { supportedReasoningEfforts: Object.freeze([...entry.supportedReasoningEfforts]) } : {}),
 			});
 		});
 		const changed = !sameModelCatalog(this.modelCatalog, catalog);
@@ -298,7 +302,9 @@ function sameModelCatalog(left: readonly ModelCatalogEntry[], right: readonly Mo
 		const candidate = right[index];
 		return candidate !== undefined
 			&& entry.displayName === candidate.displayName
-			&& modelRefIdentity(entry.model) === modelRefIdentity(candidate.model);
+			&& modelRefIdentity(entry.model) === modelRefIdentity(candidate.model)
+			&& entry.contextWindow === candidate.contextWindow
+			&& entry.supportedReasoningEfforts?.join('\0') === candidate.supportedReasoningEfforts?.join('\0');
 	});
 }
 

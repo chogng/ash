@@ -1,5 +1,5 @@
 use super::AppServer;
-use super::operations::ThreadMutation;
+use super::operations::{ThreadMutation, TurnModelSelection};
 use ash_app_server_protocol::protocol::turn::InputItem;
 use ash_protocol::AutomationRun;
 use ash_protocol::AutomationRunStatus;
@@ -101,6 +101,7 @@ impl AppServer {
                 },
                 snapshot.thread_id.clone(),
                 ash_protocol::ApprovalMode::default(),
+                TurnModelSelection::Current,
                 None,
                 vec![InputItem::Text {
                     text: run.definition.prompt.clone(),

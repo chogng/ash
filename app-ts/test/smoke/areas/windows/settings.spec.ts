@@ -11,6 +11,13 @@ test('Settings opens with editor display controls', async ({ target, workbench }
 	await expect(page.locator('[data-configuration-key="editor.renderControlCharacters"]')).toBeVisible();
 	if (target.workbenchMode === 'code') {
 		await page.locator('[data-settings-group-id="workbench"]').click();
+		await page.locator('[data-settings-category-id="startup"]').click();
+		const startupEditor = page.locator('[data-configuration-key="workbench.startupEditor"]').getByRole('combobox');
+		await expect(startupEditor).toBeVisible();
+		await startupEditor.click();
+		await expect(page.getByRole('option', { name: 'Welcome in empty workbench' })).toBeVisible();
+		await page.keyboard.press('Escape');
+		await expect(page.locator('.ash-notification')).toHaveCount(0);
 		await page.locator('[data-settings-category-id="layout"]').click();
 		const sessionsLayoutStyle = page.locator('[data-configuration-key="sessions.layoutStyle"]').getByRole('combobox');
 		await expect(sessionsLayoutStyle).toBeVisible();

@@ -138,6 +138,11 @@ pub(super) enum TurnToolModeSelection {
     Explicit(ash_protocol::ToolMode),
 }
 
+pub(super) enum TurnModelSelection {
+    Current,
+    Explicit(ash_protocol::ModelRef),
+}
+
 enum RewritePhase {
     Rewind,
     Start,
@@ -441,12 +446,14 @@ impl AppServer {
                 thread_id,
                 expected_sequence,
                 approval_mode,
+                model,
                 tool_mode,
                 input,
             } => result(&SessionRequestResult::Turn(self.start_turn_request(
                 thread_mutation(mutation, expected_sequence, connection.connection_id),
                 thread_id,
                 approval_mode,
+                model.map_or(TurnModelSelection::Current, TurnModelSelection::Explicit),
                 tool_mode,
                 input,
             )?)),
@@ -544,6 +551,7 @@ impl AppServer {
                     vec![UserInput::Text { text: question }],
                     ash_protocol::TurnKind::Advisor,
                     TurnInstructionSelection::Agent,
+                    TurnModelSelection::Current,
                 )?))
             }
             SessionRequest::CompactContext {
@@ -811,6 +819,7 @@ impl AppServer {
                 },
                 thread_id.clone(),
                 ash_protocol::ApprovalMode::default(),
+                TurnModelSelection::Current,
                 rewrite.tool_mode,
                 rewrite.input,
             )?,
@@ -1014,6 +1023,7 @@ impl AppServer {
         mutation: ThreadMutation,
         thread_id: ash_protocol::ThreadId,
         approval_mode: ash_protocol::ApprovalMode,
+        model_selection: TurnModelSelection,
         requested_tool_mode: Option<ash_protocol::ToolMode>,
         input: Vec<InputItem>,
     ) -> Result<TurnStartResult, RpcError> {
@@ -1043,6 +1053,7 @@ impl AppServer {
             input,
             ash_protocol::TurnKind::Coding,
             selection,
+            model_selection,
         )
     }
 
@@ -1088,6 +1099,7 @@ impl AppServer {
             vec![UserInput::Text { text: prompt }],
             ash_protocol::TurnKind::Review,
             TurnInstructionSelection::Product(instructions),
+            TurnModelSelection::Current,
         )
     }
 
@@ -1100,6 +1112,7 @@ impl AppServer {
         input: Vec<UserInput>,
         kind: ash_protocol::TurnKind,
         selection: TurnInstructionSelection,
+        model_selection: TurnModelSelection,
     ) -> Result<TurnStartResult, RpcError> {
         let thread_before = self
             .agent_runtime()
@@ -1159,15 +1172,18 @@ impl AppServer {
             return Err(RpcError::new(-32125, AppServerErrorName::FeatureDisabled));
         }
         self.refresh_analytics()?;
-        let model = match thread_before
-            .agent_configuration()
-            .and_then(|agent| agent.model())
-        {
-            Some(model) => Some(model.clone()),
-            None => self
-                .model_catalog
-                .configured_default()
-                .map_err(core_error)?,
+        let model = match model_selection {
+            TurnModelSelection::Explicit(model) => Some(model),
+            TurnModelSelection::Current => match thread_before
+                .agent_configuration()
+                .and_then(|agent| agent.model())
+            {
+                Some(model) => Some(model.clone()),
+                None => self
+                    .model_catalog
+                    .configured_default()
+                    .map_err(core_error)?,
+            },
         };
         let base = thread_before
             .agent_configuration()

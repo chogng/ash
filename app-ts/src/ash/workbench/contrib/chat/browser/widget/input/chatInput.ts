@@ -21,6 +21,7 @@ export interface ChatInputState {
 	readonly error?: string;
 	readonly canInterrupt: boolean;
 	readonly models: readonly ModelCatalogEntry[];
+	readonly modelsError?: string;
 	readonly slashCommands: readonly SlashCommandDefinition[];
 	readonly skillSelectors: readonly SkillSelectorDefinition[];
 	readonly selectedModel?: ModelRef;
@@ -34,5 +35,6 @@ export interface ChatInputDelegate {
 	executeServerCommand(invocation: ChatInputServerCommandInvocation): Promise<void>;
 	interrupt(): Promise<void>;
 	selectModel(model: ModelRef): Promise<void>;
+	openModelSettings(): Promise<void>;
 	resolveInteraction(response: AgentResponse): Promise<void>;
 }

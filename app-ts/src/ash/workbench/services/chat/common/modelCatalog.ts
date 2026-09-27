@@ -10,6 +10,8 @@ const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationE
 export interface ModelCatalogEntry {
 	readonly model: ModelRef;
 	readonly displayName: string;
+	readonly contextWindow?: number | null;
+	readonly supportedReasoningEfforts?: readonly string[];
 }
 
 /** User-owned presentation preferences for the shared model catalog. */

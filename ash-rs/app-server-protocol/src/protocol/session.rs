@@ -140,6 +140,9 @@ pub enum SessionRequest {
         approval_mode: ash_protocol::ApprovalMode,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
+        model: Option<ash_protocol::ModelRef>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
         tool_mode: Option<ToolMode>,
         #[schemars(length(min = 1))]
         input: Vec<InputItem>,

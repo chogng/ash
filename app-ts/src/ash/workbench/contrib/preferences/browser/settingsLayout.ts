@@ -74,7 +74,7 @@ export const SettingsNavigation = [
 	{
 		id: 'workbench',
 		label: 'Workbench',
-		description: 'Configure the Workbench appearance and layout.',
+		description: 'Configure the Workbench appearance, layout, and startup.',
 		categories: [
 			{
 				id: 'appearance',
@@ -103,6 +103,18 @@ export const SettingsNavigation = [
 					get label() { return localize('settings.sessions.layout.group.label', 'Sessions layout'); },
 					get description() { return localize('settings.sessions.layout.group.description', 'Configure the Sessions window layout.'); },
 					settings: ['sessions.layoutStyle'],
+				}],
+			},
+			{
+				id: 'startup',
+				label: 'Startup',
+				description: 'Choose what Ash shows when a window opens.',
+				presentation: 'general',
+				groups: [{
+					id: 'startup-editor',
+					get label() { return localize('settings.workbench.startup.group.label', 'Startup editor'); },
+					get description() { return localize('settings.workbench.startup.group.description', 'Choose what appears when no editor is restored.'); },
+					settings: ['workbench.startupEditor'],
 				}],
 			},
 		],

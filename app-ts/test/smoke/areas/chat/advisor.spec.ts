@@ -1,7 +1,23 @@
 import type { ElectronApplication } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 
-test('Desktop model picker shows fixed models before account setup', async ({ application, target, workbench }) => {
+test('Disconnected model picker explains the empty catalog and opens settings', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'This state requires a disconnected backend.');
+	const page = workbench.page;
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	}
+	const selector = page.locator("[data-action-id='ash.chat.input.model'] button");
+	await expect(selector).toBeEnabled();
+	await selector.click();
+	const picker = page.getByRole('dialog', { name: 'Choose a chat model' });
+	await expect(picker.getByText('Open Settings')).toBeVisible();
+	await expect(picker.getByText('Could not load models')).toBeVisible();
+	await picker.getByText('Open Settings').click();
+	await expect(page.locator('.ash-settings-editor')).toBeVisible();
+});
+
+test('Desktop model picker searches fixed models before account setup', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'required', 'The model catalog requires the product backend.');
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
@@ -9,31 +25,16 @@ test('Desktop model picker shows fixed models before account setup', async ({ ap
 	}
 	await expect(page.locator('.ash-chat-status')).not.toHaveText('Loading chat...');
 	const selector = page.locator("[data-action-id='ash.chat.input.model'] button");
-    const electron = target.kind === 'electron' && process.platform === 'darwin' ? application as ElectronApplication : undefined;
-    if (electron) {
-        await electron.evaluate(({ Menu }) => {
-            Menu.prototype.popup = function (options) {
-                const models = this.items.flatMap(item => item.submenu?.items ?? []);
-                (globalThis as typeof globalThis & { ashModelLabels?: string[] }).ashModelLabels = models.map(item => item.label);
-                models.find(item => item.label === 'GPT-5.6 Sol')?.click();
-                options?.callback?.();
-            };
-        });
-    }
-    await expect(selector).toBeEnabled();
-    await selector.click();
-    if (electron) {
-        await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashModelLabels?: string[] }).ashModelLabels ?? [])).toEqual(expect.arrayContaining(['GPT-5.6 Sol', 'GPT-6 Astra', 'GPT-5.4']));
-    } else {
-        await page.getByRole('menuitem', { name: 'openai', exact: true }).hover();
-        const menu = page.getByRole('menu').last();
-        await expect(menu.getByRole('menuitemcheckbox', { name: 'GPT-5.6 Sol', exact: true })).toBeVisible();
-        await expect(menu.getByRole('menuitemcheckbox', { name: 'GPT-6 Astra', exact: true })).toBeVisible();
-        await expect(menu.getByRole('menuitemcheckbox', { name: 'GPT-5.4', exact: true })).toBeVisible();
-        await expect(menu.locator('.ash-menu-badge')).toHaveCount(0);
-        await menu.getByRole('menuitemcheckbox', { name: 'GPT-5.6 Sol', exact: true }).click();
-    }
-    await expect(selector).toHaveText('GPT-5.6 Sol');
+	await expect(selector).toBeEnabled();
+	await selector.click();
+	const picker = page.getByRole('dialog', { name: 'Choose a chat model' });
+	await expect(picker.getByText('GPT-5.6 Sol', { exact: true })).toBeVisible();
+	await expect(picker.getByText('GPT-6 Astra', { exact: true })).toBeVisible();
+	await expect(picker.getByText('GPT-5.4', { exact: true })).toBeVisible();
+	await picker.getByRole('combobox').fill('GPT-6 Astra');
+	await expect(picker.getByRole('option')).toHaveCount(1);
+	await picker.getByRole('option', { name: /GPT-6 Astra/ }).click();
+	await expect(selector).toHaveText('GPT-6 Astra');
 	await expect(page.locator('.ash-chat-input-model-access-badge')).toHaveCount(0);
 });
 

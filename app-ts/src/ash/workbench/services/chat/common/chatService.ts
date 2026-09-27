@@ -290,7 +290,7 @@ export interface ThreadSubscription {
 	readonly updates: readonly ThreadUpdateEnvelope[];
 }
 
-export interface StartTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly text: string; readonly contexts?: readonly ResolvedChatContext[]; readonly skills?: readonly SkillReference[] }
+export interface StartTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly text: string; readonly model?: ModelRef; readonly contexts?: readonly ResolvedChatContext[]; readonly skills?: readonly SkillReference[] }
 export interface ConfigureAdvisorOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly selection: AdvisorSelection }
 export interface ConsultAdvisorOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly question: string }
 export interface CompactContextOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly retentionPrompt?: string }

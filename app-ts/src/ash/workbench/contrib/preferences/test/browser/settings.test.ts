@@ -76,6 +76,9 @@ const { ILocalizationService: LocalizationServiceId } = await import('../../../.
 const { isPreferencesEditorInput } = await import('../../../../../workbench/services/preferences/common/preferencesEditorInput.js');
 const { DefaultSettings, SettingsEditorModel } = await import('../../../../../workbench/services/preferences/common/preferencesModels.js');
 const { WorkbenchConfigurationService } = await import('../../../../../workbench/services/configuration/browser/configurationService.js');
+const { builtinLanguagePackCatalogs } = await import('../../../../../workbench/services/localization/common/localizationCatalogs.js');
+const { StartupEditorConfigurationKey } = await import('../../../../../workbench/contrib/welcomeGettingStarted/browser/startupPage.js');
+await import('../../../../../workbench/contrib/welcomeGettingStarted/browser/gettingStarted.contribution.js');
 
 const localizationService: ILocalizationService = {
 	onDidChange: Event.None,
@@ -135,6 +138,7 @@ test('settingsLayout is the single projection from registered settings to catego
 		'general',
 		'appearance',
 		'layout',
+		'startup',
 		'editor',
 		'agents',
 		'teams',
@@ -151,6 +155,10 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, SashConfiguration.size), 'general');
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.colorTheme), 'appearance');
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.layoutStyle), 'layout');
+	assert.equal(findSettingCategory(layout, StartupEditorConfigurationKey), 'startup');
+	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN');
+	assert.equal(chinese?.bundles['ash.settings']?.['categories.startup.label'], '启动');
+	assert.equal(chinese?.bundles.ash?.['settings.workbench.startup.group.label'], '启动时的编辑器');
 	assert.equal(findSettingCategory(layout, SessionsConfiguration.layoutStyle), 'layout');
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.activityBarLocation), 'layout');
 	const iconThemeSetting = defaults.get(WorkbenchConfiguration.iconTheme);
@@ -385,7 +393,7 @@ test('PreferencesEditor renders and updates registry-backed settings only', asyn
 	workbenchGroup.closest<HTMLElement>('.ash-tree-row')?.click();
 	assert.deepEqual(
 		[...root.querySelectorAll<HTMLElement>('[data-settings-category-id]')].map(element => element.dataset.settingsCategoryId),
-		['general', 'appearance', 'layout', 'editor'],
+		['general', 'appearance', 'layout', 'startup', 'editor'],
 	);
 	assert.equal(root.querySelector('[data-settings-category-id="appearance"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
 	assert.equal(root.querySelector('[data-settings-category-id="layout"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), true);

@@ -484,6 +484,7 @@ fn in_process_client_uses_session_first_contract_and_canonical_updates() {
                 thread_id: thread.thread_id.clone(),
                 expected_sequence: 1,
                 approval_mode: ash_protocol::ApprovalMode::default(),
+                model: None,
                 tool_mode: None,
                 input: vec![
                     InputItem::Text {

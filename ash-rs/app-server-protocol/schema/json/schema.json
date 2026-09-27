@@ -30838,6 +30838,16 @@
               "minItems": 1,
               "type": "array"
             },
+            "model": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ModelRef"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "threadId": {
               "$ref": "#/$defs/ThreadId"
             },

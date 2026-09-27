@@ -23,6 +23,7 @@ import { URI } from "../../../../../base/common/uri.js";
 import { Schemas } from "../../../../../base/common/network.js";
 import { ASH_REMOTE_SCHEME, createSshRemoteWorkspaceUri, getRemoteWorkspacePath } from '../../../../../platform/remote/common/remote.js';
 import { OPEN_CHAT_SETTINGS_COMMAND_ID } from "../../common/chat.js";
+import { OpenSettingsCommandId } from '../../../preferences/common/preferences.js';
 
 /** The presentation consumes one conversation model owned by its product. */
 export interface IChatWidgetModel extends IDisposable {
@@ -93,6 +94,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 					: this.model.executeServerCommand(invocation.name, invocation.argumentsText),
 			interrupt: () => this.model.interrupt(),
 			selectModel: (model) => this.model.selectModel(model),
+			openModelSettings: () => commandService.executeCommand(OpenSettingsCommandId),
 			resolveInteraction: (response) => this.model.resolveInteraction(response),
 		};
 		this.inputPart = this._register(new ChatInputPart(this.element, inputDelegate, contextMenuService, contextViewService, contextPickService, quickInputService));

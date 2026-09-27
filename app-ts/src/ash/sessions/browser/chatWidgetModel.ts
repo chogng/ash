@@ -43,6 +43,8 @@ export class ChatWidgetModel extends Disposable {
 	private subscriptionThreadId: ThreadId | undefined;
 	private subscriptionPromise: Promise<void> | undefined;
 	private _models: readonly ModelCatalogEntry[] = [];
+	private modelsError: string | undefined;
+	private readonly selectedModels = new Map<ThreadId, ModelRef>();
 	private _slashCommands: readonly SlashCommandDefinition[] = [];
 	private _skillSelectors: readonly SkillSelectorDefinition[] = [];
 	private _changeSets: readonly TurnChangeSetSummary[] = [];
@@ -90,6 +92,7 @@ export class ChatWidgetModel extends Disposable {
 			error: this._error,
 			canInterrupt: this.canInterrupt,
 			models: this._models,
+			modelsError: this.modelsError,
 			slashCommands: this._slashCommands,
 			skillSelectors: this._skillSelectors,
 			selectedModel: this.selectedModel,
@@ -140,7 +143,9 @@ export class ChatWidgetModel extends Disposable {
 	get selectedModel(): ModelRef | undefined {
 		return this.selection.kind === "untitled"
 			? this.selection.session.model
-			: this.selection.active.session.model ?? undefined;
+			: this.selectedModels.get(this.selection.active.threadId)
+				?? (this._thread?.threadId === this.selection.active.threadId ? this._thread.turns.at(-1)?.model ?? undefined : undefined)
+				?? this.selection.active.session.model ?? undefined;
 	}
 
 	get items(): readonly IChatListItem[] {
@@ -225,7 +230,8 @@ export class ChatWidgetModel extends Disposable {
 			this.sessionService.setUntitledSessionModel(this.selection.session.untitledSessionId, model);
 			return;
 		}
-		await this.sessionService.setModel(model);
+		this.selectedModels.set(this.selection.active.threadId, model);
+		this._onDidChange.fire();
 	}
 
 	async send(text: string, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[]): Promise<void> {
@@ -263,6 +269,7 @@ export class ChatWidgetModel extends Disposable {
 					threadId: active.threadId,
 					expectedSequence: thread.sequence,
 					text: input,
+					model: this.selectedModel,
 					contexts,
 					skills,
 				});
@@ -411,7 +418,12 @@ export class ChatWidgetModel extends Disposable {
 
 	private async loadCatalogs(): Promise<void> {
 		const [models, slashCommands, skillSelectors] = await Promise.allSettled([this.modelEntries(), this.chatService.listSlashCommands(), this.chatService.listSkillSelectors()]);
-		if (models.status === "fulfilled") this._models = models.value;
+		if (models.status === "fulfilled") {
+			this._models = models.value;
+			this.modelsError = undefined;
+		} else {
+			this.modelsError = String(models.reason);
+		}
 		if (slashCommands.status === "fulfilled") this._slashCommands = slashCommands.value;
 		if (skillSelectors.status === "fulfilled") this._skillSelectors = skillSelectors.value;
 		this._onDidChange.fire();
@@ -420,9 +432,11 @@ export class ChatWidgetModel extends Disposable {
 	private async loadModels(): Promise<void> {
 		try {
 			this._models = await this.modelEntries();
+			this.modelsError = undefined;
 			this._onDidChange.fire();
-		} catch {
-			// Keep the last valid catalog when a transient refresh fails.
+		} catch (error) {
+			this.modelsError = String(error);
+			this._onDidChange.fire();
 		}
 	}
 
@@ -677,6 +691,7 @@ export class ChatWidgetModel extends Disposable {
 			throw new Error("Untitled Chat Session was closed while its durable Session was being created");
 		}
 		this.selection = { kind: "session", active: created };
+		if (untitledSession.model) this.selectedModels.set(created.threadId, untitledSession.model);
 		this.sessionService.promoteUntitledSession(untitledSession.untitledSessionId, created);
 		await this.subscribe(created);
 		return created;

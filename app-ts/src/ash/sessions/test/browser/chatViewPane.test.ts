@@ -4,7 +4,7 @@ import { JSDOM } from "jsdom";
 import type { ModelRef, ServerNotification, Session as SessionDto, SessionCreateParams, Thread, ThreadTranscriptSnapshot } from "../../../platform/app-server/common/generated/index.js";
 import type { SessionMutationParams, SessionOperationInput } from "../../../platform/sessions/common/sessionApi.js";
 import type { IRendererHost } from "../../../platform/renderer/common/rendererHost.js";
-import { SubmenuAction, type IAction } from "../../../base/common/actions.js";
+import type { IAction } from "../../../base/common/actions.js";
 import { Emitter } from "../../../base/common/event.js";
 import { TAB_CLOSE_ACTION_ID } from "../../../base/browser/ui/tablist/tabList.js";
 import { Lxicon } from "../../../base/common/lxicons.js";
@@ -232,6 +232,8 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	const subscriptionModel = {
 		model: { provider: "openai", model: "gpt-5.6-sol" },
 		displayName: "GPT-5.6 Sol",
+		contextWindow: 128000,
+		supportedReasoningEfforts: ["low", "medium", "high"],
 	};
 	const fake = fakeApi({
 		sessions: [
@@ -289,7 +291,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		commands,
 		layout,
 		emptyChatContextPickService,
-		unavailableQuickInputService,
+		quickInput,
 		unavailableFileService,
 		testDialogs,
 		contextKeys,
@@ -441,10 +443,13 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	}
 	const firstChatPane = chatPanes[0]!;
 	firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.model'] button")?.click();
-	assert.deepEqual(shownContextMenuActions.map(action => action.label), ["openai"]);
-    const modelGroup = shownContextMenuActions[0];
-    assert.ok(modelGroup instanceof SubmenuAction);
-    assert.deepEqual(modelGroup.actions.map(action => action.label), ["GPT-5.6 Sol"]);
+	const modelPicker = dom.window.document.querySelector<HTMLElement>('.ash-quick-pick[role="dialog"]');
+	assert.equal(modelPicker?.getAttribute('aria-label'), 'Choose a chat model');
+	assert.equal(modelPicker?.querySelector<HTMLInputElement>('input')?.placeholder, 'Search models');
+	assert.match(modelPicker?.textContent ?? '', /GPT-5\.6 Sol/);
+	assert.match(modelPicker?.textContent ?? '', /128,000 context tokens/);
+	assert.match(modelPicker?.textContent ?? '', /Thinking: low, medium, high/);
+	dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick input')?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 	shownContextMenuActions = [];
 	firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.click();
 	assert.deepEqual(shownContextMenuActions, []);
@@ -1520,6 +1525,8 @@ interface FakeOptions {
 	readonly models?: readonly {
 		readonly model: ModelRef;
 		readonly displayName: string;
+		readonly contextWindow?: number | null;
+		readonly supportedReasoningEfforts?: readonly string[];
 	}[];
 	readonly configuredProviders?: readonly string[];
 	readonly providers?: readonly ModelProviderCredentialStatus[];
@@ -1654,6 +1661,37 @@ test("Chat picker retains the selected model when it is hidden", async () => {
 	assert.deepEqual(await chat.listModels(), []);
 	assert.deepEqual(model.models, [entry]);
 	assert.deepEqual(model.selectedModel, entry.model);
+});
+
+test("ChatWidgetModel selects models per chat without changing the global model", async () => {
+	const firstModel: ModelRef = { provider: "openai", model: "gpt-first" };
+	const secondModel: ModelRef = { provider: "openai", model: "gpt-second" };
+	const activeSession = {
+		...session("session-1", "thread-1"),
+		chats: [
+			{ threadId: "thread-1", origin: { type: "root" as const }, status: "active" as const },
+			{ threadId: "thread-2", origin: { type: "root" as const }, status: "active" as const },
+		],
+	};
+	let currentThread = thread();
+	const fake = fakeApi({ sessions: [activeSession], thread: () => currentThread });
+	using chat = createChatService(fake.api);
+	using sessions = new SessionsManagementService(fake.api);
+	using model = new ChatWidgetModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
+	await model.initialize();
+
+	await model.selectModel(firstModel);
+	await model.send("first chat");
+	currentThread = { ...thread(), threadId: "thread-2" };
+	await model.selectThread({ session: activeSession, threadId: "thread-2" });
+	await model.selectModel(secondModel);
+	await model.send("second chat");
+	currentThread = thread();
+	await model.selectThread({ session: activeSession, threadId: "thread-1" });
+
+	assert.deepEqual(fake.turnStartRequests.map(request => request.model), [firstModel, secondModel]);
+	assert.deepEqual(model.selectedModel, firstModel);
+	assert.equal(fake.modelRequests.length, 0);
 });
 
 test("ChatWidgetModel steers an active Turn instead of starting another Turn", async () => {
