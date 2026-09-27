@@ -1,6 +1,6 @@
 import "./media/multiEditorTabsControl.css";
 import { DataTransfers } from "../../../../base/browser/dnd.js";
-import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { addDisposableListener, isElement } from "../../../../base/browser/dom.js";
 import { observeResize } from "../../../../base/browser/observer.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
 import { assertDefined } from "../../../../base/common/types.js";
@@ -106,7 +106,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 
 	private showTabContextMenu(event: MouseEvent | KeyboardEvent): void {
 		const target = event.target;
-		if (!(target instanceof this.domNode.ownerDocument.defaultView!.Element)) {
+		if (!isElement(target)) {
 			return;
 		}
 		const tab = target.closest<HTMLElement>(".ash-tab");

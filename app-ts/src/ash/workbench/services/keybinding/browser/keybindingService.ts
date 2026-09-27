@@ -1,4 +1,5 @@
 import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { getWindows, onDidRegisterWindow, onWillUnregisterWindow } from "../../../../base/browser/window.js";
 import { disposableWindowTimeout } from "../../../../base/browser/scheduler.js";
 import {
 	isModifierKey,
@@ -19,6 +20,8 @@ import {
 } from "../../../../base/common/keybindings.js";
 import {
 	Disposable,
+	DisposableMap,
+	DisposableStore,
 	MutableDisposable,
 	type IDisposable,
 
@@ -74,7 +77,6 @@ export interface WorkbenchKeybindingServiceOptions {
 export class WorkbenchKeybindingService
 	extends Disposable
 	implements IKeybindingService, IKeyboardShortcutTroubleshootingService {
-	private readonly ownerDocument: Document;
 	private readonly ownerWindow: Window;
 	private readonly commandService: ICommandService;
 	private readonly contextKeyService: IContextKeyService;
@@ -88,6 +90,7 @@ export class WorkbenchKeybindingService
 	private readonly chordStatus = this._register(
 		new MutableDisposable<IStatusbarEntryAccessor>(),
 	);
+	private readonly windowListeners = this._register(new DisposableMap<Window, DisposableStore>());
 	private readonly inChordModeKey: IContextKey<boolean>;
 	private readonly isComposingKey: IContextKey<boolean>;
 	private currentEvents: KeybindingEvent[] = [];
@@ -103,7 +106,6 @@ export class WorkbenchKeybindingService
 		@INotificationService private readonly notificationService: INotificationService,
 	) {
 		super();
-		this.ownerDocument = options.ownerDocument;
 		const ownerWindow = options.ownerDocument.defaultView;
 		if (!ownerWindow) throw new Error("WorkbenchKeybindingService requires an owner window");
 		this.ownerWindow = ownerWindow;
@@ -136,45 +138,29 @@ export class WorkbenchKeybindingService
 			this.leaveChordMode();
 			this._onDidUpdateKeybindings.fire();
 		}));
-		this._register(addDisposableListener(
-			this.ownerDocument,
-			"keydown",
-			(event: KeyboardEvent) => this.dispatchEvent(event),
-			true,
-		));
-		this._register(addDisposableListener(
-			this.ownerDocument,
-			"keyup",
-			(event: KeyboardEvent) => this.dispatchKeyupEvent(event),
-			true,
-		));
-		this._register(addDisposableListener(
-			this.ownerDocument,
-			"compositionstart",
-			() => {
-				this.isComposingKey.set(true);
-				this.singleModifierCandidate = undefined;
-				this.leaveChordMode();
-			},
-			true,
-		));
-		this._register(addDisposableListener(
-			this.ownerDocument,
-			"compositionend",
-			() => this.isComposingKey.set(false),
-			true,
-		));
-		const targetWindow = this.ownerDocument.defaultView;
-		if (targetWindow) {
-			this._register(addDisposableListener(
-				targetWindow,
-				"blur",
-				() => {
-					this.singleModifierCandidate = undefined;
-					this.leaveChordMode();
-				},
-			));
-		}
+		this.attachWindow(this.ownerWindow);
+		for (const { window } of getWindows()) this.attachWindow(window);
+		this._register(onDidRegisterWindow(({ window }) => this.attachWindow(window)));
+		this._register(onWillUnregisterWindow(({ window }) => this.windowListeners.deleteAndDispose(window)));
+	}
+
+	private attachWindow(targetWindow: Window): void {
+		if (this.windowListeners.has(targetWindow)) return;
+		const listeners = new DisposableStore();
+		this.windowListeners.set(targetWindow, listeners);
+		const document = targetWindow.document;
+		listeners.add(addDisposableListener(document, "keydown", (event: KeyboardEvent) => this.dispatchEvent(event), true));
+		listeners.add(addDisposableListener(document, "keyup", (event: KeyboardEvent) => this.dispatchKeyupEvent(event), true));
+		listeners.add(addDisposableListener(document, "compositionstart", () => {
+			this.isComposingKey.set(true);
+			this.singleModifierCandidate = undefined;
+			this.leaveChordMode();
+		}, true));
+		listeners.add(addDisposableListener(document, "compositionend", () => this.isComposingKey.set(false), true));
+		listeners.add(addDisposableListener(targetWindow, "blur", () => {
+			this.singleModifierCandidate = undefined;
+			this.leaveChordMode();
+		}));
 	}
 
 	get inChordMode(): boolean {

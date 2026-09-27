@@ -1,4 +1,4 @@
-import { h, getActiveDocument } from '../../../../base/browser/dom.js';
+import { h, getActiveDocument, isHTMLElement } from '../../../../base/browser/dom.js';
 import { createFastDomNode, type FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
@@ -248,8 +248,8 @@ export class ViewZones extends ViewPart {
 	}
 
 	private validateZone(zone: IViewZone): void {
-		if (!zone || !(zone.domNode instanceof this.domNode.domNode.ownerDocument.defaultView!.HTMLElement)) {
-			throw new TypeError('Editor view zone requires a DOM root from the editor document');
+		if (!zone || !isHTMLElement(zone.domNode)) {
+			throw new TypeError('Editor view zone requires an HTML root');
 		}
 		if (!Number.isSafeInteger(zone.afterLineNumber) || zone.afterLineNumber < 0) {
 			throw new RangeError('Editor view zone line number must be a non-negative safe integer');

@@ -1,6 +1,6 @@
 import './findWidget.css';
 import '../../../../base/browser/ui/sash/sash.css';
-import { addDisposableListener, h, stopEvent } from '../../../../base/browser/dom.js';
+import { addDisposableListener, h, isHTMLElement, isNode, stopEvent } from '../../../../base/browser/dom.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { type IHoverLifecycleOptions } from '../../../../base/browser/ui/hover/hover.js';
 import { Sash, SashState } from '../../../../base/browser/ui/sash/sash.js';
@@ -403,7 +403,7 @@ export class FindWidget extends Disposable implements IOverlayWidget {
 	}
 	private onFocus(event: FocusEvent): void {
 		const target = event.target;
-		if (!(target instanceof this.root.ownerDocument.defaultView!.HTMLElement)) return;
+		if (!isHTMLElement(target)) return;
 		this.lastFocused = target;
 		if (target === this.findInput || target === this.replaceInput) this.replaceLastFocused = target === this.replaceInput;
 		this.widgetFocused.set(true);
@@ -411,7 +411,7 @@ export class FindWidget extends Disposable implements IOverlayWidget {
 		this.replaceFocused.set(target === this.replaceInput);
 	}
 	private onBlur(event: FocusEvent): void {
-		if (event.relatedTarget instanceof this.root.ownerDocument.defaultView!.Node && this.root.contains(event.relatedTarget)) return;
+		if (isNode(event.relatedTarget) && this.root.contains(event.relatedTarget)) return;
 		this.widgetFocused.set(false);
 		this.findFocused.set(false);
 		this.replaceFocused.set(false);

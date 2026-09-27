@@ -1,5 +1,5 @@
 import "./media/editorstatus.css";
-import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { addDisposableListener, h, isHTMLElement } from "../../../../base/browser/dom.js";
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
 import type { IWorkbenchContribution } from "../../../common/contributions.js";
@@ -44,18 +44,18 @@ export class EditorStatusContribution extends Disposable implements IWorkbenchCo
 	private showScreenReaderExplanation(): void {
 		if (this.explanation.value) return;
 		const doc = this.editorPart.domNode.ownerDocument;
-		const previousFocus = doc.activeElement instanceof doc.defaultView!.HTMLElement ? doc.activeElement : undefined;
+		const previousFocus = isHTMLElement(doc.activeElement) ? doc.activeElement : undefined;
 		const resources = new DisposableStore();
-		const dialog = doc.createElement("section");
+		const dialog = h(doc, "section");
 		dialog.className = "ash-screen-reader-explanation";
 		dialog.setAttribute("role", "dialog");
 		dialog.setAttribute("aria-labelledby", "ash-screen-reader-explanation-title");
-		const heading = doc.createElement("h2");
+		const heading = h(doc, "h2");
 		heading.id = "ash-screen-reader-explanation-title";
 		heading.textContent = "Screen reader mode is on";
-		const details = doc.createElement("p");
+		const details = h(doc, "p");
 		details.textContent = "Ash has adjusted editor interactions for a screen reader. You can change this in Settings under Screen reader optimization.";
-		const close = doc.createElement("button");
+		const close = h(doc, "button");
 		close.type = "button";
 		close.textContent = "Close";
 		dialog.append(heading, details, close);

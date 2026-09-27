@@ -97,30 +97,82 @@ export function createStyleSheet(
 	};
 }
 
-/**
- * Mirrors style and stylesheet-link elements into another document. The
- * returned registration owns both the clones and mutation tracking.
- */
+export interface IClonedDocumentStyles extends IDisposable {
+	readonly whenStylesHaveLoaded: Promise<void>;
+}
+
+/** Mirrors stylesheet nodes while retaining unchanged links and their loaded state. */
 export function cloneDocumentStyles(
 	sourceDocument: Document,
 	targetDocument: Document,
-): IDisposable {
+): IClonedDocumentStyles {
 	const store = new DisposableStore();
-	const clones = store.add(new DisposableStore());
+	const clones = new Map<HTMLStyleElement | HTMLLinkElement, HTMLStyleElement | HTMLLinkElement>();
+	const pendingLoads = new Set<Promise<void>>();
+	const finishLoads = new Map<HTMLLinkElement, () => void>();
+	const anchor = targetDocument.createComment('mirrored styles');
+	targetDocument.head.append(anchor);
+	const trackLinkLoad = (link: HTMLLinkElement): void => {
+		finishLoads.get(link)?.();
+		let finish!: () => void;
+		const loaded = new Promise<void>(resolve => {
+			finish = () => {
+				link.removeEventListener('load', finish);
+				link.removeEventListener('error', finish);
+				finishLoads.delete(link);
+				resolve();
+			};
+		});
+		finishLoads.set(link, finish);
+		pendingLoads.add(loaded);
+		void loaded.then(() => pendingLoads.delete(loaded));
+		link.addEventListener('load', finish);
+		link.addEventListener('error', finish);
+	};
+	const removeClone = (source: HTMLStyleElement | HTMLLinkElement): void => {
+		const clone = clones.get(source);
+		if (!clone) return;
+		if (clone.tagName === 'LINK') finishLoads.get(clone as HTMLLinkElement)?.();
+		clone.remove();
+		clones.delete(source);
+	};
+	store.add(toDisposable(() => {
+		for (const source of clones.keys()) removeClone(source);
+		anchor.remove();
+	}));
 	const synchronize = (): void => {
-		clones.clear();
-		const styles = sourceDocument.head.querySelectorAll<
-			HTMLStyleElement | HTMLLinkElement
-		>('style, link[rel="stylesheet"]');
+		const styles = [...sourceDocument.head.querySelectorAll<HTMLStyleElement | HTMLLinkElement>('style, link[rel="stylesheet"]')];
+		const live = new Set(styles);
+		for (const source of clones.keys()) if (!live.has(source)) removeClone(source);
 		for (const source of styles) {
-			const clone = source.cloneNode(true) as
-				HTMLStyleElement | HTMLLinkElement;
-			if (source.tagName === "LINK") {
-				(clone as HTMLLinkElement).href =
-					(source as HTMLLinkElement).href;
+			let clone = clones.get(source);
+			if (!clone) {
+				clone = source.cloneNode(true) as HTMLStyleElement | HTMLLinkElement;
+				clones.set(source, clone);
+				if (source.tagName === 'LINK') {
+					const link = clone as HTMLLinkElement;
+					trackLinkLoad(link);
+					link.href = (source as HTMLLinkElement).href;
+				}
+			} else {
+				for (const attribute of [...clone.attributes]) {
+					if (!source.hasAttribute(attribute.name)) clone.removeAttribute(attribute.name);
+				}
+				for (const attribute of [...source.attributes]) {
+					const value = attribute.name === 'href' && source.tagName === 'LINK' ? (source as HTMLLinkElement).href : attribute.value;
+					if (clone.getAttribute(attribute.name) !== value) {
+						if (attribute.name === 'href' && source.tagName === 'LINK') trackLinkLoad(clone as HTMLLinkElement);
+						clone.setAttribute(attribute.name, value);
+					}
+				}
+				if (source.tagName === 'STYLE' && clone.textContent !== source.textContent) clone.textContent = source.textContent;
 			}
-			targetDocument.head.append(clone);
-			clones.add(toDisposable(() => clone.remove()));
+		}
+		let next: Node = anchor;
+		for (let index = styles.length - 1; index >= 0; index--) {
+			const clone = clones.get(styles[index]!)!;
+			if (clone.nextSibling !== next) targetDocument.head.insertBefore(clone, next);
+			next = clone;
 		}
 	};
 	synchronize();
@@ -134,5 +186,9 @@ export function cloneDocumentStyles(
 			subtree: true,
 		},
 	));
-	return store;
+	return {
+		get whenStylesHaveLoaded() { return Promise.all([...pendingLoads]).then(() => undefined); },
+		dispose: () => store.dispose(),
+		[Symbol.dispose]: () => store.dispose(),
+	};
 }

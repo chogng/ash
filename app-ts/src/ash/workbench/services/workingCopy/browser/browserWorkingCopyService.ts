@@ -11,7 +11,6 @@ export class BrowserWorkingCopyService extends Disposable implements IWorkingCop
 	private readonly _onDidRegister = this._register(new Emitter<IWorkingCopy>());
 	private readonly _onDidUnregister = this._register(new Emitter<IWorkingCopy>());
 	private readonly _onDidChangeDirty = this._register(new Emitter<void>());
-	private lastHasDirtyWorkingCopies = false;
 
 	readonly onDidRegister = this._onDidRegister.event;
 	readonly onDidUnregister = this._onDidUnregister.event;
@@ -29,9 +28,9 @@ export class BrowserWorkingCopyService extends Disposable implements IWorkingCop
 		const copies = getOrSet(this.copies, key, new Set<IWorkingCopy>());
 		if (copies.has(workingCopy)) throw new Error(`Working copy is already registered: ${key}`);
 		copies.add(workingCopy);
-		this.dirtySubscriptions.set(workingCopy, workingCopy.onDidChangeDirty(() => this.publishDirtyChange()));
+		this.dirtySubscriptions.set(workingCopy, workingCopy.onDidChangeDirty(() => this._onDidChangeDirty.fire()));
 		this._onDidRegister.fire(workingCopy);
-		this.publishDirtyChange();
+		if (workingCopy.isDirty) this._onDidChangeDirty.fire();
 		let registered = true;
 		return toDisposable(() => {
 			if (!registered) return;
@@ -41,7 +40,7 @@ export class BrowserWorkingCopyService extends Disposable implements IWorkingCop
 			this.dirtySubscriptions.deleteAndDispose(workingCopy);
 			if (current.size === 0) this.copies.delete(key);
 			this._onDidUnregister.fire(workingCopy);
-			this.publishDirtyChange();
+			if (workingCopy.isDirty) this._onDidChangeDirty.fire();
 		});
 	}
 
@@ -55,13 +54,6 @@ export class BrowserWorkingCopyService extends Disposable implements IWorkingCop
 
 	getAll(): readonly IWorkingCopy[] {
 		return [...this.copies.values()].flatMap(copies => [...copies]);
-	}
-
-	private publishDirtyChange(): void {
-		const hasDirtyWorkingCopies = this.hasDirtyWorkingCopies;
-		if (hasDirtyWorkingCopies === this.lastHasDirtyWorkingCopies) return;
-		this.lastHasDirtyWorkingCopies = hasDirtyWorkingCopies;
-		this._onDidChangeDirty.fire();
 	}
 }
 

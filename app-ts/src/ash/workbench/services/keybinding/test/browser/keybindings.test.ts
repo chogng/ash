@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
+import { registerWindow } from "../../../../../base/browser/window.js";
 import { IME } from "../../../../../base/common/ime.js";
 import {
 	Keybinding,
@@ -238,6 +239,50 @@ test("browser service dispatches Ctrl+Shift+P with a shifted key value", async (
 	assert.equal(service.dispatchEvent(shortcut.event), true);
 	await executed;
 	assert.equal(shortcut.prevented, true);
+});
+
+test('registered auxiliary window dispatches workbench shortcuts until it closes', async () => {
+	using resources = new DisposableStore();
+	const main = new JSDOM('<!doctype html><body></body>');
+	const auxiliary = new JSDOM('<!doctype html><body><button>Editor</button></body>');
+	resources.add(toDisposable(() => main.window.close()));
+	resources.add(toDisposable(() => auxiliary.window.close()));
+	const registry = new KeybindingRegistry();
+	const commands = new CommandRegistry();
+	let executions = 0;
+	resources.add(commands.register('test.auxiliaryShortcut', () => { executions++; }));
+	resources.add(registry.registerKeybindingRule({
+		command: 'test.auxiliaryShortcut',
+		keybinding: Keybinding.single(logicalKey('p', { ctrlKey: true })),
+	}));
+	const contexts = resources.add(new ContextKeyService());
+	const keyboardLayout = resources.add(new BrowserKeyboardLayoutService({
+		navigator: fakeNavigator(),
+		operatingSystem: OperatingSystem.Windows,
+	}));
+	const services = resources.add(new ServiceContainer());
+	resources.add(new WorkbenchKeybindingService({
+		ownerDocument: main.window.document,
+		commandService: resources.add(new CommandService(services, commands)),
+		contextKeyService: contexts,
+		keyboardLayoutService: keyboardLayout,
+		registry,
+	}, resources.add(new BrowserNotificationService(main.window.document.body))));
+	const registration = resources.add(registerWindow(auxiliary.window as unknown as Window));
+	const button = auxiliary.window.document.querySelector('button')!;
+	const pressShortcut = (): void => {
+		const event = new auxiliary.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'p', code: 'KeyP', ctrlKey: true });
+		Object.defineProperty(event, 'keyCode', { value: 80 });
+		button.dispatchEvent(event);
+	};
+
+	pressShortcut();
+	await Promise.resolve();
+	assert.equal(executions, 1);
+	registration.dispose();
+	pressShortcut();
+	await Promise.resolve();
+	assert.equal(executions, 1);
 });
 
 test('failed keyboard command appears as a warning notification', async () => {

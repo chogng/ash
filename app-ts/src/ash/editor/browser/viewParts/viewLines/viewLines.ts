@@ -1,4 +1,5 @@
 import './viewLines.css';
+import { isHTMLElement } from '../../../../base/browser/dom.js';
 import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { CharCode } from '../../../../base/common/charCode.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
@@ -241,7 +242,7 @@ export class ViewLines extends ViewPart implements IViewLines {
 		const part = textElement === spanNode
 			? textElement.children[offset] ?? textElement.children[offset - 1]
 			: directChildOf(textElement, spanNode);
-		if (!(part instanceof row.ownerDocument.defaultView!.HTMLElement)) return null;
+		if (!isHTMLElement(part)) return null;
 		const partOffset = textElement === spanNode
 			? part === textElement.children[offset] ? 0 : part.textContent?.length ?? 0
 			: Math.min(offset, part.textContent?.length ?? 0);
@@ -448,7 +449,7 @@ function revealRange(event: ViewRevealRangeRequestEvent): Range | null {
 function readingContext(line: ViewLine): DomReadingContext {
 	const row = line.getDomNode();
 	const textElement = row.firstElementChild;
-	if (!(textElement instanceof row.ownerDocument.defaultView!.HTMLElement)) throw new Error('Rendered view line has no text element');
+	if (!isHTMLElement(textElement)) throw new Error('Rendered view line has no text element');
 	return new DomReadingContext(row, textElement);
 }
 

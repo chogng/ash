@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { AbstractDisposable, Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
 import { CONFIGURATION_CHANGED_CHANNEL } from '../../configuration/common/configurationIpc.js';
 import { configurationIpcRoutes, type ConfigurationMainService } from '../../configuration/electron-main/configurationMainService.js';
@@ -154,9 +154,18 @@ class ManagedWindowHost<TWindow extends IWorkbenchWindow<TWindow>> extends Dispo
 
 }
 
+class AuxiliaryWindowHost<TWindow extends IWorkbenchWindow<TWindow>> extends AbstractDisposable {
+	constructor(readonly window: TWindow) { super(); }
+
+	protected disposeCore(): void {
+		if (!this.window.isDestroyed()) this.window.destroy();
+	}
+}
+
 /** Owns window operations for the live Workbench windows of one Electron app. */
 export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> extends Disposable {
 	private readonly workbenchWindows = this._register(new DisposableMap<number, CodeWindow<TWindow>>());
+	private readonly auxiliaryWindows = this._register(new DisposableMap<number, AuxiliaryWindowHost<TWindow>>());
 	private readonly managedWindows = this._register(new DisposableMap<string, ManagedWindowHost<TWindow>>());
 	constructor(
 		private readonly getWindows: () => readonly TWindow[],
@@ -178,6 +187,17 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> exten
 			if (this.workbenchWindows.get(window.id) === host) this.workbenchWindows.deleteAndDispose(window.id);
 		});
 		return host;
+	}
+
+	public registerAuxiliaryWindow(window: TWindow): IDisposable {
+		this.assertNotDisposed();
+		const host = this.auxiliaryWindows.set(window.id, new AuxiliaryWindowHost(window));
+		window.once('closed', () => {
+			if (this.auxiliaryWindows.get(window.id) === host) this.auxiliaryWindows.deleteAndDispose(window.id);
+		});
+		return toDisposable(() => {
+			if (this.auxiliaryWindows.get(window.id) === host) this.auxiliaryWindows.deleteAndDispose(window.id);
+		});
 	}
 
 	public openManagedWindow(key: string, createWindow: (options: IWindowConstructorOptions & Pick<IWindowCreationOptions, 'title' | 'icon' | 'tabbingIdentifier'>) => TWindow, options: IManagedWindowOpenOptions<TWindow>, onDidClose: () => void): Promise<void> {
@@ -265,7 +285,7 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> exten
 	}
 
 	public perform(source: TWindow, operation: WindowOperation): void | number | boolean | readonly IWorkbenchWindowInfo[] | Promise<void> {
-		const windows = [...this.getWindows(), ...this.managedWindowValues()].filter(window => !window.isDestroyed());
+		const windows = [...this.getWindows(), ...this.managedWindowValues(), ...[...this.auxiliaryWindows].map(([, host]) => host.window)].filter(window => !window.isDestroyed());
 		if (!windows.includes(source)) throw new Error('Workbench window is closed');
 		switch (operation.kind) {
 			case 'list':

@@ -133,6 +133,28 @@ test('WindowsMainService owns Workbench window resources through close and app d
 	assert.deepEqual({ destroyed: next.win.isDestroyed(), released }, { destroyed: true, released: 2 });
 });
 
+test('WindowsMainService tracks auxiliary windows and releases them with their parent', () => {
+	const parent = new TestWindow(1, 'Workbench');
+	const child = new TestWindow(2, 'Editor');
+	using service = new WindowsMainService(() => [parent], async () => undefined);
+	const registration = service.registerAuxiliaryWindow(child);
+	assert.deepEqual(service.perform(parent, { kind: 'list' }), [
+		{ id: 1, title: 'Workbench', focused: false },
+		{ id: 2, title: 'Editor', focused: false },
+	]);
+	service.perform(parent, { kind: 'focus', windowId: child.id });
+	assert.deepEqual(child.calls, ['focus']);
+	registration.dispose();
+	assert.equal(child.isDestroyed(), true);
+	assert.deepEqual(service.perform(parent, { kind: 'list' }), [{ id: 1, title: 'Workbench', focused: false }]);
+
+	const next = new TestWindow(3, 'Editor');
+	service.registerAuxiliaryWindow(next);
+	service.perform(parent, { kind: 'closeOthers' });
+	assert.deepEqual(next.calls, ['close']);
+	assert.equal(next.isDestroyed(), true);
+});
+
 test('WindowsMainService owns an independent Sessions window after the Workbench closes', async () => {
 	const workbench = new TestWindow(1, 'Workbench');
 	using service = new WindowsMainService(() => [workbench], async () => undefined, 'win32');

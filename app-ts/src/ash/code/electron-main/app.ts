@@ -647,6 +647,25 @@ export class AshApplication extends Disposable {
 		const rendererEntry = this.resolveRendererEntry("workbench");
 
 		const windowDisposables = resources;
+		const auxiliaryWindows = windowDisposables.add(new DisposableMap<number, IDisposable>());
+		// Apply restored popup bounds before creation; Chromium ignores its position features here.
+		window.webContents.setWindowOpenHandler(details => {
+			if (details.url !== 'about:blank') return { action: 'allow' };
+			const features = new URLSearchParams(details.features.replaceAll(',', '&'));
+			const x = Number(features.get('x'));
+			const y = Number(features.get('y'));
+			const width = Number(features.get('width'));
+			const height = Number(features.get('height'));
+			if (!features.has('x') || !features.has('y') || !Number.isSafeInteger(x) || !Number.isSafeInteger(y) || !Number.isSafeInteger(width) || !Number.isSafeInteger(height)) return { action: 'allow' };
+			return { action: 'allow', overrideBrowserWindowOptions: { x, y, width, height } };
+		});
+		const onDidCreateWindow = (child: BrowserWindow, details: { readonly url: string }): void => {
+			if (details.url !== 'about:blank') return;
+			auxiliaryWindows.set(child.id, this.windowsMainService.registerAuxiliaryWindow(child));
+			child.once('closed', () => auxiliaryWindows.deleteAndDispose(child.id));
+		};
+		window.webContents.on('did-create-window', onDidCreateWindow);
+		windowDisposables.add(toDisposable(() => window.webContents.off('did-create-window', onDidCreateWindow)));
 		const workspaceHost = windowDisposables.add(new RendererWorkspaceHost(window.webContents));
 		windowDisposables.add(record.windowStateTracking);
 		const remoteTunnelService = new SshRemoteTunnelService({

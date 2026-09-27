@@ -1,4 +1,4 @@
-import { h, reset, fragment as createFragment } from "../../../../base/browser/dom.js";
+import { h, isHTMLElement, reset, fragment as createFragment } from "../../../../base/browser/dom.js";
 import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
 import { DomReadingContext } from './domReadingContext.js';
 import { RangeUtil } from './rangeUtil.js';
@@ -35,10 +35,10 @@ export class ViewLine {
 
 	public setDomNode(domNode: HTMLElement): void {
 		const textElement = domNode.firstElementChild;
-		if (!(textElement instanceof domNode.ownerDocument.defaultView!.HTMLSpanElement)) {
+		if (!isHTMLElement(textElement) || textElement.tagName !== 'SPAN') {
 			throw new TypeError('A view line DOM node must own one text span');
 		}
-		this._renderedViewLine = new RenderedViewLine(new FastDomNode(domNode), textElement, this._renderedViewLine.tabSize);
+		this._renderedViewLine = new RenderedViewLine(new FastDomNode(domNode), textElement as HTMLSpanElement, this._renderedViewLine.tabSize);
 		this._isMaybeInvalid = true;
 	}
 

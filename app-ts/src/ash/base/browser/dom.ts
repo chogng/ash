@@ -1,7 +1,7 @@
 import { IntervalTimer, type IntervalTimerContext } from "../common/async.js";
 import { Emitter, type Event as BaseEvent } from "../common/event.js";
 import { Disposable, type IDisposable, toDisposable } from "../common/lifecycle.js";
-import { type BrowserWindow, getWindows, isWindow, mainWindow } from "./window.js";
+import { type BrowserWindow, getWindowId, getWindows, isWindow, mainWindow } from "./window.js";
 
 type DomListenerOptions = boolean | AddEventListenerOptions;
 type DomChild = Node | string;
@@ -222,7 +222,7 @@ export function getDocument(source?: Node | Document | UIEvent | Window | null):
 export function $<T extends HTMLElement>(description: string, attrs?: { [key: string]: any }, ...children: Array<Node | string>): T {
 	const match = /^([a-zA-Z][\w-]*)?(?:#([\w-]+))?((?:\.[\w-]+)*)$/.exec(description);
 	if (!match) throw new Error(`Invalid DOM description '${description}'`);
-	const result = getActiveDocument().createElement(match[1] || 'div') as T;
+	const result = mainWindow.document.createElement(match[1] || 'div') as T;
 	if (match[2]) result.id = match[2];
 	if (match[3]) result.className = match[3].slice(1).replace(/\./g, ' ');
 	for (const [name, value] of Object.entries(attrs ?? {})) {
@@ -381,11 +381,10 @@ export function isNode(value: unknown): value is Node {
 	if (typeof value !== "object" || value === null) {
 		return false;
 	}
+	// Adoption changes ownerDocument without changing the node's constructor.
+	if (typeof Node !== "undefined" && value instanceof Node) return true;
 	const nodeConstructor = getNodeConstructor(value);
-	if (nodeConstructor) {
-		return value instanceof nodeConstructor;
-	}
-	return typeof Node !== "undefined" && value instanceof Node;
+	return nodeConstructor !== undefined && value instanceof nodeConstructor;
 }
 
 /** Cross-realm Element guard. */
@@ -398,6 +397,7 @@ export function isHTMLElement(value: unknown): value is HTMLElement {
 	if (!isElement(value)) {
 		return false;
 	}
+	if (typeof HTMLElement !== "undefined" && value instanceof HTMLElement) return true;
 	const htmlElementConstructor = value.ownerDocument?.defaultView?.HTMLElement;
 	return typeof htmlElementConstructor === "function"
 		? value instanceof htmlElementConstructor
@@ -461,7 +461,7 @@ type HtmlElementForTag<TTag extends string> =
 	TTag extends keyof HTMLElementTagNameMap ? HTMLElementTagNameMap[TTag]
 		: HTMLElement;
 
-/** Creates one HTML element in the supplied document. */
+/** Creates elements in the main realm when hosted by another registered window. */
 export function h<TTag extends string>(
 	ownerDocument: Document,
 	tag: TTag,
@@ -469,7 +469,7 @@ export function h<TTag extends string>(
 	...children: readonly DomTreeChild[]
 ): HtmlElementForTag<TTag> {
 	const args = splitElementArguments(optionsOrChild, children);
-	const element = ownerDocument.createElement(tag) as HtmlElementForTag<TTag>;
+	const element = creationDocument(ownerDocument).createElement(tag) as HtmlElementForTag<TTag>;
 	applyElementOptions(element, args.options);
 	appendDomChildren(element, args.children);
 	args.options.ref?.(element);
@@ -484,7 +484,7 @@ export function svg<K extends keyof SVGElementTagNameMap>(
 	...children: readonly DomTreeChild[]
 ): SVGElementTagNameMap[K] {
 	const args = splitElementArguments(optionsOrChild, children);
-	const element = ownerDocument.createElementNS(
+	const element = creationDocument(ownerDocument).createElementNS(
 		"http://www.w3.org/2000/svg",
 		tag,
 	);
@@ -499,7 +499,7 @@ export function text(
 	ownerDocument: Document,
 	value: string | number,
 ): Text {
-	return ownerDocument.createTextNode(String(value));
+	return creationDocument(ownerDocument).createTextNode(String(value));
 }
 
 /** Creates a document fragment containing the supplied children. */
@@ -507,9 +507,16 @@ export function fragment(
 	ownerDocument: Document,
 	...children: readonly DomTreeChild[]
 ): DocumentFragment {
-	const result = ownerDocument.createDocumentFragment();
+	const result = creationDocument(ownerDocument).createDocumentFragment();
 	appendDomChildren(result, children);
 	return result;
+}
+
+function creationDocument(ownerDocument: Document): Document {
+	const targetWindow = ownerDocument.defaultView;
+	return targetWindow && targetWindow !== mainWindow && getWindowId(targetWindow) !== undefined
+		? mainWindow.document
+		: ownerDocument;
 }
 
 function applyElementOptions<TElement extends HTMLElement | SVGElement>(

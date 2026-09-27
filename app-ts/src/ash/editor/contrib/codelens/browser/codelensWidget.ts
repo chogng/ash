@@ -1,5 +1,5 @@
 import './codelensWidget.css';
-import { addDisposableListener, h } from '../../../../base/browser/dom.js';
+import { addDisposableListener, h, isHTMLElement } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { type IViewZone } from '../../../browser/editorBrowser.js';
@@ -41,7 +41,7 @@ export class CodeLensWidget extends Disposable {
 		this._register(toDisposable(() => viewport.changeViewZones(accessor => accessor.removeZone(this.viewZoneId))));
 		this._register(addDisposableListener<MouseEvent>(this.domNode, 'click', event => {
 			const button = (event.target as Element | null)?.closest<HTMLButtonElement>('.stanza-editor-codelens-command');
-			if (!(button instanceof this.domNode.ownerDocument.defaultView!.HTMLButtonElement) || button.parentElement !== this.domNode || !this.executeCommand) return;
+			if (!isHTMLElement(button) || button.tagName !== 'BUTTON' || button.parentElement !== this.domNode || !this.executeCommand) return;
 			const command = this.currentCommands[Number(button.dataset.commandIndex)];
 			if (command) this.executeCommand(command);
 		}));
@@ -119,8 +119,8 @@ export class CodeLensWidget extends Disposable {
 			const element = h(this.domNode.ownerDocument, this.executeCommand && command.id.length > 0 ? 'button' : 'span');
 			element.className = 'stanza-editor-codelens-command';
 			element.textContent = command.title.trim();
-			if (element instanceof this.domNode.ownerDocument.defaultView!.HTMLButtonElement) {
-				element.type = 'button';
+			if (element.tagName === 'BUTTON') {
+				(element as HTMLButtonElement).type = 'button';
 				element.dataset.commandIndex = String(index);
 			}
 			children.push(element);

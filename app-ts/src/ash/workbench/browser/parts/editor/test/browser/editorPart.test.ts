@@ -34,7 +34,9 @@ import { ContextKeyService } from "../../../../../../platform/contextkey/browser
 import { ServiceContainer } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { highContrastDarkColorTheme, lightColorTheme } from '../../../../../../platform/theme/common/colorTheme.js';
 import { IThemeService } from '../../../../../../platform/theme/common/themeService.js';
+import { IStorageService } from '../../../../../../platform/storage/common/storage.js';
 import { TestThemeService } from '../../../../../../platform/theme/test/common/testThemeService.js';
+import { BrowserStorageService } from '../../../../../../workbench/services/storage/browser/storageService.js';
 import { CommandService } from '../../../../../../workbench/services/commands/common/commandService.js';
 import { IHistoryService } from '../../../../../../workbench/services/history/common/history.js';
 import type {
@@ -1473,16 +1475,20 @@ test('EditorParts replaces an untitled resource in every group and window', asyn
 });
 
 test("BrowserAuxiliaryWindowService opens, registers, mirrors styles, and releases a popup", async () => {
-	const opener = new JSDOM("<!doctype html><head><style>.mirrored { color: red; }</style></head><body></body>");
+	const opener = new JSDOM("<!doctype html><head><style>.mirrored { color: red; }</style></head><body></body>", { url: 'https://ash.test/' });
 	const popup = new JSDOM("<!doctype html><body></body>", { url: "https://ash.test/auxiliary" });
+	const reopenedPopup = new JSDOM("<!doctype html><body></body>", { url: "https://ash.test/auxiliary" });
+	let nextPopup = popup;
+	let openFeatures = '';
 	opener.window.document.documentElement.lang = "zh-Hans";
 	const root = opener.window.document.createElement("main");
 	root.className = "ash-workbench ash-reduce-motion";
 	root.setAttribute("data-os", "windows");
+	root.setAttribute("data-runtime", "electron");
 	opener.window.document.body.append(root);
 	Object.defineProperty(opener.window, "open", {
 		configurable: true,
-		value: () => popup.window,
+		value: (_url: string, _target: string, features: string) => { openFeatures = features; return nextPopup.window; },
 	});
 	const missingServices = new ServiceContainer();
 	assert.throws(() => missingServices.createInstance(BrowserAuxiliaryWindowService, opener.window as unknown as Window, root), /themeService/);
@@ -1490,6 +1496,8 @@ test("BrowserAuxiliaryWindowService opens, registers, mirrors styles, and releas
 	const services = new ServiceContainer();
 	const themes = new TestThemeService(lightColorTheme);
 	services.registerInstance(IThemeService, themes);
+	const storage = new BrowserStorageService({ ownerWindow: opener.window as unknown as Window, applicationId: 'ash-test', workspaceId: 'workspace', backend: opener.window.localStorage, flushInterval: 0 });
+	services.registerInstance(IStorageService, storage);
 	const service = services.createInstance(BrowserAuxiliaryWindowService, opener.window as unknown as Window, root);
 	const auxiliary = await service.open({ title: "Detached Editor", width: 640, height: 480 });
 
@@ -1509,6 +1517,15 @@ test("BrowserAuxiliaryWindowService opens, registers, mirrors styles, and releas
 	assert.equal(auxiliary.container.style.getPropertyValue("--ash-editor-background"), lightColorTheme.getColorCss("editor.background"));
 	assert.match(popup.window.document.head.textContent ?? "", /mirrored/);
 	assert.equal(service.getWindow(auxiliary.id), auxiliary);
+	Object.defineProperties(popup.window, {
+		outerWidth: { configurable: true, value: 740 },
+		outerHeight: { configurable: true, value: 560 },
+		innerWidth: { configurable: true, value: 724 },
+		innerHeight: { configurable: true, value: 521 },
+		screenX: { configurable: true, value: 120 },
+		screenY: { configurable: true, value: 90 },
+	});
+	assert.deepEqual(auxiliary.createState(), { width: 740, height: 560, left: 120, top: 90, featureWidthOffset: 0, featureHeightOffset: 0 });
 	let closed = 0;
 	auxiliary.onDidClose(() => closed++);
 	themes.setColorTheme(highContrastDarkColorTheme);
@@ -1523,11 +1540,17 @@ test("BrowserAuxiliaryWindowService opens, registers, mirrors styles, and releas
 	auxiliary[Symbol.dispose]();
 	assert.equal(closed, 1);
 	assert.equal(service.getWindow(auxiliary.id), undefined);
+	nextPopup = reopenedPopup;
+	const reopened = await service.open();
+	assert.match(openFeatures, /width=740,height=560,x=120,y=90/);
+	reopened[Symbol.dispose]();
 	service.dispose();
 	themes.dispose();
+	storage.dispose();
 	services.dispose();
 	opener.window.close();
 	popup.window.close();
+	reopenedPopup.window.close();
 });
 
 class TestEditorPane extends Disposable implements IEditorPane {
@@ -1723,6 +1746,10 @@ class TestAuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
 
 	layout(): void {
 		this.layoutEmitter.fire({ width: 800, height: 600 });
+	}
+
+	createState(): { width: number; height: number; left: number; top: number; featureWidthOffset: number; featureHeightOffset: number } {
+		return { width: 800, height: 600, left: 0, top: 0, featureWidthOffset: 0, featureHeightOffset: 0 };
 	}
 
 	requestBeforeUnload(): string | undefined {
