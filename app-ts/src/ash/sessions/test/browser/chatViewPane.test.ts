@@ -442,14 +442,18 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.send'] button")?.disabled, true);
 	}
 	const firstChatPane = chatPanes[0]!;
-	firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.model'] button")?.click();
-	const modelPicker = dom.window.document.querySelector<HTMLElement>('.ash-quick-pick[role="dialog"]');
+	const modelButton = firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.model'] button");
+	modelButton?.click();
+	const modelPicker = dom.window.document.querySelector<HTMLElement>('.ash-chat-model-picker[role="dialog"]');
 	assert.equal(modelPicker?.getAttribute('aria-label'), 'Choose a chat model');
+	assert.equal(modelPicker?.closest('.ash-context-view')?.parentElement, contextViewService.container);
+	assert.equal(modelButton?.getAttribute('aria-expanded'), 'true');
 	assert.equal(modelPicker?.querySelector<HTMLInputElement>('input')?.placeholder, 'Search models');
 	assert.match(modelPicker?.textContent ?? '', /GPT-5\.6 Sol/);
 	assert.match(modelPicker?.textContent ?? '', /128,000 context tokens/);
 	assert.match(modelPicker?.textContent ?? '', /Thinking: low, medium, high/);
-	dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick input')?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+	modelPicker?.querySelector<HTMLInputElement>('input')?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+	assert.equal(modelButton?.getAttribute('aria-expanded'), 'false');
 	shownContextMenuActions = [];
 	firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.click();
 	assert.deepEqual(shownContextMenuActions, []);

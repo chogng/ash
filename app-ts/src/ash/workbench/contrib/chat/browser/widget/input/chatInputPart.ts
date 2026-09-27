@@ -315,7 +315,7 @@ export class ChatInputPart extends Disposable {
 				getModelsError: () => this.state.modelsError,
 				selectModel: model => this.delegate.selectModel(model),
 				openSettings: () => this.delegate.openModelSettings(),
-			}, this.quickInputService);
+			}, contextViewService);
 		}
 		if (action instanceof SelectorAction) {
 			return new ChatInputModeSelectorViewItem(action, contextViewService, () => this.renderToolbarActions());

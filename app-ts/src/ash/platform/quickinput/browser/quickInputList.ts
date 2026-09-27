@@ -32,11 +32,12 @@ export class QuickInputList<TItem extends IQuickPickItem>
 			this._onDidChangeActive.event;
 	readonly onDidTriggerItemButton = this.buttonEmitter.event;
 
-	constructor(container: HTMLElement) {
+	constructor(container: HTMLElement, presentation: 'quickPick' | 'menu' = 'quickPick') {
 		super();
 		const ownerDocument = container.ownerDocument;
 		this.element = h(ownerDocument, "div");
-		this.element.className = "ash-quick-pick-list";
+		this.element.className = 'ash-quick-pick-list';
+		if (presentation === 'menu') this.element.classList.add('ash-quick-pick-list-menu');
 		this._register(toDisposable(() => this.element.remove()));
 		container.append(this.element);
 

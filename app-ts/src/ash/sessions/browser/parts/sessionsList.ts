@@ -125,7 +125,7 @@ class SessionListItem extends AbstractDisposable {
 		const avatar = h(ownerDocument, 'span');
 		avatar.className = 'ash-sessions-list-avatar';
 		avatar.setAttribute('aria-hidden', 'true');
-		appendIcon(Lxicon.chat, avatar);
+		appendIcon(Lxicon.chat4, avatar);
 		this.label = h(ownerDocument, 'span');
 		this.label.className = 'ash-sessions-list-label';
 		this.domNode.append(avatar, this.label);

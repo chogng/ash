@@ -33,10 +33,14 @@ mod artwork {
     pub(crate) const BROWSER_WEB: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/browser-web.svg"));
     pub(crate) const CALENDAR: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/calendar.svg"));
     pub(crate) const CHART: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/chart.svg"));
-    pub(crate) const CHAT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/chat.svg"));
+    pub(crate) const CHAT_1: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/chat-1.svg"));
+    pub(crate) const CHAT_1_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/chat-1-filled.svg"));
     pub(crate) const CHAT_2: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/chat-2.svg"));
     pub(crate) const CHAT_2_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/chat-2-filled.svg"));
-    pub(crate) const CHAT_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/chat-filled.svg"));
+    pub(crate) const CHAT_3: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/chat-3.svg"));
+    pub(crate) const CHAT_3_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/chat-3-filled.svg"));
+    pub(crate) const CHAT_4: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/chat-4.svg"));
+    pub(crate) const CHAT_4_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/chat-4-filled.svg"));
     pub(crate) const CHECK: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/check.svg"));
     pub(crate) const CHEVRON_DOWN: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/chevron-down.svg"));
     pub(crate) const CHEVRON_LEFT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/chevron-left.svg"));
@@ -70,6 +74,8 @@ mod artwork {
     pub(crate) const DEVICE_MOBILE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/device-mobile.svg"));
     pub(crate) const DIAGNOSTICS: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/diagnostics.svg"));
     pub(crate) const DIFF: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/diff.svg"));
+    pub(crate) const DIFF_MULTIPLE_1: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/diff-multiple-1.svg"));
+    pub(crate) const DIFF_MULTIPLE_2: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/diff-multiple-2.svg"));
     pub(crate) const DISCARD: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/discard.svg"));
     pub(crate) const DOCX: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/docx.svg"));
     pub(crate) const DOCX_BLUE: IconDefinition = IconDefinition::multicolor(include_bytes!("../../../resources/icons/docx-blue.svg"));
@@ -130,12 +136,15 @@ mod artwork {
     pub(crate) const LETTER_T: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/letter-t.svg"));
     pub(crate) const LIBRARY: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/library.svg"));
     pub(crate) const LIBRARY_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/library-filled.svg"));
+    pub(crate) const LIGHTING_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/lighting-filled.svg"));
     pub(crate) const LIGHTNING: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/lightning.svg"));
     pub(crate) const LIGHTNING_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/lightning-filled.svg"));
     pub(crate) const LINK_EXTERNAL: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/link-external.svg"));
     pub(crate) const LIST_FILTER: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/list-filter.svg"));
     pub(crate) const LIST_UNORDERED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/list-unordered.svg"));
     pub(crate) const MENU: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/menu.svg"));
+    pub(crate) const MIC: IconDefinition = IconDefinition::multicolor(include_bytes!("../../../resources/icons/mic.svg"));
+    pub(crate) const MIC_FILLED: IconDefinition = IconDefinition::multicolor(include_bytes!("../../../resources/icons/mic-filled.svg"));
     pub(crate) const MODEL: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/model.svg"));
     pub(crate) const MODEL_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/model-filled.svg"));
     pub(crate) const NEW_FILE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/new-file.svg"));
@@ -235,10 +244,14 @@ pub mod icons {
     pub const BROWSER_WEB: Icon = Icon::new(IconId::new("browser-web"), artwork::BROWSER_WEB);
     pub const CALENDAR: Icon = Icon::new(IconId::new("calendar"), artwork::CALENDAR);
     pub const CHART: Icon = Icon::new(IconId::new("chart"), artwork::CHART);
-    pub const CHAT: Icon = Icon::new(IconId::new("chat"), artwork::CHAT);
+    pub const CHAT_1: Icon = Icon::new(IconId::new("chat-1"), artwork::CHAT_1);
+    pub const CHAT_1_FILLED: Icon = Icon::new(IconId::new("chat-1-filled"), artwork::CHAT_1_FILLED);
     pub const CHAT_2: Icon = Icon::new(IconId::new("chat-2"), artwork::CHAT_2);
     pub const CHAT_2_FILLED: Icon = Icon::new(IconId::new("chat-2-filled"), artwork::CHAT_2_FILLED);
-    pub const CHAT_FILLED: Icon = Icon::new(IconId::new("chat-filled"), artwork::CHAT_FILLED);
+    pub const CHAT_3: Icon = Icon::new(IconId::new("chat-3"), artwork::CHAT_3);
+    pub const CHAT_3_FILLED: Icon = Icon::new(IconId::new("chat-3-filled"), artwork::CHAT_3_FILLED);
+    pub const CHAT_4: Icon = Icon::new(IconId::new("chat-4"), artwork::CHAT_4);
+    pub const CHAT_4_FILLED: Icon = Icon::new(IconId::new("chat-4-filled"), artwork::CHAT_4_FILLED);
     pub const CHECK: Icon = Icon::new(IconId::new("check"), artwork::CHECK);
     pub const CHEVRON_DOWN: Icon = Icon::new(IconId::new("chevron-down"), artwork::CHEVRON_DOWN);
     pub const CHEVRON_LEFT: Icon = Icon::new(IconId::new("chevron-left"), artwork::CHEVRON_LEFT);
@@ -272,6 +285,8 @@ pub mod icons {
     pub const DEVICE_MOBILE: Icon = Icon::new(IconId::new("device-mobile"), artwork::DEVICE_MOBILE);
     pub const DIAGNOSTICS: Icon = Icon::new(IconId::new("diagnostics"), artwork::DIAGNOSTICS);
     pub const DIFF: Icon = Icon::new(IconId::new("diff"), artwork::DIFF);
+    pub const DIFF_MULTIPLE_1: Icon = Icon::new(IconId::new("diff-multiple-1"), artwork::DIFF_MULTIPLE_1);
+    pub const DIFF_MULTIPLE_2: Icon = Icon::new(IconId::new("diff-multiple-2"), artwork::DIFF_MULTIPLE_2);
     pub const DISCARD: Icon = Icon::new(IconId::new("discard"), artwork::DISCARD);
     pub const DOCX: Icon = Icon::new(IconId::new("docx"), artwork::DOCX);
     pub const DOCX_BLUE: Icon = Icon::new(IconId::new("docx-blue"), artwork::DOCX_BLUE);
@@ -332,12 +347,15 @@ pub mod icons {
     pub const LETTER_T: Icon = Icon::new(IconId::new("letter-t"), artwork::LETTER_T);
     pub const LIBRARY: Icon = Icon::new(IconId::new("library"), artwork::LIBRARY);
     pub const LIBRARY_FILLED: Icon = Icon::new(IconId::new("library-filled"), artwork::LIBRARY_FILLED);
+    pub const LIGHTING_FILLED: Icon = Icon::new(IconId::new("lighting-filled"), artwork::LIGHTING_FILLED);
     pub const LIGHTNING: Icon = Icon::new(IconId::new("lightning"), artwork::LIGHTNING);
     pub const LIGHTNING_FILLED: Icon = Icon::new(IconId::new("lightning-filled"), artwork::LIGHTNING_FILLED);
     pub const LINK_EXTERNAL: Icon = Icon::new(IconId::new("link-external"), artwork::LINK_EXTERNAL);
     pub const LIST_FILTER: Icon = Icon::new(IconId::new("list-filter"), artwork::LIST_FILTER);
     pub const LIST_UNORDERED: Icon = Icon::new(IconId::new("list-unordered"), artwork::LIST_UNORDERED);
     pub const MENU: Icon = Icon::new(IconId::new("menu"), artwork::MENU);
+    pub const MIC: Icon = Icon::new(IconId::new("mic"), artwork::MIC);
+    pub const MIC_FILLED: Icon = Icon::new(IconId::new("mic-filled"), artwork::MIC_FILLED);
     pub const MODEL: Icon = Icon::new(IconId::new("model"), artwork::MODEL);
     pub const MODEL_FILLED: Icon = Icon::new(IconId::new("model-filled"), artwork::MODEL_FILLED);
     pub const NEW_FILE: Icon = Icon::new(IconId::new("new-file"), artwork::NEW_FILE);
@@ -433,10 +451,14 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::BROWSER_WEB,
     icons::CALENDAR,
     icons::CHART,
-    icons::CHAT,
+    icons::CHAT_1,
+    icons::CHAT_1_FILLED,
     icons::CHAT_2,
     icons::CHAT_2_FILLED,
-    icons::CHAT_FILLED,
+    icons::CHAT_3,
+    icons::CHAT_3_FILLED,
+    icons::CHAT_4,
+    icons::CHAT_4_FILLED,
     icons::CHECK,
     icons::CHEVRON_DOWN,
     icons::CHEVRON_LEFT,
@@ -470,6 +492,8 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::DEVICE_MOBILE,
     icons::DIAGNOSTICS,
     icons::DIFF,
+    icons::DIFF_MULTIPLE_1,
+    icons::DIFF_MULTIPLE_2,
     icons::DISCARD,
     icons::DOCX,
     icons::DOCX_BLUE,
@@ -530,12 +554,15 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::LETTER_T,
     icons::LIBRARY,
     icons::LIBRARY_FILLED,
+    icons::LIGHTING_FILLED,
     icons::LIGHTNING,
     icons::LIGHTNING_FILLED,
     icons::LINK_EXTERNAL,
     icons::LIST_FILTER,
     icons::LIST_UNORDERED,
     icons::MENU,
+    icons::MIC,
+    icons::MIC_FILLED,
     icons::MODEL,
     icons::MODEL_FILLED,
     icons::NEW_FILE,
@@ -632,10 +659,14 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("browser-web", artwork::BROWSER_WEB),
     ("calendar", artwork::CALENDAR),
     ("chart", artwork::CHART),
-    ("chat", artwork::CHAT),
+    ("chat-1", artwork::CHAT_1),
+    ("chat-1-filled", artwork::CHAT_1_FILLED),
     ("chat-2", artwork::CHAT_2),
     ("chat-2-filled", artwork::CHAT_2_FILLED),
-    ("chat-filled", artwork::CHAT_FILLED),
+    ("chat-3", artwork::CHAT_3),
+    ("chat-3-filled", artwork::CHAT_3_FILLED),
+    ("chat-4", artwork::CHAT_4),
+    ("chat-4-filled", artwork::CHAT_4_FILLED),
     ("check", artwork::CHECK),
     ("chevron-down", artwork::CHEVRON_DOWN),
     ("chevron-left", artwork::CHEVRON_LEFT),
@@ -669,6 +700,8 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("device-mobile", artwork::DEVICE_MOBILE),
     ("diagnostics", artwork::DIAGNOSTICS),
     ("diff", artwork::DIFF),
+    ("diff-multiple-1", artwork::DIFF_MULTIPLE_1),
+    ("diff-multiple-2", artwork::DIFF_MULTIPLE_2),
     ("discard", artwork::DISCARD),
     ("docx", artwork::DOCX),
     ("docx-blue", artwork::DOCX_BLUE),
@@ -729,12 +762,15 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("letter-t", artwork::LETTER_T),
     ("library", artwork::LIBRARY),
     ("library-filled", artwork::LIBRARY_FILLED),
+    ("lighting-filled", artwork::LIGHTING_FILLED),
     ("lightning", artwork::LIGHTNING),
     ("lightning-filled", artwork::LIGHTNING_FILLED),
     ("link-external", artwork::LINK_EXTERNAL),
     ("list-filter", artwork::LIST_FILTER),
     ("list-unordered", artwork::LIST_UNORDERED),
     ("menu", artwork::MENU),
+    ("mic", artwork::MIC),
+    ("mic-filled", artwork::MIC_FILLED),
     ("model", artwork::MODEL),
     ("model-filled", artwork::MODEL_FILLED),
     ("new-file", artwork::NEW_FILE),

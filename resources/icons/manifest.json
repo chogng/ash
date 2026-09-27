@@ -127,8 +127,13 @@
       "rendering": "symbolic"
     },
     {
-      "id": "chat",
-      "file": "chat.svg",
+      "id": "chat-1",
+      "file": "chat-1.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "chat-1-filled",
+      "file": "chat-1-filled.svg",
       "rendering": "symbolic"
     },
     {
@@ -142,8 +147,23 @@
       "rendering": "symbolic"
     },
     {
-      "id": "chat-filled",
-      "file": "chat-filled.svg",
+      "id": "chat-3",
+      "file": "chat-3.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "chat-3-filled",
+      "file": "chat-3-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "chat-4",
+      "file": "chat-4.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "chat-4-filled",
+      "file": "chat-4-filled.svg",
       "rendering": "symbolic"
     },
     {
@@ -309,6 +329,16 @@
     {
       "id": "diff",
       "file": "diff.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "diff-multiple-1",
+      "file": "diff-multiple-1.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "diff-multiple-2",
+      "file": "diff-multiple-2.svg",
       "rendering": "symbolic"
     },
     {
@@ -612,6 +642,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "lighting-filled",
+      "file": "lighting-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "lightning",
       "file": "lightning.svg",
       "rendering": "symbolic"
@@ -640,6 +675,16 @@
       "id": "menu",
       "file": "menu.svg",
       "rendering": "symbolic"
+    },
+    {
+      "id": "mic",
+      "file": "mic.svg",
+      "rendering": "multicolor"
+    },
+    {
+      "id": "mic-filled",
+      "file": "mic-filled.svg",
+      "rendering": "multicolor"
     },
     {
       "id": "model",

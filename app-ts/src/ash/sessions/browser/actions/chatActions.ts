@@ -13,7 +13,7 @@ registerAction2(class OpenChatAction extends Action2 {
 		super({
 			id: OPEN_CHAT_COMMAND_ID,
 			title: "Open Chat",
-			icon: Lxicon.chat,
+			icon: Lxicon.chat4,
 			f1: true,
 		});
 	}

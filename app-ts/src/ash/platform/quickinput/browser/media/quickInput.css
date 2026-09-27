@@ -83,12 +83,27 @@
   background: var(--ash-list-active-selection-background);
 }
 
+.ash-quick-pick-list-menu .ash-list-row.is-active {
+  color: var(--ash-menu-selection-foreground);
+  background: var(--ash-menu-selection-background);
+}
+
 .ash-quick-pick-row-text {
   display: flex;
   min-width: 0;
   flex: 1 1 auto;
   align-items: baseline;
   gap: 8px;
+}
+
+.ash-quick-pick-list-menu .ash-quick-pick-row-text {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--ash-spacing-size20);
+}
+
+.ash-quick-pick-list-menu .ash-quick-pick-row-text > span {
+  max-width: 100%;
 }
 
 .ash-quick-pick-row-label {
@@ -105,6 +120,11 @@
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.ash-quick-pick-list .ash-list-row.is-active .ash-quick-pick-row-description,
+.ash-quick-pick-list .ash-list-row.is-active .ash-quick-pick-row-detail {
+  color: inherit;
 }
 
 .ash-quick-pick-row-keybinding {

@@ -277,7 +277,7 @@ export class PdfEditorPane extends Disposable implements IEditorPane {
 			action("ash.pdf.annotations.select", "Select", "Select annotations", Lxicon.check, available, this.mode === "select", () => this.setMode("select")),
 			action("ash.pdf.annotations.highlight", "Highlight", "Draw a highlight", Lxicon.bold, available, this.mode === "highlight", () => this.setMode("highlight")),
 			action("ash.pdf.annotations.ink", "Draw", "Draw freehand ink", Lxicon.italics, available, this.mode === "ink", () => this.setMode("ink")),
-			action("ash.pdf.annotations.note", "Note", "Place a note", Lxicon.chat, available, this.mode === "note", () => this.setMode("note")),
+			action("ash.pdf.annotations.note", "Note", "Place a note", Lxicon.chat4, available, this.mode === "note", () => this.setMode("note")),
 			new Separator(),
 			action("ash.pdf.annotations.undo", "Undo", "Undo annotation change", Lxicon.history, available && this.annotationModel.canUndo, false, () => this.annotationModel.undo()),
 			action("ash.pdf.annotations.redo", "Redo", "Redo annotation change", Lxicon.history, available && this.annotationModel.canRedo, false, () => this.annotationModel.redo()),

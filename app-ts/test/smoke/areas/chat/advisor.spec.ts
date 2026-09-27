@@ -11,9 +11,18 @@ test('Disconnected model picker explains the empty catalog and opens settings', 
 	await expect(selector).toBeEnabled();
 	await selector.click();
 	const picker = page.getByRole('dialog', { name: 'Choose a chat model' });
-	await expect(picker.getByText('Open Settings')).toBeVisible();
-	await expect(picker.getByText('Could not load models')).toBeVisible();
-	await picker.getByText('Open Settings').click();
+	await expectModelPickerAnchored(picker, selector);
+	await expect(picker.getByRole('status')).toHaveText('Could not load models');
+	await expect(picker.getByText('Set up models in Settings')).toBeVisible();
+	await expect(picker.getByRole('combobox')).toHaveCount(0);
+	await expect(picker.getByRole('option')).toHaveCount(0);
+	const openSettings = picker.getByRole('button', { name: 'Open Settings' });
+	await expect(openSettings).toBeFocused();
+	await openSettings.press('Escape');
+	await expect(picker).toBeHidden();
+	await expect(selector).toBeFocused();
+	await selector.click();
+	await openSettings.click();
 	await expect(page.locator('.ash-settings-editor')).toBeVisible();
 });
 
@@ -28,15 +37,55 @@ test('Desktop model picker searches fixed models before account setup', async ({
 	await expect(selector).toBeEnabled();
 	await selector.click();
 	const picker = page.getByRole('dialog', { name: 'Choose a chat model' });
+	await expectModelPickerAnchored(picker, selector);
 	await expect(picker.getByText('GPT-5.6 Sol', { exact: true })).toBeVisible();
 	await expect(picker.getByText('GPT-6 Astra', { exact: true })).toBeVisible();
 	await expect(picker.getByText('GPT-5.4', { exact: true })).toBeVisible();
+	const activeRow = picker.locator('.ash-quick-pick-list-menu .ash-list-row.is-active');
+	await expect(activeRow).toBeVisible();
+	const activeColors = await activeRow.evaluate(row => {
+		const probe = row.ownerDocument.createElement('span');
+		probe.style.backgroundColor = 'var(--ash-menu-selection-background)';
+		row.append(probe);
+		const colors = {
+			foreground: getComputedStyle(row).color,
+			description: getComputedStyle(row.querySelector('.ash-quick-pick-row-description')!).color,
+			background: getComputedStyle(row).backgroundColor,
+			menuBackground: getComputedStyle(probe).backgroundColor,
+		};
+		probe.remove();
+		return colors;
+	});
+	expect(activeColors.description).toBe(activeColors.foreground);
+	expect(activeColors.background).toBe(activeColors.menuBackground);
 	await picker.getByRole('combobox').fill('GPT-6 Astra');
 	await expect(picker.getByRole('option')).toHaveCount(1);
 	await picker.getByRole('option', { name: /GPT-6 Astra/ }).click();
 	await expect(selector).toHaveText('GPT-6 Astra');
 	await expect(page.locator('.ash-chat-input-model-access-badge')).toHaveCount(0);
+	await selector.click();
+	const keyboardPicker = page.getByRole('dialog', { name: 'Choose a chat model' });
+	await keyboardPicker.getByRole('combobox').fill('GPT-5.4');
+	await keyboardPicker.getByRole('combobox').press('Enter');
+	await expect(selector).toHaveText('GPT-5.4');
+	await selector.click();
+	await page.getByRole('dialog', { name: 'Choose a chat model' }).getByRole('combobox').press('Escape');
+	await expect(selector).toHaveAttribute('aria-expanded', 'false');
 });
+
+async function expectModelPickerAnchored(picker: import('@playwright/test').Locator, selector: import('@playwright/test').Locator): Promise<void> {
+	const button = await selector.boundingBox();
+	const popup = await picker.boundingBox();
+	expect(button).not.toBeNull();
+	expect(popup).not.toBeNull();
+	const verticalGap = Math.min(
+		Math.abs(popup!.y + popup!.height - button!.y),
+		Math.abs(popup!.y - button!.y - button!.height),
+	);
+	expect(verticalGap).toBeLessThan(16);
+	expect(popup!.x).toBeLessThan(button!.x + button!.width);
+	expect(popup!.x + popup!.width).toBeGreaterThan(button!.x);
+}
 
 test('Advisor settings and direct questions use one chat command', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'required', 'Advisor configuration requires the product backend.');
