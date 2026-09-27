@@ -32,13 +32,15 @@ class TestSessionsPart extends WorkbenchPart {
 	}
 
 	override get minimumWidth(): number {
+		if (this.id === 'navigationbar') return 56;
 		if (this.id === "sidebar") return 180;
 		if (this.id === "sessions") return 320;
-		if (this.id === "auxiliarybar") return 220;
+		if (this.id === "auxiliarybar") return 180;
 		return 0;
 	}
 
 	override get maximumWidth(): number {
+		if (this.id === 'navigationbar') return 56;
 		return this.id === "sidebar" || this.id === "auxiliarybar" ? 640 : Number.POSITIVE_INFINITY;
 	}
 
@@ -60,10 +62,11 @@ test("Sessions layout owns a fixed Sessions-first Part topology", () => {
 	layout.layout(new Dimension(1_200, 800));
 
 	assert.deepEqual(layout.getPartSize("titlebar"), new Dimension(1_200, 46));
+	assert.equal(Math.abs(layout.getPartSize('navigationbar').width - 56) <= 1, true);
 	assert.equal(Math.abs(layout.getPartSize("sidebar").width - 260) <= 1, true);
-	assert.equal(Math.abs(layout.getPartSize("auxiliarybar").width - 292) <= 1, true);
+	assert.equal(Math.abs(layout.getPartSize("auxiliarybar").width - 200) <= 1, true);
 	assert.equal(layout.getPartSize("sessions").height, 754);
-	assert.equal(layout.getPartSize("sessions").width > 640, true);
+	assert.equal(layout.getPartSize("sessions").width > 400, true);
 	assert.equal(container.querySelectorAll(".ash-sash").length, 2);
 	assert.equal(container.querySelector("[data-part='editor']"), null);
 	assert.ok(container.querySelector("[data-part='sessions']"));
@@ -86,10 +89,11 @@ test("Sessions layout only permits the optional auxiliary Part to hide", () => {
 	layout.hidePart("auxiliarybar");
 
 	assert.equal(layout.isPartVisible("auxiliarybar"), false);
-	assert.equal(layout.getPartSize("sessions").width > 700, true);
+	assert.equal(layout.getPartSize("sessions").width > 500, true);
 	assert.equal(changes.at(-1)?.partId, "auxiliarybar");
 	assert.equal(changes.at(-1)?.visible, false);
 	assert.throws(() => layout.hidePart("sessions"), /Required Sessions Part/);
+	assert.throws(() => layout.hidePart('navigationbar'), /Required Sessions Part/);
 
 	subscription.dispose();
 	layout.dispose();
@@ -104,6 +108,9 @@ test("Sessions layout validates its complete Part set", () => {
 	parts.delete("auxiliarybar");
 
 	assert.throws(() => new SessionsWorkbenchLayout(container, parts), /missing Parts: auxiliarybar/);
+	parts.set('auxiliarybar', new TestSessionsPart('auxiliarybar', dom.window.document.body));
+	parts.delete('navigationbar');
+	assert.throws(() => new SessionsWorkbenchLayout(container, parts), /missing Parts: navigationbar/);
 
 	for (const part of parts.values()) part.dispose();
 	dom.window.close();

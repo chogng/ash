@@ -10,7 +10,7 @@
   min-width: 0;
   min-height: 0;
   flex: 1 1 auto;
-  --ash-sash-hover-background: var(--sessions-accent);
+  --ash-sash-hover-background: var(--ash-focus-border);
 }
 
 .ash-sessions-chat-slot {
@@ -19,25 +19,21 @@
   min-height: 0;
   overflow: hidden;
   flex-direction: column;
-  border: var(--ash-stroke-thickness) solid var(--ash-border);
-  border-radius: var(--ash-corner-radius-x-large);
-  background: color-mix(in srgb, var(--ash-editor-background) 96%, var(--ash-workbench-background));
-  box-shadow: 0 12px 30px color-mix(in srgb, var(--ash-widget-shadow) 40%, transparent);
-}
-
-.ash-sessions-chat-slot.active {
-  border-color: color-mix(in srgb, var(--sessions-accent) 55%, var(--ash-border));
+  border-right: var(--ash-stroke-thickness) solid var(--ash-border);
+  background: var(--ash-editor-background);
 }
 
 .ash-sessions-chat-slot-header {
   display: flex;
-  min-height: 34px;
+  min-height: 36px;
   align-items: center;
-  gap: 8px;
-  padding: 0 8px 0 12px;
+  gap: var(--ash-spacing-size80);
+  padding: 0 var(--ash-spacing-size120);
   border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
-  background: color-mix(in srgb, var(--ash-editor-background) 88%, var(--ash-workbench-background));
+  color: var(--ash-description-foreground);
 }
+
+.ash-sessions-chat-slot.active .ash-sessions-chat-slot-header { color: var(--ash-foreground); }
 
 .ash-sessions-chat-slot-title,
 .ash-sessions-chat-slot-close {
@@ -45,36 +41,34 @@
   color: inherit;
   background: transparent;
   font: inherit;
+  cursor: pointer;
 }
 
 .ash-sessions-chat-slot-title {
   min-width: 0;
   overflow: hidden;
   flex: 1 1 auto;
-  padding: 8px 0;
+  padding: var(--ash-spacing-size80) 0;
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .ash-sessions-chat-slot-close {
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   flex: 0 0 auto;
-  border-radius: var(--ash-corner-radius-medium);
-  color: var(--ash-description-foreground);
-  font-size: 18px;
+  border-radius: var(--ash-corner-radius-small);
+  font-size: var(--ash-font-size-heading2);
   line-height: 1;
 }
 
 .ash-sessions-chat-slot-title:hover,
-.ash-sessions-chat-slot-close:hover {
-  background: var(--ash-list-hover-background);
-}
+.ash-sessions-chat-slot-close:hover { background: var(--ash-list-hover-background); }
 
 .ash-sessions-chat-slot-title:focus-visible,
 .ash-sessions-chat-slot-close:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--sessions-accent);
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
   outline-offset: -1px;
 }
 
@@ -84,24 +78,37 @@
   flex: 1 1 auto;
 }
 
+.ash-sessions-chat-slot > .ash-chat.empty > .ash-chat-list-widget { flex: 1 1 auto; }
+
+.ash-sessions-chat-slot .ash-chat > .ash-chat-input-part,
+.ash-sessions-chat-slot .ash-chat.has-conversation > .ash-chat-input-part {
+  min-height: 200px;
+  padding: var(--ash-spacing-size160) var(--ash-spacing-size200);
+  border-top: var(--ash-stroke-thickness) solid var(--ash-border);
+}
+
+.ash-sessions-chat-slot .ash-chat-input-container {
+  min-height: 160px;
+  border: 0;
+  border-radius: 0;
+  background: var(--ash-editor-background);
+}
+
+.ash-sessions-chat-slot .ash-chat-input-container.focused {
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  outline-offset: -1px;
+}
+
+.ash-sessions-chat-slot .ash-chat-transcript { padding: var(--ash-spacing-size240); }
+
 .ash-sessions-chat-view-empty {
   display: grid;
   max-width: 480px;
   align-content: center;
-  gap: 8px;
+  gap: var(--ash-spacing-size80);
   margin: auto;
-  padding: 40px;
+  padding: var(--ash-spacing-size400);
 }
 
-.ash-sessions-chat-view-empty h2 {
-  margin: 0;
-  font-size: var(--ash-font-size-heading1);
-  letter-spacing: -.025em;
-}
-
-.ash-sessions-chat-view-empty p {
-  margin: 0;
-  color: var(--ash-description-foreground);
-  font-size: 13px;
-  line-height: 1.55;
-}
+.ash-sessions-chat-view-empty h2 { margin: 0; font-size: var(--ash-font-size-heading1); }
+.ash-sessions-chat-view-empty p { margin: 0; color: var(--ash-description-foreground); font-size: var(--ash-font-size-body1); }

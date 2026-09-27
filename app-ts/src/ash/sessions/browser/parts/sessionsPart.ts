@@ -11,6 +11,7 @@ import { WorkbenchPart } from "../../../workbench/browser/part.js";
 import type { SessionsViewSelection } from "../../services/sessions/browser/sessionsService.js";
 import { SessionsChatView } from "./sessionsChatView.js";
 import { h } from "../../../base/browser/dom.js";
+import { localize } from '../../../nls.js';
 
 export interface SessionsPartOptions {
 	readonly sessionService: ISessionsManagementService;
@@ -60,10 +61,10 @@ export class SessionsPart extends WorkbenchPart {
 	updateVisibleSelections(selections: readonly SessionsViewSelection[], active: SessionsViewSelection | undefined): void {
 		if (active?.kind === "session") {
 			this.heading.textContent = active.active.session.title.trim() || "Agent session";
-			this.description.textContent = `Active thread ${active.active.threadId}`;
+			this.description.textContent = localize('sessions.header.chatCount', '{0} chats', active.active.session.chats.length);
 		} else if (active?.kind === "untitled") {
 			this.heading.textContent = active.session.title.trim() || "New code session";
-			this.description.textContent = "This draft becomes a durable Session when the first message is sent.";
+			this.description.textContent = localize('sessions.header.draft', 'Draft session');
 		} else {
 			this.heading.textContent = "Agent sessions";
 			this.description.textContent = "Plan, implement, and review work in a focused agent workspace.";

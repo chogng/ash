@@ -42,6 +42,15 @@ test("SessionsList keeps session buttons and focus while refreshing", () => {
 	assert.equal(refreshed[0].textContent, "Renamed");
 	refreshed[0].click();
 	assert.deepEqual(opened, ["first"]);
+	const search = list.domNode.querySelector<HTMLInputElement>('input[type="search"]')!;
+	search.value = 'second';
+	search.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+	assert.deepEqual([...list.domNode.querySelectorAll('.ash-sessions-list-item')], [buttons[1]]);
+	search.value = 'missing';
+	search.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+	assert.equal(list.domNode.querySelector('.ash-sessions-empty')?.textContent, 'No matching sessions');
+	search.value = '';
+	search.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
 
 	untitledSessions = [untitledSessions[1]];
 	changes.fire();

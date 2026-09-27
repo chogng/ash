@@ -10,7 +10,7 @@ import { StorageScope, StorageTarget } from '../../platform/storage/common/stora
 import type { WorkbenchPart } from '../../workbench/browser/part.js';
 import { WorkbenchPartView } from '../../workbench/browser/workbenchPartView.js';
 
-export const sessionsPartIds = ['titlebar', 'sidebar', 'sessions', 'auxiliarybar'] as const;
+export const sessionsPartIds = ['titlebar', 'navigationbar', 'sidebar', 'sessions', 'auxiliarybar'] as const;
 export type SessionsPartId = typeof sessionsPartIds[number];
 
 export interface SessionsPartVisibilityChangeEvent {
@@ -19,7 +19,8 @@ export interface SessionsPartVisibilityChangeEvent {
 }
 
 const DEFAULT_SIDEBAR_WIDTH = 260;
-const DEFAULT_AUXILIARYBAR_WIDTH = 292;
+const DEFAULT_AUXILIARYBAR_WIDTH = 200;
+const NAVIGATION_BAR_WIDTH = 56;
 
 /** Persisted, Sessions-owned dimensions and visibility for the dedicated window. */
 export interface SessionsWorkbenchLayoutState {
@@ -148,7 +149,7 @@ export function createSessionsWorkbenchGridDescriptor(
 	});
 	const titlebarHeight = requiredView(views, 'titlebar').minimumHeight;
 	const bodyHeight = Math.max(0, dimension.height - titlebarHeight);
-	const sessionsWidth = Math.max(0, dimension.width - state.sidebar.width - (state.auxiliarybar.visible ? state.auxiliarybar.width : 0));
+	const sessionsWidth = Math.max(0, dimension.width - NAVIGATION_BAR_WIDTH - state.sidebar.width - (state.auxiliarybar.visible ? state.auxiliarybar.width : 0));
 	return {
 		type: 'branch',
 		orientation: 'vertical',
@@ -162,6 +163,7 @@ export function createSessionsWorkbenchGridDescriptor(
 				size: bodyHeight,
 				priority: SESSIONS_LAYOUT_PRIORITY,
 				children: [
+					leaf('navigationbar', NAVIGATION_BAR_WIDTH),
 					leaf('sidebar', state.sidebar.width),
 					leaf('sessions', sessionsWidth, true, SESSIONS_LAYOUT_PRIORITY),
 					leaf('auxiliarybar', state.auxiliarybar.width, state.auxiliarybar.visible),
@@ -180,7 +182,7 @@ export function resolveSessionsInitialDimension(container: HTMLElement, dimensio
 }
 
 export function parseSessionsPartId(value: unknown): SessionsPartId {
-	if (value === 'titlebar' || value === 'sidebar' || value === 'sessions' || value === 'auxiliarybar') return value;
+	if (value === 'titlebar' || value === 'navigationbar' || value === 'sidebar' || value === 'sessions' || value === 'auxiliarybar') return value;
 	throw new TypeError('Sessions Grid contains an unknown Part');
 }
 
@@ -229,7 +231,7 @@ export class SessionsWorkbenchLayout extends Disposable implements IResizable {
 		const initialDimension = resolveSessionsInitialDimension(this.domNode, options.initialDimension);
 		this.stateModel = new SessionsWorkbenchLayoutStateModel(options.storageService, options.initialState ?? createDefaultSessionsWorkbenchLayoutState());
 		const state = this.stateModel.state;
-		this.projectFrameInsets(state.auxiliarybar.visible);
+		this.projectFrameInsets();
 		this.grid = this._register(SerializableGrid.deserialize(
 			this.domNode,
 			createSessionsWorkbenchGridDescriptor(this.views, initialDimension, state),
@@ -258,7 +260,6 @@ export class SessionsWorkbenchLayout extends Disposable implements IResizable {
 
 	layout(dimension: IDimension = getClientArea(this.domNode)): void {
 		assertDimension(dimension);
-		this.projectFrameInsets();
 		this.grid.layout(dimension.width, dimension.height);
 		this.publishPartVisibility();
 	}
@@ -276,20 +277,20 @@ export class SessionsWorkbenchLayout extends Disposable implements IResizable {
 	}
 
 	private updatePartVisibility(partId: SessionsPartId, visible: boolean): void {
-		if (partId === 'titlebar' || partId === 'sidebar' || partId === 'sessions') throw new Error(`Required Sessions Part cannot be hidden: ${partId}`);
+		if (partId === 'titlebar' || partId === 'navigationbar' || partId === 'sidebar' || partId === 'sessions') throw new Error(`Required Sessions Part cannot be hidden: ${partId}`);
 		if (this.isPartVisible(partId) === visible) return;
-		this.projectFrameInsets(visible);
 		this.grid.setViewVisible(this.view(partId), visible);
 		this.publishPartVisibility();
 	}
 
 	private saveState(): void { this.stateModel.save(this.state); }
 
-	private projectFrameInsets(auxiliarybarVisible = this.isPartVisible('auxiliarybar')): void {
+	private projectFrameInsets(): void {
 		this.view('titlebar').setFrameInsets({ top: 0, right: 0, bottom: 0, left: 0 });
-		this.view('sidebar').setFrameInsets({ top: 0, right: PART_GUTTER / 2, bottom: 0, left: 0 });
-		this.view('sessions').setFrameInsets({ top: 0, right: auxiliarybarVisible ? PART_GUTTER / 2 : 0, bottom: 0, left: PART_GUTTER / 2 });
-		this.view('auxiliarybar').setFrameInsets({ top: 0, right: 0, bottom: 0, left: PART_GUTTER / 2 });
+		this.view('navigationbar').setFrameInsets({ top: 0, right: 0, bottom: 0, left: 0 });
+		this.view('sidebar').setFrameInsets({ top: 0, right: 0, bottom: 0, left: 0 });
+		this.view('sessions').setFrameInsets({ top: 0, right: 0, bottom: 0, left: 0 });
+		this.view('auxiliarybar').setFrameInsets({ top: 0, right: 0, bottom: 0, left: 0 });
 	}
 
 	private publishPartVisibility(): void {

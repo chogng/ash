@@ -13,13 +13,13 @@ is canonical for the renderer implementation and extension points.
 | Dedicated window host | `platform/windows/` | owns the parent-child window lifecycle, parent-only open IPC, child-only return IPC, and child resources; `code/electron-main/app.ts` supplies the Sessions entry and connections |
 | Browser window navigation | `platform/windows/browser/dedicatedWindowNavigation.ts` | resolves and navigates between sibling renderer pages |
 | Code profile | `code/common/codeSessionsProfile.ts` | defines the Code window identity and page route used by both browser and Electron entries |
-| Product composition | `browser/workbench.ts` | uses shared window identity and lifecycle services; owns the fixed titlebar/sidebar/sessions/auxiliarybar Part set |
+| Product composition | `browser/workbench.ts` | uses shared window identity and lifecycle services; owns the fixed titlebar/navigationbar/sidebar/sessions/auxiliarybar Part set |
 | Layout | `browser/layoutPolicy.ts` | owns Sessions topology, geometry, optional auxiliary visibility, and persisted sizes |
 | Window Sessions state | `services/sessions/browser/sessionsService.ts` | owns active/visible selections, focus, and Back/Forward history |
 | Frontend Session model | `services/sessions/common/session.ts` | owns `ISession`, `IChat`, workspace summary, and untitled identity types |
 | Provider and management | `contrib/providers/appServer/`, `services/sessions/common/sessionsManagement.ts`, and `services/sessions/browser/sessionsManagementService.ts` | the App Server provider adapts transport data; management owns catalog, drafts, and operations |
 | Main conversation | `browser/parts/sessionsChatView.ts` | renders visible durable and untitled Sessions as retained full `ChatWidget` Grid leaves |
-| Parts | `browser/parts/` | owns product chrome, list, primary surface, and typed active context |
+| Parts | `browser/parts/` | owns product chrome, window navigation, list, primary surface, and typed active context |
 | Session chat commands | `browser/actions/sessionsChatActions.ts` | maps the reused ChatWidget New Chat and History commands to the Sessions window's draft and active-chat selection |
 | Open Agents Window | `code/browser/workbench/modes/code.ts`, `workbench/contrib/chat/electron-browser/`, `contrib/openAgentsWindow/electron-browser/`, and `workbench/browser/parts/titlebar/` | the Code browser mode owns page navigation; the Chat desktop contribution owns the titlebar action, hover label, and window command; the Sessions desktop contribution owns system-wide shortcut synchronization; the Workbench titlebar owns the shared mark and motion. Shared shortcut selection lives in `workbench/contrib/keybindings/`, while `platform/globalKeybindings/` owns operating-system registrations |
 
@@ -46,7 +46,7 @@ import Sessions product UI or add Sessions-specific layout branches.
    `WorkbenchWindow` registers the renderer window and its document styles;
    `BrowserLifecycleService` joins storage flush before disposal.
 4. `SessionsWorkbenchLayout` deserializes the fixed Part grid. Titlebar,
-   sidebar, and sessions Parts are required; only the auxiliary Part may hide.
+   navigationbar, sidebar, and sessions Parts are required; only the auxiliary Part may hide.
 5. The window Sessions service initializes the catalog. If none is
    active, the Workbench opens a window-local untitled Session; it becomes
    durable only when the first message is sent.
@@ -106,7 +106,7 @@ and dirs. It does not grant access and is not the editor window Workspace from
   catalog refresh, provider invalidation, drafts, and operations without
   inventing Session sequence state.
 - `test/smoke/areas/sessions/sessions-window.spec.ts` verifies the dedicated
-  Electron window, all four Parts, multiple Grid leaves, close, return flow,
+  Electron window, all five Parts, list search, details visibility, multiple Grid leaves, close, return flow,
   and system-wide shortcut registration and release.
 - `platform/windows/test/electron-main/` verifies reuse,
   close and reopen ordering, resource release, initialization failure, and IPC commands.

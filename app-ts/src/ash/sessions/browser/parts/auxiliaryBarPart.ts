@@ -4,13 +4,14 @@ import type { ISessionsManagementService } from "../../services/sessions/common/
 import { WorkbenchPart } from "../../../workbench/browser/part.js";
 import type { ISessionsService } from "../../services/sessions/browser/sessionsService.js";
 import { h } from "../../../base/browser/dom.js";
+import { localize } from '../../../nls.js';
 
 /** Typed Session and Thread context for the active Sessions Workbench slot. */
 export class AuxiliaryBarPart extends WorkbenchPart {
 	private readonly sessionService: ISessionsManagementService;
 	private readonly viewService: ISessionsService;
 
-	override get minimumWidth(): number { return 220; }
+	override get minimumWidth(): number { return 180; }
 	override get maximumWidth(): number { return 460; }
 
 	constructor(container: HTMLElement, sessionService: ISessionsManagementService, viewService: ISessionsService) {
@@ -24,7 +25,7 @@ export class AuxiliaryBarPart extends WorkbenchPart {
 	private render(): void {
 		const content = this.contentDomNode;
 		const heading = h(content.ownerDocument, "h2");
-		heading.textContent = "Session context";
+		heading.textContent = localize('sessions.details.heading', 'Session details');
 		const selection = this.viewService.activeSelection;
 		if (selection?.kind === "session") {
 			const active = selection.active;

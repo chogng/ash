@@ -3,45 +3,114 @@
   min-width: 0;
   min-height: 0;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px 16px 16px;
-  background: var(--sessions-muted-surface);
+  gap: var(--ash-spacing-size160);
+  padding: var(--ash-spacing-size240) var(--ash-spacing-size120);
+  background: var(--ash-side-bar-background);
 }
 
 .ash-sessions-list h2 {
-  margin: 0;
-  color: var(--ash-section-header-foreground, var(--ash-foreground));
-  font-size: 11px;
-  font-weight: var(--ash-font-weight-semi-bold);
-  letter-spacing: .075em;
-  text-transform: uppercase;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
+
+.ash-sessions-list-controls {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--ash-spacing-size80);
+}
+
+.ash-sessions-list-search {
+  display: flex;
+  min-width: 0;
+  height: 40px;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--ash-spacing-size80);
+  padding: 0 var(--ash-spacing-size120);
+  border-radius: var(--ash-corner-radius-large);
+  color: var(--ash-description-foreground);
+  background: var(--ash-input-background);
+}
+
+.ash-sessions-list-search svg { width: 16px; height: 16px; flex: 0 0 auto; }
+
+.ash-sessions-list-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: var(--ash-input-foreground);
+  background: transparent;
+}
+
+.ash-sessions-list-search:focus-within {
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+}
+
+.ash-sessions-list-add {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--ash-corner-radius-large);
+  color: var(--ash-foreground);
+  background: var(--ash-input-background);
+  cursor: pointer;
+}
+
+.ash-sessions-list-add svg { width: 20px; height: 20px; }
+.ash-sessions-list-add:hover { background: var(--ash-list-hover-background); }
+.ash-sessions-list-add:focus-visible { outline: var(--ash-stroke-thickness) solid var(--ash-focus-border); }
 
 .ash-sessions-list-items {
   display: flex;
   min-height: 0;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--ash-spacing-size40);
   overflow: auto;
-  padding-top: 4px;
 }
 
 .ash-sessions-list-item {
   display: flex;
   min-width: 0;
-  min-height: 34px;
+  min-height: 64px;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  overflow: hidden;
-  border: var(--ash-stroke-thickness) solid transparent;
-  border-radius: var(--ash-corner-radius-medium);
+  gap: var(--ash-spacing-size120);
+  padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
+  border: 0;
+  border-radius: var(--ash-corner-radius-x-large);
   color: var(--ash-foreground);
   background: transparent;
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--ash-font-size-body1);
   text-align: left;
+}
+
+.ash-sessions-list-avatar {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--ash-button-primary-foreground);
+  background: var(--ash-button-primary-background);
+}
+
+.ash-sessions-list-avatar svg { width: 24px; height: 24px; }
+
+.ash-sessions-list-label {
+  min-width: 0;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -49,19 +118,17 @@
 .ash-sessions-list-item:hover { background: var(--ash-list-hover-background); }
 
 .ash-sessions-list-item.selected {
-  border-color: color-mix(in srgb, var(--sessions-accent) 28%, transparent);
   color: var(--ash-list-active-selection-foreground, var(--ash-foreground));
   background: var(--ash-list-active-selection-background);
 }
 
 .ash-sessions-list-item:focus-visible {
-  outline: 2px solid var(--ash-focus-border);
-  outline-offset: 2px;
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  outline-offset: -1px;
 }
 
 .ash-sessions-empty {
-  margin: 8px 2px;
-  color: var(--ash-description-foreground, var(--ash-foreground));
-  font-size: 12px;
-  line-height: 1.45;
+  margin: var(--ash-spacing-size80) var(--ash-spacing-size20);
+  color: var(--ash-description-foreground);
+  font-size: var(--ash-font-size-label1);
 }

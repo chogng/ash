@@ -139,19 +139,20 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	const titlebar = sessionsPage.locator("[data-part='titlebar']");
 	await expect(titlebar).toBeVisible();
 	await expect(titlebar).toHaveCSS('-webkit-app-region', 'drag');
-	await expect(sessionsPage.getByRole('button', { name: 'Workbench' })).toHaveCSS('-webkit-app-region', 'no-drag');
+	await expect(sessionsPage.getByRole('button', { name: 'Return to Workbench' })).toHaveCSS('-webkit-app-region', 'no-drag');
 	const [titleBounds, titlebarBounds] = await Promise.all([
 		titlebar.locator('.ash-sessions-titlebar-title').boundingBox(),
 		titlebar.boundingBox(),
 	]);
 	expect(titleBounds).not.toBeNull();
 	expect(titlebarBounds).not.toBeNull();
-	expect(Math.abs(titleBounds!.x + titleBounds!.width / 2 - titlebarBounds!.x - titlebarBounds!.width / 2)).toBeLessThan(2);
+	expect(titleBounds!.x).toBeGreaterThan(titlebarBounds!.x);
+	expect(titleBounds!.x).toBeLessThan(titlebarBounds!.x + titlebarBounds!.width / 2);
 	if (process.platform === 'darwin') {
-		const returnButton = sessionsPage.getByRole('button', { name: 'Workbench' });
+		const avatar = sessionsPage.locator('.ash-sessions-titlebar-avatar');
 		const spacer = sessionsPage.locator('.ash-sessions-window-controls-spacer');
 		await expect(spacer).toBeVisible();
-		const bounds = await returnButton.boundingBox();
+		const bounds = await avatar.boundingBox();
 		expect(bounds?.x).toBeGreaterThanOrEqual(80);
 		await sessionsPage.evaluate(async () => {
 			const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string, params: unknown): Promise<unknown> } } }).ash.ipcRenderer;
@@ -169,7 +170,7 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 		});
 		await expect(sessionsPage.locator('#app')).toHaveClass(/ash-sessions-fullscreen/u);
 		await expect(spacer).toBeHidden();
-		expect((await returnButton.boundingBox())?.x).toBeLessThan(50);
+		expect((await avatar.boundingBox())?.x).toBeLessThan(50);
 		await application.evaluate(({ BrowserWindow }) => {
 			const window = BrowserWindow.getAllWindows().find(candidate => candidate.webContents.getURL().includes('sessions-code.html'));
 			if (!window) throw new Error('Sessions window is missing');
@@ -177,12 +178,22 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 		});
 		await expect(spacer).toBeVisible();
 	}
+	await expect(sessionsPage.locator("[data-part='navigationbar']")).toBeVisible();
 	await expect(sessionsPage.locator("[data-part='sidebar']")).toBeVisible();
 	await expect(sessionsPage.locator("[data-part='sessions']")).toBeVisible();
 	await expect(sessionsPage.locator("[data-part='auxiliarybar']")).toBeVisible();
 	await expect(sessionsPage.locator(".ash-sessions-list")).toHaveCSS("display", "flex");
 	await expect(sessionsPage.locator(".ash-sessions-chat-slot").first()).toHaveCSS("display", "flex");
 	await expect(sessionsPage.locator(".ash-chat-input-part")).toBeVisible();
+	const detailsToggle = sessionsPage.getByRole('button', { name: 'Session details' });
+	await detailsToggle.click();
+	await expect(sessionsPage.locator("[data-part='auxiliarybar']")).toBeHidden();
+	await detailsToggle.click();
+	await expect(sessionsPage.locator("[data-part='auxiliarybar']")).toBeVisible();
+	const search = sessionsPage.getByRole('searchbox', { name: 'Search sessions' });
+	await search.fill('no matching session title');
+	await expect(sessionsPage.locator('.ash-sessions-empty')).toHaveText('No matching sessions');
+	await search.clear();
 	await sessionsPage.locator(".ash-sessions-titlebar-new-session").click();
 	await expect(sessionsPage.locator(".ash-sessions-chat-slot")).toHaveCount(2);
 	await expect(sessionsPage.locator(".ash-sessions-chat-slot.active")).toHaveCount(1);
@@ -228,7 +239,7 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	});
 
 	const closed = sessionsPage.waitForEvent("close");
-	await sessionsPage.getByRole("button", { name: "Workbench" }).click();
+	await sessionsPage.getByRole("button", { name: "Return to Workbench" }).click();
 	await closed;
 	await expect.poll(() => application.windows().length).toBe(1);
 	await expect(workbenchPage.locator(".ash-workbench")).toBeVisible();
@@ -242,7 +253,7 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 		return child?.getBounds();
 	})).toEqual(expectedBounds);
 	const reopenedClosed = reopenedPage.waitForEvent('close');
-	await reopenedPage.getByRole('button', { name: 'Workbench' }).click();
+	await reopenedPage.getByRole('button', { name: 'Return to Workbench' }).click();
 	await reopenedClosed;
 	const parentClosed = workbenchPage.waitForEvent('close');
 	await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.close());

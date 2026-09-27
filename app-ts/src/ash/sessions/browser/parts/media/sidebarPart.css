@@ -1,5 +1,6 @@
 .ash-workbench-sidebar {
-  background: var(--sessions-muted-surface);
+  border-right: var(--ash-stroke-thickness) solid var(--ash-border);
+  background: var(--ash-side-bar-background);
 }
 
 .ash-workbench-sidebar > .ash-workbench-part-content > .ash-sessions-list {

@@ -616,12 +616,37 @@ test('Sessions entry sits beside Quick Access and animates its Ash mark on inten
 	}
 
 	if (target.kind === 'browser') {
+		await page.setViewportSize({ width: 1200, height: 800 });
 		await entry.click();
 		await expect(page).toHaveURL(/sessions-code\.html/u);
 		await expect(page.locator('.ash-code-sessions-window')).toBeVisible();
 		await expect(page.locator('#app')).toHaveAttribute('data-runtime', 'web');
-		const returnButtonBounds = await page.getByRole('button', { name: 'Workbench' }).boundingBox();
-		expect(returnButtonBounds?.x).toBeLessThan(50);
+		await expect(page.getByRole('button', { name: 'Return to Workbench' })).toBeVisible();
+		const avatarBounds = await page.locator('.ash-sessions-titlebar-avatar').boundingBox();
+		expect(avatarBounds?.x).toBeLessThan(50);
+		await expect(page.locator("[data-part='navigationbar']")).toBeVisible();
+		const navigationBounds = await page.locator("[data-part='navigationbar']").boundingBox();
+		const sidebarBounds = await page.locator("[data-part='sidebar']").boundingBox();
+		const sessionsBounds = await page.locator("[data-part='sessions']").boundingBox();
+		const auxiliaryBounds = await page.locator("[data-part='auxiliarybar']").boundingBox();
+		expect(navigationBounds?.width).toBeCloseTo(56, 0);
+		expect(sidebarBounds?.width).toBeCloseTo(260, 0);
+		expect(auxiliaryBounds?.width).toBeCloseTo(200, 0);
+		expect(sessionsBounds!.x).toBeGreaterThan(sidebarBounds!.x);
+		expect(auxiliaryBounds!.x).toBeGreaterThan(sessionsBounds!.x);
+		await page.getByRole('button', { name: 'Session details' }).click();
+		await expect(page.locator("[data-part='auxiliarybar']")).toBeHidden();
+		await page.getByRole('button', { name: 'Session details' }).click();
+		await expect(page.locator("[data-part='auxiliarybar']")).toBeVisible();
+		const sessionsNavigation = page.locator("[data-part='navigationbar']").getByRole('button', { name: /Sessions\. Press Alt\+F1/u });
+		await sessionsNavigation.focus();
+		await page.keyboard.press('Alt+F1');
+		await expect(page.getByRole('dialog', { name: 'Accessibility Help' })).toBeVisible();
+		await expect(page.getByRole('textbox', { name: 'Accessibility Help' })).toHaveValue(/Use Tab and Shift\+Tab/u);
+		await page.getByRole('dialog', { name: 'Accessibility Help' }).getByRole('button', { name: 'Close' }).click();
+		await expect(sessionsNavigation).toBeFocused();
+		await page.getByRole('searchbox', { name: 'Search sessions' }).fill('no matching session title');
+		await expect(page.locator('.ash-sessions-empty')).toHaveText('No matching sessions');
 		await expect(page.locator('#app')).toHaveAttribute('data-color-theme', /ash-(?:light|dark)/u);
 	}
 });

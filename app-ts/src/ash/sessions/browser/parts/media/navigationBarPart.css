@@ -1,0 +1,48 @@
+.ash-workbench-navigationbar {
+  border-right: var(--ash-stroke-thickness) solid var(--ash-border);
+  background: var(--ash-side-bar-background);
+}
+
+.ash-workbench-navigationbar > .ash-workbench-part-content {
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--ash-spacing-size160) var(--ash-spacing-size80);
+}
+
+.ash-sessions-navigation-top,
+.ash-sessions-navigation-bottom {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ash-spacing-size120);
+}
+
+.ash-sessions-navigation-item {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--ash-corner-radius-large);
+  color: var(--ash-foreground);
+  background: transparent;
+  cursor: pointer;
+}
+
+.ash-sessions-navigation-item:hover,
+.ash-sessions-navigation-item.selected {
+  color: var(--ash-button-primary-foreground);
+  background: var(--ash-button-primary-background);
+}
+
+.ash-sessions-navigation-item:disabled {
+  opacity: .35;
+  cursor: default;
+}
+
+.ash-sessions-navigation-item:focus-visible {
+  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  outline-offset: 2px;
+}
+
+.ash-sessions-navigation-item svg { width: 24px; height: 24px; }

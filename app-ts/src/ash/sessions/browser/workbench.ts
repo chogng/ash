@@ -1,13 +1,19 @@
 import "./media/workbench.css";
 import "./actions/sessionsChatActions.js";
+import './navigationAccessibility.js';
+import '../../workbench/contrib/accessibility/browser/accessibleViewActions.js';
 import { h } from "../../base/browser/dom.js";
 import { bindResizableLayout } from "../../base/browser/ui/resizable/resizable.js";
 import { onUnexpectedError } from "../../base/common/errors.js";
 import { Disposable, toDisposable } from "../../base/common/lifecycle.js";
 import { ILanguageService } from "../../editor/common/languages/language.js";
 import { LanguageService } from "../../editor/common/services/languageService.js";
+import { localize } from '../../nls.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewRegistry } from '../../platform/accessibility/browser/accessibleViewRegistry.js';
 import type { IConfigurationApi } from "../../platform/configuration/common/configurationIpc.js";
 import { IConfigurationService } from "../../platform/configuration/common/configuration.js";
+import { ContextKeyExpr } from '../../platform/contextkey/common/contextkey.js';
 import { ServiceContainer } from "../../platform/instantiation/common/instantiation.js";
 import type { IKeybindingsResourceApi } from "../../platform/keybinding/common/keybindingsResource.js";
 import { BrowserLayoutService, ILayoutService } from "../../platform/layout/browser/layoutService.js";
@@ -23,6 +29,7 @@ import { WorkbenchState } from "../../platform/workspace/common/workspace.js";
 import type { WorkbenchPart } from "../../workbench/browser/part.js";
 import { WorkbenchInteractionServices, type WorkbenchContextMenuServiceFactory } from "../../workbench/browser/workbenchInteractionServices.js";
 import { WorkbenchWindow } from "../../workbench/browser/window.js";
+import { AccessibleViewService } from '../../workbench/contrib/accessibility/browser/accessibleView.js';
 import { INativeHostService } from '../../workbench/common/services.js';
 import { WorkbenchModeRegistry, type WorkbenchModeId } from "../../workbench/common/workbenchMode.js";
 import { ChatService } from "../../workbench/services/chat/browser/chatService.js";
@@ -39,6 +46,7 @@ import { ISessionsManagementService } from "../services/sessions/common/sessions
 import { ISessionsService, SessionsService } from "../services/sessions/browser/sessionsService.js";
 import { SessionsWorkbenchLayout, type SessionsPartId } from "./layoutPolicy.js";
 import { AuxiliaryBarPart } from "./parts/auxiliaryBarPart.js";
+import { NavigationBarPart } from './parts/navigationBarPart.js';
 import { SessionsPart } from "./parts/sessionsPart.js";
 import { SidebarPart } from "./parts/sidebarPart.js";
 import { TitlebarPart } from "./parts/titlebarPart.js";
@@ -149,12 +157,45 @@ export class Workbench extends Disposable {
 			notificationService,
 			createContextMenuService: options.createContextMenuService,
 		}));
+		const accessibleViewService = this._register(services.createInstance(AccessibleViewService));
+		services.registerInstance(IAccessibleViewService, accessibleViewService);
 
 		const titlebar = this._register(new TitlebarPart(this.domNode, options.profile, view, {
 			returnToWorkbench: options.returnToWorkbench,
 			focusSessions: () => sessionsPart?.focus(),
 		}));
 		const sidebar = this._register(new SidebarPart(this.domNode, sessions, view));
+		const navigationbar = this._register(new NavigationBarPart(this.domNode, view, {
+			focusList: () => sidebar.focus(),
+			focusChat: () => sessionsPart!.focus(),
+			toggleDetails: () => {
+				if (layout!.isPartVisible('auxiliarybar')) layout!.hidePart('auxiliarybar');
+				else layout!.showPart('auxiliarybar');
+			},
+		}));
+		const navigationContext = this._register(interactionServices.contextKeyService.createScoped(navigationbar.domNode));
+		navigationContext.createKey('sessionsNavigationFocused', true);
+		this._register(AccessibleViewRegistry.register({
+			type: AccessibleViewType.Help,
+			priority: 100,
+			name: 'sessionsNavigationHelp',
+			when: ContextKeyExpr.has('sessionsNavigationFocused'),
+			getProvider: () => {
+				const focused = navigationbar.domNode.ownerDocument.activeElement as HTMLElement;
+				return new AccessibleContentProvider(
+					AccessibleViewProviderId.SessionsNavigation,
+					{ type: AccessibleViewType.Help },
+					() => localize('sessions.navigation.help', 'Sessions navigation\nUse Tab and Shift+Tab to move between buttons. Press Enter or Space to activate a button. New session starts a chat. Back and Forward revisit sessions. Session details shows or hides the details panel.'),
+					() => focused.focus(),
+					AccessibilityVerbositySettingId.SessionsNavigation,
+				);
+			},
+		}));
+		const updateNavigationHelpHint = (): void => navigationbar.updateHelpHint(accessibleViewService.getOpenAriaHint(AccessibilityVerbositySettingId.SessionsNavigation));
+		this._register(configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(AccessibilityVerbositySettingId.SessionsNavigation)) updateNavigationHelpHint();
+		}));
+		updateNavigationHelpHint();
 		sessionsPart = this._register(new SessionsPart(this.domNode, {
 			sessionService: sessions,
 			chatService: chat,
@@ -172,6 +213,7 @@ export class Workbench extends Disposable {
 		const auxiliarybar = this._register(new AuxiliaryBarPart(this.domNode, sessions, view));
 		const parts = new Map<SessionsPartId, WorkbenchPart>([
 			["titlebar", titlebar],
+			['navigationbar', navigationbar],
 			["sidebar", sidebar],
 			["sessions", sessionsPart],
 			["auxiliarybar", auxiliarybar],
@@ -179,6 +221,10 @@ export class Workbench extends Disposable {
 		layout = this._register(new SessionsWorkbenchLayout(this.domNode, parts, {
 			initialDimension: this.layoutService.mainContainerDimension,
 			storageService: storage,
+		}));
+		navigationbar.updateDetailsVisibility(layout.isPartVisible('auxiliarybar'));
+		this._register(layout.onDidChangePartVisibility(event => {
+			if (event.partId === 'auxiliarybar') navigationbar.updateDetailsVisibility(event.visible);
 		}));
 		this._register(bindResizableLayout(this.layoutService.onDidLayoutMainContainer, layout));
 		this.layoutService.layout();

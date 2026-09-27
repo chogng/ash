@@ -8,8 +8,8 @@ import { SessionsList } from "./sessionsList.js";
 export class SidebarPart extends WorkbenchPart {
 	private readonly list: SessionsList;
 
-	override get minimumWidth(): number { return 190; }
-	override get maximumWidth(): number { return 460; }
+	override get minimumWidth(): number { return 240; }
+	override get maximumWidth(): number { return 520; }
 
 	constructor(container: HTMLElement, sessionService: ISessionsManagementService, viewService: ISessionsService) {
 		super(container, "sidebar");

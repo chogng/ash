@@ -1,6 +1,9 @@
 import "./media/sessionsControls.css";
 import "./media/sessionsList.css";
 import { addDisposableListener, h } from "../../../base/browser/dom.js";
+import { appendIcon } from '../../../base/browser/ui/lxicons/lxicon.js';
+import { Lxicon } from '../../../base/common/lxicons.js';
+import { localize } from '../../../nls.js';
 import { AbstractDisposable, Disposable, DisposableMap, toDisposable } from "../../../base/common/lifecycle.js";
 import type { ISessionsService } from "../../services/sessions/browser/sessionsService.js";
 import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
@@ -10,6 +13,7 @@ export class SessionsList extends Disposable {
 	readonly domNode: HTMLElement;
 	private readonly heading: HTMLHeadingElement;
 	private readonly newSessionButton: HTMLButtonElement;
+	private readonly searchInput: HTMLInputElement;
 	private readonly list: HTMLDivElement;
 	private readonly items = this._register(new DisposableMap<string, SessionListItem>());
 	private readonly empty: HTMLParagraphElement;
@@ -25,18 +29,32 @@ export class SessionsList extends Disposable {
 		this.domNode.className = "ash-sessions-list";
 		this.heading = h(ownerDocument, "h2");
 		this.heading.textContent = title;
+		const controls = h(ownerDocument, 'div');
+		controls.className = 'ash-sessions-list-controls';
+		const search = h(ownerDocument, 'label');
+		search.className = 'ash-sessions-list-search';
+		appendIcon(Lxicon.search, search);
+		this.searchInput = h(ownerDocument, 'input');
+		this.searchInput.type = 'search';
+		this.searchInput.placeholder = localize('sessions.list.search', 'Search sessions');
+		this.searchInput.setAttribute('aria-label', this.searchInput.placeholder);
+		search.append(this.searchInput);
 		this.newSessionButton = h(ownerDocument, "button");
 		this.newSessionButton.type = "button";
-		this.newSessionButton.className = "ash-sessions-button ash-sessions-primary-button";
-		this.newSessionButton.textContent = newSessionLabel;
+		this.newSessionButton.className = 'ash-sessions-list-add';
+		this.newSessionButton.setAttribute('aria-label', newSessionLabel);
+		this.newSessionButton.title = newSessionLabel;
+		appendIcon(Lxicon.add, this.newSessionButton);
+		controls.append(search, this.newSessionButton);
 		this.list = h(ownerDocument, "div");
 		this.list.className = "ash-sessions-list-items";
 		this.empty = h(ownerDocument, "p");
 		this.empty.className = "ash-sessions-empty";
-		this.domNode.append(this.heading, this.newSessionButton, this.list);
+		this.domNode.append(this.heading, controls, this.list);
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		this._register(addDisposableListener(this.newSessionButton, "click", () => viewService.openNewSession(newSessionLabel)));
+		this._register(addDisposableListener(this.searchInput, 'input', () => this.render()));
 		this._register(viewService.onDidChange(() => this.render()));
 		this.render();
 	}
@@ -52,7 +70,9 @@ export class SessionsList extends Disposable {
 		const ordered: SessionListItem[] = [];
 		const present = new Set<string>();
 		const activeSelection = this.viewService.activeSelection;
+		const query = this.searchInput.value.trim().toLocaleLowerCase();
 		for (const session of this.sessionService.untitledSessions) {
+			if (query && !session.title.toLocaleLowerCase().includes(query)) continue;
 			const selected = activeSelection?.kind === "untitled" && activeSelection.session.untitledSessionId === session.untitledSessionId;
 			const key = `untitled:${session.untitledSessionId}`;
 			const item = this.items.get(key) ?? this.items.set(key, new SessionListItem(ownerDocument));
@@ -61,6 +81,7 @@ export class SessionsList extends Disposable {
 			present.add(key);
 		}
 		for (const session of this.sessionService.sessions) {
+			if (query && !session.title.toLocaleLowerCase().includes(query)) continue;
 			const current = activeSelection?.kind === "session" && activeSelection.active.session.sessionId === session.sessionId ? activeSelection.active : undefined;
 			const thread = current
 				? session.chats.find(candidate => candidate.threadId === current.threadId && candidate.status === "active")
@@ -76,7 +97,7 @@ export class SessionsList extends Disposable {
 			if (!present.has(key)) this.items.deleteAndDispose(key);
 		}
 		if (ordered.length === 0) {
-			this.empty.textContent = this.sessionService.state === "loading"
+			this.empty.textContent = query ? localize('sessions.list.noResults', 'No matching sessions') : this.sessionService.state === "loading"
 				? "Loading sessions…"
 				: this.sessionService.error ?? "Create a session to begin.";
 			if (this.list.firstChild !== this.empty) this.list.replaceChildren(this.empty);
@@ -92,6 +113,7 @@ export class SessionsList extends Disposable {
 
 class SessionListItem extends AbstractDisposable {
 	readonly domNode: HTMLButtonElement;
+	private readonly label: HTMLSpanElement;
 	private open: () => void = () => {};
 	private readonly clickListener;
 
@@ -100,11 +122,19 @@ class SessionListItem extends AbstractDisposable {
 		this.domNode = h(ownerDocument, "button");
 		this.domNode.type = "button";
 		this.domNode.className = "ash-sessions-list-item";
+		const avatar = h(ownerDocument, 'span');
+		avatar.className = 'ash-sessions-list-avatar';
+		avatar.setAttribute('aria-hidden', 'true');
+		appendIcon(Lxicon.chat, avatar);
+		this.label = h(ownerDocument, 'span');
+		this.label.className = 'ash-sessions-list-label';
+		this.domNode.append(avatar, this.label);
 		this.clickListener = addDisposableListener(this.domNode, "click", () => this.open());
 	}
 
 	update(title: string, selected: boolean, open: () => void): void {
-		if (this.domNode.textContent !== title) this.domNode.textContent = title;
+		if (this.label.textContent !== title) this.label.textContent = title;
+		this.domNode.title = title;
 		this.domNode.classList.toggle("selected", selected);
 		this.domNode.setAttribute("aria-current", selected ? "page" : "false");
 		this.open = open;
