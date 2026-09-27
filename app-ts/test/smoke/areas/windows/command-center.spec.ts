@@ -264,7 +264,54 @@ test('activity bar context menu hides and restores view icons', async ({ target,
 	await expect(page.getByRole('menu').last().getByRole('menuitem', { name: "Hide 'Explorer'" })).toBeVisible();
 });
 
-test('macOS context menu converts pointer coordinates at the current window zoom', async ({ target, application, workbench }) => {
+test('Accounts and Manage menus open beside the activity bar and below the title bar', async ({ target, workbench }) => {
+	test.skip(target.kind !== 'browser' || target.workbenchMode !== 'code', 'This scenario requires the web Code workbench');
+	const page = workbench.page;
+	const activitybar = page.locator('[data-part="activitybar"]');
+	const accounts = activitybar.getByRole('button', { name: 'Accounts' });
+	await accounts.click();
+	const leftButton = await accounts.boundingBox();
+	const leftMenu = await page.getByRole('menu').last().boundingBox();
+	expect(leftButton).not.toBeNull();
+	expect(leftMenu).not.toBeNull();
+	expect(leftMenu!.x).toBeGreaterThanOrEqual(leftButton!.x + leftButton!.width - 1);
+	await page.keyboard.press('Escape');
+
+	await accounts.click({ button: 'right' });
+	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Move Primary Side Bar Right' }).click();
+	const manage = activitybar.getByRole('button', { name: 'Manage' });
+	await manage.click();
+	const rightButton = await manage.boundingBox();
+	const rightMenu = await page.getByRole('menu').last().boundingBox();
+	expect(rightButton).not.toBeNull();
+	expect(rightMenu).not.toBeNull();
+	expect(rightMenu!.x + rightMenu!.width).toBeLessThanOrEqual(rightButton!.x + 1);
+	await page.keyboard.press('Escape');
+
+	await manage.click({ button: 'right' });
+	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Activity Bar Position' }).hover();
+	await page.getByRole('menu').last().getByRole('menuitemcheckbox', { name: 'Top' }).click();
+	const titlebarManage = page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Manage' });
+	await titlebarManage.click();
+	const topButton = await titlebarManage.boundingBox();
+	const topMenu = await page.getByRole('menu').last().boundingBox();
+	expect(topButton).not.toBeNull();
+	expect(topMenu).not.toBeNull();
+	expect(topMenu!.y).toBeGreaterThanOrEqual(topButton!.y + topButton!.height - 1);
+	await page.keyboard.press('Escape');
+
+	await titlebarManage.click({ button: 'right' });
+	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Activity Bar Position' }).hover();
+	await page.getByRole('menu').last().getByRole('menuitemcheckbox', { name: 'Default' }).click();
+	await manage.click();
+	const restoredButton = await manage.boundingBox();
+	const restoredMenu = await page.getByRole('menu').last().boundingBox();
+	expect(restoredButton).not.toBeNull();
+	expect(restoredMenu).not.toBeNull();
+	expect(restoredMenu!.x + restoredMenu!.width).toBeLessThanOrEqual(restoredButton!.x + 1);
+});
+
+test('macOS context menu converts pointer and activity bar anchors at the current window zoom', async ({ target, application, workbench }) => {
 	test.skip(target.kind !== 'electron' || process.platform !== 'darwin', 'This scenario requires macOS Electron');
 	const electron = application as ElectronApplication;
 	await electron.evaluate(({ BrowserWindow, Menu }) => {
@@ -301,7 +348,7 @@ test('macOS context menu converts pointer coordinates at the current window zoom
 		await accounts.evaluate(element => {
 			element.addEventListener('mousedown', () => {
 				const bounds = element.getBoundingClientRect();
-				(window as Window & { ashMenuAnchor?: { x: number; y: number } }).ashMenuAnchor = { x: bounds.left, y: bounds.bottom };
+				(window as Window & { ashMenuAnchor?: { x: number; y: number } }).ashMenuAnchor = { x: bounds.right, y: bounds.top };
 			}, { once: true });
 		});
 		await accounts.click();

@@ -22,7 +22,7 @@ export class ActivitybarPart extends WorkbenchPart {
 	constructor(
 		container: HTMLElement,
 		private readonly compositeBar: CompositeBar,
-		private readonly globalCompositeBar: Pick<GlobalCompositeBar, 'domNode' | 'setOrientation' | 'getContextMenuActions'>,
+		private readonly globalCompositeBar: Pick<GlobalCompositeBar, 'domNode' | 'getContextMenuActions'>,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@ILocalizationService private readonly localizationService: ILocalizationService,
 	) {
@@ -88,7 +88,6 @@ export class ActivitybarPart extends WorkbenchPart {
 		this.domNode.classList.toggle('compact', this.compact);
 		this.domNode.classList.toggle('sidebar-right', this.sideBarLocation === 'right');
 		this.compositeBar.setOrientation('vertical');
-		this.globalCompositeBar.setOrientation('vertical');
 	}
 
 	private getContextMenuActions(): readonly IAction[] {

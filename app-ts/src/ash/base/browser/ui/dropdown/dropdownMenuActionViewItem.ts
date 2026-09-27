@@ -33,6 +33,7 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 		actions: DropdownMenuActions,
 		contextMenuProvider: IContextMenuProvider,
 		options: ActionViewItemOptions = {},
+		private readonly getAnchorOptions?: (anchor: HTMLElement) => Pick<IContextMenuDelegate, 'anchorAlignment' | 'anchorAxisAlignment'>,
 	) {
 		super(action, options);
 		this.actions = actions;
@@ -86,6 +87,7 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 		const options: IContextMenuDelegate = {
 			getAnchor: () => button.domNode,
 			getActions: () => actions,
+			...this.getAnchorOptions?.(button.domNode),
 			onHide: () => this.setVisible(false),
 		};
 		try {

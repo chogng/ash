@@ -3,6 +3,7 @@ import { h } from '../../../base/browser/dom.js';
 import { ActionBar } from '../../../base/browser/ui/actionbar/actionbar.js';
 import type { ActionViewItem, ActionViewItemOptions } from '../../../base/browser/ui/actionbar/actionViewItems.js';
 import { DropdownMenuActionViewItem } from '../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
+import { AnchorAlignment, AnchorAxisAlignment } from '../../../base/browser/ui/contextview/contextview.js';
 import type { IAction } from '../../../base/common/actions.js';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
@@ -10,11 +11,13 @@ import { Lxicon } from '../../../base/common/lxicons.js';
 import { getFlatContextMenuActions } from '../../../platform/actions/browser/menuEntryActionViewItem.js';
 import { IMenuService, MenuId } from '../../../platform/actions/common/actions.js';
 import { IAccountService, type Account, type AccountState } from '../../../platform/accounts/common/accountService.js';
+import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
 import { ILogService } from '../../../platform/log/common/log.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import { IGitHubConnectionService } from '../../services/accounts/common/gitHubConnectionService.js';
 import { ILocalizationService } from '../../services/localization/common/localizationService.js';
+import { WorkbenchConfiguration, type SideBarLocation } from '../../common/configuration.js';
 
 /** Account and management actions shared by the Activity Bar and title bar. */
 export class GlobalCompositeBar extends Disposable {
@@ -25,7 +28,6 @@ export class GlobalCompositeBar extends Disposable {
 	readonly onDidChangeActions = this.changeActionsEmitter.event;
 	private readonly manageMenu;
 	private accountsVisible: boolean;
-	private orientation: 'horizontal' | 'vertical' = 'vertical';
 	private accounts: readonly Account[] = [];
 	private accountRevision = -1n;
 
@@ -33,6 +35,7 @@ export class GlobalCompositeBar extends Disposable {
 		container: HTMLElement,
 		@IMenuService private readonly menuService: IMenuService,
 		@IContextMenuService private readonly contextMenuService: IContextMenuService,
+		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@IAccountService private readonly accountService: IAccountService,
 		@IGitHubConnectionService private readonly githubConnection: IGitHubConnectionService,
 		@ILocalizationService private readonly localizationService: ILocalizationService,
@@ -53,7 +56,7 @@ export class GlobalCompositeBar extends Disposable {
 		}));
 		this.renderActions();
 		this._register(this.localizationService.onDidChange(() => {
-			this.updateAriaLabel();
+			this.actionBar.element.setAttribute('aria-label', this.label('workbench.activityBarGlobalActions', 'Activity Bar global actions'));
 			this.renderActions();
 		}));
 		this._register(this.storageService.onDidChangeValue(event => {
@@ -96,20 +99,14 @@ export class GlobalCompositeBar extends Disposable {
 				: getFlatContextMenuActions(this.manageMenu.getActions()),
 			this.contextMenuService,
 			options,
+			// The title bar renders separate action items; the trigger's owner determines its menu direction.
+			(anchor) => this.domNode.contains(anchor)
+				? {
+					anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
+					anchorAlignment: this.configurationService.getValue<SideBarLocation>(WorkbenchConfiguration.sideBarLocation) === 'left' ? AnchorAlignment.Right : AnchorAlignment.Left,
+				}
+				: { anchorAxisAlignment: AnchorAxisAlignment.Vertical, anchorAlignment: AnchorAlignment.Left },
 		);
-	}
-
-	setOrientation(orientation: 'horizontal' | 'vertical'): void {
-		this.orientation = orientation;
-		this.actionBar.setOrientation(orientation);
-		this.updateAriaLabel();
-	}
-
-	private updateAriaLabel(): void {
-		const label = this.orientation === 'horizontal'
-			? this.label('workbench.titleBarGlobalActions', 'Title Bar global actions')
-			: this.label('workbench.activityBarGlobalActions', 'Activity Bar global actions');
-		this.actionBar.element.setAttribute('aria-label', label);
 	}
 
 	getContextMenuActions(): readonly IAction[] {

@@ -1,24 +1,29 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
+import type { IContextMenuDelegate } from '../../../../../base/browser/contextmenu.js';
 import type { IAction } from '../../../../../base/common/actions.js';
 import type { IAccountService, AccountState, AccountLoginCompletion, AccountLoginChallenge } from '../../../../../platform/accounts/common/accountService.js';
 import type { IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
 import type { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
+import type { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import type { ILogService } from '../../../../../platform/log/common/log.js';
 import type { ILocalizationService } from '../../../../services/localization/common/localizationService.js';
+import type { SideBarLocation } from '../../../../common/configuration.js';
 
 const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 for (const [name, value] of Object.entries({ window: browser.window, document: browser.window.document, Node: browser.window.Node, Element: browser.window.Element, HTMLElement: browser.window.HTMLElement, Event: browser.window.Event, MouseEvent: browser.window.MouseEvent })) {
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { DisposableStore } = await import('../../../../../base/common/lifecycle.js');
+const { DisposableStore, toDisposable } = await import('../../../../../base/common/lifecycle.js');
 const { formatNlsMessage } = await import('../../../../../nls.js');
 const { Emitter, Event } = await import('../../../../../base/common/event.js');
 const { IAccountService: AccountServiceId } = await import('../../../../../platform/accounts/common/accountService.js');
 const { IAccessibilityService: AccessibilityServiceId } = await import('../../../../../platform/accessibility/common/accessibility.js');
 const { IContextMenuService: ContextMenuServiceId } = await import('../../../../../platform/contextview/browser/contextView.js');
+const { IConfigurationService: ConfigurationServiceId } = await import('../../../../../platform/configuration/common/configuration.js');
+const { AnchorAlignment, AnchorAxisAlignment } = await import('../../../../../base/browser/ui/contextview/contextview.js');
 const { ILogService: LogServiceId } = await import('../../../../../platform/log/common/log.js');
 const { IDialogService: DialogServiceId } = await import('../../../../../platform/dialogs/common/dialogs.js');
 const { IDialogsModel: DialogsModelId } = await import('../../../../common/dialogs.js');
@@ -48,13 +53,20 @@ test('Activity Bar global actions open account and management menus', async () =
 	services.registerInstance(IMenuService, menus);
 	let actions: readonly IAction[] = [];
 	let closeMenu: (didCancel: boolean) => void = () => {};
+	let placement: Pick<IContextMenuDelegate, 'anchorAlignment' | 'anchorAxisAlignment'> = {};
+	let sideBarLocation: SideBarLocation = 'left';
 	const contextMenu: IContextMenuService = {
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
-		showContextMenu(options) { actions = options.getActions?.() ?? []; closeMenu = options.onHide ?? (() => {}); },
+		showContextMenu(options) {
+			actions = options.getActions?.() ?? [];
+			placement = { anchorAlignment: options.anchorAlignment, anchorAxisAlignment: options.anchorAxisAlignment };
+			closeMenu = options.onHide ?? (() => {});
+		},
 		hideContextMenu() {},
 	};
 	services.registerInstance(ContextMenuServiceId, contextMenu);
+	services.registerInstance(ConfigurationServiceId, { getValue: () => sideBarLocation } as unknown as IConfigurationService);
 	const accountsChanged = disposables.add(new Emitter<AccountState>());
 	const loginCompleted = disposables.add(new Emitter<AccountLoginCompletion>());
 	let accountState: AccountState = { revision: 1n, accounts: [{ provider: 'openai', accountId: 'one', displayName: 'Ash User', status: 'ready', credentialRevision: 1n }] };
@@ -105,6 +117,7 @@ test('Activity Bar global actions open account and management menus', async () =
 	assert.ok(accountsButton);
 	assert.ok(manageButton);
 	accountsButton.click();
+	assert.deepEqual(placement, { anchorAlignment: AnchorAlignment.Right, anchorAxisAlignment: AnchorAxisAlignment.Horizontal });
 	assert.deepEqual(actions.map(action => action.label), ['Sign out of Ash User', 'Sign in with ChatGPT', 'Connect GitHub']);
 	await actions[1]?.run();
 	assert.deepEqual(loginMethods, ['openAiChatGptBrowser']);
@@ -161,9 +174,27 @@ test('Activity Bar global actions open account and management menus', async () =
 	assert.equal(actions[2]?.label, 'Connect GitHub');
 	assert.equal(actions[2]?.enabled, true);
 	manageButton.click();
+	assert.deepEqual(placement, { anchorAlignment: AnchorAlignment.Right, anchorAxisAlignment: AnchorAxisAlignment.Horizontal });
 	assert.equal(actions.find(action => action.id === 'test.activityBar.settings')?.label, 'Settings');
 	await actions.find(action => action.id === 'test.activityBar.settings')?.run();
 	assert.equal(settingsOpened, true);
+	closeMenu(false);
+	sideBarLocation = 'right';
+	manageButton.click();
+	assert.deepEqual(placement, { anchorAlignment: AnchorAlignment.Left, anchorAxisAlignment: AnchorAxisAlignment.Horizontal });
+	closeMenu(false);
+	const titlebarContainer = ownerDocument.createElement('div');
+	ownerDocument.body.append(titlebarContainer);
+	disposables.add(toDisposable(() => titlebarContainer.remove()));
+	const titlebarManage = bar.getActions().find(action => action.id === 'ash.activityBar.manage');
+	assert.ok(titlebarManage);
+	const titlebarViewItem = bar.createActionViewItem(titlebarManage, {});
+	assert.ok(titlebarViewItem);
+	disposables.add(titlebarViewItem);
+	titlebarViewItem.render(titlebarContainer);
+	titlebarContainer.querySelector<HTMLButtonElement>('button')?.click();
+	assert.deepEqual(placement, { anchorAlignment: AnchorAlignment.Left, anchorAxisAlignment: AnchorAxisAlignment.Vertical });
+	closeMenu(false);
 	manageLabel = '管理';
 	localizationChanged.fire();
 	assert.equal(bar.domNode.querySelector<HTMLButtonElement>('[data-action-id="ash.activityBar.manage"] button')?.getAttribute('aria-label'), '管理');
