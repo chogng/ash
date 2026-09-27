@@ -12,6 +12,9 @@ function nextIconId(suffix: string): string {
 
 test('the icon registry exposes built-in Lxicons and semantic registrations', () => {
 	assert.equal(getIconRegistry().getIcon(Lxicon.add.id)?.defaults, resolveIconDefinition(Lxicon.add));
+	assert.equal(getIconRegistry().getIcon(Lxicon.debugAlt.id)?.defaults, resolveIconDefinition(Lxicon.debugAlt));
+	assert.equal(getIconRegistry().getIcon(Lxicon.splitHorizontal.id)?.defaults, resolveIconDefinition(Lxicon.splitHorizontal));
+	assert.equal(getIconRegistry().getIcon(Lxicon.splitVertical.id)?.defaults, resolveIconDefinition(Lxicon.splitVertical));
 	const definition = () => '<svg></svg>';
 	const icon = registerIcon(nextIconId('definition'), definition, 'A test icon');
 	assert.equal(resolveIconDefinition(icon), definition);

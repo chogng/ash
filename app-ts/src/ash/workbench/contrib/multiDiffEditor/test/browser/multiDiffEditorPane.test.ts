@@ -59,6 +59,9 @@ const { createGitMultiDiffEditorInput } = await import('../../browser/scmMultiDi
 function registerDialogs(services: ServiceContainer, sourceResolver?: IMultiDiffSourceResolver): void {
 	services.registerInstance(IDialogService, {
 		showMessage: async () => {},
+		info: async () => {},
+		warn: async () => {},
+		error: async () => {},
 		confirm: async () => ({ confirmed: true }),
 		prompt: async () => DialogResult.Cancel,
 		input: async () => ({ confirmed: false }),

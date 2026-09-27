@@ -102,3 +102,19 @@ test("dialog service propagates model presentation failures", async () => {
 	await assert.rejects(result, /render failed/);
 	assert.equal(service.model.dialogs.length, 0);
 });
+
+test("info, warn, and error use the dialog queue with their severity", async () => {
+	using service = new DialogService();
+	const results = [
+		service.info("Information", "First detail"),
+		service.warn("Warning", "Second detail"),
+		service.error("Failure", "Third detail"),
+	];
+	assert.deepEqual(service.model.dialogs.map(item => item.request), [
+		{ kind: "message", severity: DialogSeverity.Info, message: "Information", detail: "First detail", title: "Information", primaryButton: "OK" },
+		{ kind: "message", severity: DialogSeverity.Warning, message: "Warning", detail: "Second detail", title: "Warning", primaryButton: "OK" },
+		{ kind: "message", severity: DialogSeverity.Error, message: "Failure", detail: "Third detail", title: "Error", primaryButton: "OK" },
+	]);
+	for (const item of service.model.dialogs) item.close({ button: DialogResult.Primary });
+	await Promise.all(results);
+});

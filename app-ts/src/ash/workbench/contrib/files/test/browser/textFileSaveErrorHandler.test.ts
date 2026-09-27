@@ -9,6 +9,9 @@ test('File save errors distinguish disk conflicts and retain the user edits', as
 	const messages: IMessageDialogOptions[] = [];
 	const dialogs: IDialogService = {
 		showMessage: async options => { messages.push(options); },
+		info: async () => {},
+		warn: async () => {},
+		error: async () => {},
 		confirm: async () => { throw new Error('Unexpected confirm'); },
 		prompt: async () => { throw new Error('Unexpected prompt'); },
 		input: async () => { throw new Error('Unexpected input'); },

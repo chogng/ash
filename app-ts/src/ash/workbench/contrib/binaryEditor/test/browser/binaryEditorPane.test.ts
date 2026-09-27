@@ -42,6 +42,9 @@ test('Binary file editor opens a bounded read-only text preview', async () => {
 	let openOptions: EditorOpenOptions | undefined;
 	const dialogs: IDialogService = {
 		showMessage: async () => {},
+		info: async () => {},
+		warn: async () => {},
+		error: async () => {},
 		confirm: async () => { throw new Error('Unexpected confirm'); },
 		prompt: async () => { throw new Error('Unexpected prompt'); },
 		input: async () => { throw new Error('Unexpected input'); },

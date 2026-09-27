@@ -5,7 +5,7 @@ import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { Action2, IMenuService, MenuId, MenuItemAction, MenusRegistry } from '../../../../platform/actions/common/actions.js';
 import { localizedString } from '../../../../platform/action/common/action.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
-import { DialogSeverity, IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { IQuickAccessController, type IQuickAccessProvider } from '../../../../platform/quickinput/common/quickAccess.js';
@@ -50,11 +50,10 @@ export class CommandsQuickAccessProvider implements IQuickAccessProvider {
 			const commandId = command.commandId;
 			void this.commandService.executeCommand(commandId).catch((error: unknown) => {
 				if (isCancellationError(error)) return;
-				void this.dialogService.showMessage({
-					severity: DialogSeverity.Error,
-					message: localize('quickAccess.commandFailed', "Command '{0}' resulted in an error", command.label),
-					detail: getErrorMessage(error),
-				}).catch(onUnexpectedError);
+				void this.dialogService.error(
+					localize('quickAccess.commandFailed', "Command '{0}' resulted in an error", command.label),
+					getErrorMessage(error),
+				).catch(onUnexpectedError);
 			});
 		}));
 		updateItems();

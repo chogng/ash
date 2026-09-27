@@ -16,6 +16,9 @@ import type { ISessionsManagementService, SessionsManagementState } from "../../
 
 const testDialogs: IDialogService = {
 	showMessage: async () => {},
+	info: async () => {},
+	warn: async () => {},
+	error: async () => {},
 	confirm: async () => ({ confirmed: true }),
 	prompt: async () => DialogResult.Cancel,
 	input: async () => ({ confirmed: false }),

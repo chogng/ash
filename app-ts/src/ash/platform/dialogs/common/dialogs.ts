@@ -103,6 +103,9 @@ export interface IDialogHandler {
 /** Window-scoped access to modal workbench dialogs. */
 export interface IDialogService {
 	showMessage(options: IMessageDialogOptions): Promise<void>;
+	info(message: string, detail?: string): Promise<void>;
+	warn(message: string, detail?: string): Promise<void>;
+	error(message: string, detail?: string): Promise<void>;
 	confirm(options: IConfirmationDialogOptions): Promise<IConfirmationDialogResult>;
 	prompt(options: IPromptDialogOptions): Promise<DialogResult>;
 	input(options: IInputDialogOptions): Promise<IInputDialogResult>;

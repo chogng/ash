@@ -7,6 +7,9 @@ import { DialogResult, type IDialogService } from '../../../../../platform/dialo
 let dialogValues: readonly string[] = [];
 const testDialogs: IDialogService = {
 	showMessage: async () => {},
+	info: async () => {},
+	warn: async () => {},
+	error: async () => {},
 	confirm: async () => ({ confirmed: true }),
 	prompt: async () => DialogResult.Cancel,
 	input: async () => ({ confirmed: true, values: dialogValues }),

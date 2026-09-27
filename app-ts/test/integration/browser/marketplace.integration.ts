@@ -7,7 +7,7 @@ import { IConfigurationService } from '../../../src/ash/platform/configuration/c
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { ServiceContainer } from '../../../src/ash/platform/instantiation/common/instantiation.js';
 import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.js';
-import { DialogResult, IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
+import { DialogResult, DialogSeverity, IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { ILanguageServerService } from '../../../src/ash/platform/language/common/languageServerService.js';
 import type { IMarketplaceApi } from '../../../src/ash/platform/marketplace/common/marketplaceApi.js';
 import { IMarketplaceService, OPEN_MARKETPLACE_COMMAND_ID, type MarketplaceInstalledPackage, type MarketplaceOpenOptions } from '../../../src/ash/platform/marketplace/common/marketplaceService.js';
@@ -65,8 +65,11 @@ services.registerInstance(IConfigurationService, { getValue: () => true } as unk
 const dialogs = new BrowserDialogHandler(document.body);
 const signal = new AbortController().signal;
 services.registerInstance(IDialogService, {
-	confirm: async options => (await dialogs.showDialog({ kind: 'confirmation', ...options }, signal)).button === DialogResult.Primary,
+	confirm: async options => ({ confirmed: (await dialogs.showDialog({ kind: 'confirmation', ...options }, signal)).button === DialogResult.Primary }),
 	showMessage: async options => { await dialogs.showDialog({ kind: 'message', ...options }, signal); },
+	info: async message => { await dialogs.showDialog({ kind: 'message', severity: DialogSeverity.Info, message }, signal); },
+	warn: async message => { await dialogs.showDialog({ kind: 'message', severity: DialogSeverity.Warning, message }, signal); },
+	error: async message => { await dialogs.showDialog({ kind: 'message', severity: DialogSeverity.Error, message }, signal); },
 	prompt: async options => (await dialogs.showDialog({ kind: 'prompt', ...options }, signal)).button,
 	input: async options => {
 		const result = await dialogs.showDialog({ kind: 'input', ...options }, signal);

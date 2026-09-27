@@ -121,6 +121,9 @@ class TestDialogService implements IDialogService {
 	async showMessage(options: IMessageDialogOptions): Promise<void> {
 		this.messages.push(options);
 	}
+	async info(): Promise<void> {}
+	async warn(): Promise<void> {}
+	async error(): Promise<void> {}
 
 	async confirm(options: IConfirmationDialogOptions): Promise<{ confirmed: boolean }> {
 		this.confirmations.push(options);

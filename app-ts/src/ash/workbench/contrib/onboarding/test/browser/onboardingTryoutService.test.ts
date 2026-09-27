@@ -29,6 +29,9 @@ suite('OnboardingTryoutService', () => {
 		services.registerInstance(IViewsService, { openView: () => undefined, focusView: () => false });
 		services.registerInstance(IDialogService, {
 			async showMessage() {},
+			async info() {},
+			async warn() {},
+			async error() {},
 			async confirm(_options: IConfirmationDialogOptions) { return { confirmed }; },
 			async input() { throw new Error('Unexpected input dialog'); },
 			async prompt() { return DialogResult.Cancel; },

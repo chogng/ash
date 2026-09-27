@@ -1576,6 +1576,9 @@ class TestDialogService implements IDialogService {
 	}
 
 	async showMessage(): Promise<void> {}
+	async info(): Promise<void> {}
+	async warn(): Promise<void> {}
+	async error(): Promise<void> {}
 	async confirm(): Promise<{ confirmed: boolean }> { return { confirmed: false }; }
 	async input(): Promise<never> { throw new Error('Unexpected input dialog'); }
 	async prompt(options: IPromptDialogOptions): Promise<DialogResult> {

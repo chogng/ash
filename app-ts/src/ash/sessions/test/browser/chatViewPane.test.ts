@@ -45,6 +45,9 @@ import type { IEditorService } from "../../../workbench/services/editor/common/e
 
 const testDialogs: IDialogService = {
 	showMessage: async () => {},
+	info: async () => {},
+	warn: async () => {},
+	error: async () => {},
 	confirm: async () => ({ confirmed: true }),
 	prompt: async () => DialogResult.Cancel,
 	input: async () => ({ confirmed: false }),
@@ -2087,6 +2090,9 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 function recordingDialogService(messages: IMessageDialogOptions[]): IDialogService {
 	return {
 		showMessage: async options => { messages.push(options); },
+		info: async () => {},
+		warn: async () => {},
+		error: async () => {},
 		confirm: async () => ({ confirmed: false }),
 		input: async () => { throw new Error('Unexpected input dialog'); },
 		prompt: async () => DialogResult.Cancel,

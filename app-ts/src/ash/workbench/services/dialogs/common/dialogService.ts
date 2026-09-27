@@ -30,6 +30,18 @@ export class DialogService extends Disposable
 		await handle.result;
 	}
 
+	info(message: string, detail?: string): Promise<void> {
+		return this.showMessage({ severity: DialogSeverity.Info, message, detail });
+	}
+
+	warn(message: string, detail?: string): Promise<void> {
+		return this.showMessage({ severity: DialogSeverity.Warning, message, detail });
+	}
+
+	error(message: string, detail?: string): Promise<void> {
+		return this.showMessage({ severity: DialogSeverity.Error, message, detail });
+	}
+
 	async confirm(options: IConfirmationDialogOptions): Promise<IConfirmationDialogResult> {
 		const handle = this.model.show({
 			kind: "confirmation",

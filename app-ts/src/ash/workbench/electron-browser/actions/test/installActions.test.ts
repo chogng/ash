@@ -11,6 +11,9 @@ test('shell command actions report the installed path and installation errors', 
 	const messages: IMessageDialogOptions[] = [];
 	services.registerInstance(IDialogService, {
 		showMessage: async options => { messages.push(options); },
+		info: async () => {},
+		warn: async () => {},
+		error: async () => {},
 		confirm: async () => ({ confirmed: false }),
 		prompt: async () => { throw new Error('unused'); },
 		input: async () => { throw new Error('unused'); },

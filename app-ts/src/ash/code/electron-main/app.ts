@@ -184,9 +184,14 @@ export class AshApplication extends Disposable {
 		},
 		process.platform,
 	));
+	private readonly dialogs = this._register(new DialogMainService({
+		showMessageBox: (options, window) => window ? dialog.showMessageBox(window, options) : dialog.showMessageBox(options),
+		showOpenDialog: (options, window) => window ? dialog.showOpenDialog(window, options) : dialog.showOpenDialog(options),
+		showSaveDialog: (options, window) => window ? dialog.showSaveDialog(window, options) : dialog.showSaveDialog(options),
+	}));
 	private readonly lifecycleMainService = this._register(new LifecycleMainService<BrowserWindow>(async (window, message) => {
 		this.windowsMainService.failManagedWindowClose(window, message);
-		await dialog.showMessageBox(window, { type: 'error', message });
+		await this.dialogs.showMessageBox({ type: 'error', message }, window);
 	}, window => this.windowsMainService.failManagedWindowClose(window, 'Window close was vetoed')));
 	private readonly pendingWindowLaunches: PendingWindowLaunch[] = [];
 	private workspaces: WorkspacesManagementMainService | undefined;
@@ -575,7 +580,7 @@ export class AshApplication extends Disposable {
 				const detail = diagnostics
 					? `${message}\n\nDiagnostics:\n${diagnostics}`.slice(0, 8_000)
 					: message;
-				const result = await dialog.showMessageBox({
+				const result = await this.dialogs.showMessageBox({
 					type: "error",
 					title: `${WorkbenchModeRegistry.get(this.defaultModeId).title} startup failed`,
 					message: "The App Server could not be validated.",
@@ -695,7 +700,7 @@ export class AshApplication extends Disposable {
 			workspaceContext,
 			connections: record.remoteConnections,
 			tunnels: remoteTunnelService,
-			host: electronRemoteWindowMainHost(window),
+			host: electronRemoteWindowMainHost(window, this.dialogs),
 			prepareForRuntimeReplacement: () => window.webContents.send("ash:terminal:prepareReplacement"),
 		}));
 		const transitionToFolder = async (folderPath: string, selectionRequired: boolean): Promise<void> => {
@@ -722,7 +727,7 @@ export class AshApplication extends Disposable {
 			}
 		};
 		record.openWorkspace = (root) => transitionToFolder(root, true);
-		const windowDialogs = windowDisposables.add(new DialogMainService(window, (target, options) => dialog.showMessageBox(target, options)));
+		windowDisposables.add(toDisposable(() => this.dialogs.cancelWindow(window)));
 		const windowControlsOverlay = new WindowControlsOverlay(colors => {
 			if (process.platform === 'win32' || process.platform === 'linux') window.setTitleBarOverlay(colors);
 		});
@@ -738,17 +743,17 @@ export class AshApplication extends Disposable {
 			windowOperationIpcRoute(this.windowsMainService, window),
 			windowCloseResponseIpcRoute(this.lifecycleMainService, window),
 			...nativeHostIpcRoutes({
-				performDialogOperation: operation => windowDialogs.perform(operation),
+				performDialogOperation: operation => this.dialogs.perform(window, operation),
 				performShellCommand: operation => this.performShellCommand(operation),
 				pickFolder: async () => {
-					const result = await dialog.showOpenDialog(window, {
+					const result = await this.dialogs.showOpenDialog({
 						title: "Add Directory",
 						properties: ["openDirectory"],
-					});
+					}, window);
 					return result.canceled || !result.filePaths[0] ? undefined : result.filePaths[0];
 				},
 				pickFile: async (options) => {
-					const result = await dialog.showOpenDialog(window, {
+					const result = await this.dialogs.showOpenDialog({
 						title: options.title ?? 'Open File',
 						...(options.defaultPath ? { defaultPath: options.defaultPath } : {}),
 						...(options.buttonLabel ? { buttonLabel: options.buttonLabel } : {}),
@@ -758,7 +763,7 @@ export class AshApplication extends Disposable {
 							...(options.canSelectFolders ? ['openDirectory' as const] : []),
 							...(options.canSelectMany ? ['multiSelections' as const] : []),
 						],
-					});
+					}, window);
 					return result.canceled || result.filePaths.length === 0 ? undefined : result.filePaths;
 				},
 				openWorkspace: (root) => transitionToFolder(root, true),
@@ -768,12 +773,12 @@ export class AshApplication extends Disposable {
 					shell.showItemInFolder(path);
 				},
 				saveFile: async (options) => {
-					const result = await dialog.showSaveDialog(window, {
+					const result = await this.dialogs.showSaveDialog({
 						title: options.title ?? "Save File",
 						...(options.defaultPath || options.defaultName ? { defaultPath: options.defaultPath ?? options.defaultName } : {}),
 						...(options.buttonLabel ? { buttonLabel: options.buttonLabel } : {}),
 						...(options.filters ? { filters: options.filters.map(filter => ({ name: filter.name, extensions: [...filter.extensions] })) } : {}),
-					});
+					}, window);
 					return result.canceled || !result.filePath ? undefined : result.filePath;
 				},
 				isAccessibilitySupportEnabled: () => app.isAccessibilitySupportEnabled(),
@@ -873,7 +878,7 @@ export class AshApplication extends Disposable {
 							sshExecutable: process.env.ASH_SSH_PATH ?? "ssh",
 							localEnvironment: process.env,
 						}),
-						host: electronRemoteWindowMainHost(window),
+						host: electronRemoteWindowMainHost(window, this.dialogs),
 						prepareForRuntimeReplacement: () => window.webContents.send("ash:terminal:prepareReplacement"),
 					}));
 					const windowResources = {
@@ -1023,7 +1028,7 @@ export class AshApplication extends Disposable {
 		console.error("Failed to switch Workbench mode", error);
 		if (record.window.isDestroyed()) return;
 		const detail = error instanceof Error ? error.message : "The requested mode could not be loaded";
-		await dialog.showMessageBox(record.window, {
+		await this.dialogs.showMessageBox({
 			type: "error",
 			title: `${AshApplicationName} mode switch failed`,
 			message: "The requested Workbench mode could not be loaded.",
@@ -1032,7 +1037,7 @@ export class AshApplication extends Disposable {
 			defaultId: 0,
 			cancelId: 0,
 			noLink: true,
-		});
+		}, record.window);
 	}
 
 	private resolveRendererEntry(kind: "workbench" | "sessions" | "remoteRuntimeInstall", modeId: WorkbenchModeId = this.defaultModeId): RendererEntry {
@@ -1195,7 +1200,7 @@ export class AshApplication extends Disposable {
 		if (this.quitRequested) return;
 		const message = error instanceof Error ? error.message : "The requested Workspace could not be opened";
 		try {
-			await dialog.showMessageBox({
+			await this.dialogs.showMessageBox({
 				type: "error",
 				title: `${WorkbenchModeRegistry.get(this.defaultModeId).title} window failed`,
 				message: "The requested Workspace could not be opened.",
