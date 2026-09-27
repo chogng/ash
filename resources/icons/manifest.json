@@ -322,6 +322,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "debug-alt",
+      "file": "debug-alt.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "device-mobile",
       "file": "device-mobile.svg",
       "rendering": "symbolic"

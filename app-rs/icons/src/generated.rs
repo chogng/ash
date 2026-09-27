@@ -72,6 +72,7 @@ mod artwork {
     pub(crate) const DATABASE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/database.svg"));
     pub(crate) const DATABASE_FLAT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/database-flat.svg"));
     pub(crate) const DEBUG: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/debug.svg"));
+    pub(crate) const DEBUG_ALT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/debug-alt.svg"));
     pub(crate) const DEVICE_MOBILE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/device-mobile.svg"));
     pub(crate) const DIAGNOSTICS: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/diagnostics.svg"));
     pub(crate) const DIFF: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/diff.svg"));
@@ -287,6 +288,7 @@ pub mod icons {
     pub const DATABASE: Icon = Icon::new(IconId::new("database"), artwork::DATABASE);
     pub const DATABASE_FLAT: Icon = Icon::new(IconId::new("database-flat"), artwork::DATABASE_FLAT);
     pub const DEBUG: Icon = Icon::new(IconId::new("debug"), artwork::DEBUG);
+    pub const DEBUG_ALT: Icon = Icon::new(IconId::new("debug-alt"), artwork::DEBUG_ALT);
     pub const DEVICE_MOBILE: Icon = Icon::new(IconId::new("device-mobile"), artwork::DEVICE_MOBILE);
     pub const DIAGNOSTICS: Icon = Icon::new(IconId::new("diagnostics"), artwork::DIAGNOSTICS);
     pub const DIFF: Icon = Icon::new(IconId::new("diff"), artwork::DIFF);
@@ -498,6 +500,7 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::DATABASE,
     icons::DATABASE_FLAT,
     icons::DEBUG,
+    icons::DEBUG_ALT,
     icons::DEVICE_MOBILE,
     icons::DIAGNOSTICS,
     icons::DIFF,
@@ -710,6 +713,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("database", artwork::DATABASE),
     ("database-flat", artwork::DATABASE_FLAT),
     ("debug", artwork::DEBUG),
+    ("debug-alt", artwork::DEBUG_ALT),
     ("device-mobile", artwork::DEVICE_MOBILE),
     ("diagnostics", artwork::DIAGNOSTICS),
     ("diff", artwork::DIFF),
