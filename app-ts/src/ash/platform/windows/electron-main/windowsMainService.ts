@@ -12,9 +12,9 @@ import { USER_KEYBOARD_LAYOUT_CHANGED_CHANNEL } from '../../keyboardLayout/commo
 import { nativeKeyboardLayoutIpcRoutes, type NativeKeyboardLayoutMainService } from '../../keyboardLayout/electron-main/nativeKeyboardLayoutMainService.js';
 import { userKeyboardLayoutIpcRoutes, type UserKeyboardLayoutMainService } from '../../keyboardLayout/electron-main/userKeyboardLayoutMainService.js';
 import { createSshRemoteWorkspaceUri } from '../../remote/common/remote.js';
-import { type IAnyWorkspaceIdentifier, UNKNOWN_EMPTY_WINDOW_WORKSPACE, hasWorkspaceFileExtension, serializeWorkspace } from '../../workspace/common/workspace.js';
+import { type IAnyWorkspaceIdentifier, hasWorkspaceFileExtension, serializeWorkspace } from '../../workspace/common/workspace.js';
 import { WORKSPACE_CONTEXT_READ_CHANNEL, validateWorkspaceContextRead } from '../../workspace/common/workspaceIpc.js';
-import { getSingleFolderWorkspaceIdentifier, getWorkspaceIdentifier, nodeWorkspacePathService, type IWorkspacePathService, WorkspacePathKind } from '../../workspaces/node/workspaces.js';
+import { createEmptyWorkspaceIdentifier, getSingleFolderWorkspaceIdentifier, getWorkspaceIdentifier, nodeWorkspacePathService, type IWorkspacePathService, WorkspacePathKind } from '../../workspaces/node/workspaces.js';
 import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL, validateWindowCloseResponse, validateWindowOperation, type WindowCloseResponse, type WindowOperation, type IWorkbenchWindowInfo } from '../../window/common/window.js';
 import { focusWindow, type IFocusableWindow, type WorkspaceContextMainService } from '../../window/electron-main/window.js';
 
@@ -61,7 +61,7 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> {
 
 	public async resolveWorkspaceOpenTarget(target: IWorkspaceOpenTarget | undefined, cwd: string): Promise<IAnyWorkspaceIdentifier> {
 		if (!target) {
-			return UNKNOWN_EMPTY_WINDOW_WORKSPACE;
+			return createEmptyWorkspaceIdentifier();
 		}
 		if (target.kind === WorkspaceOpenTargetKind.RemoteFolder) {
 			return getSingleFolderWorkspaceIdentifier(createSshRemoteWorkspaceUri(target.sshHost, target.path));
@@ -81,7 +81,7 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> {
 			(target.kind === WorkspaceOpenTargetKind.Workspace || hasWorkspaceFileExtension(resolved.path))) {
 			return getWorkspaceIdentifier(URI.file(resolved.path));
 		}
-		return UNKNOWN_EMPTY_WINDOW_WORKSPACE;
+		return createEmptyWorkspaceIdentifier();
 	}
 
 	public trackClose(window: TWindow, beforeClose?: () => Promise<void>): IDisposable {

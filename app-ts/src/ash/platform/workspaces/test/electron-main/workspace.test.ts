@@ -178,12 +178,14 @@ test("loose files and launches without a target remain empty", async () => {
 	};
 	const service = windowsForWorkspacePaths(pathService);
 
-	assert.deepEqual(
-		await service.resolveWorkspaceOpenTarget(undefined, resolve('launch-root')),
-		UNKNOWN_EMPTY_WINDOW_WORKSPACE,
-	);
+	const firstEmptyWorkspace = await service.resolveWorkspaceOpenTarget(undefined, resolve('launch-root'));
+	const secondEmptyWorkspace = await service.resolveWorkspaceOpenTarget(undefined, resolve('launch-root'));
+	assert.match(firstEmptyWorkspace.id, /^empty-window-[0-9a-f-]{36}$/u);
+	assert.notEqual(firstEmptyWorkspace.id, secondEmptyWorkspace.id);
+	assert.notEqual(firstEmptyWorkspace.id, UNKNOWN_EMPTY_WINDOW_WORKSPACE.id);
 	const looseFileWorkspace = await service.resolveWorkspaceOpenTarget({ kind: WorkspaceOpenTargetKind.Automatic, path: 'notes.txt' }, resolve('launch-root'));
-	assert.deepEqual(looseFileWorkspace, UNKNOWN_EMPTY_WINDOW_WORKSPACE);
+	assert.match(looseFileWorkspace.id, /^empty-window-[0-9a-f-]{36}$/u);
+	assert.notEqual(looseFileWorkspace.id, firstEmptyWorkspace.id);
 	assert.equal(
 		workbenchStateFromWorkspaceIdentifier(looseFileWorkspace),
 		WorkbenchState.EMPTY,

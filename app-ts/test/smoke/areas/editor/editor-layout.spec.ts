@@ -1,15 +1,48 @@
 import type { Locator } from "@playwright/test";
+import { parseWorkspace } from "../../../../src/ash/platform/workspace/common/workspace.js";
 import { expect, test } from "../../../automation/test.js";
 
 test.describe('startup layout defaults', () => {
 	test.use({ openWorkspace: false });
 
-	test('empty window shows Welcome with sidebars and Panel hidden', async ({ workbench }) => {
+	test('empty window shows Welcome with sidebars and Panel hidden', async ({ target, workbench }) => {
+		test.skip(target.kind === 'browser' && target.appServerMode === 'required');
 		const page = workbench.page;
+		const workspaceId = target.kind === 'electron'
+			? parseWorkspace(await page.evaluate(() => {
+				const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
+				return ipc.invoke('ash:workspace:context:read');
+			})).id
+			: await page.evaluate(() => sessionStorage.getItem('ash.workbench.emptyWorkspaceId'));
+		expect(workspaceId).toMatch(/^empty-window-[0-9a-f-]{36}$/u);
 		await expect(page.locator("[data-part='sidebar']")).toBeHidden();
 		await expect(page.locator("[data-part='panel']")).toBeHidden();
 		await expect(page.locator("[data-part='auxiliarybar']")).toBeHidden();
 		await expect(workbench.editors.groupAt(0).welcome).toBeVisible();
+	});
+
+	test('new browser tab starts empty while reload keeps the current layout', async ({ target, workbench }) => {
+		if (target.kind !== 'browser' || target.appServerMode !== 'disabled') {
+			test.skip();
+			return;
+		}
+		const page = workbench.page;
+		const sidebar = page.locator("[data-part='sidebar']");
+		await page.locator('[data-action-id="workbench.action.toggleSideBar"] button').click();
+		await expect(sidebar).toBeVisible();
+
+		await page.reload();
+		await workbench.waitForReady();
+		await expect(sidebar).toBeVisible();
+
+		const newTab = await page.context().newPage();
+		try {
+			await newTab.goto(target.baseURL);
+			await expect(newTab.locator("[data-part='sidebar']")).toBeHidden();
+			await expect(newTab.locator('.ash-getting-started')).toBeVisible();
+		} finally {
+			await newTab.close();
+		}
 	});
 });
 
@@ -167,9 +200,11 @@ test.describe('welcome brand', () => {
 			await toggle.click();
 		}
 		await expect(auxiliaryBar).toBeVisible();
+		await expect(toggle.locator('svg[data-ash-icon-id="layout-sidebar-right-1"]')).toBeVisible();
 		const expanded = await geometry();
 		await toggle.click();
 		await expect(auxiliaryBar).toBeHidden();
+		await expect(toggle.locator('svg[data-ash-icon-id="layout-sidebar-right-off-1"]')).toBeVisible();
 		const collapsed = await geometry();
 		expect(expanded.editorWidth).toBeLessThan(collapsed.editorWidth);
 		expect(expanded.cardWidth).toBeGreaterThanOrEqual(160);

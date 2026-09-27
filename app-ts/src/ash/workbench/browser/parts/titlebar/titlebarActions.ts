@@ -61,12 +61,12 @@ registerAction2(class ToggleAuxiliaryBarAction extends Action2 {
 			id: ToggleAuxiliaryBarCommandId,
 			title: localizedString("ash.actions", "showSecondarySidebar", "Show Secondary Side Bar"),
 			tooltip: localizedString("ash.actions", "showSecondarySidebar", "Show Secondary Side Bar"),
-			icon: Lxicon.layoutSidebarRightOff,
+			icon: Lxicon.layoutSidebarRightOff1,
 			toggled: {
 				condition: AuxiliaryBarVisibleContext.isEqualTo(true),
 				title: localizedString("ash.actions", "hideSecondarySidebar", "Hide Secondary Side Bar"),
 				tooltip: localizedString("ash.actions", "hideSecondarySidebar", "Hide Secondary Side Bar"),
-				icon: Lxicon.layoutSidebarRight,
+				icon: Lxicon.layoutSidebarRight1,
 			},
 			menu: [
 				{

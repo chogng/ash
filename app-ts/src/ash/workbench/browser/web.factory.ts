@@ -9,7 +9,7 @@ import {
 	createDisconnectedRendererApi,
 } from "../../platform/app-server/browser/rendererApi.js";
 import {
-	UNKNOWN_EMPTY_WINDOW_WORKSPACE,
+	type IEmptyWorkspaceIdentifier,
 	workspaceFromIdentifier,
 } from "../../platform/workspace/common/workspace.js";
 import {
@@ -40,11 +40,21 @@ export function createWebWorkbench(
 		webWorkspaceClient: options.webWorkspaceClient,
 		browserFileSystemProvider: options.browserFileSystemProvider,
 		container: options.container,
-		workspace: workspaceFromIdentifier(options.workspace ?? UNKNOWN_EMPTY_WINDOW_WORKSPACE),
+		workspace: workspaceFromIdentifier(options.workspace ?? getEmptyWorkspaceIdentifier()),
 		createContextMenuService: createBrowserWorkbenchContextMenuService,
 		createTitlebarPart: createBrowserTitlebarPart,
 		switchWorkbenchMode: options.switchWorkbenchMode ?? (targetModeId => switchBrowserWorkbenchMode(window, targetModeId)),
 	});
+}
+
+function getEmptyWorkspaceIdentifier(): IEmptyWorkspaceIdentifier {
+	const key = 'ash.workbench.emptyWorkspaceId';
+	let id = window.sessionStorage.getItem(key);
+	if (!id) {
+		id = `empty-window-${crypto.randomUUID()}`;
+		window.sessionStorage.setItem(key, id);
+	}
+	return { id };
 }
 
 /**

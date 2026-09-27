@@ -119,9 +119,10 @@ mod artwork {
     pub(crate) const LAYOUT_SIDEBAR_LEFT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout-sidebar-left.svg"));
     pub(crate) const LAYOUT_SIDEBAR_LEFT_OFF: IconDefinition = IconDefinition::multicolor(include_bytes!("../../../resources/icons/layout-sidebar-left-off.svg"));
     pub(crate) const LAYOUT_SIDEBAR_LEFT_OFF_EMPTY: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout-sidebar-left-off-empty.svg"));
-    pub(crate) const LAYOUT_SIDEBAR_RIGHT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout-sidebar-right.svg"));
-    pub(crate) const LAYOUT_SIDEBAR_RIGHT_OFF: IconDefinition = IconDefinition::multicolor(include_bytes!("../../../resources/icons/layout-sidebar-right-off.svg"));
-    pub(crate) const LAYOUT_SIDEBAR_RIGHT_OFF_EMPTY: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout-sidebar-right-off-empty.svg"));
+    pub(crate) const LAYOUT_SIDEBAR_RIGHT_1: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout-sidebar-right-1.svg"));
+    pub(crate) const LAYOUT_SIDEBAR_RIGHT_2: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout-sidebar-right-2.svg"));
+    pub(crate) const LAYOUT_SIDEBAR_RIGHT_OFF_1: IconDefinition = IconDefinition::multicolor(include_bytes!("../../../resources/icons/layout-sidebar-right-off-1.svg"));
+    pub(crate) const LAYOUT_SIDEBAR_RIGHT_OFF_2: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout-sidebar-right-off-2.svg"));
     pub(crate) const LEGEND: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/legend.svg"));
     pub(crate) const LETTER_B: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/letter-b.svg"));
     pub(crate) const LETTER_H: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/letter-h.svg"));
@@ -319,9 +320,10 @@ pub mod icons {
     pub const LAYOUT_SIDEBAR_LEFT: Icon = Icon::new(IconId::new("layout-sidebar-left"), artwork::LAYOUT_SIDEBAR_LEFT);
     pub const LAYOUT_SIDEBAR_LEFT_OFF: Icon = Icon::new(IconId::new("layout-sidebar-left-off"), artwork::LAYOUT_SIDEBAR_LEFT_OFF);
     pub const LAYOUT_SIDEBAR_LEFT_OFF_EMPTY: Icon = Icon::new(IconId::new("layout-sidebar-left-off-empty"), artwork::LAYOUT_SIDEBAR_LEFT_OFF_EMPTY);
-    pub const LAYOUT_SIDEBAR_RIGHT: Icon = Icon::new(IconId::new("layout-sidebar-right"), artwork::LAYOUT_SIDEBAR_RIGHT);
-    pub const LAYOUT_SIDEBAR_RIGHT_OFF: Icon = Icon::new(IconId::new("layout-sidebar-right-off"), artwork::LAYOUT_SIDEBAR_RIGHT_OFF);
-    pub const LAYOUT_SIDEBAR_RIGHT_OFF_EMPTY: Icon = Icon::new(IconId::new("layout-sidebar-right-off-empty"), artwork::LAYOUT_SIDEBAR_RIGHT_OFF_EMPTY);
+    pub const LAYOUT_SIDEBAR_RIGHT_1: Icon = Icon::new(IconId::new("layout-sidebar-right-1"), artwork::LAYOUT_SIDEBAR_RIGHT_1);
+    pub const LAYOUT_SIDEBAR_RIGHT_2: Icon = Icon::new(IconId::new("layout-sidebar-right-2"), artwork::LAYOUT_SIDEBAR_RIGHT_2);
+    pub const LAYOUT_SIDEBAR_RIGHT_OFF_1: Icon = Icon::new(IconId::new("layout-sidebar-right-off-1"), artwork::LAYOUT_SIDEBAR_RIGHT_OFF_1);
+    pub const LAYOUT_SIDEBAR_RIGHT_OFF_2: Icon = Icon::new(IconId::new("layout-sidebar-right-off-2"), artwork::LAYOUT_SIDEBAR_RIGHT_OFF_2);
     pub const LEGEND: Icon = Icon::new(IconId::new("legend"), artwork::LEGEND);
     pub const LETTER_B: Icon = Icon::new(IconId::new("letter-b"), artwork::LETTER_B);
     pub const LETTER_H: Icon = Icon::new(IconId::new("letter-h"), artwork::LETTER_H);
@@ -515,9 +517,10 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::LAYOUT_SIDEBAR_LEFT,
     icons::LAYOUT_SIDEBAR_LEFT_OFF,
     icons::LAYOUT_SIDEBAR_LEFT_OFF_EMPTY,
-    icons::LAYOUT_SIDEBAR_RIGHT,
-    icons::LAYOUT_SIDEBAR_RIGHT_OFF,
-    icons::LAYOUT_SIDEBAR_RIGHT_OFF_EMPTY,
+    icons::LAYOUT_SIDEBAR_RIGHT_1,
+    icons::LAYOUT_SIDEBAR_RIGHT_2,
+    icons::LAYOUT_SIDEBAR_RIGHT_OFF_1,
+    icons::LAYOUT_SIDEBAR_RIGHT_OFF_2,
     icons::LEGEND,
     icons::LETTER_B,
     icons::LETTER_H,
@@ -712,9 +715,10 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("layout-sidebar-left", artwork::LAYOUT_SIDEBAR_LEFT),
     ("layout-sidebar-left-off", artwork::LAYOUT_SIDEBAR_LEFT_OFF),
     ("layout-sidebar-left-off-empty", artwork::LAYOUT_SIDEBAR_LEFT_OFF_EMPTY),
-    ("layout-sidebar-right", artwork::LAYOUT_SIDEBAR_RIGHT),
-    ("layout-sidebar-right-off", artwork::LAYOUT_SIDEBAR_RIGHT_OFF),
-    ("layout-sidebar-right-off-empty", artwork::LAYOUT_SIDEBAR_RIGHT_OFF_EMPTY),
+    ("layout-sidebar-right-1", artwork::LAYOUT_SIDEBAR_RIGHT_1),
+    ("layout-sidebar-right-2", artwork::LAYOUT_SIDEBAR_RIGHT_2),
+    ("layout-sidebar-right-off-1", artwork::LAYOUT_SIDEBAR_RIGHT_OFF_1),
+    ("layout-sidebar-right-off-2", artwork::LAYOUT_SIDEBAR_RIGHT_OFF_2),
     ("legend", artwork::LEGEND),
     ("letter-b", artwork::LETTER_B),
     ("letter-h", artwork::LETTER_H),

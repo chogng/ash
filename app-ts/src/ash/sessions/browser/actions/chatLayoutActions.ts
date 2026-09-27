@@ -23,12 +23,12 @@ registerAction2(class ToggleSessionInspectorAction extends Action2 {
 			id: TOGGLE_SESSION_INSPECTOR_COMMAND_ID,
 			title: "Show Session Inspector",
 			tooltip: "Show Session Inspector",
-			icon: Lxicon.layoutSidebarRightOff,
+			icon: Lxicon.layoutSidebarRightOff1,
 			toggled: {
 				condition: ChatSessionInspectorVisibleContext.isEqualTo(true),
 				title: "Hide Session Inspector",
 				tooltip: "Hide Session Inspector",
-				icon: Lxicon.layoutSidebarRight,
+				icon: Lxicon.layoutSidebarRight1,
 			},
 			menu: [
 				{

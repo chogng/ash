@@ -586,6 +586,12 @@ test("empty workbench starts with sidebars hidden and restores saved visibility"
 		savedEmpty.layout.isPartVisible("sidebar"),
 		savedEmpty.layout.isPartVisible("auxiliarybar"),
 	], [true, true]);
+	savedEmptyStorage.switchWorkspace("empty-c");
+	savedEmpty.layout.restoreWorkspaceState(WorkbenchState.EMPTY);
+	assert.deepEqual([
+		savedEmpty.layout.isPartVisible("sidebar"),
+		savedEmpty.layout.isPartVisible("auxiliarybar"),
+	], [false, false]);
 	savedEmptyStorage.switchWorkspace("folder-a");
 	savedEmpty.layout.restoreWorkspaceState(WorkbenchState.FOLDER);
 	assert.deepEqual([

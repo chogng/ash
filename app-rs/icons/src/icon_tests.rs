@@ -37,13 +37,14 @@ fn sidebar_toggle_icons_preserve_their_rendering_contracts() {
     for icon in [
         icons::LAYOUT_SIDEBAR_LEFT,
         icons::LAYOUT_SIDEBAR_LEFT_OFF_EMPTY,
-        icons::LAYOUT_SIDEBAR_RIGHT,
-        icons::LAYOUT_SIDEBAR_RIGHT_OFF_EMPTY,
+        icons::LAYOUT_SIDEBAR_RIGHT_1,
+        icons::LAYOUT_SIDEBAR_RIGHT_2,
+        icons::LAYOUT_SIDEBAR_RIGHT_OFF_2,
     ] {
         assert_eq!(icon.definition().rendering(), IconRendering::Symbolic);
     }
     assert_eq!(
-        icons::LAYOUT_SIDEBAR_RIGHT_OFF.definition().rendering(),
+        icons::LAYOUT_SIDEBAR_RIGHT_OFF_1.definition().rendering(),
         IconRendering::Multicolor
     );
 }

@@ -427,6 +427,26 @@ test("empty windows persist their backup identity", async () => {
 	});
 });
 
+test("empty windows keep independent placement by workspace ID", async () => {
+	const stateService = new TestStateService();
+	const firstWorkspace = { id: "empty-window-first" };
+	const secondWorkspace = { id: "empty-window-second" };
+	const first = createHandler(stateService, firstWorkspace);
+	const second = createHandler(stateService, secondWorkspace);
+	const firstWindow = new TestWindow();
+	const secondWindow = new TestWindow();
+	firstWindow.bounds = { x: 120, y: 80, width: 1000, height: 700 };
+	secondWindow.bounds = { x: 320, y: 180, width: 900, height: 640 };
+
+	await first.saveWindowState(firstWindow);
+	await second.saveWindowState(secondWindow);
+
+	const state = stateService.getItem("windowsState") as { readonly openedWindows: ReadonlyArray<{ readonly emptyWorkspaceId?: string }> };
+	assert.deepEqual(state.openedWindows.map(record => record.emptyWorkspaceId), [secondWorkspace.id, firstWorkspace.id]);
+	assert.equal(createHandler(stateService, firstWorkspace).restoreWindowState().x, 120);
+	assert.equal(createHandler(stateService, secondWorkspace).restoreWindowState().x, 320);
+});
+
 test("dedicated window state restores without changing the main window state", async () => {
 	const stateService = new TestStateService();
 	const main = createHandler(stateService, folderWorkspace);

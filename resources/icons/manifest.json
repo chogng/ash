@@ -557,18 +557,23 @@
       "rendering": "symbolic"
     },
     {
-      "id": "layout-sidebar-right",
-      "file": "layout-sidebar-right.svg",
+      "id": "layout-sidebar-right-1",
+      "file": "layout-sidebar-right-1.svg",
       "rendering": "symbolic"
     },
     {
-      "id": "layout-sidebar-right-off",
-      "file": "layout-sidebar-right-off.svg",
+      "id": "layout-sidebar-right-2",
+      "file": "layout-sidebar-right-2.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "layout-sidebar-right-off-1",
+      "file": "layout-sidebar-right-off-1.svg",
       "rendering": "multicolor"
     },
     {
-      "id": "layout-sidebar-right-off-empty",
-      "file": "layout-sidebar-right-off-empty.svg",
+      "id": "layout-sidebar-right-off-2",
+      "file": "layout-sidebar-right-off-2.svg",
       "rendering": "symbolic"
     },
     {

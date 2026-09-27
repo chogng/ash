@@ -9,7 +9,6 @@ import { basename, delimiter, dirname, isAbsolute, join } from "node:path";
 import { homedir } from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { randomUUID } from 'node:crypto';
 import { access, chmod, lstat, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { constants, readFileSync, watch } from "node:fs";
 import { pathToFileURL } from "node:url";
@@ -64,6 +63,7 @@ import { WindowsStateHandler } from "../../platform/windows/electron-main/window
 import { WindowsMainService, trackWindowResourceChanges, windowCloseResponseIpcRoute, windowOperationIpcRoute, windowResourceIpcRoutes, workspaceContextIpcRoutes } from "../../platform/windows/electron-main/windowsMainService.js";
 import { focusWindow, WindowMode, WorkspaceContextMainService, type IWindowState } from "../../platform/window/electron-main/window.js";
 import { type IAnyWorkspaceIdentifier, isRemoteWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, serializeWorkspace, UNKNOWN_EMPTY_WINDOW_WORKSPACE } from "../../platform/workspace/common/workspace.js";
+import { createEmptyWorkspaceIdentifier } from "../../platform/workspaces/node/workspaces.js";
 import { packagedRemoteRuntimeCatalogSource } from "../../platform/remote/electron-main/packagedRemoteRuntimeCatalog.js";
 import { RemoteRuntimeInstaller, remoteRuntimeArtifactFromEnvironment } from "../../platform/remote/electron-main/remoteRuntimeInstaller.js";
 import { RemoteRuntimeProvisioner } from "../../platform/remote/electron-main/remoteRuntimeProvisioner.js";
@@ -168,7 +168,7 @@ export class AshApplication extends Disposable {
 		async () => {
 			const workspaces = this.workspaces;
 			if (!workspaces) throw new Error('Workspace service is not initialized');
-			return (await this.openWorkspace({ id: `empty-window-${randomUUID()}` }, workspaces))?.window;
+			return (await this.openWorkspace(createEmptyWorkspaceIdentifier(), workspaces))?.window;
 		},
 		process.platform,
 		window => this.workbenchWindows.values().find(record => record.dedicatedWindow.currentWindow === window)?.id,
@@ -321,7 +321,7 @@ export class AshApplication extends Disposable {
 		if (this.workbenchWindows.focusActive()) return;
 		const workspaces = this.workspaces;
 		if (!workspaces || !this.persistentServices) return;
-		void this.openWorkspace(UNKNOWN_EMPTY_WINDOW_WORKSPACE, workspaces).catch(error => this.reportWindowOpenFailure(error));
+		void this.openWorkspace(createEmptyWorkspaceIdentifier(), workspaces).catch(error => this.reportWindowOpenFailure(error));
 	}
 
 	/** Electron does not finish a macOS quit after the state-save retry closes the last window. */
@@ -374,7 +374,7 @@ export class AshApplication extends Disposable {
 			return await this.windowsMainService.resolveWorkspaceOpenTarget(parseWorkspaceLaunchArguments(this.workspaceLaunchArguments(process.argv)), process.cwd());
 		} catch (error) {
 			console.error("Failed to resolve startup workspace", error);
-			return UNKNOWN_EMPTY_WINDOW_WORKSPACE;
+			return createEmptyWorkspaceIdentifier();
 		}
 	}
 

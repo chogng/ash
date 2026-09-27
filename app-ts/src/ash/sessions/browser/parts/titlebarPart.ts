@@ -44,7 +44,7 @@ export class TitlebarPart extends WorkbenchPart {
 		returnButton.className = "ash-sessions-button ash-sessions-titlebar-button";
 		returnButton.setAttribute('aria-label', localize('sessions.titlebar.workbench', 'Return to Workbench'));
 		returnButton.title = returnButton.getAttribute('aria-label')!;
-		appendIcon(Lxicon.layoutSidebarRightOff, returnButton);
+		appendIcon(Lxicon.layoutSidebarRightOff1, returnButton);
 		const backButton = navigationButton(ownerDocument, '←', localize('sessions.navigation.back', 'Back'));
 		const forwardButton = navigationButton(ownerDocument, '→', localize('sessions.navigation.forward', 'Forward'));
 		const title = h(ownerDocument, "div");
@@ -65,7 +65,7 @@ export class TitlebarPart extends WorkbenchPart {
 		this.detailsButton.className = 'ash-sessions-button ash-sessions-titlebar-button';
 		this.detailsButton.setAttribute('aria-label', localize('sessions.navigation.details', 'Session details'));
 		this.detailsButton.title = this.detailsButton.getAttribute('aria-label')!;
-		appendIcon(Lxicon.layoutSidebarRight, this.detailsButton);
+		appendIcon(Lxicon.layoutSidebarRightOff1, this.detailsButton);
 		left.append(avatar, title);
 		navigation.append(backButton, forwardButton);
 		right.append(navigation, newSession, this.detailsButton, returnButton);
@@ -94,6 +94,8 @@ export class TitlebarPart extends WorkbenchPart {
 	public updateDetailsVisibility(visible: boolean): void {
 		this.detailsButton.classList.toggle('selected', visible);
 		this.detailsButton.setAttribute('aria-pressed', String(visible));
+		this.detailsButton.replaceChildren();
+		appendIcon(visible ? Lxicon.layoutSidebarRight1 : Lxicon.layoutSidebarRightOff1, this.detailsButton);
 	}
 }
 

@@ -1,7 +1,12 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFile, realpath, stat } from 'node:fs/promises';
 import { URI } from "../../../base/common/uri.js";
-import type { ISingleFolderWorkspaceIdentifier, IWorkspaceIdentifier } from "../../workspace/common/workspace.js";
+import type { IEmptyWorkspaceIdentifier, ISingleFolderWorkspaceIdentifier, IWorkspaceIdentifier } from "../../workspace/common/workspace.js";
+
+/** Gives each new empty window its own workspace-scoped state. */
+export function createEmptyWorkspaceIdentifier(): IEmptyWorkspaceIdentifier {
+	return Object.freeze({ id: `empty-window-${randomUUID()}` });
+}
 
 /** Creates the stable identity of one multi-root workspace file. */
 export function getWorkspaceIdentifier(configPath: URI): IWorkspaceIdentifier {

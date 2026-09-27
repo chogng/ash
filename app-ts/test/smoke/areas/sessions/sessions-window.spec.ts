@@ -324,6 +324,28 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	await parentClosed;
 });
 
+test('Sessions details icon follows sidebar visibility', async ({ application, target, workbench }) => {
+	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code');
+	if (target.kind !== 'electron' || !('windows' in application)) return;
+	const sessionsPagePromise = application.waitForEvent('window');
+	await workbench.page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
+	const sessionsPage = await sessionsPagePromise;
+	const detailsToggle = sessionsPage.getByRole('button', { name: 'Session details' });
+	const auxiliaryBar = sessionsPage.locator("[data-part='auxiliarybar']");
+	await expect(detailsToggle).toHaveAttribute('aria-pressed', /^(true|false)$/);
+	if (await auxiliaryBar.isHidden()) {
+		await detailsToggle.click();
+	}
+	await expect(auxiliaryBar).toBeVisible();
+	await expect(detailsToggle.locator('svg[data-ash-icon-id="layout-sidebar-right-1"]')).toBeVisible();
+	await detailsToggle.click();
+	await expect(auxiliaryBar).toBeHidden();
+	await expect(detailsToggle.locator('svg[data-ash-icon-id="layout-sidebar-right-off-1"]')).toBeVisible();
+	const closed = sessionsPage.waitForEvent('close');
+	await sessionsPage.getByRole('button', { name: 'Return to Workbench' }).click();
+	await closed;
+});
+
 test('closing the parent Workbench closes its dedicated Sessions window', async ({ target }) => {
 	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code', 'This scenario requires Code Electron');
 	const userDataDirectory = await mkdtemp(join(tmpdir(), 'ash-dedicated-close-'));

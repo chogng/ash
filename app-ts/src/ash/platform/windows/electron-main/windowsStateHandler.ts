@@ -37,6 +37,7 @@ interface IWindowStateRecord {
 	readonly workspace?: IWorkspaceIdentifier;
 	readonly folderUri?: URI;
 	readonly backupPath?: string;
+	readonly emptyWorkspaceId?: string;
 	readonly uiState: IWindowState;
 }
 
@@ -213,8 +214,9 @@ function createWindowStateRecord(
 	if (isSingleFolderWorkspaceIdentifier(workspace)) {
 		return { folderUri: workspace.uri, uiState };
 	}
+	// A new empty window has its own workspace state; a restored backup keeps its backup identity.
 	return {
-		...(backupPath === undefined ? {} : { backupPath }),
+		...(backupPath === undefined ? { emptyWorkspaceId: workspace.id } : { backupPath }),
 		uiState,
 	};
 }
@@ -235,7 +237,7 @@ function matchesWindowIdentity(
 	return isEmptyWorkspaceIdentifier(workspace) &&
 		state.workspace === undefined &&
 		state.folderUri === undefined &&
-		state.backupPath === backupPath;
+		(backupPath === undefined ? state.emptyWorkspaceId === workspace.id : state.backupPath === backupPath);
 }
 
 function resourceComparisonKey(resource: URI): string {
@@ -269,6 +271,7 @@ function serializeWindowStateRecord(state: IWindowStateRecord): unknown {
 		...(state.backupPath === undefined
 			? {}
 			: { backupPath: state.backupPath }),
+		...(state.emptyWorkspaceId === undefined ? {} : { emptyWorkspaceId: state.emptyWorkspaceId }),
 		uiState: serializeUiState(state.uiState),
 	};
 }
@@ -321,7 +324,8 @@ function parseWindowStateRecord(
 
 	const identityCount = Number(value.workspaceIdentifier !== undefined) +
 		Number(value.folder !== undefined) +
-		Number(value.backupPath !== undefined);
+		Number(value.backupPath !== undefined) +
+		Number(value.emptyWorkspaceId !== undefined);
 	if (identityCount > 1) {
 		return undefined;
 	}
@@ -337,6 +341,11 @@ function parseWindowStateRecord(
 	if (value.backupPath !== undefined) {
 		return isNonEmptyString(value.backupPath)
 			? { backupPath: value.backupPath, uiState }
+			: undefined;
+	}
+	if (value.emptyWorkspaceId !== undefined) {
+		return isNonEmptyString(value.emptyWorkspaceId)
+			? { emptyWorkspaceId: value.emptyWorkspaceId, uiState }
 			: undefined;
 	}
 	return { uiState };
