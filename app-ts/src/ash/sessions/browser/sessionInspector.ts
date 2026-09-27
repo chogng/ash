@@ -1,11 +1,11 @@
-import './sessionInspector.css';
-import { h } from "../../../../../base/browser/dom.js";
-import { Disposable, DisposableStore, toDisposable } from "../../../../../base/common/lifecycle.js";
-import type { AgentTreeNode } from "../../../../../sessions/services/sessions/common/session.js";
-import type { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagement.js";
-import type { TurnChangeSetSummary } from "../../../../services/chat/common/chatService.js";
-import type { ChatWidgetModel } from "../widget/chatWidgetModel.js";
-import type { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import './media/sessionInspector.css';
+import { h } from "../../base/browser/dom.js";
+import { Disposable, DisposableStore, toDisposable } from "../../base/common/lifecycle.js";
+import type { AgentTreeNode } from "../services/sessions/common/session.js";
+import type { ISessionsManagementService } from "../services/sessions/common/sessionsManagement.js";
+import type { TurnChangeSetSummary } from "../../workbench/services/chat/common/chatService.js";
+import type { ChatWidgetModel } from "./chatWidgetModel.js";
+import type { IDialogService } from '../../platform/dialogs/common/dialogs.js';
 
 export interface SessionInspectorDelegate {
 	close(): void;

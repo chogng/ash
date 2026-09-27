@@ -1,12 +1,12 @@
-import { Lxicon } from "../../../../../base/common/lxicons.js";
-import { DisposableStore } from "../../../../../base/common/lifecycle.js";
-import { Action2, MenuId, registerAction2 } from "../../../../../platform/actions/common/actions.js";
-import type { ServicesAccessor } from "../../../../../platform/instantiation/common/instantiation.js";
-import { IQuickInputService, type IQuickPickItem } from "../../../../../platform/quickinput/common/quickInput.js";
-import type { SessionId, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
-import { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagement.js";
-import { IViewsService } from "../../../../services/views/browser/viewsService.js";
-import { CHAT_VIEW_ID, NEW_CHAT_COMMAND_ID, OPEN_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID } from "../../common/chat.js";
+import { Lxicon } from "../../../base/common/lxicons.js";
+import { DisposableStore } from "../../../base/common/lifecycle.js";
+import { Action2, MenuId, registerAction2 } from "../../../platform/actions/common/actions.js";
+import type { ServicesAccessor } from "../../../platform/instantiation/common/instantiation.js";
+import { IQuickInputService, type IQuickPickItem } from "../../../platform/quickinput/common/quickInput.js";
+import type { SessionId, ThreadId } from "../../services/sessions/common/session.js";
+import { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
+import { IViewsService } from "../../../workbench/services/views/browser/viewsService.js";
+import { CHAT_VIEW_ID, NEW_CHAT_COMMAND_ID, OPEN_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID } from "../../../workbench/contrib/chat/common/chat.js";
 
 registerAction2(class OpenChatAction extends Action2 {
 	constructor() {

@@ -1,12 +1,13 @@
-import { Emitter, type Event } from "../../../../../base/common/event.js";
-import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
-import type { AgentResponse, IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnChangeDetails, TurnChangeSetSummary, TurnInteraction } from "../../../../services/chat/common/chatService.js";
-import { localize } from "../../../../../nls.js";
-import type { SkillReference } from "../../../../../platform/skills/common/skillApi.js";
-import type { ResolvedChatContext } from "../../../../services/chat/common/chatContextService.js";
-import type { IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
-import type { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagement.js";
-import { chatTranscriptListItems, type IChatListItem } from "./chatListItems.js";
+import { Emitter, type Event } from "../../base/common/event.js";
+import { Disposable, toDisposable } from "../../base/common/lifecycle.js";
+import type { AgentResponse, IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnChangeDetails, TurnChangeSetSummary, TurnInteraction } from "../../workbench/services/chat/common/chatService.js";
+import { localize } from "../../nls.js";
+import type { SkillReference } from "../../platform/skills/common/skillApi.js";
+import type { ResolvedChatContext } from "../../workbench/services/chat/common/chatContextService.js";
+import type { IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../services/sessions/common/session.js";
+import type { ISessionsManagementService } from "../services/sessions/common/sessionsManagement.js";
+import { chatTranscriptListItems, type IChatListItem } from "../../workbench/contrib/chat/browser/widget/chatListItems.js";
+import type { ChatInputState } from '../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 
 export type ChatWidgetState =
 	| "loading"
@@ -81,6 +82,19 @@ export class ChatWidgetModel extends Disposable {
 
 	get state(): ChatWidgetState {
 		return this._state;
+	}
+
+	get inputState(): ChatInputState {
+		return {
+			phase: this._state,
+			error: this._error,
+			canInterrupt: this.canInterrupt,
+			models: this._models,
+			slashCommands: this._slashCommands,
+			skillSelectors: this._skillSelectors,
+			selectedModel: this.selectedModel,
+			interaction: this._interaction,
+		};
 	}
 
 	get error(): string | undefined {

@@ -1,20 +1,20 @@
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
-import { DialogResult, type IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { DialogResult, type IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 
 import { JSDOM } from "jsdom";
-import type { IFileService } from '../../../../../platform/files/common/files.js';
-import { Emitter, type Event } from "../../../../../base/common/event.js";
-import { toDisposable } from "../../../../../base/common/lifecycle.js";
-import type { IMenu, IMenuService } from "../../../../../platform/actions/common/actions.js";
-import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
-import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
-import type { IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, ThreadRead, ThreadSubscription, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope } from "../../../../services/chat/common/chatService.js";
-import type { IWorkbenchLayoutService, WorkbenchPartId, WorkbenchPartVisibilityChangeEvent } from "../../../../services/layout/browser/layoutService.js";
-import type { ApprovalMode, IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
-import type { ISessionsManagementService, SessionsManagementState } from "../../../../../sessions/services/sessions/common/sessionsManagement.js";
-import type { IChatContextPickService } from "../../../../services/chat/common/chatContextService.js";
-import type { IQuickInputService } from "../../../../../platform/quickinput/common/quickInput.js";
+import type { IFileService } from '../../../platform/files/common/files.js';
+import { Emitter, type Event } from "../../../base/common/event.js";
+import { toDisposable } from "../../../base/common/lifecycle.js";
+import type { IMenu, IMenuService } from "../../../platform/actions/common/actions.js";
+import type { ICommandService } from "../../../platform/commands/common/commands.js";
+import type { IContextMenuService } from "../../../platform/contextview/browser/contextView.js";
+import type { IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, ThreadRead, ThreadSubscription, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope } from "../../../workbench/services/chat/common/chatService.js";
+import type { IWorkbenchLayoutService, WorkbenchPartId, WorkbenchPartVisibilityChangeEvent } from "../../../workbench/services/layout/browser/layoutService.js";
+import type { ApprovalMode, IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../services/sessions/common/session.js";
+import type { ISessionsManagementService, SessionsManagementState } from "../../services/sessions/common/sessionsManagement.js";
+import type { IChatContextPickService } from "../../../workbench/services/chat/common/chatContextService.js";
+import type { IQuickInputService } from "../../../platform/quickinput/common/quickInput.js";
 
 const testDialogs: IDialogService = {
 	showMessage: async () => {},
@@ -37,8 +37,8 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { ChatViewPane } = await import("../../browser/widgetHosts/viewPane/chatViewPane.js");
-const { BrowserContextViewService } = await import("../../../../../platform/contextview/browser/contextViewService.js");
+const { ChatViewPane } = await import("../../browser/chatViewPane.js");
+const { BrowserContextViewService } = await import("../../../platform/contextview/browser/contextViewService.js");
 
 suiteTeardown(() => browserEnvironment.window.close());
 
@@ -137,11 +137,11 @@ function unavailableChatService(): IChatService {
 		saveAdvisorDefault: async () => {},
 		onDidUpdateThread: neverEvent<ThreadUpdateEnvelope>(),
 		onDidUpdateThreadTranscript: neverEvent<ThreadTranscriptUpdateEnvelope>(),
-		onDidUpdateGoal: neverEvent<import("../../../../services/chat/common/chatService.js").ThreadGoalUpdate>(),
+		onDidUpdateGoal: neverEvent<import("../../../workbench/services/chat/common/chatService.js").ThreadGoalUpdate>(),
 		onDidBecomeReady: neverEvent<void>(),
 		onDidChangeModels: neverEvent<void>(),
 		onDidChangeSkills: neverEvent<void>(),
-		onDidUpdateTurnChanges: neverEvent<import("../../../../services/chat/common/chatService.js").TurnChangesUpdate>(),
+		onDidUpdateTurnChanges: neverEvent<import("../../../workbench/services/chat/common/chatService.js").TurnChangesUpdate>(),
 		listModels: () => pending as Promise<readonly ModelCatalogEntry[]>,
 		listModelCatalog: () => pending as Promise<readonly ModelCatalogEntry[]>,
 		listModelProviders: () => pending,

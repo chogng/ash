@@ -1,12 +1,21 @@
 import type { Event } from "../../../../base/common/event.js";
 import { PRODUCT_SLASH_COMMANDS } from "../../../../platform/app-server/common/generated/index.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
-import type { ApprovalMode, ModelRef, SessionId, ThreadId } from "../../../../sessions/services/sessions/common/session.js";
 import type { SkillReference } from "../../../../platform/skills/common/skillApi.js";
 import type { ModelCatalogEntry } from "./modelCatalog.js";
 import type { ResolvedChatContext } from "./chatContextService.js";
 
 export type { ModelCatalogEntry } from "./modelCatalog.js";
+
+export type SessionId = string;
+export type ThreadId = string;
+
+export interface ModelRef {
+	readonly provider: string;
+	readonly model: string;
+}
+
+export type ApprovalMode = "askPermissions" | "autoReview" | "bypassPermissions";
 
 export interface ModelProviderCredentialStatus {
 	readonly connection: string;

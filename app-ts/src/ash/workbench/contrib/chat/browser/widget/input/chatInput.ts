@@ -1,6 +1,6 @@
 import type { AgentResponse, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, TurnInteraction } from "../../../../../services/chat/common/chatService.js";
 import type { SkillReference } from "../../../../../../platform/skills/common/skillApi.js";
-import type { ModelRef } from "../../../../../../sessions/services/sessions/common/session.js";
+import type { ModelRef } from "../../../../../services/chat/common/chatService.js";
 import type { ChatContextAttachment } from "../../../../../services/chat/common/chatContextService.js";
 
 export type ChatInputPhase = "loading" | "ready" | "submitting" | "error";

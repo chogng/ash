@@ -1,48 +1,48 @@
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
-import type { ModelRef, ServerNotification, Session as SessionDto, SessionCreateParams, Thread, ThreadTranscriptSnapshot } from "../../../../../platform/app-server/common/generated/index.js";
-import type { SessionMutationParams, SessionOperationInput } from "../../../../../platform/sessions/common/sessionApi.js";
-import type { IRendererHost } from "../../../../../platform/renderer/common/rendererHost.js";
-import { SubmenuAction, type IAction } from "../../../../../base/common/actions.js";
-import { Emitter } from "../../../../../base/common/event.js";
-import { TAB_CLOSE_ACTION_ID } from "../../../../../base/browser/ui/tablist/tabList.js";
-import { Lxicon } from "../../../../../base/common/lxicons.js";
-import { MenuId } from "../../../../../platform/actions/common/actions.js";
-import { MenuService } from "../../../../../platform/actions/common/menuService.js";
-import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
-import { ServiceContainer } from "../../../../../platform/instantiation/common/instantiation.js";
-import { IQuickInputService } from "../../../../../platform/quickinput/common/quickInput.js";
-import { CommandService } from "../../../../../workbench/services/commands/common/commandService.js";
-import type { ViewPaneContainer } from "../../../../../workbench/browser/parts/views/viewPaneContainer.js";
-import { ViewContainerLocation, WorkbenchViewRegistry } from "../../../../../workbench/common/views.js";
-import { chatTranscriptListItems, chatListItem, chatTurnErrorListItem, type ChatTurnErrorAction } from "../../browser/widget/chatListItems.js";
-import { ChatWidgetModel } from "../../browser/widget/chatWidgetModel.js";
-import { CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, NEW_CHAT_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, TOGGLE_SESSION_INSPECTOR_COMMAND_ID } from "../../../../../workbench/contrib/chat/common/chat.js";
-import { IPreferencesService, type IPreferencesService as PreferencesService } from "../../../../../workbench/services/preferences/common/preferences.js";
-import { PreferencesService as BrowserPreferencesService } from "../../../../../workbench/services/preferences/browser/preferencesService.js";
-import { emptyEditorServiceState } from '../../../../../workbench/test/common/testEditorService.js';
-import { IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent } from "../../../../../workbench/services/layout/browser/layoutService.js";
-import { ChatService } from "../../../../../workbench/services/chat/browser/chatService.js";
-import { ChatContextPickService } from "../../../../../workbench/services/chat/browser/chatContextPickService.js";
-import { IChatService, type AdvisorConfig, type ModelProviderCredentialStatus, type ThreadUpdateEnvelope, type TurnError } from "../../../../../workbench/services/chat/common/chatService.js";
-import { ModelCatalogConfiguration } from "../../../../../workbench/services/chat/common/modelCatalog.js";
-import { WorkbenchConfigurationService } from "../../../../../workbench/services/configuration/browser/configurationService.js";
-import { SessionsManagementService as BaseSessionsManagementService } from "../../../../../sessions/services/sessions/browser/sessionsManagementService.js";
-import { AppServerSessionsProvider } from "../../../../../sessions/contrib/providers/appServer/browser/appServerSessionsProvider.js";
-import type { ISession } from "../../../../../sessions/services/sessions/common/session.js";
-import { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagement.js";
-import { IViewsService, ViewsService } from "../../../../../workbench/services/views/browser/viewsService.js";
-import { ContextKeyService, IContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
-import { DialogResult, IDialogService, type IMessageDialogOptions } from '../../../../../platform/dialogs/common/dialogs.js';
-import { ViewDescriptorService } from "../../../../../workbench/services/views/common/viewDescriptorService.js";
-import { WorkbenchQuickInputService } from "../../../../../workbench/services/quickinput/browser/quickInputService.js";
-import { h } from "../../../../../base/browser/dom.js";
-import type { IFileService } from '../../../../../platform/files/common/files.js';
-import { URI } from "../../../../../base/common/uri.js";
-import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
-import type { IOpenerService } from "../../../../../platform/opener/common/openerService.js";
-import type { IEditorService } from "../../../../../workbench/services/editor/common/editorService.js";
+import type { ModelRef, ServerNotification, Session as SessionDto, SessionCreateParams, Thread, ThreadTranscriptSnapshot } from "../../../platform/app-server/common/generated/index.js";
+import type { SessionMutationParams, SessionOperationInput } from "../../../platform/sessions/common/sessionApi.js";
+import type { IRendererHost } from "../../../platform/renderer/common/rendererHost.js";
+import { SubmenuAction, type IAction } from "../../../base/common/actions.js";
+import { Emitter } from "../../../base/common/event.js";
+import { TAB_CLOSE_ACTION_ID } from "../../../base/browser/ui/tablist/tabList.js";
+import { Lxicon } from "../../../base/common/lxicons.js";
+import { MenuId } from "../../../platform/actions/common/actions.js";
+import { MenuService } from "../../../platform/actions/common/menuService.js";
+import type { IContextMenuService } from "../../../platform/contextview/browser/contextView.js";
+import { ServiceContainer } from "../../../platform/instantiation/common/instantiation.js";
+import { IQuickInputService } from "../../../platform/quickinput/common/quickInput.js";
+import { CommandService } from "../../../workbench/services/commands/common/commandService.js";
+import type { ViewPaneContainer } from "../../../workbench/browser/parts/views/viewPaneContainer.js";
+import { ViewContainerLocation, WorkbenchViewRegistry } from "../../../workbench/common/views.js";
+import { chatTranscriptListItems, chatListItem, chatTurnErrorListItem, type ChatTurnErrorAction } from "../../../workbench/contrib/chat/browser/widget/chatListItems.js";
+import { ChatWidgetModel } from "../../browser/chatWidgetModel.js";
+import { CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, NEW_CHAT_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, TOGGLE_SESSION_INSPECTOR_COMMAND_ID } from "../../../workbench/contrib/chat/common/chat.js";
+import { IPreferencesService, type IPreferencesService as PreferencesService } from "../../../workbench/services/preferences/common/preferences.js";
+import { PreferencesService as BrowserPreferencesService } from "../../../workbench/services/preferences/browser/preferencesService.js";
+import { emptyEditorServiceState } from '../../../workbench/test/common/testEditorService.js';
+import { IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent } from "../../../workbench/services/layout/browser/layoutService.js";
+import { ChatService } from "../../../workbench/services/chat/browser/chatService.js";
+import { ChatContextPickService } from "../../../workbench/services/chat/browser/chatContextPickService.js";
+import { IChatService, type AdvisorConfig, type ModelProviderCredentialStatus, type ThreadUpdateEnvelope, type TurnError } from "../../../workbench/services/chat/common/chatService.js";
+import { ModelCatalogConfiguration } from "../../../workbench/services/chat/common/modelCatalog.js";
+import { WorkbenchConfigurationService } from "../../../workbench/services/configuration/browser/configurationService.js";
+import { SessionsManagementService as BaseSessionsManagementService } from "../../services/sessions/browser/sessionsManagementService.js";
+import { AppServerSessionsProvider } from "../../contrib/providers/appServer/browser/appServerSessionsProvider.js";
+import type { ISession } from "../../services/sessions/common/session.js";
+import { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
+import { IViewsService, ViewsService } from "../../../workbench/services/views/browser/viewsService.js";
+import { ContextKeyService, IContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
+import { DialogResult, IDialogService, type IMessageDialogOptions } from '../../../platform/dialogs/common/dialogs.js';
+import { ViewDescriptorService } from "../../../workbench/services/views/common/viewDescriptorService.js";
+import { WorkbenchQuickInputService } from "../../../workbench/services/quickinput/browser/quickInputService.js";
+import { h } from "../../../base/browser/dom.js";
+import type { IFileService } from '../../../platform/files/common/files.js';
+import { URI } from "../../../base/common/uri.js";
+import type { ICommandService } from "../../../platform/commands/common/commands.js";
+import type { IOpenerService } from "../../../platform/opener/common/openerService.js";
+import type { IEditorService } from "../../../workbench/services/editor/common/editorService.js";
 
 const testDialogs: IDialogService = {
 	showMessage: async () => {},
@@ -81,20 +81,20 @@ for (const [name, value] of Object.entries({
 	});
 }
 const { registerChatViews } = await import(
-	"../../../../../workbench/contrib/chat/browser/chat.contribution.js"
+	"../../browser/workbenchSessions.contribution.js"
 );
 const { BrowserContextViewService } = await import(
-	"../../../../../platform/contextview/browser/contextViewService.js"
+	"../../../platform/contextview/browser/contextViewService.js"
 );
 const { ChatViewPane } = await import(
-	"../../../../../workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewPane.js"
+	"../../browser/chatViewPane.js"
 );
 const { ChatListWidget } = await import(
-	"../../browser/widget/chatListWidget.js"
+	"../../../workbench/contrib/chat/browser/widget/chatListWidget.js"
 );
-const { openChatMarkdownLink } = await import("../../browser/widget/chatWidget.js");
+const { openChatMarkdownLink } = await import("../../../workbench/contrib/chat/browser/widget/chatWidget.js");
 await import(
-	"../../../../../workbench/contrib/preferences/browser/preferences.contribution.js"
+	"../../../workbench/contrib/preferences/browser/preferences.contribution.js"
 );
 suiteTeardown(() => {
 	browserEnvironment.window.close();

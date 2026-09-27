@@ -12,24 +12,19 @@ import { Range } from '../../../../editor/common/core/range.js';
 import { TextModel } from '../../../../editor/common/model/textModel.js';
 import { DropdownWithPrimaryActionViewItem } from '../../../../platform/actions/browser/dropdownWithPrimaryActionViewItem.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
-import type { IActiveSessionThread } from '../../../../sessions/services/sessions/common/session.js';
-import type { ISessionsManagementService } from '../../../../sessions/services/sessions/common/sessionsManagement.js';
 import { VIEW_ID } from '../../files/common/files.js';
-import type { IChatService, TurnChangeSetSummary } from '../../../services/chat/common/chatService.js';
 import type { IEditorService } from '../../../services/editor/common/editorService.js';
 import type { IGitService } from '../../../services/git/common/gitService.js';
 import type { IViewsService } from '../../../services/views/browser/viewsService.js';
 import { createGitMultiDiffEditorInput } from './scmMultiDiffAction.js';
-import type { GitMultiDiffScope, MultiDiffEditorInput, MultiDiffEditorSource } from './multiDiffEditorInput.js';
-import { createTurnMultiDiffEditorInput, type TurnMultiDiffScope } from './turnMultiDiffSource.js';
+import { createMultiDiffEditorInput, type GitMultiDiffScope, type MultiDiffEditorInput, type MultiDiffEditorSource } from './multiDiffEditorInput.js';
+import { IMultiDiffSourceResolverService } from './multiDiffSourceResolverService.js';
 
 export interface MultiDiffEditorToolbarOptions {
 	readonly container: HTMLElement;
 	readonly input: MultiDiffEditorInput;
 	readonly contextMenuProvider: IContextMenuProvider;
 	readonly gitService?: IGitService;
-	readonly chatService?: IChatService;
-	readonly sessionsService?: ISessionsManagementService;
 	readonly editorService?: IEditorService;
 	readonly viewsService?: IViewsService;
 	readonly collapseAll: () => void;
@@ -43,7 +38,7 @@ export class MultiDiffEditorToolbar extends Disposable {
 	private readonly overlay = this._register(new MutableDisposable<DisposableStore>());
 	private busy = false;
 
-	constructor(private readonly options: MultiDiffEditorToolbarOptions, @IInstantiationService private readonly instantiationService: IInstantiationService, @IDialogService private readonly dialogs: IDialogService) {
+	constructor(private readonly options: MultiDiffEditorToolbarOptions, @IInstantiationService private readonly instantiationService: IInstantiationService, @IDialogService private readonly dialogs: IDialogService, @IMultiDiffSourceResolverService private readonly sourceResolvers: IMultiDiffSourceResolverService) {
 		super();
 		const ownerDocument = options.container.ownerDocument;
 		this.domNode = h(ownerDocument, 'div');
@@ -67,9 +62,7 @@ export class MultiDiffEditorToolbar extends Disposable {
 		const primary = new ToolbarAction('multiDiff.source', sourceLabel(this.options.input.source), 'Select change source', undefined, true, () => this.selectCurrentSource());
 		const dropdown = new ToolbarAction('multiDiff.source.menu', 'Select Changes', 'Select Changes', Lxicon.chevronDown, true, () => {});
 		const actions: readonly IAction[] = [
-			new ToolbarAction('multiDiff.source.currentTurn', 'Current Turn', 'Show the current Turn', undefined, this.canOpenTurns(), () => this.openTurnSource('currentTurn')),
-			new ToolbarAction('multiDiff.source.throughCurrentTurn', 'Current Turn and Earlier', 'Show all changes through the current Turn', undefined, this.canOpenTurns(), () => this.openTurnSource('throughCurrentTurn')),
-			new ToolbarAction('multiDiff.source.previousTurn', 'Previous Turn', 'Show the previous Turn', undefined, this.canOpenTurns(), () => this.openTurnSource('previousTurn')),
+			...this.sourceResolvers.sourceActions().map(action => this.wrapExternalAction(action, 'Loading changes…')),
 			new ToolbarAction('multiDiff.source.staged', 'Stage', 'Show staged changes', undefined, this.canOpenGit(), () => this.openGitSource('staged')),
 			new ToolbarAction('multiDiff.source.unstaged', 'Unstage', 'Show unstaged changes', undefined, this.canOpenGit(), () => this.openGitSource('unstaged')),
 			new ToolbarAction('multiDiff.source.uncommitted', 'Uncommitted', 'Show every uncommitted change', undefined, this.canOpenGit(), () => this.openGitSource('uncommitted')),
@@ -86,8 +79,11 @@ export class MultiDiffEditorToolbar extends Disposable {
 
 	private createRepositoryToolbar(container: HTMLElement): void {
 		const isMain = isMainBranch(sourceBranch(this.options.input.source));
+		const contributedPrimary = this.sourceResolvers.primaryRepositoryAction(this.options.input);
 		const primary = isMain
-			? new ToolbarAction('multiDiff.commit.auto', 'Commit', 'Generate a commit message and commit the selected Turn changes', Lxicon.gitCommit, this.canOpenTurns(), () => this.autoCommit())
+			? contributedPrimary
+				? this.wrapExternalAction(contributedPrimary, 'Committing…')
+				: new ToolbarAction('multiDiff.commit.manual', 'Commit', 'Enter a commit message', Lxicon.gitCommit, this.options.gitService !== undefined, () => this.showCommitEditor(false))
 			: new ToolbarAction('multiDiff.pullRequest.create', 'Create Pull Request', 'Pull request provider is not connected', Lxicon.git, false, () => {});
 		const dropdown = new ToolbarAction('multiDiff.repository.menu', 'Repository Actions', 'Repository Actions', Lxicon.chevronDown, true, () => {});
 		const actions = isMain ? this.commitActions() : this.pullRequestActions();
@@ -128,21 +124,16 @@ export class MultiDiffEditorToolbar extends Disposable {
 		];
 	}
 
-	private selectCurrentSource(): Promise<void> {
+	private async selectCurrentSource(): Promise<void> {
 		const source = this.options.input.source;
-		if (source?.kind === 'turn') return this.openTurnSource(source.scope);
+		if (source?.kind === 'external') {
+			const resolved = await this.sourceResolvers.resolve(this.options.input.resource);
+			if (!resolved) throw new Error('No resolver is registered for this multi-diff source.');
+			if (!this.options.editorService) throw new Error('Multi-diff source opening requires the Workbench editor service.');
+			await this.options.editorService.openEditor(createMultiDiffEditorInput(resolved.resource, resolved.resources, resolved.label, resolved.source), { pinned: true });
+			return;
+		}
 		return this.openGitSource(source?.scope ?? 'uncommitted');
-	}
-
-	private async openTurnSource(scope: TurnMultiDiffScope): Promise<void> {
-		const active = this.activeSession();
-		const chatService = this.options.chatService;
-		if (!active || !chatService || !this.options.editorService) return;
-		await this.run('Loading Turn changes…', async () => {
-			const input = await createTurnMultiDiffEditorInput(chatService, active, scope);
-			await this.options.editorService!.openEditor(input, { pinned: true });
-			return '';
-		});
 	}
 
 	private async openGitSource(scope: GitMultiDiffScope): Promise<void> {
@@ -151,59 +142,6 @@ export class MultiDiffEditorToolbar extends Disposable {
 			const input = await createGitMultiDiffEditorInput(this.options.gitService!, scope);
 			await this.options.editorService!.openEditor(input, { pinned: true });
 			return '';
-		});
-	}
-
-	private async autoCommit(): Promise<void> {
-		const chatService = this.options.chatService;
-		if (!chatService) return;
-		await this.run('Generating commit message…', async () => {
-			const source = this.options.input.source;
-			const active = this.activeSession();
-			const sessionId = source?.kind === 'turn' ? source.sessionId : active?.session.sessionId;
-			const threadId = source?.kind === 'turn' ? source.threadId : active?.threadId;
-			if (!sessionId || !threadId) throw new Error('No active Turn is available to commit.');
-			const listed = await chatService.listTurnChanges(sessionId, threadId);
-			const requestedIds = source?.kind === 'turn' ? new Set(source.changeSetIds) : undefined;
-			const selected = listed.filter(changeSet => (requestedIds?.has(changeSet.changeSetId) ?? changeSet.repositoryId === this.repositoryId()) && changeSet.captureState !== 'discarded' && changeSet.commitState !== 'committed');
-			if (selected.length === 0) throw new Error('No sealed Turn changes are available to commit.');
-			for (const changeSet of selected) await this.commitChangeSet(chatService, changeSet);
-			return selected.length === 1 ? 'Committed the selected Turn.' : `Committed ${selected.length} Turns.`;
-		});
-	}
-
-	private async commitChangeSet(chatService: IChatService, initial: TurnChangeSetSummary): Promise<void> {
-		if (initial.captureState !== 'sealed') throw new Error('The selected Turn is still running and cannot be committed.');
-		let summary = initial;
-		let details = await chatService.readTurnChange(summary.sessionId, summary.threadId, summary.changeSetId);
-		if (!details.draftMessage?.trim()) {
-			if (summary.messageState === 'unconfigured') throw new Error('Configure and authorize a commit-message model before using automatic commit.');
-			const updates = await chatService.generateTurnChangeMessage(summary.sessionId, summary.threadId, summary.changeSetId, summary.revision);
-			summary = updates.find(candidate => candidate.changeSetId === summary.changeSetId) ?? summary;
-			summary = await this.waitForGeneratedMessage(chatService, summary);
-			details = await chatService.readTurnChange(summary.sessionId, summary.threadId, summary.changeSetId);
-			const message = details.draftMessage?.trim() || details.generatedMessage?.trim();
-			if (!message) throw new Error('The commit-message model did not produce a message.');
-			if (!details.draftMessage?.trim()) {
-				const draftUpdates = await chatService.updateTurnChangeDraft(summary.sessionId, summary.threadId, summary.changeSetId, summary.revision, message);
-				summary = draftUpdates.find(candidate => candidate.changeSetId === summary.changeSetId) ?? summary;
-			}
-		}
-		await chatService.commitTurnChange(summary.sessionId, summary.threadId, summary.changeSetId, summary.revision);
-	}
-
-	private waitForGeneratedMessage(chatService: IChatService, summary: TurnChangeSetSummary): Promise<TurnChangeSetSummary> {
-		if (summary.messageState === 'ready') return Promise.resolve(summary);
-		if (summary.messageState === 'failed' || summary.messageState === 'unconfigured') return Promise.reject(new Error('Commit-message generation failed.'));
-		return new Promise((resolve, reject) => {
-			const listener = chatService.onDidUpdateTurnChanges(update => {
-				if (update.sessionId !== summary.sessionId || update.threadId !== summary.threadId) return;
-				const next = update.changeSets.find(candidate => candidate.changeSetId === summary.changeSetId);
-				if (!next || next.messageState === 'queued' || next.messageState === 'generating') return;
-				listener.dispose();
-				if (next.messageState === 'ready') resolve(next);
-				else reject(new Error('Commit-message generation failed.'));
-			});
 		});
 	}
 
@@ -321,17 +259,17 @@ export class MultiDiffEditorToolbar extends Disposable {
 		return this.options.input.source?.repositoryId;
 	}
 
-	private activeSession(): IActiveSessionThread | undefined {
-		return this.options.sessionsService?.active;
+	private wrapExternalAction(action: IAction, progress: string): ToolbarAction {
+		return new ToolbarAction(action.id, action.label, action.tooltip, action.icon, action.enabled, () => this.run(progress, async () => {
+			const result: unknown = await action.run();
+			return typeof result === 'string' ? result : '';
+		}));
 	}
 
 	private canOpenGit(): boolean {
 		return this.options.gitService !== undefined && this.options.editorService !== undefined;
 	}
 
-	private canOpenTurns(): boolean {
-		return this.options.chatService !== undefined && this.options.sessionsService?.active !== undefined && this.options.editorService !== undefined;
-	}
 }
 
 class CommitMessageEditor extends Disposable {
@@ -386,18 +324,14 @@ class ToolbarAction implements IAction {
 
 function sourceLabel(source: MultiDiffEditorSource | undefined): string {
 	if (!source) return 'Changes';
-	if (source.kind === 'turn') {
-		if (source.scope === 'currentTurn') return 'Current Turn';
-		if (source.scope === 'previousTurn') return 'Previous Turn';
-		return 'Current Turn and Earlier';
-	}
+	if (source.kind === 'external') return source.label;
 	if (source.scope === 'staged') return 'Stage';
 	if (source.scope === 'unstaged') return 'Unstage';
 	return 'Uncommitted';
 }
 
 function sourceBranch(source: MultiDiffEditorSource | undefined): string | undefined {
-	return source?.kind === 'turn' ? source.targetBranch : source?.branchName;
+	return source?.branchName;
 }
 
 function isMainBranch(branch: string | undefined): boolean {

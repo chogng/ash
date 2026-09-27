@@ -1,14 +1,18 @@
-import { URI } from '../../../../base/common/uri.js';
-import type { IActiveSessionThread } from '../../../../sessions/services/sessions/common/session.js';
-import type { IChatService, TurnChangeFile, TurnChangeSetSummary } from '../../../services/chat/common/chatService.js';
-import { createMultiDiffEditorInput, type MultiDiffEditorInput, type MultiDiffEditorInputItem, type MultiDiffEditorSource } from './multiDiffEditorInput.js';
+import { URI } from '../../base/common/uri.js';
+import type { IChatService, TurnChangeFile, TurnChangeSetSummary } from '../../workbench/services/chat/common/chatService.js';
+import { createMultiDiffEditorInput, type MultiDiffEditorInput, type MultiDiffEditorInputItem } from '../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
+import type { IActiveSessionThread } from '../services/sessions/common/session.js';
 
-export type TurnMultiDiffScope = Extract<MultiDiffEditorSource, { readonly kind: 'turn' }>['scope'];
+export type TurnMultiDiffScope = 'currentTurn' | 'throughCurrentTurn' | 'previousTurn';
 
 /** Resolves immutable Turn change sets into one composed review input. */
-export async function createTurnMultiDiffEditorInput(chatService: IChatService, active: IActiveSessionThread, scope: TurnMultiDiffScope): Promise<MultiDiffEditorInput> {
+export async function createTurnMultiDiffEditorInput(chatService: IChatService, active: IActiveSessionThread, scope: TurnMultiDiffScope, changeSetIds?: readonly string[]): Promise<MultiDiffEditorInput> {
 	const changeSets = await chatService.listTurnChanges(active.session.sessionId, active.threadId);
-	const selected = selectChangeSets(changeSets, scope);
+	const selected = changeSetIds === undefined ? selectChangeSets(changeSets, scope) : changeSetIds.map(id => {
+		const changeSet = changeSets.find(candidate => candidate.changeSetId === id);
+		if (!changeSet) throw new Error(`Turn change set '${id}' is no longer available.`);
+		return changeSet;
+	});
 	const latest = selected.at(-1);
 	if (!latest) throw new Error('No Turn changes are available for this selection.');
 	const repositoryChangeSets = selected.filter(changeSet => changeSet.repositoryId === latest.repositoryId);
@@ -37,13 +41,11 @@ export async function createTurnMultiDiffEditorInput(chatService: IChatService, 
 	const ids = repositoryChangeSets.map(changeSet => changeSet.changeSetId);
 	const source = URI.parse(`ash-multi-diff:/turn/${scope}?session=${encodeURIComponent(active.session.sessionId)}&thread=${encodeURIComponent(active.threadId)}&changes=${encodeURIComponent(ids.join(','))}`);
 	return createMultiDiffEditorInput(source, items, turnScopeLabel(scope), {
-		kind: 'turn',
-		sessionId: active.session.sessionId,
-		threadId: active.threadId,
-		changeSetIds: ids,
+		kind: 'external',
+		providerId: 'sessions.turn',
+		label: turnScopeLabel(scope),
 		repositoryId: latest.repositoryId,
-		targetBranch: latest.targetBranch,
-		scope,
+		branchName: latest.targetBranch,
 	});
 }
 

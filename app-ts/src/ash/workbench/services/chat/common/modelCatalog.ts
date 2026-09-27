@@ -1,7 +1,7 @@
 import { isRecord } from '../../../../base/common/types.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import type { ModelRef } from '../../../../sessions/services/sessions/common/session.js';
+import type { ModelRef } from './chatService.js';
 
 const MaximumHiddenModels = 2_048;
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);

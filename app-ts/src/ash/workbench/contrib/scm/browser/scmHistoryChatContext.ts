@@ -2,8 +2,7 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { CHAT_VIEW_ID } from '../../chat/common/chat.js';
-import { ChatViewPane } from '../../chat/browser/widgetHosts/viewPane/chatViewPane.js';
-import { IChatContextPickService, type ChatContextAttachment, type ChatContextPick } from '../../../services/chat/common/chatContextService.js';
+import { IChatContextPickService, type ChatContextAttachment, type ChatContextPick, type IChatContextTarget } from '../../../services/chat/common/chatContextService.js';
 import type { GitCommitChange, GitCommitFile, GitCommitFileContent, GitCommitSummary, IGitService } from '../../../services/git/common/gitService.js';
 import { IGitService as GitService } from '../../../services/git/common/gitService.js';
 import { IViewsService } from '../../../services/views/browser/viewsService.js';
@@ -107,9 +106,8 @@ function truncate(value: string, maximum: number, label: string): string {
 	return `${value.slice(0, maximum)}\n[${label} truncated after ${maximum} characters]`;
 }
 
-async function revealChat(accessor: ServicesAccessor): Promise<ChatViewPane | undefined> {
-	const view = accessor.get(IViewsService).openView(CHAT_VIEW_ID);
-	return view instanceof ChatViewPane ? view : undefined;
+async function revealChat(accessor: ServicesAccessor): Promise<IChatContextTarget | undefined> {
+	return accessor.get(IViewsService).openView(CHAT_VIEW_ID) as IChatContextTarget | undefined;
 }
 
 registerAction2(class extends Action2 {

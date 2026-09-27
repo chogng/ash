@@ -1,12 +1,31 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
 import { getSingletonServiceDescriptors } from '../../../platform/instantiation/common/extensions.js';
 import { ServiceContainer } from '../../../platform/instantiation/common/instantiation.js';
 import { IRendererHostService, type IRendererHost } from '../../../platform/renderer/common/rendererHost.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../workbench/common/contributions.js';
+import type { MultiDiffEditorInput } from '../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
+import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService } from '../../../workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
+import { IChatService, type TurnChangeSetSummary } from '../../../workbench/services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
+import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
+import { EditorInputSerializers } from '../../../workbench/services/editor/common/editorInputSerializer.js';
+import { createTurnMultiDiffEditorInput } from '../../browser/turnMultiDiffSource.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
-import '../../browser/workbenchSessions.contribution.js';
+
+const browserEnvironment = new JSDOM('<!doctype html><body></body>');
+for (const [name, value] of Object.entries({
+	window: browserEnvironment.window,
+	document: browserEnvironment.window.document,
+	Node: browserEnvironment.window.Node,
+	Element: browserEnvironment.window.Element,
+	HTMLElement: browserEnvironment.window.HTMLElement,
+	Event: browserEnvironment.window.Event,
+})) {
+	Object.defineProperty(globalThis, name, { configurable: true, value });
+}
+await import('../../browser/workbenchSessions.contribution.js');
 
 test('Sessions registers its regular Workbench service and starts its catalog', async () => {
 	let subscriptions = 0;
@@ -21,6 +40,9 @@ test('Sessions registers its regular Workbench service and starts its catalog', 
 	} as unknown as IRendererHost;
 	using services = new ServiceContainer();
 	services.registerInstance(IRendererHostService, api);
+	services.registerInstance(IChatService, {} as IChatService);
+	services.registerInstance(IEditorService, {} as IEditorService);
+	services.registerInstance(IMultiDiffSourceResolverService, new MultiDiffSourceResolverService());
 	for (const [id, descriptor] of getSingletonServiceDescriptors()) {
 		if (id === ISessionsManagementService || id === IChatSessionNavigationService) {
 			services.registerSingleton(id, () => services.createInstance(descriptor));
@@ -34,4 +56,64 @@ test('Sessions registers its regular Workbench service and starts its catalog', 
 	await sessions.initialize();
 	assert.equal(subscriptions, 1);
 	assert.equal(catalogLoads, 1);
+});
+
+test('Sessions contributes Turn changes and commit actions to the shared multi-diff editor', async () => {
+	const summaries: TurnChangeSetSummary[] = [
+		{ changeSetId: 'one', sessionId: 'session', threadId: 'thread', turnId: 'turn-one', repositoryId: 'repo', targetBranch: 'main', statistics: { files: 1, additions: 1, deletions: 1 }, captureState: 'sealed', messageState: 'ready', commitState: 'idle', dependencies: [], externalDependencyPaths: [], warnings: [], conflictPaths: [], revision: 1 },
+		{ changeSetId: 'two', sessionId: 'session', threadId: 'thread', turnId: 'turn-two', repositoryId: 'repo', targetBranch: 'main', statistics: { files: 1, additions: 1, deletions: 1 }, captureState: 'sealed', messageState: 'ready', commitState: 'idle', dependencies: [], externalDependencyPaths: [], warnings: [], conflictPaths: [], revision: 2 },
+	];
+	const commits: string[] = [];
+	const opened: MultiDiffEditorInput[] = [];
+	const chat = {
+		listTurnChanges: async () => summaries,
+		readTurnChange: async (_sessionId: string, _threadId: string, changeSetId: string) => ({
+			summary: summaries.find(summary => summary.changeSetId === changeSetId)!,
+			files: [{ path: 'src/file.ts', kind: 'modified', binary: false, additions: 1, deletions: 1 }],
+			draftMessage: 'feat: review changes',
+		}),
+		readTurnChangeFile: async (_sessionId: string, _threadId: string, changeSetId: string) => changeSetId === 'one'
+			? { path: 'src/file.ts', binary: false, truncated: false, before: 'before', after: 'middle' }
+			: { path: 'src/file.ts', binary: false, truncated: false, before: 'middle', after: 'after' },
+		commitTurnChange: async (_sessionId: string, _threadId: string, changeSetId: string) => {
+			commits.push(changeSetId);
+			return summaries;
+		},
+	} as unknown as IChatService;
+	using services = new ServiceContainer();
+	services.registerInstance(IChatService, chat);
+	const session = { sessionId: 'session' };
+	services.registerInstance(ISessionsManagementService, {
+		active: { session, threadId: 'thread' },
+		sessions: [session],
+	} as unknown as ISessionsManagementService);
+	services.registerInstance(IEditorService, {
+		openEditor: async (input: MultiDiffEditorInput) => { opened.push(input); },
+	} as unknown as IEditorService);
+	const resolvers = new MultiDiffSourceResolverService();
+	services.registerInstance(IMultiDiffSourceResolverService, resolvers);
+	using contributions = WorkbenchContributionsRegistry.createHost(services);
+	contributions.advance(WorkbenchPhase.BlockStartup);
+	await resolvers.sourceActions()[1]?.run();
+	const input = opened[0]!;
+	assert.deepEqual({
+		before: input.items[0]?.original.initialText,
+		after: input.items[0]?.modified.initialText,
+		source: input.source,
+	}, {
+		before: 'before', after: 'after',
+		source: { kind: 'external', providerId: 'sessions.turn', label: 'Changes Through Current Turn', repositoryId: 'repo', branchName: 'main' },
+	});
+	const restored = EditorInputSerializers.deserialize(EditorInputSerializers.serialize(input)) as MultiDiffEditorInput;
+	assert.deepEqual(restored.source, input.source);
+	summaries.push({ ...summaries[1]!, changeSetId: 'three', turnId: 'turn-three', revision: 3 });
+	const resolved = await resolvers.resolve(restored.resource);
+	assert.equal(resolved?.resource.toString(), restored.resource.toString());
+	assert.deepEqual(resolved?.resources.map(item => item.label), restored.items.map(item => item.label));
+	assert.equal(resolved?.source?.kind, 'external');
+	assert.equal(resolvers.primaryRepositoryAction({ ...restored, source: { kind: 'git', repositoryId: 'repo', scope: 'uncommitted', branchName: 'main' } }), undefined);
+	await resolvers.primaryRepositoryAction(restored)?.run();
+	assert.deepEqual(commits, ['one', 'two']);
+	const direct = await createTurnMultiDiffEditorInput(chat, { session: { sessionId: 'session' }, threadId: 'thread' } as never, 'currentTurn');
+	assert.equal(direct.items[0]?.original.initialText, 'middle');
 });

@@ -23,11 +23,9 @@ import type { IContextKeyService } from "../../../../platform/contextkey/browser
 import { type EditorInput } from '../../../browser/parts/editor/editorInput.js';
 import { type IEditorPaneWithViewState } from '../../../browser/parts/editor/editorWithViewState.js';
 import { EditorPaneVisibility } from '../../../browser/parts/editor/editorPane.js';
-import type { IChatService } from '../../../services/chat/common/chatService.js';
 import type { IEditorService } from '../../../services/editor/common/editorService.js';
 import type { IGitService } from '../../../services/git/common/gitService.js';
 import type { IViewsService } from '../../../services/views/browser/viewsService.js';
-import type { ISessionsManagementService } from '../../../../sessions/services/sessions/common/sessionsManagement.js';
 import { GIT_VIEW_ID } from '../../scm/browser/scmViewPane.js';
 import { createGitMultiDiffEditorInput } from './scmMultiDiffAction.js';
 import { isMultiDiffEditorInput, MULTI_DIFF_EDITOR_ID, multiDiffEditorItemKey, type MultiDiffEditorInput, type MultiDiffEditorInputItem } from './multiDiffEditorInput.js';
@@ -46,8 +44,6 @@ export interface MultiDiffEditorPaneOptions {
 	readonly showInlineChanges?: boolean;
 	readonly loopChanges?: boolean;
 	readonly gitService?: IGitService;
-	readonly chatService?: IChatService;
-	readonly sessionsService?: ISessionsManagementService;
 	readonly editorService?: IEditorService;
 	readonly viewsService?: IViewsService;
 	readonly fileActions?: {
@@ -239,8 +235,6 @@ class MultiDiffEditorPaneSession extends Disposable {
 					input: paneInput,
 					contextMenuProvider: options.fileActions.contextMenuProvider,
 					gitService: options.gitService,
-					chatService: options.chatService,
-					sessionsService: options.sessionsService,
 					editorService: options.editorService,
 					viewsService: options.viewsService,
 					collapseAll: () => this.editor?.collapseAll(),

@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
-import { Emitter } from "../../../../../base/common/event.js";
-import type { AgentTreeNode, ISession } from "../../../../../sessions/services/sessions/common/session.js";
-import type { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagement.js";
-import type { TurnChangeDetails, TurnChangeSetSummary } from "../../../../services/chat/common/chatService.js";
-import type { ChatWidgetModel } from "../../browser/widget/chatWidgetModel.js";
-import { SessionInspector } from "../../browser/view/sessionInspector.js";
-import { DialogResult, type IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { Emitter } from "../../../base/common/event.js";
+import type { AgentTreeNode, ISession } from "../../services/sessions/common/session.js";
+import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
+import type { TurnChangeDetails, TurnChangeSetSummary } from "../../../workbench/services/chat/common/chatService.js";
+import type { ChatWidgetModel } from "../../browser/chatWidgetModel.js";
+import { SessionInspector } from "../../browser/sessionInspector.js";
+import { DialogResult, type IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 
 const testDialogs: IDialogService = {
 	showMessage: async () => {},

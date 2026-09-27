@@ -24,8 +24,7 @@ import { TextFileContentSource, type ITextFileService, type ResolvedTextFileCont
 import { VIEW_ID } from '../../../files/common/files.js';
 import type { EditorInput, IEditorService } from '../../../../services/editor/common/editorService.js';
 import type { GitStatus, IGitService } from '../../../../services/git/common/gitService.js';
-import type { IChatService, TurnChangeSetSummary } from '../../../../services/chat/common/chatService.js';
-import type { ISessionsManagementService } from '../../../../../sessions/services/sessions/common/sessionsManagement.js';
+import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService, type IMultiDiffSourceResolver } from '../../browser/multiDiffSourceResolverService.js';
 import { CodeEditorConfiguration } from '../../../codeEditor/common/editorConfiguration.js';
 import { EditorLineWrapping, EditorOption } from '../../../../../editor/common/config/editorOptions.js';
 import { type ITextModelResourceService, type TextModelInput, type TextModelReference } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
@@ -56,18 +55,20 @@ const { createMultiDiffEditorInput } = await import('../../browser/multiDiffEdit
 const { MultiDiffEditorPane } = await import('../../browser/multiDiffEditorPane.js');
 await import('../../../codeEditor/browser/toggleWordWrap.js');
 const { createGitMultiDiffEditorInput } = await import('../../browser/scmMultiDiffAction.js');
-const { createTurnMultiDiffEditorInput } = await import('../../browser/turnMultiDiffSource.js');
 
-function registerDialogs(services: ServiceContainer): void {
+function registerDialogs(services: ServiceContainer, sourceResolver?: IMultiDiffSourceResolver): void {
 	services.registerInstance(IDialogService, {
 		showMessage: async () => {},
 		confirm: async () => ({ confirmed: true }),
 		prompt: async () => DialogResult.Cancel,
 		input: async () => ({ confirmed: false }),
 	});
+	const resolvers = new MultiDiffSourceResolverService();
+	if (sourceResolver) resolvers.registerResolver(sourceResolver);
+	services.registerInstance(IMultiDiffSourceResolverService, resolvers);
 }
 
-test('Multi-diff sources resolve uncommitted Git and composed Turn contents', async () => {
+test('Multi-diff source resolves uncommitted Git contents', async () => {
 	const status: GitStatus = {
 		repositoryId: 'repo', streamInstanceId: 'stream', revision: 3, workspacePath: '/workspace',
 		head: { type: 'branch', name: 'main', objectId: 'abc', upstream: undefined },
@@ -95,23 +96,6 @@ test('Multi-diff sources resolve uncommitted Git and composed Turn contents', as
 		source: { kind: 'git', repositoryId: 'repo', scope: 'uncommitted', branchName: 'main' },
 	});
 
-	const summaries: TurnChangeSetSummary[] = [
-		{ changeSetId: 'one', sessionId: 'session', threadId: 'thread', turnId: 'turn-one', repositoryId: 'repo', targetBranch: 'main', statistics: { files: 1, additions: 1, deletions: 1 }, captureState: 'sealed', messageState: 'ready', commitState: 'idle', dependencies: [], externalDependencyPaths: [], warnings: [], conflictPaths: [], revision: 1 },
-		{ changeSetId: 'two', sessionId: 'session', threadId: 'thread', turnId: 'turn-two', repositoryId: 'repo', targetBranch: 'main', statistics: { files: 1, additions: 1, deletions: 1 }, captureState: 'sealed', messageState: 'ready', commitState: 'idle', dependencies: [], externalDependencyPaths: [], warnings: [], conflictPaths: [], revision: 2 },
-	];
-	const chat = {
-		listTurnChanges: async () => summaries,
-		readTurnChange: async (_sessionId: string, _threadId: string, changeSetId: string) => ({ summary: summaries.find(summary => summary.changeSetId === changeSetId)!, files: [{ path: 'src/file.ts', kind: 'modified', binary: false, additions: 1, deletions: 1 }] }),
-		readTurnChangeFile: async (_sessionId: string, _threadId: string, changeSetId: string) => changeSetId === 'one'
-			? { path: 'src/file.ts', binary: false, truncated: false, before: 'before', after: 'middle' }
-			: { path: 'src/file.ts', binary: false, truncated: false, before: 'middle', after: 'after' },
-	} as unknown as IChatService;
-	const turnInput = await createTurnMultiDiffEditorInput(chat, { session: { sessionId: 'session' }, threadId: 'thread' } as never, 'throughCurrentTurn');
-	assert.deepEqual({
-		before: turnInput.items[0]?.original.initialText,
-		after: turnInput.items[0]?.modified.initialText,
-		ids: turnInput.source?.kind === 'turn' ? turnInput.source.changeSetIds : [],
-	}, { before: 'before', after: 'after', ids: ['one', 'two'] });
 });
 
 test('Stanza multi-diff pane resolves visible comparisons and releases the complete session', async () => {
@@ -128,14 +112,22 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 	const focusedViews: string[] = [];
 	const contextMenus: string[][] = [];
 	const committedChangeSets: string[] = [];
-	const changeSet = {
-		changeSetId: 'change-1', sessionId: 'session-1', threadId: 'thread-1', turnId: 'turn-1', repositoryId: 'repo', targetBranch: 'main',
-		statistics: { files: 1, additions: 1, deletions: 1 }, captureState: 'sealed', messageState: 'ready', commitState: 'idle',
-		dependencies: [], externalDependencyPaths: [], warnings: [], conflictPaths: [], revision: 1,
-	} satisfies TurnChangeSetSummary;
+	const externalSourceResolver: IMultiDiffSourceResolver = {
+		canHandleUri: uri => uri.path === '/test',
+		resolveDiffSource: async () => { throw new Error('Unexpected external multi-diff source'); },
+		sourceActions: () => [
+			...['Current Turn', 'Current Turn and Earlier', 'Previous Turn'].map((label, index) => ({
+				id: `external.${index}`, label, tooltip: label, enabled: true, run: () => {},
+			})),
+		],
+		primaryRepositoryAction: () => ({
+			id: 'external.commit', label: 'Commit', tooltip: 'Commit', enabled: true,
+			run: () => { committedChangeSets.push('change-1'); },
+		}),
+	};
 	using editorServices = new DisposableStore();
 	const services = createCodeEditorServices(editorServices);
-	registerDialogs(services);
+	registerDialogs(services, externalSourceResolver);
 	const configuration = services.get(IConfigurationService);
 	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, false, { overrideIdentifier: 'typescript' });
 	const seenOptions: boolean[] = [];
@@ -148,14 +140,6 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 		}),
 		lineHeight: 24,
 		showLineNumbers: false,
-		chatService: {
-			listTurnChanges: async () => [changeSet],
-			readTurnChange: async () => ({ summary: changeSet, files: [], draftMessage: 'feat: review changes' }),
-			commitTurnChange: async (_sessionId: string, _threadId: string, changeSetId: string) => { committedChangeSets.push(changeSetId); return [{ ...changeSet, commitState: 'committed' }]; },
-		} as unknown as IChatService,
-		sessionsService: {
-			active: { session: { sessionId: 'session-1' }, threadId: 'thread-1' },
-		} as unknown as ISessionsManagementService,
 		gitService: {
 			stage: async (paths: readonly string[]) => { gitActions.push(`stage:${paths.join(',')}`); return {} as never; },
 			discardWorktree: async (paths: readonly string[]) => { gitActions.push(`discard:${paths.join(',')}`); return {} as never; },
@@ -189,7 +173,7 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 			modified: { resource: URI.parse('git-change:/second/modified'), initialText: 'after', languageId: 'javascript', label: 'Working Tree' },
 		},
 	], 'Review changes', {
-		kind: 'turn', sessionId: 'session-1', threadId: 'thread-1', changeSetIds: ['change-1'], repositoryId: 'repo', targetBranch: 'main', scope: 'currentTurn',
+		kind: 'external', providerId: 'sessions.turn', label: 'Current Turn', repositoryId: 'repo', branchName: 'main',
 	}), new AbortController().signal);
 	assert.deepEqual(seenOptions, [false, true]);
 	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, false);

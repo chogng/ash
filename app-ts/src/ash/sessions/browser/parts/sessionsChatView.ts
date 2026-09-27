@@ -9,6 +9,7 @@ import type { IContextMenuService } from "../../../platform/contextview/browser/
 import type { IContextViewService } from "../../../platform/contextview/browser/contextView.js";
 import type { IQuickInputService } from "../../../platform/quickinput/common/quickInput.js";
 import { ChatWidget } from "../../../workbench/contrib/chat/browser/widget/chatWidget.js";
+import { ChatWidgetModel } from '../chatWidgetModel.js';
 import type { IChatContextPickService } from "../../../workbench/services/chat/common/chatContextService.js";
 import type { IChatService } from "../../../workbench/services/chat/common/chatService.js";
 import type { SessionId } from "../../services/sessions/common/session.js";
@@ -35,7 +36,7 @@ export class SessionsChatView extends Disposable {
 	private readonly grid: Grid<SessionsChatGridView>;
 	private readonly empty: SessionsChatEmptyView;
 	private readonly entries = new Map<string, SessionsChatGridEntry>();
-	private activePane: ChatWidget | undefined;
+	private activePane: ChatWidget<ChatWidgetModel> | undefined;
 	private dimension: IDimension | undefined;
 
 	private readonly chatService: IChatService;
@@ -184,7 +185,7 @@ interface SessionsChatGridEntryOptions extends SessionsChatViewOptions {
 
 class SessionsChatGridEntry extends Disposable implements IView {
 	readonly element: HTMLElement;
-	readonly pane: ChatWidget;
+	readonly pane: ChatWidget<ChatWidgetModel>;
 	readonly minimumWidth = 300;
 	readonly maximumWidth = Number.POSITIVE_INFINITY;
 	readonly minimumHeight = 240;
@@ -215,9 +216,8 @@ class SessionsChatGridEntry extends Disposable implements IView {
 		this.pane = this._register(new ChatWidget(
 			this.element,
 			`ash-sessions-chat-pane-${sessionsChatPaneInstanceId}`,
-			options.chatService,
-			options.selection.kind === "session" ? { kind: "session", active: options.selection.active } : { kind: "untitled", session: options.selection.session },
-			options.sessionService,
+			new ChatWidgetModel(options.chatService, options.selection.kind === "session" ? { kind: "session", active: options.selection.active } : { kind: "untitled", session: options.selection.session }, options.sessionService),
+			() => { options.sessionService.createUntitledSession(); },
 			options.contextMenuService,
 			options.contextViewService,
 			options.commandService,
@@ -250,10 +250,10 @@ class SessionsChatGridEntry extends Disposable implements IView {
 		this.element.setAttribute("aria-current", active ? "true" : "false");
 		if (selection.kind === "session") {
 			this.title.textContent = selection.active.session.title.trim() || "Agent session";
-			void this.pane.selectThread(selection.active).catch(error => console.error("Failed to select Sessions Chat thread", error));
+			void this.pane.model.selectThread(selection.active).catch(error => console.error("Failed to select Sessions Chat thread", error));
 		} else {
 			this.title.textContent = selection.session.title.trim() || "New code session";
-			this.pane.selectUntitledSession(selection.session);
+			this.pane.model.selectUntitledSession(selection.session);
 		}
 	}
 }

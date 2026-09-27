@@ -24,9 +24,7 @@ import {
 import {
 	registerSearchViews,
 } from "../contrib/search/browser/search.contribution.js";
-import {
-	registerChatViews,
-} from "../contrib/chat/browser/chat.contribution.js";
+import "../contrib/chat/browser/chat.contribution.js";
 import { registerPanelViews } from "../contrib/panel/browser/panel.contribution.js";
 import { registerProblemsView } from "../contrib/problems/browser/problems.contribution.js";
 import { registerTerminalView } from "../contrib/terminal/browser/terminal.contribution.js";
@@ -62,7 +60,6 @@ ViewsRegistry.registerStaticViewContainer({
 registerFilesViews();
 registerSearchViews();
 registerGitViews();
-registerChatViews();
 registerProblemsView();
 registerPanelViews();
 registerRemoteViews();

@@ -15,7 +15,7 @@ import type { IContextViewService } from "../../../../../../platform/contextview
 import type { IQuickInputService } from "../../../../../../platform/quickinput/common/quickInput.js";
 import type { ModelCatalogEntry } from "../../../../../services/chat/common/chatService.js";
 import type { ChatContextAttachment, IChatContextPickService } from "../../../../../services/chat/common/chatContextService.js";
-import type { ModelRef } from "../../../../../../sessions/services/sessions/common/session.js";
+import type { ModelRef } from "../../../../../services/chat/common/chatService.js";
 import { DesktopSlashCommands, parseSlashCommandInput, SlashCommandCatalog } from "../../../common/slashCommands.js";
 import { SkillSelectorCatalog } from "../../../common/skillSelectors.js";
 import type { ChatInputDelegate, ChatInputState } from "./chatInput.js";

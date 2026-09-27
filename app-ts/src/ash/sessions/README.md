@@ -18,17 +18,20 @@ is canonical for the renderer implementation and extension points.
 | Appearance | `common/configuration.ts` and `contrib/modernUI/browser/` | own the independent `sessions.layoutStyle` preference and Sessions Part appearance |
 | Window Sessions state | `services/sessions/browser/sessionsService.ts` | owns active/visible selections, focus, and Back/Forward history |
 | Frontend Session model | `services/sessions/common/session.ts` | owns `ISession`, `IChat`, workspace summary, and untitled identity types |
+| Shared Chat contract | `workbench/services/chat/common/chatService.ts` | owns Thread and Turn operations plus shared Session/Thread IDs, model references, and approval modes used by both renderers |
 | Provider and management | `contrib/providers/appServer/`, `services/sessions/common/sessionsManagement.ts`, and `services/sessions/browser/sessionsManagementService.ts` | the App Server provider adapts transport data; management owns catalog, drafts, and operations |
+| Regular Workbench Chat | `browser/workbenchSessions.contribution.ts`, `browser/chatViewPane.ts`, and `browser/chatWidgetModel.ts` | registers the Session-backed Chat view and actions; one model owns selection, draft materialization, and Thread subscriptions for each shared `ChatWidget` |
 | Main conversation | `browser/parts/sessionsChatView.ts` | renders visible durable and untitled Sessions as retained full `ChatWidget` Grid leaves |
+| Turn review | `browser/turnMultiDiffSource.ts` and `browser/workbenchSessions.contribution.ts` | compose Turn changes and register their source resolver and commit action with `workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.ts` |
 | Parts | `browser/parts/` | owns product chrome, window navigation, list, primary surface, and typed active context |
 | Session chat commands | `browser/actions/sessionsChatActions.ts` | maps the reused ChatWidget New Chat and History commands to the Sessions window's draft and active-chat selection |
 | Open Agents Window | `code/browser/workbench/modes/code.ts`, `workbench/contrib/chat/electron-browser/`, `contrib/openAgentsWindow/electron-browser/`, and `workbench/browser/parts/titlebar/` | the Code browser mode owns page navigation; the Chat desktop contribution owns the titlebar action, hover label, and window command; the Sessions desktop contribution owns system-wide shortcut synchronization; the Workbench titlebar owns the shared mark and motion. Shared shortcut selection lives in `workbench/contrib/keybindings/`, while `platform/globalKeybindings/` owns operating-system registrations |
 
-The dedicated Sessions renderer may reuse backend-neutral Workbench mechanisms
-and Chat contributions. Platform and regular Workbench code still import
-Sessions contracts and implementations; those reverse dependencies remain a
-separate ownership migration. Regular Workbench layout/runtime code must not
-import Sessions product UI or add Sessions-specific layout branches.
+The dedicated Sessions renderer reuses Workbench Chat presentation, editor, and
+service contracts. Workbench production code does not import Sessions modules;
+the Code and Academic mode entries load the Sessions contribution that registers
+their Session-backed Chat view and actions. The shared `ChatWidget` renders a
+model supplied by Sessions and does not create or select Sessions itself.
 
 ## Execution path
 
@@ -73,10 +76,11 @@ sequence because no such sequence exists.
 Durable sequence and gap handling belong to the Thread-backed Chat runtime and
 `session/thread/update`.
 
-`session.ts` is the frontend product boundary. Transport DTO mapping
-stays private to the App Server provider; Workbench Chat and the
-dedicated Sessions renderer consume `ISessionsManagementService` plus the
-frontend-owned domain types, never generated App Server DTOs.
+`session.ts` is the frontend Session product boundary and re-exports the shared
+Chat identity and model-reference types. Transport DTO mapping stays private to
+the App Server provider. Sessions views consume `ISessionsManagementService`
+and frontend-owned domain types; Workbench Chat presentation consumes its model
+through a view contract and never imports the Sessions product layer.
 
 The Session workspace is a display summary derived from Environment, `cwd`,
 and dirs. It does not grant access and is not the editor window Workspace from
@@ -106,6 +110,10 @@ and dirs. It does not grant access and is not the editor window Workspace from
   draft materialization.
 - `test/browser/sessions-part.test.ts` verifies the Sessions-owned primary Part
   passively renders multiple full Chat surfaces and reports focus/close intent.
+- `test/browser/chatViewPane.test.ts`, `chatViewPane.startup.test.ts`, and
+  `sessionInspector.test.ts` protect the Session-backed regular Workbench Chat.
+- `test/browser/workbenchSessions.contribution.test.ts` verifies service
+  registration and Turn review source and commit actions.
 - `test/browser/sessions-list.test.ts` verifies that list refresh retains buttons,
   focus, and click behavior for unchanged Sessions.
 - `services/sessions/test/browser/sessionsManagementService.test.ts` protects

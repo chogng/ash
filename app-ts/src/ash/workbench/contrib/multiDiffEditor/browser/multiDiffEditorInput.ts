@@ -56,13 +56,11 @@ export type MultiDiffEditorSource =
 		readonly branchName: string | undefined;
 	}
 	| {
-		readonly kind: 'turn';
-		readonly sessionId: string;
-		readonly threadId: string;
-		readonly changeSetIds: readonly string[];
-		readonly repositoryId: string;
-		readonly targetBranch: string | undefined;
-		readonly scope: 'currentTurn' | 'throughCurrentTurn' | 'previousTurn';
+		readonly kind: 'external';
+		readonly providerId: string;
+		readonly label: string;
+		readonly repositoryId?: string;
+		readonly branchName?: string;
 	};
 
 export interface MultiDiffEditorGitChange {
@@ -83,6 +81,7 @@ export interface MultiDiffEditorInputItem {
 
 export interface MultiDiffEditorInput extends EditorInput {
 	readonly contentType: typeof MULTI_DIFF_EDITOR_CONTENT_TYPE;
+	readonly label: string;
 	readonly items: readonly MultiDiffEditorInputItem[];
 	readonly source?: MultiDiffEditorSource;
 }
@@ -167,16 +166,14 @@ function requireMultiDiffSource(value: unknown): MultiDiffEditorSource {
 	if (source.kind === 'git' && typeof source.repositoryId === 'string' && source.repositoryId.length > 0 && (source.scope === 'staged' || source.scope === 'unstaged' || source.scope === 'uncommitted') && (source.branchName === undefined || typeof source.branchName === 'string')) {
 		return freezeMultiDiffSource(source as MultiDiffEditorSource);
 	}
-	if (source.kind === 'turn' && typeof source.sessionId === 'string' && source.sessionId.length > 0 && typeof source.threadId === 'string' && source.threadId.length > 0 && Array.isArray(source.changeSetIds) && source.changeSetIds.every(id => typeof id === 'string' && id.length > 0) && typeof source.repositoryId === 'string' && source.repositoryId.length > 0 && (source.targetBranch === undefined || typeof source.targetBranch === 'string') && (source.scope === 'currentTurn' || source.scope === 'throughCurrentTurn' || source.scope === 'previousTurn')) {
+	if (source.kind === 'external' && typeof source.providerId === 'string' && source.providerId.length > 0 && typeof source.label === 'string' && source.label.length > 0 && (source.repositoryId === undefined || typeof source.repositoryId === 'string') && (source.branchName === undefined || typeof source.branchName === 'string')) {
 		return freezeMultiDiffSource(source as MultiDiffEditorSource);
 	}
 	throw new TypeError('Multi-diff source is invalid');
 }
 
 function freezeMultiDiffSource(source: MultiDiffEditorSource): MultiDiffEditorSource {
-	return source.kind === 'turn'
-		? Object.freeze({ ...source, changeSetIds: Object.freeze([...source.changeSetIds]) })
-		: Object.freeze({ ...source });
+	return Object.freeze({ ...source });
 }
 
 function assertTextResourceInput(value: unknown, owner: string): asserts value is EditorInput {

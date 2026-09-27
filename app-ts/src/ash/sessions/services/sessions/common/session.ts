@@ -1,10 +1,7 @@
-export type SessionId = string;
-export type ThreadId = string;
+import type { ApprovalMode, ModelRef, SessionId, ThreadId } from '../../../../workbench/services/chat/common/chatService.js';
 
-export interface ModelRef {
-	readonly provider: string;
-	readonly model: string;
-}
+// Shared Chat identities live below Sessions so both window modes use one contract.
+export type { ApprovalMode, ModelRef, SessionId, ThreadId } from '../../../../workbench/services/chat/common/chatService.js';
 
 export type ThreadOrigin =
 	| { readonly type: "root" }
@@ -56,7 +53,6 @@ export interface IChat {
 }
 
 export type SessionStatus = "active" | "archived";
-export type ApprovalMode = "askPermissions" | "autoReview" | "bypassPermissions";
 
 /** Frontend product model for one App Server Session tree. */
 export interface ISession {

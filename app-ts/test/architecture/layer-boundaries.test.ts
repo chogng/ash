@@ -37,9 +37,9 @@ test("Workbench service implementations do not depend on Workbench contributions
 	assert.deepEqual(violations, []);
 });
 
-test("Workbench shell does not construct Sessions product services", () => {
+test("Workbench production imports do not depend on Sessions", () => {
 	const sessionsRoot = join(sourceRoot, "sessions");
-	const violations = productionTypeScriptFiles(join(sourceRoot, "workbench/browser"))
+	const violations = productionTypeScriptFiles(join(sourceRoot, "workbench"))
 		.flatMap(file => localImports(file).filter(target => target.startsWith(`${sessionsRoot}${sep}`)).map(target => `${sourceName(file)} -> ${sourceName(target)}`));
 	assert.deepEqual(violations, []);
 });
@@ -49,8 +49,8 @@ test("Sessions owns canonical Session management independently from Workbench co
 	const contributionRoot = join(sourceRoot, "workbench/contrib");
 	const violations = productionTypeScriptFiles(sessionsServicesRoot).flatMap(file => localImports(file).filter(target => target.startsWith(contributionRoot)).map(target => `${sourceName(file)} -> ${sourceName(target)}`));
 	assert.equal(existsSync(join(sessionsServicesRoot, "sessions/common/session.ts")), true);
-	assert.equal(existsSync(join(sessionsServicesRoot, "sessions/common/sessionsManagementService.ts")), true);
-	assert.equal(existsSync(join(sessionsServicesRoot, "sessions/browser/appServerSessionsManagementService.ts")), true);
+	assert.equal(existsSync(join(sessionsServicesRoot, "sessions/common/sessionsManagement.ts")), true);
+	assert.equal(existsSync(join(sessionsServicesRoot, "sessions/browser/sessionsManagementService.ts")), true);
 	assert.equal(existsSync(join(sourceRoot, "workbench/services/sessions/common/sessionService.ts")), false);
 	assert.equal(existsSync(join(sourceRoot, "workbench/browser/defaultWorkbenchSession.ts")), false);
 	assert.equal(existsSync(join(sourceRoot, "workbench/browser/defaultWorkbenchProfile.ts")), false);

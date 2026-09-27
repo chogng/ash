@@ -7,7 +7,7 @@ import type { IAppServerApi, IServerEventApi } from "../../../../platform/app-se
 import type { IModelApi, IThreadApi, ITurnApi } from "../../../../platform/sessions/common/sessionApi.js";
 import type { ISkillApi } from "../../../../platform/skills/common/skillApi.js";
 import type { ITurnChangesApi } from "../../../../platform/turnChanges/common/turnChangesApi.js";
-import type { ModelRef, SessionId, ThreadId } from "../../../../sessions/services/sessions/common/session.js";
+import type { ModelRef, SessionId, ThreadId } from "../common/chatService.js";
 import type { AdvisorConfig, ConfigureAdvisorOptions, ConsultAdvisorOptions, CompactContextOptions, IChatService, InterruptTurnOptions, ModelCatalogEntry, ResolveInteractionOptions, SkillSelectorDefinition, SlashCommandDefinition, StartTurnOptions, SteerTurnOptions, Thread, ThreadGoalUpdate, ThreadItem, ThreadSubscription, ThreadTranscriptEntry, ThreadTranscriptSnapshot, ThreadTranscriptUpdateEnvelope, ThreadUpdate, ThreadUpdateEnvelope, TurnChangeDetails, TurnChangeSetSummary, TurnChangesUpdate } from "../common/chatService.js";
 import type { ModelProviderCredentialStatus } from '../common/chatService.js';
 import { ModelCatalogConfiguration, modelRefIdentity } from "../common/modelCatalog.js";

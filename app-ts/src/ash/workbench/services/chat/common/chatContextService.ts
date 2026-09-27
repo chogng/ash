@@ -14,6 +14,12 @@ export interface ChatContextAttachment {
 	resolve(): Promise<ResolvedChatContext>;
 }
 
+/** A Chat view that accepts context from another Workbench contribution. */
+export interface IChatContextTarget {
+	addContext(attachment: ChatContextAttachment): void;
+	acceptInput(value?: string): Promise<void>;
+}
+
 export interface ChatContextPick {
 	readonly label: string;
 	readonly description?: string;

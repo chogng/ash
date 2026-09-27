@@ -1,17 +1,19 @@
 import { getBrowserTextModelService } from '../../../services/textmodelResolver/browser/browserTextModelService.js';
 import { registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { registerEditorPane } from '../../../browser/parts/editor/editorRegistry.js';
 import { getBrowserTextResourceStore } from '../../codeEditor/browser/browserTextResourceStore.js';
 import { CodeEditorConfiguration } from '../../codeEditor/common/editorConfiguration.js';
-import { IChatService } from '../../../services/chat/common/chatService.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IGitService } from '../../../services/git/common/gitService.js';
 import { IViewsService } from '../../../services/views/browser/viewsService.js';
-import { ISessionsManagementService } from '../../../../sessions/services/sessions/common/sessionsManagement.js';
 import { matchMultiDiffEditor, MULTI_DIFF_EDITOR_ID } from './multiDiffEditorInput.js';
 import { MultiDiffCollapseAllAction, MultiDiffExpandAllAction, MultiDiffGoToFileAction, MultiDiffGoToNextChangeAction, MultiDiffGoToPreviousChangeAction } from './multiDiffEditorActions.js';
 import { MultiDiffEditorPane } from './multiDiffEditorPane.js';
 import { OpenScmMultiDiffEditorAction } from './scmMultiDiffAction.js';
+import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService } from './multiDiffSourceResolverService.js';
+
+registerSingleton(IMultiDiffSourceResolverService, MultiDiffSourceResolverService, InstantiationType.Delayed);
 
 registerAction2(MultiDiffGoToNextChangeAction);
 registerAction2(MultiDiffGoToPreviousChangeAction);
@@ -43,8 +45,6 @@ registerEditorPane({
 			showInlineChanges: configuration?.getValue(CodeEditorConfiguration.diffShowInlineChanges),
 			loopChanges: configuration?.getValue(CodeEditorConfiguration.diffLoopChanges),
 			gitService: instantiationService.getOptional(IGitService),
-			chatService: instantiationService.getOptional(IChatService),
-			sessionsService: instantiationService.getOptional(ISessionsManagementService),
 			editorService: instantiationService.getOptional(IEditorService),
 			viewsService: instantiationService.getOptional(IViewsService),
 			fileActions: options.actionServices,

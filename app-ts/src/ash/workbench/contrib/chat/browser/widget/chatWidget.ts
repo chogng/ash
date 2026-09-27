@@ -1,17 +1,18 @@
 import './media/chat.css';
-import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
+import type { Event } from "../../../../../base/common/event.js";
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { IContextViewService } from "../../../../../platform/contextview/browser/contextView.js";
-import type { IChatService } from "../../../../services/chat/common/chatService.js";
-import type { IActiveSessionThread, IUntitledChatSession, SessionId, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
-import type { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagement.js";
+import type { AgentResponse, ModelRef, SessionId, ThreadGoal, ThreadId } from "../../../../services/chat/common/chatService.js";
 import type { ChatInputDelegate } from "./input/chatInput.js";
 import type { SkillReference } from "../../../../../platform/skills/common/skillApi.js";
 import { ChatInputPart } from "./input/chatInputPart.js";
 import type { ChatTurnErrorAction } from "./chatListItems.js";
 import { ChatListWidget } from "./chatListWidget.js";
-import { ChatWidgetModel, type ChatWidgetSelection } from "./chatWidgetModel.js";
+import type { ChatInputState } from "./input/chatInput.js";
+import type { IChatListItem } from "./chatListItems.js";
+import type { ResolvedChatContext } from "../../../../services/chat/common/chatContextService.js";
 import { h } from "../../../../../base/browser/dom.js";
 import type { ChatContextAttachment } from "../../../../services/chat/common/chatContextService.js";
 import type { IChatContextPickService } from "../../../../services/chat/common/chatContextService.js";
@@ -23,22 +24,38 @@ import { Schemas } from "../../../../../base/common/network.js";
 import { ASH_REMOTE_SCHEME, createSshRemoteWorkspaceUri, getRemoteWorkspacePath } from '../../../../../platform/remote/common/remote.js';
 import { OPEN_CHAT_SETTINGS_COMMAND_ID } from "../../common/chat.js";
 
+/** The presentation consumes one conversation model owned by its product. */
+export interface IChatWidgetModel extends IDisposable {
+	readonly onDidChange: Event<void>;
+	readonly sessionId: SessionId | undefined;
+	readonly threadId: ThreadId | undefined;
+	readonly untitledSessionId: string | undefined;
+	readonly goal: ThreadGoal | undefined;
+	readonly items: readonly IChatListItem[];
+	readonly inputState: ChatInputState;
+	send(text: string, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[]): Promise<void>;
+	executeServerCommand(name: string, argumentsText: string): Promise<void>;
+	interrupt(): Promise<void>;
+	selectModel(model: ModelRef): Promise<void>;
+	resolveInteraction(response: AgentResponse): Promise<void>;
+	retryFailedTurn(turnId: string): Promise<void>;
+}
+
 /** Owns the content and interaction state for one local or durable Chat tab. */
-export class ChatWidget extends Disposable {
+export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> extends Disposable {
 	readonly element: HTMLElement;
-	readonly model: ChatWidgetModel;
+	readonly model: TModel;
 	private readonly listWidget: ChatListWidget;
 	private readonly inputPart: ChatInputPart;
 	private readonly goalElement: HTMLDivElement;
-	private readonly sessionService: ISessionsManagementService;
 	private submittedMessage = false;
+	private displayedThreadId: ThreadId | undefined;
 
 	constructor(
 		container: HTMLElement,
 		panelId: string,
-		chatService: IChatService,
-		selection: ChatWidgetSelection,
-		sessionService: ISessionsManagementService,
+		model: TModel,
+		private readonly createUntitledSession: () => void,
 		contextMenuService: IContextMenuService,
 		contextViewService: IContextViewService,
 		commandService: ICommandService,
@@ -56,8 +73,7 @@ export class ChatWidget extends Disposable {
 		this.element.setAttribute("role", "tabpanel");
 		this.element.hidden = true;
 		container.append(this.element);
-		this.sessionService = sessionService;
-		this.model = this._register(new ChatWidgetModel(chatService, selection, sessionService));
+		this.model = this._register(model);
 		this.goalElement = h(ownerDocument, "div");
 		this.goalElement.className = "ash-chat-goal";
 		this.goalElement.hidden = true;
@@ -96,21 +112,6 @@ export class ChatWidget extends Disposable {
 
 	get threadId(): ThreadId | undefined {
 		return this.model.threadId;
-	}
-
-	selectThread(active: IActiveSessionThread): Promise<void> {
-		if (active.session.sessionId !== this.sessionId) {
-			throw new Error(`ChatWidget cannot select a Thread from another Session: ${active.session.sessionId}`);
-		}
-		if (active.threadId !== this.threadId) this.submittedMessage = false;
-		return this.model.selectThread(active);
-	}
-
-	selectUntitledSession(session: IUntitledChatSession): void {
-		if (session.untitledSessionId !== this.untitledSessionId) {
-			throw new Error(`ChatWidget cannot select another Untitled Chat Session: ${session.untitledSessionId}`);
-		}
-		this.model.selectUntitledSession(session);
 	}
 
 	setTabId(tabId: string | undefined): void {
@@ -165,7 +166,7 @@ export class ChatWidget extends Disposable {
 				this.inputPart.openModelSelector();
 				return;
 			case "startNewChat":
-				this.sessionService.createUntitledSession();
+				this.createUntitledSession();
 				return;
 			case "revise":
 				this.inputPart.focus();
@@ -174,21 +175,16 @@ export class ChatWidget extends Disposable {
 	}
 
 	private render(): void {
+		if (this.displayedThreadId !== this.model.threadId) {
+			this.displayedThreadId = this.model.threadId;
+			this.submittedMessage = false;
+		}
 		this.syncIdentity();
 		this.renderGoal();
 		const items = this.model.items;
 		this.updateConversationState(items.length > 0);
 		this.listWidget.render(items);
-		this.inputPart.render({
-			phase: this.model.state,
-			error: this.model.error,
-			canInterrupt: this.model.canInterrupt,
-			models: this.model.models,
-			slashCommands: this.model.slashCommands,
-			skillSelectors: this.model.skillSelectors,
-			selectedModel: this.model.selectedModel,
-			interaction: this.model.interaction,
-		});
+		this.inputPart.render(this.model.inputState);
 	}
 
 	private renderGoal(): void {
