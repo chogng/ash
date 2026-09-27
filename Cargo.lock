@@ -623,7 +623,7 @@ dependencies = [
  "ash-git",
  "ash-git-attribution",
  "ash-github",
- "ash-glm-subscription",
+ "ash-glm",
  "ash-goal",
  "ash-grep",
  "ash-guardian-v2",
@@ -1601,7 +1601,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ash-glm-subscription"
+name = "ash-glm"
 version = "0.1.0"
 dependencies = [
  "aes-gcm",
@@ -2108,7 +2108,7 @@ dependencies = [
  "ash-chatgpt",
  "ash-client",
  "ash-context-engine",
- "ash-glm-subscription",
+ "ash-glm",
  "ash-http-client",
  "ash-kimi",
  "ash-model-provider-config",

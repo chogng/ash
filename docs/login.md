@@ -11,14 +11,14 @@
 
 ## 快速理解
 
-登录系统是面向用户的多账户控制面。`LoginService` 按 provider 注册 driver，拥有稳定 login ID、取消、完成、provider-scoped 登出和 revisioned account collection；ChatGPT、Kimi、Super Grok 的授权与凭据生命周期分别由 `ash-chatgpt`、`ash-kimi`、`ash-supergrok` 处理。BigModel 与 Z.AI Coding Plan 的 ZCode 凭据只读复用、浏览器授权和 Ash 内部请求凭据由 `ash-glm-subscription` 处理，见[GLM 接入](models/glm.md)。
+登录系统是面向用户的多账户控制面。`LoginService` 按 provider 注册 driver，拥有稳定 login ID、取消、完成、provider-scoped 登出和 revisioned account collection；ChatGPT、Kimi、Super Grok 的授权与凭据生命周期分别由 `ash-chatgpt`、`ash-kimi`、`ash-supergrok` 处理。BigModel 与 Z.AI Coding Plan 的 ZCode 凭据只读复用、浏览器授权和 Ash 内部请求凭据由 `ash-glm` 处理，见[GLM 接入](models/glm.md)。
 
 | 用户动作或凭据类型 | 由谁处理 | Ash 登录系统能看到什么 |
 | --- | --- | --- |
 | ChatGPT 设备码登录 | 本机 `ash-chatgpt` | 授权地址、一次性用户码和脱敏账户状态；首次 token 保存为 Codex 兼容 auth.json；有 Codex 时只读复用，无 Codex 时由 Ash 维护 |
 | Kimi 设备码登录 | 本机 `ash-kimi` | 授权地址、一次性用户码和脱敏账户状态；凭据由 Kimi 适配器保存到 profile SecretStore |
 | Super Grok 设备码登录 | 本机 `ash-supergrok` | 授权地址、一次性用户码和脱敏账户状态；Ash 登录凭据保存在 profile SecretStore，没有 Ash 凭据时可只读使用宿主 Grok 登录文件 |
-| BigModel、Z.AI Coding Plan 账号 | 本机 `ash-glm-subscription` 与 `ash-backend-client` | ZCode 已登录时只读使用其账号和请求密钥；否则提供浏览器授权，在 Ash 内保存取得的请求凭据 |
+| BigModel、Z.AI Coding Plan 账号 | 本机 `ash-glm` 与 `ash-backend-client` | ZCode 已登录时只读使用其账号和请求密钥；否则提供浏览器授权，在 Ash 内保存取得的请求凭据 |
 | GitHub 浏览器登录 | 本机 `ash-github` 与 Cloudflare Worker | 浏览器授权地址和脱敏账户状态；Worker 保存 GitHub App Client Secret，本机接收回调并把凭据保存在 profile SecretStore |
 | 登出、取消或切换账户 | 登录控制面协调，供应商适配器执行 | 稳定状态和脱敏结果 |
 | 没有受支持订阅 OAuth 的供应商 API key | 对应模型凭据领域 | 不属于交互式登录，也不是 OAuth 失败后的降级 |
@@ -153,7 +153,7 @@ ash-login -/-> ash-api / ash-client / ash-http-client
 1. `ash-login` 是登录控制面，不是 credential manager 或 OAuth protocol crate。
 2. ChatGPT 订阅读取 Codex 凭据和固定 Responses 目标；缺失时设备码登录创建兼容文件；无 Codex 时 Ash 负责续期和失效后的重新登录，有 Codex 时只读复用。
 3. Kimi 订阅使用本机 device OAuth、SecretStore 与 Kimi Coding API；`ash-kimi` 是 token lifecycle 的唯一 owner。
-4. Super Grok 使用 xAI device OAuth 和订阅代理；`ash-supergrok` 持有凭据生命周期。BigModel 与 Z.AI Coding Plan 先只读检查 ZCode 账号；没有对应账号时使用浏览器授权，`ash-glm-subscription` 分别保存 Ash 登录后的账户及内部请求凭据。
+4. Super Grok 使用 xAI device OAuth 和订阅代理；`ash-supergrok` 持有凭据生命周期。BigModel 与 Z.AI Coding Plan 先只读检查 ZCode 账号；没有对应账号时使用浏览器授权，`ash-glm` 分别保存 Ash 登录后的账户及内部请求凭据。
 5. Secret persistence 仍是各 credential owner 对 `ash-secrets` 的直接依赖；login service 不读取
    secret bytes。
 6. API key 的录入可以由 App Server 的 settings command 触发，但它不是 OAuth login，不能进入 `LoginMethod`、由 `ash-login` 持有或作为登录失败后的降级。

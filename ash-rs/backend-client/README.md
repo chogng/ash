@@ -22,7 +22,7 @@
 - 各供应商客户端独立接收 `OperationClient` 与已解析的 `ResolvedApiTarget`；不同供应商不共享认证状态。
 - 生产 transport 必须拒绝重定向；Ash 默认 HTTP 配置满足此要求。
 - 新供应商在本 crate 内增加模块，只有真实接口需要时才增加子文件；后台请求不抽象成统一套餐或云任务模型。
-- Kimi 当前由 `ash-kimi` 管理登录并调用模型服务，尚无账户额度后台接口；BigModel 与 Z.AI Coding Plan 分别由 `ash-glm-subscription` 管理账号登录，本 crate 处理其后台凭据接口，用户无需录入 Coding Plan Key。
+- Kimi 当前由 `ash-kimi` 管理登录并调用模型服务，尚无账户额度后台接口；BigModel 与 Z.AI Coding Plan 分别由 `ash-glm` 管理账号登录，本 crate 处理其后台凭据接口，用户无需录入 Coding Plan Key。
 - 原根级 `BackendClient`、`RouteStyle` 和 ChatGPT 响应类型已迁到 `chatgpt`，调用方直接使用新路径。
 
 ## ChatGPT 接口

@@ -11,7 +11,7 @@ use ash_client::{
 use ash_context_engine::ContextTokenMeasurementAccuracy;
 use ash_context_engine::ContextTokenMeasurementCapability;
 use ash_context_engine::ContextTokenMeasurementOutcome;
-use ash_glm_subscription::{GlmOAuth, GlmProvider};
+use ash_glm::{GlmOAuth, GlmProvider};
 use ash_http_client::HttpHeader;
 use ash_kimi::KimiOAuth;
 use ash_model_provider_config::{

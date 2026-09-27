@@ -1,6 +1,6 @@
 # GLM Coding Plan account login
 
-`ash-glm-subscription` owns two separate interactive accounts: `bigmodel-coding-plan` and `zai-coding-plan`. It first reads an existing ZCode individual Coding Plan account from `~/.zcode/v2/credentials.json` (or `ZCODE_DATA_BASE_DIR/.zcode/v2/credentials.json`). The user does not enter a Coding Plan key.
+`ash-glm` owns two separate interactive accounts: `bigmodel-coding-plan` and `zai-coding-plan`. It first reads an existing ZCode individual Coding Plan account from `~/.zcode/v2/credentials.json` (or `ZCODE_DATA_BASE_DIR/.zcode/v2/credentials.json`). The user does not enter a Coding Plan key.
 
 ZCode credentials are read for each model request and are never copied into Ash or written back. If no ZCode account exists for that provider, Ash offers ZCode CLI browser authorization and polling. After authorization, the driver asks `ash-backend-client` to obtain a model request credential from the corresponding provider business API. Only the account ID, optional display metadata, credential revision, and model request credential are saved in the profile `SecretStore`. OAuth poll tokens and account access tokens stay within the login attempt.
 

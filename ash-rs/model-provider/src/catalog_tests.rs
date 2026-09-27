@@ -2,7 +2,7 @@ use ash_client::ClientError;
 use ash_client::ClientRequest;
 use ash_client::ClientResponse;
 use ash_client::OperationClient;
-use ash_glm_subscription::{GlmOAuth, GlmProvider};
+use ash_glm::{GlmOAuth, GlmProvider};
 use ash_model_provider_config::ModelId;
 use ash_model_provider_config::ModelProviderConfig;
 use ash_model_provider_config::ProviderConfigRegistry;

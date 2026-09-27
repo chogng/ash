@@ -1,6 +1,6 @@
 use crate::ModelProviderError;
 use crate::catalog::ModelCatalogBinding;
-use ash_glm_subscription::GlmOAuth;
+use ash_glm::GlmOAuth;
 use ash_models_manager::CatalogCacheHint;
 use ash_models_manager::CatalogDiscoveryOutcome;
 use ash_models_manager::CatalogDiscoveryRequest;

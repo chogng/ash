@@ -3057,7 +3057,7 @@ fn xai_subscription_catalog_drives_model_selection_context_and_invocation() {
 
 #[test]
 fn glm_connections_use_distinct_endpoints_keys_and_billing_without_changing_the_model() {
-    use ash_glm_subscription::{GlmOAuth, GlmProvider};
+    use ash_glm::{GlmOAuth, GlmProvider};
     use ash_protocol::ModelConnectionId;
     use ash_secrets::{SecretKey, SecretStore, SecretValue};
     #[derive(Default)]

@@ -59,7 +59,7 @@ members = [
     "ash-rs/code-mode-runtime",
     "ash-rs/v8-poc",
     "ash-rs/chatgpt",
-    "ash-rs/glm-subscription",
+    "ash-rs/glm",
     "ash-rs/backend-client",
     "ash-rs/apply-patch",
     "ash-rs/async-utils",
@@ -513,7 +513,7 @@ ash-input-classifier = { path = "app-rs/input-classifier" }
 ash-instructions = { path = "ash-rs/instructions" }
 ash-keyring-store = { path = "ash-rs/keyring-store" }
 ash-kimi = { path = "ash-rs/kimi" }
-ash-glm-subscription = { path = "ash-rs/glm-subscription" }
+ash-glm = { path = "ash-rs/glm" }
 supergrok = { package = "ash-supergrok", path = "ash-rs/supergrok" }
 ash-keybinding = { path = "ash-rs/keybinding" }
 ash-keybindings-host = { path = "app-rs/keybindings" }

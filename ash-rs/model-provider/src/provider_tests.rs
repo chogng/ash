@@ -1,5 +1,5 @@
 use super::*;
-use ash_glm_subscription::GlmProvider;
+use ash_glm::GlmProvider;
 use ash_secrets::MemorySecretStore;
 use ash_secrets::SecretKey;
 use ash_secrets::SecretValue;
