@@ -78,8 +78,6 @@
   flex: 1 1 auto;
 }
 
-.ash-sessions-chat-slot > .ash-chat.empty > .ash-chat-list-widget { flex: 1 1 auto; }
-
 .ash-sessions-chat-slot .ash-chat > .ash-chat-input-part,
 .ash-sessions-chat-slot .ash-chat.has-conversation > .ash-chat-input-part {
   min-height: 200px;

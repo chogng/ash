@@ -1,5 +1,27 @@
 import { expect, test } from '../../../automation/test.js';
 
+test('Empty chat keeps its input at the top of the pane', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
+	const page = workbench.page;
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	}
+	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
+	await expect(chat).toHaveClass(/empty/u);
+	const layout = await chat.evaluate(element => {
+		const list = element.querySelector<HTMLElement>('.ash-chat-list-widget');
+		const input = element.querySelector<HTMLElement>('.ash-chat-input-part');
+		if (!list || !input) throw new Error('Chat layout is incomplete');
+		return {
+			chatTop: element.getBoundingClientRect().top,
+			listHeight: list.getBoundingClientRect().height,
+			inputTop: input.getBoundingClientRect().top,
+		};
+	});
+	expect(layout.listHeight).toBe(0);
+	expect(layout.inputTop).toBeCloseTo(layout.chatTop, 0);
+});
+
 test('Chat input resizes with wrapped text and retains keyboard focus', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
 	const page = workbench.page;
