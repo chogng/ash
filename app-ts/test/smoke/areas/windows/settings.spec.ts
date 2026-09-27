@@ -18,14 +18,7 @@ test('Settings opens with editor display controls', async ({ target, workbench }
 		await expect(page.getByRole('option', { name: 'Welcome in empty workbench' })).toBeVisible();
 		await page.keyboard.press('Escape');
 		await expect(page.locator('.ash-notification')).toHaveCount(0);
-		await page.locator('[data-settings-category-id="layout"]').click();
-		const sessionsLayoutStyle = page.locator('[data-configuration-key="sessions.layoutStyle"]').getByRole('combobox');
-		await expect(sessionsLayoutStyle).toBeVisible();
-		await sessionsLayoutStyle.click();
-		await page.getByRole('option', { name: 'Flat' }).click();
-		await expect(sessionsLayoutStyle).toHaveText('Flat');
-		await sessionsLayoutStyle.click();
-		await page.getByRole('option', { name: 'Modern' }).click();
+		await expect(page.locator('[data-settings-category-id="sessions"]')).toHaveCount(0);
 	}
 });
 
@@ -163,6 +156,7 @@ test.describe('without an open workspace', () => {
 		await page.locator('[data-settings-category-id="layout"]').click();
 		const layoutStyle = page.locator('[data-configuration-key="workbench.layoutStyle"]');
 		await expect(layoutStyle).toBeVisible();
+		await expect(page.locator('[data-configuration-key="sessions.activityBar.location"]')).toHaveCount(0);
 		const modernWidth = (await layoutStyle.getByRole('combobox').boundingBox())?.width;
 		expect(modernWidth).toBeDefined();
 		expect(modernWidth!).toBeLessThan(120);

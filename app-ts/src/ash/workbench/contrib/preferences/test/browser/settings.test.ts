@@ -159,7 +159,7 @@ test('settingsLayout is the single projection from registered settings to catego
 	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN');
 	assert.equal(chinese?.bundles['ash.settings']?.['categories.startup.label'], '启动');
 	assert.equal(chinese?.bundles.ash?.['settings.workbench.startup.group.label'], '启动时的编辑器');
-	assert.equal(findSettingCategory(layout, SessionsConfiguration.layoutStyle), 'layout');
+	assert.equal(defaults.all.some(setting => Object.values(SessionsConfiguration).includes(setting.id)), false);
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.activityBarLocation), 'layout');
 	const iconThemeSetting = defaults.get(WorkbenchConfiguration.iconTheme);
 	assert.equal(iconThemeSetting.valueType, 'select');
@@ -193,14 +193,6 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(layoutStyleSetting.valueType, 'select');
 	if (layoutStyleSetting.valueType === 'select') {
 		assert.deepEqual(layoutStyleSetting.options, [
-			{ value: 'modern', label: 'Modern' },
-			{ value: 'flat', label: 'Flat' },
-		]);
-	}
-	const sessionsLayoutStyleSetting = defaults.get(SessionsConfiguration.layoutStyle);
-	assert.equal(sessionsLayoutStyleSetting.valueType, 'select');
-	if (sessionsLayoutStyleSetting.valueType === 'select') {
-		assert.deepEqual(sessionsLayoutStyleSetting.options, [
 			{ value: 'modern', label: 'Modern' },
 			{ value: 'flat', label: 'Flat' },
 		]);
@@ -396,7 +388,7 @@ test('PreferencesEditor renders and updates registry-backed settings only', asyn
 		['general', 'appearance', 'layout', 'startup', 'editor'],
 	);
 	assert.equal(root.querySelector('[data-settings-category-id="appearance"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
-	assert.equal(root.querySelector('[data-settings-category-id="layout"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), true);
+	assert.equal(root.querySelector('[data-settings-category-id="layout"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
 	assert.equal(root.querySelector('[data-settings-target-id="appearance.group.theme"]'), null);
 	assert.equal(root.querySelector('[data-settings-target-id="layout.group.layout"]'), null);
 	const agentsGroup = root.querySelector<HTMLElement>('[data-settings-group-id="agents"]');

@@ -12,6 +12,28 @@ test('Browser Code Sessions Activity Bar centers icons and changes size and posi
 	await expect(activityBar).toBeVisible();
 	await expect(activityBar.locator('.ash-sessions-activity-top button svg').first()).toHaveAttribute('data-ash-icon-id', 'chat-2-filled');
 	await expect(activityBar.locator('.ash-sessions-activity-bottom button svg').first()).toHaveAttribute('data-ash-icon-id', 'device-mobile');
+	const accounts = activityBar.locator('.ash-sessions-activity-bottom button').last();
+	await accounts.click();
+	await expect(accounts).toHaveAttribute('aria-expanded', 'true');
+	await page.getByRole('menuitem', { name: 'Settings' }).click();
+	const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+	await expect(settings).toBeVisible();
+	await expect(settings.locator('[data-configuration-key="sessions.layoutStyle"]')).toBeVisible();
+	await expect(settings.locator('[data-configuration-key="sessions.activityBar.location"]')).toBeVisible();
+	await expect(settings.locator('[data-configuration-key="sessions.activityBar.compact"]')).toBeVisible();
+	await expect(settings.locator('[data-configuration-key="accessibility.verbosity.sessionsActivityBar"]')).toBeVisible();
+	await expect(settings.locator('[data-configuration-key="accessibility.verbosity.sessionsSettings"]')).toBeVisible();
+	await expect(settings.locator('[data-configuration-key="workbench.layoutStyle"]')).toHaveCount(0);
+	const layoutStyle = settings.locator('[data-configuration-key="sessions.layoutStyle"]').getByRole('combobox');
+	const originalLayoutStyle = (await layoutStyle.textContent())!.trim();
+	const changedLayoutStyle = originalLayoutStyle === 'Flat' ? 'Modern' : 'Flat';
+	await layoutStyle.click();
+	await page.getByRole('option', { name: changedLayoutStyle }).click();
+	await expect(layoutStyle).toHaveText(changedLayoutStyle);
+	await layoutStyle.click();
+	await page.getByRole('option', { name: originalLayoutStyle }).click();
+	await settings.getByRole('button', { name: 'Close' }).click();
+	await expect(settings).toHaveCount(0);
 	const chatButton = activityBar.locator('button').first();
 	const buttonBounds = await chatButton.boundingBox();
 	const iconBounds = await chatButton.locator('svg').boundingBox();
@@ -97,6 +119,37 @@ test('Electron Code Sessions Activity Bar follows its position and size settings
 			await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source } });
 		}, original);
 	}
+});
+
+test('Electron Sessions account menu opens the Sessions settings page', async ({ application, target, workbench }) => {
+	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code', 'Requires the Code Sessions window');
+	if (target.kind !== 'electron' || !('windows' in application)) return;
+	const sessionPagePromise = application.waitForEvent('window');
+	await workbench.page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
+	const page = await sessionPagePromise;
+	const accountButton = page.locator('[data-part="activitybar"] .ash-sessions-activity-bottom button').last();
+	await accountButton.click();
+	await expect(accountButton).toHaveAttribute('aria-expanded', 'true');
+	await page.getByRole('menuitem', { name: 'Settings' }).click();
+	const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+	await expect(settings).toBeVisible();
+	await expect(settings.locator('[data-configuration-key="sessions.layoutStyle"]')).toBeVisible();
+	await expect(settings.locator('[data-configuration-key="sessions.activityBar.location"]')).toBeVisible();
+	await expect(settings.locator('[data-configuration-key="sessions.activityBar.compact"]')).toBeVisible();
+	await expect(settings.locator('[data-configuration-key="accessibility.verbosity.sessionsActivityBar"]')).toBeVisible();
+	await expect(settings.locator('[data-configuration-key="accessibility.verbosity.sessionsSettings"]')).toBeVisible();
+	await expect(settings.locator('[data-configuration-key="workbench.layoutStyle"]')).toHaveCount(0);
+	const layoutStyle = settings.locator('[data-configuration-key="sessions.layoutStyle"]').getByRole('combobox');
+	const originalLayoutStyle = (await layoutStyle.textContent())!.trim();
+	const changedLayoutStyle = originalLayoutStyle === 'Flat' ? 'Modern' : 'Flat';
+	await layoutStyle.click();
+	await page.getByRole('option', { name: changedLayoutStyle }).click();
+	await expect(layoutStyle).toHaveText(changedLayoutStyle);
+	await layoutStyle.click();
+	await page.getByRole('option', { name: originalLayoutStyle }).click();
+	await settings.getByRole('button', { name: 'Close' }).click();
+	await expect(settings).toHaveCount(0);
+	await expect(accountButton).toBeFocused();
 });
 
 test('Sessions and IDE layout styles switch independently', async ({ application, target, workbench }) => {

@@ -8,16 +8,14 @@ import { ActivityBarPosition, WorkbenchConfiguration } from '../../../workbench/
 import { WorkbenchConfigurationService } from '../../../workbench/services/configuration/browser/configurationService.js';
 import { builtinLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
 
-test('Sessions layout setting resolves its own Chinese metadata', () => {
+test('Sessions settings keep their values while their labels belong to the Sessions page', () => {
 	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN');
 	assert.ok(chinese);
 	setNlsResolver((bundle, key, fallback) => chinese.bundles[bundle]?.[key] ?? fallback);
 	try {
 		const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
-		const setting = registry.getConfiguration(SessionsConfiguration.layoutStyle)?.setting;
-		assert.ok(setting);
-		assert.equal(setting.title, '会话布局样式');
-		assert.equal(setting.description, '选择会话窗口中悬浮的 Modern 界面或贴边的 Flat 界面。');
+		assert.equal(registry.getConfiguration(SessionsConfiguration.layoutStyle)?.setting, undefined);
+		assert.equal(chinese.bundles.ash?.['sessions.settings.title'], '会话设置');
 	} finally {
 		resetNlsResolver();
 	}

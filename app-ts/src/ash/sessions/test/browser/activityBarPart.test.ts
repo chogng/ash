@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import type { IAction } from '../../../base/common/actions.js';
-import type { IAccountService } from '../../../platform/accounts/common/accountService.js';
 import type { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
 
 const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
@@ -28,35 +27,18 @@ test('Sessions Activity Bar exposes Chat, unavailable views, and account actions
 	const ownerDocument = browser.window.document;
 	ownerDocument.body.replaceChildren();
 	let listFocuses = 0;
-	let shownActions: readonly IAction[] = [];
-	let hideMenu: (() => void) | undefined;
-	const logoutProviders: string[] = [];
-	const loginMethods: string[] = [];
-	const accounts: IAccountService = {
-		onDidChangeAccounts: Event.None,
-		onDidCompleteLogin: Event.None,
-		read: async () => ({
-			revision: 1n,
-			accounts: [{ provider: 'openai', accountId: 'one', displayName: 'Ash User', status: 'ready', credentialRevision: 1n }],
-		}),
-		startLogin: async method => {
-			loginMethods.push(method.type);
-			return { type: 'connected', loginId: 'one' };
-		},
-		cancelLogin: async () => {},
-		logout: async provider => { logoutProviders.push(provider); },
-	};
+	let accountAnchor: HTMLElement | undefined;
 	const contextMenu: IContextMenuService = {
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
-		showContextMenu(delegate) {
-			shownActions = delegate.getActions?.() ?? [];
-			hideMenu = () => delegate.onHide?.(false);
-		},
+		showContextMenu() {},
 		hideContextMenu() {},
 	};
 	const configuration = new WorkbenchConfigurationService();
-	const bar = new ActivityBarPart(ownerDocument.body, { focusList: () => { listFocuses++; } }, accounts, configuration, contextMenu);
+	const bar = new ActivityBarPart(ownerDocument.body, {
+		focusList: () => { listFocuses++; },
+		showAccountMenu: async anchor => { accountAnchor = anchor; },
+	}, configuration, contextMenu);
 	try {
 		const buttons = [...bar.domNode.querySelectorAll<HTMLButtonElement>('button')];
 		assert.deepEqual(buttons.map(button => ({
@@ -77,13 +59,7 @@ test('Sessions Activity Bar exposes Chat, unavailable views, and account actions
 		assert.equal(listFocuses, 1);
 		buttons[3]?.click();
 		await Promise.resolve();
-		assert.deepEqual(shownActions.map(action => action.label), ['Sign out of Ash User', 'Sign in with ChatGPT']);
-		assert.equal(buttons[3]?.getAttribute('aria-expanded'), 'true');
-		await shownActions[0]?.run();
-		await shownActions[1]?.run();
-		assert.deepEqual({ logoutProviders, loginMethods }, { logoutProviders: ['openai'], loginMethods: ['openAiChatGptBrowser'] });
-		hideMenu?.();
-		assert.equal(buttons[3]?.getAttribute('aria-expanded'), 'false');
+		assert.equal(accountAnchor, buttons[3]);
 	} finally {
 		bar.dispose();
 		configuration.dispose();
@@ -100,9 +76,8 @@ test('Sessions Activity Bar context menu changes its own position and size setti
 		showContextMenu(delegate) { shownActions = delegate.getActions?.() ?? []; },
 		hideContextMenu() {},
 	};
-	const accounts = { onDidChangeAccounts: Event.None, onDidCompleteLogin: Event.None } as IAccountService;
 	const configuration = new WorkbenchConfigurationService();
-	const bar = new ActivityBarPart(ownerDocument.body, { focusList() {} }, accounts, configuration, contextMenu);
+	const bar = new ActivityBarPart(ownerDocument.body, { focusList() {}, async showAccountMenu() {} }, configuration, contextMenu);
 	try {
 		bar.domNode.querySelector('.ash-sessions-activity-content')?.dispatchEvent(new browser.window.MouseEvent('contextmenu', { bubbles: true, button: 2 }));
 		assert.deepEqual(shownActions.map(action => action.label), ['Activity Bar Position', 'Activity Bar Size']);

@@ -29,6 +29,7 @@ import { WorkbenchInteractionServices, type WorkbenchContextMenuServiceFactory }
 import { WorkbenchWindow } from "../../workbench/browser/window.js";
 import { AccessibleViewService } from '../../workbench/contrib/accessibility/browser/accessibleView.js';
 import { IAccountService } from '../../platform/accounts/common/accountService.js';
+import { BrowserClipboardService } from '../../platform/clipboard/browser/browserClipboardService.js';
 import { INativeHostService } from '../../workbench/common/services.js';
 import { WorkbenchModeRegistry, type WorkbenchModeId } from "../../workbench/common/workbenchMode.js";
 import type { ActivityBarPosition } from '../../workbench/common/configuration.js';
@@ -41,7 +42,9 @@ import { BrowserStorageService } from "../../workbench/services/storage/browser/
 import { IWorkbenchHostService } from "../../workbench/services/host/common/workbenchHostService.js";
 import { WorkbenchThemeService } from "../../workbench/services/themes/browser/workbenchThemeService.js";
 import { AppServerSessionsProvider } from "../contrib/providers/appServer/browser/appServerSessionsProvider.js";
+import { SessionsAccountMenu } from '../contrib/accounts/browser/sessionsAccountMenu.js';
 import { SessionsModernUIContribution } from '../contrib/modernUI/browser/modernUI.contribution.js';
+import { SessionsPreferences } from '../contrib/preferences/browser/sessionsPreferences.js';
 import type { SessionsProfile } from "../common/sessionsProfile.js";
 import { SessionsConfiguration } from '../common/configuration.js';
 import { SessionsManagementService } from "../services/sessions/browser/sessionsManagementService.js";
@@ -130,7 +133,8 @@ export class Workbench extends Disposable {
 		services.registerInstance(ISessionsManagementService, sessions);
 		services.registerInstance(ISessionsService, view);
 		services.registerInstance(IChatService, chat);
-		services.registerInstance(IAccountService, this._register(new AppServerAccountService(options.api.accounts, options.api.events)));
+		const accountService = this._register(new AppServerAccountService(options.api.accounts, options.api.events));
+		services.registerInstance(IAccountService, accountService);
 		services.registerInstance(IStorageService, storage);
 		this.lifecycleService = this._register(options.lifecycleService);
 		services.registerInstance(ILifecycleService, this.lifecycleService);
@@ -164,6 +168,15 @@ export class Workbench extends Disposable {
 		}));
 		const accessibleViewService = this._register(services.createInstance(AccessibleViewService));
 		services.registerInstance(IAccessibleViewService, accessibleViewService);
+		const preferences = this._register(new SessionsPreferences(
+			this.domNode,
+			configurationService,
+			new BrowserClipboardService(ownerWindow.navigator.clipboard),
+			interactionServices.contextMenuService,
+			interactionServices.contextKeyService,
+			accessibleViewService,
+		));
+		const accountMenu = this._register(new SessionsAccountMenu(accountService, interactionServices.contextMenuService, preferences));
 
 		const titlebar = this._register(new TitlebarPart(this.domNode, options.profile, view, {
 			returnToWorkbench: options.returnToWorkbench,
@@ -176,6 +189,7 @@ export class Workbench extends Disposable {
 		const sidebar = this._register(new SidebarPart(this.domNode, sessions, view));
 		const activitybar = this._register(services.createInstance(ActivityBarPart, this.domNode, {
 			focusList: () => sidebar.focus(),
+			showAccountMenu: (anchor: HTMLElement) => accountMenu.show(anchor),
 		}));
 		const activityBarLocation = configurationService.getValue<ActivityBarPosition>(SessionsConfiguration.activityBarLocation);
 		activitybar.setCompact(configurationService.getValue<boolean>(SessionsConfiguration.activityBarCompact));

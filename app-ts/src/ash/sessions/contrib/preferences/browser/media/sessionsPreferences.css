@@ -1,0 +1,30 @@
+.ash-sessions-settings-dialog {
+	width: min(680px, calc(100vw - var(--ash-spacing-size320)));
+	overflow: visible;
+}
+
+.ash-sessions-settings-description {
+	margin: 0 0 var(--ash-spacing-size160);
+	color: var(--ash-description-foreground);
+}
+
+.ash-sessions-settings-list {
+	display: flex;
+	flex-direction: column;
+}
+
+.ash-sessions-settings-list .ash-configuration-setting + .ash-configuration-setting {
+	border-top: var(--ash-stroke-thickness) solid var(--ash-settings-item-separator);
+}
+
+.ash-sessions-settings-status {
+	margin: var(--ash-spacing-size120) 0 0;
+}
+
+.ash-sessions-settings-status.is-error {
+	color: var(--ash-error-foreground);
+}
+
+.ash-sessions-settings-status[hidden] {
+	display: none;
+}

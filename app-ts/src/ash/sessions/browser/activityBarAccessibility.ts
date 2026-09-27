@@ -1,4 +1,3 @@
-import { localize } from '../../nls.js';
 import { AccessibilityVerbositySettingId } from '../../platform/accessibility/browser/accessibleView.js';
 import { Extensions, type IConfigurationRegistry } from '../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../platform/registry/common/platform.js';
@@ -9,10 +8,5 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	parse(value: unknown): boolean {
 		if (typeof value !== 'boolean') throw new TypeError('Sessions Activity Bar accessibility verbosity must be boolean');
 		return value;
-	},
-	setting: {
-		valueType: 'boolean',
-		title: localize('sessions.activity.verbosityTitle', 'Sessions Activity Bar accessibility help'),
-		description: localize('sessions.activity.verbosityDescription', 'Announce how to open accessibility help when the Sessions Activity Bar receives focus.'),
 	},
 });

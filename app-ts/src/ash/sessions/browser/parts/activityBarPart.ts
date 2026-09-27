@@ -3,10 +3,8 @@ import { addDisposableListener, h } from '../../../base/browser/dom.js';
 import { Button } from '../../../base/browser/ui/button/button.js';
 import { SubmenuAction, type IAction } from '../../../base/common/actions.js';
 import type { Icon } from '../../../base/common/icon.js';
-import { onUnexpectedError } from '../../../base/common/errors.js';
 import { Lxicon } from '../../../base/common/lxicons.js';
 import { localize } from '../../../nls.js';
-import { IAccountService } from '../../../platform/accounts/common/accountService.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
 import { ActivityBarPosition } from '../../../workbench/common/configuration.js';
@@ -15,6 +13,7 @@ import { SessionsConfiguration } from '../../common/configuration.js';
 
 export interface ActivityBarPartDelegate {
 	focusList(): void;
+	showAccountMenu(anchor: HTMLElement): void;
 }
 
 /** Primary view selector and account entry for the Sessions window. */
@@ -30,7 +29,6 @@ export class ActivityBarPart extends WorkbenchPart {
 	constructor(
 		container: HTMLElement,
 		delegate: ActivityBarPartDelegate,
-		@IAccountService private readonly accountService: IAccountService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@IContextMenuService private readonly contextMenuService: IContextMenuService,
 	) {
@@ -63,7 +61,7 @@ export class ActivityBarPart extends WorkbenchPart {
 			iconOnly: true,
 			ariaLabel: accountLabel,
 			title: accountLabel,
-			onClick: () => void this.showAccountMenu(accountButton).catch(onUnexpectedError),
+			onClick: () => delegate.showAccountMenu(accountButton.domNode),
 		}));
 		accountButton.domNode.classList.add('ash-sessions-activity-item');
 		accountButton.domNode.setAttribute('aria-haspopup', 'menu');
@@ -134,38 +132,6 @@ export class ActivityBarPart extends WorkbenchPart {
 			enabled: false,
 		}));
 		button.domNode.classList.add('ash-sessions-activity-item');
-	}
-
-	private async showAccountMenu(button: Button): Promise<void> {
-		const state = await this.accountService.read();
-		const actions = [
-			...state.accounts.map(account => {
-				const name = account.displayName ?? account.email ?? account.provider;
-				const label = account.provider === 'github'
-					? localize('workbench.signOutGitHub', 'Sign out of GitHub ({0})', name)
-					: localize('workbench.signOutAccount', 'Sign out of {0}', name);
-				return {
-					id: `ash.sessions.signOut.${account.provider}`,
-					label,
-					tooltip: label,
-					enabled: true,
-					run: () => this.accountService.logout(account.provider),
-				};
-			}),
-			{
-				id: 'ash.sessions.signIn',
-				label: localize('workbench.signInWithChatGPT', 'Sign in with ChatGPT'),
-				tooltip: localize('workbench.signInWithChatGPT', 'Sign in with ChatGPT'),
-				enabled: true,
-				run: () => this.accountService.startLogin({ type: 'openAiChatGptBrowser' as const }),
-			},
-		];
-		button.domNode.setAttribute('aria-expanded', 'true');
-		this.contextMenuService.showContextMenu({
-			getAnchor: () => button.domNode,
-			getActions: () => actions,
-			onHide: () => button.domNode.setAttribute('aria-expanded', 'false'),
-		});
 	}
 
 	public updateHelpHint(hint: string | undefined): void {
