@@ -2,6 +2,7 @@
 
 - 封装各供应商的后台业务 HTTP API，按供应商模块组织路由和响应类型。
 - `chatgpt` 提供账号、额度、账单、配置、统计与云任务接口。
+- `kimi` 提供 Kimi Code 账户与额度查询。
 - `supergrok` 提供订阅模型目录、账号、访问设置、订阅额度、余额和用量历史查询。
 - `bigmodel`、`zai` 提供 Coding Plan 账号登录后的业务令牌交换与内部模型请求凭据获取。
 - 使用调用方提供的当前认证；凭据存储、刷新与账号生命周期由认证 crate 负责。
@@ -14,6 +15,7 @@
 | 模块 | 公开入口 | 负责内容 |
 | --- | --- | --- |
 | `chatgpt` | `chatgpt::Client`、`chatgpt::RouteStyle`、供应商响应类型 | ChatGPT `/wham`、Codex `/api/codex` 和 API key 费用路由 |
+| `kimi` | `kimi::Client`、`kimi::Account`、`kimi::Usage` | Kimi Coding API `/me` 与 `/usages` |
 | `supergrok` | `supergrok::Client`、供应商响应类型 | Grok 订阅后台路由、账号、模型与账单 |
 | `bigmodel`、`zai` | `issue_api_key` | 登录后取得 Coding Plan 内部请求凭据 |
 | crate 根 | `RequestError` | 不包含认证头或响应正文的请求错误 |
@@ -22,7 +24,7 @@
 - 各供应商客户端独立接收 `OperationClient` 与已解析的 `ResolvedApiTarget`；不同供应商不共享认证状态。
 - 生产 transport 必须拒绝重定向；Ash 默认 HTTP 配置满足此要求。
 - 新供应商在本 crate 内增加模块，只有真实接口需要时才增加子文件；后台请求不抽象成统一套餐或云任务模型。
-- Kimi 当前由 `ash-kimi` 管理登录并调用模型服务，尚无账户额度后台接口；BigModel 与 Z.AI Coding Plan 分别由 `ash-glm` 管理账号登录，本 crate 处理其后台凭据接口，用户无需录入 Coding Plan Key。
+- Kimi 由 `ash-kimi` 管理登录与续期，本 crate 读取账户与额度；BigModel 与 Z.AI Coding Plan 分别由 `ash-glm` 管理账号登录，本 crate 处理其后台凭据接口，用户无需录入 Coding Plan Key。
 - 原根级 `BackendClient`、`RouteStyle` 和 ChatGPT 响应类型已迁到 `chatgpt`，调用方直接使用新路径。
 
 ## ChatGPT 接口
@@ -97,7 +99,7 @@
 - 缺失金额、额度、统计和设置保持为空；不推导零用量、允许状态或当前套餐。整数微单位和十进制金额字符串保留原精度。
 - 任务扣费只接受最多 128 字节的十进制字符串，可带正负号和 `i32` 范围的指数；不转换为浮点数。任务额度占比只接受有限数字，支持 `serde_json/arbitrary_precision`，不截断超过 100% 的值。
 - 历史套餐接口的 HTTP 404 表示报表不可用，返回 `None`；其他接口不会吞掉 HTTP 错误。
-- 此 crate 提供 HTTP 能力。当前产品已有调用方是 `chatgpt` 的账号额度查询和 `supergrok` 的订阅模型、账号与额度查询；新增云任务、统计和写入能力尚未增加 UI 或 App Server RPC 入口。
+- 此 crate 提供 HTTP 能力。当前产品已有调用方是 `chatgpt`、`kimi` 和 `supergrok` 的订阅账户与额度查询；新增云任务、统计和写入能力尚未增加 UI 或 App Server RPC 入口。
 
 ## 实现与验证
 

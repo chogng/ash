@@ -227,6 +227,7 @@ pub struct AppServer {
     approval_review_model: Option<ash_core::ApprovalReviewerFactory>,
     login: Option<Arc<ash_login::LoginService>>,
     chatgpt: Option<Arc<ash_chatgpt::ChatGptAccount>>,
+    kimi: Option<Arc<ash_kimi::KimiOAuth>>,
     supergrok: Option<Arc<supergrok::SuperGrokOAuth>>,
     pub(super) env_runtime_gate: Arc<Mutex<()>>,
     env_runtime: Arc<RwLock<EnvRuntime>>,
@@ -567,6 +568,7 @@ impl AppServer {
             approval_review_model: None,
             login: None,
             chatgpt: None,
+            kimi: None,
             supergrok: None,
             env_runtime_gate,
             env_runtime,
@@ -998,6 +1000,11 @@ impl AppServer {
 
     pub fn with_supergrok_account(mut self, account: Arc<supergrok::SuperGrokOAuth>) -> Self {
         self.supergrok = Some(account);
+        self
+    }
+
+    pub fn with_kimi_account(mut self, account: Arc<ash_kimi::KimiOAuth>) -> Self {
+        self.kimi = Some(account);
         self
     }
 

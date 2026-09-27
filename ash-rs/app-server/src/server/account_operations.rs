@@ -60,6 +60,15 @@ impl AppServer {
                 .map_err(supergrok_error)?;
             return result(&xai_usage(params, subscription));
         }
+        if params.provider == ash_kimi::KIMI_PROVIDER_ID {
+            let (account, usage) = self
+                .kimi
+                .as_ref()
+                .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::AccountUnavailable))?
+                .read_subscription(&params.account_id, cancellation)
+                .map_err(kimi_error)?;
+            return result(&kimi_usage(params, account, usage));
+        }
         if params.provider != ash_chatgpt::CHATGPT_SUBSCRIPTION_PROVIDER_ID {
             return Err(RpcError::new(
                 -32030,
@@ -111,6 +120,15 @@ impl AppServer {
             }) {
                 auth.refresh_account(&account.account.account_id, cancellation)
                     .map_err(supergrok_error)?;
+            }
+        }
+        if let Some(auth) = &self.kimi {
+            if let Some(account) = state.accounts.iter().find(|account| {
+                account.account.provider == ash_kimi::KIMI_PROVIDER_ID
+                    && account.status == AccountStatus::Ready
+            }) {
+                auth.refresh_account(&account.account.account_id, cancellation)
+                    .map_err(kimi_error)?;
             }
         }
         result(&account_state_dto(login.refresh().map_err(login_error)?))
@@ -190,7 +208,7 @@ fn window_dto(window: ash_chatgpt::RateLimitWindow) -> AccountRateLimitWindowDto
     AccountRateLimitWindowDto {
         used_percent: window.used_percent,
         window_seconds: window.window_seconds,
-        resets_at: window.resets_at,
+        resets_at: Some(window.resets_at),
     }
 }
 
@@ -355,6 +373,70 @@ fn supergrok_error(error: supergrok::SuperGrokError) -> RpcError {
         },
         name,
     )
+}
+
+fn kimi_error(error: ash_kimi::KimiError) -> RpcError {
+    use ash_kimi::KimiErrorKind;
+    let name = match error.kind() {
+        KimiErrorKind::Cancelled => AppServerErrorName::RequestCancelled,
+        KimiErrorKind::Authentication => AppServerErrorName::AccountAuthenticationRequired,
+        KimiErrorKind::AccountChanged => AppServerErrorName::AccountChanged,
+        KimiErrorKind::Unavailable => AppServerErrorName::AccountOperationFailed,
+    };
+    RpcError::new(
+        if error.kind() == KimiErrorKind::Cancelled {
+            -32800
+        } else {
+            -32030
+        },
+        name,
+    )
+}
+
+fn kimi_usage(
+    params: AccountRateLimitsReadParams,
+    account: ash_kimi::Account,
+    usage: ash_kimi::Usage,
+) -> AccountRateLimitsReadResult {
+    let windows = usage.usages;
+    let limits = [
+        ("five-hour", "5-hour limit", 18_000, windows.limit_5h),
+        ("weekly", "Weekly limit", 604_800, windows.limit_7d),
+        ("monthly", "Monthly limit", 0, windows.limit_month_total),
+    ]
+    .into_iter()
+    .filter_map(|(id, name, seconds, window)| {
+        window.map(|window| {
+            let used_percent = (window.used_ratio * 100.0).ceil() as u32;
+            let resets_at = window
+                .reset_time
+                .and_then(|time| u64::try_from(time.timestamp()).ok());
+            AccountRateLimitDto {
+                id: id.into(),
+                name: Some(name.into()),
+                model: None,
+                allowed: None,
+                limit_reached: Some(window.used_ratio >= 1.0),
+                primary: Some(AccountRateLimitWindowDto {
+                    used_percent,
+                    window_seconds: seconds,
+                    resets_at,
+                }),
+                secondary: None,
+            }
+        })
+    })
+    .collect();
+    AccountRateLimitsReadResult {
+        provider: params.provider,
+        account_id: params.account_id,
+        plan: account
+            .user_level_name
+            .filter(|plan| !plan.trim().is_empty()),
+        limits,
+        credits: None,
+        xai: None,
+    }
 }
 
 fn xai_usage(

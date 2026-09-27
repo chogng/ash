@@ -902,6 +902,7 @@ dependencies = [
  "ash-client",
  "ash-http-client",
  "ash-http-test-support",
+ "chrono",
  "serde",
  "serde_json",
  "url",
@@ -1872,6 +1873,7 @@ name = "ash-kimi"
 version = "0.1.0"
 dependencies = [
  "ash-async-utils",
+ "ash-backend-client",
  "ash-client",
  "ash-http-client",
  "ash-login",

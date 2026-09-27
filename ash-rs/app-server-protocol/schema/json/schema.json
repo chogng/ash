@@ -417,7 +417,10 @@
         "resetsAt": {
           "format": "uint64",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "usedPercent": {
           "format": "uint32",
@@ -432,8 +435,7 @@
       },
       "required": [
         "usedPercent",
-        "windowSeconds",
-        "resetsAt"
+        "windowSeconds"
       ],
       "type": "object"
     },

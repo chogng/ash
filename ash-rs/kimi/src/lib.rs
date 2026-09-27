@@ -42,6 +42,8 @@ use zeroize::Zeroize;
 
 pub const KIMI_PROVIDER_ID: &str = "kimi-subscription";
 pub const KIMI_CODE_API_BASE_URL: &str = "https://api.kimi.com/coding/v1";
+pub use backend_client::kimi::Account;
+pub use backend_client::kimi::Usage;
 
 const CLIENT_ID: &str = "17e5f671-d194-4dfb-9706-5516cb48c098";
 const DEVICE_AUTHORIZATION_URL: &str = "https://auth.kimi.com/api/oauth/device_authorization";
@@ -57,13 +59,34 @@ const CANCELLATION_POLL_INTERVAL: Duration = Duration::from_millis(100);
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct KimiError {
     message: String,
+    kind: KimiErrorKind,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum KimiErrorKind {
+    Cancelled,
+    Authentication,
+    AccountChanged,
+    Unavailable,
 }
 
 impl KimiError {
     fn new(message: impl Into<String>) -> Self {
         Self {
             message: message.into(),
+            kind: KimiErrorKind::Unavailable,
         }
+    }
+
+    fn with_kind(kind: KimiErrorKind, message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            kind,
+        }
+    }
+
+    pub fn kind(&self) -> KimiErrorKind {
+        self.kind
     }
 }
 
@@ -83,6 +106,7 @@ pub struct KimiOAuth {
     login_service: Mutex<Weak<LoginService>>,
     active: Mutex<BTreeMap<LoginId, CancellationSource>>,
     refresh: Mutex<()>,
+    profile: Mutex<Option<(String, u64, Account)>>,
     minimum_poll_interval: Duration,
 }
 
@@ -115,6 +139,7 @@ impl KimiOAuth {
             login_service: Mutex::new(Weak::new()),
             active: Mutex::new(BTreeMap::new()),
             refresh: Mutex::new(()),
+            profile: Mutex::new(None),
             minimum_poll_interval,
         })
     }
@@ -127,16 +152,23 @@ impl KimiOAuth {
 
     /// Resolves a fresh bearer target for one Kimi Coding API invocation.
     pub fn api_target(&self) -> Result<ResolvedApiTarget, KimiError> {
+        self.api_target_with_identity().map(|(target, _, _)| target)
+    }
+
+    fn api_target_with_identity(&self) -> Result<(ResolvedApiTarget, String, u64), KimiError> {
         let _refresh = self
             .refresh
             .lock()
             .map_err(|_| KimiError::new("Kimi credential refresh state is unavailable"))?;
-        let mut credential = self
-            .load_credential()?
-            .ok_or_else(|| KimiError::new("Kimi Code is not signed in"))?;
+        let mut credential = self.load_credential()?.ok_or_else(|| {
+            KimiError::with_kind(KimiErrorKind::Authentication, "Kimi Code is not signed in")
+        })?;
         if credential.needs_refresh() {
             if credential.refresh_token.trim().is_empty() {
-                return Err(KimiError::new("Kimi Code sign-in has expired"));
+                return Err(KimiError::with_kind(
+                    KimiErrorKind::Authentication,
+                    "Kimi Code sign-in has expired",
+                ));
             }
             let mut refreshed = self.refresh_token(&credential)?;
             if refreshed.refresh_token.is_empty() {
@@ -148,10 +180,71 @@ impl KimiOAuth {
             self.publish_account_update(&refreshed);
             credential = refreshed;
         }
-        Ok(ResolvedApiTarget::new(
-            KIMI_CODE_API_BASE_URL,
-            self.api_headers(&credential),
+        Ok((
+            ResolvedApiTarget::new(KIMI_CODE_API_BASE_URL, self.api_headers(&credential)),
+            credential.device_id.clone(),
+            credential.credential_revision,
         ))
+    }
+
+    pub fn refresh_account(
+        &self,
+        account_id: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<(), KimiError> {
+        self.validate_account(account_id)?;
+        let (target, device_id, revision) = self.api_target_with_identity()?;
+        let account = backend_client::kimi::Client::new(self.client.as_ref(), &target)
+            .map_err(kimi_request_error)?
+            .read_account(cancellation)
+            .map_err(kimi_request_error)?;
+        self.credential_at_identity(&device_id, revision)?;
+        *self
+            .profile
+            .lock()
+            .map_err(|_| KimiError::new("Kimi account state is unavailable"))? =
+            Some((device_id, revision, account));
+        Ok(())
+    }
+
+    pub fn read_subscription(
+        &self,
+        account_id: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<(backend_client::kimi::Account, backend_client::kimi::Usage), KimiError> {
+        self.validate_account(account_id)?;
+        let (target, device_id, revision) = self.api_target_with_identity()?;
+        let client = backend_client::kimi::Client::new(self.client.as_ref(), &target)
+            .map_err(kimi_request_error)?;
+        let account = client
+            .read_account(cancellation)
+            .map_err(kimi_request_error)?;
+        let usage = client
+            .read_usage(cancellation)
+            .map_err(kimi_request_error)?;
+        self.credential_at_identity(&device_id, revision)?;
+        Ok((account, usage))
+    }
+
+    fn validate_account(&self, account_id: &str) -> Result<(), KimiError> {
+        if account_id != "current" {
+            return Err(KimiError::with_kind(
+                KimiErrorKind::AccountChanged,
+                "Kimi account changed",
+            ));
+        }
+        Ok(())
+    }
+
+    fn credential_at_identity(&self, device_id: &str, revision: u64) -> Result<(), KimiError> {
+        self.load_credential()?
+            .filter(|credential| {
+                credential.credential_revision == revision && credential.device_id == device_id
+            })
+            .map(|_| ())
+            .ok_or_else(|| {
+                KimiError::with_kind(KimiErrorKind::AccountChanged, "Kimi account changed")
+            })
     }
 
     /// Reads whether the local Kimi Code subscription can be selected without refreshing it.
@@ -363,15 +456,35 @@ impl KimiOAuth {
     }
 
     fn account_snapshot(&self, credential: &TokenCredential) -> AccountSnapshot {
+        let profile = self.profile.lock().ok().and_then(|profile| {
+            profile
+                .as_ref()
+                .filter(|(device_id, revision, _)| {
+                    device_id == &credential.device_id
+                        && *revision == credential.credential_revision
+                })
+                .map(|(_, _, account)| account.clone())
+        });
         AccountSnapshot {
             account: AccountRef {
                 provider: KIMI_PROVIDER_ID.into(),
                 account_id: "current".into(),
             },
-            email: None,
-            display_name: Some("Kimi Code".into()),
+            email: profile
+                .as_ref()
+                .and_then(|account| account.email.as_ref())
+                .filter(|value| !value.trim().is_empty())
+                .cloned(),
+            display_name: profile
+                .as_ref()
+                .and_then(|account| account.nickname.as_ref())
+                .filter(|value| !value.trim().is_empty())
+                .cloned()
+                .or_else(|| Some("Kimi Code".into())),
             organization: None,
-            plan: None,
+            plan: profile
+                .and_then(|account| account.user_level_name)
+                .filter(|value| !value.trim().is_empty()),
             status: if credential.is_usable() {
                 AccountStatus::Ready
             } else {
@@ -509,6 +622,7 @@ impl InteractiveLoginDriver for KimiOAuth {
                 "account is not owned by the Kimi login driver",
             ));
         }
+        *self.profile.lock().map_err(login_lock_error)? = None;
         self.secrets
             .delete(&Self::credential_key())
             .map(|_| ())
@@ -689,6 +803,16 @@ fn now_epoch_seconds() -> u64 {
 
 fn login_driver_error(error: KimiError) -> LoginError {
     LoginError::new(LoginErrorKind::Driver, error.to_string())
+}
+
+fn kimi_request_error(error: backend_client::RequestError) -> KimiError {
+    use backend_client::RequestError;
+    let kind = match error {
+        RequestError::Cancelled => KimiErrorKind::Cancelled,
+        RequestError::HttpStatus(401) => KimiErrorKind::Authentication,
+        _ => KimiErrorKind::Unavailable,
+    };
+    KimiError::with_kind(kind, error.to_string())
 }
 
 fn login_lock_error<T>(_: std::sync::PoisonError<T>) -> LoginError {

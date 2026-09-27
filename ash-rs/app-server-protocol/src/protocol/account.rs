@@ -95,8 +95,8 @@ pub struct AccountRateLimitDto {
 pub struct AccountRateLimitWindowDto {
     pub used_percent: u32,
     pub window_seconds: u32,
-    #[ts(type = "number")]
-    pub resets_at: u64,
+    #[ts(type = "number | null")]
+    pub resets_at: Option<u64>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

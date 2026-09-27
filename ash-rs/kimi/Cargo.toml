@@ -11,6 +11,7 @@ name = "ash_kimi"
 path = "src/lib.rs"
 
 [dependencies]
+backend-client = { workspace = true }
 getrandom = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

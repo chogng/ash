@@ -6,12 +6,12 @@
 | --- | --- | --- | --- |
 | [ChatGPT 个人](https://chatgpt.com/pricing/) | Free、Go、Plus、Pro 5×、Pro 20× | ✅ | ❌ |
 | [ChatGPT 组织](https://openai.com/business/pricing/) | Business Standard、Business Premium、Enterprise、Edu | ✅ | ❌ |
-| [Kimi Code 新套餐](https://www.kimi.com/code/docs/en/kimi-code/models.html) | Go、Plus、Pro、Max、Ultra | ❌ | ❌ |
-| [Kimi Code 旧套餐](https://www.kimi.com/help/membership/membership-pricing) | Andante、Moderato、Allegretto、Allegro | ❌ | ❌ |
+| [Kimi Code 新套餐](https://www.kimi.com/code/docs/en/kimi-code/models.html) | Go、Plus、Pro、Max、Ultra | 部分具备 | ❌ |
+| [Kimi Code 旧套餐](https://www.kimi.com/help/membership/membership-pricing) | Andante、Moderato、Allegretto、Allegro | 部分具备 | ❌ |
 | [Super Grok](https://x.ai/news/grok-bot-more-plans) | Free、SuperGrok、SuperGrok Plus、SuperGrok Heavy | ✅ | ❌ |
 | [BigModel Coding Plan](https://zcode.z.ai/cn) | Lite、Pro、Max | ❌ | ❌ |
 | [Z.AI Coding Plan](https://zcode.z.ai/en) | Lite、Pro、Max | ❌ | ❌ |
 
-ChatGPT 的 Student 是学生优惠，不是独立套餐。
+ChatGPT 的 Student 是学生优惠，不是独立套餐。Kimi 仅在 `/coding/v1/me` 返回 `user_level_name` 时显示该名称；Ash 不根据其他字段推断具体档次。
 
 订阅连接消耗套餐额度或积分；开发者按量 API 按自己的价目表收费。两边即使用了相同数量的 token，也不能直接算成相同费用。BigModel 和 Z.AI 第三列的 ❌ 表示 Ash 当前无法读取套餐名称；Ash 通过[ZCode 账号授权](https://zcode.z.ai/en/docs/configuration)接入 Coding Plan，仍消耗套餐额度。[OpenAI 官方说明](https://learn.chatgpt.com/docs/pricing)、[Kimi 官方 FAQ](https://www.kimi.com/en/help/kimi-api/api-troubleshooting) 和 [xAI 官方 FAQ](https://docs.x.ai/developers/faq/accounts)均区分订阅与开发者 API 的账单。开发者 API 单价见[模型价格表](ash-host-models.md)。

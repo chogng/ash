@@ -229,6 +229,109 @@ fn xai_account_and_usage_rpc_use_the_subscription_backend_and_observe_logout() {
     );
 }
 
+#[test]
+fn kimi_account_and_usage_rpc_read_the_current_subscription_without_exposing_credentials() {
+    use ash_client::ClientError;
+    use ash_client::ClientRequest;
+    use ash_client::ClientResponse;
+    use ash_client::OperationClient;
+    use ash_secrets::SecretStore;
+    struct Proxy {
+        requests: Mutex<Vec<ClientRequest>>,
+        status: AtomicUsize,
+    }
+    impl OperationClient for Proxy {
+        fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
+            self.requests.lock().unwrap().push(request.clone());
+            let body = match request.url() {
+                "https://api.kimi.com/coding/v1/me" => {
+                    r#"{"user_id":"user-a","nickname":"Ada","email":"ada@example.test","user_level_name":"Allegro"}"#
+                }
+                "https://api.kimi.com/coding/v1/usages" => {
+                    r#"{"usages":{"limit_5h":{"used_ratio":0.125,"reset_time":"2026-09-28T00:00:00Z"},"limit_month_total":{"used_ratio":0.0056}}}"#
+                }
+                _ => panic!("unexpected Kimi route"),
+            };
+            Ok(ClientResponse::new(
+                self.status.load(Ordering::SeqCst) as u16,
+                vec![],
+                body.as_bytes().to_vec(),
+            ))
+        }
+    }
+    let secrets = Arc::new(MemorySecretStore::default());
+    secrets.store(
+        &ash_secrets::SecretKey::new("provider/kimi/current/oauth").unwrap(),
+        &ash_secrets::SecretValue::new(br#"{"access_token":"fixture-access","refresh_token":"fixture-refresh","token_type":"Bearer","scope":"coding","expires_at":4102444800,"device_id":"fixture-device","credential_revision":1}"#.to_vec()),
+    ).unwrap();
+    let proxy = Arc::new(Proxy {
+        requests: Mutex::new(Vec::new()),
+        status: AtomicUsize::new(200),
+    });
+    let auth = ash_kimi::KimiOAuth::with_client(secrets, proxy.clone());
+    let login = Arc::new(LoginService::new(auth.clone()).unwrap());
+    auth.install_login_service(&login).unwrap();
+    let server = server().with_login_service(login).with_kimi_account(auth);
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let account = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"account/read","params":{}}),
+    );
+    assert_eq!(account["result"]["accounts"][0]["displayName"], "Ada");
+    assert_eq!(
+        account["result"]["accounts"][0]["email"],
+        "ada@example.test"
+    );
+    assert_eq!(account["result"]["accounts"][0]["plan"], "Allegro");
+    let usage = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"account/rateLimits/read","params":{"provider":"kimi-subscription","accountId":"current"}}),
+    );
+    assert_eq!(usage["result"]["plan"], "Allegro");
+    assert_eq!(usage["result"]["limits"].as_array().unwrap().len(), 2);
+    assert_eq!(usage["result"]["limits"][0]["primary"]["usedPercent"], 13);
+    assert_eq!(usage["result"]["limits"][1]["primary"]["usedPercent"], 1);
+    assert!(usage["result"]["limits"][1]["primary"]["resetsAt"].is_null());
+    assert!(usage["result"]["credits"].is_null());
+    assert_eq!(proxy.requests.lock().unwrap().len(), 3);
+    let invalid = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":4,"method":"account/rateLimits/read","params":{"provider":"kimi-subscription","accountId":"other"}}),
+    );
+    assert_eq!(invalid["error"]["message"], "AccountChanged");
+    assert_eq!(proxy.requests.lock().unwrap().len(), 3);
+    proxy.status.store(401, Ordering::SeqCst);
+    let unauthorized = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":5,"method":"account/rateLimits/read","params":{"provider":"kimi-subscription","accountId":"current"}}),
+    );
+    assert_eq!(
+        unauthorized["error"]["message"],
+        "AccountAuthenticationRequired"
+    );
+    proxy.status.store(200, Ordering::SeqCst);
+    call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":6,"method":"account/logout","params":{"provider":"kimi-subscription"}}),
+    );
+    let after_logout = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":7,"method":"account/rateLimits/read","params":{"provider":"kimi-subscription","accountId":"current"}}),
+    );
+    assert_eq!(
+        after_logout["error"]["message"],
+        "AccountAuthenticationRequired"
+    );
+    assert!(!format!("{account}{usage}").contains("fixture-access"));
+}
+
 fn server_with_model(model: Arc<dyn ModelService>) -> AppServer {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),

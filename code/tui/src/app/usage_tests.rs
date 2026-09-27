@@ -52,6 +52,46 @@ fn usage_displays_xai_credits_without_rounding_or_inventing_missing_balances() {
 }
 
 #[test]
+fn usage_displays_kimi_plan_and_only_the_returned_quota_windows() {
+    let accounts = json!({"revision":"1","accounts":[{"provider":"kimi-subscription","accountId":"current","status":"ready","credentialRevision":"1"}]});
+    let data = json!({"provider":"kimi-subscription","accountId":"current","plan":"Allegro","limits":[
+        {"id":"five-hour","name":"5-hour limit","model":null,"allowed":null,"limitReached":false,"primary":{"usedPercent":13,"windowSeconds":18000,"resetsAt":1790553600},"secondary":null},
+        {"id":"monthly","name":"Monthly limit","model":null,"allowed":null,"limitReached":false,"primary":{"usedPercent":1,"windowSeconds":0,"resetsAt":null},"secondary":null}
+    ],"credits":null});
+    let (mut client, requests) = client(vec![accounts, data]);
+    let mut app = App::new();
+    app.update(crate::usage::load(&mut client).unwrap());
+    assert_eq!(
+        requests.lock().unwrap()[1],
+        json!({"method":"account/rateLimits/read","params":{"provider":"kimi-subscription","accountId":"current"}})
+    );
+    let screen = render(&app, 80, 28);
+    assert!(screen.contains("Kimi plan"));
+    assert!(screen.contains("Allegro"));
+    assert!(screen.contains("5-hour limit"));
+    assert!(screen.contains("Monthly limit"));
+    assert!(screen.contains("Not reported"));
+    assert!(!screen.contains("Weekly limit"));
+    assert!(!screen.contains("Credits"));
+    crate::tui_assert_snapshot!("usage_kimi", screen);
+}
+
+#[test]
+fn usage_keeps_ready_subscription_visible_when_kimi_needs_reauthentication() {
+    let accounts = json!({"revision":"1","accounts":[
+        {"provider":"kimi-subscription","accountId":"current","status":"reauthenticationRequired","credentialRevision":"1"},
+        {"provider":"chatgpt-subscription","accountId":"account-1","status":"ready","credentialRevision":"1"}
+    ]});
+    let (mut client, requests) = client(vec![accounts, quota()]);
+    let mut app = App::new();
+    app.update(crate::usage::load(&mut client).unwrap());
+    let screen = render(&app, 80, 28);
+    assert!(screen.contains("ChatGPT plan"));
+    assert!(!screen.contains("Reconnect Kimi"));
+    assert_eq!(requests.lock().unwrap().len(), 2);
+}
+
+#[test]
 fn usage_command_reads_the_selected_account_and_renders_both_screen_modes() {
     let mut app = App::new();
     let invocation = submit(&mut app);
