@@ -4,6 +4,26 @@ import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
 
+test('Manage Accounts command opens the account picker when the account service is available', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	await page.keyboard.press('F1');
+	const commandPicker = page.locator('.ash-quick-pick');
+	await commandPicker.getByRole('combobox').fill('Manage Accounts');
+	await expect(commandPicker.locator('.ash-quick-pick-row-label', { hasText: 'Manage Accounts' })).toBeVisible();
+	await commandPicker.getByRole('combobox').press('Enter');
+
+	if (target.appServerMode === 'required') {
+		const accountPicker = page.getByRole('dialog', { name: 'Select an account to manage' });
+		await expect(accountPicker.getByRole('combobox')).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(accountPicker).toHaveCount(0);
+	} else {
+		await expect(page.locator('.ash-notification', { hasText: 'Could not load accounts.' })).toBeVisible();
+		await expect(page.getByRole('dialog', { name: 'Select an account to manage' })).toHaveCount(0);
+	}
+});
+
 test('desktop GitHub connection error uses a window dialog', async ({ target, application, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'disabled');
 	const electron = application as ElectronApplication;
