@@ -4,6 +4,11 @@
   -webkit-app-region: drag;
 }
 
+.ash-workbench[data-os="mac"] .ash-electron-titlebar {
+  /* The overlay inset already ends after the macOS window controls. */
+  padding-left: env(titlebar-area-x, 12px);
+}
+
 .ash-electron-titlebar .ash-titlebar-interactive-region {
   -webkit-app-region: no-drag;
 }

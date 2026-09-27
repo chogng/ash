@@ -663,6 +663,25 @@ test('command center opens without a first-run guide', async ({ target, workbenc
 	await expect(page.locator('.ash-quick-pick').getByRole('combobox')).toBeFocused();
 });
 
+test('macOS sidebar toggle starts at the window control safe area', async ({ target, workbench }) => {
+	test.skip(target.kind !== 'electron' || process.platform !== 'darwin');
+	const titlebar = workbench.page.locator('.ash-electron-titlebar');
+	const toggle = titlebar.locator('[data-action-id="workbench.action.toggleSideBar"] button');
+	await expect(toggle).toBeVisible();
+	const { safeArea, gap } = await toggle.evaluate(button => {
+		const titlebar = button.closest('.ash-electron-titlebar')!;
+		const probe = document.createElement('div');
+		probe.style.width = 'env(titlebar-area-x, 0px)';
+		document.body.append(probe);
+		const safeArea = probe.getBoundingClientRect().width;
+		probe.remove();
+		return { safeArea, gap: button.getBoundingClientRect().left - titlebar.getBoundingClientRect().left - safeArea };
+	});
+	expect(safeArea).toBeGreaterThan(0);
+	expect(gap).toBeGreaterThanOrEqual(0);
+	expect(gap).toBeLessThanOrEqual(4);
+});
+
 test('titlebar navigation moves through editor history beside Quick Access', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
