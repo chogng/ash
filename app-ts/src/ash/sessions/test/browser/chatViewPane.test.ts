@@ -24,7 +24,6 @@ import { PreferencesService as BrowserPreferencesService } from "../../../workbe
 import { emptyEditorServiceState } from '../../../workbench/test/common/testEditorService.js';
 import { IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent } from "../../../workbench/services/layout/browser/layoutService.js";
 import { ChatService } from "../../../workbench/services/chat/browser/chatService.js";
-import { ChatContextPickService } from "../../../workbench/services/chat/browser/chatContextPickService.js";
 import { IChatService, type AdvisorConfig, type ModelProviderCredentialStatus, type ThreadUpdateEnvelope, type TurnError } from "../../../workbench/services/chat/common/chatService.js";
 import { ModelCatalogConfiguration } from "../../../workbench/services/chat/common/modelCatalog.js";
 import { WorkbenchConfigurationService } from "../../../workbench/services/configuration/browser/configurationService.js";
@@ -52,11 +51,6 @@ const testDialogs: IDialogService = {
 };
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
-const emptyChatContextPickService = new ChatContextPickService();
-const unavailableQuickInputService = {
-	createQuickPick: () => { throw new Error("Quick input is unavailable in this test"); },
-	input: () => { throw new Error('Quick input is unavailable in this test'); },
-} as IQuickInputService;
 const unavailableFileService = {
 	readFileBytes: async () => { throw new Error('File read is unavailable in this test'); },
 } as unknown as IFileService;
@@ -181,8 +175,6 @@ test('Chat loads an Ash remote workspace image through the file service', async 
 			contextViewService,
 			commands,
 			testLayoutService(),
-			emptyChatContextPickService,
-			unavailableQuickInputService,
 			fileService,
 			testDialogs,
 			contextKeys,
@@ -290,8 +282,6 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		contextViewService,
 		commands,
 		layout,
-		emptyChatContextPickService,
-		quickInput,
 		unavailableFileService,
 		testDialogs,
 		contextKeys,
@@ -431,15 +421,15 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 			[
 				"ash.chat.input.mode",
 				"ash.chat.input.model",
-				"ash.chat.input.attachment",
-				"ash.chat.input.send",
+				"ash.chat.input.mic",
+				"ash.chat.input.voice",
 			],
 		);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, "Agent");
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.model'] button .ash-button-label")?.textContent, "GPT-5.6 Sol");
 		assert.equal(inputToolbar?.querySelector(".ash-chat-input-model-access-badge"), null);
-		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.attachment'] button")?.disabled, false);
-		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.send'] button")?.disabled, true);
+		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mic'] button")?.disabled, true);
+		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.voice'] button")?.disabled, true);
 	}
 	const firstChatPane = chatPanes[0]!;
 	const modelButton = firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.model'] button");
@@ -474,6 +464,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	});
 	typeChatText(dom.window, composerInputs[0], "First draft");
 	assert.equal(firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.send'] button")?.disabled, false);
+	assert.equal(firstChatPane.querySelector("[data-action-id='ash.chat.input.voice']"), null);
 
 	tabs?.[1]?.click();
 	assert.equal(sessions.active?.session.sessionId, "session-2");
@@ -664,8 +655,6 @@ test("an empty Session list opens an untitled session and persists it on its fir
 		contextViewService,
 		commands,
 		layout,
-		emptyChatContextPickService,
-		unavailableQuickInputService,
 		unavailableFileService,
 		testDialogs,
 	);
@@ -785,8 +774,6 @@ test("the New Chat slash command opens an untitled session", async () => {
 		contextViewService,
 		commands,
 		layout,
-		emptyChatContextPickService,
-		unavailableQuickInputService,
 		unavailableFileService,
 		testDialogs,
 	);
@@ -862,8 +849,6 @@ test("failed first send keeps the untitled session and its input draft", async (
 		contextViewService,
 		commands,
 		layout,
-		emptyChatContextPickService,
-		unavailableQuickInputService,
 		unavailableFileService,
 		testDialogs,
 	);
@@ -945,8 +930,6 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
 		contextViewService,
 		commands,
 		layout,
-		emptyChatContextPickService,
-		unavailableQuickInputService,
 		unavailableFileService,
 		testDialogs,
 	);

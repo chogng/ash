@@ -3,9 +3,7 @@ import { Dimension } from "../../../base/browser/dom.js";
 import type { ICommandService } from "../../../platform/commands/common/commands.js";
 import type { IContextMenuService } from "../../../platform/contextview/browser/contextView.js";
 import type { IContextViewService } from "../../../platform/contextview/browser/contextView.js";
-import type { IQuickInputService } from "../../../platform/quickinput/common/quickInput.js";
 import type { IChatService } from "../../../workbench/services/chat/common/chatService.js";
-import type { IChatContextPickService } from "../../../workbench/services/chat/common/chatContextService.js";
 import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
 import { WorkbenchPart } from "../../../workbench/browser/part.js";
 import type { SessionsViewSelection } from "../../services/sessions/browser/sessionsService.js";
@@ -19,8 +17,6 @@ export interface SessionsPartOptions {
 	readonly contextMenuService: IContextMenuService;
 	readonly contextViewService: IContextViewService;
 	readonly commandService: ICommandService;
-	readonly contextPickService: IChatContextPickService;
-	readonly quickInputService: IQuickInputService;
 	readonly activateSelection: (selection: SessionsViewSelection) => void;
 	readonly closeSelection: (selection: SessionsViewSelection) => void;
 }
@@ -47,8 +43,6 @@ export class SessionsPart extends WorkbenchPart {
 			contextMenuService: options.contextMenuService,
 			contextViewService: options.contextViewService,
 			commandService: options.commandService,
-			contextPickService: options.contextPickService,
-			quickInputService: options.quickInputService,
 			activateSelection: options.activateSelection,
 			closeSelection: options.closeSelection,
 		}));

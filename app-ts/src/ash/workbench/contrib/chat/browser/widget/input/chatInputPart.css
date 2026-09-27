@@ -199,7 +199,7 @@
   max-width: 180px;
 }
 
-.ash-chat-input-attachment-action {
+.ash-chat-input-mic-action {
   width: var(--ash-toolbar-action-size);
   min-width: var(--ash-toolbar-action-size);
   padding: 4px;
@@ -207,16 +207,18 @@
   border-radius: 50%;
 }
 
-.ash-chat-input-attachment-action.disabled {
+.ash-chat-input-mic-action.disabled {
   opacity: 1;
 }
 
 .ash-chat-input-toolbars .ash-chat-input-send,
+.ash-chat-input-toolbars .ash-chat-input-voice,
 .ash-chat-input-toolbars .ash-chat-input-interrupt {
   margin-left: auto;
 }
 
-.ash-chat-input-send-action,
+.ash-chat-input-toolbars .ash-chat-input-send-action,
+.ash-chat-input-toolbars .ash-chat-input-voice-action,
 .ash-chat-input-interrupt-action {
   width: var(--ash-toolbar-action-size);
   min-width: var(--ash-toolbar-action-size);
@@ -226,18 +228,21 @@
   background: var(--ash-button-primary-background);
 }
 
-.ash-chat-input-send-action.disabled {
+.ash-chat-input-toolbars .ash-chat-input-send-action.disabled,
+.ash-chat-input-toolbars .ash-chat-input-voice-action.disabled {
   color: var(--ash-button-foreground);
   background: color-mix(in srgb, var(--ash-button-foreground) 12%, transparent);
   opacity: 1;
 }
 
-.ash-chat-input-send-action:hover,
+.ash-chat-input-toolbars .ash-chat-input-send-action:hover,
+.ash-chat-input-toolbars .ash-chat-input-voice-action:hover,
 .ash-chat-input-interrupt-action:hover {
   background: var(--ash-button-primary-hover-background);
 }
 
-.ash-chat-input-send-action.disabled:hover {
+.ash-chat-input-toolbars .ash-chat-input-send-action.disabled:hover,
+.ash-chat-input-toolbars .ash-chat-input-voice-action.disabled:hover {
   background: color-mix(in srgb, var(--ash-button-foreground) 12%, transparent);
 }
 
@@ -260,9 +265,5 @@
   .ash-chat-input-action.ash-chat-input-model-action {
     padding-inline: 0;
     font-size: 13px;
-  }
-
-  .ash-chat-input-toolbars .ash-chat-input-attachment {
-    display: none;
   }
 }

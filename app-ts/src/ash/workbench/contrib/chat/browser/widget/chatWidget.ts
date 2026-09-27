@@ -15,8 +15,6 @@ import type { IChatListItem } from "./chatListItems.js";
 import type { ResolvedChatContext } from "../../../../services/chat/common/chatContextService.js";
 import { h } from "../../../../../base/browser/dom.js";
 import type { ChatContextAttachment } from "../../../../services/chat/common/chatContextService.js";
-import type { IChatContextPickService } from "../../../../services/chat/common/chatContextService.js";
-import type { IQuickInputService } from "../../../../../platform/quickinput/common/quickInput.js";
 import type { IOpenerService } from "../../../../../platform/opener/common/openerService.js";
 import type { IEditorService } from "../../../../services/editor/common/editorService.js";
 import { URI } from "../../../../../base/common/uri.js";
@@ -60,8 +58,6 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		contextMenuService: IContextMenuService,
 		contextViewService: IContextViewService,
 		commandService: ICommandService,
-		contextPickService: IChatContextPickService,
-		quickInputService: IQuickInputService,
 		openerService?: IOpenerService,
 		editorService?: IEditorService,
 		imageResourceLoader?: (resource: URI) => Promise<Blob>,
@@ -97,7 +93,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			openModelSettings: () => commandService.executeCommand(OpenSettingsCommandId),
 			resolveInteraction: (response) => this.model.resolveInteraction(response),
 		};
-		this.inputPart = this._register(new ChatInputPart(this.element, inputDelegate, contextMenuService, contextViewService, contextPickService, quickInputService));
+		this.inputPart = this._register(new ChatInputPart(this.element, inputDelegate, contextMenuService, contextViewService));
 		this.element.append(this.goalElement, this.listWidget.element, this.inputPart.element);
 		this._register(this.model.onDidChange(() => this.render()));
 		this._register(toDisposable(() => this.element.remove()));

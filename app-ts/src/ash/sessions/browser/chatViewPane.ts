@@ -11,8 +11,7 @@ import { ISessionsManagementService } from "../services/sessions/common/sessions
 import { ChatWidget, resolveMarkdownWorkspaceResource } from "../../workbench/contrib/chat/browser/widget/chatWidget.js";
 import { ChatTitleControl } from "../../workbench/contrib/chat/browser/view/chatTitleControl.js";
 import { h, isHTMLElement } from "../../base/browser/dom.js";
-import { IChatContextPickService, type ChatContextAttachment, type IChatContextTarget } from "../../workbench/services/chat/common/chatContextService.js";
-import { IQuickInputService } from "../../platform/quickinput/common/quickInput.js";
+import { type ChatContextAttachment, type IChatContextTarget } from "../../workbench/services/chat/common/chatContextService.js";
 import { IOpenerService } from "../../platform/opener/common/openerService.js";
 import { IEditorService } from "../../workbench/services/editor/common/editorService.js";
 import { IFileService } from '../../platform/files/common/files.js';
@@ -68,8 +67,6 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		@IContextViewService private readonly contextViewService: IContextViewService,
 		@ICommandService commandService: ICommandService,
 		@IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService,
-		@IChatContextPickService private readonly contextPickService: IChatContextPickService,
-		@IQuickInputService private readonly quickInputService: IQuickInputService,
 		@IFileService private readonly fileService: IFileService,
 		@IDialogService private readonly dialogs: IDialogService,
 		@IContextKeyService contextKeyService?: IContextKeyService,
@@ -183,8 +180,6 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 					this.contextMenuService,
 					this.contextViewService,
 					this.commandService,
-					this.contextPickService,
-					this.quickInputService,
 					this.openerService,
 					this.editorService,
 					resource => readMarkdownImageResource(this.fileService, resource),
@@ -212,8 +207,6 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 					this.contextMenuService,
 					this.contextViewService,
 					this.commandService,
-					this.contextPickService,
-					this.quickInputService,
 					this.openerService,
 					this.editorService,
 					resource => readMarkdownImageResource(this.fileService, resource),

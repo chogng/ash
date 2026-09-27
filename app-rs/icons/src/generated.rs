@@ -143,8 +143,8 @@ mod artwork {
     pub(crate) const LIST_FILTER: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/list-filter.svg"));
     pub(crate) const LIST_UNORDERED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/list-unordered.svg"));
     pub(crate) const MENU: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/menu.svg"));
-    pub(crate) const MIC: IconDefinition = IconDefinition::multicolor(include_bytes!("../../../resources/icons/mic.svg"));
-    pub(crate) const MIC_FILLED: IconDefinition = IconDefinition::multicolor(include_bytes!("../../../resources/icons/mic-filled.svg"));
+    pub(crate) const MIC: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/mic.svg"));
+    pub(crate) const MIC_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/mic-filled.svg"));
     pub(crate) const MODEL: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/model.svg"));
     pub(crate) const MODEL_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/model-filled.svg"));
     pub(crate) const NEW_FILE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/new-file.svg"));
@@ -186,6 +186,7 @@ mod artwork {
     pub(crate) const STAR: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/star.svg"));
     pub(crate) const STAR_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/star-filled.svg"));
     pub(crate) const START: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/start.svg"));
+    pub(crate) const STOP: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/stop.svg"));
     pub(crate) const SUMMARY: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/summary.svg"));
     pub(crate) const SYNC: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/sync.svg"));
     pub(crate) const TABLE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/table.svg"));
@@ -204,6 +205,7 @@ mod artwork {
     pub(crate) const UNFOLD: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/unfold.svg"));
     pub(crate) const UNLIMITED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/unlimited.svg"));
     pub(crate) const UNPIN: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/unpin.svg"));
+    pub(crate) const VOICE_MODE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/voice-mode.svg"));
     pub(crate) const WARNING: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/warning.svg"));
     pub(crate) const WRITE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/write.svg"));
     pub(crate) const XLS_GREEN: IconDefinition = IconDefinition::multicolor(include_bytes!("../../../resources/icons/xls-green.svg"));
@@ -397,6 +399,7 @@ pub mod icons {
     pub const STAR: Icon = Icon::new(IconId::new("star"), artwork::STAR);
     pub const STAR_FILLED: Icon = Icon::new(IconId::new("star-filled"), artwork::STAR_FILLED);
     pub const START: Icon = Icon::new(IconId::new("start"), artwork::START);
+    pub const STOP: Icon = Icon::new(IconId::new("stop"), artwork::STOP);
     pub const SUMMARY: Icon = Icon::new(IconId::new("summary"), artwork::SUMMARY);
     pub const SYNC: Icon = Icon::new(IconId::new("sync"), artwork::SYNC);
     pub const TABLE: Icon = Icon::new(IconId::new("table"), artwork::TABLE);
@@ -415,6 +418,7 @@ pub mod icons {
     pub const UNFOLD: Icon = Icon::new(IconId::new("unfold"), artwork::UNFOLD);
     pub const UNLIMITED: Icon = Icon::new(IconId::new("unlimited"), artwork::UNLIMITED);
     pub const UNPIN: Icon = Icon::new(IconId::new("unpin"), artwork::UNPIN);
+    pub const VOICE_MODE: Icon = Icon::new(IconId::new("voice-mode"), artwork::VOICE_MODE);
     pub const WARNING: Icon = Icon::new(IconId::new("warning"), artwork::WARNING);
     pub const WRITE: Icon = Icon::new(IconId::new("write"), artwork::WRITE);
     pub const XLS_GREEN: Icon = Icon::new(IconId::new("xls-green"), artwork::XLS_GREEN);
@@ -604,6 +608,7 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::STAR,
     icons::STAR_FILLED,
     icons::START,
+    icons::STOP,
     icons::SUMMARY,
     icons::SYNC,
     icons::TABLE,
@@ -622,6 +627,7 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::UNFOLD,
     icons::UNLIMITED,
     icons::UNPIN,
+    icons::VOICE_MODE,
     icons::WARNING,
     icons::WRITE,
     icons::XLS_GREEN,
@@ -812,6 +818,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("star", artwork::STAR),
     ("star-filled", artwork::STAR_FILLED),
     ("start", artwork::START),
+    ("stop", artwork::STOP),
     ("summary", artwork::SUMMARY),
     ("sync", artwork::SYNC),
     ("table", artwork::TABLE),
@@ -830,6 +837,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("unfold", artwork::UNFOLD),
     ("unlimited", artwork::UNLIMITED),
     ("unpin", artwork::UNPIN),
+    ("voice-mode", artwork::VOICE_MODE),
     ("warning", artwork::WARNING),
     ("write", artwork::WRITE),
     ("xls-green", artwork::XLS_GREEN),

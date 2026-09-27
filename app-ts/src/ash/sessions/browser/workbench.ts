@@ -209,8 +209,6 @@ export class Workbench extends Disposable {
 			contextMenuService: interactionServices.contextMenuService,
 			contextViewService: interactionServices.contextViewService,
 			commandService: interactionServices.commandService,
-			contextPickService: interactionServices.chatContextPickService,
-			quickInputService: interactionServices.quickInputService,
 			activateSelection: selection => view.activateSelection(selection),
 			closeSelection: selection => view.closeVisibleSelection(selection),
 		}));

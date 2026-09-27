@@ -155,8 +155,6 @@ test("SessionsPart remains owned by the Sessions product layer", () => {
 		contextMenuService,
 		contextViewService,
 		commandService,
-		contextPickService: {} as import("../../../workbench/services/chat/common/chatContextService.js").IChatContextPickService,
-		quickInputService: {} as import("../../../platform/quickinput/common/quickInput.js").IQuickInputService,
 		activateSelection: selection => viewService.activateSelection(selection),
 		closeSelection: selection => viewService.closeVisibleSelection(selection),
 	});

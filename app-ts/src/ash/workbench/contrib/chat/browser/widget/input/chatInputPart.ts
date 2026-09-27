@@ -8,12 +8,12 @@ import type { IAction } from "../../../../../../base/common/actions.js";
 import type { Icon } from "../../../../../../base/common/icon.js";
 import { Disposable, MutableDisposable, DisposableStore, toDisposable } from "../../../../../../base/common/lifecycle.js";
 import { Lxicon } from "../../../../../../base/common/lxicons.js";
+import { localize } from "../../../../../../nls.js";
 import { WorkbenchToolBar } from "../../../../../../platform/actions/browser/toolbar.js";
 import type { IContextMenuService } from "../../../../../../platform/contextview/browser/contextView.js";
 import type { IContextViewService } from "../../../../../../platform/contextview/browser/contextView.js";
-import type { IQuickInputService } from "../../../../../../platform/quickinput/common/quickInput.js";
 import type { ModelCatalogEntry } from "../../../../../services/chat/common/chatService.js";
-import type { ChatContextAttachment, IChatContextPickService } from "../../../../../services/chat/common/chatContextService.js";
+import type { ChatContextAttachment } from "../../../../../services/chat/common/chatContextService.js";
 import type { ModelRef } from "../../../../../services/chat/common/chatService.js";
 import { DesktopSlashCommands, parseSlashCommandInput, SlashCommandCatalog } from "../../../common/slashCommands.js";
 import { SkillSelectorCatalog } from "../../../common/skillSelectors.js";
@@ -22,10 +22,11 @@ import { ChatInputEditors, type IChatInputEditor } from "./chatInputEditorRegist
 import { ModelPickerActionItem } from './modelPicker/modelPickerActionItem.js';
 
 type ChatInputMode = "agent" | "plan" | "debug" | "multitask" | "ask";
-type ChatInputToolbarPresentation = "mode" | "model" | "attachment" | "send" | "interrupt";
+type ChatInputToolbarPresentation = "mode" | "model" | "mic" | "voice" | "send" | "interrupt";
 
 interface ChatInputToolbarState {
 	readonly canSubmit: boolean;
+	readonly hasInput: boolean;
 	readonly canInterrupt: boolean;
 	readonly inputKind: "message" | "command";
 	readonly models: readonly ModelCatalogEntry[];
@@ -56,12 +57,12 @@ export class ChatInputPart extends Disposable {
 	private readonly slashCommands = new SlashCommandCatalog(DesktopSlashCommands, []);
 	private readonly skills = new SkillSelectorCatalog();
 	private state: ChatInputState = { phase: "loading", canInterrupt: false, models: [], slashCommands: [], skillSelectors: [] };
-	private toolbarState: ChatInputToolbarState = { canSubmit: false, canInterrupt: false, inputKind: "message", models: [] };
+	private toolbarState: ChatInputToolbarState = { canSubmit: false, hasInput: false, canInterrupt: false, inputKind: "message", models: [] };
 	private serverSlashCommands: ChatInputState["slashCommands"] = [];
 	private skillSelectors: ChatInputState["skillSelectors"] = [];
 	private mode: ChatInputMode = "agent";
 
-	constructor(container: HTMLElement, delegate: ChatInputDelegate, contextMenuService: IContextMenuService, contextViewService: IContextViewService, private readonly contextPickService: IChatContextPickService, private readonly quickInputService: IQuickInputService) {
+	constructor(container: HTMLElement, delegate: ChatInputDelegate, contextMenuService: IContextMenuService, contextViewService: IContextViewService) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		this.delegate = delegate;
@@ -195,6 +196,7 @@ export class ChatInputPart extends Disposable {
 		const canSubmitIntent = input.kind === "message" ? input.text.trim().length > 0 : this.input.value.trim().length > 0;
 		const state: ChatInputToolbarState = {
 			canSubmit: canSubmitIntent && this.state.phase !== "submitting",
+			hasInput: canSubmitIntent,
 			canInterrupt: this.state.canInterrupt,
 			inputKind: input.kind === "message" ? "message" : "command",
 			models: this.state.models,
@@ -202,6 +204,7 @@ export class ChatInputPart extends Disposable {
 		};
 		if (
 			state.canSubmit === this.toolbarState.canSubmit &&
+			state.hasInput === this.toolbarState.hasInput &&
 			state.canInterrupt === this.toolbarState.canInterrupt &&
 			state.inputKind === this.toolbarState.inputKind &&
 			state.models === this.toolbarState.models &&
@@ -244,39 +247,30 @@ export class ChatInputPart extends Disposable {
 			"model",
 			() => {},
 		);
-		const attachmentAction = new ChatInputAction(
-			"ash.chat.input.attachment",
-			"Attach",
-			"Attach context",
-			Lxicon.paperclip,
-			true,
-			"attachment",
-			() => void this.pickContext(),
+		const micAction = new ChatInputAction(
+			"ash.chat.input.mic",
+			localize('chat.input.dictate', 'Dictate message'),
+			localize('chat.input.dictationUnavailable', 'Dictation is unavailable'),
+			Lxicon.mic,
+			false,
+			"mic",
+			() => {},
 		);
-		const sendAction = new ChatInputAction(
-			"ash.chat.input.send",
-			"Send",
-			this.toolbarState.inputKind === "command" ? "Run command" : "Send message",
-			Lxicon.arrowUp,
-			this.toolbarState.canSubmit,
-			"send",
-			() => this.inputContainer.requestSubmit(),
-		);
+		let sendAction: ChatInputAction;
+		if (this.toolbarState.hasInput) {
+			const tooltip = this.toolbarState.inputKind === "command" ? "Run command" : "Send message";
+			sendAction = new ChatInputAction("ash.chat.input.send", "Send", tooltip, Lxicon.arrowUp, this.toolbarState.canSubmit, "send", () => this.inputContainer.requestSubmit());
+		} else {
+			sendAction = new ChatInputAction("ash.chat.input.voice", localize('chat.input.voice', 'Voice conversation'), localize('chat.input.voiceUnavailable', 'Voice conversation is unavailable'), Lxicon.voiceMode, false, "voice", () => {});
+		}
 		const trailingActions = this.toolbarState.canInterrupt
 			? [
 				sendAction,
 				new ChatInputAction("ash.chat.input.interrupt", "Stop", "Stop response", Lxicon.close, true, "interrupt", () => void this.delegate.interrupt()),
 			]
 			: [sendAction];
-		const inputActions = this.toolbarState.inputKind === "command" ? [modeAction] : [modeAction, modelAction, attachmentAction];
+		const inputActions = this.toolbarState.inputKind === "command" ? [modeAction] : [modeAction, modelAction, micAction];
 		this.inputToolbar.setActions([...inputActions, ...trailingActions]);
-	}
-
-	private async pickContext(): Promise<void> {
-		const attachment = await this.contextPickService.pickContext(this.quickInputService);
-		if (!attachment) return;
-		this.addContext(attachment);
-		this.focus();
 	}
 
 	private renderAttachments(): void {

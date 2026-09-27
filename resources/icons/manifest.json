@@ -679,12 +679,12 @@
     {
       "id": "mic",
       "file": "mic.svg",
-      "rendering": "multicolor"
+      "rendering": "symbolic"
     },
     {
       "id": "mic-filled",
       "file": "mic-filled.svg",
-      "rendering": "multicolor"
+      "rendering": "symbolic"
     },
     {
       "id": "model",
@@ -892,6 +892,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "stop",
+      "file": "stop.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "summary",
       "file": "summary.svg",
       "rendering": "symbolic"
@@ -979,6 +984,11 @@
     {
       "id": "unpin",
       "file": "unpin.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "voice-mode",
+      "file": "voice-mode.svg",
       "rendering": "symbolic"
     },
     {

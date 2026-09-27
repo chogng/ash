@@ -7,10 +7,8 @@ import { Disposable, setDisposableOwner, toDisposable } from "../../../base/comm
 import type { ICommandService } from "../../../platform/commands/common/commands.js";
 import type { IContextMenuService } from "../../../platform/contextview/browser/contextView.js";
 import type { IContextViewService } from "../../../platform/contextview/browser/contextView.js";
-import type { IQuickInputService } from "../../../platform/quickinput/common/quickInput.js";
 import { ChatWidget } from "../../../workbench/contrib/chat/browser/widget/chatWidget.js";
 import { ChatWidgetModel } from '../chatWidgetModel.js';
-import type { IChatContextPickService } from "../../../workbench/services/chat/common/chatContextService.js";
 import type { IChatService } from "../../../workbench/services/chat/common/chatService.js";
 import type { SessionId } from "../../services/sessions/common/session.js";
 import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
@@ -24,8 +22,6 @@ export interface SessionsChatViewOptions {
 	readonly contextMenuService: IContextMenuService;
 	readonly contextViewService: IContextViewService;
 	readonly commandService: ICommandService;
-	readonly contextPickService: IChatContextPickService;
-	readonly quickInputService: IQuickInputService;
 	readonly activateSelection: (selection: SessionsViewSelection) => void;
 	readonly closeSelection: (selection: SessionsViewSelection) => void;
 }
@@ -44,8 +40,6 @@ export class SessionsChatView extends Disposable {
 	private readonly contextMenuService: IContextMenuService;
 	private readonly contextViewService: IContextViewService;
 	private readonly commandService: ICommandService;
-	private readonly contextPickService: IChatContextPickService;
-	private readonly quickInputService: IQuickInputService;
 	private readonly activateSelection: (selection: SessionsViewSelection) => void;
 	private readonly closeSelection: (selection: SessionsViewSelection) => void;
 
@@ -57,8 +51,6 @@ export class SessionsChatView extends Disposable {
 		this.contextMenuService = options.contextMenuService;
 		this.contextViewService = options.contextViewService;
 		this.commandService = options.commandService;
-		this.contextPickService = options.contextPickService;
-		this.quickInputService = options.quickInputService;
 		this.activateSelection = options.activateSelection;
 		this.closeSelection = options.closeSelection;
 		this.domNode = h(ownerDocument, "section");
@@ -105,8 +97,6 @@ export class SessionsChatView extends Disposable {
 					contextMenuService: this.contextMenuService,
 					contextViewService: this.contextViewService,
 					commandService: this.commandService,
-					contextPickService: this.contextPickService,
-					quickInputService: this.quickInputService,
 					activateSelection: this.activateSelection,
 					closeSelection: this.closeSelection,
 				});
@@ -221,8 +211,6 @@ class SessionsChatGridEntry extends Disposable implements IView {
 			options.contextMenuService,
 			options.contextViewService,
 			options.commandService,
-			options.contextPickService,
-			options.quickInputService,
 		));
 		this.pane.setTabId(this.title.id);
 		this.pane.setVisible(true);

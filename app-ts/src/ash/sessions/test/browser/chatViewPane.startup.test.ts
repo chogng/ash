@@ -13,8 +13,6 @@ import type { IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCom
 import type { IWorkbenchLayoutService, WorkbenchPartId, WorkbenchPartVisibilityChangeEvent } from "../../../workbench/services/layout/browser/layoutService.js";
 import type { ApprovalMode, IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../services/sessions/common/session.js";
 import type { ISessionsManagementService, SessionsManagementState } from "../../services/sessions/common/sessionsManagement.js";
-import type { IChatContextPickService } from "../../../workbench/services/chat/common/chatContextService.js";
-import type { IQuickInputService } from "../../../platform/quickinput/common/quickInput.js";
 
 const testDialogs: IDialogService = {
 	showMessage: async () => {},
@@ -57,8 +55,6 @@ test("opens a local Chat tab before the backend session request settles", () => 
 		contextViewService,
 		{} as ICommandService,
 		layoutService,
-		{} as IChatContextPickService,
-		{} as IQuickInputService,
 		{} as IFileService,
 		testDialogs,
 	);

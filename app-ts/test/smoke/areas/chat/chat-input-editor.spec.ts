@@ -63,6 +63,38 @@ test('Chat input hides unused editor chrome and keeps its text evenly inset', as
 	expect(editorChrome.rulerDisplay).toBe('none');
 });
 
+test('Chat input shows a round voice action when empty and a send arrow for text', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
+	const page = workbench.page;
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	}
+	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
+	const toolbar = chat.locator('.ash-chat-input-toolbars');
+	await expect(toolbar.locator('[data-action-id="ash.chat.input.attachment"]')).toHaveCount(0);
+	await expect(toolbar.locator('[data-action-id="ash.chat.input.mic"] button')).toHaveCount(1);
+	const voiceButton = toolbar.locator('[data-action-id="ash.chat.input.voice"] button');
+	await expect(voiceButton).toBeVisible();
+	await expect(voiceButton.locator('[data-ash-icon-id="voice-mode"]')).toHaveCount(1);
+	const shape = await voiceButton.evaluate(button => {
+		const bounds = button.getBoundingClientRect();
+		return { width: bounds.width, height: bounds.height, radius: getComputedStyle(button).borderRadius, background: getComputedStyle(button).backgroundColor };
+	});
+	expect(shape.width).toBe(shape.height);
+	expect(shape.radius).toBe('50%');
+	expect(shape.background).not.toBe('rgba(0, 0, 0, 0)');
+	const input = chat.locator('.ash-chat-input-editor .stanza-editor-input');
+	await input.focus();
+	await page.keyboard.insertText('Hello');
+	await expect(toolbar.locator('[data-action-id="ash.chat.input.voice"]')).toHaveCount(0);
+	const sendButton = toolbar.locator('[data-action-id="ash.chat.input.send"] button');
+	await expect(sendButton.locator('[data-ash-icon-id="arrow-up"]')).toHaveCount(1);
+	await expect(sendButton).toHaveCSS('border-radius', '50%');
+	await page.keyboard.press('ControlOrMeta+A');
+	await page.keyboard.press('Backspace');
+	await expect(toolbar.locator('[data-action-id="ash.chat.input.voice"] button')).toBeVisible();
+});
+
 test('Chat input resizes with wrapped text and retains keyboard focus', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
 	const page = workbench.page;
