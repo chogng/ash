@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
-import { BrowserLifecycleService } from "../../browser/browserLifecycleService.js";
+import { BrowserLifecycleService } from "../../browser/lifecycleService.js";
+import { ShutdownVetoError } from '../../common/lifecycle.js';
 
 test("BrowserLifecycleService joins participants once before completing shutdown", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
@@ -58,5 +59,39 @@ test('BrowserLifecycleService retries a failed shutdown without publishing compl
 	await lifecycle.shutdown('windowClose');
 	assert.equal(lifecycle.phase, 'shutdown');
 	assert.deepEqual(completed, ['windowClose']);
+	browser.window.close();
+});
+
+test('BrowserLifecycleService waits for an asynchronous veto before shutdown and permits retry', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>');
+	using lifecycle = new BrowserLifecycleService({ ownerWindow: browser.window as unknown as Window, onError: () => undefined });
+	let shouldVeto = true;
+	let reentrant: Promise<void> | undefined;
+	const events: string[] = [];
+	lifecycle.onBeforeShutdown(event => {
+		reentrant = lifecycle.shutdown('quit');
+		event.veto(Promise.resolve(shouldVeto), 'editor');
+	});
+	lifecycle.onShutdownVeto(() => events.push('veto'));
+	lifecycle.onWillShutdown(() => events.push('will'));
+	const first = lifecycle.shutdown('windowClose');
+	assert.equal(reentrant, first);
+	await assert.rejects(first, ShutdownVetoError);
+	assert.deepEqual({ events, phase: lifecycle.phase }, { events: ['veto'], phase: 'running' });
+	shouldVeto = false;
+	await lifecycle.shutdown('windowClose');
+	assert.deepEqual(events, ['veto', 'will']);
+	browser.window.close();
+});
+
+test('BrowserLifecycleService treats a rejected pre-shutdown check as a veto error', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>');
+	using lifecycle = new BrowserLifecycleService({ ownerWindow: browser.window as unknown as Window, onError: () => undefined });
+	const errors: string[] = [];
+	lifecycle.onBeforeShutdown(event => event.veto(Promise.reject(new Error('backup failed')), 'backup'));
+	lifecycle.onBeforeShutdownError(event => errors.push(event.error.message));
+	lifecycle.onWillShutdown(() => errors.push('will'));
+	await assert.rejects(lifecycle.shutdown('windowClose'), /shutdown vetoes failed/);
+	assert.deepEqual({ errors, phase: lifecycle.phase }, { errors: ["Shutdown veto 'backup' failed"], phase: 'running' });
 	browser.window.close();
 });

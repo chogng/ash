@@ -4,8 +4,7 @@ import './activityBarAccessibility.js';
 import '../../workbench/contrib/accessibility/browser/accessibleViewActions.js';
 import { h } from "../../base/browser/dom.js";
 import { bindResizableLayout } from "../../base/browser/ui/resizable/resizable.js";
-import { onUnexpectedError } from "../../base/common/errors.js";
-import { Disposable, toDisposable } from "../../base/common/lifecycle.js";
+import { Disposable, toDisposable, type IDisposable } from "../../base/common/lifecycle.js";
 import { ILanguageService } from "../../editor/common/languages/language.js";
 import { LanguageService } from "../../editor/common/services/languageService.js";
 import { localize } from '../../nls.js';
@@ -17,8 +16,7 @@ import { ContextKeyExpr } from '../../platform/contextkey/common/contextkey.js';
 import { ServiceContainer } from "../../platform/instantiation/common/instantiation.js";
 import type { IKeybindingsResourceApi } from "../../platform/keybinding/common/keybindingsResource.js";
 import { BrowserLayoutService, ILayoutService } from "../../platform/layout/browser/layoutService.js";
-import { BrowserLifecycleService } from "../../platform/lifecycle/browser/browserLifecycleService.js";
-import { ILifecycleService, type ShutdownReason } from "../../platform/lifecycle/common/lifecycleService.js";
+import { ILifecycleService, type ShutdownReason } from "../../workbench/services/lifecycle/common/lifecycle.js";
 import { BrowserNotificationService } from "../../platform/notification/browser/notificationService.js";
 import { INotificationService } from "../../platform/notification/common/notification.js";
 import type { IRendererHost } from "../../platform/renderer/common/rendererHost.js";
@@ -58,6 +56,7 @@ export interface IWorkbenchOptions {
 	readonly modeId: WorkbenchModeId;
 	readonly profile: SessionsProfile;
 	readonly api: IRendererHost;
+	readonly lifecycleService: ILifecycleService & IDisposable;
 	readonly nativeHostApi?: INativeHostApi;
 	readonly returnToWorkbench: () => void;
 	readonly configurationApi?: IConfigurationApi;
@@ -131,7 +130,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IChatService, chat);
 		services.registerInstance(IAccountService, this._register(new AppServerAccountService(options.api.accounts, options.api.events)));
 		services.registerInstance(IStorageService, storage);
-		this.lifecycleService = this._register(new BrowserLifecycleService({ ownerWindow, onError: onUnexpectedError }));
+		this.lifecycleService = this._register(options.lifecycleService);
 		services.registerInstance(ILifecycleService, this.lifecycleService);
 		this._register(this.lifecycleService.onWillShutdown(event => {
 			event.join(storage.flush(WillSaveStateReason.SHUTDOWN), "Sessions storage flush");

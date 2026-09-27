@@ -34,10 +34,7 @@ flowchart TD
     Select[设置中选择 Code 或 Academic] --> Persist[保存 workbench.mode]
     Persist --> Flush[Workbench lifecycle 以 reload 原因保存 working copy 与窗口状态]
     Flush --> Request[可信 IPC 请求 Main 切换当前窗口]
-    Request --> Close{当前是否有 Code Sessions 窗口}
-    Close -->|有| CloseSessions[关闭该窗口的 Sessions 页面]
-    Close -->|无| Load
-    CloseSessions --> Load[同一 BrowserWindow 加载目标模式 URL]
+    Request --> Load[同一 BrowserWindow 加载目标模式 URL]
     Load --> Assemble[入口只导入目标模式 contribution]
     Assemble --> Restore[按目标 storage namespace 恢复 Workbench]
 ```
@@ -63,7 +60,7 @@ URL 查询参数 `ash-workbench-mode` 把 Main 已选择的窗口模式 ID 交�
 
 Code Sessions 是独立页面，不是给 `workbench/browser/layout*` 增加模式分支。Code 的普通 Workbench 只注册一个 Titlebar action，Electron Main 创建 sibling Sessions 窗口，并把对应 HTML 加入可信 IPC allowlist。
 
-`app-ts/src/ash/platform/windows/` 持有父子窗口关系、创建与关闭、重复打开时的复用、子窗口资源释放，以及打开和返回的 IPC 契约。`code/electron-main/app.ts` 根据当前模式提供 Sessions 入口、连接和可信 IPC 装配：父窗口只注册打开命令，子窗口只注册返回命令；浏览器页面切换直接使用平台导航。子窗口随父 Workbench 窗口关闭，模式切换前也会关闭。
+`app-ts/src/ash/platform/windows/electron-main/windowsMainService.ts` 持有窗口创建、重复打开时的复用和窗口资源释放；`platform/lifecycle/electron-main/lifecycleMainService.ts` 在关闭窗口前等待 Renderer 保存完成。打开 Agents 窗口通过窗口宿主能力请求；返回 Workbench 是 Sessions 自己的操作。`code/electron-main/app.ts` 根据当前模式提供 Sessions 入口、连接和可信 IPC 装配；浏览器页面切换直接使用平台导航。Sessions 窗口按 workspace 复用，有独立的工作区上下文和连接；关闭 Workbench 或切换模式不会关闭它。关闭 Sessions 时释放其资源；从 Sessions 返回 Workbench 时，若原 Workbench 已关闭，就重新打开同一 workspace。
 
 ```text
 regular Code Workbench titlebar
@@ -75,7 +72,7 @@ sessions-code page
 regular Code Workbench
 ```
 
-`sessions/` 可以依赖 `workbench/` 的可复用 Chat、Markdown 和 renderer capability；`workbench/` 不得反向导入 `sessions/`。从 Code 切换到 Academic 时，Main 先关闭当前 Workbench 所属的 Code Sessions 窗口。Academic 当前不得注册 Sessions action，也不得把未来研究工作台描述为现有能力。
+`sessions/` 可以依赖 `workbench/` 的可复用 Chat、Markdown 和 renderer capability；`workbench/` 不得反向导入 `sessions/`。从 Code 切换到 Academic 时，已打开的 Code Sessions 窗口继续运行。Academic 当前不得注册 Sessions action，也不得把未来研究工作台描述为现有能力。
 
 Code Sessions 的 Renderer 实现、状态 owner、执行路径、失败语义和扩展点见 [`app-ts/src/ash/sessions/README.md`](../app-ts/src/ash/sessions/README.md)。Academic 若增加专用研究工作台，必须先新增明确的模式 capability 与独立 renderer 入口；PDF、文献库、Zotero 同步和引用索引等领域能力不得提前放进通用 Workbench layout 或 generic Session storage。
 

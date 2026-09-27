@@ -3,7 +3,7 @@ import { test } from 'mocha';
 import { ServiceContainer } from '../../../../platform/instantiation/common/instantiation.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../platform/configuration/common/inMemoryConfigurationService.js';
-import { NATIVE_HOST_DIALOG_CHANNEL, NATIVE_HOST_SHELL_COMMAND_CHANNEL } from '../../../../platform/native/common/nativeHost.js';
+import { NATIVE_HOST_DIALOG_CHANNEL, NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL, NATIVE_HOST_SHELL_COMMAND_CHANNEL } from '../../../../platform/native/common/nativeHost.js';
 import type { INativeHostApi } from '../../../../platform/native/common/nativeHost.js';
 import { nativeHostIpcRoutes } from '../../../../platform/native/electron-main/nativeHostIpc.js';
 import { INativeHostService } from '../../../common/services.js';
@@ -16,6 +16,7 @@ test('desktop dialog and shell routes reject malformed requests', async () => {
 		performDialogOperation: operation => { operations.push(operation); },
 		performShellCommand: async operation => operation,
 		pickFolder: async () => undefined, pickFile: async () => undefined, openWorkspace: async () => {},
+		openAgentsWindow: async () => { operations.push('openAgentsWindow'); },
 		revealFile: () => {},
 		saveFile: async () => undefined, isAccessibilitySupportEnabled: () => false,
 		setWindowTheme: () => {}, setWindowDimmed: () => {}, toggleDeveloperTools: () => {},
@@ -31,6 +32,11 @@ test('desktop dialog and shell routes reject malformed requests', async () => {
 	assert.equal(operations.length, 1);
 	assert.throws(() => shell.validate('erase'), /Invalid shell command operation/);
 	assert.equal(await shell.invoke(shell.validate('install')), 'install');
+	const openAgents = routes.find(route => route.channel === NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL);
+	assert.ok(openAgents);
+	assert.throws(() => openAgents.validate({ windowId: 1 }), /does not accept parameters/);
+	await openAgents.invoke(openAgents.validate(undefined));
+	assert.equal(operations.at(-1), 'openAgentsWindow');
 });
 
 test('desktop window commands reach the window host', async () => {
@@ -59,6 +65,7 @@ test('desktop window commands reach the window host', async () => {
 		pickFolder: async () => undefined,
 		pickFile: async () => undefined,
 		openWorkspace: async () => {},
+		openAgentsWindow: async () => { calls.push('openAgentsWindow'); },
 		revealFile: async () => {},
 		setWindowTheme: async () => {},
 		setWindowDimmed: async () => {},
@@ -83,7 +90,7 @@ test('desktop window commands reach the window host', async () => {
 test('quick window switching focuses the next registered window', async () => {
 	using services = new ServiceContainer();
 	services.registerInstance(INativeHostService, {
-		listWindows: async () => [{ id: 1, title: 'Workbench', focused: true }, { id: 2, title: 'Agents', focused: false, parentId: 1 }],
+		listWindows: async () => [{ id: 1, title: 'Workbench', focused: true }, { id: 2, title: 'Agents', focused: false }],
 		focusWindowById: async (id: number) => { assert.equal(id, 2); },
 	} as unknown as INativeHostApi);
 	using commands = new CommandService(services);

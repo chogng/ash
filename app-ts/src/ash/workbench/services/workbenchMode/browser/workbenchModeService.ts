@@ -1,6 +1,6 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import type { ILifecycleService } from '../../../../platform/lifecycle/common/lifecycleService.js';
+import type { ILifecycleService } from '../../lifecycle/common/lifecycle.js';
 import { WorkbenchModeRegistry, type WorkbenchModeId } from '../../../common/workbenchMode.js';
 import { WorkbenchConfiguration } from '../../../common/configuration.js';
 import type { IWorkbenchModeService, WorkbenchModeOption } from '../common/workbenchModeService.js';

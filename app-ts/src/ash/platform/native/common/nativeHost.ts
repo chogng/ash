@@ -10,6 +10,7 @@ export const NATIVE_HOST_PICK_FILE_CHANNEL =
 	"ash:native-host:pick-file";
 export const NATIVE_HOST_OPEN_WORKSPACE_CHANNEL =
 	"ash:native-host:open-workspace";
+export const NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL = 'ash:native-host:open-agents-window';
 export const NATIVE_HOST_SET_WINDOW_THEME_CHANNEL =
 	"ash:native-host:set-window-theme";
 export const NATIVE_HOST_SET_WINDOW_DIMMED_CHANNEL =
@@ -143,6 +144,7 @@ export interface INativeHostApi {
 	pickFolder(): Promise<string | undefined>;
 	pickFile(options: INativeOpenDialogOptions): Promise<readonly string[] | undefined>;
 	openWorkspace(root: string): Promise<void>;
+	openAgentsWindow(): Promise<void>;
 	revealFile(path: string): Promise<void>;
 	setWindowTheme(theme: INativeWindowTheme): Promise<void>;
 	setWindowDimmed(dimmed: boolean): Promise<void>;
@@ -164,6 +166,11 @@ export function validateOpenWorkspace(value: unknown): string {
 		throw new Error("workspace root must be a non-empty string");
 	}
 	return value;
+}
+
+export function validateOpenAgentsWindow(value: unknown): undefined {
+	if (value !== undefined) throw new TypeError('Open Agents Window does not accept parameters');
+	return undefined;
 }
 
 export function validatePickFolder(value: unknown): undefined {

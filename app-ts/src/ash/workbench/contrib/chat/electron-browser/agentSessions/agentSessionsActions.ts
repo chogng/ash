@@ -3,8 +3,8 @@ import { localizedString } from '../../../../../platform/action/common/action.js
 import { Action2, MenuId } from '../../../../../platform/actions/common/actions.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
-import { createOpenDedicatedWindowApi } from '../../../../../platform/windows/electron-browser/dedicatedWindowApi.js';
 import { ashTitlebarMark } from '../../../../browser/parts/titlebar/titlebarMark.js';
+import { INativeHostService } from '../../../../common/services.js';
 import { OPEN_AGENTS_WINDOW_COMMAND_ID } from '../../common/constants.js';
 
 const openAgentsWindowTitle = localizedString('ash.actions', 'openAgentsWindow', 'Open Agents Window');
@@ -21,8 +21,8 @@ export class OpenAgentsWindowAction extends Action2 {
 		});
 	}
 
-	override run(): Promise<void> {
-		return createOpenDedicatedWindowApi().openDedicatedWindow();
+	override run(accessor: ServicesAccessor): Promise<void> {
+		return accessor.get(INativeHostService).openAgentsWindow();
 	}
 }
 

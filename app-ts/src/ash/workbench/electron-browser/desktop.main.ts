@@ -1,12 +1,12 @@
 import { addDisposableListener } from '../../base/browser/dom.js';
 import { installBaseUiStyles } from '../../base/browser/ui/styles.js';
 import { Disposable, DisposableTracker, installDisposableTracker, toDisposable } from '../../base/common/lifecycle.js';
+import { onUnexpectedError } from '../../base/common/errors.js';
 import { URI } from '../../base/common/uri.js';
 import { IFileService } from '../../platform/files/common/files.js';
 import { invoke } from '../../platform/ipc/electron-browser/rendererIpc.js';
 import { ServiceContainer } from '../../platform/instantiation/common/instantiation.js';
 import { createElectronRendererApi, type ElectronRendererCapabilityContribution } from '../../platform/native/electron-browser/rendererApi.js';
-import { registerWindowCloseHandler } from '../../platform/windows/electron-browser/windowClose.js';
 import { parseWorkspace } from '../../platform/workspace/common/workspace.js';
 import { showStartupError } from '../browser/startupError.js';
 import { startWorkbench, type Workbench } from '../browser/workbench.js';
@@ -14,6 +14,7 @@ import { WorkbenchModeRegistry, type WorkbenchModeId } from '../common/workbench
 import { createElectronWorkbenchContextMenuService } from '../services/contextmenu/electron-browser/contextMenuService.js';
 import { loadUserThemes } from '../services/themes/browser/workbenchThemeService.js';
 import { switchElectronWorkbenchMode } from '../services/workbenchMode/electron-browser/electronWorkbenchModeHost.js';
+import { ElectronLifecycleService } from '../services/lifecycle/electron-browser/lifecycleService.js';
 import { createElectronTitlebarPartFactory } from './parts/titlebar/titlebarPart.js';
 import { NativeDialogHandler } from './parts/dialogs/dialogHandler.js';
 import { DirectoryPermissionDialog } from './parts/dialogs/directoryPermissionDialog.js';
@@ -43,12 +44,15 @@ export class DesktopMain extends Disposable {
 			const profileServices = this._register(new ServiceContainer());
 			profileServices.registerInstance(IFileService, api.localFiles);
 			const userThemes = this._register(await loadUserThemes(profileServices, URI.parse(api.userDataHome.toString().replace(/\/$/u, '') + '/themes')));
+			const workspace = parseWorkspace(await api.workspace.getWorkspace());
+			const lifecycleService = new ElectronLifecycleService({ ownerWindow: window, onError: onUnexpectedError });
 			const workbench = this._register(startWorkbench({
 				modeId: this.modeId,
 				api,
 				browserViewApi: api.browserView,
 				container,
-				workspace: parseWorkspace(await api.workspace.getWorkspace()),
+				workspace,
+				lifecycleService,
 				configurationApi: api.configuration,
 				keybindingsResourceApi: api.keybindings,
 				keyboardLayoutProvider: api.keyboardLayout,
@@ -74,7 +78,7 @@ export class DesktopMain extends Disposable {
 					}
 				});
 			}, { once: true }));
-			this._register(await registerWindowCloseHandler(() => workbench.shutdown('windowClose')));
+			await lifecycleService.initialize();
 		} catch (error) {
 			try {
 				this.dispose();

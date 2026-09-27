@@ -26,6 +26,8 @@ import type {
 import { startWorkbench } from "./workbench.js";
 import { switchBrowserWorkbenchMode } from "../services/workbenchMode/browser/browserWorkbenchModeHost.js";
 import { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
+import { BrowserLifecycleService } from '../services/lifecycle/browser/lifecycleService.js';
+import { onUnexpectedError } from '../../base/common/errors.js';
 
 /** Creates a browser-hosted Workbench with the shared Web adapters. */
 export function createWebWorkbench(
@@ -33,6 +35,8 @@ export function createWebWorkbench(
 	options: IWebWorkbenchConstructionOptions,
 ): IWebWorkbench {
 	installBaseUiStyles();
+	const ownerWindow = options.container.ownerDocument.defaultView;
+	if (!ownerWindow) throw new Error('Workbench requires an owner window');
 	return startWorkbench({
 		modeId,
 		defaultLayout: options.defaultLayout,
@@ -40,6 +44,7 @@ export function createWebWorkbench(
 		webWorkspaceClient: options.webWorkspaceClient,
 		browserFileSystemProvider: options.browserFileSystemProvider,
 		container: options.container,
+		lifecycleService: new BrowserLifecycleService({ ownerWindow, onError: onUnexpectedError }),
 		workspace: workspaceFromIdentifier(options.workspace ?? getEmptyWorkspaceIdentifier()),
 		createContextMenuService: createBrowserWorkbenchContextMenuService,
 		createTitlebarPart: createBrowserTitlebarPart,

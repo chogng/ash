@@ -1,6 +1,6 @@
 import type { IDisposable } from "../../base/common/lifecycle.js";
 import type { IRendererHost } from "../../platform/renderer/common/rendererHost.js";
-import type { ShutdownReason } from "../../platform/lifecycle/common/lifecycleService.js";
+import type { ShutdownReason } from "../services/lifecycle/common/lifecycle.js";
 import type {
 	IAnyWorkspaceIdentifier,
 } from "../../platform/workspace/common/workspace.js";

@@ -36,7 +36,7 @@ import {
 } from "../../../../workbench/services/workspaces/browser/workspaceContextService.js";
 
 function windowsForWorkspacePaths(paths: IWorkspacePathService): WindowsMainService<never> {
-	return new WindowsMainService<never>(() => [], async () => undefined, process.platform, () => undefined, () => {}, paths);
+	return new WindowsMainService<never>(() => [], async () => undefined, process.platform, paths);
 }
 
 test("windows service resolves SSH folders without reading the local filesystem", async () => {

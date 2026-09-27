@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL } from '../../../window/common/window.js';
-import { WindowsMainService, windowCloseResponseIpcRoute, windowOperationIpcRoute, type IWorkbenchWindow } from '../../electron-main/windowsMainService.js';
+import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL } from '../../../window/common/window.js';
+import { LifecycleMainService } from '../../../lifecycle/electron-main/lifecycleMainService.js';
+import { WindowMode } from '../../../window/electron-main/window.js';
+import { WindowsMainService, windowOperationIpcRoute, type IWorkbenchWindow } from '../../electron-main/windowsMainService.js';
 
 class TestWindow implements IWorkbenchWindow<TestWindow> {
 	public readonly calls: string[] = [];
@@ -10,6 +13,7 @@ class TestWindow implements IWorkbenchWindow<TestWindow> {
 	private readonly closeListeners = new Set<(event: { preventDefault(): void }) => void>();
 	private readonly fullscreenListeners = new Map<string, Set<() => void>>();
 	private readonly rendererListeners = new Map<string, Set<() => void>>();
+	private readonly onceListeners = new Map<string, Set<() => void>>();
 	public readonly webContents = {
 		getZoomLevel: (): number => this.zoomLevel,
 		getZoomFactor: (): number => 1.2 ** this.zoomLevel,
@@ -17,6 +21,7 @@ class TestWindow implements IWorkbenchWindow<TestWindow> {
 		on: (event: 'zoom-changed' | 'did-start-loading' | 'render-process-gone', listener: () => void): void => { const listeners = event === 'zoom-changed' ? this.zoomListeners : this.rendererListeners.get(event) ?? new Set<() => void>(); listeners.add(listener); if (event !== 'zoom-changed') this.rendererListeners.set(event, listeners); },
 		off: (event: 'zoom-changed' | 'did-start-loading' | 'render-process-gone', listener: () => void): void => { if (this.destroyed) throw new Error('Object has been destroyed'); (event === 'zoom-changed' ? this.zoomListeners : this.rendererListeners.get(event))?.delete(listener); },
 		send: (channel: string, level: number | boolean): void => { this.messages.push({ channel, level }); },
+		once: (event: 'render-process-gone', listener: () => void): void => { const listeners = this.rendererListeners.get(event) ?? new Set<() => void>(); listeners.add(listener); this.rendererListeners.set(event, listeners); },
 	};
 	public destroyed = false;
 	public minimized = false;
@@ -24,8 +29,22 @@ class TestWindow implements IWorkbenchWindow<TestWindow> {
 	public zoomLevel = 0;
 	public alwaysOnTop = false;
 	public fullscreen = false;
+	public shown = 0;
+	public maximized = 0;
+	public deferClose = false;
 
 	constructor(public readonly id: number, private readonly title: string) {}
+	public once(event: 'ready-to-show' | 'closed', listener: () => void): this {
+		const listeners = this.onceListeners.get(event) ?? new Set<() => void>();
+		listeners.add(listener);
+		this.onceListeners.set(event, listeners);
+		return this;
+	}
+	public emit(event: 'ready-to-show' | 'closed'): void {
+		const listeners = this.onceListeners.get(event);
+		this.onceListeners.delete(event);
+		for (const listener of listeners ?? []) listener();
+	}
 	public on(event: 'close', listener: (event: { preventDefault(): void }) => void): void;
 	public on(event: 'enter-full-screen' | 'leave-full-screen', listener: () => void): void;
 	public on(event: 'close' | 'enter-full-screen' | 'leave-full-screen', listener: ((event: { preventDefault(): void }) => void) | (() => void)): void {
@@ -46,7 +65,11 @@ class TestWindow implements IWorkbenchWindow<TestWindow> {
 	public getTitle(): string { return this.title; }
 	public isFocused(): boolean { return this.focused; }
 	public isFullScreen(): boolean { return this.fullscreen; }
-	public close(): void { this.calls.push('close'); let prevented = false; for (const listener of this.closeListeners) listener({ preventDefault: () => { prevented = true; } }); if (!prevented) this.destroyed = true; }
+	public close(): void { this.calls.push('close'); let prevented = false; for (const listener of this.closeListeners) listener({ preventDefault: () => { prevented = true; } }); if (!prevented && !this.deferClose) this.destroy(); }
+	public show(): void { this.shown++; }
+	public maximize(): void { this.maximized++; }
+	public setFullScreen(fullscreen: boolean): void { this.fullscreen = fullscreen; }
+	public destroy(): void { if (this.destroyed) return; this.destroyed = true; this.emit('closed'); }
 	public isAlwaysOnTop(): boolean { return this.alwaysOnTop; }
 	public setAlwaysOnTop(enabled: boolean): void { this.alwaysOnTop = enabled; }
 	public selectNextTab(): void { this.calls.push('next'); }
@@ -87,18 +110,136 @@ test('WindowsMainService lists, focuses, and closes only live Workbench windows'
 	assert.deepEqual(first.calls, ['restore', 'focus', 'close']);
 });
 
-test('WindowsMainService includes a dedicated child with its parent window', () => {
-	const parent = new TestWindow(1, 'Workbench');
-	const child = new TestWindow(2, 'Agents');
-	const service = new WindowsMainService(() => [parent, child], async () => undefined, 'win32', window => window === child ? parent.id : undefined);
-	assert.deepEqual(service.perform(parent, { kind: 'list' }), [
+test('WindowsMainService owns Workbench window resources through close and app disposal', () => {
+	const service = new WindowsMainService<TestWindow>(() => [], async () => undefined);
+	const resources = new DisposableStore();
+	let released = 0;
+	resources.add(toDisposable(() => { released++; }));
+	const host = service.createWindow(options => new TestWindow(1, options.title), {
+		title: 'Workbench',
+		state: { mode: WindowMode.Normal, width: 1000, height: 700 },
+		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
+	}, resources);
+	host.win.destroy();
+	assert.equal(released, 1);
+	const nextResources = new DisposableStore();
+	nextResources.add(toDisposable(() => { released++; }));
+	const next = service.createWindow(options => new TestWindow(2, options.title), {
+		title: 'Workbench',
+		state: { mode: WindowMode.Normal, width: 1000, height: 700 },
+		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
+	}, nextResources);
+	service.dispose();
+	assert.deepEqual({ destroyed: next.win.isDestroyed(), released }, { destroyed: true, released: 2 });
+});
+
+test('WindowsMainService owns an independent Sessions window after the Workbench closes', async () => {
+	const workbench = new TestWindow(1, 'Workbench');
+	using service = new WindowsMainService(() => [workbench], async () => undefined, 'win32');
+	let created = 0;
+	let released = 0;
+	let closed = 0;
+	const create = (options: { readonly title: string }): TestWindow => { created++; return new TestWindow(created + 1, options.title); };
+	const options = {
+		title: 'Agents',
+		state: { mode: WindowMode.Normal, width: 1180, height: 780 },
+		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
+		initialize: async (_window: TestWindow, resources: DisposableStore) => { resources.add(toDisposable(() => { released++; })); },
+	};
+	await service.openManagedWindow('workspace', create, options, () => { closed++; });
+	const sessions = service.managedWindow('workspace')!;
+	sessions.emit('ready-to-show');
+	sessions.minimized = true;
+	await service.openManagedWindow('workspace', create, options, () => { closed++; });
+	assert.deepEqual({ created, shown: sessions.shown, focused: sessions.focused }, { created: 1, shown: 1, focused: true });
+	assert.deepEqual(service.perform(workbench, { kind: 'list' }), [
 		{ id: 1, title: 'Workbench', focused: false },
-		{ id: 2, title: 'Agents', focused: false, parentId: 1 },
+		{ id: 2, title: 'Agents', focused: true },
 	]);
-	service.perform(parent, { kind: 'focus', windowId: child.id });
-	assert.deepEqual(child.calls, ['focus']);
-	service.perform(parent, { kind: 'closeOthers' });
-	assert.equal(child.destroyed, true);
+	service.perform(workbench, { kind: 'close' });
+	assert.deepEqual(service.perform(sessions, { kind: 'list' }), [{ id: 2, title: 'Agents', focused: true }]);
+	service.perform(sessions, { kind: 'focusSelf' });
+	await service.closeManagedWindow('workspace');
+	assert.deepEqual({ current: service.managedWindow('workspace'), released, closed }, { current: undefined, released: 1, closed: 1 });
+});
+
+test('WindowsMainService waits for a managed window to close before reopening it', async () => {
+	using service = new WindowsMainService<TestWindow>(() => [], async () => undefined);
+	const windows: TestWindow[] = [];
+	const create = (options: { readonly title: string }): TestWindow => {
+		const window = new TestWindow(windows.length + 1, options.title);
+		windows.push(window);
+		return window;
+	};
+	const options = {
+		title: 'Agents',
+		state: { mode: WindowMode.Normal, width: 1180, height: 780 },
+		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
+		initialize: async () => {},
+	};
+	await service.openManagedWindow('workspace', create, options, () => {});
+	const first = windows[0]!;
+	first.deferClose = true;
+	const closing = service.closeManagedWindow('workspace');
+	const reopening = service.openManagedWindow('workspace', create, options, () => {});
+	assert.deepEqual({ windows: windows.length, closeRequests: first.calls.filter(call => call === 'close').length }, { windows: 1, closeRequests: 1 });
+	first.destroy();
+	await closing;
+	await reopening;
+	assert.equal(windows.length, 2);
+});
+
+test('WindowsMainService keeps a managed window open after a failed close and permits retry', async () => {
+	using service = new WindowsMainService<TestWindow>(() => [], async () => undefined);
+	using lifecycle = new LifecycleMainService<TestWindow>((window, message) => service.failManagedWindowClose(window, message), window => service.failManagedWindowClose(window, 'Window close was vetoed'));
+	let window: TestWindow | undefined;
+	await service.openManagedWindow('workspace', options => window = new TestWindow(1, options.title), {
+		title: 'Agents',
+		state: { mode: WindowMode.Normal, width: 1180, height: 780 },
+		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
+		initialize: async () => {},
+	}, () => {});
+	const sessions = window!;
+	using tracking = lifecycle.registerWindow(sessions);
+	lifecycle.respondToClose(sessions, { kind: 'ready' });
+	const closing = service.closeManagedWindow('workspace');
+	const firstToken = sessions.messages.find(message => message.channel === WINDOW_PREPARE_CLOSE_CHANNEL)?.level as number;
+	lifecycle.respondToClose(sessions, { kind: 'failed', token: firstToken, message: 'Save failed' });
+	await assert.rejects(closing, /Save failed/);
+	assert.equal(service.managedWindow('workspace'), sessions);
+	const retry = service.closeManagedWindow('workspace');
+	const secondToken = sessions.messages.filter(message => message.channel === WINDOW_PREPARE_CLOSE_CHANNEL).at(-1)?.level as number;
+	lifecycle.respondToClose(sessions, { kind: 'complete', token: secondToken });
+	await retry;
+	assert.equal(service.managedWindow('workspace'), undefined);
+});
+
+test('WindowsMainService releases a failed or crashed managed window', async () => {
+	using service = new WindowsMainService<TestWindow>(() => [], async () => undefined);
+	const windows: TestWindow[] = [];
+	let released = 0;
+	let closed = 0;
+	const create = (options: { readonly title: string }): TestWindow => {
+		const window = new TestWindow(windows.length + 1, options.title);
+		windows.push(window);
+		return window;
+	};
+	const options = {
+		title: 'Agents',
+		state: { mode: WindowMode.Maximized, width: 1180, height: 780 },
+		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
+		initialize: async (_window: TestWindow, resources: DisposableStore) => {
+			resources.add(toDisposable(() => { released++; }));
+			if (windows.length === 1) throw new Error('load failed');
+		},
+	};
+	await assert.rejects(service.openManagedWindow('workspace', create, options, () => { closed++; }), /load failed/);
+	assert.deepEqual({ destroyed: windows[0]?.isDestroyed(), released, closed }, { destroyed: true, released: 1, closed: 1 });
+	await service.openManagedWindow('workspace', create, options, () => { closed++; });
+	windows[1]!.emit('ready-to-show');
+	assert.equal(windows[1]!.maximized, 1);
+	windows[1]!.emitRendererEvent('render-process-gone');
+	assert.deepEqual({ current: service.managedWindow('workspace'), released, closed }, { current: undefined, released: 2, closed: 2 });
 });
 
 test('WindowsMainService applies zoom, always-on-top, and platform tab operations', () => {
@@ -204,71 +345,4 @@ test('window operation IPC validates commands before dispatching to the window h
 	assert.deepEqual(route.validate({ kind: 'getZoomFactor' }), { kind: 'getZoomFactor' });
 	route.invoke(route.validate({ kind: 'focusSelf' }));
 	assert.deepEqual(window.calls, ['focus']);
-});
-
-test('window close waits for the renderer to save, and a failed attempt can be retried', () => {
-	const window = new TestWindow(1, 'First');
-	const failures: string[] = [];
-	const service = new WindowsMainService(() => [window], async () => undefined, 'win32', () => undefined, (_window, message) => { failures.push(message); });
-	using tracking = service.trackClose(window);
-	const route = windowCloseResponseIpcRoute(service, window);
-	assert.equal(route.channel, WINDOW_CLOSE_RESPONSE_CHANNEL);
-	assert.throws(() => route.validate({ kind: 'complete', token: -1 }), /Invalid window close response/);
-	route.invoke(route.validate({ kind: 'ready' }));
-	window.close();
-	assert.equal(window.destroyed, false);
-	assert.deepEqual(window.messages, [{ channel: WINDOW_PREPARE_CLOSE_CHANNEL, level: 1 }]);
-	route.invoke(route.validate({ kind: 'failed', token: 1, message: 'Save failed' }));
-	assert.deepEqual(failures, ['Save failed']);
-	window.close();
-	assert.deepEqual(window.messages, [
-		{ channel: WINDOW_PREPARE_CLOSE_CHANNEL, level: 1 },
-		{ channel: WINDOW_PREPARE_CLOSE_CHANNEL, level: 2 },
-	]);
-	assert.throws(() => route.invoke(route.validate({ kind: 'complete', token: 1 })), /no longer active/);
-	route.invoke(route.validate({ kind: 'complete', token: 2 }));
-	assert.equal(window.destroyed, true);
-});
-
-test('parent close waits for its dedicated window before requesting its own save', async () => {
-	const parent = new TestWindow(1, 'Workbench');
-	const child = new TestWindow(2, 'Agents');
-	let finishChild!: () => void;
-	let childCloseRequests = 0;
-	const childClosed = new Promise<void>(resolve => { finishChild = resolve; });
-	const service = new WindowsMainService(() => [parent, child], async () => undefined);
-	using tracking = service.trackClose(parent, () => { childCloseRequests += 1; return childClosed; });
-	const route = windowCloseResponseIpcRoute(service, parent);
-	route.invoke(route.validate({ kind: 'ready' }));
-	parent.close();
-	assert.equal(parent.destroyed, false);
-	assert.deepEqual(parent.messages, []);
-	child.destroyed = true;
-	finishChild();
-	await childClosed;
-	await Promise.resolve();
-	assert.equal(parent.destroyed, false);
-	assert.deepEqual(parent.messages, [{ channel: WINDOW_PREPARE_CLOSE_CHANNEL, level: 1 }]);
-	route.invoke(route.validate({ kind: 'failed', token: 1, message: 'Parent save failed' }));
-	parent.close();
-	await Promise.resolve();
-	assert.equal(childCloseRequests, 2);
-	assert.deepEqual(parent.messages, [
-		{ channel: WINDOW_PREPARE_CLOSE_CHANNEL, level: 1 },
-		{ channel: WINDOW_PREPARE_CLOSE_CHANNEL, level: 2 },
-	]);
-	route.invoke(route.validate({ kind: 'complete', token: 2 }));
-	assert.equal(parent.destroyed, true);
-});
-
-test('window close does not wait for a renderer that is loading', () => {
-	const window = new TestWindow(1, 'First');
-	const service = new WindowsMainService(() => [window], async () => undefined);
-	using tracking = service.trackClose(window);
-	const route = windowCloseResponseIpcRoute(service, window);
-	route.invoke(route.validate({ kind: 'ready' }));
-	window.emitRendererEvent('did-start-loading');
-	window.close();
-	assert.equal(window.destroyed, true);
-	assert.deepEqual(window.messages, []);
 });

@@ -13,7 +13,7 @@ import { access, chmod, lstat, mkdir, readFile, unlink, writeFile } from "node:f
 import { constants, readFileSync, watch } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { isCancellationError } from "../../base/common/errors.js";
-import { Disposable, DisposableStore, DisposableTracker, installDisposableTracker, type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
+import { Disposable, DisposableMap, DisposableStore, DisposableTracker, installDisposableTracker, type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
 import { assertDefined } from "../../base/common/types.js";
 import { AshApplicationName } from '../common/application.js';
 import { WorkbenchModeConfigurationKey, WorkbenchModeRegistry, WorkbenchRendererEntry, withWorkbenchModeId, type WorkbenchModeId } from "../../workbench/common/workbenchMode.js";
@@ -47,8 +47,7 @@ import { UpdateMainService, updateIpcRoutes } from '../../platform/update/electr
 import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL } from "../../platform/native/common/nativeHost.js";
 import { WindowDialogHost } from '../../platform/dialogs/electron-main/windowDialogHost.js';
 import type { DialogRequest } from '../../platform/dialogs/common/dialogs.js';
-import { openDedicatedWindowIpcRoute, returnToParentWindowIpcRoute } from "../../platform/windows/electron-main/dedicatedWindowIpc.js";
-import { DedicatedWindowHost } from "../../platform/windows/electron-main/dedicatedWindowHost.js";
+import { RETURN_TO_WORKBENCH_CHANNEL, validateReturnToWorkbench } from '../../sessions/common/windowNavigation.js';
 import { GlobalKeybindingsMainService } from '../../platform/globalKeybindings/electron-main/globalKeybindingsMainService.js';
 import { OPEN_AGENTS_WINDOW_COMMAND_ID } from '../../workbench/contrib/chat/common/constants.js';
 import { StateService } from "../../platform/state/node/stateService.js";
@@ -58,9 +57,10 @@ import { diskFileSystemProviderRoutes } from "../../platform/files/electron-main
 import { URI } from "../../base/common/uri.js";
 import { DiskFileSystemProvider } from "../../platform/files/node/diskFileSystemProvider.js";
 import { LOCAL_FILE_SYSTEM_CHANGED_CHANNEL } from "../../platform/files/common/diskFileSystemProviderClient.js";
-import { applyWindowState, resolveBrowserWindowOptions, WindowControlsOverlay } from "../../platform/windows/electron-main/windows.js";
+import { WindowControlsOverlay } from "../../platform/windows/electron-main/windows.js";
 import { WindowsStateHandler } from "../../platform/windows/electron-main/windowsStateHandler.js";
-import { WindowsMainService, trackWindowResourceChanges, windowCloseResponseIpcRoute, windowOperationIpcRoute, windowResourceIpcRoutes, workspaceContextIpcRoutes } from "../../platform/windows/electron-main/windowsMainService.js";
+import { WindowsMainService, trackWindowResourceChanges, windowOperationIpcRoute, windowResourceIpcRoutes, workspaceContextIpcRoutes } from "../../platform/windows/electron-main/windowsMainService.js";
+import { LifecycleMainService, windowCloseResponseIpcRoute } from '../../platform/lifecycle/electron-main/lifecycleMainService.js';
 import { focusWindow, WindowMode, WorkspaceContextMainService, type IWindowState } from "../../platform/window/electron-main/window.js";
 import { type IAnyWorkspaceIdentifier, isRemoteWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, serializeWorkspace, UNKNOWN_EMPTY_WINDOW_WORKSPACE } from "../../platform/workspace/common/workspace.js";
 import { createEmptyWorkspaceIdentifier } from "../../platform/workspaces/node/workspaces.js";
@@ -121,12 +121,26 @@ interface WorkbenchWindowRecord extends IWorkbenchWindowRecord {
 	readonly workspaceContext: WorkspaceContextMainService;
 	readonly supervisor: AppServerConnectionRelay;
 	readonly resources: DisposableStore;
-	readonly dedicatedWindow: DedicatedWindowHost<BrowserWindow>;
 	readonly remoteConnections: IRemoteConnectionService;
 	modeId: WorkbenchModeId;
 	windowsStateHandler: WindowsStateHandler;
 	windowStateTracking: IDisposable;
 	openWorkspace?: (root: string) => Promise<void>;
+}
+
+class SessionsWindowRecord extends Disposable {
+	readonly workspaceId: string;
+	readonly workspaceContext: WorkspaceContextMainService;
+	readonly remoteConnections: IRemoteConnectionService;
+	readonly modeId: WorkbenchModeId;
+
+	constructor(workspaceId: string, workspaceContext: WorkspaceContextMainService, remoteConnections: IRemoteConnectionService, modeId: WorkbenchModeId) {
+		super();
+		this.workspaceId = workspaceId;
+		this.workspaceContext = this._register(workspaceContext);
+		this.remoteConnections = remoteConnections;
+		this.modeId = modeId;
+	}
 }
 
 interface PendingWindowLaunch {
@@ -160,23 +174,20 @@ export class AshApplication extends Disposable {
 	private readonly windowIconPath: string | undefined;
 
 	private readonly workbenchWindows = new WorkbenchWindowRegistry<WorkbenchWindowRecord>();
-	private readonly windowsMainService = new WindowsMainService(
-		() => this.workbenchWindows.values().flatMap(record => {
-			const child = record.dedicatedWindow.currentWindow;
-			return child ? [record.window, child] : [record.window];
-		}),
+	private readonly sessionsWindows = this._register(new DisposableMap<string, SessionsWindowRecord>());
+	private readonly windowsMainService = this._register(new WindowsMainService(
+		() => this.workbenchWindows.values().map(record => record.window),
 		async () => {
 			const workspaces = this.workspaces;
 			if (!workspaces) throw new Error('Workspace service is not initialized');
 			return (await this.openWorkspace(createEmptyWorkspaceIdentifier(), workspaces))?.window;
 		},
 		process.platform,
-		window => this.workbenchWindows.values().find(record => record.dedicatedWindow.currentWindow === window)?.id,
-		async (window, message) => {
-			this.workbenchWindows.values().find(record => record.dedicatedWindow.currentWindow === window)?.dedicatedWindow.failClose(window, message);
-			await dialog.showMessageBox(window, { type: 'error', message });
-		},
-	);
+	));
+	private readonly lifecycleMainService = this._register(new LifecycleMainService<BrowserWindow>(async (window, message) => {
+		this.windowsMainService.failManagedWindowClose(window, message);
+		await dialog.showMessageBox(window, { type: 'error', message });
+	}, window => this.windowsMainService.failManagedWindowClose(window, 'Window close was vetoed')));
 	private readonly pendingWindowLaunches: PendingWindowLaunch[] = [];
 	private workspaces: WorkspacesManagementMainService | undefined;
 	private persistentServices: PersistentServices | undefined;
@@ -292,18 +303,14 @@ export class AshApplication extends Disposable {
 	}
 
 	async disposeAfterStartupFailure(): Promise<void> {
-		for (const record of this.workbenchWindows.values()) record.resources.dispose();
+		this.windowsMainService.dispose();
+		this.sessionsWindows.dispose();
 		try {
 			await this.closePersistentServices();
 		} finally {
 			this.dispose();
 			this.releaseDisposableTracker();
 		}
-	}
-
-	/** Brings the most recently active Workbench window to the foreground. */
-	focusMainWindow(): void {
-		this.workbenchWindows.focusActive();
 	}
 
 	/** Opens a second-instance Workspace in its own window, or focuses the active window when no target was supplied. */
@@ -316,9 +323,14 @@ export class AshApplication extends Disposable {
 		void this.openWindowLaunch(launch).catch(error => this.reportWindowOpenFailure(error));
 	}
 
-	/** Recreates an empty Workbench after macOS activates an application with no open windows. */
+	/** Focuses a live window, or recreates an empty Workbench when none remains. */
 	handleActivate(): void {
 		if (this.workbenchWindows.focusActive()) return;
+		const sessionsWindow = this.windowsMainService.managedWindowValues()[0];
+		if (sessionsWindow) {
+			focusWindow(sessionsWindow);
+			return;
+		}
 		const workspaces = this.workspaces;
 		if (!workspaces || !this.persistentServices) return;
 		void this.openWorkspace(createEmptyWorkspaceIdentifier(), workspaces).catch(error => this.reportWindowOpenFailure(error));
@@ -392,7 +404,7 @@ export class AshApplication extends Disposable {
 		const arguments_ = this.workspaceLaunchArguments(launch.arguments);
 		const target = parseWorkspaceLaunchArguments(arguments_);
 		if (!target) {
-			this.focusMainWindow();
+			this.handleActivate();
 			return;
 		}
 		const workspace = await this.windowsMainService.resolveWorkspaceOpenTarget(target, launch.cwd);
@@ -411,11 +423,11 @@ export class AshApplication extends Disposable {
 	}
 
 	private openWorkspace(workspace: IAnyWorkspaceIdentifier, workspaces: WorkspacesManagementMainService): Promise<WorkbenchWindowRecord | undefined> {
-		return this.workbenchWindows.openWorkspace(workspace.id, () => this.performOpenWorkspace(workspace, workspaces));
+		return this.workbenchWindows.openWorkspace(workspace, () => this.performOpenWorkspace(workspace, workspaces));
 	}
 
 	private async performOpenWorkspace(workspace: IAnyWorkspaceIdentifier, workspaces: WorkspacesManagementMainService): Promise<WorkbenchWindowRecord | undefined> {
-		const resources = this._register(new DisposableStore());
+		const resources = new DisposableStore();
 		try {
 			const resolvedWorkspace = await workspaces.resolveWorkspace(workspace);
 			const workspaceContext = resources.add(new WorkspaceContextMainService(workspace, resolvedWorkspace));
@@ -428,7 +440,7 @@ export class AshApplication extends Disposable {
 				resources.dispose();
 				return undefined;
 			}
-			const existing = this.workbenchWindows.findWorkspace(workspace.id);
+			const existing = this.workbenchWindows.findWorkspace(workspace);
 			if (existing) {
 				existing.focus();
 				resources.dispose();
@@ -591,39 +603,23 @@ export class AshApplication extends Disposable {
 	): Promise<WorkbenchWindowRecord> {
 		const windowsStateHandler = this.createWindowsStateHandler(workspaceContext.getWorkspace());
 		const windowState = windowsStateHandler.restoreWindowState();
-		const browserWindowOptions = resolveBrowserWindowOptions({
+		const windowHost = this.windowsMainService.createWindow(options => new BrowserWindow(options), {
 			state: windowState,
 			webPreferences: this.createSandboxWebPreferences(),
-		});
-		const window = new BrowserWindow({
-			...browserWindowOptions,
-			...(process.platform === 'darwin' ? { tabbingIdentifier: 'ash-workbench' } : {}),
+			title: WorkbenchModeRegistry.get(this.defaultModeId).title,
+			tabbingIdentifier: process.platform === 'darwin' ? 'ash-workbench' : undefined,
 			icon: this.windowIconPath,
-			show: false,
-		});
-		resources.add(toDisposable(() => {
-			if (!window.isDestroyed()) window.destroy();
-		}));
-		const dedicatedWindow = resources.add(new DedicatedWindowHost(
-			options => new BrowserWindow(options),
-			() => focusWindow(window),
-		));
-		const remoteConnections = this.appServerStartupMode === "disabled"
-			? UnavailableRemoteConnectionService
-			: new RemoteConnections({
-				remoteExecutable: remoteExecutablePath({ appPath: app.getAppPath(), isPackaged: app.isPackaged, platform: process.platform, resourcesPath: process.resourcesPath }),
-				environment: { ...process.env, ASH_HOME: this.profileRoot },
-				scheduleConnect: connection => this.openRemoteConnection(connection, workspaces),
-			});
+		}, resources);
+		const window = windowHost.win;
+		const remoteConnections = this.createRemoteConnections(workspaces);
 		const windowStateTracking = windowsStateHandler.trackWindow(window);
 		const record: WorkbenchWindowRecord = {
 			id: window.id,
-			workspaceId: workspaceContext.getWorkspace().id,
+			openedWorkspace: workspaceContext.getWorkspace(),
 			window,
 			workspaceContext,
 			supervisor,
 			resources,
-			dedicatedWindow,
 			remoteConnections,
 			modeId: this.defaultModeId,
 			windowsStateHandler,
@@ -640,14 +636,6 @@ export class AshApplication extends Disposable {
 		resources.add(toDisposable(() => window.removeListener("focus", onFocus)));
 		window.once("closed", () => {
 			this.workbenchWindows.remove(record.id);
-			if (!resources.isDisposed) resources.dispose();
-		});
-		window.once("ready-to-show", () => {
-			if (window.isDestroyed()) {
-				return;
-			}
-			applyWindowState(window, windowState);
-			window.show();
 		});
 
 		const rendererEntry = this.resolveRendererEntry("workbench");
@@ -684,7 +672,7 @@ export class AshApplication extends Disposable {
 			const nextWindowsStateHandler = this.createWindowsStateHandler(nextWorkspace);
 			record.windowsStateHandler = nextWindowsStateHandler;
 			record.windowStateTracking = windowDisposables.add(nextWindowsStateHandler.trackWindow(window));
-			this.workbenchWindows.updateWorkspace(record.id, nextWorkspace.id);
+			this.workbenchWindows.updateWorkspace(record.id, nextWorkspace);
 		}));
 		windowDisposables.add(workspaceContext.onDidChangeWorkspace(({ resolvedWorkspace }) => {
 			if (!window.isDestroyed()) {
@@ -748,7 +736,7 @@ export class AshApplication extends Disposable {
 			...browserViewIpcRoutes(browserViewMainService),
 			...windowResourceIpcRoutes(windowResources),
 			windowOperationIpcRoute(this.windowsMainService, window),
-			windowCloseResponseIpcRoute(this.windowsMainService, window),
+			windowCloseResponseIpcRoute(this.lifecycleMainService, window),
 			...nativeHostIpcRoutes({
 				performDialogOperation: operation => windowDialogs.perform(operation),
 				performShellCommand: operation => this.performShellCommand(operation),
@@ -774,6 +762,7 @@ export class AshApplication extends Disposable {
 					return result.canceled || result.filePaths.length === 0 ? undefined : result.filePaths;
 				},
 				openWorkspace: (root) => transitionToFolder(root, true),
+				openAgentsWindow: () => this.openSessionsWindow(record),
 				revealFile: path => {
 					if (!isAbsolute(path)) throw new TypeError('File path to reveal must be absolute');
 					shell.showItemInFolder(path);
@@ -801,7 +790,6 @@ export class AshApplication extends Disposable {
 			...workspaceContextIpcRoutes(workspaceContext),
 			...updateIpcRoutes(this.updateMainService),
 		];
-		ipcRoutes.push(openDedicatedWindowIpcRoute(() => this.openSessionsWindow(record)));
 		await watchProfileThemeFiles(this.profileRoot, window, windowDisposables);
 		if (this.nativeMenubar) {
 			const nativeContextMenu = windowDisposables.add(
@@ -819,96 +807,132 @@ export class AshApplication extends Disposable {
 			ipcRoutes,
 		));
 		windowDisposables.add(this.windowsMainService.trackZoomLevel(window));
-		windowDisposables.add(this.windowsMainService.trackClose(window, () => record.dedicatedWindow.close()));
+		windowDisposables.add(this.lifecycleMainService.registerWindow(window));
 		windowDisposables.add(trackWindowResourceChanges(window, windowResources));
 		try {
 			await this.loadRendererEntry(window, rendererEntry);
 			return record;
 		} catch (error) {
-			if (!window.isDestroyed()) window.destroy();
+			windowHost.dispose();
 			throw error;
 		}
 	}
 
-	/** Opens the mode's Sessions renderer under the Workbench window host. */
+	private createRemoteConnections(workspaces: WorkspacesManagementMainService): IRemoteConnectionService {
+		return this.appServerStartupMode === "disabled"
+			? UnavailableRemoteConnectionService
+			: new RemoteConnections({
+				remoteExecutable: remoteExecutablePath({ appPath: app.getAppPath(), isPackaged: app.isPackaged, platform: process.platform, resourcesPath: process.resourcesPath }),
+				environment: { ...process.env, ASH_HOME: this.profileRoot },
+				scheduleConnect: connection => this.openRemoteConnection(connection, workspaces),
+			});
+	}
+
+	/** Opens a Sessions window with its own workspace and connection lifetime. */
 	private async openSessionsWindow(record: WorkbenchWindowRecord): Promise<void> {
 		const mode = WorkbenchModeRegistry.get(record.modeId);
 		if (!mode.dedicatedSessions) {
 			throw new Error(`${mode.title} does not provide a dedicated Sessions window`);
 		}
-		const sessionsEntry = this.resolveRendererEntry("sessions", record.modeId);
+		const workspace = record.workspaceContext.getWorkspace();
+		const workspaces = this.workspaces;
+		if (!workspaces) throw new Error('Workspace service is not initialized');
+		let sessions = this.sessionsWindows.get(workspace.id);
+		if (!sessions) {
+			const remoteConnections = this.createRemoteConnections(workspaces);
+			const workspaceContext = new WorkspaceContextMainService(workspace, record.workspaceContext.getResolvedWorkspace());
+			sessions = new SessionsWindowRecord(workspace.id, workspaceContext, remoteConnections, record.modeId);
+			this.sessionsWindows.set(workspace.id, sessions);
+		}
+		const session = sessions;
+		const sessionsEntry = this.resolveRendererEntry("sessions", session.modeId);
 		const sessionsWindowState = this.createWindowsStateHandler(UNKNOWN_EMPTY_WINDOW_WORKSPACE, {
 			storageKey: 'sessionsWindowState',
 			defaultState: { mode: WindowMode.Normal, width: 1_180, height: 780 },
 		});
-		await record.dedicatedWindow.open({
-			title: `${mode.title} Sessions`,
-			icon: this.windowIconPath,
-			state: sessionsWindowState.restoreWindowState(),
-			webPreferences: this.createSandboxWebPreferences(),
-			initialize: async (window, windowDisposables) => {
-				windowDisposables.add(sessionsWindowState.trackWindow(window));
-				const windowControlsOverlay = new WindowControlsOverlay(colors => {
-					if (process.platform === 'win32' || process.platform === 'linux') window.setTitleBarOverlay(colors);
-				});
-				const sessionsRelay = windowDisposables.add(this.createAppServerConnectionRelay(record.workspaceContext.getWorkspace(), windowDisposables));
-				const remoteWindowContext = windowDisposables.add(new RemoteWindowMainContext({
-					supervisor: sessionsRelay,
-					workspaceContext: record.workspaceContext,
-					connections: record.remoteConnections,
-					tunnels: new SshRemoteTunnelService({
-						getWorkspace: () => record.workspaceContext.getWorkspace(),
-						sshExecutable: process.env.ASH_SSH_PATH ?? "ssh",
-						localEnvironment: process.env,
-					}),
-					host: electronRemoteWindowMainHost(window),
-					prepareForRuntimeReplacement: () => window.webContents.send("ash:terminal:prepareReplacement"),
-				}));
-				const windowResources = {
-					configuration: this.services.configuration,
-					keybindings: this.services.keybindings,
-					nativeKeyboardLayout: this.nativeKeyboardLayout,
-					userKeyboardLayout: this.services.userKeyboardLayout,
-				};
-				const ipcRoutes = [
-					...sessionsRelay.routes(window.webContents, () => ({ workspaceId: record.workspaceId, workspaceRoot: record.workspaceContext.getResolvedWorkspace().folders[0]?.uri.fsPath ?? this.profileRoot })),
-					...rendererSystemHostRoutes(window, path => this.directoryPermissionPrompt(path)),
-					...remoteWindowContext.ipcRoutes,
-					...windowResourceIpcRoutes(windowResources),
-					...windowAppearanceIpcRoutes({
-						setWindowTheme: theme => windowControlsOverlay.setTheme(theme),
-						setWindowDimmed: dimmed => windowControlsOverlay.setDimmed(dimmed),
-					}),
-					windowOperationIpcRoute(this.windowsMainService, window),
-					...diskFileSystemProviderRoutes(windowDisposables.add(new DiskFileSystemProvider([URI.file(this.profileRoot)])), URI.file(this.profileRoot)),
-					...workspaceContextIpcRoutes(record.workspaceContext),
-					returnToParentWindowIpcRoute(() => record.dedicatedWindow.returnToParent(window)),
-					windowCloseResponseIpcRoute(this.windowsMainService, window),
-				];
-				await watchProfileThemeFiles(this.profileRoot, window, windowDisposables);
-				if (this.nativeMenubar) {
-					const nativeContextMenu = windowDisposables.add(new ElectronContextMenu(window));
-					ipcRoutes.push(...nativeContextMenuIpcRoutes(nativeContextMenu));
-				}
-				windowDisposables.add(this.trustedIpcRouter.register(
-					{
-						webContents: window.webContents,
-						allowedEntryUrls: new Set([normalizeEntryUrl(sessionsEntry.url)]),
-					},
-					ipcRoutes,
-				));
-				windowDisposables.add(this.windowsMainService.trackZoomLevel(window));
-				windowDisposables.add(this.windowsMainService.trackFullscreen(window));
-				windowDisposables.add(this.windowsMainService.trackClose(window));
-				windowDisposables.add(trackWindowResourceChanges(window, windowResources));
-				windowDisposables.add(record.workspaceContext.onDidChangeWorkspace(({ resolvedWorkspace }) => {
-					if (!window.isDestroyed()) {
-						window.webContents.send(WORKSPACE_CONTEXT_CHANGED_CHANNEL, serializeWorkspace(resolvedWorkspace));
+		await this.windowsMainService.openManagedWindow(
+			workspace.id,
+			options => new BrowserWindow(options),
+			{
+				title: `${WorkbenchModeRegistry.get(session.modeId).title} Sessions`,
+				icon: this.windowIconPath,
+				state: sessionsWindowState.restoreWindowState(),
+				webPreferences: this.createSandboxWebPreferences(),
+				initialize: async (window, windowDisposables) => {
+					windowDisposables.add(sessionsWindowState.trackWindow(window));
+					const windowControlsOverlay = new WindowControlsOverlay(colors => {
+						if (process.platform === 'win32' || process.platform === 'linux') window.setTitleBarOverlay(colors);
+					});
+					const sessionsRelay = windowDisposables.add(this.createAppServerConnectionRelay(session.workspaceContext.getWorkspace(), windowDisposables));
+					const remoteWindowContext = windowDisposables.add(new RemoteWindowMainContext({
+						supervisor: sessionsRelay,
+						workspaceContext: session.workspaceContext,
+						connections: session.remoteConnections,
+						tunnels: new SshRemoteTunnelService({
+							getWorkspace: () => session.workspaceContext.getWorkspace(),
+							sshExecutable: process.env.ASH_SSH_PATH ?? "ssh",
+							localEnvironment: process.env,
+						}),
+						host: electronRemoteWindowMainHost(window),
+						prepareForRuntimeReplacement: () => window.webContents.send("ash:terminal:prepareReplacement"),
+					}));
+					const windowResources = {
+						configuration: this.services.configuration,
+						keybindings: this.services.keybindings,
+						nativeKeyboardLayout: this.nativeKeyboardLayout,
+						userKeyboardLayout: this.services.userKeyboardLayout,
+					};
+					const ipcRoutes = [
+						...sessionsRelay.routes(window.webContents, () => ({ workspaceId: session.workspaceId, workspaceRoot: session.workspaceContext.getResolvedWorkspace().folders[0]?.uri.fsPath ?? this.profileRoot })),
+						...rendererSystemHostRoutes(window, path => this.directoryPermissionPrompt(path)),
+						...remoteWindowContext.ipcRoutes,
+						...windowResourceIpcRoutes(windowResources),
+						...windowAppearanceIpcRoutes({
+							setWindowTheme: theme => windowControlsOverlay.setTheme(theme),
+							setWindowDimmed: dimmed => windowControlsOverlay.setDimmed(dimmed),
+						}),
+						windowOperationIpcRoute(this.windowsMainService, window),
+						...diskFileSystemProviderRoutes(windowDisposables.add(new DiskFileSystemProvider([URI.file(this.profileRoot)])), URI.file(this.profileRoot)),
+						...workspaceContextIpcRoutes(session.workspaceContext),
+						{
+							channel: RETURN_TO_WORKBENCH_CHANNEL,
+							validate: validateReturnToWorkbench,
+							invoke: async () => {
+								await this.windowsMainService.closeManagedWindow(session.workspaceId);
+								const opened = await this.openWorkspace(workspace, workspaces);
+								opened?.focus();
+							},
+						},
+						windowCloseResponseIpcRoute(this.lifecycleMainService, window),
+					];
+					await watchProfileThemeFiles(this.profileRoot, window, windowDisposables);
+					if (this.nativeMenubar) {
+						const nativeContextMenu = windowDisposables.add(new ElectronContextMenu(window));
+						ipcRoutes.push(...nativeContextMenuIpcRoutes(nativeContextMenu));
 					}
-				}));
-				await this.loadRendererEntry(window, sessionsEntry);
+					windowDisposables.add(this.trustedIpcRouter.register(
+						{
+							webContents: window.webContents,
+							allowedEntryUrls: new Set([normalizeEntryUrl(sessionsEntry.url)]),
+						},
+						ipcRoutes,
+					));
+					windowDisposables.add(this.windowsMainService.trackZoomLevel(window));
+					windowDisposables.add(this.windowsMainService.trackFullscreen(window));
+					windowDisposables.add(this.lifecycleMainService.registerWindow(window));
+					windowDisposables.add(trackWindowResourceChanges(window, windowResources));
+					windowDisposables.add(session.workspaceContext.onDidChangeWorkspace(({ resolvedWorkspace }) => {
+						if (!window.isDestroyed()) {
+							window.webContents.send(WORKSPACE_CONTEXT_CHANGED_CHANNEL, serializeWorkspace(resolvedWorkspace));
+						}
+					}));
+					await this.loadRendererEntry(window, sessionsEntry);
+				},
 			},
-		});
+			() => {
+				if (this.sessionsWindows.get(session.workspaceId) === session) this.sessionsWindows.deleteAndDispose(session.workspaceId);
+			},
+		);
 	}
 
 	private async performShellCommand(operation: 'install' | 'uninstall'): Promise<string> {
@@ -958,7 +982,6 @@ export class AshApplication extends Disposable {
 		if (record.window.isDestroyed() || record.modeId === modeId) return;
 		const previousModeId = record.modeId;
 		const previousDefaultModeId = this.defaultModeId;
-		await record.dedicatedWindow.close();
 		this.globalKeybindings.removeWindow(record.id);
 		record.modeId = modeId;
 		this.defaultModeId = modeId;
@@ -1222,6 +1245,9 @@ export class AshApplication extends Disposable {
 	): void => {
 		for (const record of this.workbenchWindows.values()) {
 			record.window.webContents.send(NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, enabled);
+		}
+		for (const window of this.windowsMainService.managedWindowValues()) {
+			window.webContents.send(NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, enabled);
 		}
 	};
 

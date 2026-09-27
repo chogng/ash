@@ -3,7 +3,7 @@ import { addDisposableListener } from "../../base/browser/dom.js";
 import { onUnexpectedError } from "../../base/common/errors.js";
 import { DisposableStore, type IDisposable } from "../../base/common/lifecycle.js";
 import { createDisconnectedRendererApi } from "../../platform/app-server/browser/rendererApi.js";
-import { navigateToDedicatedWindowPage } from "../../platform/windows/browser/dedicatedWindowNavigation.js";
+import { BrowserLifecycleService } from '../../workbench/services/lifecycle/browser/lifecycleService.js';
 import { createBrowserWorkbenchContextMenuService } from "../../workbench/browser/workbenchInteractionServices.js";
 import type { WorkbenchModeId } from "../../workbench/common/workbenchMode.js";
 import type { SessionsProfile } from "../common/sessionsProfile.js";
@@ -16,11 +16,17 @@ export function startBrowserSessions(modeId: WorkbenchModeId, profile: SessionsP
 	const host = globalThis.ashWebWorkbenchHost;
 	const container = host?.container ?? document.querySelector<HTMLElement>("#app");
 	if (!container) throw new Error("Sessions renderer requires an #app container");
+	const ownerWindow = container.ownerDocument.defaultView;
+	if (!ownerWindow) throw new Error('Sessions renderer requires an owner window');
 	const workbench = sessions.add(new Workbench({
 		modeId,
 		profile,
 		api: host?.api ?? createDisconnectedRendererApi(),
-		returnToWorkbench: () => navigateToDedicatedWindowPage(profile.workbenchRelativePath, container.ownerDocument.location),
+		lifecycleService: new BrowserLifecycleService({ ownerWindow, onError: onUnexpectedError }),
+		returnToWorkbench: () => {
+			const location = container.ownerDocument.location;
+			location.assign(new URL(profile.workbenchRelativePath, location.href).href);
+		},
 		createContextMenuService: createBrowserWorkbenchContextMenuService,
 		container,
 	}));

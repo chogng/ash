@@ -1,7 +1,10 @@
+import { findWindowOnWorkspaceOrFolder } from '../../platform/windows/electron-main/windowsFinder.js';
+import { isSingleFolderWorkspaceIdentifier, isWorkspaceIdentifier, type IAnyWorkspaceIdentifier } from '../../platform/workspace/common/workspace.js';
+
 /** Minimal application-facing identity and focus contract for one Workbench window. */
 export interface IWorkbenchWindowRecord {
 	readonly id: number;
-	workspaceId: string;
+	openedWorkspace: IAnyWorkspaceIdentifier;
 	isDestroyed(): boolean;
 	focus(): void;
 }
@@ -12,10 +15,11 @@ export class WorkbenchWindowRegistry<T extends IWorkbenchWindowRecord> {
 	private readonly openings = new Map<string, Promise<T | undefined>>();
 	private activationOrder: number[] = [];
 
-	openWorkspace(workspaceId: string, create: () => Promise<T | undefined>): Promise<T | undefined> {
+	openWorkspace(workspace: IAnyWorkspaceIdentifier, create: () => Promise<T | undefined>): Promise<T | undefined> {
+		const workspaceId = workspace.id;
 		const pending = this.openings.get(workspaceId);
 		if (pending) return pending;
-		const existing = this.findWorkspace(workspaceId);
+		const existing = this.findWorkspace(workspace);
 		if (existing) {
 			existing.focus();
 			return Promise.resolve(existing);
@@ -50,18 +54,19 @@ export class WorkbenchWindowRegistry<T extends IWorkbenchWindowRecord> {
 		this.activationOrder.push(id);
 	}
 
-	updateWorkspace(id: number, workspaceId: string): void {
+	updateWorkspace(id: number, workspace: IAnyWorkspaceIdentifier): void {
 		const record = this.records.get(id);
 		if (!record) throw new Error(`Workbench window ${id} is not registered`);
-		record.workspaceId = workspaceId;
+		record.openedWorkspace = workspace;
 	}
 
-	findWorkspace(workspaceId: string): T | undefined {
-		for (let index = this.activationOrder.length - 1; index >= 0; index -= 1) {
-			const record = this.records.get(this.activationOrder[index]!);
-			if (record && !record.isDestroyed() && record.workspaceId === workspaceId) return record;
-		}
-		return undefined;
+	findWorkspace(workspace: IAnyWorkspaceIdentifier): T | undefined {
+		const activeFirst = [...this.activationOrder].reverse()
+			.map(id => this.records.get(id))
+			.filter((record): record is T => record !== undefined && !record.isDestroyed());
+		if (isWorkspaceIdentifier(workspace)) return findWindowOnWorkspaceOrFolder(activeFirst, workspace.configPath);
+		if (isSingleFolderWorkspaceIdentifier(workspace)) return findWindowOnWorkspaceOrFolder(activeFirst, workspace.uri);
+		return activeFirst.find(record => record.openedWorkspace.id === workspace.id);
 	}
 
 	active(): T | undefined {

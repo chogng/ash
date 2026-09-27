@@ -53,6 +53,7 @@ test("native host routes validate folder picking and developer tools", async () 
 		},
 		pickFile: async () => ['C:\\project\\paper.md'],
 		openWorkspace: async () => {},
+		openAgentsWindow: async () => {},
 		revealFile: () => {},
 		saveFile: async (options) => {
 			savedFileOptions = options;
@@ -179,6 +180,7 @@ test("desktop commands are available from the command palette", async () => {
 		pickFolder: async () => undefined,
 		pickFile: async () => undefined,
 		openWorkspace: async () => {},
+		openAgentsWindow: async () => {},
 		revealFile: async () => {},
 		saveFile: async () => undefined,
 		isAccessibilitySupportEnabled: async () => false,

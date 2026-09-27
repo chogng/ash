@@ -382,7 +382,7 @@ execute(method: string, params?: unknown): Promise<unknown>
 | 能力 | 前端契约 owner | 运行时或传输 owner | Workbench 装配责任 |
 | --- | --- | --- | --- |
 | 配置 | `configurationService.ts` | `configurationIpc.ts` 与 Electron adapters | Workbench 创建窗口级 service |
-| 生命周期 | `ILifecycleService` | `BrowserLifecycleService` | Workbench 注册 backup、storage 等同步 joiner |
+| 生命周期 | `ILifecycleService` | Web 使用 `BrowserLifecycleService`；Electron Renderer 使用 `ElectronLifecycleService`，Main 使用 `LifecycleMainService` | Workbench 注册 backup、storage 等同步 joiner |
 | 日志 | `ILogService` / `ILogSink` | Console 与 System Output sinks | composition root 选择 sinks |
 | 外部 URL 与剪贴板 | `IOpenerService` / `IClipboardService` | Browser、Electron Main adapters | Connector host 注入适配器 |
 | 编辑器打开 | `IEditorService` | `BrowserEditorService` | Workbench 把具体 `EditorPart` 封装在 service 后面 |
@@ -528,7 +528,7 @@ Workbench Mode session profile defaults
 Profile、Workspace scope，User/Machine target，值变更事件和 will-save lifecycle。
 `workbench/services/storage/browser/storageService.ts` 是浏览器适配器：以产品、profile 和
 workspace identity 隔离 versioned `localStorage` 文档，提供周期 flush 与释放 fallback；
-Workbench 的 `ILifecycleService` 在 `pagehide` 或显式关闭时统一等待 shutdown flush。存储不可用
+Workbench 的 `ILifecycleService` 在显式关闭前先等待工作副本备份检查；检查拒绝或失败时保持窗口开启，不进入后续存储 flush。`platform/lifecycle/common/lifecycle.ts` 汇总同步及异步否决，Electron Main 区分明确否决与保存失败。`pagehide` 时仍尽力完成 shutdown flush。存储不可用
 或文档损坏时回退到内存 projection。
 
 具体 Layout 内的私有 `WorkbenchLayoutStateModel` 负责把 domain state 映射为存储 key：

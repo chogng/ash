@@ -24,7 +24,7 @@ async function switchWindow(accessor: ServicesAccessor): Promise<void> {
 	picker.items = windows.map(window => ({
 		windowId: window.id,
 		label: window.title || localize({ bundle: 'ash', key: 'workbench.untitledWindow' }, 'Untitled Window'),
-		description: window.focused ? localize({ bundle: 'ash', key: 'workbench.currentWindow' }, 'Current window') : window.parentId !== undefined ? windows.find(candidate => candidate.id === window.parentId)?.title : undefined,
+		description: window.focused ? localize({ bundle: 'ash', key: 'workbench.currentWindow' }, 'Current window') : undefined,
 		className: window.focused ? 'ash-window-switch-current' : undefined,
 	}));
 	picker.placeholder = localize({ bundle: 'ash', key: 'workbench.switchWindowPlaceholder' }, 'Select a window');

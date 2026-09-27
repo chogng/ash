@@ -1,5 +1,7 @@
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
+import { URI } from '../../../base/common/uri.js';
+import type { IAnyWorkspaceIdentifier } from '../../../platform/workspace/common/workspace.js';
 import type { IWorkbenchWindowRecord } from "../../electron-main/workbenchWindowRegistry.js";
 import { WorkbenchWindowRegistry } from "../../electron-main/workbenchWindowRegistry.js";
 
@@ -33,9 +35,9 @@ test("Workbench window registry updates Workspace identity and ignores destroyed
 	registry.add(first);
 	registry.add(second);
 
-	registry.updateWorkspace(first.id, "workspace-three");
-	assert.equal(registry.findWorkspace("workspace-one"), undefined);
-	assert.equal(registry.findWorkspace("workspace-three"), first);
+	registry.updateWorkspace(first.id, workspace('workspace-three'));
+	assert.equal(registry.findWorkspace(workspace('workspace-one')), undefined);
+	assert.equal(registry.findWorkspace(workspace('workspace-three')), first);
 
 	first.destroyed = true;
 	second.destroyed = true;
@@ -51,7 +53,7 @@ test("Workbench window registry rejects duplicate or unknown record operations",
 
 	assert.throws(() => registry.add(record(1, "workspace-two")), /already registered/);
 	assert.throws(() => registry.activate(2), /not registered/);
-	assert.throws(() => registry.updateWorkspace(2, "workspace-two"), /not registered/);
+	assert.throws(() => registry.updateWorkspace(2, workspace('workspace-two')), /not registered/);
 });
 
 test("Workbench window registry coalesces concurrent opens and later focuses the live record", async () => {
@@ -66,8 +68,8 @@ test("Workbench window registry coalesces concurrent opens and later focuses the
 		return created;
 	};
 
-	const first = registry.openWorkspace("workspace-one", create);
-	const second = registry.openWorkspace("workspace-one", create);
+	const first = registry.openWorkspace(workspace('workspace-one'), create);
+	const second = registry.openWorkspace(workspace('workspace-one'), create);
 	assert.equal(first, second);
 	assert.equal(createCalls, 1);
 
@@ -76,20 +78,20 @@ test("Workbench window registry coalesces concurrent opens and later focuses the
 	assert.equal(await first, created);
 	assert.equal(await second, created);
 
-	assert.equal(await registry.openWorkspace("workspace-one", async () => assert.fail("live Workspace must not be recreated")), created);
+	assert.equal(await registry.openWorkspace(workspace('workspace-one'), async () => assert.fail("live Workspace must not be recreated")), created);
 	assert.equal(created.focusCount, 1);
 });
 
 test("Workbench window registry releases a failed opening for an explicit retry", async () => {
 	const registry = new WorkbenchWindowRegistry<TestWindowRecord>();
 	let createCalls = 0;
-	await assert.rejects(() => registry.openWorkspace("workspace-one", async () => {
+	await assert.rejects(() => registry.openWorkspace(workspace('workspace-one'), async () => {
 		createCalls += 1;
 		throw new Error("startup failed");
 	}), /startup failed/);
 
 	const created = record(1, "workspace-one");
-	assert.equal(await registry.openWorkspace("workspace-one", async () => {
+	assert.equal(await registry.openWorkspace(workspace('workspace-one'), async () => {
 		createCalls += 1;
 		registry.add(created);
 		return created;
@@ -102,13 +104,13 @@ test("Workbench window registry keeps coalescing after a window registers but be
 	const created = record(1, "workspace-one");
 	let finishStartup!: () => void;
 	const startup = new Promise<void>(resolve => finishStartup = resolve);
-	const first = registry.openWorkspace("workspace-one", async () => {
+	const first = registry.openWorkspace(workspace('workspace-one'), async () => {
 		registry.add(created);
 		await startup;
 		return created;
 	});
 
-	const second = registry.openWorkspace("workspace-one", async () => assert.fail("pending Workspace must not be recreated"));
+	const second = registry.openWorkspace(workspace('workspace-one'), async () => assert.fail("pending Workspace must not be recreated"));
 	assert.equal(second, first);
 	assert.equal(created.focusCount, 0);
 
@@ -120,7 +122,7 @@ test("Workbench window registry keeps coalescing after a window registers but be
 function record(id: number, workspaceId: string): TestWindowRecord {
 	const value: TestWindowRecord = {
 		id,
-		workspaceId,
+		openedWorkspace: workspace(workspaceId),
 		destroyed: false,
 		focusCount: 0,
 		isDestroyed: () => value.destroyed,
@@ -128,3 +130,22 @@ function record(id: number, workspaceId: string): TestWindowRecord {
 	};
 	return value;
 }
+
+function workspace(id: string): IAnyWorkspaceIdentifier {
+	return { id };
+}
+
+test('Workbench window registry reuses the most recently active window on the same folder or workspace file', () => {
+	const registry = new WorkbenchWindowRegistry<TestWindowRecord>();
+	const first = record(1, 'folder-one');
+	first.openedWorkspace = { id: 'folder-one', uri: URI.file('/repo/project') };
+	const second = record(2, 'folder-two');
+	second.openedWorkspace = { id: 'folder-two', uri: URI.file('/repo/project') };
+	registry.add(first);
+	registry.add(second);
+	assert.equal(registry.findWorkspace({ id: 'different-id', uri: URI.file('/repo/project') }), second);
+	registry.activate(first.id);
+	assert.equal(registry.findWorkspace({ id: 'different-id', uri: URI.file('/repo/project') }), first);
+	registry.updateWorkspace(first.id, { id: 'workspace', configPath: URI.file('/repo/project.code-workspace') });
+	assert.equal(registry.findWorkspace({ id: 'new-id', configPath: URI.file('/repo/project.code-workspace') }), first);
+});

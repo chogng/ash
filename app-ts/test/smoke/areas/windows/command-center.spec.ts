@@ -658,6 +658,8 @@ test('Sessions entry sits beside Quick Access and animates its Ash mark on inten
 		await page.getByRole('searchbox', { name: 'Search sessions' }).fill('no matching session title');
 		await expect(page.locator('.ash-sessions-empty')).toHaveText('No matching sessions');
 		await expect(page.locator('#app')).toHaveAttribute('data-color-theme', /ash-(?:light|dark)/u);
+		await page.getByRole('button', { name: 'Return to Workbench' }).click();
+		await expect(page).toHaveURL(/workbench\.html/u);
 	}
 });
 

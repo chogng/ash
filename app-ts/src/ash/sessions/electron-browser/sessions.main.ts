@@ -13,8 +13,8 @@ import type { SessionsProfile } from "../common/sessionsProfile.js";
 import { Workbench } from "../browser/workbench.js";
 import { NativeWindow } from '../../workbench/electron-browser/window.js';
 import { bindWindowControlTheme } from '../../workbench/electron-browser/parts/titlebar/titlebarPart.js';
-import { createReturnToParentWindowApi } from "../../platform/windows/electron-browser/dedicatedWindowApi.js";
-import { registerWindowCloseHandler } from '../../platform/windows/electron-browser/windowClose.js';
+import { RETURN_TO_WORKBENCH_CHANNEL } from '../common/windowNavigation.js';
+import { ElectronLifecycleService } from '../../workbench/services/lifecycle/electron-browser/lifecycleService.js';
 import { showStartupError } from "../../workbench/browser/startupError.js";
 import { invoke, subscribe } from '../../platform/ipc/electron-browser/rendererIpc.js';
 import { WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL } from '../../platform/window/common/window.js';
@@ -34,7 +34,6 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 	profileServices.registerInstance(IFileService, api.localFiles);
 	const { loadUserThemes } = await import('../../workbench/services/themes/browser/workbenchThemeService.js');
 	sessions.add(await loadUserThemes(profileServices, URI.parse(api.userDataHome.toString().replace(/\/$/u, '') + '/themes')));
-	const windowApi = createReturnToParentWindowApi();
 	const setFullscreen = (fullscreen: boolean): void => { container.classList.toggle('ash-sessions-fullscreen', fullscreen); };
 	setFullscreen(await invoke<boolean>(WINDOW_OPERATION_CHANNEL, { kind: 'getFullscreen' }));
 	sessions.add(toDisposable(() => container.classList.remove('ash-sessions-fullscreen')));
@@ -48,12 +47,14 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 	sessions.add(toDisposable(() => container.style.removeProperty('--ash-sessions-inverse-zoom-factor')));
 	const zoomSubscription = subscribe<number>(WINDOW_ZOOM_CHANGED_CHANNEL, () => { void updateZoomFactor().catch(onUnexpectedError); });
 	sessions.add(toDisposable(() => zoomSubscription.dispose()));
+	const lifecycleService = new ElectronLifecycleService({ ownerWindow: window, onError: onUnexpectedError });
 	const workbench = sessions.add(new Workbench({
 		modeId,
 		profile,
 		api,
+		lifecycleService,
 		nativeHostApi: api.nativeHost,
-		returnToWorkbench: () => { void windowApi.returnToParentWindow().catch(onUnexpectedError); },
+		returnToWorkbench: () => { void invoke<void>(RETURN_TO_WORKBENCH_CHANNEL).catch(onUnexpectedError); },
 		configurationApi: api.configuration,
 		keybindingsResourceApi: api.keybindings,
 		createContextMenuService: options => createElectronWorkbenchContextMenuService(options, api.nativeContextMenu),
@@ -64,6 +65,6 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 	sessions.add(addDisposableListener(window, "pagehide", () => {
 		void workbench.shutdown("pageHide").catch(error => console.error("Failed to shut down Sessions Workbench", error)).finally(() => sessions.dispose());
 	}, { once: true }));
-	sessions.add(await registerWindowCloseHandler(() => workbench.shutdown('windowClose')));
+	await lifecycleService.initialize();
 	return sessions;
 }

@@ -31,8 +31,7 @@ import { IAccessibilityService } from "../../platform/accessibility/common/acces
 import { ConsoleLogSink } from "../../platform/log/common/consoleLogSink.js";
 import { ILogService } from "../../platform/log/common/log.js";
 import { LogService } from "../../platform/log/common/logServiceImpl.js";
-import { BrowserLifecycleService } from "../../platform/lifecycle/browser/browserLifecycleService.js";
-import { ILifecycleService, type ShutdownReason } from "../../platform/lifecycle/common/lifecycleService.js";
+import { ILifecycleService, type ShutdownReason } from "../services/lifecycle/common/lifecycle.js";
 import { IDebugAdapterProcessService } from "../../platform/debug/common/debugAdapterProcessService.js";
 import { IExtensionHostApi } from "../../platform/extensionHost/common/extensionHostApi.js";
 import { ISyntaxApi } from "../../platform/syntax/common/syntaxApi.js";
@@ -272,6 +271,7 @@ export interface IStartWorkbenchOptions {
 	readonly browserViewApi?: IBrowserViewApi;
 	readonly container: HTMLElement;
 	readonly workspace: IWorkspace;
+	readonly lifecycleService: ILifecycleService & IDisposable;
 	readonly configurationApi?: IConfigurationApi;
 	readonly keybindingsResourceApi?: IKeybindingsResourceApi;
 	readonly keyboardLayoutProvider?: IKeyboardLayoutProvider;
@@ -293,6 +293,7 @@ export function startWorkbench({
 	webWorkspaceClient,
 	container,
 	workspace,
+	lifecycleService,
 	configurationApi,
 	keybindingsResourceApi,
 	keyboardLayoutProvider,
@@ -311,6 +312,7 @@ export function startWorkbench({
 		api,
 		container,
 		workspace,
+		lifecycleService,
 		configurationApi,
 		keybindingsResourceApi,
 		keyboardLayoutProvider,
@@ -352,6 +354,7 @@ export class Workbench extends Disposable {
 		api: IRendererHost,
 		workbenchRoot: HTMLElement,
 		workspace: IWorkspace,
+		lifecycleService: ILifecycleService & IDisposable,
 		configurationApi: IConfigurationApi | undefined,
 		keybindingsResourceApi: IKeybindingsResourceApi | undefined,
 		keyboardLayoutProvider: IKeyboardLayoutProvider | undefined,
@@ -578,8 +581,7 @@ export class Workbench extends Disposable {
 		const progressService = this._register(new BrowserProgressService(workbenchRoot));
 		services.registerInstance(IProgressService, progressService);
 		services.registerInstance(IClipboardService, new BrowserClipboardService(ownerWindow.navigator.clipboard));
-		const lifecycleService = this._register(new BrowserLifecycleService({ ownerWindow, onError: error => logService.error("lifecycle", "Workbench shutdown failed", error) }));
-		this.lifecycleService = lifecycleService;
+		this.lifecycleService = this._register(lifecycleService);
 		services.registerInstance(ILifecycleService, lifecycleService);
 		services.registerInstance(IWorkbenchModeService, this._register(new WorkbenchModeService({
 			currentModeId: modeId,
@@ -623,8 +625,10 @@ export class Workbench extends Disposable {
 		}));
 		const recentWorkspaces = this._register(new RecentWorkspacesService(storage, workspaceContext, workspaceOpenService));
 		services.registerInstance(IRecentWorkspacesService, recentWorkspaces);
+		this._register(lifecycleService.onBeforeShutdown(event => {
+			event.veto(workingCopyBackupTracker.flush().then(() => false), 'working-copy backup flush');
+		}));
 		this._register(lifecycleService.onWillShutdown(event => {
-			event.join(workingCopyBackupTracker.flush(), "working-copy backup flush");
 			event.join(storage.flush(WillSaveStateReason.SHUTDOWN), "Workbench storage flush");
 		}));
 		const outputService = this._register(new OutputService({ storageService: storage }));

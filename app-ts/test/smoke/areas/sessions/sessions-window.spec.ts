@@ -112,9 +112,9 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 			invoke(channel: string, params?: unknown): Promise<unknown>;
 			on(channel: string, listener: (value: unknown) => void): { dispose(): void };
 		} } }).ash.ipcRenderer;
-		const windows = await ipc.invoke('ash:window:operation', { kind: 'list' }) as readonly { readonly id: number; readonly parentId?: number }[];
-		const child = windows.find(window => window.parentId !== undefined);
-		if (!child) throw new Error('Dedicated window is missing from window list');
+		const windows = await ipc.invoke('ash:window:operation', { kind: 'list' }) as readonly { readonly id: number; readonly title: string }[];
+		const sessions = windows.find(window => window.title.includes('Sessions'));
+		if (!sessions) throw new Error('Sessions window is missing from window list');
 		const zoomChange = new Promise<number>((resolve, reject) => {
 			const subscription = ipc.on('ash:window:zoom-changed', value => {
 				clearTimeout(timeout);
@@ -130,9 +130,9 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 		const changedZoom = await zoomChange;
 		const zoom = await ipc.invoke('ash:window:operation', { kind: 'getZoom' });
 		await ipc.invoke('ash:window:operation', { kind: 'setZoom', level: 0 });
-		return { count: windows.length, childParentId: child.parentId, changedZoom, zoom };
+		return { count: windows.length, changedZoom, zoom };
 	});
-	expect(childWindowOperations).toEqual({ count: 2, childParentId: expect.any(Number), changedZoom: 1, zoom: 1 });
+	expect(childWindowOperations).toEqual({ count: 2, changedZoom: 1, zoom: 1 });
 	await sessionsPage.keyboard.press(process.platform === 'darwin' ? 'Meta+Alt+W' : 'Control+Alt+W');
 	await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getFocusedWindow()?.webContents.getURL().includes('/workbench/workbench.html'))).toBe(true);
 	await openSessions.click();
@@ -237,12 +237,14 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	expect(await activityButtons.locator('svg').evaluateAll(icons => icons.map(icon => icon.getAttribute('data-ash-icon-id')))).toEqual(['chat-2', 'colab', 'device-mobile', 'account']);
 	await expect(activityButtons.nth(1)).toBeDisabled();
 	await expect(activityButtons.nth(2)).toBeDisabled();
-	await activityButtons.nth(3).click();
-	await expect(activityButtons.nth(3)).toHaveAttribute('aria-expanded', 'true');
-	if (process.platform !== 'darwin') {
-		await expect(sessionsPage.getByRole('menuitem', { name: 'Sign in with ChatGPT' })).toBeVisible();
+	if (target.appServerMode === 'required') {
+		await activityButtons.nth(3).click();
+		await expect(activityButtons.nth(3)).toHaveAttribute('aria-expanded', 'true');
+		if (process.platform !== 'darwin') {
+			await expect(sessionsPage.getByRole('menuitem', { name: 'Sign in with ChatGPT' })).toBeVisible();
+		}
+		await sessionsPage.keyboard.press('Escape');
 	}
-	await sessionsPage.keyboard.press('Escape');
 	await expect(sessionsPage.locator("[data-part='sidebar']")).toBeVisible();
 	await expect(sessionsPage.locator("[data-part='sessions']")).toBeVisible();
 	await expect(sessionsPage.locator("[data-part='auxiliarybar']")).toBeVisible();
@@ -287,13 +289,13 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 		const keybindings = await ipc.invoke('ash:keybindings-resource:read') as { readonly bindings: readonly unknown[] };
 		const connection = await ipc.invoke('ash:remote:connection') as { readonly kind: string };
 		let childCannotOpen = false;
-		try { await ipc.invoke('ash:dedicated-window:open'); } catch { childCannotOpen = true; }
+		try { await ipc.invoke('ash:native-host:open-agents-window'); } catch { childCannotOpen = true; }
 		return { configurationRevision: configuration.revision, bindings: keybindings.bindings.length, connectionKind: connection.kind, childCannotOpen };
 	});
 	expect(reloadedIpc).toEqual({ configurationRevision: expect.any(Number), bindings: expect.any(Number), connectionKind: 'local', childCannotOpen: true });
 	await expect(workbenchPage.evaluate(async () => {
 		const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
-		return ipc.invoke('ash:dedicated-window:return-to-parent');
+		return ipc.invoke('ash:sessions:return-to-workbench');
 	})).rejects.toThrow(/Untrusted renderer IPC sender/);
 	const expectedBounds = await application.evaluate(({ BrowserWindow }) => {
 		const child = BrowserWindow.getAllWindows().find(window => window.webContents.getURL().includes('sessions-code.html'));
@@ -346,20 +348,32 @@ test('Sessions details icon follows sidebar visibility', async ({ application, t
 	await closed;
 });
 
-test('closing the parent Workbench closes its dedicated Sessions window', async ({ target }) => {
+test('closing the Workbench keeps Sessions usable and Return to Workbench opens the workspace', async ({ target }) => {
 	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code', 'This scenario requires Code Electron');
 	const userDataDirectory = await mkdtemp(join(tmpdir(), 'ash-dedicated-close-'));
 	try {
-		const { application, driver, close } = await launchElectron({ appServerMode: 'disabled', workbenchMode: 'code', userDataDirectory });
+		const { application, driver, close } = await launchElectron({ appServerMode: target.appServerMode, workbenchMode: 'code', userDataDirectory });
 		try {
 			const parent = driver.workbench.page;
 			const childPromise = application.waitForEvent('window');
 			await parent.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 			const child = await childPromise;
 			await expect(child.locator('.ash-code-sessions-window')).toBeVisible();
-			const childClosed = child.waitForEvent('close');
 			await parent.close();
-			await childClosed;
+			await expect(child.locator('.ash-code-sessions-window')).toBeVisible();
+			const windows = await child.evaluate(async () => {
+				const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
+				const list = await ipc.invoke('ash:window:operation', { kind: 'list' }) as readonly { readonly title: string }[];
+				const configuration = await ipc.invoke('ash:configuration:read') as { readonly revision: number };
+				const connection = await ipc.invoke('ash:remote:connection') as { readonly kind: string };
+				return { titles: list.map(window => window.title), configurationRevision: configuration.revision, connectionKind: connection.kind };
+			});
+			expect(windows).toEqual({ titles: [expect.stringContaining('Sessions')], configurationRevision: expect.any(Number), connectionKind: 'local' });
+			const workbenchPromise = application.waitForEvent('window');
+			await child.getByRole('button', { name: 'Return to Workbench' }).click();
+			const reopened = await workbenchPromise;
+			await expect(reopened.locator('.ash-workbench')).toBeVisible();
+			await expect.poll(() => application.windows().length).toBe(1);
 		} finally {
 			await close();
 		}

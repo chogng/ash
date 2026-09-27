@@ -10,8 +10,12 @@ is canonical for the renderer implementation and extension points.
 | Area | Owner | Current implementation |
 | --- | --- | --- |
 | Window host | `browser/web.main.ts`, `sessions.desktop.main.ts`, and `electron-browser/sessions.main.ts` | start the browser or Electron Sessions renderer and register desktop actions |
-| Dedicated window host | `platform/windows/` | owns the parent-child window lifecycle, parent-only open IPC, child-only return IPC, and child resources; `code/electron-main/app.ts` supplies the Sessions entry and connections |
-| Browser window navigation | `platform/windows/browser/dedicatedWindowNavigation.ts` | resolves and navigates between sibling renderer pages |
+| Desktop window host | `platform/windows/electron-main/windowImpl.ts` and `windowsMainService.ts` | the first owns each Electron window and its resources; the second owns live Workbench and Sessions windows; `code/electron-main/app.ts` supplies Sessions workspace context and connections |
+| Main-process close | `platform/lifecycle/electron-main/lifecycleMainService.ts` | waits for either renderer to finish shutdown before closing its window |
+| Workbench window selection | `platform/windows/electron-main/windowsFinder.ts` and `code/electron-main/workbenchWindowRegistry.ts` | match folder or workspace files to live windows, reuse a matching Workbench, and keep active-window order; Sessions owns the return action and its IPC contract |
+| Browser window navigation | `code/browser/workbench/modes/code.ts` and `sessions/browser/web.main.ts` | navigate to their sibling renderer page; the Sessions profile validates its return path |
+| Browser renderer lifecycle | `workbench/services/lifecycle/browser/lifecycleService.ts` | joins shutdown work when the browser page closes |
+| Electron renderer close | `workbench/services/lifecycle/electron-browser/lifecycleService.ts` | checks shutdown vetoes and joins save work before either Electron window closes |
 | Code profile | `code/common/codeSessionsProfile.ts` | defines the Code window identity and page route used by both browser and Electron entries |
 | Product composition | `browser/workbench.ts` | uses shared window identity and lifecycle services; owns the fixed titlebar/activitybar/sidebar/sessions/auxiliarybar Part set |
 | Layout | `browser/layoutPolicy.ts` | owns Sessions topology, geometry, optional auxiliary visibility, persisted sizes, and Modern/Flat spacing |
@@ -48,7 +52,7 @@ model supplied by Sessions and does not create or select Sessions itself.
    against its own document. On desktop, both renderers read the shared
    `workbench.colorTheme` setting, so changes apply to both windows.
    `WorkbenchWindow` registers the renderer window and its document styles;
-   `BrowserLifecycleService` joins storage flush before disposal.
+   The renderer lifecycle service joins storage flush before disposal.
 4. `SessionsWorkbenchLayout` deserializes the fixed Part grid. Titlebar,
    activitybar, sidebar, and sessions Parts are required; only the auxiliary Part may hide.
    The Activity Bar selects Chat and opens the account menu; Collaboration and Mobile devices
@@ -100,8 +104,11 @@ and dirs. It does not grant access and is not the editor window Workspace from
   visibility, active selection, focus, and navigation history.
 - Each runtime, Part, retained Chat pane, App Server event subscription, and
   interaction service is disposed with the Sessions window.
-- Returning to Workbench closes the Electron Sessions window or navigates the
-  browser page to its sibling Workbench entry.
+- Closing an Electron Workbench window leaves its Sessions window open. The
+  Sessions window retains its own workspace context and connection until it closes.
+- Returning to Workbench closes the Electron Sessions window and focuses or
+  reopens the same workspace, or navigates the browser page to its sibling
+  Workbench entry.
 - Academic currently has no dedicated Sessions renderer or profile.
 
 ## Tests and modification impact

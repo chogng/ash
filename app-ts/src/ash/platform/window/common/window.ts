@@ -26,13 +26,14 @@ export const WINDOW_ZOOM_LEVEL_SETTING = 'window.zoomLevel';
 export type WindowCloseResponse =
 	| { readonly kind: 'ready' }
 	| { readonly kind: 'complete'; readonly token: number }
+	| { readonly kind: 'vetoed'; readonly token: number }
 	| { readonly kind: 'failed'; readonly token: number; readonly message: string };
 
 export function validateWindowCloseResponse(value: unknown): WindowCloseResponse {
 	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Invalid window close response');
 	const response = value as Record<string, unknown>;
 	if (response.kind === 'ready' && Object.keys(response).join(',') === 'kind') return response as WindowCloseResponse;
-	if (response.kind === 'complete' && Object.keys(response).sort().join(',') === 'kind,token' && Number.isSafeInteger(response.token) && (response.token as number) > 0) return response as WindowCloseResponse;
+	if ((response.kind === 'complete' || response.kind === 'vetoed') && Object.keys(response).sort().join(',') === 'kind,token' && Number.isSafeInteger(response.token) && (response.token as number) > 0) return response as WindowCloseResponse;
 	if (response.kind === 'failed' && Object.keys(response).sort().join(',') === 'kind,message,token' && Number.isSafeInteger(response.token) && (response.token as number) > 0 && typeof response.message === 'string' && response.message.length > 0 && response.message.length <= 1_000) return response as WindowCloseResponse;
 	throw new TypeError('Invalid window close response');
 }
@@ -41,7 +42,6 @@ export interface IWorkbenchWindowInfo {
 	readonly id: number;
 	readonly title: string;
 	readonly focused: boolean;
-	readonly parentId?: number;
 }
 
 export type WindowOperation =
