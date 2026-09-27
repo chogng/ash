@@ -126,12 +126,24 @@ impl AppServer {
     }
 
     pub(super) fn config_read(&self) -> Result<Value, RpcError> {
-        let snapshot = self
+        let mut snapshot = self
             .config
             .as_ref()
             .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?
             .read_snapshot()
             .map_err(config_error)?;
+        if let Some(runtime) = &self.provider_runtime {
+            let selected = runtime
+                .preferred_connections(&snapshot.values.connections)
+                .map_err(|_| {
+                    RpcError::new(-32093, AppServerErrorName::ProviderCredentialsUnavailable)
+                })?;
+            snapshot.values.active_connections = selected
+                .iter()
+                .map(|(provider, config)| (provider.clone(), config.connection.clone()))
+                .collect();
+            snapshot.values.providers = selected;
+        }
         result(&config_read_result(
             snapshot,
             self.active_dir_id().as_ref(),
@@ -372,7 +384,9 @@ impl AppServer {
             .apply(ConfigCommandRequest {
                 command_id: params.command_id,
                 expected_revision: ConfigRevision::new(params.expected_revision),
-                command: if provider.custom.is_some() {
+                command: if provider.custom.is_some()
+                    || provider.connection.as_str() == "openai-compatible"
+                {
                     UserConfigCommand::ConfigureConnection {
                         connection: provider.connection.clone(),
                         config: provider,

@@ -1205,7 +1205,7 @@ fn enter_provider_row(app: &mut App, label: &str) -> Option<AppCommand> {
                     active: false,
                     configured: false,
                     ready: false,
-                    provider: "zai".into(),
+                    provider: "glm".into(),
                     display_name: "Z.ai API".into(),
                     api_key_policy: ProviderApiKeyPolicyDto::Required,
                     api_key_configured: false,

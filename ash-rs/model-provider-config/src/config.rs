@@ -103,8 +103,7 @@ impl ModelProviderConfig {
     }
 }
 
-/// The single active connection for a provider. Credentials can remain stored
-/// when this changes, but catalog discovery and requests use only this mode.
+/// Credential and billing mode of one connection.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ProviderAccessMode {

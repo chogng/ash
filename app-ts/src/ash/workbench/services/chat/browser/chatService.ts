@@ -101,10 +101,6 @@ export class ChatService extends Disposable implements IChatService {
 		}));
 	}
 
-	async activateModelConnection(connection: string): Promise<void> {
-		await this.options.modelApi.activateConnection({ commandId: commandId('activate-connection'), connection });
-	}
-
 	async setModelProviderApiKey(connection: string, apiKey: string): Promise<void> {
 		await this.options.modelApi.setProviderApiKey({ connection, apiKey });
 	}

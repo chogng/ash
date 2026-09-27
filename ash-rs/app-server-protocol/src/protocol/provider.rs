@@ -127,13 +127,3 @@ pub enum ProviderProbeResult {
     Models { models: Vec<String> },
     Failed { message: String },
 }
-
-/// Activates an already saved connection without changing its credentials.
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct ProviderActivateParams {
-    pub command_id: ash_protocol::CommandId,
-    #[ts(type = "number")]
-    pub expected_revision: u64,
-    pub connection: String,
-}

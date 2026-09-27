@@ -147,7 +147,6 @@ function unavailableChatService(): IChatService {
 		listModels: () => pending as Promise<readonly ModelCatalogEntry[]>,
 		listModelCatalog: () => pending as Promise<readonly ModelCatalogEntry[]>,
 		listModelProviders: () => pending,
-		activateModelConnection: () => pending as Promise<void>,
 		setModelProviderApiKey: () => pending as Promise<void>,
 		listAdvisorModels: () => pending as Promise<readonly ModelCatalogEntry[]>,
 		refreshModels: () => pending as Promise<readonly ModelCatalogEntry[]>,

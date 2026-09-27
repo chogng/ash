@@ -343,32 +343,32 @@ pub const STATIC_MODEL_CATALOG: &[StaticModelSpec] = &[
         name: "DeepSeek V4 Pro",
     },
     static_model! {
-        provider: "zai",
+        provider: "glm",
         id: "glm-5.3",
         name: "GLM-5.3",
     },
     static_model! {
-        provider: "zai",
+        provider: "glm",
         id: "glm-5.3-flash",
         name: "GLM-5.3 Flash",
     },
     static_model! {
-        provider: "zai",
+        provider: "glm",
         id: "glm-5.3-flashx",
         name: "GLM-5.3 FlashX",
     },
     static_model! {
-        provider: "zai",
+        provider: "glm",
         id: "glm-5.2",
         name: "GLM-5.2",
     },
     static_model! {
-        provider: "zai",
+        provider: "glm",
         id: "glm-5.1",
         name: "GLM-5.1",
     },
     static_model! {
-        provider: "zai",
+        provider: "glm",
         id: "glm-5-turbo",
         name: "GLM-5 Turbo",
     },

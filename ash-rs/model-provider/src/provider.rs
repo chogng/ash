@@ -59,6 +59,7 @@ use ash_secrets::SecretStore;
 use response_debug_context::AuthRecovery;
 use response_debug_context::ResponseDiagnosticSink;
 use response_debug_context::ResponseOperation;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -716,6 +717,94 @@ pub struct ModelProviderRuntime {
 }
 
 impl ModelProviderRuntime {
+    /// Chooses one ready connection per model vendor before an invocation is bound.
+    /// Credential changes affect later bindings; a running invocation keeps its own connection.
+    /// Readiness proves local credentials only; upstream plan eligibility is checked by the call.
+    pub fn preferred_connections(
+        &self,
+        configs: &BTreeMap<ash_protocol::ModelConnectionId, ModelProviderConfig>,
+    ) -> Result<BTreeMap<ProviderId, ModelProviderConfig>, ModelProviderError> {
+        let runtime = self.with_configs(configs.values())?;
+        let api_keys = runtime
+            .credentials
+            .as_ref()
+            .map(ProviderCredentialService::catalog)
+            .transpose()
+            .map_err(|error| ModelProviderError::Credential(error.to_string()))?
+            .unwrap_or_default()
+            .into_iter()
+            .map(|status| (status.connection, status.api_key_configured))
+            .collect::<BTreeMap<_, _>>();
+        let mut selected: BTreeMap<ProviderId, (u8, ModelProviderConfig)> = BTreeMap::new();
+        for connection in runtime.configs.connections() {
+            if connection.id.as_str() == "openai-compatible"
+                && !configs.contains_key(&connection.id)
+            {
+                continue;
+            }
+            let ready = match connection.id.as_str() {
+                "chatgpt-subscription" => match &runtime.chatgpt_oauth {
+                    Some(auth) => auth
+                        .account_id()
+                        .map_err(|error| ModelProviderError::Credential(error.to_string()))?
+                        .is_some(),
+                    None => false,
+                },
+                "kimi-subscription" => match &runtime.kimi_oauth {
+                    Some(auth) => auth
+                        .subscription_ready()
+                        .map_err(|error| ModelProviderError::Credential(error.to_string()))?,
+                    None => false,
+                },
+                "xai-subscription" => match &runtime.supergrok_oauth {
+                    Some(auth) => auth
+                        .subscription_ready()
+                        .map_err(|error| ModelProviderError::Credential(error.to_string()))?,
+                    None => false,
+                },
+                "bigmodel-coding-plan" => match &runtime.bigmodel_oauth {
+                    Some(auth) => auth
+                        .account_id()
+                        .map_err(|error| ModelProviderError::Credential(error.to_string()))?
+                        .is_some(),
+                    None => false,
+                },
+                "zai-coding-plan" => match &runtime.zai_oauth {
+                    Some(auth) => auth
+                        .account_id()
+                        .map_err(|error| ModelProviderError::Credential(error.to_string()))?
+                        .is_some(),
+                    None => false,
+                },
+                _ => {
+                    connection.transport.api_key_policy
+                        != ash_model_provider_config::ApiKeyPolicy::Required
+                        || api_keys.get(&connection.id) == Some(&true)
+                }
+            };
+            if !ready {
+                continue;
+            }
+            let rank = ash_model_provider_config::connection_priority(&connection.id);
+            let provider = connection.provider;
+            if selected
+                .get(&provider)
+                .is_some_and(|(current, _)| *current <= rank)
+            {
+                continue;
+            }
+            let config = configs
+                .get(&connection.id)
+                .cloned()
+                .unwrap_or_else(|| ModelProviderConfig::for_connection(connection.id));
+            selected.insert(provider, (rank, config));
+        }
+        Ok(selected
+            .into_iter()
+            .map(|(provider, (_, config))| (provider, config))
+            .collect())
+    }
+
     /// Creates an immutable runtime for the exact persisted connection definitions.
     pub fn with_configs<'a>(
         &self,

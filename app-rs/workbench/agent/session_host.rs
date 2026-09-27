@@ -505,17 +505,15 @@ impl WorkbenchApplication {
                         ash_protocol::ModelAccess::Unknown => "Connection",
                     };
                     ash_settings::ModelConnectionRow {
-                        connection: entry.connection.clone(),
                         label: format!("{} · {kind}", entry.display_name),
                         status: match (entry.active, entry.ready, entry.configured) {
                             (true, true, _) => "Current · Ready",
                             (true, false, _) => "Current · Not ready",
-                            (false, true, _) => "Use saved connection",
-                            (false, false, true) => "Saved · Not ready",
+                            (false, true, _) => "Ready",
+                            (false, false, true) => "Configured · Not ready",
                             _ => "Not configured",
                         }
                         .into(),
-                        can_activate: !entry.active && (entry.configured || entry.ready),
                     }
                 })
                 .collect(),
@@ -524,31 +522,6 @@ impl WorkbenchApplication {
         self.language_service
             .apply_configuration(&configuration, &self.file_editor_host);
         Ok(())
-    }
-
-    pub(crate) fn activate_model_connection(&mut self, index: usize) -> Result<()> {
-        let connection = self
-            .settings
-            .model_connections()
-            .get(index)
-            .ok_or_else(|| anyhow!("Model connection is no longer available"))?
-            .connection
-            .clone();
-        let client = self
-            .app_server_client
-            .as_mut()
-            .ok_or_else(|| anyhow!("App Server connection is unavailable"))?;
-        let config = client.read_config().map_err(client_error)?;
-        client
-            .activate_provider(
-                ash_app_server_protocol::protocol::provider::ProviderActivateParams {
-                    command_id: next_gui_config_command_id(),
-                    expected_revision: config.revision,
-                    connection,
-                },
-            )
-            .map_err(client_error)?;
-        self.refresh_configuration_from_app_server()
     }
 
     pub(crate) fn save_keybinding(

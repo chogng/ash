@@ -510,16 +510,6 @@ fn codebase_model_config_rebinds_after_provider_changes() {
         }),
     );
     assert_eq!(configured_provider["result"]["revision"], 1);
-    let active = call(
-        &server,
-        &mut connection,
-        100,
-        "provider/activate",
-        serde_json::json!({
-            "commandId":"activate-semantic", "expectedRevision":1, "connection":"openai-compatible"
-        }),
-    );
-    assert_eq!(active["result"]["revision"], 2);
     let configured_models = call(
         &server,
         &mut connection,
@@ -527,7 +517,7 @@ fn codebase_model_config_rebinds_after_provider_changes() {
         "codebase/configure",
         serde_json::json!({
             "commandId": "configure-semantic-models",
-            "expectedRevision": 2,
+            "expectedRevision": 1,
             "models": {
                 "embeddingModel": {
                     "provider": "openai-compatible",
@@ -537,7 +527,7 @@ fn codebase_model_config_rebinds_after_provider_changes() {
             }
         }),
     );
-    assert_eq!(configured_models["result"]["revision"], 3);
+    assert_eq!(configured_models["result"]["revision"], 2);
     server
         .codebase_semantic_service()
         .expect("configured semantic runtime")
@@ -552,7 +542,7 @@ fn codebase_model_config_rebinds_after_provider_changes() {
         "provider/configure",
         serde_json::json!({
             "commandId": "change-semantic-provider",
-            "expectedRevision": 3,
+            "expectedRevision": 2,
             "config": {
                 "provider": "openai-compatible",
                 "connection": "openai-compatible",
@@ -561,7 +551,7 @@ fn codebase_model_config_rebinds_after_provider_changes() {
             }
         }),
     );
-    assert_eq!(changed_provider["result"]["revision"], 4);
+    assert_eq!(changed_provider["result"]["revision"], 3);
     assert!(server.codebase_semantic_service().is_some());
     assert_eq!(provider.embedding_runtime_count.load(Ordering::Relaxed), 2);
     let snapshot = call(
@@ -625,16 +615,6 @@ fn unavailable_rerank_keeps_codebase_model_runtime_inactive() {
             }
         }),
     );
-    let active = call(
-        &server,
-        &mut connection,
-        100,
-        "provider/activate",
-        serde_json::json!({
-            "commandId":"activate-semantic", "expectedRevision":1, "connection":"openai-compatible"
-        }),
-    );
-    assert_eq!(active["result"]["revision"], 2);
     let rejected = call(
         &server,
         &mut connection,
@@ -642,7 +622,7 @@ fn unavailable_rerank_keeps_codebase_model_runtime_inactive() {
         "codebase/configure",
         serde_json::json!({
             "commandId": "configure-semantic-models",
-            "expectedRevision": 2,
+            "expectedRevision": 1,
             "models": {
                 "embeddingModel": {
                     "provider": "openai-compatible",
@@ -655,7 +635,7 @@ fn unavailable_rerank_keeps_codebase_model_runtime_inactive() {
             }
         }),
     );
-    assert_eq!(rejected["result"]["revision"], 3);
+    assert_eq!(rejected["result"]["revision"], 2);
     let snapshot = call(
         &server,
         &mut connection,
@@ -663,7 +643,7 @@ fn unavailable_rerank_keeps_codebase_model_runtime_inactive() {
         "config/read",
         serde_json::json!({}),
     );
-    assert_eq!(snapshot["result"]["revision"], 3);
+    assert_eq!(snapshot["result"]["revision"], 2);
     assert_eq!(
         snapshot["result"]["codebase"]["models"]["rerankModel"]["model"],
         "rerank-v1"

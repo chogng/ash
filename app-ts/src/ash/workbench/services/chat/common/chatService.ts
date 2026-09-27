@@ -364,7 +364,6 @@ export interface IChatService {
 	listModels(): Promise<readonly ModelCatalogEntry[]>;
 	listModelCatalog(): Promise<readonly ModelCatalogEntry[]>;
 	listModelProviders(): Promise<readonly ModelProviderCredentialStatus[]>;
-	activateModelConnection(connection: string): Promise<void>;
 	setModelProviderApiKey(connection: string, apiKey: string): Promise<void>;
 	listAdvisorModels(): Promise<readonly ModelCatalogEntry[]>;
 	refreshModels(): Promise<readonly ModelCatalogEntry[]>;

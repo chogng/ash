@@ -254,7 +254,7 @@ fn coding_plans_use_the_shared_catalog_without_a_second_discovery_list() {
         assert!(runtime.catalog_binding(&config).unwrap().is_none());
         let manager = runtime.models_manager_for_config(&config).unwrap();
         let model = ash_protocol::ModelRef::new(
-            ProviderId::new("zai").unwrap(),
+            ProviderId::new("glm").unwrap(),
             ash_protocol::ModelId::new("glm-5.3").unwrap(),
         );
         assert!(
@@ -337,13 +337,15 @@ fn api_and_coding_plan_connections_have_separate_credentials() {
             .iter()
             .any(|entry| entry.model().model.as_str() == "glm-5.1")
     );
-    let config = ModelProviderConfig::new(ProviderId::new("zai").unwrap());
+    let config =
+        ModelProviderConfig::for_connection(ash_protocol::ModelConnectionId::new("zai").unwrap());
     assert!(
         runtime.catalog_binding(&config).unwrap().is_none(),
         "a stored API key with the default endpoint stays in API mode"
     );
 
-    let mut config = ModelProviderConfig::new(ProviderId::new("zai").unwrap());
+    let mut config =
+        ModelProviderConfig::for_connection(ash_protocol::ModelConnectionId::new("zai").unwrap());
     config.base_url = Some("https://api.z.ai/api/paas/v4".into());
     assert!(
         runtime.catalog_binding(&config).unwrap().is_none(),

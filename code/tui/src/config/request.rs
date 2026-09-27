@@ -35,7 +35,6 @@ impl Command {
             Self::SetMemories(_) => "ash-tui-set-memories",
             Self::SetIssues(_) => "ash-tui-configure-issues",
             Self::SetGit(_) => "ash-tui-configure-git",
-            Self::ActivateConnection { .. } => "ash-tui-activate-connection",
             Self::Connection(_) => "ash-tui-provider-connection",
             Self::Subscription(_, _) => "ash-tui-subscription-account",
             Self::OpenEditor => "ash-tui-read-config",
@@ -72,21 +71,6 @@ where
         Command::SetMemories(edit) => set_memories(client, edit).map(Event::Updated),
         Command::SetIssues(edit) => set_issue_settings(client, edit).map(Event::Updated),
         Command::SetGit(edit) => set_git_settings(client, edit).map(Event::Updated),
-        Command::ActivateConnection {
-            connection,
-            expected_revision,
-        } => {
-            client
-                .activate_provider(
-                    ash_app_server_protocol::protocol::provider::ProviderActivateParams {
-                        command_id: new_command_id("activate-connection"),
-                        expected_revision,
-                        connection,
-                    },
-                )
-                .map_err(|error| error.to_string())?;
-            read_config_choices(client).map(Event::EditorOpened)
-        }
         Command::Connection(request) => {
             let id = request.id.clone();
             let result = execute_connection(client, request);
@@ -353,17 +337,6 @@ fn execute_connection<T: JsonRpcTransport>(
         client
             .set_provider_api_key(ProviderApiKeySetRequest::new(provider, key))
             .map_err(|error| format!("Provider settings saved; API key was not saved: {error}"))?;
-    } else if request.operation == super::provider::Operation::Save {
-        let saved = client.read_config().map_err(|error| error.to_string())?;
-        client
-            .activate_provider(
-                ash_app_server_protocol::protocol::provider::ProviderActivateParams {
-                    command_id: new_command_id("activate-connection"),
-                    expected_revision: saved.revision,
-                    connection,
-                },
-            )
-            .map_err(|error| error.to_string())?;
     }
 
     Ok((

@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
 
-pub(crate) const CURRENT_FILE_SCHEMA_VERSION: i64 = 7;
+pub(crate) const CURRENT_FILE_SCHEMA_VERSION: i64 = 8;
 // Raise this only when the product support window no longer includes the removed versions.
 const MIN_SUPPORTED_FILE_SCHEMA_VERSION: i64 = 1;
 
@@ -75,7 +75,9 @@ pub(crate) fn decode(source: &str) -> Result<DecodedDocument, ConfigError> {
     let version = root.remove("schemaVersion");
     let migrate_subscription =
         !matches!(version.as_ref(), Some(toml::Value::Integer(v)) if *v >= 6);
-    let rewrite_required = match version {
+    let migrate_glm = !matches!(version.as_ref(), Some(toml::Value::Integer(v)) if *v >= 8);
+    let obsolete_selection = root.remove("activeConnections").is_some();
+    let rewrite_required = (match version {
         None => {
             migrate_unversioned(root)?;
             remove_issue_workflow(root);
@@ -105,10 +107,21 @@ pub(crate) fn decode(source: &str) -> Result<DecodedDocument, ConfigError> {
                 "user configuration schemaVersion must be an integer".into(),
             ));
         }
-    };
+    }) || obsolete_selection;
     if rewrite_required {
         migrate_connections(root)?;
-        for key in ["agent", "gui", "tui", "desktop"] {
+        if migrate_glm {
+            migrate_glm_identity(root)?;
+        }
+        for key in [
+            "agent",
+            "gui",
+            "tui",
+            "desktop",
+            "codebase",
+            "toolSearch",
+            "commitMessages",
+        ] {
             if let Some(value) = root.get_mut(key) {
                 migrate_model_references(value);
             }
@@ -125,6 +138,20 @@ pub(crate) fn decode(source: &str) -> Result<DecodedDocument, ConfigError> {
         document,
         rewrite_required,
     })
+}
+
+fn migrate_glm_identity(root: &mut toml::map::Map<String, toml::Value>) -> Result<(), ConfigError> {
+    if let Some(connections) = root
+        .get_mut("connections")
+        .and_then(toml::Value::as_table_mut)
+    {
+        for id in ["bigmodel", "bigmodel-coding-plan", "zai", "zai-coding-plan"] {
+            if let Some(config) = connections.get_mut(id).and_then(toml::Value::as_table_mut) {
+                config.insert("provider".into(), toml::Value::String("glm".into()));
+            }
+        }
+    }
+    Ok(())
 }
 
 pub(crate) fn encode(document: &UserConfigDocument) -> Result<String, ConfigError> {
@@ -147,7 +174,7 @@ fn migrate_connections(root: &mut toml::map::Map<String, toml::Value>) -> Result
     let Some(providers) = root.remove("providers") else {
         return Ok(());
     };
-    if root.contains_key("connections") || root.contains_key("activeConnections") {
+    if root.contains_key("connections") {
         return Err(ConfigError(
             "configuration mixes legacy providers and connections".into(),
         ));
@@ -156,13 +183,6 @@ fn migrate_connections(root: &mut toml::map::Map<String, toml::Value>) -> Result
         .as_table()
         .cloned()
         .ok_or_else(|| ConfigError("providers must be a table".into()))?;
-    let selected = root
-        .get("agent")
-        .and_then(|agent| agent.get("model"))
-        .and_then(|model| model.get("provider"))
-        .and_then(toml::Value::as_str)
-        .map(str::to_owned);
-    let mut candidates: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for (id, value) in &mut connections {
         let connection = ash_protocol::ModelConnectionId::new(id.clone())
             .map_err(|error| ConfigError(error.to_string()))?;
@@ -172,35 +192,8 @@ fn migrate_connections(root: &mut toml::map::Map<String, toml::Value>) -> Result
             .ok_or_else(|| ConfigError("connection must be a table".into()))?;
         config.insert("connection".into(), toml::Value::String(id.clone()));
         config.insert("provider".into(), toml::Value::String(provider.to_string()));
-        candidates
-            .entry(provider.to_string())
-            .or_default()
-            .push(id.clone());
-    }
-    let mut active = toml::map::Map::new();
-    for (provider, ids) in candidates {
-        let chosen = if provider == "zai" {
-            selected
-                .as_ref()
-                .filter(|id| ids.contains(id))
-                .cloned()
-                .or_else(|| (ids.len() == 1).then(|| ids[0].clone()))
-        } else if matches!(provider.as_str(), "openai" | "kimi" | "xai") {
-            // Only the former xAI subscription model identity proves a route. Shared vendor
-            // identities never recorded whether OAuth or the saved API key was active.
-            selected
-                .as_ref()
-                .filter(|id| id.as_str() == "xai-subscription" && ids.contains(id))
-                .cloned()
-        } else {
-            (ids.len() == 1).then(|| ids[0].clone())
-        };
-        if let Some(id) = chosen {
-            active.insert(provider, toml::Value::String(id));
-        }
     }
     root.insert("connections".into(), toml::Value::Table(connections));
-    root.insert("activeConnections".into(), toml::Value::Table(active));
     for key in ["agent", "gui", "tui", "desktop"] {
         if let Some(value) = root.get_mut(key) {
             migrate_model_references(value);

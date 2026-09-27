@@ -27,7 +27,8 @@ impl ProviderConfigRegistry {
         let definitions = crate::builtin_connections()
             .into_iter()
             .filter(|connection| connection.id.as_str() == connection.provider.as_str())
-            .map(|connection| connection.transport);
+            .map(|connection| connection.transport)
+            .chain(std::iter::once(crate::providers::glm_model_definition()));
         Self::from_definitions(definitions)
             .expect("built-in provider definitions must be valid and unique")
     }
@@ -133,6 +134,9 @@ impl ProviderConfigRegistry {
     pub fn connections(&self) -> Vec<crate::ModelConnectionDefinition> {
         let mut connections = crate::builtin_connections();
         for provider in self.providers() {
+            if provider.id.as_str() == "glm" {
+                continue;
+            }
             let id = crate::ModelConnectionId::new(provider.id.as_str())
                 .expect("valid provider identity");
             if !connections.iter().any(|connection| connection.id == id) {

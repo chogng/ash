@@ -369,7 +369,7 @@ fn builtin_provider_api_key_policies_are_explicit() {
             .name,
         "BigModel"
     );
-    assert_eq!(registry.get(&provider_id("zai")).unwrap().name, "Z.AI");
+    assert_eq!(registry.get(&provider_id("glm")).unwrap().name, "GLM");
 
     assert_eq!(
         registry.get(&provider_id("ollama")).unwrap().api_key_policy,
@@ -604,8 +604,8 @@ fn builtin_catalog_includes_current_chat_model_families() {
         ("qwen", "qwen3-coder-next"),
         ("kimi", "kimi-k3"),
         ("deepseek", "deepseek-flash"),
-        ("zai", "glm-5.3"),
-        ("zai", "glm-5.2"),
+        ("glm", "glm-5.3"),
+        ("glm", "glm-5.2"),
         ("minimax", "MiniMax-M3"),
         ("mimo", "mimo-v2.6-pro"),
     ] {
@@ -640,7 +640,7 @@ fn connections_own_endpoints_credentials_and_counting() {
     let connections = builtin_connections();
     let glm = connections
         .iter()
-        .filter(|connection| connection.provider.as_str() == "zai")
+        .filter(|connection| connection.provider.as_str() == "glm")
         .collect::<Vec<_>>();
     assert_eq!(glm.len(), 4);
     let ids = glm
@@ -665,7 +665,7 @@ fn connections_own_endpoints_credentials_and_counting() {
             .unwrap();
         let normalized = registry.normalize(&config).unwrap();
         assert_eq!(normalized.connection, connection.id);
-        assert_eq!(normalized.provider.as_str(), "zai");
+        assert_eq!(normalized.provider.as_str(), "glm");
         assert_eq!(
             normalized
                 .input_token_count

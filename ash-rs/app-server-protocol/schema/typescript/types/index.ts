@@ -731,7 +731,6 @@ export type { ProjectSessionMutationParams } from './ProjectSessionMutationParam
 export type { ProjectStatusDto } from './ProjectStatusDto.js';
 export type { ProjectSummaryDto } from './ProjectSummaryDto.js';
 export type { ProtocolVersion } from './ProtocolVersion.js';
-export type { ProviderActivateParams } from './ProviderActivateParams.js';
 export type { ProviderApiKeyDto } from './ProviderApiKeyDto.js';
 export type { ProviderApiKeyPolicyDto } from './ProviderApiKeyPolicyDto.js';
 export type { ProviderApiKeySetParams } from './ProviderApiKeySetParams.js';

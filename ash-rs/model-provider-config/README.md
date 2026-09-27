@@ -143,9 +143,9 @@ static_model! {
 }
 ```
 
-`connection.rs` 维护 `ModelConnectionDefinition`，包含独立 `ModelConnectionId`、所属厂商、订阅/API 类型和执行声明。端点、协议、认证、计数能力和限制属于接入的 transport 定义。GLM 四个服务 ID 共享 `zai` 厂商的唯一模型目录，凭据仍各自独立。`NormalizedModelProviderConfig::upstream_model` 显式处理上游 ID 差异。
+`connection.rs` 维护 `ModelConnectionDefinition`，包含独立 `ModelConnectionId`、所属厂商、订阅/API 类型和执行声明。端点、协议、认证、计数能力和限制属于接入的 transport 定义。GLM 四个服务 ID 共享 `glm` 厂商的唯一模型目录，凭据仍各自独立。`NormalizedModelProviderConfig::upstream_model` 显式处理上游 ID 差异。
 
-后端 profile 以 `connections` 保存所有接入，以 `activeConnections` 为每个厂商保存一个当前接入。OAuth 登录或密钥保存成功后切换；读取账户和发现目录不会切换。模型列表固定可选，远端目录缺项不能阻止内置模型请求。请求错误不触发模型或接入替换。
+后端 profile 以 `connections` 保存所有接入；每次模型绑定时按就绪凭据选择订阅优先的连接。GLM 的顺序为 BigModel Coding Plan、Z.AI Coding Plan、BigModel API、Z.AI API。模型列表固定可选，远端目录缺项不能阻止内置模型请求。请求错误不触发本次模型或接入替换。
 
 `InputTokenCountTarget::InvocationBase` 会跟随显式 endpoint override，适合 count 与 invocation 同一
 service surface 的 provider。`ProviderDefault` 只在 invocation 也使用 provider 默认 endpoint 时启用；

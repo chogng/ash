@@ -7063,7 +7063,7 @@ fn cancelled_subscription_login_preserves_connection_selection() {
 }
 
 #[test]
-fn glm_account_login_activates_the_selected_coding_plan_connection() {
+fn glm_account_login_does_not_persist_a_connection_choice() {
     struct Driver(&'static str, ash_login::LoginMethod);
     impl InteractiveLoginDriver for Driver {
         fn provider_id(&self) -> &'static str {
@@ -7136,14 +7136,9 @@ fn glm_account_login_activates_the_selected_coding_plan_connection() {
             })
             .unwrap();
         let snapshot = config.read_snapshot().unwrap();
-        assert_eq!(
-            snapshot
-                .values
-                .active_connections
-                .get(&ash_protocol::ProviderId::new("zai").unwrap())
-                .map(|id| id.as_str()),
-            Some(provider)
-        );
+        assert_eq!(snapshot.revision.get(), 0);
+        assert!(snapshot.values.active_connections.is_empty());
+        assert!(snapshot.values.connections.is_empty());
         let notifications = server.drain_notifications(&mut connection);
         assert!(notifications.iter().any(|value| {
             value.contains("\"method\":\"account/login/completed\"")
@@ -7209,7 +7204,7 @@ fn github_account_login_routes_browser_challenge_without_model_provider_configur
 }
 
 #[test]
-fn chatgpt_login_registers_subscription_only_after_it_is_ready() {
+fn chatgpt_login_keeps_connection_selection_out_of_account_state() {
     let profile = tempfile::tempdir().unwrap();
     let config = Arc::new(ConfigStore::open(profile.path().join("config.sqlite3")).unwrap());
     let driver = Arc::new(TestLoginDriver::default());
@@ -7277,12 +7272,9 @@ fn chatgpt_login_registers_subscription_only_after_it_is_ready() {
         })
         .unwrap();
     let snapshot = config.read_snapshot().unwrap();
-    assert_eq!(snapshot.revision.get(), 1);
-    assert_eq!(
-        snapshot.values.active_connections[&ProviderId::new("openai").unwrap()].as_str(),
-        "chatgpt-subscription"
-    );
-    assert!(snapshot.values.model.is_some());
+    assert_eq!(snapshot.revision.get(), 0);
+    assert!(snapshot.values.active_connections.is_empty());
+    assert!(snapshot.values.model.is_none());
 }
 
 #[test]

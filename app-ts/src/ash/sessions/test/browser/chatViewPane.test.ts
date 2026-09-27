@@ -2256,7 +2256,7 @@ test('Chat Settings saves a masked provider key through the model API and refres
 	await commands.executeCommand(OPEN_CHAT_SETTINGS_COMMAND_ID);
 	choose('Manage Model Connections');
 	await waitFor(() => dom.window.document.querySelector('[role="dialog"][aria-label="Model connections"]') !== null);
-	assert.equal(dom.window.document.querySelector('.ash-quick-pick-row-description')?.textContent, 'Current connection · Ready');
+	assert.equal(dom.window.document.querySelector('.ash-quick-pick-row-description')?.textContent, 'API key saved');
 	dom.window.close();
 });
 

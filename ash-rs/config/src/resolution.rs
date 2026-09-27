@@ -59,9 +59,9 @@ impl ConfigProvenance {
                 .as_ref()
                 .map(|_| ConfigValueSource::User),
             providers: document
-                .active_connections
-                .keys()
-                .cloned()
+                .connections
+                .values()
+                .map(|config| config.provider.clone())
                 .map(|id| (id, ConfigValueSource::User))
                 .collect(),
             mcp_servers: document

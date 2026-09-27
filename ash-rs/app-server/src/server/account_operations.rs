@@ -234,70 +234,18 @@ fn usage_error(error: ash_chatgpt::ChatGptUsageError) -> RpcError {
 
 pub(super) struct AppServerLoginEvents {
     updates: Arc<UpdateBroker>,
-    config: Option<Arc<ash_config::ConfigStore>>,
 }
 
 impl AppServerLoginEvents {
-    pub(super) fn new(
-        updates: Arc<UpdateBroker>,
-        config: Option<Arc<ash_config::ConfigStore>>,
-    ) -> Self {
-        Self { updates, config }
-    }
-    fn activate_subscription(&self, id: &str) -> Result<(), String> {
-        if !matches!(
-            id,
-            "chatgpt-subscription"
-                | "kimi-subscription"
-                | "xai-subscription"
-                | "bigmodel-coding-plan"
-                | "zai-coding-plan"
-        ) {
-            return Ok(());
-        }
-        let Some(store) = &self.config else {
-            return Ok(());
-        };
-        let connection =
-            ash_protocol::ModelConnectionId::new(id).map_err(|error| error.to_string())?;
-        let snapshot = store.read_snapshot().map_err(|error| error.to_string())?;
-        let config = snapshot
-            .values
-            .connections
-            .get(&connection)
-            .cloned()
-            .unwrap_or_else(|| {
-                ash_model_provider_config::ModelProviderConfig::for_connection(connection.clone())
-            });
-        store
-            .apply(ash_config::ConfigCommandRequest {
-                command_id: ash_protocol::CommandId::new(format!(
-                    "login-{id}-{}",
-                    snapshot.revision.get()
-                ))
-                .expect("generated command ID"),
-                expected_revision: snapshot.revision,
-                command: ash_config::UserConfigCommand::ConfigureConnection { connection, config },
-            })
-            .map_err(|_| "Failed to activate the signed-in connection".to_owned())?;
-        Ok(())
+    pub(super) fn new(updates: Arc<UpdateBroker>) -> Self {
+        Self { updates }
     }
 }
 
 impl LoginEvents for AppServerLoginEvents {
     fn login_completed(&self, completion: LoginCompletion) {
         let status = match completion.outcome {
-            LoginCompletionOutcome::Succeeded { account } => {
-                match self.activate_subscription(&account.account.provider) {
-                    Ok(()) => AccountLoginCompletionStatusDto::Succeeded,
-                    Err(message) => AccountLoginCompletionStatusDto::Failed {
-                        failure: AccountLoginFailureDto {
-                            code: "ConfigUnavailable".into(),
-                            message,
-                        },
-                    },
-                }
-            }
+            LoginCompletionOutcome::Succeeded { .. } => AccountLoginCompletionStatusDto::Succeeded,
             LoginCompletionOutcome::Failed { failure } => AccountLoginCompletionStatusDto::Failed {
                 failure: AccountLoginFailureDto {
                     code: failure.code,

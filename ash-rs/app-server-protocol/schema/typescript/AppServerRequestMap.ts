@@ -313,7 +313,6 @@ import type { ProjectRootAddParams } from './types/ProjectRootAddParams.js';
 import type { ProjectRootRemoveParams } from './types/ProjectRootRemoveParams.js';
 import type { ProjectRootUpdateParams } from './types/ProjectRootUpdateParams.js';
 import type { ProjectSessionMutationParams } from './types/ProjectSessionMutationParams.js';
-import type { ProviderActivateParams } from './types/ProviderActivateParams.js';
 import type { ProviderApiKeySetParams } from './types/ProviderApiKeySetParams.js';
 import type { ProviderApiKeySetResult } from './types/ProviderApiKeySetResult.js';
 import type { ProviderConfigureParams } from './types/ProviderConfigureParams.js';
@@ -534,7 +533,6 @@ export interface AppServerRequestMap {
   "provider/list": { params: Record<string, never>; response: ProviderListResult };
   "provider/probe": { params: ProviderProbeParams; response: ProviderProbeResult };
   "provider/models/list": { params: ProviderModelsListParams; response: ProviderModelsListResult };
-  "provider/activate": { params: ProviderActivateParams; response: ConfigCommandResult };
   "provider/apiKey/set": { params: ProviderApiKeySetParams; response: ProviderApiKeySetResult };
   "account/read": { params: Record<string, never>; response: AccountReadResult };
   "account/rateLimits/read": { params: AccountRateLimitsReadParams; response: AccountRateLimitsReadResult };
@@ -831,7 +829,6 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "provider/list": { method: "provider/list" },
   "provider/probe": { method: "provider/probe" },
   "provider/models/list": { method: "provider/models/list" },
-  "provider/activate": { method: "provider/activate" },
   "provider/apiKey/set": { method: "provider/apiKey/set" },
   "account/read": { method: "account/read" },
   "account/rateLimits/read": { method: "account/rateLimits/read" },

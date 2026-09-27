@@ -91,7 +91,7 @@ fn provider_rows_use_section_names_and_distinct_connection_actions() {
         active: false,
         configured: false,
         ready: false,
-        provider: "zai".into(),
+        provider: "glm".into(),
         display_name: "Z.ai API".into(),
         api_key_policy: ProviderApiKeyPolicyDto::Required,
         api_key_configured: false,

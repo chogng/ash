@@ -11,7 +11,7 @@ BigModel 和 Z.AI 各有 Coding Plan 与开发者 API 两种接入，共四个�
 | BigModel API | `bigmodel` | BigModel 标准 API 端点 |
 | Z.AI API | `zai` | Z.AI 标准 API 端点 |
 
-ZCode 登录保存在其用户目录的 `~/.zcode/v2/credentials.json`，Ash 每次调用前直接读取当前账号和请求密钥，不复制到 Ash，也不修改 ZCode 文件；若设置了 `ZCODE_DATA_BASE_DIR`，则读取该目录下的 `.zcode/v2/credentials.json`。Ash 自己发起的登录分别保存账户和内部请求凭据。两个开发者 API 连接各自保存用户输入的密钥。同一 GLM 厂商下只启用一个连接。已有的 Z.AI API 密钥不会自动用于 Coding Plan。模型引用统一使用 `zai` 厂商 ID；连接 ID 决定实际使用哪个服务。选择与请求规则见[供应商凭据边界](../model-provider.md#6-供应商凭据边界)。
+ZCode 登录保存在其用户目录的 `~/.zcode/v2/credentials.json`，Ash 每次调用前直接读取当前账号和请求密钥，不复制到 Ash，也不修改 ZCode 文件；若设置了 `ZCODE_DATA_BASE_DIR`，则读取该目录下的 `.zcode/v2/credentials.json`。Ash 自己发起的登录分别保存账户和内部请求凭据。两个开发者 API 连接各自保存用户输入的密钥。模型引用统一使用 `glm` 厂商 ID；四条连接按 BigModel 订阅 > Z.AI 订阅 > BigModel API > Z.AI API 选择已就绪的一条。已有的 Z.AI API 密钥不会自动用于 Coding Plan。选择与请求规则见[供应商凭据边界](../model-provider.md#6-供应商凭据边界)。
 
 自动获取 Ash 内部请求密钥时，只有一个机构或项目就直接使用；有多个时只接受名称恰好为“默认机构”或“默认项目”的唯一条目。无法明确选择时登录失败，不会按列表顺序创建密钥。
 

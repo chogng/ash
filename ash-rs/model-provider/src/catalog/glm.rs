@@ -35,7 +35,7 @@ pub(crate) fn glm_catalog_binding(
     };
     let digest = Sha256::digest(format!("{config:?}:{identity}").as_bytes());
     let scope = CatalogScopeKey::new(
-        ProviderId::new("zai").expect("constant provider ID"),
+        ProviderId::new("glm").expect("constant provider ID"),
         CatalogSourceScopeId::new(format!("glm-coding-plan:{digest:x}"))
             .map_err(|error| ModelProviderError::Unavailable(error.to_string()))?,
     );

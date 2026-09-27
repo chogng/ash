@@ -124,16 +124,6 @@ test('Model provider key entry uses the App Server and shows only saved status',
 	}
 	await expect(page.locator('.ash-chat-status')).not.toHaveText('Loading chat...');
 	const electron = target.kind === 'electron' ? application as ElectronApplication : undefined;
-    if (electron) {
-        await electron.evaluate(({ dialog }) => {
-            dialog.showMessageBox = (async (...args: unknown[]) => {
-                const options = args[args.length - 1] as { message: string };
-                (globalThis as typeof globalThis & { ashConnectionMessages?: string[] }).ashConnectionMessages ??= [];
-                (globalThis as typeof globalThis & { ashConnectionMessages: string[] }).ashConnectionMessages.push(options.message);
-                return { response: 0, checkboxChecked: false };
-            }) as typeof dialog.showMessageBox;
-        });
-    }
 	const chatInput = page.locator('.ash-chat-input-editor .stanza-editor-input');
 	await chatInput.focus();
 	await page.keyboard.insertText('/config');
@@ -166,14 +156,8 @@ test('Model provider key entry uses the App Server and shows only saved status',
 	await reopened.locator('input').press('Enter');
 	const savedProviders = page.getByRole('dialog', { name: 'Model connections' });
 	await savedProviders.locator('input').fill('OpenAI');
-	await expect(savedProviders.getByRole('option', { name: 'Use OpenAI Current connection · Ready', exact: true })).toBeVisible();
-	await savedProviders.locator('input').fill('Use OpenAI');
-	await savedProviders.locator('input').press('Enter');
-	if (electron) {
-        await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashConnectionMessages?: string[] }).ashConnectionMessages ?? [])).toContain('Current connection: OpenAI. Applies to the next turn.');
-    } else {
-        await expect(page.getByText('Current connection: OpenAI. Applies to the next turn.', { exact: true })).toBeVisible();
-    }
+	await expect(savedProviders.getByRole('option', { name: 'Save key for OpenAI API key saved', exact: true })).toBeVisible();
+	await expect(savedProviders.getByRole('option', { name: /Use OpenAI/ })).toHaveCount(0);
 });
 
 

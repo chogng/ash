@@ -1154,7 +1154,6 @@ use crate::protocol::projects::ProjectStatusDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::projects::ProjectSummaryDto;
 #[cfg(any(test, feature = "export"))]
-use crate::protocol::provider::ProviderActivateParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::provider::ProviderApiKeyDto;
 #[cfg(any(test, feature = "export"))]
@@ -2826,11 +2825,6 @@ client_methods! {
         response: ProviderModelsListResult,
         serialization: GlobalSharedRead,
     },
-    ProviderActivate => "provider/activate" {
-        params: ProviderActivateParams,
-        response: ConfigCommandResult,
-        serialization: GlobalExclusive,
-    },
     ProviderApiKeySet => "provider/apiKey/set" {
         params: ProviderApiKeySetParams,
         response: ProviderApiKeySetResult,
@@ -4362,7 +4356,6 @@ typescript_bindings! {
     ProviderApiKeyDto,
     ProviderApiKeyPolicyDto,
     ProviderApiKeySetParams,
-    ProviderActivateParams,
     ProviderApiKeySetResult,
     ProviderProbeParams,
     ProviderProbeResult,

@@ -38,17 +38,14 @@ pub enum SettingsActivation {
     Ignored,
     Changed,
     OpenRemote,
-    ActivateModelConnection(usize),
     Close,
 }
 
 /// Display facts supplied by the backend host; secrets and routing stay outside UI state.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ModelConnectionRow {
-    pub connection: String,
     pub label: String,
     pub status: String,
-    pub can_activate: bool,
 }
 
 pub struct SettingsState {
@@ -95,7 +92,7 @@ impl SettingsState {
             .iter()
             .enumerate()
             .map(|(index, connection)| crate::SettingsKeybindingRow {
-                enabled: connection.can_activate,
+                enabled: false,
                 element: ElementId::scoped(SETTINGS_MODEL_CONNECTION_SCOPE, index as u32 + 1),
                 label: connection.label.clone(),
                 value: connection.status.clone(),
@@ -283,16 +280,12 @@ impl SettingsState {
 
     pub fn activate(&mut self, id: ElementId) -> SettingsActivation {
         if self.section == SettingsPageSection::Models {
-            if let Some(index) = self
+            if self
                 .model_connection_rows()
                 .iter()
-                .position(|row| row.element == id)
+                .any(|row| row.element == id)
             {
-                return if self.model_connections[index].can_activate {
-                    SettingsActivation::ActivateModelConnection(index)
-                } else {
-                    SettingsActivation::Ignored
-                };
+                return SettingsActivation::Ignored;
             }
         }
         match id {

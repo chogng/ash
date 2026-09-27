@@ -5996,22 +5996,6 @@
         {
           "properties": {
             "method": {
-              "const": "provider/activate",
-              "type": "string"
-            },
-            "params": {
-              "$ref": "#/$defs/ProviderActivateParams"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
               "const": "provider/apiKey/set",
               "type": "string"
             },
@@ -10549,22 +10533,6 @@
             },
             "result": {
               "$ref": "#/$defs/ProviderModelsListResult"
-            }
-          },
-          "required": [
-            "method",
-            "result"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "const": "provider/activate",
-              "type": "string"
-            },
-            "result": {
-              "$ref": "#/$defs/ConfigCommandResult"
             }
           },
           "required": [
@@ -28425,28 +28393,6 @@
       "required": [
         "major",
         "revision"
-      ],
-      "type": "object"
-    },
-    "ProviderActivateParams": {
-      "description": "Activates an already saved connection without changing its credentials.",
-      "properties": {
-        "commandId": {
-          "$ref": "#/$defs/CommandId"
-        },
-        "connection": {
-          "type": "string"
-        },
-        "expectedRevision": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "commandId",
-        "expectedRevision",
-        "connection"
       ],
       "type": "object"
     },

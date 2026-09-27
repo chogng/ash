@@ -193,7 +193,7 @@ pub struct AgentConfig {
 
 /// Durable, non-secret user intent for ordinary Ash configuration.
 ///
-/// Saved connections and the single selected connection for each model vendor.
+/// Saved connections and model preferences; credential readiness is resolved at invocation time.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -212,8 +212,6 @@ pub struct UserConfigDocument {
     pub network: NetworkConfig,
     #[serde(default)]
     pub connections: BTreeMap<ModelConnectionId, ModelProviderConfig>,
-    #[serde(default)]
-    pub active_connections: BTreeMap<ProviderId, ModelConnectionId>,
     #[serde(default)]
     pub mcp: McpConfig,
     #[serde(default)]
@@ -282,13 +280,6 @@ impl UserConfigDocument {
             provider
                 .validate_static()
                 .map_err(|error| ConfigError(error.to_string()))?;
-        }
-        for (provider, connection) in &self.active_connections {
-            if ash_model_provider_config::connection_provider(connection) != *provider {
-                return Err(ConfigError(format!(
-                    "connection '{connection}' does not belong to '{provider}'"
-                )));
-            }
         }
         if ![0, 5, 10, 30, 60].contains(&self.issues.auto_refresh_minutes) {
             return Err(ConfigError(
@@ -463,6 +454,20 @@ fn provider_config_error(error: ProviderConfigError) -> ConfigError {
 
 impl From<&UserConfigDocument> for ResolvedConfig {
     fn from(document: &UserConfigDocument) -> Self {
+        let mut providers: BTreeMap<ProviderId, ModelProviderConfig> = BTreeMap::new();
+        for config in document.connections.values() {
+            let rank = ash_model_provider_config::connection_priority(&config.connection);
+            if providers.get(&config.provider).is_some_and(|current| {
+                ash_model_provider_config::connection_priority(&current.connection) <= rank
+            }) {
+                continue;
+            }
+            providers.insert(config.provider.clone(), config.clone());
+        }
+        let active_connections = providers
+            .iter()
+            .map(|(provider, config)| (provider.clone(), config.connection.clone()))
+            .collect();
         Self {
             time_context: document.agent.time_context.clone(),
             features: document.features.clone(),
@@ -477,18 +482,9 @@ impl From<&UserConfigDocument> for ResolvedConfig {
             tool_mode: document.agent.tool_mode,
             grep_backend: document.grep.backend,
             network: document.network.clone(),
-            providers: document
-                .active_connections
-                .iter()
-                .filter_map(|(provider, id)| {
-                    document
-                        .connections
-                        .get(id)
-                        .map(|config| (provider.clone(), config.clone()))
-                })
-                .collect(),
+            providers,
             connections: document.connections.clone(),
-            active_connections: document.active_connections.clone(),
+            active_connections,
             mcp: document.mcp.clone(),
             skills: document.skills.clone(),
             plugins: document.plugins.clone(),

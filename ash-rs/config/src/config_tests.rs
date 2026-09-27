@@ -231,7 +231,7 @@ fn configuring_provider_selects_its_first_api_model_and_preserves_selection_afte
 }
 
 #[test]
-fn saving_connection_does_not_activate_it_or_select_a_model() {
+fn saving_connection_does_not_select_a_model() {
     let path = config_path("subscription-provider");
     let store = ConfigStore::open(&path).unwrap();
     store
@@ -252,7 +252,10 @@ fn saving_connection_does_not_activate_it_or_select_a_model() {
             .contains_key(&connection_id("chatgpt-subscription"))
     );
     assert!(snapshot.values.model.is_none());
-    assert!(snapshot.values.active_connections.is_empty());
+    assert_eq!(
+        snapshot.values.active_connections[&provider_id("openai")],
+        connection_id("chatgpt-subscription")
+    );
     drop(store);
     remove_config_files(&path);
 }
@@ -364,7 +367,7 @@ fn issue_execution_settings_are_removed_once_from_versioned_configuration() {
     ] {
         assert!(!encoded.contains(removed));
     }
-    assert!(encoded.contains("schemaVersion = 7"));
+    assert!(encoded.contains("schemaVersion = 8"));
     assert!(
         !crate::document_migration::decode(&encoded)
             .unwrap()
@@ -406,7 +409,7 @@ fn model_settings_are_migrated_once_from_version_two() {
         document.agent.model_reasoning_effort
     );
     let persisted = std::fs::read_to_string(&config_path).unwrap();
-    assert!(persisted.contains("schemaVersion = 7"));
+    assert!(persisted.contains("schemaVersion = 8"));
     assert!(!persisted.contains("preferredModel"));
     assert!(!persisted.contains("preferredReasoningEffort"));
     drop(store);
@@ -469,7 +472,7 @@ model = "kimi-k2.7-code"
         );
     }
     assert_eq!(
-        decoded.document.active_connections[&provider_id("xai")],
+        ResolvedConfig::from(&decoded.document).active_connections[&provider_id("xai")],
         connection_id("xai-subscription")
     );
     let current = crate::document_migration::encode(&decoded.document).unwrap();
@@ -657,7 +660,7 @@ type = "disabled"
     );
 
     let persisted = persisted_config_document(&database_path);
-    assert!(persisted.contains("schemaVersion = 7"));
+    assert!(persisted.contains("schemaVersion = 8"));
     assert!(persisted.contains("[codebase]"));
     assert!(persisted.contains("[dirPermissions.entries]"));
     assert!(!persisted.contains("semanticCodeIndex"));
@@ -770,11 +773,11 @@ fn versioned_config_keeps_unknown_fields_strict() {
 #[test]
 fn newer_file_schema_is_rejected_explicitly() {
     let database_path = config_path("newer-file-schema");
-    std::fs::write(database_path.with_extension("toml"), "schemaVersion = 8\n").unwrap();
+    std::fs::write(database_path.with_extension("toml"), "schemaVersion = 9\n").unwrap();
 
     let error = ConfigStore::open(&database_path).err().unwrap();
 
-    assert!(error.0.contains("newer than supported version 7"));
+    assert!(error.0.contains("newer than supported version 8"));
     remove_config_files(&database_path);
 }
 
@@ -1185,7 +1188,6 @@ fn legacy_sqlite_document_is_migrated_once_into_toml() {
     let provider = ModelProviderConfig::new(provider_id("openai"));
     let document = UserConfigDocument {
         connections: BTreeMap::from([(connection_id("openai"), provider)]),
-        active_connections: BTreeMap::from([(provider_id("openai"), connection_id("openai"))]),
         ..UserConfigDocument::default()
     };
     let connection = rusqlite::Connection::open(&path).unwrap();
@@ -1464,9 +1466,13 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
             },
         })
         .unwrap();
-    assert_eq!(
-        store.read_snapshot().unwrap().values.active_connections[&provider_id("openai")],
-        connection_id("openai")
+    assert!(
+        !store
+            .read_snapshot()
+            .unwrap()
+            .values
+            .providers
+            .contains_key(&provider_id("openai"))
     );
     remove_config_files(&path);
 }
@@ -1760,7 +1766,7 @@ fn command_rejects_stale_revisions_and_conflicting_retries() {
 }
 
 #[test]
-fn removing_the_current_connection_keeps_its_identity_without_selecting_another() {
+fn removing_a_subscription_leaves_the_saved_api_connection() {
     let path = config_path("remove-provider");
     let store = ConfigStore::open(&path).unwrap();
     configure_provider(&store, 0, "openai");
@@ -1777,10 +1783,10 @@ fn removing_the_current_connection_keeps_its_identity_without_selecting_another(
     let snapshot = ConfigStore::open(&path).unwrap().read_snapshot().unwrap();
     assert_eq!(
         snapshot.values.active_connections[&provider_id("openai")],
-        connection_id("chatgpt-subscription")
+        connection_id("openai")
     );
     assert!(
-        !snapshot
+        snapshot
             .values
             .providers
             .contains_key(&provider_id("openai"))
@@ -2509,7 +2515,7 @@ fn connection_id(id: &str) -> ash_protocol::ModelConnectionId {
 }
 
 #[test]
-fn connections_are_mutually_exclusive_per_vendor_and_survive_restarting() {
+fn saved_connections_survive_restarting() {
     let path = config_path("connection-selection");
     let store = ConfigStore::open(&path).unwrap();
     let mut revision = 0;
@@ -2524,10 +2530,7 @@ fn connections_are_mutually_exclusive_per_vendor_and_survive_restarting() {
         revision = configure_provider(&store, revision, id).revision.get();
         let snapshot = store.read_snapshot().unwrap();
         let vendor = ash_model_provider_config::connection_provider(&connection_id(id));
-        assert_eq!(
-            snapshot.values.providers[&vendor].connection,
-            connection_id(id)
-        );
+        assert_eq!(snapshot.values.providers[&vendor].provider, vendor);
     }
     let snapshot = ConfigStore::open(&path).unwrap().read_snapshot().unwrap();
     assert_eq!(snapshot.values.connections.len(), 6);
@@ -2535,55 +2538,87 @@ fn connections_are_mutually_exclusive_per_vendor_and_survive_restarting() {
         snapshot.values.active_connections,
         BTreeMap::from([
             (provider_id("openai"), connection_id("chatgpt-subscription")),
-            (provider_id("zai"), connection_id("zai-coding-plan")),
+            (provider_id("glm"), connection_id("bigmodel-coding-plan")),
         ])
     );
-    store
-        .apply(ConfigCommandRequest {
-            command_id: CommandId::new("reuse-key").unwrap(),
-            expected_revision: snapshot.revision,
-            command: UserConfigCommand::ActivateConnection {
-                connection: connection_id("bigmodel"),
-            },
-        })
-        .unwrap();
-    let next = store.read_snapshot().unwrap();
-    assert_eq!(
-        next.values.providers[&provider_id("zai")].connection,
-        connection_id("bigmodel")
-    );
-    assert_eq!(
-        next.values.providers[&provider_id("openai")].connection,
-        connection_id("chatgpt-subscription")
-    );
-    assert_eq!(next.values.connections, snapshot.values.connections);
     remove_config_files(&path);
 }
 
 #[test]
-fn migration_preserves_four_glm_connections_and_restores_only_an_explicit_choice() {
+fn migration_preserves_four_glm_connections_without_a_saved_choice() {
     let mut legacy = String::from("schemaVersion = 6\n");
     for id in ["bigmodel", "zai", "bigmodel-coding-plan", "zai-coding-plan"] {
         legacy.push_str(&format!("[providers.{id}]\nprovider = \"{id}\"\nbaseUrl = \"https://{id}.example/v1\"\nmaxOutputTokens = 1234\n"));
     }
     let ambiguous = crate::document_migration::decode(&legacy).unwrap().document;
     assert_eq!(ambiguous.connections.len(), 4);
-    assert!(ambiguous.active_connections.is_empty());
+    assert_eq!(
+        ResolvedConfig::from(&ambiguous).active_connections[&provider_id("glm")],
+        connection_id("bigmodel-coding-plan")
+    );
     legacy.push_str("[agent.model]\nprovider = \"bigmodel-coding-plan\"\nmodel = \"glm-5.1\"\n[[tui.pinnedModels]]\nprovider = \"bigmodel\"\nmodel = \"glm-5.1\"\n");
     legacy.push_str("[[tui.pinnedModels]]\nprovider = \"zai\"\nmodel = \"glm-5.1\"\n");
     let migrated = crate::document_migration::decode(&legacy).unwrap().document;
-    assert_eq!(migrated.agent.model, Some(model_ref("zai", "glm-5.1")));
+    assert_eq!(migrated.agent.model, Some(model_ref("glm", "glm-5.1")));
     assert_eq!(
-        migrated.active_connections[&provider_id("zai")],
+        ResolvedConfig::from(&migrated).active_connections[&provider_id("glm")],
         connection_id("bigmodel-coding-plan")
     );
     assert_eq!(migrated.connections, ambiguous.connections);
-    assert_eq!(migrated.tui["pinnedModels"][0]["provider"], "zai");
+    assert_eq!(migrated.tui["pinnedModels"][0]["provider"], "glm");
     assert_eq!(migrated.tui["pinnedModels"].as_array().unwrap().len(), 1);
     let encoded = crate::document_migration::encode(&migrated).unwrap();
     let reopened = crate::document_migration::decode(&encoded).unwrap();
     assert!(!reopened.rewrite_required);
     assert_eq!(reopened.document, migrated);
+}
+
+#[test]
+fn version_seven_glm_identity_migrates_without_changing_connection_ids() {
+    let source = r#"
+schemaVersion = 7
+[agent.model]
+provider = "zai"
+model = "glm-5.1"
+[connections.bigmodel]
+provider = "zai"
+connection = "bigmodel"
+[connections.zai-coding-plan]
+provider = "zai"
+connection = "zai-coding-plan"
+[activeConnections]
+zai = "zai-coding-plan"
+[[tui.pinnedModels]]
+provider = "zai"
+model = "glm-5.1"
+"#;
+    let migrated = crate::document_migration::decode(source).unwrap();
+    assert!(migrated.rewrite_required);
+    assert_eq!(
+        migrated.document.agent.model,
+        Some(model_ref("glm", "glm-5.1"))
+    );
+    assert_eq!(
+        migrated.document.connections[&connection_id("bigmodel")].provider,
+        provider_id("glm")
+    );
+    assert_eq!(
+        ResolvedConfig::from(&migrated.document).active_connections[&provider_id("glm")],
+        connection_id("zai-coding-plan")
+    );
+    assert_eq!(migrated.document.tui["pinnedModels"][0]["provider"], "glm");
+    let encoded = crate::document_migration::encode(&migrated.document).unwrap();
+    assert!(encoded.contains("schemaVersion = 8"));
+    assert!(!encoded.contains("activeConnections"));
+    let with_old_selection = format!("{encoded}\n[activeConnections]\nglm = \"zai-coding-plan\"\n");
+    let rewritten = crate::document_migration::decode(&with_old_selection).unwrap();
+    assert!(rewritten.rewrite_required);
+    assert_eq!(rewritten.document, migrated.document);
+    assert!(
+        !crate::document_migration::decode(&encoded)
+            .unwrap()
+            .rewrite_required
+    );
 }
 
 #[test]
@@ -2599,7 +2634,7 @@ fn imported_directory_model_migrates_without_rewriting_or_selecting_a_connection
     for _ in 0..2 {
         assert_eq!(
             store.read_document().unwrap().agent.model,
-            Some(model_ref("zai", "glm-5.1"))
+            Some(model_ref("glm", "glm-5.1"))
         );
     }
     assert_eq!(std::fs::read_to_string(&path).unwrap(), source);

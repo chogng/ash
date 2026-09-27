@@ -288,9 +288,8 @@ Desktop 当前实现和 Playwright 后续边界见
 | `memory/policy/read` / `memory/policy/update` | Memory | 按作用域分别管理自动读取与模型保存授权；默认关闭，使用独立 policy revision |
 | `codebase/configure` | config + Directory | 配置可选设备内模型与自动上下文行为；不保存索引数据 |
 | `languageServer/configure` / `languageServer/remove` | config | revision-safe 修改或恢复 language-server mode/path preference |
-| `provider/configure` / `provider/remove` | config | 按 connection ID 保存或移除配置。内置接入保存配置不隐式启用；移除当前接入后保持选择并标记未就绪。自定义接入保留原有产品语义。 |
-| `provider/apiKey/set` / `provider/list` | model connection | 按 connection ID 保存独立凭据，成功后由后端启用；列表返回所属厂商、接入类型、configured、active 和 ready，不返回密钥。 |
-| `provider/activate` | config | 使用 commandId、expectedRevision 和 connection 启用已保存接入；每个厂商只生效一个，其他厂商不受影响。 |
+| `provider/configure` / `provider/remove` | config | 按 connection ID 保存或移除配置；后续请求按已就绪凭据重新选择连接。 |
+| `provider/apiKey/set` / `provider/list` | model connection | 按 connection ID 保存独立凭据；列表返回所属厂商、接入类型、configured、active 和 ready，不返回密钥。`active` 表示当前自动选中的连接。 |
 | `provider/probe` | model provider | 使用未保存的 `config` 和可选临时 `apiKey`；填写 `model` 时发起一次最小生成请求，省略时获取模型 ID 列表。返回 `passed`、`models` 或 `failed`；不保存配置和密钥，不重试其他路径。成功不证明完整上下文容量；协议 revision 31。 |
 | `provider/models/list` | model observations | 按 connection 刷新观察目录，返回 models、empty 或 failed。缓存隔离接入、账户和配置；不改写内置目录、模型选择或当前接入。 |
 | `mcp/server/upsert` / `mcp/server/remove` / `mcp/server/enablement/set` | config | 修改 standalone MCP desired config |
@@ -758,7 +757,7 @@ App Server 在创建 Turn 时读取执行配置，并把实际 model、approval 
 
 `model/list` 参数为 `{}`，桌面端、Rust 桌面端和 TUI 使用同一份静态目录。模型身份始终为厂商＋模型，条目包含名称、规格和能力，不携带认证方式或执行适配器。
 
-接入定义、凭据和当前选择由后端分别管理。GLM 的模型厂商为 `zai`，四个服务 ID 是独立接入。登录或保存密钥成功后启用新接入，旧凭据保留；读取账户、刷新 token 和刷新目录不会改变选择。登出或移除当前接入不会启用其他凭据。
+接入定义和凭据由后端分别管理。GLM 的模型厂商为 `glm`，四个服务 ID 是独立接入。每轮调用前从已就绪连接中选择，订阅优先于 API；GLM 按 BigModel 订阅、Z.AI 订阅、BigModel API、Z.AI API 排序。凭据变化只影响后续调用。
 
 每轮开始保存模型、当前接入和参数。远端目录缺项不阻止内置模型请求；认证、权限、限流和模型拒绝均直接返回，不更换模型或接入。已开始轮次及其顾问调用保留原配置，新轮次读取最新选择。
 
@@ -915,7 +914,7 @@ TOML 编辑共享同一 Config revision/generation 和 `config/changed` 通知�
 
 ### Coding Plan 连接规范
 
-BigModel 与 Z.AI 的四条连接使用精确 ID 隔离配置、凭据、模型引用和请求地址。Coding Plan 登录走 Account RPC；开发者 API 密钥走 Provider RPC：
+BigModel 与 Z.AI 的四条连接使用精确 ID 隔离配置、凭据和请求地址，模型引用统一使用 `glm`。Coding Plan 登录走 Account RPC；开发者 API 密钥走 Provider RPC：
 
 | 连接 | Provider ID | 默认或连接地址 | 退出登录 |
 | --- | --- | --- | --- |
@@ -926,7 +925,7 @@ BigModel 与 Z.AI 的四条连接使用精确 ID 隔离配置、凭据、模型�
 
 四种地址对应 [ZCode 官方连接说明](https://zcode.z.ai/cn/docs/configuration)中的 Coding Plan 与通用 API 端点。
 
-Coding Plan 首次连接使用 `account/login/start` 浏览器授权，登录完成后自动启用；后端取得并保存内部请求凭据，用户无需输入 Key。四条接入互斥且凭据独立。五种订阅登出均使用各自的 `account/logout`，当前选择保持未就绪，不切换其他接入。
+Coding Plan 首次连接使用 `account/login/start` 浏览器授权，后端取得并保存内部请求凭据，用户无需输入 Key。四条接入凭据独立，并按上述优先级自动选用已就绪的一条。五种订阅登出均使用各自的 `account/logout`。
 
 `execPolicy/rule/upsert` 接收完整 typed rule：selector 支持 action digest/kind、trusted source、
 tokenized command prefix、structured network target、capability scope 和显式 `all`；effect 支持

@@ -71,6 +71,7 @@ pub use ash_protocol::ModelConnectionId;
 pub use connection::ModelConnectionDefinition;
 pub use connection::ModelConnectionRuntime;
 pub use connection::builtin_connections;
+pub use connection::connection_priority;
 pub use connection::connection_provider;
 
 pub use connection::legacy_model_providers;

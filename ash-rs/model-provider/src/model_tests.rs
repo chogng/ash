@@ -1564,7 +1564,7 @@ fn provider_measurement_capability_is_model_specific() {
     let zai_model = runtime
         .build_model(
             &provider_config("zai"),
-            &model_ref("zai", "unlisted-glm-model"),
+            &model_ref("glm", "unlisted-glm-model"),
         )
         .unwrap();
 
@@ -1634,7 +1634,7 @@ fn zai_runtime_exposes_the_documented_remote_tokenizer() {
     ));
     let runtime = ModelProviderRuntime::builtin_with_client(transport.clone());
     let model = runtime
-        .build_model(&provider_config("zai"), &model_ref("zai", "glm-5.1"))
+        .build_model(&provider_config("zai"), &model_ref("glm", "glm-5.1"))
         .unwrap();
 
     assert_eq!(
@@ -1698,7 +1698,7 @@ fn both_coding_plan_runtimes_measure_through_their_own_endpoints() {
         );
         let config = provider_config_with_endpoint(provider, base_url);
         let model = runtime
-            .build_model(&config, &model_ref("zai", "glm-5.1"))
+            .build_model(&config, &model_ref("glm", "glm-5.1"))
             .unwrap();
 
         assert_eq!(

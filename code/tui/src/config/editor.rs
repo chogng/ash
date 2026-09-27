@@ -51,10 +51,6 @@ pub(crate) enum ConfigSelectionAction {
     SetIssues(super::IssueConfigEdit),
     AdjustIssueRefresh(super::IssueConfigEdit),
     OpenProvider(super::provider::Settings),
-    ActivateConnection {
-        connection: String,
-        expected_revision: u64,
-    },
     Connection(super::provider::Request),
     OpenSubscription(super::SubscriptionProvider),
     Subscription(super::SubscriptionCommand),
@@ -516,7 +512,6 @@ impl ConfigEditor {
                 | ConfigSelectionAction::OpenProviderApiKey { .. }
                 | ConfigSelectionAction::OpenProvider(_)
                 | ConfigSelectionAction::Connection(_)
-                | ConfigSelectionAction::ActivateConnection { .. }
                 | ConfigSelectionAction::OpenSubscription(_)
                 | ConfigSelectionAction::Subscription(_) => ConfigEditorOutcome::Consumed,
                 ConfigSelectionAction::SetLanguage(edit) => language_outcome(edit, adjustment),
@@ -765,9 +760,6 @@ fn config_revision(choices: &ConfigChoices) -> u64 {
         .values()
         .find_map(|action| match action {
             ConfigSelectionAction::OpenProvider(settings) => Some(settings.revision),
-            ConfigSelectionAction::ActivateConnection {
-                expected_revision, ..
-            } => Some(*expected_revision),
             ConfigSelectionAction::SetIssues(edit)
             | ConfigSelectionAction::AdjustIssueRefresh(edit) => Some(edit.expected_revision),
             _ => None,
@@ -1450,13 +1442,6 @@ fn provider_items(
             );
             let item = ListSelectionItem::new(label).with_id(id);
             subscriptions.push(connection_status(item, provider, language));
-            add_activation(
-                &mut subscriptions,
-                provider,
-                config.revision,
-                language,
-                actions,
-            );
         }
         let api_name = match provider.connection.as_str() {
             "openai" => "OpenAI",
@@ -1471,7 +1456,6 @@ fn provider_items(
                 provider,
                 language,
             ));
-            add_activation(&mut api_items, provider, config.revision, language, actions);
         }
     }
     let id = ListSelectionItemId::new("new-custom-provider");
@@ -1510,33 +1494,6 @@ fn connection_status(
         ))
     } else {
         item
-    }
-}
-
-fn add_activation(
-    items: &mut Vec<ListSelectionItem>,
-    connection: &ProviderCatalogEntryDto,
-    revision: u64,
-    language: Language,
-    actions: &mut BTreeMap<ListSelectionItemId, ConfigSelectionAction>,
-) {
-    if connection.configured && !connection.active {
-        let id = ListSelectionItemId::new(format!("activate-{}", connection.connection));
-        actions.insert(
-            id.clone(),
-            ConfigSelectionAction::ActivateConnection {
-                connection: connection.connection.clone(),
-                expected_revision: revision,
-            },
-        );
-        items.push(
-            ListSelectionItem::new(format!(
-                "{} · {}",
-                nls::text(language, Message::ActivateConnection),
-                connection.display_name
-            ))
-            .with_id(id),
-        );
     }
 }
 

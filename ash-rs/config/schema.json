@@ -1363,15 +1363,8 @@
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Durable, non-secret user intent for ordinary Ash configuration.\n\nSaved connections and the single selected connection for each model vendor.",
+  "description": "Durable, non-secret user intent for ordinary Ash configuration.\n\nSaved connections and model preferences; credential readiness is resolved at invocation time.",
   "properties": {
-    "activeConnections": {
-      "additionalProperties": {
-        "$ref": "#/$defs/ModelConnectionId"
-      },
-      "default": {},
-      "type": "object"
-    },
     "agent": {
       "$ref": "#/$defs/AgentConfig",
       "default": {
@@ -1492,7 +1485,7 @@
       }
     },
     "schemaVersion": {
-      "const": 7,
+      "const": 8,
       "type": "integer"
     },
     "skills": {

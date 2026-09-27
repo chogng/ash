@@ -266,14 +266,6 @@ impl WorkbenchApplication {
             return false;
         }
         match self.settings.activate(id) {
-            ash_settings::SettingsActivation::ActivateModelConnection(index) => {
-                if let Err(error) = self.activate_model_connection(index) {
-                    self.settings.set_model_connection_error(error.to_string());
-                }
-                self.rebuild_presentation();
-                self.request_redraw();
-                true
-            }
             ash_settings::SettingsActivation::Ignored => false,
             ash_settings::SettingsActivation::Changed => {
                 if self.settings.section() != ash_settings::SettingsPageSection::Remote

@@ -321,11 +321,11 @@ ash-app-server → ash-login → ash-kimi → Kimi device OAuth / SecretStore
 ash-model-provider → KimiAdapter → ash-api OpenAI Chat Completions → Kimi Coding API
 ```
 
-`kimi/kimi-k2.7-code` 与 `kimi/kimi-k2.6` 都来自唯一静态目录。接入由 profile 中 Kimi 的当前选择确定；Kimi Code 的上游模型 ID 由内置精确映射提供。登录状态和目录刷新不改变接入，调用失败也不切换到其他密钥。
+`kimi/kimi-k2.7-code` 与 `kimi/kimi-k2.6` 都来自唯一静态目录。Kimi Code 已就绪时优先使用订阅连接；上游模型 ID 由内置精确映射提供。调用失败不会在同一请求中切换到其他密钥。
 
 Ash Code 将 xAI 订阅入口显示为 Super Grok，将开发者 API 入口显示为 xAI。前者使用设备授权和固定的 Grok 订阅代理，后者使用 xAI API key 与 Platform 端点；两者保留 `xai` 供应商 ID，但凭据和请求目标不互换。
 
-BigModel Coding Plan、Z.AI Coding Plan、BigModel API、Z.AI API 分别使用 `bigmodel-coding-plan`、`zai-coding-plan`、`bigmodel`、`zai` 连接 ID。两个订阅优先只读使用 ZCode 个人版 Coding Plan 的账号与请求密钥；没有对应账号时，通过 Ash 浏览器登录取得内部请求凭据。它们连接 `https://open.bigmodel.cn/api/coding/paas/v4` 与 `https://api.z.ai/api/coding/paas/v4`；API 连接使用各自手填的开发者密钥与标准端点。每次请求使用同一次读取的账号和密钥，账号在模型绑定后变化则拒绝请求。Ash 登录的订阅可在 Ash 退出；复用 ZCode 的账号须在 ZCode 退出。登录就绪不能证明上游套餐权限。完整的入口与名称对照见[订阅入口与 API 入口](login.md#订阅入口与-api-入口)。
+BigModel Coding Plan、Z.AI Coding Plan、BigModel API、Z.AI API 分别使用 `bigmodel-coding-plan`、`zai-coding-plan`、`bigmodel`、`zai` 连接 ID，共享 `glm` 模型身份。已就绪连接按上述顺序选择。两个订阅优先只读使用 ZCode 个人版 Coding Plan 的账号与请求密钥；没有对应账号时，通过 Ash 浏览器登录取得内部请求凭据。它们连接 `https://open.bigmodel.cn/api/coding/paas/v4` 与 `https://api.z.ai/api/coding/paas/v4`；API 连接使用各自手填的开发者密钥与标准端点。每次请求使用同一次读取的账号和密钥，账号在模型绑定后变化则拒绝请求。Ash 登录的订阅可在 Ash 退出；复用 ZCode 的账号须在 ZCode 退出。登录就绪不能证明上游套餐权限。完整的入口与名称对照见[订阅入口与 API 入口](login.md#订阅入口与-api-入口)。
 
 401 recovery 也按身份所有者处理：direct-provider credential 可由其 provider runtime 做一次受限 refresh/rebuild；Kimi 与 ChatGPT token 分别由 `ash-kimi`、`ash-chatgpt` 在调用前按 expiry margin 刷新。`ash-client` 不读取 secrets，也不自行刷新或重试认证。
 

@@ -28,18 +28,31 @@ pub fn connection_provider(connection: &ModelConnectionId) -> ProviderId {
         "chatgpt-subscription" => "openai",
         "kimi-subscription" => "kimi",
         "xai-subscription" => "xai",
-        "bigmodel" | "bigmodel-coding-plan" | "zai-coding-plan" => "zai",
+        "bigmodel" | "bigmodel-coding-plan" | "zai" | "zai-coding-plan" => "glm",
         id => id,
     };
     ProviderId::new(provider).expect("connection identity is non-empty")
 }
 
+/// Lower ranks win among ready connections for the same model vendor.
+pub fn connection_priority(connection: &ModelConnectionId) -> u8 {
+    match connection.as_str() {
+        "bigmodel-coding-plan" => 0,
+        "zai-coding-plan" => 1,
+        "bigmodel" => 2,
+        "zai" => 3,
+        "chatgpt-subscription" | "kimi-subscription" | "xai-subscription" => 0,
+        _ => 1,
+    }
+}
+
 /// One-time migration of former model identities. Connection and billing identities stay intact.
 pub fn legacy_model_providers() -> std::collections::BTreeMap<ProviderId, ProviderId> {
     [
-        ("bigmodel", "zai"),
-        ("bigmodel-coding-plan", "zai"),
-        ("zai-coding-plan", "zai"),
+        ("bigmodel", "glm"),
+        ("bigmodel-coding-plan", "glm"),
+        ("zai", "glm"),
+        ("zai-coding-plan", "glm"),
         ("xai-subscription", "xai"),
     ]
     .into_iter()

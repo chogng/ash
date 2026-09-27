@@ -15,7 +15,7 @@
 模型供应商配置只描述“允许怎样配置”，并以确定性方式校验和归一化；它不读取凭据、不访问网络，
 也不执行模型请求。
 
-内置模型固定登记，接入独立配置，每个厂商只生效一个接入。`ModelRef` 表示厂商＋模型，`ModelConnectionId` 表示接入。GLM 全部使用 `zai` 厂商；`bigmodel`、`zai` 和两个 Coding Plan 服务 ID 是四个独立接入，凭据与端点各自保留。配置文件以 `connections` 保存接入，以 `activeConnections` 保存各厂商的唯一选择。切换规则见[登录与账户系统](login.md#1-结论)。
+内置模型固定登记，接入独立配置，每次调用为每个厂商选择一条已就绪连接。`ModelRef` 表示厂商＋模型，`ModelConnectionId` 表示接入。GLM 全部使用 `glm` 模型厂商；`bigmodel`、`zai` 和两个 Coding Plan 服务 ID 是四个独立接入，凭据与端点各自保留。配置文件以 `connections` 保存接入；实际选择由运行时根据凭据状态决定。规则见[登录与账户系统](login.md#1-结论)。
 
 | 读者首先会问 | 直接答案 | 深入阅读 |
 | --- | --- | --- |
@@ -235,7 +235,7 @@ definition/runtime 显式声明。
 
 `model/list` 返回固定内置目录，不接受视图分支。远端目录由 `models-manager` 管理，作为接入范围内的观察和自定义接入发现能力，不作为内置模型调用许可。没有远端记录的内置模型仍能发请求，服务返回的认证、权限或模型错误直接交给调用方。
 
-配置文件版本 7 将旧 `providers` 转为独立 `connections` 和 `activeConnections`。能准确判断的选择会保留；GLM 优先采用旧默认模型明确指向的接入，多个接入有歧义时保留全部配置并要求用户选择。配置内的旧 GLM 模型引用统一为 `zai`，合并重复收藏；凭据键仍按原服务 ID 独立保存。
+配置文件版本 7 将旧 `providers` 转为独立 `connections`。版本 8 将旧 GLM 模型引用统一为 `glm`，合并重复收藏，并删除旧的 `activeConnections` 字段；四条连接和凭据键仍按原服务 ID 独立保存。
 
 ## 8. 依赖方向
 
@@ -289,4 +289,4 @@ ash-model-provider-config → Core/App Server
 5. Secret、transport、retry、SSE、telemetry 和动态 catalog 永不进入本 crate。
 6. Provider-specific option 必须 typed，禁止任意 JSON escape hatch。
 
-旧配置在升级时迁移为 `connections` 和 `activeConnections`；可继续会话中的模型与角色引用迁移为统一厂商身份，已完成调用的服务和计费记录保持原样。目录配置和 Agent 定义只取得读取权限时，在导入会话前转换旧模型身份，不改写目录文件，也不借旧服务名选择接入。
+旧配置在升级时迁移为 `connections`，旧的 `activeConnections` 被移除；可继续会话中的模型与角色引用迁移为统一厂商身份，已完成调用的服务和计费记录保持原样。目录配置和 Agent 定义只取得读取权限时，在导入会话前转换旧模型身份，不改写目录文件，也不借旧服务名选择接入。

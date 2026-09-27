@@ -557,12 +557,7 @@ fn saving_unchanged_connection_with_no_model_still_configures_provider() {
                 serde_json::json!({"revision":8,"generation":2,"disposition":"updated"}),
             ),
             response(3, serde_json::to_value(&current).unwrap()),
-            response(
-                4,
-                serde_json::json!({"revision":9,"generation":3,"disposition":"updated"}),
-            ),
-            response(5, serde_json::to_value(&current).unwrap()),
-            response(6, serde_json::json!({"providers":[]})),
+            response(4, serde_json::json!({"providers":[]})),
         ]),
     });
     let result = super::execute(
@@ -587,8 +582,6 @@ fn saving_unchanged_connection_with_no_model_still_configures_provider() {
         [
             "config/read",
             "provider/configure",
-            "config/read",
-            "provider/activate",
             "config/read",
             "provider/list"
         ]

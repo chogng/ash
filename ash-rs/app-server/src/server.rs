@@ -978,7 +978,6 @@ impl AppServer {
             login
                 .install_events(Arc::new(account_operations::AppServerLoginEvents::new(
                     Arc::clone(&self.updates),
-                    self.config.clone(),
                 )))
                 .expect("login event sink updated during composition");
         }
@@ -991,7 +990,6 @@ impl AppServer {
         login
             .install_events(Arc::new(account_operations::AppServerLoginEvents::new(
                 Arc::clone(&self.updates),
-                self.config.clone(),
             )))
             .expect("a newly composed login service accepts its App Server event sink");
         self.login = Some(login);
@@ -2278,7 +2276,6 @@ impl AppServer {
             Some(ClientMethod::PluginRevokeGrant) => self.plugin_revoke_grant(&request.params),
             Some(ClientMethod::PluginUninstall) => self.plugin_uninstall(&request.params),
             Some(ClientMethod::ModelList) => self.model_list(&request.params),
-            Some(ClientMethod::ProviderActivate) => self.provider_activate(request.params.clone()),
             Some(ClientMethod::ProviderModelsList) => self.provider_models_list(&request.params),
             Some(ClientMethod::ProviderProbe) => {
                 self.provider_probe(std::mem::take(&mut request.params))

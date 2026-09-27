@@ -145,7 +145,7 @@ impl<'a> SettingsSectionPane<'a> {
             SettingsPageSection::Models => self.paint_header(
                 scene,
                 "Model connections",
-                "Choose one saved connection per provider. Changes apply to the next turn.",
+                "Sign in or save a key. Ready connections are chosen automatically for each model.",
             ),
         }
     }

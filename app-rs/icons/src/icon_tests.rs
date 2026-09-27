@@ -16,7 +16,10 @@ fn catalog_resolves_generated_icon_ids() {
     assert_eq!(icon_by_id("file-text"), Some(icons::FILE_TEXT));
     assert_eq!(icon_by_id("git-branch"), Some(icons::GIT_BRANCH));
     assert_eq!(icon_by_id("debug-alt"), Some(icons::DEBUG_ALT));
-    assert_eq!(icon_by_id("split-horizontal"), Some(icons::SPLIT_HORIZONTAL));
+    assert_eq!(
+        icon_by_id("split-horizontal"),
+        Some(icons::SPLIT_HORIZONTAL)
+    );
     assert_eq!(icon_by_id("new-folder"), Some(icons::NEW_FOLDER));
     assert_eq!(icon_by_id("refresh"), Some(icons::REFRESH));
     assert_eq!(icon_by_id("split-vertical"), Some(icons::SPLIT_VERTICAL));

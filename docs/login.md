@@ -49,15 +49,15 @@ reauthentication-required 状态；它不把不同 Provider 的 credential 协�
 
 当前实现是 provider-neutral control plane：`InteractiveLoginDriver` 声明自己的 stable provider ID，接收 service-owned `LoginId`，返回 browser/device-code 挑战或立即连接成功，以及脱敏账户摘要。App Server 已暴露 `account/read`、`account/login/start`、`account/login/cancel`、带 provider 参数的 `account/logout`，并主动发布 `account/login/completed` 与 `account/updated`；`account/read` 返回 `accounts[]`，所以 ChatGPT、Kimi、xAI 和 GitHub 可以同时登录。
 
-每个厂商在后端 profile 中只保存一个当前接入。订阅登录成功或 API 密钥保存成功后，后端自动启用该接入；其他接入的凭据保留。读取账户和刷新远端目录都不改变选择。登录失败、取消或配置写入失败保留原选择。当前接入登出或被移除后保持未就绪，用户可直接启用其他已保存接入。
+每个厂商可保存多条独立连接和凭据。每轮模型调用前，后端从已就绪连接中自动选择订阅，其次选择 API。登录、登出或保存密钥后，下一轮按当前凭据重新选择；执行中的调用保持原连接。
 
-GLM 的 `bigmodel`、`zai`、`bigmodel-coding-plan`、`zai-coding-plan` 是同一 `zai` 厂商下的四个接入 ID，四选一；不同厂商分别选择。两个 Coding Plan 分别产生独立的 `ash-login` 账户。
+GLM 的 `bigmodel`、`zai`、`bigmodel-coding-plan`、`zai-coding-plan` 是同一 `glm` 模型厂商下的四个接入 ID，顺序为 BigModel 订阅 > Z.AI 订阅 > BigModel API > Z.AI API。两个 Coding Plan 分别产生独立的 `ash-login` 账户。
 
 本地默认组合安装 ChatGPT、Kimi、Super Grok、BigModel 和 Z.AI 五个订阅登录适配器；发行配置中的公开 GitHub App Client ID 和授权服务地址另启用 GitHub 账户适配器。ChatGPT、Kimi、Super Grok 使用各自的设备授权流程；两个 GLM Coding Plan 优先读取 ZCode 账号，否则使用浏览器授权。GitHub 使用系统浏览器授权、PKCE 和本机回调；Cloudflare Worker 持有 GitHub App Client Secret 并交换或刷新 token，本机将凭据保存到 profile SecretStore。ChatGPT 使用 Codex 兼容的本地登录存储；GLM 的 ZCode 凭据只读使用；其余 Ash 登录凭据保存在 profile SecretStore。适配器只向控制面提供脱敏账户信息。
 
 所有客户端通过 `model/list` 读取同一固定内置目录。模型条目只表达厂商、模型及规格，不携带认证方式或执行适配器；登录、保存密钥、切换和登出都不改变目录条目。远端列表缺少内置模型仍可发起请求，实际错误直接返回，不改用其他模型或接入。
 
-`provider/list` 返回每个接入的厂商、订阅/API 类型、配置状态、就绪状态和是否生效；`provider/activate` 按接入 ID 启用已保存接入。`provider/models/list` 是按接入定位的独立观察接口，不决定内置模型能否选择。发现缓存按接入和账户身份隔离，API 接入还包括有效配置身份；缓存中不保存密钥或 token。
+`provider/list` 返回每个接入的厂商、订阅/API 类型、配置状态、就绪状态和当前是否被选中。`provider/models/list` 是按接入定位的独立观察接口，不决定内置模型能否选择。发现缓存按接入和账户身份隔离，API 接入还包括有效配置身份；缓存中不保存密钥或 token。
 
 主模型每轮开始固定模型、接入和有效参数；正在执行的一轮不跟随后续设置切换。OAuth token 按原有生命周期刷新；固定账户失效或变化会返回认证错误。
 

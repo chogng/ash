@@ -9,7 +9,7 @@ export class AppServerCodebaseService implements ICodebaseService {
 
 	async configureProvider(config: CodebaseProviderConfiguration, expectedRevision: number): Promise<CodebaseConfigurationCommandResult> {
 		const saved = await this.api.configureProvider({ commandId: commandId("provider"), expectedRevision, config: providerConfigurationDto(config) });
-		return projectCommandResult(await this.api.activateProvider({ commandId: commandId("activate-provider"), expectedRevision: saved.revision, connection: config.provider }));
+		return projectCommandResult(saved);
 	}
 
 	async configure(models: CodebaseModels | undefined, automaticContext: CodebaseAutomaticContext, expectedRevision: number): Promise<CodebaseConfigurationCommandResult> {

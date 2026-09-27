@@ -49,6 +49,18 @@ pub(crate) fn subscription_definition(id: &str) -> Option<ProviderDefinition> {
     }
 }
 
+pub(crate) fn glm_model_definition() -> ProviderDefinition {
+    let mut definition = configured_provider(
+        "glm",
+        "GLM",
+        ProviderAdapter::Zai,
+        ApiProfile::OpenAiChatCompletions,
+    )
+    .with_native_streaming();
+    crate::model_catalog::attach_static_models(std::slice::from_mut(&mut definition));
+    definition
+}
+
 pub(super) fn default_provider(
     id: &str,
     name: &str,

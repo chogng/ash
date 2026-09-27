@@ -1072,13 +1072,6 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         )
     }
 
-    pub fn activate_provider(
-        &mut self,
-        params: ash_app_server_protocol::protocol::provider::ProviderActivateParams,
-    ) -> Result<ash_app_server_protocol::protocol::config::ConfigCommandResult, ClientError> {
-        self.call(ClientMethod::ProviderActivate, params)
-    }
-
     pub fn list_provider_models(
         &mut self,
         provider: String,

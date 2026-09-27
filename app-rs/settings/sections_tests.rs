@@ -135,20 +135,16 @@ fn keybindings_section_composes_scroll_view_with_translated_visible_rows() {
 }
 
 #[test]
-fn model_connections_expose_current_state_and_keyboard_activation() {
+fn model_connections_expose_read_only_status() {
     let mut settings = crate::SettingsState::default();
     settings.set_model_connections(vec![
         crate::ModelConnectionRow {
-            connection: "zai".into(),
             label: "Z.AI API".into(),
             status: "Current · Ready".into(),
-            can_activate: false,
         },
         crate::ModelConnectionRow {
-            connection: "bigmodel".into(),
             label: "BigModel API".into(),
             status: "Saved".into(),
-            can_activate: true,
         },
     ]);
     let rows = settings.model_connection_rows();
@@ -175,7 +171,6 @@ fn model_connections_expose_current_state_and_keyboard_activation() {
     assert_eq!(current.action(), zui::ui::NodeAction::None);
     assert!(current.label().contains("Current · Ready"));
     let saved = frame.interaction().node(rows[1].element).unwrap();
-    assert_eq!(saved.action(), zui::ui::NodeAction::Activate);
-    assert_eq!(saved.focus_behavior(), zui::ui::FocusBehavior::TabStop);
-    assert!(saved.label().contains("Use BigModel API"));
+    assert_eq!(saved.action(), zui::ui::NodeAction::None);
+    assert!(saved.label().contains("Saved"));
 }

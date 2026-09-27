@@ -38,11 +38,6 @@ pub(crate) fn apply_command(
                         .ok_or_else(|| ConfigError("connection order exhausted".into()))?,
                 };
             }
-            if matches!(command, UserConfigCommand::ConfigureConnection { .. }) {
-                document
-                    .active_connections
-                    .insert(config.provider.clone(), connection.clone());
-            }
             if document.agent.model.is_none()
                 && matches!(command, UserConfigCommand::ConfigureConnection { .. })
             {
@@ -53,16 +48,7 @@ pub(crate) fn apply_command(
             }
             document.connections.insert(connection.clone(), config);
         }
-        UserConfigCommand::ActivateConnection { connection } => {
-            let config = document.connections.get(connection).ok_or_else(|| {
-                ConfigError(format!("connection '{connection}' is not configured"))
-            })?;
-            document
-                .active_connections
-                .insert(config.provider.clone(), connection.clone());
-        }
         UserConfigCommand::RemoveConnection { connection } => {
-            // Keep the selected identity: removal must not activate another saved credential.
             document.connections.remove(connection);
         }
         UserConfigCommand::UpsertMcpServer { server } => {

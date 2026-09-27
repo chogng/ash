@@ -555,21 +555,11 @@ fn chatgpt_model_catalog_is_shared_by_login_picker_and_disk_cache() {
     let account = call("account/read", serde_json::json!({}));
     assert_eq!(account["accounts"][0]["status"], "ready");
     let config = call("config/read", serde_json::json!({}));
-    assert_eq!(config["activeConnections"]["openai"], "openai");
-    assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 0);
-    let activated = call(
-        "provider/activate",
-        serde_json::json!({
-            "commandId":"activate-chatgpt", "expectedRevision":config["revision"],
-            "connection":"chatgpt-subscription"
-        }),
-    );
-    assert!(activated.get("error").is_none(), "{activated}");
-    let config = call("config/read", serde_json::json!({}));
     assert_eq!(
         config["activeConnections"]["openai"],
         "chatgpt-subscription"
     );
+    assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 0);
     assert!(config["connections"]["openai"].is_object());
     let remote = call(
         "provider/models/list",
@@ -587,19 +577,21 @@ fn chatgpt_model_catalog_is_shared_by_login_picker_and_disk_cache() {
         serde_json::json!({"provider":"chatgpt-subscription"}),
     );
     assert!(disconnected.get("error").is_none(), "{disconnected}");
+    let config = call("config/read", serde_json::json!({}));
+    assert_eq!(config["activeConnections"]["openai"], "openai");
     let routes = call("provider/list", serde_json::json!({}));
     let routes = routes["providers"].as_array().unwrap();
     let subscription = routes
         .iter()
         .find(|route| route["connection"] == "chatgpt-subscription")
         .unwrap();
-    assert_eq!(subscription["active"], true);
+    assert_eq!(subscription["active"], false);
     assert_eq!(subscription["ready"], false);
     let api = routes
         .iter()
         .find(|route| route["connection"] == "openai")
         .unwrap();
-    assert_eq!(api["active"], false);
+    assert_eq!(api["active"], true);
     assert_eq!(api["apiKeyConfigured"], true);
     assert_eq!(call("model/list", serde_json::json!({})), initial);
     let cache = std::fs::read_to_string(profile.path().join("cache/models/openai.json")).unwrap();
@@ -690,13 +682,14 @@ fn kimi_discovered_catalog_tracks_the_active_connection_and_persists_by_vendor()
             .any(|entry| entry.model.provider == provider)
     );
     secrets.delete(&oauth_key).unwrap();
-    assert!(
+    assert_eq!(
         service
             .current_access(&ModelRef::new(
                 provider.clone(),
                 ModelId::new("kimi-k3").unwrap()
             ))
-            .is_err()
+            .unwrap(),
+        ModelAccess::ApiKey
     );
     assert_eq!(service.list().unwrap(), subscribed);
     assert_eq!(
@@ -1983,7 +1976,17 @@ fn configured_model_context_enables_core_managed_compaction() {
         })
         .unwrap();
     let provider_configs = ProviderConfigRegistry::builtin();
-    let catalog_provider = Arc::new(ModelProviderRuntime::new(provider_configs.clone()));
+    let secrets = Arc::new(MemorySecretStore::default());
+    ash_model_provider::ProviderCredentialService::new(provider_configs.clone(), secrets.clone())
+        .set_api_key(
+            &ash_protocol::ModelConnectionId::new("openai").unwrap(),
+            b"test-key".to_vec(),
+        )
+        .unwrap();
+    let catalog_provider = Arc::new(ModelProviderRuntime::with_secrets(
+        provider_configs.clone(),
+        secrets,
+    ));
     let service = ConfigBackedModelService {
         config,
         dir_config: None,
@@ -2466,14 +2469,14 @@ fn built_in_catalog_excludes_configured_custom_models() {
     assert_eq!(
         models
             .iter()
-            .filter(|entry| entry.model.provider.as_str() == "zai"
+            .filter(|entry| entry.model.provider.as_str() == "glm"
                 && entry.model.model.as_str() == "glm-5.1")
             .count(),
         1
     );
     assert!(!models.iter().any(|entry| matches!(
         entry.model.provider.as_str(),
-        "bigmodel" | "bigmodel-coding-plan" | "zai-coding-plan"
+        "bigmodel" | "bigmodel-coding-plan" | "zai" | "zai-coding-plan"
     )));
     let openai = models
         .iter()
@@ -3121,29 +3124,29 @@ fn glm_connections_use_distinct_endpoints_keys_and_billing_without_changing_the_
     };
     let catalog = service.list().unwrap();
     let model = ModelRef::new(
-        ProviderId::new("zai").unwrap(),
+        ProviderId::new("glm").unwrap(),
         ModelId::new("glm-5.1").unwrap(),
     );
     let mut previous: Option<Arc<dyn ModelService>> = None;
     let routes = [
-        (
-            "bigmodel",
-            "https://open.bigmodel.cn/api/paas/v4/chat/completions",
-            ModelBillingScope::PublicApi,
-        ),
         (
             "zai",
             "https://api.z.ai/api/paas/v4/chat/completions",
             ModelBillingScope::PublicApi,
         ),
         (
-            "bigmodel-coding-plan",
-            "https://open.bigmodel.cn/api/coding/paas/v4/chat/completions",
-            ModelBillingScope::SubscriptionPlan,
+            "bigmodel",
+            "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+            ModelBillingScope::PublicApi,
         ),
         (
             "zai-coding-plan",
             "https://api.z.ai/api/coding/paas/v4/chat/completions",
+            ModelBillingScope::SubscriptionPlan,
+        ),
+        (
+            "bigmodel-coding-plan",
+            "https://open.bigmodel.cn/api/coding/paas/v4/chat/completions",
             ModelBillingScope::SubscriptionPlan,
         ),
     ];

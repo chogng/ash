@@ -2354,9 +2354,15 @@ impl ConfigBackedModelService {
     }
 
     fn resolve_config(&self, user: &ResolvedConfigSnapshot) -> Result<ResolvedConfig, CoreError> {
-        resolve_local_config(user, self.dir_config.as_deref()).map_err(|error| {
-            CoreError::Model(format!("failed to resolve directory config: {}", error.0))
-        })
+        let mut config =
+            resolve_local_config(user, self.dir_config.as_deref()).map_err(|error| {
+                CoreError::Model(format!("failed to resolve directory config: {}", error.0))
+            })?;
+        config.providers = self
+            .catalog_provider
+            .preferred_connections(&config.connections)
+            .map_err(|error| CoreError::Model(error.to_string()))?;
+        Ok(config)
     }
 }
 

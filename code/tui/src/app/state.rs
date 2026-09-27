@@ -719,18 +719,6 @@ impl App {
                 | ConfigSelectionAction::AdjustIssueRefresh(edit),
             ) => Some(ConfigCommand::SetIssues(edit).into()),
 
-            crate::config::ConfigEditorOutcome::Action(
-                ConfigSelectionAction::ActivateConnection {
-                    connection,
-                    expected_revision,
-                },
-            ) => Some(
-                ConfigCommand::ActivateConnection {
-                    connection,
-                    expected_revision,
-                }
-                .into(),
-            ),
             crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::Connection(
                 request,
             )) => Some(ConfigCommand::Connection(request).into()),

@@ -67,10 +67,6 @@ pub(crate) enum Command {
     SetMemories(ConfigEdit),
     SetIssues(IssueConfigEdit),
     SetGit(ConfigEdit),
-    ActivateConnection {
-        connection: String,
-        expected_revision: u64,
-    },
     Connection(provider::Request),
     Subscription(SubscriptionProvider, SubscriptionCommand),
     OpenEditor,

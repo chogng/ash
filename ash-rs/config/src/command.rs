@@ -68,9 +68,6 @@ pub enum UserConfigCommand {
         connection: ModelConnectionId,
         config: ModelProviderConfig,
     },
-    ActivateConnection {
-        connection: ModelConnectionId,
-    },
     RemoveConnection {
         connection: ModelConnectionId,
     },
