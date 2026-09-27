@@ -6,13 +6,17 @@ use std::sync::atomic::Ordering;
 use std::sync::mpsc;
 use std::thread;
 use std::thread::JoinHandle;
+use windows::Win32::Media::Speech::ISpMMSysAudio;
 use windows::Win32::Media::Speech::ISpRecoResult;
 use windows::Win32::Media::Speech::ISpRecognizer;
 use windows::Win32::Media::Speech::SPEI_RECOGNITION;
+use windows::Win32::Media::Speech::SPEI_RESERVED1;
+use windows::Win32::Media::Speech::SPEI_RESERVED2;
 use windows::Win32::Media::Speech::SPEVENT;
 use windows::Win32::Media::Speech::SPLO_STATIC;
 use windows::Win32::Media::Speech::SPRS_ACTIVE;
-use windows::Win32::Media::Speech::SpSharedRecognizer;
+use windows::Win32::Media::Speech::SpInprocRecognizer;
+use windows::Win32::Media::Speech::SpMMAudioIn;
 use windows::Win32::System::Com::CLSCTX_ALL;
 use windows::Win32::System::Com::COINIT_APARTMENTTHREADED;
 use windows::Win32::System::Com::CoCreateInstance;
@@ -68,20 +72,34 @@ unsafe fn recognize(
     on_event: &impl Fn(DictationEvent),
     ready: mpsc::SyncSender<Result<(), String>>,
     started: &mut bool,
-) -> windows::core::Result<()> {
-    let setup = (|| -> windows::core::Result<_> {
+) -> Result<(), String> {
+    let setup = (|| -> Result<_, String> {
         let recognizer: ISpRecognizer =
-            unsafe { CoCreateInstance(&SpSharedRecognizer, None, CLSCTX_ALL) }?;
-        let context = unsafe { recognizer.CreateRecoContext() }?;
-        unsafe { context.SetNotifyWin32Event() }?;
-        let recognition_mask = 1_u64 << SPEI_RECOGNITION.0;
-        unsafe { context.SetInterest(recognition_mask, recognition_mask) }?;
-        let grammar = unsafe { context.CreateGrammar(1) }?;
-        unsafe { grammar.LoadDictation(PCWSTR::null(), SPLO_STATIC) }?;
-        unsafe { grammar.SetDictationState(SPRS_ACTIVE) }?;
-        Ok((recognizer, context, grammar))
+            unsafe { CoCreateInstance(&SpInprocRecognizer, None, CLSCTX_ALL) }
+                .map_err(|error| format!("create recognizer: {error}"))?;
+        let audio: ISpMMSysAudio = unsafe { CoCreateInstance(&SpMMAudioIn, None, CLSCTX_ALL) }
+            .map_err(|error| format!("open default microphone: {error}"))?;
+        unsafe { recognizer.SetInput(&audio, true) }
+            .map_err(|error| format!("connect microphone to recognizer: {error}"))?;
+        let context = unsafe { recognizer.CreateRecoContext() }
+            .map_err(|error| format!("create recognition context: {error}"))?;
+        unsafe { context.SetNotifyWin32Event() }
+            .map_err(|error| format!("register recognition event: {error}"))?;
+        // SAPI's SPFEI macro includes both reserved flag bits in every event-interest mask.
+        let recognition_mask = (1_u64 << SPEI_RECOGNITION.0)
+            | (1_u64 << SPEI_RESERVED1.0)
+            | (1_u64 << SPEI_RESERVED2.0);
+        unsafe { context.SetInterest(recognition_mask, recognition_mask) }
+            .map_err(|error| format!("register recognition interest: {error}"))?;
+        let grammar = unsafe { context.CreateGrammar(1) }
+            .map_err(|error| format!("create dictation grammar: {error}"))?;
+        unsafe { grammar.LoadDictation(PCWSTR::null(), SPLO_STATIC) }
+            .map_err(|error| format!("load dictation grammar: {error}"))?;
+        unsafe { grammar.SetDictationState(SPRS_ACTIVE) }
+            .map_err(|error| format!("activate dictation grammar: {error}"))?;
+        Ok((recognizer, audio, context, grammar))
     })();
-    let (_recognizer, context, grammar) = match setup {
+    let (_recognizer, _audio, context, grammar) = match setup {
         Ok(value) => value,
         Err(error) => {
             let _ = ready.send(Err(error.to_string()));
@@ -91,11 +109,13 @@ unsafe fn recognize(
     let _ = ready.send(Ok(()));
     *started = true;
     while !stop.load(Ordering::Acquire) {
-        unsafe { context.WaitForNotifyEvent(200) }?;
+        unsafe { context.WaitForNotifyEvent(200) }
+            .map_err(|error| format!("wait for recognition: {error}"))?;
         loop {
             let mut event = SPEVENT::default();
             let mut fetched = 0;
-            unsafe { context.GetEvents(1, &mut event, &mut fetched) }?;
+            unsafe { context.GetEvents(1, &mut event, &mut fetched) }
+                .map_err(|error| format!("read recognition event: {error}"))?;
             if fetched == 0 {
                 break;
             }
@@ -106,7 +126,8 @@ unsafe fn recognize(
             let mut text = PWSTR::null();
             let recognized = unsafe { result.GetText(0, u32::MAX, true, &mut text, None) };
             if recognized.is_ok() && !text.is_null() {
-                let value = unsafe { text.to_string() }?;
+                let value = unsafe { text.to_string() }
+                    .map_err(|error| format!("decode recognized text: {error}"))?;
                 if !value.trim().is_empty() {
                     on_event(DictationEvent::Transcript(value));
                 }

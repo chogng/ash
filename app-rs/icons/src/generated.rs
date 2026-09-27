@@ -23,6 +23,7 @@ mod artwork {
     pub(crate) const ARROW_LEFT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/arrow-left.svg"));
     pub(crate) const ARROW_RIGHT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/arrow-right.svg"));
     pub(crate) const ARROW_UP: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/arrow-up.svg"));
+    pub(crate) const ASK: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/ask.svg"));
     pub(crate) const BELL: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/bell.svg"));
     pub(crate) const BELL_DOT: IconDefinition = IconDefinition::multicolor(include_bytes!("../../../resources/icons/bell-dot.svg"));
     pub(crate) const BELL_SLASH: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/bell-slash.svg"));
@@ -164,6 +165,7 @@ mod artwork {
     pub(crate) const PREVIEW: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/preview.svg"));
     pub(crate) const PROJECTS: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/projects.svg"));
     pub(crate) const PROJECTS_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/projects-filled.svg"));
+    pub(crate) const QUESTION: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/question.svg"));
     pub(crate) const QUOTE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/quote.svg"));
     pub(crate) const QUOTES: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/quotes.svg"));
     pub(crate) const REFRESH: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/refresh.svg"));
@@ -236,6 +238,7 @@ pub mod icons {
     pub const ARROW_LEFT: Icon = Icon::new(IconId::new("arrow-left"), artwork::ARROW_LEFT);
     pub const ARROW_RIGHT: Icon = Icon::new(IconId::new("arrow-right"), artwork::ARROW_RIGHT);
     pub const ARROW_UP: Icon = Icon::new(IconId::new("arrow-up"), artwork::ARROW_UP);
+    pub const ASK: Icon = Icon::new(IconId::new("ask"), artwork::ASK);
     pub const BELL: Icon = Icon::new(IconId::new("bell"), artwork::BELL);
     pub const BELL_DOT: Icon = Icon::new(IconId::new("bell-dot"), artwork::BELL_DOT);
     pub const BELL_SLASH: Icon = Icon::new(IconId::new("bell-slash"), artwork::BELL_SLASH);
@@ -377,6 +380,7 @@ pub mod icons {
     pub const PREVIEW: Icon = Icon::new(IconId::new("preview"), artwork::PREVIEW);
     pub const PROJECTS: Icon = Icon::new(IconId::new("projects"), artwork::PROJECTS);
     pub const PROJECTS_FILLED: Icon = Icon::new(IconId::new("projects-filled"), artwork::PROJECTS_FILLED);
+    pub const QUESTION: Icon = Icon::new(IconId::new("question"), artwork::QUESTION);
     pub const QUOTE: Icon = Icon::new(IconId::new("quote"), artwork::QUOTE);
     pub const QUOTES: Icon = Icon::new(IconId::new("quotes"), artwork::QUOTES);
     pub const REFRESH: Icon = Icon::new(IconId::new("refresh"), artwork::REFRESH);
@@ -445,6 +449,7 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::ARROW_LEFT,
     icons::ARROW_RIGHT,
     icons::ARROW_UP,
+    icons::ASK,
     icons::BELL,
     icons::BELL_DOT,
     icons::BELL_SLASH,
@@ -586,6 +591,7 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::PREVIEW,
     icons::PROJECTS,
     icons::PROJECTS_FILLED,
+    icons::QUESTION,
     icons::QUOTE,
     icons::QUOTES,
     icons::REFRESH,
@@ -655,6 +661,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("arrow-left", artwork::ARROW_LEFT),
     ("arrow-right", artwork::ARROW_RIGHT),
     ("arrow-up", artwork::ARROW_UP),
+    ("ask", artwork::ASK),
     ("bell", artwork::BELL),
     ("bell-dot", artwork::BELL_DOT),
     ("bell-slash", artwork::BELL_SLASH),
@@ -796,6 +803,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("preview", artwork::PREVIEW),
     ("projects", artwork::PROJECTS),
     ("projects-filled", artwork::PROJECTS_FILLED),
+    ("question", artwork::QUESTION),
     ("quote", artwork::QUOTE),
     ("quotes", artwork::QUOTES),
     ("refresh", artwork::REFRESH),

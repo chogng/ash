@@ -77,6 +77,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "ask",
+      "file": "ask.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "bell",
       "file": "bell.svg",
       "rendering": "symbolic"
@@ -779,6 +784,11 @@
     {
       "id": "projects-filled",
       "file": "projects-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "question",
+      "file": "question.svg",
       "rendering": "symbolic"
     },
     {
