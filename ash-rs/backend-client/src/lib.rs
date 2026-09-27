@@ -2,7 +2,7 @@
 
 pub mod chatgpt;
 mod client;
-pub mod xai;
+pub mod supergrok;
 
 pub use client::RequestError;
 

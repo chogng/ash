@@ -3,7 +3,7 @@
 - Own Super Grok account sign-in, cancellation, and credential lifecycle.
 - Store and refresh Ash-owned credentials through the secret store.
 - Resolve authenticated Grok CLI proxy requests per invocation.
-- Delegate model catalog, account, settings, and subscription usage HTTP requests and decoding to `backend-client::xai`; retain account checks and one-time authentication recovery.
+- Delegate model catalog, account, settings, and subscription usage HTTP requests and decoding to `backend-client::supergrok`; retain account checks and one-time authentication recovery.
 - Read an existing Grok CLI OAuth access token without touching Grok's rotating refresh token or credential file. When Ash signs in, keep its credentials separate from API keys and Grok CLI storage.
 
 xAI developer API keys and their model catalog belong to `model-provider`; this crate represents the Super Grok login account used for subscription access.

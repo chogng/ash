@@ -35,5 +35,5 @@ impl<'a> Client<'a> {
 }
 
 #[cfg(test)]
-#[path = "xai/client_tests.rs"]
+#[path = "supergrok/client_tests.rs"]
 mod tests;

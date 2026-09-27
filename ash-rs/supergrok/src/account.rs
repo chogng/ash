@@ -5,11 +5,11 @@ use crate::SuperGrokOAuth;
 use crate::TokenCredential;
 use ash_async_utils::CancellationToken;
 use backend_client::RequestError;
-use backend_client::xai::Account;
-use backend_client::xai::Billing;
-use backend_client::xai::CatalogModel;
-use backend_client::xai::Client;
-use backend_client::xai::Settings;
+use backend_client::supergrok::Account;
+use backend_client::supergrok::Billing;
+use backend_client::supergrok::CatalogModel;
+use backend_client::supergrok::Client;
+use backend_client::supergrok::Settings;
 use std::sync::atomic::Ordering;
 
 /// Account-scoped subscription data; no credentials or model-generation state.

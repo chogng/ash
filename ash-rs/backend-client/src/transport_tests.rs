@@ -86,7 +86,7 @@ fn existing_reset_credits_can_be_queried_and_used_without_replaying_failures() {
 }
 
 #[test]
-fn xai_business_queries_use_the_credits_contract_over_https() {
+fn supergrok_business_queries_use_the_credits_contract_over_https() {
     let mut replies = [
         response(200, r#"{"userId":"user-1","subscriptionTier":"SuperGrokPro"}"#),
         response(200, r#"{"allow_access":true}"#),
@@ -105,7 +105,7 @@ fn xai_business_queries_use_the_credits_contract_over_https() {
             http_client::HttpHeader::new("x-userid", "user-1"),
         ],
     );
-    let client = crate::xai::Client::new(&transport, &target).unwrap();
+    let client = crate::supergrok::Client::new(&transport, &target).unwrap();
     let token = CancellationSource::new().token();
     assert_eq!(client.read_account(&token).unwrap().user_id, "user-1");
     assert_eq!(
@@ -146,7 +146,7 @@ fn client() -> AshClient {
 }
 
 #[test]
-fn xai_catalog_uses_its_own_route_and_authentication_over_https() {
+fn supergrok_catalog_uses_its_own_route_and_authentication_over_https() {
     let server = Server::reply(response(
         200,
         r#"{"data":[{"model":"grok-test","apiBackend":"responses","contextWindow":500000,"baseUrl":"https://untrusted.example"}]}"#,
@@ -159,7 +159,7 @@ fn xai_catalog_uses_its_own_route_and_authentication_over_https() {
             http_client::HttpHeader::new("X-XAI-Token-Auth", "xai-grok-cli"),
         ],
     );
-    let models = crate::xai::Client::new(&transport, &target)
+    let models = crate::supergrok::Client::new(&transport, &target)
         .unwrap()
         .read_models(&CancellationSource::new().token())
         .unwrap();

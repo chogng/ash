@@ -45,7 +45,7 @@ use std::time::UNIX_EPOCH;
 use zeroize::Zeroize;
 
 pub const SUPERGROK_SUBSCRIPTION_PROVIDER_ID: &str = "xai-subscription";
-pub use backend_client::xai::BASE_URL as SUPERGROK_SUBSCRIPTION_API_BASE_URL;
+pub use backend_client::supergrok::BASE_URL as SUPERGROK_SUBSCRIPTION_API_BASE_URL;
 
 /// Grok's credential file on the backend host, if its home directory is known.
 pub fn grok_auth_path() -> Option<std::path::PathBuf> {
@@ -55,7 +55,7 @@ pub fn grok_auth_path() -> Option<std::path::PathBuf> {
 
 mod account;
 pub use account::Subscription;
-pub use backend_client::xai::CatalogModel;
+pub use backend_client::supergrok::CatalogModel;
 
 const CLIENT_ID: &str = "b1a00492-073a-47ea-816f-4c329264a828";
 const DEVICE_AUTHORIZATION_URL: &str = "https://auth.x.ai/oauth2/device/code";
@@ -1113,7 +1113,7 @@ impl Drop for GrokIdentity {
 #[derive(Deserialize, Serialize)]
 struct TokenCredential {
     #[serde(default)]
-    profile: Option<backend_client::xai::Account>,
+    profile: Option<backend_client::supergrok::Account>,
     #[serde(default)]
     subscription_tier_display: Option<String>,
     access_token: String,
@@ -1132,7 +1132,7 @@ struct TokenCredential {
 struct BorrowedAccount {
     account_id: String,
     credential_revision: u64,
-    profile: backend_client::xai::Account,
+    profile: backend_client::supergrok::Account,
     subscription_tier_display: Option<String>,
 }
 

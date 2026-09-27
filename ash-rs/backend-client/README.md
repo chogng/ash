@@ -2,7 +2,7 @@
 
 - 封装各供应商的后台业务 HTTP API，按供应商模块组织路由和响应类型。
 - `chatgpt` 提供账号、额度、账单、配置、统计与云任务接口。
-- `xai` 提供订阅模型目录、账号、访问设置、订阅额度、余额和用量历史查询。
+- `supergrok` 提供订阅模型目录、账号、访问设置、订阅额度、余额和用量历史查询。
 - 使用调用方提供的当前认证；凭据存储、刷新与账号生命周期由认证 crate 负责。
 - 共享 URL 校验、JSON 请求、取消传递和脱敏错误，复用 `ash-client` 与 `ash-http-client`。
 - 模型生成与流式协议由 `model-provider` 和 `ash-api` 负责。
@@ -13,13 +13,14 @@
 | 模块 | 公开入口 | 负责内容 |
 | --- | --- | --- |
 | `chatgpt` | `chatgpt::Client`、`chatgpt::RouteStyle`、供应商响应类型 | ChatGPT `/wham`、Codex `/api/codex` 和 API key 费用路由 |
-| `xai` | `xai::Client`、供应商响应类型 | Grok 订阅后台路由、账号、模型与账单 |
+| `supergrok` | `supergrok::Client`、供应商响应类型 | Grok 订阅后台路由、账号、模型与账单 |
 | crate 根 | `RequestError` | 不包含认证头或响应正文的请求错误 |
 
-- `chatgpt`、`xai` 认证 crate 依赖本 crate；本 crate 不依赖登录、凭据存储或模型运行时。
+- `ash-chatgpt`、`ash-supergrok` 认证 crate 依赖本 crate；本 crate 不依赖登录、凭据存储或模型运行时。
 - 各供应商客户端独立接收 `OperationClient` 与已解析的 `ResolvedApiTarget`；不同供应商不共享认证状态。
 - 生产 transport 必须拒绝重定向；Ash 默认 HTTP 配置满足此要求。
 - 新供应商在本 crate 内增加模块，只有真实接口需要时才增加子文件；后台请求不抽象成统一套餐或云任务模型。
+- Kimi 当前由 `ash-kimi` 管理登录并调用模型服务，尚无账户额度后台接口；BigModel 与 Z.AI Coding Plan 使用独立 API key 连接，不产生订阅登录账户，因此目前没有对应的后台业务客户端。
 - 原根级 `BackendClient`、`RouteStyle` 和 ChatGPT 响应类型已迁到 `chatgpt`，调用方直接使用新路径。
 
 ## ChatGPT 接口
@@ -59,16 +60,16 @@
 | `Plugins` | `analytics/daily-plugin-usage-metrics` | 当前工作区用户，指定数量 |
 | `Skills` | `analytics/daily-skill-usage-metrics` | 当前工作区用户，指定数量 |
 
-## xAI 接口
+## Super Grok 接口
 
 | 方法 | HTTP 合约 | 返回值 |
 | --- | --- | --- |
-| `xai::Client::read_models` | `GET /v1/models-v2` | `Vec<xai::CatalogModel>` |
-| `read_account` | `GET /v1/user?include=subscription` | `xai::Account`，包含实时套餐、团队和数据保留设置 |
-| `read_settings` | `GET /v1/settings` | `xai::Settings`，包含访问资格和计费开关 |
-| `read_billing` | `GET /v1/billing?format=credits` | `Option<xai::Billing>`，包含用量百分比、周期、余额和历史 |
+| `supergrok::Client::read_models` | `GET /v1/models-v2` | `Vec<supergrok::CatalogModel>` |
+| `read_account` | `GET /v1/user?include=subscription` | `supergrok::Account`，包含实时套餐、团队和数据保留设置 |
+| `read_settings` | `GET /v1/settings` | `supergrok::Settings`，包含访问资格和计费开关 |
+| `read_billing` | `GET /v1/billing?format=credits` | `Option<supergrok::Billing>`，包含用量百分比、周期、余额和历史 |
 
-- `xai::BASE_URL` 指向 `https://cli-chat-proxy.grok.com/v1`；调用方提供该目标的当前认证与版本头。
+- `supergrok::BASE_URL` 指向 `https://cli-chat-proxy.grok.com/v1`；调用方提供该目标的当前认证与版本头。
 - 目录只返回可见的 Responses 模型，保留请求模型 ID、显示名称、上下文窗口和推理档位；缺失元数据保持为空。
 - 服务端返回的 `baseUrl`、凭据或路由覆盖值不参与请求目标解析。
 - `supergrok::SuperGrokOAuth::models` 负责账号检查及一次 HTTP 401 恢复，再委托此客户端读取目录。
@@ -94,14 +95,14 @@
 - 缺失金额、额度、统计和设置保持为空；不推导零用量、允许状态或当前套餐。整数微单位和十进制金额字符串保留原精度。
 - 任务扣费只接受最多 128 字节的十进制字符串，可带正负号和 `i32` 范围的指数；不转换为浮点数。任务额度占比只接受有限数字，支持 `serde_json/arbitrary_precision`，不截断超过 100% 的值。
 - 历史套餐接口的 HTTP 404 表示报表不可用，返回 `None`；其他接口不会吞掉 HTTP 错误。
-- 此 crate 提供 HTTP 能力。当前产品已有调用方是 `chatgpt` 的账号额度查询和 `xai` 的订阅模型、账号与额度查询；新增云任务、统计和写入能力尚未增加 UI 或 App Server RPC 入口。
+- 此 crate 提供 HTTP 能力。当前产品已有调用方是 `chatgpt` 的账号额度查询和 `supergrok` 的订阅模型、账号与额度查询；新增云任务、统计和写入能力尚未增加 UI 或 App Server RPC 入口。
 
 ## 实现与验证
 
 - 根级 `client.rs` 统一 URL、认证头传递、JSON 编解码和错误脱敏；取消令牌交给 `ash-client` 执行。供应商路由留在各自模块。
 - ChatGPT 的业务文件和测试已由 `src/*.rs` 迁至 `src/chatgpt/`；`chatgpt.rs` 汇总公开接口。
-- `xai/models.rs` 负责订阅模型目录的 HTTP 请求和解析；`xai/models_tests.rs` 覆盖目录行为，认证恢复测试位于 `ash-supergrok`。
-- `transport_tests.rs` 贯穿 `chatgpt::Client / xai::Client → AshClient → UreqHttpClient`，验证业务路由、认证、JSON、任务创建不重发和后端错误映射。
+- `supergrok/models.rs` 负责订阅模型目录的 HTTP 请求和解析；`supergrok/models_tests.rs` 覆盖目录行为，认证恢复测试位于 `ash-supergrok`。
+- `transport_tests.rs` 贯穿 `chatgpt::Client / supergrok::Client → AshClient → UreqHttpClient`，验证业务路由、认证、JSON、任务创建不重发和后端错误映射。
 - 传输重定向、超时与原始响应读取由 `http-client` 验证；取消与重试执行由 `ash-client` 验证。两个下层 crate 的测试使用通用请求，不依赖后端业务类型。
 - HTTPS 测试使用独立 CA、随机回环端口和直接连接，不修改系统信任或代理环境；不访问真实账号。
 - 业务固定响应位于 [`tests/fixtures`](tests/fixtures/README.md)；HTTPS 服务和测试证书由 [`http-test-support`](../http-test-support/README.md) 提供，只通过 `dev-dependencies` 引入。Cargo 与 Bazel 使用同一份资源。
@@ -119,6 +120,6 @@
 | `chatgpt/analytics_tests.rs` | 各报表真实数据结构、日期校验、负值扣费、插件/技能统计、历史额度 | `just test ash-backend-client chatgpt::analytics::tests` |
 | `chatgpt/client_tests.rs` | 全部业务请求的双路由、认证、取消、错误脱敏与禁止重试约定 | `just test ash-backend-client chatgpt::client::tests` |
 | `transport_tests.rs` | 本地 HTTPS 实际调用链 | `just test ash-backend-client transport_tests` |
-| `xai/models_tests.rs` | 目录筛选与元数据解析 | `just test ash-backend-client xai::models::tests` |
+| `supergrok/models_tests.rs` | 目录筛选与元数据解析 | `just test ash-backend-client supergrok::models::tests` |
 
-- xAI 业务接口验证：`just test ash-backend-client xai::`；认证与资料生命周期：`just test ash-supergrok`。
+- Super Grok 业务接口验证：`just test ash-backend-client supergrok::`；认证与资料生命周期：`just test ash-supergrok`。

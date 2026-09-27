@@ -1050,7 +1050,7 @@ account/login/completed
 account/updated
 ```
 
-`account/rateLimits/read` 按 `{ provider, accountId }` 查询指定账号。支持 `provider = "chatgpt-subscription"` 和 `"xai-subscription"`。本地组合复用对应供应商的登录与模型认证对象，通过 `backend-client::chatgpt` 或 `backend-client::xai` 读取后台数据，不接触客户端凭据。
+`account/rateLimits/read` 按 `{ provider, accountId }` 查询指定账号。支持 `provider = "chatgpt-subscription"` 和 `"xai-subscription"`。本地组合复用对应供应商的登录与模型认证对象，通过 `backend-client::chatgpt` 或 `backend-client::supergrok` 读取后台数据，不接触客户端凭据。
 
 - xAI 的 `limits` 为空、`credits` 为 `null`；`xai` 保留独立的信用额度合约：`usedPercent` 为小数，`periodType/periodStart/periodEnd` 为上游周期，`allowed/message` 为访问状态。`prepaidCents/onDemandUsedCents/onDemandCapCents` 为整数 USD 分字符串，避免跨语言精度损失。未提供的数据为 `null`；ChatGPT 不序列化 `xai`。
 - `account/read` 查询已就绪 xAI 账号的 `/user?include=subscription` 与 Grok Build `/settings`，并通过登录服务更新邮箱、姓名、组织及 `plan`。xAI 的 `plan` 优先使用设置接口给出的完整 `subscription_tier_display`，其次使用 `subscription_tier` 或账户接口的 `subscriptionTier`；没有服务端等级时为 `null`。`account/rateLimits/read` 的 xAI `plan` 使用同一优先顺序。
@@ -1081,7 +1081,7 @@ pub enum AccountLoginMethod {
 
 本地默认组合安装 `ash-chatgpt`、`ash-kimi` 与 `ash-supergrok` driver。`account/login/start` 直接向对应 authorization server 请求 device code，并在本机后台轮询。API key 继续属于对应模型凭据领域，不进入 account/login payload。
 
-Provider 是否支持 interactive login、credential 的实际所有者和 refresh 语义由 [`ash-login`](login.md) 的 exact driver 决定。ChatGPT、Kimi 与 xAI 的 driver 各自执行本地 device OAuth、SecretStore persistence 与 refresh。Ash App Server 只编排和映射 redacted control plane：
+Provider 是否支持 interactive login、credential 的实际所有者和 refresh 语义由 [`ash-login`](login.md) 的 exact driver 决定。ChatGPT、Kimi 与 Super Grok 的 driver 各自执行本地 device OAuth、SecretStore persistence 与 refresh。Ash App Server 只编排和映射 redacted control plane：
 
 ```text
 app-server-protocol/src/protocol/account.rs
@@ -1099,11 +1099,11 @@ chatgpt/
 kimi/
   └─ device OAuth、token refresh、SecretStore owner 与 authenticated API target
 
-xai/
+supergrok/
   └─ device OAuth、凭据轮换、账号资料、订阅查询与 Responses 认证目标
 
 backend-client/
-  └─ chatgpt/ 与 xai/ 后台接口、wire 类型和解码；不持有凭据
+  └─ chatgpt/ 与 supergrok/ 后台接口、wire 类型和解码；不持有凭据
 
 ash-secrets
   └─ direct-provider/API-key 或 exact OAuth-owner 的 opaque secret bytes
