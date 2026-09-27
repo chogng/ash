@@ -69,6 +69,11 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 			placeholder: options.placeholder,
 			presentation: "embedded",
 			padding: CHAT_INPUT_EDITOR_PADDING,
+			glyphMargin: false,
+			lineDecorationsWidth: 0,
+			folding: false,
+			overviewRulerLanes: 0,
+			scrollBeyondLastLine: false,
 			lineWrapping: EditorLineWrapping.On,
 			contributions,
 		}));

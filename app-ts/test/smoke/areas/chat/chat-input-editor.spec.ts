@@ -22,10 +22,35 @@ test('Empty chat keeps its input at the top of the pane', async ({ target, workb
 	expect(layout.inputTop).toBeCloseTo(layout.chatTop, 0);
 });
 
+test('Chat input hides unused editor chrome and aligns text with the input edge', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
+	const page = workbench.page;
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	}
+	const findOptions = page.locator('.ash-chat:visible .stanza-editor-find-options-widget');
+	await expect(findOptions).toBeAttached();
+	await expect(findOptions).toBeHidden();
+	const editorChrome = await page.locator('.ash-chat:visible .ash-chat-input-editor').evaluate(editor => {
+		const viewport = editor.querySelector<HTMLElement>('.stanza-editor');
+		const placeholder = editor.querySelector<HTMLElement>('.stanza-editor-placeholder-text');
+		const ruler = editor.querySelector<HTMLElement>('.decorationsOverviewRuler');
+		if (!viewport || !placeholder || !ruler) throw new Error('Chat editor viewport is incomplete');
+		return {
+			textInset: placeholder.getBoundingClientRect().left - viewport.getBoundingClientRect().left,
+			rulerDisplay: getComputedStyle(ruler).display,
+		};
+	});
+	expect(editorChrome.textInset).toBeLessThanOrEqual(4);
+	expect(editorChrome.rulerDisplay).toBe('none');
+});
+
 test('Chat input resizes with wrapped text and retains keyboard focus', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
 	const page = workbench.page;
-	await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	}
 	const host = page.locator('.ash-chat-input-editor-host');
 	const editor = host.locator('.ash-chat-input-editor');
 	const input = editor.locator('.stanza-editor-input');

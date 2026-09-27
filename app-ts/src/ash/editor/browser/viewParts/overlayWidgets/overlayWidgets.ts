@@ -209,7 +209,8 @@ class OverlayWidget extends Disposable {
 
 	public render(context: RestrictedRenderingContext, viewPagePosition: IDomNodePagePosition | null, stackOffset: number, layout: OverlayWidgetLayout): void {
 		const preference = this.position?.preference;
-		this.domNode.setDisplay(preference === null || preference === undefined ? 'none' : 'block');
+		// A positioned widget still owns its visibility, including the hidden attribute.
+		this.domNode.setDisplay(preference === null || preference === undefined ? 'none' : '');
 		if (preference === null || preference === undefined) return;
 		const rectangle = this.domNode.domNode.getBoundingClientRect();
 		const width = rectangle.width || this.domNode.domNode.offsetWidth;
