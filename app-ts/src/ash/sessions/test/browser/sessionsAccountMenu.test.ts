@@ -13,6 +13,7 @@ test('Sessions account menu opens its own settings and account actions', async (
 	const anchor = browser.window.document.querySelector('button')!;
 	const loggedOut: string[] = [];
 	let settingsOpened = 0;
+	let returnedToWorkbench = 0;
 	let actions: readonly IAction[] = [];
 	let hide: (() => void) | undefined;
 	const accounts: IAccountService = {
@@ -33,7 +34,7 @@ test('Sessions account menu opens its own settings and account actions', async (
 		hideContextMenu() {},
 	};
 	const preferences = { open: async () => { settingsOpened++; } } as SessionsPreferences;
-	using menu = new SessionsAccountMenu(accounts, contextMenus, preferences);
+	using menu = new SessionsAccountMenu(accounts, contextMenus, preferences, () => { returnedToWorkbench++; });
 	await Promise.resolve();
 	menu.show(anchor);
 	assert.deepEqual(actions.map(action => [action.label, action.enabled]), [
@@ -41,11 +42,14 @@ test('Sessions account menu opens its own settings and account actions', async (
 		['', false],
 		['Settings', true],
 		['Sign out of Ash User', true],
+		['', false],
+		['Return to Workbench', true],
 	]);
 	assert.equal(anchor.getAttribute('aria-expanded'), 'true');
 	await actions[2]?.run();
 	await actions[3]?.run();
-	assert.deepEqual({ settingsOpened, loggedOut }, { settingsOpened: 1, loggedOut: ['openai'] });
+	await actions[5]?.run();
+	assert.deepEqual({ settingsOpened, loggedOut, returnedToWorkbench }, { settingsOpened: 1, loggedOut: ['openai'], returnedToWorkbench: 1 });
 	hide?.();
 	assert.equal(anchor.getAttribute('aria-expanded'), 'false');
 	browser.window.close();
@@ -56,6 +60,7 @@ test('Sessions settings remain available when accounts cannot be loaded', async 
 	const anchor = browser.window.document.querySelector('button')!;
 	let actions: readonly IAction[] = [];
 	let settingsOpened = 0;
+	let returnedToWorkbench = 0;
 	const accounts: IAccountService = {
 		onDidChangeAccounts: Event.None,
 		onDidCompleteLogin: Event.None,
@@ -71,15 +76,18 @@ test('Sessions settings remain available when accounts cannot be loaded', async 
 		hideContextMenu() {},
 	};
 	const preferences = { open: async () => { settingsOpened++; } } as SessionsPreferences;
-	using menu = new SessionsAccountMenu(accounts, contextMenus, preferences);
+	using menu = new SessionsAccountMenu(accounts, contextMenus, preferences, () => { returnedToWorkbench++; });
 	await Promise.resolve();
 	menu.show(anchor);
 	assert.deepEqual(actions.map(action => [action.label, action.enabled]), [
 		['Accounts unavailable', false],
 		['', false],
 		['Settings', true],
+		['', false],
+		['Return to Workbench', true],
 	]);
 	await actions[2]?.run();
-	assert.equal(settingsOpened, 1);
+	await actions[4]?.run();
+	assert.deepEqual({ settingsOpened, returnedToWorkbench }, { settingsOpened: 1, returnedToWorkbench: 1 });
 	browser.window.close();
 });

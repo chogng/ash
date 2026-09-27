@@ -1,8 +1,24 @@
 import { expect, test } from "../../../automation/test.js";
+import type { Page } from '@playwright/test';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
 import { launchElectron } from '../../../automation/playwrightElectron.js';
+
+async function returnFromSessions(page: Page): Promise<void> {
+	const accountButton = page.getByRole('button', { name: 'Accounts' });
+	await accountButton.click();
+	await expect(accountButton).toHaveAttribute('aria-expanded', 'true');
+	if (process.platform === 'darwin') {
+		// macOS renders this menu outside the web page, so Playwright cannot select its item by role.
+		await page.evaluate(() => {
+			const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
+			void ipc.invoke('ash:sessions:return-to-workbench');
+		});
+		return;
+	}
+	await page.getByRole('menuitem', { name: 'Return to Workbench' }).click();
+}
 
 test('Browser Code Sessions Activity Bar centers icons and changes size and position through its menu', async ({ target, workbench }) => {
 	test.skip(target.kind !== 'browser' || target.workbenchMode !== 'code', 'Requires the browser Code Sessions page');
@@ -341,21 +357,17 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	const titlebar = sessionsPage.locator("[data-part='titlebar']");
 	await expect(titlebar).toBeVisible();
 	await expect(titlebar).toHaveCSS('-webkit-app-region', 'drag');
-	await expect(sessionsPage.getByRole('button', { name: 'Return to Workbench' })).toHaveCSS('-webkit-app-region', 'no-drag');
-	const [titleBounds, titlebarBounds] = await Promise.all([
-		titlebar.locator('.ash-sessions-titlebar-title').boundingBox(),
-		titlebar.boundingBox(),
-	]);
-	expect(titleBounds).not.toBeNull();
-	expect(titlebarBounds).not.toBeNull();
-	expect(titleBounds!.x).toBeGreaterThan(titlebarBounds!.x);
-	expect(titleBounds!.x).toBeLessThan(titlebarBounds!.x + titlebarBounds!.width / 2);
+	await expect(titlebar.getByRole('button').first()).toHaveCSS('-webkit-app-region', 'no-drag');
+	await expect(titlebar.getByRole('button', { name: 'Return to Workbench' })).toHaveCount(0);
+	await expect(titlebar.locator('.ash-sessions-titlebar-title, .ash-sessions-titlebar-avatar')).toHaveCount(0);
 	if (process.platform === 'darwin') {
-		const avatar = sessionsPage.locator('.ash-sessions-titlebar-avatar');
 		const spacer = sessionsPage.locator('.ash-sessions-window-controls-spacer');
 		await expect(spacer).toBeVisible();
-		const bounds = await avatar.boundingBox();
-		expect(bounds?.x).toBeGreaterThanOrEqual(80);
+		const [spacerBounds, controlsBounds] = await Promise.all([
+			spacer.boundingBox(),
+			titlebar.locator('.ash-sessions-titlebar-right').boundingBox(),
+		]);
+		expect(controlsBounds!.x).toBeGreaterThanOrEqual(spacerBounds!.x + spacerBounds!.width);
 		await sessionsPage.evaluate(async () => {
 			const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string, params: unknown): Promise<unknown> } } }).ash.ipcRenderer;
 			await ipc.invoke('ash:window:operation', { kind: 'setZoom', level: -2 });
@@ -372,7 +384,6 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 		});
 		await expect(sessionsPage.locator('#app')).toHaveClass(/ash-sessions-fullscreen/u);
 		await expect(spacer).toBeHidden();
-		expect((await avatar.boundingBox())?.x).toBeLessThan(50);
 		await application.evaluate(({ BrowserWindow }) => {
 			const window = BrowserWindow.getAllWindows().find(candidate => candidate.webContents.getURL().includes('sessions-code.html'));
 			if (!window) throw new Error('Sessions window is missing');
@@ -463,7 +474,7 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	});
 
 	const closed = sessionsPage.waitForEvent("close");
-	await sessionsPage.getByRole("button", { name: "Return to Workbench" }).click();
+	await returnFromSessions(sessionsPage);
 	await closed;
 	await expect.poll(() => application.windows().length).toBe(1);
 	await expect(workbenchPage.locator(".ash-workbench")).toBeVisible();
@@ -477,7 +488,7 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 		return child?.getBounds();
 	})).toEqual(expectedBounds);
 	const reopenedClosed = reopenedPage.waitForEvent('close');
-	await reopenedPage.getByRole('button', { name: 'Return to Workbench' }).click();
+	await returnFromSessions(reopenedPage);
 	await reopenedClosed;
 	const parentClosed = workbenchPage.waitForEvent('close');
 	await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.close());
@@ -502,7 +513,7 @@ test('Sessions details icon follows sidebar visibility', async ({ application, t
 	await expect(auxiliaryBar).toBeHidden();
 	await expect(detailsToggle.locator('svg[data-ash-icon-id="layout-sidebar-right-off-1"]')).toBeVisible();
 	const closed = sessionsPage.waitForEvent('close');
-	await sessionsPage.getByRole('button', { name: 'Return to Workbench' }).click();
+	await returnFromSessions(sessionsPage);
 	await closed;
 });
 
@@ -528,7 +539,7 @@ test('closing the Workbench keeps Sessions usable and Return to Workbench opens 
 			});
 			expect(windows).toEqual({ titles: [expect.stringContaining('Sessions')], configurationRevision: expect.any(Number), connectionKind: 'local' });
 			const workbenchPromise = application.waitForEvent('window');
-			await child.getByRole('button', { name: 'Return to Workbench' }).click();
+			await returnFromSessions(child);
 			const reopened = await workbenchPromise;
 			await expect(reopened.locator('.ash-workbench')).toBeVisible();
 			await expect.poll(() => application.windows().length).toBe(1);

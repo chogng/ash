@@ -20,7 +20,7 @@ is canonical for the renderer implementation and extension points.
 | Product composition | `browser/workbench.ts` | uses shared window identity and lifecycle services; owns the fixed titlebar/activitybar/sidebar/sessions/auxiliarybar Part set |
 | Layout | `browser/layoutPolicy.ts` | owns Sessions topology, geometry, Activity Bar position, optional auxiliary visibility, persisted sizes, and Modern/Flat spacing |
 | Appearance | `common/configuration.ts` and `contrib/modernUI/browser/` | own the independent Sessions layout, Activity Bar position, and size preferences |
-| Accounts and settings | `contrib/accounts/browser/` and `contrib/preferences/browser/` | the account icon opens a Sessions-owned menu; Settings opens a Sessions-owned page that reuses the Workbench setting widgets |
+| Accounts and settings | `contrib/accounts/browser/` and `contrib/preferences/browser/` | the account icon opens a Sessions-owned menu with Settings and Return to Workbench; Settings opens a Sessions-owned page that reuses the Workbench setting widgets |
 | Window Sessions state | `services/sessions/browser/sessionsService.ts` | owns active/visible selections, focus, and Back/Forward history |
 | Frontend Session model | `services/sessions/common/session.ts` | owns `ISession`, `IChat`, workspace summary, and untitled identity types |
 | Shared Chat contract | `workbench/services/chat/common/chatService.ts` | owns Thread and Turn operations plus shared Session/Thread IDs, model references, and approval modes used by both renderers |
@@ -69,7 +69,8 @@ model supplied by Sessions and does not create or select Sessions itself.
    in Sessions-owned layout storage.
    The account menu uses the shared context menu service. Its Settings action
    opens the Sessions settings page, which uses the shared setting widgets and
-   configuration service. Sessions configuration keys are registered for parsing
+   configuration service. Its Return to Workbench action returns to the sibling
+   Workbench window or page. Sessions configuration keys are registered for parsing
    and persistence, while the Sessions page owns their visible setting metadata;
    the regular Workbench Settings page lists only Workbench settings.
 5. The window Sessions service initializes the catalog. If none is

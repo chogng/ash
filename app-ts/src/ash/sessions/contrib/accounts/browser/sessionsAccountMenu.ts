@@ -15,6 +15,7 @@ export class SessionsAccountMenu extends Disposable {
 		private readonly accounts: IAccountService,
 		private readonly contextMenus: IContextMenuService,
 		private readonly preferences: SessionsPreferences,
+		private readonly returnToWorkbench: () => void,
 	) {
 		super();
 		this._register(this.accounts.onDidChangeAccounts(state => this.updateAccounts(state)));
@@ -35,6 +36,7 @@ export class SessionsAccountMenu extends Disposable {
 			const label = localize('sessions.account.unavailable', 'Accounts unavailable');
 			accountActions.push({ id: 'ash.sessions.accountsUnavailable', label, tooltip: label, enabled: false, run() {} });
 		}
+		const returnLabel = localize('sessions.menu.workbench', 'Return to Workbench');
 		const actions = Separator.join(accountActions, [
 			{ id: 'ash.sessions.settings', label: settingsLabel, tooltip: settingsLabel, enabled: true, run: () => this.preferences.open() },
 			...(this.revision >= 0n && !this.accountsSnapshot.some(account => account.provider === 'openai') ? [{
@@ -54,6 +56,8 @@ export class SessionsAccountMenu extends Disposable {
 					run: () => this.accounts.logout(account.provider),
 				};
 			}),
+		], [
+			{ id: 'ash.sessions.returnToWorkbench', label: returnLabel, tooltip: returnLabel, enabled: true, run: this.returnToWorkbench },
 		]);
 		anchor.setAttribute('aria-expanded', 'true');
 		this.contextMenus.showContextMenu({

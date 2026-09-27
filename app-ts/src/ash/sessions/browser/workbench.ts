@@ -176,10 +176,9 @@ export class Workbench extends Disposable {
 			interactionServices.contextKeyService,
 			accessibleViewService,
 		));
-		const accountMenu = this._register(new SessionsAccountMenu(accountService, interactionServices.contextMenuService, preferences));
+		const accountMenu = this._register(new SessionsAccountMenu(accountService, interactionServices.contextMenuService, preferences, options.returnToWorkbench));
 
-		const titlebar = this._register(new TitlebarPart(this.domNode, options.profile, view, {
-			returnToWorkbench: options.returnToWorkbench,
+		const titlebar = this._register(new TitlebarPart(this.domNode, view, {
 			focusSessions: () => sessionsPart?.focus(),
 			toggleDetails: () => {
 				if (layout!.isPartVisible('auxiliarybar')) layout!.hidePart('auxiliarybar');
@@ -206,7 +205,7 @@ export class Workbench extends Disposable {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsActivityBar,
 					{ type: AccessibleViewType.Help },
-					() => localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to move between available buttons. Press Enter or Space to activate a button. Use the Context Menu key or Shift+F10 for position and size options. Chat focuses the sessions list. Accounts opens the account menu. Collaboration and Mobile devices are not available yet.'),
+					() => localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to move between available buttons. Press Enter or Space to activate a button. Use the Context Menu key or Shift+F10 for position and size options. Chat focuses the sessions list. Accounts opens the account menu, which includes Return to Workbench. Collaboration and Mobile devices are not available yet.'),
 					() => focused.focus(),
 					AccessibilityVerbositySettingId.SessionsActivityBar,
 				);
