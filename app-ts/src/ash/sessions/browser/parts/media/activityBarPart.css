@@ -76,6 +76,11 @@
 }
 
 .ash-sessions-activity-item .ash-icon {
+	width: 20px;
+	height: 20px;
+}
+
+.ash-sessions-activity-content.compact:not(.horizontal) .ash-sessions-activity-item .ash-icon {
 	width: var(--ash-lxicon-font-size);
 	height: var(--ash-lxicon-font-size);
 }

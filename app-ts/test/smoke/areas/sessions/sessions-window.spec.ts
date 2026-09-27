@@ -19,12 +19,17 @@ test('Browser Code Sessions Activity Bar centers icons and changes size and posi
 	expect(iconBounds).not.toBeNull();
 	expect(buttonBounds!.width).toBe(36);
 	expect(buttonBounds!.height).toBe(36);
+	expect(iconBounds!.width).toBe(20);
+	expect(iconBounds!.height).toBe(20);
+	const collaborationIcon = activityBar.locator('button svg[data-ash-icon-id="colab"]');
+	await expect(collaborationIcon).toHaveCSS('width', '20px');
 	expect(Math.abs(iconBounds!.x + iconBounds!.width / 2 - (buttonBounds!.x + buttonBounds!.width / 2))).toBeLessThanOrEqual(1);
 	expect(Math.abs(iconBounds!.y + iconBounds!.height / 2 - (buttonBounds!.y + buttonBounds!.height / 2))).toBeLessThanOrEqual(1);
 	await chatButton.click({ button: 'right' });
 	await page.getByRole('menuitem', { name: 'Activity Bar Size' }).click();
 	await page.getByRole('menuitemcheckbox', { name: 'Compact' }).click();
 	await expect.poll(() => chatButton.evaluate(button => button.getBoundingClientRect().width)).toBe(28);
+	await expect(collaborationIcon).toHaveCSS('width', '16px');
 	await expect.poll(() => activityBar.evaluate(bar => bar.getBoundingClientRect().width)).toBe(36);
 	await chatButton.click({ button: 'right' });
 	await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
