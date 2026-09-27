@@ -2,6 +2,7 @@
 export namespace Schemas {
 	export const data = 'data';
 	export const file = 'file';
+	export const untitled = 'untitled';
 	export const http = 'http';
 	export const https = 'https';
 	export const mailto = 'mailto';

@@ -24,12 +24,15 @@ await import("../../../../../editor/contrib/documentEditor.contribution.js");
 
 let dialogValues: readonly string[] = [];
 const testDialogs: IDialogService = {
+	onWillShowDialog: Event.None,
+	onDidShowDialog: Event.None,
+	about: async () => { throw new Error('Unexpected about dialog'); },
 	showMessage: async () => {},
 	info: async () => {},
 	warn: async () => {},
 	error: async () => {},
 	confirm: async () => ({ confirmed: true }),
-	prompt: async () => DialogResult.Cancel,
+	prompt: async () => { throw new Error('Unexpected prompt'); },
 	input: async () => ({ confirmed: true, values: dialogValues }),
 };
 

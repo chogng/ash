@@ -31,12 +31,14 @@ export class BrowserDialogHandler implements IDialogHandler {
 		const ownerDocument = this.container.ownerDocument;
 		try {
 			const content = createDialogContent(ownerDocument, request, disposables);
-			const buttons: DialogButton[] = [{
-				label: request.primaryButton ??
-					(request.kind === "confirmation" ? localize('dialog.confirm', 'Confirm') : localize('dialog.ok', 'OK')),
-				value: DialogResult.Primary,
-				presentation: "primary",
-			}];
+			const buttons: DialogButton[] = request.kind === 'choice'
+				? request.buttons.map((label, index) => ({ label, value: `choice:${index}`, presentation: index === 0 ? 'primary' : undefined }))
+				: [{
+					label: request.primaryButton ??
+						(request.kind === "confirmation" ? localize('dialog.confirm', 'Confirm') : localize('dialog.ok', 'OK')),
+					value: DialogResult.Primary,
+					presentation: "primary",
+				}];
 			if (request.kind === "prompt") {
 				buttons.push({ label: request.secondaryButton, value: DialogResult.Secondary });
 			}
@@ -49,8 +51,8 @@ export class BrowserDialogHandler implements IDialogHandler {
 				buttons,
 				cancelValue: DialogResult.Cancel,
 			}));
-			dialog.element.dataset.dialogSeverity =
-				request.kind === "message" ? request.severity : "question";
+			dialog.element.dataset.dialogSeverity = request.kind === 'message' || request.kind === 'choice'
+				? request.severity ?? 'question' : 'question';
 			for (const input of content.inputs) {
 				disposables.add(input.onKeyDown(event => {
 					if (event.key === "Enter" && !event.isComposing) {
@@ -78,10 +80,13 @@ export class BrowserDialogHandler implements IDialogHandler {
 				disposables.add(observeResize(detail, updateFocusability));
 			}
 			const result = await resultPromise;
-			const button = result === DialogResult.Primary || result === DialogResult.Secondary
+			const buttonIndex = request.kind === 'choice' && result.startsWith('choice:')
+				? Number(result.slice('choice:'.length)) : undefined;
+			const button = buttonIndex !== undefined ? DialogResult.Primary : result === DialogResult.Primary || result === DialogResult.Secondary
 				? result : DialogResult.Cancel;
 			return {
 				button,
+				...(buttonIndex !== undefined ? { buttonIndex } : {}),
 				checkboxChecked: content.checkbox?.checked,
 				values: button === DialogResult.Primary && request.kind === "input"
 					? content.inputs.map(input => input.value) : undefined,

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { URI } from "../../../../../base/common/uri.js";
+import { Event } from '../../../../../base/common/event.js';
 import { FileKind, type IFileService, type IFileWriteRequest } from "../../../../../platform/files/common/files.js";
 import { EditorPaneMatch } from "../../../../../workbench/browser/parts/editor/editorPane.js";
 import { BaseBinaryResourceEditor, binaryEditorDescriptor } from "../../../../../workbench/browser/parts/editor/binaryEditor.js";
@@ -41,6 +42,9 @@ test('Binary file editor opens a bounded read-only text preview', async () => {
 	let opened: EditorInput | undefined;
 	let openOptions: EditorOpenOptions | undefined;
 	const dialogs: IDialogService = {
+		onWillShowDialog: Event.None,
+		onDidShowDialog: Event.None,
+		about: async () => { throw new Error('Unexpected about dialog'); },
 		showMessage: async () => {},
 		info: async () => {},
 		warn: async () => {},

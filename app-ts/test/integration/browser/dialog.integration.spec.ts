@@ -60,6 +60,19 @@ test('dialog buttons and Escape return their result and restore focus', async ({
 	await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.lastResult)).toBe('cancel');
 });
 
+test('action prompt returns the selected button index and checkbox state', async ({ page }) => {
+	await page.goto('/dialog.html');
+	await page.evaluate(() => window.ashDialogIntegration.showChoice());
+	const dialog = page.getByRole('dialog', { name: 'Choose action' });
+	await expect(dialog).toHaveAttribute('data-dialog-severity', 'warning');
+	await dialog.getByRole('checkbox', { name: 'Remember choice' }).check();
+	await dialog.getByRole('button', { name: 'Third' }).click();
+	await expect(dialog).toHaveCount(0);
+	await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.lastOutcome)).toEqual({
+		button: 'primary', buttonIndex: 2, checkboxChecked: true, values: undefined,
+	});
+});
+
 test('aborting a dialog settles it as cancelled and removes its modal', async ({ page }) => {
 	await page.goto('/dialog.html');
 	await page.evaluate(() => window.ashDialogIntegration.show('Details'));

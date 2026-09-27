@@ -17,13 +17,14 @@ import { DialogHandlerContribution } from '../../../src/ash/workbench/browser/pa
 import { CommandsQuickAccessProvider } from '../../../src/ash/workbench/contrib/quickaccess/browser/commandsQuickAccess.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
-import type { IDialogOutcome } from '../../../src/ash/platform/dialogs/common/dialogs.js';
+import { DialogSeverity, type IDialogOutcome } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 
 declare global {
 	interface Window {
 		ashDialogIntegration: {
 			show(detail: string): void;
 			showPrompt(): void;
+			showChoice(): void;
 			showInput(): void;
 			showCheckboxConfirmation(): void;
 			showBare(): void;
@@ -60,6 +61,14 @@ window.ashDialogIntegration = {
 			primaryButton: 'Save',
 			secondaryButton: 'Discard',
 		}, controller.signal).then(result => { window.ashDialogIntegration.lastResult = result.button; });
+	},
+	showChoice(): void {
+		controller = new AbortController();
+		void handler.showDialog({
+			kind: 'choice', severity: DialogSeverity.Warning, title: 'Choose action', message: 'Select one action.',
+			buttons: ['First', 'Second', 'Third'], cancelButton: 'Cancel',
+			checkbox: { label: 'Remember choice' },
+		}, controller.signal).then(result => { window.ashDialogIntegration.lastOutcome = result; });
 	},
 	showInput(): void {
 		controller = new AbortController();

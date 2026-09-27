@@ -31,6 +31,7 @@ import { registerTerminalView } from "../contrib/terminal/browser/terminal.contr
 import { Lxicon } from "../../base/common/lxicons.js";
 import { registerAction2 } from '../../platform/actions/common/actions.js';
 import { OpenFolderAction, OpenFolderViaWorkspaceAction } from './actions/workspaceActions.js';
+import { ShowAboutDialogAction } from './actions/windowActions.js';
 import "../contrib/bulkEdit/browser/bulkEdit.contribution.js";
 import "../contrib/binaryEditor/browser/binaryEditor.contribution.js";
 import "../contrib/markdown/browser/markdown.contribution.js";
@@ -66,6 +67,7 @@ registerRemoteViews();
 registerTerminalView();
 registerAction2(OpenFolderAction);
 registerAction2(OpenFolderViaWorkspaceAction);
+registerAction2(ShowAboutDialogAction);
 
 registerWorkbenchContribution(
 	"workbench.contrib.keybindingsResource",

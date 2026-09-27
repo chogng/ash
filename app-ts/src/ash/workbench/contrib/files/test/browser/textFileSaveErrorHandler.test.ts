@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { URI } from '../../../../../base/common/uri.js';
+import { Event } from '../../../../../base/common/event.js';
 import { DialogSeverity, type IDialogService, type IMessageDialogOptions } from '../../../../../platform/dialogs/common/dialogs.js';
 import { TextModelConflictError } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { TextFileSaveErrorHandler } from '../../browser/editors/textFileSaveErrorHandler.js';
@@ -8,6 +9,9 @@ import { TextFileSaveErrorHandler } from '../../browser/editors/textFileSaveErro
 test('File save errors distinguish disk conflicts and retain the user edits', async () => {
 	const messages: IMessageDialogOptions[] = [];
 	const dialogs: IDialogService = {
+		onWillShowDialog: Event.None,
+		onDidShowDialog: Event.None,
+		about: async () => { throw new Error('Unexpected about dialog'); },
 		showMessage: async options => { messages.push(options); },
 		info: async () => {},
 		warn: async () => {},

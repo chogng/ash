@@ -2,12 +2,54 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Emitter } from '../../../../../base/common/event.js';
 import { URI } from '../../../../../base/common/uri.js';
-import type { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { ConfirmResult, DialogResult, DialogSeverity, type IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import type { HTMLFileSystemProvider } from '../../../../../platform/files/browser/htmlFileSystemProvider.js';
 import { FileKind, FileNotFoundError, type IFileService } from '../../../../../platform/files/common/files.js';
 import type { IQuickInputService, IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { FileDialogService } from '../../browser/fileDialogService.js';
+import { DialogService } from '../../common/dialogService.js';
 import type { IWebWorkspaceClient } from '../../../workspaces/browser/workspaceOpenService.js';
+
+test('file dialog service owns the save, discard, and cancel decision', async () => {
+	using dialogs = new DialogService();
+	const service = new FileDialogService({
+		kind: 'server', client: {} as IWebWorkspaceClient,
+		quickInput: () => { throw new Error('No picker expected'); },
+		fileService: () => { throw new Error('No file service expected'); },
+		workspaceRoot: () => undefined,
+	}, () => dialogs);
+	const result = service.showSaveConfirm([URI.file('/work/draft.md')], 'The file changed on disk.');
+	const item = dialogs.model.dialogs[0];
+	assert.deepEqual(item?.request, {
+		kind: 'choice', severity: DialogSeverity.Warning, title: 'Save Changes',
+		message: 'Do you want to save the changes you made to draft.md?',
+		detail: "Your changes will be lost if you don't save them.\nThe file changed on disk.",
+		checkbox: undefined, buttons: ['Save', "Don't Save"], cancelButton: 'Cancel',
+	});
+	item?.close({ button: DialogResult.Primary, buttonIndex: 1 });
+	assert.equal(await result, ConfirmResult.DONT_SAVE);
+	const cancelled = service.showSaveConfirm(['draft.md']);
+	dialogs.model.dialogs[0]?.cancel();
+	assert.equal(await cancelled, ConfirmResult.CANCEL);
+	assert.equal(await service.showSaveConfirm([]), ConfirmResult.DONT_SAVE);
+});
+
+test('file dialog service lists multiple unsaved files and offers Save All', async () => {
+	using dialogs = new DialogService();
+	const service = new FileDialogService({
+		kind: 'server', client: {} as IWebWorkspaceClient,
+		quickInput: () => { throw new Error('No picker expected'); },
+		fileService: () => { throw new Error('No file service expected'); },
+		workspaceRoot: () => undefined,
+	}, () => dialogs);
+	const result = service.showSaveConfirm(['one.md', URI.file('/work/two.md')]);
+	const request = dialogs.model.dialogs[0]?.request;
+	assert.equal(request?.message, 'Do you want to save the changes to the following 2 files?');
+	assert.equal(request?.detail, "one.md\ntwo.md\nYour changes will be lost if you don't save them.");
+	assert.deepEqual(request?.kind === 'choice' ? request.buttons : undefined, ['Save All', "Don't Save"]);
+	dialogs.model.dialogs[0]?.close({ button: DialogResult.Primary, buttonIndex: 0 });
+	assert.equal(await result, ConfirmResult.SAVE);
+});
 
 test('browser folder selection registers the chosen directory once', async () => {
 	const handle = { name: 'notes' } as FileSystemDirectoryHandle;

@@ -1,15 +1,19 @@
 import { URI } from '../../../../base/common/uri.js';
-import type {
-	IFileDialogService,
-	IOpenDialogOptions,
-	ISaveDialogOptions,
+import {
+	IDialogService,
+	type IFileDialogService,
+	type IOpenDialogOptions,
+	type ISaveDialogOptions,
 } from '../../../../platform/dialogs/common/dialogs.js';
 import type { INativeHostApi } from '../../../../platform/native/common/nativeHost.js';
 import { INativeHostService } from '../../../common/services.js';
+import { AbstractFileDialogService } from '../browser/abstractFileDialogService.js';
 
 /** Selects a filesystem path in the desktop window that owns the editor. */
-export class FileDialogService implements IFileDialogService {
-	constructor(@INativeHostService private readonly host: INativeHostApi) {}
+export class FileDialogService extends AbstractFileDialogService implements IFileDialogService {
+	constructor(@INativeHostService private readonly host: INativeHostApi, @IDialogService dialogs: IDialogService) {
+		super(() => dialogs);
+	}
 
 	async pickFileToSave(defaultUri: URI): Promise<URI | undefined> {
 		return this.showSaveDialog({ defaultUri });

@@ -3,6 +3,7 @@ import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
+import { Schemas } from '../../../../base/common/network.js';
 import { runWhenWindowIdle } from "../../../../base/browser/dom.js";
 import { TextModelConflictError, type TextModelInput, type TextModelReference, type IFileTextModelService } from "../common/textModelResourceService.js";
 import { TextResourceConflictError, type TextResourceChangeEvent, type ITextResourceStore } from "../common/textResourceStore.js";
@@ -194,6 +195,11 @@ export class BrowserTextModelService implements IFileTextModelService {
 		throwIfCancelled(signal, "Text model revert was cancelled");
 		await entry.saveQueue;
 		this.ensureEntryAlive(entry);
+		if (entry.resource.scheme === Schemas.untitled) {
+			this.applyFileContent(entry, entry.savedText, entry.revision);
+			this.setExternalChange(entry, false);
+			return;
+		}
 		const content = await this.resourceStore.resolve({ resource: entry.resource }, signal);
 		throwIfCancelled(signal, "Text model revert was cancelled");
 		this.ensureEntryAlive(entry);

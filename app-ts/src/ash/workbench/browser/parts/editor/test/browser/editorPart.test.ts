@@ -38,9 +38,9 @@ import type {
 	IKeybindingService,
 } from "../../../../../../platform/keybinding/common/keybinding.js";
 import {
-	DialogResult,
+	ConfirmResult,
 	type IDialogService,
-	type IPromptDialogOptions,
+	type IFileDialogService,
 } from "../../../../../../platform/dialogs/common/dialogs.js";
 import type {
 	EditorInput,
@@ -563,8 +563,8 @@ test("EditorPart requires an explicit dirty-close decision", async () => {
 		".ts",
 		() => new TestEditorPane("stanza.editor.code", workingCopy),
 	));
-	const dialogs = new TestDialogService(DialogResult.Cancel, DialogResult.Secondary);
-	const editor = new EditorPart(dom.window.document.body, { registry, dialogService: dialogs });
+	const fileDialogs = new TestFileDialogService(ConfirmResult.CANCEL, ConfirmResult.DONT_SAVE);
+	const editor = new EditorPart(dom.window.document.body, { registry, fileDialogService: fileDialogs });
 	const resourceInput = input("C:\\project\\dirty.ts");
 	await editor.openEditor(resourceInput);
 
@@ -574,10 +574,7 @@ test("EditorPart requires an explicit dirty-close decision", async () => {
 	assert.equal(await editor.closeEditor(resourceInput), true);
 	assert.equal(editor.activeInput, undefined);
 	assert.equal(workingCopy.revertCount, 1);
-	assert.deepEqual(dialogs.prompts.map(prompt => [prompt.primaryButton, prompt.secondaryButton]), [
-		["Save", "Don't Save"],
-		["Save", "Don't Save"],
-	]);
+	assert.deepEqual(fileDialogs.prompts, [['dirty.ts'], ['dirty.ts']]);
 
 	editor.dispose();
 	dom.window.close();
@@ -596,8 +593,8 @@ test("EditorPart saves before closing and pins a dirty preview", async () => {
 			return new TestEditorPane("stanza.editor.code", workingCopy);
 		},
 	));
-	const dialogs = new TestDialogService(DialogResult.Primary);
-	const editor = new EditorPart(dom.window.document.body, { registry, dialogService: dialogs });
+	const fileDialogs = new TestFileDialogService(ConfirmResult.SAVE);
+	const editor = new EditorPart(dom.window.document.body, { registry, fileDialogService: fileDialogs });
 	const current = input("C:\\project\\current.ts");
 	const next = input("C:\\project\\next.ts");
 	await editor.openEditor(current, { pinned: false });
@@ -1190,7 +1187,7 @@ test('editor context keys follow preview, readonly, dirty, and close transitions
 	using contextListener = contextKeys.onDidChangeContext(event => contextChanges.push([...event.keys]));
 	const editor = new EditorPart(dom.window.document.body, {
 		contextKeyService: contextKeys,
-		dialogService: new TestDialogService(DialogResult.Secondary),
+		fileDialogService: new TestFileDialogService(ConfirmResult.DONT_SAVE),
 		registry,
 	});
 	const groupProjectionChanges = contextChanges.filter(keys => keys.includes('resourceSet'));
@@ -1567,23 +1564,20 @@ class TestWorkingCopy extends Disposable implements IWorkingCopy {
 	}
 }
 
-class TestDialogService implements IDialogService {
-	readonly prompts: IPromptDialogOptions[] = [];
-	private readonly results: DialogResult[];
+class TestFileDialogService implements IFileDialogService {
+	readonly prompts: string[][] = [];
+	private readonly results: ConfirmResult[];
 
-	constructor(...results: DialogResult[]) {
+	constructor(...results: ConfirmResult[]) {
 		this.results = [...results];
 	}
 
-	async showMessage(): Promise<void> {}
-	async info(): Promise<void> {}
-	async warn(): Promise<void> {}
-	async error(): Promise<void> {}
-	async confirm(): Promise<{ confirmed: boolean }> { return { confirmed: false }; }
-	async input(): Promise<never> { throw new Error('Unexpected input dialog'); }
-	async prompt(options: IPromptDialogOptions): Promise<DialogResult> {
-		this.prompts.push(options);
-		return this.results.shift() ?? DialogResult.Cancel;
+	async pickFileToSave(): Promise<never> { throw new Error('Unexpected Save As'); }
+	async showSaveDialog(): Promise<never> { throw new Error('Unexpected save dialog'); }
+	async showOpenDialog(): Promise<never> { throw new Error('Unexpected open dialog'); }
+	async showSaveConfirm(resources: readonly (string | URI)[]): Promise<ConfirmResult> {
+		this.prompts.push(resources.map(resource => typeof resource === 'string' ? resource : resource.fsPath));
+		return this.results.shift() ?? ConfirmResult.CANCEL;
 	}
 }
 

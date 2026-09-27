@@ -4,7 +4,7 @@ import { DialogResult, type IDialogService } from '../../../platform/dialogs/com
 
 import { JSDOM } from "jsdom";
 import type { IFileService } from '../../../platform/files/common/files.js';
-import { Emitter, type Event } from "../../../base/common/event.js";
+import { Emitter, Event } from "../../../base/common/event.js";
 import { toDisposable } from "../../../base/common/lifecycle.js";
 import type { IMenu, IMenuService } from "../../../platform/actions/common/actions.js";
 import type { ICommandService } from "../../../platform/commands/common/commands.js";
@@ -15,12 +15,15 @@ import type { ApprovalMode, IActiveSessionThread, ISession, IUntitledChatSession
 import type { ISessionsManagementService, SessionsManagementState } from "../../services/sessions/common/sessionsManagement.js";
 
 const testDialogs: IDialogService = {
+	onWillShowDialog: Event.None,
+	onDidShowDialog: Event.None,
+	about: async () => { throw new Error('Unexpected about dialog'); },
 	showMessage: async () => {},
 	info: async () => {},
 	warn: async () => {},
 	error: async () => {},
 	confirm: async () => ({ confirmed: true }),
-	prompt: async () => DialogResult.Cancel,
+	prompt: async () => { throw new Error('Unexpected prompt'); },
 	input: async () => ({ confirmed: false }),
 };
 

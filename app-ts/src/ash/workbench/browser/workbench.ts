@@ -421,6 +421,9 @@ export class Workbench extends Disposable {
 		services.registerInstance(IRemoteAgentService, remoteAgentService);
 		services.registerInstance(IRemoteConnectionService, api.remoteConnections ?? UnavailableRemoteConnectionService);
 		services.registerInstance(IRemoteTunnelService, api.remoteTunnels ?? UnavailableRemoteTunnelService);
+		const dialogService = this._register(new DialogService());
+		services.registerInstance(IDialogService, dialogService);
+		services.registerInstance(IDialogsModel, dialogService.model);
 		if (nativeHostApi) {
 			services.registerInstance(INativeHostService, nativeHostApi);
 			services.registerSingleton(IFileDialogService, () => services.createInstance(FileDialogService));
@@ -686,9 +689,6 @@ export class Workbench extends Disposable {
 		})));
 		const statusbarService = this._register(new StatusbarService());
 		services.registerInstance(IStatusbarService, statusbarService);
-		const dialogService = this._register(new DialogService());
-		services.registerInstance(IDialogService, dialogService);
-		services.registerInstance(IDialogsModel, dialogService.model);
 		const languageServerStatusService = this._register(new AppServerLanguageServerStatusService(api.events, dialogService, outputService, statusbarService, workspaceContext));
 		services.registerInstance(ILanguageServerStatusService, languageServerStatusService);
 		services.registerInstance(
@@ -844,6 +844,7 @@ export class Workbench extends Disposable {
 			serverEvents: api.events,
 			workingCopyService,
 			dialogService,
+			fileDialogService: services.getOptional(IFileDialogService),
 			bulkEditService,
 			saveAsResource: nativeHostApi || browserFileSystemProvider || webWorkspaceClient && workspace.folders.length > 0
 				? defaultName => services.get(IFileDialogService).pickFileToSave(URI.file(`/${defaultName}`))

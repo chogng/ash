@@ -2,6 +2,7 @@ import {
 	createServiceIdentifier,
 } from "../../instantiation/common/instantiation.js";
 import type { URI } from '../../../base/common/uri.js';
+import type { Event } from '../../../base/common/event.js';
 
 /** Visual severity used by a modal message dialog. */
 export enum DialogSeverity {
@@ -60,6 +61,22 @@ export interface IPromptDialogOptions extends IDialogOptions {
 	readonly cancelButton?: string;
 }
 
+export interface IActionPromptButton<T> {
+	readonly label: string;
+	run(checkbox: { readonly checkboxChecked?: boolean }): T | Promise<T>;
+}
+
+export interface IActionPromptOptions<T> extends IDialogOptions {
+	readonly severity?: DialogSeverity;
+	readonly buttons: readonly IActionPromptButton<T>[];
+	readonly cancelButton?: string | IActionPromptButton<T>;
+}
+
+export interface IActionPromptResult<T> {
+	readonly result?: T;
+	readonly checkboxChecked?: boolean;
+}
+
 /** Requests understood by a host-specific dialog handler. */
 export type DialogRequest =
 	| ({
@@ -71,6 +88,12 @@ export type DialogRequest =
 	| ({
 		readonly kind: "prompt";
 	} & IPromptDialogOptions)
+	| ({
+		readonly kind: 'choice';
+		readonly severity?: DialogSeverity;
+		readonly buttons: readonly string[];
+		readonly cancelButton: string;
+	} & IDialogOptions)
 	| ({
 		readonly kind: "input";
 	} & IInputDialogOptions);
@@ -84,6 +107,7 @@ export enum DialogResult {
 
 export interface IDialogOutcome {
 	readonly button: DialogResult;
+	readonly buttonIndex?: number;
 	readonly values?: readonly string[];
 	readonly checkboxChecked?: boolean;
 }
@@ -102,13 +126,16 @@ export interface IDialogHandler {
 
 /** Window-scoped access to modal workbench dialogs. */
 export interface IDialogService {
+	readonly onWillShowDialog: Event<void>;
+	readonly onDidShowDialog: Event<void>;
 	showMessage(options: IMessageDialogOptions): Promise<void>;
 	info(message: string, detail?: string): Promise<void>;
 	warn(message: string, detail?: string): Promise<void>;
 	error(message: string, detail?: string): Promise<void>;
 	confirm(options: IConfirmationDialogOptions): Promise<IConfirmationDialogResult>;
-	prompt(options: IPromptDialogOptions): Promise<DialogResult>;
+	prompt<T>(options: IActionPromptOptions<T>): Promise<IActionPromptResult<T>>;
 	input(options: IInputDialogOptions): Promise<IInputDialogResult>;
+	about(): Promise<void>;
 }
 
 export const IDialogService =
@@ -117,8 +144,15 @@ export const IDialogService =
 /** Selects a file path for an editor Save As operation. */
 export interface IFileDialogService {
 	pickFileToSave(defaultUri: URI): Promise<URI | undefined>;
+	showSaveConfirm(fileNamesOrResources: readonly (string | URI)[], detail?: string): Promise<ConfirmResult>;
 	showSaveDialog(options: ISaveDialogOptions): Promise<URI | undefined>;
 	showOpenDialog(options: IOpenDialogOptions): Promise<readonly URI[] | undefined>;
+}
+
+export enum ConfirmResult {
+	SAVE,
+	DONT_SAVE,
+	CANCEL,
 }
 
 export interface FileFilter {

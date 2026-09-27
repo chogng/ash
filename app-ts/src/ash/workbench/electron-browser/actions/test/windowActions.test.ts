@@ -28,6 +28,10 @@ test('desktop dialog and shell routes reject malformed requests', async () => {
 	assert.ok(shell);
 	assert.throws(() => dialog.validate({ kind: 'show', id: 0, request: { kind: 'message', severity: 'info', message: 'Hello' } }), /Invalid dialog ID/);
 	assert.throws(() => dialog.validate({ kind: 'show', id: 1, request: { kind: 'message', severity: 'info', message: 'Hello', execute: 'bad' } }), /Invalid dialog request/);
+	assert.deepEqual(dialog.validate({ kind: 'show', id: 2, request: { kind: 'choice', severity: 'warning', message: 'Choose', buttons: ['First', 'Second'], cancelButton: 'Cancel' } }),
+		{ kind: 'show', id: 2, request: { kind: 'choice', severity: 'warning', message: 'Choose', buttons: ['First', 'Second'], cancelButton: 'Cancel' } });
+	assert.throws(() => dialog.validate({ kind: 'show', id: 3, request: { kind: 'choice', message: 'Choose', buttons: [0] } }), /Invalid dialog request/);
+	assert.throws(() => dialog.validate({ kind: 'show', id: 4, request: { kind: 'choice', severity: 'critical', message: 'Choose', buttons: ['First'], cancelButton: 'Cancel' } }), /Invalid dialog request/);
 	await dialog.invoke(dialog.validate({ kind: 'show', id: 1, request: { kind: 'message', severity: 'info', message: 'Hello' } }));
 	assert.equal(operations.length, 1);
 	assert.throws(() => shell.validate('erase'), /Invalid shell command operation/);

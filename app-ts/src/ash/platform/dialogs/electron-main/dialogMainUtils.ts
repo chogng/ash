@@ -11,7 +11,7 @@ export function massageMessageBoxOptions(
 	const originalDefault = options.defaultId ?? 0;
 	const originalCancel = options.cancelId ?? buttons.length - 1;
 	const legacyMacOrder = platform === 'darwin' && Number.parseInt(release(), 10) < 24;
-	if (buttons.length > 1 && (platform === 'linux' || legacyMacOrder) && originalCancel !== 1) {
+	if (buttons.length > 1 && originalCancel >= 0 && (platform === 'linux' || legacyMacOrder) && originalCancel !== 1) {
 		buttons.splice(1, 0, buttons.splice(originalCancel, 1)[0]!);
 		buttonIndices.splice(1, 0, buttonIndices.splice(originalCancel, 1)[0]!);
 	}
@@ -34,13 +34,17 @@ export function massageMessageBoxOptions(
 }
 
 export function messageBoxOptions(request: Exclude<DialogRequest, { kind: 'input' }>, signal: AbortSignal): MessageBoxOptions {
-	const buttons = request.kind === 'message'
-		? [request.primaryButton ?? 'OK']
-		: request.kind === 'confirmation'
-			? [request.primaryButton ?? 'Confirm', request.cancelButton ?? 'Cancel']
-			: [request.primaryButton, request.secondaryButton, request.cancelButton ?? 'Cancel'];
+	const buttons = request.kind === 'choice'
+		? [...request.buttons, request.cancelButton]
+		: request.kind === 'message'
+			? [request.primaryButton ?? 'OK']
+			: request.kind === 'confirmation'
+				? [request.primaryButton ?? 'Confirm', request.cancelButton ?? 'Cancel']
+				: [request.primaryButton, request.secondaryButton, request.cancelButton ?? 'Cancel'];
+	const severity = request.kind === 'message' || request.kind === 'choice'
+		? request.severity ?? 'question' : 'question';
 	return {
-		type: request.kind === 'message' ? request.severity : 'question',
+		type: severity,
 		title: request.title,
 		message: request.message,
 		detail: request.detail,
@@ -57,6 +61,12 @@ export function messageBoxOutcome(
 	request: Exclude<DialogRequest, { kind: 'input' }>,
 	result: MessageBoxReturnValue,
 ): IDialogOutcome {
+	if (request.kind === 'choice') {
+		if (result.response === request.buttons.length) {
+			return { button: DialogResult.Cancel, checkboxChecked: result.checkboxChecked };
+		}
+		return { button: DialogResult.Primary, buttonIndex: result.response, checkboxChecked: result.checkboxChecked };
+	}
 	if (request.kind !== 'message' && result.response === (request.kind === 'confirmation' ? 1 : 2)) {
 		return { button: DialogResult.Cancel, checkboxChecked: result.checkboxChecked };
 	}

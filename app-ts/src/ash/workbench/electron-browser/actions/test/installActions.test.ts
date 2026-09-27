@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
+import { Event } from '../../../../base/common/event.js';
 import { DialogSeverity, IDialogService, type IMessageDialogOptions } from '../../../../platform/dialogs/common/dialogs.js';
 import { ServiceContainer } from '../../../../platform/instantiation/common/instantiation.js';
 import type { INativeHostApi } from '../../../../platform/native/common/nativeHost.js';
@@ -10,6 +11,9 @@ test('shell command actions report the installed path and installation errors', 
 	using services = new ServiceContainer();
 	const messages: IMessageDialogOptions[] = [];
 	services.registerInstance(IDialogService, {
+		onWillShowDialog: Event.None,
+		onDidShowDialog: Event.None,
+		about: async () => { throw new Error('Unexpected about dialog'); },
 		showMessage: async options => { messages.push(options); },
 		info: async () => {},
 		warn: async () => {},

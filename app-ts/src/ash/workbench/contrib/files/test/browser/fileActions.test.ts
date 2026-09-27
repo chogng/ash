@@ -62,6 +62,7 @@ test('Open File command opens every file selected by the dialog', async () => {
 		const services = new ServiceContainer();
 		services.registerInstance(IFileDialogService, {
 			pickFileToSave: async () => { throw new Error('Unexpected Save As'); },
+			showSaveConfirm: async () => { throw new Error('Unexpected save confirmation'); },
 			showSaveDialog: async () => { throw new Error('Unexpected save dialog'); },
 			showOpenDialog: async options => {
 				assert.equal(options.canSelectMany, true);

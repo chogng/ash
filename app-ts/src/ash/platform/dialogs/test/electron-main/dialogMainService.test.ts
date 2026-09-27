@@ -42,6 +42,23 @@ test('message box button order preserves caller response indices on Linux', () =
 	});
 });
 
+test('four-button prompt keeps its cancel and default positions on Linux', () => {
+	const prepared = massageMessageBoxOptions({
+		message: 'Choose', buttons: ['First', 'Second', 'Third', 'Cancel'], defaultId: 0, cancelId: 3,
+	}, 'linux');
+	assert.deepEqual({
+		buttons: prepared.options.buttons,
+		defaultId: prepared.options.defaultId,
+		cancelId: prepared.options.cancelId,
+		buttonIndices: prepared.buttonIndices,
+	}, {
+		buttons: ['Third', 'Second', 'Cancel', 'First'],
+		defaultId: 3,
+		cancelId: 2,
+		buttonIndices: [2, 1, 3, 0],
+	});
+});
+
 test('dialog main service maps message, confirmation, and prompt results', async () => {
 	const options: MessageBoxOptions[] = [];
 	const responses = [0, 1, 1, 2];
@@ -61,6 +78,19 @@ test('dialog main service maps message, confirmation, and prompt results', async
 		cancelledPrompt: { button: DialogResult.Cancel, checkboxChecked: true },
 		buttons: [['OK'], ['Confirm', 'Cancel'], ['Save', 'Discard', 'Cancel'], ['Save', 'Discard', 'Cancel']],
 	});
+});
+
+test('dialog main service returns the selected action index and checkbox state', async () => {
+	let shown: MessageBoxOptions | undefined;
+	using dialogs = new DialogMainService(api(async options => {
+		shown = options;
+		return { response: 2, checkboxChecked: true };
+	}));
+	const request = { kind: 'choice' as const, severity: DialogSeverity.Warning, message: 'Choose action', buttons: ['First', 'Second', 'Third'], cancelButton: 'Cancel' };
+	const result = await dialogs.perform(windowWithId(11), { kind: 'show', id: 1, request });
+	assert.deepEqual(shown?.buttons, ['First', 'Second', 'Third', 'Cancel']);
+	assert.equal(shown?.type, 'warning');
+	assert.deepEqual(result, { button: DialogResult.Primary, buttonIndex: 2, checkboxChecked: true });
 });
 
 test('dialog main service cancels active and queued renderer requests', async () => {

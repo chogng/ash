@@ -19,7 +19,7 @@ import type { IKeybindingService } from "../../../../platform/keybinding/common/
 import type { IKeybindingsResourceService } from "../../../../platform/keybinding/common/keybindingsResource.js";
 import type { IKeyboardLayoutService } from "../../../../platform/keyboardLayout/common/keyboardLayout.js";
 import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
-import { DialogResult, type IDialogService } from "../../../../platform/dialogs/common/dialogs.js";
+import { ConfirmResult, type IDialogService, type IFileDialogService } from "../../../../platform/dialogs/common/dialogs.js";
 import { type ITextFileService } from "../../../services/textfile/common/textFileService.js";
 import type { IFileService } from "../../../../platform/files/common/files.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
@@ -126,6 +126,7 @@ export interface IEditorPartOptions {
 	readonly serverEvents?: IServerEventApi;
 	readonly workingCopyService?: IWorkingCopyService;
 	readonly dialogService?: IDialogService;
+	readonly fileDialogService?: IFileDialogService;
 	readonly bulkEditService?: IBulkEditService;
 	readonly registry?: EditorPaneRegistry;
 	readonly titleActions?: {
@@ -156,6 +157,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 	private readonly saveAsResource: ((defaultName: string) => Promise<URI | undefined>) | undefined;
 	private readonly inputSerializers: EditorInputSerializerRegistry;
 	private readonly dialogService: IDialogService | undefined;
+	private readonly fileDialogService: IFileDialogService | undefined;
 	private readonly editorsObserver: EditorsObserver;
 	private readonly recentlyClosed: RecentlyClosedEditor[] = [];
 
@@ -203,6 +205,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		this.saveAsResource = options.saveAsResource;
 		this.inputSerializers = options.inputSerializers ?? EditorInputSerializers;
 		this.dialogService = options.dialogService;
+		this.fileDialogService = options.fileDialogService;
 		this.tabDragAndDrop = new EditorTabDragAndDropController((event) => {
 			this.dropEditor(event);
 		});
@@ -532,19 +535,13 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 	private async confirmEditorClose(group: IEditorGroup | undefined, input: EditorInput, pane: IEditorPane): Promise<boolean> {
 		const workingCopy = pane.workingCopy;
 		if (!workingCopy?.isDirty) return true;
-		if (!this.dialogService) return false;
+		if (!this.fileDialogService) return false;
 		const label = editorInputLabel(input);
-		const result = await this.dialogService.prompt({
-			title: "Save Changes",
-			message: `Do you want to save the changes you made to ${label}?`,
-			...(workingCopy.hasExternalChange ? { detail: "The file has also changed on disk. Saving may require resolving a conflict." } : {}),
-			primaryButton: "Save",
-			secondaryButton: "Don't Save",
-			cancelButton: "Cancel",
-		});
-		if (result === DialogResult.Cancel) return false;
+		const decision = await this.fileDialogService.showSaveConfirm([label], workingCopy.hasExternalChange
+			? "The file has also changed on disk. Saving may require resolving a conflict." : undefined);
+		if (decision === ConfirmResult.CANCEL) return false;
 		const controller = new AbortController();
-		if (result === DialogResult.Secondary) {
+		if (decision === ConfirmResult.DONT_SAVE) {
 			await workingCopy.revert(controller.signal);
 			return !workingCopy.isDirty;
 		}

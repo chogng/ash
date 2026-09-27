@@ -115,6 +115,8 @@ class TestQuickPick<TItem extends IQuickPickItem> implements IQuickPick<TItem> {
 }
 
 class TestDialogService implements IDialogService {
+	readonly onWillShowDialog = Event.None;
+	readonly onDidShowDialog = Event.None;
 	readonly messages: IMessageDialogOptions[] = [];
 	readonly confirmations: IConfirmationDialogOptions[] = [];
 
@@ -124,13 +126,14 @@ class TestDialogService implements IDialogService {
 	async info(): Promise<void> {}
 	async warn(): Promise<void> {}
 	async error(): Promise<void> {}
+	async about(): Promise<void> { throw new Error('Unexpected about dialog'); }
 
 	async confirm(options: IConfirmationDialogOptions): Promise<{ confirmed: boolean }> {
 		this.confirmations.push(options);
 		return { confirmed: true };
 	}
 
-	async prompt(_options: IPromptDialogOptions): Promise<DialogResult> { return DialogResult.Cancel; }
+	async prompt(): Promise<never> { throw new Error('Unexpected prompt'); }
 	async input(): Promise<never> { throw new Error('Unexpected input dialog'); }
 }
 

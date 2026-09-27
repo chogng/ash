@@ -40,7 +40,7 @@ export function validateNativeDialogOperation(value: unknown): NativeDialogOpera
 	const request = operation.request;
 	if (!request || typeof request !== 'object' || Array.isArray(request)) throw new TypeError('Invalid dialog request');
 	const fields = request as Record<string, unknown>;
-	const allowed = new Set(['kind', 'title', 'message', 'detail', 'severity', 'primaryButton', 'secondaryButton', 'cancelButton', 'checkbox']);
+	const allowed = new Set(['kind', 'title', 'message', 'detail', 'severity', 'primaryButton', 'secondaryButton', 'cancelButton', 'checkbox', 'buttons']);
 	if (Object.keys(fields).some(key => !allowed.has(key)) || typeof fields.message !== 'string') throw new TypeError('Invalid dialog request');
 	for (const key of ['title', 'detail', 'primaryButton', 'secondaryButton', 'cancelButton']) {
 		if (fields[key] !== undefined && typeof fields[key] !== 'string') throw new TypeError('Invalid dialog request');
@@ -51,9 +51,11 @@ export function validateNativeDialogOperation(value: unknown): NativeDialogOpera
 		const properties = checkbox as Record<string, unknown>;
 		if (Object.keys(properties).some(key => key !== 'label' && key !== 'checked') || typeof properties.label !== 'string' || properties.checked !== undefined && typeof properties.checked !== 'boolean') throw new TypeError('Invalid dialog checkbox');
 	}
-	if (fields.kind === 'message' && ['info', 'warning', 'error'].includes(fields.severity as string) && fields.secondaryButton === undefined && fields.cancelButton === undefined) return operation as NativeDialogOperation;
-	if (fields.kind === 'confirmation' && fields.severity === undefined && fields.secondaryButton === undefined) return operation as NativeDialogOperation;
-	if (fields.kind === 'prompt' && fields.severity === undefined && typeof fields.primaryButton === 'string' && typeof fields.secondaryButton === 'string') return operation as NativeDialogOperation;
+	if (fields.kind === 'message' && fields.buttons === undefined && ['info', 'warning', 'error'].includes(fields.severity as string) && fields.secondaryButton === undefined && fields.cancelButton === undefined) return operation as NativeDialogOperation;
+	if (fields.kind === 'confirmation' && fields.buttons === undefined && fields.severity === undefined && fields.secondaryButton === undefined) return operation as NativeDialogOperation;
+	if (fields.kind === 'prompt' && fields.buttons === undefined && fields.severity === undefined && typeof fields.primaryButton === 'string' && typeof fields.secondaryButton === 'string') return operation as NativeDialogOperation;
+	if (fields.kind === 'choice' && (fields.severity === undefined || ['info', 'warning', 'error'].includes(fields.severity as string)) && fields.primaryButton === undefined && fields.secondaryButton === undefined
+		&& typeof fields.cancelButton === 'string' && Array.isArray(fields.buttons) && fields.buttons.length > 0 && fields.buttons.every(button => typeof button === 'string')) return operation as NativeDialogOperation;
 	throw new TypeError('Invalid dialog request');
 }
 

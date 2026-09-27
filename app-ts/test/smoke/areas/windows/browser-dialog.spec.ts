@@ -1,4 +1,6 @@
 import { expect, test } from '../../../automation/test.js';
+import type { ElectronApplication } from '@playwright/test';
+import type { BrowserWindow, MessageBoxOptions } from 'electron';
 
 test.use({ openWorkspace: false });
 
@@ -19,6 +21,39 @@ test('browser keeps its save confirmation in the workbench', async ({ target, wo
 	await expect(dialog).toBeVisible();
 	await dialog.getByRole('button', { name: "Don't Save" }).click();
 	await expect(dialog).toHaveCount(0);
+});
+
+test('desktop dirty editor sends its choices through the owning window dialog', async ({ target, application, workbench }) => {
+	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code' || target.appServerMode !== 'disabled');
+	const electron = application as ElectronApplication;
+	await electron.evaluate(({ dialog }) => {
+		const original = dialog.showMessageBox.bind(dialog);
+		const state = globalThis as typeof globalThis & { ashSaveDialog?: { options?: MessageBoxOptions; finish?: () => void; restore: () => void } };
+		state.ashSaveDialog = { restore: () => { dialog.showMessageBox = original; } };
+		dialog.showMessageBox = ((...args: [MessageBoxOptions] | [BrowserWindow, MessageBoxOptions]) => new Promise(resolve => {
+			const options = args.length === 1 ? args[0] : args[1];
+			state.ashSaveDialog!.options = options;
+			state.ashSaveDialog!.finish = () => resolve({ response: options.buttons?.indexOf("Don't Save") ?? -1, checkboxChecked: false });
+		})) as typeof dialog.showMessageBox;
+	});
+	try {
+		const page = workbench.page;
+		await page.keyboard.press('F1');
+		await page.locator('.ash-quick-pick').getByRole('combobox').fill('New Untitled Text Editor');
+		await page.keyboard.press('Enter');
+		const input = workbench.editors.groupAt(0).content.locator('.stanza-editor-input');
+		await expect(input).toBeVisible();
+		await input.focus();
+		await input.type('unsaved draft');
+		await page.keyboard.press('F1');
+		await page.locator('.ash-quick-pick').getByRole('combobox').fill('Close Editor');
+		await page.keyboard.press('Enter');
+		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashSaveDialog?: { options?: MessageBoxOptions } }).ashSaveDialog?.options?.buttons)).toEqual(['Save', "Don't Save", 'Cancel']);
+		await electron.evaluate(() => (globalThis as typeof globalThis & { ashSaveDialog?: { finish?: () => void } }).ashSaveDialog?.finish?.());
+		await expect(input).toHaveCount(0);
+	} finally {
+		await electron.evaluate(() => (globalThis as typeof globalThis & { ashSaveDialog?: { restore: () => void } }).ashSaveDialog?.restore());
+	}
 });
 
 test('browser Save As writes an untitled editor to the selected folder', async ({ target, workbench }) => {

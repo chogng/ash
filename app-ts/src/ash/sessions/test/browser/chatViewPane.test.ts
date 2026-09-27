@@ -5,7 +5,7 @@ import type { ModelRef, ServerNotification, Session as SessionDto, SessionCreate
 import type { SessionMutationParams, SessionOperationInput } from "../../../platform/sessions/common/sessionApi.js";
 import type { IRendererHost } from "../../../platform/renderer/common/rendererHost.js";
 import type { IAction } from "../../../base/common/actions.js";
-import { Emitter } from "../../../base/common/event.js";
+import { Emitter, Event } from "../../../base/common/event.js";
 import { TAB_CLOSE_ACTION_ID } from "../../../base/browser/ui/tablist/tabList.js";
 import { Lxicon } from "../../../base/common/lxicons.js";
 import { MenuId } from "../../../platform/actions/common/actions.js";
@@ -44,12 +44,15 @@ import type { IOpenerService } from "../../../platform/opener/common/openerServi
 import type { IEditorService } from "../../../workbench/services/editor/common/editorService.js";
 
 const testDialogs: IDialogService = {
+	onWillShowDialog: Event.None,
+	onDidShowDialog: Event.None,
+	about: async () => { throw new Error('Unexpected about dialog'); },
 	showMessage: async () => {},
 	info: async () => {},
 	warn: async () => {},
 	error: async () => {},
 	confirm: async () => ({ confirmed: true }),
-	prompt: async () => DialogResult.Cancel,
+	prompt: async () => { throw new Error('Unexpected prompt'); },
 	input: async () => ({ confirmed: false }),
 };
 
@@ -2089,13 +2092,16 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 
 function recordingDialogService(messages: IMessageDialogOptions[]): IDialogService {
 	return {
+		onWillShowDialog: Event.None,
+		onDidShowDialog: Event.None,
+		about: async () => { throw new Error('Unexpected about dialog'); },
 		showMessage: async options => { messages.push(options); },
 		info: async () => {},
 		warn: async () => {},
 		error: async () => {},
 		confirm: async () => ({ confirmed: false }),
 		input: async () => { throw new Error('Unexpected input dialog'); },
-		prompt: async () => DialogResult.Cancel,
+		prompt: async () => { throw new Error('Unexpected prompt'); },
 	};
 }
 

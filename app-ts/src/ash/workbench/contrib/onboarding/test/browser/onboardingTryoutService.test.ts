@@ -28,13 +28,16 @@ suite('OnboardingTryoutService', () => {
 		});
 		services.registerInstance(IViewsService, { openView: () => undefined, focusView: () => false });
 		services.registerInstance(IDialogService, {
+			onWillShowDialog: Event.None,
+			onDidShowDialog: Event.None,
+			about: async () => { throw new Error('Unexpected about dialog'); },
 			async showMessage() {},
 			async info() {},
 			async warn() {},
 			async error() {},
 			async confirm(_options: IConfirmationDialogOptions) { return { confirmed }; },
 			async input() { throw new Error('Unexpected input dialog'); },
-			async prompt() { return DialogResult.Cancel; },
+			async prompt(): Promise<never> { throw new Error('Unexpected prompt'); },
 		});
 		const notify = (options: NotificationOptions) => {
 			notifications.push(options);

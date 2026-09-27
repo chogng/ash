@@ -141,6 +141,18 @@ test("Stanza text model references track dirty content, save snapshots, and expl
 	assert.equal(dirtyChanges, 4);
 });
 
+test('discarding an untitled text model restores its initial content without reading a workspace file', async () => {
+	const textFiles = new TestTextFileService('unrelated file');
+	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
+	using reference = await models.acquire({ resource: URI.parse('untitled:/draft'), initialText: '' }, new AbortController().signal);
+	reference.model.applyEdits([{ range: Range.fromPositions(new Position(1, 1)), text: 'unsaved draft' }]);
+	assert.equal(reference.isDirty, true);
+	await reference.revert(new AbortController().signal);
+	assert.deepEqual({ text: reference.model.getText(), dirty: reference.isDirty, resolves: textFiles.resolveCount }, {
+		text: '', dirty: false, resolves: 1,
+	});
+});
+
 test("Stanza text model save tolerates its final reference closing before I/O completes", async () => {
 	const pending = deferred<void>();
 	const textFiles: ITextFileService = {
