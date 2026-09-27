@@ -1,6 +1,6 @@
 import { expect, test } from '../../../automation/test.js';
 
-test('Settings opens with editor display controls', async ({ workbench }) => {
+test('Settings opens with editor display controls', async ({ target, workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+Shift+P');
 	await page.getByPlaceholder('Type the name of a command to run').fill('Ash Settings');
@@ -9,6 +9,17 @@ test('Settings opens with editor display controls', async ({ workbench }) => {
 	await page.locator('[data-settings-category-id="editor"]').click();
 	await expect(page.locator('[data-configuration-key="editor.renderWhitespace"]')).toBeVisible();
 	await expect(page.locator('[data-configuration-key="editor.renderControlCharacters"]')).toBeVisible();
+	if (target.workbenchMode === 'code') {
+		await page.locator('[data-settings-group-id="workbench"]').click();
+		await page.locator('[data-settings-category-id="layout"]').click();
+		const sessionsLayoutStyle = page.locator('[data-configuration-key="sessions.layoutStyle"]').getByRole('combobox');
+		await expect(sessionsLayoutStyle).toBeVisible();
+		await sessionsLayoutStyle.click();
+		await page.getByRole('option', { name: 'Flat' }).click();
+		await expect(sessionsLayoutStyle).toHaveText('Flat');
+		await sessionsLayoutStyle.click();
+		await page.getByRole('option', { name: 'Modern' }).click();
+	}
 });
 
 test.describe('without an open workspace', () => {

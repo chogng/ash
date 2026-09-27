@@ -40,6 +40,7 @@ import { BrowserStorageService } from "../../workbench/services/storage/browser/
 import { IWorkbenchHostService } from "../../workbench/services/host/common/workbenchHostService.js";
 import { WorkbenchThemeService } from "../../workbench/services/themes/browser/workbenchThemeService.js";
 import { AppServerSessionsProvider } from "../contrib/providers/appServer/browser/appServerSessionsProvider.js";
+import { SessionsModernUIContribution } from '../contrib/modernUI/browser/modernUI.contribution.js';
 import type { SessionsProfile } from "../common/sessionsProfile.js";
 import { SessionsManagementService } from "../services/sessions/browser/sessionsManagementService.js";
 import { ISessionsManagementService } from "../services/sessions/common/sessionsManagement.js";
@@ -222,6 +223,7 @@ export class Workbench extends Disposable {
 			initialDimension: this.layoutService.mainContainerDimension,
 			storageService: storage,
 		}));
+		this._register(new SessionsModernUIContribution(this.domNode, layout, configurationService));
 		navigationbar.updateDetailsVisibility(layout.isPartVisible('auxiliarybar'));
 		this._register(layout.onDidChangePartVisibility(event => {
 			if (event.partId === 'auxiliarybar') navigationbar.updateDetailsVisibility(event.visible);

@@ -3,6 +3,7 @@ import { installBaseUiStyles } from '../../base/browser/ui/styles.js';
 import { Disposable, DisposableTracker, installDisposableTracker, toDisposable } from '../../base/common/lifecycle.js';
 import { URI } from '../../base/common/uri.js';
 import { IFileService } from '../../platform/files/common/files.js';
+import { invoke } from '../../platform/ipc/electron-browser/rendererIpc.js';
 import { ServiceContainer } from '../../platform/instantiation/common/instantiation.js';
 import { createElectronRendererApi, type ElectronRendererCapabilityContribution } from '../../platform/native/electron-browser/rendererApi.js';
 import { registerWindowCloseHandler } from '../../platform/windows/electron-browser/windowClose.js';
@@ -80,7 +81,7 @@ export class DesktopMain extends Disposable {
 			} finally {
 				tracking?.[Symbol.dispose]();
 			}
-			showStartupError(error);
+			showStartupError(error, text => invoke<void>('ash:host:writeClipboard', text));
 		}
 	}
 

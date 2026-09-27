@@ -52,13 +52,13 @@ async function startBrowserWorkbenchAsync(modeId: WorkbenchModeId, rendererCapab
 		connectedHost = toDisposable(() => { authenticationLink.dispose(); connected.dispose(); transport?.dispose(); });
 	} catch (error) {
 		transport?.dispose();
-		showStartupError(error);
+		showStartupError(error, text => new BrowserClipboardService(window.navigator.clipboard).writeText(text));
 		return;
 	}
 	try {
 		startWebWorkbench(modeId, connectedHost);
 	} catch (error) {
 		connectedHost?.dispose();
-		showStartupError(error);
+		showStartupError(error, text => new BrowserClipboardService(window.navigator.clipboard).writeText(text));
 	}
 }

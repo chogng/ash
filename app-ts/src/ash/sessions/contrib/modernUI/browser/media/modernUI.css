@@ -1,0 +1,18 @@
+.ash-sessions-window.modern-ui .ash-workbench-navigationbar {
+	border: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-radius: var(--ash-corner-radius-large) 0 0 var(--ash-corner-radius-large);
+	overflow: hidden;
+}
+
+.ash-sessions-window.modern-ui .ash-workbench-sidebar {
+	border: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-left: 0;
+	border-radius: 0 var(--ash-corner-radius-large) var(--ash-corner-radius-large) 0;
+	overflow: hidden;
+}
+
+.ash-sessions-window.modern-ui :is(.ash-workbench-sessions, .ash-workbench-auxiliarybar) {
+	border: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-radius: var(--ash-corner-radius-large);
+	overflow: hidden;
+}

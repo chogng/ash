@@ -22,6 +22,10 @@ const { WorkbenchPart } = await import("../../../workbench/browser/part.js");
 const { BrowserStorageService } = await import("../../../workbench/services/storage/browser/storageService.js");
 const { WillSaveStateReason } = await import("../../../platform/storage/common/storage.js");
 const { SessionsWorkbenchLayout, sessionsPartIds } = await import("../../../sessions/browser/layoutPolicy.js");
+const { SessionsModernUIContribution } = await import('../../../sessions/contrib/modernUI/browser/modernUI.contribution.js');
+const { SessionsConfiguration } = await import('../../../sessions/common/configuration.js');
+const { WorkbenchConfiguration } = await import('../../../workbench/common/configuration.js');
+const { WorkbenchConfigurationService } = await import('../../../workbench/services/configuration/browser/configurationService.js');
 
 type SessionsPartId = import("../../../sessions/browser/layoutPolicy.js").SessionsPartId;
 type WorkbenchPartInstance = import("../../../workbench/browser/part.js").WorkbenchPart;
@@ -62,7 +66,7 @@ test("Sessions layout owns a fixed Sessions-first Part topology", () => {
 	layout.layout(new Dimension(1_200, 800));
 
 	assert.deepEqual(layout.getPartSize("titlebar"), new Dimension(1_200, 46));
-	assert.equal(Math.abs(layout.getPartSize('navigationbar').width - 56) <= 1, true);
+	assert.equal(Math.abs(layout.getPartSize('navigationbar').width - 62) <= 1, true);
 	assert.equal(Math.abs(layout.getPartSize("sidebar").width - 260) <= 1, true);
 	assert.equal(Math.abs(layout.getPartSize("auxiliarybar").width - 200) <= 1, true);
 	assert.equal(layout.getPartSize("sessions").height, 754);
@@ -74,6 +78,42 @@ test("Sessions layout owns a fixed Sessions-first Part topology", () => {
 	layout.dispose();
 	for (const part of parts.values()) part.dispose();
 	dom.window.close();
+});
+
+test('Sessions layout style changes without changing the IDE preference or visible Parts', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const container = h(dom.window.document, 'main');
+	dom.window.document.body.append(container);
+	const parts = createParts(dom.window.document);
+	const configuration = new WorkbenchConfigurationService();
+	const layout = new SessionsWorkbenchLayout(container, parts, { initialDimension: new Dimension(1_200, 800) });
+	const appearance = new SessionsModernUIContribution(container, layout, configuration);
+	const sessionsFrame = parts.get('sessions')!.domNode.parentElement as HTMLElement;
+	const surface = () => ({
+		style: container.dataset.layoutStyle,
+		leftInset: sessionsFrame.style.paddingLeft,
+		rightInset: sessionsFrame.style.paddingRight,
+	});
+	try {
+		layout.layout(new Dimension(1_200, 800));
+		assert.deepEqual(surface(), { style: 'modern', leftInset: '3px', rightInset: '3px' });
+		await configuration.updateValue(SessionsConfiguration.layoutStyle, 'flat');
+		assert.deepEqual(surface(), { style: 'flat', leftInset: '0px', rightInset: '0px' });
+		assert.equal(container.classList.contains('modern-ui'), false);
+		assert.equal(configuration.getValue(WorkbenchConfiguration.layoutStyle), 'modern');
+		assert.equal(layout.isPartVisible('auxiliarybar'), true);
+		await configuration.updateValue(WorkbenchConfiguration.layoutStyle, 'flat');
+		assert.equal(container.dataset.layoutStyle, 'flat');
+		await configuration.updateValue(SessionsConfiguration.layoutStyle, 'modern');
+		layout.hidePart('auxiliarybar');
+		assert.equal(sessionsFrame.style.paddingRight, '8px');
+	} finally {
+		appearance.dispose();
+		layout.dispose();
+		configuration.dispose();
+		for (const part of parts.values()) part.dispose();
+		dom.window.close();
+	}
 });
 
 test("Sessions layout only permits the optional auxiliary Part to hide", () => {

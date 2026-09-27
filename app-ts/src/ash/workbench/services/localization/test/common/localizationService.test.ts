@@ -56,6 +56,11 @@ test("localization lookup falls back to English and formats parameters", async (
 	assert.equal(localization.translate("ash.missing", "missing", "Hello {name}", { name: "Ada" }), "Hello Ada");
 	await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
 	assert.deepEqual([
+		localization.translate('ash', 'workbench.startupError.title', 'Unable to start Ash'),
+		localization.translate('ash', 'workbench.startupError.copy', 'Copy details'),
+		localization.translate('ash', 'workbench.startupError.copyFailed', 'Could not copy. Select the details above to copy them manually.'),
+	], ['无法启动 Ash', '复制详情', '无法复制。请选中上方详情并手动复制。']);
+	assert.deepEqual([
 		commandActionLabel(localizedString('ash.menu', 'file', 'File')),
 		commandActionLabel(localizedString('ash.actions', 'showPanel', 'Show Panel')),
 		commandActionLabel(localizedString('ash.actions', 'openAgentsWindow', 'Open Agents Window')),

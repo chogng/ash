@@ -7,6 +7,7 @@ import "../../../../workbench/contrib/debug/browser/debug.contribution.js";
 import "../../../../workbench/contrib/tasks/browser/tasks.contribution.js";
 import "../../../../workbench/contrib/testing/browser/testing.contribution.js";
 import "../codeWorkbenchServices.js";
+import '../../../../sessions/common/configuration.js';
 import { ISyntaxApi } from "../../../../platform/syntax/common/syntaxApi.js";
 import { ILanguageFeaturesService } from "../../../../editor/common/services/languageFeatures.js";
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../../workbench/common/contributions.js";

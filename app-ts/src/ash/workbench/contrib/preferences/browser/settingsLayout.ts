@@ -98,6 +98,11 @@ export const SettingsNavigation = [
 					get label() { return localize('settings.workbench.layout.group.label', 'Workbench layout'); },
 					get description() { return localize('settings.workbench.layout.description', 'Configure the Workbench layout and window zoom.'); },
 					settings: ['workbench.layoutStyle', 'workbench.activityBar.location', 'workbench.activityBar.compact', 'workbench.sideBar.location', 'window.zoomLevel'],
+				}, {
+					id: 'sessions',
+					get label() { return localize('settings.sessions.layout.group.label', 'Sessions layout'); },
+					get description() { return localize('settings.sessions.layout.group.description', 'Configure the Sessions window layout.'); },
+					settings: ['sessions.layoutStyle'],
 				}],
 			},
 		],

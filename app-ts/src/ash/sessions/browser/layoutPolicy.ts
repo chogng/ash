@@ -9,6 +9,7 @@ import type { IStorageService } from '../../platform/storage/common/storage.js';
 import { StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
 import type { WorkbenchPart } from '../../workbench/browser/part.js';
 import { WorkbenchPartView } from '../../workbench/browser/workbenchPartView.js';
+import type { SessionsLayoutStyle } from '../common/configuration.js';
 
 export const sessionsPartIds = ['titlebar', 'navigationbar', 'sidebar', 'sessions', 'auxiliarybar'] as const;
 export type SessionsPartId = typeof sessionsPartIds[number];
@@ -202,11 +203,15 @@ export function assertDimension(dimension: IDimension): void {
 }
 
 const PART_GUTTER = 6;
+const PART_GUTTER_HALF = PART_GUTTER / 2;
+const WINDOW_LEFT_EDGE_INSET = 6;
+const WINDOW_RIGHT_EDGE_INSET = 8;
 
 export interface SessionsWorkbenchLayoutOptions {
 	readonly initialDimension?: IDimension;
 	readonly initialState?: SessionsWorkbenchLayoutState;
 	readonly storageService?: IStorageService;
+	readonly layoutStyle?: SessionsLayoutStyle;
 }
 
 /** Owns the fixed Part topology and mutable geometry of one dedicated Sessions window. */
@@ -216,6 +221,7 @@ export class SessionsWorkbenchLayout extends Disposable implements IResizable {
 	private readonly stateModel: SessionsWorkbenchLayoutStateModel;
 	private readonly partVisibility = new Map<SessionsPartId, boolean>();
 	private readonly _onDidChangePartVisibility = this._register(new Emitter<SessionsPartVisibilityChangeEvent>());
+	private layoutStyle: SessionsLayoutStyle;
 
 	readonly onDidChangePartVisibility = this._onDidChangePartVisibility.event;
 	readonly domNode: HTMLDivElement;
@@ -223,6 +229,7 @@ export class SessionsWorkbenchLayout extends Disposable implements IResizable {
 	constructor(container: Element, parts: ReadonlyMap<SessionsPartId, WorkbenchPart>, options: SessionsWorkbenchLayoutOptions = {}) {
 		super();
 		validateParts(parts);
+		this.layoutStyle = options.layoutStyle ?? 'modern';
 		this.domNode = h(container.ownerDocument, 'div');
 		this.domNode.className = 'ash-sessions-workbench-layout';
 		container.append(this.domNode);
@@ -231,12 +238,12 @@ export class SessionsWorkbenchLayout extends Disposable implements IResizable {
 		const initialDimension = resolveSessionsInitialDimension(this.domNode, options.initialDimension);
 		this.stateModel = new SessionsWorkbenchLayoutStateModel(options.storageService, options.initialState ?? createDefaultSessionsWorkbenchLayoutState());
 		const state = this.stateModel.state;
-		this.projectFrameInsets();
+		this.projectFrameInsets(state.auxiliarybar.visible);
 		this.grid = this._register(SerializableGrid.deserialize(
 			this.domNode,
 			createSessionsWorkbenchGridDescriptor(this.views, initialDimension, state),
 			{ fromJSON: data => this.view(parseSessionsPartId(data)) },
-			{ sashPresentation: { type: 'inset', gap: PART_GUTTER } },
+			{ sashPresentation: this.layoutStyle === 'modern' ? { type: 'inset', gap: PART_GUTTER } : undefined },
 		));
 		if (options.storageService) this._register(options.storageService.onWillSaveState(() => this.saveState()));
 		this._register(toDisposable(() => this.saveState()));
@@ -256,6 +263,16 @@ export class SessionsWorkbenchLayout extends Disposable implements IResizable {
 				visible: this.isPartVisible('auxiliarybar'),
 			},
 		};
+	}
+
+	setLayoutStyle(style: SessionsLayoutStyle): void {
+		if (this.layoutStyle === style) return;
+		this.layoutStyle = style;
+		this.grid.sashPresentation = style === 'modern' ? { type: 'inset', gap: PART_GUTTER } : undefined;
+		this.projectFrameInsets();
+		if (this.grid.width > 0 && this.grid.height > 0) {
+			this.layout(new Dimension(this.grid.width, this.grid.height));
+		}
 	}
 
 	layout(dimension: IDimension = getClientArea(this.domNode)): void {
@@ -280,17 +297,21 @@ export class SessionsWorkbenchLayout extends Disposable implements IResizable {
 		if (partId === 'titlebar' || partId === 'navigationbar' || partId === 'sidebar' || partId === 'sessions') throw new Error(`Required Sessions Part cannot be hidden: ${partId}`);
 		if (this.isPartVisible(partId) === visible) return;
 		this.grid.setViewVisible(this.view(partId), visible);
+		this.projectFrameInsets();
 		this.publishPartVisibility();
 	}
 
 	private saveState(): void { this.stateModel.save(this.state); }
 
-	private projectFrameInsets(): void {
+	private projectFrameInsets(auxiliarybarVisible = this.isPartVisible('auxiliarybar')): void {
+		const leftEdge = this.layoutStyle === 'modern' ? WINDOW_LEFT_EDGE_INSET : 0;
+		const rightEdge = this.layoutStyle === 'modern' ? WINDOW_RIGHT_EDGE_INSET : 0;
+		const halfGutter = this.layoutStyle === 'modern' ? PART_GUTTER_HALF : 0;
 		this.view('titlebar').setFrameInsets({ top: 0, right: 0, bottom: 0, left: 0 });
-		this.view('navigationbar').setFrameInsets({ top: 0, right: 0, bottom: 0, left: 0 });
-		this.view('sidebar').setFrameInsets({ top: 0, right: 0, bottom: 0, left: 0 });
-		this.view('sessions').setFrameInsets({ top: 0, right: 0, bottom: 0, left: 0 });
-		this.view('auxiliarybar').setFrameInsets({ top: 0, right: 0, bottom: 0, left: 0 });
+		this.view('navigationbar').setFrameInsets({ top: 0, right: 0, bottom: 0, left: leftEdge });
+		this.view('sidebar').setFrameInsets({ top: 0, right: halfGutter, bottom: 0, left: 0 });
+		this.view('sessions').setFrameInsets({ top: 0, right: auxiliarybarVisible ? halfGutter : rightEdge, bottom: 0, left: halfGutter });
+		this.view('auxiliarybar').setFrameInsets({ top: 0, right: rightEdge, bottom: 0, left: halfGutter });
 	}
 
 	private publishPartVisibility(): void {

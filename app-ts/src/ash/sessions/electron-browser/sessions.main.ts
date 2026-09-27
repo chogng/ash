@@ -28,7 +28,7 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 	const permissionDialog = sessions.add(new DirectoryPermissionDialog(container));
 	let api: Awaited<ReturnType<typeof createElectronRendererApi>>;
 	try { api = await createElectronRendererApi([], { browser: false }, permissionDialog); }
-	catch (error) { sessions.dispose(); return showStartupError(error); }
+	catch (error) { sessions.dispose(); return showStartupError(error, text => invoke<void>('ash:host:writeClipboard', text)); }
 	sessions.add(api);
 	const profileServices = sessions.add(new ServiceContainer());
 	profileServices.registerInstance(IFileService, api.localFiles);

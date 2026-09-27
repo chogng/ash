@@ -51,6 +51,7 @@ const { AccessibilityConfiguration } = await import('../../../../../platform/acc
 const { HoverConfiguration } = await import('../../../../../platform/hover/common/hoverService.js');
 const { SashConfiguration } = await import('../../../../../workbench/contrib/sash/common/sash.js');
 const { WorkbenchConfiguration } = await import('../../../../../workbench/common/configuration.js');
+const { SessionsConfiguration } = await import('../../../../../sessions/common/configuration.js');
 const { WorkbenchThemesRegistry } = await import('../../../../../workbench/common/theme.js');
 const { EditorSelectionConfiguration } = await import('../../../../../workbench/common/editorSelectionConfiguration.js');
 const { CodeEditorConfiguration } = await import('../../../../../workbench/contrib/codeEditor/common/editorConfiguration.js');
@@ -150,6 +151,7 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, SashConfiguration.size), 'general');
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.colorTheme), 'appearance');
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.layoutStyle), 'layout');
+	assert.equal(findSettingCategory(layout, SessionsConfiguration.layoutStyle), 'layout');
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.activityBarLocation), 'layout');
 	const iconThemeSetting = defaults.get(WorkbenchConfiguration.iconTheme);
 	assert.equal(iconThemeSetting.valueType, 'select');
@@ -187,6 +189,15 @@ test('settingsLayout is the single projection from registered settings to catego
 			{ value: 'flat', label: 'Flat' },
 		]);
 	}
+	const sessionsLayoutStyleSetting = defaults.get(SessionsConfiguration.layoutStyle);
+	assert.equal(sessionsLayoutStyleSetting.valueType, 'select');
+	if (sessionsLayoutStyleSetting.valueType === 'select') {
+		assert.deepEqual(sessionsLayoutStyleSetting.options, [
+			{ value: 'modern', label: 'Modern' },
+			{ value: 'flat', label: 'Flat' },
+		]);
+	}
+	assert.throws(() => configurationRegistry.getConfiguration(SessionsConfiguration.layoutStyle)?.parse('other'), /Unknown Sessions layout style/);
 
 	model.dispose();
 });
@@ -377,7 +388,7 @@ test('PreferencesEditor renders and updates registry-backed settings only', asyn
 		['general', 'appearance', 'layout', 'editor'],
 	);
 	assert.equal(root.querySelector('[data-settings-category-id="appearance"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
-	assert.equal(root.querySelector('[data-settings-category-id="layout"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
+	assert.equal(root.querySelector('[data-settings-category-id="layout"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), true);
 	assert.equal(root.querySelector('[data-settings-target-id="appearance.group.theme"]'), null);
 	assert.equal(root.querySelector('[data-settings-target-id="layout.group.layout"]'), null);
 	const agentsGroup = root.querySelector<HTMLElement>('[data-settings-group-id="agents"]');

@@ -14,7 +14,8 @@ is canonical for the renderer implementation and extension points.
 | Browser window navigation | `platform/windows/browser/dedicatedWindowNavigation.ts` | resolves and navigates between sibling renderer pages |
 | Code profile | `code/common/codeSessionsProfile.ts` | defines the Code window identity and page route used by both browser and Electron entries |
 | Product composition | `browser/workbench.ts` | uses shared window identity and lifecycle services; owns the fixed titlebar/navigationbar/sidebar/sessions/auxiliarybar Part set |
-| Layout | `browser/layoutPolicy.ts` | owns Sessions topology, geometry, optional auxiliary visibility, and persisted sizes |
+| Layout | `browser/layoutPolicy.ts` | owns Sessions topology, geometry, optional auxiliary visibility, persisted sizes, and Modern/Flat spacing |
+| Appearance | `common/configuration.ts` and `contrib/modernUI/browser/` | own the independent `sessions.layoutStyle` preference and Sessions Part appearance |
 | Window Sessions state | `services/sessions/browser/sessionsService.ts` | owns active/visible selections, focus, and Back/Forward history |
 | Frontend Session model | `services/sessions/common/session.ts` | owns `ISession`, `IChat`, workspace summary, and untitled identity types |
 | Provider and management | `contrib/providers/appServer/`, `services/sessions/common/sessionsManagement.ts`, and `services/sessions/browser/sessionsManagementService.ts` | the App Server provider adapts transport data; management owns catalog, drafts, and operations |
@@ -47,6 +48,11 @@ import Sessions product UI or add Sessions-specific layout branches.
    `BrowserLifecycleService` joins storage flush before disposal.
 4. `SessionsWorkbenchLayout` deserializes the fixed Part grid. Titlebar,
    navigationbar, sidebar, and sessions Parts are required; only the auxiliary Part may hide.
+   Its spacing follows `sessions.layoutStyle`, independently of the IDE's
+   `workbench.layoutStyle`. Both preferences use the same profile settings
+   resource; changing either one updates its own window without changing
+   the other window's layout. Sessions sizes and auxiliary visibility remain
+   in Sessions-owned layout storage.
 5. The window Sessions service initializes the catalog. If none is
    active, the Workbench opens a window-local untitled Session; it becomes
    durable only when the first message is sent.

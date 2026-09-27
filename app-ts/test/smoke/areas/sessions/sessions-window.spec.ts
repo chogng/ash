@@ -4,6 +4,60 @@ import { tmpdir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
 import { launchElectron } from '../../../automation/playwrightElectron.js';
 
+test('Sessions and IDE layout styles switch independently', async ({ application, target, workbench }) => {
+	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code', 'Requires the Code Sessions window');
+	if (target.kind !== 'electron' || !('windows' in application)) return;
+	const sessionsPagePromise = application.waitForEvent('window');
+	await workbench.page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
+	const sessionsPage = await sessionsPagePromise;
+	const sessionsWindow = sessionsPage.locator('.ash-sessions-window');
+	await expect(sessionsWindow).toBeVisible();
+	const original = await sessionsPage.evaluate(async () => {
+		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
+		return (await ipc.invoke('ash:configuration:read') as { document: { source: string } }).document.source;
+	});
+	const updateSettings = async (values: Record<string, string>): Promise<void> => {
+		await sessionsPage.evaluate(async changes => {
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
+			const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { version: 1; source: string } };
+			const settings = JSON.parse(snapshot.document.source) as Record<string, unknown>;
+			for (const [key, value] of Object.entries(changes)) settings[key] = value;
+			await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(settings) } });
+		}, values);
+	};
+	const gap = () => sessionsPage.evaluate(() => {
+		const sidebar = document.querySelector<HTMLElement>('[data-part="sidebar"]');
+		const sessions = document.querySelector<HTMLElement>('[data-part="sessions"]');
+		if (!sidebar || !sessions) throw new Error('Sessions regions are missing');
+		return Math.round(sessions.getBoundingClientRect().left - sidebar.getBoundingClientRect().right);
+	});
+	try {
+		await updateSettings({ 'workbench.layoutStyle': 'modern', 'sessions.layoutStyle': 'modern' });
+		await expect(sessionsWindow).toHaveAttribute('data-layout-style', 'modern');
+		await expect.poll(gap).toBe(6);
+		await updateSettings({ 'workbench.layoutStyle': 'flat' });
+		await expect(workbench.element).toHaveAttribute('data-layout-style', 'flat');
+		await expect(sessionsWindow).toHaveAttribute('data-layout-style', 'modern');
+		await updateSettings({ 'sessions.layoutStyle': 'flat' });
+		await expect(sessionsWindow).toHaveAttribute('data-layout-style', 'flat');
+		await expect.poll(gap).toBe(0);
+		await expect(sessionsPage.locator('[data-part="sessions"]')).toHaveCSS('border-top-left-radius', '0px');
+		await sessionsPage.reload();
+		await expect(sessionsWindow).toHaveAttribute('data-layout-style', 'flat');
+		await expect.poll(gap).toBe(0);
+		await updateSettings({ 'sessions.layoutStyle': 'modern' });
+		await expect(sessionsWindow).toHaveAttribute('data-layout-style', 'modern');
+		await expect.poll(gap).toBe(6);
+		await expect(sessionsPage.locator('[data-part="sessions"]')).toHaveCSS('border-top-left-radius', '8px');
+	} finally {
+		await sessionsPage.evaluate(async source => {
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
+			const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number };
+			await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source } });
+		}, original);
+	}
+});
+
 test('Sessions applies an installed extension color theme', async ({ application, target, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires Code Sessions and App Server extension resources');
 	if (target.kind !== 'electron' || !('windows' in application)) return;
