@@ -1,4 +1,5 @@
 import "./code.contribution.js";
+import "../../../../sessions/browser/workbenchSessions.contribution.js";
 import { createAppServerDebugAdapterCapability } from "../../../../platform/debug/browser/appServerDebugAdapterProcessService.js";
 import { WorkbenchModeId } from "../../../../workbench/common/workbenchMode.js";
 import { codeSessionsProfile } from "../../../common/codeSessionsProfile.js";

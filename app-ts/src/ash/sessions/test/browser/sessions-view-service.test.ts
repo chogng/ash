@@ -113,6 +113,7 @@ class FakeSessionService implements ISessionsManagementService {
 	get activeUntitledSession(): IUntitledChatSession | undefined { return this._untitledSessions.find(session => session.untitledSessionId === this.activeUntitledSessionId); }
 
 	async initialize(): Promise<void> {}
+	async openThread(sessionId: SessionId, threadId: ThreadId): Promise<void> { this.selectThread(sessionId, threadId); }
 
 	selectThread(sessionId: SessionId, threadId: ThreadId): void {
 		const session = this._sessions.find(candidate => candidate.sessionId === sessionId);

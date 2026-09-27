@@ -114,7 +114,7 @@ test("workbench context keys describe the current workspace", () => {
 	assert.equal(contextKeys.getValue('dirtyWorkingCopies'), true);
 });
 
-test("workbench contributions start once at their declared phases", () => {
+test("workbench contributions start once at their declared phases", async () => {
 	const serviceId = createServiceIdentifier<string>("testService");
 	const services = new ServiceContainer();
 	services.registerInstance(serviceId, "ready");
@@ -133,7 +133,9 @@ test("workbench contributions start once at their declared phases", () => {
 		WorkbenchPhase.AfterRestored,
 		() => {
 			calls.push("restored");
-			return toDisposable(() => calls.push("dispose:restored"));
+			return Object.assign(toDisposable(() => calls.push("dispose:restored")), {
+				onWorkspaceRestored: () => { calls.push("workspace:restored"); },
+			});
 		},
 	);
 
@@ -143,11 +145,13 @@ test("workbench contributions start once at their declared phases", () => {
 		host.advance(WorkbenchPhase.BlockRestore);
 		host.advance(WorkbenchPhase.AfterRestored);
 		host.advance(WorkbenchPhase.AfterRestored);
-		assert.deepEqual(calls, ["startup:ready", "restored"]);
+		await host.workspaceRestored();
+		assert.deepEqual(calls, ["startup:ready", "restored", "workspace:restored"]);
 	}
 	assert.deepEqual(calls, [
 		"startup:ready",
 		"restored",
+		"workspace:restored",
 		"dispose:restored",
 		"dispose:startup",
 	]);

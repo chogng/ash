@@ -1,4 +1,6 @@
 import { localize } from '../../../../nls.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Registry } from '../../../../platform/registry/common/platform.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
@@ -9,7 +11,28 @@ import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/c
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { GettingStartedFocusedContext, GettingStartedPage, GettingStartedPageId } from './gettingStarted.js';
 import { createGettingStartedInput, isGettingStartedInput } from './gettingStartedInput.js';
-import { StartupPageRunnerContribution } from './startupPage.js';
+import { StartupEditorConfigurationKey, StartupPageRunnerContribution, type StartupEditor } from './startupPage.js';
+
+Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration<StartupEditor>({
+	key: StartupEditorConfigurationKey,
+	defaultValue: 'welcomePageInEmptyWorkbench',
+	parse(value: unknown): StartupEditor {
+		if (value === 'none' || value === 'welcomePage' || value === 'welcomePageInEmptyWorkbench') return value;
+		throw new TypeError(`Unknown startup editor: ${String(value)}`);
+	},
+	setting: {
+		valueType: 'select',
+		get title() { return localize('workbench.startupEditor.title', 'Startup editor'); },
+		get description() { return localize('workbench.startupEditor.description', 'Choose the editor to show when no editor is restored.'); },
+		get options() {
+			return [
+				{ value: 'none', label: localize('workbench.startupEditor.none', 'None') },
+				{ value: 'welcomePage', label: localize('workbench.startupEditor.welcomePage', 'Welcome') },
+				{ value: 'welcomePageInEmptyWorkbench', label: localize('workbench.startupEditor.welcomePageInEmptyWorkbench', 'Welcome in empty workbench') },
+			] as const;
+		},
+	},
+});
 
 registerEditorPane({
 	id: GettingStartedPageId,

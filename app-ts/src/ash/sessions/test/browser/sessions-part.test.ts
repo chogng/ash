@@ -45,6 +45,7 @@ test("SessionsPart remains owned by the Sessions product layer", () => {
 		state: "ready",
 		error: undefined,
 		async initialize() {},
+		async openThread() {},
 		selectThread() {},
 		async interruptThread() {},
 		createUntitledSession() {

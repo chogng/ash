@@ -13,7 +13,6 @@ import { IMemoriesService } from '../../platform/memories/common/memoriesService
 import { IMemoryDiagnosticsService } from '../../platform/memory/common/memoryDiagnosticsService.js';
 import "./style.js";
 import { IAutomationService } from '../../platform/automation/common/automationService.js';
-import { IChatSessionNavigationService } from '../services/chat/common/chatSessionNavigationService.js';
 import { bindResizableLayout } from "../../base/browser/ui/resizable/resizable.js";
 import { disposableWindowTimeout } from "../../base/browser/scheduler.js";
 import { mainWindow } from "../../base/browser/window.js";
@@ -37,7 +36,7 @@ import { ILifecycleService, type ShutdownReason } from "../../platform/lifecycle
 import { IDebugAdapterProcessService } from "../../platform/debug/common/debugAdapterProcessService.js";
 import { IExtensionHostApi } from "../../platform/extensionHost/common/extensionHostApi.js";
 import { ISyntaxApi } from "../../platform/syntax/common/syntaxApi.js";
-import type { IRendererHost } from "../../platform/renderer/common/rendererHost.js";
+import { IRendererHostService, type IRendererHost } from "../../platform/renderer/common/rendererHost.js";
 import { IBrowserViewApi } from '../../platform/browser/common/browserView.js';
 import { IRemoteConnectionService } from "../../platform/remote/common/remoteConnectionService.js";
 import { UnavailableRemoteConnectionService } from "../../platform/remote/common/remoteConnectionService.js";
@@ -129,9 +128,6 @@ import {
 	IViewsService,
 	ViewsService,
 } from "../services/views/browser/viewsService.js";
-import { SessionsManagementService } from "../../sessions/services/sessions/browser/sessionsManagementService.js";
-import { AppServerSessionsProvider } from "../../sessions/contrib/providers/appServer/browser/appServerSessionsProvider.js";
-import { ISessionsManagementService } from "../../sessions/services/sessions/common/sessionsManagement.js";
 import {
 	WorkbenchConfigurationService,
 } from "../services/configuration/browser/configurationService.js";
@@ -344,6 +340,7 @@ export class Workbench extends Disposable {
 	private readonly workbenchWindow: WorkbenchWindow;
 	private readonly logService: ILogService;
 	private readonly lifecycleService: ILifecycleService;
+	private readonly contributions: WorkbenchContributionHost;
 	private readonly ownerWindow: Window;
 	private restoreActiveViewContainers: (() => void) | undefined;
 	private workspaceSwitchQueue: Promise<void> = Promise.resolve();
@@ -382,6 +379,7 @@ export class Workbench extends Disposable {
 		this.logService = logService;
 		this.registerErrorHandler(logService);
 		services.registerInstance(ILogService, logService);
+		services.registerInstance(IRendererHostService, api);
 		services.registerInstance(IExtensionHostApi, api.extensionHost);
 		services.registerInstance(ICodebaseSymbolsApi, api.codebaseSymbols);
 		services.registerInstance(ISyntaxApi, api.syntax);
@@ -702,22 +700,11 @@ export class Workbench extends Disposable {
 			contextKeyService: contextKeys,
 		}));
 		services.registerInstance(IViewDescriptorService, viewDescriptors);
-		const sessionService = this._register(new SessionsManagementService(new AppServerSessionsProvider({
-			session: api.session,
-			model: api.model,
-			turn: api.turn,
-			events: api.events,
-		})));
-		services.registerInstance(ISessionsManagementService, sessionService);
-		services.registerInstance(IChatSessionNavigationService, {
-			getConversations: () => sessionService.sessions.filter(session => session.status === 'active').flatMap(session =>
-				session.chats.filter(chat => chat.status === 'active').map(chat => ({ sessionId: session.sessionId, threadId: chat.threadId, title: `${session.title} · ${chat.title ?? 'Conversation'}` }))),
-			openConversation: (sessionId, threadId) => sessionService.openThread(sessionId, threadId),
-		});
 		const keybindings = interactionServices.keybindingService;
 		const contributions = this._register(
 			WorkbenchContributionsRegistry.createHost(services),
 		);
+		this.contributions = contributions;
 		contributions.advance(WorkbenchPhase.BlockStartup);
 
 		const titlebar = this._register(createTitlebarPart(workbenchRoot, {
@@ -1086,7 +1073,6 @@ export class Workbench extends Disposable {
 				openPanelComposite(compositeId);
 			},
 		));
-		void sessionService.initialize();
 		contributions.advance(WorkbenchPhase.BlockRestore);
 		layoutService.layout();
 		this.whenRestored = this.completeStartupRestoration([extensionReady, ...serviceContributionReady], workingCopyBackups, editor, contributions);
@@ -1165,6 +1151,7 @@ export class Workbench extends Disposable {
 		this.workbenchLayout.restoreWorkspaceState(nextWorkbenchState);
 		this.restoreActiveViewContainers?.();
 		await this.restoreWorkingCopyBackups(this.workingCopyBackups, this.editor);
+		await this.contributions.workspaceRestored();
 	}
 }
 

@@ -6,7 +6,7 @@ import { WorkbenchContextKeysHandler } from '../../browser/contextkeys.js';
 import type { IEditorGroupsService } from '../../services/editor/common/editorGroupsService.js';
 import type { IEditorService } from '../../services/editor/common/editorService.js';
 import type { EditorGroupState } from '../../services/editor/common/editorState.js';
-import type { IWorkbenchLayoutService } from '../../services/layout/common/workbenchLayoutService.js';
+import type { IWorkbenchLayoutService } from '../../services/layout/browser/layoutService.js';
 import type { IWorkingCopyService } from '../../services/workingCopy/common/workingCopyService.js';
 import { emptyEditorServiceState } from './testEditorService.js';
 

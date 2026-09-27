@@ -6,7 +6,7 @@ import { type IWorkspaceContextService, workbenchStateToString } from '../../pla
 import { ActiveEditorGroupEmptyContext, ActiveEditorGroupIndexContext, ActiveEditorGroupLastContext, AgentSidebarVisibleContext, AuxiliaryBarVisibleContext, BrowserLocalFolderSupportContext, DirtyWorkingCopiesContext, EditorAreaVisibleContext, EditorsVisibleContext, MultipleEditorGroupsContext, OpenFolderWorkspaceSupportContext, PanelMaximizedContext, PanelVisibleContext, SideBarVisibleContext, WorkbenchStateContext, WorkspaceFolderCountContext } from '../common/contextkeys.js';
 import type { IEditorGroupsService } from '../services/editor/common/editorGroupsService.js';
 import type { IEditorService } from '../services/editor/common/editorService.js';
-import type { IWorkbenchLayoutService, WorkbenchPartId } from '../services/layout/common/workbenchLayoutService.js';
+import type { IWorkbenchLayoutService, WorkbenchPartId } from '../services/layout/browser/layoutService.js';
 import type { IWorkingCopyService } from '../services/workingCopy/common/workingCopyService.js';
 
 /** Projects window-wide service state into Workbench context keys. */

@@ -9,7 +9,7 @@ import type { ILayoutOffsetInfo } from "../../platform/layout/browser/layoutServ
 import { type IStorageService, StorageScope, StorageTarget } from "../../platform/storage/common/storage.js";
 import { WorkbenchState } from "../../platform/workspace/common/workspace.js";
 import type { ActivityBarLocation, SideBarLocation, WorkbenchLayoutStyle } from "../common/configuration.js";
-import { type IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent, workbenchPartIds } from "../services/layout/common/workbenchLayoutService.js";
+import { type IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent, workbenchPartIds } from "../services/layout/browser/layoutService.js";
 import type { IWorkbenchLayoutStyleService } from "../services/layout/browser/workbenchLayoutStyleService.js";
 import type { WorkbenchPart } from "./part.js";
 import { WorkbenchPartView } from "./workbenchPartView.js";

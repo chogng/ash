@@ -30,6 +30,7 @@ import type { IDirPermissionsApi } from "../../dirPermissions/common/dirPermissi
 import type { IAccountApi } from "../../accounts/common/accountApi.js";
 import type { ITurnChangesApi } from "../../turnChanges/common/turnChangesApi.js";
 import type { IAutomationService } from '../../automation/common/automationService.js';
+import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
 /** Optional product capabilities contributed by a statically selected host bundle. */
 export interface RendererHostCapabilities {
@@ -90,3 +91,5 @@ export interface IRendererHost extends RendererHostCapabilities {
 	readonly toolSearch: IToolSearchApi;
 	readonly dirPermissions: IDirPermissionsApi;
 }
+
+export const IRendererHostService = createServiceIdentifier<IRendererHost>('rendererHostService');

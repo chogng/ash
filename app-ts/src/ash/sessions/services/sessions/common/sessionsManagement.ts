@@ -14,6 +14,7 @@ export interface ISessionsManagementService {
 	readonly state: SessionsManagementState;
 	readonly error: string | undefined;
 	initialize(): Promise<void>;
+	openThread(sessionId: SessionId, threadId: ThreadId): Promise<void>;
 	selectThread(sessionId: SessionId, threadId: ThreadId): void;
 	interruptThread(sessionId: SessionId, threadId: ThreadId): Promise<void>;
 	createUntitledSession(title?: string): IUntitledChatSession;

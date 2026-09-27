@@ -86,6 +86,7 @@ class PendingSessionService implements ISessionsManagementService {
 	}
 
 	initialize(): Promise<void> { return this.pendingInitialization; }
+	openThread(_sessionId: SessionId, _threadId: ThreadId): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
 
 	selectThread(_sessionId: SessionId, _threadId: ThreadId): void {}
 	interruptThread(_sessionId: SessionId, _threadId: ThreadId): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }

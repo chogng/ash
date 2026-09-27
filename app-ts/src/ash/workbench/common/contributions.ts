@@ -21,7 +21,9 @@ export enum WorkbenchPhase {
  * Implementations should install their listeners and projections during
  * construction and release all window-owned state from `dispose`.
  */
-export interface IWorkbenchContribution extends IDisposable {}
+export interface IWorkbenchContribution extends IDisposable {
+	onWorkspaceRestored?(): Promise<void> | void;
+}
 
 /** Creates one contribution from the services of a workbench window. */
 export type WorkbenchContributionFactory =
@@ -118,6 +120,7 @@ export class WorkbenchContributionHost extends Disposable {
 		readonly IWorkbenchContributionRegistration[];
 	private readonly onError: WorkbenchContributionErrorHandler;
 	private readonly instantiated = new Set<string>();
+	private readonly instances: { readonly id: string; readonly contribution: IWorkbenchContribution }[] = [];
 	private _phase = 0;
 
 	constructor(
@@ -157,9 +160,20 @@ export class WorkbenchContributionHost extends Disposable {
 			}
 			this.instantiated.add(registration.id);
 			try {
-				this._register(registration.factory(this.accessor));
+				const contribution = this._register(registration.factory(this.accessor));
+				this.instances.push({ id: registration.id, contribution });
 			} catch (error) {
 				this.onError(error, registration.id);
+			}
+		}
+	}
+
+	async workspaceRestored(): Promise<void> {
+		for (const { id, contribution } of this.instances) {
+			try {
+				await contribution.onWorkspaceRestored?.();
+			} catch (error) {
+				this.onError(error, id);
 			}
 		}
 	}

@@ -37,6 +37,13 @@ test("Workbench service implementations do not depend on Workbench contributions
 	assert.deepEqual(violations, []);
 });
 
+test("Workbench shell does not construct Sessions product services", () => {
+	const sessionsRoot = join(sourceRoot, "sessions");
+	const violations = productionTypeScriptFiles(join(sourceRoot, "workbench/browser"))
+		.flatMap(file => localImports(file).filter(target => target.startsWith(`${sessionsRoot}${sep}`)).map(target => `${sourceName(file)} -> ${sourceName(target)}`));
+	assert.deepEqual(violations, []);
+});
+
 test("Sessions owns canonical Session management independently from Workbench contributions", () => {
 	const sessionsServicesRoot = join(sourceRoot, "sessions/services");
 	const contributionRoot = join(sourceRoot, "workbench/contrib");
