@@ -22,6 +22,7 @@ export interface ButtonOptions {
 	label: string;
 	icon?: Icon;
 	ariaLabel?: string;
+	iconOnly?: boolean;
 	contentAlignment?: ButtonContentAlignment;
 	presentation?: ButtonPresentation;
 	size?: ButtonSize;
@@ -42,6 +43,7 @@ export class Button extends Disposable {
 	private readonly hover = this._register(new MutableDisposable<IManagedHover>());
 	private readonly hoverGroupId: string | undefined;
 	private readonly hoverAnchorPosition: AnchorPosition | undefined;
+	private readonly usesLabelAsAriaLabel: boolean;
 	private currentIcon: Icon | undefined;
 	readonly onDidClick: Event<DOMEventMap["click"]>;
 
@@ -50,6 +52,7 @@ export class Button extends Disposable {
 		const ownerDocument = container.ownerDocument;
 		this.hoverGroupId = options.hoverGroupId;
 		this.hoverAnchorPosition = options.hoverAnchorPosition;
+		this.usesLabelAsAriaLabel = options.iconOnly === true && options.ariaLabel === undefined;
 		this.currentIcon = options.icon;
 		const domNode = h(ownerDocument, "button", {
 			properties: {
@@ -63,12 +66,13 @@ export class Button extends Disposable {
 			"ash-button",
 			`ash-button-${options.presentation ?? "quiet"}`,
 			`ash-button-${options.size ?? "standard"}`,
+			options.iconOnly === true && "icon-only",
 			options.contentAlignment === "labelCentered" && "label-centered",
 		].filter(value => value !== false).join(" "));
 		this.root = root;
 		this.domNode = root.domNode;
-		if (options.ariaLabel) {
-			setAriaAttribute(this.domNode, "label", options.ariaLabel);
+		if (options.ariaLabel || options.iconOnly) {
+			setAriaAttribute(this.domNode, "label", options.ariaLabel ?? options.label);
 		}
 		this.content = this._register(new IconLabel(this.domNode, {
 			label: options.label,
@@ -96,7 +100,10 @@ export class Button extends Disposable {
 
 	hasFocus(): boolean { return this.domNode.ownerDocument.activeElement === this.domNode; }
 
-	set label(value: string) { this.content.setLabel(value, undefined, { icon: this.currentIcon }); }
+	set label(value: string) {
+		this.content.setLabel(value, undefined, { icon: this.currentIcon });
+		if (this.usesLabelAsAriaLabel) setAriaAttribute(this.domNode, "label", value);
+	}
 	get label(): string { return this.content.labelElement.textContent ?? ""; }
 
 	set icon(value: Icon | undefined) {

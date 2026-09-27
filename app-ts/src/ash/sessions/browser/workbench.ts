@@ -31,6 +31,7 @@ import { AccessibleViewService } from '../../workbench/contrib/accessibility/bro
 import { IAccountService } from '../../platform/accounts/common/accountService.js';
 import { INativeHostService } from '../../workbench/common/services.js';
 import { WorkbenchModeRegistry, type WorkbenchModeId } from "../../workbench/common/workbenchMode.js";
+import type { ActivityBarPosition } from '../../workbench/common/configuration.js';
 import { ChatService } from "../../workbench/services/chat/browser/chatService.js";
 import { AppServerAccountService } from '../../workbench/services/accounts/browser/appServerAccountService.js';
 import { IChatService } from "../../workbench/services/chat/common/chatService.js";
@@ -42,6 +43,7 @@ import { WorkbenchThemeService } from "../../workbench/services/themes/browser/w
 import { AppServerSessionsProvider } from "../contrib/providers/appServer/browser/appServerSessionsProvider.js";
 import { SessionsModernUIContribution } from '../contrib/modernUI/browser/modernUI.contribution.js';
 import type { SessionsProfile } from "../common/sessionsProfile.js";
+import { SessionsConfiguration } from '../common/configuration.js';
 import { SessionsManagementService } from "../services/sessions/browser/sessionsManagementService.js";
 import { ISessionsManagementService } from "../services/sessions/common/sessionsManagement.js";
 import { ISessionsService, SessionsService } from "../services/sessions/browser/sessionsService.js";
@@ -175,7 +177,10 @@ export class Workbench extends Disposable {
 		const activitybar = this._register(services.createInstance(ActivityBarPart, this.domNode, {
 			focusList: () => sidebar.focus(),
 		}));
-		const activityBarContext = this._register(interactionServices.contextKeyService.createScoped(activitybar.domNode));
+		const activityBarLocation = configurationService.getValue<ActivityBarPosition>(SessionsConfiguration.activityBarLocation);
+		activitybar.setCompact(configurationService.getValue<boolean>(SessionsConfiguration.activityBarCompact));
+		activitybar.setLocation(activityBarLocation, sidebar.setActivityBarLocation(activityBarLocation));
+		const activityBarContext = this._register(interactionServices.contextKeyService.createScoped(activitybar.focusContainer));
 		activityBarContext.createKey('sessionsActivityBarFocused', true);
 		this._register(AccessibleViewRegistry.register({
 			type: AccessibleViewType.Help,
@@ -183,11 +188,11 @@ export class Workbench extends Disposable {
 			name: 'sessionsActivityBarHelp',
 			when: ContextKeyExpr.has('sessionsActivityBarFocused'),
 			getProvider: () => {
-				const focused = activitybar.domNode.ownerDocument.activeElement as HTMLElement;
+				const focused = activitybar.focusContainer.ownerDocument.activeElement as HTMLElement;
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsActivityBar,
 					{ type: AccessibleViewType.Help },
-					() => localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to move between available buttons. Press Enter or Space to activate a button. Chat focuses the sessions list. Accounts opens the account menu. Collaboration and Mobile devices are not available yet.'),
+					() => localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to move between available buttons. Press Enter or Space to activate a button. Use the Context Menu key or Shift+F10 for position and size options. Chat focuses the sessions list. Accounts opens the account menu. Collaboration and Mobile devices are not available yet.'),
 					() => focused.focus(),
 					AccessibilityVerbositySettingId.SessionsActivityBar,
 				);
@@ -223,6 +228,17 @@ export class Workbench extends Disposable {
 		layout = this._register(new SessionsWorkbenchLayout(this.domNode, parts, {
 			initialDimension: this.layoutService.mainContainerDimension,
 			storageService: storage,
+			activityBarLocation,
+		}));
+		this._register(configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(SessionsConfiguration.activityBarLocation)) {
+				const location = configurationService.getValue<ActivityBarPosition>(SessionsConfiguration.activityBarLocation);
+				activitybar.setLocation(location, sidebar.setActivityBarLocation(location));
+				layout!.setActivityBarLocation(location);
+			}
+			if (event.affectsConfiguration(SessionsConfiguration.activityBarCompact)) {
+				activitybar.setCompact(configurationService.getValue<boolean>(SessionsConfiguration.activityBarCompact));
+			}
 		}));
 		this._register(new SessionsModernUIContribution(this.domNode, layout, configurationService));
 		titlebar.updateDetailsVisibility(layout.isPartVisible('auxiliarybar'));

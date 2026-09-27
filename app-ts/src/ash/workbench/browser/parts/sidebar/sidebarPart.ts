@@ -7,7 +7,7 @@ import type { IContextKeyService } from "../../../../platform/contextkey/browser
 import { localize, type ILocalizationService, type LocalizationKey } from "../../../services/localization/common/localizationService.js";
 import type { IViewDescriptorService } from "../../../services/views/common/viewDescriptorService.js";
 import { PaneCompositePart, type PaneCompositeTitleActions } from "../paneCompositePart.js";
-import type { ActivityBarLocation } from '../../../common/configuration.js';
+import { ActivityBarPosition } from '../../../common/configuration.js';
 
 /** Construction inputs for a Sidebar Composite host. */
 export interface SidebarPartOptions {
@@ -77,10 +77,10 @@ export class SidebarPart extends PaneCompositePart {
 		}
 	}
 
-	public setActivityBarLocation(location: ActivityBarLocation): void {
+	public setActivityBarLocation(location: ActivityBarPosition): void {
 		if (!this.topCompositeBarDomNode || !this.bottomCompositeBarDomNode) return;
-		const isTop = location === 'top';
-		const isBottom = location === 'bottom';
+		const isTop = location === ActivityBarPosition.TOP;
+		const isBottom = location === ActivityBarPosition.BOTTOM;
 		this.topCompositeBarDomNode.hidden = !isTop;
 		this.bottomCompositeBarDomNode.hidden = !isBottom;
 		if (isTop || isBottom) {

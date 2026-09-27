@@ -18,8 +18,8 @@ is canonical for the renderer implementation and extension points.
 | Electron renderer close | `workbench/services/lifecycle/electron-browser/lifecycleService.ts` | checks shutdown vetoes and joins save work before either Electron window closes |
 | Code profile | `code/common/codeSessionsProfile.ts` | defines the Code window identity and page route used by both browser and Electron entries |
 | Product composition | `browser/workbench.ts` | uses shared window identity and lifecycle services; owns the fixed titlebar/activitybar/sidebar/sessions/auxiliarybar Part set |
-| Layout | `browser/layoutPolicy.ts` | owns Sessions topology, geometry, optional auxiliary visibility, persisted sizes, and Modern/Flat spacing |
-| Appearance | `common/configuration.ts` and `contrib/modernUI/browser/` | own the independent `sessions.layoutStyle` preference and Sessions Part appearance |
+| Layout | `browser/layoutPolicy.ts` | owns Sessions topology, geometry, Activity Bar position, optional auxiliary visibility, persisted sizes, and Modern/Flat spacing |
+| Appearance | `common/configuration.ts` and `contrib/modernUI/browser/` | own the independent Sessions layout, Activity Bar position, and size preferences |
 | Window Sessions state | `services/sessions/browser/sessionsService.ts` | owns active/visible selections, focus, and Back/Forward history |
 | Frontend Session model | `services/sessions/common/session.ts` | owns `ISession`, `IChat`, workspace summary, and untitled identity types |
 | Shared Chat contract | `workbench/services/chat/common/chatService.ts` | owns Thread and Turn operations plus shared Session/Thread IDs, model references, and approval modes used by both renderers |
@@ -54,9 +54,12 @@ model supplied by Sessions and does not create or select Sessions itself.
    `WorkbenchWindow` registers the renderer window and its document styles;
    The renderer lifecycle service joins storage flush before disposal.
 4. `SessionsWorkbenchLayout` deserializes the fixed Part grid. Titlebar,
-   activitybar, sidebar, and sessions Parts are required; only the auxiliary Part may hide.
+   activitybar, sidebar, and sessions Parts are required; the auxiliary Part can be toggled,
+   and Activity Bar visibility follows `sessions.activityBar.location`.
    The Activity Bar selects Chat and opens the account menu; Collaboration and Mobile devices
-   are visible but unavailable until those views have product data. The titlebar owns new-session,
+   are visible but unavailable until those views have product data. Its right-click menu moves the
+   controls to the sidebar top or bottom, hides them, or selects the side rail size through
+   `sessions.activityBar.compact`. The titlebar owns new-session,
    history, and details controls.
    Its spacing follows `sessions.layoutStyle`, independently of the IDE's
    `workbench.layoutStyle`. Both preferences use the same profile settings

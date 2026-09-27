@@ -13,6 +13,7 @@
   cursor: pointer;
 }
 .ash-button > .ash-button-content { gap: 6px; }
+.ash-button.icon-only > .ash-button-content > .ash-icon-label-container { display: none; }
 .ash-button.label-centered > .ash-button-content {
   display: grid;
   width: 100%;

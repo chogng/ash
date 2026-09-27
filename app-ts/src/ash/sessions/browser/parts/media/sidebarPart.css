@@ -7,3 +7,20 @@
   min-height: 0;
   flex: 1 1 auto;
 }
+
+.ash-sessions-window .ash-workbench-sidebar .ash-sessions-activity-host {
+	flex: 0 0 auto;
+	background: var(--ash-side-bar-background);
+}
+
+.ash-sessions-window .ash-workbench-sidebar .ash-sessions-activity-host[hidden] {
+	display: none;
+}
+
+.ash-sessions-window .ash-workbench-sidebar .ash-sessions-activity-host.top {
+	border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
+}
+
+.ash-sessions-window .ash-workbench-sidebar .ash-sessions-activity-host.bottom {
+	border-top: var(--ash-stroke-thickness) solid var(--ash-border);
+}

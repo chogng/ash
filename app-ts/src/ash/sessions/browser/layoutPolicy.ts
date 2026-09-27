@@ -9,6 +9,7 @@ import type { IStorageService } from '../../platform/storage/common/storage.js';
 import { StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
 import type { WorkbenchPart } from '../../workbench/browser/part.js';
 import { WorkbenchPartView } from '../../workbench/browser/workbenchPartView.js';
+import { ActivityBarPosition } from '../../workbench/common/configuration.js';
 import type { SessionsLayoutStyle } from '../common/configuration.js';
 
 export const sessionsPartIds = ['titlebar', 'activitybar', 'sidebar', 'sessions', 'auxiliarybar'] as const;
@@ -21,7 +22,6 @@ export interface SessionsPartVisibilityChangeEvent {
 
 const DEFAULT_SIDEBAR_WIDTH = 260;
 const DEFAULT_AUXILIARYBAR_WIDTH = 200;
-const ACTIVITY_BAR_WIDTH = 56;
 
 /** Persisted, Sessions-owned dimensions and visibility for the dedicated window. */
 export interface SessionsWorkbenchLayoutState {
@@ -140,6 +140,7 @@ export function createSessionsWorkbenchGridDescriptor(
 	views: ReadonlyMap<SessionsPartId, WorkbenchPartView<SessionsPartId>>,
 	dimension: IDimension,
 	state: SessionsWorkbenchLayoutState,
+	activityBarLocation: ActivityBarPosition = ActivityBarPosition.DEFAULT,
 ): SerializedGridDescriptor {
 	const leaf = (partId: SessionsPartId, size: number, visible = true, priority: 'normal' | 'high' = 'normal'): SerializedGridDescriptor => ({
 		type: 'leaf',
@@ -150,7 +151,8 @@ export function createSessionsWorkbenchGridDescriptor(
 	});
 	const titlebarHeight = requiredView(views, 'titlebar').minimumHeight;
 	const bodyHeight = Math.max(0, dimension.height - titlebarHeight);
-	const sessionsWidth = Math.max(0, dimension.width - ACTIVITY_BAR_WIDTH - state.sidebar.width - (state.auxiliarybar.visible ? state.auxiliarybar.width : 0));
+	const activityBarWidth = requiredView(views, 'activitybar').minimumWidth;
+	const sessionsWidth = Math.max(0, dimension.width - (activityBarLocation === ActivityBarPosition.DEFAULT ? activityBarWidth : 0) - state.sidebar.width - (state.auxiliarybar.visible ? state.auxiliarybar.width : 0));
 	return {
 		type: 'branch',
 		orientation: 'vertical',
@@ -164,7 +166,7 @@ export function createSessionsWorkbenchGridDescriptor(
 				size: bodyHeight,
 				priority: SESSIONS_LAYOUT_PRIORITY,
 				children: [
-					leaf('activitybar', ACTIVITY_BAR_WIDTH),
+					leaf('activitybar', activityBarWidth, activityBarLocation === ActivityBarPosition.DEFAULT),
 					leaf('sidebar', state.sidebar.width),
 					leaf('sessions', sessionsWidth, true, SESSIONS_LAYOUT_PRIORITY),
 					leaf('auxiliarybar', state.auxiliarybar.width, state.auxiliarybar.visible),
@@ -212,6 +214,7 @@ export interface SessionsWorkbenchLayoutOptions {
 	readonly initialState?: SessionsWorkbenchLayoutState;
 	readonly storageService?: IStorageService;
 	readonly layoutStyle?: SessionsLayoutStyle;
+	readonly activityBarLocation?: ActivityBarPosition;
 }
 
 /** Owns the fixed Part topology and mutable geometry of one dedicated Sessions window. */
@@ -222,6 +225,7 @@ export class SessionsWorkbenchLayout extends Disposable implements IResizable {
 	private readonly partVisibility = new Map<SessionsPartId, boolean>();
 	private readonly _onDidChangePartVisibility = this._register(new Emitter<SessionsPartVisibilityChangeEvent>());
 	private layoutStyle: SessionsLayoutStyle;
+	private activityBarLocation: ActivityBarPosition;
 
 	readonly onDidChangePartVisibility = this._onDidChangePartVisibility.event;
 	readonly domNode: HTMLDivElement;
@@ -230,6 +234,7 @@ export class SessionsWorkbenchLayout extends Disposable implements IResizable {
 		super();
 		validateParts(parts);
 		this.layoutStyle = options.layoutStyle ?? 'modern';
+		this.activityBarLocation = options.activityBarLocation ?? ActivityBarPosition.DEFAULT;
 		this.domNode = h(container.ownerDocument, 'div');
 		this.domNode.className = 'ash-sessions-workbench-layout';
 		container.append(this.domNode);
@@ -241,7 +246,7 @@ export class SessionsWorkbenchLayout extends Disposable implements IResizable {
 		this.projectFrameInsets(state.auxiliarybar.visible);
 		this.grid = this._register(SerializableGrid.deserialize(
 			this.domNode,
-			createSessionsWorkbenchGridDescriptor(this.views, initialDimension, state),
+			createSessionsWorkbenchGridDescriptor(this.views, initialDimension, state, this.activityBarLocation),
 			{ fromJSON: data => this.view(parseSessionsPartId(data)) },
 			{ sashPresentation: this.layoutStyle === 'modern' ? { type: 'inset', gap: PART_GUTTER } : undefined },
 		));
@@ -273,6 +278,15 @@ export class SessionsWorkbenchLayout extends Disposable implements IResizable {
 		if (this.grid.width > 0 && this.grid.height > 0) {
 			this.layout(new Dimension(this.grid.width, this.grid.height));
 		}
+	}
+
+	setActivityBarLocation(location: ActivityBarPosition): void {
+		if (this.activityBarLocation === location) return;
+		this.activityBarLocation = location;
+		this.projectFrameInsets();
+		this.grid.setViewVisible(this.view('activitybar'), location === ActivityBarPosition.DEFAULT);
+		if (this.grid.width > 0 && this.grid.height > 0) this.layout(new Dimension(this.grid.width, this.grid.height));
+		else this.publishPartVisibility();
 	}
 
 	layout(dimension: IDimension = getClientArea(this.domNode)): void {
@@ -308,8 +322,8 @@ export class SessionsWorkbenchLayout extends Disposable implements IResizable {
 		const rightEdge = this.layoutStyle === 'modern' ? WINDOW_RIGHT_EDGE_INSET : 0;
 		const halfGutter = this.layoutStyle === 'modern' ? PART_GUTTER_HALF : 0;
 		this.view('titlebar').setFrameInsets({ top: 0, right: 0, bottom: 0, left: 0 });
-		this.view('activitybar').setFrameInsets({ top: 0, right: 0, bottom: 0, left: leftEdge });
-		this.view('sidebar').setFrameInsets({ top: 0, right: halfGutter, bottom: 0, left: 0 });
+		this.view('activitybar').setFrameInsets({ top: 0, right: 0, bottom: 0, left: this.activityBarLocation === ActivityBarPosition.DEFAULT ? leftEdge : 0 });
+		this.view('sidebar').setFrameInsets({ top: 0, right: halfGutter, bottom: 0, left: this.activityBarLocation === ActivityBarPosition.DEFAULT ? 0 : leftEdge });
 		this.view('sessions').setFrameInsets({ top: 0, right: auxiliarybarVisible ? halfGutter : rightEdge, bottom: 0, left: halfGutter });
 		this.view('auxiliarybar').setFrameInsets({ top: 0, right: rightEdge, bottom: 0, left: halfGutter });
 	}

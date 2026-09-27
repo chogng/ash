@@ -4,6 +4,96 @@ import { tmpdir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
 import { launchElectron } from '../../../automation/playwrightElectron.js';
 
+test('Browser Code Sessions Activity Bar centers icons and changes size and position through its menu', async ({ target, workbench }) => {
+	test.skip(target.kind !== 'browser' || target.workbenchMode !== 'code', 'Requires the browser Code Sessions page');
+	const page = workbench.page;
+	await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
+	const activityBar = page.locator('[data-part="activitybar"]');
+	await expect(activityBar).toBeVisible();
+	await expect(activityBar.locator('.ash-sessions-activity-top button svg').first()).toHaveAttribute('data-ash-icon-id', 'chat-2-filled');
+	await expect(activityBar.locator('.ash-sessions-activity-bottom button svg').first()).toHaveAttribute('data-ash-icon-id', 'device-mobile');
+	const chatButton = activityBar.locator('button').first();
+	const buttonBounds = await chatButton.boundingBox();
+	const iconBounds = await chatButton.locator('svg').boundingBox();
+	expect(buttonBounds).not.toBeNull();
+	expect(iconBounds).not.toBeNull();
+	expect(buttonBounds!.width).toBe(36);
+	expect(buttonBounds!.height).toBe(36);
+	expect(Math.abs(iconBounds!.x + iconBounds!.width / 2 - (buttonBounds!.x + buttonBounds!.width / 2))).toBeLessThanOrEqual(1);
+	expect(Math.abs(iconBounds!.y + iconBounds!.height / 2 - (buttonBounds!.y + buttonBounds!.height / 2))).toBeLessThanOrEqual(1);
+	await chatButton.click({ button: 'right' });
+	await page.getByRole('menuitem', { name: 'Activity Bar Size' }).click();
+	await page.getByRole('menuitemcheckbox', { name: 'Compact' }).click();
+	await expect.poll(() => chatButton.evaluate(button => button.getBoundingClientRect().width)).toBe(28);
+	await expect.poll(() => activityBar.evaluate(bar => bar.getBoundingClientRect().width)).toBe(36);
+	await chatButton.click({ button: 'right' });
+	await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
+	await page.getByRole('menuitemcheckbox', { name: 'Top' }).click();
+	await expect(activityBar).toBeHidden();
+	const topHost = page.locator('.ash-sessions-activity-host.top');
+	await expect(topHost).toBeVisible();
+	await expect(topHost.locator('button').first()).toHaveAttribute('aria-label', /Chat/);
+	await topHost.locator('button').first().click({ button: 'right' });
+	await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
+	await page.getByRole('menuitemcheckbox', { name: 'Bottom' }).click();
+	await expect(page.locator('.ash-sessions-activity-host.bottom')).toBeVisible();
+	await expect(topHost).toBeHidden();
+	await page.locator('.ash-sessions-activity-host.bottom button').first().click({ button: 'right' });
+	await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
+	await page.getByRole('menuitemcheckbox', { name: 'Default' }).click();
+	await expect(activityBar).toBeVisible();
+	await expect.poll(() => activityBar.evaluate(bar => bar.getBoundingClientRect().width)).toBe(36);
+	await chatButton.click({ button: 'right' });
+	await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
+	await page.getByRole('menuitemcheckbox', { name: 'Hidden' }).click();
+	await expect(page.locator('.ash-sessions-activity-host.bottom')).toBeHidden();
+	await expect(activityBar).toBeHidden();
+});
+
+test('Electron Code Sessions Activity Bar follows its position and size settings', async ({ application, target, workbench }) => {
+	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code', 'Requires the Code Sessions window');
+	if (target.kind !== 'electron' || !('windows' in application)) return;
+	const sessionPagePromise = application.waitForEvent('window');
+	await workbench.page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
+	const page = await sessionPagePromise;
+	const original = await page.evaluate(async () => {
+		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
+		return (await ipc.invoke('ash:configuration:read') as { document: { source: string } }).document.source;
+	});
+	const updateSettings = async (location: string, compact: boolean): Promise<void> => {
+		await page.evaluate(async values => {
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
+			const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { version: 1; source: string } };
+			const settings = JSON.parse(snapshot.document.source) as Record<string, unknown>;
+			settings['sessions.activityBar.location'] = values.location;
+			settings['sessions.activityBar.compact'] = values.compact;
+			await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(settings) } });
+		}, { location, compact });
+	};
+	try {
+		await updateSettings('default', false);
+		const chatButton = page.locator('[data-part="activitybar"] button').first();
+		await expect(chatButton).toBeVisible();
+		await chatButton.click({ button: 'right' });
+		await page.keyboard.press('Escape');
+		await updateSettings('default', true);
+		await expect.poll(() => chatButton.evaluate(button => button.getBoundingClientRect().width)).toBe(28);
+		await updateSettings('top', true);
+		await expect(page.locator('[data-part="activitybar"]')).toBeHidden();
+		await expect(page.locator('.ash-sessions-activity-host.top')).toBeVisible();
+		await page.reload();
+		await expect(page.locator('.ash-sessions-activity-host.top')).toBeVisible();
+		await updateSettings('bottom', true);
+		await expect(page.locator('.ash-sessions-activity-host.bottom')).toBeVisible();
+	} finally {
+		await page.evaluate(async source => {
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
+			const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number };
+			await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source } });
+		}, original);
+	}
+});
+
 test('Sessions and IDE layout styles switch independently', async ({ application, target, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code', 'Requires the Code Sessions window');
 	if (target.kind !== 'electron' || !('windows' in application)) return;
@@ -234,7 +324,17 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	}
 	await expect(sessionsPage.locator("[data-part='activitybar']")).toBeVisible();
 	const activityButtons = sessionsPage.locator("[data-part='activitybar'] button");
-	expect(await activityButtons.locator('svg').evaluateAll(icons => icons.map(icon => icon.getAttribute('data-ash-icon-id')))).toEqual(['chat-2', 'colab', 'device-mobile', 'account']);
+	expect(await activityButtons.locator('svg').evaluateAll(icons => icons.map(icon => icon.getAttribute('data-ash-icon-id')))).toEqual(['chat-2-filled', 'colab', 'device-mobile', 'account']);
+	await expect(sessionsPage.locator('.ash-sessions-activity-bottom button')).toHaveCount(2);
+	const chatButton = activityButtons.first();
+	const chatButtonBounds = await chatButton.boundingBox();
+	const chatIconBounds = await chatButton.locator('svg').boundingBox();
+	expect(chatButtonBounds).not.toBeNull();
+	expect(chatIconBounds).not.toBeNull();
+	expect(chatButtonBounds!.width).toBe(36);
+	expect(chatButtonBounds!.height).toBe(36);
+	expect(Math.abs(chatIconBounds!.x + chatIconBounds!.width / 2 - (chatButtonBounds!.x + chatButtonBounds!.width / 2))).toBeLessThanOrEqual(1);
+	expect(Math.abs(chatIconBounds!.y + chatIconBounds!.height / 2 - (chatButtonBounds!.y + chatButtonBounds!.height / 2))).toBeLessThanOrEqual(1);
 	await expect(activityButtons.nth(1)).toBeDisabled();
 	await expect(activityButtons.nth(2)).toBeDisabled();
 	if (target.appServerMode === 'required') {

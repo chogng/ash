@@ -86,7 +86,7 @@ import {
 	IThemeService,
 } from "../../platform/theme/common/themeService.js";
 import { type IWorkspace, IWorkspaceContextService, WorkbenchState, workbenchStateFromWorkspace, workspaceOpenTarget } from "../../platform/workspace/common/workspace.js";
-import { WorkbenchConfiguration, type ActivityBarLocation, type SideBarLocation, type WorkbenchLayoutStyle } from "../common/configuration.js";
+import { ActivityBarPosition, WorkbenchConfiguration, type SideBarLocation, type WorkbenchLayoutStyle } from "../common/configuration.js";
 import {
 	type WorkbenchContributionHost,
 	WorkbenchContributionsRegistry,
@@ -733,9 +733,9 @@ export class Workbench extends Disposable {
 		}));
 		const globalCompositeBar = this._register(services.createInstance(GlobalCompositeBar, workbenchRoot));
 		const activitybar = this._register(services.createInstance(ActivitybarPart, workbenchRoot, sidebar.compositeBar, globalCompositeBar));
-		const initialActivityBarLocation = configuration.getValue<ActivityBarLocation>(WorkbenchConfiguration.activityBarLocation);
+		const initialActivityBarLocation = configuration.getValue<ActivityBarPosition>(WorkbenchConfiguration.activityBarLocation);
 		sidebar.setActivityBarLocation(initialActivityBarLocation);
-		if (initialActivityBarLocation === 'top' || initialActivityBarLocation === 'bottom') {
+		if (initialActivityBarLocation === ActivityBarPosition.TOP || initialActivityBarLocation === ActivityBarPosition.BOTTOM) {
 			titlebar.setActivityActions({ bar: globalCompositeBar, showContextMenu: event => activitybar.showContextMenu(event) });
 		}
 		sidebar.domNode.classList.toggle('sidebar-right', configuration.getValue(WorkbenchConfiguration.sideBarLocation) === 'right');
@@ -953,9 +953,9 @@ export class Workbench extends Disposable {
 			}
 			if (event.affectsConfiguration(WorkbenchConfiguration.activityBarCompact)) activitybar.setCompact(configuration.getValue<boolean>(WorkbenchConfiguration.activityBarCompact));
 			if (event.affectsConfiguration(WorkbenchConfiguration.activityBarLocation)) {
-				const location = configuration.getValue<ActivityBarLocation>(WorkbenchConfiguration.activityBarLocation);
+				const location = configuration.getValue<ActivityBarPosition>(WorkbenchConfiguration.activityBarLocation);
 				sidebar.setActivityBarLocation(location);
-				if (location === 'top' || location === 'bottom') {
+				if (location === ActivityBarPosition.TOP || location === ActivityBarPosition.BOTTOM) {
 					titlebar.setActivityActions({ bar: globalCompositeBar, showContextMenu: event => activitybar.showContextMenu(event) });
 				} else {
 					activitybar.hostCompositeBar();

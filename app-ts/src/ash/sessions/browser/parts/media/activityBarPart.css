@@ -6,20 +6,42 @@
 .ash-sessions-window .ash-workbench-activitybar > .ash-workbench-part-content {
 	justify-content: space-between;
 	align-items: center;
-	padding: var(--ash-spacing-size160) var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size80) 0;
 }
 
 .ash-sessions-activity-top,
 .ash-sessions-activity-bottom {
 	display: flex;
 	flex-direction: column;
-	gap: var(--ash-spacing-size120);
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-sessions-activity-content.horizontal {
+	box-sizing: border-box;
+	display: flex;
+	width: 100%;
+	height: 44px;
+	flex: 0 0 auto;
+	flex-direction: row;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0 var(--ash-spacing-size80);
+}
+
+.ash-sessions-activity-content.horizontal .ash-sessions-activity-top,
+.ash-sessions-activity-content.horizontal .ash-sessions-activity-bottom {
+	flex-direction: row;
+}
+
+.ash-sessions-activity-content.compact:not(.horizontal) .ash-sessions-activity-top,
+.ash-sessions-activity-content.compact:not(.horizontal) .ash-sessions-activity-bottom {
+	gap: var(--ash-spacing-size40);
 }
 
 .ash-sessions-activity-item.ash-button {
 	display: grid;
-	width: 40px;
-	height: 40px;
+	width: var(--ash-spacing-size360);
+	height: var(--ash-spacing-size360);
 	place-items: center;
 	padding: 0;
 	border: 0;
@@ -28,8 +50,9 @@
 	background: transparent;
 }
 
-.ash-sessions-activity-item .ash-button-label {
-	display: none;
+.ash-sessions-activity-content.compact:not(.horizontal) .ash-sessions-activity-item.ash-button {
+	width: var(--ash-spacing-size280);
+	height: var(--ash-spacing-size280);
 }
 
 .ash-sessions-activity-item.ash-button:hover,

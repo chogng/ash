@@ -3,7 +3,7 @@ import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { Separator, SubmenuAction, type IAction } from '../../../../base/common/actions.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { CompositeBar } from '../compositebar/compositeBar.js';
-import { WorkbenchConfiguration, type ActivityBarLocation, type SideBarLocation, type WorkbenchLayoutStyle } from '../../../common/configuration.js';
+import { ActivityBarPosition, WorkbenchConfiguration, type SideBarLocation, type WorkbenchLayoutStyle } from '../../../common/configuration.js';
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import type { GlobalCompositeBar } from '../globalCompositeBar.js';
 import { WorkbenchPart } from '../../part.js';
@@ -93,17 +93,17 @@ export class ActivitybarPart extends WorkbenchPart {
 
 	private getContextMenuActions(): readonly IAction[] {
 		const label = (key: string, fallback: string) => this.localizationService.translate('ash', key, fallback);
-		const location = this.configurationService.getValue<ActivityBarLocation>(WorkbenchConfiguration.activityBarLocation);
+		const location = this.configurationService.getValue<ActivityBarPosition>(WorkbenchConfiguration.activityBarLocation);
 		const compact = this.configurationService.getValue<boolean>(WorkbenchConfiguration.activityBarCompact);
 		const sideBarLocation = this.configurationService.getValue<SideBarLocation>(WorkbenchConfiguration.sideBarLocation);
 		const positionActions: IAction[] = [
-			{ id: 'workbench.action.activityBar.position.default', label: label('workbench.activityBarPositionDefault', 'Default'), tooltip: '', enabled: true, checked: location === 'default', run: () => this.configurationService.updateValue(WorkbenchConfiguration.activityBarLocation, 'default') },
-			{ id: 'workbench.action.activityBar.position.top', label: label('workbench.activityBarPositionTop', 'Top'), tooltip: '', enabled: true, checked: location === 'top', run: () => this.configurationService.updateValue(WorkbenchConfiguration.activityBarLocation, 'top') },
-			{ id: 'workbench.action.activityBar.position.bottom', label: label('workbench.activityBarPositionBottom', 'Bottom'), tooltip: '', enabled: true, checked: location === 'bottom', run: () => this.configurationService.updateValue(WorkbenchConfiguration.activityBarLocation, 'bottom') },
-			{ id: 'workbench.action.activityBar.position.hidden', label: label('workbench.activityBarPositionHidden', 'Hidden'), tooltip: '', enabled: true, checked: location === 'hidden', run: () => this.configurationService.updateValue(WorkbenchConfiguration.activityBarLocation, 'hidden') },
+			{ id: 'workbench.action.activityBar.position.default', label: label('workbench.activityBarPositionDefault', 'Default'), tooltip: '', enabled: true, checked: location === ActivityBarPosition.DEFAULT, run: () => this.configurationService.updateValue(WorkbenchConfiguration.activityBarLocation, ActivityBarPosition.DEFAULT) },
+			{ id: 'workbench.action.activityBar.position.top', label: label('workbench.activityBarPositionTop', 'Top'), tooltip: '', enabled: true, checked: location === ActivityBarPosition.TOP, run: () => this.configurationService.updateValue(WorkbenchConfiguration.activityBarLocation, ActivityBarPosition.TOP) },
+			{ id: 'workbench.action.activityBar.position.bottom', label: label('workbench.activityBarPositionBottom', 'Bottom'), tooltip: '', enabled: true, checked: location === ActivityBarPosition.BOTTOM, run: () => this.configurationService.updateValue(WorkbenchConfiguration.activityBarLocation, ActivityBarPosition.BOTTOM) },
+			{ id: 'workbench.action.activityBar.position.hidden', label: label('workbench.activityBarPositionHidden', 'Hidden'), tooltip: '', enabled: true, checked: location === ActivityBarPosition.HIDDEN, run: () => this.configurationService.updateValue(WorkbenchConfiguration.activityBarLocation, ActivityBarPosition.HIDDEN) },
 		];
 		const actions: IAction[] = [new SubmenuAction('workbench.action.activityBar.position', label('workbench.activityBarPosition', 'Activity Bar Position'), positionActions)];
-		if (location === 'default') {
+		if (location === ActivityBarPosition.DEFAULT) {
 			actions.push(new SubmenuAction('workbench.action.activityBar.size', label('workbench.activityBarSize', 'Activity Bar Size'), [
 				{ id: 'workbench.action.activityBar.size.default', label: label('workbench.activityBarSizeDefault', 'Default'), tooltip: '', enabled: true, checked: !compact, run: () => this.configurationService.updateValue(WorkbenchConfiguration.activityBarCompact, false) },
 				{ id: 'workbench.action.activityBar.size.compact', label: label('workbench.activityBarSizeCompact', 'Compact'), tooltip: '', enabled: true, checked: compact, run: () => this.configurationService.updateValue(WorkbenchConfiguration.activityBarCompact, true) },

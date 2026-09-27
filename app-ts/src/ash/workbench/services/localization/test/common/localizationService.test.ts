@@ -86,6 +86,8 @@ test("localization lookup falls back to English and formats parameters", async (
 		localization.translate('ash', 'sessions.activity.mobile', 'Mobile devices'),
 		localization.translate('ash', 'sessions.activity.unavailable', '{0} (coming soon)', { '0': '协作' }),
 	], ['聊天', '协作', '移动设备', '协作（即将推出）']);
+	assert.equal(localization.translate('ash', 'sessions.activityBar.location.title', 'Sessions Activity Bar Position'), '会话活动栏位置');
+	assert.equal(localization.translate('ash', 'sessions.activityBar.compact.title', 'Compact Sessions Activity Bar'), '紧凑会话活动栏');
 	assert.equal(localization.translate('ash', 'sessions.header.chatCount', '{0} chats', { '0': 3 }), '3 个聊天');
 	assert.equal(localization.translate('ash', 'dialog.input', 'Input'), '输入');
 	assert.equal(localization.translate('ash', 'collaboration.dialog.tokenMessage', 'Enter the remote collaboration server bearer token.'), '输入远程协作服务器的访问令牌。');

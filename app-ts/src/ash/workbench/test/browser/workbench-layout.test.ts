@@ -32,6 +32,7 @@ const { bindResizableLayout } = await import("../../../base/browser/ui/resizable
 const { Lxicon } = await import("../../../base/common/lxicons.js");
 const { StorageScope, WillSaveStateReason } = await import("../../../platform/storage/common/storage.js");
 const { WorkbenchState } = await import("../../../platform/workspace/common/workspace.js");
+const { ActivityBarPosition } = await import('../../../workbench/common/configuration.js');
 const { MenuId } = await import(
 	"../../../platform/actions/common/actions.js"
 );
@@ -322,7 +323,7 @@ test('Activity Bar top and bottom positions keep the full sidebar height', () =>
 	const sidebarFrame = harness.container.querySelector<HTMLElement>("[data-part='sidebar']")?.parentElement;
 	assert.equal(sidebarFrame?.style.paddingLeft, '0px');
 
-	for (const location of ['top', 'bottom'] as const) {
+	for (const location of [ActivityBarPosition.TOP, ActivityBarPosition.BOTTOM]) {
 		harness.layout.setActivityBarLocation(location);
 		assert.equal(harness.layout.isPartVisible('activitybar'), false);
 		assert.equal(harness.layout.domNode.classList.contains('activitybar-absent'), true);
@@ -332,9 +333,9 @@ test('Activity Bar top and bottom positions keep the full sidebar height', () =>
 
 	harness.layout.setSideBarLocation('right');
 	assert.equal(sidebarFrame?.style.paddingRight, '8px');
-	harness.layout.setActivityBarLocation('hidden');
+	harness.layout.setActivityBarLocation(ActivityBarPosition.HIDDEN);
 	assert.equal(sidebarFrame?.style.paddingRight, '8px');
-	harness.layout.setActivityBarLocation('default');
+	harness.layout.setActivityBarLocation(ActivityBarPosition.DEFAULT);
 	assert.equal(harness.layout.isPartVisible('activitybar'), true);
 	assert.equal(harness.layout.domNode.classList.contains('activitybar-absent'), false);
 	assert.equal(sidebarFrame?.style.paddingRight, '0px');
@@ -347,7 +348,7 @@ test('Workbench layout assigns the window edge inset on startup from the Activit
 	const harness = createLayoutHarness(dom.window.document, {
 		initialDimension: new Dimension(1_200, 800),
 		layoutStyle: 'modern',
-		activityBarLocation: 'top',
+		activityBarLocation: ActivityBarPosition.TOP,
 	});
 	harness.layout.layout(new Dimension(1_200, 800));
 	const sidebarFrame = harness.container.querySelector<HTMLElement>("[data-part='sidebar']")?.parentElement;
@@ -886,12 +887,12 @@ test("Activity Bar hosts the primary sidebar selector independently of sidebar v
 	assert.equal(compositeBar.domNode.parentElement, activitybar.domNode.querySelector('.ash-workbench-part-content'));
 	assert.equal(globalActions.parentElement, activitybar.domNode.querySelector('.ash-workbench-part-content'));
 	assert.equal(title?.parentElement, sidebar.domNode);
-	sidebar.setActivityBarLocation('top');
+	sidebar.setActivityBarLocation(ActivityBarPosition.TOP);
 	assert.equal(compositeBar.domNode.parentElement, sidebar.domNode.querySelector('.ash-sidebar-composite-bar-top'));
 	assert.equal(compositeBar.domNode.querySelector('[role="tablist"]')?.getAttribute('aria-orientation'), 'horizontal');
-	sidebar.setActivityBarLocation('bottom');
+	sidebar.setActivityBarLocation(ActivityBarPosition.BOTTOM);
 	assert.equal(compositeBar.domNode.parentElement, sidebar.domNode.querySelector('.ash-sidebar-composite-bar-bottom'));
-	sidebar.setActivityBarLocation('default');
+	sidebar.setActivityBarLocation(ActivityBarPosition.DEFAULT);
 	activitybar.hostCompositeBar();
 	assert.equal(compositeBar.domNode.parentElement, activitybar.domNode.querySelector('.ash-workbench-part-content'));
 	assert.equal(compositeBar.domNode.querySelector('[role="tablist"]')?.getAttribute('aria-orientation'), 'vertical');

@@ -7,7 +7,12 @@ import { WorkbenchModeConfigurationKey, WorkbenchModeRegistry } from "./workbenc
 import { defaultWorkbenchColorThemePreference, SystemColorThemePreference, WorkbenchThemesRegistry } from "./theme.js";
 
 export type WorkbenchLayoutStyle = "modern" | "flat";
-export type ActivityBarLocation = 'default' | 'top' | 'bottom' | 'hidden';
+export const enum ActivityBarPosition {
+	DEFAULT = 'default',
+	TOP = 'top',
+	BOTTOM = 'bottom',
+	HIDDEN = 'hidden',
+}
 export type SideBarLocation = 'left' | 'right';
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
@@ -94,11 +99,14 @@ export const WorkbenchConfiguration = Object.freeze({
 			],
 		},
 	}),
-	activityBarLocation: configurationRegistry.registerConfiguration<ActivityBarLocation>({
+	activityBarLocation: configurationRegistry.registerConfiguration<ActivityBarPosition>({
 		key: 'workbench.activityBar.location',
-		defaultValue: 'default',
-		parse(value: unknown): ActivityBarLocation {
-			if (value === 'default' || value === 'top' || value === 'bottom' || value === 'hidden') return value;
+		defaultValue: ActivityBarPosition.DEFAULT,
+		parse(value: unknown): ActivityBarPosition {
+			if (value === ActivityBarPosition.DEFAULT) return ActivityBarPosition.DEFAULT;
+			if (value === ActivityBarPosition.TOP) return ActivityBarPosition.TOP;
+			if (value === ActivityBarPosition.BOTTOM) return ActivityBarPosition.BOTTOM;
+			if (value === ActivityBarPosition.HIDDEN) return ActivityBarPosition.HIDDEN;
 			throw new TypeError(`Unknown Activity Bar location: ${String(value)}`);
 		},
 		setting: {
@@ -107,10 +115,10 @@ export const WorkbenchConfiguration = Object.freeze({
 			get description() { return localize('workbench.activityBar.location.description', 'Choose where the Activity Bar appears.'); },
 			get options() {
 				return [
-					{ value: 'default', label: localize('workbench.activityBar.location.side', 'Side') },
-					{ value: 'top', label: localize('workbench.activityBar.location.top', 'Top') },
-					{ value: 'bottom', label: localize('workbench.activityBar.location.bottom', 'Bottom') },
-					{ value: 'hidden', label: localize('workbench.activityBar.location.hidden', 'Hidden') },
+					{ value: ActivityBarPosition.DEFAULT, label: localize('workbench.activityBar.location.side', 'Side') },
+					{ value: ActivityBarPosition.TOP, label: localize('workbench.activityBar.location.top', 'Top') },
+					{ value: ActivityBarPosition.BOTTOM, label: localize('workbench.activityBar.location.bottom', 'Bottom') },
+					{ value: ActivityBarPosition.HIDDEN, label: localize('workbench.activityBar.location.hidden', 'Hidden') },
 				] as const;
 			},
 		},

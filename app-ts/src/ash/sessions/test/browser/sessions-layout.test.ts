@@ -24,7 +24,7 @@ const { WillSaveStateReason } = await import("../../../platform/storage/common/s
 const { SessionsWorkbenchLayout, sessionsPartIds } = await import("../../../sessions/browser/layoutPolicy.js");
 const { SessionsModernUIContribution } = await import('../../../sessions/contrib/modernUI/browser/modernUI.contribution.js');
 const { SessionsConfiguration } = await import('../../../sessions/common/configuration.js');
-const { WorkbenchConfiguration } = await import('../../../workbench/common/configuration.js');
+const { ActivityBarPosition, WorkbenchConfiguration } = await import('../../../workbench/common/configuration.js');
 const { WorkbenchConfigurationService } = await import('../../../workbench/services/configuration/browser/configurationService.js');
 
 type SessionsPartId = import("../../../sessions/browser/layoutPolicy.js").SessionsPartId;
@@ -36,7 +36,7 @@ class TestSessionsPart extends WorkbenchPart {
 	}
 
 	override get minimumWidth(): number {
-		if (this.id === 'activitybar') return 56;
+		if (this.id === 'activitybar') return 44;
 		if (this.id === "sidebar") return 180;
 		if (this.id === "sessions") return 320;
 		if (this.id === "auxiliarybar") return 180;
@@ -44,7 +44,7 @@ class TestSessionsPart extends WorkbenchPart {
 	}
 
 	override get maximumWidth(): number {
-		if (this.id === 'activitybar') return 56;
+		if (this.id === 'activitybar') return 44;
 		return this.id === "sidebar" || this.id === "auxiliarybar" ? 640 : Number.POSITIVE_INFINITY;
 	}
 
@@ -66,7 +66,7 @@ test("Sessions layout owns a fixed Sessions-first Part topology", () => {
 	layout.layout(new Dimension(1_200, 800));
 
 	assert.deepEqual(layout.getPartSize("titlebar"), new Dimension(1_200, 46));
-	assert.equal(Math.abs(layout.getPartSize('activitybar').width - 62) <= 1, true);
+	assert.equal(Math.abs(layout.getPartSize('activitybar').width - 50) <= 1, true);
 	assert.equal(Math.abs(layout.getPartSize("sidebar").width - 260) <= 1, true);
 	assert.equal(Math.abs(layout.getPartSize("auxiliarybar").width - 200) <= 1, true);
 	assert.equal(layout.getPartSize("sessions").height, 754);
@@ -139,6 +139,36 @@ test("Sessions layout only permits the optional auxiliary Part to hide", () => {
 	layout.dispose();
 	for (const part of parts.values()) part.dispose();
 	dom.window.close();
+});
+
+test('Sessions Activity Bar position changes the grid visibility and frame edge', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const container = h(dom.window.document, 'main');
+	dom.window.document.body.append(container);
+	const parts = createParts(dom.window.document);
+	const layout = new SessionsWorkbenchLayout(container, parts, {
+		initialDimension: new Dimension(1_200, 800),
+		activityBarLocation: ActivityBarPosition.TOP,
+	});
+	try {
+		layout.layout(new Dimension(1_200, 800));
+		assert.equal(layout.isPartVisible('activitybar'), false);
+		assert.equal(parts.get('sidebar')!.domNode.parentElement?.style.paddingLeft, '6px');
+		const expandedWidth = layout.getPartSize('sessions').width;
+		layout.setActivityBarLocation(ActivityBarPosition.DEFAULT);
+		assert.equal(layout.isPartVisible('activitybar'), true);
+		assert.equal(Math.abs(layout.getPartSize('activitybar').width - 50) <= 1, true);
+		assert.equal(parts.get('activitybar')!.domNode.parentElement?.style.paddingLeft, '6px');
+		assert.equal(parts.get('sidebar')!.domNode.parentElement?.style.paddingLeft, '0px');
+		assert.equal(layout.getPartSize('sessions').width < expandedWidth, true);
+		layout.setActivityBarLocation(ActivityBarPosition.HIDDEN);
+		assert.equal(layout.isPartVisible('activitybar'), false);
+		assert.equal(parts.get('sidebar')!.domNode.parentElement?.style.paddingLeft, '6px');
+	} finally {
+		layout.dispose();
+		for (const part of parts.values()) part.dispose();
+		dom.window.close();
+	}
 });
 
 test("Sessions layout validates its complete Part set", () => {

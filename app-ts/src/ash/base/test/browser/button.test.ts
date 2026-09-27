@@ -43,8 +43,12 @@ test("Button only installs a Hover for an explicit title", () => {
 	using iconButton = new Button(dom.window.document.body, {
 		label: "Menu",
 		icon: Lxicon.menu,
+		iconOnly: true,
 	});
+	assert.equal(iconButton.domNode.classList.contains("icon-only"), true);
+	assert.equal(iconButton.domNode.getAttribute("aria-label"), "Menu");
 	iconButton.label = "Application menu";
+	assert.equal(iconButton.domNode.getAttribute("aria-label"), "Application menu");
 	assert.ok(iconButton.domNode.querySelector("svg.ash-icon"));
 
 	using submitButton = new Button(dom.window.document.body, {
