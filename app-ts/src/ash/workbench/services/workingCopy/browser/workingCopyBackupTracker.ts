@@ -22,7 +22,8 @@ export class WorkingCopyBackupTracker extends Disposable {
 	}
 
 	flush(): Promise<void> {
-		return Promise.all(this.workingCopies.getAll().map(copy => this.persist(copy.resource, copy))).then(() => Promise.all(this.queues.values())).then(() => undefined);
+		const pending = this.workingCopies.getAll().filter(copy => copy.isDirty || this.timers.get(copy)?.value);
+		return Promise.all(pending.map(copy => this.persist(copy.resource, copy))).then(() => Promise.all(this.queues.values())).then(() => undefined);
 	}
 
 	private track(copy: IWorkingCopy): void {
@@ -32,7 +33,8 @@ export class WorkingCopyBackupTracker extends Disposable {
 		listeners.add(copy.onDidChangeContent(() => this.schedule(copy)));
 		listeners.add(copy.onDidChangeDirty(() => this.schedule(copy)));
 		this.tracked.set(copy, listeners);
-		this.schedule(copy);
+		// A clean editor may be opening for crash restoration; its saved backup remains until restoration finishes.
+		if (copy.isDirty) this.schedule(copy);
 	}
 
 	private untrack(copy: IWorkingCopy): void {
@@ -60,10 +62,11 @@ export class WorkingCopyBackupTracker extends Disposable {
 	private persist(resource: IWorkingCopy['resource'], copy?: IWorkingCopy): Promise<void> {
 		if (copy) this.cancel(copy);
 		const key = resource.toString();
+		const dirtyCopy = copy?.isDirty ? copy : this.workingCopies.get(resource).find(candidate => candidate.isDirty);
 		let operation: () => Promise<void>;
 		try {
-			if (copy?.isDirty) {
-				const backup = { resource: copy.resource, kind: copy.backupKind, content: copy.backup(), updatedAt: Date.now(), ...(copy.backupLanguageId ? { languageId: copy.backupLanguageId } : {}), ...(copy.backupContentType ? { contentType: copy.backupContentType } : {}), ...(copy.backupLabel ? { label: copy.backupLabel } : {}) };
+			if (dirtyCopy) {
+				const backup = { resource: dirtyCopy.resource, kind: dirtyCopy.backupKind, content: dirtyCopy.backup(), updatedAt: Date.now(), ...(dirtyCopy.backupLanguageId ? { languageId: dirtyCopy.backupLanguageId } : {}), ...(dirtyCopy.backupContentType ? { contentType: dirtyCopy.backupContentType } : {}), ...(dirtyCopy.backupLabel ? { label: dirtyCopy.backupLabel } : {}) };
 				operation = () => this.backups.store(backup);
 			} else {
 				operation = () => this.backups.delete(resource);

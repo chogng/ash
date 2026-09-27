@@ -23,7 +23,7 @@ test("BrowserWorkingCopyService indexes and unregisters format-specific copies",
 	assert.deepEqual(unregistered, [copy]);
 });
 
-test('BrowserWorkingCopyService publishes aggregate dirty state changes', () => {
+test('BrowserWorkingCopyService publishes every working copy dirty state change', () => {
 	using service = new BrowserWorkingCopyService();
 	using first = new FakeWorkingCopy(URI.file('C:\\project\\first.ts'));
 	using second = new FakeWorkingCopy(URI.file('C:\\project\\second.ts'));
@@ -37,6 +37,17 @@ test('BrowserWorkingCopyService publishes aggregate dirty state changes', () => 
 	first.setDirty(false);
 	second.setDirty(false);
 
+	assert.deepEqual(changes, [true, true, true, false]);
+});
+
+test('BrowserWorkingCopyService reports initially dirty registrations and removal', () => {
+	using service = new BrowserWorkingCopyService();
+	using copy = new FakeWorkingCopy(URI.file('C:\\project\\draft.ts'));
+	copy.setDirty(true);
+	const changes: boolean[] = [];
+	using listener = service.onDidChangeDirty(() => changes.push(service.hasDirtyWorkingCopies));
+	const registration = service.register(copy);
+	registration.dispose();
 	assert.deepEqual(changes, [true, false]);
 });
 

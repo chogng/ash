@@ -75,6 +75,7 @@ test('Open Editors follows editor groups, dirty state, activation, and close', a
 
 test('Dirty file activity follows working copy registration and dirty state', () => {
 	using dirtyChanges = new Emitter<void>();
+	using secondDirtyChanges = new Emitter<void>();
 	using workingCopies = new BrowserWorkingCopyService();
 	let isDirty = true;
 	let activeBadge: NumberBadge | undefined;
@@ -106,8 +107,21 @@ test('Dirty file activity follows working copy registration and dirty state', ()
 	using registration = workingCopies.register(first);
 	assert.equal(activeBadge?.number, 1);
 	assert.equal(activeBadge?.description, '1 unsaved file');
+	let secondIsDirty = false;
+	using secondRegistration = workingCopies.register({
+		...first,
+		resource: URI.file('/project/second.ts'),
+		get isDirty() { return secondIsDirty; },
+		onDidChangeDirty: secondDirtyChanges.event,
+	});
+	secondIsDirty = true;
+	secondDirtyChanges.fire();
+	assert.equal(activeBadge?.number, 2);
 	isDirty = false;
 	dirtyChanges.fire();
+	assert.equal(activeBadge?.number, 1);
+	secondIsDirty = false;
+	secondDirtyChanges.fire();
 	assert.equal(activeBadge, undefined);
 });
 

@@ -56,6 +56,49 @@ test("working-copy backup tracker removes a closed draft and keeps another open 
 	}
 });
 
+test('working-copy backup tracker keeps a dirty copy when another copy of the resource is clean', async () => {
+	using workingCopies = new BrowserWorkingCopyService();
+	using backups = new MemoryBackups();
+	const ownerWindow = new TestWindow();
+	using tracker = new WorkingCopyBackupTracker(workingCopies, backups, ownerWindow as unknown as Window);
+	const resource = URI.file('C:\\project\\main.ts');
+	using dirty = new TestWorkingCopy(resource);
+	using clean = new TestWorkingCopy(resource);
+	using dirtyRegistration = workingCopies.register(dirty);
+	using cleanRegistration = workingCopies.register(clean);
+
+	dirty.change('unsaved');
+	ownerWindow.runTimers();
+	await tracker.flush();
+	assert.equal((await backups.list())[0]?.content, 'unsaved');
+
+	clean.markClean();
+	ownerWindow.runTimers();
+	await tracker.flush();
+	assert.equal((await backups.list())[0]?.content, 'unsaved');
+});
+
+test('working-copy backup tracker retains a crash backup while a clean editor opens for restoration', async () => {
+	using workingCopies = new BrowserWorkingCopyService();
+	using backups = new MemoryBackups();
+	const ownerWindow = new TestWindow();
+	using tracker = new WorkingCopyBackupTracker(workingCopies, backups, ownerWindow as unknown as Window);
+	const resource = URI.file('C:\\project\\recovered.ts');
+	await backups.store({ resource, kind: 'text', content: 'recovered', updatedAt: Date.now() });
+	using copy = new TestWorkingCopy(resource);
+	using registration = workingCopies.register(copy);
+
+	ownerWindow.runTimers();
+	await tracker.flush();
+	assert.equal((await backups.list())[0]?.content, 'recovered');
+
+	copy.restoreBackup('recovered');
+	await tracker.flush();
+	copy.markClean();
+	await tracker.flush();
+	assert.deepEqual(await backups.list(), []);
+});
+
 class TestWorkingCopy extends Disposable implements IWorkingCopy {
 	private readonly dirtyChanges = this._register(new Emitter<void>());
 	private readonly contentChanges = this._register(new Emitter<void>());
