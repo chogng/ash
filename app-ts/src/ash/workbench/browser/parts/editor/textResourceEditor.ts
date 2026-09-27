@@ -332,6 +332,7 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 			if (modelReference.hasExternalChange) part.announceAccessibilityStatus?.("File changed on disk. Local edits are preserved.");
 			this.statusChangeEmitter.fire();
 		}));
+		if (input.onDidChangeLabel) statusListeners.add(input.onDidChangeLabel(() => part.updateOptions({ ariaLabel: input.label })));
 		this.statusListener.value = statusListeners;
 		part.layout(this.dimension);
 		if (shouldRestoreFocus && !container.hidden) {
@@ -422,7 +423,6 @@ class EditorWorkingCopy extends Disposable implements IWorkingCopy {
 	readonly backupKind = "text" as const;
 	readonly backupLanguageId: string | undefined;
 	readonly backupContentType: string | undefined;
-	readonly backupLabel: string | undefined;
 	readonly onDidChangeDirty: IWorkingCopy["onDidChangeDirty"];
 	readonly onDidChangeExternalChange: IWorkingCopy["onDidChangeExternalChange"];
 	readonly onDidChangeContent: IWorkingCopy["onDidChangeContent"];
@@ -430,7 +430,7 @@ class EditorWorkingCopy extends Disposable implements IWorkingCopy {
 	constructor(
 		private readonly reference: TextModelReference,
 		private readonly resourceStore: ITextResourceStore,
-		input: EditorInput,
+		private readonly input: EditorInput,
 		workingCopyService: IWorkingCopyService | undefined,
 		private readonly saveUntitled: (() => Promise<void | boolean>) | undefined,
 	) {
@@ -439,7 +439,6 @@ class EditorWorkingCopy extends Disposable implements IWorkingCopy {
 		this.resource = input.resource;
 		this.backupLanguageId = input.languageId;
 		this.backupContentType = input.contentType;
-		this.backupLabel = input.label;
 		this.onDidChangeDirty = reference.onDidChangeDirty;
 		this.onDidChangeExternalChange = reference.onDidChangeExternalChange;
 		this.onDidChangeContent = listener => reference.model.onDidChangeContent(() => listener());
@@ -448,6 +447,10 @@ class EditorWorkingCopy extends Disposable implements IWorkingCopy {
 
 	get isDirty(): boolean {
 		return this.reference.isDirty;
+	}
+
+	get backupLabel(): string | undefined {
+		return this.input.label;
 	}
 
 	get hasExternalChange(): boolean {

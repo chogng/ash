@@ -360,6 +360,7 @@ export class Workbench extends Disposable {
 	private readonly workspaceContext: WorkspaceContextService;
 	private readonly storage: BrowserStorageService;
 	private readonly editor: IEditorPartsService;
+	private readonly untitledTextEditorService: IUntitledTextEditorService;
 	private readonly workbenchLayout: WorkbenchLayout;
 	private readonly workingCopyBackups: IndexedDbWorkingCopyBackupService;
 	private readonly workingCopyBackupTracker: WorkingCopyBackupTracker;
@@ -499,10 +500,11 @@ export class Workbench extends Disposable {
 		services.registerInstance(IFileSystemProviderService, fileService);
 		const textFileService = new TextFileService(fileService);
 		services.registerInstance(ITextFileService, textFileService);
-		const untitledTextEditorService = this._register(new BrowserUntitledTextEditorService());
-		services.registerInstance(IUntitledTextEditorService, untitledTextEditorService);
 		const workingCopyService = this._register(new BrowserWorkingCopyService());
 		services.registerInstance(IWorkingCopyService, workingCopyService);
+		const untitledTextEditorService = this._register(services.createInstance(BrowserUntitledTextEditorService));
+		this.untitledTextEditorService = untitledTextEditorService;
+		services.registerInstance(IUntitledTextEditorService, untitledTextEditorService);
 		const workingCopyBackups = this._register(new IndexedDbWorkingCopyBackupService(workspace.id));
 		this.workingCopyBackups = workingCopyBackups;
 		services.registerInstance(IWorkingCopyBackupService, workingCopyBackups);
@@ -843,6 +845,7 @@ export class Workbench extends Disposable {
 			documentCollaborationApi: api.documentCollaboration,
 			serverEvents: api.events,
 			workingCopyService,
+			replaceEditorResource: (source, input, replacement) => editorParts.replaceEditorResource(source, input, replacement),
 			dialogService,
 			fileDialogService: services.getOptional(IFileDialogService),
 			bulkEditService,
@@ -867,7 +870,7 @@ export class Workbench extends Disposable {
 				void nativeHostApi.setWindowDimmed(visible).catch(error => console.error('Failed to update window controls', error));
 			}));
 		}
-		const auxiliaryWindows = this._register(new BrowserAuxiliaryWindowService(ownerWindow));
+		const auxiliaryWindows = this._register(services.createInstance(BrowserAuxiliaryWindowService, ownerWindow, workbenchRoot));
 		services.registerInstance(IAuxiliaryWindowService, auxiliaryWindows);
 		const editorParts = this._register(new EditorParts(editor, auxiliaryWindows, container => {
 			const contextKeyService = contextKeys.createScoped(container);
@@ -1178,12 +1181,22 @@ export class Workbench extends Disposable {
 		try { pending = await backups.list(); }
 		catch (error) { this.logService.error("workingCopy", "Failed to list working-copy backups", error); return; }
 		for (const backup of pending) {
+			if (backup.kind === "text" && this.untitledTextEditorService.isUntitled(backup.resource)) {
+				this.untitledTextEditorService.create({ untitledResource: backup.resource, initialText: backup.content, languageId: backup.languageId, label: backup.label });
+			}
+		}
+		for (const backup of pending) {
 			try {
 				let pane;
-				try {
-					pane = await editor.openEditor({ resource: backup.resource, ...(backup.languageId ? { languageId: backup.languageId } : {}), ...(backup.contentType ? { contentType: backup.contentType } : {}), ...(backup.label ? { label: backup.label } : {}) });
-				} catch {
-					pane = await editor.openEditor({ resource: backup.resource, initialText: "", ...(backup.languageId ? { languageId: backup.languageId } : {}), ...(backup.contentType ? { contentType: backup.contentType } : {}), ...(backup.label ? { label: backup.label } : {}) });
+				const untitled = backup.kind === "text" ? this.untitledTextEditorService.get(backup.resource) : undefined;
+				if (untitled) {
+					pane = await editor.openEditor(untitled);
+				} else {
+					try {
+						pane = await editor.openEditor({ resource: backup.resource, ...(backup.languageId ? { languageId: backup.languageId } : {}), ...(backup.contentType ? { contentType: backup.contentType } : {}), ...(backup.label ? { label: backup.label } : {}) });
+					} catch {
+						pane = await editor.openEditor({ resource: backup.resource, initialText: "", ...(backup.languageId ? { languageId: backup.languageId } : {}), ...(backup.contentType ? { contentType: backup.contentType } : {}), ...(backup.label ? { label: backup.label } : {}) });
+					}
 				}
 				const workingCopy = pane.workingCopy;
 				if (!workingCopy || workingCopy.backupKind !== backup.kind) throw new Error(`Restored editor does not support ${backup.kind} backups`);
@@ -1206,6 +1219,7 @@ export class Workbench extends Disposable {
 		await this.workingCopyBackupTracker.flush();
 		if (!await this.editor.closeAllEditors({ reason: "reset" })) throw new CancellationError("Workspace switch was cancelled");
 		await this.workingCopyBackupTracker.flush();
+		this.untitledTextEditorService.reset();
 		this.workingCopyBackups.switchWorkspace(workspace.id);
 		await this.storage.flush(WillSaveStateReason.WORKSPACE_CHANGE);
 		this.storage.switchWorkspace(workspace.id);

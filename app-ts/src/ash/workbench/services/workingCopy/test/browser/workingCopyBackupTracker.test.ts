@@ -28,6 +28,34 @@ test("working-copy backup tracker persists the latest dirty content and deletes 
 	assert.deepEqual(await backups.list(), []);
 });
 
+test("working-copy backup tracker removes a closed draft and keeps another open copy", async () => {
+	using workingCopies = new BrowserWorkingCopyService();
+	using backups = new MemoryBackups();
+	const ownerWindow = new TestWindow();
+	using tracker = new WorkingCopyBackupTracker(workingCopies, backups, ownerWindow as unknown as Window);
+	const resource = URI.parse('untitled:/Untitled-1');
+	using first = new TestWorkingCopy(resource);
+	using second = new TestWorkingCopy(resource);
+	const firstRegistration = workingCopies.register(first);
+	const secondRegistration = workingCopies.register(second);
+	try {
+		first.change('first draft');
+		second.change('second draft');
+		await tracker.flush();
+
+		firstRegistration.dispose();
+		await tracker.flush();
+		assert.equal((await backups.list())[0]?.content, 'second draft');
+
+		secondRegistration.dispose();
+		await tracker.flush();
+		assert.deepEqual(await backups.list(), []);
+	} finally {
+		firstRegistration.dispose();
+		secondRegistration.dispose();
+	}
+});
+
 class TestWorkingCopy extends Disposable implements IWorkingCopy {
 	private readonly dirtyChanges = this._register(new Emitter<void>());
 	private readonly contentChanges = this._register(new Emitter<void>());

@@ -3,7 +3,7 @@ import { Separator, type IAction } from "../../../../base/common/actions.js";
 import { Dimension, type IDimension } from "../../../../base/browser/dom.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { validateJsonValue } from "../../../../base/common/jsonValue.js";
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { localize } from "../../../../nls.js";
 import type { URI } from "../../../../base/common/uri.js";
 import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
@@ -125,6 +125,7 @@ export interface EditorGroupOptions {
 interface EditorGroupEntry extends EditorTabDescriptor {
 	readonly instanceId: EditorInstanceId;
 	paneInstance: EditorPaneInstance;
+	readonly labelListener: MutableDisposable<IDisposable>;
 	input: EditorInput;
 	preview: boolean;
 	sticky: boolean;
@@ -177,6 +178,9 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 
 	constructor(container: HTMLElement, options: EditorGroupOptions) {
 		super();
+		this._register(toDisposable(() => {
+			for (const entry of this.entries) entry.labelListener.dispose();
+		}));
 		this.id = options.id ?? nextEditorGroupId();
 		reserveEditorGroupId(this.id);
 		this.registry = options.registry;
@@ -410,6 +414,7 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 		if (existing?.paneInstance.pane.id === descriptor.id) {
 			const wasPreview = existing.preview;
 			existing.input = input;
+			existing.labelListener.value = input.onDidChangeLabel?.(() => this.publishEditorState(existing));
 			if (options.pinned === true) existing.preview = false;
 			this.moveEntry(existing, options.index);
 			this.activateEntry(existing, false);
@@ -506,11 +511,13 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 			panelId: paneInstance.panelId,
 			tabId: paneInstance.tabId,
 			paneInstance,
+			labelListener: new MutableDisposable<IDisposable>(),
 			preview: options.pinned === false,
 			sticky: existing?.sticky ?? false,
 			get isDirty() { return paneInstance.pane.workingCopy?.isDirty ?? false; },
 			get hasExternalChange() { return paneInstance.pane.workingCopy?.hasExternalChange ?? false; },
 		};
+		entry.labelListener.value = input.onDidChangeLabel?.(() => this.publishEditorState(entry));
 		paneInstance.observeWorkingCopy(() => {
 			if (entry.preview && entry.paneInstance.pane.workingCopy?.isDirty) entry.preview = false;
 			this.publishEditorState(entry);
@@ -518,6 +525,7 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 		if (existing) {
 			const index = this.entries.indexOf(existing);
 			const previous = this.editorState(existing);
+			existing.labelListener.dispose();
 			this.panes.disposePane(existing.paneInstance);
 			if (this.activeEntry === existing) this.activeEntry = undefined;
 			this.entries[index] = entry;
@@ -529,6 +537,7 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 			if (preview) {
 				const index = this.entries.indexOf(preview);
 				const previous = this.editorState(preview);
+				preview.labelListener.dispose();
 				this.panes.disposePane(preview.paneInstance);
 				if (this.activeEntry === preview) this.activeEntry = undefined;
 				this.entries[index] = entry;
@@ -612,6 +621,7 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 		if (wasActive) {
 			this.activeEntry = undefined;
 		}
+		entry.labelListener.dispose();
 		this.panes.disposePane(entry.paneInstance);
 		this.editorChangeEmitter.fire(Object.freeze({ kind: "editorClosed", editor: closedState, reason }));
 		if (wasActive) {
@@ -631,9 +641,12 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 		);
 		if (index < 0) throw new RangeError(`Editor is not open in this group: ${input.resource}`);
 		const wasSticky = this.isSticky(input);
+		const previouslyActive = this.activeInput;
+		const wasActive = previouslyActive && editorInputKey(previouslyActive) === editorInputKey(input);
 		await this.openEditor(replacement, { index });
 		if (wasSticky) this.toggleSticky(replacement);
 		await this.closeEditor(input, { skipConfirmation: true, reason: "replace" });
+		if (previouslyActive && !wasActive) this.activateEditor(previouslyActive);
 	}
 
 	getEditorInsertionIndex(target: EditorInput | undefined, position: EditorTabDropPosition): number {

@@ -1,5 +1,5 @@
 import { expect, test } from '../../../automation/test.js';
-import type { ElectronApplication } from '@playwright/test';
+import type { ElectronApplication, Page } from '@playwright/test';
 import type { BrowserWindow, MessageBoxOptions } from 'electron';
 
 test.use({ openWorkspace: false });
@@ -21,6 +21,10 @@ test('browser keeps its save confirmation in the workbench', async ({ target, wo
 	await expect(dialog).toBeVisible();
 	await dialog.getByRole('button', { name: "Don't Save" }).click();
 	await expect(dialog).toHaveCount(0);
+	await page.keyboard.press('F1');
+	await page.locator('.ash-quick-pick').getByRole('combobox').fill('Reopen Closed Editor');
+	await page.keyboard.press('Enter');
+	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'Untitled-1' })).toHaveCount(0);
 });
 
 test('desktop dirty editor sends its choices through the owning window dialog', async ({ target, application, workbench }) => {
@@ -73,6 +77,11 @@ test('browser Save As writes an untitled editor to the selected folder', async (
 	await expect(input).toBeVisible();
 	await input.focus();
 	await input.type('saved through the file dialog');
+	await expect.poll(() => hasWorkingCopyBackup(page, 'saved through the file dialog')).toBe(true);
+	await page.keyboard.press('F1');
+	await page.locator('.ash-quick-pick').getByRole('combobox').fill('Split Editor Horizontal');
+	await page.keyboard.press('Enter');
+	await expect(workbench.editors.groupAt(1).tabs.filter({ hasText: 'Untitled-1' })).toHaveCount(1);
 	await input.press('Control+S');
 	const dialog = page.getByRole('dialog', { name: 'Save File' });
 	await expect(dialog).toBeVisible();
@@ -83,6 +92,11 @@ test('browser Save As writes an untitled editor to the selected folder', async (
 		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
 		return (await (await folder.getFileHandle('draft.txt')).getFile()).text();
 	}, folderName)).toBe('saved through the file dialog');
+	for (const index of [0, 1]) {
+		await expect(workbench.editors.groupAt(index).tabs.filter({ hasText: 'draft.txt' })).toHaveCount(1);
+		await expect(workbench.editors.groupAt(index).tabs.filter({ hasText: 'Untitled-1' })).toHaveCount(0);
+	}
+	await expect.poll(() => hasWorkingCopyBackup(page, 'saved through the file dialog')).toBe(false);
 	await page.keyboard.press('F1');
 	await page.locator('.ash-quick-pick').getByRole('combobox').fill('New Untitled Text Editor');
 	await page.keyboard.press('Enter');
@@ -101,6 +115,26 @@ test('browser Save As writes an untitled editor to the selected folder', async (
 		return (await (await folder.getFileHandle('draft.txt')).getFile()).text();
 	}, folderName)).toBe('saved through the file dialog');
 });
+
+async function hasWorkingCopyBackup(page: Page, content: string): Promise<boolean> {
+	return page.evaluate(async expectedContent => {
+		const database = await new Promise<IDBDatabase>((resolve, reject) => {
+			const request = indexedDB.open('ash-working-copy-backups', 1);
+			request.onsuccess = () => resolve(request.result);
+			request.onerror = () => reject(request.error ?? new Error('Could not read working-copy backups'));
+		});
+		try {
+			const records = await new Promise<Array<{ readonly content?: string }>>((resolve, reject) => {
+				const request = database.transaction('backups', 'readonly').objectStore('backups').getAll();
+				request.onsuccess = () => resolve(request.result);
+				request.onerror = () => reject(request.error ?? new Error('Could not read working-copy backups'));
+			});
+			return records.some(record => record.content === expectedContent);
+		} finally {
+			database.close();
+		}
+	}, content);
+}
 
 test('browser Open File selects multiple files from the current workspace', async ({ target, workbench }) => {
 	test.skip(target.kind !== 'browser' || target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'This scenario requires the standalone Code browser');

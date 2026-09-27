@@ -153,6 +153,18 @@ test('discarding an untitled text model restores its initial content without rea
 	});
 });
 
+test('initial untitled content is dirty and discarding it leaves an empty document', async () => {
+	const textFiles = new TestTextFileService('unrelated file');
+	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
+	using reference = await models.acquire({ resource: URI.parse('untitled:/template'), initialText: 'template body' }, new AbortController().signal);
+	assert.deepEqual({ text: reference.model.getText(), dirty: reference.isDirty }, { text: 'template body', dirty: true });
+
+	await reference.revert(new AbortController().signal);
+	assert.deepEqual({ text: reference.model.getText(), dirty: reference.isDirty, resolves: textFiles.resolveCount }, {
+		text: '', dirty: false, resolves: 1,
+	});
+});
+
 test("Stanza text model save tolerates its final reference closing before I/O completes", async () => {
 	const pending = deferred<void>();
 	const textFiles: ITextFileService = {

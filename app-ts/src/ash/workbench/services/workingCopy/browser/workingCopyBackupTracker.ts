@@ -22,7 +22,7 @@ export class WorkingCopyBackupTracker extends Disposable {
 	}
 
 	flush(): Promise<void> {
-		return Promise.all(this.workingCopies.getAll().map(copy => this.persist(copy))).then(() => Promise.all(this.queues.values())).then(() => undefined);
+		return Promise.all(this.workingCopies.getAll().map(copy => this.persist(copy.resource, copy))).then(() => Promise.all(this.queues.values())).then(() => undefined);
 	}
 
 	private track(copy: IWorkingCopy): void {
@@ -39,7 +39,8 @@ export class WorkingCopyBackupTracker extends Disposable {
 		this.cancel(copy);
 		this.tracked.deleteAndDispose(copy);
 		this.timers.delete(copy);
-		void this.persist(copy).catch(this.onError);
+		const remaining = this.workingCopies.get(copy.resource);
+		void this.persist(copy.resource, remaining.find(candidate => candidate.isDirty) ?? remaining[0]).catch(this.onError);
 	}
 
 	private schedule(copy: IWorkingCopy): void {
@@ -48,7 +49,7 @@ export class WorkingCopyBackupTracker extends Disposable {
 		if (!timer) return;
 		timer.value = disposableWindowTimeout(this.ownerWindow, () => {
 			timer.clear();
-			void this.persist(copy).catch(this.onError);
+			void this.persist(copy.resource, copy).catch(this.onError);
 		}, BACKUP_DELAY_MS);
 	}
 
@@ -56,16 +57,16 @@ export class WorkingCopyBackupTracker extends Disposable {
 		this.timers.get(copy)?.clear();
 	}
 
-	private persist(copy: IWorkingCopy): Promise<void> {
-		this.cancel(copy);
-		const key = copy.resource.toString();
+	private persist(resource: IWorkingCopy['resource'], copy?: IWorkingCopy): Promise<void> {
+		if (copy) this.cancel(copy);
+		const key = resource.toString();
 		let operation: () => Promise<void>;
 		try {
-			if (copy.isDirty) {
+			if (copy?.isDirty) {
 				const backup = { resource: copy.resource, kind: copy.backupKind, content: copy.backup(), updatedAt: Date.now(), ...(copy.backupLanguageId ? { languageId: copy.backupLanguageId } : {}), ...(copy.backupContentType ? { contentType: copy.backupContentType } : {}), ...(copy.backupLabel ? { label: copy.backupLabel } : {}) };
 				operation = () => this.backups.store(backup);
 			} else {
-				operation = () => this.backups.delete(copy.resource);
+				operation = () => this.backups.delete(resource);
 			}
 		} catch (error) {
 			return Promise.reject(error);

@@ -2,6 +2,7 @@ import { addDisposableListener } from "../../../../base/browser/dom.js";
 import type { IDimension } from "../../../../base/browser/dom.js";
 import type { Direction as GridDirection } from "../../../../base/browser/ui/grid/grid.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
+import { onUnexpectedError } from "../../../../base/common/errors.js";
 import { DisposableMap, Disposable, DisposableStore } from "../../../../base/common/lifecycle.js";
 import { rot } from "../../../../base/common/numbers.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
@@ -29,6 +30,7 @@ export interface IEditorPartsService extends IEditorPart {
 	createAuxiliaryEditorPart(): Promise<IEditorPart>;
 	moveActiveEditorToNewWindow(): Promise<IEditorPart | undefined>;
 	closeAuxiliaryEditorPart(part: IEditorPart): Promise<boolean>;
+	replaceEditorResource(source: IEditorGroup, input: EditorInput, replacement: EditorInput): Promise<void>;
 }
 
 export const IEditorPartsService = createServiceIdentifier<IEditorPartsService>("editorPartsService");
@@ -142,6 +144,18 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		return part.closeEditor(input);
 	}
 
+	async replaceEditorResource(source: IEditorGroup, input: EditorInput, replacement: EditorInput): Promise<void> {
+		const key = editorInputKey(input);
+		const groups = this.groups.filter(group => group.inputs.some(candidate => editorInputKey(candidate) === key));
+		if (!groups.includes(source)) throw new RangeError(`Editor is not open in its source group: ${input.resource}`);
+		const activePart = this._activePart;
+		for (const group of groups) {
+			if (group !== source) await group.replaceEditor(input, replacement);
+		}
+		await source.replaceEditor(input, replacement);
+		this.setActivePart(activePart);
+	}
+
 	closeEditorIdentifier(identifier: EditorIdentifier): Promise<boolean> {
 		const part = this.parts.find(candidate => candidate.groups.some(group => group.id === identifier.groupId));
 		return part?.closeEditorIdentifier(identifier) ?? Promise.resolve(false);
@@ -188,8 +202,29 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 			this.editorChangeEmitter.fire(event);
 		}));
 		listeners.add(addDisposableListener(part.domNode, "focusin", () => this.setActivePart(part)));
-		if (auxiliaryWindow) listeners.add(auxiliaryWindow.onDidClose(() => this.removeAuxiliaryPart(part)));
+		if (auxiliaryWindow) listeners.add(auxiliaryWindow.onDidClose(() => {
+			void this.returnEditorsToMainPart(part);
+		}));
 		this.partListeners.set(part, listeners);
+	}
+
+	private async returnEditorsToMainPart(part: IEditorPart): Promise<void> {
+		const activeGroup = part.activeGroup;
+		const activeInput = activeGroup.activeInput;
+		const editors = part.groups.flatMap(group => group.inputs.map(input => ({ group, input })));
+		const active = editors.find(editor => editor.group === activeGroup && editor.input === activeInput);
+		try {
+			for (const editor of editors) {
+				if (editor === active) continue;
+				await editor.group.moveEditorTo(editor.input, this.mainPart.activeGroup, this.mainPart.activeGroup.inputs.length);
+			}
+			if (active) await active.group.moveEditorTo(active.input, this.mainPart.activeGroup, this.mainPart.activeGroup.inputs.length);
+		} catch (error) {
+			onUnexpectedError(error);
+		} finally {
+			this.removeAuxiliaryPart(part);
+			this.mainPart.focus();
+		}
 	}
 
 	private removeAuxiliaryPart(part: IEditorPart): void {

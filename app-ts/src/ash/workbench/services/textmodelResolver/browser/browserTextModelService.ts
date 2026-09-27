@@ -110,10 +110,11 @@ export class BrowserTextModelService implements IFileTextModelService {
 			externalChangeEmitter,
 			modelChangeListener: model.onDidChangeContent(() => this.refreshDirty(entry)),
 			fileChangeListener: this.resourceStore.onDidChange(event => this.acceptFileChange(entry, event)),
-			savedText: model.getText(),
+			// Untitled content has no persisted baseline, including caller supplied initial text.
+			savedText: input.resource.scheme === Schemas.untitled ? "" : model.getText(),
 			revision: content.revision,
 			lineEnding: detectExternalLineEnding(content.text),
-			dirty: false,
+			dirty: input.resource.scheme === Schemas.untitled && model.getText().length > 0,
 			hasExternalChange: false,
 			disposed: false,
 			saveQueue: Promise.resolve(),

@@ -900,6 +900,34 @@ test("Code restores unsaved editor content after a browser reload", async ({ tar
 	await expect.poll(() => hasWorkingCopyBackup(page, "const recovered = 42;"), { message: "saving removes the crash backup" }).toBe(false);
 });
 
+test("Code restores an untitled draft and opens the next document separately", async ({ target, workbench }) => {
+	test.skip(
+		target.appServerMode !== "disabled" || target.workbenchMode !== "code",
+		"This scenario requires the standalone Code workbench",
+	);
+
+	const page = workbench.page;
+	const group = workbench.editors.groupAt(0);
+	await page.keyboard.press("ControlOrMeta+N");
+	const input = group.content.locator(".stanza-editor-input");
+	await expect(input).toBeVisible();
+	await input.focus();
+	await input.type("recovered untitled draft");
+	await expect.poll(() => hasWorkingCopyBackup(page, "recovered untitled draft"), { message: "untitled draft reaches IndexedDB" }).toBe(true);
+
+	await page.reload({ waitUntil: "domcontentloaded" });
+	await expect(page.locator(".ash-workbench")).toBeVisible();
+	const restoredTab = group.tabs.filter({ hasText: "Untitled-1" });
+	await expect(restoredTab).toHaveCount(1);
+	await expect(group.content.locator(".stanza-editor-line-text").first()).toContainText("recovered untitled draft");
+
+	await page.keyboard.press("ControlOrMeta+N");
+	await expect(group.tabs).toHaveCount(2);
+	await expect(group.tabs.filter({ hasText: "Untitled-2" })).toHaveCount(1);
+	await restoredTab.click();
+	await expect(group.content.locator(".stanza-editor-line-text").first()).toContainText("recovered untitled draft");
+});
+
 async function hasWorkingCopyBackup(page: Page, content: string): Promise<boolean> {
 	return page.evaluate(async expectedContent => {
 		const database = await new Promise<IDBDatabase>((resolve, reject) => {

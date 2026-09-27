@@ -11,6 +11,8 @@ import { IExtensionService } from "../../../extensions/common/extensionService.j
 import { BrowserUntitledTextEditorService } from "../../browser/browserUntitledTextEditorService.js";
 import { IUntitledTextEditorService } from "../../common/untitledTextEditorService.js";
 import { CommandService } from "../../../commands/common/commandService.js";
+import { BrowserWorkingCopyService } from "../../../workingCopy/browser/browserWorkingCopyService.js";
+import { IWorkingCopyService, type IWorkingCopy } from "../../../workingCopy/common/workingCopyService.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -34,7 +36,10 @@ await import("../../../../contrib/files/browser/fileActions.contribution.js");
 suiteTeardown(() => browserEnvironment.window.close());
 
 test("untitled service creates stable virtual editor identities", () => {
-	using service = new BrowserUntitledTextEditorService();
+	using workingCopies = new BrowserWorkingCopyService();
+	using services = new ServiceContainer();
+	services.registerInstance(IWorkingCopyService, workingCopies);
+	using service = services.createInstance(BrowserUntitledTextEditorService);
 	const first = service.create();
 	const second = service.create({ initialText: "draft", languageId: "typescript" });
 
@@ -51,24 +56,79 @@ test("untitled service creates stable virtual editor identities", () => {
 });
 
 test("untitled service publishes display-label changes without changing resource identity", () => {
-	using service = new BrowserUntitledTextEditorService();
+	using workingCopies = new BrowserWorkingCopyService();
+	using services = new ServiceContainer();
+	services.registerInstance(IWorkingCopyService, workingCopies);
+	using service = services.createInstance(BrowserUntitledTextEditorService);
 	const editor = service.create();
 	const changes: string[] = [];
 	using listener = service.onDidChangeLabel(value => changes.push(value.label));
+	using inputListener = editor.onDidChangeLabel(() => changes.push(`input:${editor.label}`));
 
 	const renamed = service.rename(editor.resource, "Scratch");
+	assert.equal(renamed, editor);
 	assert.equal(renamed?.resource.toString(), editor.resource.toString());
 	assert.equal(renamed?.label, "Scratch");
+	assert.equal(editor.label, "Scratch");
 	assert.equal(service.get(editor.resource)?.label, "Scratch");
-	assert.deepEqual(changes, ["Scratch"]);
+	assert.deepEqual(changes, ["input:Scratch", "Scratch"]);
 	assert.equal(service.rename(URI.file("C:\\project\\main.ts"), "Other"), undefined);
 });
 
+test("restored untitled resources are reused and reserve their document numbers", () => {
+	using workingCopies = new BrowserWorkingCopyService();
+	using services = new ServiceContainer();
+	services.registerInstance(IWorkingCopyService, workingCopies);
+	using service = services.createInstance(BrowserUntitledTextEditorService);
+	const resource = URI.parse("untitled:/Untitled-7");
+	const restored = service.create({ untitledResource: resource, initialText: "recovered draft", languageId: "typescript", label: 'Recovered draft' });
+
+	assert.equal(service.create({ untitledResource: resource, initialText: "stale" }), restored);
+	assert.deepEqual({ restored: restored.initialText, label: restored.label, next: service.create().resource.toString() }, {
+		restored: "recovered draft",
+		label: 'Recovered draft',
+		next: "untitled:/Untitled-8",
+	});
+	service.reset();
+	assert.equal(service.get(resource), undefined);
+	assert.equal(service.create().resource.toString(), "untitled:/Untitled-1");
+});
+
+test("closing the last working copy releases its untitled identity", () => {
+	using workingCopies = new BrowserWorkingCopyService();
+	using services = new ServiceContainer();
+	services.registerInstance(IWorkingCopyService, workingCopies);
+	using service = services.createInstance(BrowserUntitledTextEditorService);
+	const editor = service.create();
+	const copy: IWorkingCopy = {
+		resource: editor.resource,
+		backupKind: "text",
+		isDirty: false,
+		hasExternalChange: false,
+		onDidChangeDirty: Event.None,
+		onDidChangeExternalChange: Event.None,
+		onDidChangeContent: Event.None,
+		backup: () => "",
+		restoreBackup: () => {},
+		save: async () => {},
+		saveAs: async () => {},
+		revert: async () => {},
+		dispose: () => {},
+		[Symbol.dispose]: () => {},
+	};
+	const registration = workingCopies.register(copy);
+
+	registration.dispose();
+	assert.equal(service.get(editor.resource), undefined);
+});
+
 test("New Untitled Text Editor opens a compatible text editor input", async () => {
-	using untitled = new BrowserUntitledTextEditorService();
+	using workingCopies = new BrowserWorkingCopyService();
+	using services = new ServiceContainer();
+	services.registerInstance(IWorkingCopyService, workingCopies);
+	using untitled = services.createInstance(BrowserUntitledTextEditorService);
 	const opened: Array<{ readonly resource: URI; readonly label?: string; readonly initialText?: string }> = [];
 	const editorPart = { openEditor: async (input: typeof opened[number]) => { opened.push(input); } } as unknown as IEditorPartContract;
-	const services = new ServiceContainer();
 	services.registerInstance(IUntitledTextEditorService, untitled);
 	services.registerInstance(IEditorPart, editorPart);
 	using commands = new CommandService(services);
@@ -82,7 +142,10 @@ test("New Untitled Text Editor opens a compatible text editor input", async () =
 });
 
 test("New File from Template opens the selected extension template as an untitled editor", async () => {
-	using untitled = new BrowserUntitledTextEditorService();
+	using workingCopies = new BrowserWorkingCopyService();
+	using services = new ServiceContainer();
+	services.registerInstance(IWorkingCopyService, workingCopies);
+	using untitled = services.createInstance(BrowserUntitledTextEditorService);
 	using templates = new ExtensionFileTemplateRegistry();
 	templates.replace([{
 		id: "builtin.typescript.class",
@@ -95,7 +158,6 @@ test("New File from Template opens the selected extension template as an untitle
 	const opened: Array<{ readonly resource: URI; readonly label?: string; readonly initialText?: string; readonly languageId?: string }> = [];
 	const editorPart = { openEditor: async (input: typeof opened[number]) => { opened.push(input); } } as unknown as IEditorPartContract;
 	const quickInput = new TestQuickInputService();
-	const services = new ServiceContainer();
 	services.registerInstance(IUntitledTextEditorService, untitled);
 	services.registerInstance(IEditorPart, editorPart);
 	services.registerInstance(IQuickInputService, quickInput);

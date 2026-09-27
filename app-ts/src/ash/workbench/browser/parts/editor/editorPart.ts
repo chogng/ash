@@ -11,6 +11,7 @@ import { observeElementSize } from "../../../../base/browser/observer.js";
 import { Direction, SerializableGrid, Sizing, type Direction as GridDirection, type GridDescriptor, type ISerializableView as ISerializableGridView } from "../../../../base/browser/ui/grid/grid.js";
 import { DisposableMap, Disposable, MutableDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { rot } from "../../../../base/common/numbers.js";
+import { Schemas } from "../../../../base/common/network.js";
 import type { IMenuService } from "../../../../platform/actions/common/actions.js";
 import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
 import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
@@ -138,6 +139,7 @@ export interface IEditorPartOptions {
 	readonly languageFeaturesService?: ILanguageFeaturesService;
 	readonly showBreadcrumbSymbolPicker?: (symbols: readonly LanguageDocumentSymbol[], selected: LanguageDocumentSymbol, reveal: (range: Range) => void) => void;
 	readonly saveAsResource?: (defaultName: string) => Promise<URI | undefined>;
+	readonly replaceEditorResource?: (source: IEditorGroup, input: EditorInput, replacement: EditorInput) => Promise<void>;
 	readonly inputSerializers?: EditorInputSerializerRegistry;
 }
 
@@ -155,6 +157,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 	private readonly tabDragAndDrop: EditorTabDragAndDropController;
 	private dimension = Dimension.Zero;
 	private readonly saveAsResource: ((defaultName: string) => Promise<URI | undefined>) | undefined;
+	private readonly replaceEditorResource: ((source: IEditorGroup, input: EditorInput, replacement: EditorInput) => Promise<void>) | undefined;
 	private readonly inputSerializers: EditorInputSerializerRegistry;
 	private readonly dialogService: IDialogService | undefined;
 	private readonly fileDialogService: IFileDialogService | undefined;
@@ -203,6 +206,8 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 			} : {}),
 		};
 		this.saveAsResource = options.saveAsResource;
+		this.replaceEditorResource = options.replaceEditorResource;
+		if (this.saveAsResource && !this.replaceEditorResource) throw new Error('Editor Save As requires editor-wide replacement');
 		this.inputSerializers = options.inputSerializers ?? EditorInputSerializers;
 		this.dialogService = options.dialogService;
 		this.fileDialogService = options.fileDialogService;
@@ -557,7 +562,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		const target = await this.saveAsResource(editorInputLabel(input));
 		if (!target) return false;
 		await pane.saveAs(target);
-		await group.replaceEditor(input, {
+		await this.replaceEditorResource!(group, input, {
 			resource: target,
 			label: editorInputLabel({ resource: target }),
 		});
@@ -764,6 +769,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 	}
 
 	private addRecentlyClosed(input: EditorInput, preferredEditorId: string): void {
+		if (input.resource.scheme === Schemas.untitled) return;
 		const closed = Object.freeze({ input, preferredEditorId });
 		const duplicate = this.recentlyClosed.findIndex(candidate => editorInputKey(candidate.input) === editorInputKey(closed.input) && candidate.preferredEditorId === closed.preferredEditorId);
 		if (duplicate >= 0) this.recentlyClosed.splice(duplicate, 1);

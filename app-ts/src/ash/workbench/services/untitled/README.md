@@ -1,8 +1,12 @@
 # Untitled editor service
 
 This Workbench service owns the identity and bootstrap snapshot of unsaved text
-editors. `BrowserUntitledTextEditorService` creates exact `untitled:/Untitled-N`
-resources and exposes them through `IUntitledTextEditorService`.
+editors. `BrowserUntitledTextEditorService` creates `untitled:/Untitled-N`
+resources, reuses a supplied untitled resource during backup restoration, and
+reserves its number for the next new editor. It releases an identity when its
+last working copy closes and clears remaining identities on workspace switch.
+The input keeps a stable identity when renamed and publishes label changes to
+its open editor tabs.
 
 The service does not own text transactions, undo history, dirty comparison, or
 editor presentation. The selected editor's model service remains responsible
@@ -14,14 +18,14 @@ serialize the provider's document.
 
 ## Current status
 
-`Ctrl/Cmd+N` invokes
-`workbench.action.files.newUntitledFile`, creates a new Workbench input, and
-opens it through the default text editor provider. Explicit language IDs and
-bootstrap text are preserved on the input. In Electron, `Ctrl/Cmd+S` runs
-Workbench's Save As coordinator, writes the active editor content to the
-selected file, and replaces the virtual input with the saved file input.
+`Ctrl/Cmd+N` invokes `workbench.action.files.newUntitledFile` and opens a new
+text editor. Explicit language IDs and bootstrap text are preserved. A new
+untitled editor is clean when empty and dirty when it starts with text or gains
+text; discarding it clears the text. Dirty close uses the Workbench save
+confirmation. Save As writes the active model and replaces the untitled input
+with the saved file input in every editor group and window. A discarded
+untitled template is not offered by Reopen Closed Editor.
 
-Dirty-close confirmation, cross-window restoration, and crash backup are not
-part of this slice yet. They require a document/working-copy contract that can
-persist a model snapshot without moving text transaction ownership into the
-Workbench service.
+The working-copy backup tracker stores dirty text in IndexedDB. On startup,
+Workbench recreates the original untitled resource and restores its content
+before opening the next new editor.

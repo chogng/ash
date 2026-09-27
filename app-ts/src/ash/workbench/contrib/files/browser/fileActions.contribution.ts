@@ -65,12 +65,7 @@ registerAction2(class NewUntitledTextEditorAction extends Action2 {
 
 	override run(accessor: ServicesAccessor): Promise<void> {
 		const untitled = accessor.get(IUntitledTextEditorService).create();
-		return accessor.get(IEditorPart).openEditor({
-			resource: untitled.resource,
-			label: untitled.label,
-			initialText: untitled.initialText,
-			languageId: untitled.languageId,
-		}).then(() => undefined);
+		return accessor.get(IEditorPart).openEditor(untitled).then(() => undefined);
 	}
 });
 

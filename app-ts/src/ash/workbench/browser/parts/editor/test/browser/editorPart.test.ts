@@ -32,6 +32,9 @@ import type {
 import { type Context } from "../../../../../../platform/contextkey/common/contextkey.js";
 import { ContextKeyService } from "../../../../../../platform/contextkey/browser/contextKeyService.js";
 import { ServiceContainer } from '../../../../../../platform/instantiation/common/instantiation.js';
+import { highContrastDarkColorTheme, lightColorTheme } from '../../../../../../platform/theme/common/colorTheme.js';
+import { IThemeService } from '../../../../../../platform/theme/common/themeService.js';
+import { TestThemeService } from '../../../../../../platform/theme/test/common/testThemeService.js';
 import { CommandService } from '../../../../../../workbench/services/commands/common/commandService.js';
 import { IHistoryService } from '../../../../../../workbench/services/history/common/history.js';
 import type {
@@ -57,7 +60,7 @@ import {
 	EditorPanes,
 } from "../../../../../../workbench/browser/parts/editor/editorRegistry.js";
 import { ActiveEditorContext } from "../../../../../../workbench/common/contextkeys.js";
-import { h } from "../../../../../../base/browser/dom.js";
+import { h, isHTMLElement } from "../../../../../../base/browser/dom.js";
 import type { IWorkingCopy } from "../../../../../../workbench/services/workingCopy/common/workingCopyService.js";
 import { TextFileBinaryError } from "../../../../../../workbench/services/textfile/common/textFileService.js";
 import type {
@@ -808,6 +811,35 @@ test("EditorPart tracks MRU editors, reopens closed inputs, and reopens with ano
 	dom.window.close();
 });
 
+test('EditorPart does not reopen discarded untitled template content', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const registry = new EditorPaneRegistry();
+	registry.register(descriptor('test.editor.default', '', () => new TestEditorPane('test.editor.default')));
+	const editor = new EditorPart(dom.window.document.body, { registry });
+	const template: EditorInput = { resource: URI.parse('untitled:/Untitled-1'), label: 'Untitled-1', initialText: 'template body' };
+	await editor.openEditor(template);
+	assert.equal(await editor.closeEditor(template), true);
+	assert.deepEqual({ recentlyClosed: editor.recentlyClosedEditors.length, reopened: await editor.reopenClosedEditor() }, { recentlyClosed: 0, reopened: false });
+	editor.dispose();
+	dom.window.close();
+});
+
+test('EditorPart refreshes the tab when an input changes its label', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const registry = new EditorPaneRegistry();
+	registry.register(descriptor('test.editor.default', '', () => new TestEditorPane('test.editor.default')));
+	const editor = new EditorPart(dom.window.document.body, { registry });
+	using labelChanges = new Emitter<void>();
+	let label = 'Untitled-1';
+	const untitled: EditorInput = { resource: URI.parse('untitled:/Untitled-1'), get label() { return label; }, onDidChangeLabel: labelChanges.event };
+	await editor.openEditor(untitled);
+	label = 'Scratch';
+	labelChanges.fire();
+	assert.equal(editor.domNode.querySelector('.ash-tab .ash-icon-label-text')?.textContent, 'Scratch');
+	editor.dispose();
+	dom.window.close();
+});
+
 test("EditorPart keeps MRU order across groups and removes closed editors", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
@@ -1394,9 +1426,20 @@ test("EditorParts moves an editor to an auxiliary window without changing its in
 	assert.equal(await editorParts.closeAuxiliaryEditorPart(auxiliary), false);
 
 	await workingCopy.save();
-	assert.equal(await editorParts.closeAuxiliaryEditorPart(auxiliary), true);
+	const secondInput = input("C:\\project\\second.ts");
+	await auxiliary.openEditor(secondInput);
+	auxiliary.activateEditor(resourceInput);
+	windows.lastWindow?.dispose();
+	await nextTask();
 	assert.equal(editorParts.parts.length, 1);
 	assert.equal(editorParts.activePart, main);
+	assert.equal(main.groups[0]?.inputs.length, 2);
+	assert.equal(main.getEditorState().activeEditor?.instanceId, instanceId);
+	assert.equal(main.activeInput?.resource.fsPath, resourceInput.resource.fsPath);
+	const detachedAgain = await editorParts.moveActiveEditorToNewWindow();
+	assert.ok(detachedAgain);
+	assert.equal(await editorParts.closeAuxiliaryEditorPart(detachedAgain), true);
+	assert.equal(editorParts.parts.length, 1);
 
 	editorParts.dispose();
 	windows.dispose();
@@ -1405,24 +1448,84 @@ test("EditorParts moves an editor to an auxiliary window without changing its in
 	dom.window.close();
 });
 
+test('EditorParts replaces an untitled resource in every group and window', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const registry = new EditorPaneRegistry();
+	registry.register(descriptor('test.editor.default', '', () => new TestEditorPane('test.editor.default')));
+	const main = new EditorPart(dom.window.document.body, { registry });
+	using windows = new TestAuxiliaryWindowService();
+	const editorParts = new EditorParts(main, windows, container => ({ part: new EditorPart(container, { registry }) }), {
+		onDidChangeScreenReaderOptimized: Event.None,
+		isScreenReaderOptimized: () => false,
+	} as unknown as IAccessibilityService);
+	const untitled: EditorInput = { resource: URI.parse('untitled:/Untitled-1'), label: 'Untitled-1' };
+	const saved: EditorInput = { resource: URI.file('C:\\project\\draft.txt'), label: 'draft.txt' };
+	await editorParts.openEditor(untitled);
+	await main.openEditor(untitled, {}, 'sideGroup');
+	const auxiliary = await editorParts.createAuxiliaryEditorPart();
+	await auxiliary.openEditor(untitled);
+	await editorParts.replaceEditorResource(auxiliary.activeGroup, untitled, saved);
+	assert.deepEqual(editorParts.groups.map(group => group.inputs.map(input => input.resource.toString())), [[saved.resource.toString()], [saved.resource.toString()], [saved.resource.toString()]]);
+	assert.equal(editorParts.activePart, auxiliary);
+	editorParts.dispose();
+	main.dispose();
+	dom.window.close();
+});
+
 test("BrowserAuxiliaryWindowService opens, registers, mirrors styles, and releases a popup", async () => {
 	const opener = new JSDOM("<!doctype html><head><style>.mirrored { color: red; }</style></head><body></body>");
 	const popup = new JSDOM("<!doctype html><body></body>", { url: "https://ash.test/auxiliary" });
+	opener.window.document.documentElement.lang = "zh-Hans";
+	const root = opener.window.document.createElement("main");
+	root.className = "ash-workbench ash-reduce-motion";
+	root.setAttribute("data-os", "windows");
+	opener.window.document.body.append(root);
 	Object.defineProperty(opener.window, "open", {
 		configurable: true,
 		value: () => popup.window,
 	});
-	const service = new BrowserAuxiliaryWindowService(opener.window as unknown as Window);
+	const missingServices = new ServiceContainer();
+	assert.throws(() => missingServices.createInstance(BrowserAuxiliaryWindowService, opener.window as unknown as Window, root), /themeService/);
+	missingServices.dispose();
+	const services = new ServiceContainer();
+	const themes = new TestThemeService(lightColorTheme);
+	services.registerInstance(IThemeService, themes);
+	const service = services.createInstance(BrowserAuxiliaryWindowService, opener.window as unknown as Window, root);
 	const auxiliary = await service.open({ title: "Detached Editor", width: 640, height: 480 });
 
 	assert.equal(auxiliary.window.document.title, "Detached Editor");
+	assert.equal(auxiliary.window.document.documentElement.lang, "zh-Hans");
 	assert.equal(auxiliary.container.ownerDocument, popup.window.document);
+	assert.ok(auxiliary.container instanceof opener.window.HTMLElement);
+	const child = h(auxiliary.container.ownerDocument, "div");
+	auxiliary.container.append(child);
+	assert.equal(child.ownerDocument, popup.window.document);
+	assert.ok(child instanceof browserEnvironment.window.HTMLElement);
+	assert.ok(isHTMLElement(child));
+	assert.equal(auxiliary.container.classList.contains("ash-workbench"), true);
+	assert.equal(auxiliary.container.classList.contains("ash-reduce-motion"), true);
+	assert.equal(auxiliary.container.getAttribute("data-os"), "windows");
+	assert.equal(auxiliary.container.getAttribute("data-color-scheme"), lightColorTheme.colorScheme);
+	assert.equal(auxiliary.container.style.getPropertyValue("--ash-editor-background"), lightColorTheme.getColorCss("editor.background"));
 	assert.match(popup.window.document.head.textContent ?? "", /mirrored/);
 	assert.equal(service.getWindow(auxiliary.id), auxiliary);
+	let closed = 0;
+	auxiliary.onDidClose(() => closed++);
+	themes.setColorTheme(highContrastDarkColorTheme);
+	root.classList.remove("ash-reduce-motion");
+	root.classList.add("ash-underline-links");
+	await nextTask();
+	assert.equal(auxiliary.container.getAttribute("data-color-scheme"), highContrastDarkColorTheme.colorScheme);
+	assert.equal(auxiliary.container.style.getPropertyValue("--ash-editor-background"), highContrastDarkColorTheme.getColorCss("editor.background"));
+	assert.equal(auxiliary.container.classList.contains("ash-reduce-motion"), false);
+	assert.equal(auxiliary.container.classList.contains("ash-underline-links"), true);
 
 	auxiliary[Symbol.dispose]();
+	assert.equal(closed, 1);
 	assert.equal(service.getWindow(auxiliary.id), undefined);
 	service.dispose();
+	themes.dispose();
+	services.dispose();
 	opener.window.close();
 	popup.window.close();
 });
