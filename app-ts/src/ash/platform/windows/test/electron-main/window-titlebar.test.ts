@@ -6,6 +6,7 @@ import {
 import {
 	defaultWindowState,
 } from "../../../../platform/window/electron-main/window.js";
+import { resolveContextMenuStyle } from '../../../../platform/window/common/window.js';
 import {
 	resolveBrowserWindowOptions,
 	WindowControlsOverlay,
@@ -51,6 +52,23 @@ test("window options apply the custom titlebar host policy", () => {
 		symbolColor: "#d6d6d6",
 		height: 35,
 	});
+	for (const platform of ['win32', 'linux', 'darwin'] as const) {
+		const systemTitleBar = resolveBrowserWindowOptions({ state, webPreferences, platform, titleBarStyle: 'system' });
+		assert.equal(systemTitleBar.titleBarStyle, undefined);
+		assert.equal(systemTitleBar.titleBarOverlay, undefined);
+	}
+});
+
+test('system context menus follow the window frame on Windows and Linux', () => {
+	assert.deepEqual([
+		resolveContextMenuStyle('inherit', 'custom', 'desktop'),
+		resolveContextMenuStyle('inherit', 'system', 'desktop'),
+		resolveContextMenuStyle('system', 'custom', 'desktop'),
+		resolveContextMenuStyle('system', 'system', 'desktop'),
+		resolveContextMenuStyle('custom', 'system', 'desktop'),
+		resolveContextMenuStyle('system', 'custom', 'macos'),
+		resolveContextMenuStyle('system', 'system', 'web'),
+	], ['custom', 'system', 'custom', 'system', 'custom', 'system', 'custom']);
 });
 
 test('window controls follow the modal backdrop and restore the latest theme', () => {

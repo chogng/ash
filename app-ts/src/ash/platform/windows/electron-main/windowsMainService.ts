@@ -57,6 +57,7 @@ export interface IWorkbenchWindow<TWindow> extends IFocusableWindow {
 
 export interface IManagedWindowOpenOptions<TWindow extends IWorkbenchWindow<TWindow>> {
 	readonly title: string;
+	readonly titleBarStyle?: IWindowCreationOptions['titleBarStyle'];
 	readonly icon?: string;
 	readonly state: IWindowState;
 	readonly webPreferences: IWindowWebPreferences;

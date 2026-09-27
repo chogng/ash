@@ -6,7 +6,7 @@ import { WorkbenchModeConfigurationKey, WorkbenchModeRegistry, type WorkbenchMod
 export function readPersistedWorkbenchModeId(configurationFilePath: string, fallback: WorkbenchModeId): WorkbenchModeId {
 	let candidate: unknown;
 	try {
-		const document = JSON.parse(readFileSync(configurationFilePath, 'utf8')) as unknown;
+		const document = parseJsonc(readFileSync(configurationFilePath, 'utf8'), 'settings');
 		candidate = readConfigurationValue(document, WorkbenchModeConfigurationKey);
 	} catch {
 		return fallback;
@@ -16,11 +16,5 @@ export function readPersistedWorkbenchModeId(configurationFilePath: string, fall
 
 function readConfigurationValue(document: unknown, key: string): unknown {
 	if (typeof document !== 'object' || document === null || Array.isArray(document)) return undefined;
-	const record = document as Readonly<Record<string, unknown>>;
-	if (record.version !== 1 || typeof record.source !== 'string') return undefined;
-	const fields = Object.keys(record).sort();
-	if (fields.length !== 2 || fields[0] !== 'source' || fields[1] !== 'version') return undefined;
-	const values = parseJsonc(record.source, 'configuration source');
-	if (typeof values !== 'object' || values === null || Array.isArray(values)) return undefined;
-	return (values as Readonly<Record<string, unknown>>)[key];
+	return (document as Readonly<Record<string, unknown>>)[key];
 }

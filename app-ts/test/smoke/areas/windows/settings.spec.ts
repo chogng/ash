@@ -156,6 +156,10 @@ test.describe('without an open workspace', () => {
 		await page.locator('[data-settings-category-id="layout"]').click();
 		const layoutStyle = page.locator('[data-configuration-key="workbench.layoutStyle"]');
 		await expect(layoutStyle).toBeVisible();
+		for (const key of ['window.titleBarStyle', 'window.menuStyle']) {
+			if (target.kind === 'electron') await expect(page.locator(`[data-configuration-key="${key}"]`)).toBeVisible();
+			else await expect(page.locator(`[data-configuration-key="${key}"]`)).toHaveCount(0);
+		}
 		await expect(page.locator('[data-configuration-key="sessions.activityBar.location"]')).toHaveCount(0);
 		const modernWidth = (await layoutStyle.getByRole('combobox').boundingBox())?.width;
 		expect(modernWidth).toBeDefined();

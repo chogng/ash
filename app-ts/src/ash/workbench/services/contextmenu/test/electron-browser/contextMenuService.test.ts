@@ -6,6 +6,8 @@ import { AnchorAlignment, AnchorAxisAlignment, ContextViewHideReason, type Conte
 import type { INativeContextMenuApi, INativeContextMenuRequest, INativeContextMenuResult } from "../../../../../base/parts/contextmenu/common/contextmenu.js";
 import type { IMenuService } from "../../../../../platform/actions/common/actions.js";
 import { ContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
+import { InMemoryConfigurationService } from "../../../../../platform/configuration/common/inMemoryConfigurationService.js";
+import { ConfigurationRegistry } from "../../../../../platform/configuration/common/configurationRegistry.js";
 import type { IContextViewService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { IKeybindingService } from "../../../../../platform/keybinding/common/keybinding.js";
 import type { INotificationService } from "../../../../../platform/notification/common/notification.js";
@@ -131,7 +133,7 @@ test("Electron context menus position element and point anchors in CSS pixels", 
 	Reflect.deleteProperty(globalThis, "window");
 });
 
-test("switching from a macOS menu to a browser menu keeps the menu visibility event active", async () => {
+test("macOS switches context menu implementation when the menu style changes", async () => {
 	if (process.platform !== "darwin") return;
 	const environment = new JSDOM("<!doctype html><body><button></button></body>");
 	Object.defineProperty(globalThis, "window", { configurable: true, value: environment.window });
@@ -159,6 +161,10 @@ test("switching from a macOS menu to a browser menu keeps the menu visibility ev
 		layout() {},
 	} as IContextViewService;
 	using contextKeyService = new ContextKeyService();
+	const registry = new ConfigurationRegistry();
+	registry.registerConfiguration({ key: "window.menuStyle", defaultValue: "system", parse: value => value });
+	registry.registerConfiguration({ key: "window.titleBarStyle", defaultValue: "custom", parse: value => value });
+	using configurationService = new InMemoryConfigurationService(registry);
 	const keybindingService = {
 		inChordMode: false,
 		onDidUpdateKeybindings: Event.None,
@@ -168,6 +174,7 @@ test("switching from a macOS menu to a browser menu keeps the menu visibility ev
 		lookupKeybinding() { return undefined; },
 	} satisfies IKeybindingService;
 	using service = createElectronWorkbenchContextMenuService({
+		configurationService,
 		menuService: {} as IMenuService,
 		contextKeyService,
 		keybindingService,
@@ -182,17 +189,18 @@ test("switching from a macOS menu to a browser menu keeps the menu visibility ev
 		getAnchor: () => ({ x: 10, y: 20, targetWindow: environment.window as unknown as Window }),
 		getActions: () => [action],
 	});
+	finishPopup({});
+	await new Promise<void>(resolve => setTimeout(resolve, 0));
+	await configurationService.updateValue("window.menuStyle", "custom");
 	service.showContextMenu({
 		getAnchor: () => environment.window.document.querySelector("button")!,
 		getActions: () => [action],
 		anchorAlignment: AnchorAlignment.Left,
 		anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
 	});
-	finishPopup({});
-	await new Promise<void>(resolve => setTimeout(resolve, 0));
-	assert.deepEqual(events, ["show"]);
+	assert.deepEqual(events, ["show", "hide", "show"]);
 	service.hideContextMenu();
-	assert.deepEqual(events, ["show", "hide"]);
+	assert.deepEqual(events, ["show", "hide", "show", "hide"]);
 	environment.window.close();
 	Reflect.deleteProperty(globalThis, "window");
 	Reflect.deleteProperty(globalThis, "Node");

@@ -6,16 +6,16 @@ import { test } from 'mocha';
 import { readPersistedWorkbenchModeId } from '../../electron-main/readPersistedWorkbenchMode.js';
 import { WorkbenchModeId } from '../../../workbench/common/workbenchMode.js';
 
-test('persisted startup mode accepts only the canonical configuration source and a registered id', () => {
+test('persisted startup mode reads JSONC settings and accepts only a registered id', () => {
 	const directory = mkdtempSync(join(tmpdir(), 'ash-mode-'));
-	const filePath = join(directory, 'configuration.json');
+	const filePath = join(directory, 'settings.json');
 	try {
 		assert.equal(readPersistedWorkbenchModeId(filePath, WorkbenchModeId.Code), WorkbenchModeId.Code);
-		writeFileSync(filePath, JSON.stringify({ version: 1, source: '{\n\t// startup mode\n\t"workbench.mode": "academic",\n}\n' }));
+		writeFileSync(filePath, '{\n\t// startup mode\n\t"workbench.mode": "academic",\n}\n');
 		assert.equal(readPersistedWorkbenchModeId(filePath, WorkbenchModeId.Code), WorkbenchModeId.Academic);
-		writeFileSync(filePath, JSON.stringify({ version: 1, source: '{ "workbench.mode": "unknown" }' }));
+		writeFileSync(filePath, '{ "workbench.mode": "unknown" }');
 		assert.equal(readPersistedWorkbenchModeId(filePath, WorkbenchModeId.Code), WorkbenchModeId.Code);
-		writeFileSync(filePath, JSON.stringify({ version: 1, values: { 'workbench.mode': 'academic' } }));
+		writeFileSync(filePath, '{ "version": 1, "values": { "workbench.mode": "academic" } }');
 		assert.equal(readPersistedWorkbenchModeId(filePath, WorkbenchModeId.Code), WorkbenchModeId.Code);
 	} finally {
 		rmSync(directory, { force: true, recursive: true });

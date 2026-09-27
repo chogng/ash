@@ -90,6 +90,7 @@ test('desktop GitHub authorization opens a browser URL and can be cancelled with
 
 test('primary sidebar toggle sits immediately after the application menu', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	test.skip(target.kind === 'electron' && process.platform === 'darwin', 'macOS uses the system menu');
 	const page = workbench.page;
 	const actionId = 'workbench.action.toggleSideBar';
 	const toggle = page.locator(`.ash-titlebar-left-actions [data-action-id="${actionId}"] button`);
@@ -314,8 +315,8 @@ test('Accounts and Manage menus open beside the activity bar and below the title
 test('macOS right activity bar menus open beside their buttons', async ({ target, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code' || process.platform !== 'darwin', 'This scenario requires macOS Electron Code');
 	const page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+Shift+P');
-	await page.getByPlaceholder('Type the name of a command to run').fill('Ash Settings');
+	await page.getByRole('button', { name: 'Search commands' }).click();
+	await page.getByRole('dialog', { name: 'Search commands (type >, @, or ? for modes)' }).getByRole('combobox').fill('Ash Settings');
 	await page.keyboard.press('Enter');
 	await page.locator('[data-settings-group-id="workbench"]').click();
 	await page.locator('[data-settings-category-id="layout"]').click();
@@ -688,9 +689,7 @@ test('titlebar navigation moves through editor history beside Quick Access', asy
 	await page.setViewportSize(originalViewport);
 
 	const openUntitled = async () => {
-		await page.getByRole('button', { name: 'Application menu' }).click();
-		await page.getByRole('menu').first().getByRole('menuitem', { name: 'File' }).hover();
-		await page.getByRole('menu').last().getByRole('menuitem', { name: 'New Untitled Text Editor' }).click();
+		await page.keyboard.press('ControlOrMeta+N');
 	};
 	await openUntitled();
 	await openUntitled();
@@ -715,9 +714,7 @@ test('titlebar navigation moves through editor history beside Quick Access', asy
 test('titlebar navigation restores a cursor location in the same editor', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
-	await page.getByRole('button', { name: 'Application menu' }).click();
-	await page.getByRole('menu').first().getByRole('menuitem', { name: 'File' }).hover();
-	await page.getByRole('menu').last().getByRole('menuitem', { name: 'New Untitled Text Editor' }).click();
+	await page.keyboard.press('ControlOrMeta+N');
 	const input = workbench.editors.groupAt(0).content.locator('.stanza-editor-input');
 	await input.focus();
 	await page.keyboard.insertText(Array.from({ length: 40 }, (_, index) => `line ${index + 1}`).join('\n'));
@@ -892,6 +889,7 @@ test('titlebar toolbar icons fit inside their buttons', async ({ target, workben
 
 test('Quick Access has no backdrop and lets workbench controls receive clicks', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	test.skip(target.kind === 'electron' && process.platform === 'darwin', 'macOS uses the system menu');
 	const page = workbench.page;
 	await page.keyboard.press('F1');
 	const host = page.locator('.ash-quick-input-host');

@@ -6,9 +6,7 @@ test.use({ openWorkspace: false });
 test('editor tab uses the editor surface and shares its pin and close slot', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
-	await page.getByRole('button', { name: 'Application menu' }).click();
-	await page.getByRole('menu').first().getByRole('menuitem', { name: 'File' }).hover();
-	await page.getByRole('menu').last().getByRole('menuitem', { name: 'New Untitled Text Editor' }).click();
+	await page.keyboard.press('ControlOrMeta+N');
 
 	const ordinary = page.locator('.ash-ordinary-editor-tabs-row .ash-tab.checked');
 	await expect(ordinary).toHaveCount(1);

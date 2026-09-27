@@ -4,6 +4,7 @@ import { Disposable, DisposableTracker, installDisposableTracker, toDisposable }
 import { onUnexpectedError } from '../../base/common/errors.js';
 import { URI } from '../../base/common/uri.js';
 import { IFileService } from '../../platform/files/common/files.js';
+import { validateConfigurationSnapshot } from '../../platform/configuration/common/configurationIpc.js';
 import { invoke } from '../../platform/ipc/electron-browser/rendererIpc.js';
 import { ServiceContainer } from '../../platform/instantiation/common/instantiation.js';
 import { createElectronRendererApi, type ElectronRendererCapabilityContribution } from '../../platform/native/electron-browser/rendererApi.js';
@@ -45,6 +46,7 @@ export class DesktopMain extends Disposable {
 			profileServices.registerInstance(IFileService, api.localFiles);
 			const userThemes = this._register(await loadUserThemes(profileServices, URI.parse(api.userDataHome.toString().replace(/\/$/u, '') + '/themes')));
 			const workspace = parseWorkspace(await api.workspace.getWorkspace());
+			const initialConfigurationSnapshot = validateConfigurationSnapshot(await api.configuration.read());
 			const lifecycleService = new ElectronLifecycleService({ ownerWindow: window, onError: onUnexpectedError });
 			const workbench = this._register(startWorkbench({
 				modeId: this.modeId,
@@ -54,6 +56,7 @@ export class DesktopMain extends Disposable {
 				workspace,
 				lifecycleService,
 				configurationApi: api.configuration,
+				initialConfigurationSnapshot,
 				keybindingsResourceApi: api.keybindings,
 				keyboardLayoutProvider: api.keyboardLayout,
 				userKeyboardLayoutApi: api.userKeyboardLayout,

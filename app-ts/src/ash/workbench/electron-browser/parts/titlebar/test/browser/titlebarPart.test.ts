@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Event } from '../../../../../../base/common/event.js';
+import { isMacintosh } from '../../../../../../base/common/platform.js';
 import { DisposableTracker, installDisposableTracker } from '../../../../../../base/common/lifecycle.js';
 import { ServiceContainer } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
@@ -81,6 +82,10 @@ test('Electron titlebar applies the active theme and releases its subscription w
 		using missingServices = new ServiceContainer();
 		assert.throws(() => factory(environment.window.document.body, options, missingServices), /service/i);
 		using titlebar = factory(environment.window.document.body, options, services);
+		const leftActions = titlebar.domNode.querySelector('.ash-titlebar-left-actions');
+		assert.ok(leftActions);
+		assert.equal(leftActions?.getAttribute('role'), 'toolbar');
+		assert.equal(leftActions.querySelector('[data-action-id="ash.applicationMenu"]') === null, isMacintosh);
 		themes.setColorTheme(lightColorTheme);
 		assert.deepEqual(applied, [darkColorTheme, lightColorTheme].map(theme => ({ backgroundColor: theme.getColorCss('titleBar.background'), symbolColor: theme.getColorCss('titleBar.actionForeground'), backdropColor: theme.getColorCss('dialog.backdropBackground') })));
 		titlebar.dispose();

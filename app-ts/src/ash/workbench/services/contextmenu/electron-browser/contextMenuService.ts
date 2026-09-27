@@ -16,6 +16,7 @@ import {
 import { toElectronAccelerator } from "../../../../platform/keybinding/common/electronAccelerator.js";
 import type { IMenuService } from "../../../../platform/actions/common/actions.js";
 import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
+import { hasSystemContextMenu, MenuSettings } from "../../../../platform/window/common/window.js";
 import type {
 	IKeybindingService,
 } from "../../../../platform/keybinding/common/keybinding.js";
@@ -36,7 +37,7 @@ import type {
 	IContextMenuService,
 } from "../../../../platform/contextview/browser/contextView.js";
 
-/** macOS implementation backed by Electron's native Menu. */
+/** Desktop implementation backed by Electron's system Menu. */
 export class NativeContextMenuService extends Disposable
 	implements IContextMenuService {
 	private readonly _onDidShowContextMenu = this._register(new Emitter<void>());
@@ -248,7 +249,7 @@ function toErrorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
-/** Electron Menu.popup cannot align a menu's right edge with its trigger. */
+/** Uses the chosen menu style while keeping menus clear of right-hand triggers. */
 class ElectronContextMenuService extends Disposable implements IContextMenuService {
 	private readonly _onDidShowContextMenu = this._register(new Emitter<void>());
 	private readonly _onDidHideContextMenu = this._register(new Emitter<void>());
@@ -256,23 +257,34 @@ class ElectronContextMenuService extends Disposable implements IContextMenuServi
 	private readonly browserMenu: BrowserContextMenuService;
 	private systemVisible = false;
 	private browserVisible = false;
+	private usesSystemMenu: boolean;
 
 	readonly onDidShowContextMenu = this._onDidShowContextMenu.event;
 	readonly onDidHideContextMenu = this._onDidHideContextMenu.event;
 
 	constructor(options: ContextMenuServiceOptions, nativeApi: INativeContextMenuApi) {
 		super();
+		this.usesSystemMenu = hasSystemContextMenu(options.configurationService);
 		this.systemMenu = this._register(new NativeContextMenuService(nativeApi, options.menuService, options.contextKeyService, options.keybindingService, options.notificationService));
 		this.browserMenu = this._register(new BrowserContextMenuService(options.menuService, options.contextKeyService, options.keybindingService, options.contextViewService, options.notificationService));
-		this._register(this.systemMenu.onDidShowContextMenu(() => this.setVisible("system", true)));
-		this._register(this.systemMenu.onDidHideContextMenu(() => this.setVisible("system", false)));
-		this._register(this.browserMenu.onDidShowContextMenu(() => this.setVisible("browser", true)));
-		this._register(this.browserMenu.onDidHideContextMenu(() => this.setVisible("browser", false)));
+		this._register(this.systemMenu.onDidShowContextMenu(() => this.setVisible('system', true)));
+		this._register(this.systemMenu.onDidHideContextMenu(() => this.setVisible('system', false)));
+		this._register(this.browserMenu.onDidShowContextMenu(() => this.setVisible('browser', true)));
+		this._register(this.browserMenu.onDidHideContextMenu(() => this.setVisible('browser', false)));
+		if (isMacintosh) {
+			this._register(options.configurationService.onDidChangeConfiguration(event => {
+				if (!event.affectsConfiguration(MenuSettings.MenuStyle)) return;
+				const useSystemMenu = hasSystemContextMenu(options.configurationService);
+				if (useSystemMenu === this.usesSystemMenu) return;
+				this.hideContextMenu();
+				this.usesSystemMenu = useSystemMenu;
+			}));
+		}
 	}
 
-	private setVisible(menu: "system" | "browser", visible: boolean): void {
+	private setVisible(menu: 'system' | 'browser', visible: boolean): void {
 		const wasVisible = this.systemVisible || this.browserVisible;
-		if (menu === "system") this.systemVisible = visible;
+		if (menu === 'system') this.systemVisible = visible;
 		else this.browserVisible = visible;
 		const isVisible = this.systemVisible || this.browserVisible;
 		if (!wasVisible && isVisible) this._onDidShowContextMenu.fire();
@@ -281,9 +293,9 @@ class ElectronContextMenuService extends Disposable implements IContextMenuServi
 
 	showContextMenu(delegate: IContextMenuDelegate | IContextMenuMenuDelegate): void {
 		const anchor = delegate.getAnchor();
-		const menu = isNode(anchor) && delegate.anchorAxisAlignment === AnchorAxisAlignment.Horizontal && delegate.anchorAlignment === AnchorAlignment.Left
-			? this.browserMenu
-			: this.systemMenu;
+		// Electron Menu.popup cannot align its right edge with an element on the right side of the window.
+		const rightHandTrigger = isNode(anchor) && delegate.anchorAxisAlignment === AnchorAxisAlignment.Horizontal && delegate.anchorAlignment === AnchorAlignment.Left;
+		const menu = this.usesSystemMenu && !rightHandTrigger ? this.systemMenu : this.browserMenu;
 		if (menu === this.browserMenu) this.systemMenu.hideContextMenu();
 		else this.browserMenu.hideContextMenu();
 		menu.showContextMenu({ ...delegate, getAnchor: () => anchor });
@@ -300,13 +312,5 @@ export function createElectronWorkbenchContextMenuService(
 	options: ContextMenuServiceOptions,
 	nativeApi: INativeContextMenuApi,
 ): IContextMenuService & IDisposable {
-	return isMacintosh
-		? new ElectronContextMenuService(options, nativeApi)
-		: new BrowserContextMenuService(
-			options.menuService,
-			options.contextKeyService,
-			options.keybindingService,
-			options.contextViewService,
-			options.notificationService,
-		);
+	return new ElectronContextMenuService(options, nativeApi);
 }

@@ -1,6 +1,7 @@
 import { installBaseUiStyles } from "../../base/browser/ui/styles.js";
 import { URI } from "../../base/common/uri.js";
 import { IFileService } from "../../platform/files/common/files.js";
+import { validateConfigurationSnapshot } from '../../platform/configuration/common/configurationIpc.js';
 import { ServiceContainer } from "../../platform/instantiation/common/instantiation.js";
 import { addDisposableListener } from "../../base/browser/dom.js";
 import { DisposableStore, toDisposable, type IDisposable } from "../../base/common/lifecycle.js";
@@ -48,6 +49,7 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 	const zoomSubscription = subscribe<number>(WINDOW_ZOOM_CHANGED_CHANNEL, () => { void updateZoomFactor().catch(onUnexpectedError); });
 	sessions.add(toDisposable(() => zoomSubscription.dispose()));
 	const lifecycleService = new ElectronLifecycleService({ ownerWindow: window, onError: onUnexpectedError });
+	const initialConfigurationSnapshot = validateConfigurationSnapshot(await api.configuration.read());
 	const workbench = sessions.add(new Workbench({
 		modeId,
 		profile,
@@ -56,6 +58,7 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 		nativeHostApi: api.nativeHost,
 		returnToWorkbench: () => { void invoke<void>(RETURN_TO_WORKBENCH_CHANNEL).catch(onUnexpectedError); },
 		configurationApi: api.configuration,
+		initialConfigurationSnapshot,
 		keybindingsResourceApi: api.keybindings,
 		createContextMenuService: options => createElectronWorkbenchContextMenuService(options, api.nativeContextMenu),
 		container,

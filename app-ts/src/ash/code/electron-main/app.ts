@@ -51,13 +51,13 @@ import { RETURN_TO_WORKBENCH_CHANNEL, validateReturnToWorkbench } from '../../se
 import { GlobalKeybindingsMainService } from '../../platform/globalKeybindings/electron-main/globalKeybindingsMainService.js';
 import { OPEN_AGENTS_WINDOW_COMMAND_ID } from '../../workbench/contrib/chat/common/constants.js';
 import { StateService } from "../../platform/state/node/stateService.js";
-import { migrateLegacyLocalProfile } from "../../platform/profile/node/localProfile.js";
 import { resolveHome } from "../../platform/home/node/home.js";
 import { diskFileSystemProviderRoutes } from "../../platform/files/electron-main/diskFileSystemProviderServer.js";
 import { URI } from "../../base/common/uri.js";
 import { DiskFileSystemProvider } from "../../platform/files/node/diskFileSystemProvider.js";
 import { LOCAL_FILE_SYSTEM_CHANGED_CHANNEL } from "../../platform/files/common/diskFileSystemProviderClient.js";
 import { WindowControlsOverlay } from "../../platform/windows/electron-main/windows.js";
+import { TitleBarSetting, parseTitleBarStyle, type TitleBarStyleConfiguration } from "../../platform/window/common/window.js";
 import { WindowsStateHandler } from "../../platform/windows/electron-main/windowsStateHandler.js";
 import { WindowsMainService, trackWindowResourceChanges, windowOperationIpcRoute, windowResourceIpcRoutes, workspaceContextIpcRoutes } from "../../platform/windows/electron-main/windowsMainService.js";
 import { LifecycleMainService, windowCloseResponseIpcRoute } from '../../platform/lifecycle/electron-main/lifecycleMainService.js';
@@ -347,7 +347,6 @@ export class AshApplication extends Disposable {
 	}
 
 	private async createPersistentServices(): Promise<void> {
-		await migrateLegacyLocalProfile({ legacyUserDataRoot: app.getPath("userData"), profileRoot: this.profileRoot });
 		const state = await StateService.create(
 			join(app.getPath("userData"), "state.json"),
 		);
@@ -356,7 +355,7 @@ export class AshApplication extends Disposable {
 		let userKeyboardLayout: UserKeyboardLayoutMainService | undefined;
 		try {
 			configuration = await ConfigurationMainService.create({
-				filePath: join(this.profileRoot, "configuration.json"),
+				filePath: join(this.profileRoot, "settings.json"),
 				onError: (error) => {
 					console.error("Failed to process configuration", error);
 				},
@@ -608,8 +607,10 @@ export class AshApplication extends Disposable {
 	): Promise<WorkbenchWindowRecord> {
 		const windowsStateHandler = this.createWindowsStateHandler(workspaceContext.getWorkspace());
 		const windowState = windowsStateHandler.restoreWindowState();
+		const titleBarStyle = this.titleBarStyle;
 		const windowHost = this.windowsMainService.createWindow(options => new BrowserWindow(options), {
 			state: windowState,
+			titleBarStyle,
 			webPreferences: this.createSandboxWebPreferences(),
 			title: WorkbenchModeRegistry.get(this.defaultModeId).title,
 			tabbingIdentifier: process.platform === 'darwin' ? 'ash-workbench' : undefined,
@@ -729,7 +730,7 @@ export class AshApplication extends Disposable {
 		record.openWorkspace = (root) => transitionToFolder(root, true);
 		windowDisposables.add(toDisposable(() => this.dialogs.cancelWindow(window)));
 		const windowControlsOverlay = new WindowControlsOverlay(colors => {
-			if (process.platform === 'win32' || process.platform === 'linux') window.setTitleBarOverlay(colors);
+			if (titleBarStyle === 'custom' && (process.platform === 'win32' || process.platform === 'linux')) window.setTitleBarOverlay(colors);
 		});
 		const ipcRoutes = [
 			...workspaceHost.routes(),
@@ -796,12 +797,10 @@ export class AshApplication extends Disposable {
 			...updateIpcRoutes(this.updateMainService),
 		];
 		await watchProfileThemeFiles(this.profileRoot, window, windowDisposables);
+		const systemContextMenu = windowDisposables.add(new ElectronContextMenu(window));
+		ipcRoutes.push(...nativeContextMenuIpcRoutes(systemContextMenu));
 		if (this.nativeMenubar) {
-			const nativeContextMenu = windowDisposables.add(
-				new ElectronContextMenu(window),
-			);
 			windowDisposables.add(this.nativeMenubar.registerWindow(window));
-			ipcRoutes.push(...nativeContextMenuIpcRoutes(nativeContextMenu));
 			ipcRoutes.push(...nativeMenubarIpcRoutes(this.nativeMenubar, window));
 		}
 		windowDisposables.add(this.trustedIpcRouter.register(
@@ -855,18 +854,20 @@ export class AshApplication extends Disposable {
 			storageKey: 'sessionsWindowState',
 			defaultState: { mode: WindowMode.Normal, width: 1_180, height: 780 },
 		});
+		const titleBarStyle = this.titleBarStyle;
 		await this.windowsMainService.openManagedWindow(
 			workspace.id,
 			options => new BrowserWindow(options),
 			{
 				title: `${WorkbenchModeRegistry.get(session.modeId).title} Sessions`,
+				titleBarStyle,
 				icon: this.windowIconPath,
 				state: sessionsWindowState.restoreWindowState(),
 				webPreferences: this.createSandboxWebPreferences(),
 				initialize: async (window, windowDisposables) => {
 					windowDisposables.add(sessionsWindowState.trackWindow(window));
 					const windowControlsOverlay = new WindowControlsOverlay(colors => {
-						if (process.platform === 'win32' || process.platform === 'linux') window.setTitleBarOverlay(colors);
+						if (titleBarStyle === 'custom' && (process.platform === 'win32' || process.platform === 'linux')) window.setTitleBarOverlay(colors);
 					});
 					const sessionsRelay = windowDisposables.add(this.createAppServerConnectionRelay(session.workspaceContext.getWorkspace(), windowDisposables));
 					const remoteWindowContext = windowDisposables.add(new RemoteWindowMainContext({
@@ -911,10 +912,8 @@ export class AshApplication extends Disposable {
 						windowCloseResponseIpcRoute(this.lifecycleMainService, window),
 					];
 					await watchProfileThemeFiles(this.profileRoot, window, windowDisposables);
-					if (this.nativeMenubar) {
-						const nativeContextMenu = windowDisposables.add(new ElectronContextMenu(window));
-						ipcRoutes.push(...nativeContextMenuIpcRoutes(nativeContextMenu));
-					}
+					const systemContextMenu = windowDisposables.add(new ElectronContextMenu(window));
+					ipcRoutes.push(...nativeContextMenuIpcRoutes(systemContextMenu));
 					windowDisposables.add(this.trustedIpcRouter.register(
 						{
 							webContents: window.webContents,
@@ -1353,6 +1352,11 @@ export class AshApplication extends Disposable {
 	private get services(): PersistentServices {
 		assertDefined(this.persistentServices, "Persistent application services are not initialized");
 		return this.persistentServices;
+	}
+
+	private get titleBarStyle(): TitleBarStyleConfiguration {
+		const value = configurationValues(this.services.configuration.read().document)[TitleBarSetting.TitleBarStyle];
+		return parseTitleBarStyle(value ?? 'custom');
 	}
 
 	private releaseDisposableTracker(): void {

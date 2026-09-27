@@ -22,6 +22,7 @@ export interface RevisionedJsonFileOptions<T> {
 	readonly filePath: string;
 	readonly defaultValue: () => T;
 	readonly validate: (value: unknown) => T;
+	readonly parse?: (source: string) => unknown;
 	readonly serialize?: (value: T) => string;
 	readonly label?: string;
 	readonly onError?: (error: unknown) => void;
@@ -39,6 +40,7 @@ export class RevisionedJsonFile<T> extends Disposable {
 	private readonly temporaryFilePath: string;
 	private readonly defaultValue: () => T;
 	private readonly validate: (value: unknown) => T;
+	private readonly parse: (source: string) => unknown;
 	private readonly serialize: (value: T) => string;
 	private readonly label: string;
 	private readonly onError: (error: unknown) => void;
@@ -63,6 +65,7 @@ export class RevisionedJsonFile<T> extends Disposable {
 		this.temporaryFilePath = `${options.filePath}.${process.pid}.tmp`;
 		this.defaultValue = options.defaultValue;
 		this.validate = options.validate;
+		this.parse = options.parse ?? JSON.parse;
 		this.serialize = options.serialize ??
 			((value) => `${JSON.stringify(value, null, 2)}\n`);
 		this.label = options.label ?? "JSON resource";
@@ -208,7 +211,7 @@ export class RevisionedJsonFile<T> extends Disposable {
 			if (isFileNotFound(error)) return undefined;
 			throw error;
 		}
-		const value = this.validate(JSON.parse(contents));
+		const value = this.validate(this.parse(contents));
 		return {
 			value,
 			serialized: this.serialize(value),

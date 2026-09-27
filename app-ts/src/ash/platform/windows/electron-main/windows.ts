@@ -7,6 +7,7 @@ import {
 import type {
 	WorkbenchState,
 } from "../../workspace/common/workspace.js";
+import type { TitleBarStyleConfiguration } from "../../window/common/window.js";
 import {
 	defaultWindowState,
 	WindowMode,
@@ -52,6 +53,7 @@ export interface IWindowDisplay {
 export interface IResolveBrowserWindowOptions {
 	readonly state: IWindowState;
 	readonly webPreferences: IWindowWebPreferences;
+	readonly titleBarStyle?: TitleBarStyleConfiguration;
 	readonly platform?: NodeJS.Platform;
 }
 
@@ -59,6 +61,7 @@ export interface IResolveBrowserWindowOptions {
 export function resolveBrowserWindowOptions({
 	state,
 	webPreferences,
+	titleBarStyle = 'custom',
 	platform = process.platform,
 }: IResolveBrowserWindowOptions): IWindowConstructorOptions {
 	const browserWindowOptions: IWindowConstructorOptions = {
@@ -71,6 +74,8 @@ export function resolveBrowserWindowOptions({
 		minHeight: WINDOW_MINIMUM_SIZE.height,
 		webPreferences,
 	};
+
+	if (titleBarStyle === 'system') return browserWindowOptions;
 
 	if (platform === "win32" || platform === "linux") {
 		browserWindowOptions.titleBarStyle = "hidden";

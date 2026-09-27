@@ -10,6 +10,7 @@ import {
 } from "../../actions/browser/menuEntryActionViewItem.js";
 import { MenuId, type IMenuService } from "../../actions/common/actions.js";
 import type { IContextKeyService } from "../../contextkey/browser/contextKeyService.js";
+import type { IConfigurationService } from "../../configuration/common/configuration.js";
 import type { IKeybindingService } from "../../keybinding/common/keybinding.js";
 import type { INotificationService } from "../../notification/common/notification.js";
 import { ContextMenuHandler } from "./contextMenuHandler.js";
@@ -72,6 +73,7 @@ export class BrowserContextMenuService extends Disposable
 }
 
 export interface ContextMenuServiceOptions {
+	readonly configurationService: IConfigurationService;
 	readonly menuService: IMenuService;
 	readonly contextKeyService: IContextKeyService;
 	readonly keybindingService: IKeybindingService;

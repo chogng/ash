@@ -45,6 +45,8 @@ export class ConfigurationMainService extends Disposable {
 			filePath: options.filePath,
 			defaultValue: emptyConfigurationDocument,
 			validate: validateConfigurationDocument,
+			parse: source => ({ version: 1, source }),
+			serialize: document => document.source,
 			label: "Configuration",
 			onError: options.onError,
 		});

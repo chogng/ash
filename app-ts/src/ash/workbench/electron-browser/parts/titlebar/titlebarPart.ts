@@ -67,7 +67,7 @@ export function bindWindowControlTheme(themeService: IThemeService, hostService:
 
 /**
  * Windows and Linux show the shared menu tree through the compact titlebar button.
- * macOS keeps that button and also presents the same tree in the system menu bar.
+ * macOS presents the tree in the system menu bar and keeps the other left actions.
  */
 class ElectronMenubarControl extends Disposable
 	implements IMenubarControl {
@@ -84,6 +84,7 @@ class ElectronMenubarControl extends Disposable
 			options.menuService,
 			options.contextMenuService,
 			options.localizationService,
+			isMacintosh ? 'actions-only' : 'application-menu',
 		));
 		this.domNode = browserMenubar.domNode;
 		if (isMacintosh) {

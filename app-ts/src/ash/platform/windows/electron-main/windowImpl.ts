@@ -1,11 +1,13 @@
 import { Disposable, toDisposable, type DisposableStore } from '../../../base/common/lifecycle.js';
 import type { IWindowState } from '../../window/electron-main/window.js';
+import type { TitleBarStyleConfiguration } from '../../window/common/window.js';
 import { applyWindowState, resolveBrowserWindowOptions, type IWindowConstructorOptions, type IWindowWebPreferences } from './windows.js';
 
 export interface IWindowCreationOptions {
 	readonly state: IWindowState;
 	readonly webPreferences: IWindowWebPreferences;
 	readonly title: string;
+	readonly titleBarStyle?: TitleBarStyleConfiguration;
 	readonly icon?: string;
 	readonly tabbingIdentifier?: string;
 }
@@ -34,7 +36,7 @@ export class CodeWindow<TWindow extends ICodeWindowHandle> extends Disposable {
 		this.resources = this._register(resources);
 		try {
 			this.win = createWindow({
-				...resolveBrowserWindowOptions({ state: options.state, webPreferences: options.webPreferences }),
+				...resolveBrowserWindowOptions({ state: options.state, webPreferences: options.webPreferences, titleBarStyle: options.titleBarStyle }),
 				show: false,
 				title: options.title,
 				icon: options.icon,

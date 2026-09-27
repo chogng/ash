@@ -13,10 +13,26 @@ test('macOS system menu receives workbench commands', async ({ target, applicati
 	})).toContain('New Untitled Text Editor');
 });
 
+test('macOS keeps the sidebar action and omits the duplicate application menu', async ({ target, workbench }) => {
+	test.skip(target.kind !== 'electron' || process.platform !== 'darwin' || target.workbenchMode !== 'code', 'This scenario requires the macOS Code desktop product');
+	const toolbar = workbench.page.getByRole('toolbar', { name: 'Title bar left actions' });
+	await expect(toolbar.getByRole('button', { name: 'Application menu' })).toHaveCount(0);
+	const sidebarToggle = toolbar.locator('[data-action-id="workbench.action.toggleSideBar"] button');
+	await expect(sidebarToggle).toBeVisible();
+	await expect(toolbar.locator('.ash-action-view-item').first()).toHaveAttribute('data-action-id', 'workbench.action.toggleSideBar');
+	const sidebar = workbench.page.locator('[data-part="sidebar"]');
+	const wasVisible = await sidebar.isVisible();
+	await sidebarToggle.click();
+	await expect(sidebar).toBeVisible({ visible: !wasVisible });
+});
+
 test('application menu trigger uses the titlebar action size', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	test.skip(target.kind === 'electron' && process.platform === 'darwin', 'macOS uses the system menu');
 	const page = workbench.page;
 	const trigger = page.getByRole('toolbar', { name: 'Title bar left actions' }).getByRole('button', { name: 'Application menu' });
+	await expect(trigger).toHaveCount(1);
+	await expect(page.getByRole('toolbar', { name: 'Title bar left actions' }).getByRole('menubar')).toHaveCount(0);
 	const adjacentAction = page.locator('.ash-titlebar-left-actions [data-action-id="workbench.action.toggleSideBar"] .ash-button');
 	const [triggerBounds, actionBounds] = await Promise.all([trigger.boundingBox(), adjacentAction.boundingBox()]);
 	expect(triggerBounds).not.toBeNull();
@@ -27,6 +43,56 @@ test('application menu trigger uses the titlebar action size', async ({ target, 
 	});
 	await trigger.hover();
 	await expect(trigger).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+});
+
+test('macOS menu style switches context menus without a titlebar menu button', async ({ target, application, workbench }) => {
+	test.skip(target.kind !== 'electron' || process.platform !== 'darwin' || target.workbenchMode !== 'code', 'This scenario requires the macOS Code desktop');
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+Shift+P');
+	await page.getByPlaceholder('Type the name of a command to run').fill('Ash Settings');
+	await page.keyboard.press('Enter');
+	await page.locator('[data-settings-group-id="workbench"]').click();
+	await page.locator('[data-settings-category-id="layout"]').click();
+	const menuStyle = page.locator('[data-configuration-key="window.menuStyle"]').getByRole('combobox');
+	await menuStyle.click();
+	await page.getByRole('option', { name: 'Custom' }).click();
+	await page.getByRole('button', { name: 'Close Ash Settings' }).click();
+
+	const search = page.locator('[data-part="activitybar"]').getByRole('tab', { name: 'Search' });
+	await search.click({ button: 'right' });
+	await expect(page.getByRole('menu').last()).toBeVisible();
+	await page.keyboard.press('Escape');
+
+	await page.keyboard.press('ControlOrMeta+Shift+P');
+	await page.getByPlaceholder('Type the name of a command to run').fill('Ash Settings');
+	await page.keyboard.press('Enter');
+	await page.locator('[data-settings-group-id="workbench"]').click();
+	await page.locator('[data-settings-category-id="layout"]').click();
+	await menuStyle.click();
+	await page.getByRole('option', { name: 'System' }).click();
+	await page.getByRole('button', { name: 'Close Ash Settings' }).click();
+
+	const electron = application as ElectronApplication;
+	await electron.evaluate(({ Menu }) => {
+		const originalPopup = Menu.prototype.popup;
+		const state = globalThis as typeof globalThis & { ashMenuStyleTest?: { count: number; restore: () => void } };
+		state.ashMenuStyleTest = { count: 0, restore: () => { Menu.prototype.popup = originalPopup; } };
+		Menu.prototype.popup = function(options) {
+			state.ashMenuStyleTest!.count++;
+			options?.callback?.();
+		};
+	});
+	try {
+		await search.click({ button: 'right' });
+		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuStyleTest?: { count: number } }).ashMenuStyleTest?.count)).toBe(1);
+		await expect(page.getByRole('toolbar', { name: 'Title bar left actions' }).getByRole('button', { name: 'Application menu' })).toHaveCount(0);
+		await expect(page.locator('.ash-titlebar-left-actions [data-action-id="workbench.action.toggleSideBar"] button')).toBeVisible();
+	} finally {
+		await electron.evaluate(({ Menu }) => {
+			const state = (globalThis as typeof globalThis & { ashMenuStyleTest?: { restore: () => void } }).ashMenuStyleTest;
+			state?.restore();
+		});
+	}
 });
 
 test('application menu switches its root submenus on pointer entry', async ({ target, workbench }) => {
@@ -83,6 +149,7 @@ test('application menu aligns command labels with and without icons', async ({ t
 
 test('application menu shows clean labels and readable shortcuts', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	test.skip(target.kind === 'electron' && process.platform === 'darwin', 'macOS uses the system menu');
 	const page = workbench.page;
 	await page.getByRole('button', { name: 'Application menu' }).click();
 	const mainMenu = page.getByRole('menu').first();
@@ -116,6 +183,7 @@ test('application menu shows clean labels and readable shortcuts', async ({ targ
 
 test('checked View menu icons stay inside the leading slot', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	test.skip(target.kind === 'electron' && process.platform === 'darwin', 'macOS uses the system menu');
 	const page = workbench.page;
 	const sidebarToggle = page.locator('.ash-titlebar-left-actions [data-action-id="workbench.action.toggleSideBar"] button');
 	if (await sidebarToggle.getAttribute('aria-label') === 'Show Primary Side Bar') await sidebarToggle.click();

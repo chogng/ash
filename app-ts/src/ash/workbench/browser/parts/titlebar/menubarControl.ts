@@ -44,7 +44,7 @@ class ApplicationMenuActionViewItem extends ButtonActionViewItem {
 /**
  * Collapses File, Edit, and other application menus into the first item of the left titlebar ActionBar.
  * Actions contributed to `MenuId.TitleBarLeft` follow it in the same keyboard and spacing group.
- * The same menu tree remains available to the macOS system menu bar.
+ * Desktop hosts can omit the button when the system menu bar presents the menu tree.
  */
 export class BrowserMenubarControl extends Disposable
 	implements IMenubarControl {
@@ -60,6 +60,7 @@ export class BrowserMenubarControl extends Disposable
 		menuService: IMenuService,
 		contextMenuService: IContextMenuService,
 		localizationService?: ILocalizationService,
+		presentation: 'application-menu' | 'actions-only' = 'application-menu',
 	) {
 		super();
 		this.contextMenuService = contextMenuService;
@@ -77,7 +78,7 @@ export class BrowserMenubarControl extends Disposable
 		const toolbar = this._register(new MenuWorkbenchToolBar(container, menuService, contextMenuService, MenuId.TitleBarLeft, {
 			ariaLabel: leftActionsLabel(),
 			presentation: "inherit-foreground",
-			leadingActions: [action],
+			leadingActions: presentation === 'application-menu' ? [action] : [],
 			actionViewItemProvider: (candidate) => {
 				if (candidate !== action) return undefined;
 				const item = new ApplicationMenuActionViewItem(action, (event) => this.handleMenuKeyDown(event));
@@ -92,7 +93,7 @@ export class BrowserMenubarControl extends Disposable
 		}));
 		if (localizationService) this._register(localizationService.onDidChange(() => {
 			this.domNode.setAttribute("aria-label", leftActionsLabel());
-			this.currentMenuItem.setLabel(applicationMenuLabel());
+			if (this.menuItem) this.menuItem.setLabel(applicationMenuLabel());
 		}));
 		this._register(this.menu.onDidChange(() => {
 			if (this.active) this.contextMenuService.hideContextMenu();

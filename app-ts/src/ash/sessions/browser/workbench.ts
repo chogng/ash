@@ -10,7 +10,7 @@ import { LanguageService } from "../../editor/common/services/languageService.js
 import { localize } from '../../nls.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../platform/accessibility/browser/accessibleViewRegistry.js';
-import type { IConfigurationApi } from "../../platform/configuration/common/configurationIpc.js";
+import type { IConfigurationApi, IConfigurationSnapshot } from "../../platform/configuration/common/configurationIpc.js";
 import { IConfigurationService } from "../../platform/configuration/common/configuration.js";
 import { ContextKeyExpr } from '../../platform/contextkey/common/contextkey.js';
 import { ServiceContainer } from "../../platform/instantiation/common/instantiation.js";
@@ -93,6 +93,7 @@ export interface IWorkbenchOptions {
 	readonly nativeHostApi?: INativeHostApi;
 	readonly returnToWorkbench: () => void;
 	readonly configurationApi?: IConfigurationApi;
+	readonly initialConfigurationSnapshot?: IConfigurationSnapshot;
 	readonly keybindingsResourceApi?: IKeybindingsResourceApi;
 	readonly createContextMenuService: ContextMenuServiceFactory;
 	readonly container: HTMLElement;
@@ -118,7 +119,7 @@ export class Workbench extends Disposable {
 		const ownerWindow = ownerDocument.defaultView;
 		if (!ownerWindow) throw new Error("Sessions renderer requires an owner window");
 
-		const configurationService = this.configurationService = this._register(new WorkbenchConfigurationService({ api: options.configurationApi }));
+		const configurationService = this.configurationService = this._register(new WorkbenchConfigurationService({ api: options.configurationApi, initialSnapshot: options.initialConfigurationSnapshot }));
 		const services = this._register(new ServiceContainer());
 		services.registerInstance(IConfigurationService, configurationService);
 		if (options.nativeHostApi) services.registerInstance(INativeHostService, options.nativeHostApi);
@@ -222,6 +223,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IChatContextPickService, new ChatContextPickService());
 		services.registerInstance(IPreferencesService, this._register(new PreferencesService(() => services.get(IEditorService))));
 		const contextMenus = this._register(options.createContextMenuService({
+			configurationService,
 			menuService: menus,
 			contextKeyService: contextKeys,
 			keybindingService: keybindings,

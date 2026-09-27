@@ -45,7 +45,7 @@ import type {
 	INativeHostApi,
 } from "../../platform/native/common/nativeHost.js";
 import { MenuId } from "../../platform/actions/common/actions.js";
-import type { IConfigurationApi } from "../../platform/configuration/common/configurationIpc.js";
+import type { IConfigurationApi, IConfigurationSnapshot } from "../../platform/configuration/common/configurationIpc.js";
 import { IConfigurationResourceService } from "../../platform/configuration/common/configurationResourceService.js";
 import { IConfigurationService } from "../../platform/configuration/common/configuration.js";
 import { IStorageService, StorageScope, StorageTarget, WillSaveStateReason } from "../../platform/storage/common/storage.js";
@@ -297,6 +297,7 @@ export interface IStartWorkbenchOptions {
 	readonly workspace: IWorkspace;
 	readonly lifecycleService: ILifecycleService & IDisposable;
 	readonly configurationApi?: IConfigurationApi;
+	readonly initialConfigurationSnapshot?: IConfigurationSnapshot;
 	readonly keybindingsResourceApi?: IKeybindingsResourceApi;
 	readonly keyboardLayoutProvider?: IKeyboardLayoutProvider;
 	readonly userKeyboardLayoutApi?: IUserKeyboardLayoutApi;
@@ -319,6 +320,7 @@ export function startWorkbench({
 	workspace,
 	lifecycleService,
 	configurationApi,
+	initialConfigurationSnapshot,
 	keybindingsResourceApi,
 	keyboardLayoutProvider,
 	userKeyboardLayoutApi,
@@ -338,6 +340,7 @@ export function startWorkbench({
 		workspace,
 		lifecycleService,
 		configurationApi,
+		initialConfigurationSnapshot,
 		keybindingsResourceApi,
 		keyboardLayoutProvider,
 		userKeyboardLayoutApi,
@@ -381,6 +384,7 @@ export class Workbench extends Disposable {
 		workspace: IWorkspace,
 		lifecycleService: ILifecycleService & IDisposable,
 		configurationApi: IConfigurationApi | undefined,
+		initialConfigurationSnapshot: IConfigurationSnapshot | undefined,
 		keybindingsResourceApi: IKeybindingsResourceApi | undefined,
 		keyboardLayoutProvider: IKeyboardLayoutProvider | undefined,
 		userKeyboardLayoutApi: IUserKeyboardLayoutApi | undefined,
@@ -510,6 +514,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IWorkingCopyBackupService, workingCopyBackups);
 		const configuration = this._register(new WorkbenchConfigurationService({
 			api: configurationApi,
+			initialSnapshot: initialConfigurationSnapshot,
 		}));
 		services.registerInstance(IConfigurationService, configuration);
 		services.registerInstance(IConfigurationResourceService, configuration);
@@ -736,6 +741,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IChatContextPickService, new ChatContextPickService());
 		services.registerInstance(IPreferencesService, this._register(new PreferencesService(() => services.get(IEditorService))));
 		const contextMenus = this._register(createContextMenuService({
+			configurationService: configuration,
 			menuService: menus,
 			contextKeyService: contextKeys,
 			keybindingService: keybindings,

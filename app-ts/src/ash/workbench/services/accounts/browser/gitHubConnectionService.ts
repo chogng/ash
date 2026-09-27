@@ -12,6 +12,8 @@ export class GitHubConnectionService extends Disposable implements IGitHubConnec
 	private isStarting = false;
 	private cancelRequested = false;
 	private loginId: string | undefined;
+	// A completion may arrive while the browser handoff still holds the start response.
+	private readonly completedWhileStarting = new Map<string, AccountLoginCompletion>();
 
 	constructor(
 		@IAccountService private readonly accounts: IAccountService,
@@ -35,6 +37,8 @@ export class GitHubConnectionService extends Disposable implements IGitHubConnec
 		try {
 			const challenge = await this.accounts.startLogin({ type: 'gitHubBrowser' });
 			this.isStarting = false;
+			const completion = this.completedWhileStarting.get(challenge.loginId);
+			this.completedWhileStarting.clear();
 			if (this.cancelRequested) {
 				this.cancelRequested = false;
 				if (challenge.type !== 'connected') await this.accounts.cancelLogin(challenge.loginId);
@@ -46,9 +50,14 @@ export class GitHubConnectionService extends Disposable implements IGitHubConnec
 			}
 			if (challenge.type !== 'browser') throw new Error('GitHub browser login returned a different challenge');
 			this.loginId = challenge.loginId;
+			if (completion) {
+				this.complete(completion);
+				return;
+			}
 			this.accessibility.status(this.label('account.githubAuthorizeInBrowser', 'Authorize Ash in your browser to connect GitHub.'));
 		} catch (error) {
 			this.isStarting = false;
+			this.completedWhileStarting.clear();
 			if (this.cancelRequested) {
 				this.cancelRequested = false;
 				return;
@@ -68,7 +77,10 @@ export class GitHubConnectionService extends Disposable implements IGitHubConnec
 	}
 
 	private complete(completion: AccountLoginCompletion): void {
-		if (completion.loginId !== this.loginId) return;
+		if (completion.loginId !== this.loginId) {
+			if (this.isStarting) this.completedWhileStarting.set(completion.loginId, completion);
+			return;
+		}
 		this.loginId = undefined;
 		if (completion.status.type === 'succeeded') {
 			this.accessibility.status(this.label('account.githubConnected', 'GitHub account connected.'));

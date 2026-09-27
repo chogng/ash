@@ -1,3 +1,42 @@
+import { isMacintosh, isWeb } from '../../../base/common/platform.js';
+import type { IConfigurationService } from '../../configuration/common/configuration.js';
+
+export const enum MenuSettings {
+	MenuStyle = 'window.menuStyle',
+}
+
+export const enum TitleBarSetting {
+	TitleBarStyle = 'window.titleBarStyle',
+}
+
+export type MenuStyleConfiguration = 'custom' | 'system' | 'inherit';
+export type TitleBarStyleConfiguration = 'custom' | 'system';
+
+export function parseMenuStyle(value: unknown): MenuStyleConfiguration {
+	if (value === 'custom' || value === 'system' || value === 'inherit') return value;
+	throw new TypeError(`Unknown window menu style: ${String(value)}`);
+}
+
+export function parseTitleBarStyle(value: unknown): TitleBarStyleConfiguration {
+	if (value === 'custom' || value === 'system') return value;
+	throw new TypeError(`Unknown window title bar style: ${String(value)}`);
+}
+
+/** Windows and Linux use system context menus only with a system title bar. */
+export function hasSystemContextMenu(configurationService: IConfigurationService): boolean {
+	const menuStyle = configurationService.getValue<MenuStyleConfiguration>(MenuSettings.MenuStyle);
+	const titleBarStyle = configurationService.getValue<TitleBarStyleConfiguration>(TitleBarSetting.TitleBarStyle);
+	return resolveContextMenuStyle(menuStyle, titleBarStyle, isWeb ? 'web' : isMacintosh ? 'macos' : 'desktop') === 'system';
+}
+
+/** The host window frame determines whether desktop system menus are available. */
+export function resolveContextMenuStyle(menuStyle: MenuStyleConfiguration, titleBarStyle: TitleBarStyleConfiguration, host: 'web' | 'macos' | 'desktop'): 'custom' | 'system' {
+	if (host === 'web') return 'custom';
+	if (menuStyle === 'custom') return 'custom';
+	if (menuStyle === 'system' && host === 'macos') return 'system';
+	return titleBarStyle === 'system' ? 'system' : 'custom';
+}
+
 /** Dimensions used for a new window without an opened workspace. */
 export const DEFAULT_EMPTY_WINDOW_SIZE = {
 	width: 1200,

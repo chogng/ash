@@ -11,6 +11,7 @@ import type { IWorkspaceFolder } from '../../../../platform/workspace/common/wor
 
 export interface WorkbenchConfigurationServiceOptions {
 	readonly api?: IConfigurationApi;
+	readonly initialSnapshot?: IConfigurationSnapshot;
 	readonly registry?: IConfigurationRegistry;
 	readonly onError?: (error: unknown) => void;
 }
@@ -53,6 +54,7 @@ export class WorkbenchConfigurationService extends Disposable implements IConfig
 		this.onError = options.onError ?? (error => console.error('Failed to apply configuration', error));
 		this.hasAuthoritativeSnapshot = this.api === undefined;
 		this.rebuildValues();
+		if (options.initialSnapshot) this.acceptSnapshot(validateConfigurationSnapshot(options.initialSnapshot));
 		if (this.api) {
 			const subscription = this.api.onDidChange(candidate => {
 				try {

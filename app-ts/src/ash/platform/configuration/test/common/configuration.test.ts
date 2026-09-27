@@ -382,7 +382,7 @@ test("workbench configuration change compares values after language overrides", 
 test("main configuration service persists atomic revisions", async () => {
 	const directory = await mkdtemp(join(tmpdir(), "ash-configuration-"));
 	try {
-		const filePath = join(directory, "configuration.json");
+		const filePath = join(directory, "settings.json");
 		const service = await ConfigurationMainService.create({ filePath });
 
 		const updated = await service.update({
@@ -402,10 +402,7 @@ test("main configuration service persists atomic revisions", async () => {
 		);
 		await service.close();
 
-		assert.deepEqual(
-			JSON.parse(await readFile(filePath, "utf8")),
-			updated.document,
-		);
+		assert.equal(await readFile(filePath, "utf8"), updated.document.source);
 		assert.deepEqual(configurationValues(updated.document), { "editor.fontSize": 14 });
 		const reopened = await ConfigurationMainService.create({ filePath });
 		assert.deepEqual(reopened.read(), {
@@ -416,6 +413,19 @@ test("main configuration service persists atomic revisions", async () => {
 	} finally {
 		await rm(directory, { recursive: true, force: true });
 	}
+});
+
+test('workbench configuration applies the startup snapshot before services choose window behavior', () => {
+	const registry = new ConfigurationRegistry();
+	registry.registerConfiguration({ key: 'window.menuStyle', defaultValue: 'inherit', parse: value => value });
+	registry.registerConfiguration({ key: 'window.titleBarStyle', defaultValue: 'custom', parse: value => value });
+	const snapshot: IConfigurationSnapshot = {
+		revision: 3,
+		document: { version: 1, source: '{ "window.titleBarStyle": "system" }' },
+	};
+	using service = new WorkbenchConfigurationService({ registry, api: new TestConfigurationApi(snapshot), initialSnapshot: snapshot });
+	assert.equal(service.getValue('window.titleBarStyle'), 'system');
+	assert.equal(service.getValue('window.menuStyle'), 'inherit');
 });
 
 class TestConfigurationApi implements IConfigurationApi {

@@ -3,6 +3,8 @@ import { localize } from '../../nls.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../platform/configuration/common/configurationRegistry.js";
 import { AccessibilityConfiguration } from "../../platform/accessibility/common/accessibility.js";
 import { Registry } from "../../platform/registry/common/platform.js";
+import { isMacintosh, isWeb } from "../../base/common/platform.js";
+import { MenuSettings, TitleBarSetting, parseMenuStyle, parseTitleBarStyle, type MenuStyleConfiguration, type TitleBarStyleConfiguration } from "../../platform/window/common/window.js";
 import { WorkbenchModeConfigurationKey, WorkbenchModeRegistry } from "./workbenchMode.js";
 import { defaultWorkbenchColorThemePreference, SystemColorThemePreference, WorkbenchThemesRegistry } from "./theme.js";
 
@@ -21,6 +23,41 @@ const defaultFileIconThemeId = 'vs-seti';
 /** Typed configuration keys owned by the workbench layer. */
 export const WorkbenchConfiguration = Object.freeze({
 	...AccessibilityConfiguration,
+	...(!isWeb ? {
+		menuStyle: configurationRegistry.registerConfiguration<MenuStyleConfiguration>({
+			key: MenuSettings.MenuStyle,
+			defaultValue: isMacintosh ? 'system' : 'inherit',
+			parse: parseMenuStyle,
+			setting: {
+				valueType: 'select',
+				get title() { return localize('window.menuStyle.title', 'Menu Style'); },
+				get description() { return localize('window.menuStyle.description', 'Choose the context menu style. On Windows and Linux, system menus require a system title bar and changes take effect after restart.'); },
+				get options() {
+					return [
+						{ value: 'custom', label: localize('window.menuStyle.custom', 'Custom') },
+						{ value: 'system', label: localize('window.menuStyle.system', 'System') },
+						{ value: 'inherit', label: localize('window.menuStyle.inherit', 'Follow title bar') },
+					] as const;
+				},
+			},
+		}),
+		titleBarStyle: configurationRegistry.registerConfiguration<TitleBarStyleConfiguration>({
+			key: TitleBarSetting.TitleBarStyle,
+			defaultValue: 'custom',
+			parse: parseTitleBarStyle,
+			setting: {
+				valueType: 'select',
+				get title() { return localize('window.titleBarStyle.title', 'Title Bar Style'); },
+				get description() { return localize('window.titleBarStyle.description', 'Choose the window frame style. Changes take effect after restart. The compact application menu remains in Ash’s command bar.'); },
+				get options() {
+					return [
+						{ value: 'custom', label: localize('window.titleBarStyle.custom', 'Custom') },
+						{ value: 'system', label: localize('window.titleBarStyle.system', 'System') },
+					] as const;
+				},
+			},
+		}),
+	} : {}),
 	mode: configurationRegistry.registerConfiguration({
 		key: WorkbenchModeConfigurationKey,
 		defaultValue: WorkbenchModeRegistry.defaultModeId,

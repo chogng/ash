@@ -18,8 +18,7 @@ test('desktop window commands update zoom and open the window switcher', async (
 	const profileRoot = await application.evaluate(() => process.env.ASH_HOME);
 	if (!profileRoot) throw new Error('Test profile is unavailable');
 	await expect.poll(async () => {
-		const document = JSON.parse(await readFile(join(profileRoot, 'configuration.json'), 'utf8')) as { source: string };
-		return (JSON.parse(document.source) as Record<string, unknown>)['window.zoomLevel'];
+		return (JSON.parse(await readFile(join(profileRoot, 'settings.json'), 'utf8')) as Record<string, unknown>)['window.zoomLevel'];
 	}).toBe(1);
 	await page.reload({ waitUntil: 'domcontentloaded' });
 	await expect(page.locator('.ash-workbench')).toBeVisible();
