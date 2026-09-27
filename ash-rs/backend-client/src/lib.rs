@@ -3,6 +3,7 @@
 #[path = "bigmodel/client.rs"]
 pub mod bigmodel;
 pub mod chatgpt;
+pub mod kimi;
 mod client;
 mod coding_plan;
 pub mod supergrok;

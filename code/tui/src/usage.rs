@@ -22,24 +22,26 @@ pub(crate) fn load<T: JsonRpcTransport>(client: &mut AppServerClient<T>) -> Resu
         .filter(|account| {
             matches!(
                 account.provider.as_str(),
-                "chatgpt-subscription" | "xai-subscription"
+                "chatgpt-subscription" | "kimi-subscription" | "xai-subscription"
             )
         })
         .collect();
     if accounts.is_empty() {
-        return Ok(message("Sign in to ChatGPT or xAI: /config > Providers."));
+        return Ok(message(
+            "Sign in to ChatGPT, Kimi or xAI: /config > Providers.",
+        ));
     }
     let mut groups = Vec::new();
+    let mut reconnect = None;
     for account in accounts {
-        let name = if account.provider == "xai-subscription" {
-            "xAI"
-        } else {
-            "ChatGPT"
+        let name = match account.provider.as_str() {
+            "xai-subscription" => "xAI",
+            "kimi-subscription" => "Kimi",
+            _ => "ChatGPT",
         };
         if account.status != AccountStatusDto::Ready {
-            return Ok(message(&format!(
-                "Reconnect {name} in /config > Providers."
-            )));
+            reconnect.get_or_insert(name);
+            continue;
         }
         let usage = client
             .read_account_rate_limits(AccountRateLimitsReadParams {
@@ -48,6 +50,12 @@ pub(crate) fn load<T: JsonRpcTransport>(client: &mut AppServerClient<T>) -> Resu
             })
             .map_err(query_error)?;
         groups.push(choices(usage));
+    }
+    if groups.is_empty() {
+        return Ok(message(&format!(
+            "Reconnect {} in /config > Providers.",
+            reconnect.expect("all subscription accounts are unavailable")
+        )));
     }
     let single = groups.len() == 1;
     let mut model =
@@ -87,8 +95,17 @@ fn choices(usage: AccountRateLimitsReadResult) -> ListSelectionGroup {
     if let Some(xai) = usage.xai {
         return xai_choices(usage.plan, xai);
     }
+    let provider = if usage.provider == "kimi-subscription" {
+        "Kimi"
+    } else {
+        "ChatGPT"
+    };
     let mut items = vec![detail(
-        "ChatGPT plan",
+        if provider == "Kimi" {
+            "Kimi plan"
+        } else {
+            "ChatGPT plan"
+        },
         usage.plan.unwrap_or_else(|| "Not reported".into()),
     )];
     if usage.limits.is_empty() {
@@ -114,25 +131,28 @@ fn choices(usage: AccountRateLimitsReadResult) -> ListSelectionGroup {
         }
         for window in [limit.primary, limit.secondary].into_iter().flatten() {
             items.push(window_item(&window));
-            let reset = i64::try_from(window.resets_at)
-                .ok()
+            let reset = window
+                .resets_at
+                .and_then(|seconds| i64::try_from(seconds).ok())
                 .and_then(|seconds| DateTime::from_timestamp(seconds, 0))
                 .map(|time| time.format("%Y-%m-%d %H:%M UTC").to_string())
-                .unwrap_or_else(|| "Unavailable".into());
+                .unwrap_or_else(|| "Not reported".into());
             items.push(detail("Resets", reset));
         }
     }
-    let credits = match usage.credits {
-        None => "Not reported".into(),
-        Some(credits) if credits.unlimited => "Unlimited".into(),
-        Some(credits) => match credits.balance {
-            Some(balance) => balance,
-            None if credits.has_credits => "Available; balance not reported".into(),
-            None => "No credits available".into(),
-        },
-    };
-    items.push(detail("Credits", credits));
-    ListSelectionGroup::new("ChatGPT", items)
+    if provider == "ChatGPT" {
+        let credits = match usage.credits {
+            None => "Not reported".into(),
+            Some(credits) if credits.unlimited => "Unlimited".into(),
+            Some(credits) => match credits.balance {
+                Some(balance) => balance,
+                None if credits.has_credits => "Available; balance not reported".into(),
+                None => "No credits available".into(),
+            },
+        };
+        items.push(detail("Credits", credits));
+    }
+    ListSelectionGroup::new(provider, items)
 }
 
 fn window_item(window: &AccountRateLimitWindowDto) -> ListSelectionItem {

@@ -37,6 +37,39 @@ impl OperationClient for ScriptedClient {
 }
 
 #[test]
+fn account_profile_is_bound_to_the_current_device_login() {
+    use ash_secrets::SecretStore;
+    let client = Arc::new(ScriptedClient::new([
+        r#"{"user_id":"user-a","nickname":"Ada","email":"ada@example.test","user_level_name":"Allegro"}"#,
+    ]));
+    let secrets = Arc::new(MemorySecretStore::default());
+    let key = SecretKey::new(CREDENTIAL_KEY).unwrap();
+    let credential = |device_id: &str| {
+        SecretValue::new(format!(r#"{{"access_token":"fixture","refresh_token":"refresh","token_type":"Bearer","scope":"coding","expires_at":4102444800,"device_id":"{device_id}","credential_revision":1}}"#).into_bytes())
+    };
+    secrets.store(&key, &credential("device-a")).unwrap();
+    let runtime = KimiOAuth::with_client(secrets.clone(), client);
+    runtime
+        .refresh_account("current", &CancellationSource::new().token())
+        .unwrap();
+    assert_eq!(
+        runtime.read_account().unwrap().unwrap().plan.as_deref(),
+        Some("Allegro")
+    );
+    secrets.store(&key, &credential("device-b")).unwrap();
+    let account = runtime.read_account().unwrap().unwrap();
+    assert_eq!(account.plan, None);
+    assert_eq!(account.email, None);
+    assert_eq!(
+        runtime
+            .read_subscription("other", &CancellationSource::new().token())
+            .unwrap_err()
+            .kind(),
+        KimiErrorKind::AccountChanged
+    );
+}
+
+#[test]
 fn device_flow_persists_tokens_and_projects_an_authenticated_api_target() {
     let client = Arc::new(ScriptedClient::new([
         r#"{"device_code":"device-secret","user_code":"ABCD-EFGH","verification_uri":"https://kimi.com/device","verification_uri_complete":"https://kimi.com/device?code=ABCD-EFGH","expires_in":60,"interval":0}"#,

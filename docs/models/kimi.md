@@ -10,4 +10,4 @@ Kimi Code 通过设备码登录。Ash 保存并更新这次登录的凭据，再
 
 ## 套餐与额度
 
-目前 Ash 无法从 Kimi 查询具体套餐等级，因此账户页不显示“计划”，账户快照中的 `plan` 为 `null`。`account/rateLimits/read` 也不支持 Kimi，`/usage` 不显示 Kimi 额度。登录成功只表示凭据可用，不代表 Ash 已核实用户购买的套餐。
+`account/read` 用当前 Ash 登录查询 `/coding/v1/me`，把上游返回的昵称、邮箱和 `user_level_name` 显示在账户页；缺失的套餐保持为空。`account/rateLimits/read` 查询 `/coding/v1/me` 和 `/coding/v1/usages`，`/usage` 显示服务端实际返回的五小时、每周和每月额度窗口及重置时间。某个窗口未返回时不补造数值；月度 Code 用量占月度总量的份额不显示成独立额度。每次运行 `/usage` 都重新查询，登录状态本身不代表套餐或额度已核实。

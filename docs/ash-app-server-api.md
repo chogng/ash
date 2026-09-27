@@ -1050,18 +1050,19 @@ account/login/completed
 account/updated
 ```
 
-`account/rateLimits/read` 按 `{ provider, accountId }` 查询指定账号。支持 `provider = "chatgpt-subscription"` 和 `"xai-subscription"`。本地组合复用对应供应商的登录与模型认证对象，通过 `backend-client::chatgpt` 或 `backend-client::supergrok` 读取后台数据，不接触客户端凭据。
+`account/rateLimits/read` 按 `{ provider, accountId }` 查询指定账号。支持 `provider = "chatgpt-subscription"`、`"kimi-subscription"` 和 `"xai-subscription"`。本地组合复用对应供应商的登录与模型认证对象，通过各自的 `backend-client` 模块读取后台数据，不接触客户端凭据。
 
 - xAI 的 `limits` 为空、`credits` 为 `null`；`xai` 保留独立的信用额度合约：`usedPercent` 为小数，`periodType/periodStart/periodEnd` 为上游周期，`allowed/message` 为访问状态。`prepaidCents/onDemandUsedCents/onDemandCapCents` 为整数 USD 分字符串，避免跨语言精度损失。未提供的数据为 `null`；ChatGPT 不序列化 `xai`。
 - `account/read` 查询已就绪 xAI 账号的 `/user?include=subscription` 与 Grok Build `/settings`，并通过登录服务更新邮箱、姓名、组织及 `plan`。xAI 的 `plan` 优先使用设置接口给出的完整 `subscription_tier_display`，其次使用 `subscription_tier` 或账户接口的 `subscriptionTier`；没有服务端等级时为 `null`。`account/rateLimits/read` 的 xAI `plan` 使用同一优先顺序。
+- Kimi 的 `account/read` 从 `/coding/v1/me` 更新昵称、邮箱与 `user_level_name`。额度查询从 `/coding/v1/usages` 读取实际返回的 `limit_5h`、`limit_7d` 和 `limit_month_total`；每个窗口成为单独的 `limits` 项。缺失的窗口不生成，`limit_month_code` 是月度总量中的 Code 用量份额，不作为独立额度。重置时间缺失时 `resetsAt = null`，客户端显示“未提供”。
 - 账号资料和额度查询均不持有全局读写锁。请求前后检查登录身份，取消或退出登录后的旧响应不进入账号状态。订阅接入不提供充值、购卡、充值提醒或付款入口。已有重置卡的查询和使用保留在 `backend-client::chatgpt`，尚未暴露为 RPC。
 
 - 结果为 `{ provider, accountId, plan, limits, credits, xai? }`；`plan` 未提供时为 `null`。ChatGPT 的 `limits` 包含 `codex` 主额度和上游提供的附加模型额度，各项含 `id`、`name`、`model`、`allowed`、`limitReached`、`primary`、`secondary`。
-- 每个窗口返回已使用百分比 `usedPercent`、精确时长 `windowSeconds` 和 Unix 秒时间戳 `resetsAt`。余额为 `{ hasCredits, unlimited, balance }`，金额保留上游十进制字符串；缺失窗口、状态和余额保持 `null`。
+- 每个窗口返回已使用百分比 `usedPercent`、精确时长 `windowSeconds` 和可为空的 Unix 秒时间戳 `resetsAt`。余额为 `{ hasCredits, unlimited, balance }`，金额保留上游十进制字符串；缺失窗口、状态和余额保持 `null`。
 - 此接口只查询，不消费重置额度、不修改套餐、不计算本地参考成本。组织消费上限与重置额度明细不在当前结果中。
 - 每次查询读取当前认证，HTTP 401 只允许同一用户与工作区恢复一次；Codex 管理凭据时不会刷新或写入其凭据。查询前后及重试前检查这两个身份；上游提供用户 ID 时也校验它，避免将同一工作区内不同用户的结果混用。
 - 不持有全局请求锁，不阻塞其他领域写入；连接关闭取消额度 HTTP 等待和后续重试。认证刷新期间的取消在刷新提交后生效，以保留上游已轮换的凭据。当前没有单次请求的主动取消 method，也不轮询或缓存额度。
-- 空账号返回 `InvalidParams`；未安装或未登录返回 `AccountUnavailable`；不支持的 provider 返回 `AccountRateLimitsUnavailable`；账号变化返回 `AccountChanged`；明确的认证拒绝返回 `AccountAuthenticationRequired`；其他上游失败返回 `AccountOperationFailed`。错误不包含上游正文、地址或凭据。
+- 空账号返回 `InvalidParams`；未安装账户能力返回 `AccountUnavailable`，Kimi 未登录或认证被拒绝返回 `AccountAuthenticationRequired`；不支持的 provider 返回 `AccountRateLimitsUnavailable`；账号变化返回 `AccountChanged`；其他上游失败返回 `AccountOperationFailed`。错误不包含上游正文、地址或凭据。
 - 协议、类型映射和运行时 decoder 由 Rust registry 统一生成；界面展示仍由产品客户端实现。
 
 `account/read` 丢弃被同一供应商后续登录、登出、读取或账户更新取代的旧读取结果，不将旧状态发布为新版本。`account/login/start` 在已有凭据由 Codex 管理且需要重新登录时返回 `AccountExternalLoginRequired`（code `-32030`，`data.kind` 同名）。客户端应提示用户先在 Codex 完成登录，再重新连接；错误不转发供应商原始消息。

@@ -4,9 +4,16 @@ expression: screen
 ---
   .                                                        [— / —] [Dashboard]
 
+
         ┌── Usage ─────────────────────────────────────────────────[✗]─┐
         │                                                              │
-        │  Sign in to ChatGPT, Kimi or xAI: /config > Providers.       │
+        │> Kimi plan  ·  Allegro                                       │
+        │  5-hour limit                                                │
+        │  5h window  ·  87% left (13% used)                           │
+        │  Resets  ·  2026-09-28 00:00 UTC                             │
+        │  Monthly limit                                               │
+        │  Window  ·  99% left (1% used)                               │
+        │  Resets  ·  Not reported                                     │
         │                                                              │
         │                                                              │
         │                                                              │
@@ -17,6 +24,7 @@ expression: screen
         │                                                              │
         │                                                              │
         │                                                              │
-  ╭─────│                                                              │─────╮
-  │ > Bu│  Esc to close                                                │     │
-  ╰─────└──────────────────────────────────────────────────────────────┘del ─╯
+        │                                                              │
+  ╭─────│  Esc to close  ·  Run /usage to refresh                      │─────╮
+  │ > Bu└──────────────────────────────────────────────────────────────┘     │
+  ╰──────────────────────────────────────────────────────── Automatic model ─╯
