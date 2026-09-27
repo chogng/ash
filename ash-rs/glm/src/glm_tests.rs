@@ -220,7 +220,7 @@ fn zcode_coding_plan_credentials_are_read_live_without_copying_them() {
 }
 
 #[test]
-fn zcode_incomplete_account_does_not_start_an_ash_login_silently() {
+fn zcode_account_without_coding_plan_key_allows_ash_login() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("credentials.json");
     std::fs::write(
@@ -231,12 +231,115 @@ fn zcode_incomplete_account_does_not_start_an_ash_login_silently() {
     let auth = GlmOAuth::with_client_and_zcode(
         GlmProvider::Zai,
         Arc::new(MemorySecretStore::default()),
+        Arc::new(ScriptedClient::new(vec![init_response()])),
+        Some(zcode::ZCodeCredentials::at(path)),
+    );
+    assert!(auth.read_account().unwrap().is_none());
+    assert!(auth.api_target().is_err());
+    let service = LoginService::deferred(auth as Arc<dyn InteractiveLoginDriver>);
+    let started = service.begin(LoginMethod::ZaiBrowser).unwrap();
+    assert!(matches!(&started, BeginLogin::Browser { .. }));
+}
+
+#[test]
+fn zcode_bigmodel_profile_without_coding_plan_key_is_disconnected() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("credentials.json");
+    std::fs::write(
+        &path,
+        serde_json::json!({
+            "oauth:bigmodel:user_info": encrypted(r#"{"id":"person-1","rawProfile":{"email":"person@example.test"}}"#),
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let auth = GlmOAuth::with_client_and_zcode(
+        GlmProvider::BigModel,
+        Arc::new(MemorySecretStore::default()),
         Arc::new(ScriptedClient::new(Vec::new())),
         Some(zcode::ZCodeCredentials::at(path)),
     );
-    assert!(auth.read_account().is_err());
+    assert!(auth.read_account().unwrap().is_none());
+}
+
+#[test]
+fn zcode_account_with_empty_coding_plan_key_allows_ash_login() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("credentials.json");
+    let provider = "account:bigmodel-individual-coding-plan";
+    std::fs::write(
+        &path,
+        serde_json::json!({
+            format!("account-provider:{provider}:identity"): encrypted("person-1"),
+            format!("account-provider:coding-plan:{provider}:account:person-1:api-key"): encrypted(" "),
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let auth = GlmOAuth::with_client_and_zcode(
+        GlmProvider::BigModel,
+        Arc::new(MemorySecretStore::default()),
+        Arc::new(ScriptedClient::new(vec![init_response()])),
+        Some(zcode::ZCodeCredentials::at(path)),
+    );
+    assert!(auth.read_account().unwrap().is_none());
     let service = LoginService::deferred(auth as Arc<dyn InteractiveLoginDriver>);
-    assert!(service.begin(LoginMethod::ZaiBrowser).is_err());
+    assert!(matches!(
+        service.begin(LoginMethod::BigModelBrowser).unwrap(),
+        BeginLogin::Browser { .. }
+    ));
+}
+
+#[test]
+fn zcode_reuse_precedes_ash_login_until_zcode_is_unusable() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("credentials.json");
+    let provider = "account:bigmodel-individual-coding-plan";
+    let write_zcode = |key: &str| {
+        std::fs::write(&path, serde_json::json!({
+            format!("account-provider:{provider}:identity"): encrypted("zcode-person"),
+            format!("account-provider:coding-plan:{provider}:account:zcode-person:api-key"): key,
+        }).to_string()).unwrap();
+    };
+    write_zcode("zcode-key.secret");
+    let secrets = Arc::new(MemorySecretStore::default());
+    secrets
+        .store(
+            &GlmProvider::BigModel.credential_key(),
+            &SecretValue::new(
+                serde_json::to_vec(&Credential {
+                    account_id: "ash-person".into(),
+                    email: None,
+                    display_name: None,
+                    model_key: "ash-key.secret".into(),
+                    revision: 1,
+                })
+                .unwrap(),
+            ),
+        )
+        .unwrap();
+    let auth = GlmOAuth::with_client_and_zcode(
+        GlmProvider::BigModel,
+        secrets,
+        Arc::new(ScriptedClient::new(Vec::new())),
+        Some(zcode::ZCodeCredentials::at(path.clone())),
+    );
+    let external = auth.read_account().unwrap().unwrap();
+    assert_eq!(external.account.account_id, "zcode-person");
+    assert_eq!(
+        auth.api_target().unwrap().target.headers[0].value(),
+        "Bearer zcode-key.secret"
+    );
+
+    write_zcode("enc:v1:invalid");
+    let account = auth.read_account().unwrap().unwrap();
+    assert_eq!(account.account.account_id, "ash-person");
+    let target = auth.api_target().unwrap();
+    assert_eq!(target.account_id, "ash-person");
+    assert_eq!(target.target.headers[0].value(), "Bearer ash-key.secret");
+    auth.logout(&account.account).unwrap();
+    assert!(auth.read_account().unwrap().is_none());
+    assert!(path.exists());
 }
 
 #[test]

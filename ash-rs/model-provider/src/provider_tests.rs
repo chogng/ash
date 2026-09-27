@@ -69,6 +69,49 @@ fn glm_connection_priority_follows_ready_credentials() {
 }
 
 #[test]
+fn unreadable_glm_login_does_not_block_other_connections() {
+    let secrets = Arc::new(MemorySecretStore::default());
+    let client = Arc::new(AshClient::new(Arc::new(UreqHttpClient::new().unwrap())));
+    let bigmodel = GlmOAuth::with_client(GlmProvider::BigModel, secrets.clone(), client.clone());
+    let runtime = ModelProviderRuntime::with_client_and_secrets(
+        ProviderConfigRegistry::builtin(),
+        client.clone(),
+        secrets.clone(),
+    )
+    .with_glm_oauth(
+        bigmodel.clone(),
+        GlmOAuth::with_client(GlmProvider::Zai, secrets.clone(), client),
+    );
+    secrets
+        .store(
+            &SecretKey::new("provider/bigmodel/current/oauth").unwrap(),
+            &SecretValue::new(b"invalid credential".to_vec()),
+        )
+        .unwrap();
+    assert!(bigmodel.api_target().is_err());
+    assert!(
+        !runtime
+            .preferred_connections(&BTreeMap::new())
+            .unwrap()
+            .contains_key(&ProviderId::new("glm").unwrap())
+    );
+
+    ProviderCredentialService::new(ProviderConfigRegistry::builtin(), secrets)
+        .set_api_key(
+            &ash_protocol::ModelConnectionId::new("bigmodel").unwrap(),
+            b"api-key".to_vec(),
+        )
+        .unwrap();
+    let selected = runtime.preferred_connections(&BTreeMap::new()).unwrap();
+    assert_eq!(
+        selected[&ProviderId::new("glm").unwrap()]
+            .connection
+            .as_str(),
+        "bigmodel"
+    );
+}
+
+#[test]
 fn glm_request_rejects_an_account_switch_between_identity_and_target_reads() {
     let secrets = Arc::new(MemorySecretStore::default());
     let key = SecretKey::new("provider/zai/current/oauth").unwrap();

@@ -184,7 +184,7 @@ impl GlmOAuth {
 
     fn load(&self) -> Result<Option<Credential>, LoginError> {
         if let Some(zcode) = &self.zcode
-            && let Some(credential) = zcode.read(self.provider)?
+            && let Some(credential) = zcode.reusable_credential(self.provider)
         {
             return Ok(Some(credential));
         }
@@ -406,7 +406,7 @@ impl InteractiveLoginDriver for GlmOAuth {
             ));
         }
         if let Some(source) = &self.zcode
-            && let Some(credential) = source.read(self.provider)?
+            && let Some(credential) = source.reusable_credential(self.provider)
         {
             return Ok(BeginLogin::Connected {
                 login_id: request.login_id,
@@ -470,7 +470,7 @@ impl InteractiveLoginDriver for GlmOAuth {
         }
         if let Some(source) = &self.zcode
             && source
-                .read(self.provider)?
+                .reusable_credential(self.provider)
                 .is_some_and(|external| external.account_id == account.account_id)
         {
             return Err(LoginError::new(

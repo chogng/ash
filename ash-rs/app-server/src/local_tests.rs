@@ -224,6 +224,61 @@ fn local_composition_reads_empty_subscription_accounts_before_sign_in() {
 }
 
 #[test]
+fn local_composition_starts_with_an_unreadable_glm_subscription() {
+    use ash_secrets::FileSecretStore;
+    use ash_secrets::SecretKey;
+    use ash_secrets::SecretStore;
+    use ash_secrets::SecretValue;
+
+    let profile = tempfile::tempdir().unwrap();
+    FileSecretStore::open(profile.path().join("secrets"))
+        .unwrap()
+        .store(
+            &SecretKey::new("provider/bigmodel/current/oauth").unwrap(),
+            &SecretValue::new(b"invalid credential".to_vec()),
+        )
+        .unwrap();
+    let server = open_local_app_server(
+        LocalAppServerOptions::new(profile.path())
+            .with_codex_home(profile.path().join("codex"))
+            .without_built_in_skills()
+            .with_session_state_mode(SessionStateMode::Ephemeral),
+    )
+    .unwrap();
+    let mut connection = server.connection();
+    let initialized = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {"clientInfo":{"name":"test","version":"1"},"capabilities":{}}
+        }),
+    );
+    assert!(initialized.get("result").is_some());
+    let models = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"model/list","params":{}}),
+    );
+    assert!(models.get("result").is_some());
+    let providers = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"provider/list","params":{}}),
+    );
+    let bigmodel_plan = providers["result"]["providers"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|provider| provider["connection"] == "bigmodel-coding-plan")
+        .unwrap();
+    assert_eq!(bigmodel_plan["ready"], false);
+    assert_eq!(bigmodel_plan["active"], false);
+}
+
+#[test]
 fn local_composition_reads_existing_grok_login_without_importing_it() {
     let profile = tempfile::tempdir().unwrap();
     let grok_auth = profile.path().join("grok-auth.json");

@@ -762,20 +762,16 @@ impl ModelProviderRuntime {
                         .map_err(|error| ModelProviderError::Credential(error.to_string()))?,
                     None => false,
                 },
-                "bigmodel-coding-plan" => match &runtime.bigmodel_oauth {
-                    Some(auth) => auth
-                        .account_id()
-                        .map_err(|error| ModelProviderError::Credential(error.to_string()))?
-                        .is_some(),
-                    None => false,
-                },
-                "zai-coding-plan" => match &runtime.zai_oauth {
-                    Some(auth) => auth
-                        .account_id()
-                        .map_err(|error| ModelProviderError::Credential(error.to_string()))?
-                        .is_some(),
-                    None => false,
-                },
+                // One broken account is an unavailable connection, not a failure of the
+                // directory runtime. Binding that connection directly still reports its error.
+                "bigmodel-coding-plan" => runtime
+                    .bigmodel_oauth
+                    .as_ref()
+                    .is_some_and(|auth| auth.account_id().is_ok_and(|id| id.is_some())),
+                "zai-coding-plan" => runtime
+                    .zai_oauth
+                    .as_ref()
+                    .is_some_and(|auth| auth.account_id().is_ok_and(|id| id.is_some())),
                 _ => {
                     connection.transport.api_key_policy
                         != ash_model_provider_config::ApiKeyPolicy::Required

@@ -41,7 +41,13 @@ impl ZCodeCredentials {
         }
     }
 
-    pub(super) fn read(&self, provider: GlmProvider) -> Result<Option<Credential>, LoginError> {
+    /// ZCode is an optional credential source. Only a complete, readable subscription
+    /// takes precedence over Ash's own login; an unusable ZCode record stays untouched.
+    pub(super) fn reusable_credential(&self, provider: GlmProvider) -> Option<Credential> {
+        self.read_candidate(provider).ok().flatten()
+    }
+
+    fn read_candidate(&self, provider: GlmProvider) -> Result<Option<Credential>, LoginError> {
         let raw = match std::fs::read(&self.path) {
             Ok(raw) => raw,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -97,7 +103,11 @@ impl ZCodeCredentials {
         let key_name = format!(
             "account-provider:coding-plan:{provider_id}:account:{encoded_identity}:api-key"
         );
-        let model_key = entries.get(&key_name).ok_or_else(unavailable)?;
+        // ZCode may retain OAuth account metadata without a Coding Plan key. That account
+        // is not a usable subscription and must not prevent Ash from starting its own login.
+        let Some(model_key) = entries.get(&key_name) else {
+            return Ok(None);
+        };
         let model_key = decrypt(model_key, self.secret_override.as_deref())?
             .trim()
             .to_owned();
