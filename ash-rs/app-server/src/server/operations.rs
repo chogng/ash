@@ -299,16 +299,16 @@ impl AppServer {
     }
 
     pub(super) fn model_list(&self, params: &Value) -> Result<Value, RpcError> {
-        let params: ModelListParams = decode(params)?;
+        let _: ModelListParams = decode(params)?;
         result(&ModelListResult {
-            models: self.model_catalog.list(params.view).map_err(core_error)?,
+            models: self.model_catalog.list().map_err(core_error)?,
         })
     }
 
     pub(super) fn provider_models_list(&self, params: &Value) -> Result<Value, RpcError> {
         let params: ash_app_server_protocol::protocol::provider::ProviderModelsListParams =
             decode(params)?;
-        let provider = ash_protocol::ProviderId::new(params.provider)
+        let provider = ash_protocol::ModelConnectionId::new(params.connection)
             .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
         let response = match self.model_catalog.refresh(&provider) {
             Ok(models) if models.is_empty() => ProviderModelsListResult::Empty,
@@ -493,21 +493,24 @@ impl AppServer {
                     config
                         .validate()
                         .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
-                    let listed = self
+                    let saved = self
+                        .config
+                        .as_ref()
+                        .map(|store| store.read_snapshot())
+                        .transpose()
+                        .map_err(|_| RpcError::new(-32603, AppServerErrorName::InternalError))?;
+                    if !self
                         .model_catalog
-                        .list(ash_app_server_protocol::protocol::model::ModelListView::BuiltIn)
+                        .list()
                         .map_err(core_error)?
                         .iter()
-                        .any(|entry| entry.model == config.model);
-                    if !listed
-                        && !self
-                            .model_catalog
-                            .list(
-                                ash_app_server_protocol::protocol::model::ModelListView::Discovered,
-                            )
-                            .map_err(core_error)?
-                            .iter()
-                            .any(|entry| entry.model == config.model)
+                        .any(|entry| entry.model == config.model)
+                        && !saved.is_some_and(|snapshot| {
+                            snapshot
+                                .values
+                                .providers
+                                .contains_key(&config.model.provider)
+                        })
                     {
                         return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
                     }

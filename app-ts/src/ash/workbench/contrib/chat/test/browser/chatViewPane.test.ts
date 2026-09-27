@@ -4,7 +4,7 @@ import { JSDOM } from "jsdom";
 import type { ModelRef, ServerNotification, Session as SessionDto, SessionCreateParams, Thread, ThreadTranscriptSnapshot } from "../../../../../platform/app-server/common/generated/index.js";
 import type { SessionMutationParams, SessionOperationInput } from "../../../../../platform/sessions/common/sessionApi.js";
 import type { IRendererHost } from "../../../../../platform/renderer/common/rendererHost.js";
-import type { IAction } from "../../../../../base/common/actions.js";
+import { SubmenuAction, type IAction } from "../../../../../base/common/actions.js";
 import { Emitter } from "../../../../../base/common/event.js";
 import { TAB_CLOSE_ACTION_ID } from "../../../../../base/browser/ui/tablist/tabList.js";
 import { Lxicon } from "../../../../../base/common/lxicons.js";
@@ -232,8 +232,6 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	const subscriptionModel = {
 		model: { provider: "openai", model: "gpt-5.6-sol" },
 		displayName: "GPT-5.6 Sol",
-		access: "subscription" as const,
-		outputTransport: "nativeStreaming" as const,
 	};
 	const fake = fakeApi({
 		sessions: [
@@ -443,9 +441,10 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	}
 	const firstChatPane = chatPanes[0]!;
 	firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.model'] button")?.click();
-	assert.deepEqual(shownContextMenuActions.map(action => action.label), [
-		"GPT-5.6 Sol",
-	]);
+	assert.deepEqual(shownContextMenuActions.map(action => action.label), ["openai"]);
+    const modelGroup = shownContextMenuActions[0];
+    assert.ok(modelGroup instanceof SubmenuAction);
+    assert.deepEqual(modelGroup.actions.map(action => action.label), ["GPT-5.6 Sol"]);
 	shownContextMenuActions = [];
 	firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.click();
 	assert.deepEqual(shownContextMenuActions, []);
@@ -1521,8 +1520,6 @@ interface FakeOptions {
 	readonly models?: readonly {
 		readonly model: ModelRef;
 		readonly displayName: string;
-		readonly access: "apiKey" | "subscription" | "local" | "enterprise" | "unknown";
-		readonly outputTransport: "nativeStreaming" | "unary";
 	}[];
 	readonly configuredProviders?: readonly string[];
 	readonly providers?: readonly ModelProviderCredentialStatus[];
@@ -1614,20 +1611,14 @@ test("Chat service caches the static catalog and filters picker entries by user 
 	const first = {
 		model: { provider: "openai", model: "gpt-5.6-sol" },
 		displayName: "GPT-5.6 Sol",
-		access: "subscription" as const,
-		outputTransport: "nativeStreaming" as const,
 	};
 	const second = {
 		model: { provider: "anthropic", model: "claude-opus-5" },
 		displayName: "Claude Opus 5",
-		access: "apiKey" as const,
-		outputTransport: "nativeStreaming" as const,
 	};
 	const third = {
 		model: { provider: "openai", model: "gpt-5.6" },
 		displayName: "GPT-5.6",
-		access: "apiKey" as const,
-		outputTransport: "nativeStreaming" as const,
 	};
 	const fake = fakeApi({ models: [first, second, third] });
 	using configuration = new WorkbenchConfigurationService();
@@ -1649,8 +1640,6 @@ test("Chat picker retains the selected model when it is hidden", async () => {
 	const entry = {
 		model: { provider: "openai", model: "gpt-5.6-sol" },
 		displayName: "GPT-5.6 Sol",
-		access: "subscription" as const,
-		outputTransport: "nativeStreaming" as const,
 	};
 	const activeSession = { ...session("session-1", "thread-1"), model: entry.model };
 	const fake = fakeApi({ sessions: [activeSession], models: [entry] });
@@ -1757,7 +1746,7 @@ function fakeApi(options: FakeOptions = {}): {
 	readonly turnCompactRequests: readonly SessionOperationInput<"compactContext">[];
 	readonly turnSteerRequests: readonly SessionOperationInput<"steerTurn">[];
 	readonly modelListRequests: readonly undefined[];
-	readonly providerKeyRequests: readonly { readonly provider: string; readonly apiKey: string }[];
+	readonly providerKeyRequests: readonly { readonly connection: string; readonly apiKey: string }[];
 	readonly modelRequests: readonly { readonly commandId: string; readonly model: ModelRef }[];
 	readonly savedAdvisorDefaults: readonly (AdvisorConfig | null)[];
 	readonly emit: (notification: ServerNotification) => void;
@@ -1775,7 +1764,7 @@ function fakeApi(options: FakeOptions = {}): {
 	const turnCompactRequests: SessionOperationInput<"compactContext">[] = [];
 	const turnSteerRequests: SessionOperationInput<"steerTurn">[] = [];
 	const modelListRequests: undefined[] = [];
-	const providerKeyRequests: { provider: string; apiKey: string }[] = [];
+	const providerKeyRequests: { connection: string; apiKey: string }[] = [];
 	let providers = options.providers?.map(provider => ({ ...provider })) ?? [];
 	const modelRequests: { readonly commandId: string; readonly model: ModelRef }[] = [];
 	const savedAdvisorDefaults: (AdvisorConfig | null)[] = [];
@@ -1848,15 +1837,15 @@ function fakeApi(options: FakeOptions = {}): {
 			},
 		},
 		model: {
-			listBuiltIn: async () => {
+			listModels: async () => {
 				modelListRequests.push(undefined);
 				return { models: [...(options.models ?? [])] };
 			},
 			listProviders: async () => ({ providers: providers.map(provider => ({ ...provider })) }),
-			setProviderApiKey: async ({ provider, apiKey }: { provider: string; apiKey: string }) => {
-				providerKeyRequests.push({ provider, apiKey });
-				providers = providers.map(entry => entry.provider === provider ? { ...entry, apiKeyConfigured: true } : entry);
-				return { provider, apiKeyConfigured: true };
+			setProviderApiKey: async ({ connection, apiKey }: { connection: string; apiKey: string }) => {
+				providerKeyRequests.push({ connection, apiKey });
+				providers = providers.map(entry => entry.connection === connection ? { ...entry, apiKeyConfigured: true, active: true, configured: true, ready: true } : entry);
+				return { connection, apiKeyConfigured: true };
 			},
 			readAdvisorDefault: async () => advisorDefault,
 			readConfiguredProviderIds: async () => options.configuredProviders ?? [],
@@ -2125,7 +2114,7 @@ test("Advisor without a configured model keeps an untitled chat", async () => {
 test("Advisor command selects a model and the off switch preserves its settings", async () => {
 	const fake = fakeApi({
 		configuredProviders: ["openai"],
-		models: [{ model: { provider: "openai", model: "reviewer" }, displayName: "Reviewer", access: "apiKey", outputTransport: "unary" }],
+		models: [{ model: { provider: "openai", model: "reviewer" }, displayName: "Reviewer", }],
 	});
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
@@ -2181,8 +2170,8 @@ test("Chat Settings toggles Advisor while keeping its selected model", async () 
 test('Chat Settings saves a masked provider key through the model API and refreshes the catalog', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const fake = fakeApi({ providers: [
-		{ provider: 'ollama', displayName: 'Ollama', apiKeyPolicy: 'unsupported', apiKeyConfigured: false },
-		{ provider: 'openai', displayName: 'OpenAI', apiKeyPolicy: 'required', apiKeyConfigured: false },
+		{ provider: 'ollama', connection: 'ollama', access: 'apiKey', active: false, configured: false, ready: true, displayName: 'Ollama', apiKeyPolicy: 'unsupported', apiKeyConfigured: false },
+		{ provider: 'openai', connection: 'openai', access: 'apiKey', active: false, configured: false, ready: false, displayName: 'OpenAI', apiKeyPolicy: 'required', apiKeyConfigured: false },
 	] });
 	using chat = createChatService(fake.api);
 	using contextKeys = new ContextKeyService();
@@ -2208,10 +2197,10 @@ test('Chat Settings saves a masked provider key through the model API and refres
 		input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter' }));
 	};
 	await commands.executeCommand(OPEN_CHAT_SETTINGS_COMMAND_ID);
-	choose('Manage Model API Keys');
-	await waitFor(() => dom.window.document.querySelector('[role="dialog"][aria-label="Model provider API keys"]') !== null);
+	choose('Manage Model Connections');
+	await waitFor(() => dom.window.document.querySelector('[role="dialog"][aria-label="Model connections"]') !== null);
 	const labels = [...dom.window.document.querySelectorAll('.ash-quick-pick-row-label')].map(element => element.textContent);
-	assert.deepEqual(labels, ['OpenAI']);
+	assert.deepEqual(labels, ['Save key for OpenAI']);
 	assert.match(dom.window.document.querySelector('.ash-quick-pick-row-description')?.textContent ?? '', /API key required/);
 	choose('OpenAI');
 	await waitFor(() => dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick-input input[type="password"]') !== null);
@@ -2222,28 +2211,28 @@ test('Chat Settings saves a masked provider key through the model API and refres
 	assert.equal(dom.window.document.body.textContent?.includes('test-secret'), false);
 	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter' }));
 	await waitFor(() => messages.length === 1);
-	assert.deepEqual(fake.providerKeyRequests, [{ provider: 'openai', apiKey: 'test-secret' }]);
+	assert.deepEqual(fake.providerKeyRequests, [{ connection: 'openai', apiKey: 'test-secret' }]);
 	assert.equal(fake.modelListRequests.length, 2);
 	assert.equal(messages[0]?.message, 'API key saved for OpenAI');
 	assert.equal(input.value, '');
 
 	await commands.executeCommand(OPEN_CHAT_SETTINGS_COMMAND_ID);
-	choose('Manage Model API Keys');
-	await waitFor(() => dom.window.document.querySelector('[role="dialog"][aria-label="Model provider API keys"]') !== null);
-	assert.equal(dom.window.document.querySelector('.ash-quick-pick-row-description')?.textContent, 'API key saved');
+	choose('Manage Model Connections');
+	await waitFor(() => dom.window.document.querySelector('[role="dialog"][aria-label="Model connections"]') !== null);
+	assert.equal(dom.window.document.querySelector('.ash-quick-pick-row-description')?.textContent, 'Current connection · Ready');
 	dom.window.close();
 });
 
-test("Advisor model choices include only configured providers", async () => {
+test("Advisor model choices include the fixed catalog before connection setup", async () => {
 	const fake = fakeApi({
 		configuredProviders: ["openai"],
 		models: [
-			{ model: { provider: "openai", model: "reviewer" }, displayName: "Reviewer", access: "apiKey", outputTransport: "unary" },
-			{ model: { provider: "google", model: "flash" }, displayName: "Flash", access: "apiKey", outputTransport: "unary" },
+			{ model: { provider: "openai", model: "reviewer" }, displayName: "Reviewer", },
+			{ model: { provider: "google", model: "flash" }, displayName: "Flash", },
 		],
 	});
 	using chat = createChatService(fake.api);
-	assert.deepEqual((await chat.listAdvisorModels()).map(entry => entry.displayName), ["Reviewer"]);
+	assert.deepEqual((await chat.listAdvisorModels()).map(entry => entry.displayName), ["Reviewer", "Flash"]);
 });
 
 test("Advisor transcript groups the call and renders advice as a disclosure", () => {

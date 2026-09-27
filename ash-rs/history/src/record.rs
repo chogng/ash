@@ -7,7 +7,7 @@ use serde::Serialize;
 
 /// Schema version written for newly persisted Thread history records.
 /// Version 19 adds Advisor selection, frozen Turn configuration and tool-linked model accounting.
-pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 19;
+pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 20;
 
 /// Resolves the identity at the history-version boundary. Legacy branches each receive one
 /// deterministic identity; current records must carry their explicitly allocated identity.

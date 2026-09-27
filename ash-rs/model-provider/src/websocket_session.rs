@@ -91,9 +91,8 @@ impl ModelProviderRuntime {
         cancellation: &CancellationToken,
     ) -> Result<ResponsesModelSession, ModelProviderError> {
         super::check_cancellation(cancellation)?;
-        let config = self.effective_config(config)?;
-        let runtime = self.with_configs([&config])?;
-        let normalized = runtime.configs.normalize_for(&config, &model.provider)?;
+        let runtime = self.with_configs([config])?;
+        let normalized = runtime.configs.normalize_for(config, &model.provider)?;
         let definition = runtime
             .configs
             .get(&normalized.provider)
@@ -158,12 +157,7 @@ impl ModelProviderRuntime {
                 "provider has no declared Realtime GA protocol".into(),
             ));
         }
-        if ash_model_provider_config::find_static_model_for_mode(
-            model,
-            ash_model_provider_config::ProviderAccessMode::Subscription,
-        )
-        .is_some()
-        {
+        if config.access_mode() == ash_model_provider_config::ProviderAccessMode::Subscription {
             return Err(ModelProviderError::Unavailable(
                 "subscription text models do not authorize the Realtime service".into(),
             ));

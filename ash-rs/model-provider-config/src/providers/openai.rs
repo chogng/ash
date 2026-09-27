@@ -7,7 +7,7 @@ use crate::ProviderDefinition;
 use crate::WebSocketApiProfile;
 
 pub(super) fn definition() -> ProviderDefinition {
-    default_provider(
+    let mut definition = default_provider(
         "openai",
         "OpenAI",
         ProviderAdapter::OpenAi,
@@ -35,7 +35,11 @@ pub(super) fn definition() -> ProviderDefinition {
     })
     .with_input_token_count(InputTokenCountDefinition::invocation_base(
         InputTokenCountProfile::OpenAiResponses,
-    ))
+    ));
+    definition.defaults.approval_review_model = crate::ApprovalReviewModelDefault::Model {
+        model: crate::ModelId::new("gpt-5.6").expect("built-in model ID"),
+    };
+    definition
 }
 
 /// ChatGPT subscription models use the Codex backend with OAuth credentials.

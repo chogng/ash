@@ -372,9 +372,16 @@ impl AppServer {
             .apply(ConfigCommandRequest {
                 command_id: params.command_id,
                 expected_revision: ConfigRevision::new(params.expected_revision),
-                command: UserConfigCommand::ConfigureProvider {
-                    provider: provider.provider.clone(),
-                    config: provider,
+                command: if provider.custom.is_some() {
+                    UserConfigCommand::ConfigureConnection {
+                        connection: provider.connection.clone(),
+                        config: provider,
+                    }
+                } else {
+                    UserConfigCommand::SaveConnection {
+                        connection: provider.connection.clone(),
+                        config: provider,
+                    }
                 },
             })
             .map_err(config_operation_error)?;
@@ -422,26 +429,12 @@ impl AppServer {
 
     pub(super) fn provider_remove(&self, params: &Value) -> Result<Value, RpcError> {
         let params: ProviderRemoveParams = decode(params)?;
-        let provider = ProviderId::new(params.provider)
+        let provider = ash_protocol::ModelConnectionId::new(params.connection)
             .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
         let store = self
             .config
             .clone()
             .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
-        let snapshot = store
-            .read_snapshot()
-            .map_err(|_| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
-        if snapshot
-            .values
-            .providers
-            .get(&provider)
-            .is_some_and(|config| config.custom.is_none())
-            || ash_model_provider_config::ProviderConfigRegistry::builtin()
-                .get(&provider)
-                .is_some()
-        {
-            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
-        }
         let credentials = self.provider_credentials.as_ref().ok_or_else(|| {
             RpcError::new(-32093, AppServerErrorName::ProviderCredentialsUnavailable)
         })?;
@@ -449,8 +442,8 @@ impl AppServer {
             .apply(ConfigCommandRequest {
                 command_id: params.command_id,
                 expected_revision: ConfigRevision::new(params.expected_revision),
-                command: UserConfigCommand::RemoveProvider {
-                    provider: provider.clone(),
+                command: UserConfigCommand::RemoveConnection {
+                    connection: provider.clone(),
                 },
             })
             .map_err(config_operation_error)?;
@@ -651,6 +644,18 @@ fn config_read_result(
         tool_mode: snapshot.values.tool_mode,
         grep_backend: grep_backend_dto(snapshot.values.grep_backend),
         gui: FrontendConfigDto(snapshot.values.gui),
+        connections: snapshot
+            .values
+            .connections
+            .into_iter()
+            .map(|(id, config)| (id.to_string(), provider_config_dto(config)))
+            .collect(),
+        active_connections: snapshot
+            .values
+            .active_connections
+            .into_iter()
+            .map(|(provider, connection)| (provider.to_string(), connection.to_string()))
+            .collect(),
         providers: snapshot
             .values
             .providers
@@ -1079,6 +1084,7 @@ fn approval_review_model_update_from_dto(
 
 fn provider_config_dto(config: ModelProviderConfig) -> ProviderConfigDto {
     ProviderConfigDto {
+        connection: config.connection.to_string(),
         provider: config.provider.to_string(),
         custom: config.custom.map(|custom| ash_app_server_protocol::protocol::config::CustomProviderConfigDto {
             context_window: custom.context_window,
@@ -1134,7 +1140,8 @@ pub(super) fn provider_config_from_dto(
         .transpose()
         .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
     Ok(ModelProviderConfig {
-        access_mode: ash_model_provider_config::ProviderAccessMode::Api,
+        connection: ash_protocol::ModelConnectionId::new(config.connection)
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?,
         custom: config.custom.map(|custom| ash_model_provider_config::CustomProviderConfig {
             context_window: custom.context_window,
         order: custom.order,

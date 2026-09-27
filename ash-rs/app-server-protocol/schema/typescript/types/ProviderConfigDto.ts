@@ -2,4 +2,4 @@
 import type { CustomProviderConfigDto } from './CustomProviderConfigDto.js';
 import type { ModelContextConfigDto } from './ModelContextConfigDto.js';
 
-export type ProviderConfigDto = { provider: string, custom?: CustomProviderConfigDto | null, baseUrl?: string | null, maxOutputTokens?: number | null, modelContext?: { [key in string]: ModelContextConfigDto }, };
+export type ProviderConfigDto = { connection: string, provider: string, custom?: CustomProviderConfigDto | null, baseUrl?: string | null, maxOutputTokens?: number | null, modelContext?: { [key in string]: ModelContextConfigDto }, };

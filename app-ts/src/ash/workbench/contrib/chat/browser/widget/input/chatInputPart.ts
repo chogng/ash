@@ -5,7 +5,7 @@ import { AnchorPosition, ContextView, ContextViewFocusRestore } from "../../../.
 import { DropdownMenuActionViewItem } from "../../../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js";
 import { appendIcon } from "../../../../../../base/browser/ui/lxicons/lxicon.js";
 import { Menu } from "../../../../../../base/browser/ui/menu/menu.js";
-import type { IAction } from "../../../../../../base/common/actions.js";
+import { SubmenuAction, type IAction } from "../../../../../../base/common/actions.js";
 import type { Icon } from "../../../../../../base/common/icon.js";
 import { Disposable, MutableDisposable, DisposableStore, toDisposable } from "../../../../../../base/common/lifecycle.js";
 import { Lxicon } from "../../../../../../base/common/lxicons.js";
@@ -241,16 +241,7 @@ export class ChatInputPart extends Disposable {
 			selectedModel ? `Model: ${selectedModel.displayName}` : "Select model",
 			undefined,
 			"model",
-			this.toolbarState.models.map(entry => new ChatInputAction(
-				`ash.chat.input.model.${entry.model.provider}.${entry.model.model}`,
-				entry.displayName,
-				`Use ${entry.displayName}`,
-				undefined,
-				true,
-				"model",
-				() => void this.delegate.selectModel(entry.model),
-				sameModel(entry.model, this.toolbarState.selectedModel),
-			)),
+			this.modelMenuActions(),
 			this.toolbarState.models.length > 0,
 		);
 		const attachmentAction = new ChatInputAction(
@@ -279,6 +270,29 @@ export class ChatInputPart extends Disposable {
 			: [sendAction];
 		const inputActions = this.toolbarState.inputKind === "command" ? [modeAction] : [modeAction, modelAction, attachmentAction];
 		this.inputToolbar.setActions([...inputActions, ...trailingActions]);
+	}
+
+	private modelMenuActions(): readonly IAction[] {
+		const groups = new Map<string, IAction[]>();
+		for (const entry of this.toolbarState.models) {
+			let actions = groups.get(entry.model.provider);
+			if (!actions) groups.set(entry.model.provider, actions = []);
+			actions.push(new ChatInputAction(
+				`ash.chat.input.model.${entry.model.provider}.${entry.model.model}`,
+				entry.displayName,
+				entry.displayName,
+				undefined,
+				true,
+				"model",
+				() => void this.delegate.selectModel(entry.model),
+				sameModel(entry.model, this.toolbarState.selectedModel),
+			));
+		}
+		return [...groups].map(([provider, actions]) => new SubmenuAction(
+			`ash.chat.input.model.provider.${provider}`,
+			provider,
+			actions,
+		));
 	}
 
 	private async pickContext(): Promise<void> {

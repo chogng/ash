@@ -40,10 +40,6 @@ pub(crate) trait ProviderAdapter: Send + Sync {
         ModelImageInputPolicy::default()
     }
 
-    fn model_id<'a>(&self, model: &'a str) -> &'a str {
-        model
-    }
-
     /// Returns provider-owned non-secret headers applied to every direct API request.
     fn fixed_headers(&self) -> Vec<ash_http_client::HttpHeader> {
         Vec::new()

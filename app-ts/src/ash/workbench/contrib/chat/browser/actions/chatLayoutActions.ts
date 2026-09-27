@@ -136,7 +136,7 @@ registerAction2(class OpenChatSettingsAction extends Action2 {
 			: localize('chat.settings.advisorProviderRequired', 'Configure a provider in Chat Settings to choose an advisor model');
 		picker.items = [
 			{ label: localize('chat.settings.openAll', 'Open all settings'), openSettings: true },
-			{ label: localize('chat.providerKeys.manage', 'Manage Model API Keys'), manageProviderKeys: true },
+			{ label: localize('chat.providerKeys.manage', 'Manage Model Connections'), manageProviderKeys: true },
 			...(current ? [{
 				label: current.enabled ? localize('chat.settings.advisorDisable', 'Turn Advisor off') : localize('chat.settings.advisorEnable', 'Turn Advisor on'),
 				description: `${current.model.provider}/${current.model.model}`,
@@ -184,12 +184,13 @@ registerAction2(class OpenChatSettingsAction extends Action2 {
 
 interface ModelProviderQuickPickItem extends IQuickPickItem {
 	readonly provider: ModelProviderCredentialStatus;
+	readonly activate: boolean;
 }
 
 async function showModelProviderKeys(chat: IChatService, quickInput: IQuickInputService, dialogs: IDialogService): Promise<void> {
 	let providers: readonly ModelProviderCredentialStatus[];
 	try {
-		providers = (await chat.listModelProviders()).filter(provider => provider.apiKeyPolicy !== 'unsupported');
+		providers = await chat.listModelProviders();
 	} catch {
 		await dialogs.showMessage({ severity: DialogSeverity.Error, message: localize('chat.providerKeys.listFailed', 'Could not load model providers') });
 		return;
@@ -199,8 +200,18 @@ async function showModelProviderKeys(chat: IChatService, quickInput: IQuickInput
 		return;
 	}
 
-	const provider = await pickModelProvider(quickInput, providers);
-	if (!provider) return;
+	const choice = await pickModelProvider(quickInput, providers);
+	if (!choice) return;
+	const { provider } = choice;
+	if (choice.activate) {
+		try {
+			await chat.activateModelConnection(provider.connection);
+			await dialogs.showMessage({ severity: DialogSeverity.Info, message: localize('chat.connections.activated', 'Current connection: {0}. Applies to the next turn.', provider.displayName) });
+		} catch {
+			await dialogs.showMessage({ severity: DialogSeverity.Error, message: localize('chat.connections.activateFailed', 'Could not activate the connection') });
+		}
+		return;
+	}
 	const apiKey = await quickInput.input({
 		title: localize('chat.providerKeys.inputTitle', 'API key for {0}', provider.displayName),
 		placeHolder: localize('chat.providerKeys.inputPlaceholder', 'Paste an API key'),
@@ -209,7 +220,7 @@ async function showModelProviderKeys(chat: IChatService, quickInput: IQuickInput
 	});
 	if (apiKey === undefined) return;
 	try {
-		await chat.setModelProviderApiKey(provider.provider, apiKey.trim());
+		await chat.setModelProviderApiKey(provider.connection, apiKey.trim());
 	} catch {
 		await dialogs.showMessage({ severity: DialogSeverity.Error, message: localize('chat.providerKeys.saveFailed', 'Could not save the API key') });
 		return;
@@ -223,13 +234,13 @@ async function showModelProviderKeys(chat: IChatService, quickInput: IQuickInput
 	await dialogs.showMessage({ severity: DialogSeverity.Info, message: localize('chat.providerKeys.saved', 'API key saved for {0}', provider.displayName) });
 }
 
-function pickModelProvider(quickInput: IQuickInputService, providers: readonly ModelProviderCredentialStatus[]): Promise<ModelProviderCredentialStatus | undefined> {
+function pickModelProvider(quickInput: IQuickInputService, providers: readonly ModelProviderCredentialStatus[]): Promise<ModelProviderQuickPickItem | undefined> {
 	const picker = quickInput.createQuickPick<ModelProviderQuickPickItem>();
 	const disposables = new DisposableStore();
 	disposables.add(picker);
-	picker.ariaLabel = localize('chat.providerKeys.aria', 'Model provider API keys');
-	picker.placeholder = localize('chat.providerKeys.select', 'Choose a provider to enter or replace its API key');
-	picker.items = providers.map(provider => {
+	picker.ariaLabel = localize('chat.connections.aria', 'Model connections');
+	picker.placeholder = localize('chat.connections.select', 'Choose a saved connection to activate, or save a key. Only one connection per provider is active.');
+	picker.items = providers.flatMap(provider => {
 		let description: string;
 		if (provider.apiKeyConfigured) {
 			description = localize('chat.providerKeys.configured', 'API key saved');
@@ -238,18 +249,27 @@ function pickModelProvider(quickInput: IQuickInputService, providers: readonly M
 		} else {
 			description = localize('chat.providerKeys.optional', 'No API key saved');
 		}
-		return { provider, label: provider.displayName, description };
+		const status = provider.active
+			? localize('chat.connections.current', 'Current connection')
+			: localize('chat.connections.inactive', 'Inactive');
+		const items: ModelProviderQuickPickItem[] = [];
+		if (provider.configured) items.push({ provider, activate: true,
+			label: localize('chat.connections.activate', 'Use {0}', provider.displayName),
+			description: `${status} · ${provider.ready ? localize('chat.connections.ready', 'Ready') : localize('chat.connections.notReady', 'Sign in or save a key')}` });
+		if (provider.apiKeyPolicy !== 'unsupported') items.push({ provider, activate: false,
+			label: localize('chat.connections.saveKey', 'Save key for {0}', provider.displayName), description: `${status} · ${description}` });
+		return items;
 	});
 	return new Promise(resolve => {
 		let settled = false;
-		const finish = (provider: ModelProviderCredentialStatus | undefined): void => {
+		const finish = (provider: ModelProviderQuickPickItem | undefined): void => {
 			if (settled) return;
 			settled = true;
 			picker.hide();
 			disposables.dispose();
 			resolve(provider);
 		};
-		disposables.add(picker.onDidAccept(item => finish(item.provider)));
+		disposables.add(picker.onDidAccept(item => finish(item)));
 		disposables.add(picker.onDidHide(() => finish(undefined)));
 		picker.show();
 	});

@@ -605,6 +605,20 @@ pub(crate) fn reduce_thread_event_with_prefix(
             snapshot.archived_at_unix_ms = None;
             snapshot.archive_reason = None;
         }
+        ThreadEvent::ModelProvidersMigrated { providers, .. } => {
+            require_no_command(envelope)?;
+            if envelope.schema_version < 20
+                || providers.is_empty()
+                || providers
+                    .iter()
+                    .any(|(from, to)| from == to || providers.contains_key(to))
+            {
+                return Err(CoreError::Journal(
+                    "invalid model provider migration".into(),
+                ));
+            }
+            migrate_model_providers(&mut snapshot, providers);
+        }
         ThreadEvent::AdvisorConfigured { selection, .. } => {
             if let ash_protocol::AdvisorSelection::Model { config } = selection {
                 config
@@ -3031,4 +3045,65 @@ fn branch_history_turns(source: &ThreadSnapshot) -> Result<Vec<Turn>, CoreError>
         }
     }
     Ok(turns)
+}
+
+/// Only resumable selections change. Invocation facts, usage and retained history remain exact.
+pub(crate) fn migrate_model_providers(
+    snapshot: &mut ThreadSnapshot,
+    providers: &BTreeMap<ash_protocol::ProviderId, ash_protocol::ProviderId>,
+) -> bool {
+    let mut changed = false;
+    let mut migrate = |model: &mut ModelRef| {
+        if let Some(provider) = providers.get(&model.provider) {
+            model.provider = provider.clone();
+            changed = true;
+        }
+    };
+    let instructions = |value: &mut ash_protocol::TurnInstructions,
+                        migrate: &mut dyn FnMut(&mut ModelRef)| {
+        if let Some(mut guidance) = value.model_guidance().cloned() {
+            match &mut guidance {
+                ash_protocol::ModelInstructionSelection::Generic { model } => {
+                    if let Some(model) = model {
+                        migrate(model);
+                    }
+                }
+                ash_protocol::ModelInstructionSelection::Specialized { model, .. } => {
+                    migrate(model)
+                }
+            }
+            *value = value.clone().with_model_guidance(guidance);
+        }
+    };
+    if let Some(agent) = &mut snapshot.agent {
+        if let Some(model) = agent.role.as_mut().and_then(|role| role.model.as_mut()) {
+            migrate(model);
+        }
+        if let Some(base) = &mut agent.base_instructions {
+            instructions(base, &mut migrate);
+        }
+    }
+    if let ash_protocol::AdvisorSelection::Model { config } = &mut snapshot.advisor {
+        migrate(&mut config.model);
+    }
+    for turn in &mut snapshot.turns {
+        if matches!(
+            turn.status,
+            ash_protocol::TurnStatus::Completed
+                | ash_protocol::TurnStatus::Failed
+                | ash_protocol::TurnStatus::Interrupted
+        ) {
+            continue;
+        }
+        if let Some(model) = &mut turn.model {
+            migrate(model);
+        }
+        if let Some(advisor) = &mut turn.advisor {
+            migrate(&mut advisor.model);
+        }
+        if let Some(base) = &mut turn.instructions {
+            instructions(base, &mut migrate);
+        }
+    }
+    changed
 }

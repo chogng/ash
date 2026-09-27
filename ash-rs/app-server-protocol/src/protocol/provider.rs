@@ -17,6 +17,11 @@ pub enum ProviderApiKeyPolicyDto {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderCatalogEntryDto {
+    pub connection: String,
+    pub access: ash_protocol::ModelAccess,
+    pub active: bool,
+    pub configured: bool,
+    pub ready: bool,
     pub provider: String,
     pub display_name: String,
     pub api_key_policy: ProviderApiKeyPolicyDto,
@@ -32,7 +37,7 @@ pub struct ProviderListResult {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderModelsListParams {
-    pub provider: String,
+    pub connection: String,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -95,14 +100,14 @@ impl Drop for ProviderApiKeyDto {
 #[derive(Debug, Deserialize, Eq, JsonSchema, PartialEq, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderApiKeySetParams {
-    pub provider: String,
+    pub connection: String,
     pub api_key: ProviderApiKeyDto,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderApiKeySetResult {
-    pub provider: String,
+    pub connection: String,
     pub api_key_configured: bool,
 }
 
@@ -121,4 +126,14 @@ pub enum ProviderProbeResult {
     Passed,
     Models { models: Vec<String> },
     Failed { message: String },
+}
+
+/// Activates an already saved connection without changing its credentials.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderActivateParams {
+    pub command_id: ash_protocol::CommandId,
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    pub connection: String,
 }

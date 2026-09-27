@@ -219,3 +219,31 @@ fn shortcut_recording_routes_platform_keys_to_portable_bindings() {
         assert_eq!(serialize_key_sequence(&commit.keybinding), "primary+c");
     }
 }
+
+#[test]
+fn saved_model_connections_activate_without_credentials_and_refresh_current_state() {
+    let mut settings = SettingsState::default();
+    settings.set_model_connections(vec![crate::ModelConnectionRow {
+        connection: "bigmodel-coding-plan".into(),
+        label: "GLM Coding Plan".into(),
+        status: "Saved".into(),
+        can_activate: true,
+    }]);
+    assert_eq!(
+        settings.activate(crate::SETTINGS_NAV_MODELS),
+        SettingsActivation::Changed
+    );
+    let element = settings.model_connection_rows()[0].element;
+    assert_eq!(
+        settings.activate(element),
+        SettingsActivation::ActivateModelConnection(0)
+    );
+    settings.set_model_connections(vec![crate::ModelConnectionRow {
+        connection: "bigmodel-coding-plan".into(),
+        label: "GLM Coding Plan".into(),
+        status: "Current · Ready".into(),
+        can_activate: false,
+    }]);
+    assert_eq!(settings.activate(element), SettingsActivation::Ignored);
+    assert_eq!(settings.model_connection_rows()[0].value, "Current · Ready");
+}

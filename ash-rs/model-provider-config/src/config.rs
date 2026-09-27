@@ -2,6 +2,7 @@ use crate::ApiProfile;
 use crate::BaseUrlNormalization;
 use crate::NormalizedInputTokenCountConfig;
 use crate::ProviderConfigError;
+use ash_protocol::ModelConnectionId;
 use ash_protocol::ModelId;
 use ash_protocol::ProviderId;
 use schemars::JsonSchema;
@@ -24,9 +25,7 @@ pub struct ModelContextConfig {
 #[serde(rename_all = "camelCase")]
 pub struct ModelProviderConfig {
     pub provider: ProviderId,
-    #[serde(skip)]
-    #[schemars(skip)]
-    pub access_mode: ProviderAccessMode,
+    pub connection: ModelConnectionId,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub custom: Option<CustomProviderConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -40,8 +39,8 @@ pub struct ModelProviderConfig {
 impl ModelProviderConfig {
     pub fn new(provider: ProviderId) -> Self {
         Self {
+            connection: ModelConnectionId::new(provider.as_str()).expect("valid provider identity"),
             provider,
-            access_mode: ProviderAccessMode::Api,
             custom: None,
             base_url: None,
             max_output_tokens: None,
@@ -49,7 +48,32 @@ impl ModelProviderConfig {
         }
     }
 
+    pub fn for_connection(connection: ModelConnectionId) -> Self {
+        let mut config = Self::new(crate::connection_provider(&connection));
+        config.connection = connection;
+        config
+    }
+
+    pub fn access_mode(&self) -> ProviderAccessMode {
+        match self.connection.as_str() {
+            "chatgpt-subscription"
+            | "kimi-subscription"
+            | "xai-subscription"
+            | "bigmodel-coding-plan"
+            | "zai-coding-plan" => ProviderAccessMode::Subscription,
+            _ => ProviderAccessMode::Api,
+        }
+    }
+
     pub fn validate_static(&self) -> Result<(), ProviderConfigError> {
+        let provider = crate::connection_provider(&self.connection);
+        if self.provider != provider {
+            return Err(ProviderConfigError::ProviderMismatch {
+                configured: self.provider.clone(),
+                selected: provider,
+            });
+        }
+
         if let Some(custom) = &self.custom {
             custom.definition(self)?.validate()?;
         }
@@ -121,14 +145,11 @@ impl CustomProviderConfig {
         };
         crate::STATIC_MODEL_CATALOG
             .iter()
-            .filter(|entry| {
-                entry.runtime == crate::StaticModelRuntime::ProviderApi
-                    && match &self.model {
-                        Some(id) => entry.model_id == id.as_str(),
-                        None => registry
-                            .get(&ProviderId::new(entry.provider_id).expect("static provider"))
-                            .is_some_and(|provider| provider.api_profile == profile),
-                    }
+            .filter(|entry| match &self.model {
+                Some(id) => entry.model_id == id.as_str(),
+                None => registry
+                    .get(&ProviderId::new(entry.provider_id).expect("static provider"))
+                    .is_some_and(|provider| provider.api_profile == profile),
             })
             .map(|entry| (entry.model_id, entry.model()))
             .collect::<BTreeMap<_, _>>()
@@ -220,6 +241,7 @@ impl CustomProviderConfig {
 #[serde(rename_all = "camelCase")]
 pub struct NormalizedModelProviderConfig {
     pub provider: ProviderId,
+    pub connection: ModelConnectionId,
     pub access_mode: ProviderAccessMode,
     pub api_profile: ApiProfile,
     pub base_url: String,
@@ -227,6 +249,18 @@ pub struct NormalizedModelProviderConfig {
     pub input_token_count: Option<NormalizedInputTokenCountConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_output_tokens: Option<u32>,
+}
+
+impl NormalizedModelProviderConfig {
+    /// Exact upstream aliases belong to the built-in connection contract. Other IDs are sent
+    /// unchanged, including IDs absent from a remote observation of the model catalog.
+    pub fn upstream_model<'a>(&self, model: &'a str) -> &'a str {
+        match (self.connection.as_str(), model) {
+            ("kimi-subscription", "kimi-k2.7-code") => "kimi-for-coding",
+            ("kimi-subscription", "kimi-k2.7-code-highspeed") => "kimi-for-coding-highspeed",
+            _ => model,
+        }
+    }
 }
 
 pub(crate) fn normalize_base_url(value: &str, rule: BaseUrlNormalization) -> String {

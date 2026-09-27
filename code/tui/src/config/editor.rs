@@ -51,6 +51,10 @@ pub(crate) enum ConfigSelectionAction {
     SetIssues(super::IssueConfigEdit),
     AdjustIssueRefresh(super::IssueConfigEdit),
     OpenProvider(super::provider::Settings),
+    ActivateConnection {
+        connection: String,
+        expected_revision: u64,
+    },
     Connection(super::provider::Request),
     OpenSubscription(super::SubscriptionProvider),
     Subscription(super::SubscriptionCommand),
@@ -92,7 +96,7 @@ impl ProviderApiKeyEdit {
     }
 
     pub(crate) fn for_coding_plan(mut self, provider: super::SubscriptionProvider) -> Self {
-        self.provider = provider.model_provider().into();
+        self.provider = provider.id().into();
         self.target = ApiKeyTarget::CodingPlan(provider);
         self
     }
@@ -536,6 +540,7 @@ impl ConfigEditor {
                 | ConfigSelectionAction::OpenProviderApiKey { .. }
                 | ConfigSelectionAction::OpenProvider(_)
                 | ConfigSelectionAction::Connection(_)
+                | ConfigSelectionAction::ActivateConnection { .. }
                 | ConfigSelectionAction::OpenSubscription(_)
                 | ConfigSelectionAction::Subscription(_) => ConfigEditorOutcome::Consumed,
                 ConfigSelectionAction::SetLanguage(edit) => language_outcome(edit, adjustment),
@@ -803,6 +808,9 @@ fn config_revision(choices: &ConfigChoices) -> u64 {
         .values()
         .find_map(|action| match action {
             ConfigSelectionAction::OpenProvider(settings) => Some(settings.revision),
+            ConfigSelectionAction::ActivateConnection {
+                expected_revision, ..
+            } => Some(*expected_revision),
             ConfigSelectionAction::SetIssues(edit)
             | ConfigSelectionAction::AdjustIssueRefresh(edit) => Some(edit.expected_revision),
             _ => None,
@@ -1433,7 +1441,7 @@ fn provider_items(
     actions: &mut BTreeMap<ListSelectionItemId, ConfigSelectionAction>,
 ) -> Vec<ListSelectionItem> {
     let mut custom = config
-        .providers
+        .connections
         .values()
         .filter(|entry| entry.custom.is_some())
         .collect::<Vec<_>>();
@@ -1462,43 +1470,51 @@ fn provider_items(
     let mut subscriptions = Vec::new();
     for provider in &catalog.providers {
         if config
-            .providers
-            .get(&provider.provider)
+            .connections
+            .get(&provider.connection)
             .is_some_and(|entry| entry.custom.is_some())
             || provider.provider == "openai-compatible"
         {
             continue;
         }
-        let subscription = match provider.provider.as_str() {
-            "openai" => Some(("ChatGPT", super::SubscriptionProvider::ChatGpt)),
-            "xai" => Some(("Super Grok", super::SubscriptionProvider::Xai)),
-            "kimi" => Some(("Kimi", super::SubscriptionProvider::Kimi)),
+        let subscription = match provider.connection.as_str() {
+            "chatgpt-subscription" => Some(("ChatGPT", super::SubscriptionProvider::ChatGpt)),
+            "xai-subscription" => Some(("Super Grok", super::SubscriptionProvider::Xai)),
+            "kimi-subscription" => Some(("Kimi", super::SubscriptionProvider::Kimi)),
             "bigmodel-coding-plan" => Some(("BigModel", super::SubscriptionProvider::BigModel)),
             "zai-coding-plan" => Some(("Z.AI", super::SubscriptionProvider::Zai)),
             _ => None,
         };
         if let Some((label, subscription)) = subscription {
-            let id = ListSelectionItemId::new(format!("{}-subscription", provider.provider));
+            let id = ListSelectionItemId::new(format!("{}-details", provider.connection));
             actions.insert(
                 id.clone(),
                 ConfigSelectionAction::OpenSubscription(subscription),
             );
-            subscriptions.push(ListSelectionItem::new(label).with_id(id));
+            let item = ListSelectionItem::new(label).with_id(id);
+            subscriptions.push(connection_status(item, provider, language));
+            add_activation(
+                &mut subscriptions,
+                provider,
+                config.revision,
+                language,
+                actions,
+            );
         }
-        let api_name = match provider.provider.as_str() {
+        let api_name = match provider.connection.as_str() {
             "openai" => "OpenAI",
             "xai" => "xAI",
             "bigmodel" => "BigModel",
             "zai" => "Z.AI",
             _ => &provider.display_name,
         };
-        if !matches!(
-            provider.provider.as_str(),
-            "bigmodel-coding-plan" | "zai-coding-plan"
-        ) && (subscription.is_none()
-            || provider.api_key_policy != ProviderApiKeyPolicyDto::Unsupported)
-        {
-            api_items.push(provider_item(provider, api_name, actions));
+        if provider.access == ash_protocol::ModelAccess::ApiKey {
+            api_items.push(connection_status(
+                provider_item(provider, api_name, actions),
+                provider,
+                language,
+            ));
+            add_activation(&mut api_items, provider, config.revision, language, actions);
         }
     }
     let id = ListSelectionItemId::new("new-custom-provider");
@@ -1521,6 +1537,52 @@ fn provider_items(
     items
 }
 
+fn connection_status(
+    item: ListSelectionItem,
+    connection: &ProviderCatalogEntryDto,
+    language: Language,
+) -> ListSelectionItem {
+    if connection.active {
+        item.with_description(nls::text(
+            language,
+            if connection.ready {
+                Message::CurrentConnection
+            } else {
+                Message::ConnectionNotReady
+            },
+        ))
+    } else {
+        item
+    }
+}
+
+fn add_activation(
+    items: &mut Vec<ListSelectionItem>,
+    connection: &ProviderCatalogEntryDto,
+    revision: u64,
+    language: Language,
+    actions: &mut BTreeMap<ListSelectionItemId, ConfigSelectionAction>,
+) {
+    if connection.configured && !connection.active {
+        let id = ListSelectionItemId::new(format!("activate-{}", connection.connection));
+        actions.insert(
+            id.clone(),
+            ConfigSelectionAction::ActivateConnection {
+                connection: connection.connection.clone(),
+                expected_revision: revision,
+            },
+        );
+        items.push(
+            ListSelectionItem::new(format!(
+                "{} · {}",
+                nls::text(language, Message::ActivateConnection),
+                connection.display_name
+            ))
+            .with_id(id),
+        );
+    }
+}
+
 fn provider_item(
     provider: &ProviderCatalogEntryDto,
     display_name: &str,
@@ -1530,11 +1592,11 @@ fn provider_item(
     if provider.api_key_policy == ProviderApiKeyPolicyDto::Unsupported {
         return item;
     }
-    let id = ListSelectionItemId::new(format!("provider-api-key-{}", provider.provider));
+    let id = ListSelectionItemId::new(format!("provider-api-key-{}", provider.connection));
     actions.insert(
         id.clone(),
         ConfigSelectionAction::OpenProviderApiKey {
-            provider: provider.provider.clone(),
+            provider: provider.connection.clone(),
             display_name: display_name.to_owned(),
             target: ApiKeyTarget::Provider,
         },

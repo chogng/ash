@@ -45,6 +45,14 @@ pub trait ModelService: Send + Sync {
         Ok(None)
     }
 
+    /// Resolves the configured approval model against this Turn's frozen configuration.
+    /// Absence means automatic model review is unavailable.
+    fn approval_review_model(
+        &self,
+    ) -> Result<Option<(ModelRef, std::sync::Arc<dyn ModelService>)>, CoreError> {
+        Ok(None)
+    }
+
     /// Returns the verified billing surface for the selected immutable runtime.
     fn billing_scope(&self, _: ModelSelection<'_>) -> Result<ModelBillingScope, CoreError> {
         Ok(ModelBillingScope::Unavailable)

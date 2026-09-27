@@ -90,28 +90,32 @@ export class ChatService extends Disposable implements IChatService {
 		const result = await this.options.modelApi.listProviders();
 		return result.providers.map(provider => ({
 			provider: provider.provider,
+			connection: provider.connection,
+			access: provider.access,
+			active: provider.active,
+			configured: provider.configured,
+			ready: provider.ready,
 			displayName: provider.displayName,
 			apiKeyPolicy: provider.apiKeyPolicy,
 			apiKeyConfigured: provider.apiKeyConfigured,
 		}));
 	}
 
-	async setModelProviderApiKey(provider: string, apiKey: string): Promise<void> {
-		await this.options.modelApi.setProviderApiKey({ provider, apiKey });
+	async activateModelConnection(connection: string): Promise<void> {
+		await this.options.modelApi.activateConnection({ commandId: commandId('activate-connection'), connection });
+	}
+
+	async setModelProviderApiKey(connection: string, apiKey: string): Promise<void> {
+		await this.options.modelApi.setProviderApiKey({ connection, apiKey });
 	}
 
 	async listAdvisorModels(): Promise<readonly ModelCatalogEntry[]> {
-		const [models, providers] = await Promise.all([
-			this.listModelCatalog(),
-			this.options.modelApi.readConfiguredProviderIds(),
-		]);
-		const configured = new Set(providers);
-		return models.filter(entry => configured.has(entry.model.provider));
+		return this.listModelCatalog();
 	}
 
 	async refreshModels(): Promise<readonly ModelCatalogEntry[]> {
 		if (this.modelCatalogLoad) return this.modelCatalogLoad;
-		const load = this.options.modelApi.listBuiltIn().then(result => this.acceptModelCatalog(result.models));
+		const load = this.options.modelApi.listModels().then(result => this.acceptModelCatalog(result.models));
 		this.modelCatalogLoad = load;
 		try {
 			return await load;
@@ -262,8 +266,6 @@ export class ChatService extends Disposable implements IChatService {
 	private acceptModelCatalog(entries: readonly {
 		readonly model: ModelRef;
 		readonly displayName: string;
-		readonly access: ModelCatalogEntry["access"];
-		readonly outputTransport: ModelCatalogEntry["outputTransport"];
 	}[]): readonly ModelCatalogEntry[] {
 		const identities = new Set<string>();
 		const catalog = entries.map(entry => {
@@ -273,8 +275,6 @@ export class ChatService extends Disposable implements IChatService {
 			return Object.freeze({
 				model: Object.freeze({ ...entry.model }),
 				displayName: entry.displayName,
-				access: entry.access,
-				outputTransport: entry.outputTransport,
 			});
 		});
 		const changed = !sameModelCatalog(this.modelCatalog, catalog);
@@ -298,8 +298,6 @@ function sameModelCatalog(left: readonly ModelCatalogEntry[], right: readonly Mo
 		const candidate = right[index];
 		return candidate !== undefined
 			&& entry.displayName === candidate.displayName
-			&& entry.access === candidate.access
-			&& entry.outputTransport === candidate.outputTransport
 			&& modelRefIdentity(entry.model) === modelRefIdentity(candidate.model);
 	});
 }

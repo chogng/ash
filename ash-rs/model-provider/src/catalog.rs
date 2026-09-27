@@ -1,10 +1,8 @@
-mod glm_coding_plan;
 mod kimi;
 mod ollama;
 mod openai;
 mod xai;
 
-pub(crate) use glm_coding_plan::glm_coding_plan_catalog_binding;
 pub(crate) use kimi::kimi_catalog_binding;
 pub(crate) use ollama::ollama_catalog_binding;
 pub(crate) use openai::chatgpt_catalog_binding;

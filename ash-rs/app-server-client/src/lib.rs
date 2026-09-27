@@ -208,14 +208,14 @@ pub struct ConnectorApiTokenConnectRequest {
 
 /// Client-owned provider API-key request whose secret and encoded wire buffer are cleared.
 pub struct ProviderApiKeySetRequest {
-    pub provider: String,
+    pub connection: String,
     api_key: Zeroizing<String>,
 }
 
 impl ProviderApiKeySetRequest {
-    pub fn new(provider: String, api_key: String) -> Self {
+    pub fn new(connection: String, api_key: String) -> Self {
         Self {
-            provider,
+            connection,
             api_key: Zeroizing::new(api_key),
         }
     }
@@ -225,7 +225,7 @@ impl fmt::Debug for ProviderApiKeySetRequest {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("ProviderApiKeySetRequest")
-            .field("provider", &self.provider)
+            .field("connection", &self.connection)
             .field("api_key", &"[REDACTED]")
             .finish()
     }
@@ -237,7 +237,7 @@ impl Serialize for ProviderApiKeySetRequest {
         S: Serializer,
     {
         let mut request = serializer.serialize_struct("ProviderApiKeySetRequest", 2)?;
-        request.serialize_field("provider", &self.provider)?;
+        request.serialize_field("connection", &self.connection)?;
         request.serialize_field("apiKey", self.api_key.as_str())?;
         request.end()
     }
@@ -1064,22 +1064,18 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         self.call(ClientMethod::PluginUninstall, params)
     }
 
-    pub fn list_builtin_models(&mut self) -> Result<ModelListResult, ClientError> {
+    pub fn list_models(&mut self) -> Result<ModelListResult, ClientError> {
         self.call(
             ClientMethod::ModelList,
-            ash_app_server_protocol::protocol::model::ModelListParams {
-                view: ash_app_server_protocol::protocol::model::ModelListView::BuiltIn,
-            },
+            ash_app_server_protocol::protocol::model::ModelListParams {},
         )
     }
 
-    pub fn list_discovered_models(&mut self) -> Result<ModelListResult, ClientError> {
-        self.call(
-            ClientMethod::ModelList,
-            ash_app_server_protocol::protocol::model::ModelListParams {
-                view: ash_app_server_protocol::protocol::model::ModelListView::Discovered,
-            },
-        )
+    pub fn activate_provider(
+        &mut self,
+        params: ash_app_server_protocol::protocol::provider::ProviderActivateParams,
+    ) -> Result<ash_app_server_protocol::protocol::config::ConfigCommandResult, ClientError> {
+        self.call(ClientMethod::ProviderActivate, params)
     }
 
     pub fn list_provider_models(
@@ -1089,7 +1085,9 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
     {
         self.call(
             ClientMethod::ProviderModelsList,
-            ash_app_server_protocol::protocol::provider::ProviderModelsListParams { provider },
+            ash_app_server_protocol::protocol::provider::ProviderModelsListParams {
+                connection: provider,
+            },
         )
     }
 

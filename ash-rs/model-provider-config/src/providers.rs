@@ -43,8 +43,8 @@ pub(crate) fn subscription_definition(id: &str) -> Option<ProviderDefinition> {
         "openai" => Some(openai::subscription_definition()),
         "xai" => Some(xai::subscription_definition()),
         "kimi" => Some(kimi::subscription_definition()),
-        "bigmodel-coding-plan" => Some(bigmodel::subscription_definition()),
-        "zai-coding-plan" => Some(zai::subscription_definition()),
+        "bigmodel-coding-plan" => Some(bigmodel::coding_plan_definition()),
+        "zai-coding-plan" => Some(zai::coding_plan_definition()),
         _ => None,
     }
 }

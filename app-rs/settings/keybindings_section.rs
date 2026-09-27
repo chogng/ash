@@ -64,6 +64,7 @@ impl SettingsKeybindingsViewport {
 pub type SettingsScrollbarPointerOutcome = ash_ui_components::ScrollbarInteractionOutcome;
 
 pub(crate) struct KeybindingsSection<'a> {
+    label: &'static str,
     bounds: Rect,
     rows: &'a [SettingsKeybindingRow],
     diagnostics: &'a [String],
@@ -87,6 +88,7 @@ impl<'a> KeybindingsSection<'a> {
         dispatch: &'a UiDispatch,
     ) -> Self {
         Self {
+            label: "Keybindings",
             bounds,
             rows,
             diagnostics,
@@ -96,6 +98,11 @@ impl<'a> KeybindingsSection<'a> {
             style,
             dispatch,
         }
+    }
+
+    pub(crate) fn with_label(mut self, label: &'static str) -> Self {
+        self.label = label;
+        self
     }
 
     fn viewport(&self) -> SettingsKeybindingsViewport {
@@ -116,6 +123,7 @@ impl<'a> KeybindingsSection<'a> {
         KeybindingRow {
             bounds,
             row: &self.rows[index],
+            label: self.label,
             style: &self.style,
             dispatch: self.dispatch,
             interactions_enabled: self.interactions_enabled,
@@ -150,7 +158,7 @@ impl Component for KeybindingsSection<'_> {
                 SETTINGS_KEYBINDINGS_LIST,
                 element.bounds(),
                 AccessibilityRole::List,
-                "Keybindings",
+                self.label,
             )
             .with_parent(SETTINGS_SECTION_CONTENT),
         )
@@ -196,6 +204,7 @@ impl Component for KeybindingsSection<'_> {
 }
 
 struct KeybindingRow<'a> {
+    label: &'static str,
     bounds: Rect,
     row: &'a SettingsKeybindingRow,
     style: &'a SettingsSectionStyle,
@@ -217,13 +226,31 @@ impl Component for KeybindingRow<'_> {
             UiNode::new(
                 self.row.element,
                 element.bounds(),
-                AccessibilityRole::Button,
-                format!("Record shortcut for {}", self.row.label),
+                if self.row.enabled {
+                    AccessibilityRole::Button
+                } else {
+                    AccessibilityRole::ListItem
+                },
+                if self.label == "Keybindings" {
+                    format!("Record shortcut for {}", self.row.label)
+                } else if self.row.enabled {
+                    format!("Use {} — {}", self.row.label, self.row.value)
+                } else {
+                    format!("{} — {}", self.row.label, self.row.value)
+                },
             )
             .with_parent(SETTINGS_KEYBINDINGS_LIST)
-            .with_cursor(CursorFeedback::Pointer)
+            .with_cursor(if self.row.enabled {
+                CursorFeedback::Pointer
+            } else {
+                CursorFeedback::Default
+            })
             .with_focus(FocusBehavior::TabStop)
-            .with_action(NodeAction::Activate)
+            .with_action(if self.row.enabled {
+                NodeAction::Activate
+            } else {
+                NodeAction::None
+            })
             .with_navigation(
                 NavigationGroupId::new(SETTINGS_KEYBINDINGS_LIST),
                 NavigationAxis::Vertical,

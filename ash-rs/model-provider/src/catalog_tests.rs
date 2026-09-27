@@ -242,81 +242,24 @@ fn providers_without_dynamic_discovery_return_no_binding() {
 }
 
 #[test]
-fn coding_plan_bindings_are_scoped_to_each_subscription_and_credential() {
-    for (provider, endpoint) in [
-        (
-            "bigmodel-coding-plan",
-            ash_model_provider_config::BIGMODEL_CODING_PLAN_BASE_URL,
-        ),
-        (
-            "zai-coding-plan",
-            ash_model_provider_config::ZAI_CODING_PLAN_BASE_URL,
-        ),
-    ] {
-        let secrets = Arc::new(ash_secrets::MemorySecretStore::default());
-        let client = Arc::new(CatalogClient {
-            request: Mutex::new(None),
-        });
-        let runtime = crate::ModelProviderRuntime::with_client_and_secrets(
-            ProviderConfigRegistry::builtin(),
-            client.clone(),
-            secrets.clone(),
+fn coding_plans_use_the_shared_catalog_without_a_second_discovery_list() {
+    let runtime = crate::ModelProviderRuntime::builtin_with_client(Arc::new(CatalogClient {
+        request: Mutex::new(None),
+    }));
+    for id in ["bigmodel-coding-plan", "zai-coding-plan"] {
+        let config =
+            ModelProviderConfig::for_connection(ash_protocol::ModelConnectionId::new(id).unwrap());
+        assert!(runtime.catalog_binding(&config).unwrap().is_none());
+        let manager = runtime.models_manager_for_config(&config).unwrap();
+        let model = ash_protocol::ModelRef::new(
+            ProviderId::new("zai").unwrap(),
+            ash_protocol::ModelId::new("glm-5.3").unwrap(),
         );
-        let credentials =
-            ProviderCredentialService::new(ProviderConfigRegistry::builtin(), secrets);
-        credentials
-            .set_api_key(&ProviderId::new(provider).unwrap(), b"plan-key".to_vec())
-            .unwrap();
-        let mut config = ModelProviderConfig::new(ProviderId::new(provider).unwrap());
-        config.base_url = Some(endpoint.into());
-
-        let binding = runtime
-            .catalog_binding(&config)
-            .unwrap()
-            .expect("coding plan endpoint and API key select the plan binding");
         assert!(
-            binding
-                .scope()
-                .source_scope()
-                .as_str()
-                .starts_with("coding-plan:")
+            manager
+                .resolve_static(&model, &ash_models_manager::ModelRequirements::agent())
+                .is_ok()
         );
-        assert_eq!(
-            binding.scope().provider(),
-            &ProviderId::new(provider).unwrap()
-        );
-        let executor = tokio::runtime::Builder::new_current_thread()
-            .build()
-            .unwrap();
-        executor
-            .block_on(
-                runtime
-                    .models_manager()
-                    .refresh(binding.scope().clone(), binding.source()),
-            )
-            .unwrap();
-        let models = runtime
-            .models_manager()
-            .list(&[binding.scope().clone()], &CatalogQuery::all())
-            .unwrap();
-        assert_eq!(
-            models
-                .iter()
-                .map(|entry| entry.model().model.as_str())
-                .collect::<Vec<_>>(),
-            vec!["glm-5.1"]
-        );
-        assert_eq!(
-            models[0].info().access,
-            ash_protocol::ModelAccess::Subscription
-        );
-        assert!(client.request.lock().unwrap().is_none());
-
-        credentials
-            .set_api_key(&ProviderId::new(provider).unwrap(), b"rotated-key".to_vec())
-            .unwrap();
-        let rotated = runtime.catalog_binding(&config).unwrap().unwrap();
-        assert_ne!(binding.scope(), rotated.scope());
     }
 }
 
@@ -330,21 +273,30 @@ fn api_and_coding_plan_connections_have_separate_credentials() {
         }),
         secrets.clone(),
     );
-    let mut config = ModelProviderConfig::new(ProviderId::new("zai-coding-plan").unwrap());
+    let mut config = ModelProviderConfig::for_connection(
+        ash_protocol::ModelConnectionId::new("zai-coding-plan").unwrap(),
+    );
     config.base_url = Some(ash_model_provider_config::ZAI_CODING_PLAN_BASE_URL.into());
     assert!(
         runtime.catalog_binding(&config).unwrap().is_none(),
-        "the coding endpoint without a stored API key stays in API mode"
+        "Coding Plans do not invent a discovery source"
     );
 
     let credentials = ProviderCredentialService::new(ProviderConfigRegistry::builtin(), secrets);
     credentials
-        .set_api_key(&ProviderId::new("zai").unwrap(), b"api-key".to_vec())
+        .set_api_key(
+            &ash_protocol::ModelConnectionId::new(ProviderId::new("zai").unwrap().as_str())
+                .unwrap(),
+            b"api-key".to_vec(),
+        )
         .unwrap();
     assert!(runtime.catalog_binding(&config).unwrap().is_none());
     credentials
         .set_api_key(
-            &ProviderId::new("zai-coding-plan").unwrap(),
+            &ash_protocol::ModelConnectionId::new(
+                ProviderId::new("zai-coding-plan").unwrap().as_str(),
+            )
+            .unwrap(),
             b"plan-key".to_vec(),
         )
         .unwrap();
@@ -462,7 +414,10 @@ fn custom_catalog_fetches_models_with_its_own_key_and_invalidates_scope() {
         .unwrap();
     let credentials = ProviderCredentialService::new(registry.clone(), secrets.clone());
     credentials
-        .set_api_key(&config.provider, b"custom-key".to_vec())
+        .set_api_key(
+            &ash_protocol::ModelConnectionId::new(config.provider.as_str()).unwrap(),
+            b"custom-key".to_vec(),
+        )
         .unwrap();
     let runtime = crate::ModelProviderRuntime::with_client_and_secrets(
         ProviderConfigRegistry::builtin(),
@@ -500,7 +455,10 @@ fn custom_catalog_fetches_models_with_its_own_key_and_invalidates_scope() {
     );
     drop(requests);
     credentials
-        .set_api_key(&config.provider, b"rotated-key".to_vec())
+        .set_api_key(
+            &ash_protocol::ModelConnectionId::new(config.provider.as_str()).unwrap(),
+            b"rotated-key".to_vec(),
+        )
         .unwrap();
     let changed_key = runtime.catalog_binding(&config).unwrap().unwrap();
     assert_ne!(binding.scope(), changed_key.scope());

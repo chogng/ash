@@ -92,6 +92,7 @@ pub fn settings_keybinding_rows<'a>(
     keyboard_shortcut_rows(binding_for_command)
         .into_iter()
         .map(|row| SettingsKeybindingRow {
+            enabled: true,
             element: row.element,
             label: row.label.to_owned(),
             value: row

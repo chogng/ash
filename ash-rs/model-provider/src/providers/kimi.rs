@@ -66,12 +66,4 @@ impl ProviderAdapter for KimiAdapter {
         let count = counter.count(target, model, request, client, cancellation)?;
         super::measurement::estimated_provider_measurement(count, "kimi-estimate-token-count-v1")
     }
-
-    fn model_id<'a>(&self, model: &'a str) -> &'a str {
-        match model {
-            "kimi-k2.7-code" => "kimi-for-coding",
-            "kimi-k2.7-code-highspeed" => "kimi-for-coding-highspeed",
-            _ => model,
-        }
-    }
 }

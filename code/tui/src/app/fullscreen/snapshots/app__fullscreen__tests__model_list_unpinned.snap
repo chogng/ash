@@ -10,7 +10,7 @@ expression: "render(&app, 100, 18)"
             │  │ Search models                                                      │ │             
             │  ╰────────────────────────────────────────────────────────────────────╯ │             
             │> gateway-model                                                          │             
-            │                                                                         │             
+            │  Unconfigured model                                                     │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             

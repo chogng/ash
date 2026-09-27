@@ -14,8 +14,8 @@ use ash_file_access::DirId;
 use ash_file_access::Permissions;
 use ash_model_provider_config::ModelProviderConfig;
 use ash_protocol::CommandId;
+use ash_protocol::ModelConnectionId;
 use ash_protocol::Patch;
-use ash_protocol::ProviderId;
 use ash_protocol::ReasoningEffort;
 use ash_protocol::ToolMode;
 use serde::{Deserialize, Serialize};
@@ -60,16 +60,19 @@ pub enum UserConfigCommand {
         config: crate::IssueConfig,
     },
     UpdatePreferences(PreferencesUpdate),
-    ConfigureProvider {
-        provider: ProviderId,
+    SaveConnection {
+        connection: ModelConnectionId,
         config: ModelProviderConfig,
     },
-    /// Adds a built-in subscription provider without choosing a default model.
-    EnsureProvider {
-        provider: ProviderId,
+    ConfigureConnection {
+        connection: ModelConnectionId,
+        config: ModelProviderConfig,
     },
-    RemoveProvider {
-        provider: ProviderId,
+    ActivateConnection {
+        connection: ModelConnectionId,
+    },
+    RemoveConnection {
+        connection: ModelConnectionId,
     },
     UpsertMcpServer {
         server: McpServerConfig,

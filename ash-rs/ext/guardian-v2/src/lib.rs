@@ -75,6 +75,11 @@ pub struct ProviderReviewModel {
 }
 
 impl ProviderReviewModel {
+    /// Uses the runtime already frozen by the Turn owner.
+    pub fn new(model: ModelRef, invoker: Arc<dyn ModelInvoker>) -> Self {
+        Self { model, invoker }
+    }
+
     pub fn model(&self) -> &ModelRef {
         &self.model
     }

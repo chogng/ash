@@ -458,6 +458,16 @@ fn enter_autosaves_complete_fields_and_keeps_focus_for_the_next_edit() {
     saved
         .providers
         .insert(first.config.provider.clone(), first.config.clone());
+    saved.connections = saved
+        .providers
+        .values()
+        .map(|config| (config.connection.clone(), config.clone()))
+        .collect();
+    saved.active_connections = saved
+        .providers
+        .values()
+        .map(|config| (config.provider.clone(), config.connection.clone()))
+        .collect();
     panel.complete(Reply {
         id: first.id,
         result: Ok((

@@ -7,6 +7,7 @@ use ash_model_provider_config::ApiKeyPolicy;
 use ash_model_provider_config::ProviderConfigRegistry;
 use ash_model_provider_config::ProviderDefinition;
 use ash_model_provider_config::ProviderId;
+use ash_protocol::ModelConnectionId;
 use ash_secrets::SecretKey;
 use ash_secrets::SecretStore;
 use ash_secrets::SecretStoreError;
@@ -14,7 +15,7 @@ use ash_secrets::SecretValue;
 
 const MAX_API_KEY_BYTES: usize = 16 * 1024;
 
-pub fn provider_api_key_secret_key(provider: &ProviderId) -> SecretKey {
+pub fn provider_api_key_secret_key(provider: &ModelConnectionId) -> SecretKey {
     SecretKey::new(format!("provider/{provider}/default/api-key"))
         .expect("validated provider IDs produce valid secret keys")
 }
@@ -22,6 +23,8 @@ pub fn provider_api_key_secret_key(provider: &ProviderId) -> SecretKey {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProviderCredentialStatus {
     pub provider: ProviderId,
+    pub connection: ModelConnectionId,
+    pub access_mode: ash_model_provider_config::ProviderAccessMode,
     pub display_name: String,
     pub api_key_policy: ApiKeyPolicy,
     pub api_key_configured: bool,
@@ -61,17 +64,21 @@ impl ProviderCredentialService {
 
     pub fn catalog(&self) -> Result<Vec<ProviderCredentialStatus>, ProviderCredentialError> {
         self.providers
-            .providers()
-            .map(|definition| {
+            .connections()
+            .into_iter()
+            .map(|connection| {
+                let definition = &connection.transport;
                 let api_key_configured = match definition.api_key_policy {
                     ApiKeyPolicy::Unsupported => false,
                     ApiKeyPolicy::Optional | ApiKeyPolicy::Required => self
                         .secrets
-                        .load(&provider_api_key_secret_key(&definition.id))?
+                        .load(&provider_api_key_secret_key(&connection.id))?
                         .is_some(),
                 };
                 Ok(ProviderCredentialStatus {
-                    provider: definition.id.clone(),
+                    provider: connection.provider,
+                    connection: connection.id,
+                    access_mode: connection.access_mode,
                     display_name: definition.name.clone(),
                     api_key_policy: definition.api_key_policy,
                     api_key_configured,
@@ -82,7 +89,7 @@ impl ProviderCredentialService {
 
     pub fn set_api_key(
         &self,
-        provider: &ProviderId,
+        provider: &ModelConnectionId,
         api_key: Vec<u8>,
     ) -> Result<(), ProviderCredentialError> {
         let definition = self.definition(provider)?;
@@ -98,7 +105,10 @@ impl ProviderCredentialService {
     }
 
     /// Deletes a removed connection's credential without requiring it to remain in the registry.
-    pub fn remove_api_key(&self, provider: &ProviderId) -> Result<(), ProviderCredentialError> {
+    pub fn remove_api_key(
+        &self,
+        provider: &ModelConnectionId,
+    ) -> Result<(), ProviderCredentialError> {
         self.secrets
             .delete(&provider_api_key_secret_key(provider))?;
         Ok(())
@@ -106,31 +116,19 @@ impl ProviderCredentialService {
 
     pub(crate) fn request_headers(
         &self,
-        provider: &ProviderId,
+        provider: &ModelConnectionId,
     ) -> Result<Vec<HttpHeader>, ProviderCredentialError> {
         let definition = self.definition(provider)?;
-        let secret = self.api_key(definition)?;
+        let secret = self.api_key(provider, &definition)?;
         encode_key(provider, definition.api_key_header, secret.as_ref())
-    }
-
-    /// Loads the stored API key for scope identity without the Required-policy missing-key error.
-    pub(crate) fn stored_api_key(
-        &self,
-        provider: &ProviderId,
-    ) -> Result<Option<SecretValue>, ProviderCredentialError> {
-        let definition = self.definition(provider)?;
-        if definition.api_key_policy == ApiKeyPolicy::Unsupported {
-            return Ok(None);
-        }
-        Ok(self.secrets.load(&provider_api_key_secret_key(provider))?)
     }
 
     pub(crate) fn request_model_headers(
         &self,
         config: &ash_model_provider_config::NormalizedModelProviderConfig,
     ) -> Result<ModelHeaders, ProviderCredentialError> {
-        let definition = self.definition(&config.provider)?;
-        let secret = self.api_key(definition)?;
+        let definition = self.definition(&config.connection)?;
+        let secret = self.api_key(&config.connection, &definition)?;
         let count_header = match config.input_token_count.as_ref().map(|count| count.profile) {
             Some(ash_model_provider_config::InputTokenCountProfile::GoogleGenerateContent) => {
                 ApiKeyHeader::XGoogApiKey
@@ -146,13 +144,18 @@ impl ProviderCredentialService {
             None => definition.api_key_header,
         };
         Ok(ModelHeaders {
-            invocation: encode_key(&config.provider, definition.api_key_header, secret.as_ref())?,
-            measurement: encode_key(&config.provider, count_header, secret.as_ref())?,
+            invocation: encode_key(
+                &config.connection,
+                definition.api_key_header,
+                secret.as_ref(),
+            )?,
+            measurement: encode_key(&config.connection, count_header, secret.as_ref())?,
         })
     }
 
     fn api_key(
         &self,
+        connection: &ModelConnectionId,
         definition: &ProviderDefinition,
     ) -> Result<Option<SecretValue>, ProviderCredentialError> {
         if definition.api_key_policy == ApiKeyPolicy::Unsupported {
@@ -160,29 +163,28 @@ impl ProviderCredentialService {
         }
         let secret = self
             .secrets
-            .load(&provider_api_key_secret_key(&definition.id))?;
+            .load(&provider_api_key_secret_key(connection))?;
         if let Some(secret) = &secret {
             validate_api_key(secret.expose())?;
         } else if definition.api_key_policy == ApiKeyPolicy::Required {
-            return Err(ProviderCredentialError::ApiKeyMissing(
-                definition.id.clone(),
-            ));
+            return Err(ProviderCredentialError::ApiKeyMissing(connection.clone()));
         }
         Ok(secret)
     }
 
     fn definition(
         &self,
-        provider: &ProviderId,
-    ) -> Result<&ProviderDefinition, ProviderCredentialError> {
+        provider: &ModelConnectionId,
+    ) -> Result<ProviderDefinition, ProviderCredentialError> {
         self.providers
-            .get(provider)
+            .connection(provider)
+            .map(|connection| connection.transport)
             .ok_or(ProviderCredentialError::UnknownProvider)
     }
 }
 
 fn encode_key(
-    provider: &ProviderId,
+    provider: &ModelConnectionId,
     format: ApiKeyHeader,
     secret: Option<&SecretValue>,
 ) -> Result<Vec<HttpHeader>, ProviderCredentialError> {
@@ -203,8 +205,8 @@ pub enum ProviderCredentialError {
     UnknownProvider,
     ApiKeyUnsupported,
     InvalidApiKey,
-    ApiKeyMissing(ProviderId),
-    InvalidStoredApiKey(ProviderId),
+    ApiKeyMissing(ModelConnectionId),
+    InvalidStoredApiKey(ModelConnectionId),
     SecretStore(SecretStoreError),
 }
 

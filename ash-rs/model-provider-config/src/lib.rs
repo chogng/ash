@@ -1,6 +1,7 @@
 //! Declarative, serializable, and runtime-free model-provider configuration.
 
 mod config;
+mod connection;
 mod definition;
 mod error;
 mod input_token_count;
@@ -43,12 +44,10 @@ pub use input_token_count::InputTokenCountTarget;
 pub use input_token_count::NormalizedInputTokenCountConfig;
 pub use model_catalog::STATIC_MODEL_CATALOG;
 pub use model_catalog::find_static_model;
-pub use model_catalog::find_static_model_for_mode;
 pub use providers::bigmodel::BIGMODEL_CODING_PLAN_BASE_URL;
 pub use providers::zai::ZAI_CODING_PLAN_BASE_URL;
 pub use registry::ProviderConfigRegistry;
 pub use registry::RegistryMergePolicy;
-pub use static_model_spec::StaticModelRuntime;
 pub use static_model_spec::StaticModelSpec;
 
 use schemars::{Schema, schema_for};
@@ -67,3 +66,11 @@ mod tests;
 
 pub use definition::LiveApiProfile;
 pub use definition::RealtimeApiProfile;
+
+pub use ash_protocol::ModelConnectionId;
+pub use connection::ModelConnectionDefinition;
+pub use connection::ModelConnectionRuntime;
+pub use connection::builtin_connections;
+pub use connection::connection_provider;
+
+pub use connection::legacy_model_providers;

@@ -10,7 +10,7 @@ use ash_app_server_protocol::protocol::provider::ProviderCatalogEntryDto;
 use ash_app_server_protocol::protocol::provider::ProviderListResult;
 use ash_model_provider::ProviderCredentialError;
 use ash_model_provider_config::ApiKeyPolicy;
-use ash_model_provider_config::ProviderId;
+use ash_protocol::ModelConnectionId;
 use serde_json::Value;
 
 impl AppServer {
@@ -28,7 +28,7 @@ impl AppServer {
             .read_snapshot()
             .map_err(|_| provider_credentials_unavailable())?;
         credentials
-            .with_configs(config.values.providers.values())
+            .with_configs(config.values.connections.values())
             .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))
     }
     pub(super) fn provider_probe(&self, params: Value) -> Result<Value, RpcError> {
@@ -55,52 +55,156 @@ impl AppServer {
     }
 
     pub(super) fn provider_list(&self) -> Result<Value, RpcError> {
+        let config = self
+            .config
+            .as_ref()
+            .ok_or_else(provider_credentials_unavailable)?
+            .read_snapshot()
+            .map_err(|_| provider_credentials_unavailable())?;
+        let accounts = self
+            .login
+            .as_ref()
+            .map(|login| login.read())
+            .transpose()
+            .map_err(|_| provider_credentials_unavailable())?;
         let providers = self
             .configured_credentials()?
             .catalog()
-            .map_err(provider_credential_error)?;
-        let providers = providers
+            .map_err(provider_credential_error)?
             .into_iter()
-            .map(|provider| ProviderCatalogEntryDto {
-                provider: provider.provider.to_string(),
-                display_name: provider.display_name,
-                api_key_policy: api_key_policy_dto(provider.api_key_policy),
-                api_key_configured: provider.api_key_configured,
+            .map(|entry| {
+                let oauth = matches!(
+                    entry.connection.as_str(),
+                    "chatgpt-subscription" | "kimi-subscription" | "xai-subscription"
+                );
+                let ready = if oauth {
+                    accounts.as_ref().is_some_and(|state| {
+                        state.accounts.iter().any(|account| {
+                            account.account.provider == entry.connection.as_str()
+                                && account.status == ash_login::AccountStatus::Ready
+                        })
+                    })
+                } else {
+                    entry.api_key_configured || entry.api_key_policy != ApiKeyPolicy::Required
+                };
+                ProviderCatalogEntryDto {
+                    active: config.values.active_connections.get(&entry.provider)
+                        == Some(&entry.connection),
+                    configured: config.values.connections.contains_key(&entry.connection)
+                        || (oauth && ready),
+                    ready,
+                    access: match entry.access_mode {
+                        ash_model_provider_config::ProviderAccessMode::Api => {
+                            ash_protocol::ModelAccess::ApiKey
+                        }
+                        ash_model_provider_config::ProviderAccessMode::Subscription => {
+                            ash_protocol::ModelAccess::Subscription
+                        }
+                    },
+                    connection: entry.connection.to_string(),
+                    provider: entry.provider.to_string(),
+                    display_name: entry.display_name,
+                    api_key_policy: api_key_policy_dto(entry.api_key_policy),
+                    api_key_configured: entry.api_key_configured,
+                }
             })
             .collect();
         result(&ProviderListResult { providers })
     }
 
+    pub(super) fn provider_activate(&self, params: Value) -> Result<Value, RpcError> {
+        let params: ash_app_server_protocol::protocol::provider::ProviderActivateParams =
+            decode(&params)?;
+        let connection = ModelConnectionId::new(params.connection)
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        let store = self
+            .config
+            .as_ref()
+            .ok_or_else(provider_credentials_unavailable)?;
+        let snapshot = store
+            .read_snapshot()
+            .map_err(|_| provider_credentials_unavailable())?;
+        let command = if snapshot.values.connections.contains_key(&connection) {
+            ash_config::UserConfigCommand::ActivateConnection { connection }
+        } else {
+            if !matches!(
+                connection.as_str(),
+                "chatgpt-subscription" | "kimi-subscription" | "xai-subscription"
+            ) {
+                return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+            }
+            let accounts = self
+                .login
+                .as_ref()
+                .ok_or_else(provider_credentials_unavailable)?
+                .read()
+                .map_err(|_| provider_credentials_unavailable())?;
+            if !accounts.accounts.iter().any(|account| {
+                account.account.provider == connection.as_str()
+                    && account.status == ash_login::AccountStatus::Ready
+            }) {
+                return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+            }
+            ash_config::UserConfigCommand::ConfigureConnection {
+                config: ash_model_provider_config::ModelProviderConfig::for_connection(
+                    connection.clone(),
+                ),
+                connection,
+            }
+        };
+        let outcome = store
+            .apply(ash_config::ConfigCommandRequest {
+                command_id: params.command_id,
+                expected_revision: ash_config::ConfigRevision::new(params.expected_revision),
+                command,
+            })
+            .map_err(super::config_operations::config_operation_error)?;
+        result(&super::config_operations::config_command_result(outcome))
+    }
+
     pub(super) fn provider_api_key_set(&self, params: Value) -> Result<Value, RpcError> {
         let params: ProviderApiKeySetParams = decode(&params)?;
-        let provider = ProviderId::new(params.provider)
+        let connection = ModelConnectionId::new(params.connection)
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        let store = self
+            .config
+            .as_ref()
+            .ok_or_else(provider_credentials_unavailable)?;
+        let snapshot = store
+            .read_snapshot()
+            .map_err(|_| provider_credentials_unavailable())?;
+        let config = snapshot
+            .values
+            .connections
+            .get(&connection)
+            .cloned()
+            .unwrap_or_else(|| {
+                ash_model_provider_config::ModelProviderConfig::for_connection(connection.clone())
+            });
+        config
+            .validate_static()
             .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
         self.configured_credentials()?
-            .set_api_key(&provider, params.api_key.into_bytes())
+            .set_api_key(&connection, params.api_key.into_bytes())
             .map_err(provider_credential_error)?;
-        if let Some(store) = &self.config {
-            let snapshot = store
-                .read_snapshot()
-                .map_err(|_| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
-            if !snapshot.values.providers.contains_key(&provider) {
-                store
-                    .apply(ash_config::ConfigCommandRequest {
-                        command_id: ash_protocol::CommandId::new(format!(
-                            "configure-api-key-{}-{}",
-                            provider,
-                            snapshot.revision.get()
-                        ))
-                        .expect("generated command ID"),
-                        expected_revision: snapshot.revision,
-                        command: ash_config::UserConfigCommand::EnsureProvider {
-                            provider: provider.clone(),
-                        },
-                    })
-                    .map_err(|_| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
-            }
-        }
+        // Commit selection only after credentials were saved. A failed configuration write leaves
+        // the prior selection intact, even if the new secret has already reached its own store.
+        store
+            .apply(ash_config::ConfigCommandRequest {
+                command_id: ash_protocol::CommandId::new(format!(
+                    "connect-{connection}-{}",
+                    snapshot.revision.get()
+                ))
+                .expect("generated command ID"),
+                expected_revision: snapshot.revision,
+                command: ash_config::UserConfigCommand::ConfigureConnection {
+                    connection: connection.clone(),
+                    config,
+                },
+            })
+            .map_err(super::config_operations::config_operation_error)?;
         result(&ProviderApiKeySetResult {
-            provider: provider.to_string(),
+            connection: connection.to_string(),
             api_key_configured: true,
         })
     }

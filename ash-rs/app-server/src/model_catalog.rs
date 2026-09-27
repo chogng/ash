@@ -1,5 +1,4 @@
 use ash_app_server_protocol::protocol::model::ModelCatalogEntry;
-use ash_app_server_protocol::protocol::model::ModelListView;
 use ash_protocol::ModelAccess;
 use ash_protocol::ModelRef;
 use core_api::CoreError;
@@ -55,11 +54,11 @@ impl From<ash_models_manager::ModelsManagerError> for ModelCatalogRefreshError {
 pub(crate) trait ModelCatalog: Send + Sync {
     fn refresh(
         &self,
-        _provider: &ash_protocol::ProviderId,
+        _connection: &ash_protocol::ModelConnectionId,
     ) -> Result<Vec<ModelCatalogEntry>, ModelCatalogRefreshError> {
         Err(ModelCatalogRefreshError::Unsupported)
     }
-    fn list(&self, view: ModelListView) -> Result<Vec<ModelCatalogEntry>, CoreError>;
+    fn list(&self) -> Result<Vec<ModelCatalogEntry>, CoreError>;
     /// Reads the current request path for a model; catalog metadata can differ from the active account.
     fn current_access(&self, model: &ModelRef) -> Result<ModelAccess, CoreError>;
     fn configured_default(&self) -> Result<Option<ModelRef>, CoreError>;
@@ -68,7 +67,7 @@ pub(crate) trait ModelCatalog: Send + Sync {
 pub(crate) struct UnavailableModelCatalog;
 
 impl ModelCatalog for UnavailableModelCatalog {
-    fn list(&self, _: ModelListView) -> Result<Vec<ModelCatalogEntry>, CoreError> {
+    fn list(&self) -> Result<Vec<ModelCatalogEntry>, CoreError> {
         Ok(Vec::new())
     }
 

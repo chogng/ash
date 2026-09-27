@@ -47,10 +47,6 @@ pub(crate) fn model_choices(
     let mut pinned_items = Vec::new();
     let mut other_items = Vec::new();
     for entry in &catalog.models {
-        // The product catalog is global; this client only offers configured providers.
-        if !config.providers.contains_key(entry.model.provider.as_str()) {
-            continue;
-        }
         let model = ModelRefDto {
             provider: entry.model.provider.to_string(),
             model: entry.model.model.to_string(),

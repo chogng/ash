@@ -17,7 +17,9 @@ fn catalog_reports_every_builtin_without_exposing_values() {
     let openai = provider("openai");
     secrets
         .store(
-            &provider_api_key_secret_key(&openai),
+            &provider_api_key_secret_key(
+                &ash_protocol::ModelConnectionId::new(openai.as_str()).unwrap(),
+            ),
             &SecretValue::new(b"secret-openai-key".to_vec()),
         )
         .unwrap();
@@ -25,7 +27,7 @@ fn catalog_reports_every_builtin_without_exposing_values() {
 
     let catalog = service.catalog().unwrap();
 
-    assert_eq!(catalog.len(), 16);
+    assert_eq!(catalog.len(), 19);
     assert!(catalog.iter().any(|entry| {
         entry.provider == openai
             && entry.api_key_policy == ApiKeyPolicy::Required
@@ -51,19 +53,25 @@ fn stored_keys_resolve_through_each_declared_header_shape() {
     ] {
         service
             .set_api_key(
-                &provider_id(provider),
+                &ash_protocol::ModelConnectionId::new(provider_id(provider).as_str()).unwrap(),
                 format!("{provider}-key").into_bytes(),
             )
             .unwrap();
         assert_eq!(
-            service.request_headers(&provider_id(provider)).unwrap(),
+            service
+                .request_headers(
+                    &ash_protocol::ModelConnectionId::new(provider_id(provider).as_str()).unwrap()
+                )
+                .unwrap(),
             vec![ash_http_client::HttpHeader::new(header, value)]
         );
     }
 
     assert_eq!(
         secrets
-            .load(&provider_api_key_secret_key(&provider("openai")))
+            .load(&provider_api_key_secret_key(
+                &ash_protocol::ModelConnectionId::new(provider("openai").as_str()).unwrap()
+            ))
             .unwrap()
             .unwrap()
             .expose(),
@@ -79,24 +87,30 @@ fn mutation_rejects_unsupported_and_invalid_keys() {
     );
 
     assert!(matches!(
-        service.set_api_key(&provider("ollama"), b"key".to_vec()),
+        service.set_api_key(
+            &ash_protocol::ModelConnectionId::new(provider("ollama").as_str()).unwrap(),
+            b"key".to_vec()
+        ),
         Err(ProviderCredentialError::ApiKeyUnsupported)
     ));
-    for id in ["openai", "kimi", "xai"] {
-        let mut config = ash_model_provider_config::ModelProviderConfig::new(provider(id));
-        config.access_mode = ash_model_provider_config::ProviderAccessMode::Subscription;
-        let registry = ProviderConfigRegistry::builtin()
-            .with_configs([&config])
-            .unwrap();
-        let subscription =
-            ProviderCredentialService::new(registry, Arc::new(MemorySecretStore::default()));
+    for id in [
+        "chatgpt-subscription",
+        "kimi-subscription",
+        "xai-subscription",
+    ] {
         assert!(matches!(
-            subscription.set_api_key(&provider(id), b"key".to_vec()),
+            service.set_api_key(
+                &ash_protocol::ModelConnectionId::new(id).unwrap(),
+                b"key".to_vec()
+            ),
             Err(ProviderCredentialError::ApiKeyUnsupported)
         ));
     }
     assert!(matches!(
-        service.set_api_key(&provider("openai"), b"bad\nkey".to_vec()),
+        service.set_api_key(
+            &ash_protocol::ModelConnectionId::new(provider("openai").as_str()).unwrap(),
+            b"bad\nkey".to_vec()
+        ),
         Err(ProviderCredentialError::InvalidApiKey)
     ));
 }

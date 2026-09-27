@@ -59,7 +59,7 @@ impl ConfigProvenance {
                 .as_ref()
                 .map(|_| ConfigValueSource::User),
             providers: document
-                .providers
+                .active_connections
                 .keys()
                 .cloned()
                 .map(|id| (id, ConfigValueSource::User))

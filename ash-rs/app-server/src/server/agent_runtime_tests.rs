@@ -187,7 +187,6 @@ struct SelectedModel(ash_protocol::ModelRef);
 impl crate::model_catalog::ModelCatalog for SelectedModel {
     fn list(
         &self,
-        _: ash_app_server_protocol::protocol::model::ModelListView,
     ) -> Result<Vec<ash_app_server_protocol::protocol::model::ModelCatalogEntry>, CoreError> {
         Ok(Vec::new())
     }

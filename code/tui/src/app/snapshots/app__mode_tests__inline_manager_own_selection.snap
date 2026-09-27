@@ -3,7 +3,7 @@ source: code/tui/src/app/mode_tests.rs
 expression: render(&app)
 ---
     ▄  ▄     Ash Code v0.1.0                      
-  ▗█▛██▜█▖   Automatic model · Access unknown     
+  ▗█▛██▜█▖   Automatic model                      
   ▝▜████▛▘   .                                    
     ▝  ▘                                          
                                                   

@@ -349,8 +349,15 @@ fn parse_model_ref(reference: &str) -> Result<ModelRef, CoreError> {
             "Agent model reference '{reference}' must use provider/model"
         ))
     })?;
+    let provider =
+        ProviderId::new(provider).map_err(|error| CoreError::InvalidInput(error.to_string()))?;
+    // Directory definitions are read-only input. Migrate their identity before the role is
+    // frozen; never let a former service ID select a connection during execution.
+    let provider = model_provider_config::legacy_model_providers()
+        .remove(&provider)
+        .unwrap_or(provider);
     Ok(ModelRef::new(
-        ProviderId::new(provider).map_err(|error| CoreError::InvalidInput(error.to_string()))?,
+        provider,
         ModelId::new(model).map_err(|error| CoreError::InvalidInput(error.to_string()))?,
     ))
 }

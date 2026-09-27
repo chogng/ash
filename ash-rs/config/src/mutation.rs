@@ -1,6 +1,5 @@
 use crate::{ConfigError, PreferencesUpdate, UserConfigCommand, UserConfigDocument};
 use ash_model_provider_config::STATIC_MODEL_CATALOG;
-use ash_model_provider_config::StaticModelRuntime;
 use ash_protocol::Patch;
 
 pub(crate) fn apply_command(
@@ -10,120 +9,61 @@ pub(crate) fn apply_command(
     match command {
         UserConfigCommand::ConfigureIssues { config } => document.issues = config.clone(),
         UserConfigCommand::UpdatePreferences(update) => apply_preferences(document, update),
-        UserConfigCommand::ConfigureProvider { provider, config } => {
-            if &config.provider != provider {
-                return Err(ConfigError(format!(
-                    "provider command key '{}' does not match configuration provider '{}'",
-                    provider, config.provider
-                )));
+        UserConfigCommand::ConfigureConnection { connection, config }
+        | UserConfigCommand::SaveConnection { connection, config } => {
+            if &config.connection != connection {
+                return Err(ConfigError(
+                    "connection command identity does not match its configuration".into(),
+                ));
             }
+            config
+                .validate_static()
+                .map_err(|error| ConfigError(error.to_string()))?;
             let mut config = config.clone();
             if let Some(custom) = &mut config.custom {
                 custom.order = match document
-                    .providers
-                    .get(provider)
+                    .connections
+                    .get(connection)
                     .and_then(|entry| entry.custom.as_ref())
                 {
                     Some(previous) => previous.order,
                     None => document
-                        .providers
+                        .connections
                         .values()
                         .filter_map(|entry| entry.custom.as_ref())
                         .map(|entry| entry.order)
                         .max()
                         .unwrap_or(0)
                         .checked_add(1)
-                        .ok_or_else(|| ConfigError("provider order exhausted".into()))?,
+                        .ok_or_else(|| ConfigError("connection order exhausted".into()))?,
                 };
             }
-            document.providers.insert(provider.clone(), config);
-            if document.agent.model.is_none() {
+            if matches!(command, UserConfigCommand::ConfigureConnection { .. }) {
+                document
+                    .active_connections
+                    .insert(config.provider.clone(), connection.clone());
+            }
+            if document.agent.model.is_none()
+                && matches!(command, UserConfigCommand::ConfigureConnection { .. })
+            {
                 document.agent.model = STATIC_MODEL_CATALOG
                     .iter()
-                    .find(|model| {
-                        model.provider_id == provider.as_str()
-                            && model.runtime == StaticModelRuntime::ProviderApi
-                    })
+                    .find(|model| model.provider_id == config.provider.as_str())
                     .map(|model| model.model_ref());
             }
+            document.connections.insert(connection.clone(), config);
         }
-        UserConfigCommand::EnsureProvider { provider } => {
+        UserConfigCommand::ActivateConnection { connection } => {
+            let config = document.connections.get(connection).ok_or_else(|| {
+                ConfigError(format!("connection '{connection}' is not configured"))
+            })?;
             document
-                .providers
-                .entry(provider.clone())
-                .or_insert_with(|| {
-                    ash_model_provider_config::ModelProviderConfig::new(provider.clone())
-                });
+                .active_connections
+                .insert(config.provider.clone(), connection.clone());
         }
-        UserConfigCommand::RemoveProvider { provider } => {
-            if document
-                .agent
-                .advisor
-                .as_ref()
-                .is_some_and(|advisor| advisor.model.provider == *provider)
-            {
-                return Err(ConfigError(format!(
-                    "cannot remove provider '{}' while it is the advisor provider",
-                    provider
-                )));
-            }
-            if document
-                .agent
-                .model
-                .as_ref()
-                .is_some_and(|model| model.provider == *provider)
-            {
-                return Err(ConfigError(format!(
-                    "cannot remove provider '{}' while it is the model provider",
-                    provider
-                )));
-            }
-            if document
-                .agent
-                .approval_review_model
-                .explicit_model()
-                .is_some_and(|model| model.provider == *provider)
-            {
-                return Err(ConfigError(format!(
-                    "cannot remove provider '{}' while it is the approval review model provider",
-                    provider
-                )));
-            }
-            if document
-                .agent
-                .commit_message_model
-                .as_ref()
-                .is_some_and(|model| model.provider == *provider)
-            {
-                return Err(ConfigError(format!(
-                    "cannot remove provider '{}' while it is the commit-message model provider",
-                    provider
-                )));
-            }
-            if document.codebase.models.as_ref().is_some_and(|models| {
-                models.embedding_model.provider == *provider
-                    || models
-                        .rerank_model
-                        .as_ref()
-                        .is_some_and(|model| model.provider == *provider)
-            }) {
-                return Err(ConfigError(format!(
-                    "cannot remove provider '{}' while Codebase models use it",
-                    provider
-                )));
-            }
-            if document
-                .tool_search
-                .embedding_model
-                .as_ref()
-                .is_some_and(|model| model.provider == *provider)
-            {
-                return Err(ConfigError(format!(
-                    "cannot remove provider '{}' while Tool Search uses it",
-                    provider
-                )));
-            }
-            document.providers.remove(provider);
+        UserConfigCommand::RemoveConnection { connection } => {
+            // Keep the selected identity: removal must not activate another saved credential.
+            document.connections.remove(connection);
         }
         UserConfigCommand::UpsertMcpServer { server } => {
             document
@@ -232,7 +172,7 @@ pub(crate) fn apply_command(
                 .authorize(
                     dir.clone(),
                     document.agent.commit_message_model.as_ref(),
-                    &document.providers,
+                    &crate::ResolvedConfig::from(&*document).providers,
                 )
                 .map_err(|message| ConfigError(message.into()))?;
         }

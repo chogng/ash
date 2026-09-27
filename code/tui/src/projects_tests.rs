@@ -16,8 +16,9 @@ use std::path::Path;
 #[test]
 fn project_root_picker_preselects_the_current_workspace() {
     let workspace = tempfile::tempdir().unwrap();
-    let a = workspace.path().join("a");
-    let b = workspace.path().join("b");
+    let root_path = workspace.path().canonicalize().unwrap();
+    let a = root_path.join("a");
+    let b = root_path.join("b");
     std::fs::create_dir(&a).unwrap();
     std::fs::create_dir(&b).unwrap();
     let project = ProjectDto {

@@ -27,7 +27,6 @@ use std::time::UNIX_EPOCH;
 /// Core owns context, attachments and accounting; the capability owns its prompt and selection.
 pub struct ToolModel {
     threads: Arc<ThreadController>,
-    model: Arc<dyn ModelService>,
 }
 
 pub struct ToolModelRequest<'a> {
@@ -48,8 +47,8 @@ pub struct ToolModelResponse {
 }
 
 impl ToolModel {
-    pub fn new(threads: Arc<ThreadController>, model: Arc<dyn ModelService>) -> Self {
-        Self { threads, model }
+    pub fn new(threads: Arc<ThreadController>) -> Self {
+        Self { threads }
     }
 
     pub fn invoke(
@@ -86,9 +85,16 @@ impl ToolModel {
         });
         let selection = ModelSelection::Session(request.model);
         let model = self
-            .model
-            .snapshot(selection)?
-            .unwrap_or_else(|| Arc::clone(&self.model));
+            .threads
+            .turn_tool_models
+            .lock()
+            .map_err(|_| CoreError::Execution("Turn model state lock poisoned".into()))?
+            .get(thread_id)
+            .filter(|(owner, model, _)| owner == turn_id && model == request.model)
+            .map(|(_, _, model)| model.clone())
+            .ok_or_else(|| {
+                CoreError::Execution("auxiliary model was not captured at Turn start".into())
+            })?;
         let model = crate::attachment_model_service::AttachmentModelService::new(
             model,
             self.threads.attachments(),

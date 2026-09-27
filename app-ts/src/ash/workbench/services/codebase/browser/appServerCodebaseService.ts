@@ -8,7 +8,8 @@ export class AppServerCodebaseService implements ICodebaseService {
 	async readConfig(): Promise<CodebaseConfigurationSnapshot> { return projectConfiguration(await this.api.readConfig()); }
 
 	async configureProvider(config: CodebaseProviderConfiguration, expectedRevision: number): Promise<CodebaseConfigurationCommandResult> {
-		return projectCommandResult(await this.api.configureProvider({ commandId: commandId("provider"), expectedRevision, config: providerConfigurationDto(config) }));
+		const saved = await this.api.configureProvider({ commandId: commandId("provider"), expectedRevision, config: providerConfigurationDto(config) });
+		return projectCommandResult(await this.api.activateProvider({ commandId: commandId("activate-provider"), expectedRevision: saved.revision, connection: config.provider }));
 	}
 
 	async configure(models: CodebaseModels | undefined, automaticContext: CodebaseAutomaticContext, expectedRevision: number): Promise<CodebaseConfigurationCommandResult> {
@@ -36,7 +37,7 @@ function projectProviderConfiguration(config: ProviderConfigDto): CodebaseProvid
 }
 
 function providerConfigurationDto(config: CodebaseProviderConfiguration): ProviderConfigDto {
-	return { provider: config.provider, baseUrl: config.baseUrl, maxOutputTokens: config.maxOutputTokens, modelContext: config.modelContext ? Object.fromEntries(Object.entries(config.modelContext).map(([model, context]) => [model, { ...context }])) : undefined };
+	return { connection: config.provider, provider: config.provider, baseUrl: config.baseUrl, maxOutputTokens: config.maxOutputTokens, modelContext: config.modelContext ? Object.fromEntries(Object.entries(config.modelContext).map(([model, context]) => [model, { ...context }])) : undefined };
 }
 
 function projectModels(models: CodebaseModelsDto): CodebaseModels {

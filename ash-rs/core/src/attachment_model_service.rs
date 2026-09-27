@@ -104,6 +104,21 @@ fn is_data_url(url: &str) -> bool {
 }
 
 impl ModelService for AttachmentModelService {
+    fn approval_review_model(
+        &self,
+    ) -> Result<Option<(ash_protocol::ModelRef, Arc<dyn ModelService>)>, CoreError> {
+        self.inner.approval_review_model()
+    }
+
+    fn snapshot(
+        &self,
+        selection: ModelSelection<'_>,
+    ) -> Result<Option<Arc<dyn ModelService>>, CoreError> {
+        Ok(self.inner.snapshot(selection)?.map(|inner| {
+            Arc::new(Self::new(inner, Arc::clone(&self.attachments))) as Arc<dyn ModelService>
+        }))
+    }
+
     fn billing_scope(
         &self,
         selection: ModelSelection<'_>,

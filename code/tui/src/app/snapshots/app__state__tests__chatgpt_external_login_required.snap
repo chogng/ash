@@ -12,7 +12,6 @@ expression: screen
             │  Plan  ·  pro                                                        │
             │> Sign in to ChatGPT in Codex, then reconnect here.                   │
             │  Sign in with ChatGPT                                                │
-            │  Disconnect from Ash                                                 │
             │                                                                      │
             │                                                                      │
             │                                                                      │
@@ -21,6 +20,7 @@ expression: screen
             │                                                                      │
             │                                                                      │
             │                                                                      │
-  ╭─────────│  Tab/Shift+Tab to switch  ·  Esc to return                           │─────────╮
+            │                                                                      │
+  ╭─────────│  Tab/Shift+Tab to switch  ·  Esc to return  ·  l to sign out         │─────────╮
   │ > Build └──────────────────────────────────────────────────────────────────────┘         │
   ╰──────────────────────────────────────────────────────────────────────── Automatic model ─╯

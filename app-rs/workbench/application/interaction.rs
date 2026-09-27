@@ -266,6 +266,14 @@ impl WorkbenchApplication {
             return false;
         }
         match self.settings.activate(id) {
+            ash_settings::SettingsActivation::ActivateModelConnection(index) => {
+                if let Err(error) = self.activate_model_connection(index) {
+                    self.settings.set_model_connection_error(error.to_string());
+                }
+                self.rebuild_presentation();
+                self.request_redraw();
+                true
+            }
             ash_settings::SettingsActivation::Ignored => false,
             ash_settings::SettingsActivation::Changed => {
                 if self.settings.section() != ash_settings::SettingsPageSection::Remote
@@ -501,7 +509,11 @@ impl WorkbenchApplication {
         &self,
     ) -> Option<ash_settings::SettingsKeybindingsViewport> {
         if !self.workbench.workbench().sidebar_part().is_settings()
-            || self.settings.section() != ash_settings::SettingsPageSection::Keybindings
+            || !matches!(
+                self.settings.section(),
+                ash_settings::SettingsPageSection::Keybindings
+                    | ash_settings::SettingsPageSection::Models
+            )
             || self.quick_access.shortcuts_open()
         {
             return None;
@@ -512,8 +524,16 @@ impl WorkbenchApplication {
             .element_bounds(ash_settings::SETTINGS_KEYBINDINGS_LIST)?;
         Some(ash_settings::SettingsKeybindingsViewport::new(
             bounds,
-            ash_commands::AppCommandId::BINDABLE.len(),
-            self.keybinding_diagnostics.len(),
+            if self.settings.section() == ash_settings::SettingsPageSection::Models {
+                self.settings.model_connections().len()
+            } else {
+                ash_commands::AppCommandId::BINDABLE.len()
+            },
+            if self.settings.section() == ash_settings::SettingsPageSection::Models {
+                self.settings.model_connection_error().len()
+            } else {
+                self.keybinding_diagnostics.len()
+            },
             ash_settings::SettingsSectionStyle::from_theme(self.palette, &self.typography)
                 .scroll_view,
         ))

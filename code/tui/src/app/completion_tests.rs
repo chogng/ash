@@ -98,8 +98,7 @@ fn status_line_context_follows_thread_snapshots() {
             ash_app_server_protocol::protocol::model::ModelCatalogEntry {
                 model: snapshot.turns[0].model.clone().unwrap(),
                 display_name: "model".into(),
-                access: ash_protocol::ModelAccess::ApiKey,
-                output_transport: ash_protocol::ModelOutputTransport::Unary,
+
                 context_window: Some(100),
                 auto_compact_token_limit: None,
                 available_context_window: Some(100),

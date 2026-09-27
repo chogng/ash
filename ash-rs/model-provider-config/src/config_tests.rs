@@ -71,6 +71,7 @@ fn custom_connections_validate_and_restore_protocol_without_shadowing_builtins()
     );
     let mut second = first.clone();
     second.provider = provider_id("custom-two");
+    second.connection = ModelConnectionId::new("custom-two").unwrap();
     assert!(
         ProviderConfigRegistry::builtin()
             .with_configs([&first, &second])
@@ -115,7 +116,7 @@ fn model_ref(provider: &str, model: &str) -> ash_protocol::ModelRef {
 #[test]
 fn model_provider_config_is_serializable_and_has_a_schema() {
     let config = ModelProviderConfig {
-        access_mode: crate::ProviderAccessMode::Api,
+        connection: ModelConnectionId::new("openai").unwrap(),
         custom: None,
         provider: provider_id("openai"),
         base_url: Some("https://example.test/v1".into()),
@@ -134,6 +135,7 @@ fn model_provider_config_is_serializable_and_has_a_schema() {
         value,
         json!({
             "provider": "openai",
+            "connection": "openai",
             "baseUrl": "https://example.test/v1",
             "maxOutputTokens": 2048,
             "modelContext": {
@@ -219,8 +221,9 @@ fn builtins_declare_websocket_protocol_without_inference_from_http_compatibility
     ] {
         assert_eq!(
             registry
-                .get(&provider_id(provider))
+                .connection(&ModelConnectionId::new(provider).unwrap())
                 .unwrap()
+                .transport
                 .websocket_api_profile,
             WebSocketApiProfile::Unavailable,
             "provider {provider}",
@@ -244,7 +247,7 @@ fn token_count_targets_and_model_support_are_normalized_explicitly() {
     let registry = ProviderConfigRegistry::builtin();
     let openai = registry
         .normalize(&ModelProviderConfig {
-            access_mode: crate::ProviderAccessMode::Api,
+            connection: ModelConnectionId::new("openai").unwrap(),
             custom: None,
             provider: provider_id("openai"),
             base_url: Some("https://proxy.test/v1".into()),
@@ -257,7 +260,7 @@ fn token_count_targets_and_model_support_are_normalized_explicitly() {
         .unwrap();
     let google_override = registry
         .normalize(&ModelProviderConfig {
-            access_mode: crate::ProviderAccessMode::Api,
+            connection: ModelConnectionId::new("google").unwrap(),
             custom: None,
             provider: provider_id("google"),
             base_url: Some("https://proxy.test/v1/openai".into()),
@@ -358,7 +361,14 @@ fn builtin_provider_api_key_policies_are_explicit() {
     let registry = ProviderConfigRegistry::builtin();
 
     assert_eq!(registry.get(&provider_id("google")).unwrap().name, "Google");
-    assert_eq!(registry.get(&provider_id("bigmodel")).unwrap().name, "BigModel");
+    assert_eq!(
+        registry
+            .connection(&ModelConnectionId::new("bigmodel").unwrap())
+            .unwrap()
+            .transport
+            .name,
+        "BigModel"
+    );
     assert_eq!(registry.get(&provider_id("zai")).unwrap().name, "Z.AI");
 
     assert_eq!(
@@ -411,7 +421,7 @@ fn configured_endpoint_is_required_and_overrides_are_normalized() {
 
     let normalized = registry
         .normalize(&ModelProviderConfig {
-            access_mode: crate::ProviderAccessMode::Api,
+            connection: ModelConnectionId::new("custom").unwrap(),
             custom: None,
             provider: provider_id("custom"),
             base_url: Some(" https://runtime.test/v1/ ".into()),
@@ -425,7 +435,7 @@ fn configured_endpoint_is_required_and_overrides_are_normalized() {
 #[test]
 fn static_validation_rejects_invalid_urls_and_zero_token_limits() {
     let invalid_url = ModelProviderConfig {
-        access_mode: crate::ProviderAccessMode::Api,
+        connection: ModelConnectionId::new("custom").unwrap(),
         custom: None,
         provider: provider_id("custom"),
         base_url: Some("file:///tmp/provider".into()),
@@ -438,7 +448,7 @@ fn static_validation_rejects_invalid_urls_and_zero_token_limits() {
     ));
 
     let invalid_tokens = ModelProviderConfig {
-        access_mode: crate::ProviderAccessMode::Api,
+        connection: ModelConnectionId::new("custom").unwrap(),
         custom: None,
         provider: provider_id("custom"),
         base_url: None,
@@ -455,7 +465,7 @@ fn static_validation_rejects_invalid_urls_and_zero_token_limits() {
 fn static_validation_rejects_zero_model_context_limits() {
     let model = ModelId::new("model").unwrap();
     let config = ModelProviderConfig {
-        access_mode: crate::ProviderAccessMode::Api,
+        connection: ModelConnectionId::new("custom").unwrap(),
         custom: None,
         provider: provider_id("custom"),
         base_url: None,
@@ -521,7 +531,8 @@ fn registry_merge_has_explicit_conflict_semantics() {
 #[test]
 fn builtins_are_valid_and_include_all_supported_adapters() {
     let registry = ProviderConfigRegistry::builtin();
-    assert_eq!(registry.providers().count(), 16);
+    assert_eq!(registry.providers().count(), 13);
+    assert_eq!(registry.connections().len(), 19);
     assert_eq!(
         registry.get(&provider_id("openai")).unwrap().adapter,
         ProviderAdapter::OpenAi
@@ -543,63 +554,39 @@ fn builtins_are_valid_and_include_all_supported_adapters() {
 fn static_model_catalog_has_unique_valid_rows() {
     let mut identities = BTreeSet::new();
     for spec in STATIC_MODEL_CATALOG {
-        assert!(!spec.provider_id.trim().is_empty());
-        assert!(!spec.model_id.trim().is_empty());
-        assert!(!spec.display_name.trim().is_empty());
-        assert!(identities.insert((
-            spec.provider_id,
-            spec.model_id,
-            spec.access == ash_protocol::ModelAccess::Subscription,
-        )));
-        assert_eq!(
-            spec.has_one_million_context(),
-            spec.context_window == ash_protocol::ContextWindow::Known(1_000_000)
-        );
+        assert!(identities.insert((spec.provider_id, spec.model_id)));
+        assert_eq!(find_static_model(&spec.model_ref()), Some(spec));
         if let Some(effort) = spec.model_reasoning_effort {
             assert!(spec.supported_reasoning_efforts.contains(&effort));
-        }
-        match spec.access {
-            ash_protocol::ModelAccess::Subscription => {
-                assert_ne!(spec.runtime, StaticModelRuntime::ProviderApi);
-            }
-            ash_protocol::ModelAccess::ApiKey => {
-                assert_eq!(spec.runtime, StaticModelRuntime::ProviderApi);
-            }
-            _ => {}
-        }
-        if let (
-            ash_protocol::ContextWindow::Known(context_window),
-            Some(auto_compact_token_limit),
-        ) = (spec.context_window, spec.auto_compact_token_limit)
-        {
-            assert!(auto_compact_token_limit <= context_window);
         }
     }
 }
 
 #[test]
-fn chatgpt_subscription_seeds_only_current_models() {
-    let mut config = ModelProviderConfig::new(provider_id("openai"));
-    config.access_mode = ProviderAccessMode::Subscription;
-    let registry = ProviderConfigRegistry::builtin()
-        .with_configs([&config])
-        .unwrap();
-    let models = &registry.get(&provider_id("openai")).unwrap().models;
-    assert_eq!(
-        models
-            .iter()
-            .map(|model| model.id.as_str())
-            .collect::<Vec<_>>(),
-        [
-            "gpt-6-astra",
-            "gpt-6-sol",
-            "gpt-6-luna",
-            "gpt-5.6-sol",
-            "gpt-5.6-terra",
-            "gpt-5.6-luna",
-            "gpt-5.5",
-        ]
-    );
+fn switching_connections_preserves_the_model_catalog() {
+    let mut vendors = BTreeMap::new();
+    for connection in builtin_connections() {
+        connection.transport.validate().unwrap();
+        let mut config = ModelProviderConfig::for_connection(connection.id.clone());
+        if connection.transport.endpoint == EndpointPolicy::ConfiguredOnly {
+            config.base_url = Some("https://example.com/v1".into());
+        }
+        let registry = ProviderConfigRegistry::builtin()
+            .with_configs([&config])
+            .unwrap();
+        let actual = &registry.get(&config.provider).unwrap().models;
+        if let Some(previous) = vendors.insert(config.provider.clone(), actual.clone()) {
+            assert_eq!(
+                actual, &previous,
+                "{} changed model identity",
+                connection.id
+            );
+        }
+        assert_eq!(
+            registry.normalize(&config).unwrap().access_mode,
+            connection.access_mode
+        );
+    }
 }
 
 #[test]
@@ -618,7 +605,7 @@ fn builtin_catalog_includes_current_chat_model_families() {
         ("kimi", "kimi-k3"),
         ("deepseek", "deepseek-flash"),
         ("zai", "glm-5.3"),
-        ("bigmodel", "glm-5.2"),
+        ("zai", "glm-5.2"),
         ("minimax", "MiniMax-M3"),
         ("mimo", "mimo-v2.6-pro"),
     ] {
@@ -649,147 +636,54 @@ fn builtin_catalog_includes_current_chat_model_families() {
 }
 
 #[test]
-fn builtin_provider_models_and_defaults_derive_from_static_catalog() {
-    let registry = ProviderConfigRegistry::builtin();
-
-    for definition in registry.providers() {
-        let specs = STATIC_MODEL_CATALOG
-            .iter()
-            .filter(|spec| {
-                spec.provider_id == definition.id.as_str()
-                    && spec.access != ash_protocol::ModelAccess::Subscription
-            })
-            .collect::<Vec<_>>();
-        assert_eq!(
-            definition.models,
-            specs.iter().map(|spec| spec.model()).collect::<Vec<_>>()
+fn connections_own_endpoints_credentials_and_counting() {
+    let connections = builtin_connections();
+    let glm = connections
+        .iter()
+        .filter(|connection| connection.provider.as_str() == "zai")
+        .collect::<Vec<_>>();
+    assert_eq!(glm.len(), 4);
+    let ids = glm
+        .iter()
+        .map(|connection| &connection.id)
+        .collect::<BTreeSet<_>>();
+    assert_eq!(ids.len(), 4);
+    for connection in glm {
+        assert!(
+            connection
+                .transport
+                .models
+                .iter()
+                .any(|model| model.id.as_str() == "glm-5.3")
         );
-
-        let defaults = specs
-            .iter()
-            .filter(|spec| spec.is_approval_review_default)
-            .collect::<Vec<_>>();
-        assert!(defaults.len() <= 1);
-        match defaults.first() {
-            Some(default) => assert_eq!(
-                definition.defaults.approval_review_model,
-                ApprovalReviewModelDefault::Model {
-                    model: ModelId::new(default.model_id).unwrap(),
-                }
-            ),
-            None => assert_eq!(
-                definition.defaults.approval_review_model,
-                ApprovalReviewModelDefault::ActiveModel
-            ),
+        let mut config = ModelProviderConfig::for_connection(connection.id.clone());
+        if connection.transport.endpoint == EndpointPolicy::ConfiguredOnly {
+            config.base_url = Some("https://example.com/v1".into());
         }
-    }
-
-    for spec in STATIC_MODEL_CATALOG {
-        assert!(registry.get(&provider_id(spec.provider_id)).is_some());
-        if spec.runtime == StaticModelRuntime::ChatGptSubscription {
-            assert_eq!(spec.provider_id, "openai");
-            assert!(!spec.is_approval_review_default);
-            assert!(!spec.supports_input_token_count);
-        }
-        if spec.runtime == StaticModelRuntime::KimiCode {
-            assert_eq!(spec.provider_id, "kimi");
-        }
-        if spec.runtime == StaticModelRuntime::GlmCodingPlan {
-            assert!(matches!(
-                spec.provider_id,
-                "bigmodel-coding-plan" | "zai-coding-plan"
-            ));
-            assert!(!spec.is_approval_review_default);
-        }
-        if spec.supports_input_token_count {
-            assert!(
-                registry
-                    .get(&provider_id(spec.provider_id))
-                    .unwrap()
-                    .input_token_count
-                    .as_ref()
-                    .is_some_and(|definition| definition
-                        .models
-                        .supports(&ModelId::new(spec.model_id).unwrap()))
-            );
-        }
-    }
-}
-
-#[test]
-fn provider_subscription_mode_replaces_the_api_catalog_and_endpoint() {
-    assert_eq!(
-        ProviderConfigRegistry::builtin()
-            .get(&provider_id("xai"))
-            .unwrap()
-            .name,
-        "xAI"
-    );
-    for (provider, endpoint, api_key_policy) in [
-        (
-            "openai",
-            "https://chatgpt.com/backend-api/codex",
-            ApiKeyPolicy::Unsupported,
-        ),
-        (
-            "xai",
-            "https://cli-chat-proxy.grok.com/v1",
-            ApiKeyPolicy::Unsupported,
-        ),
-        (
-            "kimi",
-            "https://api.kimi.com/coding/v1",
-            ApiKeyPolicy::Unsupported,
-        ),
-        (
-            "bigmodel-coding-plan",
-            crate::BIGMODEL_CODING_PLAN_BASE_URL,
-            ApiKeyPolicy::Required,
-        ),
-        (
-            "zai-coding-plan",
-            crate::ZAI_CODING_PLAN_BASE_URL,
-            ApiKeyPolicy::Required,
-        ),
-    ] {
-        let mut config = ModelProviderConfig::new(provider_id(provider));
-        config.access_mode = crate::ProviderAccessMode::Subscription;
         let registry = ProviderConfigRegistry::builtin()
             .with_configs([&config])
             .unwrap();
-        let definition = registry.get(&config.provider).unwrap();
-        match provider {
-            "xai" => assert_eq!(definition.name, "Super Grok"),
-            "bigmodel-coding-plan" => assert_eq!(definition.name, "BigModel"),
-            "zai-coding-plan" => assert_eq!(definition.name, "Z.AI"),
-            "kimi" => assert_eq!(definition.name, "Kimi"),
-            _ => {}
-        }
-        assert_eq!(definition.api_key_policy, api_key_policy);
-        assert!(
-            matches!(&definition.endpoint, EndpointPolicy::ProviderDefault { base_url } if base_url == endpoint)
-        );
-        assert!(
-            definition
-                .models
-                .iter()
-                .all(|model| model.access == ash_protocol::ModelAccess::Subscription)
-        );
-        if provider == "zai-coding-plan" {
-            assert_eq!(
-                definition
-                    .models
-                    .iter()
-                    .map(|model| model.id.as_str())
-                    .collect::<Vec<_>>(),
-                ["glm-5.3", "glm-5.3-flash", "glm-5.1"]
-            );
-        }
+        let normalized = registry.normalize(&config).unwrap();
+        assert_eq!(normalized.connection, connection.id);
+        assert_eq!(normalized.provider.as_str(), "zai");
         assert_eq!(
-            registry.normalize(&config).unwrap().access_mode,
-            crate::ProviderAccessMode::Subscription
+            normalized
+                .input_token_count
+                .unwrap()
+                .models
+                .supports(&ModelId::new("glm-5.3").unwrap()),
+            connection.id.as_str() != "bigmodel-coding-plan"
         );
     }
+    assert_eq!(
+        connections
+            .iter()
+            .find(|value| value.id.as_str() == "chatgpt-subscription")
+            .unwrap()
+            .transport
+            .api_key_policy,
+        ApiKeyPolicy::Unsupported
+    );
 }
 
 #[test]

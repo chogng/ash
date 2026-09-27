@@ -37,6 +37,8 @@ pub(crate) fn in_process_test_guard() -> MutexGuard<'static, ()> {
 
 pub(crate) fn empty_config_snapshot() -> ConfigReadResult {
     ConfigReadResult {
+        connections: Default::default(),
+        active_connections: Default::default(),
         advisor: None,
         time_context: Default::default(),
         features: features::resolve(&Default::default()),

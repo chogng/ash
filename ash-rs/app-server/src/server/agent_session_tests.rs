@@ -41,7 +41,6 @@ struct TestModels;
 impl ModelCatalog for TestModels {
     fn list(
         &self,
-        _: ash_app_server_protocol::protocol::model::ModelListView,
     ) -> Result<Vec<ash_app_server_protocol::protocol::model::ModelCatalogEntry>, CoreError> {
         Ok(Vec::new())
     }

@@ -321,7 +321,7 @@ ash-app-server → ash-login → ash-kimi → Kimi device OAuth / SecretStore
 ash-model-provider → KimiAdapter → ash-api OpenAI Chat Completions → Kimi Coding API
 ```
 
-目录中的 `kimi/kimi-k2.7-code` 是 `access = subscription, runtime = kimi_code`，请求时映射为 Kimi Coding API model `kimi-for-coding`。`kimi/kimi-k2.6` 是 API 模型；订阅账户就绪时目录只使用订阅接入方式，订阅不可用时才使用保存的 Kimi Platform API key。
+`kimi/kimi-k2.7-code` 与 `kimi/kimi-k2.6` 都来自唯一静态目录。接入由 profile 中 Kimi 的当前选择确定；Kimi Code 的上游模型 ID 由内置精确映射提供。登录状态和目录刷新不改变接入，调用失败也不切换到其他密钥。
 
 Ash Code 将 xAI 订阅入口显示为 Super Grok，将开发者 API 入口显示为 xAI。前者使用设备授权和固定的 Grok 订阅代理，后者使用 xAI API key 与 Platform 端点；两者保留 `xai` 供应商 ID，但凭据和请求目标不互换。
 

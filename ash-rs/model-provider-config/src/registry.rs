@@ -2,8 +2,7 @@ use crate::config::{is_http_url, normalize_base_url};
 use crate::{
     ApprovalReviewModelDefault, BaseUrlNormalization, EndpointPolicy, InputTokenCountTarget,
     ModelCatalogPolicy, ModelProviderConfig, NormalizedInputTokenCountConfig,
-    NormalizedModelProviderConfig, ProviderAccessMode, ProviderConfigError, ProviderDefinition,
-    ProviderId, model_catalog, providers,
+    NormalizedModelProviderConfig, ProviderConfigError, ProviderDefinition, ProviderId,
 };
 use ash_protocol::ModelRef;
 use std::collections::BTreeMap;
@@ -25,8 +24,10 @@ impl ProviderConfigRegistry {
     }
 
     pub fn builtin() -> Self {
-        let mut definitions = providers::builtin();
-        model_catalog::attach_static_models(&mut definitions);
+        let definitions = crate::builtin_connections()
+            .into_iter()
+            .filter(|connection| connection.id.as_str() == connection.provider.as_str())
+            .map(|connection| connection.transport);
         Self::from_definitions(definitions)
             .expect("built-in provider definitions must be valid and unique")
     }
@@ -83,17 +84,14 @@ impl ProviderConfigRegistry {
         let mut registry = self.clone();
         let mut names = std::collections::BTreeSet::new();
         for config in configs {
-            if config.access_mode == ProviderAccessMode::Subscription {
+            if let Some(connection) = crate::builtin_connections()
+                .into_iter()
+                .find(|connection| connection.id == config.connection)
+            {
                 config.validate_static()?;
-                let mut definition = providers::subscription_definition(config.provider.as_str())
-                    .ok_or_else(|| ProviderConfigError::InvalidProvider {
-                    provider: config.provider.clone(),
-                    message: "subscription access is unavailable for this provider".into(),
-                })?;
-                model_catalog::attach_subscription_models(&mut definition);
                 registry
                     .providers
-                    .insert(config.provider.clone(), definition);
+                    .insert(config.provider.clone(), connection.transport);
             } else if let Some(custom) = &config.custom {
                 config.validate_static()?;
                 if !names.insert(custom.name.trim().to_lowercase()) {
@@ -107,6 +105,41 @@ impl ProviderConfigRegistry {
             }
         }
         Ok(registry)
+    }
+
+    /// Returns a service declaration independently of the selected connection for its vendor.
+    pub fn connection(
+        &self,
+        id: &crate::ModelConnectionId,
+    ) -> Option<crate::ModelConnectionDefinition> {
+        if let Some(connection) = crate::builtin_connections()
+            .into_iter()
+            .find(|value| &value.id == id)
+        {
+            return Some(connection);
+        }
+        let provider = crate::connection_provider(id);
+        self.get(&provider)
+            .cloned()
+            .map(|transport| crate::ModelConnectionDefinition {
+                id: id.clone(),
+                provider,
+                access_mode: crate::ProviderAccessMode::Api,
+                runtime: crate::ModelConnectionRuntime::ProviderApi,
+                transport,
+            })
+    }
+
+    pub fn connections(&self) -> Vec<crate::ModelConnectionDefinition> {
+        let mut connections = crate::builtin_connections();
+        for provider in self.providers() {
+            let id = crate::ModelConnectionId::new(provider.id.as_str())
+                .expect("valid provider identity");
+            if !connections.iter().any(|connection| connection.id == id) {
+                connections.push(self.connection(&id).expect("registered provider"));
+            }
+        }
+        connections
     }
 
     pub fn providers(&self) -> impl Iterator<Item = &ProviderDefinition> {
@@ -198,7 +231,8 @@ impl ProviderConfigRegistry {
         });
         Ok(NormalizedModelProviderConfig {
             provider: config.provider.clone(),
-            access_mode: config.access_mode,
+            connection: config.connection.clone(),
+            access_mode: config.access_mode(),
             api_profile: definition.api_profile,
             base_url,
             input_token_count,

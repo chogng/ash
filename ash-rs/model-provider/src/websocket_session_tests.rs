@@ -23,7 +23,9 @@ async fn stored_api_key_authenticates_all_three_openai_websocket_services() {
     let secrets = Arc::new(MemorySecretStore::default());
     secrets
         .store(
-            &provider_api_key_secret_key(&provider_id("openai")),
+            &provider_api_key_secret_key(
+                &ash_protocol::ModelConnectionId::new(provider_id("openai").as_str()).unwrap(),
+            ),
             &SecretValue::new(b"socket-test-key".to_vec()),
         )
         .unwrap();
@@ -125,7 +127,9 @@ async fn stored_api_key_authenticates_all_three_openai_websocket_services() {
 #[tokio::test]
 async fn responses_socket_reconnects_after_key_rotation_and_closes_after_deletion() {
     let secrets = Arc::new(MemorySecretStore::default());
-    let key = provider_api_key_secret_key(&provider_id("openai"));
+    let key = provider_api_key_secret_key(
+        &ash_protocol::ModelConnectionId::new(provider_id("openai").as_str()).unwrap(),
+    );
     secrets
         .store(&key, &SecretValue::new(b"first-key".to_vec()))
         .unwrap();
@@ -275,7 +279,7 @@ fn websocket_factories_require_their_own_declared_service_protocols() {
         assert!(matches!(
             runtime
                 .connect_realtime(
-                    &provider_config("openai"),
+                    &provider_config("chatgpt-subscription"),
                     &model_ref("openai", "gpt-5.6-luna"),
                     &connector,
                     WebSocketSessionConfig::default(),
@@ -324,7 +328,7 @@ fn live_luna_websocket_uses_two_responses_on_one_caller_owned_session() {
         );
         let mut session = runtime
             .connect_responses(
-                &provider_config("openai"),
+                &provider_config("chatgpt-subscription"),
                 &model_ref("openai", "gpt-5.6-luna"),
                 Some(scope.clone()),
                 connector,

@@ -34,10 +34,11 @@ impl SemanticModelProvider for SemanticRuntimeResolver {
     ) -> Result<EmbeddingRuntimeIdentity, ModelProviderError> {
         let normalized = self
             .configs
+            .with_configs([&request.config])?
             .normalize_for(&request.config, &request.model.provider)?;
         EmbeddingRuntimeIdentity::new(format!(
-            "provider={};model={};endpoint={}",
-            request.model.provider, request.model.model, normalized.base_url
+            "connection={};provider={};model={};endpoint={}",
+            normalized.connection, request.model.provider, request.model.model, normalized.base_url
         ))
     }
 
@@ -92,7 +93,8 @@ impl SemanticRuntimeResolver {
         provider: &ash_protocol::ProviderId,
         config: &ash_model_provider_config::ModelProviderConfig,
     ) -> Result<SemanticRuntimeLocation, ModelProviderError> {
-        let normalized = self.configs.normalize_for(config, provider)?;
+        let registry = self.configs.with_configs([config])?;
+        let normalized = registry.normalize_for(config, provider)?;
         let url = url::Url::parse(&normalized.base_url).map_err(|error| {
             ModelProviderError::Unavailable(format!(
                 "provider '{provider}' has an invalid semantic endpoint: {error}"
@@ -117,9 +119,20 @@ impl SemanticRuntimeResolver {
         config: &ash_model_provider_config::ModelProviderConfig,
         operation: SemanticOperation,
     ) -> Result<SemanticHttpRuntime, ModelProviderError> {
-        let normalized = self.configs.normalize_for(config, provider)?;
-        let definition = self
-            .configs
+        let registry = self.configs.with_configs([config])?;
+        let normalized = registry.normalize_for(config, provider)?;
+        if registry
+            .connection(&config.connection)
+            .is_some_and(|connection| {
+                connection.runtime != ash_model_provider_config::ModelConnectionRuntime::ProviderApi
+            })
+        {
+            return Err(ModelProviderError::Unavailable(format!(
+                "connection '{}' does not expose semantic endpoints",
+                config.connection
+            )));
+        }
+        let definition = registry
             .get(provider)
             .expect("normalization only succeeds for registered providers");
         let supported = match operation {
@@ -140,7 +153,7 @@ impl SemanticRuntimeResolver {
         let headers = self
             .credentials
             .as_ref()
-            .map(|credentials| credentials.request_headers(provider))
+            .map(|credentials| credentials.request_headers(&config.connection))
             .transpose()
             .map_err(|error| ModelProviderError::Credential(error.to_string()))?
             .unwrap_or_default();

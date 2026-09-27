@@ -9,6 +9,11 @@ import type { ResolvedChatContext } from "./chatContextService.js";
 export type { ModelCatalogEntry } from "./modelCatalog.js";
 
 export interface ModelProviderCredentialStatus {
+	readonly connection: string;
+	readonly access: 'apiKey' | 'subscription' | 'local' | 'enterprise' | 'unknown';
+	readonly active: boolean;
+	readonly configured: boolean;
+	readonly ready: boolean;
 	readonly provider: string;
 	readonly displayName: string;
 	readonly apiKeyPolicy: 'unsupported' | 'optional' | 'required';
@@ -180,6 +185,7 @@ export type ThreadCommittedEvent =
 	| { readonly type:
 		"threadCreated"
 		| "advisorConfigured"
+		| "modelProvidersMigrated"
 		| "threadArchived"
 		| "threadRestored"
 		| "goalCreated"
@@ -349,7 +355,8 @@ export interface IChatService {
 	listModels(): Promise<readonly ModelCatalogEntry[]>;
 	listModelCatalog(): Promise<readonly ModelCatalogEntry[]>;
 	listModelProviders(): Promise<readonly ModelProviderCredentialStatus[]>;
-	setModelProviderApiKey(provider: string, apiKey: string): Promise<void>;
+	activateModelConnection(connection: string): Promise<void>;
+	setModelProviderApiKey(connection: string, apiKey: string): Promise<void>;
 	listAdvisorModels(): Promise<readonly ModelCatalogEntry[]>;
 	refreshModels(): Promise<readonly ModelCatalogEntry[]>;
 	isModelVisible(model: ModelRef): boolean;

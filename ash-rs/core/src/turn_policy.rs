@@ -14,7 +14,16 @@ use std::sync::Arc;
 /// Host actions use the base policy; isolated Code Mode controls use Core-owned authority.
 /// The policy revision includes the configured reviewer. Core invokes that reviewer only after
 /// an interactive decision in automatic review mode.
+/// Host-owned factory; called once at Turn start, before any assessment can run.
+pub type ApprovalReviewerFactory = Arc<
+    dyn Fn(Arc<dyn crate::ModelService>) -> Result<ash_extension_api::ApprovalReviewer, CoreError>
+        + Send
+        + Sync,
+>;
+
 pub struct TurnActionPolicy {
+    factory: Option<ApprovalReviewerFactory>,
+    revision_identity: Option<String>,
     base: Arc<dyn ActionPolicyService>,
     reviewer: ash_extension_api::ApprovalReviewer,
 }
@@ -24,16 +33,55 @@ impl TurnActionPolicy {
         base: Arc<dyn ActionPolicyService>,
         reviewer: ash_extension_api::ApprovalReviewer,
     ) -> Self {
-        Self { base, reviewer }
+        Self {
+            base,
+            reviewer,
+            factory: None,
+            revision_identity: None,
+        }
+    }
+}
+
+impl TurnActionPolicy {
+    pub fn with_reviewer_factory(
+        base: Arc<dyn ActionPolicyService>,
+        factory: ApprovalReviewerFactory,
+    ) -> Self {
+        Self {
+            base,
+            reviewer: ash_extension_api::ApprovalReviewer::Unavailable,
+            factory: Some(factory),
+            revision_identity: Some("profile-review".into()),
+        }
     }
 }
 
 impl ActionPolicyService for TurnActionPolicy {
-    fn revision(&self) -> String {
-        let reviewer = match &self.reviewer {
-            ash_extension_api::ApprovalReviewer::Unavailable => "unavailable",
-            ash_extension_api::ApprovalReviewer::Configured { identity, .. } => identity.as_str(),
+    fn snapshot(
+        &self,
+        model: Arc<dyn crate::ModelService>,
+    ) -> Result<Option<Arc<dyn ActionPolicyService>>, CoreError> {
+        let Some(factory) = &self.factory else {
+            return Ok(None);
         };
+        Ok(Some(Arc::new(Self {
+            base: self.base.clone(),
+            reviewer: factory(model)?,
+            factory: None,
+            revision_identity: self.revision_identity.clone(),
+        })))
+    }
+
+    fn revision(&self) -> String {
+        let reviewer = self
+            .revision_identity
+            .as_deref()
+            .unwrap_or_else(|| match &self.reviewer {
+                ash_extension_api::ApprovalReviewer::Unavailable => "unavailable",
+                ash_extension_api::ApprovalReviewer::Configured { identity, .. } => {
+                    identity.as_str()
+                }
+            });
         format!(
             "{}:auto-review={reviewer}:isolated-controls=v1",
             self.base.revision()

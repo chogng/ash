@@ -10,7 +10,6 @@ use ash_app_server_protocol::protocol::model::ModelListResult;
 use ash_protocol::ModelAccess;
 use ash_protocol::ModelId;
 use ash_protocol::ModelInfo;
-use ash_protocol::ModelOutputTransport;
 use ash_protocol::ModelRef;
 use ash_protocol::ProviderId;
 
@@ -21,11 +20,12 @@ fn catalog_entry(provider: &str, model: &str, name: &str) -> ModelCatalogEntry {
     );
     let mut info = ModelInfo::new(model.model.clone(), name);
     info.access = ModelAccess::ApiKey;
-    ModelCatalogEntry::from_info(model, &info, ModelOutputTransport::Unary)
+    ModelCatalogEntry::from_info(model, &info)
 }
 
 fn provider_config(provider: &str) -> ProviderConfigDto {
     ProviderConfigDto {
+        connection: provider.into(),
         provider: provider.into(),
         custom: None,
         base_url: None,
@@ -74,10 +74,8 @@ fn model_picker_shows_name_only_and_keeps_selection_identity_and_pin_state() {
 
 #[test]
 fn subscription_models_share_one_list_without_provider_names() {
-    let mut chatgpt = catalog_entry("openai", "gpt-ash", "GPT Ash");
-    chatgpt.access = ModelAccess::Subscription;
-    let mut xai = catalog_entry("xai", "grok-ash", "Grok Ash");
-    xai.access = ModelAccess::Subscription;
+    let chatgpt = catalog_entry("openai", "gpt-ash", "GPT Ash");
+    let xai = catalog_entry("xai", "grok-ash", "Grok Ash");
     let catalog = ModelListResult {
         models: vec![chatgpt, xai],
     };
@@ -146,7 +144,7 @@ fn pinned_models_lead_the_same_searchable_list_without_duplicate_entries() {
 }
 
 #[test]
-fn model_picker_only_offers_models_from_configured_providers() {
+fn model_picker_keeps_all_builtin_models_selectable_before_configuration() {
     let catalog = ModelListResult {
         models: vec![
             catalog_entry("openai", "gpt-ash", "GPT Ash"),
@@ -160,6 +158,7 @@ fn model_picker_only_offers_models_from_configured_providers() {
     config.providers.insert(
         "custom-empty".into(),
         ProviderConfigDto {
+            connection: "custom-empty".into(),
             provider: "custom-empty".into(),
             custom: Some(CustomProviderConfigDto {
                 context_window: 100_000,
@@ -179,38 +178,26 @@ fn model_picker_only_offers_models_from_configured_providers() {
         ]),
     );
     let view = model_choices(&catalog, &config).unwrap();
-    assert_eq!(view.actions.len(), 1);
-    assert_eq!(
-        view.actions.values().next(),
-        Some(&ModelSelectionAction::Select {
-            preference: "mimo/mimo-v2.5-pro".into(),
-            pinned: true,
-        })
-    );
+    assert_eq!(view.actions.len(), 2);
+    assert!(view.actions.values().any(|action| matches!(action, ModelSelectionAction::Select {preference, pinned: true} if preference == "openai/gpt-ash")));
     let state = ListSelectionState::new(view.model);
     assert!(!state.show_tabs());
     assert_eq!(state.tabs().len(), 1);
     assert_eq!(state.visible_items()[0].label(), "Pinned");
-    assert_eq!(state.visible_items()[1].label(), "MiMo V2.5 Pro");
+    assert_eq!(state.visible_items()[1].label(), "GPT Ash");
     assert_eq!(state.visible_items()[1].description(), None);
 }
 
 #[test]
-fn model_picker_without_configured_models_explains_configuration() {
+fn model_picker_without_configured_connections_still_offers_builtin_models() {
     let catalog = ModelListResult {
         models: vec![catalog_entry("openai", "gpt-ash", "GPT Ash")],
     };
-    let config = crate::test_support::empty_config_snapshot();
-    let view = model_choices(&catalog, &config).unwrap();
-    assert!(view.actions.is_empty());
+    let view = model_choices(&catalog, &crate::test_support::empty_config_snapshot()).unwrap();
+    assert_eq!(view.actions.len(), 1);
     let state = ListSelectionState::new(view.model);
-    assert_eq!(state.tabs().len(), 1);
-    assert!(!state.show_tabs());
-    assert!(state.visible_items().is_empty());
-    assert_eq!(
-        state.empty_message(),
-        "No configured models · Configure a provider in /config"
-    );
+    assert_eq!(state.visible_items()[0].label(), "GPT Ash");
+    assert!(state.visible_items()[0].id().is_some());
 }
 
 #[test]

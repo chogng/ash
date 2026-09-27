@@ -270,7 +270,7 @@ fn model_ref(provider: &str, model: &str) -> ModelRef {
 }
 
 fn provider_config(provider: &str) -> ModelProviderConfig {
-    ModelProviderConfig::new(provider_id(provider))
+    ModelProviderConfig::for_connection(ash_protocol::ModelConnectionId::new(provider).unwrap())
 }
 
 fn provider_config_with_endpoint(
@@ -278,9 +278,11 @@ fn provider_config_with_endpoint(
     base_url: impl Into<String>,
 ) -> ModelProviderConfig {
     ModelProviderConfig {
-        access_mode: ash_model_provider_config::ProviderAccessMode::Api,
+        connection: ash_protocol::ModelConnectionId::new(provider).unwrap(),
         custom: None,
-        provider: provider_id(provider),
+        provider: ash_model_provider_config::connection_provider(
+            &ash_protocol::ModelConnectionId::new(provider).unwrap(),
+        ),
         base_url: Some(base_url.into()),
         max_output_tokens: None,
         model_context: Default::default(),
@@ -342,10 +344,16 @@ fn custom_provider_uses_selected_protocol_and_isolated_credentials() {
             secrets.clone(),
         );
         credentials
-            .set_api_key(&config.provider, b"custom-key".to_vec())
+            .set_api_key(
+                &ash_protocol::ModelConnectionId::new(config.provider.as_str()).unwrap(),
+                b"custom-key".to_vec(),
+            )
             .unwrap();
         credentials
-            .set_api_key(&provider_id("openai"), b"official-key".to_vec())
+            .set_api_key(
+                &ash_protocol::ModelConnectionId::new(provider_id("openai").as_str()).unwrap(),
+                b"official-key".to_vec(),
+            )
             .unwrap();
         let client = Arc::new(CapturingTransport::new(response));
         let runtime = ModelProviderRuntime::with_client_and_secrets(
@@ -740,7 +748,10 @@ fn direct_provider_runtime_materializes_the_stored_api_key_as_a_header() {
     let secrets = Arc::new(MemorySecretStore::default());
     secrets
         .store(
-            &provider_api_key_secret_key(&ProviderId::new("openai").unwrap()),
+            &provider_api_key_secret_key(
+                &ash_protocol::ModelConnectionId::new(ProviderId::new("openai").unwrap().as_str())
+                    .unwrap(),
+            ),
             &SecretValue::new(b"sk-test".to_vec()),
         )
         .unwrap();
@@ -791,7 +802,9 @@ fn chatgpt_subscription_runtime_uses_local_oauth_and_ash_agent_loop() {
     let secrets = Arc::new(MemorySecretStore::default());
     secrets
         .store(
-            &provider_api_key_secret_key(&provider_id("openai")),
+            &provider_api_key_secret_key(
+                &ash_protocol::ModelConnectionId::new(provider_id("openai").as_str()).unwrap(),
+            ),
             &SecretValue::new(b"openai-api-key".to_vec()),
         )
         .unwrap();
@@ -824,7 +837,7 @@ fn chatgpt_subscription_runtime_uses_local_oauth_and_ash_agent_loop() {
     .with_chatgpt_oauth(chatgpt_oauth);
     let model = runtime
         .build_model(
-            &provider_config("openai"),
+            &provider_config("chatgpt-subscription"),
             &model_ref("openai", "gpt-5.6-luna"),
         )
         .unwrap();
@@ -968,7 +981,7 @@ fn live_chatgpt_luna_low_uses_the_ash_model_pipeline() {
     // and never refresh or rewrite the user's Codex authentication to make it pass.
     let model = runtime
         .build_model(
-            &provider_config("openai"),
+            &provider_config("chatgpt-subscription"),
             &model_ref("openai", "gpt-5.6-luna"),
         )
         .unwrap();
@@ -1044,7 +1057,9 @@ fn kimi_subscription_runtime_uses_local_oauth_and_the_coding_api() {
     let secrets = Arc::new(MemorySecretStore::default());
     secrets
         .store(
-            &provider_api_key_secret_key(&provider_id("kimi")),
+            &provider_api_key_secret_key(
+                &ash_protocol::ModelConnectionId::new(provider_id("kimi").as_str()).unwrap(),
+            ),
             &SecretValue::new(b"kimi-api-key".to_vec()),
         )
         .unwrap();
@@ -1066,7 +1081,7 @@ fn kimi_subscription_runtime_uses_local_oauth_and_the_coding_api() {
     .with_kimi_oauth(kimi_oauth);
     let model = runtime
         .build_model(
-            &provider_config("kimi"),
+            &provider_config("kimi-subscription"),
             &model_ref("kimi", "kimi-k2.7-code"),
         )
         .unwrap();
@@ -1085,11 +1100,11 @@ fn kimi_subscription_runtime_uses_local_oauth_and_the_coding_api() {
     assert_eq!(request["model"], "kimi-for-coding");
 
     let binding = runtime
-        .catalog_binding(&provider_config("kimi"))
+        .catalog_binding(&provider_config("kimi-subscription"))
         .unwrap()
         .unwrap();
     let manager = runtime
-        .models_manager_for_config(&provider_config("kimi"))
+        .models_manager_for_config(&provider_config("kimi-subscription"))
         .unwrap();
     tokio::runtime::Builder::new_current_thread()
         .build()
@@ -1102,12 +1117,10 @@ fn kimi_subscription_runtime_uses_local_oauth_and_the_coding_api() {
             &ash_models_manager::CatalogQuery::all(),
         )
         .unwrap();
-    assert_eq!(catalog.len(), 1);
-    assert_eq!(catalog[0].model(), &model_ref("kimi", "kimi-k2.7-code"));
-    assert_eq!(
-        catalog[0].info().access,
-        ash_protocol::ModelAccess::Subscription
-    );
+    assert!(catalog.iter().any(
+        |entry| entry.model() == &model_ref("kimi", "kimi-k2.7-code")
+            && entry.info().access == ash_protocol::ModelAccess::Subscription
+    ));
     let persisted = std::fs::read_to_string(cache.path().join("models/kimi.json")).unwrap();
     assert!(persisted.contains("kimi-k2.7-code"));
     assert!(!persisted.contains("kimi-access"));
@@ -1122,7 +1135,7 @@ fn kimi_subscription_runtime_uses_local_oauth_and_the_coding_api() {
         )
         .unwrap();
     let changed = runtime
-        .catalog_binding(&provider_config("kimi"))
+        .catalog_binding(&provider_config("kimi-subscription"))
         .unwrap()
         .unwrap();
     assert_ne!(binding.scope(), changed.scope());
@@ -1477,7 +1490,9 @@ fn google_runtime_uses_native_count_tokens_as_a_conservative_measurement() {
     let secrets = Arc::new(MemorySecretStore::default());
     secrets
         .store(
-            &provider_api_key_secret_key(&provider_id("google")),
+            &provider_api_key_secret_key(
+                &ash_protocol::ModelConnectionId::new(provider_id("google").as_str()).unwrap(),
+            ),
             &SecretValue::new(b"google-fixture-key".to_vec()),
         )
         .unwrap();
@@ -1656,7 +1671,9 @@ fn both_coding_plan_runtimes_measure_through_their_own_endpoints() {
         let secrets = Arc::new(MemorySecretStore::default());
         secrets
             .store(
-                &provider_api_key_secret_key(&provider_id(provider)),
+                &provider_api_key_secret_key(
+                    &ash_protocol::ModelConnectionId::new(provider_id(provider).as_str()).unwrap(),
+                ),
                 &SecretValue::new(b"plan-key".to_vec()),
             )
             .unwrap();
@@ -1667,7 +1684,7 @@ fn both_coding_plan_runtimes_measure_through_their_own_endpoints() {
         );
         let config = provider_config_with_endpoint(provider, base_url);
         let model = runtime
-            .build_model(&config, &model_ref(provider, "glm-5.1"))
+            .build_model(&config, &model_ref("zai", "glm-5.1"))
             .unwrap();
 
         assert_eq!(
@@ -2055,7 +2072,9 @@ fn unsaved_provider_probe_uses_exact_ids_and_draft_keys_without_persisting() {
         );
         assert!(
             secrets
-                .load(&crate::provider_api_key_secret_key(&config.provider))
+                .load(&crate::provider_api_key_secret_key(
+                    &ash_protocol::ModelConnectionId::new(config.provider.as_str()).unwrap()
+                ))
                 .unwrap()
                 .is_none()
         );
@@ -2119,8 +2138,9 @@ fn every_builtin_provider_applies_its_authentication_without_subscription_header
     assert_eq!(
         providers.len(),
         ProviderConfigRegistry::builtin()
-            .providers()
-            .filter(|provider| !provider.id.as_str().ends_with("-subscription"))
+            .connections()
+            .into_iter()
+            .filter(|connection| !connection.id.as_str().ends_with("-subscription"))
             .count()
     );
     for provider in providers {
@@ -2129,7 +2149,9 @@ fn every_builtin_provider_applies_its_authentication_without_subscription_header
         let key = format!("{provider}-fixture-key");
         secrets
             .store(
-                &provider_api_key_secret_key(&provider_id(provider)),
+                &provider_api_key_secret_key(
+                    &ash_protocol::ModelConnectionId::new(provider_id(provider).as_str()).unwrap(),
+                ),
                 &SecretValue::new(key.clone().into_bytes()),
             )
             .unwrap();
@@ -2141,7 +2163,12 @@ fn every_builtin_provider_applies_its_authentication_without_subscription_header
         let model = runtime
             .build_model(
                 &provider_config_with_endpoint(provider, "https://example.test/v1"),
-                &model_ref(provider, "fixture-model"),
+                &ModelRef::new(
+                    ash_model_provider_config::connection_provider(
+                        &ash_protocol::ModelConnectionId::new(provider).unwrap(),
+                    ),
+                    model_id("fixture-model"),
+                ),
             )
             .unwrap();
         let mut request = ModelRequest::text("input");

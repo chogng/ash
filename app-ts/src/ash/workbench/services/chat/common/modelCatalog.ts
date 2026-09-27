@@ -6,14 +6,10 @@ import type { ModelRef } from '../../../../sessions/services/sessions/common/ses
 const MaximumHiddenModels = 2_048;
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 
-export type ModelAccess = 'apiKey' | 'subscription' | 'local' | 'enterprise' | 'unknown';
-export type ModelOutputTransport = 'nativeStreaming' | 'unary';
 
 export interface ModelCatalogEntry {
 	readonly model: ModelRef;
 	readonly displayName: string;
-	readonly access: ModelAccess;
-	readonly outputTransport: ModelOutputTransport;
 }
 
 /** User-owned presentation preferences for the shared model catalog. */

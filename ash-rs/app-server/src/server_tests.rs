@@ -339,7 +339,6 @@ struct FixedModelCatalog {
 impl crate::model_catalog::ModelCatalog for FixedModelCatalog {
     fn list(
         &self,
-        _: ash_app_server_protocol::protocol::model::ModelListView,
     ) -> Result<Vec<ash_app_server_protocol::protocol::model::ModelCatalogEntry>, CoreError> {
         Ok(self.models.clone())
     }
@@ -349,7 +348,9 @@ impl crate::model_catalog::ModelCatalog for FixedModelCatalog {
             .models
             .iter()
             .find(|entry| &entry.model == model)
-            .map_or(ash_protocol::ModelAccess::Unknown, |entry| entry.access))
+            .map_or(ash_protocol::ModelAccess::Unknown, |_| {
+                ash_protocol::ModelAccess::ApiKey
+            }))
     }
 
     fn configured_default(&self) -> Result<Option<ModelRef>, CoreError> {
@@ -366,13 +367,18 @@ fn model_ref(model: &str) -> ModelRef {
 
 #[test]
 fn provider_rpc_lists_the_backend_catalog_and_stores_api_keys_without_projecting_values() {
+    let profile = tempfile::tempdir().unwrap();
     let secrets = Arc::new(MemorySecretStore::default());
-    let server = server().with_provider_credentials(Arc::new(
-        ash_model_provider::ProviderCredentialService::new(
-            ash_model_provider_config::ProviderConfigRegistry::builtin(),
-            secrets,
-        ),
-    ));
+    let server = server()
+        .with_config_store(Arc::new(
+            ConfigStore::open(profile.path().join("config.sqlite3")).unwrap(),
+        ))
+        .with_provider_credentials(Arc::new(
+            ash_model_provider::ProviderCredentialService::new(
+                ash_model_provider_config::ProviderConfigRegistry::builtin(),
+                secrets,
+            ),
+        ));
     let mut connection = server.connection();
     initialize(&server, &mut connection);
 
@@ -386,8 +392,8 @@ fn provider_rpc_lists_the_backend_catalog_and_stores_api_keys_without_projecting
     assert_eq!(
         initial["result"]["providers"].as_array().unwrap().len(),
         ash_model_provider_config::ProviderConfigRegistry::builtin()
-            .providers()
-            .count()
+            .connections()
+            .len()
     );
 
     let saved = call(
@@ -395,10 +401,10 @@ fn provider_rpc_lists_the_backend_catalog_and_stores_api_keys_without_projecting
         &mut connection,
         serde_json::json!({
             "jsonrpc":"2.0","id":3,"method":"provider/apiKey/set",
-            "params":{"provider":"openai","apiKey":"secret-provider-key"}
+            "params":{"connection":"openai","apiKey":"secret-provider-key"}
         }),
     );
-    assert_eq!(saved["result"]["provider"], "openai");
+    assert_eq!(saved["result"]["connection"], "openai");
     assert!(!saved.to_string().contains("secret-provider-key"));
 
     let updated = call(
@@ -427,15 +433,12 @@ fn provider_models_rpc_distinguishes_models_empty_and_classified_failure() {
     impl crate::model_catalog::ModelCatalog for Catalog {
         fn refresh(
             &self,
-            provider: &ProviderId,
+            provider: &ash_protocol::ModelConnectionId,
         ) -> Result<Vec<ModelCatalogEntry>, ModelCatalogRefreshError> {
             assert_eq!(provider.as_str(), "openai");
             self.0.clone()
         }
-        fn list(
-            &self,
-            _: ash_app_server_protocol::protocol::model::ModelListView,
-        ) -> Result<Vec<ModelCatalogEntry>, CoreError> {
+        fn list(&self) -> Result<Vec<ModelCatalogEntry>, CoreError> {
             Ok(vec![])
         }
         fn current_access(&self, _: &ModelRef) -> Result<ash_protocol::ModelAccess, CoreError> {
@@ -449,7 +452,6 @@ fn provider_models_rpc_distinguishes_models_empty_and_classified_failure() {
     let entry = ModelCatalogEntry::from_info(
         model.clone(),
         &ash_protocol::ModelInfo::new(model.model, "Example"),
-        ash_protocol::ModelOutputTransport::Unary,
     );
     for (value, expected) in [
         (
@@ -476,7 +478,7 @@ fn provider_models_rpc_distinguishes_models_empty_and_classified_failure() {
         let reply = call(
             &server,
             &mut connection,
-            serde_json::json!({"jsonrpc":"2.0","id":2,"method":"provider/models/list","params":{"provider":"openai"}}),
+            serde_json::json!({"jsonrpc":"2.0","id":2,"method":"provider/models/list","params":{"connection":"openai"}}),
         );
         assert_eq!(reply["result"], expected);
         assert!(reply.get("error").is_none());
@@ -503,7 +505,7 @@ fn custom_provider_rpc_round_trips_protocol_and_stores_a_separate_key() {
         serde_json::json!({
             "jsonrpc":"2.0","id":2,"method":"provider/configure","params":{
                 "commandId":"create-custom","expectedRevision":0,"config":{
-                    "provider":"custom-example","custom":{"name":"Example","protocol":"responses"},"baseUrl":"https://example.test/v1","modelContext":{}
+                    "provider":"custom-example","connection":"custom-example","custom":{"name":"Example","protocol":"responses"},"baseUrl":"https://example.test/v1","modelContext":{}
                 }
             }
         }),
@@ -512,7 +514,7 @@ fn custom_provider_rpc_round_trips_protocol_and_stores_a_separate_key() {
     let saved = call(
         &server,
         &mut connection,
-        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"provider/apiKey/set","params":{"provider":"custom-example","apiKey":"test-key"}}),
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"provider/apiKey/set","params":{"connection":"custom-example","apiKey":"test-key"}}),
     );
     assert_eq!(saved["result"]["apiKeyConfigured"], true);
     let catalog = call(
@@ -2008,12 +2010,10 @@ fn model_catalog_is_global_and_session_views_do_not_own_model_selection() {
             ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
                 default.clone(),
                 &default_info,
-                ash_protocol::ModelOutputTransport::Unary,
             ),
             ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
                 alternate.clone(),
                 &alternate_info,
-                ash_protocol::ModelOutputTransport::Unary,
             ),
         ],
         default,
@@ -2025,7 +2025,7 @@ fn model_catalog_is_global_and_session_views_do_not_own_model_selection() {
     let listed = call(
         &server,
         &mut connection,
-        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"model/list","params":{"view":"builtIn"}}),
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"model/list","params":{}}),
     );
     assert_eq!(listed["result"]["models"].as_array().unwrap().len(), 2);
     let session = create_session(&server, &mut connection, 3, "session");
@@ -3288,7 +3288,6 @@ fn session_request_steers_a_running_turn_retry_safely_and_replans() {
             ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
                 selected.clone(),
                 &info,
-                ash_protocol::ModelOutputTransport::Unary,
             ),
         ],
         default: selected,
@@ -4407,7 +4406,7 @@ fn provider_context_budget_metadata_round_trips_through_the_rpc() {
             "params":{
                 "commandId":"configure-openai-context","expectedRevision":0,
                 "config":{
-                    "provider":"openai",
+                    "provider":"openai","connection":"openai",
                     "modelContext":{
                         "gpt-5.6":{
                             "contextWindow":200000,
@@ -4426,7 +4425,7 @@ fn provider_context_budget_metadata_round_trips_through_the_rpc() {
         serde_json::json!({"jsonrpc":"2.0","id":3,"method":"config/read","params":{}}),
     );
     assert_eq!(
-        read["result"]["providers"]["openai"]["modelContext"]["gpt-5.6"],
+        read["result"]["connections"]["openai"]["modelContext"]["gpt-5.6"],
         serde_json::json!({
             "contextWindow": 200000,
             "autoCompactTokenLimit": 150000
@@ -6095,13 +6094,13 @@ fn custom_provider_order_survives_edits_and_remove_cleans_only_its_secret() {
         let reply = call(
             &server,
             &mut connection,
-            serde_json::json!({"jsonrpc":"2.0","id":revision+2,"method":"provider/configure","params":{"commandId":format!("configure-{revision}"),"expectedRevision":revision,"config":{"provider":id,"baseUrl":"https://example.test/v1","custom":{"name":name,"protocol":"anthropicMessages","order":999}}}}),
+            serde_json::json!({"jsonrpc":"2.0","id":revision+2,"method":"provider/configure","params":{"commandId":format!("configure-{revision}"),"expectedRevision":revision,"config":{"provider":id,"connection":id,"baseUrl":"https://example.test/v1","custom":{"name":name,"protocol":"anthropicMessages","order":999}}}}),
         );
         assert!(reply.get("error").is_none(), "{reply}");
     }
     let snapshot = store.read_snapshot().unwrap();
     assert_eq!(
-        snapshot.values.providers[&ash_protocol::ProviderId::new("custom-a").unwrap()]
+        snapshot.values.connections[&ash_protocol::ModelConnectionId::new("custom-a").unwrap()]
             .custom
             .as_ref()
             .unwrap()
@@ -6109,7 +6108,7 @@ fn custom_provider_order_survives_edits_and_remove_cleans_only_its_secret() {
         1
     );
     assert_eq!(
-        snapshot.values.providers[&ash_protocol::ProviderId::new("custom-b").unwrap()]
+        snapshot.values.connections[&ash_protocol::ModelConnectionId::new("custom-b").unwrap()]
             .custom
             .as_ref()
             .unwrap()
@@ -6117,37 +6116,41 @@ fn custom_provider_order_survives_edits_and_remove_cleans_only_its_secret() {
         2
     );
     let configured = credentials
-        .with_configs(snapshot.values.providers.values())
+        .with_configs(snapshot.values.connections.values())
         .unwrap();
-    let id = ash_protocol::ProviderId::new("custom-a").unwrap();
+    let id = ash_protocol::ModelConnectionId::new("custom-a").unwrap();
     configured
-        .set_api_key(&id, b"removed-key".to_vec())
+        .set_api_key(
+            &ash_protocol::ModelConnectionId::new(id.as_str()).unwrap(),
+            b"removed-key".to_vec(),
+        )
         .unwrap();
     let builtin = ash_protocol::ProviderId::new("openai").unwrap();
     configured
-        .set_api_key(&builtin, b"keep-key".to_vec())
+        .set_api_key(
+            &ash_protocol::ModelConnectionId::new(builtin.as_str()).unwrap(),
+            b"keep-key".to_vec(),
+        )
         .unwrap();
-    let denied = call(
-        &server,
-        &mut connection,
-        serde_json::json!({"jsonrpc":"2.0","id":5,"method":"provider/remove","params":{"commandId":"remove-builtin","expectedRevision":3,"provider":"openai"}}),
-    );
-    assert!(denied.get("error").is_some());
     let removed = call(
         &server,
         &mut connection,
-        serde_json::json!({"jsonrpc":"2.0","id":6,"method":"provider/remove","params":{"commandId":"remove-custom","expectedRevision":3,"provider":"custom-a"}}),
+        serde_json::json!({"jsonrpc":"2.0","id":6,"method":"provider/remove","params":{"commandId":"remove-custom","expectedRevision":3,"connection":"custom-a"}}),
     );
     assert!(removed.get("error").is_none(), "{removed}");
     assert!(
         secrets
-            .load(&ash_model_provider::provider_api_key_secret_key(&id))
+            .load(&ash_model_provider::provider_api_key_secret_key(
+                &ash_protocol::ModelConnectionId::new(id.as_str()).unwrap()
+            ))
             .unwrap()
             .is_none()
     );
     assert!(
         secrets
-            .load(&ash_model_provider::provider_api_key_secret_key(&builtin))
+            .load(&ash_model_provider::provider_api_key_secret_key(
+                &ash_protocol::ModelConnectionId::new(builtin.as_str()).unwrap()
+            ))
             .unwrap()
             .is_some()
     );
@@ -6156,7 +6159,7 @@ fn custom_provider_order_survives_edits_and_remove_cleans_only_its_secret() {
             .read_snapshot()
             .unwrap()
             .values
-            .providers
+            .connections
             .contains_key(&id)
     );
 }
@@ -6488,8 +6491,9 @@ fn advisor_requests_are_typed_retry_safe_and_separate_from_worker_turns() {
         .apply(ash_config::ConfigCommandRequest {
             command_id: CommandId::new("configure-advisor-provider").unwrap(),
             expected_revision: ash_config::ConfigRevision::new(0),
-            command: ash_config::UserConfigCommand::ConfigureProvider {
-                provider: provider.clone(),
+            command: ash_config::UserConfigCommand::ConfigureConnection {
+                connection: ash_protocol::ModelConnectionId::new(provider.clone().as_str())
+                    .unwrap(),
                 config: ash_model_provider_config::ModelProviderConfig::new(provider.clone()),
             },
         })
@@ -6696,7 +6700,7 @@ fn advisor_requests_are_typed_retry_safe_and_separate_from_worker_turns() {
 }
 
 #[test]
-fn device_subscription_login_registers_its_provider_once_for_model_selection() {
+fn cancelled_device_subscription_login_preserves_connection_selection() {
     struct Driver {
         provider: &'static str,
         method: ash_login::LoginMethod,
@@ -6761,18 +6765,9 @@ fn device_subscription_login_registers_its_provider_once_for_model_selection() {
             );
             assert_eq!(cancelled["result"]["status"], "cancelled");
             let snapshot = config.read_snapshot().unwrap();
-            assert_eq!(snapshot.revision.get(), 1);
-            assert_eq!(snapshot.values.providers.len(), 1);
-            assert!(
-                snapshot.values.providers.contains_key(
-                    &ProviderId::new(if provider == "xai-subscription" {
-                        "xai"
-                    } else {
-                        "kimi"
-                    })
-                    .unwrap()
-                )
-            );
+            assert_eq!(snapshot.revision.get(), 0);
+            assert!(snapshot.values.connections.is_empty());
+            assert!(snapshot.values.active_connections.is_empty());
             assert!(snapshot.values.model.is_none());
         }
     }
@@ -6839,9 +6834,10 @@ fn chatgpt_login_registers_subscription_only_after_it_is_ready() {
     let profile = tempfile::tempdir().unwrap();
     let config = Arc::new(ConfigStore::open(profile.path().join("config.sqlite3")).unwrap());
     let driver = Arc::new(TestLoginDriver::default());
+    let login = Arc::new(LoginService::new(driver.clone()).unwrap());
     let server = server()
         .with_config_store(config.clone())
-        .with_login_service(Arc::new(LoginService::new(driver.clone()).unwrap()));
+        .with_login_service(login.clone());
     let mut connection = server.connection();
     initialize(&server, &mut connection);
 
@@ -6892,19 +6888,26 @@ fn chatgpt_login_registers_subscription_only_after_it_is_ready() {
         serde_json::json!({"jsonrpc":"2.0","id":5,"method":"account/read","params":{}}),
     );
     assert_eq!(read["result"]["accounts"][0]["status"], "ready");
+    assert_eq!(config.read_snapshot().unwrap().revision.get(), 0);
+    login
+        .complete(CompleteLogin {
+            login_id: LoginId::new(restarted["result"]["loginId"].as_str().unwrap()).unwrap(),
+            outcome: LoginCompletionOutcome::Succeeded {
+                account: driver.account.lock().unwrap().clone().unwrap(),
+            },
+        })
+        .unwrap();
     let snapshot = config.read_snapshot().unwrap();
     assert_eq!(snapshot.revision.get(), 1);
-    assert!(
-        snapshot
-            .values
-            .providers
-            .contains_key(&ProviderId::new("openai").unwrap())
+    assert_eq!(
+        snapshot.values.active_connections[&ProviderId::new("openai").unwrap()].as_str(),
+        "chatgpt-subscription"
     );
-    assert!(snapshot.values.model.is_none());
+    assert!(snapshot.values.model.is_some());
 }
 
 #[test]
-fn account_read_registers_subscription_for_an_existing_chatgpt_login() {
+fn account_read_never_activates_an_existing_chatgpt_login() {
     let profile = tempfile::tempdir().unwrap();
     let config = Arc::new(ConfigStore::open(profile.path().join("config.sqlite3")).unwrap());
     let driver = Arc::new(TestLoginDriver {
@@ -6935,13 +6938,9 @@ fn account_read_registers_subscription_for_an_existing_chatgpt_login() {
         );
         assert_eq!(read["result"]["accounts"][0]["status"], "ready");
         let snapshot = config.read_snapshot().unwrap();
-        assert_eq!(snapshot.revision.get(), 1);
-        assert!(
-            snapshot
-                .values
-                .providers
-                .contains_key(&ProviderId::new("openai").unwrap())
-        );
+        assert_eq!(snapshot.revision.get(), 0);
+        assert!(snapshot.values.connections.is_empty());
+        assert!(snapshot.values.active_connections.is_empty());
         assert!(snapshot.values.model.is_none());
     }
 }

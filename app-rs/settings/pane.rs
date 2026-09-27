@@ -147,6 +147,18 @@ pub fn draw_settings_pane(
             context.draw_component(&manager);
         }
     } else {
+        let connection_rows = view.state.model_connection_rows();
+        let (rows, diagnostics) = if section == SettingsPageSection::Models {
+            (
+                connection_rows.as_slice(),
+                view.state.model_connection_error(),
+            )
+        } else {
+            (
+                view.features.keybindings.keybinding_rows,
+                view.features.keybindings.keybinding_diagnostics,
+            )
+        };
         context.draw_component(&SettingsSectionPane::new(
             content,
             section,
@@ -154,9 +166,9 @@ pub fn draw_settings_pane(
             view.features.general.directory_label,
             view.features.general.connection_label,
             view.features.general.surface_label,
-            view.features.keybindings.keybinding_rows,
+            rows,
             view.keyboard_shortcuts_visible,
-            view.features.keybindings.keybinding_diagnostics,
+            diagnostics,
             view.features.appearance.scheme,
             view.features.appearance.follows_system,
             view.state.keybindings_scroll_state(),

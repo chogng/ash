@@ -16,7 +16,6 @@ pub(crate) enum Command {
 
 use ash_app_server_protocol::protocol::config::ModelRefDto;
 use ash_app_server_protocol::protocol::model::ModelListResult;
-use ash_protocol::ModelAccess;
 use ash_protocol::ReasoningEffort;
 
 pub(crate) use picker::ModelChoices;
@@ -33,7 +32,6 @@ pub(crate) struct ModelSummary {
     model: Option<ModelRefDto>,
     display_name: Option<String>,
     model_reasoning_effort: Option<ReasoningEffort>,
-    access: ModelAccess,
     context_capacity: Option<u64>,
 }
 
@@ -51,20 +49,18 @@ impl ModelSummary {
                 })
             })
         });
-        let (display_name, model_reasoning_effort, access, context_capacity) = match entry {
+        let (display_name, model_reasoning_effort, context_capacity) = match entry {
             Some(entry) => (
                 Some(entry.display_name.clone()),
                 model_reasoning_effort.or(entry.model_reasoning_effort),
-                entry.access,
                 entry.available_context_window.map(u64::from),
             ),
-            None => (None, model_reasoning_effort, ModelAccess::Unknown, None),
+            None => (None, model_reasoning_effort, None),
         };
         Self {
             model,
             display_name,
             model_reasoning_effort,
-            access,
             context_capacity,
         }
     }
@@ -99,10 +95,6 @@ impl ModelSummary {
             None => model.into(),
         }
     }
-
-    pub(crate) const fn access(&self) -> ModelAccess {
-        self.access
-    }
 }
 
 const fn reasoning_effort_label(effort: ReasoningEffort) -> &'static str {
@@ -114,16 +106,6 @@ const fn reasoning_effort_label(effort: ReasoningEffort) -> &'static str {
         ReasoningEffort::High => "high",
         ReasoningEffort::ExtraHigh => "extra high",
         ReasoningEffort::Max => "max",
-    }
-}
-
-pub(crate) const fn access_label(access: ModelAccess) -> &'static str {
-    match access {
-        ModelAccess::ApiKey => "API usage billing",
-        ModelAccess::Subscription => "Subscription",
-        ModelAccess::Local => "Local",
-        ModelAccess::Enterprise => "Enterprise",
-        ModelAccess::Unknown => "Access unknown",
     }
 }
 

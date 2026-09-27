@@ -33,8 +33,7 @@ pub(crate) fn openai_catalog_binding(
     diagnostics: Option<Arc<dyn ResponseDiagnosticSink>>,
 ) -> Result<ModelCatalogBinding, crate::ModelProviderError> {
     let mut digest = Sha256::new();
-    digest.update(config.base_url.as_bytes());
-    digest.update(format!("{:?}", config.api_profile).as_bytes());
+    digest.update(format!("{config:?}").as_bytes());
     for header in &headers {
         digest.update(header.name().as_bytes());
         digest.update(header.value().as_bytes());

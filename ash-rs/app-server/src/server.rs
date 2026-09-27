@@ -45,7 +45,6 @@ use core_api::AgentRuntime;
 use core_api::CoreError;
 use core_api::ModelService;
 use core_api::ThreadUpdateSink;
-use guardian_v2::ProviderReviewModel;
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::BTreeSet;
@@ -222,7 +221,7 @@ pub struct AppServer {
     pub(super) mcp_status: Arc<RwLock<ash_mcp_extension::McpRuntimeStatusSnapshot>>,
     language: Mutex<language_runtime::AppServerLanguageRuntime>,
     syntax_documents: Mutex<HashMap<(u64, String), Arc<Mutex<syntax_operations::SyntaxSession>>>>,
-    approval_review_model: Option<ProviderReviewModel>,
+    approval_review_model: Option<ash_core::ApprovalReviewerFactory>,
     login: Option<Arc<ash_login::LoginService>>,
     chatgpt: Option<Arc<ash_chatgpt::ChatGptAccount>>,
     xai: Option<Arc<xai::XaiOAuth>>,
@@ -968,6 +967,14 @@ impl AppServer {
             Arc::clone(&self.agent_extensions),
         ));
         self.config = Some(config);
+        if let Some(login) = &self.login {
+            login
+                .install_events(Arc::new(account_operations::AppServerLoginEvents::new(
+                    Arc::clone(&self.updates),
+                    self.config.clone(),
+                )))
+                .expect("login event sink updated during composition");
+        }
         self.with_memory_extension()
             .expect("configured memory extension")
     }
@@ -977,6 +984,7 @@ impl AppServer {
         login
             .install_events(Arc::new(account_operations::AppServerLoginEvents::new(
                 Arc::clone(&self.updates),
+                self.config.clone(),
             )))
             .expect("a newly composed login service accepts its App Server event sink");
         self.login = Some(login);
@@ -1172,7 +1180,7 @@ impl AppServer {
 
     pub(crate) fn with_approval_review_model(
         mut self,
-        review_model: Option<ProviderReviewModel>,
+        review_model: Option<ash_core::ApprovalReviewerFactory>,
     ) -> Self {
         self.approval_review_model = review_model;
         self
@@ -1454,13 +1462,10 @@ impl AppServer {
         tools: Arc<dyn ToolService>,
         policy: Arc<dyn ActionPolicyService>,
     ) -> Self {
-        let policy = Arc::new(TurnActionPolicy::new(
-            policy,
-            self.approval_review_model
-                .clone()
-                .map(guardian_v2::reviewer)
-                .unwrap_or(ash_extension_api::ApprovalReviewer::Unavailable),
-        ));
+        let policy = Arc::new(match &self.approval_review_model {
+            Some(factory) => TurnActionPolicy::with_reviewer_factory(policy, factory.clone()),
+            None => TurnActionPolicy::new(policy, ash_extension_api::ApprovalReviewer::Unavailable),
+        });
         let mut executor = self
             .env_runtime_mut()
             .turn_executor
@@ -2261,6 +2266,7 @@ impl AppServer {
             Some(ClientMethod::PluginRevokeGrant) => self.plugin_revoke_grant(&request.params),
             Some(ClientMethod::PluginUninstall) => self.plugin_uninstall(&request.params),
             Some(ClientMethod::ModelList) => self.model_list(&request.params),
+            Some(ClientMethod::ProviderActivate) => self.provider_activate(request.params.clone()),
             Some(ClientMethod::ProviderModelsList) => self.provider_models_list(&request.params),
             Some(ClientMethod::ProviderProbe) => {
                 self.provider_probe(std::mem::take(&mut request.params))

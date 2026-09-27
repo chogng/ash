@@ -7,7 +7,7 @@ use crate::ProviderAdapter;
 use crate::ProviderDefinition;
 
 pub(super) fn definition() -> ProviderDefinition {
-    default_provider(
+    let mut definition = default_provider(
         "kimi",
         "Kimi",
         ProviderAdapter::Kimi,
@@ -18,6 +18,10 @@ pub(super) fn definition() -> ProviderDefinition {
     .with_input_token_count(
         InputTokenCountDefinition::invocation_base(InputTokenCountProfile::KimiChatCompletions)
             .with_models([
+                ModelId::new("kimi-k3").expect("valid model ID"),
+                ModelId::new("kimi-k2.7-code").expect("valid model ID"),
+                ModelId::new("kimi-k2.6").expect("valid model ID"),
+                ModelId::new("kimi-k2.5").expect("valid model ID"),
                 ModelId::new("kimi-k2.7-code-highspeed").expect("valid model ID"),
                 ModelId::new("moonshot-v1-8k").expect("valid model ID"),
                 ModelId::new("moonshot-v1-32k").expect("valid model ID"),
@@ -27,7 +31,11 @@ pub(super) fn definition() -> ProviderDefinition {
                 ModelId::new("moonshot-v1-32k-vision-preview").expect("valid model ID"),
                 ModelId::new("moonshot-v1-128k-vision-preview").expect("valid model ID"),
             ]),
-    )
+    );
+    definition.defaults.approval_review_model = crate::ApprovalReviewModelDefault::Model {
+        model: crate::ModelId::new("kimi-k2.6").expect("built-in model ID"),
+    };
+    definition
 }
 
 /// Kimi Code subscription models use the coding endpoint with OAuth credentials.

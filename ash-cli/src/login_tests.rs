@@ -9,7 +9,7 @@ fn completion(id: &str, status: AccountLoginCompletionStatusDto) -> AppServerEve
             login_id: id.into(),
             status,
             account: AccountReadResult {
-                revision: 7,
+                revision: "7".into(),
                 accounts: Vec::new(),
             },
         },
@@ -32,7 +32,7 @@ fn only_the_requested_login_can_complete_the_command() {
     )
     .unwrap()
     .unwrap();
-    assert_eq!(account.revision, 7);
+    assert_eq!(account.revision, "7");
 }
 
 #[test]

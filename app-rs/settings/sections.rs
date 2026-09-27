@@ -73,6 +73,7 @@ impl SettingsSectionStyle {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SettingsKeybindingRow {
+    pub enabled: bool,
     pub element: ElementId,
     pub label: String,
     pub value: String,
@@ -141,6 +142,11 @@ impl<'a> SettingsSectionPane<'a> {
             SettingsPageSection::Appearance => self.paint_appearance(scene),
             SettingsPageSection::Keybindings => self.paint_keybindings_header(scene),
             SettingsPageSection::Remote => {}
+            SettingsPageSection::Models => self.paint_header(
+                scene,
+                "Model connections",
+                "Choose one saved connection per provider. Changes apply to the next turn.",
+            ),
         }
     }
 
@@ -360,14 +366,20 @@ impl Component for SettingsSectionPane<'_> {
                 .with_action(zui::ui::NodeAction::Activate),
             );
         }
-        if self.section == SettingsPageSection::Keybindings {
+        if matches!(
+            self.section,
+            SettingsPageSection::Keybindings | SettingsPageSection::Models
+        ) {
             context.draw_component(&self.keybindings_section());
         }
     }
 
     fn paint(&self, scene: &mut UiScene) {
         self.paint_section(scene);
-        if self.section == SettingsPageSection::Keybindings {
+        if matches!(
+            self.section,
+            SettingsPageSection::Keybindings | SettingsPageSection::Models
+        ) {
             scene.draw_component(&self.keybindings_section());
         }
     }
@@ -385,6 +397,11 @@ impl SettingsSectionPane<'_> {
             self.style.clone(),
             self.dispatch,
         )
+        .with_label(if self.section == SettingsPageSection::Models {
+            "Model connections"
+        } else {
+            "Keybindings"
+        })
     }
 
     fn section_label(&self) -> &'static str {
@@ -393,6 +410,7 @@ impl SettingsSectionPane<'_> {
             SettingsPageSection::Appearance => "Appearance settings",
             SettingsPageSection::Keybindings => "Keybinding settings",
             SettingsPageSection::Remote => "Remote settings",
+            SettingsPageSection::Models => "Model connection settings",
         }
     }
 }

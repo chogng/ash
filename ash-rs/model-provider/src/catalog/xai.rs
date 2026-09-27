@@ -27,6 +27,7 @@ use std::time::Duration;
 use std::time::SystemTime;
 
 pub(crate) fn xai_catalog_binding(
+    config: &ash_model_provider_config::NormalizedModelProviderConfig,
     auth: Arc<XaiOAuth>,
 ) -> Result<Option<ModelCatalogBinding>, crate::ModelProviderError> {
     let Some(account_id) = auth
@@ -35,7 +36,7 @@ pub(crate) fn xai_catalog_binding(
     else {
         return Ok(None);
     };
-    let digest = Sha256::digest(account_id.as_bytes());
+    let digest = Sha256::digest(format!("{config:?}:{account_id}").as_bytes());
     let scope = CatalogScopeKey::new(
         ProviderId::new("xai").expect("constant provider ID"),
         CatalogSourceScopeId::new(format!("xai-subscription:{digest:x}"))

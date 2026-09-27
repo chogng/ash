@@ -213,8 +213,17 @@ impl DirConfigStore {
             return Ok(DirConfigDocument::default());
         }
         let source = fs::read_to_string(&self.path).map_err(io_error)?;
-        let document: DirConfigDocument =
+        let mut document: DirConfigDocument =
             toml::from_str(&source).map_err(|error| ConfigError(error.to_string()))?;
+        // A directory's read grant does not authorize rewriting its source. Import the old
+        // model identity into the canonical snapshot, without changing connection selection.
+        if let Some(model) = &mut document.agent.model {
+            if let Some(provider) =
+                ash_model_provider_config::legacy_model_providers().remove(&model.provider)
+            {
+                model.provider = provider;
+            }
+        }
         document.validate(&self.scope)?;
         Ok(document)
     }

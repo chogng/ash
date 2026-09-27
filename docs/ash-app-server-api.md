@@ -260,7 +260,7 @@ Desktop 当前实现和 Playwright 后续边界见
 | `session/subscribe` | connection + session tree | Session 视图 + 每个 child Thread 的 snapshot 和 durable gap；Session 没有 `afterSequence` |
 | `session/request` | `session_id` grouping boundary | tagged request；树级动作枚举 Thread，Thread/Turn 写入绑定具体 Thread |
 | `session/unsubscribe` | connection | 删除订阅 |
-| `model/list` | model catalog | 必填 `{ "view": "builtIn" | "discovered" }`；固定目录供桌面选择器使用，发现目录供 TUI 使用；两种结果均不证明模型调用成功 |
+| `model/list` | model catalog | 参数 `{}`；各端使用固定内置目录，登录和接入切换不改变模型身份集合；目录不证明请求成功 |
 | `session/thread/read` | Session + Thread | 读取 canonical Thread snapshot |
 | `session/thread/subscribe` | Session + Thread + connection | snapshot + `afterSequence` 之后的 durable gap |
 | `session/thread/unsubscribe` | Session + Thread + connection | 删除 child Thread 订阅 |
@@ -288,10 +288,11 @@ Desktop 当前实现和 Playwright 后续边界见
 | `memory/policy/read` / `memory/policy/update` | Memory | 按作用域分别管理自动读取与模型保存授权；默认关闭，使用独立 policy revision |
 | `codebase/configure` | config + Directory | 配置可选设备内模型与自动上下文行为；不保存索引数据 |
 | `languageServer/configure` / `languageServer/remove` | config | revision-safe 修改或恢复 language-server mode/path preference |
-| `provider/configure` / `provider/remove` | config | 新增自定义项分配并持久保存顺序，编辑保持顺序；删除拒绝内置项和仍被配置引用的项，并清理该连接密钥。自定义 API 类型支持 Responses、Chat Completions、Anthropic Messages；`contextWindow` 保存 Provider 的 272000／1000000 档位，`model` 留空时目录使用对应 API 类型的内置模型，填写时使用该 ID。 |
-| `provider/apiKey/set` / `provider/list` | model provider credential | 受信任的本地客户端提交新 key，由 App Server 写入 profile SecretStore；列表只返回配置状态，不返回 key。CLI/TUI 使用同一协议；Desktop 的 Chat Settings 可查看提供者状态并录入或替换 key。 |
+| `provider/configure` / `provider/remove` | config | 按 connection ID 保存或移除配置。内置接入保存配置不隐式启用；移除当前接入后保持选择并标记未就绪。自定义接入保留原有产品语义。 |
+| `provider/apiKey/set` / `provider/list` | model connection | 按 connection ID 保存独立凭据，成功后由后端启用；列表返回所属厂商、接入类型、configured、active 和 ready，不返回密钥。 |
+| `provider/activate` | config | 使用 commandId、expectedRevision 和 connection 启用已保存接入；每个厂商只生效一个，其他厂商不受影响。 |
 | `provider/probe` | model provider | 使用未保存的 `config` 和可选临时 `apiKey`；填写 `model` 时发起一次最小生成请求，省略时获取模型 ID 列表。返回 `passed`、`models` 或 `failed`；不保存配置和密钥，不重试其他路径。成功不证明完整上下文容量；协议 revision 31。 |
-| `provider/models/list` | model catalog | 按已保存 Provider 配置主动刷新目录；返回带 `type` 的 `models`（含列表）、`empty` 或 `failed`（含分类 code），不修改配置和凭据。刷新可改变 `model/list` 的 `discovered` 结果，但不会自动修改已选模型；选择远端模型需通过 `provider/configure` 保存其 ID。失败分类不包含上游响应正文或秘密；协议 revision 29 |
+| `provider/models/list` | model observations | 按 connection 刷新观察目录，返回 models、empty 或 failed。缓存隔离接入、账户和配置；不改写内置目录、模型选择或当前接入。 |
 | `mcp/server/upsert` / `mcp/server/remove` / `mcp/server/enablement/set` | config | 修改 standalone MCP desired config |
 | `mcp/server/connect` / `mcp/server/disconnect` | runtime | 设置 process-local lifecycle intent，不改变 Config revision |
 | `mcp/server/status` | read | 读取 active Config/Plugin/Connector MCP runtime 的 redacted lifecycle 与 generation projection |
@@ -751,20 +752,15 @@ Thread 并逐一归档；停止还会中断活动 Turn。连接断开只释放�
 
 ### 执行选择
 
-Session 不保存 model、下一次 approval mode 或 current Thread。`model/list` 返回指定视图的模型目录；
+Session 不保存 model、下一次 approval mode 或 current Thread。`model/list` 返回固定内置模型目录；
 App Server 在创建 Turn 时读取执行配置，并把实际 model、approval mode、tool mode 与 policy revision
 冻结到该 Turn。产品当前选中的分支属于产品导航状态，不进入 Core Session 视图。
 
-`model/list` 必须指定 `view`，由客户端按界面选择；此请求格式使用 protocol revision 4、capability version 8。App Server 提供两种结果：
+`model/list` 参数为 `{}`，桌面端、Rust 桌面端和 TUI 使用同一份静态目录。模型身份始终为厂商＋模型，条目包含名称、规格和能力，不携带认证方式或执行适配器。
 
-| `view` | 使用方 | 条目来源 | 登录或 API key 的影响 |
-| --- | --- | --- | --- |
-| `builtIn` | 桌面端模型选择器 | `ash-model-provider-config::STATIC_MODEL_CATALOG` 中的固定模型身份与基础信息；相同 provider/model 只出现一次 | 不改变列表；TypeScript 桌面端可在设置中隐藏固定条目 |
-| `discovered` | TUI 的 `/model` 等模型选择界面 | 当前已配置供应商的最新成功发现结果，或同账户的持久缓存；没有发现结果就不显示该模型 | 决定可连接的目录来源及可观察到的模型 |
+接入定义、凭据和当前选择由后端分别管理。GLM 的模型厂商为 `zai`，四个服务 ID 是独立接入。登录或保存密钥成功后启用新接入，旧凭据保留；读取账户、刷新 token 和刷新目录不会改变选择。登出或移除当前接入不会启用其他凭据。
 
-App Server 负责内置目录、按供应商/账户隔离的发现缓存和模型请求接线；前端只选择视图并展示条目，不根据订阅或 API key 自行判断请求路径。订阅目录存入 Ash profile 的 `cache/models/<provider>.json`。每个条目统一返回 provider-scoped identity、display name、`access`、context、capabilities、reasoning efforts 和默认 personality；`access` 是内部接入资料，桌面选择器不显示接入方式分类。`discovered` 的列表读取遵循缓存新鲜度策略，可能是上次成功观察；目录响应不等于模型调用健康检查。不支持目录发现的连接可以在 TUI 用 `/model <provider>/<model>` 输入准确身份，调用仍在后端验证。`builtIn` 的 metadata 不受当前配置或发现结果改写。
-
-用户选定准确的 provider/model 后，App Server 在创建 Turn 时读取当前配置，并由模型服务决定实际认证与请求路径。Provider 配置、认证、账户 entitlement、rate limit、传输和模型端拒绝都在调用时验证，并以该 Turn 的稳定错误出现；它们不回写固定目录。登录状态不会隐式改变已经创建的 Turn。
+每轮开始保存模型、当前接入和参数。远端目录缺项不阻止内置模型请求；认证、权限、限流和模型拒绝均直接返回，不更换模型或接入。已开始轮次及其顾问调用保留原配置，新轮次读取最新选择。
 
 ## 7. Thread 与 Turn
 
@@ -923,14 +919,14 @@ BigModel 与 Z.ai 的四条连接使用同一组 Provider RPC，但以精确 ID 
 
 | 连接 | Provider ID | 默认或连接地址 | 退出登录 |
 | --- | --- | --- | --- |
-| BigModel Coding Plan | `bigmodel-coding-plan` | `https://open.bigmodel.cn/api/coding/paas/v4` | `provider/configure` 将该连接的 `baseUrl` 设为 `null` |
-| Z.ai Coding Plan | `zai-coding-plan` | `https://api.z.ai/api/coding/paas/v4` | `provider/configure` 将该连接的 `baseUrl` 设为 `null` |
+| BigModel Coding Plan | `bigmodel-coding-plan` | `https://open.bigmodel.cn/api/coding/paas/v4` | `provider/remove` 移除该接入 |
+| Z.ai Coding Plan | `zai-coding-plan` | `https://api.z.ai/api/coding/paas/v4` | `provider/remove` 移除该接入 |
 | BigModel API | `bigmodel` | `https://open.bigmodel.cn/api/paas/v4` | 无订阅登录 |
 | Z.ai API | `zai` | `https://api.z.ai/api/paas/v4` | 无订阅登录 |
 
 四种地址对应 [ZCode 官方连接说明](https://zcode.z.ai/cn/docs/configuration)中的 Coding Plan 与通用 API 端点。
 
-Coding Plan 首次连接时对对应 ID 使用 `provider/configure` 启用专用端点，并用 `provider/apiKey/set` 保存密钥；已有密钥时只需启用端点。`provider/list` 的 `apiKeyConfigured` 只表示该 ID 是否保存了密钥。退出不调用 `provider/apiKey/set`，也不改动其他三个 ID。ChatGPT、Kimi、Super Grok 的订阅登出仍使用各自的 `account/logout`。
+Coding Plan 首次连接使用 `provider/apiKey/set` 保存密钥并自动启用；已有接入使用 `provider/activate`，无需重新输入密钥。四条接入互斥且凭据独立。ChatGPT、Kimi、Super Grok 登出使用各自的 `account/logout`，当前选择保持未就绪，不切换其他接入。
 
 `execPolicy/rule/upsert` 接收完整 typed rule：selector 支持 action digest/kind、trusted source、
 tokenized command prefix、structured network target、capability scope 和显式 `all`；effect 支持
@@ -1243,7 +1239,7 @@ Thread 保存普通 Coding Turn 的顾问选择策略；接受 Turn 时将解析
 
 每次实际发起的顾问请求都有带 `toolCallId` 的 `ModelInvocationRecord`。顾问用量与参考费用计入 Turn、Thread 和目标预算；它不更新工作模型的上下文占用。供应商未返回用量时保留未知状态。恢复遵循既有 ToolCall 规则，已开始且结果未知的请求不自动重新计费调用。
 
-桌面端和 TUI 的 `/advisor` 打开模型配置，`/advisor <provider/model>` 选择并启用模型，`/advisor off` 关闭顾问但保留选择，`/advisor clear` 清除选择；其他 `/advisor <question>` 参数直接提交一次咨询。`off`、`clear` 和不含空白的 `<provider/model>` 优先按配置命令解析。TUI 在“配置 → 通用 → 顾问”中分别设置启用开关和顾问模型；“提供商”只管理供应商。首次在配置页选择模型时保持关闭，须显式开启。界面从 `model/list` 获取模型；TUI 请求 `discovered` 并只提供 `config/read.providers` 中已配置供应商的模型，桌面端请求 `builtIn`，通过 `config/read.advisor` 显示当前选择，再通过 `config/update.advisor` 保存。直接咨询使用 `consultAdvisor` 和全局顾问模型，即使旧会话保存了单独的关闭或模型选择也以全局配置为准；只选择模型不创建会话。普通提问中要求“先咨询 Advisor”时，由工作模型决定是否调用 `advisor({question})`。
+桌面端和 TUI 的 `/advisor` 打开模型配置，`/advisor <provider/model>` 选择并启用模型，`/advisor off` 关闭顾问但保留选择，`/advisor clear` 清除选择；其他 `/advisor <question>` 参数直接提交一次咨询。`off`、`clear` 和不含空白的 `<provider/model>` 优先按配置命令解析。TUI 在“配置 → 通用 → 顾问”中分别设置启用开关和顾问模型；“提供商”只管理供应商。首次在配置页选择模型时保持关闭，须显式开启。界面从 `model/list` 获取模型；所有端统一请求固定目录 `{}`，通过 `config/read.advisor` 显示当前选择，再通过 `config/update.advisor` 保存。直接咨询使用 `consultAdvisor` 和全局顾问模型，即使旧会话保存了单独的关闭或模型选择也以全局配置为准；只选择模型不创建会话。普通提问中要求“先咨询 Advisor”时，由工作模型决定是否调用 `advisor({question})`。
 
 ## 可用语言服务器
 

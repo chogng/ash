@@ -11,7 +11,8 @@ export function buildMetricsPlugin(): Plugin {
 		generateBundle: { order: 'post', handler(_options, bundle) {
 			for (const output of Object.values(bundle)) {
 				if (output.type === 'chunk' && Buffer.byteLength(output.code) > 500_000) {
-					this.error(`JavaScript chunk exceeds 500 kB: ${output.fileName}. Review its module dependencies and split boundaries.`);
+					const largest = Object.entries(output.modules).sort((a, b) => b[1].renderedLength - a[1].renderedLength).slice(0, 8).map(([id, module]) => `${relative(root, id)} (${module.renderedLength} bytes)`).join(", ");
+					this.error(`JavaScript chunk exceeds 500 kB: ${output.fileName} (${Buffer.byteLength(output.code)} bytes). Largest modules: ${largest}. Review its module dependencies and split boundaries.`);
 				}
 			}
 			const entries = Object.values(bundle).filter(output => output.type === 'chunk' && output.isEntry);

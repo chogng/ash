@@ -379,7 +379,7 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
 
     assert!(typescript.contains("export type ModelRef = { provider: string, model: string, };"));
     assert!(typescript.contains(
-        "export type ModelCatalogEntry = { model: ModelRef, displayName: string, access: ModelAccess, outputTransport: ModelOutputTransport, contextWindow: number | null, autoCompactTokenLimit: number | null, availableContextWindow?: number | null, capabilities: ModelCapabilities, supportedReasoningEfforts: Array<ReasoningEffort>, modelReasoningEffort: ReasoningEffort | null, defaultPersonality: Personality | null, };"
+        "export type ModelCatalogEntry = { model: ModelRef, displayName: string, contextWindow: number | null, autoCompactTokenLimit: number | null, availableContextWindow?: number | null, capabilities: ModelCapabilities, supportedReasoningEfforts: Array<ReasoningEffort>, modelReasoningEffort: ReasoningEffort | null, defaultPersonality: Personality | null, };"
     ));
     assert!(
         typescript

@@ -4266,3 +4266,100 @@ fn encrypted_reasoning_survives_tool_results_and_reloading_thread_history() {
         .unwrap();
     assert!(model.requests()[0].input.contains(&expected));
 }
+
+#[test]
+fn connection_selection_is_frozen_at_turn_start_and_released_for_the_next_turn() {
+    struct Selector {
+        selected: AtomicUsize,
+        entered: Arc<std::sync::Barrier>,
+        release: Arc<std::sync::Barrier>,
+        used: Arc<Mutex<Vec<usize>>>,
+    }
+    struct Fixed {
+        connection: usize,
+        entered: Arc<std::sync::Barrier>,
+        release: Arc<std::sync::Barrier>,
+        used: Arc<Mutex<Vec<usize>>>,
+    }
+    impl ModelService for Selector {
+        fn snapshot(
+            &self,
+            _: ModelSelection<'_>,
+        ) -> Result<Option<Arc<dyn ModelService>>, CoreError> {
+            Ok(Some(Arc::new(Fixed {
+                connection: self.selected.load(Ordering::SeqCst),
+                entered: self.entered.clone(),
+                release: self.release.clone(),
+                used: self.used.clone(),
+            })))
+        }
+        fn invoke(
+            &self,
+            _: ModelSelection<'_>,
+            _: &ModelRequest,
+            _: &CancellationToken,
+        ) -> Result<ModelResponse, CoreError> {
+            panic!("the mutable selector must not execute a Turn")
+        }
+    }
+    impl ModelService for Fixed {
+        fn invoke(
+            &self,
+            _: ModelSelection<'_>,
+            _: &ModelRequest,
+            _: &CancellationToken,
+        ) -> Result<ModelResponse, CoreError> {
+            if self.connection == 1 {
+                self.entered.wait();
+                self.release.wait();
+            }
+            self.used.lock().unwrap().push(self.connection);
+            Ok(text_response("done"))
+        }
+    }
+    let (threads, thread_id, turn_id) = started_turn();
+    let model = Arc::new(Selector {
+        selected: AtomicUsize::new(1),
+        entered: Arc::new(std::sync::Barrier::new(2)),
+        release: Arc::new(std::sync::Barrier::new(2)),
+        used: Arc::default(),
+    });
+    let executor = TurnExecutor::without_tools(threads.clone(), model.clone());
+    executor.start(&thread_id, &turn_id).unwrap();
+    model.entered.wait();
+    model.selected.store(2, Ordering::SeqCst);
+    model.release.wait();
+    wait_for_turn_status(&threads, &thread_id, &turn_id, TurnStatus::Completed);
+    let next = threads
+        .start_turn(
+            &thread_id,
+            StartTurnRequest {
+                advisor: None,
+                kind: ash_protocol::TurnKind::Coding,
+                instructions: crate::test_turn_instructions(),
+                command_id: CommandId::new("after-switch").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                model: None,
+                policy_revision: "test-policy-v1".into(),
+                approval_mode: ash_protocol::ApprovalMode::AskPermissions,
+                tool_mode: ash_protocol::ToolMode::Direct,
+                tool_profile: None,
+                activated_skills: vec![],
+                input: vec![UserInput::Text {
+                    text: "next".into(),
+                }],
+            },
+        )
+        .unwrap()
+        .turn_id;
+    // An extension continuation starts through the frozen executor from the previous Turn.
+    let mut continuation = executor.clone();
+    continuation.model = model
+        .snapshot(ModelSelection::ConfiguredDefault)
+        .unwrap()
+        .unwrap();
+    model.selected.store(3, Ordering::SeqCst);
+    continuation.start(&thread_id, &next).unwrap();
+    wait_for_turn_status(&threads, &thread_id, &next, TurnStatus::Completed);
+    assert_eq!(*model.used.lock().unwrap(), [1, 3]);
+}

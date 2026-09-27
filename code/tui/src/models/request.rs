@@ -60,7 +60,7 @@ where
 {
     client.read_accounts()?;
     let config = client.read_config()?;
-    let catalog = client.list_builtin_models()?;
+    let catalog = client.list_models()?;
     model_choices(&catalog, &config).map_err(ModelCommandError)
 }
 
@@ -105,12 +105,6 @@ where
                 "model must use non-empty <provider>/<model> without whitespace".into(),
             ));
         }
-        if !config.providers.contains_key(provider) {
-            return Err(ModelCommandError(format!(
-                "provider '{provider}' is not configured"
-            )));
-        }
-
         let effort_opt = match tokens.next() {
             Some(raw) => {
                 let effort = raw.parse::<ReasoningEffort>().map_err(|_| {
@@ -130,7 +124,7 @@ where
         }
 
         if let Some(effort) = effort_opt {
-            let catalog = client.list_builtin_models()?;
+            let catalog = client.list_models()?;
             let entry = catalog.models.iter().find(|entry| {
                 entry.model.provider.as_str() == provider && entry.model.model.as_str() == model
             });
@@ -183,7 +177,7 @@ where
         tui: Patch::Missing,
     })?;
     let config = client.read_config()?;
-    let catalog = client.list_builtin_models().ok();
+    let catalog = client.list_models().ok();
     let summary = ModelSummary::from_catalog(
         config.model,
         config.model_reasoning_effort,
@@ -268,7 +262,7 @@ fn set_pin<T: JsonRpcTransport>(
         model: model.into(),
     };
     if pinned {
-        let catalog = client.list_builtin_models()?;
+        let catalog = client.list_models()?;
         if !catalog.models.iter().any(|entry| {
             entry.model.provider.as_str() == model.provider
                 && entry.model.model.as_str() == model.model

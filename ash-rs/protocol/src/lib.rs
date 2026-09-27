@@ -126,6 +126,7 @@ pub use model::ModelBillingRecord;
 pub use model::ModelBillingScope;
 pub use model::ModelCapabilities;
 pub use model::ModelCatalogFreshness;
+pub use model::ModelConnectionId;
 pub use model::ModelContextUsage;
 pub use model::ModelContextUsageSource;
 pub use model::ModelCostLineItem;

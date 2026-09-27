@@ -12,8 +12,8 @@ expression: "render(&app, 100, 18)"
             │  Pinned ─────────────────────────────────────────────────────────────── │             
             │> gateway-model                                                          │             
             │                                                                         │             
-            │                                                                         │             
-            │                                                                         │             
+            │  Other models ───────────────────────────────────────────────────────── │             
+            │  Unconfigured model                                                     │             
             │                                                                         │             
   ╭─────────│                                                                         │──────────╮  
   │ > Build │  Enter to apply  ·  / to search  ·  Esc to close  ·  P to pin/unpin     │          │  

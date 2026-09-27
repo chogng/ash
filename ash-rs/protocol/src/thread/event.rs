@@ -88,6 +88,12 @@ pub enum ThreadEvent {
         thread_id: ThreadId,
         title: String,
     },
+    /// Changes future model selections without rewriting historical invocation or billing facts.
+    ModelProvidersMigrated {
+        thread_id: ThreadId,
+        #[ts(type = "Record<string, string>")]
+        providers: std::collections::BTreeMap<crate::ProviderId, crate::ProviderId>,
+    },
     AdvisorConfigured {
         thread_id: ThreadId,
         selection: crate::AdvisorSelection,
@@ -361,6 +367,7 @@ impl ThreadEvent {
         match self {
             Self::ThreadCreated { .. } => "thread.created",
             Self::AdvisorConfigured { .. } => "advisor.configured",
+            Self::ModelProvidersMigrated { .. } => "model.providers_migrated",
             Self::ThreadArchived { .. } => "thread.archived",
             Self::ThreadRestored { .. } => "thread.restored",
             Self::GoalCreated { .. } => "thread.goal_created",
@@ -412,6 +419,7 @@ impl ThreadEvent {
     pub fn thread_id(&self) -> &ThreadId {
         match self {
             Self::ThreadCreated { thread_id, .. }
+            | Self::ModelProvidersMigrated { thread_id, .. }
             | Self::AdvisorConfigured { thread_id, .. }
             | Self::ThreadArchived { thread_id, .. }
             | Self::ThreadRestored { thread_id }

@@ -21,6 +21,7 @@ pub use catalog::ModelAccess;
 pub use catalog::ModelAvailability;
 pub use catalog::ModelCapabilities;
 pub use catalog::ModelCatalogFreshness;
+pub use catalog::ModelConnectionId;
 pub use catalog::ModelId;
 pub use catalog::ModelInfo;
 pub use catalog::ModelLifecycle;

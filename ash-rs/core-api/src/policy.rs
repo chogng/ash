@@ -8,6 +8,14 @@ use ash_async_utils::CancellationToken;
 /// Implementations own the authoritative policy decision. Core checks the Turn's frozen revision
 /// and applies its approval mode. `AskUser` is a request for interaction, never authorization.
 pub trait ActionPolicyService: Send + Sync {
+    /// Freezes model-backed review dependencies at Turn start; permission checks remain live.
+    fn snapshot(
+        &self,
+        _: std::sync::Arc<dyn crate::ModelService>,
+    ) -> Result<Option<std::sync::Arc<dyn ActionPolicyService>>, CoreError> {
+        Ok(None)
+    }
+
     /// Returns the current immutable policy-environment revision at a Turn safe point.
     fn revision(&self) -> String;
 

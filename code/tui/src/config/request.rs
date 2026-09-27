@@ -36,6 +36,7 @@ impl Command {
             Self::SetMemories(_) => "ash-tui-set-memories",
             Self::SetIssues(_) => "ash-tui-configure-issues",
             Self::SetGit(_) => "ash-tui-configure-git",
+            Self::ActivateConnection { .. } => "ash-tui-activate-connection",
             Self::Connection(_) => "ash-tui-provider-connection",
             Self::Subscription(_, _) => "ash-tui-subscription-account",
             Self::OpenEditor => "ash-tui-read-config",
@@ -52,9 +53,7 @@ where
     match command {
         Command::OpenAdvisor => (|| -> Result<Event, ConfigCommandError> {
             let config = client.read_config().map_err(ConfigCommandError::from)?;
-            let models = client
-                .list_builtin_models()
-                .map_err(ConfigCommandError::from)?;
+            let models = client.list_models().map_err(ConfigCommandError::from)?;
             let terminal = TerminalSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
             let status_line =
                 StatusLineSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
@@ -66,7 +65,7 @@ where
         })(),
         Command::SelectAdvisor(selection) => select_advisor(client, selection).map(Event::Updated),
         Command::SetAdvisor(advisor) => (|| -> Result<Event, ConfigCommandError> {
-            let models = client.list_builtin_models()?;
+            let models = client.list_models()?;
             let (result, config) = set_advisor(client, advisor)?;
             let choices = advisor_choices(&config, &models, result.terminal.language());
             Ok(Event::AdvisorSaved(result, choices))
@@ -74,6 +73,21 @@ where
         Command::SetMemories(edit) => set_memories(client, edit).map(Event::Updated),
         Command::SetIssues(edit) => set_issue_settings(client, edit).map(Event::Updated),
         Command::SetGit(edit) => set_git_settings(client, edit).map(Event::Updated),
+        Command::ActivateConnection {
+            connection,
+            expected_revision,
+        } => {
+            client
+                .activate_provider(
+                    ash_app_server_protocol::protocol::provider::ProviderActivateParams {
+                        command_id: new_command_id("activate-connection"),
+                        expected_revision,
+                        connection,
+                    },
+                )
+                .map_err(|error| error.to_string())?;
+            read_config_choices(client).map(Event::EditorOpened)
+        }
         Command::Connection(request) => {
             let id = request.id.clone();
             let result = execute_connection(client, request);
@@ -110,14 +124,11 @@ fn select_advisor<T: JsonRpcTransport>(
             advisor
         })
     } else {
-        let models = client.list_builtin_models()?;
+        let models = client.list_models()?;
         let model = models
             .models
             .iter()
-            .find(|entry| {
-                format!("{}/{}", entry.model.provider, entry.model.model) == selection
-                    && config.providers.contains_key(entry.model.provider.as_str())
-            })
+            .find(|entry| format!("{}/{}", entry.model.provider, entry.model.model) == selection)
             .map(|entry| entry.model.clone())
             .ok_or_else(|| {
                 ConfigCommandError(format!(
@@ -271,6 +282,7 @@ fn execute_connection<T: JsonRpcTransport>(
     mut request: super::provider::Request,
 ) -> Result<(ConfigChoices, Option<Result<Vec<String>, String>>), String> {
     let provider = request.config.provider.clone();
+    let connection = request.config.connection.clone();
     if matches!(request.operation, super::provider::Operation::Test) {
         use ash_app_server_protocol::protocol::provider::ProviderProbeResult;
         let model = request.model.clone();
@@ -298,7 +310,7 @@ fn execute_connection<T: JsonRpcTransport>(
                 ash_app_server_protocol::protocol::config::ProviderRemoveParams {
                     command_id: request.id,
                     expected_revision: request.revision,
-                    provider: provider.clone(),
+                    connection: connection.clone(),
                 },
             )
             .map_err(|error| error.to_string())?;
@@ -312,8 +324,8 @@ fn execute_connection<T: JsonRpcTransport>(
     let current = client.read_config().map_err(|error| error.to_string())?;
     if let Some(custom) = &mut request.config.custom {
         if let Some(saved) = current
-            .providers
-            .get(&provider)
+            .connections
+            .get(&connection)
             .and_then(|config| config.custom.as_ref())
         {
             custom.order = saved.order;
@@ -321,7 +333,8 @@ fn execute_connection<T: JsonRpcTransport>(
     }
 
     if request.operation == super::provider::Operation::Save
-        && (current.providers.get(&provider) != Some(&request.config) || current.model.is_none())
+        && (current.connections.get(&connection) != Some(&request.config)
+            || current.model.is_none())
     {
         client
             .configure_provider(
@@ -341,6 +354,17 @@ fn execute_connection<T: JsonRpcTransport>(
         client
             .set_provider_api_key(ProviderApiKeySetRequest::new(provider, key))
             .map_err(|error| format!("Provider settings saved; API key was not saved: {error}"))?;
+    } else if request.operation == super::provider::Operation::Save {
+        let saved = client.read_config().map_err(|error| error.to_string())?;
+        client
+            .activate_provider(
+                ash_app_server_protocol::protocol::provider::ProviderActivateParams {
+                    command_id: new_command_id("activate-connection"),
+                    expected_revision: saved.revision,
+                    connection,
+                },
+            )
+            .map_err(|error| error.to_string())?;
     }
 
     Ok((
@@ -378,37 +402,6 @@ where
 {
     let target = edit.target();
     let (provider, api_key) = edit.into_parts();
-    let current = client.read_config()?;
-    let mut config = current
-        .providers
-        .get(&provider)
-        .cloned()
-        .unwrap_or_else(
-            || ash_app_server_protocol::protocol::config::ProviderConfigDto {
-                provider: provider.clone(),
-                custom: None,
-                base_url: None,
-                max_output_tokens: None,
-                model_context: Default::default(),
-            },
-        );
-    if let ApiKeyTarget::CodingPlan(subscription) = target {
-        config.base_url = Some(
-            subscription
-                .coding_plan_endpoint()
-                .expect("Coding Plan endpoint")
-                .into(),
-        );
-    }
-    if current.providers.get(&provider) != Some(&config) || current.model.is_none() {
-        client.configure_provider(
-            ash_app_server_protocol::protocol::config::ProviderConfigureParams {
-                command_id: new_command_id("provider-config"),
-                expected_revision: current.revision,
-                config,
-            },
-        )?;
-    }
     client.set_provider_api_key(ProviderApiKeySetRequest::new(provider.clone(), api_key))?;
     let choices = read_config_choices(client)?;
     Ok(ProviderApiKeyUpdate {

@@ -48,12 +48,17 @@ reauthentication-required 状态；它不把不同 Provider 的 credential 协�
 
 当前实现是 provider-neutral control plane：`InteractiveLoginDriver` 声明自己的 stable provider ID，接收 service-owned `LoginId`，返回 browser/device-code 挑战或立即连接成功，以及脱敏账户摘要。App Server 已暴露 `account/read`、`account/login/start`、`account/login/cancel`、带 provider 参数的 `account/logout`，并主动发布 `account/login/completed` 与 `account/updated`；`account/read` 返回 `accounts[]`，所以 ChatGPT、Kimi、xAI 和 GitHub 可以同时登录。
 
-产品边界按认证能力划分：ChatGPT、Kimi、xAI 的订阅接入通过 `ash-login` 暴露交互式账户登录；开发者 API 通过模型凭据领域接受 API key。两种凭据可以同时保存；订阅账户就绪时，该供应商的模型列表与文本请求优先使用订阅。订阅不可用时才使用已保存的 API key，不会在一次失败的订阅请求中改走 API。BigModel 与 Z.AI Coding Plan 各使用独立密钥和端点，不产生 `ash-login` 账户。
+每个厂商在后端 profile 中只保存一个当前接入。订阅登录成功或 API/Coding Plan 密钥保存成功后，后端自动启用该接入；其他接入的凭据保留。读取账户、刷新 token 和刷新远端目录都不改变选择。登录失败、取消或配置写入失败保留原选择。当前接入登出或被移除后保持未就绪，用户可直接启用其他已保存接入，无需重填密钥。
+
+GLM 的 `bigmodel`、`zai`、`bigmodel-coding-plan`、`zai-coding-plan` 是同一 `zai` 厂商下的四个接入 ID，四选一；不同厂商分别选择。Coding Plan 密钥不产生 `ash-login` 账户。
 
 本地默认组合安装 ChatGPT、Kimi 和 xAI 三个订阅登录适配器；发行配置中的公开 GitHub App Client ID 和授权服务地址另启用 GitHub 账户适配器。ChatGPT、Kimi、xAI 使用各自的设备授权流程。GitHub 使用系统浏览器授权、PKCE 和本机回调；Cloudflare Worker 持有 GitHub App Client Secret 并交换或刷新 token，本机将凭据保存到 profile SecretStore。ChatGPT 使用 Codex 兼容的本地登录存储，Kimi、xAI 的 Ash 登录凭据也保存在 profile SecretStore，xAI 在没有 Ash 凭据时还能只读使用宿主 Grok 登录文件。它们只向控制面提供脱敏账户信息。
 
-默认目录中的 `openai/gpt-5.6-sol` 等订阅模型显式标记 `runtime = chatgpt_subscription`，`kimi/kimi-k2.7-code` 标记 `runtime = kimi_code`。`ModelRef` 始终使用供应商 ID；当前账户状态决定有效接入方式。桌面端的固定模型列表不因登录或填入 API key 增减条目；TUI `/model` 只显示当前连接发现或同账户缓存观察到的模型。订阅切换后，TUI 的可选条目会随目录变化；已选择的准确模型是否能请求成功由调用时的接线和认证决定。
-App Server 读取到已就绪的 ChatGPT 账户时登记 `openai` 供应商，供 TUI 读取该账户的发现目录。Ash 首次读取订阅目录时，若 Codex 有本地模型缓存，会通过 Codex 的本地 `model/list` 校验当前账户并转换可见条目；否则由 Ash 使用当前登录读取 ChatGPT 目录。转换后的模型信息存入 Ash profile 的 `cache/models/openai.json`，同一文件内按账户和接入方式隔离。xAI 写入 `xai.json`，Kimi Code 写入 `kimi.json`；这些文件都按供应商和账户 scope 管理。旧配置的 `xai-subscription` 模型引用迁为 `xai`；OpenAI 与 Kimi 的原有模型引用保持供应商 ID 不变。
+所有客户端通过 `model/list` 读取同一固定内置目录。模型条目只表达厂商、模型及规格，不携带认证方式或执行适配器；登录、保存密钥、切换和登出都不改变目录条目。远端列表缺少内置模型仍可发起请求，实际错误直接返回，不改用其他模型或接入。
+
+`provider/list` 返回每个接入的厂商、订阅/API 类型、配置状态、就绪状态和是否生效；`provider/activate` 按接入 ID 启用已保存接入。`provider/models/list` 是按接入定位的独立观察接口，不决定内置模型能否选择。发现缓存按接入和账户身份隔离，API 接入还包括有效配置身份；缓存中不保存密钥或 token。
+
+主模型每轮开始固定模型、接入和有效参数；正在执行的一轮不跟随后续设置切换。OAuth token 按原有生命周期刷新；固定账户失效或变化会返回认证错误。
 
 Kimi wire contract 以 [Kimi CLI 的官方 OAuth 实现](https://github.com/MoonshotAI/kimi-cli/blob/main/src/kimi_cli/auth/oauth.py) 为主依据，并与 [CLIProxyAPI 的 Kimi adapter](https://github.com/router-for-me/CLIProxyAPI/blob/main/internal/auth/kimi/kimi.go) 交叉验证。Ash 请求使用真实 `User-Agent: Ash/*` 与 `X-Msh-Platform: Ash`，不伪装成 Kimi CLI 或 CPA。
 

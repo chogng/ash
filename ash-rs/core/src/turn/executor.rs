@@ -84,8 +84,18 @@ use std::time::UNIX_EPOCH;
 pub struct TurnExecutor {
     threads: Arc<ThreadController>,
     model: Arc<dyn ModelService>,
+    // A continuation starts a new Turn and must read the profile again, even when launched by a frozen executor.
+    model_source: Arc<dyn ModelService>,
+    // Approval waits keep the same runtime. Terminal completion and session closure release it.
+    turn_models: Arc<
+        std::sync::Mutex<
+            BTreeMap<ThreadId, (TurnId, Arc<dyn ModelService>, Arc<dyn ActionPolicyService>)>,
+        >,
+    >,
+    model_compaction: bool,
     tools: Arc<dyn ToolService>,
     policy: Arc<dyn ActionPolicyService>,
+    policy_source: Arc<dyn ActionPolicyService>,
     compaction: Arc<dyn ContextCompactionService>,
     updates: Arc<dyn ThreadUpdateSink>,
     harness_context: Arc<dyn HarnessContextProvider>,
@@ -124,6 +134,21 @@ impl TurnExecutor {
     /// Releases process-local cells and stored values when a session is stopped or archived.
     pub fn close_code_mode_session(&self, session_id: &SessionId) {
         self.code_mode.close_session(session_id);
+        if let Ok(mut models) = self.threads.turn_tool_models.lock() {
+            models.retain(|thread, _| {
+                self.threads
+                    .read_thread(thread)
+                    .is_ok_and(|snapshot| &snapshot.session_id != session_id)
+            });
+        }
+
+        if let Ok(mut models) = self.turn_models.lock() {
+            models.retain(|thread, _| {
+                self.threads
+                    .read_thread(thread)
+                    .is_ok_and(|snapshot| &snapshot.session_id != session_id)
+            });
+        }
     }
 
     /// Captures the model-neutral direct tool surface for a newly accepted Turn.
@@ -233,8 +258,12 @@ impl TurnExecutor {
         );
         Self {
             threads,
+            model_source: Arc::clone(&model),
             model,
+            turn_models: Arc::default(),
+            model_compaction: true,
             tools,
+            policy_source: Arc::clone(&policy),
             policy,
             compaction,
             updates: Arc::new(NoThreadUpdates),
@@ -292,6 +321,7 @@ impl TurnExecutor {
             .code_mode
             .with_tool_service(Arc::clone(&tools), Arc::clone(&policy));
         self.tools = tools;
+        self.policy_source = Arc::clone(&policy);
         self.policy = policy;
         self
     }
@@ -319,6 +349,7 @@ impl TurnExecutor {
         compaction: Arc<dyn ContextCompactionService>,
     ) -> Self {
         self.compaction = compaction;
+        self.model_compaction = false;
         self
     }
 
@@ -361,19 +392,112 @@ impl TurnExecutor {
     /// The mailbox runs model and tool I/O away from the caller and from the Thread projection
     /// lock. Completion, failure, and cancellation remain durable Core transitions.
     pub fn start(&self, thread_id: &ThreadId, turn_id: &TurnId) -> Result<(), CoreError> {
-        let executor = self.clone();
+        let mut executor = self.clone();
+        {
+            // Duplicate wakeups for one Turn must share the very same connection snapshot.
+            let mut models = self
+                .turn_models
+                .lock()
+                .map_err(|_| CoreError::Execution("Turn model state lock poisoned".into()))?;
+            executor.model = if let Some((_, model, policy)) =
+                models.get(thread_id).filter(|(id, _, _)| id == turn_id)
+            {
+                executor.policy = Arc::clone(policy);
+                Arc::clone(model)
+            } else {
+                let snapshot = self.threads.read_thread(thread_id)?;
+                let turn = snapshot
+                    .turns
+                    .iter()
+                    .find(|turn| &turn.turn_id == turn_id)
+                    .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
+                let selection = turn
+                    .model
+                    .as_ref()
+                    .map_or(ModelSelection::ConfiguredDefault, ModelSelection::Session);
+                let model = self
+                    .model_source
+                    .snapshot(selection)?
+                    .unwrap_or_else(|| Arc::clone(&self.model_source));
+                executor.policy = self
+                    .policy_source
+                    .snapshot(Arc::clone(&model))?
+                    .unwrap_or_else(|| Arc::clone(&self.policy_source));
+                if let Some(advisor) = &turn.advisor {
+                    let auxiliary = model
+                        .snapshot(ModelSelection::Session(&advisor.model))?
+                        .unwrap_or_else(|| Arc::clone(&model));
+                    self.threads
+                        .turn_tool_models
+                        .lock()
+                        .map_err(|_| CoreError::Execution("Turn model state lock poisoned".into()))?
+                        .insert(
+                            thread_id.clone(),
+                            (turn_id.clone(), advisor.model.clone(), auxiliary),
+                        );
+                }
+                models.insert(
+                    thread_id.clone(),
+                    (
+                        turn_id.clone(),
+                        Arc::clone(&model),
+                        Arc::clone(&executor.policy),
+                    ),
+                );
+                model
+            };
+        }
+        if self.model_compaction {
+            executor.compaction = Arc::new(ModelContextCompactionService::new(Arc::clone(
+                &executor.model,
+            )));
+        }
         let queued_thread_id = thread_id.clone();
         let queued_turn_id = turn_id.clone();
-        self.threads
+        let result = self
+            .threads
             .enqueue_turn_execution(thread_id, turn_id, move |execution| {
                 if execution.check_current().is_ok() {
-                    let _ = executor.execute(
+                    let result = executor.execute(
                         &queued_thread_id,
                         &queued_turn_id,
                         execution.cancellation(),
                     );
+                    if !matches!(
+                        result,
+                        Ok(TurnExecutionOutcome::WaitingForApproval
+                            | TurnExecutionOutcome::WaitingForCapability)
+                    ) {
+                        executor.release_turn_model(&queued_thread_id, &queued_turn_id);
+                    }
+                } else {
+                    executor.release_turn_model(&queued_thread_id, &queued_turn_id);
                 }
-            })
+            });
+        if result.is_err() {
+            self.release_turn_model(thread_id, turn_id);
+        }
+        result
+    }
+
+    fn release_turn_model(&self, thread_id: &ThreadId, turn_id: &TurnId) {
+        if let Ok(mut models) = self.threads.turn_tool_models.lock() {
+            if models
+                .get(thread_id)
+                .is_some_and(|(id, _, _)| id == turn_id)
+            {
+                models.remove(thread_id);
+            }
+        }
+
+        if let Ok(mut models) = self.turn_models.lock() {
+            if models
+                .get(thread_id)
+                .is_some_and(|(id, _, _)| id == turn_id)
+            {
+                models.remove(thread_id);
+            }
+        }
     }
 
     /// Enqueues one already-started model-free Shell Turn.
@@ -664,6 +788,7 @@ impl TurnExecutor {
             Ok(TurnExecutionOutcome::WaitingForApproval
                 | TurnExecutionOutcome::WaitingForCapability)
         ) {
+            self.release_turn_model(thread_id, turn_id);
             let _ = self.code_mode.close_turn(thread_id, turn_id);
         }
         if matches!(&result, Ok(TurnExecutionOutcome::Completed(_))) {

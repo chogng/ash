@@ -46,6 +46,7 @@ macro_rules! model_identifier {
 
 model_identifier!(ProviderId, "provider ID");
 model_identifier!(ModelId, "model ID");
+model_identifier!(ModelConnectionId, "model connection ID");
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

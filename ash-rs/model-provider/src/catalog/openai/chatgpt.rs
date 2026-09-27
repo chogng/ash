@@ -40,17 +40,18 @@ use std::time::SystemTime;
 const MAX_CATALOG_BYTES: usize = 1024 * 1024;
 
 pub(crate) fn chatgpt_catalog_binding(
+    config: &ash_model_provider_config::NormalizedModelProviderConfig,
     auth: Arc<ChatGptOAuth>,
     client: Arc<dyn OperationClient>,
     diagnostics: Option<Arc<dyn ResponseDiagnosticSink>>,
 ) -> Result<Option<ModelCatalogBinding>, ModelProviderError> {
     let account_id = auth
-        .account_id()
+        .model_execution_identity()
         .map_err(|error| ModelProviderError::Credential(error.to_string()))?;
     let Some(account_id) = account_id else {
         return Ok(None);
     };
-    let digest = Sha256::digest(account_id.as_bytes());
+    let digest = Sha256::digest(format!("{config:?}:{account_id}").as_bytes());
     let scope = CatalogScopeKey::new(
         ProviderId::new("openai").expect("constant provider ID"),
         CatalogSourceScopeId::new(format!("chatgpt:{digest:x}"))
@@ -224,7 +225,7 @@ impl ModelCatalogSource for ChatGptCatalogSource {
 }
 
 fn ensure_account(auth: &ChatGptOAuth, account_id: &str) -> Result<(), CatalogSourceError> {
-    let current = auth.account_id().map_err(|_| {
+    let current = auth.model_execution_identity().map_err(|_| {
         CatalogSourceError::new(
             CatalogSourceErrorKind::Authentication,
             "ChatGPT login changed during catalog discovery",

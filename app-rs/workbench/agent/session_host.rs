@@ -138,6 +138,9 @@ impl WorkbenchApplication {
             }
             SessionRuntimeEvent::Disconnected => {
                 self.app_server_client = None;
+                self.settings.set_model_connections(Vec::new());
+                self.settings
+                    .set_model_connection_error("App Server connection is unavailable".into());
             }
             SessionRuntimeEvent::Catalog {
                 slash_commands,
@@ -191,7 +194,7 @@ impl WorkbenchApplication {
                     self.refresh_files_from_app_server();
                     self.refresh_open_files_from_app_server(&changed);
                 }
-                ServerNotification::ConfigChanged(_) => {
+                ServerNotification::ConfigChanged(_) | ServerNotification::AccountUpdated(_) => {
                     if let Err(error) = self.refresh_configuration_from_app_server() {
                         eprintln!("could not refresh App Server configuration: {error}");
                     }
@@ -441,10 +444,63 @@ impl WorkbenchApplication {
             .as_mut()
             .ok_or_else(|| anyhow!("App Server connection is unavailable"))?;
         let configuration = client.read_config().map_err(client_error)?;
+        let connections = client.list_providers().map_err(client_error)?.providers;
+        self.settings.set_model_connections(
+            connections
+                .into_iter()
+                .map(|entry| {
+                    let kind = match entry.access {
+                        ash_protocol::ModelAccess::Subscription => "Subscription",
+                        ash_protocol::ModelAccess::ApiKey => "API",
+                        ash_protocol::ModelAccess::Local => "Local",
+                        ash_protocol::ModelAccess::Enterprise => "Enterprise",
+                        ash_protocol::ModelAccess::Unknown => "Connection",
+                    };
+                    ash_settings::ModelConnectionRow {
+                        connection: entry.connection.clone(),
+                        label: format!("{} · {kind}", entry.display_name),
+                        status: match (entry.active, entry.ready, entry.configured) {
+                            (true, true, _) => "Current · Ready",
+                            (true, false, _) => "Current · Not ready",
+                            (false, true, _) => "Use saved connection",
+                            (false, false, true) => "Saved · Not ready",
+                            _ => "Not configured",
+                        }
+                        .into(),
+                        can_activate: !entry.active && (entry.configured || entry.ready),
+                    }
+                })
+                .collect(),
+        );
         self.apply_gui_config(configuration.gui.clone());
         self.language_service
             .apply_configuration(&configuration, &self.file_editor_host);
         Ok(())
+    }
+
+    pub(crate) fn activate_model_connection(&mut self, index: usize) -> Result<()> {
+        let connection = self
+            .settings
+            .model_connections()
+            .get(index)
+            .ok_or_else(|| anyhow!("Model connection is no longer available"))?
+            .connection
+            .clone();
+        let client = self
+            .app_server_client
+            .as_mut()
+            .ok_or_else(|| anyhow!("App Server connection is unavailable"))?;
+        let config = client.read_config().map_err(client_error)?;
+        client
+            .activate_provider(
+                ash_app_server_protocol::protocol::provider::ProviderActivateParams {
+                    command_id: next_gui_config_command_id(),
+                    expected_revision: config.revision,
+                    connection,
+                },
+            )
+            .map_err(client_error)?;
+        self.refresh_configuration_from_app_server()
     }
 
     pub(crate) fn save_keybinding(

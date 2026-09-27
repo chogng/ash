@@ -11,12 +11,12 @@ credential、secret、connection pool 或 process-local adapter。
 
 | Symbol | 职责 | 关键语义 |
 | --- | --- | --- |
-| `ModelProviderConfig` | 用户/host 可配置值 | provider、base URL、max output 与 per-model context metadata |
+| `ModelProviderConfig` | 用户/host 可配置值 | provider、connection、base URL、max output 与 per-model context metadata |
 | `ModelContextConfig` | 单模型的 Core budget metadata | positive context window、optional auto-compact limit |
 | `ProviderDefinition` | provider-owned declaration | adapter identity、HTTP/WebSocket API profile、endpoint/catalog/defaults、API Key policy/header |
 | `NormalizedModelProviderConfig` | runtime-ready immutable config | provider/profile/base URL 已确定 |
 | `ProviderConfigRegistry` | definition authority | validate、register、merge、selection、normalize |
-| `STATIC_MODEL_CATALOG` / `StaticModelSpec` | 内置文本模型目录 | model/provider ID、access、context、capabilities、reasoning、defaults |
+| `STATIC_MODEL_CATALOG` / `StaticModelSpec` | 内置文本模型目录 | 唯一 model/provider ID、context、capabilities、reasoning、defaults |
 | `ProviderAdapter` | serializable adapter identity | 不是 runtime trait/object |
 | `ApiProfile` | declarative wire profile | runtime 显式解析为 `ash-api::ApiEndpoint` |
 | `WebSocketApiProfile` | Responses WebSocket 能力 | 默认 `Unavailable`；不得从 HTTP compatibility 推断 |
@@ -49,6 +49,7 @@ schema 没有第二份手写来源。
 
 ```text
 src/
+├── connection.rs   # 接入 ID、厂商、认证类型与执行声明
 ├── config.rs       # user config、normalized config、URL helpers
 ├── definition.rs   # provider declaration 与 validation
 ├── input_token_count.rs # count profile、target、model policy 与 normalized snapshot
@@ -65,13 +66,13 @@ src/
 | `ProviderDefinition::validate` | public method | name、default endpoint、profile pairing、defaults、catalog uniqueness | definition 自身必须独立有效 |
 | `InputTokenCountDefinition::validate` | crate-private method | count URL、non-empty/unique model list | 不探测远端 model availability |
 | `STATIC_MODEL_CATALOG` | public constant | 产品内置文本模型及静态 metadata | 文本模型在这里声明；语音目录归 `voice_models` |
-| `attach_static_models` | crate-private function | catalog rows → provider models/default/count eligibility | registry validation 前自动执行 |
+| `attach_static_models` | crate-private function | catalog rows → provider models | registry validation 前自动执行 |
 | `ProviderConfigRegistry::register` | public method | validate + reject duplicate | built-in/plugin 定义走相同路径 |
 | `ProviderConfigRegistry::merge` | public method | prevalidate incoming + explicit conflict policy | merge 不能 partial apply |
 | `ProviderConfigRegistry::normalize` | public method | config + definition → normalized snapshot | endpoint/default/profile precedence 在此唯一实现 |
 | `normalize_for` | public method | 先 enforce selected/configured provider identity | 防止 model ref 与 config 串线 |
 | `automatic_approval_review_model` | public method | provider default 或 active model fallback | 不证明远端 entitlement |
-| `validate_model_selection` | public compatibility/preflight method | listed catalog 的 deterministic static gate | 新 runtime consumer 使用 `ash-models-manager` canonical resolution |
+| `validate_model_selection` | public compatibility/preflight method | 显式配置校验 | 内置模型请求不依赖远端目录成员资格 |
 | `normalize_base_url` | crate-private function | apply explicit normalization rule | 不追加 API route |
 | `is_http_url` | crate-private function | 最小 HTTP(S) shape check | 不是 full URL/network validator |
 | `providers::builtin` | crate-private function | 13 个 built-in definitions | 每个 provider 在 sibling module 独立定义 |
@@ -118,7 +119,7 @@ Merge 必须 preflight 后一次 extend；在循环中边验证边插入会造�
 `OpenAiResponses` 与同 base 的 count profile；Google invocation 使用 compatible base，但
 `countTokens` 使用单独声明的 native base；Anthropic 选择 `AnthropicMessages` 并声明默认 max
 tokens。Kimi、Google 和 Z.AI 的额外 allow-unlisted count model 是 transport definition 数据；进入产品
-目录的模型及其 count eligibility 由 `STATIC_MODEL_CATALOG` 自动注入，不由 runtime 按 ID 前缀猜测。
+模型列表由 `STATIC_MODEL_CATALOG` 提供；计数支持范围由每条接入显式声明，不按模型 ID 前缀猜测。
 Provider matrix 和官方依据由系统文档维护，本 README 只固定 definition construction pattern。
 
 OpenAI definition 另外声明 `WebSocketApiProfile::OpenAiResponses`。其他 built-in definition 当前均为
@@ -127,36 +128,24 @@ Chat Completions definition。真实调用仍需 runtime target 和 `ash-api` co
 
 ## 统一静态模型清单
 
-产品内置文本模型只在 `src/model_catalog.rs` 的 `STATIC_MODEL_CATALOG` 中声明。最小条目只写 provider、
-model ID、显示名和 access；1M context 直接写 `context_window: 1_000_000`，不再维护一个可能与 token
-数冲突的 `is1m` 布尔值。能力、reasoning、personality、自动压缩、input-token count 和 approval-review
-default 都是同一块中的可选命名字段。未填写的 metadata 明确保持 unknown、none 或 false：
+产品内置文本模型只在 `src/model_catalog.rs` 的 `STATIC_MODEL_CATALOG` 中声明。模型自身不带认证方式、执行适配器或端点；订阅和 API 共享同一个厂商＋模型身份。
 
 ```rust
 static_model! {
     provider: "provider-id",
     id: "model-id",
     name: "Display Name",
-    access: subscription,
     context_window: 1_000_000,
-    capabilities: {
-        tools: supported,
-        reasoning: supported,
-    },
+    capabilities: { tools: supported, reasoning: supported },
     reasoning: [low, medium, high],
     model_reasoning_effort: medium,
     default_personality: pragmatic,
-    input_token_count: true,
-    approval_review_default: true,
 }
 ```
 
-`ProviderConfigRegistry::builtin()` 自动把 direct-provider rows 投影为 `ProviderDefinition.models`；App
-Server 从同一目录投影 ChatGPT subscription rows。通用契约测试会对
-每个新增 row 自动检查 identity 唯一性、metadata 一致性、provider 存在、default 唯一性和 count binding，
-无需再维护一份枚举式 expected-model 测试。
+`connection.rs` 维护 `ModelConnectionDefinition`，包含独立 `ModelConnectionId`、所属厂商、订阅/API 类型和执行声明。端点、协议、认证、计数能力和限制属于接入的 transport 定义。GLM 四个服务 ID 共享 `zai` 厂商的唯一模型目录，凭据仍各自独立。`NormalizedModelProviderConfig::upstream_model` 显式处理上游 ID 差异。
 
-`ModelAccess::Subscription` 表示该模型要求登录系统中的用户订阅账户，`ModelAccess::ApiKey` 表示该模型要求模型凭据领域中的开发者 API key；两者不互相降级。具体执行面由独立的 `StaticModelRuntime` 选择，不能根据 `ModelAccess` 猜测。`ModelRef.provider` 只表示模型厂商，认证、订阅权益和远端可用性仍在真正执行 Turn 时验证。
+后端 profile 以 `connections` 保存所有接入，以 `activeConnections` 为每个厂商保存一个当前接入。OAuth 登录或密钥保存成功后切换；读取账户和发现目录不会切换。模型列表固定可选，远端目录缺项不能阻止内置模型请求。请求错误不触发模型或接入替换。
 
 `InputTokenCountTarget::InvocationBase` 会跟随显式 endpoint override，适合 count 与 invocation 同一
 service surface 的 provider。`ProviderDefault` 只在 invocation 也使用 provider 默认 endpoint 时启用；
@@ -186,7 +175,7 @@ service surface 的 provider。`ProviderDefault` 只在 invocation 也使用 pro
 ## 测试、限制与演进
 
 ```text
-cargo test -p ash-model-provider-config
+just test ash-model-provider-config
 bazel test //ash-rs/model-provider-config:model-provider-config-unit-tests
 ```
 

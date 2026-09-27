@@ -1,8 +1,6 @@
 pub(super) mod pet;
 
 use crate::models::ModelSummary;
-use crate::models::access_label;
-use ash_protocol::ModelAccess;
 use std::path::Path;
 
 /// Display-only context for the Thread identity header.
@@ -10,7 +8,6 @@ use std::path::Path;
 pub(crate) struct WelcomeModel {
     directory: String,
     model: String,
-    access: ModelAccess,
 }
 
 impl WelcomeModel {
@@ -18,18 +15,11 @@ impl WelcomeModel {
         Self {
             directory: format_directory(workspace_root, dirs::home_dir().as_deref()),
             model: "Automatic model".into(),
-            access: ModelAccess::Unknown,
         }
     }
 
     pub(crate) fn apply_model_summary(&mut self, summary: &ModelSummary) {
-        let model = summary.model_label();
-        if self.model != model {
-            self.model = model;
-            self.access = summary.access();
-        } else if summary.access() != ModelAccess::Unknown {
-            self.access = summary.access();
-        }
+        self.model = summary.model_label();
     }
 
     pub(crate) fn directory(&self) -> &str {
@@ -37,7 +27,7 @@ impl WelcomeModel {
     }
 
     pub(super) fn model_line(&self) -> String {
-        format!("{} · {}", self.model, access_label(self.access))
+        self.model.clone()
     }
 }
 

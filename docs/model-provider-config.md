@@ -15,7 +15,7 @@
 模型供应商配置只描述“允许怎样配置”，并以确定性方式校验和归一化；它不读取凭据、不访问网络，
 也不执行模型请求。
 
-内置定义中订阅与 API 连接都显示 `BigModel` 或 `Z.AI`；它们分别拥有 `bigmodel-coding-plan`、`zai-coding-plan`、`bigmodel`、`zai` 四个稳定 `ProviderId`。两个 Coding Plan 共享协议实现，但模型引用、连接、密钥和端点各自独立。xAI 订阅连接显示 `Super Grok`，标准 API 仍显示 `xAI`。终端设置中的订阅/API 分组及凭据边界见[登录与账户系统](login.md#订阅入口与-api-入口)。
+内置模型固定登记，接入独立配置，每个厂商只生效一个接入。`ModelRef` 表示厂商＋模型，`ModelConnectionId` 表示接入。GLM 全部使用 `zai` 厂商；`bigmodel`、`zai` 和两个 Coding Plan 服务 ID 是四个独立接入，凭据与端点各自保留。配置文件以 `connections` 保存接入，以 `activeConnections` 保存各厂商的唯一选择。切换规则见[登录与账户系统](login.md#1-结论)。
 
 | 读者首先会问 | 直接答案 | 深入阅读 |
 | --- | --- | --- |
@@ -107,9 +107,9 @@ ash-http-client      负责底层网络传输
 | definition 目前只有一个 `api_profile` | 无法表达 Google、xAI、Ollama 等多个正式 API profile | 扩展为 typed default/allowed API profile policy |
 | count binding 已独立声明 profile/target/models | invocation 与 count 可能不共享 base path | 保持 definition 显式，禁止 runtime 剥 URL 或猜 model 前缀 |
 | Responses WebSocket 与 Realtime profile 分别声明 | HTTP 或文本订阅支持不代表语音服务可用 | runtime 分别校验能力与凭据；实连证据按服务记录 |
-| 静态 models 同时参与运行时可用性判断 | 容易与 models manager catalog 重复 | 仅作为 seed metadata 和 fallback evidence |
+| 静态模型与接入分离 | 远端目录不能代表内置目录 | 模型固定可选，请求只使用明确选中的接入 |
 
-迁移期间可以保留现有类型名，但新代码不能继续扩大这些歧义。
+协议、端点与认证声明属于接入；模型自身规格只维护一份。
 
 ## 4. 目标配置模型
 
@@ -156,7 +156,7 @@ HTTP compatibility 推导 WebSocket。
 
 `RealtimeApiProfile::{Unavailable, OpenAiRealtime}` 独立声明公共 Realtime GA 协议。OpenAI 内置定义启用它，其他定义默认不可用；反序列化旧定义时缺少 `realtimeApiProfile` 也保持不可用。该声明表示协议可用性，不代表账户已经获得服务权限。运行时还需使用对应凭据与模型；Luna 等 ChatGPT 文本订阅不能用于公共 Realtime。实现及验证范围见[端点实现](ash-api.md#46-端点归属与-websocket-实现)。
 
-ChatGPT subscription rows 复用 typed `OpenAiResponses` codec，但不复用 Platform target 或 API key。`runtime = chatgpt_subscription` 使 `ash-model-provider` 从 `ash-chatgpt` 获取固定 target 与 fresh OAuth headers；用户配置不得覆盖为任意 URL。
+ChatGPT 订阅接入复用 typed `OpenAiResponses` codec，但不复用 Platform target 或 API key。接入的 `ModelConnectionRuntime::ChatGptSubscription` 使 `ash-model-provider` 从 `ash-chatgpt` 获取固定 target 与 fresh OAuth headers；用户配置不得覆盖为任意 URL。
 
 Provider-specific compatibility 也必须 typed：
 
@@ -229,35 +229,13 @@ definition/runtime 显式声明。
 
 ## 7. 静态模型元数据
 
-`STATIC_MODEL_CATALOG` 是产品内置模型的唯一声明点。每个 `StaticModelSpec` 可以声明 provider/model identity、display name、access kind、execution runtime、context window、automatic compaction threshold、capabilities、reasoning efforts、personality、input-token count eligibility 和 approval-review default。1M 模型用实际 `context_window = 1_000_000` 表示，`has_one_million_context()` 由数值推导，不保存第二个布尔事实。
+`STATIC_MODEL_CATALOG` 是产品内置文本模型的唯一声明点。每个条目只声明厂商、模型 ID、显示名、上下文窗口、能力和推理参数等模型规格。订阅/API 重复条目合并；`access` 和 `runtime` 不属于模型条目。1M 上下文直接写 `context_window = 1_000_000`。
 
-`ProviderConfigRegistry::builtin()` 把所有 rows 自动注入 `ProviderDefinition.models`、默认审核模型和 count eligibility。Provider 文件只拥有 endpoint、adapter、profile 和 transport 特例，不能再写一份产品模型名单。
+`builtin_connections()` 声明每个接入的厂商、认证类型、执行适配器、端点、协议、计数能力和限制。`ProviderConfigRegistry::with_configs` 选择保存的接入定义并规范化参数；上游 ID 差异由 `NormalizedModelProviderConfig::upstream_model` 精确映射，未声明差异的模型保持相同 ID，不猜名称前缀。
 
-`ModelAccess` 当前区分 `ApiKey`、`Subscription`、`Local`、`Enterprise` 和 `Unknown`。`Subscription` 要求客户端使用登录系统中的用户账户，`ApiKey` 要求模型凭据领域中的开发者密钥；二者不能互相降级。它们不能承担 backend routing，`StaticModelRuntime::{ProviderApi, ChatGptSubscription, KimiCode}` 才是独立执行事实；`ModelRef.provider` 只表示模型厂商。当前认证、订阅权益和远端可用性仍只在实际 Turn 中验证。
+`model/list` 返回固定内置目录，不接受视图分支。远端目录由 `models-manager` 管理，作为接入范围内的观察和自定义接入发现能力，不作为内置模型调用许可。没有远端记录的内置模型仍能发请求，服务返回的认证、权限或模型错误直接交给调用方。
 
-> Proposed：自动替换上线前，provider runtime 需要按不含秘密的 catalog scope 向 `ash-models-manager` 提供凭据存在、账号授权和执行 runtime 可用性的受控事实；manager 只能自动选择已经证实可用的 scope。真实调用仍是最终 authority，选择前检查不能保证之后没有限流、撤权或服务故障，也不能把 credential 内容放进目录。
-
-> Proposed：为了支持 [`ash-models-manager` 的兼容模型替换](models-manager.md#103-模型选择与替换)，静态模型清单还需要增加可选、带来源的模型族和替换排序 metadata。它们只能来自 provider 明确声明或内置可审阅资料，不能根据模型 ID、价格或发布时间猜测；动态目录返回的明确事实按字段合并，未知继续保持 `Unknown`。执行 runtime 和访问来源继续作为独立事实参与候选检查，同 provider 的 API key、用户订阅和企业 endpoint 不能互相伪装。这些字段只提供目录事实，不在本 crate 执行候选选择。
-
-这些 rows 是：
-
-- 启动 seed；
-- Provider 没有动态 discovery 时的静态来源；
-- display name、capability 和 limit 的内置 metadata evidence；
-- 离线配置校验的辅助信息。
-
-它不是：
-
-- 当前 credential 可访问模型的实时 authority；
-- availability cache；
-- pricing/billing authority；
-- runtime health probe。
-
-动态发现、缓存、字段级 merge 和筛选属于
-[`ash-models-manager`](models-manager.md)。`ListedOnly` / `AllowUnlisted` 的最终判断应逐步消费
-manager resolution，而不是让静态 definition 永久承担动态 catalog。新增 row 会自动进入通用 contract
-tests；测试验证 identity 唯一、metadata 自洽、provider/default/count binding 有效，不维护第二份 expected
-model 枚举。
+配置文件版本 7 将旧 `providers` 转为独立 `connections` 和 `activeConnections`。能准确判断的选择会保留；GLM 优先采用旧默认模型明确指向的接入，多个接入有歧义时保留全部配置并要求用户选择。配置内的旧 GLM 模型引用统一为 `zai`，合并重复收藏；凭据键仍按原服务 ID 独立保存。
 
 ## 8. 依赖方向
 
@@ -287,43 +265,9 @@ ash-model-provider-config → credentials
 ash-model-provider-config → Core/App Server
 ```
 
-## 9. 目标目录
+## 9. 修改入口
 
-```text
-ash-rs/model-provider-config/
-├── BUILD.bazel
-├── Cargo.toml
-├── README.md
-└── src/
-    ├── lib.rs
-    ├── config/
-    │   ├── mod.rs
-    │   ├── user.rs
-    │   ├── normalized.rs
-    │   └── config_tests.rs
-    ├── definition/
-    │   ├── mod.rs
-    │   ├── adapter.rs
-    │   ├── api_profile.rs
-    │   ├── base_url.rs
-    │   ├── defaults.rs
-    │   └── definition_tests.rs
-    ├── registry/
-    │   ├── mod.rs
-    │   ├── normalize.rs
-    │   └── registry_tests.rs
-    ├── providers/
-    │   ├── mod.rs
-    │   ├── openai.rs
-    │   ├── anthropic.rs
-    │   ├── google.rs
-    │   ├── deepseek.rs
-    │   └── ...
-    └── error.rs
-```
-
-目录只在有实现和测试的 vertical slice 中创建。新 test module 使用 sibling
-`*_tests.rs`；public trait/type 写明实现和调用约束。
+静态模型在 `src/model_catalog.rs`，接入声明在 `src/connection.rs`，端点和协议细节在 `src/providers/`。用户配置和规范化结果在 `src/config.rs`，注册和校验在 `src/registry.rs`。测试使用相邻的 `*_tests.rs`，不另建重复目录。
 
 ## 10. 验收
 
@@ -339,8 +283,10 @@ ash-rs/model-provider-config/
 ## 11. 固定决策
 
 1. 本 crate 是声明配置层，不是运行时。
-2. “静态”表示无需网络和进程状态，不表示编译期硬编码。
+2. 内置模型随 Ash 版本维护，不根据登录状态或远端目录增删。
 3. 默认 base URL 属于本 crate，resolved target 不属于。
 4. API profile 可以被声明，但具体 `ash-api` endpoint object 由 runtime 选择。
 5. Secret、transport、retry、SSE、telemetry 和动态 catalog 永不进入本 crate。
 6. Provider-specific option 必须 typed，禁止任意 JSON escape hatch。
+
+旧配置在升级时迁移为 `connections` 和 `activeConnections`；可继续会话中的模型与角色引用迁移为统一厂商身份，已完成调用的服务和计费记录保持原样。目录配置和 Agent 定义只取得读取权限时，在导入会话前转换旧模型身份，不改写目录文件，也不借旧服务名选择接入。

@@ -1,12 +1,10 @@
 use super::ModelSummary;
-use super::access_label;
 use ash_app_server_protocol::protocol::config::ModelRefDto;
 use ash_app_server_protocol::protocol::model::ModelCatalogEntry;
 use ash_app_server_protocol::protocol::model::ModelListResult;
 use ash_protocol::ModelAccess;
 use ash_protocol::ModelCapabilities;
 use ash_protocol::ModelId;
-use ash_protocol::ModelOutputTransport;
 use ash_protocol::ModelRef;
 use ash_protocol::ProviderId;
 use ash_protocol::ReasoningEffort;
@@ -28,8 +26,6 @@ fn model_summary_resolves_the_selected_models_access_path() {
 
     assert_eq!(summary.model_label(), "openai/gpt-5.6");
     assert_eq!(summary.model_and_effort_label(), "GPT-5.6 (high)");
-    assert_eq!(summary.access(), ModelAccess::Subscription);
-    assert_eq!(access_label(summary.access()), "Subscription");
 }
 
 #[test]
@@ -44,8 +40,6 @@ fn missing_or_automatic_models_are_reported_without_guessing_access() {
     );
     let automatic = ModelSummary::from_catalog(None, None, None);
 
-    assert_eq!(configured.access(), ModelAccess::Unknown);
-    assert_eq!(access_label(configured.access()), "Access unknown");
     assert_eq!(automatic.model_label(), "Automatic model");
     assert_eq!(configured.model_and_effort_label(), "unknown");
     assert_eq!(automatic.model_and_effort_label(), "Automatic model");
@@ -74,15 +68,13 @@ fn model_reasoning_effort_overrides_catalog_value() {
     );
 }
 
-fn entry(provider: &str, model: &str, access: ModelAccess) -> ModelCatalogEntry {
+fn entry(provider: &str, model: &str, _access: ModelAccess) -> ModelCatalogEntry {
     ModelCatalogEntry {
         model: ModelRef::new(
             ProviderId::new(provider).unwrap(),
             ModelId::new(model).unwrap(),
         ),
         display_name: model.into(),
-        access,
-        output_transport: ModelOutputTransport::Unary,
         context_window: None,
         auto_compact_token_limit: None,
         available_context_window: None,

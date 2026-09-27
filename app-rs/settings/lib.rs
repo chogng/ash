@@ -34,7 +34,7 @@ pub use remote::*;
 pub use sections::{
     SETTINGS_SECTION_CONTENT, SettingsKeybindingRow, SettingsSectionPane, SettingsSectionStyle,
 };
-pub use state::{SettingsActivation, SettingsState};
+pub use state::{ModelConnectionRow, SettingsActivation, SettingsState};
 
 use ash_icons::icons;
 use ash_ui_components::ButtonBackgrounds;
@@ -79,6 +79,8 @@ pub const SETTINGS_NAV_APPEARANCE: ElementId = ElementId::scoped(SETTINGS_SCOPE,
 /// Keyboard shortcut preferences.
 pub const SETTINGS_NAV_KEYBINDINGS: ElementId = ElementId::scoped(SETTINGS_SCOPE, 8);
 
+pub const SETTINGS_NAV_MODELS: ElementId = ElementId::scoped(SETTINGS_SCOPE, 9);
+
 /// The section currently projected into the Settings content slot.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum SettingsPageSection {
@@ -91,6 +93,8 @@ pub enum SettingsPageSection {
     Keybindings,
     /// Remote directory, connection, and Tunnel overview.
     Remote,
+    /// Saved model connections shared by this backend profile.
+    Models,
 }
 
 impl SettingsPageSection {
@@ -100,6 +104,7 @@ impl SettingsPageSection {
             Self::Appearance => 1,
             Self::Keybindings => 2,
             Self::Remote => 3,
+            Self::Models => 4,
         }
     }
 }

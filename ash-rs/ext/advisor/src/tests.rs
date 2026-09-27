@@ -8,6 +8,7 @@ use core_api::ActionPolicyService;
 use core_api::SequenceExpectation;
 
 use core_api::ModelSelection;
+use core_api::ModelService;
 use protocol::AdvisorSelection;
 use protocol::CommandId;
 use protocol::ModelRef;
@@ -147,7 +148,6 @@ impl Fixture {
         });
         let tools = Arc::new(AdvisorToolService::new(
             threads.clone(),
-            model.clone(),
             ActionPolicyRevision::new("test-policy"),
         ));
         let executor = TurnExecutor::new(threads.clone(), model.clone(), tools, Arc::new(Allow));

@@ -180,6 +180,7 @@ pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
             | ConfigCommand::OpenEditor
             | ConfigCommand::Subscription(_, _)
             | ConfigCommand::Edit(_)
+            | ConfigCommand::ActivateConnection { .. }
             | ConfigCommand::Connection(_)
             | ConfigCommand::SetProviderApiKey(_),
         )

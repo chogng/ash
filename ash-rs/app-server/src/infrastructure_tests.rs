@@ -295,7 +295,7 @@ fn local_provider_diagnostics_reach_the_reviewed_feedback_bundle() {
         &mut connection,
         json!({
             "jsonrpc":"2.0", "id":2, "method":"provider/probe",
-            "params":{"config":{"provider":"openai"}, "apiKey":"secret-api-key"}
+            "params":{"config":{"provider":"openai","connection":"openai"}, "apiKey":"secret-api-key"}
         }),
     );
     assert_eq!(probe["result"]["type"], "failed", "{probe}");
@@ -556,6 +556,7 @@ fn memory_policy_rpc_controls_actual_turn_context_and_citation_access() {
     let root = tempfile::tempdir().unwrap();
     let model = Arc::new(super::RecordingModel::default());
     let server = super::server_with_model(model.clone())
+        .with_config_store(enabled_memories(root.path()))
         .with_local_memories(&root.path().join("state.sqlite"))
         .unwrap()
         .with_tool_service(

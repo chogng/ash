@@ -385,6 +385,16 @@ enum GoalWriteSource {
 
 /// Coordinates durable mutations for each loaded Thread.
 pub struct ThreadController {
+    pub(crate) turn_tool_models: Mutex<
+        BTreeMap<
+            ThreadId,
+            (
+                ash_protocol::TurnId,
+                ash_protocol::ModelRef,
+                Arc<dyn crate::ModelService>,
+            ),
+        >,
+    >,
     time_context: RwLock<Arc<dyn crate::TimeContextProvider>>,
     checkpoint_sources: RwLock<BTreeMap<ThreadId, Weak<dyn crate::MessageCheckpointSource>>>,
     store: Arc<dyn ThreadStore>,
@@ -471,6 +481,7 @@ impl ThreadController {
         let loaded_threads = Arc::new(loaded_thread::LoadedThreads::new(store.clone()));
         Self {
             store,
+            turn_tool_models: Mutex::new(BTreeMap::new()),
             checkpoint_sources: RwLock::new(BTreeMap::new()),
             time_context: RwLock::new(Arc::new(crate::context::time::NoTimeContext)),
             writer_lease: None,
@@ -506,6 +517,7 @@ impl ThreadController {
         let loaded_threads = Arc::new(loaded_thread::LoadedThreads::new(store.clone()));
         Self {
             store,
+            turn_tool_models: Mutex::new(BTreeMap::new()),
             checkpoint_sources: RwLock::new(BTreeMap::new()),
             time_context: RwLock::new(Arc::new(crate::context::time::NoTimeContext)),
             writer_lease: Some(writer_lease),
@@ -1215,6 +1227,30 @@ impl ThreadController {
     }
 
     /// Changes future Turn consultations while preserving the active Turn's frozen selection.
+    /// Appends one migration record for each affected Thread. Repeated startup is a no-op.
+    /// The caller owns the reviewed identity mapping; Core preserves immutable call history.
+    pub fn migrate_model_providers(
+        &self,
+        providers: &BTreeMap<ash_protocol::ProviderId, ash_protocol::ProviderId>,
+    ) -> Result<(), CoreError> {
+        for thread in self.list_threads()? {
+            self.mutate_thread(&thread.thread_id, |snapshot| {
+                let mut candidate = snapshot.clone();
+                if crate::thread_reducer::migrate_model_providers(&mut candidate, providers) {
+                    self.record_batch(
+                        snapshot,
+                        vec![ThreadEvent::ModelProvidersMigrated {
+                            thread_id: thread.thread_id.clone(),
+                            providers: providers.clone(),
+                        }],
+                    )?;
+                }
+                Ok(())
+            })?;
+        }
+        Ok(())
+    }
+
     pub fn configure_advisor(
         &self,
         thread_id: &ThreadId,

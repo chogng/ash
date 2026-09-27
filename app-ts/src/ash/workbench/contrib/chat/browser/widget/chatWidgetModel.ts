@@ -419,8 +419,6 @@ export class ChatWidgetModel extends Disposable {
 		const selectedEntry = catalog.find(entry => sameModel(entry.model, selected)) ?? {
 			model: selected,
 			displayName: selected.model,
-			access: "unknown" as const,
-			outputTransport: "unary" as const,
 		};
 		return [...visible, selectedEntry];
 	}

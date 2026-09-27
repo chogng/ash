@@ -161,6 +161,21 @@ impl ChatGptOAuth {
             .map(|identity| Some(identity.account_id))
     }
 
+    /// Pins an execution to both the user and workspace while permitting token rotation.
+    pub fn model_execution_identity(&self) -> Result<Option<String>, ChatGptError> {
+        let Some(credential) = self.load_credential()? else {
+            return Ok(None);
+        };
+        if self.account_snapshot(&credential).status != AccountStatus::Ready {
+            return Ok(None);
+        }
+        let identity = credential.identity()?;
+        Ok(Some(format!(
+            "{}\0{}",
+            identity.user_id, identity.account_id
+        )))
+    }
+
     /// Path to the Codex catalog beside the external login when Codex owns the account.
     pub fn codex_model_cache_path(&self) -> Option<PathBuf> {
         self.auth.codex_model_cache_path()

@@ -24,6 +24,7 @@ use std::time::Duration;
 use std::time::SystemTime;
 
 pub(crate) fn kimi_catalog_binding(
+    config: &ash_model_provider_config::NormalizedModelProviderConfig,
     auth: Arc<KimiOAuth>,
 ) -> Result<Option<ModelCatalogBinding>, ModelProviderError> {
     let Some(identity) = auth
@@ -32,7 +33,7 @@ pub(crate) fn kimi_catalog_binding(
     else {
         return Ok(None);
     };
-    let digest = Sha256::digest(identity.as_bytes());
+    let digest = Sha256::digest(format!("{config:?}:{identity}").as_bytes());
     let scope = CatalogScopeKey::new(
         ProviderId::new("kimi").expect("constant provider ID"),
         CatalogSourceScopeId::new(format!("kimi-subscription:{digest:x}"))

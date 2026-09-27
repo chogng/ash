@@ -579,3 +579,25 @@ fn exact(name: &str) -> protocol::AgentRoleSelection {
         },
     }
 }
+
+#[test]
+fn imported_role_migrates_service_identity_before_freezing_without_rewriting_source() {
+    for provider in ["bigmodel", "bigmodel-coding-plan", "zai-coding-plan"] {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join(".ash/agents");
+        fs::create_dir_all(&root).unwrap();
+        let path = root.join("reviewer.md");
+        let source = format!(
+            "---\nname: reviewer\ndescription: Review code\nmodel: {provider}/glm-5.1\n---\nReview correctness.\n"
+        );
+        fs::write(&path, &source).unwrap();
+        let catalog = AgentRoleCatalog::discover("test", dir.path()).snapshot();
+        let selected =
+            resolve_agent_selection(&exact("reviewer"), None, vec![], &[], &[catalog], &[])
+                .unwrap();
+        let model = selected.role.unwrap().model.unwrap();
+        assert_eq!(model.provider.as_str(), "zai");
+        assert_eq!(model.model.as_str(), "glm-5.1");
+        assert_eq!(fs::read_to_string(path).unwrap(), source);
+    }
+}

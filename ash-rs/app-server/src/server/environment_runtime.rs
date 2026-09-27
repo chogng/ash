@@ -201,7 +201,6 @@ pub(crate) struct EnvRuntimeControl {
     runtime: Arc<RwLock<EnvRuntime>>,
     tools: Arc<EnvToolPorts>,
     threads: Arc<ThreadController>,
-    model: Arc<dyn core_api::ModelService>,
     multi_agent: Arc<MultiAgentCoordinator>,
     model_instructions: Arc<ash_models_manager::ModelInstructionCatalog>,
     turn_backend: Arc<dyn ash_core::TurnExecutionBackend>,
@@ -305,7 +304,6 @@ impl EnvRuntimeControl {
             local,
             &self.multi_agent,
             &self.model_instructions,
-            &self.model,
             &self.threads,
             &self.turn_backend,
             customizations.as_ref(),
@@ -477,7 +475,6 @@ impl EnvRuntimeControl {
             local,
             &self.multi_agent,
             &self.model_instructions,
-            &self.model,
             &self.threads,
             &turn_backend,
             Some(&customizations),
@@ -1194,13 +1191,15 @@ impl AppServer {
             &providers,
             self.semantic_model_provider.clone(),
         )?;
-        let policy = Arc::new(TurnActionPolicy::new(
-            tools.reloadable.policy(),
-            self.approval_review_model
-                .clone()
-                .map(guardian_v2::reviewer)
-                .unwrap_or(ash_extension_api::ApprovalReviewer::Unavailable),
-        ));
+        let policy = Arc::new(match &self.approval_review_model {
+            Some(factory) => {
+                TurnActionPolicy::with_reviewer_factory(tools.reloadable.policy(), factory.clone())
+            }
+            None => TurnActionPolicy::new(
+                tools.reloadable.policy(),
+                ash_extension_api::ApprovalReviewer::Unavailable,
+            ),
+        });
         let hooks = Arc::new(DeclarativeHookRuntime::new(
             hook_config,
             tools.reloadable.policy(),
@@ -1257,7 +1256,6 @@ impl AppServer {
             runtime: Arc::clone(&self.env_runtime),
             tools: Arc::clone(&host.tools),
             threads: self.threads.clone(),
-            model: self.model.clone(),
             multi_agent: Arc::clone(&self.multi_agent),
             model_instructions: Arc::clone(&self.model_instructions),
             turn_backend: self.turn_backend.clone(),
@@ -2161,7 +2159,6 @@ impl AppServer {
             local,
             &self.multi_agent,
             &self.model_instructions,
-            &self.model,
             &self.threads,
             &turn_backend,
             Some(&customizations),
@@ -2900,7 +2897,6 @@ fn append_multi_agent_tools(
     local: crate::local_tools::LocalToolComposition,
     coordinator: &Arc<MultiAgentCoordinator>,
     model_instructions: &Arc<ash_models_manager::ModelInstructionCatalog>,
-    model: &Arc<dyn core_api::ModelService>,
     threads: &Arc<ThreadController>,
     turn_backend: &Arc<dyn ash_core::TurnExecutionBackend>,
     customizations: Option<&Arc<DirContributions>>,
@@ -2924,7 +2920,6 @@ fn append_multi_agent_tools(
         local,
         Arc::new(advisor::AdvisorToolService::new(
             Arc::clone(threads),
-            Arc::clone(model),
             action_policy_revision.clone(),
         )),
     );

@@ -981,6 +981,9 @@
         }
       ]
     },
+    "ModelConnectionId": {
+      "type": "string"
+    },
     "ModelContextConfig": {
       "description": "Model-specific context limits supplied by user or host configuration.\n\nThis metadata is deliberately separate from transport normalization: Core\nconsumes it to decide whether it can enforce a context budget itself.",
       "properties": {
@@ -1014,6 +1017,9 @@
             "null"
           ]
         },
+        "connection": {
+          "$ref": "#/$defs/ModelConnectionId"
+        },
         "custom": {
           "anyOf": [
             {
@@ -1043,7 +1049,8 @@
         }
       },
       "required": [
-        "provider"
+        "provider",
+        "connection"
       ],
       "type": "object"
     },
@@ -1356,8 +1363,15 @@
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Durable, non-secret user intent for ordinary Ash configuration.\n\nProvider entries are keyed by `ProviderId`; each value repeats its provider identity so a\nserialized document remains self-describing and mismatched entries can be rejected.",
+  "description": "Durable, non-secret user intent for ordinary Ash configuration.\n\nSaved connections and the single selected connection for each model vendor.",
   "properties": {
+    "activeConnections": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ModelConnectionId"
+      },
+      "default": {},
+      "type": "object"
+    },
     "agent": {
       "$ref": "#/$defs/AgentConfig",
       "default": {
@@ -1379,6 +1393,13 @@
     "commitMessages": {
       "$ref": "#/$defs/CommitMessageConfig",
       "default": {}
+    },
+    "connections": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ModelProviderConfig"
+      },
+      "default": {},
+      "type": "object"
     },
     "desktop": {
       "additionalProperties": true,
@@ -1470,15 +1491,8 @@
         "requests": {}
       }
     },
-    "providers": {
-      "additionalProperties": {
-        "$ref": "#/$defs/ModelProviderConfig"
-      },
-      "default": {},
-      "type": "object"
-    },
     "schemaVersion": {
-      "const": 5,
+      "const": 7,
       "type": "integer"
     },
     "skills": {

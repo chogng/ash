@@ -2595,3 +2595,57 @@ fn advisor_selection_is_retry_safe_and_inherited_at_the_fork_boundary() {
         selection
     );
 }
+
+#[test]
+fn model_identity_migration_replays_once_and_preserves_completed_turns() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let controller = ThreadController::with_store(store.clone());
+    let thread = create_thread(&controller, "migration");
+    let old = ModelRef {
+        provider: ProviderId::new("bigmodel-coding-plan").unwrap(),
+        model: ModelId::new("glm-5.1").unwrap(),
+    };
+    let mut completed = start_request("completed");
+    completed.model = Some(old.clone());
+    let turn = controller.start_turn(&thread, completed).unwrap().turn_id;
+    controller
+        .complete_turn(&thread, &turn, "historical answer".into())
+        .unwrap();
+    controller
+        .configure_advisor(
+            &thread,
+            CommandId::new("advisor").unwrap(),
+            SequenceExpectation::Any,
+            ash_protocol::AdvisorSelection::Model {
+                config: ash_protocol::AdvisorConfig::new(old.clone()),
+            },
+        )
+        .unwrap();
+    let mut pending = start_request("pending");
+    pending.model = Some(old.clone());
+    controller.start_turn(&thread, pending).unwrap();
+    let before = controller.read_thread(&thread).unwrap();
+    let mapping = [(old.provider.clone(), ProviderId::new("zai").unwrap())]
+        .into_iter()
+        .collect();
+    controller.migrate_model_providers(&mapping).unwrap();
+    let after = controller.read_thread(&thread).unwrap();
+    assert_eq!(after.sequence, before.sequence + 1);
+    assert_eq!(after.turns[0], before.turns[0]);
+    assert_eq!(after.items, before.items);
+    assert_eq!(
+        after.turns[1].model.as_ref().unwrap().provider.as_str(),
+        "zai"
+    );
+    assert!(
+        matches!(&after.advisor, ash_protocol::AdvisorSelection::Model { config }
+        if config.model.provider.as_str() == "zai")
+    );
+    let reopened = ThreadController::with_store(store);
+    assert_eq!(reopened.read_thread(&thread).unwrap(), after);
+    reopened.migrate_model_providers(&mapping).unwrap();
+    assert_eq!(
+        reopened.read_thread(&thread).unwrap().sequence,
+        after.sequence
+    );
+}

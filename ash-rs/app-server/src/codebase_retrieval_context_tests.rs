@@ -92,8 +92,9 @@ fn automatic_context_requires_explicit_opt_in() {
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("configure-provider").expect("command id"),
             expected_revision: ConfigRevision::INITIAL,
-            command: UserConfigCommand::ConfigureProvider {
-                provider: provider.clone(),
+            command: UserConfigCommand::ConfigureConnection {
+                connection: ash_protocol::ModelConnectionId::new(provider.clone().as_str())
+                    .unwrap(),
                 config: ModelProviderConfig::new(provider.clone()),
             },
         })

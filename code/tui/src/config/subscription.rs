@@ -19,11 +19,8 @@ use ash_app_server_protocol::protocol::account::AccountLogoutParams;
 use ash_app_server_protocol::protocol::account::AccountReadResult;
 use ash_app_server_protocol::protocol::account::AccountStatusDto;
 use ash_app_server_protocol::protocol::config::ConfigReadResult;
-use ash_app_server_protocol::protocol::config::ProviderConfigDto;
-use ash_app_server_protocol::protocol::config::ProviderConfigureParams;
 use ash_app_server_protocol::protocol::model::ModelCatalogEntry;
 use ash_app_server_protocol::protocol::provider::ProviderListResult;
-use ash_protocol::ModelAccess;
 use std::collections::BTreeMap;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -46,7 +43,7 @@ impl SubscriptionProvider {
             Self::Zai => 4,
         }
     }
-    fn id(self) -> &'static str {
+    pub(crate) fn id(self) -> &'static str {
         match self {
             Self::ChatGpt => "chatgpt-subscription",
             Self::Xai => "xai-subscription",
@@ -91,16 +88,7 @@ impl SubscriptionProvider {
             Self::ChatGpt => "openai",
             Self::Xai => "xai",
             Self::Kimi => "kimi",
-            Self::BigModel => "bigmodel-coding-plan",
-            Self::Zai => "zai-coding-plan",
-        }
-    }
-
-    pub(crate) fn coding_plan_endpoint(self) -> Option<&'static str> {
-        match self {
-            Self::BigModel => Some(ash_model_provider_config::BIGMODEL_CODING_PLAN_BASE_URL),
-            Self::Zai => Some(ash_model_provider_config::ZAI_CODING_PLAN_BASE_URL),
-            _ => None,
+            Self::BigModel | Self::Zai => "zai",
         }
     }
 }
@@ -481,7 +469,7 @@ impl Subscription {
                 actions.insert(
                     id,
                     ConfigSelectionAction::OpenProviderApiKey {
-                        provider: self.provider.model_provider().into(),
+                        provider: self.provider.id().into(),
                         display_name: self.provider.title().into(),
                         target: ApiKeyTarget::CodingPlan(self.provider),
                     },
@@ -642,15 +630,12 @@ fn read_account_and_models<T: JsonRpcTransport>(
         .any(|entry| entry.provider == provider.id() && entry.status == AccountStatusDto::Ready);
     let models = ready.then(|| {
         client
-            .list_discovered_models()
+            .list_models()
             .map(|catalog| {
                 catalog
                     .models
                     .into_iter()
-                    .filter(|entry| {
-                        entry.model.provider.as_str() == provider.model_provider()
-                            && entry.access == ModelAccess::Subscription
-                    })
+                    .filter(|entry| entry.model.provider.as_str() == provider.model_provider())
                     .collect()
             })
             .map_err(|error| error.to_string())
@@ -673,23 +658,18 @@ fn plan_status(
     providers: &ProviderListResult,
     provider: SubscriptionProvider,
 ) -> PlanStatus {
-    let id = provider.model_provider();
     let key_saved = providers
         .providers
         .iter()
-        .any(|entry| entry.provider == id && entry.api_key_configured);
+        .any(|entry| entry.connection == provider.id() && entry.api_key_configured);
     let enabled = config
-        .providers
-        .get(id)
-        .and_then(|entry| entry.base_url.as_deref())
-        .is_some_and(|base_url| coding_plan_endpoint(base_url, provider));
-    PlanStatus { key_saved, enabled }
-}
-
-/// Mirrors the backend's connection selection: the plan is the connection whose endpoint is the
-/// coding gateway, compared with the same trimming the backend applies to configured URLs.
-fn coding_plan_endpoint(base_url: &str, provider: SubscriptionProvider) -> bool {
-    Some(base_url.trim().trim_end_matches('/')) == provider.coding_plan_endpoint()
+        .active_connections
+        .get(provider.model_provider())
+        .is_some_and(|connection| connection == provider.id());
+    PlanStatus {
+        key_saved,
+        enabled: enabled && key_saved,
+    }
 }
 
 fn set_plan<T: JsonRpcTransport>(
@@ -697,30 +677,28 @@ fn set_plan<T: JsonRpcTransport>(
     subscription: SubscriptionProvider,
     connection: PlanConnection,
 ) -> Result<PlanStatus, ClientError> {
-    let id = subscription.model_provider();
+    let id = subscription.id();
     let config = client.read_config()?;
-    let mut provider = config
-        .providers
-        .get(id)
-        .cloned()
-        .unwrap_or_else(|| ProviderConfigDto {
-            provider: id.into(),
-            custom: None,
-            base_url: None,
-            max_output_tokens: None,
-            model_context: BTreeMap::new(),
-        });
-    provider.base_url = (connection == PlanConnection::Connected).then(|| {
-        subscription
-            .coding_plan_endpoint()
-            .expect("Coding Plan endpoint")
-            .to_owned()
-    });
-    client.configure_provider(ProviderConfigureParams {
-        command_id: crate::client::new_command_id(id),
-        expected_revision: config.revision,
-        config: provider,
-    })?;
+    match connection {
+        PlanConnection::Connected => {
+            client.activate_provider(
+                ash_app_server_protocol::protocol::provider::ProviderActivateParams {
+                    command_id: crate::client::new_command_id(id),
+                    expected_revision: config.revision,
+                    connection: id.into(),
+                },
+            )?;
+        }
+        PlanConnection::Disconnected => {
+            client.remove_provider(
+                ash_app_server_protocol::protocol::config::ProviderRemoveParams {
+                    command_id: crate::client::new_command_id(id),
+                    expected_revision: config.revision,
+                    connection: id.into(),
+                },
+            )?;
+        }
+    }
     read_plan_status(client, subscription)
 }
 

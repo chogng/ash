@@ -521,149 +521,87 @@ fn chatgpt_model_catalog_is_shared_by_login_picker_and_disk_cache() {
     let client = Arc::new(CatalogClient {
         calls: std::sync::atomic::AtomicUsize::new(0),
     });
-    for (iteration, expected_calls) in [1, 1, 2].into_iter().enumerate() {
-        if iteration == 2 {
-            let path = profile.path().join("cache/models/openai.json");
-            let mut cache: serde_json::Value =
-                serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-            cache["catalogs"][0]["models"] = serde_json::json!([]);
-            std::fs::write(path, serde_json::to_vec(&cache).unwrap()).unwrap();
-        }
-        let server = open_local_app_server(
-            LocalAppServerOptions::new(profile.path())
-                .with_codex_home(home.path())
-                .with_model_operation_client(client.clone())
-                .without_built_in_skills()
-                .with_session_state_mode(SessionStateMode::Ephemeral),
-        )
-        .unwrap();
-        let mut connection = server.connection();
-        local_call(
+    let server = open_local_app_server(
+        LocalAppServerOptions::new(profile.path())
+            .with_codex_home(home.path())
+            .with_model_operation_client(client.clone())
+            .without_built_in_skills()
+            .with_session_state_mode(SessionStateMode::Ephemeral),
+    )
+    .unwrap();
+    let mut connection = server.connection();
+    let mut request_id = 0;
+    let mut call = |method: &str, params: serde_json::Value| {
+        request_id += 1;
+        let reply = local_call(
             &server,
             &mut connection,
-            serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"catalog-test","version":"1"},"capabilities":{}}}),
+            serde_json::json!({"jsonrpc":"2.0","id":request_id,"method":method,"params":params}),
         );
-        let saved_key = local_call(
-            &server,
-            &mut connection,
-            serde_json::json!({"jsonrpc":"2.0","id":50,"method":"provider/apiKey/set","params":{"provider":"openai","apiKey":"catalog-api-key"}}),
-        );
-        assert_eq!(saved_key["result"]["apiKeyConfigured"], true);
-        let api_config = local_call(
-            &server,
-            &mut connection,
-            serde_json::json!({"jsonrpc":"2.0","id":49,"method":"config/read","params":{}}),
-        );
-        assert!(api_config["result"]["providers"]["openai"].is_object());
-        let account = local_call(
-            &server,
-            &mut connection,
-            serde_json::json!({"jsonrpc":"2.0","id":2,"method":"account/read","params":{}}),
-        );
-        assert_eq!(account["result"]["accounts"][0]["status"], "ready");
-        let config = local_call(
-            &server,
-            &mut connection,
-            serde_json::json!({"jsonrpc":"2.0","id":3,"method":"config/read","params":{}}),
-        );
-        assert!(config["result"]["providers"]["openai"].is_object());
-        assert!(config["result"]["model"].is_null());
-        let models = local_call(
-            &server,
-            &mut connection,
-            serde_json::json!({"jsonrpc":"2.0","id":4,"method":"model/list","params":{"view":"discovered"}}),
-        );
-        assert_eq!(
-            models["result"]["models"][0]["model"]["model"],
-            "gpt-6-astra"
-        );
-        assert_eq!(models["result"]["models"][1]["model"]["model"], "gpt-5.6");
-        assert!(
-            !models["result"]["models"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .any(|entry| entry["model"]["provider"] == "openai"
-                    && entry["model"]["model"] == "gpt-5.4")
-        );
-        let entry = models["result"]["models"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|entry| {
-                entry["model"]["provider"] == "openai" && entry["model"]["model"] == "gpt-5.6"
-            })
-            .unwrap();
-        assert_eq!(entry["displayName"], "Subscription Test");
-        assert_eq!(entry["access"], "subscription");
-        assert!(
-            !models["result"]["models"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .any(|entry| {
-                    entry["model"]["provider"] == "openai"
-                        && entry["model"]["model"] == "gpt-5.6"
-                        && entry["access"] == "apiKey"
-                })
-        );
-        let built_in = local_call(
-            &server,
-            &mut connection,
-            serde_json::json!({"jsonrpc":"2.0","id":5,"method":"model/list","params":{"view":"builtIn"}}),
-        );
-        assert!(
-            built_in["result"]["models"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .any(|entry| {
-                    entry["model"]["provider"] == "openai"
-                        && entry["model"]["model"] == "gpt-5.6-sol"
-                        && entry["access"] == "subscription"
-                })
-        );
-        assert!(
-            built_in["result"]["models"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .any(|entry| {
-                    entry["model"]["provider"] == "openai"
-                        && entry["model"]["model"] == "gpt-5.6"
-                        && entry["access"] == "apiKey"
-                })
-        );
-        assert_eq!(
-            client.calls.load(std::sync::atomic::Ordering::SeqCst),
-            expected_calls
-        );
-        if iteration == 2 {
-            let disconnected = local_call(
-                &server,
-                &mut connection,
-                serde_json::json!({"jsonrpc":"2.0","id":51,"method":"account/logout","params":{"provider":"chatgpt-subscription"}}),
-            );
-            assert!(disconnected["result"].is_object());
-            let api_models = local_call(
-                &server,
-                &mut connection,
-                serde_json::json!({"jsonrpc":"2.0","id":52,"method":"model/list","params":{"view":"builtIn"}}),
-            );
-            assert_eq!(api_models["result"]["models"], built_in["result"]["models"]);
-            assert!(
-                api_models["result"]["models"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .any(|entry| {
-                        entry["model"]["provider"] == "openai"
-                            && entry["model"]["model"] == "gpt-5.6"
-                            && entry["access"] == "apiKey"
-                    })
-            );
-        }
+        assert!(reply.get("error").is_none(), "{reply}");
+        reply["result"].clone()
+    };
+    call(
+        "initialize",
+        serde_json::json!({"clientInfo":{"name":"catalog-test","version":"1"},"capabilities":{}}),
+    );
+    let initial = call("model/list", serde_json::json!({}));
+    assert!(initial["models"].as_array().unwrap().len() > 10);
+    let saved = call(
+        "provider/apiKey/set",
+        serde_json::json!({"connection":"openai","apiKey":"catalog-api-key"}),
+    );
+    assert_eq!(saved["apiKeyConfigured"], true, "{saved}");
+    let account = call("account/read", serde_json::json!({}));
+    assert_eq!(account["accounts"][0]["status"], "ready");
+    let config = call("config/read", serde_json::json!({}));
+    assert_eq!(config["activeConnections"]["openai"], "openai");
+    assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 0);
+    let activated = call(
+        "provider/activate",
+        serde_json::json!({
+            "commandId":"activate-chatgpt", "expectedRevision":config["revision"],
+            "connection":"chatgpt-subscription"
+        }),
+    );
+    assert!(activated.get("error").is_none(), "{activated}");
+    let config = call("config/read", serde_json::json!({}));
+    assert_eq!(
+        config["activeConnections"]["openai"],
+        "chatgpt-subscription"
+    );
+    assert!(config["connections"]["openai"].is_object());
+    let remote = call(
+        "provider/models/list",
+        serde_json::json!({"connection":"chatgpt-subscription"}),
+    );
+    assert!(remote.get("error").is_none(), "{remote}");
+    assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+    assert_eq!(call("model/list", serde_json::json!({})), initial);
+    for entry in initial["models"].as_array().unwrap() {
+        assert!(entry.get("access").is_none());
+        assert!(entry.get("outputTransport").is_none());
     }
+    let disconnected = call(
+        "account/logout",
+        serde_json::json!({"provider":"chatgpt-subscription"}),
+    );
+    assert!(disconnected.get("error").is_none(), "{disconnected}");
+    let routes = call("provider/list", serde_json::json!({}));
+    let routes = routes["providers"].as_array().unwrap();
+    let subscription = routes
+        .iter()
+        .find(|route| route["connection"] == "chatgpt-subscription")
+        .unwrap();
+    assert_eq!(subscription["active"], true);
+    assert_eq!(subscription["ready"], false);
+    let api = routes
+        .iter()
+        .find(|route| route["connection"] == "openai")
+        .unwrap();
+    assert_eq!(api["active"], false);
+    assert_eq!(api["apiKeyConfigured"], true);
+    assert_eq!(call("model/list", serde_json::json!({})), initial);
     let cache = std::fs::read_to_string(profile.path().join("cache/models/openai.json")).unwrap();
     assert!(cache.contains("gpt-5.6"));
     assert!(!cache.contains("catalog-token"));
@@ -687,8 +625,11 @@ fn kimi_discovered_catalog_tracks_the_active_connection_and_persists_by_vendor()
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("enable-kimi").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
-            command: UserConfigCommand::EnsureProvider {
-                provider: ProviderId::new("kimi").unwrap(),
+            command: UserConfigCommand::ConfigureConnection {
+                connection: ash_protocol::ModelConnectionId::new("kimi-subscription").unwrap(),
+                config: ModelProviderConfig::for_connection(
+                    ash_protocol::ModelConnectionId::new("kimi-subscription").unwrap(),
+                ),
             },
         })
         .unwrap();
@@ -696,7 +637,9 @@ fn kimi_discovered_catalog_tracks_the_active_connection_and_persists_by_vendor()
     let provider = ProviderId::new("kimi").unwrap();
     secrets
         .store(
-            &ash_model_provider::provider_api_key_secret_key(&provider),
+            &ash_model_provider::provider_api_key_secret_key(
+                &ash_protocol::ModelConnectionId::new(provider.as_str()).unwrap(),
+            ),
             &ash_secrets::SecretValue::new(b"kimi-api-key".to_vec()),
         )
         .unwrap();
@@ -731,7 +674,7 @@ fn kimi_discovered_catalog_tracks_the_active_connection_and_persists_by_vendor()
             model_provider: runtime,
         }),
     };
-    let subscribed = service.list(ModelListView::Discovered).unwrap();
+    let subscribed = service.list().unwrap();
     assert_eq!(
         service
             .current_access(&ModelRef::new(
@@ -741,35 +684,27 @@ fn kimi_discovered_catalog_tracks_the_active_connection_and_persists_by_vendor()
             .unwrap(),
         ModelAccess::Subscription
     );
-    assert!(subscribed.iter().any(|entry| {
-        entry.model == ModelRef::new(provider.clone(), ModelId::new("kimi-k2.7-code").unwrap())
-            && entry.access == ModelAccess::Subscription
-    }));
     assert!(
-        !subscribed.iter().any(|entry| {
-            entry.model.provider == provider && entry.access == ModelAccess::ApiKey
-        })
+        subscribed
+            .iter()
+            .any(|entry| entry.model.provider == provider)
     );
-    let persisted = std::fs::read_to_string(profile.path().join("models/kimi.json")).unwrap();
-    assert!(persisted.contains("kimi-k2.7-code"));
-    assert!(!persisted.contains("kimi-access"));
-    assert!(!persisted.contains("kimi-api-key"));
-
     secrets.delete(&oauth_key).unwrap();
-    assert_eq!(
+    assert!(
         service
             .current_access(&ModelRef::new(
                 provider.clone(),
-                ModelId::new("kimi-k2.6").unwrap(),
+                ModelId::new("kimi-k3").unwrap()
             ))
-            .unwrap(),
-        ModelAccess::ApiKey
+            .is_err()
     );
-    let api = service.list(ModelListView::Discovered).unwrap();
-    assert!(!api.iter().any(|entry| entry.model.provider == provider));
-    assert!(!api.iter().any(|entry| {
-        entry.model == ModelRef::new(provider.clone(), ModelId::new("kimi-k2.7-code").unwrap())
-    }));
+    assert_eq!(service.list().unwrap(), subscribed);
+    assert_eq!(
+        service.config.read_snapshot().unwrap().values.providers[&provider]
+            .connection
+            .as_str(),
+        "kimi-subscription"
+    );
 }
 
 #[test]
@@ -1622,7 +1557,7 @@ fn shared_profile_runtime_reuses_one_durable_secret_store_across_env_hosts() {
 
     let saved: serde_json::Value = serde_json::from_str(&first.handle_json(
         &mut first_connection,
-        r#"{"jsonrpc":"2.0","id":2,"method":"provider/apiKey/set","params":{"provider":"openai","apiKey":"shared-secret"}}"#,
+        r#"{"jsonrpc":"2.0","id":2,"method":"provider/apiKey/set","params":{"connection":"openai","apiKey":"shared-secret"}}"#,
     ))
     .unwrap();
     assert_eq!(saved["result"]["apiKeyConfigured"], true);
@@ -2028,8 +1963,9 @@ fn configured_model_context_enables_core_managed_compaction() {
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("configure-context").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
-            command: UserConfigCommand::ConfigureProvider {
-                provider: provider.clone(),
+            command: UserConfigCommand::ConfigureConnection {
+                connection: ash_protocol::ModelConnectionId::new(provider.clone().as_str())
+                    .unwrap(),
                 config: provider_config,
             },
         })
@@ -2070,7 +2006,7 @@ fn configured_model_context_enables_core_managed_compaction() {
             ContextCompactionLimit::Tokens(ContextTokenCount::new(15_000)),
         )
     );
-    let models = service.list(ModelListView::BuiltIn).unwrap();
+    let models = service.list().unwrap();
     let entry = models
         .iter()
         .find(|entry| entry.model == ModelRef::new(provider.clone(), model.clone()))
@@ -2095,8 +2031,9 @@ fn config_backed_model_service_resolves_model_reasoning_effort() {
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("configure-provider").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
-            command: UserConfigCommand::ConfigureProvider {
-                provider: provider.clone(),
+            command: UserConfigCommand::ConfigureConnection {
+                connection: ash_protocol::ModelConnectionId::new(provider.clone().as_str())
+                    .unwrap(),
                 config: provider_config,
             },
         })
@@ -2142,8 +2079,11 @@ fn configure_test_provider(config: &ConfigStore, revision: ConfigRevision) -> Co
         .apply(ConfigCommandRequest {
             command_id: CommandId::new(format!("configure-test-{}", revision.get())).unwrap(),
             expected_revision: revision,
-            command: UserConfigCommand::ConfigureProvider {
-                provider: ProviderId::new("test").unwrap(),
+            command: UserConfigCommand::ConfigureConnection {
+                connection: ash_protocol::ModelConnectionId::new(
+                    ProviderId::new("test").unwrap().as_str(),
+                )
+                .unwrap(),
                 config: ModelProviderConfig::new(ProviderId::new("test").unwrap()),
             },
         })
@@ -2245,8 +2185,9 @@ fn configured_provider_resolves_default_model_with_its_saved_endpoint() {
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("configure-default").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
-            command: UserConfigCommand::ConfigureProvider {
-                provider: config.provider.clone(),
+            command: UserConfigCommand::ConfigureConnection {
+                connection: ash_protocol::ModelConnectionId::new(config.provider.clone().as_str())
+                    .unwrap(),
                 config: config.clone(),
             },
         })
@@ -2276,7 +2217,8 @@ fn subscription_model_resolution_uses_the_vendor_provider_config() {
         model_provider: provider.clone(),
     };
     let mut provider_config = ModelProviderConfig::new(ProviderId::new("openai").unwrap());
-    provider_config.access_mode = ash_model_provider_config::ProviderAccessMode::Subscription;
+    provider_config.connection =
+        ash_protocol::ModelConnectionId::new("chatgpt-subscription").unwrap();
     let config = ResolvedConfig {
         model: Some(ModelRef::new(
             ProviderId::new("openai").unwrap(),
@@ -2313,8 +2255,8 @@ fn same_model_identity_uses_the_active_access_mode_for_billing() {
         super::billing_scope_for_config(&config),
         ModelBillingScope::PublicApi
     );
-    config.providers.get_mut(&provider).unwrap().access_mode =
-        ash_model_provider_config::ProviderAccessMode::Subscription;
+    config.providers.get_mut(&provider).unwrap().connection =
+        ash_protocol::ModelConnectionId::new("chatgpt-subscription").unwrap();
     assert_eq!(
         super::billing_scope_for_config(&config),
         ModelBillingScope::SubscriptionPlan
@@ -2503,22 +2445,17 @@ fn built_in_catalog_excludes_configured_custom_models() {
         }),
     };
 
-    let models = model.list(ModelListView::BuiltIn).unwrap();
+    let models = model.list().unwrap();
 
     let api_models = models
         .iter()
-        .filter(|entry| {
-            entry.model.provider.as_str() == "openai"
-                && entry.access == ash_protocol::ModelAccess::ApiKey
-        })
+        .filter(|entry| entry.model.provider.as_str() == "openai")
         .map(|entry| entry.model.model.as_str())
         .collect::<Vec<_>>();
     assert!(api_models.contains(&"gpt-5.6"));
     assert!(api_models.contains(&"gpt-5.4"));
     assert!(models.iter().any(|entry| {
-        entry.model.provider.as_str() == "openai"
-            && entry.model.model.as_str() == "gpt-6-astra"
-            && entry.access == ash_protocol::ModelAccess::Subscription
+        entry.model.provider.as_str() == "openai" && entry.model.model.as_str() == "gpt-6-astra"
     }));
 
     assert!(
@@ -2526,35 +2463,24 @@ fn built_in_catalog_excludes_configured_custom_models() {
             .iter()
             .all(|entry| entry.model != model_ref("custom-model"))
     );
-    for (provider, access) in [
-        ("bigmodel", ash_protocol::ModelAccess::ApiKey),
-        ("zai", ash_protocol::ModelAccess::ApiKey),
-        (
-            "bigmodel-coding-plan",
-            ash_protocol::ModelAccess::Subscription,
-        ),
-        ("zai-coding-plan", ash_protocol::ModelAccess::Subscription),
-    ] {
-        assert_eq!(
-            models
-                .iter()
-                .filter(|entry| {
-                    entry.model.provider.as_str() == provider
-                        && entry.model.model.as_str() == "glm-5.1"
-                        && entry.access == access
-                })
-                .count(),
-            1,
-            "{provider} GLM-5.1 must keep its own model identity"
-        );
-    }
+    assert_eq!(
+        models
+            .iter()
+            .filter(|entry| entry.model.provider.as_str() == "zai"
+                && entry.model.model.as_str() == "glm-5.1")
+            .count(),
+        1
+    );
+    assert!(!models.iter().any(|entry| matches!(
+        entry.model.provider.as_str(),
+        "bigmodel" | "bigmodel-coding-plan" | "zai-coding-plan"
+    )));
     let openai = models
         .iter()
         .find(|entry| {
             entry.model.provider.as_str() == "openai" && entry.model.model.as_str() == "gpt-5.6"
         })
         .unwrap();
-    assert_eq!(openai.access, ash_protocol::ModelAccess::ApiKey);
     assert_eq!(openai.context_window, None);
     assert_eq!(
         openai.capabilities.image_detail_original,
@@ -2607,8 +2533,9 @@ fn custom_provider_discovery_controls_discovered_view_without_mutating_config() 
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("create-custom").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
-            command: UserConfigCommand::ConfigureProvider {
-                provider: provider.clone(),
+            command: UserConfigCommand::ConfigureConnection {
+                connection: ash_protocol::ModelConnectionId::new(provider.clone().as_str())
+                    .unwrap(),
                 config: connection,
             },
         })
@@ -2633,14 +2560,16 @@ fn custom_provider_discovery_controls_discovered_view_without_mutating_config() 
         }),
     };
     let configured = model.config.read_snapshot().unwrap();
-    let built_in = model.list(ModelListView::BuiltIn).unwrap();
+    let built_in = model.list().unwrap();
     assert!(
         built_in
             .iter()
             .all(|entry| entry.model.provider != provider)
     );
     assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 0);
-    let fetched = model.refresh(&provider).unwrap();
+    let fetched = model
+        .refresh(&ash_protocol::ModelConnectionId::new(provider.as_str()).unwrap())
+        .unwrap();
     assert_eq!(
         fetched
             .iter()
@@ -2651,22 +2580,19 @@ fn custom_provider_discovery_controls_discovered_view_without_mutating_config() 
             ModelId::new("custom-model").unwrap(),
         )]
     );
-    assert_eq!(
-        model
-            .list(ModelListView::Discovered)
-            .unwrap()
-            .into_iter()
-            .filter(|entry| entry.model.provider == provider)
-            .collect::<Vec<_>>(),
-        fetched
-    );
-    assert_eq!(model.list(ModelListView::BuiltIn).unwrap(), built_in);
+    assert_eq!(model.list().unwrap(), built_in);
+    assert_eq!(model.list().unwrap(), built_in);
     assert_eq!(model.config.read_snapshot().unwrap(), configured);
     assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 1);
-    assert!(model.refresh(&provider).unwrap().is_empty());
     assert!(
         model
-            .list(ModelListView::Discovered)
+            .refresh(&ash_protocol::ModelConnectionId::new(provider.as_str()).unwrap())
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        model
+            .list()
             .unwrap()
             .into_iter()
             .all(|entry| entry.model.provider != provider)
@@ -2674,28 +2600,25 @@ fn custom_provider_discovery_controls_discovered_view_without_mutating_config() 
     assert_eq!(model.config.read_snapshot().unwrap(), configured);
     assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 2);
     assert_eq!(
-        model.refresh(&provider),
+        model.refresh(&ash_protocol::ModelConnectionId::new(provider.as_str()).unwrap()),
         Err(crate::model_catalog::ModelCatalogRefreshError::Authentication)
     );
     assert!(
         model
-            .list(ModelListView::Discovered)
+            .list()
             .unwrap()
             .into_iter()
             .all(|entry| entry.model.provider != provider)
     );
     assert_eq!(model.config.read_snapshot().unwrap(), configured);
     assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 3);
-    assert_eq!(model.refresh(&provider).unwrap(), fetched);
     assert_eq!(
         model
-            .list(ModelListView::Discovered)
-            .unwrap()
-            .into_iter()
-            .filter(|entry| entry.model.provider == provider)
-            .collect::<Vec<_>>(),
+            .refresh(&ash_protocol::ModelConnectionId::new(provider.as_str()).unwrap())
+            .unwrap(),
         fetched
     );
+    assert_eq!(model.list().unwrap(), built_in);
     assert_eq!(model.config.read_snapshot().unwrap(), configured);
     assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 4);
 
@@ -2706,22 +2629,15 @@ fn custom_provider_discovery_controls_discovered_view_without_mutating_config() 
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("select-discovered-model").unwrap(),
             expected_revision: configured.revision,
-            command: UserConfigCommand::ConfigureProvider {
-                provider: provider.clone(),
+            command: UserConfigCommand::ConfigureConnection {
+                connection: ash_protocol::ModelConnectionId::new(provider.clone().as_str())
+                    .unwrap(),
                 config: connection,
             },
         })
         .unwrap();
-    assert_eq!(
-        model
-            .list(ModelListView::Discovered)
-            .unwrap()
-            .into_iter()
-            .filter(|entry| entry.model.provider == provider)
-            .collect::<Vec<_>>(),
-        fetched
-    );
-    assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 5);
+    assert_eq!(model.list().unwrap(), built_in);
+    assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 4);
     drop(model);
     remove_config_files(&path);
 }
@@ -2747,8 +2663,11 @@ fn local_catalog_includes_models_installed_in_configured_ollama() {
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("configure-ollama").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
-            command: UserConfigCommand::ConfigureProvider {
-                provider: ProviderId::new("ollama").unwrap(),
+            command: UserConfigCommand::ConfigureConnection {
+                connection: ash_protocol::ModelConnectionId::new(
+                    ProviderId::new("ollama").unwrap().as_str(),
+                )
+                .unwrap(),
                 config: ModelProviderConfig::new(ProviderId::new("ollama").unwrap()),
             },
         })
@@ -2770,7 +2689,11 @@ fn local_catalog_includes_models_installed_in_configured_ollama() {
         }),
     };
 
-    let models = model.list(ModelListView::Discovered).unwrap();
+    let initial = model.list().unwrap();
+    let models = model
+        .refresh(&ash_protocol::ModelConnectionId::new("ollama").unwrap())
+        .unwrap();
+    assert_eq!(model.list().unwrap(), initial);
 
     assert!(models.iter().any(|entry| {
         entry.model.provider.as_str() == "ollama" && entry.model.model.as_str() == "qwen3:8b"
@@ -3029,7 +2952,7 @@ fn xai_subscription_catalog_drives_model_selection_context_and_invocation() {
                 "https://cli-chat-proxy.grok.com/v1/responses"
             );
             let body: serde_json::Value = serde_json::from_slice(request.body()).unwrap();
-            assert_eq!(body["model"], "grok-test");
+            assert_eq!(body["model"], "grok-4.7");
             sink.emit(b"data: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"hello\"}]}]}}\n\n")?;
             Ok(ClientResponse::new(200, vec![], vec![]))
         }
@@ -3057,31 +2980,21 @@ fn xai_subscription_catalog_drives_model_selection_context_and_invocation() {
             model_provider: runtime,
         }),
     };
-    let entries = service.list(ModelListView::Discovered).unwrap();
-    assert_eq!(
-        entries
-            .iter()
-            .map(|entry| entry.model.model.as_str())
-            .collect::<Vec<_>>(),
-        ["grok-test", "grok-older"]
-    );
+    let entries = service.list().unwrap();
     let model = ModelRef::new(
         ProviderId::new("xai").unwrap(),
-        ModelId::new("grok-test").unwrap(),
+        ModelId::new("grok-4.7").unwrap(),
     );
-    let entry = entries.iter().find(|entry| entry.model == model).unwrap();
-    assert_eq!(entry.access, ModelAccess::Subscription);
-    assert_eq!(entry.context_window, Some(500000));
-    let cache = std::fs::read_to_string(profile.path().join("models/xai.json")).unwrap();
-    assert!(cache.contains("grok-test"));
-    assert!(!cache.contains("fixture-refresh"));
+    assert!(entries.iter().any(|entry| entry.model == model));
     let configured = config
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("configure-xai").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
-            command: UserConfigCommand::ConfigureProvider {
-                provider: model.provider.clone(),
-                config: ModelProviderConfig::new(model.provider.clone()),
+            command: UserConfigCommand::ConfigureConnection {
+                connection: ash_protocol::ModelConnectionId::new("xai-subscription").unwrap(),
+                config: ModelProviderConfig::for_connection(
+                    ash_protocol::ModelConnectionId::new("xai-subscription").unwrap(),
+                ),
             },
         })
         .unwrap();
@@ -3096,20 +3009,26 @@ fn xai_subscription_catalog_drives_model_selection_context_and_invocation() {
         })
         .unwrap();
 
+    let observed = service
+        .refresh(&ash_protocol::ModelConnectionId::new("xai-subscription").unwrap())
+        .unwrap();
+    assert!(
+        observed
+            .iter()
+            .any(|entry| entry.model.model.as_str() == "grok-test")
+    );
+    assert!(
+        !observed
+            .iter()
+            .any(|entry| entry.model.model.as_str() == "grok-4.7")
+    );
+    assert_eq!(service.list().unwrap(), entries);
     assert_eq!(
         service
             .billing_scope(ModelSelection::ConfiguredDefault)
             .unwrap(),
         ModelBillingScope::SubscriptionPlan
     );
-    assert!(matches!(
-        service
-            .context_budget(ModelSelection::ConfiguredDefault)
-            .unwrap()
-            .resolve()
-            .unwrap(),
-        ResolvedContextBudget::CoreManaged(_)
-    ));
     let frozen = service
         .snapshot(ModelSelection::ConfiguredDefault)
         .unwrap()
@@ -3120,13 +3039,162 @@ fn xai_subscription_catalog_drives_model_selection_context_and_invocation() {
             .unwrap(),
         ModelBillingScope::SubscriptionPlan
     );
-    assert_eq!(
-        service
-            .reasoning_config(ModelSelection::ConfiguredDefault)
-            .unwrap()
-            .unwrap()
-            .effort,
-        ReasoningEffort::High
-    );
     assert_eq!(invoke_text(&service, "hi"), "hello");
+}
+
+#[test]
+fn glm_connections_use_distinct_endpoints_keys_and_billing_without_changing_the_model() {
+    use ash_protocol::ModelConnectionId;
+    #[derive(Default)]
+    struct Requests(Mutex<Vec<(String, String, serde_json::Value)>>);
+    impl OperationClient for Requests {
+        fn execute_streaming(
+            &self,
+            request: &ClientRequest,
+            sink: &mut dyn ash_client::OperationStreamSink,
+        ) -> Result<ClientResponse, ClientError> {
+            self.execute(request)?;
+            sink.emit(b"data: {\"id\":\"test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\"},\"finish_reason\":null}]}\n\n")?;
+            sink.emit(b"data: {\"id\":\"test\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":7,\"completion_tokens\":1,\"total_tokens\":8}}\n\ndata: [DONE]\n\n")?;
+            Ok(ClientResponse::new(200, vec![], vec![]))
+        }
+
+        fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
+            let key = request
+                .headers()
+                .iter()
+                .find(|header| header.name().eq_ignore_ascii_case("authorization"))
+                .unwrap()
+                .value()
+                .to_owned();
+            self.0.lock().unwrap().push((
+                request.url().to_owned(),
+                key,
+                serde_json::from_slice(request.body()).unwrap(),
+            ));
+            Ok(ClientResponse::new(200, vec![], br#"{"id":"test","choices":[{"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":7,"completion_tokens":1,"total_tokens":8}}"#.to_vec()))
+        }
+    }
+    let profile = tempfile::tempdir().unwrap();
+    let config = Arc::new(ConfigStore::open(profile.path().join("config.sqlite3")).unwrap());
+    let registry = ProviderConfigRegistry::builtin();
+    let requests = Arc::new(Requests::default());
+    let secrets = Arc::new(MemorySecretStore::default());
+    let credentials =
+        ash_model_provider::ProviderCredentialService::new(registry.clone(), secrets.clone());
+    let runtime = Arc::new(ModelProviderRuntime::with_client_and_secrets(
+        registry.clone(),
+        requests.clone(),
+        secrets,
+    ));
+    let service = ConfigBackedModelService {
+        config: config.clone(),
+        dir_config: None,
+        provider_configs: registry,
+        models_manager: runtime.models_manager(),
+        catalog_provider: runtime.clone(),
+        catalog_runtime: Arc::new(tokio::runtime::Runtime::new().unwrap()),
+        resolver: Arc::new(ModelProviderSnapshotResolver {
+            model_provider: runtime,
+        }),
+    };
+    let catalog = service.list().unwrap();
+    let model = ModelRef::new(
+        ProviderId::new("zai").unwrap(),
+        ModelId::new("glm-5.1").unwrap(),
+    );
+    let mut previous: Option<Arc<dyn ModelService>> = None;
+    let routes = [
+        (
+            "bigmodel",
+            "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+            ModelBillingScope::PublicApi,
+        ),
+        (
+            "zai",
+            "https://api.z.ai/api/paas/v4/chat/completions",
+            ModelBillingScope::PublicApi,
+        ),
+        (
+            "bigmodel-coding-plan",
+            "https://open.bigmodel.cn/api/coding/paas/v4/chat/completions",
+            ModelBillingScope::SubscriptionPlan,
+        ),
+        (
+            "zai-coding-plan",
+            "https://api.z.ai/api/coding/paas/v4/chat/completions",
+            ModelBillingScope::SubscriptionPlan,
+        ),
+    ];
+    for (index, (id, endpoint, billing)) in routes.iter().enumerate() {
+        let connection = ModelConnectionId::new(*id).unwrap();
+        credentials
+            .set_api_key(&connection, format!("key-{id}").into_bytes())
+            .unwrap();
+        config
+            .apply(ConfigCommandRequest {
+                command_id: CommandId::new(format!("choose-{id}")).unwrap(),
+                expected_revision: config.read_snapshot().unwrap().revision,
+                command: UserConfigCommand::ConfigureConnection {
+                    config: ModelProviderConfig::for_connection(connection.clone()),
+                    connection,
+                },
+            })
+            .unwrap();
+        let frozen = service
+            .snapshot(ModelSelection::Session(&model))
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            frozen
+                .billing_scope(ModelSelection::ConfiguredDefault)
+                .unwrap(),
+            *billing
+        );
+        assert_eq!(invoke_text(frozen.as_ref(), "hi"), "ok");
+        let latest = requests.0.lock().unwrap().last().unwrap().clone();
+        assert_eq!(latest.0, *endpoint);
+        assert_eq!(latest.1, format!("Bearer key-{id}"));
+        assert_eq!(latest.2["model"], "glm-5.1");
+        if let Some(old) = previous {
+            let (_, review) = old.approval_review_model().unwrap().unwrap();
+            assert_eq!(
+                invoke_text(review.as_ref(), "review in the running turn"),
+                "ok"
+            );
+            assert_eq!(
+                requests.0.lock().unwrap().last().unwrap().0,
+                routes[index - 1].1
+            );
+            let related = old
+                .snapshot(ModelSelection::Session(&model))
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                invoke_text(related.as_ref(), "consultation in the running turn"),
+                "ok"
+            );
+            assert_eq!(
+                requests.0.lock().unwrap().last().unwrap().0,
+                routes[index - 1].1
+            );
+            assert_eq!(invoke_text(old.as_ref(), "already running"), "ok");
+            assert_eq!(
+                requests.0.lock().unwrap().last().unwrap().0,
+                routes[index - 1].1
+            );
+        }
+        previous = Some(frozen);
+        assert_eq!(service.list().unwrap(), catalog);
+        assert_eq!(
+            config
+                .read_snapshot()
+                .unwrap()
+                .values
+                .active_connections
+                .len(),
+            1
+        );
+    }
+    assert_eq!(config.read_snapshot().unwrap().values.connections.len(), 4);
 }

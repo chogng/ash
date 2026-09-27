@@ -355,6 +355,7 @@ fn model_command_updates_and_clears_model_with_config_revision() {
             command_id: CommandId::new("configure-test-provider").unwrap(),
             expected_revision: revision,
             config: ProviderConfigDto {
+                connection: "test".into(),
                 custom: None,
                 provider: "test".into(),
                 base_url: None,
@@ -627,10 +628,10 @@ fn resume_and_model_without_arguments_open_actionable_pickers() {
     );
     assert_eq!(app.list_selection().unwrap().title(), "Model");
     assert!(!app.list_selection().unwrap().show_tabs());
-    assert!(app.list_selection().unwrap().visible_items().is_empty());
+    assert!(!app.list_selection().unwrap().visible_items().is_empty());
     assert!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
-            .is_none()
+            .is_some()
     );
 
     drop(client);
@@ -964,6 +965,7 @@ fn model_pins_keep_provider_identity_and_provider_deletion_cleans_preferences() 
         client.configure_provider(ProviderConfigureParams {
             command_id: CommandId::new(format!("configure-{id}")).unwrap(), expected_revision: revision,
             config: ProviderConfigDto {
+ connection: id.into(),
                 provider: id.into(), base_url: Some("https://example.invalid/v1".into()), max_output_tokens: None, model_context: Default::default(),
                 custom: Some(ash_app_server_protocol::protocol::config::CustomProviderConfigDto {
                     context_window: 272_000, order: 0, name: id.into(), model: Some("shared-alias".into()),
@@ -1006,7 +1008,7 @@ fn model_pins_keep_provider_identity_and_provider_deletion_cleans_preferences() 
     let choices = crate::models::load_selection(&mut *client).unwrap();
     let state = crate::widgets::list_selection::ListSelectionState::new(choices.model);
     assert!(!state.show_tabs());
-    assert!(state.visible_items().is_empty());
+    assert!(!state.visible_items().is_empty());
     assert_eq!(state.tabs().len(), 1);
     crate::models::execute(
         &mut *client,
@@ -1041,6 +1043,7 @@ fn model_pins_keep_provider_identity_and_provider_deletion_cleans_preferences() 
 fn model_picker_uses_builtin_catalog_and_allows_manual_custom_selection() {
     let (mut client, root, transport) = client_with_model_probe();
     let mut config = ProviderConfigDto {
+        connection: "custom-gateway".into(),
         provider: "custom-gateway".into(),
         base_url: Some("https://example.invalid/v1".into()),
         max_output_tokens: None,
@@ -1065,7 +1068,7 @@ fn model_picker_uses_builtin_catalog_and_allows_manual_custom_selection() {
         })
         .unwrap();
     let choices = crate::models::load_selection(&mut *client).unwrap();
-    assert!(choices.actions.is_empty());
+    assert!(choices.actions.values().any(|action| matches!(action, crate::models::ModelSelectionAction::Select { preference, .. } if preference == "openai/gpt-6-astra")));
     crate::models::set_model(&mut *client, "custom-gateway/gpt-5.6").unwrap();
     config.custom.as_mut().unwrap().model = Some("private-alias".into());
     let revision = client.read_config().unwrap().revision;
@@ -1077,7 +1080,7 @@ fn model_picker_uses_builtin_catalog_and_allows_manual_custom_selection() {
         })
         .unwrap();
     let choices = crate::models::load_selection(&mut *client).unwrap();
-    assert!(choices.actions.is_empty());
+    assert!(choices.actions.values().any(|action| matches!(action, crate::models::ModelSelectionAction::Select { preference, .. } if preference == "openai/gpt-6-astra")));
     assert_eq!(transport.calls(), 0);
     drop(client);
     let _ = fs::remove_dir_all(root);
@@ -1092,6 +1095,7 @@ fn model_picker_lists_builtin_models_without_provider_discovery() {
             command_id: CommandId::new("configure-openai-picker").unwrap(),
             expected_revision: revision,
             config: ProviderConfigDto {
+                connection: "openai".into(),
                 provider: "openai".into(),
                 base_url: None,
                 max_output_tokens: None,
@@ -1117,6 +1121,7 @@ fn model_picker_lists_builtin_models_without_provider_discovery() {
 fn set_model_sets_and_clears_model_reasoning_effort() {
     let (mut client, root, transport) = client_with_model_probe();
     let config = ProviderConfigDto {
+        connection: "openai".into(),
         provider: "openai".into(),
         base_url: None,
         max_output_tokens: None,

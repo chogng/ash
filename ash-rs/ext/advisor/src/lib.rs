@@ -19,7 +19,6 @@ use ash_core::ToolOutputSink;
 use ash_core::ToolService;
 use async_utils::CancellationToken;
 use core_api::CoreError;
-use core_api::ModelService;
 use protocol::AdvisorConfig;
 use protocol::ToolCall;
 use protocol::ToolDefinition;
@@ -37,13 +36,9 @@ pub struct AdvisorToolService {
 }
 
 impl AdvisorToolService {
-    pub fn new(
-        threads: Arc<ThreadController>,
-        model: Arc<dyn ModelService>,
-        revision: ActionPolicyRevision,
-    ) -> Self {
+    pub fn new(threads: Arc<ThreadController>, revision: ActionPolicyRevision) -> Self {
         Self {
-            model: ToolModel::new(Arc::clone(&threads), model),
+            model: ToolModel::new(Arc::clone(&threads)),
             threads,
             revision,
         }

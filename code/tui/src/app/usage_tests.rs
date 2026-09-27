@@ -29,7 +29,7 @@ use unicode_width::UnicodeWidthStr;
 
 #[test]
 fn usage_displays_xai_credits_without_rounding_or_inventing_missing_balances() {
-    let accounts = json!({"revision":1,"accounts":[{"provider":"xai-subscription","accountId":"xai-1","status":"ready","credentialRevision":1}]});
+    let accounts = json!({"revision":"1","accounts":[{"provider":"xai-subscription","accountId":"xai-1","status":"ready","credentialRevision":"1"}]});
     let data = json!({"provider":"xai-subscription","accountId":"xai-1","plan":"SuperGrok Heavy","limits":[],"credits":null,
         "xai":{"usedPercent":12.125,"allowed":true,"periodType":"USAGE_PERIOD_TYPE_WEEKLY","periodEnd":"2026-09-28T00:00:00Z","prepaidCents":"9007199254740993","onDemandUsedCents":"0"}});
     let (mut client, requests) = client(vec![accounts, data]);
@@ -104,7 +104,7 @@ fn usage_command_reads_the_selected_account_and_renders_both_screen_modes() {
 #[test]
 fn usage_keeps_chatgpt_and_xai_in_separate_keyboard_selectable_groups() {
     let mut accounts = account("ready");
-    accounts["accounts"].as_array_mut().unwrap().push(json!({"provider":"xai-subscription","accountId":"xai-1","status":"ready","credentialRevision":1}));
+    accounts["accounts"].as_array_mut().unwrap().push(json!({"provider":"xai-subscription","accountId":"xai-1","status":"ready","credentialRevision":"1"}));
     let (mut client, requests) = client(vec![
         accounts,
         quota(),
@@ -173,7 +173,7 @@ fn usage_requires_a_ready_chatgpt_account_before_querying_quota() {
     for (name, accounts, expected) in [
         (
             "usage_signed_out",
-            json!({"revision":1,"accounts":[]}),
+            json!({"revision":"1","accounts":[]}),
             "Sign in to ChatGPT",
         ),
         (
@@ -321,8 +321,8 @@ fn set_mode(app: &mut App, mode: ScreenMode) {
 }
 
 fn account(status: &str) -> Value {
-    json!({"revision":1,"accounts":[{"provider":"chatgpt-subscription","accountId":"account-1",
-        "email":null,"displayName":null,"organization":null,"plan":"pro","status":status,"credentialRevision":1}]})
+    json!({"revision":"1","accounts":[{"provider":"chatgpt-subscription","accountId":"account-1",
+        "email":null,"displayName":null,"organization":null,"plan":"pro","status":status,"credentialRevision":"1"}]})
 }
 
 fn quota() -> Value {

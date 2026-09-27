@@ -1,5 +1,7 @@
 use std::time::Instant;
 
+const SETTINGS_MODEL_CONNECTION_SCOPE: u32 = 84;
+
 use ash_commands::AppCommandId;
 use ash_keybinding::HostPlatform;
 use ash_keybindings_host::recording_chord;
@@ -36,10 +38,22 @@ pub enum SettingsActivation {
     Ignored,
     Changed,
     OpenRemote,
+    ActivateModelConnection(usize),
     Close,
 }
 
+/// Display facts supplied by the backend host; secrets and routing stay outside UI state.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ModelConnectionRow {
+    pub connection: String,
+    pub label: String,
+    pub status: String,
+    pub can_activate: bool,
+}
+
 pub struct SettingsState {
+    model_connections: Vec<ModelConnectionRow>,
+    model_connection_error: Vec<String>,
     section: SettingsPageSection,
     search: TextInput,
     keyboard_shortcuts: KeyboardShortcutsState,
@@ -50,6 +64,8 @@ pub struct SettingsState {
 impl Default for SettingsState {
     fn default() -> Self {
         Self {
+            model_connections: Vec::new(),
+            model_connection_error: Vec::new(),
             section: SettingsPageSection::default(),
             search: TextInput::default(),
             keyboard_shortcuts: KeyboardShortcutsState::default(),
@@ -60,6 +76,33 @@ impl Default for SettingsState {
 }
 
 impl SettingsState {
+    pub fn set_model_connections(&mut self, connections: Vec<ModelConnectionRow>) {
+        self.model_connections = connections;
+        self.model_connection_error.clear();
+    }
+
+    pub fn model_connections(&self) -> &[ModelConnectionRow] {
+        &self.model_connections
+    }
+    pub fn model_connection_error(&self) -> &[String] {
+        &self.model_connection_error
+    }
+    pub fn set_model_connection_error(&mut self, error: String) {
+        self.model_connection_error = vec![error];
+    }
+    pub fn model_connection_rows(&self) -> Vec<crate::SettingsKeybindingRow> {
+        self.model_connections
+            .iter()
+            .enumerate()
+            .map(|(index, connection)| crate::SettingsKeybindingRow {
+                enabled: connection.can_activate,
+                element: ElementId::scoped(SETTINGS_MODEL_CONNECTION_SCOPE, index as u32 + 1),
+                label: connection.label.clone(),
+                value: connection.status.clone(),
+            })
+            .collect()
+    }
+
     pub const fn section(&self) -> SettingsPageSection {
         self.section
     }
@@ -102,6 +145,22 @@ impl SettingsState {
         viewport: SettingsKeybindingsViewport,
         now: Instant,
     ) -> bool {
+        if self.section == SettingsPageSection::Models {
+            let Some(index) = self
+                .model_connection_rows()
+                .iter()
+                .position(|row| row.element == element)
+            else {
+                return false;
+            };
+            let list = viewport.list(
+                self.keybindings_scroll,
+                self.keybindings_scrollbar.presentation(),
+            );
+            return list
+                .ensure_visible_command(index)
+                .is_some_and(|command| self.scroll_keybindings(command, viewport, now));
+        }
         let Some(command) = command_for_keyboard_shortcut_row(element) else {
             return false;
         };
@@ -223,7 +282,21 @@ impl SettingsState {
     }
 
     pub fn activate(&mut self, id: ElementId) -> SettingsActivation {
+        if self.section == SettingsPageSection::Models {
+            if let Some(index) = self
+                .model_connection_rows()
+                .iter()
+                .position(|row| row.element == id)
+            {
+                return if self.model_connections[index].can_activate {
+                    SettingsActivation::ActivateModelConnection(index)
+                } else {
+                    SettingsActivation::Ignored
+                };
+            }
+        }
         match id {
+            crate::SETTINGS_NAV_MODELS => self.select(SettingsPageSection::Models),
             SETTINGS_CLOSE => SettingsActivation::Close,
             SETTINGS_NAV_GENERAL => self.select(SettingsPageSection::General),
             SETTINGS_NAV_APPEARANCE => self.select(SettingsPageSection::Appearance),

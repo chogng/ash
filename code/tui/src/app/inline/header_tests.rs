@@ -21,8 +21,7 @@ fn wide_header_keeps_pet_and_identity_information_together() {
                     ash_protocol::ModelId::new("gpt-5.6").unwrap(),
                 ),
                 display_name: "gpt-5.6".into(),
-                access: ash_protocol::ModelAccess::Subscription,
-                output_transport: ash_protocol::ModelOutputTransport::Unary,
+
                 context_window: None,
                 auto_compact_token_limit: None,
                 available_context_window: None,
@@ -46,7 +45,7 @@ fn wide_header_keeps_pet_and_identity_information_together() {
     let rendered = buffer_text(&buffer, 80, 10);
 
     assert!(rendered.contains(concat!("Ash Code v", env!("CARGO_PKG_VERSION"))));
-    assert!(rendered.contains("openai/gpt-5.6 · Subscription"));
+    assert!(rendered.contains("openai/gpt-5.6"));
     assert!(rendered.contains("/work/ash"));
     assert_eq!(
         (super::pet::sprite().width(), super::pet::sprite().height()),

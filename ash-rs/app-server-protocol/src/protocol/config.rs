@@ -150,6 +150,7 @@ pub enum ApprovalReviewModelSelectionDto {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderConfigDto {
+    pub connection: String,
     #[schemars(length(min = 1))]
     pub provider: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -477,6 +478,8 @@ pub struct ConfigReadResult {
     pub grep_backend: GrepBackendDto,
     pub gui: FrontendConfigDto,
     pub providers: BTreeMap<String, ProviderConfigDto>,
+    pub connections: BTreeMap<String, ProviderConfigDto>,
+    pub active_connections: BTreeMap<String, String>,
     pub mcp_servers: BTreeMap<String, McpServerConfigDto>,
     pub skill_sources: BTreeMap<String, SkillSourceConfigDto>,
     pub plugin_requests: BTreeMap<String, PluginRequestDto>,
@@ -691,7 +694,7 @@ pub struct ProviderRemoveParams {
     #[ts(type = "number")]
     pub expected_revision: u64,
     #[schemars(length(min = 1))]
-    pub provider: String,
+    pub connection: String,
 }
 
 /// Creates or replaces one standalone MCP server declaration.

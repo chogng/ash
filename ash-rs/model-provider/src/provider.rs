@@ -66,7 +66,7 @@ enum ProviderConnection {
     ChatGpt { auth: Arc<ChatGptOAuth> },
     Xai { auth: Arc<xai::XaiOAuth> },
     Direct { headers: crate::auth::ModelHeaders },
-    Subscription { target: ResolvedApiTarget },
+    Kimi { auth: Arc<KimiOAuth> },
 }
 
 #[derive(Clone)]
@@ -74,18 +74,21 @@ enum ProviderTarget {
     Fixed(ResolvedApiTarget),
     ChatGpt(Arc<ChatGptOAuth>),
     Xai(Arc<xai::XaiOAuth>),
+    Kimi(Arc<KimiOAuth>),
 }
 
 enum ResolvedProviderTarget<'a> {
     Fixed(&'a ResolvedApiTarget),
     ChatGpt(ChatGptApiTarget),
     Xai(xai::XaiApiTarget),
+    Kimi(ResolvedApiTarget),
 }
 
 impl ResolvedProviderTarget<'_> {
     fn api_target(&self) -> &ResolvedApiTarget {
         match self {
             Self::Fixed(target) => target,
+            Self::Kimi(target) => target,
             Self::ChatGpt(target) => target.api_target(),
             Self::Xai(target) => &target.target,
         }
@@ -94,6 +97,7 @@ impl ResolvedProviderTarget<'_> {
     fn into_api_target(self) -> ResolvedApiTarget {
         match self {
             Self::Fixed(target) => target.clone(),
+            Self::Kimi(target) => target,
             Self::ChatGpt(target) => target.into_api_target(),
             Self::Xai(target) => target.target,
         }
@@ -101,17 +105,36 @@ impl ResolvedProviderTarget<'_> {
 }
 
 impl ProviderTarget {
+    fn identity(&self) -> Result<Option<String>, ModelProviderError> {
+        match self {
+            Self::Fixed(_) => Ok(None),
+            Self::ChatGpt(auth) => auth
+                .model_execution_identity()
+                .map_err(|error| ModelProviderError::Credential(error.to_string())),
+            Self::Xai(auth) => auth
+                .account_id()
+                .map_err(|error| ModelProviderError::Credential(error.to_string())),
+            Self::Kimi(auth) => auth
+                .subscription_catalog_identity()
+                .map_err(|error| ModelProviderError::Credential(error.to_string())),
+        }
+    }
+
     fn endpoint(&self, direct: ApiEndpoint) -> ApiEndpoint {
         match self {
             Self::ChatGpt(_) => ApiEndpoint::ChatGptResponses,
             Self::Xai(_) => ApiEndpoint::XaiSubscriptionResponses,
-            Self::Fixed(_) => direct,
+            Self::Fixed(_) | Self::Kimi(_) => direct,
         }
     }
 
     fn resolve(&self) -> Result<ResolvedProviderTarget<'_>, ModelProviderError> {
         match self {
             Self::Fixed(target) => Ok(ResolvedProviderTarget::Fixed(target)),
+            Self::Kimi(auth) => auth
+                .api_target()
+                .map(ResolvedProviderTarget::Kimi)
+                .map_err(|error| ModelProviderError::Credential(error.to_string())),
             Self::Xai(auth) => auth
                 .api_target()
                 .map(ResolvedProviderTarget::Xai)
@@ -240,6 +263,7 @@ pub struct Provider {
     models: ModelsManager,
     adapter: Arc<dyn ProviderAdapter>,
     target: ProviderTarget,
+    account_identity: Option<String>,
     remote_measurement: RemoteMeasurement,
     client: Arc<dyn OperationClient>,
     local_counter: providers::measurement::LocalInputTokenCounter,
@@ -276,8 +300,8 @@ impl Provider {
                     RemoteMeasurement::Enabled(count_headers),
                 )
             }
-            ProviderConnection::Subscription { target } => {
-                (ProviderTarget::Fixed(target), RemoteMeasurement::Disabled)
+            ProviderConnection::Kimi { auth } => {
+                (ProviderTarget::Kimi(auth), RemoteMeasurement::Disabled)
             }
             ProviderConnection::Xai { auth } => {
                 (ProviderTarget::Xai(auth), RemoteMeasurement::Disabled)
@@ -295,6 +319,7 @@ impl Provider {
             config,
             models,
             adapter,
+            account_identity: target.identity()?,
             target,
             remote_measurement,
             client,
@@ -457,7 +482,7 @@ impl Provider {
     ) -> Result<ModelResponse, ModelProviderError> {
         use sha2::Digest;
         let endpoint = self.target.endpoint(self.adapter.endpoint());
-        let model = self.adapter.model_id(model);
+        let model = self.config.upstream_model(model);
         let mut digest = sha2::Sha256::new();
         let mut hash = |value: &str| {
             digest.update((value.len() as u64).to_be_bytes());
@@ -595,37 +620,27 @@ impl Provider {
     }
 
     fn resolve_model(&self, model_id: &ModelId) -> Result<Model, ModelProviderError> {
-        if let ProviderTarget::Xai(auth) = &self.target {
-            let binding =
-                crate::catalog::xai_catalog_binding(Arc::clone(auth))?.ok_or_else(|| {
-                    ModelProviderError::Credential("xAI Subscription is not signed in".into())
-                })?;
-            return self
-                .models
-                .resolve(binding.scope(), model_id, &ModelRequirements::agent())
-                .map(|resolved| resolved.entry().info().clone())
-                .map_err(model_resolution_error);
+        if self.target.identity()? != self.account_identity {
+            return Err(ModelProviderError::Credential(
+                "the connection account changed or is no longer ready".into(),
+            ));
         }
-        if let ProviderTarget::ChatGpt(auth) = &self.target {
-            let binding = crate::catalog::chatgpt_catalog_binding(
-                Arc::clone(auth),
-                Arc::clone(&self.client),
-                self.diagnostics.clone(),
-            )?
-            .ok_or_else(|| ModelProviderError::Credential("ChatGPT is not signed in".into()))?;
-            return self
-                .models
-                .resolve(binding.scope(), model_id, &ModelRequirements::agent())
+        let model_ref = ModelRef::new(self.definition.id.clone(), model_id.clone());
+        // Built-in membership is independent of a remote listing, including an empty or stale one.
+        let mut model = if let Some(spec) = ash_model_provider_config::find_static_model(&model_ref)
+        {
+            spec.model()
+        } else {
+            self.models
+                .resolve_static(&model_ref, &ModelRequirements::agent())
                 .map(|resolved| resolved.entry().info().clone())
-                .map_err(model_resolution_error);
-        }
-        self.models
-            .resolve_static(
-                &ModelRef::new(self.definition.id.clone(), model_id.clone()),
-                &ModelRequirements::agent(),
-            )
-            .map(|resolved| resolved.entry().info().clone())
-            .map_err(model_resolution_error)
+                .map_err(model_resolution_error)?
+        };
+        model.access = match self.config.access_mode {
+            ProviderAccessMode::Api => ash_protocol::ModelAccess::ApiKey,
+            ProviderAccessMode::Subscription => ash_protocol::ModelAccess::Subscription,
+        };
+        Ok(model)
     }
 }
 
@@ -772,7 +787,7 @@ impl ModelProviderRuntime {
                         Arc::new(ash_secrets::MemorySecretStore::default()),
                     );
                     credentials
-                        .set_api_key(&config.provider, key)
+                        .set_api_key(&config.connection, key)
                         .map_err(|error| ModelProviderError::Credential(error.to_string()))?;
                     Some(credentials)
                 }
@@ -782,11 +797,11 @@ impl ModelProviderRuntime {
             if let Some(credentials) = credentials {
                 headers.extend(
                     credentials
-                        .request_headers(&config.provider)
+                        .request_headers(&config.connection)
                         .map_err(|error| ModelProviderError::Credential(error.to_string()))?,
                 );
             }
-            let target = ResolvedApiTarget::new(normalized.base_url, headers);
+            let target = ResolvedApiTarget::new(normalized.base_url.clone(), headers);
             let cancellation = CancellationSource::new();
             if let Some(model) = model {
                 ModelId::new(model)
@@ -794,7 +809,7 @@ impl ModelProviderRuntime {
                 let mut request = ModelRequest::text("Reply with OK.");
                 request.max_output_tokens = Some(1024);
                 let endpoint = adapter.endpoint();
-                let model = adapter.model_id(model);
+                let model = normalized.upstream_model(model);
                 match definition.output_transport {
                     ModelOutputTransport::NativeStreaming => stream_endpoint(
                         endpoint,
@@ -885,79 +900,8 @@ impl ModelProviderRuntime {
         &self,
         config: &ModelProviderConfig,
     ) -> Result<ModelsManager, ModelProviderError> {
-        let effective = self.effective_config(config)?;
-        let registry = self.configs.with_configs([&effective])?;
+        let registry = self.configs.with_configs([config])?;
         Ok(self.models.with_registry(registry))
-    }
-
-    /// Materializes the active connection. A ready subscription takes precedence over
-    /// a stored API key; a credential-store error must not silently change the route.
-    pub fn effective_config(
-        &self,
-        config: &ModelProviderConfig,
-    ) -> Result<ModelProviderConfig, ModelProviderError> {
-        let subscription_ready = match config.provider.as_str() {
-            "openai" => self
-                .chatgpt_oauth
-                .as_ref()
-                .map(|auth| auth.account_id())
-                .transpose()
-                .map_err(|error| ModelProviderError::Credential(error.to_string()))?
-                .flatten()
-                .is_some(),
-            "xai" => self
-                .xai_oauth
-                .as_ref()
-                .map(|auth| auth.subscription_ready())
-                .transpose()
-                .map_err(|error| ModelProviderError::Credential(error.to_string()))?
-                .unwrap_or(false),
-            "kimi" => self
-                .kimi_oauth
-                .as_ref()
-                .map(|auth| auth.subscription_ready())
-                .transpose()
-                .map_err(|error| ModelProviderError::Credential(error.to_string()))?
-                .unwrap_or(false),
-            "bigmodel-coding-plan" | "zai-coding-plan" => {
-                // Each plan has its own connection and credential, even when the wire adapter
-                // and model catalog are shared with the corresponding API connection.
-                let endpoint = match config.provider.as_str() {
-                    "bigmodel-coding-plan" => {
-                        ash_model_provider_config::BIGMODEL_CODING_PLAN_BASE_URL
-                    }
-                    "zai-coding-plan" => ash_model_provider_config::ZAI_CODING_PLAN_BASE_URL,
-                    _ => unreachable!(),
-                };
-                let coding_plan_selected = config
-                    .base_url
-                    .as_deref()
-                    .is_some_and(|base_url| base_url.trim().trim_end_matches('/') == endpoint);
-                coding_plan_selected
-                    && self
-                        .credentials
-                        .as_ref()
-                        .map(|credentials| {
-                            credentials
-                                .stored_api_key(&config.provider)
-                                .map(|key| key.is_some())
-                        })
-                        .transpose()
-                        .map_err(|error| ModelProviderError::Credential(error.to_string()))?
-                        .unwrap_or(false)
-            }
-            _ => false,
-        };
-        let mut effective = config.clone();
-        effective.access_mode = if subscription_ready {
-            ProviderAccessMode::Subscription
-        } else {
-            ProviderAccessMode::Api
-        };
-        if subscription_ready {
-            effective.base_url = None;
-        }
-        Ok(effective)
     }
 
     /// Resolves a dynamic model catalog source for one immutable provider configuration.
@@ -965,16 +909,15 @@ impl ModelProviderRuntime {
         &self,
         config: &ModelProviderConfig,
     ) -> Result<Option<ModelCatalogBinding>, ModelProviderError> {
-        let config = self.effective_config(config)?;
-        let runtime = self.with_configs([&config])?;
-        let normalized = runtime.configs.normalize(&config)?;
+        let runtime = self.with_configs([config])?;
+        let normalized = runtime.configs.normalize(config)?;
         if normalized.access_mode == ProviderAccessMode::Subscription
             && normalized.provider.as_str() == "xai"
         {
             return self
                 .xai_oauth
                 .as_ref()
-                .map(|auth| crate::catalog::xai_catalog_binding(Arc::clone(auth)))
+                .map(|auth| crate::catalog::xai_catalog_binding(&normalized, Arc::clone(auth)))
                 .transpose()
                 .map(Option::flatten);
         }
@@ -986,6 +929,7 @@ impl ModelProviderRuntime {
                 .as_ref()
                 .map(|auth| {
                     crate::catalog::chatgpt_catalog_binding(
+                        &normalized,
                         Arc::clone(auth),
                         Arc::clone(&self.client),
                         self.diagnostics.clone(),
@@ -1000,24 +944,15 @@ impl ModelProviderRuntime {
             return self
                 .kimi_oauth
                 .as_ref()
-                .map(|auth| crate::catalog::kimi_catalog_binding(Arc::clone(auth)))
+                .map(|auth| crate::catalog::kimi_catalog_binding(&normalized, Arc::clone(auth)))
                 .transpose()
                 .map(Option::flatten);
         }
-        if normalized.access_mode == ProviderAccessMode::Subscription
-            && matches!(
-                normalized.provider.as_str(),
-                "bigmodel-coding-plan" | "zai-coding-plan"
-            )
-        {
-            let api_key = self
-                .credentials
-                .as_ref()
-                .map(|credentials| credentials.stored_api_key(&normalized.provider))
-                .transpose()
-                .map_err(|error| ModelProviderError::Credential(error.to_string()))?
-                .flatten();
-            return crate::catalog::glm_coding_plan_catalog_binding(&normalized.provider, api_key);
+        if matches!(
+            normalized.connection.as_str(),
+            "bigmodel-coding-plan" | "zai-coding-plan"
+        ) {
+            return Ok(None);
         }
         let definition = runtime
             .configs
@@ -1029,7 +964,7 @@ impl ModelProviderRuntime {
                 let headers = runtime
                     .credentials
                     .as_ref()
-                    .map(|credentials| credentials.request_headers(&config.provider))
+                    .map(|credentials| credentials.request_headers(&config.connection))
                     .transpose()
                     .map_err(|error| ModelProviderError::Credential(error.to_string()))?
                     .unwrap_or_default();
@@ -1058,9 +993,8 @@ impl ModelProviderRuntime {
         &self,
         config: &ModelProviderConfig,
     ) -> Result<Provider, ModelProviderError> {
-        let config = self.effective_config(config)?;
-        let runtime = self.with_configs([&config])?;
-        let normalized = runtime.configs.normalize(&config)?;
+        let runtime = self.with_configs([config])?;
+        let normalized = runtime.configs.normalize(config)?;
         runtime.instantiate_normalized(normalized)
     }
 
@@ -1069,9 +1003,8 @@ impl ModelProviderRuntime {
         config: &ModelProviderConfig,
         model: &ModelRef,
     ) -> Result<Model, ModelProviderError> {
-        let config = self.effective_config(config)?;
-        let runtime = self.with_configs([&config])?;
-        let normalized = runtime.configs.normalize_for(&config, &model.provider)?;
+        let runtime = self.with_configs([config])?;
+        let normalized = runtime.configs.normalize_for(config, &model.provider)?;
         let connection = runtime.connection(&normalized)?;
         runtime
             .instantiate_normalized_with_connection(normalized, connection)?
@@ -1083,11 +1016,8 @@ impl ModelProviderRuntime {
         config: &ModelProviderConfig,
         model_ref: &ModelRef,
     ) -> Result<Arc<dyn ModelInvoker>, ModelProviderError> {
-        let config = self.effective_config(config)?;
-        let runtime = self.with_configs([&config])?;
-        let normalized = runtime
-            .configs
-            .normalize_for(&config, &model_ref.provider)?;
+        let runtime = self.with_configs([config])?;
+        let normalized = runtime.configs.normalize_for(config, &model_ref.provider)?;
         let connection = runtime.connection(&normalized)?;
         runtime
             .instantiate_normalized_with_connection(normalized, connection)?
@@ -1100,11 +1030,8 @@ impl ModelProviderRuntime {
         model_ref: &ModelRef,
         request: &ModelRequest,
     ) -> Result<ModelResponse, ModelProviderError> {
-        let config = self.effective_config(config)?;
-        let runtime = self.with_configs([&config])?;
-        let normalized = runtime
-            .configs
-            .normalize_for(&config, &model_ref.provider)?;
+        let runtime = self.with_configs([config])?;
+        let normalized = runtime.configs.normalize_for(config, &model_ref.provider)?;
         let connection = runtime.connection(&normalized)?;
         runtime
             .instantiate_normalized_with_connection(normalized, connection)?
@@ -1145,40 +1072,40 @@ impl ModelProviderRuntime {
         &self,
         normalized: &NormalizedModelProviderConfig,
     ) -> Result<ProviderConnection, ModelProviderError> {
-        if normalized.access_mode == ProviderAccessMode::Subscription
-            && normalized.provider.as_str() == "xai"
-        {
-            return self.xai_connection();
-        }
-        match (normalized.access_mode, normalized.provider.as_str()) {
-            (ProviderAccessMode::Subscription, "kimi") => self
-                .kimi_oauth
-                .as_ref()
-                .ok_or_else(|| {
+        use ash_model_provider_config::ModelConnectionRuntime;
+        let connection = self
+            .configs
+            .connection(&normalized.connection)
+            .ok_or_else(|| {
+                ModelProviderError::Unavailable(format!(
+                    "unknown connection '{}'",
+                    normalized.connection
+                ))
+            })?;
+        match connection.runtime {
+            ModelConnectionRuntime::XaiSubscription => self.xai_connection(),
+            ModelConnectionRuntime::KimiCode => {
+                let auth = self.kimi_oauth.as_ref().ok_or_else(|| {
                     ModelProviderError::Credential("Kimi Code OAuth is unavailable".into())
-                })?
-                .api_target()
-                .map(|target| ProviderConnection::Subscription { target })
-                .map_err(|error| ModelProviderError::Credential(error.to_string())),
-            (ProviderAccessMode::Subscription, "bigmodel-coding-plan" | "zai-coding-plan") => {
-                self.direct_connection(normalized)
+                })?;
+                auth.api_target()
+                    .map_err(|error| ModelProviderError::Credential(error.to_string()))?;
+                Ok(ProviderConnection::Kimi {
+                    auth: Arc::clone(auth),
+                })
             }
-            (ProviderAccessMode::Subscription, "openai") => {
+            ModelConnectionRuntime::ChatGptSubscription => {
                 let auth = self.chatgpt_oauth.as_ref().ok_or_else(|| {
                     ModelProviderError::Credential("ChatGPT OAuth is unavailable".into())
                 })?;
                 auth.api_target()
                     .map_err(|error| ModelProviderError::Credential(error.to_string()))?;
-                // Keep the authority, not a token snapshot: a reused model must observe
-                // Codex rotation, logout and Ash disconnection before every invocation.
+                // Keep the authority so each invocation still observes token rotation and logout.
                 Ok(ProviderConnection::ChatGpt {
                     auth: Arc::clone(auth),
                 })
             }
-            (ProviderAccessMode::Api, _) => self.direct_connection(normalized),
-            (ProviderAccessMode::Subscription, _) => Err(ModelProviderError::Unavailable(
-                "subscription access is unavailable for this provider".into(),
-            )),
+            ModelConnectionRuntime::ProviderApi => self.direct_connection(normalized),
         }
     }
 

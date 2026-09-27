@@ -1080,42 +1080,110 @@ fn enter_provider_row(app: &mut App, label: &str) -> Option<AppCommand> {
         &ProviderListResult {
             providers: vec![
                 ProviderCatalogEntryDto {
+                    connection: "chatgpt-subscription".into(),
+                    provider: "openai".into(),
+                    display_name: "ChatGPT".into(),
+                    access: ash_protocol::ModelAccess::Subscription,
+                    active: false,
+                    configured: false,
+                    ready: false,
+                    api_key_policy: ProviderApiKeyPolicyDto::Unsupported,
+                    api_key_configured: false,
+                },
+                ProviderCatalogEntryDto {
+                    connection: "openai".into(),
+                    access: ash_protocol::ModelAccess::ApiKey,
+                    active: false,
+                    configured: false,
+                    ready: false,
                     provider: "openai".into(),
                     display_name: "OpenAI".into(),
                     api_key_policy: ProviderApiKeyPolicyDto::Required,
                     api_key_configured: false,
                 },
                 ProviderCatalogEntryDto {
+                    connection: "xai-subscription".into(),
+                    provider: "xai".into(),
+                    display_name: "Super Grok".into(),
+                    access: ash_protocol::ModelAccess::Subscription,
+                    active: false,
+                    configured: false,
+                    ready: false,
+                    api_key_policy: ProviderApiKeyPolicyDto::Unsupported,
+                    api_key_configured: false,
+                },
+                ProviderCatalogEntryDto {
+                    connection: "xai".into(),
+                    access: ash_protocol::ModelAccess::ApiKey,
+                    active: false,
+                    configured: false,
+                    ready: false,
                     provider: "xai".into(),
                     display_name: "xAI".into(),
                     api_key_policy: ProviderApiKeyPolicyDto::Required,
                     api_key_configured: false,
                 },
                 ProviderCatalogEntryDto {
+                    connection: "kimi-subscription".into(),
+                    provider: "kimi".into(),
+                    display_name: "Kimi".into(),
+                    access: ash_protocol::ModelAccess::Subscription,
+                    active: false,
+                    configured: false,
+                    ready: false,
+                    api_key_policy: ProviderApiKeyPolicyDto::Unsupported,
+                    api_key_configured: false,
+                },
+                ProviderCatalogEntryDto {
+                    connection: "kimi".into(),
+                    access: ash_protocol::ModelAccess::ApiKey,
+                    active: false,
+                    configured: false,
+                    ready: false,
                     provider: "kimi".into(),
                     display_name: "Kimi".into(),
                     api_key_policy: ProviderApiKeyPolicyDto::Unsupported,
                     api_key_configured: false,
                 },
                 ProviderCatalogEntryDto {
+                    connection: "zai".into(),
+                    access: ash_protocol::ModelAccess::ApiKey,
+                    active: false,
+                    configured: false,
+                    ready: false,
                     provider: "zai".into(),
                     display_name: "Z.ai API".into(),
                     api_key_policy: ProviderApiKeyPolicyDto::Required,
                     api_key_configured: false,
                 },
                 ProviderCatalogEntryDto {
+                    connection: "bigmodel".into(),
+                    access: ash_protocol::ModelAccess::ApiKey,
+                    active: false,
+                    configured: false,
+                    ready: false,
                     provider: "bigmodel".into(),
                     display_name: "BigModel API".into(),
                     api_key_policy: ProviderApiKeyPolicyDto::Required,
                     api_key_configured: false,
                 },
                 ProviderCatalogEntryDto {
+                    connection: "bigmodel-coding-plan".into(),
+                    access: ash_protocol::ModelAccess::Subscription,
+                    active: false,
+                    configured: false,
+                    ready: false,
                     provider: "bigmodel-coding-plan".into(),
                     display_name: "BigModel Coding Plan".into(),
                     api_key_policy: ProviderApiKeyPolicyDto::Required,
                     api_key_configured: false,
                 },
                 ProviderCatalogEntryDto {
+                    connection: "zai-coding-plan".into(),
+                    access: ash_protocol::ModelAccess::Subscription,
+                    active: false,
+                    configured: false,
+                    ready: false,
                     provider: "zai-coding-plan".into(),
                     display_name: "Z.ai Coding Plan".into(),
                     api_key_policy: ProviderApiKeyPolicyDto::Required,
@@ -1175,7 +1243,6 @@ fn chatgpt_subscription_shows_fetched_models_in_chinese() {
     use ash_protocol::ModelAccess;
     use ash_protocol::ModelId;
     use ash_protocol::ModelInfo;
-    use ash_protocol::ModelOutputTransport;
     use ash_protocol::ModelRef;
     use ash_protocol::ProviderId;
 
@@ -1198,20 +1265,16 @@ fn chatgpt_subscription_shows_fetched_models_in_chinese() {
         organization: None,
         plan: Some("pro".into()),
         status: AccountStatusDto::Ready,
-        credential_revision: 1,
+        credential_revision: 1.to_string(),
     };
     app.update(ConfigEvent::SubscriptionReply(
         SubscriptionProvider::ChatGpt,
         SubscriptionEvent::Read {
             account: AccountReadResult {
-                revision: 1,
+                revision: 1.to_string(),
                 accounts: vec![account.clone()],
             },
-            models: Some(Ok(vec![ModelCatalogEntry::from_info(
-                model,
-                &info,
-                ModelOutputTransport::Unary,
-            )])),
+            models: Some(Ok(vec![ModelCatalogEntry::from_info(model, &info)])),
         },
     ));
     let screen = crate::app::usage_tests::render(&app, 96, 24);
@@ -1224,9 +1287,9 @@ fn chatgpt_subscription_shows_fetched_models_in_chinese() {
     for revision in 2..=3 {
         app.update(ConfigEvent::Subscription(SubscriptionEvent::Updated(
             AccountReadResult {
-                revision,
+                revision: revision.to_string(),
                 accounts: vec![AccountDto {
-                    credential_revision: revision,
+                    credential_revision: revision.to_string(),
                     ..account.clone()
                 }],
             },
@@ -1239,7 +1302,7 @@ fn chatgpt_subscription_shows_fetched_models_in_chinese() {
 
     app.update(ConfigEvent::Subscription(SubscriptionEvent::Updated(
         AccountReadResult {
-            revision: 4,
+            revision: 4.to_string(),
             accounts: vec![AccountDto {
                 account_id: "account-2".into(),
                 ..account
@@ -1282,7 +1345,7 @@ fn subscription_sign_out_shortcut_uses_each_connection_owner() {
             provider,
             SubscriptionEvent::Read {
                 account: AccountReadResult {
-                    revision: 1,
+                    revision: 1.to_string(),
                     accounts: vec![AccountDto {
                         provider: account_provider.into(),
                         account_id: "account-1".into(),
@@ -1291,7 +1354,7 @@ fn subscription_sign_out_shortcut_uses_each_connection_owner() {
                         organization: None,
                         plan: None,
                         status: AccountStatusDto::Ready,
-                        credential_revision: 1,
+                        credential_revision: 1.to_string(),
                     }],
                 },
                 models: Some(Ok(vec![])),
@@ -1388,7 +1451,7 @@ fn chatgpt_subscription_keeps_pending_login_across_navigation_and_cancels_by_id(
     );
     app.update(ConfigEvent::Subscription(SubscriptionEvent::Read {
         account: AccountReadResult {
-            revision: 1,
+            revision: 1.to_string(),
             accounts: vec![],
         },
         models: None,
@@ -1423,7 +1486,7 @@ fn chatgpt_subscription_keeps_pending_login_across_navigation_and_cancels_by_id(
     );
     app.update(ConfigEvent::Subscription(SubscriptionEvent::Read {
         account: AccountReadResult {
-            revision: 1,
+            revision: 1.to_string(),
             accounts: vec![],
         },
         models: None,
@@ -1448,7 +1511,7 @@ fn chatgpt_subscription_keeps_pending_login_across_navigation_and_cancels_by_id(
     }
     app.update(ConfigEvent::Subscription(SubscriptionEvent::Read {
         account: AccountReadResult {
-            revision: 2,
+            revision: 2.to_string(),
             accounts: vec![],
         },
         models: None,
@@ -1469,9 +1532,9 @@ fn chatgpt_external_login_error_shows_codex_instructions_and_allows_retry() {
             let mut response = serde_json::json!({"jsonrpc":"2.0","id":request["id"]});
             match request["method"].as_str().unwrap() {
                 "account/read" => {
-                    response["result"] = serde_json::json!({"revision":1,"accounts":[{
+                    response["result"] = serde_json::json!({"revision":"1","accounts":[{
                         "provider":"chatgpt-subscription","accountId":"account-1","status":"reauthenticationRequired",
-                        "email":null,"displayName":"ChatGPT","organization":null,"plan":"pro","credentialRevision":1
+                        "email":null,"displayName":"ChatGPT","organization":null,"plan":"pro","credentialRevision":"1"
                     }]})
                 }
                 "account/login/start" => {
@@ -2552,8 +2615,9 @@ fn project_folder_picker_switches_only_to_a_non_current_root_without_a_draft() {
     use ash_file_access::DirId;
     use ash_file_access::EnvId;
     let workspace = tempfile::tempdir().unwrap();
-    let current = workspace.path().join("current");
-    let other = workspace.path().join("other");
+    let root_path = workspace.path().canonicalize().unwrap();
+    let current = root_path.join("current");
+    let other = root_path.join("other");
     std::fs::create_dir(&current).unwrap();
     std::fs::create_dir(&other).unwrap();
     let mut app = App::for_dir(&current);
@@ -2626,7 +2690,8 @@ fn project_folder_picker_opens_add_root_when_add_item_is_selected() {
     use ash_file_access::DirId;
     use ash_file_access::EnvId;
     let workspace = tempfile::tempdir().unwrap();
-    let current = workspace.path().join("current");
+    let root_path = workspace.path().canonicalize().unwrap();
+    let current = root_path.join("current");
     std::fs::create_dir(&current).unwrap();
     let mut app = App::for_dir(&current);
     let dir_id = |seed: char| {
@@ -3018,7 +3083,7 @@ fn xai_subscription_displays_server_plan() {
         SubscriptionProvider::Xai,
         SubscriptionEvent::Read {
             account: AccountReadResult {
-                revision: 1,
+                revision: 1.to_string(),
                 accounts: vec![AccountDto {
                     provider: "xai-subscription".into(),
                     account_id: "login-a".into(),
@@ -3027,7 +3092,7 @@ fn xai_subscription_displays_server_plan() {
                     organization: None,
                     plan: Some("SuperGrok Heavy".into()),
                     status: AccountStatusDto::Ready,
-                    credential_revision: 1,
+                    credential_revision: 1.to_string(),
                 }],
             },
             models: Some(Ok(vec![])),
@@ -3052,7 +3117,7 @@ fn kimi_subscription_shows_account_and_sign_out_shortcut() {
         SubscriptionProvider::Kimi,
         SubscriptionEvent::Read {
             account: AccountReadResult {
-                revision: 1,
+                revision: 1.to_string(),
                 accounts: vec![AccountDto {
                     provider: "kimi-subscription".into(),
                     account_id: "kimi-a".into(),
@@ -3061,7 +3126,7 @@ fn kimi_subscription_shows_account_and_sign_out_shortcut() {
                     organization: None,
                     plan: None,
                     status: AccountStatusDto::Ready,
-                    credential_revision: 1,
+                    credential_revision: 1.to_string(),
                 }],
             },
             models: Some(Ok(vec![])),
@@ -3089,7 +3154,7 @@ fn kimi_subscription_signed_out_shows_only_the_sign_in_action_in_chinese() {
         SubscriptionProvider::Kimi,
         SubscriptionEvent::Read {
             account: AccountReadResult {
-                revision: 1,
+                revision: 1.to_string(),
                 accounts: vec![],
             },
             models: None,
@@ -3130,7 +3195,7 @@ fn xai_subscription_login_stays_separate_from_chatgpt_after_navigation() {
         SubscriptionProvider::Xai,
         SubscriptionEvent::Read {
             account: AccountReadResult {
-                revision: 1,
+                revision: 1.to_string(),
                 accounts: vec![],
             },
             models: None,
@@ -3172,7 +3237,7 @@ fn xai_subscription_login_stays_separate_from_chatgpt_after_navigation() {
         SubscriptionProvider::ChatGpt,
         SubscriptionEvent::Read {
             account: AccountReadResult {
-                revision: 1,
+                revision: 1.to_string(),
                 accounts: vec![],
             },
             models: None,
@@ -3189,7 +3254,7 @@ fn xai_subscription_login_stays_separate_from_chatgpt_after_navigation() {
         SubscriptionProvider::Xai,
         SubscriptionEvent::Read {
             account: AccountReadResult {
-                revision: 1,
+                revision: 1.to_string(),
                 accounts: vec![],
             },
             models: None,
@@ -3210,7 +3275,7 @@ fn xai_subscription_browser_failure_keeps_the_manual_challenge_visible() {
         SubscriptionProvider::Xai,
         SubscriptionEvent::Read {
             account: AccountReadResult {
-                revision: 1,
+                revision: 1.to_string(),
                 accounts: vec![],
             },
             models: None,

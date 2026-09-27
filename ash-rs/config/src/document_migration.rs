@@ -8,7 +8,6 @@ use ash_file_access::Dir;
 use ash_file_access::DirId;
 use ash_file_access::Permission;
 use ash_file_access::Permissions;
-use ash_model_provider_config::ModelProviderConfig;
 use ash_protocol::ModelRef;
 use ash_protocol::ProviderId;
 use serde::Deserialize;
@@ -18,7 +17,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
 
-pub(crate) const CURRENT_FILE_SCHEMA_VERSION: i64 = 6;
+pub(crate) const CURRENT_FILE_SCHEMA_VERSION: i64 = 7;
 // Raise this only when the product support window no longer includes the removed versions.
 const MIN_SUPPORTED_FILE_SCHEMA_VERSION: i64 = 1;
 
@@ -74,7 +73,8 @@ pub(crate) fn decode(source: &str) -> Result<DecodedDocument, ConfigError> {
         .as_table_mut()
         .ok_or_else(|| ConfigError("user configuration root must be a TOML table".into()))?;
     let version = root.remove("schemaVersion");
-    let migrate_subscription = !matches!(version.as_ref(), Some(toml::Value::Integer(6)));
+    let migrate_subscription =
+        !matches!(version.as_ref(), Some(toml::Value::Integer(v)) if *v >= 6);
     let rewrite_required = match version {
         None => {
             migrate_unversioned(root)?;
@@ -106,6 +106,14 @@ pub(crate) fn decode(source: &str) -> Result<DecodedDocument, ConfigError> {
             ));
         }
     };
+    if rewrite_required {
+        migrate_connections(root)?;
+        for key in ["agent", "gui", "tui", "desktop"] {
+            if let Some(value) = root.get_mut(key) {
+                migrate_model_references(value);
+            }
+        }
+    }
     let mut document = value
         .try_into::<UserConfigDocument>()
         .map_err(|error| ConfigError(error.to_string()))?;
@@ -133,6 +141,110 @@ pub(crate) fn encode(document: &UserConfigDocument) -> Result<String, ConfigErro
     root.extend(fields.clone());
     toml::to_string_pretty(&toml::Value::Table(root))
         .map_err(|error| ConfigError(error.to_string()))
+}
+
+fn migrate_connections(root: &mut toml::map::Map<String, toml::Value>) -> Result<(), ConfigError> {
+    let Some(providers) = root.remove("providers") else {
+        return Ok(());
+    };
+    if root.contains_key("connections") || root.contains_key("activeConnections") {
+        return Err(ConfigError(
+            "configuration mixes legacy providers and connections".into(),
+        ));
+    }
+    let mut connections = providers
+        .as_table()
+        .cloned()
+        .ok_or_else(|| ConfigError("providers must be a table".into()))?;
+    let selected = root
+        .get("agent")
+        .and_then(|agent| agent.get("model"))
+        .and_then(|model| model.get("provider"))
+        .and_then(toml::Value::as_str)
+        .map(str::to_owned);
+    let mut candidates: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for (id, value) in &mut connections {
+        let connection = ash_protocol::ModelConnectionId::new(id.clone())
+            .map_err(|error| ConfigError(error.to_string()))?;
+        let provider = ash_model_provider_config::connection_provider(&connection);
+        let config = value
+            .as_table_mut()
+            .ok_or_else(|| ConfigError("connection must be a table".into()))?;
+        config.insert("connection".into(), toml::Value::String(id.clone()));
+        config.insert("provider".into(), toml::Value::String(provider.to_string()));
+        candidates
+            .entry(provider.to_string())
+            .or_default()
+            .push(id.clone());
+    }
+    let mut active = toml::map::Map::new();
+    for (provider, ids) in candidates {
+        let chosen = if provider == "zai" {
+            selected
+                .as_ref()
+                .filter(|id| ids.contains(id))
+                .cloned()
+                .or_else(|| (ids.len() == 1).then(|| ids[0].clone()))
+        } else if matches!(provider.as_str(), "openai" | "kimi" | "xai") {
+            // Only the former xAI subscription model identity proves a route. Shared vendor
+            // identities never recorded whether OAuth or the saved API key was active.
+            selected
+                .as_ref()
+                .filter(|id| id.as_str() == "xai-subscription" && ids.contains(id))
+                .cloned()
+        } else {
+            (ids.len() == 1).then(|| ids[0].clone())
+        };
+        if let Some(id) = chosen {
+            active.insert(provider, toml::Value::String(id));
+        }
+    }
+    root.insert("connections".into(), toml::Value::Table(connections));
+    root.insert("activeConnections".into(), toml::Value::Table(active));
+    for key in ["agent", "gui", "tui", "desktop"] {
+        if let Some(value) = root.get_mut(key) {
+            migrate_model_references(value);
+        }
+    }
+    Ok(())
+}
+
+fn migrate_model_references(value: &mut toml::Value) {
+    match value {
+        toml::Value::Table(table) => {
+            if table.get("model").is_some_and(toml::Value::is_str) {
+                if let Some(toml::Value::String(provider)) = table.get_mut("provider") {
+                    if let Some(current) = ash_model_provider_config::legacy_model_providers()
+                        .iter()
+                        .find_map(|(old, current)| (old.as_str() == provider).then_some(current))
+                    {
+                        *provider = current.to_string();
+                    }
+                }
+            }
+            for (_, value) in table.iter_mut() {
+                migrate_model_references(value);
+            }
+        }
+        toml::Value::Array(values) => {
+            for value in values.iter_mut() {
+                migrate_model_references(value);
+            }
+            // Favorites can contain the same model through several former GLM service IDs.
+            // Keep the first position, without removing duplicates from unrelated user arrays.
+            let mut models = std::collections::BTreeSet::new();
+            values.retain(|value| {
+                let Some(provider) = value.get("provider").and_then(toml::Value::as_str) else {
+                    return true;
+                };
+                let Some(model) = value.get("model").and_then(toml::Value::as_str) else {
+                    return true;
+                };
+                models.insert((provider.to_owned(), model.to_owned()))
+            });
+        }
+        _ => {}
+    }
 }
 
 fn migrate_subscription_models(document: &mut UserConfigDocument) {
@@ -172,12 +284,6 @@ fn migrate_subscription_models(document: &mut UserConfigDocument) {
         .commit_messages
         .source_egress_grants
         .retain(|_, grant| grant.model.provider != old);
-    if document.providers.remove(&old).is_some() {
-        document
-            .providers
-            .entry(current.clone())
-            .or_insert_with(|| ModelProviderConfig::new(current));
-    }
 }
 
 fn migrate_grep_backend(root: &mut toml::map::Map<String, toml::Value>) {
@@ -418,7 +524,7 @@ struct LegacySemanticCodeIndexEgressGrant {
     #[serde(rename = "models")]
     _models: CodebaseModelSelection,
     #[serde(rename = "providers")]
-    _providers: BTreeMap<ProviderId, ModelProviderConfig>,
+    _providers: BTreeMap<ProviderId, serde_json::Value>,
 }
 
 #[derive(Deserialize)]
@@ -482,9 +588,25 @@ pub(crate) fn decode_legacy_json(source: &str) -> Result<UserConfigDocument, Con
         }
         root.insert("grep".into(), serde_json::json!({"backend": backend}));
     }
-    let mut document: UserConfigDocument = serde_json::from_value(value)
-        .map_err(|error| ConfigError(format!("invalid legacy config document: {error}")))?;
-    migrate_subscription_models(&mut document);
-    document.validate()?;
-    Ok(document)
+    // Old SQLite authorities use JSON. Remove absent optional values before passing the same
+    // structural migration through TOML; both stores must produce identical selections.
+    fn remove_nulls(value: &mut serde_json::Value) {
+        match value {
+            serde_json::Value::Object(fields) => {
+                fields.retain(|_, value| !value.is_null());
+                for value in fields.values_mut() {
+                    remove_nulls(value);
+                }
+            }
+            serde_json::Value::Array(values) => {
+                for value in values {
+                    remove_nulls(value);
+                }
+            }
+            _ => {}
+        }
+    }
+    remove_nulls(&mut value);
+    let source = toml::to_string(&value).map_err(|error| ConfigError(error.to_string()))?;
+    Ok(decode(&source)?.document)
 }

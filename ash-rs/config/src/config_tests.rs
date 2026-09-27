@@ -146,9 +146,10 @@ fn tool_search_defaults_to_lexical_and_requires_a_configured_embedding_model() {
     let provider = provider_id("ollama");
     let embedding_model = model_ref("ollama", "nomic-embed-text");
     let mut hybrid_document = UserConfigDocument::default();
-    hybrid_document
-        .providers
-        .insert(provider.clone(), ModelProviderConfig::new(provider));
+    hybrid_document.connections.insert(
+        connection_id(provider.as_str()),
+        ModelProviderConfig::new(provider),
+    );
     hybrid_document.tool_search = ToolSearchConfig {
         mode: ToolSearchModeConfig::HybridEmbedding,
         embedding_model: Some(embedding_model.clone()),
@@ -200,9 +201,9 @@ fn configure_provider(store: &ConfigStore, revision: u64, provider: &str) -> Con
         .apply(ConfigCommandRequest {
             command_id: CommandId::new(format!("configure-{provider}-{revision}")).unwrap(),
             expected_revision: ConfigRevision::new(revision),
-            command: UserConfigCommand::ConfigureProvider {
-                provider: provider_id(provider),
-                config: ModelProviderConfig::new(provider_id(provider)),
+            command: UserConfigCommand::ConfigureConnection {
+                connection: connection_id(provider),
+                config: ModelProviderConfig::for_connection(connection_id(provider)),
             },
         })
         .unwrap()
@@ -230,15 +231,16 @@ fn configuring_provider_selects_its_first_api_model_and_preserves_selection_afte
 }
 
 #[test]
-fn ensuring_subscription_provider_keeps_model_selection_empty() {
+fn saving_connection_does_not_activate_it_or_select_a_model() {
     let path = config_path("subscription-provider");
     let store = ConfigStore::open(&path).unwrap();
     store
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("ensure-openai").unwrap(),
             expected_revision: ConfigRevision::new(0),
-            command: UserConfigCommand::EnsureProvider {
-                provider: provider_id("openai"),
+            command: UserConfigCommand::SaveConnection {
+                connection: connection_id("chatgpt-subscription"),
+                config: ModelProviderConfig::for_connection(connection_id("chatgpt-subscription")),
             },
         })
         .unwrap();
@@ -246,10 +248,11 @@ fn ensuring_subscription_provider_keeps_model_selection_empty() {
     assert!(
         snapshot
             .values
-            .providers
-            .contains_key(&provider_id("openai"))
+            .connections
+            .contains_key(&connection_id("chatgpt-subscription"))
     );
     assert!(snapshot.values.model.is_none());
+    assert!(snapshot.values.active_connections.is_empty());
     drop(store);
     remove_config_files(&path);
 }
@@ -269,7 +272,7 @@ fn saving_existing_provider_restores_missing_model_but_preserves_explicit_choice
     let saved = configure_provider(&store, cleared.revision.get(), "anthropic");
     assert_eq!(
         store.read_snapshot().unwrap().values.model,
-        Some(model_ref("anthropic", "claude-sonnet-4-20250514"))
+        Some(model_ref("anthropic", "claude-fable-5-1"))
     );
     let explicit = model_ref("anthropic", "custom-deployment");
     let selected = store
@@ -361,7 +364,7 @@ fn issue_execution_settings_are_removed_once_from_versioned_configuration() {
     ] {
         assert!(!encoded.contains(removed));
     }
-    assert!(encoded.contains("schemaVersion = 6"));
+    assert!(encoded.contains("schemaVersion = 7"));
     assert!(
         !crate::document_migration::decode(&encoded)
             .unwrap()
@@ -378,8 +381,8 @@ fn model_settings_are_migrated_once_from_version_two() {
     let database_path = config_path("model-settings-migration");
     let config_path = database_path.with_extension("toml");
     let mut document = UserConfigDocument::default();
-    document.providers.insert(
-        provider_id("openai"),
+    document.connections.insert(
+        connection_id("openai"),
         ModelProviderConfig::new(provider_id("openai")),
     );
     document.agent.model = Some(model_ref("openai", "gpt-6-astra"));
@@ -403,7 +406,7 @@ fn model_settings_are_migrated_once_from_version_two() {
         document.agent.model_reasoning_effort
     );
     let persisted = std::fs::read_to_string(&config_path).unwrap();
-    assert!(persisted.contains("schemaVersion = 6"));
+    assert!(persisted.contains("schemaVersion = 7"));
     assert!(!persisted.contains("preferredModel"));
     assert!(!persisted.contains("preferredReasoningEffort"));
     drop(store);
@@ -420,19 +423,25 @@ fn model_settings_are_migrated_once_from_version_two() {
 
 #[test]
 fn legacy_xai_subscription_provider_moves_to_vendor_identity_once() {
-    let mut document = UserConfigDocument::default();
-    for id in ["openai", "kimi", "xai-subscription"] {
-        document
-            .providers
-            .insert(provider_id(id), ModelProviderConfig::new(provider_id(id)));
-    }
-    document.agent.model = Some(model_ref("xai-subscription", "grok-4.5"));
-    document.agent.approval_review_model = ApprovalReviewModelSelection::Explicit {
-        model: model_ref("openai", "gpt-5.6-sol"),
-    };
-    document.agent.commit_message_model = Some(model_ref("kimi", "kimi-k2.7-code"));
-    let encoded = crate::document_migration::encode(&document).unwrap();
-    let legacy = encoded.replacen("schemaVersion = 6", "schemaVersion = 5", 1);
+    let legacy = r#"schemaVersion = 5
+[providers.openai]
+provider = "openai"
+[providers.kimi]
+provider = "kimi"
+[providers.xai-subscription]
+provider = "xai-subscription"
+[agent.model]
+provider = "xai-subscription"
+model = "grok-4.5"
+[agent.approvalReviewModel]
+type = "explicit"
+[agent.approvalReviewModel.model]
+provider = "openai"
+model = "gpt-5.6-sol"
+[agent.commitMessageModel]
+provider = "kimi"
+model = "kimi-k2.7-code"
+"#;
     let decoded = crate::document_migration::decode(&legacy).unwrap();
     assert!(decoded.rewrite_required);
     assert_eq!(
@@ -451,14 +460,17 @@ fn legacy_xai_subscription_provider_moves_to_vendor_identity_once() {
         decoded.document.agent.commit_message_model,
         Some(model_ref("kimi", "kimi-k2.7-code"))
     );
-    for id in ["openai", "kimi", "xai"] {
-        assert!(decoded.document.providers.contains_key(&provider_id(id)));
+    for id in ["openai", "kimi", "xai-subscription"] {
+        assert!(
+            decoded
+                .document
+                .connections
+                .contains_key(&connection_id(id))
+        );
     }
-    assert!(
-        !decoded
-            .document
-            .providers
-            .contains_key(&provider_id("xai-subscription"))
+    assert_eq!(
+        decoded.document.active_connections[&provider_id("xai")],
+        connection_id("xai-subscription")
     );
     let current = crate::document_migration::encode(&decoded.document).unwrap();
     let reopened = crate::document_migration::decode(&current).unwrap();
@@ -502,8 +514,8 @@ fn custom_provider_survives_restart_and_rejects_stale_update() {
     let command = |id: &str, config: ModelProviderConfig| ConfigCommandRequest {
         command_id: CommandId::new(id).unwrap(),
         expected_revision: ConfigRevision::INITIAL,
-        command: UserConfigCommand::ConfigureProvider {
-            provider: config.provider.clone(),
+        command: UserConfigCommand::ConfigureConnection {
+            connection: config.connection.clone(),
             config,
         },
     };
@@ -645,7 +657,7 @@ type = "disabled"
     );
 
     let persisted = persisted_config_document(&database_path);
-    assert!(persisted.contains("schemaVersion = 6"));
+    assert!(persisted.contains("schemaVersion = 7"));
     assert!(persisted.contains("[codebase]"));
     assert!(persisted.contains("[dirPermissions.entries]"));
     assert!(!persisted.contains("semanticCodeIndex"));
@@ -758,11 +770,11 @@ fn versioned_config_keeps_unknown_fields_strict() {
 #[test]
 fn newer_file_schema_is_rejected_explicitly() {
     let database_path = config_path("newer-file-schema");
-    std::fs::write(database_path.with_extension("toml"), "schemaVersion = 7\n").unwrap();
+    std::fs::write(database_path.with_extension("toml"), "schemaVersion = 8\n").unwrap();
 
     let error = ConfigStore::open(&database_path).err().unwrap();
 
-    assert!(error.0.contains("newer than supported version 6"));
+    assert!(error.0.contains("newer than supported version 7"));
     remove_config_files(&database_path);
 }
 
@@ -1172,7 +1184,8 @@ fn legacy_sqlite_document_is_migrated_once_into_toml() {
     let path = config_path("legacy-document-migration");
     let provider = ModelProviderConfig::new(provider_id("openai"));
     let document = UserConfigDocument {
-        providers: BTreeMap::from([(provider_id("openai"), provider)]),
+        connections: BTreeMap::from([(connection_id("openai"), provider)]),
+        active_connections: BTreeMap::from([(provider_id("openai"), connection_id("openai"))]),
         ..UserConfigDocument::default()
     };
     let connection = rusqlite::Connection::open(&path).unwrap();
@@ -1383,22 +1396,23 @@ fn dir_permissions_commands_persist_user_owned_decisions() {
 }
 
 #[test]
-fn selected_model_must_reference_a_configured_provider() {
+fn built_in_model_can_be_selected_before_any_connection_is_configured() {
     let path = config_path("selected-provider");
     let store = ConfigStore::open(&path).unwrap();
-    let error = store
+    store
         .apply(update_preferences(
-            "select-missing-provider",
+            "select-model",
             0,
-            Patch::Value(model_ref("openai", "model")),
+            Patch::Value(model_ref("openai", "gpt-6-astra")),
         ))
-        .unwrap_err();
-
-    assert!(matches!(error, ConfigCommandError::Config(_)));
+        .unwrap();
+    let snapshot = store.read_snapshot().unwrap();
     assert_eq!(
-        store.read_snapshot().unwrap().revision,
-        ConfigRevision::INITIAL
+        snapshot.values.model,
+        Some(model_ref("openai", "gpt-6-astra"))
     );
+    assert!(snapshot.values.connections.is_empty());
+    assert!(snapshot.values.active_connections.is_empty());
     remove_config_files(&path);
 }
 
@@ -1410,30 +1424,6 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
         store.read_snapshot().unwrap().values.approval_review_model,
         ApprovalReviewModelSelection::Automatic
     );
-
-    let missing_provider = store
-        .apply(ConfigCommandRequest {
-            command_id: CommandId::new("select-missing-review-provider").unwrap(),
-            expected_revision: ConfigRevision::INITIAL,
-            command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
-                advisor: Default::default(),
-                time_context: ash_protocol::Patch::Missing,
-                features: Default::default(),
-                model: Patch::Missing,
-                model_reasoning_effort: Patch::Missing,
-                commit_message_model: Patch::Missing,
-                tool_mode: Patch::Missing,
-                grep_backend: Patch::Missing,
-                git: Patch::Missing,
-                gui: Patch::Missing,
-                tui: Patch::Missing,
-                approval_review_model: Patch::Value(ApprovalReviewModelSelection::Explicit {
-                    model: model_ref("openai", "codex-auto-review"),
-                }),
-            }),
-        })
-        .unwrap_err();
-    assert!(matches!(missing_provider, ConfigCommandError::Config(_)));
 
     let configured = configure_provider(&store, 0, "openai");
     let selected = store
@@ -1465,16 +1455,19 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
         }
     );
 
-    let remove_error = store
+    store
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("remove-review-provider").unwrap(),
             expected_revision: selected.revision,
-            command: UserConfigCommand::RemoveProvider {
-                provider: provider_id("openai"),
+            command: UserConfigCommand::RemoveConnection {
+                connection: connection_id("openai"),
             },
         })
-        .unwrap_err();
-    assert!(matches!(remove_error, ConfigCommandError::Config(_)));
+        .unwrap();
+    assert_eq!(
+        store.read_snapshot().unwrap().values.active_connections[&provider_id("openai")],
+        connection_id("openai")
+    );
     remove_config_files(&path);
 }
 
@@ -1499,7 +1492,7 @@ fn automatic_approval_review_follows_the_selected_model_provider() {
         resolved
             .resolve_approval_review_model(&ProviderConfigRegistry::builtin())
             .unwrap(),
-        model_ref("anthropic", "claude-sonnet-4-20250514")
+        model_ref("anthropic", "claude-main")
     );
 }
 
@@ -1511,10 +1504,10 @@ fn provider_entries_validate_their_key_and_static_settings() {
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("bad-provider").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
-            command: UserConfigCommand::ConfigureProvider {
-                provider: provider_id("openai"),
+            command: UserConfigCommand::ConfigureConnection {
+                connection: connection_id("openai"),
                 config: ModelProviderConfig {
-                    access_mode: ash_model_provider_config::ProviderAccessMode::Api,
+                    connection: connection_id("anthropic"),
                     custom: None,
                     provider: provider_id("anthropic"),
                     base_url: Some("file:///tmp/provider".into()),
@@ -1767,44 +1760,38 @@ fn command_rejects_stale_revisions_and_conflicting_retries() {
 }
 
 #[test]
-fn a_model_provider_cannot_be_removed_until_the_model_is_cleared() {
+fn removing_the_current_connection_keeps_its_identity_without_selecting_another() {
     let path = config_path("remove-provider");
     let store = ConfigStore::open(&path).unwrap();
-    let configured = configure_provider(&store, 0, "openai");
-    let selected = store
-        .apply(update_preferences(
-            "select",
-            configured.revision.get(),
-            Patch::Value(model_ref("openai", "model")),
-        ))
-        .unwrap();
-    assert!(matches!(
-        store.apply(ConfigCommandRequest {
-            command_id: CommandId::new("remove-in-use").unwrap(),
-            expected_revision: selected.revision,
-            command: UserConfigCommand::RemoveProvider {
-                provider: provider_id("openai"),
-            },
-        }),
-        Err(ConfigCommandError::Config(_))
-    ));
-    let cleared = store
-        .apply(update_preferences(
-            "clear-model",
-            selected.revision.get(),
-            Patch::Null,
-        ))
-        .unwrap();
+    configure_provider(&store, 0, "openai");
+    let selected = configure_provider(&store, 1, "chatgpt-subscription");
     store
         .apply(ConfigCommandRequest {
-            command_id: CommandId::new("remove-after-clear").unwrap(),
-            expected_revision: cleared.revision,
-            command: UserConfigCommand::RemoveProvider {
-                provider: provider_id("openai"),
+            command_id: CommandId::new("remove-current").unwrap(),
+            expected_revision: selected.revision,
+            command: UserConfigCommand::RemoveConnection {
+                connection: connection_id("chatgpt-subscription"),
             },
         })
         .unwrap();
-    assert!(store.read_snapshot().unwrap().values.providers.is_empty());
+    let snapshot = ConfigStore::open(&path).unwrap().read_snapshot().unwrap();
+    assert_eq!(
+        snapshot.values.active_connections[&provider_id("openai")],
+        connection_id("chatgpt-subscription")
+    );
+    assert!(
+        !snapshot
+            .values
+            .providers
+            .contains_key(&provider_id("openai"))
+    );
+    assert!(
+        snapshot
+            .values
+            .connections
+            .contains_key(&connection_id("openai"))
+    );
+    assert!(snapshot.values.model.is_some());
     remove_config_files(&path);
 }
 
@@ -2468,17 +2455,6 @@ fn advisor_default_validates_provider_and_survives_reopening() {
             .advisor,
         Some(advisor.clone())
     );
-    assert!(
-        store
-            .apply(ConfigCommandRequest {
-                command_id: CommandId::new("remove-advisor-provider").unwrap(),
-                expected_revision: selected.revision,
-                command: UserConfigCommand::RemoveProvider {
-                    provider: provider_id("openai")
-                }
-            })
-            .is_err()
-    );
     let mut disabled = advisor.clone();
     disabled.enabled = false;
     let disabled_result = store
@@ -2526,4 +2502,106 @@ fn advisor_default_validates_provider_and_survives_reopening() {
         .unwrap();
     assert!(store.read_snapshot().unwrap().values.advisor.is_none());
     remove_config_files(&path);
+}
+
+fn connection_id(id: &str) -> ash_protocol::ModelConnectionId {
+    ash_protocol::ModelConnectionId::new(id).unwrap()
+}
+
+#[test]
+fn connections_are_mutually_exclusive_per_vendor_and_survive_restarting() {
+    let path = config_path("connection-selection");
+    let store = ConfigStore::open(&path).unwrap();
+    let mut revision = 0;
+    for id in [
+        "openai",
+        "chatgpt-subscription",
+        "bigmodel",
+        "zai",
+        "bigmodel-coding-plan",
+        "zai-coding-plan",
+    ] {
+        revision = configure_provider(&store, revision, id).revision.get();
+        let snapshot = store.read_snapshot().unwrap();
+        let vendor = ash_model_provider_config::connection_provider(&connection_id(id));
+        assert_eq!(
+            snapshot.values.providers[&vendor].connection,
+            connection_id(id)
+        );
+    }
+    let snapshot = ConfigStore::open(&path).unwrap().read_snapshot().unwrap();
+    assert_eq!(snapshot.values.connections.len(), 6);
+    assert_eq!(
+        snapshot.values.active_connections,
+        BTreeMap::from([
+            (provider_id("openai"), connection_id("chatgpt-subscription")),
+            (provider_id("zai"), connection_id("zai-coding-plan")),
+        ])
+    );
+    store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("reuse-key").unwrap(),
+            expected_revision: snapshot.revision,
+            command: UserConfigCommand::ActivateConnection {
+                connection: connection_id("bigmodel"),
+            },
+        })
+        .unwrap();
+    let next = store.read_snapshot().unwrap();
+    assert_eq!(
+        next.values.providers[&provider_id("zai")].connection,
+        connection_id("bigmodel")
+    );
+    assert_eq!(
+        next.values.providers[&provider_id("openai")].connection,
+        connection_id("chatgpt-subscription")
+    );
+    assert_eq!(next.values.connections, snapshot.values.connections);
+    remove_config_files(&path);
+}
+
+#[test]
+fn migration_preserves_four_glm_connections_and_restores_only_an_explicit_choice() {
+    let mut legacy = String::from("schemaVersion = 6\n");
+    for id in ["bigmodel", "zai", "bigmodel-coding-plan", "zai-coding-plan"] {
+        legacy.push_str(&format!("[providers.{id}]\nprovider = \"{id}\"\nbaseUrl = \"https://{id}.example/v1\"\nmaxOutputTokens = 1234\n"));
+    }
+    let ambiguous = crate::document_migration::decode(&legacy).unwrap().document;
+    assert_eq!(ambiguous.connections.len(), 4);
+    assert!(ambiguous.active_connections.is_empty());
+    legacy.push_str("[agent.model]\nprovider = \"bigmodel-coding-plan\"\nmodel = \"glm-5.1\"\n[[tui.pinnedModels]]\nprovider = \"bigmodel\"\nmodel = \"glm-5.1\"\n");
+    legacy.push_str("[[tui.pinnedModels]]\nprovider = \"zai\"\nmodel = \"glm-5.1\"\n");
+    let migrated = crate::document_migration::decode(&legacy).unwrap().document;
+    assert_eq!(migrated.agent.model, Some(model_ref("zai", "glm-5.1")));
+    assert_eq!(
+        migrated.active_connections[&provider_id("zai")],
+        connection_id("bigmodel-coding-plan")
+    );
+    assert_eq!(migrated.connections, ambiguous.connections);
+    assert_eq!(migrated.tui["pinnedModels"][0]["provider"], "zai");
+    assert_eq!(migrated.tui["pinnedModels"].as_array().unwrap().len(), 1);
+    let encoded = crate::document_migration::encode(&migrated).unwrap();
+    let reopened = crate::document_migration::decode(&encoded).unwrap();
+    assert!(!reopened.rewrite_required);
+    assert_eq!(reopened.document, migrated);
+}
+
+#[test]
+fn imported_directory_model_migrates_without_rewriting_or_selecting_a_connection() {
+    let path = dir_config_path("connection-model-migration");
+    let source = toml::to_string_pretty(&dir_document(Some(model_ref(
+        "bigmodel-coding-plan",
+        "glm-5.1",
+    ))))
+    .unwrap();
+    std::fs::write(&path, &source).unwrap();
+    let store = DirConfigStore::open(&path, dir_scope());
+    for _ in 0..2 {
+        assert_eq!(
+            store.read_document().unwrap().agent.model,
+            Some(model_ref("zai", "glm-5.1"))
+        );
+    }
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), source);
+    std::fs::remove_file(path).unwrap();
 }

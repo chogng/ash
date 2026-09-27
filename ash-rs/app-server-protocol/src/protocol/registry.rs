@@ -1101,8 +1101,6 @@ use crate::protocol::model::ModelCatalogEntry;
 use crate::protocol::model::ModelListParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::model::ModelListResult;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::model::ModelListView;
 use crate::protocol::notification::ThreadTranscriptUpdateEnvelope;
 use crate::protocol::notification::ThreadUpdateEnvelope;
 #[cfg(any(test, feature = "export"))]
@@ -1151,6 +1149,8 @@ use crate::protocol::projects::ProjectSessionMutationParams;
 use crate::protocol::projects::ProjectStatusDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::projects::ProjectSummaryDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::provider::ProviderActivateParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::provider::ProviderApiKeyDto;
 #[cfg(any(test, feature = "export"))]
@@ -2822,6 +2822,11 @@ client_methods! {
         response: ProviderModelsListResult,
         serialization: GlobalSharedRead,
     },
+    ProviderActivate => "provider/activate" {
+        params: ProviderActivateParams,
+        response: ConfigCommandResult,
+        serialization: GlobalExclusive,
+    },
     ProviderApiKeySet => "provider/apiKey/set" {
         params: ProviderApiKeySetParams,
         response: ProviderApiKeySetResult,
@@ -4335,10 +4340,10 @@ typescript_bindings! {
     ModelCatalogEntry,
     ModelListParams,
     ModelListResult,
-    ModelListView,
     ProviderApiKeyDto,
     ProviderApiKeyPolicyDto,
     ProviderApiKeySetParams,
+    ProviderActivateParams,
     ProviderApiKeySetResult,
     ProviderProbeParams,
     ProviderProbeResult,

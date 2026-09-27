@@ -40,12 +40,14 @@ pub(crate) struct Settings {
 
 impl Settings {
     pub(crate) fn new(config: &ConfigReadResult, providers: &ProviderListResult, id: &str) -> Self {
+        let custom_id = new_command_id("custom").to_string();
         let saved = config
-            .providers
+            .connections
             .get(id)
             .cloned()
             .unwrap_or_else(|| ProviderConfigDto {
-                provider: new_command_id("custom").to_string(),
+                provider: custom_id.clone(),
+                connection: custom_id,
                 custom: None,
                 base_url: None,
                 max_output_tokens: None,
@@ -57,7 +59,7 @@ impl Settings {
             key_saved: providers
                 .providers
                 .iter()
-                .any(|entry| entry.provider == saved.provider && entry.api_key_configured),
+                .any(|entry| entry.connection == saved.connection && entry.api_key_configured),
             config: saved,
         }
     }

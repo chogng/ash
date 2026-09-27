@@ -46,6 +46,7 @@ fn style() -> SettingsSectionStyle {
 fn keybindings_section_composes_scroll_view_with_translated_visible_rows() {
     let rows = (0..18)
         .map(|index| SettingsKeybindingRow {
+            enabled: true,
             element: zui::ui::ElementId::scoped(90, index + 1),
             label: format!("Command {index}"),
             value: "Unassigned".to_owned(),
@@ -131,4 +132,50 @@ fn keybindings_section_composes_scroll_view_with_translated_visible_rows() {
         .expect("accessible keybindings scrollbar");
     assert_eq!(scrollbar.role(), zui::ui::AccessibilityRole::ScrollBar);
     assert_eq!(scrollbar.parent(), Some(SETTINGS_KEYBINDINGS_LIST));
+}
+
+#[test]
+fn model_connections_expose_current_state_and_keyboard_activation() {
+    let mut settings = crate::SettingsState::default();
+    settings.set_model_connections(vec![
+        crate::ModelConnectionRow {
+            connection: "zai".into(),
+            label: "Z.AI API".into(),
+            status: "Current · Ready".into(),
+            can_activate: false,
+        },
+        crate::ModelConnectionRow {
+            connection: "bigmodel".into(),
+            label: "BigModel API".into(),
+            status: "Saved".into(),
+            can_activate: true,
+        },
+    ]);
+    let rows = settings.model_connection_rows();
+    let dispatch = UiDispatch::default();
+    let pane = SettingsSectionPane::new(
+        Rect::from_xywh(0.0, 0.0, 600.0, 300.0),
+        SettingsPageSection::Models,
+        style(),
+        "ash",
+        "Local",
+        "Agent",
+        &rows,
+        false,
+        &[],
+        "Light",
+        true,
+        ScrollState::default(),
+        ScrollbarPresentation::default(),
+        &dispatch,
+    );
+    let mut frame = UiFrame::<InteractionFrame>::new(Color::WHITE);
+    frame.draw_component(&pane);
+    let current = frame.interaction().node(rows[0].element).unwrap();
+    assert_eq!(current.action(), zui::ui::NodeAction::None);
+    assert!(current.label().contains("Current · Ready"));
+    let saved = frame.interaction().node(rows[1].element).unwrap();
+    assert_eq!(saved.action(), zui::ui::NodeAction::Activate);
+    assert_eq!(saved.focus_behavior(), zui::ui::FocusBehavior::TabStop);
+    assert!(saved.label().contains("Use BigModel API"));
 }

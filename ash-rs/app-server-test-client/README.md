@@ -24,7 +24,6 @@ Windows 下可执行路径加 `.exe`。未指定连接参数时从 PATH 启动 `
 
 ```text
 ash-app-server-test-client model-list
-ash-app-server-test-client model-list --view built-in
 ash-app-server-test-client session-list
 ash-app-server-test-client request session/read @params.json
 ash-app-server-test-client request session/subscribe @params.json --watch

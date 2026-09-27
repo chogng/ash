@@ -186,7 +186,7 @@ fn fixture_with_diagnostics(
     }
     let model = runtime
         .build_model(
-            &provider_config("openai"),
+            &provider_config("chatgpt-subscription"),
             &model_ref("openai", "gpt-5.6-luna"),
         )
         .unwrap();

@@ -201,3 +201,5 @@ pub(crate) use core_api::SetGoalResult;
 pub(crate) use core_api::ShellTurnInvocation;
 pub(crate) use core_api::StartThreadRequest;
 pub(crate) use core_api::SteerTurnRequest;
+
+pub use turn_policy::ApprovalReviewerFactory;

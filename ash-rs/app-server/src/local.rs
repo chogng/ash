@@ -7,7 +7,6 @@ use crate::server::DirGrantPolicy;
 use crate::server::EnvToolPorts;
 use crate::server::update_broker::UpdateBroker;
 use crate::tool_composition::ToolPort;
-use ash_app_server_protocol::protocol::model::ModelListView;
 use ash_async_utils::CancellationToken;
 use ash_chatgpt::ChatGptOAuth;
 use ash_client::OperationClient;
@@ -1106,6 +1105,10 @@ pub fn open_local_app_server_with_codebase_providers(
             (database_path, threads, config)
         }
     };
+    threads
+        .migrate_model_providers(&ash_model_provider_config::legacy_model_providers())
+        .map_err(open_error)?;
+
     if profile_runtime.is_none() {
         threads
             .install_time_context_provider(Arc::new(crate::time_context::ConfigTimeContext::new(
@@ -1375,11 +1378,14 @@ pub fn open_local_app_server_with_codebase_providers(
     let runtime_config = configured_model
         .resolve_config(&user_config)
         .map_err(|error| OpenAppServerError(error.to_string()))?;
-    let approval_model_provider: Arc<dyn ModelProvider> = model_provider.clone();
-    let approval_review_model =
-        crate::ReviewModelResolver::new(provider_configs.clone(), approval_model_provider)
-            .resolve(&runtime_config)
-            .ok();
+    let approval_review_model: ash_core::ApprovalReviewerFactory = Arc::new(|model| {
+        let Some((identity, runtime)) = model.approval_review_model()? else {
+            return Ok(ash_extension_api::ApprovalReviewer::Unavailable);
+        };
+        Ok(guardian_v2::reviewer(
+            guardian_v2::ProviderReviewModel::new(identity, Arc::new(ReviewModelInvoker(runtime))),
+        ))
+    });
     let skill_config = Arc::new(LocalSkillConfigProvider {
         config: Arc::clone(&config),
     });
@@ -1459,7 +1465,7 @@ pub fn open_local_app_server_with_codebase_providers(
             Arc::clone(&profile_secrets),
         ),
     ))
-    .with_approval_review_model(approval_review_model)
+    .with_approval_review_model(Some(approval_review_model))
     .with_call_network_policy(network_policy.clone())
     .with_config_store(Arc::clone(&config))
     .with_login_service(login_service)
@@ -2059,13 +2065,13 @@ impl ModelService for ConfigBackedModelService {
         selection: ModelSelection<'_>,
     ) -> Result<Option<Arc<dyn ModelService>>, CoreError> {
         let config = self.config_for_selection(selection)?;
-        let budget = self.context_budget_for_resolved(&config)?;
-        let billing_scope = billing_scope_for_config(&config);
-        Ok(Some(Arc::new(FrozenModelService {
-            provider: ProviderModelService::new(self.resolver.resolve(&config)),
-            budget,
-            billing_scope,
-        })))
+        let source = Arc::new(FrozenModelSource {
+            config,
+            registry: self.provider_configs.clone(),
+            manager: self.models_manager.clone(),
+            resolver: self.resolver.clone(),
+        });
+        Ok(Some(source.resolve(selection)?))
     }
 
     fn billing_scope(&self, selection: ModelSelection<'_>) -> Result<ModelBillingScope, CoreError> {
@@ -2097,7 +2103,7 @@ impl ModelService for ConfigBackedModelService {
         let default_effort = if config
             .providers
             .get(&model.provider)
-            .is_some_and(|provider| provider.access_mode == ProviderAccessMode::Subscription)
+            .is_some_and(|provider| provider.access_mode() == ProviderAccessMode::Subscription)
         {
             self.catalog_provider
                 .model_info(&config.providers[&model.provider], model)
@@ -2170,21 +2176,26 @@ impl ModelService for ConfigBackedModelService {
 impl ModelCatalog for ConfigBackedModelService {
     fn refresh(
         &self,
-        provider: &ash_protocol::ProviderId,
+        id: &ash_protocol::ModelConnectionId,
     ) -> Result<
         Vec<ash_app_server_protocol::protocol::model::ModelCatalogEntry>,
         crate::model_catalog::ModelCatalogRefreshError,
     > {
         use crate::model_catalog::ModelCatalogRefreshError;
-        let config = self
+        let mut config = self
             .resolved_config()
             .map_err(|_| ModelCatalogRefreshError::InvalidConfiguration)?;
-        let connection = config.providers.get(provider).cloned().unwrap_or_else(|| {
-            ash_model_provider_config::ModelProviderConfig::new(provider.clone())
-        });
+        let connection = config
+            .connections
+            .get(id)
+            .cloned()
+            .ok_or(ModelCatalogRefreshError::InvalidConfiguration)?;
+        config
+            .providers
+            .insert(connection.provider.clone(), connection.clone());
         let registry = self
             .provider_configs
-            .with_configs(config.providers.values())
+            .with_configs([&connection])
             .map_err(|_| ModelCatalogRefreshError::InvalidConfiguration)?;
         let manager = self.models_manager.with_registry(registry.clone());
         let binding = self
@@ -2213,106 +2224,16 @@ impl ModelCatalog for ConfigBackedModelService {
     }
     fn list(
         &self,
-        view: ModelListView,
     ) -> Result<Vec<ash_app_server_protocol::protocol::model::ModelCatalogEntry>, CoreError> {
-        if view == ModelListView::BuiltIn {
-            let mut seen = BTreeSet::new();
-            return Ok(ash_model_provider_config::STATIC_MODEL_CATALOG
-                .iter()
-                .filter_map(|spec| {
-                    let model = spec.model_ref();
-                    seen.insert((spec.provider_id, spec.model_id)).then(|| {
-                        let definition = self
-                            .provider_configs
-                            .get(&model.provider)
-                            .expect("built-in model belongs to a built-in provider");
-                        ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
-                            model,
-                            &spec.model(),
-                            definition.output_transport,
-                        )
-                    })
-                })
-                .collect());
-        }
-        let config = self.resolved_config()?;
-        let registry = self
-            .provider_configs
-            .with_configs(config.providers.values())
-            .map_err(|error| CoreError::Model(error.to_string()))?;
-        let manager = self.models_manager.with_registry(registry.clone());
-        let mut scopes = Vec::new();
-        for provider in config.providers.values() {
-            let binding = match self.catalog_provider.catalog_binding(provider) {
-                Ok(Some(binding)) => binding,
-                Ok(None) => continue,
-                Err(error) => {
-                    log::warn!(
-                        "could not bind dynamic model catalog for {}: {error}",
-                        provider.provider
-                    );
-                    continue;
-                }
-            };
-            let scope = binding.scope().clone();
-            if let Err(error) = self.catalog_runtime.block_on(manager.read(
-                scope.clone(),
-                ash_models_manager::CatalogReadPolicy::CachePreferred,
-                ash_models_manager::CatalogReadSource::dynamic(binding.source()),
-            )) {
-                if provider.provider.as_str() == "openai"
-                    && provider.access_mode == ProviderAccessMode::Subscription
-                {
-                    return Err(CoreError::Model(error.to_string()));
-                }
-                log::warn!(
-                    "could not refresh dynamic model catalog for {}: {error}",
-                    provider.provider
-                );
-            }
-            // A prior empty response may still be marked fresh on disk. A ready ChatGPT
-            // account should recheck it before the model picker decides which tabs exist.
-            if provider.provider.as_str() == "openai"
-                && provider.access_mode == ProviderAccessMode::Subscription
-                && manager
-                    .list_discovered(&[scope.clone()], &CatalogQuery::selectable())
-                    .map_err(|error| CoreError::Model(error.to_string()))?
-                    .is_empty()
-            {
-                self.catalog_runtime
-                    .block_on(manager.refresh(scope.clone(), binding.source()))
-                    .map_err(|error| CoreError::Model(error.to_string()))?;
-            }
-            scopes.push(scope);
-        }
-        let mut models = manager
-            .list_discovered(&scopes, &CatalogQuery::selectable())
-            .map_err(|error| CoreError::Model(error.to_string()))?;
-        models.sort_by(|left, right| {
-            let catalog_position = |model: &ash_protocol::ModelRef| {
-                ash_model_provider_config::STATIC_MODEL_CATALOG
-                    .iter()
-                    .position(|entry| {
-                        entry.provider_id == model.provider.as_str()
-                            && entry.model_id == model.model.as_str()
-                    })
-                    .unwrap_or(usize::MAX)
-            };
-            left.model()
-                .provider
-                .cmp(&right.model().provider)
-                .then_with(|| {
-                    left.catalog_order()
-                        .unwrap_or(usize::MAX)
-                        .cmp(&right.catalog_order().unwrap_or(usize::MAX))
-                })
-                .then_with(|| catalog_position(left.model()).cmp(&catalog_position(right.model())))
-                .then_with(|| left.model().model.cmp(&right.model().model))
-        });
-        models
+        Ok(ash_model_provider_config::STATIC_MODEL_CATALOG
             .iter()
-            .map(|entry| runtime_catalog_entry(entry, &config, &registry))
-            .collect()
+            .map(|spec| {
+                ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
+                    spec.model_ref(),
+                    &spec.model(),
+                )
+            })
+            .collect())
     }
 
     fn current_access(&self, model: &ash_protocol::ModelRef) -> Result<ModelAccess, CoreError> {
@@ -2340,7 +2261,7 @@ impl ConfigBackedModelService {
             && config
                 .providers
                 .get(&model.provider)
-                .is_some_and(|provider| provider.access_mode == ProviderAccessMode::Subscription)
+                .is_some_and(|provider| provider.access_mode() == ProviderAccessMode::Subscription)
         {
             let provider = &config.providers[&model.provider];
             let info = self
@@ -2367,31 +2288,6 @@ impl ConfigBackedModelService {
         if let ModelSelection::Session(model) = selection {
             config.model = Some(model.clone());
         }
-        if let Some(model) = &config.model
-            && config
-                .providers
-                .get(&model.provider)
-                .is_some_and(|provider| provider.access_mode == ProviderAccessMode::Subscription)
-        {
-            let provider = config
-                .providers
-                .entry(model.provider.clone())
-                .or_insert_with(|| ModelProviderConfig::new(model.provider.clone()));
-            let Some(binding) = self
-                .catalog_provider
-                .catalog_binding(provider)
-                .map_err(|error| CoreError::Model(error.to_string()))?
-            else {
-                return Ok(config);
-            };
-            self.catalog_runtime
-                .block_on(self.models_manager.read(
-                    binding.scope().clone(),
-                    ash_models_manager::CatalogReadPolicy::CachePreferred,
-                    ash_models_manager::CatalogReadSource::dynamic(binding.source()),
-                ))
-                .map_err(|error| CoreError::Model(error.to_string()))?;
-        }
         Ok(config)
     }
 
@@ -2403,28 +2299,9 @@ impl ConfigBackedModelService {
     }
 
     fn resolve_config(&self, user: &ResolvedConfigSnapshot) -> Result<ResolvedConfig, CoreError> {
-        let mut config =
-            resolve_local_config(user, self.dir_config.as_deref()).map_err(|error| {
-                CoreError::Model(format!("failed to resolve directory config: {}", error.0))
-            })?;
-        for id in ["openai", "xai", "kimi"] {
-            let provider = ash_protocol::ProviderId::new(id).expect("built-in provider ID");
-            let configured = config
-                .providers
-                .get(&provider)
-                .cloned()
-                .unwrap_or_else(|| ModelProviderConfig::new(provider.clone()));
-            let effective = self
-                .catalog_provider
-                .effective_config(&configured)
-                .map_err(|error| CoreError::Model(error.to_string()))?;
-            if effective.access_mode == ProviderAccessMode::Subscription
-                || config.providers.contains_key(&provider)
-            {
-                config.providers.insert(provider, effective);
-            }
-        }
-        Ok(config)
+        resolve_local_config(user, self.dir_config.as_deref()).map_err(|error| {
+            CoreError::Model(format!("failed to resolve directory config: {}", error.0))
+        })
     }
 }
 
@@ -2500,9 +2377,6 @@ fn runtime_catalog_entry(
     config: &ResolvedConfig,
     registry: &ProviderConfigRegistry,
 ) -> Result<ash_app_server_protocol::protocol::model::ModelCatalogEntry, CoreError> {
-    let definition = registry
-        .get(&entry.model().provider)
-        .expect("catalog entry belongs to the same provider registry");
     let default_config = ModelProviderConfig::new(entry.model().provider.clone());
     let provider_config = config
         .providers
@@ -2514,7 +2388,6 @@ fn runtime_catalog_entry(
     let mut result = ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
         entry.model().clone(),
         &info,
-        definition.output_transport,
     );
     if config.providers.contains_key(&entry.model().provider) {
         match context_budget_for_model(&info, provider_config, registry)?
@@ -2768,18 +2641,9 @@ fn billing_scope_for_config(config: &ash_config::ResolvedConfig) -> ModelBilling
     if config
         .providers
         .get(&model.provider)
-        .is_some_and(|provider| provider.access_mode == ProviderAccessMode::Subscription)
+        .is_some_and(|provider| provider.access_mode() == ProviderAccessMode::Subscription)
     {
         return ModelBillingScope::SubscriptionPlan;
-    }
-    let access = find_static_model(model)
-        .map(|definition| definition.access)
-        .unwrap_or(ModelAccess::ApiKey);
-    if access == ModelAccess::Subscription {
-        return ModelBillingScope::SubscriptionPlan;
-    }
-    if access != ModelAccess::ApiKey {
-        return ModelBillingScope::Unavailable;
     }
     let uses_provider_endpoint = config
         .providers
@@ -2797,13 +2661,108 @@ fn billing_scope_for_config(config: &ash_config::ResolvedConfig) -> ModelBilling
     }
 }
 
+/// Approval reviews share the Turn's model selection while retaining Guardian's request contract.
+struct ReviewModelInvoker(Arc<dyn ModelService>);
+impl ModelInvoker for ReviewModelInvoker {
+    fn output_transport(&self) -> ash_protocol::ModelOutputTransport {
+        ash_protocol::ModelOutputTransport::Unary
+    }
+    fn invoke_with_cancellation(
+        &self,
+        request: &ash_protocol::ModelRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<ash_protocol::ModelResponse, ash_model_provider::ModelProviderError> {
+        self.0
+            .invoke(ModelSelection::ConfiguredDefault, request, cancellation)
+            .map_err(|error| match error {
+                CoreError::Cancelled(reason) => {
+                    ash_model_provider::ModelProviderError::Cancelled(reason)
+                }
+                error => ash_model_provider::ModelProviderError::InvalidResponse(error.to_string()),
+            })
+    }
+    fn stream_with_cancellation(
+        &self,
+        request: &ash_protocol::ModelRequest,
+        cancellation: &CancellationToken,
+        _: &mut dyn ModelEventSink,
+    ) -> Result<ash_protocol::ModelResponse, ash_model_provider::ModelProviderError> {
+        self.invoke_with_cancellation(request, cancellation)
+    }
+}
+
+/// All model consultations in a Turn resolve against this one profile configuration.
+struct FrozenModelSource {
+    config: ResolvedConfig,
+    registry: ProviderConfigRegistry,
+    manager: ModelsManager,
+    resolver: Arc<dyn ModelSnapshotResolver>,
+}
+impl FrozenModelSource {
+    fn resolve(
+        self: &Arc<Self>,
+        selection: ModelSelection<'_>,
+    ) -> Result<Arc<dyn ModelService>, CoreError> {
+        let mut config = self.config.clone();
+        if let ModelSelection::Session(model) = selection {
+            config.model = Some(model.clone());
+        }
+        let budget = context_budget_for_config(&config, &self.registry, &self.manager)?;
+        let reasoning = config
+            .model
+            .as_ref()
+            .and_then(|model| {
+                config.model_reasoning_effort.or_else(|| {
+                    find_static_model(model).and_then(|spec| spec.model_reasoning_effort)
+                })
+            })
+            .map(|effort| ash_protocol::ReasoningConfig {
+                effort,
+                summary: false,
+            });
+        Ok(Arc::new(FrozenModelService {
+            source: self.clone(),
+            provider: ProviderModelService::new(self.resolver.resolve(&config)),
+            budget,
+            billing_scope: billing_scope_for_config(&config),
+            reasoning,
+        }))
+    }
+}
+
 /// One model/provider snapshot shared by auxiliary context preparation and execution.
 struct FrozenModelService {
+    source: Arc<FrozenModelSource>,
     provider: ProviderModelService,
     budget: ContextBudget,
     billing_scope: ModelBillingScope,
+    reasoning: Option<ash_protocol::ReasoningConfig>,
 }
 impl ModelService for FrozenModelService {
+    fn approval_review_model(
+        &self,
+    ) -> Result<Option<(ash_protocol::ModelRef, Arc<dyn ModelService>)>, CoreError> {
+        if self.source.config.model.is_none() {
+            return Ok(None);
+        }
+        let Ok(model) = self
+            .source
+            .config
+            .resolve_approval_review_model(&self.source.registry)
+        else {
+            return Ok(None);
+        };
+        let runtime = self.source.resolve(ModelSelection::Session(&model))?;
+        Ok(Some((model, runtime)))
+    }
+
+    fn snapshot(
+        &self,
+        selection: ModelSelection<'_>,
+    ) -> Result<Option<Arc<dyn ModelService>>, CoreError> {
+        Ok(Some(self.source.resolve(selection)?))
+    }
+
     fn billing_scope(&self, _: ModelSelection<'_>) -> Result<ModelBillingScope, CoreError> {
         Ok(self.billing_scope)
     }
@@ -2816,6 +2775,42 @@ impl ModelService for FrozenModelService {
     ) -> Result<ModelImageInputPolicy, CoreError> {
         self.provider
             .image_input_policy(ModelSelection::ConfiguredDefault)
+    }
+    fn reasoning_config(
+        &self,
+        _: ModelSelection<'_>,
+    ) -> Result<Option<ash_protocol::ReasoningConfig>, CoreError> {
+        Ok(self.reasoning.clone())
+    }
+    fn input_token_measurement_capability(
+        &self,
+        _: ModelSelection<'_>,
+    ) -> Result<ContextTokenMeasurementCapability, CoreError> {
+        self.provider
+            .input_token_measurement_capability(ModelSelection::ConfiguredDefault)
+    }
+    fn measure_input(
+        &self,
+        _: ModelSelection<'_>,
+        request: &ash_protocol::ModelRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<ContextTokenMeasurementOutcome, CoreError> {
+        self.provider
+            .measure_input(ModelSelection::ConfiguredDefault, request, cancellation)
+    }
+    fn stream(
+        &self,
+        _: ModelSelection<'_>,
+        request: &ash_protocol::ModelRequest,
+        cancellation: &CancellationToken,
+        sink: &mut dyn CoreModelStreamSink,
+    ) -> Result<ash_protocol::ModelResponse, CoreError> {
+        self.provider.stream(
+            ModelSelection::ConfiguredDefault,
+            request,
+            cancellation,
+            sink,
+        )
     }
     fn invoke(
         &self,

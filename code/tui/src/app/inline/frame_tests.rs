@@ -107,6 +107,7 @@ fn model_list_opens_inline_and_restores_input_after_close() {
     config.providers.insert(
         "openai".into(),
         ash_app_server_protocol::protocol::config::ProviderConfigDto {
+            connection: "openai".into(),
             provider: "openai".into(),
             custom: None,
             base_url: None,
@@ -114,6 +115,16 @@ fn model_list_opens_inline_and_restores_input_after_close() {
             model_context: Default::default(),
         },
     );
+    config.connections = config
+        .providers
+        .values()
+        .map(|config| (config.connection.clone(), config.clone()))
+        .collect();
+    config.active_connections = config
+        .providers
+        .values()
+        .map(|config| (config.provider.clone(), config.connection.clone()))
+        .collect();
     let model = ash_protocol::ModelRef::new(
         ash_protocol::ProviderId::new("openai").unwrap(),
         ash_protocol::ModelId::new("gpt-test").unwrap(),
@@ -123,7 +134,6 @@ fn model_list_opens_inline_and_restores_input_after_close() {
             ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
                 model.clone(),
                 &ash_protocol::ModelInfo::new(model.model, "GPT Test"),
-                ash_protocol::ModelOutputTransport::Unary,
             ),
         ],
     };

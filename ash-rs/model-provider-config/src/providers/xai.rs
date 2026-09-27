@@ -2,14 +2,18 @@ use super::default_provider;
 use crate::{ApiProfile, ProviderAdapter, ProviderDefinition};
 
 pub(super) fn definition() -> ProviderDefinition {
-    default_provider(
+    let mut definition = default_provider(
         "xai",
         "xAI",
         ProviderAdapter::Xai,
         ApiProfile::OpenAiResponses,
         "https://api.x.ai/v1",
     )
-    .with_native_streaming()
+    .with_native_streaming();
+    definition.defaults.approval_review_model = crate::ApprovalReviewModelDefault::Model {
+        model: crate::ModelId::new("grok-4.5").expect("built-in model ID"),
+    };
+    definition
 }
 
 /// Subscription credentials only ever target the Grok CLI proxy.

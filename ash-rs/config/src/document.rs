@@ -16,6 +16,7 @@ use crate::UserExecPolicyConfig;
 use ash_model_provider_config::ModelProviderConfig;
 use ash_model_provider_config::ProviderConfigError;
 use ash_model_provider_config::ProviderConfigRegistry;
+use ash_protocol::ModelConnectionId;
 use ash_protocol::ModelRef;
 use ash_protocol::ProviderId;
 use ash_protocol::ReasoningEffort;
@@ -192,8 +193,7 @@ pub struct AgentConfig {
 
 /// Durable, non-secret user intent for ordinary Ash configuration.
 ///
-/// Provider entries are keyed by `ProviderId`; each value repeats its provider identity so a
-/// serialized document remains self-describing and mismatched entries can be rejected.
+/// Saved connections and the single selected connection for each model vendor.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -211,7 +211,9 @@ pub struct UserConfigDocument {
     #[serde(default)]
     pub network: NetworkConfig,
     #[serde(default)]
-    pub providers: BTreeMap<ProviderId, ModelProviderConfig>,
+    pub connections: BTreeMap<ModelConnectionId, ModelProviderConfig>,
+    #[serde(default)]
+    pub active_connections: BTreeMap<ProviderId, ModelConnectionId>,
     #[serde(default)]
     pub mcp: McpConfig,
     #[serde(default)]
@@ -241,6 +243,14 @@ pub struct UserConfigDocument {
 }
 
 impl UserConfigDocument {
+    fn has_model_provider(&self, provider: &ProviderId) -> bool {
+        ProviderConfigRegistry::builtin().get(provider).is_some()
+            || self
+                .connections
+                .values()
+                .any(|config| &config.provider == provider)
+    }
+
     pub(crate) fn validate(&self) -> Result<(), ConfigError> {
         if let Some(git) = self.git {
             git.validate()?;
@@ -251,18 +261,19 @@ impl UserConfigDocument {
             advisor
                 .validate()
                 .map_err(|message| ConfigError(message.into()))?;
-            if !self.providers.contains_key(&advisor.model.provider) {
+            if !self.has_model_provider(&advisor.model.provider) {
                 return Err(ConfigError(format!(
                     "advisor model provider '{}' is not configured",
                     advisor.model.provider
                 )));
             }
         }
-        ProviderConfigRegistry::new()
-            .with_configs(self.providers.values())
-            .map_err(provider_config_error)?;
-        for (provider_id, provider) in &self.providers {
-            if provider.provider != *provider_id {
+
+        ProviderConfigRegistry::builtin()
+            .with_configs(self.connections.values())
+            .map_err(|error| ConfigError(error.to_string()))?;
+        for (provider_id, provider) in &self.connections {
+            if provider.connection != *provider_id {
                 return Err(ConfigError(format!(
                     "provider entry '{}' contains configuration for '{}'",
                     provider_id, provider.provider
@@ -272,13 +283,20 @@ impl UserConfigDocument {
                 .validate_static()
                 .map_err(|error| ConfigError(error.to_string()))?;
         }
+        for (provider, connection) in &self.active_connections {
+            if ash_model_provider_config::connection_provider(connection) != *provider {
+                return Err(ConfigError(format!(
+                    "connection '{connection}' does not belong to '{provider}'"
+                )));
+            }
+        }
         if ![0, 5, 10, 30, 60].contains(&self.issues.auto_refresh_minutes) {
             return Err(ConfigError(
                 "issues.autoRefreshMinutes must be 0, 5, 10, 30 or 60".into(),
             ));
         }
         if let Some(model) = &self.agent.model
-            && !self.providers.contains_key(&model.provider)
+            && !self.has_model_provider(&model.provider)
         {
             return Err(ConfigError(format!(
                 "model provider '{}' is not configured",
@@ -286,7 +304,7 @@ impl UserConfigDocument {
             )));
         }
         if let Some(model) = self.agent.approval_review_model.explicit_model()
-            && !self.providers.contains_key(&model.provider)
+            && !self.has_model_provider(&model.provider)
         {
             return Err(ConfigError(format!(
                 "approval review model provider '{}' is not configured",
@@ -294,7 +312,7 @@ impl UserConfigDocument {
             )));
         }
         if let Some(model) = &self.agent.commit_message_model
-            && !self.providers.contains_key(&model.provider)
+            && !self.has_model_provider(&model.provider)
         {
             return Err(ConfigError(format!(
                 "commit-message model provider '{}' is not configured",
@@ -315,7 +333,7 @@ impl UserConfigDocument {
                 if role == "rerank" && models.rerank_model.is_none() {
                     continue;
                 }
-                if !self.providers.contains_key(&model.provider) {
+                if !self.has_model_provider(&model.provider) {
                     return Err(ConfigError(format!(
                         "semantic codebase {role} provider '{}' is not configured",
                         model.provider
@@ -331,7 +349,7 @@ impl UserConfigDocument {
             ));
         }
         if let Some(model) = &self.tool_search.embedding_model
-            && !self.providers.contains_key(&model.provider)
+            && !self.has_model_provider(&model.provider)
         {
             return Err(ConfigError(format!(
                 "Tool Search embedding provider '{}' is not configured",
@@ -368,6 +386,8 @@ pub struct ResolvedConfig {
     pub grep_backend: GrepBackend,
     pub network: NetworkConfig,
     pub providers: BTreeMap<ProviderId, ModelProviderConfig>,
+    pub connections: BTreeMap<ModelConnectionId, ModelProviderConfig>,
+    pub active_connections: BTreeMap<ProviderId, ModelConnectionId>,
     pub mcp: McpConfig,
     pub skills: SkillsConfig,
     pub plugins: PluginsConfig,
@@ -457,7 +477,18 @@ impl From<&UserConfigDocument> for ResolvedConfig {
             tool_mode: document.agent.tool_mode,
             grep_backend: document.grep.backend,
             network: document.network.clone(),
-            providers: document.providers.clone(),
+            providers: document
+                .active_connections
+                .iter()
+                .filter_map(|(provider, id)| {
+                    document
+                        .connections
+                        .get(id)
+                        .map(|config| (provider.clone(), config.clone()))
+                })
+                .collect(),
+            connections: document.connections.clone(),
+            active_connections: document.active_connections.clone(),
             mcp: document.mcp.clone(),
             skills: document.skills.clone(),
             plugins: document.plugins.clone(),

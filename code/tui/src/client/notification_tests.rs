@@ -151,7 +151,7 @@ fn account_notifications_reach_the_subscription_owner() {
     use ash_app_server_protocol::protocol::account::AccountReadResult;
     use ash_app_server_protocol::protocol::account::AccountUpdated;
     let account = AccountReadResult {
-        revision: 3,
+        revision: 3.to_string(),
         accounts: vec![],
     };
     assert_eq!(

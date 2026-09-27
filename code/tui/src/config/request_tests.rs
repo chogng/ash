@@ -73,7 +73,7 @@ fn advisor_model_selection_updates_global_config() {
         ]
     );
     assert_eq!(requests[2]["params"]["expectedRevision"], 4);
-    assert_eq!(requests[0]["params"]["view"], "builtIn");
+    assert_eq!(requests[0]["params"], serde_json::json!({}));
     assert_eq!(
         requests[2]["params"]["advisor"]["model"],
         serde_json::json!({"provider":"openai","model":"gpt-ash"})
@@ -122,10 +122,7 @@ fn advisor_off_command_preserves_the_selected_model() {
 #[test]
 fn advisor_model_command_selects_a_configured_provider_model() {
     use ash_app_server_protocol::protocol::model::{ModelCatalogEntry, ModelListResult};
-    use ash_protocol::{
-        AdvisorConfig, ModelAccess, ModelCapabilities, ModelId, ModelOutputTransport, ModelRef,
-        ProviderId,
-    };
+    use ash_protocol::{AdvisorConfig, ModelCapabilities, ModelId, ModelRef, ProviderId};
 
     let model = ModelRef::new(
         ProviderId::new("openai").unwrap(),
@@ -136,6 +133,7 @@ fn advisor_model_command_selects_a_configured_provider_model() {
     current.providers.insert(
         "openai".into(),
         ash_app_server_protocol::protocol::config::ProviderConfigDto {
+            connection: "openai".into(),
             provider: "openai".into(),
             custom: None,
             base_url: None,
@@ -143,12 +141,21 @@ fn advisor_model_command_selects_a_configured_provider_model() {
             model_context: Default::default(),
         },
     );
+    current.connections = current
+        .providers
+        .values()
+        .map(|config| (config.connection.clone(), config.clone()))
+        .collect();
+    current.active_connections = current
+        .providers
+        .values()
+        .map(|config| (config.provider.clone(), config.connection.clone()))
+        .collect();
     let catalog = ModelListResult {
         models: vec![ModelCatalogEntry {
             model: model.clone(),
             display_name: "Reviewer".into(),
-            access: ModelAccess::Unknown,
-            output_transport: ModelOutputTransport::Unary,
+
             context_window: None,
             auto_compact_token_limit: None,
             available_context_window: None,
@@ -255,6 +262,7 @@ fn probing_unsaved_values_does_not_write_configuration_or_credentials() {
                 id: crate::client::new_command_id("probe"),
                 revision: 7,
                 config: ash_app_server_protocol::protocol::config::ProviderConfigDto {
+                    connection: "custom-test".into(),
                     provider: "custom-test".into(),
                     custom: None,
                     base_url: Some("https://example.test/v1".into()),
@@ -321,6 +329,7 @@ fn probe_transport_failure_returns_without_writing_or_refreshing() {
             id: crate::client::new_command_id("test"),
             revision: 0,
             config: ash_app_server_protocol::protocol::config::ProviderConfigDto {
+                connection: "custom-test".into(),
                 provider: "custom-test".into(),
                 custom: None,
                 base_url: Some("https://example.test/v1".into()),
@@ -338,6 +347,7 @@ fn probe_transport_failure_returns_without_writing_or_refreshing() {
 #[test]
 fn custom_provider_saves_settings_and_key_separately_then_refreshes() {
     let config = ash_app_server_protocol::protocol::config::ProviderConfigDto {
+        connection: "custom-one".into(),
         provider: "custom-one".into(),
         custom: Some(
             ash_app_server_protocol::protocol::config::CustomProviderConfigDto {
@@ -358,6 +368,16 @@ fn custom_provider_saves_settings_and_key_separately_then_refreshes() {
     refreshed
         .providers
         .insert(config.provider.clone(), config.clone());
+    refreshed.connections = refreshed
+        .providers
+        .values()
+        .map(|config| (config.connection.clone(), config.clone()))
+        .collect();
+    refreshed.active_connections = refreshed
+        .providers
+        .values()
+        .map(|config| (config.provider.clone(), config.connection.clone()))
+        .collect();
     let requests = Arc::new(Mutex::new(Vec::new()));
     let mut client = AppServerClient::new(RecordingTransport {
         requests: requests.clone(),
@@ -369,7 +389,7 @@ fn custom_provider_saves_settings_and_key_separately_then_refreshes() {
             ),
             response(
                 3,
-                serde_json::json!({"provider":"custom-one","apiKeyConfigured":true}),
+                serde_json::json!({"connection":"custom-one","apiKeyConfigured":true}),
             ),
             response(4, serde_json::to_value(refreshed).unwrap()),
             response(5, serde_json::json!({"providers":[]})),
@@ -401,7 +421,7 @@ fn custom_provider_saves_settings_and_key_separately_then_refreshes() {
     );
     assert!(!requests[1].to_string().contains("test-key"));
     assert_eq!(requests[2]["method"], "provider/apiKey/set");
-    assert_eq!(requests[2]["params"]["provider"], "custom-one");
+    assert_eq!(requests[2]["params"]["connection"], "custom-one");
 }
 
 #[test]
@@ -420,6 +440,7 @@ fn rejected_connection_update_does_not_send_key_or_report_saved() {
             id: crate::client::new_command_id("test"),
             revision: 7,
             config: ash_app_server_protocol::protocol::config::ProviderConfigDto {
+                connection: "openai-compatible".into(),
                 provider: "openai-compatible".into(),
                 custom: None,
                 base_url: Some("invalid".into()),
@@ -439,139 +460,41 @@ fn rejected_connection_update_does_not_send_key_or_report_saved() {
 }
 
 #[test]
-fn saving_key_configures_default_model_without_fetching_models() {
-    for existing in [false, true] {
-        let mut current = empty_config_snapshot();
-        let config = ash_app_server_protocol::protocol::config::ProviderConfigDto {
-            provider: "openai".into(),
-            custom: None,
-            base_url: Some("https://proxy.example.test/v1".into()),
-            max_output_tokens: None,
-            model_context: Default::default(),
-        };
-        if existing {
-            current.providers.insert("openai".into(), config.clone());
-        }
-        let requests = Arc::new(Mutex::new(Vec::new()));
-        let mut client = AppServerClient::new(RecordingTransport {
-            requests: requests.clone(),
-            responses: VecDeque::from([
-                response(1, serde_json::to_value(&current).unwrap()),
-                response(
-                    2,
-                    serde_json::json!({"revision":8,"generation":2,"disposition":"updated"}),
-                ),
-                response(
-                    3,
-                    serde_json::json!({"provider":"openai","apiKeyConfigured":true}),
-                ),
-                response(4, serde_json::to_value(&current).unwrap()),
-                response(5, serde_json::json!({"providers":[]})),
-            ]),
-        });
-        super::set_provider_api_key(
-            &mut client,
-            crate::config::ProviderApiKeyEdit::new("openai".into(), "test-key".into()),
-        )
-        .unwrap();
-        let requests = requests.lock().unwrap();
-        assert_eq!(
-            requests
-                .iter()
-                .map(|request| request["method"].as_str().unwrap())
-                .collect::<Vec<_>>(),
-            [
-                "config/read",
-                "provider/configure",
-                "provider/apiKey/set",
-                "config/read",
-                "provider/list"
-            ]
-        );
-        if existing {
-            assert_eq!(
-                requests[1]["params"]["config"],
-                serde_json::to_value(&config).unwrap()
-            );
-        }
-    }
-}
-
-#[test]
-fn coding_plan_sign_in_saves_each_key_on_its_own_endpoint() {
-    for (subscription, plan_id, api_id, api_endpoint, plan_endpoint) in [
+fn saving_keys_targets_the_exact_connection_and_leaves_activation_to_the_backend() {
+    for (id, subscription) in [
+        ("openai", None),
         (
-            crate::config::SubscriptionProvider::BigModel,
             "bigmodel-coding-plan",
-            "bigmodel",
-            "https://open.bigmodel.cn/api/paas/v4",
-            ash_model_provider_config::BIGMODEL_CODING_PLAN_BASE_URL,
+            Some(crate::config::SubscriptionProvider::BigModel),
         ),
         (
-            crate::config::SubscriptionProvider::Zai,
             "zai-coding-plan",
-            "zai",
-            "https://api.z.ai/api/paas/v4",
-            ash_model_provider_config::ZAI_CODING_PLAN_BASE_URL,
+            Some(crate::config::SubscriptionProvider::Zai),
         ),
     ] {
-        let mut current = empty_config_snapshot();
-        let mut plan = ash_app_server_protocol::protocol::config::ProviderConfigDto {
-            provider: plan_id.into(),
-            custom: None,
-            base_url: None,
-            max_output_tokens: None,
-            model_context: Default::default(),
-        };
-        current.providers.insert(plan_id.into(), plan.clone());
-        current.providers.insert(
-            api_id.into(),
-            ash_app_server_protocol::protocol::config::ProviderConfigDto {
-                provider: api_id.into(),
-                custom: None,
-                base_url: Some(api_endpoint.into()),
-                max_output_tokens: None,
-                model_context: Default::default(),
-            },
-        );
-        plan.base_url = Some(plan_endpoint.into());
-        let mut saved = current.clone();
-        saved.providers.insert(plan_id.into(), plan.clone());
         let requests = Arc::new(Mutex::new(Vec::new()));
         let mut client = AppServerClient::new(RecordingTransport {
             requests: requests.clone(),
             responses: VecDeque::from([
-                response(1, serde_json::to_value(&current).unwrap()),
                 response(
-                    2,
-                    serde_json::json!({"revision":2,"generation":1,"disposition":"updated"}),
+                    1,
+                    serde_json::json!({"connection":id,"apiKeyConfigured":true}),
                 ),
-                response(
-                    3,
-                    serde_json::json!({"provider":plan_id,"apiKeyConfigured":true}),
-                ),
-                response(4, serde_json::to_value(&saved).unwrap()),
-                response(
-                    5,
-                    serde_json::json!({"providers":[{"provider":plan_id,"displayName":plan_id,"apiKeyPolicy":"required","apiKeyConfigured":true}]}),
-                ),
+                response(2, serde_json::to_value(empty_config_snapshot()).unwrap()),
+                response(3, serde_json::json!({"providers":[]})),
             ]),
         });
-        let update = super::set_provider_api_key(
-            &mut client,
-            crate::config::ProviderApiKeyEdit::new(api_id.into(), "plan-key".into())
-                .for_coding_plan(subscription),
-        )
-        .unwrap();
+        let mut edit = crate::config::ProviderApiKeyEdit::new(id.into(), "fixture-key".into());
+        if let Some(subscription) = subscription {
+            edit = edit.for_coding_plan(subscription);
+        }
+        let update = super::set_provider_api_key(&mut client, edit).unwrap();
+        assert_eq!(update.provider, id);
         assert_eq!(
-            update.plan,
-            Some((
-                subscription,
-                crate::config::PlanStatus {
-                    key_saved: true,
-                    enabled: true,
-                }
-            ))
+            update
+                .plan
+                .map(|(provider, status)| (provider, status.enabled)),
+            subscription.map(|provider| (provider, true))
         );
         let requests = requests.lock().unwrap();
         assert_eq!(
@@ -579,21 +502,12 @@ fn coding_plan_sign_in_saves_each_key_on_its_own_endpoint() {
                 .iter()
                 .map(|request| request["method"].as_str().unwrap())
                 .collect::<Vec<_>>(),
-            [
-                "config/read",
-                "provider/configure",
-                "provider/apiKey/set",
-                "config/read",
-                "provider/list"
-            ]
+            ["provider/apiKey/set", "config/read", "provider/list"]
         );
         assert_eq!(
-            requests[1]["params"]["config"],
-            serde_json::to_value(plan).unwrap()
+            requests[0]["params"],
+            serde_json::json!({"connection":id,"apiKey":"fixture-key"})
         );
-        assert_eq!(requests[2]["params"]["provider"], plan_id);
-        assert_eq!(requests[2]["params"]["apiKey"], "plan-key");
-        assert_eq!(saved.providers.get(api_id), current.providers.get(api_id));
     }
 }
 
@@ -601,6 +515,7 @@ fn coding_plan_sign_in_saves_each_key_on_its_own_endpoint() {
 fn saving_unchanged_connection_with_no_model_still_configures_provider() {
     let mut current = empty_config_snapshot();
     let config = ash_app_server_protocol::protocol::config::ProviderConfigDto {
+        connection: "openai".into(),
         provider: "openai".into(),
         custom: None,
         base_url: None,
@@ -608,6 +523,16 @@ fn saving_unchanged_connection_with_no_model_still_configures_provider() {
         model_context: Default::default(),
     };
     current.providers.insert("openai".into(), config.clone());
+    current.connections = current
+        .providers
+        .values()
+        .map(|config| (config.connection.clone(), config.clone()))
+        .collect();
+    current.active_connections = current
+        .providers
+        .values()
+        .map(|config| (config.provider.clone(), config.connection.clone()))
+        .collect();
     let requests = Arc::new(Mutex::new(Vec::new()));
     let mut client = AppServerClient::new(RecordingTransport {
         requests: requests.clone(),
@@ -618,7 +543,12 @@ fn saving_unchanged_connection_with_no_model_still_configures_provider() {
                 serde_json::json!({"revision":8,"generation":2,"disposition":"updated"}),
             ),
             response(3, serde_json::to_value(&current).unwrap()),
-            response(4, serde_json::json!({"providers":[]})),
+            response(
+                4,
+                serde_json::json!({"revision":9,"generation":3,"disposition":"updated"}),
+            ),
+            response(5, serde_json::to_value(&current).unwrap()),
+            response(6, serde_json::json!({"providers":[]})),
         ]),
     });
     let result = super::execute(
@@ -643,6 +573,8 @@ fn saving_unchanged_connection_with_no_model_still_configures_provider() {
         [
             "config/read",
             "provider/configure",
+            "config/read",
+            "provider/activate",
             "config/read",
             "provider/list"
         ]

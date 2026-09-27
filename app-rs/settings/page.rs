@@ -5,6 +5,7 @@ use super::SETTINGS_CLOSE;
 use super::SETTINGS_NAV_APPEARANCE;
 use super::SETTINGS_NAV_GENERAL;
 use super::SETTINGS_NAV_KEYBINDINGS;
+use super::SETTINGS_NAV_MODELS;
 use super::SETTINGS_NAV_REMOTE;
 use super::SETTINGS_PAGE;
 use super::SETTINGS_SEARCH_INPUT;
@@ -53,7 +54,7 @@ pub struct SettingsPage {
     search_box: SearchBox,
     search_value: String,
     close_button: Button,
-    navigation: [Button; 4],
+    navigation: [Button; 5],
 }
 
 impl SettingsPage {
@@ -198,6 +199,7 @@ impl SettingsPage {
             (SETTINGS_NAV_APPEARANCE, "Appearance"),
             (SETTINGS_NAV_KEYBINDINGS, "Keybindings"),
             (SETTINGS_NAV_REMOTE, "Remote"),
+            (SETTINGS_NAV_MODELS, "Models"),
         ]
         .into_iter()
         .enumerate()

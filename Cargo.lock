@@ -470,6 +470,7 @@ dependencies = [
  "ash-core",
  "ash-core-api",
  "ash-instructions",
+ "ash-model-provider-config",
  "ash-models-manager",
  "ash-prompts",
  "ash-protocol",

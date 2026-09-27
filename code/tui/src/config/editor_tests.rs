@@ -22,12 +22,33 @@ fn providers() -> ProviderListResult {
     ProviderListResult {
         providers: vec![
             ProviderCatalogEntryDto {
+                connection: "chatgpt-subscription".into(),
+                provider: "openai".into(),
+                display_name: "ChatGPT".into(),
+                access: ash_protocol::ModelAccess::Subscription,
+                active: false,
+                configured: false,
+                ready: false,
+                api_key_policy: ProviderApiKeyPolicyDto::Unsupported,
+                api_key_configured: false,
+            },
+            ProviderCatalogEntryDto {
+                connection: "openai".into(),
+                access: ash_protocol::ModelAccess::ApiKey,
+                active: false,
+                configured: false,
+                ready: false,
                 provider: "openai".into(),
                 display_name: "OpenAI".into(),
                 api_key_policy: ProviderApiKeyPolicyDto::Required,
                 api_key_configured: false,
             },
             ProviderCatalogEntryDto {
+                connection: "ollama".into(),
+                access: ash_protocol::ModelAccess::ApiKey,
+                active: false,
+                configured: false,
+                ready: false,
                 provider: "ollama".into(),
                 display_name: "Ollama".into(),
                 api_key_policy: ProviderApiKeyPolicyDto::Unsupported,
@@ -40,43 +61,102 @@ fn providers() -> ProviderListResult {
 #[test]
 fn provider_rows_use_section_names_and_distinct_connection_actions() {
     let mut catalog = providers();
+    catalog.providers.extend([
+        ProviderCatalogEntryDto {
+            connection: "kimi-subscription".into(),
+            provider: "kimi".into(),
+            display_name: "Kimi".into(),
+            access: ash_protocol::ModelAccess::Subscription,
+            active: false,
+            configured: false,
+            ready: false,
+            api_key_policy: ProviderApiKeyPolicyDto::Unsupported,
+            api_key_configured: false,
+        },
+        ProviderCatalogEntryDto {
+            connection: "kimi".into(),
+            access: ash_protocol::ModelAccess::ApiKey,
+            active: false,
+            configured: false,
+            ready: false,
+            provider: "kimi".into(),
+            display_name: "Kimi".into(),
+            api_key_policy: ProviderApiKeyPolicyDto::Required,
+            api_key_configured: false,
+        },
+    ]);
     catalog.providers.push(ProviderCatalogEntryDto {
-        provider: "kimi".into(),
-        display_name: "Kimi".into(),
-        api_key_policy: ProviderApiKeyPolicyDto::Required,
-        api_key_configured: false,
-    });
-    catalog.providers.push(ProviderCatalogEntryDto {
+        connection: "zai".into(),
+        access: ash_protocol::ModelAccess::ApiKey,
+        active: false,
+        configured: false,
+        ready: false,
         provider: "zai".into(),
         display_name: "Z.ai API".into(),
         api_key_policy: ProviderApiKeyPolicyDto::Required,
         api_key_configured: false,
     });
     catalog.providers.push(ProviderCatalogEntryDto {
+        connection: "bigmodel".into(),
+        access: ash_protocol::ModelAccess::ApiKey,
+        active: false,
+        configured: false,
+        ready: false,
         provider: "bigmodel".into(),
         display_name: "BigModel API".into(),
         api_key_policy: ProviderApiKeyPolicyDto::Required,
         api_key_configured: false,
     });
     catalog.providers.push(ProviderCatalogEntryDto {
+        connection: "bigmodel-coding-plan".into(),
+        access: ash_protocol::ModelAccess::Subscription,
+        active: false,
+        configured: false,
+        ready: false,
         provider: "bigmodel-coding-plan".into(),
         display_name: "BigModel Coding Plan".into(),
         api_key_policy: ProviderApiKeyPolicyDto::Required,
         api_key_configured: false,
     });
     catalog.providers.push(ProviderCatalogEntryDto {
+        connection: "zai-coding-plan".into(),
+        access: ash_protocol::ModelAccess::Subscription,
+        active: false,
+        configured: false,
+        ready: false,
         provider: "zai-coding-plan".into(),
         display_name: "Z.ai Coding Plan".into(),
         api_key_policy: ProviderApiKeyPolicyDto::Required,
         api_key_configured: false,
     });
     catalog.providers.push(ProviderCatalogEntryDto {
+        connection: "xai-subscription".into(),
+        provider: "xai".into(),
+        display_name: "Super Grok".into(),
+        access: ash_protocol::ModelAccess::Subscription,
+        active: false,
+        configured: false,
+        ready: false,
+        api_key_policy: ProviderApiKeyPolicyDto::Unsupported,
+        api_key_configured: false,
+    });
+    catalog.providers.push(ProviderCatalogEntryDto {
+        connection: "xai".into(),
+        access: ash_protocol::ModelAccess::ApiKey,
+        active: false,
+        configured: false,
+        ready: false,
         provider: "xai".into(),
         display_name: "xAI".into(),
         api_key_policy: ProviderApiKeyPolicyDto::Required,
         api_key_configured: false,
     });
     catalog.providers.push(ProviderCatalogEntryDto {
+        connection: "google".into(),
+        access: ash_protocol::ModelAccess::ApiKey,
+        active: false,
+        configured: false,
+        ready: false,
         provider: "google".into(),
         display_name: "Google".into(),
         api_key_policy: ProviderApiKeyPolicyDto::Required,
@@ -117,10 +197,10 @@ fn provider_rows_use_section_names_and_distinct_connection_actions() {
     );
     let actions = &choices.actions;
     for (label, row_id) in [
-        ("Kimi", "kimi-subscription"),
-        ("BigModel", "bigmodel-coding-plan-subscription"),
-        ("Z.AI", "zai-coding-plan-subscription"),
-        ("Super Grok", "xai-subscription"),
+        ("Kimi", "kimi-subscription-details"),
+        ("BigModel", "bigmodel-coding-plan-details"),
+        ("Z.AI", "zai-coding-plan-details"),
+        ("Super Grok", "xai-subscription-details"),
     ] {
         let id = state
             .visible_items()
@@ -160,12 +240,44 @@ fn down_from_provider_tab_advances_from_the_highlighted_kimi_row() {
     let catalog = ProviderListResult {
         providers: vec![
             ProviderCatalogEntryDto {
+                connection: "kimi-subscription".into(),
+                provider: "kimi".into(),
+                display_name: "Kimi".into(),
+                access: ash_protocol::ModelAccess::Subscription,
+                active: false,
+                configured: false,
+                ready: false,
+                api_key_policy: ProviderApiKeyPolicyDto::Unsupported,
+                api_key_configured: false,
+            },
+            ProviderCatalogEntryDto {
+                connection: "kimi".into(),
+                access: ash_protocol::ModelAccess::ApiKey,
+                active: false,
+                configured: false,
+                ready: false,
                 provider: "kimi".into(),
                 display_name: "Kimi".into(),
                 api_key_policy: ProviderApiKeyPolicyDto::Required,
                 api_key_configured: false,
             },
             ProviderCatalogEntryDto {
+                connection: "chatgpt-subscription".into(),
+                provider: "openai".into(),
+                display_name: "ChatGPT".into(),
+                access: ash_protocol::ModelAccess::Subscription,
+                active: false,
+                configured: false,
+                ready: false,
+                api_key_policy: ProviderApiKeyPolicyDto::Unsupported,
+                api_key_configured: false,
+            },
+            ProviderCatalogEntryDto {
+                connection: "openai".into(),
+                access: ash_protocol::ModelAccess::ApiKey,
+                active: false,
+                configured: false,
+                ready: false,
                 provider: "openai".into(),
                 display_name: "OpenAI".into(),
                 api_key_policy: ProviderApiKeyPolicyDto::Required,
@@ -246,10 +358,7 @@ fn advisor_entry_belongs_to_general_not_providers() {
 #[test]
 fn configured_advisor_model_is_selected_when_opening_config() {
     use ash_app_server_protocol::protocol::model::{ModelCatalogEntry, ModelListResult};
-    use ash_protocol::{
-        AdvisorConfig, ModelAccess, ModelCapabilities, ModelId, ModelOutputTransport, ModelRef,
-        ProviderId,
-    };
+    use ash_protocol::{AdvisorConfig, ModelCapabilities, ModelId, ModelRef, ProviderId};
 
     let model = ModelRef::new(
         ProviderId::new("openai").unwrap(),
@@ -261,8 +370,7 @@ fn configured_advisor_model_is_selected_when_opening_config() {
         models: vec![ModelCatalogEntry {
             model,
             display_name: "GPT Ash".into(),
-            access: ModelAccess::Unknown,
-            output_transport: ModelOutputTransport::Unary,
+
             context_window: None,
             auto_compact_token_limit: None,
             available_context_window: None,
@@ -282,6 +390,7 @@ fn configured_advisor_model_is_selected_when_opening_config() {
     config.providers.insert(
         "openai".into(),
         ash_app_server_protocol::protocol::config::ProviderConfigDto {
+            connection: "openai".into(),
             provider: "openai".into(),
             custom: None,
             base_url: None,
@@ -289,6 +398,16 @@ fn configured_advisor_model_is_selected_when_opening_config() {
             model_context: Default::default(),
         },
     );
+    config.connections = config
+        .providers
+        .values()
+        .map(|config| (config.connection.clone(), config.clone()))
+        .collect();
+    config.active_connections = config
+        .providers
+        .values()
+        .map(|config| (config.provider.clone(), config.connection.clone()))
+        .collect();
     let choices = advisor_choices(&config, &catalog, Language::English);
     let state = ListSelectionState::new(choices.models.model);
     assert_eq!(state.selected_item().unwrap().label(), "GPT Ash");
@@ -560,6 +679,22 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
 fn provider_sections_keep_subscription_navigation_and_search_actionable() {
     let mut catalog = providers();
     catalog.providers.push(ProviderCatalogEntryDto {
+        connection: "xai-subscription".into(),
+        provider: "xai".into(),
+        display_name: "Super Grok".into(),
+        access: ash_protocol::ModelAccess::Subscription,
+        active: false,
+        configured: false,
+        ready: false,
+        api_key_policy: ProviderApiKeyPolicyDto::Unsupported,
+        api_key_configured: false,
+    });
+    catalog.providers.push(ProviderCatalogEntryDto {
+        connection: "xai".into(),
+        access: ash_protocol::ModelAccess::ApiKey,
+        active: false,
+        configured: false,
+        ready: false,
         provider: "xai".into(),
         display_name: "xAI".into(),
         api_key_policy: ProviderApiKeyPolicyDto::Unsupported,
@@ -579,7 +714,7 @@ fn provider_sections_keep_subscription_navigation_and_search_actionable() {
         .map(|item| item.label())
         .collect::<Vec<_>>();
     assert!(labels.contains(&"Super Grok"));
-    assert!(!labels.contains(&"xAI"));
+    assert!(labels.contains(&"xAI"));
     let xai_id = state
         .visible_items()
         .iter()
@@ -1008,6 +1143,16 @@ fn created_provider_autosaves_without_leaving_form_and_next_edit_uses_new_revisi
     config
         .providers
         .insert(request.config.provider.clone(), request.config.clone());
+    config.connections = config
+        .providers
+        .values()
+        .map(|config| (config.connection.clone(), config.clone()))
+        .collect();
+    config.active_connections = config
+        .providers
+        .values()
+        .map(|config| (config.provider.clone(), config.connection.clone()))
+        .collect();
     editor.complete_connection(crate::config::provider::Reply {
         id: request.id,
         result: Ok((
@@ -1044,6 +1189,7 @@ fn only_custom_provider_rows_offer_delete_and_order_does_not_follow_names() {
         config.providers.insert(
             id.into(),
             ProviderConfigDto {
+                connection: id.into(),
                 provider: id.into(),
                 custom: Some(CustomProviderConfigDto {
                     context_window: 272_000,
@@ -1057,6 +1203,16 @@ fn only_custom_provider_rows_offer_delete_and_order_does_not_follow_names() {
                 model_context: Default::default(),
             },
         );
+        config.connections = config
+            .providers
+            .values()
+            .map(|config| (config.connection.clone(), config.clone()))
+            .collect();
+        config.active_connections = config
+            .providers
+            .values()
+            .map(|config| (config.provider.clone(), config.connection.clone()))
+            .collect();
     }
     let mut editor = super::ConfigEditor::new(config_choices(
         &config,
@@ -1094,7 +1250,7 @@ fn tab_enters_the_first_item_of_each_config_page() {
         StatusLineSettings::default(),
     ));
     for (code, expected_tab, expected_item) in [
-        (KeyCode::Tab, "Providers", "openai-subscription"),
+        (KeyCode::Tab, "Providers", "chatgpt-subscription-details"),
         (KeyCode::Tab, "Issues", "issue-refresh"),
         (KeyCode::Tab, "General", "terminal-vim-mode"),
         (KeyCode::BackTab, "Issues", "issue-refresh"),
