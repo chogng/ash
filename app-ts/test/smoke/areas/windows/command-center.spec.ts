@@ -311,6 +311,34 @@ test('Accounts and Manage menus open beside the activity bar and below the title
 	expect(restoredMenu!.x + restoredMenu!.width).toBeLessThanOrEqual(restoredButton!.x + 1);
 });
 
+test('macOS right activity bar menus open beside their buttons', async ({ target, workbench }) => {
+	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code' || process.platform !== 'darwin', 'This scenario requires macOS Electron Code');
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+Shift+P');
+	await page.getByPlaceholder('Type the name of a command to run').fill('Ash Settings');
+	await page.keyboard.press('Enter');
+	await page.locator('[data-settings-group-id="workbench"]').click();
+	await page.locator('[data-settings-category-id="layout"]').click();
+	await page.locator('[data-configuration-key="workbench.sideBar.location"]').getByRole('combobox').click();
+	await page.getByRole('option', { name: 'Right' }).click();
+	await page.getByRole('button', { name: 'Close Ash Settings' }).click();
+
+	const activitybar = page.locator('[data-part="activitybar"]');
+	for (const name of ['Accounts', 'Manage']) {
+		const button = activitybar.getByRole('button', { name });
+		await button.click();
+		const menu = page.getByRole('menu').last();
+		await expect(menu).toBeVisible();
+		const buttonBounds = await button.boundingBox();
+		const menuBounds = await menu.boundingBox();
+		expect(buttonBounds).not.toBeNull();
+		expect(menuBounds).not.toBeNull();
+		expect(menuBounds!.x + menuBounds!.width).toBeLessThanOrEqual(buttonBounds!.x + 1);
+		await page.keyboard.press('Escape');
+		await expect(button).toHaveAttribute('aria-expanded', 'false');
+	}
+});
+
 test('macOS context menu converts pointer and activity bar anchors at the current window zoom', async ({ target, application, workbench }) => {
 	test.skip(target.kind !== 'electron' || process.platform !== 'darwin', 'This scenario requires macOS Electron');
 	const electron = application as ElectronApplication;
@@ -359,6 +387,42 @@ test('macOS context menu converts pointer and activity bar anchors at the curren
 		expect(elementMenu).toEqual({ x: Math.floor(anchor!.x * elementMenu!.zoom), y: Math.floor(anchor!.y * elementMenu!.zoom) + 4, positioningItem: undefined, zoom: elementMenu!.zoom });
 	} finally {
 		await electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuPosition?: { restore: () => void } }).ashMenuPosition?.restore());
+	}
+});
+
+test('a late macOS menu close callback leaves the next menu open', async ({ target, application, workbench }) => {
+	test.skip(target.kind !== 'electron' || process.platform !== 'darwin', 'This scenario requires macOS Electron');
+	const electron = application as ElectronApplication;
+	await electron.evaluate(({ Menu }) => {
+		const originalPopup = Menu.prototype.popup;
+		const state = globalThis as typeof globalThis & { ashMenuCallbacks?: { callbacks: (() => void)[]; restore: () => void } };
+		state.ashMenuCallbacks = {
+			callbacks: [],
+			restore: () => { Menu.prototype.popup = originalPopup; },
+		};
+		Menu.prototype.popup = function(options) {
+			if (!options) throw new Error('Expected context menu popup options');
+			state.ashMenuCallbacks!.callbacks.push(() => options.callback?.());
+		};
+	});
+	try {
+		const activitybar = workbench.page.locator('[data-part="activitybar"]');
+		const accounts = activitybar.getByRole('button', { name: 'Accounts' });
+		const manage = activitybar.getByRole('button', { name: 'Manage' });
+		await accounts.click();
+		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuCallbacks?: { callbacks: (() => void)[] } }).ashMenuCallbacks?.callbacks.length)).toBe(1);
+		await electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuCallbacks: { callbacks: (() => void)[] } }).ashMenuCallbacks.callbacks[0]!());
+		await expect(accounts).toHaveAttribute('aria-expanded', 'false');
+		await manage.click();
+		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuCallbacks?: { callbacks: (() => void)[] } }).ashMenuCallbacks?.callbacks.length)).toBe(2);
+		await expect(manage).toHaveAttribute('aria-expanded', 'true');
+		await electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuCallbacks: { callbacks: (() => void)[] } }).ashMenuCallbacks.callbacks[0]!());
+		await workbench.page.waitForTimeout(100);
+		await expect(manage).toHaveAttribute('aria-expanded', 'true');
+		await electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuCallbacks: { callbacks: (() => void)[] } }).ashMenuCallbacks.callbacks[1]!());
+		await expect(manage).toHaveAttribute('aria-expanded', 'false');
+	} finally {
+		await electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuCallbacks?: { callbacks: (() => void)[]; restore: () => void } }).ashMenuCallbacks?.restore());
 	}
 });
 

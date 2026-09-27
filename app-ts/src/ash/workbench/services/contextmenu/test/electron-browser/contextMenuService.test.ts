@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { Event } from "../../../../../base/common/event.js";
-import { AnchorAlignment, AnchorAxisAlignment } from "../../../../../base/browser/ui/contextview/contextview.js";
-import type { INativeContextMenuApi, INativeContextMenuRequest } from "../../../../../base/parts/contextmenu/common/contextmenu.js";
+import { AnchorAlignment, AnchorAxisAlignment, ContextViewHideReason, type ContextViewOptions } from "../../../../../base/browser/ui/contextview/contextview.js";
+import type { INativeContextMenuApi, INativeContextMenuRequest, INativeContextMenuResult } from "../../../../../base/parts/contextmenu/common/contextmenu.js";
 import type { IMenuService } from "../../../../../platform/actions/common/actions.js";
 import { ContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
+import type { IContextViewService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { IKeybindingService } from "../../../../../platform/keybinding/common/keybinding.js";
 import type { INotificationService } from "../../../../../platform/notification/common/notification.js";
 
@@ -128,4 +129,71 @@ test("Electron context menus position element and point anchors in CSS pixels", 
 	]);
 	environment.window.close();
 	Reflect.deleteProperty(globalThis, "window");
+});
+
+test("switching from a macOS menu to a browser menu keeps the menu visibility event active", async () => {
+	if (process.platform !== "darwin") return;
+	const environment = new JSDOM("<!doctype html><body><button></button></body>");
+	Object.defineProperty(globalThis, "window", { configurable: true, value: environment.window });
+	Object.defineProperty(globalThis, "Node", { configurable: true, value: environment.window.Node });
+	const { createElectronWorkbenchContextMenuService } = await import("../../electron-browser/contextMenuService.js");
+	let finishPopup!: (result: INativeContextMenuResult) => void;
+	const api: INativeContextMenuApi = {
+		popup: () => new Promise(resolve => { finishPopup = resolve; }),
+		async close() {},
+	};
+	let activeView: ContextViewOptions | undefined;
+	const contextView = {
+		container: environment.window.document.body,
+		show(options: ContextViewOptions) {
+			activeView = options;
+			this.container.append(options.content);
+			return true;
+		},
+		hide() {
+			const current = activeView;
+			activeView = undefined;
+			current?.onHide?.(ContextViewHideReason.Programmatic);
+			current?.content.remove();
+		},
+		layout() {},
+	} as IContextViewService;
+	using contextKeyService = new ContextKeyService();
+	const keybindingService = {
+		inChordMode: false,
+		onDidUpdateKeybindings: Event.None,
+		resolveKeybinding() { throw new Error("Not used"); },
+		resolveUserBinding() { return undefined; },
+		lookupKeybindings() { return []; },
+		lookupKeybinding() { return undefined; },
+	} satisfies IKeybindingService;
+	using service = createElectronWorkbenchContextMenuService({
+		menuService: {} as IMenuService,
+		contextKeyService,
+		keybindingService,
+		contextViewService: contextView,
+		notificationService: { error: (error: unknown) => { throw error; } } as unknown as INotificationService,
+	}, api);
+	const events: string[] = [];
+	using shown = service.onDidShowContextMenu(() => events.push("show"));
+	using hidden = service.onDidHideContextMenu(() => events.push("hide"));
+	const action = { id: "open", label: "Open", tooltip: "Open", enabled: true, run() {} };
+	service.showContextMenu({
+		getAnchor: () => ({ x: 10, y: 20, targetWindow: environment.window as unknown as Window }),
+		getActions: () => [action],
+	});
+	service.showContextMenu({
+		getAnchor: () => environment.window.document.querySelector("button")!,
+		getActions: () => [action],
+		anchorAlignment: AnchorAlignment.Left,
+		anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
+	});
+	finishPopup({});
+	await new Promise<void>(resolve => setTimeout(resolve, 0));
+	assert.deepEqual(events, ["show"]);
+	service.hideContextMenu();
+	assert.deepEqual(events, ["show", "hide"]);
+	environment.window.close();
+	Reflect.deleteProperty(globalThis, "window");
+	Reflect.deleteProperty(globalThis, "Node");
 });

@@ -19,17 +19,13 @@ export class ElectronContextMenu extends Disposable {
 	constructor(window: BrowserWindow) {
 		super();
 		this.window = window;
-		this._register(toDisposable(() => {
-			this.close();
-			this.finish({});
-		}));
+		this._register(toDisposable(() => this.close()));
 	}
 
 	popup(
 		request: INativeContextMenuRequest,
 	): Promise<INativeContextMenuResult> {
 		this.close();
-		this.finish({});
 		if (this.window.isDestroyed()) return Promise.resolve({});
 
 		let selectedId: string | undefined;
@@ -52,12 +48,12 @@ export class ElectronContextMenu extends Disposable {
 				x: Math.floor(request.x * zoom),
 				y: Math.floor(request.y * zoom) + (request.elementAnchor ? 4 : 0),
 				positioningItem: request.positioningItem,
-				callback: () => this.finish(
+				callback: () => this.finish(menu,
 					selectedId ? { selectedId } : {},
 				),
 			});
 		} catch (error) {
-			this.finish({});
+			this.finish(menu, {});
 			throw error;
 		}
 		return result;
@@ -66,12 +62,12 @@ export class ElectronContextMenu extends Disposable {
 	close(): void {
 		const menu = this.activeMenu;
 		if (!menu) return;
-		this.activeMenu = undefined;
+		this.finish(menu, {});
 		if (!this.window.isDestroyed()) menu.closePopup(this.window);
-		this.finish({});
 	}
 
-	private finish(result: INativeContextMenuResult): void {
+	private finish(menu: Menu, result: INativeContextMenuResult): void {
+		if (this.activeMenu !== menu) return;
 		const settle = this.settle;
 		if (!settle) return;
 		this.settle = undefined;

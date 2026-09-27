@@ -9,7 +9,7 @@ import {
 } from "../../../base/browser/ui/contextview/contextview.js";
 import { Menu } from "../../../base/browser/ui/menu/menu.js";
 import { ActionRunner } from "../../../base/common/actions.js";
-import { Disposable, DisposableStore, MutableDisposable } from "../../../base/common/lifecycle.js";
+import { Disposable, DisposableMap, DisposableStore, MutableDisposable } from "../../../base/common/lifecycle.js";
 import type { IRectangle } from "../../../base/common/layout.js";
 import type { IKeybindingService } from "../../keybinding/common/keybinding.js";
 import type { INotificationService } from "../../notification/common/notification.js";
@@ -18,7 +18,7 @@ import type { IContextViewService } from "./contextView.js";
 /** Owns browser menu rendering and action lifecycle for one context-view host. */
 export class ContextMenuHandler extends Disposable {
 	private readonly activeMenu = new MutableDisposable<DisposableStore>();
-	private didSelect = false;
+	private readonly executions = this._register(new DisposableMap<DisposableStore, DisposableStore>());
 
 	constructor(
 		private readonly contextViewService: IContextViewService,
@@ -42,20 +42,19 @@ export class ContextMenuHandler extends Disposable {
 
 		const disposables = new DisposableStore();
 		this.activeMenu.value = disposables;
-		this.didSelect = false;
-		const executionDisposables = this._register(new DisposableStore());
+		const executionDisposables = new DisposableStore();
+		this.executions.set(executionDisposables, executionDisposables);
 		const actionRunner = delegate.actionRunner ?? executionDisposables.add(new ActionRunner());
 		let actionStarted = false;
 		executionDisposables.add(actionRunner.onWillRun(() => {
 			actionStarted = true;
-			this.didSelect = true;
 			this.contextViewService.hide();
 		}));
 		executionDisposables.add(actionRunner.onDidRun((event) => {
 			if (event.error !== undefined) {
 				this.notificationService.error(toErrorMessage(event.error));
 			}
-			executionDisposables.dispose();
+			this.executions.deleteAndDispose(executionDisposables);
 		}));
 
 		const menu = disposables.add(new Menu(this.contextViewService.container, {
@@ -85,15 +84,14 @@ export class ContextMenuHandler extends Disposable {
 			isTargetWithin: (target) => menu.contains(target),
 			onHide: () => {
 				didHide = true;
-				if (!actionStarted) executionDisposables.dispose();
-				const didCancel = !this.didSelect;
+				if (!actionStarted) this.executions.deleteAndDispose(executionDisposables);
 				this.activeMenu.clear();
-				this.didSelect = false;
-				delegate.onHide?.(didCancel);
+				delegate.onHide?.(!actionStarted);
 			},
 		});
 		if (!shown) {
 			this.activeMenu.clear();
+			this.executions.deleteAndDispose(executionDisposables);
 			if (!didHide) delegate.onHide?.(true);
 			return false;
 		}
