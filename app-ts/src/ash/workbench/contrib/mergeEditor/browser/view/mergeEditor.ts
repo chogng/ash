@@ -63,7 +63,7 @@ export class MergeEditor extends Disposable {
 	private columnLayout = false;
 	private activeHunk = 0;
 	private syncingScroll = false;
-	private pendingChoiceFocus: { readonly index: number; readonly choice: MergeEditorChoice } | undefined;
+	private pendingActionFocus: { readonly index: number; readonly action: MergeEditorChoice | 'markHandled' | 'markUnhandled' } | undefined;
 
 	constructor(
 		public readonly resultEditor: MergeResultEditor,
@@ -209,7 +209,7 @@ export class MergeEditor extends Disposable {
 		this.hunkActionButtons.length = 0;
 		this.hunksDomNode?.replaceChildren();
 		this.activeHunk = 0;
-		this.pendingChoiceFocus = undefined;
+		this.pendingActionFocus = undefined;
 		this.updateNavigation();
 	}
 
@@ -300,14 +300,14 @@ export class MergeEditor extends Disposable {
 			select.domNode.classList.add('ash-merge-hunk-select');
 			const state = h(this.domNode.ownerDocument, 'span');
 			state.className = 'ash-merge-hunk-state';
-			state.textContent = resolutionLabel(hunk.resolution);
+			state.textContent = hunk.unresolved ? resolutionLabel('unresolved') : resolutionLabel(hunk.resolution);
 			row.append(state);
 			this.hunksDomNode.append(row);
 		}
 		const focusButton = this.renderZones();
 		this.updateNavigation();
 		focusButton?.focus();
-		this.pendingChoiceFocus = undefined;
+		this.pendingActionFocus = undefined;
 	}
 
 	private renderZones(): Button | undefined {
@@ -374,7 +374,7 @@ export class MergeEditor extends Disposable {
 		const addAction = (choice: MergeEditorChoice, label: string): void => {
 			const button = this.zoneButtons.add(new Button(node, { label, onClick: () => this.acceptHunk(hunk.index, choice) }));
 			this.hunkActionButtons.push(button);
-			if (this.pendingChoiceFocus?.index === hunk.index && this.pendingChoiceFocus.choice === choice) focusButton = button;
+			if (this.pendingActionFocus?.index === hunk.index && this.pendingActionFocus.action === choice) focusButton = button;
 		};
 		switch (side) {
 			case 'base': addAction('base', localize({ bundle: 'ash', key: 'git.useBase' }, 'Use Base')); break;
@@ -383,13 +383,25 @@ export class MergeEditor extends Disposable {
 			case 'result': {
 				const state = h(this.domNode.ownerDocument, 'span');
 				state.className = 'ash-merge-inline-state';
-				state.textContent = resolutionLabel(hunk.resolution);
+				state.textContent = hunk.unresolved ? resolutionLabel('unresolved') : resolutionLabel(hunk.resolution);
 				node.append(state);
 				if (!this.showBase) addAction('base', localize({ bundle: 'ash', key: 'git.useBase' }, 'Use Base'));
 				addAction('both', this.model!.canSmartCombine(hunk.index)
 					? localize({ bundle: 'ash', key: 'git.acceptCombination' }, 'Accept Combination')
 					: localize({ bundle: 'ash', key: 'git.acceptBoth' }, 'Accept Both'));
 				if (!this.model!.canSmartCombine(hunk.index)) addAction('bothReversed', localize({ bundle: 'ash', key: 'git.acceptIncomingFirst' }, 'Accept Both (Incoming First)'));
+				if (hunk.resolution !== 'unresolved') {
+					const markHandled = !hunk.handled;
+					const action = markHandled ? 'markHandled' : 'markUnhandled';
+					const button = this.zoneButtons.add(new Button(node, {
+						label: markHandled
+							? localize({ bundle: 'ash', key: 'git.markHandled' }, 'Mark Handled')
+							: localize({ bundle: 'ash', key: 'git.markUnhandled' }, 'Mark Unhandled'),
+						onClick: () => this.setHandled(hunk.index, markHandled),
+					}));
+					this.hunkActionButtons.push(button);
+					if (this.pendingActionFocus?.index === hunk.index && this.pendingActionFocus.action === action) focusButton = button;
+				}
 				break;
 			}
 		}
@@ -425,25 +437,24 @@ export class MergeEditor extends Disposable {
 
 	private acceptHunk(index: number, choice: MergeEditorChoice): void {
 		const model = this.model;
-		const control = this.resultEditor.getControl();
-		if (!model?.isReady || !control) return;
-		const edit = model.editForHunk(index, choice);
-		this.pendingChoiceFocus = { index, choice };
-		control.pushUndoStop();
-		if (!control.executeEdits('mergeEditor', [edit])) this.pendingChoiceFocus = undefined;
-		control.pushUndoStop();
+		if (!model?.isReady) return;
+		this.pendingActionFocus = { index, action: choice };
+		model.acceptHunk(index, choice);
+		this.activeHunk = index;
+	}
+
+	private setHandled(index: number, handled: boolean): void {
+		const model = this.model;
+		if (!model?.isReady) return;
+		this.pendingActionFocus = { index, action: handled ? 'markUnhandled' : 'markHandled' };
+		model.setHandled(index, handled);
 		this.activeHunk = index;
 	}
 
 	private acceptRemaining(choice: 'current' | 'incoming'): void {
 		const model = this.model;
-		const control = this.resultEditor.getControl();
-		if (!model?.isReady || !control) return;
-		const edits = model.hunks.filter(hunk => hunk.unresolved).map(hunk => model.editForHunk(hunk.index, choice));
-		if (edits.length === 0) return;
-		control.pushUndoStop();
-		control.executeEdits('mergeEditor', edits);
-		control.pushUndoStop();
+		if (!model?.isReady) return;
+		model.acceptRemaining(choice);
 	}
 
 	private renderDecorations(collections: Map<MergeEditorSide, IEditorDecorationsCollection>): void {
@@ -494,13 +505,20 @@ export class MergeEditor extends Disposable {
 		this.syncingScroll = true;
 		try {
 			const topLine = sourceEditor.getVisibleRanges()[0]?.startLineNumber ?? 1;
-			const relativeTop = sourceEditor.getScrollTop() - sourceEditor.getTopForLineNumber(topLine);
 			for (const side of ['base', 'current', 'incoming', 'result'] as const) {
 				if (side === 'base' && !this.showBase) continue;
 				if (side === source) continue;
 				const target = side === 'result' ? this.resultEditor.getControl() : this.sourceEditors.get(side);
 				if (!target) continue;
-				if (event.scrollTopChanged) target.setScrollTop(target.getTopForLineNumber(model.mapLine(source, side, topLine)) + relativeTop);
+				if (event.scrollTopChanged) {
+					const mapping = model.getLineMapping(source, side).project(topLine);
+					const sourceStart = this.topForBoundary(sourceEditor, model[source], mapping.inputRange.startLineNumber);
+					const sourceEnd = this.topForBoundary(sourceEditor, model[source], mapping.inputRange.endLineNumberExclusive);
+					const targetStart = this.topForBoundary(target, model[side], mapping.outputRange.startLineNumber);
+					const targetEnd = this.topForBoundary(target, model[side], mapping.outputRange.endLineNumberExclusive);
+					const fraction = Math.min(1, (sourceEditor.getScrollTop() - sourceStart) / (sourceEnd - sourceStart));
+					target.setScrollTop(targetStart + (targetEnd - targetStart) * fraction);
+				}
 				if (event.scrollLeftChanged) target.setScrollLeft(sourceEditor.getScrollLeft());
 			}
 		} finally {

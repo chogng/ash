@@ -65,7 +65,6 @@ export interface EditorPanePart extends IDisposable, ITextCodeEditorControl {
 	setScrollLeft(scrollLeft: number): void;
 	changeViewZones(callback: (accessor: IViewZoneChangeAccessor) => void): void;
 	executeEdits(source: string, edits: { range: Range; text: string }[]): boolean;
-	pushUndoStop(): boolean;
 	updateOptions(options: Readonly<IEditorOptions>): void;
 	revealRange?(range: Range): void;
 	saveViewState?(): ICodeEditorViewState | null;

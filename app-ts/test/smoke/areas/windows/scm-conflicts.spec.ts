@@ -95,6 +95,77 @@ test('SCM can choose the incoming-first combination and then use the common ance
 	await expect(page.locator('.ash-merge-progress')).toHaveText('1 of 1 conflicts resolved');
 });
 
+test('SCM keeps an explicitly handled base result when the merge editor reopens', async ({ target, testWorkspace, workbench }) => {
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires a desktop App Server workspace.');
+	await writeFile(testWorkspace.file, 'const value = 1;\n');
+	const page = workbench.page;
+	await page.getByRole('tab', { name: 'Git', exact: true }).click();
+	await page.getByRole('button', { name: 'Open merge conflict in main.ts' }).click();
+	const group = workbench.editors.groupAt(0);
+	await expect(group.content.locator('.ash-merge-hunk-state')).toHaveText('Unresolved');
+	await expect(group.content.locator('.ash-merge-progress')).toHaveText('0 of 1 conflicts resolved');
+	await page.getByRole('button', { name: 'Complete Merge' }).click();
+	await expect(group.content.locator('.ash-scm-merge-status')).toHaveText('Review or resolve every conflict before completing the merge.');
+	await page.getByRole('button', { name: 'Use Base' }).click();
+	await expect(group.content.locator('.ash-merge-progress')).toHaveText('1 of 1 conflicts resolved');
+	await page.keyboard.press('F1');
+	const picker = page.locator('.ash-quick-pick');
+	await picker.getByRole('combobox').fill('Close Editor');
+	await picker.locator('.ash-quick-pick-row-label', { hasText: /^Close Editor$/u }).click();
+	await page.getByRole('button', { name: 'Open merge conflict in main.ts' }).click();
+	await expect(group.content.locator('.ash-merge-hunk-state')).toHaveText('Base');
+	await expect(group.content.locator('.ash-merge-progress')).toHaveText('1 of 1 conflicts resolved');
+	await page.getByRole('button', { name: 'Complete Merge' }).click();
+	await expect(page.locator('.ash-scm-merge-status')).toHaveText('Merge completed and result staged.');
+	await expect.poll(async () => (await run('git', ['ls-files', '--unmerged', 'main.ts'], { cwd: testWorkspace.directory })).stdout).toBe('');
+});
+
+test('SCM requires review of an existing manual result and preserves the decision', async ({ target, testWorkspace, workbench }) => {
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires a desktop App Server workspace.');
+	await writeFile(testWorkspace.file, 'const reviewed = true;\n');
+	const page = workbench.page;
+	await page.getByRole('tab', { name: 'Git', exact: true }).click();
+	await page.getByRole('button', { name: 'Open merge conflict in main.ts' }).click();
+	const group = workbench.editors.groupAt(0);
+	await expect(group.content.locator('.ash-merge-hunk-state')).toHaveText('Unresolved');
+	await page.getByRole('button', { name: 'Mark Handled' }).click();
+	await expect(group.content.locator('.ash-merge-progress')).toHaveText('1 of 1 conflicts resolved');
+	await page.getByRole('button', { name: 'Mark Unhandled' }).click();
+	await expect(group.content.locator('.ash-merge-progress')).toHaveText('0 of 1 conflicts resolved');
+	await page.getByRole('button', { name: 'Mark Handled' }).click();
+	await page.keyboard.press('F1');
+	const picker = page.locator('.ash-quick-pick');
+	await picker.getByRole('combobox').fill('Close Editor');
+	await picker.locator('.ash-quick-pick-row-label', { hasText: /^Close Editor$/u }).click();
+	await page.getByRole('button', { name: 'Open merge conflict in main.ts' }).click();
+	await expect(group.content.locator('.ash-merge-hunk-state')).toHaveText('Manual resolution');
+	await page.getByRole('button', { name: 'Complete Merge' }).click();
+	await expect(page.locator('.ash-scm-merge-status')).toHaveText('Merge completed and result staged.');
+	await expect.poll(async () => (await run('git', ['ls-files', '--unmerged', 'main.ts'], { cwd: testWorkspace.directory })).stdout).toBe('');
+});
+
+test('SCM preserves a manually edited result after saving and reopening', async ({ target, testWorkspace, workbench }) => {
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires a desktop App Server workspace.');
+	const page = workbench.page;
+	await page.getByRole('tab', { name: 'Git', exact: true }).click();
+	await page.getByRole('button', { name: 'Open merge conflict in main.ts' }).click();
+	const group = workbench.editors.groupAt(0);
+	const input = group.content.locator('.ash-merge-result-editor .stanza-editor-input');
+	await input.focus();
+	await input.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+	await input.type('const reviewed = true;\n');
+	await expect(group.content.locator('.ash-merge-progress')).toHaveText('1 of 1 conflicts resolved');
+	await input.press(process.platform === 'darwin' ? 'Meta+S' : 'Control+S');
+	await expect.poll(() => readFile(testWorkspace.file, 'utf8')).toBe('const reviewed = true;\n');
+	await page.keyboard.press('F1');
+	const picker = page.locator('.ash-quick-pick');
+	await picker.getByRole('combobox').fill('Close Editor');
+	await picker.locator('.ash-quick-pick-row-label', { hasText: /^Close Editor$/u }).click();
+	await page.getByRole('button', { name: 'Open merge conflict in main.ts' }).click();
+	await expect(group.content.locator('.ash-merge-hunk-state')).toHaveText('Manual resolution');
+	await expect(group.content.locator('.ash-merge-progress')).toHaveText('1 of 1 conflicts resolved');
+});
+
 test('SCM merge editors synchronize scrolling across the three sources and result', async ({ target, testWorkspace, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires a desktop App Server workspace.');
 	const cwd = testWorkspace.directory;
@@ -108,15 +179,17 @@ test('SCM merge editors synchronize scrolling across the three sources and resul
 	await run('git', ['-c', 'user.name=Ash Test', '-c', 'user.email=ash-test@example.invalid', 'commit', '-m', 'Long base'], { cwd });
 	await run('git', ['branch', '-f', 'topic', 'HEAD'], { cwd });
 	await run('git', ['switch', 'topic'], { cwd });
-	lines[75] = 'const value = 2;';
-	lines[125] = 'const second = 2;';
-	await writeFile(testWorkspace.file, `${lines.join('\n')}\n`);
+	const incomingLines = [...lines];
+	incomingLines.splice(75, 1, 'const value = 2;', 'const incomingExtra = 20;', 'const incomingTail = 21;');
+	incomingLines[127] = 'const second = 2;';
+	await writeFile(testWorkspace.file, `${incomingLines.join('\n')}\n`);
 	await run('git', ['add', 'main.ts'], { cwd });
 	await run('git', ['-c', 'user.name=Ash Test', '-c', 'user.email=ash-test@example.invalid', 'commit', '-m', 'Long topic'], { cwd });
 	await run('git', ['switch', 'main'], { cwd });
-	lines[75] = 'const value = 3;';
-	lines[125] = 'const second = 3;';
-	await writeFile(testWorkspace.file, `${lines.join('\n')}\n`);
+	const currentLines = [...lines];
+	currentLines.splice(75, 1, 'const value = 3;', 'const currentExtra = 30;');
+	currentLines[126] = 'const second = 3;';
+	await writeFile(testWorkspace.file, `${currentLines.join('\n')}\n`);
 	await run('git', ['add', 'main.ts'], { cwd });
 	await run('git', ['-c', 'user.name=Ash Test', '-c', 'user.email=ash-test@example.invalid', 'commit', '-m', 'Long main'], { cwd });
 	await run('git', ['merge', 'topic'], { cwd }).then(() => { throw new Error('Expected text conflict'); }, () => undefined);
@@ -144,6 +217,22 @@ test('SCM merge editors synchronize scrolling across the three sources and resul
 		return node.getBoundingClientRect().top - editor.getBoundingClientRect().top;
 	})));
 	expect(Math.max(...alignedTops) - Math.min(...alignedTops)).toBeLessThan(2);
+	const actionScrollTop = await editors[0].evaluate(node => node.scrollTop);
+	await editors[0].evaluate(node => {
+		const line = [...node.querySelectorAll('.view-line')].find(row => row.textContent?.includes('const currentExtra = 30;'));
+		if (!line) throw new Error('Current conflict line is not rendered');
+		node.scrollTop += line.getBoundingClientRect().top - node.getBoundingClientRect().top + 8;
+		node.dispatchEvent(new Event('scroll'));
+	});
+	await expect.poll(async () => {
+		const scrollTops = await Promise.all([...editors, baseEditor].map(editor => editor.evaluate(node => node.scrollTop)));
+		return Math.max(...scrollTops) - Math.min(...scrollTops);
+	}).toBeLessThan(2);
+	await editors[0].evaluate((node, scrollTop) => {
+		node.scrollTop = scrollTop;
+		node.dispatchEvent(new Event('scroll'));
+	}, actionScrollTop);
+	await expect(group.content.locator('.ash-merge-input-current .ash-merge-inline-actions[data-visible-view-zone]')).toBeVisible();
 	await group.content.locator('.ash-merge-input-current .ash-merge-inline-actions[data-visible-view-zone]').getByRole('button', { name: 'Accept Current' }).click();
 	await expect(group.content.locator('.ash-merge-progress')).toHaveText('1 of 2 conflicts resolved');
 	await page.getByRole('button', { name: 'Next Unresolved' }).click();

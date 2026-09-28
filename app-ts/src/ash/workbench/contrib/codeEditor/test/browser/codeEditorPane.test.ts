@@ -716,7 +716,6 @@ function createInertEditorPart(): EditorPanePart {
 		setScrollLeft: () => {},
 		changeViewZones: () => {},
 		executeEdits: () => false,
-		pushUndoStop: () => false,
 		getSelections: () => null,
 		setSelection: () => {},
 		updateOptions: () => {},

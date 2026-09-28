@@ -4,10 +4,12 @@ import { Disposable, toDisposable, type IDisposable } from '../../../../../base/
 import { Position } from '../../../../../editor/common/core/position.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import { LineRange } from '../../../../../editor/common/core/ranges/lineRange.js';
+import { TextModelChangeReason } from '../../../../../editor/common/core/textChange.js';
 import type { DetailedLineRangeMapping } from '../../../../../editor/common/diff/rangeMapping.js';
 import type { IDocumentDiff, IDocumentDiffProvider } from '../../../../../editor/common/diff/documentDiffProvider.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { IDiffService } from '../../../../services/diff/common/diffService.js';
+import { DocumentLineRangeMap, LineRangeMapping } from './mapping.js';
 
 export type MergeEditorSide = 'base' | 'current' | 'incoming' | 'result';
 export type MergeEditorChoice = 'base' | 'current' | 'incoming' | 'both' | 'bothReversed';
@@ -20,6 +22,7 @@ export interface MergeEditorHunk {
 	readonly incoming: LineRange;
 	readonly result: LineRange;
 	readonly unresolved: boolean;
+	readonly handled: boolean;
 	readonly resolution: MergeEditorResolution;
 }
 
@@ -30,6 +33,7 @@ interface SourceHunk {
 }
 
 const diffOptions = { ignoreTrimWhitespace: false, maxComputationTimeMs: 0, computeMoves: false } as const;
+const MAX_HANDLED_HISTORY = 1_001;
 
 /** The three immutable inputs own conflict identity; the file-backed result supplies its current mapping. */
 export class MergeEditorModel extends Disposable {
@@ -42,8 +46,14 @@ export class MergeEditorModel extends Disposable {
 	private currentChanges: readonly DetailedLineRangeMapping[] = [];
 	private incomingChanges: readonly DetailedLineRangeMapping[] = [];
 	private resultChanges: readonly DetailedLineRangeMapping[] = [];
+	private readonly lineMappings = new Map<string, DocumentLineRangeMap>();
 	private sourceHunks: readonly SourceHunk[] = [];
 	private hunksValue: readonly MergeEditorHunk[] = [];
+	private handledStates: boolean[] | undefined;
+	private resultTexts: readonly string[] = [];
+	private readonly handledHistory = new Map<number, readonly boolean[]>();
+	private hasManualResultChange = false;
+	private applyingChoice = false;
 	private resultRequest: CancellationTokenSource | undefined;
 	private generation = 0;
 	private ready = false;
@@ -54,6 +64,7 @@ export class MergeEditorModel extends Disposable {
 		current: string,
 		incoming: string,
 		public readonly result: TextModel,
+		private readonly initialHandled: readonly boolean[] | undefined,
 		@IDiffService private readonly diffService: IDiffService,
 	) {
 		super();
@@ -73,6 +84,7 @@ export class MergeEditorModel extends Disposable {
 
 	public get hunks(): readonly MergeEditorHunk[] { return this.hunksValue; }
 	public get unresolvedCount(): number { return this.hunksValue.filter(hunk => hunk.unresolved).length; }
+	public getHandledState(): readonly boolean[] { return this.hunksValue.map(hunk => hunk.handled); }
 	public get isReady(): boolean { return this.ready; }
 	public get error(): Error | undefined { return this.errorValue; }
 	public getChanges(side: Exclude<MergeEditorSide, 'base'>): readonly DetailedLineRangeMapping[] { return this.changesFor(side); }
@@ -95,7 +107,16 @@ export class MergeEditorModel extends Disposable {
 			this.incomingChanges = completeChanges(incoming);
 			this.resultChanges = completeChanges(result);
 			this.sourceHunks = buildSourceHunks(this.base, this.current, this.incoming, this.currentChanges, this.incomingChanges);
-			this._register(this.result.onDidChangeContent(() => void this.refreshResult()));
+			this._register(this.result.onDidChangeContent(change => {
+				if (change.reason === TextModelChangeReason.Undo || change.reason === TextModelChangeReason.Redo) {
+					const previous = this.handledHistory.get(this.result.getAlternativeVersionId());
+					if (previous) this.handledStates = [...previous];
+					else this.hasManualResultChange = true;
+				} else if (!this.applyingChoice) {
+					this.hasManualResultChange = true;
+				}
+				void this.refreshResult();
+			}));
 			if (this.result.getVersionId() !== resultVersion) await this.refreshResult();
 			else {
 				this.ready = true;
@@ -136,17 +157,67 @@ export class MergeEditorModel extends Disposable {
 	}
 
 	private updateHunks(): void {
-		this.hunksValue = this.sourceHunks.map((source, index) => {
-			const result = mapRange(source.base, this.resultChanges);
+		this.lineMappings.clear();
+		const resultMapping = this.mappingFromBase('result');
+		const computed = this.sourceHunks.map((source, index) => {
+			const result = resultMapping.mapRange(source.base);
 			const hunk = {
 				...source,
 				index,
 				result,
 			};
 			const resolution = this.classifyHunk(hunk);
-			return { ...hunk, resolution, unresolved: resolution === 'unresolved' };
+			return { ...hunk, resolution };
 		});
+		const resultTexts = computed.map(hunk => textInRange(this.result, hunk.result));
+		if (!this.handledStates || this.handledStates.length !== computed.length) {
+			this.handledStates = this.initialHandled?.length === computed.length
+				? [...this.initialHandled]
+				: computed.map(hunk => hunk.resolution !== 'unresolved' && hunk.resolution !== 'base' && hunk.resolution !== 'manual');
+		} else if (this.hasManualResultChange) {
+			for (const [index, text] of resultTexts.entries()) {
+				if (this.resultTexts[index] !== text) this.handledStates[index] = true;
+			}
+		}
+		this.hasManualResultChange = false;
+		this.resultTexts = resultTexts;
+		this.hunksValue = computed.map((hunk, index) => {
+			const handled = this.handledStates![index];
+			return { ...hunk, handled, unresolved: !handled || hunk.resolution === 'unresolved' };
+		});
+		this.handledHistory.set(this.result.getAlternativeVersionId(), [...this.handledStates]);
+		while (this.handledHistory.size > MAX_HANDLED_HISTORY) this.handledHistory.delete(this.handledHistory.keys().next().value!);
 		this.changeEmitter.fire();
+	}
+
+	public acceptHunk(index: number, choice: MergeEditorChoice): void {
+		this.acceptEdits([index], [this.editForHunk(index, choice)]);
+	}
+
+	public acceptRemaining(choice: 'current' | 'incoming'): void {
+		const indices = this.hunksValue.filter(hunk => hunk.unresolved).map(hunk => hunk.index);
+		if (indices.length === 0) return;
+		this.acceptEdits(indices, indices.map(index => this.editForHunk(index, choice)));
+	}
+
+	public setHandled(index: number, handled: boolean): void {
+		if (!this.ready || !this.handledStates || !this.hunksValue[index]) throw new RangeError('Merge conflict is unavailable');
+		if (this.handledStates[index] === handled) return;
+		this.handledStates[index] = handled;
+		this.updateHunks();
+	}
+
+	private acceptEdits(indices: readonly number[], edits: readonly { range: Range; text: string }[]): void {
+		if (!this.ready || !this.handledStates) throw new Error('Merge differences are still computing');
+		const beforeVersion = this.result.getVersionId();
+		this.applyingChoice = true;
+		try {
+			this.result.applyOperations(edits);
+		} finally {
+			this.applyingChoice = false;
+		}
+		for (const index of indices) this.handledStates[index] = true;
+		if (this.result.getVersionId() === beforeVersion) this.updateHunks();
 	}
 
 	private classifyHunk(hunk: SourceHunk & { readonly result: LineRange }): MergeEditorResolution {
@@ -198,9 +269,39 @@ export class MergeEditorModel extends Disposable {
 		return applyCharacterEdits(baseText, combined);
 	}
 
-	public mapLine(source: MergeEditorSide, target: MergeEditorSide, lineNumber: number): number {
-		const baseLine = source === 'base' ? lineNumber : mapBoundary(lineNumber, this.changesFor(source).map(change => change.flip()), 'start');
-		return target === 'base' ? baseLine : mapBoundary(baseLine, this.changesFor(target), 'start');
+	public getLineMapping(source: MergeEditorSide, target: MergeEditorSide): DocumentLineRangeMap {
+		const key = `${source}:${target}`;
+		let mapping = this.lineMappings.get(key);
+		if (!mapping) {
+			if (source === 'base') {
+				if (target === 'base') throw new RangeError('Merge line mapping requires two different sides');
+				mapping = this.mappingFromBase(target);
+			} else if (target === 'base') {
+				mapping = this.mappingFromBase(source).reverse();
+			} else {
+				if (source === target) throw new RangeError('Merge line mapping requires two different sides');
+				mapping = DocumentLineRangeMap.betweenOutputs(
+					this.mappingFromBase(source).lineRangeMappings,
+					this.mappingFromBase(target).lineRangeMappings,
+					this.base.getLineCount(),
+				);
+			}
+			this.lineMappings.set(key, mapping);
+		}
+		return mapping;
+	}
+
+	private mappingFromBase(side: Exclude<MergeEditorSide, 'base'>): DocumentLineRangeMap {
+		const key = `base:${side}`;
+		let mapping = this.lineMappings.get(key);
+		if (!mapping) {
+			mapping = new DocumentLineRangeMap(
+				this.changesFor(side).map(change => new LineRangeMapping(change.original, change.modified)),
+				this.base.getLineCount(),
+			);
+			this.lineMappings.set(key, mapping);
+		}
+		return mapping;
 	}
 
 	private changesFor(side: Exclude<MergeEditorSide, 'base'>): readonly DetailedLineRangeMapping[] {
@@ -218,6 +319,8 @@ function completeChanges(diff: IDocumentDiff): readonly DetailedLineRangeMapping
 }
 
 function buildSourceHunks(base: TextModel, current: TextModel, incoming: TextModel, currentChanges: readonly DetailedLineRangeMapping[], incomingChanges: readonly DetailedLineRangeMapping[]): readonly SourceHunk[] {
+	const currentMapping = new DocumentLineRangeMap(currentChanges.map(change => new LineRangeMapping(change.original, change.modified)), base.getLineCount());
+	const incomingMapping = new DocumentLineRangeMap(incomingChanges.map(change => new LineRangeMapping(change.original, change.modified)), base.getLineCount());
 	const changes = [...currentChanges.map(change => ({ range: change.original, side: 'current' as const })), ...incomingChanges.map(change => ({ range: change.original, side: 'incoming' as const }))]
 		.sort((left, right) => left.range.startLineNumber - right.range.startLineNumber || left.range.endLineNumberExclusive - right.range.endLineNumberExclusive);
 	const groups: { base: LineRange; currentChanged: boolean; incomingChanged: boolean }[] = [];
@@ -233,30 +336,9 @@ function buildSourceHunks(base: TextModel, current: TextModel, incoming: TextMod
 	}
 	return groups.filter(group => group.currentChanged && group.incomingChanged).map(group => ({
 		base: group.base,
-		current: mapRange(group.base, currentChanges),
-		incoming: mapRange(group.base, incomingChanges),
+		current: currentMapping.mapRange(group.base),
+		incoming: incomingMapping.mapRange(group.base),
 	})).filter(hunk => textInRange(current, hunk.current) !== textInRange(incoming, hunk.incoming) || textInRange(base, hunk.base) === '');
-}
-
-function mapRange(range: LineRange, changes: readonly DetailedLineRangeMapping[]): LineRange {
-	return new LineRange(mapBoundary(range.startLineNumber, changes, 'start'), mapBoundary(range.endLineNumberExclusive, changes, 'end'));
-}
-
-function mapBoundary(lineNumber: number, changes: readonly DetailedLineRangeMapping[], edge: 'start' | 'end'): number {
-	let delta = 0;
-	for (const change of changes) {
-		const original = change.original;
-		const modified = change.modified;
-		if (original.endLineNumberExclusive < lineNumber || (original.endLineNumberExclusive === lineNumber && (edge === 'end' || original.startLineNumber < lineNumber))) {
-			delta = modified.endLineNumberExclusive - original.endLineNumberExclusive;
-			continue;
-		}
-		if (original.startLineNumber < lineNumber && lineNumber < original.endLineNumberExclusive) {
-			return edge === 'start' ? modified.startLineNumber : modified.endLineNumberExclusive;
-		}
-		break;
-	}
-	return lineNumber + delta;
 }
 
 function rangeInModel(model: TextModel, lines: LineRange): Range {

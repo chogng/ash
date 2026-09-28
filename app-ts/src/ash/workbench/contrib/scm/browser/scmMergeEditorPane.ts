@@ -1,6 +1,7 @@
 import { h, type IDimension } from '../../../../base/browser/dom.js';
 import { alert as ariaAlert } from '../../../../base/browser/ui/aria/aria.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
+import { StringSHA1 } from '../../../../base/common/hash.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { TextModel } from '../../../../editor/common/model/textModel.js';
 import { localize } from '../../../../nls.js';
@@ -10,6 +11,7 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IGitService, type GitConflictFile, type GitConflictResolution } from '../../../services/git/common/gitService.js';
 import type { EditorInput } from '../../../services/editor/common/editorService.js';
 import type { IWorkingCopy } from '../../../services/workingCopy/common/workingCopyService.js';
@@ -41,6 +43,8 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 	private resolved = false;
 	private lastBlockCount: number | undefined;
 	private resultLoaded = false;
+	private mergeStateKey: string | undefined;
+	private storedHandledState: string | undefined;
 
 	constructor(
 		private readonly resultEditor: TextFileEditor,
@@ -49,6 +53,7 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 		@IAccessibleViewService private readonly accessibleView: IAccessibleViewService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@IDialogService private readonly dialogs: IDialogService,
+		@IStorageService private readonly storageService: IStorageService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
 		super();
@@ -98,6 +103,7 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 		if (signal.aborted) throw new Error('SCM merge editor loading was cancelled');
 		this.clearInput();
 		this.input = input;
+		this.mergeStateKey = `ash.scm.merge.${digest(`${input.repositoryId}\0${input.path}`)}`;
 		this.resolved = false;
 		this.stageIds = file.stageIds;
 		this.resultObjectId = file.resultObjectId;
@@ -126,7 +132,14 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 				await model.initialize(signal);
 				if (signal.aborted) throw new Error('SCM merge editor loading was cancelled');
 				this.mergeView.setModel(model);
-				listeners.add(model.onDidChange(() => this.updateStatus()));
+				listeners.add(model.onDidChange(() => {
+					this.updateStatus();
+					if (model.isReady) this.saveMergeState(model);
+				}));
+				if (copy) listeners.add(copy.onDidChangeDirty(() => {
+					if (!copy.isDirty) this.saveMergeState(model);
+				}));
+				this.saveMergeState(model);
 			}
 			this.updateStatus();
 		} else {
@@ -147,6 +160,8 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 		this.stageIds = undefined;
 		this.resultObjectId = undefined;
 		this.resultLoaded = false;
+		this.mergeStateKey = undefined;
+		this.storedHandledState = undefined;
 		this.resolved = false;
 		this.lastBlockCount = undefined;
 		this.finishButton.enabled = false;
@@ -187,7 +202,35 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 			file.current.kind === 'text' ? file.current.text : '',
 			file.incoming.kind === 'text' ? file.incoming.text : '',
 			result,
+			this.loadMergeState(file, result),
 		);
+	}
+
+	private loadMergeState(file: GitConflictFile, result: TextModel): readonly boolean[] | undefined {
+		const raw = this.mergeStateKey && this.storageService.get(this.mergeStateKey, StorageScope.WORKSPACE);
+		if (!raw) return undefined;
+		let value: unknown;
+		try { value = JSON.parse(raw); } catch { return undefined; }
+		if (!value || typeof value !== 'object') return undefined;
+		const state = value as Record<string, unknown>;
+		if (state.version !== 1 || state.resultHash !== digest(result.getValue())) return undefined;
+		if (!Array.isArray(state.stageIds) || state.stageIds.length !== file.stageIds.length || !state.stageIds.every((id, index) => id === file.stageIds[index])) return undefined;
+		if (!Array.isArray(state.handled) || !state.handled.every(flag => typeof flag === 'boolean')) return undefined;
+		return state.handled;
+	}
+
+	private saveMergeState(model: MergeEditorModel): void {
+		if (!this.mergeStateKey || !this.stageIds || !model.isReady) return;
+		const handledStates = model.getHandledState();
+		const handled = JSON.stringify(handledStates);
+		if (this.resultEditor.isDirty && this.storedHandledState === handled) return;
+		this.storageService.store(this.mergeStateKey, JSON.stringify({
+			version: 1,
+			stageIds: this.stageIds,
+			resultHash: digest(model.result.getValue()),
+			handled: handledStates,
+		}), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		this.storedHandledState = handled;
 	}
 
 	private updateStatus(): void {
@@ -201,8 +244,8 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 		const unresolved = model?.isReady ? model.hunks.filter(hunk => hunk.unresolved).length : parseMergeConflictBlocks(text).length;
 		if (this.lastBlockCount !== unresolved) {
 			this.setStatus(unresolved === 0
-				? localize({ bundle: 'ash', key: 'git.mergeNoBlocks' }, 'No conflict blocks remain. Review the result, then complete the merge.')
-				: localize({ bundle: 'ash', key: 'git.mergeBlockCount' }, '{0} conflict blocks remain.', unresolved));
+				? localize({ bundle: 'ash', key: 'git.mergeNoBlocks' }, 'All conflicts are handled. Review the result, then complete the merge.')
+				: localize({ bundle: 'ash', key: 'git.mergeBlockCount' }, '{0} conflicts remain.', unresolved));
 			this.lastBlockCount = unresolved;
 		}
 	}
@@ -244,6 +287,7 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 				if (!decision.confirmed) return;
 			}
 			await this.gitService.completeConflict(input.path, stageIds, resultObjectId, resolution, input.repositoryId);
+			if (this.mergeStateKey) this.storageService.remove(this.mergeStateKey, StorageScope.WORKSPACE);
 			this.resolved = true;
 			this.fileChoiceStore.clear();
 			this.fileChoicesDomNode.replaceChildren();
@@ -267,8 +311,9 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 		const stageIds = this.stageIds;
 		const control = this.resultEditor.getControl();
 		if (!input || !stageIds || !control || this.busy || this.resolved) return;
-		if (hasMergeConflictMarkers(control.getValue())) {
-			this.setStatus(localize({ bundle: 'ash', key: 'git.mergeUnresolved' }, 'Resolve every conflict marker before completing the merge.'));
+		const model = this.modelSlot.value;
+		if (hasMergeConflictMarkers(control.getValue()) || (model && (!model.isReady || model.unresolvedCount > 0))) {
+			this.setStatus(localize({ bundle: 'ash', key: 'git.mergeUnresolved' }, 'Review or resolve every conflict before completing the merge.'));
 			this.focus();
 			return;
 		}
@@ -283,6 +328,7 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 				throw new Error(localize({ bundle: 'ash', key: 'git.mergeIndexChanged' }, 'The conflict changed in Git. Reopen this merge editor to review the new versions.'));
 			}
 			await this.gitService.completeConflict(input.path, stageIds, saved.resultObjectId, { kind: 'edited', text: control.getValue() }, input.repositoryId);
+			if (this.mergeStateKey) this.storageService.remove(this.mergeStateKey, StorageScope.WORKSPACE);
 			this.resolved = true;
 			this.setStatus(localize({ bundle: 'ash', key: 'git.mergeCompleted' }, 'Merge completed and result staged.'));
 		} catch (error) {
@@ -303,4 +349,10 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 		const hint = this.accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.ScmMerge);
 		this.domNode.setAttribute('aria-label', hint ? `${title}. ${hint}` : title);
 	}
+}
+
+function digest(value: string): string {
+	const hash = new StringSHA1();
+	hash.update(value);
+	return hash.digest();
 }
