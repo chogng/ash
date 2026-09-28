@@ -57,11 +57,18 @@ test('Code chat mode menu shows the available icons and selection', async ({ app
 	await expect(modeButton.locator('svg[data-ash-icon-id="unlimited"]')).toHaveCount(1);
 	const chevron = modeButton.locator('.ash-chat-input-mode-indicator svg[data-ash-icon-id="chevron-down"]');
 	await expect(chevron).toBeVisible();
+	await expect(modeButton.locator('.ash-chat-input-mode-action-label')).toBeVisible();
 	const labelBounds = await modeButton.locator('.ash-chat-input-mode-action-label').boundingBox();
 	const chevronBounds = await chevron.boundingBox();
 	expect(labelBounds).not.toBeNull();
 	expect(chevronBounds).not.toBeNull();
 	expect(chevronBounds!.x).toBeGreaterThan(labelBounds!.x + labelBounds!.width);
+	const inputContainer = page.locator('.ash-chat-input-container').filter({ has: modeButton });
+	await inputContainer.evaluate(element => element.style.width = '230px');
+	await expect(modeButton.locator('.ash-chat-input-mode-action-label')).toBeHidden();
+	await expect(modeButton).toHaveAttribute('aria-label', 'Agent');
+	await inputContainer.evaluate(element => element.style.width = '');
+	await expect(modeButton.locator('.ash-chat-input-mode-action-label')).toBeVisible();
 	await modeButton.click();
 	const menu = page.locator('.ash-chat-input-mode-menu');
 	await expect(menu).toBeVisible();
