@@ -116,6 +116,7 @@ const iconImageFilled = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"
 const iconInfo = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><circle cx=\"8\" cy=\"8\" r=\"6.5\" stroke=\"#000\"/><path stroke=\"#000\" stroke-linecap=\"round\" d=\"M8 7.5v4\"/><path fill=\"#000\" d=\"M8.74 5a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0\"/></svg>";
 const iconItalics = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"#000\" stroke-linecap=\"round\" d=\"m10 2.5-4 11m4-11H7m3 0h3m-7 11H3m3 0h3\"/></svg>";
 const iconKebabVertical = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path fill=\"#000\" d=\"M8 11a1 1 0 1 1 0 2 1 1 0 0 1 0-2\"/><circle cx=\"8\" cy=\"8\" r=\"1\" fill=\"#000\" transform=\"rotate(-90 8 8)\"/><path fill=\"#000\" d=\"M8 3a1 1 0 1 1 0 2 1 1 0 0 1 0-2\"/></svg>";
+const iconKeyboardTab = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"#000\" stroke-linecap=\"round\" d=\"M14.5 3.5V12\"/><path stroke=\"#000\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"m8.5 3.5 4 4-4 4m4-4H3\"/></svg>";
 const iconLayout = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"#000\" d=\"M2.5 3.5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1zm6 0a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1zm0 6a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1zm-6 0a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1z\"/></svg>";
 const iconLayoutPanel1 = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"#000\" d=\"M3 2.5h10A1.5 1.5 0 0 1 14.5 4v7a1.5 1.5 0 0 1-1.5 1.5H3A1.5 1.5 0 0 1 1.5 11V4a1.5 1.5 0 0 1 1.347-1.492z\"/><path fill=\"#000\" d=\"M3 8.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.5.5h-9a.5.5 0 0 1-.5-.5z\"/></svg>";
 const iconLayoutPanelOff1 = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"#000\" d=\"M3 2.5h10A1.5 1.5 0 0 1 14.5 4v8a1.5 1.5 0 0 1-1.5 1.5H3A1.5 1.5 0 0 1 1.5 12V4a1.5 1.5 0 0 1 1.347-1.492z\"/><path fill=\"#c7c7c7\" d=\"M3 9.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.5.5h-9a.5.5 0 0 1-.5-.5z\"/></svg>";
@@ -328,6 +329,7 @@ export function createProductIconLibrary<T>(register: (id: string, definition: P
     info: register("info", iconInfo),
     italics: register("italics", iconItalics),
     kebabVertical: register("kebab-vertical", iconKebabVertical),
+    keyboardTab: register("keyboard-tab", iconKeyboardTab),
     layout: register("layout", iconLayout),
     layoutPanel1: register("layout-panel-1", iconLayoutPanel1),
     layoutPanelOff1: register("layout-panel-off-1", iconLayoutPanelOff1),

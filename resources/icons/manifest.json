@@ -567,6 +567,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "keyboard-tab",
+      "file": "keyboard-tab.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "layout",
       "file": "layout.svg",
       "rendering": "symbolic"

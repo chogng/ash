@@ -121,6 +121,7 @@ mod artwork {
     pub(crate) const INFO: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/info.svg"));
     pub(crate) const ITALICS: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/italics.svg"));
     pub(crate) const KEBAB_VERTICAL: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/kebab-vertical.svg"));
+    pub(crate) const KEYBOARD_TAB: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/keyboard-tab.svg"));
     pub(crate) const LAYOUT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout.svg"));
     pub(crate) const LAYOUT_PANEL_1: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout-panel-1.svg"));
     pub(crate) const LAYOUT_PANEL_OFF_1: IconDefinition = IconDefinition::multicolor(include_bytes!("../../../resources/icons/layout-panel-off-1.svg"));
@@ -338,6 +339,7 @@ pub mod icons {
     pub const INFO: Icon = Icon::new(IconId::new("info"), artwork::INFO);
     pub const ITALICS: Icon = Icon::new(IconId::new("italics"), artwork::ITALICS);
     pub const KEBAB_VERTICAL: Icon = Icon::new(IconId::new("kebab-vertical"), artwork::KEBAB_VERTICAL);
+    pub const KEYBOARD_TAB: Icon = Icon::new(IconId::new("keyboard-tab"), artwork::KEYBOARD_TAB);
     pub const LAYOUT: Icon = Icon::new(IconId::new("layout"), artwork::LAYOUT);
     pub const LAYOUT_PANEL_1: Icon = Icon::new(IconId::new("layout-panel-1"), artwork::LAYOUT_PANEL_1);
     pub const LAYOUT_PANEL_OFF_1: Icon = Icon::new(IconId::new("layout-panel-off-1"), artwork::LAYOUT_PANEL_OFF_1);
@@ -551,6 +553,7 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::INFO,
     icons::ITALICS,
     icons::KEBAB_VERTICAL,
+    icons::KEYBOARD_TAB,
     icons::LAYOUT,
     icons::LAYOUT_PANEL_1,
     icons::LAYOUT_PANEL_OFF_1,
@@ -765,6 +768,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("info", artwork::INFO),
     ("italics", artwork::ITALICS),
     ("kebab-vertical", artwork::KEBAB_VERTICAL),
+    ("keyboard-tab", artwork::KEYBOARD_TAB),
     ("layout", artwork::LAYOUT),
     ("layout-panel-1", artwork::LAYOUT_PANEL_1),
     ("layout-panel-off-1", artwork::LAYOUT_PANEL_OFF_1),
