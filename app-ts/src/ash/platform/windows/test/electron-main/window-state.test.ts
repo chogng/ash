@@ -3,10 +3,10 @@ import { test } from "mocha";
 import type { IDisposable } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
 import type { IStateService } from "../../../../platform/state/node/state.js";
-import { type IAnyWorkspaceIdentifier, type ISingleFolderWorkspaceIdentifier, type IWorkspaceIdentifier, UNKNOWN_EMPTY_WINDOW_WORKSPACE, WorkbenchState } from "../../../../platform/workspace/common/workspace.js";
+import { type IAnyWorkspaceIdentifier, type ISingleFolderWorkspaceIdentifier, type IWorkspaceIdentifier, UNKNOWN_EMPTY_WINDOW_WORKSPACE, WorkbenchState, serializeWorkspaceIdentifier } from "../../../../platform/workspace/common/workspace.js";
 import { defaultWindowState, WindowMode, type IWindowBounds } from "../../../../platform/window/electron-main/window.js";
 import { applyWindowState, resolveBrowserWindowOptions, validateWindowState, type IWindowDisplay } from "../../../../platform/windows/electron-main/windows.js";
-import { WindowsStateHandler, type IStatefulWindow } from "../../../../platform/windows/electron-main/windowsStateHandler.js";
+import { WindowsStateHandler, WindowSessionStateHandler, type IStatefulWindow, type IWindowSessionEntry, type IWindowSessionWindow } from "../../../../platform/windows/electron-main/windowsStateHandler.js";
 
 const primaryDisplay: IWindowDisplay = {
 	id: 1,
@@ -46,6 +46,46 @@ class TestStateService implements IStateService {
 		await this.flush();
 	}
 }
+
+test('window session state owner persists active Workbench and Agents windows and the last closed window', async () => {
+	type Entry =
+		| { readonly kind: 'workbench'; readonly workspace: IAnyWorkspaceIdentifier }
+		| { readonly kind: 'sessions'; readonly workspace: IAnyWorkspaceIdentifier; readonly modeId: string };
+	const isEntry = (entry: IWindowSessionEntry): entry is Entry => entry.kind === 'workbench' && entry.modeId === undefined || entry.kind === 'sessions' && entry.modeId === 'code';
+	const workbench: Entry = { kind: 'workbench', workspace: folderWorkspace };
+	const agents: Entry = { kind: 'sessions', workspace: multiRootWorkspace, modeId: 'code' };
+	const state = new TestStateService();
+	let windows: readonly IWindowSessionWindow<Entry>[] = [
+		{ id: 1, entry: workbench, focused: false },
+		{ id: 2, entry: agents, focused: true },
+	];
+	const handler = new WindowSessionStateHandler(state, () => windows, isEntry);
+	{
+		using restoration = handler.beginRestoration();
+		handler.windowOpened();
+		assert.equal(state.getItem('windowSession'), undefined);
+	}
+	await handler.saveSession();
+	assert.deepEqual(state.getItem('windowSession'), {
+		version: 1,
+		active: 1,
+		windows: [
+			{ kind: 'workbench', workspace: serializeWorkspaceIdentifier(folderWorkspace) },
+			{ kind: 'sessions', workspace: serializeWorkspaceIdentifier(multiRootWorkspace), modeId: 'code' },
+		],
+	});
+	const restored = new WindowSessionStateHandler(state, () => windows, isEntry).readSession();
+	assert.deepEqual(restored, { windows: [workbench, agents], active: 1 });
+
+	windows = [];
+	handler.windowClosed(agents);
+	await handler.saveSession();
+	assert.deepEqual(handler.readSession(), { windows: [agents], active: 0 });
+	windows = [{ id: 3, entry: workbench, focused: true }];
+	handler.windowOpened();
+	await handler.saveSession();
+	assert.deepEqual(handler.readSession(), { windows: [workbench], active: 0 });
+});
 
 class TestWindow implements IStatefulWindow {
 	private readonly listeners = new Map<"blur" | "close", Set<() => void>>();

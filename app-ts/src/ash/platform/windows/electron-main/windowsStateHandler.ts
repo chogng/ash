@@ -3,7 +3,7 @@ import { isFiniteNumber } from "../../../base/common/numbers.js";
 import { isNonEmptyString, isRecord } from "../../../base/common/types.js";
 import { URI } from "../../../base/common/uri.js";
 import type { IStateService } from "../../state/node/state.js";
-import { type IAnyWorkspaceIdentifier, type IWorkspaceIdentifier, type WorkbenchState, isEmptyWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, isWorkspaceIdentifier, workbenchStateFromWorkspaceIdentifier } from "../../workspace/common/workspace.js";
+import { type IAnyWorkspaceIdentifier, type IWorkspaceIdentifier, type WorkbenchState, isEmptyWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, isWorkspaceIdentifier, parseWorkspaceIdentifier, serializeWorkspaceIdentifier, workbenchStateFromWorkspaceIdentifier } from "../../workspace/common/workspace.js";
 import { defaultWindowState, WindowMode, type IWindowBounds, type IWindowState } from "../../window/electron-main/window.js";
 import { validateWindowState, type IWindowDisplay } from "./windows.js";
 import { getRemoteWorkspacePath, isRemoteResource } from "../../remote/common/remote.js";
@@ -11,6 +11,7 @@ import { getRemoteWorkspacePath, isRemoteResource } from "../../remote/common/re
 const WINDOWS_STATE_STORAGE_KEY = "windowsState";
 const WINDOWS_STATE_VERSION = 1;
 const MAX_OPENED_WINDOW_RECORDS = 100;
+const WINDOW_SESSION_STATE_KEY = 'windowSession';
 
 /** Display operations needed to restore and capture window placement. */
 export interface IWindowDisplayService {
@@ -200,6 +201,110 @@ export class WindowsStateHandler {
 			...bounds,
 			displayId,
 		};
+	}
+}
+
+export interface IWindowSessionEntry {
+	readonly kind: string;
+	readonly workspace: IAnyWorkspaceIdentifier;
+	readonly modeId?: string;
+}
+
+export interface IWindowSession<TEntry extends IWindowSessionEntry> {
+	readonly windows: readonly TEntry[];
+	readonly active: number;
+}
+
+export interface IWindowSessionWindow<TEntry extends IWindowSessionEntry> {
+	readonly id: number;
+	readonly entry: TEntry;
+	readonly focused: boolean;
+}
+
+/** Owns the persisted list and active identity of top-level application windows. */
+export class WindowSessionStateHandler<TEntry extends IWindowSessionEntry> {
+	private restoring = false;
+	private shuttingDown = false;
+	private lastFocusedWindowId: number | undefined;
+	private lastClosedWindow: TEntry | undefined;
+
+	constructor(
+		private readonly stateService: IStateService,
+		private readonly getOpenWindows: () => readonly IWindowSessionWindow<TEntry>[],
+		private readonly isEntry: (entry: IWindowSessionEntry) => entry is TEntry,
+	) {}
+
+	readSession(): IWindowSession<TEntry> | undefined {
+		const value = this.stateService.getItem(WINDOW_SESSION_STATE_KEY);
+		if (!isRecord(value) || Object.keys(value).sort().join(',') !== 'active,version,windows' || value.version !== 1 || !Array.isArray(value.windows)) return undefined;
+		if (!Number.isSafeInteger(value.active) || (value.active as number) < 0 || (value.windows.length === 0 ? value.active !== 0 : (value.active as number) >= value.windows.length)) return undefined;
+		const windows: TEntry[] = [];
+		for (const candidate of value.windows) {
+			if (!isRecord(candidate) || !isNonEmptyString(candidate.kind)) return undefined;
+			if (Object.keys(candidate).sort().join(',') !== (candidate.modeId === undefined ? 'kind,workspace' : 'kind,modeId,workspace')) return undefined;
+			if (candidate.modeId !== undefined && !isNonEmptyString(candidate.modeId)) return undefined;
+			let workspace: IAnyWorkspaceIdentifier;
+			try {
+				workspace = parseWorkspaceIdentifier(candidate.workspace);
+			} catch {
+				return undefined;
+			}
+			const entry: IWindowSessionEntry = { kind: candidate.kind, workspace, ...(candidate.modeId === undefined ? {} : { modeId: candidate.modeId }) };
+			if (!this.isEntry(entry)) return undefined;
+			windows.push(entry);
+		}
+		return { windows, active: value.active as number };
+	}
+
+	beginRestoration(): IDisposable {
+		this.restoring = true;
+		return toDisposable(() => { this.restoring = false; });
+	}
+
+	windowOpened(): void {
+		this.lastClosedWindow = undefined;
+		this.scheduleSave();
+	}
+
+	windowFocused(id: number): void {
+		this.lastFocusedWindowId = id;
+		this.scheduleSave();
+	}
+
+	windowClosed(entry: TEntry): void {
+		this.lastClosedWindow = entry;
+		this.scheduleSave();
+	}
+
+	windowChanged(): void {
+		this.scheduleSave();
+	}
+
+	stopAutomaticSaves(): void {
+		this.shuttingDown = true;
+	}
+
+	async saveSession(): Promise<void> {
+		const windows = this.getOpenWindows();
+		const entries = windows.length > 0 ? windows.map(window => window.entry) : this.lastClosedWindow ? [this.lastClosedWindow] : [];
+		const focused = windows.findIndex(window => window.focused);
+		const lastFocused = windows.findIndex(window => window.id === this.lastFocusedWindowId);
+		const active = focused >= 0 ? focused : Math.max(0, lastFocused);
+		this.stateService.setItem(WINDOW_SESSION_STATE_KEY, {
+			version: 1,
+			active,
+			windows: entries.map(entry => ({
+				kind: entry.kind,
+				workspace: serializeWorkspaceIdentifier(entry.workspace),
+				...(entry.modeId === undefined ? {} : { modeId: entry.modeId }),
+			})),
+		});
+		await this.stateService.flush();
+	}
+
+	private scheduleSave(): void {
+		if (this.restoring || this.shuttingDown) return;
+		void this.saveSession().catch(error => console.error('Failed to save window session', error));
 	}
 }
 

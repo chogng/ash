@@ -303,9 +303,9 @@ Folder/Workspace 产生稳定 ID。标识采用 `{ id }`、`{ id, uri }` 或
 last-active state，最后才使用默认尺寸。旧的 `windowState` 与 `windowState.empty` 键不会迁移
 或读取。
 
-窗口种类和工作区另存于 `windowSession` 状态，不与窗口位置混用。`app.ts` 保存 Workbench 与
-Agents 的窗口种类及其模式，`WindowsMainService` 按设置筛选需要恢复的窗口；Desktop 在窗口打开、获得焦点、
-关闭和退出时更新该清单。正常启动默认恢复上次仍打开的全部 Workbench 与 Agents 窗口，并把
+窗口种类和工作区另存于 `windowSession` 状态，不与窗口位置混用。`WindowSessionStateHandler`
+在窗口打开、获得焦点、关闭和退出时保存清单；`WindowsMainService` 按设置筛选需要恢复的窗口；
+`app.ts` 只负责创建对应的 Workbench 或 Agents 窗口。正常启动默认恢复上次仍打开的全部窗口，并把
 最后使用的窗口带到前面。`window.restoreWindows` 是共享 profile 中的启动偏好，支持
 `preserve`、`all`（默认）、`folders`、`one` 和 `none`。直接指定 Folder 或 Workspace 时，
 除 `preserve` 外以本次目标为准。手动关闭的窗口从清单移除；关闭最后一个窗口导致应用退出时，
