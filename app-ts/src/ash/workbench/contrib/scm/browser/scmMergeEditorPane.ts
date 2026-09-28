@@ -1,21 +1,22 @@
 import { h, type IDimension } from '../../../../base/browser/dom.js';
 import { alert as ariaAlert } from '../../../../base/browser/ui/aria/aria.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
-import { observeElementSize } from '../../../../base/browser/observer.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { Range } from '../../../../editor/common/core/range.js';
+import type { TextModel } from '../../../../editor/common/model/textModel.js';
 import { localize } from '../../../../nls.js';
 import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IGitService, type GitConflictFile, type GitConflictResolution } from '../../../services/git/common/gitService.js';
 import type { EditorInput } from '../../../services/editor/common/editorService.js';
 import type { IWorkingCopy } from '../../../services/workingCopy/common/workingCopyService.js';
 import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { TextFileEditor } from '../../files/browser/editors/textFileEditor.js';
-import { hasMergeConflictMarkers, parseMergeConflictBlocks, type MergeConflictBlock } from '../common/mergeConflict.js';
+import { MergeEditor, MergeEditorModel } from '../../mergeEditor/browser/mergeEditor.js';
+import { hasMergeConflictMarkers, parseMergeConflictBlocks } from '../common/mergeConflict.js';
 import { isScmMergeEditorInput, SCM_MERGE_EDITOR_ID, type ScmMergeEditorInput } from './scmMergeEditorInput.js';
 import { gitErrorMessage } from './scmError.js';
 
@@ -25,14 +26,12 @@ export const ScmMergeFocusedContext = new RawContextKey<boolean>('scmMergeEditor
 export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 	public readonly id = SCM_MERGE_EDITOR_ID;
 	private readonly inputListeners = this._register(new MutableDisposable<DisposableStore>());
-	private readonly blockButtons = this._register(new DisposableStore());
+	private readonly modelSlot = this._register(new MutableDisposable<MergeEditorModel>());
 	private readonly fileChoiceStore = this._register(new DisposableStore());
 	private readonly fileChoiceButtons: Button[] = [];
+	private readonly mergeView: MergeEditor;
 	private domNode!: HTMLDivElement;
-	private sidesDomNode!: HTMLDivElement;
 	private fileChoicesDomNode!: HTMLDivElement;
-	private blocksDomNode!: HTMLDivElement;
-	private resultDomNode!: HTMLDivElement;
 	private statusDomNode!: HTMLDivElement;
 	private finishButton!: Button;
 	private input: ScmMergeEditorInput | undefined;
@@ -40,10 +39,8 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 	private resultObjectId: string | null | undefined;
 	private busy = false;
 	private resolved = false;
-	private lastBlocksSignature: string | undefined;
 	private lastBlockCount: number | undefined;
 	private resultLoaded = false;
-	private dimension: IDimension = { width: 0, height: 0 };
 
 	constructor(
 		private readonly resultEditor: TextFileEditor,
@@ -52,9 +49,10 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 		@IAccessibleViewService private readonly accessibleView: IAccessibleViewService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@IDialogService private readonly dialogs: IDialogService,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
 		super();
-		this._register(resultEditor);
+		this.mergeView = this._register(instantiationService.createInstance(MergeEditor, resultEditor));
 	}
 
 	public get workingCopy(): IWorkingCopy | undefined { return this.resultEditor.workingCopy; }
@@ -89,23 +87,9 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 			onClick: () => void this.completeMerge(),
 		}));
 		header.append(title, this.statusDomNode, actions);
-		this.sidesDomNode = h(document, 'div');
-		this.sidesDomNode.className = 'ash-scm-merge-sides';
 		this.fileChoicesDomNode = h(document, 'div');
-		this.blocksDomNode = h(document, 'div');
-		this.blocksDomNode.className = 'ash-scm-merge-blocks';
-		const resultSection = h(document, 'section');
-		resultSection.className = 'ash-scm-merge-result';
-		const resultTitle = h(document, 'h3');
-		resultTitle.textContent = localize({ bundle: 'ash', key: 'git.mergeResult' }, 'Result');
-		this.resultDomNode = h(document, 'div');
-		this.resultDomNode.className = 'ash-scm-merge-result-editor';
-		this._register(observeElementSize(this.resultDomNode, size => {
-			if (this.resultLoaded) this.resultEditor.layout(size);
-		}));
-		resultSection.append(resultTitle, this.resultDomNode);
-		this.domNode.append(header, this.sidesDomNode, this.fileChoicesDomNode, this.blocksDomNode, resultSection);
-		this.resultEditor.create(this.resultDomNode);
+		this.domNode.append(header, this.fileChoicesDomNode);
+		this.mergeView.create(this.domNode);
 	}
 
 	public async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
@@ -117,18 +101,34 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 		this.resolved = false;
 		this.stageIds = file.stageIds;
 		this.resultObjectId = file.resultObjectId;
-		this.renderSides(file);
 		if (file.current.kind !== 'text' || file.incoming.kind !== 'text' || file.result.kind !== 'text') this.renderFileChoices(file);
+		const hasTextSources = file.current.kind === 'text' && file.incoming.kind === 'text' && file.base.kind !== 'binary';
+		if (!hasTextSources || file.result.kind !== 'text') {
+			this.mergeView.showUnavailableSources(
+				this.sourceText(file.base),
+				this.sourceText(file.current),
+				this.sourceText(file.incoming),
+				file.result.kind === 'text' ? undefined : this.sourceText(file.result),
+			);
+		}
 		if (file.result.kind === 'text') {
 			this.finishButton.enabled = true;
 			await this.resultEditor.setInput({ resource: input.resultResource, label: input.label }, signal);
 			this.resultLoaded = true;
 			const listeners = new DisposableStore();
 			const copy = this.resultEditor.workingCopy;
-			if (copy) listeners.add(copy.onDidChangeContent(() => this.renderBlocks()));
+			if (copy) listeners.add(copy.onDidChangeContent(() => this.updateStatus()));
 			this.inputListeners.value = listeners;
-			this.resultEditor.layout(this.resultDimension());
-			this.renderBlocks();
+			if (hasTextSources) {
+				const resultModel = this.resultEditor.getControl()?.getModel();
+				if (!resultModel) throw new Error('Merge result model is not loaded');
+				const model = this.modelSlot.value = this.createModel(file, resultModel);
+				await model.initialize(signal);
+				if (signal.aborted) throw new Error('SCM merge editor loading was cancelled');
+				this.mergeView.setModel(model);
+				listeners.add(model.onDidChange(() => this.updateStatus()));
+			}
+			this.updateStatus();
 		} else {
 			this.resultLoaded = false;
 			this.finishButton.enabled = false;
@@ -138,36 +138,32 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 
 	public clearInput(): void {
 		this.inputListeners.clear();
-		this.blockButtons.clear();
 		this.fileChoiceStore.clear();
 		this.fileChoiceButtons.length = 0;
-		this.resultEditor.clearInput();
-		this.sidesDomNode?.replaceChildren();
-		this.blocksDomNode?.replaceChildren();
+		this.mergeView.clearInput();
+		this.modelSlot.clear();
 		this.fileChoicesDomNode?.replaceChildren();
 		this.input = undefined;
 		this.stageIds = undefined;
 		this.resultObjectId = undefined;
 		this.resultLoaded = false;
 		this.resolved = false;
-		this.lastBlocksSignature = undefined;
 		this.lastBlockCount = undefined;
 		this.finishButton.enabled = false;
 	}
 
 	public layout(dimension: IDimension): void {
-		this.dimension = dimension;
-		if (this.resultLoaded) this.resultEditor.layout(this.resultDimension());
+		this.mergeView.layout(dimension);
 	}
 
 	public setVisible(visibility: EditorPaneVisibility): void {
 		this.domNode.hidden = visibility === EditorPaneVisibility.Hidden;
-		this.resultEditor.setVisible(visibility);
+		this.mergeView.setVisible(visibility);
 	}
 
 	public focus(): void {
-		if (this.resultLoaded) this.resultEditor.focus();
-		else this.sidesDomNode.querySelector<HTMLElement>('[tabindex]')?.focus();
+		if (this.resultLoaded) this.mergeView.focus();
+		else this.fileChoiceButtons[0]?.focus();
 	}
 
 	public async save(): Promise<void> { await this.resultEditor.save(); }
@@ -175,59 +171,40 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 	public getAccessibleContent(): string {
 		const input = this.input;
 		if (!input) return '';
-		const sides = [...this.sidesDomNode.querySelectorAll('pre')].map(element => element.textContent ?? '');
-		return [
-			input.path,
-			`${localize({ bundle: 'ash', key: 'git.mergeBase' }, 'Base')}\n${sides[0] ?? ''}`,
-			`${localize({ bundle: 'ash', key: 'git.mergeCurrent' }, 'Current')}\n${sides[1] ?? ''}`,
-			`${localize({ bundle: 'ash', key: 'git.mergeIncoming' }, 'Incoming')}\n${sides[2] ?? ''}`,
-			`${localize({ bundle: 'ash', key: 'git.mergeResult' }, 'Result')}\n${this.resultEditor.getControl()?.getValue() ?? ''}`,
-		].join('\n\n');
+		return `${input.path}\n\n${this.mergeView.getAccessibleContent()}`;
 	}
 
-	private resultDimension(): IDimension {
-		return { width: Math.max(0, this.resultDomNode.clientWidth || this.dimension.width), height: Math.max(0, this.resultDomNode.clientHeight) };
+	private sourceText(content: GitConflictFile['base']): string {
+		return content.kind === 'text' ? content.text : content.kind === 'binary'
+			? localize({ bundle: 'ash', key: 'git.mergeBinary' }, 'Binary file')
+			: localize({ bundle: 'ash', key: 'git.mergeDeleted' }, 'File deleted');
 	}
 
-	private renderSides(file: GitConflictFile): void {
-		this.sidesDomNode.replaceChildren();
-		const labels = [
-			localize({ bundle: 'ash', key: 'git.mergeBase' }, 'Base'),
-			localize({ bundle: 'ash', key: 'git.mergeCurrent' }, 'Current'),
-			localize({ bundle: 'ash', key: 'git.mergeIncoming' }, 'Incoming'),
-		];
-		for (const [index, content] of [file.base, file.current, file.incoming].entries()) {
-			const section = h(this.domNode.ownerDocument, 'section');
-			section.className = 'ash-scm-merge-side';
-			const heading = h(this.domNode.ownerDocument, 'h3');
-			heading.textContent = labels[index];
-			const body = h(this.domNode.ownerDocument, 'pre');
-			body.tabIndex = 0;
-			body.setAttribute('aria-label', labels[index]);
-			body.textContent = content.kind === 'text' ? content.text : content.kind === 'binary'
-				? localize({ bundle: 'ash', key: 'git.mergeBinary' }, 'Binary file')
-				: localize({ bundle: 'ash', key: 'git.mergeDeleted' }, 'File deleted');
-			section.append(heading, body);
-			this.sidesDomNode.append(section);
-		}
+	private createModel(file: GitConflictFile, result: TextModel): MergeEditorModel {
+		return this.instantiationService.createInstance(
+			MergeEditorModel,
+			file.base.kind === 'text' ? file.base.text : '',
+			file.current.kind === 'text' ? file.current.text : '',
+			file.incoming.kind === 'text' ? file.incoming.text : '',
+			result,
+		);
 	}
 
-	private renderBlocks(): void {
+	private updateStatus(): void {
 		const text = this.resultEditor.getControl()?.getValue();
 		if (text === undefined) return;
-		const blocks = parseMergeConflictBlocks(text);
-		if (this.lastBlockCount !== blocks.length) {
-			this.setStatus(blocks.length === 0
-				? localize({ bundle: 'ash', key: 'git.mergeNoBlocks' }, 'No conflict blocks remain. Review the result, then complete the merge.')
-				: localize({ bundle: 'ash', key: 'git.mergeBlockCount' }, '{0} conflict blocks remain.', blocks.length));
-			this.lastBlockCount = blocks.length;
+		const model = this.modelSlot.value;
+		if (model?.error) {
+			this.setStatus(model.error.message);
+			return;
 		}
-		const signature = JSON.stringify(blocks);
-		if (signature === this.lastBlocksSignature) return;
-		this.lastBlocksSignature = signature;
-		this.blockButtons.clear();
-		this.blocksDomNode.replaceChildren();
-		for (const [index, block] of blocks.entries()) this.renderBlock(block, index);
+		const unresolved = model?.isReady ? model.hunks.filter(hunk => hunk.unresolved).length : parseMergeConflictBlocks(text).length;
+		if (this.lastBlockCount !== unresolved) {
+			this.setStatus(unresolved === 0
+				? localize({ bundle: 'ash', key: 'git.mergeNoBlocks' }, 'No conflict blocks remain. Review the result, then complete the merge.')
+				: localize({ bundle: 'ash', key: 'git.mergeBlockCount' }, '{0} conflict blocks remain.', unresolved));
+			this.lastBlockCount = unresolved;
+		}
 	}
 
 	private renderFileChoices(file: GitConflictFile): void {
@@ -270,9 +247,8 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 			this.resolved = true;
 			this.fileChoiceStore.clear();
 			this.fileChoicesDomNode.replaceChildren();
-			this.blockButtons.clear();
-			this.blocksDomNode.replaceChildren();
-			this.resultEditor.clearInput();
+			this.mergeView.clearInput();
+			this.modelSlot.clear();
 			this.resultLoaded = false;
 			this.finishButton.enabled = false;
 			this.setStatus(localize({ bundle: 'ash', key: 'git.mergeCompleted' }, 'Merge completed and result staged.'));
@@ -284,49 +260,6 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 			this.busy = false;
 			if (!this.resolved) for (const button of this.fileChoiceButtons) button.enabled = true;
 		}
-	}
-
-	private renderBlock(block: MergeConflictBlock, index: number): void {
-		const document = this.domNode.ownerDocument;
-		const section = h(document, 'section');
-		section.className = 'ash-scm-merge-block';
-		const heading = h(document, 'h4');
-		heading.textContent = localize({ bundle: 'ash', key: 'git.mergeBlock' }, 'Conflict {0}', index + 1);
-		const sources = h(document, 'div');
-		sources.className = 'ash-scm-merge-block-sources';
-		for (const [label, value] of [
-			[localize({ bundle: 'ash', key: 'git.mergeCurrent' }, 'Current'), block.current],
-			[localize({ bundle: 'ash', key: 'git.mergeIncoming' }, 'Incoming'), block.incoming],
-		] as const) {
-			const source = h(document, 'pre');
-			source.setAttribute('aria-label', label);
-			source.textContent = value;
-			sources.append(source);
-		}
-		const actions = h(document, 'div');
-		actions.className = 'ash-scm-merge-block-actions';
-		for (const [label, value] of [
-			[localize({ bundle: 'ash', key: 'git.acceptCurrent' }, 'Accept Current'), block.current],
-			[localize({ bundle: 'ash', key: 'git.acceptIncoming' }, 'Accept Incoming'), block.incoming],
-			[localize({ bundle: 'ash', key: 'git.acceptBoth' }, 'Accept Both'), block.current + block.incoming],
-		] as const) {
-			this.blockButtons.add(new Button(actions, { label, onClick: () => this.acceptBlock(block, value) }));
-		}
-		section.append(heading, sources, actions);
-		this.blocksDomNode.append(section);
-	}
-
-	private acceptBlock(block: MergeConflictBlock, value: string): void {
-		const control = this.resultEditor.getControl();
-		if (!control) return;
-		const text = control.getValue();
-		if (!parseMergeConflictBlocks(text).some(candidate => candidate.start === block.start && candidate.end === block.end && candidate.current === block.current && candidate.incoming === block.incoming)) {
-			this.renderBlocks();
-			return;
-		}
-		const model = control.getModel();
-		if (!model) return;
-		control.executeEdits('mergeEditor', [{ range: Range.fromPositions(model.positionAt(block.start), model.positionAt(block.end)), text: value }]);
 	}
 
 	private async completeMerge(): Promise<void> {

@@ -18,6 +18,7 @@ import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { Selection } from '../../../common/core/selection.js';
 import { TextModel } from "../../../common/model/textModel.js";
+import { ScrollType } from '../../../common/editorCommon.js';
 import { EditorLineWrapping, EditorOption } from '../../../common/config/editorOptions.js';
 import { type ViewConfigurationChangedEvent } from '../../../common/viewEvents.js';
 import { AccessibilitySupport, IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
@@ -61,6 +62,18 @@ function pointerEvent(dom: JSDOM, type: string, pointerId: number, buttons: numb
 function delay(targetWindow: Pick<Window, 'setTimeout'>, duration: number): Promise<void> {
 	return new Promise(resolve => targetWindow.setTimeout(resolve, duration));
 }
+
+test('code editor reports vertical scroll changes for linked editor views', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel(Array.from({ length: 100 }, (_, index) => `line ${index}`).join('\n'));
+	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, lineHeight: 20 });
+	editor.layout({ width: 320, height: 80 });
+	const changes: { readonly scrollTopChanged: boolean; readonly scrollLeftChanged: boolean }[] = [];
+	using listener = editor.onDidScrollChange(event => changes.push(event));
+	editor.setScrollTop(80, ScrollType.Immediate);
+	assert.ok(changes.some(change => change.scrollTopChanged));
+});
 
 test('textarea system-caret movement returns through TextAreaInput and stops after blur', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');

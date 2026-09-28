@@ -1,0 +1,113 @@
+.ash-merge-editor {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-height: 0;
+	min-width: 0;
+	container-type: inline-size;
+	background: var(--ash-editor-background);
+	color: var(--ash-editor-foreground);
+}
+
+.ash-merge-navigation {
+	display: flex;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-editor-group-border);
+}
+
+.ash-merge-inputs {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	flex: 1;
+	min-height: 0;
+}
+
+.ash-merge-input,
+.ash-merge-result {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	min-width: 0;
+}
+
+.ash-merge-input + .ash-merge-input {
+	border-left: var(--ash-strokeThickness) solid var(--ash-editor-group-border);
+}
+
+.ash-merge-input h3,
+.ash-merge-result h3 {
+	margin: 0;
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
+	font-size: var(--ash-fontSize-heading3);
+	font-weight: var(--ash-fontWeight-semiBold);
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-editor-group-border);
+}
+
+.ash-merge-input-editor,
+.ash-merge-result-editor {
+	flex: 1;
+	min-height: 0;
+	min-width: 0;
+}
+
+.ash-merge-hunks {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+	max-height: 25%;
+	overflow: auto;
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
+	border-block: var(--ash-strokeThickness) solid var(--ash-editor-group-border);
+}
+
+.ash-merge-hunk {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size40);
+	border: var(--ash-strokeThickness) solid var(--ash-editor-group-border);
+	border-radius: var(--ash-cornerRadius-small);
+}
+
+.ash-merge-hunk.active {
+	border-color: var(--ash-focusBorder);
+}
+
+.ash-merge-hunk-state {
+	font-size: var(--ash-fontSize-label2);
+}
+
+.ash-merge-result {
+	flex: 1;
+}
+
+.ash-merge-result-placeholder {
+	padding: var(--ash-spacing-size120);
+}
+
+.ash-merge-line-unresolved {
+	background: var(--ash-diffEditor-removedLineBackground);
+}
+
+.ash-merge-line-resolved {
+	background: var(--ash-diffEditor-insertedLineBackground);
+}
+
+@container (max-width: 700px) {
+	.ash-merge-inputs {
+		grid-template-columns: 1fr;
+		min-height: 40%;
+		overflow: auto;
+	}
+
+	.ash-merge-input {
+		min-height: 10rem;
+	}
+
+	.ash-merge-input + .ash-merge-input {
+		border-left: 0;
+		border-top: var(--ash-strokeThickness) solid var(--ash-editor-group-border);
+	}
+}

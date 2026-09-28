@@ -368,6 +368,8 @@ test('Source Control settings use the selected Chinese language catalog', async 
 			localize('git.unavailable', 'Git is unavailable for this workspace. Check folder access and retry.'),
 			localize('git.keepCurrentDeletion', 'Keep Current Deletion'),
 			localize('git.keepIncomingDeletion', 'Keep Incoming Deletion'),
+			localize('git.previousConflict', 'Previous Conflict'),
+			localize('git.nextConflict', 'Next Conflict'),
 		], [
 			'配置 Git 自动获取和源代码管理差异标记。',
 			'自动获取远端更新',
@@ -380,6 +382,8 @@ test('Source Control settings use the selected Chinese language catalog', async 
 			'此工作区暂时无法使用 Git。请检查文件夹访问权限后重试。',
 			'保留当前删除结果',
 			'保留传入删除结果',
+			'上一个冲突',
+			'下一个冲突',
 		]);
 	} finally {
 		resetNlsResolver();

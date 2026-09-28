@@ -131,6 +131,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	private readonly dropIntoEditorEmitter = this._register(new Emitter<{ readonly position: Position; readonly event: DragEvent }>());
 	private readonly mouseWheelEmitter = this._register(new Emitter<IMouseWheelEvent>());
 	private readonly changeEmitter = this._register(new Emitter<IModelContentChangedEvent>());
+	private readonly scrollChangeEmitter = this._register(new Emitter<{ readonly scrollTopChanged: boolean; readonly scrollLeftChanged: boolean }>());
 	private readonly modelWillChangeEmitter = this._register(new Emitter<IModelChangedEvent>());
 	private readonly modelChangeEmitter = this._register(new Emitter<IModelChangedEvent>());
 	private readonly modelDecorationsEmitter = this._register(new Emitter<IModelDecorationsChangedEvent>());
@@ -148,6 +149,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	readonly onDidDispose = this.disposeEmitter.event;
 	readonly onDidChangeConfiguration: Event<ConfigurationChangedEvent>;
 	readonly onDidChangeModelContent = this.changeEmitter.event;
+	readonly onDidScrollChange = this.scrollChangeEmitter.event;
 	readonly onWillChangeModel = this.modelWillChangeEmitter.event;
 	readonly onDidChangeModel = this.modelChangeEmitter.event;
 	readonly onDidChangeModelDecorations = this.modelDecorationsEmitter.event;
@@ -329,6 +331,10 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				{ batchChanges: callback => callback() },
 			));
 			modelStore.add(viewModel.onEvent(event => {
+				if (event.kind === OutgoingViewModelEventKind.ScrollChanged) {
+					this.scrollChangeEmitter.fire({ scrollTopChanged: event.scrollTopChanged, scrollLeftChanged: event.scrollLeftChanged });
+					return;
+				}
 				if (event.kind === OutgoingViewModelEventKind.ModelContentChanged) {
 					this.changeEmitter.fire(event.event);
 					return;

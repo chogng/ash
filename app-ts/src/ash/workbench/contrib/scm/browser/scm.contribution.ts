@@ -73,7 +73,7 @@ AccessibleViewRegistry.register({
 		return new AccessibleContentProvider(
 			AccessibleViewProviderId.ScmMerge,
 			{ type: AccessibleViewType.Help },
-			() => localize({ bundle: 'ash', key: 'git.mergeHelp' }, 'Merge editor. Review Base, Current, and Incoming. Use Tab to reach each conflict choice. Accept Current, Incoming, or Both, or edit the Result directly. For deleted or binary versions, choose the whole file. Save with Ctrl+S or Command+S. Complete Merge saves and stages the result after all conflict markers are removed. Press <keybinding:editor.action.accessibleView> to read all four versions.'),
+			() => localize({ bundle: 'ash', key: 'git.mergeHelp' }, 'Merge editor. Review Base, Current, and Incoming in read-only code editors. Use Previous Conflict and Next Conflict to navigate, then Accept Current, Incoming, or Both, or edit the Result directly. For deleted or binary versions, choose the whole file. Save with Ctrl+S or Command+S. Complete Merge saves and stages the result after all conflict markers are removed. Press <keybinding:editor.action.accessibleView> to read all four versions.'),
 			() => pane.focus(),
 			AccessibilityVerbositySettingId.ScmMerge,
 		);

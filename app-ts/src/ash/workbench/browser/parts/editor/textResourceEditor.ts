@@ -16,7 +16,7 @@ import { EditorPaneSelectionChangeReason, type IEditorPaneWithSelection } from '
 import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
 import { type ITextResourceStore } from "../../../services/textmodelResolver/common/textResourceStore.js";
 import { CodeEditorWidget, type CodeEditorWidgetOptions } from '../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
-import { type ICodeEditorViewState } from '../../../../editor/common/editorCommon.js';
+import { type ICodeEditorViewState, type IEditorDecorationsCollection } from '../../../../editor/common/editorCommon.js';
 import { ITextModelResourceService, type TextModelReference } from "../../../services/textmodelResolver/common/textModelResourceService.js";
 import { type EditorTextDirection } from "../../../../editor/browser/view.js";
 import { EditorLineWrapping, type IEditorOptions } from "../../../../editor/common/config/editorOptions.js";
@@ -27,6 +27,7 @@ import { type LanguageLocation, type LanguageWorkspaceEdit } from "../../../../e
 import { type ILanguageDiagnosticsService } from "../../../services/language/common/languageDiagnosticsService.js";
 import type { Selection } from "../../../../editor/common/core/selection.js";
 import type { TextModel } from '../../../../editor/common/model/textModel.js';
+import type { IModelDeltaDecoration } from '../../../../editor/common/model.js';
 import type { ICursorSelectionChangedEvent } from "../../../../editor/common/cursorEvents.js";
 import type { EditorPaneStatus } from "../../../browser/parts/editor/editorPane.js";
 import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
@@ -45,6 +46,7 @@ import { CODE_EDITOR_ID } from '../../../common/editor/codeEditorId.js';
 
 export interface EditorPanePart extends IDisposable, ITextCodeEditorControl {
 	readonly onDidChangeModelContent: Event<IModelContentChangedEvent>;
+	readonly onDidScrollChange: Event<{ readonly scrollTopChanged: boolean; readonly scrollLeftChanged: boolean }>;
 	readonly onDidChangeCursorSelection: Event<ICursorSelectionChangedEvent>;
 	getSelections(): Selection[] | null;
 	setSelection(selection: Range, source?: string): void;
@@ -52,6 +54,13 @@ export interface EditorPanePart extends IDisposable, ITextCodeEditorControl {
 	focus(): void;
 	getValue(): string;
 	getModel(): TextModel | null;
+	createDecorationsCollection(decorations?: IModelDeltaDecoration[]): IEditorDecorationsCollection;
+	getScrollTop(): number;
+	getScrollLeft(): number;
+	getVisibleRanges(): Range[];
+	getTopForLineNumber(lineNumber: number): number;
+	setScrollTop(scrollTop: number): void;
+	setScrollLeft(scrollLeft: number): void;
 	executeEdits(source: string, edits: { range: Range; text: string }[]): boolean;
 	updateOptions(options: Readonly<IEditorOptions>): void;
 	revealRange?(range: Range): void;

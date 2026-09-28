@@ -166,6 +166,7 @@ export interface ICodeEditor {
 	readonly onWillChangeModel: Event<IModelChangedEvent>;
 	readonly onDidChangeModel: Event<IModelChangedEvent>;
 	readonly onDidChangeModelContent: Event<IModelContentChangedEvent>;
+	readonly onDidScrollChange: Event<{ readonly scrollTopChanged: boolean; readonly scrollLeftChanged: boolean }>;
 	readonly onDidChangeModelDecorations: Event<IModelDecorationsChangedEvent>;
 	readonly onDidChangeConfiguration: Event<ConfigurationChangedEvent>;
 	readonly onDidAttemptReadOnlyEdit: Event<void>;
