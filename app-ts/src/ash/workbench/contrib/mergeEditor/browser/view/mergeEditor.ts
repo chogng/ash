@@ -1,9 +1,11 @@
-import { h, type IDimension } from '../../../../../base/browser/dom.js';
+import { getWindow, h, type IDimension } from '../../../../../base/browser/dom.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { observeElementSize } from '../../../../../base/browser/observer.js';
+import { AnimationFrameScheduler } from '../../../../../base/browser/scheduler.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { CodeEditorWidget } from '../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
 import type { ICodeEditor } from '../../../../../editor/browser/editorBrowser.js';
+import type { EditorLayoutInfo } from '../../../../../editor/common/config/editorOptions.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import type { LineRange } from '../../../../../editor/common/core/ranges/lineRange.js';
 import type { IEditorDecorationsCollection } from '../../../../../editor/common/editorCommon.js';
@@ -20,6 +22,7 @@ import './media/mergeEditor.css';
 
 type SourceSide = Exclude<MergeEditorSide, 'result'>;
 type MergeCodeEditor = Pick<ICodeEditor, 'changeViewZones' | 'getTopForLineNumber' | 'getBottomForLineNumber' | 'getModel'>;
+type MergeGeometryEditor = Pick<ICodeEditor, 'onDidChangeConfiguration' | 'onDidLayoutChange' | 'getLayoutInfo'>;
 
 interface MergeZone {
 	readonly afterLineNumber: number;
@@ -45,6 +48,7 @@ export class MergeEditor extends Disposable {
 	private readonly zoneIds = new Map<MergeEditorSide, string[]>();
 	private readonly sourceEditors = new Map<SourceSide, CodeEditorWidget>();
 	private readonly sourceNodes = new Map<SourceSide, HTMLElement>();
+	private alignmentScheduler!: AnimationFrameScheduler;
 	private domNode!: HTMLDivElement;
 	private hunksDomNode!: HTMLDivElement;
 	private resultDomNode!: HTMLDivElement;
@@ -75,6 +79,13 @@ export class MergeEditor extends Disposable {
 	}
 
 	public create(container: HTMLElement): void {
+		this.alignmentScheduler = this._register(new AnimationFrameScheduler(getWindow(container), () => {
+			if (!this.model?.isReady) return;
+			const focusedButtonIndex = this.hunkActionButtons.findIndex(button => button.domNode === this.domNode.ownerDocument.activeElement);
+			this.renderZones();
+			if (focusedButtonIndex >= 0) this.hunkActionButtons[focusedButtonIndex]?.focus();
+			this.synchronizeScroll('current', { scrollTopChanged: true, scrollLeftChanged: false });
+		}));
 		const document = container.ownerDocument;
 		this.domNode = h(document, 'div');
 		this.domNode.className = 'ash-merge-editor';
@@ -176,10 +187,12 @@ export class MergeEditor extends Disposable {
 		for (const side of ['base', 'current', 'incoming'] as const) {
 			const editor = this.sourceEditors.get(side)!;
 			store.add(editor.onDidScrollChange(event => this.synchronizeScroll(side, event)));
+			this.trackEditorGeometry(editor, store);
 		}
 		const resultControl = this.resultEditor.getControl();
 		if (!resultControl) throw new Error('Merge result editor is not loaded');
 		store.add(resultControl.onDidScrollChange(event => this.synchronizeScroll('result', event)));
+		this.trackEditorGeometry(resultControl, store);
 		const decorations = new Map<MergeEditorSide, IEditorDecorationsCollection>();
 		for (const side of ['base', 'current', 'incoming'] as const) decorations.set(side, this.sourceEditors.get(side)!.createDecorationsCollection());
 		decorations.set('result', resultControl.createDecorationsCollection());
@@ -201,6 +214,7 @@ export class MergeEditor extends Disposable {
 	}
 
 	public clearInput(): void {
+		this.alignmentScheduler.cancel();
 		this.clearZones();
 		for (const editor of this.sourceEditors.values()) editor.setModel(null);
 		this.session.clear();
@@ -239,6 +253,16 @@ export class MergeEditor extends Disposable {
 			this.renderZones();
 			this.synchronizeScroll('current', { scrollTopChanged: true, scrollLeftChanged: false });
 		}
+	}
+
+	private trackEditorGeometry(editor: MergeGeometryEditor, store: DisposableStore): void {
+		let layout = editor.getLayoutInfo();
+		store.add(editor.onDidChangeConfiguration(() => this.alignmentScheduler.schedule()));
+		store.add(editor.onDidLayoutChange(next => {
+			if (sameLineGeometry(layout, next)) return;
+			layout = next;
+			this.alignmentScheduler.schedule();
+		}));
 	}
 
 	public setVisible(visibility: EditorPaneVisibility): void {
@@ -594,4 +618,10 @@ function rangeForLines(model: TextModel, lines: LineRange): Range {
 	const start = Math.min(lines.startLineNumber, model.getLineCount());
 	const end = Math.min(lines.endLineNumberExclusive, model.getLineCount());
 	return new Range(start, 1, end, lines.endLineNumberExclusive > model.getLineCount() ? model.getLineMaxColumn(end) : 1);
+}
+
+function sameLineGeometry(previous: EditorLayoutInfo, next: EditorLayoutInfo): boolean {
+	return previous.width === next.width
+		&& previous.contentWidth === next.contentWidth
+		&& previous.wrappingColumn === next.wrappingColumn;
 }

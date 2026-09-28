@@ -172,6 +172,7 @@ test('SCM merge editors synchronize scrolling across the three sources and resul
 	await run('git', ['merge', '--abort'], { cwd });
 	await run('git', ['reset', '--hard', 'HEAD~1'], { cwd });
 	const lines = Array.from({ length: 150 }, (_, index) => `const line${index} = ${index};`);
+	lines[74] = `const preceding = '${'wide'.repeat(70)}';`;
 	lines[75] = 'const value = 1;';
 	lines[76] = 'const middle = 1;';
 	lines[77] = 'const tail = 1;';
@@ -229,6 +230,30 @@ test('SCM merge editors synchronize scrolling across the three sources and resul
 		return node.getBoundingClientRect().top - editor.getBoundingClientRect().top;
 	})));
 	expect(Math.max(...pairedTops) - Math.min(...pairedTops)).toBeLessThan(2);
+	const readActionTopSpread = async (): Promise<number> => {
+		const tops = await Promise.all(['.ash-merge-input-base', '.ash-merge-input-current', '.ash-merge-input-incoming', '.ash-merge-result-editor'].map(selector => group.content.locator(`${selector} .ash-merge-inline-actions[data-visible-view-zone]`).evaluate(node => {
+			const editor = node.closest('.stanza-editor')!;
+			return node.getBoundingClientRect().top - editor.getBoundingClientRect().top;
+		})));
+		return Math.max(...tops) - Math.min(...tops);
+	};
+	await group.content.locator('.ash-merge-result-editor .stanza-editor-input').focus();
+	await page.keyboard.press('F1');
+	const picker = page.locator('.ash-quick-pick');
+	await picker.getByRole('combobox').fill('View: Toggle Word Wrap');
+	await picker.locator('.ash-quick-pick-row-label', { hasText: /^View: Toggle Word Wrap$/u }).click();
+	await expect(group.content.locator('.ash-merge-result-editor .stanza-editor')).toHaveClass(/word-wrapped/);
+	await page.getByRole('button', { name: 'Conflict 1' }).click();
+	await expect.poll(readActionTopSpread).toBeLessThan(2);
+	const viewport = await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
+	const resultWidth = await editors[2].evaluate(node => node.getBoundingClientRect().width);
+	const currentAction = group.content.locator('.ash-merge-input-current .ash-merge-inline-actions[data-visible-view-zone]').getByRole('button', { name: 'Accept Current' });
+	await currentAction.focus();
+	await page.setViewportSize({ width: viewport.width - 300, height: viewport.height });
+	await expect.poll(() => editors[2].evaluate(node => node.getBoundingClientRect().width)).toBeLessThan(resultWidth - 100);
+	await expect.poll(readActionTopSpread).toBeLessThan(2);
+	await expect(currentAction).toBeFocused();
+	await page.setViewportSize(viewport);
 	const actionScrollTop = await editors[0].evaluate(node => node.scrollTop);
 	await editors[0].evaluate(node => {
 		const line = [...node.querySelectorAll('.view-line')].find(row => row.textContent?.includes('const currentExtra = 30;'));

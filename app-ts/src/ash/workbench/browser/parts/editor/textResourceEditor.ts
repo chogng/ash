@@ -19,7 +19,7 @@ import { CodeEditorWidget, type CodeEditorWidgetOptions } from '../../../../edit
 import { type ICodeEditorViewState, type IEditorDecorationsCollection } from '../../../../editor/common/editorCommon.js';
 import { ITextModelResourceService, type TextModelReference } from "../../../services/textmodelResolver/common/textModelResourceService.js";
 import { type EditorTextDirection } from "../../../../editor/browser/view.js";
-import { EditorLineWrapping, type IEditorOptions } from "../../../../editor/common/config/editorOptions.js";
+import { EditorLineWrapping, type ConfigurationChangedEvent, type EditorLayoutInfo, type IEditorOptions } from "../../../../editor/common/config/editorOptions.js";
 import { EditorMinimapConfiguration } from '../../../../editor/common/config/editorConfigurationSchema.js';
 import { type IWorkingCopy, type IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import { type Range } from "../../../../editor/common/core/range.js";
@@ -48,6 +48,8 @@ import { CODE_EDITOR_ID } from '../../../common/editor/codeEditorId.js';
 export interface EditorPanePart extends IDisposable, ITextCodeEditorControl {
 	readonly onDidChangeModelContent: Event<IModelContentChangedEvent>;
 	readonly onDidScrollChange: Event<{ readonly scrollTopChanged: boolean; readonly scrollLeftChanged: boolean }>;
+	readonly onDidChangeConfiguration: Event<ConfigurationChangedEvent>;
+	readonly onDidLayoutChange: Event<EditorLayoutInfo>;
 	readonly onDidChangeCursorSelection: Event<ICursorSelectionChangedEvent>;
 	getSelections(): Selection[] | null;
 	setSelection(selection: Range, source?: string): void;
@@ -61,6 +63,7 @@ export interface EditorPanePart extends IDisposable, ITextCodeEditorControl {
 	getVisibleRanges(): Range[];
 	getTopForLineNumber(lineNumber: number): number;
 	getBottomForLineNumber(lineNumber: number): number;
+	getLayoutInfo(): EditorLayoutInfo;
 	setScrollTop(scrollTop: number): void;
 	setScrollLeft(scrollLeft: number): void;
 	changeViewZones(callback: (accessor: IViewZoneChangeAccessor) => void): void;
