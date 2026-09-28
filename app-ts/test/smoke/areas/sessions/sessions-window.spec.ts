@@ -5,6 +5,30 @@ import { tmpdir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
 import { launchElectron } from '../../../automation/playwrightElectron.js';
 
+test.describe('Notification Center', () => {
+	test.use({ openWorkspace: false });
+	test('Sessions window opens and closes Notification Center', async ({ application, target, workbench }) => {
+		test.skip(target.workbenchMode !== 'code', 'Requires Code Sessions');
+		let page = workbench.page;
+		if (target.kind === 'browser') {
+			await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
+		} else {
+			if (!('windows' in application)) throw new Error('Expected an Electron application');
+			const opened = application.waitForEvent('window');
+			await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
+			page = await opened;
+		}
+		const toggle = page.getByRole('button', { name: 'Show Notification Center' });
+		await expect(toggle).toBeVisible();
+		await toggle.click();
+		const center = page.getByRole('region', { name: 'Notification Center' });
+		await expect(center).toBeVisible();
+		await expect(center.getByText('No notifications')).toBeVisible();
+		await page.keyboard.press('Escape');
+		await expect(center).toBeHidden();
+	});
+});
+
 async function returnFromSessions(page: Page): Promise<void> {
 	const accountButton = page.getByRole('button', { name: 'Accounts' });
 	await accountButton.click();

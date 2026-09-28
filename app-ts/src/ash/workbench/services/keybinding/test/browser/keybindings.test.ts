@@ -28,7 +28,8 @@ import {
 import {
 	ServiceContainer,
 } from "../../../../../platform/instantiation/common/instantiation.js";
-import { BrowserNotificationService } from "../../../../../platform/notification/browser/notificationService.js";
+import { NotificationService } from "../../../../../workbench/services/notification/common/notificationService.js";
+import { NotificationsToasts } from "../../../../browser/parts/notifications/notificationsToasts.js";
 import { INotificationService, NotificationSeverity } from "../../../../../platform/notification/common/notification.js";
 import {
 	KeybindingResolveKind,
@@ -171,7 +172,7 @@ test("browser service executes chords and restores IME state", async () => {
 		keyboardLayoutService: keyboardLayout,
 		statusbarService: statusbar,
 		registry,
-	}, registrations.add(new BrowserNotificationService(dom.window.document.body))));
+	}, registrations.add(new NotificationService())));
 
 	IME.enable();
 	const first = keyboardEvent({ code: "KeyK", key: "k" });
@@ -229,7 +230,7 @@ test("browser service dispatches Ctrl+Shift+P with a shifted key value", async (
 		contextKeyService: contexts,
 		keyboardLayoutService: keyboardLayout,
 		registry,
-	}, registrations.add(new BrowserNotificationService(dom.window.document.body))));
+	}, registrations.add(new NotificationService())));
 	const shortcut = keyboardEvent({
 		code: "KeyP",
 		key: "P",
@@ -267,7 +268,7 @@ test('registered auxiliary window dispatches workbench shortcuts until it closes
 		contextKeyService: contexts,
 		keyboardLayoutService: keyboardLayout,
 		registry,
-	}, resources.add(new BrowserNotificationService(main.window.document.body))));
+	}, resources.add(new NotificationService())));
 	const registration = resources.add(registerWindow(auxiliary.window as unknown as Window));
 	const button = auxiliary.window.document.querySelector('button')!;
 	const pressShortcut = (): void => {
@@ -301,7 +302,8 @@ test('failed keyboard command appears as a warning notification', async () => {
 		navigator: fakeNavigator(),
 		operatingSystem: OperatingSystem.Windows,
 	}));
-	const notifications = resources.add(new BrowserNotificationService(dom.window.document.body));
+	const notifications = resources.add(new NotificationService());
+	resources.add(new NotificationsToasts(dom.window.document.body, notifications));
 	const services = resources.add(new ServiceContainer());
 	services.registerInstance(INotificationService, notifications);
 	const keybindings = resources.add(services.createInstance(WorkbenchKeybindingService, {
@@ -344,7 +346,7 @@ test("keyboard shortcut troubleshooting traces native, mapped, and resolved even
 		contextKeyService: contexts,
 		keyboardLayoutService: keyboardLayout,
 		registry,
-	}, registrations.add(new BrowserNotificationService(dom.window.document.body))));
+	}, registrations.add(new NotificationService())));
 	const messages: string[] = [];
 	registrations.add(service.onDidLog(message => messages.push(message)));
 
@@ -404,7 +406,7 @@ test("single modifier bindings dispatch on keyup only when the modifier was unus
 		contextKeyService: contexts,
 		keyboardLayoutService: keyboardLayout,
 		registry,
-	}, registrations.add(new BrowserNotificationService(dom.window.document.body))));
+	}, registrations.add(new NotificationService())));
 
 	const firstDown = keyboardEvent({ key: "Control", code: "ControlLeft", keyCode: 17, ctrlKey: true });
 	const firstUp = keyboardEvent({ key: "Control", code: "ControlLeft", keyCode: 17, ctrlKey: false });

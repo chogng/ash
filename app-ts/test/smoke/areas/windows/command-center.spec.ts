@@ -19,7 +19,58 @@ test('Manage Accounts command opens the account picker when the account service 
 		await page.keyboard.press('Escape');
 		await expect(accountPicker).toHaveCount(0);
 	} else {
-		await expect(page.locator('.ash-notification', { hasText: 'Could not load accounts.' })).toBeVisible();
+		const notification = page.locator('.ash-notification', { hasText: 'Could not load accounts.' });
+		await expect(notification).toBeVisible();
+		const [notificationBounds, statusbarBounds, workbenchBounds] = await Promise.all([
+			notification.boundingBox(),
+			page.locator('.ash-workbench-statusbar').boundingBox(),
+			workbench.element.boundingBox(),
+		]);
+		expect(notificationBounds).not.toBeNull();
+		expect(statusbarBounds).not.toBeNull();
+		expect(workbenchBounds).not.toBeNull();
+		expect(notificationBounds!.y + notificationBounds!.height).toBeLessThanOrEqual(statusbarBounds!.y);
+		expect(statusbarBounds!.y - notificationBounds!.y - notificationBounds!.height).toBeLessThanOrEqual(24);
+		expect(workbenchBounds!.x + workbenchBounds!.width - notificationBounds!.x - notificationBounds!.width).toBeLessThanOrEqual(24);
+		await page.locator('.ash-progress-host').evaluate(host => {
+			const item = host.ownerDocument.createElement('div');
+			item.className = 'ash-progress-item';
+			item.textContent = 'Background task';
+			host.append(item);
+		});
+		const [notificationWithProgress, progressBounds] = await Promise.all([
+			notification.boundingBox(),
+			page.locator('.ash-progress-item').boundingBox(),
+		]);
+		expect(notificationWithProgress).not.toBeNull();
+		expect(progressBounds).not.toBeNull();
+		expect(notificationWithProgress!.y + notificationWithProgress!.height).toBeLessThanOrEqual(progressBounds!.y);
+		await notification.getByRole('button', { name: 'Hide notification' }).click();
+		await expect(notification).toHaveCount(0);
+		await page.getByRole('button', { name: 'Show Notification Center' }).click();
+		const center = page.getByRole('region', { name: 'Notification Center' });
+		await expect(center).toBeVisible();
+		await expect(center.locator('.ash-notifications-row', { hasText: 'Could not load accounts.' })).toBeVisible();
+		await center.getByRole('button', { name: 'Clear All' }).click();
+		await expect(center.getByText('No notifications')).toBeVisible();
+		await page.keyboard.press('Escape');
+		await expect(center).toBeHidden();
+		if (target.kind === 'electron') {
+			await page.keyboard.press('Control+k');
+			await page.keyboard.press('Control+Shift+n');
+		} else {
+			await page.keyboard.press('F1');
+			await page.locator('.ash-quick-pick').getByRole('combobox').fill('Show Notifications');
+			await page.locator('.ash-quick-pick').getByRole('combobox').press('Enter');
+		}
+		await expect(center).toBeVisible();
+		await page.keyboard.press('Alt+F1');
+		const help = page.getByRole('dialog', { name: 'Accessibility Help' });
+		await expect(help).toBeVisible();
+		await help.getByRole('button', { name: 'Close' }).last().click();
+		await expect(help).toHaveCount(0);
+		await page.keyboard.press('Escape');
+		await expect(center).toBeHidden();
 		await expect(page.getByRole('dialog', { name: 'Select an account to manage' })).toHaveCount(0);
 	}
 });

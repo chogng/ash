@@ -232,56 +232,31 @@ button, input, select, textarea { font: inherit; }
   text-decoration-line: underline;
 }
 
-.ash-notification-host {
+.ash-feedback-host {
   position: absolute;
   z-index: 1000;
-  inset-block-start: 12px;
+  inset-block-end: calc(var(--ash-feedback-statusbar-height) + 8px);
   inset-inline-end: 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
   width: min(420px, calc(100% - 24px));
+  max-height: calc(100% - var(--ash-feedback-statusbar-height) - 16px);
   pointer-events: none;
 }
 
-.ash-notification {
+.ash-progress-host {
   display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  padding: 10px 12px;
-  border: var(--ash-stroke-thickness) solid var(--ash-widget-border, var(--ash-foreground));
-  border-radius: var(--ash-corner-radius-medium);
-  color: var(--ash-foreground);
-  background: var(--ash-editor-background, var(--ash-workbench-background));
-  box-shadow: 0 4px 16px var(--ash-widget-shadow);
+  min-height: 0;
+  flex-direction: column;
+  overflow-y: auto;
   pointer-events: auto;
 }
 
-.ash-notification-content {
-  min-width: 0;
-  flex: 1 1 auto;
+.ash-progress-host:empty {
+  display: none;
 }
 
-.ash-notification-message {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.ash-notification-source {
-  margin-top: 4px;
-  opacity: .75;
-  font-size: .9em;
-}
-
-.ash-notification-actions {
-  display: flex;
-  gap: 6px;
-  margin-top: 8px;
-  flex-wrap: wrap;
-}
-
-.ash-notification-action,
-.ash-notification-close,
 .ash-progress-cancel {
   border: var(--ash-stroke-thickness) solid var(--ash-button-border, var(--ash-foreground));
   border-radius: var(--ash-corner-radius-small);
@@ -290,24 +265,8 @@ button, input, select, textarea { font: inherit; }
   cursor: pointer;
 }
 
-.ash-notification-close {
-  inline-size: 24px;
-  block-size: 24px;
-  padding: 0;
-  font-size: 18px;
-  line-height: 20px;
-}
-
 .ash-progress-host {
-  position: absolute;
-  z-index: 999;
-  inset-block-end: 8px;
-  inset-inline-end: 12px;
-  display: flex;
-  flex-direction: column;
   gap: 6px;
-  width: min(420px, calc(100% - 24px));
-  pointer-events: none;
 }
 
 .ash-progress-item {

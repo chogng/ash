@@ -55,10 +55,13 @@ import {
 	ServiceContainer,
 } from "../../platform/instantiation/common/instantiation.js";
 import { getSingletonServiceDescriptors } from '../../platform/instantiation/common/extensions.js';
-import { BrowserNotificationService } from "../../platform/notification/browser/notificationService.js";
+import { NotificationService } from "../services/notification/common/notificationService.js";
+import { IAccessibleViewService, AccessibilityVerbositySettingId } from "../../platform/accessibility/browser/accessibleView.js";
+import { INotificationsCenter, NotificationsCenter } from "./parts/notifications/notificationsCenter.js";
 import { INotificationService } from "../../platform/notification/common/notification.js";
 import { BrowserProgressService } from "../../platform/progress/browser/progressService.js";
 import { IProgressService } from "../../platform/progress/common/progress.js";
+import { StatusbarHeight } from './parts/workbenchPartDimensions.js';
 import { MarkerService, IMarkerService } from "../../platform/markers/common/markers.js";
 import type { IKeybindingsResourceApi } from "../../platform/keybinding/common/keybindingsResource.js";
 import type { IKeyboardLayoutProvider } from "../../platform/keyboardLayout/common/keyboardLayout.js";
@@ -610,9 +613,14 @@ export class Workbench extends Disposable {
 			throw new Error("Workbench requires an owner window");
 		}
 		this.ownerWindow = ownerWindow;
-		const notificationService = this._register(new BrowserNotificationService(workbenchRoot));
+		const feedbackHost = ownerDocument.createElement('div');
+		feedbackHost.className = 'ash-feedback-host';
+		feedbackHost.style.setProperty('--ash-feedback-statusbar-height', `${StatusbarHeight}px`);
+		workbenchRoot.append(feedbackHost);
+		this._register(toDisposable(() => feedbackHost.remove()));
+		const notificationService = this._register(new NotificationService());
 		services.registerInstance(INotificationService, notificationService);
-		const progressService = this._register(new BrowserProgressService(workbenchRoot));
+		const progressService = this._register(new BrowserProgressService(feedbackHost));
 		services.registerInstance(IProgressService, progressService);
 		services.registerInstance(IClipboardService, new BrowserClipboardService(ownerWindow.navigator.clipboard));
 		this.lifecycleService = this._register(lifecycleService);
@@ -709,6 +717,8 @@ export class Workbench extends Disposable {
 		services.registerInstance(ICommandService, commandService);
 		const contextKeys = this._register(new ContextKeyService());
 		services.registerInstance(IContextKeyService, contextKeys);
+		const notificationsCenter = this._register(new NotificationsCenter(workbenchRoot, feedbackHost, notificationService, statusbarService, contextKeys, () => services.get(IAccessibleViewService).getOpenAriaHint(AccessibilityVerbositySettingId.Notifications)));
+		services.registerInstance(INotificationsCenter, notificationsCenter);
 		const keyboardLayoutService = this._register(new BrowserKeyboardLayoutService({
 			navigator: ownerWindow.navigator,
 			configurationService: configuration,

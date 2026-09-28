@@ -48,6 +48,7 @@ import "./parts/dialogs/dialog.web.contribution.js";
 import "./parts/editor/editor.contribution.js";
 import "./parts/titlebar/menubar.contribution.js";
 import "./parts/titlebar/titlebarActions.js";
+import "./parts/notifications/notificationsCommands.js";
 
 ViewsRegistry.registerStaticViewContainer({
 	id: WorkbenchViewContainerId.Sidebar,

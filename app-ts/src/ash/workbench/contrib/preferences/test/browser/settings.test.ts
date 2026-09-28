@@ -50,6 +50,7 @@ const { darkColorTheme } = await import('../../../../../platform/theme/common/co
 const { AccessibilityConfiguration } = await import('../../../../../platform/accessibility/common/accessibility.js');
 const { HoverConfiguration } = await import('../../../../../platform/hover/common/hoverService.js');
 const { SashConfiguration } = await import('../../../../../workbench/contrib/sash/common/sash.js');
+const { DictationConfiguration } = await import('../../../../../platform/dictation/common/dictationConfiguration.js');
 const { WorkbenchConfiguration } = await import('../../../../../workbench/common/configuration.js');
 const { SessionsConfiguration } = await import('../../../../../sessions/common/configuration.js');
 const { WorkbenchThemesRegistry } = await import('../../../../../workbench/common/theme.js');
@@ -152,12 +153,15 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, AccessibilityConfiguration.underlineLinks), 'general');
 	assert.equal(findSettingCategory(layout, HoverConfiguration.delay), 'general');
 	assert.equal(findSettingCategory(layout, SashConfiguration.size), 'general');
+	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'general');
+	assert.equal(findSettingCategory(layout, DictationConfiguration.localModel), 'general');
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.colorTheme), 'appearance');
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.layoutStyle), 'layout');
 	assert.equal(findSettingCategory(layout, StartupEditorConfigurationKey), 'startup');
 	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN');
 	assert.equal(chinese?.bundles['ash.settings']?.['categories.startup.label'], '启动');
 	assert.equal(chinese?.bundles.ash?.['settings.workbench.startup.group.label'], '启动时的编辑器');
+	assert.equal(chinese?.bundles.ash?.['settings.dictation.group'], '语音输入');
 	assert.equal(defaults.all.some(setting => Object.values(SessionsConfiguration).includes(setting.id)), false);
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.activityBarLocation), 'layout');
 	const iconThemeSetting = defaults.get(WorkbenchConfiguration.iconTheme);

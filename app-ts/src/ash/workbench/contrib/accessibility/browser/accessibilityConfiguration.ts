@@ -4,6 +4,20 @@ import { Extensions, type IConfigurationRegistry } from '../../../../platform/co
 import { Registry } from '../../../../platform/registry/common/platform.js';
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.Notifications,
+	defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') throw new TypeError('Notifications accessibility verbosity must be boolean');
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		title: localize('accessibility.notificationsVerbosityTitle', 'Notifications accessibility help'),
+		description: localize('accessibility.notificationsVerbosityDescription', 'Announce how to open notification accessibility help when the Notification Center receives focus.'),
+	},
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.Explorer,
 	defaultValue: true,
 	parse(value: unknown): boolean {

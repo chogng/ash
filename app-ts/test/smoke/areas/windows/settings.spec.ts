@@ -9,6 +9,11 @@ test('Settings opens with editor display controls', async ({ target, workbench }
 	await page.locator('[data-settings-category-id="editor"]').click();
 	await expect(page.locator('[data-configuration-key="editor.renderWhitespace"]')).toBeVisible();
 	await expect(page.locator('[data-configuration-key="editor.renderControlCharacters"]')).toBeVisible();
+	if (target.kind === 'electron') {
+		await page.locator('[data-settings-category-id="general"]').click();
+		await expect(page.locator('[data-configuration-key="dictation.backend"]')).toBeVisible();
+		await expect(page.locator('[data-configuration-key="dictation.localModel"]')).toBeVisible();
+	}
 	if (target.workbenchMode === 'code') {
 		await page.locator('[data-settings-group-id="workbench"]').click();
 		await page.locator('[data-settings-category-id="startup"]').click();

@@ -7,6 +7,7 @@ export const enum AccessibleViewProviderId {
 	OpenEditors = 'openEditors',
 	SessionsActivityBar = 'sessionsActivityBar',
 	SessionsSettings = 'sessionsSettings',
+	Notifications = 'notifications',
 }
 
 export const enum AccessibleViewType {
@@ -20,6 +21,7 @@ export const enum AccessibilityVerbositySettingId {
 	OpenEditors = 'accessibility.verbosity.openEditors',
 	SessionsActivityBar = 'accessibility.verbosity.sessionsActivityBar',
 	SessionsSettings = 'accessibility.verbosity.sessionsSettings',
+	Notifications = 'accessibility.verbosity.notifications',
 }
 
 export interface IAccessibleViewOptions {

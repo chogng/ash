@@ -1,6 +1,8 @@
 import "./media/workbench.css";
 import "./actions/sessionsChatActions.js";
 import './activityBarAccessibility.js';
+import '../../workbench/contrib/accessibility/browser/accessibilityConfiguration.js';
+import '../../workbench/browser/parts/notifications/notificationsCommands.js';
 import '../../workbench/contrib/accessibility/browser/accessibleViewActions.js';
 import { h } from "../../base/browser/dom.js";
 import { bindResizableLayout } from "../../base/browser/ui/resizable/resizable.js";
@@ -17,7 +19,8 @@ import { ServiceContainer } from "../../platform/instantiation/common/instantiat
 import type { IKeybindingsResourceApi } from "../../platform/keybinding/common/keybindingsResource.js";
 import { BrowserLayoutService, ILayoutService } from "../../platform/layout/browser/layoutService.js";
 import { ILifecycleService, type ShutdownReason } from "../../workbench/services/lifecycle/common/lifecycle.js";
-import { BrowserNotificationService } from "../../platform/notification/browser/notificationService.js";
+import { NotificationService } from "../../workbench/services/notification/common/notificationService.js";
+import { INotificationsCenter, NotificationsCenter } from "../../workbench/browser/parts/notifications/notificationsCenter.js";
 import { INotificationService } from "../../platform/notification/common/notification.js";
 import type { IRendererHost } from "../../platform/renderer/common/rendererHost.js";
 import type { INativeHostApi } from '../../platform/native/common/nativeHost.js';
@@ -185,14 +188,20 @@ export class Workbench extends Disposable {
 			focus: () => sessionsPart?.focus(),
 		}));
 		services.registerInstance(ILayoutService, this.layoutService);
-		const notificationService = this._register(new BrowserNotificationService(this.domNode));
+		const notificationService = this._register(new NotificationService());
 		services.registerInstance(INotificationService, notificationService);
+		const feedbackHost = h(ownerDocument, "div");
+		feedbackHost.className = "ash-feedback-host";
+		this.domNode.append(feedbackHost);
+		this._register(toDisposable(() => feedbackHost.remove()));
 		services.registerInstance(IOpenerService, new BrowserOpenerService(ownerWindow));
 		services.registerInstance(IUserKeyboardLayoutService, UnavailableUserKeyboardLayoutService);
 		const commandService = this._register(new CommandService(services));
 		services.registerInstance(ICommandService, commandService);
 		const contextKeys = this._register(new ContextKeyService());
 		services.registerInstance(IContextKeyService, contextKeys);
+		const notificationsCenter = this._register(new NotificationsCenter(this.domNode, feedbackHost, notificationService, undefined, contextKeys, () => services.get(IAccessibleViewService).getOpenAriaHint(AccessibilityVerbositySettingId.Notifications)));
+		services.registerInstance(INotificationsCenter, notificationsCenter);
 		const keyboardLayoutService = this._register(new BrowserKeyboardLayoutService({
 			navigator: ownerWindow.navigator,
 			configurationService,

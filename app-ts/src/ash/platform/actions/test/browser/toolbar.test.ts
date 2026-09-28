@@ -4,6 +4,7 @@ import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { h } from "../../../../base/browser/dom.js";
 import { Event } from "../../../../base/common/event.js";
+import type { INotificationService } from "../../../notification/common/notification.js";
 
 test("toolbar submenu items retain toolbar button semantics", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
@@ -594,7 +595,6 @@ test("More Actions opens an anchored Menu with actionable list items", async () 
 		{ CommandService },
 		{ BrowserContextViewService },
 		{ BrowserContextMenuService },
-		{ BrowserNotificationService },
 	] = await Promise.all([
 		import("../../../../base/common/actions.js"),
 		import("../../../../base/browser/ui/toolbar/toolbar.js"),
@@ -604,7 +604,6 @@ test("More Actions opens an anchored Menu with actionable list items", async () 
 		import("../../../../workbench/services/commands/common/commandService.js"),
 		import("../../../../platform/contextview/browser/contextViewService.js"),
 		import("../../../../platform/contextview/browser/contextMenuService.js"),
-		import("../../../../platform/notification/browser/notificationService.js"),
 	]);
 	const host = dom.window.document.querySelector<HTMLElement>("main");
 	assert.ok(host);
@@ -612,7 +611,8 @@ test("More Actions opens an anchored Menu with actionable list items", async () 
 	const commands = new CommandService(new ServiceContainer());
 	const menus = new MenuService(commands, contexts);
 	using contextViews = new BrowserContextViewService(host);
-	using notifications = new BrowserNotificationService(host);
+	const notificationMessages: string[] = [];
+	const notifications = { error: (message: string) => { notificationMessages.push(message); } } as unknown as INotificationService;
 	using contextMenus = new BrowserContextMenuService(
 		menus,
 		contexts,
@@ -689,7 +689,7 @@ test("More Actions opens an anchored Menu with actionable list items", async () 
 	await Promise.resolve();
 	await Promise.resolve();
 	assert.equal(
-		notifications.getNotifications()[0]?.message,
+		notificationMessages[0],
 		"Action failed after the menu closed",
 	);
 
