@@ -3,6 +3,7 @@ use super::AppServerThreadUpdates;
 use super::CodebaseModels;
 use super::EnvStateMode;
 use super::RpcError;
+use super::agent_environment_source::RepositoryInspection;
 use super::codebase_runtime::CodebaseRuntime;
 use super::dir_contributions::DirContributions;
 use super::fs_watcher::FileSystemWatcher;
@@ -79,7 +80,6 @@ use std::sync::Mutex;
 use std::sync::RwLock;
 
 pub(super) struct EnvRuntime {
-    pub(super) cwd: Option<PathBuf>,
     pub(super) selected_grant: Option<Grant>,
     pub(super) selected_file_system: Option<Arc<dyn FileSystem>>,
     pub(super) dirs: BTreeMap<String, Grant>,
@@ -137,7 +137,6 @@ pub(super) struct SessionDirEntrySnapshotSet {
 impl EnvRuntime {
     pub(super) fn empty(turn_executor: TurnExecutor) -> Self {
         Self {
-            cwd: None,
             selected_grant: None,
             selected_file_system: None,
             dirs: BTreeMap::new(),
@@ -1009,12 +1008,6 @@ impl fmt::Display for EnvRuntimeError {
 
 impl std::error::Error for EnvRuntimeError {}
 
-#[derive(Clone, Copy)]
-enum CwdUpdate {
-    Preserve,
-    SelectedDirectory,
-}
-
 impl AppServer {
     /// Installs explicit execution targets without coupling them to the selected local directory.
     pub fn with_execution_environments(
@@ -1291,27 +1284,11 @@ impl AppServer {
             .env_runtime_gate
             .lock()
             .map_err(|_| EnvRuntimeError::Failed("Environment runtime gate poisoned".into()))?;
-        self.ensure_env_cwd_set_is_idle()?;
+        self.ensure_directory_transition_is_idle()?;
         let dir =
             Dir::open_local(root).map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
         let authorization = host.grants.grant(dir)?;
-        self.activate_dir_runtime(authorization, host, CwdUpdate::Preserve)
-    }
-
-    pub(crate) fn set_env_cwd(&self, cwd: PathBuf) -> Result<PathBuf, EnvRuntimeError> {
-        if self.local_env_host.is_none() {
-            return Err(EnvRuntimeError::Unavailable);
-        }
-        self.ensure_env_cwd_set_is_idle()?;
-        let cwd = Dir::open_local(cwd)
-            .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?
-            .canonical_path()
-            .to_path_buf();
-        self.env_runtime
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .cwd = Some(cwd.clone());
-        Ok(cwd)
+        self.activate_dir_runtime(authorization, host)
     }
 
     pub(crate) fn activate_host_configured_dir_root(
@@ -1326,12 +1303,12 @@ impl AppServer {
             .env_runtime_gate
             .lock()
             .map_err(|_| EnvRuntimeError::Failed("Environment runtime gate poisoned".into()))?;
-        self.ensure_env_cwd_set_is_idle()?;
+        self.ensure_directory_transition_is_idle()?;
         let dir =
             Dir::open_local(root).map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
         let authorization =
             Grant::for_environment(dir, GrantSource::HostConfiguration, host_dir_permissions());
-        self.activate_dir_runtime(authorization, host, CwdUpdate::Preserve)
+        self.activate_dir_runtime(authorization, host)
     }
 
     pub(crate) fn switch_local_dir_root_with_permissions(
@@ -1348,14 +1325,10 @@ impl AppServer {
             .env_runtime_gate
             .lock()
             .map_err(|_| EnvRuntimeError::Failed("Environment runtime gate poisoned".into()))?;
-        self.ensure_env_cwd_set_is_idle()?;
+        self.ensure_directory_transition_is_idle()?;
         let dir =
             Dir::open_local(root).map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
-        self.activate_dir_runtime(
-            Grant::for_environment(dir, source, permissions),
-            host,
-            CwdUpdate::Preserve,
-        )
+        self.activate_dir_runtime(Grant::for_environment(dir, source, permissions), host)
     }
 
     pub(crate) fn authorize_local_dir_root(
@@ -1415,25 +1388,7 @@ impl AppServer {
 
     pub(crate) fn activate_local_dirs(
         &self,
-        dirs: Vec<(String, Grant)>,
-    ) -> Result<Vec<(String, PathBuf, Permissions)>, EnvRuntimeError> {
-        self.activate_local_dirs_with_cwd(dirs, CwdUpdate::Preserve)
-    }
-
-    pub(crate) fn activate_local_workspace(
-        &self,
-        authorization: Grant,
-    ) -> Result<Vec<(String, PathBuf, Permissions)>, EnvRuntimeError> {
-        self.activate_local_dirs_with_cwd(
-            vec![("root".to_string(), authorization)],
-            CwdUpdate::SelectedDirectory,
-        )
-    }
-
-    fn activate_local_dirs_with_cwd(
-        &self,
         mut dirs: Vec<(String, Grant)>,
-        cwd_update: CwdUpdate,
     ) -> Result<Vec<(String, PathBuf, Permissions)>, EnvRuntimeError> {
         let host = self
             .local_env_host
@@ -1443,7 +1398,7 @@ impl AppServer {
             .env_runtime_gate
             .lock()
             .map_err(|_| EnvRuntimeError::Failed("Environment runtime gate poisoned".into()))?;
-        self.ensure_env_cwd_set_is_idle()?;
+        self.ensure_directory_transition_is_idle()?;
         if dirs.is_empty() {
             host.hooks.unbind_dir();
             host.tools.replace_executable(None, false)?;
@@ -1467,7 +1422,6 @@ impl AppServer {
                 }
             };
             let mut next = EnvRuntime::empty(executor);
-            next.cwd = current.cwd.clone();
             next.dir_grants = Arc::clone(&current.dir_grants);
             let previous = std::mem::replace(&mut *current, next);
             drop(current);
@@ -1500,7 +1454,6 @@ impl AppServer {
         let Some((_, primary)) = dirs.first() else {
             unreachable!("empty directory sets are handled above");
         };
-        let primary_path = primary.dir().canonical_path().to_path_buf();
         let git_dirs = dirs
             .iter()
             .map(|(id, authorization)| {
@@ -1534,7 +1487,7 @@ impl AppServer {
                 (id.clone(), file_system)
             })
             .collect::<BTreeMap<_, _>>();
-        self.activate_dir_runtime(primary.clone(), host, cwd_update)?;
+        self.activate_dir_runtime(primary.clone(), host)?;
         let (grep, primary_search, primary_terminals, primary_debug_adapters) = {
             let runtime = self
                 .env_runtime
@@ -1650,9 +1603,6 @@ impl AppServer {
             let previous_watcher = runtime.workspace._git_watcher.take();
             let previous_dir_watchers =
                 std::mem::take(&mut runtime.workspace._dir_file_system_watchers);
-            if matches!(cwd_update, CwdUpdate::SelectedDirectory) {
-                runtime.cwd = Some(primary_path);
-            }
             runtime.dirs = dirs.clone();
             runtime.dir_file_systems = dir_file_systems;
             runtime.workspace._dir_file_system_watchers = dir_file_system_watchers;
@@ -1738,6 +1688,50 @@ impl AppServer {
         Ok((path, mutation, snapshots))
     }
 
+    pub(super) fn move_session_dir(
+        &self,
+        session_id: &SessionId,
+        root: PathBuf,
+        permissions: Permissions,
+    ) -> Result<(PathBuf, SessionDirEntrySnapshotSet), EnvRuntimeError> {
+        ensure_session_exists(&self.threads, session_id)?;
+        let (primary, contributions) = {
+            let runtime = self
+                .env_runtime
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let primary = runtime
+                .selected_grant
+                .as_ref()
+                .ok_or(EnvRuntimeError::Unavailable)?;
+            let contributions = runtime
+                ._dir_contributions
+                .clone()
+                .ok_or(EnvRuntimeError::Unavailable)?;
+            (primary.dir().canonical_path().to_path_buf(), contributions)
+        };
+        let requested = if root.is_absolute() {
+            root
+        } else {
+            primary.join(root)
+        };
+        let dir = Dir::open_local(requested)
+            .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
+        let path = dir.canonical_path().to_path_buf();
+        let inspection = if permissions.allows(Permission::InspectRepository) {
+            RepositoryInspection::Allowed
+        } else {
+            RepositoryInspection::Omit
+        };
+        let environment = contributions
+            .environment_for_directory(&path, inspection)
+            .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
+        let (path, _, snapshots) = self.add_session_dir(session_id, path, permissions)?;
+        // Turn context is immutable once assembled; only later snapshots see this selection.
+        contributions.move_session(session_id.clone(), path.clone(), environment);
+        Ok((path, snapshots))
+    }
+
     pub(super) fn remove_session_dir(
         &self,
         session_id: &SessionId,
@@ -1760,6 +1754,15 @@ impl AppServer {
         };
         let mutation = dir_grants.remove_dir(session_id, root);
         self.reconcile_session_dir_consumers(session_id)?;
+        if let Some(contributions) = self
+            .env_runtime
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            ._dir_contributions
+            .as_ref()
+        {
+            contributions.forget_ungranted_session_directory(session_id);
+        }
         self.terminate_revoked_terminal_sessions();
         let snapshots = session_dir_snapshots(&dir_grants, session_id);
         Ok((mutation, snapshots))
@@ -1957,7 +1960,6 @@ impl AppServer {
         &self,
         authorization: Grant,
         host: &LocalEnvHost,
-        cwd_update: CwdUpdate,
     ) -> Result<PathBuf, EnvRuntimeError> {
         if self.selected_grant_is_current(&authorization) {
             return Ok(authorization.dir().canonical_path().to_path_buf());
@@ -1966,7 +1968,7 @@ impl AppServer {
             .permissions()
             .allows(Permission::ExecuteCommands)
         {
-            self.commit_limited_dir_runtime(authorization, host, cwd_update)
+            self.commit_limited_dir_runtime(authorization, host)
         } else {
             let env_config = self
                 .env_config
@@ -1989,7 +1991,7 @@ impl AppServer {
                 self.pty_helper.as_ref(),
             )
             .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
-            self.commit_full_env_runtime(authorization, local, grep, host, cwd_update)
+            self.commit_full_env_runtime(authorization, local, grep, host)
         };
         if result.is_ok() {
             self.reset_language_env_runtimes();
@@ -2007,7 +2009,6 @@ impl AppServer {
         &self,
         authorization: Grant,
         host: &LocalEnvHost,
-        cwd_update: CwdUpdate,
     ) -> Result<PathBuf, EnvRuntimeError> {
         let dir = authorization.dir().clone();
         let canonical_root = dir.canonical_path().to_path_buf();
@@ -2078,10 +2079,6 @@ impl AppServer {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         current.dir_grants.clear();
         let next = EnvRuntime {
-            cwd: match cwd_update {
-                CwdUpdate::Preserve => current.cwd.clone(),
-                CwdUpdate::SelectedDirectory => Some(canonical_root.clone()),
-            },
             selected_grant: Some(authorization),
             selected_file_system: Some(file_system),
             dirs: BTreeMap::new(),
@@ -2128,7 +2125,6 @@ impl AppServer {
         local: crate::local_tools::LocalToolComposition,
         grep: Arc<grep::Service>,
         host: &LocalEnvHost,
-        cwd_update: CwdUpdate,
     ) -> Result<PathBuf, EnvRuntimeError> {
         let dir = authorization.dir().clone();
         let file_system: Arc<dyn FileSystem> =
@@ -2287,10 +2283,6 @@ impl AppServer {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         current.dir_grants.clear();
         let next = EnvRuntime {
-            cwd: match cwd_update {
-                CwdUpdate::Preserve => current.cwd.clone(),
-                CwdUpdate::SelectedDirectory => Some(canonical_root.clone()),
-            },
             selected_grant: Some(authorization),
             selected_file_system: Some(file_system),
             dirs: BTreeMap::new(),
@@ -2874,7 +2866,7 @@ impl AppServer {
             .clone()
     }
 
-    fn ensure_env_cwd_set_is_idle(&self) -> Result<(), EnvRuntimeError> {
+    fn ensure_directory_transition_is_idle(&self) -> Result<(), EnvRuntimeError> {
         let threads = self
             .threads
             .list_threads()

@@ -2199,9 +2199,9 @@
         "SkillsUnavailable",
         "SkillOperationFailed",
         "SkillNotFound",
-        "EnvCwdSetUnavailable",
-        "EnvCwdSetBusy",
-        "EnvCwdSetFailed",
+        "EnvironmentUnavailable",
+        "EnvironmentBusy",
+        "EnvironmentFailed",
         "RevisionConflict",
         "PermissionRequired",
         "ExtensionsUnavailable",
@@ -4462,43 +4462,11 @@
         {
           "properties": {
             "method": {
-              "const": "env/cwd/set",
-              "type": "string"
-            },
-            "params": {
-              "$ref": "#/$defs/EnvCwdSetParams"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
               "const": "env/dirs/set",
               "type": "string"
             },
             "params": {
               "$ref": "#/$defs/EnvDirsSetParams"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "const": "env/workspace/set",
-              "type": "string"
-            },
-            "params": {
-              "$ref": "#/$defs/EnvWorkspaceSetParams"
             }
           },
           "required": [
@@ -4531,6 +4499,22 @@
             },
             "params": {
               "$ref": "#/$defs/SessionDirAddParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "session/dirs/move",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionDirMoveParams"
             }
           },
           "required": [
@@ -9234,43 +9218,11 @@
         {
           "properties": {
             "method": {
-              "const": "env/cwd/set",
-              "type": "string"
-            },
-            "result": {
-              "$ref": "#/$defs/EnvCwdSetResult"
-            }
-          },
-          "required": [
-            "method",
-            "result"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
               "const": "env/dirs/set",
               "type": "string"
             },
             "result": {
               "$ref": "#/$defs/EnvDirsSetResult"
-            }
-          },
-          "required": [
-            "method",
-            "result"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "const": "env/workspace/set",
-              "type": "string"
-            },
-            "result": {
-              "$ref": "#/$defs/EnvWorkspaceSetResult"
             }
           },
           "required": [
@@ -9303,6 +9255,22 @@
             },
             "result": {
               "$ref": "#/$defs/SessionDirAddResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "session/dirs/move",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/SessionDirMoveResult"
             }
           },
           "required": [
@@ -17109,29 +17077,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "EnvCwdSetParams": {
-      "description": "Changes only the working directory used to resolve relative paths.",
-      "properties": {
-        "cwd": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "cwd"
-      ],
-      "type": "object"
-    },
-    "EnvCwdSetResult": {
-      "properties": {
-        "cwd": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "cwd"
-      ],
-      "type": "object"
-    },
     "EnvDirDto": {
       "properties": {
         "id": {
@@ -17204,40 +17149,6 @@
     "EnvId": {
       "description": "Stable host-selected identity for one execution and filesystem environment.",
       "type": "string"
-    },
-    "EnvWorkspaceSetParams": {
-      "description": "Selects one directory as both the working directory and active workspace root.",
-      "properties": {
-        "grant": {
-          "$ref": "#/$defs/DirGrantDto"
-        },
-        "path": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "path",
-        "grant"
-      ],
-      "type": "object"
-    },
-    "EnvWorkspaceSetResult": {
-      "properties": {
-        "cwd": {
-          "type": "string"
-        },
-        "dirs": {
-          "items": {
-            "$ref": "#/$defs/EnvDirDto"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "cwd",
-        "dirs"
-      ],
-      "type": "object"
     },
     "ExecPolicyActionKindDto": {
       "description": "Coarse action category available to deterministic execution-policy selectors.",
@@ -31331,6 +31242,53 @@
         }
       },
       "required": [
+        "revision",
+        "dirs"
+      ],
+      "type": "object"
+    },
+    "SessionDirMoveParams": {
+      "description": "Selects one Session execution directory and adds its explicit Session grant.",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "permissions": {
+          "items": {
+            "$ref": "#/$defs/PermissionDto"
+          },
+          "type": "array"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        }
+      },
+      "required": [
+        "sessionId",
+        "path",
+        "permissions"
+      ],
+      "type": "object"
+    },
+    "SessionDirMoveResult": {
+      "properties": {
+        "cwd": {
+          "type": "string"
+        },
+        "dirs": {
+          "items": {
+            "$ref": "#/$defs/SessionDirDto"
+          },
+          "type": "array"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cwd",
         "revision",
         "dirs"
       ],

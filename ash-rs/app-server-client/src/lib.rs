@@ -56,9 +56,9 @@ use ash_app_server_protocol::protocol::diff::DiffComputeParams;
 use ash_app_server_protocol::protocol::diff::DiffComputeResult;
 use ash_app_server_protocol::protocol::document::{TypstCompileParams, TypstCompileResult};
 use ash_app_server_protocol::protocol::environment::{
-    DirPermissionsReadParams, DirPermissionsReadResult, EnvCwdSetParams, EnvCwdSetResult,
-    EnvDirsSetParams, EnvDirsSetResult, SessionDirAddParams, SessionDirAddResult,
-    SessionDirListParams, SessionDirListResult, SessionDirMutationResult,
+    DirPermissionsReadParams, DirPermissionsReadResult, EnvDirsSetParams, EnvDirsSetResult,
+    SessionDirAddParams, SessionDirAddResult, SessionDirListParams, SessionDirListResult,
+    SessionDirMoveParams, SessionDirMoveResult, SessionDirMutationResult,
     SessionDirPermissionsSetParams, SessionDirRemoveParams,
 };
 use ash_app_server_protocol::protocol::fs::{
@@ -390,10 +390,6 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         })
     }
 
-    pub fn set_env_cwd(&mut self, params: EnvCwdSetParams) -> Result<EnvCwdSetResult, ClientError> {
-        self.call(ClientMethod::EnvCwdSet, params)
-    }
-
     pub fn set_env_dirs(
         &mut self,
         params: EnvDirsSetParams,
@@ -413,6 +409,13 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         params: SessionDirAddParams,
     ) -> Result<SessionDirAddResult, ClientError> {
         self.call(ClientMethod::SessionDirAdd, params)
+    }
+
+    pub fn move_session_dir(
+        &mut self,
+        params: SessionDirMoveParams,
+    ) -> Result<SessionDirMoveResult, ClientError> {
+        self.call(ClientMethod::SessionDirMove, params)
     }
 
     pub fn remove_session_dir(

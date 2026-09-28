@@ -105,19 +105,24 @@ fn session_scope_uses_the_declared_session_identity() {
 }
 
 #[test]
-fn environment_changes_exclude_concurrent_global_reads() {
-    let scope = definition("env/cwd/set")
-        .serialization_scope(&serde_json::json!({ "cwd": "/workspace" }))
+fn session_directory_move_is_session_exclusive() {
+    let scope = definition("session/dirs/move")
+        .serialization_scope(&serde_json::json!({ "sessionId": "session-1", "path": "/workspace", "permissions": [] }))
         .unwrap();
 
     assert_eq!(
         scope,
-        Some(ClientRequestSerializationScope::Global {
+        Some(ClientRequestSerializationScope::Session {
+            session_id: "session-1".into(),
             access: SerializationAccess::Exclusive,
         })
     );
+    assert!(
+        !CLIENT_METHODS
+            .iter()
+            .any(|method| matches!(method.method, "env/cwd/set" | "env/workspace/set"))
+    );
 }
-
 #[test]
 fn account_usage_queries_do_not_hold_the_global_mutation_lock() {
     assert_eq!(

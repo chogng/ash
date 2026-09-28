@@ -82,7 +82,7 @@ import { ElectronRemoteRuntimeInstallWindow } from "../../platform/remote/electr
 import { electronRemoteWindowMainHost } from "../../platform/remote/electron-main/electronRemoteWindowMainHost.js";
 import { RemoteWindowMainContext } from "../../platform/remote/electron-main/remoteWindowMainContext.js";
 import { WORKSPACE_CONTEXT_CHANGED_CHANNEL } from "../../platform/workspace/common/workspaceIpc.js";
-import { createAppServerWorkspaceTransitionAdapter, createUserDirGrant, readAppServerDirPermissions, setAppServerWorkspaceFolders, switchAppServerWorkspace } from "../../platform/workspaces/electron-main/appServerWorkspaceTransition.js";
+import { createAppServerWorkspaceTransitionAdapter, createUserDirGrant, persistAppServerDirectoryGrant, readAppServerDirPermissions, setAppServerWorkspaceFolders } from "../../platform/workspaces/electron-main/appServerWorkspaceTransition.js";
 import { DEVELOPMENT_DIR_PERMISSIONS, READ_DIR_PERMISSIONS } from '../../platform/workspace/common/workspaceTrust.js';
 import { type IWorkspaceTransitionFailure, type WorkspaceTransitionMainServiceOptions, WorkspaceTransitionFailureKind, WorkspaceTransitionMainService, WorkspaceTransitionStatus } from "../../platform/workspaces/electron-main/workspaceTransitionMainService.js";
 import { WorkspacesManagementMainService } from '../../platform/workspaces/electron-main/workspacesManagementMainService.js';
@@ -1253,15 +1253,13 @@ export class AshApplication extends Disposable {
 			};
 		}
 		const launcher = supervisor.options.enabled ? supervisor.options.processLauncher : undefined;
-		const appServerWorkspace = createAppServerWorkspaceTransitionAdapter(
-			supervisor,
-			workspaceHost,
+		if (!(launcher instanceof LocalAppServerProcessLauncher) && !(launcher instanceof SshAppServerProcessLauncher)) {
+			throw new Error("Workspace connection has no directory launcher");
+		}
+		const appServerWorkspace = createAppServerWorkspaceTransitionAdapter(supervisor,
 			launcher instanceof LocalAppServerProcessLauncher
-				? (root, grant) => this.reconnectLocalAppServerWorkspace(supervisor, launcher, root, grant, workspaceHost)
-				: launcher instanceof SshAppServerProcessLauncher
-					? (root, grant) => this.reconnectRemoteAppServerWorkspace(supervisor, launcher, root, grant, workspaceHost)
-				: undefined,
-		);
+				? (root, grant, workspaceId, previousWorkspaceId) => this.reconnectLocalAppServerWorkspace(supervisor, launcher, root, grant, workspaceId, previousWorkspaceId, workspaceHost)
+				: (root, grant, workspaceId, previousWorkspaceId) => this.reconnectRemoteAppServerWorkspace(supervisor, launcher, root, grant, workspaceId, previousWorkspaceId, workspaceHost));
 		return {
 			runtime: appServerWorkspace,
 			classifyRuntimeError: (error) => appServerWorkspace.classifyRuntimeError(error),
@@ -1274,6 +1272,8 @@ export class AshApplication extends Disposable {
 		launcher: LocalAppServerProcessLauncher,
 		root: string,
 		grant: DirGrant,
+		workspaceId: string,
+		previousWorkspaceId: string,
 		workspaceHost: RendererWorkspaceHost,
 	): Promise<void> {
 		const previousEnvironment = launcher.environment;
@@ -1282,16 +1282,20 @@ export class AshApplication extends Disposable {
 			ASH_WORKSPACE_ROOT: root,
 			ASH_DIR_GRANT_SOURCE: "userConfig",
 		};
+		await persistAppServerDirectoryGrant(workspaceHost, root, grant);
 		await supervisor.stop();
 		launcher.replaceEnvironment(nextEnvironment);
 		try {
 			await supervisor.start();
-			await switchAppServerWorkspace(workspaceHost, root, grant);
+			await workspaceHost.setFolders([{ id: workspaceId, path: root, grant: { type: "config" } }]);
 		} catch (error) {
 			await supervisor.stop();
 			launcher.replaceEnvironment(previousEnvironment);
 			try {
 				await supervisor.start();
+				await workspaceHost.setFolders(previousEnvironment.ASH_WORKSPACE_ROOT
+					? [{ id: previousWorkspaceId, path: previousEnvironment.ASH_WORKSPACE_ROOT, grant: { type: "config" } }]
+					: []);
 			} catch (rollbackError) {
 				throw new AggregateError([error, rollbackError], "Workspace authority switch and rollback both failed");
 			}
@@ -1304,19 +1308,25 @@ export class AshApplication extends Disposable {
 		launcher: SshAppServerProcessLauncher,
 		root: string,
 		grant: DirGrant,
+		workspaceId: string,
+		previousWorkspaceId: string,
 		workspaceHost: RendererWorkspaceHost,
 	): Promise<void> {
 		const previousRoot = launcher.workspaceRoot;
+		await persistAppServerDirectoryGrant(workspaceHost, root, grant);
 		await supervisor.stop();
 		launcher.replaceWorkspaceRoot(root);
 		try {
 			await supervisor.start();
-			await switchAppServerWorkspace(workspaceHost, root, grant);
+			await workspaceHost.setFolders([{ id: workspaceId, path: root, grant: { type: "config" } }]);
 		} catch (error) {
 			await supervisor.stop();
 			launcher.replaceWorkspaceRoot(previousRoot);
 			try {
 				await supervisor.start();
+				await workspaceHost.setFolders(previousRoot
+					? [{ id: previousWorkspaceId, path: previousRoot, grant: { type: "config" } }]
+					: []);
 			} catch (rollbackError) {
 				throw new AggregateError([error, rollbackError], "Remote Workspace authority switch and rollback both failed");
 			}

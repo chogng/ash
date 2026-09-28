@@ -112,19 +112,6 @@ pub struct DirPermissionsForgetParams {
     pub dir: DirId,
 }
 
-/// Changes only the working directory used to resolve relative paths.
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct EnvCwdSetParams {
-    pub cwd: PathBuf,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct EnvCwdSetResult {
-    pub cwd: PathBuf,
-}
-
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct EnvDirSetEntry {
@@ -150,21 +137,6 @@ pub struct EnvDirDto {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct EnvDirsSetResult {
-    pub dirs: Vec<EnvDirDto>,
-}
-
-/// Selects one directory as both the working directory and active workspace root.
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct EnvWorkspaceSetParams {
-    pub path: PathBuf,
-    pub grant: DirGrantDto,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct EnvWorkspaceSetResult {
-    pub cwd: PathBuf,
     pub dirs: Vec<EnvDirDto>,
 }
 
@@ -207,6 +179,24 @@ pub struct SessionDirAddParams {
     pub session_id: SessionId,
     pub path: PathBuf,
     pub permissions: Vec<PermissionDto>,
+}
+
+/// Selects one Session execution directory and adds its explicit Session grant.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionDirMoveParams {
+    pub session_id: SessionId,
+    pub path: PathBuf,
+    pub permissions: Vec<PermissionDto>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionDirMoveResult {
+    pub cwd: PathBuf,
+    #[ts(type = "number")]
+    pub revision: u64,
+    pub dirs: Vec<SessionDirDto>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

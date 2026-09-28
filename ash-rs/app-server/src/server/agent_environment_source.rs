@@ -9,6 +9,12 @@ use std::process::Command;
 
 const MAX_GIT_STATUS_LINES: usize = 40;
 
+#[derive(Clone, Copy)]
+pub(super) enum RepositoryInspection {
+    Allowed,
+    Omit,
+}
+
 /// App Server-owned collection of immutable host and repository facts.
 #[derive(Clone)]
 pub(super) struct AgentEnvironmentSource {
@@ -17,6 +23,25 @@ pub(super) struct AgentEnvironmentSource {
 }
 
 impl AgentEnvironmentSource {
+    pub(super) fn for_directory(
+        &self,
+        path: &Path,
+        repository_inspection: RepositoryInspection,
+    ) -> Result<Self, AgentEnvironmentError> {
+        if matches!(repository_inspection, RepositoryInspection::Allowed) {
+            return Self::capture(path);
+        }
+        Ok(Self {
+            host: HostEnvironment::new(
+                path.to_path_buf(),
+                self.host.platform().to_owned(),
+                self.host.os_version().to_owned(),
+                self.host.shell().to_owned(),
+            )?,
+            repository: RepositoryEnvironment::NotDetected,
+        })
+    }
+
     pub(super) fn capture(dir_root: &Path) -> Result<Self, AgentEnvironmentError> {
         let is_git_repo = command_output(dir_root, "git", &["rev-parse", "--is-inside-work-tree"])
             .is_some_and(|output| output.trim() == "true");

@@ -4,6 +4,8 @@
 >
 > 状态：Session、Thread、Environment、Dir、目录授权以及 Project 的持久实体和长期多根目录表已经进入当前后端协议与实现。Project 的 Desktop/CLI/TUI 产品入口、根选择和跨 Environment 交互仍未完成；多个 Session 保持独立，不再建立第二套跨 Session 工作状态机。
 
+当前 `ash code /cd` 通过 `session/dirs/move` 更新该 Session 后续 Agent 上下文的 cwd，并单独记录该 Session 的目录授权；它不切换其他 Session 的执行位置。Desktop 的窗口 Workspace 切换由窗口重连到所选目录，再设置该窗口的目录集合，App Server 不提供窗口 Workspace 切换命令。
+
 ## 快速理解
 
 > **Project 是长期多根工作中心，弱关联根目录表、Session 和共同工作；`session_id` 是 Thread 树的分组身份，`thread.id` 是具体执行分支，Environment 是执行位置，`cwd` 与目录集合是环境内的工作范围。**

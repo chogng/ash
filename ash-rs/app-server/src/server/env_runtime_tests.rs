@@ -1,5 +1,4 @@
 use super::*;
-use crate::ConnectionState;
 use crate::local::ProviderModelService;
 use crate::local_tools::LocalToolComposition;
 use ash_action_policy::ActionReviewRequest;
@@ -238,13 +237,7 @@ fn env_runtime_replaces_directory_services_and_retains_connection_terminals() {
     let host = server.local_env_host.as_ref().unwrap();
 
     server
-        .commit_full_env_runtime(
-            first.authorization(),
-            test_local_tools(),
-            test_grep(),
-            host,
-            CwdUpdate::Preserve,
-        )
+        .commit_full_env_runtime(first.authorization(), test_local_tools(), test_grep(), host)
         .unwrap();
     let tool_names = host
         .tools
@@ -290,7 +283,6 @@ fn env_runtime_replaces_directory_services_and_retains_connection_terminals() {
             test_local_tools(),
             test_grep(),
             host,
-            CwdUpdate::Preserve,
         )
         .unwrap();
     let Ok(second_file_system) = server.file_system_service_for(None) else {
@@ -339,137 +331,6 @@ fn local_env_host_rejects_an_unconfigured_state_mode() {
     assert_eq!(
         error.to_string(),
         "local Directory host requires an explicit Directory state mode"
-    );
-}
-
-#[test]
-fn env_cwd_set_rpc_requires_a_local_env_host() {
-    let server = server();
-    let mut connection = server.connection();
-    let initialized = serde_json::json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "initialize",
-        "params": {
-            "clientInfo": {"name": "test", "version": "1"},
-            "capabilities": {}
-        }
-    });
-    server.handle_json(&mut connection, &initialized.to_string());
-    let request = serde_json::json!({
-        "jsonrpc": "2.0",
-        "id": 2,
-        "method": "env/cwd/set",
-        "params": {
-            "cwd": std::env::current_dir().unwrap()
-        }
-    });
-    let response: serde_json::Value =
-        serde_json::from_str(&server.handle_json(&mut connection, &request.to_string())).unwrap();
-
-    assert_eq!(response["error"]["message"], "EnvCwdSetUnavailable");
-}
-
-#[test]
-fn env_workspace_set_commits_cwd_and_root_together() {
-    let first = TestDir::new("workspace-first", "first.txt");
-    let second = TestDir::new("workspace-second", "second.txt");
-    let server = server().with_local_env_host(None, host_policy()).unwrap();
-    let mut connection = server.product_host_connection();
-    server.handle_json(
-        &mut connection,
-        &serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "clientInfo": {"name": "desktop", "version": "1"},
-                "capabilities": {"dirPermissionsHost": {"version": 1}}
-            }
-        })
-        .to_string(),
-    );
-
-    let set_workspace =
-        |connection: &mut ConnectionState, id, path: &Path, permissions: &[&str]| {
-            serde_json::from_str::<serde_json::Value>(
-                &server.handle_json(
-                    connection,
-                    &serde_json::json!({
-                        "jsonrpc": "2.0",
-                        "id": id,
-                        "method": "env/workspace/set",
-                        "params": {
-                            "path": path,
-                            "grant": {"type": "host", "permissions": permissions}
-                        }
-                    })
-                    .to_string(),
-                ),
-            )
-            .unwrap()
-        };
-    let permissions = ["readFiles", "inspectRepository"];
-    let response = set_workspace(&mut connection, 2, &first.path, &permissions);
-    let first_root = first.root();
-    assert_eq!(
-        response["result"]["cwd"],
-        first_root.canonical_path().to_str().unwrap()
-    );
-    assert_eq!(response["result"]["dirs"][0]["id"], "root");
-    assert_eq!(
-        response["result"]["dirs"][0]["path"],
-        first_root.canonical_path().to_str().unwrap()
-    );
-
-    let rejected = set_workspace(&mut connection, 3, &second.path, &[]);
-    assert_eq!(rejected["error"]["message"], "PermissionRequired");
-    {
-        let runtime = server.env_runtime.read().unwrap();
-        assert_eq!(runtime.cwd.as_deref(), Some(first_root.canonical_path()));
-        assert_eq!(
-            runtime.dirs["root"].dir().canonical_path(),
-            first_root.canonical_path()
-        );
-    }
-    let files = server.file_system_service_for(Some("root")).unwrap();
-    assert_eq!(
-        files.read_file(Path::new("first.txt"), 1024).unwrap(),
-        b"workspace-first"
-    );
-
-    let development_permissions = [
-        "readFiles",
-        "writeFiles",
-        "executeCommands",
-        "watchFiles",
-        "browseFiles",
-        "searchFiles",
-        "loadInstructions",
-        "loadConfig",
-        "discoverSkills",
-        "discoverMcp",
-        "useLanguageServices",
-        "discoverHooks",
-        "discoverPlugins",
-        "inspectRepository",
-        "mutateRepository",
-    ];
-    let response = set_workspace(&mut connection, 4, &second.path, &development_permissions);
-    let second_root = second.root();
-    assert_eq!(
-        response["result"]["cwd"],
-        second_root.canonical_path().to_str().unwrap()
-    );
-    assert_eq!(
-        response["result"]["dirs"][0]["path"],
-        second_root.canonical_path().to_str().unwrap()
-    );
-    let runtime = server.env_runtime.read().unwrap();
-    assert_eq!(runtime.cwd.as_deref(), Some(second_root.canonical_path()));
-    assert_eq!(
-        runtime.dirs["root"].dir().canonical_path(),
-        second_root.canonical_path()
     );
 }
 
@@ -550,7 +411,6 @@ fn dirs_are_session_scoped_and_removable() {
             test_local_tools(),
             test_grep(),
             host,
-            CwdUpdate::Preserve,
         )
         .unwrap();
     let first = server
@@ -614,7 +474,6 @@ fn cwd_directory_can_be_added_explicitly() {
             test_local_tools(),
             test_grep(),
             host,
-            CwdUpdate::Preserve,
         )
         .unwrap();
     let session = server
@@ -652,7 +511,6 @@ fn dir_mutation_requires_a_dir_permissions_host_connection() {
             test_local_tools(),
             test_grep(),
             host,
-            CwdUpdate::Preserve,
         )
         .unwrap();
     let session = server
@@ -711,7 +569,6 @@ fn dir_permissions_are_revision_bound_and_filter_capability_snapshots() {
             test_local_tools(),
             test_grep(),
             host,
-            CwdUpdate::Preserve,
         )
         .unwrap();
     let session = server
@@ -923,50 +780,6 @@ fn dir_permissions_are_revision_bound_and_filter_capability_snapshots() {
     )
     .unwrap();
     assert_eq!(stale["error"]["message"], "RevisionConflict");
-}
-
-#[test]
-fn env_cwd_set_does_not_require_a_directory_grant() {
-    let dir = TestDir::new("rpc-cwd", "readable.txt");
-    let config = Arc::new(ConfigStore::open(dir.path.join("permissions.sqlite3")).unwrap());
-    let server = server()
-        .with_config_store(Arc::clone(&config))
-        .with_local_env_host(None, DirGrantPolicy::UserConfig(Arc::clone(&config)))
-        .unwrap();
-    let mut connection = server.connection();
-    server.handle_json(
-        &mut connection,
-        &serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "clientInfo": {"name": "test", "version": "1"},
-                "capabilities": {}
-            }
-        })
-        .to_string(),
-    );
-
-    let response: serde_json::Value = serde_json::from_str(
-        &server.handle_json(
-            &mut connection,
-            &serde_json::json!({
-                "jsonrpc": "2.0",
-                "id": 2,
-                "method": "env/cwd/set",
-                "params": {
-                    "cwd": dir.path
-                }
-            })
-            .to_string(),
-        ),
-    )
-    .unwrap();
-
-    assert!(response.get("error").is_none());
-    assert!(response["result"]["cwd"].is_string());
-    assert!(server.terminal_service().is_err());
 }
 
 #[test]
@@ -1476,19 +1289,13 @@ fn restricted_activation_retries_a_persisted_pending_cloud_deletion() {
 }
 
 #[test]
-fn active_turn_blocks_env_cwd_set_without_changing_authority() {
+fn active_turn_blocks_directory_root_switch_without_changing_authority() {
     let first = TestDir::new("busy-first", "first.txt");
     let second = TestDir::new("busy-second", "second.txt");
     let server = server().with_local_env_host(None, host_policy()).unwrap();
     let host = server.local_env_host.as_ref().unwrap();
     server
-        .commit_full_env_runtime(
-            first.authorization(),
-            test_local_tools(),
-            test_grep(),
-            host,
-            CwdUpdate::Preserve,
-        )
+        .commit_full_env_runtime(first.authorization(), test_local_tools(), test_grep(), host)
         .unwrap();
     let thread = server
         .start_thread(StartThreadRequest {
@@ -1552,7 +1359,6 @@ fn active_turn_accepts_session_access_changes_and_revokes_old_snapshots() {
             test_local_tools(),
             test_grep(),
             host,
-            CwdUpdate::Preserve,
         )
         .unwrap();
     let thread = server
@@ -1623,6 +1429,65 @@ fn active_turn_accepts_session_access_changes_and_revokes_old_snapshots() {
         .unwrap();
     assert_eq!(empty_snapshot.revision().get(), 2);
     assert!(empty_snapshot.authorizations().is_empty());
+}
+
+#[test]
+fn session_directory_move_changes_future_context_only_for_that_session() {
+    let primary = TestDir::new("session-cwd-primary", "primary.txt");
+    let target = TestDir::new("session-cwd-target", "target.txt");
+    let server = server().with_local_env_host(None, host_policy()).unwrap();
+    server.switch_local_dir_root(primary.path.clone()).unwrap();
+    let first = server
+        .start_thread(StartThreadRequest {
+            branch_name: None,
+            agent_id: None,
+            agent: None,
+            command_id: CommandId::new("create-first-cwd-thread").unwrap(),
+            title: "first".into(),
+        })
+        .unwrap();
+    let second = server
+        .start_thread(StartThreadRequest {
+            branch_name: None,
+            agent_id: None,
+            agent: None,
+            command_id: CommandId::new("create-second-cwd-thread").unwrap(),
+            title: "second".into(),
+        })
+        .unwrap();
+    let (cwd, _) = server
+        .move_session_dir(&first.session_id, target.path.clone(), Permissions::new([]))
+        .unwrap();
+    assert_eq!(cwd, target.root().canonical_path());
+
+    let contributions = server
+        .env_runtime
+        .read()
+        .unwrap()
+        ._dir_contributions
+        .clone()
+        .unwrap();
+    let turn_id = ash_protocol::TurnId::new("session-cwd-test-turn").unwrap();
+    let context = |thread: &ash_core::ThreadSnapshot| {
+        ash_core::HarnessContextProvider::snapshot(
+            contributions.as_ref(),
+            &ash_core::HarnessContextRequest {
+                session_id: &thread.session_id,
+                thread_id: &thread.thread_id,
+                turn_id: &turn_id,
+                read_paths: &[],
+            },
+        )
+        .unwrap()
+        .environment()
+        .unwrap()
+        .render()
+    };
+    assert!(context(&first).contains(&format!("<cwd>{}</cwd>", cwd.display())));
+    assert!(!context(&second).contains(&format!("<cwd>{}</cwd>", cwd.display())));
+
+    server.remove_session_dir(&first.session_id, &cwd).unwrap();
+    assert!(!context(&first).contains(&format!("<cwd>{}</cwd>", cwd.display())));
 }
 
 fn server() -> AppServer {
@@ -1795,11 +1660,7 @@ fn directory_search_and_backend_configuration_do_not_require_agent_execution() {
         ]),
     );
     server
-        .commit_limited_dir_runtime(
-            grant,
-            server.local_env_host.as_ref().unwrap(),
-            CwdUpdate::Preserve,
-        )
+        .commit_limited_dir_runtime(grant, server.local_env_host.as_ref().unwrap())
         .unwrap();
     let (grep, root) = server.grep_index_context().unwrap();
     let token = ash_async_utils::CancellationSource::new().token();

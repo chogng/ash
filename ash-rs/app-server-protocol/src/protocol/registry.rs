@@ -485,10 +485,6 @@ use crate::protocol::environment::DirPermissionsReadResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::environment::DirPermissionsSetParams;
 #[cfg(any(test, feature = "export"))]
-use crate::protocol::environment::EnvCwdSetParams;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::environment::EnvCwdSetResult;
-#[cfg(any(test, feature = "export"))]
 use crate::protocol::environment::EnvDirDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::environment::EnvDirSetEntry;
@@ -496,10 +492,6 @@ use crate::protocol::environment::EnvDirSetEntry;
 use crate::protocol::environment::EnvDirsSetParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::environment::EnvDirsSetResult;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::environment::EnvWorkspaceSetParams;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::environment::EnvWorkspaceSetResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::environment::PermissionDto;
 #[cfg(any(test, feature = "export"))]
@@ -512,6 +504,10 @@ use crate::protocol::environment::SessionDirDto;
 use crate::protocol::environment::SessionDirListParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::environment::SessionDirListResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::environment::SessionDirMoveParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::environment::SessionDirMoveResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::environment::SessionDirMutationDto;
 #[cfg(any(test, feature = "export"))]
@@ -2365,19 +2361,9 @@ client_methods! {
         response: InitializeResult,
         serialization: GlobalExclusive,
     },
-    EnvCwdSet => "env/cwd/set" {
-        params: EnvCwdSetParams,
-        response: EnvCwdSetResult,
-        serialization: GlobalExclusive,
-    },
     EnvDirsSet => "env/dirs/set" {
         params: EnvDirsSetParams,
         response: EnvDirsSetResult,
-        serialization: GlobalExclusive,
-    },
-    EnvWorkspaceSet => "env/workspace/set" {
-        params: EnvWorkspaceSetParams,
-        response: EnvWorkspaceSetResult,
         serialization: GlobalExclusive,
     },
     SessionDirList => "session/dirs/list" {
@@ -2388,6 +2374,11 @@ client_methods! {
     SessionDirAdd => "session/dirs/add" {
         params: SessionDirAddParams,
         response: SessionDirAddResult,
+        serialization: SessionExclusive,
+    },
+    SessionDirMove => "session/dirs/move" {
+        params: SessionDirMoveParams,
+        response: SessionDirMoveResult,
         serialization: SessionExclusive,
     },
     SessionDirRemove => "session/dirs/remove" {
@@ -4378,15 +4369,11 @@ typescript_bindings! {
     ServerCapabilities,
     InitializeParams,
     InitializeResult,
-    EnvCwdSetParams,
-    EnvCwdSetResult,
     DirGrantDto,
     EnvDirDto,
     EnvDirSetEntry,
     EnvDirsSetParams,
     EnvDirsSetResult,
-    EnvWorkspaceSetParams,
-    EnvWorkspaceSetResult,
     SessionDirSelector,
     SessionDirDto,
     DirContributionsDto,
@@ -4396,6 +4383,8 @@ typescript_bindings! {
     SessionDirRemoveParams,
     SessionDirMutationDto,
     SessionDirAddResult,
+    SessionDirMoveParams,
+    SessionDirMoveResult,
     SessionDirMutationResult,
     PermissionDto,
     SessionDirPermissionsSetParams,

@@ -8,29 +8,29 @@ import { type IWorkspaceRuntimeSwitcher, type IWorkspaceTransitionContext, type 
 
 export interface IAppServerWorkspaceTransitionHost {
 	getState(): AppServerConnectionState;
-	switchWorkspace(root: string, grant: IWorkspaceTransitionContext["grant"]): Promise<void>;
+	switchWorkspace(root: string, grant: IWorkspaceTransitionContext["grant"], workspaceId: string, previousWorkspaceId: string): Promise<void>;
 	onStateChange(listener: (state: AppServerConnectionState) => void): IDisposable;
 }
 
 /**
  * Adapts App Server connection lifecycle into Workspace transition semantics.
  *
- * Only connection loss is retryable. Busy, unsupported protocol, and runtime
- * rejection remain visible domain failures and never trigger process restart.
+ * Connection loss is retryable. Busy, unsupported protocol, and runtime
+ * rejection remain visible transition failures.
  */
 export class AppServerWorkspaceTransitionAdapter implements IWorkspaceRuntimeSwitcher, IWorkspaceTransitionRecoveryRouter {
 	constructor(private readonly host: IAppServerWorkspaceTransitionHost) {}
 
-	switchWorkspace({ root, grant }: IWorkspaceTransitionContext): Promise<void> {
-		return this.host.switchWorkspace(root, grant);
+	switchWorkspace({ root, grant, workspace, previous }: IWorkspaceTransitionContext): Promise<void> {
+		return this.host.switchWorkspace(root, grant, workspace.id, previous.id);
 	}
 
 	classifyRuntimeError(error: unknown): WorkspaceTransitionFailureKind {
 		if (error instanceof AppServerRemoteError) {
 			switch (error.errorName) {
-				case "EnvCwdSetBusy":
+				case "EnvironmentBusy":
 					return WorkspaceTransitionFailureKind.RuntimeBusy;
-				case "EnvCwdSetUnavailable":
+				case "EnvironmentUnavailable":
 				case "MethodNotFound":
 					return WorkspaceTransitionFailureKind.RuntimeUnsupported;
 				default:
@@ -96,10 +96,7 @@ interface IWaitUntilReadyOptions {
 
 export function createAppServerWorkspaceTransitionAdapter(
 	supervisor: AppServerConnectionRelay,
-	workspace: RendererWorkspaceHost,
-	switchWorkspace: (root: string, grant: DirGrant) => Promise<void> = async (root, grant) => {
-		await switchAppServerWorkspace(workspace, root, grant);
-	},
+	switchWorkspace: (root: string, grant: DirGrant, workspaceId: string, previousWorkspaceId: string) => Promise<void>,
 ): AppServerWorkspaceTransitionAdapter {
 	return new AppServerWorkspaceTransitionAdapter({
 		getState: () => supervisor.state,
@@ -117,8 +114,9 @@ export async function createUserDirGrant(workspace: RendererWorkspaceHost, path:
 	return workspace.createGrant(path, permissions);
 }
 
-export async function switchAppServerWorkspace(workspace: RendererWorkspaceHost, path: string, grant: DirGrant): Promise<void> {
-	await workspace.switchWorkspace(path, grant);
+/** Persists a user grant before the window reconnects to its new directory root. */
+export async function persistAppServerDirectoryGrant(workspace: RendererWorkspaceHost, path: string, grant: DirGrant): Promise<void> {
+	await workspace.persistDirectoryGrant(path, grant);
 }
 
 export interface IAppServerWorkspaceFolder {

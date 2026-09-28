@@ -45,7 +45,7 @@ impl AgentEnvironmentSnapshot {
         }
         rendered.push_str("    </accessible_dirs>\n  </filesystem>\n</environment_context>\n");
         rendered.push_str(
-            "Environment values except accessible_dirs were captured when the environment connection was created and do not update. Run commands (for example `git status`) when you need current state. Relative paths resolve from cwd.",
+            "Environment values except accessible_dirs were captured when the working directory was selected and do not update. Run commands (for example `git status`) when you need current state. Relative paths resolve from cwd.",
         );
         rendered
     }

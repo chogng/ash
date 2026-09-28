@@ -106,12 +106,8 @@ import type { DocumentCollaborationSubmitResult } from './types/DocumentCollabor
 import type { DocumentOverlayCloseParams } from './types/DocumentOverlayCloseParams.js';
 import type { DocumentOverlayStatusResult } from './types/DocumentOverlayStatusResult.js';
 import type { DocumentOverlaySynchronizeParams } from './types/DocumentOverlaySynchronizeParams.js';
-import type { EnvCwdSetParams } from './types/EnvCwdSetParams.js';
-import type { EnvCwdSetResult } from './types/EnvCwdSetResult.js';
 import type { EnvDirsSetParams } from './types/EnvDirsSetParams.js';
 import type { EnvDirsSetResult } from './types/EnvDirsSetResult.js';
-import type { EnvWorkspaceSetParams } from './types/EnvWorkspaceSetParams.js';
-import type { EnvWorkspaceSetResult } from './types/EnvWorkspaceSetResult.js';
 import type { ExecPolicyRuleRemoveParams } from './types/ExecPolicyRuleRemoveParams.js';
 import type { ExecPolicyRuleUpsertParams } from './types/ExecPolicyRuleUpsertParams.js';
 import type { ExtensionHostInvokeCancelParams } from './types/ExtensionHostInvokeCancelParams.js';
@@ -349,6 +345,8 @@ import type { SessionDirAddParams } from './types/SessionDirAddParams.js';
 import type { SessionDirAddResult } from './types/SessionDirAddResult.js';
 import type { SessionDirListParams } from './types/SessionDirListParams.js';
 import type { SessionDirListResult } from './types/SessionDirListResult.js';
+import type { SessionDirMoveParams } from './types/SessionDirMoveParams.js';
+import type { SessionDirMoveResult } from './types/SessionDirMoveResult.js';
 import type { SessionDirMutationResult } from './types/SessionDirMutationResult.js';
 import type { SessionDirPermissionsSetParams } from './types/SessionDirPermissionsSetParams.js';
 import type { SessionDirRemoveParams } from './types/SessionDirRemoveParams.js';
@@ -461,11 +459,10 @@ export interface AppServerRequestMap {
   "automation/runs": { params: AutomationRunsParams; response: AutomationRunsResult };
   "automation/stop": { params: AutomationStopParams; response: AutomationRun };
   "initialize": { params: InitializeParams; response: InitializeResult };
-  "env/cwd/set": { params: EnvCwdSetParams; response: EnvCwdSetResult };
   "env/dirs/set": { params: EnvDirsSetParams; response: EnvDirsSetResult };
-  "env/workspace/set": { params: EnvWorkspaceSetParams; response: EnvWorkspaceSetResult };
   "session/dirs/list": { params: SessionDirListParams; response: SessionDirListResult };
   "session/dirs/add": { params: SessionDirAddParams; response: SessionDirAddResult };
+  "session/dirs/move": { params: SessionDirMoveParams; response: SessionDirMoveResult };
   "session/dirs/remove": { params: SessionDirRemoveParams; response: SessionDirMutationResult };
   "session/dirs/permissions/set": { params: SessionDirPermissionsSetParams; response: SessionDirMutationResult };
   "config/dirPermissions/read": { params: DirPermissionsReadParams; response: DirPermissionsReadResult };
@@ -771,11 +768,10 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "automation/runs": { method: "automation/runs" },
   "automation/stop": { method: "automation/stop" },
   "initialize": { method: "initialize" },
-  "env/cwd/set": { method: "env/cwd/set" },
   "env/dirs/set": { method: "env/dirs/set" },
-  "env/workspace/set": { method: "env/workspace/set" },
   "session/dirs/list": { method: "session/dirs/list" },
   "session/dirs/add": { method: "session/dirs/add" },
+  "session/dirs/move": { method: "session/dirs/move" },
   "session/dirs/remove": { method: "session/dirs/remove" },
   "session/dirs/permissions/set": { method: "session/dirs/permissions/set" },
   "config/dirPermissions/read": { method: "config/dirPermissions/read" },

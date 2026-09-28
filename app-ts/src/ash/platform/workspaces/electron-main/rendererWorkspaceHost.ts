@@ -16,7 +16,7 @@ export class RendererWorkspaceHost extends Disposable {
 	public readPermissions(path: string): Promise<readonly DirPermission[] | undefined> { return this.call('readPermissions', { path }) as Promise<readonly DirPermission[] | undefined>; }
 	public selectPermissions(path: string): Promise<WorkspaceTrustChoice> { return this.call('selectPermissions', { path }) as Promise<WorkspaceTrustChoice>; }
 	public createGrant(path: string, permissions: readonly DirPermission[]): Promise<DirGrant> { return this.call('createGrant', { path, permissions }) as Promise<DirGrant>; }
-	public async switchWorkspace(path: string, grant: DirGrant): Promise<void> { await this.call('switchWorkspace', { path, grant }); }
+	public async persistDirectoryGrant(path: string, grant: DirGrant): Promise<void> { await this.call('persistDirectoryGrant', { path, grant }); }
 	public async setFolders(folders: readonly { id: string; path: string; grant: DirGrant }[]): Promise<void> { await this.call('setFolders', { folders }); }
 
 	public routes(): readonly IpcRoute<unknown, unknown>[] {
@@ -28,7 +28,7 @@ export class RendererWorkspaceHost extends Disposable {
 			if (this.pending?.nonce !== reply.nonce) { return; }
 			const pending = this.pending;
 			this.pending = undefined;
-			if (reply.failure === 'EnvCwdSetBusy' || reply.failure === 'EnvCwdSetUnavailable' || reply.failure === 'MethodNotFound') { pending.reject(new AppServerRemoteError(-32000, reply.error ?? reply.failure, { kind: reply.failure })); }
+			if (reply.failure === 'EnvironmentBusy' || reply.failure === 'EnvironmentUnavailable' || reply.failure === 'MethodNotFound') { pending.reject(new AppServerRemoteError(-32000, reply.error ?? reply.failure, { kind: reply.failure })); }
 			else if (reply.error) { pending.reject(new Error(reply.error)); }
 			else { pending.resolve(reply.result); }
 		} }];

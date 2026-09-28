@@ -54,9 +54,17 @@ export function registerAppServerWorkspaceHost(client: AppServerProtocolClient, 
 					const checked = decodeAppServerRequestParams('config/dirPermissions/set', { commandId: generateUuid(), expectedRevision: config.revision, path: params.path, permissions: params.permissions });
 					return { type: 'user', commandId: checked.commandId, expectedRevision: checked.expectedRevision, permissions: checked.permissions };
 				}
-				case 'switchWorkspace': {
-					const request = decodeAppServerRequestParams('env/workspace/set', { path: params.path, grant: params.grant });
-					return client.request(APP_SERVER_METHODS['env/workspace/set'], request);
+				case 'persistDirectoryGrant': {
+					if (!isRecord(params.grant)) throw new TypeError('Invalid directory grant');
+					if (params.grant.type === 'config') return;
+					if (params.grant.type !== 'user') throw new TypeError('Invalid directory grant');
+					const request = decodeAppServerRequestParams('config/dirPermissions/set', {
+						commandId: params.grant.commandId,
+						expectedRevision: params.grant.expectedRevision,
+						path: params.path,
+						permissions: params.grant.permissions,
+					});
+					return client.request(APP_SERVER_METHODS['config/dirPermissions/set'], request);
 				}
 				case 'setFolders': return client.request(APP_SERVER_METHODS['env/dirs/set'], decodeAppServerRequestParams('env/dirs/set', { dirs: params.folders }));
 				default: throw new Error('Unknown workspace operation');

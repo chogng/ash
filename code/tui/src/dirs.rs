@@ -11,11 +11,11 @@ use crate::widgets::search_box::SearchBoxModel;
 use ash_app_server_client::AppServerClient;
 use ash_app_server_client::ClientError;
 use ash_app_server_client::JsonRpcTransport;
-use ash_app_server_protocol::protocol::environment::EnvCwdSetParams;
 use ash_app_server_protocol::protocol::environment::PermissionDto;
 use ash_app_server_protocol::protocol::environment::SessionDirAddParams;
 use ash_app_server_protocol::protocol::environment::SessionDirListParams;
 use ash_app_server_protocol::protocol::environment::SessionDirListResult;
+use ash_app_server_protocol::protocol::environment::SessionDirMoveParams;
 use ash_app_server_protocol::protocol::environment::SessionDirMutationDto;
 use ash_app_server_protocol::protocol::environment::SessionDirPermissionsSetParams;
 use std::collections::BTreeMap;
@@ -219,15 +219,13 @@ pub(crate) fn move_session<T>(
 where
     T: JsonRpcTransport,
 {
-    let target = client.add_session_dir(SessionDirAddParams {
+    // Selecting a cwd does not grant filesystem or command permissions for it.
+    let target = client.move_session_dir(SessionDirMoveParams {
         session_id: session_id.clone(),
         path,
         permissions: Vec::new(),
     })?;
-    client.set_env_cwd(EnvCwdSetParams {
-        cwd: target.path.clone(),
-    })?;
-    Ok(target.path)
+    Ok(target.cwd)
 }
 
 pub(crate) fn choices(session_id: &SessionId, result: SessionDirListResult) -> DirChoices {

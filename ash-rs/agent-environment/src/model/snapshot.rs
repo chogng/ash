@@ -6,7 +6,7 @@ use ash_utils_absolute_path::AbsolutePathBuf;
 use std::path::Path;
 use std::path::PathBuf;
 
-/// Host facts captured for one environment connection.
+/// Host facts captured for one execution scope.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HostEnvironment {
     cwd: AbsolutePathBuf,

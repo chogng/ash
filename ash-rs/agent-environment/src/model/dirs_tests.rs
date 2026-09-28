@@ -6,13 +6,18 @@ fn directories_are_sorted_and_deduplicated() {
     let alpha = absolute_path("alpha");
     let ash = absolute_path("ash");
     let dirs = Dirs::new([ash.clone(), beta.clone(), alpha.clone(), ash.clone()]).unwrap();
+    let mut expected = vec![alpha, beta, ash];
+    expected.sort();
 
     assert_eq!(
         dirs.as_slice()
             .iter()
             .map(AbsolutePathBuf::as_path)
             .collect::<Vec<_>>(),
-        [&alpha, &beta, &ash]
+        expected
+            .iter()
+            .map(std::path::PathBuf::as_path)
+            .collect::<Vec<_>>()
     );
 }
 

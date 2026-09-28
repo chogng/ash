@@ -479,7 +479,7 @@ fn dir_view_maps_exact_paths_to_remove_actions() {
 }
 
 #[test]
-fn move_session_adds_directory_and_updates_cwd() {
+fn move_session_adds_directory_and_selects_its_cwd() {
     use ash_app_server_client::InProcessClientOptions;
     use ash_app_server_client::start_in_process_client;
     use ash_app_server_protocol::protocol::common::ClientInfo;
@@ -529,4 +529,10 @@ fn move_session_adds_directory_and_updates_cwd() {
         panic!("execute MoveSession must return Event::Moved");
     };
     assert_eq!(path.canonicalize().unwrap(), target.canonicalize().unwrap());
+    let selected = client
+        .list_session_dirs(
+            ash_app_server_protocol::protocol::environment::SessionDirListParams { session_id },
+        )
+        .unwrap();
+    assert!(selected.dirs.iter().any(|dir| dir.path == path));
 }

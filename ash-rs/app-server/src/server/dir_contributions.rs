@@ -1,4 +1,5 @@
 use super::agent_environment_source::AgentEnvironmentSource;
+use super::agent_environment_source::RepositoryInspection;
 use super::fs_watcher::DirFileChangeSink;
 use super::fs_watcher::SessionDirFileChangeSink;
 use super::home_context::add_home_instructions;
@@ -38,6 +39,7 @@ pub(super) struct DirContributions {
     env_dir: Mutex<Option<DirContributionCatalog>>,
     dir_grants: Arc<DirGrants>,
     dirs: Mutex<BTreeMap<SessionId, BTreeMap<PathBuf, DirContributionCatalog>>>,
+    session_environments: Mutex<BTreeMap<SessionId, (PathBuf, AgentEnvironmentSource)>>,
     nested_warnings: Mutex<BTreeMap<SessionId, BTreeSet<String>>>,
     hooks: RwLock<Option<Arc<ash_hooks::DeclarativeHookRuntime>>>,
 }
@@ -78,6 +80,7 @@ impl DirContributions {
             env_dir: Mutex::new(env_dir),
             dir_grants,
             dirs: Mutex::new(BTreeMap::new()),
+            session_environments: Mutex::new(BTreeMap::new()),
             nested_warnings: Mutex::new(BTreeMap::new()),
             hooks: RwLock::new(None),
         }))
@@ -291,6 +294,10 @@ impl DirContributions {
     }
 
     pub(super) fn remove_session(&self, session_id: &SessionId) {
+        self.session_environments
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(session_id);
         self.dirs
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -299,6 +306,42 @@ impl DirContributions {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .remove(session_id);
+    }
+
+    pub(super) fn move_session(
+        &self,
+        session_id: SessionId,
+        path: PathBuf,
+        environment: AgentEnvironmentSource,
+    ) {
+        self.session_environments
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(session_id, (path, environment));
+    }
+
+    pub(super) fn environment_for_directory(
+        &self,
+        path: &Path,
+        repository_inspection: RepositoryInspection,
+    ) -> Result<AgentEnvironmentSource, ash_agent_environment::AgentEnvironmentError> {
+        self.environment.for_directory(path, repository_inspection)
+    }
+
+    pub(super) fn forget_ungranted_session_directory(&self, session_id: &SessionId) {
+        let mut environments = self
+            .session_environments
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if environments.get(session_id).is_some_and(|(cwd, _)| {
+            !self
+                .dir_grants
+                .list(session_id)
+                .iter()
+                .any(|entry| entry.dir().canonical_path() == cwd)
+        }) {
+            environments.remove(session_id);
+        }
     }
 
     pub(super) fn dir_files_changed(
@@ -552,8 +595,14 @@ impl HarnessContextProvider for DirContributions {
                     .collect::<Vec<_>>()
             })
             .collect::<Vec<_>>();
-        let environment = self
-            .environment
+        let source = self
+            .session_environments
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(request.session_id)
+            .map(|(_, source)| source.clone())
+            .unwrap_or_else(|| self.environment.clone());
+        let environment = source
             .snapshot(roots)
             .map_err(|error| CoreError::Context(error.to_string()))?;
         let (dir_contributions, user_paths) = {

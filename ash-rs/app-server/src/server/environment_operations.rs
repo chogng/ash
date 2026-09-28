@@ -14,19 +14,17 @@ use ash_app_server_protocol::protocol::environment::DirPermissionsListResult;
 use ash_app_server_protocol::protocol::environment::DirPermissionsReadParams;
 use ash_app_server_protocol::protocol::environment::DirPermissionsReadResult;
 use ash_app_server_protocol::protocol::environment::DirPermissionsSetParams;
-use ash_app_server_protocol::protocol::environment::EnvCwdSetParams;
-use ash_app_server_protocol::protocol::environment::EnvCwdSetResult;
 use ash_app_server_protocol::protocol::environment::EnvDirDto;
 use ash_app_server_protocol::protocol::environment::EnvDirsSetParams;
 use ash_app_server_protocol::protocol::environment::EnvDirsSetResult;
-use ash_app_server_protocol::protocol::environment::EnvWorkspaceSetParams;
-use ash_app_server_protocol::protocol::environment::EnvWorkspaceSetResult;
 use ash_app_server_protocol::protocol::environment::PermissionDto;
 use ash_app_server_protocol::protocol::environment::SessionDirAddParams;
 use ash_app_server_protocol::protocol::environment::SessionDirAddResult;
 use ash_app_server_protocol::protocol::environment::SessionDirDto;
 use ash_app_server_protocol::protocol::environment::SessionDirListParams;
 use ash_app_server_protocol::protocol::environment::SessionDirListResult;
+use ash_app_server_protocol::protocol::environment::SessionDirMoveParams;
+use ash_app_server_protocol::protocol::environment::SessionDirMoveResult;
 use ash_app_server_protocol::protocol::environment::SessionDirMutationDto;
 use ash_app_server_protocol::protocol::environment::SessionDirMutationResult;
 use ash_app_server_protocol::protocol::environment::SessionDirPermissionsSetParams;
@@ -74,6 +72,25 @@ impl AppServer {
         result(&SessionDirAddResult {
             path,
             mutation: session_dir_mutation(mutation),
+            revision: snapshot.revision,
+            dirs: session_dir_dtos(snapshot.dirs),
+        })
+    }
+
+    pub(super) fn session_dir_move(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        require_dir_permissions_host(connection)?;
+        let params: SessionDirMoveParams = decode(params)?;
+        validate_path(&params.path, false)?;
+        let permissions = permissions(params.permissions)?;
+        let (cwd, snapshot) = self
+            .move_session_dir(&params.session_id, params.path, permissions)
+            .map_err(environment_runtime_error)?;
+        result(&SessionDirMoveResult {
+            cwd,
             revision: snapshot.revision,
             dirs: session_dir_dtos(snapshot.dirs),
         })
@@ -218,19 +235,6 @@ impl AppServer {
         result(&command_result)
     }
 
-    pub(super) fn env_cwd_set(
-        &self,
-        _connection: &ConnectionState,
-        params: &Value,
-    ) -> Result<Value, RpcError> {
-        let params: EnvCwdSetParams = decode(params)?;
-        validate_path(&params.cwd, true)?;
-        let cwd = self
-            .set_env_cwd(params.cwd)
-            .map_err(environment_runtime_error)?;
-        result(&EnvCwdSetResult { cwd })
-    }
-
     pub(super) fn env_dirs_set(
         &self,
         connection: &ConnectionState,
@@ -264,31 +268,6 @@ impl AppServer {
             })
             .collect();
         result(&EnvDirsSetResult { dirs })
-    }
-
-    pub(super) fn env_workspace_set(
-        &self,
-        connection: &ConnectionState,
-        params: &Value,
-    ) -> Result<Value, RpcError> {
-        let params: EnvWorkspaceSetParams = decode(params)?;
-        validate_path(&params.path, true)?;
-        let grant = self.resolve_dir_grant(connection, &params.path, params.grant)?;
-        let grant = self
-            .authorize_local_dir_root(params.path, grant)
-            .map_err(environment_runtime_error)?;
-        let cwd = grant.dir().canonical_path().to_path_buf();
-        let dirs = self
-            .activate_local_workspace(grant)
-            .map_err(environment_runtime_error)?
-            .into_iter()
-            .map(|(id, path, permissions)| EnvDirDto {
-                id,
-                path,
-                permissions: permission_dtos(&permissions),
-            })
-            .collect();
-        result(&EnvWorkspaceSetResult { cwd, dirs })
     }
 
     fn resolve_dir_grant(
@@ -547,15 +526,15 @@ fn require_dir_permissions_host(connection: &ConnectionState) -> Result<(), RpcE
 fn environment_runtime_error(error: EnvRuntimeError) -> RpcError {
     match error {
         EnvRuntimeError::Unavailable => {
-            RpcError::new(-32070, AppServerErrorName::EnvCwdSetUnavailable)
+            RpcError::new(-32070, AppServerErrorName::EnvironmentUnavailable)
         }
-        EnvRuntimeError::Busy => RpcError::new(-32071, AppServerErrorName::EnvCwdSetBusy),
+        EnvRuntimeError::Busy => RpcError::new(-32071, AppServerErrorName::EnvironmentBusy),
         EnvRuntimeError::AccessRevisionConflict => {
             RpcError::new(-32074, AppServerErrorName::RevisionConflict)
         }
         EnvRuntimeError::PermissionRequired => {
             RpcError::new(-32073, AppServerErrorName::PermissionRequired)
         }
-        EnvRuntimeError::Failed(_) => RpcError::new(-32072, AppServerErrorName::EnvCwdSetFailed),
+        EnvRuntimeError::Failed(_) => RpcError::new(-32072, AppServerErrorName::EnvironmentFailed),
     }
 }

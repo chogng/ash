@@ -485,11 +485,11 @@ test("workspace transition routes Busy without committing and accepts a later ba
 test("App Server workspace adapter routes only connection recovery into a retry", async () => {
 	let state: ReturnType<IAppServerWorkspaceTransitionHost["getState"]> = "ready";
 	const listeners = new Set<Parameters<IAppServerWorkspaceTransitionHost["onStateChange"]>[0]>();
-	const switchedRoots: string[] = [];
+	const switched: { root: string; workspaceId: string; previousWorkspaceId: string }[] = [];
 	const host: IAppServerWorkspaceTransitionHost = {
 		getState: () => state,
-		async switchWorkspace(root) {
-			switchedRoots.push(root);
+		async switchWorkspace(root, _grant, workspaceId, previousWorkspaceId) {
+			switched.push({ root, workspaceId, previousWorkspaceId });
 		},
 		onStateChange(listener) {
 			listeners.add(listener);
@@ -499,11 +499,11 @@ test("App Server workspace adapter routes only connection recovery into a retry"
 	const adapter = new AppServerWorkspaceTransitionAdapter(host);
 
 	assert.equal(
-		adapter.classifyRuntimeError(new AppServerRemoteError(-32071, "Workspace switch is busy", { kind: "EnvCwdSetBusy" })),
+		adapter.classifyRuntimeError(new AppServerRemoteError(-32071, "Workspace switch is busy", { kind: "EnvironmentBusy" })),
 		WorkspaceTransitionFailureKind.RuntimeBusy,
 	);
 	assert.equal(
-		adapter.classifyRuntimeError(new AppServerRemoteError(-32070, "Workspace switch is unavailable", { kind: "EnvCwdSetUnavailable" })),
+		adapter.classifyRuntimeError(new AppServerRemoteError(-32070, "Workspace switch is unavailable", { kind: "EnvironmentUnavailable" })),
 		WorkspaceTransitionFailureKind.RuntimeUnsupported,
 	);
 	state = "restarting";
@@ -538,5 +538,9 @@ test("App Server workspace adapter routes only connection recovery into a retry"
 		root: workspace.uri.fsPath,
 		grant: { type: "config" },
 	});
-	assert.deepEqual(switchedRoots, [workspace.uri.fsPath]);
+	assert.deepEqual(switched, [{
+		root: workspace.uri.fsPath,
+		workspaceId: workspace.id,
+		previousWorkspaceId: UNKNOWN_EMPTY_WINDOW_WORKSPACE.id,
+	}]);
 });

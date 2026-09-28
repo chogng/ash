@@ -1685,9 +1685,6 @@ pub fn open_local_app_server_with_codebase_providers(
         .map_err(|error| OpenAppServerError(error.to_string()))?;
     let local_dir_root = options.dir_root.clone();
     if let Some(dir_root) = options.dir_root {
-        server
-            .set_env_cwd(dir_root.clone())
-            .map_err(|error| OpenAppServerError(error.to_string()))?;
         match options.initial_dir_permissions {
             InitialDirPermissions::HostConfiguration => server
                 .activate_host_configured_dir_root(dir_root)
