@@ -3,6 +3,8 @@
 `ash` 是 Ash 的 Electron Desktop 产品线。它由 Renderer、Preload 和 Electron Main 组成，
 通过 App Server 使用 Rust 后端；三条公开产品线的关系见
 [`docs/product-lines.md`](../docs/product-lines.md)。
+前端 Service、领域 API、协议客户端与 Electron Main 的职责见
+[前端 Service 与 Rust App Server 的连接边界](docs/frontend-app-server-boundary.md)。
 
 `code` 与 `academic` 两种内置 Workbench 模式的窗口重载、统一 Renderer 和 contribution 所有权以 [`docs/workbench-modes.md`](../docs/workbench-modes.md) 为准；本 README 只记录 Desktop 实现、运行与验证入口。
 

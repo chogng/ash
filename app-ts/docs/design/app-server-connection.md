@@ -1,6 +1,7 @@
 # 前端连接与浏览器能力
 
 TS 前端以浏览器环境为运行边界，业务与系统执行通过协议交给 Rust；启动与 Electron 平台能力属于宿主层。当前 Web 通过受管理 Rust App Server 的认证 HTTP/WebSocket 入口连接，Electron 仍保留 Main 中转。本文说明目标职责、当前连接方式、Node 退场范围和验证边界。
+前端 Service、领域 API、协议客户端与 Main 的具体分工见[前端 Service 与 Rust App Server 的连接边界](../frontend-app-server-boundary.md)。
 
 ## 前端与 Node 的边界
 
