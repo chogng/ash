@@ -15,6 +15,7 @@ import { IInstantiationService } from '../../../../../platform/instantiation/com
 import { EditorPaneVisibility } from '../../../../browser/parts/editor/editorPane.js';
 import type { EditorPanePart } from '../../../../browser/parts/editor/textResourceEditor.js';
 import { MergeEditorModel, type MergeEditorChoice, type MergeEditorHunk, type MergeEditorSide } from '../model/mergeEditorModel.js';
+import { getAlignments } from './lineAlignment.js';
 import './media/mergeEditor.css';
 
 type SourceSide = Exclude<MergeEditorSide, 'result'>;
@@ -318,6 +319,11 @@ export class MergeEditor extends Disposable {
 		const specs = new Map<MergeEditorSide, MergeZone[]>(sides.map(side => [side, []]));
 		const added = new Map<MergeEditorSide, number>(sides.map(side => [side, 0]));
 		const actionHeight = 32;
+		const changes = {
+			current: model.getChanges('current'),
+			incoming: model.getChanges('incoming'),
+			result: model.getChanges('result'),
+		};
 		for (const hunk of model.hunks) {
 			const top = Math.max(...sides.map(side => this.topForBoundary(this.editorFor(side)!, model[side], hunk[side].startLineNumber) + added.get(side)!));
 			for (const side of sides) {
@@ -330,6 +336,21 @@ export class MergeEditor extends Disposable {
 				}
 				specs.get(side)!.push({ afterLineNumber: hunk[side].startLineNumber - 1, heightInPx: actionHeight, hunkIndex: hunk.index });
 				added.set(side, added.get(side)! + actionHeight);
+			}
+			for (const alignment of getAlignments(hunk, changes, sides)) {
+				const positions = sides.flatMap(side => {
+					const lineNumber = alignment[side];
+					if (lineNumber === undefined) return [];
+					const top = this.topForBoundary(this.editorFor(side)!, model[side], lineNumber) + added.get(side)!;
+					return [{ side, lineNumber, top }];
+				});
+				const top = Math.max(...positions.map(position => position.top));
+				for (const { side, lineNumber, top: currentTop } of positions) {
+					const gap = top - currentTop;
+					if (gap <= 0) continue;
+					specs.get(side)!.push({ afterLineNumber: lineNumber - 1, heightInPx: gap });
+					added.set(side, added.get(side)! + gap);
+				}
 			}
 			const bottom = Math.max(...sides.map(side => this.bottomForRange(this.editorFor(side)!, model[side], hunk[side]) + added.get(side)!));
 			for (const side of sides) {
@@ -505,19 +526,25 @@ export class MergeEditor extends Disposable {
 		this.syncingScroll = true;
 		try {
 			const topLine = sourceEditor.getVisibleRanges()[0]?.startLineNumber ?? 1;
+			// Conflict view zones share pixel coordinates; line mappings apply between conflicts.
+			const isAlignedConflict = model.hunks.some(hunk => hunk[source].contains(topLine));
 			for (const side of ['base', 'current', 'incoming', 'result'] as const) {
 				if (side === 'base' && !this.showBase) continue;
 				if (side === source) continue;
 				const target = side === 'result' ? this.resultEditor.getControl() : this.sourceEditors.get(side);
 				if (!target) continue;
 				if (event.scrollTopChanged) {
-					const mapping = model.getLineMapping(source, side).project(topLine);
-					const sourceStart = this.topForBoundary(sourceEditor, model[source], mapping.inputRange.startLineNumber);
-					const sourceEnd = this.topForBoundary(sourceEditor, model[source], mapping.inputRange.endLineNumberExclusive);
-					const targetStart = this.topForBoundary(target, model[side], mapping.outputRange.startLineNumber);
-					const targetEnd = this.topForBoundary(target, model[side], mapping.outputRange.endLineNumberExclusive);
-					const fraction = Math.min(1, (sourceEditor.getScrollTop() - sourceStart) / (sourceEnd - sourceStart));
-					target.setScrollTop(targetStart + (targetEnd - targetStart) * fraction);
+					let targetTop = sourceEditor.getScrollTop();
+					if (!isAlignedConflict) {
+						const mapping = model.getLineMapping(source, side).project(topLine);
+						const sourceStart = this.topForBoundary(sourceEditor, model[source], mapping.inputRange.startLineNumber);
+						const sourceEnd = this.topForBoundary(sourceEditor, model[source], mapping.inputRange.endLineNumberExclusive);
+						const targetStart = this.topForBoundary(target, model[side], mapping.outputRange.startLineNumber);
+						const targetEnd = this.topForBoundary(target, model[side], mapping.outputRange.endLineNumberExclusive);
+						const fraction = Math.min(1, (sourceEditor.getScrollTop() - sourceStart) / (sourceEnd - sourceStart));
+						targetTop = targetStart + (targetEnd - targetStart) * fraction;
+					}
+					target.setScrollTop(targetTop);
 				}
 				if (event.scrollLeftChanged) target.setScrollLeft(sourceEditor.getScrollLeft());
 			}

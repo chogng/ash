@@ -173,6 +173,8 @@ test('SCM merge editors synchronize scrolling across the three sources and resul
 	await run('git', ['reset', '--hard', 'HEAD~1'], { cwd });
 	const lines = Array.from({ length: 150 }, (_, index) => `const line${index} = ${index};`);
 	lines[75] = 'const value = 1;';
+	lines[76] = 'const middle = 1;';
+	lines[77] = 'const tail = 1;';
 	lines[125] = 'const second = 1;';
 	await writeFile(testWorkspace.file, `${lines.join('\n')}\n`);
 	await run('git', ['add', 'main.ts'], { cwd });
@@ -180,14 +182,14 @@ test('SCM merge editors synchronize scrolling across the three sources and resul
 	await run('git', ['branch', '-f', 'topic', 'HEAD'], { cwd });
 	await run('git', ['switch', 'topic'], { cwd });
 	const incomingLines = [...lines];
-	incomingLines.splice(75, 1, 'const value = 2;', 'const incomingExtra = 20;', 'const incomingTail = 21;');
-	incomingLines[127] = 'const second = 2;';
+	incomingLines.splice(75, 3, 'const value = 2;', 'const middle = 2;', 'const tail = 1;');
+	incomingLines[125] = 'const second = 2;';
 	await writeFile(testWorkspace.file, `${incomingLines.join('\n')}\n`);
 	await run('git', ['add', 'main.ts'], { cwd });
 	await run('git', ['-c', 'user.name=Ash Test', '-c', 'user.email=ash-test@example.invalid', 'commit', '-m', 'Long topic'], { cwd });
 	await run('git', ['switch', 'main'], { cwd });
 	const currentLines = [...lines];
-	currentLines.splice(75, 1, 'const value = 3;', 'const currentExtra = 30;');
+	currentLines.splice(75, 3, 'const value = 3;', 'const currentExtra = 30;', 'const middle = 1;', 'const tail = 3;');
 	currentLines[126] = 'const second = 3;';
 	await writeFile(testWorkspace.file, `${currentLines.join('\n')}\n`);
 	await run('git', ['add', 'main.ts'], { cwd });
@@ -217,6 +219,16 @@ test('SCM merge editors synchronize scrolling across the three sources and resul
 		return node.getBoundingClientRect().top - editor.getBoundingClientRect().top;
 	})));
 	expect(Math.max(...alignedTops) - Math.min(...alignedTops)).toBeLessThan(2);
+	const pairedLines = [
+		['base', 'const middle = 1;'],
+		['current', 'const middle = 1;'],
+		['incoming', 'const middle = 2;'],
+	] as const;
+	const pairedTops = await Promise.all(pairedLines.map(([side, content]) => group.content.locator(`.ash-merge-input-${side} .view-line`, { hasText: content }).evaluate(node => {
+		const editor = node.closest('.stanza-editor')!;
+		return node.getBoundingClientRect().top - editor.getBoundingClientRect().top;
+	})));
+	expect(Math.max(...pairedTops) - Math.min(...pairedTops)).toBeLessThan(2);
 	const actionScrollTop = await editors[0].evaluate(node => node.scrollTop);
 	await editors[0].evaluate(node => {
 		const line = [...node.querySelectorAll('.view-line')].find(row => row.textContent?.includes('const currentExtra = 30;'));
@@ -235,6 +247,15 @@ test('SCM merge editors synchronize scrolling across the three sources and resul
 	await expect(group.content.locator('.ash-merge-input-current .ash-merge-inline-actions[data-visible-view-zone]')).toBeVisible();
 	await group.content.locator('.ash-merge-input-current .ash-merge-inline-actions[data-visible-view-zone]').getByRole('button', { name: 'Accept Current' }).click();
 	await expect(group.content.locator('.ash-merge-progress')).toHaveText('1 of 2 conflicts resolved');
+	await page.getByRole('button', { name: 'Conflict 1' }).click();
+	const resolvedLines = await Promise.all([
+		group.content.locator('.ash-merge-input-current .view-line', { hasText: 'const middle = 1;' }),
+		group.content.locator('.ash-merge-result-editor .view-line', { hasText: 'const middle = 1;' }),
+	].map(line => line.evaluate(node => {
+		const editor = node.closest('.stanza-editor')!;
+		return node.getBoundingClientRect().top - editor.getBoundingClientRect().top;
+	})));
+	expect(Math.abs(resolvedLines[0] - resolvedLines[1])).toBeLessThan(2);
 	await page.getByRole('button', { name: 'Next Unresolved' }).click();
 	await expect(group.content.locator('.ash-merge-hunk').nth(1)).toHaveClass(/active/);
 	await expect(group.content.locator('.ash-merge-inline-actions[data-visible-view-zone]')).toHaveCount(4);
