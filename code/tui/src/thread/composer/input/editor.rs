@@ -7,6 +7,7 @@ use ratatui::layout::Position;
 use std::ops::Range;
 use std::time::Duration;
 use std::time::Instant;
+use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthChar;
 use unicode_width::UnicodeWidthStr;
 
@@ -23,10 +24,13 @@ enum TextClass {
     Symbol,
 }
 
-fn text_class(character: char) -> TextClass {
-    if character.is_whitespace() {
+fn text_class(grapheme: &str) -> TextClass {
+    if grapheme.chars().all(char::is_whitespace) {
         TextClass::Whitespace
-    } else if character.is_alphanumeric() || character == '_' {
+    } else if grapheme
+        .chars()
+        .any(|character| character.is_alphanumeric() || character == '_')
+    {
         TextClass::Word
     } else {
         TextClass::Symbol
@@ -76,7 +80,7 @@ impl TextArea {
     }
 
     pub(super) fn handle_key(&mut self, key: KeyEvent) -> TextAreaOutcome {
-        self.last_click = None;
+        self.pointer_up();
         if key
             .modifiers
             .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
@@ -149,12 +153,11 @@ impl TextArea {
     }
 
     pub(super) fn insert_text(&mut self, text: &str) {
-        self.last_click = None;
+        self.pointer_up();
         if let Some(range) = self.selection_range() {
             self.remove_editable_range(range);
         }
         self.selection_anchor = None;
-        self.pointer_anchor = None;
         self.shift_elements_for_insertion(self.cursor, text.len());
         self.text.insert_str(self.cursor, text);
         self.cursor += text.len();
@@ -211,6 +214,8 @@ impl TextArea {
     pub(super) fn pointer_finish(
         &mut self,
         cursor: usize,
+        glyph_byte: Option<usize>,
+        row: Range<usize>,
         position: Position,
         now: Instant,
     ) -> Option<Range<usize>> {
@@ -238,27 +243,19 @@ impl TextArea {
             });
         self.last_click = Some((position, now, count));
         match count {
-            2 => self.select_word_at(cursor),
-            3 => self.select_line_at(cursor),
+            2 => glyph_byte.and_then(|byte| self.select_word_at(byte, row)),
+            3 => self.select_range(row),
             _ => None,
         }
     }
 
-    fn select_word_at(&mut self, cursor: usize) -> Option<Range<usize>> {
-        let characters = self.text.char_indices().collect::<Vec<_>>();
-        if characters.is_empty() {
+    fn select_word_at(&mut self, glyph_byte: usize, row: Range<usize>) -> Option<Range<usize>> {
+        let graphemes = self.text.grapheme_indices(true).collect::<Vec<_>>();
+        if graphemes.is_empty() {
             return None;
         }
-        let mut index = characters
-            .partition_point(|(offset, _)| *offset < cursor)
-            .min(characters.len().saturating_sub(1));
-        if index > 0
-            && (cursor == self.text.len()
-                || characters[index].1.is_whitespace() && !characters[index - 1].1.is_whitespace())
-        {
-            index -= 1;
-        }
-        let start = characters[index].0;
+        let index = graphemes.partition_point(|(offset, _)| *offset < glyph_byte);
+        let (start, grapheme) = *graphemes.get(index)?;
         if let Some(element) = self
             .elements
             .iter()
@@ -266,32 +263,49 @@ impl TextArea {
         {
             return self.select_range(element.range.clone());
         }
-        let class = text_class(characters[index].1);
+        let class = text_class(grapheme);
+        let previous_element_end = self
+            .elements
+            .iter()
+            .take_while(|element| element.range.end <= start)
+            .last()
+            .map_or(0, |element| element.range.end);
+        let next_element_start = self
+            .elements
+            .iter()
+            .find(|element| element.range.start > start)
+            .map_or(self.text.len(), |element| element.range.start);
+        let lower = row.start.max(previous_element_end);
+        let upper = row.end.min(next_element_start);
         let mut first = index;
-        while first > 0 && text_class(characters[first - 1].1) == class {
+        while first > 0
+            && graphemes[first - 1].0 >= lower
+            && text_class(graphemes[first - 1].1) == class
+        {
             first -= 1;
         }
         let mut last = index;
-        while last + 1 < characters.len() && text_class(characters[last + 1].1) == class {
+        while last + 1 < graphemes.len()
+            && graphemes[last + 1].0 < upper
+            && text_class(graphemes[last + 1].1) == class
+        {
             last += 1;
         }
-        let end = characters
+        let end = graphemes
             .get(last + 1)
             .map_or(self.text.len(), |(offset, _)| *offset);
-        self.select_range(characters[first].0..end)
+        self.select_range(graphemes[first].0..end)
     }
 
-    fn select_line_at(&mut self, cursor: usize) -> Option<Range<usize>> {
-        let start = self.text[..cursor].rfind('\n').map_or(0, |index| index + 1);
-        let end = self.text[cursor..]
-            .find('\n')
-            .map_or(self.text.len(), |index| cursor + index);
-        self.select_range(start..end)
-    }
-
-    fn select_range(&mut self, range: Range<usize>) -> Option<Range<usize>> {
+    fn select_range(&mut self, mut range: Range<usize>) -> Option<Range<usize>> {
         if range.is_empty() {
             return None;
+        }
+        for element in &self.elements {
+            if element.range.start < range.end && element.range.end > range.start {
+                range.start = range.start.min(element.range.start);
+                range.end = range.end.max(element.range.end);
+            }
         }
         self.selection_anchor = Some(range.start);
         self.cursor = range.end;
@@ -370,7 +384,7 @@ impl TextArea {
 
     pub(super) fn replace_element(&mut self, element_id: TextElementId, text: &str) {
         self.selection_anchor = None;
-        self.pointer_anchor = None;
+        self.pointer_up();
         let index = self
             .elements
             .iter()
@@ -450,7 +464,7 @@ impl TextArea {
         self.text.clear();
         self.cursor = 0;
         self.selection_anchor = None;
-        self.pointer_anchor = None;
+        self.pointer_up();
         self.elements.clear();
         self.next_element_id = 0;
     }

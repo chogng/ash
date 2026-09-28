@@ -96,4 +96,42 @@ fn pointer_positions_follow_box_insets_wide_characters_and_wrapping() {
     assert_eq!(hit(6, 2), 7);
     assert_eq!(hit(7, 2), 8);
     assert_eq!(hit(15, 2), 9);
+    let wide = super::cursor_at(
+        area,
+        ChatInputChrome::Box,
+        "ab你cdef",
+        0,
+        8,
+        None,
+        Position::new(9, 1),
+    );
+    assert_eq!(wide.byte, 5);
+    assert_eq!(wide.glyph_byte, Some(2));
+    assert_eq!((wide.row_start, wide.row_end), (0, 7));
+    assert_eq!(
+        super::cursor_at(
+            area,
+            ChatInputChrome::Box,
+            "ab你cdef",
+            0,
+            8,
+            None,
+            Position::new(5, 1),
+        )
+        .glyph_byte,
+        None
+    );
+    assert_eq!(
+        super::cursor_at(
+            area,
+            ChatInputChrome::Box,
+            "ab你cdef",
+            0,
+            8,
+            None,
+            Position::new(15, 2),
+        )
+        .glyph_byte,
+        None
+    );
 }

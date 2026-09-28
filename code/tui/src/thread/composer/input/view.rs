@@ -36,7 +36,13 @@ pub(crate) enum ChatInputChrome {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct InputHit {
+    /// Nearest caret boundary; the right half of a wide glyph points after it.
     pub(crate) byte: usize,
+    /// Glyph under the pointer, independent of the caret boundary.
+    pub(crate) glyph_byte: Option<usize>,
+    /// Byte bounds of the rendered row, which can be shorter than a logical line.
+    pub(crate) row_start: usize,
+    pub(crate) row_end: usize,
     pub(crate) scroll_row: usize,
 }
 
@@ -250,10 +256,13 @@ pub(crate) fn cursor_at(
     for (offset, character) in line.char_indices() {
         let character_width = character.width().unwrap_or(0);
         if column < width + character_width {
+            let glyph_byte = range.start + offset;
             return InputHit {
-                byte: range.start
-                    + offset
+                byte: glyph_byte
                     + usize::from((column - width) * 2 >= character_width) * character.len_utf8(),
+                glyph_byte: (position.x >= text_x).then_some(glyph_byte),
+                row_start: range.start,
+                row_end: range.end,
                 scroll_row,
             };
         }
@@ -261,6 +270,9 @@ pub(crate) fn cursor_at(
     }
     InputHit {
         byte: range.end,
+        glyph_byte: None,
+        row_start: range.start,
+        row_end: range.end,
         scroll_row,
     }
 }

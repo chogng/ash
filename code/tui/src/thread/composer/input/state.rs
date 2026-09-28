@@ -203,7 +203,7 @@ impl ChatInput {
     }
 
     pub(in crate::thread::composer) fn handle_key(&mut self, key: KeyEvent) -> ChatInputOutcome {
-        self.pointer_scroll_row = None;
+        self.reset_pointer_view();
         if self.history.query().is_some() {
             return self.handle_history_search_key(key);
         }
@@ -339,7 +339,13 @@ impl ChatInput {
         position: Position,
         now: Instant,
     ) -> Option<String> {
-        let range = self.textarea.pointer_finish(hit.byte, position, now);
+        let range = self.textarea.pointer_finish(
+            hit.byte,
+            hit.glyph_byte,
+            hit.row_start..hit.row_end,
+            position,
+            now,
+        );
         self.sync_completion();
         range.map(|range| self.textarea.text()[range].to_owned())
     }

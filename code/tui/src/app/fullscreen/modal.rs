@@ -117,13 +117,13 @@ pub(super) fn target_at(
     if layout.close.contains(position) {
         return Some(Target::Close);
     }
+    let text_area = selectable_text_area(app, available);
     if app.overlay().is_some() {
-        return layout.content.contains(position).then_some(Target::Text);
+        return text_area
+            .is_some_and(|area| area.contains(position))
+            .then_some(Target::Text);
     }
     let panel = app.command_panel()?;
-    if dialog_body_area(app, available).is_some_and(|body| body.contains(position)) {
-        return Some(Target::Text);
-    }
     if let Some(parent) = panel.parent_title() {
         if parent_area(layout, &crate::nls::localize(app.language(), parent)).contains(position) {
             return Some(Target::Parent);
@@ -154,7 +154,11 @@ pub(super) fn target_at(
         }
         None => panel.tab_at(tabs, position).map(Target::Tab),
     };
-    target.or_else(|| layout.content.contains(position).then_some(Target::Text))
+    target.or_else(|| {
+        text_area
+            .is_some_and(|area| area.contains(position))
+            .then_some(Target::Text)
+    })
 }
 
 pub(super) fn activate(

@@ -314,6 +314,78 @@ fn input_double_click_selects_a_word_and_triple_click_selects_the_line() {
 }
 
 #[test]
+fn input_double_click_uses_the_wide_glyph_under_the_pointer() {
+    let mut app = App::new();
+    app.insert_text("你!");
+    let area = Rect::new(0, 0, 60, 16);
+    let input = crate::app::fullscreen::layout(&app, area).input;
+    let row = input.y + 1;
+    let column = (input.x..input.right())
+        .find(|column| {
+            let hit = super::chat_composer::cursor_at(
+                input,
+                super::chat_composer::ChatInputChrome::Box,
+                app.input(),
+                app.input_state().cursor_line(),
+                app.input_state().cursor_display_width(),
+                app.input_state().pointer_scroll_row(),
+                ratatui::layout::Position::new(*column, row),
+            );
+            hit.byte == "你".len() && hit.glyph_byte == Some(0)
+        })
+        .unwrap();
+    let event = |kind| MouseEvent {
+        kind,
+        column,
+        row,
+        modifiers: KeyModifiers::NONE,
+    };
+    for click in 0..2 {
+        handle_mouse(
+            &mut app,
+            area,
+            event(MouseEventKind::Down(MouseButton::Left)),
+        );
+        let outcome = handle_mouse(&mut app, area, event(MouseEventKind::Up(MouseButton::Left)));
+        if click == 1 {
+            assert!(
+                matches!(outcome, super::MouseAction::InputSelection(ref text) if text == "你")
+            );
+        }
+    }
+}
+
+#[test]
+fn input_key_between_clicks_starts_a_new_click_sequence() {
+    let mut app = App::new();
+    app.insert_text("alpha beta");
+    let area = Rect::new(0, 0, 60, 16);
+    let input = crate::app::fullscreen::layout(&app, area).input;
+    let event = |kind| MouseEvent {
+        kind,
+        column: input.x + 6,
+        row: input.y + 1,
+        modifiers: KeyModifiers::NONE,
+    };
+    handle_mouse(
+        &mut app,
+        area,
+        event(MouseEventKind::Down(MouseButton::Left)),
+    );
+    handle_mouse(&mut app, area, event(MouseEventKind::Up(MouseButton::Left)));
+    app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+    handle_mouse(
+        &mut app,
+        area,
+        event(MouseEventKind::Down(MouseButton::Left)),
+    );
+    assert!(matches!(
+        handle_mouse(&mut app, area, event(MouseEventKind::Up(MouseButton::Left))),
+        super::MouseAction::Selection(None)
+    ));
+}
+
+#[test]
 fn dragging_in_a_scrolled_input_keeps_the_clicked_rows_in_place() {
     let mut app = App::new();
     app.insert_text("0\n1\n2\n3\n4\n5\n6\n7");

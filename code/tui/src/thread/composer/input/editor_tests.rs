@@ -56,16 +56,31 @@ fn double_and_triple_click_select_an_editable_word_then_line() {
     let now = Instant::now();
 
     textarea.pointer_down(8);
-    assert_eq!(textarea.pointer_finish(8, position, now), None);
+    assert_eq!(
+        textarea.pointer_finish(8, Some(8), 0..10, position, now),
+        None
+    );
     textarea.pointer_down(8);
     assert_eq!(
-        textarea.pointer_finish(8, position, now + Duration::from_millis(100)),
+        textarea.pointer_finish(
+            8,
+            Some(8),
+            0..10,
+            position,
+            now + Duration::from_millis(100)
+        ),
         Some(6..10)
     );
     assert_eq!(textarea.selection_range(), Some(6..10));
     textarea.pointer_down(8);
     assert_eq!(
-        textarea.pointer_finish(8, position, now + Duration::from_millis(200)),
+        textarea.pointer_finish(
+            8,
+            Some(8),
+            0..10,
+            position,
+            now + Duration::from_millis(200)
+        ),
         Some(0..10)
     );
     assert_eq!(textarea.selection_range(), Some(0..10));
@@ -83,13 +98,145 @@ fn double_click_keeps_an_atomic_element_whole() {
     let now = Instant::now();
 
     textarea.pointer_down(5);
-    assert_eq!(textarea.pointer_finish(5, position, now), None);
+    assert_eq!(
+        textarea.pointer_finish(5, Some(5), 0..11, position, now),
+        None
+    );
     textarea.pointer_down(5);
     assert_eq!(
-        textarea.pointer_finish(5, position, now + Duration::from_millis(100)),
+        textarea.pointer_finish(
+            5,
+            Some(5),
+            0..11,
+            position,
+            now + Duration::from_millis(100)
+        ),
         Some(2..11)
     );
     assert_eq!(textarea.selection_range(), Some(2..11));
+}
+
+#[test]
+fn double_click_stops_at_newlines_and_atomic_elements() {
+    let mut textarea = TextArea::new();
+    textarea.insert_text("ab");
+    textarea.insert_element("cd");
+    textarea.insert_text("  \n  ef");
+    let position = Position::new(8, 2);
+    let now = Instant::now();
+
+    textarea.pointer_down(0);
+    assert_eq!(
+        textarea.pointer_finish(0, Some(0), 0..6, position, now),
+        None
+    );
+    textarea.pointer_down(0);
+    assert_eq!(
+        textarea.pointer_finish(0, Some(0), 0..6, position, now + Duration::from_millis(100)),
+        Some(0..2)
+    );
+
+    let next = now + Duration::from_secs(1);
+    textarea.pointer_down(5);
+    assert_eq!(
+        textarea.pointer_finish(5, Some(5), 0..6, position, next),
+        None
+    );
+    textarea.pointer_down(5);
+    assert_eq!(
+        textarea.pointer_finish(
+            5,
+            Some(5),
+            0..6,
+            position,
+            next + Duration::from_millis(100)
+        ),
+        Some(4..6)
+    );
+}
+
+#[test]
+fn triple_click_selects_only_the_rendered_row() {
+    let mut textarea = TextArea::new();
+    textarea.insert_text("alpha beta gamma");
+    let position = Position::new(8, 2);
+    let now = Instant::now();
+
+    for count in 0..3 {
+        textarea.pointer_down(12);
+        let selected = textarea.pointer_finish(
+            12,
+            Some(12),
+            11..16,
+            position,
+            now + Duration::from_millis(count * 100),
+        );
+        if count == 2 {
+            assert_eq!(selected, Some(11..16));
+        }
+    }
+}
+
+#[test]
+fn triple_click_keeps_a_wrapped_atomic_element_whole() {
+    let mut textarea = TextArea::new();
+    textarea.insert_text("ab");
+    textarea.insert_element("CDEF");
+    textarea.insert_text("gh");
+    let position = Position::new(8, 2);
+    let now = Instant::now();
+
+    for count in 0..3 {
+        textarea.pointer_down(3);
+        let selected = textarea.pointer_finish(
+            3,
+            Some(2),
+            0..4,
+            position,
+            now + Duration::from_millis(count * 100),
+        );
+        if count == 2 {
+            assert_eq!(selected, Some(0..6));
+        }
+    }
+}
+
+#[test]
+fn double_click_stops_at_a_soft_wrap() {
+    let mut textarea = TextArea::new();
+    textarea.insert_text("abcdefgh");
+    let position = Position::new(8, 2);
+    let now = Instant::now();
+
+    textarea.pointer_down(2);
+    assert_eq!(
+        textarea.pointer_finish(2, Some(2), 0..4, position, now),
+        None
+    );
+    textarea.pointer_down(2);
+    assert_eq!(
+        textarea.pointer_finish(2, Some(2), 0..4, position, now + Duration::from_millis(100)),
+        Some(0..4)
+    );
+}
+
+#[test]
+fn double_click_keeps_combining_marks_with_the_word() {
+    let mut textarea = TextArea::new();
+    textarea.insert_text("e\u{301}!");
+    let position = Position::new(8, 2);
+    let now = Instant::now();
+
+    textarea.pointer_down(0);
+    assert_eq!(
+        textarea.pointer_finish(0, Some(0), 0..4, position, now),
+        None
+    );
+    textarea.pointer_down(0);
+    assert_eq!(
+        textarea.pointer_finish(0, Some(0), 0..4, position, now + Duration::from_millis(100)),
+        Some(0..3)
+    );
 }
 
 #[test]
