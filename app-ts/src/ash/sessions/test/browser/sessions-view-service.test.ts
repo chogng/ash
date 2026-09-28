@@ -113,6 +113,7 @@ class FakeSessionService implements ISessionsManagementService {
 	get activeUntitledSession(): IUntitledChatSession | undefined { return this._untitledSessions.find(session => session.untitledSessionId === this.activeUntitledSessionId); }
 
 	async initialize(): Promise<void> {}
+	async listAgents(): Promise<readonly import('../../../workbench/services/chat/common/chatService.js').ChatAgent[]> { return []; }
 	async openThread(sessionId: SessionId, threadId: ThreadId): Promise<void> { this.selectThread(sessionId, threadId); }
 
 	selectThread(sessionId: SessionId, threadId: ThreadId): void {
@@ -125,7 +126,7 @@ class FakeSessionService implements ISessionsManagementService {
 	async interruptThread(): Promise<void> {}
 
 	createUntitledSession(title = "New session"): IUntitledChatSession {
-		const draft = { untitledSessionId: `untitled-${this.nextUntitledId++}`, title, model: undefined };
+		const draft = { untitledSessionId: `untitled-${this.nextUntitledId++}`, title, model: undefined, agent: undefined };
 		this._untitledSessions = [draft, ...this._untitledSessions];
 		this.activeUntitledSessionId = draft.untitledSessionId;
 		this._onDidChange.fire();
@@ -145,6 +146,7 @@ class FakeSessionService implements ISessionsManagementService {
 	}
 
 	setUntitledSessionModel(_untitledSessionId: string, _model: ModelRef): void {}
+	setUntitledSessionAgent(_untitledSessionId: string, _agent: import('../../../workbench/services/chat/common/chatService.js').ChatAgent | undefined): void {}
 	async materializeUntitledSession(_untitledSessionId: string): Promise<IActiveSessionThread> {
 		const id = this.nextMaterializedId++;
 		const durable = session(`materialized-${id}`, `materialized-thread-${id}`);

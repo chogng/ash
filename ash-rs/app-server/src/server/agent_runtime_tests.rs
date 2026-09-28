@@ -39,6 +39,59 @@ use std::time::Duration;
 use std::time::Instant;
 
 #[test]
+fn root_agent_picker_lists_authorized_roles_and_creates_the_selected_session() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(root.path().join(".ash/agents")).unwrap();
+    std::fs::write(
+        root.path().join(".ash/agents/reviewer.md"),
+        "---\nname: reviewer\ndescription: Reviews changes\n---\n\nReview changes.",
+    )
+    .unwrap();
+    let grant = ash_file_access::Grant::for_environment(
+        ash_file_access::Dir::open_local(root.path()).unwrap(),
+        ash_file_access::GrantSource::HostConfiguration,
+        ash_file_access::Permissions::new([ash_file_access::Permission::LoadInstructions]),
+    );
+    let authorization = grant
+        .authorize(ash_file_access::Permission::LoadInstructions)
+        .unwrap();
+    let threads = Arc::new(ThreadController::with_store(Arc::new(
+        InMemoryThreadStore::default(),
+    )));
+    let mut server = crate::AppServer::new(threads.clone(), Arc::new(TextModel));
+    let contributions = super::dir_contributions::DirContributions::discover(
+        root.path(),
+        server.env_runtime_mut().dir_grants.clone(),
+        Some(authorization),
+        None,
+    )
+    .unwrap();
+    server.env_runtime_mut()._dir_contributions = Some(contributions);
+    let mut connection = server.connection();
+    let mut call = |id: u64, method: &str, params: Value| -> Value {
+        serde_json::from_str(&server.handle_json(
+            &mut connection,
+            &json!({"jsonrpc":"2.0", "id":id, "method":method, "params":params}).to_string(),
+        ))
+        .unwrap()
+    };
+    let initialized = call(1, "initialize", json!({"clientInfo":{"name":"test", "version":"1"}, "capabilities":{}}));
+    assert!(initialized.get("result").is_some(), "{initialized}");
+    let listed = call(2, "agent/roles/list", json!({}));
+    assert_eq!(listed["result"]["agents"][0]["name"], "reviewer");
+    assert_eq!(listed["result"]["agents"][0]["description"], "Reviews changes");
+    let source = listed["result"]["agents"][0]["source"].clone();
+    let created = call(3, "session/create", json!({"commandId":"selected-reviewer", "title":"Review", "agent":{"type":"exact", "source":source, "name":"reviewer"}}));
+    assert!(created.get("result").is_some(), "{created}");
+    let session_id = created["result"]["session"]["sessionId"].as_str().unwrap();
+    let thread = threads.read_thread(&ThreadId::new(session_id).unwrap()).unwrap();
+    assert_eq!(thread.agent_configuration().unwrap().role.as_ref().unwrap().name, "reviewer");
+    grant.revoke();
+    let revoked = call(4, "agent/roles/list", json!({}));
+    assert_eq!(revoked["result"]["agents"], json!([]));
+}
+
+#[test]
 fn recovered_spawn_starts_a_new_child_turn_once() {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),

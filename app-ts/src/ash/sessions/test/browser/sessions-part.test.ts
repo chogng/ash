@@ -34,7 +34,7 @@ test("SessionsPart remains owned by the Sessions product layer", () => {
 	const dom = browserEnvironment;
 	dom.window.document.body.replaceChildren();
 	const onDidChange = new Emitter<void>();
-	let untitledSessions: readonly { untitledSessionId: string; title: string; model: undefined }[] = [];
+	let untitledSessions: readonly { untitledSessionId: string; title: string; model: undefined; agent: undefined }[] = [];
 	let activeUntitledSessionId: string | undefined;
 	const sessionService: ISessionsManagementService = {
 		onDidChange: onDidChange.event,
@@ -45,11 +45,12 @@ test("SessionsPart remains owned by the Sessions product layer", () => {
 		state: "ready",
 		error: undefined,
 		async initialize() {},
+		async listAgents() { return []; },
 		async openThread() {},
 		selectThread() {},
 		async interruptThread() {},
 		createUntitledSession() {
-			const untitledSession = { untitledSessionId: `untitled-${untitledSessions.length + 1}`, title: "New code session", model: undefined };
+			const untitledSession = { untitledSessionId: `untitled-${untitledSessions.length + 1}`, title: "New code session", model: undefined, agent: undefined };
 			untitledSessions = [...untitledSessions, untitledSession];
 			activeUntitledSessionId = untitledSession.untitledSessionId;
 			onDidChange.fire();
@@ -65,6 +66,7 @@ test("SessionsPart remains owned by the Sessions product layer", () => {
 			onDidChange.fire();
 		},
 		setUntitledSessionModel() {},
+		setUntitledSessionAgent() {},
 		async materializeUntitledSession() {
 			throw new Error("Session creation is unavailable");
 		},

@@ -3,9 +3,15 @@ use super::ConnectionState;
 use super::RpcError;
 use super::decode;
 use super::result;
+use ash_app_server_protocol::protocol::dictation::DictationEnded;
 use ash_app_server_protocol::protocol::dictation::DictationResourceParams;
+use ash_app_server_protocol::protocol::dictation::DictationTranscript;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
+use ash_app_server_protocol::protocol::registry::ServerNotificationMethod;
+use realtime_voice::DictationEvent;
 use serde_json::Value;
+
+use super::update_broker::notification;
 
 impl AppServer {
     pub(super) fn dictation_start(
@@ -20,11 +26,28 @@ impl AppServer {
             ));
         }
         let params: DictationResourceParams = decode(params)?;
+        let resource_id = params.resource_id.clone();
+        let notifications = connection.outbound_notifications.clone();
         self.dictation
             .start(
                 connection.connection_id,
                 params.resource_id,
-                connection.outbound_notifications.clone(),
+                move |event| match event {
+                    DictationEvent::Transcript(text) => notifications.push(notification(
+                        ServerNotificationMethod::DictationTranscript,
+                        &DictationTranscript {
+                            resource_id: resource_id.clone(),
+                            text,
+                        },
+                    )),
+                    DictationEvent::Ended { error } => notifications.push(notification(
+                        ServerNotificationMethod::DictationEnded,
+                        &DictationEnded {
+                            resource_id: resource_id.clone(),
+                            error,
+                        },
+                    )),
+                },
             )
             .map_err(dictation_error)?;
         result(&())

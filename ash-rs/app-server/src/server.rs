@@ -86,7 +86,6 @@ mod connector_runtime;
 mod debug_operations;
 mod diagnostics_operations;
 mod dictation_operations;
-mod dictation_runtime;
 mod diff_operations;
 mod dir_contributions;
 mod environment_operations;
@@ -197,7 +196,7 @@ pub struct AppServer {
     memories: Option<Arc<memories::Memories>>,
     pub(super) attachment_uploads: Mutex<AttachmentUploadStore>,
     calls: call_runtime::Calls,
-    dictation: dictation_runtime::DictationRuntime,
+    dictation: realtime_voice::DictationManager,
     pub(super) collaboration: Mutex<collaboration_runtime::DocumentCollaborationStore>,
     pub(super) extensions: Mutex<ExtensionCatalog>,
     pub(super) config: Option<Arc<ConfigStore>>,
@@ -535,7 +534,7 @@ impl AppServer {
             memories: None,
             attachment_uploads: Mutex::new(AttachmentUploadStore::default()),
             calls: call_runtime::Calls::default(),
-            dictation: dictation_runtime::DictationRuntime::default(),
+            dictation: realtime_voice::DictationManager::default(),
             collaboration: Mutex::new(collaboration_runtime::DocumentCollaborationStore::default()),
             extensions: Mutex::new(ExtensionCatalog::default()),
             config: None,
@@ -2095,6 +2094,7 @@ impl AppServer {
             Some(ClientMethod::SessionCatalogRead) => self.session_catalog_read(&request.params),
             Some(ClientMethod::MessageCheckpoints) => self.message_checkpoints(&request.params),
             Some(ClientMethod::AgentRead) => self.agent_read(&request.params),
+            Some(ClientMethod::AgentRoleList) => self.agent_roles_list(),
             Some(ClientMethod::SessionList) => self.session_list(),
             Some(ClientMethod::SessionCatalogSubscribe) => {
                 self.session_catalog_subscribe(connection)

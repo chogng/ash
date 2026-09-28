@@ -4,6 +4,7 @@ import { createUuid } from "../../../../base/common/uuid.js";
 import type { IActiveSessionThread, IUntitledChatSession, ISession, ModelRef, SessionId, ThreadId } from "../common/session.js";
 import type { ISessionsManagementService, SessionsManagementState } from "../common/sessionsManagement.js";
 import type { ISessionsProvider } from "../common/sessionsProvider.js";
+import type { ChatAgent } from '../../../../workbench/services/chat/common/chatService.js';
 
 /** Keeps the rendered Session list and drafts; App Server owns durable Session data. */
 export class SessionsManagementService extends Disposable implements ISessionsManagementService {
@@ -44,6 +45,10 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		return this.initializePromise;
 	}
 
+	listAgents(): Promise<readonly ChatAgent[]> {
+		return this.provider.listAgents();
+	}
+
 	async openThread(sessionId: SessionId, threadId: ThreadId): Promise<void> {
 		await this.initialize();
 		const listed = this._sessions.find(candidate => candidate.sessionId === sessionId)
@@ -73,7 +78,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	}
 
 	createUntitledSession(title = "New Chat"): IUntitledChatSession {
-		const session = { untitledSessionId: createUuid(), title, model: undefined };
+		const session = { untitledSessionId: createUuid(), title, model: undefined, agent: undefined };
 		this._untitledSessions = [session, ...this._untitledSessions];
 		this._activeUntitledSessionId = session.untitledSessionId;
 		this._error = undefined;
@@ -106,10 +111,18 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		this._onDidChange.fire();
 	}
 
+	setUntitledSessionAgent(untitledSessionId: string, agent: ChatAgent | undefined): void {
+		const current = this._untitledSessions.find(session => session.untitledSessionId === untitledSessionId);
+		if (!current) throw new Error(`Untitled Chat Session is not available: ${untitledSessionId}`);
+		if (current.agent?.name === agent?.name && current.agent?.sourceId === agent?.sourceId) return;
+		this._untitledSessions = this._untitledSessions.map(session => session.untitledSessionId === untitledSessionId ? { ...session, agent } : session);
+		this._onDidChange.fire();
+	}
+
 	async materializeUntitledSession(untitledSessionId: string): Promise<IActiveSessionThread> {
 		const session = this._untitledSessions.find(candidate => candidate.untitledSessionId === untitledSessionId);
 		if (!session) throw new Error(`Untitled Chat Session is not available: ${untitledSessionId}`);
-		return this.createSession(session.title, session.model);
+		return this.createSession(session.title, session.model, session.agent);
 	}
 
 	promoteUntitledSession(untitledSessionId: string, active: IActiveSessionThread): void {
@@ -151,10 +164,10 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		this._onDidChange.fire();
 	}
 
-	private async createSession(title: string, model?: ModelRef): Promise<IActiveSessionThread> {
+	private async createSession(title: string, model?: ModelRef, agent?: ChatAgent): Promise<IActiveSessionThread> {
 		this.setState("creating");
 		try {
-			return await this.provider.create(title, model);
+			return await this.provider.create(title, model, agent);
 		} catch (error) {
 			this.setError(error);
 			throw error;

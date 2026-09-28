@@ -1,4 +1,4 @@
-import type { ApprovalMode, ModelRef, SessionId, ThreadId } from '../../../../workbench/services/chat/common/chatService.js';
+import type { ApprovalMode, ChatAgent, ModelRef, SessionId, ThreadId } from '../../../../workbench/services/chat/common/chatService.js';
 
 // Shared Chat identities live below Sessions so both window modes use one contract.
 export type { ApprovalMode, ModelRef, SessionId, ThreadId } from '../../../../workbench/services/chat/common/chatService.js';
@@ -81,4 +81,5 @@ export interface IUntitledChatSession {
 	readonly untitledSessionId: string;
 	readonly title: string;
 	readonly model: ModelRef | undefined;
+	readonly agent: ChatAgent | undefined;
 }

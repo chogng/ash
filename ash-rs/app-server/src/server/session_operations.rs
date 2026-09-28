@@ -22,6 +22,35 @@ use core_api::StartThreadRequest;
 use serde_json::Value;
 
 impl AppServer {
+    pub(super) fn agent_roles_list(&self) -> Result<Value, RpcError> {
+        use ash_app_server_protocol::protocol::agent::AgentRoleEntry;
+        use ash_app_server_protocol::protocol::agent::AgentRoleListResult;
+        let environment = self.env_runtime.read().map_err(|_| {
+            core_error(core_api::CoreError::Execution("Environment runtime lock poisoned".into()))
+        })?;
+        let contributions = environment._dir_contributions.clone();
+        drop(environment);
+        // Before Session creation, only the environment grant can authorize a root definition.
+        let snapshot = contributions.as_ref().map(|catalog| catalog.refresh_root_agents());
+        let agents = snapshot
+            .as_ref()
+            .map(|catalog| catalog.entries())
+            .unwrap_or_default()
+            .iter()
+            .map(|role| AgentRoleEntry {
+                name: role.name().to_owned(),
+                description: role.description().to_owned(),
+                source: match role.source() {
+                    agent_roles::AgentRoleSource::BuiltIn => ash_protocol::AgentRoleSource::BuiltIn,
+                    agent_roles::AgentRoleSource::Directory { id } => {
+                        ash_protocol::AgentRoleSource::Directory { id: id.clone() }
+                    }
+                },
+            })
+            .collect();
+        result(&AgentRoleListResult { agents })
+    }
+
     pub(super) fn agent_read(&self, params: &Value) -> Result<Value, RpcError> {
         use ash_app_server_protocol::protocol::agent::AgentReadParams;
         use ash_app_server_protocol::protocol::agent::AgentReadResult;

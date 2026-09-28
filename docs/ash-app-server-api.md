@@ -49,6 +49,12 @@ Session、Thread、Turn 和更新流，不建立第二套领域模型。
 - 连接关闭会释放其资源；其他窗口的通话不受影响。媒体重连期间停止采集，房间换代后重新取得权限和票据。
 - AI 任务委托、屏幕共享及文档关联尚未进入此协议。类型和错误以 [通话协议源](../ash-rs/app-server-protocol/src/protocol/call.rs)及生成 schema 为准。
 
+### 本地听写资源
+
+- `dictation/start` 与 `dictation/stop` 使用客户端生成的 `resourceId`。只有受信产品 host 可以启动听写；停止只能针对同一连接创建的资源。
+- [realtime-voice](../ash-rs/realtime-voice/README.md) 管理设备所在进程的识别会话，一个进程同时只占用一个麦克风。`dictation/transcript` 返回定稿短语，`dictation/ended` 返回结束及错误；这些通知只送给发起连接。
+- 停止请求或连接关闭会释放听写资源。当前识别器是 Windows 系统听写；本地模型下载、流式临时文本和 WebRTC 不属于当前协议能力。客户端连接远端 App Server 时不应启动本机听写资源。
+
 ### 唯一外部门禁
 
 这条规则适用于所有 `Session`、`Thread`、`Turn`、`ThreadItem` 产品能力：App Server 同时是
@@ -254,6 +260,7 @@ Desktop 当前实现和 Playwright 后续边界见
 | Method | Aggregate | Effect |
 | --- | --- | --- |
 | `agent/read` | Agent identity | 按 agentId 读取身份与全部执行分支，不加载历史 |
+| `agent/roles/list` | authorized environment Agent catalog | 刷新并列出可作为根 Agent 启动的目录定义；不返回定义正文 |
 | `session/create` | new root Thread | 创建根 Thread，返回由其 `session_id` 得出的 Session 视图 |
 | `session/read` | session tree view | 按 `session_id` 读取当前树视图 |
 | `session/list` | global | 列出按 `session_id` 聚合的 Session 视图 |
@@ -701,6 +708,8 @@ spawn 前执行 `env_clear`，所以 PTY 看不到最终 map 之外的 App Serve
 可选的 `branchName` 要求在创建根 Thread 时同时创建同名本地 Git 分支和独立 linked worktree，并让新 Thread 在该分支内运行。分支名由调用方提供，后端按 Git ref 规则校验；重名或非 Git 来源返回创建错误，来源目录的 HEAD 不变。省略时沿用默认的 detached 受管 worktree。
 
 `agent/read` 接受 `{ "agentId": "..." }`，返回 `{ "agentId", "createdAtUnixMs", "threads": [{ "sessionId", "threadId", "origin" }] }`。分支按 ThreadId 稳定排序，包含归档分支；任务删除后相应分支消失，Agent 记录保留。
+
+`agent/roles/list` 接受 `{}`，只读取当前环境中具备有效 `LoadInstructions` 授权的 `.ash/agents/*.md`。每项返回 `name`、`description` 与精确的 `source`；客户端把后两者中的来源和名称原样提交给 `session/create.agent`。每次读取刷新 catalog，失效或撤销的授权不会继续列出角色。该接口不授予权限，也不改变已有 Session 的冻结角色。
 
 ### 创建 Thread
 

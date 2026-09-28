@@ -45,6 +45,10 @@ use crate::protocol::agent::AgentReadParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::agent::AgentReadResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::agent::AgentRoleEntry;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::agent::AgentRoleListResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::agent::AgentThread;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::attachments::AttachmentImportRemoteParams;
@@ -2460,6 +2464,11 @@ client_methods! {
         response: AgentReadResult,
         serialization: GlobalSharedRead,
     },
+    AgentRoleList => "agent/roles/list" {
+        params: EmptyParams,
+        response: AgentRoleListResult,
+        serialization: GlobalSharedRead,
+    },
     SessionRead => "session/read" {
         params: SessionReadParams,
         response: SessionResult,
@@ -4167,6 +4176,8 @@ typescript_bindings! {
     AgentDefinitionSelectionReason,
     FrozenAgentDefinitionRef,
     AgentRoleSource,
+    AgentRoleEntry,
+    AgentRoleListResult,
     AgentRoleSnapshot,
     AgentTreeExecutionStatus,
     AgentTreeWaitingReason,

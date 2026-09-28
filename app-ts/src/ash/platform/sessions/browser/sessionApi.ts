@@ -7,6 +7,7 @@ import type { IModelApi, ISessionApi, IThreadApi, ITurnApi } from "../common/ses
 export function createDisconnectedSessionApi(unavailable: UnavailableOperation): ISessionApi {
 	return {
 		create: () => unavailable("session.create"),
+		listAgents: () => unavailable("session.listAgents"),
 		read: () => unavailable("session.read"),
 		readCatalog: () => unavailable("session.readCatalog"),
 		list: () => unavailable("session.list"),
@@ -60,6 +61,7 @@ export function createDisconnectedTurnApi(unavailable: UnavailableOperation): IT
 export function createAppServerSessionApi(connection: AppServerProtocolClient): ISessionApi {
 	return {
 		create: (params) => appServerRequest(connection, "session/create", params),
+		listAgents: () => appServerRequest(connection, "agent/roles/list", {}),
 		read: (params) => appServerRequest(connection, "session/read", params),
 		readCatalog: (params) => appServerRequest(connection, "session/catalog/read", params),
 		list: () => appServerRequest(connection, "session/list", {}),

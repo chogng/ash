@@ -6,6 +6,7 @@ import type { IServerEventApi } from "../../../../../platform/app-server/common/
 import type { IModelApi, ISessionApi, ITurnApi } from "../../../../../platform/sessions/common/sessionApi.js";
 import type { AgentThreadExecutionStatus, AgentTreeNode, IActiveSessionThread, ISession, ModelRef, SessionId, ThreadId } from "../../../../services/sessions/common/session.js";
 import type { ISessionsProvider } from "../../../../services/sessions/common/sessionsProvider.js";
+import type { ChatAgent } from '../../../../../workbench/services/chat/common/chatService.js';
 
 export interface AppServerSessionsProviderHost {
 	readonly session: ISessionApi;
@@ -50,6 +51,13 @@ export class AppServerSessionsProvider extends Disposable implements ISessionsPr
 		return result.sessions.map(session => ({ ...toSession(session), model }));
 	}
 
+	async listAgents(): Promise<readonly ChatAgent[]> {
+		const result = await this.host.session.listAgents();
+		return result.agents.flatMap(agent => agent.source.type === 'directory'
+			? [{ name: agent.name, description: agent.description, sourceId: agent.source.id }]
+			: []);
+	}
+
 	async readCatalog(sessionId: SessionId, previous?: ISession): Promise<ISession | undefined> {
 		const result = await this.host.session.readCatalog({ sessionId });
 		return result.session ? { ...toSession(result.session, [], previous), model: previous?.model ?? this.model } : undefined;
@@ -73,8 +81,8 @@ export class AppServerSessionsProvider extends Disposable implements ISessionsPr
 		await this.host.session.unsubscribe({ sessionId });
 	}
 
-	async create(title: string, model?: ModelRef): Promise<IActiveSessionThread> {
-		const created = await this.host.session.create({ commandId: commandId("session"), title, agent: { type: "default" } });
+	async create(title: string, model?: ModelRef, agent?: ChatAgent): Promise<IActiveSessionThread> {
+		const created = await this.host.session.create({ commandId: commandId("session"), title, agent: agent ? { type: 'exact', source: { type: 'directory', id: agent.sourceId }, name: agent.name } : { type: 'default' } });
 		const thread = await this.host.session.createThread({ commandId: commandId("thread"), sessionId: created.session.sessionId, title: "Main" });
 		const selected = model ?? await this.host.model?.readModel();
 		const session = await this.subscribe({ ...toSession(thread.session), model: selected ?? null });

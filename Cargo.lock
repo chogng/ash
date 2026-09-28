@@ -657,6 +657,7 @@ dependencies = [
  "ash-prompts",
  "ash-protocol",
  "ash-queue",
+ "ash-realtime-voice",
  "ash-rollout",
  "ash-sandboxing",
  "ash-screen-capture",
@@ -669,7 +670,6 @@ dependencies = [
  "ash-state",
  "ash-supergrok",
  "ash-syntax",
- "ash-system-dictation",
  "ash-thread-transcript",
  "ash-tools",
  "ash-typst",
@@ -2342,6 +2342,13 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.19",
  "ts-rs",
+]
+
+[[package]]
+name = "ash-realtime-voice"
+version = "0.1.0"
+dependencies = [
+ "ash-system-dictation",
 ]
 
 [[package]]

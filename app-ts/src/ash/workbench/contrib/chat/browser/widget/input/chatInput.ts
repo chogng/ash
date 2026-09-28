@@ -1,4 +1,4 @@
-import type { AgentResponse, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, TurnInteraction } from "../../../../../services/chat/common/chatService.js";
+import type { AgentResponse, ChatAgent, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, TurnInteraction } from "../../../../../services/chat/common/chatService.js";
 import type { SkillReference } from "../../../../../../platform/skills/common/skillApi.js";
 import type { ModelRef } from "../../../../../services/chat/common/chatService.js";
 import type { ChatContextAttachment } from "../../../../../services/chat/common/chatContextService.js";
@@ -25,6 +25,9 @@ export interface ChatInputState {
 	readonly slashCommands: readonly SlashCommandDefinition[];
 	readonly skillSelectors: readonly SkillSelectorDefinition[];
 	readonly selectedModel?: ModelRef;
+	readonly selectedAgent?: ChatAgent;
+	readonly agentName?: string;
+	readonly canSelectAgent: boolean;
 	readonly interaction?: TurnInteraction;
 }
 
@@ -35,6 +38,8 @@ export interface ChatInputDelegate {
 	executeServerCommand(invocation: ChatInputServerCommandInvocation): Promise<void>;
 	interrupt(): Promise<void>;
 	selectModel(model: ModelRef): Promise<void>;
+	listAgents(): Promise<readonly ChatAgent[]>;
+	selectAgent(agent: ChatAgent | undefined): void;
 	openModelSettings(): Promise<void>;
 	resolveInteraction(response: AgentResponse): Promise<void>;
 }

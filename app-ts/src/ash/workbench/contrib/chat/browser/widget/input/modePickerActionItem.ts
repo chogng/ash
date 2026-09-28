@@ -9,7 +9,7 @@ import { Lxicon } from '../../../../../../base/common/lxicons.js';
 import type { IContextViewService } from '../../../../../../platform/contextview/browser/contextView.js';
 
 interface IModePickerAction extends IAction {
-	readonly actions: readonly IAction[] | (() => readonly IAction[]);
+	readonly actions: readonly IAction[] | (() => Promise<readonly IAction[]>);
 }
 
 /** Presents the chat input's mode action as a keyboard-accessible menu. */
@@ -17,6 +17,7 @@ export class ModePickerActionItem extends ButtonActionViewItem {
 	private readonly menu = this._register(new MutableDisposable<Menu>());
 	private contextView: ContextView | undefined;
 	private visible = false;
+	private opening = false;
 
 	constructor(
 		private readonly modeAction: IModePickerAction,
@@ -45,7 +46,7 @@ export class ModePickerActionItem extends ButtonActionViewItem {
 		this._register(addDisposableListener(button, 'keydown', event => {
 			if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
 			stopEvent(event);
-			this.show();
+			void this.show();
 		}));
 	}
 
@@ -54,13 +55,22 @@ export class ModePickerActionItem extends ButtonActionViewItem {
 			this.contextView?.hide();
 			return;
 		}
-		this.show();
+		void this.show();
 	}
 
-	private show(): void {
+	private async show(): Promise<void> {
 		const contextView = this.contextView;
-		if (!contextView || this.visible || !this.action.enabled) return;
-		const actions = typeof this.modeAction.actions === 'function' ? this.modeAction.actions() : this.modeAction.actions;
+		if (!contextView || this.visible || this.opening || !this.action.enabled) return;
+		this.opening = true;
+		let actions: readonly IAction[];
+		try {
+			actions = typeof this.modeAction.actions === 'function' ? await this.modeAction.actions() : this.modeAction.actions;
+		} catch {
+			return;
+		} finally {
+			this.opening = false;
+		}
+		if (this.isDisposed) return;
 		if (actions.length === 0) return;
 		const menu = new Menu(contextView.element, {
 			actions,

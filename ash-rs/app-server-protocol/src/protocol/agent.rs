@@ -1,6 +1,7 @@
 use crate::JsonSchema;
 use crate::TS;
 use ash_protocol::AgentId;
+use ash_protocol::AgentRoleSource;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use ash_protocol::ThreadOrigin;
@@ -29,4 +30,19 @@ pub struct AgentReadResult {
     #[ts(type = "number")]
     pub created_at_unix_ms: u64,
     pub threads: Vec<AgentThread>,
+}
+
+/// One Agent definition that can be selected when creating a root Session.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentRoleEntry {
+    pub name: String,
+    pub description: String,
+    pub source: AgentRoleSource,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentRoleListResult {
+    pub agents: Vec<AgentRoleEntry>,
 }

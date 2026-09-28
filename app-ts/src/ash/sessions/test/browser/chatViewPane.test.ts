@@ -453,6 +453,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	shownContextMenuActions = [];
 	firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.click();
 	assert.deepEqual(shownContextMenuActions, []);
+	await waitFor(() => dom.window.document.querySelector('.ash-chat-input-mode-menu') !== null);
 	const modeMenu = dom.window.document.querySelector<HTMLElement>(".ash-chat-input-mode-menu");
 	assert.equal(modeMenu?.closest(".ash-context-view")?.parentElement, contextViewService.container);
 	assert.deepEqual(
@@ -627,11 +628,13 @@ test("Turn error cards invoke their typed action without interpreting message te
 
 test("an empty Session list opens an untitled session and persists it on its first send", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
+	dom.window.HTMLElement.prototype.scrollTo = () => {};
 	using contextViewService = new BrowserContextViewService(dom.window.document.body);
 	const createdSession = session("session-1", undefined, "New Chat");
 	const attachedSession = session("session-1", "thread-1", "New Chat");
 	const fake = fakeApi({
 		sessions: [],
+		agents: [{ name: 'reviewer', description: 'Reviews changes', sourceId: 'directory-1' }],
 		createSession: createdSession,
 		createThread: {
 			session: attachedSession,
@@ -698,6 +701,18 @@ test("an empty Session list opens an untitled session and persists it on its fir
 	assert.ok(untitledPane?.dataset.untitledSessionId);
 	const input = untitledPane.querySelector<HTMLTextAreaElement>(".ash-chat-textarea-input");
 	assert.ok(input);
+	const agentButton = untitledPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button");
+	agentButton?.click();
+	await waitFor(() => dom.window.document.querySelector(".ash-chat-input-mode-menu [data-action-id='ash.chat.input.agent.directory-1.reviewer']") !== null);
+	dom.window.document.querySelector<HTMLButtonElement>(".ash-chat-input-mode-menu [data-action-id='ash.chat.input.agent.directory-1.reviewer'] button")?.click();
+	assert.equal(untitledPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, 'reviewer');
+	await nextTask();
+	untitledPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.click();
+	await waitFor(() => dom.window.document.querySelector(".ash-chat-input-mode-menu [data-action-id='ash.chat.input.agent.directory-1.reviewer'] button") !== null);
+	const selectedAgentItem = dom.window.document.querySelector<HTMLButtonElement>(".ash-chat-input-mode-menu [data-action-id='ash.chat.input.agent.directory-1.reviewer'] button");
+	assert.equal(selectedAgentItem?.getAttribute('role'), 'menuitemradio');
+	assert.equal(selectedAgentItem?.getAttribute('aria-checked'), 'true');
+	selectedAgentItem?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 	assert.equal(untitledPane.classList.contains("empty"), true);
 	let contextResolutions = 0;
 	pane.addContext({
@@ -723,6 +738,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
 	await waitFor(() => fake.turnStartRequests.length === 1);
 
 	assert.equal(fake.createSessionRequests.length, 1);
+	assert.deepEqual(fake.createSessionRequests[0]?.agent, { type: 'exact', source: { type: 'directory', id: 'directory-1' }, name: 'reviewer' });
 	assert.equal(fake.createThreadRequests.length, 1);
 	assert.equal(fake.turnStartRequests.length, 1);
 	assert.equal(contextResolutions, 1);
@@ -1509,6 +1525,7 @@ test("ChatWidgetModel retries only the latest retryable failed Turn as a new vis
 });
 
 interface FakeOptions {
+	readonly agents?: readonly { readonly name: string; readonly description: string; readonly sourceId: string }[];
 	readonly sessions?: readonly ISession[];
 	readonly createSession?: ISession;
 	readonly createSessionError?: Error;
@@ -1824,6 +1841,7 @@ function fakeApi(options: FakeOptions = {}): {
 			},
 		},
 		session: {
+			listAgents: async () => ({ agents: (options.agents ?? []).map(agent => ({ name: agent.name, description: agent.description, source: { type: 'directory' as const, id: agent.sourceId } })) }),
 			list: async () => ({ sessions: (options.sessions ?? []).map(sessionDto) }),
 			subscribeCatalog: async () => ({ sessions: (options.sessions ?? []).map(sessionDto) }),
 			unsubscribeCatalog: async () => undefined,
@@ -2155,6 +2173,28 @@ test("Advisor without a configured model keeps an untitled chat", async () => {
 	await assert.rejects(model.executeServerCommand("advisor", "Check cancellation"), /Configure an advisor model in Chat Settings/);
 	assert.equal(fake.createSessionRequests.length, 0);
 	assert.equal(fake.consultRequests.length, 0);
+});
+
+test('Selecting a custom Agent in a new Chat creates the Session with its exact authorized source', async () => {
+	const agent = { name: 'reviewer', description: 'Reviews changes', sourceId: 'directory-1' };
+	const fake = fakeApi({
+		agents: [agent],
+		createSession: session('session-1'),
+		createThread: { session: session('session-1', 'thread-1'), threadId: 'thread-1' },
+	});
+	using chat = createChatService(fake.api);
+	using sessions = new SessionsManagementService(fake.api);
+	using model = new ChatWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
+	await model.initialize();
+
+	assert.deepEqual(await model.listAgents(), [agent]);
+	model.selectAgent(agent);
+	assert.deepEqual(model.inputState.selectedAgent, agent);
+	await model.send('Review this change');
+
+	assert.deepEqual(fake.createSessionRequests[0]?.agent, { type: 'exact', source: { type: 'directory', id: 'directory-1' }, name: 'reviewer' });
+	assert.equal(fake.turnStartRequests[0]?.input[0]?.type, 'text');
+	assert.equal(sessions.untitledSessions.length, 0);
 });
 
 test("Advisor command selects a model and the off switch preserves its settings", async () => {

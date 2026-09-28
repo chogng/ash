@@ -12,6 +12,7 @@ import type { IDictationService, IDictationSession } from "../../../../../../pla
 import type { IContextMenuService } from "../../../../../../platform/contextview/browser/contextView.js";
 import type { IContextViewService } from "../../../../../../platform/contextview/browser/contextView.js";
 import type { ModelCatalogEntry } from "../../../../../services/chat/common/chatService.js";
+import type { ChatAgent } from '../../../../../services/chat/common/chatService.js';
 import type { ChatContextAttachment } from "../../../../../services/chat/common/chatContextService.js";
 import type { ModelRef } from "../../../../../services/chat/common/chatService.js";
 import { DesktopSlashCommands, parseSlashCommandInput, SlashCommandCatalog } from "../../../common/slashCommands.js";
@@ -31,6 +32,9 @@ interface ChatInputToolbarState {
 	readonly inputKind: "message" | "command";
 	readonly models: readonly ModelCatalogEntry[];
 	readonly selectedModel?: ModelRef;
+	readonly selectedAgent?: ChatAgent;
+	readonly agentName?: string;
+	readonly canSelectAgent: boolean;
 }
 
 const modeOptions: readonly { readonly id: ChatInputMode; readonly label: string; readonly icon?: Icon }[] = [
@@ -56,11 +60,12 @@ export class ChatInputPart extends Disposable {
 	private readonly inputToolbar: WorkbenchToolBar;
 	private readonly slashCommands = new SlashCommandCatalog(DesktopSlashCommands, []);
 	private readonly skills = new SkillSelectorCatalog();
-	private state: ChatInputState = { phase: "loading", canInterrupt: false, models: [], slashCommands: [], skillSelectors: [] };
-	private toolbarState: ChatInputToolbarState = { canSubmit: false, hasInput: false, canInterrupt: false, inputKind: "message", models: [] };
+	private state: ChatInputState = { phase: "loading", canInterrupt: false, models: [], slashCommands: [], skillSelectors: [], canSelectAgent: false };
+	private toolbarState: ChatInputToolbarState = { canSubmit: false, hasInput: false, canInterrupt: false, inputKind: "message", models: [], canSelectAgent: false };
 	private serverSlashCommands: ChatInputState["slashCommands"] = [];
 	private skillSelectors: ChatInputState["skillSelectors"] = [];
 	private mode: ChatInputMode = "agent";
+	private pendingAgentSelection: { readonly agent: ChatAgent | undefined } | undefined;
 	private dictationSession: IDictationSession | undefined;
 	private dictationStarting = false;
 	private dictationCancelStart = false;
@@ -210,6 +215,9 @@ export class ChatInputPart extends Disposable {
 			inputKind: input.kind === "message" ? "message" : "command",
 			models: this.state.models,
 			selectedModel: this.state.selectedModel,
+			selectedAgent: this.state.selectedAgent,
+			agentName: this.state.agentName,
+			canSelectAgent: this.state.canSelectAgent,
 		};
 		if (
 			state.canSubmit === this.toolbarState.canSubmit &&
@@ -217,7 +225,11 @@ export class ChatInputPart extends Disposable {
 			state.canInterrupt === this.toolbarState.canInterrupt &&
 			state.inputKind === this.toolbarState.inputKind &&
 			state.models === this.toolbarState.models &&
-			sameModel(state.selectedModel, this.toolbarState.selectedModel)
+			sameModel(state.selectedModel, this.toolbarState.selectedModel) &&
+			state.selectedAgent?.name === this.toolbarState.selectedAgent?.name &&
+			state.selectedAgent?.sourceId === this.toolbarState.selectedAgent?.sourceId &&
+			state.agentName === this.toolbarState.agentName &&
+			state.canSelectAgent === this.toolbarState.canSelectAgent
 		) return;
 		this.toolbarState = state;
 		this.renderToolbarActions();
@@ -225,26 +237,54 @@ export class ChatInputPart extends Disposable {
 
 	private renderToolbarActions(): void {
 		const mode = modeOptions.find(option => option.id === this.mode) ?? modeOptions[0]!;
+		const modeLabel = this.mode === 'agent' ? this.state.selectedAgent?.name ?? this.state.agentName ?? mode.label : mode.label;
+		const modeTooltip = this.mode === 'agent' && modeLabel !== mode.label
+			? localize('chat.agentPicker.mode', 'Agent: {0}', modeLabel)
+			: `Mode: ${modeLabel}`;
 		const modeAction = this.toolbarState.inputKind === "command"
 			? new ChatInputAction("ash.chat.input.command", "Command", "Slash command", Lxicon.start, false, "mode", () => {})
 			: new SelectorAction(
 				"ash.chat.input.mode",
-				mode.label,
-				`Mode: ${mode.label}`,
+				modeLabel,
+				modeTooltip,
 				mode.icon,
 				"mode",
-				() => modeOptions.map(option => new ChatInputAction(
-					`ash.chat.input.mode.${option.id}`,
-					option.label,
-					`Use ${option.label} mode`,
-					option.icon,
-					true,
-					"mode",
-					() => {
-						this.mode = option.id;
-					},
-					option.id === this.mode,
-				)),
+				async () => {
+					let agents: readonly ChatAgent[] = [];
+					let agentsError = false;
+					if (this.state.canSelectAgent) {
+						try {
+							agents = await this.delegate.listAgents();
+						} catch {
+							agentsError = true;
+						}
+					}
+					const options = modeOptions.map(option => new ChatInputAction(
+						`ash.chat.input.mode.${option.id}`,
+						option.label,
+						`Use ${option.label} mode`,
+						option.icon,
+						option.id !== 'agent' || this.state.canSelectAgent,
+						"mode",
+						() => {
+							this.mode = option.id;
+							if (this.state.canSelectAgent) this.pendingAgentSelection = { agent: undefined };
+						},
+						option.id === this.mode && !this.state.selectedAgent && !this.state.agentName,
+					));
+					if (this.state.agentName) options.unshift(new ChatInputAction('ash.chat.input.agent.current', this.state.agentName, this.state.agentName, Lxicon.unlimited, false, 'mode', () => {}, true));
+					if (agentsError) options.push(new ChatInputAction('ash.chat.input.agent.error', localize('chat.agentPicker.loadFailed', 'Could not load custom Agents'), localize('chat.agentPicker.loadFailed', 'Could not load custom Agents'), undefined, false, 'mode', () => {}));
+					return [...options, ...agents.map(agent => new ChatInputAction(
+						`ash.chat.input.agent.${agent.sourceId}.${agent.name}`,
+						agent.name,
+						agent.description,
+						undefined,
+						true,
+						'mode',
+						() => { this.mode = 'agent'; this.pendingAgentSelection = { agent }; },
+						this.state.selectedAgent?.name === agent.name && this.state.selectedAgent.sourceId === agent.sourceId,
+					))];
+				},
 			);
 		const selectedModel = this.toolbarState.models.find(entry => sameModel(entry.model, this.toolbarState.selectedModel));
 		const modelAction = new ChatInputAction(
@@ -379,7 +419,16 @@ export class ChatInputPart extends Disposable {
 			}, contextViewService);
 		}
 		if (action instanceof SelectorAction) {
-			return new ModePickerActionItem(action, contextViewService, () => this.renderToolbarActions());
+			return new ModePickerActionItem(action, contextViewService, () => {
+				const selected = this.pendingAgentSelection;
+				this.pendingAgentSelection = undefined;
+				if (selected) {
+					const changed = selected.agent?.name !== this.state.selectedAgent?.name || selected.agent?.sourceId !== this.state.selectedAgent?.sourceId;
+					this.delegate.selectAgent(selected.agent);
+					if (changed) return;
+				}
+				this.renderToolbarActions();
+			});
 		}
 		return new ChatInputButtonViewItem(action);
 	}
@@ -507,9 +556,9 @@ class ChatInputAction implements IAction {
 }
 
 class SelectorAction extends ChatInputAction {
-	readonly actions: readonly IAction[] | (() => readonly IAction[]);
+	readonly actions: readonly IAction[] | (() => Promise<readonly IAction[]>);
 
-	constructor(id: string, label: string, tooltip: string, icon: Icon | undefined, presentation: "mode" | "model", actions: readonly IAction[] | (() => readonly IAction[]), enabled = true) {
+	constructor(id: string, label: string, tooltip: string, icon: Icon | undefined, presentation: "mode" | "model", actions: readonly IAction[] | (() => Promise<readonly IAction[]>), enabled = true) {
 		super(id, label, tooltip, icon, enabled, presentation, () => {});
 		this.actions = actions;
 	}

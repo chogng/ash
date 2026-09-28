@@ -110,6 +110,16 @@ impl DirContributions {
             .unwrap_or_default()
     }
 
+    pub(super) fn refresh_root_agents(&self) -> Arc<AgentRoleCatalogSnapshot> {
+        self.env_dir
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_mut()
+            .filter(|catalog| catalog.authorization.is_active())
+            .map(|catalog| catalog.agents.refresh())
+            .unwrap_or_default()
+    }
+
     pub(super) fn agent_snapshots_for(
         &self,
         session_id: &SessionId,

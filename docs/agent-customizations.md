@@ -6,8 +6,8 @@
 > 状态：架构边界已接受（2026-08-12）；User 与 Directory 的 `AGENTS.md`、`ASH.md`、Global Instructions 和
 > 成功读取文件命中的 Contextual Instructions 会进入后续 model invocation。Skills 已有 metadata catalog、显式 activation 和通用
 > context injection，可信 built-in Skill 自动 selector 与 Agent delegation definition 选择已经接通。
-> 已有指令列表与显式附件 API；独立指令管理界面、Agent definition list/picker API 和完整 import apply
-> 仍未实现。
+> 已有指令列表与显式附件 API；已授权环境目录的 Agent 定义可在新聊天选择器中列出并用于创建根会话。
+> 独立指令管理界面、完整 Agent 管理界面和完整 import apply 仍未实现。
 >
 > Skill 的格式、来源与激活细节见 [`skills.md`](skills.md)；外部格式发现和转换实现契约见
 > [`external-agent-migration` README](../ash-rs/external-agent-migration/README.md)；配置与事务边界见
@@ -126,7 +126,7 @@ Skill 统一使用 `$name` 选择器，产品 Slash Command 不注册 Skill 的�
 `<name>/SKILL.md` 目录。目录加入 Environment 且具备相应 Grant 时，App Server 才把 root 交给对应 runtime；
 `ash-skills-extension` 拥有 Skill catalog 与 watcher refresh。模型调用不在 Core context assembly
 中扫描 catalog：Global Instructions 使用冻结的 `HarnessInstructions` snapshot；已激活 Skill 由
-extension 按 durable digest 精确加载正文。扫描 Agent catalog 本身不会执行定义。当前只有 `spawn_agent` 在委托安全点完成目录定义的选择、引用解析与冻结；让会话入口和工作流使用同一契约属于 [`agents.md`](agents.md) 的计划设计。
+extension 按 durable digest 精确加载正文。扫描 Agent catalog 本身不会执行定义。`spawn_agent` 在委托安全点选择并冻结目录定义；新聊天可从已授权的环境目录列出定义，并在创建根 Session 时选择精确来源。已有 Session 的角色不会因选择器操作而改变；工作流入口仍需单独接入。
 
 | Scope/source | 物理 owner | 是否经过 `external-agent-migration` |
 | --- | --- | --- |
@@ -238,7 +238,7 @@ Slash Command catalog 只包含产品和服务命令；独立 `$name` Skill sele
 | Codex/Claude bounded source parsers 与 `MigrationPlan` fragments | 部分具备 | settings/MCP/hooks/plugins/memory/agents/commands fragments 已实现；sessions、apply adapter、wire contract 未实现 |
 | User Instructions authority | 部分具备 | `ash-home` + `ash-instructions`；`AGENTS.md`、`ASH.md`、Global 与已读文件 Contextual 注入已实现 |
 | Directory Instructions authority | 部分具备 | `ash-instructions` + `DirContributions`；共享/专属 always-on、Global 与已读文件 Contextual 注入已实现 |
-| Directory Agents authority | 部分具备 | catalog/refresh、spawn 显式/自动选择、reference/capability freezing 已实现；list/picker API 未实现 |
+| Directory Agents authority | 部分具备 | catalog/refresh、spawn 显式/自动选择、reference/capability freezing、已授权环境目录的 list/picker 和根 Session 选择已实现；独立管理界面未实现 |
 | `.ash/{instructions,skills,agents}` loader | 已实现 | 固定 roots、有界校验、Directory activation 与 watcher refresh |
 | External parser、preview 与 apply | 部分具备 | 四种来源的项目指令已有 typed fragment、摘要预览和逐文件发布；其他 apply、跨领域事务与持久回执未完成 |
 | `$name` Skill selector | 已实现 | TUI/Desktop `$name` 绑定 stable `SkillRef`；`/skills` 只管理，`@` 留给文件和 Plugin 上下文 |
@@ -257,7 +257,7 @@ Slash Command catalog 只包含产品和服务命令；独立 `$name` Skill sele
 2. 已完成 Directory 三类 catalog、Global Instruction safe-point injection 与 watcher refresh。
 3. 已完成 Skill 显式 activation、可信 built-in 自动 selector、Directory source、用户可调用投影
    和通用 context injection；已接通按需读取、显式附件与写入前规则检查；管理界面仍待接入。
-4. Agent definition catalog 已开放给 multi-agent delegation 的受限选择；下一步补 list/picker API，
+4. Agent definition catalog 已开放给 multi-agent delegation 的受限选择；已授权环境目录的定义可由新聊天选择器列出并用于创建根 Session，
    cross-authority reference 在具备明确 authority contract 前继续拒绝。
 5. `external-agent-migration` 的 bounded parsers 和 typed preview fragments 已实现；四种来源的项目指令已接入
    App Server 预览与发布。其他条目只在具备对应 target authority 时开放 apply。

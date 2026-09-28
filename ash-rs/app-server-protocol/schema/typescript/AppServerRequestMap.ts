@@ -10,6 +10,7 @@ import type { AccountRateLimitsReadResult } from './types/AccountRateLimitsReadR
 import type { AccountReadResult } from './types/AccountReadResult.js';
 import type { AgentReadParams } from './types/AgentReadParams.js';
 import type { AgentReadResult } from './types/AgentReadResult.js';
+import type { AgentRoleListResult } from './types/AgentRoleListResult.js';
 import type { AppServerError } from './types/AppServerError.js';
 import type { AttachmentImportRemoteParams } from './types/AttachmentImportRemoteParams.js';
 import type { AttachmentMaterializeResult } from './types/AttachmentMaterializeResult.js';
@@ -460,6 +461,7 @@ export interface AppServerRequestMap {
   "document/collaboration/presence/read": { params: DocumentCollaborationPresenceReadParams; response: DocumentCollaborationPresenceSnapshot };
   "session/create": { params: SessionCreateParams; response: SessionResult };
   "agent/read": { params: AgentReadParams; response: AgentReadResult };
+  "agent/roles/list": { params: Record<string, never>; response: AgentRoleListResult };
   "session/read": { params: SessionReadParams; response: SessionResult };
   "session/catalog/read": { params: SessionReadParams; response: SessionCatalogReadResult };
   "session/thread/checkpoints": { params: MessageCheckpointsParams; response: MessageCheckpointsResult };
@@ -756,6 +758,7 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "document/collaboration/presence/read": { method: "document/collaboration/presence/read" },
   "session/create": { method: "session/create" },
   "agent/read": { method: "agent/read" },
+  "agent/roles/list": { method: "agent/roles/list" },
   "session/read": { method: "session/read" },
   "session/catalog/read": { method: "session/catalog/read" },
   "session/thread/checkpoints": { method: "session/thread/checkpoints" },

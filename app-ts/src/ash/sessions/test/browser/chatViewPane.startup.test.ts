@@ -88,13 +88,14 @@ class PendingSessionService implements ISessionsManagementService {
 	}
 
 	initialize(): Promise<void> { return this.pendingInitialization; }
+	listAgents(): Promise<readonly import('../../../workbench/services/chat/common/chatService.js').ChatAgent[]> { return Promise.resolve([]); }
 	openThread(_sessionId: SessionId, _threadId: ThreadId): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
 
 	selectThread(_sessionId: SessionId, _threadId: ThreadId): void {}
 	interruptThread(_sessionId: SessionId, _threadId: ThreadId): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
 
 	createUntitledSession(title = "New Chat"): IUntitledChatSession {
-		const session = { untitledSessionId: `untitled-${this._untitledSessions.length + 1}`, title, model: undefined };
+		const session = { untitledSessionId: `untitled-${this._untitledSessions.length + 1}`, title, model: undefined, agent: undefined };
 		this._untitledSessions = [session, ...this._untitledSessions];
 		this._activeUntitledSessionId = session.untitledSessionId;
 		this._onDidChange.fire();
@@ -104,6 +105,7 @@ class PendingSessionService implements ISessionsManagementService {
 	selectUntitledSession(untitledSessionId: string): void { this._activeUntitledSessionId = untitledSessionId; }
 	discardUntitledSession(_untitledSessionId: string): void {}
 	setUntitledSessionModel(_untitledSessionId: string, _model: ModelRef): void {}
+	setUntitledSessionAgent(_untitledSessionId: string, _agent: import('../../../workbench/services/chat/common/chatService.js').ChatAgent | undefined): void {}
 	materializeUntitledSession(_untitledSessionId: string): Promise<IActiveSessionThread> { return Promise.reject(new Error("Backend is unavailable")); }
 	promoteUntitledSession(_untitledSessionId: string, _active: IActiveSessionThread): void {}
 	ensureActiveThread(): Promise<IActiveSessionThread> { return Promise.reject(new Error("Backend is unavailable")); }

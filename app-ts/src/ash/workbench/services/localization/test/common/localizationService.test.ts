@@ -273,6 +273,8 @@ test('editor action labels use the selected Chinese language catalog', async () 
 		assert.equal(localize('parameterHints.dialog', 'Parameter hints'), '参数提示');
 		assert.equal(localize('chat.providerKeys.manage', 'Manage Model Connections'), '管理模型接入');
 		assert.equal(localize('chat.input.dictate', 'Dictate message'), '语音输入');
+		assert.equal(localize('chat.agentPicker.mode', 'Agent: {0}', 'reviewer'), '智能体：reviewer');
+		assert.equal(localize('chat.agentPicker.loadFailed', 'Could not load custom Agents'), '无法加载自定义智能体');
 		assert.equal(localize('chat.input.voice', 'Voice conversation'), '语音对话');
 		assert.equal(localize('chat.providerKeys.inputTitle', 'API key for {0}', 'OpenAI'), 'OpenAI 的 API 密钥');
 		assert.equal(localize('onboarding.stepProgress', 'Step {0} of {1}', 2, 3), '第 2 步，共 3 步');

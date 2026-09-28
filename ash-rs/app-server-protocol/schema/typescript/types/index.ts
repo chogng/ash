@@ -55,6 +55,8 @@ export type { AgentReadResult } from './AgentReadResult.js';
 export type { AgentRequest } from './AgentRequest.js';
 export type { AgentRequestEnvelope } from './AgentRequestEnvelope.js';
 export type { AgentResponse } from './AgentResponse.js';
+export type { AgentRoleEntry } from './AgentRoleEntry.js';
+export type { AgentRoleListResult } from './AgentRoleListResult.js';
 export type { AgentRoleSelection } from './AgentRoleSelection.js';
 export type { AgentRoleSnapshot } from './AgentRoleSnapshot.js';
 export type { AgentRoleSource } from './AgentRoleSource.js';

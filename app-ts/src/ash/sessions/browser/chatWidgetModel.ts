@@ -1,6 +1,6 @@
 import { Emitter, type Event } from "../../base/common/event.js";
 import { Disposable, toDisposable } from "../../base/common/lifecycle.js";
-import type { AgentResponse, IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnChangeDetails, TurnChangeSetSummary, TurnInteraction } from "../../workbench/services/chat/common/chatService.js";
+import type { AgentResponse, ChatAgent, IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnChangeDetails, TurnChangeSetSummary, TurnInteraction } from "../../workbench/services/chat/common/chatService.js";
 import { localize } from "../../nls.js";
 import type { SkillReference } from "../../platform/skills/common/skillApi.js";
 import type { ResolvedChatContext } from "../../workbench/services/chat/common/chatContextService.js";
@@ -96,6 +96,9 @@ export class ChatWidgetModel extends Disposable {
 			slashCommands: this._slashCommands,
 			skillSelectors: this._skillSelectors,
 			selectedModel: this.selectedModel,
+			selectedAgent: this.selection.kind === 'untitled' ? this.selection.session.agent : undefined,
+			agentName: this.selection.kind === 'session' ? this.selection.active.session.agentTree?.find(node => node.threadId === this.threadId)?.role?.name : undefined,
+			canSelectAgent: this.selection.kind === 'untitled',
 			interaction: this._interaction,
 		};
 	}
@@ -231,6 +234,20 @@ export class ChatWidgetModel extends Disposable {
 			return;
 		}
 		this.selectedModels.set(this.selection.active.threadId, model);
+		this._onDidChange.fire();
+	}
+
+	async listAgents(): Promise<readonly ChatAgent[]> {
+		return this.sessionService.listAgents();
+	}
+
+	selectAgent(agent: ChatAgent | undefined): void {
+		if (this.selection.kind !== 'untitled') throw new Error('Start a new Chat to select an Agent');
+		if (this.selection.session.agent?.name === agent?.name && this.selection.session.agent?.sourceId === agent?.sourceId) return;
+		const untitledSessionId = this.selection.session.untitledSessionId;
+		this.sessionService.setUntitledSessionAgent(untitledSessionId, agent);
+		const session = this.sessionService.untitledSessions.find(candidate => candidate.untitledSessionId === untitledSessionId)!;
+		this.selection = { kind: 'untitled', session };
 		this._onDidChange.fire();
 	}
 

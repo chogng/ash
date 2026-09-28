@@ -22,7 +22,7 @@ livekit-client = { package = "ash-livekit-client", path = "../livekit-client" }
 ash-screen-capture = { workspace = true }
 image = { workspace = true, features = ["jpeg"] }
 voice-host = { package = "ash-voice-host", path = "../voice-host" }
-ash-system-dictation = { path = "../system-dictation" }
+realtime-voice = { package = "ash-realtime-voice", path = "../realtime-voice" }
 file-search = { package = "ash-file-search", path = "../file-search" }
 tempfile = { workspace = true }
 sleep_inhibitor.workspace = true

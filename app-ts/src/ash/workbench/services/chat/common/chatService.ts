@@ -15,6 +15,13 @@ export interface ModelRef {
 	readonly model: string;
 }
 
+/** An authorized directory Agent that can start a new Chat Session. */
+export interface ChatAgent {
+	readonly name: string;
+	readonly description: string;
+	readonly sourceId: string;
+}
+
 export type ApprovalMode = "askPermissions" | "autoReview" | "bypassPermissions";
 
 export interface ModelProviderCredentialStatus {

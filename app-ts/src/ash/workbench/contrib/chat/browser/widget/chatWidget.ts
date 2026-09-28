@@ -4,7 +4,7 @@ import type { Event } from "../../../../../base/common/event.js";
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { IContextViewService } from "../../../../../platform/contextview/browser/contextView.js";
-import type { AgentResponse, ModelRef, SessionId, ThreadGoal, ThreadId } from "../../../../services/chat/common/chatService.js";
+import type { AgentResponse, ChatAgent, ModelRef, SessionId, ThreadGoal, ThreadId } from "../../../../services/chat/common/chatService.js";
 import type { ChatInputDelegate } from "./input/chatInput.js";
 import type { SkillReference } from "../../../../../platform/skills/common/skillApi.js";
 import { ChatInputPart } from "./input/chatInputPart.js";
@@ -37,6 +37,8 @@ export interface IChatWidgetModel extends IDisposable {
 	executeServerCommand(name: string, argumentsText: string): Promise<void>;
 	interrupt(): Promise<void>;
 	selectModel(model: ModelRef): Promise<void>;
+	listAgents(): Promise<readonly ChatAgent[]>;
+	selectAgent(agent: ChatAgent | undefined): void;
 	resolveInteraction(response: AgentResponse): Promise<void>;
 	retryFailedTurn(turnId: string): Promise<void>;
 }
@@ -92,6 +94,8 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 					: this.model.executeServerCommand(invocation.name, invocation.argumentsText),
 			interrupt: () => this.model.interrupt(),
 			selectModel: (model) => this.model.selectModel(model),
+			listAgents: () => this.model.listAgents(),
+			selectAgent: agent => this.model.selectAgent(agent),
 			openModelSettings: () => commandService.executeCommand(OpenSettingsCommandId),
 			resolveInteraction: (response) => this.model.resolveInteraction(response),
 		};

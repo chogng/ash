@@ -1709,6 +1709,40 @@
         }
       ]
     },
+    "AgentRoleEntry": {
+      "description": "One Agent definition that can be selected when creating a root Session.",
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/AgentRoleSource"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "source"
+      ],
+      "type": "object"
+    },
+    "AgentRoleListResult": {
+      "properties": {
+        "agents": {
+          "items": {
+            "$ref": "#/$defs/AgentRoleEntry"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "agents"
+      ],
+      "type": "object"
+    },
     "AgentRoleSelection": {
       "description": "Selects normal Agent behavior or one definition from an exact authorized source.",
       "oneOf": [
@@ -4817,6 +4851,22 @@
             },
             "params": {
               "$ref": "#/$defs/AgentReadParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "agent/roles/list",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
             }
           },
           "required": [
@@ -9365,6 +9415,22 @@
             },
             "result": {
               "$ref": "#/$defs/AgentReadResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "agent/roles/list",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/AgentRoleListResult"
             }
           },
           "required": [

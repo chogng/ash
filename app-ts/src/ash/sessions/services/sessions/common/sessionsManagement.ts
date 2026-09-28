@@ -1,6 +1,7 @@
 import type { Event } from "../../../../base/common/event.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import type { IActiveSessionThread, IUntitledChatSession, ISession, ModelRef, SessionId, ThreadId } from "./session.js";
+import type { ChatAgent } from '../../../../workbench/services/chat/common/chatService.js';
 
 export type SessionsManagementState = "loading" | "ready" | "creating" | "stopping" | "archiving" | "error";
 
@@ -14,6 +15,7 @@ export interface ISessionsManagementService {
 	readonly state: SessionsManagementState;
 	readonly error: string | undefined;
 	initialize(): Promise<void>;
+	listAgents(): Promise<readonly ChatAgent[]>;
 	openThread(sessionId: SessionId, threadId: ThreadId): Promise<void>;
 	selectThread(sessionId: SessionId, threadId: ThreadId): void;
 	interruptThread(sessionId: SessionId, threadId: ThreadId): Promise<void>;
@@ -21,6 +23,7 @@ export interface ISessionsManagementService {
 	selectUntitledSession(untitledSessionId: string): void;
 	discardUntitledSession(untitledSessionId: string): void;
 	setUntitledSessionModel(untitledSessionId: string, model: ModelRef): void;
+	setUntitledSessionAgent(untitledSessionId: string, agent: ChatAgent | undefined): void;
 	materializeUntitledSession(untitledSessionId: string): Promise<IActiveSessionThread>;
 	promoteUntitledSession(untitledSessionId: string, active: IActiveSessionThread): void;
 	ensureActiveThread(): Promise<IActiveSessionThread>;
