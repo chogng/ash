@@ -19,12 +19,14 @@ export interface TestWorkspace {
 export interface TestWorkspaceOptions {
 	readonly includeLargeFile?: boolean;
 	readonly gitRepository?: boolean;
+	readonly gitMergeConflict?: boolean;
 }
 
 const run = promisify(execFile);
 
 /** Creates an isolated folder and text file for App Server-backed UI tests. */
 export async function createTestWorkspace(options: TestWorkspaceOptions = {}): Promise<TestWorkspace> {
+	if (options.gitMergeConflict && !options.gitRepository) throw new Error('A merge conflict requires a Git test repository');
 	const sharedDirectory = process.env.ASH_PLAYWRIGHT_WORKSPACE;
 	const directory = sharedDirectory && !options.gitRepository ? resolve(sharedDirectory) : await mkdtemp(join(tmpdir(), "ash-playwright-workspace-"));
 	await mkdir(directory, { recursive: true });
@@ -44,6 +46,20 @@ export async function createTestWorkspace(options: TestWorkspaceOptions = {}): P
 		await run('git', ['init', '-b', 'main'], { cwd: directory });
 		await run('git', ['add', 'main.ts'], { cwd: directory });
 		await run('git', ['-c', 'user.name=Ash Test', '-c', 'user.email=ash-test@example.invalid', 'commit', '-m', 'Initial'], { cwd: directory });
+		if (options.gitMergeConflict) {
+			await run('git', ['switch', '-c', 'topic'], { cwd: directory });
+			await writeFile(file, 'const value = 2;\n');
+			await run('git', ['add', 'main.ts'], { cwd: directory });
+			await run('git', ['-c', 'user.name=Ash Test', '-c', 'user.email=ash-test@example.invalid', 'commit', '-m', 'Topic'], { cwd: directory });
+			await run('git', ['switch', 'main'], { cwd: directory });
+			await writeFile(file, 'const value = 3;\n');
+			await run('git', ['add', 'main.ts'], { cwd: directory });
+			await run('git', ['-c', 'user.name=Ash Test', '-c', 'user.email=ash-test@example.invalid', 'commit', '-m', 'Main'], { cwd: directory });
+			const rejected = await run('git', ['merge', 'topic'], { cwd: directory }).then(() => false, () => true);
+			if (!rejected || !(await run('git', ['ls-files', '--unmerged', 'main.ts'], { cwd: directory })).stdout.trim()) {
+				throw new Error('Test repository did not produce a merge conflict');
+			}
+		}
 	}
 	return { directory, file, rustFile, academicFile, largeFile, pdfFile, removeOnDispose: sharedDirectory === undefined || options.gitRepository === true };
 }

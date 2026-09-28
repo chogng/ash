@@ -11,6 +11,7 @@ import { ICommandService } from "../../../../platform/commands/common/commands.j
 import { IResourceIconRenderer } from "../../../browser/labels.js";
 import { type GitChangeFileComparison, type GitChangeStatus, type GitRepositoryChange, type GitStatus, IGitService } from "../../../services/git/common/gitService.js";
 import { IEditorService } from "../../../services/editor/common/editorService.js";
+import { IWorkingCopyService } from '../../../services/workingCopy/common/workingCopyService.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
@@ -41,7 +42,17 @@ export class ScmViewPane extends ViewPane {
 	private busy = false;
 	private unavailable = false;
 
-	constructor(container: HTMLElement, options: IViewPaneOptions, @IGitService gitService: IGitService, @IResourceIconRenderer private readonly resourceIconRenderer: IResourceIconRenderer, @IEditorService private readonly editorService: IEditorService, @ICommandService private readonly commandService: ICommandService, @IContextMenuService private readonly contextMenuProvider: IContextMenuProvider, @IDialogService private readonly dialogs: IDialogService) {
+	constructor(
+		container: HTMLElement,
+		options: IViewPaneOptions,
+		@IGitService gitService: IGitService,
+		@IResourceIconRenderer private readonly resourceIconRenderer: IResourceIconRenderer,
+		@IEditorService private readonly editorService: IEditorService,
+		@ICommandService private readonly commandService: ICommandService,
+		@IContextMenuService private readonly contextMenuProvider: IContextMenuProvider,
+		@IDialogService private readonly dialogs: IDialogService,
+		@IWorkingCopyService private readonly workingCopies: IWorkingCopyService,
+	) {
 		super(container, options);
 		this.gitService = gitService;
 		this.contentElement.classList.add("ash-scm");
@@ -170,6 +181,20 @@ export class ScmViewPane extends ViewPane {
 
 	private async requestPathAction(action: GitPathAction, paths: readonly string[]): Promise<void> {
 		if (this.busy || paths.length === 0) return;
+		const status = this.status;
+		if (action === 'stage' && status) {
+			const dirtyConflicts = status.changes.filter(change => {
+				if (!change.conflicted || !paths.includes(change.path)) return false;
+				const resource = repositoryFileUri(status.workspacePath, change.path);
+				return this.workingCopies.get(resource).some(copy => copy.isDirty);
+			});
+			if (dirtyConflicts.length > 0) {
+				this.statusElement.textContent = dirtyConflicts.length === 1
+					? `Save ${dirtyConflicts[0].path} before staging its conflict resolution.`
+					: `Save ${dirtyConflicts.length} conflicted files before staging their resolutions.`;
+				return;
+			}
+		}
 		if (action === "discard") {
 			const target = paths.length === 1 ? paths[0] : `${paths.length} working-tree files`;
 			const repositoryId = this.status?.repositoryId;
@@ -290,17 +315,15 @@ export class ScmViewPane extends ViewPane {
 		open.setAttribute("aria-label", `Open ${side === "index" ? "staged changes" : "changes"} for ${change.path}`);
 		open.append(fileLabel.element);
 		if (change.conflicted) {
-			open.disabled = true;
-			open.setAttribute("aria-label", `Merge conflict in ${change.path}`);
-		} else {
-			this.renderedChanges.add(addDisposableListener(open, "click", (event) => {
-				if ((event as MouseEvent).detail > 1) return;
-				void this.openChange(change, side, false);
-			}));
-			this.renderedChanges.add(addDisposableListener(open, "dblclick", () => {
-				void this.openChange(change, side, true);
-			}));
+			open.setAttribute("aria-label", `Open merge conflict in ${change.path}`);
 		}
+		this.renderedChanges.add(addDisposableListener(open, "click", (event) => {
+			if ((event as MouseEvent).detail > 1) return;
+			void this.openChange(change, side, false);
+		}));
+		this.renderedChanges.add(addDisposableListener(open, "dblclick", () => {
+			void this.openChange(change, side, true);
+		}));
 		const actions = side === "index"
 			? [this.pathAction(`scm.change.unstage.${change.path}`, `Unstage ${change.path}`, "unstage", changePaths(change))]
 			: [
@@ -322,6 +345,14 @@ export class ScmViewPane extends ViewPane {
 	private async openChange(change: GitRepositoryChange, side: GitChangeSide, pinned: boolean): Promise<void> {
 		const status = this.status;
 		if (!status) return;
+		if (change.conflicted) {
+			try {
+				await this.editorService.openEditor({ resource: repositoryFileUri(status.workspacePath, change.path), label: basename(change.path) }, { pinned });
+			} catch (error) {
+				if (!this.isDisposed) this.statusElement.textContent = gitErrorMessage(error);
+			}
+			return;
+		}
 		const comparison: GitChangeFileComparison = side === "index" ? "staged" : "unstaged";
 		try {
 			const inputs = await resolveGitChangeInputs(this.gitService, status, change, comparison);

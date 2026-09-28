@@ -15,6 +15,7 @@ import type { HoverSetupOptions, IHoverService, IManagedHover } from "../../../.
 import type { IResourceIconRenderer } from "../../../../browser/labels.js";
 import { GitWorkspaceError, IGitService, type GitRepository, type GraphQuery, type GitStatus } from "../../../../../workbench/services/git/common/gitService.js";
 import { IEditorService, type EditorInput, type EditorOpenOptions } from "../../../../../workbench/services/editor/common/editorService.js";
+import type { IWorkingCopyService } from '../../../../../workbench/services/workingCopy/common/workingCopyService.js';
 import { CommandService } from "../../../../../workbench/services/commands/common/commandService.js";
 import { OpenScmMultiDiffEditorAction } from "../../../../../workbench/contrib/multiDiffEditor/browser/scmMultiDiffAction.js";
 import { resolveGitChangeInputs } from "../../../../../workbench/contrib/scm/browser/scmChangeEditorInput.js";
@@ -577,6 +578,10 @@ test("ScmViewPane groups App Server Git status", async () => {
 	const activeRepositoryChanges = new Emitter<GitRepository | undefined>();
 	const readyChanges = new Emitter<void>();
 	let workspaceError: GitWorkspaceError | undefined;
+	let dirtyConflict = false;
+	const workingCopies = {
+		get: (resource: URI) => resource.path.endsWith('/conflict.ts') && dirtyConflict ? [{ isDirty: true }] : [],
+	} as unknown as IWorkingCopyService;
 	const selectedRepositories: string[] = [];
 	const gitService = {
 		repositories,
@@ -638,7 +643,7 @@ test("ScmViewPane groups App Server Git status", async () => {
 		}, gitService, testFileIconThemeService(), editorService, commandService, testContextMenuProvider, {
 			...testDialogs,
 			confirm: async () => ({ confirmed: false }),
-		});
+		}, workingCopies);
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector(".ash-scm-status")?.textContent === "4 changed files");
 
@@ -659,7 +664,7 @@ test("ScmViewPane groups App Server Git status", async () => {
 		assert.ok(workingLabel);
 		assert.equal(workingLabel.querySelector(".ash-scm-change-description")?.textContent, "src");
 		assert.equal(workingLabel.querySelector(".ash-icon-label-icon")?.getAttribute("data-file-icon"), "working.ts");
-		assert.equal(pane.element.querySelector<HTMLButtonElement>('button[aria-label="Merge conflict in conflict.ts"]')?.disabled, true);
+		assert.equal(pane.element.querySelector<HTMLButtonElement>('button[aria-label="Open merge conflict in conflict.ts"]')?.disabled, false);
 
 		const stagedOpen = pane.element.querySelector<HTMLButtonElement>('button[aria-label="Open staged changes for staged.ts"]');
 		assert.ok(stagedOpen);
@@ -696,6 +701,20 @@ test("ScmViewPane groups App Server Git status", async () => {
 			"file:///both.ts",
 		]);
 		assert.equal(opened[3].options?.pinned, true);
+		const conflictOpen = pane.element.querySelector<HTMLButtonElement>('button[aria-label="Open merge conflict in conflict.ts"]');
+		assert.ok(conflictOpen);
+		const changeFileCount = changeFileRequests.length;
+		conflictOpen.click();
+		await waitFor(() => opened.length === 5);
+		assert.equal(opened[4].input.resource.toString(), 'file:///conflict.ts');
+		assert.equal(opened[4].input.readOnly, undefined);
+		assert.equal(opened[4].options?.pinned, false);
+		assert.equal(changeFileRequests.length, changeFileCount);
+		dirtyConflict = true;
+		pane.element.querySelector<HTMLButtonElement>('button[aria-label="Stage conflict.ts"]')?.click();
+		assert.equal(stagedPaths, undefined);
+		assert.equal(pane.element.querySelector('.ash-scm-status')?.textContent, 'Save conflict.ts before staging its conflict resolution.');
+		dirtyConflict = false;
 
 		const stageAll = pane.element.querySelector<HTMLButtonElement>('button[aria-label="Stage All Changes"]');
 		const discardAll = pane.element.querySelector<HTMLButtonElement>('button[aria-label="Discard All Changes"]');
@@ -823,7 +842,7 @@ test("ScmViewPane accepts a restarted Git stream and rejects its retired predece
 		using pane = new ScmViewPane(browser.window.document.body, {
 			id: "ash.git.restart",
 			title: "Changes",
-		}, gitService, testFileIconThemeService(), testEditorService(), inactiveCommandService(), testContextMenuProvider, testDialogs);
+		}, gitService, testFileIconThemeService(), testEditorService(), inactiveCommandService(), testContextMenuProvider, testDialogs, { get: () => [] } as unknown as IWorkingCopyService);
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector('[aria-label="Open changes for before.ts"]') !== null);
 		assert.equal(pane.element.querySelector(".ash-scm-branch"), null);
