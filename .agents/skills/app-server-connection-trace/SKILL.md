@@ -30,9 +30,23 @@ In the current flow, Main's `startAppServerWithRecovery` runs before window crea
 4. Capture these milestones where observable: Electron launch request, window created, Renderer acquire request, daemon command spawned, managed endpoint ready, daemon probe response, Renderer `initialize` response, workspace initialization complete, and Workbench ready. Record each event's process, run ID, phase, elapsed time, and result. Use request/connection IDs to connect related events. Measure an interval with one process's monotonic clock or at a single observer boundary. Do not subtract timestamps from independent process clocks without clock alignment.
 5. Save machine-readable runs and a concise timeline under an ignored `.build/startup-trace/<run-id>/` directory. Preserve the raw trace or logs that support each phase. Redact credentials and home paths before sharing artifacts.
 
-For a cheap baseline, launch the real Electron build with Playwright (`_electron.launch`) and measure `launch → window → Workbench ready`; separately launch `ash-app-server --listen stdio://` and measure `spawn → valid initialize response`; then measure `ash-app-server-daemon connect-selected` to the same response. These are **different scopes**, so compare them as clues, not additive components of a single run. Use the repository's `app-ts/test/automation/electron.ts` launch configuration and `test/automation/workbench.ts` readiness contract rather than inventing a weaker selector.
+For a cheap backend baseline, separately launch `ash-app-server --listen stdio://` and measure `spawn → valid initialize response`, then measure `ash-app-server-daemon connect-selected` to the same response. These are **different scopes** from Desktop readiness, so compare them as clues, not additive components of a single run. Use the repository's `app-ts/test/automation/electron.ts` launch configuration and `test/automation/workbench.ts` readiness contract rather than inventing a weaker selector.
 
 A standalone development binary may need the product-services fixture and packaged helper tools to initialize. Missing credentials, `tgrep`, or another required resource is a failed run, even if the process exits quickly. Use an isolated test profile and test credentials when needed; never borrow a user's login to make the benchmark pass.
+
+## Run the repeatable Desktop baseline
+
+After preparing the development backend package and Electron build, run from the repository root:
+
+```sh
+ASH_CONNECTION_TRACE=1 pnpm --dir app-ts exec playwright test test/smoke/areas/windows/connection-trace.spec.ts --project=electron-app-server
+```
+
+The test is opt-in and skips during ordinary smoke runs. It records five launches in each cohort: a new profile without a daemon (including the first-run trust choice), one authorized profile whose daemon is stopped between launches, one authorized profile with a reused daemon, and UI-only startup with an authorized profile and the same workspace. Every sample gets a new Electron user-data directory; the OS file cache is not cleared. The reused cohort checks that the daemon PID stays the same.
+
+The report is attached to the Playwright result and saved at `.build/startup-trace/desktop-<run-id>/connection-trace.json`. Read its individual samples and errors alongside the medians; it also records the build ID, backend size, platform, readiness condition, and cache and profile conditions. The measured interval starts immediately before `launchElectron` in the Playwright worker and ends when its Workbench readiness check finishes. It includes automation and first-run interaction time. It does not isolate Electron process creation, the daemon probe, protocol initialization, or CPU work; use the detailed tracing steps below for those spans. Do not turn a single build's median into a fixed CI latency threshold.
+
+For behavior coverage, `app-ts/test/smoke/areas/windows/home.spec.ts` verifies that an authorized workspace reopens after its backend stops. The trace test measures duration while also requiring successful readiness; it does not replace that regression test.
 
 ## Collect detailed traces only for the slow stage
 
@@ -48,3 +62,7 @@ Use a stage table with per-run samples, median, and error count. State which int
 Example conclusion: “Fresh-profile Workbench readiness improved by 240 ms median across seven valid runs; the daemon `spawn → probe` interval accounts for 190 ms of that change. Reused-daemon readiness changed by 8 ms. Renderer CPU trace shows no new long task.” Replace these values with measured results; do not report a cause from subtraction alone.
 
 Stop only processes and delete only profiles created for the trace. Do not stop a user's shared daemon or copy their real credentials into an artifact. When code changes follow the repository's matching TypeScript, Rust, and testing instructions, and use Playwright for Electron UI verification.
+
+## Learnings
+
+- Close each test Electron window before stopping its managed daemon. Stopping the daemon while its Renderer is still running triggers reconnect and can turn cleanup into a test-only initialization timeout.
