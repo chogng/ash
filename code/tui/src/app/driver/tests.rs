@@ -1,3 +1,5 @@
+use super::AppDriver;
+use super::AppDriverResources;
 use super::ScheduledCommand;
 use super::schedule_command as schedule;
 use crate::app::requests::RequestOrigin;
@@ -26,6 +28,7 @@ fn schedule_command(
 }
 use crate::app::App;
 use crate::app::AppCommand;
+use crate::app::AppEvent;
 use crate::app::completion::Completion;
 use crate::app::requests::RequestKey;
 use crate::app::requests::RequestTasks;
@@ -33,7 +36,100 @@ use crate::host::Command as HostCommand;
 use crate::keymap_setup::Command as KeymapCommand;
 use crate::theme::Command as ThemeCommand;
 use crate::thread::Command as ThreadCommand;
+use crate::thread::composer::SlashCommandInvocation;
+use crate::thread::composer::TuiSlashCommandAction;
+use crate::thread::composer::built_in_catalog_command;
+use ash_app_server_client::AppServerSession;
+use ash_app_server_client::InProcessClientOptions;
+use ash_app_server_protocol::protocol::common::ClientInfo;
+use ash_slash_commands::SlashCommandOrigin;
+use ratatui::Terminal;
+use ratatui::backend::TestBackend;
 use std::collections::VecDeque;
+use std::sync::Arc;
+
+#[test]
+fn repeated_model_command_opens_the_fixed_catalog_without_loading() {
+    let _guard = crate::test_support::in_process_test_guard();
+    let root = tempfile::tempdir().unwrap();
+    let session = AppServerSession::start_embedded(InProcessClientOptions::new(
+        root.path(),
+        ClientInfo {
+            name: "ash-tui-model-picker-test".into(),
+            version: "1".into(),
+        },
+    ))
+    .unwrap();
+    let mut client = session.client();
+    let model_picker = crate::models::ModelPickerData::new(
+        client.list_models().unwrap(),
+        client.read_config().unwrap(),
+    );
+    let runtime = state::StateRuntime::open(root.path()).unwrap();
+    let dictation_settings = Arc::new(
+        crate::config::LocalDictationSettings::open(root.path(), runtime.database_path()).unwrap(),
+    );
+    let mut driver = AppDriver::new(
+        App::new(),
+        client,
+        None,
+        AppDriverResources {
+            file_search: None,
+            host_dir_root: root.path().to_path_buf(),
+            theme_resource: crate::theme::ThemeResource::in_product_root(
+                root.path().to_path_buf(),
+                None,
+            ),
+            server_slash_commands: Vec::new(),
+            plugins_enabled: false,
+            profile_root: root.path().to_path_buf(),
+            dictation_settings,
+            model_picker,
+        },
+    );
+    driver.queued_commands.clear();
+
+    for _ in 0..2 {
+        let invocation = SlashCommandInvocation {
+            command: built_in_catalog_command(TuiSlashCommandAction::Model),
+            origin: SlashCommandOrigin::Local,
+            display_arguments: String::new(),
+            arguments: Vec::new(),
+        };
+        let command = ThreadCommand::ExecuteProductCommand(invocation).into();
+        assert!(driver.next_command(Some(command), false).is_none());
+        assert_eq!(driver.app().list_selection().unwrap().title(), "Model");
+        assert!(
+            !driver
+                .app()
+                .list_selection()
+                .unwrap()
+                .visible_items()
+                .is_empty()
+        );
+        assert!(driver.requests.is_idle(Some(RequestKey::Config)));
+        driver.app_mut().update(AppEvent::CommandPanelClosed);
+    }
+
+    let invocation = SlashCommandInvocation {
+        command: built_in_catalog_command(TuiSlashCommandAction::Model),
+        origin: SlashCommandOrigin::Local,
+        display_arguments: String::new(),
+        arguments: Vec::new(),
+    };
+    driver.next_command(
+        Some(ThreadCommand::ExecuteProductCommand(invocation).into()),
+        false,
+    );
+    let mut terminal = Terminal::new(TestBackend::new(80, 20)).unwrap();
+    terminal
+        .draw(|frame| crate::app::frame::draw(frame, driver.app()))
+        .unwrap();
+    crate::tui_assert_snapshot!(
+        "model_command_opens_fixed_catalog_immediately",
+        terminal.backend().to_string()
+    );
+}
 
 #[test]
 fn unrelated_actions_bypass_a_busy_request_without_losing_same_domain_order() {

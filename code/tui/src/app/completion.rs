@@ -44,7 +44,7 @@ pub(super) enum Completion {
         generation: u64,
         result: Result<ConversationCompletion, String>,
     },
-    ConfigRefreshed(Result<(ConfigReadResult, ModelListResult), String>),
+    ConfigRefreshed(Result<ConfigReadResult, String>),
     Sessions(SessionCompletion),
     ProductCommand {
         command: String,
@@ -122,6 +122,7 @@ pub(super) fn apply_request_completion(
     origin: super::requests::RequestOrigin,
     active: &mut Option<Conversation>,
     app: &mut App,
+    model_catalog: &ModelListResult,
 ) {
     let panel_generation = origin.panel_generation;
     if completion.thread_scope().is_some_and(|scope| {
@@ -160,8 +161,8 @@ pub(super) fn apply_request_completion(
             Err(error) => app.finish_issue_start(origin.mode, generation, Err(error)),
         },
         Completion::Memory(_) => unreachable!("memory completions are owned by AppDriver"),
-        Completion::ConfigRefreshed(Ok((config, models))) => {
-            apply_tui_config(config, Some(&models), app);
+        Completion::ConfigRefreshed(Ok(config)) => {
+            apply_tui_config(config, Some(model_catalog), app);
         }
         Completion::ConfigRefreshed(Err(error)) => {
             app.update_for_panel(panel_generation, ThreadEvent::FailureReported(error));

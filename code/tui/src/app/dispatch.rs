@@ -3,7 +3,6 @@
 use crate::app::AppEvent;
 use crate::dirs;
 use crate::mcp;
-use crate::models;
 use crate::sessions;
 use crate::sessions::ActiveConversation;
 use crate::sessions::ConversationChange;
@@ -340,26 +339,7 @@ where
                 "host command reached the App Server dispatcher".into(),
             ));
         }
-        TuiSlashCommandAction::Model => {
-            if arguments.is_empty() {
-                output.events.push(
-                    models::Event::PickerOpened(
-                        models::load_selection(client)
-                            .map_err(|error| CommandExecutionError(error.to_string()))?,
-                    )
-                    .into(),
-                );
-            } else {
-                let update = models::set_model(client, &arguments)
-                    .map_err(|error| CommandExecutionError(error.to_string()))?;
-                output
-                    .events
-                    .push(models::Event::SummaryReceived(update.summary).into());
-                output
-                    .events
-                    .push(crate::thread::Event::ProductNotice(update.notice).into());
-            }
-        }
+        TuiSlashCommandAction::Model => unreachable!("model commands are handled by AppDriver"),
         TuiSlashCommandAction::Theme => unreachable!("theme commands are handled locally"),
         TuiSlashCommandAction::Quit => {
             return Err(CommandExecutionError(

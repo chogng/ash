@@ -101,6 +101,7 @@ pub(super) struct AppDriver {
     queued_commands: VecDeque<ScheduledCommand>,
     refresh: ServerRefresh,
     queue_refresh_requested: bool,
+    model_picker: crate::models::ModelPickerData,
     file_search: Option<FileSearchManager>,
     host_dir_root: PathBuf,
     theme_resource: ThemeResource,
@@ -120,6 +121,7 @@ pub(super) struct AppDriverResources {
     pub(super) plugins_enabled: bool,
     pub(super) profile_root: PathBuf,
     pub(super) dictation_settings: std::sync::Arc<crate::config::LocalDictationSettings>,
+    pub(super) model_picker: crate::models::ModelPickerData,
 }
 
 impl AppDriver {
@@ -140,6 +142,7 @@ impl AppDriver {
             queued_commands: VecDeque::from([initial]),
             refresh: ServerRefresh::default(),
             queue_refresh_requested: true,
+            model_picker: resources.model_picker,
             file_search: resources.file_search,
             host_dir_root: resources.host_dir_root,
             theme_resource: resources.theme_resource,
@@ -232,12 +235,34 @@ impl AppDriver {
                     }
                     self.publish_memory_status(previous);
                 }
-                Ok(RequestCompletion { completion, origin }) => apply_request_completion(
-                    completion,
-                    origin,
-                    &mut self.conversation,
-                    &mut self.app,
-                ),
+                Ok(RequestCompletion { completion, origin }) => {
+                    if let Completion::ConfigRefreshed(Ok(config)) = &completion {
+                        self.model_picker.update_config(config.clone());
+                        if matches!(
+                            self.app.command_panel(),
+                            Some(super::command_panel::CommandPanel::Model(_))
+                        ) && let Ok(choices) = self.model_picker.choices()
+                        {
+                            self.app.update_for_panel(
+                                self.app.panels().generation(),
+                                crate::models::Event::PickerUpdated(choices),
+                            );
+                        }
+                    }
+                    if let Completion::ModelUpdated {
+                        result: Ok(update), ..
+                    } = &completion
+                    {
+                        self.model_picker.update_config(update.config.clone());
+                    }
+                    apply_request_completion(
+                        completion,
+                        origin,
+                        &mut self.conversation,
+                        &mut self.app,
+                        self.model_picker.catalog(),
+                    );
+                }
                 Err(error) => self
                     .app
                     .update(ThreadEvent::FailureReported(error.to_string())),
@@ -360,7 +385,19 @@ impl AppDriver {
                 &self.app,
             ));
         }
-        let command = command.map(|command| {
+        let command = command.and_then(|command| {
+            if let AppCommand::Thread(ThreadCommand::ExecuteProductCommand(invocation)) = &command
+                && invocation.command.name == "model"
+                && invocation.arguments.is_empty()
+            {
+                match self.model_picker.choices() {
+                    Ok(choices) => {
+                        self.app.update(crate::models::Event::PickerOpened(choices));
+                    }
+                    Err(error) => self.app.update(ThreadEvent::FailureReported(error)),
+                }
+                return None;
+            }
             match (&command, self.app.panels_mut().command_mut()) {
                 (
                     AppCommand::Marketplace(_),
@@ -392,7 +429,7 @@ impl AppDriver {
                         "Loading…",
                     ));
             }
-            ScheduledCommand::new(command, &self.app)
+            Some(ScheduledCommand::new(command, &self.app))
         });
         self.queue_refresh_requested |= had_active_turn && self.app.active_turn().is_none();
 
@@ -499,11 +536,9 @@ impl AppDriver {
                 Some(RequestKey::Config),
                 "ash-tui-refresh-config",
                 move || {
-                    Completion::ConfigRefreshed((|| {
-                        let config = client.read_config().map_err(|error| error.to_string())?;
-                        let models = client.list_models().map_err(|error| error.to_string())?;
-                        Ok((config, models))
-                    })())
+                    Completion::ConfigRefreshed(
+                        client.read_config().map_err(|error| error.to_string()),
+                    )
                 },
                 &mut self.app,
                 origin,

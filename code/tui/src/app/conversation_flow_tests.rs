@@ -93,7 +93,8 @@ fn normal_conversation_streams_completes_and_preserves_multi_turn_context() {
             "test-api-key".into(),
         ))
         .unwrap();
-    set_model(&mut client, "openai/gpt-5.6").unwrap();
+    let catalog = client.list_models().unwrap();
+    set_model(&mut client, "openai/gpt-5.6", &catalog).unwrap();
     let mut conversation =
         ActiveConversation::start(&mut client, "Conversation flow".into()).unwrap();
     let mut app = app_for_conversation(&mut client, &conversation);

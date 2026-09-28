@@ -9,7 +9,6 @@ use ash_app_server_client::JsonRpcTransport;
 use ash_app_server_protocol::protocol::config::ConfigUpdateParams;
 use ash_app_server_protocol::protocol::config::ModelRefDto;
 use ash_app_server_protocol::protocol::model::ModelListResult;
-use ash_app_server_protocol::protocol::provider::ProviderModelsListResult;
 use ash_protocol::Patch;
 use ash_protocol::ReasoningEffort;
 use std::fmt;
@@ -19,6 +18,7 @@ pub(crate) struct ModelUpdate {
     pub(crate) summary: ModelSummary,
     pub(crate) notice: String,
     pub(crate) picker: Option<ModelChoices>,
+    pub(crate) config: ash_app_server_protocol::protocol::config::ConfigReadResult,
 }
 
 impl Command {
@@ -43,56 +43,22 @@ impl Command {
 pub(crate) fn execute<T>(
     client: &mut AppServerClient<T>,
     command: Command,
+    catalog: &ModelListResult,
 ) -> Result<ModelUpdate, String>
 where
     T: JsonRpcTransport,
 {
     match command {
-        Command::SetModel { preference } => set_model(client, &preference),
-        Command::Pin { preference, pinned } => set_pin(client, &preference, pinned),
+        Command::SetModel { preference } => set_model(client, &preference, catalog),
+        Command::Pin { preference, pinned } => set_pin(client, &preference, pinned, catalog),
     }
     .map_err(|error| error.to_string())
-}
-
-pub(crate) fn load_selection<T>(
-    client: &mut AppServerClient<T>,
-) -> Result<ModelChoices, ModelCommandError>
-where
-    T: JsonRpcTransport,
-{
-    client.read_accounts()?;
-    let config = client.read_config()?;
-    let catalog = load_catalog(client)?;
-    model_choices(&catalog, &config).map_err(ModelCommandError)
-}
-
-fn load_catalog<T: JsonRpcTransport>(
-    client: &mut AppServerClient<T>,
-) -> Result<ModelListResult, ModelCommandError> {
-    let mut catalog = client.list_models()?;
-    let providers = client.list_providers()?;
-    for connection in ["kimi-desktop", "kimi-cli"] {
-        if !providers
-            .providers
-            .iter()
-            .any(|provider| provider.connection == connection && provider.ready)
-        {
-            continue;
-        }
-        match client.list_provider_models(connection.into())? {
-            ProviderModelsListResult::Models { models } => catalog.models.extend(models),
-            ProviderModelsListResult::Empty => {}
-            ProviderModelsListResult::Failed { failure } => {
-                return Err(ModelCommandError(format!("{connection}: {:?}", failure.code)));
-            }
-        }
-    }
-    Ok(catalog)
 }
 
 pub(crate) fn set_model<T>(
     client: &mut AppServerClient<T>,
     arguments: &str,
+    catalog: &ModelListResult,
 ) -> Result<ModelUpdate, ModelCommandError>
 where
     T: JsonRpcTransport,
@@ -150,7 +116,6 @@ where
         }
 
         if let Some(effort) = effort_opt {
-            let catalog = load_catalog(client)?;
             let entry = catalog.models.iter().find(|entry| {
                 entry.model.provider.as_str() == provider && entry.model.model.as_str() == model
             });
@@ -203,11 +168,10 @@ where
         tui: Patch::Missing,
     })?;
     let config = client.read_config()?;
-    let catalog = client.list_models().ok();
     let summary = ModelSummary::from_catalog(
-        config.model,
+        config.model.clone(),
         config.model_reasoning_effort,
-        catalog.as_ref(),
+        Some(catalog),
     );
     let notice = format!(
         "Model: {}",
@@ -217,6 +181,7 @@ where
         summary,
         notice,
         picker: None,
+        config,
     })
 }
 
@@ -277,6 +242,7 @@ fn set_pin<T: JsonRpcTransport>(
     client: &mut AppServerClient<T>,
     preference: &str,
     pinned: bool,
+    catalog: &ModelListResult,
 ) -> Result<ModelUpdate, ModelCommandError> {
     let config = client.read_config()?;
     let mut pins = super::picker::pinned_models(&config.tui).map_err(ModelCommandError)?;
@@ -288,7 +254,6 @@ fn set_pin<T: JsonRpcTransport>(
         model: model.into(),
     };
     if pinned {
-        let catalog = load_catalog(client)?;
         if !catalog.models.iter().any(|entry| {
             entry.model.provider.as_str() == model.provider
                 && entry.model.model.as_str() == model.model
@@ -301,9 +266,14 @@ fn set_pin<T: JsonRpcTransport>(
     } else {
         pins.retain(|pin| pin != &model);
     }
-    let summary =
-        ModelSummary::from_catalog(config.model.clone(), config.model_reasoning_effort, None);
     write_pins(client, config, pins)?;
+    let config = client.read_config()?;
+    let summary = ModelSummary::from_catalog(
+        config.model.clone(),
+        config.model_reasoning_effort,
+        Some(catalog),
+    );
+    let picker = model_choices(catalog, &config).map_err(ModelCommandError)?;
     Ok(ModelUpdate {
         summary,
         notice: if pinned {
@@ -312,7 +282,8 @@ fn set_pin<T: JsonRpcTransport>(
             "Model unpinned"
         }
         .into(),
-        picker: Some(load_selection(client)?),
+        picker: Some(picker),
+        config,
     })
 }
 pub(crate) fn remove_provider_pins<T: JsonRpcTransport>(
@@ -328,7 +299,3 @@ pub(crate) fn remove_provider_pins<T: JsonRpcTransport>(
     }
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "request_tests.rs"]
-mod tests;

@@ -348,7 +348,6 @@ fn skills_view_toggles_catalog_entries_by_enablement() {
 #[test]
 fn model_command_updates_and_clears_model_with_config_revision() {
     let (mut client, state_root) = client();
-    let mut conversation = ActiveConversation::start(&mut client, "model".into()).unwrap();
     let revision = client.read_config().unwrap().revision;
     client
         .configure_provider(ProviderConfigureParams {
@@ -365,13 +364,16 @@ fn model_command_updates_and_clears_model_with_config_revision() {
         })
         .unwrap();
     let mut app = App::new();
-
-    execute(
-        &mut conversation,
-        &mut client,
-        invocation(TuiSlashCommandAction::Model, "test/model-one"),
-        &mut app,
-    );
+    let catalog = client.list_models().unwrap();
+    let update = crate::models::execute(
+        &mut *client,
+        ModelCommand::SetModel {
+            preference: "test/model-one".into(),
+        },
+        &catalog,
+    )
+    .unwrap();
+    app.update(crate::models::Event::SummaryReceived(update.summary));
 
     let configured = client.read_config().unwrap();
     let selected = configured.model.unwrap();
@@ -388,12 +390,15 @@ fn model_command_updates_and_clears_model_with_config_revision() {
         "⏸ ask permissions on"
     );
 
-    execute(
-        &mut conversation,
-        &mut client,
-        invocation(TuiSlashCommandAction::Model, "clear"),
-        &mut app,
-    );
+    let update = crate::models::execute(
+        &mut *client,
+        ModelCommand::SetModel {
+            preference: "clear".into(),
+        },
+        &catalog,
+    )
+    .unwrap();
+    app.update(crate::models::Event::SummaryReceived(update.summary));
     assert_eq!(client.read_config().unwrap().model, None);
     assert_eq!(
         app.status_line()
@@ -596,7 +601,7 @@ fn glyph_set_is_persisted_in_the_tui_toml_section() {
 }
 
 #[test]
-fn resume_and_model_without_arguments_open_actionable_pickers() {
+fn resume_without_arguments_opens_an_actionable_picker() {
     let (mut client, state_root) = client();
     let mut conversation = ActiveConversation::start(&mut client, "current".into()).unwrap();
     let current_session = conversation.session_id().to_string();
@@ -618,22 +623,6 @@ fn resume_and_model_without_arguments_open_actionable_pickers() {
             preferred_thread_id: None,
         }))
     );
-    app.update(AppEvent::CommandPanelClosed);
-
-    execute(
-        &mut conversation,
-        &mut client,
-        invocation(TuiSlashCommandAction::Model, ""),
-        &mut app,
-    );
-    assert_eq!(app.list_selection().unwrap().title(), "Model");
-    assert!(!app.list_selection().unwrap().show_tabs());
-    assert!(!app.list_selection().unwrap().visible_items().is_empty());
-    assert!(
-        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
-            .is_some()
-    );
-
     drop(client);
     let _ = fs::remove_dir_all(state_root);
 }
@@ -881,6 +870,12 @@ struct DispatchTestClient {
     _guard: MutexGuard<'static, ()>,
 }
 
+fn model_choices_from_client(client: &mut DispatchTestClient) -> crate::models::ModelChoices {
+    let catalog = client.list_models().unwrap();
+    let config = client.read_config().unwrap();
+    crate::models::model_choices(&catalog, &config).unwrap()
+}
+
 impl Deref for DispatchTestClient {
     type Target = AppServerClient<InProcessTransport>;
 
@@ -1005,17 +1000,19 @@ fn model_pins_keep_provider_identity_and_provider_deletion_cleans_preferences() 
         .unwrap();
     let config = client.read_config().unwrap();
     assert_eq!(config.tui.0["pinnedModels"].as_array().unwrap().len(), 2);
-    let choices = crate::models::load_selection(&mut *client).unwrap();
+    let choices = model_choices_from_client(&mut client);
     let state = crate::widgets::list_selection::ListSelectionState::new(choices.model);
     assert!(!state.show_tabs());
     assert!(!state.visible_items().is_empty());
     assert_eq!(state.tabs().len(), 1);
+    let catalog = client.list_models().unwrap();
     crate::models::execute(
         &mut *client,
         ModelCommand::Pin {
             preference: "custom-first/shared-alias".into(),
             pinned: false,
         },
+        &catalog,
     )
     .unwrap();
     let config = client.read_config().unwrap();
@@ -1067,9 +1064,10 @@ fn model_picker_uses_builtin_catalog_and_allows_manual_custom_selection() {
             config: config.clone(),
         })
         .unwrap();
-    let choices = crate::models::load_selection(&mut *client).unwrap();
+    let choices = model_choices_from_client(&mut client);
     assert!(choices.actions.values().any(|action| matches!(action, crate::models::ModelSelectionAction::Select { preference, .. } if preference == "openai/gpt-6-astra")));
-    crate::models::set_model(&mut *client, "custom-gateway/gpt-5.6").unwrap();
+    let catalog = client.list_models().unwrap();
+    crate::models::set_model(&mut *client, "custom-gateway/gpt-5.6", &catalog).unwrap();
     config.custom.as_mut().unwrap().model = Some("private-alias".into());
     let revision = client.read_config().unwrap().revision;
     client
@@ -1079,7 +1077,7 @@ fn model_picker_uses_builtin_catalog_and_allows_manual_custom_selection() {
             config,
         })
         .unwrap();
-    let choices = crate::models::load_selection(&mut *client).unwrap();
+    let choices = model_choices_from_client(&mut client);
     assert!(choices.actions.values().any(|action| matches!(action, crate::models::ModelSelectionAction::Select { preference, .. } if preference == "openai/gpt-6-astra")));
     assert_eq!(transport.calls(), 0);
     drop(client);
@@ -1105,7 +1103,7 @@ fn model_picker_lists_builtin_models_without_provider_discovery() {
         })
         .unwrap();
 
-    let choices = crate::models::load_selection(&mut *client).unwrap();
+    let choices = model_choices_from_client(&mut client);
     assert!(choices.actions.values().any(|action| matches!(
         action,
         crate::models::ModelSelectionAction::Select { preference, .. }
@@ -1136,9 +1134,11 @@ fn set_model_sets_and_clears_model_reasoning_effort() {
             config,
         })
         .unwrap();
+    let catalog = client.list_models().unwrap();
 
     // Specifying valid effort on a model that supports it
-    let update = crate::models::set_model(&mut *client, "openai/gpt-6-astra high").unwrap();
+    let update =
+        crate::models::set_model(&mut *client, "openai/gpt-6-astra high", &catalog).unwrap();
     crate::tui_assert_snapshot!(&update.notice, @"Model: openai/gpt-6-astra (high)");
     assert_eq!(
         update.summary.model_reasoning_effort(),
@@ -1148,31 +1148,33 @@ fn set_model_sets_and_clears_model_reasoning_effort() {
     assert_eq!(read.model_reasoning_effort, Some(ReasoningEffort::High));
 
     // An unlisted model can be selected manually; support is checked when it runs.
-    let update = crate::models::set_model(&mut *client, "openai/gpt-unlisted high").unwrap();
+    let update =
+        crate::models::set_model(&mut *client, "openai/gpt-unlisted high", &catalog).unwrap();
     assert_eq!(
         update.summary.model_reasoning_effort(),
         Some(ReasoningEffort::High)
     );
 
     // Invalid effort fails
-    let err = crate::models::set_model(&mut *client, "openai/gpt-6-astra super").unwrap_err();
+    let err =
+        crate::models::set_model(&mut *client, "openai/gpt-6-astra super", &catalog).unwrap_err();
     assert!(err.to_string().contains("invalid reasoning effort"));
 
     // Setting model without effort clears model reasoning effort.
-    let update = crate::models::set_model(&mut *client, "openai/gpt-6-astra").unwrap();
+    let update = crate::models::set_model(&mut *client, "openai/gpt-6-astra", &catalog).unwrap();
     assert_eq!(update.notice, "Model: openai/gpt-6-astra");
     assert_eq!(update.summary.model_reasoning_effort(), None);
     let read = client.read_config().unwrap();
     assert_eq!(read.model_reasoning_effort, None);
 
     // Clear unsets model and effort
-    let update = crate::models::set_model(&mut *client, "clear").unwrap();
+    let update = crate::models::set_model(&mut *client, "clear", &catalog).unwrap();
     assert_eq!(update.notice, "Model: not configured");
     assert_eq!(update.summary.model(), None);
     assert_eq!(update.summary.model_reasoning_effort(), None);
 
     // Clear with extra argument fails
-    let err = crate::models::set_model(&mut *client, "clear now").unwrap_err();
+    let err = crate::models::set_model(&mut *client, "clear now", &catalog).unwrap_err();
     assert!(
         err.to_string()
             .contains("does not accept additional arguments")

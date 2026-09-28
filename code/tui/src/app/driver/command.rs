@@ -248,12 +248,13 @@ impl AppDriver {
                     .update(ThreadEvent::CommandStarted(command_line.clone()));
                 let name = command.request_name();
                 let mut client = self.client.clone();
+                let catalog = self.model_picker.catalog().clone();
                 self.requests.spawn(
                     request_key,
                     name,
                     move || Completion::ModelUpdated {
                         command: command_line,
-                        result: crate::models::execute(&mut client, command),
+                        result: crate::models::execute(&mut client, command, &catalog),
                     },
                     &mut self.app,
                     origin,

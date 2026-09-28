@@ -148,7 +148,9 @@ pub(super) fn start(
             app.input_history_unavailable(format!("Could not open input history: {error}"))
         }
     }
-    let initial_model_catalog = client.list_models().ok();
+    let initial_model_catalog = client.list_models()?;
+    let model_picker =
+        crate::models::ModelPickerData::new(initial_model_catalog, initial_config.clone());
     let theme_preference = theme_feature::preference(&initial_config);
     match theme_resource.load(theme_preference) {
         Ok(loaded) => {
@@ -159,7 +161,7 @@ pub(super) fn start(
         }
         Err(error) => app.update(ThreadEvent::FailureReported(error)),
     }
-    apply_tui_config(initial_config, initial_model_catalog.as_ref(), &mut app);
+    apply_tui_config(initial_config, Some(model_picker.catalog()), &mut app);
     match sessions::load_catalog(&mut client) {
         Ok(catalog) => app.update(SessionEvent::CatalogReceived(catalog)),
         Err(error) => app.update(ThreadEvent::FailureReported(format!(
@@ -202,6 +204,7 @@ pub(super) fn start(
             plugins_enabled,
             profile_root,
             dictation_settings,
+            model_picker,
         },
     );
     let pump = EventPump::start(events, resource_targets, notices)?;

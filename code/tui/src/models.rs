@@ -19,12 +19,13 @@ use ash_app_server_protocol::protocol::model::ModelListResult;
 use ash_protocol::ReasoningEffort;
 
 pub(crate) use picker::ModelChoices;
+pub(crate) use picker::ModelPickerData;
 pub(crate) use picker::ModelSelectionAction;
 pub(crate) use picker::model_choices;
 pub(crate) use request::ModelUpdate;
 pub(crate) use request::execute;
-pub(crate) use request::load_selection;
 pub(crate) use request::remove_provider_pins;
+#[cfg(test)]
 pub(crate) use request::set_model;
 
 #[derive(Clone, Debug, Eq, PartialEq)]

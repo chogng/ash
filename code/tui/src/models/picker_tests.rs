@@ -1,3 +1,4 @@
+use super::ModelPickerData;
 use super::ModelSelectionAction;
 use super::model_choices;
 use crate::widgets::list_selection::ListSelectionState;
@@ -36,6 +37,25 @@ fn provider_config(provider: &str) -> ProviderConfigDto {
         max_output_tokens: None,
         model_context: Default::default(),
     }
+}
+
+#[test]
+fn fixed_models_remain_available_when_connections_change() {
+    let catalog = ModelListResult {
+        models: vec![catalog_entry("openai", "gpt-ash", "GPT Ash")],
+    };
+    let mut data = ModelPickerData::new(catalog, crate::test_support::empty_config_snapshot());
+    assert_eq!(data.choices().unwrap().actions.len(), 1);
+
+    let mut config = crate::test_support::empty_config_snapshot();
+    config
+        .connections
+        .insert("kimi-desktop".into(), provider_config("kimi-desktop"));
+    data.update_config(config);
+    let choices = data.choices().unwrap();
+    assert_eq!(choices.actions.len(), 1);
+    let state = ListSelectionState::new(choices.model);
+    assert_eq!(state.visible_items()[0].label(), "GPT Ash");
 }
 
 #[test]

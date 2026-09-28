@@ -132,6 +132,31 @@ fn effort_display(
 
 pub(crate) type ModelChoices = ListSelectionSpec<ModelSelectionAction>;
 
+/// The model catalog is fixed for this TUI session; connection configuration only changes how
+/// those models are selected and used.
+pub(crate) struct ModelPickerData {
+    catalog: ModelListResult,
+    config: ConfigReadResult,
+}
+
+impl ModelPickerData {
+    pub(crate) fn new(catalog: ModelListResult, config: ConfigReadResult) -> Self {
+        Self { catalog, config }
+    }
+
+    pub(crate) fn catalog(&self) -> &ModelListResult {
+        &self.catalog
+    }
+
+    pub(crate) fn update_config(&mut self, config: ConfigReadResult) {
+        self.config = config;
+    }
+
+    pub(crate) fn choices(&self) -> Result<ModelChoices, String> {
+        model_choices(&self.catalog, &self.config)
+    }
+}
+
 impl ListSelection<ModelSelectionAction> {
     pub(crate) fn handle_model_key(
         &mut self,

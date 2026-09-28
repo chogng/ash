@@ -3578,6 +3578,20 @@ impl App {
                 }
                 .into(),
             ),
+            (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Model))
+                if !invocation.arguments.is_empty() =>
+            {
+                match invocation.text_arguments() {
+                    Ok(preference) => Some(ModelCommand::SetModel { preference }.into()),
+                    Err(error) => {
+                        self.thread.update(ThreadPresentationEvent::CommandFailed {
+                            command: invocation.display_text(),
+                            error,
+                        });
+                        None
+                    }
+                }
+            }
             (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Help)) => {
                 let spec = help_choices(
                     self.thread_presentations.slash_commands(),

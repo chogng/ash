@@ -19,6 +19,7 @@ use crate::keymap_setup::KeymapEditKind;
 use crate::keymap_setup::KeymapEditorUpdate;
 use crate::keymap_setup::keymap_choices;
 use crate::keymap_setup::settings_from_tui as keymap_settings_from_tui;
+use crate::models::Command as ModelCommand;
 use crate::nls::Language;
 use crate::render::RenderTheme;
 use crate::sessions::Command as SessionCommand;
@@ -2291,21 +2292,17 @@ fn shortcut_capture_emits_a_revision_bound_edit() {
 }
 
 #[test]
-fn inline_product_arguments_reach_the_typed_dispatcher() {
+fn inline_model_arguments_use_the_model_command() {
     let mut app = App::new();
     app.insert_text("/model provider/model");
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
-    let Some(AppCommand::Thread(ThreadCommand::ExecuteProductCommand(invocation))) = action else {
-        panic!("expected product command action");
-    };
-    assert_eq!(invocation.command.name, "model");
-    assert_eq!(invocation.origin, SlashCommandOrigin::Local);
-    assert_eq!(invocation.display_arguments, "provider/model");
     assert_eq!(
-        invocation.arguments,
-        vec![ChatInputItem::Text("provider/model".into())]
+        action,
+        Some(AppCommand::Models(ModelCommand::SetModel {
+            preference: "provider/model".into(),
+        }))
     );
     assert_eq!(app.status(), &Status::Ready);
     assert_eq!(app.messages()[0].text(), "/model provider/model");
