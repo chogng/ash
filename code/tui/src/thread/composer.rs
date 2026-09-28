@@ -25,6 +25,7 @@ pub(crate) use input::SkillCompletionItem;
 pub(crate) use input::SlashCommandCatalog;
 pub(crate) use input::SlashCommandInvocation;
 pub(crate) use input::TuiSlashCommandAction;
+pub(crate) use input::UnknownSlashCommand;
 #[cfg(test)]
 pub(crate) use input::built_in_catalog_command;
 pub(crate) use input::built_in_slash_command_definitions;

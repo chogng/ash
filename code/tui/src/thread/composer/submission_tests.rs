@@ -44,6 +44,26 @@ fn queue_target_returns_content_to_the_feature_owner() {
 }
 
 #[test]
+fn queued_unknown_command_is_rejected_before_it_becomes_a_follow_up() {
+    let mut composer = ChatComposer::new();
+    let mut input = ChatInput::new();
+    composer.insert_text(&mut input, "/confg");
+    input.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+
+    let outcome = composer.handle_queued_turn_key(
+        &mut input,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    );
+
+    let ChatComposerOutcome::UnknownCommand(command) = outcome else {
+        panic!("expected local unknown command");
+    };
+    assert_eq!(command.name, "confg");
+    assert_eq!(command.suggestion.as_deref(), Some("config"));
+    assert_eq!(input.text(), "");
+}
+
+#[test]
 fn active_turn_queues_enter_and_steers_ctrl_enter() {
     let mut composer = ChatComposer::new();
     let mut input = ChatInput::new();

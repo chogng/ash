@@ -106,6 +106,23 @@ impl SlashCommandCatalog {
         self.commands.iter().find(|command| command.name == name)
     }
 
+    /// Suggests only a unique one-edit correction so a typo cannot silently select a command.
+    pub fn suggested_command(&self, name: &str) -> Option<&SlashCommandDefinition> {
+        let name = name.to_ascii_lowercase();
+        if !name
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+        {
+            return None;
+        }
+        let mut candidates = self
+            .commands
+            .iter()
+            .filter(|command| one_edit_away(name.as_bytes(), command.name.as_bytes()));
+        let suggestion = candidates.next()?;
+        candidates.next().is_none().then_some(suggestion)
+    }
+
     pub fn origin(&self, name: &str) -> Option<SlashCommandOrigin> {
         self.origins.get(name).copied()
     }
@@ -129,6 +146,38 @@ impl SlashCommandCatalog {
         matches.sort_by_key(|(score, index, _)| (*score, *index));
         matches.into_iter().map(|(_, _, command)| command).collect()
     }
+}
+
+fn one_edit_away(input: &[u8], command: &[u8]) -> bool {
+    match input.len().cmp(&command.len()) {
+        std::cmp::Ordering::Equal => {
+            let mismatches = input
+                .iter()
+                .zip(command)
+                .enumerate()
+                .filter_map(|(index, (left, right))| (left != right).then_some(index))
+                .collect::<Vec<_>>();
+            matches!(mismatches.as_slice(), [_])
+                || matches!(mismatches.as_slice(), [first, second]
+                    if *second == *first + 1
+                        && input[*first] == command[*second]
+                        && input[*second] == command[*first])
+        }
+        std::cmp::Ordering::Less => one_missing_byte(input, command),
+        std::cmp::Ordering::Greater => one_missing_byte(command, input),
+    }
+}
+
+fn one_missing_byte(shorter: &[u8], longer: &[u8]) -> bool {
+    if longer.len() != shorter.len() + 1 {
+        return false;
+    }
+    let first_difference = shorter
+        .iter()
+        .zip(longer)
+        .position(|(left, right)| left != right)
+        .unwrap_or(shorter.len());
+    shorter[first_difference..] == longer[first_difference + 1..]
 }
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]

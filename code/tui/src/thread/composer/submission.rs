@@ -7,6 +7,7 @@ use crate::thread::composer::QueuedChatInput;
 use crate::thread::composer::SlashCommandInvocation;
 use crate::thread::composer::Steer;
 use crate::thread::composer::SteerId;
+use crate::thread::composer::UnknownSlashCommand;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -68,6 +69,7 @@ pub(crate) enum ChatComposerOutcome {
     SubmissionRejected(String),
     Queued(QueuedChatInput),
     Submit(ChatSubmission),
+    UnknownCommand(UnknownSlashCommand),
     Unhandled,
 }
 
@@ -193,6 +195,9 @@ impl ChatComposer {
             ChatInputQueueOutcome::Command(command) => ChatComposerOutcome::Command(command),
             ChatInputQueueOutcome::Consumed => ChatComposerOutcome::Consumed,
             ChatInputQueueOutcome::Queued(input) => ChatComposerOutcome::Queued(input),
+            ChatInputQueueOutcome::UnknownCommand(command) => {
+                ChatComposerOutcome::UnknownCommand(command)
+            }
         }
     }
 }
@@ -208,6 +213,7 @@ fn map_chat_input_outcome(outcome: ChatInputOutcome) -> ChatComposerOutcome {
         ChatInputOutcome::Command(command) => ChatComposerOutcome::Command(command),
         ChatInputOutcome::Consumed => ChatComposerOutcome::Consumed,
         ChatInputOutcome::Submit(prompt) => ChatComposerOutcome::Submit(prompt),
+        ChatInputOutcome::UnknownCommand(command) => ChatComposerOutcome::UnknownCommand(command),
         ChatInputOutcome::Unhandled => ChatComposerOutcome::Unhandled,
     }
 }

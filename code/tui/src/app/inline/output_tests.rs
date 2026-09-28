@@ -15,7 +15,35 @@ use ash_protocol::TurnId;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
+use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
+
+#[test]
+fn unknown_slash_command_is_emitted_to_inline_terminal_history() {
+    let mut app = app();
+    app.insert_text("/confg");
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        None
+    );
+
+    let mut output = Output::default();
+    output.select_thread(app.screen_thread_id());
+    let pending = output.pending(&app);
+    assert_eq!(pending.len(), 1);
+    assert_eq!(
+        pending[0].text(),
+        "Unknown command: /confg. Did you mean /config?"
+    );
+    let mut buffer = Buffer::empty(Rect::new(0, 0, 80, 1));
+    pending[0].render_rows(
+        &mut buffer,
+        0,
+        app.render_context(),
+        app.transcript_render_cache(),
+    );
+    crate::tui_assert_snapshot!("unknown_slash_command", text(&buffer));
+}
 
 fn entry(id: &str, text: &str, transient: bool) -> ThreadTranscriptEntry {
     let turn_id = TurnId::new(id).unwrap();

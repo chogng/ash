@@ -56,6 +56,27 @@ fn commands_without_arguments_reject_extra_text() {
 }
 
 #[test]
+fn unknown_command_name_uses_the_submission_grammar() {
+    let catalog = catalog();
+    assert_eq!(
+        SlashCommandInput::for_submission("/modle now", &catalog).unknown_command_name(),
+        Some("modle")
+    );
+    assert_eq!(
+        SlashCommandInput::for_submission("/model now", &catalog).unknown_command_name(),
+        None
+    );
+    assert_eq!(
+        SlashCommandInput::for_submission("/", &catalog).unknown_command_name(),
+        None
+    );
+    assert_eq!(
+        SlashCommandInput::for_submission(" /modle", &catalog).unknown_command_name(),
+        None
+    );
+}
+
+#[test]
 fn argument_hint_is_offered_only_after_command_with_empty_arguments() {
     let catalog = catalog();
     let input = SlashCommandInput::at_cursor("/model ", 7, &catalog);

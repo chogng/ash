@@ -491,6 +491,18 @@ const fn translation(
 /// identifiers, and code are intentionally absent so they remain byte-for-byte source text.
 const UI_TRANSLATIONS: &[Translation] = &[
     translation(
+        "Unknown command: {0}. Did you mean {1}?",
+        "不明なコマンド: {0}。{1} のことですか？",
+        "未知命令：{0}。你想输入 {1} 吗？",
+        "Commande inconnue : {0}. Vouliez-vous dire {1} ?",
+    ),
+    translation(
+        "Unknown command: {0}.",
+        "不明なコマンド: {0}。",
+        "未知命令：{0}。",
+        "Commande inconnue : {0}.",
+    ),
+    translation(
         "Ask the configured advisor for a second opinion",
         "設定済みのアドバイザーにセカンドオピニオンを聞く",
         "向已配置的顾问征求第二意见",

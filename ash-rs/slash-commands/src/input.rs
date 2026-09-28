@@ -106,6 +106,12 @@ impl<'a, 'c> SlashCommandInput<'a, 'c> {
         })
     }
 
+    pub fn unknown_command_name(self) -> Option<&'a str> {
+        let command_range = command_name_range(self.text)?;
+        let name = &self.text[1..command_range.end];
+        (!name.is_empty() && self.catalog.command_named(name).is_none()).then_some(name)
+    }
+
     pub fn command_element_range(self) -> Option<Range<usize>> {
         let command_range = command_name_range(self.text)?;
         if (1..command_range.end).contains(&self.cursor) {

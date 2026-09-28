@@ -29,6 +29,7 @@ pub(crate) enum ChatInputOutcome {
     Command(SlashCommandInvocation),
     Consumed,
     Submit(ChatSubmission),
+    UnknownCommand(UnknownSlashCommand),
     Unhandled,
 }
 
@@ -37,6 +38,13 @@ pub(crate) enum ChatInputQueueOutcome {
     Command(SlashCommandInvocation),
     Consumed,
     Queued(QueuedChatInput),
+    UnknownCommand(UnknownSlashCommand),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct UnknownSlashCommand {
+    pub(crate) name: String,
+    pub(crate) suggestion: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -408,11 +416,15 @@ impl ChatInput {
 
     pub(in crate::thread::composer) fn submit_current(&mut self) -> ChatInputOutcome {
         let command = self.current_command();
+        let unknown_command = self.unknown_command();
         let Some(submission) = self.prepare_submission() else {
             return ChatInputOutcome::Consumed;
         };
         self.record_submission_history(&submission);
         self.clear();
+        if let Some(unknown_command) = unknown_command {
+            return ChatInputOutcome::UnknownCommand(unknown_command);
+        }
         match command {
             Some(command) => match into_command_invocation(submission, command) {
                 Ok(invocation) => ChatInputOutcome::Command(invocation),
@@ -424,9 +436,15 @@ impl ChatInput {
 
     pub(crate) fn queue_current(&mut self) -> ChatInputQueueOutcome {
         let command = self.current_command();
+        let unknown_command = self.unknown_command();
         let Some(submission) = self.prepare_submission() else {
             return ChatInputQueueOutcome::Consumed;
         };
+        if let Some(unknown_command) = unknown_command {
+            self.record_submission_history(&submission);
+            self.clear();
+            return ChatInputQueueOutcome::UnknownCommand(unknown_command);
+        }
         if let Some(command) = command {
             match into_command_invocation(submission.clone(), command) {
                 Ok(invocation) if invocation.origin == SlashCommandOrigin::Local => {
@@ -584,13 +602,19 @@ impl ChatInput {
             .iter()
             .all(|input| matches!(input, ChatInputItem::Text(_)))
         {
-            let kind = if self.current_command().is_some() {
+            let kind = if self.current_command().is_some() || self.unknown_command().is_some() {
                 InputKind::Command
             } else {
                 InputKind::Agent
             };
             self.history.record(submission.display_text.clone(), kind);
         }
+    }
+
+    fn unknown_command(&self) -> Option<UnknownSlashCommand> {
+        let text = self.submission_display_text()?;
+        let (name, suggestion) = self.completion.unknown_command(&text)?;
+        Some(UnknownSlashCommand { name, suggestion })
     }
 
     fn clear(&mut self) {

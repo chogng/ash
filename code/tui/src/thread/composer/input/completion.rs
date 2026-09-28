@@ -277,6 +277,15 @@ impl CompletionState {
         self.slash_commands.invocation(text)
     }
 
+    pub(super) fn unknown_command(&self, text: &str) -> Option<(String, Option<String>)> {
+        let catalog = self.slash_commands.catalog();
+        let name = SlashCommandInput::for_submission(text, catalog).unknown_command_name()?;
+        let suggestion = catalog
+            .suggested_command(name)
+            .map(|command| command.name.clone());
+        Some((name.to_owned(), suggestion))
+    }
+
     pub(super) fn command_element_range(&self, text: &str, cursor: usize) -> Option<Range<usize>> {
         self.slash_commands.command_element_range(text, cursor)
     }

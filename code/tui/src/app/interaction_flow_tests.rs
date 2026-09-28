@@ -159,6 +159,21 @@ fn model_errors_keep_their_actions_visible_in_the_conversation() {
     crate::tui_assert_snapshot!("model_errors_in_conversation", frame);
 }
 
+#[test]
+fn misspelled_slash_command_shows_a_local_suggestion() {
+    let mut app = App::new();
+    app.insert_text("/confg");
+
+    assert_eq!(app.handle_key(key(KeyCode::Enter)), None);
+    assert_eq!(app.input(), "");
+    assert_eq!(app.messages().len(), 1);
+    assert_eq!(
+        app.messages()[0].text(),
+        "Unknown command: /confg. Did you mean /config?"
+    );
+    crate::tui_assert_snapshot!("unknown_slash_command_fullscreen", render(&app, 80, 20));
+}
+
 fn key(code: KeyCode) -> KeyEvent {
     KeyEvent::new(code, KeyModifiers::NONE)
 }

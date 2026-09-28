@@ -75,6 +75,21 @@ fn templates_translate_labels_and_preserve_literal_arguments_across_languages() 
 }
 
 #[test]
+fn unknown_command_notice_translates_without_changing_command_names() {
+    let mut notice = super::Text::template(
+        "Unknown command: {0}. Did you mean {1}?",
+        vec![
+            super::Text::literal("/confg"),
+            super::Text::literal("/config"),
+        ],
+    );
+    notice.localize(Language::Chinese);
+    assert_eq!(&*notice, "未知命令：/confg。你想输入 /config 吗？");
+    notice.localize(Language::English);
+    assert_eq!(&*notice, "Unknown command: /confg. Did you mean /config?");
+}
+
+#[test]
 fn product_chrome_is_localized_without_changing_source_content() {
     assert_eq!(
         localize(Language::Chinese, "65% left (35% used)"),

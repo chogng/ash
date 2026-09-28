@@ -66,6 +66,17 @@ fn catalog_preserves_local_then_server_order_and_origin() {
 }
 
 #[test]
+fn suggestion_requires_one_unambiguous_edit() {
+    let catalog =
+        SlashCommandCatalog::new([command("config"), command("model"), command("mode")]).unwrap();
+    assert_eq!(catalog.suggested_command("confg").unwrap().name, "config");
+    assert_eq!(catalog.suggested_command("cofnig").unwrap().name, "config");
+    assert!(catalog.suggested_command("modes").is_none());
+    assert!(catalog.suggested_command("explain").is_none());
+    assert!(catalog.suggested_command("config").is_none());
+}
+
+#[test]
 fn matching_ranks_exact_prefix_word_and_missing_character_candidates() {
     let catalog = SlashCommandCatalog::new([
         command("update-config"),

@@ -408,6 +408,28 @@ impl App {
                     .update(ThreadPresentationEvent::FailureReported(error));
                 None
             }
+            ChatComposerOutcome::UnknownCommand(command) => {
+                let name = format!("/{}", command.name);
+                let message = if let Some(suggestion) = command.suggestion {
+                    crate::nls::Text::template(
+                        "Unknown command: {0}. Did you mean {1}?",
+                        vec![
+                            crate::nls::Text::literal(name),
+                            crate::nls::Text::literal(format!("/{suggestion}")),
+                        ],
+                    )
+                } else {
+                    crate::nls::Text::template(
+                        "Unknown command: {0}.",
+                        vec![crate::nls::Text::literal(name)],
+                    )
+                };
+                let mut message = message;
+                message.localize(self.language());
+                self.thread
+                    .update(ThreadPresentationEvent::NoticeReceived(message.to_string()));
+                None
+            }
             ChatComposerOutcome::Queued(input) => {
                 if self.starts_new_session() {
                     let submission = input.submission().clone();

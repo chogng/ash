@@ -2061,15 +2061,36 @@ fn activating_a_slash_command_by_index_uses_the_command_dispatch_path() {
 }
 
 #[test]
-fn unknown_slash_input_remains_a_prompt() {
+fn unknown_slash_input_is_reported_locally() {
     let mut app = App::new();
     app.insert_text("/explain");
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
-    assert_text_submission(action, "/explain");
-    assert_eq!(app.status(), &Status::Working);
-    assert_eq!(app.messages()[0].text(), "/explain");
+    assert_eq!(action, None);
+    assert_eq!(app.status(), &Status::Ready);
+    assert_eq!(app.input(), "");
+    assert_eq!(app.messages()[0].role(), MessageRole::Notice);
+    assert_eq!(app.messages()[0].text(), "Unknown command: /explain.");
+}
+
+#[test]
+fn unknown_slash_suggestion_uses_the_selected_language() {
+    let mut app = App::new();
+    let mut settings = TerminalSettings::default();
+    settings.set_language(Language::Chinese);
+    app.update(ConfigEvent::SettingsReceived(settings));
+    app.insert_text("/confg");
+
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        None
+    );
+    assert_eq!(app.messages()[0].role(), MessageRole::Notice);
+    assert_eq!(
+        app.messages()[0].text(),
+        "未知命令：/confg。你想输入 /config 吗？"
+    );
 }
 
 #[test]
@@ -2091,8 +2112,12 @@ fn weak_slash_popup_does_not_execute_a_command_without_selection() {
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
-    assert_text_submission(action, "/cofig");
-    assert_eq!(app.messages()[0].text(), "/cofig");
+    assert_eq!(action, None);
+    assert_eq!(app.messages()[0].role(), MessageRole::Notice);
+    assert_eq!(
+        app.messages()[0].text(),
+        "Unknown command: /cofig. Did you mean /config?"
+    );
 }
 
 #[test]
