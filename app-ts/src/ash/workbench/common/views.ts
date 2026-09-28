@@ -26,6 +26,8 @@ export interface IViewContainerDescriptor {
 	readonly title: string;
 	readonly localizationKey?: LocalizationKey;
 	readonly location: ViewContainerLocation;
+	/** Browser host constructed for this container when it opens. */
+	readonly ctorDescriptor?: ServiceConstructionDescriptor<IView>;
 	readonly icon?: Icon;
 	readonly order?: number;
 	readonly isDefault?: boolean;

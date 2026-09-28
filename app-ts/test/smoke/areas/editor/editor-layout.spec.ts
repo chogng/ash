@@ -24,6 +24,7 @@ test.describe('startup layout defaults', () => {
 	test('Git explains that an empty window needs a folder', async ({ workbench }) => {
 		const page = workbench.page;
 		await page.getByRole('tab', { name: 'Git', exact: true }).click();
+		await expect(page.locator('[data-view-container-id="ash.git"]')).toHaveClass(/ash-scm-viewlet/u);
 		await expect(page.locator('.ash-scm-status')).toHaveText('Open a folder to use Git.');
 		await expect(page.locator('.ash-scm-change')).toHaveCount(0);
 	});

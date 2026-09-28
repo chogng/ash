@@ -16,12 +16,12 @@ import { ScmGraphViewPane } from "./scmGraphViewPane.js";
 import { GIT_GRAPH_VIEW_ID } from "./scmGraphTitleActions.js";
 import { ScmStatusContribution } from "./scmStatus.js";
 import { GIT_VIEW_ID, ScmViewPane } from "./scmViewPane.js";
-import "./media/scm.css";
 import { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import { IStorageService } from "../../../../platform/storage/common/storage.js";
 import { IEditorPart } from "../../../browser/parts/editor/editorPart.js";
 import { ScmWorkingSetController } from "./workingSet.js";
 import { ScmHistoryChatContextContribution } from "./scmHistoryChatContext.js";
+import { SCMViewPaneContainer } from './scmViewPaneContainer.js';
 import { IChatContextPickService } from "../../../services/chat/common/chatContextService.js";
 import "../common/scmConfiguration.js";
 import "./quickDiff.contribution.js";
@@ -108,6 +108,7 @@ export function registerGitViews(
 		title: "Git",
 		localizationKey: { bundle: "ash.views", key: "git" },
 		location: ViewContainerLocation.Sidebar,
+		ctorDescriptor: new ServiceConstructionDescriptor(SCMViewPaneContainer),
 		icon: Lxicon.gitBranch,
 		order: 3,
 	});

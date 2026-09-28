@@ -165,7 +165,7 @@ import { StatusbarPart } from "./parts/statusbar/statusbarPart.js";
 import type {
 	TitlebarPartFactory,
 } from "./parts/titlebar/titlebarPart.js";
-import { PaneComposite } from "./parts/views/paneComposite.js";
+import { PaneComposite, type PaneCompositeOptions } from "./parts/views/paneComposite.js";
 import { WorkbenchWindow } from "./window.js";
 import { TerminalService } from "../services/terminal/browser/terminalService.js";
 import { BrowserAuxiliaryWindowService, IAuxiliaryWindowService } from "../services/auxiliaryWindow/browser/auxiliaryWindowService.js";
@@ -908,6 +908,17 @@ export class Workbench extends Disposable {
 		const editorService = this._register(new BrowserEditorService(editorParts));
 		services.registerInstance(IEditorService, editorService);
 		services.registerInstance(IEditorGroupsService, editorService);
+		const createPaneComposite = (parent: HTMLElement, options: PaneCompositeOptions): PaneComposite => {
+			const descriptor = options.viewContainer.ctorDescriptor;
+			if (!descriptor) {
+				return new PaneComposite(parent, options);
+			}
+			const composite = instantiationService.createInstance(descriptor, parent, options);
+			if (!(composite instanceof PaneComposite)) {
+				throw new TypeError(`View container did not create a PaneComposite: ${options.viewContainer.id}`);
+			}
+			return composite;
+		};
 		const openSidebarComposite = (
 			compositeId: string,
 		): PaneComposite => {
@@ -920,7 +931,7 @@ export class Workbench extends Disposable {
 				);
 			}
 			if (!sidebar.getComposite(viewContainer.id)) {
-				sidebar.addComposite(new PaneComposite(sidebar.domNode, {
+				sidebar.addComposite(createPaneComposite(sidebar.domNode, {
 					viewContainer,
 					model: viewDescriptors.getViewContainerModel(viewContainer.id),
 					instantiationService,
@@ -945,7 +956,7 @@ export class Workbench extends Disposable {
 				);
 			}
 			if (!agentSidebar.getComposite(viewContainer.id)) {
-				agentSidebar.addComposite(new PaneComposite(agentSidebar.domNode, {
+				agentSidebar.addComposite(createPaneComposite(agentSidebar.domNode, {
 					viewContainer,
 					model: viewDescriptors.getViewContainerModel(viewContainer.id),
 					instantiationService,
@@ -983,7 +994,7 @@ export class Workbench extends Disposable {
 				);
 			}
 			if (!panel.getComposite(viewContainer.id)) {
-				panel.addComposite(new PaneComposite(panel.domNode, {
+				panel.addComposite(createPaneComposite(panel.domNode, {
 					viewContainer,
 					model: viewDescriptors.getViewContainerModel(viewContainer.id),
 					instantiationService,
@@ -1070,7 +1081,7 @@ export class Workbench extends Disposable {
 				);
 			}
 			if (!auxiliarybar.getComposite(viewContainer.id)) {
-				auxiliarybar.addComposite(new PaneComposite(auxiliarybar.domNode, {
+				auxiliarybar.addComposite(createPaneComposite(auxiliarybar.domNode, {
 					viewContainer,
 					model: viewDescriptors.getViewContainerModel(viewContainer.id),
 					instantiationService,
