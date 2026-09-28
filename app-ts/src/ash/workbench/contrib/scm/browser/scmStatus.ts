@@ -1,96 +1,49 @@
-import { Lxicon } from "../../../../base/common/lxicons.js";
-import { Disposable, MutableDisposable } from "../../../../base/common/lifecycle.js";
-import type { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { Disposable, DisposableMap, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import type { IWorkbenchContribution } from "../../../common/contributions.js";
-import type { GitHead, GitStatus, IGitService } from "../../../contrib/git/common/gitService.js";
-import { StatusbarAlignment, type IStatusbarEntry, type IStatusbarEntryAccessor, type IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
-import type { IViewsService } from "../../../services/views/browser/viewsService.js";
-import { GitSwitchBranchCommandId } from '../../git/common/gitCommands.js';
-
-const BranchPriority = 900;
-const SyncPriority = 800;
-const ScmCompactGroup = "ash.status.git";
+import { StatusbarAlignment, type IStatusbarEntryAccessor, type IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
+import type { ISCMProvider, ISCMViewService } from '../common/scm.js';
 
 export interface ScmStatusContributionOptions {
 	readonly statusbarService: IStatusbarService;
-	readonly gitService: IGitService;
-	readonly viewsService: IViewsService;
-	readonly commandService: ICommandService;
+	readonly scmViewService: ISCMViewService;
 }
 
-/** Projects the active Git branch and upstream state into the status bar. */
+/** Displays status commands owned by the selected SCM provider. */
 export class ScmStatusContribution extends Disposable implements IWorkbenchContribution {
-	private readonly branch = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
-	private readonly sync = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
-	private readonly retiredGitStreams = new Set<string>();
-	private gitStatus: GitStatus | undefined;
-	private refreshRevision = 0;
+	private readonly entries = this._register(new DisposableMap<string, IStatusbarEntryAccessor>());
+	private readonly providerListener = this._register(new MutableDisposable());
 
 	constructor(private readonly options: ScmStatusContributionOptions) {
 		super();
-		this._register(options.gitService.onDidChangeStatus(status => {
-			this.refreshRevision += 1;
-			this.acceptStatus(status);
-		}));
-		this._register(options.gitService.onDidBecomeReady(() => this.refresh()));
-		this._register(options.gitService.onDidChangeActiveRepository(repository => {
-			if (repository) return;
-			this.refreshRevision += 1;
-			this.gitStatus = undefined;
-			this.branch.clear();
-			this.sync.clear();
-		}));
-		this.refresh();
+		this._register(options.scmViewService.onDidChangeActiveRepository(() => this.bindProvider()));
+		this.bindProvider();
 	}
 
-	private refresh(): void {
-		const revision = ++this.refreshRevision;
-		void this.options.gitService.status().then(status => {
-			if (!this.isDisposed && revision === this.refreshRevision) this.acceptStatus(status);
-		}).catch(() => undefined);
+	private bindProvider(): void {
+		const provider = this.options.scmViewService.activeRepository?.provider;
+		this.providerListener.value = provider?.onDidChangeResources(() => this.update(provider));
+		this.update(provider);
 	}
 
-	private acceptStatus(status: GitStatus): void {
-		if (this.gitStatus) {
-			if (status.streamInstanceId === this.gitStatus.streamInstanceId) {
-				if (status.revision <= this.gitStatus.revision) return;
-			} else {
-				if (this.retiredGitStreams.has(status.streamInstanceId)) return;
-				this.retiredGitStreams.add(this.gitStatus.streamInstanceId);
+	private update(provider: ISCMProvider | undefined): void {
+		const commands = provider?.statusBarCommands ?? [];
+		const activeIds = new Set(commands.map(command => command.id));
+		for (const id of this.entries.keys()) {
+			if (!activeIds.has(id)) this.entries.deleteAndDispose(id);
+		}
+		for (const command of commands) {
+			const entry = { icon: command.icon, text: command.text, ariaLabel: command.ariaLabel, tooltip: command.tooltip, run: () => command.run() };
+			const current = this.entries.get(command.id);
+			if (current) {
+				current.update(entry);
+				continue;
 			}
-		}
-		this.gitStatus = status;
-		const focusGit = () => this.options.viewsService.focusView("ash.gitView");
-		const switchBranch = () => this.options.commandService.executeCommand(GitSwitchBranchCommandId, status.repositoryId);
-		this.updateOrAdd(this.branch, branchEntry(status.head, switchBranch), "ash.status.git.branch", BranchPriority);
-		this.updateOrAdd(this.sync, syncEntry(status.head, focusGit), "ash.status.git.sync", SyncPriority);
-	}
-
-	private updateOrAdd(slot: MutableDisposable<IStatusbarEntryAccessor>, entry: IStatusbarEntry, id: string, priority: number): void {
-		if (slot.value) {
-			slot.value.update(entry);
-			return;
-		}
-		slot.value = this.options.statusbarService.addEntry(entry, { id, alignment: StatusbarAlignment.Left, priority, compactGroup: ScmCompactGroup });
-	}
-}
-
-function branchEntry(head: GitHead, run: () => unknown): IStatusbarEntry {
-	switch (head.type) {
-		case "branch": return { icon: Lxicon.gitBranch, text: head.name, ariaLabel: `Git branch ${head.name}`, tooltip: head.upstream ? `${head.name} tracks ${head.upstream.name}` : `${head.name} has no upstream`, run };
-		case "unborn": return { icon: Lxicon.gitBranch, text: head.name, ariaLabel: `Unborn Git branch ${head.name}`, tooltip: `${head.name} has no commits`, run };
-		case "detached": {
-			const revision = head.objectId.slice(0, 8);
-			return { icon: Lxicon.gitCommit, text: revision, ariaLabel: `Detached Git HEAD at ${revision}`, tooltip: `Detached HEAD at ${head.objectId}`, run };
+			this.entries.set(command.id, this.options.statusbarService.addEntry(entry, {
+				id: command.id,
+				alignment: StatusbarAlignment.Left,
+				priority: command.priority,
+				compactGroup: command.compactGroup,
+			}));
 		}
 	}
-}
-
-function syncEntry(head: GitHead, run: () => unknown): IStatusbarEntry {
-	if (head.type !== "branch") return { icon: Lxicon.sync, text: "", ariaLabel: "No Git branch to synchronize", tooltip: "No Git branch to synchronize", run };
-	if (!head.upstream) return { icon: Lxicon.repoPush, text: "", ariaLabel: `Publish Git branch ${head.name}`, tooltip: `${head.name} has no upstream`, run };
-	const { ahead, behind, name } = head.upstream;
-	const text = ahead === 0 && behind === 0 ? "" : `${behind}↓ ${ahead}↑`;
-	const summary = `${behind} incoming and ${ahead} outgoing ${ahead + behind === 1 ? "change" : "changes"}`;
-	return { icon: Lxicon.sync, text, ariaLabel: `Synchronize Git changes, ${summary}`, tooltip: `Synchronize Changes with ${name}: ${summary}`, run };
 }

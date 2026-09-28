@@ -3,107 +3,81 @@ import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/c
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { CHAT_VIEW_ID } from '../../chat/common/chat.js';
 import { IChatContextPickService, type ChatContextAttachment, type ChatContextPick, type IChatContextTarget } from '../../../services/chat/common/chatContextService.js';
-import type { GitCommitChange, GitCommitFile, GitCommitFileContent, GitCommitSummary, IGitService } from '../../../contrib/git/common/gitService.js';
-import { IGitService as GitService } from '../../../contrib/git/common/gitService.js';
 import { IViewsService } from '../../../services/views/browser/viewsService.js';
+import type { SCMHistoryItemChangeViewModelTreeElement, SCMHistoryItemViewModelTreeElement } from '../common/history.js';
+import { ISCMService, type ISCMService as ISCMServiceType } from '../common/scm.js';
 
 const HistoryLimit = 100;
-const MaxFiles = 40;
-const MaxFileCharacters = 64 * 1024;
-const MaxContextCharacters = 512 * 1024;
 
-/** Registers Git history as a searchable, lazily resolved Chat context source. */
+/** Registers SCM history as a searchable, lazily resolved Chat context source. */
 export class ScmHistoryChatContextContribution extends Disposable {
-	constructor(contextPickService: IChatContextPickService, gitService: IGitService) {
+	constructor(contextPickService: IChatContextPickService, scmService: ISCMServiceType) {
 		super();
 		this._register(contextPickService.registerPicker({
 			id: 'scm.history',
 			label: 'Source Control',
-			isEnabled: async () => gitService.status().then(() => true, () => false),
-			providePicks: query => historyPicks(gitService, query),
+			isEnabled: async () => [...scmService.repositories].some(repository => repository.provider.historyProvider !== undefined),
+			providePicks: query => historyPicks(scmService, query),
 		}));
 	}
 }
 
-export function createCommitChatAttachment(gitService: IGitService, commit: GitCommitSummary): ChatContextAttachment {
+export function createHistoryItemChatAttachment(element: SCMHistoryItemViewModelTreeElement): ChatContextAttachment {
+	const { repository, historyItemViewModel } = element;
+	const historyItem = historyItemViewModel.historyItem;
+	const historyProvider = repository.provider.historyProvider;
+	if (!historyProvider) throw new Error(`Repository '${repository.id}' does not provide history`);
 	return {
-		id: `${commit.repositoryId}:${commit.objectId}`,
+		id: `${repository.id}:${historyItem.id}`,
 		kind: 'scmHistoryItem',
-		name: `${commit.objectId.slice(0, 7)} · ${commit.subject}`,
-		resolve: () => resolveCommitContext(gitService, commit),
+		name: `${historyItem.displayId ?? historyItem.id} · ${historyItem.subject}`,
+		resolve: async () => {
+			const content = await historyProvider.resolveHistoryItemChatContext(historyItem.id);
+			if (content === undefined) throw new Error(`History item '${historyItem.id}' is unavailable`);
+			return { name: `${historyItem.displayId ?? historyItem.id} · ${historyItem.subject}`, content };
+		},
 	};
 }
 
-export function createCommitChangeChatAttachment(gitService: IGitService, commit: GitCommitSummary, change: GitCommitChange): ChatContextAttachment {
+export function createHistoryItemChangeChatAttachment(element: SCMHistoryItemChangeViewModelTreeElement): ChatContextAttachment {
+	const { repository, historyItemViewModel, historyItemChange } = element;
+	const historyItem = historyItemViewModel.historyItem;
+	const historyProvider = repository.provider.historyProvider;
+	if (!historyProvider) throw new Error(`Repository '${repository.id}' does not provide history`);
 	return {
-		id: `${commit.repositoryId}:${commit.objectId}:${change.path}`,
+		id: `${repository.id}:${historyItem.id}:${historyItemChange.path}`,
 		kind: 'scmHistoryItemChange',
-		name: change.path,
-		resolve: async () => ({
-			name: `Git change ${commit.objectId.slice(0, 7)} · ${change.path}`,
-			content: formatFileChange(commit, change, await gitService.commitFile(commit.objectId, change.path, commit.repositoryId)),
-		}),
+		name: historyItemChange.path,
+		resolve: async () => {
+			const content = await historyProvider.resolveHistoryItemChangeRangeChatContext(historyItem.id, historyItem.parentIds[0] ?? '', historyItemChange.path);
+			if (content === undefined) throw new Error(`History change '${historyItemChange.path}' is unavailable`);
+			return { name: `${historyItem.displayId ?? historyItem.id} · ${historyItemChange.path}`, content };
+		},
 	};
 }
 
-async function historyPicks(gitService: IGitService, rawQuery: string): Promise<readonly ChatContextPick[]> {
+async function historyPicks(scmService: ISCMServiceType, rawQuery: string): Promise<readonly ChatContextPick[]> {
 	const query = rawQuery.trim().toLocaleLowerCase();
-	const page = await gitService.graph({ limit: HistoryLimit });
-	return page.commits
-		.filter(commit => !query || commit.subject.toLocaleLowerCase().includes(query) || commit.objectId.toLocaleLowerCase().includes(query))
-		.map(commit => ({
-			label: commit.subject,
-			description: commit.objectId.slice(0, 7),
-			detail: new Date(commit.timestampSeconds * 1_000).toLocaleString(),
-			attachment: createCommitChatAttachment(gitService, commit),
-		}));
-}
-
-async function resolveCommitContext(gitService: IGitService, commit: GitCommitSummary): Promise<{ readonly name: string; readonly content: string }> {
-	const result = await gitService.commitChanges(commit.objectId, commit.repositoryId);
-	const selected = result.changes.slice(0, MaxFiles);
-	const files = await Promise.all(selected.map(async change => ({
-		change,
-		file: await gitService.commitFile(commit.objectId, change.path, commit.repositoryId),
-	})));
-	const sections = [
-		`Commit: ${commit.objectId}`,
-		`Subject: ${commit.subject}`,
-		`Parents: ${commit.parentObjectIds.join(', ') || '(root commit)'}`,
-		`Changed files: ${result.changes.length}`,
-		...files.map(({ change, file }) => formatFileChange(commit, change, file)),
-	];
-	if (result.changes.length > selected.length) {
-		sections.push(`[${result.changes.length - selected.length} additional files omitted]`);
+	const picks: ChatContextPick[] = [];
+	for (const repository of scmService.repositories) {
+		const historyProvider = repository.provider.historyProvider;
+		if (!historyProvider) continue;
+		const historyItems = await historyProvider.provideHistoryItems({ limit: HistoryLimit });
+		for (const historyItem of historyItems ?? []) {
+			if (query && !historyItem.subject.toLocaleLowerCase().includes(query) && !historyItem.id.toLocaleLowerCase().includes(query)) continue;
+			picks.push({
+				label: historyItem.subject,
+				description: historyItem.displayId ?? historyItem.id,
+				detail: historyItem.timestamp === undefined ? repository.provider.label : new Date(historyItem.timestamp).toLocaleString(),
+				attachment: createHistoryItemChatAttachment({
+					repository,
+					historyItemViewModel: { historyItem, inputSwimlanes: [], outputSwimlanes: [], kind: 'node' },
+					type: 'historyItemViewModel',
+				}),
+			});
+		}
 	}
-	return {
-		name: `Git commit ${commit.objectId.slice(0, 7)} · ${commit.subject}`,
-		content: truncate(sections.join('\n\n'), MaxContextCharacters, 'commit context'),
-	};
-}
-
-function formatFileChange(commit: GitCommitSummary, change: GitCommitChange, file: GitCommitFile): string {
-	return [
-		`File: ${change.path}`,
-		...(change.originalPath ? [`Previous path: ${change.originalPath}`] : []),
-		`Status: ${change.status}`,
-		`Before:\n${formatContent(file.original)}`,
-		`After:\n${formatContent(file.modified)}`,
-		`Commit: ${commit.objectId}`,
-	].join('\n');
-}
-
-function formatContent(content: GitCommitFileContent): string {
-	switch (content.kind) {
-		case 'missing': return '[file does not exist on this side]';
-		case 'binary': return '[binary content omitted]';
-		case 'text': return truncate(content.text, MaxFileCharacters, 'file content');
-	}
-}
-
-function truncate(value: string, maximum: number, label: string): string {
-	if (value.length <= maximum) return value;
-	return `${value.slice(0, maximum)}\n[${label} truncated after ${maximum} characters]`;
+	return picks;
 }
 
 async function revealChat(accessor: ServicesAccessor): Promise<IChatContextTarget | undefined> {
@@ -119,10 +93,10 @@ registerAction2(class extends Action2 {
 		});
 	}
 
-	override async run(accessor: ServicesAccessor, commit: GitCommitSummary): Promise<void> {
-		if (!isCommit(commit)) return;
+	override async run(accessor: ServicesAccessor, element: SCMHistoryItemViewModelTreeElement): Promise<void> {
+		if (!isHistoryItem(element)) return;
 		const view = await revealChat(accessor);
-		view?.addContext(createCommitChatAttachment(accessor.get(GitService), commit));
+		view?.addContext(createHistoryItemChatAttachment(element));
 	}
 });
 
@@ -135,11 +109,11 @@ registerAction2(class extends Action2 {
 		});
 	}
 
-	override async run(accessor: ServicesAccessor, commit: GitCommitSummary): Promise<void> {
-		if (!isCommit(commit)) return;
+	override async run(accessor: ServicesAccessor, element: SCMHistoryItemViewModelTreeElement): Promise<void> {
+		if (!isHistoryItem(element)) return;
 		const view = await revealChat(accessor);
 		if (!view) return;
-		view.addContext(createCommitChatAttachment(accessor.get(GitService), commit));
+		view.addContext(createHistoryItemChatAttachment(element));
 		await view.acceptInput('Explain the changes in the attached commit.');
 	}
 });
@@ -153,20 +127,21 @@ registerAction2(class extends Action2 {
 		});
 	}
 
-	override async run(accessor: ServicesAccessor, commit: GitCommitSummary, change: GitCommitChange): Promise<void> {
-		if (!isCommit(commit) || !isCommitChange(change)) return;
+	override async run(accessor: ServicesAccessor, element: SCMHistoryItemChangeViewModelTreeElement): Promise<void> {
+		if (!isHistoryItemChange(element)) return;
 		const view = await revealChat(accessor);
-		view?.addContext(createCommitChangeChatAttachment(accessor.get(GitService), commit, change));
+		view?.addContext(createHistoryItemChangeChatAttachment(element));
 	}
 });
 
-function isCommit(value: unknown): value is GitCommitSummary {
+function isHistoryItem(value: unknown): value is SCMHistoryItemViewModelTreeElement {
 	return typeof value === 'object' && value !== null &&
-		typeof (value as GitCommitSummary).repositoryId === 'string' &&
-		typeof (value as GitCommitSummary).objectId === 'string' &&
-		typeof (value as GitCommitSummary).subject === 'string';
+		(value as SCMHistoryItemViewModelTreeElement).type === 'historyItemViewModel' &&
+		typeof (value as SCMHistoryItemViewModelTreeElement).historyItemViewModel?.historyItem?.id === 'string';
 }
 
-function isCommitChange(value: unknown): value is GitCommitChange {
-	return typeof value === 'object' && value !== null && typeof (value as GitCommitChange).path === 'string';
+function isHistoryItemChange(value: unknown): value is SCMHistoryItemChangeViewModelTreeElement {
+	return typeof value === 'object' && value !== null &&
+		(value as SCMHistoryItemChangeViewModelTreeElement).type === 'historyItemChangeViewModel' &&
+		typeof (value as SCMHistoryItemChangeViewModelTreeElement).historyItemChange?.path === 'string';
 }

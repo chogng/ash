@@ -1,20 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { EditorInputSerializers } from '../../../../services/editor/common/editorInputSerializer.js';
-import type { GitStatus } from '../../../../contrib/git/common/gitService.js';
 import { createScmMergeEditorInput, isScmMergeEditorInput, matchScmMergeEditor } from '../../browser/scmMergeEditorInput.js';
 import { EditorPaneMatch } from '../../../../browser/parts/editor/editorPane.js';
+import { URI } from '../../../../../base/common/uri.js';
 
 test('merge editor input keeps its result file and repository across restore', () => {
-	const status: GitStatus = {
-		repositoryId: 'repo-1',
-		streamInstanceId: 'stream-1',
-		revision: 1,
-		workspacePath: '/workspace',
-		head: { type: 'branch', name: 'main', objectId: '1234', upstream: undefined },
-		changes: [],
-	};
-	const input = createScmMergeEditorInput(status, 'src/main.ts');
+	const input = createScmMergeEditorInput('repo-1', 'src/main.ts', URI.parse('git-merge:/repo-1/src/main.ts'), URI.file('/workspace/src/main.ts'));
 	const restored = EditorInputSerializers.deserialize(EditorInputSerializers.serialize(input));
 	assert.equal(isScmMergeEditorInput(restored), true);
 	assert.equal(matchScmMergeEditor(restored), EditorPaneMatch.Default);

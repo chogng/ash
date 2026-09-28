@@ -1,9 +1,7 @@
 import { URI } from '../../../../base/common/uri.js';
 import type { EditorInput } from '../../../services/editor/common/editorService.js';
 import { EditorInputSerializers, requireRecord, requireString } from '../../../services/editor/common/editorInputSerializer.js';
-import type { GitStatus } from '../../../contrib/git/common/gitService.js';
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
-import { repositoryFileUri } from './scmChangeEditorInput.js';
 
 export const SCM_MERGE_EDITOR_ID = 'ash.editor.scmMerge';
 const contentType = 'application/vnd.ash.scm-merge';
@@ -15,14 +13,13 @@ export interface ScmMergeEditorInput extends EditorInput {
 	readonly resultResource: URI;
 }
 
-export function createScmMergeEditorInput(status: GitStatus, path: string): ScmMergeEditorInput {
-	const resource = URI.parse(`git-merge:/${encodeURIComponent(status.repositoryId)}/${path.split('/').map(encodeURIComponent).join('/')}`);
+export function createScmMergeEditorInput(repositoryId: string, path: string, resource: URI, resultResource: URI): ScmMergeEditorInput {
 	return {
 		resource,
 		contentType,
-		repositoryId: status.repositoryId,
+		repositoryId,
 		path,
-		resultResource: repositoryFileUri(status.workspacePath, path),
+		resultResource,
 		label: path.split('/').at(-1) ?? path,
 		showBreadcrumbs: false,
 	};

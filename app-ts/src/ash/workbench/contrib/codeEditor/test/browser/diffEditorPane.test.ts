@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
+import { setIconResolver } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { type CancellationToken } from '../../../../../base/common/cancellation.js';
 import { Event } from '../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
@@ -9,9 +10,12 @@ import { Range } from '../../../../../editor/common/core/range.js';
 import { TextEditorSelectionSource } from '../../../../../platform/editor/common/editor.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { getIconDefinition } from '../../../../../platform/theme/common/iconRegistry.js';
 import { CodeEditorConfiguration } from '../../common/editorConfiguration.js';
 import { EditorLineWrapping, EditorOption, RenderLineNumbersType } from '../../../../../editor/common/config/editorOptions.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
+import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import { AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { type DiffEditorWidget } from '../../../../../editor/browser/widget/diffEditor/diffEditorWidget.js';
 import { IEditorPartsService } from '../../../../browser/parts/editor/editorParts.js';
 import { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
@@ -37,6 +41,8 @@ for (const [name, value] of Object.entries({
 
 const { TextDiffEditor: DiffEditorPane } = await import("../../../../browser/parts/editor/textDiffEditor.js");
 await import('../../../../../editor/contrib/diffEditorBreadcrumbs/browser/contribution.js');
+await import('../../../../../editor/browser/widget/diffEditor/diffEditor.contribution.js');
+await import('../../../../contrib/accessibility/browser/accessibilityConfiguration.js');
 await import('../../browser/toggleWordWrap.js');
 const { createCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
 const { BrowserTextModelService } = await import("../../../../services/textmodelResolver/browser/browserTextModelService.js");
@@ -47,7 +53,7 @@ const { DIFF_FOCUS_SECONDARY_SIDE, DIFF_OPEN_SIDE, DIFF_SWAP_SIDES, GOTO_NEXT_CH
 registerDiffEditorCommands();
 
 test('Diff commands navigate and focus the active comparison through the Workbench service', async () => {
-	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const dom = createTestDom();
 	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
 	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
 	using models = new BrowserTextModelService(resourceStore);
@@ -89,9 +95,43 @@ test('Diff commands navigate and focus the active comparison through the Workben
 	pane.layout({ width: 480, height: 300 });
 	assert.equal(widget.viewMode, 'inline');
 	pane.layout({ width: 800, height: 300 });
+	assert.equal(widget.viewMode, 'inline');
+	await container.get(IConfigurationService).updateValue('diffEditor.renderSideBySideInlineBreakpoint', 700);
 	assert.equal(widget.viewMode, 'sideBySide');
+	await container.get(IConfigurationService).updateValue('diffEditor.renderSideBySideInlineBreakpoint', 900);
+	assert.equal(widget.viewMode, 'inline');
+	pane.layout({ width: 1_000, height: 300 });
+	assert.equal(widget.viewMode, 'sideBySide');
+	const configuration = container.get(IConfigurationService);
+	await configuration.updateValue('diffEditor.splitViewDefaultRatio', 0.3);
+	assert.equal(widget.element.style.getPropertyValue('--stanza-diff-original-width'), '291px');
+	const sash = widget.element.querySelector('.stanza-diff-sash') as HTMLElement;
+	sash.focus();
+	await configuration.updateValue('diffEditor.enableSplitViewResizing', false);
+	assert.equal(sash.hidden, true);
+	assert.equal(widget.modifiedEditor.getDomNode().contains(dom.window.document.activeElement), true);
+	await configuration.updateValue('diffEditor.enableSplitViewResizing', true);
+	assert.equal(sash.hidden, false);
 	await commands.executeCommand(DIFF_FOCUS_SECONDARY_SIDE);
 	assert.equal(widget.originalEditor.getDomNode().contains(dom.window.document.activeElement), true);
+	const help = AccessibleViewRegistry.getImplementations().find(implementation => implementation.name === 'diffEditorHelp')?.getProvider(container);
+	assert.match(help?.provideContent() ?? '', /Press F7/);
+	help?.dispose();
+	const view = AccessibleViewRegistry.getImplementations().find(implementation => implementation.name === 'diffEditorView')?.getProvider(container);
+	assert.match(view?.provideContent() ?? '', /Original line 1: before/);
+	assert.match(view?.provideContent() ?? '', /Modified line 1: after/);
+	view?.dispose();
+	assert.match(widget.element.getAttribute('aria-description') ?? '', /Alt\+F1/);
+	await configuration.updateValue(AccessibilityVerbositySettingId.DiffEditor, false);
+	assert.equal(widget.element.hasAttribute('aria-description'), false);
+	await configuration.updateValue(AccessibilityVerbositySettingId.DiffEditor, true);
+	assert.match(widget.element.getAttribute('aria-description') ?? '', /Alt\+F1/);
+	await commands.executeCommand('editor.action.accessibleDiffViewer.next');
+	const accessibleViewer = requiredElement<HTMLElement>(dom.window.document, '.stanza-accessible-diff-viewer');
+	assert.equal(accessibleViewer.hidden, false);
+	assert.match((accessibleViewer.querySelector('textarea') as HTMLTextAreaElement).value, /Original line 1: before/);
+	(accessibleViewer.querySelector('.stanza-accessible-diff-toolbar button:last-child') as HTMLButtonElement).click();
+	assert.equal(accessibleViewer.hidden, true);
 	await commands.executeCommand(DIFF_OPEN_SIDE);
 	assert.deepEqual(opened, [input.original]);
 	await commands.executeCommand(TOGGLE_DIFF_IGNORE_TRIM_WHITESPACE);
@@ -111,7 +151,7 @@ test("Stanza diff pane rejects a missing Workbench diff computation service", ()
 });
 
 test("Stanza diff pane acquires both models, lays out the review view, and releases both references", async () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	const dom = createTestDom();
 	const parent = requiredElement<HTMLElement>(dom.window.document, "main");
 	const textFiles = new BootstrapTextFiles();
 	const resourceStore = new BrowserTextResourceStore(textFiles);
@@ -171,7 +211,7 @@ test("Stanza diff pane acquires both models, lays out the review view, and relea
 });
 
 test('Diff pane recomputes an open comparison when ignore-trim-whitespace changes', async () => {
-	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const dom = createTestDom();
 	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
 	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
 	using models = new BrowserTextModelService(resourceStore);
@@ -202,7 +242,7 @@ test('Diff pane recomputes an open comparison when ignore-trim-whitespace change
 });
 
 test('Diff pane follows the modified language override and language changes', async () => {
-	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const dom = createTestDom();
 	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
 	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
 	using models = new BrowserTextModelService(resourceStore);
@@ -240,7 +280,7 @@ test('Diff pane follows the modified language override and language changes', as
 });
 
 test('Diff pane follows configured word wrap and keeps its temporary toggle in the open view', async () => {
-	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const dom = createTestDom();
 	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
 	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
 	using models = new BrowserTextModelService(resourceStore);
@@ -275,7 +315,7 @@ test('Diff pane follows configured word wrap and keeps its temporary toggle in t
 });
 
 test('Diff pane updates hidden unchanged regions when settings change', async () => {
-	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const dom = createTestDom();
 	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
 	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
 	using models = new BrowserTextModelService(resourceStore);
@@ -346,6 +386,12 @@ class PaneTestDiffComputationService implements IDocumentDiffProvider {
 	[Symbol.dispose](): void {
 		this.dispose();
 	}
+}
+
+function createTestDom(): JSDOM {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	setIconResolver(dom.window.document, icon => getIconDefinition(icon));
+	return dom;
 }
 
 function requiredElement<T extends Element>(ownerDocument: Document, selector: string): T {

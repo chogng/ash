@@ -3,6 +3,7 @@ import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { type CancellationToken } from '../../../../base/common/cancellation.js';
 import { Event } from '../../../../base/common/event.js';
+import { setIconResolver } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Range } from '../../../common/core/range.js';
 import { type IDocumentDiff, type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from '../../../common/diff/documentDiffProvider.js';
 import { DefaultLinesDiffComputer } from '../../../common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js';
@@ -12,6 +13,7 @@ import { ICodeEditorService } from '../../../browser/services/codeEditorService.
 import { StandaloneCodeEditorService } from '../../../standalone/browser/standaloneCodeEditorService.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
+import { getIconDefinition } from '../../../../platform/theme/common/iconRegistry.js';
 import { TestThemeService } from '../../../../platform/theme/test/common/testThemeService.js';
 import { darkColorTheme } from '../../../../platform/theme/common/colorTheme.js';
 import { ILanguageConfigurationService } from '../../../common/languages/languageConfigurationRegistry.js';
@@ -33,6 +35,7 @@ class TestResizeObserver {
 const installedGlobals = installEditorTestDom(browserEnvironment, [
 	'Node', 'Element', 'HTMLElement', 'Event', 'InputEvent', 'KeyboardEvent',
 ], { ResizeObserver: TestResizeObserver });
+setIconResolver(browserEnvironment.window.document, icon => getIconDefinition(icon));
 
 await import('../../../contrib/diffEditorBreadcrumbs/browser/contribution.js');
 const { DiffEditorWidget } = await import('../../../browser/widget/diffEditor/diffEditorWidget.js');
@@ -95,6 +98,29 @@ test('DiffEditorWidget owns two editors, keeps source models caller-owned, and r
 	assert.deepEqual(codeEditorService.listDiffEditors(), []);
 	assert.equal(original.isDisposed(), false);
 	assert.equal(modified.isDisposed(), false);
+});
+
+test('DiffEditorWidget applies the split ratio and disables its separator when resizing is off', async () => {
+	using services = createServices();
+	using original = new TextModel('before');
+	using modified = new TextModel('after');
+	using computation = new WidgetTestDiffComputationService();
+	using model = new DiffModel({ original, modified, diffProvider: computation, diffOptions });
+	await waitForReady(model);
+	const container = browserEnvironment.window.document.createElement('main');
+	using editor = services.createInstance(DiffEditorWidget, {
+		container, model, splitViewDefaultRatio: 0.3, enableSplitViewResizing: false,
+	});
+	editor.layout({ width: 530, height: 80 });
+	assert.equal(editor.element.style.getPropertyValue('--stanza-diff-original-width'), '150px');
+	const sash = editor.element.querySelector('.stanza-diff-sash');
+	assert.equal(sash?.getAttribute('aria-disabled'), 'true');
+	assert.equal(sash?.getAttribute('aria-valuenow'), '30');
+	assert.equal((sash as HTMLElement).hidden, true);
+	editor.setSplitViewOptions(true, 0.4);
+	assert.equal(editor.element.style.getPropertyValue('--stanza-diff-original-width'), '200px');
+	assert.equal(sash?.getAttribute('aria-disabled'), 'false');
+	assert.throws(() => editor.setSplitViewOptions(true, 1), /between 0.1 and 0.9/);
 });
 
 test('DiffEditorWidget inserts paired view space for added lines and navigates without wrapping when requested', async () => {

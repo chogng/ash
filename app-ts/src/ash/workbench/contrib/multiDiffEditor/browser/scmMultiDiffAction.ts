@@ -4,7 +4,7 @@ import type { ServicesAccessor } from '../../../../platform/instantiation/common
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import type { GitChangeFileComparison, GitRepositoryChange, GitStatus } from '../../../contrib/git/common/gitService.js';
 import { IGitService } from '../../../contrib/git/common/gitService.js';
-import { resolveGitChangeInputs } from '../../scm/browser/scmChangeEditorInput.js';
+import { resolveGitChangeInputs } from '../../git/browser/gitChangeEditorInput.js';
 import { createMultiDiffEditorInput, type GitMultiDiffScope, type MultiDiffEditorInput, type MultiDiffEditorInputItem } from './multiDiffEditorInput.js';
 
 export const OpenScmMultiDiffEditorCommandId = '_workbench.openScmMultiDiffEditor';

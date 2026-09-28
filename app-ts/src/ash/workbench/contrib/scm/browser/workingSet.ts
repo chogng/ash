@@ -1,10 +1,10 @@
-import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { StorageScope, StorageTarget, type IStorageService } from '../../../../platform/storage/common/storage.js';
 import type { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
-import type { GitStatus, IGitService } from '../../../contrib/git/common/gitService.js';
 import type { EditorWorkingSet } from '../../../services/editor/common/editorWorkingSet.js';
 import { ScmConfiguration } from '../common/scmConfiguration.js';
+import type { ISCMViewService } from '../common/scm.js';
 
 const WorkingSetsStorageKey = 'scm.workingSets';
 
@@ -22,16 +22,17 @@ interface RepositoryWorkingSets {
 export interface ScmWorkingSetControllerOptions {
 	readonly configurationService: IConfigurationService;
 	readonly editorPart: IEditorPart;
-	readonly gitService: IGitService;
+	readonly scmViewService: ISCMViewService;
 	readonly storageService: IStorageService;
 }
 
-/** Saves and restores editor tabs when the active Git branch changes. */
+/** Saves and restores editor tabs when the selected repository reference changes. */
 export class ScmWorkingSetController extends Disposable {
 	private readonly enabledResources = this._register(new DisposableStore());
+	private readonly providerListener = this._register(new MutableDisposable());
 	private readonly repositoryWorkingSets = new Map<string, RepositoryWorkingSets>();
 	private statusQueue = Promise.resolve();
-	private lastStatusIdentity: string | undefined;
+	private lastRefIdentity: string | undefined;
 	private generation = 0;
 
 	constructor(private readonly options: ScmWorkingSetControllerOptions) {
@@ -46,33 +47,33 @@ export class ScmWorkingSetController extends Disposable {
 		this.generation += 1;
 		this.enabledResources.clear();
 		this.repositoryWorkingSets.clear();
-		this.lastStatusIdentity = undefined;
+		this.lastRefIdentity = undefined;
+		this.providerListener.clear();
 		if (!this.options.configurationService.getValue(ScmConfiguration.workingSetsEnabled)) {
 			this.options.storageService.remove(WorkingSetsStorageKey, StorageScope.WORKSPACE);
 			return;
 		}
 		this.load();
-		this.enabledResources.add(this.options.gitService.onDidChangeStatus(status => this.enqueue(status)));
-		this.enabledResources.add(this.options.gitService.onDidBecomeReady(() => this.refresh()));
-		this.refresh();
+		this.enabledResources.add(this.options.scmViewService.onDidChangeActiveRepository(() => this.bindProvider()));
+		this.bindProvider();
 	}
 
-	private refresh(): void {
-		void this.options.gitService.status().then(status => this.enqueue(status)).catch(() => undefined);
+	private bindProvider(): void {
+		const repository = this.options.scmViewService.activeRepository;
+		this.providerListener.value = repository?.provider.onDidChangeResources(() => this.enqueue(repository.id, repository.provider.activeRepositoryName));
+		if (repository) this.enqueue(repository.id, repository.provider.activeRepositoryName);
 	}
 
-	private enqueue(status: GitStatus): void {
-		const identity = `${status.repositoryId}:${status.streamInstanceId}:${status.revision}`;
-		if (identity === this.lastStatusIdentity) return;
-		this.lastStatusIdentity = identity;
+	private enqueue(repositoryId: string, ref: string | undefined): void {
+		if (ref === undefined) return;
+		const identity = `${repositoryId}:${ref}`;
+		if (identity === this.lastRefIdentity) return;
+		this.lastRefIdentity = identity;
 		const generation = this.generation;
-		this.statusQueue = this.statusQueue.then(() => generation === this.generation ? this.acceptStatus(status) : undefined).catch(() => undefined);
+		this.statusQueue = this.statusQueue.then(() => generation === this.generation ? this.acceptRef(repositoryId, ref) : undefined).catch(() => undefined);
 	}
 
-	private async acceptStatus(status: GitStatus): Promise<void> {
-		const ref = historyRef(status);
-		if (!ref) return;
-		const repositoryKey = status.repositoryId;
+	private async acceptRef(repositoryKey: string, ref: string): Promise<void> {
 		const repository = this.repositoryWorkingSets.get(repositoryKey);
 		if (!repository) {
 			this.repositoryWorkingSets.set(repositoryKey, { currentRef: ref, editorWorkingSets: new Map() });
@@ -122,14 +123,6 @@ export class ScmWorkingSetController extends Disposable {
 			editorWorkingSets: [...state.editorWorkingSets],
 		}));
 		this.options.storageService.store(WorkingSetsStorageKey, JSON.stringify(serialized), StorageScope.WORKSPACE, StorageTarget.MACHINE);
-	}
-}
-
-function historyRef(status: GitStatus): string | undefined {
-	switch (status.head.type) {
-		case 'branch': return status.head.name;
-		case 'detached': return status.head.objectId;
-		case 'unborn': return status.head.name;
 	}
 }
 

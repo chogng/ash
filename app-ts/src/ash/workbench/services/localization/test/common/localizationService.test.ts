@@ -55,6 +55,11 @@ test("localization lookup falls back to English and formats parameters", async (
 	assert.equal(localization.translate("ash.settings", "displayLanguage.title", "Fallback"), "Display Language");
 	assert.equal(localization.translate("ash.missing", "missing", "Hello {name}", { name: "Ada" }), "Hello Ada");
 	await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
+	assert.deepEqual([
+		localization.translate('ash', 'scm.history.actions', 'History actions'),
+		localization.translate('ash', 'scm.history.references', 'History references'),
+		localization.translate('ash', 'scm.history.remotes', 'Repository remotes'),
+	], ['历史记录操作', '历史记录引用', '仓库远端']);
 	assert.equal(localization.translate('ash', 'git.completeMerge', 'Complete Merge'), '完成合并');
 	assert.equal(localization.translate('ash', 'git.mergeUnresolved', 'Review or resolve every conflict before completing the merge.'), '请先检查或处理所有冲突，再完成合并。');
 	assert.equal(localization.translate('ash', 'git.markHandled', 'Mark Handled'), '标记为已处理');

@@ -12,6 +12,7 @@ import { DIFF_EDITOR_ID, isDiffEditorInput } from "../../../common/editor/diffEd
 import { type ITextResourceStore } from "../../../services/textmodelResolver/common/textResourceStore.js";
 import { DiffModel } from "../../../../editor/common/diff/diffModel.js";
 import { type HideUnchangedRegionsOptions } from '../../../../editor/common/config/diffEditor.js';
+import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from "../../../../editor/common/diff/documentDiffProvider.js";
 import { DiffEditorWidget } from "../../../../editor/browser/widget/diffEditor/diffEditorWidget.js";
 import { type TextModelReference, type ITextModelResourceService } from "../../../services/textmodelResolver/common/textModelResourceService.js";
@@ -205,11 +206,23 @@ class DiffEditorPaneSession extends Disposable {
 				this.editor.setHideUnchangedRegionsOptions(getHideUnchangedRegionsOptions(configuration));
 			}
 			if (event.affectsConfiguration('diffEditor.renderSideBySide')
-				|| event.affectsConfiguration('diffEditor.useInlineViewWhenSpaceIsLimited')) {
+				|| event.affectsConfiguration('diffEditor.useInlineViewWhenSpaceIsLimited')
+				|| event.affectsConfiguration('diffEditor.renderSideBySideInlineBreakpoint')) {
 				this.editor.setViewMode(
 					configuration.getValue('diffEditor.renderSideBySide'),
 					configuration.getValue('diffEditor.useInlineViewWhenSpaceIsLimited'),
+					configuration.getValue('diffEditor.renderSideBySideInlineBreakpoint'),
 				);
+			}
+			if (event.affectsConfiguration('diffEditor.enableSplitViewResizing')
+				|| event.affectsConfiguration('diffEditor.splitViewDefaultRatio')) {
+				this.editor.setSplitViewOptions(
+					configuration.getValue('diffEditor.enableSplitViewResizing'),
+					configuration.getValue('diffEditor.splitViewDefaultRatio'),
+				);
+			}
+			if (event.affectsConfiguration(AccessibilityVerbositySettingId.DiffEditor)) {
+				this.editor.setAccessibilityHelpHint(configuration.getValue(AccessibilityVerbositySettingId.DiffEditor));
 			}
 		}));
 		this._register(modified.model.onDidChangeLanguage(() => {
@@ -221,6 +234,9 @@ class DiffEditorPaneSession extends Disposable {
 			wordWrap: getDiffWordWrap(configuration),
 			renderSideBySide: configuration.getValue('diffEditor.renderSideBySide'),
 			useInlineViewWhenSpaceIsLimited: configuration.getValue('diffEditor.useInlineViewWhenSpaceIsLimited'),
+			renderSideBySideInlineBreakpoint: configuration.getValue('diffEditor.renderSideBySideInlineBreakpoint'),
+			enableSplitViewResizing: configuration.getValue('diffEditor.enableSplitViewResizing'),
+			splitViewDefaultRatio: configuration.getValue('diffEditor.splitViewDefaultRatio'),
 			hideUnchangedRegions: getHideUnchangedRegionsOptions(configuration),
 			lineHeight: options.lineHeight,
 			fontFamily: options.fontFamily,
@@ -232,6 +248,7 @@ class DiffEditorPaneSession extends Disposable {
 			originalAriaLabel: originalLabel,
 			modifiedAriaLabel: modifiedLabel,
 		}));
+		this.editor.setAccessibilityHelpHint(configuration.getValue(AccessibilityVerbositySettingId.DiffEditor));
 	}
 
 	updateOptions(options: IDocumentDiffProviderOptions): void {

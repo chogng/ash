@@ -71,6 +71,10 @@ Stanza 是整个编辑器的名称，但 Code 与 Academic 是两套独立的 fe
 
 `CodeEditorWidget` 的主题、语言配置和语言功能服务通过构造参数注入，Widget 不创建这些共享服务。Workbench 与 Standalone 拥有服务注册；每次模型挂载只创建一个子作用域，持有本次贡献和局部服务，拆除时不释放宿主共享服务。测试通过 `test/browser/testCodeEditor.ts` 显式装配依赖。
 
+Diff 的版本化结果由 `common/diff/diffModel.ts` 持有。`browser/widget/diffEditor/diffEditorOptions.ts` 校验创建选项并持有动态布局选项，Workbench 把已注册的单栏宽度设置传入这里。`browser/widget/diffEditor/diffEditorWidget.ts` 负责组合两侧编辑器与滚动、布局和导航；`components/diffEditorSash.ts` 持有双栏宽度比例和可操作的分隔线。`components/diffEditorDecorations.ts` 持有两侧临时 decoration，并把差异行、行内范围和纯插入或删除时的空范围投影到既有编辑器 decoration 系统。`components/diffEditorViewZones/diffEditorViewZones.ts` 持有两侧对齐留白和行内模式的原始行，其生命周期随 Diff Widget 结束。差异标记选项和图标由同目录的 `registrations.contribution.ts` 定义，颜色由 `platform/theme/common/colors/editorColors.ts` 注册，右侧概览 DOM 由 `features/overviewRulerFeature.ts` 持有。修改 Diff 外观时沿这条调用链核对主题、换行、边栏和概览，而不是在 Widget 中另建绘制状态。
+
+`components/accessibleDiffViewer.ts` 从当前版本化结果读取差异文本，F7/Shift+F7 沿 Widget 现有导航状态逐行阅读，Escape 恢复原焦点。`diffEditor.contribution.ts` 注册 Alt+F1 帮助和 Alt+F2 全部差异纯文本视图；`commands.ts` 注册命令面板入口。Workbench 的 `accessibility.verbosity.diffEditor` 设置控制编辑器焦点上的帮助提示。
+
 ### 富文档 engine
 
 Academic 使用与 Code 相同的 `TextModel`、`TextBuffer`、`LineSequence` 和版本号，并用 schema 定义允许的 mark、atom、facet、region、relation、selection、transaction history、plugin state 与 serialization。`TextModel.lineDocument` 给出当前不可变语义快照；字符和逻辑行始终由 TextModel 唯一保存。Workbench-owned `DocumentEditorTextModelService` 负责 reference、working copy 和保存边界。

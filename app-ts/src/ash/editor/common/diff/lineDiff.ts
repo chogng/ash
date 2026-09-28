@@ -83,7 +83,7 @@ export function toLineDiff(diff: Pick<IDocumentDiff, 'changes'>, originalLineCou
 function changesForLine(changes: readonly RangeMapping[] | undefined, lineNumber: number, side: 'original' | 'modified'): DiffRange[] {
 	return (changes ?? []).flatMap(change => {
 		const range = side === 'original' ? change.originalRange : change.modifiedRange;
-		return range.startLineNumber === lineNumber && !range.isEmpty()
+		return range.startLineNumber === lineNumber
 			? [{ startColumn: range.startColumn - 1, endColumn: range.endColumn - 1 }]
 			: [];
 	});

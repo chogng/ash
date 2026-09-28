@@ -83,6 +83,16 @@ export const diffUnchangedRegionBackground = color("diffEditor.unchangedRegionBa
 export const diffUnchangedRegionForeground = alias("diffEditor.unchangedRegionForeground", mutedForeground, "Foreground for collapsed unchanged diff regions.");
 export const diffRemovedLineMarker = alias("diffEditor.removedLineMarker", errorForeground, "Marker foreground for removed diff lines.");
 export const diffInsertedLineMarker = alias("diffEditor.insertedLineMarker", successForeground, "Marker foreground for inserted diff lines.");
+export const diffInsertedLineGutter = alias('diffEditorGutter.insertedLineBackground', diffInsertedLineBackground, 'Background for the margin beside inserted diff lines.');
+export const diffRemovedLineGutter = alias('diffEditorGutter.removedLineBackground', diffRemovedLineBackground, 'Background for the margin beside removed diff lines.');
+export const diffOverviewRulerInserted = registerColor('diffEditorOverview.insertedForeground', {
+	dark: transparent(diffInsertedLineMarker, 0.55), light: transparent(diffInsertedLineMarker, 0.55),
+	highContrastDark: diffInsertedLineMarker, highContrastLight: diffInsertedLineMarker,
+}, { description: 'Overview ruler marker for inserted diff lines.', owner });
+export const diffOverviewRulerRemoved = registerColor('diffEditorOverview.removedForeground', {
+	dark: transparent(diffRemovedLineMarker, 0.55), light: transparent(diffRemovedLineMarker, 0.55),
+	highContrastDark: diffRemovedLineMarker, highContrastLight: diffRemovedLineMarker,
+}, { description: 'Overview ruler marker for removed diff lines.', owner });
 
 const legacy = (id: string, value: string, description: string): string => registerColor(id, {
 	dark: value, light: value, highContrastDark: value, highContrastLight: value,

@@ -4,8 +4,8 @@ import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from "../../../.
 import { appendIcon } from "../../../../base/browser/ui/lxicons/lxicon.js";
 import { IconLabel } from "../../../../base/browser/ui/iconlabel/iconlabel.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
-import { DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
-import { URI } from "../../../../base/common/uri.js";
+import { localize } from '../../../../nls.js';
+import { DisposableStore, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { MenuWorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
 import { type IMenuService, MenuId } from "../../../../platform/actions/common/actions.js";
 import type { IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
@@ -14,14 +14,14 @@ import type { IContextMenuService } from "../../../../platform/contextview/brows
 import { registerOpenEditorListeners, type IOpenEditorOptions } from "../../../../platform/editor/browser/editor.js";
 import type { IHoverService } from "../../../../platform/hover/browser/hoverService.js";
 import type { IResourceIconRenderer } from "../../../browser/labels.js";
-import { GitWorkspaceError, type GitCommitChange, type GitCommitChanges, type GitCommitSummary, type GraphPage, type GitHead, type GitReference, type GitRemoteProvider, type IGitService } from "../../../contrib/git/common/gitService.js";
+import { SCMHistoryUnavailableError, type ISCMHistoryItem, type ISCMHistoryItemChange, type ISCMHistoryItemRef, type ISCMHistoryItemViewModel, type ISCMHistoryProvider, type SCMHistoryItemChangeViewModelTreeElement, type SCMHistoryItemViewModelTreeElement } from '../common/history.js';
+import type { ISCMViewService } from '../common/scm.js';
 import type { IEditorService } from "../../../services/editor/common/editorService.js";
 import type { IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
 import { ViewPane } from "../../../browser/parts/views/viewPane.js";
 import { createDiffEditorInput } from "../../../common/editor/diffEditorInput.js";
-import { createRows, GraphRowHeight, renderRow, type GraphNodeKind, type GraphRow, type GraphState } from "./scmGraphRenderer.js";
-import { GitGraphBusyContext } from "./scmGraphTitleActions.js";
-import { gitErrorMessage } from "../../git/common/gitError.js";
+import { SWIMLANE_HEIGHT, renderSCMHistoryItemGraph, toISCMHistoryItemViewModelArray } from './scmHistory.js';
+import { SCMHistoryBusyContext, SCMHistoryProviderIdContext } from '../common/scm.js';
 
 const PageSize = 50;
 const LoadAhead = 48;
@@ -29,38 +29,43 @@ const Overscan = 8;
 
 type ExpandedCommit =
 	| { readonly state: "loading" }
-	| { readonly state: "ready"; readonly result: GitCommitChanges }
+	| { readonly state: "ready"; readonly result: readonly ISCMHistoryItemChange[] }
 	| { readonly state: "error"; readonly message: string };
 
-/** Paged repository history rendered as a compact commit graph. */
-export class ScmGraphViewPane extends ViewPane {
-	private readonly gitService: IGitService;
+interface HistoryPage {
+	readonly items: readonly ISCMHistoryItem[];
+	readonly hasMore: boolean;
+}
+
+/** Paged SCM history rendered as a compact graph. */
+export class SCMHistoryViewPane extends ViewPane {
+	private readonly scmViewService: ISCMViewService;
+	private readonly graphLabel: string;
 	private readonly busyContext: IContextKey<boolean>;
+	private readonly providerIdContext: IContextKey<string>;
 	private readonly graphElement: HTMLDivElement;
 	private readonly hovers = this._register(new DisposableStore());
 	private readonly more = this._register(new DisposableStore());
-	private page: GraphPage | undefined;
-	private head: GitHead | undefined;
+	private readonly providerListener = this._register(new MutableDisposable());
+	private provider: ISCMHistoryProvider | undefined;
+	private page: HistoryPage | undefined;
+	private head: ISCMHistoryItemRef | undefined;
 	private generation = 0;
-	private cursor: string | undefined;
 	private loading = false;
 	private moreError: string | undefined;
-	private rows: readonly GraphRow[] = [];
-	private graphState: GraphState = { lanes: [], nextColor: 0 };
+	private rows: readonly ISCMHistoryItemViewModel[] = [];
 	private list: HTMLOListElement | undefined;
-	private readonly refs = new Map<string, readonly GitReference[]>();
 	private readonly expanded = new Map<string, ExpandedCommit>();
 	private graphRepositoryId: string | undefined;
 	public get repositoryId(): string | undefined { return this.graphRepositoryId; }
 
-	constructor(container: HTMLElement, options: IViewPaneOptions, gitService: IGitService, menuService: IMenuService, private readonly contextMenuService: IContextMenuService, contextKeyService: IContextKeyService, private readonly hoverService: IHoverService, private readonly editorService: IEditorService, private readonly resourceIconRenderer: IResourceIconRenderer) {
+	constructor(container: HTMLElement, options: IViewPaneOptions, scmViewService: ISCMViewService, menuService: IMenuService, private readonly contextMenuService: IContextMenuService, contextKeyService: IContextKeyService, private readonly hoverService: IHoverService, private readonly editorService: IEditorService, private readonly resourceIconRenderer: IResourceIconRenderer) {
 		super(container, { ...options, headerActionsVisibility: "whenExpanded" });
-		this.gitService = gitService;
+		this.scmViewService = scmViewService;
+		this.graphLabel = options.title;
 		this.contentElement.classList.add("ash-scm-secondary-pane");
 		this.graphElement = h(container.ownerDocument, "div");
 		this.graphElement.className = "ash-scm-graph";
-		this.graphElement.setAttribute("role", "status");
-		this.graphElement.setAttribute("aria-live", "polite");
 		this._register(addDisposableListener(this.graphElement, "scroll", () => {
 			this.renderRows();
 			if (this.graphElement.scrollTop + this.graphElement.clientHeight >= this.graphElement.scrollHeight - LoadAhead) void this.loadMore();
@@ -68,20 +73,19 @@ export class ScmGraphViewPane extends ViewPane {
 		this.contentElement.append(this.graphElement);
 		this._register(observeElementSize(this.graphElement, () => this.renderRows()));
 		this._register(resourceIconRenderer.onDidChangeResourceIcons(() => this.renderRows()));
-		this.busyContext = GitGraphBusyContext.bindTo(contextKeyService);
+		this.busyContext = SCMHistoryBusyContext.bindTo(contextKeyService);
 		this._register(toDisposable(() => this.busyContext.reset()));
+		this.providerIdContext = SCMHistoryProviderIdContext.bindTo(contextKeyService);
+		this._register(toDisposable(() => this.providerIdContext.reset()));
 		const toolbar = this._register(new MenuWorkbenchToolBar(
 			this.headerActionsElement,
 			menuService,
 			contextMenuService,
-			MenuId.GitGraphTitle,
-			{ ariaLabel: "Git graph actions", menuOptions: { arg: this } },
+			MenuId.SCMHistoryTitle,
+			{ ariaLabel: localize('scm.history.actions', 'History actions'), menuOptions: { arg: this } },
 		));
 		toolbar.element.classList.add("ash-scm-remote-actions");
-		this._register(this.gitService.onDidBecomeReady(() => void this.refresh()));
-		this._register(this.gitService.onDidChangeActiveRepository(repository => {
-			if (!repository) void this.refresh();
-		}));
+		this._register(this.scmViewService.onDidChangeActiveRepository(() => void this.refresh()));
 		void this.refresh();
 	}
 
@@ -89,6 +93,7 @@ export class ScmGraphViewPane extends ViewPane {
 		this.busyContext.set(true);
 		try {
 			await operation?.();
+			this.provider?.refresh();
 			await this.refresh();
 		} finally {
 			this.busyContext.set(false);
@@ -97,42 +102,49 @@ export class ScmGraphViewPane extends ViewPane {
 
 	private async refresh(): Promise<void> {
 		const generation = ++this.generation;
-		const repositoryId = this.gitService.activeRepository?.id;
-		this.graphRepositoryId = repositoryId;
+		const repository = this.scmViewService.activeRepository;
+		this.providerIdContext.set(repository?.provider.providerId ?? '');
+		const provider = repository?.provider.historyProvider;
+		this.provider = provider;
+		this.providerListener.value = provider?.onDidChange(() => void this.refresh());
+		this.graphRepositoryId = repository?.id;
 		this.page = undefined;
 		this.head = undefined;
-		this.cursor = undefined;
 		this.loading = false;
 		this.moreError = undefined;
 		this.rows = [];
-		this.graphState = { lanes: [], nextColor: 0 };
 		this.list = undefined;
-		this.refs.clear();
 		this.expanded.clear();
 		this.hovers.clear();
 		this.more.clear();
 		this.graphElement.textContent = "Loading commit graph…";
+		this.graphElement.setAttribute('role', 'status');
+		this.graphElement.setAttribute('aria-live', 'polite');
 		this.graphElement.setAttribute("aria-busy", "true");
+		if (!provider) {
+			this.renderGraph({ items: [], hasMore: false }, []);
+			return;
+		}
 		try {
-			const [graph, status] = await Promise.all([
-				this.gitService.graph({ limit: PageSize }, repositoryId),
-				this.gitService.status(repositoryId),
+			const [loaded, remoteLabels] = await Promise.all([
+				provider.provideHistoryItems({ skip: 0, limit: PageSize + 1 }),
+				provider.provideRemoteLabels(),
 			]);
 			if (this.isDisposed || generation !== this.generation) return;
-			this.graphRepositoryId = status.repositoryId;
-			this.page = graph;
-			this.head = status.head;
-			this.cursor = graph.nextCursor;
-			this.renderGraph(graph, status.head);
-			if (graph.hasMore) void this.loadMore();
+			const items = loaded ?? [];
+			const page = { items: items.slice(0, PageSize), hasMore: items.length > PageSize };
+			this.page = page;
+			this.head = provider.historyItemRef.get();
+			this.renderGraph(page, remoteLabels);
+			if (page.hasMore) void this.loadMore();
 		} catch (error) {
 			if (this.isDisposed || generation !== this.generation) return;
 			const document = this.graphElement.ownerDocument;
 			const message = h(document, "p");
 			message.className = "ash-scm-empty";
-			message.textContent = gitErrorMessage(error);
+			message.textContent = error instanceof Error ? error.message : String(error);
 			this.graphElement.replaceChildren(message);
-			if (!(error instanceof GitWorkspaceError)) {
+			if (!(error instanceof SCMHistoryUnavailableError)) {
 				const retry = h(document, "button");
 				retry.className = "ash-scm-command";
 				retry.type = "button";
@@ -145,23 +157,16 @@ export class ScmGraphViewPane extends ViewPane {
 		}
 	}
 
-	private renderGraph(graph: GraphPage, head: GitHead): void {
+	private renderGraph(page: HistoryPage, remoteLabels: readonly string[]): void {
+		this.graphElement.removeAttribute('role');
+		this.graphElement.removeAttribute('aria-live');
 		this.hovers.clear();
 		this.more.clear();
-		this.rows = [];
-		this.graphState = { lanes: [], nextColor: 0 };
-		this.refs.clear();
-		for (const reference of graph.references) {
-			const references = this.refs.get(reference.objectId) ?? [];
-			this.refs.set(reference.objectId, [...references, reference]);
-		}
-		const batch = createRows(graph.commits);
-		this.rows = batch.rows;
-		this.graphState = batch.state;
-		const remotes = this.renderRemotes(graph);
+		this.rows = toISCMHistoryItemViewModelArray(page.items, new Map(), this.head);
+		const remotes = this.renderRemotes(remoteLabels);
 		const children: HTMLElement[] = remotes ? [remotes] : [];
 		this.list = undefined;
-		if (graph.commits.length === 0) {
+		if (page.items.length === 0) {
 			const empty = h(this.graphElement.ownerDocument, "p");
 			empty.className = "ash-scm-empty";
 			empty.textContent = "No commits yet.";
@@ -170,9 +175,10 @@ export class ScmGraphViewPane extends ViewPane {
 			this.list = h(this.graphElement.ownerDocument, "ol");
 			this.list.className = "ash-scm-graph-list";
 			this.list.setAttribute("role", "tree");
+			this.list.setAttribute('aria-label', this.graphLabel);
 			children.push(this.list);
 		}
-		if (graph.hasMore) children.push(this.renderMore());
+		if (page.hasMore) children.push(this.renderMore());
 		this.graphElement.replaceChildren(...children);
 		this.renderRows();
 		this.graphElement.setAttribute("aria-busy", this.loading ? "true" : "false");
@@ -180,14 +186,13 @@ export class ScmGraphViewPane extends ViewPane {
 
 	private renderRows(): void {
 		const list = this.list;
-		const head = this.head;
-		if (!list || !head || this.rows.length === 0) return;
+		if (!list || this.rows.length === 0) return;
 		this.hovers.clear();
 		const listTop = offsetTopWithinScrollContainer(list, this.graphElement);
 		const viewportTop = Math.max(0, this.graphElement.scrollTop - listTop);
-		const viewportHeight = Math.max(GraphRowHeight, this.graphElement.clientHeight);
+		const viewportHeight = Math.max(SWIMLANE_HEIGHT, this.graphElement.clientHeight);
 		const offsets = this.rowOffsets();
-		const firstVisible = offsets.findIndex((offset, index) => offset + this.rowHeight(this.rows[index].commit) > viewportTop);
+		const firstVisible = offsets.findIndex((offset, index) => offset + this.rowHeight(this.rows[index].historyItem) > viewportTop);
 		const start = Math.max(0, (firstVisible < 0 ? this.rows.length - 1 : firstVisible) - Overscan);
 		let end = start;
 		while (end < this.rows.length && offsets[end] < viewportTop + viewportHeight) end += 1;
@@ -195,9 +200,12 @@ export class ScmGraphViewPane extends ViewPane {
 		const children: HTMLElement[] = [this.renderSpacer(offsets[start] ?? 0)];
 		for (let index = start; index < end; index += 1) {
 			const row = this.rows[index];
-			children.push(this.renderCommit(row.commit, head, this.refs.get(row.commit.objectId) ?? [], renderRow(this.graphElement.ownerDocument, row, graphNodeKind(row.commit, head), this.rowHeight(row.commit))));
+			const item = this.renderCommit(row, renderSCMHistoryItemGraph(row, this.rowHeight(row.historyItem), this.graphElement.ownerDocument));
+			item.setAttribute('aria-posinset', String(index + 1));
+			item.setAttribute('aria-setsize', String(this.rows.length));
+			children.push(item);
 		}
-		const totalHeight = offsets.at(-1)! + this.rowHeight(this.rows.at(-1)!.commit);
+		const totalHeight = offsets.at(-1)! + this.rowHeight(this.rows.at(-1)!.historyItem);
 		children.push(this.renderSpacer(totalHeight - (offsets[end] ?? totalHeight)));
 		list.replaceChildren(...children);
 	}
@@ -207,16 +215,16 @@ export class ScmGraphViewPane extends ViewPane {
 		let offset = 0;
 		for (const row of this.rows) {
 			offsets.push(offset);
-			offset += this.rowHeight(row.commit);
+			offset += this.rowHeight(row.historyItem);
 		}
 		return offsets;
 	}
 
-	private rowHeight(commit: GitCommitSummary): number {
-		const expanded = this.expanded.get(commit.objectId);
-		if (!expanded) return GraphRowHeight;
-		const childRows = expanded.state === "ready" ? Math.max(1, expanded.result.changes.length) : 1;
-		return GraphRowHeight * (childRows + 1);
+	private rowHeight(historyItem: ISCMHistoryItem): number {
+		const expanded = this.expanded.get(historyItem.id);
+		if (!expanded) return SWIMLANE_HEIGHT;
+		const childRows = expanded.state === "ready" ? Math.max(1, expanded.result.length) : 1;
+		return SWIMLANE_HEIGHT * (childRows + 1);
 	}
 
 	private renderSpacer(height: number): HTMLLIElement {
@@ -263,8 +271,8 @@ export class ScmGraphViewPane extends ViewPane {
 
 	private async loadMore(): Promise<void> {
 		const page = this.page;
-		const head = this.head;
-		if (!page || !head || !page.hasMore || this.loading) return;
+		const provider = this.provider;
+		if (!page || !provider || !page.hasMore || this.loading) return;
 
 		const generation = this.generation;
 		this.loading = true;
@@ -273,22 +281,12 @@ export class ScmGraphViewPane extends ViewPane {
 		try {
 			while (this.page?.hasMore) {
 				const current = this.page;
-				const next = await this.gitService.graph({ limit: PageSize, ...(this.cursor ? { cursor: this.cursor } : {}) }, this.graphRepositoryId);
+				const next = await provider.provideHistoryItems({ skip: current.items.length, limit: PageSize + 1 });
 				if (this.isDisposed || generation !== this.generation) return;
-				const commits = [...current.commits];
-				const knownObjectIds = new Set(commits.map((commit) => commit.objectId));
-				const additions: GitCommitSummary[] = [];
-				for (const commit of next.commits) {
-					if (knownObjectIds.has(commit.objectId)) continue;
-					knownObjectIds.add(commit.objectId);
-					commits.push(commit);
-					additions.push(commit);
-				}
-				const batch = createRows(additions, this.graphState);
-				this.rows = [...this.rows, ...batch.rows];
-				this.graphState = batch.state;
-				this.page = { ...next, commits };
-				this.cursor = next.nextCursor;
+				const items = next ?? [];
+				const additions = items.slice(0, PageSize);
+				this.page = { items: [...current.items, ...additions], hasMore: items.length > PageSize };
+				this.rows = toISCMHistoryItemViewModelArray(this.page.items, new Map(), this.head);
 				this.updateMore();
 				this.renderRows();
 			}
@@ -298,17 +296,18 @@ export class ScmGraphViewPane extends ViewPane {
 		} catch (error) {
 			if (this.isDisposed || generation !== this.generation) return;
 			this.loading = false;
-			this.moreError = gitErrorMessage(error);
+			this.moreError = error instanceof Error ? error.message : String(error);
 			this.updateMore();
 		}
 	}
 
-	private renderCommit(commit: GitCommitSummary, head: GitHead, references: readonly GitReference[], graph: SVGSVGElement): HTMLLIElement {
+	private renderCommit(historyItemViewModel: ISCMHistoryItemViewModel, graph: SVGSVGElement): HTMLLIElement {
+		const historyItem = historyItemViewModel.historyItem;
 		const document = this.graphElement.ownerDocument;
 		const item = h(document, "li");
 		item.className = "ash-scm-graph-commit";
-		const current = headObjectId(head) === commit.objectId;
-		const merge = commit.parentObjectIds.length > 1;
+		const current = this.head?.revision === historyItem.id;
+		const merge = historyItem.parentIds.length > 1;
 		item.classList.toggle("current", current);
 		item.classList.toggle("head", current);
 		item.classList.toggle("merge", merge);
@@ -317,11 +316,11 @@ export class ScmGraphViewPane extends ViewPane {
 		item.style.setProperty("--scm-graph-content-x", graph.style.width || "22px");
 		item.tabIndex = 0;
 		item.setAttribute("role", "treeitem");
-		item.setAttribute("aria-expanded", String(this.expanded.has(commit.objectId)));
+		item.setAttribute("aria-expanded", String(this.expanded.has(historyItem.id)));
 		if (current) item.setAttribute("aria-current", "true");
 		this.hovers.add(this.hoverService.setupHover({
 			target: item,
-			content: () => this.renderCommitHover(commit),
+			content: () => this.renderCommitHover(historyItem),
 			groupId: "scm.history.items",
 			anchorAlignment: AnchorAlignment.Left,
 			anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
@@ -332,32 +331,34 @@ export class ScmGraphViewPane extends ViewPane {
 		details.className = "ash-scm-graph-details";
 		const subject = h(document, "span");
 		subject.className = "ash-scm-graph-subject";
-		subject.textContent = commit.subject;
+		subject.textContent = historyItem.subject;
 		details.append(subject);
-		const visibleReferences = commitReferences(commit, head, references);
+		const visibleReferences = historyItemReferences(historyItem, this.head);
 		if (visibleReferences.length > 0) details.append(this.renderReferenceLabels(visibleReferences));
 		const metadata = h(document, "span");
 		metadata.className = "ash-scm-graph-metadata";
-		const date = new Date(commit.timestampSeconds * 1_000);
-		metadata.textContent = `${commit.objectId.slice(0, 7)} · ${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+		const date = historyItem.timestamp === undefined ? undefined : new Date(historyItem.timestamp);
+		metadata.textContent = date ? `${historyItem.displayId ?? historyItem.id} · ${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}` : historyItem.displayId ?? historyItem.id;
 		const row = h(document, "div");
 		row.className = "ash-scm-graph-row";
 		row.append(graph, details, metadata);
 		item.append(row);
-		const expanded = this.expanded.get(commit.objectId);
-		if (expanded) item.append(this.renderCommitChanges(commit, expanded));
+		const expanded = this.expanded.get(historyItem.id);
+		if (expanded) item.append(this.renderCommitChanges(historyItemViewModel, expanded));
 		this.hovers.add(addDisposableListener(item, "click", (event) => {
 			if ((event.target as Element).closest(".ash-scm-graph-change")) return;
-			void this.toggleCommit(commit);
+			void this.toggleCommit(historyItem);
 		}));
 		this.hovers.add(addDisposableListener(item, "keydown", (event) => {
 			if (event.key !== "Enter" && event.key !== " ") return;
 			event.preventDefault();
-			void this.toggleCommit(commit);
+			void this.toggleCommit(historyItem);
 		}));
 		this.hovers.add(addDisposableListener(item, "contextmenu", event => {
 			event.preventDefault();
 			event.stopPropagation();
+			const repository = this.scmViewService.activeRepository;
+			if (!repository) return;
 			this.contextMenuService.showContextMenu({
 				getAnchor: () => ({
 					x: event.clientX,
@@ -365,70 +366,77 @@ export class ScmGraphViewPane extends ViewPane {
 					targetWindow: event.view ?? undefined,
 				}),
 				menuId: MenuId.SCMHistoryItemContext,
-				menuActionOptions: { arg: commit },
+				menuActionOptions: { arg: {
+					repository,
+					historyItemViewModel,
+					type: 'historyItemViewModel',
+				} satisfies SCMHistoryItemViewModelTreeElement },
 			});
 		}));
 		return item;
 	}
 
-	private renderReferenceLabels(references: readonly GitReference[]): HTMLSpanElement {
+	private renderReferenceLabels(references: readonly ISCMHistoryItemRef[]): HTMLSpanElement {
 		const container = h(this.graphElement.ownerDocument, "span");
 		container.className = "ash-scm-graph-label-container";
-		container.setAttribute("aria-label", "Git references");
+		container.setAttribute("aria-label", localize('scm.history.references', 'History references'));
 		for (const reference of references) {
 			const label = h(this.graphElement.ownerDocument, "span");
-			label.className = `ash-scm-graph-label ${reference.current ? "head" : reference.kind === "remoteBranch" ? "remote" : "local"}`;
-			label.dataset.icon = reference.kind === "remoteBranch" ? "cloud" : "git-branch";
-			appendIcon(reference.kind === "remoteBranch" ? Lxicon.cloud : Lxicon.gitBranch, label);
+			const isCurrent = reference.id === this.head?.id;
+			const isRemote = reference.category === 'remoteBranch';
+			label.className = `ash-scm-graph-label ${isCurrent ? "head" : isRemote ? "remote" : "local"}`;
+			label.dataset.icon = isRemote ? "cloud" : "git-branch";
+			appendIcon(isRemote ? Lxicon.cloud : Lxicon.gitBranch, label);
 			const text = h(this.graphElement.ownerDocument, "span");
 			text.className = "ash-scm-graph-label-description";
 			text.textContent = reference.name;
 			label.append(text);
-			label.title = reference.kind === "remoteBranch" ? `Fetched remote branch ${reference.name}` : `Local branch ${reference.name}`;
+			label.title = reference.description ?? reference.name;
 			container.append(label);
 		}
 		return container;
 	}
 
-	private renderRemotes(graph: GraphPage): HTMLDivElement | undefined {
-		if (graph.remotes.length === 0) return undefined;
+	private renderRemotes(remoteLabels: readonly string[]): HTMLDivElement | undefined {
+		if (remoteLabels.length === 0) return undefined;
 		const container = h(this.graphElement.ownerDocument, "div");
 		container.className = "ash-scm-graph-remotes";
-		container.setAttribute("aria-label", "Git remotes");
-		for (const remote of graph.remotes) {
+		container.setAttribute("aria-label", localize('scm.history.remotes', 'Repository remotes'));
+		for (const remote of remoteLabels) {
 			const label = h(this.graphElement.ownerDocument, "span");
 			label.className = "ash-scm-graph-remote";
-			label.textContent = remote.identity ? `${remoteLabel(remote.identity.provider)} · ${remote.identity.owner}/${remote.identity.repository} · ${remote.name}` : remote.name;
-			label.title = remote.identity ? `${remote.identity.host}/${remote.identity.owner}/${remote.identity.repository}` : `Git remote ${remote.name}`;
+			label.textContent = remote;
+			label.title = remote;
 			container.append(label);
 		}
 		return container;
 	}
 
-	private renderCommitChanges(commit: GitCommitSummary, expanded: ExpandedCommit): HTMLUListElement {
+	private renderCommitChanges(historyItemViewModel: ISCMHistoryItemViewModel, expanded: ExpandedCommit): HTMLUListElement {
+		const historyItem = historyItemViewModel.historyItem;
 		const document = this.graphElement.ownerDocument;
 		const list = h(document, "ul");
 		list.className = "ash-scm-graph-changes";
-		if (expanded.state !== "ready" || expanded.result.changes.length === 0) {
+		if (expanded.state !== "ready" || expanded.result.length === 0) {
 			const state = h(document, "li");
 			state.className = `ash-scm-graph-change-state ${expanded.state}`;
 			state.textContent = expanded.state === "loading" ? "Loading changed files…" : expanded.state === "error" ? expanded.message : "No changed files.";
 			list.append(state);
 			return list;
 		}
-		for (const change of expanded.result.changes) {
+		for (const change of expanded.result) {
 			const row = h(document, "li");
 			const button = h(document, "button");
 			button.className = "ash-scm-graph-change";
 			button.type = "button";
-			button.title = `Open ${change.path} from ${commit.objectId.slice(0, 7)}`;
+			button.title = `Open ${change.path} from ${historyItem.displayId ?? historyItem.id}`;
 			const name = change.path.split("/").at(-1) ?? change.path;
 			const parentPath = change.path.includes("/") ? change.path.slice(0, change.path.lastIndexOf("/")) : "";
 			const fileLabel = this.hovers.add(new IconLabel(button, {
 				label: name,
 				description: parentPath || undefined,
 				reserveIconSpace: true,
-				renderIcon: (container) => this.resourceIconRenderer.renderFileIcon(commitFileUri(commit.objectId, change.path, "modified"), container),
+				renderIcon: (container) => this.resourceIconRenderer.renderFileIcon(change.uri, container),
 				title: change.path,
 			}));
 			fileLabel.element.classList.add("ash-scm-graph-change-label");
@@ -438,11 +446,13 @@ export class ScmGraphViewPane extends ViewPane {
 			status.textContent = changeStatusLabel(change.status);
 			button.append(fileLabel.element, status);
 			this.hovers.add(registerOpenEditorListeners(button, options => {
-				void this.openCommitChange(commit, change, expanded.result, options);
+				void this.openCommitChange(historyItem, change, options);
 			}));
 			this.hovers.add(addDisposableListener(button, "contextmenu", event => {
 				event.preventDefault();
 				event.stopPropagation();
+				const repository = this.scmViewService.activeRepository;
+				if (!repository) return;
 				this.contextMenuService.showContextMenu({
 					getAnchor: () => ({
 						x: event.clientX,
@@ -450,7 +460,13 @@ export class ScmGraphViewPane extends ViewPane {
 						targetWindow: event.view ?? undefined,
 					}),
 					menuId: MenuId.SCMHistoryItemChangeContext,
-					menuActionOptions: { args: [commit, change] },
+					menuActionOptions: { arg: {
+						repository,
+						historyItemViewModel,
+						historyItemChange: change,
+						graphColumns: historyItemViewModel.outputSwimlanes,
+						type: 'historyItemChangeViewModel',
+					} satisfies SCMHistoryItemChangeViewModelTreeElement },
 				});
 			}));
 			row.append(button);
@@ -459,37 +475,41 @@ export class ScmGraphViewPane extends ViewPane {
 		return list;
 	}
 
-	private async toggleCommit(commit: GitCommitSummary): Promise<void> {
-		if (this.expanded.delete(commit.objectId)) {
+	private async toggleCommit(historyItem: ISCMHistoryItem): Promise<void> {
+		if (this.expanded.delete(historyItem.id)) {
 			this.renderRows();
 			return;
 		}
+		const provider = this.provider;
+		if (!provider) return;
 		const generation = this.generation;
-		this.expanded.set(commit.objectId, { state: "loading" });
+		this.expanded.set(historyItem.id, { state: "loading" });
 		this.renderRows();
 		try {
-			const result = await this.gitService.commitChanges(commit.objectId, commit.repositoryId);
-			if (this.isDisposed || generation !== this.generation || !this.expanded.has(commit.objectId)) return;
-			this.expanded.set(commit.objectId, { state: "ready", result });
+			const result = await provider.provideHistoryItemChanges(historyItem.id, historyItem.parentIds[0]);
+			if (this.isDisposed || generation !== this.generation || !this.expanded.has(historyItem.id)) return;
+			this.expanded.set(historyItem.id, { state: "ready", result: result ?? [] });
 		} catch (error) {
-			if (this.isDisposed || generation !== this.generation || !this.expanded.has(commit.objectId)) return;
-			this.expanded.set(commit.objectId, { state: "error", message: gitErrorMessage(error) });
+			if (this.isDisposed || generation !== this.generation || !this.expanded.has(historyItem.id)) return;
+			this.expanded.set(historyItem.id, { state: "error", message: error instanceof Error ? error.message : String(error) });
 		}
 		this.renderRows();
 	}
 
-	private async openCommitChange(commit: GitCommitSummary, change: GitCommitChange, expanded: GitCommitChanges, options: IOpenEditorOptions): Promise<void> {
-		const file = await this.gitService.commitFile(commit.objectId, change.path, commit.repositoryId);
+	private async openCommitChange(historyItem: ISCMHistoryItem, change: ISCMHistoryItemChange, options: IOpenEditorOptions): Promise<void> {
+		const provider = this.provider;
+		if (!provider) return;
+		const file = await provider.resolveHistoryItemChangeContents(historyItem.id, change);
 		const name = change.path.split("/").at(-1) ?? change.path;
 		const original = file.original.kind === "text" ? {
-			resource: commitFileUri(expanded.parentObjectId ?? "root", change.originalPath ?? change.path, "original"),
-			label: `${name} (${expanded.parentObjectId?.slice(0, 7) ?? "empty"})`,
+			resource: change.originalUri ?? change.uri,
+			label: `${name} (${file.parentId?.slice(0, 7) ?? "empty"})`,
 			readOnly: true,
 			initialText: file.original.text,
 		} : undefined;
 		const modified = file.modified.kind === "text" ? {
-			resource: commitFileUri(commit.objectId, change.path, "modified"),
-			label: `${name} (${commit.objectId.slice(0, 7)})`,
+			resource: change.modifiedUri ?? change.uri,
+			label: `${name} (${historyItem.displayId ?? historyItem.id})`,
 			readOnly: true,
 			initialText: file.modified.text,
 		} : undefined;
@@ -503,52 +523,28 @@ export class ScmGraphViewPane extends ViewPane {
 		}
 	}
 
-	private renderCommitHover(commit: GitCommitSummary): HTMLDivElement {
+	private renderCommitHover(historyItem: ISCMHistoryItem): HTMLDivElement {
 		const document = this.graphElement.ownerDocument;
 		const hover = h(document, "div");
 		hover.className = "ash-scm-graph-hover";
 		const subject = h(document, "div");
 		subject.className = "ash-scm-graph-hover-subject";
-		subject.textContent = commit.subject;
+		subject.textContent = historyItem.subject;
 		const metadata = h(document, "div");
 		metadata.className = "ash-scm-graph-hover-metadata";
-		metadata.textContent = `${commit.objectId} · ${new Date(commit.timestampSeconds * 1_000).toLocaleString()}`;
+		metadata.textContent = historyItem.timestamp === undefined ? historyItem.id : `${historyItem.id} · ${new Date(historyItem.timestamp).toLocaleString()}`;
 		hover.append(subject, metadata);
 		return hover;
 	}
 }
 
-function headObjectId(head: GitHead): string | undefined {
-	return head.type === "unborn" ? undefined : head.objectId;
+function historyItemReferences(historyItem: ISCMHistoryItem, head: ISCMHistoryItemRef | undefined): readonly ISCMHistoryItemRef[] {
+	const references = [...(historyItem.references ?? [])];
+	if (head?.revision === historyItem.id && !references.some(reference => reference.id === head.id)) references.unshift(head);
+	return references.sort((left, right) => Number(right.id === head?.id) - Number(left.id === head?.id) || left.category?.localeCompare(right.category ?? '') || left.name.localeCompare(right.name));
 }
 
-function graphNodeKind(commit: GitCommitSummary, head: GitHead): GraphNodeKind {
-	if (headObjectId(head) === commit.objectId) return "head";
-	return commit.parentObjectIds.length > 1 ? "merge" : "commit";
-}
-
-function remoteLabel(provider: GitRemoteProvider): string {
-	switch (provider) {
-		case "github": return "GitHub";
-		case "gitlab": return "GitLab";
-		case "bitbucket": return "Bitbucket";
-		case "other": return "Remote";
-	}
-}
-
-function commitReferences(commit: GitCommitSummary, head: GitHead, references: readonly GitReference[]): readonly GitReference[] {
-	const result = references.map((reference) => ({ ...reference }));
-	if (head.type === "branch" && head.objectId === commit.objectId) {
-		const current = result.findIndex((reference) => reference.kind === "localBranch" && reference.name === head.name);
-		if (current >= 0) result[current] = { ...result[current], current: true };
-		else result.unshift({ name: head.name, objectId: commit.objectId, kind: "localBranch", remoteName: undefined, current: true });
-	} else if (head.type === "detached" && head.objectId === commit.objectId) {
-		result.unshift({ name: commit.objectId.slice(0, 7), objectId: commit.objectId, kind: "localBranch", remoteName: undefined, current: true });
-	}
-	return result.sort((left, right) => Number(right.current) - Number(left.current) || left.kind.localeCompare(right.kind) || left.name.localeCompare(right.name));
-}
-
-function changeStatusLabel(status: GitCommitChange["status"]): string {
+function changeStatusLabel(status: string): string {
 	switch (status) {
 		case "modified": return "M";
 		case "added": return "A";
@@ -560,12 +556,8 @@ function changeStatusLabel(status: GitCommitChange["status"]): string {
 		case "unmodified": return "";
 		case "untracked": return "?";
 		case "ignored": return "!";
+		default: return status.slice(0, 1).toUpperCase();
 	}
-}
-
-function commitFileUri(objectId: string, path: string, side: "original" | "modified"): URI {
-	const encodedPath = path.split("/").map(encodeURIComponent).join("/");
-	return URI.parse(`git-commit:/${encodeURIComponent(objectId)}/${encodedPath}?side=${side}`);
 }
 
 function offsetTopWithinScrollContainer(element: HTMLElement, scrollContainer: HTMLElement): number {

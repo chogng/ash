@@ -60,7 +60,9 @@ suite('Frontend line diff', () => {
 
 	test('marks whitespace and inner insertions exactly', async () => {
 		const diff = await compute('ab cd', 'aXb cYd ');
-		assert.deepEqual([diff.rows[0]!.originalChanges, diff.rows[0]!.modifiedChanges], [[], [
+		assert.deepEqual([diff.rows[0]!.originalChanges, diff.rows[0]!.modifiedChanges], [[
+			{ startColumn: 1, endColumn: 1 }, { startColumn: 4, endColumn: 4 }, { startColumn: 5, endColumn: 5 },
+		], [
 			{ startColumn: 1, endColumn: 2 }, { startColumn: 5, endColumn: 6 }, { startColumn: 7, endColumn: 8 },
 		]]);
 	});

@@ -344,6 +344,8 @@ const properties: Record<string, JsonSchema> = {
 	'diffEditor.maxComputationTime': { type: 'number', default: diffEditorDefaultOptions.maxComputationTime, minimum: 0 },
 	'diffEditor.maxFileSize': { type: 'number', default: diffEditorDefaultOptions.maxFileSize, minimum: 0 },
 	'diffEditor.renderSideBySide': { type: 'boolean', default: diffEditorDefaultOptions.renderSideBySide },
+	'diffEditor.enableSplitViewResizing': { type: 'boolean', default: diffEditorDefaultOptions.enableSplitViewResizing },
+	'diffEditor.splitViewDefaultRatio': { type: 'number', default: diffEditorDefaultOptions.splitViewDefaultRatio, minimum: 0.1, maximum: 0.9 },
 	'diffEditor.renderSideBySideInlineBreakpoint': { type: 'number', default: diffEditorDefaultOptions.renderSideBySideInlineBreakpoint, minimum: 0 },
 	'diffEditor.useInlineViewWhenSpaceIsLimited': { type: 'boolean', default: diffEditorDefaultOptions.useInlineViewWhenSpaceIsLimited },
 	'diffEditor.renderMarginRevertIcon': { type: 'boolean', default: diffEditorDefaultOptions.renderMarginRevertIcon },
@@ -471,6 +473,50 @@ configurationRegistry.registerConfiguration({
 	setting: {
 		title: localize('diffEditor.maxComputationTime.title', 'Max computation time'),
 		description: localize('diffEditor.maxComputationTime.description', 'Maximum time in milliseconds to compute a diff. Set to 0 for no time limit.'),
+		valueType: 'number',
+		minimum: 0,
+		maximum: Number.MAX_SAFE_INTEGER,
+	},
+});
+configurationRegistry.registerConfiguration({
+	key: 'diffEditor.enableSplitViewResizing',
+	defaultValue: diffEditorDefaultOptions.enableSplitViewResizing,
+	parse: value => modelBoolean(value, 'diffEditor.enableSplitViewResizing'),
+	setting: {
+		title: localize('diffEditor.enableSplitViewResizing.title', 'Resize diff editor columns'),
+		description: localize('diffEditor.enableSplitViewResizing.description', 'Allow dragging the separator between the original and modified editors.'),
+		valueType: 'boolean',
+	},
+});
+configurationRegistry.registerConfiguration({
+	key: 'diffEditor.splitViewDefaultRatio',
+	defaultValue: diffEditorDefaultOptions.splitViewDefaultRatio,
+	parse(value) {
+		if (typeof value !== 'number' || !Number.isFinite(value) || value < 0.1 || value > 0.9) {
+			throw new RangeError('diffEditor.splitViewDefaultRatio must be between 0.1 and 0.9');
+		}
+		return value;
+	},
+	setting: {
+		title: localize('diffEditor.splitViewDefaultRatio.title', 'Default diff column ratio'),
+		description: localize('diffEditor.splitViewDefaultRatio.description', 'Portion of the diff editor width used by the original editor before resizing.'),
+		valueType: 'number',
+		minimum: 0.1,
+		maximum: 0.9,
+	},
+});
+configurationRegistry.registerConfiguration({
+	key: 'diffEditor.renderSideBySideInlineBreakpoint',
+	defaultValue: diffEditorDefaultOptions.renderSideBySideInlineBreakpoint,
+	parse(value) {
+		if (!Number.isSafeInteger(value) || (value as number) < 0) {
+			throw new RangeError('diffEditor.renderSideBySideInlineBreakpoint must be a non-negative integer');
+		}
+		return value as number;
+	},
+	setting: {
+		title: localize('diffEditor.inlineBreakpoint.title', 'Inline diff width'),
+		description: localize('diffEditor.inlineBreakpoint.description', 'Show one column when the diff editor is at or below this width in pixels.'),
 		valueType: 'number',
 		minimum: 0,
 		maximum: Number.MAX_SAFE_INTEGER,

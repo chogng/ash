@@ -7,20 +7,29 @@ import { JSDOM } from "jsdom";
 import type { IContextMenuProvider } from "../../../../../base/browser/contextmenu.js";
 import { AnchorAxisAlignment, AnchorPosition } from "../../../../../base/common/layout.js";
 import { URI } from "../../../../../base/common/uri.js";
+import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { MenuId, registerAction2 } from "../../../../../platform/actions/common/actions.js";
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
 import { ServiceContainer } from "../../../../../platform/instantiation/common/instantiation.js";
+import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { HoverSetupOptions, IHoverService, IManagedHover } from "../../../../../platform/hover/browser/hoverService.js";
 import type { IResourceIconRenderer } from "../../../../browser/labels.js";
 import { GitWorkspaceError, IGitService, type GitRepository, type GraphQuery, type GitStatus } from "../../../../../workbench/contrib/git/common/gitService.js";
 import { IEditorService, type EditorInput, type EditorOpenOptions } from "../../../../../workbench/services/editor/common/editorService.js";
+import type { IViewsService } from '../../../../../workbench/services/views/browser/viewsService.js';
+import { WorkbenchState, type IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import type { IWorkingCopyService } from '../../../../../workbench/services/workingCopy/common/workingCopyService.js';
 import { CommandService } from "../../../../../workbench/services/commands/common/commandService.js";
 import { OpenScmMultiDiffEditorAction } from "../../../../../workbench/contrib/multiDiffEditor/browser/scmMultiDiffAction.js";
-import { resolveGitChangeInputs } from "../../../../../workbench/contrib/scm/browser/scmChangeEditorInput.js";
+import { resolveGitChangeInputs } from '../../../git/browser/gitChangeEditorInput.js';
 import { isScmMergeEditorInput } from "../../../../../workbench/contrib/scm/browser/scmMergeEditorInput.js";
 import { emptyEditorServiceState } from '../../../../../workbench/test/common/testEditorService.js';
+import { GitHistoryProvider } from '../../../git/browser/gitHistoryProvider.js';
+import { GitSCMContribution, GitSCMProvider, type GitSCMProviderServices } from '../../../git/browser/gitSCMProvider.js';
+import { SCMService } from '../../common/scmService.js';
+import { SCMViewService } from '../../browser/scmViewService.js';
+import { ISCMService, ISCMViewService, type ISCMProvider } from '../../common/scm.js';
 
 const testDialogs: IDialogService = {
 	onWillShowDialog: Event.None,
@@ -34,6 +43,73 @@ const testDialogs: IDialogService = {
 	prompt: async () => { throw new Error('Unexpected prompt'); },
 	input: async () => ({ confirmed: false }),
 };
+
+function createHistoryViewFixture(gitService: IGitService): DisposableStore & { readonly viewService: SCMViewService } {
+	const resources = new DisposableStore();
+	const scmService = resources.add(new SCMService());
+	const viewService = resources.add(new SCMViewService(scmService));
+	const provider = resources.add(new GitHistoryProvider({
+		...gitService,
+		onDidChangeRepositoryStatus: gitService.onDidChangeRepositoryStatus ?? noEvent,
+		onDidBecomeReady: gitService.onDidBecomeReady ?? noEvent,
+	}, 'repo-1'));
+	resources.add(scmService.registerSCMProvider(testSCMProvider('repo-1', 'workspace', provider)));
+	return Object.assign(resources, { viewService });
+}
+
+test('Git history contribution registers repositories and follows active repository changes', () => {
+	using resources = new DisposableStore();
+	const scmService = resources.add(new SCMService());
+	const viewService = resources.add(new SCMViewService(scmService));
+	const repositoriesChanged = resources.add(new Emitter<readonly GitRepository[]>());
+	const activeChanged = resources.add(new Emitter<GitRepository | undefined>());
+	const main = { id: 'main', label: 'main', path: '/main', root: URI.file('/main') };
+	const secondary = { id: 'secondary', label: 'secondary', path: '/secondary', root: URI.file('/secondary') };
+	let repositories: readonly GitRepository[] = [main, secondary];
+	let activeRepository: GitRepository | undefined = secondary;
+	const gitService = {
+		get repositories() { return repositories; },
+		get activeRepository() { return activeRepository; },
+		onDidChangeRepositories: repositoriesChanged.event,
+		onDidChangeActiveRepository: activeChanged.event,
+		onDidChangeRepositoryStatus: Event.None,
+		onDidBecomeReady: Event.None,
+	} as IGitService;
+	resources.add(new GitSCMContribution(gitService, scmService, viewService, testGitProviderServices()));
+
+	assert.deepEqual([...scmService.repositories].map(repository => repository.id), ['main', 'secondary']);
+	assert.equal(viewService.activeRepository?.id, 'secondary');
+	assert.ok(scmService.getRepository('main')?.provider.historyProvider instanceof GitHistoryProvider);
+
+	activeRepository = main;
+	activeChanged.fire(main);
+	assert.equal(viewService.activeRepository?.id, 'main');
+
+	repositories = [secondary];
+	activeRepository = secondary;
+	repositoriesChanged.fire(repositories);
+	assert.deepEqual([...scmService.repositories].map(repository => repository.id), ['secondary']);
+	assert.equal(viewService.activeRepository?.id, 'secondary');
+	using other = scmService.registerSCMProvider({ ...testSCMProvider('other', 'other', {} as GitHistoryProvider), providerId: 'other' });
+	viewService.selectRepository('other');
+	activeRepository = undefined;
+	activeChanged.fire(undefined);
+	assert.equal(viewService.activeRepository?.id, 'other');
+});
+
+test('SCM history services assemble through their production registrations', async () => {
+	await import('../../browser/scm.service.contribution.js');
+	using services = new ServiceContainer();
+	for (const [id, descriptor] of getSingletonServiceDescriptors()) {
+		if (id === ISCMService || id === ISCMViewService) services.registerSingleton(id, () => services.createInstance(descriptor));
+	}
+	assert.ok(services.has(ISCMService));
+	assert.ok(services.has(ISCMViewService));
+	const scmService = services.get(ISCMService);
+	const viewService = services.get(ISCMViewService);
+	using repository = scmService.registerSCMProvider(testSCMProvider('repo', 'repo', {} as GitHistoryProvider));
+	assert.equal(viewService.activeRepository?.id, 'repo');
+});
 
 test("SCM diff inputs open live files and keep deleted files on the readable side", async () => {
 	const status: GitStatus = {
@@ -77,9 +153,11 @@ test("Git contribution registers Changes, Agent Review, and Graph as ordered pan
 	}
 });
 
-test("ScmGraphViewPane renders a repository history page", async () => {
+test("SCMHistoryViewPane renders a repository history page", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
+	await import('../../browser/scm.contribution.js');
+	await import('../../../git/browser/git.contribution.js');
 	const graphRequests: GraphQuery[] = [];
 	const [
 		{ ContextKeyService },
@@ -98,9 +176,7 @@ test("ScmGraphViewPane renders a repository history page", async () => {
 	const hoverOptions: HoverSetupOptions[] = [];
 	const graphRepositoryIds: Array<string | undefined> = [];
 	const remoteRepositoryIds: Array<string | undefined> = [];
-	const activeRepositoryChanges = new Emitter<GitRepository | undefined>();
 	const readyChanges = new Emitter<void>();
-	let activeRepository: GitRepository | undefined = { id: "repo-1", label: "workspace", path: "", root: URI.file("/workspace") };
 	let workspaceError: GitWorkspaceError | undefined;
 	let readySubscriptions = 0;
 	const hoverService: IHoverService = {
@@ -120,12 +196,10 @@ test("ScmGraphViewPane renders a repository history page", async () => {
 		changes: [],
 	};
 	const gitService = {
-		get activeRepository() { return activeRepository; },
 		onDidBecomeReady: (listener: () => void) => {
 			readySubscriptions += 1;
 			return readyChanges.event(listener);
 		},
-		onDidChangeActiveRepository: activeRepositoryChanges.event,
 		status: async (repositoryId?: string) => {
 			if (workspaceError) throw workspaceError;
 			assert.equal(repositoryId, "repo-1");
@@ -157,10 +231,12 @@ test("ScmGraphViewPane renders a repository history page", async () => {
 	services.registerInstance(IGitService, gitService);
 
 	try {
-		const { ScmGraphViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmGraphViewPane.js");
-		using pane = new ScmGraphViewPane(browser.window.document.body, { id: "ash.gitGraph.test", title: "Graph" }, gitService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testFileIconThemeService());
+		using history = createHistoryViewFixture(gitService);
+		const { SCMHistoryViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmHistoryViewPane.js");
+		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: "ash.gitGraph.test", title: "Graph" }, history.viewService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testFileIconThemeService());
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelectorAll(".ash-scm-graph-commit").length === 2);
+		assert.equal(pane.element.querySelector('[role="tree"]')?.getAttribute('aria-label'), 'Graph');
 		assert.equal(readySubscriptions, 1);
 
 		const remoteActionItems = [...pane.element.querySelectorAll<HTMLElement>(".ash-pane-view-header-actions .ash-action-view-item")];
@@ -210,15 +286,12 @@ test("ScmGraphViewPane renders a repository history page", async () => {
 		assert.equal(readySubscriptions, 1);
 
 		workspaceError = new GitWorkspaceError('noFolder');
-		activeRepository = undefined;
-		activeRepositoryChanges.fire(undefined);
+		readyChanges.fire();
 		await waitFor(() => pane.element.querySelector('.ash-scm-empty')?.textContent === 'Open a folder to use Git.');
 		assert.equal(pane.element.querySelectorAll('.ash-scm-graph-commit').length, 0);
 		assert.equal(pane.element.querySelector('.ash-scm-graph .ash-scm-command'), null);
 
 		workspaceError = undefined;
-		activeRepository = { id: "repo-1", label: "workspace", path: "", root: URI.file("/workspace") };
-		activeRepositoryChanges.fire(activeRepository);
 		readyChanges.fire();
 		await waitFor(() => pane.element.querySelectorAll('.ash-scm-graph-commit').length === 2);
 	} finally {
@@ -227,7 +300,7 @@ test("ScmGraphViewPane renders a repository history page", async () => {
 	}
 });
 
-test("ScmGraphViewPane loads the complete history across graph pages", async () => {
+test("SCMHistoryViewPane loads the complete history across graph pages", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
 	const graphRequests: GraphQuery[] = [];
@@ -281,8 +354,9 @@ test("ScmGraphViewPane loads the complete history across graph pages", async () 
 	} as unknown as IGitService;
 
 	try {
-		const { ScmGraphViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmGraphViewPane.js");
-		using pane = new ScmGraphViewPane(browser.window.document.body, { id: "ash.gitGraph.pagination.test", title: "Graph" }, gitService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testFileIconThemeService());
+		using history = createHistoryViewFixture(gitService);
+		const { SCMHistoryViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmHistoryViewPane.js");
+		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: "ash.gitGraph.pagination.test", title: "Graph" }, history.viewService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testFileIconThemeService());
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector(".ash-scm-graph-list") !== null);
 		const list = pane.element.querySelector(".ash-scm-graph-list");
@@ -298,7 +372,7 @@ test("ScmGraphViewPane loads the complete history across graph pages", async () 
 	}
 });
 
-test("ScmGraphViewPane virtualizes loaded history rows", async () => {
+test("SCMHistoryViewPane virtualizes loaded history rows", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
 	let resizeCallback: ResizeObserverCallback | undefined;
@@ -350,8 +424,9 @@ test("ScmGraphViewPane virtualizes loaded history rows", async () => {
 	};
 
 	try {
-		const { ScmGraphViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmGraphViewPane.js");
-		using pane = new ScmGraphViewPane(browser.window.document.body, { id: "ash.gitGraph.virtualized.test", title: "Graph" }, gitService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testFileIconThemeService());
+		using history = createHistoryViewFixture(gitService);
+		const { SCMHistoryViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmHistoryViewPane.js");
+		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: "ash.gitGraph.virtualized.test", title: "Graph" }, history.viewService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testFileIconThemeService());
 		const graph = pane.element.querySelector<HTMLElement>(".ash-scm-graph");
 		assert.ok(graph);
 		Object.defineProperty(graph, "clientHeight", { configurable: true, value: 100 });
@@ -384,7 +459,7 @@ test("ScmGraphViewPane virtualizes loaded history rows", async () => {
 	}
 });
 
-test("ScmGraphViewPane expands commit files and opens a selected change in the diff editor", async () => {
+test("SCMHistoryViewPane expands commit files and opens a selected change in the diff editor", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
 	const [{ ContextKeyService }, { MenuService }, { ServiceContainer }, { CommandService }] = await Promise.all([
@@ -442,8 +517,9 @@ test("ScmGraphViewPane expands commit files and opens a selected change in the d
 	} as unknown as IContextMenuService;
 
 	try {
-		const { ScmGraphViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmGraphViewPane.js");
-		using pane = new ScmGraphViewPane(browser.window.document.body, { id: "ash.gitGraph.changes.test", title: "Graph" }, gitService, menuService, contextMenuService, contextKeyService, hoverService, editorService, testFileIconThemeService());
+		using history = createHistoryViewFixture(gitService);
+		const { SCMHistoryViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmHistoryViewPane.js");
+		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: "ash.gitGraph.changes.test", title: "Graph" }, history.viewService, menuService, contextMenuService, contextKeyService, hoverService, editorService, testFileIconThemeService());
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector(".ash-scm-graph-commit") !== null);
 
@@ -451,7 +527,7 @@ test("ScmGraphViewPane expands commit files and opens a selected change in the d
 		assert.ok(commit);
 		commit.dispatchEvent(new browser.window.MouseEvent("contextmenu", { bubbles: true }));
 		assert.equal(contextMenus[0]?.menuId, MenuId.SCMHistoryItemContext);
-		assert.equal((contextMenus[0]?.menuActionOptions?.arg as { readonly objectId: string }).objectId, objectId);
+		assert.equal((contextMenus[0]?.menuActionOptions?.arg as { readonly historyItemViewModel: { readonly historyItem: { readonly id: string } } }).historyItemViewModel.historyItem.id, objectId);
 		commit.click();
 		await waitFor(() => pane.element.querySelector(".ash-scm-graph-change") !== null);
 		assert.equal(changeRequests, 1);
@@ -468,10 +544,10 @@ test("ScmGraphViewPane expands commit files and opens a selected change in the d
 		const change = pane.element.querySelector<HTMLButtonElement>(".ash-scm-graph-change");
 		change?.dispatchEvent(new browser.window.MouseEvent("contextmenu", { bubbles: true }));
 		assert.equal(contextMenus[1]?.menuId, MenuId.SCMHistoryItemChangeContext);
-		assert.deepEqual(
-			contextMenus[1]?.menuActionOptions?.args?.map(value => (value as { readonly path?: string; readonly objectId?: string }).path ?? (value as { readonly objectId?: string }).objectId),
-			[objectId, "src/editor.ts"],
-		);
+		assert.deepEqual(contextMenus[1]?.menuActionOptions?.arg && {
+			itemId: (contextMenus[1].menuActionOptions.arg as { readonly historyItemViewModel: { readonly historyItem: { readonly id: string } } }).historyItemViewModel.historyItem.id,
+			path: (contextMenus[1].menuActionOptions.arg as { readonly historyItemChange: { readonly path: string } }).historyItemChange.path,
+		}, { itemId: objectId, path: 'src/editor.ts' });
 		change?.click();
 		await waitFor(() => opened.length === 1);
 		assert.equal(fileRequests, 1);
@@ -531,6 +607,8 @@ test("ScmViewPane groups App Server Git status", async () => {
 	let committedMessage: string | undefined;
 	let committedRepositoryId: string | undefined;
 	let statusListener: ((status: GitStatus) => void) | undefined;
+	const repositoryStatusChanges = new Emitter<GitStatus>();
+	statusListener = status => repositoryStatusChanges.fire(status);
 	const changeFileRequests: Array<{ readonly path: string; readonly comparison: "staged" | "unstaged"; readonly repositoryId: string | undefined }> = [];
 	const opened: Array<{ readonly input: EditorInput; readonly options: EditorOpenOptions | undefined }> = [];
 	const first: GitStatus = {
@@ -594,10 +672,10 @@ test("ScmViewPane groups App Server Git status", async () => {
 			activeRepository = repositories.find(repository => repository.id === repositoryId)!;
 			return nestedStatus;
 		},
-		status: async () => {
+		status: async (repositoryId?: string) => {
 			requestCount += 1;
 			if (workspaceError) throw workspaceError;
-			return first;
+			return repositoryId === nestedStatus.repositoryId ? nestedStatus : first;
 		},
 		stage: (paths: readonly string[], repositoryId?: string) => new Promise<GitStatus>((resolve) => {
 			stagedPaths = paths;
@@ -620,13 +698,8 @@ test("ScmViewPane groups App Server Git status", async () => {
 				? { original: { kind: "text" as const, text: "head\n" }, modified: { kind: "text" as const, text: "index\n" } }
 				: { original: { kind: "text" as const, text: "index\n" }, modified: { kind: "text" as const, text: "worktree\n" } };
 		},
-		onDidChangeStatus: (listener: (status: GitStatus) => void) => {
-			statusListener = listener;
-			const dispose = () => {
-				statusListener = undefined;
-			};
-			return { dispose, [Symbol.dispose]: dispose };
-		},
+		onDidChangeRepositoryStatus: repositoryStatusChanges.event,
+		onDidChangeStatus: repositoryStatusChanges.event,
 		onDidBecomeReady: readyChanges.event,
 	} as unknown as IGitService;
 
@@ -638,13 +711,16 @@ test("ScmViewPane groups App Server Git status", async () => {
 		services.registerInstance(IEditorService, editorService);
 		using commandService = new CommandService(services);
 		using actionRegistration = registerAction2(OpenScmMultiDiffEditorAction);
+		using scmService = new SCMService();
+		using viewService = new SCMViewService(scmService);
+		using contribution = new GitSCMContribution(gitService, scmService, viewService, testGitProviderServices({
+			commandService, editorService, workingCopyService: workingCopies,
+			dialogService: { ...testDialogs, confirm: async () => ({ confirmed: false }) },
+		}));
 		using pane = new ScmViewPane(browser.window.document.body, {
 			id: "ash.git",
 			title: "Changes",
-		}, gitService, testFileIconThemeService(), editorService, commandService, testContextMenuProvider, {
-			...testDialogs,
-			confirm: async () => ({ confirmed: false }),
-		}, workingCopies);
+		}, scmService, viewService, testFileIconThemeService(), testContextMenuProvider, testWorkspaceContext());
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector(".ash-scm-status")?.textContent === "4 changed files");
 
@@ -741,8 +817,9 @@ test("ScmViewPane groups App Server Git status", async () => {
 		await waitFor(() => stagedPaths !== undefined);
 		assert.deepEqual(stagedPaths, ["src/working.ts"]);
 		assert.equal(stagedRepositoryId, first.repositoryId);
-		assert.equal(stage.disabled, true);
-		assert.equal(viewAllChanges.disabled, true);
+		assert.equal(pane.element.contains(stage), true);
+		assert.equal(pane.element.querySelector<HTMLButtonElement>('button[aria-label="Stage src/working.ts"]')?.disabled, true);
+		assert.equal(pane.element.querySelector<HTMLButtonElement>('button[aria-label="View All Changes"]')?.disabled, true);
 		assert.ok(completeStage);
 		completeStage();
 		await waitFor(() => pane.element.querySelector<HTMLButtonElement>('button[aria-label="Stage src/working.ts"]')?.disabled === false);
@@ -770,26 +847,26 @@ test("ScmViewPane groups App Server Git status", async () => {
 		const repositorySelector = pane.element.querySelector<HTMLSelectElement>('[aria-label="Active source control repository"]');
 		assert.ok(repositorySelector);
 		assert.equal(repositorySelector.closest("label")?.hidden, false);
-		assert.deepEqual([...repositorySelector.options].map(option => option.textContent), ["workspace", "nested — nested"]);
+		assert.deepEqual([...repositorySelector.options].map(option => option.textContent), ["workspace — /workspace", "nested — /workspace/nested"]);
 		repositorySelector.value = nestedStatus.repositoryId;
 		repositorySelector.dispatchEvent(new browser.window.Event("change", { bubbles: true }));
 		await waitFor(() => pane.element.querySelector(".ash-scm-status")?.textContent === "No changes.");
 		assert.deepEqual(selectedRepositories, [nestedStatus.repositoryId]);
 		assert.equal(repositorySelector.value, nestedStatus.repositoryId);
 
-		assert.equal(requestCount, 2);
+		assert.equal(requestCount, 3);
 
 		workspaceError = new GitWorkspaceError('noFolder');
 		activeRepository = undefined;
 		activeRepositoryChanges.fire(undefined);
-		await waitFor(() => pane.element.querySelector('.ash-scm-status')?.textContent === 'Open a folder to use Git.');
+		await waitFor(() => pane.element.querySelector('.ash-scm-status')?.textContent === 'Open a folder to use source control.');
 		assert.equal(pane.element.querySelectorAll('.ash-scm-change').length, 0);
 		assert.equal(pane.element.querySelector<HTMLButtonElement>('.ash-scm-commit')?.disabled, true);
 
 		workspaceError = undefined;
 		activeRepository = repositories[0];
 		activeRepositoryChanges.fire(activeRepository);
-		assert.equal(pane.element.querySelector<HTMLButtonElement>('.ash-scm-commit')?.disabled, true);
+		assert.equal(pane.element.querySelector<HTMLButtonElement>('.ash-scm-commit')?.disabled, false);
 		readyChanges.fire();
 		await waitFor(() => pane.element.querySelector('.ash-scm-status')?.textContent === '4 changed files');
 	} finally {
@@ -804,6 +881,10 @@ test("ScmViewPane accepts a restarted Git stream and rejects its retired predece
 	let statusRequest = 0;
 	let statusListener: ((status: GitStatus) => void) | undefined;
 	let readyListener: (() => void) | undefined;
+	const repositoryStatusChanges = new Emitter<GitStatus>();
+	const readyChanges = new Emitter<void>();
+	statusListener = status => repositoryStatusChanges.fire(status);
+	readyListener = () => readyChanges.fire();
 	const previous: GitStatus = {
 		repositoryId: "repo-1",
 		streamInstanceId: "git-stream-before-restart",
@@ -826,27 +907,25 @@ test("ScmViewPane accepts a restarted Git stream and rejects its retired predece
 		head: { type: "branch", name: "late-before", objectId: "3333333", upstream: undefined },
 	};
 	const gitService = {
-		repositories: [],
+		repositories: [{ id: 'repo-1', label: 'workspace', path: '/workspace', root: URI.file('/workspace') }],
 		activeRepository: undefined,
 		onDidChangeRepositories: noEvent,
 		onDidChangeActiveRepository: noEvent,
-			status: async () => statusRequest++ === 0 ? previous : restarted,
-			onDidChangeStatus: (listener: (status: GitStatus) => void) => {
-				statusListener = listener;
-				return { dispose(): void {}, [Symbol.dispose](): void {} };
-			},
-			onDidBecomeReady: (listener: () => void) => {
-				readyListener = listener;
-				return { dispose(): void {}, [Symbol.dispose](): void {} };
-			},
+		status: async () => statusRequest++ === 0 ? previous : restarted,
+		onDidChangeRepositoryStatus: repositoryStatusChanges.event,
+		onDidBecomeReady: readyChanges.event,
 	} as unknown as IGitService;
 
 	try {
 		const { ScmViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmViewPane.js");
+		using scmService = new SCMService();
+		using viewService = new SCMViewService(scmService);
+		using provider = new GitSCMProvider(gitService, gitService.repositories[0], {} as GitHistoryProvider, testGitProviderServices());
+		using repository = scmService.registerSCMProvider(provider);
 		using pane = new ScmViewPane(browser.window.document.body, {
 			id: "ash.git.restart",
 			title: "Changes",
-		}, gitService, testFileIconThemeService(), testEditorService(), inactiveCommandService(), testContextMenuProvider, testDialogs, { get: () => [] } as unknown as IWorkingCopyService);
+		}, scmService, viewService, testFileIconThemeService(), testContextMenuProvider, testWorkspaceContext());
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector('[aria-label="Open changes for before.ts"]') !== null);
 		assert.equal(pane.element.querySelector(".ash-scm-branch"), null);
@@ -917,6 +996,36 @@ function inactiveCommandService(): ICommandService {
 	return {
 		executeCommand: async () => undefined,
 	} as unknown as ICommandService;
+}
+
+function testGitProviderServices(overrides: Partial<GitSCMProviderServices> = {}): GitSCMProviderServices {
+	return {
+		commandService: inactiveCommandService(),
+		dialogService: testDialogs,
+		editorService: testEditorService(),
+		viewsService: { focusView: () => true } as unknown as IViewsService,
+		workingCopyService: { get: () => [] } as unknown as IWorkingCopyService,
+		...overrides,
+	};
+}
+
+function testWorkspaceContext(): IWorkspaceContextService {
+	return {
+		onDidChangeWorkspace: Event.None,
+		getWorkbenchState: () => WorkbenchState.EMPTY,
+		getWorkspace: () => ({ id: 'empty', folders: [] }),
+		getWorkspaceFolder: () => null,
+	};
+}
+
+function testSCMProvider(id: string, label: string, historyProvider: GitHistoryProvider): ISCMProvider {
+	return {
+		id, providerId: 'git', label, historyProvider,
+		groups: [], onDidChangeResources: Event.None,
+		input: { value: '', placeholder: '', enabled: false, canAccept: false, buttonLabel: '', buttonTooltip: '', accept: async () => undefined },
+		activeRepositoryName: undefined, statusBarCommands: [], statusMessage: '', isBusy: false,
+		refresh: async () => {}, activate: async () => {},
+	};
 }
 
 async function waitFor(condition: () => boolean, timeoutMillis = 1_000): Promise<void> {

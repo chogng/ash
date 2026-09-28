@@ -2,8 +2,8 @@ import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
 import { getRemoteWorkspacePath, isRemoteResource } from '../../../../platform/remote/common/remote.js';
-import { type IGitService } from '../../../contrib/git/common/gitService.js';
-import { type QuickDiffOriginalResource, type QuickDiffProvider } from '../common/quickDiff.js';
+import type { IGitService } from '../common/gitService.js';
+import type { QuickDiffOriginalResource, QuickDiffProvider } from '../../scm/common/quickDiff.js';
 
 /** Git-backed original-resource provider for worktree and index changes. */
 export class GitQuickDiffProvider extends Disposable implements QuickDiffProvider {

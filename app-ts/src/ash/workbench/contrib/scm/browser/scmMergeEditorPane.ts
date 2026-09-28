@@ -12,7 +12,7 @@ import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
-import { IGitService, type GitConflictFile, type GitConflictResolution } from '../../../contrib/git/common/gitService.js';
+import { ISCMService, type ISCMConflictFile, type ISCMConflictProvider, type ISCMConflictResolution } from '../common/scm.js';
 import type { EditorInput } from '../../../services/editor/common/editorService.js';
 import type { IWorkingCopy } from '../../../services/workingCopy/common/workingCopyService.js';
 import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
@@ -20,7 +20,6 @@ import { TextFileEditor } from '../../files/browser/editors/textFileEditor.js';
 import { MergeEditor, MergeEditorModel } from '../../mergeEditor/browser/mergeEditor.js';
 import { hasMergeConflictMarkers, parseMergeConflictBlocks } from '../common/mergeConflict.js';
 import { isScmMergeEditorInput, SCM_MERGE_EDITOR_ID, type ScmMergeEditorInput } from './scmMergeEditorInput.js';
-import { gitErrorMessage } from '../../git/common/gitError.js';
 
 export const ScmMergeFocusedContext = new RawContextKey<boolean>('scmMergeEditorFocused', false);
 
@@ -37,6 +36,7 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 	private statusDomNode!: HTMLDivElement;
 	private finishButton!: Button;
 	private input: ScmMergeEditorInput | undefined;
+	private conflictProvider: ISCMConflictProvider | undefined;
 	private stageIds: readonly (string | null)[] | undefined;
 	private resultObjectId: string | null | undefined;
 	private busy = false;
@@ -48,7 +48,7 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 
 	constructor(
 		private readonly resultEditor: TextFileEditor,
-		@IGitService private readonly gitService: IGitService,
+		@ISCMService private readonly scmService: ISCMService,
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
 		@IAccessibleViewService private readonly accessibleView: IAccessibleViewService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
@@ -99,10 +99,13 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 
 	public async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
 		if (!isScmMergeEditorInput(input)) throw new TypeError('SCM merge editor requires a conflict input');
-		const file = await this.gitService.conflictFile(input.path, input.repositoryId);
+		const conflictProvider = this.scmService.getRepository(input.repositoryId)?.provider.mergeProvider;
+		if (!conflictProvider) throw new Error(`SCM repository '${input.repositoryId}' cannot resolve merge conflicts`);
+		const file = await conflictProvider.resolve(input.path);
 		if (signal.aborted) throw new Error('SCM merge editor loading was cancelled');
 		this.clearInput();
 		this.input = input;
+		this.conflictProvider = conflictProvider;
 		this.mergeStateKey = `ash.scm.merge.${digest(`${input.repositoryId}\0${input.path}`)}`;
 		this.resolved = false;
 		this.stageIds = file.stageIds;
@@ -157,6 +160,7 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 		this.modelSlot.clear();
 		this.fileChoicesDomNode?.replaceChildren();
 		this.input = undefined;
+		this.conflictProvider = undefined;
 		this.stageIds = undefined;
 		this.resultObjectId = undefined;
 		this.resultLoaded = false;
@@ -189,13 +193,13 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 		return `${input.path}\n\n${this.mergeView.getAccessibleContent()}`;
 	}
 
-	private sourceText(content: GitConflictFile['base']): string {
+	private sourceText(content: ISCMConflictFile['base']): string {
 		return content.kind === 'text' ? content.text : content.kind === 'binary'
 			? localize({ bundle: 'ash', key: 'git.mergeBinary' }, 'Binary file')
 			: localize({ bundle: 'ash', key: 'git.mergeDeleted' }, 'File deleted');
 	}
 
-	private createModel(file: GitConflictFile, result: TextModel): MergeEditorModel {
+	private createModel(file: ISCMConflictFile, result: TextModel): MergeEditorModel {
 		return this.instantiationService.createInstance(
 			MergeEditorModel,
 			file.base.kind === 'text' ? file.base.text : '',
@@ -206,7 +210,7 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 		);
 	}
 
-	private loadMergeState(file: GitConflictFile, result: TextModel): readonly boolean[] | undefined {
+	private loadMergeState(file: ISCMConflictFile, result: TextModel): readonly boolean[] | undefined {
 		const raw = this.mergeStateKey && this.storageService.get(this.mergeStateKey, StorageScope.WORKSPACE);
 		if (!raw) return undefined;
 		let value: unknown;
@@ -250,7 +254,7 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 		}
 	}
 
-	private renderFileChoices(file: GitConflictFile): void {
+	private renderFileChoices(file: ISCMConflictFile): void {
 		this.fileChoiceStore.clear();
 		this.fileChoiceButtons.length = 0;
 		this.fileChoicesDomNode.replaceChildren();
@@ -271,11 +275,12 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 		this.fileChoicesDomNode.append(actions);
 	}
 
-	private async chooseFile(resolution: GitConflictResolution): Promise<void> {
+	private async chooseFile(resolution: ISCMConflictResolution): Promise<void> {
 		const input = this.input;
+		const provider = this.conflictProvider;
 		const stageIds = this.stageIds;
 		const resultObjectId = this.resultObjectId;
-		if (!input || !stageIds || resultObjectId === undefined || this.busy || this.resolved) return;
+		if (!input || !provider || !stageIds || resultObjectId === undefined || this.busy || this.resolved) return;
 		this.busy = true;
 		for (const button of this.fileChoiceButtons) button.enabled = false;
 		try {
@@ -286,7 +291,7 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 				});
 				if (!decision.confirmed) return;
 			}
-			await this.gitService.completeConflict(input.path, stageIds, resultObjectId, resolution, input.repositoryId);
+			await provider.complete(input.path, stageIds, resultObjectId, resolution);
 			if (this.mergeStateKey) this.storageService.remove(this.mergeStateKey, StorageScope.WORKSPACE);
 			this.resolved = true;
 			this.fileChoiceStore.clear();
@@ -297,7 +302,7 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 			this.finishButton.enabled = false;
 			this.setStatus(localize({ bundle: 'ash', key: 'git.mergeCompleted' }, 'Merge completed and result staged.'));
 		} catch (error) {
-			const message = gitErrorMessage(error);
+			const message = provider.errorMessage(error);
 			this.setStatus(message);
 			ariaAlert(message);
 		} finally {
@@ -308,9 +313,10 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 
 	private async completeMerge(): Promise<void> {
 		const input = this.input;
+		const provider = this.conflictProvider;
 		const stageIds = this.stageIds;
 		const control = this.resultEditor.getControl();
-		if (!input || !stageIds || !control || this.busy || this.resolved) return;
+		if (!input || !provider || !stageIds || !control || this.busy || this.resolved) return;
 		const model = this.modelSlot.value;
 		if (hasMergeConflictMarkers(control.getValue()) || (model && (!model.isReady || model.unresolvedCount > 0))) {
 			this.setStatus(localize({ bundle: 'ash', key: 'git.mergeUnresolved' }, 'Review or resolve every conflict before completing the merge.'));
@@ -323,16 +329,16 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 		try {
 			if (this.resultEditor.hasExternalChange) throw new Error(localize({ bundle: 'ash', key: 'git.mergeFileChanged' }, 'The result file changed outside this editor. Review it before completing the merge.'));
 			if (this.resultEditor.isDirty) await this.resultEditor.save();
-			const saved = await this.gitService.conflictFile(input.path, input.repositoryId);
+			const saved = await provider.resolve(input.path);
 			if (JSON.stringify(saved.stageIds) !== JSON.stringify(stageIds) || saved.result.kind !== 'text' || saved.result.text !== control.getValue()) {
 				throw new Error(localize({ bundle: 'ash', key: 'git.mergeIndexChanged' }, 'The conflict changed in Git. Reopen this merge editor to review the new versions.'));
 			}
-			await this.gitService.completeConflict(input.path, stageIds, saved.resultObjectId, { kind: 'edited', text: control.getValue() }, input.repositoryId);
+			await provider.complete(input.path, stageIds, saved.resultObjectId, { kind: 'edited', text: control.getValue() });
 			if (this.mergeStateKey) this.storageService.remove(this.mergeStateKey, StorageScope.WORKSPACE);
 			this.resolved = true;
 			this.setStatus(localize({ bundle: 'ash', key: 'git.mergeCompleted' }, 'Merge completed and result staged.'));
 		} catch (error) {
-			const message = gitErrorMessage(error);
+			const message = provider.errorMessage(error);
 			this.setStatus(message);
 			ariaAlert(message);
 		} finally {

@@ -86,7 +86,7 @@ export class MenuId {
 	static readonly ChatTitle = new MenuId("ChatTitle");
 	static readonly ChatTitleLayout = new MenuId("ChatTitleLayout");
 	static readonly AgentSidebarTitle = new MenuId("AgentSidebarTitle");
-	static readonly GitGraphTitle = new MenuId("GitGraphTitle");
+	static readonly SCMHistoryTitle = new MenuId('SCMHistoryTitle');
 	static readonly SCMHistoryItemContext = new MenuId("SCMHistoryItemContext");
 	static readonly SCMHistoryItemChangeContext = new MenuId("SCMHistoryItemChangeContext");
 	static readonly PanelTitle = new MenuId("PanelTitle");

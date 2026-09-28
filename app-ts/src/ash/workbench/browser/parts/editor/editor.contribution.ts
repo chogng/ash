@@ -8,6 +8,7 @@ import { IWorkingCopyService } from "../../../services/workingCopy/common/workin
 import "./editorActions.js";
 import "./editorCommands.js";
 import "./diffEditor.workbench.contribution.js";
+import '../../../../editor/browser/widget/diffEditor/diffEditor.contribution.js';
 import { registerDiffEditorCommands } from "./diffEditorCommands.js";
 import { EditorAutoSave } from "./editorAutoSave.js";
 import { IEditorPart } from "./editorPart.js";

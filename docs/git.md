@@ -12,8 +12,8 @@ Desktop Renderer 和 TUI 不启动 Git 进程，也不解析 Git 输出。App Se
 Workbench 的通用展示与 provider 编排层；Git 是当前注册到 SCM 的版本控制 provider 和后端领域。
 
 ```text
-Desktop SCM View（当前直接消费 IGitService；目标改由 SCM contract 消费）
-  → Desktop Git domain service（目标由 frontend Git provider adapter 投影）
+Desktop SCM History View → Git history provider → Desktop Git domain service
+Desktop SCM Changes View → Desktop Git domain service
   ↔ Electron typed IPC + Git notification
   ↔ App Server GitRuntime
   → GitService
@@ -42,7 +42,7 @@ Git 查询和修改使用不同 capability：
 | 查看更改 | `git/repositories` 列出已授权目录内的仓库，并逐仓库读取状态 | 重复 worktree 只投影一次 |
 | 暂存或取消暂存 | 使用明确的 `repositoryId` 与仓库相对路径 | 不能越过对应目录 Grant |
 | 丢弃更改 | 只恢复已跟踪文件，并在界面确认 | 不删除未跟踪文件 |
-| 切换本地分支 | Native 点击底栏当前分支，在菜单中选择另一个本地分支；请求通过 App Server | 冲突时 Git 拒绝切换并保留当前工作树 |
+| 切换本地分支 | 在桌面端点击底栏当前分支，在菜单中选择另一个本地分支；请求通过 App Server | 冲突时 Git 拒绝切换并保留当前工作树 |
 | 查看 history graph | SCM Graph 以 `limit`/`cursor` 分页读取 `git/graph`，自动连续合并全部页面，按 lane 分配颜色并显示 local/remote refs；列表本身按视口虚拟化；history item 可展开 `git/commitChanges` 文件列表，点击文本文件再按需读取 `git/commitFile` 并挂到 Editor | 只包含本地已存在的 refs；自动 fetch 需主动开启；binary 或超限文件不作为文本 editor 打开 |
 | 自动获取远端更新 | App Server 读取共享 `[git]` 配置并逐仓库调度；`autofetch` 默认为 `"off"`，`"default"` 获取默认远端，`"all"` 获取全部远端；`autofetchPeriod` 默认 180 秒 | 三端共用配置，不提供仓库级覆盖；只对有修改授权的仓库执行，各仓库独立定时获取；只更新远端引用，不执行 pull |
 | 拉取远端 | 只允许 fast-forward | 需要交互认证时失败 |
@@ -59,17 +59,17 @@ VS Code 的 extension-host 进程布局。
 
 | 层级 | 长期 owner | 当前状态 | 边界判断 |
 | --- | --- | --- | --- |
-| Workbench SCM | provider registry、通用 repository/resource/history contract、树与 Graph 展示、Editor 打开语义 | 尚未完成：`ScmViewPane`、`ScmGraphViewPane` 和 `ScmStatusContribution` 仍直接消费 `IGitService` | 需要解耦；新增 VCS 不应修改 SCM View |
-| Desktop Git provider adapter | 把 `IGitService` 的 status、refs、history、changed-file URI 和命令映射为 SCM contract | 尚未抽取为独立 provider；当前映射散落在 SCM consumer | 是前端迁移落点，不拥有 Git RPC 或 Git output parsing |
+| Workbench SCM | repository registry、通用 history contract、历史图展示和 Editor 打开语义 | 历史图已通过 `ISCMViewService` 消费 provider；`ScmViewPane` 和 `ScmStatusContribution` 仍直接消费 `IGitService` | 后续需把 Changes 和状态栏接入 SCM contract |
+| Desktop Git history provider | 把 `IGitService` 的仓库、refs、history、changed-file URI 和历史 Chat 上下文映射为 SCM contract | `GitHistoryProvider` 已在 Git contribution 注册；Changes 和状态栏尚未接入 | 只拥有前端映射，不拥有 Git RPC 或 Git output parsing |
 | Desktop `IGitService` 与 Electron bridge | client-safe Git domain、连接事件和 typed `git/*` transport | 已实现 | 保持 Git 专属；不改名为 SCM service |
 | App Server `GitRuntime` / `GitService` | Git operation serialization、`Authorization<InspectRepository>` / `Authorization<MutateRepository>`、repository projection 与通知 | 已实现 | 保持 Git 专属；不新增仅转发 Git DTO 的 `scm/*` facade |
 | `ash-git` | Git executable、命令、解析和 failure semantics | 已实现 | 与 SCM UI 无依赖 |
 | `git-turn-changes` | 按 Session/Thread/Turn 捕获 Git tree、归属 Tool 写入、维护 ChangeSet 与提交状态 | 已实现 | 只接受 Git repository，不拥有 Thread 目录或 GitHub Issue |
 | `worktree` | 组合 `ash-git` inventory、维护 Thread 独占 checkout/目录和持久化绑定 | 已接入 App Server 的 Thread 创建与恢复 | 不拥有 Turn 归属、摘要或提交状态机 |
 
-前端迁移必须从调用者 contract 开始：先定义通用 `IScmService`、repository/provider 和 history
-provider，再让 Git adapter 注册实现，最后把现有 SCM panes 改为只依赖通用 contract。不能让
-`IScmService` 直接暴露 `GitStatus`、`GraphPage`、`git/commitFile` 或 `fetch/pull/push` 方法；这些能力
+前端历史图已由通用 `ISCMService`、repository/provider 和 history contract 接收 Git history provider。
+Changes 和状态栏后续也应只依赖通用 contract。不能让
+`ISCMService` 直接暴露 `GitStatus`、`GraphPage`、`git/commitFile` 或 `fetch/pull/push` 方法；这些能力
 应由 provider 以 resource group、history item change、status bar command 和 menu action 投影。
 
 后端只有在出现真正共享的跨 VCS authority、队列或 durability 语义时才增加对应通用层。仅为了让
@@ -80,7 +80,7 @@ provider，再让 Git adapter 注册实现，最后把现有 SCM panes 改为只
 
 | 层级 | 当前职责 | 不拥有 |
 | --- | --- | --- |
-| Desktop SCM（当前实现） | 分支/upstream、Merge/Staged/Working Tree 分组，提交输入，Git intent，history graph lane/ref/remote presentation，以及按 revision 接收自动状态更新；其中 Git DTO 到 SCM contract 的 provider adapter 尚待抽取 | Git process、porcelain parser、任意 host path authority |
+| Desktop SCM（当前实现） | 历史图通过 SCM history contract 显示 lane/ref/remote、展开文件并打开 Editor；Changes 和状态栏仍直接处理分支/upstream、Merge/Staged/Working Tree 分组、提交输入与 Git intent | Git process、porcelain parser、任意 host path authority |
 | Electron bridge | 校验 `repositoryId`、仓库相对路径、commit message 和空参数，再把 typed Git intent 转发给 App Server | Git domain semantics、最终路径授权 |
 | App Server `GitRuntime` | 发现目录集合中的仓库，按 repository 串行化 operation、维护 projection/revision、消费 watcher hint、去重并发布状态 | Git command/parsing、Renderer state |
 | App Server `GitService` | 冻结 canonical `Dir` 与 repository projection root、映射目录/仓库路径、持有 Tokio runtime并调用 `ash-git`；按 `InspectRepository`/`MutateRepository` 再校验读写边界 | live projection、notification |
@@ -153,9 +153,9 @@ stderr 和非 UTF-8 path 不进入 Renderer；工作树的绝对目录路径是�
 
 ## 当前限制
 
-- `GitRuntime` 已支持目录集合中的 multi-repository registry；前端仍需完成通用 SCM provider 抽取；
-- Workbench SCM 尚无通用 provider registry；现有 panes 直接依赖 `IGitService`，因此第二种 VCS
-  仍会迫使 UI 分支。这是明确的前端架构债务，不是后端增加 `scm/*` facade 的理由；
+- `GitRuntime` 已支持目录集合中的 multi-repository registry。Workbench 通过 `ISCMService`
+  注册仓库、由 `ISCMViewService` 选择当前仓库；Git provider 提供 Changes 资源组、输入框、状态栏命令、
+  历史记录和冲突操作。SCM 视图从 provider 读取这些数据，不直接读取 Git 状态；
 - operation 由 runtime mutex 串行化，但尚无可观测 queue、progress、caller cancellation 或 retry；
 - App Server 已支持切换、新建和安全删除本地分支，以及独立创建、选择和安全删除工作树；系统仍无 branch 重命名、tag 删除 mutation、强制删除或 credential prompt；
 - pull 固定为 fast-forward only；discard 不删除 untracked 文件；
@@ -172,13 +172,10 @@ stderr 和非 UTF-8 path 不进入 Renderer；工作树的绝对目录路径是�
 
 近期扩展顺序：
 
-1. 增加显式 repository identity 与 multi-root registry；
-2. 抽取前端 `IScmService`、repository/history provider contract 与 Git adapter，让 SCM panes 不再
-   import `IGitService` 或 Git DTO；
-3. 为长时间 remote operation 增加 progress、queue state 和 caller cancellation；
-4. 为工作树 change row 接入 diff/open，并补充更细粒度的错误 UI；
-5. 在明确的 connector/权限 contract 下接入 GitHub PR、Checks 等 provider data；
-6. 按明确产品语义增加 branch lifecycle 等额外 mutation，并让已接受该产品需求的
+1. 为长时间 remote operation 增加 progress、queue state 和 caller cancellation；
+2. 为工作树 change row 接入 diff/open，并补充更细粒度的错误 UI；
+3. 在明确的 connector/权限 contract 下接入 GitHub PR、Checks 等 provider data；
+4. 按明确产品语义增加 branch lifecycle 等额外 mutation，并让已接受该产品需求的
    UI consumer 消费同一协议。协议存在不自动使其成为 TUI 功能。
 
 长期不变量是：Desktop、Native 与 TUI 不直接执行 Git；App Server adapter 不复制 Git

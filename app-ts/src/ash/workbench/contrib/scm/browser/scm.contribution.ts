@@ -1,19 +1,16 @@
 import { Lxicon } from "../../../../base/common/lxicons.js";
-import { IMenuService } from "../../../../platform/actions/common/actions.js";
+import { Action2, IMenuService, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
 import { IHoverService } from "../../../../platform/hover/browser/hoverService.js";
 import { IResourceIconRenderer } from "../../../browser/labels.js";
-import { ServiceConstructionDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
+import { ServiceConstructionDescriptor, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
-import { IGitService } from "../../../contrib/git/common/gitService.js";
 import { IEditorService } from "../../../services/editor/common/editorService.js";
 import { IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
-import { IViewsService } from "../../../services/views/browser/viewsService.js";
 import { ScmAgentReviewViewPane } from "./scmAgentReviewViewPane.js";
-import { ScmGraphViewPane } from "./scmGraphViewPane.js";
-import { GIT_GRAPH_VIEW_ID } from "./scmGraphTitleActions.js";
+import { SCMHistoryViewPane } from "./scmHistoryViewPane.js";
 import { ScmStatusContribution } from "./scmStatus.js";
 import { GIT_VIEW_ID, ScmViewPane } from "./scmViewPane.js";
 import { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
@@ -25,7 +22,6 @@ import { SCMViewPaneContainer } from './scmViewPaneContainer.js';
 import { IChatContextPickService } from "../../../services/chat/common/chatContextService.js";
 import "../common/scmConfiguration.js";
 import "./quickDiff.contribution.js";
-import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { localize } from '../../../../nls.js';
 import { registerEditorPane } from '../../../browser/parts/editor/editorRegistry.js';
 import { TextFileEditor } from '../../files/browser/editors/textFileEditor.js';
@@ -37,10 +33,29 @@ import { ScmMergeEditorPane, ScmMergeFocusedContext } from './scmMergeEditorPane
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import './media/scmMergeEditor.css';
+import './scm.service.contribution.js';
+import { ISCMService, ISCMViewService, SCMHistoryBusyContext } from '../common/scm.js';
 
 export const GIT_AGENT_REVIEW_VIEW_ID = "ash.gitAgentReview";
-export { GIT_GRAPH_VIEW_ID };
+export const GIT_GRAPH_VIEW_ID = 'ash.gitGraph';
 export { GIT_VIEW_ID };
+
+registerAction2(class SCMHistoryRefreshAction extends Action2 {
+	constructor() {
+		super({
+			id: 'ash.git.graph.refresh',
+			title: 'Refresh',
+			tooltip: 'Refresh SCM history',
+			icon: Lxicon.refresh,
+			precondition: SCMHistoryBusyContext.isEqualTo(false),
+			menu: { id: MenuId.SCMHistoryTitle, group: 'navigation', order: 4 },
+		});
+	}
+
+	override async run(_accessor: ServicesAccessor, target: unknown): Promise<void> {
+		if (target instanceof SCMHistoryViewPane) await target.runTitleOperation();
+	}
+});
 
 registerEditorPane({
 	id: SCM_MERGE_EDITOR_ID,
@@ -135,8 +150,8 @@ export function registerGitViews(
 			order: 3,
 			collapsed: true,
 			canToggleVisibility: false,
-			ctorDescriptor: new ServiceConstructionDescriptor(ScmGraphViewPane, {
-				serviceDependencies: [IGitService, IMenuService, IContextMenuService, IContextKeyService, IHoverService, IEditorService, IResourceIconRenderer],
+			ctorDescriptor: new ServiceConstructionDescriptor(SCMHistoryViewPane, {
+				serviceDependencies: [ISCMViewService, IMenuService, IContextMenuService, IContextKeyService, IHoverService, IEditorService, IResourceIconRenderer],
 			}),
 		},
 	]);
@@ -144,19 +159,17 @@ export function registerGitViews(
 
 registerWorkbenchContribution("workbench.contrib.scmStatus", WorkbenchPhase.BlockRestore, accessor => new ScmStatusContribution({
 	statusbarService: accessor.get(IStatusbarService),
-	gitService: accessor.get(IGitService),
-	viewsService: accessor.get(IViewsService),
-	commandService: accessor.get(ICommandService),
+	scmViewService: accessor.get(ISCMViewService),
 }));
 
 registerWorkbenchContribution("workbench.contrib.scmWorkingSets", WorkbenchPhase.BlockRestore, accessor => new ScmWorkingSetController({
 	configurationService: accessor.get(IConfigurationService),
 	editorPart: accessor.get(IEditorPart),
-	gitService: accessor.get(IGitService),
+	scmViewService: accessor.get(ISCMViewService),
 	storageService: accessor.get(IStorageService),
 }));
 
 registerWorkbenchContribution("workbench.contrib.scmHistoryChatContext", WorkbenchPhase.BlockRestore, accessor => new ScmHistoryChatContextContribution(
 	accessor.get(IChatContextPickService),
-	accessor.get(IGitService),
+	accessor.get(ISCMService),
 ));

@@ -16,7 +16,7 @@ import { InMemoryConfigurationService } from '../../../../../platform/configurat
 import { DiffTestPort } from '../../../../../editor/test/browser/services/diffTestPort.js';
 import { DiffService } from '../../../../services/diff/browser/diffService.js';
 import { type GitStatus, type IGitService } from '../../../../contrib/git/common/gitService.js';
-import { GitQuickDiffProvider } from '../../browser/gitQuickDiffProvider.js';
+import { GitQuickDiffProvider } from '../../../git/browser/gitQuickDiffProvider.js';
 import { QuickDiffDecorator } from '../../browser/quickDiffDecorator.js';
 import { QuickDiffModelService } from '../../browser/quickDiffModel.js';
 import { WorkbenchQuickDiffService } from '../../browser/workbenchQuickDiffService.js';

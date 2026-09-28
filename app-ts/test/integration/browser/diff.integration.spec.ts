@@ -32,26 +32,207 @@ test('editable diff renders Unicode changes and shares models with Multi Diff', 
 	expect(errors).toEqual([]);
 });
 
+test('diff decorations render themed lines, gutter signs, and overview markers', async ({ page }) => {
+	await openDiffPage(page);
+	const editor = page.locator('#single .stanza-diff-editor');
+	const removedLine = editor.locator('.stanza-diff-line-removed').first();
+	const insertedLine = editor.locator('.stanza-diff-line-added').first();
+	const removedGutter = editor.locator('.stanza-diff-gutter-removed').first();
+	const insertedGutter = editor.locator('.stanza-diff-gutter-added').first();
+	const removedSign = editor.locator('.stanza-diff-remove-sign .ash-icon').first();
+	const insertedSign = editor.locator('.stanza-diff-insert-sign .ash-icon').first();
+	const removedMarker = editor.locator('.stanza-diff-overview-marker.removed').first();
+	const insertedMarker = editor.locator('.stanza-diff-overview-marker.inserted').first();
+	await page.evaluate(() => document.documentElement.style.setProperty('--ash-lxicon-font-size-compact', '12px'));
+	await expect(removedSign).toHaveAttribute('aria-hidden', 'true');
+	await expect(insertedSign).toHaveAttribute('aria-hidden', 'true');
+	await expect(removedSign).toHaveCSS('width', '12px');
+	await expect(insertedSign).toHaveCSS('width', '12px');
+	await page.evaluate(() => {
+		const root = document.documentElement;
+		root.style.setProperty('--ash-diff-editor-removed-line-background', 'rgb(250, 220, 220)');
+		root.style.setProperty('--ash-diff-editor-inserted-line-background', 'rgb(220, 250, 220)');
+		root.style.setProperty('--ash-diff-editor-gutter-removed-line-background', 'rgb(240, 180, 180)');
+		root.style.setProperty('--ash-diff-editor-gutter-inserted-line-background', 'rgb(180, 240, 180)');
+		root.style.setProperty('--ash-diff-editor-overview-removed-foreground', 'rgb(200, 40, 40)');
+		root.style.setProperty('--ash-diff-editor-overview-inserted-foreground', 'rgb(40, 160, 40)');
+	});
+	await expect(removedLine).toHaveCSS('background-color', 'rgb(250, 220, 220)');
+	await expect(insertedLine).toHaveCSS('background-color', 'rgb(220, 250, 220)');
+	await expect(removedGutter).toHaveCSS('background-color', 'rgb(240, 180, 180)');
+	await expect(insertedGutter).toHaveCSS('background-color', 'rgb(180, 240, 180)');
+	await expect(removedMarker).toHaveCSS('background-color', 'rgb(200, 40, 40)');
+	await expect(insertedMarker).toHaveCSS('background-color', 'rgb(40, 160, 40)');
+	await page.evaluate(() => window.ashDiffIntegration.setComparisonText('same', 'same'));
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	await expect(editor.locator('.stanza-diff-line-removed, .stanza-diff-line-added, .stanza-diff-remove-sign, .stanza-diff-insert-sign')).toHaveCount(0);
+});
+
+test('diff separator resizes both columns by pointer and keyboard, resets, and leaves focus in inline view', async ({ page }) => {
+	await openDiffPage(page);
+	const editor = page.locator('#single .stanza-diff-editor');
+	const sash = editor.getByRole('separator', { name: 'Resize diff editor columns' });
+	const original = editor.locator('.stanza-diff-editor-side.original');
+	const modified = editor.locator('.stanza-diff-editor-side.modified');
+	const widths = async () => ({
+		original: await original.evaluate(element => element.getBoundingClientRect().width),
+		modified: await modified.evaluate(element => element.getBoundingClientRect().width),
+	});
+	await expect(sash).toHaveAttribute('aria-valuenow', '50');
+	await expect(sash).toHaveAttribute('aria-controls', /ash-diff-editor-\d+-original ash-diff-editor-\d+-modified/);
+	const initial = await widths();
+	await sash.focus();
+	await page.keyboard.press('ArrowRight');
+	await expect.poll(async () => (await widths()).original).toBe(initial.original + 10);
+	await page.keyboard.press('Alt+ArrowLeft');
+	await expect.poll(async () => (await widths()).original).toBe(initial.original + 9);
+	const bounds = await sash.boundingBox();
+	if (!bounds) throw new Error('Diff separator has no bounds');
+	await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(bounds.x + bounds.width / 2 + 80, bounds.y + bounds.height / 2);
+	await page.mouse.up();
+	await expect.poll(async () => (await widths()).original).toBe(initial.original + 89);
+	await expect.poll(async () => (await widths()).modified).toBe(initial.modified - 89);
+	await sash.dblclick();
+	await expect.poll(async () => (await widths()).original).toBe(initial.original);
+	await sash.focus();
+	await page.locator('#single').evaluate(element => { element.style.width = '200px'; });
+	await expect(sash).toBeHidden();
+	await expect.poll(() => modified.evaluate(element => element.contains(document.activeElement))).toBe(true);
+	await page.locator('#single').evaluate(element => { element.style.width = '800px'; });
+	await expect(sash).toBeVisible();
+	await sash.focus();
+	await page.evaluate(() => window.ashDiffIntegration.setViewMode(false, false, 900));
+	await expect(sash).toBeHidden();
+	await expect.poll(() => modified.evaluate(element => element.contains(document.activeElement))).toBe(true);
+	await page.evaluate(() => window.ashDiffIntegration.setViewMode(true, false, 900));
+	await expect.poll(async () => (await widths()).original).toBe(initial.original);
+	await page.evaluate(() => window.ashDiffIntegration.setChineseLocale());
+	const localizedSash = editor.getByRole('separator', { name: '调整差异编辑器的分栏宽度' });
+	await expect(localizedSash).toHaveAttribute('aria-valuetext', '原始文件 50%，修改后文件 50%');
+	await expect(localizedSash).toHaveAttribute('aria-description', /左右方向键/);
+});
+
+test('accessible diff viewer reads changed lines, follows navigation, and restores editor focus', async ({ page }) => {
+	await openDiffPage(page);
+	await page.evaluate(() => window.ashDiffIntegration.setComparisonText('first\nold\nlast\nold end', 'first\nnew\nlast\nnew end'));
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	const editor = page.locator('#single .stanza-diff-editor');
+	const viewer = editor.locator('.stanza-accessible-diff-viewer');
+	await editor.focus();
+	await page.keyboard.press('F7');
+	await expect(viewer).toBeVisible();
+	await expect(viewer).toHaveAttribute('aria-label', 'Accessible Diff Viewer');
+	await expect(viewer.locator('textarea')).toBeFocused();
+	await expect(viewer.locator('[role="status"]')).toHaveText('Difference 1 of 2');
+	await expect(viewer.locator('textarea')).toHaveValue('Original line 2: old\nModified line 2: new');
+	await expect(editor.locator('.stanza-diff-editor-side.original')).toHaveAttribute('aria-hidden', 'true');
+	await expect(editor.locator('.stanza-diff-editor-side.original')).toHaveAttribute('inert', '');
+	await page.keyboard.press('F7');
+	await expect(viewer.locator('[role="status"]')).toHaveText('Difference 2 of 2');
+	await expect(viewer.locator('textarea')).toHaveValue('Original line 4: old end\nModified line 4: new end');
+	await page.keyboard.press('Shift+F7');
+	await expect(viewer.locator('[role="status"]')).toHaveText('Difference 1 of 2');
+	await viewer.getByRole('button', { name: 'Next difference' }).click();
+	await expect(viewer.locator('[role="status"]')).toHaveText('Difference 2 of 2');
+	await page.evaluate(() => {
+		document.documentElement.dataset.colorScheme = 'high-contrast-dark';
+		document.documentElement.style.setProperty('--ash-contrast-border', 'rgb(10, 20, 30)');
+		document.documentElement.style.setProperty('--ash-stroke-thickness', '1px');
+	});
+	await expect(viewer).toHaveCSS('border-top-color', 'rgb(10, 20, 30)');
+	await expect(viewer.getByRole('button', { name: 'Next difference' })).toHaveCSS('border-top-color', 'rgb(10, 20, 30)');
+	await page.evaluate(() => window.ashDiffIntegration.setChineseLocale());
+	await expect(editor.getByRole('region', { name: '无障碍差异查看器' }).locator('[role="status"]')).toHaveText('第 2 处差异，共 2 处');
+	await expect(viewer.locator('textarea')).toHaveValue('原始文件第 4 行：old end\n修改后文件第 4 行：new end');
+	await page.keyboard.press('Escape');
+	await expect(viewer).toBeHidden();
+	await expect(editor).toBeFocused();
+	await expect(editor.locator('.stanza-diff-editor-side.original')).toHaveAttribute('aria-hidden', 'false');
+	await expect(editor.locator('.stanza-diff-editor-side.original')).not.toHaveAttribute('inert');
+	await page.evaluate(() => window.ashDiffIntegration.setComparisonText('same', 'same'));
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	await page.keyboard.press('F7');
+	await expect(viewer).toBeHidden();
+	await expect(editor.locator('.stanza-diff-editor-accessibility-status')).toHaveText('没有差异');
+	await page.evaluate(() => window.ashDiffIntegration.setComparisonText('head\nremoved\ntail', 'head\ntail'));
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	await page.keyboard.press('F7');
+	await expect(viewer.locator('textarea')).toHaveValue('原始文件第 2 行：removed');
+	await page.keyboard.press('Escape');
+	await page.evaluate(() => window.ashDiffIntegration.setComparisonText('head\ntail', 'head\nadded\ntail'));
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	await page.keyboard.press('F7');
+	await expect(viewer.locator('textarea')).toHaveValue('修改后文件第 2 行：added');
+	await page.evaluate(() => window.ashDiffIntegration.setComparisonText('head\ntail', 'head\nnew addition\ntail'));
+	await expect(viewer).toBeHidden();
+	await expect(editor.locator('.stanza-diff-editor-side.modified')).not.toHaveAttribute('inert');
+});
+
+test('inline changes mark the empty side of pure insertions and deletions', async ({ page }) => {
+	await openDiffPage(page);
+	await page.evaluate(() => window.ashDiffIntegration.setComparisonText('before after', 'before new after'));
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	await page.evaluate(() => {
+		document.documentElement.style.setProperty('--ash-stroke-thickness', '1px');
+		document.documentElement.style.setProperty('--ash-diff-editor-removed-line-marker', 'rgb(200, 40, 40)');
+		document.documentElement.style.setProperty('--ash-diff-editor-removed-text-background', 'rgb(250, 220, 220)');
+	});
+	const originalAnchor = page.locator('#single .stanza-diff-editor-side.original .stanza-diff-inline-removed-empty');
+	await expect(originalAnchor).toBeVisible();
+	await expect(originalAnchor).toHaveCSS('border-left-style', 'solid');
+	await expect(originalAnchor).toHaveCSS('background-color', 'rgb(250, 220, 220)');
+	await expect(page.locator('#single .stanza-diff-editor-side.modified .stanza-diff-inline-added')).toContainText('new ');
+	await page.evaluate(() => window.ashDiffIntegration.setComparisonText('before new after', 'before after'));
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	await expect(page.locator('#single .stanza-diff-editor-side.modified .stanza-diff-inline-added-empty')).toBeVisible();
+	await expect(page.locator('#single .stanza-diff-editor-side.original .stanza-diff-inline-removed')).toContainText('new ');
+});
+
 test('inline diff keeps removed text readable and restores both sides', async ({ page }) => {
 	await openDiffPage(page);
 	const editor = page.locator('#single .stanza-diff-editor');
-	await page.evaluate(() => window.ashDiffIntegration.setViewMode(false, false));
+	await page.evaluate(() => window.ashDiffIntegration.setViewMode(false, false, 900));
 	await expect(editor).toHaveClass(/inline-view/);
 	await expect(editor.locator('.stanza-diff-editor-side.original')).toBeHidden();
 	await expect(editor.locator('.stanza-diff-editor-side.modified')).toBeVisible();
 	await expect(editor.locator('.stanza-diff-inline-original-line')).toContainText('before 😀 after');
 	await expect(editor.locator('.stanza-diff-inline-original-line').first()).toHaveAttribute('aria-label', /Removed line/);
 	await editor.locator('.stanza-diff-editor-side.modified .stanza-editor').focus();
-	await page.evaluate(() => window.ashDiffIntegration.setViewMode(true, false));
+	await page.evaluate(() => window.ashDiffIntegration.setViewMode(true, false, 900));
 	await expect(editor).not.toHaveClass(/inline-view/);
 	await expect(editor.locator('.stanza-diff-editor-side.original')).toBeVisible();
 	await expect(editor.locator('.stanza-diff-inline-original-line')).toHaveCount(0);
 	await expect.poll(() => editor.locator('.stanza-diff-editor-side.modified').evaluate(element => element.contains(document.activeElement))).toBe(true);
-	await page.evaluate(() => window.ashDiffIntegration.setViewMode(true, true));
+	await page.evaluate(() => window.ashDiffIntegration.setViewMode(true, true, 900));
 	await page.locator('#single').evaluate(element => { element.style.width = '400px'; });
 	await expect(editor).toHaveClass(/inline-view/);
 	await page.locator('#single').evaluate(element => { element.style.width = '800px'; });
+	await expect(editor).toHaveClass(/inline-view/);
+	await page.evaluate(() => window.ashDiffIntegration.setViewMode(true, true, 700));
 	await expect(editor).not.toHaveClass(/inline-view/);
+	await page.evaluate(() => window.ashDiffIntegration.setViewMode(true, true, 900));
+	await expect(editor).toHaveClass(/inline-view/);
+	await page.locator('#single').evaluate(element => { element.style.width = '1000px'; });
+	await expect(editor).not.toHaveClass(/inline-view/);
+});
+
+test('diff view zones replace removed lines after a comparison changes', async ({ page }) => {
+	await openDiffPage(page);
+	await page.evaluate(() => window.ashDiffIntegration.setViewMode(false, false, 900));
+	await page.evaluate(() => window.ashDiffIntegration.setComparisonText('first\nremoved line\nlast', 'first\nlast'));
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	const removedLines = page.locator('#single .stanza-diff-inline-original-line');
+	await expect(removedLines).toHaveCount(1);
+	await expect(removedLines).toHaveText('removed line');
+	await page.evaluate(() => window.ashDiffIntegration.setComparisonText('first\nnew removed line\nlast', 'first\nlast'));
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	await expect(removedLines).toHaveCount(1);
+	await expect(removedLines).toHaveText('new removed line');
+	await page.evaluate(() => window.ashDiffIntegration.setComparisonText('first\nlast', 'first\nlast'));
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	await expect(removedLines).toHaveCount(0);
 });
 
 test('unchanged regions collapse on both sides and symbol navigation reveals the target', async ({ page }) => {
@@ -283,7 +464,7 @@ test('multi diff keeps the visible file in place when an earlier comparison chan
 test('multi diff mounts only nearby file headers and restores collapsed state after scrolling away', async ({ page }) => {
 	await openDiffPage(page);
 	await page.evaluate(() => {
-		document.documentElement.style.setProperty('--ash-strokeThickness', '1px');
+		document.documentElement.style.setProperty('--ash-stroke-thickness', '1px');
 		document.documentElement.style.setProperty('--ash-multi-diff-editor-background', 'rgb(18, 27, 36)');
 		document.documentElement.style.setProperty('--ash-multi-diff-editor-header-background', 'rgb(37, 46, 55)');
 		document.documentElement.style.setProperty('--ash-multi-diff-editor-border', 'rgb(56, 65, 74)');

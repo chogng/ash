@@ -5,7 +5,9 @@ import { InMemoryConfigurationService } from '../../../../../platform/configurat
 import { StorageScope, type IStorageService } from '../../../../../platform/storage/common/storage.js';
 import type { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
 import type { EditorWorkingSet, EditorWorkingSetTarget } from '../../../../services/editor/common/editorWorkingSet.js';
-import type { GitStatus, IGitService } from '../../../../contrib/git/common/gitService.js';
+import type { ISCMProvider } from '../../common/scm.js';
+import { SCMService } from '../../common/scmService.js';
+import { SCMViewService } from '../../browser/scmViewService.js';
 import { ScmWorkingSetController } from '../../browser/workingSet.js';
 import { ScmConfiguration } from '../../common/scmConfiguration.js';
 
@@ -13,7 +15,10 @@ test('SCM working sets save and restore editor state across branch changes', asy
 	using configuration = new InMemoryConfigurationService();
 	await configuration.updateValue(ScmConfiguration.workingSetsEnabled, true);
 	await configuration.updateValue(ScmConfiguration.workingSetsDefault, 'empty');
-	using git = new TestGitService(status('main', 1));
+	using provider = new TestSCMProvider('main');
+	using scmService = new SCMService();
+	using viewService = new SCMViewService(scmService);
+	using repository = scmService.registerSCMProvider(provider);
 	const storage = new TestStorageService();
 	const saved: string[] = [];
 	const applied: EditorWorkingSetTarget[] = [];
@@ -30,25 +35,25 @@ test('SCM working sets save and restore editor state across branch changes', asy
 	using controller = new ScmWorkingSetController({
 		configurationService: configuration,
 		editorPart,
-		gitService: git as unknown as IGitService,
+		scmViewService: viewService,
 		storageService: storage as unknown as IStorageService,
 	});
 	await nextTask();
 
-	git.accept(status('feature', 2));
+	provider.accept('feature');
 	await nextTask();
 	assert.deepEqual(saved, ['main']);
 	assert.deepEqual(applied, ['empty']);
 	assert.ok(storage.get('scm.workingSets', StorageScope.WORKSPACE)?.includes('main'));
 
-	git.accept(status('main', 3));
+	provider.accept('main');
 	await nextTask();
 	assert.deepEqual(saved, ['main', 'feature']);
 	assert.deepEqual(applied, ['empty', workingSet('main')]);
 
 	await configuration.updateValue(ScmConfiguration.workingSetsEnabled, false);
 	assert.equal(storage.get('scm.workingSets', StorageScope.WORKSPACE), undefined);
-	git.accept(status('other', 4));
+	provider.accept('other');
 	await nextTask();
 	assert.deepEqual(saved, ['main', 'feature']);
 });
@@ -61,42 +66,24 @@ function workingSet(id: string): EditorWorkingSet {
 	};
 }
 
-function status(branch: string, revision: number): GitStatus {
-	return {
-		repositoryId: 'repo-1',
-		streamInstanceId: 'git_test',
-		revision,
-		workspacePath: 'C:/project',
-		head: { type: 'branch', name: branch, objectId: branch.padEnd(40, '0'), upstream: undefined },
-		changes: [],
-	};
-}
+class TestSCMProvider implements ISCMProvider {
+	readonly id = 'repo-1';
+	readonly providerId = 'test';
+	readonly label = 'project';
+	readonly groups = [];
+	readonly input = { value: '', placeholder: '', enabled: false, canAccept: false, buttonLabel: '', buttonTooltip: '', accept: async () => undefined };
+	readonly statusBarCommands = [];
+	readonly statusMessage = '';
+	readonly isBusy = false;
+	private readonly changed = new Emitter<void>();
+	readonly onDidChangeResources = this.changed.event;
 
-class TestGitService implements Disposable {
-	private readonly statusChanged = new Emitter<GitStatus>();
-	private readonly becameReady = new Emitter<void>();
-	readonly onDidChangeStatus = this.statusChanged.event;
-	readonly onDidBecomeReady = this.becameReady.event;
-
-	constructor(private current: GitStatus) {}
-
-	status(): Promise<GitStatus> {
-		return Promise.resolve(this.current);
-	}
-
-	accept(value: GitStatus): void {
-		this.current = value;
-		this.statusChanged.fire(value);
-	}
-
-	dispose(): void {
-		this.statusChanged.dispose();
-		this.becameReady.dispose();
-	}
-
-	[Symbol.dispose](): void {
-		this.dispose();
-	}
+	constructor(public activeRepositoryName: string) {}
+	accept(ref: string): void { this.activeRepositoryName = ref; this.changed.fire(); }
+	refresh(): Promise<void> { return Promise.resolve(); }
+	activate(): Promise<void> { return Promise.resolve(); }
+	dispose(): void { this.changed.dispose(); }
+	[Symbol.dispose](): void { this.dispose(); }
 }
 
 class TestStorageService {

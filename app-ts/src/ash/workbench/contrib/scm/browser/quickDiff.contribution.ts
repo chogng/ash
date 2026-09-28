@@ -1,17 +1,13 @@
-import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { EditorContributionInstantiation, registerEditorContribution } from '../../../../editor/browser/editorExtensions.js';
 import { registerWorkbenchServiceContribution } from '../../../browser/workbenchServiceContributions.js';
-import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { ActiveEditorContext } from '../../../common/contextkeys.js';
-import { IGitService } from '../../../contrib/git/common/gitService.js';
 import { IDiffService } from '../../../services/diff/common/diffService.js';
 import { CODE_EDITOR_ID } from '../../../browser/parts/editor/textResourceEditor.js';
 import { IQuickDiffEditorControllerService, IQuickDiffModelService, IQuickDiffService } from '../common/quickDiff.js';
-import { GitQuickDiffProvider } from './gitQuickDiffProvider.js';
 import { QuickDiffEditorController, QuickDiffEditorControllerService } from './quickDiffEditorController.js';
 import { QuickDiffModelService } from './quickDiffModel.js';
 import { WorkbenchQuickDiffService } from './workbenchQuickDiffService.js';
@@ -32,13 +28,6 @@ registerWorkbenchServiceContribution({
 	service: IQuickDiffModelService,
 	dependencies: [IQuickDiffService, IDiffService, IConfigurationService],
 	install: context => context.register(context.container.createInstance(QuickDiffModelService, context.container.get(IQuickDiffService), context.container.get(IDiffService))),
-});
-
-registerWorkbenchContribution('workbench.contrib.gitQuickDiffProvider', WorkbenchPhase.BlockRestore, accessor => {
-	const resources = new DisposableStore();
-	const provider = resources.add(new GitQuickDiffProvider(accessor.get(IGitService)));
-	resources.add(accessor.get(IQuickDiffService).addProvider(provider));
-	return resources;
 });
 
 registerEditorContribution({

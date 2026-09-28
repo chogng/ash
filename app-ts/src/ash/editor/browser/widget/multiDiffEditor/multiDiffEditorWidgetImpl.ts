@@ -13,7 +13,8 @@ import { type IDimension } from '../../../common/core/2d/dimension.js';
 import { type DiffModel } from '../../../common/diff/diffModel.js';
 import { LineDiffKind } from '../../../common/diff/lineDiff.js';
 import { FontMeasurements } from '../../config/fontMeasurements.js';
-import { DiffEditorWidget, type DiffEditorWidgetOptions } from '../diffEditor/diffEditorWidget.js';
+import { DiffEditorWidget } from '../diffEditor/diffEditorWidget.js';
+import { type DiffEditorWidgetOptions } from '../diffEditor/diffEditorOptions.js';
 import { computeDiffRowLayout, type DiffRowLayout } from './compressedVirtualizedScrollLayout.js';
 import { CompressedVirtualizedScrollView } from './compressedVirtualizedScrollView.js';
 import {
