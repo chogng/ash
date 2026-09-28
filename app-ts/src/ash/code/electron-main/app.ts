@@ -810,7 +810,7 @@ export class AshApplication extends Disposable {
 			host: electronRemoteWindowMainHost(window, this.dialogs),
 			prepareForRuntimeReplacement: () => window.webContents.send("ash:terminal:prepareReplacement"),
 		}));
-		const transitionToFolder = async (folderPath: string, selectionRequired: boolean): Promise<void> => {
+		const performTransitionToFolder = async (folderPath: string, selectionRequired: boolean): Promise<void> => {
 			const currentWorkspace = workspaceContext.getWorkspace();
 			const nextWorkspace = isRemoteWorkspaceIdentifier(currentWorkspace)
 				? await this.resolveRemoteFolderWorkspace(currentWorkspace, folderPath)
@@ -832,6 +832,13 @@ export class AshApplication extends Disposable {
 			if (transition.status === WorkspaceTransitionStatus.Failed) {
 				throw workspaceTransitionError(transition.failure);
 			}
+		};
+		let workspaceOpenQueue: Promise<void> = Promise.resolve();
+		const transitionToFolder = (folderPath: string, selectionRequired: boolean): Promise<void> => {
+			// Permission selection must finish before another request reaches this window's Workspace host.
+			const operation = workspaceOpenQueue.then(() => performTransitionToFolder(folderPath, selectionRequired));
+			workspaceOpenQueue = operation.then(() => undefined, () => undefined);
+			return operation;
 		};
 		record.openWorkspace = (root) => transitionToFolder(root, true);
 		windowDisposables.add(toDisposable(() => this.dialogs.cancelWindow(window)));
