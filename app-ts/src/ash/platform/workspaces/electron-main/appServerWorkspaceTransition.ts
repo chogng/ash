@@ -1,5 +1,4 @@
-import type { RendererWorkspaceHost } from './rendererWorkspaceHost.js';
-import { type DirPermission, type DirGrant } from "../../dirPermissions/common/dirPermissionsService.js";
+import type { DirGrant } from "../../dirPermissions/common/dirPermissionsService.js";
 import type { IDisposable } from "../../../base/common/lifecycle.js";
 import type { AppServerConnectionState } from "../../app-server/common/appServerApi.js";
 import { AppServerRemoteError } from "../../app-server/common/appServerError.js";
@@ -103,29 +102,4 @@ export function createAppServerWorkspaceTransitionAdapter(
 		switchWorkspace,
 		onStateChange: (listener) => supervisor.onStateChange(listener),
 	});
-}
-
-export async function readAppServerDirPermissions(workspace: RendererWorkspaceHost, path: string): Promise<readonly DirPermission[] | undefined> {
-	const result = { permissions: await workspace.readPermissions(path) };
-	return result.permissions ?? undefined;
-}
-
-export async function createUserDirGrant(workspace: RendererWorkspaceHost, path: string, permissions: readonly DirPermission[]): Promise<DirGrant> {
-	return workspace.createGrant(path, permissions);
-}
-
-/** Persists a user grant before the window reconnects to its new directory root. */
-export async function persistAppServerDirectoryGrant(workspace: RendererWorkspaceHost, path: string, grant: DirGrant): Promise<void> {
-	await workspace.persistDirectoryGrant(path, grant);
-}
-
-export interface IAppServerWorkspaceFolder {
-	readonly id: string;
-	readonly path: string;
-	readonly grant: DirGrant;
-}
-
-/** Atomically replaces the App Server's ordered workspace-folder collection. */
-export async function setAppServerWorkspaceFolders(workspace: RendererWorkspaceHost, folders: readonly IAppServerWorkspaceFolder[]): Promise<void> {
-	await workspace.setFolders(folders);
 }

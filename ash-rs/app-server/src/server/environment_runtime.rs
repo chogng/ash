@@ -1728,7 +1728,7 @@ impl AppServer {
             .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
         let (path, _, snapshots) = self.add_session_dir(session_id, path, permissions)?;
         // Turn context is immutable once assembled; only later snapshots see this selection.
-        contributions.move_session(session_id.clone(), path.clone(), environment);
+        contributions.move_session(session_id.clone(), environment);
         Ok((path, snapshots))
     }
 

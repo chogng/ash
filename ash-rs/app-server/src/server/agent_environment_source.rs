@@ -23,6 +23,10 @@ pub(super) struct AgentEnvironmentSource {
 }
 
 impl AgentEnvironmentSource {
+    pub(super) fn cwd(&self) -> &Path {
+        self.host.cwd()
+    }
+
     pub(super) fn for_directory(
         &self,
         path: &Path,

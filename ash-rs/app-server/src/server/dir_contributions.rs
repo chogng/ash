@@ -39,7 +39,7 @@ pub(super) struct DirContributions {
     env_dir: Mutex<Option<DirContributionCatalog>>,
     dir_grants: Arc<DirGrants>,
     dirs: Mutex<BTreeMap<SessionId, BTreeMap<PathBuf, DirContributionCatalog>>>,
-    session_environments: Mutex<BTreeMap<SessionId, (PathBuf, AgentEnvironmentSource)>>,
+    session_environments: Mutex<BTreeMap<SessionId, AgentEnvironmentSource>>,
     nested_warnings: Mutex<BTreeMap<SessionId, BTreeSet<String>>>,
     hooks: RwLock<Option<Arc<ash_hooks::DeclarativeHookRuntime>>>,
 }
@@ -308,16 +308,11 @@ impl DirContributions {
             .remove(session_id);
     }
 
-    pub(super) fn move_session(
-        &self,
-        session_id: SessionId,
-        path: PathBuf,
-        environment: AgentEnvironmentSource,
-    ) {
+    pub(super) fn move_session(&self, session_id: SessionId, environment: AgentEnvironmentSource) {
         self.session_environments
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert(session_id, (path, environment));
+            .insert(session_id, environment);
     }
 
     pub(super) fn environment_for_directory(
@@ -333,12 +328,12 @@ impl DirContributions {
             .session_environments
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if environments.get(session_id).is_some_and(|(cwd, _)| {
+        if environments.get(session_id).is_some_and(|source| {
             !self
                 .dir_grants
                 .list(session_id)
                 .iter()
-                .any(|entry| entry.dir().canonical_path() == cwd)
+                .any(|entry| entry.dir().canonical_path() == source.cwd())
         }) {
             environments.remove(session_id);
         }
@@ -600,7 +595,7 @@ impl HarnessContextProvider for DirContributions {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .get(request.session_id)
-            .map(|(_, source)| source.clone())
+            .cloned()
             .unwrap_or_else(|| self.environment.clone());
         let environment = source
             .snapshot(roots)

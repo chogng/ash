@@ -82,7 +82,7 @@ import { ElectronRemoteRuntimeInstallWindow } from "../../platform/remote/electr
 import { electronRemoteWindowMainHost } from "../../platform/remote/electron-main/electronRemoteWindowMainHost.js";
 import { RemoteWindowMainContext } from "../../platform/remote/electron-main/remoteWindowMainContext.js";
 import { WORKSPACE_CONTEXT_CHANGED_CHANNEL } from "../../platform/workspace/common/workspaceIpc.js";
-import { createAppServerWorkspaceTransitionAdapter, createUserDirGrant, persistAppServerDirectoryGrant, readAppServerDirPermissions, setAppServerWorkspaceFolders } from "../../platform/workspaces/electron-main/appServerWorkspaceTransition.js";
+import { createAppServerWorkspaceTransitionAdapter } from "../../platform/workspaces/electron-main/appServerWorkspaceTransition.js";
 import { DEVELOPMENT_DIR_PERMISSIONS, READ_DIR_PERMISSIONS } from '../../platform/workspace/common/workspaceTrust.js';
 import { type IWorkspaceTransitionFailure, type WorkspaceTransitionMainServiceOptions, WorkspaceTransitionFailureKind, WorkspaceTransitionMainService, WorkspaceTransitionStatus } from "../../platform/workspaces/electron-main/workspaceTransitionMainService.js";
 import { WorkspacesManagementMainService } from '../../platform/workspaces/electron-main/workspacesManagementMainService.js';
@@ -1257,9 +1257,7 @@ export class AshApplication extends Disposable {
 			throw new Error("Workspace connection has no directory launcher");
 		}
 		const appServerWorkspace = createAppServerWorkspaceTransitionAdapter(supervisor,
-			launcher instanceof LocalAppServerProcessLauncher
-				? (root, grant, workspaceId, previousWorkspaceId) => this.reconnectLocalAppServerWorkspace(supervisor, launcher, root, grant, workspaceId, previousWorkspaceId, workspaceHost)
-				: (root, grant, workspaceId, previousWorkspaceId) => this.reconnectRemoteAppServerWorkspace(supervisor, launcher, root, grant, workspaceId, previousWorkspaceId, workspaceHost));
+			(root, grant, workspaceId, previousWorkspaceId) => this.reconnectAppServerWorkspace(supervisor, launcher, root, grant, workspaceId, previousWorkspaceId, workspaceHost));
 		return {
 			runtime: appServerWorkspace,
 			classifyRuntimeError: (error) => appServerWorkspace.classifyRuntimeError(error),
@@ -1267,68 +1265,42 @@ export class AshApplication extends Disposable {
 		};
 	}
 
-	private async reconnectLocalAppServerWorkspace(
+	private async reconnectAppServerWorkspace(
 		supervisor: AppServerConnectionRelay,
-		launcher: LocalAppServerProcessLauncher,
+		launcher: LocalAppServerProcessLauncher | SshAppServerProcessLauncher,
 		root: string,
 		grant: DirGrant,
 		workspaceId: string,
 		previousWorkspaceId: string,
 		workspaceHost: RendererWorkspaceHost,
 	): Promise<void> {
-		const previousEnvironment = launcher.environment;
-		const nextEnvironment = {
-			...previousEnvironment,
-			ASH_WORKSPACE_ROOT: root,
-			ASH_DIR_GRANT_SOURCE: "userConfig",
-		};
-		await persistAppServerDirectoryGrant(workspaceHost, root, grant);
+		const previous = launcher instanceof LocalAppServerProcessLauncher
+			? { kind: "local" as const, launcher, environment: launcher.environment, root: launcher.environment.ASH_WORKSPACE_ROOT }
+			: { kind: "remote" as const, launcher, root: launcher.workspaceRoot };
+		await workspaceHost.persistDirectoryGrant(root, grant);
 		await supervisor.stop();
-		launcher.replaceEnvironment(nextEnvironment);
+		if (previous.kind === "local") {
+			previous.launcher.replaceEnvironment({ ...previous.environment, ASH_WORKSPACE_ROOT: root, ASH_DIR_GRANT_SOURCE: "userConfig" });
+		} else {
+			previous.launcher.replaceWorkspaceRoot(root);
+		}
 		try {
 			await supervisor.start();
 			await workspaceHost.setFolders([{ id: workspaceId, path: root, grant: { type: "config" } }]);
 		} catch (error) {
 			await supervisor.stop();
-			launcher.replaceEnvironment(previousEnvironment);
+			if (previous.kind === "local") {
+				previous.launcher.replaceEnvironment(previous.environment);
+			} else {
+				previous.launcher.replaceWorkspaceRoot(previous.root);
+			}
 			try {
 				await supervisor.start();
-				await workspaceHost.setFolders(previousEnvironment.ASH_WORKSPACE_ROOT
-					? [{ id: previousWorkspaceId, path: previousEnvironment.ASH_WORKSPACE_ROOT, grant: { type: "config" } }]
+				await workspaceHost.setFolders(previous.root
+					? [{ id: previousWorkspaceId, path: previous.root, grant: { type: "config" } }]
 					: []);
 			} catch (rollbackError) {
 				throw new AggregateError([error, rollbackError], "Workspace authority switch and rollback both failed");
-			}
-			throw error;
-		}
-	}
-
-	private async reconnectRemoteAppServerWorkspace(
-		supervisor: AppServerConnectionRelay,
-		launcher: SshAppServerProcessLauncher,
-		root: string,
-		grant: DirGrant,
-		workspaceId: string,
-		previousWorkspaceId: string,
-		workspaceHost: RendererWorkspaceHost,
-	): Promise<void> {
-		const previousRoot = launcher.workspaceRoot;
-		await persistAppServerDirectoryGrant(workspaceHost, root, grant);
-		await supervisor.stop();
-		launcher.replaceWorkspaceRoot(root);
-		try {
-			await supervisor.start();
-			await workspaceHost.setFolders([{ id: workspaceId, path: root, grant: { type: "config" } }]);
-		} catch (error) {
-			await supervisor.stop();
-			launcher.replaceWorkspaceRoot(previousRoot);
-			try {
-				await supervisor.start();
-				await workspaceHost.setFolders(previousRoot
-					? [{ id: previousWorkspaceId, path: previousRoot, grant: { type: "config" } }]
-					: []);
-			} catch (rollbackError) {
-				throw new AggregateError([error, rollbackError], "Remote Workspace authority switch and rollback both failed");
 			}
 			throw error;
 		}
@@ -1452,12 +1424,12 @@ export class AshApplication extends Disposable {
 
 	private async resolveDirGrant(workspaceHost: RendererWorkspaceHost, path: string): Promise<DirGrant | undefined> {
 		if (this.appServerStartupMode === "disabled") return { type: "config" };
-		const persisted = await readAppServerDirPermissions(workspaceHost, path);
+		const persisted = await workspaceHost.readPermissions(path);
 		if (persisted !== undefined) return { type: "config" };
 		const choice = await workspaceHost.selectPermissions(path);
 		if (choice === 'cancel') return undefined;
 		if (choice !== 'development' && choice !== 'readOnly') throw new Error('Invalid directory permission selection');
-		return createUserDirGrant(workspaceHost, path, choice === 'development' ? DEVELOPMENT_DIR_PERMISSIONS : READ_DIR_PERMISSIONS);
+		return workspaceHost.createGrant(path, choice === 'development' ? DEVELOPMENT_DIR_PERMISSIONS : READ_DIR_PERMISSIONS);
 	}
 
 	private directoryPermissionPrompt(path: string): DialogRequest {
