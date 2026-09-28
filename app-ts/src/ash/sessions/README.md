@@ -131,8 +131,8 @@ and dirs. It does not grant access and is not the editor window Workspace from
   draft materialization.
 - `test/browser/sessions-part.test.ts` verifies the Sessions-owned primary Part
   passively renders multiple full Chat surfaces and reports focus/close intent.
-- `test/browser/chatViewPane.test.ts`, `chatViewPane.startup.test.ts`, and
-  `sessionInspector.test.ts` protect the Session-backed regular Workbench Chat.
+- `test/browser/chatViewPane.test.ts` and `chatViewPane.startup.test.ts`
+  protect the Session-backed regular Workbench Chat and its Agent Sessions list.
 - `test/browser/workbenchSessions.contribution.test.ts` verifies the regular
   Workbench's separate Sessions service, Chat navigation, and Turn review registrations.
 - `test/browser/sessions-list.test.ts` verifies that list refresh retains buttons,

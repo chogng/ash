@@ -10,17 +10,19 @@ import type { IActiveSessionThread, IChat, ISession, IUntitledChatSession, Threa
 import { ISessionsManagementService } from "../services/sessions/common/sessionsManagement.js";
 import { ChatWidget, resolveMarkdownWorkspaceResource } from "../../workbench/contrib/chat/browser/widget/chatWidget.js";
 import { ChatTitleControl } from "../../workbench/contrib/chat/browser/view/chatTitleControl.js";
-import { h, isHTMLElement } from "../../base/browser/dom.js";
+import { addDisposableListener, h, isHTMLElement } from "../../base/browser/dom.js";
 import { type ChatContextAttachment, type IChatContextTarget } from "../../workbench/services/chat/common/chatContextService.js";
 import { IOpenerService } from "../../platform/opener/common/openerService.js";
 import { IEditorService } from "../../workbench/services/editor/common/editorService.js";
 import { IFileService } from '../../platform/files/common/files.js';
-import { IDialogService } from '../../platform/dialogs/common/dialogs.js';
 import { URI } from '../../base/common/uri.js';
 import { type IContextKey } from "../../platform/contextkey/common/contextkey.js";
 import { ContextKeyService, IContextKeyService } from "../../platform/contextkey/browser/contextKeyService.js";
-import { ChatSessionInspectorVisibleContext } from "../../workbench/contrib/chat/common/chat.js";
-import { SessionInspector } from "./sessionInspector.js";
+import { AgentSessionsSidebarVisibleContext } from '../../workbench/contrib/chat/common/chat.js';
+import { AgentSessionsControl } from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsControl.js';
+import { registerAgentSessionsAccessibility } from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsAccessibility.js';
+import { createAgentSessionsModel } from './agentSessionsModel.js';
+import { localize } from '../../nls.js';
 import { ChatWidgetModel } from './chatWidgetModel.js';
 import { IRendererHostService, type IRendererHost } from '../../platform/renderer/common/rendererHost.js';
 import type { IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
@@ -49,8 +51,9 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 	private readonly titleControl: ChatTitleControl;
 	private readonly paneHost: HTMLDivElement;
 	private readonly body: HTMLDivElement;
-	private readonly inspector: SessionInspector;
-	private readonly inspectorVisible: IContextKey<boolean>;
+	private readonly sessionsSidebar: HTMLElement;
+	private readonly sessionsControl: AgentSessionsControl;
+	private readonly sessionsSidebarVisible: IContextKey<boolean>;
 	private readonly empty: HTMLDivElement;
 	private readonly panes = new Map<string, ChatWidget<ChatWidgetModel>>();
 	private readonly tabOrder: string[] = [];
@@ -70,7 +73,6 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		@ICommandService commandService: ICommandService,
 		@IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService,
 		@IFileService private readonly fileService: IFileService,
-		@IDialogService private readonly dialogs: IDialogService,
 		@IContextKeyService contextKeyService?: IContextKeyService,
 		@IOpenerService private readonly openerService?: IOpenerService,
 		@IEditorService private readonly editorService?: IEditorService,
@@ -104,18 +106,32 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		this.body = h(container.ownerDocument, "div");
 		this.body.className = "ash-chat-body";
 		this.body.append(this.paneHost);
-		const inspectorContextKeys = contextKeyService ?? this._register(new ContextKeyService());
-		this.inspectorVisible = ChatSessionInspectorVisibleContext.bindTo(inspectorContextKeys);
-		this._register(toDisposable(() => this.inspectorVisible.reset()));
-		this.inspector = this._register(new SessionInspector(this.body, sessionService, {
-			close: () => this.setInspectorVisible(false),
-		}, this.dialogs));
-		this.inspector.element.hidden = true;
+		const sidebarContextKeys = contextKeyService ?? this._register(new ContextKeyService());
+		this.sessionsSidebarVisible = AgentSessionsSidebarVisibleContext.bindTo(sidebarContextKeys);
+		this._register(toDisposable(() => this.sessionsSidebarVisible.reset()));
+		this.sessionsSidebar = h(container.ownerDocument, 'aside');
+		this.sessionsSidebar.className = 'ash-chat-sessions-sidebar';
+		this.sessionsSidebar.setAttribute('aria-label', localize('chat.sessions.sidebar', 'Agent sessions'));
+		const sessionsHeader = h(container.ownerDocument, 'header');
+		const sessionsTitle = h(container.ownerDocument, 'h2');
+		sessionsTitle.textContent = localize('chat.sessions.title', 'Sessions');
+		const newSessionButton = h(container.ownerDocument, 'button');
+		newSessionButton.type = 'button';
+		newSessionButton.className = 'ash-chat-sessions-new';
+		newSessionButton.textContent = localize('chat.sessions.new', 'New Session');
+		sessionsHeader.append(sessionsTitle, newSessionButton);
+		this.sessionsSidebar.append(sessionsHeader);
+		this.body.append(this.sessionsSidebar);
+		this._register(toDisposable(() => this.sessionsSidebar.remove()));
+		this._register(registerAgentSessionsAccessibility(this.sessionsSidebar, sidebarContextKeys));
+		this._register(addDisposableListener(newSessionButton, 'click', () => this.sessionService.createUntitledSession()));
+		this.sessionsControl = this._register(new AgentSessionsControl(this.sessionsSidebar, createAgentSessionsModel(sessionService)));
+		this.sessionsSidebar.hidden = true;
 		this.contentElement.append(this.body);
 		this.body.addEventListener("keydown", (event) => {
-			if (event.key !== "Escape" || !this.inspectorVisible.get()) return;
+			if (event.key !== 'Escape' || !this.sessionsSidebarVisible.get()) return;
 			event.preventDefault();
-			this.setInspectorVisible(false);
+			this.setSessionsSidebarVisible(false);
 		});
 		const ResizeObserver = container.ownerDocument.defaultView?.ResizeObserver;
 		if (ResizeObserver) {
@@ -146,8 +162,8 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		this.activePane?.focus();
 	}
 
-	toggleInspector(): void {
-		this.setInspectorVisible(!this.inspectorVisible.get());
+	toggleSessionsSidebar(): void {
+		this.setSessionsSidebarVisible(!this.sessionsSidebarVisible.get());
 	}
 
 	addContext(attachment: ChatContextAttachment): void {
@@ -237,7 +253,6 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		const orderedEntries = this.orderEntries(entries, activePane);
 		this.paneHost.replaceChildren(...orderedEntries.map((entry) => entry.pane.element), this.empty);
 		this.activePane = activePane;
-		this.inspector.bind(this.activePane?.model);
 		for (const entry of orderedEntries) entry.pane.setVisible(entry.pane === this.activePane);
 		this.empty.hidden = orderedEntries.length > 0;
 		const activeTabId = this.activePane?.element.id;
@@ -368,17 +383,17 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		return [...this.panes.values()].find((pane) => pane.element.id === tabId);
 	}
 
-	private setInspectorVisible(visible: boolean): void {
-		if (visible === this.inspectorVisible.get()) return;
+	private setSessionsSidebarVisible(visible: boolean): void {
+		if (visible === this.sessionsSidebarVisible.get()) return;
 		if (visible) {
 			const active = this.contentElement.ownerDocument.activeElement;
 			const HTMLElement = this.contentElement.ownerDocument.defaultView?.HTMLElement;
 			this.focusReturn = this.titleControl.captureFocus() ?? (HTMLElement && active instanceof HTMLElement ? () => active.focus() : undefined);
 		}
-		this.inspectorVisible.set(visible);
-		this.body.classList.toggle("inspector-visible", visible);
-		this.inspector.element.hidden = !visible;
-		if (visible) this.inspector.focus();
+		this.sessionsSidebarVisible.set(visible);
+		this.body.classList.toggle('sessions-sidebar-visible', visible);
+		this.sessionsSidebar.hidden = !visible;
+		if (visible) this.sessionsControl.focus();
 		else {
 			this.focusReturn?.();
 			this.focusReturn = undefined;

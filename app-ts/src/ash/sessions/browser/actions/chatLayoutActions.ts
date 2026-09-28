@@ -10,24 +10,24 @@ import { IChatService } from "../../../workbench/services/chat/common/chatServic
 import type { ModelProviderCredentialStatus } from '../../../workbench/services/chat/common/chatService.js';
 import { IPreferencesService } from "../../../workbench/services/preferences/common/preferences.js";
 import { IViewsService } from "../../../workbench/services/views/browser/viewsService.js";
-import { ChatSessionInspectorVisibleContext, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, TOGGLE_SESSION_INSPECTOR_COMMAND_ID } from "../../../workbench/contrib/chat/common/chat.js";
+import { AgentSessionsSidebarVisibleContext, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID } from "../../../workbench/contrib/chat/common/chat.js";
 import { ChatViewPane } from "../chatViewPane.js";
 
 const ChatBrowserAvailable = ContextKeyExpr.equals("chatBrowserAvailable", true);
 const ChatEditorAreaAvailable = ContextKeyExpr.equals("chatEditorAreaAvailable", true);
 const ChatNewWindowAvailable = ContextKeyExpr.equals("chatNewWindowAvailable", true);
 
-registerAction2(class ToggleSessionInspectorAction extends Action2 {
+registerAction2(class ToggleAgentSessionsSidebarAction extends Action2 {
 	constructor() {
 		super({
-			id: TOGGLE_SESSION_INSPECTOR_COMMAND_ID,
-			title: "Show Session Inspector",
-			tooltip: "Show Session Inspector",
+			id: TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID,
+			title: localize('chat.sessions.showSidebar', 'Show Agent Sessions'),
+			tooltip: localize('chat.sessions.showSidebar', 'Show Agent Sessions'),
 			icon: Lxicon.layoutSidebarRightOff1,
 			toggled: {
-				condition: ChatSessionInspectorVisibleContext.isEqualTo(true),
-				title: "Hide Session Inspector",
-				tooltip: "Hide Session Inspector",
+				condition: AgentSessionsSidebarVisibleContext.isEqualTo(true),
+				title: localize('chat.sessions.hideSidebar', 'Hide Agent Sessions'),
+				tooltip: localize('chat.sessions.hideSidebar', 'Hide Agent Sessions'),
 				icon: Lxicon.layoutSidebarRight1,
 			},
 			menu: [
@@ -43,7 +43,7 @@ registerAction2(class ToggleSessionInspectorAction extends Action2 {
 
 	override run(accessor: ServicesAccessor): void {
 		const view = accessor.get(IViewsService).openView(CHAT_VIEW_ID);
-		if (view instanceof ChatViewPane) view.toggleInspector();
+		if (view instanceof ChatViewPane) view.toggleSessionsSidebar();
 	}
 });
 

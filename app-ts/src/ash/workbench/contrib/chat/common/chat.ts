@@ -6,10 +6,10 @@ export const OPEN_CHAT_COMMAND_ID = "workbench.action.chat.open";
 export const NEW_CHAT_COMMAND_ID = "workbench.action.chat.new";
 export const SHOW_CHAT_HISTORY_COMMAND_ID =
 	"workbench.action.chat.showHistory";
-export const TOGGLE_SESSION_INSPECTOR_COMMAND_ID =
-	"workbench.action.chat.toggleSessionInspector";
-export const ChatSessionInspectorVisibleContext = new RawContextKey<boolean>(
-	"chatSessionInspectorVisible",
+export const TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID =
+	'agentSessions.toggleAgentSessionsSidebar';
+export const AgentSessionsSidebarVisibleContext = new RawContextKey<boolean>(
+	'agentSessionsSidebarVisible',
 	false,
 );
 export const OPEN_CHAT_BROWSER_COMMAND_ID =

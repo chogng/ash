@@ -18,7 +18,7 @@ import type { ViewPaneContainer } from "../../../workbench/browser/parts/views/v
 import { ViewContainerLocation, WorkbenchViewRegistry } from "../../../workbench/common/views.js";
 import { chatTranscriptListItems, chatListItem, chatTurnErrorListItem, type ChatTurnErrorAction } from "../../../workbench/contrib/chat/browser/widget/chatListItems.js";
 import { ChatWidgetModel } from "../../browser/chatWidgetModel.js";
-import { CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, NEW_CHAT_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, TOGGLE_SESSION_INSPECTOR_COMMAND_ID } from "../../../workbench/contrib/chat/common/chat.js";
+import { CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, NEW_CHAT_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID } from "../../../workbench/contrib/chat/common/chat.js";
 import { IPreferencesService, type IPreferencesService as PreferencesService } from "../../../workbench/services/preferences/common/preferences.js";
 import { PreferencesService as BrowserPreferencesService } from "../../../workbench/services/preferences/browser/preferencesService.js";
 import { emptyEditorServiceState } from '../../../workbench/test/common/testEditorService.js';
@@ -42,19 +42,6 @@ import { URI } from "../../../base/common/uri.js";
 import type { ICommandService } from "../../../platform/commands/common/commands.js";
 import type { IOpenerService } from "../../../platform/opener/common/openerService.js";
 import type { IEditorService } from "../../../workbench/services/editor/common/editorService.js";
-
-const testDialogs: IDialogService = {
-	onWillShowDialog: Event.None,
-	onDidShowDialog: Event.None,
-	about: async () => { throw new Error('Unexpected about dialog'); },
-	showMessage: async () => {},
-	info: async () => {},
-	warn: async () => {},
-	error: async () => {},
-	confirm: async () => ({ confirmed: true }),
-	prompt: async () => { throw new Error('Unexpected prompt'); },
-	input: async () => ({ confirmed: false }),
-};
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 const unavailableFileService = {
@@ -182,7 +169,6 @@ test('Chat loads an Ash remote workspace image through the file service', async 
 			commands,
 			testLayoutService(),
 			fileService,
-			testDialogs,
 			contextKeys,
 		);
 		dom.window.document.body.append(pane.element);
@@ -290,7 +276,6 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		commands,
 		layout,
 		unavailableFileService,
-		testDialogs,
 		contextKeys,
 	);
 	chatView = pane;
@@ -339,15 +324,33 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	assert.ok(toolbar?.querySelector(".ash-button-label"));
 	assert.ok(toolbar?.querySelector("svg.ash-icon"));
 	assert.ok(layoutToolbar?.querySelector(
-		`[data-action-id="${TOGGLE_SESSION_INSPECTOR_COMMAND_ID}"]`,
+		`[data-action-id="${TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID}"]`,
 	));
 	layoutToolbar?.querySelector<HTMLButtonElement>("button")?.focus();
-	await commands.executeCommand(TOGGLE_SESSION_INSPECTOR_COMMAND_ID);
-	assert.equal(pane.element.querySelector<HTMLElement>(".ash-session-inspector")?.hidden, false);
-	assert.equal(contextKeys.getValue("chatSessionInspectorVisible"), true);
+	await commands.executeCommand(TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID);
+	const sessionsSidebar = pane.element.querySelector<HTMLElement>('.ash-chat-sessions-sidebar');
+	assert.equal(sessionsSidebar?.hidden, false);
+	assert.equal(contextKeys.getValue('agentSessionsSidebarVisible'), true);
+	assert.deepEqual([...sessionsSidebar?.querySelectorAll<HTMLButtonElement>('.ash-agent-session-row') ?? []].map(button => button.title), ['Session session-1', 'Session session-2']);
+	assert.equal(sessionsSidebar?.contains(dom.window.document.activeElement), true);
+	sessionsSidebar?.querySelectorAll<HTMLButtonElement>('.ash-agent-session-row')[1]?.click();
+	assert.equal(sessions.active?.session.sessionId, 'session-2');
+	const search = sessionsSidebar?.querySelector<HTMLInputElement>('.ash-agent-sessions-search');
+	assert.ok(search);
+	search.value = 'session-1';
+	search.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+	assert.deepEqual([...sessionsSidebar?.querySelectorAll<HTMLButtonElement>('.ash-agent-session-row') ?? []].map(button => button.title), ['Session session-1']);
+	search.value = '';
+	search.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+	sessionsSidebar?.querySelector<HTMLButtonElement>('.ash-chat-sessions-new')?.click();
+	const draftId = sessions.activeUntitledSession?.untitledSessionId;
+	assert.ok(draftId);
+	assert.equal(sessionsSidebar?.querySelector<HTMLElement>('.ash-agent-sessions-group')?.hidden, false);
+	sessions.discardUntitledSession(draftId);
+	sessions.selectThread('session-1', 'thread-1');
 	pane.element.querySelector(".ash-chat-body")!.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-	assert.equal(pane.element.querySelector<HTMLElement>(".ash-session-inspector")?.hidden, true);
-	assert.equal(contextKeys.getValue("chatSessionInspectorVisible"), false);
+	assert.equal(sessionsSidebar?.hidden, true);
+	assert.equal(contextKeys.getValue('agentSessionsSidebarVisible'), false);
 	assert.equal(dom.window.document.activeElement, layoutToolbar?.querySelector("button"));
 	assert.equal(layoutToolbar?.hidden, false);
 	const chatActions = menuService.getMenuActions(MenuId.ChatTitle)
@@ -686,7 +689,6 @@ test("an empty Session list opens an untitled session and persists it on its fir
 		commands,
 		layout,
 		unavailableFileService,
-		testDialogs,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -827,7 +829,6 @@ test("the New Chat slash command opens an untitled session", async () => {
 		commands,
 		layout,
 		unavailableFileService,
-		testDialogs,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -903,7 +904,6 @@ test("failed first send keeps the untitled session and its input draft", async (
 		commands,
 		layout,
 		unavailableFileService,
-		testDialogs,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -984,7 +984,6 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
 		commands,
 		layout,
 		unavailableFileService,
-		testDialogs,
 	);
 	dom.window.document.body.append(pane.element);
 

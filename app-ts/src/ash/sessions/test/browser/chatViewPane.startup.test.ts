@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
-import { DialogResult, type IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 
 import { JSDOM } from "jsdom";
 import type { IFileService } from '../../../platform/files/common/files.js';
@@ -13,19 +12,6 @@ import type { IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCom
 import type { IWorkbenchLayoutService, WorkbenchPartId, WorkbenchPartVisibilityChangeEvent } from "../../../workbench/services/layout/browser/layoutService.js";
 import type { ApprovalMode, IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../services/sessions/common/session.js";
 import type { ISessionsManagementService, SessionsManagementState } from "../../services/sessions/common/sessionsManagement.js";
-
-const testDialogs: IDialogService = {
-	onWillShowDialog: Event.None,
-	onDidShowDialog: Event.None,
-	about: async () => { throw new Error('Unexpected about dialog'); },
-	showMessage: async () => {},
-	info: async () => {},
-	warn: async () => {},
-	error: async () => {},
-	confirm: async () => ({ confirmed: true }),
-	prompt: async () => { throw new Error('Unexpected prompt'); },
-	input: async () => ({ confirmed: false }),
-};
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -62,7 +48,6 @@ test("opens a local Chat tab before the backend session request settles", () => 
 		{} as ICommandService,
 		layoutService,
 		{} as IFileService,
-		testDialogs,
 	);
 
 	assert.equal(sessionService.untitledSessions.length, 1);
