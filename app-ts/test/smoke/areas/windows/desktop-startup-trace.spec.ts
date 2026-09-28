@@ -1,25 +1,27 @@
 import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { cpus, homedir, release, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { promisify } from 'node:util';
 import { expect, test } from '../../../automation/test.js';
-import { launchElectron, type ElectronLaunchResult } from '../../../automation/playwrightElectron.js';
+import { launchElectron, type ElectronLaunchMilestone, type ElectronLaunchResult } from '../../../automation/playwrightElectron.js';
 import { appServerDaemonExecutablePath, appServerExecutablePath } from '../../../../src/ash/platform/app-server/electron-main/appServerPackage.js';
 
 const execFileAsync = promisify(execFile);
 const samplesPerCohort = 5;
+const accountHome = homedir();
 
 interface ConnectionSample {
 	readonly cohort: 'fresh' | 'stopped' | 'reused' | 'ui-only';
 	readonly index: number;
 	readonly readyMs: number | null;
+	readonly milestones: readonly { phase: 'launch-requested' | ElectronLaunchMilestone; elapsedMs: number }[];
 	readonly error?: string;
 }
 
-test('Desktop connection startup trace', async ({ target, testWorkspace }, testInfo) => {
-	test.skip(process.env.ASH_CONNECTION_TRACE !== '1' || target.kind !== 'electron' || target.appServerMode !== 'required', 'Run explicitly to measure Desktop connection startup.');
+test('Desktop startup trace', async ({ target, testWorkspace }, testInfo) => {
+	test.skip(process.env.ASH_DESKTOP_STARTUP_TRACE !== '1' || target.kind !== 'electron' || target.appServerMode !== 'required', 'Run explicitly to measure Desktop startup.');
 	test.setTimeout(240_000);
 	const directory = await mkdtemp(join(tmpdir(), 'ash-trace-'));
 	const priorHome = process.env.HOME;
@@ -39,6 +41,9 @@ test('Desktop connection startup trace', async ({ target, testWorkspace }, testI
 	const metadata: Record<string, unknown> = {
 		platform: process.platform,
 		architecture: process.arch,
+		osRelease: release(),
+		cpuModel: cpus()[0]?.model ?? 'unknown',
+		cpuCount: cpus().length,
 		buildId: undefined,
 		backendBytes: undefined,
 		workbenchMode: 'code',
@@ -48,6 +53,7 @@ test('Desktop connection startup trace', async ({ target, testWorkspace }, testI
 		measurement: 'one Playwright worker clock, immediately before launchElectron through Workbench ready',
 		cache: 'new user data for every sample; operating-system file cache is not cleared',
 		profileState: 'fresh profiles include Playwright trust selection; stopped, reused, and UI-only use an authorized profile',
+		milestoneClock: 'Playwright worker performance.now; each elapsed time is relative to launch-requested in the same process',
 	};
 	const stop = async (profile: string): Promise<void> => {
 		await execFileAsync(daemon, ['stop'], { env: { ...process.env, ASH_HOME: profile }, windowsHide: true, timeout: 30_000 });
@@ -62,6 +68,7 @@ test('Desktop connection startup trace', async ({ target, testWorkspace }, testI
 		const start = performance.now();
 		let readyMs: number | null = null;
 		let error: string | undefined;
+		const milestones: { phase: 'launch-requested' | ElectronLaunchMilestone; elapsedMs: number }[] = [{ phase: 'launch-requested', elapsedMs: 0 }];
 		try {
 			desktop = await launchElectron({
 				appServerMode: cohort === 'ui-only' ? 'disabled' : 'required',
@@ -69,7 +76,7 @@ test('Desktop connection startup trace', async ({ target, testWorkspace }, testI
 				profileDirectory: profile,
 				workspaceDirectory: testWorkspace.directory,
 				workspacePermissions: cohort === 'fresh' ? 'development' : undefined,
-			});
+			}, phase => milestones.push({ phase, elapsedMs: Math.round(performance.now() - start) }));
 			readyMs = Math.round(performance.now() - start);
 		} catch (cause) {
 			error = redact(String(cause), directory, testWorkspace.directory);
@@ -84,7 +91,7 @@ test('Desktop connection startup trace', async ({ target, testWorkspace }, testI
 			} catch (cause) {
 				error = `${error ? `${error}\n` : ''}Cleanup: ${redact(String(cause), directory, testWorkspace.directory)}`;
 			}
-			samples.push({ cohort, index, readyMs, ...(error ? { error } : {}) });
+			samples.push({ cohort, index, readyMs, milestones, ...(error ? { error } : {}) });
 		}
 	};
 	try {
@@ -147,14 +154,17 @@ test('Desktop connection startup trace', async ({ target, testWorkspace }, testI
 				try { await stop(profile); }
 				catch (cause) { cleanupFailure ??= cause; }
 			}
-			if (cleanupFailure) throw cleanupFailure;
+			if (cleanupFailure) {
+				metadata.failure = `Cleanup: ${redact(String(cleanupFailure), directory, testWorkspace.directory)}`;
+				throw cleanupFailure;
+			}
 		} finally {
-			const output = join(traceDirectory, 'connection-trace.json');
+			const output = join(traceDirectory, 'desktop-startup-trace.json');
 			try {
 				await mkdir(traceDirectory, { recursive: true });
-				await writeFile(output, JSON.stringify({ schemaVersion: 1, metadata, summary: summarize(samples), samples }, null, 2));
-				await testInfo.attach('connection-trace', { path: output, contentType: 'application/json' });
-				console.log(`ASH_CONNECTION_TRACE_REPORT ${output}`);
+				await writeFile(output, JSON.stringify({ schemaVersion: 2, metadata, summary: summarize(samples), samples }, null, 2));
+				await testInfo.attach('desktop-startup-trace', { path: output, contentType: 'application/json' });
+				console.log(`ASH_DESKTOP_STARTUP_TRACE_REPORT ${output}`);
 			} finally {
 				if (priorHome === undefined) delete process.env.HOME;
 				else process.env.HOME = priorHome;
@@ -167,7 +177,7 @@ test('Desktop connection startup trace', async ({ target, testWorkspace }, testI
 });
 
 function redact(value: string, home: string, workspace: string): string {
-	return value.replaceAll(home, '[test-home]').replaceAll(workspace, '[test-workspace]').replaceAll('offline-test-key', '[test-credential]');
+	return value.replaceAll(home, '[test-home]').replaceAll(workspace, '[test-workspace]').replaceAll(accountHome, '[home]').replaceAll('offline-test-key', '[test-credential]');
 }
 
 function summarize(samples: readonly ConnectionSample[]): Record<ConnectionSample['cohort'], { valid: number; errors: number; medianMs: number | null }> {

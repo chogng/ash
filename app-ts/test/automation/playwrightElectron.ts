@@ -12,8 +12,10 @@ export interface ElectronLaunchResult {
 	close(): Promise<void>;
 }
 
+export type ElectronLaunchMilestone = 'electron-launch-resolved' | 'first-window' | 'trust-accepted' | 'workbench-ready';
+
 /** Launches Ash Desktop through Playwright's Electron adapter. */
-export async function launchElectron(options: ElectronLaunchOptions): Promise<ElectronLaunchResult> {
+export async function launchElectron(options: ElectronLaunchOptions, onMilestone?: (milestone: ElectronLaunchMilestone) => void): Promise<ElectronLaunchResult> {
 	const configuration = resolveElectronConfiguration(options);
 	const application = await _electron.launch({
 		args: [...configuration.args],
@@ -22,6 +24,7 @@ export async function launchElectron(options: ElectronLaunchOptions): Promise<El
 		executablePath: configuration.executablePath,
 		timeout: 30_000,
 	});
+	onMilestone?.('electron-launch-resolved');
 	// Playwright releases the application channel on exit; retain the child process for startup diagnostics and cleanup.
 	const electronProcess = application.process();
 	const close = async (): Promise<void> => {
@@ -41,6 +44,7 @@ export async function launchElectron(options: ElectronLaunchOptions): Promise<El
 	electronProcess.stderr?.on('data', onProcessError);
 	try {
 		const page = application.windows()[0] ?? await application.waitForEvent("window", { timeout: 30_000 });
+		onMilestone?.('first-window');
 		const driver = new ElectronPlaywrightDriver(application, page);
 		const pageErrors: string[] = [];
 		const pendingRequests = new Set<Request>();
@@ -63,9 +67,11 @@ export async function launchElectron(options: ElectronLaunchOptions): Promise<El
 				await Promise.race([ready, prompt.waitFor({ state: 'visible' })]);
 				if (await prompt.isVisible()) {
 					await prompt.getByRole('button', { name: 'Trust Folder & Enable Features' }).click();
+					onMilestone?.('trust-accepted');
 				}
 			}
 			await ready;
+			onMilestone?.('workbench-ready');
 		} catch (error) {
 			const text = await page.locator('body').innerText().catch(() => 'Document is unavailable');
 			const details = [
