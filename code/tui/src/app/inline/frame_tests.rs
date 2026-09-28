@@ -55,6 +55,20 @@ pub(super) fn text(buffer: &Buffer) -> String {
 }
 
 #[test]
+fn running_tip_appears_below_the_inline_spinner() {
+    let mut app = app();
+    app.set_active_turn(ash_protocol::TurnId::new("inline-tip").unwrap());
+    app.update(crate::thread::Event::TurnActivityChanged(
+        crate::thread::TurnActivity::Working,
+    ));
+    app.handle_tick(std::time::Instant::now() + std::time::Duration::from_secs(9));
+
+    let rendered = text(&render(&app, 80, 20));
+    assert!(rendered.contains("Working"));
+    assert!(rendered.contains("└ Tip: Ask Ash to list steps for complex tasks"));
+}
+
+#[test]
 fn input_uses_a_bounded_area_with_terminal_mouse_selection() {
     let mut app = app();
     assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
@@ -152,11 +166,18 @@ fn model_list_opens_inline_and_restores_input_after_close() {
         ash_protocol::ProviderId::new("openai").unwrap(),
         ash_protocol::ModelId::new("gpt-test").unwrap(),
     );
+    let mut info = ash_protocol::ModelInfo::new(model.model.clone(), "GPT Test");
+    info.supported_reasoning_efforts = vec![
+        ash_protocol::ReasoningEffort::Low,
+        ash_protocol::ReasoningEffort::Medium,
+        ash_protocol::ReasoningEffort::High,
+    ];
+    info.model_reasoning_effort = Some(ash_protocol::ReasoningEffort::Medium);
     let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
         models: vec![
             ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
                 model.clone(),
-                &ash_protocol::ModelInfo::new(model.model, "GPT Test"),
+                &info,
             ),
         ],
     };
@@ -169,8 +190,26 @@ fn model_list_opens_inline_and_restores_input_after_close() {
     );
     let buffer = render(&app, 100, 32);
     assert!(text(&buffer).contains("GPT Test"));
+    assert!(text(&buffer).contains("■■■"));
+    let blocks = buffer
+        .content
+        .iter()
+        .filter(|cell| cell.symbol() == "■")
+        .collect::<Vec<_>>();
+    assert!(
+        blocks
+            .iter()
+            .any(|cell| cell.fg == app.render_context().accent())
+    );
+    assert!(
+        blocks
+            .iter()
+            .any(|cell| cell.fg == app.render_context().muted())
+    );
     assert!(!text(&buffer).contains("openai"));
     crate::tui_assert_snapshot!("model_list", text(&buffer));
+    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    assert!(text(&render(&app, 100, 32)).contains("■■■"));
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.command_panel().is_none());
     assert!(app.chat_input_focused());

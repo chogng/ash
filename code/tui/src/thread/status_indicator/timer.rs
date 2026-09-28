@@ -8,11 +8,15 @@ pub(crate) struct StatusTimer {
     turn_id: Option<TurnId>,
     started_at: Option<Instant>,
     elapsed: Duration,
+    runs_started: u64,
 }
 
 impl StatusTimer {
     pub(crate) fn start(&mut self, now: Instant) {
-        self.started_at.get_or_insert(now);
+        if self.started_at.is_none() {
+            self.started_at = Some(now);
+            self.runs_started += 1;
+        }
     }
 
     pub(crate) fn bind_turn(&mut self, turn_id: &TurnId, now: Instant) {
@@ -28,7 +32,9 @@ impl StatusTimer {
     }
 
     pub(crate) fn clear(&mut self) {
-        *self = Self::default();
+        self.turn_id = None;
+        self.started_at = None;
+        self.elapsed = Duration::ZERO;
     }
 
     pub(crate) fn tick(&mut self, now: Instant) -> bool {
@@ -43,6 +49,10 @@ impl StatusTimer {
 
     pub(crate) fn elapsed(&self) -> Duration {
         self.elapsed
+    }
+
+    pub(crate) fn runs_started(&self) -> u64 {
+        self.runs_started
     }
 }
 

@@ -15,6 +15,7 @@ fn tui_table_defaults_missing_terminal_fields() {
     let settings = TerminalSettings::from_tui(&section).unwrap();
 
     assert!(!settings.memory_diagnostics());
+    assert!(settings.show_tips());
     assert_eq!(settings.auto_update(), crate::UpdatePolicy::Latest);
     assert_eq!(settings.language(), Language::English);
     assert_eq!(settings.key_hint_style(), KeyHintStyle::Contrast);
@@ -22,6 +23,31 @@ fn tui_table_defaults_missing_terminal_fields() {
     assert_eq!(
         settings.screen_mode(),
         crate::terminal::ScreenMode::Fullscreen
+    );
+}
+
+#[test]
+fn show_tips_round_trips_and_rejects_non_boolean_values() {
+    let section = FrontendConfigDto(BTreeMap::from([
+        ("showTips".into(), serde_json::json!(false)),
+        ("futureOption".into(), serde_json::json!(42)),
+    ]));
+    let mut settings = TerminalSettings::from_tui(&section).unwrap();
+    assert!(!settings.show_tips());
+    assert_eq!(
+        settings.write_to_tui(&section).unwrap().0["showTips"],
+        false
+    );
+    settings.set_show_tips(true);
+    let updated = settings.write_to_tui(&section).unwrap();
+    assert_eq!(updated.0["showTips"], true);
+    assert_eq!(updated.0["futureOption"], 42);
+    assert!(
+        TerminalSettings::from_tui(&FrontendConfigDto(BTreeMap::from([(
+            "showTips".into(),
+            serde_json::json!("false"),
+        )])))
+        .is_err()
     );
 }
 

@@ -13,6 +13,7 @@ expression: frame_text(&app)
             │  │ Search configuration                                               │ │             
             │  ╰────────────────────────────────────────────────────────────────────╯ │             
             │> Vim mode                                                           off │             
+            │> Show tips                                                           on │             
             │> Memory diagnostics                                                 off │             
             │> Automatic updates                                               Latest │             
             │> Show Git changes as diff                                           off │             
@@ -25,7 +26,6 @@ expression: frame_text(&app)
             │> Git fetch interval                                                180s │             
             │> Git branch marker                                            Powerline │             
             │> Advisor                                                            Off │             
-            │                                                                         │             
             │                                                                         │             
   ╭─────────│  Enter change · r reset · ←/→ details · Tab tabs · / search · Esc close │──────────╮  
   │ > preser└─────────────────────────────────────────────────────────────────────────┘          │  

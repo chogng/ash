@@ -76,8 +76,24 @@ pub(super) fn draw(
     }
     frame.render_widget(
         Paragraph::new(Line::from(spans)).style(Style::default().fg(context.muted())),
-        content,
+        Rect {
+            height: 1,
+            ..content
+        },
     );
+    if area.height > 1
+        && let Some(tip) = indicator.tip()
+    {
+        frame.render_widget(
+            Paragraph::new(format!("└ {}", crate::nls::text(context.language(), tip)))
+                .style(Style::default().fg(context.muted())),
+            Rect {
+                y: area.y + 1,
+                height: 1,
+                ..area
+            },
+        );
+    }
 }
 
 #[cfg(test)]

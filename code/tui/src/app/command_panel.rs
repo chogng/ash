@@ -373,24 +373,7 @@ impl CommandPanel {
             Self::Lsp(content) => CommandPanelOutcome::Lsp(content.handle_key(key)),
             Self::Mcp(content) => map_selection(content.handle_key(key), CommandPanelOutcome::Mcp),
             Self::Model(content) => {
-                if key.kind == crossterm::event::KeyEventKind::Press
-                    && key.modifiers.is_empty()
-                    && key.code == crossterm::event::KeyCode::Char('p')
-                    && content.state().items_focused()
-                {
-                    if let Some(ModelSelectionAction::Select { preference, pinned }) = content
-                        .state()
-                        .selected_item()
-                        .and_then(|item| item.id())
-                        .and_then(|id| content.action(id))
-                    {
-                        return CommandPanelOutcome::Model(ModelSelectionAction::Pin {
-                            preference: preference.clone(),
-                            pinned: !pinned,
-                        });
-                    }
-                }
-                map_selection(content.handle_key(key), CommandPanelOutcome::Model)
+                map_selection(content.handle_model_key(key), CommandPanelOutcome::Model)
             }
             Self::ProjectRoots(content) => {
                 map_selection(content.handle_key(key), CommandPanelOutcome::ProjectRoot)
@@ -545,6 +528,12 @@ impl CommandPanel {
         if let Self::Config(editor) = self {
             return CommandPanelOutcome::Config(editor.handle_click(target, click));
         }
+        if let Self::Model(selection) = self {
+            return map_selection(
+                selection.handle_model_click(target, click),
+                CommandPanelOutcome::Model,
+            );
+        }
         if let Self::Marketplace(panel) = self
             && let list_selection::ListSelectionPointerTarget::Tab(index) = target
         {
@@ -649,7 +638,7 @@ impl CommandPanel {
             Self::Marketplace(content) => content.key_hints(),
             Self::Lsp(content) => content.key_hints(),
             Self::Mcp(content) => content.key_hints(),
-            Self::Model(content) => content.key_hints(),
+            Self::Model(content) => content.model_key_hints(),
             Self::ProjectRoots(content) => content.key_hints(),
             Self::Rewind(content) => content.key_hints(),
             Self::Sessions(content) => content.key_hints(),
@@ -1115,7 +1104,7 @@ impl Panels {
 
     pub(crate) fn replace_model(&mut self, choices: crate::models::ModelChoices) {
         if let Some(CommandPanel::Model(selection)) = self.command.as_mut() {
-            selection.replace(choices.model, choices.actions);
+            selection.replace_model_choices(choices);
         }
     }
 

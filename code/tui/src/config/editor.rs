@@ -488,6 +488,8 @@ impl ConfigEditor {
                 } else if *id == ListSelectionItemId::new("memory-diagnostics") {
                     edit.terminal
                         .set_memory_diagnostics(defaults.memory_diagnostics());
+                } else if *id == ListSelectionItemId::new("show-tips") {
+                    edit.terminal.set_show_tips(defaults.show_tips());
                 } else {
                     return None;
                 }
@@ -922,6 +924,18 @@ pub(crate) fn config_choices(
             providers: providers.clone(),
         }),
     );
+    let show_tips_id = ListSelectionItemId::new("show-tips");
+    let mut toggled_terminal = terminal;
+    toggled_terminal.set_show_tips(!terminal.show_tips());
+    actions.insert(
+        show_tips_id.clone(),
+        ConfigSelectionAction::SetTerminalSettings(ConfigEdit {
+            terminal: toggled_terminal,
+            status_line: status_line.clone(),
+            server_config: config.clone(),
+            providers: providers.clone(),
+        }),
+    );
     let auto_update_id = ListSelectionItemId::new("auto-update");
     let auto_update = terminal.auto_update();
     actions.insert(
@@ -1015,6 +1029,13 @@ pub(crate) fn config_choices(
                 nls::text(language, Message::ConfigVimMode),
                 nls::text(language, Message::ConfigVimModeDescription),
                 switch_value(vim_mode),
+            ),
+        ListSelectionItem::new(nls::text(language, Message::ConfigShowTips))
+            .with_id(show_tips_id)
+            .with_columns(
+                nls::text(language, Message::ConfigShowTips),
+                nls::text(language, Message::ConfigShowTipsDescription),
+                switch_value(terminal.show_tips()),
             ),
         ListSelectionItem::new(nls::text(language, Message::ConfigMemoryDiagnostics))
             .with_id(memory_diagnostics_id)

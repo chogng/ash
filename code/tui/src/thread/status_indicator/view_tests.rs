@@ -27,6 +27,7 @@ fn status_indicator_renders_waiting_and_deterministic_activity() {
                     activity,
                     timer: &timer,
                     interrupt_hint: (activity != TurnActivity::Cancelling).then(|| "ctrl+c".into()),
+                    show_tips: false,
                 }
                 .draw(frame, Rect::new(0, row as u16, 80, 1), test_context());
             }
@@ -61,6 +62,7 @@ fn status_indicator_narrow_row_preserves_interrupt_hint() {
                 activity: TurnActivity::Working,
                 timer: &timer,
                 interrupt_hint: Some("ctrl+c".into()),
+                show_tips: false,
             }
             .draw(frame, frame.area(), test_context())
         })
@@ -70,4 +72,61 @@ fn status_indicator_narrow_row_preserves_interrupt_hint() {
         .collect::<String>();
     assert!(text.contains("ctrl+c to interrupt"));
     assert!(!text.contains("total"));
+}
+
+#[test]
+fn tips_appear_below_the_running_indicator_and_stop_while_waiting() {
+    let started = Instant::now();
+    let mut timer = StatusTimer::default();
+    timer.start(started);
+    timer.tick(started + Duration::from_secs(7));
+    fn working(timer: &StatusTimer) -> StatusIndicator<'_> {
+        StatusIndicator {
+            activity: TurnActivity::Working,
+            timer,
+            interrupt_hint: Some("ctrl+c".into()),
+            show_tips: true,
+        }
+    }
+    assert_eq!(working(&timer).desired_height(), 1);
+    timer.tick(started + Duration::from_secs(8));
+    assert_eq!(working(&timer).desired_height(), 2);
+    let mut terminal = Terminal::new(TestBackend::new(80, 2)).unwrap();
+    terminal
+        .draw(|frame| working(&timer).draw(frame, frame.area(), test_context()))
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    let first = (0..80).map(|x| buffer[(x, 0)].symbol()).collect::<String>();
+    let second = (0..80).map(|x| buffer[(x, 1)].symbol()).collect::<String>();
+    assert!(first.contains("Working"));
+    assert!(second.starts_with("└ Tip: Ask Ash to list steps for complex tasks"));
+
+    timer.tick(started + Duration::from_secs(120));
+    assert_eq!(working(&timer).tip(), Some(crate::nls::Message::TipPlan));
+    let waiting = StatusIndicator {
+        activity: TurnActivity::WaitingForApproval,
+        timer: &timer,
+        interrupt_hint: None,
+        show_tips: true,
+    };
+    assert_eq!(waiting.desired_height(), 1);
+    assert_eq!(waiting.tip(), None);
+    let disabled = StatusIndicator {
+        show_tips: false,
+        ..working(&timer)
+    };
+    assert_eq!(disabled.desired_height(), 1);
+
+    for run in 2..=4 {
+        timer.clear();
+        let next_start = started + Duration::from_secs(run * 150);
+        timer.start(next_start);
+        timer.tick(next_start + Duration::from_secs(8));
+        let expected = if run < 4 {
+            crate::nls::Message::TipPlan
+        } else {
+            crate::nls::Message::TipHelp
+        };
+        assert_eq!(working(&timer).tip(), Some(expected));
+    }
 }

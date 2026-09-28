@@ -635,6 +635,48 @@ fn draw_item(
     let middle_width = trailing_x
         .saturating_sub(column_layout.gap)
         .saturating_sub(middle_x);
+    if let Some(value) = &columns.segmented {
+        let active = show_marker && value.adjustable;
+        let selected_color = context.accent();
+        let filled_color = if active {
+            selected_color
+        } else {
+            context.foreground()
+        };
+        let empty_color = context.muted();
+        let mut spans = Vec::with_capacity(value.total + 4);
+        spans.push(Span::styled(
+            if active { "← " } else { "  " },
+            Style::default().fg(selected_color),
+        ));
+        for index in 0..value.total {
+            spans.push(Span::styled(
+                "■",
+                Style::default().fg(if index < value.filled {
+                    filled_color
+                } else {
+                    empty_color
+                }),
+            ));
+        }
+        spans.push(Span::styled(
+            if active { " → " } else { "   " },
+            Style::default().fg(selected_color),
+        ));
+        spans.push(Span::styled(
+            value.label.as_str(),
+            Style::default().fg(if active {
+                selected_color
+            } else {
+                context.muted()
+            }),
+        ));
+        frame.render_widget(
+            Paragraph::new(Line::from(spans)),
+            Rect::new(middle_x, area.y, area.right().saturating_sub(middle_x), 1),
+        );
+        return;
+    }
     frame.render_widget(
         Paragraph::new(Span::styled(columns.middle.as_str(), detail_style)),
         Rect::new(middle_x, area.y, middle_width, 1),

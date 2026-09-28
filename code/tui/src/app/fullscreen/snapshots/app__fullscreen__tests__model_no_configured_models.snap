@@ -16,5 +16,5 @@ expression: "render(&app, 100, 18)"
             │                                                                         │             
             │                                                                         │             
   ╭─────────│                                                                         │──────────╮  
-  │ > Build │  Enter to apply  ·  / to search  ·  Esc to close  ·  P to pin/unpin     │          │  
+  │ > Build │  ↑↓ select · / search · P pin/unpin · Enter apply · Esc cancel          │          │  
   ╰─────────└─────────────────────────────────────────────────────────────────────────┘ic model ─╯

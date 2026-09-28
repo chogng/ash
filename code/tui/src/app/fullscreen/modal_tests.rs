@@ -1744,7 +1744,7 @@ fn config_descriptions_expand_below_items_and_keep_mouse_targets_aligned() {
         Some(super::Target::Text)
     );
     assert_eq!(
-        super::target_at(&app, area, Position::new(body.x + 3, first + 2)),
+        super::target_at(&app, area, Position::new(body.x + 3, first + 3)),
         Some(super::Target::Panel(
             crate::app::command_panel::CommandPanelPointerTarget::List(
                 ListSelectionPointerTarget::Item(ListSelectionItemId::new("memory-diagnostics"))
@@ -1792,7 +1792,7 @@ fn config_switches_keep_the_selected_language_after_saving() {
         )));
         for (id, steps) in [
             ("terminal-vim-mode", 0),
-            ("memory-diagnostics", 1),
+            ("memory-diagnostics", 2),
             ("show-git-changes-as-diff", 2),
             ("memories", 5),
         ] {
@@ -1824,9 +1824,9 @@ fn config_switches_keep_the_selected_language_after_saving() {
             let switch_row = |frame: &str| frame.lines().nth(row_index).unwrap().replace(' ', "");
             let before = frame_text(&app);
             assert!(
+                switch_row(&before).contains(&format!("{label}{off}│")),
+                "{id}: selected row was {}",
                 switch_row(&before)
-                    .trim_end_matches('│')
-                    .ends_with(&format!("{label}{off}"))
             );
             for enabled in [true, false] {
                 let Some(AppCommand::Config(command)) =
@@ -1872,8 +1872,7 @@ fn config_switches_keep_the_selected_language_after_saving() {
                 let frame = frame_text(&app);
                 let row = switch_row(&frame);
                 assert!(
-                    row.trim_end_matches('│')
-                        .ends_with(&format!("{label}{}", if enabled { on } else { off })),
+                    row.contains(&format!("{label}{}│", if enabled { on } else { off })),
                     "{language:?} {id}: {row}"
                 );
                 if !enabled {
@@ -1902,7 +1901,7 @@ fn config_double_click_changes_the_selected_item_once() {
     app.update(crate::config::Event::EditorOpened(config_choices()));
     let area = Rect::new(0, 0, 100, 30);
     let body = super::body_area(app.command_panel().unwrap(), super::layout(area).content);
-    let row = body.y + crate::widgets::search_box::SEARCH_BOX_HEIGHT + 1;
+    let row = body.y + crate::widgets::search_box::SEARCH_BOX_HEIGHT + 2;
     for click in 0..2 {
         let event = |kind| MouseEvent {
             kind,
@@ -1971,7 +1970,7 @@ fn config_drag_and_keyboard_input_cancel_pending_double_click() {
     let event = |kind| MouseEvent {
         kind,
         column: body.x + 8,
-        row: body.y + crate::widgets::search_box::SEARCH_BOX_HEIGHT + 1,
+        row: body.y + crate::widgets::search_box::SEARCH_BOX_HEIGHT + 2,
         modifiers: KeyModifiers::NONE,
     };
     let click = |app: &mut crate::app::App| {

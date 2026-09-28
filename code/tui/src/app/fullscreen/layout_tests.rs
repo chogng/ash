@@ -141,13 +141,26 @@ fn short_session_keeps_the_entire_question_visible_before_transcript_space() {
 
 #[test]
 fn status_indicator_layout_stays_bounded_on_short_terminals() {
-    for height in 0..40 {
-        let area = Rect::new(3, 5, 40, height);
-        let areas = session_areas(area, 0, 0, 0, 0, 3, 2, 0, 1, super::MIN_TRANSCRIPT_ROWS);
-        assert!(areas.status_indicator.bottom() <= area.bottom());
-        assert!(areas.status_indicator.y >= area.y);
-        assert_eq!(areas.status_indicator.bottom(), areas.top_tip.y);
-        assert!(areas.status_indicator.height <= 1);
-        assert_eq!(areas.top_tip.bottom(), areas.composer.y);
+    for status_rows in [1, 2] {
+        for height in 0..40 {
+            let area = Rect::new(3, 5, 40, height);
+            let areas = session_areas(
+                area,
+                0,
+                0,
+                0,
+                0,
+                3,
+                2,
+                0,
+                status_rows,
+                super::MIN_TRANSCRIPT_ROWS,
+            );
+            assert!(areas.status_indicator.bottom() <= area.bottom());
+            assert!(areas.status_indicator.y >= area.y);
+            assert_eq!(areas.status_indicator.bottom(), areas.top_tip.y);
+            assert!(areas.status_indicator.height <= status_rows);
+            assert_eq!(areas.top_tip.bottom(), areas.composer.y);
+        }
     }
 }

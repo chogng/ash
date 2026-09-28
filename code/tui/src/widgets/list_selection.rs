@@ -14,6 +14,7 @@ pub(crate) use state::ListSelectionInputOutcome;
 pub(crate) use state::ListSelectionItem;
 pub(crate) use state::ListSelectionItemId;
 pub(crate) use state::ListSelectionModel;
+pub(crate) use state::ListSelectionSegmentedValue;
 pub(crate) use state::ListSelectionState;
 pub(crate) use view::ListSelectionPointerTarget;
 pub(crate) use view::draw_body_with_pointer;

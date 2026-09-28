@@ -583,9 +583,16 @@ impl App {
                 }
                 .into(),
             ),
-            CommandPanelOutcome::Model(ModelSelectionAction::Select { preference, .. }) => {
-                Some(ModelCommand::SetModel { preference }.into())
-            }
+            CommandPanelOutcome::Model(ModelSelectionAction::Select {
+                preference, effort, ..
+            }) => Some(
+                ModelCommand::SetModel {
+                    preference: effort.map_or(preference.clone(), |effort| {
+                        format!("{preference} {}", effort.as_str())
+                    }),
+                }
+                .into(),
+            ),
             CommandPanelOutcome::Model(ModelSelectionAction::Pin { preference, pinned }) => {
                 Some(ModelCommand::Pin { preference, pinned }.into())
             }
@@ -1821,6 +1828,7 @@ impl App {
             activity,
             timer: &self.thread_presentations.active().status_timer,
             interrupt_hint,
+            show_tips: self.terminal_settings.show_tips(),
         })
     }
 

@@ -9,6 +9,7 @@ expression: text(&buffer)
   │ Search configuration                                                                         │  
   ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  
 > Vim mode                                                                                     off  
+> Show tips                                                                                     on  
 > Memory diagnostics                                                                           off  
 > Automatic updates                                                                         Latest  
 > Show Git changes as diff                                                                     off  

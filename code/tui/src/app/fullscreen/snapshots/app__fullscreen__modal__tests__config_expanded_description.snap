@@ -14,9 +14,10 @@ expression: frame_text(&app)
   │         │  ╰────────────────────────────────────────────────────────────────────╯ │          │  
   │         │v Vim mode                                                           off │          │  
   │         │    Use Vim editing in ChatInput                                         │          │  
+  │         │> Show tips                                                           on │          │  
   │         │> Memory diagnostics                                                 off │          │  
-  │         │> Automatic updates                                               Latest │          │  
-  ╰─────────│> Show Git changes as diff                                           off │──────────╯  
+  ╰─────────│> Automatic updates                                               Latest │──────────╯  
+            │> Show Git changes as diff                                           off │             
             │> Language                                                       English │             
             │> Status bar style                                                Simple │             
             │> Key hint style                                                Contrast │             
@@ -25,8 +26,7 @@ expression: frame_text(&app)
             │> Automatic Git fetch                                                Off │             
             │> Git fetch interval                                                180s │             
             │> Git branch marker                                            Powerline │             
-            │> Advisor                                                            Off │             
-            │                                                                         │ Esc return  
+            │> Advisor                                                            Off │ Esc return  
   ╭─────────│  Enter change · r reset · ←/→ details · Tab tabs · / search · Esc close │──────────╮  
   │ > Build └─────────────────────────────────────────────────────────────────────────┘          │  
   ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯

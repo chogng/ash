@@ -40,6 +40,15 @@ pub(super) struct ListSelectionItemColumns {
     pub(super) leading: String,
     pub(super) middle: String,
     pub(super) trailing: String,
+    pub(super) segmented: Option<ListSelectionSegmentedValue>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ListSelectionSegmentedValue {
+    pub(crate) filled: usize,
+    pub(crate) total: usize,
+    pub(crate) label: String,
+    pub(crate) adjustable: bool,
 }
 
 impl ListSelectionItem {
@@ -96,9 +105,20 @@ impl ListSelectionItem {
             leading: leading.into(),
             middle: middle.into(),
             trailing: trailing.into(),
+            segmented: None,
         };
         self.description = Some(format!("{} {}", columns.middle, columns.trailing).into());
         self.columns = Some(columns);
+        self
+    }
+
+    pub(crate) fn with_segmented_value(mut self, value: ListSelectionSegmentedValue) -> Self {
+        self.columns = Some(ListSelectionItemColumns {
+            leading: self.label.to_string(),
+            middle: String::new(),
+            trailing: String::new(),
+            segmented: Some(value),
+        });
         self
     }
 
@@ -603,6 +623,21 @@ impl ListSelectionState {
             .into_iter()
             .filter_map(|index| self.active_tab().items.get(index))
             .collect()
+    }
+
+    pub(crate) fn set_item_segmented_value(
+        &mut self,
+        id: &ListSelectionItemId,
+        value: ListSelectionSegmentedValue,
+    ) {
+        for group in self.tabs.tabs_mut() {
+            if let Some(item) = group.items.iter_mut().find(|item| item.id() == Some(id)) {
+                if let Some(columns) = item.columns.as_mut() {
+                    columns.segmented = Some(value);
+                }
+                break;
+            }
+        }
     }
 
     pub(crate) fn selected_visible_index(&self) -> Option<usize> {

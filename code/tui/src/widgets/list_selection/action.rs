@@ -73,6 +73,10 @@ impl<A> ListSelection<A> {
         self.actions.get(id)
     }
 
+    pub(crate) fn action_mut(&mut self, id: &ListSelectionItemId) -> Option<&mut A> {
+        self.actions.get_mut(id)
+    }
+
     pub(crate) fn state(&self) -> &ListSelectionState {
         &self.state
     }

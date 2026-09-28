@@ -524,9 +524,9 @@ fn screen_mode_can_be_changed_with_activation() {
                 terminal,
                 StatusLineSettings::default(),
             ));
-            for _ in 0..7 {
-                editor.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-            }
+            assert!(editor.selection.state_mut().focus_item(
+                &crate::widgets::list_selection::ListSelectionItemId::new("screen-mode")
+            ));
             assert!(
                 matches!(editor.handle_key(KeyEvent::new(code, KeyModifiers::NONE)),
                 super::ConfigEditorOutcome::Action(ConfigSelectionAction::SetTerminalSettings(edit))
@@ -591,7 +591,13 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
         ConfigSelectionAction::SetVimMode(edit)
             if edit.terminal.input_mode() == ChatInputMode::Vim
     ));
-    let memory_diagnostics = &state.visible_items()[1];
+    let show_tips = &state.visible_items()[1];
+    assert_eq!(show_tips.label(), "Show tips");
+    assert_eq!(
+        show_tips.description(),
+        Some("Show usage tips while a task is running on")
+    );
+    let memory_diagnostics = &state.visible_items()[2];
     assert_eq!(memory_diagnostics.label(), "Memory diagnostics");
     assert_eq!(
         memory_diagnostics.description(),
@@ -604,7 +610,7 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
         ConfigSelectionAction::SetTerminalSettings(edit)
             if edit.terminal.memory_diagnostics()
     ));
-    let auto_update = &state.visible_items()[2];
+    let auto_update = &state.visible_items()[3];
     assert_eq!(auto_update.label(), "Automatic updates");
     assert_eq!(
         auto_update.description(),
@@ -615,7 +621,7 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
         ConfigSelectionAction::SetUpdatePolicy(edit)
             if edit.terminal.auto_update() == crate::UpdatePolicy::Latest
     ));
-    let git_changes = &state.visible_items()[3];
+    let git_changes = &state.visible_items()[4];
     assert_eq!(git_changes.label(), "Show Git changes as diff");
     assert_eq!(
         git_changes.description(),
@@ -626,7 +632,7 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
         ConfigSelectionAction::SetShowGitChangesAsDiff(edit)
             if edit.status_line.show_git_changes_as_diff()
     ));
-    let language = &state.visible_items()[4];
+    let language = &state.visible_items()[5];
     assert_eq!(language.label(), "Language");
     assert_eq!(
         language.description(),
@@ -637,7 +643,7 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
         ConfigSelectionAction::SetLanguage(edit)
             if edit.terminal.language() == Language::English
     ));
-    let key_hint_style = &state.visible_items()[6];
+    let key_hint_style = &state.visible_items()[7];
     assert_eq!(key_hint_style.label(), "Key hint style");
     assert_eq!(
         key_hint_style.description(),
@@ -785,9 +791,9 @@ fn git_autofetch_settings_change_the_shared_config_snapshot() {
         )
     };
     let mut mode = super::ConfigEditor::new(choices());
-    for _ in 0..9 {
-        mode.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    }
+    assert!(mode.selection.state_mut().focus_item(
+        &crate::widgets::list_selection::ListSelectionItemId::new("git-autofetch")
+    ));
     assert!(matches!(
         mode.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         super::ConfigEditorOutcome::Action(ConfigSelectionAction::SetGitMode(edit))
@@ -796,9 +802,9 @@ fn git_autofetch_settings_change_the_shared_config_snapshot() {
     ));
 
     let mut period = super::ConfigEditor::new(choices());
-    for _ in 0..10 {
-        period.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    }
+    assert!(period.selection.state_mut().focus_item(
+        &crate::widgets::list_selection::ListSelectionItemId::new("git-autofetch-period")
+    ));
     assert!(matches!(
         period.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         super::ConfigEditorOutcome::Action(ConfigSelectionAction::SetGitPeriod(edit))
@@ -843,9 +849,9 @@ fn language_setting_cycles_with_activation_and_directional_keys() {
         )
     };
     let mut editor = super::ConfigEditor::new(choices());
-    for _ in 0..4 {
-        editor.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    }
+    assert!(editor.selection.state_mut().focus_item(
+        &crate::widgets::list_selection::ListSelectionItemId::new("language")
+    ));
 
     assert!(matches!(
         editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
@@ -854,9 +860,9 @@ fn language_setting_cycles_with_activation_and_directional_keys() {
     ));
 
     let mut editor = super::ConfigEditor::new(choices());
-    for _ in 0..4 {
-        editor.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    }
+    assert!(editor.selection.state_mut().focus_item(
+        &crate::widgets::list_selection::ListSelectionItemId::new("language")
+    ));
     assert!(matches!(
         editor.handle_key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE)),
         super::ConfigEditorOutcome::Action(ConfigSelectionAction::SetLanguage(edit))
@@ -864,9 +870,9 @@ fn language_setting_cycles_with_activation_and_directional_keys() {
     ));
 
     let mut editor = super::ConfigEditor::new(choices());
-    for _ in 0..4 {
-        editor.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    }
+    assert!(editor.selection.state_mut().focus_item(
+        &crate::widgets::list_selection::ListSelectionItemId::new("language")
+    ));
     assert!(matches!(
         editor.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE)),
         super::ConfigEditorOutcome::Consumed
@@ -895,20 +901,43 @@ fn config_root_uses_the_selected_language_through_nls() {
         vec!["通用", "提供商", "议题"]
     );
     assert_eq!(state.visible_items()[0].label(), "Vim 模式");
-    assert_eq!(state.visible_items()[7].label(), "屏幕模式");
-    assert_eq!(state.visible_items()[1].label(), "内存诊断");
-    assert_eq!(state.visible_items()[2].label(), "自动更新");
+    assert_eq!(state.visible_items()[1].label(), "显示使用技巧");
+    assert_eq!(state.visible_items()[8].label(), "屏幕模式");
+    assert_eq!(state.visible_items()[2].label(), "内存诊断");
+    assert_eq!(state.visible_items()[3].label(), "自动更新");
     assert_eq!(
-        state.visible_items()[2].description(),
+        state.visible_items()[3].description(),
         Some("选择版本更新节奏 最新")
     );
-    assert_eq!(state.visible_items()[4].label(), "语言");
+    assert_eq!(state.visible_items()[5].label(), "语言");
     assert_eq!(
-        state.visible_items()[4].description(),
+        state.visible_items()[5].description(),
         Some("切换界面语言 中文")
     );
-    assert_eq!(state.visible_items()[6].label(), "按键提示风格");
-    assert_eq!(state.visible_items()[11].label(), "Git 分支标识");
+    assert_eq!(state.visible_items()[7].label(), "按键提示风格");
+    assert_eq!(state.visible_items()[12].label(), "Git 分支标识");
+}
+
+#[test]
+fn show_tips_toggles_with_activation() {
+    use crate::widgets::list_selection::ListSelectionItemId;
+    let mut editor = super::ConfigEditor::new(config_choices(
+        &empty_config_snapshot(),
+        &providers(),
+        TerminalSettings::default(),
+        StatusLineSettings::default(),
+    ));
+    assert!(
+        editor
+            .selection
+            .state_mut()
+            .focus_item(&ListSelectionItemId::new("show-tips"))
+    );
+    assert!(matches!(
+        editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        super::ConfigEditorOutcome::Action(ConfigSelectionAction::SetTerminalSettings(edit))
+            if !edit.terminal.show_tips()
+    ));
 }
 
 #[test]
@@ -1318,6 +1347,7 @@ fn reset_restores_only_the_selected_general_setting() {
     let mut terminal = TerminalSettings::default();
     terminal.set_input_mode(ChatInputMode::Vim);
     terminal.set_memory_diagnostics(true);
+    terminal.set_show_tips(false);
     terminal.set_auto_update(crate::UpdatePolicy::Never);
     terminal.set_language(Language::Chinese);
     terminal.set_key_hint_style(crate::config::KeyHintStyle::Muted);
@@ -1336,6 +1366,7 @@ fn reset_restores_only_the_selected_general_setting() {
     for (row, id) in [
         "terminal-vim-mode",
         "memory-diagnostics",
+        "show-tips",
         "auto-update",
         "show-git-changes-as-diff",
         "language",
@@ -1360,14 +1391,15 @@ fn reset_restores_only_the_selected_general_setting() {
         match row {
             0 => expected_terminal.set_input_mode(defaults.input_mode()),
             1 => expected_terminal.set_memory_diagnostics(defaults.memory_diagnostics()),
-            2 => expected_terminal.set_auto_update(defaults.auto_update()),
-            3 => expected_status
+            2 => expected_terminal.set_show_tips(defaults.show_tips()),
+            3 => expected_terminal.set_auto_update(defaults.auto_update()),
+            4 => expected_status
                 .set_show_git_changes_as_diff(status_defaults.show_git_changes_as_diff()),
-            4 => expected_terminal.set_language(defaults.language()),
-            5 => expected_status.set_style(status_defaults.style()),
-            6 => expected_terminal.set_key_hint_style(defaults.key_hint_style()),
-            7 => expected_terminal.set_screen_mode(defaults.screen_mode()),
-            8 => expected_terminal.set_glyph_set(defaults.glyph_set()),
+            5 => expected_terminal.set_language(defaults.language()),
+            6 => expected_status.set_style(status_defaults.style()),
+            7 => expected_terminal.set_key_hint_style(defaults.key_hint_style()),
+            8 => expected_terminal.set_screen_mode(defaults.screen_mode()),
+            9 => expected_terminal.set_glyph_set(defaults.glyph_set()),
             _ => unreachable!(),
         }
         // A refresh and a second reset must preserve the selection and stay at the default.

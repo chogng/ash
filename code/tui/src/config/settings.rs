@@ -64,17 +64,19 @@ pub(crate) struct TerminalSettings {
     key_hint_style: KeyHintStyle,
     glyph_set: GlyphSet,
     memory_diagnostics: bool,
+    show_tips: bool,
     auto_update: crate::UpdatePolicy,
     language: Language,
 }
 
 impl TerminalSettings {
-    const KEYS: [&'static str; 7] = [
+    const KEYS: [&'static str; 8] = [
         "screenMode",
         "inputMode",
         "keyHintStyle",
         "glyphSet",
         "memoryDiagnostics",
+        "showTips",
         "autoUpdate",
         "language",
     ];
@@ -158,6 +160,14 @@ impl TerminalSettings {
         self.memory_diagnostics = enabled;
     }
 
+    pub(crate) const fn show_tips(self) -> bool {
+        self.show_tips
+    }
+
+    pub(crate) fn set_show_tips(&mut self, enabled: bool) {
+        self.show_tips = enabled;
+    }
+
     pub(crate) const fn auto_update(self) -> crate::UpdatePolicy {
         self.auto_update
     }
@@ -183,6 +193,7 @@ impl Default for TerminalSettings {
             key_hint_style: KeyHintStyle::Contrast,
             glyph_set: GlyphSet::Powerline,
             memory_diagnostics: false,
+            show_tips: true,
             auto_update: crate::UpdatePolicy::Latest,
             language: Language::English,
         }

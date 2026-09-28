@@ -35,7 +35,7 @@ fn provider_config(provider: &str) -> ProviderConfigDto {
 }
 
 #[test]
-fn model_picker_shows_name_only_and_keeps_selection_identity_and_pin_state() {
+fn model_without_effort_shows_name_only_and_keeps_selection_identity_and_pin_state() {
     let catalog = ModelListResult {
         models: vec![catalog_entry("openai", "gpt-ash", "GPT Ash")],
     };
@@ -63,13 +63,11 @@ fn model_picker_shows_name_only_and_keeps_selection_identity_and_pin_state() {
     assert_eq!(state.visible_items()[1].label(), "GPT Ash");
     assert_eq!(state.visible_items()[1].description(), None);
     assert_eq!(state.selected_visible_index(), Some(1));
-    assert!(view.actions.values().any(|action| {
-        action
-            == &ModelSelectionAction::Select {
-                preference: "openai/gpt-ash".into(),
-                pinned: true,
-            }
-    }));
+    assert!(view.actions.values().any(|action| matches!(
+        action,
+        ModelSelectionAction::Select { preference, pinned: true, .. }
+            if preference == "openai/gpt-ash"
+    )));
 }
 
 #[test]
@@ -179,7 +177,7 @@ fn model_picker_keeps_all_builtin_models_selectable_before_configuration() {
     );
     let view = model_choices(&catalog, &config).unwrap();
     assert_eq!(view.actions.len(), 2);
-    assert!(view.actions.values().any(|action| matches!(action, ModelSelectionAction::Select {preference, pinned: true} if preference == "openai/gpt-ash")));
+    assert!(view.actions.values().any(|action| matches!(action, ModelSelectionAction::Select {preference, pinned: true, ..} if preference == "openai/gpt-ash")));
     let state = ListSelectionState::new(view.model);
     assert!(!state.show_tabs());
     assert_eq!(state.tabs().len(), 1);
@@ -198,6 +196,46 @@ fn model_picker_without_configured_connections_still_offers_builtin_models() {
     let state = ListSelectionState::new(view.model);
     assert_eq!(state.visible_items()[0].label(), "GPT Ash");
     assert!(state.visible_items()[0].id().is_some());
+}
+
+#[test]
+fn effort_values_do_not_change_model_name_search() {
+    let mut entry = catalog_entry("openai", "gpt-ash", "GPT Ash");
+    entry.supported_reasoning_efforts = vec![
+        ash_protocol::ReasoningEffort::Low,
+        ash_protocol::ReasoningEffort::High,
+    ];
+    entry.model_reasoning_effort = Some(ash_protocol::ReasoningEffort::High);
+    let choices = model_choices(
+        &ModelListResult {
+            models: vec![entry],
+        },
+        &crate::test_support::empty_config_snapshot(),
+    )
+    .unwrap();
+    let mut state = ListSelectionState::new(choices.model);
+    assert_eq!(state.visible_items()[0].description(), None);
+    assert!(state.focus_search());
+    state.handle_paste("high".into());
+    assert!(state.visible_items().is_empty());
+}
+
+#[test]
+fn configured_model_is_selected_when_picker_opens() {
+    let catalog = ModelListResult {
+        models: vec![
+            catalog_entry("openai", "gpt-first", "First"),
+            catalog_entry("openai", "gpt-second", "Second"),
+        ],
+    };
+    let mut config = crate::test_support::empty_config_snapshot();
+    config.model = Some(ModelRefDto {
+        provider: "openai".into(),
+        model: "gpt-second".into(),
+    });
+    let choices = model_choices(&catalog, &config).unwrap();
+    let state = ListSelectionState::new(choices.model);
+    assert_eq!(state.selected_item().unwrap().label(), "Second");
 }
 
 #[test]

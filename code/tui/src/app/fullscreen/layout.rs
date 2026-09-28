@@ -101,7 +101,12 @@ pub(in crate::app) fn layout(app: &App, terminal_area: Rect) -> Layout {
         } else {
             app.agent_thread_switcher_rows()
         },
-        u16::from(!app.fullscreen.home_visible() && app.status_indicator().is_some()),
+        if app.fullscreen.home_visible() {
+            0
+        } else {
+            app.status_indicator()
+                .map_or(0, |indicator| indicator.desired_height())
+        },
         MIN_TRANSCRIPT_ROWS.min(
             terminal_area
                 .height

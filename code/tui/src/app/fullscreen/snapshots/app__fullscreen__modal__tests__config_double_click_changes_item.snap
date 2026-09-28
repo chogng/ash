@@ -13,10 +13,11 @@ expression: frame_text(&app)
   │         │  │ Search configuration                                               │ │          │  
   │         │  ╰────────────────────────────────────────────────────────────────────╯ │          │  
   │         │> Vim mode                                                           off │          │  
+  │         │> Show tips                                                           on │          │  
   │         │> Memory diagnostics                                                  on │          │  
   │         │> Automatic updates                                               Latest │          │  
-  │         │> Show Git changes as diff                                           off │          │  
-  ╰─────────│> Language                                                       English │──────────╯  
+  ╰─────────│> Show Git changes as diff                                           off │──────────╯  
+            │> Language                                                       English │             
             │> Status bar style                                                Simple │             
             │> Key hint style                                                Contrast │             
             │> Screen mode                                                 fullscreen │             
@@ -25,7 +26,6 @@ expression: frame_text(&app)
             │> Git fetch interval                                                180s │             
             │> Git branch marker                                            Powerline │             
             │> Advisor                                                            Off │             
-            │                                                                         │             
             │                                                                         │ Esc return  
   ╭─────────│  Enter change · r reset · ←/→ details · Tab tabs · / search · Esc close │──────────╮  
   │ > Build └─────────────────────────────────────────────────────────────────────────┘          │  

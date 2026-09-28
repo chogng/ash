@@ -2856,6 +2856,168 @@ fn model_list_search_filters_models_and_escape_returns_to_list() {
 }
 
 #[test]
+fn model_picker_cycles_supported_effort_in_place_and_commits_on_enter() {
+    let model = ash_protocol::ModelRef::new(
+        ash_protocol::ProviderId::new("openai").unwrap(),
+        ash_protocol::ModelId::new("gpt-effort").unwrap(),
+    );
+    let mut info = ash_protocol::ModelInfo::new(model.model.clone(), "GPT Effort");
+    info.supported_reasoning_efforts = vec![
+        ReasoningEffort::None,
+        ReasoningEffort::Low,
+        ReasoningEffort::Medium,
+        ReasoningEffort::High,
+    ];
+    info.model_reasoning_effort = Some(ReasoningEffort::Medium);
+    let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
+        models: vec![
+            ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(model, &info),
+            ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
+                ash_protocol::ModelRef::new(
+                    ash_protocol::ProviderId::new("openai").unwrap(),
+                    ash_protocol::ModelId::new("gpt-other").unwrap(),
+                ),
+                &{
+                    let mut other = ash_protocol::ModelInfo::new(
+                        ash_protocol::ModelId::new("gpt-other").unwrap(),
+                        "GPT Other",
+                    );
+                    other.supported_reasoning_efforts = vec![
+                        ReasoningEffort::Low,
+                        ReasoningEffort::Medium,
+                        ReasoningEffort::High,
+                    ];
+                    other.model_reasoning_effort = Some(ReasoningEffort::Low);
+                    other
+                },
+            ),
+        ],
+    };
+    let choices = || {
+        crate::models::model_choices(&catalog, &crate::test_support::empty_config_snapshot())
+            .unwrap()
+    };
+    let mut app = App::new();
+    app.update(ModelEvent::PickerOpened(choices()));
+    let buffer = render_buffer(&app, 100, 18);
+    let blocks = buffer
+        .content
+        .iter()
+        .filter(|cell| cell.symbol() == "■")
+        .collect::<Vec<_>>();
+    assert!(
+        blocks
+            .iter()
+            .any(|cell| cell.fg == app.render_context().accent())
+    );
+    assert!(
+        blocks
+            .iter()
+            .any(|cell| cell.fg == app.render_context().muted())
+    );
+    assert!(render(&app, 100, 18).contains("■■■"));
+
+    let mut chinese = App::new();
+    let mut settings = crate::config::TerminalSettings::default();
+    settings.set_language(crate::nls::Language::Chinese);
+    chinese.update(crate::config::Event::SettingsReceived(settings));
+    chinese.update(ModelEvent::PickerOpened(choices()));
+    assert!(render(&chinese, 100, 18).contains("←→ 推 理 档 位"));
+
+    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    assert!(render(&app, 100, 18).contains("■■■"));
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    let selected_other = render(&app, 100, 18);
+    assert!(
+        selected_other
+            .lines()
+            .any(|line| line.contains("GPT Other") && line.contains("←") && line.contains("→"))
+    );
+    assert!(
+        selected_other
+            .lines()
+            .any(|line| line.contains("GPT Effort") && !line.contains("←"))
+    );
+    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+    assert!(
+        render(&app, 100, 18)
+            .lines()
+            .any(|line| line.contains("GPT Effort") && line.contains("Medium")),
+        "{}",
+        render(&app, 100, 18)
+    );
+    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    crate::tui_assert_snapshot!("model_effort_selected", render(&app, 100, 18));
+
+    app.update(ModelEvent::PickerUpdated(choices()));
+    assert!(render(&app, 100, 18).contains("■■■"));
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::Models(crate::models::Command::SetModel {
+            preference: "openai/gpt-effort high".into(),
+        }))
+    );
+
+    app.update(ModelEvent::PickerOpened(choices()));
+    assert!(
+        render(&app, 100, 18)
+            .lines()
+            .any(|line| line.contains("GPT Effort") && line.contains("Medium"))
+    );
+    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    app.update(ModelEvent::PickerOpened(choices()));
+    assert!(
+        render(&app, 100, 18)
+            .lines()
+            .any(|line| line.contains("GPT Effort") && line.contains("Medium"))
+    );
+}
+
+#[test]
+fn model_pointer_single_click_previews_and_double_click_confirms() {
+    let mut app = App::new();
+    app.update(ModelEvent::PickerOpened(custom_model_choices(vec![])));
+    let target =
+        super::modal::Target::Panel(crate::app::command_panel::CommandPanelPointerTarget::List(
+            crate::widgets::list_selection::ListSelectionPointerTarget::Item(
+                crate::widgets::list_selection::ListSelectionItemId::new("openai/gpt-unconfigured"),
+            ),
+        ));
+    let area = Rect::new(0, 0, 100, 18);
+    assert_eq!(
+        super::modal::activate(
+            &mut app,
+            area,
+            target.clone(),
+            crate::widgets::list_selection::ListSelectionClick::Single,
+        ),
+        None
+    );
+    assert_eq!(
+        app.list_selection()
+            .unwrap()
+            .selected_item()
+            .unwrap()
+            .label(),
+        "Unconfigured model"
+    );
+    crate::tui_assert_snapshot!("model_pointer_preview", render(&app, 100, 18));
+    assert_eq!(
+        super::modal::activate(
+            &mut app,
+            area,
+            target,
+            crate::widgets::list_selection::ListSelectionClick::Double,
+        ),
+        Some(AppCommand::Models(crate::models::Command::SetModel {
+            preference: "openai/gpt-unconfigured".into(),
+        }))
+    );
+}
+
+#[test]
 fn status_indicator_tracks_turn_events_without_hiding_top_tip() {
     let mut app = App::new();
     app.set_active_turn(ash_protocol::TurnId::new("status-test").unwrap());
@@ -2890,6 +3052,33 @@ fn status_indicator_tracks_turn_events_without_hiding_top_tip() {
             .height,
         0
     );
+}
+
+#[test]
+fn running_tip_appears_below_spinner_and_leaves_when_waiting() {
+    let mut app = App::new();
+    app.set_active_turn(ash_protocol::TurnId::new("tip-test").unwrap());
+    app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
+    app.handle_tick(Instant::now() + Duration::from_secs(9));
+
+    let areas = layout(&app, Rect::new(0, 0, 80, 20)).session;
+    assert_eq!(areas.status_indicator.height, 2);
+    let rendered = render(&app, 80, 20);
+    assert!(rendered.contains("Working"));
+    assert!(rendered.contains("└ Tip: Ask Ash to list steps for complex tasks"));
+    assert_eq!(areas.status_indicator.bottom(), areas.top_tip.y);
+
+    app.update(ThreadEvent::TurnActivityChanged(
+        TurnActivity::WaitingForApproval,
+    ));
+    assert_eq!(
+        layout(&app, Rect::new(0, 0, 80, 20))
+            .session
+            .status_indicator
+            .height,
+        1
+    );
+    assert!(!render(&app, 80, 20).contains("Tip: Ask Ash"));
 }
 
 fn input_overlay_index_at(app: &App, area: Rect, column: u16, row: u16) -> Option<usize> {

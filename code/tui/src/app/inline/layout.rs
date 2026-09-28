@@ -105,7 +105,8 @@ fn layout_with_minimum(app: &App, terminal_area: Rect, min_transcript_rows: u16)
         composer_rows,
         BOTTOM_ROWS,
         app.agent_thread_switcher_rows(),
-        u16::from(app.status_indicator().is_some()),
+        app.status_indicator()
+            .map_or(0, |indicator| indicator.desired_height()),
         min_transcript_rows,
     );
     let input = if approval_rows > 0 {
