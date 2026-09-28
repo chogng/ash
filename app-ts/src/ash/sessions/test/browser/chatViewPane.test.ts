@@ -459,8 +459,17 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		[...modeMenu?.querySelectorAll<HTMLElement>("[data-action-id]") ?? []].map(item => item.textContent),
 		["Agent", "Plan", "Debug", "Multitask", "Ask"],
 	);
+	assert.deepEqual(
+		[...modeMenu?.querySelectorAll<HTMLElement>("[data-action-id]") ?? []].map(item => item.querySelector('.ash-menu-leading-slot .ash-icon-label-icon svg.ash-icon')?.getAttribute('data-ash-icon-id') ?? null),
+		['unlimited', 'plan', 'debug', null, 'chat-4'],
+	);
+	assert.deepEqual(
+		[...modeMenu?.querySelectorAll<HTMLButtonElement>("[role='menuitemradio']") ?? []].map(item => item.getAttribute('aria-checked')),
+		['true', 'false', 'false', 'false', 'false'],
+	);
 	modeMenu?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode.plan'] button")?.click();
 	assert.equal(firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, "Plan");
+	assert.equal(firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button svg.ash-icon")?.getAttribute('data-ash-icon-id'), 'plan');
 	assert.equal(dom.window.document.querySelector(".ash-chat-input-mode-menu"), null);
 	assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [false, true]);
 	const composerInputs = [...chatPanes].map((chatPane) => {

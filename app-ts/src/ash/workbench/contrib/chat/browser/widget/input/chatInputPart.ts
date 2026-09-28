@@ -1,12 +1,10 @@
 import "./chatInputPart.css";
-import { addDisposableListener, stopEvent, h } from "../../../../../../base/browser/dom.js";
+import { addDisposableListener, h } from "../../../../../../base/browser/dom.js";
 import { ButtonActionViewItem, type ActionViewItem } from "../../../../../../base/browser/ui/actionbar/actionViewItems.js";
-import { AnchorPosition, ContextView, ContextViewFocusRestore } from "../../../../../../base/browser/ui/contextview/contextview.js";
 import { appendIcon } from "../../../../../../base/browser/ui/lxicons/lxicon.js";
-import { Menu } from "../../../../../../base/browser/ui/menu/menu.js";
 import type { IAction } from "../../../../../../base/common/actions.js";
 import type { Icon } from "../../../../../../base/common/icon.js";
-import { Disposable, MutableDisposable, DisposableStore, toDisposable } from "../../../../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, toDisposable } from "../../../../../../base/common/lifecycle.js";
 import { Lxicon } from "../../../../../../base/common/lxicons.js";
 import { localize } from "../../../../../../nls.js";
 import { WorkbenchToolBar } from "../../../../../../platform/actions/browser/toolbar.js";
@@ -21,6 +19,7 @@ import { SkillSelectorCatalog } from "../../../common/skillSelectors.js";
 import type { ChatInputDelegate, ChatInputState } from "./chatInput.js";
 import { ChatInputEditors, type IChatInputEditor } from "./chatInputEditorRegistry.js";
 import { ModelPickerActionItem } from './modelPicker/modelPickerActionItem.js';
+import { ModePickerActionItem } from './modePickerActionItem.js';
 
 type ChatInputMode = "agent" | "plan" | "debug" | "multitask" | "ask";
 type ChatInputToolbarPresentation = "mode" | "model" | "mic" | "voice" | "send" | "interrupt";
@@ -34,12 +33,12 @@ interface ChatInputToolbarState {
 	readonly selectedModel?: ModelRef;
 }
 
-const modeOptions: readonly { readonly id: ChatInputMode; readonly label: string }[] = [
-	{ id: "agent", label: "Agent" },
-	{ id: "plan", label: "Plan" },
-	{ id: "debug", label: "Debug" },
+const modeOptions: readonly { readonly id: ChatInputMode; readonly label: string; readonly icon?: Icon }[] = [
+	{ id: "agent", label: "Agent", icon: Lxicon.unlimited },
+	{ id: "plan", label: "Plan", icon: Lxicon.plan },
+	{ id: "debug", label: "Debug", icon: Lxicon.debug },
 	{ id: "multitask", label: "Multitask" },
-	{ id: "ask", label: "Ask" },
+	{ id: "ask", label: "Ask", icon: Lxicon.chat4 },
 ];
 
 /** Owns the complete input region and all user-facing interactions for one Chat pane. */
@@ -232,13 +231,13 @@ export class ChatInputPart extends Disposable {
 				"ash.chat.input.mode",
 				mode.label,
 				`Mode: ${mode.label}`,
-				Lxicon.unlimited,
+				mode.icon,
 				"mode",
 				() => modeOptions.map(option => new ChatInputAction(
 					`ash.chat.input.mode.${option.id}`,
 					option.label,
 					`Use ${option.label} mode`,
-					undefined,
+					option.icon,
 					true,
 					"mode",
 					() => {
@@ -380,7 +379,7 @@ export class ChatInputPart extends Disposable {
 			}, contextViewService);
 		}
 		if (action instanceof SelectorAction) {
-			return new ChatInputModeSelectorViewItem(action, contextViewService, () => this.renderToolbarActions());
+			return new ModePickerActionItem(action, contextViewService, () => this.renderToolbarActions());
 		}
 		return new ChatInputButtonViewItem(action);
 	}
@@ -518,94 +517,6 @@ class SelectorAction extends ChatInputAction {
 
 function sameModel(left: ModelRef | undefined, right: ModelRef | undefined): boolean {
 	return left === right || (left !== undefined && right !== undefined && left.provider === right.provider && left.model === right.model);
-}
-
-/** Chat-owned HTML popup presentation for the mode selector. */
-class ChatInputModeSelectorViewItem extends ButtonActionViewItem {
-	private readonly selectorAction: SelectorAction;
-	private readonly contextViewService: IContextViewService;
-	private readonly onDidSelect: () => void;
-	private readonly menu = this._register(new MutableDisposable<Menu>());
-	private contextView: ContextView | undefined;
-	private visible = false;
-
-	constructor(action: SelectorAction, contextViewService: IContextViewService, onDidSelect: () => void) {
-		super(action);
-		this.selectorAction = action;
-		this.contextViewService = contextViewService;
-		this.onDidSelect = onDidSelect;
-	}
-
-		override render(container: HTMLElement): void {
-		super.render(container);
-		container.classList.add("ash-chat-input-selector", "ash-chat-input-mode-selector", "ash-dropdown-menu-action-view-item");
-		container.classList.toggle("disabled", !this.action.enabled);
-		const button = this.button.domNode;
-		this.button.toggleClassName("ash-chat-input-action", true);
-		this.button.toggleClassName("ash-chat-input-mode-action", true);
-		this.button.toggleClassName("disabled", !this.action.enabled);
-		button.querySelector(".ash-button-label")?.classList.add("ash-chat-input-mode-action-label");
-		button.setAttribute("aria-haspopup", "menu");
-		button.setAttribute("aria-expanded", "false");
-		const indicator = h(container.ownerDocument, "span");
-		indicator.className = "ash-dropdown-menu-indicator ash-chat-input-mode-indicator";
-		appendIcon(Lxicon.chevronDown, indicator);
-		button.append(indicator);
-		this.contextView = this._register(new ContextView(this.contextViewService.container));
-		this._register(addDisposableListener(button, "keydown", (event) => {
-			if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-			stopEvent(event);
-			this.show();
-		}));
-	}
-
-	protected override runAction(): void {
-		if (this.visible) {
-			this.contextView?.hide();
-			return;
-		}
-		this.show();
-	}
-
-	private show(): void {
-		const contextView = this.contextView;
-		if (!contextView || this.visible || !this.action.enabled) return;
-		const actions = typeof this.selectorAction.actions === "function" ? this.selectorAction.actions() : this.selectorAction.actions;
-		if (actions.length === 0) return;
-		const menu = new Menu(contextView.element, {
-			actions,
-			contextViewContainer: this.contextViewService.container,
-			layer: 20,
-			onDidSelect: () => {
-				contextView.hide();
-				this.onDidSelect();
-			},
-		});
-		menu.element.classList.add("ash-chat-input-mode-menu");
-		this.menu.value = menu;
-		const shown = contextView.show({
-			anchor: this.button.domNode,
-			content: menu.element,
-			anchorPosition: AnchorPosition.Below,
-			gap: 2,
-			presentation: "menu",
-			focusRestore: ContextViewFocusRestore.Previous,
-			layer: 20,
-			isTargetWithin: target => menu.contains(target),
-			onHide: () => {
-				this.visible = false;
-				this.button.domNode.setAttribute("aria-expanded", "false");
-				this.menu.clear();
-			},
-		});
-		if (!shown) {
-			this.menu.clear();
-			return;
-		}
-		this.visible = true;
-		this.button.domNode.setAttribute("aria-expanded", "true");
-		menu.focusFirst();
-	}
 }
 
 class ChatInputButtonViewItem extends ButtonActionViewItem {

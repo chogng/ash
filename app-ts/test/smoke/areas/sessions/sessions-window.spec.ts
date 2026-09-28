@@ -20,6 +20,66 @@ async function returnFromSessions(page: Page): Promise<void> {
 	await page.getByRole('menuitem', { name: 'Return to Workbench' }).click();
 }
 
+test('Code chat mode menu shows the available icons and selection', async ({ application, target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code' || (target.kind !== 'browser' && target.kind !== 'electron'), 'Requires Code browser or Electron UI');
+	let page = workbench.page;
+	if (target.kind === 'browser') {
+		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
+	} else {
+		if (!('windows' in application)) throw new Error('Expected an Electron application');
+		const sessionPagePromise = application.waitForEvent('window');
+		await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
+		page = await sessionPagePromise;
+	}
+	const modeButton = page.locator("[data-action-id='ash.chat.input.mode'] button").first();
+	await expect(modeButton).toBeVisible();
+	await expect(modeButton.locator('svg[data-ash-icon-id="unlimited"]')).toHaveCount(1);
+	const chevron = modeButton.locator('.ash-chat-input-mode-indicator svg[data-ash-icon-id="chevron-down"]');
+	await expect(chevron).toBeVisible();
+	const labelBounds = await modeButton.locator('.ash-chat-input-mode-action-label').boundingBox();
+	const chevronBounds = await chevron.boundingBox();
+	expect(labelBounds).not.toBeNull();
+	expect(chevronBounds).not.toBeNull();
+	expect(chevronBounds!.x).toBeGreaterThan(labelBounds!.x + labelBounds!.width);
+	await modeButton.click();
+	const menu = page.locator('.ash-chat-input-mode-menu');
+	await expect(menu).toBeVisible();
+	for (const [label, iconId] of [
+		['Agent', 'unlimited'],
+		['Plan', 'plan'],
+		['Debug', 'debug'],
+		['Multitask', null],
+		['Ask', 'chat-4'],
+	] as const) {
+		const item = menu.getByRole('menuitemradio', { name: label, exact: true });
+		await expect(item).toBeVisible();
+		await expect(item.locator('.ash-menu-leading-slot .ash-icon-label-icon svg.ash-icon')).toHaveCount(iconId ? 1 : 0);
+		if (iconId) await expect(item.locator('.ash-menu-leading-slot .ash-icon-label-icon svg.ash-icon')).toHaveAttribute('data-ash-icon-id', iconId);
+	}
+	await expect(menu.getByRole('menuitemradio', { name: 'Agent' })).toHaveAttribute('aria-checked', 'true');
+	const selectedAgent = menu.getByRole('menuitemradio', { name: 'Agent' });
+	const agentIcon = selectedAgent.locator('.ash-icon-label-icon svg.ash-icon');
+	const selectionCheck = selectedAgent.locator('.ash-menu-leading-check > svg.ash-icon');
+	await expect(agentIcon).toBeVisible();
+	await expect(selectionCheck).toBeVisible();
+	const agentIconBounds = await agentIcon.boundingBox();
+	const selectionCheckBounds = await selectionCheck.boundingBox();
+	expect(agentIconBounds).not.toBeNull();
+	expect(selectionCheckBounds).not.toBeNull();
+	expect(selectionCheckBounds!.x).toBeGreaterThan(agentIconBounds!.x);
+	await menu.getByRole('menuitemradio', { name: 'Plan' }).click();
+	await expect(modeButton).toHaveText('Plan');
+	await expect(modeButton.locator('svg[data-ash-icon-id="plan"]')).toHaveCount(1);
+	await expect(chevron).toBeVisible();
+	await modeButton.focus();
+	await page.keyboard.press('ArrowDown');
+	await expect(modeButton).toHaveAttribute('aria-expanded', 'true');
+	await expect(page.locator('.ash-chat-input-mode-menu').getByRole('menuitemradio', { name: 'Plan' })).toBeFocused();
+	await page.keyboard.press('Escape');
+	await expect(modeButton).toHaveAttribute('aria-expanded', 'false');
+	await expect(modeButton).toBeFocused();
+});
+
 test('Browser Code Sessions Activity Bar centers icons and changes size and position through its menu', async ({ target, workbench }) => {
 	test.skip(target.kind !== 'browser' || target.workbenchMode !== 'code', 'Requires the browser Code Sessions page');
 	const page = workbench.page;
