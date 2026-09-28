@@ -1,6 +1,8 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { execFile } from 'node:child_process';
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { promisify } from 'node:util';
 import { createAcademicDocumentSchema } from "../../src/ash/editor/contrib/academic/common/schema.js";
 import { serializeDocument } from "../../src/ash/editor/common/model/documentSerialization.js";
 
@@ -16,12 +18,15 @@ export interface TestWorkspace {
 
 export interface TestWorkspaceOptions {
 	readonly includeLargeFile?: boolean;
+	readonly gitRepository?: boolean;
 }
+
+const run = promisify(execFile);
 
 /** Creates an isolated folder and text file for App Server-backed UI tests. */
 export async function createTestWorkspace(options: TestWorkspaceOptions = {}): Promise<TestWorkspace> {
 	const sharedDirectory = process.env.ASH_PLAYWRIGHT_WORKSPACE;
-	const directory = sharedDirectory ? resolve(sharedDirectory) : await mkdtemp(join(tmpdir(), "ash-playwright-workspace-"));
+	const directory = sharedDirectory && !options.gitRepository ? resolve(sharedDirectory) : await mkdtemp(join(tmpdir(), "ash-playwright-workspace-"));
 	await mkdir(directory, { recursive: true });
 	const file = join(directory, "main.ts");
 	const rustFile = join(directory, "main.rs");
@@ -35,7 +40,12 @@ export async function createTestWorkspace(options: TestWorkspaceOptions = {}): P
 	await writeFile(academicFile, createAcademicDocument(), "utf8");
 	if (options.includeLargeFile) await writeFile(largeFile, "let value = 1;\n".repeat(300_001), "utf8");
 	await writeFile(pdfFile, createPdfDocument());
-	return { directory, file, rustFile, academicFile, largeFile, pdfFile, removeOnDispose: sharedDirectory === undefined };
+	if (options.gitRepository) {
+		await run('git', ['init', '-b', 'main'], { cwd: directory });
+		await run('git', ['add', 'main.ts'], { cwd: directory });
+		await run('git', ['-c', 'user.name=Ash Test', '-c', 'user.email=ash-test@example.invalid', 'commit', '-m', 'Initial'], { cwd: directory });
+	}
+	return { directory, file, rustFile, academicFile, largeFile, pdfFile, removeOnDispose: sharedDirectory === undefined || options.gitRepository === true };
 }
 
 /** Removes one test workspace created by {@link createTestWorkspace}. */

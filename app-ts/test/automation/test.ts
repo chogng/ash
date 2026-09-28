@@ -11,6 +11,7 @@ import type { Workbench } from "./workbench.js";
 
 interface PlaywrightFixtures {
 	readonly includeLargeTestFile: boolean;
+	readonly gitRepository: boolean;
 	readonly openWorkspace: boolean;
 	readonly target: PlaywrightTarget;
 	readonly application: PlaywrightApplication;
@@ -23,12 +24,13 @@ const FORBIDDEN_WORKBENCH_CONSOLE_ERRORS = ["App Server language document synchr
 
 export const test = base.extend<PlaywrightFixtures>({
 	includeLargeTestFile: [false, { option: true }],
+	gitRepository: [false, { option: true }],
 	openWorkspace: [true, { option: true }],
 	target: async ({ baseURL }, use, testInfo) => {
 		await use(playwrightTargetForProject(testInfo.project.name, baseURL));
 	},
-	testWorkspace: async ({ includeLargeTestFile }, use) => {
-		const workspace = await createTestWorkspace({ includeLargeFile: includeLargeTestFile });
+	testWorkspace: async ({ includeLargeTestFile, gitRepository }, use) => {
+		const workspace = await createTestWorkspace({ includeLargeFile: includeLargeTestFile, gitRepository });
 		try {
 			await use(workspace);
 		} finally {

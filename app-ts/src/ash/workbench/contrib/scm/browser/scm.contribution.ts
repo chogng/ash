@@ -26,6 +26,8 @@ import { IChatContextPickService } from "../../../services/chat/common/chatConte
 import "../common/scmConfiguration.js";
 import "./quickDiff.contribution.js";
 import './gitClone.js';
+import './gitBranches.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
 
 export const GIT_AGENT_REVIEW_VIEW_ID = "ash.gitAgentReview";
 export { GIT_GRAPH_VIEW_ID };
@@ -79,6 +81,7 @@ registerWorkbenchContribution("workbench.contrib.scmStatus", WorkbenchPhase.Bloc
 	statusbarService: accessor.get(IStatusbarService),
 	gitService: accessor.get(IGitService),
 	viewsService: accessor.get(IViewsService),
+	commandService: accessor.get(ICommandService),
 }));
 
 registerWorkbenchContribution("workbench.contrib.scmWorkingSets", WorkbenchPhase.BlockRestore, accessor => new ScmWorkingSetController({

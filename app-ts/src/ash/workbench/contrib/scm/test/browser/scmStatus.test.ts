@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "mocha";
 import { Emitter } from "../../../../../base/common/event.js";
 import { Lxicon } from "../../../../../base/common/lxicons.js";
+import type { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { ScmStatusContribution } from "../../../../../workbench/contrib/scm/browser/scmStatus.js";
+import { GitSwitchBranchCommandId } from '../../../../../workbench/contrib/scm/browser/gitBranches.js';
 import type { GitRepository, GitStatus, IGitService } from "../../../../../workbench/services/git/common/gitService.js";
 import { StatusbarAlignment, StatusbarService } from "../../../../../workbench/services/statusbar/browser/statusbar.js";
 import type { IViewsService } from "../../../../../workbench/services/views/browser/viewsService.js";
@@ -21,8 +23,12 @@ test("SCM status projects the Git branch and upstream counts", async () => {
 	const viewsService = {
 		focusView: (viewId: string) => { focusedViews.push(viewId); return true; },
 	} as unknown as IViewsService;
+	const commands: Array<{ id: string; repositoryId: string }> = [];
+	const commandService = {
+		executeCommand: async (id: string, repositoryId: string) => { commands.push({ id, repositoryId }); },
+	} as unknown as ICommandService;
 	using statusbar = new StatusbarService();
-	using contribution = new ScmStatusContribution({ statusbarService: statusbar, gitService, viewsService });
+	using contribution = new ScmStatusContribution({ statusbarService: statusbar, gitService, viewsService, commandService });
 
 	await settle();
 	assert.deepEqual(statusbar.getEntries(StatusbarAlignment.Left).map(item => item.id), [
@@ -32,9 +38,10 @@ test("SCM status projects the Git branch and upstream counts", async () => {
 	assert.deepEqual(statusbar.getEntries(StatusbarAlignment.Left).map(item => item.entry.text), ["main", "3↓ 2↑"]);
 	assert.deepEqual(statusbar.getEntries(StatusbarAlignment.Left).map(item => item.compactGroup), ["ash.status.git", "ash.status.git"]);
 	assert.equal(statusbar.getEntries(StatusbarAlignment.Left)[1]?.entry.icon, Lxicon.sync);
-	assert.equal(statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.run?.(), true);
+	await statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.run?.();
 	assert.equal(statusbar.getEntries(StatusbarAlignment.Left)[1]?.entry.run?.(), true);
-	assert.deepEqual(focusedViews, ["ash.gitView", "ash.gitView"]);
+	assert.deepEqual(commands, [{ id: GitSwitchBranchCommandId, repositoryId: 'repo-1' }]);
+	assert.deepEqual(focusedViews, ["ash.gitView"]);
 
 	status = detachedStatus();
 	changes.fire(status);
@@ -58,8 +65,9 @@ test("Git status events supersede an older in-flight status request", async () =
 		status: () => initial,
 	} as unknown as IGitService;
 	const viewsService = { focusView: () => true } as unknown as IViewsService;
+	const commandService = { executeCommand: async () => undefined } as unknown as ICommandService;
 	using statusbar = new StatusbarService();
-	using contribution = new ScmStatusContribution({ statusbarService: statusbar, gitService, viewsService });
+	using contribution = new ScmStatusContribution({ statusbarService: statusbar, gitService, viewsService, commandService });
 
 	changes.fire(branchStatus(4, 5, "event-branch"));
 	resolveInitial(branchStatus(1, 1, "stale-branch"));

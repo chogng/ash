@@ -1,9 +1,11 @@
 import { Lxicon } from "../../../../base/common/lxicons.js";
 import { Disposable, MutableDisposable } from "../../../../base/common/lifecycle.js";
+import type { ICommandService } from '../../../../platform/commands/common/commands.js';
 import type { IWorkbenchContribution } from "../../../common/contributions.js";
 import type { GitHead, GitStatus, IGitService } from "../../../services/git/common/gitService.js";
 import { StatusbarAlignment, type IStatusbarEntry, type IStatusbarEntryAccessor, type IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
 import type { IViewsService } from "../../../services/views/browser/viewsService.js";
+import { GitSwitchBranchCommandId } from './gitBranches.js';
 
 const BranchPriority = 900;
 const SyncPriority = 800;
@@ -13,6 +15,7 @@ export interface ScmStatusContributionOptions {
 	readonly statusbarService: IStatusbarService;
 	readonly gitService: IGitService;
 	readonly viewsService: IViewsService;
+	readonly commandService: ICommandService;
 }
 
 /** Projects the active Git branch and upstream state into the status bar. */
@@ -58,7 +61,8 @@ export class ScmStatusContribution extends Disposable implements IWorkbenchContr
 		}
 		this.gitStatus = status;
 		const focusGit = () => this.options.viewsService.focusView("ash.gitView");
-		this.updateOrAdd(this.branch, branchEntry(status.head, focusGit), "ash.status.git.branch", BranchPriority);
+		const switchBranch = () => this.options.commandService.executeCommand(GitSwitchBranchCommandId, status.repositoryId);
+		this.updateOrAdd(this.branch, branchEntry(status.head, switchBranch), "ash.status.git.branch", BranchPriority);
 		this.updateOrAdd(this.sync, syncEntry(status.head, focusGit), "ash.status.git.sync", SyncPriority);
 	}
 
