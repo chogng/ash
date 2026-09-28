@@ -13,6 +13,7 @@ import { Registry } from '../../../../platform/registry/common/platform.js';
 import { DESKTOP_UPDATE_POLICY_SETTING, type DesktopUpdatePolicy } from '../../../../platform/update/common/updateService.js';
 import { localize } from '../../../../nls.js';
 import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
+import type { IChatService } from '../../../services/chat/common/chatService.js';
 import type { EditorInput } from '../../../services/editor/common/editorService.js';
 import { GitConfiguration, type GitAutofetch } from '../../../services/git/common/gitConfiguration.js';
 import type { IGitService } from '../../../services/git/common/gitService.js';
@@ -21,6 +22,7 @@ import type { ISetting, ISettingsEditorModel } from '../../../services/preferenc
 import { isSettingsEditorInput } from '../../../services/preferences/common/settingsEditorInput.js';
 import { DefaultSettings, SettingsEditorModel } from '../../../services/preferences/common/settingsModels.js';
 import { SettingsRenderer } from './settingsRenderers.js';
+import { ModelsSettings } from './modelsSettings.js';
 import { SettingsSearchQuery } from './settingsSearch.js';
 import { SettingsSearchWidget } from './settingsWidgets.js';
 import { createSettingsLayout, settingsRootNodes, SettingsCategories, type SettingsCategoryDescriptor, type SettingsCategoryGroupDescriptor, type SettingsLayoutCategory } from './settingsLayout.js';
@@ -47,6 +49,7 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 	private navigationEmpty!: HTMLParagraphElement;
 	private navigationScrollable!: ScrollableElement;
 	private readonly settingsModel: ISettingsEditorModel;
+	private modelsSettings!: ModelsSettings;
 	private settingsTree!: SettingsTree<ISetting>;
 	private tocTree!: TOCTree;
 	private treeModel!: SettingsTreeModel<ISetting>;
@@ -63,6 +66,7 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 		contextViewProvider: IContextViewProvider,
 		localizationService: ILocalizationService,
 		gitService: IGitService,
+		private readonly chatService: IChatService,
 	) {
 		super();
 		this.configurationService = configurationService;
@@ -176,6 +180,13 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 			updateItem: item => settingsRenderer.update(item.value),
 			disposeItem: item => settingsRenderer.disposeSetting(item.id),
 		}));
+		this.modelsSettings = this._register(new ModelsSettings(settingsContent, {
+			chatService: this.chatService,
+			clipboardService: this.clipboardService,
+			configurationService: this.configurationService,
+			contextMenuProvider: this.contextMenuProvider,
+			contextViewProvider: this.contextViewProvider,
+		}));
 		this.renderCategory(initialCategory);
 
 		this._register(this.localizationService.onDidChange(() => this.updateLocalizedChrome()));
@@ -225,6 +236,7 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 		const query = new SettingsSearchQuery(text);
 		this.tocTree.setFindPattern(query.text);
 		this.treeModel.setQuery(query);
+		this.modelsSettings.setVisible(query.isEmpty && this.activeCategory.id === 'models');
 		this.navigationScrollable.scrollTo(0, 0);
 		this.navigationScrollable.layout();
 	}
@@ -258,6 +270,7 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 		const target = this.treeModel.getGroup(targetId);
 		if (!target) throw new RangeError(`Settings layout does not expose navigation target '${targetId}'`);
 		this.settingsTree.setNavigationTarget(targetId);
+		this.modelsSettings.setVisible(category.id === 'models' && !this.searchWidget?.value);
 		this.activeNavigationTarget = entry;
 		this.content.classList.toggle('has-navigation-target', entry !== undefined);
 		if (entry) this.content.dataset.activeSettingsTarget = entry.target.targetId;

@@ -6,6 +6,7 @@ import type { IClipboardService } from '../../../../../platform/clipboard/common
 import type { IContextMenuService as ContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import type { ILocalizationService } from '../../../../../workbench/services/localization/common/localizationService.js';
 import type { IGitService } from '../../../../../workbench/services/git/common/gitService.js';
+import type { IChatService } from '../../../../../workbench/services/chat/common/chatService.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>', {
 	pretendToBeVisual: true,
@@ -60,6 +61,7 @@ const { ContentSearchConfiguration } = await import('../../../../../workbench/co
 const { GitConfiguration } = await import('../../../../../workbench/services/git/common/gitConfiguration.js');
 const { ScmConfiguration } = await import('../../../../../workbench/contrib/scm/common/scmConfiguration.js');
 const { IGitService: GitServiceId } = await import('../../../../../workbench/services/git/common/gitService.js');
+const { IChatService: ChatServiceId } = await import('../../../../../workbench/services/chat/common/chatService.js');
 const configurationRegistry = Registry.as<InstanceType<typeof ConfigurationRegistry>>(ConfigurationExtensions.Configuration);
 const { EditorPart } = await import('../../../../../workbench/browser/parts/editor/editorPart.js');
 const { EditorPaneMatch } = await import('../../../../../workbench/browser/parts/editor/editorPane.js');
@@ -343,6 +345,24 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		setAutoFetch: async (value: false | true | 'all') => { autoFetch = value; autoFetchChanged.fire(); },
 		setAutoFetchPeriod: async (value: number) => { autoFetchPeriod = value; autoFetchChanged.fire(); },
 	} as IGitService;
+	const model = { provider: 'openai', model: 'gpt-test' };
+	const modelsChanged = disposables.add(new Emitter<void>());
+	let modelVisible = true;
+	const modelWrites: boolean[] = [];
+	const savedKeys: string[] = [];
+	const chatService = {
+		onDidChangeModels: modelsChanged.event,
+		listModelCatalog: async () => [{ model, displayName: 'GPT Test' }],
+		listModelProviders: async () => [{ connection: 'openai', provider: 'openai', displayName: 'OpenAI API', apiKeyPolicy: 'required', apiKeyConfigured: savedKeys.length > 0 }],
+		isModelVisible: () => modelVisible,
+		setModelVisible: async (_model: typeof model, visible: boolean) => {
+			modelWrites.push(visible);
+			modelVisible = visible;
+			modelsChanged.fire();
+		},
+		setModelProviderApiKey: async (_connection: string, key: string) => { savedKeys.push(key); },
+		refreshModels: async () => [{ model, displayName: 'GPT Test' }],
+	} as unknown as IChatService;
 	const contextView = disposables.add(new BrowserContextViewService(root));
 	const services = new ServiceContainer();
 	services.registerInstance(ClipboardServiceId, clipboardService);
@@ -351,6 +371,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(IContextViewService, contextView);
 	services.registerInstance(LocalizationServiceId, localizationService);
 	services.registerInstance(GitServiceId, gitService);
+	services.registerInstance(ChatServiceId, chatService);
 	const instantiationService = services;
 	const editorPanes = new EditorPaneRegistry();
 	disposables.add(editorPanes.register({
@@ -358,7 +379,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		name: 'Settings',
 		canOpen: input => isSettingsEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
 		create: () => instantiationService.createInstance(new ServiceConstructionDescriptor(SettingsEditor, {
-			serviceDependencies: [ClipboardServiceId, ConfigurationServiceId, IContextMenuService, IContextViewService, LocalizationServiceId, GitServiceId],
+			serviceDependencies: [ClipboardServiceId, ConfigurationServiceId, IContextMenuService, IContextViewService, LocalizationServiceId, GitServiceId, ChatServiceId],
 		})),
 	}));
 	const editor = disposables.add(new EditorPart(root, { registry: editorPanes, instantiationService }));
@@ -444,6 +465,33 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		['My Agents', 'Teams', 'Defaults', 'Models', 'Rules', 'Skills', 'Tools & MCPs', 'Hooks'],
 	);
 	assert.equal(root.querySelector('[data-tree-id="general"]')?.getAttribute('aria-selected'), 'true');
+	root.querySelector<HTMLElement>('[data-settings-category-id="models"]')?.click();
+	await nextTurn();
+	assert.equal(root.querySelector('[data-settings-container]')?.getAttribute('data-active-settings-category'), 'models');
+	assert.ok(root.querySelector('[data-configuration-key="dictation.localModel"]'));
+	const modelSwitch = root.querySelector<HTMLInputElement>('.ash-models-settings-model-row input[role="switch"]');
+	assert.ok(modelSwitch);
+	assert.equal(modelSwitch.getAttribute('aria-label'), 'Show GPT Test in model picker');
+	modelSwitch.click();
+	await nextTurn();
+	assert.deepEqual(modelWrites, [false]);
+	assert.equal(modelSwitch.getAttribute('aria-checked'), 'false');
+	const modelSearch = root.querySelector<HTMLInputElement>('.ash-models-settings-search input');
+	assert.ok(modelSearch);
+	modelSearch.value = 'missing';
+	modelSearch.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
+	assert.equal(root.querySelector('.ash-models-settings-empty')?.textContent, 'No matching models or APIs.');
+	modelSearch.value = '';
+	modelSearch.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
+	const apiInput = root.querySelector<HTMLInputElement>('.ash-models-settings-api-controls input[type="password"]');
+	const saveKey = root.querySelector<HTMLButtonElement>('.ash-models-settings-api-controls button');
+	assert.ok(apiInput && saveKey);
+	apiInput.value = 'test-secret';
+	apiInput.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
+	saveKey.click();
+	await nextTurn();
+	assert.deepEqual(savedKeys, ['test-secret']);
+	assert.equal(root.textContent?.includes('test-secret'), false);
 	root.querySelector<HTMLElement>('[data-settings-category-id="teams"]')?.click();
 	assert.equal(root.querySelector<HTMLElement>('[data-settings-container]')?.dataset.activeSettingsCategory, 'teams');
 	assert.equal(root.querySelector('.ash-settings-page h3')?.textContent, 'Teams');

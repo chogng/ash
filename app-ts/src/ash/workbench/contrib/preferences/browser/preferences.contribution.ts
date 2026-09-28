@@ -8,6 +8,7 @@ import { registerEditorPane } from '../../../browser/parts/editor/editorRegistry
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import { IGitService } from '../../../services/git/common/gitService.js';
+import { IChatService } from '../../../services/chat/common/chatService.js';
 import { isSettingsEditorInput } from '../../../services/preferences/common/settingsEditorInput.js';
 import { SettingsEditor, SettingsEditorId } from './settingsEditor.js';
 import { PreferencesContribution } from '../common/preferencesContribution.js';
@@ -30,6 +31,7 @@ registerEditorPane({
 				IContextViewService,
 				ILocalizationService,
 				IGitService,
+				IChatService,
 			],
 		}));
 	},

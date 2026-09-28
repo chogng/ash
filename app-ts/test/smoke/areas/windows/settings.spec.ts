@@ -1,5 +1,55 @@
 import { expect, test } from '../../../automation/test.js';
 
+test('Workbench and Sessions Models share model visibility', async ({ application, target, workbench }) => {
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires Electron Code with App Server');
+	if (target.kind !== 'electron' || !('windows' in application)) return;
+	const page = workbench.page;
+	if (process.platform === 'darwin') {
+		await page.evaluate(async () => {
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
+			const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { version: 1; source: string } };
+			const settings = JSON.parse(snapshot.document.source) as Record<string, unknown>;
+			settings['window.menuStyle'] = 'custom';
+			await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(settings) } });
+		});
+	}
+	await page.keyboard.press('ControlOrMeta+Shift+P');
+	await page.getByPlaceholder('Type the name of a command to run').fill('Ash Settings');
+	await page.keyboard.press('Enter');
+	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
+	await settings.locator('[data-settings-group-id="agents"]').click();
+	await settings.locator('[data-settings-category-id="models"]').click();
+	await expect(settings.getByRole('heading', { name: 'Voice input' })).toBeVisible();
+	await expect(settings.locator('[data-configuration-key="dictation.localModel"]')).toBeVisible();
+	await expect(settings.getByRole('heading', { name: 'API connections' })).toBeVisible();
+	const firstModel = settings.locator('.ash-models-settings-model-row').first();
+	await expect(firstModel).toBeVisible();
+	const modelSwitch = firstModel.getByRole('switch');
+	const modelLabel = await modelSwitch.getAttribute('aria-label');
+	if (!modelLabel) throw new Error('Model visibility switch has no label');
+	const initiallyVisible = await modelSwitch.isChecked();
+	await modelSwitch.locator('..').locator('.ash-switch-track').click();
+	await expect(modelSwitch).toHaveAttribute('aria-checked', String(!initiallyVisible));
+	await expect(modelSwitch).not.toHaveAttribute('aria-busy', 'true');
+	await expect(modelSwitch).toHaveAttribute('aria-checked', String(!initiallyVisible));
+	await expect(settings.locator('.ash-models-settings-status')).toBeHidden();
+	await settings.locator('.ash-modal-editor-close').click();
+	await expect(settings).toBeHidden();
+	const sessionPagePromise = application.waitForEvent('window');
+	await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
+	const sessionsPage = await sessionPagePromise;
+	const accounts = sessionsPage.locator('.ash-sessions-activity-bottom button').last();
+	await accounts.click();
+	await sessionsPage.getByRole('menuitem', { name: 'Settings' }).click();
+	const sessionsSettings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
+	await sessionsSettings.getByRole('navigation', { name: 'Settings categories' }).getByRole('button', { name: 'Models' }).click();
+	const sessionSwitch = sessionsSettings.getByRole('switch', { name: modelLabel });
+	await expect(sessionSwitch).toHaveAttribute('aria-checked', String(!initiallyVisible));
+	await sessionSwitch.locator('..').locator('.ash-switch-track').click();
+	await expect(sessionSwitch).toHaveAttribute('aria-checked', String(initiallyVisible));
+	await expect(sessionSwitch).not.toHaveAttribute('aria-busy', 'true');
+});
+
 test('Settings opens with editor display controls', async ({ target, workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+Shift+P');
