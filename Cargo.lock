@@ -2837,6 +2837,7 @@ dependencies = [
  "ash-utils-elapsed",
  "ash-utils-home-dir",
  "ash-utils-image",
+ "ash-utils-path",
  "base64 0.22.1",
  "chrono",
  "crossterm",

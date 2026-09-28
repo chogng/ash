@@ -62,7 +62,7 @@ pub(crate) fn line_range_at(buffer: &Buffer, position: Position) -> Option<Scree
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum CellClass {
+pub(crate) enum TextClass {
     Whitespace,
     Word,
     Symbol,
@@ -72,7 +72,7 @@ enum CellClass {
 struct RowUnit {
     start: u16,
     end: u16,
-    class: CellClass,
+    class: TextClass,
 }
 
 fn row_units(buffer: &Buffer, row: u16) -> Vec<RowUnit> {
@@ -92,23 +92,23 @@ fn row_units(buffer: &Buffer, row: u16) -> Vec<RowUnit> {
         units.push(RowUnit {
             start: column,
             end,
-            class: cell_class(symbol),
+            class: text_class(symbol),
         });
         column = end.saturating_add(1);
     }
     units
 }
 
-fn cell_class(symbol: &str) -> CellClass {
+pub(crate) fn text_class(symbol: &str) -> TextClass {
     if symbol.chars().all(char::is_whitespace) {
-        CellClass::Whitespace
+        TextClass::Whitespace
     } else if symbol
         .chars()
         .any(|character| character.is_alphanumeric() || character == '_')
     {
-        CellClass::Word
+        TextClass::Word
     } else {
-        CellClass::Symbol
+        TextClass::Symbol
     }
 }
 

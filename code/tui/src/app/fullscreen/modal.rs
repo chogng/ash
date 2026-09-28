@@ -3,6 +3,7 @@
 use crate::app::App;
 use crate::app::AppCommand;
 use crate::app::command_panel::CommandPanel;
+use crate::app::command_panel::CommandPanelPointerTarget;
 use crate::keymap::bindings;
 use crate::render::InteractionState;
 use crate::render::RenderContext;
@@ -83,13 +84,10 @@ pub(super) fn selectable_text_area(app: &App, available: Rect) -> Option<Rect> {
 pub(in crate::app) enum Target {
     Close,
     Parent,
-    Provider(crate::config::provider::Target),
-    Memories(crate::memories::Target),
     Backdrop,
     Blocked,
     Text,
-    Tab(usize),
-    List(crate::widgets::list_selection::ListSelectionPointerTarget),
+    Panel(CommandPanelPointerTarget),
 }
 
 pub(super) fn target_at(
@@ -130,11 +128,6 @@ pub(super) fn target_at(
         }
     }
     let body = body_area(panel, layout.content);
-    if let crate::app::command_panel::CommandPanelBody::Provider(provider) = panel.body() {
-        if let Some(target) = provider.target_at(body, position) {
-            return Some(Target::Provider(target));
-        }
-    }
     let tabs = Rect {
         height: panel
             .body()
@@ -142,18 +135,9 @@ pub(super) fn target_at(
             .min(layout.content.height),
         ..layout.content
     };
-    if let crate::app::command_panel::CommandPanelBody::Memories(memories) = panel.body() {
-        if let Some(target) = memories.target_at(tabs, body, position) {
-            return Some(Target::Memories(target));
-        }
-    }
-    let target = match panel.list_selection() {
-        Some(selection) => {
-            crate::widgets::list_selection::pointer_target_at(selection, tabs, body, position)
-                .map(Target::List)
-        }
-        None => panel.tab_at(tabs, position).map(Target::Tab),
-    };
+    let target = panel
+        .pointer_target_at(tabs, body, position)
+        .map(Target::Panel);
     target.or_else(|| {
         text_area
             .is_some_and(|area| area.contains(position))
@@ -168,29 +152,8 @@ pub(super) fn activate(
     click: crate::widgets::list_selection::ListSelectionClick,
 ) -> Option<AppCommand> {
     match target {
-        Target::Memories(target) => {
-            let outcome = app
-                .fullscreen
-                .panels
-                .command_mut()?
-                .activate_memory(&target, click);
-            app.handle_command_panel_outcome(outcome)
-        }
         Target::Parent => {
             app.fullscreen.panels.command_mut()?.return_to_parent();
-            None
-        }
-        Target::Provider(target) => {
-            let outcome = app
-                .fullscreen
-                .panels
-                .command_mut()?
-                .activate_provider(target);
-            app.handle_command_panel_outcome(outcome)
-        }
-        Target::Tab(index) => {
-            app.fullscreen.modal_alert = false;
-            app.fullscreen.panels.command_mut()?.select_tab(index);
             None
         }
         Target::Close => {
@@ -208,12 +171,12 @@ pub(super) fn activate(
             None
         }
         Target::Text => None,
-        Target::List(target) => {
+        Target::Panel(target) => {
             app.fullscreen.modal_alert = false;
             let content = layout_for(app, available).content;
             let panel = app.fullscreen.panels.command_mut()?;
             let body = body_area(panel, content);
-            let outcome = panel.handle_click(&target, body, click);
+            let outcome = panel.activate_pointer_target(target, body, click);
             app.handle_command_panel_outcome(outcome)
         }
     }
@@ -327,70 +290,18 @@ pub(super) fn draw_panel(
             .min(layout.content.height),
         ..layout.content
     };
-    let tab = |target: Option<&Target>| match target {
-        Some(Target::Tab(index))
-        | Some(Target::List(crate::widgets::list_selection::ListSelectionPointerTarget::Tab(
-            index,
-        ))) => Some(*index),
-        _ => None,
-    };
-    let hovered_list = match hovered {
-        Some(Target::List(target)) => Some(target),
-        _ => None,
-    };
-    let pressed_list = match pressed {
-        Some(Target::List(target)) => Some(target),
-        _ => None,
-    };
-    if let crate::app::command_panel::CommandPanelBody::Memories(memories) = body {
-        fn target(target: Option<&Target>) -> Option<&crate::memories::Target> {
-            match target {
-                Some(Target::Memories(target)) => Some(target),
-                _ => None,
-            }
+    fn panel_target(target: Option<&Target>) -> Option<&CommandPanelPointerTarget> {
+        match target {
+            Some(Target::Panel(target)) => Some(target),
+            _ => None,
         }
-        let tab = |target: Option<&crate::memories::Target>| match target {
-            Some(crate::memories::Target::List(
-                crate::widgets::list_selection::ListSelectionPointerTarget::Tab(index),
-            )) => Some(*index),
-            _ => None,
-        };
-        memories.draw_tabs(
-            frame,
-            tabs,
-            tab(target(hovered)),
-            tab(target(pressed)),
-            context,
-        );
-        memories.draw(
-            frame,
-            body_area(panel, layout.content),
-            target(hovered),
-            target(pressed),
-            context,
-        );
-        return;
     }
-    body.draw_tabs(frame, tabs, tab(hovered), tab(pressed), context);
-    if let crate::app::command_panel::CommandPanelBody::Provider(provider) = body {
-        let target = |target: Option<&Target>| match target {
-            Some(Target::Provider(target)) => Some(*target),
-            _ => None,
-        };
-        provider.draw_with_pointer(
-            frame,
-            body_area(panel, layout.content),
-            target(hovered),
-            target(pressed),
-            context,
-        );
-        return;
-    }
-    body.draw_body(
+    panel.draw_content(
         frame,
+        tabs,
         body_area(panel, layout.content),
-        hovered_list,
-        pressed_list,
+        panel_target(hovered),
+        panel_target(pressed),
         context,
     );
 }

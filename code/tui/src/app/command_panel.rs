@@ -50,6 +50,7 @@ use crate::widgets::text_prompt;
 use crate::widgets::text_prompt::TextPrompt;
 use crossterm::event::KeyEvent;
 use ratatui::Frame;
+use ratatui::layout::Position;
 use ratatui::layout::Rect;
 use std::collections::BTreeMap;
 
@@ -62,6 +63,14 @@ pub(super) enum CommandPanelBody<'a> {
     Provider(&'a crate::config::provider::Panel),
     KeyCapture(&'a KeyCapture),
     Status(&'a StatusPanel),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) enum CommandPanelPointerTarget {
+    Provider(crate::config::provider::Target),
+    Memories(crate::memories::Target),
+    Tab(usize),
+    List(list_selection::ListSelectionPointerTarget),
 }
 
 impl CommandPanelBody<'_> {
@@ -172,29 +181,57 @@ impl CommandPanel {
         }
     }
 
-    pub(super) fn activate_provider(
-        &mut self,
-        target: crate::config::provider::Target,
-    ) -> CommandPanelOutcome {
-        match self {
-            Self::Config(editor) => editor
-                .provider_mut()
-                .map(|panel| CommandPanelOutcome::Config(panel.activate(target)))
-                .unwrap_or(CommandPanelOutcome::Consumed),
-            _ => CommandPanelOutcome::Consumed,
+    pub(super) fn pointer_target_at(
+        &self,
+        tabs: Rect,
+        body: Rect,
+        position: Position,
+    ) -> Option<CommandPanelPointerTarget> {
+        match self.body() {
+            CommandPanelBody::Provider(provider) => provider
+                .target_at(body, position)
+                .map(CommandPanelPointerTarget::Provider),
+            CommandPanelBody::Memories(memories) => memories
+                .target_at(tabs, body, position)
+                .map(CommandPanelPointerTarget::Memories),
+            _ => self.list_selection().map_or_else(
+                || {
+                    self.tab_at(tabs, position)
+                        .map(CommandPanelPointerTarget::Tab)
+                },
+                |selection| {
+                    list_selection::pointer_target_at(selection, tabs, body, position)
+                        .map(CommandPanelPointerTarget::List)
+                },
+            ),
         }
     }
 
-    pub(super) fn activate_memory(
+    pub(super) fn activate_pointer_target(
         &mut self,
-        target: &crate::memories::Target,
+        target: CommandPanelPointerTarget,
+        area: Rect,
         click: list_selection::ListSelectionClick,
     ) -> CommandPanelOutcome {
-        match self {
-            Self::Memories(panel) => {
-                map_selection(panel.click(target, click), CommandPanelOutcome::Memories)
+        match target {
+            CommandPanelPointerTarget::Provider(target) => match self {
+                Self::Config(editor) => editor
+                    .provider_mut()
+                    .map(|panel| CommandPanelOutcome::Config(panel.activate(target)))
+                    .unwrap_or(CommandPanelOutcome::Consumed),
+                _ => CommandPanelOutcome::Consumed,
+            },
+            CommandPanelPointerTarget::Memories(target) => match self {
+                Self::Memories(panel) => {
+                    map_selection(panel.click(&target, click), CommandPanelOutcome::Memories)
+                }
+                _ => CommandPanelOutcome::Consumed,
+            },
+            CommandPanelPointerTarget::Tab(index) => {
+                self.select_tab(index);
+                CommandPanelOutcome::Consumed
             }
-            _ => CommandPanelOutcome::Consumed,
+            CommandPanelPointerTarget::List(target) => self.handle_click(&target, area, click),
         }
     }
 
@@ -573,6 +610,30 @@ impl CommandPanel {
         }
     }
 
+    pub(super) fn draw_content(
+        &self,
+        frame: &mut Frame<'_>,
+        tabs: Rect,
+        body_area: Rect,
+        hovered: Option<&CommandPanelPointerTarget>,
+        pressed: Option<&CommandPanelPointerTarget>,
+        context: crate::render::RenderContext<'_>,
+    ) {
+        let body = self.body();
+        let tab_index = |target: Option<&CommandPanelPointerTarget>| match target {
+            Some(CommandPanelPointerTarget::Tab(index))
+            | Some(CommandPanelPointerTarget::List(
+                list_selection::ListSelectionPointerTarget::Tab(index),
+            )) => Some(*index),
+            Some(CommandPanelPointerTarget::Memories(crate::memories::Target::List(
+                list_selection::ListSelectionPointerTarget::Tab(index),
+            ))) => Some(*index),
+            _ => None,
+        };
+        body.draw_tabs(frame, tabs, tab_index(hovered), tab_index(pressed), context);
+        body.draw_body(frame, body_area, hovered, pressed, context);
+    }
+
     pub(crate) fn key_hints(&self) -> &crate::widgets::key_hint::KeyHints {
         match self {
             Self::Help(content) | Self::Loading(content) | Self::Usage(content) => {
@@ -848,20 +909,47 @@ impl<'a> CommandPanelBody<'a> {
         self,
         frame: &mut Frame<'_>,
         area: Rect,
-        hovered: Option<&list_selection::ListSelectionPointerTarget>,
-        pressed: Option<&list_selection::ListSelectionPointerTarget>,
+        hovered: Option<&CommandPanelPointerTarget>,
+        pressed: Option<&CommandPanelPointerTarget>,
         context: crate::render::RenderContext<'_>,
     ) {
+        fn list(
+            target: Option<&CommandPanelPointerTarget>,
+        ) -> Option<&list_selection::ListSelectionPointerTarget> {
+            match target {
+                Some(CommandPanelPointerTarget::List(target)) => Some(target),
+                _ => None,
+            }
+        }
+        fn memory(target: Option<&CommandPanelPointerTarget>) -> Option<&crate::memories::Target> {
+            match target {
+                Some(CommandPanelPointerTarget::Memories(target)) => Some(target),
+                _ => None,
+            }
+        }
+        let provider = |target: Option<&CommandPanelPointerTarget>| match target {
+            Some(CommandPanelPointerTarget::Provider(target)) => Some(*target),
+            _ => None,
+        };
         match self {
             Self::Selection(selection) => list_selection::draw_body_with_pointer(
-                frame, area, selection, hovered, pressed, context,
+                frame,
+                area,
+                selection,
+                list(hovered),
+                list(pressed),
+                context,
             ),
-            Self::Memories(panel) => panel.draw(frame, area, None, None, context),
+            Self::Memories(panel) => {
+                panel.draw(frame, area, memory(hovered), memory(pressed), context)
+            }
             Self::Prompt(prompt) => text_prompt::draw(frame, area, prompt, context),
             Self::Dialog(dialog) => dialog.draw(frame, area, context),
             Self::KeyCapture(capture) => key_capture::draw(frame, area, capture, context),
             Self::Status(panel) => panel.draw_body(frame, area, context),
-            Self::Provider(panel) => panel.draw_body(frame, area, context),
+            Self::Provider(panel) => {
+                panel.draw_with_pointer(frame, area, provider(hovered), provider(pressed), context)
+            }
         }
     }
 }

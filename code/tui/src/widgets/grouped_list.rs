@@ -1,9 +1,9 @@
 use crate::render::RenderContext;
+use crate::render::display_width;
+use crate::render::truncate_to_width;
 use ratatui::style::Modifier;
 use ratatui::style::Style;
 use ratatui::text::Line;
-use unicode_width::UnicodeWidthChar;
-use unicode_width::UnicodeWidthStr;
 // Shared viewport policy for grouped managers, including overflow indicator rows.
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -72,18 +72,9 @@ pub(crate) fn more_line(
     )
 }
 
-pub(crate) fn truncate_to_width(text: &str, width: usize) -> String {
-    text.chars()
-        .scan(0, |used, character| {
-            let character_width = character.width().unwrap_or(0);
-            (*used + character_width <= width).then(|| {
-                *used += character_width;
-                character
-            })
-        })
-        .collect()
-}
-
 pub(crate) fn pad_to_width(text: &str, width: usize) -> String {
-    format!("{text}{}", " ".repeat(width.saturating_sub(text.width())))
+    format!(
+        "{text}{}",
+        " ".repeat(width.saturating_sub(display_width(text)))
+    )
 }

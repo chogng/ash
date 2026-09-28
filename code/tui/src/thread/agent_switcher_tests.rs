@@ -1,4 +1,6 @@
+use super::AgentThreadRow;
 use super::AgentThreadSwitcher;
+use super::AgentThreadSwitcherView;
 use super::draw_agent_thread_switcher;
 use crate::render::test_context;
 use ash_protocol::Session;
@@ -87,6 +89,41 @@ fn rows_use_selection_dots_lowercase_names_and_right_aligned_elapsed_time() {
     assert!(!rows.join("\n").contains("child-a"));
     assert_eq!(buffer[(0, 0)].fg, test_context().muted());
     assert_eq!(buffer[(0, 1)].fg, test_context().foreground());
+}
+
+#[test]
+fn narrow_row_keeps_a_combined_glyph_and_elapsed_column() {
+    let rows = [AgentThreadRow {
+        thread_id: thread_id("child"),
+        label: "abｶﾞc".into(),
+        completed_turn_duration_ms: 31_000,
+        active_turn_started_at_unix_ms: None,
+    }];
+    let mut terminal = Terminal::new(TestBackend::new(10, 1)).unwrap();
+    terminal
+        .draw(|frame| {
+            draw_agent_thread_switcher(
+                frame,
+                frame.area(),
+                AgentThreadSwitcherView {
+                    rows: &rows,
+                    selected: None,
+                    viewed: None,
+                    focused: false,
+                    now_unix_ms: 0,
+                },
+                None,
+                None,
+                test_context(),
+            );
+        })
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    let rendered = (0..10)
+        .map(|column| buffer[(column, 0)].symbol())
+        .collect::<String>();
+    crate::tui_assert_snapshot!(rendered, @"○ abｶﾞc 31s");
+    assert_eq!(buffer[(7, 0)].symbol(), "3");
 }
 
 #[test]

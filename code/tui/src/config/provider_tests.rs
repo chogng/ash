@@ -237,11 +237,13 @@ fn render_language(
         ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, height)).unwrap();
     terminal
         .draw(|frame| {
-            panel.draw_body_at(
+            panel.draw_body_at_with_pointer(
                 frame,
                 Rect::new(2, 0, width.saturating_sub(4), height),
                 crate::render::test_context().with_language(language),
                 now,
+                None,
+                None,
             )
         })
         .unwrap();

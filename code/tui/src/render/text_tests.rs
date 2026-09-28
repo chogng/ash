@@ -1,8 +1,11 @@
+use super::display_width;
 use super::line_to_borrowed;
 use super::line_to_static;
 use super::prefix_lines;
 use super::push_owned_lines;
 use super::styled_text_lines;
+use super::truncate_to_width;
+use super::truncate_with_ellipsis;
 use super::wrapped_height;
 use ratatui::layout::Alignment;
 use ratatui::style::Color;
@@ -67,4 +70,14 @@ fn wrapped_height_uses_ratatui_word_wrapping() {
     assert_eq!(wrapped_height(&lines, 20), 1);
     assert_eq!(wrapped_height(&lines, 5), 2);
     assert_eq!(wrapped_height(&lines, 0), 0);
+}
+
+#[test]
+fn truncation_keeps_combined_terminal_glyphs_whole() {
+    let text = "abｶﾞc";
+    assert_eq!(display_width(text), 4);
+    assert_eq!(truncate_to_width(text, 2), "ab");
+    assert_eq!(truncate_to_width(text, 3), "abｶﾞ");
+    assert_eq!(truncate_to_width(text, 4), text);
+    assert_eq!(truncate_with_ellipsis(text, 3), "ab…");
 }

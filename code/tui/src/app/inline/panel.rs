@@ -29,8 +29,7 @@ pub(super) fn draw(
         &panel.navigation_title(context.language()),
         presentation_focus,
     );
-    body.draw_tabs(frame, layout.tabs, None, None, context);
-    body.draw_body(frame, layout.body, None, None, context);
+    panel.draw_content(frame, layout.tabs, layout.body, None, None, context);
 }
 
 pub(super) fn handle_key(

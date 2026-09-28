@@ -1,3 +1,4 @@
+use crate::render::display_width;
 use crate::render::truncate_with_ellipsis;
 use crate::thread::TurnApprovalModes;
 use ash_app_server_protocol::protocol::config::ModelRefDto;
@@ -11,7 +12,6 @@ use ash_protocol::ModelReferenceCostSummary;
 use ash_protocol::ModelUsageSummary;
 use ash_protocol::StreamInstanceId;
 use unicode_segmentation::UnicodeSegmentation;
-use unicode_width::UnicodeWidthStr;
 
 use super::StatusLineItem;
 use super::StatusLineSettings;
@@ -770,7 +770,10 @@ fn join_values(values: &[DisplayValue], compact: bool) -> Vec<StatusLineSegment>
 }
 
 fn segments_width(segments: &[StatusLineSegment]) -> usize {
-    segments.iter().map(|segment| segment.text.width()).sum()
+    segments
+        .iter()
+        .map(|segment| display_width(&segment.text))
+        .sum()
 }
 
 fn truncate_segments_with_ellipsis(
@@ -794,7 +797,7 @@ fn truncate_segments_with_ellipsis(
         let mut text = String::new();
         let mut truncated = false;
         for character in segment.text.graphemes(true) {
-            let character_width = character.width();
+            let character_width = display_width(character);
             if rendered_width + character_width > content_width {
                 truncated = true;
                 break;

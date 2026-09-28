@@ -809,8 +809,10 @@ fn mouse_wheel_scrolls_modal_list_by_rows_without_moving_keyboard_focus() {
             area,
             ratatui::layout::Position::new(body.x, row),
         ) {
-            Some(super::super::modal::Target::List(
-                crate::widgets::list_selection::ListSelectionPointerTarget::Item(id),
+            Some(super::super::modal::Target::Panel(
+                crate::app::command_panel::CommandPanelPointerTarget::List(
+                    crate::widgets::list_selection::ListSelectionPointerTarget::Item(id),
+                ),
             )) => Some(id),
             _ => None,
         }
@@ -890,9 +892,9 @@ fn mouse_wheel_scrolls_config_providers_without_switching_tabs() {
                 area,
                 ratatui::layout::Position::new(body.x, row),
             ),
-            Some(super::super::modal::Target::List(
+            Some(super::super::modal::Target::Panel(crate::app::command_panel::CommandPanelPointerTarget::List(
                 crate::widgets::list_selection::ListSelectionPointerTarget::Item(id)
-            )) if id == ListSelectionItemId::new("0")
+            ))) if id == ListSelectionItemId::new("0")
         )
     }));
 }

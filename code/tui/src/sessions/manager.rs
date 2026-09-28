@@ -4,11 +4,11 @@ use crate::render::InteractionTarget;
 use crate::render::RenderContext;
 use crate::render::interaction_style;
 use crate::render::selection_marker;
+use crate::render::truncate_to_width;
 #[cfg(test)]
 use crate::widgets::grouped_list::Viewport as ManagerViewport;
 use crate::widgets::grouped_list::more_line;
 use crate::widgets::grouped_list::pad_to_width;
-use crate::widgets::grouped_list::truncate_to_width;
 use crate::widgets::grouped_list::viewport as manager_viewport;
 use ash_protocol::Session;
 use ash_protocol::SessionId;

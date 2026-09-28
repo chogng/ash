@@ -17,26 +17,6 @@ pub(super) enum TextAreaOutcome {
     Unhandled,
 }
 
-#[derive(Clone, Copy, Eq, PartialEq)]
-enum TextClass {
-    Whitespace,
-    Word,
-    Symbol,
-}
-
-fn text_class(grapheme: &str) -> TextClass {
-    if grapheme.chars().all(char::is_whitespace) {
-        TextClass::Whitespace
-    } else if grapheme
-        .chars()
-        .any(|character| character.is_alphanumeric() || character == '_')
-    {
-        TextClass::Word
-    } else {
-        TextClass::Symbol
-    }
-}
-
 /// Stable identity for one atomic element during the lifetime of a draft.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct TextElementId(u64);
@@ -671,3 +651,4 @@ fn boundary_for_display_width(text: &str, target_width: usize) -> usize {
 #[cfg(test)]
 #[path = "editor_tests.rs"]
 mod tests;
+use crate::terminal::text::text_class;

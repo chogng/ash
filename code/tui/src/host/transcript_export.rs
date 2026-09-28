@@ -1,8 +1,10 @@
 //! Directory-bounded transcript file export.
 
+use ash_utils_path::CanonicalContainmentError;
+use ash_utils_path::CanonicalPathRoot;
+use ash_utils_path::join_descendant;
 use std::fs::OpenOptions;
 use std::io::Write;
-use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -11,12 +13,30 @@ pub(crate) fn write(
     requested_path: Option<&Path>,
     contents: &str,
 ) -> Result<PathBuf, String> {
-    let relative_path = match requested_path {
-        Some(path) => validate_relative_path(path)?,
-        None => available_default_path(dir_root),
-    };
-    let path = dir_root.join(relative_path);
-    let target = bounded_target(dir_root, &path)?;
+    let relative_path = requested_path
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| available_default_path(dir_root));
+    let boundary = CanonicalPathRoot::new(dir_root)
+        .map_err(|error| format!("could not resolve directory root: {error}"))?;
+    let path = join_descendant(boundary.path(), &relative_path)
+        .map_err(|_| "export path must stay inside the active directory".to_owned())?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| "export path must name a file inside the active directory".to_owned())?;
+    let parent = boundary
+        .canonicalize_within(parent)
+        .map_err(|error| match error {
+            CanonicalContainmentError::OutsideRoot => {
+                "export path must stay inside the active directory".to_owned()
+            }
+            CanonicalContainmentError::Unavailable(error) => {
+                format!("could not resolve export directory: {error}")
+            }
+        })?;
+    let file_name = path
+        .file_name()
+        .ok_or_else(|| "export path must name a file inside the active directory".to_owned())?;
+    let target = parent.join(file_name);
     let mut file = OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -26,41 +46,7 @@ pub(crate) fn write(
         .map_err(|error| format!("could not write {}: {error}", path.display()))?;
     file.sync_all()
         .map_err(|error| format!("could not sync {}: {error}", path.display()))?;
-    Ok(path)
-}
-
-fn bounded_target(dir_root: &Path, path: &Path) -> Result<PathBuf, String> {
-    let canonical_root = dir_root
-        .canonicalize()
-        .map_err(|error| format!("could not resolve directory root: {error}"))?;
-    let parent = path
-        .parent()
-        .ok_or_else(|| "export path must name a file inside the active directory".to_owned())?;
-    let canonical_parent = parent
-        .canonicalize()
-        .map_err(|error| format!("could not resolve export directory: {error}"))?;
-    if !canonical_parent.starts_with(&canonical_root) {
-        return Err("export path must stay inside the active directory".into());
-    }
-    let file_name = path
-        .file_name()
-        .ok_or_else(|| "export path must name a file inside the active directory".to_owned())?;
-    Ok(canonical_parent.join(file_name))
-}
-
-fn validate_relative_path(path: &Path) -> Result<PathBuf, String> {
-    if path.as_os_str().is_empty()
-        || path.is_absolute()
-        || path.components().any(|component| {
-            matches!(
-                component,
-                Component::ParentDir | Component::RootDir | Component::Prefix(_)
-            )
-        })
-    {
-        return Err("export path must stay inside the active directory".into());
-    }
-    Ok(path.to_path_buf())
+    Ok(dir_root.join(relative_path))
 }
 
 fn available_default_path(dir_root: &Path) -> PathBuf {

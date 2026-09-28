@@ -1,7 +1,9 @@
 use crate::render::InteractionState;
 use crate::render::InteractionTarget;
 use crate::render::RenderContext;
+use crate::render::display_width;
 use crate::render::interaction_style;
+use crate::render::truncate_to_width;
 use ash_protocol::Session;
 use ash_protocol::ThreadId;
 use ash_protocol::ThreadStatus;
@@ -14,8 +16,6 @@ use ratatui::widgets::Paragraph;
 use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
-use unicode_width::UnicodeWidthChar;
-use unicode_width::UnicodeWidthStr;
 
 pub(crate) const DEFAULT_MAX_ROWS: usize = 4;
 const MARKER_WIDTH: usize = 2;
@@ -225,26 +225,14 @@ pub(crate) fn pointer_target_at(
 }
 
 fn row_text(marker: char, label: &str, elapsed: &str, width: usize) -> String {
-    let elapsed_width = elapsed.width();
+    let elapsed_width = display_width(elapsed);
     let name_width = width.saturating_sub(MARKER_WIDTH + elapsed_width + 1);
     let name = truncate_to_width(label, name_width);
     let left = format!("{marker} {name}");
     let gap = width
-        .saturating_sub(left.width() + elapsed_width)
-        .max(usize::from(width > left.width() + elapsed_width));
+        .saturating_sub(display_width(&left) + elapsed_width)
+        .max(usize::from(width > display_width(&left) + elapsed_width));
     format!("{left}{}{elapsed}", " ".repeat(gap))
-}
-
-fn truncate_to_width(text: &str, width: usize) -> String {
-    text.chars()
-        .scan(0, |used, character| {
-            let character_width = character.width().unwrap_or(0);
-            (*used + character_width <= width).then(|| {
-                *used += character_width;
-                character
-            })
-        })
-        .collect()
 }
 
 fn current_unix_millis() -> u64 {

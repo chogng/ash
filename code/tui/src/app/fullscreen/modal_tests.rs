@@ -163,14 +163,14 @@ fn theme_picker_is_numbered_fixed_and_not_searchable() {
     assert!(rendered.contains('┘'));
     assert_eq!(title_row, usize::from(layout.surface.y));
     assert_eq!(first_choice_row - title_row, 2);
-    let hover = super::Target::List(
+    let hover = super::Target::Panel(crate::app::command_panel::CommandPanelPointerTarget::List(
         crate::widgets::list_selection::ListSelectionPointerTarget::Item(
             panel.list_selection().unwrap().visible_items()[0]
                 .id()
                 .unwrap()
                 .clone(),
         ),
-    );
+    ));
     terminal
         .draw(|frame| {
             super::draw_panel(
@@ -698,8 +698,10 @@ fn modal_mouse_activation_uses_the_session_identity_and_close_requires_matching_
         .find(|(x, y)| {
             matches!(
                 super::target_at(&app, area, ratatui::layout::Position::new(*x, *y)),
-                Some(super::Target::List(
-                    crate::widgets::list_selection::ListSelectionPointerTarget::Item(_)
+                Some(super::Target::Panel(
+                    crate::app::command_panel::CommandPanelPointerTarget::List(
+                        crate::widgets::list_selection::ListSelectionPointerTarget::Item(_)
+                    )
                 ))
             )
         })
@@ -1331,7 +1333,11 @@ fn detail_tabs_use_the_same_mouse_routing_as_list_tabs() {
         .flat_map(|y| (0..area.width).map(move |x| (x, y)))
         .find_map(|(x, y)| {
             match super::target_at(&app, area, ratatui::layout::Position::new(x, y)) {
-                Some(target @ super::Target::Tab(1)) => Some(target),
+                Some(
+                    target @ super::Target::Panel(
+                        crate::app::command_panel::CommandPanelPointerTarget::Tab(1),
+                    ),
+                ) => Some(target),
                 _ => None,
             }
         })
@@ -1628,7 +1634,9 @@ fn provider_mouse_input_and_parent_title_return_to_config() {
     let position = Position::new(body.x + 4, body.y + 2);
     assert!(matches!(
         super::target_at(&app, area, position),
-        Some(super::Target::Provider(_))
+        Some(super::Target::Panel(
+            crate::app::command_panel::CommandPanelPointerTarget::Provider(_)
+        ))
     ));
     for kind in [
         MouseEventKind::Down(MouseButton::Left),
@@ -1737,9 +1745,11 @@ fn config_descriptions_expand_below_items_and_keep_mouse_targets_aligned() {
     );
     assert_eq!(
         super::target_at(&app, area, Position::new(body.x + 3, first + 2)),
-        Some(super::Target::List(ListSelectionPointerTarget::Item(
-            ListSelectionItemId::new("memory-diagnostics")
-        )))
+        Some(super::Target::Panel(
+            crate::app::command_panel::CommandPanelPointerTarget::List(
+                ListSelectionPointerTarget::Item(ListSelectionItemId::new("memory-diagnostics"))
+            )
+        ))
     );
     assert!(
         app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE))

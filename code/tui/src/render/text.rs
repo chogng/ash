@@ -6,6 +6,24 @@ use ratatui::widgets::Wrap;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
+pub(crate) fn display_width(text: &str) -> usize {
+    text.width()
+}
+
+pub(crate) fn truncate_to_width(text: &str, width: usize) -> String {
+    let mut rendered = String::new();
+    let mut used = 0;
+    for grapheme in text.graphemes(true) {
+        let grapheme_width = display_width(grapheme);
+        if used + grapheme_width > width {
+            break;
+        }
+        rendered.push_str(grapheme);
+        used += grapheme_width;
+    }
+    rendered
+}
+
 pub(crate) fn line_to_borrowed<'a>(line: &'a Line<'_>) -> Line<'a> {
     Line {
         style: line.style,
@@ -73,24 +91,14 @@ pub(crate) fn truncate_with_ellipsis(text: &str, width: usize) -> String {
     if width == 0 {
         return String::new();
     }
-    if text.width() <= width {
+    if display_width(text) <= width {
         return text.to_owned();
     }
     if width == 1 {
         return "…".into();
     }
 
-    let content_width = width - 1;
-    let mut rendered = String::new();
-    let mut rendered_width = 0;
-    for character in text.graphemes(true) {
-        let character_width = character.width();
-        if rendered_width + character_width > content_width {
-            break;
-        }
-        rendered.push_str(character);
-        rendered_width += character_width;
-    }
+    let mut rendered = truncate_to_width(text, width - 1);
     rendered.push('…');
     rendered
 }

@@ -24,6 +24,8 @@ fn requested_exports_are_bounded_and_refuse_overwrite() {
     let root = std::env::temp_dir().join(format!("ash-tui-export-path-{}", std::process::id()));
     fs::create_dir_all(&root).unwrap();
 
+    assert!(write(&root, Some(Path::new("")), "no").is_err());
+    assert!(write(&root, Some(root.join("absolute.md").as_path()), "no").is_err());
     assert!(write(&root, Some(Path::new("../outside.md")), "no").is_err());
     let path = write(&root, Some(Path::new("conversation.md")), "yes").unwrap();
     assert!(write(&root, Some(Path::new("conversation.md")), "replace").is_err());
@@ -41,7 +43,10 @@ fn requested_exports_do_not_follow_a_directory_symlink_outside_the_dir() {
     fs::create_dir_all(&outside).unwrap();
     std::os::unix::fs::symlink(&outside, root.join("outside")).unwrap();
 
-    assert!(write(&root, Some(Path::new("outside/escaped.md")), "no").is_err());
+    assert_eq!(
+        write(&root, Some(Path::new("outside/escaped.md")), "no"),
+        Err("export path must stay inside the active directory".into())
+    );
     assert!(!outside.join("escaped.md").exists());
 
     let _ = fs::remove_dir_all(root);

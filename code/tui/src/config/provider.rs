@@ -560,20 +560,6 @@ impl Panel {
     pub(crate) fn body_rows(&self) -> u16 {
         FIELD_HEIGHTS.iter().sum::<u16>() + u16::from(!self.message.is_empty())
     }
-    pub(crate) fn draw_body(&self, frame: &mut Frame<'_>, area: Rect, context: RenderContext<'_>) {
-        self.draw_body_at(frame, area, context, Instant::now());
-    }
-
-    fn draw_body_at(
-        &self,
-        frame: &mut Frame<'_>,
-        area: Rect,
-        context: RenderContext<'_>,
-        now: Instant,
-    ) {
-        self.draw_body_at_with_pointer(frame, area, context, now, None, None);
-    }
-
     fn draw_body_at_with_pointer(
         &self,
         frame: &mut Frame<'_>,

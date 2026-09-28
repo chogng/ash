@@ -27,10 +27,12 @@ pub(crate) use palette::ThemeRgb;
 pub(crate) use palette::test_context;
 use ratatui::Frame;
 use ratatui::layout::Rect;
+pub(crate) use text::display_width;
 pub(crate) use text::line_to_borrowed;
 pub(crate) use text::prefix_lines;
 pub(crate) use text::push_owned_lines;
 pub(crate) use text::styled_text_lines;
+pub(crate) use text::truncate_to_width;
 pub(crate) use text::truncate_with_ellipsis;
 pub(crate) use text::wrapped_height;
 
