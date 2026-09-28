@@ -2113,6 +2113,7 @@
         "GitUnavailable",
         "GitNotRepository",
         "GitOperationFailed",
+        "GitConflictChanged",
         "TurnChangesUnavailable",
         "TurnChangesRevisionConflict",
         "TurnChangesOperationFailed",
@@ -7981,6 +7982,38 @@
         {
           "properties": {
             "method": {
+              "const": "git/conflictFile",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitConflictFileParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "git/completeConflict",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitCompleteConflictParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "git/branch/switch",
               "type": "string"
             },
@@ -12694,6 +12727,38 @@
             },
             "result": {
               "$ref": "#/$defs/GitChangeFileResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "git/conflictFile",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitConflictFileResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "git/completeConflict",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitOperationResult"
             }
           },
           "required": [
@@ -19687,6 +19752,47 @@
       ],
       "type": "object"
     },
+    "GitCompleteConflictParams": {
+      "properties": {
+        "expectedResultObjectId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expectedStageIds": {
+          "items": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "path": {
+          "maxLength": 32768,
+          "minLength": 1,
+          "type": "string"
+        },
+        "repositoryId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "resolution": {
+          "$ref": "#/$defs/GitConflictResolutionDto"
+        }
+      },
+      "required": [
+        "path",
+        "expectedStageIds",
+        "resolution"
+      ],
+      "type": "object"
+    },
     "GitConfigDto": {
       "additionalProperties": false,
       "properties": {
@@ -19705,6 +19811,113 @@
         "autofetchPeriod"
       ],
       "type": "object"
+    },
+    "GitConflictFileParams": {
+      "description": "Identifies a conflicted path in the selected repository.",
+      "properties": {
+        "path": {
+          "maxLength": 32768,
+          "minLength": 1,
+          "type": "string"
+        },
+        "repositoryId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "GitConflictFileResult": {
+      "description": "Exact unmerged index stages and the current working file.",
+      "properties": {
+        "base": {
+          "$ref": "#/$defs/GitCommitFileContentDto"
+        },
+        "current": {
+          "$ref": "#/$defs/GitCommitFileContentDto"
+        },
+        "incoming": {
+          "$ref": "#/$defs/GitCommitFileContentDto"
+        },
+        "result": {
+          "$ref": "#/$defs/GitCommitFileContentDto"
+        },
+        "resultObjectId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stageIds": {
+          "items": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        }
+      },
+      "required": [
+        "stageIds",
+        "base",
+        "current",
+        "incoming",
+        "result"
+      ],
+      "type": "object"
+    },
+    "GitConflictResolutionDto": {
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {
+              "const": "edited",
+              "type": "string"
+            },
+            "text": {
+              "maxLength": 2097152,
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "text"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "current",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "incoming",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "GitDiffStatisticsDto": {
       "properties": {

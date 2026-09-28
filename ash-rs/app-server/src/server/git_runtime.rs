@@ -11,6 +11,8 @@ use ash_app_server_protocol::protocol::git::GitCommitChangesResult;
 use ash_app_server_protocol::protocol::git::GitCommitFileContentDto;
 use ash_app_server_protocol::protocol::git::GitCommitFileResult;
 use ash_app_server_protocol::protocol::git::GitCommitSummaryDto;
+use ash_app_server_protocol::protocol::git::GitConflictFileResult;
+use ash_app_server_protocol::protocol::git::GitConflictResolutionDto;
 use ash_app_server_protocol::protocol::git::GitDiffStatisticsDto;
 use ash_app_server_protocol::protocol::git::GitFetchModeDto;
 use ash_app_server_protocol::protocol::git::GitGraphResult;
@@ -362,6 +364,30 @@ impl GitRuntime {
     ) -> Result<GitChangeFileResult, GitRuntimeError> {
         self.repository(repository_id)?
             .change_file(path, comparison)
+    }
+
+    pub(super) fn conflict_file_for(
+        &self,
+        repository_id: Option<&str>,
+        path: &Path,
+    ) -> Result<GitConflictFileResult, GitRuntimeError> {
+        self.repository(repository_id)?.conflict_file(path)
+    }
+
+    pub(super) fn complete_conflict_for(
+        &self,
+        repository_id: Option<&str>,
+        path: &Path,
+        expected_stage_ids: [Option<String>; 3],
+        expected_result_object_id: Option<String>,
+        resolution: GitConflictResolutionDto,
+    ) -> Result<GitStatusResult, GitRuntimeError> {
+        self.repository(repository_id)?.complete_conflict(
+            path,
+            expected_stage_ids,
+            expected_result_object_id,
+            resolution,
+        )
     }
 
     pub(super) fn change_file(
@@ -817,6 +843,61 @@ impl GitRepositoryRuntime {
             original: commit_file_content(file.original()),
             modified: commit_file_content(file.modified()),
         })
+    }
+
+    pub(super) fn conflict_file(
+        &self,
+        path: &Path,
+    ) -> Result<GitConflictFileResult, GitRuntimeError> {
+        let _operation = self
+            .operation
+            .lock()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        let file = self
+            .service
+            .conflict_file(path)
+            .map_err(GitRuntimeError::Service)?;
+        Ok(GitConflictFileResult {
+            stage_ids: file.stage_ids().clone(),
+            result_object_id: file.result_object_id().map(str::to_owned),
+            base: commit_file_content(file.base()),
+            current: commit_file_content(file.current()),
+            incoming: commit_file_content(file.incoming()),
+            result: commit_file_content(file.result()),
+        })
+    }
+
+    pub(super) fn complete_conflict(
+        &self,
+        path: &Path,
+        expected_stage_ids: [Option<String>; 3],
+        expected_result_object_id: Option<String>,
+        resolution: GitConflictResolutionDto,
+    ) -> Result<GitStatusResult, GitRuntimeError> {
+        let _operation = self
+            .operation
+            .lock()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        let resolution = match resolution {
+            GitConflictResolutionDto::Edited { text } => {
+                crate::git_service::GitConflictResolution::Edited(text)
+            }
+            GitConflictResolutionDto::Current => crate::git_service::GitConflictResolution::Current,
+            GitConflictResolutionDto::Incoming => {
+                crate::git_service::GitConflictResolution::Incoming
+            }
+        };
+        let (repository, snapshot) = self
+            .service
+            .complete_conflict(
+                path,
+                expected_stage_ids,
+                expected_result_object_id,
+                resolution,
+            )
+            .map_err(GitRuntimeError::Service)?;
+        self.invalidate_graphs()?;
+        self.accept(repository, snapshot)
     }
 
     pub(super) fn switch_branch(&self, name: &str) -> Result<GitStatusResult, GitRuntimeError> {

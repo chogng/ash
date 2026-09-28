@@ -704,6 +704,8 @@ function createInertEditorPart(): EditorPanePart {
 		layout: () => {},
 		focus: () => {},
 		getValue: () => '',
+		getModel: () => null,
+		executeEdits: () => false,
 		getSelections: () => null,
 		setSelection: () => {},
 		updateOptions: () => {},

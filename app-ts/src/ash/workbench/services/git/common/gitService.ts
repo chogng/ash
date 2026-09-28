@@ -123,6 +123,17 @@ export interface GitChangeFile {
 	readonly modified: GitCommitFileContent;
 }
 
+export interface GitConflictFile {
+	readonly stageIds: readonly (string | null)[];
+	readonly resultObjectId: string | null;
+	readonly base: GitCommitFileContent;
+	readonly current: GitCommitFileContent;
+	readonly incoming: GitCommitFileContent;
+	readonly result: GitCommitFileContent;
+}
+
+export type GitConflictResolution = { readonly kind: 'edited'; readonly text: string } | { readonly kind: 'current' } | { readonly kind: 'incoming' };
+
 /** Describes one bounded page of Git graph history requested by a frontend consumer. */
 export interface GraphQuery {
 	readonly limit: number;
@@ -167,6 +178,8 @@ export interface IGitService {
 	commitChanges(objectId: string, repositoryId?: string): Promise<GitCommitChanges>;
 	commitFile(objectId: string, path: string, repositoryId?: string): Promise<GitCommitFile>;
 	changeFile(path: string, comparison: GitChangeFileComparison, repositoryId?: string): Promise<GitChangeFile>;
+	conflictFile(path: string, repositoryId?: string): Promise<GitConflictFile>;
+	completeConflict(path: string, expectedStageIds: readonly (string | null)[], expectedResultObjectId: string | null, resolution: GitConflictResolution, repositoryId?: string): Promise<GitStatus>;
 	stage(paths: readonly string[], repositoryId?: string): Promise<GitStatus>;
 	unstage(paths: readonly string[], repositoryId?: string): Promise<GitStatus>;
 	discardWorktree(paths: readonly string[], repositoryId?: string): Promise<GitStatus>;

@@ -669,6 +669,14 @@ use crate::protocol::git::GitCommitResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCommitSummaryDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitCompleteConflictParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitConflictFileParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitConflictFileResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitConflictResolutionDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitDiffStatisticsDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitFetchModeDto;
@@ -3478,6 +3486,16 @@ client_methods! {
         response: GitChangeFileResult,
         serialization: GlobalSharedRead,
     },
+    GitConflictFile => "git/conflictFile" {
+        params: GitConflictFileParams,
+        response: GitConflictFileResult,
+        serialization: GlobalSharedRead,
+    },
+    GitCompleteConflict => "git/completeConflict" {
+        params: GitCompleteConflictParams,
+        response: GitOperationResult,
+        serialization: GlobalExclusive,
+    },
     GitBranchSwitch => "git/branch/switch" {
         params: GitBranchSwitchParams,
         response: GitOperationResult,
@@ -4914,6 +4932,10 @@ typescript_bindings! {
     GitChangeFileComparisonDto,
     GitChangeFileParams,
     GitChangeFileResult,
+    GitConflictFileParams,
+    GitConflictFileResult,
+    GitConflictResolutionDto,
+    GitCompleteConflictParams,
     GitBranchSwitchParams,
     GitTextDiffDto,
     GitDiffStatisticsDto,

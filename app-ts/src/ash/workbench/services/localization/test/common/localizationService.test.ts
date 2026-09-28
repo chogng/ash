@@ -55,6 +55,7 @@ test("localization lookup falls back to English and formats parameters", async (
 	assert.equal(localization.translate("ash.settings", "displayLanguage.title", "Fallback"), "Display Language");
 	assert.equal(localization.translate("ash.missing", "missing", "Hello {name}", { name: "Ada" }), "Hello Ada");
 	await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
+	assert.equal(localization.translate('ash', 'git.completeMerge', 'Complete Merge'), '完成合并');
 	assert.deepEqual([
 		localization.translate('ash', 'workbench.startupError.title', 'Unable to start Ash'),
 		localization.translate('ash', 'workbench.startupError.copy', 'Copy details'),
@@ -355,6 +356,8 @@ test('Source Control settings use the selected Chinese language catalog', async 
 			localize('git.noFolder', 'Open a folder to use Git.'),
 			localize('git.noRepository', 'No Git repository found in the open folder.'),
 			localize('git.unavailable', 'Git is unavailable for this workspace. Check folder access and retry.'),
+			localize('git.keepCurrentDeletion', 'Keep Current Deletion'),
+			localize('git.keepIncomingDeletion', 'Keep Incoming Deletion'),
 		], [
 			'配置 Git 自动获取和源代码管理差异标记。',
 			'自动获取远端更新',
@@ -365,6 +368,8 @@ test('Source Control settings use the selected Chinese language catalog', async 
 			'打开文件夹后即可使用 Git。',
 			'打开的文件夹中未找到 Git 仓库。',
 			'此工作区暂时无法使用 Git。请检查文件夹访问权限后重试。',
+			'保留当前删除结果',
+			'保留传入删除结果',
 		]);
 	} finally {
 		resetNlsResolver();

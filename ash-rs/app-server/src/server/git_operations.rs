@@ -17,6 +17,8 @@ use ash_app_server_protocol::protocol::git::GitCommitChangesParams;
 use ash_app_server_protocol::protocol::git::GitCommitFileParams;
 use ash_app_server_protocol::protocol::git::GitCommitParams;
 use ash_app_server_protocol::protocol::git::GitCommitResult as GitCommitResultDto;
+use ash_app_server_protocol::protocol::git::GitCompleteConflictParams;
+use ash_app_server_protocol::protocol::git::GitConflictFileParams;
 use ash_app_server_protocol::protocol::git::GitFetchModeDto;
 use ash_app_server_protocol::protocol::git::GitFetchParams;
 use ash_app_server_protocol::protocol::git::GitGraphParams;
@@ -170,6 +172,43 @@ impl AppServer {
                 .change_file_for(params.repository_id.as_deref(), &path, params.comparison)
                 .map_err(git_error)?,
         )
+    }
+
+    pub(super) fn git_conflict_file(&self, value: &Value) -> Result<Value, RpcError> {
+        let params: GitConflictFileParams = decode(value)?;
+        let path = paths(vec![params.path])?
+            .pop()
+            .expect("validated conflict file path");
+        result(
+            &self
+                .git_runtime_service()?
+                .conflict_file_for(params.repository_id.as_deref(), &path)
+                .map_err(git_error)?,
+        )
+    }
+
+    pub(super) fn git_complete_conflict(&self, value: &Value) -> Result<Value, RpcError> {
+        let params: GitCompleteConflictParams = decode(value)?;
+        if let ash_app_server_protocol::protocol::git::GitConflictResolutionDto::Edited { text } =
+            &params.resolution
+            && text.len() > 2 * 1024 * 1024
+        {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let path = paths(vec![params.path])?
+            .pop()
+            .expect("validated conflict path");
+        let status = self
+            .git_runtime_service()?
+            .complete_conflict_for(
+                params.repository_id.as_deref(),
+                &path,
+                params.expected_stage_ids,
+                params.expected_result_object_id,
+                params.resolution,
+            )
+            .map_err(git_error)?;
+        result(&GitOperationResult { status })
     }
 
     pub(super) fn git_branch_switch(&self, params: &Value) -> Result<Value, RpcError> {
@@ -473,6 +512,9 @@ fn git_error(error: GitRuntimeError) -> RpcError {
         | GitRuntimeError::Service(GitServiceError::BranchNotFound)
         | GitRuntimeError::Service(GitServiceError::CommitChangeNotFound) => {
             RpcError::new(-32061, AppServerErrorName::GitOperationFailed)
+        }
+        GitRuntimeError::Service(GitServiceError::ConflictChanged) => {
+            RpcError::new(-32064, AppServerErrorName::GitConflictChanged)
         }
         GitRuntimeError::Service(GitServiceError::Git(GitError::NotAWorkingTree { .. })) => {
             RpcError::new(-32062, AppServerErrorName::GitNotRepository)

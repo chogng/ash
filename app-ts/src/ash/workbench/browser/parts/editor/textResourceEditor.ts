@@ -26,6 +26,7 @@ import { type Range } from "../../../../editor/common/core/range.js";
 import { type LanguageLocation, type LanguageWorkspaceEdit } from "../../../../editor/common/languages.js";
 import { type ILanguageDiagnosticsService } from "../../../services/language/common/languageDiagnosticsService.js";
 import type { Selection } from "../../../../editor/common/core/selection.js";
+import type { TextModel } from '../../../../editor/common/model/textModel.js';
 import type { ICursorSelectionChangedEvent } from "../../../../editor/common/cursorEvents.js";
 import type { EditorPaneStatus } from "../../../browser/parts/editor/editorPane.js";
 import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
@@ -50,6 +51,8 @@ export interface EditorPanePart extends IDisposable, ITextCodeEditorControl {
 	layout(dimension: IDimension): void;
 	focus(): void;
 	getValue(): string;
+	getModel(): TextModel | null;
+	executeEdits(source: string, edits: { range: Range; text: string }[]): boolean;
 	updateOptions(options: Readonly<IEditorOptions>): void;
 	revealRange?(range: Range): void;
 	saveViewState?(): ICodeEditorViewState | null;

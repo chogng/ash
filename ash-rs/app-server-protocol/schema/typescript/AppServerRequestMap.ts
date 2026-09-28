@@ -155,6 +155,9 @@ import type { GitCommitFileParams } from './types/GitCommitFileParams.js';
 import type { GitCommitFileResult } from './types/GitCommitFileResult.js';
 import type { GitCommitParams } from './types/GitCommitParams.js';
 import type { GitCommitResult } from './types/GitCommitResult.js';
+import type { GitCompleteConflictParams } from './types/GitCompleteConflictParams.js';
+import type { GitConflictFileParams } from './types/GitConflictFileParams.js';
+import type { GitConflictFileResult } from './types/GitConflictFileResult.js';
 import type { GitFetchParams } from './types/GitFetchParams.js';
 import type { GitGraphParams } from './types/GitGraphParams.js';
 import type { GitGraphResult } from './types/GitGraphResult.js';
@@ -676,6 +679,8 @@ export interface AppServerRequestMap {
   "git/commitChanges": { params: GitCommitChangesParams; response: GitCommitChangesResult };
   "git/commitFile": { params: GitCommitFileParams; response: GitCommitFileResult };
   "git/changeFile": { params: GitChangeFileParams; response: GitChangeFileResult };
+  "git/conflictFile": { params: GitConflictFileParams; response: GitConflictFileResult };
+  "git/completeConflict": { params: GitCompleteConflictParams; response: GitOperationResult };
   "git/branch/switch": { params: GitBranchSwitchParams; response: GitOperationResult };
   "git/branch/create": { params: GitBranchCreateParams; response: GitBranchListResult };
   "git/branch/delete": { params: GitBranchDeleteParams; response: GitBranchListResult };
@@ -983,6 +988,8 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "git/commitChanges": { method: "git/commitChanges" },
   "git/commitFile": { method: "git/commitFile" },
   "git/changeFile": { method: "git/changeFile" },
+  "git/conflictFile": { method: "git/conflictFile" },
+  "git/completeConflict": { method: "git/completeConflict" },
   "git/branch/switch": { method: "git/branch/switch" },
   "git/branch/create": { method: "git/branch/create" },
   "git/branch/delete": { method: "git/branch/delete" },

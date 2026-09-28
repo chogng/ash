@@ -2555,6 +2555,8 @@ impl AppServer {
             Some(ClientMethod::GitCommitChanges) => self.git_commit_changes(&request.params),
             Some(ClientMethod::GitCommitFile) => self.git_commit_file(&request.params),
             Some(ClientMethod::GitChangeFile) => self.git_change_file(&request.params),
+            Some(ClientMethod::GitConflictFile) => self.git_conflict_file(&request.params),
+            Some(ClientMethod::GitCompleteConflict) => self.git_complete_conflict(&request.params),
             Some(ClientMethod::GitBranchSwitch) => self.git_branch_switch(&request.params),
             Some(ClientMethod::GitBranchCreate) => self.git_branch_create(&request.params),
             Some(ClientMethod::GitBranchDelete) => self.git_branch_delete(&request.params),

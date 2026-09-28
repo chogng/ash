@@ -19,6 +19,7 @@ import { createDiffEditorInput } from "../../../common/editor/diffEditorInput.js
 import { OpenScmMultiDiffEditorCommandId, type OpenScmMultiDiffEditorOptions, type OpenScmMultiDiffEditorResult } from "../../multiDiffEditor/browser/scmMultiDiffAction.js";
 import { repositoryFileUri, resolveGitChangeInputs } from "./scmChangeEditorInput.js";
 import { gitErrorMessage } from "./scmError.js";
+import { createScmMergeEditorInput } from './scmMergeEditorInput.js';
 
 type GitChangeSide = "index" | "worktree";
 type GitPathAction = "stage" | "unstage" | "discard";
@@ -347,7 +348,7 @@ export class ScmViewPane extends ViewPane {
 		if (!status) return;
 		if (change.conflicted) {
 			try {
-				await this.editorService.openEditor({ resource: repositoryFileUri(status.workspacePath, change.path), label: basename(change.path) }, { pinned });
+				await this.editorService.openEditor(createScmMergeEditorInput(status, change.path), { pinned });
 			} catch (error) {
 				if (!this.isDisposed) this.statusElement.textContent = gitErrorMessage(error);
 			}

@@ -8,6 +8,7 @@ export const enum AccessibleViewProviderId {
 	SessionsActivityBar = 'sessionsActivityBar',
 	SessionsSettings = 'sessionsSettings',
 	Notifications = 'notifications',
+	ScmMerge = 'scmMerge',
 }
 
 export const enum AccessibleViewType {
@@ -22,6 +23,7 @@ export const enum AccessibilityVerbositySettingId {
 	SessionsActivityBar = 'accessibility.verbosity.sessionsActivityBar',
 	SessionsSettings = 'accessibility.verbosity.sessionsSettings',
 	Notifications = 'accessibility.verbosity.notifications',
+	ScmMerge = 'accessibility.verbosity.scmMerge',
 }
 
 export interface IAccessibleViewOptions {

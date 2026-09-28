@@ -28,10 +28,75 @@ import "./quickDiff.contribution.js";
 import './gitClone.js';
 import './gitBranches.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { localize } from '../../../../nls.js';
+import { registerEditorPane } from '../../../browser/parts/editor/editorRegistry.js';
+import { TextFileEditor } from '../../files/browser/editors/textFileEditor.js';
+import type { EditorPanePartOptions } from '../../../browser/parts/editor/textResourceEditor.js';
+import { getBrowserTextResourceStore } from '../../codeEditor/browser/browserTextResourceStore.js';
+import { createBrowserEditorPart } from '../../codeEditor/browser/browserEditorPart.js';
+import { matchScmMergeEditor, SCM_MERGE_EDITOR_ID } from './scmMergeEditorInput.js';
+import { ScmMergeEditorPane, ScmMergeFocusedContext } from './scmMergeEditorPane.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import './media/scmMergeEditor.css';
 
 export const GIT_AGENT_REVIEW_VIEW_ID = "ash.gitAgentReview";
 export { GIT_GRAPH_VIEW_ID };
 export { GIT_VIEW_ID };
+
+registerEditorPane({
+	id: SCM_MERGE_EDITOR_ID,
+	name: localize({ bundle: 'ash', key: 'git.mergeTitle' }, 'Resolve merge conflict'),
+	canOpen: matchScmMergeEditor,
+	create: options => {
+		if (!options.textFileService || !options.instantiationService) throw new Error('SCM merge editor requires the text file and instantiation services');
+		const instantiationService = options.instantiationService;
+		const resultEditor = instantiationService.createInstance(TextFileEditor, getBrowserTextResourceStore(options.textFileService), {
+			createPart: (partOptions: EditorPanePartOptions) => createBrowserEditorPart(instantiationService, partOptions),
+			workingCopyService: options.workingCopyService,
+			accessibilityService: options.accessibilityService,
+			textMateService: options.textMateService,
+			languageDiagnosticsService: options.languageDiagnosticsService,
+		});
+		return instantiationService.createInstance(ScmMergeEditorPane, resultEditor);
+	},
+});
+
+AccessibleViewRegistry.register({
+	type: AccessibleViewType.Help,
+	priority: 100,
+	name: 'scmMergeHelp',
+	when: ScmMergeFocusedContext.isEqualTo(true),
+	getProvider: accessor => {
+		const pane = accessor.get(IEditorPart).activePane;
+		if (!(pane instanceof ScmMergeEditorPane)) return undefined;
+		return new AccessibleContentProvider(
+			AccessibleViewProviderId.ScmMerge,
+			{ type: AccessibleViewType.Help },
+			() => localize({ bundle: 'ash', key: 'git.mergeHelp' }, 'Merge editor. Review Base, Current, and Incoming. Use Tab to reach each conflict choice. Accept Current, Incoming, or Both, or edit the Result directly. For deleted or binary versions, choose the whole file. Save with Ctrl+S or Command+S. Complete Merge saves and stages the result after all conflict markers are removed. Press <keybinding:editor.action.accessibleView> to read all four versions.'),
+			() => pane.focus(),
+			AccessibilityVerbositySettingId.ScmMerge,
+		);
+	},
+});
+
+AccessibleViewRegistry.register({
+	type: AccessibleViewType.View,
+	priority: 100,
+	name: 'scmMergeView',
+	when: ScmMergeFocusedContext.isEqualTo(true),
+	getProvider: accessor => {
+		const pane = accessor.get(IEditorPart).activePane;
+		if (!(pane instanceof ScmMergeEditorPane)) return undefined;
+		return new AccessibleContentProvider(
+			AccessibleViewProviderId.ScmMerge,
+			{ type: AccessibleViewType.View },
+			() => pane.getAccessibleContent(),
+			() => pane.focus(),
+			AccessibilityVerbositySettingId.ScmMerge,
+		);
+	},
+});
 
 /** Registers the Git Sidebar container and its initial pane. */
 export function registerGitViews(

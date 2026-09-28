@@ -9,7 +9,7 @@ import type { IGitApi } from "../../../../platform/git/common/gitApi.js";
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { getRemoteWorkspacePath, isRemoteResource } from "../../../../platform/remote/common/remote.js";
 import type { IWorkspaceContextService, IWorkspaceFolder } from "../../../../platform/workspace/common/workspace.js";
-import { GitWorkspaceError, type GitBranch, type GitChangeFile, type GitChangeFileComparison, type GitCommitChanges, type GitCommitFile, type GitCommitResult, type GitCommitSummary, type GitHead, type GitRepository, type GitRepositoryChange, type GitStatus, type GraphPage, type GraphQuery, type IGitService } from "../common/gitService.js";
+import { GitWorkspaceError, type GitBranch, type GitChangeFile, type GitChangeFileComparison, type GitConflictFile, type GitConflictResolution, type GitCommitChanges, type GitCommitFile, type GitCommitResult, type GitCommitSummary, type GitHead, type GitRepository, type GitRepositoryChange, type GitStatus, type GraphPage, type GraphQuery, type IGitService } from "../common/gitService.js";
 import { GitConfiguration, type GitAutofetch } from '../common/gitConfiguration.js';
 
 export interface GitServiceOptions {
@@ -195,6 +195,32 @@ export class GitService extends Disposable implements IGitService {
 		const repository = await this.requireRepository(repositoryId);
 		const result = await this.api.changeFile({ repositoryId: repository.id, path, comparison });
 		return { original: { ...result.original }, modified: { ...result.modified } };
+	}
+
+	async conflictFile(path: string, repositoryId?: string): Promise<GitConflictFile> {
+		const repository = await this.requireRepository(repositoryId);
+		const result = await this.api.conflictFile({ repositoryId: repository.id, path });
+		return {
+			stageIds: result.stageIds,
+			resultObjectId: result.resultObjectId,
+			base: { ...result.base },
+			current: { ...result.current },
+			incoming: { ...result.incoming },
+			result: { ...result.result },
+		};
+	}
+
+	async completeConflict(path: string, expectedStageIds: readonly (string | null)[], expectedResultObjectId: string | null, resolution: GitConflictResolution, repositoryId?: string): Promise<GitStatus> {
+		const repository = await this.requireRepository(repositoryId);
+		if (expectedStageIds.length !== 3) throw new TypeError('A Git conflict must contain three stage identities');
+		const result = await this.api.completeConflict({
+			repositoryId: repository.id,
+			path,
+			expectedStageIds: [expectedStageIds[0], expectedStageIds[1], expectedStageIds[2]],
+			expectedResultObjectId,
+			resolution,
+		});
+		return toGitStatus(result.status, repository);
 	}
 
 	async stage(paths: readonly string[], repositoryId?: string): Promise<GitStatus> {

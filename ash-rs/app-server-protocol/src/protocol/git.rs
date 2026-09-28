@@ -372,6 +372,57 @@ pub struct GitChangeFileResult {
     pub modified: GitCommitFileContentDto,
 }
 
+/// Identifies a conflicted path in the selected repository.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct GitConflictFileParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub repository_id: Option<String>,
+    #[schemars(length(min = 1, max = 32768))]
+    pub path: String,
+}
+
+/// Exact unmerged index stages and the current working file.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct GitConflictFileResult {
+    pub stage_ids: [Option<String>; 3],
+    pub result_object_id: Option<String>,
+    pub base: GitCommitFileContentDto,
+    pub current: GitCommitFileContentDto,
+    pub incoming: GitCommitFileContentDto,
+    pub result: GitCommitFileContentDto,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+#[ts(tag = "kind", rename_all = "camelCase")]
+pub enum GitConflictResolutionDto {
+    Edited {
+        #[schemars(length(max = 2097152))]
+        text: String,
+    },
+    Current,
+    Incoming,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct GitCompleteConflictParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub repository_id: Option<String>,
+    #[schemars(length(min = 1, max = 32768))]
+    pub path: String,
+    pub expected_stage_ids: [Option<String>; 3],
+    pub expected_result_object_id: Option<String>,
+    pub resolution: GitConflictResolutionDto,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitBranchSwitchParams {

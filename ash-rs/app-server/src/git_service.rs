@@ -10,6 +10,7 @@ use ash_git::GitCommitChange;
 use ash_git::GitCommitFile;
 use ash_git::GitCommitRequest;
 use ash_git::GitCommitSummary;
+use ash_git::GitConflictChoice;
 use ash_git::GitError;
 use ash_git::GitGraph;
 use ash_git::GitGraphCursor;
@@ -40,6 +41,12 @@ pub(crate) struct GitServiceCommitChanges {
     pub(crate) repository: GitRepository,
     pub(crate) parent_object_id: Option<String>,
     pub(crate) changes: Vec<GitCommitChange>,
+}
+
+pub(crate) enum GitConflictResolution {
+    Edited(String),
+    Current,
+    Incoming,
 }
 
 #[derive(Clone, Copy)]
@@ -341,6 +348,108 @@ impl GitService {
         })
     }
 
+    pub(crate) fn conflict_file(
+        &self,
+        path: &Path,
+    ) -> Result<ash_git::GitConflictFile, GitServiceError> {
+        self.ensure_readable()?;
+        let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
+        runtime.block_on(async {
+            let repository = self.open_repository().await?;
+            let repository_path = self.repository_prefix(&repository)?.join(path);
+            let snapshot = self
+                .client
+                .snapshot(&repository)
+                .await
+                .map_err(GitServiceError::Git)?;
+            let change = snapshot
+                .changes()
+                .iter()
+                .find(|change| change.path() == repository_path && change.is_conflicted())
+                .ok_or(GitServiceError::ConflictChanged)?;
+            self.client
+                .conflict_file(&repository, change, MAX_CHANGE_FILE_BYTES)
+                .await
+                .map_err(GitServiceError::Git)
+        })
+    }
+
+    pub(crate) fn complete_conflict(
+        &self,
+        path: &Path,
+        expected_stage_ids: [Option<String>; 3],
+        expected_result_object_id: Option<String>,
+        resolution: GitConflictResolution,
+    ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
+        self.ensure_mutable()?;
+        let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
+        runtime.block_on(async {
+            let repository = self.open_repository().await?;
+            let paths = self.repository_paths(&repository, vec![path.to_path_buf()])?;
+            let repository_path = &paths.paths()[0];
+            let snapshot = self
+                .client
+                .snapshot(&repository)
+                .await
+                .map_err(GitServiceError::Git)?;
+            let change = snapshot
+                .changes()
+                .iter()
+                .find(|change| change.path() == repository_path && change.is_conflicted())
+                .ok_or(GitServiceError::ConflictChanged)?;
+            let file = self
+                .client
+                .conflict_file(&repository, change, MAX_CHANGE_FILE_BYTES)
+                .await
+                .map_err(GitServiceError::Git)?;
+            if file.stage_ids() != &expected_stage_ids {
+                return Err(GitServiceError::ConflictChanged);
+            }
+            if file.result_object_id() != expected_result_object_id.as_deref() {
+                return Err(GitServiceError::ConflictChanged);
+            }
+            match resolution {
+                GitConflictResolution::Edited(text) => {
+                    if file.result() != Some(text.as_bytes()) || has_conflict_markers(&text) {
+                        return Err(GitServiceError::ConflictChanged);
+                    }
+                    self.client
+                        .complete_conflict(&repository, repository_path)
+                        .await
+                        .map_err(GitServiceError::Git)?;
+                }
+                GitConflictResolution::Current => {
+                    let choice = if expected_stage_ids[1].is_some() {
+                        GitConflictChoice::Current
+                    } else {
+                        GitConflictChoice::Delete
+                    };
+                    self.client
+                        .choose_conflict_side(&repository, repository_path, choice)
+                        .await
+                        .map_err(GitServiceError::Git)?;
+                }
+                GitConflictResolution::Incoming => {
+                    let choice = if expected_stage_ids[2].is_some() {
+                        GitConflictChoice::Incoming
+                    } else {
+                        GitConflictChoice::Delete
+                    };
+                    self.client
+                        .choose_conflict_side(&repository, repository_path, choice)
+                        .await
+                        .map_err(GitServiceError::Git)?;
+                }
+            }
+            let snapshot = self
+                .client
+                .snapshot(&repository)
+                .await
+                .map_err(GitServiceError::Git)?;
+            Ok((repository, snapshot))
+        })
+    }
+
     pub(crate) fn text_diff_snapshot(
         &self,
     ) -> Result<(GitRepository, GitTextDiffSnapshot), GitServiceError> {
@@ -557,7 +666,21 @@ pub(crate) enum GitServiceError {
     BranchNotFound,
     Boundary,
     CommitChangeNotFound,
+    ConflictChanged,
     Git(GitError),
     Runtime,
     Permission,
+}
+
+fn has_conflict_markers(text: &str) -> bool {
+    text.lines().any(|line| {
+        let line = line.trim_end_matches('\r');
+        line.starts_with("<<<<<<< ")
+            || line == "<<<<<<<"
+            || line.starts_with("||||||| ")
+            || line == "|||||||"
+            || line == "======="
+            || line.starts_with(">>>>>>> ")
+            || line == ">>>>>>>"
+    })
 }

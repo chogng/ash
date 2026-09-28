@@ -6278,6 +6278,108 @@ fn git_change_file_rpc_preserves_head_index_and_worktree_sides() {
 }
 
 #[test]
+fn git_conflict_rpc_reads_stages_and_completes_only_the_selected_state() {
+    let root = std::env::temp_dir().join(format!(
+        "ash-app-server-git-conflict-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos(),
+    ));
+    std::fs::create_dir_all(&root).unwrap();
+    run_git(&root, &["init", "-b", "main"]);
+    run_git(&root, &["config", "user.name", "Ash Test"]);
+    run_git(&root, &["config", "user.email", "ash@example.test"]);
+    std::fs::write(root.join("tracked.txt"), "base\n").unwrap();
+    run_git(&root, &["add", "tracked.txt"]);
+    run_git(&root, &["commit", "-m", "base"]);
+    run_git(&root, &["switch", "-c", "topic"]);
+    std::fs::write(root.join("tracked.txt"), "incoming\n").unwrap();
+    run_git(&root, &["commit", "-am", "incoming"]);
+    run_git(&root, &["switch", "main"]);
+    std::fs::write(root.join("tracked.txt"), "current\n").unwrap();
+    run_git(&root, &["commit", "-am", "current"]);
+    let merge = std::process::Command::new("git")
+        .current_dir(&root)
+        .args(["merge", "topic"])
+        .output()
+        .unwrap();
+    assert!(!merge.status.success());
+
+    let server = server()
+        .with_git_root(dir_authorization(&root, DirPermission::MutateRepository))
+        .unwrap();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let file = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":2, "method":"git/conflictFile", "params":{"path":"tracked.txt"}
+        }),
+    );
+    assert!(file.get("error").is_none(), "{file}");
+    assert_eq!(file["result"]["base"]["text"], "base\n");
+    assert_eq!(file["result"]["current"]["text"], "current\n");
+    assert_eq!(file["result"]["incoming"]["text"], "incoming\n");
+    let stage_ids = file["result"]["stageIds"].clone();
+    assert_eq!(stage_ids.as_array().unwrap().len(), 3);
+
+    std::fs::write(root.join("tracked.txt"), "resolved\n").unwrap();
+    let saved = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":5, "method":"git/conflictFile", "params":{"path":"tracked.txt"}
+        }),
+    );
+    assert!(saved.get("error").is_none(), "{saved}");
+    let result_object_id = saved["result"]["resultObjectId"].clone();
+    assert_ne!(file["result"]["resultObjectId"], result_object_id);
+    let stale = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":3, "method":"git/completeConflict",
+            "params":{"path":"tracked.txt", "expectedStageIds":[null,null,null], "expectedResultObjectId":result_object_id, "resolution":{"kind":"edited","text":"resolved\n"}}
+        }),
+    );
+    assert!(stale.get("error").is_some(), "{stale}");
+    let stale_result = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":6, "method":"git/completeConflict",
+            "params":{"path":"tracked.txt", "expectedStageIds":stage_ids, "expectedResultObjectId":file["result"]["resultObjectId"], "resolution":{"kind":"edited","text":"resolved\n"}}
+        }),
+    );
+    assert_eq!(stale_result["error"]["message"], "GitConflictChanged");
+    let completed = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":4, "method":"git/completeConflict",
+            "params":{"path":"tracked.txt", "expectedStageIds":stage_ids, "expectedResultObjectId":result_object_id, "resolution":{"kind":"edited","text":"resolved\n"}}
+        }),
+    );
+    assert!(completed.get("error").is_none(), "{completed}");
+    assert_eq!(
+        completed["result"]["status"]["changes"][0]["conflicted"],
+        false
+    );
+    let index = std::process::Command::new("git")
+        .current_dir(&root)
+        .args(["show", ":tracked.txt"])
+        .output()
+        .unwrap();
+    assert_eq!(index.stdout, b"resolved\n");
+
+    drop(server);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn git_watcher_publishes_external_repository_changes() {
     let root = std::env::temp_dir().join(format!(
         "ash-app-server-git-watch-{}-{}",

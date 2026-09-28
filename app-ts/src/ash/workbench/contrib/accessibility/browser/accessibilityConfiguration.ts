@@ -18,6 +18,20 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 });
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.ScmMerge,
+	defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') throw new TypeError('SCM merge accessibility verbosity must be boolean');
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		title: localize({ bundle: 'ash', key: 'git.mergeVerbosityTitle' }, 'Merge editor accessibility help'),
+		description: localize({ bundle: 'ash', key: 'git.mergeVerbosityDescription' }, 'Announce how to open merge editor accessibility help when the editor receives focus.'),
+	},
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.Explorer,
 	defaultValue: true,
 	parse(value: unknown): boolean {
