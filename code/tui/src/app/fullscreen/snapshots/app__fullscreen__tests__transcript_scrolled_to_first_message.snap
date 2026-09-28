@@ -17,8 +17,8 @@ expression: scrolled_to_start
 ● Model invocation failed 4                                                     
                             Jump to bottom (click) ↓                            
   ⏸ ask permissions on                                                          
-  ╭──────────────────────────────────────────────────────────────────────────╮  
-  │ >                                                                        │  
-  ╰──────────────────────────────────────────────────────── Automatic model ─╯  
+  ────────────────────────────────────────────────────────────────────────────  
+  >                                                                             
+  ─────────────────────────────────────────────────────────── Automatic model   
                                                                                 
   Enter send  ·  shift+tab permissions  ·  /home

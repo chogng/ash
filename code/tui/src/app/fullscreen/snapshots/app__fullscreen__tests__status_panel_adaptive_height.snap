@@ -17,6 +17,6 @@ expression: rendered
         │  Cached input:             0 tokens                          │        
         │  Cached input share:       unknown                           │        
         │  Cache writes:             0 tokens                          │        
-  ╭─────│  Output tokens:            0 tokens                          │─────╮  
-  │ > / │  Tab to switch · Esc to close                                │     │  
-  ╰─────└──────────────────────────────────────────────────────────────┘del ─╯
+  ──────│  Output tokens:            0 tokens                          │──────  
+  > /   │  Tab to switch · Esc to close                                │        
+  ──────└──────────────────────────────────────────────────────────────┘model

@@ -9,8 +9,8 @@ expression: text(&buffer)
   │> Quit                            │  
   ╰──────────────────────────────────╯  
   ⏸ ask permissions on                  
-  ╭──────────────────────────────────╮  
-  │ > Build anything                 │  
-  ╰──────────────── Automatic model ─╯  
+  ────────────────────────────────────  
+  > Build anything                      
+  ─────────────────── Automatic model   
                                         
   Enter select · Esc input

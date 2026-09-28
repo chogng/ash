@@ -13,8 +13,8 @@ expression: text
                                                             
                                                             
   ⏸ ask permissions on                                      
-  ╭──────────────────────────────────────────────────────╮  
-  │ > ab你 cd                                             │  
-  ╰──────────────────────────────────── Automatic model ─╯  
+  ────────────────────────────────────────────────────────  
+  > ab你 cd                                                  
+  ─────────────────────────────────────── Automatic model   
                                                             
   Enter send  ·  shift+tab permissions  ·  /home

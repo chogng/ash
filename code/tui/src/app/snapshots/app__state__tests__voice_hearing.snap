@@ -1,6 +1,5 @@
 ---
 source: code/tui/src/app/state_tests.rs
-assertion_line: 866
 expression: render_dictation_frame(&app)
 ---
   .                                                        [— / —] [Dashboard]  
@@ -22,8 +21,8 @@ expression: render_dictation_frame(&app)
                                                                                 
                                                                                 
                                                                                 
-  ╭──────────────────────────────────────────────────────────────────────────╮  
-  │ > draft for later                                                        │  
-  ╰──────────────────────────────────────────────────────── Automatic model ─╯  
+  ────────────────────────────────────────────────────────────────────────────  
+  > draft for later                                                             
+  ─────────────────────────────────────────────────────────── Automatic model   
                                                                                 
   Voice · heard: thinking

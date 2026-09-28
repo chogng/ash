@@ -1,6 +1,6 @@
 ---
 source: code/tui/src/app/fullscreen/frame_tests.rs
-expression: "render(&app, 100, 18)"
+expression: rendered
 ---
   .                                                                            [— / —] [Dashboard]  
                                                                                                     
@@ -15,6 +15,6 @@ expression: "render(&app, 100, 18)"
             │  Other models ───────────────────────────────────────────────────────── │             
             │  Unconfigured model                                                     │             
             │                                                                         │             
-  ╭─────────│                                                                         │──────────╮  
-  │ > Build │  ↑↓ select · / search · P pin/unpin · Enter apply · Esc cancel          │          │  
-  ╰─────────└─────────────────────────────────────────────────────────────────────────┘ic model ─╯
+  ──────────│                                                                         │───────────  
+  > Build an│  ↑↓ select · / search · P pin/unpin · Enter apply · Esc cancel          │             
+  ──────────└─────────────────────────────────────────────────────────────────────────┘atic model

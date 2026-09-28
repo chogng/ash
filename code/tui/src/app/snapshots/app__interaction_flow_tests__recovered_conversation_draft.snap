@@ -17,8 +17,8 @@ expression: "render(&restored, 80, 20)"
 
 
   ⏸ ask permissions on
-  ╭──────────────────────────────────────────────────────────────────────────╮
-  │ > conversation draft                                                     │
-  ╰──────────────────────────────────────────────────────── Automatic model ─╯
+  ────────────────────────────────────────────────────────────────────────────
+  > conversation draft
+  ─────────────────────────────────────────────────────────── Automatic model
 
   Enter send  ·  shift+tab permissions  ·  /home

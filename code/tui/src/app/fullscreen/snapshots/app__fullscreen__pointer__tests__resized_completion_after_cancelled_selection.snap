@@ -9,8 +9,8 @@ expression: text
                                         
   ─────────────────────────────── 1/1   
   /quit                      quit Ash   
-  ╭──────────────────────────────────╮  
-  │ > /q                             │  
-  ╰──────────────── Automatic model ─╯  
+  ────────────────────────────────────  
+  > /q                                  
+  ─────────────────── Automatic model   
                                         
   Enter send · shift+tab permissions

@@ -58,9 +58,9 @@ pub(in crate::app) fn layout(app: &App, terminal_area: Rect) -> Layout {
         view: &input_view,
         cursor: chat_input::ChatInputCursor::Hidden,
         focus: chat_input::ChatInputFocus::Blurred,
-        chrome: chat_input::ChatInputChrome::Box,
+        placeholder: Some("Build anything"),
     }
-    .desired_height(terminal_area.width, app.render_context());
+    .desired_height(terminal_area.width.saturating_sub(4), app.render_context());
     let approval_rows = app
         .approval_view()
         .map(approval::desired_height)
@@ -127,6 +127,7 @@ pub(in crate::app) fn layout(app: &App, terminal_area: Rect) -> Layout {
             ..session.composer
         }
     };
+    let input = crate::render::horizontal_margin(input, 2);
     Layout {
         header,
         session,

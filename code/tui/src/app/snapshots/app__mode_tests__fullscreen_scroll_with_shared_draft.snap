@@ -13,8 +13,8 @@ expression: render(&app)
              Jump to bottom (click) ↓             
   Queue 1: queued message · next                  
   ⏸ ask permissions on                            
-  ╭────────────────────────────────────────────╮  
-  │ > shared draft                             │  
-  ╰────────────────────────── Automatic model ─╯  
+  ──────────────────────────────────────────────  
+  > shared draft                                  
+  ───────────────────────────── Automatic model   
                                                   
   Enter send  ·  shift+tab permissions  ·  /home

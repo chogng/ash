@@ -575,6 +575,6 @@ fn short_home_keeps_the_input_and_selected_action_visible() {
     assert!(text(&buffer).contains("> Quit"));
     assert!(text(&buffer).contains("Ash Code"));
     assert!(!text(&buffer).contains("Quit Code"));
-    assert_eq!(buffer[(areas.input.x + 2, areas.input.y)].symbol(), "╭");
+    assert_eq!(buffer[(areas.input.x, areas.input.y)].symbol(), "─");
     crate::tui_assert_snapshot!("home_short", text(&buffer));
 }

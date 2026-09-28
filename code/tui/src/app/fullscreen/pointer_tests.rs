@@ -145,8 +145,8 @@ fn fullscreen_selection_copies_text_and_reports_the_clipboard_result() {
             .draw(|frame| crate::app::frame::draw(frame, &app))
             .unwrap();
         let range = crate::terminal::text::ScreenSelectionRange::new(
-            ratatui::layout::Position::new(6, row),
-            ratatui::layout::Position::new(12, row),
+            ratatui::layout::Position::new(4, row),
+            ratatui::layout::Position::new(10, row),
         );
         let mut copied = None;
         super::super::selection::apply_screen_selection(
@@ -165,7 +165,7 @@ fn fullscreen_selection_copies_text_and_reports_the_clipboard_result() {
             .unwrap();
         let buffer = terminal.backend().buffer();
         assert_eq!(
-            buffer[(6, row)].bg,
+            buffer[(4, row)].bg,
             app.render_context().screen_selection_background()
         );
         let text = buffer
@@ -199,12 +199,12 @@ fn input_click_moves_the_cursor_and_drag_selects_editable_text() {
     handle_mouse(
         &mut app,
         area,
-        mouse(MouseEventKind::Down(MouseButton::Left), 7),
+        mouse(MouseEventKind::Down(MouseButton::Left), 5),
     );
     handle_mouse(
         &mut app,
         area,
-        mouse(MouseEventKind::Up(MouseButton::Left), 7),
+        mouse(MouseEventKind::Up(MouseButton::Left), 5),
     );
     assert_eq!(app.input_state().cursor_display_width(), 1);
     assert_eq!(app.input_state().selection_range(), None);
@@ -212,17 +212,17 @@ fn input_click_moves_the_cursor_and_drag_selects_editable_text() {
     handle_mouse(
         &mut app,
         area,
-        mouse(MouseEventKind::Down(MouseButton::Left), 7),
+        mouse(MouseEventKind::Down(MouseButton::Left), 5),
     );
     handle_mouse(
         &mut app,
         area,
-        mouse(MouseEventKind::Drag(MouseButton::Left), 11),
+        mouse(MouseEventKind::Drag(MouseButton::Left), 9),
     );
     let outcome = handle_mouse(
         &mut app,
         area,
-        mouse(MouseEventKind::Up(MouseButton::Left), 11),
+        mouse(MouseEventKind::Up(MouseButton::Left), 9),
     );
     assert!(matches!(
         outcome,
@@ -237,19 +237,19 @@ fn input_click_moves_the_cursor_and_drag_selects_editable_text() {
     terminal.draw(|frame| frame::draw(frame, &app)).unwrap();
     let buffer = terminal.backend().buffer();
     assert_eq!(
-        buffer[(7, row)].bg,
+        buffer[(5, row)].bg,
         app.render_context().selection_background()
     );
     assert_eq!(
-        buffer[(8, row)].bg,
-        app.render_context().selection_background()
-    );
-    assert_ne!(
         buffer[(6, row)].bg,
         app.render_context().selection_background()
     );
     assert_ne!(
-        buffer[(11, row)].bg,
+        buffer[(4, row)].bg,
+        app.render_context().selection_background()
+    );
+    assert_ne!(
+        buffer[(9, row)].bg,
         app.render_context().selection_background()
     );
     let text = buffer
@@ -276,7 +276,6 @@ fn input_double_click_selects_a_word_and_triple_click_selects_the_line() {
         .find(|column| {
             super::chat_composer::cursor_at(
                 input,
-                super::chat_composer::ChatInputChrome::Box,
                 app.input(),
                 app.input_state().cursor_line(),
                 app.input_state().cursor_display_width(),
@@ -324,7 +323,6 @@ fn input_double_click_uses_the_wide_glyph_under_the_pointer() {
         .find(|column| {
             let hit = super::chat_composer::cursor_at(
                 input,
-                super::chat_composer::ChatInputChrome::Box,
                 app.input(),
                 app.input_state().cursor_line(),
                 app.input_state().cursor_display_width(),
@@ -393,7 +391,7 @@ fn dragging_in_a_scrolled_input_keeps_the_clicked_rows_in_place() {
     let input = crate::app::fullscreen::layout(&app, area).input;
     let mouse = |kind, row| MouseEvent {
         kind,
-        column: 6,
+        column: 4,
         row,
         modifiers: KeyModifiers::NONE,
     };
@@ -422,8 +420,8 @@ fn dragging_in_a_scrolled_input_keeps_the_clicked_rows_in_place() {
             .unwrap();
     terminal.draw(|frame| frame::draw(frame, &app)).unwrap();
     let buffer = terminal.backend().buffer();
-    assert_eq!(buffer[(6, input.y + 1)].symbol(), "2");
-    assert_eq!(buffer[(6, input.y + 2)].symbol(), "3");
+    assert_eq!(buffer[(4, input.y + 1)].symbol(), "2");
+    assert_eq!(buffer[(4, input.y + 2)].symbol(), "3");
 
     let mut settings = crate::config::TerminalSettings::default();
     settings.set_screen_mode(crate::terminal::ScreenMode::Inline);

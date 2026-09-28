@@ -9,7 +9,6 @@ pub(crate) use catalog::chat_input_catalog_snapshot;
 pub(crate) use catalog::slash_command_registry;
 pub(crate) use input::ChatInput;
 pub(crate) use input::ChatInputCatalog;
-pub(crate) use input::ChatInputChrome;
 pub(crate) use input::ChatInputCursor;
 pub(crate) use input::ChatInputDraft;
 pub(crate) use input::ChatInputFocus;

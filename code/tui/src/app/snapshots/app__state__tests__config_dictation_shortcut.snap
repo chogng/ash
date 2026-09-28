@@ -21,6 +21,6 @@ expression: render_dictation_frame(&app)
         │  Advisor                                               Off + │        
         │  Dictation shortcut                                    off + │        
         │> Dictation key                                      ctrl+g + │        
-  ╭─────│  Enter/Space change · ←/→ details · Tab tabs · / search      │─────╮  
-  │ > Bu└──────────────────────────────────────────────────────────────┘     │  
-  ╰──────────────────────────────────────────────────────── Automatic model ─╯
+  ──────│  Enter/Space change · ←/→ details · Tab tabs · / search      │──────  
+  > Buil└──────────────────────────────────────────────────────────────┘        
+  ─────────────────────────────────────────────────────────── Automatic model

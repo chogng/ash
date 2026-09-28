@@ -13,8 +13,8 @@ expression: "render(&app, 50, 16)"
 ● Model invocation failed 5                       
              Jump to bottom (click) ↓             
   ⏸ ask permissions on                            
-  ╭────────────────────────────────────────────╮  
-  │ >                                          │  
-  ╰────────────────────────── Automatic model ─╯  
+  ──────────────────────────────────────────────  
+  >                                               
+  ───────────────────────────── Automatic model   
                                                   
   Enter send  ·  shift+tab permissions  ·  /home

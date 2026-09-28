@@ -9,9 +9,7 @@ use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::widgets::Block;
-use ratatui::widgets::BorderType;
 use ratatui::widgets::Borders;
-use ratatui::widgets::Padding;
 use ratatui::widgets::Paragraph;
 use std::ops::Range;
 use unicode_width::UnicodeWidthChar;
@@ -28,12 +26,6 @@ pub(crate) enum ChatInputFocus {
     Focused,
 }
 
-#[derive(Clone, Copy)]
-pub(crate) enum ChatInputChrome {
-    Rules,
-    Box,
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct InputHit {
     /// Nearest caret boundary; the right half of a wide glyph points after it.
@@ -44,29 +36,6 @@ pub(crate) struct InputHit {
     pub(crate) row_start: usize,
     pub(crate) row_end: usize,
     pub(crate) scroll_row: usize,
-}
-
-impl ChatInputChrome {
-    pub(crate) fn inset(self, width: u16) -> u16 {
-        match self {
-            Self::Rules => 0,
-            Self::Box => 6 + 2 * self.padding(width),
-        }
-    }
-
-    fn padding(self, width: u16) -> u16 {
-        u16::from(matches!(self, Self::Box) && width >= 10)
-    }
-
-    pub(crate) fn border_area(self, area: Rect) -> Rect {
-        match self {
-            Self::Rules => area,
-            Self::Box => Rect {
-                width: content_area(area).width.saturating_sub(2),
-                ..content_area(area)
-            },
-        }
-    }
 }
 
 pub(crate) fn content_area(area: Rect) -> Rect {
@@ -89,16 +58,11 @@ pub(crate) fn draw(
     prompt: &str,
     cursor: ChatInputCursor,
     focus: ChatInputFocus,
-    chrome: ChatInputChrome,
+    placeholder: Option<&str>,
     argument_hint: Option<&str>,
     context: RenderContext<'_>,
 ) {
-    let wrapped = wrap_input(
-        input,
-        cursor_line,
-        cursor_width,
-        area.width.saturating_sub(chrome.inset(area.width)),
-    );
+    let wrapped = wrap_input(input, cursor_line, cursor_width, area.width);
     let mut lines = wrapped
         .lines
         .iter()
@@ -141,8 +105,8 @@ pub(crate) fn draw(
         ));
     }
     if input.is_empty()
-        && matches!(chrome, ChatInputChrome::Box)
         && focus == ChatInputFocus::Blurred
+        && let Some(placeholder) = placeholder
     {
         lines = vec![Line::from(vec![
             Span::styled(
@@ -152,7 +116,7 @@ pub(crate) fn draw(
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled(
-                context.localize("Build anything"),
+                context.localize(placeholder),
                 Style::default().fg(context.muted()),
             ),
         ])];
@@ -168,41 +132,16 @@ pub(crate) fn draw(
         .scroll((scroll_row.min(u16::MAX as usize) as u16, 0))
         .block(
             Block::default()
-                .borders(match chrome {
-                    ChatInputChrome::Rules => Borders::TOP | Borders::BOTTOM,
-                    ChatInputChrome::Box => Borders::ALL,
-                })
-                .border_type(BorderType::Rounded)
-                .padding(match chrome {
-                    ChatInputChrome::Rules => Padding::ZERO,
-                    ChatInputChrome::Box => Padding::horizontal(chrome.padding(area.width)),
-                })
+                .borders(Borders::TOP | Borders::BOTTOM)
                 .border_style(Style::default().fg(match focus {
                     ChatInputFocus::Blurred => context.border(),
                     ChatInputFocus::Focused => context.chat_input_chrome(),
                 })),
         );
-    let border_area = chrome.border_area(area);
-    frame.render_widget(chat_input, border_area);
+    frame.render_widget(chat_input, area);
 
-    if cursor == ChatInputCursor::Visible
-        && (matches!(chrome, ChatInputChrome::Rules)
-            || (visible_rows > 0 && area.width > chrome.inset(area.width) + PROMPT_WIDTH as u16))
-    {
-        let prompt_area = match chrome {
-            ChatInputChrome::Rules => area,
-            ChatInputChrome::Box => {
-                let horizontal_inset = 1 + chrome.padding(area.width);
-                Rect {
-                    x: border_area
-                        .x
-                        .saturating_add(horizontal_inset.min(border_area.width)),
-                    width: border_area.width.saturating_sub(2 * horizontal_inset),
-                    ..border_area
-                }
-            }
-        };
-        let content = content_area(prompt_area);
+    if cursor == ChatInputCursor::Visible && visible_rows > 0 && area.width > PROMPT_WIDTH as u16 {
+        let content = content_area(area);
         let input_width = wrapped
             .cursor_column
             .min(content.width.saturating_sub(1) as usize) as u16;
@@ -216,22 +155,16 @@ pub(crate) fn draw(
     }
 }
 
-/// Resolve a screen cell with the same wrapping, inset, and scroll used by `draw`.
+/// Resolve a screen cell with the same wrapping, prompt width, and scroll used by `draw`.
 pub(crate) fn cursor_at(
     area: Rect,
-    chrome: ChatInputChrome,
     input: &str,
     cursor_line: usize,
     cursor_width: usize,
     scroll_override: Option<usize>,
     position: Position,
 ) -> InputHit {
-    let wrapped = wrap_input(
-        input,
-        cursor_line,
-        cursor_width,
-        area.width.saturating_sub(chrome.inset(area.width)),
-    );
+    let wrapped = wrap_input(input, cursor_line, cursor_width, area.width);
     let visible_rows = area.height.saturating_sub(2) as usize;
     let scroll_row = visible_scroll_row(
         wrapped.cursor_row,
@@ -242,13 +175,7 @@ pub(crate) fn cursor_at(
     let row = scroll_row
         .saturating_add(position.y.saturating_sub(area.y.saturating_add(1)) as usize)
         .min(wrapped.lines.len().saturating_sub(1));
-    let border_area = chrome.border_area(area);
-    let text_x = match chrome {
-        ChatInputChrome::Rules => content_area(area).x,
-        ChatInputChrome::Box => {
-            border_area.x + 1 + chrome.padding(area.width) + PROMPT_WIDTH as u16
-        }
-    };
+    let text_x = content_area(area).x;
     let column = usize::from(position.x.saturating_sub(text_x));
     let line = &wrapped.lines[row];
     let range = &wrapped.byte_ranges[row];

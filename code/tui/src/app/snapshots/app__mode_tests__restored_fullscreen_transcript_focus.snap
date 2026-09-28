@@ -13,8 +13,8 @@ expression: render(&app)
              Jump to bottom (click) ↓             
   Queue 1: queued message · next                  
                                                   
-  ╭────────────────────────────────────────────╮  
-  │ > Build anything                           │  
-  ╰────────────────────────── Automatic model ─╯  
+  ──────────────────────────────────────────────  
+  > Build anything                                
+  ───────────────────────────── Automatic model   
                                                   
   Space to expand · Esc to return to input

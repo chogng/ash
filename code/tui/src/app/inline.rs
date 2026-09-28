@@ -187,10 +187,10 @@ fn draw_content(
         panel::draw(panel, frame, areas.session.composer, context);
     } else {
         ChatComposerSurface {
-            chrome: chat_input::ChatInputChrome::Rules,
             view: &input_view,
             cursor,
             focus,
+            placeholder: None,
         }
         .render(frame, areas.input, context);
     }

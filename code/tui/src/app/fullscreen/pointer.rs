@@ -192,9 +192,7 @@ pub(crate) fn target_at(
     if app.approval_view().is_none()
         && app.query_view().is_none()
         && !areas.input.is_empty()
-        && chat_composer::ChatInputChrome::Box
-            .border_area(areas.input)
-            .contains(position)
+        && areas.input.contains(position)
     {
         return Some(PointerTarget::Composer(ChatComposerPointerTarget::Input));
     }
@@ -452,7 +450,6 @@ pub(in crate::app) fn handle_mouse(
         let input = app.input_state();
         let hit = chat_composer::cursor_at(
             input_area,
-            chat_composer::ChatInputChrome::Box,
             input.text(),
             input.cursor_line(),
             input.cursor_display_width(),

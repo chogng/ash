@@ -13,8 +13,8 @@ expression: text
                                                             
                                                             
   ⏸ ask permissions on                                      
-  ╭──────────────────────────────────────────────────────╮  
-  │ > copy me                                            │  
-  ╰──────────────────────────────────── Automatic model ─╯  
+  ────────────────────────────────────────────────────────  
+  > copy me                                                 
+  ─────────────────────────────────────── Automatic model   
                                                             
   Enter send  ·  shift+tab permissions  ·  /home

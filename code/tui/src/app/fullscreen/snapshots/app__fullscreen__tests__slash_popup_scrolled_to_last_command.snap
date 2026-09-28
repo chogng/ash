@@ -17,8 +17,8 @@ expression: rendered
   /lsp                       manage language servers and find packages         │
   /dictate                   dictate into the current draft; run again to stop │
   /voice                     speak continuously and receive text replies       ┃
-  ╭──────────────────────────────────────────────────────────────────────────╮  
-  │ > /                                                                      │  
-  ╰──────────────────────────────────────────────────────── Automatic model ─╯  
+  ────────────────────────────────────────────────────────────────────────────  
+  > /                                                                           
+  ─────────────────────────────────────────────────────────── Automatic model   
                                                                                 
   Enter send  ·  shift+tab permissions  ·  /home

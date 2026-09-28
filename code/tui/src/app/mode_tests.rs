@@ -246,14 +246,7 @@ fn escape_returns_to_the_shared_draft_after_restoring_transcript_selection() {
             .unwrap();
         assert_eq!(
             terminal.get_cursor_position().unwrap(),
-            Position::new(
-                input.x
-                    + match target {
-                        ScreenMode::Fullscreen => 7,
-                        ScreenMode::Inline => 3,
-                    },
-                input.y + 1
-            )
+            Position::new(input.x + 3, input.y + 1)
         );
     }
 }

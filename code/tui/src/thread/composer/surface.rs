@@ -19,13 +19,12 @@ pub(crate) struct ChatComposerSurface<'a, 'view> {
     pub(crate) view: &'view ChatComposerView<'a>,
     pub(crate) cursor: ChatInputCursor,
     pub(crate) focus: ChatInputFocus,
-    pub(crate) chrome: chat_input::ChatInputChrome,
+    pub(crate) placeholder: Option<&'static str>,
 }
 
 impl Renderable for ChatComposerSurface<'_, '_> {
     fn desired_height(&self, width: u16, _context: RenderContext<'_>) -> u16 {
-        self.view
-            .input_desired_height(width.saturating_sub(self.chrome.inset(width)))
+        self.view.input_desired_height(width)
     }
 
     fn render(&self, frame: &mut Frame<'_>, area: Rect, context: RenderContext<'_>) {
@@ -44,17 +43,12 @@ impl Renderable for ChatComposerSurface<'_, '_> {
                 self.cursor
             },
             self.focus,
-            self.chrome,
+            self.placeholder,
             self.view.argument_hint(),
             context,
         );
         if let Some(status) = self.view.history_status() {
-            let content = match self.chrome {
-                chat_input::ChatInputChrome::Rules => chat_input::content_area(area),
-                chat_input::ChatInputChrome::Box => {
-                    crate::render::horizontal_margin(self.chrome.border_area(area), 2)
-                }
-            };
+            let content = chat_input::content_area(area);
             frame.render_widget(
                 ratatui::widgets::Paragraph::new(status)
                     .style(ratatui::style::Style::default().fg(context.foreground())),

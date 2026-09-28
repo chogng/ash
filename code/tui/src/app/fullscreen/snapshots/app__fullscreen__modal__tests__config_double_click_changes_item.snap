@@ -27,6 +27,6 @@ expression: frame_text(&app)
             │  Git branch marker                                          Powerline + │             
             │  Advisor                                                          Off + │             
             │  2 more below                                                           │ Esc return  
-  ╭─────────│  Enter change · r reset · ←/→ details · Tab tabs · / search · Esc close │──────────╮  
-  │ > Build └─────────────────────────────────────────────────────────────────────────┘          │  
-  ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯
+  ──────────│  Enter change · r reset · ←/→ details · Tab tabs · / search · Esc close │───────────  
+  > Build an└─────────────────────────────────────────────────────────────────────────┘             
+  ─────────────────────────────────────────────────────────────────────────────── Automatic model

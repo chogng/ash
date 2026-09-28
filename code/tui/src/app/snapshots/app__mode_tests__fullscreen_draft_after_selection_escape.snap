@@ -13,8 +13,8 @@ expression: render(&app)
                                                   
              Jump to bottom (click) ↓             
   ⏸ ask permissions on                            
-  ╭────────────────────────────────────────────╮  
-  │ > x                                        │  
-  ╰────────────────────────── Automatic model ─╯  
+  ──────────────────────────────────────────────  
+  > x                                             
+  ───────────────────────────── Automatic model   
                                                   
   Enter send  ·  shift+tab permissions  ·  /home

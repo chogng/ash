@@ -13,8 +13,8 @@ expression: render(&app)
   │  Help and shortcuts                        │  
   ╰────────────────────────────────────────────╯  
   ⏸ ask permissions on                            
-  ╭────────────────────────────────────────────╮  
-  │ >                                          │  
-  ╰────────────────────────── Automatic model ─╯  
+  ──────────────────────────────────────────────  
+  >                                               
+  ───────────────────────────── Automatic model   
                                                   
   Enter send  ·  Tab actions  ·  / commands

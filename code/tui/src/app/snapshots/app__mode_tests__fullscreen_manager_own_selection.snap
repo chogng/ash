@@ -13,8 +13,8 @@ expression: render(&app)
                                                   
                                                   
                                                   
-  ╭────────────────────────────────────────────╮  
-  │ > Build anything                           │  
-  ╰────────────────────────── Automatic model ─╯  
+  ──────────────────────────────────────────────  
+  > Build anything                                
+  ───────────────────────────── Automatic model   
                                                   
   Enter to open · Esc to return

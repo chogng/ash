@@ -21,8 +21,8 @@ expression: render_dictation_frame(&app)
                                                                                 
                                                                                 
                                             Listening. Press /dictate to stop.  
-  ╭──────────────────────────────────────────────────────────────────────────╮  
-  │ > Draft hello                                                            │  
-  ╰──────────────────────────────────────────────────────── Automatic model ─╯  
+  ────────────────────────────────────────────────────────────────────────────  
+  > Draft hello                                                                 
+  ─────────────────────────────────────────────────────────── Automatic model   
                                                                                 
   Enter send  ·  shift+tab permissions  ·  /home

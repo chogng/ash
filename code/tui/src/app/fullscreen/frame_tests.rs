@@ -124,7 +124,7 @@ fn input_history_search_and_cancel_preserve_the_composer() {
         buffer[(content.x + 2, area.y)].fg,
         app.render_context().foreground()
     );
-    assert_eq!(buffer[(area.x + 4, area.y + 1)].symbol(), ">");
+    assert_eq!(buffer[(area.x + 2, area.y + 1)].symbol(), ">");
     crate::tui_assert_snapshot!("input_history_search", render(&app, 100, 20));
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
@@ -972,19 +972,18 @@ fn composer_shows_the_configured_model_once_at_wide_and_narrow_widths() {
 }
 
 #[test]
-fn boxed_input_keeps_its_width_and_renders_the_prompt_inside() {
+fn ruled_input_aligns_with_the_transcript_and_renders_the_prompt() {
     let app = App::new();
     let input = layout(&app, Rect::new(0, 0, 80, 20)).input;
     let buffer = render_buffer(&app, 80, 20);
     assert_eq!(buffer[(0, input.y)].symbol(), " ");
-    assert_eq!(buffer[(2, input.y)].symbol(), "╭");
-    assert_eq!(buffer[(77, input.y)].symbol(), "╮");
+    assert_eq!(buffer[(2, input.y)].symbol(), "─");
+    assert_eq!(buffer[(77, input.y)].symbol(), "─");
     assert_eq!(buffer[(2, input.y)].fg, test_context().chat_input_chrome());
     assert_eq!(buffer[(0, input.y + 1)].symbol(), " ");
-    assert_eq!(buffer[(2, input.y + 1)].symbol(), "│");
-    assert_eq!(buffer[(4, input.y + 1)].symbol(), ">");
-    assert_eq!(buffer[(4, input.y + 1)].fg, test_context().foreground());
-    assert_eq!(buffer[(77, input.y + 1)].symbol(), "│");
+    assert_eq!(buffer[(2, input.y + 1)].symbol(), ">");
+    assert_eq!(buffer[(2, input.y + 1)].fg, test_context().foreground());
+    assert_eq!(buffer[(77, input.y + 1)].symbol(), " ");
 }
 
 #[test]
@@ -1039,8 +1038,8 @@ fn policy_tip_appears_after_first_submission_and_each_policy_change() {
             .collect::<String>()
             .contains("permissions on")
     );
-    assert_eq!(buffer[(2, composer.y)].symbol(), "╭");
-    assert_eq!(buffer[(77, composer.y)].symbol(), "╮");
+    assert_eq!(buffer[(2, composer.y)].symbol(), "─");
+    assert_eq!(buffer[(77, composer.y)].symbol(), "─");
 
     let first_tip_expired = Instant::now() + Duration::from_secs(6);
     assert!(app.handle_tick(first_tip_expired));
@@ -1377,8 +1376,8 @@ fn chat_input_soft_wraps_long_lines_instead_of_clipping_them() {
     let rendered = render(&app, terminal_area.width, terminal_area.height);
     let rows = rendered.lines().collect::<Vec<_>>();
 
-    assert!(rows[usize::from(input.y + 1)].contains("> ab"));
-    assert!(rows[usize::from(input.y + 2)].contains("  cd"));
+    assert!(rows[usize::from(input.y + 1)].contains("> abcdef"));
+    assert!(rows[usize::from(input.y + 2)].contains("  ghij"));
 }
 
 #[test]
@@ -1581,7 +1580,7 @@ fn command_completion_renders_an_adjacent_result_line() {
 }
 
 #[test]
-fn transcript_content_aligns_with_the_composer_border_and_input_has_padding() {
+fn transcript_content_aligns_with_the_composer_rule_and_prompt() {
     let mut app = App::new();
     app.update(ThreadEvent::CommandCompleted {
         command: "/theme ash-code-light".into(),
@@ -1601,8 +1600,8 @@ fn transcript_content_aligns_with_the_composer_border_and_input_has_padding() {
         .unwrap();
 
     assert_eq!(buffer[(2, transcript_row)].symbol(), "/");
-    assert_eq!(buffer[(2, input.y + 1)].symbol(), "│");
-    assert_eq!(buffer[(6, input.y + 1)].symbol(), "d");
+    assert_eq!(buffer[(2, input.y + 1)].symbol(), ">");
+    assert_eq!(buffer[(4, input.y + 1)].symbol(), "d");
 }
 
 #[test]
@@ -2022,7 +2021,7 @@ fn mention_popup_keeps_its_layout_and_highlights_fuzzy_matches() {
         }
     }
     assert_eq!(
-        buffer[(6, layout(&app, terminal_area).input.y + 1)].symbol(),
+        buffer[(4, layout(&app, terminal_area).input.y + 1)].symbol(),
         "@"
     );
     let second = &popup.matches[1];

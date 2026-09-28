@@ -13,8 +13,8 @@ expression: "render(&app, 42, 16)"
 │                                        │
 └────────────────────────────────────────┘
 
-  ╭────────────────────────────────────╮
-  │ > chat draft stays here            │
-  ╰────────────────── Automatic model ─╯
+  ──────────────────────────────────────
+  > chat draft stays here
+  ───────────────────── Automatic model
 
   Enter to answer

@@ -17,8 +17,8 @@ expression: "render(&app, 100, 20)"
                                                                                                     
                                                                                                     
   ⏸ ask permissions on                                                                              
-  ╭─History search: find · ↑/↓ browse · Enter edit · Esc cancel──────────────────────────────────╮  
-  │ > find the input history owner                                                               │  
-  ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯  
+  ──History search: find · ↑/↓ browse · Enter edit · Esc cancel───────────────────────────────────  
+  > find the input history owner                                                                    
+  ─────────────────────────────────────────────────────────────────────────────── Automatic model   
                                                                                                     
   Enter send  ·  shift+tab permissions  ·  /home

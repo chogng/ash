@@ -1,6 +1,5 @@
 ---
 source: code/tui/src/app/fullscreen/modal_tests.rs
-assertion_line: 690
 expression: frame_text(&app)
 ---
   .                                                                            [— / —] [Dashboard]  
@@ -28,6 +27,6 @@ expression: frame_text(&app)
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
-  ╭─────────│  Tab to switch · Esc to close                                           │──────────╮  
-  │ > Build └─────────────────────────────────────────────────────────────────────────┘          │  
-  ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯
+  ──────────│  Tab to switch · Esc to close                                           │───────────  
+  > Build an└─────────────────────────────────────────────────────────────────────────┘             
+  ─────────────────────────────────────────────────────────────────────────────── Automatic model

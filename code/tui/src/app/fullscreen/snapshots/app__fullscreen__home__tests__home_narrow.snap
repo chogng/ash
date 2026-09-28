@@ -13,8 +13,8 @@ expression: "text(&render(&app, 40, 16))"
   │> Quit                            │  
   ╰──────────────────────────────────╯  
   ⏸ ask permissions on                  
-  ╭──────────────────────────────────╮  
-  │ > Build anything                 │  
-  ╰──────────────── Automatic model ─╯  
+  ────────────────────────────────────  
+  > Build anything                      
+  ─────────────────── Automatic model   
                                         
   Enter select · Esc input

@@ -55,20 +55,20 @@ pub(super) fn draw(
             view: &input_view,
             cursor,
             focus,
-            chrome: chat_input::ChatInputChrome::Box,
+            placeholder: Some("Build anything"),
         }
         .render(frame, areas.input, context);
-        let border = chat_input::ChatInputChrome::Box.border_area(areas.input);
-        if border.height >= 3 && border.width >= 8 {
+        let input = areas.input;
+        if input.height >= 3 && input.width >= 8 {
             let model = crate::render::truncate_with_ellipsis(
                 &context.localize(app.status_line().model_label()),
-                usize::from(border.width.saturating_sub(6)),
+                usize::from(input.width.saturating_sub(6)),
             );
             let label = Line::from(format!(" {model} "));
             let width = label.width() as u16;
             frame.render_widget(
                 Paragraph::new(label).style(Style::default().fg(context.muted())),
-                Rect::new(border.right() - 2 - width, border.bottom() - 1, width, 1),
+                Rect::new(input.right() - width, input.bottom() - 1, width, 1),
             );
         }
     }

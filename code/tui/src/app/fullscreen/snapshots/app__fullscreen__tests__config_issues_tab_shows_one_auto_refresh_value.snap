@@ -17,6 +17,6 @@ expression: "render(&app, 100, 20)"
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
-  ╭─────────│                                                                         │──────────╮  
-  │ > Build │  Enter/Space change · ←/→ details · Tab tabs · / search · Esc close     │          │  
-  ╰─────────└─────────────────────────────────────────────────────────────────────────┘ic model ─╯
+  ──────────│                                                                         │───────────  
+  > Build an│  Enter/Space change · ←/→ details · Tab tabs · / search · Esc close     │             
+  ──────────└─────────────────────────────────────────────────────────────────────────┘atic model

@@ -1,6 +1,5 @@
 ---
 source: code/tui/src/app/fullscreen/frame_tests.rs
-assertion_line: 1683
 expression: "render(&app, terminal_area.width, terminal_area.height)"
 ---
   .                                                        [— / —] [Dashboard]  
@@ -18,8 +17,8 @@ content underlying transcript content underlying transcript content
   /skills                    browse and manage skills                          │
   /memories                  manage memories, reading consent and model saving │
   /mcp                       list configured MCP tools                         │
-  ╭──────────────────────────────────────────────────────────────────────────╮  
-  │ > /                                                                      │  
-  ╰─────────────────────────────────────────────────── Claude Sonnet (high) ─╯  
+  ────────────────────────────────────────────────────────────────────────────  
+  > /                                                                           
+  ────────────────────────────────────────────────────── Claude Sonnet (high)   
                                                                                 
   Enter send  ·  shift+tab permissions  ·  /home

@@ -13,8 +13,8 @@ expression: render(&app)
                                                   
                                                   
   ⏸ ask permissions on                            
-  ╭────────────────────────────────────────────╮  
-  │ > new task draft                           │  
-  ╰────────────────────────── Automatic model ─╯  
+  ──────────────────────────────────────────────  
+  > new task draft                                
+  ───────────────────────────── Automatic model   
                                                   
   Enter send  ·  / commands
