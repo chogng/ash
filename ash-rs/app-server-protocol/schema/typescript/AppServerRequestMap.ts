@@ -373,6 +373,23 @@ import type { SyntaxOpenParams } from './types/SyntaxOpenParams.js';
 import type { SyntaxSelectionRangesParams } from './types/SyntaxSelectionRangesParams.js';
 import type { SyntaxSelectionRangesResult } from './types/SyntaxSelectionRangesResult.js';
 import type { SyntaxUpdateParams } from './types/SyntaxUpdateParams.js';
+import type { TeamCommandParams } from './types/TeamCommandParams.js';
+import type { TeamCommandResult } from './types/TeamCommandResult.js';
+import type { TeamListParams } from './types/TeamListParams.js';
+import type { TeamListResult } from './types/TeamListResult.js';
+import type { TeamMessageListParams } from './types/TeamMessageListParams.js';
+import type { TeamMessageListResult } from './types/TeamMessageListResult.js';
+import type { TeamMessagePostParams } from './types/TeamMessagePostParams.js';
+import type { TeamMessagePostResult } from './types/TeamMessagePostResult.js';
+import type { TeamReadParams } from './types/TeamReadParams.js';
+import type { TeamReadResult } from './types/TeamReadResult.js';
+import type { TeamRunAttachParams } from './types/TeamRunAttachParams.js';
+import type { TeamRunListParams } from './types/TeamRunListParams.js';
+import type { TeamRunListResult } from './types/TeamRunListResult.js';
+import type { TeamRunReadParams } from './types/TeamRunReadParams.js';
+import type { TeamRunReadResult } from './types/TeamRunReadResult.js';
+import type { TeamRunStartParams } from './types/TeamRunStartParams.js';
+import type { TeamRunStartResult } from './types/TeamRunStartResult.js';
 import type { TerminalAttachParams } from './types/TerminalAttachParams.js';
 import type { TerminalAttachResult } from './types/TerminalAttachResult.js';
 import type { TerminalCloseParams } from './types/TerminalCloseParams.js';
@@ -495,6 +512,15 @@ export interface AppServerRequestMap {
   "project/session/unlink": { params: ProjectSessionMutationParams; response: ProjectMutationResult };
   "project/archive": { params: ProjectLifecycleParams; response: ProjectMutationResult };
   "project/restore": { params: ProjectLifecycleParams; response: ProjectMutationResult };
+  "team/list": { params: TeamListParams; response: TeamListResult };
+  "team/read": { params: TeamReadParams; response: TeamReadResult };
+  "team/command": { params: TeamCommandParams; response: TeamCommandResult };
+  "team/run/start": { params: TeamRunStartParams; response: TeamRunStartResult };
+  "team/run/attach": { params: TeamRunAttachParams; response: TeamRunStartResult };
+  "team/run/read": { params: TeamRunReadParams; response: TeamRunReadResult };
+  "team/run/list": { params: TeamRunListParams; response: TeamRunListResult };
+  "team/message/post": { params: TeamMessagePostParams; response: TeamMessagePostResult };
+  "team/message/list": { params: TeamMessageListParams; response: TeamMessageListResult };
   "session/thread/subscribe": { params: SessionThreadSubscribeParams; response: SessionThreadSubscribeResult };
   "session/thread/unsubscribe": { params: SessionThreadUnsubscribeParams; response: null };
   "config/read": { params: Record<string, never>; response: ConfigReadResult };
@@ -792,6 +818,15 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "project/session/unlink": { method: "project/session/unlink" },
   "project/archive": { method: "project/archive" },
   "project/restore": { method: "project/restore" },
+  "team/list": { method: "team/list" },
+  "team/read": { method: "team/read" },
+  "team/command": { method: "team/command" },
+  "team/run/start": { method: "team/run/start" },
+  "team/run/attach": { method: "team/run/attach" },
+  "team/run/read": { method: "team/run/read" },
+  "team/run/list": { method: "team/run/list" },
+  "team/message/post": { method: "team/message/post" },
+  "team/message/list": { method: "team/message/list" },
   "session/thread/subscribe": { method: "session/thread/subscribe" },
   "session/thread/unsubscribe": { method: "session/thread/unsubscribe" },
   "config/read": { method: "config/read" },

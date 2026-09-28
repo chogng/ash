@@ -1,0 +1,19 @@
+[package]
+name = "ash-teams"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "ash_teams"
+path = "src/lib.rs"
+
+[dependencies]
+ash-protocol = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

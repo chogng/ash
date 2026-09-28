@@ -1,7 +1,7 @@
 import type { Event } from '../../../base/common/event.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
-export type MemoryScope = { readonly type: 'profile' } | { readonly type: 'project'; readonly projectId: string } | { readonly type: 'dir'; readonly dirId: string };
+export type MemoryScope = { readonly type: 'profile' } | { readonly type: 'project'; readonly projectId: string } | { readonly type: 'team'; readonly teamId: string } | { readonly type: 'dir'; readonly dirId: string };
 export interface MemoryPolicy {
 	readonly scope: MemoryScope;
 	readonly revision: number;

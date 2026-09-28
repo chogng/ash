@@ -1579,6 +1579,9 @@ pub fn open_local_app_server_with_codebase_providers(
         .with_local_projects(&database_path)
         .map_err(OpenAppServerError)?;
     server = server
+        .with_local_teams(&database_path)
+        .map_err(OpenAppServerError)?;
+    server = server
         .with_local_memories(&database_path)
         .map_err(OpenAppServerError)?;
     if let Some(profile) = &profile_runtime {

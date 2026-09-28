@@ -23,6 +23,7 @@ serde_json = { workspace = true }
 ash-history = { workspace = true }
 ash-protocol = { workspace = true }
 ash-projects = { workspace = true }
+ash-teams = { workspace = true }
 ash-thread-store = { workspace = true }
 git-turn-changes = { workspace = true }
 ash-utils-path = { workspace = true }

@@ -123,6 +123,7 @@ ash-execpolicy = { workspace = true }
 ash-plugin = { workspace = true }
 ash-protocol = { workspace = true }
 ash-projects = { workspace = true }
+ash-teams = { workspace = true }
 ash-rollout = { workspace = true }
 ash-state = { workspace = true }
 ash-sandboxing = { workspace = true }

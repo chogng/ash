@@ -100,6 +100,7 @@ fn automatic_memories_follow_session_projects_and_current_directory_grants() {
         Arc::new(MemoryScopes {
             config: Some(enabled_memories(root.path())),
             projects: Some(projects.clone()),
+            teams: None,
             dirs: dirs.clone(),
         }),
         Arc::new(super::super::update_broker::UpdateBroker::default()),
@@ -327,6 +328,7 @@ fn memories_are_recollected_after_preflight_compaction_and_revocation() {
         Arc::new(MemoryScopes {
             config: Some(enabled_memories(root.path())),
             projects: None,
+            teams: None,
             dirs: Arc::new(DirGrants::default()),
         }),
         Arc::new(super::super::update_broker::UpdateBroker::default()),
@@ -410,6 +412,7 @@ fn config_master_switch_stops_model_access_and_keeps_scope_permissions() {
     let scopes = MemoryScopes {
         config: Some(config.clone()),
         projects: None,
+        teams: None,
         dirs: Arc::new(DirGrants::default()),
     };
     let session = SessionId::new("s").unwrap();

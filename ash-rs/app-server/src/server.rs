@@ -55,6 +55,7 @@ use std::io::Write;
 use std::sync::Arc;
 use std::sync::Condvar;
 use std::sync::Mutex;
+use std::sync::OnceLock;
 use std::sync::RwLock;
 use std::sync::mpsc;
 use std::thread;
@@ -151,6 +152,10 @@ mod skill_operations;
 mod symbol_index_operations;
 mod symbol_index_runtime;
 mod syntax_operations;
+mod team_operations;
+#[cfg(test)]
+#[path = "server/team_operations_tests.rs"]
+mod team_operations_tests;
 mod terminal_operations;
 mod thread_dir_binding;
 mod thread_dirs;
@@ -264,6 +269,8 @@ pub struct AppServer {
     issue_runtime: Option<Arc<issue_runtime::IssueRuntime>>,
     issue_cache: Option<Arc<Mutex<ash_state::SqliteIssueCache>>>,
     projects: Option<Arc<ash_projects::ProjectCoordinator>>,
+    teams: Option<Arc<ash_teams::TeamCoordinator>>,
+    team_memberships: Arc<OnceLock<Arc<ash_teams::TeamCoordinator>>>,
     automation: Option<Arc<ash_automation::AutomationStore>>,
     updates: Arc<UpdateBroker>,
 }
@@ -298,6 +305,7 @@ enum ConnectionAuthority {
     #[default]
     Client,
     ProductHost,
+    Browser,
 }
 
 #[derive(Debug, Default)]
@@ -339,6 +347,13 @@ impl ConnectionState {
 
     fn allows_product_host_capabilities(&self) -> bool {
         self.authority == ConnectionAuthority::ProductHost
+    }
+
+    fn allows_team_capabilities(&self) -> bool {
+        matches!(
+            self.authority,
+            ConnectionAuthority::ProductHost | ConnectionAuthority::Browser
+        )
     }
 
     pub(super) fn supports_dir_permissions_host(&self) -> bool {
@@ -606,6 +621,8 @@ impl AppServer {
             issue_runtime: None,
             issue_cache: None,
             projects: None,
+            teams: None,
+            team_memberships: Arc::new(OnceLock::new()),
             automation: None,
             updates,
         }
@@ -715,6 +732,22 @@ impl AppServer {
         self.with_memory_extension()
     }
 
+    pub(crate) fn with_local_teams(
+        mut self,
+        database_path: &std::path::Path,
+    ) -> Result<Self, String> {
+        let store: Arc<dyn ash_teams::TeamStore> = Arc::new(
+            ash_state::SqliteTeamStore::open(database_path).map_err(|error| error.to_string())?,
+        );
+        self.teams = Some(Arc::new(ash_teams::TeamCoordinator::new(store)));
+        self.team_memberships
+            .set(Arc::clone(
+                self.teams.as_ref().expect("Team coordinator was set"),
+            ))
+            .map_err(|_| "Team coordinator is already initialized".to_string())?;
+        Ok(self)
+    }
+
     pub(crate) fn with_local_memories(
         mut self,
         database_path: &std::path::Path,
@@ -736,6 +769,10 @@ impl AppServer {
     /// promote a regular connection by declaring a capability in their initialize payload.
     pub fn product_host_connection(&self) -> ConnectionState {
         self.open_connection(ConnectionAuthority::ProductHost)
+    }
+
+    fn browser_connection(&self) -> ConnectionState {
+        self.open_connection(ConnectionAuthority::Browser)
     }
 
     fn open_connection(&self, authority: ConnectionAuthority) -> ConnectionState {
@@ -1876,6 +1913,15 @@ impl AppServer {
         self.serve_jsonl_connection(reader, writer, self.product_host_connection())
     }
 
+    /// The authenticated browser listener creates this authority after validating its ticket.
+    pub(crate) fn serve_browser_jsonl<R: BufRead, W: Write + Send>(
+        &self,
+        reader: R,
+        writer: W,
+    ) -> Result<(), std::io::Error> {
+        self.serve_jsonl_connection(reader, writer, self.browser_connection())
+    }
+
     fn serve_jsonl_connection<R: BufRead, W: Write + Send>(
         &self,
         reader: R,
@@ -2210,6 +2256,19 @@ impl AppServer {
             }
             Some(ClientMethod::ProjectArchive) => self.project_archive(connection, &request.params),
             Some(ClientMethod::ProjectRestore) => self.project_restore(connection, &request.params),
+            Some(ClientMethod::TeamList) => self.team_list(connection, &request.params),
+            Some(ClientMethod::TeamRead) => self.team_read(connection, &request.params),
+            Some(ClientMethod::TeamCommand) => self.team_command(connection, &request.params),
+            Some(ClientMethod::TeamRunStart) => self.team_run_start(connection, &request.params),
+            Some(ClientMethod::TeamRunAttach) => self.team_run_attach(connection, &request.params),
+            Some(ClientMethod::TeamRunRead) => self.team_run_read(connection, &request.params),
+            Some(ClientMethod::TeamRunList) => self.team_run_list(connection, &request.params),
+            Some(ClientMethod::TeamMessagePost) => {
+                self.team_message_post(connection, &request.params)
+            }
+            Some(ClientMethod::TeamMessageList) => {
+                self.team_message_list(connection, &request.params)
+            }
             Some(ClientMethod::TypstCompile) => self.typst_compile(connection, &request.params),
             Some(ClientMethod::ConfigRead) => self.config_read(),
             Some(ClientMethod::AccountRead) => self.account_read(cancellation),

@@ -1,6 +1,6 @@
 # Agent Team：跨任务的成员组织
 
-> 状态：目标产品契约，尚未实现。Ash 当前的 `/team` 是一次 Session 内的协作工作流；它没有持久 Team、成员表或跨任务消息。现有 Agent 树的执行事实见 [Agent 委托与运行树](../../docs/core-multi-agent.md)，Agent 定义见 [Agent](../../docs/agents.md)。
+> 状态：持久 Team 的创建、成员管理、任务快照、成员身份复用、团队讨论和 Team 记忆作用域已接入 App Server 与 Agents Window。现有 `/team` 命令仍是一次 Session 内的协作工作流。现有 Agent 树的执行事实见 [Agent 委托与运行树](../../docs/core-multi-agent.md)，Agent 定义见 [Agent](../../docs/agents.md)。
 
 Team 回答“哪些 Agent 长期作为一组成员协作”；Team 任务记录回答“哪一组成员参与了哪次工作”；Session 的 Agent 树回答“这次工作如何执行”；并行调度回答“哪些互不依赖的工作同时运行”。这些问题分别建模。同一个 Team 可以顺序或并行执行任务；没有 Team 的 Agent 树也可以并行运行。
 
@@ -28,7 +28,7 @@ Team 是 profile 范围的持久实体，可以被多个 Project 的任务使用
 
 Team 任务提交与启动使用同一个稳定命令身份。启动中断后按已保存的 `TeamRunId`、成员快照和 Core 委托事实恢复，不能重新选成员或创建第二个协调 Thread。Team 任务不保存自己的 running/completed 执行状态机；可见状态从关联的工作流、Thread 和委托读取。
 
-成员可以离线。长期身份指能够在下一次任务中找回同一成员及其明确保存的工作记录，不要求模型进程常驻。当前 `AgentId` 与 Thread 绑定已具备跨 Session 身份基础；但 `spawn_agent` 目前总是新建被委托 Agent，尚不能绑定 Team 现有成员，Team 启动链路也尚不存在。
+成员可以离线。长期身份指能够在下一次任务中找回同一成员及其明确保存的工作记录，不要求模型进程常驻。Team 任务的协调 Thread 和带 `team_run_id`、`member_id` 的 `spawn_agent` 委托会使用成员已有的 `AgentId`；未指定 Team 任务的委托继续创建新身份。
 
 ## 消息、知识与共同工作
 
@@ -50,6 +50,12 @@ Team 的任务列表从 `TeamRunId` 关联和所属 Session 的事实构成。�
 - `agent-graph-store` 继续拥有 `AgentId` 与 Thread 的不可变绑定，并增加无 Thread 的 Agent 身份创建，使 Team 成员可先于第一次任务存在；对应持久化属于 `ash-state`。Core 扩展委托创建入口，以受验证的 Team 成员身份建立子 Thread，保留现有委托和权限收窄规则。普通 `spawn_agent` 不因名称相同就自动复用成员。
 - Team 消息由 Team 领域保存并校验成员资格；现有任务讨论板仍按 Session 隔离。Memory 领域拥有 Team 作用域的长期知识。执行、上下文和授权仍由各自系统决定。
 - 前端 Team service 消费 App Server 的 Team 契约；Agents Window 只持有选中项和布局状态。生成协议类型停留在领域适配器，不进入视图组件。
+
+## 当前接口与后续入口
+
+App Server 提供 `team/list|read|command`、`team/run/start|attach|read|list` 和 `team/message/post|list`。`team/run/start` 新建 Session 和协调 Thread，并启动第一轮任务；`team/run/attach` 将已用协调者身份创建的 Thread 关联到它所在的 Session。两者均保存成员快照。Agent 工具通过 `team_run_id` 和 `member_id` 指定委托对象，并通过 `team_read_messages`、`team_post_message` 继续讨论。Memory 的 Team 作用域只向参与该任务的 Thread 提供，具体读取与写入仍受 Memory 策略控制。
+
+Agents Window 目前提供 Team 名册、成员和角色修改、任务启动、历史任务及讨论。`/develop` 尚未增加直接选择 Team 的命令参数；其已有 Session 可通过 `team/run/attach` 关联，但该工作流还未自动选择成员。旧 `/team` 命令也尚未更名为 `multitask`。这些命令入口需要与现有工作流语义一起调整，不能把历史临时委托推断为持久成员。
 
 ## 完成条件
 

@@ -17,10 +17,12 @@ use ash_core::ToolExecutionFacts;
 use ash_core::ToolOutputSink;
 use ash_core::ToolService;
 use ash_core::TurnExecutionBackend;
+use ash_teams::TeamMessage;
 use async_utils::CancellationToken;
 use core_api::CoreError;
 use protocol::AgentContextMode;
 use protocol::AgentContextSource;
+use protocol::AgentId;
 use protocol::AgentJoinId;
 use protocol::AgentJoinPolicy;
 use protocol::AgentJoinStatus;
@@ -32,6 +34,7 @@ use protocol::DelegatedTask;
 use protocol::DelegationId;
 use protocol::ForkedAgentContext;
 use protocol::ItemId;
+use protocol::TeamRunId;
 use protocol::ThreadId;
 use protocol::ToolCall;
 use protocol::ToolDefinition;
@@ -41,14 +44,18 @@ use serde::Deserialize;
 use serde_json::Value;
 use serde_json::json;
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::time::Duration;
 use std::time::Instant;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::ResolvedAgentSelection;
 
 pub const SPAWN_AGENT_TOOL_NAME: &str = "spawn_agent";
 pub const SEND_AGENT_MESSAGE_TOOL_NAME: &str = "send_agent_message";
 pub const WAIT_AGENT_TOOL_NAME: &str = "wait_agent";
+pub const TEAM_POST_MESSAGE_TOOL_NAME: &str = "team_post_message";
+pub const TEAM_READ_MESSAGES_TOOL_NAME: &str = "team_read_messages";
 const MAX_WAIT: Duration = Duration::from_secs(12 * 60 * 60);
 
 pub struct MultiAgentToolService {
@@ -59,6 +66,7 @@ pub struct MultiAgentToolService {
     action_policy_revision: ActionPolicyRevision,
     customizations: Option<Arc<dyn crate::AgentCatalogProvider>>,
     model_instructions: Arc<models_manager::ModelInstructionCatalog>,
+    teams: Option<Arc<OnceLock<Arc<ash_teams::TeamCoordinator>>>>,
 }
 
 impl MultiAgentToolService {
@@ -72,10 +80,17 @@ impl MultiAgentToolService {
             coordinator,
             threads,
             turn_backend,
-            definitions: vec![spawn_definition(), send_definition(), wait_definition()],
+            definitions: vec![
+                spawn_definition(),
+                send_definition(),
+                wait_definition(),
+                team_post_definition(),
+                team_read_definition(),
+            ],
             action_policy_revision,
             customizations: None,
             model_instructions: models_manager::ModelInstructionCatalog::built_in(),
+            teams: None,
         }
     }
 
@@ -95,6 +110,11 @@ impl MultiAgentToolService {
         self
     }
 
+    pub fn with_teams(mut self, teams: Arc<OnceLock<Arc<ash_teams::TeamCoordinator>>>) -> Self {
+        self.teams = Some(teams);
+        self
+    }
+
     fn execute_with_context(
         &self,
         call: &ToolCall,
@@ -111,6 +131,34 @@ impl MultiAgentToolService {
             SPAWN_AGENT_TOOL_NAME => {
                 let delegation_id = DelegationId::new(format!("tool:{}", call.id))
                     .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
+                let mut arguments: SpawnArguments = decode_arguments(&call.arguments)?;
+                let team_member = match (&arguments.team_run_id, &arguments.member_id) {
+                    (Some(run_id), Some(member_id)) => {
+                        let teams = self
+                            .teams
+                            .as_ref()
+                            .and_then(|teams| teams.get())
+                            .ok_or_else(|| {
+                                CoreError::Execution("Team service is unavailable".into())
+                            })?;
+                        let member = teams
+                            .member_for_spawn(
+                                run_id,
+                                identity.session_id(),
+                                identity.thread_id(),
+                                member_id,
+                            )
+                            .map_err(|error| CoreError::Policy(error.to_string()))?;
+                        arguments.agent = member.role.clone();
+                        Some(member)
+                    }
+                    (None, None) => None,
+                    _ => {
+                        return Err(CoreError::InvalidInput(
+                            "team_run_id and member_id must be given together".into(),
+                        ));
+                    }
+                };
                 // Core already bound this Tool Call's arguments durably. A retry must not
                 // reselect its role or model from catalogs that may have changed meanwhile.
                 let parent = self.threads.read_thread(identity.thread_id())?;
@@ -118,15 +166,20 @@ impl MultiAgentToolService {
                     self.coordinator
                         .resume_delegation(identity.thread_id(), &delegation_id)?
                 } else {
-                    let arguments: SpawnArguments = decode_arguments(&call.arguments)?;
                     let selection = self.resolve_agent(&arguments, facts)?;
                     self.coordinator.spawn(SpawnAgentRequest {
+                        agent_id: team_member.as_ref().map(|member| member.agent_id.clone()),
                         delegation_id: delegation_id.clone(),
                         session_id: identity.session_id().clone(),
                         parent_thread_id: identity.thread_id().clone(),
                         parent_turn_id: identity.turn_id().clone(),
                         task: DelegatedTask {
-                            title: arguments.name.unwrap_or_else(|| "subagent".into()),
+                            title: arguments.name.unwrap_or_else(|| {
+                                team_member
+                                    .as_ref()
+                                    .map(|member| member.name.clone())
+                                    .unwrap_or_else(|| "subagent".into())
+                            }),
                             instructions: arguments.task,
                         },
                         role: selection.role.clone(),
@@ -148,6 +201,16 @@ impl MultiAgentToolService {
                         capability_scope: selection.capability_scope,
                     })?
                 };
+                if let (Some(run_id), Some(member)) = (&arguments.team_run_id, &team_member) {
+                    let teams = self
+                        .teams
+                        .as_ref()
+                        .and_then(|teams| teams.get())
+                        .expect("Team service was checked above");
+                    teams
+                        .bind_thread(run_id, &spawned.child_thread_id, &member.agent_id)
+                        .map_err(|error| CoreError::Policy(error.to_string()))?;
+                }
                 let child = self.threads.read_thread(&spawned.child_thread_id)?;
                 let status = child
                     .turns
@@ -206,6 +269,69 @@ impl MultiAgentToolService {
                     timeout,
                     cancellation,
                 )
+            }
+            TEAM_POST_MESSAGE_TOOL_NAME => {
+                let arguments: TeamPostArguments = decode_arguments(&call.arguments)?;
+                let teams = self
+                    .teams
+                    .as_ref()
+                    .and_then(|teams| teams.get())
+                    .ok_or_else(|| CoreError::Execution("Team service is unavailable".into()))?;
+                let caller = self.threads.read_thread(identity.thread_id())?.agent_id;
+                teams
+                    .member_for_spawn(
+                        &arguments.run_id,
+                        identity.session_id(),
+                        identity.thread_id(),
+                        &caller,
+                    )
+                    .map_err(|error| CoreError::Policy(error.to_string()))?;
+                let run = teams
+                    .read_run(&arguments.run_id)
+                    .map_err(|error| CoreError::Policy(error.to_string()))?;
+                let created_at_unix_ms = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .map_err(|error| CoreError::Execution(error.to_string()))?
+                    .as_millis() as u64;
+                let message = teams
+                    .post_message(&TeamMessage {
+                        message_id: AgentMessageId::new(format!("tool:{}", call.id))
+                            .map_err(|error| CoreError::InvalidInput(error.to_string()))?,
+                        team_id: run.team_id,
+                        run_id: Some(arguments.run_id),
+                        sender_id: caller,
+                        receiver_id: arguments.receiver_id,
+                        text: arguments.text,
+                        created_at_unix_ms,
+                    })
+                    .map_err(|error| CoreError::Policy(error.to_string()))?;
+                success(
+                    json!({"message_id": message.message_id, "created_at_unix_ms": message.created_at_unix_ms}),
+                )
+            }
+            TEAM_READ_MESSAGES_TOOL_NAME => {
+                let arguments: TeamReadArguments = decode_arguments(&call.arguments)?;
+                let teams = self
+                    .teams
+                    .as_ref()
+                    .and_then(|teams| teams.get())
+                    .ok_or_else(|| CoreError::Execution("Team service is unavailable".into()))?;
+                let caller = self.threads.read_thread(identity.thread_id())?.agent_id;
+                teams
+                    .member_for_spawn(
+                        &arguments.run_id,
+                        identity.session_id(),
+                        identity.thread_id(),
+                        &caller,
+                    )
+                    .map_err(|error| CoreError::Policy(error.to_string()))?;
+                let run = teams
+                    .read_run(&arguments.run_id)
+                    .map_err(|error| CoreError::Policy(error.to_string()))?;
+                let messages = teams
+                    .list_messages(&run.team_id, &caller)
+                    .map_err(|error| CoreError::Policy(error.to_string()))?;
+                success(json!({"messages": messages}))
             }
             _ => Err(CoreError::Policy(format!(
                 "tool is not available: {}",
@@ -437,6 +563,8 @@ struct SpawnArguments {
     #[serde(default)]
     agent: protocol::AgentRoleSelection,
     context: Option<SpawnContextArguments>,
+    team_run_id: Option<TeamRunId>,
+    member_id: Option<AgentId>,
 }
 
 #[derive(Deserialize)]
@@ -489,6 +617,20 @@ struct WaitArguments {
     policy: Option<WaitPolicy>,
     quorum: Option<u32>,
     timeout_ms: Option<u64>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TeamPostArguments {
+    run_id: TeamRunId,
+    receiver_id: Option<AgentId>,
+    text: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TeamReadArguments {
+    run_id: TeamRunId,
 }
 
 #[derive(Clone, Copy, Deserialize)]
@@ -763,9 +905,17 @@ fn spawn_definition() -> ToolDefinition {
                     },
                     "required": ["mode", "count", "sources"],
                     "additionalProperties": false
+                },
+                "team_run_id": {
+                    "type": ["string", "null"],
+                    "description": "For a Team task, the stable run ID whose member snapshot authorizes this delegation."
+                },
+                "member_id": {
+                    "type": ["string", "null"],
+                    "description": "The Agent ID of a member in team_run_id. The Team fixes this member's role."
                 }
             },
-            "required": ["task", "name", "agent", "context"],
+            "required": ["task", "name", "agent", "context", "team_run_id", "member_id"],
             "additionalProperties": false
         }),
     )
@@ -788,6 +938,36 @@ fn send_definition() -> ToolDefinition {
                 }
             },
             "required": ["delegation_id", "message"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn team_post_definition() -> ToolDefinition {
+    definition(
+        TEAM_POST_MESSAGE_TOOL_NAME,
+        "Posts a durable message to the Team discussion for the current Team task. The message does not start or notify an idle Agent.",
+        json!({
+            "type": "object",
+            "properties": {
+                "run_id": {"type": "string", "description": "The Team task's run ID."},
+                "receiver_id": {"type": ["string", "null"], "description": "A current Team member, or null for the whole Team."},
+                "text": {"type": "string", "description": "The message to retain for later Team tasks."}
+            },
+            "required": ["run_id", "receiver_id", "text"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn team_read_definition() -> ToolDefinition {
+    definition(
+        TEAM_READ_MESSAGES_TOOL_NAME,
+        "Reads the durable Team discussion across tasks after checking current task membership.",
+        json!({
+            "type": "object",
+            "properties": {"run_id": {"type": "string", "description": "The Team task's run ID."}},
+            "required": ["run_id"],
             "additionalProperties": false
         }),
     )

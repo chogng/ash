@@ -10,7 +10,9 @@ mod web;
 pub use web::WebLaunchOptions;
 pub use web::WebListenInfo;
 pub use web::WebSessionInfo;
-pub use web::{WebWorkspaceDirectory, WebWorkspaceListRequest, WebWorkspaceListResult, WebWorkspaceOpenRequest};
+pub use web::{
+    WebWorkspaceDirectory, WebWorkspaceListRequest, WebWorkspaceListResult, WebWorkspaceOpenRequest,
+};
 pub mod protocol;
 pub mod rpc;
 #[cfg(any(test, feature = "export"))]

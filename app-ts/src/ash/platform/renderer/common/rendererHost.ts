@@ -31,6 +31,7 @@ import type { IDirPermissionsApi } from "../../dirPermissions/common/dirPermissi
 import type { IAccountApi } from "../../accounts/common/accountApi.js";
 import type { ITurnChangesApi } from "../../turnChanges/common/turnChangesApi.js";
 import type { IAutomationService } from '../../automation/common/automationService.js';
+import type { ITeamApi } from '../../teams/common/teamApi.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
 /** Optional product capabilities contributed by a statically selected host bundle. */
@@ -66,6 +67,7 @@ export interface IRendererHost extends RendererHostCapabilities {
 	/** Optional because web and disconnected hosts cannot own an SSH process. */
 	readonly remoteTunnels?: IRemoteTunnelService;
 	readonly session: ISessionApi;
+	readonly teams: ITeamApi;
 	readonly model: IModelApi;
 	readonly thread: IThreadApi;
 	readonly turn: ITurnApi;

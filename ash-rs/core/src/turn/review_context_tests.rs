@@ -229,6 +229,7 @@ fn delegated_review_uses_frozen_parent_authority_and_fork_preserves_sources() {
     let spawned =
         crate::MultiAgentCoordinator::new(threads.clone(), crate::AgentTreeLimits::default())
             .spawn(crate::SpawnAgentRequest {
+                agent_id: None,
                 base_instructions: crate::test_turn_instructions(),
                 delegation_id: ash_protocol::DelegationId::new("review").unwrap(),
                 session_id: root.session_id.clone(),

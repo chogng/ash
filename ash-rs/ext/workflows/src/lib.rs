@@ -254,6 +254,7 @@ impl Runtime<'_> {
                 let context = plan.transition.work.context(attempt)?;
                 let digest = format!("sha256:{:x}", Sha256::digest(context.as_bytes()));
                 let spawned = self.agents.spawn(SpawnAgentRequest {
+                    agent_id: None,
                     delegation_id: attempt.delegation.clone(),
                     session_id: parent.session_id.clone(),
                     parent_thread_id: root.clone(),

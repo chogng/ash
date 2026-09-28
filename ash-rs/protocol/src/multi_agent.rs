@@ -273,6 +273,9 @@ sha256_digest!(
 #[serde(rename_all = "camelCase")]
 pub struct AgentContextSeed {
     pub delegation_id: DelegationId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub agent_id: Option<crate::AgentId>,
     pub parent_thread_id: ThreadId,
     pub parent_turn_id: TurnId,
     #[ts(type = "number")]

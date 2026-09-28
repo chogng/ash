@@ -157,6 +157,46 @@ fn spawn_creates_seeded_child_thread_and_initial_turn_idempotently() {
 }
 
 #[test]
+fn spawn_reuses_an_explicit_agent_identity_across_sessions() {
+    let fixture = fixture();
+    let member = fixture
+        .threads
+        .start_thread(
+            &crate::NoThreadWorktreeBinder,
+            StartThreadRequest {
+                branch_name: None,
+                agent_id: None,
+                agent: None,
+                command_id: CommandId::new("create-member").unwrap(),
+                title: "member".into(),
+            },
+        )
+        .unwrap();
+    let mut request = spawn_request(&fixture);
+    request.agent_id = Some(member.agent_id.clone());
+
+    let spawned = fixture.coordinator.spawn(request).unwrap();
+    let child = fixture
+        .threads
+        .read_thread(&spawned.child_thread_id)
+        .unwrap();
+    assert_eq!(child.agent_id, member.agent_id);
+    assert_ne!(child.session_id, member.session_id);
+    assert_eq!(spawned.context_seed.agent_id, Some(member.agent_id.clone()));
+
+    let mut replay = spawn_request(&fixture);
+    replay.agent_id = Some(member.agent_id);
+    assert_eq!(
+        fixture.coordinator.spawn(replay).unwrap().disposition,
+        AgentCommandDisposition::Replayed
+    );
+    assert!(matches!(
+        fixture.coordinator.spawn(spawn_request(&fixture)),
+        Err(crate::CoreError::CommandConflict)
+    ));
+}
+
+#[test]
 fn code_mode_agent_scope_keeps_controls_and_limits_nested_tools() {
     let fixture = fixture_with_tool_mode(ash_protocol::ToolMode::CodeModeOnly);
     let parent = fixture
@@ -599,6 +639,7 @@ fn cancelling_a_parent_delegation_interrupts_every_live_descendant() {
     let grandchild = fixture
         .coordinator
         .spawn(SpawnAgentRequest {
+            agent_id: None,
             base_instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
             delegation_id: DelegationId::new("delegation-grandchild").unwrap(),
             session_id: fixture.session_id.clone(),
@@ -1082,6 +1123,7 @@ fn spawn_request(fixture: &Fixture) -> SpawnAgentRequest {
 
 fn spawn_request_with_id(fixture: &Fixture, delegation_id: &str) -> SpawnAgentRequest {
     SpawnAgentRequest {
+        agent_id: None,
         base_instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
         delegation_id: DelegationId::new(delegation_id).unwrap(),
         session_id: fixture.session_id.clone(),

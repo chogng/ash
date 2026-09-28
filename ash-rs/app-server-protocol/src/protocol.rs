@@ -47,6 +47,7 @@ pub mod session;
 pub mod skills;
 pub mod slash_commands;
 pub mod syntax;
+pub mod teams;
 pub mod terminal;
 pub mod transcript;
 pub mod turn;

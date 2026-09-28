@@ -26,12 +26,16 @@ impl AppServer {
         use ash_app_server_protocol::protocol::agent::AgentRoleEntry;
         use ash_app_server_protocol::protocol::agent::AgentRoleListResult;
         let environment = self.env_runtime.read().map_err(|_| {
-            core_error(core_api::CoreError::Execution("Environment runtime lock poisoned".into()))
+            core_error(core_api::CoreError::Execution(
+                "Environment runtime lock poisoned".into(),
+            ))
         })?;
         let contributions = environment._dir_contributions.clone();
         drop(environment);
         // Before Session creation, only the environment grant can authorize a root definition.
-        let snapshot = contributions.as_ref().map(|catalog| catalog.refresh_root_agents());
+        let snapshot = contributions
+            .as_ref()
+            .map(|catalog| catalog.refresh_root_agents());
         let agents = snapshot
             .as_ref()
             .map(|catalog| catalog.entries())

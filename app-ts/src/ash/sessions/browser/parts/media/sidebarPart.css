@@ -8,6 +8,29 @@
   flex: 1 1 auto;
 }
 
+.ash-workbench-sidebar > .ash-workbench-part-content > .ash-sessions-list[hidden] { display: none; }
+
+.ash-sessions-sidebar-tabs {
+	display: flex;
+	flex: 0 0 auto;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
+	border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
+}
+
+.ash-sessions-sidebar-tabs button {
+	flex: 1 1 0;
+	min-height: 32px;
+	border: 0;
+	border-radius: var(--ash-corner-radius-medium);
+	color: var(--ash-foreground);
+	background: transparent;
+	cursor: pointer;
+}
+
+.ash-sessions-sidebar-tabs button[aria-current="page"] { background: var(--ash-list-active-selection-background); }
+.ash-sessions-sidebar-tabs button:focus-visible { outline: var(--ash-stroke-thickness) solid var(--ash-focus-border); }
+
 .ash-sessions-window .ash-workbench-sidebar .ash-sessions-activity-host {
 	flex: 0 0 auto;
 	background: var(--ash-side-bar-background);

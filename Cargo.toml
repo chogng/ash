@@ -14,6 +14,7 @@ members = [
     "ash-rs/ext/workflows",
     "ash-rs/ext/guardian-v2",
     "ash-rs/memories",
+    "ash-rs/teams",
     "ash-rs/ext/items",
     "ash-rs/ext/memories",
     "ash-rs/ext/queue",
@@ -560,6 +561,7 @@ ash-sprite = { path = "code/sprite", default-features = false }
 ash-slash-launcher = { path = "ash-rs/slash-launcher" }
 ash-skills = { path = "ash-rs/skills" }
 ash-state = { path = "ash-rs/state" }
+ash-teams = { path = "ash-rs/teams" }
 ash-syntax = { path = "ash-rs/syntax" }
 ash-terminal = { path = "app-rs/terminal" }
 ash-terminal-runtime = { path = "app-rs/terminal-runtime" }

@@ -75,17 +75,39 @@ fn root_agent_picker_lists_authorized_roles_and_creates_the_selected_session() {
         ))
         .unwrap()
     };
-    let initialized = call(1, "initialize", json!({"clientInfo":{"name":"test", "version":"1"}, "capabilities":{}}));
+    let initialized = call(
+        1,
+        "initialize",
+        json!({"clientInfo":{"name":"test", "version":"1"}, "capabilities":{}}),
+    );
     assert!(initialized.get("result").is_some(), "{initialized}");
     let listed = call(2, "agent/roles/list", json!({}));
     assert_eq!(listed["result"]["agents"][0]["name"], "reviewer");
-    assert_eq!(listed["result"]["agents"][0]["description"], "Reviews changes");
+    assert_eq!(
+        listed["result"]["agents"][0]["description"],
+        "Reviews changes"
+    );
     let source = listed["result"]["agents"][0]["source"].clone();
-    let created = call(3, "session/create", json!({"commandId":"selected-reviewer", "title":"Review", "agent":{"type":"exact", "source":source, "name":"reviewer"}}));
+    let created = call(
+        3,
+        "session/create",
+        json!({"commandId":"selected-reviewer", "title":"Review", "agent":{"type":"exact", "source":source, "name":"reviewer"}}),
+    );
     assert!(created.get("result").is_some(), "{created}");
     let session_id = created["result"]["session"]["sessionId"].as_str().unwrap();
-    let thread = threads.read_thread(&ThreadId::new(session_id).unwrap()).unwrap();
-    assert_eq!(thread.agent_configuration().unwrap().role.as_ref().unwrap().name, "reviewer");
+    let thread = threads
+        .read_thread(&ThreadId::new(session_id).unwrap())
+        .unwrap();
+    assert_eq!(
+        thread
+            .agent_configuration()
+            .unwrap()
+            .role
+            .as_ref()
+            .unwrap()
+            .name,
+        "reviewer"
+    );
     grant.revoke();
     let revoked = call(4, "agent/roles/list", json!({}));
     assert_eq!(revoked["result"]["agents"], json!([]));
@@ -133,6 +155,7 @@ fn recovered_spawn_starts_a_new_child_turn_once() {
     let spawned = server
         .multi_agent
         .spawn(SpawnAgentRequest {
+            agent_id: None,
             base_instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
             delegation_id: DelegationId::new("recover-child").unwrap(),
             session_id: parent.session_id.clone(),

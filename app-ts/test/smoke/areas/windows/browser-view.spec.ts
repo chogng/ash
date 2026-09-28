@@ -32,24 +32,47 @@ test('desktop browser opens visible pages, navigates history, resizes and releas
 		const location = editor.getByRole('textbox', { name: 'Browser address' });
 		await location.fill(url); await location.press('Enter');
 		await expect(editor.getByRole('status')).toHaveText('First page');
+		await expect(page.getByRole('tab', { name: 'First page' })).toBeVisible();
 		const views = () => electron.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).filter(view => 'webContents' in view).map(view => ({ bounds: view.getBounds(), visible: view.getVisible(), url: (view as Electron.WebContentsView).webContents.getURL() })));
 		await expect.poll(async () => (await views()).filter(view => view.url === url && view.visible).length).toBe(1);
+		await electron.evaluate(async ({ BrowserWindow }) => {
+			const view = BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).find(child => 'webContents' in child && (child as Electron.WebContentsView).webContents.getURL().endsWith('/')) as Electron.WebContentsView;
+			await view.webContents.executeJavaScript("history.pushState({}, '', '/routed'); document.title = 'Routed page';");
+		});
+		await expect(location).toHaveValue(`${url}routed`);
+		await expect(page.getByRole('tab', { name: 'Routed page' })).toBeVisible();
+		await editor.getByRole('button', { name: 'Back', exact: true }).click();
+		await expect(location).toHaveValue(url);
+		await electron.evaluate(async ({ BrowserWindow }) => {
+			const view = BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).find(child => 'webContents' in child && (child as Electron.WebContentsView).webContents.getURL() === url) as Electron.WebContentsView;
+			await view.webContents.executeJavaScript("document.title = 'First page';");
+		});
 		await location.fill(`${url}second`); await location.press('Enter');
 		await expect(editor.getByRole('status')).toHaveText('Second page');
 		await page.keyboard.press('ControlOrMeta+Shift+P');
 		await page.getByPlaceholder('Type the name of a command to run').fill('Browser: Open Browser');
 		await page.keyboard.press('Enter');
-		await expect(page.getByRole('tab', { name: 'Browser', exact: true })).toHaveCount(2);
+		await expect(page.getByRole('tab', { name: 'Second page', exact: true })).toHaveCount(1);
+		await expect(page.getByRole('tab', { name: 'Browser', exact: true })).toHaveCount(1);
 		await expect.poll(async () => (await views()).filter(view => view.url === `${url}second` && view.visible).length).toBe(0);
-		await page.getByRole('tab', { name: 'Browser', exact: true }).first().click();
+		await page.getByRole('tab', { name: 'Second page', exact: true }).click();
 		await page.locator('.ash-browser-editor:visible').getByRole('textbox', { name: 'Browser address' }).focus();
 		await expect.poll(async () => (await views()).filter(view => view.url === `${url}second` && view.visible).length).toBe(1);
-		await page.getByRole('tab', { name: 'Browser', exact: true }).last().click();
-		await page.getByRole('button', { name: 'Close Browser', exact: true }).last().click();
+		await page.getByRole('tab', { name: 'Browser', exact: true }).click();
+		await page.getByRole('button', { name: 'Close Browser', exact: true }).click();
 		await editor.getByRole('button', { name: 'Back', exact: true }).click();
 		await expect(editor.getByRole('status')).toHaveText('First page');
 		await editor.getByRole('button', { name: 'Forward', exact: true }).click();
 		await expect(editor.getByRole('status')).toHaveText('Second page');
+		await page.keyboard.press('ControlOrMeta+Shift+P');
+		await page.getByPlaceholder('Type the name of a command to run').fill('Split Editor Horizontal');
+		await page.keyboard.press('Enter');
+		await expect(page.getByRole('tab', { name: 'Second page', exact: true })).toHaveCount(2);
+		await page.getByRole('button', { name: 'Close Second page', exact: true }).last().click();
+		await expect(page.getByRole('tab', { name: 'Second page', exact: true })).toHaveCount(1);
+		await page.getByRole('tab', { name: 'Second page', exact: true }).click();
+		await editor.getByRole('textbox', { name: 'Browser address' }).focus();
+		await expect.poll(async () => (await views()).filter(view => view.url === `${url}second` && view.visible).length).toBe(1);
 		await electron.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setSize(960, 720));
 		await expect.poll(async () => {
 			const bounds = await editor.locator('.ash-browser-viewport').boundingBox();
@@ -74,7 +97,7 @@ test('desktop browser opens visible pages, navigates history, resizes and releas
 			state?.finish?.();
 			state?.restore();
 		});
-		await page.getByRole('button', { name: 'Close Browser', exact: true }).click();
+		await page.getByRole('button', { name: 'Close Second page', exact: true }).click();
 		await expect.poll(async () => (await views()).filter(view => view.url.startsWith(url)).length).toBe(0);
 		const hostCall = (method: string, params: unknown) => page.evaluate(({ method, params }) => {
 			const bridge = (globalThis as unknown as { ash: ISandboxGlobals }).ash;

@@ -10,10 +10,13 @@ mod history;
 mod memories;
 #[path = "sqlite/projects.rs"]
 mod projects;
+#[path = "sqlite/teams.rs"]
+mod teams;
 #[path = "sqlite/thread.rs"]
 mod thread;
 
 pub use git_turn_changes::{SqliteTurnChangeStore, TurnChangeCommandOutcome};
 pub use memories::SqliteMemoryStore;
 pub use projects::SqliteProjectStore;
+pub use teams::SqliteTeamStore;
 pub use thread::SqliteThreadStore;

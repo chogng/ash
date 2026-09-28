@@ -475,6 +475,7 @@ dependencies = [
  "ash-prompts",
  "ash-protocol",
  "ash-skills-extension",
+ "ash-teams",
  "futures",
  "pollster 1.0.1",
  "serde",
@@ -670,6 +671,7 @@ dependencies = [
  "ash-state",
  "ash-supergrok",
  "ash-syntax",
+ "ash-teams",
  "ash-thread-transcript",
  "ash-tools",
  "ash-typst",
@@ -2657,6 +2659,7 @@ dependencies = [
  "ash-message-history",
  "ash-projects",
  "ash-protocol",
+ "ash-teams",
  "ash-thread-store",
  "ash-utils-path",
  "fs2",
@@ -2707,6 +2710,15 @@ name = "ash-system-dictation"
 version = "0.1.0"
 dependencies = [
  "windows",
+]
+
+[[package]]
+name = "ash-teams"
+version = "0.1.0"
+dependencies = [
+ "ash-protocol",
+ "serde",
+ "thiserror 2.0.19",
 ]
 
 [[package]]

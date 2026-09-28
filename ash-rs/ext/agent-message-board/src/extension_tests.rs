@@ -221,6 +221,7 @@ impl Runtime {
     fn child(&self) -> (ThreadId, TurnId) {
         let spawned = MultiAgentCoordinator::new(self.threads.clone(), AgentTreeLimits::default())
             .spawn(SpawnAgentRequest {
+                agent_id: None,
                 delegation_id: protocol::DelegationId::new("child").unwrap(),
                 session_id: self.session.clone(),
                 parent_thread_id: self.root.clone(),

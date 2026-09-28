@@ -87,7 +87,7 @@ impl WebWorkspaces {
                     workspace: Some(BrowserWorkspaceOperations { list, open }),
                 },
                 move |reader, writer| {
-                    if let Err(error) = server.serve_jsonl(BufReader::new(reader), writer)
+                    if let Err(error) = server.serve_browser_jsonl(BufReader::new(reader), writer)
                         && !super::is_peer_disconnect(&error)
                     {
                         eprintln!("Browser App Server connection failed: {error}");

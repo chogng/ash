@@ -77,6 +77,8 @@ pub use ids::ModelInvocationId;
 pub use ids::ProjectId;
 pub use ids::RequestId;
 pub use ids::SessionId;
+pub use ids::TeamId;
+pub use ids::TeamRunId;
 pub use ids::ThreadId;
 pub use ids::ToolCallId;
 pub use ids::TurnId;

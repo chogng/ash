@@ -340,6 +340,7 @@ fn wait_timeout_returns_a_durable_waiting_join_without_losing_the_delegation() {
         .unwrap();
     let spawned = coordinator
         .spawn(SpawnAgentRequest {
+            agent_id: None,
             base_instructions: prompts::AGENT_INSTRUCTIONS.freeze(),
             delegation_id: DelegationId::new("timeout-child").unwrap(),
             session_id: parent.session_id.clone(),

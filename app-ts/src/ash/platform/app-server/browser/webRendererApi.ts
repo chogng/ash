@@ -30,6 +30,7 @@ import { createAppServerDirPermissionsApi } from "../../dirPermissions/browser/d
 import { createAppServerAccountApi } from "../../accounts/browser/accountApi.js";
 import { createAppServerTurnChangesApi } from "../../turnChanges/browser/turnChangesApi.js";
 import { AppServerAutomationService } from '../../automation/browser/appServerAutomationService.js';
+import { createAppServerTeamApi } from '../../teams/browser/teamApi.js';
 
 export type RendererCapabilityContribution = (connection: AppServerProtocolClient, appServer: IRendererHost["appServer"]) => RendererHostCapabilities;
 
@@ -89,6 +90,7 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 		appServer,
 		accounts: createAppServerAccountApi(connection, connectorHostServices),
 		session: createAppServerSessionApi(connection),
+		teams: createAppServerTeamApi(connection),
 		model: createAppServerModelApi(connection),
 		thread: createAppServerThreadApi(connection),
 		turn: createAppServerTurnApi(connection),

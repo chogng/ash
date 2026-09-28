@@ -306,22 +306,31 @@ pub fn typescript_files() -> Vec<(PathBuf, String)> {
             <crate::WebSessionInfo as ts_rs::TS>::decl(&ts_rs::Config::default())
         ),
     ));
-    files.push((PathBuf::from("WebWorkspaceDirectory.ts"), format!(
-        "{GENERATED_TYPESCRIPT_HEADER}export {}\n",
-        <crate::WebWorkspaceDirectory as ts_rs::TS>::decl(&ts_rs::Config::default())
-    )));
-    files.push((PathBuf::from("WebWorkspaceListRequest.ts"), format!(
-        "{GENERATED_TYPESCRIPT_HEADER}export {}\n",
-        <crate::WebWorkspaceListRequest as ts_rs::TS>::decl(&ts_rs::Config::default())
-    )));
+    files.push((
+        PathBuf::from("WebWorkspaceDirectory.ts"),
+        format!(
+            "{GENERATED_TYPESCRIPT_HEADER}export {}\n",
+            <crate::WebWorkspaceDirectory as ts_rs::TS>::decl(&ts_rs::Config::default())
+        ),
+    ));
+    files.push((
+        PathBuf::from("WebWorkspaceListRequest.ts"),
+        format!(
+            "{GENERATED_TYPESCRIPT_HEADER}export {}\n",
+            <crate::WebWorkspaceListRequest as ts_rs::TS>::decl(&ts_rs::Config::default())
+        ),
+    ));
     files.push((PathBuf::from("WebWorkspaceListResult.ts"), format!(
         "{GENERATED_TYPESCRIPT_HEADER}import type {{ WebWorkspaceDirectory }} from './WebWorkspaceDirectory.js';\nexport {}\n",
         <crate::WebWorkspaceListResult as ts_rs::TS>::decl(&ts_rs::Config::default())
     )));
-    files.push((PathBuf::from("WebWorkspaceOpenRequest.ts"), format!(
-        "{GENERATED_TYPESCRIPT_HEADER}export {}\n",
-        <crate::WebWorkspaceOpenRequest as ts_rs::TS>::decl(&ts_rs::Config::default())
-    )));
+    files.push((
+        PathBuf::from("WebWorkspaceOpenRequest.ts"),
+        format!(
+            "{GENERATED_TYPESCRIPT_HEADER}export {}\n",
+            <crate::WebWorkspaceOpenRequest as ts_rs::TS>::decl(&ts_rs::Config::default())
+        ),
+    ));
     files.sort_by(|left, right| left.0.cmp(&right.0));
     files
 }

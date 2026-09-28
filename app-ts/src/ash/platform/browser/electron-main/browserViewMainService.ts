@@ -224,6 +224,15 @@ export class BrowserViewMainService extends Disposable
 			target.url = navigation?.requestedUrlFor(normalized) ?? normalized;
 			this.emitState(target);
 		});
+		this.on(contents, target, "did-navigate-in-page", (
+			_event: ElectronEvent,
+			url: string,
+			isMainFrame: boolean,
+		) => {
+			if (!isMainFrame) return;
+			target.url = this.requestedUrlFor(target, url);
+			this.emitState(target);
+		});
 		this.on(contents, target, "page-title-updated", () =>
 			this.emitState(target));
 		this.on(

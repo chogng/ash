@@ -202,6 +202,7 @@ pub(crate) struct EnvRuntimeControl {
     tools: Arc<EnvToolPorts>,
     threads: Arc<ThreadController>,
     multi_agent: Arc<MultiAgentCoordinator>,
+    team_memberships: Arc<std::sync::OnceLock<Arc<ash_teams::TeamCoordinator>>>,
     model_instructions: Arc<ash_models_manager::ModelInstructionCatalog>,
     turn_backend: Arc<dyn ash_core::TurnExecutionBackend>,
     updates: Arc<super::update_broker::UpdateBroker>,
@@ -303,6 +304,7 @@ impl EnvRuntimeControl {
         local = append_multi_agent_tools(
             local,
             &self.multi_agent,
+            &self.team_memberships,
             &self.model_instructions,
             &self.threads,
             &self.turn_backend,
@@ -474,6 +476,7 @@ impl EnvRuntimeControl {
         let local = append_multi_agent_tools(
             local,
             &self.multi_agent,
+            &self.team_memberships,
             &self.model_instructions,
             &self.threads,
             &turn_backend,
@@ -1257,6 +1260,7 @@ impl AppServer {
             tools: Arc::clone(&host.tools),
             threads: self.threads.clone(),
             multi_agent: Arc::clone(&self.multi_agent),
+            team_memberships: Arc::clone(&self.team_memberships),
             model_instructions: Arc::clone(&self.model_instructions),
             turn_backend: self.turn_backend.clone(),
             updates: Arc::clone(&self.updates),
@@ -2158,6 +2162,7 @@ impl AppServer {
         let local = append_multi_agent_tools(
             local,
             &self.multi_agent,
+            &self.team_memberships,
             &self.model_instructions,
             &self.threads,
             &turn_backend,
@@ -2896,6 +2901,7 @@ fn ensure_session_exists(
 fn append_multi_agent_tools(
     local: crate::local_tools::LocalToolComposition,
     coordinator: &Arc<MultiAgentCoordinator>,
+    teams: &Arc<std::sync::OnceLock<Arc<ash_teams::TeamCoordinator>>>,
     model_instructions: &Arc<ash_models_manager::ModelInstructionCatalog>,
     threads: &Arc<ThreadController>,
     turn_backend: &Arc<dyn ash_core::TurnExecutionBackend>,
@@ -2939,7 +2945,8 @@ fn append_multi_agent_tools(
         Arc::clone(turn_backend),
         action_policy_revision,
     )
-    .with_model_instructions(Arc::clone(model_instructions));
+    .with_model_instructions(Arc::clone(model_instructions))
+    .with_teams(Arc::clone(teams));
     if let Some(customizations) = customizations {
         multi_agent = multi_agent.with_dir_contributions(customizations.clone());
     }

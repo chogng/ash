@@ -61,6 +61,7 @@ pub enum AgentCommandDisposition {
 /// Complete caller intent required to create one child Agent Thread.
 pub struct SpawnAgentRequest {
     pub delegation_id: DelegationId,
+    pub agent_id: Option<ash_protocol::AgentId>,
     pub session_id: SessionId,
     pub parent_thread_id: ThreadId,
     pub parent_turn_id: TurnId,
@@ -155,6 +156,9 @@ impl MultiAgentCoordinator {
     /// Commits a parent request, creates and seeds its child Thread, then accepts the initial Turn.
     pub fn spawn(&self, request: SpawnAgentRequest) -> Result<SpawnedAgent, CoreError> {
         validate_spawn_request(&request)?;
+        if let Some(agent_id) = &request.agent_id {
+            self.threads.read_agent(agent_id)?;
+        }
         let gate = self.threads.agent_spawn_gate(&request.session_id)?;
         let permit = gate
             .lock()
@@ -1152,6 +1156,7 @@ fn validate_replayed_spawn(
 ) -> Result<(), CoreError> {
     if seed.delegation_id != request.delegation_id
         || seed.parent_thread_id != request.parent_thread_id
+        || seed.agent_id != request.agent_id
         || seed.parent_turn_id != request.parent_turn_id
         || seed.task != request.task
         || seed.agent.role != request.role
@@ -1184,6 +1189,7 @@ fn build_context_seed_with_materialized(
 ) -> Result<AgentContextSeed, CoreError> {
     let mut seed = AgentContextSeed {
         delegation_id: request.delegation_id,
+        agent_id: request.agent_id,
         parent_thread_id: request.parent_thread_id,
         parent_turn_id: request.parent_turn_id,
         parent_sequence,
@@ -1207,6 +1213,8 @@ fn build_context_seed_with_materialized(
 #[serde(rename_all = "camelCase")]
 struct ContextSeedMaterial<'a> {
     delegation_id: &'a DelegationId,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    agent_id: &'a Option<ash_protocol::AgentId>,
     parent_thread_id: &'a ThreadId,
     parent_turn_id: &'a TurnId,
     parent_sequence: u64,
@@ -1224,6 +1232,7 @@ struct ContextSeedMaterial<'a> {
 fn context_seed_digest(seed: &AgentContextSeed) -> Result<ContextSeedDigest, CoreError> {
     let material = ContextSeedMaterial {
         delegation_id: &seed.delegation_id,
+        agent_id: &seed.agent_id,
         parent_thread_id: &seed.parent_thread_id,
         parent_turn_id: &seed.parent_turn_id,
         parent_sequence: seed.parent_sequence,

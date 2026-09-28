@@ -1360,6 +1360,8 @@ use crate::protocol::syntax::SyntaxTokenKindDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::syntax::SyntaxUpdateParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::teams::*;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalAttachParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalAttachResult;
@@ -1749,6 +1751,10 @@ use ash_protocol::StableTurnError;
 use ash_protocol::StableTurnErrorCode;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::StreamCursor;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::TeamId;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::TeamRunId;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::Thread;
 #[cfg(any(test, feature = "export"))]
@@ -2631,6 +2637,51 @@ client_methods! {
         params: ProjectLifecycleParams,
         response: ProjectMutationResult,
         serialization: GlobalExclusive,
+    },
+    TeamList => "team/list" {
+        params: TeamListParams,
+        response: TeamListResult,
+        serialization: GlobalSharedRead,
+    },
+    TeamRead => "team/read" {
+        params: TeamReadParams,
+        response: TeamReadResult,
+        serialization: GlobalSharedRead,
+    },
+    TeamCommand => "team/command" {
+        params: TeamCommandParams,
+        response: TeamCommandResult,
+        serialization: GlobalExclusive,
+    },
+    TeamRunStart => "team/run/start" {
+        params: TeamRunStartParams,
+        response: TeamRunStartResult,
+        serialization: GlobalExclusive,
+    },
+    TeamRunAttach => "team/run/attach" {
+        params: TeamRunAttachParams,
+        response: TeamRunStartResult,
+        serialization: GlobalExclusive,
+    },
+    TeamRunRead => "team/run/read" {
+        params: TeamRunReadParams,
+        response: TeamRunReadResult,
+        serialization: GlobalSharedRead,
+    },
+    TeamRunList => "team/run/list" {
+        params: TeamRunListParams,
+        response: TeamRunListResult,
+        serialization: GlobalSharedRead,
+    },
+    TeamMessagePost => "team/message/post" {
+        params: TeamMessagePostParams,
+        response: TeamMessagePostResult,
+        serialization: GlobalExclusive,
+    },
+    TeamMessageList => "team/message/list" {
+        params: TeamMessageListParams,
+        response: TeamMessageListResult,
+        serialization: GlobalSharedRead,
     },
     SessionThreadSubscribe => "session/thread/subscribe" {
         params: SessionThreadSubscribeParams,
@@ -3968,6 +4019,8 @@ typescript_bindings! {
     DirId,
     EnvId,
     ProjectId,
+    TeamId,
+    TeamRunId,
     ConnectorAccountDto,
     ConnectorAvailableActionDto,
     ConnectorOAuthMethodDto,
@@ -4624,6 +4677,29 @@ typescript_bindings! {
     ProjectCommandDispositionDto,
     ProjectMutationResult,
     ProjectChanged,
+    TeamMemberDto,
+    TeamStatusDto,
+    TeamDto,
+    TeamCommandDto,
+    TeamListParams,
+    TeamListResult,
+    TeamReadParams,
+    TeamReadResult,
+    TeamCommandParams,
+    TeamCommandResult,
+    TeamRunDto,
+    TeamRunStartParams,
+    TeamRunStartResult,
+    TeamRunAttachParams,
+    TeamRunReadParams,
+    TeamRunReadResult,
+    TeamRunListParams,
+    TeamRunListResult,
+    TeamMessageDto,
+    TeamMessagePostParams,
+    TeamMessagePostResult,
+    TeamMessageListParams,
+    TeamMessageListResult,
     TypstCompileParams,
     TypstCompileResult,
     TypstDiagnosticDto,

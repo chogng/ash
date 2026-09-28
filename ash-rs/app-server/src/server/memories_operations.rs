@@ -270,6 +270,13 @@ impl AppServer {
                 .read(project_id)
                 .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
         }
+        if let memories::MemoryScope::Team { team_id } = scope {
+            self.teams
+                .as_deref()
+                .ok_or_else(|| RpcError::new(-32130, AppServerErrorName::MemoryUnavailable))?
+                .read(team_id)
+                .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        }
         Ok(())
     }
 }

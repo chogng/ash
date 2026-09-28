@@ -73,6 +73,9 @@ import { BrowserStorageService } from "../../workbench/services/storage/browser/
 import { IWorkbenchHostService } from "../../workbench/services/host/common/workbenchHostService.js";
 import { WorkbenchThemeService } from "../../workbench/services/themes/browser/workbenchThemeService.js";
 import { AppServerSessionsProvider } from "../contrib/providers/appServer/browser/appServerSessionsProvider.js";
+import { AppServerTeamsProvider } from '../contrib/providers/appServer/browser/appServerTeamsProvider.js';
+import { TeamsManagementService } from '../services/teams/browser/teamsManagementService.js';
+import { ITeamsManagementService } from '../services/teams/common/teamsManagement.js';
 import { SessionsAccountMenu } from '../contrib/accounts/browser/sessionsAccountMenu.js';
 import { SessionsModernUIContribution } from '../contrib/modernUI/browser/modernUI.contribution.js';
 import { SessionsPreferences } from '../contrib/preferences/browser/sessionsPreferences.js';
@@ -145,6 +148,8 @@ export class Workbench extends Disposable {
 			turn: options.api.turn,
 			events: options.api.events,
 		})));
+		const teams = new TeamsManagementService(new AppServerTeamsProvider(options.api.teams));
+		services.registerInstance(ITeamsManagementService, teams);
 		const view = this._register(new SessionsService(sessions));
 		const chat = this._register(new ChatService({
 			modelApi: options.api.model,
@@ -264,9 +269,16 @@ export class Workbench extends Disposable {
 				else layout!.showPart('auxiliarybar');
 			},
 		}));
-		const sidebar = this._register(new SidebarPart(this.domNode, sessions, view));
+		const sidebar = this._register(new SidebarPart(this.domNode, sessions, view, teams, quickInputService, async () => {
+			const catalog = await options.api.session.listAgents();
+			return catalog.agents.map(agent => ({
+				name: agent.name,
+				description: agent.description,
+				role: { type: 'exact' as const, name: agent.name, source: agent.source },
+			}));
+		}));
 		const activitybar = this._register(services.createInstance(ActivityBarPart, this.domNode, {
-			focusList: () => sidebar.focus(),
+			focusList: () => sidebar.focusChats(),
 			showAccountMenu: (anchor: HTMLElement) => accountMenu.show(anchor),
 		}));
 		const activityBarLocation = configurationService.getValue<ActivityBarPosition>(SessionsConfiguration.activityBarLocation);

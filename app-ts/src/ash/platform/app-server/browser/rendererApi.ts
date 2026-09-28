@@ -24,6 +24,7 @@ import { createDisconnectedMarketplaceApi } from "../../marketplace/browser/mark
 import { createDisconnectedDirPermissionsApi } from "../../dirPermissions/browser/dirPermissionsApi.js";
 import { createDisconnectedAccountApi } from "../../accounts/browser/accountApi.js";
 import { createDisconnectedTurnChangesApi } from "../../turnChanges/browser/turnChangesApi.js";
+import { createDisconnectedTeamApi } from '../../teams/browser/teamApi.js';
 
 export { WebAppServerUnavailableError };
 
@@ -34,6 +35,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
 		appServer,
 		accounts: createDisconnectedAccountApi(unavailableOperation),
 		session: createDisconnectedSessionApi(unavailableOperation),
+		teams: createDisconnectedTeamApi(unavailableOperation),
 		model: createDisconnectedModelApi(unavailableOperation),
 		thread: createDisconnectedThreadApi(unavailableOperation),
 		turn: createDisconnectedTurnApi(unavailableOperation),

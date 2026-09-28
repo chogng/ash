@@ -4,6 +4,7 @@ use ash_file_access::Permission;
 use ash_projects::ProjectCoordinator;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
+use ash_teams::TeamCoordinator;
 use memories::MemoryError;
 use memories::MemoryScope;
 use memories_extension::MemoryScopeProvider;
@@ -13,6 +14,7 @@ use std::sync::Arc;
 struct MemoryScopes {
     config: Option<Arc<ash_config::ConfigStore>>,
     projects: Option<Arc<ProjectCoordinator>>,
+    teams: Option<Arc<TeamCoordinator>>,
     dirs: Arc<DirGrants>,
 }
 
@@ -37,6 +39,7 @@ impl AppServer {
         let scopes = MemoryScopes {
             config: self.config.clone(),
             projects: self.projects.clone(),
+            teams: self.teams.clone(),
             dirs: dirs.clone(),
         }
         .available_scopes(&thread.session_id, thread_id)
@@ -71,6 +74,15 @@ impl AppServer {
                             .map_err(|error| error.to_string())?
                             .name
                     ),
+                    MemoryScope::Team { team_id } => format!(
+                        "Team: {}",
+                        self.teams
+                            .as_ref()
+                            .ok_or("Teams unavailable")?
+                            .read(team_id)
+                            .map_err(|error| error.to_string())?
+                            .name
+                    ),
                     MemoryScope::Dir { dir_id } => format!(
                         "Directory: {}",
                         directory_labels
@@ -90,6 +102,7 @@ impl AppServer {
         let scopes = Arc::new(MemoryScopes {
             config: self.config.clone(),
             projects: self.projects.clone(),
+            teams: self.teams.clone(),
             dirs: Arc::clone(&self.env_runtime_mut().dir_grants),
         });
         let mut builder =
@@ -156,6 +169,14 @@ impl MemoryScopes {
                         project_id: project.project_id,
                     });
                 }
+            }
+        }
+        if let Some(teams) = &self.teams {
+            if let Some(team_id) = teams
+                .team_for_thread(session_id, thread_id)
+                .map_err(|error| MemoryError::Storage(error.to_string()))?
+            {
+                scopes.push(MemoryScope::Team { team_id });
             }
         }
         if let Some(dir_id) = self.dirs.thread_dir_id(thread_id) {

@@ -305,6 +305,7 @@ fn delegation_queries_keep_breadth_first_order_and_exclude_forks() {
     let spawn = |name: &str, parent: &ThreadId, turn: &ash_protocol::TurnId| {
         coordinator
             .spawn(ash_core::SpawnAgentRequest {
+                agent_id: None,
                 delegation_id: ash_protocol::DelegationId::new(name).unwrap(),
                 session_id: root.session_id.clone(),
                 parent_thread_id: parent.clone(),

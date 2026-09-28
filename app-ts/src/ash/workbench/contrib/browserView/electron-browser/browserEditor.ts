@@ -43,7 +43,10 @@ export class BrowserEditor extends Disposable implements IEditorPane {
 			if (event.type === 'stateChanged' && event.state.targetId === this.targetId) { this.render(event.state); }
 			if ('targetId' in event && event.targetId === this.targetId) {
 				if (event.type === 'focusAddress') { this.focus(); }
-				if (event.type === 'closed') { this.targetId = undefined; this.statusDomNode.textContent = 'Page closed'; }
+				if (event.type === 'closed') {
+					if (visiblePanes.get(event.targetId) === this) { visiblePanes.delete(event.targetId); }
+					this.targetId = undefined; this.statusDomNode.textContent = 'Page closed';
+				}
 				if (event.type === 'loadFailed') { this.statusDomNode.textContent = `Unable to load page: ${event.errorDescription}`; }
 				if (event.type === 'renderProcessGone') { this.statusDomNode.textContent = `Page stopped: ${event.reason}`; }
 				if (event.type === 'openRequested') { void api.create({ url: event.url }).catch(error => this.report(error)); }
@@ -51,9 +54,7 @@ export class BrowserEditor extends Disposable implements IEditorPane {
 		});
 		this._register(toDisposable(() => subscription.dispose()));
 		this._register(toDisposable(() => {
-			const targetId = this.targetId;
-			this.targetId = undefined;
-			if (targetId) { void this.update.then(() => api.close({ targetId })).catch(error => console.error('Browser close failed', error)); }
+			if (this.targetId && visiblePanes.get(this.targetId) === this) { visiblePanes.delete(this.targetId); }
 		}));
 	}
 
@@ -132,8 +133,11 @@ export class BrowserEditor extends Disposable implements IEditorPane {
 	private refreshLayout(): void {
 		if (!this.targetId || !this.viewportDomNode || this.isDisposed) { return; }
 		const targetId = this.targetId;
+		if (this.visible) { visiblePanes.set(targetId, this); }
+		else if (visiblePanes.get(targetId) === this) { visiblePanes.delete(targetId); }
 		this.update = this.update.then(async () => {
 			if (this.targetId !== targetId || this.isDisposed) { return; }
+			if (visiblePanes.get(targetId) && visiblePanes.get(targetId) !== this) { return; }
 			const bounds = this.viewportDomNode.getBoundingClientRect();
 			const visible = this.visible && !this.menuVisible && !this.focusOutside && this.dialogs.dialogs.length === 0 && bounds.width > 0 && bounds.height > 0;
 			if (visible) {
@@ -147,3 +151,6 @@ export class BrowserEditor extends Disposable implements IEditorPane {
 		return this.dialogService.showMessage({ severity: DialogSeverity.Info, title: 'Browser accessibility help', message: 'Use Tab to move through browser controls. Enter in the address field navigates. Ctrl+L (Command+L on macOS) or F6 in the webpage returns to the address field. Back and Forward navigate page history. Close the editor tab to close its webpage.', detail: 'Webpages use the browser’s accessibility tree. Downloads and website permissions are unavailable in this isolated session.' });
 	}
 }
+
+// A moved tab can create its new pane before the old pane is disposed.
+const visiblePanes = new Map<string, BrowserEditor>();

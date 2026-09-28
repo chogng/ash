@@ -5,12 +5,30 @@ import { DisposableStore, type IDisposable } from "../../base/common/lifecycle.j
 import { createDisconnectedRendererApi } from "../../platform/app-server/browser/rendererApi.js";
 import { BrowserLifecycleService } from '../../workbench/services/lifecycle/browser/lifecycleService.js';
 import { createBrowserContextMenuService } from "../../platform/contextview/browser/contextMenuService.js";
+import { BrowserClipboardService } from '../../platform/clipboard/browser/browserClipboardService.js';
+import { connectBrowserWorkbenchHost } from '../../workbench/browser/web.host.js';
+import { showStartupError } from '../../workbench/browser/startupError.js';
 import type { WorkbenchModeId } from "../../workbench/common/workbenchMode.js";
 import type { SessionsProfile } from "../common/sessionsProfile.js";
 import { Workbench } from "./workbench.js";
 
 /** Starts a browser-hosted Sessions page with the optional renderer host. */
-export function startBrowserSessions(modeId: WorkbenchModeId, profile: SessionsProfile): IDisposable {
+export function startBrowserSessions(modeId: WorkbenchModeId, profile: SessionsProfile): void {
+	void startBrowserSessionsAsync(modeId, profile);
+}
+
+async function startBrowserSessionsAsync(modeId: WorkbenchModeId, profile: SessionsProfile): Promise<void> {
+	let connectedHost: IDisposable | undefined;
+	try {
+		connectedHost = await connectBrowserWorkbenchHost();
+		mountBrowserSessions(modeId, profile, connectedHost);
+	} catch (error) {
+		connectedHost?.dispose();
+		showStartupError(error, text => new BrowserClipboardService(window.navigator.clipboard).writeText(text));
+	}
+}
+
+function mountBrowserSessions(modeId: WorkbenchModeId, profile: SessionsProfile, connectedHost?: IDisposable): void {
 	installBaseUiStyles();
 	const sessions = new DisposableStore();
 	const host = globalThis.ashWebWorkbenchHost;
@@ -33,5 +51,5 @@ export function startBrowserSessions(modeId: WorkbenchModeId, profile: SessionsP
 	sessions.add(addDisposableListener(window, "pagehide", () => {
 		void workbench.shutdown("pageHide").catch(onUnexpectedError).finally(() => sessions.dispose());
 	}, { once: true }));
-	return sessions;
+	if (connectedHost) sessions.add(connectedHost);
 }

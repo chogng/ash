@@ -88,6 +88,7 @@ impl std::error::Error for InvalidMemoryId {}
 pub enum MemoryScope {
     Profile,
     Project { project_id: ProjectId },
+    Team { team_id: ash_protocol::TeamId },
     Dir { dir_id: DirId },
 }
 
@@ -96,6 +97,7 @@ impl MemoryScope {
         match self {
             Self::Profile => "profile".into(),
             Self::Project { project_id } => format!("project:{project_id}"),
+            Self::Team { team_id } => format!("team:{team_id}"),
             Self::Dir { dir_id } => format!("dir:{dir_id}"),
         }
     }

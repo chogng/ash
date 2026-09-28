@@ -86,6 +86,7 @@ impl ThreadController {
         }
 
         let thread_id = request.thread_id;
+        let agent_id = self.select_agent_id(request.context_seed.agent_id.as_ref(), &thread_id)?;
         let mut prefixes = Vec::new();
         let mut prefix_event = None;
         if matches!(
@@ -111,10 +112,7 @@ impl ThreadController {
         }
         let mut events = vec![
             ThreadEvent::ThreadCreated {
-                agent_id: Some(
-                    ash_protocol::AgentId::new(format!("agent:{thread_id}"))
-                        .map_err(|error| CoreError::InvalidInput(error.to_string()))?,
-                ),
+                agent_id: Some(agent_id),
                 origin: ThreadOrigin::AgentSpawn {
                     parent_thread_id: request.context_seed.parent_thread_id.clone(),
                     parent_sequence: request.context_seed.parent_sequence,

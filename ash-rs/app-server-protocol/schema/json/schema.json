@@ -1134,6 +1134,16 @@
     "AgentContextSeed": {
       "description": "Durable, verifiable input captured before the first child Turn starts.",
       "properties": {
+        "agentId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AgentId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "baseInstructions": {
           "anyOf": [
             {
@@ -2114,6 +2124,11 @@
         "ProjectNotFound",
         "ProjectRevisionConflict",
         "ProjectOperationFailed",
+        "TeamsUnavailable",
+        "TeamNotFound",
+        "TeamRevisionConflict",
+        "TeamMemberUnauthorized",
+        "TeamOperationFailed",
         "DiffOperationFailed",
         "SyntaxAnalysisFailed",
         "CodebaseUnavailable",
@@ -5363,6 +5378,150 @@
             },
             "params": {
               "$ref": "#/$defs/ProjectLifecycleParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "team/list",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TeamListParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "team/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TeamReadParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "team/command",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TeamCommandParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "team/run/start",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TeamRunStartParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "team/run/attach",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TeamRunAttachParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "team/run/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TeamRunReadParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "team/run/list",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TeamRunListParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "team/message/post",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TeamMessagePostParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "team/message/list",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TeamMessageListParams"
             }
           },
           "required": [
@@ -9927,6 +10086,150 @@
             },
             "result": {
               "$ref": "#/$defs/ProjectMutationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "team/list",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/TeamListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "team/read",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/TeamReadResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "team/command",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/TeamCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "team/run/start",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/TeamRunStartResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "team/run/attach",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/TeamRunStartResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "team/run/read",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/TeamRunReadResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "team/run/list",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/TeamRunListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "team/message/post",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/TeamMessagePostResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "team/message/list",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/TeamMessageListResult"
             }
           },
           "required": [
@@ -26367,6 +26670,23 @@
         {
           "additionalProperties": false,
           "properties": {
+            "teamId": {
+              "$ref": "#/$defs/TeamId"
+            },
+            "type": {
+              "const": "team",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "teamId"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
             "dirId": {
               "$ref": "#/$defs/DirId"
             },
@@ -32848,6 +33168,622 @@
         "edits"
       ],
       "type": "object"
+    },
+    "TeamCommandDto": {
+      "oneOf": [
+        {
+          "properties": {
+            "coordinatorId": {
+              "$ref": "#/$defs/AgentId"
+            },
+            "description": {
+              "type": "string"
+            },
+            "members": {
+              "items": {
+                "$ref": "#/$defs/TeamMemberDto"
+              },
+              "type": "array"
+            },
+            "name": {
+              "type": "string"
+            },
+            "type": {
+              "const": "create",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "name",
+            "description",
+            "coordinatorId",
+            "members"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "description": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "type": {
+              "const": "updateDetails",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "name",
+            "description"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "member": {
+              "$ref": "#/$defs/TeamMemberDto"
+            },
+            "type": {
+              "const": "addMember",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "member"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "member": {
+              "$ref": "#/$defs/TeamMemberDto"
+            },
+            "type": {
+              "const": "updateMember",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "member"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "agentId": {
+              "$ref": "#/$defs/AgentId"
+            },
+            "type": {
+              "const": "removeMember",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "agentId"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "agentId": {
+              "$ref": "#/$defs/AgentId"
+            },
+            "type": {
+              "const": "setCoordinator",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "agentId"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "archive",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "restore",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "TeamCommandParams": {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "$ref": "#/$defs/TeamCommandDto"
+        },
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "teamId": {
+          "$ref": "#/$defs/TeamId"
+        }
+      },
+      "required": [
+        "commandId",
+        "teamId",
+        "expectedRevision",
+        "command"
+      ],
+      "type": "object"
+    },
+    "TeamCommandResult": {
+      "properties": {
+        "replayed": {
+          "type": "boolean"
+        },
+        "team": {
+          "$ref": "#/$defs/TeamDto"
+        }
+      },
+      "required": [
+        "team",
+        "replayed"
+      ],
+      "type": "object"
+    },
+    "TeamDto": {
+      "properties": {
+        "coordinatorId": {
+          "$ref": "#/$defs/AgentId"
+        },
+        "description": {
+          "type": "string"
+        },
+        "members": {
+          "items": {
+            "$ref": "#/$defs/TeamMemberDto"
+          },
+          "type": "array"
+        },
+        "name": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status": {
+          "$ref": "#/$defs/TeamStatusDto"
+        },
+        "teamId": {
+          "$ref": "#/$defs/TeamId"
+        }
+      },
+      "required": [
+        "teamId",
+        "revision",
+        "status",
+        "name",
+        "description",
+        "coordinatorId",
+        "members"
+      ],
+      "type": "object"
+    },
+    "TeamId": {
+      "description": "Stable identity of a long-lived Agent Team.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "TeamListParams": {
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "TeamListResult": {
+      "properties": {
+        "teams": {
+          "items": {
+            "$ref": "#/$defs/TeamDto"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "teams"
+      ],
+      "type": "object"
+    },
+    "TeamMemberDto": {
+      "properties": {
+        "agentId": {
+          "$ref": "#/$defs/AgentId"
+        },
+        "name": {
+          "type": "string"
+        },
+        "responsibility": {
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/AgentRoleSelection"
+        }
+      },
+      "required": [
+        "agentId",
+        "name",
+        "responsibility",
+        "role"
+      ],
+      "type": "object"
+    },
+    "TeamMessageDto": {
+      "properties": {
+        "createdAtUnixMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "messageId": {
+          "$ref": "#/$defs/AgentMessageId"
+        },
+        "receiverId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AgentId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "runId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TeamRunId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "senderId": {
+          "$ref": "#/$defs/AgentId"
+        },
+        "teamId": {
+          "$ref": "#/$defs/TeamId"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "messageId",
+        "teamId",
+        "senderId",
+        "text",
+        "createdAtUnixMs"
+      ],
+      "type": "object"
+    },
+    "TeamMessageListParams": {
+      "additionalProperties": false,
+      "properties": {
+        "readerId": {
+          "$ref": "#/$defs/AgentId"
+        },
+        "teamId": {
+          "$ref": "#/$defs/TeamId"
+        }
+      },
+      "required": [
+        "teamId",
+        "readerId"
+      ],
+      "type": "object"
+    },
+    "TeamMessageListResult": {
+      "properties": {
+        "messages": {
+          "items": {
+            "$ref": "#/$defs/TeamMessageDto"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "messages"
+      ],
+      "type": "object"
+    },
+    "TeamMessagePostParams": {
+      "additionalProperties": false,
+      "properties": {
+        "messageId": {
+          "$ref": "#/$defs/AgentMessageId"
+        },
+        "receiverId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AgentId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "runId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TeamRunId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "senderId": {
+          "$ref": "#/$defs/AgentId"
+        },
+        "teamId": {
+          "$ref": "#/$defs/TeamId"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "messageId",
+        "teamId",
+        "senderId",
+        "text"
+      ],
+      "type": "object"
+    },
+    "TeamMessagePostResult": {
+      "properties": {
+        "message": {
+          "$ref": "#/$defs/TeamMessageDto"
+        }
+      },
+      "required": [
+        "message"
+      ],
+      "type": "object"
+    },
+    "TeamReadParams": {
+      "additionalProperties": false,
+      "properties": {
+        "teamId": {
+          "$ref": "#/$defs/TeamId"
+        }
+      },
+      "required": [
+        "teamId"
+      ],
+      "type": "object"
+    },
+    "TeamReadResult": {
+      "properties": {
+        "team": {
+          "$ref": "#/$defs/TeamDto"
+        }
+      },
+      "required": [
+        "team"
+      ],
+      "type": "object"
+    },
+    "TeamRunAttachParams": {
+      "additionalProperties": false,
+      "description": "Links an existing coordinator Thread and its Session to a Team task.",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "coordinatorThreadId": {
+          "$ref": "#/$defs/ThreadId"
+        },
+        "expectedTeamRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "objective": {
+          "type": "string"
+        },
+        "runId": {
+          "$ref": "#/$defs/TeamRunId"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "teamId": {
+          "$ref": "#/$defs/TeamId"
+        }
+      },
+      "required": [
+        "commandId",
+        "runId",
+        "teamId",
+        "expectedTeamRevision",
+        "sessionId",
+        "coordinatorThreadId",
+        "objective"
+      ],
+      "type": "object"
+    },
+    "TeamRunDto": {
+      "properties": {
+        "coordinatorId": {
+          "$ref": "#/$defs/AgentId"
+        },
+        "coordinatorThreadId": {
+          "$ref": "#/$defs/ThreadId"
+        },
+        "members": {
+          "items": {
+            "$ref": "#/$defs/TeamMemberDto"
+          },
+          "type": "array"
+        },
+        "objective": {
+          "type": "string"
+        },
+        "runId": {
+          "$ref": "#/$defs/TeamRunId"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "teamId": {
+          "$ref": "#/$defs/TeamId"
+        },
+        "teamRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "runId",
+        "teamId",
+        "teamRevision",
+        "members",
+        "coordinatorId",
+        "sessionId",
+        "coordinatorThreadId",
+        "objective"
+      ],
+      "type": "object"
+    },
+    "TeamRunId": {
+      "description": "Stable identity of one Team task across retries and restarts.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "TeamRunListParams": {
+      "additionalProperties": false,
+      "properties": {
+        "teamId": {
+          "$ref": "#/$defs/TeamId"
+        }
+      },
+      "required": [
+        "teamId"
+      ],
+      "type": "object"
+    },
+    "TeamRunListResult": {
+      "properties": {
+        "runs": {
+          "items": {
+            "$ref": "#/$defs/TeamRunDto"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "runs"
+      ],
+      "type": "object"
+    },
+    "TeamRunReadParams": {
+      "additionalProperties": false,
+      "properties": {
+        "runId": {
+          "$ref": "#/$defs/TeamRunId"
+        }
+      },
+      "required": [
+        "runId"
+      ],
+      "type": "object"
+    },
+    "TeamRunReadResult": {
+      "properties": {
+        "run": {
+          "$ref": "#/$defs/TeamRunDto"
+        }
+      },
+      "required": [
+        "run"
+      ],
+      "type": "object"
+    },
+    "TeamRunStartParams": {
+      "additionalProperties": false,
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedTeamRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "objective": {
+          "type": "string"
+        },
+        "runId": {
+          "$ref": "#/$defs/TeamRunId"
+        },
+        "teamId": {
+          "$ref": "#/$defs/TeamId"
+        }
+      },
+      "required": [
+        "commandId",
+        "runId",
+        "teamId",
+        "expectedTeamRevision",
+        "objective"
+      ],
+      "type": "object"
+    },
+    "TeamRunStartResult": {
+      "properties": {
+        "replayed": {
+          "type": "boolean"
+        },
+        "run": {
+          "$ref": "#/$defs/TeamRunDto"
+        }
+      },
+      "required": [
+        "run",
+        "replayed"
+      ],
+      "type": "object"
+    },
+    "TeamStatusDto": {
+      "enum": [
+        "active",
+        "archived"
+      ],
+      "type": "string"
     },
     "TerminalAttachParams": {
       "additionalProperties": false,
