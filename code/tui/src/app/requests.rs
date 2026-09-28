@@ -159,7 +159,9 @@ impl RequestTasks {
 
 pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
     match command {
-        AppCommand::Dictation { .. } => Some(RequestKey::Dictation),
+        AppCommand::DictationStart { .. } | AppCommand::DictationStop { .. } => {
+            Some(RequestKey::Dictation)
+        }
         AppCommand::Thread(ThreadCommand::Interrupt) => Some(RequestKey::Interrupt),
         AppCommand::Thread(ThreadCommand::ResolveRequest(_)) => Some(RequestKey::Interaction),
         AppCommand::Host(

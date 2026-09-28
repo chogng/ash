@@ -167,6 +167,17 @@ pub(crate) struct ChatInputDraft {
     attachments: Attachments,
 }
 
+/// Keeps cumulative recognition updates in one editor element while surrounding edits survive.
+#[derive(Debug)]
+enum DictationDraft {
+    Waiting,
+    Text {
+        element: TextElementId,
+        separator: &'static str,
+    },
+    Removed,
+}
+
 /// Owns the editable draft, Slash/Mention/Skill completion, and typed submission assembly.
 #[derive(Debug)]
 pub(crate) struct ChatInput {
@@ -184,6 +195,7 @@ pub(crate) struct ChatInput {
     pub(super) attachments: Attachments,
     history: HistoryRecall,
     history_draft: Option<ChatInputDraft>,
+    dictation: Option<DictationDraft>,
 }
 
 impl ChatInput {
@@ -207,6 +219,7 @@ impl ChatInput {
             attachments: Attachments::default(),
             history: HistoryRecall::default(),
             history_draft: None,
+            dictation: None,
         }
     }
 
@@ -269,11 +282,82 @@ impl ChatInput {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn insert_text(&mut self, text: &str) {
         self.pointer_scroll_row = None;
         self.reset_history_navigation();
         self.textarea.insert_text(text);
         self.sync_completion();
+    }
+
+    pub(crate) fn begin_dictation(&mut self) {
+        self.dictation = Some(DictationDraft::Waiting);
+    }
+
+    pub(super) fn dictation_range(&self) -> Option<std::ops::Range<usize>> {
+        let Some(DictationDraft::Text { element, .. }) = self.dictation.as_ref() else {
+            return None;
+        };
+        self.textarea.element_range(*element)
+    }
+
+    pub(crate) fn update_dictation(&mut self, text: &str) {
+        if text.is_empty() {
+            return;
+        }
+        match self.dictation.as_ref() {
+            Some(DictationDraft::Waiting) => {
+                let separator = if self.textarea.text()[..self.textarea.cursor()]
+                    .chars()
+                    .next_back()
+                    .is_some_and(|character| character.is_ascii_alphanumeric())
+                    && text
+                        .chars()
+                        .next()
+                        .is_some_and(|character| character.is_ascii_alphanumeric())
+                {
+                    " "
+                } else {
+                    ""
+                };
+                let element = self.textarea.insert_element(&format!("{separator}{text}"));
+                self.dictation = Some(DictationDraft::Text { element, separator });
+            }
+            Some(DictationDraft::Text { element, separator }) => {
+                if self.textarea.has_element(*element) {
+                    self.textarea
+                        .replace_element(*element, &format!("{separator}{text}"));
+                } else {
+                    self.dictation = Some(DictationDraft::Removed);
+                }
+            }
+            Some(DictationDraft::Removed) | None => return,
+        }
+        self.reset_history_navigation();
+        self.sync_completion();
+    }
+
+    pub(crate) fn finish_dictation(&mut self, text: Option<&str>) -> bool {
+        if self.dictation.is_none() {
+            return false;
+        }
+        match text {
+            Some("") => {
+                if let Some(DictationDraft::Text { element, .. }) = self.dictation.as_ref()
+                    && let Some(range) = self.textarea.element_range(*element)
+                {
+                    self.textarea.unmark_element(*element);
+                    self.textarea.replace_range(range, "");
+                }
+            }
+            Some(text) => self.update_dictation(text),
+            None => {}
+        }
+        if let Some(DictationDraft::Text { element, .. }) = self.dictation.take() {
+            self.textarea.unmark_element(element);
+        }
+        self.sync_completion();
+        true
     }
 
     pub(in crate::thread::composer) fn handle_paste(
@@ -491,8 +575,12 @@ impl ChatInput {
     }
 
     pub(crate) fn recovery_draft(&self) -> ChatInputDraft {
+        let mut textarea = self.textarea.clone();
+        if let Some(DictationDraft::Text { element, .. }) = self.dictation.as_ref() {
+            textarea.unmark_element(*element);
+        }
         ChatInputDraft {
-            textarea: self.textarea.clone(),
+            textarea,
             vim: self.vim.clone(),
             slash_command_element: self.slash_command_element,
             skill_bindings: self.skill_bindings.clone(),
@@ -577,6 +665,9 @@ impl ChatInput {
     }
 
     fn take_editor_draft(&mut self) -> ChatInputDraft {
+        if let Some(DictationDraft::Text { element, .. }) = self.dictation.take() {
+            self.textarea.unmark_element(element);
+        }
         ChatInputDraft {
             textarea: std::mem::replace(&mut self.textarea, TextArea::new()),
             vim: std::mem::take(&mut self.vim),
@@ -618,6 +709,7 @@ impl ChatInput {
     }
 
     fn clear(&mut self) {
+        self.dictation = None;
         self.pointer_scroll_row = None;
         self.generation = self.generation.wrapping_add(1);
         self.textarea.clear();

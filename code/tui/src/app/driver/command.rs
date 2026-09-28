@@ -26,6 +26,7 @@ use crate::thread;
 use crate::thread::Command as ThreadCommand;
 use crate::thread::CommandPreparation as ThreadCommandPreparation;
 use crate::thread::Event as ThreadEvent;
+use ash_app_server_protocol::protocol::dictation::DictationBackend;
 use std::time::Instant;
 
 impl AppDriver {
@@ -33,21 +34,43 @@ impl AppDriver {
         let ScheduledCommand { command, origin } = scheduled;
         let request_key = request_key(&command);
         match command {
-            AppCommand::Dictation { resource_id, start } => {
+            AppCommand::DictationStart { resource_id } => {
                 let mut client = self.client.clone();
                 self.requests.spawn_presentation(
                     request_key,
-                    "ash-tui-dictation",
+                    "ash-tui-dictation-start",
                     move || {
-                        let result = if start {
-                            client.start_dictation(resource_id.clone())
-                        } else {
-                            client.stop_dictation(resource_id.clone())
-                        };
-                        Ok::<_, String>(crate::app::AppEvent::DictationResult {
+                        let error = client
+                            .start_dictation(
+                                resource_id.clone(),
+                                DictationBackend::Local {
+                                    model_id: "paraformer-large-online-ec6a3c64".into(),
+                                },
+                            )
+                            .err()
+                            .map(|error| error.to_string());
+                        Ok::<_, String>(crate::app::AppEvent::DictationStarted {
                             resource_id,
-                            start,
-                            error: result.err().map(|error| error.to_string()),
+                            error,
+                        })
+                    },
+                    &mut self.app,
+                    origin,
+                );
+            }
+            AppCommand::DictationStop { resource_id } => {
+                let mut client = self.client.clone();
+                self.requests.spawn_presentation(
+                    request_key,
+                    "ash-tui-dictation-stop",
+                    move || {
+                        let result = client
+                            .stop_dictation(resource_id.clone())
+                            .map(|result| result.text)
+                            .map_err(|error| error.to_string());
+                        Ok::<_, String>(crate::app::AppEvent::DictationStopped {
+                            resource_id,
+                            result,
                         })
                     },
                     &mut self.app,

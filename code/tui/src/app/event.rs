@@ -3,10 +3,13 @@ use crate::widgets::list_selection::ListSelectionModel;
 
 /// A fact delivered to the single writer of TUI presentation state.
 pub(crate) enum AppEvent {
-    DictationResult {
+    DictationStarted {
         resource_id: String,
-        start: bool,
         error: Option<String>,
+    },
+    DictationStopped {
+        resource_id: String,
+        result: Result<Option<String>, String>,
     },
     Config(crate::config::Event),
     Connectors(crate::connectors::Event),

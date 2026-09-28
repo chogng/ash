@@ -622,7 +622,11 @@ fn refresh_server_event(
 ) -> ServerRefresh {
     match event {
         client::ClientEvent::DictationTranscript(transcript) => {
-            app.dictation_transcript(&transcript.resource_id, &transcript.text);
+            app.dictation_transcript(
+                &transcript.resource_id,
+                &transcript.text,
+                transcript.is_final,
+            );
             ServerRefresh::default()
         }
         client::ClientEvent::DictationEnded(ended) => {

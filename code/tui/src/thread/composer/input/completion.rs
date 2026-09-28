@@ -366,7 +366,12 @@ impl ChatInput {
     pub(super) fn sync_completion(&mut self) {
         let desired_command = self
             .completion
-            .command_element_range(self.textarea.text(), self.textarea.cursor());
+            .command_element_range(self.textarea.text(), self.textarea.cursor())
+            .filter(|command| {
+                self.dictation_range().is_none_or(|dictation| {
+                    command.end <= dictation.start || dictation.end <= command.start
+                })
+            });
         self.reconcile_completion_bindings(desired_command);
         self.completion.sync_textarea(
             self.textarea.text(),

@@ -781,58 +781,172 @@ fn product_command_is_delegated_to_the_typed_dispatcher() {
     );
 }
 
+fn render_dictation_frame(app: &App) -> String {
+    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(80, 24)).unwrap();
+    terminal
+        .draw(|frame| crate::app::frame::draw(frame, app))
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    (0..24)
+        .map(|y| (0..80).map(|x| buffer[(x, y)].symbol()).collect::<String>())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[cfg(target_os = "windows")]
 #[test]
 fn dictate_command_adds_recognized_text_to_the_draft_and_stops() {
     let mut app = App::new();
     app.insert_text("/dictate");
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    let Some(AppCommand::Dictation {
-        resource_id,
-        start: true,
-    }) = action
-    else {
+    let Some(AppCommand::DictationStart { resource_id }) = action else {
         panic!("expected dictation start command");
     };
-    app.update(AppEvent::DictationResult {
+    app.update(AppEvent::DictationStarted {
         resource_id: resource_id.clone(),
-        start: true,
         error: None,
     });
-    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(80, 24)).unwrap();
-    terminal
-        .draw(|frame| crate::app::frame::draw(frame, &app))
-        .unwrap();
-    let buffer = terminal.backend().buffer();
-    let rendered = (0..24)
-        .map(|y| (0..80).map(|x| buffer[(x, y)].symbol()).collect::<String>())
-        .collect::<Vec<_>>()
-        .join("\n");
-    crate::tui_assert_snapshot!("dictation_listening", rendered);
-    app.dictation_transcript("other", "ignored");
-    app.dictation_transcript(&resource_id, "recognized text");
+    crate::tui_assert_snapshot!("dictation_listening", render_dictation_frame(&app));
+    app.dictation_transcript("other", "ignored", false);
+    app.dictation_transcript(&resource_id, "recognized text", false);
     assert_eq!(app.input(), "recognized text");
     app.thread_presentations
         .switch(ThreadId::new("another-thread").unwrap());
     assert!(app.dictation_scope_changed(&resource_id));
-    app.dictation_transcript(&resource_id, "wrong draft");
+    app.dictation_transcript(&resource_id, "wrong draft", false);
     assert_eq!(app.input(), "");
     app.thread_presentations
         .switch(ThreadId::new("tui-local").unwrap());
     let stop = app.handle_key(KeyEvent::new(KeyCode::F(8), KeyModifiers::NONE));
     assert_eq!(
         stop,
-        Some(AppCommand::Dictation {
-            resource_id: resource_id.clone(),
-            start: false
+        Some(AppCommand::DictationStop {
+            resource_id: resource_id.clone()
         })
     );
-    app.update(AppEvent::DictationResult {
+    app.update(AppEvent::DictationStopped {
         resource_id: resource_id.clone(),
-        start: false,
+        result: Ok(Some("recognized text".into())),
+    });
+    app.dictation_transcript(&resource_id, "late", true);
+    assert_eq!(app.input(), "recognized text");
+}
+
+#[test]
+fn dictation_replaces_partial_text_and_commits_final_once() {
+    let mut app = App::new();
+    app.insert_text("Draft");
+    let Some(AppCommand::DictationStart { resource_id }) = app.toggle_dictation() else {
+        panic!("expected dictation start command");
+    };
+    app.update(AppEvent::DictationStarted {
+        resource_id: resource_id.clone(),
         error: None,
     });
-    app.dictation_transcript(&resource_id, "late");
-    assert_eq!(app.input(), "recognized text");
+
+    app.dictation_transcript(&resource_id, "hel", false);
+    assert_eq!(app.input(), "Draft hel");
+    app.dictation_transcript(&resource_id, "hello", false);
+    assert_eq!(app.input(), "Draft hello");
+    crate::tui_assert_snapshot!("dictation_partial_draft", render_dictation_frame(&app));
+    app.dictation_transcript(&resource_id, "hello world", true);
+    assert_eq!(app.input(), "Draft hello world");
+    app.update(AppEvent::DictationStopped {
+        resource_id,
+        result: Ok(Some("hello world".into())),
+    });
+    assert_eq!(app.input(), "Draft hello world");
+}
+
+#[test]
+fn dictation_stop_response_commits_final_text_before_late_notifications() {
+    let mut app = App::new();
+    let Some(AppCommand::DictationStart { resource_id }) = app.toggle_dictation() else {
+        panic!("expected dictation start command");
+    };
+    app.update(AppEvent::DictationStarted {
+        resource_id: resource_id.clone(),
+        error: None,
+    });
+    app.dictation_transcript(&resource_id, "part", false);
+    app.update(AppEvent::DictationStopped {
+        resource_id: resource_id.clone(),
+        result: Ok(Some("final text".into())),
+    });
+    app.dictation_transcript(&resource_id, "final text", true);
+    assert_eq!(app.input(), "final text");
+}
+
+#[test]
+fn dictation_result_does_not_write_into_a_different_thread_draft() {
+    let mut app = App::new();
+    let Some(AppCommand::DictationStart { resource_id }) = app.toggle_dictation() else {
+        panic!("expected dictation start command");
+    };
+    app.update(AppEvent::DictationStarted {
+        resource_id: resource_id.clone(),
+        error: None,
+    });
+    app.dictation_transcript(&resource_id, "original", false);
+    app.thread_presentations
+        .switch(ThreadId::new("another-thread").unwrap());
+    app.dictation_transcript(&resource_id, "wrong", true);
+    app.update(AppEvent::DictationStopped {
+        resource_id,
+        result: Ok(Some("late final".into())),
+    });
+    assert_eq!(app.input(), "");
+    app.thread_presentations
+        .switch(ThreadId::new("tui-local").unwrap());
+    assert_eq!(app.input(), "original");
+}
+
+#[test]
+fn dictation_preview_does_not_conflict_with_slash_command_binding() {
+    let mut app = App::new();
+    let Some(AppCommand::DictationStart { resource_id }) = app.toggle_dictation() else {
+        panic!("expected dictation start command");
+    };
+    app.update(AppEvent::DictationStarted {
+        resource_id: resource_id.clone(),
+        error: None,
+    });
+    app.dictation_transcript(&resource_id, "/model", false);
+    app.dictation_transcript(&resource_id, "/model x", true);
+    assert_eq!(app.input(), "/model x");
+}
+
+#[test]
+fn dictation_updates_preserve_text_typed_after_the_preview() {
+    let mut app = App::new();
+    let Some(AppCommand::DictationStart { resource_id }) = app.toggle_dictation() else {
+        panic!("expected dictation start command");
+    };
+    app.update(AppEvent::DictationStarted {
+        resource_id: resource_id.clone(),
+        error: None,
+    });
+    app.dictation_transcript(&resource_id, "hello", false);
+    app.insert_text(" tail");
+    app.dictation_transcript(&resource_id, "hello world", true);
+    assert_eq!(app.input(), "hello world tail");
+}
+
+#[test]
+fn removing_dictation_preview_prevents_late_text_from_reappearing() {
+    let mut app = App::new();
+    let Some(AppCommand::DictationStart { resource_id }) = app.toggle_dictation() else {
+        panic!("expected dictation start command");
+    };
+    app.update(AppEvent::DictationStarted {
+        resource_id: resource_id.clone(),
+        error: None,
+    });
+    app.dictation_transcript(&resource_id, "unwanted", false);
+    app.handle_key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
+    assert_eq!(app.input(), "");
+    app.dictation_transcript(&resource_id, "late final", true);
+    assert_eq!(app.input(), "");
 }
 
 #[test]

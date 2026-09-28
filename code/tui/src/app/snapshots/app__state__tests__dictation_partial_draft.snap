@@ -1,0 +1,28 @@
+---
+source: code/tui/src/app/state_tests.rs
+expression: render_dictation_frame(&app)
+---
+  .                                                        [— / —] [Dashboard]  
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                  Listening. Press F8 to stop.  
+  ╭──────────────────────────────────────────────────────────────────────────╮  
+  │ > Draft hello                                                            │  
+  ╰──────────────────────────────────────────────────────── Automatic model ─╯  
+                                                                                
+  Enter send  ·  shift+tab permissions  ·  /home

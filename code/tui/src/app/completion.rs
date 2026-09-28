@@ -337,7 +337,10 @@ pub(super) fn apply_request_completion(
                 );
             }
         }
-        Completion::Presentation(Ok(event @ AppEvent::DictationResult { .. })) => app.update(event),
+        Completion::Presentation(Ok(event @ AppEvent::DictationStarted { .. }))
+        | Completion::Presentation(Ok(event @ AppEvent::DictationStopped { .. })) => {
+            app.update(event)
+        }
         Completion::Presentation(Ok(event)) => app.update_from_origin(origin, event),
         Completion::ModelUpdated {
             command,

@@ -143,6 +143,8 @@ pub(crate) struct App {
     dictation_resource_id: Option<String>,
     dictation_target: Option<DictationTarget>,
     dictation_pending: bool,
+    /// The final notification and stop response may carry the same text in either order.
+    dictation_final_received: bool,
     dictation_next_id: u64,
     pub(super) chat_panel: ChatPanel,
     pub(super) app_keymap: AppKeymap,
@@ -174,6 +176,7 @@ impl App {
             dictation_resource_id: None,
             dictation_target: None,
             dictation_pending: false,
+            dictation_final_received: false,
             dictation_next_id: 0,
             chat_panel: ChatPanel::new(),
             app_keymap: AppKeymap::default(),
@@ -267,6 +270,7 @@ impl App {
             dictation_resource_id: None,
             dictation_target: None,
             dictation_pending: false,
+            dictation_final_received: false,
             dictation_next_id: 0,
             chat_panel: ChatPanel::new(),
             app_keymap: AppKeymap::default(),
@@ -875,39 +879,43 @@ impl App {
         }
     }
 
-    pub(crate) fn dictation_transcript(&mut self, resource_id: &str, text: &str) {
+    pub(crate) fn dictation_transcript(&mut self, resource_id: &str, text: &str, is_final: bool) {
         if self.dictation_resource_id.as_deref() != Some(resource_id)
             || self.dictation_target.as_ref() != Some(&self.current_dictation_target())
+            || self.dictation_final_received
         {
             return;
         }
-        let separator = if self
-            .input_state()
-            .text()
-            .chars()
-            .last()
-            .is_some_and(|character| character.is_ascii_alphanumeric())
-            && text
-                .chars()
-                .next()
-                .is_some_and(|character| character.is_ascii_alphanumeric())
-        {
-            " "
+        if is_final {
+            self.dictation_final_received = self
+                .dictation_input_mut()
+                .is_some_and(|input| input.finish_dictation(Some(text)));
         } else {
-            ""
-        };
-        let (panel, input) = self.composer_parts_mut();
-        panel.insert_text(input, &format!("{separator}{text}"));
+            if let Some(input) = self.dictation_input_mut() {
+                input.update_dictation(text);
+            }
+        }
         self.dismiss_fullscreen_welcome_on_input();
+    }
+
+    fn dictation_input_mut(&mut self) -> Option<&mut crate::thread::composer::ChatInput> {
+        match self.dictation_target.as_ref()? {
+            DictationTarget::NewSession => Some(&mut self.sessions.input),
+            DictationTarget::Thread(thread_id) => self.thread_presentations.input_mut(thread_id),
+        }
     }
 
     pub(crate) fn dictation_ended(&mut self, resource_id: &str, error: Option<String>) {
         if self.dictation_resource_id.as_deref() != Some(resource_id) {
             return;
         }
+        if let Some(input) = self.dictation_input_mut() {
+            input.finish_dictation(None);
+        }
         self.dictation_resource_id = None;
         self.dictation_target = None;
         self.dictation_pending = false;
+        self.dictation_final_received = false;
         self.chat_panel.show_notice(
             error.map_or_else(
                 || "Dictation stopped.".to_owned(),
@@ -923,20 +931,18 @@ impl App {
         }
         if let Some(resource_id) = self.dictation_resource_id.clone() {
             self.dictation_pending = true;
-            return Some(AppCommand::Dictation {
-                resource_id,
-                start: false,
-            });
+            return Some(AppCommand::DictationStop { resource_id });
         }
         self.dictation_next_id += 1;
         let resource_id = format!("tui-dictation-{}", self.dictation_next_id);
         self.dictation_resource_id = Some(resource_id.clone());
         self.dictation_target = Some(self.current_dictation_target());
         self.dictation_pending = true;
-        Some(AppCommand::Dictation {
-            resource_id,
-            start: true,
-        })
+        self.dictation_final_received = false;
+        self.dictation_input_mut()
+            .expect("the current dictation target has an input")
+            .begin_dictation();
+        Some(AppCommand::DictationStart { resource_id })
     }
 
     pub(crate) fn dictation_scope_changed(&self, resource_id: &str) -> bool {
@@ -2161,25 +2167,51 @@ impl App {
             self.fullscreen.pointer.clear();
         }
         match event {
-            AppEvent::DictationResult {
-                resource_id,
-                start,
-                error,
-            } => {
+            AppEvent::DictationStarted { resource_id, error } => {
                 if self.dictation_resource_id.as_deref() != Some(resource_id.as_str()) {
                     return;
                 }
                 self.dictation_pending = false;
-                if !start || error.is_some() {
+                if error.is_some() {
+                    if let Some(input) = self.dictation_input_mut() {
+                        input.finish_dictation(None);
+                    }
                     self.dictation_resource_id = None;
                     self.dictation_target = None;
+                    self.dictation_final_received = false;
                 }
                 if let Some(error) = error {
                     self.chat_panel
                         .show_notice(format!("Dictation failed: {error}"), Instant::now());
-                } else if start {
+                } else {
                     self.chat_panel
                         .show_notice("Listening. Press F8 to stop.".into(), Instant::now());
+                }
+            }
+            AppEvent::DictationStopped {
+                resource_id,
+                result,
+            } => {
+                if self.dictation_resource_id.as_deref() != Some(resource_id.as_str()) {
+                    return;
+                }
+                let final_text = if self.dictation_final_received
+                    || self.dictation_target.as_ref() != Some(&self.current_dictation_target())
+                {
+                    None
+                } else {
+                    result.as_ref().ok().and_then(|text| text.as_deref())
+                };
+                if let Some(input) = self.dictation_input_mut() {
+                    input.finish_dictation(final_text);
+                }
+                self.dictation_resource_id = None;
+                self.dictation_target = None;
+                self.dictation_pending = false;
+                self.dictation_final_received = false;
+                if let Err(error) = result {
+                    self.chat_panel
+                        .show_notice(format!("Dictation failed: {error}"), Instant::now());
                 } else {
                     self.chat_panel
                         .show_notice("Dictation stopped.".into(), Instant::now());

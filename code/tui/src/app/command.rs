@@ -4,7 +4,8 @@ use std::path::PathBuf;
 /// A typed side-effect intent emitted by the single-writer application state.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum AppCommand {
-    Dictation { resource_id: String, start: bool },
+    DictationStart { resource_id: String },
+    DictationStop { resource_id: String },
     Config(crate::config::Command),
     Connectors(crate::connectors::Command),
     Dirs(crate::dirs::Command),
