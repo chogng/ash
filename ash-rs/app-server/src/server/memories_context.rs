@@ -109,7 +109,7 @@ impl AppServer {
         self.turn_backend.install_executor(executor.clone());
         self.env_runtime_mut().turn_executor = executor;
         self.agent_extensions = registry;
-        self.restart_extension_config_watcher();
+        self.update_extension_config_watcher();
         self.with_extension_tool_port(tools)
             .map_err(|error| error.to_string())
     }

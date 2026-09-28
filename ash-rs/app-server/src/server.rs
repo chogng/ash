@@ -943,13 +943,9 @@ impl AppServer {
         self
     }
 
-    fn restart_extension_config_watcher(&mut self) {
-        if let Some(config) = &self.config {
-            self._config_watcher = Some(config_runtime::ConfigWatcher::start(
-                config,
-                self.updates.clone(),
-                self.agent_extensions.clone(),
-            ));
+    fn update_extension_config_watcher(&mut self) {
+        if let Some(watcher) = &self._config_watcher {
+            watcher.replace_extensions(self.agent_extensions.clone());
         }
     }
 
@@ -1239,7 +1235,7 @@ impl AppServer {
         self.agent_extensions = registry;
         self.notes = Some(notes);
         self.message_board = Some(message_board);
-        self.restart_extension_config_watcher();
+        self.update_extension_config_watcher();
         self.with_extension_tool_port(port)
             .map_err(|e| e.to_string())
     }
@@ -1287,7 +1283,7 @@ impl AppServer {
         self.turn_backend.install_executor(executor.clone());
         self.env_runtime_mut().turn_executor = executor;
         self.agent_extensions = agent_extensions;
-        self.restart_extension_config_watcher();
+        self.update_extension_config_watcher();
         self = self
             .with_extension_tool_port(extension_tool_port)
             .map_err(|error| error.to_string())?;
@@ -1588,7 +1584,7 @@ impl AppServer {
             .with_extensions(self.agent_extensions.clone());
         self.turn_backend.install_executor(executor.clone());
         self.env_runtime_mut().turn_executor = executor;
-        self.restart_extension_config_watcher();
+        self.update_extension_config_watcher();
         self.queue = Some(store);
         self.queue_directory = directory;
         Ok(self)
