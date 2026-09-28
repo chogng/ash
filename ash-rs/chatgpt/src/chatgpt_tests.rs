@@ -102,6 +102,7 @@ fn device_flow_creates_codex_compatible_credentials_and_subscription_headers() {
     let account = service.read().unwrap().accounts[0].clone();
     assert_eq!(account.account.provider, CHATGPT_SUBSCRIPTION_PROVIDER_ID);
     assert_eq!(account.email.as_deref(), Some("person@example.com"));
+    assert_eq!(account.display_name, None);
     assert_eq!(account.plan.as_deref(), Some("plus"));
     assert_eq!(account.status, AccountStatus::Ready);
 

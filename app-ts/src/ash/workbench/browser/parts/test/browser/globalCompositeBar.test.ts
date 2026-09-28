@@ -64,7 +64,7 @@ test('Activity Bar global actions open account and management menus', async () =
 	services.registerInstance(ConfigurationServiceId, { getValue: () => sideBarLocation } as unknown as IConfigurationService);
 	const accountsChanged = disposables.add(new Emitter<AccountState>());
 	let accountState: AccountState = { revision: 1n, accounts: [
-		{ provider: 'chatgpt-subscription', accountId: 'one', displayName: 'lanxiang484@gmail.com', status: 'ready', credentialRevision: 1n },
+		{ provider: 'chatgpt-subscription', accountId: 'one', email: 'lanxiang484@gmail.com', status: 'ready', credentialRevision: 1n },
 		{ provider: 'github', accountId: 'octocat', displayName: 'octocat', status: 'ready', credentialRevision: 1n },
 	] };
 	const loggedOutProviders: string[] = [];

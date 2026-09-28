@@ -326,7 +326,7 @@ impl ChatGptOAuth {
                     .unwrap_or_else(|| "current".into()),
             },
             email: credential.email.clone(),
-            display_name: Some("ChatGPT".into()),
+            display_name: None,
             organization: credential.account_id.clone(),
             plan: credential.plan.clone(),
             status: if !self.maintenance.requires_login(credential)
