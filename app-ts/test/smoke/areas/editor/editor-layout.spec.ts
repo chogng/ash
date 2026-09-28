@@ -27,6 +27,10 @@ test.describe('startup layout defaults', () => {
 		await expect(page.locator('[data-view-container-id="ash.git"]')).toHaveClass(/ash-scm-viewlet/u);
 		await expect(page.locator('.ash-scm-status')).toHaveText('Open a folder to use Git.');
 		await expect(page.locator('.ash-scm-change')).toHaveCount(0);
+		const sidebar = page.locator('[data-part="sidebar"]');
+		const sash = sidebar.locator('xpath=../../..').locator(':scope > .ash-sash').first();
+		await sash.dblclick();
+		await expect.poll(async () => sidebar.evaluate(element => element.getBoundingClientRect().width)).toBe(400);
 	});
 
 	test('new browser tab starts empty while reload keeps the current layout', async ({ target, workbench }) => {

@@ -76,6 +76,7 @@ class LeafNode extends GridNode {
 	get maximumWidth(): number { return this.view.maximumWidth; }
 	get minimumHeight(): number { return this.view.minimumHeight; }
 	get maximumHeight(): number { return this.view.maximumHeight; }
+	get preferredWidth(): number | undefined { return this.view.preferredWidth; }
 	isVisible(): boolean { return this.visible; }
 
 	setDisplayed(visible: boolean): void {
@@ -122,7 +123,7 @@ class BranchNode extends GridNode {
 		this.updateBoundarySashes();
 		this.tryLink2x2Sashes(host);
 		host.registerEvent(this.splitView.onDidChangeViewSizes(() => host.handleSplitViewChange()));
-		host.registerEvent(this.splitView.onDidSashReset((boundaryIndex) => this.splitView.resetSash(boundaryIndex)));
+		host.registerEvent(this.splitView.onDidSashReset((boundaryIndex) => this.resetSash(boundaryIndex)));
 	}
 
 	get minimumWidth(): number {
@@ -199,6 +200,35 @@ class BranchNode extends GridNode {
 			(result, child) => orthogonalReducer(result, child[property]),
 			orthogonalInitial,
 		);
+	}
+
+	private resetSash(boundaryIndex: number): void {
+		// Grid owns view preferences; SplitView keeps the reset constrained to the adjacent pair.
+		const beforeIndex = this.findVisibleChild(boundaryIndex, -1);
+		const afterIndex = this.findVisibleChild(boundaryIndex + 1, 1);
+		if (beforeIndex === undefined || afterIndex === undefined) return;
+		const before = this.children[beforeIndex];
+		const after = this.children[afterIndex];
+		const beforeWidth = this.orientation === "horizontal" && before instanceof LeafNode
+			? before.preferredWidth
+			: undefined;
+		const afterWidth = this.orientation === "horizontal" && after instanceof LeafNode
+			? after.preferredWidth
+			: undefined;
+		const total = this.splitView.getViewSize(beforeIndex) + this.splitView.getViewSize(afterIndex);
+		const leadingSize = beforeWidth !== undefined
+			? Math.round(beforeWidth)
+			: afterWidth !== undefined
+			? total - Math.round(afterWidth)
+			: undefined;
+		this.splitView.resetSash(boundaryIndex, leadingSize);
+	}
+
+	private findVisibleChild(start: number, step: -1 | 1): number | undefined {
+		for (let index = start; index >= 0 && index < this.children.length; index += step) {
+			if (this.splitView.isViewVisible(index)) return index;
+		}
+		return undefined;
 	}
 
 	private updateBoundarySashes(): void {

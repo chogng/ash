@@ -1,10 +1,11 @@
 import "./sidebarpart.css";
 import { h } from "../../../../base/browser/dom.js";
+import { MutableDisposable } from "../../../../base/common/lifecycle.js";
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import { ViewContainerLocation, type IViewContainerDescriptor } from "../../../common/views.js";
 import type { IStorageService } from "../../../../platform/storage/common/storage.js";
 import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
-import { localize, type ILocalizationService, type LocalizationKey } from "../../../services/localization/common/localizationService.js";
+import type { ILocalizationService, LocalizationKey } from "../../../services/localization/common/localizationService.js";
 import type { IViewDescriptorService } from "../../../services/views/common/viewDescriptorService.js";
 import { PaneCompositePart, type PaneCompositeTitleActions } from "../paneCompositePart.js";
 import { ActivityBarPosition } from '../../../common/configuration.js';
@@ -30,13 +31,17 @@ export interface SidebarPartOptions {
 
 /** Reusable Pane Composite Part presented at the side of the Workbench. */
 export class SidebarPart extends PaneCompositePart {
-	private readonly viewDescriptors: IViewDescriptorService;
-	private readonly localization: ILocalizationService | undefined;
 	private readonly activeTitleDomNode: HTMLSpanElement | undefined;
 	private readonly topCompositeBarDomNode: HTMLDivElement | undefined;
 	private readonly bottomCompositeBarDomNode: HTMLDivElement | undefined;
+	private readonly activeTitleListener = this._register(new MutableDisposable());
 	override get minimumWidth(): number { return 180; }
 	override get maximumWidth(): number { return 600; }
+	override get preferredWidth(): number | undefined {
+		const active = this.activeCompositeId;
+		const width = active ? this.getComposite(active)?.getOptimalWidth() : undefined;
+		return width === undefined ? undefined : Math.max(width, 300);
+	}
 
 	constructor(container: HTMLElement, options: SidebarPartOptions) {
 		const location = options.location ?? ViewContainerLocation.Sidebar;
@@ -57,8 +62,6 @@ export class SidebarPart extends PaneCompositePart {
 			compositeBarOrientation: location === ViewContainerLocation.Sidebar ? "vertical" : "horizontal",
 			titleActions: options.titleActions,
 		});
-		this.viewDescriptors = options.viewDescriptorService;
-		this.localization = options.localizationService;
 		this.domNode.classList.add("ash-sidebar-part");
 		if (location === ViewContainerLocation.Sidebar) {
 			// In top and bottom mode the view selector belongs to the sidebar, so the sidebar keeps its full grid height.
@@ -73,7 +76,6 @@ export class SidebarPart extends PaneCompositePart {
 			this.activeTitleDomNode = h(container.ownerDocument, "span");
 			this.activeTitleDomNode.className = "ash-sidebar-title-label";
 			this.titleContentDomNode.replaceChildren(this.activeTitleDomNode);
-			if (this.localization) this._register(this.localization.onDidChange(() => this.updateActiveTitle()));
 		}
 	}
 
@@ -92,14 +94,18 @@ export class SidebarPart extends PaneCompositePart {
 	}
 
 	override showComposite(compositeId: string): void {
+		const previousId = this.activeCompositeId;
+		if (previousId) this.getComposite(previousId)?.setMergedTitleActionsHost();
 		super.showComposite(compositeId);
+		this.activeTitleListener.value = this.getComposite(compositeId)?.onDidChangeTitle(() => this.updateActiveTitle());
 		this.updateActiveTitle();
 	}
 
 	private updateActiveTitle(): void {
 		if (!this.activeTitleDomNode || !this.activeCompositeId) return;
-		const container = this.viewDescriptors.getViewContainers(ViewContainerLocation.Sidebar)
-			.find(candidate => candidate.id === this.activeCompositeId);
-		if (container) this.activeTitleDomNode.textContent = localize(this.localization, container.localizationKey, container.title);
+		const composite = this.getComposite(this.activeCompositeId);
+		if (!composite) return;
+		this.activeTitleDomNode.textContent = composite.getTitle();
+		composite.setMergedTitleActionsHost(this.viewTitleActionsDomNode);
 	}
 }

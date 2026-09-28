@@ -3,7 +3,11 @@ import './media/scm.css';
 
 export class SCMViewPaneContainer extends PaneComposite {
 	constructor(container: HTMLElement, options: PaneCompositeOptions) {
-		super(container, options);
+		super(container, { ...options, mergeViewWithContainerWhenSingleView: true });
 		this.element.classList.add('ash-scm-viewlet');
+	}
+
+	override getOptimalWidth(): number {
+		return 400;
 	}
 }

@@ -144,6 +144,7 @@ function createLayoutHarness(
 	ownerDocument: Document,
 	options: Partial<WorkbenchLayoutOptions> = {},
 	existingContainer?: HTMLElement,
+	sidebarPart?: WorkbenchPartInstance,
 ): {
 	readonly disposables: DisposableStore;
 	readonly container: HTMLElement;
@@ -160,6 +161,8 @@ function createLayoutHarness(
 	for (const partId of workbenchPartIds) {
 		const part = partId === "editor"
 			? new EditorPart(container)
+			: partId === "sidebar" && sidebarPart
+			? sidebarPart
 			: new TestPart(partId, container);
 		disposables.add(part);
 		parts.set(partId, part);
@@ -510,6 +513,88 @@ test("Workbench sash reset keeps unrelated sidebars at their current widths", ()
 	);
 
 	harness.disposables.dispose();
+	dom.window.close();
+});
+
+test("Git sidebar uses its preferred reset width and merges a lone view into the title", async () => {
+	const { SCMViewPaneContainer } = await import("../../../workbench/contrib/scm/browser/scmViewPaneContainer.js");
+	class GitTestView extends ViewPane {
+		readonly action: HTMLButtonElement;
+
+		constructor(container: HTMLElement, options: IViewPaneOptions) {
+			super(container, options);
+			this.action = h(container.ownerDocument, "button");
+			this.action.textContent = "Refresh";
+			this.headerActionsElement.append(this.action);
+		}
+	}
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const disposables = new DisposableStore();
+	const registry = new WorkbenchViewRegistry();
+	disposables.add(registry.registerViewContainer({
+		id: "ash.git",
+		title: "Git",
+		location: ViewContainerLocation.Sidebar,
+		isDefault: true,
+	}));
+	disposables.add(registry.registerViews("ash.git", [
+		{ id: "test.changes", title: "Changes", collapsed: true, ctorDescriptor: new ServiceConstructionDescriptor(GitTestView) },
+		{ id: "test.graph", title: "Graph", ctorDescriptor: new ServiceConstructionDescriptor(GitTestView) },
+	]));
+	const contextKeys = disposables.add(new ContextKeyService());
+	const viewDescriptors = disposables.add(new ViewDescriptorService({ contextKeyService: contextKeys, registry }));
+	const descriptor = viewDescriptors.getDefaultViewContainer(ViewContainerLocation.Sidebar);
+	assert.ok(descriptor);
+	const model = viewDescriptors.getViewContainerModel(descriptor.id);
+	const host = h(dom.window.document, "main");
+	const sidebar = new SidebarPart(host, { viewDescriptorService: viewDescriptors, contextKeyService: contextKeys });
+	const composite = new SCMViewPaneContainer(host, {
+		viewContainer: descriptor,
+		model,
+		instantiationService: disposables.add(new ServiceContainer()),
+		contextKeyService: contextKeys,
+	});
+	sidebar.addComposite(composite);
+	sidebar.showComposite(descriptor.id);
+	const harness = createLayoutHarness(dom.window.document, {
+		initialDimension: new Dimension(1_200, 800),
+	}, host, sidebar);
+	harness.layout.layout(new Dimension(1_200, 800));
+	harness.layout.resizePart("sidebar", harness.layout.getPartSize("sidebar").with(250));
+	assert.equal(sidebar.preferredWidth, 400);
+	resetWorkbenchSash(dom.window, host, "sidebar", 0);
+	assert.equal(harness.layout.getPartSize("sidebar").width, 403);
+
+	const changes = composite.getView("test.changes") as GitTestView;
+	const header = changes.element.querySelector<HTMLElement>(".ash-pane-view-header");
+	const headerButton = changes.element.querySelector<HTMLElement>(".ash-pane-view-header-button");
+	assert.ok(header);
+	assert.ok(headerButton);
+	assert.equal(changes.isExpanded(), false);
+	assert.equal(sidebar.domNode.querySelector(".ash-sidebar-title-label")?.textContent, "Git");
+	headerButton.focus();
+	assert.equal(dom.window.document.activeElement, headerButton);
+	model.setVisible("test.graph", false);
+	assert.equal(sidebar.domNode.querySelector(".ash-sidebar-title-label")?.textContent, "Git: Changes");
+	assert.equal(header.hidden, true);
+	assert.equal(changes.element.getAttribute("aria-label"), "Changes");
+	assert.equal(changes.isBodyVisible(), true);
+	assert.equal(dom.window.document.activeElement, changes.element);
+	assert.equal(changes.action.closest(".ash-pane-composite-title-view-actions") !== null, true);
+	changes.action.focus();
+	model.setVisible("test.graph", true);
+	assert.equal(sidebar.domNode.querySelector(".ash-sidebar-title-label")?.textContent, "Git");
+	assert.equal(header.hidden, false);
+	assert.equal(changes.isExpanded(), false);
+	assert.equal(changes.action.closest(".ash-pane-view-header") !== null, true);
+	assert.equal(dom.window.document.activeElement, changes.action);
+	harness.layout.setSideBarLocation("right");
+	harness.layout.resizePart("sidebar", harness.layout.getPartSize("sidebar").with(250));
+	resetWorkbenchSash(dom.window, host, "sidebar", 2);
+	assert.equal(harness.layout.getPartSize("sidebar").width, 403);
+
+	harness.disposables.dispose();
+	disposables.dispose();
 	dom.window.close();
 });
 

@@ -141,12 +141,16 @@ export class ViewPaneContainer extends Disposable {
 				this._register(new ViewPaneItem(pane, this.focusedView)),
 			);
 		}
-		this.element.replaceChildren(
-			...desired.flatMap((descriptor) => {
-				const pane = this._panes.get(descriptor.id)?.pane;
-				return pane ? [pane.element] : [];
-			}),
-		);
+		// Keep unchanged panes mounted so a visibility change does not discard keyboard focus.
+		let index = 0;
+		for (const descriptor of desired) {
+			const pane = this._panes.get(descriptor.id)?.pane;
+			if (!pane) continue;
+			if (this.element.children[index] !== pane.element) {
+				this.element.insertBefore(pane.element, this.element.children[index] ?? null);
+			}
+			index += 1;
+		}
 	}
 
 	private updateLocalizedTitles(): void {

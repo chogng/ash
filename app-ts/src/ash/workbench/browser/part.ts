@@ -39,6 +39,7 @@ export abstract class WorkbenchPart extends Disposable {
 	get maximumWidth(): number { return Number.POSITIVE_INFINITY; }
 	get minimumHeight(): number { return 0; }
 	get maximumHeight(): number { return Number.POSITIVE_INFINITY; }
+	get preferredWidth(): number | undefined { return undefined; }
 
 	layout(_dimension: IDimension): void {}
 

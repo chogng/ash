@@ -62,7 +62,7 @@ export class PaneCompositePart extends CompositePart {
 	private readonly location: ViewContainerLocation;
 	protected readonly titleContentDomNode: HTMLDivElement;
 	protected readonly titleActionsSlotDomNode: HTMLDivElement;
-	private readonly viewTitleActionsDomNode: HTMLDivElement;
+	protected readonly viewTitleActionsDomNode: HTMLDivElement;
 	private readonly partTitleActionsDomNode: HTMLDivElement;
 	private compositeBarVisible = true;
 	private hasCustomTitleContent = false;

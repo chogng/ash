@@ -91,6 +91,28 @@ export class PaneView extends Disposable {
 
 	setTitle(title: string): void {
 		this.titleElement.textContent = title;
+		if (this.headerElement.hidden) this.element.setAttribute("aria-label", title);
+	}
+
+	get paneTitle(): string {
+		return this.titleElement.textContent ?? "";
+	}
+
+	setHeaderVisible(visible: boolean): void {
+		if (!visible && this.headerElement.contains(this.element.ownerDocument.activeElement)) {
+			this.focus();
+		}
+		this.headerElement.hidden = !visible;
+		if (visible) this.element.removeAttribute("aria-label");
+		else this.element.setAttribute("aria-label", this.paneTitle);
+		if (visible) this.setHeaderActionsHost();
+	}
+
+	setHeaderActionsHost(host?: HTMLElement): void {
+		const focused = this.element.ownerDocument.activeElement;
+		const restoreFocus = this.headerActionsElement.contains(focused);
+		(host ?? this.headerElement).append(this.headerActionsElement);
+		if (restoreFocus) (focused as HTMLElement).focus();
 	}
 
 	isCollapsed(): boolean {

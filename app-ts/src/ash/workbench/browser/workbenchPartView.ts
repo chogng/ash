@@ -62,6 +62,11 @@ export class WorkbenchPartView<TPartId extends string = WorkbenchPartId> {
 		return this.part.maximumHeight + this.frameInsets.top + this.frameInsets.bottom;
 	}
 
+	get preferredWidth(): number | undefined {
+		const width = this.part.preferredWidth;
+		return width === undefined ? undefined : width + this.frameInsets.left + this.frameInsets.right;
+	}
+
 	get onDidChange(): Event<void> {
 		return this.part.onDidChangeConstraints;
 	}

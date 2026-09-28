@@ -338,7 +338,7 @@ export class SplitView extends Disposable {
 	 * Resets the nearest visible views around one sash to an even split.
 	 * Unrelated views retain their current sizes.
 	 */
-	resetSash(boundaryIndex: number): void {
+	resetSash(boundaryIndex: number, leadingSize?: number): void {
 		if (!Number.isInteger(boundaryIndex) || boundaryIndex < 0 || boundaryIndex >= this.items.length - 1) {
 			throw new RangeError(`SplitView sash boundary is out of range: ${boundaryIndex}`);
 		}
@@ -347,7 +347,7 @@ export class SplitView extends Disposable {
 		const after = this.findVisibleItem(boundaryIndex + 1, 1);
 		if (!before || !after) return;
 		const total = before.size + after.size;
-		const beforeSize = resetLeadingViewSize(total, before, after);
+		const beforeSize = resetLeadingViewSize(total, before, after, leadingSize);
 		before.size = beforeSize;
 		after.size = total - beforeSize;
 		this.render();
@@ -680,7 +680,7 @@ function isResizable(item: ViewItem): boolean {
 	return item.view.minimumSize < item.view.maximumSize;
 }
 
-function resetLeadingViewSize(total: number, leading: ViewItem, trailing: ViewItem): number {
+function resetLeadingViewSize(total: number, leading: ViewItem, trailing: ViewItem, leadingSize?: number): number {
 	const minimum = Math.max(
 		leading.view.minimumSize,
 		total - trailing.view.maximumSize,
@@ -689,7 +689,7 @@ function resetLeadingViewSize(total: number, leading: ViewItem, trailing: ViewIt
 		leading.view.maximumSize,
 		total - trailing.view.minimumSize,
 	);
-	return clamp(total / 2, minimum, maximum);
+	return clamp(leadingSize ?? total / 2, minimum, maximum);
 }
 
 function assertNonNegativeFinite(value: number, name: string): void {
