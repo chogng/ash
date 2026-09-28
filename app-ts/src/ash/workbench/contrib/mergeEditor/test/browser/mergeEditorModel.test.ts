@@ -29,9 +29,11 @@ test('merge model keeps two conflicts anchored to the base after editing the fir
 	await model.initialize(new AbortController().signal);
 	assert.equal(model.hunks.length, 2);
 	assert.deepEqual(model.hunks.map(hunk => hunk.unresolved), [true, true]);
+	assert.equal(model.unresolvedCount, 2);
 	await applyChoice(model, result, 0, 'current');
 	assert.equal(model.hunks.length, 2);
 	assert.deepEqual(model.hunks.map(hunk => hunk.unresolved), [false, true]);
+	assert.deepEqual(model.hunks.map(hunk => hunk.resolution), ['current', 'unresolved']);
 	await applyChoice(model, result, 1, 'incoming');
 	assert.equal(result.getValue(), 'before\ncurrent\nbetween\nincoming2\nafter\n');
 	assert.deepEqual(model.hunks.map(hunk => hunk.unresolved), [false, false]);
@@ -43,6 +45,7 @@ test('merge model finds a conflict even when the result has no Git markers', asy
 	await model.initialize(new AbortController().signal);
 	assert.equal(model.hunks.length, 1);
 	assert.equal(model.hunks[0].unresolved, false);
+	assert.equal(model.hunks[0].resolution, 'manual');
 	assert.equal(model.editForHunk(0, 'incoming').text, 'incoming\n');
 });
 
@@ -54,7 +57,24 @@ test('accepting both combines disjoint changes on the same line', async () => {
 	assert.equal(model.editForHunk(0, 'both').text, 'halloworld\n');
 });
 
-async function applyChoice(model: MergeEditorModel, result: TextModel, index: number, choice: 'current' | 'incoming'): Promise<void> {
+test('merge model recognizes base and both input orders from the editable result', async () => {
+	using result = new TextModel('<<<<<<< HEAD\ncurrent\n=======\nincoming\n>>>>>>> topic\n');
+	using model = new MergeEditorModel('base\n', 'current\n', 'incoming\n', result, diffService);
+	await model.initialize(new AbortController().signal);
+	assert.deepEqual([
+		model.canSmartCombine(0),
+		model.editForHunk(0, 'base').text,
+		model.editForHunk(0, 'both').text,
+		model.editForHunk(0, 'bothReversed').text,
+	], [false, 'base\n', 'current\nincoming\n', 'incoming\ncurrent\n']);
+	await applyChoice(model, result, 0, 'bothReversed');
+	assert.equal(model.hunks[0].resolution, 'bothReversed');
+	await applyChoice(model, result, 0, 'base');
+	assert.equal(model.hunks[0].resolution, 'base');
+	assert.equal(model.unresolvedCount, 0);
+});
+
+async function applyChoice(model: MergeEditorModel, result: TextModel, index: number, choice: 'base' | 'current' | 'incoming' | 'bothReversed'): Promise<void> {
 	const edit = model.editForHunk(index, choice);
 	const changed = new Promise<void>(resolve => {
 		const listener = model.onDidChange(() => {

@@ -370,6 +370,11 @@ test('Source Control settings use the selected Chinese language catalog', async 
 			localize('git.keepIncomingDeletion', 'Keep Incoming Deletion'),
 			localize('git.previousConflict', 'Previous Conflict'),
 			localize('git.nextConflict', 'Next Conflict'),
+			localize('git.nextUnresolvedConflict', 'Next Unresolved'),
+			localize('git.acceptCombination', 'Accept Combination'),
+			localize('git.showBase', 'Show Base'),
+			localize('git.useColumns', 'Use Columns'),
+			localize('git.acceptRemainingIncoming', 'Accept Remaining Incoming'),
 		], [
 			'配置 Git 自动获取和源代码管理差异标记。',
 			'自动获取远端更新',
@@ -384,6 +389,11 @@ test('Source Control settings use the selected Chinese language catalog', async 
 			'保留传入删除结果',
 			'上一个冲突',
 			'下一个冲突',
+			'下一个未解决冲突',
+			'采用自动合并结果',
+			'显示共同祖先',
+			'使用横向三栏',
+			'剩余冲突均采用传入版本',
 		]);
 	} finally {
 		resetNlsResolver();

@@ -1,18 +1,17 @@
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { Emitter } from '../../../../../base/common/event.js';
-import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { Position } from '../../../../../editor/common/core/position.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import { LineRange } from '../../../../../editor/common/core/ranges/lineRange.js';
 import type { DetailedLineRangeMapping } from '../../../../../editor/common/diff/rangeMapping.js';
-import type { IDocumentDiff } from '../../../../../editor/common/diff/documentDiffProvider.js';
-import type { IDocumentDiffProvider } from '../../../../../editor/common/diff/documentDiffProvider.js';
-import type { IDisposable } from '../../../../../base/common/lifecycle.js';
+import type { IDocumentDiff, IDocumentDiffProvider } from '../../../../../editor/common/diff/documentDiffProvider.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { IDiffService } from '../../../../services/diff/common/diffService.js';
 
 export type MergeEditorSide = 'base' | 'current' | 'incoming' | 'result';
-export type MergeEditorChoice = 'current' | 'incoming' | 'both';
+export type MergeEditorChoice = 'base' | 'current' | 'incoming' | 'both' | 'bothReversed';
+export type MergeEditorResolution = 'unresolved' | 'base' | 'current' | 'incoming' | 'both' | 'bothReversed' | 'manual';
 
 export interface MergeEditorHunk {
 	readonly index: number;
@@ -21,6 +20,7 @@ export interface MergeEditorHunk {
 	readonly incoming: LineRange;
 	readonly result: LineRange;
 	readonly unresolved: boolean;
+	readonly resolution: MergeEditorResolution;
 }
 
 interface SourceHunk {
@@ -72,8 +72,10 @@ export class MergeEditorModel extends Disposable {
 	}
 
 	public get hunks(): readonly MergeEditorHunk[] { return this.hunksValue; }
+	public get unresolvedCount(): number { return this.hunksValue.filter(hunk => hunk.unresolved).length; }
 	public get isReady(): boolean { return this.ready; }
 	public get error(): Error | undefined { return this.errorValue; }
+	public getChanges(side: Exclude<MergeEditorSide, 'base'>): readonly DetailedLineRangeMapping[] { return this.changesFor(side); }
 
 	public async initialize(signal: AbortSignal): Promise<void> {
 		const request = new CancellationTokenSource();
@@ -136,14 +138,28 @@ export class MergeEditorModel extends Disposable {
 	private updateHunks(): void {
 		this.hunksValue = this.sourceHunks.map((source, index) => {
 			const result = mapRange(source.base, this.resultChanges);
-			return {
+			const hunk = {
 				...source,
 				index,
 				result,
-				unresolved: /^(?:<{7}|={7}|>{7})/m.test(textInRange(this.result, result)),
 			};
+			const resolution = this.classifyHunk(hunk);
+			return { ...hunk, resolution, unresolved: resolution === 'unresolved' };
 		});
 		this.changeEmitter.fire();
+	}
+
+	private classifyHunk(hunk: SourceHunk & { readonly result: LineRange }): MergeEditorResolution {
+		const result = textInRange(this.result, hunk.result);
+		if (/^(?:<{7}|={7}|>{7})/m.test(result)) return 'unresolved';
+		for (const side of ['current', 'incoming', 'base'] as const) {
+			if (result === textInRange(this[side], hunk[side])) return side;
+		}
+		const current = textInRange(this.current, hunk.current);
+		const incoming = textInRange(this.incoming, hunk.incoming);
+		if (result === this.smartCombine(hunk, current, incoming) || result === current + incoming) return 'both';
+		if (result === incoming + current) return 'bothReversed';
+		return 'manual';
 	}
 
 	public editForHunk(index: number, choice: MergeEditorChoice): { range: Range; text: string } {
@@ -152,11 +168,23 @@ export class MergeEditorModel extends Disposable {
 		if (!hunk) throw new RangeError('Merge conflict does not exist');
 		const current = textInRange(this.current, hunk.current);
 		const incoming = textInRange(this.incoming, hunk.incoming);
-		const text = choice === 'current' ? current : choice === 'incoming' ? incoming : this.smartCombine(hunk, current, incoming) ?? current + incoming;
+		let text: string;
+		switch (choice) {
+			case 'base': text = textInRange(this.base, hunk.base); break;
+			case 'current': text = current; break;
+			case 'incoming': text = incoming; break;
+			case 'both': text = this.smartCombine(hunk, current, incoming) ?? current + incoming; break;
+			case 'bothReversed': text = this.smartCombine(hunk, current, incoming) ?? incoming + current; break;
+		}
 		return { range: rangeInModel(this.result, hunk.result), text };
 	}
 
-	private smartCombine(hunk: MergeEditorHunk, current: string, incoming: string): string | undefined {
+	public canSmartCombine(index: number): boolean {
+		const hunk = this.hunksValue[index];
+		return Boolean(hunk && this.smartCombine(hunk, textInRange(this.current, hunk.current), textInRange(this.incoming, hunk.incoming)) !== undefined);
+	}
+
+	private smartCombine(hunk: SourceHunk, current: string, incoming: string): string | undefined {
 		const baseText = textInRange(this.base, hunk.base);
 		const currentEdits = characterEdits(this.base, this.current, hunk.base, this.currentChanges);
 		const incomingEdits = characterEdits(this.base, this.incoming, hunk.base, this.incomingChanges);

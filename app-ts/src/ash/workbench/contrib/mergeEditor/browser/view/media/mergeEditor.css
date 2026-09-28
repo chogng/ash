@@ -11,16 +11,31 @@
 
 .ash-merge-navigation {
 	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
 	gap: var(--ash-spacing-size80);
 	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
 	border-bottom: var(--ash-strokeThickness) solid var(--ash-editor-group-border);
 }
 
+.ash-merge-progress {
+	margin-inline-start: auto;
+	font-size: var(--ash-fontSize-label1);
+}
+
 .ash-merge-inputs {
 	display: grid;
-	grid-template-columns: repeat(3, minmax(0, 1fr));
+	grid-template-columns: repeat(2, minmax(0, 1fr));
 	flex: 1;
 	min-height: 0;
+}
+
+.ash-merge-editor.show-base .ash-merge-inputs {
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.ash-merge-input-base[hidden] {
+	display: none;
 }
 
 .ash-merge-input,
@@ -33,6 +48,52 @@
 
 .ash-merge-input + .ash-merge-input {
 	border-left: var(--ash-strokeThickness) solid var(--ash-editor-group-border);
+}
+
+.ash-merge-editor:not(.show-base) .ash-merge-input-current {
+	border-left: 0;
+}
+
+.ash-merge-editor.columns {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	grid-template-rows: auto auto minmax(0, 1fr);
+}
+
+.ash-merge-editor.columns.show-base {
+	grid-template-rows: auto auto minmax(0, 3fr) minmax(0, 1fr);
+}
+
+.ash-merge-editor.columns .ash-merge-navigation,
+.ash-merge-editor.columns .ash-merge-hunks {
+	grid-column: 1 / -1;
+}
+
+.ash-merge-editor.columns .ash-merge-inputs {
+	display: contents;
+}
+
+.ash-merge-editor.columns .ash-merge-input-current {
+	grid-column: 1;
+	grid-row: 3;
+	border-left: 0;
+}
+
+.ash-merge-editor.columns .ash-merge-result {
+	grid-column: 2;
+	grid-row: 3;
+	border-left: var(--ash-strokeThickness) solid var(--ash-editor-group-border);
+}
+
+.ash-merge-editor.columns .ash-merge-input-incoming {
+	grid-column: 3;
+	grid-row: 3;
+}
+
+.ash-merge-editor.columns.show-base .ash-merge-input-base {
+	grid-column: 1 / -1;
+	grid-row: 4;
+	border-top: var(--ash-strokeThickness) solid var(--ash-editor-group-border);
 }
 
 .ash-merge-input h3,
@@ -93,6 +154,43 @@
 
 .ash-merge-line-resolved {
 	background: var(--ash-diffEditor-insertedLineBackground);
+}
+
+.ash-merge-line-base-change,
+.ash-merge-inline-removed {
+	background: var(--ash-diffEditor-removedLineBackground);
+}
+
+.ash-merge-line-change,
+.ash-merge-inline-inserted {
+	background: var(--ash-diffEditor-insertedLineBackground);
+}
+
+.ash-merge-inline-actions {
+	box-sizing: border-box;
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+	height: 100%;
+	padding-inline: var(--ash-spacing-size80);
+	overflow-x: auto;
+	white-space: nowrap;
+	background: var(--ash-editor-background);
+	border-block: var(--ash-strokeThickness) solid var(--ash-editor-group-border);
+}
+
+.ash-merge-inline-state {
+	font-size: var(--ash-fontSize-label1);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-merge-spacer {
+	background: var(--ash-editor-background);
+}
+
+.hc-black .ash-merge-inline-actions,
+.hc-light .ash-merge-inline-actions {
+	border-color: var(--ash-contrastBorder);
 }
 
 @container (max-width: 700px) {

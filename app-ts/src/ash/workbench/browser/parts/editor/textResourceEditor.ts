@@ -28,6 +28,7 @@ import { type ILanguageDiagnosticsService } from "../../../services/language/com
 import type { Selection } from "../../../../editor/common/core/selection.js";
 import type { TextModel } from '../../../../editor/common/model/textModel.js';
 import type { IModelDeltaDecoration } from '../../../../editor/common/model.js';
+import type { IViewZoneChangeAccessor } from '../../../../editor/browser/editorBrowser.js';
 import type { ICursorSelectionChangedEvent } from "../../../../editor/common/cursorEvents.js";
 import type { EditorPaneStatus } from "../../../browser/parts/editor/editorPane.js";
 import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
@@ -59,9 +60,12 @@ export interface EditorPanePart extends IDisposable, ITextCodeEditorControl {
 	getScrollLeft(): number;
 	getVisibleRanges(): Range[];
 	getTopForLineNumber(lineNumber: number): number;
+	getBottomForLineNumber(lineNumber: number): number;
 	setScrollTop(scrollTop: number): void;
 	setScrollLeft(scrollLeft: number): void;
+	changeViewZones(callback: (accessor: IViewZoneChangeAccessor) => void): void;
 	executeEdits(source: string, edits: { range: Range; text: string }[]): boolean;
+	pushUndoStop(): boolean;
 	updateOptions(options: Readonly<IEditorOptions>): void;
 	revealRange?(range: Range): void;
 	saveViewState?(): ICodeEditorViewState | null;
