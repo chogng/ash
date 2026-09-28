@@ -1181,6 +1181,9 @@ impl App {
             self.panels_mut().handle_command_paste(pasted);
             return;
         }
+        if self.fullscreen_home_visible() && self.accepts_input() {
+            self.fullscreen.focus_home_input_for_paste();
+        }
         if self.accepts_input() && self.chat_input_focused() && !self.queue_focused() {
             let (panel, input) = self.composer_parts_mut();
             if let Err(error) = panel.handle_input_paste(input, pasted) {

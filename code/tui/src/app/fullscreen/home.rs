@@ -301,6 +301,16 @@ pub(super) fn handle_key(app: &mut App, key: KeyEvent) -> Option<Option<AppComma
         (KeyModifiers::NONE, KeyCode::Esc) if app.sessions.active_session_id().is_some() => {
             app.show_conversation()
         }
+        (_, KeyCode::Char(_))
+            if selected.is_some()
+                && (key.modifiers == KeyModifiers::NONE
+                    || key.modifiers == KeyModifiers::SHIFT) =>
+        {
+            app.fullscreen.home.selected = None;
+            app.fullscreen.focus_input();
+            // Pass this key to the composer so the first character is kept.
+            return None;
+        }
         _ if selected.is_some() => return Some(None),
         _ => return None,
     }

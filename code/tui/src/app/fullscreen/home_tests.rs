@@ -240,11 +240,16 @@ fn first_character_clears_welcome_and_keeps_the_workspace_header() {
     let mut app = unstarted_app();
     app.open_home();
     assert!(app.fullscreen_welcome_visible());
+    app.handle_key(key(KeyCode::Tab));
+    assert_eq!(app.fullscreen.home.selected, Some(0));
+    assert!(!app.chat_input_focused());
 
     app.handle_key(key(KeyCode::Char('x')));
 
     assert!(app.fullscreen_home_visible());
     assert!(!app.fullscreen_welcome_visible());
+    assert_eq!(app.fullscreen.home.selected, None);
+    assert!(app.chat_input_focused());
     let rendered = text(&render(&app, 80, 24));
     assert!(rendered.lines().next().unwrap().contains("  ."));
     assert!(!rendered.contains("Ash Code v"));
@@ -262,6 +267,22 @@ fn first_character_clears_welcome_and_keeps_the_workspace_header() {
     whitespace.handle_key(key(KeyCode::Char(' ')));
     assert_eq!(whitespace.input(), " ");
     assert!(!whitespace.fullscreen_welcome_visible());
+}
+
+#[test]
+fn pasting_into_the_home_menu_returns_to_the_composer() {
+    let mut app = unstarted_app();
+    app.open_home();
+    app.handle_key(key(KeyCode::Tab));
+    assert_eq!(app.fullscreen.home.selected, Some(0));
+
+    app.handle_paste("检查项目结构".into());
+
+    assert_eq!(app.input(), "检查项目结构");
+    assert_eq!(app.fullscreen.home.selected, None);
+    assert!(app.chat_input_focused());
+    assert!(!app.fullscreen_welcome_visible());
+    crate::tui_assert_snapshot!("home_pasted_from_menu", text(&render(&app, 80, 24)));
 }
 
 #[test]
