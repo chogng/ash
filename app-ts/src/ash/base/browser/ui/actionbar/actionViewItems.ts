@@ -80,11 +80,11 @@ export class ButtonActionViewItem extends ActionViewItem {
 			label: this.action.label,
 			icon: this.action.icon,
 			ariaLabel: this.action.label,
-			title: this.action.tooltip,
 			enabled: this.action.enabled,
 			checked: this.action.checked,
 			onClick: () => this.runAction(),
 		});
+		this.setupTooltip();
 	}
 
 	override focus(): void {
@@ -98,6 +98,10 @@ export class ButtonActionViewItem extends ActionViewItem {
 	protected get button(): Button {
 		assertDefined(this._button, `Action view item is not rendered: ${this.action.id}`);
 		return this._button;
+	}
+
+	protected setupTooltip(): void {
+		this.button.setTitle(this.action.tooltip);
 	}
 
 	protected runAction(): unknown {

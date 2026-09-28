@@ -462,7 +462,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	);
 	assert.deepEqual(
 		[...modeMenu?.querySelectorAll<HTMLElement>("[data-action-id]") ?? []].map(item => item.querySelector('.ash-menu-leading-slot .ash-icon-label-icon svg.ash-icon')?.getAttribute('data-ash-icon-id') ?? null),
-		['unlimited', 'plan', 'debug', null, 'chat-4'],
+		['unlimited', 'plan', 'debug', 'multitask', 'chat-4'],
 	);
 	assert.deepEqual(
 		[...modeMenu?.querySelectorAll<HTMLButtonElement>("[role='menuitemradio']") ?? []].map(item => item.getAttribute('aria-checked')),
@@ -471,7 +471,15 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	modeMenu?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode.plan'] button")?.click();
 	assert.equal(firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, "Plan");
 	assert.equal(firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button svg.ash-icon")?.getAttribute('data-ash-icon-id'), 'plan');
+	assert.equal(firstChatPane.querySelector(".ash-chat-input-mode-selector")?.classList.contains('mode-plan'), true);
 	assert.equal(dom.window.document.querySelector(".ash-chat-input-mode-menu"), null);
+	for (const [mode, icon] of [['debug', 'debug'], ['multitask', 'multitask'], ['ask', 'chat-4']] as const) {
+		firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.click();
+		await waitFor(() => dom.window.document.querySelector('.ash-chat-input-mode-menu') !== null);
+		dom.window.document.querySelector<HTMLButtonElement>(`[data-action-id='ash.chat.input.mode.${mode}'] button`)?.click();
+		assert.equal(firstChatPane.querySelector(".ash-chat-input-mode-selector")?.classList.contains(`mode-${mode}`), true);
+		assert.equal(firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button svg.ash-icon")?.getAttribute('data-ash-icon-id'), icon);
+	}
 	assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [false, true]);
 	const composerInputs = [...chatPanes].map((chatPane) => {
 		const input = chatPane.querySelector<HTMLTextAreaElement>(".ash-chat-textarea-input");
@@ -630,11 +638,13 @@ test("an empty Session list opens an untitled session and persists it on its fir
 	const dom = new JSDOM("<!doctype html><body></body>");
 	dom.window.HTMLElement.prototype.scrollTo = () => {};
 	using contextViewService = new BrowserContextViewService(dom.window.document.body);
+	let failAgentList = false;
 	const createdSession = session("session-1", undefined, "New Chat");
 	const attachedSession = session("session-1", "thread-1", "New Chat");
 	const fake = fakeApi({
 		sessions: [],
 		agents: [{ name: 'reviewer', description: 'Reviews changes', sourceId: 'directory-1' }],
+		agentListFails: () => failAgentList,
 		createSession: createdSession,
 		createThread: {
 			session: attachedSession,
@@ -713,6 +723,14 @@ test("an empty Session list opens an untitled session and persists it on its fir
 	assert.equal(selectedAgentItem?.getAttribute('role'), 'menuitemradio');
 	assert.equal(selectedAgentItem?.getAttribute('aria-checked'), 'true');
 	selectedAgentItem?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+	failAgentList = true;
+	untitledPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.click();
+	await waitFor(() => dom.window.document.querySelector('.ash-chat-input-mode-menu') !== null);
+	assert.deepEqual(
+		[...dom.window.document.querySelectorAll<HTMLElement>('.ash-chat-input-mode-menu [data-action-id]')].map(item => item.dataset.actionId),
+		['ash.chat.input.mode.agent', 'ash.chat.input.mode.plan', 'ash.chat.input.mode.debug', 'ash.chat.input.mode.multitask', 'ash.chat.input.mode.ask'],
+	);
+	dom.window.document.querySelector<HTMLButtonElement>('.ash-chat-input-mode-menu [role="menuitemradio"]')?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 	assert.equal(untitledPane.classList.contains("empty"), true);
 	let contextResolutions = 0;
 	pane.addContext({
@@ -1526,6 +1544,7 @@ test("ChatWidgetModel retries only the latest retryable failed Turn as a new vis
 
 interface FakeOptions {
 	readonly agents?: readonly { readonly name: string; readonly description: string; readonly sourceId: string }[];
+	readonly agentListFails?: () => boolean;
 	readonly sessions?: readonly ISession[];
 	readonly createSession?: ISession;
 	readonly createSessionError?: Error;
@@ -1841,7 +1860,10 @@ function fakeApi(options: FakeOptions = {}): {
 			},
 		},
 		session: {
-			listAgents: async () => ({ agents: (options.agents ?? []).map(agent => ({ name: agent.name, description: agent.description, source: { type: 'directory' as const, id: agent.sourceId } })) }),
+			listAgents: async () => {
+				if (options.agentListFails?.()) throw new Error('Agent list unavailable');
+				return { agents: (options.agents ?? []).map(agent => ({ name: agent.name, description: agent.description, source: { type: 'directory' as const, id: agent.sourceId } })) };
+			},
 			list: async () => ({ sessions: (options.sessions ?? []).map(sessionDto) }),
 			subscribeCatalog: async () => ({ sessions: (options.sessions ?? []).map(sessionDto) }),
 			unsubscribeCatalog: async () => undefined,

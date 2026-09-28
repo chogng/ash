@@ -42,8 +42,13 @@ function prependMenuLeadingSlot(
 	button.prepend(slot);
 }
 
+/** Menus use the action label for accessibility without opening a tooltip. */
+abstract class MenuButtonActionViewItem extends ButtonActionViewItem {
+	protected override setupTooltip(): void {}
+}
+
 /** Button view item for an action presented inside a menu. */
-class MenuActionViewItem extends ButtonActionViewItem {
+class MenuActionViewItem extends MenuButtonActionViewItem {
 	private readonly onDidSelect: (() => void) | undefined;
 	private readonly keybinding: ResolvedKeybinding | undefined;
 	private readonly actionRunner: IActionRunner | undefined;
@@ -105,7 +110,7 @@ class MenuActionViewItem extends ButtonActionViewItem {
 }
 
 /** Menu view item that owns the nested Menu for a submenu action. */
-class SubmenuMenuActionViewItem extends ButtonActionViewItem {
+class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 	private readonly submenuAction: SubmenuAction;
 	private readonly onDidSelect: (() => void) | undefined;
 	private readonly submenuLayer: number;

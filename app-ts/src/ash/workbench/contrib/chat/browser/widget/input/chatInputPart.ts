@@ -21,9 +21,8 @@ import { SkillSelectorCatalog } from "../../../common/skillSelectors.js";
 import type { ChatInputDelegate, ChatInputState } from "./chatInput.js";
 import { ChatInputEditors, type IChatInputEditor } from "./chatInputEditorRegistry.js";
 import { ModelPickerActionItem } from './modelPicker/modelPickerActionItem.js';
-import { ModePickerActionItem } from './modePickerActionItem.js';
+import { ModePickerActionItem, type ChatInputMode } from './modePickerActionItem.js';
 
-type ChatInputMode = "agent" | "plan" | "debug" | "multitask" | "ask";
 type ChatInputToolbarPresentation = "mode" | "model" | "mic" | "voice" | "send" | "interrupt";
 
 interface ChatInputToolbarState {
@@ -42,7 +41,7 @@ const modeOptions: readonly { readonly id: ChatInputMode; readonly label: string
 	{ id: "agent", label: "Agent", icon: Lxicon.unlimited },
 	{ id: "plan", label: "Plan", icon: Lxicon.plan },
 	{ id: "debug", label: "Debug", icon: Lxicon.debug },
-	{ id: "multitask", label: "Multitask" },
+	{ id: "multitask", label: "Multitask", icon: Lxicon.multitask },
 	{ id: "ask", label: "Ask", icon: Lxicon.chat4 },
 ];
 
@@ -257,12 +256,11 @@ export class ChatInputPart extends Disposable {
 				"mode",
 				async () => {
 					let agents: readonly ChatAgent[] = [];
-					let agentsError = false;
 					if (this.state.canSelectAgent) {
 						try {
 							agents = await this.delegate.listAgents();
 						} catch {
-							agentsError = true;
+							// Built-in modes remain available when custom Agents cannot be listed.
 						}
 					}
 					const options = modeOptions.map(option => new ChatInputAction(
@@ -279,7 +277,6 @@ export class ChatInputPart extends Disposable {
 						option.id === this.mode && !this.state.selectedAgent && !this.state.agentName,
 					));
 					if (this.state.agentName) options.unshift(new ChatInputAction('ash.chat.input.agent.current', this.state.agentName, this.state.agentName, Lxicon.unlimited, false, 'mode', () => {}, true));
-					if (agentsError) options.push(new ChatInputAction('ash.chat.input.agent.error', localize('chat.agentPicker.loadFailed', 'Could not load custom Agents'), localize('chat.agentPicker.loadFailed', 'Could not load custom Agents'), undefined, false, 'mode', () => {}));
 					return [...options, ...agents.map(agent => new ChatInputAction(
 						`ash.chat.input.agent.${agent.sourceId}.${agent.name}`,
 						agent.name,
@@ -436,7 +433,7 @@ export class ChatInputPart extends Disposable {
 			}, contextViewService);
 		}
 		if (action instanceof SelectorAction) {
-			return new ModePickerActionItem(action, contextViewService, () => {
+			return new ModePickerActionItem(action, contextViewService, this.mode, () => {
 				const selected = this.pendingAgentSelection;
 				this.pendingAgentSelection = undefined;
 				if (selected) {

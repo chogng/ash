@@ -69,6 +69,33 @@ test("Menu renders action badges as trailing metadata", async () => {
 	Reflect.deleteProperty(globalThis, "Node");
 });
 
+test("Menu items keep accessible names without installing action tooltips", async () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const [{ Menu }, { setHoverDelegate }] = await Promise.all([
+		import("../../browser/ui/menu/menu.js"),
+		import("../../browser/ui/hover/hoverDelegate.js"),
+	]);
+	using hoverDelegate = setHoverDelegate({
+		setupHover(): never {
+			throw new Error("Menu items must not install tooltips");
+		},
+	});
+	const menu = new Menu(dom.window.document.body, {
+		actions: [{
+			id: "plan",
+			label: "Plan",
+			tooltip: "Use Plan mode",
+			enabled: true,
+			run(): void {},
+		}],
+	});
+	const item = menu.element.querySelector<HTMLButtonElement>("[role='menuitem']");
+	assert.equal(item?.getAttribute("aria-label"), "Plan");
+	assert.equal(item?.hasAttribute("title"), false);
+	menu.dispose();
+	dom.window.close();
+});
+
 test("Menu projects one focused item for keyboard and pointer navigation", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	Object.defineProperty(globalThis, "window", {

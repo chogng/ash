@@ -12,6 +12,8 @@ interface IModePickerAction extends IAction {
 	readonly actions: readonly IAction[] | (() => Promise<readonly IAction[]>);
 }
 
+export type ChatInputMode = 'agent' | 'plan' | 'debug' | 'multitask' | 'ask';
+
 /** Presents the chat input's mode action as a keyboard-accessible menu. */
 export class ModePickerActionItem extends ButtonActionViewItem {
 	private readonly menu = this._register(new MutableDisposable<Menu>());
@@ -22,6 +24,7 @@ export class ModePickerActionItem extends ButtonActionViewItem {
 	constructor(
 		private readonly modeAction: IModePickerAction,
 		private readonly contextViewService: IContextViewService,
+		private readonly mode: ChatInputMode,
 		private readonly onDidSelect: () => void,
 	) {
 		super(modeAction);
@@ -29,7 +32,7 @@ export class ModePickerActionItem extends ButtonActionViewItem {
 
 	override render(container: HTMLElement): void {
 		super.render(container);
-		container.classList.add('ash-chat-input-selector', 'ash-chat-input-mode-selector', 'ash-dropdown-menu-action-view-item');
+		container.classList.add('ash-chat-input-selector', 'ash-chat-input-mode-selector', 'ash-dropdown-menu-action-view-item', `mode-${this.mode}`);
 		container.classList.toggle('disabled', !this.action.enabled);
 		const button = this.button.domNode;
 		this.button.toggleClassName('ash-chat-input-action', true);

@@ -87,8 +87,8 @@ test("localization lookup falls back to English and formats parameters", async (
 		localization.translate('ash', 'sessions.activity.mobile', 'Mobile devices'),
 		localization.translate('ash', 'sessions.activity.unavailable', '{0} (coming soon)', { '0': '协作' }),
 	], ['聊天', '协作', '移动设备', '协作（即将推出）']);
-	assert.equal(localization.translate('ash', 'sessions.activityBar.location.title', 'Sessions Activity Bar Position'), '会话活动栏位置');
-	assert.equal(localization.translate('ash', 'sessions.activityBar.compact.title', 'Compact Sessions Activity Bar'), '紧凑会话活动栏');
+	assert.equal(localization.translate('ash', 'sessions.activityBar.location.title', 'Sessions Activity Bar Position'), '活动栏位置');
+	assert.equal(localization.translate('ash', 'sessions.activityBar.compact.title', 'Compact Sessions Activity Bar'), '紧凑活动栏');
 	assert.equal(localization.translate('ash', 'sessions.header.chatCount', '{0} chats', { '0': 3 }), '3 个聊天');
 	assert.equal(localization.translate('ash', 'dialog.input', 'Input'), '输入');
 	assert.equal(localization.translate('ash', 'collaboration.dialog.tokenMessage', 'Enter the remote collaboration server bearer token.'), '输入远程协作服务器的访问令牌。');
@@ -276,7 +276,6 @@ test('editor action labels use the selected Chinese language catalog', async () 
 		assert.equal(localize('dictation.cloudProvider.title', 'Cloud dictation provider'), '云端听写供应商');
 		assert.equal(localize('dictation.cloudProvider.description', 'Choose the cloud transcription provider. Its API key is required.'), '选择云端语音转写供应商，并配置对应的 API 密钥。');
 		assert.equal(localize('chat.agentPicker.mode', 'Agent: {0}', 'reviewer'), '智能体：reviewer');
-		assert.equal(localize('chat.agentPicker.loadFailed', 'Could not load custom Agents'), '无法加载自定义智能体');
 		assert.equal(localize('chat.input.voice', 'Voice conversation'), '语音对话');
 		assert.equal(localize('chat.providerKeys.inputTitle', 'API key for {0}', 'OpenAI'), 'OpenAI 的 API 密钥');
 		assert.equal(localize('onboarding.stepProgress', 'Step {0} of {1}', 2, 3), '第 2 步，共 3 步');

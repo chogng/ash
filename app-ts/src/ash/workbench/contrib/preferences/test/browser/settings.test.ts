@@ -59,7 +59,6 @@ const { CodeEditorConfiguration } = await import('../../../../../workbench/contr
 const { ContentSearchConfiguration } = await import('../../../../../workbench/contrib/search/common/searchConfiguration.js');
 const { GitConfiguration } = await import('../../../../../workbench/services/git/common/gitConfiguration.js');
 const { ScmConfiguration } = await import('../../../../../workbench/contrib/scm/common/scmConfiguration.js');
-const { DictationConfiguration } = await import('../../../../../platform/dictation/common/dictationConfiguration.js');
 const { IGitService: GitServiceId } = await import('../../../../../workbench/services/git/common/gitService.js');
 const configurationRegistry = Registry.as<InstanceType<typeof ConfigurationRegistry>>(ConfigurationExtensions.Configuration);
 const { EditorPart } = await import('../../../../../workbench/browser/parts/editor/editorPart.js');

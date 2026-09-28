@@ -68,11 +68,14 @@ test('Code chat mode menu shows the available icons and selection', async ({ app
 	await modeButton.click();
 	const menu = page.locator('.ash-chat-input-mode-menu');
 	await expect(menu).toBeVisible();
+	await menu.getByRole('menuitemradio', { name: 'Plan', exact: true }).hover();
+	await page.waitForTimeout(650);
+	await expect(page.locator('.ash-hover[role="tooltip"]')).toHaveCount(0);
 	for (const [label, iconId] of [
 		['Agent', 'unlimited'],
 		['Plan', 'plan'],
 		['Debug', 'debug'],
-		['Multitask', null],
+		['Multitask', 'multitask'],
 		['Ask', 'chat-4'],
 	] as const) {
 		const item = menu.getByRole('menuitemradio', { name: label, exact: true });
@@ -81,6 +84,7 @@ test('Code chat mode menu shows the available icons and selection', async ({ app
 		if (iconId) await expect(item.locator('.ash-menu-leading-slot .ash-icon-label-icon svg.ash-icon')).toHaveAttribute('data-ash-icon-id', iconId);
 	}
 	await expect(menu.getByRole('menuitemradio', { name: 'Agent' })).toHaveAttribute('aria-checked', 'true');
+	await expect(menu.locator("[data-action-id='ash.chat.input.agent.error']")).toHaveCount(0);
 	const selectedAgent = menu.getByRole('menuitemradio', { name: 'Agent' });
 	const agentIcon = selectedAgent.locator('.ash-icon-label-icon svg.ash-icon');
 	const selectionCheck = selectedAgent.locator('.ash-menu-leading-check > svg.ash-icon');
@@ -95,13 +99,35 @@ test('Code chat mode menu shows the available icons and selection', async ({ app
 	await expect(modeButton).toHaveText('Plan');
 	await expect(modeButton.locator('svg[data-ash-icon-id="plan"]')).toHaveCount(1);
 	await expect(chevron).toBeVisible();
+	await page.mouse.move(4, 4);
 	await modeButton.focus();
 	await page.keyboard.press('ArrowDown');
 	await expect(modeButton).toHaveAttribute('aria-expanded', 'true');
-	await expect(page.locator('.ash-chat-input-mode-menu').getByRole('menuitemradio', { name: 'Plan' })).toBeFocused();
+	await expect(page.locator('.ash-chat-input-mode-menu').getByRole('menuitemradio', { name: 'Agent', exact: true })).toBeFocused();
 	await page.keyboard.press('Escape');
 	await expect(modeButton).toHaveAttribute('aria-expanded', 'false');
 	await expect(modeButton).toBeFocused();
+	for (const [label, mode, color] of [
+		['Plan', 'plan', '--ash-charts-orange'],
+		['Debug', 'debug', '--ash-charts-red'],
+		['Multitask', 'multitask', '--ash-charts-purple'],
+		['Ask', 'ask', '--ash-charts-green'],
+	] as const) {
+		if (mode !== 'plan') {
+			await modeButton.click();
+			await page.locator('.ash-chat-input-mode-menu').getByRole('menuitemradio', { name: label, exact: true }).click();
+		}
+		await expect(modeButton.locator('..')).toHaveClass(new RegExp(`\\bmode-${mode}\\b`));
+		const foreground = await modeButton.evaluate((button, variable) => {
+			const probe = document.createElement('span');
+			probe.style.color = `var(${variable})`;
+			button.append(probe);
+			const expected = getComputedStyle(probe).color;
+			probe.remove();
+			return { actual: getComputedStyle(button).color, expected };
+		}, color);
+		expect(foreground.actual).toBe(foreground.expected);
+	}
 });
 
 test('Browser Code Sessions Activity Bar centers icons and changes size and position through its menu', async ({ target, workbench }) => {

@@ -181,6 +181,26 @@
   font-size: 12px;
 }
 
+.ash-chat-input-toolbars.ash-toolbar .ash-chat-input-mode-selector.mode-plan .ash-chat-input-mode-action {
+  color: var(--ash-charts-orange);
+  background: color-mix(in srgb, var(--ash-charts-orange) 16%, transparent);
+}
+
+.ash-chat-input-toolbars.ash-toolbar .ash-chat-input-mode-selector.mode-debug .ash-chat-input-mode-action {
+  color: var(--ash-charts-red);
+  background: color-mix(in srgb, var(--ash-charts-red) 16%, transparent);
+}
+
+.ash-chat-input-toolbars.ash-toolbar .ash-chat-input-mode-selector.mode-multitask .ash-chat-input-mode-action {
+  color: var(--ash-charts-purple);
+  background: color-mix(in srgb, var(--ash-charts-purple) 16%, transparent);
+}
+
+.ash-chat-input-toolbars.ash-toolbar .ash-chat-input-mode-selector.mode-ask .ash-chat-input-mode-action {
+  color: var(--ash-charts-green);
+  background: color-mix(in srgb, var(--ash-charts-green) 16%, transparent);
+}
+
 .ash-chat-input-mode-indicator {
   flex: 0 0 auto;
   margin-left: 6px;
