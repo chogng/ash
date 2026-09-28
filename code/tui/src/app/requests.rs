@@ -162,6 +162,7 @@ pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
         AppCommand::DictationStart { .. } | AppCommand::DictationStop { .. } => {
             Some(RequestKey::Dictation)
         }
+        AppCommand::SetDictationShortcutSettings(_) => Some(RequestKey::Config),
         AppCommand::Thread(ThreadCommand::Interrupt) => Some(RequestKey::Interrupt),
         AppCommand::Thread(ThreadCommand::ResolveRequest(_)) => Some(RequestKey::Interaction),
         AppCommand::Host(

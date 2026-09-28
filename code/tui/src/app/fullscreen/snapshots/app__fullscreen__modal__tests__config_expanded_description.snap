@@ -26,7 +26,7 @@ expression: frame_text(&app)
             │> Automatic Git fetch                                                Off │             
             │> Git fetch interval                                                180s │             
             │> Git branch marker                                            Powerline │             
-            │> Advisor                                                            Off │ Esc return  
+            │  3 more below                                                           │ Esc return  
   ╭─────────│  Enter change · r reset · ←/→ details · Tab tabs · / search · Esc close │──────────╮  
   │ > Build └─────────────────────────────────────────────────────────────────────────┘          │  
   ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯

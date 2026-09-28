@@ -58,6 +58,12 @@ pub(super) fn start(
         Some(root) => ash_utils_home_dir::resolve_path(&root)?,
         None => ash_utils_home_dir::find_ash_home()?,
     };
+    let local_state = state::StateRuntime::open(&profile_root).map_err(std::io::Error::other)?;
+    let dictation_settings = std::sync::Arc::new(
+        crate::config::LocalDictationSettings::open(&profile_root, local_state.database_path())
+            .map_err(std::io::Error::other)?,
+    );
+    let dictation_preference = dictation_settings.read().map_err(std::io::Error::other)?;
     let initialization = client.initialization()?;
     let server_slash_commands = initialization.slash_commands.clone();
     let plugins_enabled = initialization.capabilities.plugins;
@@ -125,6 +131,7 @@ pub(super) fn start(
         input_catalog,
         startup_context,
     );
+    app.set_dictation_shortcut_settings(dictation_preference);
     let history = (|| {
         let runtime =
             state::StateRuntime::open(&profile_root).map_err(|error| error.to_string())?;
@@ -194,6 +201,7 @@ pub(super) fn start(
             server_slash_commands,
             plugins_enabled,
             profile_root,
+            dictation_settings,
         },
     );
     let pump = EventPump::start(events, resource_targets, notices)?;

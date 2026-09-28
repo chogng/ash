@@ -20,7 +20,7 @@ expression: render_dictation_frame(&app)
                                                                                 
                                                                                 
                                                                                 
-                                                  Listening. Press F8 to stop.  
+                                            Listening. Press /dictate to stop.  
   ╭──────────────────────────────────────────────────────────────────────────╮  
   │ > Draft hello                                                            │  
   ╰──────────────────────────────────────────────────────── Automatic model ─╯  

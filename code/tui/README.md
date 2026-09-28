@@ -7,7 +7,7 @@
 - 接收文字、图片和命令，处理会话、设置与批准面板。
 - 通过 App Server 客户端发送请求，把后端状态和流式正文显示到终端。
 - 管理终端输入模式、绘制、滚动、鼠标捕获和退出清理。
-- 在本机运行语音识别：`/voice` 按停顿逐句发送给当前对话，模型回复显示为文字；`/dictate` 或 TUI 内任意页面的 F8 把听写写入当前草稿。
+- 在本机运行语音识别：`/voice` 按停顿逐句发送给当前对话，模型回复显示为文字；`/dictate` 把听写写入当前草稿。Config 可开启 TUI 内的听写快捷键，默认按键为 Ctrl+G。
 
 从仓库根目录运行：
 
@@ -116,7 +116,7 @@ CLI 将已初始化的 `AppServerSession` 和 `TuiOptions` 交给 `run`：
 | `TuiExit` | 区分用户退出、系统终止和连接丢失；`ConnectionLost.recovery` 在尚无会话时为 `None` |
 | `TuiError` | 报告客户端、事件流、关闭和终端错误 |
 
-`with_remote_dir` 只设置远程展示目录，并关闭本地文件补全，避免把远程路径当成本机路径扫描。正文导出仍受先前配置的本机目录约束。`with_profile_root` 启用该 profile 的 TUI 主题目录，其他设置从后端配置读取。
+`with_remote_dir` 只设置远程展示目录，并关闭本地文件补全，避免把远程路径当成本机路径扫描。正文导出仍受先前配置的本机目录约束。`with_profile_root` 启用该 profile 的 TUI 主题目录和听写快捷键设置；其余设置从后端配置读取。
 
 ## 输入如何提交
 
@@ -247,9 +247,13 @@ autoUpdate = "latest"
 showGitChangesAsDiff = false
 statusLineStyle = "compact"
 language = "en"
+dictationShortcutEnabled = false
+dictationShortcut = "ctrl+g"
 ```
 
-`screenMode` 只接受 `fullscreen` 和 `inline`，缺省为 `fullscreen`。已有主屏配置需要将该值更新为 `inline`；其他值按配置错误报告。在 Config 的“通用”页通过 Enter、Space 或左右键切换，保存成功后立即应用；外部配置重载也使用同一路径。设置沿用现有 Config 读写通路；本地运行保存在本机 profile，远程连接目前读取和写入远端 App Server 的 profile。本机独立 UX 配置通路尚未接入。启动时先验证设置，再获取终端模式；非法值会报告配置错误。
+`screenMode` 只接受 `fullscreen` 和 `inline`，缺省为 `fullscreen`。已有主屏配置需要将该值更新为 `inline`；其他值按配置错误报告。在 Config 的“通用”页通过 Enter、Space 或左右键切换，保存成功后立即应用；外部配置重载也使用同一路径。除听写快捷键外，现有 TUI 设置沿用 App Server 的 Config 读写通路：本地运行保存在本机 profile，远程连接目前读取和写入远端 App Server 的 profile。启动时先验证设置，再获取终端模式；非法值会报告配置错误。
+
+`dictationShortcutEnabled` 缺省为 `false`。开启后，在 TUI 任意页面按 `dictationShortcut` 开始或停止听写，结果写入当前草稿；输入框聚焦时按 Enter 会结束听写，等最终文字返回后发送。`/dictate` 不受开关影响。默认键为 `ctrl+g`，可在 Config 修改为一个带修饰键的组合键。两个值读写运行 TUI 的本机 profile，连接远端 App Server 不改变它们。macOS 的媒体键不作为默认听写键。
 
 `keyHintStyle` 只接受 `contrast` 和 `muted`，缺省为 `contrast`。`contrast` 使用当前主题的前景色与粗体显示按键，说明文字使用弱化色；`muted` 保留整条弱化斜体效果。该设置由 Config 的“通用”页写入，fullscreen、inline 和两者的功能面板共用同一渲染通路并即时应用。
 

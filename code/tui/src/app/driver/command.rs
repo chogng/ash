@@ -44,6 +44,22 @@ impl AppDriver {
         }
         let request_key = request_key(&command);
         match command {
+            AppCommand::SetDictationShortcutSettings(settings) => {
+                let store = std::sync::Arc::clone(&self.dictation_settings);
+                let mut client = self.client.clone();
+                self.requests.spawn_presentation(
+                    request_key,
+                    "ash-tui-set-dictation-shortcut",
+                    move || {
+                        let saved = store.write(settings)?;
+                        let choices = config::request::read_config_choices(&mut client)
+                            .map_err(|error| error.to_string())?;
+                        Ok::<_, String>(config::Event::DictationShortcutSaved(saved, choices))
+                    },
+                    &mut self.app,
+                    origin,
+                );
+            }
             AppCommand::VoiceStart { resource_id } => {
                 if let Err(error) = self.voice.start() {
                     self.app.update(crate::app::AppEvent::VoiceStarted {

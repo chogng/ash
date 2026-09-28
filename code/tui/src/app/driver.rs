@@ -110,6 +110,8 @@ pub(super) struct AppDriver {
     plugins_enabled: bool,
     memory: crate::memory::Controller,
     voice: crate::voice::VoiceRuntime,
+    dictation_settings: std::sync::Arc<crate::config::LocalDictationSettings>,
+    dictation_settings_changes: std::sync::mpsc::Receiver<ash_config::ConfigChange>,
 }
 
 pub(super) struct AppDriverResources {
@@ -119,6 +121,7 @@ pub(super) struct AppDriverResources {
     pub(super) server_slash_commands: Vec<SlashCommandDefinition>,
     pub(super) plugins_enabled: bool,
     pub(super) profile_root: PathBuf,
+    pub(super) dictation_settings: std::sync::Arc<crate::config::LocalDictationSettings>,
 }
 
 impl AppDriver {
@@ -128,6 +131,7 @@ impl AppDriver {
         conversation: Option<Conversation>,
         resources: AppDriverResources,
     ) -> Self {
+        let dictation_settings_changes = resources.dictation_settings.subscribe_changes();
         let initial =
             ScheduledCommand::new(HostCommand::RefreshClipboardImageAvailability.into(), &app);
         let mut driver = Self {
@@ -145,6 +149,8 @@ impl AppDriver {
             plugins_enabled: resources.plugins_enabled,
             memory: crate::memory::Controller::default(),
             voice: crate::voice::VoiceRuntime::new(&resources.profile_root),
+            dictation_settings: resources.dictation_settings,
+            dictation_settings_changes,
         };
         driver.reconcile_memory_diagnostics();
         driver
@@ -197,11 +203,21 @@ impl AppDriver {
     }
 
     pub(super) fn poll_request_completions(&mut self) -> bool {
+        let local_settings_changed = self.dictation_settings_changes.try_iter().last().is_some();
+        if local_settings_changed {
+            match self.dictation_settings.read() {
+                Ok(settings) => self.app.set_dictation_shortcut_settings(settings),
+                Err(error) => self.app.update(ThreadEvent::FailureReported(error)),
+            }
+        }
         let voice_events = self.voice.poll();
         let voice_changed = !voice_events.is_empty();
         self.memory.observe_objects(self.app.memory_object_count());
         let completions = self.requests.poll();
-        let mut changed = voice_changed || self.app.poll_input_history() || !completions.is_empty();
+        let mut changed = local_settings_changed
+            || voice_changed
+            || self.app.poll_input_history()
+            || !completions.is_empty();
         for completion in completions {
             let thread_before = self
                 .conversation
@@ -246,6 +262,11 @@ impl AppDriver {
             changed = true;
         }
         if let Some(command) = self.app.take_dictation_stop_requested() {
+            self.queued_commands
+                .push_back(ScheduledCommand::new(command, &self.app));
+            changed = true;
+        }
+        if let Some(command) = self.app.take_dictation_submission() {
             self.queued_commands
                 .push_back(ScheduledCommand::new(command, &self.app));
             changed = true;

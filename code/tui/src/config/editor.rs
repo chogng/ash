@@ -1,3 +1,4 @@
+use crate::config::DictationShortcutSettings;
 use crate::config::TerminalSettings;
 use crate::keymap::bindings;
 use crate::nls;
@@ -44,6 +45,8 @@ pub(crate) struct ConfigEdit {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ConfigSelectionAction {
+    ToggleDictationShortcut(DictationShortcutSettings),
+    EditDictationShortcut(DictationShortcutSettings),
     OpenAdvisor,
     OpenAdvisorModel,
     SetAdvisor(Option<AdvisorConfig>),
@@ -120,15 +123,21 @@ pub(crate) struct ConfigEditor {
     subscription_sign_out: super::SignOutAvailability,
     dialog: Option<crate::widgets::dialog::Dialog>,
     advisor: Option<AdvisorEditor>,
-    prompt: Option<ProviderApiKeyPromptState>,
+    prompt: Option<ConfigPromptState>,
     removing: Option<super::provider::Request>,
 }
 
 #[derive(Debug)]
-struct ProviderApiKeyPromptState {
-    provider: String,
+struct ConfigPromptState {
+    kind: ConfigPromptKind,
     prompt: TextPrompt,
     key_hints: crate::widgets::key_hint::KeyHints,
+}
+
+#[derive(Debug)]
+enum ConfigPromptKind {
+    ProviderApiKey(String),
+    DictationShortcut(DictationShortcutSettings),
 }
 
 #[derive(Debug)]
@@ -179,6 +188,8 @@ impl AdvisorEditor {
 pub(crate) enum ConfigEditorOutcome {
     Action(ConfigSelectionAction),
     SaveApiKey(ProviderApiKeyEdit),
+    SaveDictationShortcut(DictationShortcutSettings),
+    InvalidDictationShortcut(String),
     Consumed,
     Dismiss,
 }
@@ -321,10 +332,17 @@ impl ConfigEditor {
                     self.prompt = None;
                     ConfigEditorOutcome::Consumed
                 }
-                TextPromptOutcome::Submit(value) => {
-                    let edit = ProviderApiKeyEdit::new(prompt.provider.clone(), value);
-                    ConfigEditorOutcome::SaveApiKey(edit)
-                }
+                TextPromptOutcome::Submit(value) => match &prompt.kind {
+                    ConfigPromptKind::ProviderApiKey(provider) => ConfigEditorOutcome::SaveApiKey(
+                        ProviderApiKeyEdit::new(provider.clone(), value),
+                    ),
+                    ConfigPromptKind::DictationShortcut(settings) => {
+                        match settings.clone().with_shortcut(&value) {
+                            Ok(settings) => ConfigEditorOutcome::SaveDictationShortcut(settings),
+                            Err(error) => ConfigEditorOutcome::InvalidDictationShortcut(error),
+                        }
+                    }
+                },
             };
         }
         if let Some(subscription) = self.subscription.as_mut() {
@@ -530,11 +548,18 @@ impl ConfigEditor {
                 self.open_provider_prompt(provider, display_name);
                 ConfigEditorOutcome::Consumed
             }
+            ListSelectionOutcome::Activate(ConfigSelectionAction::EditDictationShortcut(
+                settings,
+            )) => {
+                self.open_dictation_shortcut_prompt(settings);
+                ConfigEditorOutcome::Consumed
+            }
             ListSelectionOutcome::Activate(action) => ConfigEditorOutcome::Action(action),
             ListSelectionOutcome::Adjust(action, adjustment) => match action {
                 ConfigSelectionAction::OpenAdvisor
                 | ConfigSelectionAction::OpenAdvisorModel
                 | ConfigSelectionAction::OpenProviderApiKey { .. }
+                | ConfigSelectionAction::EditDictationShortcut(_)
                 | ConfigSelectionAction::OpenProvider(_)
                 | ConfigSelectionAction::Connection(_)
                 | ConfigSelectionAction::OpenSubscription(_)
@@ -785,14 +810,72 @@ impl ConfigEditor {
 
     fn open_provider_prompt(&mut self, provider: String, display_name: String) {
         let prompt = provider_api_key_prompt(provider, display_name);
-        self.prompt = Some(ProviderApiKeyPromptState {
-            provider: prompt.provider,
+        self.prompt = Some(ConfigPromptState {
+            kind: ConfigPromptKind::ProviderApiKey(prompt.provider),
             prompt: TextPrompt::new(prompt.spec),
             key_hints: crate::widgets::key_hint::KeyHints::new()
                 .with_binding(bindings::SAVE)
                 .with_binding(bindings::CANCEL),
         });
     }
+
+    fn open_dictation_shortcut_prompt(&mut self, settings: DictationShortcutSettings) {
+        self.prompt = Some(ConfigPromptState {
+            kind: ConfigPromptKind::DictationShortcut(settings.clone()),
+            prompt: TextPrompt::new(TextPromptSpec {
+                title: "Dictation shortcut".into(),
+                explanation: "Enter one key combination, for example ctrl+g".into(),
+                placeholder: settings.shortcut,
+                masked: false,
+            }),
+            key_hints: crate::widgets::key_hint::KeyHints::new()
+                .with_binding(bindings::SAVE)
+                .with_binding(bindings::CANCEL),
+        });
+    }
+}
+
+pub(crate) fn with_dictation_shortcut(
+    choices: &mut ConfigChoices,
+    settings: &DictationShortcutSettings,
+    language: Language,
+) {
+    let enabled_id = ListSelectionItemId::new("dictation-shortcut-enabled");
+    let shortcut_id = ListSelectionItemId::new("dictation-shortcut");
+    let mut toggled = settings.clone();
+    toggled.enabled = !toggled.enabled;
+    choices.actions.insert(
+        enabled_id.clone(),
+        ConfigSelectionAction::ToggleDictationShortcut(toggled),
+    );
+    choices.actions.insert(
+        shortcut_id.clone(),
+        ConfigSelectionAction::EditDictationShortcut(settings.clone()),
+    );
+    let label = nls::localize(language, "Dictation shortcut").into_owned();
+    choices.model.append_item(
+        0,
+        ListSelectionItem::new(&label)
+            .with_id(enabled_id)
+            .with_columns(
+                &label,
+                nls::localize(
+                    language,
+                    "Enable the shortcut to dictate into the current draft",
+                ),
+                switch_value(settings.enabled),
+            ),
+    );
+    choices.model.append_item(
+        0,
+        ListSelectionItem::new(nls::localize(language, "Dictation key"))
+            .with_id(shortcut_id)
+            .with_columns(
+                nls::localize(language, "Dictation key"),
+                nls::localize(language, "Press Enter to change the key"),
+                &settings.shortcut,
+            ),
+    );
 }
 
 fn config_revision(choices: &ConfigChoices) -> u64 {

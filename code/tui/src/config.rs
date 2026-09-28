@@ -1,6 +1,7 @@
+mod dictation;
 mod editor;
 pub(crate) mod provider;
-mod request;
+pub(crate) mod request;
 mod settings;
 mod subscription;
 
@@ -10,6 +11,8 @@ pub(crate) use subscription::SubscriptionCommand;
 pub(crate) use subscription::SubscriptionEvent;
 pub(crate) use subscription::SubscriptionProvider;
 
+pub(crate) use dictation::DictationShortcutSettings;
+pub(crate) use dictation::LocalDictationSettings;
 pub(crate) use editor::AdvisorChoices;
 pub(crate) use editor::ConfigChoices;
 pub(crate) use editor::ConfigEdit;
@@ -20,6 +23,7 @@ pub(crate) use editor::ConfigSelectionAction;
 pub(crate) use editor::ProviderApiKeyEdit;
 pub(crate) use editor::advisor_choices;
 pub(crate) use editor::config_choices;
+pub(crate) use editor::with_dictation_shortcut;
 pub(crate) use request::execute;
 #[cfg(test)]
 pub(crate) use request::set_settings;
@@ -41,6 +45,7 @@ pub(crate) struct ConfigEditResult {
 
 /// A completed configuration operation delivered to the TUI state owner.
 pub(crate) enum Event {
+    DictationShortcutSaved(DictationShortcutSettings, ConfigChoices),
     AdvisorOpened {
         root: ConfigChoices,
         advisor: AdvisorChoices,

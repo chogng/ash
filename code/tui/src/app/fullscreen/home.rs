@@ -253,6 +253,9 @@ pub(super) fn activate(app: &mut App, action: Action) -> Option<AppCommand> {
             let choices = crate::app::help::help_choices(
                 app.thread_presentations.slash_commands(),
                 app.app_keymap.setup_actions(),
+                app.dictation_shortcut_settings
+                    .enabled
+                    .then_some(app.dictation_shortcut_settings.shortcut.as_str()),
             );
             app.open_command_panel(CommandPanel::help(choices));
             None

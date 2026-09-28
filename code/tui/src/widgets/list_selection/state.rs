@@ -232,6 +232,10 @@ struct ListSelectionPresentation {
 }
 
 impl ListSelectionModel {
+    pub(crate) fn append_item(&mut self, tab: usize, item: ListSelectionItem) {
+        self.tabs[tab].items.push(item);
+    }
+
     pub(crate) fn new(title: impl Into<Text>, tabs: Vec<ListSelectionGroup>) -> Self {
         assert!(
             !tabs.is_empty(),

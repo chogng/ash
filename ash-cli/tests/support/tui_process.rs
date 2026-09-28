@@ -47,6 +47,7 @@ pub struct Fixture {
     profile: PathBuf,
     daemon: PathBuf,
     product_services: Option<PathBuf>,
+    voice_host: Option<PathBuf>,
 }
 
 impl Fixture {
@@ -104,6 +105,7 @@ impl Fixture {
             profile,
             daemon,
             product_services: None,
+            voice_host: None,
         }
     }
 
@@ -111,6 +113,11 @@ impl Fixture {
         let path = self.root.join("product-services.json");
         fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
         self.product_services = Some(path);
+        self
+    }
+
+    pub fn with_missing_voice_host(mut self) -> Self {
+        self.voice_host = Some(self.root.join("missing-voice-host"));
         self
     }
 
@@ -127,6 +134,9 @@ impl Fixture {
         ];
         if let Some(path) = &self.product_services {
             environment.push(("ASH_PRODUCT_SERVICES_PATH", path.clone()));
+        }
+        if let Some(path) = &self.voice_host {
+            environment.push(("ASH_VOICE_HOST_PATH", path.clone()));
         }
         #[cfg(windows)]
         let environment = {

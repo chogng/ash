@@ -816,7 +816,8 @@ fn dictate_command_adds_recognized_text_to_the_draft_and_stops() {
     assert_eq!(app.input(), "");
     app.thread_presentations
         .switch(ThreadId::new("tui-local").unwrap());
-    let stop = app.handle_key(KeyEvent::new(KeyCode::F(8), KeyModifiers::NONE));
+    app.dictation_shortcut_settings.enabled = true;
+    let stop = app.handle_key(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::CONTROL));
     assert_eq!(
         stop,
         Some(AppCommand::DictationStop {
@@ -832,33 +833,63 @@ fn dictate_command_adds_recognized_text_to_the_draft_and_stops() {
 }
 
 #[test]
-fn f8_toggles_dictation_even_when_chat_input_is_unavailable() {
+fn dictation_shortcut_is_inactive_until_enabled() {
     let mut app = App::new();
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::CONTROL)),
+        None,
+    );
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::F(8), KeyModifiers::NONE)),
+        None,
+    );
+    app.dictation_shortcut_settings.enabled = true;
+    let Some(AppCommand::DictationStart { resource_id }) =
+        app.handle_key(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::CONTROL))
+    else {
+        panic!("enabled shortcut must start dictation");
+    };
+    app.dictation_shortcut_settings.enabled = false;
+    app.update(AppEvent::DictationStarted {
+        resource_id: resource_id.clone(),
+        error: None,
+    });
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::CONTROL)),
+        Some(AppCommand::DictationStop { resource_id }),
+    );
+}
+
+#[test]
+fn ctrl_g_toggles_dictation_when_enabled_even_when_chat_input_is_unavailable() {
+    let mut app = App::new();
+    app.dictation_shortcut_settings.enabled = true;
     app.set_status(Status::WaitingForApproval);
-    let start = app.handle_key(KeyEvent::new(KeyCode::F(8), KeyModifiers::NONE));
+    let start = app.handle_key(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::CONTROL));
     let Some(AppCommand::DictationStart { resource_id }) = start else {
-        panic!("F8 must start dictation from outside the composer");
+        panic!("the enabled shortcut must start dictation from outside the composer");
     };
     app.update(AppEvent::DictationStarted {
         resource_id: resource_id.clone(),
         error: None,
     });
     assert_eq!(
-        app.handle_key(KeyEvent::new(KeyCode::F(8), KeyModifiers::NONE)),
+        app.handle_key(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::CONTROL)),
         Some(AppCommand::DictationStop { resource_id })
     );
 }
 
 #[test]
-fn f8_during_dictation_start_stops_after_start_completes() {
+fn ctrl_g_during_dictation_start_stops_after_start_completes() {
     let mut app = App::new();
+    app.dictation_shortcut_settings.enabled = true;
     let Some(AppCommand::DictationStart { resource_id }) =
-        app.handle_key(KeyEvent::new(KeyCode::F(8), KeyModifiers::NONE))
+        app.handle_key(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::CONTROL))
     else {
         panic!("expected dictation start");
     };
     assert_eq!(
-        app.handle_key(KeyEvent::new(KeyCode::F(8), KeyModifiers::NONE)),
+        app.handle_key(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::CONTROL)),
         None
     );
     app.update(AppEvent::DictationStarted {
@@ -869,6 +900,128 @@ fn f8_during_dictation_start_stops_after_start_completes() {
         app.take_dictation_stop_requested(),
         Some(AppCommand::DictationStop { resource_id })
     );
+}
+
+#[test]
+fn enter_waits_for_final_dictation_text_before_sending() {
+    let mut app = App::new();
+    app.dictation_shortcut_settings.enabled = true;
+    let Some(AppCommand::DictationStart { resource_id }) =
+        app.handle_key(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::CONTROL))
+    else {
+        panic!("expected dictation start");
+    };
+    app.update(AppEvent::DictationStarted {
+        resource_id: resource_id.clone(),
+        error: None,
+    });
+    app.dictation_transcript(&resource_id, "partial", false);
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::DictationStop {
+            resource_id: resource_id.clone(),
+        }),
+    );
+    assert_eq!(app.input(), "partial");
+    assert_eq!(app.take_dictation_submission(), None);
+    app.update(AppEvent::DictationStopped {
+        resource_id,
+        result: Ok(Some("complete sentence".into())),
+    });
+    let Some(AppCommand::Thread(ThreadCommand::SubmitTurn { submission })) =
+        app.take_dictation_submission()
+    else {
+        panic!("final dictation should send the completed message");
+    };
+    assert_eq!(submission.display_text, "complete sentence");
+    assert_eq!(app.take_dictation_submission(), None);
+}
+
+#[test]
+fn failed_dictation_stop_keeps_the_draft_without_sending() {
+    let mut app = App::new();
+    app.dictation_shortcut_settings.enabled = true;
+    let Some(AppCommand::DictationStart { resource_id }) =
+        app.handle_key(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::CONTROL))
+    else {
+        panic!("expected dictation start");
+    };
+    app.update(AppEvent::DictationStarted {
+        resource_id: resource_id.clone(),
+        error: None,
+    });
+    app.dictation_transcript(&resource_id, "partial", false);
+    assert!(matches!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::DictationStop { .. }),
+    ));
+    app.update(AppEvent::DictationStopped {
+        resource_id,
+        result: Err("microphone unavailable".into()),
+    });
+    assert_eq!(app.take_dictation_submission(), None);
+    assert_eq!(app.input(), "partial");
+}
+
+#[test]
+fn config_can_enable_and_change_the_local_dictation_shortcut() {
+    let config = empty_config_snapshot();
+    let providers = ProviderListResult { providers: vec![] };
+    let choices = || {
+        config_choices(
+            &config,
+            &providers,
+            TerminalSettings::default(),
+            StatusLineSettings::default(),
+        )
+    };
+    let mut app = App::new();
+    app.update(ConfigEvent::EditorOpened(choices()));
+    for _ in 0..20 {
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    }
+    assert_eq!(
+        app.list_selection().unwrap().selected_item().unwrap().id(),
+        Some(&crate::widgets::list_selection::ListSelectionItemId::new(
+            "dictation-shortcut"
+        )),
+    );
+    crate::tui_assert_snapshot!("config_dictation_shortcut", render_dictation_frame(&app));
+    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    let Some(AppCommand::SetDictationShortcutSettings(settings)) =
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("Config should enable the local shortcut");
+    };
+    assert!(settings.enabled);
+    app.update(ConfigEvent::DictationShortcutSaved(
+        settings.clone(),
+        choices(),
+    ));
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        None,
+    );
+    for key in "ctrl+y".chars() {
+        app.handle_key(KeyEvent::new(KeyCode::Char(key), KeyModifiers::NONE));
+    }
+    let Some(AppCommand::SetDictationShortcutSettings(settings)) =
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("Config should save a changed shortcut");
+    };
+    assert_eq!(settings.shortcut, "ctrl+y");
+    app.update(ConfigEvent::DictationShortcutSaved(settings, choices()));
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::CONTROL)),
+        None,
+    );
+    assert!(matches!(
+        app.handle_key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::CONTROL)),
+        Some(AppCommand::DictationStart { .. })
+    ));
 }
 
 #[test]

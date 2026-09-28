@@ -112,7 +112,7 @@ impl TuiSlashCommandAction {
             Self::Theme => "show or set the terminal color theme",
             Self::New => "start a new chat",
             Self::Quit => "quit Ash",
-            Self::Dictate => "dictate into the draft; toggle with F8",
+            Self::Dictate => "dictate into the current draft; run again to stop",
             Self::Voice => "speak continuously and receive text replies",
         };
         let name: &'static str = self.into();

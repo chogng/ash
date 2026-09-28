@@ -2903,7 +2903,7 @@ fn model_picker_cycles_supported_effort_in_place_and_commits_on_enter() {
     let blocks = buffer
         .content
         .iter()
-        .filter(|cell| cell.symbol() == "■")
+        .filter(|cell| cell.symbol() == "◼")
         .collect::<Vec<_>>();
     assert!(
         blocks
@@ -2915,7 +2915,7 @@ fn model_picker_cycles_supported_effort_in_place_and_commits_on_enter() {
             .iter()
             .any(|cell| cell.fg == app.render_context().muted())
     );
-    assert!(render(&app, 100, 18).contains("■■■"));
+    assert!(render(&app, 100, 18).contains("◼◼◼"));
 
     let mut chinese = App::new();
     let mut settings = crate::config::TerminalSettings::default();
@@ -2925,7 +2925,7 @@ fn model_picker_cycles_supported_effort_in_place_and_commits_on_enter() {
     assert!(render(&chinese, 100, 18).contains("←→ 推 理 档 位"));
 
     app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
-    assert!(render(&app, 100, 18).contains("■■■"));
+    assert!(render(&app, 100, 18).contains("◼◼◼"));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     let selected_other = render(&app, 100, 18);
     assert!(
@@ -2951,7 +2951,7 @@ fn model_picker_cycles_supported_effort_in_place_and_commits_on_enter() {
     crate::tui_assert_snapshot!("model_effort_selected", render(&app, 100, 18));
 
     app.update(ModelEvent::PickerUpdated(choices()));
-    assert!(render(&app, 100, 18).contains("■■■"));
+    assert!(render(&app, 100, 18).contains("◼◼◼"));
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         Some(AppCommand::Models(crate::models::Command::SetModel {

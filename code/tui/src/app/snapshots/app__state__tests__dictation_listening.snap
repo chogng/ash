@@ -1,6 +1,6 @@
 ---
 source: code/tui/src/app/state_tests.rs
-expression: rendered
+expression: render_dictation_frame(&app)
 ---
   .                                                        [— / —] [Dashboard]  
                                                                                 
@@ -20,7 +20,7 @@ expression: rendered
                                                                                 
                                                                                 
                                                                                 
-                                                  Listening. Press F8 to stop.  
+                                            Listening. Press /dictate to stop.  
   ╭──────────────────────────────────────────────────────────────────────────╮  
   │ >                                                                        │  
   ╰──────────────────────────────────────────────────────── Automatic model ─╯  

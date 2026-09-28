@@ -644,14 +644,15 @@ fn draw_item(
             context.foreground()
         };
         let empty_color = context.muted();
-        let mut spans = Vec::with_capacity(value.total + 4);
+        let mut spans = Vec::with_capacity(value.total + 3);
         spans.push(Span::styled(
             if active { "← " } else { "  " },
             Style::default().fg(selected_color),
         ));
         for index in 0..value.total {
+            // The medium square leaves a narrow gap inside each terminal cell.
             spans.push(Span::styled(
-                "■",
+                "◼",
                 Style::default().fg(if index < value.filled {
                     filled_color
                 } else {

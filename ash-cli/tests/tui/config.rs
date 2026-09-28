@@ -20,6 +20,21 @@ fn open_provider(process: &mut TuiProcess, label: &str) {
 }
 
 #[test]
+fn actual_tui_ctrl_g_starts_configured_dictation_through_the_pty() {
+    let fixture = Fixture::new().with_missing_voice_host();
+    let server = ScenarioServer::start([]);
+    fixture.write_config(&server.base_url());
+    fixture.append_config(
+        "\n[tui]\ndictationShortcutEnabled = true\ndictationShortcut = \"ctrl+g\"\n",
+    );
+    let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+    process.wait_for_screen("Ash Code v");
+    process.send(b"\x07");
+    process.wait_for_screen("Dictation failed:");
+    process.quit();
+}
+
+#[test]
 fn actual_tui_screen_mode_replaces_obsolete_pointer_settings_on_save() {
     let fixture = Fixture::new();
     let server = ScenarioServer::start([]);

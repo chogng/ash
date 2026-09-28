@@ -10,6 +10,7 @@ use ash_slash_commands::SlashCommandOrigin;
 pub(crate) fn help_choices(
     slash_commands: &SlashCommandCatalog,
     shortcut_actions: Vec<KeymapActionSnapshot>,
+    dictation_shortcut: Option<&str>,
 ) -> ListSelectionModel {
     let mut commands = Vec::new();
     let mut custom_commands = Vec::new();
@@ -28,7 +29,10 @@ pub(crate) fn help_choices(
     ListSelectionModel::new(
         "Help",
         vec![
-            ListSelectionGroup::new("Shortcuts", shortcut_items(shortcut_actions)),
+            ListSelectionGroup::new(
+                "Shortcuts",
+                shortcut_items(shortcut_actions, dictation_shortcut),
+            ),
             ListSelectionGroup::new("Commands", commands),
             ListSelectionGroup::new(
                 "Custom commands",
@@ -40,8 +44,17 @@ pub(crate) fn help_choices(
     .with_empty_message("No matching help entries")
 }
 
-fn shortcut_items(actions: Vec<KeymapActionSnapshot>) -> Vec<ListSelectionItem> {
+fn shortcut_items(
+    actions: Vec<KeymapActionSnapshot>,
+    dictation_shortcut: Option<&str>,
+) -> Vec<ListSelectionItem> {
     let mut items = Vec::new();
+    if let Some(shortcut) = dictation_shortcut {
+        items.push(
+            ListSelectionItem::new(shortcut)
+                .with_description("toggle dictation into the current draft"),
+        );
+    }
     for action in actions {
         for key in action.default_bindings {
             items.push(ListSelectionItem::new(key).with_description(action.label));

@@ -2830,6 +2830,7 @@ dependencies = [
  "ash-app-server-client",
  "ash-app-server-protocol",
  "ash-client",
+ "ash-config",
  "ash-features",
  "ash-file-access",
  "ash-file-search",

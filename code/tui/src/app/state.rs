@@ -144,9 +144,12 @@ pub(crate) struct App {
     dictation_target: Option<DictationTarget>,
     dictation_pending: bool,
     dictation_stop_requested: bool,
+    dictation_send_after_stop: bool,
+    dictation_submission_ready: bool,
     /// The final notification and stop response may carry the same text in either order.
     dictation_final_received: bool,
     dictation_next_id: u64,
+    pub(super) dictation_shortcut_settings: crate::config::DictationShortcutSettings,
     voice_resource_id: Option<String>,
     voice_thread_id: Option<ash_protocol::ThreadId>,
     voice_stopping: bool,
@@ -184,8 +187,11 @@ impl App {
             dictation_target: None,
             dictation_pending: false,
             dictation_stop_requested: false,
+            dictation_send_after_stop: false,
+            dictation_submission_ready: false,
             dictation_final_received: false,
             dictation_next_id: 0,
+            dictation_shortcut_settings: crate::config::DictationShortcutSettings::default(),
             voice_resource_id: None,
             voice_thread_id: None,
             voice_stopping: false,
@@ -285,8 +291,11 @@ impl App {
             dictation_target: None,
             dictation_pending: false,
             dictation_stop_requested: false,
+            dictation_send_after_stop: false,
+            dictation_submission_ready: false,
             dictation_final_received: false,
             dictation_next_id: 0,
+            dictation_shortcut_settings: crate::config::DictationShortcutSettings::default(),
             voice_resource_id: None,
             voice_thread_id: None,
             voice_stopping: false,
@@ -395,8 +404,17 @@ impl App {
         terminal_area: Rect,
     ) -> Option<AppCommand> {
         if key.kind == crossterm::event::KeyEventKind::Press
-            && key.code == crossterm::event::KeyCode::F(8)
+            && key.code == crossterm::event::KeyCode::Enter
             && key.modifiers.is_empty()
+            && self.dictation_resource_id.is_some()
+            && self.chat_input_focused()
+            && self.accepts_input()
+        {
+            self.dictation_send_after_stop = true;
+            return self.toggle_dictation();
+        }
+        if self.dictation_shortcut_settings.matches(&key)
+            && (self.dictation_shortcut_settings.enabled || self.dictation_resource_id.is_some())
         {
             return self.toggle_dictation();
         }
@@ -759,6 +777,12 @@ impl App {
             crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::SetAdvisor(
                 config,
             )) => Some(ConfigCommand::SetAdvisor(config).into()),
+            crate::config::ConfigEditorOutcome::Action(
+                ConfigSelectionAction::ToggleDictationShortcut(settings),
+            ) => Some(AppCommand::SetDictationShortcutSettings(settings)),
+            crate::config::ConfigEditorOutcome::Action(
+                ConfigSelectionAction::EditDictationShortcut(_),
+            ) => None,
             crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::SetMemories(
                 edit,
             )) => Some(ConfigCommand::SetMemories(edit).into()),
@@ -809,6 +833,14 @@ impl App {
             ) => None,
             crate::config::ConfigEditorOutcome::SaveApiKey(edit) => {
                 Some(ConfigCommand::SetProviderApiKey(edit).into())
+            }
+            crate::config::ConfigEditorOutcome::SaveDictationShortcut(settings) => {
+                Some(AppCommand::SetDictationShortcutSettings(settings))
+            }
+            crate::config::ConfigEditorOutcome::InvalidDictationShortcut(error) => {
+                self.thread
+                    .update(ThreadPresentationEvent::FailureReported(error));
+                None
             }
             crate::config::ConfigEditorOutcome::Consumed => None,
             crate::config::ConfigEditorOutcome::Dismiss => {
@@ -1040,6 +1072,8 @@ impl App {
         self.dictation_target = None;
         self.dictation_pending = false;
         self.dictation_stop_requested = false;
+        self.dictation_send_after_stop = false;
+        self.dictation_submission_ready = false;
         self.dictation_final_received = false;
         self.chat_panel.show_notice(
             error.map_or_else(
@@ -1082,6 +1116,8 @@ impl App {
         self.dictation_target = Some(self.current_dictation_target());
         self.dictation_pending = true;
         self.dictation_stop_requested = false;
+        self.dictation_send_after_stop = false;
+        self.dictation_submission_ready = false;
         self.dictation_final_received = false;
         self.dictation_input_mut()
             .expect("the current dictation target has an input")
@@ -1096,6 +1132,17 @@ impl App {
         self.dictation_stop_requested = false;
         self.dictation_resource_id.as_ref()?;
         self.toggle_dictation()
+    }
+
+    pub(crate) fn take_dictation_submission(&mut self) -> Option<AppCommand> {
+        if !std::mem::take(&mut self.dictation_submission_ready) || !self.chat_input_focused() {
+            return None;
+        }
+        let outcome = self.handle_composer_key(KeyEvent::new(
+            crossterm::event::KeyCode::Enter,
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        self.handle_chat_composer_outcome(outcome, Instant::now())
     }
 
     pub(crate) fn dictation_scope_changed(&self, resource_id: &str) -> bool {
@@ -1358,6 +1405,21 @@ impl App {
         } else {
             self.terminal_settings = settings;
         }
+    }
+
+    pub(super) fn set_dictation_shortcut_settings(
+        &mut self,
+        settings: crate::config::DictationShortcutSettings,
+    ) {
+        self.dictation_shortcut_settings = settings;
+    }
+
+    fn decorate_config(&self, choices: &mut crate::config::ConfigChoices) {
+        crate::config::with_dictation_shortcut(
+            choices,
+            &self.dictation_shortcut_settings,
+            self.language(),
+        );
     }
 
     pub(crate) fn command_panel_key_hints(&self) -> Option<&crate::widgets::key_hint::KeyHints> {
@@ -2332,6 +2394,7 @@ impl App {
                     self.dictation_resource_id = None;
                     self.dictation_target = None;
                     self.dictation_final_received = false;
+                    self.dictation_send_after_stop = false;
                 }
                 if let Some(error) = error {
                     self.chat_panel.show_notice(
@@ -2343,7 +2406,19 @@ impl App {
                     );
                 } else {
                     self.chat_panel.show_notice(
-                        crate::nls::localize_owned(self.language(), "Listening. Press F8 to stop."),
+                        {
+                            let key = if self.dictation_shortcut_settings.enabled {
+                                self.dictation_shortcut_settings.shortcut.as_str()
+                            } else {
+                                "/dictate"
+                            };
+                            let mut text = crate::nls::Text::template(
+                                "Listening. Press {0} to stop.",
+                                vec![crate::nls::Text::literal(key)],
+                            );
+                            text.localize(self.language());
+                            text.to_string()
+                        },
                         Instant::now(),
                     );
                 }
@@ -2355,6 +2430,9 @@ impl App {
                 if self.dictation_resource_id.as_deref() != Some(resource_id.as_str()) {
                     return;
                 }
+                let send_after_stop = self.dictation_send_after_stop
+                    && result.is_ok()
+                    && self.dictation_target.as_ref() == Some(&self.current_dictation_target());
                 let final_text = if self.dictation_final_received
                     || self.dictation_target.as_ref() != Some(&self.current_dictation_target())
                 {
@@ -2369,6 +2447,8 @@ impl App {
                 self.dictation_target = None;
                 self.dictation_pending = false;
                 self.dictation_stop_requested = false;
+                self.dictation_send_after_stop = false;
+                self.dictation_submission_ready = send_after_stop;
                 self.dictation_final_received = false;
                 if let Err(error) = result {
                     self.chat_panel.show_notice(
@@ -2664,6 +2744,9 @@ impl App {
             ) => {
                 self.update(ConfigEvent::SettingsReceived(result.terminal));
                 self.update(StatusEvent::LineSettingsReceived(result.status_line));
+            }
+            AppEvent::Config(ConfigEvent::DictationShortcutSaved(settings, _)) => {
+                self.set_dictation_shortcut_settings(settings);
             }
             AppEvent::Keymap(KeymapEvent::EditorOpened(result)) => {
                 self.update(KeymapEvent::SettingsReceived(result.settings))
@@ -2972,8 +3055,9 @@ impl App {
     fn apply_config_event(&mut self, event: ConfigEvent) {
         self.fullscreen.pointer.cancel_click();
         match event {
-            ConfigEvent::AdvisorOpened { root, advisor } => {
+            ConfigEvent::AdvisorOpened { mut root, advisor } => {
                 if !matches!(self.panels().command(), Some(CommandPanel::Config(_))) {
+                    self.decorate_config(&mut root);
                     self.open_command_panel(CommandPanel::config(root));
                 }
                 self.panels_mut().open_advisor(advisor);
@@ -2982,7 +3066,10 @@ impl App {
                 self.apply_config_result(result);
                 self.panels_mut().update_advisor(choices);
             }
-            ConfigEvent::Connection(reply) => {
+            ConfigEvent::Connection(mut reply) => {
+                if let Ok((choices, _)) = &mut reply.result {
+                    self.decorate_config(choices);
+                }
                 if let Err(error) = &reply.result {
                     self.thread
                         .update(ThreadPresentationEvent::NoticeReceived(format!(
@@ -3035,10 +3122,17 @@ impl App {
                 self.thread_presentations
                     .set_input_mode(settings.input_mode());
             }
+            ConfigEvent::DictationShortcutSaved(settings, mut choices) => {
+                self.set_dictation_shortcut_settings(settings);
+                self.decorate_config(&mut choices);
+                self.panels_mut().finish_config_prompt(choices);
+                self.set_status(Status::Ready);
+            }
             ConfigEvent::Updated(result) => {
                 self.apply_config_result(result);
             }
-            ConfigEvent::EditorOpened(view) => {
+            ConfigEvent::EditorOpened(mut view) => {
+                self.decorate_config(&mut view);
                 self.open_command_panel(CommandPanel::config(view));
             }
             ConfigEvent::ApiKeySaved {
@@ -3046,6 +3140,7 @@ impl App {
                 mut choices,
                 models,
             } => {
+                self.decorate_config(&mut choices);
                 self.localize_selection(&mut choices);
                 self.panels_mut().finish_config_prompt(choices);
                 if let Some(models) = models {
@@ -3075,7 +3170,7 @@ impl App {
         }
     }
 
-    fn apply_config_result(&mut self, result: crate::config::ConfigEditResult) {
+    fn apply_config_result(&mut self, mut result: crate::config::ConfigEditResult) {
         self.set_terminal_settings(result.terminal);
         self.chat_panel
             .status_line_mut()
@@ -3088,6 +3183,7 @@ impl App {
             .set_input_mode(result.terminal.input_mode());
         self.thread_presentations
             .set_input_mode(result.terminal.input_mode());
+        self.decorate_config(&mut result.choices);
         self.panels_mut().replace_config(result.choices);
     }
 
@@ -3492,6 +3588,9 @@ impl App {
                 let spec = help_choices(
                     self.thread_presentations.slash_commands(),
                     self.app_keymap.setup_actions(),
+                    self.dictation_shortcut_settings
+                        .enabled
+                        .then_some(self.dictation_shortcut_settings.shortcut.as_str()),
                 );
                 self.open_command_panel(CommandPanel::help(spec));
                 None

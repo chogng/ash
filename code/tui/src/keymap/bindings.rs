@@ -764,7 +764,6 @@ pub(crate) static CLIPBOARD_HINTS: LazyLock<KeyHints> = LazyLock::new(|| {
 pub(crate) fn fixed_bindings() -> impl Iterator<Item = (&'static str, &'static str)> {
     static ENTRIES: LazyLock<Vec<(String, &'static str)>> = LazyLock::new(|| {
         vec![
-            ("F8".into(), "toggle dictation into the current draft"),
             (
                 "ctrl+r".into(),
                 "search input history; Enter edits the match, Esc restores the draft",

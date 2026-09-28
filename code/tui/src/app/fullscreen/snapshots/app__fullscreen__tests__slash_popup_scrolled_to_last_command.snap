@@ -1,6 +1,5 @@
 ---
 source: code/tui/src/app/fullscreen/frame_tests.rs
-assertion_line: 1807
 expression: rendered
 ---
   .                                                        [— / —] [Dashboard]  
@@ -16,7 +15,7 @@ expression: rendered
   /marketplace               find and install Marketplace packages             │
   /plugins                   manage installed packages and exact versions      │
   /lsp                       manage language servers and find packages         │
-  /dictate                   dictate into the draft; toggle with F8            │
+  /dictate                   dictate into the current draft; run again to stop │
   /voice                     speak continuously and receive text replies       ┃
   ╭──────────────────────────────────────────────────────────────────────────╮  
   │ > /                                                                      │  
