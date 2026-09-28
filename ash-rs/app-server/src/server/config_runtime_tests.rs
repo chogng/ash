@@ -34,37 +34,55 @@ fn registry(sender: mpsc::Sender<u64>) -> Arc<ExtensionRegistry> {
 }
 
 #[test]
-fn config_changes_reach_the_current_extension_registry() {
+fn config_changes_reach_each_current_extension_registry_once() {
     let directory = tempfile::tempdir().unwrap();
     let config = ConfigStore::open(directory.path().join("config.sqlite3")).unwrap();
-    let (old_sender, old_receiver) = mpsc::channel();
-    let (current_sender, current_receiver) = mpsc::channel();
+    let (first_sender, first_receiver) = mpsc::channel();
+    let (second_sender, second_receiver) = mpsc::channel();
+    let (third_sender, third_receiver) = mpsc::channel();
     let watcher = ConfigWatcher::start(
         &config,
         Arc::new(UpdateBroker::default()),
-        registry(old_sender),
+        registry(first_sender),
     );
-    watcher.replace_extensions(registry(current_sender));
+    update_gui(&config, 0);
+    assert_eq!(
+        first_receiver.recv_timeout(Duration::from_secs(2)).unwrap(),
+        1
+    );
 
+    watcher.replace_extensions(registry(second_sender));
+    update_gui(&config, 1);
+    assert_eq!(
+        second_receiver
+            .recv_timeout(Duration::from_secs(2))
+            .unwrap(),
+        2
+    );
+
+    watcher.replace_extensions(registry(third_sender));
+    update_gui(&config, 2);
+    assert_eq!(
+        third_receiver.recv_timeout(Duration::from_secs(2)).unwrap(),
+        3
+    );
+    assert!(first_receiver.try_recv().is_err());
+    assert!(second_receiver.try_recv().is_err());
+    assert!(third_receiver.try_recv().is_err());
+}
+
+fn update_gui(config: &ConfigStore, revision: u64) {
     config
         .apply(ConfigCommandRequest {
-            command_id: CommandId::new("change-gui").unwrap(),
-            expected_revision: ConfigRevision::INITIAL,
+            command_id: CommandId::new(format!("change-gui-{revision}")).unwrap(),
+            expected_revision: ConfigRevision::new(revision),
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
                 gui: Patch::Value(BTreeMap::from([(
                     "theme".into(),
-                    serde_json::json!("ash-dark"),
+                    serde_json::json!(format!("ash-dark-{revision}")),
                 )])),
                 ..PreferencesUpdate::default()
             }),
         })
         .unwrap();
-
-    assert_eq!(
-        current_receiver
-            .recv_timeout(Duration::from_secs(2))
-            .unwrap(),
-        1
-    );
-    assert!(old_receiver.try_recv().is_err());
 }

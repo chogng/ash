@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { access, chmod, copyFile, link, mkdtemp, realpath, rm } from 'node:fs/promises';
+import { access, chmod, copyFile, link, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
@@ -28,6 +28,61 @@ test('Desktop uses the selected Ash home for UI and backend startup', async ({ a
 	await expect(workbench.element).toBeVisible();
 	if (target.appServerMode === 'required') {
 		await expect.poll(async () => access(join(paths.home!, 'state.sqlite3')).then(() => true, () => false)).toBe(true);
+	}
+});
+
+test('Desktop reopens an authorized workspace after its backend stops', async ({ target, testWorkspace }) => {
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'This checks a stopped backend on Desktop.');
+	test.setTimeout(90_000);
+	const directory = await mkdtemp(join(tmpdir(), 'ash-'));
+	const profile = join(directory, 'profile');
+	const daemon = appServerDaemonExecutablePath({ appPath: resolve(import.meta.dirname, '../../../..'), isPackaged: false, platform: process.platform, resourcesPath: '' });
+	const priorHome = process.env.HOME;
+	const priorUserProfile = process.env.USERPROFILE;
+	process.env.HOME = directory;
+	process.env.USERPROFILE = directory;
+	const environment = { ...process.env, ASH_HOME: profile };
+	let desktop: Awaited<ReturnType<typeof launchElectron>> | undefined;
+	try {
+		// Startup must use test credentials, independent of accounts on the developer's machine.
+		const credentials = join(directory, '.zcode', 'v2');
+		await mkdir(credentials, { recursive: true });
+		const entries: Record<string, string> = {};
+		for (const provider of ['bigmodel', 'zai']) {
+			const id = `account:${provider}-individual-coding-plan`;
+			entries[`account-provider:${id}:identity`] = 'offline-test';
+			entries[`account-provider:coding-plan:${id}:account:offline-test:api-key`] = 'offline-test-key';
+		}
+		await writeFile(join(credentials, 'credentials.json'), JSON.stringify(entries));
+
+		desktop = await launchElectron({ appServerMode: 'required', userDataDirectory: join(directory, 'first'), profileDirectory: profile, workspaceDirectory: testWorkspace.directory, workspacePermissions: 'development' });
+		await desktop.close();
+		desktop = undefined;
+		await execFileAsync(daemon, ['stop'], { env: environment, windowsHide: true, timeout: 30_000 });
+
+		desktop = await launchElectron({ appServerMode: 'required', userDataDirectory: join(directory, 'second'), profileDirectory: profile, workspaceDirectory: testWorkspace.directory });
+		const page = desktop.driver.workbench.page;
+		await expect(desktop.driver.workbench.element).toBeVisible();
+		const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
+		if (await showSidebar.isVisible()) await showSidebar.click();
+		const file = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
+		await expect(file).toHaveCount(1);
+		await file.dblclick();
+		await expect(page.locator('.stanza-editor-line-text').first()).toContainText('const value = 1;');
+	} finally {
+		try {
+			await desktop?.close();
+		} finally {
+			try {
+				await execFileAsync(daemon, ['stop'], { env: environment, windowsHide: true, timeout: 30_000 });
+			} finally {
+				if (priorHome === undefined) delete process.env.HOME;
+				else process.env.HOME = priorHome;
+				if (priorUserProfile === undefined) delete process.env.USERPROFILE;
+				else process.env.USERPROFILE = priorUserProfile;
+				await rm(directory, { force: true, recursive: true, maxRetries: 10, retryDelay: 100 });
+			}
+		}
 	}
 });
 
