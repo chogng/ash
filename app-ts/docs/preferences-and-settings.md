@@ -25,7 +25,7 @@
 
 代码名也按职责区分：`preferencesActions.ts`、`PreferencesService` 负责跨页面入口；`settingsEditorInput.ts`、`settingsModels.ts`、`settingsSearch.ts`、`settingsWidgets.ts` 和 `settingsRenderers.ts` 只处理设置内容。快捷键编辑器保留独立名称和模型。
 
-样式也跟随创建页面的代码：[`settingsEditor.css`](../src/ash/workbench/contrib/preferences/browser/media/settingsEditor.css) 负责图形设置页布局，[`settingsWidgets.css`](../src/ash/workbench/contrib/preferences/browser/media/settingsWidgets.css) 负责设置搜索框和设置项控件。
+样式也跟随创建页面的代码：[`settingsEditor.css`](../src/ash/workbench/contrib/preferences/browser/media/settingsEditor.css) 负责页面布局和状态提示，[`settingsTree.css`](../src/ash/workbench/contrib/preferences/browser/media/settingsTree.css) 负责分类树布局，[`settingsWidgets.css`](../src/ash/workbench/contrib/preferences/browser/media/settingsWidgets.css) 负责设置搜索框和设置项控件。
 
 ## 为什么没有 PreferencesEditor 容器
 

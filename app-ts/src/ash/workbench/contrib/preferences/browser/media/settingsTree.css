@@ -9,3 +9,58 @@
 .ash-settings-tree-group.is-navigation-target > .ash-settings-tree-group-description {
   display: none;
 }
+
+.ash-configuration-settings {
+  display: flex;
+  max-width: 760px;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.ash-configuration-settings-group h4 {
+  margin: 0;
+  color: var(--ash-foreground);
+  font-size: var(--ash-font-size-heading3);
+  font-weight: var(--ash-font-weight-semi-bold);
+}
+
+.ash-configuration-settings-group-description {
+  margin: 6px 0 12px;
+  color: var(--ash-description-foreground);
+  line-height: 1.5;
+}
+
+.ash-configuration-settings-list {
+  overflow: visible;
+  border-radius: var(--ash-corner-radius-large);
+  background: var(--ash-settings-item-background);
+}
+
+.ash-settings-tree-group.is-settings-root > .ash-configuration-settings-list {
+  display: flex;
+  overflow: visible;
+  flex-direction: column;
+  border-radius: 0;
+  background: transparent;
+  gap: 32px;
+}
+
+.ash-settings-tree-group.is-settings-root > .ash-configuration-settings-list > .ash-settings-tree-group:only-child > .ash-settings-tree-group-title,
+.ash-settings-tree-group.is-settings-root > .ash-configuration-settings-list > .ash-settings-tree-group:only-child > .ash-settings-tree-group-description {
+	display: none;
+}
+
+.ash-settings-tree-group:not(.is-settings-root) > .ash-configuration-settings-list > * {
+	position: relative;
+}
+
+.ash-settings-tree-group:not(.is-settings-root) > .ash-configuration-settings-list > * + *::before {
+	position: absolute;
+	top: 0;
+	right: 14px;
+	left: 14px;
+	height: 1px;
+	background: var(--ash-settings-item-separator);
+	content: '';
+	pointer-events: none;
+}
