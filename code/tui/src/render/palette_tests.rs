@@ -45,7 +45,8 @@ fn render_theme_maps_its_colors_for_each_terminal_capability() {
     assert_eq!(true_color.selection_background(), Color::Rgb(47, 43, 82));
     assert_eq!(true_color.hover_background(), Color::Rgb(37, 35, 58));
     assert_eq!(true_color.pressed_background(), Color::Rgb(59, 53, 104));
-    assert_eq!(true_color.segmented_inactive(), Color::Rgb(160, 168, 178));
+    assert_eq!(true_color.segmented_active(), Color::Rgb(184, 192, 201));
+    assert_eq!(true_color.segmented_inactive(), Color::Rgb(88, 97, 110));
     assert_eq!(
         true_color.screen_selection_foreground(),
         Color::Rgb(13, 17, 23)
@@ -65,13 +66,22 @@ fn render_theme_maps_its_colors_for_each_terminal_capability() {
         ansi16.accent(),
         Color::Rgb(..) | Color::Indexed(..)
     ));
+    assert_ne!(ansi16.segmented_active(), ansi16.segmented_inactive());
+    assert_ne!(ansi256.segmented_active(), ansi256.segmented_inactive());
     assert_eq!(monochrome.accent(), Color::Reset);
+    assert_eq!(monochrome.segmented_active(), Color::Reset);
 
     let light = RenderTheme::from_palette(ThemePalette::light(), ColorLevel::TrueColor);
     assert_eq!(light.background(), Color::Rgb(255, 255, 255));
     assert_eq!(light.foreground(), Color::Rgb(31, 35, 40));
     assert_eq!(light.overlay_background(), Color::Rgb(248, 248, 248));
+    assert_eq!(light.segmented_active(), Color::Rgb(110, 119, 129));
     assert_eq!(light.segmented_inactive(), Color::Rgb(208, 215, 222));
+    let light_ansi16 = RenderTheme::from_palette(ThemePalette::light(), ColorLevel::Ansi16);
+    assert_ne!(
+        light_ansi16.segmented_active(),
+        light_ansi16.segmented_inactive()
+    );
     assert_eq!(light.modal_border(), light.chat_input_chrome());
     assert_eq!(
         light.transcript_jump_background(),

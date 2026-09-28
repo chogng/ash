@@ -640,6 +640,13 @@ impl ConfigEditor {
                 .with_compact_action("/", "search")
                 .with_compact_action("Esc", "close")
         });
+        static PROVIDERS: LazyLock<KeyHints> = LazyLock::new(|| {
+            KeyHints::compact()
+                .with_compact_action("Enter/Space", "change")
+                .with_compact_action("Tab", "tabs")
+                .with_compact_action("/", "search")
+                .with_compact_action("Esc", "close")
+        });
         if let Some(dialog) = &self.dialog {
             return dialog.key_hints();
         }
@@ -660,6 +667,8 @@ impl ConfigEditor {
         }
         if self.selection.state().items_focused() && self.selection.state().selected_item().and_then(ListSelectionItem::id).and_then(|id| self.selection.action(id)).is_some_and(|action| matches!(action, ConfigSelectionAction::OpenProvider(settings) if settings.config.custom.is_some())) {
             &CUSTOM_PROVIDER
+        } else if self.selection.state().active_tab_index() == 1 {
+            &PROVIDERS
         } else {
             self.selection.key_hints()
         }
@@ -1583,8 +1592,7 @@ fn provider_items(
                 id.clone(),
                 ConfigSelectionAction::OpenSubscription(subscription),
             );
-            let item = ListSelectionItem::new(label).with_id(id);
-            subscriptions.push(connection_status(item, provider, language));
+            subscriptions.push(ListSelectionItem::new(label).with_id(id));
         }
         let api_name = match provider.connection.as_str() {
             "openai" => "OpenAI",
@@ -1594,11 +1602,7 @@ fn provider_items(
             _ => &provider.display_name,
         };
         if provider.access == ash_protocol::ModelAccess::ApiKey {
-            api_items.push(connection_status(
-                provider_item(provider, api_name, actions),
-                provider,
-                language,
-            ));
+            api_items.push(provider_item(provider, api_name, actions));
         }
     }
     let id = ListSelectionItemId::new("new-custom-provider");
@@ -1619,25 +1623,6 @@ fn provider_items(
         .push(ListSelectionItem::new(nls::text(language, Message::ConfigApi)).as_section_divider());
     items.extend(api_items);
     items
-}
-
-fn connection_status(
-    item: ListSelectionItem,
-    connection: &ProviderCatalogEntryDto,
-    language: Language,
-) -> ListSelectionItem {
-    if connection.active {
-        item.with_description(nls::text(
-            language,
-            if connection.ready {
-                Message::CurrentConnection
-            } else {
-                Message::ConnectionNotReady
-            },
-        ))
-    } else {
-        item
-    }
 }
 
 fn provider_item(

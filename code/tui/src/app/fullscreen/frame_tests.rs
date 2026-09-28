@@ -2236,9 +2236,9 @@ fn config_providers_show_subscription_and_api_sections() {
                     ProviderCatalogEntryDto {
                         connection: "bigmodel-coding-plan".into(),
                         access: ash_protocol::ModelAccess::Subscription,
-                        active: false,
-                        configured: false,
-                        ready: false,
+                        active: true,
+                        configured: true,
+                        ready: true,
                         provider: "bigmodel-coding-plan".into(),
                         display_name: "BigModel Coding Plan".into(),
                         api_key_policy: ProviderApiKeyPolicyDto::Required,
@@ -2271,9 +2271,9 @@ fn config_providers_show_subscription_and_api_sections() {
                         provider: "xai".into(),
                         display_name: "Super Grok".into(),
                         access: ash_protocol::ModelAccess::Subscription,
-                        active: false,
-                        configured: false,
-                        ready: false,
+                        active: true,
+                        configured: true,
+                        ready: true,
                         api_key_policy: ProviderApiKeyPolicyDto::Unsupported,
                         api_key_configured: false,
                     },
@@ -2291,13 +2291,13 @@ fn config_providers_show_subscription_and_api_sections() {
                     ProviderCatalogEntryDto {
                         connection: "google".into(),
                         access: ash_protocol::ModelAccess::ApiKey,
-                        active: false,
-                        configured: false,
-                        ready: false,
+                        active: true,
+                        configured: true,
+                        ready: true,
                         provider: "google".into(),
                         display_name: "Google".into(),
                         api_key_policy: ProviderApiKeyPolicyDto::Required,
-                        api_key_configured: false,
+                        api_key_configured: true,
                     },
                 ],
             },
@@ -2315,6 +2315,16 @@ fn config_providers_show_subscription_and_api_sections() {
             .label(),
         "Kimi"
     );
+    for label in ["BigModel", "Super Grok", "Google"] {
+        let item = app
+            .list_selection()
+            .unwrap()
+            .visible_items()
+            .into_iter()
+            .find(|item| item.label() == label)
+            .unwrap();
+        assert_eq!(item.description(), None);
+    }
     crate::tui_assert_snapshot!("config_providers_sections", render(&app, 100, 34));
 }
 
@@ -2922,8 +2932,8 @@ fn model_picker_cycles_supported_effort_in_place_and_commits_on_enter() {
             context.focus(),
             context.segmented_inactive(),
             context.segmented_inactive(),
-            context.accent(),
-            context.accent(),
+            context.segmented_active(),
+            context.segmented_active(),
             context.segmented_inactive(),
             context.segmented_inactive(),
             context.segmented_inactive(),
@@ -2968,8 +2978,8 @@ fn model_picker_cycles_supported_effort_in_place_and_commits_on_enter() {
             light_context.focus(),
             light_context.segmented_inactive(),
             light_context.segmented_inactive(),
-            light_context.accent(),
-            light_context.accent(),
+            light_context.segmented_active(),
+            light_context.segmented_active(),
             light_context.segmented_inactive(),
             light_context.segmented_inactive(),
             light_context.segmented_inactive(),

@@ -656,7 +656,12 @@ fn draw_item(
         } else if selected {
             selected_foreground
         } else {
-            context.accent()
+            context.muted()
+        };
+        let filled_color = if selected || pressed {
+            indicator_color
+        } else {
+            context.segmented_active()
         };
         let empty_color = context.segmented_inactive();
         let mut spans = Vec::with_capacity(value.total * 2 + 3);
@@ -670,7 +675,7 @@ fn draw_item(
             spans.push(Span::styled(
                 "██",
                 Style::default().fg(if index < value.filled {
-                    indicator_color
+                    filled_color
                 } else {
                     empty_color
                 }),
