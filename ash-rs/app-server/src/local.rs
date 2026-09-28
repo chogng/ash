@@ -43,6 +43,7 @@ use ash_install_context::InstallContext;
 use ash_kimi::KimiCli;
 use ash_kimi::KimiDesktop;
 use ash_kimi::KimiOAuth;
+use ash_login::AccountMetadataRefresher;
 use ash_login::InteractiveLoginDriver;
 use ash_login::LoginService;
 use ash_lsp_server_provider::ManagedNodeRuntime;
@@ -1453,8 +1454,11 @@ pub fn open_local_app_server_with_codebase_providers(
     if let Some(github) = &github_oauth {
         login_drivers.push(github.clone());
     }
+    let metadata_refreshers: Vec<Arc<dyn AccountMetadataRefresher>> =
+        vec![kimi_oauth.clone(), supergrok_oauth.clone()];
     let login_service = Arc::new(
         LoginService::deferred_with_drivers(login_drivers)
+            .and_then(|service| service.with_account_metadata_refreshers(metadata_refreshers))
             .map_err(|error| OpenAppServerError(error.to_string()))?,
     );
     chatgpt_oauth
@@ -1478,28 +1482,11 @@ pub fn open_local_app_server_with_codebase_providers(
             .map_err(|error| OpenAppServerError(error.to_string()))?;
     }
     let subscription_sources = vec![
-        crate::server::SubscriptionSource::local(ash_chatgpt::CHATGPT_SUBSCRIPTION_PROVIDER_ID),
-        crate::server::SubscriptionSource::with_remote_metadata(ash_kimi::KIMI_PROVIDER_ID, {
-            let kimi = Arc::clone(&kimi_oauth);
-            move |account_id, cancellation| {
-                kimi.refresh_account(account_id, cancellation)
-                    .map_err(|error| error.to_string())
-            }
-        }),
-        crate::server::SubscriptionSource::with_remote_metadata(
-            supergrok::SUPERGROK_SUBSCRIPTION_PROVIDER_ID,
-            {
-                let supergrok = Arc::clone(&supergrok_oauth);
-                move |account_id, cancellation| {
-                    supergrok
-                        .refresh_account(account_id, cancellation)
-                        .map(|_| ())
-                        .map_err(|error| error.to_string())
-                }
-            },
-        ),
-        crate::server::SubscriptionSource::local(ash_glm::BIGMODEL_PROVIDER_ID),
-        crate::server::SubscriptionSource::local(ash_glm::ZAI_PROVIDER_ID),
+        ash_chatgpt::CHATGPT_SUBSCRIPTION_PROVIDER_ID,
+        ash_kimi::KIMI_PROVIDER_ID,
+        supergrok::SUPERGROK_SUBSCRIPTION_PROVIDER_ID,
+        ash_glm::BIGMODEL_PROVIDER_ID,
+        ash_glm::ZAI_PROVIDER_ID,
     ];
     let direct_catalog: Arc<dyn ModelCatalog> = configured_model.clone();
     let agent_model: Arc<dyn ModelService> = options

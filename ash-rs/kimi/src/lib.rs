@@ -9,6 +9,7 @@ use ash_client::ResolvedApiTarget;
 use ash_client::RetryPolicy;
 use ash_http_client::HttpHeader;
 use ash_http_client::UreqHttpClient;
+use ash_login::AccountMetadataRefresher;
 use ash_login::AccountRef;
 use ash_login::AccountSnapshot;
 use ash_login::AccountStatus;
@@ -662,6 +663,20 @@ impl InteractiveLoginDriver for KimiOAuth {
                     "Kimi credential store is unavailable",
                 )
             })
+    }
+}
+
+impl AccountMetadataRefresher for KimiOAuth {
+    fn provider_id(&self) -> &'static str {
+        KIMI_PROVIDER_ID
+    }
+
+    fn refresh_account(
+        &self,
+        account_id: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<(), LoginError> {
+        KimiOAuth::refresh_account(self, account_id, cancellation).map_err(login_driver_error)
     }
 }
 

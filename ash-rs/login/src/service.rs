@@ -1,5 +1,7 @@
+use crate::AccountMetadataRefresher;
 use crate::AccountSnapshot;
 use crate::AccountState;
+use crate::AccountStatus;
 use crate::BeginLogin;
 use crate::BeginLoginRequest;
 use crate::CancelLoginOutcome;
@@ -13,6 +15,7 @@ use crate::LoginEvents;
 use crate::LoginId;
 use crate::LoginMethod;
 use crate::LogoutOutcome;
+use ash_async_utils::CancellationToken;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -23,6 +26,7 @@ use std::sync::atomic::Ordering;
 /// Coordinates provider-scoped drivers, stable login identities, and revisioned redacted state.
 pub struct LoginService {
     drivers: BTreeMap<String, Arc<dyn InteractiveLoginDriver>>,
+    metadata_refreshers: BTreeMap<String, Arc<dyn AccountMetadataRefresher>>,
     next_login_id: AtomicU64,
     state: Mutex<LoginServiceState>,
     events: Mutex<Option<Arc<dyn LoginEvents>>>,
@@ -107,6 +111,7 @@ impl LoginService {
             .collect();
         Ok(Self {
             drivers: registered,
+            metadata_refreshers: BTreeMap::new(),
             next_login_id: AtomicU64::new(1),
             state: Mutex::new(LoginServiceState {
                 account: AccountState {
@@ -119,6 +124,66 @@ impl LoginService {
             }),
             events: Mutex::new(None),
         })
+    }
+
+    /// Installs remote metadata readers for providers already registered with this service.
+    pub fn with_account_metadata_refreshers(
+        mut self,
+        refreshers: impl IntoIterator<Item = Arc<dyn AccountMetadataRefresher>>,
+    ) -> Result<Self, LoginError> {
+        for refresher in refreshers {
+            let provider = refresher.provider_id();
+            if !self.drivers.contains_key(provider) {
+                return Err(LoginError::new(
+                    LoginErrorKind::InvalidInput,
+                    format!("metadata refresher provider '{provider}' has no login driver"),
+                ));
+            }
+            if self
+                .metadata_refreshers
+                .insert(provider.to_owned(), refresher)
+                .is_some()
+            {
+                return Err(LoginError::new(
+                    LoginErrorKind::Conflict,
+                    format!("multiple metadata refreshers own provider '{provider}'"),
+                ));
+            }
+        }
+        Ok(self)
+    }
+
+    /// Reports whether this provider can refresh remote account display metadata.
+    pub fn has_account_metadata_refresher(&self, provider: &str) -> bool {
+        self.metadata_refreshers.contains_key(provider)
+    }
+
+    /// Refreshes display metadata only while the requested account is still current.
+    pub fn refresh_account_metadata(
+        &self,
+        provider: &str,
+        account_id: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<AccountState, LoginError> {
+        let refresher = self.metadata_refreshers.get(provider).ok_or_else(|| {
+            LoginError::new(
+                LoginErrorKind::Unavailable,
+                format!("metadata refresher for '{provider}' is unavailable"),
+            )
+        })?;
+        let state = self.read_or_refresh()?;
+        if !state.accounts.iter().any(|account| {
+            account.account.provider == provider
+                && account.account.account_id == account_id
+                && account.status == AccountStatus::Ready
+        }) {
+            return Err(LoginError::new(
+                LoginErrorKind::NotFound,
+                "subscription account is no longer ready",
+            ));
+        }
+        refresher.refresh_account(account_id, cancellation)?;
+        self.refresh()
     }
 
     pub fn install_events(&self, events: Arc<dyn LoginEvents>) -> Result<(), LoginError> {

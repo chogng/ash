@@ -27,39 +27,9 @@ pub(super) struct SubscriptionMonitor {
 
 struct Sources {
     login: Arc<LoginService>,
-    subscriptions: Vec<SubscriptionSource>,
+    subscriptions: Vec<&'static str>,
     catalog: Arc<dyn ModelCatalog>,
     updates: Arc<UpdateBroker>,
-}
-
-type MetadataRefresh =
-    dyn Fn(&str, &ash_async_utils::CancellationToken) -> Result<(), String> + Send + Sync;
-
-pub(crate) struct SubscriptionSource {
-    connection: &'static str,
-    metadata_refresh: Option<Arc<MetadataRefresh>>,
-}
-
-impl SubscriptionSource {
-    pub(crate) fn local(connection: &'static str) -> Self {
-        Self {
-            connection,
-            metadata_refresh: None,
-        }
-    }
-
-    pub(crate) fn with_remote_metadata(
-        connection: &'static str,
-        refresh: impl Fn(&str, &ash_async_utils::CancellationToken) -> Result<(), String>
-        + Send
-        + Sync
-        + 'static,
-    ) -> Self {
-        Self {
-            connection,
-            metadata_refresh: Some(Arc::new(refresh)),
-        }
-    }
 }
 
 #[derive(Default)]
@@ -81,7 +51,7 @@ struct CatalogIdentity {
 impl SubscriptionMonitor {
     pub(super) fn start(
         login: Arc<LoginService>,
-        subscriptions: Vec<SubscriptionSource>,
+        subscriptions: Vec<&'static str>,
         catalog: Arc<dyn ModelCatalog>,
         updates: Arc<UpdateBroker>,
     ) -> Self {
@@ -152,35 +122,30 @@ impl Observed {
             self.remote_attempts.clear();
             return;
         }
-        let mut metadata_updated = false;
-        for source in &sources.subscriptions {
-            let Some(refresh) = &source.metadata_refresh else {
+        for &connection in &sources.subscriptions {
+            if !sources.login.has_account_metadata_refresher(connection) {
                 continue;
-            };
+            }
             let Some(account) = state.accounts.iter().find(|account| {
-                account.account.provider == source.connection
-                    && account.status == AccountStatus::Ready
+                account.account.provider == connection && account.status == AccountStatus::Ready
             }) else {
                 continue;
             };
-            let changed =
-                self.remote_attempts.get(source.connection) != Some(&account.account.account_id);
+            let changed = self.remote_attempts.get(connection) != Some(&account.account.account_id);
             if !remote_due && !changed {
                 continue;
             }
             self.remote_attempts
-                .insert(source.connection.into(), account.account.account_id.clone());
-            match refresh(&account.account.account_id, cancellation) {
-                Ok(()) => metadata_updated = true,
-                Err(error) => log::warn!("Subscription account refresh failed: {error}"),
+                .insert(connection.into(), account.account.account_id.clone());
+            if let Err(error) = sources.login.refresh_account_metadata(
+                connection,
+                &account.account.account_id,
+                cancellation,
+            ) {
+                log::warn!("Subscription account refresh failed: {error}");
             }
         }
-        let refreshed = if metadata_updated {
-            sources.login.refresh()
-        } else {
-            sources.login.read()
-        };
-        let Ok(state) = refreshed else {
+        let Ok(state) = sources.login.read() else {
             log::warn!("Subscription account observation failed after metadata refresh");
             return;
         };
@@ -199,14 +164,13 @@ impl Observed {
                 account.account.provider == *provider && account.status == AccountStatus::Ready
             })
         });
-        for source in &sources.subscriptions {
+        for &connection in &sources.subscriptions {
             let Some(account) = state.accounts.iter().find(|account| {
-                account.account.provider == source.connection
-                    && account.status == AccountStatus::Ready
+                account.account.provider == connection && account.status == AccountStatus::Ready
             }) else {
                 continue;
             };
-            let provider = source.connection;
+            let provider = connection;
             let identity = CatalogIdentity {
                 account_id: account.account.account_id.clone(),
                 organization: account.organization.clone(),

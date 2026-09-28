@@ -1936,6 +1936,9 @@ dependencies = [
 [[package]]
 name = "ash-login"
 version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+]
 
 [[package]]
 name = "ash-lsp"

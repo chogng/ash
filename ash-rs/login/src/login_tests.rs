@@ -24,6 +24,27 @@ struct FakeKimiDriver {
 
 struct UnavailableDriver;
 
+struct FakeMetadataRefresher {
+    driver: Arc<FakeDriver>,
+    calls: AtomicUsize,
+}
+
+impl AccountMetadataRefresher for FakeMetadataRefresher {
+    fn provider_id(&self) -> &'static str {
+        "chatgpt-subscription"
+    }
+
+    fn refresh_account(
+        &self,
+        _: &str,
+        _: &ash_async_utils::CancellationToken,
+    ) -> Result<(), LoginError> {
+        self.calls.fetch_add(1, Ordering::Relaxed);
+        self.driver.account.lock().unwrap().as_mut().unwrap().plan = Some("pro".into());
+        Ok(())
+    }
+}
+
 impl InteractiveLoginDriver for FakeKimiDriver {
     fn provider_id(&self) -> &'static str {
         "kimi-subscription"
@@ -184,6 +205,46 @@ fn browser_login_completion_updates_redacted_state_and_emits_events() {
     assert_eq!(state.revision, 1);
     assert_eq!(state.accounts, vec![account()]);
     assert_eq!(events.completions.lock().unwrap().len(), 1);
+    assert_eq!(events.accounts.lock().unwrap().as_slice(), &[state]);
+}
+
+#[test]
+fn remote_metadata_refresh_updates_only_the_current_account() {
+    let driver = Arc::new(FakeDriver::default());
+    *driver.account.lock().unwrap() = Some(account());
+    let refresher = Arc::new(FakeMetadataRefresher {
+        driver: driver.clone(),
+        calls: AtomicUsize::new(0),
+    });
+    let service = LoginService::new(driver)
+        .unwrap()
+        .with_account_metadata_refreshers([refresher.clone() as Arc<dyn AccountMetadataRefresher>])
+        .unwrap();
+    assert!(service.has_account_metadata_refresher("chatgpt-subscription"));
+    assert!(!service.has_account_metadata_refresher("kimi-subscription"));
+    let events = Arc::new(RecordedEvents::default());
+    service.install_events(events.clone()).unwrap();
+    let cancellation = ash_async_utils::CancellationSource::new();
+
+    let error = service
+        .refresh_account_metadata(
+            "chatgpt-subscription",
+            "other-account",
+            &cancellation.token(),
+        )
+        .unwrap_err();
+    assert_eq!(error.kind(), LoginErrorKind::NotFound);
+    assert_eq!(refresher.calls.load(Ordering::Relaxed), 0);
+
+    let state = service
+        .refresh_account_metadata(
+            "chatgpt-subscription",
+            "acct_redacted",
+            &cancellation.token(),
+        )
+        .unwrap();
+    assert_eq!(refresher.calls.load(Ordering::Relaxed), 1);
+    assert_eq!(state.accounts[0].plan.as_deref(), Some("pro"));
     assert_eq!(events.accounts.lock().unwrap().as_slice(), &[state]);
 }
 

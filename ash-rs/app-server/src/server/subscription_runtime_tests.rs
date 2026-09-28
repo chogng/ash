@@ -3,6 +3,7 @@ use crate::model_catalog::ModelCatalogRefreshError;
 use crate::server::account_operations::AppServerLoginEvents;
 use crate::server::notification_queue::NotificationQueue;
 use ash_app_server_protocol::protocol::model::ModelCatalogEntry;
+use ash_login::AccountMetadataRefresher;
 use ash_login::AccountRef;
 use ash_login::AccountSnapshot;
 use ash_login::BeginLogin;
@@ -24,6 +25,30 @@ use std::sync::atomic::Ordering;
 
 struct AccountDriver {
     account: Mutex<Option<AccountSnapshot>>,
+}
+
+struct MetadataDriver {
+    account: Arc<AccountDriver>,
+    next_plan: Mutex<Option<&'static str>>,
+    calls: AtomicUsize,
+}
+
+impl AccountMetadataRefresher for MetadataDriver {
+    fn provider_id(&self) -> &'static str {
+        ash_chatgpt::CHATGPT_SUBSCRIPTION_PROVIDER_ID
+    }
+
+    fn refresh_account(
+        &self,
+        _: &str,
+        _: &ash_async_utils::CancellationToken,
+    ) -> Result<(), LoginError> {
+        self.calls.fetch_add(1, Ordering::Relaxed);
+        if let Some(plan) = self.next_plan.lock().unwrap().take() {
+            *self.account.account.lock().unwrap() = Some(account(plan));
+        }
+        Ok(())
+    }
 }
 
 impl InteractiveLoginDriver for AccountDriver {
@@ -125,9 +150,7 @@ fn account_and_model_changes_publish_once_without_opening_a_page() {
         .unwrap();
     let sources = Sources {
         login,
-        subscriptions: vec![SubscriptionSource::local(
-            ash_chatgpt::CHATGPT_SUBSCRIPTION_PROVIDER_ID,
-        )],
+        subscriptions: vec![ash_chatgpt::CHATGPT_SUBSCRIPTION_PROVIDER_ID],
         catalog: catalog.clone(),
         updates,
     };
@@ -187,9 +210,7 @@ fn failed_discovery_waits_for_the_next_observation_period() {
     updates.register(1, false, &queue);
     let sources = Sources {
         login: Arc::new(LoginService::deferred(driver)),
-        subscriptions: vec![SubscriptionSource::local(
-            ash_chatgpt::CHATGPT_SUBSCRIPTION_PROVIDER_ID,
-        )],
+        subscriptions: vec![ash_chatgpt::CHATGPT_SUBSCRIPTION_PROVIDER_ID],
         catalog: catalog.clone(),
         updates,
     };
@@ -216,7 +237,16 @@ fn remote_metadata_change_publishes_account_and_matching_models() {
     let driver = Arc::new(AccountDriver {
         account: Mutex::new(Some(account("Plus"))),
     });
-    let login = Arc::new(LoginService::deferred(driver.clone()));
+    let metadata = Arc::new(MetadataDriver {
+        account: driver.clone(),
+        next_plan: Mutex::new(Some("Pro")),
+        calls: AtomicUsize::new(0),
+    });
+    let login = Arc::new(
+        LoginService::deferred(driver)
+            .with_account_metadata_refreshers([metadata as Arc<dyn AccountMetadataRefresher>])
+            .unwrap(),
+    );
     let catalog = Arc::new(Catalog {
         models: Mutex::new(vec![model("available")]),
         unavailable: AtomicBool::new(false),
@@ -230,13 +260,7 @@ fn remote_metadata_change_publishes_account_and_matching_models() {
         .unwrap();
     let sources = Sources {
         login,
-        subscriptions: vec![SubscriptionSource::with_remote_metadata(
-            ash_chatgpt::CHATGPT_SUBSCRIPTION_PROVIDER_ID,
-            move |_, _| {
-                *driver.account.lock().unwrap() = Some(account("Pro"));
-                Ok(())
-            },
-        )],
+        subscriptions: vec![ash_chatgpt::CHATGPT_SUBSCRIPTION_PROVIDER_ID],
         catalog,
         updates,
     };
@@ -261,7 +285,11 @@ fn signed_out_accounts_make_no_remote_requests_and_external_login_is_observed() 
     let driver = Arc::new(AccountDriver {
         account: Mutex::new(None),
     });
-    let remote_calls = Arc::new(AtomicUsize::new(0));
+    let metadata = Arc::new(MetadataDriver {
+        account: driver.clone(),
+        next_plan: Mutex::new(None),
+        calls: AtomicUsize::new(0),
+    });
     let catalog = Arc::new(Catalog {
         models: Mutex::new(vec![model("available")]),
         unavailable: AtomicBool::new(false),
@@ -270,22 +298,19 @@ fn signed_out_accounts_make_no_remote_requests_and_external_login_is_observed() 
     let updates = Arc::new(UpdateBroker::default());
     let queue = NotificationQueue::default();
     updates.register(1, false, &queue);
-    let login = Arc::new(LoginService::deferred(driver.clone()));
+    let login = Arc::new(
+        LoginService::deferred(driver.clone())
+            .with_account_metadata_refreshers([
+                metadata.clone() as Arc<dyn AccountMetadataRefresher>
+            ])
+            .unwrap(),
+    );
     login
         .install_events(Arc::new(AppServerLoginEvents::new(updates.clone())))
         .unwrap();
     let sources = Sources {
         login,
-        subscriptions: vec![SubscriptionSource::with_remote_metadata(
-            ash_chatgpt::CHATGPT_SUBSCRIPTION_PROVIDER_ID,
-            {
-                let remote_calls = remote_calls.clone();
-                move |_, _| {
-                    remote_calls.fetch_add(1, Ordering::Relaxed);
-                    Ok(())
-                }
-            },
-        )],
+        subscriptions: vec![ash_chatgpt::CHATGPT_SUBSCRIPTION_PROVIDER_ID],
         catalog: catalog.clone(),
         updates,
     };
@@ -293,24 +318,24 @@ fn signed_out_accounts_make_no_remote_requests_and_external_login_is_observed() 
     let cancellation = CancellationSource::new();
 
     observed.check(&sources, true, &cancellation.token());
-    assert_eq!(remote_calls.load(Ordering::Relaxed), 0);
+    assert_eq!(metadata.calls.load(Ordering::Relaxed), 0);
     assert_eq!(catalog.calls.load(Ordering::Relaxed), 0);
     assert!(queue.drain().is_empty());
 
     *driver.account.lock().unwrap() = Some(account("Plus"));
     observed.check(&sources, false, &cancellation.token());
-    assert_eq!(remote_calls.load(Ordering::Relaxed), 1);
+    assert_eq!(metadata.calls.load(Ordering::Relaxed), 1);
     assert_eq!(catalog.calls.load(Ordering::Relaxed), 1);
     assert_eq!(queue.drain().len(), 2);
 
     *driver.account.lock().unwrap() = None;
     observed.check(&sources, false, &cancellation.token());
-    assert_eq!(remote_calls.load(Ordering::Relaxed), 1);
+    assert_eq!(metadata.calls.load(Ordering::Relaxed), 1);
     assert_eq!(catalog.calls.load(Ordering::Relaxed), 1);
     assert_eq!(queue.drain()[0]["method"], "account/updated");
 
     *driver.account.lock().unwrap() = Some(account("Plus"));
     observed.check(&sources, false, &cancellation.token());
-    assert_eq!(remote_calls.load(Ordering::Relaxed), 2);
+    assert_eq!(metadata.calls.load(Ordering::Relaxed), 2);
     assert_eq!(catalog.calls.load(Ordering::Relaxed), 2);
 }

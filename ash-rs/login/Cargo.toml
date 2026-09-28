@@ -10,5 +10,8 @@ doctest = false
 name = "ash_login"
 path = "src/lib.rs"
 
+[dependencies]
+ash-async-utils = { workspace = true }
+
 [lints]
 workspace = true

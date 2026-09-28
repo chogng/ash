@@ -74,6 +74,7 @@ Desktop 的 Models 设置页已接入这条控制面：ChatGPT 与 Kimi 使用�
 - redacted account/session projection；
 - login request 的生命周期和稳定 `LoginId`；
 - begin/cancel/logout/account-changed/reauthentication-required 的状态转换；
+- 当前账户的远端展示资料刷新与脱敏状态提交；供应商适配器执行实际请求；
 - UI/CLI/App Server 所需的授权 URL、device code、进度和稳定错误的安全投影；
 - 对 provider-specific interactive login adapter 的最小 consumer-owned port。
 

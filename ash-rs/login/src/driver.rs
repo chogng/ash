@@ -7,6 +7,7 @@ use crate::CancelLoginOutcome;
 use crate::LoginCompletion;
 use crate::LoginError;
 use crate::LoginId;
+use ash_async_utils::CancellationToken;
 
 /// Executes provider-owned interactive login operations without exposing credentials.
 ///
@@ -24,6 +25,21 @@ pub trait InteractiveLoginDriver: Send + Sync {
     fn cancel(&self, login_id: &LoginId) -> Result<CancelLoginOutcome, LoginError>;
 
     fn logout(&self, account: &AccountRef) -> Result<(), LoginError>;
+}
+
+/// Refreshes remote display metadata for an existing provider account.
+///
+/// Implementations verify the exact account before publishing metadata to their
+/// credential owner. LoginService then reads the redacted snapshot and applies
+/// its normal revision checks; this port never returns credential material.
+pub trait AccountMetadataRefresher: Send + Sync {
+    fn provider_id(&self) -> &'static str;
+
+    fn refresh_account(
+        &self,
+        account_id: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<(), LoginError>;
 }
 
 /// Receives redacted login lifecycle events from [`crate::LoginService`].

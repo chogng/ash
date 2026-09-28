@@ -148,9 +148,8 @@ mod runtime_extensions;
 mod search_operations;
 mod semantic_index_job;
 mod session_operations;
-mod subscription_runtime;
-pub(crate) use subscription_runtime::SubscriptionSource;
 mod skill_operations;
+mod subscription_runtime;
 mod symbol_index_operations;
 mod symbol_index_runtime;
 mod syntax_operations;
@@ -1034,10 +1033,7 @@ impl AppServer {
         self
     }
 
-    pub(crate) fn start_subscription_monitor(
-        mut self,
-        subscriptions: Vec<subscription_runtime::SubscriptionSource>,
-    ) -> Self {
+    pub(crate) fn start_subscription_monitor(mut self, subscriptions: Vec<&'static str>) -> Self {
         let login = self
             .login
             .as_ref()

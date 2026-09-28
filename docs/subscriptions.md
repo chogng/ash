@@ -42,6 +42,8 @@ BigModel 与 Z.AI 使用[官方 ZCode](https://zcode.z.ai/en/docs/configuration)
 
 `account/rateLimits/read` 支持 ChatGPT、Kimi 和 Super Grok，按 `{ provider, accountId }` 查询指定账户；接口字段、身份检查和错误见 [App Server 账号接口](ash-app-server-api.md#11-account-与登录)。ChatGPT 返回额度窗口的已使用比例、UTC 重置时间和点数；Kimi 返回上游实际提供的五小时、每周或每月窗口；Super Grok 返回上游周期、使用比例和余额。各供应商的额度含义不同，界面分别展示。BigModel Coding Plan 和 Z.AI Coding Plan 尚未接入这个额度接口。
 
+后台定期更新 Kimi 和 Super Grok 的账户展示资料时，由 `ash-login` 核对当前账户并提交脱敏状态；供应商适配器读取远端资料。模型目录仍由模型目录服务更新，额度仍在打开 `/usage` 时查询。
+
 每次运行 `/usage` 都读取当前已登录账户，并为每个就绪的 ChatGPT、Kimi 或 Super Grok 账户查询一次额度。面板中的页签切换和重绘只使用这次查询的结果；关闭后再次运行 `/usage` 才会重新查询。当前没有定时刷新，也不读取或保存本地额度缓存文件。Codex 兼容的 `auth.json` 只用于认证，不提供额度数据。
 
 这个命令由用户主动打开，请求次数取决于打开次数，因此保持即时查询，不为它增加本地额度缓存。若以后提供常驻额度显示，再由账户侧维护按账户区分、带更新时间的共享数据，并确定刷新时机；本地保存的上次结果只能作为带时间标记的旧值展示，不能当作当前余额。
