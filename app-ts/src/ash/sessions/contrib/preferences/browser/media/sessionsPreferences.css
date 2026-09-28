@@ -1,11 +1,116 @@
 .ash-sessions-settings-dialog {
-	width: min(680px, calc(100vw - var(--ash-spacing-size320)));
-	overflow: visible;
+	width: min(920px, calc(100vw - var(--ash-spacing-size320)));
+	overflow: hidden;
+	container-type: inline-size;
 }
 
-.ash-sessions-settings-description {
-	margin: 0 0 var(--ash-spacing-size160);
+.ash-sessions-settings-dialog > .ash-dialog-title {
+	display: none;
+}
+
+.ash-sessions-settings-dialog > .ash-dialog-body {
+	display: grid;
+	width: 100%;
+	height: min(560px, calc(100vh - 160px));
+	min-width: 0;
+	min-height: 0;
+	grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+	grid-template-rows: minmax(0, 1fr) auto;
+	padding: 0;
+}
+
+.ash-sessions-settings {
+	display: contents;
+}
+
+.ash-sessions-settings-sidebar {
+	display: flex;
+	grid-column: 1;
+	grid-row: 1 / 3;
+	min-width: 0;
+	min-height: 0;
+	box-sizing: border-box;
+	overflow: hidden;
+	flex-direction: column;
+	padding: var(--ash-spacing-size160) var(--ash-spacing-size120);
+	border-right: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+	background: var(--ash-side-bar-background);
+}
+
+.ash-sessions-settings-search {
+	position: relative;
+	flex: 0 0 auto;
+}
+
+.ash-sessions-settings-search > .ash-icon {
+	position: absolute;
+	z-index: 1;
+	top: 50%;
+	left: var(--ash-spacing-size100);
 	color: var(--ash-description-foreground);
+	transform: translateY(-50%);
+	pointer-events: none;
+}
+
+.ash-sessions-settings-search .ash-input-box {
+	width: 100%;
+	padding-left: var(--ash-spacing-size240);
+}
+
+.ash-sessions-settings-navigation-label {
+	margin: 0 var(--ash-spacing-size80) var(--ash-spacing-size80);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-font-size-label1);
+}
+
+.ash-sessions-settings-navigation {
+	display: flex;
+	min-height: 0;
+	overflow-y: auto;
+	flex-direction: column;
+	margin-top: var(--ash-spacing-size200);
+	gap: var(--ash-spacing-size160);
+}
+
+.ash-sessions-settings-navigation-group {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-sessions-settings-navigation .ash-sessions-settings-navigation-item {
+	width: 100%;
+	justify-content: flex-start;
+	text-align: left;
+}
+
+.ash-sessions-settings-navigation-item:hover,
+.ash-sessions-settings-navigation-item.is-current {
+	background: var(--ash-settings-row-hover-background);
+}
+
+.ash-sessions-settings-page {
+	grid-column: 2;
+	grid-row: 1;
+	min-width: 0;
+	min-height: 0;
+	box-sizing: border-box;
+	overflow-y: auto;
+	padding: var(--ash-spacing-size240) var(--ash-spacing-size280);
+	background: var(--ash-editor-background);
+}
+
+.ash-sessions-settings-dialog .ash-dialog-actions {
+	grid-column: 2;
+	grid-row: 2;
+	padding: var(--ash-spacing-size120) var(--ash-spacing-size280);
+}
+
+.ash-sessions-settings-page-title {
+	margin: 0 0 var(--ash-spacing-size240);
+	color: var(--ash-foreground);
+	font-size: var(--ash-font-size-heading2);
+	font-weight: var(--ash-font-weight-semi-bold);
 }
 
 .ash-sessions-settings-list {
@@ -13,8 +118,21 @@
 	flex-direction: column;
 }
 
+.ash-sessions-settings-list[hidden] {
+	display: none;
+}
+
 .ash-sessions-settings-list .ash-configuration-setting + .ash-configuration-setting {
 	border-top: var(--ash-stroke-thickness) solid var(--ash-settings-item-separator);
+}
+
+.ash-sessions-settings-empty {
+	margin: 0;
+	color: var(--ash-description-foreground);
+}
+
+.ash-sessions-settings-empty[hidden] {
+	display: none;
 }
 
 .ash-sessions-settings-status {
@@ -27,4 +145,30 @@
 
 .ash-sessions-settings-status[hidden] {
 	display: none;
+}
+
+@container (max-width: 600px) {
+	.ash-sessions-settings-dialog > .ash-dialog-body {
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: auto minmax(0, 1fr) auto;
+	}
+
+	.ash-sessions-settings-sidebar {
+		grid-column: 1;
+		grid-row: 1;
+		max-height: 180px;
+		border-right: 0;
+		border-bottom: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+	}
+
+	.ash-sessions-settings-page {
+		grid-column: 1;
+		grid-row: 2;
+	}
+
+	.ash-sessions-settings-dialog .ash-dialog-actions {
+		grid-column: 1;
+		grid-row: 3;
+	}
+
 }

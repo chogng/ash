@@ -94,12 +94,66 @@ test('Browser Code Sessions Activity Bar centers icons and changes size and posi
 	await page.getByRole('menuitem', { name: 'Settings' }).click();
 	const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
 	await expect(settings).toBeVisible();
+	await expect(settings.locator('.ash-dialog-title')).toBeHidden();
+	await expect(settings).toHaveCSS('border-top-width', '1px');
+	await expect(settings.locator('.ash-sessions-settings')).toHaveCSS('border-top-width', '0px');
+	await expect(settings.locator('.ash-sessions-settings-list')).toHaveCSS('border-top-width', '0px');
+	const sidebar = settings.locator('.ash-sessions-settings-sidebar');
+	const settingsPage = settings.locator('.ash-sessions-settings-page');
+	const actions = settings.locator('.ash-dialog-actions');
+	const sidebarBounds = await sidebar.boundingBox();
+	const pageBounds = await settingsPage.boundingBox();
+	const actionsBounds = await actions.boundingBox();
+	expect(sidebarBounds).not.toBeNull();
+	expect(pageBounds).not.toBeNull();
+	expect(actionsBounds).not.toBeNull();
+	expect(sidebarBounds!.x + sidebarBounds!.width).toBeLessThanOrEqual(pageBounds!.x + 1);
+	expect(pageBounds!.y + pageBounds!.height).toBeLessThanOrEqual(actionsBounds!.y + 1);
+	expect(sidebarBounds!.y + sidebarBounds!.height).toBeGreaterThanOrEqual(actionsBounds!.y + actionsBounds!.height - 1);
+	const navigation = settings.getByRole('navigation', { name: 'Settings categories' });
+	for (const [section, categories] of [
+		['Basics', ['General', 'Account', 'Appearance', 'Voice', 'Personalization']],
+		['Development', ['Agents', 'Models', 'Git & PRs', 'Worktree', 'Browser', 'Tab', 'Code Intelligence', 'Environment']],
+		['Management', ['Plugins', 'Keyboard Shortcuts', 'Archived Chats']],
+	] as const) {
+		const group = navigation.getByRole('group', { name: section });
+		for (const category of categories) {
+			await expect(group.getByRole('button', { name: category, exact: true }).locator('svg.ash-icon')).toHaveCount(1);
+		}
+	}
+	await expect(navigation.getByRole('button', { name: 'General' })).toHaveAttribute('aria-current', 'page');
+	await expect(settings.getByRole('heading', { name: 'General' })).toBeVisible();
+	await expect(settings.locator('[data-configuration-key="accessibility.verbosity.sessionsActivityBar"]')).toBeVisible();
+	await expect(settings.locator('[data-configuration-key="accessibility.verbosity.sessionsSettings"]')).toBeVisible();
+	await navigation.getByRole('button', { name: 'Appearance' }).click();
+	await expect(settings.getByRole('heading', { name: 'Appearance' })).toBeVisible();
 	await expect(settings.locator('[data-configuration-key="sessions.layoutStyle"]')).toBeVisible();
 	await expect(settings.locator('[data-configuration-key="sessions.activityBar.location"]')).toBeVisible();
 	await expect(settings.locator('[data-configuration-key="sessions.activityBar.compact"]')).toBeVisible();
-	await expect(settings.locator('[data-configuration-key="accessibility.verbosity.sessionsActivityBar"]')).toBeVisible();
-	await expect(settings.locator('[data-configuration-key="accessibility.verbosity.sessionsSettings"]')).toBeVisible();
+	await navigation.getByRole('button', { name: 'Archived Chats' }).click();
+	await expect(settingsPage.getByRole('heading')).toHaveCount(0);
+	await expect(settingsPage.locator('.ash-configuration-setting')).toHaveCount(0);
+	await expect(settings.getByText('No settings found.')).toBeHidden();
+	await navigation.getByRole('button', { name: 'Appearance' }).click();
 	await expect(settings.locator('[data-configuration-key="workbench.layoutStyle"]')).toHaveCount(0);
+	const searchSettings = settings.getByRole('searchbox', { name: 'Search settings' });
+	await expect(settings.locator('.ash-sessions-settings-search svg[data-ash-icon-id="search"]')).toBeVisible();
+	await searchSettings.fill('layout');
+	await expect(settings.getByRole('heading', { name: 'Search results' })).toBeVisible();
+	await expect(settings.locator('.ash-configuration-setting')).toHaveCount(1);
+	await searchSettings.fill('unmatched-setting');
+	await expect(settings.getByText('No settings found.')).toBeVisible();
+	await navigation.getByRole('button', { name: 'Appearance' }).click();
+	const originalViewport = page.viewportSize();
+	if (!originalViewport) throw new Error('Browser test requires a viewport');
+	await page.setViewportSize({ width: 540, height: 500 });
+	const narrowSidebarBounds = await sidebar.boundingBox();
+	const narrowPageBounds = await settingsPage.boundingBox();
+	expect(narrowSidebarBounds).not.toBeNull();
+	expect(narrowPageBounds).not.toBeNull();
+	expect(narrowSidebarBounds!.y + narrowSidebarBounds!.height).toBeLessThanOrEqual(narrowPageBounds!.y + 1);
+	await expect(settings.getByRole('searchbox', { name: 'Search settings' })).toBeVisible();
+	await page.setViewportSize(originalViewport);
 	const layoutStyle = settings.locator('[data-configuration-key="sessions.layoutStyle"]').getByRole('combobox');
 	const originalLayoutStyle = (await layoutStyle.textContent())!.trim();
 	const changedLayoutStyle = originalLayoutStyle === 'Flat' ? 'Modern' : 'Flat';
@@ -110,6 +164,7 @@ test('Browser Code Sessions Activity Bar centers icons and changes size and posi
 	await page.getByRole('option', { name: originalLayoutStyle }).click();
 	await settings.getByRole('button', { name: 'Close' }).click();
 	await expect(settings).toHaveCount(0);
+	await expect(accounts).toBeFocused();
 	const chatButton = activityBar.locator('button').first();
 	const buttonBounds = await chatButton.boundingBox();
 	const iconBounds = await chatButton.locator('svg').boundingBox();
@@ -200,6 +255,16 @@ test('Electron Code Sessions Activity Bar follows its position and size settings
 test('Electron Sessions account menu opens the Sessions settings page', async ({ application, target, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code', 'Requires the Code Sessions window');
 	if (target.kind !== 'electron' || !('windows' in application)) return;
+	if (process.platform === 'darwin') {
+		// The system menu is outside Playwright's page DOM; use the product's custom menu for this UI flow.
+		await workbench.page.evaluate(async () => {
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
+			const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { version: 1; source: string } };
+			const settings = JSON.parse(snapshot.document.source) as Record<string, unknown>;
+			settings['window.menuStyle'] = 'custom';
+			await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(settings) } });
+		});
+	}
 	const sessionPagePromise = application.waitForEvent('window');
 	await workbench.page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 	const page = await sessionPagePromise;
@@ -209,12 +274,16 @@ test('Electron Sessions account menu opens the Sessions settings page', async ({
 	await page.getByRole('menuitem', { name: 'Settings' }).click();
 	const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
 	await expect(settings).toBeVisible();
+	const navigation = settings.getByRole('navigation', { name: 'Settings categories' });
+	await navigation.getByRole('button', { name: 'Appearance' }).click();
 	await expect(settings.locator('[data-configuration-key="sessions.layoutStyle"]')).toBeVisible();
 	await expect(settings.locator('[data-configuration-key="sessions.activityBar.location"]')).toBeVisible();
 	await expect(settings.locator('[data-configuration-key="sessions.activityBar.compact"]')).toBeVisible();
+	await navigation.getByRole('button', { name: 'General' }).click();
 	await expect(settings.locator('[data-configuration-key="accessibility.verbosity.sessionsActivityBar"]')).toBeVisible();
 	await expect(settings.locator('[data-configuration-key="accessibility.verbosity.sessionsSettings"]')).toBeVisible();
 	await expect(settings.locator('[data-configuration-key="workbench.layoutStyle"]')).toHaveCount(0);
+	await navigation.getByRole('button', { name: 'Appearance' }).click();
 	const layoutStyle = settings.locator('[data-configuration-key="sessions.layoutStyle"]').getByRole('combobox');
 	const originalLayoutStyle = (await layoutStyle.textContent())!.trim();
 	const changedLayoutStyle = originalLayoutStyle === 'Flat' ? 'Modern' : 'Flat';
