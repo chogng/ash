@@ -22,11 +22,6 @@ export const settingsHeaderBorder = registerColor('settings.headerBorder', { dar
 	owner,
 });
 
-export const modifiedItemIndicator = registerColor('settings.modifiedItemIndicator', { dark: '#0c7d9d', light: '#2f7ead', highContrastDark: '#ffff00', highContrastLight: '#0000ee' }, {
-	description: 'Indicator for a setting changed from its default value.',
-	owner,
-});
-
 export const focusedRowBackground = registerColor('settings.focusedRowBackground', {
 	dark: transparent('list.hoverBackground', 0.6),
 	light: transparent('list.hoverBackground', 0.6),

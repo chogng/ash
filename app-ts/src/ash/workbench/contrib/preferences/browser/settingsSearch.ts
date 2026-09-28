@@ -6,28 +6,18 @@ export interface SettingsSearchTarget {
 	readonly tags?: readonly string[];
 }
 
-export interface SettingsSearchQueryOptions {
-	readonly isModified?: (id: string) => boolean;
-}
-
 /** Normalizes one Settings query and matches it against searchable setting metadata. */
 export class SettingsSearchQuery {
 	public readonly text: string;
 	public readonly key: string;
-	public readonly hasModifiedFilter: boolean;
 	private readonly idFilter: string | undefined;
 	private readonly terms: readonly string[];
 
-	constructor(value: string, private readonly options: SettingsSearchQueryOptions = {}) {
+	constructor(value: string) {
 		const textTokens: string[] = [];
 		let idFilter: string | undefined;
-		let modified = false;
 		for (const token of value.trim().split(/\s+/u).filter(Boolean)) {
 			const normalized = token.toLocaleLowerCase();
-			if (normalized === '@modified') {
-				modified = true;
-				continue;
-			}
 			if (normalized.startsWith('@id:')) {
 				idFilter = normalized.slice('@id:'.length) || undefined;
 				continue;
@@ -41,16 +31,14 @@ export class SettingsSearchQuery {
 			.toLocaleLowerCase();
 		this.terms = this.text ? this.text.split(' ') : [];
 		this.idFilter = idFilter;
-		this.hasModifiedFilter = modified;
-		this.key = `${this.text}\0${idFilter ?? ''}\0${modified}`;
+		this.key = `${this.text}\0${idFilter ?? ''}`;
 	}
 
 	public get isEmpty(): boolean {
-		return this.terms.length === 0 && !this.idFilter && !this.hasModifiedFilter;
+		return this.terms.length === 0 && !this.idFilter;
 	}
 
 	public matches(target: SettingsSearchTarget): boolean {
-		if (this.hasModifiedFilter && (!target.id || !this.options.isModified?.(target.id))) return false;
 		if (this.idFilter && !target.id?.toLocaleLowerCase().includes(this.idFilter)) return false;
 		if (this.terms.length === 0) return true;
 		const searchableText = [target.title, target.description, ...(target.keywords ?? []), ...(target.tags ?? [])]

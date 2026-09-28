@@ -59,6 +59,7 @@
   min-height: 68px;
   box-sizing: border-box;
   align-items: center;
+  grid-template-columns: minmax(0, 1fr) minmax(112px, 190px);
   padding: 12px 16px;
   color: var(--ash-foreground);
   gap: 20px;
@@ -104,14 +105,6 @@
 
 .ash-settings-indicators[hidden] {
   display: none;
-}
-
-.ash-settings-indicators.is-modified::before {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--ash-settings-modified-item-indicator);
-  content: '';
 }
 
 .ash-settings-indicators.is-pending {
@@ -163,17 +156,10 @@
 	display: none;
 }
 
-.ash-general-setting {
-	grid-template-columns: minmax(0, 1fr) minmax(132px, 190px);
-}
-
 .ash-general-toggle-control,
 .ash-editor-toggle-control {
 	width: 100%;
 	grid-column: 1 / -1;
-}
-
-.ash-editor-toggle-control {
 	cursor: pointer;
 }
 
@@ -192,7 +178,7 @@
 	justify-self: end;
 }
 
-.ash-general-setting-control.ash-select-box {
+.ash-configuration-setting > .ash-select-box {
 	justify-self: end;
 }
 
@@ -221,11 +207,6 @@
 .ash-general-setting-control[type="number"]::-webkit-outer-spin-button {
 	margin: 0;
 	-webkit-appearance: none;
-}
-
-.ash-editor-setting {
-	cursor: default;
-	grid-template-columns: minmax(0, 1fr) minmax(112px, 180px);
 }
 
 .ash-editor-setting-text:focus-visible {

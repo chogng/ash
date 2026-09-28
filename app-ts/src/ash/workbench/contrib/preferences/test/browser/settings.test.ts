@@ -250,15 +250,11 @@ test('Settings search normalizes pasted setting syntax and matches complete meta
 	}), false);
 });
 
-test('Settings search composes modified and setting ID filters', () => {
-	const modifiedIds = new Set(['editor.fontFamily']);
-	const query = new SettingsSearchQuery('@modified @id:font editor', {
-		isModified: id => modifiedIds.has(id),
-	});
+test('Settings search composes setting ID and text filters', () => {
+	const query = new SettingsSearchQuery('@id:font editor');
 
-	assert.equal(query.hasModifiedFilter, true);
 	assert.equal(query.matches({ id: 'editor.fontFamily', title: 'Font family', description: 'Editor typography.' }), true);
-	assert.equal(query.matches({ id: 'editor.fontSize', title: 'Font size', description: 'Editor typography.' }), false);
+	assert.equal(query.matches({ id: 'editor.fontSize', title: 'Font size', description: 'Editor typography.' }), true);
 	assert.equal(query.matches({ id: 'workbench.fontFamily', title: 'Font family', description: 'Workbench typography.' }), false);
 });
 
@@ -414,12 +410,15 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 
 	const underline = root.querySelector<HTMLInputElement>(`[data-configuration-key="${AccessibilityConfiguration.underlineLinks}"]`);
 	assert.ok(underline);
+	assert.equal(underline.getAttribute('role'), 'switch');
+	assert.equal(underline.getAttribute('aria-checked'), 'false');
 	underline.click();
 	await nextTurn();
 	assert.equal(configuration.getValue(AccessibilityConfiguration.underlineLinks), true);
+	assert.equal(underline.getAttribute('aria-checked'), 'true');
 	const underlineIndicator = root.querySelector<HTMLElement>(`[data-settings-item-id="${AccessibilityConfiguration.underlineLinks}"] .ash-settings-indicators`);
-	assert.equal(underlineIndicator?.textContent, 'Modified');
-	assert.equal(underlineIndicator?.getAttribute('aria-label'), 'Setting has been modified');
+	assert.equal(underlineIndicator?.hidden, true);
+	assert.equal(underlineIndicator?.textContent, '');
 
 	const hoverDelay = root.querySelector<HTMLInputElement>(`[data-configuration-key="${HoverConfiguration.delay}"]`);
 	assert.ok(hoverDelay);
@@ -480,11 +479,14 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	await nextTurn();
 	assert.equal(configuration.getValue(CodeEditorConfiguration.fontFamily), 'Fira Code');
 	root.querySelector<HTMLButtonElement>('.ash-settings-search-filter')?.click();
-	const modifiedFilter = menuActions.find(action => action.id === 'settings.search.modified');
-	assert.ok(modifiedFilter);
-	await modifiedFilter.run();
+	assert.deepEqual(menuActions.filter(action => action.label).map(action => action.label), ['Setting ID…', 'Clear Filters']);
+	const idFilter = menuActions.find(action => action.id === 'settings.search.id');
+	assert.ok(idFilter);
+	await idFilter.run();
 	hideMenu?.(false);
-	assert.equal(search.value, '@modified');
+	assert.equal(search.value, '@id:');
+	search.value = '@id:fontFamily';
+	search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
 	assert.ok(root.querySelector(`[data-settings-item-id="${CodeEditorConfiguration.fontFamily}"]`));
 	assert.equal(root.querySelector(`[data-settings-item-id="${CodeEditorConfiguration.fontSize}"]`), null);
 	root.querySelector<HTMLButtonElement>('.ash-settings-search-filter')?.click();

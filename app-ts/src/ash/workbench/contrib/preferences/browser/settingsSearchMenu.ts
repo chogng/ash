@@ -34,19 +34,8 @@ export class SettingsSearchMenu extends Disposable {
 	private show(): void {
 		if (this.domNode.classList.contains('is-open')) return;
 		const tokens = this.options.getValue().trim().split(/\s+/u).filter(Boolean);
-		const hasModified = tokens.some(token => token.toLocaleLowerCase() === '@modified');
 		const hasFilters = tokens.some(token => token.startsWith('@'));
 		const actions: readonly IAction[] = [
-			{
-				id: 'settings.search.modified',
-				label: 'Modified',
-				tooltip: 'Show settings changed from their defaults',
-				enabled: true,
-				checked: hasModified,
-				run: () => this.updateTokens(hasModified
-					? tokens.filter(token => token.toLocaleLowerCase() !== '@modified')
-					: [...tokens, '@modified']),
-			},
 			{
 				id: 'settings.search.id',
 				label: 'Setting ID…',

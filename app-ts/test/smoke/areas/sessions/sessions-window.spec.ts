@@ -122,6 +122,11 @@ test('Browser Code Sessions Activity Bar centers icons and changes size and posi
 	await expect(settings).toHaveCSS('border-top-width', '1px');
 	await expect(settings.locator('.ash-sessions-settings')).toHaveCSS('border-top-width', '0px');
 	await expect(settings.locator('.ash-sessions-settings-list')).toHaveCSS('border-top-width', '0px');
+	const settingsCard = settings.locator('.ash-sessions-settings-list.ash-settings-card');
+	await expect(settingsCard).toHaveCSS('border-radius', '8px');
+	await expect(settingsCard).toHaveCSS('background-color', /rgb\(/);
+	await expect(settingsCard.locator('.ash-configuration-setting').first()).toHaveCSS('border-top-left-radius', '8px');
+	await expect(settingsCard.locator('.ash-configuration-setting').last()).toHaveCSS('border-bottom-right-radius', '8px');
 	const sidebar = settings.locator('.ash-sessions-settings-sidebar');
 	const settingsPage = settings.locator('.ash-sessions-settings-page');
 	const sidebarBounds = await sidebar.boundingBox();
@@ -295,6 +300,7 @@ test('Electron Sessions account menu opens the Sessions settings page', async ({
 	await page.getByRole('menuitem', { name: 'Settings' }).click();
 	const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
 	await expect(settings).toBeVisible();
+	await expect(settings.locator('.ash-sessions-settings-list.ash-settings-card')).toHaveCSS('border-radius', '8px');
 	const navigation = settings.getByRole('navigation', { name: 'Settings categories' });
 	await navigation.getByRole('button', { name: 'Appearance' }).click();
 	await expect(settings.locator('[data-configuration-key="sessions.layoutStyle"]')).toBeVisible();

@@ -65,10 +65,6 @@ export class SettingsTreeModel<T> extends ObjectTreeModel<SettingsTreeElement<T>
 		this.refilter();
 	}
 
-	refreshQuery(): void {
-		this.refilter();
-	}
-
 	setNavigationTarget(targetId: string | undefined): void {
 		if (targetId === this.navigationTargetId) return;
 		if (targetId !== undefined && !this.has(targetId)) throw new RangeError(`Unknown Settings navigation target '${targetId}'`);

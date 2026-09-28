@@ -7,8 +7,18 @@ test('Settings opens with editor display controls', async ({ target, workbench }
 	await page.keyboard.press('Enter');
 	await expect(page.locator('.ash-modal-editor')).toBeVisible();
 	await page.locator('[data-settings-category-id="editor"]').click();
+	await expect(page.locator('.ash-settings-card').first()).toHaveCSS('border-radius', '8px');
 	await expect(page.locator('[data-configuration-key="editor.renderWhitespace"]')).toBeVisible();
 	await expect(page.locator('[data-configuration-key="editor.renderControlCharacters"]')).toBeVisible();
+	await page.locator('[data-settings-target-id="editor.group.selection"]').click();
+	for (const key of ['workbench.editor.showTabs', 'workbench.editor.defaultBinaryEditor']) {
+		const row = page.locator(`[data-settings-item-id="${key}"]`);
+		const control = row.getByRole('combobox');
+		const [rowBounds, controlBounds] = await Promise.all([row.boundingBox(), control.boundingBox()]);
+		expect(rowBounds).not.toBeNull();
+		expect(controlBounds).not.toBeNull();
+		expect(Math.abs(rowBounds!.x + rowBounds!.width - 16 - controlBounds!.x - controlBounds!.width)).toBeLessThanOrEqual(1);
+	}
 	if (target.kind === 'electron') {
 		await page.locator('[data-settings-category-id="general"]').click();
 		await expect(page.locator('[data-configuration-key="dictation.backend"]')).toBeVisible();
@@ -19,12 +29,60 @@ test('Settings opens with editor display controls', async ({ target, workbench }
 		await page.locator('[data-settings-category-id="startup"]').click();
 		const startupEditor = page.locator('[data-configuration-key="workbench.startupEditor"]').getByRole('combobox');
 		await expect(startupEditor).toBeVisible();
+		const startupRow = page.locator('[data-settings-item-id="workbench.startupEditor"]');
+		const [startupRowBounds, startupControlBounds] = await Promise.all([startupRow.boundingBox(), startupEditor.boundingBox()]);
+		expect(startupRowBounds).not.toBeNull();
+		expect(startupControlBounds).not.toBeNull();
+		expect(Math.abs(startupRowBounds!.x + startupRowBounds!.width - 16 - startupControlBounds!.x - startupControlBounds!.width)).toBeLessThanOrEqual(1);
 		await startupEditor.click();
 		await expect(page.getByRole('option', { name: 'Welcome in empty workbench' })).toBeVisible();
 		await page.keyboard.press('Escape');
 		await expect(page.locator('.ash-notification')).toHaveCount(0);
 		await expect(page.locator('[data-settings-category-id="sessions"]')).toHaveCount(0);
 	}
+});
+
+test('Changing the color theme does not add a modified marker', async ({ target, workbench }) => {
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+Shift+P');
+	await page.getByPlaceholder('Type the name of a command to run').fill('Ash Settings');
+	await page.keyboard.press('Enter');
+	await page.locator('[data-settings-group-id="workbench"]').click();
+	await page.locator('[data-settings-category-id="appearance"]').click();
+	const setting = page.locator('[data-settings-item-id="workbench.colorTheme"]');
+	const control = setting.getByRole('combobox');
+	const initialHeight = (await setting.boundingBox())?.height;
+	expect(initialHeight).toBeDefined();
+	await control.click();
+	await page.getByRole('option', { name: 'Ash Dark', exact: true }).click();
+	await expect(control).toHaveText('Ash Dark');
+	await expect(setting.locator('.ash-settings-indicators')).toHaveCSS('display', 'none');
+	expect((await setting.boundingBox())?.height).toBeCloseTo(initialHeight!, 0);
+	if (target.kind === 'browser') {
+		await page.locator('.ash-settings-search-filter').click();
+		await expect(page.getByRole('menuitem', { name: 'Setting ID…' })).toBeVisible();
+		await expect(page.getByRole('menuitem', { name: 'Modified' })).toHaveCount(0);
+	}
+});
+
+test('Workbench boolean settings use keyboard-operable switches', async ({ workbench }) => {
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+Shift+P');
+	await page.getByPlaceholder('Type the name of a command to run').fill('Ash Settings');
+	await page.keyboard.press('Enter');
+	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
+	await expect(settings).toBeVisible();
+	await settings.locator('[data-settings-group-id="workbench"]').click();
+	await settings.locator('[data-settings-category-id="layout"]').click();
+	const compactActivityBar = settings.getByRole('switch', { name: 'Compact Activity Bar' });
+	await expect(compactActivityBar).toBeVisible();
+	const initialState = await compactActivityBar.isChecked();
+	await expect(compactActivityBar).toHaveAttribute('aria-checked', String(initialState));
+	await compactActivityBar.focus();
+	await compactActivityBar.press('Space');
+	await expect(compactActivityBar).toHaveAttribute('aria-checked', String(!initialState));
+	await compactActivityBar.press('Space');
+	await expect(compactActivityBar).toHaveAttribute('aria-checked', String(initialState));
 });
 
 test.describe('without an open workspace', () => {
@@ -149,6 +207,7 @@ test.describe('without an open workspace', () => {
 		const appearanceGroup = page.locator('.ash-settings-content-group:not(.is-settings-root)');
 		await expect(appearanceGroup.locator('.ash-settings-tree-group-title')).toBeHidden();
 		await expect(appearanceGroup.locator('.ash-settings-tree-group-description')).toBeHidden();
+		await expect(appearanceGroup.locator('.ash-settings-card')).toHaveCSS('border-radius', '8px');
 		await expect(page.locator('[data-configuration-key="workbench.colorTheme"]')).toBeVisible();
 		await expect(page.locator('[data-configuration-key="workbench.colorTheme"]').getByRole('combobox')).toBeVisible();
 		const appearanceSettings = appearanceGroup.locator('.ash-configuration-setting');

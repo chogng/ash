@@ -1,4 +1,5 @@
 import './media/sessionsPreferences.css';
+import '../../../../workbench/contrib/preferences/browser/media/settingsCard.css';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import { ContextView } from '../../../../base/browser/ui/contextview/contextview.js';
@@ -108,7 +109,7 @@ export class SessionsPreferences extends Disposable {
 		heading.id = 'ash-sessions-settings-page-title';
 		page.setAttribute('aria-labelledby', heading.id);
 		const list = h(ownerDocument, 'div');
-		list.className = 'ash-sessions-settings-list';
+		list.className = 'ash-sessions-settings-list ash-settings-card';
 		const empty = h(ownerDocument, 'p');
 		empty.className = 'ash-sessions-settings-empty';
 		empty.setAttribute('role', 'status');

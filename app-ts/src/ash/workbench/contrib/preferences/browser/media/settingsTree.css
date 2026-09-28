@@ -30,12 +30,6 @@
   line-height: 1.5;
 }
 
-.ash-configuration-settings-list {
-  overflow: visible;
-  border-radius: var(--ash-corner-radius-large);
-  background: var(--ash-settings-item-background);
-}
-
 .ash-settings-tree-group.is-settings-root > .ash-configuration-settings-list {
   display: flex;
   overflow: visible;
@@ -48,19 +42,4 @@
 .ash-settings-tree-group.is-settings-root > .ash-configuration-settings-list > .ash-settings-tree-group:only-child > .ash-settings-tree-group-title,
 .ash-settings-tree-group.is-settings-root > .ash-configuration-settings-list > .ash-settings-tree-group:only-child > .ash-settings-tree-group-description {
 	display: none;
-}
-
-.ash-settings-tree-group:not(.is-settings-root) > .ash-configuration-settings-list > * {
-	position: relative;
-}
-
-.ash-settings-tree-group:not(.is-settings-root) > .ash-configuration-settings-list > * + *::before {
-	position: absolute;
-	top: 0;
-	right: 14px;
-	left: 14px;
-	height: 1px;
-	background: var(--ash-settings-item-separator);
-	content: '';
-	pointer-events: none;
 }

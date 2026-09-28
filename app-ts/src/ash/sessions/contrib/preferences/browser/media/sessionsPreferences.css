@@ -116,10 +116,6 @@
 	display: none;
 }
 
-.ash-sessions-settings-list .ash-configuration-setting + .ash-configuration-setting {
-	border-top: var(--ash-stroke-thickness) solid var(--ash-settings-item-separator);
-}
-
 .ash-sessions-settings-empty {
 	margin: 0;
 	color: var(--ash-description-foreground);

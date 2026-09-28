@@ -5,7 +5,7 @@ import { Button } from '../../../../base/browser/ui/button/button.js';
 import type { IContextViewProvider } from '../../../../base/browser/ui/contextview/contextview.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { SelectBox, type SelectOption } from '../../../../base/browser/ui/selectbox/selectbox.js';
-import { Checkbox, Switch, type Toggle } from '../../../../base/browser/ui/toggle/toggle.js';
+import { Switch } from '../../../../base/browser/ui/toggle/toggle.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -252,7 +252,7 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 
 	protected bindState(renderState: (state: SettingState<TValue>) => void): void {
 		const render = (state: SettingState<TValue>): void => {
-			this.indicators.update({ isModified: !state.isDefault, isPending: state.isPending });
+			this.indicators.update({ isPending: state.isPending });
 			renderState(state);
 		};
 		this._register(this.model.onDidChange(render));
@@ -291,13 +291,11 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 }
 
 class BooleanSettingWidget extends AbstractSettingWidget<IBooleanSetting, boolean> {
-	private readonly toggle: Toggle;
+	private readonly toggle: Switch;
 
 	constructor(container: HTMLElement, descriptor: IBooleanSetting, options: SettingWidgetOptions) {
 		super(container, descriptor, descriptor.binding ?? configurationSettingBinding(options.configurationService, descriptor.configuration), options, 'toggle');
-		this.toggle = this._register(this.presentation === 'general'
-			? new Checkbox(this.domNode, { ariaLabel: descriptor.title, content: this.copyDomNode, contentPlacement: 'before-control' })
-			: new Switch(this.domNode, { ariaLabel: descriptor.title, content: this.copyDomNode, contentPlacement: 'before-control' }));
+		this.toggle = this._register(new Switch(this.domNode, { ariaLabel: descriptor.title, content: this.copyDomNode, contentPlacement: 'before-control' }));
 		this.toggle.element.classList.add(`ash-${this.presentation}-toggle-control`);
 		this.toggle.input.dataset.configurationKey = descriptor.configuration.key;
 		this.bindState(state => {

@@ -2,11 +2,10 @@ import { h } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 
 export interface SettingsTreeIndicatorsState {
-	readonly isModified: boolean;
 	readonly isPending: boolean;
 }
 
-/** Projects persistent Settings state into a stable visible and accessible label. */
+/** Announces an in-progress Settings write without adding a persistent row status. */
 export class SettingsTreeIndicatorsLabel extends Disposable {
 	public readonly domNode: HTMLSpanElement;
 	private readonly labelDomNode: HTMLSpanElement;
@@ -24,15 +23,14 @@ export class SettingsTreeIndicatorsLabel extends Disposable {
 	}
 
 	public update(state: SettingsTreeIndicatorsState): void {
-		const label = state.isPending ? 'Saving…' : state.isModified ? 'Modified' : '';
+		const label = state.isPending ? 'Saving…' : '';
 		this.labelDomNode.textContent = label;
 		this.domNode.setAttribute('aria-label', getIndicatorsLabelAriaLabel(state));
-		this.domNode.classList.toggle('is-modified', state.isModified);
 		this.domNode.classList.toggle('is-pending', state.isPending);
 		this.domNode.hidden = !label;
 	}
 }
 
 export function getIndicatorsLabelAriaLabel(state: SettingsTreeIndicatorsState): string {
-	return state.isPending ? 'Saving setting' : state.isModified ? 'Setting has been modified' : '';
+	return state.isPending ? 'Saving setting' : '';
 }

@@ -1,0 +1,32 @@
+.ash-settings-card {
+	overflow: visible;
+	border-radius: var(--ash-corner-radius-large);
+	background: var(--ash-settings-item-background);
+}
+
+.ash-settings-card > * {
+	position: relative;
+}
+
+.ash-settings-card > :first-child {
+	border-radius: var(--ash-corner-radius-large) var(--ash-corner-radius-large) 0 0;
+}
+
+.ash-settings-card > :last-child {
+	border-radius: 0 0 var(--ash-corner-radius-large) var(--ash-corner-radius-large);
+}
+
+.ash-settings-card > :only-child {
+	border-radius: var(--ash-corner-radius-large);
+}
+
+.ash-settings-card > * + *::before {
+	position: absolute;
+	top: 0;
+	right: var(--ash-spacing-size160);
+	left: var(--ash-spacing-size160);
+	height: var(--ash-stroke-thickness);
+	background: var(--ash-settings-item-separator);
+	content: '';
+	pointer-events: none;
+}

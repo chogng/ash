@@ -179,7 +179,6 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 		this.renderCategory(initialCategory);
 
 		this._register(this.localizationService.onDidChange(() => this.updateLocalizedChrome()));
-		this._register(this.configurationService.onDidChangeConfiguration(() => this.treeModel.refreshQuery()));
 		this._register(this.settingsModel.onDidChangeStatus(status => {
 			this.contentStatus.textContent = status.message;
 			this.contentStatus.classList.toggle('is-error', status.isError);
@@ -223,19 +222,11 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 	}
 
 	private search(text: string): void {
-		const query = new SettingsSearchQuery(text, { isModified: id => this.isModified(id) });
+		const query = new SettingsSearchQuery(text);
 		this.tocTree.setFindPattern(query.text);
 		this.treeModel.setQuery(query);
 		this.navigationScrollable.scrollTo(0, 0);
 		this.navigationScrollable.layout();
-	}
-
-	private isModified(id: string): boolean {
-		const setting = this.settingsModel.settings.find(candidate => candidate.id === id);
-		if (!setting) return false;
-		if (setting.binding) return !Object.is(setting.binding.getValue(), setting.binding.defaultValue);
-		const configuration = setting.configuration as IRegisteredConfiguration<unknown>;
-		return JSON.stringify(configuration.serialize(this.configurationService.getValue(configuration.key))) !== JSON.stringify(configuration.serialize(configuration.defaultValue));
 	}
 
 	private focusResults(): void {

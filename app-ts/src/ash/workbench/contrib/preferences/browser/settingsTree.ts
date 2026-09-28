@@ -1,4 +1,5 @@
 import "./media/settingsTree.css";
+import './media/settingsCard.css';
 import type { ObjectTreeNode } from "../../../../base/browser/ui/tree/objectTreeModel.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { SettingsTreeElement, SettingsTreeGroup, SettingsTreeItem, SettingsTreeModel } from "./settingsTreeModels.js";
@@ -153,7 +154,7 @@ export class SettingsTree<T> extends Disposable {
 		} else {
 			element.classList.add(`ash-${rootId}-settings-group`);
 			description.classList.add(`ash-${rootId}-settings-group-description`);
-			items.classList.add(`ash-${rootId}-settings-list`);
+			items.classList.add(`ash-${rootId}-settings-list`, 'ash-settings-card');
 		}
 		element.append(heading, description, items);
 		return { kind: "group", element, heading, description, items, group };
