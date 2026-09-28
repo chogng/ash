@@ -7837,6 +7837,22 @@
         {
           "properties": {
             "method": {
+              "const": "git/clone",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitCloneParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "git/status",
               "type": "string"
             },
@@ -12534,6 +12550,22 @@
             },
             "result": {
               "$ref": "#/$defs/GitRepositoriesResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "git/clone",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitCloneResult"
             }
           },
           "required": [
@@ -19413,6 +19445,35 @@
         "ignored"
       ],
       "type": "string"
+    },
+    "GitCloneParams": {
+      "description": "Repository URL and host-selected parent directory for a desktop clone.",
+      "properties": {
+        "parentPath": {
+          "type": "string"
+        },
+        "url": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "url",
+        "parentPath"
+      ],
+      "type": "object"
+    },
+    "GitCloneResult": {
+      "properties": {
+        "repositoryPath": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "repositoryPath"
+      ],
+      "type": "object"
     },
     "GitCommitChangeDto": {
       "description": "One repository-relative path changed by a commit relative to its first parent.",

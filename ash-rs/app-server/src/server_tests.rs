@@ -5764,6 +5764,38 @@ fn filesystem_watcher_publishes_only_dir_relative_paths() {
 }
 
 #[test]
+fn git_clone_requires_the_product_host_and_returns_a_new_repository_path() {
+    let source = tempfile::tempdir().unwrap();
+    run_git(source.path(), &["init"]);
+    let destination = tempfile::tempdir().unwrap();
+    let server = server();
+    let mut client = server.connection();
+    initialize(&server, &mut client);
+    let params = serde_json::json!({
+        "url": source.path().to_str().unwrap(),
+        "parentPath": destination.path().to_str().unwrap(),
+    });
+    let denied = call(
+        &server,
+        &mut client,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"git/clone","params":params}),
+    );
+    assert_eq!(denied["error"]["code"], -32073);
+    assert_eq!(destination.path().read_dir().unwrap().count(), 0);
+
+    let mut host = server.product_host_connection();
+    initialize(&server, &mut host);
+    let cloned = call(
+        &server,
+        &mut host,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"git/clone","params":params}),
+    );
+    let path = cloned["result"]["repositoryPath"].as_str().unwrap();
+    assert!(std::path::Path::new(path).join(".git").exists());
+    assert!(std::path::Path::new(path).starts_with(destination.path().canonicalize().unwrap()));
+}
+
+#[test]
 fn git_status_rpc_returns_dir_repository_state() {
     let root = std::env::temp_dir().join(format!(
         "ash-app-server-git-{}-{}",

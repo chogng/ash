@@ -110,6 +110,26 @@ test.describe('welcome brand', () => {
 		await expect(welcome.getByRole('button', { name: 'Open folder' })).toBeVisible();
 	});
 
+	test('Clone repo and the Git command open the repository URL input in a desktop window', async ({ target, workbench }) => {
+		const clone = workbench.editors.groupAt(0).welcome.getByRole('button', { name: 'Clone repo' });
+		if (target.kind !== 'electron') {
+			await expect(clone).toBeDisabled();
+			return;
+		}
+		await expect(clone).toBeEnabled();
+		await clone.click();
+		const input = workbench.page.locator('.ash-quick-pick').getByRole('textbox', { name: 'Clone Repository' });
+		await expect(input).toBeFocused();
+		await workbench.page.keyboard.press('Escape');
+		await expect(workbench.page.locator('.ash-quick-pick')).toHaveCount(0);
+		await expect(clone).toBeFocused();
+		await workbench.page.keyboard.press('F1');
+		await workbench.page.locator('.ash-quick-pick').getByRole('combobox').fill('Git: Clone Repository');
+		await workbench.page.keyboard.press('Enter');
+		await expect(input).toBeFocused();
+		await workbench.page.keyboard.press('Escape');
+	});
+
 	test('welcome omits the command hint and empty recent projects', async ({ workbench }) => {
 		const welcome = workbench.editors.groupAt(0).welcome;
 		await expect(welcome.locator('.ash-editor-group-watermark-shortcuts')).toHaveCount(0);

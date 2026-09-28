@@ -65,7 +65,7 @@ AccessibleViewRegistry.register({
 	getProvider: accessor => new AccessibleContentProvider(
 		AccessibleViewProviderId.GettingStarted,
 		{ type: AccessibleViewType.Help },
-		() => localize('gettingStarted.accessibilityHelp', 'Welcome\nUse Tab and Shift+Tab to move between actions and recent projects. Press Enter to activate the focused item.'),
+		() => localize('gettingStarted.accessibilityHelp', 'Welcome\nUse Tab and Shift+Tab to move between actions and recent projects. Press Enter to activate the focused item. Clone repo asks for a repository URL and a destination folder.'),
 		() => accessor.get(IEditorService).focusActiveEditor(),
 		AccessibilityVerbositySettingId.GettingStarted,
 	),

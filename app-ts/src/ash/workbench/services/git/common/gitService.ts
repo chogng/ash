@@ -136,6 +136,8 @@ export interface GitCommitResult {
 
 /** Frontend Git operations and repository updates for the active workspace. */
 export interface IGitService {
+	readonly canCloneRepository: boolean;
+	cloneRepository(url: string, parentPath: string): Promise<string>;
 	readonly onDidChangeAutoFetch: Event<void>;
 	readonly autoFetch: GitAutofetch;
 	readonly autoFetchPeriod: number;

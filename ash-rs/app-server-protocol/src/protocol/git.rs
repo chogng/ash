@@ -13,6 +13,21 @@ pub struct GitRepositoryParams {
     pub repository_id: Option<String>,
 }
 
+/// Repository URL and host-selected parent directory for a desktop clone.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitCloneParams {
+    #[schemars(length(min = 1, max = 4096))]
+    pub url: String,
+    pub parent_path: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitCloneResult {
+    pub repository_path: String,
+}
+
 /// Remote selection for a Git fetch operation.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

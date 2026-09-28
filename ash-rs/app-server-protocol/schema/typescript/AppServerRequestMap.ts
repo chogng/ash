@@ -147,6 +147,8 @@ import type { GitBranchListResult } from './types/GitBranchListResult.js';
 import type { GitBranchSwitchParams } from './types/GitBranchSwitchParams.js';
 import type { GitChangeFileParams } from './types/GitChangeFileParams.js';
 import type { GitChangeFileResult } from './types/GitChangeFileResult.js';
+import type { GitCloneParams } from './types/GitCloneParams.js';
+import type { GitCloneResult } from './types/GitCloneResult.js';
 import type { GitCommitChangesParams } from './types/GitCommitChangesParams.js';
 import type { GitCommitChangesResult } from './types/GitCommitChangesResult.js';
 import type { GitCommitFileParams } from './types/GitCommitFileParams.js';
@@ -665,6 +667,7 @@ export interface AppServerRequestMap {
   "issue/list": { params: IssueListParams; response: IssueListResult };
   "issue/read": { params: IssueReadParams; response: IssueReadResult };
   "git/repositories": { params: Record<string, never>; response: GitRepositoriesResult };
+  "git/clone": { params: GitCloneParams; response: GitCloneResult };
   "git/status": { params: GitRepositoryParams; response: GitStatusResult };
   "git/textDiff": { params: GitRepositoryParams; response: GitTextDiffResult };
   "git/branch/list": { params: GitRepositoryParams; response: GitBranchListResult };
@@ -971,6 +974,7 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "issue/list": { method: "issue/list" },
   "issue/read": { method: "issue/read" },
   "git/repositories": { method: "git/repositories" },
+  "git/clone": { method: "git/clone" },
   "git/status": { method: "git/status" },
   "git/textDiff": { method: "git/textDiff" },
   "git/branch/list": { method: "git/branch/list" },

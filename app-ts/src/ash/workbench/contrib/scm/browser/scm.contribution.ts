@@ -25,6 +25,7 @@ import { ScmHistoryChatContextContribution } from "./scmHistoryChatContext.js";
 import { IChatContextPickService } from "../../../services/chat/common/chatContextService.js";
 import "../common/scmConfiguration.js";
 import "./quickDiff.contribution.js";
+import './gitClone.js';
 
 export const GIT_AGENT_REVIEW_VIEW_ID = "ash.gitAgentReview";
 export { GIT_GRAPH_VIEW_ID };

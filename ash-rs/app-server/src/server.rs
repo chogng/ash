@@ -2544,6 +2544,7 @@ impl AppServer {
             Some(ClientMethod::FsRename) => self.fs_rename(&request.params),
             Some(ClientMethod::FsDelete) => self.fs_delete(&request.params),
             Some(ClientMethod::GitRepositories) => self.git_repositories(),
+            Some(ClientMethod::GitClone) => self.git_clone(connection, &request.params),
             Some(ClientMethod::GitStatus) => self.git_status(&request.params),
             Some(ClientMethod::GitTextDiff) => self.git_text_diff(&request.params),
             Some(ClientMethod::GitBranchList) => self.git_branch_list(&request.params),

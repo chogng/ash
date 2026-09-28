@@ -1,4 +1,5 @@
 use super::AppServer;
+use super::ConnectionState;
 use super::RpcError;
 use super::decode;
 use super::result;
@@ -10,6 +11,8 @@ use ash_app_server_protocol::protocol::git::GitBranchDeleteParams;
 use ash_app_server_protocol::protocol::git::GitBranchListResult;
 use ash_app_server_protocol::protocol::git::GitBranchSwitchParams;
 use ash_app_server_protocol::protocol::git::GitChangeFileParams;
+use ash_app_server_protocol::protocol::git::GitCloneParams;
+use ash_app_server_protocol::protocol::git::GitCloneResult;
 use ash_app_server_protocol::protocol::git::GitCommitChangesParams;
 use ash_app_server_protocol::protocol::git::GitCommitFileParams;
 use ash_app_server_protocol::protocol::git::GitCommitParams;
@@ -29,6 +32,7 @@ use ash_app_server_protocol::protocol::git::GitWorktreeListResult;
 use ash_app_server_protocol::protocol::git::GitWorktreeResolveParams;
 use ash_app_server_protocol::protocol::git::GitWorktreeResolveResult;
 use ash_app_server_protocol::protocol::git::GitWorktreeStateDto;
+use ash_git::GitClient;
 use ash_git::GitError;
 use serde_json::Value;
 use std::num::NonZeroUsize;
@@ -41,6 +45,34 @@ use worktree::WorktreeSelector;
 const MAX_GIT_GRAPH_PAGE_SIZE: usize = 1000;
 
 impl AppServer {
+    pub(super) fn git_clone(
+        &self,
+        connection: &ConnectionState,
+        value: &Value,
+    ) -> Result<Value, RpcError> {
+        if !connection.allows_product_host_capabilities() {
+            return Err(RpcError::new(
+                -32073,
+                AppServerErrorName::PermissionRequired,
+            ));
+        }
+        let params: GitCloneParams = decode(value)?;
+        let parent = Path::new(&params.parent_path);
+        if !parent.is_absolute() {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?;
+        let path = runtime
+            .block_on(GitClient::system().clone_repository(&params.url, parent))
+            .map_err(|_| RpcError::new(-32061, AppServerErrorName::GitOperationFailed))?;
+        result(&GitCloneResult {
+            repository_path: path.to_string_lossy().into_owned(),
+        })
+    }
+
     pub(super) fn git_repositories(&self) -> Result<Value, RpcError> {
         result(&self.git_runtime_service()?.repositories())
     }

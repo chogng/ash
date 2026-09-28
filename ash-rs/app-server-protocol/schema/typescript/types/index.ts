@@ -362,6 +362,8 @@ export type { GitChangeFileComparisonDto } from './GitChangeFileComparisonDto.js
 export type { GitChangeFileParams } from './GitChangeFileParams.js';
 export type { GitChangeFileResult } from './GitChangeFileResult.js';
 export type { GitChangeStatusDto } from './GitChangeStatusDto.js';
+export type { GitCloneParams } from './GitCloneParams.js';
+export type { GitCloneResult } from './GitCloneResult.js';
 export type { GitCommitChangeDto } from './GitCommitChangeDto.js';
 export type { GitCommitChangesParams } from './GitCommitChangesParams.js';
 export type { GitCommitChangesResult } from './GitCommitChangesResult.js';

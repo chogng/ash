@@ -4,11 +4,13 @@ import { RawContextKey, type IContextKey } from '../../../../platform/contextkey
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IGitHubConnectionService } from '../../../services/accounts/common/gitHubConnectionService.js';
+import { IGitService } from '../../../services/git/common/gitService.js';
 import type { EditorInput } from '../../../services/editor/common/editorService.js';
 import { IRecentWorkspacesService } from '../../../services/workspaces/common/recentWorkspacesService.js';
 import { IWorkspaceOpenService } from '../../../services/workspaces/browser/workspaceOpenService.js';
 import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { ConnectToRemoteCommandId } from '../../remote/browser/remoteActions.js';
+import { GitCloneCommandId } from '../../scm/browser/gitClone.js';
 import { GettingStarted, type IGettingStartedProject } from './gettingStartedContent.js';
 import { isGettingStartedInput } from './gettingStartedInput.js';
 
@@ -28,6 +30,7 @@ export class GettingStartedPage extends Disposable implements IEditorPane {
 		@ICommandService private readonly commandService: ICommandService,
 		@IContextKeyService private readonly contextKeyService: IContextKeyService,
 		@IGitHubConnectionService private readonly githubConnection: IGitHubConnectionService,
+		@IGitService private readonly gitService: IGitService,
 	) {
 		super();
 		this._register(this.recentWorkspaces.onDidChange(() => this.content?.setRecentProjects(this.projects())));
@@ -50,6 +53,7 @@ export class GettingStartedPage extends Disposable implements IEditorPane {
 			recentProjects: this.projects(),
 			actions: {
 				openFolder: this.workspaceOpenService.canOpenFolder ? () => this.workspaceOpenService.openFolder() : undefined,
+				cloneRepository: this.gitService.canCloneRepository ? () => this.commandService.executeCommand(GitCloneCommandId) : undefined,
 				connectViaSsh: () => this.commandService.executeCommand(ConnectToRemoteCommandId),
 				connectGitHub: () => this.githubConnection.connect(),
 			},

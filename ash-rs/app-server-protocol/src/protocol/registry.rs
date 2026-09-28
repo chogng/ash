@@ -647,6 +647,10 @@ use crate::protocol::git::GitChangeFileResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitChangeStatusDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitCloneParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitCloneResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCommitChangeDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCommitChangesParams;
@@ -3429,6 +3433,11 @@ client_methods! {
         response: GitRepositoriesResult,
         serialization: GlobalSharedRead,
     },
+    GitClone => "git/clone" {
+        params: GitCloneParams,
+        response: GitCloneResult,
+        serialization: None,
+    },
     GitStatus => "git/status" {
         params: GitRepositoryParams,
         response: GitStatusResult,
@@ -4866,6 +4875,8 @@ typescript_bindings! {
     GitHeadDto,
     GitSubmoduleStateDto,
     GitRepositoryParams,
+    GitCloneParams,
+    GitCloneResult,
     GitFetchModeDto,
     GitFetchParams,
     GitRepositoryDto,

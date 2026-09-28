@@ -40,6 +40,57 @@ async fn query_runner_captures_system_git_output() {
     assert_eq!(output.stderr, Vec::<u8>::new());
 }
 
+#[tokio::test(flavor = "current_thread")]
+async fn clone_repository_uses_an_unused_child_folder() {
+    let source = TestRepository::init();
+    let destination = tempfile::tempdir().unwrap();
+    let name = source.root().file_name().unwrap().to_string_lossy();
+    let first = GitClient::system()
+        .clone_repository(source.root().to_str().unwrap(), destination.path())
+        .await
+        .unwrap();
+    assert_eq!(
+        first,
+        destination
+            .path()
+            .canonicalize()
+            .unwrap()
+            .join(name.as_ref())
+    );
+    assert!(first.join(".git").exists());
+
+    let second = GitClient::system()
+        .clone_repository(source.root().to_str().unwrap(), destination.path())
+        .await
+        .unwrap();
+    assert_eq!(
+        second,
+        destination
+            .path()
+            .canonicalize()
+            .unwrap()
+            .join(format!("{name}-1"))
+    );
+    assert!(second.join(".git").exists());
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn clone_repository_rejects_a_url_without_a_repository_name() {
+    let destination = tempfile::tempdir().unwrap();
+    let error = GitClient::system()
+        .clone_repository("https://example.com/", destination.path())
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        GitError::InvalidConfiguration {
+            field: "clone URL",
+            ..
+        }
+    ));
+    assert_eq!(destination.path().read_dir().unwrap().count(), 0);
+}
+
 #[test]
 fn git_commands_remove_inherited_repository_selectors() {
     let client = GitClient::system();

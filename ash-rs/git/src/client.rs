@@ -25,6 +25,7 @@ use crate::GitResult;
 
 const DEFAULT_QUERY_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_MUTATION_TIMEOUT: Duration = Duration::from_secs(30);
+const CLONE_TIMEOUT: Duration = Duration::from_secs(900);
 const DEFAULT_MAX_OUTPUT_BYTES: usize = 8 * 1024 * 1024;
 const DISABLED_HOOKS_PATH: &str = if cfg!(windows) { "NUL" } else { "/dev/null" };
 const REPOSITORY_SELECTOR_ENVIRONMENT: [&str; 15] = [
@@ -155,6 +156,70 @@ impl GitClient {
 
     pub fn limits(&self) -> GitExecutionLimits {
         self.limits
+    }
+
+    /// Clones into a new child of an existing destination directory.
+    pub async fn clone_repository(&self, url: &str, parent: &Path) -> GitResult<PathBuf> {
+        let url = url.trim();
+        if url.is_empty() || url.len() > 4096 || url.chars().any(char::is_control) {
+            return Err(GitError::InvalidConfiguration {
+                field: "clone URL",
+                requirement: "must be a non-empty repository location",
+            });
+        }
+        let source = url.trim_end_matches('/');
+        if source
+            .split_once("://")
+            .is_some_and(|(_, address)| !address.contains('/'))
+        {
+            return Err(GitError::InvalidConfiguration {
+                field: "clone URL",
+                requirement: "must end in a repository name",
+            });
+        }
+        let name = source.rsplit(['/', ':']).next().unwrap_or_default();
+        let name = name.strip_suffix(".git").unwrap_or(name);
+        if name.is_empty() || name == "." || name == ".." || name.contains('\\') {
+            return Err(GitError::InvalidConfiguration {
+                field: "clone URL",
+                requirement: "must end in a repository name",
+            });
+        }
+        let parent = std::fs::canonicalize(parent)
+            .map_err(|source| GitError::io("resolve clone destination", source))?;
+        if !parent.is_dir() {
+            return Err(GitError::InvalidConfiguration {
+                field: "clone destination",
+                requirement: "must be an existing directory",
+            });
+        }
+        let target = (0..20)
+            .map(|index| {
+                parent.join(if index == 0 {
+                    name.to_string()
+                } else {
+                    format!("{name}-{index}")
+                })
+            })
+            .find(|path| !path.exists())
+            .ok_or_else(|| {
+                GitError::runtime(
+                    "choose clone destination",
+                    "no unused repository folder name",
+                )
+            })?;
+        self.run(GitInvocation::clone(
+            &parent,
+            [
+                OsStr::new("clone"),
+                OsStr::new("--"),
+                OsStr::new(url),
+                target.as_os_str(),
+            ],
+        ))
+        .await?
+        .require_success()?;
+        Ok(target)
     }
 
     pub(crate) async fn discover_repository(&self, cwd: PathBuf) -> GitResult<GitCommandOutput> {
@@ -351,7 +416,10 @@ impl GitClient {
         let command_for_log = render_command(&executable, &invocation.args);
         let mut command = Command::new(&executable);
         if let ExecutableSource::System(system) = &self.executable
-            && !matches!(invocation.profile, GitCommandProfile::Mutation)
+            && !matches!(
+                invocation.profile,
+                GitCommandProfile::Mutation | GitCommandProfile::Clone
+            )
         {
             command.env(
                 "PATH",
@@ -490,6 +558,7 @@ enum GitCommandProfile {
     Query { fsmonitor: FsmonitorOverride },
     ConfigurationProbe,
     Mutation,
+    Clone,
 }
 
 impl GitCommandProfile {
@@ -497,6 +566,7 @@ impl GitCommandProfile {
         match self {
             Self::Query { .. } | Self::ConfigurationProbe => limits.query_timeout,
             Self::Mutation => limits.mutation_timeout,
+            Self::Clone => CLONE_TIMEOUT,
         }
     }
 
@@ -511,7 +581,7 @@ impl GitCommandProfile {
             Self::ConfigurationProbe => {
                 command.env("GIT_OPTIONAL_LOCKS", "0");
             }
-            Self::Mutation => {
+            Self::Mutation | Self::Clone => {
                 command
                     .arg("-c")
                     .arg(FsmonitorOverride::Disabled.git_config());
@@ -529,6 +599,19 @@ struct GitInvocation {
 }
 
 impl GitInvocation {
+    fn clone<I, S>(cwd: &Path, args: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>,
+    {
+        Self {
+            cwd: cwd.to_path_buf(),
+            args: collect_args(args),
+            profile: GitCommandProfile::Clone,
+            stdin: None,
+            environment: Vec::new(),
+        }
+    }
     fn query<I, S>(cwd: &Path, args: I, fsmonitor: FsmonitorOverride) -> Self
     where
         I: IntoIterator<Item = S>,

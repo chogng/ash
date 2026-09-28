@@ -13,6 +13,7 @@ import type { GitBranch, GitChangeFile, GitChangeFileComparison, GitCommitChange
 import { GitConfiguration, type GitAutofetch } from '../common/gitConfiguration.js';
 
 export interface GitServiceOptions {
+	readonly canCloneRepository: boolean;
 	readonly api: IGitApi;
 	readonly appServerApi: IAppServerApi;
 	readonly eventApi: IServerEventApi;
@@ -21,6 +22,7 @@ export interface GitServiceOptions {
 
 /** App Server-backed implementation of the frontend Git repository collection. */
 export class GitService extends Disposable implements IGitService {
+	readonly canCloneRepository: boolean;
 	private readonly _onDidChangeStatus = this._register(new Emitter<GitStatus>());
 	private readonly _onDidChangeRepositoryStatus = this._register(new Emitter<GitStatus>());
 	private readonly _onDidChangeRepositories = this._register(new Emitter<readonly GitRepository[]>());
@@ -62,6 +64,7 @@ export class GitService extends Disposable implements IGitService {
 		@ILogService private readonly logService: ILogService,
 	) {
 		super();
+		this.canCloneRepository = options.canCloneRepository;
 		this.api = options.api;
 		const events = options.eventApi.subscribe(event => {
 			if (event.method === 'config/changed') {
@@ -106,6 +109,12 @@ export class GitService extends Disposable implements IGitService {
 	async listRepositories(): Promise<readonly GitRepository[]> {
 		this.requireWorkspaceFolders();
 		return this.refreshRepositories();
+	}
+
+	async cloneRepository(url: string, parentPath: string): Promise<string> {
+		if (!this.canCloneRepository) throw new Error('Git clone is unavailable in this Workbench host');
+		const result = await this.api.clone({ url, parentPath });
+		return result.repositoryPath;
 	}
 
 	async selectRepository(repositoryId: string): Promise<GitStatus> {

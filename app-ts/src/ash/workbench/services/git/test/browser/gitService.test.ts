@@ -10,6 +10,24 @@ import { WorkspaceContextService } from "../../../workspaces/browser/workspaceCo
 import { GitService } from "../../browser/gitService.js";
 import { GitConfiguration } from '../../common/gitConfiguration.js';
 
+test('GitService clones from an empty desktop window through the Git API', async () => {
+	const requests: unknown[] = [];
+	const api = {
+		clone: async (params: unknown) => {
+			requests.push(params);
+			return { repositoryPath: '/repos/example' };
+		},
+	} as unknown as IGitApi;
+	const appServerApi = { getConnectionState: async () => 'ready', onConnectionState: () => toDisposable(() => undefined) } as unknown as IAppServerApi;
+	const eventApi = { subscribe: () => toDisposable(() => undefined) } as unknown as IServerEventApi;
+	using workspaceContext = new WorkspaceContextService({ id: 'empty-window' });
+	using configuration = new WorkbenchConfigurationService();
+	using service = new GitService({ api, appServerApi, eventApi, workspaceContext, canCloneRepository: true }, configuration, new NullLoggerService());
+
+	assert.equal(await service.cloneRepository('https://example.com/example.git', '/repos'), '/repos/example');
+	assert.deepEqual(requests, [{ url: 'https://example.com/example.git', parentPath: '/repos' }]);
+});
+
 test("GitService keeps empty windows off the App Server and becomes ready with a folder", async () => {
 	let statusCalls = 0;
 	let repositoryCalls = 0;
@@ -41,7 +59,7 @@ test("GitService keeps empty windows off the App Server and becomes ready with a
 	} as unknown as IServerEventApi;
 	using workspaceContext = new WorkspaceContextService({ id: "empty-window" });
 	using configuration = new WorkbenchConfigurationService();
-	using service = new GitService({ api, appServerApi, eventApi, workspaceContext }, configuration, new NullLoggerService());
+	using service = new GitService({ api, appServerApi, eventApi, workspaceContext, canCloneRepository: false }, configuration, new NullLoggerService());
 	let readyEvents = 0;
 	using ready = service.onDidBecomeReady(() => readyEvents += 1);
 
@@ -82,7 +100,7 @@ test("GitService routes resources and requests to an explicitly selected reposit
 	const eventApi = { subscribe: () => toDisposable(() => undefined) } as unknown as IServerEventApi;
 	using workspaceContext = new WorkspaceContextService({ id: "workspace", uri: URI.file("/workspace") });
 	using configuration = new WorkbenchConfigurationService();
-	using service = new GitService({ api, appServerApi, eventApi, workspaceContext }, configuration, new NullLoggerService());
+	using service = new GitService({ api, appServerApi, eventApi, workspaceContext, canCloneRepository: false }, configuration, new NullLoggerService());
 
 	const repositories = await service.listRepositories();
 	assert.deepEqual(repositories.map(repository => [repository.id, repository.root.fsPath]), [
@@ -119,7 +137,7 @@ test('GitService reads and writes shared Auto Fetch settings through App Server'
 	const eventApi = { subscribe: () => toDisposable(() => undefined) } as unknown as IServerEventApi;
 	using workspaceContext = new WorkspaceContextService({ id: 'empty-window' });
 	using configuration = new WorkbenchConfigurationService();
-	using service = new GitService({ api, appServerApi, eventApi, workspaceContext }, configuration, new NullLoggerService());
+	using service = new GitService({ api, appServerApi, eventApi, workspaceContext, canCloneRepository: false }, configuration, new NullLoggerService());
 	await service.setAutoFetch(true);
 	assert.equal(service.autoFetch, true);
 	await service.setAutoFetchPeriod(60);
@@ -150,7 +168,7 @@ test('GitService migrates persisted Desktop Auto Fetch settings once', async () 
 	using configuration = new WorkbenchConfigurationService();
 	await configuration.updateValue(GitConfiguration.autofetch, 'all');
 	await configuration.updateValue(GitConfiguration.autofetchPeriod, 60);
-	using service = new GitService({ api, appServerApi, eventApi, workspaceContext }, configuration, new NullLoggerService());
+	using service = new GitService({ api, appServerApi, eventApi, workspaceContext, canCloneRepository: false }, configuration, new NullLoggerService());
 	await waitFor(() => service.autoFetch === 'all' && service.autoFetchPeriod === 60);
 	assert.deepEqual(git, { autofetch: 'all', autofetchPeriod: 60 });
 	assert.equal(revision, 1);
@@ -167,7 +185,7 @@ test('GitService drops repository discovery completed after disposal', async () 
 	const eventApi = { subscribe: () => toDisposable(() => undefined) } as unknown as IServerEventApi;
 	using workspaceContext = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
 	using configuration = new WorkbenchConfigurationService();
-	using service = new GitService({ api, appServerApi, eventApi, workspaceContext }, configuration, new NullLoggerService());
+	using service = new GitService({ api, appServerApi, eventApi, workspaceContext, canCloneRepository: false }, configuration, new NullLoggerService());
 	const discovery = service.listRepositories();
 	service.dispose();
 	finishDiscovery?.({ repositories: [{ id: `repo_${'5'.repeat(64)}`, label: 'workspace', path: '' }] });
