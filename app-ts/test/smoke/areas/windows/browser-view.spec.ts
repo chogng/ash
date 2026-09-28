@@ -14,7 +14,8 @@ test('desktop browser opens visible pages, navigates history, resizes and releas
 			finishSlowLoad = () => response.end('<title>Cancelled page</title>');
 			return;
 		}
-		response.end(`<title>${request.url === '/second' ? 'Second page' : 'First page'}</title><h1>Visible browser fixture</h1><input aria-label="Page input"><a href="/second">Next</a>`);
+		const title = request.url === '/second' ? 'Second page' : request.url === '/popup' ? 'Popup page' : 'First page';
+		response.end(`<title>${title}</title><h1>Visible browser fixture</h1><input aria-label="Page input"><a href="/second">Next</a>`);
 	});
 	await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
 	const address = server.address();
@@ -68,6 +69,13 @@ test('desktop browser opens visible pages, navigates history, resizes and releas
 		await page.getByPlaceholder('Type the name of a command to run').fill('Split Editor Horizontal');
 		await page.keyboard.press('Enter');
 		await expect(page.getByRole('tab', { name: 'Second page', exact: true })).toHaveCount(2);
+		await electron.evaluate(async ({ BrowserWindow }) => {
+			const view = BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).find(child => 'webContents' in child && (child as Electron.WebContentsView).webContents.getURL().endsWith('/second')) as Electron.WebContentsView;
+			await view.webContents.executeJavaScript("window.open('/popup'); undefined", true);
+		});
+		await expect(page.getByRole('tab', { name: 'Popup page', exact: true })).toHaveCount(1);
+		await page.getByRole('button', { name: 'Close Popup page', exact: true }).click();
+		await expect.poll(async () => (await views()).filter(view => view.url === `${url}popup`).length).toBe(0);
 		await page.getByRole('button', { name: 'Close Second page', exact: true }).last().click();
 		await expect(page.getByRole('tab', { name: 'Second page', exact: true })).toHaveCount(1);
 		await page.getByRole('tab', { name: 'Second page', exact: true }).click();
