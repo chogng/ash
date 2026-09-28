@@ -141,15 +141,24 @@ fn credential_rotation_during_model_fetch_does_not_start_another_fetch() {
 #[test]
 fn model_catalog_failure_keeps_account_visible_and_reports_error() {
     let mut subscription = Subscription::default();
-    subscription.update(SubscriptionEvent::Read {
+    let event = SubscriptionEvent::Read {
         account: account(1),
         models: Some(Err("catalog unavailable".into())),
-    });
+    };
+    assert_eq!(
+        subscription.error_dialog(&event),
+        Some(("Could not load models", "catalog unavailable".into()))
+    );
+    subscription.update(event);
     let state = ListSelectionState::new(subscription.choices().model);
     assert!(!labels(&subscription).contains(&"Signed in".into()));
-    assert!(state.visible_items().iter().any(|item| {
-        item.label() == "Could not load models" && item.description() == Some("catalog unavailable")
-    }));
+    assert!(
+        state
+            .visible_items()
+            .iter()
+            .any(|item| item.label() == "Account")
+    );
+    assert!(!labels(&subscription).contains(&"Could not load models".into()));
 }
 
 #[test]
@@ -162,7 +171,7 @@ fn login_waits_without_blocking_and_completion_shows_account_and_plan() {
         },
         models: None,
     });
-    assert!(labels(&subscription).contains(&"Sign in with ChatGPT".into()));
+    assert!(labels(&subscription).contains(&"Sign in to ChatGPT".into()));
     assert!(subscription.begin(&SubscriptionCommand::SignIn));
     assert!(!subscription.begin(&SubscriptionCommand::SignIn));
     subscription.update(started_event());
@@ -215,9 +224,38 @@ fn failed_login_and_request_errors_allow_retry() {
             message: "Code expired".into(),
         },
     };
-    subscription.update(SubscriptionEvent::Completed(completed));
-    assert!(labels(&subscription).contains(&"Code expired".into()));
+    let event = SubscriptionEvent::Completed(completed);
+    assert_eq!(
+        subscription.error_dialog(&event),
+        Some(("Error", "Code expired".into()))
+    );
+    subscription.update(event);
+    assert!(!labels(&subscription).contains(&"Code expired".into()));
     assert!(subscription.begin(&SubscriptionCommand::SignIn));
+}
+
+#[test]
+fn failed_completion_before_start_response_opens_error_when_login_is_matched() {
+    let mut subscription = Subscription::default();
+    assert!(subscription.begin(&SubscriptionCommand::SignIn));
+    let mut completed = completion();
+    completed.account.accounts.clear();
+    completed.status = AccountLoginCompletionStatusDto::Failed {
+        failure: AccountLoginFailureDto {
+            code: "expired".into(),
+            message: "Code expired".into(),
+        },
+    };
+    let completion = SubscriptionEvent::Completed(completed);
+    assert_eq!(subscription.error_dialog(&completion), None);
+    subscription.update(completion);
+    let started = started_event();
+    assert_eq!(
+        subscription.error_dialog(&started),
+        Some(("Error", "Code expired".into()))
+    );
+    subscription.update(started);
+    assert_eq!(labels(&subscription), vec!["Sign in to ChatGPT"]);
 }
 
 #[test]
@@ -259,7 +297,60 @@ fn cancellation_after_completion_preserves_the_successful_account() {
             .iter()
             .any(|label| label.contains("Signed in"))
     );
-    assert!(!labels(&subscription).contains(&"Sign-in cancelled".into()));
+    assert!(!labels(&subscription).contains(&"Cancel sign-in".into()));
+}
+
+#[test]
+fn cancelled_login_returns_to_the_sign_in_action() {
+    let mut subscription = Subscription::default();
+    subscription.update(started_event());
+    assert!(subscription.begin(&SubscriptionCommand::Cancel {
+        login_id: "login-1".into(),
+    }));
+    subscription.update(SubscriptionEvent::Cancelled {
+        login_id: "login-1".into(),
+    });
+    assert_eq!(
+        labels(&subscription),
+        vec!["Sign in to ChatGPT".to_string()]
+    );
+    assert_eq!(
+        subscription.sign_out_availability(),
+        SignOutAvailability::Unavailable
+    );
+}
+
+#[test]
+fn unusable_accounts_show_only_the_sign_in_action_for_every_subscription() {
+    for provider in [
+        SubscriptionProvider::ChatGpt,
+        SubscriptionProvider::Xai,
+        SubscriptionProvider::Kimi,
+        SubscriptionProvider::BigModel,
+        SubscriptionProvider::Zai,
+    ] {
+        for status in [
+            AccountStatusDto::ReauthenticationRequired,
+            AccountStatusDto::Unavailable,
+        ] {
+            let mut account = account(1);
+            account.accounts[0].provider = provider.id().into();
+            account.accounts[0].status = status;
+            let mut subscription = Subscription::new(provider);
+            subscription.update(SubscriptionEvent::Read {
+                account,
+                models: None,
+            });
+            assert_eq!(
+                labels(&subscription),
+                vec![format!("Sign in to {}", provider.name())]
+            );
+            assert_eq!(
+                subscription.sign_out_availability(),
+                SignOutAvailability::Unavailable
+            );
+        }
+    }
 }
 
 struct Transport {
@@ -522,9 +613,13 @@ fn browser_open_failure_keeps_the_device_challenge_available() {
         }
     );
     let mut subscription = Subscription::default();
+    assert_eq!(
+        subscription.error_dialog(&event),
+        Some(("Could not open browser", "could not open browser".into()))
+    );
     subscription.update(event);
     let state = ListSelectionState::new(subscription.choices().model);
-    assert!(labels(&subscription).contains(&"Could not open browser".into()));
+    assert!(!labels(&subscription).contains(&"Could not open browser".into()));
     assert!(labels(&subscription).contains(&"Open in your browser".into()));
     assert!(
         state
@@ -577,14 +672,14 @@ fn glm_subscription_panels_use_account_login_for_both_regions() {
         let mut subscription = Subscription::new(provider);
         assert_eq!(
             labels(&subscription),
-            vec![format!("Sign in with {}", provider.name())]
+            vec![format!("Sign in to {}", provider.name())]
         );
         assert!(matches!(
             subscription
                 .choices()
                 .actions
                 .get(&ListSelectionItemId::new(format!(
-                    "Sign in with {}",
+                    "Sign in to {}",
                     provider.name()
                 ))),
             Some(ConfigSelectionAction::Subscription(
@@ -637,10 +732,13 @@ fn glm_browser_login_starts_account_authorization() {
 }
 
 #[test]
-fn glm_subscription_sign_in_actions_are_localized_in_chinese() {
+fn subscription_sign_in_actions_are_localized_in_chinese() {
     for (provider, expected) in [
-        (SubscriptionProvider::BigModel, "使用 BigModel 登录"),
-        (SubscriptionProvider::Zai, "使用 Z.AI 登录"),
+        (SubscriptionProvider::ChatGpt, "登录 ChatGPT"),
+        (SubscriptionProvider::Xai, "登录 Super Grok"),
+        (SubscriptionProvider::Kimi, "登录 Kimi"),
+        (SubscriptionProvider::BigModel, "登录 BigModel"),
+        (SubscriptionProvider::Zai, "登录 Z.AI"),
     ] {
         let mut choices = Subscription::new(provider).choices();
         choices.model.localize(crate::nls::Language::Chinese);

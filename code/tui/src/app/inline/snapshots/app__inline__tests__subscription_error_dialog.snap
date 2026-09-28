@@ -1,0 +1,9 @@
+---
+source: code/tui/src/app/inline/frame_tests.rs
+expression: text(&buffer)
+---
+─ Kimi › Error ─────────────────────────────────────────────────────────────────
+                                                                                
+  Kimi token exchange failed with HTTP 400                                      
+                                                                                
+  Enter/Esc to close

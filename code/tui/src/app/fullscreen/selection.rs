@@ -125,13 +125,18 @@ impl ScreenSelection {
         })
     }
 
-    pub(crate) fn draw(&self, buffer: &mut Buffer, context: RenderContext<'_>) {
+    pub(crate) fn draw(
+        &self,
+        buffer: &mut Buffer,
+        context: RenderContext<'_>,
+        clip: ratatui::layout::Rect,
+    ) {
         let Some(range) = self.range() else {
             return;
         };
         let foreground = context.screen_selection_foreground();
         let background = context.screen_selection_background();
-        let area = buffer.area;
+        let area = buffer.area.intersection(clip);
         for row in area.y..area.bottom() {
             for column in area.x..area.right() {
                 let position = Position::new(column, row);

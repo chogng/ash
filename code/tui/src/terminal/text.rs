@@ -113,7 +113,15 @@ fn cell_class(symbol: &str) -> CellClass {
 }
 
 pub(crate) fn text_in_range(buffer: &Buffer, range: ScreenSelectionRange) -> Option<String> {
-    let area = buffer.area;
+    text_in_range_in_area(buffer, range, buffer.area)
+}
+
+pub(crate) fn text_in_range_in_area(
+    buffer: &Buffer,
+    range: ScreenSelectionRange,
+    clip: ratatui::layout::Rect,
+) -> Option<String> {
+    let area = buffer.area.intersection(clip);
     if area.is_empty() {
         return None;
     }

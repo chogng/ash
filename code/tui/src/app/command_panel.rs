@@ -57,6 +57,7 @@ use std::collections::BTreeMap;
 pub(super) enum CommandPanelBody<'a> {
     Selection(&'a ListSelectionState),
     Prompt(&'a TextPrompt),
+    Dialog(&'a crate::widgets::dialog::Dialog),
     Memories(&'a crate::memories::Panel),
     Provider(&'a crate::config::provider::Panel),
     KeyCapture(&'a KeyCapture),
@@ -68,7 +69,7 @@ impl CommandPanelBody<'_> {
         match self {
             Self::Selection(_) | Self::Status(_) => true,
             Self::Memories(panel) => panel.allows_backdrop_dismiss(),
-            Self::Prompt(_) | Self::Provider(_) | Self::KeyCapture(_) => false,
+            Self::Prompt(_) | Self::Provider(_) | Self::KeyCapture(_) | Self::Dialog(_) => false,
         }
     }
 }
@@ -549,6 +550,7 @@ impl CommandPanel {
                 ConfigEditorPage::Selection(selection) => CommandPanelBody::Selection(selection),
                 ConfigEditorPage::Prompt(prompt) => CommandPanelBody::Prompt(prompt),
                 ConfigEditorPage::Provider(panel) => CommandPanelBody::Provider(panel),
+                ConfigEditorPage::Dialog(dialog) => CommandPanelBody::Dialog(dialog),
             },
             Self::Connectors(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Keymap(editor) => match editor.page() {
@@ -678,6 +680,12 @@ impl CommandPanel {
         }
     }
 
+    pub(crate) fn show_subscription_error(&mut self, title: &'static str, message: String) {
+        if let Self::Config(content) = self {
+            content.show_subscription_error(title, message);
+        }
+    }
+
     pub(crate) fn finish_config_prompt(&mut self, spec: ConfigChoices) -> bool {
         let Self::Config(content) = self else {
             return false;
@@ -775,6 +783,7 @@ impl<'a> CommandPanelBody<'a> {
             }
             Self::Memories(panel) => panel.title(),
             Self::Prompt(prompt) => prompt.title(),
+            Self::Dialog(dialog) => dialog.title(),
             Self::Provider(_) => "Custom provider",
             Self::KeyCapture(capture) => capture.title(),
             Self::Status(panel) => panel.title(),
@@ -787,7 +796,7 @@ impl<'a> CommandPanelBody<'a> {
             Self::Selection(selection) => selection.tab_rows(width),
             Self::Status(panel) => panel.tab_rows(width),
             Self::Memories(panel) => panel.tab_rows(width),
-            Self::Provider(_) | Self::Prompt(_) | Self::KeyCapture(_) => 0,
+            Self::Provider(_) | Self::Prompt(_) | Self::KeyCapture(_) | Self::Dialog(_) => 0,
         }
     }
 
@@ -796,6 +805,7 @@ impl<'a> CommandPanelBody<'a> {
             Self::Selection(selection) => selection.body_rows(width),
             Self::Memories(panel) => panel.body_rows(width),
             Self::Prompt(prompt) => prompt.desired_height(),
+            Self::Dialog(dialog) => dialog.body_rows(width),
             Self::KeyCapture(capture) => capture.desired_height(),
             Self::Status(panel) => panel.body_rows(width),
             Self::Provider(panel) => panel.body_rows(),
@@ -807,6 +817,7 @@ impl<'a> CommandPanelBody<'a> {
             Self::Selection(selection) => selection.presentation_focus(),
             Self::Memories(_)
             | Self::Prompt(_)
+            | Self::Dialog(_)
             | Self::KeyCapture(_)
             | Self::Status(_)
             | Self::Provider(_) => None,
@@ -829,7 +840,7 @@ impl<'a> CommandPanelBody<'a> {
             Self::Memories(panel) => {
                 panel.draw_tabs(frame, area, hovered_tab, pressed_tab, context)
             }
-            Self::Provider(_) | Self::Prompt(_) | Self::KeyCapture(_) => {}
+            Self::Provider(_) | Self::Prompt(_) | Self::KeyCapture(_) | Self::Dialog(_) => {}
         }
     }
 
@@ -847,6 +858,7 @@ impl<'a> CommandPanelBody<'a> {
             ),
             Self::Memories(panel) => panel.draw(frame, area, None, None, context),
             Self::Prompt(prompt) => text_prompt::draw(frame, area, prompt, context),
+            Self::Dialog(dialog) => dialog.draw(frame, area, context),
             Self::KeyCapture(capture) => key_capture::draw(frame, area, capture, context),
             Self::Status(panel) => panel.draw_body(frame, area, context),
             Self::Provider(panel) => panel.draw_body(frame, area, context),
@@ -992,6 +1004,12 @@ impl Panels {
     ) {
         if let Some(command) = self.command.as_mut() {
             command.update_subscription(choices, sign_out);
+        }
+    }
+
+    pub(crate) fn show_subscription_error(&mut self, title: &'static str, message: String) {
+        if let Some(command) = self.command.as_mut() {
+            command.show_subscription_error(title, message);
         }
     }
 

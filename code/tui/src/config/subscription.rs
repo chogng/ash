@@ -122,7 +122,6 @@ pub(crate) struct Subscription {
     login: Option<AccountLoginStartResult>,
     browser_error: Option<String>,
     pending: Option<SubscriptionCommand>,
-    message: Option<String>,
     early_completions: BTreeMap<String, AccountLoginCompleted>,
 }
 
@@ -131,6 +130,48 @@ impl Subscription {
         Self {
             provider,
             ..Self::default()
+        }
+    }
+
+    pub(crate) fn error_dialog(&self, event: &SubscriptionEvent) -> Option<(&'static str, String)> {
+        match event {
+            SubscriptionEvent::Failed(message) => Some(("Error", message.clone())),
+            SubscriptionEvent::Completed(completed)
+                if self
+                    .login
+                    .as_ref()
+                    .is_some_and(|login| login_id(login) == completed.login_id) =>
+            {
+                match &completed.status {
+                    AccountLoginCompletionStatusDto::Failed { failure } => {
+                        Some(("Error", failure.message.clone()))
+                    }
+                    AccountLoginCompletionStatusDto::Succeeded => None,
+                }
+            }
+            SubscriptionEvent::Started {
+                login,
+                browser_error,
+            } => {
+                if let Some(completed) = self.early_completions.get(login_id(login)) {
+                    match &completed.status {
+                        AccountLoginCompletionStatusDto::Failed { failure } => {
+                            Some(("Error", failure.message.clone()))
+                        }
+                        AccountLoginCompletionStatusDto::Succeeded => None,
+                    }
+                } else {
+                    browser_error
+                        .as_ref()
+                        .map(|error| ("Could not open browser", error.clone()))
+                }
+            }
+            SubscriptionEvent::Read {
+                account,
+                models: Some(Err(error)),
+                ..
+            } if self.accepts_read(account) => Some(("Could not load models", error.clone())),
+            _ => None,
         }
     }
 
@@ -145,7 +186,6 @@ impl Subscription {
             return false;
         }
         self.pending = Some(command.clone());
-        self.message = None;
         true
     }
 
@@ -161,7 +201,7 @@ impl Subscription {
                     .as_ref()
                     .is_some_and(|login| login_id(login) == completed.login_id)
                 {
-                    self.finish(completed);
+                    self.finish();
                 } else if matches!(self.pending, Some(SubscriptionCommand::SignIn)) {
                     self.early_completions
                         .insert(completed.login_id.clone(), completed);
@@ -172,15 +212,9 @@ impl Subscription {
                 match event {
                     SubscriptionEvent::Read { account, models } => {
                         self.early_completions.clear();
-                        // Catalog fetching may rotate the same account's credential and advance
-                        // its revision. The fetched models still belong to that account.
-                        let same_account = self.account.as_ref().is_some_and(|current| {
-                            same_catalog_account(
-                                account_for(current, self.provider),
-                                account_for(&account, self.provider),
-                            )
-                        });
-                        if self.update_account(account) || same_account {
+                        let accepted = self.accepts_read(&account);
+                        self.update_account(account);
+                        if accepted {
                             self.models = models;
                         }
                     }
@@ -194,8 +228,8 @@ impl Subscription {
                             self.early_completions.clear();
                             return;
                         }
-                        if let Some(completed) = self.early_completions.remove(login_id(&login)) {
-                            self.finish(completed);
+                        if self.early_completions.remove(login_id(&login)).is_some() {
+                            self.finish();
                         } else {
                             self.login = Some(login);
                             self.browser_error = browser_error;
@@ -212,16 +246,13 @@ impl Subscription {
                         {
                             self.login = None;
                             self.browser_error = None;
-                            self.message = Some("Sign-in cancelled".into());
                         }
                     }
                     SubscriptionEvent::SignedOut(account) => {
                         self.update_account(account);
-                        self.message = Some(format!("Signed out of {}", self.provider.name()));
                     }
-                    SubscriptionEvent::Failed(message) => {
+                    SubscriptionEvent::Failed(_) => {
                         self.early_completions.clear();
-                        self.message = Some(message);
                     }
                     _ => unreachable!("notifications are handled above"),
                 }
@@ -229,7 +260,7 @@ impl Subscription {
         }
     }
 
-    fn update_account(&mut self, account: AccountReadResult) -> bool {
+    fn update_account(&mut self, account: AccountReadResult) {
         if self
             .account
             .as_ref()
@@ -244,9 +275,19 @@ impl Subscription {
                 self.models = None;
             }
             self.account = Some(account);
-            return true;
         }
-        false
+    }
+
+    fn accepts_read(&self, account: &AccountReadResult) -> bool {
+        self.account.as_ref().is_none_or(|current| {
+            account.revision >= current.revision
+                // Catalog fetching may rotate the same account's credential and advance
+                // its revision. The fetched models still belong to that account.
+                || same_catalog_account(
+                    account_for(current, self.provider),
+                    account_for(account, self.provider),
+                )
+        })
     }
 
     pub(crate) fn needs_model_refresh(&self) -> bool {
@@ -258,13 +299,9 @@ impl Subscription {
                 .is_some_and(|account| account.status == AccountStatusDto::Ready)
     }
 
-    fn finish(&mut self, completed: AccountLoginCompleted) {
+    fn finish(&mut self) {
         self.login = None;
         self.browser_error = None;
-        self.message = match completed.status {
-            AccountLoginCompletionStatusDto::Succeeded => None,
-            AccountLoginCompletionStatusDto::Failed { failure } => Some(failure.message),
-        };
     }
 
     pub(crate) fn choices(&self) -> ConfigChoices {
@@ -274,50 +311,33 @@ impl Subscription {
             .account
             .as_ref()
             .and_then(|result| account_for(result, self.provider));
-        if let Some(account) = account {
-            match account.status {
-                AccountStatusDto::Ready => {}
-                AccountStatusDto::ReauthenticationRequired => {
-                    items.push(ListSelectionItem::new("Sign in again"));
-                }
-                AccountStatusDto::Unavailable => {
-                    items.push(ListSelectionItem::new("Unavailable"));
-                }
-            }
+        let ready_account = account.filter(|account| account.status == AccountStatusDto::Ready);
+        if let Some(account) = ready_account {
             if let Some(email) = &account.email {
                 items.push(ListSelectionItem::new("Account").with_description(email));
             }
             if let Some(plan) = &account.plan {
                 items.push(ListSelectionItem::new("Plan").with_description(plan));
             }
-            if account.status == AccountStatusDto::Ready {
+            if !matches!(self.models, Some(Err(_))) {
                 items.push(ListSelectionItem::new("Models").as_section_divider());
-                match &self.models {
-                    Some(Ok(models)) if models.is_empty() => {
-                        items.push(ListSelectionItem::new("No models available"));
-                    }
-                    Some(Ok(models)) => {
-                        items.extend(models.iter().map(|model| {
-                            ListSelectionItem::new(crate::nls::Text::literal(
-                                model.display_name.clone(),
-                            ))
-                        }));
-                    }
-                    Some(Err(error)) => items.push(
-                        ListSelectionItem::new("Could not load models").with_description(error),
-                    ),
-                    None => items.push(ListSelectionItem::new("Loading models…")),
-                }
             }
-        }
-        if let Some(message) = &self.message {
-            items.push(ListSelectionItem::new(message));
+            match &self.models {
+                Some(Ok(models)) if models.is_empty() => {
+                    items.push(ListSelectionItem::new("No models available"));
+                }
+                Some(Ok(models)) => {
+                    items.extend(models.iter().map(|model| {
+                        ListSelectionItem::new(crate::nls::Text::literal(
+                            model.display_name.clone(),
+                        ))
+                    }));
+                }
+                Some(Err(_)) => {}
+                None => items.push(ListSelectionItem::new("Loading models…")),
+            }
         }
         if let Some(login) = &self.login {
-            if let Some(error) = &self.browser_error {
-                items
-                    .push(ListSelectionItem::new("Could not open browser").with_description(error));
-            }
             match login {
                 AccountLoginStartResult::Connected { .. } => {}
                 AccountLoginStartResult::DeviceCode {
@@ -361,11 +381,11 @@ impl Subscription {
                 },
             );
         } else {
-            if account.is_none_or(|account| account.status != AccountStatusDto::Ready) {
+            if ready_account.is_none() {
                 add_action(
                     &mut items,
                     &mut actions,
-                    &format!("Sign in with {}", self.provider.name()),
+                    &format!("Sign in to {}", self.provider.name()),
                     SubscriptionCommand::SignIn,
                 );
             }
@@ -374,6 +394,7 @@ impl Subscription {
             self.provider.title(),
             vec![ListSelectionGroup::new("Account", items)],
         )
+        .without_tab_bar()
         .with_dismiss(crate::keymap::bindings::RETURN_LIST);
         if self.sign_out_availability() == SignOutAvailability::Available {
             model = model.with_key_hint_action(crate::keymap::bindings::SUBSCRIPTION_SIGN_OUT);
@@ -390,7 +411,7 @@ impl Subscription {
                 .account
                 .as_ref()
                 .and_then(|result| account_for(result, self.provider))
-                .is_some()
+                .is_some_and(|account| account.status == AccountStatusDto::Ready)
         {
             SignOutAvailability::Available
         } else {

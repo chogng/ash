@@ -6,8 +6,6 @@ expression: "crate::app::usage_tests::render(&app, 96, 24)"
 
             ┌── Config › Kimi ─────────────────────────────────────────────────[✗]─┐
             │                                                                      │
-            │   Account                                                            │
-            │                                                                      │
             │> Account  ·  person@example.test                                     │
             │                                                                      │
             │  Models ──────────────────────────────────────────────────────────── │
@@ -21,6 +19,8 @@ expression: "crate::app::usage_tests::render(&app, 96, 24)"
             │                                                                      │
             │                                                                      │
             │                                                                      │
-  ╭─────────│  Tab/Shift+Tab to switch  ·  Esc to return  ·  l to sign out         │─────────╮
+            │                                                                      │
+            │                                                                      │
+  ╭─────────│  Esc to return  ·  l to sign out                                     │─────────╮
   │ > Build └──────────────────────────────────────────────────────────────────────┘         │
   ╰──────────────────────────────────────────────────────────────────────── Automatic model ─╯

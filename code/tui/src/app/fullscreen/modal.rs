@@ -33,6 +33,21 @@ pub(super) fn layout(available: Rect) -> ModalLayout {
     )
 }
 
+fn layout_for(app: &App, available: Rect) -> ModalLayout {
+    if app.overlay().is_none()
+        && let Some(panel) = app.command_panel()
+        && let crate::app::command_panel::CommandPanelBody::Dialog(dialog) = panel.body()
+    {
+        let width = available.width.min(76);
+        let content_width = ModalLayout::new(available, width, available.height)
+            .content
+            .width;
+        let height = dialog.body_rows(content_width).saturating_add(4).max(6);
+        return ModalLayout::new(available, width, height);
+    }
+    layout(available)
+}
+
 pub(super) fn body_area(panel: &CommandPanel, content: Rect) -> Rect {
     let rows = panel.body().tab_rows(content.width).min(content.height);
     let gap = u16::from(rows > 0).min(content.height.saturating_sub(rows));
@@ -44,6 +59,21 @@ pub(super) fn body_area(panel: &CommandPanel, content: Rect) -> Rect {
     )
 }
 
+pub(super) fn dialog_body_area(app: &App, available: Rect) -> Option<Rect> {
+    if app.overlay().is_some() {
+        return None;
+    }
+    let panel = app.command_panel()?;
+    let crate::app::command_panel::CommandPanelBody::Dialog(dialog) = panel.body() else {
+        return None;
+    };
+    let content = layout_for(app, available).content;
+    Some(Rect {
+        height: dialog.body_rows(content.width).min(content.height),
+        ..content
+    })
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(in crate::app) enum Target {
     Close,
@@ -52,6 +82,7 @@ pub(in crate::app) enum Target {
     Memories(crate::memories::Target),
     Backdrop,
     Blocked,
+    DialogText,
     Tab(usize),
     List(crate::widgets::list_selection::ListSelectionPointerTarget),
 }
@@ -64,9 +95,15 @@ pub(super) fn target_at(
     if !available.contains(position) {
         return None;
     }
-    let layout = layout(available);
+    let layout = layout_for(app, available);
     if !layout.surface.contains(position) {
-        return if allows_backdrop_dismiss(app) {
+        return if allows_backdrop_dismiss(app)
+            || app.command_panel().is_some_and(|panel| {
+                matches!(
+                    panel.body(),
+                    crate::app::command_panel::CommandPanelBody::Dialog(_)
+                )
+            }) {
             Some(Target::Backdrop)
         } else {
             Some(Target::Blocked)
@@ -79,6 +116,9 @@ pub(super) fn target_at(
         return None;
     }
     let panel = app.command_panel()?;
+    if dialog_body_area(app, available).is_some_and(|body| body.contains(position)) {
+        return Some(Target::DialogText);
+    }
     if let Some(parent) = panel.parent_title() {
         if parent_area(layout, &crate::nls::localize(app.language(), parent)).contains(position) {
             return Some(Target::Parent);
@@ -155,10 +195,12 @@ pub(super) fn activate(
             app.fullscreen.modal_alert = true;
             None
         }
+        Target::DialogText => None,
         Target::List(target) => {
             app.fullscreen.modal_alert = false;
+            let content = layout_for(app, available).content;
             let panel = app.fullscreen.panels.command_mut()?;
-            let body = body_area(panel, layout(available).content);
+            let body = body_area(panel, content);
             let outcome = panel.handle_click(&target, body, click);
             app.handle_command_panel_outcome(outcome)
         }
@@ -169,7 +211,7 @@ pub(super) fn draw(frame: &mut Frame<'_>, app: &App, context: RenderContext<'_>)
     if !is_open(app) {
         return;
     }
-    let layout = layout(frame.area());
+    let layout = layout_for(app, frame.area());
     context.clear_hyperlinks(layout.surface);
     let close = app
         .fullscreen
@@ -362,7 +404,7 @@ pub(super) fn handle_key(
     }
     app.fullscreen.modal_alert = false;
     app.fullscreen.pointer.cancel_click();
-    let layout = layout(available);
+    let layout = layout_for(app, available);
     if let Some(detail) = app.overlay_mut() {
         if key.kind == KeyEventKind::Press && bindings::CLOSE.matches(key) {
             super::navigation::close_overlay(app);
@@ -372,8 +414,22 @@ pub(super) fn handle_key(
         return Some(None);
     }
     let panel = app.fullscreen.panels.command_mut()?;
+    let was_dialog = matches!(
+        panel.body(),
+        crate::app::command_panel::CommandPanelBody::Dialog(_)
+    );
     let area = body_area(panel, layout.content);
     let outcome = panel.handle_key(key, area);
+    if was_dialog
+        && app.command_panel().is_some_and(|panel| {
+            !matches!(
+                panel.body(),
+                crate::app::command_panel::CommandPanelBody::Dialog(_)
+            )
+        })
+    {
+        app.fullscreen.selection.clear();
+    }
     Some(app.handle_command_panel_outcome(outcome))
 }
 
@@ -381,6 +437,16 @@ pub(super) fn close(app: &mut App) {
     app.fullscreen.modal_alert = false;
     if app.overlay().is_some() {
         super::navigation::close_overlay(app);
+    } else if app.command_panel().is_some_and(|panel| {
+        matches!(
+            panel.body(),
+            crate::app::command_panel::CommandPanelBody::Dialog(_)
+        )
+    }) {
+        app.fullscreen.selection.clear();
+        if let Some(panel) = app.fullscreen.panels.command_mut() {
+            panel.return_to_parent();
+        }
     } else {
         app.close_command_panel();
     }

@@ -4,23 +4,23 @@ expression: screen
 ---
   .                                                                        [— / —] [Dashboard]
 
-            ┌── Config › ChatGPT subscription ─────────────────────────────────[✗]─┐
-            │                                                                      │
-            │   Account                                                            │
-            │                                                                      │
-            │  Sign in again                                                       │
-            │  Plan  ·  pro                                                        │
-            │> Sign in to ChatGPT in Codex, then reconnect here.                   │
-            │  Sign in with ChatGPT                                                │
-            │                                                                      │
-            │                                                                      │
-            │                                                                      │
-            │                                                                      │
-            │                                                                      │
-            │                                                                      │
-            │                                                                      │
-            │                                                                      │
-            │                                                                      │
-  ╭─────────│  Tab/Shift+Tab to switch  ·  Esc to return  ·  l to sign out         │─────────╮
-  │ > Build └──────────────────────────────────────────────────────────────────────┘         │
+
+
+
+
+
+
+
+          ┌── ChatGPT subscription › Error ──────────────────────────────────────[✗]─┐
+          │                                                                          │
+          │  Sign in to ChatGPT in Codex, then reconnect here.                       │
+          │                                                                          │
+          │  Enter/Esc to close                                                      │
+          └──────────────────────────────────────────────────────────────────────────┘
+
+
+
+
+  ╭──────────────────────────────────────────────────────────────────────────────────────────╮
+  │ > Build anything                                                                         │
   ╰──────────────────────────────────────────────────────────────────────── Automatic model ─╯

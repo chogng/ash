@@ -854,6 +854,114 @@ fn modal_backdrop_click_closes_modal_and_drag_cancels() {
 }
 
 #[test]
+fn subscription_error_dialog_ignores_backdrop_and_copies_dragged_text() {
+    let mut app = crate::app::App::new();
+    app.update(crate::config::Event::EditorOpened(config_choices()));
+    let panel = app.fullscreen.panels.command_mut().unwrap();
+    panel.open_subscription(
+        crate::config::Subscription::new(crate::config::SubscriptionProvider::Kimi).choices(),
+        crate::config::SignOutAvailability::Unavailable,
+    );
+    panel.show_subscription_error("Error", "Kimi token exchange failed with HTTP 400".into());
+
+    let area = Rect::new(0, 0, 100, 30);
+    let outside = ratatui::layout::Position::new(0, 0);
+    assert!(!super::allows_backdrop_dismiss(&app));
+    assert_eq!(
+        super::target_at(&app, area, outside),
+        Some(super::Target::Backdrop)
+    );
+    let mouse = |kind, position: ratatui::layout::Position| MouseEvent {
+        kind,
+        column: position.x,
+        row: position.y,
+        modifiers: KeyModifiers::NONE,
+    };
+    for kind in [
+        MouseEventKind::Down(MouseButton::Left),
+        MouseEventKind::Up(MouseButton::Left),
+    ] {
+        crate::app::fullscreen::pointer::handle_mouse(&mut app, area, mouse(kind, outside));
+    }
+    assert!(matches!(
+        app.command_panel().unwrap().body(),
+        crate::app::command_panel::CommandPanelBody::Dialog(_)
+    ));
+    assert!(!app.fullscreen.modal_alert);
+
+    let body = super::dialog_body_area(&app, area).unwrap();
+    let message = "Kimi token exchange failed with HTTP 400";
+    let start = ratatui::layout::Position::new(body.x, body.y);
+    let end = ratatui::layout::Position::new(body.x + message.len() as u16 - 1, body.y);
+    let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
+    terminal
+        .draw(|frame| crate::app::frame::draw(frame, &app))
+        .unwrap();
+    crate::app::fullscreen::pointer::handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Down(MouseButton::Left), start),
+    );
+    crate::app::fullscreen::pointer::handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Drag(MouseButton::Left), end),
+    );
+    let crate::app::fullscreen::pointer::MouseAction::Selection(Some(
+        crate::app::fullscreen::selection::ScreenSelectionOutcome::Selection(range),
+    )) = crate::app::fullscreen::pointer::handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Up(MouseButton::Left), end),
+    )
+    else {
+        panic!("dragging dialog text must create a screen selection");
+    };
+    let mut copied = None;
+    crate::app::fullscreen::selection::apply_screen_selection(
+        &mut app,
+        range,
+        |range| {
+            crate::terminal::text::text_in_range_in_area(terminal.backend().buffer(), range, body)
+        },
+        |text| {
+            copied = Some(text.to_owned());
+            Ok(())
+        },
+    );
+    assert_eq!(copied.as_deref(), Some(message));
+    assert!(matches!(
+        app.command_panel().unwrap().body(),
+        crate::app::command_panel::CommandPanelBody::Dialog(_)
+    ));
+    terminal
+        .draw(|frame| crate::app::frame::draw(frame, &app))
+        .unwrap();
+    assert_eq!(
+        terminal.backend().buffer()[(body.x, body.y)].bg,
+        app.render_context().screen_selection_background()
+    );
+    assert_ne!(
+        terminal.backend().buffer()[(body.x - 1, body.y)].bg,
+        app.render_context().screen_selection_background()
+    );
+
+    let close = super::layout_for(&app, area).close;
+    let position = ratatui::layout::Position::new(close.x, close.y);
+    for kind in [
+        MouseEventKind::Down(MouseButton::Left),
+        MouseEventKind::Up(MouseButton::Left),
+    ] {
+        crate::app::fullscreen::pointer::handle_mouse(&mut app, area, mouse(kind, position));
+    }
+    assert!(matches!(
+        app.command_panel().unwrap().body(),
+        crate::app::command_panel::CommandPanelBody::Selection(_)
+    ));
+    assert!(app.fullscreen.selection.range().is_none());
+}
+
+#[test]
 fn editing_modal_blocks_backdrop_dismiss_and_protects_input() {
     use crate::memories::Event;
     use crate::memories::Page;

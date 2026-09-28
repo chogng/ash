@@ -469,9 +469,8 @@ fn assert_base_pointer_targets(app: &mut App, area: Rect) {
     }
 }
 
-fn assert_fullscreen_pointer_cleared(app: &mut App) {
-    assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
-    app.fullscreen.clear();
+fn assert_fullscreen_pointer_cleared(app: &App) {
+    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
     assert!(app.fullscreen.pointer.hovered().is_none());
     assert!(app.fullscreen.pointer.pressed().is_none());
     assert!(app.fullscreen.selection.range().is_none());
@@ -1279,7 +1278,7 @@ fn switching_to_main_screen_during_a_drag_discards_the_pending_copy() {
         ),
         super::MouseAction::Selection(None)
     ));
-    assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
+    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
     assert!(app.fullscreen.pointer.hovered().is_none());
     assert!(app.fullscreen.pointer.pressed().is_none());
     assert!(app.fullscreen.selection.range().is_none());

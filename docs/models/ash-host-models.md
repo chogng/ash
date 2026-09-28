@@ -4,6 +4,25 @@
 
 表内输入、输出、缓存读、缓存写金额均按每 100 万 token 计，Google 的缓存存储费另按每 100 万 token·小时计。输入表示未命中缓存的输入；缓存读表示命中缓存的输入。“上下文”列标出最大上下文窗口；按上下文档位变价的型号直接列出对应档位，顺序与价格栏一致。
 
+## 推理档位
+
+下表汇总 Ash 内置模型供应商的推理控制名称。档位数量按**有效推理行为**统计；同一家不同型号可能只支持其中一部分。`关闭`表示不启用推理，不算推理档位。供应商文档会更新，以下依据于 2026-09-27 核对。
+
+| 供应商 | 推理档位数与名称 | 型号差异和控制方式 |
+| --- | --- | --- |
+| OpenAI | API 最多 7 档：`none`、`minimal`、`low`、`medium`、`high`、`xhigh`、`max`；ChatGPT Work/Codex 另有 `Ultra` | API 值由具体型号决定；例如 GPT-6 Astra 不支持 `none`。`Ultra` 是产品界面选择，使用 maximum reasoning，并可能运行额外 agent；它不是 API 的 `reasoning.effort` 值。`pro` 也是独立模式。[API 档位](https://developers.openai.com/api/docs/guides/reasoning) · [Work/Codex Ultra](https://help.openai.com/en/articles/11481834-chatgpt-rate-card-business-enterpriseedu-credit-based-pricing) |
+| Anthropic | 最多 5 档：`low`、`medium`、`high`、`xhigh`、`max` | 支持范围因型号而异；较早的型号可能使用 thinking token budget，而非 effort 档位。[官方文档](https://platform.claude.com/docs/en/build-with-claude/effort) |
+| Google | 最多 4 档：`minimal`、`low`、`medium`、`high` | Gemini 3 各型号支持集合不同；Gemini 2.5 使用数值 `thinkingBudget`，不与这些档位等同。[官方文档](https://ai.google.dev/gemini-api/docs/thinking) |
+| xAI | 3 或 4 档：`low`、`medium`、`high`、`xhigh` | Grok 4.5 支持前三档；Grok 4.6 及更新型号支持四档。不能关闭推理。[官方文档](https://docs.x.ai/developers/model-capabilities/text/reasoning) |
+| Qwen | 新版常用 3 档：`low`、`medium`、`xhigh`；另可关闭 | 新型号可用 `reasoning_effort` 或数值 `thinking_budget`。部分兼容标签会映射到这三档；旧型号支持范围不同。[官方文档](https://help.aliyun.com/en/model-studio/qwen-api-via-openai-chat-completions) |
+| Kimi | K3 为 3 档：`low`、`high`、`max`；部分型号只有开/关 | K3 思考常开；K2.6 可切换思考模式。开关不计作 effort 档位。[官方文档](https://www.kimi.ai/help/kimi-api/api-model-selection) |
+| DeepSeek | 3 档：`low`、`high`、`max`；另可关闭 | DeepSeek V4 默认开启思考；`none` 关闭。其他兼容值会折叠映射到这些档位。[官方文档](https://api-docs.deepseek.com/guides/thinking_mode/) |
+| GLM | 因型号不同为 3、6 或 7 档 | GLM-5.3：`low`、`high`、`max`；GLM-5.2：`none`、`minimal`、`low`、`medium`、`high`、`xhigh`、`max`；GLM-5.1：前述集合去掉 `max`。GLM-5.3 思考不能关闭。[官方文档](https://docs.z.ai/guides/overview/migrate-to-glm-new) |
+| MiniMax | M3/M2.x 没有可调的推理深度档位 | M3 使用自适应思考，可按型号开关；M2.x 不能关闭。虽然部分端点接受 `reasoning_effort`，当前这些型号不会据此调节深度。[官方文档](https://platform.minimax.io/docs/api-reference/text-chat-openai) |
+| MiMo | 0 个深度档位；2 种有效模式：关闭、开启 | 接口接受 `none`、`minimal`、`low`、`medium`、`high`、`xhigh`、`max`、`ultra`，但不支持自定义深度；除 `none` 外都只表示开启。[官方文档](https://mimo.mi.com/docs/en-US/api/chat/responses) |
+
+这些标签不能跨供应商直接比较，也不能用供应商级的固定枚举替代型号级支持列表。请求构造应依据所选型号和接入协议。
+
 OpenAI 双价按“输入 ≤272K / 输入 >272K 至 1.05M”顺序排列，表中简写为“272K / 1M”。第二档从输入超过 272K 起适用，直到这些型号约 1.05M 的输入上限；整次会话按第二档计费，不要求请求正好达到 1M。GPT-5.5 和 GPT-5.4 的长上下文缓存读价未由官方单独公布。
 
 Anthropic Claude 4.6 及更新型号默认支持 1M 上下文，长上下文不另设价格档；Haiku 4.5 和 Sonnet 4.5 的上下文上限为 200K。Claude Opus 5 仍可通过 API 调用，但已标为 legacy，官方建议迁移到 Opus 5.5；其单价见表。各型号单价仍不同，表中价格在各自支持的上下文范围内不因长度改变。

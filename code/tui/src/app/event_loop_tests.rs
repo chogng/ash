@@ -77,35 +77,21 @@ fn real_terminal_mouse_handoff() {
     settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
     app.update(crate::config::Event::SettingsReceived(settings));
     super::draw_terminal(&mut terminal, &mut app, &mut output).unwrap();
-    assert_eq!(app.mouse_mode(), crate::terminal::MouseMode::TuiCapture);
+    assert_eq!(
+        app.mouse_mode(),
+        crate::terminal::MouseMode::TerminalSelection
+    );
     assert!(app.fullscreen.pointer.hovered().is_none());
     assert!(app.fullscreen.pointer.pressed().is_none());
     assert!(app.fullscreen.selection.range().is_none());
     assert_eq!(app.input(), "/q");
-    let inline_area = terminal.area().unwrap();
-    let inline_input = crate::app::inline::layout(&app, inline_area).input;
-    let row = inline_input.y + 1;
-    let pointer = |kind, column| MouseEvent {
-        kind,
-        column,
-        row,
-        modifiers: KeyModifiers::NONE,
-    };
-    crate::app::inline::pointer::handle_mouse(
-        &mut app,
-        inline_area,
-        pointer(MouseEventKind::Down(MouseButton::Left), inline_input.x + 3),
-    );
-    let outcome = crate::app::inline::pointer::handle_mouse(
-        &mut app,
-        inline_area,
-        pointer(MouseEventKind::Up(MouseButton::Left), inline_input.x + 4),
-    );
-    assert!(matches!(
-        outcome,
-        super::MouseAction::InputSelection(ref text) if text == "q"
-    ));
-    assert_eq!(app.input_state().selection_range(), Some(1..2));
+    assert_eq!(app.input_state().selection_range(), None);
+
+    settings.set_screen_mode(crate::terminal::ScreenMode::Fullscreen);
+    app.update(crate::config::Event::SettingsReceived(settings));
+    super::draw_terminal(&mut terminal, &mut app, &mut output).unwrap();
+    assert_eq!(app.mouse_mode(), crate::terminal::MouseMode::TuiCapture);
+    assert_eq!(app.input(), "/q");
 }
 
 #[test]

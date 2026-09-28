@@ -328,15 +328,40 @@ pub(in crate::app) fn handle_mouse(
     if super::modal::is_open(app) {
         app.input_state_mut().pointer_up();
         let target = target_at(app, area, mouse.column, mouse.row);
+        let dialog_text_pressed = app.fullscreen.pointer.pressed()
+            == Some(&PointerTarget::Modal(super::modal::Target::DialogText));
         match mouse.kind {
             MouseEventKind::Down(MouseButton::Left) => {
+                app.fullscreen.selection.clear();
                 if super::modal::layout(area).surface.contains(position) {
                     app.fullscreen.modal_alert = false;
                 }
+                if target == Some(PointerTarget::Modal(super::modal::Target::DialogText)) {
+                    app.fullscreen.selection.begin(position);
+                }
                 app.fullscreen.pointer.update_pressed(target);
             }
-            MouseEventKind::Drag(MouseButton::Left) => app.fullscreen.pointer.cancel_click(),
+            MouseEventKind::Drag(MouseButton::Left) => {
+                if dialog_text_pressed {
+                    let body = super::modal::dialog_body_area(app, area)
+                        .expect("pressed dialog text has a body area");
+                    app.fullscreen.selection.drag(clamp_to_rect(position, body));
+                } else {
+                    app.fullscreen.pointer.cancel_click();
+                }
+            }
             MouseEventKind::Up(MouseButton::Left) => {
+                if dialog_text_pressed {
+                    let body = super::modal::dialog_body_area(app, area)
+                        .expect("pressed dialog text has a body area");
+                    let position = clamp_to_rect(position, body);
+                    let outcome = app.fullscreen.selection.finish(position, Instant::now());
+                    app.fullscreen.pointer.cancel_click();
+                    return MouseAction::Selection(match outcome {
+                        Some(selection @ ScreenSelectionOutcome::Selection(_)) => Some(selection),
+                        _ => None,
+                    });
+                }
                 let click = app
                     .fullscreen
                     .pointer
@@ -510,6 +535,13 @@ pub(in crate::app) fn handle_mouse(
     MouseAction::Selection(None)
 }
 
+fn clamp_to_rect(position: ratatui::layout::Position, area: Rect) -> ratatui::layout::Position {
+    ratatui::layout::Position::new(
+        position.x.clamp(area.x, area.right() - 1),
+        position.y.clamp(area.y, area.bottom() - 1),
+    )
+}
+
 pub(super) fn activate_pointer_item(
     app: &mut App,
     area: ratatui::layout::Rect,
@@ -648,11 +680,16 @@ pub(in crate::app) fn finish_pointer_gesture(
     terminal: &terminal::TerminalSession,
     outcome: Option<ScreenSelectionOutcome>,
 ) -> Result<Option<AppCommand>, std::io::Error> {
+    let area = terminal.area()?;
+    let dialog_body = super::modal::dialog_body_area(app, area);
     let select = |app: &mut App, range| {
         super::selection::apply_screen_selection(
             app,
             range,
-            |range| terminal.selected_text(range),
+            |range| match dialog_body {
+                Some(body) => terminal.selected_text_in_area(range, body),
+                None => terminal.selected_text(range),
+            },
             host::clipboard::write_text,
         );
     };
@@ -660,10 +697,7 @@ pub(in crate::app) fn finish_pointer_gesture(
         Some(ScreenSelectionOutcome::Click {
             position,
             count: ClickCount::Single,
-        }) => {
-            let area = terminal.area()?;
-            Ok(activate_pointer_item(app, area, position.x, position.y))
-        }
+        }) => Ok(activate_pointer_item(app, area, position.x, position.y)),
         Some(ScreenSelectionOutcome::Click {
             position,
             count: ClickCount::Double,

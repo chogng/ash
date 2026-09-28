@@ -120,7 +120,8 @@ fn selection_highlight_applies_to_every_rendered_surface_cell_in_the_range() {
     selection.drag(Position::new(2, 1));
     let mut buffer = Buffer::empty(Rect::new(0, 0, 4, 2));
 
-    selection.draw(&mut buffer, crate::render::test_context());
+    let area = buffer.area;
+    selection.draw(&mut buffer, crate::render::test_context(), area);
 
     let colors = buffer
         .content()

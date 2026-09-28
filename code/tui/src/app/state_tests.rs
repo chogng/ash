@@ -1487,6 +1487,34 @@ fn subscription_sign_out_shortcut_uses_each_connection_owner() {
             app.handle_key(KeyEvent::new(KeyCode::Char('l'), KeyModifiers::NONE))
                 .is_none()
         );
+        app.update(ConfigEvent::SubscriptionReply(
+            provider,
+            SubscriptionEvent::SignedOut(AccountReadResult {
+                revision: 2.to_string(),
+                accounts: vec![],
+            }),
+        ));
+        let screen = crate::app::usage_tests::render(&app, 96, 24);
+        assert!(screen.contains(&format!("Sign in to {name}")));
+        assert!(!screen.contains("Signed out"));
+        assert!(!screen.contains("l to sign out"));
+        let selection = app.list_selection().unwrap();
+        assert_eq!(selection.visible_items().len(), 1);
+        assert_eq!(
+            selection.selected_item().unwrap().label(),
+            format!("Sign in to {name}")
+        );
+        assert!(
+            app.handle_key(KeyEvent::new(KeyCode::Char('l'), KeyModifiers::NONE))
+                .is_none()
+        );
+        assert_eq!(
+            app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+            Some(AppCommand::Config(ConfigCommand::Subscription(
+                provider,
+                SubscriptionCommand::SignIn,
+            )))
+        );
     }
 }
 
@@ -1614,7 +1642,7 @@ fn chatgpt_external_login_error_shows_codex_instructions_and_allows_retry() {
             .list_selection()
             .unwrap()
             .selected_item()
-            .is_some_and(|item| item.label() == "Sign in with ChatGPT")
+            .is_some_and(|item| item.label() == "Sign in to ChatGPT")
         {
             signin = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
             break;
@@ -1640,8 +1668,17 @@ fn chatgpt_external_login_error_shows_codex_instructions_and_allows_retry() {
     let screen = crate::app::usage_tests::render(&app, 96, 24);
     assert!(screen.contains("Sign in to ChatGPT in Codex, then reconnect here."));
     assert!(!screen.contains("Working…"));
+    assert!(app.list_selection().is_none());
     crate::tui_assert_snapshot!("chatgpt_external_login_required", screen);
-    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert_eq!(
+        app.list_selection()
+            .unwrap()
+            .selected_item()
+            .unwrap()
+            .label(),
+        "Sign in to ChatGPT"
+    );
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         Some(AppCommand::Config(ConfigCommand::Subscription(
@@ -2160,7 +2197,7 @@ fn switching_to_main_screen_clears_selection() {
     settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
     app.update(ConfigEvent::SettingsReceived(settings));
 
-    assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
+    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
     assert!(app.fullscreen.selection.range().is_none());
 }
 
@@ -2191,7 +2228,7 @@ fn saved_main_screen_mode_clears_pointer_feedback_and_selection() {
             StatusLineSettings::default(),
         ),
     }));
-    assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
+    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
     assert!(app.fullscreen.pointer.hovered().is_none());
     assert!(app.fullscreen.pointer.pressed().is_none());
     assert!(app.fullscreen.selection.range().is_none());
@@ -3213,7 +3250,9 @@ fn kimi_subscription_signed_out_shows_only_the_sign_in_action_in_chinese() {
     use crate::config::SubscriptionCommand;
     use crate::config::SubscriptionEvent;
     use crate::config::SubscriptionProvider;
+    use ash_app_server_protocol::protocol::account::AccountDto;
     use ash_app_server_protocol::protocol::account::AccountReadResult;
+    use ash_app_server_protocol::protocol::account::AccountStatusDto;
 
     let mut app = App::new();
     let mut settings = TerminalSettings::default();
@@ -3225,14 +3264,37 @@ fn kimi_subscription_signed_out_shows_only_the_sign_in_action_in_chinese() {
         SubscriptionEvent::Read {
             account: AccountReadResult {
                 revision: 1.to_string(),
-                accounts: vec![],
+                accounts: vec![AccountDto {
+                    provider: "kimi-subscription".into(),
+                    account_id: "kimi-a".into(),
+                    email: Some("person@example.test".into()),
+                    display_name: None,
+                    organization: None,
+                    plan: None,
+                    status: AccountStatusDto::Ready,
+                    credential_revision: 1.to_string(),
+                }],
             },
-            models: None,
+            models: Some(Ok(vec![])),
         },
+    ));
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Char('l'), KeyModifiers::NONE)),
+        Some(AppCommand::Config(ConfigCommand::Subscription(
+            SubscriptionProvider::Kimi,
+            SubscriptionCommand::SignOut,
+        )))
+    );
+    app.update(ConfigEvent::SubscriptionReply(
+        SubscriptionProvider::Kimi,
+        SubscriptionEvent::SignedOut(AccountReadResult {
+            revision: 2.to_string(),
+            accounts: vec![],
+        }),
     ));
     let selection = app.list_selection().unwrap();
     assert_eq!(selection.visible_items().len(), 1);
-    assert_eq!(selection.selected_item().unwrap().label(), "使用 Kimi 登录");
+    assert_eq!(selection.selected_item().unwrap().label(), "登录 Kimi");
     crate::tui_assert_snapshot!(
         "kimi_subscription_signed_out_chinese",
         crate::app::usage_tests::render(&app, 96, 24)
@@ -3314,7 +3376,7 @@ fn xai_subscription_login_stays_separate_from_chatgpt_after_navigation() {
         },
     ));
     let screen = crate::app::usage_tests::render(&app, 96, 24);
-    assert!(screen.contains("Sign in with ChatGPT"));
+    assert!(screen.contains("Sign in to ChatGPT"));
     assert!(!screen.contains("XAI-1234"));
     for _ in 0..2 {
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
@@ -3366,9 +3428,50 @@ fn xai_subscription_browser_failure_keeps_the_manual_challenge_visible() {
     ));
     let screen = crate::app::usage_tests::render(&app, 96, 24);
     assert!(screen.contains("Could not open browser"));
-    assert!(screen.contains("https://auth.x.ai/device"));
-    assert!(screen.contains("XAI-1234"));
+    assert!(app.list_selection().is_none());
     crate::tui_assert_snapshot!("xai_subscription_browser_failure", screen);
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    let challenge = crate::app::usage_tests::render(&app, 96, 24);
+    assert!(challenge.contains("https://auth.x.ai/device"));
+    assert!(challenge.contains("XAI-1234"));
+}
+
+#[test]
+fn kimi_login_failure_uses_dialog_and_restores_sign_in() {
+    use crate::config::SubscriptionCommand;
+    use crate::config::SubscriptionEvent;
+    use crate::config::SubscriptionProvider;
+
+    let mut app = App::new();
+    let mut settings = TerminalSettings::default();
+    settings.set_language(Language::Chinese);
+    app.update(ConfigEvent::SettingsReceived(settings));
+    enter_provider_row(&mut app, "Kimi");
+    app.update(ConfigEvent::SubscriptionReply(
+        SubscriptionProvider::Kimi,
+        SubscriptionEvent::Failed("Kimi token exchange failed with HTTP 400".into()),
+    ));
+    let screen = crate::app::usage_tests::render(&app, 96, 24);
+    assert!(screen.contains("错误"));
+    assert!(screen.contains("Kimi token exchange failed with HTTP 400"));
+    assert!(app.list_selection().is_none());
+    crate::tui_assert_snapshot!("kimi_subscription_error_dialog", screen);
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert_eq!(
+        app.list_selection()
+            .unwrap()
+            .selected_item()
+            .unwrap()
+            .label(),
+        "登录 Kimi"
+    );
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::Config(ConfigCommand::Subscription(
+            SubscriptionProvider::Kimi,
+            SubscriptionCommand::SignIn,
+        )))
+    );
 }
 
 #[test]

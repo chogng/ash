@@ -3,6 +3,7 @@ use crate::terminal::ScreenMode;
 use crate::terminal::text::ScreenSelectionRange;
 use crate::terminal::text::line_range_at;
 use crate::terminal::text::text_in_range;
+use crate::terminal::text::text_in_range_in_area;
 use crate::terminal::text::token_range_at;
 use ash_terminal_detection::TerminalRgb;
 use ash_terminal_detection::detect_host_terminal;
@@ -171,6 +172,16 @@ impl TerminalSession {
         self.rendered_frame
             .as_ref()
             .and_then(|buffer| text_in_range(buffer, range))
+    }
+
+    pub(crate) fn selected_text_in_area(
+        &self,
+        range: ScreenSelectionRange,
+        area: Rect,
+    ) -> Option<String> {
+        self.rendered_frame
+            .as_ref()
+            .and_then(|buffer| text_in_range_in_area(buffer, range, area))
     }
 
     pub(crate) fn token_range_at(&self, position: Position) -> Option<ScreenSelectionRange> {

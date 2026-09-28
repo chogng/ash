@@ -1164,8 +1164,6 @@ impl App {
             self.terminal_settings = settings;
             self.panels_mut().receive_editor(editor);
             self.fullscreen.clear();
-            self.inline.selection.clear();
-            self.inline.completion_pressed = None;
             self.fullscreen.escape.reset();
             self.inline.escape.reset();
             self.reconcile_transcript_scroll_anchor();
@@ -1254,10 +1252,10 @@ impl App {
     }
 
     pub(crate) fn mouse_mode(&self) -> MouseMode {
-        // The main screen must report mouse events for editing the inline composer.
+        // Inline replies live in terminal scrollback, so selection must remain with the terminal.
         match self.screen_mode() {
             crate::terminal::ScreenMode::Fullscreen => MouseMode::TuiCapture,
-            crate::terminal::ScreenMode::Inline => MouseMode::TuiCapture,
+            crate::terminal::ScreenMode::Inline => MouseMode::TerminalSelection,
         }
     }
 
@@ -2724,6 +2722,8 @@ impl App {
                 self.set_status(Status::Ready);
             }
             ConfigEvent::Subscription(event) => {
+                let error =
+                    self.subscriptions[self.selected_subscription.index()].error_dialog(&event);
                 for subscription in &mut self.subscriptions {
                     subscription.update(event.clone());
                 }
@@ -2732,14 +2732,27 @@ impl App {
                 let sign_out =
                     self.subscriptions[self.selected_subscription.index()].sign_out_availability();
                 self.panels_mut().update_subscription(choices, sign_out);
+                if let Some((title, message)) = error {
+                    if self.panels().subscription_open() {
+                        self.fullscreen.selection.clear();
+                    }
+                    self.panels_mut().show_subscription_error(title, message);
+                }
             }
             ConfigEvent::SubscriptionReply(provider, event) => {
+                let error = self.subscriptions[provider.index()].error_dialog(&event);
                 self.subscriptions[provider.index()].update(event);
                 if provider == self.selected_subscription {
                     let mut choices = self.subscriptions[provider.index()].choices();
                     self.localize_selection(&mut choices);
                     let sign_out = self.subscriptions[provider.index()].sign_out_availability();
                     self.panels_mut().update_subscription(choices, sign_out);
+                    if let Some((title, message)) = error {
+                        if self.panels().subscription_open() {
+                            self.fullscreen.selection.clear();
+                        }
+                        self.panels_mut().show_subscription_error(title, message);
+                    }
                 }
             }
             ConfigEvent::SettingsReceived(settings) => {

@@ -4,23 +4,23 @@ expression: screen
 ---
   .                                                                        [— / —] [Dashboard]
 
-            ┌── Config › Super Grok ───────────────────────────────────────────[✗]─┐
-            │                                                                      │
-            │   Account                                                            │
-            │                                                                      │
-            │> Could not open browser  ·  browser command unavailable              │
-            │  Open in your browser  ·  https://auth.x.ai/device                   │
-            │  Enter code  ·  XAI-1234                                             │
-            │  Cancel sign-in                                                      │
-            │                                                                      │
-            │                                                                      │
-            │                                                                      │
-            │                                                                      │
-            │                                                                      │
-            │                                                                      │
-            │                                                                      │
-            │                                                                      │
-            │                                                                      │
-  ╭─────────│  Tab/Shift+Tab to switch  ·  Esc to return                           │─────────╮
-  │ > Build └──────────────────────────────────────────────────────────────────────┘         │
+
+
+
+
+
+
+
+          ┌── Super Grok › Could not open browser ───────────────────────────────[✗]─┐
+          │                                                                          │
+          │  browser command unavailable                                             │
+          │                                                                          │
+          │  Enter/Esc to close                                                      │
+          └──────────────────────────────────────────────────────────────────────────┘
+
+
+
+
+  ╭──────────────────────────────────────────────────────────────────────────────────────────╮
+  │ > Build anything                                                                         │
   ╰──────────────────────────────────────────────────────────────────────── Automatic model ─╯

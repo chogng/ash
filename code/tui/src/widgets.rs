@@ -1,4 +1,5 @@
 pub(crate) mod detail_list;
+pub(crate) mod dialog;
 pub(crate) mod grouped_list;
 pub(crate) mod key_capture;
 pub(crate) mod key_hint;

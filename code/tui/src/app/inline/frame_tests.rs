@@ -55,10 +55,9 @@ pub(super) fn text(buffer: &Buffer) -> String {
 }
 
 #[test]
-fn input_captures_mouse_and_uses_a_bounded_area() {
+fn input_uses_a_bounded_area_with_terminal_mouse_selection() {
     let mut app = app();
-    assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
-    assert!(app.mouse_mode().enables_pointer_actions());
+    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
     app.insert_text("继续检查终端历史");
     let buffer = render(&app, 80, 32);
     assert!(buffer.area.height < 32);
@@ -73,6 +72,30 @@ fn input_captures_mouse_and_uses_a_bounded_area() {
     app.update(ConfigEvent::SettingsReceived(settings));
     assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
     assert!(app.input().contains("继续检查终端历史"));
+}
+
+#[test]
+fn subscription_error_dialog_is_visible_in_the_inline_panel() {
+    let mut app = app();
+    app.update(ConfigEvent::EditorOpened(crate::config::config_choices(
+        &crate::test_support::empty_config_snapshot(),
+        &ash_app_server_protocol::protocol::provider::ProviderListResult { providers: vec![] },
+        TerminalSettings::default(),
+        crate::status::StatusLineSettings::default(),
+    )));
+    app.inline.panels.command_mut().unwrap().open_subscription(
+        crate::config::Subscription::new(crate::config::SubscriptionProvider::Kimi).choices(),
+        crate::config::SignOutAvailability::Unavailable,
+    );
+    app.inline
+        .panels
+        .command_mut()
+        .unwrap()
+        .show_subscription_error("Error", "Kimi token exchange failed with HTTP 400".into());
+
+    let buffer = render(&app, 80, 24);
+    assert!(text(&buffer).contains("Kimi token exchange failed with HTTP 400"));
+    crate::tui_assert_snapshot!("subscription_error_dialog", text(&buffer));
 }
 
 #[test]

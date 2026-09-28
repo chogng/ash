@@ -1,6 +1,7 @@
 use super::ScreenSelectionRange;
 use super::line_range_at;
 use super::text_in_range;
+use super::text_in_range_in_area;
 use super::token_range_at;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Position;
@@ -20,6 +21,22 @@ fn selected_screen_text_trims_row_padding_and_preserves_line_boundaries() {
             ScreenSelectionRange::new(Position::new(2, 0), Position::new(3, 2))
         ),
         Some("pha\n  beta\ngamm".into())
+    );
+}
+
+#[test]
+fn clipped_selection_copies_multiline_dialog_text_without_its_border() {
+    let mut buffer = Buffer::empty(Rect::new(0, 0, 10, 2));
+    buffer.set_string(0, 0, "│ alpha  │", Style::default());
+    buffer.set_string(0, 1, "│ beta   │", Style::default());
+
+    assert_eq!(
+        text_in_range_in_area(
+            &buffer,
+            ScreenSelectionRange::new(Position::new(2, 0), Position::new(5, 1)),
+            Rect::new(2, 0, 6, 2),
+        ),
+        Some("alpha\nbeta".into())
     );
 }
 

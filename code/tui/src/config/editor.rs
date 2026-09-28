@@ -118,6 +118,7 @@ pub(crate) struct ConfigEditor {
     provider_panel: Option<super::provider::Panel>,
     subscription: Option<ListSelection<ConfigSelectionAction>>,
     subscription_sign_out: super::SignOutAvailability,
+    dialog: Option<crate::widgets::dialog::Dialog>,
     advisor: Option<AdvisorEditor>,
     prompt: Option<ProviderApiKeyPromptState>,
     removing: Option<super::provider::Request>,
@@ -187,6 +188,7 @@ pub(crate) enum ConfigEditorPage<'a> {
     Selection(&'a crate::widgets::list_selection::ListSelectionState),
     Prompt(&'a TextPrompt),
     Provider(&'a super::provider::Panel),
+    Dialog(&'a crate::widgets::dialog::Dialog),
 }
 
 impl ConfigEditor {
@@ -197,6 +199,7 @@ impl ConfigEditor {
             provider_panel: None,
             subscription: None,
             subscription_sign_out: super::SignOutAvailability::Unavailable,
+            dialog: None,
             advisor: None,
             prompt: None,
             removing: None,
@@ -204,6 +207,12 @@ impl ConfigEditor {
     }
 
     pub(crate) fn parent_title(&self) -> Option<&str> {
+        if self.dialog.is_some() {
+            return self
+                .subscription
+                .as_ref()
+                .map(|selection| selection.state().title());
+        }
         if let Some(advisor) = &self.advisor {
             if advisor.models.is_some() {
                 return Some(advisor.settings.state().title());
@@ -222,6 +231,9 @@ impl ConfigEditor {
     }
 
     pub(crate) fn return_to_parent(&mut self) {
+        if self.dialog.take().is_some() {
+            return;
+        }
         if self
             .provider_panel
             .as_ref()
@@ -270,6 +282,17 @@ impl ConfigEditor {
     }
 
     pub(crate) fn handle_key(&mut self, key: crossterm::event::KeyEvent) -> ConfigEditorOutcome {
+        if self.dialog.is_some() {
+            if key.kind == crossterm::event::KeyEventKind::Press
+                && matches!(
+                    key.code,
+                    crossterm::event::KeyCode::Esc | crossterm::event::KeyCode::Enter
+                )
+            {
+                self.dialog = None;
+            }
+            return ConfigEditorOutcome::Consumed;
+        }
         if let Some(advisor) = self.advisor.as_mut() {
             let outcome = advisor.selection_mut().handle_key(key);
             return match outcome {
@@ -539,6 +562,9 @@ impl ConfigEditor {
     }
 
     pub(crate) fn handle_paste(&mut self, pasted: String) {
+        if self.dialog.is_some() {
+            return;
+        }
         if let Some(advisor) = self.advisor.as_mut() {
             advisor.selection_mut().handle_paste(pasted);
         } else if let Some(prompt) = self.prompt.as_mut() {
@@ -553,6 +579,9 @@ impl ConfigEditor {
     }
 
     pub(crate) fn page(&self) -> ConfigEditorPage<'_> {
+        if let Some(dialog) = &self.dialog {
+            return ConfigEditorPage::Dialog(dialog);
+        }
         if let Some(advisor) = &self.advisor {
             return ConfigEditorPage::Selection(advisor.selection().state());
         }
@@ -584,6 +613,9 @@ impl ConfigEditor {
                 .with_compact_action("/", "search")
                 .with_compact_action("Esc", "close")
         });
+        if let Some(dialog) = &self.dialog {
+            return dialog.key_hints();
+        }
         if let Some(advisor) = &self.advisor {
             return advisor.selection().key_hints();
         }
@@ -607,7 +639,7 @@ impl ConfigEditor {
     }
 
     pub(crate) fn selection(&self) -> Option<&crate::widgets::list_selection::ListSelectionState> {
-        if self.prompt.is_some() {
+        if self.prompt.is_some() || self.dialog.is_some() {
             return None;
         }
         if let Some(advisor) = &self.advisor {
@@ -622,7 +654,7 @@ impl ConfigEditor {
     pub(crate) fn selection_mut(
         &mut self,
     ) -> Option<&mut crate::widgets::list_selection::ListSelectionState> {
-        if self.prompt.is_some() {
+        if self.prompt.is_some() || self.dialog.is_some() {
             return None;
         }
         if let Some(advisor) = &mut self.advisor {
@@ -639,12 +671,19 @@ impl ConfigEditor {
         spec: ConfigChoices,
         sign_out: super::SignOutAvailability,
     ) {
+        self.dialog = None;
         self.subscription_sign_out = sign_out;
         self.subscription = Some(ListSelection::new(spec.model, spec.actions));
     }
 
     pub(crate) fn subscription_open(&self) -> bool {
         self.subscription.is_some() && self.prompt.is_none()
+    }
+
+    pub(crate) fn show_subscription_error(&mut self, title: &'static str, message: String) {
+        if self.subscription_open() {
+            self.dialog = Some(crate::widgets::dialog::Dialog::error(title, message));
+        }
     }
 
     pub(crate) fn open_advisor(&mut self, choices: AdvisorChoices) {

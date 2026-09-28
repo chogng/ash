@@ -6,8 +6,6 @@ expression: screen
 
             ┌── Config › BigModel ─────────────────────────────────────────────[✗]─┐
             │                                                                      │
-            │   Account                                                            │
-            │                                                                      │
             │> Browser opened  ·  https://zcode.z.ai/authorize                     │
             │  Cancel sign-in                                                      │
             │                                                                      │
@@ -21,6 +19,8 @@ expression: screen
             │                                                                      │
             │                                                                      │
             │                                                                      │
-  ╭─────────│  Tab/Shift+Tab to switch  ·  Esc to return                           │─────────╮
+            │                                                                      │
+            │                                                                      │
+  ╭─────────│  Esc to return                                                       │─────────╮
   │ > Build └──────────────────────────────────────────────────────────────────────┘         │
   ╰──────────────────────────────────────────────────────────────────────── Automatic model ─╯

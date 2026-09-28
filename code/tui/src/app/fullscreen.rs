@@ -187,7 +187,10 @@ pub(super) fn draw(
             context,
         );
     }
-    app.fullscreen.selection.draw(frame.buffer_mut(), context);
+    let selection_area = modal::dialog_body_area(app, frame.area()).unwrap_or(frame.area());
+    app.fullscreen
+        .selection
+        .draw(frame.buffer_mut(), context, selection_area);
 }
 
 #[cfg(test)]

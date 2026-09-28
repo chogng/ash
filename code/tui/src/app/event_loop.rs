@@ -186,31 +186,14 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     Event::Key(key) if key.kind != KeyEventKind::Release => {
                         driver.app_mut().handle_key_in_area(key, terminal.area()?)
                     }
-                    Event::Mouse(mouse) => {
-                        let action = match driver.app().screen_mode() {
-                            terminal::ScreenMode::Fullscreen => {
-                                handle_mouse(driver.app_mut(), terminal.area()?, mouse)
-                            }
-                            terminal::ScreenMode::Inline => super::inline::pointer::handle_mouse(
-                                driver.app_mut(),
-                                terminal.area()?,
-                                mouse,
-                            ),
-                        };
+                    Event::Mouse(mouse)
+                        if driver.app().screen_mode() == terminal::ScreenMode::Fullscreen =>
+                    {
+                        let action = handle_mouse(driver.app_mut(), terminal.area()?, mouse);
                         match action {
-                            MouseAction::Selection(outcome) => match driver.app().screen_mode() {
-                                terminal::ScreenMode::Fullscreen => {
-                                    finish_pointer_gesture(driver.app_mut(), &terminal, outcome)?
-                                }
-                                terminal::ScreenMode::Inline => {
-                                    super::inline::pointer::finish_pointer_gesture(
-                                        driver.app_mut(),
-                                        &terminal,
-                                        outcome,
-                                    );
-                                    None
-                                }
-                            },
+                            MouseAction::Selection(outcome) => {
+                                finish_pointer_gesture(driver.app_mut(), &terminal, outcome)?
+                            }
                             MouseAction::InputSelection(text) => {
                                 super::fullscreen::selection::apply_copied_text(
                                     driver.app_mut(),
@@ -222,14 +205,13 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             MouseAction::Command(command) => command,
                         }
                     }
+                    Event::Mouse(_) => None,
                     Event::Paste(text) => {
                         driver.app_mut().handle_paste(text);
                         None
                     }
                     Event::Resize(_, _) => {
                         driver.app_mut().fullscreen.clear();
-                        driver.app_mut().inline.selection.clear();
-                        driver.app_mut().inline.completion_pressed = None;
                         driver.app_mut().input_state_mut().reset_pointer_view();
                         None
                     }
@@ -322,9 +304,6 @@ fn draw_terminal(
 ) -> Result<(), std::io::Error> {
     if app.screen_mode() == terminal::ScreenMode::Inline {
         app.fullscreen.clear();
-    } else {
-        app.inline.selection.clear();
-        app.inline.completion_pressed = None;
     }
     terminal.set_screen_mode(app.screen_mode())?;
     terminal.set_mouse_mode(app.mouse_mode())?;
