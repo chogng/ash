@@ -149,6 +149,7 @@ mod artwork {
     pub(crate) const MIC_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/mic-filled.svg"));
     pub(crate) const MODEL: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/model.svg"));
     pub(crate) const MODEL_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/model-filled.svg"));
+    pub(crate) const MULTITASK: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/multitask.svg"));
     pub(crate) const NEW_FILE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/new-file.svg"));
     pub(crate) const NEW_FOLDER: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/new-folder.svg"));
     pub(crate) const OPENAI: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/openai.svg"));
@@ -365,6 +366,7 @@ pub mod icons {
     pub const MIC_FILLED: Icon = Icon::new(IconId::new("mic-filled"), artwork::MIC_FILLED);
     pub const MODEL: Icon = Icon::new(IconId::new("model"), artwork::MODEL);
     pub const MODEL_FILLED: Icon = Icon::new(IconId::new("model-filled"), artwork::MODEL_FILLED);
+    pub const MULTITASK: Icon = Icon::new(IconId::new("multitask"), artwork::MULTITASK);
     pub const NEW_FILE: Icon = Icon::new(IconId::new("new-file"), artwork::NEW_FILE);
     pub const NEW_FOLDER: Icon = Icon::new(IconId::new("new-folder"), artwork::NEW_FOLDER);
     pub const OPENAI: Icon = Icon::new(IconId::new("openai"), artwork::OPENAI);
@@ -577,6 +579,7 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::MIC_FILLED,
     icons::MODEL,
     icons::MODEL_FILLED,
+    icons::MULTITASK,
     icons::NEW_FILE,
     icons::NEW_FOLDER,
     icons::OPENAI,
@@ -790,6 +793,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("mic-filled", artwork::MIC_FILLED),
     ("model", artwork::MODEL),
     ("model-filled", artwork::MODEL_FILLED),
+    ("multitask", artwork::MULTITASK),
     ("new-file", artwork::NEW_FILE),
     ("new-folder", artwork::NEW_FOLDER),
     ("openai", artwork::OPENAI),

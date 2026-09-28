@@ -707,6 +707,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "multitask",
+      "file": "multitask.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "new-file",
       "file": "new-file.svg",
       "rendering": "symbolic"
