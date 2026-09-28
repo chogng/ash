@@ -10,7 +10,7 @@ import { IRecentWorkspacesService } from '../../../services/workspaces/common/re
 import { IWorkspaceOpenService } from '../../../services/workspaces/browser/workspaceOpenService.js';
 import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { ConnectToRemoteCommandId } from '../../remote/browser/remoteActions.js';
-import { GitCloneCommandId } from '../../scm/browser/gitClone.js';
+import { GitCloneCommandId } from '../../git/common/gitCommands.js';
 import { GettingStarted, type IGettingStartedProject } from './gettingStartedContent.js';
 import { isGettingStartedInput } from './gettingStartedInput.js';
 

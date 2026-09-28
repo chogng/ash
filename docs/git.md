@@ -54,6 +54,9 @@ VS Code 的 SCM Workbench 不执行 Git，也不定义 Git wire DTO；Git provid
 group、history item、reference 和 command 投影成 SCM contract。Ash 应保持同一依赖方向，但不照搬
 VS Code 的 extension-host 进程布局。
 
+前端 Git 专属命令注册在 `app-ts/src/ash/workbench/contrib/git/browser/`；SCM 的视图和通用展示留在
+`workbench/contrib/scm/`。Git 命令 ID 由 `contrib/git/common/gitCommands.ts` 提供给欢迎页和状态栏。
+
 | 层级 | 长期 owner | 当前状态 | 边界判断 |
 | --- | --- | --- | --- |
 | Workbench SCM | provider registry、通用 repository/resource/history contract、树与 Graph 展示、Editor 打开语义 | 尚未完成：`ScmViewPane`、`ScmGraphViewPane` 和 `ScmStatusContribution` 仍直接消费 `IGitService` | 需要解耦；新增 VCS 不应修改 SCM View |

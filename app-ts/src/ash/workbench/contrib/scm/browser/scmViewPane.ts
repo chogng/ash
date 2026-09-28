@@ -18,7 +18,7 @@ import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/vi
 import { createDiffEditorInput } from "../../../common/editor/diffEditorInput.js";
 import { OpenScmMultiDiffEditorCommandId, type OpenScmMultiDiffEditorOptions, type OpenScmMultiDiffEditorResult } from "../../multiDiffEditor/browser/scmMultiDiffAction.js";
 import { repositoryFileUri, resolveGitChangeInputs } from "./scmChangeEditorInput.js";
-import { gitErrorMessage } from "./scmError.js";
+import { gitErrorMessage } from "../../git/common/gitError.js";
 import { createScmMergeEditorInput } from './scmMergeEditorInput.js';
 
 type GitChangeSide = "index" | "worktree";

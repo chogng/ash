@@ -21,7 +21,7 @@ import { ViewPane } from "../../../browser/parts/views/viewPane.js";
 import { createDiffEditorInput } from "../../../common/editor/diffEditorInput.js";
 import { createRows, GraphRowHeight, renderRow, type GraphNodeKind, type GraphRow, type GraphState } from "./scmGraphRenderer.js";
 import { GitGraphBusyContext } from "./scmGraphTitleActions.js";
-import { gitErrorMessage } from "./scmError.js";
+import { gitErrorMessage } from "../../git/common/gitError.js";
 
 const PageSize = 50;
 const LoadAhead = 48;

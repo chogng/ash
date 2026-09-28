@@ -7,8 +7,7 @@ import { IQuickInputService } from '../../../../platform/quickinput/common/quick
 import { localize } from '../../../../nls.js';
 import { IGitService } from '../../../services/git/common/gitService.js';
 import { IWorkspaceOpenService } from '../../../services/workspaces/browser/workspaceOpenService.js';
-
-export const GitCloneCommandId = 'git.clone';
+import { GitCloneCommandId } from '../common/gitCommands.js';
 
 registerAction2(class GitCloneAction extends Action2 {
 	constructor() {

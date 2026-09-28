@@ -5,7 +5,7 @@ import type { IWorkbenchContribution } from "../../../common/contributions.js";
 import type { GitHead, GitStatus, IGitService } from "../../../services/git/common/gitService.js";
 import { StatusbarAlignment, type IStatusbarEntry, type IStatusbarEntryAccessor, type IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
 import type { IViewsService } from "../../../services/views/browser/viewsService.js";
-import { GitSwitchBranchCommandId } from './gitBranches.js';
+import { GitSwitchBranchCommandId } from '../../git/common/gitCommands.js';
 
 const BranchPriority = 900;
 const SyncPriority = 800;

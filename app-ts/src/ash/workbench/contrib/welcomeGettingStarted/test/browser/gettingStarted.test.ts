@@ -8,7 +8,7 @@ import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../../
 import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { GettingStarted } from '../../browser/gettingStartedContent.js';
 import { GettingStartedPage } from '../../browser/gettingStarted.js';
-import { GitCloneCommandId } from '../../../scm/browser/gitClone.js';
+import { GitCloneCommandId } from '../../../git/common/gitCommands.js';
 import type { IGitService } from '../../../../services/git/common/gitService.js';
 import type { IGitHubConnectionService } from '../../../../services/accounts/common/gitHubConnectionService.js';
 import type { IRecentWorkspacesService } from '../../../../services/workspaces/common/recentWorkspacesService.js';

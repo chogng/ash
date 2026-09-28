@@ -20,7 +20,7 @@ import { TextFileEditor } from '../../files/browser/editors/textFileEditor.js';
 import { MergeEditor, MergeEditorModel } from '../../mergeEditor/browser/mergeEditor.js';
 import { hasMergeConflictMarkers, parseMergeConflictBlocks } from '../common/mergeConflict.js';
 import { isScmMergeEditorInput, SCM_MERGE_EDITOR_ID, type ScmMergeEditorInput } from './scmMergeEditorInput.js';
-import { gitErrorMessage } from './scmError.js';
+import { gitErrorMessage } from '../../git/common/gitError.js';
 
 export const ScmMergeFocusedContext = new RawContextKey<boolean>('scmMergeEditorFocused', false);
 

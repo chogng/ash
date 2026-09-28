@@ -9,7 +9,8 @@ import { builtinLanguagePackCatalogs } from '../../../../services/localization/c
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { IGitService } from '../../../../services/git/common/gitService.js';
 import { IWorkspaceOpenService } from '../../../../services/workspaces/browser/workspaceOpenService.js';
-import { GitCloneCommandId } from '../../browser/gitClone.js';
+import { GitCloneCommandId } from '../../common/gitCommands.js';
+import '../../browser/gitClone.js';
 
 test('Git clone command asks for a repository, clones it, and opens the result', async () => {
 	const calls: string[] = [];

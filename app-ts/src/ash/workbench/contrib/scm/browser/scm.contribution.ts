@@ -25,8 +25,6 @@ import { SCMViewPaneContainer } from './scmViewPaneContainer.js';
 import { IChatContextPickService } from "../../../services/chat/common/chatContextService.js";
 import "../common/scmConfiguration.js";
 import "./quickDiff.contribution.js";
-import './gitClone.js';
-import './gitBranches.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { localize } from '../../../../nls.js';
 import { registerEditorPane } from '../../../browser/parts/editor/editorRegistry.js';

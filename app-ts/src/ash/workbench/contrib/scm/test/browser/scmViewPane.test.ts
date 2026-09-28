@@ -19,6 +19,7 @@ import type { IWorkingCopyService } from '../../../../../workbench/services/work
 import { CommandService } from "../../../../../workbench/services/commands/common/commandService.js";
 import { OpenScmMultiDiffEditorAction } from "../../../../../workbench/contrib/multiDiffEditor/browser/scmMultiDiffAction.js";
 import { resolveGitChangeInputs } from "../../../../../workbench/contrib/scm/browser/scmChangeEditorInput.js";
+import { isScmMergeEditorInput } from "../../../../../workbench/contrib/scm/browser/scmMergeEditorInput.js";
 import { emptyEditorServiceState } from '../../../../../workbench/test/common/testEditorService.js';
 
 const testDialogs: IDialogService = {
@@ -706,8 +707,11 @@ test("ScmViewPane groups App Server Git status", async () => {
 		const changeFileCount = changeFileRequests.length;
 		conflictOpen.click();
 		await waitFor(() => opened.length === 5);
-		assert.equal(opened[4].input.resource.toString(), 'file:///conflict.ts');
-		assert.equal(opened[4].input.readOnly, undefined);
+		const conflictInput = opened[4].input;
+		assert.ok(isScmMergeEditorInput(conflictInput));
+		assert.equal(conflictInput.resource.toString(), 'git-merge:/repo-1/conflict.ts');
+		assert.equal(conflictInput.resultResource.toString(), 'file:///conflict.ts');
+		assert.equal(conflictInput.readOnly, undefined);
 		assert.equal(opened[4].options?.pinned, false);
 		assert.equal(changeFileRequests.length, changeFileCount);
 		dirtyConflict = true;
@@ -947,7 +951,7 @@ function installDomGlobals(browser: JSDOM): readonly string[] {
 }
 test("SCM distinguishes an empty window, a folder without Git, and unavailable access", async () => {
 	const [{ gitErrorMessage }, { GitWorkspaceError }] = await Promise.all([
-		import("../../../../../workbench/contrib/scm/browser/scmError.js"),
+		import("../../../../../workbench/contrib/git/common/gitError.js"),
 		import("../../../../../workbench/services/git/common/gitService.js"),
 	]);
 	assert.deepEqual([

@@ -18,6 +18,7 @@ import {
 } from "../contrib/files/browser/explorerViewlet.js";
 import '../contrib/files/browser/files.contribution.js';
 import '../contrib/accessibility/browser/accessibility.contribution.js';
+import '../contrib/git/browser/git.contribution.js';
 import {
 	registerGitViews,
 } from "../contrib/scm/browser/scm.contribution.js";

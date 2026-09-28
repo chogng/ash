@@ -6,9 +6,8 @@ import type { ServicesAccessor } from '../../../../platform/instantiation/common
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { type GitBranch, IGitService } from '../../../services/git/common/gitService.js';
-import { gitErrorMessage } from './scmError.js';
-
-export const GitSwitchBranchCommandId = 'git.switchBranch';
+import { GitSwitchBranchCommandId } from '../common/gitCommands.js';
+import { gitErrorMessage } from '../common/gitError.js';
 
 interface BranchItem extends IQuickPickItem {
 	readonly branch: GitBranch;
