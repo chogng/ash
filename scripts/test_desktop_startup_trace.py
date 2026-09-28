@@ -5,7 +5,7 @@ import unittest
 import desktop_startup_trace
 
 
-def report(duration=100, error=False):
+def report(duration=100, error=False, version=2):
     samples = []
     for cohort in desktop_startup_trace.COHORTS:
         for index in range(5):
@@ -21,12 +21,39 @@ def report(duration=100, error=False):
                         {"phase": "first-window", "elapsedMs": 40},
                         *([] if failed else [{"phase": "workbench-ready", "elapsedMs": duration + index}]),
                     ],
+                    **({"renderer": None if failed else {
+                        "responseEndMs": 10,
+                        "marks": [
+                            {"name": name, "startTimeMs": time}
+                            for name, time in (
+                                ("ash.desktop.contributions-start", 18),
+                                ("ash.desktop.contributions-ready", 19),
+                                ("ash.desktop.open-start", 20),
+                                ("ash.rendererApi.start", 21),
+                                ("ash.rendererApi.acquire-start", 22),
+                                ("ash.rendererApi.acquired", 23),
+                                *((("ash.rendererApi.initialized", 24), ("ash.rendererApi.workspace-initialized", 25)) if cohort != "ui-only" else ()),
+                                ("ash.desktop.api-ready", 26),
+                                ("ash.desktop.themes-ready", 27),
+                                ("ash.desktop.workspace-ready", 28),
+                                ("ash.desktop.configuration-ready", 29),
+                                ("ash.desktop.workbench-start", 30),
+                                ("ash.workbench.constructor-start", 30),
+                                ("ash.workbench.services-ready", 30.2),
+                                ("ash.workbench.shell-ready", 30.4),
+                                ("ash.workbench.views-restored", 30.6),
+                                ("ash.workbench.constructor-done", 30.8),
+                                ("ash.desktop.workbench-created", 31),
+                                ("ash.desktop.lifecycle-ready", 32),
+                            )
+                        ],
+                    }} if version == 3 else {}),
                     **({"error": "launch failed"} if failed else {}),
                 }
             )
     return {
-        "schemaVersion": 2,
-        "metadata": {key: "same" for key in desktop_startup_trace.CONDITIONS + desktop_startup_trace.V2_CONDITIONS},
+        "schemaVersion": version,
+        "metadata": {key: "same" for key in desktop_startup_trace.CONDITIONS + desktop_startup_trace.V2_CONDITIONS + (desktop_startup_trace.V3_CONDITIONS if version == 3 else ())},
         "samples": samples,
     }
 
@@ -44,6 +71,18 @@ class DesktopStartupTraceComparisonTests(unittest.TestCase):
         self.assertIn("candidate fresh[0] error: launch failed", output)
         self.assertIn("errors (B/C)", output)
         self.assertIn("Result: incomplete comparison", output)
+
+    def test_renderer_stages_are_compared_on_one_window_clock(self):
+        output, status = desktop_startup_trace.compare_reports(report(version=3), report(90, version=3))
+        self.assertEqual(status, 0)
+        self.assertIn("Renderer stages, one window performance clock", output)
+        self.assertIn("reused | response-end → ash.desktop.open-start | 10.0,10.0,10.0,10.0,10.0", output)
+
+    def test_missing_renderer_mark_is_rejected(self):
+        candidate = report(version=3)
+        candidate["samples"][0]["renderer"]["marks"].pop()
+        with self.assertRaisesRegex(ValueError, "missing renderer mark"):
+            desktop_startup_trace.compare_reports(report(version=3), candidate)
 
     def test_mismatched_conditions_are_rejected(self):
         candidate = report()

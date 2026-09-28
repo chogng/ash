@@ -2,6 +2,8 @@
 
 本基线用于决定功能加载边界，不把单个 chunk 小于 500 kB 当作启动性能目标。
 
+Desktop 启动的端到端测量和前端优化顺序见 [Desktop 前端启动测量与优化路线](desktop-startup.md)。
+
 ## 重现
 
 在仓库根目录运行 `corepack pnpm --dir app-ts test:loading`。

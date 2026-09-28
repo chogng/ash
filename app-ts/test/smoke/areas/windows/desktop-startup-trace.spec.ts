@@ -17,6 +17,7 @@ interface ConnectionSample {
 	readonly index: number;
 	readonly readyMs: number | null;
 	readonly milestones: readonly { phase: 'launch-requested' | ElectronLaunchMilestone; elapsedMs: number }[];
+	readonly renderer: { readonly responseEndMs: number; readonly marks: readonly { name: string; startTimeMs: number }[] } | null;
 	readonly error?: string;
 }
 
@@ -54,6 +55,7 @@ test('Desktop startup trace', async ({ target, testWorkspace }, testInfo) => {
 		cache: 'new user data for every sample; operating-system file cache is not cleared',
 		profileState: 'fresh profiles include Playwright trust selection; stopped, reused, and UI-only use an authorized profile',
 		milestoneClock: 'Playwright worker performance.now; each elapsed time is relative to launch-requested in the same process',
+		rendererClock: 'Renderer performance timeline; marks and navigation responseEnd share one window clock',
 	};
 	const stop = async (profile: string): Promise<void> => {
 		await execFileAsync(daemon, ['stop'], { env: { ...process.env, ASH_HOME: profile }, windowsHide: true, timeout: 30_000 });
@@ -67,6 +69,7 @@ test('Desktop startup trace', async ({ target, testWorkspace }, testInfo) => {
 		let desktop: ElectronLaunchResult | undefined;
 		const start = performance.now();
 		let readyMs: number | null = null;
+		let renderer: ConnectionSample['renderer'] = null;
 		let error: string | undefined;
 		const milestones: { phase: 'launch-requested' | ElectronLaunchMilestone; elapsedMs: number }[] = [{ phase: 'launch-requested', elapsedMs: 0 }];
 		try {
@@ -78,6 +81,14 @@ test('Desktop startup trace', async ({ target, testWorkspace }, testInfo) => {
 				workspacePermissions: cohort === 'fresh' ? 'development' : undefined,
 			}, phase => milestones.push({ phase, elapsedMs: Math.round(performance.now() - start) }));
 			readyMs = Math.round(performance.now() - start);
+			renderer = await desktop.driver.workbench.page.evaluate(() => {
+				const navigation = window.performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+				if (!navigation) throw new Error('Desktop navigation timing is unavailable');
+				return {
+					responseEndMs: navigation.responseEnd,
+					marks: window.performance.getEntriesByType('mark').filter(mark => mark.name.startsWith('ash.desktop.') || mark.name.startsWith('ash.rendererApi.') || mark.name.startsWith('ash.workbench.')).map(mark => ({ name: mark.name, startTimeMs: mark.startTime })),
+				};
+			});
 		} catch (cause) {
 			error = redact(String(cause), directory, testWorkspace.directory);
 		} finally {
@@ -91,7 +102,7 @@ test('Desktop startup trace', async ({ target, testWorkspace }, testInfo) => {
 			} catch (cause) {
 				error = `${error ? `${error}\n` : ''}Cleanup: ${redact(String(cause), directory, testWorkspace.directory)}`;
 			}
-			samples.push({ cohort, index, readyMs, milestones, ...(error ? { error } : {}) });
+			samples.push({ cohort, index, readyMs, milestones, renderer, ...(error ? { error } : {}) });
 		}
 	};
 	try {
@@ -138,6 +149,7 @@ test('Desktop startup trace', async ({ target, testWorkspace }, testInfo) => {
 			await measure('ui-only', index, stoppedProfile, false);
 		}
 		expect(samples.filter(sample => sample.error)).toEqual([]);
+		expect(samples.filter(sample => !sample.renderer?.marks.some(mark => mark.name === 'ash.desktop.lifecycle-ready'))).toEqual([]);
 		expect(metadata.reusedDaemonSameProcess).toBe(true);
 	} catch (cause) {
 		metadata.failure = redact(String(cause), directory, testWorkspace.directory);
@@ -162,7 +174,7 @@ test('Desktop startup trace', async ({ target, testWorkspace }, testInfo) => {
 			const output = join(traceDirectory, 'desktop-startup-trace.json');
 			try {
 				await mkdir(traceDirectory, { recursive: true });
-				await writeFile(output, JSON.stringify({ schemaVersion: 2, metadata, summary: summarize(samples), samples }, null, 2));
+				await writeFile(output, JSON.stringify({ schemaVersion: 3, metadata, summary: summarize(samples), samples }, null, 2));
 				await testInfo.attach('desktop-startup-trace', { path: output, contentType: 'application/json' });
 				console.log(`ASH_DESKTOP_STARTUP_TRACE_REPORT ${output}`);
 			} finally {
