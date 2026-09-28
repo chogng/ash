@@ -13,6 +13,7 @@ fn scheduled(command: AppCommand) -> ScheduledCommand {
     ScheduledCommand {
         command,
         origin: origin(),
+        voice_thread_id: None,
     }
 }
 

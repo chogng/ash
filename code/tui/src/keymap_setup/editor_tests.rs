@@ -87,6 +87,7 @@ fn keymap_choices_lists_keys_before_responsibilities() {
             "ctrl+d",
             "ctrl+o",
             "ctrl+z",
+            "F8",
             "ctrl+r",
             "Esc Esc",
             "↑/k · ↓/j",

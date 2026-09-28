@@ -3243,6 +3243,96 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "démarrer une nouvelle discussion",
     ),
     translation("quit Ash", "Ash を終了", "退出 Ash", "quitter Ash"),
+    translation(
+        "dictate into the draft; toggle with F8",
+        "音声を下書きに入力します。F8 で切り替えます",
+        "将语音转写到草稿；按 F8 开关听写",
+        "dicter dans le brouillon ; F8 active ou arrête la dictée",
+    ),
+    translation(
+        "speak continuously and receive text replies",
+        "続けて話し、文字で返信を受け取ります",
+        "连续说话，接收文字回复",
+        "parler en continu et recevoir des réponses écrites",
+    ),
+    translation(
+        "toggle dictation into the current draft",
+        "現在の下書きへの音声入力を切り替え",
+        "开关当前草稿的听写",
+        "activer ou arrêter la dictée dans le brouillon actuel",
+    ),
+    translation(
+        "Voice · stopping",
+        "音声 · 停止中",
+        "语音 · 正在停止",
+        "Voix · arrêt en cours",
+    ),
+    translation(
+        "Voice · preparing microphone",
+        "音声 · マイクを準備中",
+        "语音 · 正在准备麦克风",
+        "Voix · préparation du microphone",
+    ),
+    translation(
+        "Voice · listening · /voice to stop",
+        "音声 · 聞き取り中 · /voice で停止",
+        "语音 · 正在听 · 输入 /voice 停止",
+        "Voix · écoute · /voice pour arrêter",
+    ),
+    translation(
+        "Voice · heard:",
+        "音声 · 認識中:",
+        "语音 · 识别中：",
+        "Voix · entendu :",
+    ),
+    translation(
+        "Voice failed:",
+        "音声に失敗しました:",
+        "语音失败：",
+        "Échec de la voix :",
+    ),
+    translation(
+        "Voice mode stopped.",
+        "音声モードを停止しました。",
+        "语音模式已停止。",
+        "Mode vocal arrêté.",
+    ),
+    translation(
+        "Start a chat before using voice mode.",
+        "音声モードを使う前にチャットを開始してください。",
+        "使用语音模式前请先开始聊天。",
+        "Démarrez une discussion avant d'utiliser le mode vocal.",
+    ),
+    translation(
+        "Stop dictation before starting voice mode.",
+        "音声モードを始める前に音声入力を停止してください。",
+        "开始语音模式前请先停止听写。",
+        "Arrêtez la dictée avant de démarrer le mode vocal.",
+    ),
+    translation(
+        "Stop voice mode before starting dictation.",
+        "音声入力を始める前に音声モードを停止してください。",
+        "开始听写前请先停止语音模式。",
+        "Arrêtez le mode vocal avant de démarrer la dictée.",
+    ),
+    translation(
+        "Listening. Press F8 to stop.",
+        "聞き取り中です。F8 で停止します。",
+        "正在听写。按 F8 停止。",
+        "Dictée en cours. Appuyez sur F8 pour arrêter.",
+    ),
+    translation(
+        "Dictation stopped.",
+        "音声入力を停止しました。",
+        "听写已停止。",
+        "Dictée arrêtée.",
+    ),
+    translation(
+        "Dictation failed:",
+        "音声入力に失敗しました:",
+        "听写失败：",
+        "Échec de la dictée :",
+    ),
 ];
 
 pub(crate) fn localize<'a>(language: Language, source: &'a str) -> Cow<'a, str> {

@@ -99,15 +99,14 @@ fn builtins_follow_enum_presentation_order() {
                 "plugins",
                 "lsp",
             ];
-            if cfg!(target_os = "windows") {
-                names.push("dictate");
-            }
+            names.push("dictate");
+            names.push("voice");
             names
         }
     );
     assert_eq!(
         definitions.len(),
-        if cfg!(target_os = "windows") { 32 } else { 31 }
+        33
     );
 }
 

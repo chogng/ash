@@ -793,7 +793,6 @@ fn render_dictation_frame(app: &App) -> String {
         .join("\n")
 }
 
-#[cfg(target_os = "windows")]
 #[test]
 fn dictate_command_adds_recognized_text_to_the_draft_and_stops() {
     let mut app = App::new();
@@ -830,6 +829,145 @@ fn dictate_command_adds_recognized_text_to_the_draft_and_stops() {
     });
     app.dictation_transcript(&resource_id, "late", true);
     assert_eq!(app.input(), "recognized text");
+}
+
+#[test]
+fn f8_toggles_dictation_even_when_chat_input_is_unavailable() {
+    let mut app = App::new();
+    app.set_status(Status::WaitingForApproval);
+    let start = app.handle_key(KeyEvent::new(KeyCode::F(8), KeyModifiers::NONE));
+    let Some(AppCommand::DictationStart { resource_id }) = start else {
+        panic!("F8 must start dictation from outside the composer");
+    };
+    app.update(AppEvent::DictationStarted {
+        resource_id: resource_id.clone(),
+        error: None,
+    });
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::F(8), KeyModifiers::NONE)),
+        Some(AppCommand::DictationStop { resource_id })
+    );
+}
+
+#[test]
+fn f8_during_dictation_start_stops_after_start_completes() {
+    let mut app = App::new();
+    let Some(AppCommand::DictationStart { resource_id }) =
+        app.handle_key(KeyEvent::new(KeyCode::F(8), KeyModifiers::NONE))
+    else {
+        panic!("expected dictation start");
+    };
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::F(8), KeyModifiers::NONE)),
+        None
+    );
+    app.update(AppEvent::DictationStarted {
+        resource_id: resource_id.clone(),
+        error: None,
+    });
+    assert_eq!(
+        app.take_dictation_stop_requested(),
+        Some(AppCommand::DictationStop { resource_id })
+    );
+}
+
+#[test]
+fn voice_submits_completed_speech_as_text_without_consuming_the_draft() {
+    let mut app = App::new();
+    app.insert_text("draft for later");
+    let Some(AppCommand::VoiceStart { resource_id }) = app.toggle_voice() else {
+        panic!("expected voice start");
+    };
+    app.update(AppEvent::VoiceStarted {
+        resource_id: resource_id.clone(),
+        error: None,
+    });
+    app.voice_partial(&resource_id, "thinking".into());
+    assert_eq!(app.input(), "draft for later");
+    assert!(app.voice_status().unwrap().contains("thinking"));
+    crate::tui_assert_snapshot!("voice_hearing", render_dictation_frame(&app));
+    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(80, 24)).unwrap();
+    terminal
+        .draw(|frame| crate::app::frame::draw(frame, &app))
+        .unwrap();
+    assert_eq!(
+        terminal.backend().buffer()[(2, 23)].fg,
+        app.render_context().muted()
+    );
+
+    let Some(AppCommand::Thread(ThreadCommand::SubmitTurn { submission })) =
+        app.voice_utterance(&resource_id, "/quit".into())
+    else {
+        panic!("spoken text must be submitted to the Agent");
+    };
+    assert_eq!(submission.display_text, "/quit");
+    assert_eq!(submission.input, vec![ChatInputItem::Text("/quit".into())]);
+    assert_eq!(app.input(), "draft for later");
+    assert_eq!(
+        app.voice_status().unwrap(),
+        "Voice · listening · /voice to stop"
+    );
+}
+
+#[test]
+fn voice_slash_command_starts_and_stops_during_a_turn() {
+    let mut app = App::new();
+    app.set_active_turn(TurnId::new("voice-active-turn").unwrap());
+    app.insert_text("/voice");
+    let Some(AppCommand::VoiceStart { resource_id }) =
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("expected voice mode to start during a turn");
+    };
+    app.update(AppEvent::VoiceStarted {
+        resource_id: resource_id.clone(),
+        error: None,
+    });
+    app.insert_text("/voice");
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::VoiceStop { resource_id })
+    );
+}
+
+#[test]
+fn voice_stops_when_the_active_thread_changes() {
+    let mut app = App::new();
+    let Some(AppCommand::VoiceStart { resource_id }) = app.toggle_voice() else {
+        panic!("expected voice start");
+    };
+    app.thread_presentations
+        .switch(ThreadId::new("different-thread").unwrap());
+    assert_eq!(
+        app.stop_voice_if_scope_changed(),
+        Some(AppCommand::VoiceStop {
+            resource_id: resource_id.clone()
+        })
+    );
+    assert_eq!(
+        app.voice_utterance(&resource_id, "wrong thread".into()),
+        None
+    );
+}
+
+#[test]
+fn voice_stop_submits_the_final_utterance() {
+    let mut app = App::new();
+    let Some(AppCommand::VoiceStart { resource_id }) = app.toggle_voice() else {
+        panic!("expected voice start");
+    };
+    assert_eq!(
+        app.toggle_voice(),
+        Some(AppCommand::VoiceStop {
+            resource_id: resource_id.clone(),
+        })
+    );
+    let Some(AppCommand::Thread(ThreadCommand::SubmitTurn { submission })) =
+        app.voice_utterance(&resource_id, "final words".into())
+    else {
+        panic!("expected final spoken turn");
+    };
+    assert_eq!(submission.display_text, "final words");
 }
 
 #[test]

@@ -1,6 +1,8 @@
 //! The selected ONNX package is ready before microphone capture begins.
 use crate::DictationEvent;
 use crate::LocalDictationRequest;
+use crate::LocalSpeechEvent;
+use crate::LocalSpeechMode;
 use crate::model_package::ModelPackage;
 use async_utils::CancellationSource;
 use sherpa_onnx::OnlineRecognizer;
@@ -16,6 +18,32 @@ pub(super) async fn run(
     request: LocalDictationRequest,
     stopped: &mut oneshot::Receiver<()>,
     on_event: &dyn Fn(DictationEvent),
+) -> Result<(), String> {
+    run_session(
+        request,
+        stopped,
+        LocalSpeechMode::Dictation,
+        &|event| match event {
+            LocalSpeechEvent::Ready => {}
+            LocalSpeechEvent::Partial { text } => on_event(DictationEvent::Transcript {
+                text,
+                is_final: false,
+            }),
+            LocalSpeechEvent::Utterance { text } => on_event(DictationEvent::Transcript {
+                text,
+                is_final: true,
+            }),
+            LocalSpeechEvent::Ended { .. } => unreachable!("the session owner reports completion"),
+        },
+    )
+    .await
+}
+
+pub(super) async fn run_session(
+    request: LocalDictationRequest,
+    stopped: &mut oneshot::Receiver<()>,
+    mode: LocalSpeechMode,
+    on_event: &dyn Fn(LocalSpeechEvent),
 ) -> Result<(), String> {
     let cancellation = CancellationSource::new();
     let token = cancellation.token();
@@ -39,6 +67,12 @@ pub(super) async fn run(
     config.model_config.paraformer.decoder = Some(package.decoder.to_string_lossy().into_owned());
     config.model_config.tokens = Some(package.tokens.to_string_lossy().into_owned());
     config.model_config.num_threads = 2;
+    if mode == LocalSpeechMode::Conversation {
+        config.enable_endpoint = true;
+        config.rule1_min_trailing_silence = 2.4;
+        config.rule2_min_trailing_silence = 0.9;
+        config.rule3_min_utterance_length = 20.0;
+    }
     let recognizer =
         OnlineRecognizer::create(&config).ok_or("Could not load Paraformer dictation model")?;
     let stream = recognizer.create_stream();
@@ -53,6 +87,7 @@ pub(super) async fn run(
         })
         .await
         .map_err(|error| error.to_string())?;
+    on_event(LocalSpeechEvent::Ready);
     let mut last_text = String::new();
     loop {
         tokio::select! {
@@ -64,11 +99,18 @@ pub(super) async fn run(
                 while recognizer.is_ready(&stream) {
                     recognizer.decode(&stream);
                 }
-                if let Some(result) = recognizer.get_result(&stream)
-                    && result.text != last_text
-                {
-                    last_text = result.text.clone();
-                    on_event(DictationEvent::Transcript { text: result.text, is_final: false });
+                if let Some(result) = recognizer.get_result(&stream) {
+                    if result.text != last_text {
+                        last_text = result.text.clone();
+                        on_event(LocalSpeechEvent::Partial { text: result.text.clone() });
+                    }
+                    if mode == LocalSpeechMode::Conversation && recognizer.is_endpoint(&stream) {
+                        if !result.text.trim().is_empty() {
+                            on_event(LocalSpeechEvent::Utterance { text: result.text });
+                        }
+                        recognizer.reset(&stream);
+                        last_text.clear();
+                    }
                 }
             }
         }
@@ -78,10 +120,9 @@ pub(super) async fn run(
         recognizer.decode(&stream);
     }
     if let Some(result) = recognizer.get_result(&stream) {
-        on_event(DictationEvent::Transcript {
-            text: result.text,
-            is_final: true,
-        });
+        if mode == LocalSpeechMode::Dictation || !result.text.trim().is_empty() {
+            on_event(LocalSpeechEvent::Utterance { text: result.text });
+        }
     }
     audio.stop().await.map_err(|error| error.to_string())?;
     audio.close().await.map_err(|error| error.to_string())?;

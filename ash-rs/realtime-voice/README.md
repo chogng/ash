@@ -2,7 +2,9 @@
 
 `ash-realtime-voice` 管理听写会话。App Server 校验发起连接的权限和麦克风占用，把转写通知送回该连接；`voice-host` 进程采集 16 kHz 或 24 kHz PCM 音频。一次听写从持续输入音频、接收临时文本，到结束输入、收齐最终文本并回写，构成完整的一轮。`src/local.rs` 和 `src/cloud.rs` 各自负责这一轮的输入与返回结果。
 
-语音对话的每轮也要关联用户音频、模型音频、输入与输出转写，以及完成或打断。现有 `voice-agent` 负责持续的双向传输；模型事件尚无响应 ID，停止播报后需要新建模型会话，产品入口也尚未接通。
+Ash Code TUI 的 `/voice` 使用 `LocalSpeechSession` 在终端所在机器上采集和识别，按停顿产出完整话语并交给 TUI 发送到当前 Thread。模型回复在终端显示为文字；`/dictate` 则把识别文字填入草稿。TUI 连接远端 App Server 时，`/voice` 的麦克风和音频处理仍留在本机。
+
+双向音频语音对话的每轮还要关联用户音频、模型音频、输入与输出转写，以及完成或打断。现有 `voice-agent` 负责持续的双向传输；模型事件尚无响应 ID，停止播报后需要新建模型会话，双向音频的产品入口尚未接通。
 
 本地听写默认使用 [Paraformer-large-online ONNX 包](https://www.modelscope.cn/models/iic/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-online-onnx/summary)，模型 ID 为 `paraformer-large-online-ec6a3c64`。第一次启动时下载该版本的量化编码器、解码器、CMVN 和词表，校验原始文件的 SHA-256，再把编码器所需的前端元数据写入 ONNX 文件。模型位于 Ash home 的 `dictation-models/<模型 ID>/`；录音和识别由 sherpa-onnx 流式执行。
 

@@ -1,5 +1,6 @@
 ---
 source: code/tui/src/app/fullscreen/frame_tests.rs
+assertion_line: 1683
 expression: "render(&app, terminal_area.width, terminal_area.height)"
 ---
   .                                                        [— / —] [Dashboard]  
@@ -10,7 +11,7 @@ content underlying transcript content underlying transcript content
 ● Model invocation failed 9 underlying transcript content underlying transcript 
 content underlying transcript content underlying transcript content             
                                                                                 
-  ────────────────────────────────────────────────────────────────────── 1/31   
+  ────────────────────────────────────────────────────────────────────── 1/33   
   /status                    show the active session, thread, and model        ┃
   /usage                     show subscription quotas and reset times          │
   /statusline                choose the items shown in the status line         │

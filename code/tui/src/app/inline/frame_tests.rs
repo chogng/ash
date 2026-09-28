@@ -1,6 +1,8 @@
 use super::draw;
 use super::layout::height;
 use crate::app::App;
+use crate::app::AppCommand;
+use crate::app::AppEvent;
 use crate::config::Event as ConfigEvent;
 use crate::config::TerminalSettings;
 use crate::models::Event as ModelEvent;
@@ -52,6 +54,30 @@ pub(super) fn text(buffer: &Buffer) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+#[test]
+fn voice_status_is_visible_below_the_inline_input() {
+    let mut app = app();
+    app.insert_text("/voice");
+    let Some(AppCommand::VoiceStart { resource_id }) =
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("expected voice mode to start");
+    };
+    app.update(AppEvent::VoiceStarted {
+        resource_id,
+        error: None,
+    });
+
+    let buffer = render(&app, 80, 20);
+    crate::tui_assert_snapshot!("voice_listening", text(&buffer));
+    let status = "Voice · listening · /voice to stop";
+    let row = text(&buffer)
+        .lines()
+        .position(|line| line.contains(status))
+        .expect("voice status is visible");
+    assert_eq!(buffer[(2, row as u16)].fg, app.render_context().muted());
 }
 
 #[test]

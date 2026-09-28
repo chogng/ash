@@ -173,6 +173,8 @@ pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
         AppCommand::Quit
         | AppCommand::Suspend
         | AppCommand::OpenWorkspace { .. }
+        | AppCommand::VoiceStart { .. }
+        | AppCommand::VoiceStop { .. }
         | AppCommand::Thread(ThreadCommand::CycleNextApprovalMode) => None,
         AppCommand::Config(
             ConfigCommand::SetIssues(_)

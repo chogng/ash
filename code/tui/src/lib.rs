@@ -1,6 +1,7 @@
 //! Interactive terminal client for Ash's App Server product boundary.
 
 mod app;
+mod voice;
 mod client;
 mod config;
 mod connectors;

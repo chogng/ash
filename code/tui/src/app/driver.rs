@@ -41,6 +41,7 @@ use std::path::PathBuf;
 pub(super) struct ScheduledCommand {
     pub(super) command: AppCommand,
     pub(super) origin: RequestOrigin,
+    pub(super) voice_thread_id: Option<ash_protocol::ThreadId>,
 }
 
 impl ScheduledCommand {
@@ -48,6 +49,15 @@ impl ScheduledCommand {
         Self {
             command,
             origin: RequestOrigin::current(app),
+            voice_thread_id: None,
+        }
+    }
+
+    fn voice(command: AppCommand, app: &App) -> Self {
+        Self {
+            command,
+            origin: RequestOrigin::current(app),
+            voice_thread_id: Some(app.thread_presentations.active_id().clone()),
         }
     }
 }
@@ -99,6 +109,7 @@ pub(super) struct AppDriver {
     server_slash_commands: Vec<SlashCommandDefinition>,
     plugins_enabled: bool,
     memory: crate::memory::Controller,
+    voice: crate::voice::VoiceRuntime,
 }
 
 pub(super) struct AppDriverResources {
@@ -107,6 +118,7 @@ pub(super) struct AppDriverResources {
     pub(super) theme_resource: ThemeResource,
     pub(super) server_slash_commands: Vec<SlashCommandDefinition>,
     pub(super) plugins_enabled: bool,
+    pub(super) profile_root: PathBuf,
 }
 
 impl AppDriver {
@@ -132,6 +144,7 @@ impl AppDriver {
             server_slash_commands: resources.server_slash_commands,
             plugins_enabled: resources.plugins_enabled,
             memory: crate::memory::Controller::default(),
+            voice: crate::voice::VoiceRuntime::new(&resources.profile_root),
         };
         driver.reconcile_memory_diagnostics();
         driver
@@ -184,9 +197,11 @@ impl AppDriver {
     }
 
     pub(super) fn poll_request_completions(&mut self) -> bool {
+        let voice_events = self.voice.poll();
+        let voice_changed = !voice_events.is_empty();
         self.memory.observe_objects(self.app.memory_object_count());
         let completions = self.requests.poll();
-        let mut changed = self.app.poll_input_history() || !completions.is_empty();
+        let mut changed = voice_changed || self.app.poll_input_history() || !completions.is_empty();
         for completion in completions {
             let thread_before = self
                 .conversation
@@ -222,8 +237,56 @@ impl AppDriver {
                 self.queue_refresh_requested = true;
             }
         }
+        for event in voice_events {
+            self.handle_voice_event(event);
+        }
+        if let Some(command) = self.app.stop_voice_if_scope_changed() {
+            self.queued_commands
+                .push_back(ScheduledCommand::new(command, &self.app));
+            changed = true;
+        }
+        if let Some(command) = self.app.take_dictation_stop_requested() {
+            self.queued_commands
+                .push_back(ScheduledCommand::new(command, &self.app));
+            changed = true;
+        }
         changed |= self.reconcile_memory_diagnostics();
         changed
+    }
+
+    fn handle_voice_event(&mut self, event: crate::voice::Event) {
+        let Some(resource_id) = self.app.voice_resource_id().map(str::to_owned) else {
+            return;
+        };
+        match event {
+            crate::voice::Event::Speech(realtime_voice::LocalSpeechEvent::Ready) => {
+                self.app.update(AppEvent::VoiceStarted {
+                    resource_id,
+                    error: None,
+                });
+            }
+            crate::voice::Event::Speech(realtime_voice::LocalSpeechEvent::Partial { text }) => {
+                self.app.voice_partial(&resource_id, text);
+            }
+            crate::voice::Event::Speech(realtime_voice::LocalSpeechEvent::Utterance { text }) => {
+                if let Some(command) = self.app.voice_utterance(&resource_id, text) {
+                    self.queued_commands
+                        .push_back(ScheduledCommand::voice(command, &self.app));
+                }
+            }
+            crate::voice::Event::Speech(realtime_voice::LocalSpeechEvent::Ended { error }) => {
+                self.app
+                    .update(AppEvent::VoiceStopped { resource_id, error });
+            }
+            crate::voice::Event::Stopped(result) => {
+                if let Err(error) = result {
+                    self.app.update(AppEvent::VoiceStopped {
+                        resource_id,
+                        error: Some(error),
+                    });
+                }
+            }
+        }
     }
 
     fn reconcile_memory_diagnostics(&mut self) -> bool {

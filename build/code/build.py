@@ -28,13 +28,14 @@ BINARY_PACKAGES = {
     "ash": "ash-cli",
     "ash-app-server": "ash-app-server",
     "ash-code-mode-host": "ash-code-mode-host",
+    "ash-voice-host": "ash-voice-host",
     "bwrap": "ash-bwrap",
 }
 
 
 def development_binaries(*, platform_name: str | None = None) -> list[str]:
     platform_name = platform_name or sys.platform
-    binaries = ["ash", "ash-app-server", "ash-code-mode-host"]
+    binaries = ["ash", "ash-app-server", "ash-code-mode-host", "ash-voice-host"]
     if platform_name.startswith("linux"):
         binaries.append("bwrap")
     return binaries
@@ -62,6 +63,8 @@ def build_binaries(
     ]
     for binary in binaries:
         command.extend(["--package", BINARY_PACKAGES[binary], "--bin", binary])
+    if "ash-voice-host" in binaries:
+        command.extend(["--features", "ash-voice-host/host"])
     executables: dict[str, Path] = {}
     # Cargo writes build progress to stderr; keep it on the terminal while
     # reading JSON diagnostics and executable paths from stdout as they arrive.

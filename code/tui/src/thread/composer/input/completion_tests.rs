@@ -123,10 +123,11 @@ fn completion_escape_precedes_vim_and_normal_mode_does_not_submit() {
         ChatInputOutcome::Consumed
     );
     chat_input.handle_key(key(KeyCode::Char('i')));
-    assert!(matches!(
-        chat_input.handle_key(key(KeyCode::Enter)),
-        ChatInputOutcome::Submit(_)
-    ));
+    let ChatInputOutcome::UnknownCommand(unknown) = chat_input.handle_key(key(KeyCode::Enter))
+    else {
+        panic!("insert mode should submit the unknown slash command");
+    };
+    assert_eq!(unknown.name, "mo");
 }
 
 #[test]

@@ -12,6 +12,7 @@ use ratatui::widgets::Paragraph;
 enum BottomContent<'a> {
     Keys(&'a KeyHints),
     Warning(String),
+    Voice(String),
     Muted(&'a str),
     InputHints,
 }
@@ -37,6 +38,10 @@ pub(super) fn draw(
         }
         BottomContent::Warning(text) => frame.render_widget(
             Paragraph::new(text).style(Style::default().fg(context.warning())),
+            chat_input::content_area(bottom_row(area)),
+        ),
+        BottomContent::Voice(text) => frame.render_widget(
+            Paragraph::new(text).style(Style::default().fg(context.muted())),
             chat_input::content_area(bottom_row(area)),
         ),
         BottomContent::Muted(text) => frame.render_widget(
@@ -138,6 +143,9 @@ fn bottom_content(app: &App) -> BottomContent<'_> {
             crate::nls::localize(app.language(), "waiting for next key"),
             bindings::CANCEL_HINTS.localized_text(app.language())
         ));
+    }
+    if let Some(status) = app.voice_status() {
+        return BottomContent::Voice(status);
     }
     if app.viewed_thread_completed() {
         return BottomContent::Muted("completed · choose Main or another Subagent");

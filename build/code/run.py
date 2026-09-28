@@ -31,6 +31,7 @@ def runtime_environment(
     if bubblewrap := executables.get("bwrap"):
         runtime["ASH_BWRAP_PATH"] = str(bubblewrap.resolve())
     runtime["ASH_CODE_MODE_HOST_BIN"] = str(executables["ash-code-mode-host"].resolve())
+    runtime["ASH_VOICE_HOST_PATH"] = str(executables["ash-voice-host"].resolve())
     return runtime
 
 

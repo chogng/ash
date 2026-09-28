@@ -49,6 +49,76 @@ pub enum DictationRequest {
     Cloud(CloudDictationRequest),
 }
 
+/// A local microphone session either fills a draft or emits completed spoken turns.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum LocalSpeechMode {
+    Dictation,
+    Conversation,
+}
+
+/// Ordered recognition facts; only `Utterance` is suitable for submitting a user turn.
+#[derive(Debug, Eq, PartialEq)]
+pub enum LocalSpeechEvent {
+    Ready,
+    Partial { text: String },
+    Utterance { text: String },
+    Ended { error: Option<String> },
+}
+
+/// Owns capture on the user's machine, independently of the selected App Server.
+pub struct LocalSpeechSession {
+    stop: Option<oneshot::Sender<()>>,
+    worker: Option<thread::JoinHandle<()>>,
+}
+
+impl LocalSpeechSession {
+    pub fn start(
+        request: LocalDictationRequest,
+        mode: LocalSpeechMode,
+        on_event: impl Fn(LocalSpeechEvent) + Send + 'static,
+    ) -> Result<Self, String> {
+        let (stop, mut stopped) = oneshot::channel();
+        let worker = thread::Builder::new()
+            .name("ash-local-speech".into())
+            .spawn(move || {
+                let result = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .map_err(|error| error.to_string())
+                    .and_then(|runtime| {
+                        runtime.block_on(local::run_session(request, &mut stopped, mode, &on_event))
+                    });
+                on_event(LocalSpeechEvent::Ended {
+                    error: result.err(),
+                });
+            })
+            .map_err(|error| error.to_string())?;
+        Ok(Self {
+            stop: Some(stop),
+            worker: Some(worker),
+        })
+    }
+
+    /// Stops capture and waits until its final utterance and completion events are delivered.
+    pub fn stop(&mut self) -> Result<(), String> {
+        if let Some(stop) = self.stop.take() {
+            let _ = stop.send(());
+        }
+        if let Some(worker) = self.worker.take() {
+            worker
+                .join()
+                .map_err(|_| "Local speech worker failed".to_owned())?;
+        }
+        Ok(())
+    }
+}
+
+impl Drop for LocalSpeechSession {
+    fn drop(&mut self) {
+        let _ = self.stop();
+    }
+}
+
 #[derive(Debug, Eq, PartialEq)]
 pub enum DictationEvent {
     Transcript { text: String, is_final: bool },

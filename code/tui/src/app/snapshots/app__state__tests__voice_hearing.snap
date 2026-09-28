@@ -1,7 +1,7 @@
 ---
-source: code/tui/src/app/fullscreen/frame_tests.rs
-assertion_line: 1807
-expression: rendered
+source: code/tui/src/app/state_tests.rs
+assertion_line: 866
+expression: render_dictation_frame(&app)
 ---
   .                                                        [— / —] [Dashboard]  
                                                                                 
@@ -11,15 +11,19 @@ expression: rendered
                                                                                 
                                                                                 
                                                                                 
-  ───────────────────────────────────────────────────────────────────── 33/33   
-  /pr                        ask the Agent to create or inspect a pull request │
-  /marketplace               find and install Marketplace packages             │
-  /plugins                   manage installed packages and exact versions      │
-  /lsp                       manage language servers and find packages         │
-  /dictate                   dictate into the draft; toggle with F8            │
-  /voice                     speak continuously and receive text replies       ┃
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
   ╭──────────────────────────────────────────────────────────────────────────╮  
-  │ > /                                                                      │  
+  │ > draft for later                                                        │  
   ╰──────────────────────────────────────────────────────── Automatic model ─╯  
                                                                                 
-  Enter send  ·  shift+tab permissions  ·  /home
+  Voice · heard: thinking

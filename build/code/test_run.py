@@ -99,6 +99,10 @@ class SourceRunnerTests(unittest.TestCase):
             runtime["ASH_CODE_MODE_HOST_BIN"],
             str(staged["ash-code-mode-host"].resolve()),
         )
+        self.assertEqual(
+            runtime["ASH_VOICE_HOST_PATH"],
+            str(staged["ash-voice-host"].resolve()),
+        )
         tgrep.assert_called_once()
         subprocess_run.assert_called_once_with(
             [str(staged["ash"]), "--help"],
@@ -108,7 +112,7 @@ class SourceRunnerTests(unittest.TestCase):
         )
 
     def test_build_binaries_uses_one_cargo_invocation(self) -> None:
-        binaries = ["ash", "ash-app-server"]
+        binaries = ["ash", "ash-app-server", "ash-voice-host"]
         with (
             tempfile.TemporaryDirectory() as temporary,
             patch.object(
@@ -120,8 +124,10 @@ class SourceRunnerTests(unittest.TestCase):
         ):
             first = Path(temporary) / "ash"
             second = Path(temporary) / "ash-app-server"
+            third = Path(temporary) / "ash-voice-host"
             first.touch()
             second.touch()
+            third.touch()
             process = subprocess_popen.return_value.__enter__.return_value
 
             def cargo_messages():
@@ -135,7 +141,11 @@ class SourceRunnerTests(unittest.TestCase):
                     + "\n"
                 )
                 self.assertEqual("warning\n", stderr.getvalue())
-                for name, path in (("ash", first), ("ash-app-server", second)):
+                for name, path in (
+                    ("ash", first),
+                    ("ash-app-server", second),
+                    ("ash-voice-host", third),
+                ):
                     yield (
                         json.dumps(
                             {
@@ -152,7 +162,7 @@ class SourceRunnerTests(unittest.TestCase):
 
             self.assertEqual(
                 build.build_binaries(binaries, {"CARGO_BUILD_JOBS": "4"}),
-                (0, {"ash": first, "ash-app-server": second}),
+                (0, {"ash": first, "ash-app-server": second, "ash-voice-host": third}),
             )
 
         subprocess_popen.assert_called_once_with(
@@ -177,6 +187,12 @@ class SourceRunnerTests(unittest.TestCase):
                 "ash-app-server",
                 "--bin",
                 "ash-app-server",
+                "--package",
+                "ash-voice-host",
+                "--bin",
+                "ash-voice-host",
+                "--features",
+                "ash-voice-host/host",
             ],
             cwd=build.REPOSITORY_ROOT,
             env={
@@ -236,6 +252,10 @@ class SourceRunnerTests(unittest.TestCase):
             "ash-code-mode-host",
             build.development_binaries(platform_name="darwin"),
         )
+        self.assertIn(
+            "ash-voice-host",
+            build.development_binaries(platform_name="darwin"),
+        )
 
     def test_stage_runtime_reuses_one_content_generation(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -260,6 +280,7 @@ class SourceRunnerTests(unittest.TestCase):
             "ash": root / "ash.exe",
             "ash-app-server": root / "ash-app-server.exe",
             "ash-code-mode-host": root / "ash-code-mode-host.exe",
+            "ash-voice-host": root / "ash-voice-host.exe",
             "tgrep": root / "tgrep.exe",
         }
 

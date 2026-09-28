@@ -1,0 +1,11 @@
+---
+source: code/tui/src/app/inline/frame_tests.rs
+assertion_line: 74
+expression: text(&buffer)
+---
+                                                                                
+────────────────────────────────────────────────────────────────────────────────
+>                                                                               
+────────────────────────────────────────────────────────────────────────────────
+                                                                                
+  Voice · listening · /voice to stop

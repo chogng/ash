@@ -7,6 +7,7 @@
 - 接收文字、图片和命令，处理会话、设置与批准面板。
 - 通过 App Server 客户端发送请求，把后端状态和流式正文显示到终端。
 - 管理终端输入模式、绘制、滚动、鼠标捕获和退出清理。
+- 在本机运行语音识别：`/voice` 按停顿逐句发送给当前对话，模型回复显示为文字；`/dictate` 或 TUI 内任意页面的 F8 把听写写入当前草稿。
 
 从仓库根目录运行：
 
@@ -23,6 +24,7 @@ just ash
 | 启动、事件循环和请求调度 | [start.rs](src/app/start.rs)、[event_loop.rs](src/app/event_loop.rs)、[driver.rs](src/app/driver.rs) |
 | 输入历史、搜索和草稿回查 | [input/state.rs](src/thread/composer/input/state.rs)、[共享输入历史](../../ash-rs/message-history/README.md) |
 | 输入、附件、补全和排队发送 | [composer](src/thread/composer)、[submission.rs](src/thread/composer/submission.rs) |
+| 语音会话与本机麦克风 | [voice.rs](src/voice.rs)、[realtime-voice](../../ash-rs/realtime-voice/README.md)；`ash-voice-host` 处理设备和音频，TUI 只接收识别文字 |
 | 批准或回答问题 | [interaction](src/thread/interaction) |
 | 正文、执行输出、缓存与滚动 | [transcript](src/thread/transcript) |
 | Issue 分组、搜索、分页与工作详情 | [issues.rs](src/issues.rs) |
