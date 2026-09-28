@@ -7,7 +7,7 @@ import { EditorContributionInstantiation, registerEditorContribution } from '../
 import { registerWorkbenchServiceContribution } from '../../../browser/workbenchServiceContributions.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { ActiveEditorContext } from '../../../common/contextkeys.js';
-import { IGitService } from '../../../services/git/common/gitService.js';
+import { IGitService } from '../../../contrib/git/common/gitService.js';
 import { IDiffService } from '../../../services/diff/common/diffService.js';
 import { CODE_EDITOR_ID } from '../../../browser/parts/editor/textResourceEditor.js';
 import { IQuickDiffEditorControllerService, IQuickDiffModelService, IQuickDiffService } from '../common/quickDiff.js';

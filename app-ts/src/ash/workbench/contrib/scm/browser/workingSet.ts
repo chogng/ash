@@ -2,7 +2,7 @@ import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.j
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { StorageScope, StorageTarget, type IStorageService } from '../../../../platform/storage/common/storage.js';
 import type { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
-import type { GitStatus, IGitService } from '../../../services/git/common/gitService.js';
+import type { GitStatus, IGitService } from '../../../contrib/git/common/gitService.js';
 import type { EditorWorkingSet } from '../../../services/editor/common/editorWorkingSet.js';
 import { ScmConfiguration } from '../common/scmConfiguration.js';
 

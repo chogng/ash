@@ -3,7 +3,7 @@ import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import type { ChatContextPicker, IChatContextPickService } from '../../../../../workbench/services/chat/common/chatContextService.js';
-import type { GitCommitChange, GitCommitSummary, IGitService } from '../../../../../workbench/services/git/common/gitService.js';
+import type { GitCommitChange, GitCommitSummary, IGitService } from '../../../../../workbench/contrib/git/common/gitService.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 for (const [name, value] of Object.entries({

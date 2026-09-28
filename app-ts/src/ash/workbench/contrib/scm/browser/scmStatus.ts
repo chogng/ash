@@ -2,7 +2,7 @@ import { Lxicon } from "../../../../base/common/lxicons.js";
 import { Disposable, MutableDisposable } from "../../../../base/common/lifecycle.js";
 import type { ICommandService } from '../../../../platform/commands/common/commands.js';
 import type { IWorkbenchContribution } from "../../../common/contributions.js";
-import type { GitHead, GitStatus, IGitService } from "../../../services/git/common/gitService.js";
+import type { GitHead, GitStatus, IGitService } from "../../../contrib/git/common/gitService.js";
 import { StatusbarAlignment, type IStatusbarEntry, type IStatusbarEntryAccessor, type IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
 import type { IViewsService } from "../../../services/views/browser/viewsService.js";
 import { GitSwitchBranchCommandId } from '../../git/common/gitCommands.js';

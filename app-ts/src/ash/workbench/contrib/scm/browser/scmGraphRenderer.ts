@@ -1,4 +1,4 @@
-import type { GitCommitSummary } from "../../../services/git/common/gitService.js";
+import type { GitCommitSummary } from "../../../contrib/git/common/gitService.js";
 import { svg as createSvgElement } from "../../../../base/browser/dom.js";
 
 const SvgNamespace = "http://www.w3.org/2000/svg";

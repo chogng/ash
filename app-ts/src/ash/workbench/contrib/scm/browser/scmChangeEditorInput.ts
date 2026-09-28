@@ -1,6 +1,6 @@
 import { URI } from '../../../../base/common/uri.js';
 import type { EditorInput } from '../../../services/editor/common/editorService.js';
-import type { GitChangeFileComparison, GitChangeStatus, GitCommitFileContent, GitRepositoryChange, GitStatus, IGitService } from '../../../services/git/common/gitService.js';
+import type { GitChangeFileComparison, GitChangeStatus, GitCommitFileContent, GitRepositoryChange, GitStatus, IGitService } from '../../../contrib/git/common/gitService.js';
 
 export interface ResolvedGitChangeInputs {
 	readonly original: EditorInput | undefined;

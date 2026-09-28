@@ -5,7 +5,7 @@ import { registerEditorPane } from '../../../browser/parts/editor/editorRegistry
 import { getBrowserTextResourceStore } from '../../codeEditor/browser/browserTextResourceStore.js';
 import { CodeEditorConfiguration } from '../../codeEditor/common/editorConfiguration.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
-import { IGitService } from '../../../services/git/common/gitService.js';
+import { IGitService } from '../../../contrib/git/common/gitService.js';
 import { IViewsService } from '../../../services/views/browser/viewsService.js';
 import { matchMultiDiffEditor, MULTI_DIFF_EDITOR_ID } from './multiDiffEditorInput.js';
 import { MultiDiffCollapseAllAction, MultiDiffExpandAllAction, MultiDiffGoToFileAction, MultiDiffGoToNextChangeAction, MultiDiffGoToPreviousChangeAction } from './multiDiffEditorActions.js';

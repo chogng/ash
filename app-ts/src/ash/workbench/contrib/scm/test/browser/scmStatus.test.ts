@@ -5,7 +5,7 @@ import { Lxicon } from "../../../../../base/common/lxicons.js";
 import type { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { ScmStatusContribution } from "../../../../../workbench/contrib/scm/browser/scmStatus.js";
 import { GitSwitchBranchCommandId } from '../../../../../workbench/contrib/git/common/gitCommands.js';
-import type { GitRepository, GitStatus, IGitService } from "../../../../../workbench/services/git/common/gitService.js";
+import type { GitRepository, GitStatus, IGitService } from "../../../../../workbench/contrib/git/common/gitService.js";
 import { StatusbarAlignment, StatusbarService } from "../../../../../workbench/services/statusbar/browser/statusbar.js";
 import type { IViewsService } from "../../../../../workbench/services/views/browser/viewsService.js";
 

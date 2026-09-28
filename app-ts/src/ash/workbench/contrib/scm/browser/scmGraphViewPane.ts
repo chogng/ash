@@ -14,7 +14,7 @@ import type { IContextMenuService } from "../../../../platform/contextview/brows
 import { registerOpenEditorListeners, type IOpenEditorOptions } from "../../../../platform/editor/browser/editor.js";
 import type { IHoverService } from "../../../../platform/hover/browser/hoverService.js";
 import type { IResourceIconRenderer } from "../../../browser/labels.js";
-import { GitWorkspaceError, type GitCommitChange, type GitCommitChanges, type GitCommitSummary, type GraphPage, type GitHead, type GitReference, type GitRemoteProvider, type IGitService } from "../../../services/git/common/gitService.js";
+import { GitWorkspaceError, type GitCommitChange, type GitCommitChanges, type GitCommitSummary, type GraphPage, type GitHead, type GitReference, type GitRemoteProvider, type IGitService } from "../../../contrib/git/common/gitService.js";
 import type { IEditorService } from "../../../services/editor/common/editorService.js";
 import type { IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
 import { ViewPane } from "../../../browser/parts/views/viewPane.js";

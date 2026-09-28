@@ -2,8 +2,8 @@ import { URI } from '../../../../base/common/uri.js';
 import { Action2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
-import type { GitChangeFileComparison, GitRepositoryChange, GitStatus } from '../../../services/git/common/gitService.js';
-import { IGitService } from '../../../services/git/common/gitService.js';
+import type { GitChangeFileComparison, GitRepositoryChange, GitStatus } from '../../../contrib/git/common/gitService.js';
+import { IGitService } from '../../../contrib/git/common/gitService.js';
 import { resolveGitChangeInputs } from '../../scm/browser/scmChangeEditorInput.js';
 import { createMultiDiffEditorInput, type GitMultiDiffScope, type MultiDiffEditorInput, type MultiDiffEditorInputItem } from './multiDiffEditorInput.js';
 

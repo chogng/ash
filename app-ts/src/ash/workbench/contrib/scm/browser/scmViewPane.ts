@@ -9,7 +9,7 @@ import { DisposableStore, toDisposable } from "../../../../base/common/lifecycle
 import { WorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
 import { ICommandService } from "../../../../platform/commands/common/commands.js";
 import { IResourceIconRenderer } from "../../../browser/labels.js";
-import { type GitChangeFileComparison, type GitChangeStatus, type GitRepositoryChange, type GitStatus, IGitService } from "../../../services/git/common/gitService.js";
+import { type GitChangeFileComparison, type GitChangeStatus, type GitRepositoryChange, type GitStatus, IGitService } from "../../../contrib/git/common/gitService.js";
 import { IEditorService } from "../../../services/editor/common/editorService.js";
 import { IWorkingCopyService } from '../../../services/workingCopy/common/workingCopyService.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';

@@ -7,7 +7,7 @@ import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 import { registerEditorPane } from '../../../browser/parts/editor/editorRegistry.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
-import { IGitService } from '../../../services/git/common/gitService.js';
+import { IGitService } from '../../../contrib/git/common/gitService.js';
 import { IChatService } from '../../../services/chat/common/chatService.js';
 import { isSettingsEditorInput } from '../../../services/preferences/common/settingsEditorInput.js';
 import { SettingsEditor, SettingsEditorId } from './settingsEditor.js';

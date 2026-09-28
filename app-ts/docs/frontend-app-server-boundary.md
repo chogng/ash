@@ -21,15 +21,15 @@ Workbench / 编辑器调用方
 
 | 位置 | 放什么 | 不放什么 |
 | --- | --- | --- |
-| `platform/<领域>/common/` 或 `workbench/services/<领域>/common/` | 前端领域接口和类型 | 传输消息、生成协议类型 |
-| `platform/<领域>/browser/` 或 `workbench/services/<领域>/browser/` | 领域 API 适配层、Service 实现 | 进程启动、通用连接状态 |
+| `platform/<领域>/common/`、`workbench/services/<领域>/common/` 或 `workbench/contrib/<功能>/common/` | 前端领域接口和类型 | 传输消息、生成协议类型 |
+| `platform/<领域>/browser/`、`workbench/services/<领域>/browser/` 或 `workbench/contrib/<功能>/browser/` | 领域 API 适配层、Service 实现 | 进程启动、通用连接状态 |
 | `platform/app-server/browser/` | 协议客户端、请求配对、初始化和通知 | 具体领域的业务状态 |
 | `platform/app-server/electron-browser/` | Renderer 的 MessagePort 传输 | Rust 进程管理 |
 | `platform/app-server/electron-main/` | 连接载体启动、端口取得和透明转发 | 业务方法路由、领域 Service |
 | `code/electron-main/` | Electron 应用、窗口与上述组件的装配 | 领域协议解析 |
 | `ash-rs/` | 协议入口及各 Rust 领域的执行与持久状态 | 前端编辑器对象和窗口 UI |
 
-领域属于 `platform` 还是 `workbench`，取决于它的真实调用方及 `base → platform → editor → workbench` 依赖方向。`browser/` 表示可在浏览器环境使用的实现；只有需要 Electron IPC 的部分进入 `electron-browser/`。Main 若需提供系统窗口等宿主能力，应使用明确的宿主接口，不能因此成为业务协议的入口。
+领域属于 `platform` 还是 `workbench`，取决于它的真实调用方及 `base → platform → editor → workbench` 依赖方向。Workbench 中，非特定功能的核心 Service 放在 `services/`；Git 这样的功能专属 Service 放在 `contrib/git/`，即使它调用 App Server。`browser/` 表示可在浏览器环境使用的实现；只有需要 Electron IPC 的部分进入 `electron-browser/`。Main 若需提供系统窗口等宿主能力，应使用明确的宿主接口，不能因此成为业务协议的入口。
 
 ## 谁启动后端
 

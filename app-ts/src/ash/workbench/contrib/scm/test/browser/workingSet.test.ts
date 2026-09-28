@@ -5,7 +5,7 @@ import { InMemoryConfigurationService } from '../../../../../platform/configurat
 import { StorageScope, type IStorageService } from '../../../../../platform/storage/common/storage.js';
 import type { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
 import type { EditorWorkingSet, EditorWorkingSetTarget } from '../../../../services/editor/common/editorWorkingSet.js';
-import type { GitStatus, IGitService } from '../../../../services/git/common/gitService.js';
+import type { GitStatus, IGitService } from '../../../../contrib/git/common/gitService.js';
 import { ScmWorkingSetController } from '../../browser/workingSet.js';
 import { ScmConfiguration } from '../../common/scmConfiguration.js';
 

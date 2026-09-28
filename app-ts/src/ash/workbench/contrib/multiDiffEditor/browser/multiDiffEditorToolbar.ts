@@ -14,7 +14,7 @@ import { DropdownWithPrimaryActionViewItem } from '../../../../platform/actions/
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { VIEW_ID } from '../../files/common/files.js';
 import type { IEditorService } from '../../../services/editor/common/editorService.js';
-import type { IGitService } from '../../../services/git/common/gitService.js';
+import type { IGitService } from '../../../contrib/git/common/gitService.js';
 import type { IViewsService } from '../../../services/views/browser/viewsService.js';
 import { createGitMultiDiffEditorInput } from './scmMultiDiffAction.js';
 import { createMultiDiffEditorInput, type GitMultiDiffScope, type MultiDiffEditorInput, type MultiDiffEditorSource } from './multiDiffEditorInput.js';

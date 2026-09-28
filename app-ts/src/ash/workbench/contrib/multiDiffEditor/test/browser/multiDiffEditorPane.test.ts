@@ -23,7 +23,7 @@ import { CommandService } from '../../../../services/commands/common/commandServ
 import { TextFileContentSource, type ITextFileService, type ResolvedTextFileContent, type TextFileResolveRequest } from '../../../../services/textfile/common/textFileService.js';
 import { VIEW_ID } from '../../../files/common/files.js';
 import type { EditorInput, IEditorService } from '../../../../services/editor/common/editorService.js';
-import type { GitStatus, IGitService } from '../../../../services/git/common/gitService.js';
+import type { GitStatus, IGitService } from '../../../../contrib/git/common/gitService.js';
 import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService, type IMultiDiffSourceResolver } from '../../browser/multiDiffSourceResolverService.js';
 import { CodeEditorConfiguration } from '../../../codeEditor/common/editorConfiguration.js';
 import { EditorLineWrapping, EditorOption } from '../../../../../editor/common/config/editorOptions.js';

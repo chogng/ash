@@ -13,7 +13,7 @@ import { ServiceContainer } from "../../../../../platform/instantiation/common/i
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { HoverSetupOptions, IHoverService, IManagedHover } from "../../../../../platform/hover/browser/hoverService.js";
 import type { IResourceIconRenderer } from "../../../../browser/labels.js";
-import { GitWorkspaceError, IGitService, type GitRepository, type GraphQuery, type GitStatus } from "../../../../../workbench/services/git/common/gitService.js";
+import { GitWorkspaceError, IGitService, type GitRepository, type GraphQuery, type GitStatus } from "../../../../../workbench/contrib/git/common/gitService.js";
 import { IEditorService, type EditorInput, type EditorOpenOptions } from "../../../../../workbench/services/editor/common/editorService.js";
 import type { IWorkingCopyService } from '../../../../../workbench/services/workingCopy/common/workingCopyService.js';
 import { CommandService } from "../../../../../workbench/services/commands/common/commandService.js";
@@ -952,7 +952,7 @@ function installDomGlobals(browser: JSDOM): readonly string[] {
 test("SCM distinguishes an empty window, a folder without Git, and unavailable access", async () => {
 	const [{ gitErrorMessage }, { GitWorkspaceError }] = await Promise.all([
 		import("../../../../../workbench/contrib/git/common/gitError.js"),
-		import("../../../../../workbench/services/git/common/gitService.js"),
+		import("../../../../../workbench/contrib/git/common/gitService.js"),
 	]);
 	assert.deepEqual([
 		gitErrorMessage(new GitWorkspaceError('noFolder')),

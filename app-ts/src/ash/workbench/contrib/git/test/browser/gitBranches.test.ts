@@ -6,7 +6,7 @@ import { ServiceContainer } from '../../../../../platform/instantiation/common/i
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
-import { type GitBranch, IGitService } from '../../../../services/git/common/gitService.js';
+import { type GitBranch, IGitService } from '../../common/gitService.js';
 import { GitSwitchBranchCommandId } from '../../common/gitCommands.js';
 import '../../browser/gitBranches.js';
 

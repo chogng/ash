@@ -5,7 +5,7 @@ import type { ServicesAccessor } from '../../../../platform/instantiation/common
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { localize } from '../../../../nls.js';
-import { IGitService } from '../../../services/git/common/gitService.js';
+import { IGitService } from '../common/gitService.js';
 import { IWorkspaceOpenService } from '../../../services/workspaces/browser/workspaceOpenService.js';
 import { GitCloneCommandId } from '../common/gitCommands.js';
 

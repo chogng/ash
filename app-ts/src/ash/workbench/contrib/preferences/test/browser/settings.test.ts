@@ -5,7 +5,7 @@ import type { IAction } from '../../../../../base/common/actions.js';
 import type { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import type { IContextMenuService as ContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import type { ILocalizationService } from '../../../../../workbench/services/localization/common/localizationService.js';
-import type { IGitService } from '../../../../../workbench/services/git/common/gitService.js';
+import type { IGitService } from '../../../../../workbench/contrib/git/common/gitService.js';
 import type { IChatService } from '../../../../../workbench/services/chat/common/chatService.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>', {
@@ -58,9 +58,9 @@ const { WorkbenchThemesRegistry } = await import('../../../../../workbench/commo
 const { EditorSelectionConfiguration } = await import('../../../../../workbench/common/editorSelectionConfiguration.js');
 const { CodeEditorConfiguration } = await import('../../../../../workbench/contrib/codeEditor/common/editorConfiguration.js');
 const { ContentSearchConfiguration } = await import('../../../../../workbench/contrib/search/common/searchConfiguration.js');
-const { GitConfiguration } = await import('../../../../../workbench/services/git/common/gitConfiguration.js');
+const { GitConfiguration } = await import('../../../../../workbench/contrib/git/common/gitConfiguration.js');
 const { ScmConfiguration } = await import('../../../../../workbench/contrib/scm/common/scmConfiguration.js');
-const { IGitService: GitServiceId } = await import('../../../../../workbench/services/git/common/gitService.js');
+const { IGitService: GitServiceId } = await import('../../../../../workbench/contrib/git/common/gitService.js');
 const { IChatService: ChatServiceId } = await import('../../../../../workbench/services/chat/common/chatService.js');
 const configurationRegistry = Registry.as<InstanceType<typeof ConfigurationRegistry>>(ConfigurationExtensions.Configuration);
 const { EditorPart } = await import('../../../../../workbench/browser/parts/editor/editorPart.js');

@@ -7,7 +7,7 @@ import { IQuickInputService } from '../../../../../platform/quickinput/common/qu
 import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
 import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
-import { IGitService } from '../../../../services/git/common/gitService.js';
+import { IGitService } from '../../common/gitService.js';
 import { IWorkspaceOpenService } from '../../../../services/workspaces/browser/workspaceOpenService.js';
 import { GitCloneCommandId } from '../../common/gitCommands.js';
 import '../../browser/gitClone.js';

@@ -12,7 +12,7 @@ import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
-import { IGitService, type GitConflictFile, type GitConflictResolution } from '../../../services/git/common/gitService.js';
+import { IGitService, type GitConflictFile, type GitConflictResolution } from '../../../contrib/git/common/gitService.js';
 import type { EditorInput } from '../../../services/editor/common/editorService.js';
 import type { IWorkingCopy } from '../../../services/workingCopy/common/workingCopyService.js';
 import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';

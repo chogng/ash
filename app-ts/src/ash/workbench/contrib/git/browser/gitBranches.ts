@@ -5,7 +5,7 @@ import { Action2, registerAction2 } from '../../../../platform/actions/common/ac
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
-import { type GitBranch, IGitService } from '../../../services/git/common/gitService.js';
+import { type GitBranch, IGitService } from '../common/gitService.js';
 import { GitSwitchBranchCommandId } from '../common/gitCommands.js';
 import { gitErrorMessage } from '../common/gitError.js';
 

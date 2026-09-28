@@ -1,7 +1,7 @@
 import { URI } from '../../../../base/common/uri.js';
 import type { EditorInput } from '../../../services/editor/common/editorService.js';
 import { EditorInputSerializers, requireRecord, requireString } from '../../../services/editor/common/editorInputSerializer.js';
-import type { GitStatus } from '../../../services/git/common/gitService.js';
+import type { GitStatus } from '../../../contrib/git/common/gitService.js';
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 import { repositoryFileUri } from './scmChangeEditorInput.js';
 

@@ -1,6 +1,6 @@
 import { AppServerRemoteError } from "../../../../platform/app-server/common/appServerError.js";
 import { localize } from '../../../../nls.js';
-import { GitWorkspaceError } from '../../../services/git/common/gitService.js';
+import { GitWorkspaceError } from './gitService.js';
 
 export function gitErrorMessage(error: unknown): string {
 	if (error instanceof GitWorkspaceError) {

@@ -3,8 +3,8 @@ import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/c
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { CHAT_VIEW_ID } from '../../chat/common/chat.js';
 import { IChatContextPickService, type ChatContextAttachment, type ChatContextPick, type IChatContextTarget } from '../../../services/chat/common/chatContextService.js';
-import type { GitCommitChange, GitCommitFile, GitCommitFileContent, GitCommitSummary, IGitService } from '../../../services/git/common/gitService.js';
-import { IGitService as GitService } from '../../../services/git/common/gitService.js';
+import type { GitCommitChange, GitCommitFile, GitCommitFileContent, GitCommitSummary, IGitService } from '../../../contrib/git/common/gitService.js';
+import { IGitService as GitService } from '../../../contrib/git/common/gitService.js';
 import { IViewsService } from '../../../services/views/browser/viewsService.js';
 
 const HistoryLimit = 100;

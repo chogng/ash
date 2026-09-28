@@ -4,7 +4,7 @@ import { RawContextKey, type IContextKey } from '../../../../platform/contextkey
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IGitHubConnectionService } from '../../../services/accounts/common/gitHubConnectionService.js';
-import { IGitService } from '../../../services/git/common/gitService.js';
+import { IGitService } from '../../../contrib/git/common/gitService.js';
 import type { EditorInput } from '../../../services/editor/common/editorService.js';
 import { IRecentWorkspacesService } from '../../../services/workspaces/common/recentWorkspacesService.js';
 import { IWorkspaceOpenService } from '../../../services/workspaces/browser/workspaceOpenService.js';

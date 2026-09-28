@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { EditorInputSerializers } from '../../../../services/editor/common/editorInputSerializer.js';
-import type { GitStatus } from '../../../../services/git/common/gitService.js';
+import type { GitStatus } from '../../../../contrib/git/common/gitService.js';
 import { createScmMergeEditorInput, isScmMergeEditorInput, matchScmMergeEditor } from '../../browser/scmMergeEditorInput.js';
 import { EditorPaneMatch } from '../../../../browser/parts/editor/editorPane.js';
 

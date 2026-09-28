@@ -7,7 +7,7 @@ import { IResourceIconRenderer } from "../../../browser/labels.js";
 import { ServiceConstructionDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
-import { IGitService } from "../../../services/git/common/gitService.js";
+import { IGitService } from "../../../contrib/git/common/gitService.js";
 import { IEditorService } from "../../../services/editor/common/editorService.js";
 import { IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
 import { IViewsService } from "../../../services/views/browser/viewsService.js";

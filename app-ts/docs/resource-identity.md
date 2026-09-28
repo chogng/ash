@@ -47,7 +47,7 @@ their current responsibilities:
 | `jsonValue.ts` | General JSON value validation |
 | `icon.ts`, `lxicons.ts`, `lxiconsLibrary.ts`, `lxiconsUtil.ts`, `productIcons.ts` | Ash icon contracts and generated product icon catalog |
 
-`workbench/services/git/browser/gitService.ts` was also confirmed as the owner
+`workbench/contrib/git/browser/gitService.ts` was also confirmed as the owner
 of Ash Git repository selection. Its URI containment check uses the Base
 contract; repository discovery and selection remain in that service.
 

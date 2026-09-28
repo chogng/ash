@@ -9,7 +9,7 @@ import { builtinLanguagePackCatalogs } from '../../../../services/localization/c
 import { GettingStarted } from '../../browser/gettingStartedContent.js';
 import { GettingStartedPage } from '../../browser/gettingStarted.js';
 import { GitCloneCommandId } from '../../../git/common/gitCommands.js';
-import type { IGitService } from '../../../../services/git/common/gitService.js';
+import type { IGitService } from '../../../../contrib/git/common/gitService.js';
 import type { IGitHubConnectionService } from '../../../../services/accounts/common/gitHubConnectionService.js';
 import type { IRecentWorkspacesService } from '../../../../services/workspaces/common/recentWorkspacesService.js';
 import type { IWorkspaceOpenService } from '../../../../services/workspaces/browser/workspaceOpenService.js';
