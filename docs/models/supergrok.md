@@ -14,6 +14,6 @@ Super Grok 可以在 Ash 中通过设备码登录。如果运行 Ash 后端的�
 
 `account/rateLimits/read` 查询当前订阅的使用比例、周期和余额。每次打开 `/usage` 都会重新查询，与 ChatGPT 额度分开显示。账户就绪后，订阅页通过 `provider/models/list` 读取该账户可用的模型；内置 `model/list` 目录不代表账户已经有使用权限。xAI 开发者 API 的密钥、模型目录和请求目标与 Super Grok 订阅分开。
 
-本地 App Server 会观察 Grok 凭据变化，并定期刷新已登录账户资料和模型目录。账户或模型发生变化时向客户端发送通知；再次进入订阅页直接显示已知状态，不因导航重复请求远端。
+订阅后台观察器会检查 Grok 凭据变化，并定期刷新已登录账户资料和模型目录。账户或模型发生变化时通过 App Server 向客户端发送通知；再次进入订阅页直接显示已知状态，不因导航重复请求远端。
 
 模型目录系统把发现结果写入 profile 的 `cache/models/xai.json`，按账户和连接分开保存。xAI API 密钥连接从 Platform 的 `/v1/language-models` 读取模型，并写入同一文件中的 API 部分。目录读取失败时，界面会分别显示密钥保存和模型列表的结果。

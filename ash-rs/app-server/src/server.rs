@@ -149,7 +149,7 @@ mod search_operations;
 mod semantic_index_job;
 mod session_operations;
 mod skill_operations;
-mod subscription_runtime;
+mod subscription_adapter;
 mod symbol_index_operations;
 mod symbol_index_runtime;
 mod syntax_operations;
@@ -260,7 +260,7 @@ pub struct AppServer {
     pub(super) skills: Option<Arc<SkillRuntime>>,
     _skill_watcher: Option<SkillWatcher>,
     _config_watcher: Option<config_runtime::ConfigWatcher>,
-    _subscription_monitor: Option<subscription_runtime::SubscriptionMonitor>,
+    _subscription_observer: Option<ash_subscriptions::SubscriptionObserver>,
     _connector_watcher: Option<connector_runtime::ConnectorWatcher>,
     _plugin_watcher: Option<plugin_runtime::PluginWatcher>,
     _marketplace_watcher: Option<marketplace_runtime::MarketplaceChangeWatcher>,
@@ -613,7 +613,7 @@ impl AppServer {
             skills: None,
             _skill_watcher: None,
             _config_watcher: None,
-            _subscription_monitor: None,
+            _subscription_observer: None,
             _connector_watcher: None,
             _plugin_watcher: None,
             _marketplace_watcher: None,
@@ -1033,12 +1033,12 @@ impl AppServer {
         self
     }
 
-    pub(crate) fn start_subscription_monitor(mut self, subscriptions: Vec<&'static str>) -> Self {
+    pub(crate) fn start_subscription_observer(mut self, subscriptions: Vec<&'static str>) -> Self {
         let login = self
             .login
             .as_ref()
             .expect("subscription observation requires a login service");
-        self._subscription_monitor = Some(subscription_runtime::SubscriptionMonitor::start(
+        self._subscription_observer = Some(subscription_adapter::start(
             Arc::clone(login),
             subscriptions,
             Arc::clone(&self.model_catalog),

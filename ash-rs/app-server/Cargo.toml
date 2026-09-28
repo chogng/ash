@@ -113,6 +113,7 @@ supergrok = { workspace = true }
 ash-lsp-server-provider = { workspace = true }
 ash-lsp-manager = { workspace = true }
 ash-login = { workspace = true }
+ash-subscriptions = { workspace = true }
 ash-core-plugins = { workspace = true }
 ash-model-provider = { workspace = true }
 ash-model-provider-config = { workspace = true }

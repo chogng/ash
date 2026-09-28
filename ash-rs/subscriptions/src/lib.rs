@@ -1,9 +1,10 @@
-use super::UpdateBroker;
-use crate::model_catalog::ModelCatalog;
-use ash_app_server_protocol::protocol::provider::ProviderModelsListFailureDto;
-use ash_app_server_protocol::protocol::provider::ProviderModelsListResult;
-use ash_app_server_protocol::protocol::provider::ProviderModelsUpdated;
+//! Background observation of subscription accounts and their model catalogs.
+//!
+//! The login service owns account state. A catalog port owns model discovery;
+//! this crate owns the observation cadence and account-bound model notifications.
+
 use ash_async_utils::CancellationSource;
+use ash_async_utils::CancellationToken;
 use ash_login::AccountStatus;
 use ash_login::LoginService;
 use ash_protocol::ModelConnectionId;
@@ -19,26 +20,61 @@ use std::time::Instant;
 const ACCOUNT_CHECK_INTERVAL: Duration = Duration::from_secs(60);
 const REMOTE_CHECK_INTERVAL: Duration = Duration::from_secs(5 * 60);
 
-pub(super) struct SubscriptionMonitor {
+/// Discovers models for one subscription connection using its current account.
+///
+/// Implementations perform provider-specific discovery and return only model
+/// metadata. The observer binds the result to the account it observed.
+pub trait SubscriptionCatalog<M, E>: Send + Sync {
+    fn refresh(&self, connection: &ModelConnectionId) -> Result<Vec<M>, E>;
+}
+
+/// Receives account-bound model changes from the subscription observer.
+///
+/// Product hosts convert these values to their own notification protocol.
+pub trait SubscriptionEvents<M, E>: Send + Sync {
+    fn models_updated(&self, update: ModelsUpdate<M, E>);
+}
+
+/// Model discovery outcome for one unchanged subscription account.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ModelsUpdate<M, E> {
+    pub connection: String,
+    pub account_id: String,
+    pub organization: Option<String>,
+    pub plan: Option<String>,
+    pub result: Result<Vec<M>, E>,
+}
+
+/// Owns the lifetime of the subscription observation worker.
+pub struct SubscriptionObserver {
     shutdown: Option<mpsc::Sender<()>>,
     cancellation: CancellationSource,
     thread: Option<JoinHandle<()>>,
 }
 
-struct Sources {
+struct Sources<M, E> {
     login: Arc<LoginService>,
-    subscriptions: Vec<&'static str>,
-    catalog: Arc<dyn ModelCatalog>,
-    updates: Arc<UpdateBroker>,
+    connections: Vec<&'static str>,
+    catalog: Arc<dyn SubscriptionCatalog<M, E>>,
+    events: Arc<dyn SubscriptionEvents<M, E>>,
 }
 
-#[derive(Default)]
-struct Observed {
-    models: BTreeMap<String, ProviderModelsUpdated>,
-    // Remember attempts as well as successes so a failed remote request waits for the
-    // next remote interval instead of retrying on every local credential check.
+struct Observed<M, E> {
+    models: BTreeMap<String, ModelsUpdate<M, E>>,
+    // A failed request waits for the next remote interval instead of retrying
+    // on every local credential check.
     model_attempts: BTreeMap<String, CatalogIdentity>,
     remote_attempts: BTreeMap<String, String>,
+}
+
+impl<M, E> Default for Observed<M, E> {
+    fn default() -> Self {
+        Self {
+            models: BTreeMap::new(),
+            model_attempts: BTreeMap::new(),
+            remote_attempts: BTreeMap::new(),
+        }
+    }
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -48,18 +84,22 @@ struct CatalogIdentity {
     plan: Option<String>,
 }
 
-impl SubscriptionMonitor {
-    pub(super) fn start(
+impl SubscriptionObserver {
+    pub fn start<M, E>(
         login: Arc<LoginService>,
-        subscriptions: Vec<&'static str>,
-        catalog: Arc<dyn ModelCatalog>,
-        updates: Arc<UpdateBroker>,
-    ) -> Self {
+        connections: Vec<&'static str>,
+        catalog: Arc<dyn SubscriptionCatalog<M, E>>,
+        events: Arc<dyn SubscriptionEvents<M, E>>,
+    ) -> Self
+    where
+        M: Clone + Eq + Send + 'static,
+        E: Clone + Eq + Send + std::fmt::Debug + 'static,
+    {
         let sources = Sources {
             login,
-            subscriptions,
+            connections,
             catalog,
-            updates,
+            events,
         };
         let cancellation = CancellationSource::new();
         let token = cancellation.token();
@@ -89,7 +129,7 @@ impl SubscriptionMonitor {
     }
 }
 
-impl Drop for SubscriptionMonitor {
+impl Drop for SubscriptionObserver {
     fn drop(&mut self) {
         self.cancellation.cancel();
         if let Some(shutdown) = self.shutdown.take() {
@@ -101,12 +141,12 @@ impl Drop for SubscriptionMonitor {
     }
 }
 
-impl Observed {
+impl<M: Clone + Eq, E: Clone + Eq + std::fmt::Debug> Observed<M, E> {
     fn check(
         &mut self,
-        sources: &Sources,
+        sources: &Sources<M, E>,
         remote_due: bool,
-        cancellation: &ash_async_utils::CancellationToken,
+        cancellation: &CancellationToken,
     ) {
         let Ok(state) = sources.login.refresh() else {
             log::warn!("Subscription account observation failed");
@@ -122,7 +162,7 @@ impl Observed {
             self.remote_attempts.clear();
             return;
         }
-        for &connection in &sources.subscriptions {
+        for &connection in &sources.connections {
             if !sources.login.has_account_metadata_refresher(connection) {
                 continue;
             }
@@ -164,57 +204,60 @@ impl Observed {
                 account.account.provider == *provider && account.status == AccountStatus::Ready
             })
         });
-        for &connection in &sources.subscriptions {
+        for &connection in &sources.connections {
             let Some(account) = state.accounts.iter().find(|account| {
                 account.account.provider == connection && account.status == AccountStatus::Ready
             }) else {
                 continue;
             };
-            let provider = connection;
             let identity = CatalogIdentity {
                 account_id: account.account.account_id.clone(),
                 organization: account.organization.clone(),
                 plan: account.plan.clone(),
             };
-            let identity_changed = self.model_attempts.get(provider) != Some(&identity);
+            let identity_changed = self.model_attempts.get(connection) != Some(&identity);
             if !remote_due && !identity_changed {
                 continue;
             }
             if identity_changed {
-                self.models.remove(provider);
+                self.models.remove(connection);
             }
-            self.model_attempts.insert(provider.into(), identity);
-            let connection = ModelConnectionId::new(provider.to_owned())
+            self.model_attempts.insert(connection.into(), identity);
+            let id = ModelConnectionId::new(connection.to_owned())
                 .expect("registered subscription provider ID");
-            let result = match sources.catalog.refresh(&connection) {
-                Ok(models) if models.is_empty() => ProviderModelsListResult::Empty,
-                Ok(models) => ProviderModelsListResult::Models { models },
-                Err(error) => {
-                    log::warn!("Subscription model refresh failed: {error:?}");
-                    ProviderModelsListResult::Failed {
-                        failure: ProviderModelsListFailureDto {
-                            code: super::operations::provider_models_failure_code(error),
-                        },
-                    }
-                }
+            let result = sources.catalog.refresh(&id);
+            if let Err(error) = &result {
+                log::warn!("Subscription model refresh failed: {error:?}");
+            }
+            let Ok(current) = sources.login.read() else {
+                log::warn!("Subscription account observation failed after model refresh");
+                continue;
             };
-            let updated = ProviderModelsUpdated {
-                connection: provider.into(),
+            if !current.accounts.iter().any(|current| {
+                current.account.provider == connection
+                    && current.account.account_id == account.account.account_id
+                    && current.organization == account.organization
+                    && current.plan == account.plan
+                    && current.status == AccountStatus::Ready
+            }) {
+                self.models.remove(connection);
+                continue;
+            }
+            let update = ModelsUpdate {
+                connection: connection.into(),
                 account_id: account.account.account_id.clone(),
                 organization: account.organization.clone(),
                 plan: account.plan.clone(),
                 result,
             };
-            if self.models.get(provider) != Some(&updated) {
-                sources
-                    .updates
-                    .publish_provider_models_updated(updated.clone());
-                self.models.insert(provider.into(), updated);
+            if self.models.get(connection) != Some(&update) {
+                sources.events.models_updated(update.clone());
+                self.models.insert(connection.into(), update);
             }
         }
     }
 }
 
 #[cfg(test)]
-#[path = "subscription_runtime_tests.rs"]
+#[path = "subscription_tests.rs"]
 mod tests;

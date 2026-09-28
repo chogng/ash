@@ -669,6 +669,7 @@ dependencies = [
  "ash-slash-commands",
  "ash-sleep",
  "ash-state",
+ "ash-subscriptions",
  "ash-supergrok",
  "ash-syntax",
  "ash-teams",
@@ -2675,6 +2676,16 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+]
+
+[[package]]
+name = "ash-subscriptions"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-login",
+ "ash-protocol",
+ "log",
 ]
 
 [[package]]

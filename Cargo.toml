@@ -121,6 +121,7 @@ members = [
     "ash-rs/lsp-server-provider",
     "ash-rs/lsp-manager",
     "ash-rs/login",
+    "ash-rs/subscriptions",
     "ash-rs/core-plugins",
     "ash-rs/lsp",
     "ash-rs/model-accounting",
@@ -523,6 +524,7 @@ ash-keybindings-host = { path = "app-rs/keybindings" }
 ash-lsp-server-provider = { path = "ash-rs/lsp-server-provider" }
 ash-lsp-manager = { path = "ash-rs/lsp-manager" }
 ash-login = { path = "ash-rs/login" }
+ash-subscriptions = { path = "ash-rs/subscriptions" }
 ash-core-plugins = { path = "ash-rs/core-plugins" }
 ash-lsp = { path = "ash-rs/lsp" }
 ash-markdown = { path = "app-rs/markdown" }

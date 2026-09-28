@@ -1481,7 +1481,7 @@ pub fn open_local_app_server_with_codebase_providers(
             .install_login_service(&login_service)
             .map_err(|error| OpenAppServerError(error.to_string()))?;
     }
-    let subscription_sources = vec![
+    let subscription_connections = vec![
         ash_chatgpt::CHATGPT_SUBSCRIPTION_PROVIDER_ID,
         ash_kimi::KIMI_PROVIDER_ID,
         supergrok::SUPERGROK_SUBSCRIPTION_PROVIDER_ID,
@@ -1737,7 +1737,7 @@ pub fn open_local_app_server_with_codebase_providers(
         mcp_changes,
         mcp_runtime_intent_changes,
     }));
-    Ok(server.start_subscription_monitor(subscription_sources))
+    Ok(server.start_subscription_observer(subscription_connections))
 }
 
 fn default_dir_config(

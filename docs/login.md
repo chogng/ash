@@ -2,6 +2,7 @@
 
 > 物理位置：`ash-rs/login/`
 > Rust crate：`ash_login`
+> 订阅后台观察：`ash-rs/subscriptions/`
 > 当前状态：多 Provider 控制面、App Server RPC、ChatGPT/Kimi/Super Grok/BigModel/Z.AI 订阅认证、GitHub 账户连接与本地模型执行已实现
 > 订阅接入与额度：[`subscriptions.md`](subscriptions.md)
 > Kimi OAuth owner：`ash-rs/kimi/`

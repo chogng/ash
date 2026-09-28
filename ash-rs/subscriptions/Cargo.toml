@@ -1,0 +1,20 @@
+[package]
+name = "ash-subscriptions"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "ash_subscriptions"
+path = "src/lib.rs"
+
+[dependencies]
+ash-async-utils = { workspace = true }
+ash-login = { workspace = true }
+ash-protocol = { workspace = true }
+log = { workspace = true }
+
+[lints]
+workspace = true
