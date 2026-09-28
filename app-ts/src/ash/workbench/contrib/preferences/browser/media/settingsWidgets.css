@@ -94,21 +94,18 @@
   line-height: 1.45;
 }
 
+/* Announce transient saves without inserting a visible line into the setting row. */
 .ash-settings-indicators {
-  display: inline-flex;
-  min-height: 18px;
-  align-items: center;
-  color: var(--ash-description-foreground);
-  font-size: 11px;
-  gap: 6px;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .ash-settings-indicators[hidden] {
   display: none;
-}
-
-.ash-settings-indicators.is-pending {
-  opacity: 0.8;
 }
 
 .ash-setting-item {

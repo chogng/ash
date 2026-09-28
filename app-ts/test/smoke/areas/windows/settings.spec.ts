@@ -90,6 +90,45 @@ test('Workbench boolean settings use keyboard-operable switches', async ({ workb
 	await expect(compactActivityBar).toHaveAttribute('aria-checked', String(initialState));
 });
 
+test('Saving a boolean setting does not move neighboring settings', async ({ workbench }) => {
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+Shift+P');
+	await page.getByPlaceholder('Type the name of a command to run').fill('Ash Settings');
+	await page.keyboard.press('Enter');
+	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
+	await settings.locator('[data-settings-category-id="general"]').click();
+	await settings.locator('[data-settings-target-id="general.group.accessibility"]').click();
+	const row = settings.locator('[data-settings-item-id="accessibility.verbosity.memories"]');
+	const control = row.getByRole('switch', { name: 'Memories accessibility help' });
+	await expect(control).toBeVisible();
+	await expect(row.locator('.ash-settings-indicators')).toHaveAttribute('aria-live', 'polite');
+	await expect(row.locator('.ash-settings-indicators')).toHaveCSS('clip-path', 'inset(50%)');
+	const initialChecked = await control.isChecked();
+	await page.evaluate(() => {
+		const row = document.querySelector<HTMLElement>('[data-settings-item-id="accessibility.verbosity.memories"]')!;
+		const indicator = row.querySelector<HTMLElement>('.ash-settings-indicators')!;
+		const measurements: { pending: boolean; height: number }[] = [];
+		const sample = () => measurements.push({ pending: !indicator.hidden, height: row.getBoundingClientRect().height });
+		const observer = new MutationObserver(sample);
+		observer.observe(indicator, { attributes: true, childList: true, subtree: true });
+		sample();
+		(window as Window & { settingRowMeasurements?: typeof measurements; settingRowObserver?: MutationObserver }).settingRowMeasurements = measurements;
+		(window as Window & { settingRowObserver?: MutationObserver }).settingRowObserver = observer;
+	});
+	for (let index = 0; index < 4; index++) {
+		await row.locator('.ash-switch-track').click();
+		await expect(control).toHaveAttribute('aria-checked', String(index % 2 === 0 ? !initialChecked : initialChecked));
+		await expect(row.locator('.ash-settings-indicators')).toBeHidden();
+	}
+	const measurements = await page.evaluate(() => {
+		const state = window as Window & { settingRowMeasurements?: { pending: boolean; height: number }[]; settingRowObserver?: MutationObserver };
+		state.settingRowObserver!.disconnect();
+		return state.settingRowMeasurements!;
+	});
+	expect(measurements.some(measurement => measurement.pending)).toBe(true);
+	expect(measurements.every(measurement => Math.abs(measurement.height - measurements[0].height) <= 1)).toBe(true);
+});
+
 test.describe('without an open workspace', () => {
 	test.use({ openWorkspace: false });
 
