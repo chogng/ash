@@ -93,7 +93,14 @@ export class ScmViewPane extends ViewPane {
 		}));
 		this._register(this.gitService.onDidChangeStatus((status) => this.onStatusChanged(status)));
 		this._register(this.gitService.onDidChangeRepositories(() => this.renderRepositorySelector()));
-		this._register(this.gitService.onDidChangeActiveRepository(() => this.renderRepositorySelector()));
+		this._register(this.gitService.onDidChangeActiveRepository(repository => {
+			this.renderRepositorySelector();
+			this.status = undefined;
+			this.renderedChanges.clear();
+			this.changesElement.replaceChildren();
+			this.updateCommandState();
+			if (!repository) void this.refresh();
+		}));
 		this._register(this.gitService.onDidBecomeReady(() => void this.refresh()));
 		this._register(this.resourceIconRenderer.onDidChangeResourceIcons(() => {
 			if (this.status) this.renderStatus(this.status);

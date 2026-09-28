@@ -134,6 +134,12 @@ export interface GitCommitResult {
 	readonly status: GitStatus;
 }
 
+export class GitWorkspaceError extends Error {
+	constructor(readonly reason: 'noFolder' | 'noRepository') {
+		super(reason);
+	}
+}
+
 /** Frontend Git operations and repository updates for the active workspace. */
 export interface IGitService {
 	readonly canCloneRepository: boolean;

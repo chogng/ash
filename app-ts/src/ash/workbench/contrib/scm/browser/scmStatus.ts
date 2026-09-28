@@ -30,6 +30,13 @@ export class ScmStatusContribution extends Disposable implements IWorkbenchContr
 			this.acceptStatus(status);
 		}));
 		this._register(options.gitService.onDidBecomeReady(() => this.refresh()));
+		this._register(options.gitService.onDidChangeActiveRepository(repository => {
+			if (repository) return;
+			this.refreshRevision += 1;
+			this.gitStatus = undefined;
+			this.branch.clear();
+			this.sync.clear();
+		}));
 		this.refresh();
 	}
 

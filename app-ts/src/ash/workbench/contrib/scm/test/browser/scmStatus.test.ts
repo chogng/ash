@@ -3,15 +3,17 @@ import { test } from "mocha";
 import { Emitter } from "../../../../../base/common/event.js";
 import { Lxicon } from "../../../../../base/common/lxicons.js";
 import { ScmStatusContribution } from "../../../../../workbench/contrib/scm/browser/scmStatus.js";
-import type { GitStatus, IGitService } from "../../../../../workbench/services/git/common/gitService.js";
+import type { GitRepository, GitStatus, IGitService } from "../../../../../workbench/services/git/common/gitService.js";
 import { StatusbarAlignment, StatusbarService } from "../../../../../workbench/services/statusbar/browser/statusbar.js";
 import type { IViewsService } from "../../../../../workbench/services/views/browser/viewsService.js";
 
 test("SCM status projects the Git branch and upstream counts", async () => {
 	const changes = new Emitter<GitStatus>();
+	const activeRepositoryChanges = new Emitter<GitRepository | undefined>();
 	let status = branchStatus(2, 3);
 	const gitService = {
 		onDidChangeStatus: changes.event,
+		onDidChangeActiveRepository: activeRepositoryChanges.event,
 		onDidBecomeReady: () => ({ dispose(): void {}, [Symbol.dispose](): void {} }),
 		status: async () => status,
 	} as unknown as IGitService;
@@ -37,6 +39,8 @@ test("SCM status projects the Git branch and upstream counts", async () => {
 	status = detachedStatus();
 	changes.fire(status);
 	assert.deepEqual(statusbar.getEntries(StatusbarAlignment.Left).map(item => item.entry.text), ["12345678", ""]);
+	activeRepositoryChanges.fire(undefined);
+	assert.deepEqual(statusbar.getEntries(StatusbarAlignment.Left), []);
 
 	contribution.dispose();
 	assert.deepEqual(statusbar.getEntries(StatusbarAlignment.Left), []);
@@ -44,10 +48,12 @@ test("SCM status projects the Git branch and upstream counts", async () => {
 
 test("Git status events supersede an older in-flight status request", async () => {
 	const changes = new Emitter<GitStatus>();
+	const activeRepositoryChanges = new Emitter<GitRepository | undefined>();
 	let resolveInitial!: (status: GitStatus) => void;
 	const initial = new Promise<GitStatus>(resolve => { resolveInitial = resolve; });
 	const gitService = {
 		onDidChangeStatus: changes.event,
+		onDidChangeActiveRepository: activeRepositoryChanges.event,
 		onDidBecomeReady: () => ({ dispose(): void {}, [Symbol.dispose](): void {} }),
 		status: () => initial,
 	} as unknown as IGitService;

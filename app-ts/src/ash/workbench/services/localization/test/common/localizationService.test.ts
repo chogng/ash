@@ -352,6 +352,9 @@ test('Source Control settings use the selected Chinese language catalog', async 
 			localize('git.autofetch.off', 'Off'),
 			localize('git.autofetch.default', 'Default remote'),
 			localize('git.autofetch.all', 'All remotes'),
+			localize('git.noFolder', 'Open a folder to use Git.'),
+			localize('git.noRepository', 'No Git repository found in the open folder.'),
+			localize('git.unavailable', 'Git is unavailable for this workspace. Check folder access and retry.'),
 		], [
 			'配置 Git 自动获取和源代码管理差异标记。',
 			'自动获取远端更新',
@@ -359,6 +362,9 @@ test('Source Control settings use the selected Chinese language catalog', async 
 			'关闭',
 			'默认远端',
 			'所有远端',
+			'打开文件夹后即可使用 Git。',
+			'打开的文件夹中未找到 Git 仓库。',
+			'此工作区暂时无法使用 Git。请检查文件夹访问权限后重试。',
 		]);
 	} finally {
 		resetNlsResolver();

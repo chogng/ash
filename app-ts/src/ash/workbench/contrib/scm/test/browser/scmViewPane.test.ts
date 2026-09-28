@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { Event } from '../../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
 import { DialogResult, type IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 
 import { test } from "mocha";
@@ -13,7 +13,7 @@ import { ServiceContainer } from "../../../../../platform/instantiation/common/i
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { HoverSetupOptions, IHoverService, IManagedHover } from "../../../../../platform/hover/browser/hoverService.js";
 import type { IResourceIconRenderer } from "../../../../browser/labels.js";
-import { IGitService, type GraphQuery, type GitStatus } from "../../../../../workbench/services/git/common/gitService.js";
+import { GitWorkspaceError, IGitService, type GitRepository, type GraphQuery, type GitStatus } from "../../../../../workbench/services/git/common/gitService.js";
 import { IEditorService, type EditorInput, type EditorOpenOptions } from "../../../../../workbench/services/editor/common/editorService.js";
 import { CommandService } from "../../../../../workbench/services/commands/common/commandService.js";
 import { OpenScmMultiDiffEditorAction } from "../../../../../workbench/contrib/multiDiffEditor/browser/scmMultiDiffAction.js";
@@ -96,6 +96,10 @@ test("ScmGraphViewPane renders a repository history page", async () => {
 	const hoverOptions: HoverSetupOptions[] = [];
 	const graphRepositoryIds: Array<string | undefined> = [];
 	const remoteRepositoryIds: Array<string | undefined> = [];
+	const activeRepositoryChanges = new Emitter<GitRepository | undefined>();
+	const readyChanges = new Emitter<void>();
+	let activeRepository: GitRepository | undefined = { id: "repo-1", label: "workspace", path: "", root: URI.file("/workspace") };
+	let workspaceError: GitWorkspaceError | undefined;
 	let readySubscriptions = 0;
 	const hoverService: IHoverService = {
 		setupHover: (options) => {
@@ -114,17 +118,20 @@ test("ScmGraphViewPane renders a repository history page", async () => {
 		changes: [],
 	};
 	const gitService = {
-		activeRepository: { id: "repo-1", label: "workspace", path: "", root: URI.file("/workspace") },
-		onDidBecomeReady: () => {
+		get activeRepository() { return activeRepository; },
+		onDidBecomeReady: (listener: () => void) => {
 			readySubscriptions += 1;
-			return noEvent();
+			return readyChanges.event(listener);
 		},
+		onDidChangeActiveRepository: activeRepositoryChanges.event,
 		status: async (repositoryId?: string) => {
+			if (workspaceError) throw workspaceError;
 			assert.equal(repositoryId, "repo-1");
 			return status;
 		},
 		graph: async (query: GraphQuery, repositoryId?: string) => {
-				graphRequests.push(query);
+			if (workspaceError) throw workspaceError;
+			graphRequests.push(query);
 				graphRepositoryIds.push(repositoryId);
 				return {
 					commits: [
@@ -199,6 +206,19 @@ test("ScmGraphViewPane renders a repository history page", async () => {
 		await waitFor(() => remoteRepositoryIds.length === 1 && graphRequests.length === 3);
 		assert.deepEqual(remoteRepositoryIds, ["repo-1"]);
 		assert.equal(readySubscriptions, 1);
+
+		workspaceError = new GitWorkspaceError('noFolder');
+		activeRepository = undefined;
+		activeRepositoryChanges.fire(undefined);
+		await waitFor(() => pane.element.querySelector('.ash-scm-empty')?.textContent === 'Open a folder to use Git.');
+		assert.equal(pane.element.querySelectorAll('.ash-scm-graph-commit').length, 0);
+		assert.equal(pane.element.querySelector('.ash-scm-graph .ash-scm-command'), null);
+
+		workspaceError = undefined;
+		activeRepository = { id: "repo-1", label: "workspace", path: "", root: URI.file("/workspace") };
+		activeRepositoryChanges.fire(activeRepository);
+		readyChanges.fire();
+		await waitFor(() => pane.element.querySelectorAll('.ash-scm-graph-commit').length === 2);
 	} finally {
 		browser.window.close();
 		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
@@ -237,6 +257,7 @@ test("ScmGraphViewPane loads the complete history across graph pages", async () 
 	};
 	const gitService = {
 		onDidBecomeReady: noEvent,
+		onDidChangeActiveRepository: noEvent,
 		status: async () => status,
 		graph: async (query: GraphQuery) => {
 			graphRequests.push(query);
@@ -316,6 +337,7 @@ test("ScmGraphViewPane virtualizes loaded history rows", async () => {
 	}));
 	const gitService = {
 		onDidBecomeReady: noEvent,
+		onDidChangeActiveRepository: noEvent,
 		status: async () => status,
 		graph: async (_query: GraphQuery) => ({ commits, references: [], remotes: [], hasMore: false, nextCursor: undefined }),
 	} as unknown as IGitService;
@@ -377,6 +399,7 @@ test("ScmGraphViewPane expands commit files and opens a selected change in the d
 	let fileRequests = 0;
 	const gitService = {
 		onDidBecomeReady: noEvent,
+		onDidChangeActiveRepository: noEvent,
 		status: async (): Promise<GitStatus> => ({
 			repositoryId: "repo-1",
 			streamInstanceId: "git-graph-stream",
@@ -550,13 +573,16 @@ test("ScmViewPane groups App Server Git status", async () => {
 		{ id: first.repositoryId, label: "workspace", path: "", root: URI.file("/workspace") },
 		{ id: nestedStatus.repositoryId, label: "nested", path: "nested", root: URI.file("/workspace/nested") },
 	];
-	let activeRepository = repositories[0];
+	let activeRepository: GitRepository | undefined = repositories[0];
+	const activeRepositoryChanges = new Emitter<GitRepository | undefined>();
+	const readyChanges = new Emitter<void>();
+	let workspaceError: GitWorkspaceError | undefined;
 	const selectedRepositories: string[] = [];
 	const gitService = {
 		repositories,
 		get activeRepository() { return activeRepository; },
 		onDidChangeRepositories: noEvent,
-		onDidChangeActiveRepository: noEvent,
+		onDidChangeActiveRepository: activeRepositoryChanges.event,
 		selectRepository: async (repositoryId: string) => {
 			selectedRepositories.push(repositoryId);
 			activeRepository = repositories.find(repository => repository.id === repositoryId)!;
@@ -564,6 +590,7 @@ test("ScmViewPane groups App Server Git status", async () => {
 		},
 		status: async () => {
 			requestCount += 1;
+			if (workspaceError) throw workspaceError;
 			return first;
 		},
 		stage: (paths: readonly string[], repositoryId?: string) => new Promise<GitStatus>((resolve) => {
@@ -594,7 +621,7 @@ test("ScmViewPane groups App Server Git status", async () => {
 			};
 			return { dispose, [Symbol.dispose]: dispose };
 		},
-		onDidBecomeReady: () => ({ dispose(): void {}, [Symbol.dispose](): void {} }),
+		onDidBecomeReady: readyChanges.event,
 	} as unknown as IGitService;
 
 	try {
@@ -728,6 +755,20 @@ test("ScmViewPane groups App Server Git status", async () => {
 		assert.equal(repositorySelector.value, nestedStatus.repositoryId);
 
 		assert.equal(requestCount, 2);
+
+		workspaceError = new GitWorkspaceError('noFolder');
+		activeRepository = undefined;
+		activeRepositoryChanges.fire(undefined);
+		await waitFor(() => pane.element.querySelector('.ash-scm-status')?.textContent === 'Open a folder to use Git.');
+		assert.equal(pane.element.querySelectorAll('.ash-scm-change').length, 0);
+		assert.equal(pane.element.querySelector<HTMLButtonElement>('.ash-scm-commit')?.disabled, true);
+
+		workspaceError = undefined;
+		activeRepository = repositories[0];
+		activeRepositoryChanges.fire(activeRepository);
+		assert.equal(pane.element.querySelector<HTMLButtonElement>('.ash-scm-commit')?.disabled, true);
+		readyChanges.fire();
+		await waitFor(() => pane.element.querySelector('.ash-scm-status')?.textContent === '4 changed files');
 	} finally {
 		browser.window.close();
 		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
@@ -885,10 +926,18 @@ function installDomGlobals(browser: JSDOM): readonly string[] {
 	}
 	return Object.keys(globals);
 }
-test("SCM presents Git unavailability without raw RPC errors", async () => {
-	const { gitErrorMessage } = await import("../../../../../workbench/contrib/scm/browser/scmError.js");
-	assert.equal(
+test("SCM distinguishes an empty window, a folder without Git, and unavailable access", async () => {
+	const [{ gitErrorMessage }, { GitWorkspaceError }] = await Promise.all([
+		import("../../../../../workbench/contrib/scm/browser/scmError.js"),
+		import("../../../../../workbench/services/git/common/gitService.js"),
+	]);
+	assert.deepEqual([
+		gitErrorMessage(new GitWorkspaceError('noFolder')),
+		gitErrorMessage(new GitWorkspaceError('noRepository')),
 		gitErrorMessage(new Error("Error invoking remote method 'ash:git:status': JsonRpcRemoteError: GitUnavailable")),
-		"Git is unavailable for this workspace. Trust the folder to enable Git changes.",
-	);
+	], [
+		'Open a folder to use Git.',
+		'No Git repository found in the open folder.',
+		'Git is unavailable for this workspace. Check folder access and retry.',
+	]);
 });

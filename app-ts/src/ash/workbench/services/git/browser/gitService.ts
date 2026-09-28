@@ -9,7 +9,7 @@ import type { IGitApi } from "../../../../platform/git/common/gitApi.js";
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { getRemoteWorkspacePath, isRemoteResource } from "../../../../platform/remote/common/remote.js";
 import type { IWorkspaceContextService, IWorkspaceFolder } from "../../../../platform/workspace/common/workspace.js";
-import type { GitBranch, GitChangeFile, GitChangeFileComparison, GitCommitChanges, GitCommitFile, GitCommitResult, GitCommitSummary, GitHead, GitRepository, GitRepositoryChange, GitStatus, GraphPage, GraphQuery, IGitService } from "../common/gitService.js";
+import { GitWorkspaceError, type GitBranch, type GitChangeFile, type GitChangeFileComparison, type GitCommitChanges, type GitCommitFile, type GitCommitResult, type GitCommitSummary, type GitHead, type GitRepository, type GitRepositoryChange, type GitStatus, type GraphPage, type GraphQuery, type IGitService } from "../common/gitService.js";
 import { GitConfiguration, type GitAutofetch } from '../common/gitConfiguration.js';
 
 export interface GitServiceOptions {
@@ -308,7 +308,10 @@ export class GitService extends Disposable implements IGitService {
 		if (this.repositoryList.length === 0) await this.refreshRepositories();
 		const id = repositoryId ?? this.activeRepositoryId;
 		const repository = this.repositoryList.find(candidate => candidate.id === id);
-		if (!repository) throw new Error(repositoryId ? `GitRepositoryNotFound: ${repositoryId}` : "GitUnavailable: no Git repository found in the workspace");
+		if (!repository) {
+			if (repositoryId) throw new Error(`GitRepositoryNotFound: ${repositoryId}`);
+			throw new GitWorkspaceError('noRepository');
+		}
 		return repository;
 	}
 
@@ -352,7 +355,7 @@ export class GitService extends Disposable implements IGitService {
 
 	private requireWorkspaceFolders(): readonly IWorkspaceFolder[] {
 		const folders = this.options.workspaceContext.getWorkspace().folders;
-		if (folders.length === 0) throw new Error("GitUnavailable: Git requires at least one workspace folder");
+		if (folders.length === 0) throw new GitWorkspaceError('noFolder');
 		return folders;
 	}
 }

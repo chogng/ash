@@ -14,7 +14,7 @@ import type { IContextMenuService } from "../../../../platform/contextview/brows
 import { registerOpenEditorListeners, type IOpenEditorOptions } from "../../../../platform/editor/browser/editor.js";
 import type { IHoverService } from "../../../../platform/hover/browser/hoverService.js";
 import type { IResourceIconRenderer } from "../../../browser/labels.js";
-import type { GitCommitChange, GitCommitChanges, GitCommitSummary, GraphPage, GitHead, GitReference, GitRemoteProvider, IGitService } from "../../../services/git/common/gitService.js";
+import { GitWorkspaceError, type GitCommitChange, type GitCommitChanges, type GitCommitSummary, type GraphPage, type GitHead, type GitReference, type GitRemoteProvider, type IGitService } from "../../../services/git/common/gitService.js";
 import type { IEditorService } from "../../../services/editor/common/editorService.js";
 import type { IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
 import { ViewPane } from "../../../browser/parts/views/viewPane.js";
@@ -79,6 +79,9 @@ export class ScmGraphViewPane extends ViewPane {
 		));
 		toolbar.element.classList.add("ash-scm-remote-actions");
 		this._register(this.gitService.onDidBecomeReady(() => void this.refresh()));
+		this._register(this.gitService.onDidChangeActiveRepository(repository => {
+			if (!repository) void this.refresh();
+		}));
 		void this.refresh();
 	}
 
@@ -128,13 +131,16 @@ export class ScmGraphViewPane extends ViewPane {
 			const message = h(document, "p");
 			message.className = "ash-scm-empty";
 			message.textContent = gitErrorMessage(error);
-			const retry = h(document, "button");
-			retry.className = "ash-scm-command";
-			retry.type = "button";
-			retry.textContent = "Retry";
-			retry.setAttribute("aria-label", "Retry loading commit graph");
-			this.more.add(addDisposableListener(retry, "click", () => void this.refresh()));
-			this.graphElement.replaceChildren(message, retry);
+			this.graphElement.replaceChildren(message);
+			if (!(error instanceof GitWorkspaceError)) {
+				const retry = h(document, "button");
+				retry.className = "ash-scm-command";
+				retry.type = "button";
+				retry.textContent = "Retry";
+				retry.setAttribute("aria-label", "Retry loading commit graph");
+				this.more.add(addDisposableListener(retry, "click", () => void this.refresh()));
+				this.graphElement.append(retry);
+			}
 			this.graphElement.setAttribute("aria-busy", "false");
 		}
 	}

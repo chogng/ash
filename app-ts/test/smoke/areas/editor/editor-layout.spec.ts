@@ -21,6 +21,13 @@ test.describe('startup layout defaults', () => {
 		await expect(workbench.editors.groupAt(0).welcome).toBeVisible();
 	});
 
+	test('Git explains that an empty window needs a folder', async ({ workbench }) => {
+		const page = workbench.page;
+		await page.getByRole('tab', { name: 'Git', exact: true }).click();
+		await expect(page.locator('.ash-scm-status')).toHaveText('Open a folder to use Git.');
+		await expect(page.locator('.ash-scm-change')).toHaveCount(0);
+	});
+
 	test('new browser tab starts empty while reload keeps the current layout', async ({ target, workbench }) => {
 		if (target.kind !== 'browser' || target.appServerMode !== 'disabled') {
 			test.skip();
@@ -52,6 +59,14 @@ test('new desktop workspace shows Explorer and Chat with Panel hidden', async ({
 	await expect(page.locator("[data-part='sidebar']")).toBeVisible();
 	await expect(page.locator("[data-part='auxiliarybar']")).toBeVisible();
 	await expect(page.locator("[data-part='panel']")).toBeHidden();
+});
+
+test('Git explains when the open folder has no repository', async ({ target, workbench }) => {
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires a desktop App Server workspace.');
+	const page = workbench.page;
+	await page.getByRole('tab', { name: 'Git', exact: true }).click();
+	await expect(page.locator('.ash-scm-status')).toHaveText('No Git repository found in the open folder.');
+	await expect(page.locator('.ash-scm-change')).toHaveCount(0);
 });
 
 test("empty editor distinguishes an empty window from an open workspace", async ({ target, workbench }) => {

@@ -9,6 +9,7 @@ import { WorkbenchConfigurationService } from '../../../configuration/browser/co
 import { WorkspaceContextService } from "../../../workspaces/browser/workspaceContextService.js";
 import { GitService } from "../../browser/gitService.js";
 import { GitConfiguration } from '../../common/gitConfiguration.js';
+import { GitWorkspaceError } from '../../common/gitService.js';
 
 test('GitService clones from an empty desktop window through the Git API', async () => {
 	const requests: unknown[] = [];
@@ -63,7 +64,7 @@ test("GitService keeps empty windows off the App Server and becomes ready with a
 	let readyEvents = 0;
 	using ready = service.onDidBecomeReady(() => readyEvents += 1);
 
-	await assert.rejects(service.status(), /GitUnavailable/);
+	await assert.rejects(service.status(), (error: unknown) => error instanceof GitWorkspaceError && error.reason === 'noFolder');
 	assert.equal(statusCalls, 0);
 
 	workspaceContext.updateWorkspace({ id: "workspace", uri: URI.file("/workspace") });
@@ -73,6 +74,17 @@ test("GitService keeps empty windows off the App Server and becomes ready with a
 	assert.equal(service.activeRepository?.id, repositoryId);
 	assert.equal((await service.status()).workspacePath, "/workspace");
 	assert.equal(statusCalls, 1);
+});
+
+test('GitService identifies an open folder without a Git repository', async () => {
+	const api = { repositories: async () => ({ repositories: [] }) } as unknown as IGitApi;
+	const appServerApi = { getConnectionState: async () => 'ready', onConnectionState: () => toDisposable(() => undefined) } as unknown as IAppServerApi;
+	const eventApi = { subscribe: () => toDisposable(() => undefined) } as unknown as IServerEventApi;
+	using workspaceContext = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using configuration = new WorkbenchConfigurationService();
+	using service = new GitService({ api, appServerApi, eventApi, workspaceContext, canCloneRepository: false }, configuration, new NullLoggerService());
+
+	await assert.rejects(service.status(), (error: unknown) => error instanceof GitWorkspaceError && error.reason === 'noRepository');
 });
 
 test("GitService routes resources and requests to an explicitly selected repository", async () => {
