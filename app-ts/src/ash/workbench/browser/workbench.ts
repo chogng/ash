@@ -399,7 +399,6 @@ export class Workbench extends Disposable {
 		webWorkspaceClient?: IWebWorkspaceClient,
 	) {
 		super();
-		performance.mark('ash.workbench.constructor-start');
 		this._register(FormattingConflicts.setFormatterSelector(async formatters => formatters[0]));
 		const mode = WorkbenchModeRegistry.get(modeId);
 		const services = this._register(new ServiceContainer());
@@ -777,7 +776,6 @@ export class Workbench extends Disposable {
 			WorkbenchContributionsRegistry.createHost(services),
 		);
 		this.contributions = contributions;
-		performance.mark('ash.workbench.services-ready');
 		contributions.advance(WorkbenchPhase.BlockStartup);
 
 		const titlebar = this._register(createTitlebarPart(workbenchRoot, {
@@ -1100,9 +1098,7 @@ export class Workbench extends Disposable {
 				).id);
 			}
 		};
-		performance.mark('ash.workbench.shell-ready');
 		this.restoreActiveViewContainers();
-		performance.mark('ash.workbench.views-restored');
 		const viewsService = new ViewsService({
 			viewDescriptorService: viewDescriptors,
 			openViewContainer: (container) => {
@@ -1153,7 +1149,6 @@ export class Workbench extends Disposable {
 		contributions.advance(WorkbenchPhase.BlockRestore);
 		layoutService.layout();
 		this.whenRestored = this.completeStartupRestoration([extensionReady, ...serviceContributionReady], workingCopyBackups, editor, contributions);
-		performance.mark('ash.workbench.constructor-done');
 	}
 
 	private registerErrorHandler(logService: ILogService): void {

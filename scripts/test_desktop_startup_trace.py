@@ -73,8 +73,14 @@ class DesktopStartupTraceComparisonTests(unittest.TestCase):
         self.assertIn("Result: incomplete comparison", output)
 
     def test_renderer_stages_are_compared_on_one_window_clock(self):
-        output, status = desktop_startup_trace.compare_reports(report(version=3), report(90, version=3))
+        baseline = report(version=3)
+        candidate = report(90, version=3)
+        baseline["metadata"]["rendererBuildId"] = "sha256:before"
+        candidate["metadata"]["rendererBuildId"] = "sha256:after"
+        output, status = desktop_startup_trace.compare_reports(baseline, candidate)
         self.assertEqual(status, 0)
+        self.assertIn("Baseline renderer build: sha256:before", output)
+        self.assertIn("Candidate renderer build: sha256:after", output)
         self.assertIn("Renderer stages, one window performance clock", output)
         self.assertIn("reused | response-end → ash.desktop.open-start | 10.0,10.0,10.0,10.0,10.0", output)
 

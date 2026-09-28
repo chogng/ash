@@ -182,8 +182,10 @@ def compare_reports(baseline: dict, candidate: dict) -> tuple[str, int]:
     if differences:
         raise ValueError(f"measurement conditions differ: {', '.join(differences)}")
     lines = [
-        f"Baseline build: {baseline['metadata'].get('buildId')}",
-        f"Candidate build: {candidate['metadata'].get('buildId')}",
+        f"Baseline backend build: {baseline['metadata'].get('buildId')}",
+        f"Candidate backend build: {candidate['metadata'].get('buildId')}",
+        f"Baseline renderer build: {baseline['metadata'].get('rendererBuildId')}",
+        f"Candidate renderer build: {candidate['metadata'].get('rendererBuildId')}",
         "End-to-end: Playwright launch request → usable Workbench (ms)",
         "cohort | baseline samples | candidate samples | baseline median | candidate median | delta | errors (B/C)",
     ]

@@ -34,7 +34,6 @@ export class DesktopMain extends Disposable {
 			throw new Error('Desktop startup has already begun');
 		}
 		this.opened = true;
-		performance.mark('ash.desktop.open-start');
 		document.title = WorkbenchModeRegistry.get(this.modeId).title;
 		installBaseUiStyles();
 		const tracker = import.meta.env.DEV ? new DisposableTracker() : undefined;
@@ -43,17 +42,12 @@ export class DesktopMain extends Disposable {
 			const container = document.querySelector<HTMLElement>('#app') ?? document.body;
 			const permissionDialog = this._register(new DirectoryPermissionDialog(container));
 			const api = this._register(await createElectronRendererApi(this.rendererCapabilities, { browser: true }, permissionDialog));
-			performance.mark('ash.desktop.api-ready');
 			const profileServices = this._register(new ServiceContainer());
 			profileServices.registerInstance(IFileService, api.localFiles);
 			const userThemes = this._register(await loadUserThemes(profileServices, URI.parse(api.userDataHome.toString().replace(/\/$/u, '') + '/themes')));
-			performance.mark('ash.desktop.themes-ready');
 			const workspace = parseWorkspace(await api.workspace.getWorkspace());
-			performance.mark('ash.desktop.workspace-ready');
 			const initialConfigurationSnapshot = validateConfigurationSnapshot(await api.configuration.read());
-			performance.mark('ash.desktop.configuration-ready');
 			const lifecycleService = new ElectronLifecycleService({ ownerWindow: window, onError: onUnexpectedError });
-			performance.mark('ash.desktop.workbench-start');
 			const workbench = this._register(startWorkbench({
 				modeId: this.modeId,
 				api,
@@ -73,7 +67,6 @@ export class DesktopMain extends Disposable {
 				createTitlebarPart: createElectronTitlebarPartFactory(api.nativeMenubar),
 				switchWorkbenchMode: switchElectronWorkbenchMode,
 			}));
-			performance.mark('ash.desktop.workbench-created');
 			const subscription = api.workspace.onDidChange(workspace => {
 				void this.updateWorkspace(workbench, workspace);
 			});
@@ -89,7 +82,6 @@ export class DesktopMain extends Disposable {
 				});
 			}, { once: true }));
 			await lifecycleService.initialize();
-			performance.mark('ash.desktop.lifecycle-ready');
 		} catch (error) {
 			try {
 				this.dispose();

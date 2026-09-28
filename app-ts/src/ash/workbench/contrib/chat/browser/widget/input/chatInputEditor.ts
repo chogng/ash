@@ -11,6 +11,7 @@ import { LanguageCompletionService } from '../../../../../../editor/contrib/sugg
 import { LanguageCompletionProviderRegistry } from '../../../../../../editor/common/languageFeatureRegistry.js';
 import { SuggestModel } from "../../../../../../editor/contrib/suggest/browser/suggestModel.js";
 import { SuggestController } from "../../../../../../editor/contrib/suggest/browser/suggestController.js";
+import { PlaceholderTextContribution } from "../../../../../../editor/contrib/placeholderText/browser/placeholderTextContribution.js";
 import "../../../../../../editor/contrib/placeholderText/browser/placeholderText.contribution.js";
 import "../../../../../../editor/browser/coreCommands.js";
 import { Position } from "../../../../../../editor/common/core/position.js";
@@ -58,7 +59,11 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 				});
 			},
 		} satisfies EditorContributionRegistration;
-		const contributions = EditorExtensionsRegistry.getEditorContributions().map(contribution =>
+		// Chat only needs its placeholder and command/skill suggestions; unrelated editor features add work to every Chat tab.
+		const contributions = EditorExtensionsRegistry.getSomeEditorContributions([
+			PlaceholderTextContribution.ID,
+			SuggestController.ID,
+		]).map(contribution =>
 			contribution.id === SuggestController.ID ? chatSuggest : contribution,
 		);
 		this.editor = this._register(instantiationService.createInstance(CodeEditorWidget, {

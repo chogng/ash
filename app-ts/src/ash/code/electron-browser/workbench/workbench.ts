@@ -9,5 +9,4 @@ const modeLoaders = {
 } satisfies Record<WorkbenchModeId, () => Promise<unknown>>;
 
 const modeId = resolveWorkbenchModeIdFromUrl(window.location.href, __ASH_WORKBENCH_MODE__);
-performance.mark('ash.desktop.contributions-start');
 await modeLoaders[modeId]();

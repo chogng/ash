@@ -31,15 +31,14 @@ test('Empty chat keeps its input near the pane edges', async ({ target, workbenc
 	expect(layout.composerRightInset).toBe(12);
 });
 
-test('Chat input hides unused editor chrome and keeps its text evenly inset', async ({ target, workbench }) => {
+test('Chat input omits the unused find control and keeps its text evenly inset', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
 	const findOptions = page.locator('.ash-chat:visible .stanza-editor-find-options-widget');
-	await expect(findOptions).toBeAttached();
-	await expect(findOptions).toBeHidden();
+	await expect(findOptions).toHaveCount(0);
 	const editorChrome = await page.locator('.ash-chat:visible .ash-chat-input-editor').evaluate(editor => {
 		const viewport = editor.querySelector<HTMLElement>('.stanza-editor');
 		const placeholder = editor.querySelector<HTMLElement>('.stanza-editor-placeholder-text');
@@ -146,7 +145,9 @@ test('Chat input resizes with wrapped text and retains keyboard focus', async ({
 test('Chat input explicitly opens slash suggestions from the keyboard', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
 	const page = workbench.page;
-	await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	}
 	const editor = page.locator('.ash-chat-input-editor');
 	const input = editor.locator('.stanza-editor-input');
 	await input.focus();
@@ -162,7 +163,9 @@ test('Chat input explicitly opens slash suggestions from the keyboard', async ({
 test('Chat input returns to the empty message state when a slash command is deleted', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
 	const page = workbench.page;
-	await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	}
 	const editor = page.locator('.ash-chat-input-editor');
 	const input = editor.locator('.stanza-editor-input');
 	await input.focus();
@@ -179,7 +182,9 @@ test('Chat input returns to the empty message state when a slash command is dele
 test('Chat input suggests and completes a command with a missing character', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
 	const page = workbench.page;
-	await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	}
 	const editor = page.locator('.ash-chat-input-editor');
 	const input = editor.locator('.stanza-editor-input');
 	await input.focus();
@@ -200,7 +205,9 @@ test('Chat input suggests and completes a command with a missing character', asy
 test('Chat input matches slash command descriptions without selecting a command', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
 	const page = workbench.page;
-	await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	}
 	const editor = page.locator('.ash-chat-input-editor');
 	const input = editor.locator('.stanza-editor-input');
 	await input.focus();

@@ -4,6 +4,7 @@ import { AshRendererDirectory } from "../../../app-ts/src/ash/code/common/applic
 import { WorkbenchModeRegistry } from "../../../app-ts/src/ash/workbench/common/workbenchMode.js";
 import { appTsBuildPath } from "../paths.ts";
 import { buildMetricsPlugin } from './buildMetricsPlugin.ts';
+import { desktopStartupTracePlugin } from './desktopStartupTracePlugin.ts';
 import { rendererOutput } from './rendererOutput.ts';
 import { hotReloadPlugin } from "./hotReloadPlugin.ts";
 import { productIconsPlugin } from "./productIconsPlugin.ts";
@@ -36,7 +37,14 @@ export default defineConfig(() => {
       __ASH_WORKBENCH_MODE__: JSON.stringify(workbenchModeId),
       __ASH_WEB_APP_SERVER__: JSON.stringify(webAppServerEnabled),
     },
-    plugins: [buildMetricsPlugin(), hotReloadPlugin({ desktopRoot }), workbenchEntryPlugin(), productIconsPlugin(), ...(webAppServerEnabled ? [webAppServerVitePlugin()] : [])],
+    plugins: [
+      buildMetricsPlugin(),
+      hotReloadPlugin({ desktopRoot }),
+      workbenchEntryPlugin(),
+      productIconsPlugin(),
+      ...(process.env.ASH_DESKTOP_STARTUP_TRACE === '1' ? [desktopStartupTracePlugin(desktopRoot)] : []),
+      ...(webAppServerEnabled ? [webAppServerVitePlugin()] : []),
+    ],
     optimizeDeps: {
       // The dependency scanner parses source before Vite transforms parameter decorators.
       noDiscovery: true,

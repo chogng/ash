@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { cpus, homedir, release, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -46,6 +47,7 @@ test('Desktop startup trace', async ({ target, testWorkspace }, testInfo) => {
 		cpuModel: cpus()[0]?.model ?? 'unknown',
 		cpuCount: cpus().length,
 		buildId: undefined,
+		rendererBuildId: undefined,
 		backendBytes: undefined,
 		workbenchMode: 'code',
 		workspace: 'isolated test workspace',
@@ -86,7 +88,7 @@ test('Desktop startup trace', async ({ target, testWorkspace }, testInfo) => {
 				if (!navigation) throw new Error('Desktop navigation timing is unavailable');
 				return {
 					responseEndMs: navigation.responseEnd,
-					marks: window.performance.getEntriesByType('mark').filter(mark => mark.name.startsWith('ash.desktop.') || mark.name.startsWith('ash.rendererApi.') || mark.name.startsWith('ash.workbench.')).map(mark => ({ name: mark.name, startTimeMs: mark.startTime })),
+					marks: window.performance.getEntriesByType('mark').filter(mark => mark.name.startsWith('ash.')).map(mark => ({ name: mark.name, startTimeMs: mark.startTime })),
 				};
 			});
 		} catch (cause) {
@@ -117,6 +119,7 @@ test('Desktop startup trace', async ({ target, testWorkspace }, testInfo) => {
 		await writeFile(join(credentials, 'credentials.json'), JSON.stringify(entries));
 		const packageRoot = dirname(dirname(backend));
 		metadata.buildId = (JSON.parse(await readFile(join(packageRoot, 'ash-package.json'), 'utf8')) as { buildId: string }).buildId;
+		metadata.rendererBuildId = `sha256:${createHash('sha256').update(await readFile(resolve(appPath, '../.build/app-ts/renderer/ash/build-assets.json'))).digest('hex')}`;
 		metadata.backendBytes = (await stat(backend)).size;
 
 		for (let index = 0; index < samplesPerCohort; index++) {
@@ -149,6 +152,7 @@ test('Desktop startup trace', async ({ target, testWorkspace }, testInfo) => {
 			await measure('ui-only', index, stoppedProfile, false);
 		}
 		expect(samples.filter(sample => sample.error)).toEqual([]);
+		expect(samples.filter(sample => !sample.renderer?.marks.some(mark => mark.name === 'ash.desktop.trace-build-v1'))).toEqual([]);
 		expect(samples.filter(sample => !sample.renderer?.marks.some(mark => mark.name === 'ash.desktop.lifecycle-ready'))).toEqual([]);
 		expect(metadata.reusedDaemonSameProcess).toBe(true);
 	} catch (cause) {
