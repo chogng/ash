@@ -8,6 +8,7 @@
 }
 
 .ash-titlebar-center-adjacent-actions .ash-action-view-item.icon:has(.ash-titlebar-mark) .ash-icon-label-container {
+  display: inline-flex;
   flex: 0 1 auto;
   max-width: 0;
   margin-inline-start: 0;
