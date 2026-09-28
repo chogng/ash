@@ -16,7 +16,7 @@ test('desktop dialog and shell routes reject malformed requests', async () => {
 		performDialogOperation: operation => { operations.push(operation); },
 		performShellCommand: async operation => operation,
 		pickFolder: async () => undefined, pickFile: async () => undefined, openWorkspace: async () => {},
-		openAgentsWindow: async () => { operations.push('openAgentsWindow'); },
+		openAgentsWindow: async options => { operations.push(options ?? 'openAgentsWindow'); },
 		revealFile: () => {},
 		saveFile: async () => undefined, isAccessibilitySupportEnabled: () => false,
 		setWindowTheme: () => {}, setWindowDimmed: () => {}, toggleDeveloperTools: () => {},
@@ -38,7 +38,13 @@ test('desktop dialog and shell routes reject malformed requests', async () => {
 	assert.equal(await shell.invoke(shell.validate('install')), 'install');
 	const openAgents = routes.find(route => route.channel === NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL);
 	assert.ok(openAgents);
-	assert.throws(() => openAgents.validate({ windowId: 1 }), /does not accept parameters/);
+	assert.throws(() => openAgents.validate({ windowId: 1 }), /Invalid Agents Window options/);
+	assert.throws(() => openAgents.validate({}), /requires a conversation or draft/);
+	assert.throws(() => openAgents.validate({ conversation: { sessionId: '', threadId: 'thread' } }), /Invalid Agents Window conversation/);
+	assert.throws(() => openAgents.validate({ draft: { text: 'Review this', contexts: [{ id: 'file' }] } }), /Invalid Agents Window context/);
+	const handoff = { conversation: { sessionId: 'session', threadId: 'thread' }, draft: { text: 'Review this', contexts: [{ id: 'file', kind: 'file', name: 'file.ts', content: 'const value = 1;' }] } };
+	await openAgents.invoke(openAgents.validate(handoff));
+	assert.deepEqual(operations.at(-1), handoff);
 	await openAgents.invoke(openAgents.validate(undefined));
 	assert.equal(operations.at(-1), 'openAgentsWindow');
 });

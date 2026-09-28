@@ -30,6 +30,9 @@ import { registerProblemsView } from "../contrib/problems/browser/problems.contr
 import { registerTerminalView } from "../contrib/terminal/browser/terminal.contribution.js";
 import { Lxicon } from "../../base/common/lxicons.js";
 import { registerAction2 } from '../../platform/actions/common/actions.js';
+import { localize } from '../../nls.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../platform/configuration/common/configurationRegistry.js';
+import { Registry } from '../../platform/registry/common/platform.js';
 import { OpenFolderAction, OpenFolderViaWorkspaceAction } from './actions/workspaceActions.js';
 import { ShowAboutDialogAction } from './actions/windowActions.js';
 import "../contrib/bulkEdit/browser/bulkEdit.contribution.js";
@@ -49,6 +52,20 @@ import "./parts/editor/editor.contribution.js";
 import "./parts/titlebar/menubar.contribution.js";
 import "./parts/titlebar/titlebarActions.js";
 import "./parts/notifications/notificationsCommands.js";
+
+Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration<boolean>({
+	key: 'workbench.editor.restoreEditors',
+	defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') throw new TypeError('Editor restoration setting must be boolean');
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('workbench.editor.restoreEditors.title', 'Restore editors'); },
+		get description() { return localize('workbench.editor.restoreEditors.description', 'Restore open editors and editor groups when a Workbench window reopens. Unsaved changes are restored even when this is off.'); },
+	},
+});
 
 ViewsRegistry.registerStaticViewContainer({
 	id: WorkbenchViewContainerId.Sidebar,

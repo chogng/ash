@@ -12,7 +12,7 @@ import { registerWorkbenchContribution, WorkbenchPhase } from '../common/contrib
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../platform/registry/common/platform.js';
-import { WINDOW_ZOOM_LEVEL_SETTING } from '../../platform/window/common/window.js';
+import { RESTORE_WINDOWS_SETTING, WINDOW_ZOOM_LEVEL_SETTING, parseRestoreWindowsSetting, type RestoreWindowsSetting } from '../../platform/window/common/window.js';
 import { localize } from '../../nls.js';
 import { NativeWindow } from './window.js';
 import {
@@ -46,6 +46,26 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 		valueType: 'number', minimum: -8, maximum: 8,
 		title: localize({ bundle: 'ash', key: 'workbench.zoomSettingTitle' }, 'Window zoom level'),
 		description: localize({ bundle: 'ash', key: 'workbench.zoomSettingDescription' }, 'Adjust the zoom level of desktop windows.'),
+	},
+});
+
+Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration<RestoreWindowsSetting>({
+	key: RESTORE_WINDOWS_SETTING,
+	defaultValue: 'all',
+	parse: parseRestoreWindowsSetting,
+	setting: {
+		valueType: 'select',
+		get title() { return localize('window.restoreWindows.title', 'Restore windows'); },
+		get description() { return localize('window.restoreWindows.description', 'Choose which windows reopen when Ash starts. Opening a folder or workspace directly takes priority, except with Preserve.'); },
+		get options() {
+			return [
+				{ value: 'preserve', label: localize('window.restoreWindows.preserve', 'Preserve all windows') },
+				{ value: 'all', label: localize('window.restoreWindows.all', 'All windows') },
+				{ value: 'folders', label: localize('window.restoreWindows.folders', 'Folders and workspaces') },
+				{ value: 'one', label: localize('window.restoreWindows.one', 'Last active window') },
+				{ value: 'none', label: localize('window.restoreWindows.none', 'None') },
+			] as const;
+		},
 	},
 });
 

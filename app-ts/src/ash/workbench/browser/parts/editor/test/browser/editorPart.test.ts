@@ -34,7 +34,7 @@ import { ContextKeyService } from "../../../../../../platform/contextkey/browser
 import { ServiceContainer } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { highContrastDarkColorTheme, lightColorTheme } from '../../../../../../platform/theme/common/colorTheme.js';
 import { IThemeService } from '../../../../../../platform/theme/common/themeService.js';
-import { IStorageService } from '../../../../../../platform/storage/common/storage.js';
+import { IStorageService, StorageScope, StorageTarget, WillSaveStateReason } from '../../../../../../platform/storage/common/storage.js';
 import { TestThemeService } from '../../../../../../platform/theme/test/common/testThemeService.js';
 import { BrowserStorageService } from '../../../../../../workbench/services/storage/browser/storageService.js';
 import { CommandService } from '../../../../../../workbench/services/commands/common/commandService.js';
@@ -1397,16 +1397,17 @@ test("EditorPart rejects an open superseded by ordinary content", async () => {
 });
 
 test("EditorParts moves an editor to an auxiliary window without changing its instance identity", async () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+	const dom = new JSDOM("<!doctype html><body></body>", { url: 'http://localhost' });
 	const registry = new EditorPaneRegistry();
 	const workingCopy = new TestWorkingCopy(URI.file("C:\\project\\detached.ts"));
 	registry.register(descriptor("stanza.editor.code", ".ts", () => new TestEditorPane("stanza.editor.code", workingCopy)));
 	const main = new EditorPart(dom.window.document.body, { registry });
 	const windows = new TestAuxiliaryWindowService();
+	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, applicationId: 'editor-parts-test', workspaceId: 'workspace', flushInterval: 0 });
 	const editorParts = new EditorParts(main, windows, container => ({ part: new EditorPart(container, { registry }) }), {
 		onDidChangeScreenReaderOptimized: Event.None,
 		isScreenReaderOptimized: () => false,
-	} as unknown as IAccessibilityService);
+	} as unknown as IAccessibilityService, storage);
 	using contextKeys = new ContextKeyService();
 	using editorContexts = new EditorContextKeyController(contextKeys, editorParts, registry, undefined);
 	const resourceInput = input("C:\\project\\detached.ts");
@@ -1450,16 +1451,57 @@ test("EditorParts moves an editor to an auxiliary window without changing its in
 	dom.window.close();
 });
 
+test('EditorParts restores main and auxiliary editor windows with their active part', async () => {
+	const registry = new EditorPaneRegistry();
+	registry.register(descriptor('test.editor.default', '', () => new TestEditorPane('test.editor.default')));
+	const accessibility = {
+		onDidChangeScreenReaderOptimized: Event.None,
+		isScreenReaderOptimized: () => false,
+	} as unknown as IAccessibilityService;
+	const firstDom = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost' });
+	const firstMain = new EditorPart(firstDom.window.document.body, { registry });
+	using firstWindows = new TestAuxiliaryWindowService();
+	using firstStorage = new BrowserStorageService({ ownerWindow: firstDom.window as unknown as Window, applicationId: 'editor-parts-test', workspaceId: 'workspace', flushInterval: 0 });
+	using firstParts = new EditorParts(firstMain, firstWindows, container => ({ part: new EditorPart(container, { registry }) }), accessibility, firstStorage);
+	await firstParts.restoreSavedState(true);
+	await firstMain.openEditor(input('C:\\project\\main.txt'));
+	const detached = await firstParts.createAuxiliaryEditorPart();
+	await detached.openEditor(input('C:\\project\\detached.txt'));
+	await firstStorage.flush(WillSaveStateReason.SHUTDOWN);
+	const saved = firstStorage.get('editorparts.state', StorageScope.WORKSPACE);
+	assert.ok(saved);
+	firstParts.dispose();
+	firstMain.dispose();
+	firstDom.window.close();
+
+	const restoredDom = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost' });
+	const restoredMain = new EditorPart(restoredDom.window.document.body, { registry });
+	using restoredWindows = new TestAuxiliaryWindowService();
+	using restoredStorage = new BrowserStorageService({ ownerWindow: restoredDom.window as unknown as Window, applicationId: 'editor-parts-test', workspaceId: 'workspace', flushInterval: 0 });
+	using restoredParts = new EditorParts(restoredMain, restoredWindows, container => ({ part: new EditorPart(container, { registry }) }), accessibility, restoredStorage);
+	restoredStorage.store('editorparts.state', saved, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	await restoredParts.restoreSavedState(true);
+	assert.deepEqual(restoredParts.parts.map(part => part.groups.flatMap(group => group.inputs.map(editor => editor.resource.fsPath))), [
+		['C:\\project\\main.txt'],
+		['C:\\project\\detached.txt'],
+	]);
+	assert.equal(restoredParts.activePart, restoredParts.parts[1]);
+	restoredParts.dispose();
+	restoredMain.dispose();
+	restoredDom.window.close();
+});
+
 test('EditorParts replaces an untitled resource in every group and window', async () => {
-	const dom = new JSDOM('<!doctype html><body></body>');
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost' });
 	const registry = new EditorPaneRegistry();
 	registry.register(descriptor('test.editor.default', '', () => new TestEditorPane('test.editor.default')));
 	const main = new EditorPart(dom.window.document.body, { registry });
 	using windows = new TestAuxiliaryWindowService();
+	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, applicationId: 'editor-parts-test', workspaceId: 'workspace', flushInterval: 0 });
 	const editorParts = new EditorParts(main, windows, container => ({ part: new EditorPart(container, { registry }) }), {
 		onDidChangeScreenReaderOptimized: Event.None,
 		isScreenReaderOptimized: () => false,
-	} as unknown as IAccessibilityService);
+	} as unknown as IAccessibilityService, storage);
 	const untitled: EditorInput = { resource: URI.parse('untitled:/Untitled-1'), label: 'Untitled-1' };
 	const saved: EditorInput = { resource: URI.file('C:\\project\\draft.txt'), label: 'draft.txt' };
 	await editorParts.openEditor(untitled);

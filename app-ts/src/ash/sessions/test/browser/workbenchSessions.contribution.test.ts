@@ -9,6 +9,7 @@ import type { MultiDiffEditorInput } from '../../../workbench/contrib/multiDiffE
 import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService } from '../../../workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
 import { IChatService, type TurnChangeSetSummary } from '../../../workbench/services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
+import { IViewsService } from '../../../workbench/services/views/browser/viewsService.js';
 import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
 import { EditorInputSerializers } from '../../../workbench/services/editor/common/editorInputSerializer.js';
 import { createTurnMultiDiffEditorInput } from '../../browser/turnMultiDiffSource.js';
@@ -25,7 +26,9 @@ for (const [name, value] of Object.entries({
 })) {
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
-await import('../../browser/workbenchSessions.contribution.js');
+await import('../../contrib/providers/appServer/browser/workbenchSessionsService.contribution.js');
+await import('../../browser/workbenchChat.contribution.js');
+await import('../../browser/turnMultiDiffSource.contribution.js');
 
 test('Sessions registers its regular Workbench service and starts its catalog', async () => {
 	let subscriptions = 0;
@@ -42,6 +45,7 @@ test('Sessions registers its regular Workbench service and starts its catalog', 
 	services.registerInstance(IRendererHostService, api);
 	services.registerInstance(IChatService, {} as IChatService);
 	services.registerInstance(IEditorService, {} as IEditorService);
+	services.registerInstance(IViewsService, { openView: () => { throw new Error('Draft capture must not reveal Chat'); }, focusView: () => false, getViewWithId: () => undefined });
 	services.registerInstance(IMultiDiffSourceResolverService, new MultiDiffSourceResolverService());
 	for (const [id, descriptor] of getSingletonServiceDescriptors()) {
 		if (id === ISessionsManagementService || id === IChatSessionNavigationService) {
@@ -51,11 +55,30 @@ test('Sessions registers its regular Workbench service and starts its catalog', 
 	const sessions = services.get(ISessionsManagementService);
 	const navigation = services.get(IChatSessionNavigationService);
 	assert.deepEqual(navigation.getConversations(), []);
+	assert.equal(navigation.getActiveConversation(), undefined);
+	assert.equal(await navigation.captureActiveDraft(), undefined);
 	using contributions = WorkbenchContributionsRegistry.createHost(services);
 	contributions.advance(WorkbenchPhase.BlockRestore);
 	await sessions.initialize();
 	assert.equal(subscriptions, 1);
 	assert.equal(catalogLoads, 1);
+});
+
+test('Open in Agents uses the visible untitled chat instead of an older active session', () => {
+	const selection = {
+		active: { session: { sessionId: 'older-session' }, threadId: 'older-thread' },
+		activeUntitledSession: undefined as { readonly untitledSessionId: string } | undefined,
+	};
+	using services = new ServiceContainer();
+	services.registerInstance(ISessionsManagementService, selection as unknown as ISessionsManagementService);
+	services.registerInstance(IViewsService, { openView: () => undefined, focusView: () => false, getViewWithId: () => undefined });
+	const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IChatSessionNavigationService)?.[1];
+	assert.ok(descriptor);
+	services.registerSingleton(IChatSessionNavigationService, () => services.createInstance(descriptor));
+	const navigation = services.get(IChatSessionNavigationService);
+	assert.deepEqual(navigation.getActiveConversation(), { sessionId: 'older-session', threadId: 'older-thread' });
+	selection.activeUntitledSession = { untitledSessionId: 'new-chat' };
+	assert.equal(navigation.getActiveConversation(), undefined);
 });
 
 test('Sessions contributes Turn changes and commit actions to the shared multi-diff editor', async () => {

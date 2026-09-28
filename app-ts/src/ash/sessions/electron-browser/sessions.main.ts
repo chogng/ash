@@ -15,6 +15,8 @@ import { Workbench } from "../browser/workbench.js";
 import { NativeWindow } from '../../workbench/electron-browser/window.js';
 import { bindWindowControlTheme } from '../../workbench/electron-browser/parts/titlebar/titlebarPart.js';
 import { RETURN_TO_WORKBENCH_CHANNEL } from '../common/windowNavigation.js';
+import { AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL, AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL, AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL } from '../common/windowNavigation.js';
+import type { IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
 import { ElectronLifecycleService } from '../../workbench/services/lifecycle/electron-browser/lifecycleService.js';
 import { showStartupError } from "../../workbench/browser/startupError.js";
 import { invoke, subscribe } from '../../platform/ipc/electron-browser/rendererIpc.js';
@@ -26,6 +28,36 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 	const container = document.querySelector<HTMLElement>("#app");
 	if (!container) throw new Error("Sessions renderer requires an #app container");
 	const sessions = new DisposableStore();
+	let workbench: Workbench | undefined;
+	let drainRequested = false;
+	let draining = false;
+	const drainHandoffs = async (): Promise<void> => {
+		if (draining || !workbench) return;
+		draining = true;
+		try {
+			while (drainRequested) {
+				drainRequested = false;
+				let handoff: { readonly id: string; readonly options: IOpenAgentsWindowOptions } | undefined;
+				while ((handoff = await invoke<typeof handoff>(AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL))) {
+					try {
+						await workbench.acceptHandoff(handoff.options);
+						await invoke<void>(AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL, { id: handoff.id });
+					} catch (error) {
+						await invoke<void>(AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL, { id: handoff.id, error: String(error) });
+					}
+				}
+			}
+		} finally {
+			draining = false;
+			if (drainRequested) void drainHandoffs().catch(onUnexpectedError);
+		}
+	};
+	const requestDrain = (): void => {
+		drainRequested = true;
+		void drainHandoffs().catch(onUnexpectedError);
+	};
+	const handoffSubscription = subscribe<void>(AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL, requestDrain);
+	sessions.add(toDisposable(() => handoffSubscription.dispose()));
 	const permissionDialog = sessions.add(new DirectoryPermissionDialog(container));
 	let api: Awaited<ReturnType<typeof createElectronRendererApi>>;
 	try { api = await createElectronRendererApi([], { browser: false }, permissionDialog); }
@@ -50,7 +82,7 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 	sessions.add(toDisposable(() => zoomSubscription.dispose()));
 	const lifecycleService = new ElectronLifecycleService({ ownerWindow: window, onError: onUnexpectedError });
 	const initialConfigurationSnapshot = validateConfigurationSnapshot(await api.configuration.read());
-	const workbench = sessions.add(new Workbench({
+	workbench = sessions.add(new Workbench({
 		modeId,
 		profile,
 		api,
@@ -63,6 +95,7 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 		createContextMenuService: options => createElectronWorkbenchContextMenuService(options, api.nativeContextMenu),
 		container,
 	}));
+	requestDrain();
 	sessions.add(new NativeWindow(api.nativeHost, workbench.configurationService));
 	sessions.add(bindWindowControlTheme(workbench.themeService, api.nativeHost));
 	sessions.add(addDisposableListener(window, "pagehide", () => {

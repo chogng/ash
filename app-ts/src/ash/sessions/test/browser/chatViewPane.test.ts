@@ -81,7 +81,7 @@ for (const [name, value] of Object.entries({
 	});
 }
 const { registerChatViews } = await import(
-	"../../browser/workbenchSessions.contribution.js"
+	"../../browser/workbenchChat.contribution.js"
 );
 const { BrowserContextViewService } = await import(
 	"../../../platform/contextview/browser/contextViewService.js"
@@ -268,6 +268,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	services.registerInstance(IViewsService, {
 		openView: () => chatView,
 		focusView: () => true,
+		getViewWithId: () => chatView,
 	});
 	let shownContextMenuActions: readonly IAction[] = [];
 	const contextMenuService = {
@@ -663,6 +664,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
 	services.registerInstance(IViewsService, {
 		openView: () => undefined,
 		focusView: () => true,
+		getViewWithId: () => undefined,
 	});
 	using commands = new CommandService(services);
 	const menuService = new MenuService(commands, contextKeys);
@@ -803,6 +805,7 @@ test("the New Chat slash command opens an untitled session", async () => {
 			focusedView = viewId;
 			return true;
 		},
+		getViewWithId: () => undefined,
 	});
 	using commands = new CommandService(services);
 	const menuService = new MenuService(commands, contextKeys);
@@ -878,6 +881,7 @@ test("failed first send keeps the untitled session and its input draft", async (
 	services.registerInstance(IViewsService, {
 		openView: () => undefined,
 		focusView: () => true,
+		getViewWithId: () => undefined,
 	});
 	using commands = new CommandService(services);
 	const menuService = new MenuService(commands, contextKeys);
@@ -1034,6 +1038,7 @@ test("Chat history selects an active Thread through Quick Pick", async () => {
 			focusedView = viewId;
 			return true;
 		},
+		getViewWithId: () => undefined,
 	});
 	using commands = new CommandService(services);
 	await sessions.initialize();
@@ -1086,20 +1091,28 @@ test("ViewsService resolves, opens, and focuses contributed views", () => {
 		isVisible: () => true,
 		setVisible: () => undefined,
 	};
+	const paneContainer = {
+		getView: (viewId: string) => viewId === CHAT_VIEW_ID ? view : undefined,
+		openView: (viewId: string) => {
+			assert.equal(viewId, CHAT_VIEW_ID);
+			opened++;
+			return view;
+		},
+	} as unknown as ViewPaneContainer;
 	const service = new ViewsService({
 		viewDescriptorService: descriptors,
+		getViewContainer: (container) => {
+			assert.equal(container.id, CHAT_VIEW_CONTAINER_ID);
+			return paneContainer;
+		},
 		openViewContainer: (container) => {
 			assert.equal(container.id, CHAT_VIEW_CONTAINER_ID);
-			return {
-				openView: (viewId: string) => {
-					assert.equal(viewId, CHAT_VIEW_ID);
-					opened++;
-					return view;
-				},
-			} as unknown as ViewPaneContainer;
+			return paneContainer;
 		},
 	});
 
+	assert.equal(service.getViewWithId(CHAT_VIEW_ID), view);
+	assert.equal(opened, 0);
 	assert.equal(service.focusView(CHAT_VIEW_ID), true);
 	assert.equal(opened, 1);
 	assert.equal(focused, 1);

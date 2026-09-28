@@ -81,6 +81,8 @@ const { WorkbenchConfigurationService } = await import('../../../../../workbench
 const { builtinLanguagePackCatalogs } = await import('../../../../../workbench/services/localization/common/localizationCatalogs.js');
 const { StartupEditorConfigurationKey } = await import('../../../../../workbench/contrib/welcomeGettingStarted/browser/startupPage.js');
 await import('../../../../../workbench/contrib/welcomeGettingStarted/browser/gettingStarted.contribution.js');
+await import('../../../../../workbench/browser/workbench.contribution.js');
+await import('../../../../../workbench/electron-browser/desktop.contribution.js');
 
 const localizationService: ILocalizationService = {
 	onDidChange: Event.None,
@@ -160,9 +162,13 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.colorTheme), 'appearance');
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.layoutStyle), 'layout');
 	assert.equal(findSettingCategory(layout, StartupEditorConfigurationKey), 'startup');
+	assert.equal(findSettingCategory(layout, 'window.restoreWindows'), 'startup');
+	assert.equal(findSettingCategory(layout, 'workbench.editor.restoreEditors'), 'startup');
 	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN');
 	assert.equal(chinese?.bundles['ash.settings']?.['categories.startup.label'], '启动');
 	assert.equal(chinese?.bundles.ash?.['settings.workbench.startup.group.label'], '启动时的编辑器');
+	assert.equal(chinese?.bundles.ash?.['window.restoreWindows.all'], '全部窗口');
+	assert.equal(chinese?.bundles.ash?.['workbench.editor.restoreEditors.title'], '恢复编辑器');
 	assert.equal(chinese?.bundles.ash?.['settings.dictation.group'], '语音输入');
 	assert.equal(defaults.all.some(setting => Object.values(SessionsConfiguration).includes(setting.id)), false);
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.activityBarLocation), 'layout');

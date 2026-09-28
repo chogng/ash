@@ -11,6 +11,13 @@ export const enum TitleBarSetting {
 
 export type MenuStyleConfiguration = 'custom' | 'system' | 'inherit';
 export type TitleBarStyleConfiguration = 'custom' | 'system';
+export type RestoreWindowsSetting = 'preserve' | 'all' | 'folders' | 'one' | 'none';
+export const RESTORE_WINDOWS_SETTING = 'window.restoreWindows';
+
+export function parseRestoreWindowsSetting(value: unknown): RestoreWindowsSetting {
+	if (value === 'preserve' || value === 'all' || value === 'folders' || value === 'one' || value === 'none') return value;
+	throw new TypeError(`Unknown window restore setting: ${String(value)}`);
+}
 
 export function parseMenuStyle(value: unknown): MenuStyleConfiguration {
 	if (value === 'custom' || value === 'system' || value === 'inherit') return value;

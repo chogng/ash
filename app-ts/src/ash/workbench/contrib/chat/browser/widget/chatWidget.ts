@@ -23,6 +23,7 @@ import { ASH_REMOTE_SCHEME, createSshRemoteWorkspaceUri, getRemoteWorkspacePath 
 import { OPEN_CHAT_SETTINGS_COMMAND_ID } from "../../common/chat.js";
 import { OpenSettingsCommandId } from '../../../preferences/common/preferences.js';
 import type { IDictationService } from '../../../../../platform/dictation/common/dictationService.js';
+import type { IOpenAgentsWindowOptions } from '../../../../../platform/native/common/nativeHost.js';
 
 /** The presentation consumes one conversation model owned by its product. */
 export interface IChatWidgetModel extends IDisposable {
@@ -140,6 +141,14 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 
 	addContext(attachment: ChatContextAttachment): void {
 		this.inputPart.addContext(attachment);
+	}
+
+	captureDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void } | undefined> {
+		return this.inputPart.captureDraft();
+	}
+
+	restoreDraft(draft: NonNullable<IOpenAgentsWindowOptions['draft']>): void {
+		this.inputPart.restoreDraft(draft);
 	}
 
 	acceptInput(value?: string): Promise<void> {

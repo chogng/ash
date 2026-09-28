@@ -14,6 +14,8 @@ import type { SessionId } from "../../services/sessions/common/session.js";
 import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
 import type { SessionsViewSelection } from "../../services/sessions/browser/sessionsService.js";
 import type { IDictationService } from '../../../platform/dictation/common/dictationService.js';
+import type { IOpenAgentsWindowOptions } from '../../../platform/native/common/nativeHost.js';
+import { localize } from '../../../nls.js';
 
 let sessionsChatPaneInstanceId = 0;
 
@@ -72,6 +74,12 @@ export class SessionsChatView extends Disposable {
 
 	focus(): void {
 		this.activePane?.focus();
+	}
+
+	restoreDraft(draft: NonNullable<IOpenAgentsWindowOptions['draft']>): void {
+		if (!this.activePane) throw new Error(localize('sessions.handoff.noActiveChat', 'Agents Window has no active chat for the draft.'));
+		this.activePane.restoreDraft(draft);
+		this.activePane.focus();
 	}
 
 	layout(dimension: IDimension): void {

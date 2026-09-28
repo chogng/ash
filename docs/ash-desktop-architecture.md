@@ -303,6 +303,20 @@ Folder/Workspace 产生稳定 ID。标识采用 `{ id }`、`{ id, uri }` 或
 last-active state，最后才使用默认尺寸。旧的 `windowState` 与 `windowState.empty` 键不会迁移
 或读取。
 
+窗口种类和工作区另存于 `windowSession` 状态，不与窗口位置混用。`app.ts` 保存 Workbench 与
+Agents 的窗口种类及其模式，`WindowsMainService` 按设置筛选需要恢复的窗口；Desktop 在窗口打开、获得焦点、
+关闭和退出时更新该清单。正常启动默认恢复上次仍打开的全部 Workbench 与 Agents 窗口，并把
+最后使用的窗口带到前面。`window.restoreWindows` 是共享 profile 中的启动偏好，支持
+`preserve`、`all`（默认）、`folders`、`one` 和 `none`。直接指定 Folder 或 Workspace 时，
+除 `preserve` 外以本次目标为准。手动关闭的窗口从清单移除；关闭最后一个窗口导致应用退出时，
+保留该窗口作为下次启动目标。Agents 窗口可以单独恢复，不要求同时打开 Workbench。
+Workbench 使用共享 profile 当前的 `workbench.mode`，Agents 窗口恢复其原有模式。
+`LifecycleMainService` 在更新安装时记录目标版本；首次启动该版本时，无论 `window.restoreWindows` 当前选项如何，
+均恢复上次打开的全部窗口，然后清除更新标记。普通启动继续遵循用户设置。
+Workbench 的 `workbench.editor.restoreEditors` 默认开启。`WorkbenchLayout` 判断是否恢复编辑器，
+`EditorParts` 将主编辑器与独立编辑器窗口的标签页、分组、激活项和视图状态保存在各自工作区的状态中，并在窗口重新打开时恢复。
+关闭该选项只跳过常规编辑器状态；未保存内容仍从工作副本备份恢复。
+
 Renderer 通过受信 IPC route 和 `workspace.getWorkspace()` 读取该身份，并在
 `parseWorkspaceIdentifier()` 校验和恢复 URI。`WorkspaceContextService` 根据该标识构造当前
 `IWorkspace`，并从 `configuration` 或单根 `folders` 推导 `WorkbenchState`。Workbench
@@ -336,8 +350,7 @@ App Server 连接并重新读取 Session/Thread；Renderer 不直接读写 SQLit
 - Explorer 当前仅支持单根 Folder 的按需读取；后端已有 `fs/writeFile` 与 `fs/changed`，但
   Renderer 尚未接入保存、自动刷新、选择模型或键盘导航。Search contrib 已能展示单根
   workspace 内容结果，但尚不能打开文件；
-- 当前 `WorkspacesMainService` 只负责启动目标解析，最近项目、多窗口创建和 workspace
-  配置管理尚未实现；`windowsState` 已保留多窗口恢复数据形状，但当前只写入单个主窗口；
+- 最近项目和 workspace 配置管理尚未实现；
 - 空窗口 backup service 尚未实现，因此当前启动路径没有可传给 `WindowsStateHandler` 的
   `backupPath`，无备份的空窗口只能使用 last-active fallback；
 - 启动目标无效时记录错误并安全回退到空窗口。

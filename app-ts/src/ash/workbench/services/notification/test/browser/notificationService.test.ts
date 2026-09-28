@@ -15,10 +15,12 @@ test("notifications share history across toast and center", async () => {
 		using center = new NotificationsCenter(root, root, service);
 		const toggle = root.querySelector<HTMLButtonElement>(".ash-notifications-toggle")!;
 		assert.equal(toggle.textContent, "Notifications");
+		assert.equal(toggle.hidden, true);
 		let actionRuns = 0;
 		const removed: number[] = [];
 		service.onDidRemove(item => removed.push(item.id));
 		const handle = service.notify({ severity: NotificationSeverity.Warning, message: "Workspace needs attention", source: "fixture", actions: [{ id: "open", label: "Open", run: () => { actionRuns++; } }] });
+		assert.equal(toggle.hidden, false);
 		assert.equal(root.querySelectorAll(".ash-notification").length, 1);
 		root.querySelector<HTMLButtonElement>(".ash-notification-action")!.click();
 		await Promise.resolve();
@@ -32,9 +34,12 @@ test("notifications share history across toast and center", async () => {
 		root.querySelector<HTMLButtonElement>(".ash-notifications-clear")!.click();
 		assert.deepEqual(removed, [handle.item.id]);
 		assert.equal(service.getNotifications().length, 0);
+		assert.equal(toggle.hidden, true);
 		assert.equal(root.querySelector(".ash-notifications-empty")?.textContent, "No notifications");
 		center.hide();
 		assert.equal(root.querySelector<HTMLElement>(".ash-notifications-center")?.hidden, true);
+		service.info("Another notification");
+		assert.equal(toggle.hidden, false);
 		toggle.click();
 		assert.equal(root.querySelector<HTMLElement>(".ash-notifications-center")?.hidden, false);
 	} finally { browser.window.close(); }

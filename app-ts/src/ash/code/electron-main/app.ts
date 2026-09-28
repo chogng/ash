@@ -13,8 +13,9 @@ import { access, chmod, lstat, mkdir, readFile, unlink, writeFile } from "node:f
 import { constants, readFileSync, watch } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { isCancellationError } from "../../base/common/errors.js";
+import { createUuid } from '../../base/common/uuid.js';
 import { Disposable, DisposableMap, DisposableStore, DisposableTracker, installDisposableTracker, type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
-import { assertDefined } from "../../base/common/types.js";
+import { assertDefined, isRecord } from "../../base/common/types.js";
 import { AshApplicationName } from '../common/application.js';
 import { WorkbenchModeConfigurationKey, WorkbenchModeRegistry, WorkbenchRendererEntry, withWorkbenchModeId, type WorkbenchModeId } from "../../workbench/common/workbenchMode.js";
 import { ElectronContextMenu } from "../../base/parts/contextmenu/electron-main/contextmenu.js";
@@ -44,10 +45,10 @@ import { NativeMenubarMainService, nativeMenubarIpcRoutes } from "../../platform
 import { clearElectronApplicationMenu, createElectronMenubarHost } from "../../platform/menubar/electron-main/menubar.js";
 import { nativeHostIpcRoutes, windowAppearanceIpcRoutes } from "../../platform/native/electron-main/nativeHostIpc.js";
 import { UpdateMainService, updateIpcRoutes } from '../../platform/update/electron-main/updateMainService.js';
-import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL } from "../../platform/native/common/nativeHost.js";
+import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, type IOpenAgentsWindowOptions } from "../../platform/native/common/nativeHost.js";
 import { DialogMainService } from '../../platform/dialogs/electron-main/dialogMainService.js';
 import type { DialogRequest } from '../../platform/dialogs/common/dialogs.js';
-import { RETURN_TO_WORKBENCH_CHANNEL, validateReturnToWorkbench } from '../../sessions/common/windowNavigation.js';
+import { AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL, AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL, AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL, RETURN_TO_WORKBENCH_CHANNEL, validateAgentsWindowHandoffComplete, validateAgentsWindowHandoffTake, validateReturnToWorkbench, type IAgentsWindowHandoffResult } from '../../sessions/common/windowNavigation.js';
 import { GlobalKeybindingsMainService } from '../../platform/globalKeybindings/electron-main/globalKeybindingsMainService.js';
 import { OPEN_AGENTS_WINDOW_COMMAND_ID } from '../../workbench/contrib/chat/common/constants.js';
 import { StateService } from "../../platform/state/node/stateService.js";
@@ -57,12 +58,12 @@ import { URI } from "../../base/common/uri.js";
 import { DiskFileSystemProvider } from "../../platform/files/node/diskFileSystemProvider.js";
 import { LOCAL_FILE_SYSTEM_CHANGED_CHANNEL } from "../../platform/files/common/diskFileSystemProviderClient.js";
 import { WindowControlsOverlay } from "../../platform/windows/electron-main/windows.js";
-import { TitleBarSetting, parseTitleBarStyle, type TitleBarStyleConfiguration } from "../../platform/window/common/window.js";
+import { RESTORE_WINDOWS_SETTING, TitleBarSetting, parseTitleBarStyle, type TitleBarStyleConfiguration } from "../../platform/window/common/window.js";
 import { WindowsStateHandler } from "../../platform/windows/electron-main/windowsStateHandler.js";
 import { WindowsMainService, trackWindowResourceChanges, windowOperationIpcRoute, windowResourceIpcRoutes, workspaceContextIpcRoutes } from "../../platform/windows/electron-main/windowsMainService.js";
 import { LifecycleMainService, windowCloseResponseIpcRoute } from '../../platform/lifecycle/electron-main/lifecycleMainService.js';
 import { focusWindow, WindowMode, WorkspaceContextMainService, type IWindowState } from "../../platform/window/electron-main/window.js";
-import { type IAnyWorkspaceIdentifier, isRemoteWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, serializeWorkspace, UNKNOWN_EMPTY_WINDOW_WORKSPACE } from "../../platform/workspace/common/workspace.js";
+import { type IAnyWorkspaceIdentifier, type IWorkspace, isRemoteWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, parseWorkspaceIdentifier, serializeWorkspace, serializeWorkspaceIdentifier, UNKNOWN_EMPTY_WINDOW_WORKSPACE } from "../../platform/workspace/common/workspace.js";
 import { createEmptyWorkspaceIdentifier } from "../../platform/workspaces/node/workspaces.js";
 import { packagedRemoteRuntimeCatalogSource } from "../../platform/remote/electron-main/packagedRemoteRuntimeCatalog.js";
 import { RemoteRuntimeInstaller, remoteRuntimeArtifactFromEnvironment } from "../../platform/remote/electron-main/remoteRuntimeInstaller.js";
@@ -133,6 +134,8 @@ class SessionsWindowRecord extends Disposable {
 	readonly workspaceContext: WorkspaceContextMainService;
 	readonly remoteConnections: IRemoteConnectionService;
 	readonly modeId: WorkbenchModeId;
+	private readonly handoffs = new Map<string, { readonly options: IOpenAgentsWindowOptions; readonly resolve: () => void; readonly reject: (error: Error) => void }>();
+	private readonly handoffQueue: string[] = [];
 
 	constructor(workspaceId: string, workspaceContext: WorkspaceContextMainService, remoteConnections: IRemoteConnectionService, modeId: WorkbenchModeId) {
 		super();
@@ -140,6 +143,35 @@ class SessionsWindowRecord extends Disposable {
 		this.workspaceContext = this._register(workspaceContext);
 		this.remoteConnections = remoteConnections;
 		this.modeId = modeId;
+		this._register(toDisposable(() => this.rejectHandoffs(new Error('Agents Window closed before the handoff completed'))));
+	}
+
+	enqueueHandoff(options: IOpenAgentsWindowOptions): Promise<void> {
+		const id = createUuid();
+		return new Promise<void>((resolve, reject) => {
+			this.handoffs.set(id, { options, resolve, reject });
+			this.handoffQueue.push(id);
+		});
+	}
+
+	takeHandoff(): { readonly id: string; readonly options: IOpenAgentsWindowOptions } | undefined {
+		const id = this.handoffQueue.shift();
+		const handoff = id ? this.handoffs.get(id) : undefined;
+		return handoff && id ? { id, options: handoff.options } : undefined;
+	}
+
+	completeHandoff(result: IAgentsWindowHandoffResult): void {
+		const handoff = this.handoffs.get(result.id);
+		if (!handoff) throw new Error('Agents Window handoff is not pending');
+		this.handoffs.delete(result.id);
+		if (result.error) handoff.reject(new Error(result.error));
+		else handoff.resolve();
+	}
+
+	rejectHandoffs(error: Error): void {
+		for (const handoff of this.handoffs.values()) handoff.reject(error);
+		this.handoffs.clear();
+		this.handoffQueue.length = 0;
 	}
 }
 
@@ -147,6 +179,17 @@ interface PendingWindowLaunch {
 	readonly arguments: readonly string[];
 	readonly cwd: string;
 }
+
+type WindowSessionEntry =
+	| { readonly kind: 'workbench'; readonly workspace: IAnyWorkspaceIdentifier }
+	| { readonly kind: 'sessions'; readonly workspace: IAnyWorkspaceIdentifier; readonly modeId: WorkbenchModeId };
+
+interface WindowSession {
+	readonly windows: readonly WindowSessionEntry[];
+	readonly active: number;
+}
+
+const WINDOW_SESSION_STATE_KEY = 'windowSession';
 
 async function watchProfileThemeFiles(profileRoot: string, window: BrowserWindow, resources: DisposableStore): Promise<void> {
 	const directory = join(profileRoot, 'themes');
@@ -189,10 +232,7 @@ export class AshApplication extends Disposable {
 		showOpenDialog: (options, window) => window ? dialog.showOpenDialog(window, options) : dialog.showOpenDialog(options),
 		showSaveDialog: (options, window) => window ? dialog.showSaveDialog(window, options) : dialog.showSaveDialog(options),
 	}));
-	private readonly lifecycleMainService = this._register(new LifecycleMainService<BrowserWindow>(async (window, message) => {
-		this.windowsMainService.failManagedWindowClose(window, message);
-		await this.dialogs.showMessageBox({ type: 'error', message }, window);
-	}, window => this.windowsMainService.failManagedWindowClose(window, 'Window close was vetoed')));
+	private lifecycleMainService!: LifecycleMainService<BrowserWindow>;
 	private readonly pendingWindowLaunches: PendingWindowLaunch[] = [];
 	private workspaces: WorkspacesManagementMainService | undefined;
 	private persistentServices: PersistentServices | undefined;
@@ -200,6 +240,11 @@ export class AshApplication extends Disposable {
 	private quitRequested = false;
 	private quitAfterStateSaved = false;
 	private quitSaveStarted = false;
+	/** Opening the first restored window must not replace the rest of the saved session. */
+	private restoringWindowSession = false;
+	private lastFocusedWindowId: number | undefined;
+	/** Closing the last window can cause Electron to quit after every live record is gone. */
+	private lastClosedWindow: WindowSessionEntry | undefined;
 
 	private constructor(
 		options: AshApplicationOptions,
@@ -213,7 +258,7 @@ export class AshApplication extends Disposable {
 		this.disposableTracker = disposableTracker;
 		this.tracking = tracking;
 		this.trustedIpcRouter = this._register(new TrustedIpcRouter(ipcMain));
-		this.updateMainService = this._register(new UpdateMainService());
+		this.updateMainService = this._register(new UpdateMainService(version => this.lifecycleMainService.prepareUpdateRestart(version)));
 		this.nativeKeyboardLayout = this._register(new NativeKeyboardLayoutMainService());
 		this.globalKeybindings = this._register(new GlobalKeybindingsMainService({
 			shortcuts: globalShortcut,
@@ -221,7 +266,7 @@ export class AshApplication extends Disposable {
 			runCommand: (windowId, commandId) => {
 				if (commandId !== OPEN_AGENTS_WINDOW_COMMAND_ID) return;
 				const record = this.workbenchWindows.values().find(candidate => candidate.id === windowId);
-				if (record) return this.openSessionsWindow(record);
+				if (record) return this.openSessionsWindow(record.workspaceContext.getWorkspace(), record.workspaceContext.getResolvedWorkspace(), record.modeId);
 			},
 			onError: error => console.error('Failed to open Agents Window from a system-wide shortcut', error),
 		}));
@@ -269,16 +314,61 @@ export class AshApplication extends Disposable {
 		}
 
 		await this.createPersistentServices();
+		this.lifecycleMainService = this._register(new LifecycleMainService<BrowserWindow>(async (window, message) => {
+			this.windowsMainService.failManagedWindowClose(window, message);
+			await this.dialogs.showMessageBox({ type: 'error', message }, window);
+		}, window => this.windowsMainService.failManagedWindowClose(window, 'Window close was vetoed'), this.services.state, app.getVersion()));
+		const wasUpdated = this.lifecycleMainService.wasRestarted;
 		const workspaces = new WorkspacesManagementMainService();
 		this.workspaces = workspaces;
-		const workspace = await this.resolveWorkspace();
-		const record = await this.openWorkspace(workspace, workspaces);
-		if (!record) {
+		this.restoringWindowSession = true;
+		try {
+			await this.openStartupWindows(workspaces, wasUpdated);
+		} finally {
+			this.restoringWindowSession = false;
+		}
+		if (this.workbenchWindows.size === 0 && this.windowsMainService.managedWindowValues().length === 0) {
 			if (!this.quitRequested) app.quit();
 			return;
 		}
+		await this.saveWindowSession();
 		this.createTray();
 		await this.drainPendingWindowLaunches();
+	}
+
+	private async openStartupWindows(workspaces: WorkspacesManagementMainService, wasUpdated: boolean): Promise<void> {
+		const launch = await this.resolveWorkspace();
+		await this.restoreWindowSession(workspaces, launch.explicit, wasUpdated);
+		if (launch.explicit) {
+			await this.openWorkspace(launch.workspace, workspaces);
+		} else if (this.workbenchWindows.size === 0 && this.windowsMainService.managedWindowValues().length === 0) {
+			await this.openWorkspace(launch.workspace, workspaces);
+		}
+	}
+
+	private async restoreWindowSession(workspaces: WorkspacesManagementMainService, hasExplicitTarget: boolean, wasUpdated: boolean): Promise<void> {
+		const session = parseWindowSession(this.services.state.getItem(WINDOW_SESSION_STATE_KEY));
+		const configuredSetting = configurationValues(this.services.configuration.read().document)[RESTORE_WINDOWS_SETTING];
+		const selection = this.windowsMainService.selectWindowsToRestore(session, configuredSetting, hasExplicitTarget, wasUpdated);
+		for (const entry of selection.windows) {
+			try {
+				if (entry.kind === 'workbench') {
+					await this.openWorkspace(entry.workspace, workspaces);
+				} else {
+					await this.openSessionsWindow(entry.workspace, await workspaces.resolveWorkspace(entry.workspace), entry.modeId);
+				}
+			} catch (error) {
+				console.error('Failed to restore window', error);
+			}
+		}
+		const active = selection.active;
+		if (active) {
+			if (active.kind === 'workbench') this.workbenchWindows.findWorkspace(active.workspace)?.focus();
+			else {
+				const window = this.windowsMainService.managedWindow(active.workspace.id);
+				if (window) focusWindow(window);
+			}
+		}
 	}
 
 	private createTray(): void {
@@ -385,12 +475,16 @@ export class AshApplication extends Disposable {
 		}
 	}
 
-	private async resolveWorkspace(): Promise<IAnyWorkspaceIdentifier> {
+	private async resolveWorkspace(): Promise<{ readonly workspace: IAnyWorkspaceIdentifier; readonly explicit: boolean }> {
 		try {
-			return await this.windowsMainService.resolveWorkspaceOpenTarget(parseWorkspaceLaunchArguments(this.workspaceLaunchArguments(process.argv)), process.cwd());
+			const target = parseWorkspaceLaunchArguments(this.workspaceLaunchArguments(process.argv));
+			return {
+				workspace: await this.windowsMainService.resolveWorkspaceOpenTarget(target, process.cwd()),
+				explicit: target !== undefined,
+			};
 		} catch (error) {
 			console.error("Failed to resolve startup workspace", error);
-			return createEmptyWorkspaceIdentifier();
+			return { workspace: createEmptyWorkspaceIdentifier(), explicit: true };
 		}
 	}
 
@@ -635,13 +729,21 @@ export class AshApplication extends Disposable {
 		this.workbenchWindows.add(record);
 		resources.add(toDisposable(() => this.globalKeybindings.removeWindow(record.id)));
 		const onFocus = (): void => {
-			if (!window.isDestroyed()) this.workbenchWindows.activate(record.id);
+			if (!window.isDestroyed()) {
+				this.workbenchWindows.activate(record.id);
+				this.lastFocusedWindowId = record.id;
+				this.scheduleWindowSessionSave();
+			}
 		};
 		window.on("focus", onFocus);
 		resources.add(toDisposable(() => window.removeListener("focus", onFocus)));
 		window.once("closed", () => {
 			this.workbenchWindows.remove(record.id);
+			this.lastClosedWindow = { kind: 'workbench', workspace: record.openedWorkspace };
+			this.scheduleWindowSessionSave();
 		});
+		this.lastClosedWindow = undefined;
+		this.scheduleWindowSessionSave();
 
 		const rendererEntry = this.resolveRendererEntry("workbench");
 
@@ -697,6 +799,7 @@ export class AshApplication extends Disposable {
 			record.windowsStateHandler = nextWindowsStateHandler;
 			record.windowStateTracking = windowDisposables.add(nextWindowsStateHandler.trackWindow(window));
 			this.workbenchWindows.updateWorkspace(record.id, nextWorkspace);
+			this.scheduleWindowSessionSave();
 		}));
 		windowDisposables.add(workspaceContext.onDidChangeWorkspace(({ resolvedWorkspace }) => {
 			if (!window.isDestroyed()) {
@@ -786,7 +889,7 @@ export class AshApplication extends Disposable {
 					return result.canceled || result.filePaths.length === 0 ? undefined : result.filePaths;
 				},
 				openWorkspace: (root) => transitionToFolder(root, true),
-				openAgentsWindow: () => this.openSessionsWindow(record),
+				openAgentsWindow: options => this.openSessionsWindow(record.workspaceContext.getWorkspace(), record.workspaceContext.getResolvedWorkspace(), record.modeId, options),
 				revealFile: path => {
 					if (!isAbsolute(path)) throw new TypeError('File path to reveal must be absolute');
 					shell.showItemInFolder(path);
@@ -851,19 +954,18 @@ export class AshApplication extends Disposable {
 	}
 
 	/** Opens a Sessions window with its own workspace and connection lifetime. */
-	private async openSessionsWindow(record: WorkbenchWindowRecord): Promise<void> {
-		const mode = WorkbenchModeRegistry.get(record.modeId);
+	private async openSessionsWindow(workspace: IAnyWorkspaceIdentifier, resolvedWorkspace: IWorkspace, modeId: WorkbenchModeId, handoff?: IOpenAgentsWindowOptions): Promise<void> {
+		const mode = WorkbenchModeRegistry.get(modeId);
 		if (!mode.dedicatedSessions) {
 			throw new Error(`${mode.title} does not provide a dedicated Sessions window`);
 		}
-		const workspace = record.workspaceContext.getWorkspace();
 		const workspaces = this.workspaces;
 		if (!workspaces) throw new Error('Workspace service is not initialized');
 		let sessions = this.sessionsWindows.get(workspace.id);
 		if (!sessions) {
 			const remoteConnections = this.createRemoteConnections(workspaces);
-			const workspaceContext = new WorkspaceContextMainService(workspace, record.workspaceContext.getResolvedWorkspace());
-			sessions = new SessionsWindowRecord(workspace.id, workspaceContext, remoteConnections, record.modeId);
+			const workspaceContext = new WorkspaceContextMainService(workspace, resolvedWorkspace);
+			sessions = new SessionsWindowRecord(workspace.id, workspaceContext, remoteConnections, modeId);
 			this.sessionsWindows.set(workspace.id, sessions);
 		}
 		const session = sessions;
@@ -884,6 +986,24 @@ export class AshApplication extends Disposable {
 				webPreferences: this.createSandboxWebPreferences(),
 				initialize: async (window, windowDisposables) => {
 					windowDisposables.add(sessionsWindowState.trackWindow(window));
+					const onFocus = (): void => {
+						this.lastFocusedWindowId = window.id;
+						this.scheduleWindowSessionSave();
+					};
+					window.on('focus', onFocus);
+					windowDisposables.add(toDisposable(() => window.removeListener('focus', onFocus)));
+					// A renderer reload cannot acknowledge a draft already handed to the previous renderer.
+					const rejectInterruptedHandoffs = (): void => session.rejectHandoffs(new Error('Agents Window reloaded before the handoff completed'));
+					const onNavigation = (_event: unknown, _url: string, inPlace: boolean, mainFrame: boolean): void => {
+						if (mainFrame && !inPlace) rejectInterruptedHandoffs();
+					};
+					window.webContents.on('did-start-navigation', onNavigation);
+					window.webContents.on('render-process-gone', rejectInterruptedHandoffs);
+					windowDisposables.add(toDisposable(() => {
+						if (window.isDestroyed()) return;
+						window.webContents.removeListener('did-start-navigation', onNavigation);
+						window.webContents.removeListener('render-process-gone', rejectInterruptedHandoffs);
+					}));
 					const windowControlsOverlay = new WindowControlsOverlay(colors => {
 						if (titleBarStyle === 'custom' && (process.platform === 'win32' || process.platform === 'linux')) window.setTitleBarOverlay(colors);
 					});
@@ -919,11 +1039,22 @@ export class AshApplication extends Disposable {
 						...diskFileSystemProviderRoutes(windowDisposables.add(new DiskFileSystemProvider([URI.file(this.profileRoot)])), URI.file(this.profileRoot)),
 						...workspaceContextIpcRoutes(session.workspaceContext),
 						{
+							channel: AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL,
+							validate: validateAgentsWindowHandoffTake,
+							invoke: () => session.takeHandoff(),
+						},
+						{
+							channel: AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL,
+							validate: validateAgentsWindowHandoffComplete,
+							invoke: (result: unknown) => session.completeHandoff(result as IAgentsWindowHandoffResult),
+						},
+						{
 							channel: RETURN_TO_WORKBENCH_CHANNEL,
 							validate: validateReturnToWorkbench,
 							invoke: async () => {
-								await this.windowsMainService.closeManagedWindow(session.workspaceId);
+								// Keep one window alive when Agents is the only restored window.
 								const opened = await this.openWorkspace(workspace, workspaces);
+								await this.windowsMainService.closeManagedWindow(session.workspaceId);
 								opened?.focus();
 							},
 						},
@@ -952,9 +1083,21 @@ export class AshApplication extends Disposable {
 				},
 			},
 			() => {
+				const closedWorkspace = session.workspaceContext.getWorkspace();
 				if (this.sessionsWindows.get(session.workspaceId) === session) this.sessionsWindows.deleteAndDispose(session.workspaceId);
+				this.lastClosedWindow = { kind: 'sessions', workspace: closedWorkspace, modeId: session.modeId };
+				this.scheduleWindowSessionSave();
 			},
 		);
+		this.lastClosedWindow = undefined;
+		this.scheduleWindowSessionSave();
+		if (handoff) {
+			const completed = session.enqueueHandoff(handoff);
+			const window = this.windowsMainService.managedWindow(workspace.id);
+			if (!window) throw new Error('Agents Window is unavailable for handoff');
+			window.webContents.send(AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL);
+			await completed;
+		}
 	}
 
 	private async performShellCommand(operation: 'install' | 'uninstall'): Promise<string> {
@@ -1248,6 +1391,7 @@ export class AshApplication extends Disposable {
 		for (const record of records) record.windowStateTracking.dispose();
 		void (async () => {
 			try {
+				await this.saveWindowSession();
 				for (const record of records) {
 					if (!record.window.isDestroyed()) await record.windowsStateHandler.saveWindowState(record.window);
 				}
@@ -1289,6 +1433,38 @@ export class AshApplication extends Disposable {
 				]).then(() => undefined)
 			: Promise.resolve();
 		return this.closePersistentServicesPromise;
+	}
+
+	private scheduleWindowSessionSave(): void {
+		if (this.restoringWindowSession || this.quitRequested || !this.persistentServices) return;
+		void this.saveWindowSession().catch(error => console.error('Failed to save window session', error));
+	}
+
+	private async saveWindowSession(): Promise<void> {
+		const windows = [
+			...this.workbenchWindows.values().map(record => ({
+				id: record.id,
+				entry: { kind: 'workbench' as const, workspace: record.openedWorkspace },
+			})),
+			...[...this.sessionsWindows].flatMap(([, session]) => {
+				const window = this.windowsMainService.managedWindow(session.workspaceId);
+				return window ? [{ id: window.id, entry: { kind: 'sessions' as const, workspace: session.workspaceContext.getWorkspace(), modeId: session.modeId } }] : [];
+			}),
+		];
+		const entries = windows.length > 0 ? windows.map(window => window.entry) : this.lastClosedWindow ? [this.lastClosedWindow] : [];
+		const focused = windows.findIndex(window => window.id === BrowserWindow.getFocusedWindow()?.id);
+		const lastFocused = windows.findIndex(window => window.id === this.lastFocusedWindowId);
+		const active = focused >= 0 ? focused : Math.max(0, lastFocused);
+		this.services.state.setItem(WINDOW_SESSION_STATE_KEY, {
+			version: 1,
+			active,
+			windows: entries.map(entry => ({
+				kind: entry.kind,
+				workspace: serializeWorkspaceIdentifier(entry.workspace),
+				...(entry.kind === 'sessions' ? { modeId: entry.modeId } : {}),
+			})),
+		});
+		await this.services.state.flush();
 	}
 
 	private async resolveDirGrant(workspaceHost: RendererWorkspaceHost, path: string): Promise<DirGrant | undefined> {
@@ -1384,6 +1560,29 @@ export class AshApplication extends Disposable {
 			this.tracking?.[Symbol.dispose]();
 		}
 	}
+}
+
+function parseWindowSession(value: unknown): WindowSession | undefined {
+	if (!isRecord(value) || Object.keys(value).sort().join(',') !== 'active,version,windows' || value.version !== 1 || !Array.isArray(value.windows)) return undefined;
+	if (!Number.isSafeInteger(value.active) || (value.active as number) < 0 || (value.windows.length === 0 ? value.active !== 0 : (value.active as number) >= value.windows.length)) return undefined;
+	const windows: WindowSessionEntry[] = [];
+	for (const candidate of value.windows) {
+		if (!isRecord(candidate) || (candidate.kind !== 'workbench' && candidate.kind !== 'sessions')) return undefined;
+		const keys = Object.keys(candidate).sort().join(',');
+		if (keys !== (candidate.kind === 'sessions' ? 'kind,modeId,workspace' : 'kind,workspace')) return undefined;
+		try {
+			const workspace = parseWorkspaceIdentifier(candidate.workspace);
+			if (candidate.kind === 'sessions') {
+				if (!WorkbenchModeRegistry.isModeId(candidate.modeId)) return undefined;
+				windows.push({ kind: 'sessions', workspace, modeId: candidate.modeId });
+			} else {
+				windows.push({ kind: 'workbench', workspace });
+			}
+		} catch {
+			return undefined;
+		}
+	}
+	return { windows, active: value.active as number };
 }
 
 function workspaceTransitionError(

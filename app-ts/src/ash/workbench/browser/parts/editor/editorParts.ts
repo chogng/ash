@@ -3,9 +3,10 @@ import type { IDimension } from "../../../../base/browser/dom.js";
 import type { Direction as GridDirection } from "../../../../base/browser/ui/grid/grid.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { onUnexpectedError } from "../../../../base/common/errors.js";
-import { DisposableMap, Disposable, DisposableStore } from "../../../../base/common/lifecycle.js";
+import { DisposableMap, Disposable, DisposableStore, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { rot } from "../../../../base/common/numbers.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
+import { type IStorageService, StorageScope, StorageTarget } from "../../../../platform/storage/common/storage.js";
 import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
 import type { EditorInput, EditorOpenOptions, EditorOpenTarget } from "../../../services/editor/common/editorService.js";
 import type { ApplyEditorWorkingSetOptions, EditorWorkingSet, EditorWorkingSetTarget } from "../../../services/editor/common/editorWorkingSet.js";
@@ -21,6 +22,12 @@ import {
 	type AuxiliaryEditorPartFactory,
 } from "./auxiliaryEditorPart.js";
 
+export interface EditorPartsState {
+	readonly version: 1;
+	readonly active: number;
+	readonly parts: readonly EditorWorkingSet[];
+}
+
 /** Multi-window coordinator exposed to commands and editor services. */
 export interface IEditorPartsService extends IEditorPart {
 	readonly mainPart: IEditorPart;
@@ -31,17 +38,24 @@ export interface IEditorPartsService extends IEditorPart {
 	moveActiveEditorToNewWindow(): Promise<IEditorPart | undefined>;
 	closeAuxiliaryEditorPart(part: IEditorPart): Promise<boolean>;
 	replaceEditorResource(source: IEditorGroup, input: EditorInput, replacement: EditorInput): Promise<void>;
+	savePartsState(): EditorPartsState;
+	restorePartsState(state: EditorPartsState): Promise<void>;
+	restoreSavedState(shouldRestore: boolean): Promise<void>;
+	pauseStatePersistence(): IDisposable;
 }
 
 export const IEditorPartsService = createServiceIdentifier<IEditorPartsService>("editorPartsService");
 
 /** Coordinates one primary EditorPart and zero or more auxiliary-window parts. */
 export class EditorParts extends Disposable implements IEditorPartsService {
+	private static readonly stateStorageKey = 'editorparts.state';
 	private readonly editorChangeEmitter = this._register(new Emitter<EditorPartChangeEvent>());
 	private readonly auxiliaryCreatedEmitter = this._register(new Emitter<IEditorPart>());
 	private readonly auxiliary = this._register(new DisposableMap<IEditorPart, AuxiliaryEditorPart>());
 	private readonly partListeners = this._register(new DisposableMap<IEditorPart, DisposableStore>());
 	private _activePart: IEditorPart;
+	private hasRestoredState = false;
+	private statePersistencePauses = 0;
 	readonly onDidChangeEditors = this.editorChangeEmitter.event;
 	readonly onDidCreateAuxiliaryEditorPart = this.auxiliaryCreatedEmitter.event;
 
@@ -50,10 +64,16 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		private readonly windows: IAuxiliaryWindowService,
 		private readonly createPart: AuxiliaryEditorPartFactory,
 		private readonly accessibility: IAccessibilityService,
+		private readonly storage: IStorageService,
 	) {
 		super();
 		this._activePart = mainPart;
 		this.registerPart(mainPart);
+		this._register(storage.onWillSaveState(() => {
+			if (this.hasRestoredState && this.statePersistencePauses === 0) {
+				storage.store(EditorParts.stateStorageKey, JSON.stringify(this.savePartsState()), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+			}
+		}));
 	}
 
 	get parts(): readonly IEditorPart[] { return [this.mainPart, ...this.auxiliary.keys()]; }
@@ -73,6 +93,45 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 	}
 
 	getEditorState(): EditorPartState { return this._activePart.getEditorState(); }
+
+	savePartsState(): EditorPartsState {
+		const parts = this.parts;
+		return { version: 1, active: parts.indexOf(this._activePart), parts: parts.map(part => part.saveWorkingSet('lastSession')) };
+	}
+
+	async restoreSavedState(shouldRestore: boolean): Promise<void> {
+		try {
+			if (!shouldRestore) return;
+			const saved = this.storage.get(EditorParts.stateStorageKey, StorageScope.WORKSPACE);
+			if (saved !== undefined) {
+				try {
+					await this.restorePartsState(JSON.parse(saved));
+				} catch (error) {
+					this.storage.remove(EditorParts.stateStorageKey, StorageScope.WORKSPACE);
+					throw error;
+				}
+			}
+		} finally {
+			this.hasRestoredState = true;
+		}
+	}
+
+	pauseStatePersistence(): IDisposable {
+		this.statePersistencePauses++;
+		return toDisposable(() => { this.statePersistencePauses--; });
+	}
+
+	async restorePartsState(state: EditorPartsState): Promise<void> {
+		if (state?.version !== 1 || !Array.isArray(state.parts) || state.parts.length === 0 || !Number.isInteger(state.active) || state.active < 0 || state.active >= state.parts.length) {
+			throw new TypeError('Invalid saved editor parts state');
+		}
+		await this.mainPart.applyWorkingSet(state.parts[0]!, { preserveFocus: true });
+		for (const workingSet of state.parts.slice(1)) {
+			const part = await this.createAuxiliaryEditorPart();
+			await part.applyWorkingSet(workingSet, { preserveFocus: true });
+		}
+		this.setActivePart(this.parts[state.active]!);
+	}
 
 	async createAuxiliaryEditorPart(): Promise<IEditorPart> {
 		const auxiliaryWindow = await this.windows.open({ title: "Editor" });

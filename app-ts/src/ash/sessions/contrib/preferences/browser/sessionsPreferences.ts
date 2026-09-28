@@ -6,6 +6,7 @@ import { ContextView } from '../../../../base/browser/ui/contextview/contextview
 import { Dialog } from '../../../../base/browser/ui/dialog/dialog.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
+import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import { Switch } from '../../../../base/browser/ui/toggle/toggle.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import type { Icon } from '../../../../base/common/icon.js';
@@ -109,9 +110,13 @@ export class SessionsPreferences extends Disposable {
 		const navigation = h(ownerDocument, 'nav');
 		navigation.className = 'ash-sessions-settings-navigation';
 		navigation.setAttribute('aria-label', localize('sessions.settings.categories', 'Settings categories'));
+		const navigationContent = h(ownerDocument, 'div');
+		navigationContent.className = 'ash-sessions-settings-navigation-content';
 		sidebar.append(search, navigation);
 		const page = h(ownerDocument, 'section');
 		page.className = 'ash-sessions-settings-page';
+		const pageContent = h(ownerDocument, 'div');
+		pageContent.className = 'ash-sessions-settings-page-content';
 		const heading = h(ownerDocument, 'h3');
 		heading.className = 'ash-sessions-settings-page-title';
 		heading.id = 'ash-sessions-settings-page-title';
@@ -159,9 +164,25 @@ export class SessionsPreferences extends Disposable {
 		status.className = 'ash-sessions-settings-status';
 		status.setAttribute('role', 'status');
 		status.hidden = true;
-		page.append(heading, modelSearch, chatModelsHeading, list, empty, voiceGroup, apiGroup, status);
+		pageContent.append(heading, modelSearch, chatModelsHeading, list, empty, voiceGroup, apiGroup, status);
 		content.append(sidebar, page);
 		const resources = new DisposableStore();
+		const navigationScrollable = resources.add(new ScrollableElement(navigation, {
+			direction: 'vertical',
+			vertical: 'auto',
+			tabIndex: -1,
+			wheel: { consume: 'when-scrolling' },
+		}));
+		navigationScrollable.element.classList.add('ash-sessions-settings-navigation-scrollable');
+		navigationScrollable.append(navigationContent);
+		const pageScrollable = resources.add(new ScrollableElement(page, {
+			direction: 'vertical',
+			vertical: 'auto',
+			tabIndex: -1,
+			wheel: { consume: 'when-scrolling' },
+		}));
+		pageScrollable.element.classList.add('ash-sessions-settings-page-scrollable');
+		pageScrollable.append(pageContent);
 		const searchInput = resources.add(new InputBox(search, {
 			type: 'search',
 			presentation: 'field',
@@ -279,7 +300,7 @@ export class SessionsPreferences extends Disposable {
 			label.className = 'ash-sessions-settings-navigation-label';
 			label.textContent = section.title;
 			group.append(label);
-			navigation.append(group);
+			navigationContent.append(group);
 			for (const category of section.categories) {
 				const index = buttons.length;
 				const button = resources.add(new Button(group, {
@@ -315,7 +336,7 @@ export class SessionsPreferences extends Disposable {
 				renderedApiRows = [];
 			}
 			list.replaceChildren(...visible.map(setting => renderer.render(setting)));
-			page.scrollTop = 0;
+			pageScrollable.scrollTo(0, 0);
 			list.hidden = visible.length === 0 && !isModels;
 			empty.textContent = localize('sessions.settings.noResults', 'No settings found.');
 			empty.hidden = query.isEmpty || visible.length !== 0;

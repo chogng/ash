@@ -30,7 +30,7 @@ export class UpdateMainService extends AbstractDisposable {
 	private staged: StagedUpdate | undefined;
 	private installing = false;
 
-	constructor() {
+	constructor(private readonly prepareRestart: (version: string) => Promise<void>) {
 		super();
 		if (app.isPackaged && process.platform === 'darwin') {
 			void this.cleanupPreviousMacUpdate().catch(error => console.error('Could not clean up previous Ash update', error));
@@ -73,6 +73,7 @@ export class UpdateMainService extends AbstractDisposable {
 		this.installing = true;
 		try {
 			await verifyStaged(staged);
+			await this.prepareRestart(staged.version);
 			if (process.platform === 'win32') await this.installWindows(staged);
 			else if (process.platform === 'darwin') await this.installMac(staged);
 			else throw new Error('Desktop installation is unavailable on this platform');

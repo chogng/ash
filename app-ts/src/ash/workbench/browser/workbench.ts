@@ -364,6 +364,7 @@ export class Workbench extends Disposable {
 	/** Resolves after dirty working copies are restored and AfterRestored contributions are active. */
 	readonly whenRestored: Promise<void>;
 	private readonly workspaceContext: WorkspaceContextService;
+	private readonly configurationService: IConfigurationService;
 	private readonly storage: BrowserStorageService;
 	private readonly editor: IEditorPartsService;
 	private readonly untitledTextEditorService: IUntitledTextEditorService;
@@ -519,6 +520,7 @@ export class Workbench extends Disposable {
 			api: configurationApi,
 			initialSnapshot: initialConfigurationSnapshot,
 		}));
+		this.configurationService = configuration;
 		services.registerInstance(IConfigurationService, configuration);
 		services.registerInstance(IConfigurationResourceService, configuration);
 		const languageService = this._register(new LanguageService());
@@ -897,7 +899,7 @@ export class Workbench extends Disposable {
 				}),
 				resources: [contextKeyService],
 			};
-		}, accessibilityService));
+		}, accessibilityService, storage));
 		services.registerInstance(IEditorPartsService, editorParts);
 		this._register(new EditorContextKeyController(contextKeys, editorParts, EditorPanes, languageService));
 		services.registerInstance(IEditorPart, editorParts);
@@ -1111,6 +1113,14 @@ export class Workbench extends Disposable {
 		this.restoreActiveViewContainers();
 		const viewsService = new ViewsService({
 			viewDescriptorService: viewDescriptors,
+			getViewContainer: (container) => {
+				switch (container.location) {
+					case ViewContainerLocation.Sidebar: return sidebar.getComposite(container.id);
+					case ViewContainerLocation.AuxiliaryBar: return auxiliarybar.getComposite(container.id);
+					case ViewContainerLocation.AgentSidebar: return agentSidebar.getComposite(container.id);
+					case ViewContainerLocation.Panel: return panel.getComposite(container.id);
+				}
+			},
 			openViewContainer: (container) => {
 				switch (container.location) {
 					case ViewContainerLocation.Sidebar:
@@ -1158,7 +1168,7 @@ export class Workbench extends Disposable {
 		));
 		contributions.advance(WorkbenchPhase.BlockRestore);
 		layoutService.layout();
-		this.whenRestored = this.completeStartupRestoration([extensionReady, ...serviceContributionReady], workingCopyBackups, editor, contributions);
+		this.whenRestored = this.completeStartupRestoration([extensionReady, ...serviceContributionReady], workingCopyBackups, editor, editorParts, contributions);
 	}
 
 	private registerErrorHandler(logService: ILogService): void {
@@ -1183,13 +1193,23 @@ export class Workbench extends Disposable {
 		return this.lifecycleService.shutdown(reason);
 	}
 
-	private async completeStartupRestoration(extensionReady: readonly Promise<void>[], backups: IWorkingCopyBackupService, editor: IEditorPart, contributions: WorkbenchContributionHost): Promise<void> {
+	private async completeStartupRestoration(extensionReady: readonly Promise<void>[], backups: IWorkingCopyBackupService, editor: IEditorPart, editorParts: IEditorPartsService, contributions: WorkbenchContributionHost): Promise<void> {
 		await Promise.allSettled(extensionReady);
+		if (this.isDisposed) return;
+		await this.restoreEditorParts(editorParts);
 		if (this.isDisposed) return;
 		await this.restoreWorkingCopyBackups(backups, editor);
 		if (this.isDisposed) return;
 		contributions.advance(WorkbenchPhase.AfterRestored);
 		this._register(disposableWindowTimeout(this.ownerWindow, () => contributions.advance(WorkbenchPhase.Eventually), 2_000));
+	}
+
+	private async restoreEditorParts(editorParts: IEditorPartsService): Promise<void> {
+		try {
+			await editorParts.restoreSavedState(this.workbenchLayout.shouldRestoreEditors(this.configurationService));
+		} catch (error) {
+			this.logService.error('editor', 'Failed to restore saved editor parts', error);
+		}
 	}
 
 	private async restoreWorkingCopyBackups(backups: IWorkingCopyBackupService, editor: IEditorPart): Promise<void> {
@@ -1233,17 +1253,19 @@ export class Workbench extends Disposable {
 	private async doUpdateWorkspace(workspace: IWorkspace): Promise<void> {
 		if (this.workspaceContext.getWorkspace().id === workspace.id) return;
 		await this.workingCopyBackupTracker.flush();
+		await this.storage.flush(WillSaveStateReason.WORKSPACE_CHANGE);
+		using editorStatePause = this.editor.pauseStatePersistence();
 		if (!await this.editor.closeAllEditors({ reason: "reset" })) throw new CancellationError("Workspace switch was cancelled");
 		await this.workingCopyBackupTracker.flush();
 		this.untitledTextEditorService.reset();
 		this.workingCopyBackups.switchWorkspace(workspace.id);
-		await this.storage.flush(WillSaveStateReason.WORKSPACE_CHANGE);
 		this.storage.switchWorkspace(workspace.id);
 		const nextWorkbenchState = workbenchStateFromWorkspace(workspace);
 		this.workbenchWindow.setWorkbenchState(nextWorkbenchState);
 		this.workspaceContext.updateWorkspace(workspace);
 		this.workbenchLayout.restoreWorkspaceState(nextWorkbenchState);
 		this.restoreActiveViewContainers?.();
+		await this.restoreEditorParts(this.editor);
 		await this.restoreWorkingCopyBackups(this.workingCopyBackups, this.editor);
 		await this.contributions.workspaceRestored();
 	}

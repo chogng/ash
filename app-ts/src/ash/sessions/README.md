@@ -24,10 +24,10 @@ is canonical for the renderer implementation and extension points.
 | Window Sessions state | `services/sessions/browser/sessionsService.ts` | owns active/visible selections, focus, and Back/Forward history |
 | Frontend Session model | `services/sessions/common/session.ts` | owns `ISession`, `IChat`, workspace summary, and untitled identity types |
 | Shared Chat contract | `workbench/services/chat/common/chatService.ts` | owns Thread and Turn operations plus shared Session/Thread IDs, model references, and approval modes used by both renderers |
-| Provider and management | `contrib/providers/appServer/`, `services/sessions/common/sessionsManagement.ts`, and `services/sessions/browser/sessionsManagementService.ts` | the App Server provider adapts transport data; management owns catalog, drafts, and operations |
-| Regular Workbench Chat | `browser/workbenchSessions.contribution.ts`, `browser/chatViewPane.ts`, and `browser/chatWidgetModel.ts` | registers the Session-backed Chat view and actions; one model owns selection, draft materialization, and Thread subscriptions for each shared `ChatWidget` |
+| Provider and management | `contrib/providers/appServer/browser/workbenchSessionsService.contribution.ts`, `services/sessions/common/sessionsManagement.ts`, and `services/sessions/browser/sessionsManagementService.ts` | the App Server provider adapts transport data; management owns catalog, drafts, and operations; the contribution registers and starts it in the regular Workbench |
+| Regular Workbench Chat | `browser/workbenchChat.contribution.ts`, `browser/chatViewPane.ts`, and `browser/chatWidgetModel.ts` | registers the Session-backed Chat view, actions, and navigation service; one model owns selection, draft materialization, and Thread subscriptions for each shared `ChatWidget` |
 | Main conversation | `browser/parts/sessionsChatView.ts` | renders visible durable and untitled Sessions as retained full `ChatWidget` Grid leaves |
-| Turn review | `browser/turnMultiDiffSource.ts` and `browser/workbenchSessions.contribution.ts` | compose Turn changes and register their source resolver and commit action with `workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.ts` |
+| Turn review | `browser/turnMultiDiffSource.ts` and `browser/turnMultiDiffSource.contribution.ts` | compose Turn changes and register their source resolver and commit action with `workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.ts` |
 | Parts | `browser/parts/` | owns product chrome, window navigation, list, primary surface, and typed active context |
 | Application menu | `browser/parts/menubar.contribution.ts` | registers the Sessions window's menu sections and window actions; the titlebar uses the shared Workbench menu control |
 | Session chat commands | `browser/actions/sessionsChatActions.ts` | maps the reused ChatWidget New Chat and History commands to the Sessions window's draft and active-chat selection |
@@ -133,8 +133,8 @@ and dirs. It does not grant access and is not the editor window Workspace from
   passively renders multiple full Chat surfaces and reports focus/close intent.
 - `test/browser/chatViewPane.test.ts`, `chatViewPane.startup.test.ts`, and
   `sessionInspector.test.ts` protect the Session-backed regular Workbench Chat.
-- `test/browser/workbenchSessions.contribution.test.ts` verifies service
-  registration and Turn review source and commit actions.
+- `test/browser/workbenchSessions.contribution.test.ts` verifies the regular
+  Workbench's separate Sessions service, Chat navigation, and Turn review registrations.
 - `test/browser/sessions-list.test.ts` verifies that list refresh retains buttons,
   focus, and click behavior for unchanged Sessions.
 - `test/browser/sessionsAccountMenu.test.ts` verifies account menu actions and

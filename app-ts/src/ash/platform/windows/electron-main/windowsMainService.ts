@@ -12,10 +12,10 @@ import { USER_KEYBOARD_LAYOUT_CHANGED_CHANNEL } from '../../keyboardLayout/commo
 import { nativeKeyboardLayoutIpcRoutes, type NativeKeyboardLayoutMainService } from '../../keyboardLayout/electron-main/nativeKeyboardLayoutMainService.js';
 import { userKeyboardLayoutIpcRoutes, type UserKeyboardLayoutMainService } from '../../keyboardLayout/electron-main/userKeyboardLayoutMainService.js';
 import { createSshRemoteWorkspaceUri } from '../../remote/common/remote.js';
-import { type IAnyWorkspaceIdentifier, hasWorkspaceFileExtension, serializeWorkspace } from '../../workspace/common/workspace.js';
+import { type IAnyWorkspaceIdentifier, hasWorkspaceFileExtension, isSingleFolderWorkspaceIdentifier, isWorkspaceIdentifier, serializeWorkspace } from '../../workspace/common/workspace.js';
 import { WORKSPACE_CONTEXT_READ_CHANNEL, validateWorkspaceContextRead } from '../../workspace/common/workspaceIpc.js';
 import { createEmptyWorkspaceIdentifier, getSingleFolderWorkspaceIdentifier, getWorkspaceIdentifier, nodeWorkspacePathService, type IWorkspacePathService, WorkspacePathKind } from '../../workspaces/node/workspaces.js';
-import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL, validateWindowCloseResponse, validateWindowOperation, type WindowCloseResponse, type WindowOperation, type IWorkbenchWindowInfo } from '../../window/common/window.js';
+import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL, parseRestoreWindowsSetting, validateWindowCloseResponse, validateWindowOperation, type WindowCloseResponse, type WindowOperation, type IWorkbenchWindowInfo, type RestoreWindowsSetting } from '../../window/common/window.js';
 import { focusWindow, type IFocusableWindow, type WorkspaceContextMainService } from '../../window/electron-main/window.js';
 import { CodeWindow, type IWindowCreationOptions } from './windowImpl.js';
 import type { IWindowConstructorOptions, IWindowWebPreferences } from './windows.js';
@@ -224,6 +224,25 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> exten
 
 	public closeManagedWindow(key: string): Promise<void> {
 		return this.managedWindows.get(key)?.close() ?? Promise.resolve();
+	}
+
+	public selectWindowsToRestore<TEntry extends { readonly workspace: IAnyWorkspaceIdentifier }>(
+		session: { readonly windows: readonly TEntry[]; readonly active: number } | undefined,
+		configuredSetting: unknown,
+		hasExplicitTarget: boolean,
+		wasRestarted: boolean,
+	): { readonly windows: readonly TEntry[]; readonly active: TEntry | undefined } {
+		const setting: RestoreWindowsSetting = wasRestarted || configuredSetting === undefined
+			? 'all'
+			: parseRestoreWindowsSetting(configuredSetting);
+		if (!session || setting === 'none' || (hasExplicitTarget && !wasRestarted && setting !== 'preserve')) {
+			return { windows: [], active: undefined };
+		}
+		const windows = setting === 'one'
+			? [session.windows[session.active]].filter((entry): entry is TEntry => entry !== undefined)
+			: session.windows.filter(entry => setting !== 'folders' || isSingleFolderWorkspaceIdentifier(entry.workspace) || isWorkspaceIdentifier(entry.workspace));
+		const active = session.windows[session.active];
+		return { windows, active: active && windows.includes(active) ? active : undefined };
 	}
 
 	public async resolveWorkspaceOpenTarget(target: IWorkspaceOpenTarget | undefined, cwd: string): Promise<IAnyWorkspaceIdentifier> {

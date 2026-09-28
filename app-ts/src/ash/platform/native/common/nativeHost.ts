@@ -126,6 +126,14 @@ export interface INativeOpenDialogOptions {
 	readonly filters?: readonly FileFilter[];
 }
 
+export interface IOpenAgentsWindowOptions {
+	readonly conversation?: { readonly sessionId: string; readonly threadId: string };
+	readonly draft?: {
+		readonly text: string;
+		readonly contexts: readonly { readonly id: string; readonly kind: string; readonly name: string; readonly content: string }[];
+	};
+}
+
 /** Window-scoped native capabilities exposed to an Electron renderer. */
 export interface INativeHostApi {
 	showNativeDialog(request: DialogRequest, signal: AbortSignal): Promise<IDialogOutcome>;
@@ -146,7 +154,7 @@ export interface INativeHostApi {
 	pickFolder(): Promise<string | undefined>;
 	pickFile(options: INativeOpenDialogOptions): Promise<readonly string[] | undefined>;
 	openWorkspace(root: string): Promise<void>;
-	openAgentsWindow(): Promise<void>;
+	openAgentsWindow(options?: IOpenAgentsWindowOptions): Promise<void>;
 	revealFile(path: string): Promise<void>;
 	setWindowTheme(theme: INativeWindowTheme): Promise<void>;
 	setWindowDimmed(dimmed: boolean): Promise<void>;
@@ -170,9 +178,30 @@ export function validateOpenWorkspace(value: unknown): string {
 	return value;
 }
 
-export function validateOpenAgentsWindow(value: unknown): undefined {
-	if (value !== undefined) throw new TypeError('Open Agents Window does not accept parameters');
-	return undefined;
+export function validateOpenAgentsWindow(value: unknown): IOpenAgentsWindowOptions | undefined {
+	if (value === undefined) return undefined;
+	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Invalid Agents Window options');
+	const options = value as Record<string, unknown>;
+	if (Object.keys(options).some(key => key !== 'conversation' && key !== 'draft')) throw new TypeError('Invalid Agents Window options');
+	if (options.conversation === undefined && options.draft === undefined) throw new TypeError('Agents Window handoff requires a conversation or draft');
+	if (options.conversation !== undefined) {
+		const conversation = options.conversation;
+		if (!conversation || typeof conversation !== 'object' || Array.isArray(conversation)) throw new TypeError('Invalid Agents Window conversation');
+		const fields = conversation as Record<string, unknown>;
+		if (Object.keys(fields).sort().join(',') !== 'sessionId,threadId' || typeof fields.sessionId !== 'string' || !fields.sessionId || typeof fields.threadId !== 'string' || !fields.threadId) throw new TypeError('Invalid Agents Window conversation');
+	}
+	if (options.draft !== undefined) {
+		const draft = options.draft;
+		if (!draft || typeof draft !== 'object' || Array.isArray(draft)) throw new TypeError('Invalid Agents Window draft');
+		const fields = draft as Record<string, unknown>;
+		if (Object.keys(fields).sort().join(',') !== 'contexts,text' || typeof fields.text !== 'string' || !Array.isArray(fields.contexts)) throw new TypeError('Invalid Agents Window draft');
+		for (const context of fields.contexts) {
+			if (!context || typeof context !== 'object' || Array.isArray(context)) throw new TypeError('Invalid Agents Window context');
+			const attachment = context as Record<string, unknown>;
+			if (Object.keys(attachment).sort().join(',') !== 'content,id,kind,name' || Object.values(attachment).some(item => typeof item !== 'string')) throw new TypeError('Invalid Agents Window context');
+		}
+	}
+	return value as IOpenAgentsWindowOptions;
 }
 
 export function validatePickFolder(value: unknown): undefined {

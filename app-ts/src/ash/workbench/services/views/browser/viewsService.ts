@@ -18,7 +18,7 @@ export type OpenViewContainer = (
 ) => ViewPaneContainer | undefined;
 
 /**
- * Window-scoped operations for revealing registered views.
+ * Window-scoped operations for reading and revealing registered views.
  *
  * The service resolves contribution identity. Its host callback owns Part
  * visibility and Composite activation for each workbench location.
@@ -26,6 +26,7 @@ export type OpenViewContainer = (
 export interface IViewsService {
 	openView(viewId: string): IView | undefined;
 	focusView(viewId: string): boolean;
+	getViewWithId(viewId: string): IView | undefined;
 }
 
 export const IViewsService =
@@ -34,16 +35,19 @@ export const IViewsService =
 export interface ViewsServiceOptions {
 	readonly viewDescriptorService: IViewDescriptorService;
 	readonly openViewContainer: OpenViewContainer;
+	readonly getViewContainer: (container: IViewContainerDescriptor) => ViewPaneContainer | undefined;
 }
 
 /** Default browser implementation of the registered-view operations. */
 export class ViewsService implements IViewsService {
 	private readonly viewDescriptorService: IViewDescriptorService;
 	private readonly openViewContainer: OpenViewContainer;
+	private readonly getViewContainer: ViewsServiceOptions['getViewContainer'];
 
 	constructor(options: ViewsServiceOptions) {
 		this.viewDescriptorService = options.viewDescriptorService;
 		this.openViewContainer = options.openViewContainer;
+		this.getViewContainer = options.getViewContainer;
 	}
 
 	openView(viewId: string): IView | undefined {
@@ -58,5 +62,10 @@ export class ViewsService implements IViewsService {
 		if (!view) return false;
 		view.focus();
 		return true;
+	}
+
+	getViewWithId(viewId: string): IView | undefined {
+		const container = this.viewDescriptorService.getViewContainerForView(viewId);
+		return container ? this.getViewContainer(container)?.getView(viewId) : undefined;
 	}
 }

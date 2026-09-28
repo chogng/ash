@@ -129,6 +129,7 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 		const focusedId = this.list.contains(focusedRow ?? null) ? focusedRow?.dataset.notificationId : undefined;
 		const items = this.service.getNotifications().slice().reverse();
 		this.clearButton.disabled = items.length === 0;
+		if (this.toggleButton) this.toggleButton.hidden = items.length === 0;
 		this.list.replaceChildren(...items.map(item => this.renderItem(document, item)));
 		if (!items.length) { const empty = h(document, "p"); empty.className = "ash-notifications-empty"; empty.textContent = localize('notifications.empty', 'No notifications'); this.list.append(empty); }
 		if (focusedId && this.open) {

@@ -1,10 +1,26 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { URI } from '../../../../base/common/uri.js';
 import { WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL } from '../../../window/common/window.js';
 import { LifecycleMainService } from '../../../lifecycle/electron-main/lifecycleMainService.js';
 import { WindowMode } from '../../../window/electron-main/window.js';
+import { createEmptyWorkspaceIdentifier, getSingleFolderWorkspaceIdentifier } from '../../../workspaces/node/workspaces.js';
 import { WindowsMainService, windowOperationIpcRoute, type IWorkbenchWindow } from '../../electron-main/windowsMainService.js';
+
+test('window restoration selection respects the setting, explicit target, and update restart', () => {
+	using service = new WindowsMainService<TestWindow>(() => [], async () => undefined);
+	const folder = { workspace: getSingleFolderWorkspaceIdentifier(URI.file('C:\\project')) };
+	const empty = { workspace: createEmptyWorkspaceIdentifier() };
+	const session = { windows: [folder, empty], active: 1 };
+	assert.deepEqual(service.selectWindowsToRestore(session, undefined, false, false), { windows: [folder, empty], active: empty });
+	assert.deepEqual(service.selectWindowsToRestore(session, 'folders', false, false), { windows: [folder], active: undefined });
+	assert.deepEqual(service.selectWindowsToRestore(session, 'one', false, false), { windows: [empty], active: empty });
+	assert.deepEqual(service.selectWindowsToRestore(session, 'none', false, false), { windows: [], active: undefined });
+	assert.deepEqual(service.selectWindowsToRestore(session, 'all', true, false), { windows: [], active: undefined });
+	assert.deepEqual(service.selectWindowsToRestore(session, 'preserve', true, false), { windows: [folder, empty], active: empty });
+	assert.deepEqual(service.selectWindowsToRestore(session, 'none', true, true), { windows: [folder, empty], active: empty });
+});
 
 class TestWindow implements IWorkbenchWindow<TestWindow> {
 	public readonly calls: string[] = [];
@@ -213,7 +229,13 @@ test('WindowsMainService waits for a managed window to close before reopening it
 
 test('WindowsMainService keeps a managed window open after a failed close and permits retry', async () => {
 	using service = new WindowsMainService<TestWindow>(() => [], async () => undefined);
-	using lifecycle = new LifecycleMainService<TestWindow>((window, message) => service.failManagedWindowClose(window, message), window => service.failManagedWindowClose(window, 'Window close was vetoed'));
+	using lifecycle = new LifecycleMainService<TestWindow>((window, message) => service.failManagedWindowClose(window, message), window => service.failManagedWindowClose(window, 'Window close was vetoed'), {
+		getItem: () => undefined,
+		setItem: () => {},
+		removeItem: () => {},
+		flush: async () => {},
+		close: async () => {},
+	}, '1.0.0');
 	let window: TestWindow | undefined;
 	await service.openManagedWindow('workspace', options => window = new TestWindow(1, options.title), {
 		title: 'Agents',

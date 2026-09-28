@@ -10,6 +10,7 @@ import { Lxicon } from "../../../../../../base/common/lxicons.js";
 import { localize } from "../../../../../../nls.js";
 import { WorkbenchToolBar } from "../../../../../../platform/actions/browser/toolbar.js";
 import type { IDictationService, IDictationSession } from "../../../../../../platform/dictation/common/dictationService.js";
+import type { IOpenAgentsWindowOptions } from '../../../../../../platform/native/common/nativeHost.js';
 import type { IContextMenuService } from "../../../../../../platform/contextview/browser/contextView.js";
 import type { IContextViewService } from "../../../../../../platform/contextview/browser/contextView.js";
 import type { ModelCatalogEntry } from "../../../../../services/chat/common/chatService.js";
@@ -72,6 +73,7 @@ export class ChatInputPart extends Disposable {
 	private dictationCancelStart = false;
 	private dictationError: string | undefined;
 	private visible = true;
+	private draftRevision = 0;
 
 	constructor(container: HTMLElement, delegate: ChatInputDelegate, contextMenuService: IContextMenuService, contextViewService: IContextViewService, private readonly dictation?: IDictationService) {
 		super();
@@ -121,6 +123,7 @@ export class ChatInputPart extends Disposable {
 			void this.acceptInput().catch(() => undefined);
 		}));
 		this._register(this.input.onDidChange(() => {
+			this.draftRevision++;
 			this.status.textContent = this.statusText(this.state);
 			this.renderToolbar();
 		}));
@@ -157,7 +160,49 @@ export class ChatInputPart extends Disposable {
 	addContext(attachment: ChatContextAttachment): void {
 		if (!attachment.id.trim() || !attachment.kind.trim() || !attachment.name.trim()) throw new TypeError("Chat context attachment requires an ID, kind, and name");
 		this.attachments.set(attachmentKey(attachment), attachment);
+		this.draftRevision++;
 		this.renderAttachments();
+	}
+
+	async captureDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void } | undefined> {
+		const text = this.input.value;
+		const attachments = [...this.attachments.values()];
+		if (!text && attachments.length === 0) return undefined;
+		const revision = this.draftRevision;
+		const contexts = await Promise.all(attachments.map(async attachment => ({
+			id: attachment.id,
+			kind: attachment.kind,
+			name: attachment.name,
+			content: (await attachment.resolve()).content,
+		})));
+		if (this.draftRevision !== revision) throw new Error(localize('chat.draftChangedDuringHandoff', 'The draft changed while opening Agents Window. Try again.'));
+		return {
+			draft: { text, contexts },
+			clear: () => {
+				if (this.draftRevision !== revision) return;
+				this.input.value = '';
+				this.attachments.clear();
+				this.draftRevision++;
+				this.renderAttachments();
+				this.renderToolbar();
+			},
+		};
+	}
+
+	restoreDraft(draft: NonNullable<IOpenAgentsWindowOptions['draft']>): void {
+		if (this.input.value || this.attachments.size > 0) throw new Error(localize('chat.draftHandoffConflict', 'The Agents Window already has an unsent draft in this chat.'));
+		this.input.value = draft.text;
+		for (const context of draft.contexts) {
+			this.attachments.set(attachmentKey(context), {
+				id: context.id,
+				kind: context.kind,
+				name: context.name,
+				resolve: async () => ({ name: context.name, content: context.content }),
+			});
+		}
+		this.draftRevision++;
+		this.renderAttachments();
+		this.renderToolbar();
 	}
 
 	async acceptInput(value?: string): Promise<void> {
@@ -410,6 +455,7 @@ export class ChatInputPart extends Disposable {
 			appendIcon(Lxicon.close, remove);
 			this.attachmentListeners.add(addDisposableListener(remove, "click", () => {
 				this.attachments.delete(attachmentKey(attachment));
+				this.draftRevision++;
 				this.renderAttachments();
 			}));
 			item.append(label, remove);
@@ -548,7 +594,7 @@ export class ChatInputPart extends Disposable {
 	}
 }
 
-function attachmentKey(attachment: ChatContextAttachment): string {
+function attachmentKey(attachment: Pick<ChatContextAttachment, 'id' | 'kind'>): string {
 	return `${attachment.kind}\0${attachment.id}`;
 }
 

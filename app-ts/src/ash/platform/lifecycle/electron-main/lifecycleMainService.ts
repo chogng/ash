@@ -1,5 +1,6 @@
 import { Disposable, DisposableMap, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
+import type { IStateService } from '../../state/node/state.js';
 import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, validateWindowCloseResponse, type WindowCloseResponse } from '../../window/common/window.js';
 
 interface ILifecycleWindow {
@@ -16,15 +17,27 @@ interface ILifecycleWindow {
 
 /** Owns the main-process close handshake for Workbench and Sessions windows. */
 export class LifecycleMainService<TWindow extends ILifecycleWindow> extends Disposable {
+	private static readonly updateRestartStateKey = 'updateRestartVersion';
 	private readonly windowRegistrations = this._register(new DisposableMap<TWindow, IDisposable>());
 	private readonly closeStates = new Map<TWindow, { ready: boolean; authorized: boolean; pendingToken: number | undefined; timer: ReturnType<typeof setTimeout> | undefined }>();
 	private nextCloseToken = 0;
+	public readonly wasRestarted: boolean;
 
 	constructor(
 		private readonly reportCloseFailure: (window: TWindow, message: string) => void | Promise<void>,
 		private readonly reportCloseVeto: (window: TWindow) => void,
+		private readonly stateService: IStateService,
+		currentVersion: string,
 	) {
 		super();
+		this.wasRestarted = stateService.getItem(LifecycleMainService.updateRestartStateKey) === currentVersion;
+		if (this.wasRestarted) stateService.removeItem(LifecycleMainService.updateRestartStateKey);
+	}
+
+	public async prepareUpdateRestart(version: string): Promise<void> {
+		this.assertNotDisposed();
+		this.stateService.setItem(LifecycleMainService.updateRestartStateKey, version);
+		await this.stateService.flush();
 	}
 
 	public registerWindow(window: TWindow): IDisposable {

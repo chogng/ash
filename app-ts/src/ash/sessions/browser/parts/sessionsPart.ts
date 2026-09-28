@@ -11,6 +11,7 @@ import { SessionsChatView } from "./sessionsChatView.js";
 import { h } from "../../../base/browser/dom.js";
 import { localize } from '../../../nls.js';
 import type { IDictationService } from '../../../platform/dictation/common/dictationService.js';
+import type { IOpenAgentsWindowOptions } from '../../../platform/native/common/nativeHost.js';
 
 export interface SessionsPartOptions {
 	readonly sessionService: ISessionsManagementService;
@@ -63,6 +64,8 @@ export class SessionsPart extends WorkbenchPart {
 	}
 
 	focus(): void { this.chat.focus(); }
+
+	restoreDraft(draft: NonNullable<IOpenAgentsWindowOptions['draft']>): void { this.chat.restoreDraft(draft); }
 
 	setPage(page: 'chat' | 'code' | 'empty'): void {
 		this.contentDomNode.classList.toggle('empty-page', page === 'empty');

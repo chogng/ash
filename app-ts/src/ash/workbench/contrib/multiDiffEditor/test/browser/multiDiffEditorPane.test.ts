@@ -156,6 +156,7 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 		viewsService: {
 			openView: () => undefined,
 			focusView: (viewId: string) => { focusedViews.push(viewId); return true; },
+			getViewWithId: () => undefined,
 		},
 		fileActions: {
 			menuService: menus,

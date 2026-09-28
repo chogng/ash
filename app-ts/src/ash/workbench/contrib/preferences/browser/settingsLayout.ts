@@ -112,10 +112,15 @@ export const SettingsNavigation = [
 				description: 'Choose what Ash shows when a window opens.',
 				presentation: 'general',
 				groups: [{
+					id: 'startup-windows',
+					get label() { return localize('settings.workbench.startup.windows.label', 'Startup windows'); },
+					get description() { return localize('settings.workbench.startup.windows.description', 'Choose which windows Ash reopens.'); },
+					settings: ['window.restoreWindows'],
+				}, {
 					id: 'startup-editor',
 					get label() { return localize('settings.workbench.startup.group.label', 'Startup editor'); },
 					get description() { return localize('settings.workbench.startup.group.description', 'Choose what appears when no editor is restored.'); },
-					settings: ['workbench.startupEditor'],
+					settings: ['workbench.startupEditor', 'workbench.editor.restoreEditors'],
 				}],
 			},
 		],

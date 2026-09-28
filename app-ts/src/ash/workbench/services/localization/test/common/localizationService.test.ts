@@ -58,6 +58,7 @@ test("localization lookup falls back to English and formats parameters", async (
 	assert.equal(localization.translate('ash', 'git.completeMerge', 'Complete Merge'), '完成合并');
 	assert.equal(localization.translate('ash', 'git.mergeUnresolved', 'Review or resolve every conflict before completing the merge.'), '请先检查或处理所有冲突，再完成合并。');
 	assert.equal(localization.translate('ash', 'git.markHandled', 'Mark Handled'), '标记为已处理');
+	assert.equal(localization.translate('ash', 'chat.draftHandoffConflict', 'The Agents Window already has an unsent draft in this chat.'), 'Agents 窗口中的这个聊天已有未发送的草稿。');
 	assert.deepEqual([
 		localization.translate('ash', 'workbench.startupError.title', 'Unable to start Ash'),
 		localization.translate('ash', 'workbench.startupError.copy', 'Copy details'),

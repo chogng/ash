@@ -7,7 +7,7 @@ import { launchElectron } from '../../../automation/playwrightElectron.js';
 
 test.describe('Notification Center', () => {
 	test.use({ openWorkspace: false });
-	test('Sessions window opens and closes Notification Center', async ({ application, target, workbench }) => {
+	test('Sessions window does not show an empty Notification Center button', async ({ application, target, workbench }) => {
 		test.skip(target.workbenchMode !== 'code', 'Requires Code Sessions');
 		let page = workbench.page;
 		if (target.kind === 'browser') {
@@ -18,13 +18,10 @@ test.describe('Notification Center', () => {
 			await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 			page = await opened;
 		}
+		await expect(page.locator('.ash-sessions-window')).toBeVisible();
 		const toggle = page.getByRole('button', { name: 'Show Notification Center' });
-		await expect(toggle).toBeVisible();
-		await toggle.click();
+		await expect(toggle).toBeHidden();
 		const center = page.getByRole('region', { name: 'Notification Center' });
-		await expect(center).toBeVisible();
-		await expect(center.getByText('No notifications')).toBeVisible();
-		await page.keyboard.press('Escape');
 		await expect(center).toBeHidden();
 	});
 });
@@ -302,6 +299,43 @@ test('Browser Code Sessions Activity Bar centers icons and changes size and posi
 	await expect(activityBar).toBeHidden();
 });
 
+test('Browser Sessions settings scroll each pane independently', async ({ target, workbench }) => {
+	test.skip(target.kind !== 'browser' || target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Requires the browser Code Sessions page');
+	const page = workbench.page;
+	await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
+	await page.locator('.ash-sessions-activity-bottom button').last().click();
+	await page.getByRole('menuitem', { name: 'Settings' }).click();
+	const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+	const navigation = settings.getByRole('navigation', { name: 'Settings categories' });
+	await navigation.getByRole('button', { name: 'Appearance' }).click();
+	const originalViewport = page.viewportSize();
+	if (!originalViewport) throw new Error('Browser test requires a viewport');
+	try {
+		await page.setViewportSize({ width: 1080, height: 420 });
+		const navigationViewport = navigation.locator('.ash-scrollbar-viewport');
+		const contentViewport = settings.locator('.ash-sessions-settings-page .ash-scrollbar-viewport');
+		await expect(navigationViewport).toHaveCSS('scrollbar-width', 'none');
+		await expect(contentViewport).toHaveCSS('scrollbar-width', 'none');
+		await expect(navigation.locator('.ash-scrollbar-track-vertical')).toHaveCount(1);
+		await expect(settings.locator('.ash-sessions-settings-page .ash-scrollbar-track-vertical')).toHaveCount(1);
+		await expect.poll(() => navigationViewport.evaluate(viewport => viewport.scrollHeight > viewport.clientHeight)).toBe(true);
+		await expect.poll(() => contentViewport.evaluate(viewport => viewport.scrollHeight > viewport.clientHeight)).toBe(true);
+		await contentViewport.hover({ position: { x: 10, y: 10 } });
+		await page.mouse.wheel(0, 300);
+		await expect.poll(() => contentViewport.evaluate(viewport => viewport.scrollTop)).toBeGreaterThan(0);
+		await expect(navigationViewport).toHaveJSProperty('scrollTop', 0);
+		const contentScrollTop = await contentViewport.evaluate(viewport => viewport.scrollTop);
+		await navigationViewport.hover({ position: { x: 10, y: 10 } });
+		await page.mouse.wheel(0, 300);
+		await expect.poll(() => navigationViewport.evaluate(viewport => viewport.scrollTop)).toBeGreaterThan(0);
+		await expect(contentViewport).toHaveJSProperty('scrollTop', contentScrollTop);
+		await navigation.getByRole('button', { name: 'Voice' }).click();
+		await expect(contentViewport).toHaveJSProperty('scrollTop', 0);
+	} finally {
+		await page.setViewportSize(originalViewport);
+	}
+});
+
 test('Browser Models Settings controls which models appear in the picker', async ({ target, workbench }) => {
 	test.skip(target.kind !== 'browser' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires browser Code Sessions with App Server');
 	const page = workbench.page;
@@ -432,6 +466,15 @@ test('Electron Sessions account menu opens the Sessions settings page', async ({
 	await expect(settings).toBeVisible();
 	await expect(settings.locator('.ash-sessions-settings-list.ash-settings-card')).toHaveCSS('border-radius', '8px');
 	const navigation = settings.getByRole('navigation', { name: 'Settings categories' });
+	await expect(navigation.locator('.ash-scrollbar-viewport')).toHaveCSS('scrollbar-width', 'none');
+	await expect(settings.locator('.ash-sessions-settings-page .ash-scrollbar-viewport')).toHaveCSS('scrollbar-width', 'none');
+	await expect(navigation.locator('.ash-scrollbar-track-vertical')).toHaveCount(1);
+	await expect(settings.locator('.ash-sessions-settings-page .ash-scrollbar-track-vertical')).toHaveCount(1);
+	const sidebarBounds = await settings.locator('.ash-sessions-settings-sidebar').boundingBox();
+	const scrollTrackBounds = await navigation.locator('.ash-scrollbar-track-vertical').boundingBox();
+	expect(sidebarBounds).not.toBeNull();
+	expect(scrollTrackBounds).not.toBeNull();
+	expect(Math.abs(sidebarBounds!.x + sidebarBounds!.width - scrollTrackBounds!.x - scrollTrackBounds!.width)).toBeLessThanOrEqual(2);
 	await navigation.getByRole('button', { name: 'Appearance' }).click();
 	await expect(settings.locator('[data-configuration-key="sessions.layoutStyle"]')).toBeVisible();
 	await expect(settings.locator('[data-configuration-key="sessions.activityBar.location"]')).toBeVisible();
@@ -553,6 +596,68 @@ test('Sessions applies an installed extension color theme', async ({ application
 	await expect.poll(() => sessionsPage.locator('#app').evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background').trim())).toBe('#1e1e1e');
 	await expect(workbench.element).toHaveAttribute('data-color-theme', 'extension-vscode-theme-defaults-visual-studio-dark');
 	await expect.poll(() => workbench.element.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background').trim())).toBe('#1e1e1e');
+});
+
+test('Open in Agents moves the IDE chat draft into the Agents Window', async ({ application, target, workbench }) => {
+	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the Code Electron chat shell');
+	if (target.kind !== 'electron' || !('windows' in application)) throw new Error('Agents Window handoff requires Electron');
+
+	const workbenchPage = workbench.page;
+	if (!await workbenchPage.locator('.ash-chat-view-pane').isVisible()) {
+		await workbenchPage.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	}
+	const sourceChat = workbenchPage.locator('.ash-chat-view-pane .ash-chat').first();
+	const sourceDraft = sourceChat.getByRole('textbox', { name: 'Chat message' });
+	const sourceLine = sourceChat.locator('.ash-chat-input-editor .stanza-editor-line-text').first();
+	await sourceDraft.focus();
+	await workbenchPage.keyboard.insertText('Continue reviewing this change in Agents Window');
+	await workbenchPage.getByRole('button', { name: 'Hide Secondary Side Bar', exact: true }).click();
+	const auxiliaryBar = workbenchPage.locator('[data-part="auxiliarybar"]');
+	await expect(auxiliaryBar).toBeHidden();
+
+	const sessionsPagePromise = application.waitForEvent('window');
+	await workbenchPage.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
+	const sessionsPage = await sessionsPagePromise;
+	const targetDraft = sessionsPage.locator('.ash-sessions-chat-slot.active').getByRole('textbox', { name: 'Chat message' });
+	await expect(targetDraft).toHaveValue('Continue reviewing this change in Agents Window');
+	await expect(auxiliaryBar).toBeHidden();
+	await expect(sourceLine).toHaveText('');
+
+	await sessionsPage.keyboard.press(process.platform === 'darwin' ? 'Meta+Alt+W' : 'Control+Alt+W');
+	await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getFocusedWindow()?.webContents.getURL().includes('/workbench/workbench.html'))).toBe(true);
+	await workbenchPage.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	await sourceDraft.focus();
+	await workbenchPage.keyboard.insertText('Keep this second draft in the IDE');
+	await expect(sourceLine).toHaveText('Keep this second draft in the IDE');
+	await workbenchPage.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
+	await expect(targetDraft).toHaveValue('Continue reviewing this change in Agents Window');
+	await expect(sourceLine).toHaveText('Keep this second draft in the IDE');
+});
+
+test('Open in Agents selects the same session thread in the Agents Window', async ({ application, target, workbench }) => {
+	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code' || target.appServerMode !== 'required', 'Requires Code Electron with App Server');
+	if (target.kind !== 'electron' || !('windows' in application)) throw new Error('Agents Window handoff requires Electron');
+
+	const workbenchPage = workbench.page;
+	if (!await workbenchPage.locator('.ash-chat-view-pane').isVisible()) {
+		await workbenchPage.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	}
+	const sourceChat = workbenchPage.locator('.ash-chat-view-pane .ash-chat:visible');
+	await sourceChat.getByRole('textbox', { name: 'Chat message' }).focus();
+	await workbenchPage.keyboard.insertText('Create a session for the window handoff test');
+	await sourceChat.locator('[data-action-id="ash.chat.input.send"] button').click();
+	await expect(sourceChat).toHaveAttribute('data-session-id', /.+/u);
+	const sessionId = await sourceChat.getAttribute('data-session-id');
+	const threadId = await sourceChat.getAttribute('data-thread-id');
+	expect(sessionId).toBeTruthy();
+	expect(threadId).toBeTruthy();
+
+	const sessionsPagePromise = application.waitForEvent('window');
+	await workbenchPage.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
+	const sessionsPage = await sessionsPagePromise;
+	const targetChat = sessionsPage.locator('.ash-sessions-chat-slot.active .ash-chat');
+	await expect(targetChat).toHaveAttribute('data-session-id', sessionId!);
+	await expect(targetChat).toHaveAttribute('data-thread-id', threadId!);
 });
 
 test("Code opens Sessions in a dedicated Electron window and returns to Workbench", async ({ application, target, workbench }) => {

@@ -196,8 +196,9 @@ export class FoldingController extends Disposable {
 	public saveViewState(): FoldingStateMemento {
 		if (!this.editor.getModel() || !this.editor.getOption(EditorOption.folding)
 			|| this.folding.model.largeFile.tooLargeForTokenization) return {};
+		const collapsedRegions = this.folding.getMemento();
 		return {
-			collapsedRegions: this.folding.getMemento(),
+			...(collapsedRegions ? { collapsedRegions } : {}),
 			lineCount: this.folding.model.lineCount,
 		};
 	}

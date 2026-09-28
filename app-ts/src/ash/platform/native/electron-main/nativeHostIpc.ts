@@ -20,6 +20,7 @@ import {
 	type INativeSaveFileOptions,
 	type INativeOpenDialogOptions,
 	type INativeWindowTheme,
+	type IOpenAgentsWindowOptions,
 	type ShellCommandOperation,
 	type NativeDialogOperation,
 	validateAccessibilitySupportRead,
@@ -44,7 +45,7 @@ export interface INativeHostMainService {
 	pickFolder(): Promise<string | undefined>;
 	pickFile(options: INativeOpenDialogOptions): Promise<readonly string[] | undefined>;
 	openWorkspace(root: string): Promise<void>;
-	openAgentsWindow(): Promise<void>;
+	openAgentsWindow(options?: IOpenAgentsWindowOptions): Promise<void>;
 	revealFile(path: string): void;
 	saveFile(options: INativeSaveFileOptions): Promise<string | undefined>;
 	isAccessibilitySupportEnabled(): boolean;
@@ -92,7 +93,7 @@ export function nativeHostIpcRoutes(
 		{
 			channel: NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL,
 			validate: validateOpenAgentsWindow,
-			invoke: () => service.openAgentsWindow(),
+			invoke: options => service.openAgentsWindow(options as IOpenAgentsWindowOptions | undefined),
 		},
 		{
 			channel: NATIVE_HOST_REVEAL_FILE_CHANNEL,

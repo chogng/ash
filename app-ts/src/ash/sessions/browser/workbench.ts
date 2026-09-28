@@ -23,7 +23,7 @@ import { NotificationService } from "../../workbench/services/notification/commo
 import { INotificationsCenter, NotificationsCenter } from "../../workbench/browser/parts/notifications/notificationsCenter.js";
 import { INotificationService } from "../../platform/notification/common/notification.js";
 import type { IRendererHost } from "../../platform/renderer/common/rendererHost.js";
-import type { INativeHostApi } from '../../platform/native/common/nativeHost.js';
+import type { INativeHostApi, IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
 import { IStorageService, WillSaveStateReason } from "../../platform/storage/common/storage.js";
 import { IThemeService } from "../../platform/theme/common/themeService.js";
 import { WorkbenchState } from "../../platform/workspace/common/workspace.js";
@@ -113,6 +113,11 @@ export class Workbench extends Disposable {
 	readonly themeService: WorkbenchThemeService;
 	private readonly layoutService: BrowserLayoutService;
 	private readonly lifecycleService: ILifecycleService;
+	private readonly sessionsManagement: SessionsManagementService;
+	private readonly sessionsView: SessionsService;
+	private readonly sessionsPart: SessionsPart;
+	private readonly showChat: () => void;
+	private readonly initialized: Promise<void>;
 
 	constructor(options: IWorkbenchOptions) {
 		super();
@@ -143,7 +148,7 @@ export class Workbench extends Disposable {
 			workbenchState: WorkbenchState.EMPTY,
 		}));
 		services.registerInstance(IWorkbenchHostService, workbenchWindow);
-		const sessions = this._register(new SessionsManagementService(new AppServerSessionsProvider({
+		const sessions = this.sessionsManagement = this._register(new SessionsManagementService(new AppServerSessionsProvider({
 			session: options.api.session,
 			model: options.api.model,
 			turn: options.api.turn,
@@ -151,7 +156,7 @@ export class Workbench extends Disposable {
 		})));
 		const teams = new TeamsManagementService(new AppServerTeamsProvider(options.api.teams));
 		services.registerInstance(ITeamsManagementService, teams);
-		const view = this._register(new SessionsService(sessions));
+		const view = this.sessionsView = this._register(new SessionsService(sessions));
 		const chat = this._register(new ChatService({
 			modelApi: options.api.model,
 			threadApi: options.api.thread,
@@ -298,6 +303,7 @@ export class Workbench extends Disposable {
 			sidebar.setEmptyPage(page !== 'chat');
 			selectMode('chat');
 		};
+		this.showChat = () => selectActivityPage('chat');
 		activitybar = this._register(services.createInstance(ActivityBarPart, this.domNode, {
 			focusList: () => sidebar.focusChats(),
 			selectPage: selectActivityPage,
@@ -329,7 +335,7 @@ export class Workbench extends Disposable {
 			if (event.affectsConfiguration(AccessibilityVerbositySettingId.SessionsActivityBar)) updateActivityBarHelpHint();
 		}));
 		updateActivityBarHelpHint();
-		sessionsPart = this._register(new SessionsPart(this.domNode, {
+		sessionsPart = this.sessionsPart = this._register(new SessionsPart(this.domNode, {
 			sessionService: sessions,
 			chatService: chat,
 			dictation: options.api.dictation,
@@ -372,7 +378,16 @@ export class Workbench extends Disposable {
 		}));
 		this._register(bindResizableLayout(this.layoutService.onDidLayoutMainContainer, layout));
 		this.layoutService.layout();
-		void this.initialize(view, configurationService);
+		this.initialized = this.initialize(view, configurationService);
+		void this.initialized.catch(error => console.error('Failed to initialize Sessions Workbench', error));
+	}
+
+	async acceptHandoff(options: IOpenAgentsWindowOptions): Promise<void> {
+		await this.initialized;
+		if (options.conversation) await this.sessionsManagement.openThread(options.conversation.sessionId, options.conversation.threadId);
+		else if (options.draft && this.sessionsView.activeSelection?.kind !== 'untitled') this.sessionsView.openNewSession('New code session');
+		this.showChat();
+		if (options.draft) this.sessionsPart.restoreDraft(options.draft);
 	}
 
 	shutdown(reason: ShutdownReason): Promise<void> {

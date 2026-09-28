@@ -5,6 +5,7 @@ import type { IResizable } from "../../base/browser/ui/resizable/resizable.js";
 import { Emitter } from "../../base/common/event.js";
 import { Disposable, MutableDisposable, toDisposable } from "../../base/common/lifecycle.js";
 import { isRecord } from "../../base/common/types.js";
+import type { IConfigurationService } from "../../platform/configuration/common/configuration.js";
 import type { ILayoutOffsetInfo } from "../../platform/layout/browser/layoutService.js";
 import { type IStorageService, StorageScope, StorageTarget } from "../../platform/storage/common/storage.js";
 import { WorkbenchState } from "../../platform/workspace/common/workspace.js";
@@ -112,6 +113,11 @@ export class WorkbenchLayout
 
 	readonly onDidChangePartVisibility = this._onDidChangePartVisibility.event;
 	readonly domNode: HTMLDivElement;
+
+	/** Editor restoration follows the Workbench setting; Ash has no startup-file or temporary-workspace launch path. */
+	shouldRestoreEditors(configuration: IConfigurationService): boolean {
+		return configuration.getValue<boolean>('workbench.editor.restoreEditors') !== false;
+	}
 
 	constructor(
 		container: HTMLElement,

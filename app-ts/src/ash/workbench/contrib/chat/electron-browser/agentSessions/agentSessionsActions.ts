@@ -1,11 +1,11 @@
 import './media/openInAgents.css';
 import { localizedString } from '../../../../../platform/action/common/action.js';
 import { Action2, MenuId } from '../../../../../platform/actions/common/actions.js';
-import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ashTitlebarMark } from '../../../../browser/parts/titlebar/titlebarMark.js';
 import { INativeHostService } from '../../../../common/services.js';
 import { OPEN_AGENTS_WINDOW_COMMAND_ID } from '../../common/constants.js';
+import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 
 const openAgentsWindowTitle = localizedString('ash.actions', 'openAgentsWindow', 'Open Agents Window');
 const openInAgentsTitle = localizedString('ash.actions', 'openInAgents', 'Open in Agents');
@@ -37,7 +37,12 @@ export class OpenAgentsWindowTitleBarAction extends Action2 {
 		});
 	}
 
-	override run(accessor: ServicesAccessor): Promise<void> {
-		return accessor.get(ICommandService).executeCommand(OPEN_AGENTS_WINDOW_COMMAND_ID);
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const navigation = accessor.get(IChatSessionNavigationService);
+		const conversation = navigation.getActiveConversation();
+		const captured = await navigation.captureActiveDraft();
+		await accessor.get(INativeHostService).openAgentsWindow(conversation || captured ? { conversation, draft: captured?.draft } : undefined);
+		// Only the target window's acknowledgement transfers ownership of an unsent draft.
+		captured?.clear();
 	}
 }

@@ -42,7 +42,7 @@ export function createNativeHostApi(): INativeHostApi {
 		pickFolder: () => invoke<string | undefined>(NATIVE_HOST_PICK_FOLDER_CHANNEL),
 		pickFile: (options) => invoke<readonly string[] | undefined>(NATIVE_HOST_PICK_FILE_CHANNEL, options),
 		openWorkspace: (root) => invoke<void>(NATIVE_HOST_OPEN_WORKSPACE_CHANNEL, root),
-		openAgentsWindow: () => invoke<void>(NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL),
+		openAgentsWindow: options => invoke<void>(NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL, options),
 		revealFile: path => invoke<void>(NATIVE_HOST_REVEAL_FILE_CHANNEL, path),
 		setWindowTheme: (theme) => invoke<void>(NATIVE_HOST_SET_WINDOW_THEME_CHANNEL, theme),
 		setWindowDimmed: dimmed => invoke<void>(NATIVE_HOST_SET_WINDOW_DIMMED_CHANNEL, dimmed),

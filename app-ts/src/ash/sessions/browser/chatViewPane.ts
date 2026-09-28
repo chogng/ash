@@ -23,6 +23,7 @@ import { ChatSessionInspectorVisibleContext } from "../../workbench/contrib/chat
 import { SessionInspector } from "./sessionInspector.js";
 import { ChatWidgetModel } from './chatWidgetModel.js';
 import { IRendererHostService, type IRendererHost } from '../../platform/renderer/common/rendererHost.js';
+import type { IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
 
 let chatViewInstanceId = 0;
 let chatPaneInstanceId = 0;
@@ -152,6 +153,10 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 	addContext(attachment: ChatContextAttachment): void {
 		this.ensureTabForVisibleChat();
 		this.activePane?.addContext(attachment);
+	}
+
+	captureActiveDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void } | undefined> {
+		return this.activePane?.captureDraft() ?? Promise.resolve(undefined);
 	}
 
 	acceptInput(value?: string): Promise<void> {

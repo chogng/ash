@@ -1,56 +1,15 @@
-import { onUnexpectedError } from '../../base/common/errors.js';
 import type { IAction } from '../../base/common/actions.js';
 import { Disposable } from '../../base/common/lifecycle.js';
 import { Lxicon } from '../../base/common/lxicons.js';
 import type { URI } from '../../base/common/uri.js';
-import { InstantiationType, registerSingleton } from '../../platform/instantiation/common/extensions.js';
-import { IInstantiationService, ServiceConstructionDescriptor } from '../../platform/instantiation/common/instantiation.js';
-import { IRendererHostService, type IRendererHost } from '../../platform/renderer/common/rendererHost.js';
+import { IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../workbench/common/contributions.js';
-import { ViewContainerLocation, type WorkbenchViewRegistry, ViewsRegistry } from '../../workbench/common/views.js';
-import { CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID } from '../../workbench/contrib/chat/common/chat.js';
-import { type IChatService, IChatService as ChatServiceId, type TurnChangeSetSummary } from '../../workbench/services/chat/common/chatService.js';
-import { IChatSessionNavigationService, type IChatSessionNavigationService as IChatSessionNavigationServiceContract } from '../../workbench/services/chat/common/chatSessionNavigationService.js';
-import { IEditorService, type IEditorService as IEditorServiceContract } from '../../workbench/services/editor/common/editorService.js';
 import type { MultiDiffEditorInput } from '../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import { IMultiDiffSourceResolverService, type IMultiDiffSourceResolver, type IResolvedMultiDiffSource } from '../../workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
-import { AppServerSessionsProvider } from '../contrib/providers/appServer/browser/appServerSessionsProvider.js';
-import { SessionsManagementService } from '../services/sessions/browser/sessionsManagementService.js';
+import { type IChatService, IChatService as ChatServiceId, type TurnChangeSetSummary } from '../../workbench/services/chat/common/chatService.js';
+import { IEditorService, type IEditorService as IEditorServiceContract } from '../../workbench/services/editor/common/editorService.js';
 import { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
 import { createTurnMultiDiffEditorInput, type TurnMultiDiffScope } from './turnMultiDiffSource.js';
-import { ChatViewPane } from './chatViewPane.js';
-import './actions/chatActions.js';
-import './actions/chatLayoutActions.js';
-
-class WorkbenchSessionsManagementService extends SessionsManagementService {
-	constructor(@IRendererHostService api: IRendererHost) {
-		super(new AppServerSessionsProvider({ session: api.session, model: api.model, turn: api.turn, events: api.events }));
-	}
-}
-
-class ChatSessionNavigationService implements IChatSessionNavigationServiceContract {
-	constructor(@ISessionsManagementService private readonly sessions: ISessionsManagementService) {}
-
-	getConversations(): readonly { readonly sessionId: string; readonly threadId: string; readonly title: string }[] {
-		return this.sessions.sessions.filter(session => session.status === 'active').flatMap(session =>
-			session.chats.filter(chat => chat.status === 'active').map(chat => ({
-				sessionId: session.sessionId,
-				threadId: chat.threadId,
-				title: `${session.title} · ${chat.title ?? 'Conversation'}`,
-			})));
-	}
-
-	openConversation(sessionId: string, threadId: string): Promise<void> {
-		return this.sessions.openThread(sessionId, threadId);
-	}
-}
-
-class WorkbenchSessionsStartupContribution extends Disposable {
-	constructor(@ISessionsManagementService sessions: ISessionsManagementService) {
-		super();
-		void sessions.initialize().catch(onUnexpectedError);
-	}
-}
 
 class SessionsMultiDiffSourceResolver implements IMultiDiffSourceResolver {
 
@@ -184,31 +143,5 @@ function turnSourceIdentity(uri: URI): {
 	return { scope, sessionId, threadId, changeSetIds: changes.split(',') };
 }
 
-/** Registers the Session-backed Chat view in the regular Workbench. */
-export function registerChatViews(registry: WorkbenchViewRegistry = ViewsRegistry): void {
-	registry.registerStaticViewContainer({
-		id: CHAT_VIEW_CONTAINER_ID,
-		title: 'Chat',
-		localizationKey: { bundle: 'ash.views', key: 'chat' },
-		location: ViewContainerLocation.AuxiliaryBar,
-		icon: Lxicon.chat4,
-		order: 1,
-		isDefault: true,
-	});
-	registry.registerStaticViews(CHAT_VIEW_CONTAINER_ID, [{
-		id: CHAT_VIEW_ID,
-		title: 'Chat',
-		localizationKey: { bundle: 'ash.views', key: 'chat' },
-		order: 1,
-		canToggleVisibility: false,
-		ctorDescriptor: new ServiceConstructionDescriptor(ChatViewPane),
-	}]);
-}
-
-registerSingleton(ISessionsManagementService, WorkbenchSessionsManagementService, InstantiationType.Delayed);
-registerSingleton(IChatSessionNavigationService, ChatSessionNavigationService, InstantiationType.Delayed);
-registerChatViews();
 registerWorkbenchContribution('sessions.contrib.multiDiffSource', WorkbenchPhase.BlockStartup,
 	accessor => accessor.get(IInstantiationService).createInstance(SessionsMultiDiffSourceContribution));
-registerWorkbenchContribution('sessions.contrib.workbenchStartup', WorkbenchPhase.BlockRestore,
-	accessor => accessor.get(IInstantiationService).createInstance(WorkbenchSessionsStartupContribution));
