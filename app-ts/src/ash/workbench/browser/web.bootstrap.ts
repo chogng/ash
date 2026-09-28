@@ -16,7 +16,7 @@ async function startBrowserWorkbenchAsync(modeId: WorkbenchModeId, rendererCapab
 	let connectedHost: IDisposable | undefined;
 	try {
 		connectedHost = await connectBrowserWorkbenchHost(rendererCapabilities);
-		startWebWorkbench(modeId, connectedHost);
+		await startWebWorkbench(modeId, connectedHost);
 	} catch (error) {
 		connectedHost?.dispose();
 		showStartupError(error, text => new BrowserClipboardService(window.navigator.clipboard).writeText(text));

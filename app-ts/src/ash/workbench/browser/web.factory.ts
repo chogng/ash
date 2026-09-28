@@ -28,6 +28,7 @@ import { switchBrowserWorkbenchMode } from "../services/workbenchMode/browser/br
 import { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
 import { BrowserLifecycleService } from '../services/lifecycle/browser/lifecycleService.js';
 import { onUnexpectedError } from '../../base/common/errors.js';
+import { IndexedDbConfigurationApi } from '../../platform/configuration/browser/indexedDbConfigurationApi.js';
 
 /** Creates a browser-hosted Workbench with the shared Web adapters. */
 export function createWebWorkbench(
@@ -39,6 +40,8 @@ export function createWebWorkbench(
 	if (!ownerWindow) throw new Error('Workbench requires an owner window');
 	return startWorkbench({
 		modeId,
+		configurationApi: options.configurationApi,
+		initialConfigurationSnapshot: options.initialConfigurationSnapshot,
 		defaultLayout: options.defaultLayout,
 		api: options.api,
 		webWorkspaceClient: options.webWorkspaceClient,
@@ -67,33 +70,42 @@ function getEmptyWorkspaceIdentifier(): IEmptyWorkspaceIdentifier {
  * shutdown. A page without an embedder starts in an explicit disconnected
  * state so its UI remains inspectable without claiming backend availability.
  */
-export function startWebWorkbench(
+export async function startWebWorkbench(
 	modeId: WorkbenchModeId,
 	hostLifetime?: IDisposable,
-): IDisposable {
+): Promise<IDisposable> {
 	const host = readWebWorkbenchHost();
 	const workbench = new DisposableStore();
 	workbench.add(hostLifetime);
-	const picker = window as Window & { showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle> };
-	const browserFileSystemProvider = !host && picker.showDirectoryPicker && globalThis.indexedDB
-		? new HTMLFileSystemProvider(globalThis.indexedDB)
-		: undefined;
-	const instance = createWebWorkbench(modeId, {
-		api: host?.api ?? createDisconnectedRendererApi(),
-		webWorkspaceClient: host?.webWorkspaceClient,
-		browserFileSystemProvider,
-		defaultLayout: host?.defaultLayout,
-		workspace: host?.workspace,
-		container: host?.container ??
-			document.querySelector<HTMLElement>("#app") ??
-			document.body,
-		switchWorkbenchMode: host?.switchWorkbenchMode,
-	});
-	workbench.add(instance);
-	workbench.add(addDisposableListener(window, "pagehide", () => {
-		void instance.shutdown("pageHide").catch(error => console.error("Failed to shut down Workbench", error)).finally(() => workbench.dispose());
-	}, { once: true }));
-	return workbench;
+	try {
+		const configurationApi = workbench.add(new IndexedDbConfigurationApi());
+		const initialConfigurationSnapshot = await configurationApi.read();
+		const picker = window as Window & { showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle> };
+		const browserFileSystemProvider = !host && picker.showDirectoryPicker && globalThis.indexedDB
+			? new HTMLFileSystemProvider(globalThis.indexedDB)
+			: undefined;
+		const instance = createWebWorkbench(modeId, {
+			api: host?.api ?? createDisconnectedRendererApi(),
+			configurationApi,
+			initialConfigurationSnapshot,
+			webWorkspaceClient: host?.webWorkspaceClient,
+			browserFileSystemProvider,
+			defaultLayout: host?.defaultLayout,
+			workspace: host?.workspace,
+			container: host?.container ??
+				document.querySelector<HTMLElement>("#app") ??
+				document.body,
+			switchWorkbenchMode: host?.switchWorkbenchMode,
+		});
+		workbench.add(instance);
+		workbench.add(addDisposableListener(window, "pagehide", () => {
+			void instance.shutdown("pageHide").catch(error => console.error("Failed to shut down Workbench", error)).finally(() => workbench.dispose());
+		}, { once: true }));
+		return workbench;
+	} catch (error) {
+		workbench.dispose();
+		throw error;
+	}
 }
 
 function readWebWorkbenchHost(): IWebWorkbenchHost | undefined {

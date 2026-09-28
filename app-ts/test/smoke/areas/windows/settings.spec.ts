@@ -50,6 +50,48 @@ test('Workbench and Sessions Models share model visibility', async ({ applicatio
 	await expect(sessionSwitch).not.toHaveAttribute('aria-busy', 'true');
 });
 
+test('Browser Workbench and Sessions persist model visibility across page navigation', async ({ target, workbench }) => {
+	test.skip(target.kind !== 'browser' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires browser Code with App Server');
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+Shift+P');
+	await page.getByPlaceholder('Type the name of a command to run').fill('Ash Settings');
+	await page.keyboard.press('Enter');
+	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
+	await settings.locator('[data-settings-group-id="agents"]').click();
+	await settings.locator('[data-settings-category-id="models"]').click();
+	const modelSwitch = settings.locator('.ash-models-settings-model-row').first().getByRole('switch');
+	await expect(modelSwitch).toBeVisible();
+	const modelLabel = await modelSwitch.getAttribute('aria-label');
+	if (!modelLabel) throw new Error('Model visibility switch has no label');
+	const initiallyVisible = await modelSwitch.isChecked();
+	await modelSwitch.locator('..').locator('.ash-switch-track').click();
+	await expect(modelSwitch).toHaveAttribute('aria-checked', String(!initiallyVisible));
+	await expect(modelSwitch).not.toHaveAttribute('aria-busy', 'true');
+	await settings.locator('.ash-modal-editor-close').click();
+	await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
+	await expect(page.locator('[data-part="sessions"]')).toBeVisible();
+	await page.locator('.ash-sessions-activity-bottom button').last().click();
+	await page.getByRole('menuitem', { name: 'Settings' }).click();
+	const sessionsSettings = page.getByRole('dialog', { name: 'Sessions Settings' });
+	await sessionsSettings.getByRole('navigation', { name: 'Settings categories' }).getByRole('button', { name: 'Models' }).click();
+	const sessionSwitch = sessionsSettings.getByRole('switch', { name: modelLabel });
+	await expect(sessionSwitch).toHaveAttribute('aria-checked', String(!initiallyVisible));
+	await sessionSwitch.locator('..').locator('.ash-switch-track').click();
+	await expect(sessionSwitch).toHaveAttribute('aria-checked', String(initiallyVisible));
+	await expect(sessionSwitch).not.toHaveAttribute('aria-busy', 'true');
+	await page.keyboard.press('Escape');
+	await expect(sessionsSettings).toBeHidden();
+	await page.locator('.ash-sessions-activity-bottom button').last().click();
+	await page.getByRole('menuitem', { name: 'Return to Workbench' }).click();
+	await expect(page.locator('[data-action-id="ash.code.open-sessions"] button')).toBeVisible();
+	await page.keyboard.press('ControlOrMeta+Shift+P');
+	await page.getByPlaceholder('Type the name of a command to run').fill('Ash Settings');
+	await page.keyboard.press('Enter');
+	await settings.locator('[data-settings-group-id="agents"]').click();
+	await settings.locator('[data-settings-category-id="models"]').click();
+	await expect(settings.getByRole('switch', { name: modelLabel })).toHaveAttribute('aria-checked', String(initiallyVisible));
+});
+
 test('Settings opens with editor display controls', async ({ target, workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+Shift+P');
@@ -63,14 +105,10 @@ test('Settings opens with editor display controls', async ({ target, workbench }
 	await expect(page.locator('[data-configuration-key="editor.renderControlCharacters"]')).toBeVisible();
 	const rootTitle = page.locator('.ash-settings-page .is-settings-root > .ash-settings-tree-group-title');
 	const rootDescription = page.locator('.ash-settings-page .is-settings-root > .ash-settings-tree-group-description');
-	await expect(rootTitle).toHaveCount(1);
-	await expect(rootDescription).toHaveCount(1);
-	await expect(rootTitle).toBeHidden();
-	await expect(rootDescription).toBeHidden();
+	await expect(rootTitle).toHaveCount(0);
+	await expect(rootDescription).toHaveCount(0);
 	await page.locator('[data-settings-target-id="editor.group.selection"]').click();
 	await expect(page.locator('.ash-settings-page h3')).toHaveText('Editor selection');
-	await expect(rootTitle).toBeHidden();
-	await expect(rootDescription).toBeHidden();
 	for (const key of ['workbench.editor.showTabs', 'workbench.editor.defaultBinaryEditor']) {
 		const row = page.locator(`[data-settings-item-id="${key}"]`);
 		const control = row.getByRole('combobox');
@@ -81,25 +119,24 @@ test('Settings opens with editor display controls', async ({ target, workbench }
 	}
 	await page.locator('[data-settings-target-id="editor.group.minimap"]').click();
 	await expect(page.locator('.ash-settings-page h3')).toHaveText('Minimap');
-	await expect(rootTitle).toBeHidden();
-	await expect(rootDescription).toBeHidden();
 	await expect(page.locator('[data-configuration-key="editor.minimap.enabled"]')).toBeVisible();
 	if (target.kind === 'electron') {
 		await page.locator('[data-settings-category-id="general"]').click();
-		await expect(rootTitle).toBeHidden();
-		await expect(rootDescription).toBeHidden();
+		await expect(rootTitle).toHaveCount(0);
+		await expect(rootDescription).toHaveCount(0);
 		await page.locator('[data-settings-target-id="general.group.dictation"]').click();
 		await expect(page.locator('.ash-settings-page h3')).toHaveText('Voice input');
 		await expect(page.locator('.ash-settings-content-tree > .is-settings-root > .ash-settings-tree-group-title')).toHaveCount(0);
 		await expect(page.locator('.ash-settings-content-tree > .is-settings-root > .ash-settings-tree-group-description')).toHaveCount(0);
-		await expect(page.locator('[data-configuration-key="dictation.backend"]')).toBeVisible();
-		await expect(page.locator('[data-configuration-key="dictation.localModel"]')).toBeVisible();
+		const voiceInput = page.getByRole('main', { name: 'Voice input' });
+		await expect(voiceInput.getByRole('combobox', { name: 'Dictation service' })).toBeVisible();
+		await expect(voiceInput.getByRole('textbox', { name: 'Local dictation model' })).toBeVisible();
 	}
 	if (target.workbenchMode === 'code') {
 		await page.locator('[data-settings-group-id="workbench"]').click();
 		await page.locator('[data-settings-category-id="startup"]').click();
-		await expect(rootTitle).toBeHidden();
-		await expect(rootDescription).toBeHidden();
+		await expect(rootTitle).toHaveCount(0);
+		await expect(rootDescription).toHaveCount(0);
 		const startupEditor = page.locator('[data-configuration-key="workbench.startupEditor"]').getByRole('combobox');
 		await expect(startupEditor).toBeVisible();
 		const startupRow = page.locator('[data-settings-item-id="workbench.startupEditor"]');
@@ -154,8 +191,10 @@ test('Workbench boolean settings use keyboard-operable switches', async ({ workb
 	await compactActivityBar.focus();
 	await compactActivityBar.press('Space');
 	await expect(compactActivityBar).toHaveAttribute('aria-checked', String(!initialState));
+	await expect(compactActivityBar).not.toHaveAttribute('aria-busy', 'true');
 	await compactActivityBar.press('Space');
 	await expect(compactActivityBar).toHaveAttribute('aria-checked', String(initialState));
+	await expect(compactActivityBar).not.toHaveAttribute('aria-busy', 'true');
 });
 
 test('Saving a boolean setting does not move neighboring settings', async ({ workbench }) => {
