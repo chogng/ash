@@ -14,6 +14,10 @@ export class MultiChatTabsControl extends ChatTabsControl {
 	private readonly tabList: TabList<string>;
 	private readonly idPrefix: string;
 	private readonly tabIds = new Map<string, string>();
+	private hasRenderedTabs = false;
+	private renderedTabs: readonly ChatTab[] = [];
+	private renderedActiveTabId: string | undefined;
+	private renderedTabIds: ReadonlyMap<string, string> = new Map();
 	private draggedTabId: string | undefined;
 	private nextTabId = 0;
 
@@ -44,6 +48,12 @@ export class MultiChatTabsControl extends ChatTabsControl {
 	}
 
 	setTabs(entries: readonly ChatTab[], activeTabId: string | undefined): ReadonlyMap<string, string> {
+		if (this.hasRenderedTabs && this.renderedActiveTabId === activeTabId && entries.length === this.renderedTabs.length
+			&& entries.every((entry, index) => entry.id === this.renderedTabs[index]?.id
+				&& entry.label === this.renderedTabs[index]?.label
+				&& entry.panelId === this.renderedTabs[index]?.panelId)) {
+			return this.renderedTabIds;
+		}
 		const tabs = entries.map(({ id, label, panelId }) => {
 			let tabId = this.tabIds.get(id);
 			if (!tabId) {
@@ -60,6 +70,10 @@ export class MultiChatTabsControl extends ChatTabsControl {
 			panelId: tab.panelId,
 		})), activeTabId);
 		this.element.hidden = tabs.length === 0;
-		return new Map(tabs.map((tab) => [tab.id, tab.tabId]));
+		this.hasRenderedTabs = true;
+		this.renderedTabs = entries.map(({ id, label, panelId }) => ({ id, label, panelId }));
+		this.renderedActiveTabId = activeTabId;
+		this.renderedTabIds = new Map(tabs.map((tab) => [tab.id, tab.tabId]));
+		return this.renderedTabIds;
 	}
 }

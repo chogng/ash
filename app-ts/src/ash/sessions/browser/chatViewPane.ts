@@ -251,7 +251,12 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		const activePaneId = this.activePaneId();
 		const activePane = activePaneId ? this.panes.get(activePaneId) : undefined;
 		const orderedEntries = this.orderEntries(entries, activePane);
-		this.paneHost.replaceChildren(...orderedEntries.map((entry) => entry.pane.element), this.empty);
+		const orderedNodes = [...orderedEntries.map((entry) => entry.pane.element), this.empty];
+		for (let index = 0; index < orderedNodes.length; index += 1) {
+			const node = orderedNodes[index]!;
+			// Keep retained Chat editors attached while Session details refresh.
+			if (this.paneHost.children[index] !== node) this.paneHost.insertBefore(node, this.paneHost.children[index] ?? null);
+		}
 		this.activePane = activePane;
 		for (const entry of orderedEntries) entry.pane.setVisible(entry.pane === this.activePane);
 		this.empty.hidden = orderedEntries.length > 0;

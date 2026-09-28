@@ -346,6 +346,15 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	const draftId = sessions.activeUntitledSession?.untitledSessionId;
 	assert.ok(draftId);
 	assert.equal(sessionsSidebar?.querySelector<HTMLElement>('.ash-agent-sessions-group')?.hidden, false);
+	const paneHost = pane.element.querySelector<HTMLElement>('.ash-chat-pane-host');
+	assert.ok(paneHost);
+	const activeTab = chatTitleContent(pane).querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
+	const paneChanges = new dom.window.MutationObserver(() => {});
+	paneChanges.observe(paneHost, { childList: true });
+	sessions.setUntitledSessionAgent(draftId, { name: 'reviewer', description: 'Reviews changes', sourceId: 'directory-1' });
+	assert.equal(paneChanges.takeRecords().flatMap(record => [...record.removedNodes]).length, 0);
+	assert.equal(chatTitleContent(pane).querySelector<HTMLElement>('[role="tab"][aria-selected="true"]'), activeTab);
+	paneChanges.disconnect();
 	sessions.discardUntitledSession(draftId);
 	sessions.selectThread('session-1', 'thread-1');
 	pane.element.querySelector(".ash-chat-body")!.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
