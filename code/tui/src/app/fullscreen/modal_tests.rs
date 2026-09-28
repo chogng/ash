@@ -192,7 +192,7 @@ fn theme_picker_is_numbered_fixed_and_not_searchable() {
     );
     assert_eq!(
         terminal.backend().buffer()[(layout.content.x, first_choice_row as u16 + 1)].bg,
-        test_context().selection_background()
+        test_context().background()
     );
     let custom_row = rows
         .iter()

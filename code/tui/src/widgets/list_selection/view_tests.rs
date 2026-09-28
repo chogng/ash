@@ -315,7 +315,12 @@ fn keyboard_selection_and_a_different_hovered_row_remain_visible_together() {
     assert_eq!(buffer[(0, 0)].symbol(), ">");
     assert_eq!(buffer[(0, 0)].fg, test_context().focus());
     assert_eq!(buffer[(2, 0)].fg, test_context().focus());
-    assert_eq!(buffer[(2, 0)].bg, test_context().selection_background());
+    assert_eq!(buffer[(2, 0)].bg, ratatui::style::Color::Reset);
+    assert!(
+        !buffer[(2, 0)]
+            .modifier
+            .contains(ratatui::style::Modifier::REVERSED)
+    );
     assert_eq!(buffer[(0, 1)].symbol(), " ");
     assert_eq!(buffer[(2, 1)].fg, test_context().hover_foreground());
     assert_eq!(buffer[(2, 1)].bg, test_context().hover_background());

@@ -163,7 +163,7 @@ fn issue_browser_uses_the_shared_state_column_and_handles_narrow_terminals() {
         assert_eq!(buffer[(2, 7)].symbol(), "[");
         assert_eq!(
             buffer[(2, 7)].bg,
-            crate::render::test_context().selection_background()
+            crate::render::test_context().background()
         );
         assert!(
             buffer[(2, 7)]
@@ -177,7 +177,7 @@ fn issue_browser_uses_the_shared_state_column_and_handles_narrow_terminals() {
         );
         assert_eq!(
             buffer[(width - 3, 7)].bg,
-            crate::render::test_context().selection_background()
+            crate::render::test_context().background()
         );
         for y in 2..7 {
             assert_eq!(buffer[(0, y)].symbol(), " ");

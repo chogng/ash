@@ -2790,7 +2790,14 @@ fn model_list_pins_without_changing_the_selected_model() {
             .label(),
         "gateway-model"
     );
-    crate::tui_assert_snapshot!("model_list_pinned", render(&app, 100, 18));
+    let rendered = render(&app, 100, 18);
+    let row = rendered
+        .lines()
+        .position(|line| line.contains("> gateway-model"))
+        .unwrap() as u16;
+    let buffer = render_buffer(&app, 100, 18);
+    assert_eq!(buffer[(30, row)].bg, buffer[(30, row + 1)].bg);
+    crate::tui_assert_snapshot!("model_list_pinned", rendered);
 }
 
 #[test]

@@ -742,7 +742,7 @@ pub(crate) fn item_style(
     pressed: bool,
 ) -> Style {
     if selected || hovered || pressed {
-        return crate::render::interaction_style(
+        let mut style = crate::render::interaction_style(
             context,
             crate::render::InteractionState {
                 target: crate::render::InteractionTarget::Rest,
@@ -751,6 +751,12 @@ pub(crate) fn item_style(
                 pressed,
             },
         );
+        if selected && !pressed {
+            // The marker and foreground identify selection even without color support.
+            style.bg = None;
+            style = style.remove_modifier(Modifier::REVERSED);
+        }
+        return style;
     }
     Style::default().fg(context.muted())
 }

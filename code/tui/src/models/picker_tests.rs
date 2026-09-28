@@ -270,6 +270,12 @@ fn effort_labels_align_across_models_with_different_level_counts() {
             )
         })
         .unwrap();
+    let buffer = terminal.backend().buffer();
+    assert!(
+        (0..62).all(|x| buffer[(x, 3)].bg == buffer[(x, 4)].bg),
+        "the selected model keeps the list background"
+    );
+    assert_eq!(buffer[(0, 3)].fg, crate::render::test_context().focus());
     let rendered = terminal.backend().to_string();
     let value_columns = rendered
         .lines()
