@@ -1,3 +1,4 @@
+import './parts/menubar.contribution.js';
 import { installBaseUiStyles } from "../../base/browser/ui/styles.js";
 import { addDisposableListener } from "../../base/browser/dom.js";
 import { onUnexpectedError } from "../../base/common/errors.js";

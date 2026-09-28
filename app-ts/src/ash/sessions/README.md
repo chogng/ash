@@ -18,7 +18,7 @@ is canonical for the renderer implementation and extension points.
 | Electron renderer close | `workbench/services/lifecycle/electron-browser/lifecycleService.ts` | checks shutdown vetoes and joins save work before either Electron window closes |
 | Code profile | `code/common/codeSessionsProfile.ts` | defines the Code window identity and page route used by both browser and Electron entries |
 | Product composition | `browser/workbench.ts` | uses shared window identity and lifecycle services; owns the fixed titlebar/activitybar/sidebar/sessions/auxiliarybar Part set |
-| Layout | `browser/layoutPolicy.ts` | owns Sessions topology, geometry, Activity Bar position, optional auxiliary visibility, persisted sizes, and Modern/Flat spacing |
+| Layout | `browser/layoutPolicy.ts` | owns Sessions topology, geometry, Activity Bar position, sidebar and auxiliary visibility, and persisted sizes |
 | Appearance | `common/configuration.ts` and `contrib/modernUI/browser/` | own the independent Sessions layout, Activity Bar position, and size preferences |
 | Accounts and settings | `contrib/accounts/browser/` and `contrib/preferences/browser/` | the account icon opens a Sessions-owned menu with Settings and Return to Workbench; Settings opens a Sessions-owned page that reuses the Workbench setting widgets |
 | Window Sessions state | `services/sessions/browser/sessionsService.ts` | owns active/visible selections, focus, and Back/Forward history |
@@ -29,6 +29,7 @@ is canonical for the renderer implementation and extension points.
 | Main conversation | `browser/parts/sessionsChatView.ts` | renders visible durable and untitled Sessions as retained full `ChatWidget` Grid leaves |
 | Turn review | `browser/turnMultiDiffSource.ts` and `browser/workbenchSessions.contribution.ts` | compose Turn changes and register their source resolver and commit action with `workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.ts` |
 | Parts | `browser/parts/` | owns product chrome, window navigation, list, primary surface, and typed active context |
+| Application menu | `browser/parts/menubar.contribution.ts` | registers the Sessions window's menu sections and window actions; the titlebar uses the shared Workbench menu control |
 | Session chat commands | `browser/actions/sessionsChatActions.ts` | maps the reused ChatWidget New Chat and History commands to the Sessions window's draft and active-chat selection |
 | Open Agents Window | `code/browser/workbench/modes/code.ts`, `workbench/contrib/chat/electron-browser/`, `contrib/openAgentsWindow/electron-browser/`, and `workbench/browser/parts/titlebar/` | the Code browser mode owns page navigation; the Chat desktop contribution owns the titlebar action, hover label, and window command; the Sessions desktop contribution owns system-wide shortcut synchronization; the Workbench titlebar owns the shared mark and motion. Shared shortcut selection lives in `workbench/contrib/keybindings/`, while `platform/globalKeybindings/` owns operating-system registrations |
 
@@ -55,17 +56,17 @@ model supplied by Sessions and does not create or select Sessions itself.
    `WorkbenchWindow` registers the renderer window and its document styles;
    The renderer lifecycle service joins storage flush before disposal.
 4. `SessionsWorkbenchLayout` deserializes the fixed Part grid. Titlebar,
-   activitybar, sidebar, and sessions Parts are required; the auxiliary Part can be toggled,
+   activitybar, sidebar, and sessions Parts are registered; the sidebar and auxiliary Parts can be toggled,
    and Activity Bar visibility follows `sessions.activityBar.location`.
-   The Activity Bar selects Chat and opens the account menu; Collaboration and Mobile devices
-   are visible but unavailable until those views have product data. Its right-click menu moves the
+   The Activity Bar selects Chat, Collaboration, and Library; the latter two currently show empty pages.
+   Mobile devices remains unavailable. Its right-click menu moves the
    controls to the sidebar top or bottom, hides them, or selects the side rail size through
-   `sessions.activityBar.compact`. The titlebar owns new-session,
-   history, and details controls.
+   `sessions.activityBar.compact`. The titlebar uses the shared application menu control with Sessions-owned menu contributions and owns sidebar visibility,
+   session history, and a Chat / Code switch. Code shows an empty page in the primary Part; the sidebar owns the new-session control.
    Its spacing follows `sessions.layoutStyle`, independently of the IDE's
    `workbench.layoutStyle`. Both preferences use the same profile settings
    resource; changing either one updates its own window without changing
-   the other window's layout. Sessions sizes and auxiliary visibility remain
+   the other window's layout. Sessions sizes, sidebar visibility, and auxiliary visibility remain
    in Sessions-owned layout storage.
    The account menu uses the shared context menu service. Its Settings action
    opens the Sessions settings page, which uses the shared setting widgets and
@@ -124,7 +125,7 @@ and dirs. It does not grant access and is not the editor window Workspace from
 ## Tests and modification impact
 
 - `test/browser/sessions-layout.test.ts` protects fixed topology, required
-  Parts, and optional auxiliary visibility.
+  Parts, and sidebar and auxiliary visibility.
 - `test/browser/sessions-view-service.test.ts` protects selection ownership,
   multi-session visibility, history, stale references, close behavior, and
   draft materialization.

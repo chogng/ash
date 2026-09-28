@@ -27,7 +27,7 @@
 .ash-teams-panel button:hover { background: var(--ash-list-hover-background); }
 .ash-teams-panel button:focus-visible { outline: var(--ash-stroke-thickness) solid var(--ash-focus-border); }
 .ash-teams-list-item { width: 100%; text-align: left; }
-.ash-teams-list-item[aria-current="true"] { background: var(--ash-list-active-selection-background); }
+.ash-teams-list-item.selected { background: var(--ash-sessions-selection-background); }
 .ash-teams-member { padding: var(--ash-spacing-size80); border: var(--ash-stroke-thickness) solid var(--ash-border); border-radius: var(--ash-corner-radius-medium); }
 .ash-teams-member p, .ash-teams-detail p { margin: 0; overflow-wrap: anywhere; }
 .ash-teams-member button { margin: var(--ash-spacing-size80) var(--ash-spacing-size80) 0 0; }

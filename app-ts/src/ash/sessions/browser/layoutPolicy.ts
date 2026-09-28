@@ -28,6 +28,7 @@ export interface SessionsWorkbenchLayoutState {
 	readonly version: 1;
 	readonly sidebar: {
 		readonly width: number;
+		readonly visible: boolean;
 	};
 	readonly auxiliarybar: {
 		readonly width: number;
@@ -38,7 +39,7 @@ export interface SessionsWorkbenchLayoutState {
 export function createDefaultSessionsWorkbenchLayoutState(): SessionsWorkbenchLayoutState {
 	return {
 		version: 1,
-		sidebar: { width: DEFAULT_SIDEBAR_WIDTH },
+		sidebar: { width: DEFAULT_SIDEBAR_WIDTH, visible: true },
 		auxiliarybar: { width: DEFAULT_AUXILIARYBAR_WIDTH, visible: true },
 	};
 }
@@ -49,6 +50,7 @@ export function parseSessionsWorkbenchLayoutState(value: unknown): SessionsWorkb
 		value.version !== 1 ||
 		!isRecord(value.sidebar) ||
 		!isDimension(value.sidebar.width) ||
+		typeof value.sidebar.visible !== 'boolean' ||
 		!isRecord(value.auxiliarybar) ||
 		!isDimension(value.auxiliarybar.width) ||
 		typeof value.auxiliarybar.visible !== 'boolean'
@@ -57,7 +59,7 @@ export function parseSessionsWorkbenchLayoutState(value: unknown): SessionsWorkb
 	}
 	return {
 		version: 1,
-		sidebar: { width: value.sidebar.width },
+		sidebar: { width: value.sidebar.width, visible: value.sidebar.visible },
 		auxiliarybar: {
 			width: value.auxiliarybar.width,
 			visible: value.auxiliarybar.visible,
@@ -79,6 +81,7 @@ export class SessionsWorkbenchLayoutStateModel {
 			version: 1,
 			sidebar: {
 				width: storedDimension(storage.getNumber(SessionsWorkbenchLayoutStorageKeys.SIDEBAR_WIDTH.key, SessionsWorkbenchLayoutStorageKeys.SIDEBAR_WIDTH.scope), this.defaults.sidebar.width),
+				visible: storage.getBoolean(SessionsWorkbenchLayoutStorageKeys.SIDEBAR_VISIBLE.key, SessionsWorkbenchLayoutStorageKeys.SIDEBAR_VISIBLE.scope, this.defaults.sidebar.visible),
 			},
 			auxiliarybar: {
 				width: storedDimension(storage.getNumber(SessionsWorkbenchLayoutStorageKeys.AUXILIARYBAR_WIDTH.key, SessionsWorkbenchLayoutStorageKeys.AUXILIARYBAR_WIDTH.scope), this.defaults.auxiliarybar.width),
@@ -91,6 +94,7 @@ export class SessionsWorkbenchLayoutStateModel {
 		const storage = this.storageService;
 		if (!storage) return;
 		storeLayoutValue(storage, SessionsWorkbenchLayoutStorageKeys.SIDEBAR_WIDTH, state.sidebar.width);
+		storeLayoutValue(storage, SessionsWorkbenchLayoutStorageKeys.SIDEBAR_VISIBLE, state.sidebar.visible);
 		storeLayoutValue(storage, SessionsWorkbenchLayoutStorageKeys.AUXILIARYBAR_WIDTH, state.auxiliarybar.width);
 		storeLayoutValue(storage, SessionsWorkbenchLayoutStorageKeys.AUXILIARYBAR_VISIBLE, state.auxiliarybar.visible);
 	}
@@ -105,6 +109,11 @@ interface SessionsWorkbenchLayoutStorageKey {
 const SessionsWorkbenchLayoutStorageKeys = {
 	SIDEBAR_WIDTH: {
 		key: 'sessions.layout.sidebar.width',
+		scope: StorageScope.PROFILE,
+		target: StorageTarget.MACHINE,
+	},
+	SIDEBAR_VISIBLE: {
+		key: 'sessions.layout.sidebar.visible',
 		scope: StorageScope.PROFILE,
 		target: StorageTarget.MACHINE,
 	},
@@ -152,7 +161,7 @@ export function createSessionsWorkbenchGridDescriptor(
 	const titlebarHeight = requiredView(views, 'titlebar').minimumHeight;
 	const bodyHeight = Math.max(0, dimension.height - titlebarHeight);
 	const activityBarWidth = requiredView(views, 'activitybar').minimumWidth;
-	const sessionsWidth = Math.max(0, dimension.width - (activityBarLocation === ActivityBarPosition.DEFAULT ? activityBarWidth : 0) - state.sidebar.width - (state.auxiliarybar.visible ? state.auxiliarybar.width : 0));
+	const sessionsWidth = Math.max(0, dimension.width - (activityBarLocation === ActivityBarPosition.DEFAULT ? activityBarWidth : 0) - (state.sidebar.visible ? state.sidebar.width : 0) - (state.auxiliarybar.visible ? state.auxiliarybar.width : 0));
 	return {
 		type: 'branch',
 		orientation: 'vertical',
@@ -167,7 +176,7 @@ export function createSessionsWorkbenchGridDescriptor(
 				priority: SESSIONS_LAYOUT_PRIORITY,
 				children: [
 					leaf('activitybar', activityBarWidth, activityBarLocation === ActivityBarPosition.DEFAULT),
-					leaf('sidebar', state.sidebar.width),
+					leaf('sidebar', state.sidebar.width, state.sidebar.visible),
 					leaf('sessions', sessionsWidth, true, SESSIONS_LAYOUT_PRIORITY),
 					leaf('auxiliarybar', state.auxiliarybar.width, state.auxiliarybar.visible),
 				],
@@ -204,8 +213,6 @@ export function assertDimension(dimension: IDimension): void {
 	}
 }
 
-const PART_GUTTER = 6;
-const PART_GUTTER_HALF = PART_GUTTER / 2;
 const WINDOW_LEFT_EDGE_INSET = 6;
 const WINDOW_RIGHT_EDGE_INSET = 8;
 
@@ -248,7 +255,6 @@ export class SessionsWorkbenchLayout extends Disposable implements IResizable {
 			this.domNode,
 			createSessionsWorkbenchGridDescriptor(this.views, initialDimension, state, this.activityBarLocation),
 			{ fromJSON: data => this.view(parseSessionsPartId(data)) },
-			{ sashPresentation: this.layoutStyle === 'modern' ? { type: 'inset', gap: PART_GUTTER } : undefined },
 		));
 		if (options.storageService) this._register(options.storageService.onWillSaveState(() => this.saveState()));
 		this._register(toDisposable(() => this.saveState()));
@@ -262,7 +268,7 @@ export class SessionsWorkbenchLayout extends Disposable implements IResizable {
 	get state(): SessionsWorkbenchLayoutState {
 		return {
 			version: 1,
-			sidebar: { width: this.getPartSize('sidebar').width },
+			sidebar: { width: this.getPartSize('sidebar').width, visible: this.isPartVisible('sidebar') },
 			auxiliarybar: {
 				width: this.getPartSize('auxiliarybar').width,
 				visible: this.isPartVisible('auxiliarybar'),
@@ -273,7 +279,6 @@ export class SessionsWorkbenchLayout extends Disposable implements IResizable {
 	setLayoutStyle(style: SessionsLayoutStyle): void {
 		if (this.layoutStyle === style) return;
 		this.layoutStyle = style;
-		this.grid.sashPresentation = style === 'modern' ? { type: 'inset', gap: PART_GUTTER } : undefined;
 		this.projectFrameInsets();
 		if (this.grid.width > 0 && this.grid.height > 0) {
 			this.layout(new Dimension(this.grid.width, this.grid.height));
@@ -308,7 +313,7 @@ export class SessionsWorkbenchLayout extends Disposable implements IResizable {
 	}
 
 	private updatePartVisibility(partId: SessionsPartId, visible: boolean): void {
-		if (partId === 'titlebar' || partId === 'activitybar' || partId === 'sidebar' || partId === 'sessions') throw new Error(`Required Sessions Part cannot be hidden: ${partId}`);
+		if (partId === 'titlebar' || partId === 'activitybar' || partId === 'sessions') throw new Error(`Required Sessions Part cannot be hidden: ${partId}`);
 		if (this.isPartVisible(partId) === visible) return;
 		this.grid.setViewVisible(this.view(partId), visible);
 		this.projectFrameInsets();
@@ -320,12 +325,11 @@ export class SessionsWorkbenchLayout extends Disposable implements IResizable {
 	private projectFrameInsets(auxiliarybarVisible = this.isPartVisible('auxiliarybar')): void {
 		const leftEdge = this.layoutStyle === 'modern' ? WINDOW_LEFT_EDGE_INSET : 0;
 		const rightEdge = this.layoutStyle === 'modern' ? WINDOW_RIGHT_EDGE_INSET : 0;
-		const halfGutter = this.layoutStyle === 'modern' ? PART_GUTTER_HALF : 0;
 		this.view('titlebar').setFrameInsets({ top: 0, right: 0, bottom: 0, left: 0 });
 		this.view('activitybar').setFrameInsets({ top: 0, right: 0, bottom: 0, left: this.activityBarLocation === ActivityBarPosition.DEFAULT ? leftEdge : 0 });
-		this.view('sidebar').setFrameInsets({ top: 0, right: halfGutter, bottom: 0, left: this.activityBarLocation === ActivityBarPosition.DEFAULT ? 0 : leftEdge });
-		this.view('sessions').setFrameInsets({ top: 0, right: auxiliarybarVisible ? halfGutter : rightEdge, bottom: 0, left: halfGutter });
-		this.view('auxiliarybar').setFrameInsets({ top: 0, right: rightEdge, bottom: 0, left: halfGutter });
+		this.view('sidebar').setFrameInsets({ top: 0, right: 0, bottom: 0, left: this.activityBarLocation === ActivityBarPosition.DEFAULT ? 0 : leftEdge });
+		this.view('sessions').setFrameInsets({ top: 0, right: auxiliarybarVisible ? 0 : rightEdge, bottom: 0, left: 0 });
+		this.view('auxiliarybar').setFrameInsets({ top: 0, right: rightEdge, bottom: 0, left: 0 });
 	}
 
 	private publishPartVisibility(): void {

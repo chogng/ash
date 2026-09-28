@@ -84,10 +84,11 @@
 	text-align: left;
 }
 
-.ash-sessions-settings-navigation-item:hover,
-.ash-sessions-settings-navigation-item.is-current {
+.ash-sessions-settings-navigation-item:hover {
 	background: var(--ash-settings-row-hover-background);
 }
+
+.ash-sessions-settings-navigation-item.is-current { background: var(--ash-sessions-selection-background); }
 
 .ash-sessions-settings-page {
 	grid-column: 2;

@@ -22,6 +22,10 @@ export class AuxiliaryBarPart extends WorkbenchPart {
 		this.render();
 	}
 
+	setEmptyPage(empty: boolean): void {
+		this.contentDomNode.classList.toggle('empty-page', empty);
+	}
+
 	private render(): void {
 		const content = this.contentDomNode;
 		const heading = h(content.ownerDocument, "h2");

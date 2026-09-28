@@ -1,5 +1,4 @@
 .ash-sessions-titlebar {
-  border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
   background: var(--ash-title-bar-background, var(--ash-workbench-background));
 }
 
@@ -8,23 +7,20 @@
   width: 100%;
   flex-direction: row;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 var(--ash-spacing-size160);
+  padding: 0 var(--ash-spacing-size160) 0 var(--ash-spacing-size20);
 }
 
-.ash-sessions-titlebar-left,
-.ash-sessions-titlebar-right,
-.ash-sessions-titlebar-navigation {
+.ash-sessions-titlebar-left {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: var(--ash-spacing-size80);
 }
 
 .ash-sessions-titlebar-left { align-self: stretch; }
 
 .ash-workbench[data-runtime="electron"] .ash-sessions-titlebar { -webkit-app-region: drag; }
 .ash-workbench[data-runtime="electron"] .ash-sessions-titlebar button { -webkit-app-region: no-drag; }
+.ash-workbench[data-runtime="electron"] .ash-sessions-titlebar .ash-action-bar { -webkit-app-region: no-drag; }
 
 .ash-sessions-window-controls-spacer {
   flex: 0 0 max(70px, calc(70px * var(--ash-sessions-inverse-zoom-factor)));
@@ -33,27 +29,12 @@
 
 .ash-workbench.ash-sessions-fullscreen .ash-sessions-window-controls-spacer { display: none; }
 
-.ash-sessions-titlebar-button,
-.ash-sessions-titlebar-new-session,
-.ash-sessions-navigation-button {
-  display: grid;
-  width: 28px;
-  height: 28px;
-  min-height: 0;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  border-radius: var(--ash-corner-radius-small);
-  color: var(--ash-title-bar-foreground, var(--ash-foreground));
-  background: transparent;
-  box-shadow: none;
-  cursor: pointer;
+.ash-sessions-titlebar .ash-toolbar {
+  --ash-action-bar-gap: var(--ash-spacing-size80);
+  --ash-toolbar-action-size: var(--ash-spacing-size280);
 }
 
-.ash-sessions-titlebar-button svg,
-.ash-sessions-titlebar-new-session svg { width: 16px; height: 16px; }
+.ash-sessions-titlebar .ash-toolbar .ash-button { color: var(--ash-title-bar-foreground, var(--ash-foreground)); }
 
-.ash-sessions-titlebar button:hover:not(:disabled) { background: var(--ash-list-hover-background); }
-.ash-sessions-titlebar-button.selected { background: var(--ash-list-hover-background); }
-.ash-sessions-titlebar button:focus-visible { outline: var(--ash-stroke-thickness) solid var(--ash-focus-border); }
-.ash-sessions-titlebar button:disabled { opacity: .35; cursor: default; }
+.ash-sessions-titlebar .ash-toolbar .ash-button:hover:not(:disabled) { background: var(--ash-title-bar-hover-background); }
+.ash-sessions-titlebar .ash-toolbar .ash-button.checked { background: var(--ash-sessions-selection-background); }

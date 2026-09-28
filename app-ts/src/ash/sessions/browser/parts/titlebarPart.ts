@@ -1,88 +1,68 @@
-import "../../common/sessionsColors.js";
-import "./media/titlebarpart.css";
-import "./media/sessionsControls.css";
-import { addDisposableListener, h } from "../../../base/browser/dom.js";
-import { appendIcon } from '../../../base/browser/ui/lxicons/lxicon.js';
+import '../../common/sessionsColors.js';
+import './media/titlebarpart.css';
+import { h } from '../../../base/browser/dom.js';
+import type { IAction } from '../../../base/common/actions.js';
 import { Lxicon } from '../../../base/common/lxicons.js';
+import { environment } from '../../../base/common/platform.js';
 import { localize } from '../../../nls.js';
-import { environment } from "../../../base/common/platform.js";
-import type { ISessionsService } from "../../services/sessions/browser/sessionsService.js";
-import { WorkbenchPart } from "../../../workbench/browser/part.js";
+import type { IMenuService } from '../../../platform/actions/common/actions.js';
+import type { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
+import { WorkbenchPart } from '../../../workbench/browser/part.js';
+import { WorkbenchWindowBarHeight } from '../../../workbench/browser/parts/workbenchPartDimensions.js';
+import { BrowserMenubarControl } from '../../../workbench/browser/parts/titlebar/menubarControl.js';
+import type { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
+import { ChatCodeSwitchWidget } from '../widget/chatCodeSwitchWidget.js';
 
 export interface TitlebarPartDelegate {
-	focusSessions(): void;
-	toggleDetails(): void;
+	toggleSidebar(): void;
+	selectMode(mode: 'chat' | 'code'): void;
 }
 
 /** Window chrome and primary product actions for the dedicated Sessions Workbench. */
 export class TitlebarPart extends WorkbenchPart {
-	private readonly detailsButton: HTMLButtonElement;
+	private readonly menubar: BrowserMenubarControl;
+	private readonly modeSwitch: ChatCodeSwitchWidget;
+	private sidebarVisible = true;
 
-	override get minimumHeight(): number { return 46; }
-	override get maximumHeight(): number { return 46; }
+	override get minimumHeight(): number { return WorkbenchWindowBarHeight; }
+	override get maximumHeight(): number { return WorkbenchWindowBarHeight; }
 
-	constructor(container: HTMLElement, viewService: ISessionsService, delegate: TitlebarPartDelegate) {
-		super(container, "titlebar");
-		this.domNode.classList.add("ash-sessions-titlebar");
-		const ownerDocument = container.ownerDocument;
-		const left = h(ownerDocument, "div");
-		left.className = "ash-sessions-titlebar-left";
-		const navigation = h(ownerDocument, "div");
-		navigation.className = "ash-sessions-titlebar-navigation";
-		const right = h(ownerDocument, "div");
-		right.className = "ash-sessions-titlebar-right";
-		if (environment.runtime === "electron" && environment.os === "mac") {
-			const windowControlsSpacer = h(ownerDocument, "div");
-			windowControlsSpacer.className = "ash-sessions-window-controls-spacer";
-			windowControlsSpacer.setAttribute("aria-hidden", "true");
-			left.append(windowControlsSpacer);
+	constructor(container: HTMLElement, private readonly viewService: ISessionsService, menuService: IMenuService, contextMenus: IContextMenuService, private readonly delegate: TitlebarPartDelegate) {
+		super(container, 'titlebar');
+		this.domNode.classList.add('ash-sessions-titlebar');
+		const left = h(container.ownerDocument, 'div');
+		left.className = 'ash-sessions-titlebar-left';
+		if (environment.runtime === 'electron' && environment.os === 'mac') {
+			const spacer = h(container.ownerDocument, 'div');
+			spacer.className = 'ash-sessions-window-controls-spacer';
+			spacer.setAttribute('aria-hidden', 'true');
+			left.append(spacer);
 		}
-		const backButton = navigationButton(ownerDocument, '←', localize('sessions.navigation.back', 'Back'));
-		const forwardButton = navigationButton(ownerDocument, '→', localize('sessions.navigation.forward', 'Forward'));
-		const newSession = h(ownerDocument, "button");
-		newSession.type = "button";
-		newSession.className = "ash-sessions-button ash-sessions-titlebar-new-session";
-		newSession.setAttribute('aria-label', localize('sessions.navigation.new', 'New session'));
-		newSession.title = newSession.getAttribute('aria-label')!;
-		appendIcon(Lxicon.add, newSession);
-		this.detailsButton = h(ownerDocument, 'button');
-		this.detailsButton.type = 'button';
-		this.detailsButton.className = 'ash-sessions-button ash-sessions-titlebar-button';
-		this.detailsButton.setAttribute('aria-label', localize('sessions.navigation.details', 'Session details'));
-		this.detailsButton.title = this.detailsButton.getAttribute('aria-label')!;
-		appendIcon(Lxicon.layoutSidebarRightOff1, this.detailsButton);
-		navigation.append(backButton, forwardButton);
-		right.append(navigation, newSession, this.detailsButton);
-		this.contentDomNode.append(left, right);
-		this._register(addDisposableListener(backButton, "click", () => viewService.navigateBack()));
-		this._register(addDisposableListener(forwardButton, "click", () => viewService.navigateForward()));
-		this._register(addDisposableListener(newSession, "click", () => {
-			viewService.openNewSession(localize('sessions.newCodeSession', 'New code session'));
-			delegate.focusSessions();
-		}));
-		this._register(addDisposableListener(this.detailsButton, 'click', () => delegate.toggleDetails()));
-		const updateNavigation = (): void => {
-			backButton.disabled = !viewService.canNavigateBack;
-			forwardButton.disabled = !viewService.canNavigateForward;
-		};
-		this._register(viewService.onDidChange(updateNavigation));
-		updateNavigation();
+		this.contentDomNode.append(left);
+		this.menubar = this._register(new BrowserMenubarControl(left, menuService, contextMenus));
+		this._register(viewService.onDidChange(() => this.updateActions()));
+		this.updateActions();
+		this.modeSwitch = this._register(new ChatCodeSwitchWidget(left, mode => this.delegate.selectMode(mode)));
 	}
 
-	public updateDetailsVisibility(visible: boolean): void {
-		this.detailsButton.classList.toggle('selected', visible);
-		this.detailsButton.setAttribute('aria-pressed', String(visible));
-		this.detailsButton.replaceChildren();
-		appendIcon(visible ? Lxicon.layoutSidebarRight1 : Lxicon.layoutSidebarRightOff1, this.detailsButton);
-	}
-}
+	public updateMode(mode: 'chat' | 'code'): void { this.modeSwitch.setMode(mode); }
 
-function navigationButton(ownerDocument: Document, label: string, ariaLabel: string): HTMLButtonElement {
-	const button = h(ownerDocument, "button");
-	button.type = "button";
-	button.className = "ash-sessions-navigation-button";
-	button.textContent = label;
-	button.setAttribute("aria-label", ariaLabel);
-	button.title = ariaLabel;
-	return button;
+	public updateSidebarVisibility(visible: boolean): void {
+		this.sidebarVisible = visible;
+		this.updateActions();
+	}
+
+	private updateActions(): void {
+		const action = (id: string, label: string, icon: IAction['icon'], run: () => void, enabled = true, checked?: boolean): IAction => ({
+			id, label, tooltip: label, icon, enabled, checked, run,
+		});
+		const sidebarLabel = this.sidebarVisible
+			? localize('sessions.navigation.hideSidebar', 'Hide sidebar')
+			: localize('sessions.navigation.showSidebar', 'Show sidebar');
+		this.menubar.setTrailingActions([
+			action('ash.sessions.toggleSidebar', sidebarLabel, this.sidebarVisible ? Lxicon.layoutSidebarLeft2 : Lxicon.layoutSidebarLeftOff2, () => this.delegate.toggleSidebar(), true, this.sidebarVisible),
+			action('ash.sessions.back', localize('sessions.navigation.back', 'Back'), Lxicon.arrowLeft, () => this.viewService.navigateBack(), this.viewService.canNavigateBack),
+			action('ash.sessions.forward', localize('sessions.navigation.forward', 'Forward'), Lxicon.arrowRight, () => this.viewService.navigateForward(), this.viewService.canNavigateForward),
+		]);
+	}
 }

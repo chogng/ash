@@ -49,6 +49,7 @@ class ApplicationMenuActionViewItem extends ButtonActionViewItem {
 export class BrowserMenubarControl extends Disposable
 	implements IMenubarControl {
 	private readonly menu: IMenu;
+	private readonly toolbar: MenuWorkbenchToolBar;
 	private readonly contextMenuService: IContextMenuService;
 	private menuItem: ApplicationMenuActionViewItem | undefined;
 	private active = false;
@@ -75,7 +76,7 @@ export class BrowserMenubarControl extends Disposable
 			run: () => this.toggleMenu(),
 		};
 		const leftActionsLabel = () => localize(localizationService, { bundle: "ash.regions", key: "titleBarLeftActions" }, "Title bar left actions");
-		const toolbar = this._register(new MenuWorkbenchToolBar(container, menuService, contextMenuService, MenuId.TitleBarLeft, {
+		this.toolbar = this._register(new MenuWorkbenchToolBar(container, menuService, contextMenuService, MenuId.TitleBarLeft, {
 			ariaLabel: leftActionsLabel(),
 			presentation: "inherit-foreground",
 			leadingActions: presentation === 'application-menu' ? [action] : [],
@@ -86,9 +87,9 @@ export class BrowserMenubarControl extends Disposable
 				return item;
 			},
 		}));
-		this.domNode = toolbar.element;
+		this.domNode = this.toolbar.element;
 		this.domNode.classList.add("ash-menubar", "ash-titlebar-left-actions");
-		this._register(toolbar.onDidChangeMenuItems(() => {
+		this._register(this.toolbar.onDidChangeMenuItems(() => {
 			if (this.active) this.contextMenuService.hideContextMenu();
 		}));
 		if (localizationService) this._register(localizationService.onDidChange(() => {
@@ -101,6 +102,10 @@ export class BrowserMenubarControl extends Disposable
 		this._register(toDisposable(() => {
 			if (this.active) this.contextMenuService.hideContextMenu();
 		}));
+	}
+
+	public setTrailingActions(actions: readonly IAction[]): void {
+		this.toolbar.setTrailingActions(actions);
 	}
 
 	private get currentMenuItem(): ApplicationMenuActionViewItem {

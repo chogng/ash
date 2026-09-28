@@ -7,3 +7,10 @@ export const sessionsAccentGlow = registerColor("sessions.accentGlow", {
 	highContrastDark: null,
 	highContrastLight: null,
 }, { description: "Glow around the sessions title bar accent.", owner: "sessions.titlebar", needsTransparency: true });
+
+registerColor('sessions.selectionBackground', {
+	dark: '#303030',
+	light: '#f0f0f0',
+	highContrastDark: '#333333',
+	highContrastLight: '#dddddd',
+}, { description: 'Selected item background in the Sessions window.', owner: 'sessions' });

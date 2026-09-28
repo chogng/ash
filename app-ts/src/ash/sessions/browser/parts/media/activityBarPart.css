@@ -57,8 +57,8 @@
 
 .ash-sessions-activity-item.ash-button:hover,
 .ash-sessions-activity-item.ash-button.selected {
-	color: var(--ash-button-primary-foreground);
-	background: var(--ash-button-primary-background);
+	color: var(--ash-foreground);
+	background: var(--ash-sessions-selection-background);
 }
 
 .ash-sessions-activity-item.ash-button:disabled {

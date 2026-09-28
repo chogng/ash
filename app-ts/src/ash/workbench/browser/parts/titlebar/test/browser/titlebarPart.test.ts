@@ -353,4 +353,9 @@ test("browser titlebar hosts the application menu in an ActionBar", () => {
 	assert.equal(openSubmenusImmediatelyOnHover, true);
 	assert.equal(updatedButton.getAttribute("aria-expanded"), "true");
 	extraAction.dispose();
+	menubar.setTrailingActions([{ id: 'test.titlebar.back', label: 'Back', tooltip: 'Back', icon: Lxicon.arrowLeft, enabled: true, run() {} }]);
+	assert.deepEqual(
+		Array.from(menubar.domNode.querySelectorAll<HTMLButtonElement>('button'), item => item.getAttribute('aria-label')),
+		[applicationMenuLabel, 'Toggle sidebar', 'Back'],
+	);
 });

@@ -19,6 +19,7 @@ for (const [name, value] of Object.entries({
 
 const { Dimension } = await import("../../../base/browser/dom.js");
 const { WorkbenchPart } = await import("../../../workbench/browser/part.js");
+const { WorkbenchWindowBarHeight } = await import("../../../workbench/browser/parts/workbenchPartDimensions.js");
 const { BrowserStorageService } = await import("../../../workbench/services/storage/browser/storageService.js");
 const { WillSaveStateReason } = await import("../../../platform/storage/common/storage.js");
 const { SessionsWorkbenchLayout, sessionsPartIds } = await import("../../../sessions/browser/layoutPolicy.js");
@@ -48,8 +49,8 @@ class TestSessionsPart extends WorkbenchPart {
 		return this.id === "sidebar" || this.id === "auxiliarybar" ? 640 : Number.POSITIVE_INFINITY;
 	}
 
-	override get minimumHeight(): number { return this.id === "titlebar" ? 46 : 0; }
-	override get maximumHeight(): number { return this.id === "titlebar" ? 46 : Number.POSITIVE_INFINITY; }
+	override get minimumHeight(): number { return this.id === "titlebar" ? WorkbenchWindowBarHeight : 0; }
+	override get maximumHeight(): number { return this.id === "titlebar" ? WorkbenchWindowBarHeight : Number.POSITIVE_INFINITY; }
 }
 
 function createParts(ownerDocument: Document): Map<SessionsPartId, WorkbenchPartInstance> {
@@ -65,11 +66,11 @@ test("Sessions layout owns a fixed Sessions-first Part topology", () => {
 
 	layout.layout(new Dimension(1_200, 800));
 
-	assert.deepEqual(layout.getPartSize("titlebar"), new Dimension(1_200, 46));
+	assert.deepEqual(layout.getPartSize("titlebar"), new Dimension(1_200, WorkbenchWindowBarHeight));
 	assert.equal(Math.abs(layout.getPartSize('activitybar').width - 50) <= 1, true);
 	assert.equal(Math.abs(layout.getPartSize("sidebar").width - 260) <= 1, true);
 	assert.equal(Math.abs(layout.getPartSize("auxiliarybar").width - 200) <= 1, true);
-	assert.equal(layout.getPartSize("sessions").height, 754);
+	assert.equal(layout.getPartSize("sessions").height, 800 - WorkbenchWindowBarHeight);
 	assert.equal(layout.getPartSize("sessions").width > 400, true);
 	assert.equal(container.querySelectorAll(".ash-sash").length, 2);
 	assert.equal(container.querySelector("[data-part='editor']"), null);
@@ -96,9 +97,9 @@ test('Sessions layout style changes without changing the IDE preference or visib
 	});
 	try {
 		layout.layout(new Dimension(1_200, 800));
-		assert.deepEqual(surface(), { style: 'modern', leftInset: '3px', rightInset: '3px' });
+		assert.deepEqual(surface(), { style: 'modern', leftInset: '', rightInset: '' });
 		await configuration.updateValue(SessionsConfiguration.layoutStyle, 'flat');
-		assert.deepEqual(surface(), { style: 'flat', leftInset: '0px', rightInset: '0px' });
+		assert.deepEqual(surface(), { style: 'flat', leftInset: '', rightInset: '' });
 		assert.equal(container.classList.contains('modern-ui'), false);
 		assert.equal(configuration.getValue(WorkbenchConfiguration.layoutStyle), 'modern');
 		assert.equal(layout.isPartVisible('auxiliarybar'), true);
@@ -116,7 +117,7 @@ test('Sessions layout style changes without changing the IDE preference or visib
 	}
 });
 
-test("Sessions layout only permits the optional auxiliary Part to hide", () => {
+test("Sessions layout toggles the sidebar and auxiliary Part while keeping the primary Part visible", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const container = h(dom.window.document, "main");
 	dom.window.document.body.append(container);
@@ -126,6 +127,15 @@ test("Sessions layout only permits the optional auxiliary Part to hide", () => {
 	const subscription = layout.onDidChangePartVisibility(change => changes.push(change));
 
 	layout.layout(new Dimension(1_000, 700));
+	const sidebarWidth = layout.getPartSize('sidebar').width;
+	const sessionsWidth = layout.getPartSize('sessions').width;
+	layout.hidePart('sidebar');
+	assert.equal(layout.isPartVisible('sidebar'), false);
+	assert.equal(layout.getPartSize('sidebar').width, sidebarWidth);
+	assert.equal(layout.getPartSize('sessions').width > sessionsWidth, true);
+	layout.showPart('sidebar');
+	assert.equal(layout.isPartVisible('sidebar'), true);
+	assert.equal(layout.getPartSize('sidebar').width, sidebarWidth);
 	layout.hidePart("auxiliarybar");
 
 	assert.equal(layout.isPartVisible("auxiliarybar"), false);
@@ -203,6 +213,7 @@ test("Sessions layout restores its profile-scoped geometry and auxiliary visibil
 	first.layout(new Dimension(1_100, 700));
 	first.resizePart("sidebar", new Dimension(320, first.getPartSize("sidebar").height));
 	first.resizePart("auxiliarybar", new Dimension(360, first.getPartSize("auxiliarybar").height));
+	first.hidePart('sidebar');
 	first.hidePart("auxiliarybar");
 	await firstStorage.flush(WillSaveStateReason.SHUTDOWN);
 	first.dispose();
@@ -216,6 +227,7 @@ test("Sessions layout restores its profile-scoped geometry and auxiliary visibil
 	restored.layout(new Dimension(1_100, 700));
 
 	assert.equal(Math.abs(restored.getPartSize("sidebar").width - 320) <= 1, true);
+	assert.equal(restored.isPartVisible('sidebar'), false);
 	assert.equal(Math.abs(restored.getPartSize("auxiliarybar").width - 360) <= 1, true);
 	assert.equal(restored.isPartVisible("auxiliarybar"), false);
 

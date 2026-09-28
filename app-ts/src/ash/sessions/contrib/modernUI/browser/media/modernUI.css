@@ -7,12 +7,18 @@
 .ash-sessions-window.modern-ui .ash-workbench-sidebar {
 	border: var(--ash-stroke-thickness) solid var(--ash-border);
 	border-left: 0;
-	border-radius: 0 var(--ash-corner-radius-large) var(--ash-corner-radius-large) 0;
 	overflow: hidden;
 }
 
-.ash-sessions-window.modern-ui :is(.ash-workbench-sessions, .ash-workbench-auxiliarybar) {
+.ash-sessions-window.modern-ui .ash-workbench-sessions {
 	border: var(--ash-stroke-thickness) solid var(--ash-border);
-	border-radius: var(--ash-corner-radius-large);
+	border-left: 0;
+	overflow: hidden;
+}
+
+.ash-sessions-window.modern-ui .ash-workbench-auxiliarybar {
+	border: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-left: 0;
+	border-radius: 0 var(--ash-corner-radius-large) var(--ash-corner-radius-large) 0;
 	overflow: hidden;
 }

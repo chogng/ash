@@ -1,6 +1,6 @@
 import "./media/sidebarPart.css";
-import { addDisposableListener, h } from '../../../base/browser/dom.js';
-import { localize } from '../../../nls.js';
+import { h } from '../../../base/browser/dom.js';
+import { Emitter } from '../../../base/common/event.js';
 import type { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
 import { ActivityBarPosition } from '../../../workbench/common/configuration.js';
 import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
@@ -11,12 +11,14 @@ import { TeamsPanel, type TeamRoleOption } from './teamsPanel.js';
 import type { ITeamsManagementService } from '../../services/teams/common/teamsManagement.js';
 
 /** Session navigation Part for the dedicated Sessions Workbench. */
+export type SidebarView = 'chats' | 'teams';
+
 export class SidebarPart extends WorkbenchPart {
 	private readonly list: SessionsList;
 	private readonly teams: TeamsPanel;
-	private readonly chatTab: HTMLButtonElement;
-	private readonly teamsTab: HTMLButtonElement;
-	private activeTab: 'chats' | 'teams' = 'chats';
+	private activeView: SidebarView = 'chats';
+	private readonly didChangeView = this._register(new Emitter<SidebarView>());
+	public readonly onDidChangeView = this.didChangeView.event;
 	private readonly topActivityBarHost: HTMLDivElement;
 	private readonly bottomActivityBarHost: HTMLDivElement;
 
@@ -29,41 +31,33 @@ export class SidebarPart extends WorkbenchPart {
 		this.topActivityBarHost.className = 'ash-sessions-activity-host top';
 		this.topActivityBarHost.hidden = true;
 		this.contentDomNode.append(this.topActivityBarHost);
-		const tabs = h(container.ownerDocument, 'nav');
-		tabs.className = 'ash-sessions-sidebar-tabs';
-		tabs.setAttribute('aria-label', localize('sessions.sidebar.views', 'Sidebar views'));
-		this.chatTab = h(container.ownerDocument, 'button');
-		this.chatTab.type = 'button';
-		this.chatTab.textContent = localize('sessions.sidebar.chats', 'Chats');
-		this.teamsTab = h(container.ownerDocument, 'button');
-		this.teamsTab.type = 'button';
-		this.teamsTab.textContent = localize('sessions.sidebar.teams', 'Teams');
-		tabs.append(this.chatTab, this.teamsTab);
-		this.contentDomNode.append(tabs);
 		this.list = this._register(new SessionsList(this.contentDomNode, sessionService, viewService, "Sessions", "New session"));
 		this.teams = this._register(new TeamsPanel(this.contentDomNode, teamsService, sessionService, quickInput, listRoles));
-		this._register(addDisposableListener(this.chatTab, 'click', () => this.showChats()));
-		this._register(addDisposableListener(this.teamsTab, 'click', () => { void this.showTeams(); }));
-		this.updateTabs();
 		this.bottomActivityBarHost = h(container.ownerDocument, 'div');
 		this.bottomActivityBarHost.className = 'ash-sessions-activity-host bottom';
 		this.bottomActivityBarHost.hidden = true;
 		this.contentDomNode.append(this.bottomActivityBarHost);
 	}
 
-	focus(): void { this.activeTab === 'chats' ? this.list.focus() : this.teams.focus(); }
+	focus(): void { this.activeView === 'chats' ? this.list.focus() : this.teams.focus(); }
 
-	focusChats(): void { this.showChats(); this.list.focus(); }
+	focusChats(): void { this.selectView('chats'); this.list.focus(); }
 
-	private showChats(): void { this.activeTab = 'chats'; this.updateTabs(); }
+	public get currentView(): SidebarView { return this.activeView; }
 
-	private async showTeams(): Promise<void> { this.activeTab = 'teams'; this.updateTabs(); await this.teams.show(); this.teams.focus(); }
+	public selectView(view: SidebarView): void {
+		if (this.activeView === view) return;
+		this.activeView = view;
+		this.list.domNode.hidden = view !== 'chats';
+		this.teams.domNode.hidden = view !== 'teams';
+		this.didChangeView.fire(view);
+		if (view === 'teams') void this.teams.show().then(() => {
+			if (this.activeView === 'teams') this.teams.focus();
+		});
+	}
 
-	private updateTabs(): void {
-		this.list.domNode.hidden = this.activeTab !== 'chats';
-		this.teams.domNode.hidden = this.activeTab !== 'teams';
-		this.chatTab.setAttribute('aria-current', this.activeTab === 'chats' ? 'page' : 'false');
-		this.teamsTab.setAttribute('aria-current', this.activeTab === 'teams' ? 'page' : 'false');
+	setEmptyPage(empty: boolean): void {
+		this.contentDomNode.classList.toggle('empty-page', empty);
 	}
 
 	setActivityBarLocation(location: ActivityBarPosition): HTMLElement | undefined {

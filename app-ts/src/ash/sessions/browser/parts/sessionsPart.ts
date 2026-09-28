@@ -26,6 +26,8 @@ export interface SessionsPartOptions {
 /** Passive primary Part that renders the visible Sessions supplied by its owner. */
 export class SessionsPart extends WorkbenchPart {
 	private readonly chat: SessionsChatView;
+	private readonly header: HTMLDivElement;
+	private readonly codePage: HTMLDivElement;
 	private readonly heading: HTMLHeadingElement;
 	private readonly description: HTMLParagraphElement;
 
@@ -34,11 +36,11 @@ export class SessionsPart extends WorkbenchPart {
 	constructor(container: HTMLElement, options: SessionsPartOptions) {
 		super(container, "sessions");
 		const ownerDocument = container.ownerDocument;
-		const header = h(ownerDocument, "div");
-		header.className = "ash-sessions-surface-header";
+		this.header = h(ownerDocument, "div");
+		this.header.className = "ash-sessions-surface-header";
 		this.heading = h(ownerDocument, "h1");
 		this.description = h(ownerDocument, "p");
-		header.append(this.heading, this.description);
+		this.header.append(this.heading, this.description);
 		this.chat = this._register(new SessionsChatView(this.contentDomNode, {
 			chatService: options.chatService,
 			dictation: options.dictation,
@@ -49,11 +51,26 @@ export class SessionsPart extends WorkbenchPart {
 			activateSelection: options.activateSelection,
 			closeSelection: options.closeSelection,
 		}));
-		this.contentDomNode.prepend(header);
+		// Keep Chat mounted while Code is shown so drafts and session panes survive the switch.
+		this.contentDomNode.prepend(this.header);
+		this.codePage = h(ownerDocument, 'div');
+		this.codePage.className = 'ash-sessions-code-page';
+		this.codePage.setAttribute('role', 'region');
+		this.codePage.setAttribute('aria-label', localize('sessions.mode.code', 'Code'));
+		this.codePage.hidden = true;
+		this.contentDomNode.append(this.codePage);
 		this.updateVisibleSelections([], undefined);
 	}
 
 	focus(): void { this.chat.focus(); }
+
+	setPage(page: 'chat' | 'code' | 'empty'): void {
+		this.contentDomNode.classList.toggle('empty-page', page === 'empty');
+		this.header.hidden = page === 'code';
+		this.chat.domNode.hidden = page === 'code';
+		this.codePage.hidden = page !== 'code';
+		if (page === 'chat') this.layout(new Dimension(this.contentDomNode.clientWidth, this.contentDomNode.clientHeight));
+	}
 
 	updateVisibleSelections(selections: readonly SessionsViewSelection[], active: SessionsViewSelection | undefined): void {
 		if (active?.kind === "session") {

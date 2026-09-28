@@ -99,6 +99,7 @@ export class TeamsPanel extends Disposable {
 			const entry = this.button(list, label, () => this.perform(async () => { this.selectedId = team.teamId; await this.loadSelected(); }));
 			entry.setAttribute('aria-current', team.teamId === this.selectedId ? 'true' : 'false');
 			entry.classList.add('ash-teams-list-item');
+			entry.classList.toggle('selected', team.teamId === this.selectedId);
 		}
 		this.content.append(list);
 		const team = this.current();

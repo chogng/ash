@@ -474,7 +474,7 @@ export class SessionsPreferences extends Disposable {
 			valueType: 'select',
 			configuration: configuration<string | boolean>(SessionsConfiguration.layoutStyle),
 			title: localize('sessions.layoutStyle.title', 'Layout style'),
-			description: localize('sessions.layoutStyle.description', 'Choose floating surfaces (Modern) or edge-to-edge regions (Flat).'),
+			description: localize('sessions.layoutStyle.description', 'Choose an inset frame (Modern) or edge-to-edge regions (Flat).'),
 			options: [
 				{ value: 'modern', label: localize('sessions.layoutStyle.modern', 'Modern') },
 				{ value: 'flat', label: localize('sessions.layoutStyle.flat', 'Flat') },
@@ -535,7 +535,7 @@ export class SessionsPreferences extends Disposable {
 				{ title: localize('sessions.settings.gitPrs', 'Git & PRs'), icon: Lxicon.git, settings: [] },
 				{ title: localize('sessions.settings.worktree', 'Worktree'), icon: Lxicon.gitBranch, settings: [] },
 				{ title: localize('sessions.settings.browser', 'Browser'), icon: Lxicon.browserWeb, settings: [] },
-				{ title: localize('sessions.settings.tab', 'Tab'), icon: Lxicon.splitPage, settings: [] },
+				{ title: localize('sessions.settings.tab', 'Tab'), icon: Lxicon.keyboardTab, settings: [] },
 				{ title: localize('sessions.settings.codeIntelligence', 'Code Intelligence'), icon: Lxicon.code, settings: [] },
 				{ title: localize('sessions.settings.environment', 'Environment'), icon: Lxicon.terminal, settings: [] },
 			],

@@ -32,7 +32,7 @@ import type { ContextMenuServiceFactory } from "../../platform/contextview/brows
 import { setHoverDelegate } from "../../base/browser/ui/hover/hoverDelegate.js";
 import { IMenuService } from "../../platform/actions/common/actions.js";
 import { MenuService } from "../../platform/actions/common/menuService.js";
-import { ICommandService } from "../../platform/commands/common/commands.js";
+import { CommandsRegistry, ICommandService } from "../../platform/commands/common/commands.js";
 import { IContextKeyService, ContextKeyService } from "../../platform/contextkey/browser/contextKeyService.js";
 import { IContextMenuService, IContextViewService } from "../../platform/contextview/browser/contextView.js";
 import { BrowserContextViewService } from "../../platform/contextview/browser/contextViewService.js";
@@ -80,13 +80,14 @@ import { SessionsAccountMenu } from '../contrib/accounts/browser/sessionsAccount
 import { SessionsModernUIContribution } from '../contrib/modernUI/browser/modernUI.contribution.js';
 import { SessionsPreferences } from '../contrib/preferences/browser/sessionsPreferences.js';
 import type { SessionsProfile } from "../common/sessionsProfile.js";
+import { RETURN_TO_WORKBENCH_COMMAND_ID } from '../common/windowNavigation.js';
 import { SessionsConfiguration } from '../common/configuration.js';
 import { SessionsManagementService } from "../services/sessions/browser/sessionsManagementService.js";
 import { ISessionsManagementService } from "../services/sessions/common/sessionsManagement.js";
 import { ISessionsService, SessionsService } from "../services/sessions/browser/sessionsService.js";
 import { SessionsWorkbenchLayout, type SessionsPartId } from "./layoutPolicy.js";
 import { AuxiliaryBarPart } from "./parts/auxiliaryBarPart.js";
-import { ActivityBarPart } from './parts/activityBarPart.js';
+import { ActivityBarPart, type SessionsActivityPage } from './parts/activityBarPart.js';
 import { SessionsPart } from "./parts/sessionsPart.js";
 import { SidebarPart } from "./parts/sidebarPart.js";
 import { TitlebarPart } from "./parts/titlebarPart.js";
@@ -203,6 +204,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IUserKeyboardLayoutService, UnavailableUserKeyboardLayoutService);
 		const commandService = this._register(new CommandService(services));
 		services.registerInstance(ICommandService, commandService);
+		this._register(CommandsRegistry.register(RETURN_TO_WORKBENCH_COMMAND_ID, () => options.returnToWorkbench()));
 		const contextKeys = this._register(new ContextKeyService());
 		services.registerInstance(IContextKeyService, contextKeys);
 		const notificationsCenter = this._register(new NotificationsCenter(this.domNode, feedbackHost, notificationService, undefined, contextKeys, () => services.get(IAccessibleViewService).getOpenAriaHint(AccessibilityVerbositySettingId.Notifications)));
@@ -263,12 +265,23 @@ export class Workbench extends Disposable {
 		));
 		const accountMenu = this._register(new SessionsAccountMenu(accountService, contextMenus, preferences, options.returnToWorkbench));
 
-		const titlebar = this._register(new TitlebarPart(this.domNode, view, {
-			focusSessions: () => sessionsPart?.focus(),
-			toggleDetails: () => {
-				if (layout!.isPartVisible('auxiliarybar')) layout!.hidePart('auxiliarybar');
-				else layout!.showPart('auxiliarybar');
+		let activityPage: SessionsActivityPage = 'chat';
+		let mode: 'chat' | 'code' = 'chat';
+		let auxiliarybar: AuxiliaryBarPart | undefined;
+		let titlebar: TitlebarPart;
+		const selectMode = (selectedMode: 'chat' | 'code'): void => {
+			mode = selectedMode;
+			titlebar.updateMode(mode);
+			if (mode === 'code') sessionsPart?.setPage('code');
+			else sessionsPart?.setPage(activityPage === 'chat' ? 'chat' : 'empty');
+			auxiliarybar?.setEmptyPage(mode === 'code' || activityPage !== 'chat');
+		};
+		titlebar = this._register(new TitlebarPart(this.domNode, view, menus, contextMenus, {
+			toggleSidebar: () => {
+				if (layout!.isPartVisible('sidebar')) layout!.hidePart('sidebar');
+				else layout!.showPart('sidebar');
 			},
+			selectMode,
 		}));
 		const sidebar = this._register(new SidebarPart(this.domNode, sessions, view, teams, quickInputService, async () => {
 			const catalog = await options.api.session.listAgents();
@@ -278,8 +291,16 @@ export class Workbench extends Disposable {
 				role: { type: 'exact' as const, name: agent.name, source: agent.source },
 			}));
 		}));
-		const activitybar = this._register(services.createInstance(ActivityBarPart, this.domNode, {
+		let activitybar: ActivityBarPart;
+		const selectActivityPage = (page: SessionsActivityPage): void => {
+			activityPage = page;
+			activitybar.selectPage(page);
+			sidebar.setEmptyPage(page !== 'chat');
+			selectMode('chat');
+		};
+		activitybar = this._register(services.createInstance(ActivityBarPart, this.domNode, {
 			focusList: () => sidebar.focusChats(),
+			selectPage: selectActivityPage,
 			showAccountMenu: (anchor: HTMLElement) => accountMenu.show(anchor),
 		}));
 		const activityBarLocation = configurationService.getValue<ActivityBarPosition>(SessionsConfiguration.activityBarLocation);
@@ -297,7 +318,7 @@ export class Workbench extends Disposable {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsActivityBar,
 					{ type: AccessibleViewType.Help },
-					() => localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to move between available buttons. Press Enter or Space to activate a button. Use the Context Menu key or Shift+F10 for position and size options. Chat focuses the sessions list. Accounts opens the account menu, which includes Return to Workbench. Collaboration and Mobile devices are not available yet.'),
+					() => localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to move between available buttons. Press Enter or Space to activate a button. Use the Context Menu key or Shift+F10 for position and size options. Chat focuses the sessions list. Collaboration and Library open empty pages. Accounts opens the account menu, which includes Return to Workbench. Mobile devices is not available yet.'),
 					() => focused.focus(),
 					AccessibilityVerbositySettingId.SessionsActivityBar,
 				);
@@ -321,7 +342,7 @@ export class Workbench extends Disposable {
 		const updateSessionsPart = (): void => sessionsPart?.updateVisibleSelections(view.visibleSelections, view.activeSelection);
 		this._register(view.onDidChange(updateSessionsPart));
 		updateSessionsPart();
-		const auxiliarybar = this._register(new AuxiliaryBarPart(this.domNode, sessions, view));
+		auxiliarybar = this._register(new AuxiliaryBarPart(this.domNode, sessions, view));
 		const parts = new Map<SessionsPartId, WorkbenchPart>([
 			["titlebar", titlebar],
 			['activitybar', activitybar],
@@ -345,9 +366,9 @@ export class Workbench extends Disposable {
 			}
 		}));
 		this._register(new SessionsModernUIContribution(this.domNode, layout, configurationService));
-		titlebar.updateDetailsVisibility(layout.isPartVisible('auxiliarybar'));
+		titlebar.updateSidebarVisibility(layout.isPartVisible('sidebar'));
 		this._register(layout.onDidChangePartVisibility(event => {
-			if (event.partId === 'auxiliarybar') titlebar.updateDetailsVisibility(event.visible);
+			if (event.partId === 'sidebar') titlebar.updateSidebarVisibility(event.visible);
 		}));
 		this._register(bindResizableLayout(this.layoutService.onDidLayoutMainContainer, layout));
 		this.layoutService.layout();

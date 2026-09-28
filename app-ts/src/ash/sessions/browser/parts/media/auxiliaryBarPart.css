@@ -9,6 +9,8 @@
   padding: var(--ash-spacing-size240) var(--ash-spacing-size200);
 }
 
+.ash-workbench-auxiliarybar > .ash-workbench-part-content.empty-page > * { visibility: hidden; }
+
 .ash-workbench-auxiliarybar > .ash-workbench-part-content > h2 {
   min-width: 0;
   overflow: hidden;

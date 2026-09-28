@@ -118,8 +118,8 @@
 .ash-sessions-list-item:hover { background: var(--ash-list-hover-background); }
 
 .ash-sessions-list-item.selected {
-  color: var(--ash-list-active-selection-foreground, var(--ash-foreground));
-  background: var(--ash-list-active-selection-background);
+  color: var(--ash-foreground);
+  background: var(--ash-sessions-selection-background);
 }
 
 .ash-sessions-list-item:focus-visible {

@@ -13,12 +13,17 @@ import { SessionsConfiguration } from '../../common/configuration.js';
 
 export interface ActivityBarPartDelegate {
 	focusList(): void;
+	selectPage(page: SessionsActivityPage): void;
 	showAccountMenu(anchor: HTMLElement): void;
 }
+
+export type SessionsActivityPage = 'chat' | 'colab' | 'library';
 
 /** Primary view selector and account entry for the Sessions window. */
 export class ActivityBarPart extends WorkbenchPart {
 	private readonly chatButton: Button;
+	private readonly colabButton: Button;
+	private readonly libraryButton: Button;
 
 	private compact = false;
 
@@ -46,12 +51,34 @@ export class ActivityBarPart extends WorkbenchPart {
 			iconOnly: true,
 			ariaLabel: chatLabel,
 			title: chatLabel,
-			onClick: () => delegate.focusList(),
+			onClick: () => {
+				delegate.selectPage('chat');
+				delegate.focusList();
+			},
 		}));
 		this.chatButton.domNode.classList.add('ash-sessions-activity-item', 'selected');
 		this.chatButton.domNode.setAttribute('aria-current', 'page');
 
-		this.addUnavailableButton(top, Lxicon.colab, localize('sessions.activity.colab', 'Collaboration'));
+		const colabLabel = localize('sessions.activity.colab', 'Collaboration');
+		this.colabButton = this._register(new Button(top, {
+			label: colabLabel,
+			icon: Lxicon.colab,
+			iconOnly: true,
+			ariaLabel: colabLabel,
+			title: colabLabel,
+			onClick: () => delegate.selectPage('colab'),
+		}));
+		this.colabButton.domNode.classList.add('ash-sessions-activity-item');
+		const libraryLabel = localize('sessions.activity.library', 'Library');
+		this.libraryButton = this._register(new Button(top, {
+			label: libraryLabel,
+			icon: Lxicon.library,
+			iconOnly: true,
+			ariaLabel: libraryLabel,
+			title: libraryLabel,
+			onClick: () => delegate.selectPage('library'),
+		}));
+		this.libraryButton.domNode.classList.add('ash-sessions-activity-item');
 		this.addUnavailableButton(bottom, Lxicon.deviceMobile, localize('sessions.activity.mobile', 'Mobile devices'));
 
 		const accountLabel = localize('workbench.accounts', 'Accounts');
@@ -71,6 +98,19 @@ export class ActivityBarPart extends WorkbenchPart {
 		this._register(addDisposableListener(this.contentDomNode, 'keydown', event => {
 			if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) this.showContextMenu(event);
 		}));
+	}
+
+	public selectPage(page: SessionsActivityPage): void {
+		for (const [button, selected, icon] of [
+			[this.chatButton, page === 'chat', page === 'chat' ? Lxicon.chat2Filled : Lxicon.chat2],
+			[this.colabButton, page === 'colab', page === 'colab' ? Lxicon.colabFilled : Lxicon.colab],
+			[this.libraryButton, page === 'library', page === 'library' ? Lxicon.libraryFilled : Lxicon.library],
+		] as const) {
+			button.icon = icon;
+			button.toggleClassName('selected', selected);
+			if (selected) button.domNode.setAttribute('aria-current', 'page');
+			else button.domNode.removeAttribute('aria-current');
+		}
 	}
 
 	public setCompact(compact: boolean): void {

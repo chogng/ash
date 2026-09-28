@@ -81,13 +81,23 @@ test("localization lookup falls back to English and formats parameters", async (
 	assert.equal(localization.translate('ash', 'openAgentsWindow.systemWideFailed', 'Some system-wide shortcuts could not be registered ({0}); they may be used by another application.', { '0': 'Ctrl+A' }), '部分系统级快捷键无法注册（Ctrl+A）；它们可能已被其他应用占用。');
 	assert.equal(localization.translate('ash', 'sessions.list.search', 'Search sessions'), '搜索会话');
 	assert.equal(localization.translate('ash', 'sessions.menu.workbench', 'Return to Workbench'), '返回工作台');
+	assert.deepEqual([
+		localization.translate('ash', 'sessions.navigation.actions', 'Session window actions'),
+		localization.translate('ash', 'sessions.navigation.menu', 'Session menu'),
+		localization.translate('ash', 'sessions.navigation.showSidebar', 'Show sidebar'),
+		localization.translate('ash', 'sessions.navigation.hideSidebar', 'Hide sidebar'),
+		localization.translate('ash', 'sessions.mode.switch', 'Chat and Code'),
+		localization.translate('ash', 'sessions.mode.chat', 'Chat'),
+		localization.translate('ash', 'sessions.mode.code', 'Code'),
+	], ['会话窗口操作', '会话菜单', '显示侧边栏', '隐藏侧边栏', '聊天与代码', '聊天', '代码']);
 	assert.equal(localization.translate('ash', 'chat.modelPicker.context', '{0} context tokens', { '0': '128,000' }), '上下文：128,000 个词元');
 	assert.deepEqual([
 		localization.translate('ash', 'sessions.activity.chat', 'Chat'),
 		localization.translate('ash', 'sessions.activity.colab', 'Collaboration'),
+		localization.translate('ash', 'sessions.activity.library', 'Library'),
 		localization.translate('ash', 'sessions.activity.mobile', 'Mobile devices'),
 		localization.translate('ash', 'sessions.activity.unavailable', '{0} (coming soon)', { '0': '协作' }),
-	], ['聊天', '协作', '移动设备', '协作（即将推出）']);
+	], ['聊天', '协作', '资料库', '移动设备', '协作（即将推出）']);
 	assert.equal(localization.translate('ash', 'sessions.activityBar.location.title', 'Sessions Activity Bar Position'), '活动栏位置');
 	assert.equal(localization.translate('ash', 'sessions.activityBar.compact.title', 'Compact Sessions Activity Bar'), '紧凑活动栏');
 	assert.equal(localization.translate('ash', 'sessions.header.chatCount', '{0} chats', { '0': 3 }), '3 个聊天');
