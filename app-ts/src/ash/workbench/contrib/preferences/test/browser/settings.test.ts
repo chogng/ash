@@ -446,8 +446,11 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	);
 	assert.equal(root.querySelector('[data-settings-category-id="appearance"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
 	assert.equal(root.querySelector('[data-settings-category-id="layout"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
+	assert.equal(root.querySelector('[data-settings-category-id="startup"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
 	assert.equal(root.querySelector('[data-settings-target-id="appearance.group.theme"]'), null);
 	assert.equal(root.querySelector('[data-settings-target-id="layout.group.layout"]'), null);
+	assert.equal(root.querySelector('[data-settings-target-id="startup.group.startup-windows"]'), null);
+	assert.equal(root.querySelector('[data-settings-target-id="startup.group.startup-editor"]'), null);
 	const agentsGroup = root.querySelector<HTMLElement>('[data-settings-group-id="agents"]');
 	assert.ok(agentsGroup);
 	assert.equal(agentsGroup.textContent, 'Agents');

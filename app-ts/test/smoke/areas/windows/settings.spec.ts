@@ -135,8 +135,13 @@ test('Settings opens with editor display controls', async ({ target, workbench }
 	if (target.workbenchMode === 'code') {
 		await page.locator('[data-settings-group-id="workbench"]').click();
 		await page.locator('[data-settings-category-id="startup"]').click();
+		const startupNavigationRow = page.locator('.ash-tree-row', { has: page.locator('[data-settings-category-id="startup"]') });
+		await expect(startupNavigationRow).not.toHaveAttribute('aria-expanded');
+		await expect(page.locator('[data-settings-target-id="startup.group.startup-windows"], [data-settings-target-id="startup.group.startup-editor"]')).toHaveCount(0);
 		await expect(rootTitle).toHaveCount(0);
 		await expect(rootDescription).toHaveCount(0);
+		if (target.kind === 'electron') await expect(page.locator('[data-configuration-key="window.restoreWindows"]')).toBeVisible();
+		await expect(page.locator('[data-configuration-key="workbench.editor.restoreEditors"]')).toBeVisible();
 		const startupEditor = page.locator('[data-configuration-key="workbench.startupEditor"]').getByRole('combobox');
 		await expect(startupEditor).toBeVisible();
 		const startupRow = page.locator('[data-settings-item-id="workbench.startupEditor"]');

@@ -58,7 +58,8 @@ export class TOCTreeModel {
 			targetId: node.element.id,
 			keywords: tocSearchKeywords(node),
 		}));
-		const showGroupTargets = targets.length > 1;
+		// Short category pages are easier to scan directly than through another navigation level.
+		const showGroupTargets = targets.length > 2;
 		const children = (showGroupTargets ? targets : []).map((target): ObjectTreeElement<SettingsTOCEntry> => ({
 			element: { kind: 'target', id: target.id, category, target },
 		}));
