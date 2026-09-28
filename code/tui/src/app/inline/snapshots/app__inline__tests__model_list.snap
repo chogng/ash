@@ -7,6 +7,6 @@ expression: text(&buffer)
   ╭──────────────────────────────────────────────────────────────────────────────────────────────╮  
   │ Search models                                                                                │  
   ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  
-> GPT Test    ← ◼◼◼ → Medium                                                                        
+> GPT Test    ← ██ ██ ██ → Medium                                                                   
                                                                                                     
   ↑↓ select · ←→ effort · / search · P pin/unpin · Enter apply · Esc cancel

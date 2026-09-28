@@ -216,26 +216,28 @@ fn model_list_opens_inline_and_restores_input_after_close() {
     );
     let buffer = render(&app, 100, 32);
     assert!(text(&buffer).contains("GPT Test"));
-    assert!(text(&buffer).contains("◼◼◼"));
+    assert!(text(&buffer).contains("██ ██ ██"));
     let blocks = buffer
         .content
         .iter()
-        .filter(|cell| cell.symbol() == "◼")
+        .filter(|cell| cell.symbol() == "█")
         .collect::<Vec<_>>();
-    assert!(
-        blocks
-            .iter()
-            .any(|cell| cell.fg == app.render_context().accent())
-    );
-    assert!(
-        blocks
-            .iter()
-            .any(|cell| cell.fg == app.render_context().muted())
+    let context = app.render_context();
+    assert_eq!(
+        blocks.iter().map(|cell| cell.fg).collect::<Vec<_>>(),
+        [
+            context.focus(),
+            context.focus(),
+            context.focus(),
+            context.focus(),
+            context.segmented_inactive(),
+            context.segmented_inactive(),
+        ]
     );
     assert!(!text(&buffer).contains("openai"));
     crate::tui_assert_snapshot!("model_list", text(&buffer));
     app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
-    assert!(text(&render(&app, 100, 32)).contains("◼◼◼"));
+    assert!(text(&render(&app, 100, 32)).contains("██ ██ ██"));
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.command_panel().is_none());
     assert!(app.chat_input_focused());

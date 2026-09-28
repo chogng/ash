@@ -279,6 +279,7 @@ fn item_marker_is_visible_only_while_the_list_has_focus() {
     let search = render(&state);
     assert_eq!(search[(0, 2)].symbol(), " ");
     assert_eq!(search[(0, 4)].symbol(), " ");
+    assert_eq!(search[(2, 4)].fg, test_context().selection_foreground());
     assert_eq!(state.selected_visible_index(), Some(0));
 
     state.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
@@ -312,7 +313,8 @@ fn keyboard_selection_and_a_different_hovered_row_remain_visible_together() {
     let buffer = render_with_item_hover(&state, 1);
 
     assert_eq!(buffer[(0, 0)].symbol(), ">");
-    assert_eq!(buffer[(2, 0)].fg, test_context().selection_foreground());
+    assert_eq!(buffer[(0, 0)].fg, test_context().focus());
+    assert_eq!(buffer[(2, 0)].fg, test_context().focus());
     assert_eq!(buffer[(2, 0)].bg, test_context().selection_background());
     assert_eq!(buffer[(0, 1)].symbol(), " ");
     assert_eq!(buffer[(2, 1)].fg, test_context().hover_foreground());

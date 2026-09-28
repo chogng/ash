@@ -99,6 +99,7 @@ fn apply_color(palette: &mut ThemePalette, name: &str, color: ThemeRgb) -> Resul
         "quickViewBackground" => &mut palette.overlay_background,
         "removedBackground" => &mut palette.removed_background,
         "removedMarker" => &mut palette.removed_marker,
+        "segmentedInactive" => &mut palette.segmented_inactive,
         "string" => &mut palette.string,
         "success" => &mut palette.success,
         "selectionBackground" => &mut palette.selection_background,

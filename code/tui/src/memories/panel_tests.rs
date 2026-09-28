@@ -10,6 +10,9 @@ fn panel() -> Panel {
         MemoryScope::Project {
             project_id: ProjectId::new("ash").unwrap(),
         },
+        MemoryScope::Team {
+            team_id: ash_protocol::TeamId::new("team-a").unwrap(),
+        },
         MemoryScope::Dir {
             dir_id: format!("sha256:{}", "a".repeat(64)).parse().unwrap(),
         },

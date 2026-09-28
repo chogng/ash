@@ -2903,19 +2903,82 @@ fn model_picker_cycles_supported_effort_in_place_and_commits_on_enter() {
     let blocks = buffer
         .content
         .iter()
-        .filter(|cell| cell.symbol() == "◼")
+        .filter(|cell| cell.symbol() == "█")
         .collect::<Vec<_>>();
-    assert!(
-        blocks
-            .iter()
-            .any(|cell| cell.fg == app.render_context().accent())
+    let context = app.render_context();
+    assert_eq!(
+        blocks.iter().map(|cell| cell.fg).collect::<Vec<_>>(),
+        [
+            context.focus(),
+            context.focus(),
+            context.focus(),
+            context.focus(),
+            context.segmented_inactive(),
+            context.segmented_inactive(),
+            context.accent(),
+            context.accent(),
+            context.segmented_inactive(),
+            context.segmented_inactive(),
+            context.segmented_inactive(),
+            context.segmented_inactive(),
+        ]
     );
-    assert!(
-        blocks
+    let selected_row = (0..buffer.area.height)
+        .find(|&y| (0..buffer.area.width).any(|x| buffer[(x, y)].symbol() == "G"))
+        .unwrap();
+    for symbol in [">", "G", "M", "←", "→"] {
+        let cell = (0..buffer.area.width)
+            .map(|x| &buffer[(x, selected_row)])
+            .find(|cell| cell.symbol() == symbol)
+            .unwrap();
+        assert_eq!(cell.fg, context.focus(), "{symbol}");
+    }
+    assert!(render(&app, 100, 18).contains("██ ██ ██"));
+    let narrow = render(&app, 60, 18);
+    assert!(narrow.contains("██ ██ ██ → Medium"), "{narrow}");
+
+    let mut light = App::new();
+    light.update(crate::theme::Event::RenderChanged(
+        crate::render::RenderTheme::from_palette(
+            crate::render::ThemePalette::light(),
+            ash_terminal_detection::ColorLevel::TrueColor,
+        ),
+    ));
+    light.update(ModelEvent::PickerOpened(choices()));
+    let light_buffer = render_buffer(&light, 100, 18);
+    let light_context = light.render_context();
+    assert_eq!(
+        light_buffer
+            .content
             .iter()
-            .any(|cell| cell.fg == app.render_context().muted())
+            .filter(|cell| cell.symbol() == "█")
+            .map(|cell| cell.fg)
+            .collect::<Vec<_>>(),
+        [
+            light_context.focus(),
+            light_context.focus(),
+            light_context.focus(),
+            light_context.focus(),
+            light_context.segmented_inactive(),
+            light_context.segmented_inactive(),
+            light_context.accent(),
+            light_context.accent(),
+            light_context.segmented_inactive(),
+            light_context.segmented_inactive(),
+            light_context.segmented_inactive(),
+            light_context.segmented_inactive(),
+        ]
     );
-    assert!(render(&app, 100, 18).contains("◼◼◼"));
+    let selected_row = (0..light_buffer.area.height)
+        .find(|&y| (0..light_buffer.area.width).any(|x| light_buffer[(x, y)].symbol() == "G"))
+        .unwrap();
+    for symbol in [">", "G", "M", "←", "→"] {
+        let cell = (0..light_buffer.area.width)
+            .map(|x| &light_buffer[(x, selected_row)])
+            .find(|cell| cell.symbol() == symbol)
+            .unwrap();
+        assert_eq!(cell.fg, light_context.focus(), "{symbol}");
+    }
 
     let mut chinese = App::new();
     let mut settings = crate::config::TerminalSettings::default();
@@ -2925,7 +2988,7 @@ fn model_picker_cycles_supported_effort_in_place_and_commits_on_enter() {
     assert!(render(&chinese, 100, 18).contains("←→ 推 理 档 位"));
 
     app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
-    assert!(render(&app, 100, 18).contains("◼◼◼"));
+    assert!(render(&app, 100, 18).contains("██ ██ ██"));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     let selected_other = render(&app, 100, 18);
     assert!(
@@ -2951,7 +3014,7 @@ fn model_picker_cycles_supported_effort_in_place_and_commits_on_enter() {
     crate::tui_assert_snapshot!("model_effort_selected", render(&app, 100, 18));
 
     app.update(ModelEvent::PickerUpdated(choices()));
-    assert!(render(&app, 100, 18).contains("◼◼◼"));
+    assert!(render(&app, 100, 18).contains("██ ██ ██"));
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         Some(AppCommand::Models(crate::models::Command::SetModel {

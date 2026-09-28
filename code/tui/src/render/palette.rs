@@ -76,6 +76,7 @@ pub(crate) struct ThemePalette {
     pub(crate) pressed_foreground: ThemeRgb,
     pub(crate) removed_background: ThemeRgb,
     pub(crate) removed_marker: ThemeRgb,
+    pub(crate) segmented_inactive: ThemeRgb,
     pub(crate) string: ThemeRgb,
     pub(crate) success: ThemeRgb,
     pub(crate) selection_background: ThemeRgb,
@@ -116,6 +117,7 @@ impl ThemePalette {
             pressed_foreground: ThemeRgb::from_hex("#ffffff"),
             removed_background: ThemeRgb::from_hex("#351b1b"),
             removed_marker: ThemeRgb::from_hex("#f85149"),
+            segmented_inactive: ThemeRgb::from_hex("#a0a8b2"),
             string: ThemeRgb::from_hex("#a5d6ff"),
             success: ThemeRgb::from_hex("#3fb950"),
             selection_background: ThemeRgb::from_hex("#2f2b52"),
@@ -156,6 +158,7 @@ impl ThemePalette {
             pressed_foreground: ThemeRgb::from_hex("#271f63"),
             removed_background: ThemeRgb::from_hex("#ffebe9"),
             removed_marker: ThemeRgb::from_hex("#cf222e"),
+            segmented_inactive: ThemeRgb::from_hex("#d0d7de"),
             string: ThemeRgb::from_hex("#0a3069"),
             success: ThemeRgb::from_hex("#1a7f37"),
             selection_background: ThemeRgb::from_hex("#e9e5ff"),
@@ -267,6 +270,7 @@ pub(crate) struct RenderTheme {
     pressed_foreground: Color,
     removed_background: Color,
     removed_marker: Color,
+    segmented_inactive: Color,
     overlay_background: Color,
     string: Color,
     success: Color,
@@ -311,6 +315,7 @@ impl RenderTheme {
             pressed_foreground: projected(palette.pressed_foreground),
             removed_background: projected(palette.removed_background),
             removed_marker: projected(palette.removed_marker),
+            segmented_inactive: projected(palette.segmented_inactive),
             overlay_background: projected(palette.overlay_background),
             string: projected(palette.string),
             success: projected(palette.success),
@@ -364,6 +369,7 @@ impl RenderTheme {
             pressed_foreground: hex("#ffffff"),
             removed_background: hex("#37191b"),
             removed_marker: hex("#f85149"),
+            segmented_inactive: hex("#a0a8b2"),
             overlay_background: hex("#252526"),
             string: hex("#a5d6ff"),
             success: hex("#5fd28c"),
@@ -447,6 +453,9 @@ impl RenderTheme {
     }
     pub(crate) const fn removed_marker(self) -> Color {
         self.removed_marker
+    }
+    pub(crate) const fn segmented_inactive(self) -> Color {
+        self.segmented_inactive
     }
     pub(crate) const fn overlay_background(self) -> Color {
         self.overlay_background
@@ -646,6 +655,9 @@ impl<'a> RenderContext<'a> {
     }
     pub(crate) const fn removed_marker(self) -> Color {
         self.theme.removed_marker()
+    }
+    pub(crate) const fn segmented_inactive(self) -> Color {
+        self.theme.segmented_inactive()
     }
     pub(crate) const fn overlay_background(self) -> Color {
         self.theme.overlay_background()

@@ -559,12 +559,15 @@ fn draw_item(
     }
     let row_style = item_style(context, selected, hovered, pressed);
     frame.render_widget(Block::default().style(row_style), area);
+    let selected_foreground = item.selection_foreground().unwrap_or_else(|| {
+        if show_marker {
+            context.focus()
+        } else {
+            context.selection_foreground()
+        }
+    });
     let label_style = if selected && !pressed {
-        item.selection_foreground()
-            .map(|foreground| row_style.fg(foreground))
-            .unwrap_or(row_style)
-    } else if selected || hovered || pressed {
-        row_style
+        row_style.fg(selected_foreground)
     } else {
         row_style
     };
@@ -573,9 +576,7 @@ fn draw_item(
         |expanded| if expanded { "v " } else { "> " },
     );
     let marker_style = if selected {
-        Style::default()
-            .fg(context.foreground())
-            .add_modifier(Modifier::BOLD)
+        label_style.add_modifier(Modifier::BOLD)
     } else {
         label_style
     };
@@ -637,37 +638,42 @@ fn draw_item(
         .saturating_sub(middle_x);
     if let Some(value) = &columns.segmented {
         let active = show_marker && value.adjustable;
-        let selected_color = context.accent();
-        let filled_color = if active {
-            selected_color
+        let indicator_color = if pressed {
+            context.pressed_foreground()
+        } else if selected {
+            selected_foreground
         } else {
-            context.foreground()
+            context.accent()
         };
-        let empty_color = context.muted();
-        let mut spans = Vec::with_capacity(value.total + 3);
+        let empty_color = context.segmented_inactive();
+        let mut spans = Vec::with_capacity(value.total * 2 + 3);
         spans.push(Span::styled(
             if active { "← " } else { "  " },
-            Style::default().fg(selected_color),
+            Style::default().fg(indicator_color),
         ));
         for index in 0..value.total {
-            // The medium square leaves a narrow gap inside each terminal cell.
+            // Two Block Elements make a square in typical terminal cells and keep
+            // their colors under xterm.js contrast adjustment.
             spans.push(Span::styled(
-                "◼",
+                "██",
                 Style::default().fg(if index < value.filled {
-                    filled_color
+                    indicator_color
                 } else {
                     empty_color
                 }),
             ));
+            if index + 1 < value.total {
+                spans.push(Span::raw(" "));
+            }
         }
         spans.push(Span::styled(
             if active { " → " } else { "   " },
-            Style::default().fg(selected_color),
+            Style::default().fg(indicator_color),
         ));
         spans.push(Span::styled(
             value.label.as_str(),
-            Style::default().fg(if active {
-                selected_color
+            Style::default().fg(if selected || active {
+                indicator_color
             } else {
                 context.muted()
             }),
