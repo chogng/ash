@@ -26,6 +26,7 @@ export function createDisconnectedModelApi(unavailable: UnavailableOperation): I
 	return {
 		listModels: () => unavailable("model.listModels"),
 		listProviders: () => unavailable('model.listProviders'),
+		listProviderModels: () => unavailable('model.listProviderModels'),
 		setProviderApiKey: () => unavailable('model.setProviderApiKey'),
 		readModel: () => unavailable("model.readModel"),
 		readAdvisorDefault: () => unavailable("model.readAdvisorDefault"),
@@ -80,6 +81,11 @@ export function createAppServerModelApi(connection: AppServerProtocolClient): IM
 	return {
 		listModels: () => appServerRequest(connection, "model/list", {}),
 		listProviders: () => appServerRequest(connection, 'provider/list', {}),
+		listProviderModels: async provider => {
+			const result = await appServerRequest(connection, 'provider/models/list', { connection: provider });
+			if (result.type === 'failed') throw new Error(`${provider} model discovery failed: ${result.failure.code}`);
+			return result.type === 'models' ? result.models : [];
+		},
 		setProviderApiKey: params => appServerRequest(connection, 'provider/apiKey/set', params),
 		readModel: async () => (await appServerRequest(connection, "config/read", {})).model,
 		readAdvisorDefault: async () => (await appServerRequest(connection, "config/read", {})).advisor ?? null,

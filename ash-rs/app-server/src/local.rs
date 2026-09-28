@@ -40,6 +40,8 @@ use ash_glm::GlmProvider;
 use ash_http_client::NetworkAccess;
 use ash_http_client::OutboundNetworkPolicy;
 use ash_install_context::InstallContext;
+use ash_kimi::KimiCli;
+use ash_kimi::KimiDesktop;
 use ash_kimi::KimiOAuth;
 use ash_login::InteractiveLoginDriver;
 use ash_login::LoginService;
@@ -1386,6 +1388,14 @@ pub fn open_local_app_server_with_codebase_providers(
     .with_kimi_oauth(Arc::clone(&kimi_oauth))
     .with_glm_oauth(Arc::clone(&bigmodel_oauth), Arc::clone(&zai_oauth))
     .with_supergrok_oauth(Arc::clone(&supergrok_oauth));
+    let model_provider = match KimiDesktop::production() {
+        Some(desktop) => model_provider.with_kimi_desktop(Arc::new(desktop)),
+        None => model_provider,
+    };
+    let model_provider = match KimiCli::production() {
+        Some(cli) => model_provider.with_kimi_cli(Arc::new(cli)),
+        None => model_provider,
+    };
     let models_manager = model_provider.models_manager();
     let model_provider = Arc::new(model_provider);
     let catalog_runtime = Arc::new(
@@ -2241,6 +2251,8 @@ impl ModelCatalog for ConfigBackedModelService {
                     id.as_str(),
                     "chatgpt-subscription"
                         | "kimi-subscription"
+                        | "kimi-desktop"
+                        | "kimi-cli"
                         | "xai-subscription"
                         | "bigmodel-coding-plan"
                         | "zai-coding-plan"

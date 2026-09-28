@@ -111,13 +111,23 @@ export class ChatService extends Disposable implements IChatService {
 
 	async refreshModels(): Promise<readonly ModelCatalogEntry[]> {
 		if (this.modelCatalogLoad) return this.modelCatalogLoad;
-		const load = this.options.modelApi.listModels().then(result => this.acceptModelCatalog(result.models));
+		const load = this.loadModelCatalog();
 		this.modelCatalogLoad = load;
 		try {
 			return await load;
 		} finally {
 			if (this.modelCatalogLoad === load) this.modelCatalogLoad = undefined;
 		}
+	}
+
+	private async loadModelCatalog(): Promise<readonly ModelCatalogEntry[]> {
+		const [catalog, providers] = await Promise.all([this.options.modelApi.listModels(), this.options.modelApi.listProviders()]);
+		const models: ModelCatalogEntry[] = [...catalog.models];
+		for (const connection of ['kimi-desktop', 'kimi-cli']) {
+			if (!providers.providers.some(provider => provider.connection === connection && provider.ready)) continue;
+			models.push(...await this.options.modelApi.listProviderModels(connection));
+		}
+		return this.acceptModelCatalog(models);
 	}
 
 	isModelVisible(model: ModelRef): boolean {

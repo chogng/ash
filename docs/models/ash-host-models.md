@@ -6,7 +6,7 @@
 
 ## 推理档位
 
-下表汇总 Ash 内置模型供应商的推理控制名称。档位数量按**有效推理行为**统计；同一家不同型号可能只支持其中一部分。`关闭`表示不启用推理，不算推理档位。供应商文档会更新，以下依据于 2026-09-27 核对。
+下表汇总 Ash 内置模型供应商 API 的推理控制名称，不代表 Ash 当前已接入每种控制。档位数量按**有效推理行为**统计；同一家不同型号可能只支持其中一部分。`关闭`表示不启用推理，不算推理档位。供应商文档会更新，以下依据于 2026-09-27 核对。
 
 | 供应商 | 推理档位数与名称 | 型号差异和控制方式 |
 | --- | --- | --- |
@@ -16,12 +16,31 @@
 | xAI | 3 或 4 档：`low`、`medium`、`high`、`xhigh` | Grok 4.5 支持前三档；Grok 4.6 及更新型号支持四档。不能关闭推理。[官方文档](https://docs.x.ai/developers/model-capabilities/text/reasoning) |
 | Qwen | 新版常用 3 档：`low`、`medium`、`xhigh`；另可关闭 | 新型号可用 `reasoning_effort` 或数值 `thinking_budget`。部分兼容标签会映射到这三档；旧型号支持范围不同。[官方文档](https://help.aliyun.com/en/model-studio/qwen-api-via-openai-chat-completions) |
 | Kimi | K3 为 3 档：`low`、`high`、`max`；部分型号只有开/关 | K3 思考常开；K2.6 可切换思考模式。开关不计作 effort 档位。[官方文档](https://www.kimi.ai/help/kimi-api/api-model-selection) |
-| DeepSeek | 3 档：`low`、`high`、`max`；另可关闭 | DeepSeek V4 默认开启思考；`none` 关闭。其他兼容值会折叠映射到这些档位。[官方文档](https://api-docs.deepseek.com/guides/thinking_mode/) |
+| DeepSeek | 3 档：`low`、`high`、`max`；另可关闭 | DeepSeek V4 默认开启思考；Responses API 的 `none` 可关闭，Chat Completions 要用 `thinking.type: "disabled"`。其他兼容值会折叠映射到这三档。[官方文档](https://api-docs.deepseek.com/guides/thinking_mode/) |
 | GLM | 因型号不同为 3、6 或 7 档 | GLM-5.3：`low`、`high`、`max`；GLM-5.2：`none`、`minimal`、`low`、`medium`、`high`、`xhigh`、`max`；GLM-5.1：前述集合去掉 `max`。GLM-5.3 思考不能关闭。[官方文档](https://docs.z.ai/guides/overview/migrate-to-glm-new) |
 | MiniMax | M3/M2.x 没有可调的推理深度档位 | M3 使用自适应思考，可按型号开关；M2.x 不能关闭。虽然部分端点接受 `reasoning_effort`，当前这些型号不会据此调节深度。[官方文档](https://platform.minimax.io/docs/api-reference/text-chat-openai) |
-| MiMo | 0 个深度档位；2 种有效模式：关闭、开启 | 接口接受 `none`、`minimal`、`low`、`medium`、`high`、`xhigh`、`max`、`ultra`，但不支持自定义深度；除 `none` 外都只表示开启。[官方文档](https://mimo.mi.com/docs/en-US/api/chat/responses) |
+| MiMo | 0 个深度档位；2 种有效模式：关闭、开启 | Responses API 的 `reasoning.effort` 接受 `none`、`minimal`、`low`、`medium`、`high`、`xhigh`、`max`、`ultra`，但不支持自定义深度；除 `none` 外都只表示开启。Chat Completions 使用 `thinking.type`。[Responses 文档](https://mimo.mi.com/docs/en-US/api/chat/responses) · [Chat Completions 文档](https://mimo.mi.com/docs/en-US/api/chat) |
 
 这些标签不能跨供应商直接比较，也不能用供应商级的固定枚举替代型号级支持列表。请求构造应依据所选型号和接入协议。
+
+### 思考开关与 Ash 接入端点
+
+以下按 Ash 内置开发者 API 连接当前选用的协议核对，不把其他协议或托管平台的参数视为同一个接口。模型支持推理档位，不代表该端点支持关闭思考；端点支持关闭，也不代表 Ash 已发送对应参数。核对时间为 2026-09-28。
+
+| Ash 接入端点 | 型号 | 端点关闭思考的方式 | Ash 当前请求 |
+| --- | --- | --- | --- |
+| OpenAI Responses | 支持 `none` 的 GPT 型号 | `reasoning.effort: "none"`；GPT-6 Astra 等不接受 `none` | 选择 `none` 时发送该值。[官方文档](https://developers.openai.com/api/docs/guides/reasoning) |
+| Anthropic Messages | Claude Opus 5.5 | 不能关闭；`thinking.type: "disabled"` 返回错误 | 仅发送 `output_config.effort`，没有独立思考开关。[官方文档](https://platform.claude.com/docs/en/build-with-claude/effort) |
+| Google OpenAI 兼容 Chat Completions | Gemini 3 系列 | 不能关闭；`reasoning_effort: "minimal"` 也不保证关闭 | 发送 `reasoning_effort` 调节档位。[官方文档](https://ai.google.dev/gemini-api/docs/openai) |
+| xAI Responses | Grok 4.5–4.7 | 不能关闭 | 发送 `reasoning.effort` 调节档位。[官方文档](https://docs.x.ai/developers/model-capabilities/text/reasoning) |
+| 阿里云 OpenAI 兼容 Chat Completions | Qwen 3.8 Max、Flash | `reasoning_effort: "none"` 会映射成关闭思考 | 选择 `none` 时发送该值；其他 Qwen 型号不能直接套用此映射。[官方文档](https://help.aliyun.com/en/model-studio/qwen-api-via-openai-chat-completions) |
+| Kimi OpenAI 兼容 Chat Completions | K3、K2.6 | K3 不能关闭；K2.6 支持思考与非思考模式 | 只发送 `reasoning_effort`，未接入 K2.6 的模式开关。[官方文档](https://www.kimi.ai/help/kimi-api/api-model-selection) |
+| DeepSeek Chat Completions | V4 系列 | `thinking.type: "disabled"`；`reasoning_effort` 只控制开启后的强度 | 只发送 `reasoning_effort`，选择 `none` 尚不能据此认定思考已关闭。[官方文档](https://api-docs.deepseek.com/guides/thinking_mode/) |
+| Z.AI Chat Completions | GLM-5.3 系列 | 不能关闭，传入关闭值会报错 | 只发送 `reasoning_effort` 调节档位。[官方文档](https://docs.z.ai/guides/overview/migrate-to-glm-new) |
+| MiniMax Chat Completions | M3、M2.x | M3 可用 `thinking.type: "disabled"`；M2.x 不能关闭，传入 `disabled` 也会被忽略 | 未发送 `thinking` 开关。[官方文档](https://platform.minimax.io/docs/api-reference/text-chat-openai) |
+| MiMo Chat Completions | V2.6 系列 | `thinking.type: "disabled"` | 未发送 `thinking` 开关；MiMo Responses 的 `reasoning.effort: "none"` 不能直接套用到此端点。[Chat Completions 文档](https://mimo.mi.com/docs/en-US/api/chat) · [Responses 文档](https://mimo.mi.com/docs/en-US/api/chat/responses) |
+
+Ash 的 Chat Completions 构造器当前统一发送 `reasoning_effort`；Anthropic Messages 发送 `output_config.effort`；Responses 发送 `reasoning.effort`。表中未列的型号与自定义端点未逐一核实关闭能力。产品界面不应据此提供一个适用于所有型号的思考开关。
 
 OpenAI 双价按“输入 ≤272K / 输入 >272K 至 1.05M”顺序排列，表中简写为“272K / 1M”。第二档从输入超过 272K 起适用，直到这些型号约 1.05M 的输入上限；整次会话按第二档计费，不要求请求正好达到 1M。GPT-5.5 和 GPT-5.4 的长上下文缓存读价未由官方单独公布。
 

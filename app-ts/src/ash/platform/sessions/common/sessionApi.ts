@@ -56,12 +56,20 @@ export interface ISessionApi {
 	stop(params: SessionOperationInput<"stop">): Promise<SessionResult>;
 }
 
+interface ProviderModelCatalogEntry {
+	readonly model: ModelRef;
+	readonly displayName: string;
+	readonly contextWindow?: number | null;
+	readonly supportedReasoningEfforts?: readonly string[];
+}
+
 export interface IModelApi {
 	readAdvisorDefault(): Promise<AdvisorConfig | null>;
 	readConfiguredProviderIds(): Promise<readonly string[]>;
 	setAdvisorDefault(params: { readonly commandId: string; readonly advisor: AdvisorConfig | null }): Promise<void>;
 	listModels(): Promise<ModelListResult>;
 	listProviders(): Promise<ProviderListResult>;
+	listProviderModels(connection: string): Promise<readonly ProviderModelCatalogEntry[]>;
 	setProviderApiKey(params: ProviderApiKeySetParams): Promise<ProviderApiKeySetResult>;
 	readModel(): Promise<ModelRef | null>;
 	setModel(params: { readonly commandId: string; readonly model: ModelRef }): Promise<void>;

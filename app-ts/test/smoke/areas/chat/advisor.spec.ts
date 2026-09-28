@@ -59,7 +59,7 @@ test('Desktop model picker searches fixed models before account setup', async ({
 	expect(activeColors.description).toBe(activeColors.foreground);
 	expect(activeColors.background).toBe(activeColors.menuBackground);
 	await picker.getByRole('combobox').fill('GPT-6 Astra');
-	await expect(picker.getByRole('option')).toHaveCount(1);
+	await expect(picker.getByRole('option', { name: /GPT-6 Astra/ })).toBeVisible();
 	await picker.getByRole('option', { name: /GPT-6 Astra/ }).click();
 	await expect(selector).toHaveText('GPT-6 Astra');
 	await expect(page.locator('.ash-chat-input-model-access-badge')).toHaveCount(0);

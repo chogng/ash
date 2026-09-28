@@ -501,7 +501,12 @@ fn provider_rpc_lists_the_backend_catalog_and_stores_api_keys_without_projecting
             .connections()
             .len()
     );
-    for id in ["bigmodel-coding-plan", "zai-coding-plan"] {
+    for id in [
+        "bigmodel-coding-plan",
+        "zai-coding-plan",
+        "kimi-desktop",
+        "kimi-cli",
+    ] {
         let entry = initial["result"]["providers"]
             .as_array()
             .unwrap()

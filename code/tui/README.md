@@ -156,7 +156,7 @@ Queue 保存完整草稿，包括图片、长粘贴和绑定的 Skill。恢复�
 
 `/resume`、`/rewind`、`/add-dir`、`/branch`、`/fork`、`/model`、`/theme` 和 `/new` 支持行内参数；产品命令拒绝图片参数。命令后输入空格且参数尚为空时，光标后方以置灰样式（`context.muted()`）显示行内虚提示（如 `<path>`、`<model>`、`<theme>` 等），提示用户后续参数含义；用户输入非空白参数字符或光标移开时虚提示自动消失。命令回显和结果始终更新同一正文单元。
 
-`/model` 无参数时直接列出用户已配置提供商的目录模型；有离散推理档位的模型显示方块并可用左右键切换，没有推理档位的模型只显示名称。可搜索并用 `P` 固定或取消固定，固定模型排在列表顶部。没有候选时提示在 `/config` 配置提供商。模型出现在目录中不保证凭据或远端权限有效，实际调用仍由运行时校验。各型号可选档位见[内置模型表](../../docs/models/ash-host-models.md#推理档位)。
+`/model` 无参数时列出内置目录模型；本机 Kimi Desktop 或 Kimi Code CLI 连接就绪时，还会向对应端点查询当前型号。有离散推理档位的模型显示方块并可用左右键切换，没有推理档位的模型只显示名称。可搜索并用 `P` 固定或取消固定，固定模型排在列表顶部。没有候选时提示在 `/config` 配置提供商。模型出现在目录中不保证凭据或远端权限有效，实际调用仍由运行时校验。各型号可选档位见[内置模型表](../../docs/models/ash-host-models.md#推理档位)。
 
 文件补全只识别空白分隔的 `@token`，不处理邮箱中的 `@`。扫描遵守 Git 忽略规则、不跟随符号链接，并跳过 `.git`、`.ash`、`node_modules` 和 `target`；结果按匹配分数与路径稳定排序，最多 50 项。请求同时校验查询文本和版本，关闭补全后释放搜索句柄。
 
@@ -183,7 +183,7 @@ Connector 操作见 [request.rs](src/connectors/request.rs)：设备码复制到
 
 `/config` 中的 Git 自动获取模式与间隔写入共享的 `[git]` 表。App Server 对有仓库修改授权的目录执行定时 fetch；Desktop、Rust GUI 和 TUI 读取同一份配置。
 
-`/config` 的 Providers 页在订阅区提供 ChatGPT、Kimi、Super Grok、BigModel 和 Z.AI；API 区也显示 BigModel 和 Z.AI，两组使用各自独立的连接 ID、密钥与端点。列表直接打开连接设置，不再显示“启用”行。账户页可查看账户和套餐、启动设备码登录或取消登录；两个 Coding Plan 各通过自己的 API key 与专用端点连接。已连接时按 `l` 退出登录，退出操作不作为列表项显示。模型调用自动优先使用已就绪订阅；GLM 按 BigModel 订阅、Z.AI 订阅、BigModel API、Z.AI API 排序。验证地址与一次性代码显示在账户页；Esc 返回 Providers，待完成登录仍可重新进入查看和取消。ChatGPT 后端有 Codex 时只读复用，无 Codex 时负责续期和重新登录；缺失时生成兼容的 auth.json。复用模式退出不会退出 Codex；自管模式登出清除认证。重新连接仍有效的已有凭据无需浏览器。[认证存储与验收](../../ash-rs/docs/changes/chatgpt-auth/verification.md)。
+`/config` 的 Providers 页在订阅区提供 ChatGPT、Kimi、Super Grok、BigModel 和 Z.AI；API 区也显示 BigModel 和 Z.AI，两组使用各自独立的连接 ID、密钥与端点。Kimi Desktop 与 Kimi Code CLI 的连接独立于 Kimi 账户页，型号分别以 `kimi-desktop/<型号>` 和 `kimi-cli/<型号>` 选择。列表直接打开连接设置，不再显示“启用”行。账户页可查看账户和套餐、启动设备码登录或取消登录；两个 Coding Plan 各通过自己的 API key 与专用端点连接。已连接时按 `l` 退出登录，退出操作不作为列表项显示。模型调用自动优先使用已就绪订阅；GLM 按 BigModel 订阅、Z.AI 订阅、BigModel API、Z.AI API 排序。验证地址与一次性代码显示在账户页；Esc 返回 Providers，待完成登录仍可重新进入查看和取消。ChatGPT 后端有 Codex 时只读复用，无 Codex 时负责续期和重新登录；缺失时生成兼容的 auth.json。复用模式退出不会退出 Codex；自管模式登出清除认证。重新连接仍有效的已有凭据无需浏览器。[认证存储与验收](../../ash-rs/docs/changes/chatgpt-auth/verification.md)。
 
 资源采样由可见状态行项目和 Processes 页共同决定；没有需求时停止采样。关闭 Git 显示只停止状态行专属工作，不能停止 ChangeTurn 的目录跟随。
 

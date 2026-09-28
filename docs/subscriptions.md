@@ -1,13 +1,15 @@
 # 订阅计划接入与额度
 
-Ash Code 的订阅区目前提供 ChatGPT、Kimi、Super Grok、BigModel 和 Z.AI 五种接入方式。本页说明它们分别使用什么凭据、能否查询账户额度，以及 `/usage` 何时刷新。入口名称不表示 Ash 已核实用户购买的具体套餐或上游服务权限；登录控制面见[登录与账户系统](login.md)，模型请求如何选择接入方式见[模型调用系统](model-provider.md#6-供应商凭据边界)。
+Ash Code 的订阅区目前提供 ChatGPT、Kimi、Super Grok、BigModel 和 Z.AI 五个账户入口，另有独立的 Kimi Desktop 和 Kimi Code CLI 模型连接。本页说明它们分别使用什么凭据、能否查询账户额度，以及 `/usage` 何时刷新。入口名称不表示 Ash 已核实用户购买的具体套餐或上游服务权限；登录控制面见[登录与账户系统](login.md)，模型请求如何选择接入方式见[模型调用系统](model-provider.md#6-供应商凭据边界)。
 
 ## 当前支持范围
 
-| 订阅区入口 | 身份与凭据 | 模型接入 | `/usage` |
+| 接入 | 身份与凭据 | 模型接入 | `/usage` |
 | --- | --- | --- | --- |
 | ChatGPT | `chatgpt-subscription` 账户；复用或维护 Codex 兼容登录 | `openai` 的 ChatGPT 订阅 Responses 服务 | 套餐、额度窗口、点数 |
 | Kimi | `kimi-subscription` 账户；Ash 设备码登录和 profile SecretStore | `kimi` 的 Kimi Coding API | 套餐与上游返回的五小时、每周、每月额度 |
+| Kimi Desktop | `kimi-desktop` 连接；只读使用桌面端的 Kimi Code 运行配置 | `kimi-desktop` 的桌面端 Code 网关 | 尚未接入账户和额度查询 |
+| Kimi Code CLI | `kimi-cli` 连接；只读使用 CLI 的 OAuth 凭据文件 | `kimi-cli` 的 CLI 配置端点 | 尚未接入账户和额度查询 |
 | Super Grok | `xai-subscription` 账户；Ash 设备码登录，或只读使用已有 Grok 登录 | `xai` 的 Grok 订阅代理 | 套餐、使用比例、周期和余额 |
 | BigModel | 只读复用 ZCode 个人版 Coding Plan 账号，或在 Ash 浏览器登录 | `open.bigmodel.cn` 的 Coding Plan 端点 | 尚未提供账户额度查询 |
 | Z.AI | 只读复用 ZCode 个人版 Coding Plan 账号，或在 Ash 浏览器登录 | `api.z.ai` 的 Coding Plan 端点 | 尚未提供账户额度查询 |
@@ -52,7 +54,7 @@ ChatGPT 账户如何登录、复用 Codex 凭据、刷新及断开，见[ChatGPT
 
 ## Kimi Code
 
-Kimi 使用设备码登录，凭据由 Ash 维护；可查询账户、套餐和实际返回的额度窗口。详情见[Kimi Code 订阅账户](models/kimi.md)。
+Ash 的 Kimi 账户使用设备码登录，凭据由 Ash 维护，可查询账户、套餐和实际返回的额度窗口。Kimi Desktop 与 Kimi Code CLI 连接只读使用各自的凭据，用于模型调用，不进入账户页或 `/usage`。详情见[Kimi Code 连接](models/kimi.md)。
 
 ## Super Grok
 

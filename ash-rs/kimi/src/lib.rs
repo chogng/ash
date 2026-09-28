@@ -45,6 +45,36 @@ pub const KIMI_CODE_API_BASE_URL: &str = "https://api.kimi.com/coding/v1";
 pub use backend_client::kimi::Account;
 pub use backend_client::kimi::Usage;
 
+mod desktop;
+pub use desktop::KimiDesktop;
+mod cli;
+pub use cli::KimiCli;
+
+/// A credential owned by another Kimi product and observed by Ash at request time.
+/// Implementations provide the current request target and a cache identity for model discovery.
+pub trait KimiExternalCredential: Send + Sync {
+    fn api_target(&self) -> Result<ResolvedApiTarget, KimiError>;
+    fn catalog_identity(&self) -> Result<String, KimiError>;
+}
+
+impl KimiExternalCredential for KimiDesktop {
+    fn api_target(&self) -> Result<ResolvedApiTarget, KimiError> {
+        self.api_target()
+    }
+    fn catalog_identity(&self) -> Result<String, KimiError> {
+        self.catalog_identity()
+    }
+}
+
+impl KimiExternalCredential for KimiCli {
+    fn api_target(&self) -> Result<ResolvedApiTarget, KimiError> {
+        self.api_target()
+    }
+    fn catalog_identity(&self) -> Result<String, KimiError> {
+        self.catalog_identity()
+    }
+}
+
 const CLIENT_ID: &str = "17e5f671-d194-4dfb-9706-5516cb48c098";
 const DEVICE_AUTHORIZATION_URL: &str = "https://auth.kimi.com/api/oauth/device_authorization";
 const TOKEN_URL: &str = "https://auth.kimi.com/api/oauth/token";

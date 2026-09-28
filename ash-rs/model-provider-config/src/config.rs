@@ -58,6 +58,8 @@ impl ModelProviderConfig {
         match self.connection.as_str() {
             "chatgpt-subscription"
             | "kimi-subscription"
+            | "kimi-desktop"
+            | "kimi-cli"
             | "xai-subscription"
             | "bigmodel-coding-plan"
             | "zai-coding-plan" => ProviderAccessMode::Subscription,
@@ -71,6 +73,14 @@ impl ModelProviderConfig {
             return Err(ProviderConfigError::ProviderMismatch {
                 configured: self.provider.clone(),
                 selected: provider,
+            });
+        }
+        if matches!(self.connection.as_str(), "kimi-desktop" | "kimi-cli")
+            && let Some(base_url) = &self.base_url
+        {
+            return Err(ProviderConfigError::InvalidBaseUrl {
+                provider: self.provider.clone(),
+                base_url: base_url.clone(),
             });
         }
 

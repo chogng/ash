@@ -168,7 +168,9 @@ Provider 名称不能等同于 API 协议。同一 Provider 可以选择多个�
 | OpenAI Platform | Responses |
 | ChatGPT 订阅 | OpenAI Responses codec + `ash-chatgpt` native OAuth target |
 | Kimi Platform | OpenAI-compatible Chat Completions + API key |
-| Kimi Code 订阅 | Kimi Coding OpenAI-compatible Chat Completions + native OAuth target |
+| Kimi Code 订阅 | Kimi Coding OpenAI-compatible Chat Completions + Ash OAuth 凭据 |
+| Kimi Desktop | Kimi Code Chat Completions + 桌面端当前网关凭据 |
+| Kimi Code CLI | Kimi Code Chat Completions + CLI 当前 OAuth 文件凭据 |
 | xAI | Responses、Chat Completions |
 | Google | Gemini Interactions、GenerateContent、OpenAI-compatible Chat |
 | MiniMax | Anthropic Messages、OpenAI-compatible Chat |
@@ -323,7 +325,9 @@ ash-app-server → ash-login → ash-kimi → Kimi device OAuth / SecretStore
 ash-model-provider → KimiAdapter → ash-api OpenAI Chat Completions → Kimi Coding API
 ```
 
-`kimi/kimi-k2.7-code` 与 `kimi/kimi-k2.6` 都来自唯一静态目录。Kimi Code 已就绪时优先使用订阅连接；上游模型 ID 由内置精确映射提供。调用失败不会在同一请求中切换到其他密钥。
+`kimi/kimi-k2.7-code` 与 `kimi/kimi-k2.6` 都来自唯一静态目录。Ash 的 `kimi-subscription` 登录就绪时优先使用该连接；上游模型 ID 由内置精确映射提供。调用失败不会在同一请求中切换到其他密钥。
+
+本机 Kimi Desktop 的 `kimi-desktop/<型号>` 是独立模型身份。Ash 每次请求只读获取桌面端当前的 Code 网关凭据，请求 `https://agent-gw.kimi.com/coding/v1`；该网关 `/models` 返回的型号进入独立目录范围，不继承 Ash Kimi 静态清单。桌面端负责凭据轮换，Ash 不把它导入自己的 OAuth 账户。`kimi-cli/<型号>` 从 CLI 配置和当前 OAuth 文件读取连接与凭据；三种型号身份各自选择自己的连接。Ash Code 和 Desktop 模型选择器都读取已就绪外部连接的动态型号。
 
 Ash Code 将 xAI 订阅入口显示为 Super Grok，将开发者 API 入口显示为 xAI。前者使用设备授权和固定的 Grok 订阅代理，后者使用 xAI API key 与 Platform 端点；两者保留 `xai` 供应商 ID，但凭据和请求目标不互换。
 
@@ -432,7 +436,7 @@ model-provider
 Runtime 负责 scope identity、credential revision 和 catalog API binding；manager 负责何时刷新、
 缓存、merge 和发布 snapshot。Runtime 不维护第二份 catalog cache。
 
-ChatGPT 订阅的账户身份由 `ash-chatgpt` 从已验证登录 token 提供。`ash-model-provider` 的订阅目录组件用该身份建立隔离的 catalog scope；有 Codex 本地目录时通过 Codex `model/list` 校验并转换，否则通过已认证目标读取 ChatGPT 模型目录。xAI 订阅由自己的目录适配器读取 Grok 订阅代理，xAI API Key 连接使用 Platform `/v1/language-models`；两者使用不同的凭据和 catalog scope。Kimi Code 的已知型号由 Kimi 目录来源提供并按登录设备隔离。`ash-models-manager` 统一管理刷新，并将目录分别保存到 `cache/models/<provider>.json`，不读取 OAuth token 或 API Key。
+ChatGPT 订阅的账户身份由 `ash-chatgpt` 从已验证登录 token 提供。`ash-model-provider` 的订阅目录组件用该身份建立隔离的 catalog scope；有 Codex 本地目录时通过 Codex `model/list` 校验并转换，否则通过已认证目标读取 ChatGPT 模型目录。xAI 订阅由自己的目录适配器读取 Grok 订阅代理，xAI API Key 连接使用 Platform `/v1/language-models`；两者使用不同的凭据和 catalog scope。Ash 的 Kimi Code 已知型号按登录设备隔离；Kimi Desktop 型号从其网关 `/models` 获取；Kimi Code CLI 型号从 CLI 配置端点 `/models` 获取。两者分别按当前凭据隔离。`ash-models-manager` 统一管理刷新，并将目录分别保存到 `cache/models/<provider>.json`，不读取 OAuth token 或 API Key。
 
 ## 11. 依赖方向
 

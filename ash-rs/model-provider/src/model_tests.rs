@@ -13,6 +13,8 @@ use ash_context_engine::ContextTokenMeasurementCapability;
 use ash_context_engine::ContextTokenMeasurementOutcome;
 use ash_glm::{GlmOAuth, GlmProvider};
 use ash_http_client::HttpHeader;
+use ash_kimi::KimiCli;
+use ash_kimi::KimiDesktop;
 use ash_kimi::KimiOAuth;
 use ash_model_provider_config::{
     ApiProfile, EndpointPolicy, ModelCatalogPolicy, ModelProviderConfig, ProviderAdapter,
@@ -1140,6 +1142,202 @@ fn kimi_subscription_runtime_uses_local_oauth_and_the_coding_api() {
         .unwrap()
         .unwrap();
     assert_ne!(binding.scope(), changed.scope());
+}
+
+#[test]
+fn kimi_desktop_runtime_discovers_models_and_uses_the_desktop_gateway() {
+    struct DesktopTransport {
+        requests: Mutex<Vec<ClientRequest>>,
+    }
+    impl OperationClient for DesktopTransport {
+        fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
+            self.requests.lock().unwrap().push(request.clone());
+            let body = if request.url().ends_with("/models") {
+                json!({"data":[
+                    {"id":"k3-agent","display_name":"K3 Agent"},
+                    {"id":"k2d8-preview","display_name":"K2 Preview"}
+                ]})
+            } else {
+                completion_response("Hello from Kimi Desktop")
+            };
+            Ok(ClientResponse::new(
+                200,
+                Vec::new(),
+                serde_json::to_vec(&body).unwrap(),
+            ))
+        }
+
+        fn execute_streaming(
+            &self,
+            request: &ClientRequest,
+            sink: &mut dyn OperationStreamSink,
+        ) -> Result<ClientResponse, ClientError> {
+            self.requests.lock().unwrap().push(request.clone());
+            sink.emit(
+                streaming::response_stream(&completion_response("Hello from Kimi Desktop"))
+                    .as_bytes(),
+            )?;
+            Ok(ClientResponse::new(200, Vec::new(), Vec::new()))
+        }
+    }
+
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("config.toml");
+    let content = r#"[providers.daimon-kimi-code]
+type = "kimi"
+base_url = "https://agent-gw.kimi.com/coding/v1"
+api_key = "desktop-key"
+"#;
+    std::fs::write(&path, content).unwrap();
+    let transport = Arc::new(DesktopTransport {
+        requests: Mutex::new(Vec::new()),
+    });
+    let desktop = Arc::new(KimiDesktop::at(path.clone()));
+    let runtime = ModelProviderRuntime::with_client_and_secrets(
+        ProviderConfigRegistry::builtin(),
+        transport.clone(),
+        Arc::new(MemorySecretStore::default()),
+    )
+    .with_catalog_cache(directory.path().join("models"))
+    .with_kimi_desktop(desktop);
+    let preferred = runtime
+        .preferred_connections(&std::collections::BTreeMap::new())
+        .unwrap();
+    assert_eq!(
+        preferred[&provider_id("kimi-desktop")].connection.as_str(),
+        "kimi-desktop"
+    );
+    let config = provider_config("kimi-desktop");
+    let binding = runtime.catalog_binding(&config).unwrap().unwrap();
+    let manager = runtime.models_manager_for_config(&config).unwrap();
+    tokio::runtime::Builder::new_current_thread()
+        .build()
+        .unwrap()
+        .block_on(manager.refresh(binding.scope().clone(), binding.source()))
+        .unwrap();
+
+    let model = runtime
+        .build_model(&config, &model_ref("kimi-desktop", "k2d8-preview"))
+        .unwrap();
+    let rotated = content.replace("desktop-key", "rotated-desktop-key");
+    std::fs::write(&path, &rotated).unwrap();
+    assert_eq!(
+        invoke_text(model.as_ref(), "hello"),
+        "Hello from Kimi Desktop"
+    );
+    let requests = transport.requests.lock().unwrap();
+    assert!(
+        requests
+            .iter()
+            .any(|request| { request.url() == "https://agent-gw.kimi.com/coding/v1/models" })
+    );
+    assert!(requests.iter().any(|request| {
+        request.url() == "https://agent-gw.kimi.com/coding/v1/chat/completions"
+            && request.headers().iter().any(|header| {
+                header.name() == "Authorization" && header.value() == "Bearer rotated-desktop-key"
+            })
+    }));
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), rotated);
+    let cached =
+        std::fs::read_to_string(directory.path().join("models/kimi-desktop.json")).unwrap();
+    assert!(!cached.contains("desktop-key"));
+}
+
+#[test]
+fn kimi_cli_runtime_discovers_models_and_uses_the_current_cli_token() {
+    struct CliTransport {
+        requests: Mutex<Vec<ClientRequest>>,
+    }
+    impl OperationClient for CliTransport {
+        fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
+            self.requests.lock().unwrap().push(request.clone());
+            Ok(ClientResponse::new(
+                200,
+                Vec::new(),
+                serde_json::to_vec(&json!({"data":[{"id":"kimi-k2","display_name":"Kimi K2"}]}))
+                    .unwrap(),
+            ))
+        }
+
+        fn execute_streaming(
+            &self,
+            request: &ClientRequest,
+            sink: &mut dyn OperationStreamSink,
+        ) -> Result<ClientResponse, ClientError> {
+            self.requests.lock().unwrap().push(request.clone());
+            sink.emit(
+                streaming::response_stream(&completion_response("Hello from Kimi CLI")).as_bytes(),
+            )?;
+            Ok(ClientResponse::new(200, Vec::new(), Vec::new()))
+        }
+    }
+
+    let directory = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(directory.path().join("credentials")).unwrap();
+    std::fs::write(directory.path().join("device_id"), "test-device").unwrap();
+    std::fs::write(
+        directory.path().join("config.toml"),
+        r#"[providers."managed:kimi-code"]
+type = "kimi"
+base_url = "https://api.kimi.ai/coding/v1"
+[providers."managed:kimi-code".oauth]
+storage = "file"
+key = "oauth/kimi-code"
+"#,
+    )
+    .unwrap();
+    let token_path = directory.path().join("credentials/kimi-code.json");
+    std::fs::write(
+        &token_path,
+        json!({"access_token":"first-token","expires_at":4102444800u64}).to_string(),
+    )
+    .unwrap();
+    let transport = Arc::new(CliTransport {
+        requests: Mutex::new(Vec::new()),
+    });
+    let runtime = ModelProviderRuntime::with_client_and_secrets(
+        ProviderConfigRegistry::builtin(),
+        transport.clone(),
+        Arc::new(MemorySecretStore::default()),
+    )
+    .with_catalog_cache(directory.path().join("models"))
+    .with_kimi_cli(Arc::new(KimiCli::at(directory.path().into())));
+    let preferred = runtime
+        .preferred_connections(&std::collections::BTreeMap::new())
+        .unwrap();
+    assert_eq!(
+        preferred[&provider_id("kimi-cli")].connection.as_str(),
+        "kimi-cli"
+    );
+    let config = provider_config("kimi-cli");
+    let binding = runtime.catalog_binding(&config).unwrap().unwrap();
+    let manager = runtime.models_manager_for_config(&config).unwrap();
+    tokio::runtime::Builder::new_current_thread()
+        .build()
+        .unwrap()
+        .block_on(manager.refresh(binding.scope().clone(), binding.source()))
+        .unwrap();
+    let model = runtime
+        .build_model(&config, &model_ref("kimi-cli", "kimi-k2"))
+        .unwrap();
+    std::fs::write(
+        &token_path,
+        json!({"access_token":"rotated-token","expires_at":4102444800u64}).to_string(),
+    )
+    .unwrap();
+    assert_eq!(invoke_text(model.as_ref(), "hello"), "Hello from Kimi CLI");
+    let requests = transport.requests.lock().unwrap();
+    assert!(
+        requests
+            .iter()
+            .any(|request| request.url() == "https://api.kimi.ai/coding/v1/models")
+    );
+    assert!(requests.iter().any(|request| {
+        request.url() == "https://api.kimi.ai/coding/v1/chat/completions"
+            && request.headers().iter().any(|header| {
+                header.name() == "Authorization" && header.value() == "Bearer rotated-token"
+            })
+    }));
 }
 
 #[test]

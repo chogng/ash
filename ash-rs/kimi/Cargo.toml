@@ -12,9 +12,12 @@ path = "src/lib.rs"
 
 [dependencies]
 backend-client = { workspace = true }
+dirs = { workspace = true }
 getrandom = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
+toml = { workspace = true }
 urlencoding = { workspace = true }
 zeroize = { workspace = true }
 ash-async-utils = { workspace = true }
@@ -25,3 +28,6 @@ ash-secrets = { workspace = true }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+tempfile = { workspace = true }

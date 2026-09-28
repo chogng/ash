@@ -6,6 +6,7 @@ mod xai;
 
 pub(crate) use glm::glm_catalog_binding;
 pub(crate) use kimi::kimi_catalog_binding;
+pub(crate) use kimi::kimi_external_catalog_binding;
 pub(crate) use ollama::ollama_catalog_binding;
 pub(crate) use openai::chatgpt_catalog_binding;
 pub(crate) use openai::openai_catalog_binding;

@@ -52,3 +52,29 @@ pub(super) fn subscription_definition() -> ProviderDefinition {
     definition.model_catalog_policy = crate::ModelCatalogPolicy::ListedOnly;
     definition
 }
+
+pub(super) fn desktop_definition() -> ProviderDefinition {
+    let mut definition = default_provider(
+        "kimi-desktop",
+        "Kimi Desktop",
+        ProviderAdapter::Kimi,
+        ApiProfile::OpenAiChatCompletions,
+        "https://agent-gw.kimi.com/coding/v1",
+    )
+    .with_native_streaming();
+    definition.api_key_policy = crate::ApiKeyPolicy::Unsupported;
+    definition
+}
+
+pub(super) fn cli_definition() -> ProviderDefinition {
+    let mut definition = default_provider(
+        "kimi-cli",
+        "Kimi Code CLI",
+        ProviderAdapter::Kimi,
+        ApiProfile::OpenAiChatCompletions,
+        "https://api.kimi.com/coding/v1",
+    )
+    .with_native_streaming();
+    definition.api_key_policy = crate::ApiKeyPolicy::Unsupported;
+    definition
+}

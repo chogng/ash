@@ -36,6 +36,8 @@ use ash_context_engine::ContextTokenMeasurementOutcome;
 use ash_glm::GlmApiTarget;
 use ash_glm::GlmOAuth;
 use ash_http_client::UreqHttpClient;
+use ash_kimi::KimiCli;
+use ash_kimi::KimiDesktop;
 use ash_kimi::KimiOAuth;
 use ash_model_provider_config::Model;
 use ash_model_provider_config::ModelId;
@@ -82,6 +84,12 @@ enum ProviderConnection {
     Kimi {
         auth: Arc<KimiOAuth>,
     },
+    KimiDesktop {
+        desktop: Arc<KimiDesktop>,
+    },
+    KimiCli {
+        cli: Arc<KimiCli>,
+    },
     Glm {
         auth: Arc<GlmOAuth>,
     },
@@ -93,6 +101,8 @@ enum ProviderTarget {
     ChatGpt(Arc<ChatGptOAuth>),
     Xai(Arc<supergrok::SuperGrokOAuth>),
     Kimi(Arc<KimiOAuth>),
+    KimiDesktop(Arc<KimiDesktop>),
+    KimiCli(Arc<KimiCli>),
     Glm(Arc<GlmOAuth>),
 }
 
@@ -101,6 +111,8 @@ enum ResolvedProviderTarget<'a> {
     ChatGpt(ChatGptApiTarget),
     Xai(supergrok::SuperGrokApiTarget),
     Kimi(ResolvedApiTarget),
+    KimiDesktop(ResolvedApiTarget),
+    KimiCli(ResolvedApiTarget),
     Glm(GlmApiTarget),
 }
 
@@ -108,7 +120,7 @@ impl ResolvedProviderTarget<'_> {
     fn api_target(&self) -> &ResolvedApiTarget {
         match self {
             Self::Fixed(target) => target,
-            Self::Kimi(target) => target,
+            Self::Kimi(target) | Self::KimiDesktop(target) | Self::KimiCli(target) => target,
             Self::Glm(target) => &target.target,
             Self::ChatGpt(target) => target.api_target(),
             Self::Xai(target) => &target.target,
@@ -118,7 +130,7 @@ impl ResolvedProviderTarget<'_> {
     fn into_api_target(self) -> ResolvedApiTarget {
         match self {
             Self::Fixed(target) => target.clone(),
-            Self::Kimi(target) => target,
+            Self::Kimi(target) | Self::KimiDesktop(target) | Self::KimiCli(target) => target,
             Self::Glm(target) => target.target,
             Self::ChatGpt(target) => target.into_api_target(),
             Self::Xai(target) => target.target,
@@ -150,6 +162,7 @@ impl ProviderTarget {
             Self::Kimi(auth) => auth
                 .subscription_catalog_identity()
                 .map_err(|error| ModelProviderError::Credential(error.to_string())),
+            Self::KimiDesktop(_) | Self::KimiCli(_) => Ok(None),
             Self::Glm(auth) => auth
                 .account_id()
                 .map_err(|error| ModelProviderError::Credential(error.to_string())),
@@ -160,7 +173,11 @@ impl ProviderTarget {
         match self {
             Self::ChatGpt(_) => ApiEndpoint::ChatGptResponses,
             Self::Xai(_) => ApiEndpoint::XaiSubscriptionResponses,
-            Self::Fixed(_) | Self::Kimi(_) | Self::Glm(_) => direct,
+            Self::Fixed(_)
+            | Self::Kimi(_)
+            | Self::KimiDesktop(_)
+            | Self::KimiCli(_)
+            | Self::Glm(_) => direct,
         }
     }
 
@@ -170,6 +187,14 @@ impl ProviderTarget {
             Self::Kimi(auth) => auth
                 .api_target()
                 .map(ResolvedProviderTarget::Kimi)
+                .map_err(|error| ModelProviderError::Credential(error.to_string())),
+            Self::KimiDesktop(desktop) => desktop
+                .api_target()
+                .map(ResolvedProviderTarget::KimiDesktop)
+                .map_err(|error| ModelProviderError::Credential(error.to_string())),
+            Self::KimiCli(cli) => cli
+                .api_target()
+                .map(ResolvedProviderTarget::KimiCli)
                 .map_err(|error| ModelProviderError::Credential(error.to_string())),
             Self::Glm(auth) => auth
                 .api_target()
@@ -343,6 +368,13 @@ impl Provider {
             }
             ProviderConnection::Kimi { auth } => {
                 (ProviderTarget::Kimi(auth), RemoteMeasurement::Disabled)
+            }
+            ProviderConnection::KimiDesktop { desktop } => (
+                ProviderTarget::KimiDesktop(desktop),
+                RemoteMeasurement::Disabled,
+            ),
+            ProviderConnection::KimiCli { cli } => {
+                (ProviderTarget::KimiCli(cli), RemoteMeasurement::Disabled)
             }
             ProviderConnection::Glm { auth } => {
                 (ProviderTarget::Glm(auth), RemoteMeasurement::Authenticated)
@@ -710,6 +742,8 @@ pub struct ModelProviderRuntime {
     local_tokenizers: Arc<dyn LocalTokenizerService>,
     chatgpt_oauth: Option<Arc<ChatGptOAuth>>,
     kimi_oauth: Option<Arc<KimiOAuth>>,
+    kimi_desktop: Option<Arc<KimiDesktop>>,
+    kimi_cli: Option<Arc<KimiCli>>,
     supergrok_oauth: Option<Arc<supergrok::SuperGrokOAuth>>,
     bigmodel_oauth: Option<Arc<GlmOAuth>>,
     zai_oauth: Option<Arc<GlmOAuth>>,
@@ -756,6 +790,11 @@ impl ModelProviderRuntime {
                         .map_err(|error| ModelProviderError::Credential(error.to_string()))?,
                     None => false,
                 },
+                "kimi-desktop" => runtime
+                    .kimi_desktop
+                    .as_ref()
+                    .is_some_and(|desktop| desktop.is_ready()),
+                "kimi-cli" => runtime.kimi_cli.as_ref().is_some_and(|cli| cli.is_ready()),
                 "xai-subscription" => match &runtime.supergrok_oauth {
                     Some(auth) => auth
                         .subscription_ready()
@@ -833,6 +872,8 @@ impl ModelProviderRuntime {
             local_tokenizers: Arc::new(LocalTokenizerRegistry::new()),
             chatgpt_oauth: None,
             kimi_oauth: None,
+            kimi_desktop: None,
+            kimi_cli: None,
             supergrok_oauth: None,
             bigmodel_oauth: None,
             zai_oauth: None,
@@ -863,6 +904,8 @@ impl ModelProviderRuntime {
             local_tokenizers: Arc::new(LocalTokenizerRegistry::new()),
             chatgpt_oauth: None,
             kimi_oauth: None,
+            kimi_desktop: None,
+            kimi_cli: None,
             supergrok_oauth: None,
             bigmodel_oauth: None,
             zai_oauth: None,
@@ -904,6 +947,27 @@ impl ModelProviderRuntime {
     pub fn with_kimi_oauth(mut self, kimi_oauth: Arc<KimiOAuth>) -> Self {
         self.kimi_oauth = Some(kimi_oauth);
         self
+    }
+
+    /// Installs the read-only connection to Kimi Desktop's separate Code gateway.
+    pub fn with_kimi_desktop(mut self, desktop: Arc<KimiDesktop>) -> Self {
+        self.kimi_desktop = Some(desktop);
+        self
+    }
+
+    pub fn kimi_desktop_ready(&self) -> bool {
+        self.kimi_desktop
+            .as_ref()
+            .is_some_and(|desktop| desktop.is_ready())
+    }
+
+    pub fn with_kimi_cli(mut self, cli: Arc<KimiCli>) -> Self {
+        self.kimi_cli = Some(cli);
+        self
+    }
+
+    pub fn kimi_cli_ready(&self) -> bool {
+        self.kimi_cli.as_ref().is_some_and(|cli| cli.is_ready())
     }
 
     /// Installs the ChatGPT OAuth authority used by subscription model rows.
@@ -1093,6 +1157,7 @@ impl ModelProviderRuntime {
         }
         if normalized.access_mode == ProviderAccessMode::Subscription
             && normalized.provider.as_str() == "kimi"
+            && normalized.connection.as_str() == "kimi-subscription"
         {
             return self
                 .kimi_oauth
@@ -1100,6 +1165,34 @@ impl ModelProviderRuntime {
                 .map(|auth| crate::catalog::kimi_catalog_binding(&normalized, Arc::clone(auth)))
                 .transpose()
                 .map(Option::flatten);
+        }
+        if normalized.connection.as_str() == "kimi-desktop" {
+            return self
+                .kimi_desktop
+                .as_ref()
+                .map(|desktop| {
+                    crate::catalog::kimi_external_catalog_binding(
+                        &normalized,
+                        "kimi-desktop",
+                        desktop.clone(),
+                        Arc::clone(&self.client),
+                    )
+                })
+                .transpose();
+        }
+        if normalized.connection.as_str() == "kimi-cli" {
+            return self
+                .kimi_cli
+                .as_ref()
+                .map(|cli| {
+                    crate::catalog::kimi_external_catalog_binding(
+                        &normalized,
+                        "kimi-cli",
+                        cli.clone(),
+                        Arc::clone(&self.client),
+                    )
+                })
+                .transpose();
         }
         if let Some(auth) = match normalized.connection.as_str() {
             "bigmodel-coding-plan" => self.bigmodel_oauth.as_ref(),
@@ -1277,6 +1370,27 @@ impl ModelProviderRuntime {
                     .map_err(|error| ModelProviderError::Credential(error.to_string()))?;
                 Ok(ProviderConnection::Kimi {
                     auth: Arc::clone(auth),
+                })
+            }
+            ModelConnectionRuntime::KimiDesktop => {
+                let desktop = self.kimi_desktop.as_ref().ok_or_else(|| {
+                    ModelProviderError::Credential("Kimi Desktop connection is unavailable".into())
+                })?;
+                desktop
+                    .api_target()
+                    .map_err(|error| ModelProviderError::Credential(error.to_string()))?;
+                Ok(ProviderConnection::KimiDesktop {
+                    desktop: Arc::clone(desktop),
+                })
+            }
+            ModelConnectionRuntime::KimiCli => {
+                let cli = self.kimi_cli.as_ref().ok_or_else(|| {
+                    ModelProviderError::Credential("Kimi Code CLI connection is unavailable".into())
+                })?;
+                cli.api_target()
+                    .map_err(|error| ModelProviderError::Credential(error.to_string()))?;
+                Ok(ProviderConnection::KimiCli {
+                    cli: Arc::clone(cli),
                 })
             }
             ModelConnectionRuntime::ChatGptSubscription => {

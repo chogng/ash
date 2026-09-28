@@ -81,7 +81,16 @@ impl AppServer {
                         | "bigmodel-coding-plan"
                         | "zai-coding-plan"
                 );
-                let ready = if oauth {
+                let external = matches!(entry.connection.as_str(), "kimi-desktop" | "kimi-cli");
+                let ready = if entry.connection.as_str() == "kimi-desktop" {
+                    self.provider_runtime
+                        .as_ref()
+                        .is_some_and(|runtime| runtime.kimi_desktop_ready())
+                } else if entry.connection.as_str() == "kimi-cli" {
+                    self.provider_runtime
+                        .as_ref()
+                        .is_some_and(|runtime| runtime.kimi_cli_ready())
+                } else if oauth {
                     accounts.as_ref().is_some_and(|state| {
                         state.accounts.iter().any(|account| {
                             account.account.provider == entry.connection.as_str()
@@ -94,7 +103,7 @@ impl AppServer {
                 ProviderCatalogEntryDto {
                     active: false,
                     configured: config.values.connections.contains_key(&entry.connection)
-                        || (oauth && ready),
+                        || ((oauth || external) && ready),
                     ready,
                     access: match entry.access_mode {
                         ash_model_provider_config::ProviderAccessMode::Api => {

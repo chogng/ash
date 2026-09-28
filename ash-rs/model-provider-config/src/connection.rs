@@ -9,6 +9,8 @@ pub enum ModelConnectionRuntime {
     ProviderApi,
     ChatGptSubscription,
     KimiCode,
+    KimiDesktop,
+    KimiCli,
     XaiSubscription,
     GlmSubscription,
 }
@@ -102,6 +104,12 @@ pub fn builtin_connections() -> Vec<ModelConnectionDefinition> {
             ModelConnectionRuntime::KimiCode,
         ),
         (
+            "kimi-desktop",
+            "kimi-desktop",
+            ModelConnectionRuntime::KimiDesktop,
+        ),
+        ("kimi-cli", "kimi-cli", ModelConnectionRuntime::KimiCli),
+        (
             "xai-subscription",
             "xai",
             ModelConnectionRuntime::XaiSubscription,
@@ -127,7 +135,12 @@ fn declare(
     transport.id = provider.clone();
     // A remote listing is observation, not permission to select an Ash built-in model.
     transport.model_catalog_policy = crate::ModelCatalogPolicy::AllowUnlisted;
-    crate::model_catalog::attach_static_models(std::slice::from_mut(&mut transport));
+    if !matches!(
+        runtime,
+        ModelConnectionRuntime::KimiDesktop | ModelConnectionRuntime::KimiCli
+    ) {
+        crate::model_catalog::attach_static_models(std::slice::from_mut(&mut transport));
+    }
     ModelConnectionDefinition {
         id,
         provider,

@@ -1568,6 +1568,7 @@ interface FakeOptions {
 	}[];
 	readonly configuredProviders?: readonly string[];
 	readonly providers?: readonly ModelProviderCredentialStatus[];
+	readonly providerModels?: Readonly<Record<string, readonly { readonly model: ModelRef; readonly displayName: string }[]>>;
 	readonly advisorDefault?: { readonly model: ModelRef; readonly enabled: boolean; readonly maxCalls: number; readonly maxOutputTokens: number };
 }
 
@@ -1679,6 +1680,25 @@ test("Chat service caches the static catalog and filters picker entries by user 
 	assert.deepEqual(configuration.getValue(ModelCatalogConfiguration.hiddenModels), [first.model]);
 	await chat.refreshModels();
 	assert.equal(fake.modelListRequests.length, 2);
+});
+
+test("Chat service includes ready Kimi connections in the desktop model picker", async () => {
+	const desktop = { model: { provider: 'kimi-desktop', model: 'desktop-k2' }, displayName: 'Desktop K2' };
+	const cli = { model: { provider: 'kimi-cli', model: 'cli-k2' }, displayName: 'CLI K2' };
+	const provider = (connection: string): ModelProviderCredentialStatus => ({
+		connection, provider: connection, displayName: connection, access: 'subscription',
+		active: true, configured: true, ready: true, apiKeyPolicy: 'unsupported', apiKeyConfigured: false,
+	});
+	const fake = fakeApi({
+		providers: [provider('kimi-desktop'), provider('kimi-cli')],
+		providerModels: { 'kimi-desktop': [desktop], 'kimi-cli': [cli] },
+	});
+	using chat = createChatService(fake.api);
+
+	assert.deepEqual(await chat.listModels(), [desktop, cli]);
+	assert.deepEqual(fake.providerModelRequests, ['kimi-desktop', 'kimi-cli']);
+	assert.deepEqual(await chat.listModels(), [desktop, cli]);
+	assert.deepEqual(fake.providerModelRequests, ['kimi-desktop', 'kimi-cli']);
 });
 
 test("Chat picker excludes a hidden selected model", async () => {
@@ -1822,6 +1842,7 @@ function fakeApi(options: FakeOptions = {}): {
 	readonly turnCompactRequests: readonly SessionOperationInput<"compactContext">[];
 	readonly turnSteerRequests: readonly SessionOperationInput<"steerTurn">[];
 	readonly modelListRequests: readonly undefined[];
+	readonly providerModelRequests: readonly string[];
 	readonly providerKeyRequests: readonly { readonly connection: string; readonly apiKey: string }[];
 	readonly modelRequests: readonly { readonly commandId: string; readonly model: ModelRef }[];
 	readonly savedAdvisorDefaults: readonly (AdvisorConfig | null)[];
@@ -1840,6 +1861,7 @@ function fakeApi(options: FakeOptions = {}): {
 	const turnCompactRequests: SessionOperationInput<"compactContext">[] = [];
 	const turnSteerRequests: SessionOperationInput<"steerTurn">[] = [];
 	const modelListRequests: undefined[] = [];
+	const providerModelRequests: string[] = [];
 	const providerKeyRequests: { connection: string; apiKey: string }[] = [];
 	let providers = options.providers?.map(provider => ({ ...provider })) ?? [];
 	const modelRequests: { readonly commandId: string; readonly model: ModelRef }[] = [];
@@ -1922,6 +1944,10 @@ function fakeApi(options: FakeOptions = {}): {
 				return { models: [...(options.models ?? [])] };
 			},
 			listProviders: async () => ({ providers: providers.map(provider => ({ ...provider })) }),
+			listProviderModels: async (connection: string) => {
+				providerModelRequests.push(connection);
+				return [...(options.providerModels?.[connection] ?? [])];
+			},
 			setProviderApiKey: async ({ connection, apiKey }: { connection: string; apiKey: string }) => {
 				providerKeyRequests.push({ connection, apiKey });
 				providers = providers.map(entry => entry.connection === connection ? { ...entry, apiKeyConfigured: true, active: true, configured: true, ready: true } : entry);
@@ -1990,6 +2016,7 @@ function fakeApi(options: FakeOptions = {}): {
 		turnCompactRequests,
 		turnSteerRequests,
 		modelListRequests,
+		providerModelRequests,
 		providerKeyRequests,
 		modelRequests,
 		savedAdvisorDefaults,

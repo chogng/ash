@@ -8,6 +8,8 @@ use ash_app_server_client::ClientError;
 use ash_app_server_client::JsonRpcTransport;
 use ash_app_server_protocol::protocol::config::ConfigUpdateParams;
 use ash_app_server_protocol::protocol::config::ModelRefDto;
+use ash_app_server_protocol::protocol::model::ModelListResult;
+use ash_app_server_protocol::protocol::provider::ProviderModelsListResult;
 use ash_protocol::Patch;
 use ash_protocol::ReasoningEffort;
 use std::fmt;
@@ -60,8 +62,32 @@ where
 {
     client.read_accounts()?;
     let config = client.read_config()?;
-    let catalog = client.list_models()?;
+    let catalog = load_catalog(client)?;
     model_choices(&catalog, &config).map_err(ModelCommandError)
+}
+
+fn load_catalog<T: JsonRpcTransport>(
+    client: &mut AppServerClient<T>,
+) -> Result<ModelListResult, ModelCommandError> {
+    let mut catalog = client.list_models()?;
+    let providers = client.list_providers()?;
+    for connection in ["kimi-desktop", "kimi-cli"] {
+        if !providers
+            .providers
+            .iter()
+            .any(|provider| provider.connection == connection && provider.ready)
+        {
+            continue;
+        }
+        match client.list_provider_models(connection.into())? {
+            ProviderModelsListResult::Models { models } => catalog.models.extend(models),
+            ProviderModelsListResult::Empty => {}
+            ProviderModelsListResult::Failed { failure } => {
+                return Err(ModelCommandError(format!("{connection}: {:?}", failure.code)));
+            }
+        }
+    }
+    Ok(catalog)
 }
 
 pub(crate) fn set_model<T>(
@@ -124,7 +150,7 @@ where
         }
 
         if let Some(effort) = effort_opt {
-            let catalog = client.list_models()?;
+            let catalog = load_catalog(client)?;
             let entry = catalog.models.iter().find(|entry| {
                 entry.model.provider.as_str() == provider && entry.model.model.as_str() == model
             });
@@ -262,7 +288,7 @@ fn set_pin<T: JsonRpcTransport>(
         model: model.into(),
     };
     if pinned {
-        let catalog = client.list_models()?;
+        let catalog = load_catalog(client)?;
         if !catalog.models.iter().any(|entry| {
             entry.model.provider.as_str() == model.provider
                 && entry.model.model.as_str() == model.model
@@ -302,3 +328,7 @@ pub(crate) fn remove_provider_pins<T: JsonRpcTransport>(
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "request_tests.rs"]
+mod tests;

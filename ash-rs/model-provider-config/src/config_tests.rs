@@ -533,8 +533,8 @@ fn registry_merge_has_explicit_conflict_semantics() {
 #[test]
 fn builtins_are_valid_and_include_all_supported_adapters() {
     let registry = ProviderConfigRegistry::builtin();
-    assert_eq!(registry.providers().count(), 13);
-    assert_eq!(registry.connections().len(), 19);
+    assert_eq!(registry.providers().count(), 15);
+    assert_eq!(registry.connections().len(), 21);
     assert_eq!(
         registry.get(&provider_id("openai")).unwrap().adapter,
         ProviderAdapter::OpenAi
@@ -680,6 +680,13 @@ fn switching_connections_preserves_the_model_catalog() {
     let mut vendors = BTreeMap::new();
     for connection in builtin_connections() {
         connection.transport.validate().unwrap();
+        if matches!(connection.id.as_str(), "kimi-desktop" | "kimi-cli") {
+            assert_eq!(
+                connection.transport.model_catalog_policy,
+                ModelCatalogPolicy::AllowUnlisted
+            );
+            assert!(connection.transport.models.is_empty());
+        }
         let mut config = ModelProviderConfig::for_connection(connection.id.clone());
         if connection.transport.endpoint == EndpointPolicy::ConfiguredOnly {
             config.base_url = Some("https://example.com/v1".into());
@@ -688,7 +695,9 @@ fn switching_connections_preserves_the_model_catalog() {
             .with_configs([&config])
             .unwrap();
         let actual = &registry.get(&config.provider).unwrap().models;
-        if let Some(previous) = vendors.insert(config.provider.clone(), actual.clone()) {
+        if !matches!(connection.id.as_str(), "kimi-desktop" | "kimi-cli")
+            && let Some(previous) = vendors.insert(config.provider.clone(), actual.clone())
+        {
             assert_eq!(
                 actual, &previous,
                 "{} changed model identity",
@@ -699,6 +708,19 @@ fn switching_connections_preserves_the_model_catalog() {
             registry.normalize(&config).unwrap().access_mode,
             connection.access_mode
         );
+    }
+}
+
+#[test]
+fn kimi_desktop_connection_rejects_endpoint_override() {
+    for id in ["kimi-desktop", "kimi-cli"] {
+        let mut config =
+            ModelProviderConfig::for_connection(crate::ModelConnectionId::new(id).unwrap());
+        config.base_url = Some("https://example.test/coding/v1".into());
+        assert!(matches!(
+            ProviderConfigRegistry::builtin().normalize(&config),
+            Err(ProviderConfigError::InvalidBaseUrl { .. })
+        ));
     }
 }
 
