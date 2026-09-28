@@ -43,7 +43,8 @@ export class ModelsSettings extends Disposable {
 	private catalog: readonly ModelCatalogEntry[] | undefined;
 	private modelElements: readonly { readonly entry: ModelCatalogEntry; readonly row: HTMLElement }[] = [];
 	private apiElements: readonly { readonly provider: ModelProviderCredentialStatus; readonly row: HTMLElement }[] = [];
-	private loadVersion = 0;
+	private modelLoadVersion = 0;
+	private apiLoadVersion = 0;
 	private visible = false;
 
 	constructor(container: HTMLElement, private readonly options: ModelsSettingsOptions) {
@@ -117,9 +118,11 @@ export class ModelsSettings extends Disposable {
 		this._register(this.search.onDidChange(() => this.filter()));
 		this._register(options.chatService.onDidChangeModels(() => {
 			if (!this.visible) return;
-			const version = this.loadVersion;
+			const version = this.modelLoadVersion;
 			void options.chatService.listModelCatalog().then(catalog => {
-				if (version === this.loadVersion && catalog !== this.catalog) void this.loadModels(++this.loadVersion);
+				if (version === this.modelLoadVersion && catalog !== this.catalog) void this.loadModels(++this.modelLoadVersion);
+			}).catch(() => {
+				if (version === this.modelLoadVersion) this.reportStatus(localize('sessions.settings.modelsLoadFailed', 'Could not load models.'), true);
 			});
 		}));
 		this._register(toDisposable(() => this.domNode.remove()));
@@ -129,7 +132,8 @@ export class ModelsSettings extends Disposable {
 		this.visible = visible;
 		this.domNode.hidden = !visible;
 		if (!visible) {
-			this.loadVersion++;
+			this.modelLoadVersion++;
+			this.apiLoadVersion++;
 			this.rows.clear();
 			this.apiRows.clear();
 			this.catalog = undefined;
@@ -143,15 +147,14 @@ export class ModelsSettings extends Disposable {
 		this.empty.hidden = false;
 		this.apiEmpty.textContent = localize('sessions.settings.apiLoading', 'Loading API connections…');
 		this.apiEmpty.hidden = false;
-		const version = ++this.loadVersion;
-		void this.loadModels(version);
-		void this.loadApiConnections(version);
+		void this.loadModels(++this.modelLoadVersion);
+		void this.loadApiConnections(++this.apiLoadVersion);
 	}
 
 	private async loadModels(version: number): Promise<void> {
 		try {
 			const catalog = await this.options.chatService.listModelCatalog();
-			if (version !== this.loadVersion) return;
+			if (version !== this.modelLoadVersion) return;
 			this.catalog = catalog;
 			const resources = new DisposableStore();
 			this.modelElements = catalog.map(entry => ({ entry, row: this.modelRow(entry, resources) }));
@@ -159,7 +162,7 @@ export class ModelsSettings extends Disposable {
 			this.chatList.replaceChildren(...this.modelElements.map(item => item.row));
 			this.filter();
 		} catch {
-			if (version !== this.loadVersion) return;
+			if (version !== this.modelLoadVersion) return;
 			this.chatList.hidden = true;
 			this.empty.textContent = localize('sessions.settings.modelsLoadFailed', 'Could not load models.');
 			this.empty.hidden = false;
@@ -169,7 +172,7 @@ export class ModelsSettings extends Disposable {
 	private async loadApiConnections(version: number): Promise<void> {
 		try {
 			const providers = (await this.options.chatService.listModelProviders()).filter(provider => provider.apiKeyPolicy !== 'unsupported');
-			if (version !== this.loadVersion) return;
+			if (version !== this.apiLoadVersion) return;
 			const resources = new DisposableStore();
 			this.apiElements = providers.map(provider => ({ provider, row: this.apiConnectionRow(provider, resources) }));
 			this.apiRows.value = resources;
@@ -179,7 +182,7 @@ export class ModelsSettings extends Disposable {
 			this.apiEmpty.hidden = providers.length !== 0;
 			this.filter();
 		} catch {
-			if (version !== this.loadVersion) return;
+			if (version !== this.apiLoadVersion) return;
 			this.apiList.hidden = true;
 			this.apiEmpty.textContent = localize('sessions.settings.apiLoadFailed', 'Could not load API connections.');
 			this.apiEmpty.hidden = false;

@@ -69,6 +69,7 @@ const { EditorPaneRegistry } = await import('../../../../../workbench/browser/pa
 const { SettingsSearchQuery } = await import('../../../../../workbench/contrib/preferences/browser/settingsSearch.js');
 const { createSettingsLayout, SettingsCategories, SettingsLayout } = await import('../../../../../workbench/contrib/preferences/browser/settingsLayout.js');
 const { SettingsEditor, SettingsEditorId } = await import('../../../../../workbench/contrib/preferences/browser/settingsEditor.js');
+const { ModelsSettings } = await import('../../../../../workbench/contrib/preferences/browser/modelsSettings.js');
 const { SettingsTree } = await import('../../../../../workbench/contrib/preferences/browser/settingsTree.js');
 const { SettingsTreeModel } = await import('../../../../../workbench/contrib/preferences/browser/settingsTreeModels.js');
 const { PreferencesService } = await import('../../../../../workbench/services/preferences/browser/preferencesService.js');
@@ -257,6 +258,41 @@ test('Settings search composes setting ID and text filters', () => {
 	assert.equal(query.matches({ id: 'editor.fontFamily', title: 'Font family', description: 'Editor typography.' }), true);
 	assert.equal(query.matches({ id: 'editor.fontSize', title: 'Font size', description: 'Editor typography.' }), true);
 	assert.equal(query.matches({ id: 'workbench.fontFamily', title: 'Font family', description: 'Workbench typography.' }), false);
+});
+
+test('Models Settings keeps loading API connections when the model catalog changes', async () => {
+	using disposables = new DisposableStore();
+	const ownerDocument = browserEnvironment.window.document;
+	ownerDocument.body.replaceChildren();
+	const root = h(ownerDocument, 'div');
+	ownerDocument.body.append(root);
+	const configuration = disposables.add(new WorkbenchConfigurationService());
+	const contextView = disposables.add(new BrowserContextViewService(root));
+	const changed = disposables.add(new Emitter<void>());
+	const model = { provider: 'openai', model: 'gpt-test' };
+	let catalog = [{ model, displayName: 'GPT Test' }];
+	let resolveProviders!: (providers: readonly { connection: string; provider: string; displayName: string; apiKeyPolicy: 'required'; apiKeyConfigured: boolean }[]) => void;
+	const providers = new Promise<readonly { connection: string; provider: string; displayName: string; apiKeyPolicy: 'required'; apiKeyConfigured: boolean }[]>(resolve => { resolveProviders = resolve; });
+	const chat = {
+		onDidChangeModels: changed.event,
+		listModelCatalog: async () => catalog,
+		listModelProviders: () => providers,
+		isModelVisible: () => true,
+	} as unknown as IChatService;
+	const panel = disposables.add(new ModelsSettings(root, {
+		chatService: chat,
+		clipboardService: {} as IClipboardService,
+		configurationService: configuration,
+		contextMenuProvider: {} as ContextMenuService,
+		contextViewProvider: contextView,
+	}));
+	panel.setVisible(true);
+	await nextTurn();
+	catalog = [{ model, displayName: 'GPT Test Updated' }];
+	changed.fire();
+	resolveProviders([{ connection: 'openai', provider: 'openai', displayName: 'OpenAI API', apiKeyPolicy: 'required', apiKeyConfigured: false }]);
+	await nextTurn();
+	assert.equal(root.querySelector('.ash-models-settings-api-row h5')?.textContent, 'OpenAI API');
 });
 
 test('Settings tree preserves item identity while filtering and updating', () => {
