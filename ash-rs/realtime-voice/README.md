@@ -6,6 +6,8 @@
 
 本地听写选用 [Paraformer-large-online 的 ONNX 导出版](https://www.modelscope.cn/models/iic/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-online-onnx/summary)。接入时需将模型文件、配置、CMVN 和词表作为同一版本的资产管理，并处理 16 kHz 音频特征、逐块推理状态与转写文本。当前尚未实现这些步骤，识别器仍为 Windows 系统听写。
 
-`voice-host` 负责需要 PCM 音频的设备采集、重采样和处理；`realtime-voice` 负责听写模型资产、识别器和会话。输入分类器已经通过 `candle-onnx` 运行 ONNX 模型；这不能证明 Paraformer 的流式 ONNX 图也能由 Candle 正确、高效地执行，仓库目前也没有引入微软 ONNX Runtime。是否共用推理运行库应先以实际模型验证，两个模型各自的前后处理和会话状态仍由所属领域负责。听写链路没有 WebRTC 传输；LiveKit 房间传输仍由 `livekit-client` 负责。
+`voice-host` 负责需要 PCM 音频的设备采集、重采样和处理；`realtime-voice` 负责听写模型资产、识别器和会话。听写链路没有 WebRTC 传输；LiveKit 房间传输仍由 `livekit-client` 负责。
+
+输入分类器使用 `candle-onnx` 运行内嵌的 ONNX 模型。Paraformer-large-online 的模型修订 `ec6a3c64e290b719409e8c06cc2ac504e747c8eb` 中，`model_quant.onnx` 和 `decoder_quant.onnx` 都使用 `DynamicQuantizeLinear` 与 `MatMulInteger`，当前仓库的 `candle-onnx` 执行器不支持这两个算子，不能直接运行这两张图。仓库目前没有引入 ONNX Runtime；接入模型时需要确定推理运行库并验证流式识别结果。两个模型各自的前后处理和会话状态由所属领域负责，只有出现实际共用的运行库代码时才抽取通用 crate。
 
 验证入口：`just check ash-realtime-voice`、`just test ash-realtime-voice`、`just rust-warnings ash-realtime-voice`。真实麦克风、系统权限和具体识别模型需要在目标设备上验收。
