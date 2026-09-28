@@ -12,10 +12,12 @@ use ash_api::RealtimeSession;
 use ash_api::ResponsesWebSocketSession;
 use ash_api::TranscriptionSession;
 use ash_api::WebSocketSessionConfig;
+use ash_api::XaiTranscriptionSession;
 use ash_async_utils::CancellationToken;
 use ash_client::ResolvedApiTarget;
 use ash_model_provider_config::ModelProviderConfig;
 use ash_model_provider_config::RealtimeApiProfile;
+use ash_model_provider_config::TranscriptionApiProfile;
 use ash_model_provider_config::WebSocketApiProfile;
 use ash_protocol::ModelRef;
 use ash_websocket_client::WebSocketConnector;
@@ -50,7 +52,7 @@ impl ModelProviderRuntime {
             .configs
             .get(&normalized.provider)
             .expect("normalized provider exists");
-        if definition.realtime_api_profile != RealtimeApiProfile::OpenAiRealtime {
+        if definition.transcription_api_profile != TranscriptionApiProfile::OpenAiRealtime {
             return Err(ModelProviderError::Unavailable(
                 "provider has no declared transcription protocol".into(),
             ));
@@ -64,6 +66,46 @@ impl ModelProviderRuntime {
         let provider = runtime.instantiate_normalized_with_connection(normalized, connection)?;
         let target = provider.target.resolve()?;
         TranscriptionSession::connect(
+            connector,
+            target.api_target(),
+            model.model.as_str(),
+            limits,
+            cancellation,
+        )
+        .await
+        .map_err(Into::into)
+    }
+
+    /// Opens xAI's binary-audio STT protocol using direct xAI API credentials.
+    pub async fn connect_xai_transcription(
+        &self,
+        config: &ModelProviderConfig,
+        model: &ModelRef,
+        connector: &WebSocketConnector,
+        limits: WebSocketSessionConfig,
+        cancellation: &CancellationToken,
+    ) -> Result<XaiTranscriptionSession, ModelProviderError> {
+        super::check_cancellation(cancellation)?;
+        let runtime = self.with_configs([config])?;
+        let normalized = runtime.configs.normalize_for(config, &model.provider)?;
+        let definition = runtime
+            .configs
+            .get(&normalized.provider)
+            .expect("normalized provider exists");
+        if definition.transcription_api_profile != TranscriptionApiProfile::XaiStt {
+            return Err(ModelProviderError::Unavailable(
+                "provider has no declared xAI transcription protocol".into(),
+            ));
+        }
+        if config.access_mode() == ash_model_provider_config::ProviderAccessMode::Subscription {
+            return Err(ModelProviderError::Unavailable(
+                "subscription text models do not authorize transcription".into(),
+            ));
+        }
+        let connection = runtime.direct_connection(&normalized)?;
+        let provider = runtime.instantiate_normalized_with_connection(normalized, connection)?;
+        let target = provider.target.resolve()?;
+        XaiTranscriptionSession::connect(
             connector,
             target.api_target(),
             model.model.as_str(),

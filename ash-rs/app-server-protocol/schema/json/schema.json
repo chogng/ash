@@ -15741,6 +15741,9 @@
             "modelId": {
               "type": "string"
             },
+            "provider": {
+              "$ref": "#/$defs/DictationCloudProvider"
+            },
             "type": {
               "const": "cloud",
               "type": "string"
@@ -15748,11 +15751,19 @@
           },
           "required": [
             "type",
+            "provider",
             "modelId"
           ],
           "type": "object"
         }
       ]
+    },
+    "DictationCloudProvider": {
+      "enum": [
+        "openAi",
+        "xai"
+      ],
+      "type": "string"
     },
     "DictationEnded": {
       "properties": {

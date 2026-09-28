@@ -66,6 +66,7 @@ mod tests;
 
 pub use definition::LiveApiProfile;
 pub use definition::RealtimeApiProfile;
+pub use definition::TranscriptionApiProfile;
 
 pub use ash_protocol::ModelConnectionId;
 pub use connection::ModelConnectionDefinition;

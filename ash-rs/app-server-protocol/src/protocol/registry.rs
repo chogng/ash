@@ -436,6 +436,8 @@ use crate::protocol::diagnostics::FeedbackPrepareParams;
 use crate::protocol::diagnostics::FeedbackUploadParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::dictation::DictationBackend;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::dictation::DictationCloudProvider;
 use crate::protocol::dictation::DictationEnded;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::dictation::DictationResourceParams;
@@ -4082,6 +4084,7 @@ typescript_bindings! {
     DictationResourceParams,
     DictationStartParams,
     DictationBackend,
+    DictationCloudProvider,
     DictationTranscript,
     DictationEnded,
     DictationStopResult,

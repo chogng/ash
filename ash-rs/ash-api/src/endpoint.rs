@@ -9,6 +9,7 @@ pub(crate) mod responses_websocket;
 pub(crate) mod semantic;
 pub(crate) mod token_count;
 pub(crate) mod transcription;
+pub(crate) mod xai_transcription;
 
 use crate::ApiError;
 use crate::InputTokenCount;

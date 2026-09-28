@@ -8,6 +8,7 @@ use anyhow::anyhow;
 use ash_app_server_protocol::protocol::config::ConfigUpdateParams;
 use ash_app_server_protocol::protocol::config::FrontendConfigDto;
 use ash_app_server_protocol::protocol::dictation::DictationBackend;
+use ash_app_server_protocol::protocol::dictation::DictationCloudProvider;
 use ash_app_server_protocol::protocol::environment::SessionDirListParams;
 use ash_app_server_protocol::protocol::fs::FsChanged;
 use ash_app_server_protocol::protocol::fs::FsGetMetadataParams;
@@ -319,9 +320,22 @@ fn dictation_backend(gui: &FrontendConfigDto) -> Result<DictationBackend, String
                 model_id: model_id.into(),
             })
         }
-        "cloud" => Ok(DictationBackend::Cloud {
-            model_id: "gpt-live-transcribe".into(),
-        }),
+        "cloud" => {
+            let provider = match gui.0.get("dictationCloudProvider") {
+                None => DictationCloudProvider::OpenAi,
+                Some(value) if value.as_str() == Some("openAi") => DictationCloudProvider::OpenAi,
+                Some(value) if value.as_str() == Some("xai") => DictationCloudProvider::Xai,
+                _ => return Err("gui.dictationCloudProvider must be openAi or xai".into()),
+            };
+            let model_id = match provider {
+                DictationCloudProvider::OpenAi => "gpt-live-transcribe",
+                DictationCloudProvider::Xai => "grok-voice-transcribe-2.0",
+            };
+            Ok(DictationBackend::Cloud {
+                provider,
+                model_id: model_id.into(),
+            })
+        }
         _ => Err("gui.dictationBackend must be local or cloud".into()),
     }
 }
@@ -349,9 +363,29 @@ fn dictation_model_selection_uses_gui_configuration() {
     assert_eq!(
         dictation_backend(&cloud).unwrap(),
         DictationBackend::Cloud {
+            provider: DictationCloudProvider::OpenAi,
             model_id: "gpt-live-transcribe".into()
         }
     );
+    let xai = FrontendConfigDto(std::collections::BTreeMap::from([
+        ("dictationBackend".into(), serde_json::json!("cloud")),
+        ("dictationCloudProvider".into(), serde_json::json!("xai")),
+    ]));
+    assert_eq!(
+        dictation_backend(&xai).unwrap(),
+        DictationBackend::Cloud {
+            provider: DictationCloudProvider::Xai,
+            model_id: "grok-voice-transcribe-2.0".into(),
+        }
+    );
+    let invalid = FrontendConfigDto(std::collections::BTreeMap::from([
+        ("dictationBackend".into(), serde_json::json!("cloud")),
+        (
+            "dictationCloudProvider".into(),
+            serde_json::json!("unknown"),
+        ),
+    ]));
+    assert!(dictation_backend(&invalid).is_err());
 }
 
 fn shell_completion_sources_changed(changed: &FsChanged) -> bool {

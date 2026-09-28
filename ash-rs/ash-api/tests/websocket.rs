@@ -19,6 +19,89 @@ use tokio_tungstenite::tungstenite::Message as WireMessage;
 type Server = WebSocketStream<TcpStream>;
 
 #[tokio::test]
+async fn xai_transcription_sends_binary_pcm_and_waits_for_session_completion() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let target = ResolvedApiTarget::new(
+        format!("http://{}/v1", listener.local_addr().unwrap()),
+        vec![HttpHeader::new("Authorization", "Bearer xai-fixture")],
+    );
+    let server = tokio::spawn(async move {
+        let (tcp, _) = listener.accept().await.unwrap();
+        let mut socket = tokio_tungstenite::accept_hdr_async(
+            tcp,
+            |request: &tokio_tungstenite::tungstenite::handshake::server::Request, response| {
+                assert_eq!(request.uri().path(), "/v1/stt");
+                let query: std::collections::BTreeMap<_, _> = request
+                    .uri()
+                    .query()
+                    .unwrap()
+                    .split('&')
+                    .map(|pair| pair.split_once('=').unwrap())
+                    .collect();
+                assert_eq!(
+                    query,
+                    std::collections::BTreeMap::from([
+                        ("model", "grok-voice-transcribe-2.0"),
+                        ("sample_rate", "16000"),
+                        ("encoding", "pcm"),
+                        ("interim_results", "true"),
+                    ])
+                );
+                assert_eq!(request.headers()["authorization"], "Bearer xai-fixture");
+                Ok(response)
+            },
+        )
+        .await
+        .unwrap();
+        send(&mut socket, json!({"type":"transcript.created"})).await;
+        assert_eq!(
+            socket.next().await.unwrap().unwrap().into_data().to_vec(),
+            vec![1, 0, 2, 0]
+        );
+        send(
+            &mut socket,
+            json!({"type":"transcript.partial","text":"hello","is_final":true,"speech_final":true}),
+        )
+        .await;
+        assert_eq!(read(&mut socket).await, json!({"type":"audio.done"}));
+        send(
+            &mut socket,
+            json!({"type":"transcript.done","text":"world"}),
+        )
+        .await;
+        assert!(socket.next().await.unwrap().unwrap().is_close());
+    });
+    let token = CancellationSource::new().token();
+    let mut session = XaiTranscriptionSession::connect(
+        &connector(),
+        &target,
+        "grok-voice-transcribe-2.0",
+        limits(),
+        &token,
+    )
+    .await
+    .unwrap();
+    session.append_audio(&[1, 0, 2, 0], &token).await.unwrap();
+    assert_eq!(
+        session.receive(&token).await.unwrap(),
+        XaiTranscriptionEvent::Partial {
+            text: "hello".into(),
+            is_final: true,
+            speech_final: true,
+        }
+    );
+    session.finish(&token).await.unwrap();
+    assert_eq!(
+        session.receive(&token).await.unwrap(),
+        XaiTranscriptionEvent::Done {
+            text: "world".into()
+        }
+    );
+    session.close(&token).await.unwrap();
+    server.await.unwrap();
+}
+
+#[tokio::test]
 async fn transcription_uses_dedicated_session_and_commits_one_audio_turn() {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let target = ResolvedApiTarget::new(

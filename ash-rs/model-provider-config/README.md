@@ -21,6 +21,7 @@ credential、secret、connection pool 或 process-local adapter。
 | `ApiProfile` | declarative wire profile | runtime 显式解析为 `ash-api::ApiEndpoint` |
 | `WebSocketApiProfile` | Responses WebSocket 能力 | 默认 `Unavailable`；不得从 HTTP compatibility 推断 |
 | `RealtimeApiProfile` | 独立语音会话协议能力 | 默认 `Unavailable`；与文本 WebSocket 和订阅身份分开授权 |
+| `TranscriptionApiProfile` | OpenAI／xAI 流式听写协议能力 | 默认 `Unavailable`；直接 API 接入各自声明，订阅接入不可用 |
 | `LiveApiProfile` | GPT-Live 会话协议能力 | 明确声明，不能从文本协议推断 |
 | `VoiceModelCatalog` / `VoiceModelDefinition` | Provider 的独立语音目录 | 模型、支持的音色与默认值 |
 | `VoiceModelConfig` | 可序列化的语音选择 | 与文本模型选择分开，不含密钥 |

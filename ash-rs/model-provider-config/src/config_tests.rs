@@ -758,3 +758,29 @@ fn realtime_service_requires_an_independent_explicit_capability() {
         crate::RealtimeApiProfile::Unavailable
     );
 }
+
+#[test]
+fn transcription_protocol_is_explicit_for_each_direct_api_provider() {
+    let registry = ProviderConfigRegistry::builtin();
+    for definition in registry.providers() {
+        let expected = match definition.id.as_str() {
+            "openai" => crate::TranscriptionApiProfile::OpenAiRealtime,
+            "xai" => crate::TranscriptionApiProfile::XaiStt,
+            _ => crate::TranscriptionApiProfile::Unavailable,
+        };
+        assert_eq!(
+            definition.transcription_api_profile, expected,
+            "{}",
+            definition.id
+        );
+    }
+    let mut old = serde_json::to_value(registry.get(&provider_id("xai")).unwrap()).unwrap();
+    old.as_object_mut()
+        .unwrap()
+        .remove("transcriptionApiProfile");
+    let restored: crate::ProviderDefinition = serde_json::from_value(old).unwrap();
+    assert_eq!(
+        restored.transcription_api_profile,
+        crate::TranscriptionApiProfile::Unavailable
+    );
+}

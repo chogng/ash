@@ -26,8 +26,20 @@ pub struct DictationStartParams {
     deny_unknown_fields
 )]
 pub enum DictationBackend {
-    Local { model_id: String },
-    Cloud { model_id: String },
+    Local {
+        model_id: String,
+    },
+    Cloud {
+        provider: DictationCloudProvider,
+        model_id: String,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum DictationCloudProvider {
+    OpenAi,
+    Xai,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -50,3 +62,7 @@ pub struct DictationEnded {
 pub struct DictationStopResult {
     pub text: Option<String>,
 }
+
+#[cfg(test)]
+#[path = "dictation_tests.rs"]
+mod tests;

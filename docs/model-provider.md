@@ -193,6 +193,8 @@ Ash 当前 adapter 可以切换过去。OAuth 也只决定如何取得 credentia
 | Anthropic | [Messages streaming](https://platform.claude.com/docs/en/build-with-claude/streaming) 使用 SSE | 当前 Messages route 没有已核实的官方 WebSocket contract | `Unavailable` |
 | DeepSeek | [Chat Completions](https://api-docs.deepseek.com/api/create-chat-completion) 的 streaming 为 data-only SSE | 当前 Chat route 不支持已核实的 WebSocket mode | `Unavailable` |
 | Kimi | [Chat API](https://platform.kimi.ai/docs/api/chat) 的 streaming 为 SSE | Kimi OAuth 不改变该 wire contract | `Unavailable` |
+
+听写使用独立于文本调用的 `transcriptionApiProfile`：OpenAI 的 `gpt-live-transcribe` 走 Realtime 转写协议，xAI 的 `grok-voice-transcribe-2.0` 走 STT WebSocket。两者分别要求对应供应商的直接 API 凭据；上表中的 xAI 文本 Responses WebSocket 状态不影响 STT 能力。
 | Ollama | [Streaming responses](https://docs.ollama.com/api/streaming) 使用 NDJSON | 当前 native/compatible route 不是 WebSocket | `Unavailable` |
 | Hugging Face Router | [Chat completion streaming](https://huggingface.co/docs/inference-providers/en/tasks/chat-completion) 使用 SSE | Router Chat route 没有已核实的 WebSocket mode | `Unavailable` |
 | Z.AI | [Streaming](https://docs.z.ai/guides/capabilities/streaming) 使用 SSE | 当前 GLM Chat route 没有已核实的 WebSocket mode | `Unavailable` |

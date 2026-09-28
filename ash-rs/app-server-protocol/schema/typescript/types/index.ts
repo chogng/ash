@@ -232,6 +232,7 @@ export type { DelegationResultStatus } from './DelegationResultStatus.js';
 export type { DiagnosticOutcome } from './DiagnosticOutcome.js';
 export type { DiagnosticSnapshot } from './DiagnosticSnapshot.js';
 export type { DictationBackend } from './DictationBackend.js';
+export type { DictationCloudProvider } from './DictationCloudProvider.js';
 export type { DictationEnded } from './DictationEnded.js';
 export type { DictationResourceParams } from './DictationResourceParams.js';
 export type { DictationStartParams } from './DictationStartParams.js';

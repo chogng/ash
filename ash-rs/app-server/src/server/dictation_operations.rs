@@ -4,6 +4,7 @@ use super::RpcError;
 use super::decode;
 use super::result;
 use ash_app_server_protocol::protocol::dictation::DictationBackend;
+use ash_app_server_protocol::protocol::dictation::DictationCloudProvider;
 use ash_app_server_protocol::protocol::dictation::DictationEnded;
 use ash_app_server_protocol::protocol::dictation::DictationResourceParams;
 use ash_app_server_protocol::protocol::dictation::DictationStartParams;
@@ -12,6 +13,7 @@ use ash_app_server_protocol::protocol::dictation::DictationTranscript;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::registry::ServerNotificationMethod;
 use realtime_voice::CloudDictationRequest;
+use realtime_voice::CloudTranscriptionProvider;
 use realtime_voice::DictationEvent;
 use realtime_voice::DictationRequest;
 use realtime_voice::LocalDictationRequest;
@@ -82,8 +84,20 @@ impl AppServer {
                     .map_err(|error| dictation_error(error.to_string()))?,
                 })
             }
-            DictationBackend::Cloud { model_id } => {
-                if model_id != "gpt-live-transcribe" {
+            DictationBackend::Cloud { provider, model_id } => {
+                let (provider_id, expected_model, protocol) = match provider {
+                    DictationCloudProvider::OpenAi => (
+                        "openai",
+                        "gpt-live-transcribe",
+                        CloudTranscriptionProvider::OpenAi,
+                    ),
+                    DictationCloudProvider::Xai => (
+                        "xai",
+                        "grok-voice-transcribe-2.0",
+                        CloudTranscriptionProvider::Xai,
+                    ),
+                };
+                if model_id != expected_model {
                     return Err(dictation_error("Unsupported cloud dictation model".into()));
                 }
                 let provider_runtime = self
@@ -98,17 +112,9 @@ impl AppServer {
                 let snapshot = store
                     .read_snapshot()
                     .map_err(|error| dictation_error(error.to_string()))?;
-                let provider =
-                    ash_protocol::ProviderId::new("openai").expect("built-in provider ID");
-                let connection = snapshot
-                    .values
-                    .active_connections
-                    .get(&provider)
-                    .cloned()
-                    .unwrap_or_else(|| {
-                        ash_protocol::ModelConnectionId::new("openai")
-                            .expect("built-in connection ID")
-                    });
+                // Speech recognition uses direct API credentials independently of the text model.
+                let connection = ash_protocol::ModelConnectionId::new(provider_id)
+                    .expect("built-in connection ID");
                 let provider_config = snapshot
                     .values
                     .connections
@@ -123,6 +129,7 @@ impl AppServer {
                 )
                 .map_err(|error| dictation_error(error.to_string()))?;
                 DictationRequest::Cloud(CloudDictationRequest {
+                    provider: protocol,
                     model_id,
                     audio_host,
                     provider_runtime,

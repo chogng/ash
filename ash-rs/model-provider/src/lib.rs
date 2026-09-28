@@ -84,5 +84,6 @@ pub use provider::ResponsesModelSession;
 pub use ash_api::LiveCommand as VoiceCommand;
 pub use ash_api::LiveEvent as VoiceEvent;
 pub use ash_api::TranscriptionEvent;
+pub use ash_api::XaiTranscriptionEvent;
 pub use ash_api::WebSocketSessionConfig as VoiceSessionLimits;
 pub use provider::VoiceModelSession;

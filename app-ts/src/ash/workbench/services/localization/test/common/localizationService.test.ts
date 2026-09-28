@@ -273,6 +273,8 @@ test('editor action labels use the selected Chinese language catalog', async () 
 		assert.equal(localize('parameterHints.dialog', 'Parameter hints'), '参数提示');
 		assert.equal(localize('chat.providerKeys.manage', 'Manage Model Connections'), '管理模型接入');
 		assert.equal(localize('chat.input.dictate', 'Dictate message'), '语音输入');
+		assert.equal(localize('dictation.cloudProvider.title', 'Cloud dictation provider'), '云端听写供应商');
+		assert.equal(localize('dictation.cloudProvider.description', 'Choose the cloud transcription provider. Its API key is required.'), '选择云端语音转写供应商，并配置对应的 API 密钥。');
 		assert.equal(localize('chat.agentPicker.mode', 'Agent: {0}', 'reviewer'), '智能体：reviewer');
 		assert.equal(localize('chat.agentPicker.loadFailed', 'Could not load custom Agents'), '无法加载自定义智能体');
 		assert.equal(localize('chat.input.voice', 'Voice conversation'), '语音对话');

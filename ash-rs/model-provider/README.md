@@ -9,7 +9,7 @@
 `Arc<dyn ModelInvoker>`。它选择 provider runtime 和 API profile；wire codec 属于 `ash-api`，
 operation retry/framing 属于 `ash-client`，HTTP transport 与共享 network policy 属于
 `ash-http-client`。WebSocket 连接属于 `ash-websocket-client`；本 crate 已通过
-`connect_responses`、`connect_realtime` 和 `connect_voice` 组合协议会话、明确的服务能力与凭据。
+`connect_responses`、`connect_realtime`、`connect_transcription`、`connect_xai_transcription` 和 `connect_voice` 组合协议会话、明确的服务能力与凭据。
 
 ## 语音模型会话
 
@@ -168,7 +168,7 @@ invoker、request/response validation、OpenAI-compatible/Ollama runtime resolve
 每个 immutable provider definition 显式发布输出方式；catalog/Desktop 只消费该声明，
 不从 provider 名称或 `ApiProfile` 猜测。
 WebSocket eligibility 由独立的 `WebSocketApiProfile` 声明，不能从
-`ModelOutputTransport` 或 HTTP compatibility 推断。`connect_responses` 返回调用者拥有的 `ResponsesModelSession`，支持完整请求、准确增量、预热、已存 API key 轮换后的重连及关闭；不自动切换 HTTP 或重放。`connect_realtime` 由独立的 `RealtimeApiProfile` 授权，接受独立的 Realtime 模型 ID，拒绝订阅文本模型，返回公共 Realtime GA 会话。三种 OpenAI WebSocket 会话均在握手时使用已存 API key；默认 Agent 调用仍走 HTTP，未增加语音 UI。
+`ModelOutputTransport` 或 HTTP compatibility 推断。`connect_responses` 返回调用者拥有的 `ResponsesModelSession`，支持完整请求、准确增量、预热、已存 API key 轮换后的重连及关闭；不自动切换 HTTP 或重放。`connect_realtime` 由独立的 `RealtimeApiProfile` 授权，接受独立的 Realtime 模型 ID，拒绝订阅文本模型，返回公共 Realtime GA 会话。听写由独立的 `TranscriptionApiProfile` 授权：`connect_transcription` 使用 OpenAI Realtime 转写，`connect_xai_transcription` 使用 xAI STT，两者均读取对应供应商的直接 API key；默认 Agent 调用仍走 HTTP。
 `ProviderCredentialService` 是供应商 API Key 的唯一所有者：App Server 通过它校验并写入 host 注入的 `SecretStore`，direct 和 semantic runtime 通过它解析 `ApiKeyPolicy` 与 `ApiKeyHeader`。`Provider` 合并 adapter 声明的固定 Header 与认证 Header，并唯一持有最终 `ResolvedApiTarget`；各 provider adapter 只负责 endpoint、模型名映射、固定 Header 和专属计数。Anthropic 的现有 API key 通道使用 `x-api-key`；Google OpenAI 兼容生成接口及其余远端 adapter 使用 Bearer Header；Ollama 不读取 Key，OpenAI-compatible 允许无 Key endpoint。
 模型目录读取按供应商放在 `src/catalog/`：`openai.rs` 管 OpenAI API 目录，其下的 `chatgpt.rs` 管 ChatGPT 订阅目录，并优先读取 Codex 当前账户校验后的本地目录；`xai.rs` 读取已登录账户的模型目录，`kimi.rs` 提供已支持的 Kimi Code 型号，`ollama.rs` 读取本地 Ollama。各来源只返回标准化观察结果，缓存由 `ash-models-manager` 按供应商写入 Ash profile。更多 stream profile 与动态 catalog 的长期设计仍在系统文档中演进。
 

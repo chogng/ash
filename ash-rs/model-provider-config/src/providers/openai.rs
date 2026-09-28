@@ -17,6 +17,7 @@ pub(super) fn definition() -> ProviderDefinition {
     .with_native_streaming()
     .with_websocket_api_profile(WebSocketApiProfile::OpenAiResponses)
     .with_realtime_api_profile(crate::RealtimeApiProfile::OpenAiRealtime)
+    .with_transcription_api_profile(crate::TranscriptionApiProfile::OpenAiRealtime)
     .with_live_api_profile(crate::LiveApiProfile::OpenAiLive)
     .with_voice_models(crate::VoiceModelCatalog {
         default_model: crate::ModelId::new("gpt-live-1").expect("built-in voice model"),

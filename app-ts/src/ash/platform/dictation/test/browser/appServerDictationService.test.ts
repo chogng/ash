@@ -99,10 +99,25 @@ test('cloud dictation selects the dedicated streaming transcription model', asyn
 	using service = new AppServerDictationService(client as unknown as AppServerProtocolClient, configuration('{"dictation.backend":"cloud"}'));
 	const updates: { text: string; isFinal: boolean }[] = [];
 	const session = await service.start((text, isFinal) => updates.push({ text, isFinal }), () => {});
-	assert.deepEqual(client.requests[0]!.backend, { type: 'cloud', modelId: 'gpt-live-transcribe' });
+	assert.deepEqual(client.requests[0]!.backend, { type: 'cloud', provider: 'openAi', modelId: 'gpt-live-transcribe' });
 	const resourceId = client.requests[0]!.resourceId;
 	client.emit({ method: 'dictation/transcript', params: { resourceId, text: 'partial', isFinal: false } });
 	client.emit({ method: 'dictation/transcript', params: { resourceId, text: 'complete', isFinal: true } });
 	assert.deepEqual(updates, [{ text: 'partial', isFinal: false }, { text: 'complete', isFinal: true }]);
 	await session.stop();
+});
+
+test('cloud dictation sends the selected xAI provider and its speech model', async () => {
+	const client = new Client();
+	using service = new AppServerDictationService(client as unknown as AppServerProtocolClient, configuration('{"dictation.backend":"cloud","dictation.cloudProvider":"xai"}'));
+	const session = await service.start(() => {}, () => {});
+	assert.deepEqual(client.requests[0]!.backend, { type: 'cloud', provider: 'xai', modelId: 'grok-voice-transcribe-2.0' });
+	await session.stop();
+});
+
+test('cloud dictation rejects an unknown provider before starting capture', async () => {
+	const client = new Client();
+	using service = new AppServerDictationService(client as unknown as AppServerProtocolClient, configuration('{"dictation.backend":"cloud","dictation.cloudProvider":"unknown"}'));
+	await assert.rejects(service.start(() => {}, () => {}), /dictation.cloudProvider/);
+	assert.deepEqual(client.requests, []);
 });

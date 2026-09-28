@@ -9,7 +9,8 @@ pub(super) fn definition() -> ProviderDefinition {
         ApiProfile::OpenAiResponses,
         "https://api.x.ai/v1",
     )
-    .with_native_streaming();
+    .with_native_streaming()
+    .with_transcription_api_profile(crate::TranscriptionApiProfile::XaiStt);
     definition.defaults.approval_review_model = crate::ApprovalReviewModelDefault::Model {
         model: crate::ModelId::new("grok-4.5").expect("built-in model ID"),
     };

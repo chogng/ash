@@ -19,6 +19,70 @@ fn local_connector() -> WebSocketConnector {
 }
 
 #[tokio::test]
+async fn xai_transcription_uses_the_direct_api_key() {
+    let secrets = Arc::new(MemorySecretStore::default());
+    secrets
+        .store(
+            &provider_api_key_secret_key(&ash_protocol::ModelConnectionId::new("xai").unwrap()),
+            &SecretValue::new(b"xai-stt-key".to_vec()),
+        )
+        .unwrap();
+    let runtime = ModelProviderRuntime::with_client_and_secrets(
+        ProviderConfigRegistry::builtin(),
+        Arc::new(FailingTransport),
+        secrets,
+    );
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let config = provider_config_with_endpoint(
+        "xai",
+        format!("http://{}/v1", listener.local_addr().unwrap()),
+    );
+    let server = tokio::spawn(async move {
+        let (tcp, _) = listener.accept().await.unwrap();
+        let mut socket = tokio_tungstenite::accept_hdr_async(
+            tcp,
+            |request: &tokio_tungstenite::tungstenite::handshake::server::Request, response| {
+                assert_eq!(request.uri().path(), "/v1/stt");
+                assert_eq!(request.headers()["authorization"], "Bearer xai-stt-key");
+                Ok(response)
+            },
+        )
+        .await
+        .unwrap();
+        socket
+            .send(Message::Text(
+                json!({"type":"transcript.created"}).to_string().into(),
+            ))
+            .await
+            .unwrap();
+    });
+    let cancellation = CancellationSource::new().token();
+    runtime
+        .connect_xai_transcription(
+            &config,
+            &model_ref("xai", "grok-voice-transcribe-2.0"),
+            &local_connector(),
+            WebSocketSessionConfig::default(),
+            &cancellation,
+        )
+        .await
+        .unwrap();
+    server.await.unwrap();
+    assert!(matches!(
+        runtime
+            .connect_xai_transcription(
+                &provider_config("xai-subscription"),
+                &model_ref("xai", "grok-voice-transcribe-2.0"),
+                &local_connector(),
+                WebSocketSessionConfig::default(),
+                &cancellation,
+            )
+            .await,
+        Err(ModelProviderError::Unavailable(_))
+    ));
+}
+
+#[tokio::test]
 async fn stored_api_key_authenticates_all_three_openai_websocket_services() {
     let secrets = Arc::new(MemorySecretStore::default());
     secrets

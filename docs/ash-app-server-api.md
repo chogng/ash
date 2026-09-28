@@ -49,11 +49,12 @@ Session、Thread、Turn 和更新流，不建立第二套领域模型。
 - 连接关闭会释放其资源；其他窗口的通话不受影响。媒体重连期间停止采集，房间换代后重新取得权限和票据。
 - AI 任务委托、屏幕共享及文档关联尚未进入此协议。类型和错误以 [通话协议源](../ash-rs/app-server-protocol/src/protocol/call.rs)及生成 schema 为准。
 
-### 本地听写资源
+### 听写资源
 
 - `dictation/start` 与 `dictation/stop` 使用客户端生成的 `resourceId`。只有受信产品 host 可以启动听写；停止只能针对同一连接创建的资源。
-- [realtime-voice](../ash-rs/realtime-voice/README.md) 管理设备所在进程的识别会话，一个进程同时只占用一个麦克风。`dictation/transcript` 返回定稿短语，`dictation/ended` 返回结束及错误；这些通知只送给发起连接。
-- 停止请求或连接关闭会释放听写资源。当前识别器是 Windows 系统听写；本地模型下载、流式临时文本和 WebRTC 不属于当前协议能力。客户端连接远端 App Server 时不应启动本机听写资源。
+- `backend` 明确选择本地模型，或选择 `openAi` / `xai` 云端供应商及其转写模型。云端识别使用该供应商的直接 API 凭据，不读取当前文字模型的订阅凭据。
+- [realtime-voice](../ash-rs/realtime-voice/README.md) 管理设备所在进程的识别会话，一个进程同时只占用一个麦克风。`dictation/transcript` 携带临时或最终文本，`dictation/ended` 携带结束及错误；这些通知只送给发起连接。停止响应也携带最终文本。
+- 停止请求或连接关闭会释放听写资源。App Server 在所在设备上采集音频；远端客户端需要由本机语音会话持有麦克风。
 
 ### 唯一外部门禁
 

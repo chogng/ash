@@ -4,6 +4,7 @@
 mod cloud;
 mod local;
 mod model_package;
+mod xai;
 
 use http_client::OutboundNetworkSnapshot;
 use model_provider::ModelProviderRuntime;
@@ -29,11 +30,18 @@ pub struct LocalDictationRequest {
 
 /// Cloud dictation uses a separate transcription session and direct model credentials.
 pub struct CloudDictationRequest {
+    pub provider: CloudTranscriptionProvider,
     pub model_id: String,
     pub audio_host: PathBuf,
     pub provider_runtime: Arc<ModelProviderRuntime>,
     pub provider_config: ModelProviderConfig,
     pub connector: WebSocketConnector,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CloudTranscriptionProvider {
+    OpenAi,
+    Xai,
 }
 
 pub enum DictationRequest {

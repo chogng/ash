@@ -49,6 +49,8 @@ pub use endpoint::semantic::SemanticApiEndpoint;
 pub use endpoint::token_count::InputTokenCountEndpoint;
 pub use endpoint::transcription::TranscriptionEvent;
 pub use endpoint::transcription::TranscriptionSession;
+pub use endpoint::xai_transcription::XaiTranscriptionEvent;
+pub use endpoint::xai_transcription::XaiTranscriptionSession;
 pub use error::ApiError;
 pub use sse::AnthropicMessagesSseDecoder;
 pub use sse::OpenAiChatCompletionsSseDecoder;

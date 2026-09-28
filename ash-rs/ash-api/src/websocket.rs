@@ -8,7 +8,7 @@ use ash_websocket_client::WebSocketRequest;
 use serde_json::Value;
 use std::time::Duration;
 
-/// Bounded JSON protocol I/O. Transport frame limits remain owned by the connector.
+/// Bounded JSON event I/O with binary audio output. Transport frame limits remain owned by the connector.
 #[derive(Clone, Copy, Debug)]
 pub struct WebSocketSessionConfig {
     pub idle_timeout: Duration,
@@ -83,6 +83,23 @@ impl JsonSocket {
             biased;
             _ = cancellation.cancelled() => Err(cancelled()),
             result = tokio::time::timeout(self.limits.idle_timeout, self.connection.send(WebSocketMessage::Text(text))) => result.map_err(|_| timeout())?.map_err(map_error),
+        }
+    }
+
+    pub(crate) async fn send_binary(
+        &mut self,
+        bytes: &[u8],
+        cancellation: &CancellationToken,
+    ) -> Result<(), ApiError> {
+        if bytes.is_empty() || bytes.len() > self.limits.max_event_bytes {
+            return Err(ApiError::InvalidRequest(
+                "WebSocket binary event has invalid length".into(),
+            ));
+        }
+        tokio::select! {
+            biased;
+            _ = cancellation.cancelled() => Err(cancelled()),
+            result = tokio::time::timeout(self.limits.idle_timeout, self.connection.send(WebSocketMessage::Binary(bytes.to_vec()))) => result.map_err(|_| timeout())?.map_err(map_error),
         }
     }
 

@@ -67,6 +67,16 @@ pub enum RealtimeApiProfile {
     OpenAiRealtime,
 }
 
+/// Streaming speech recognition is declared independently of speech output and text models.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum TranscriptionApiProfile {
+    #[default]
+    Unavailable,
+    OpenAiRealtime,
+    XaiStt,
+}
+
 /// GPT-Live is declared separately from Realtime and Responses protocols.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -161,6 +171,8 @@ pub struct ProviderDefinition {
     #[serde(default)]
     pub realtime_api_profile: RealtimeApiProfile,
     #[serde(default)]
+    pub transcription_api_profile: TranscriptionApiProfile,
+    #[serde(default)]
     pub live_api_profile: LiveApiProfile,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub voice_models: Option<crate::VoiceModelCatalog>,
@@ -195,6 +207,7 @@ impl ProviderDefinition {
             output_transport: ModelOutputTransport::Unary,
             websocket_api_profile: WebSocketApiProfile::Unavailable,
             realtime_api_profile: RealtimeApiProfile::Unavailable,
+            transcription_api_profile: TranscriptionApiProfile::Unavailable,
             live_api_profile: LiveApiProfile::Unavailable,
             voice_models: None,
             models: Vec::new(),
@@ -231,6 +244,11 @@ impl ProviderDefinition {
 
     pub fn with_realtime_api_profile(mut self, profile: RealtimeApiProfile) -> Self {
         self.realtime_api_profile = profile;
+        self
+    }
+
+    pub fn with_transcription_api_profile(mut self, profile: TranscriptionApiProfile) -> Self {
+        self.transcription_api_profile = profile;
         self
     }
 

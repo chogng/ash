@@ -8,7 +8,7 @@
 - 在 `ash-protocol` 的模型值与供应商 JSON 之间转换。
 - 按端点维护路径、协议头和字段支持。
 - 实现 Responses、Chat Completions、Anthropic Messages 的 HTTP／SSE 调用与响应解码。
-- 实现 Responses WebSocket 续接和 Realtime GA 文本／音频事件会话。
+- 实现 Responses WebSocket 续接、Realtime GA 文本／音频事件会话，以及 OpenAI／xAI 流式听写协议。
 - 实现 OpenAI、Anthropic、Gemini、Kimi 和 Z.AI 的输入 token 计数协议。
 
 上层提供 `ModelRequest` 与带凭据的 `ResolvedApiTarget`。Provider、模型、凭据和 base URL 的选择属于运行时；HTTP／WebSocket 连接、TLS、代理与 SSE 分帧分别由底层客户端承担。
@@ -24,7 +24,7 @@ ash-model-provider
           ├─ framed SSE event → ModelStreamEvent
           │    ├─ ash-client：operation retry 与 SSE framing
           │    └─ ash-http-client：HTTP transport
-          └─ Responses／Realtime JSON 会话
+          └─ Responses／Realtime／听写会话
                └─ ash-websocket-client：WebSocket transport
 ```
 
@@ -44,6 +44,8 @@ request/response domain model。
 | `ResponsesEventDecoder` | Responses SSE／WebSocket 事件与终态解码 | SSE 分帧、重连 |
 | `ResponsesWebSocketSession` | 顺序请求、预热、前缀校验与增量续接 | 持久化历史、全局连接池 |
 | `RealtimeSession` | GA 文本／音频／工具事件、取消与会话状态 | 音频采集、播放、工具执行 |
+| `TranscriptionSession` | OpenAI Realtime 听写事件、音频提交与最终文本 | 麦克风采集、凭据选择 |
+| `XaiTranscriptionSession` | xAI STT 二进制 PCM、短语事件与最终文本 | 麦克风采集、凭据选择 |
 | `AnthropicMessagesSseDecoder` | Messages content-block lifecycle 与 canonical delta | transport liveness、tool JSON accumulation |
 | `ApiError` | request、transport、status 与 response codec failure | provider selection error |
 
@@ -187,7 +189,7 @@ unknown optional event、terminal EOF、malformed JSON 与 Anthropic block lifec
 conformance fixture 还覆盖 instructions、Tool Call/Result、图片、refusal、错误分类、未物化附件拒绝
 和 prompt-cache scope，并通过 injected `OperationClient` 验证 request 与 response shape。
 
-当前 HTTP/SSE 与 Responses WebSocket、Realtime GA 会话已有调用实现。NDJSON、WebRTC、GPT-Live 和更多服务操作不在本轮实现范围。新增能力必须继续保持 canonical domain、wire codec、
+当前 HTTP/SSE、Responses WebSocket、Realtime GA 与两种听写会话已有调用实现。NDJSON、WebRTC、GPT-Live 和更多服务操作不在本轮实现范围。新增能力必须继续保持 canonical domain、wire codec、
 operation framing、transport 四层分离。
 
 ## 请求头契约

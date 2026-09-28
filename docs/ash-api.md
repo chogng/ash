@@ -5,7 +5,7 @@
 > - 层次：模型 API 协议层
 > - 当前状态：OpenAI Responses、OpenAI-compatible Chat Completions 与 Anthropic Messages 已具备
 >   unary codec、原生 HTTP/SSE invocation、canonical delta 与 terminal response assembly；独立
->   Responses WebSocket 与公共 Realtime GA 已有协议会话和显式 runtime 入口
+>   Responses WebSocket、公共 Realtime GA、OpenAI 与 xAI 听写均有协议会话和显式 runtime 入口
 > - Crate codec 与 decoder 实现：[`ash-rs/ash-api/README.md`](../ash-rs/ash-api/README.md)
 > - Canonical contract：[`protocol.md`](protocol.md#6-provider-independent-model-contract)
 > - Provider runtime：[`model-provider.md`](model-provider.md)
@@ -235,7 +235,7 @@ pub trait SseDecoder {
 
 ### 4.4 非 SSE 流
 
-协议会话跟随端点归属：Responses WebSocket 在 `endpoint/responses_websocket.rs`，Realtime GA 在 `endpoint/realtime.rs`。`websocket.rs` 只处理有界 JSON 消息收发和取消／超时，真实握手与帧传输由独立的 `websocket-client` crate 提供。
+协议会话跟随端点归属：Responses WebSocket 在 `endpoint/responses_websocket.rs`，Realtime GA 在 `endpoint/realtime.rs`，OpenAI 听写在 `endpoint/transcription.rs`，xAI 听写在 `endpoint/xai_transcription.rs`。`websocket.rs` 处理有界 JSON 事件、二进制音频帧的发送以及取消／超时；真实握手与帧传输由独立的 `websocket-client` crate 提供。
 
 Ollama 的 NDJSON 不能交给 SSE decoder。后续实现应消费 `ash-client::NdjsonRecord`，把事件解释放在对应端点；无需为目录齐全预建另一套分派。
 
@@ -291,9 +291,9 @@ Platform API key 不能访问 subscription target，ChatGPT OAuth token 也不�
 
 空闲超时按连接消息计算，Ping／Pong 也会刷新期限；模型暂时没有文本输出不等于连接失活。取消、无终态断线、格式错误、消费者错误或放弃进行中的 invoke 都使 Responses 连接退场；没有自动 HTTP 重试或推理重放。重新创建连接后从完整历史开始。Realtime 的 receive 可以与音频输入队列轮流轮询；明确取消会关闭连接。生成完成与播放完成分别处理，response.done 必须查看 completed/cancelled/failed/incomplete 状态。
 
-运行时提供 `connect_responses` 和 `connect_realtime`，由调用者拥有返回的会话。Responses 会在每次调用前核对认证，凭据变动时丢弃旧连接和增量基线。`WebSocketApiProfile` 与 `RealtimeApiProfile` 分别授权两个协议，旧配置缺字段不会自动启用 Realtime；ChatGPT 的 Luna 订阅不能授权公共 Realtime 服务。
+运行时提供 `connect_responses` 和 `connect_realtime`，由调用者拥有返回的会话。听写分别由 `connect_transcription` 和 `connect_xai_transcription` 建立；前者发送 OpenAI Realtime JSON 音频事件，后者发送 xAI STT 二进制 PCM 并以 `audio.done` 结束输入。Responses 会在每次调用前核对认证，凭据变动时丢弃旧连接和增量基线。`WebSocketApiProfile`、`RealtimeApiProfile` 和 `TranscriptionApiProfile` 分别声明协议能力；ChatGPT 与 Super Grok 订阅不能授权供应商的直接语音转写 API。
 
-普通 Agent 模型调用仍使用现有 HTTP 路径。这里提供的是明确可调用的 API／runtime 会话，未把一个共享 Provider 变成全局连接池，也未新增桌面或 TUI 语音入口。
+普通 Agent 模型调用仍使用现有 HTTP 路径。桌面听写入口经 App Server 选择本地、OpenAI 或 xAI 识别；这些语音会话不改变普通文字模型的调用连接。
 
 官方依据：[Responses WebSocket](https://developers.openai.com/api/docs/guides/websocket-mode)、[Realtime GA](https://developers.openai.com/api/docs/guides/realtime)、[语音 WebSocket](https://developers.openai.com/api/docs/guides/voice-websockets?api=realtime)、[Realtime client events](https://developers.openai.com/api/reference/resources/realtime/client-events)。Realtime GA 不发送旧 realtime=v1 beta 头。GPT-Live 是另一套 session.start／音频生命周期，不能混用这两套事件。
 

@@ -1,5 +1,6 @@
 //! One audio item stays open until stop commits it and returns the final transcript.
 use crate::CloudDictationRequest;
+use crate::CloudTranscriptionProvider;
 use crate::DictationEvent;
 use async_utils::CancellationSource;
 use model_provider::TranscriptionEvent;
@@ -19,6 +20,12 @@ pub(super) async fn run(
     stopped: &mut oneshot::Receiver<()>,
     on_event: &dyn Fn(DictationEvent),
 ) -> Result<(), String> {
+    match request.provider {
+        CloudTranscriptionProvider::Xai => {
+            return crate::xai::run(request, stopped, on_event).await;
+        }
+        CloudTranscriptionProvider::OpenAi => {}
+    }
     let provider = ProviderId::new("openai").expect("built-in provider ID");
     let model = ModelRef::new(
         provider,

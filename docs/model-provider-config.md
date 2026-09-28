@@ -156,6 +156,8 @@ HTTP compatibility 推导 WebSocket。
 
 `RealtimeApiProfile::{Unavailable, OpenAiRealtime}` 独立声明公共 Realtime GA 协议。OpenAI 内置定义启用它，其他定义默认不可用；反序列化旧定义时缺少 `realtimeApiProfile` 也保持不可用。该声明表示协议可用性，不代表账户已经获得服务权限。运行时还需使用对应凭据与模型；Luna 等 ChatGPT 文本订阅不能用于公共 Realtime。实现及验证范围见[端点实现](ash-api.md#46-端点归属与-websocket-实现)。
 
+`TranscriptionApiProfile::{Unavailable, OpenAiRealtime, XaiStt}` 单独声明流式语音转写协议。OpenAI 直接 API 接入使用 Realtime 转写，xAI 直接 API 接入使用 STT WebSocket；ChatGPT 和 Super Grok 订阅接入不提供这项能力。缺少 `transcriptionApiProfile` 的定义默认不可用。语音转写始终使用对应供应商的直接 API 凭据，与当前文字模型接入无关。
+
 ChatGPT 订阅接入复用 typed `OpenAiResponses` codec，但不复用 Platform target 或 API key。接入的 `ModelConnectionRuntime::ChatGptSubscription` 使 `ash-model-provider` 从 `ash-chatgpt` 获取固定 target 与 fresh OAuth headers；用户配置不得覆盖为任意 URL。
 
 Provider-specific compatibility 也必须 typed：
