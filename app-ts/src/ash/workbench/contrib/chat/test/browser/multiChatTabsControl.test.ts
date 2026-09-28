@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
-import type { ChatTabsDelegate } from "../../browser/view/chatTabsControl.js";
-import { MultiChatTabsControl } from "../../browser/view/multiChatTabsControl.js";
+import type { ChatTabsDelegate } from "../../browser/widgetHosts/viewPane/chatTabsControl.js";
+import { MultiChatTabsControl } from "../../browser/widgetHosts/viewPane/multiChatTabsControl.js";
 
 test("MultiChatTabsControl moves the dragged tab through its delegate", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");

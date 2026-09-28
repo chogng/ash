@@ -1,6 +1,6 @@
-import type { TabListDropPosition } from "../../../../../base/browser/ui/tablist/tabList.js";
-import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
-import { h } from "../../../../../base/browser/dom.js";
+import type { TabListDropPosition } from "../../../../../../base/browser/ui/tablist/tabList.js";
+import { Disposable, toDisposable } from "../../../../../../base/common/lifecycle.js";
+import { h } from "../../../../../../base/browser/dom.js";
 
 export interface ChatTab {
 	readonly id: string;

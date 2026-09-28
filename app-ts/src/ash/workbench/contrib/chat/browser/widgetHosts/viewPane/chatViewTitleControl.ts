@@ -1,16 +1,16 @@
-import "./chatTitleControl.css";
-import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
-import { AnchorPosition } from "../../../../../base/common/layout.js";
-import { MenuWorkbenchToolBar } from "../../../../../platform/actions/browser/toolbar.js";
-import { type IMenuService, MenuId } from "../../../../../platform/actions/common/actions.js";
-import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
+import "./media/chatViewTitleControl.css";
+import { Disposable, toDisposable } from "../../../../../../base/common/lifecycle.js";
+import { AnchorPosition } from "../../../../../../base/common/layout.js";
+import { MenuWorkbenchToolBar } from "../../../../../../platform/actions/browser/toolbar.js";
+import { type IMenuService, MenuId } from "../../../../../../platform/actions/common/actions.js";
+import type { IContextMenuService } from "../../../../../../platform/contextview/browser/contextView.js";
 import { ChatTabsControl, type ChatTab, type ChatTabsDelegate } from "./chatTabsControl.js";
 import { MultiChatTabsControl } from "./multiChatTabsControl.js";
-import type { PartTitleProjection } from "../../../../browser/parts/views/viewPane.js";
-import { h } from "../../../../../base/browser/dom.js";
+import type { PartTitleProjection } from "../../../../../browser/parts/views/viewPane.js";
+import { h } from "../../../../../../base/browser/dom.js";
 
 /** Owns Chat's title content and action projections. */
-export class ChatTitleControl extends Disposable {
+export class ChatViewTitleControl extends Disposable {
 	private readonly tabs: ChatTabsControl;
 	private readonly actionsElement: HTMLDivElement;
 	private readonly layoutToolbar: MenuWorkbenchToolBar;

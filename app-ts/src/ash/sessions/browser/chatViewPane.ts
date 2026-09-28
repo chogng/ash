@@ -9,7 +9,7 @@ import { IChatService } from "../../workbench/services/chat/common/chatService.j
 import type { IActiveSessionThread, IChat, ISession, IUntitledChatSession, ThreadId } from "../services/sessions/common/session.js";
 import { ISessionsManagementService } from "../services/sessions/common/sessionsManagement.js";
 import { ChatWidget, resolveMarkdownWorkspaceResource } from "../../workbench/contrib/chat/browser/widget/chatWidget.js";
-import { ChatTitleControl } from "../../workbench/contrib/chat/browser/view/chatTitleControl.js";
+import { ChatViewTitleControl } from "../../workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewTitleControl.js";
 import { addDisposableListener, h, isHTMLElement } from "../../base/browser/dom.js";
 import { type ChatContextAttachment, type IChatContextTarget } from "../../workbench/services/chat/common/chatContextService.js";
 import { IOpenerService } from "../../platform/opener/common/openerService.js";
@@ -48,7 +48,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 	private readonly sessionService: ISessionsManagementService;
 	private readonly contextMenuService: IContextMenuService;
 	private readonly commandService: ICommandService;
-	private readonly titleControl: ChatTitleControl;
+	private readonly titleControl: ChatViewTitleControl;
 	private readonly paneHost: HTMLDivElement;
 	private readonly body: HTMLDivElement;
 	private readonly sessionsSidebar: HTMLElement;
@@ -87,7 +87,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		this.headerElement.hidden = true;
 		this.contentElement.classList.add("ash-chat-view");
 		const viewId = `ash-chat-view-${++chatViewInstanceId}`;
-		this.titleControl = this._register(new ChatTitleControl(
+		this.titleControl = this._register(new ChatViewTitleControl(
 			this.element,
 			viewId,
 			{

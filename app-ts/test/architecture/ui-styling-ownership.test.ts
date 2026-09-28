@@ -126,7 +126,7 @@ test("TabList preserves the standard close-action hover background", async () =>
 	const sourceRoot = join(process.cwd(), "src", "ash");
 	const tabListCss = await readFile(join(sourceRoot, "base", "browser", "ui", "tablist", "tablist.css"), "utf8");
 	const editorTabsCss = await readFile(join(sourceRoot, "workbench", "browser", "parts", "editor", "media", "multiEditorTabsControl.css"), "utf8");
-	const chatTabsCss = await readFile(join(sourceRoot, "workbench", "contrib", "chat", "browser", "view", "multiChatTabsControl.css"), "utf8");
+	const chatTabsCss = await readFile(join(sourceRoot, "workbench", "contrib", "chat", "browser", "widgetHosts", "viewPane", "media", "multiChatTabsControl.css"), "utf8");
 
 	assert.match(tabListCss, /\.ash-tab-actions \.ash-action-view-item\.icon \.ash-button:hover\s*\{[^}]*background: var\(--ash-toolbar-hover-background\);/s);
 	assert.doesNotMatch(editorTabsCss, /--ash-tab-list-(?:checked-)?action-hover-background/);
