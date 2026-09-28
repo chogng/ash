@@ -1,0 +1,15 @@
+[package]
+name = "ash-realtime-voice"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+name = "realtime_voice"
+
+[dependencies]
+system-dictation = { package = "ash-system-dictation", path = "../system-dictation" }
+
+[lints]
+workspace = true
