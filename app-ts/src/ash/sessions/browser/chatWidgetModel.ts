@@ -458,14 +458,7 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	private async modelEntries(): Promise<readonly ModelCatalogEntry[]> {
-		const [visible, catalog] = await Promise.all([this.chatService.listModels(), this.chatService.listModelCatalog()]);
-		const selected = this.selectedModel;
-		if (!selected || visible.some(entry => sameModel(entry.model, selected))) return visible;
-		const selectedEntry = catalog.find(entry => sameModel(entry.model, selected)) ?? {
-			model: selected,
-			displayName: selected.model,
-		};
-		return [...visible, selectedEntry];
+		return this.chatService.listModels();
 	}
 
 	private async loadSkillSelectors(): Promise<void> {

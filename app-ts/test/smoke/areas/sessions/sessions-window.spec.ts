@@ -182,6 +182,19 @@ test('Browser Code Sessions Activity Bar centers icons and changes size and posi
 	await expect(settings.locator('[data-configuration-key="sessions.layoutStyle"]')).toBeVisible();
 	await expect(settings.locator('[data-configuration-key="sessions.activityBar.location"]')).toBeVisible();
 	await expect(settings.locator('[data-configuration-key="sessions.activityBar.compact"]')).toBeVisible();
+	await navigation.getByRole('button', { name: 'Voice' }).click();
+	await expect(settings.getByRole('heading', { name: 'Voice' })).toBeVisible();
+	for (const key of ['dictation.backend', 'dictation.cloudProvider', 'dictation.localModel']) {
+		await expect(settings.locator(`[data-configuration-key="${key}"]`)).toBeVisible();
+	}
+	const dictationBackend = settings.locator('[data-configuration-key="dictation.backend"]').getByRole('combobox');
+	const originalDictationBackend = (await dictationBackend.textContent())!.trim();
+	const changedDictationBackend = originalDictationBackend === 'Local' ? 'Cloud' : 'Local';
+	await dictationBackend.click();
+	await page.getByRole('option', { name: changedDictationBackend }).click();
+	await expect(dictationBackend).toHaveText(changedDictationBackend);
+	await dictationBackend.click();
+	await page.getByRole('option', { name: originalDictationBackend }).click();
 	await navigation.getByRole('button', { name: 'Archived Chats' }).click();
 	await expect(settingsPage.getByRole('heading')).toHaveCount(0);
 	await expect(settingsPage.locator('.ash-configuration-setting')).toHaveCount(0);
@@ -260,6 +273,57 @@ test('Browser Code Sessions Activity Bar centers icons and changes size and posi
 	await expect(activityBar).toBeHidden();
 });
 
+test('Browser Models Settings controls which models appear in the picker', async ({ target, workbench }) => {
+	test.skip(target.kind !== 'browser' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires browser Code Sessions with App Server');
+	const page = workbench.page;
+	await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
+	const modelButton = page.locator('[data-action-id="ash.chat.input.model"] button').first();
+	await expect(modelButton).toBeVisible();
+	const accounts = page.locator('.ash-sessions-activity-bottom button').last();
+	await accounts.click();
+	await page.getByRole('menuitem', { name: 'Settings' }).click();
+	const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+	await settings.getByRole('navigation', { name: 'Settings categories' }).getByRole('button', { name: 'Models' }).click();
+	await expect(settings.getByRole('heading', { name: 'Voice input' })).toBeVisible();
+	await expect(settings.locator('.ash-sessions-settings-voice-list [data-configuration-key="dictation.localModel"]')).toBeVisible();
+	await expect(settings.locator('.ash-sessions-settings-cloud-models')).toContainText('gpt-live-transcribe');
+	await expect(settings.getByRole('heading', { name: 'API connections' })).toBeVisible();
+	const apiConnection = settings.locator('.ash-sessions-settings-api-row').first();
+	await expect(apiConnection).toBeVisible();
+	await expect(apiConnection.locator('input[type="password"]')).toBeVisible();
+	const apiName = (await apiConnection.locator('.ash-sessions-settings-api-name').textContent())!.trim();
+	const modelRows = settings.locator('.ash-sessions-settings-model-row');
+	await expect(modelRows.first()).toBeVisible();
+	const firstModel = modelRows.first();
+	const modelName = (await firstModel.locator('.ash-sessions-settings-model-name').textContent())!.trim();
+	const modelSearch = settings.getByRole('searchbox', { name: 'Search models and APIs' });
+	await modelSearch.fill('no-such-model');
+	await expect(settings.getByText('No matching models or APIs.')).toBeVisible();
+	await expect(modelRows.first()).toBeHidden();
+	await modelSearch.fill(apiName);
+	await expect(apiConnection).toBeVisible();
+	await modelSearch.fill(modelName);
+	await expect(firstModel).toBeVisible();
+	const visibility = firstModel.getByRole('switch', { name: `Show ${modelName} in model picker` });
+	await expect(visibility).toHaveAttribute('aria-checked', 'true');
+	await firstModel.locator('.ash-switch-track').click();
+	await expect(visibility).toHaveAttribute('aria-checked', 'false');
+	await page.keyboard.press('Escape');
+	await modelButton.click();
+	await expect(page.locator('.ash-chat-model-picker').getByText(modelName, { exact: true })).toHaveCount(0);
+	await page.keyboard.press('Escape');
+	await accounts.click();
+	await page.getByRole('menuitem', { name: 'Settings' }).click();
+	await settings.getByRole('navigation', { name: 'Settings categories' }).getByRole('button', { name: 'Models' }).click();
+	const restoredVisibility = settings.getByRole('switch', { name: `Show ${modelName} in model picker` });
+	await expect(restoredVisibility).toHaveAttribute('aria-checked', 'false');
+	await restoredVisibility.locator('..').locator('.ash-switch-track').click();
+	await expect(restoredVisibility).toHaveAttribute('aria-checked', 'true');
+	await page.keyboard.press('Escape');
+	await modelButton.click();
+	await expect(page.locator('.ash-chat-model-picker').getByText(modelName, { exact: true })).toBeVisible();
+});
+
 test('Electron Code Sessions Activity Bar follows its position and size settings', async ({ application, target, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code', 'Requires the Code Sessions window');
 	if (target.kind !== 'electron' || !('windows' in application)) return;
@@ -332,10 +396,31 @@ test('Electron Sessions account menu opens the Sessions settings page', async ({
 	await expect(settings.locator('[data-configuration-key="sessions.layoutStyle"]')).toBeVisible();
 	await expect(settings.locator('[data-configuration-key="sessions.activityBar.location"]')).toBeVisible();
 	await expect(settings.locator('[data-configuration-key="sessions.activityBar.compact"]')).toBeVisible();
+	await navigation.getByRole('button', { name: 'Voice' }).click();
+	await expect(settings.locator('[data-configuration-key="dictation.backend"]')).toBeVisible();
+	await expect(settings.locator('[data-configuration-key="dictation.cloudProvider"]')).toBeVisible();
+	await expect(settings.locator('[data-configuration-key="dictation.localModel"]')).toBeVisible();
 	await navigation.getByRole('button', { name: 'General' }).click();
 	await expect(settings.locator('[data-configuration-key="accessibility.verbosity.sessionsActivityBar"]')).toBeVisible();
 	await expect(settings.locator('[data-configuration-key="accessibility.verbosity.sessionsSettings"]')).toBeVisible();
 	await expect(settings.locator('[data-configuration-key="workbench.layoutStyle"]')).toHaveCount(0);
+	await navigation.getByRole('button', { name: 'Models' }).click();
+	await expect(settings.getByRole('heading', { name: 'Models', exact: true })).toBeVisible();
+	await expect(settings.getByRole('searchbox', { name: 'Search models and APIs' })).toBeVisible();
+	await expect(settings.getByRole('heading', { name: 'Voice input' })).toBeVisible();
+	await expect(settings.locator('.ash-sessions-settings-voice-list [data-configuration-key="dictation.localModel"]')).toBeVisible();
+	await expect(settings.getByRole('heading', { name: 'API connections' })).toBeVisible();
+	if (target.appServerMode === 'required') {
+		await expect(settings.locator('.ash-sessions-settings-api-row').first().locator('input[type="password"]')).toBeVisible();
+		const firstModel = settings.locator('.ash-sessions-settings-model-row').first();
+		await expect(firstModel).toBeVisible();
+		const visibility = firstModel.getByRole('switch');
+		await expect(visibility).toHaveAttribute('aria-checked', 'true');
+		await firstModel.locator('.ash-switch-track').click();
+		await expect(visibility).toHaveAttribute('aria-checked', 'false');
+		await firstModel.locator('.ash-switch-track').click();
+		await expect(visibility).toHaveAttribute('aria-checked', 'true');
+	}
 	await navigation.getByRole('button', { name: 'Appearance' }).click();
 	const layoutStyle = settings.locator('[data-configuration-key="sessions.layoutStyle"]').getByRole('combobox');
 	const originalLayoutStyle = (await layoutStyle.textContent())!.trim();

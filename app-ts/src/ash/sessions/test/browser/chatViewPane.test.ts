@@ -1681,7 +1681,7 @@ test("Chat service caches the static catalog and filters picker entries by user 
 	assert.equal(fake.modelListRequests.length, 2);
 });
 
-test("Chat picker retains the selected model when it is hidden", async () => {
+test("Chat picker excludes a hidden selected model", async () => {
 	const entry = {
 		model: { provider: "openai", model: "gpt-5.6-sol" },
 		displayName: "GPT-5.6 Sol",
@@ -1697,7 +1697,7 @@ test("Chat picker retains the selected model when it is hidden", async () => {
 	await model.initialize();
 
 	assert.deepEqual(await chat.listModels(), []);
-	assert.deepEqual(model.models, [entry]);
+	assert.deepEqual(model.models, []);
 	assert.deepEqual(model.selectedModel, entry.model);
 });
 

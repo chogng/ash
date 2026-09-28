@@ -11,7 +11,16 @@ test('Settings opens with editor display controls', async ({ target, workbench }
 	await expect(page.locator('.ash-settings-card').first()).toHaveCSS('border-radius', '8px');
 	await expect(page.locator('[data-configuration-key="editor.renderWhitespace"]')).toBeVisible();
 	await expect(page.locator('[data-configuration-key="editor.renderControlCharacters"]')).toBeVisible();
+	const rootTitle = page.locator('.ash-settings-page .is-settings-root > .ash-settings-tree-group-title');
+	const rootDescription = page.locator('.ash-settings-page .is-settings-root > .ash-settings-tree-group-description');
+	await expect(rootTitle).toHaveCount(1);
+	await expect(rootDescription).toHaveCount(1);
+	await expect(rootTitle).toBeHidden();
+	await expect(rootDescription).toBeHidden();
 	await page.locator('[data-settings-target-id="editor.group.selection"]').click();
+	await expect(page.locator('.ash-settings-page h3')).toHaveText('Editor selection');
+	await expect(rootTitle).toBeHidden();
+	await expect(rootDescription).toBeHidden();
 	for (const key of ['workbench.editor.showTabs', 'workbench.editor.defaultBinaryEditor']) {
 		const row = page.locator(`[data-settings-item-id="${key}"]`);
 		const control = row.getByRole('combobox');
@@ -20,8 +29,15 @@ test('Settings opens with editor display controls', async ({ target, workbench }
 		expect(controlBounds).not.toBeNull();
 		expect(Math.abs(rowBounds!.x + rowBounds!.width - 16 - controlBounds!.x - controlBounds!.width)).toBeLessThanOrEqual(1);
 	}
+	await page.locator('[data-settings-target-id="editor.group.minimap"]').click();
+	await expect(page.locator('.ash-settings-page h3')).toHaveText('Minimap');
+	await expect(rootTitle).toBeHidden();
+	await expect(rootDescription).toBeHidden();
+	await expect(page.locator('[data-configuration-key="editor.minimap.enabled"]')).toBeVisible();
 	if (target.kind === 'electron') {
 		await page.locator('[data-settings-category-id="general"]').click();
+		await expect(rootTitle).toBeHidden();
+		await expect(rootDescription).toBeHidden();
 		await page.locator('[data-settings-target-id="general.group.dictation"]').click();
 		await expect(page.locator('.ash-settings-page h3')).toHaveText('Voice input');
 		await expect(page.locator('.ash-settings-content-tree > .is-settings-root > .ash-settings-tree-group-title')).toHaveCount(0);
@@ -32,6 +48,8 @@ test('Settings opens with editor display controls', async ({ target, workbench }
 	if (target.workbenchMode === 'code') {
 		await page.locator('[data-settings-group-id="workbench"]').click();
 		await page.locator('[data-settings-category-id="startup"]').click();
+		await expect(rootTitle).toBeHidden();
+		await expect(rootDescription).toBeHidden();
 		const startupEditor = page.locator('[data-configuration-key="workbench.startupEditor"]').getByRole('combobox');
 		await expect(startupEditor).toBeVisible();
 		const startupRow = page.locator('[data-settings-item-id="workbench.startupEditor"]');

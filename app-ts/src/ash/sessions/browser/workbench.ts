@@ -259,6 +259,7 @@ export class Workbench extends Disposable {
 			contextMenus,
 			contextKeys,
 			accessibleViewService,
+			chat,
 		));
 		const accountMenu = this._register(new SessionsAccountMenu(accountService, contextMenus, preferences, options.returnToWorkbench));
 
