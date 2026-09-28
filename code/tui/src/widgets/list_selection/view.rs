@@ -492,6 +492,7 @@ struct ItemColumnLayout {
     leading_width: u16,
     trailing_width: u16,
     gap: u16,
+    segmented_prefix_width: usize,
 }
 
 impl ItemColumnLayout {
@@ -518,12 +519,24 @@ impl ItemColumnLayout {
                 .saturating_sub(gap.saturating_mul(2))
                 .saturating_sub(1),
         );
+        // Reserve the longest indicator so values share one column across the list.
+        let segmented_prefix_width = items
+            .iter()
+            .filter_map(|item| item.columns()?.segmented.as_ref())
+            .map(|value| segmented_prefix_width(value.total))
+            .max()
+            .unwrap_or_default();
         Self {
             leading_width,
             trailing_width,
             gap,
+            segmented_prefix_width,
         }
     }
+}
+
+fn segmented_prefix_width(total: usize) -> usize {
+    2 + total * 2 + total.saturating_sub(1) + 3
 }
 
 fn draw_item(
@@ -669,6 +682,13 @@ fn draw_item(
         spans.push(Span::styled(
             if active { " → " } else { "   " },
             Style::default().fg(indicator_color),
+        ));
+        spans.push(Span::raw(
+            " ".repeat(
+                column_layout
+                    .segmented_prefix_width
+                    .saturating_sub(segmented_prefix_width(value.total)),
+            ),
         ));
         spans.push(Span::styled(
             value.label.as_str(),

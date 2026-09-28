@@ -1,6 +1,7 @@
 use super::ModelSelectionAction;
 use super::model_choices;
 use crate::widgets::list_selection::ListSelectionState;
+use crate::widgets::list_selection::draw_body_with_pointer;
 use ash_app_server_protocol::protocol::config::CustomProviderConfigDto;
 use ash_app_server_protocol::protocol::config::CustomProviderProtocolDto;
 use ash_app_server_protocol::protocol::config::ModelRefDto;
@@ -12,6 +13,9 @@ use ash_protocol::ModelId;
 use ash_protocol::ModelInfo;
 use ash_protocol::ModelRef;
 use ash_protocol::ProviderId;
+use ratatui::Terminal;
+use ratatui::backend::TestBackend;
+use unicode_width::UnicodeWidthStr;
 
 fn catalog_entry(provider: &str, model: &str, name: &str) -> ModelCatalogEntry {
     let model = ModelRef::new(
@@ -218,6 +222,70 @@ fn effort_values_do_not_change_model_name_search() {
     assert!(state.focus_search());
     state.handle_paste("high".into());
     assert!(state.visible_items().is_empty());
+}
+
+#[test]
+fn effort_labels_align_across_models_with_different_level_counts() {
+    use ash_protocol::ReasoningEffort;
+
+    let mut entries = [
+        catalog_entry("openai", "terra", "GPT-5.6 Terra"),
+        catalog_entry("openai", "luna", "GPT-5.6 Luna"),
+        catalog_entry("openai", "mini", "GPT-5 Mini"),
+    ];
+    entries[0].supported_reasoning_efforts = vec![
+        ReasoningEffort::Low,
+        ReasoningEffort::Medium,
+        ReasoningEffort::High,
+    ];
+    entries[0].model_reasoning_effort = Some(ReasoningEffort::Medium);
+    entries[1].supported_reasoning_efforts = vec![
+        ReasoningEffort::Minimal,
+        ReasoningEffort::Low,
+        ReasoningEffort::Medium,
+        ReasoningEffort::High,
+        ReasoningEffort::ExtraHigh,
+    ];
+    entries[1].model_reasoning_effort = Some(ReasoningEffort::Medium);
+    entries[2].supported_reasoning_efforts = vec![ReasoningEffort::None];
+    entries[2].model_reasoning_effort = Some(ReasoningEffort::None);
+    let choices = model_choices(
+        &ModelListResult {
+            models: entries.into(),
+        },
+        &crate::test_support::empty_config_snapshot(),
+    )
+    .unwrap();
+    let view = ListSelectionState::new(choices.model);
+    let mut terminal = Terminal::new(TestBackend::new(62, 9)).unwrap();
+    terminal
+        .draw(|frame| {
+            draw_body_with_pointer(
+                frame,
+                frame.area(),
+                &view,
+                None,
+                None,
+                crate::render::test_context(),
+            )
+        })
+        .unwrap();
+    let rendered = terminal.backend().to_string();
+    let value_columns = rendered
+        .lines()
+        .filter_map(|line| {
+            ["Medium", "None"]
+                .iter()
+                .find_map(|value| line.find(value).map(|index| line[..index].width()))
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(value_columns.len(), 3);
+    assert!(
+        value_columns
+            .iter()
+            .all(|column| *column == value_columns[0])
+    );
+    crate::tui_assert_snapshot!("aligned_model_effort_labels", rendered);
 }
 
 #[test]
