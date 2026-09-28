@@ -332,12 +332,13 @@ pub(in crate::app) fn handle_mouse(
             == Some(&PointerTarget::Modal(super::modal::Target::DialogText));
         match mouse.kind {
             MouseEventKind::Down(MouseButton::Left) => {
-                app.fullscreen.selection.clear();
                 if super::modal::layout(area).surface.contains(position) {
                     app.fullscreen.modal_alert = false;
                 }
                 if target == Some(PointerTarget::Modal(super::modal::Target::DialogText)) {
                     app.fullscreen.selection.begin(position);
+                } else {
+                    app.fullscreen.selection.clear();
                 }
                 app.fullscreen.pointer.update_pressed(target);
             }
@@ -358,7 +359,13 @@ pub(in crate::app) fn handle_mouse(
                     let outcome = app.fullscreen.selection.finish(position, Instant::now());
                     app.fullscreen.pointer.cancel_click();
                     return MouseAction::Selection(match outcome {
-                        Some(selection @ ScreenSelectionOutcome::Selection(_)) => Some(selection),
+                        Some(selection @ ScreenSelectionOutcome::Selection(_))
+                        | Some(
+                            selection @ ScreenSelectionOutcome::Click {
+                                count: ClickCount::Double | ClickCount::Triple,
+                                ..
+                            },
+                        ) => Some(selection),
                         _ => None,
                     });
                 }

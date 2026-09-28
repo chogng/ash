@@ -962,6 +962,98 @@ fn subscription_error_dialog_ignores_backdrop_and_copies_dragged_text() {
 }
 
 #[test]
+fn subscription_error_dialog_double_click_selects_one_word() {
+    use crate::app::fullscreen::pointer::MouseAction;
+    use crate::app::fullscreen::selection::ClickCount;
+    use crate::app::fullscreen::selection::ScreenSelectionOutcome;
+
+    let mut app = crate::app::App::new();
+    app.update(crate::config::Event::EditorOpened(config_choices()));
+    let panel = app.fullscreen.panels.command_mut().unwrap();
+    panel.open_subscription(
+        crate::config::Subscription::new(crate::config::SubscriptionProvider::Kimi).choices(),
+        crate::config::SignOutAvailability::Unavailable,
+    );
+    let message = "Kimi token exchange failed with HTTP 400";
+    panel.show_subscription_error("Error", message.into());
+
+    let area = Rect::new(0, 0, 100, 30);
+    let body = super::dialog_body_area(&app, area).unwrap();
+    let position =
+        ratatui::layout::Position::new(body.x + message.find("failed").unwrap() as u16 + 2, body.y);
+    let event = |kind| MouseEvent {
+        kind,
+        column: position.x,
+        row: position.y,
+        modifiers: KeyModifiers::NONE,
+    };
+    let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
+    terminal
+        .draw(|frame| crate::app::frame::draw(frame, &app))
+        .unwrap();
+
+    for click in 0..2 {
+        crate::app::fullscreen::pointer::handle_mouse(
+            &mut app,
+            area,
+            event(MouseEventKind::Down(MouseButton::Left)),
+        );
+        let outcome = crate::app::fullscreen::pointer::handle_mouse(
+            &mut app,
+            area,
+            event(MouseEventKind::Up(MouseButton::Left)),
+        );
+        if click == 0 {
+            assert!(matches!(outcome, MouseAction::Selection(None)));
+            assert!(app.fullscreen.selection.range().is_none());
+            continue;
+        }
+        let MouseAction::Selection(Some(ScreenSelectionOutcome::Click {
+            position,
+            count: ClickCount::Double,
+        })) = outcome
+        else {
+            panic!("second click on dialog text must select its word");
+        };
+        let range =
+            crate::terminal::text::token_range_at(terminal.backend().buffer(), position).unwrap();
+        let mut copied = None;
+        crate::app::fullscreen::selection::apply_screen_selection(
+            &mut app,
+            range,
+            |range| {
+                crate::terminal::text::text_in_range_in_area(
+                    terminal.backend().buffer(),
+                    range,
+                    body,
+                )
+            },
+            |text| {
+                copied = Some(text.to_owned());
+                Ok(())
+            },
+        );
+        assert_eq!(copied.as_deref(), Some("failed"));
+        assert_eq!(app.fullscreen.selection.range(), Some(range));
+    }
+    terminal
+        .draw(|frame| crate::app::frame::draw(frame, &app))
+        .unwrap();
+    assert_eq!(
+        terminal.backend().buffer()[(position.x, position.y)].bg,
+        app.render_context().screen_selection_background()
+    );
+    assert_ne!(
+        terminal.backend().buffer()[(body.x, body.y)].bg,
+        app.render_context().screen_selection_background()
+    );
+    assert!(matches!(
+        app.command_panel().unwrap().body(),
+        crate::app::command_panel::CommandPanelBody::Dialog(_)
+    ));
+}
+
+#[test]
 fn editing_modal_blocks_backdrop_dismiss_and_protects_input() {
     use crate::memories::Event;
     use crate::memories::Page;
