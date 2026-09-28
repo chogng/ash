@@ -1,5 +1,28 @@
 use super::*;
 use crate::ImageDetail;
+use crate::ReasoningConfig;
+
+#[test]
+fn reasoning_uses_anthropic_effort_for_messages_and_token_counts() {
+    let mut request = ModelRequest::text("Explain the result");
+    request.reasoning = Some(ReasoningConfig {
+        effort: ReasoningEffort::ExtraHigh,
+        summary: false,
+    });
+
+    let message = build_request("claude-opus-4-8", &request).unwrap();
+    assert_eq!(message["output_config"], json!({"effort": "xhigh"}));
+    assert!(message.get("thinking").is_none());
+
+    let count = build_count_request("claude-opus-4-8", &request).unwrap();
+    assert_eq!(count["output_config"], message["output_config"]);
+
+    request.reasoning.as_mut().unwrap().effort = ReasoningEffort::None;
+    assert!(matches!(
+        build_request("claude-opus-4-8", &request),
+        Err(ApiError::InvalidRequest(_))
+    ));
+}
 
 #[test]
 fn request_builder_injects_three_stable_cache_breakpoints_without_mutating_canonical_input() {

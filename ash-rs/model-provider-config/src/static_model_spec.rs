@@ -75,6 +75,7 @@ macro_rules! static_model {
                 $($(
                     $capability: static_model!(@support $support),
                 )*)?
+                reasoning: static_model!(@reasoning_capability $($($reasoning),*)?),
                 ..ash_protocol::ModelCapabilities::UNKNOWN
             },
             supported_reasoning_efforts: &[$($(static_model!(@reasoning $reasoning)),*)?],
@@ -93,6 +94,10 @@ macro_rules! static_model {
     (@support supported) => { ash_protocol::CapabilitySupport::Supported };
     (@support unsupported) => { ash_protocol::CapabilitySupport::Unsupported };
     (@support unknown) => { ash_protocol::CapabilitySupport::Unknown };
+    (@reasoning_capability) => { ash_protocol::CapabilitySupport::Unknown };
+    (@reasoning_capability $first:ident $(, $rest:ident)*) => {
+        ash_protocol::CapabilitySupport::Supported
+    };
 
     (@reasoning none) => { ash_protocol::ReasoningEffort::None };
     (@reasoning minimal) => { ash_protocol::ReasoningEffort::Minimal };

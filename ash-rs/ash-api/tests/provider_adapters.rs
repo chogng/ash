@@ -845,8 +845,7 @@ fn anthropic_messages_converts_tools_and_tool_use() {
             "output_tokens_details": {"thinking_tokens": 2}
         }
     }));
-    let mut request = tool_request();
-    request.reasoning = None;
+    let request = tool_request();
     let response = ApiEndpoint::AnthropicMessages
         .complete_with_client(
             &ResolvedApiTarget::new(
@@ -867,6 +866,8 @@ fn anthropic_messages_converts_tools_and_tool_use() {
             .any(|header| header.name() == "anthropic-version")
     );
     assert_eq!(body["tools"][0]["input_schema"]["type"], "object");
+    assert_eq!(body["output_config"], json!({"effort": "medium"}));
+    assert!(body.get("thinking").is_none());
     assert_eq!(response.stop_reason, StopReason::ToolUse);
     assert_eq!(
         response.tool_calls().next().unwrap().name.as_str(),
@@ -906,8 +907,7 @@ fn anthropic_messages_streams_wire_deltas_and_reassembles_tool_use() {
         ),
         23,
     );
-    let mut request = tool_request();
-    request.reasoning = None;
+    let request = tool_request();
     let mut events = RecordedStreamEvents::default();
 
     let response = ApiEndpoint::AnthropicMessages
@@ -943,6 +943,10 @@ fn anthropic_messages_streams_wire_deltas_and_reassembles_tool_use() {
     assert_eq!(
         transport.request.lock().unwrap().as_ref().unwrap()["stream"],
         true
+    );
+    assert_eq!(
+        transport.request.lock().unwrap().as_ref().unwrap()["output_config"],
+        json!({"effort": "medium"})
     );
 }
 

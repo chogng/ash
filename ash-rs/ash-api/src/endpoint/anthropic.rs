@@ -10,6 +10,7 @@ use crate::ModelRequest;
 use crate::ModelResponse;
 use crate::ModelUsage;
 use crate::OutputItem;
+use crate::ReasoningEffort;
 use crate::StopReason;
 use crate::ToolCall;
 use crate::ToolCallId;
@@ -36,11 +37,6 @@ pub(crate) fn complete(
     client: &dyn OperationClient,
     cancellation: &CancellationToken,
 ) -> Result<ModelResponse, ApiError> {
-    if request.reasoning.is_some() {
-        return Err(ApiError::InvalidRequest(
-            "Anthropic reasoning requires a provider-specific thinking configuration".into(),
-        ));
-    }
     let response = crate::requests::post_json(
         client,
         target,
@@ -61,11 +57,6 @@ pub(crate) fn stream(
     cancellation: &CancellationToken,
     sink: &mut dyn ApiStreamSink,
 ) -> Result<ModelResponse, ApiError> {
-    if request.reasoning.is_some() {
-        return Err(ApiError::InvalidRequest(
-            "Anthropic reasoning requires a provider-specific thinking configuration".into(),
-        ));
-    }
     let Value::Object(mut body) = build_request(model, request)? else {
         unreachable!("Anthropic request builders always return an object");
     };
@@ -145,11 +136,6 @@ pub(crate) fn count_input_tokens(
     client: &dyn OperationClient,
     cancellation: &CancellationToken,
 ) -> Result<InputTokenCount, ApiError> {
-    if request.reasoning.is_some() {
-        return Err(ApiError::InvalidRequest(
-            "Anthropic reasoning requires a provider-specific thinking configuration".into(),
-        ));
-    }
     let response = crate::requests::post_json_to_path(
         client,
         target,
@@ -247,6 +233,23 @@ fn build_request(model: &str, request: &ModelRequest) -> Result<Value, ApiError>
             "tool_choice".into(),
             convert_anthropic_tool_choice(&request.tool_choice),
         );
+    }
+    if let Some(reasoning) = &request.reasoning {
+        let effort = match reasoning.effort {
+            ReasoningEffort::Low => "low",
+            ReasoningEffort::Medium => "medium",
+            ReasoningEffort::High => "high",
+            ReasoningEffort::ExtraHigh => "xhigh",
+            ReasoningEffort::Max => "max",
+            ReasoningEffort::None | ReasoningEffort::Minimal => {
+                return Err(ApiError::InvalidRequest(
+                    "Anthropic does not support this reasoning effort".into(),
+                ));
+            }
+        };
+        // Effort is independent of thinking mode. Enabling adaptive thinking here would
+        // require preserving signed thinking blocks across tool continuations.
+        body.insert("output_config".into(), json!({ "effort": effort }));
     }
     if let Some(temperature) = request.temperature {
         body.insert("temperature".into(), json!(temperature));

@@ -1,4 +1,6 @@
 use super::*;
+use ash_protocol::CapabilitySupport;
+use ash_protocol::ReasoningEffort;
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -558,6 +560,117 @@ fn static_model_catalog_has_unique_valid_rows() {
         assert_eq!(find_static_model(&spec.model_ref()), Some(spec));
         if let Some(effort) = spec.model_reasoning_effort {
             assert!(spec.supported_reasoning_efforts.contains(&effort));
+        }
+    }
+}
+
+#[test]
+fn static_catalog_exposes_only_model_specific_reasoning_levels() {
+    let cases: &[(&str, &str, &[ReasoningEffort])] = &[
+        (
+            "openai",
+            "gpt-6-sol",
+            &[
+                ReasoningEffort::None,
+                ReasoningEffort::Low,
+                ReasoningEffort::Medium,
+                ReasoningEffort::High,
+                ReasoningEffort::ExtraHigh,
+                ReasoningEffort::Max,
+            ],
+        ),
+        (
+            "anthropic",
+            "claude-opus-5-5",
+            &[
+                ReasoningEffort::Low,
+                ReasoningEffort::Medium,
+                ReasoningEffort::High,
+                ReasoningEffort::Max,
+            ],
+        ),
+        (
+            "google",
+            "gemini-3.1-flash-lite",
+            &[
+                ReasoningEffort::Minimal,
+                ReasoningEffort::Low,
+                ReasoningEffort::Medium,
+                ReasoningEffort::High,
+            ],
+        ),
+        (
+            "xai",
+            "grok-4.7",
+            &[
+                ReasoningEffort::Low,
+                ReasoningEffort::Medium,
+                ReasoningEffort::High,
+                ReasoningEffort::ExtraHigh,
+            ],
+        ),
+        (
+            "qwen",
+            "qwen3.8-max",
+            &[
+                ReasoningEffort::None,
+                ReasoningEffort::Low,
+                ReasoningEffort::Medium,
+                ReasoningEffort::ExtraHigh,
+            ],
+        ),
+        (
+            "kimi",
+            "kimi-k3",
+            &[
+                ReasoningEffort::Low,
+                ReasoningEffort::High,
+                ReasoningEffort::Max,
+            ],
+        ),
+        (
+            "deepseek",
+            "deepseek-v4-pro",
+            &[
+                ReasoningEffort::None,
+                ReasoningEffort::Low,
+                ReasoningEffort::High,
+                ReasoningEffort::Max,
+            ],
+        ),
+        (
+            "glm",
+            "glm-5.2",
+            &[
+                ReasoningEffort::None,
+                ReasoningEffort::Minimal,
+                ReasoningEffort::Low,
+                ReasoningEffort::Medium,
+                ReasoningEffort::High,
+                ReasoningEffort::ExtraHigh,
+                ReasoningEffort::Max,
+            ],
+        ),
+        ("openai", "gpt-4.1", &[]),
+        ("anthropic", "claude-haiku-4-5-20251001", &[]),
+        ("qwen", "qwen3.7-max", &[]),
+        ("minimax", "MiniMax-M3", &[]),
+        ("mimo", "mimo-v2.6-pro", &[]),
+    ];
+    for &(provider, model, expected) in cases {
+        let entry = STATIC_MODEL_CATALOG
+            .iter()
+            .find(|entry| entry.provider_id == provider && entry.model_id == model)
+            .unwrap();
+        assert_eq!(
+            entry.supported_reasoning_efforts, expected,
+            "{provider}/{model}"
+        );
+        if !expected.is_empty() {
+            assert_eq!(
+                entry.model().capabilities.reasoning,
+                CapabilitySupport::Supported
+            );
         }
     }
 }
